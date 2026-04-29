@@ -1,94 +1,79 @@
-# AgroCloud
+# Agri Cloud
 
-AgroCloud is a Vite + React (frontend) and Express (backend) web application, designed for agricultural management and satellite/GIS workflows. The frontend is configured for GitHub Pages (hash routing) and standard static hosting.
+نظام إدارة زراعية مع واجهة **React + Vite** وخادم **Express** اختياري. المستودع منظم كـ **monorepo** (`frontend/` + `backend/`).
 
-## Project Structure
+📁 راجع [`docs/REPOSITORY_STRUCTURE.md`](docs/REPOSITORY_STRUCTURE.md) لهيكل المجلدات وملاحظات النشر.
 
-- `src/` React application source (pages, components, state, utilities)
-- `public/` Static assets served as-is (favicons, SVGs, etc.)
-- `config/` Shared configuration used by build/runtime (repository base path, app metadata)
-- `server/` Express API server (local development)
-- `.github/workflows/` GitHub Actions workflows (GitHub Pages deployment)
+## المتطلبات
 
-## Requirements
+- Node.js **18+** (يُفضّل LTS)
+- npm **9+** (دعم workspaces)
 
-- Node.js (LTS recommended)
-- npm
+## التثبيت
 
-## Install
+من **جذر المستودع** (يثبّت كلا الحزمتين):
 
 ```bash
 npm install
 ```
 
-## Run (Development)
+## التشغيل للتطوير
 
-Runs frontend and backend together:
+- **الواجهة + الخادم معاً:**
 
 ```bash
 npm run dev
 ```
 
-- Frontend: http://localhost:5173/
-- Backend: http://localhost:3001/
-
-Run only the frontend (helpful for GitHub Pages-style routing):
+- **واجهة فقط (Vite، غالباً `http://localhost:5173`):**
 
 ```bash
-npm run dev:client:clean
+npm run dev:client
 ```
 
-## Build (Production)
+- **خادم API فقط (`http://localhost:3001`):**
+
+```bash
+npm run dev:server
+```
+
+البروكسي في Vite يوجّه `/api` و `/ws` إلى الخادم المحلي.
+
+## البناء للإنتاج
 
 ```bash
 npm run build
 ```
 
-## Typecheck
+المخرجات: **`frontend/dist`**. الخلفية تخدم هذا المجلد عند تشغيل `npm run start -w backend`.
+
+معاينة الواجهة المبنية:
+
+```bash
+npm run preview
+```
+
+## جودة الكود
 
 ```bash
 npm run typecheck
+npm test
+npm run test:e2e
 ```
 
-## Tests
+## إعدادات النظام في المتصفح
+
+- المفتاح: `agri_system_settings_v1` في **localStorage**.
+- التفاصيل السابقة حول الثيم والقوائم لا تزال صالحة؛ المسارات أصبحت تحت `frontend/src/`.
+
+## صلاحيات
+
+- إعدادات النظام: `#/admin/system-settings` — للمستخدمين ذوي الصلاحية المناسبة (انظر الكود في `frontend/src`).
+
+## Docker
 
 ```bash
-npm test
+docker build -t agri-cloud .
 ```
 
-## Environment Variables
-
-Do not commit secrets to GitHub. Use `.env.example` as a template and create `.env.local` (or set variables in your hosting provider).
-
-Frontend (Vite) variables must start with `VITE_`:
-
-- `VITE_API_BASE_URL` (default `http://localhost:3001`)
-- `VITE_ENABLE_PWA` (`true`/`false`, default `false`)
-
-Backend variables (used by `server/`) can be set in your environment:
-
-- `OPENAI_API_KEY` (optional, enables AI features)
-- `GITHUB_CLIENT_ID` (optional, enables GitHub OAuth integration)
-- `GITHUB_CLIENT_SECRET` (optional, enables GitHub OAuth integration)
-- `GITHUB_WEBHOOK_SECRET` (optional, enables webhook signature verification)
-- `APP_ORIGIN` (optional, default `http://localhost:5173`)
-- `GITHUB_OAUTH_REDIRECT_URL` (optional, default `http://localhost:3001/api/github/oauth/callback`)
-
-## GitHub Pages
-
-This project is configured to work on GitHub Pages using hash routing.
-
-- Home: `https://alkamelgis.github.io/AgroCloud/`
-- Login: `https://alkamelgis.github.io/AgroCloud/#/login`
-
-Deployment is done via GitHub Actions by building the project and publishing the generated `dist/` output.
-
-## Contributing
-
-- Create a feature branch from `main` (or `master`) and keep changes focused.
-- Verify locally before opening a PR:
-  - `npm run typecheck`
-  - `npm test`
-  - `npm run build`
-- Avoid committing secrets (use `.env.local` and GitHub secrets for CI/deployments).
-- Use clear PR descriptions (what changed, why, how to test).
+يبني الواجهة ثم يشغّل الخلفية (منفذ **3001**).

@@ -1,22 +1,19 @@
-
-# Use Node.js 20 LTS
+# Production-style image: build SPA then serve API + static assets via backend
 FROM node:20-alpine
 
-# Set working directory
 WORKDIR /app
 
-# Install dependencies first (caching)
-COPY package*.json ./
+COPY package.json package-lock.json* ./
+COPY frontend/package.json ./frontend/
+COPY backend/package.json ./backend/
+
 RUN npm ci
 
-# Copy source code
 COPY . .
 
-# Build the application
 RUN npm run build
 
-# Expose port
-EXPOSE 3000
+ENV NODE_ENV=production
+EXPOSE 3001
 
-# Start command
-CMD ["npm", "run", "dev:server"]
+CMD ["npm", "run", "start", "-w", "backend"]

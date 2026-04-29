@@ -20,4 +20,4 @@ echo The system is now running at http://localhost:3001
 echo You can close this window if you are running via the background script.
 echo.
 
-node server/index.js
+node backend\server\index.js
