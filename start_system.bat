@@ -1,7 +1,7 @@
 @echo off
 cd /d "%~dp0"
 echo ==========================================
-echo      Agri Cloud System - Startup
+echo      Agri Cloud System - Dev Startup
 echo ==========================================
 echo.
 echo [1/3] Checking environment...
@@ -11,13 +11,11 @@ if not exist node_modules (
 )
 
 echo.
-echo [2/3] Building frontend for offline use...
-call npm.cmd run build
-
+echo [2/3] Starting Frontend + Backend (dev mode)...
+echo Frontend: http://localhost:5173/AgroCloud/
+echo Backend : http://localhost:3001
 echo.
-echo [3/3] Starting Server...
-echo The system is now running at http://localhost:3001
-echo You can close this window if you are running via the background script.
+echo [3/3] Running (auto dev watch)...
+echo Keep this window open to keep both servers alive.
 echo.
-
-node backend\server\index.js
+call npm.cmd run dev:clean

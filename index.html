@@ -3,11 +3,106 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Elite Agro Projects</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="description" content="Agri Cloud platform entry page." />
+    <meta name="theme-color" content="#047857" />
+    <title>Agri Cloud</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: "Inter", "Segoe UI", Arial, sans-serif;
+        background: #f1f5f9;
+        color: #0f172a;
+      }
+      .boot {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        box-sizing: border-box;
+      }
+      .boot-card {
+        width: min(640px, 100%);
+        border: 1px solid #dbe4ee;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 14px 38px rgba(15, 23, 42, 0.08);
+        padding: 18px;
+      }
+      .boot-card h1 {
+        margin: 0 0 8px;
+        font-size: 18px;
+      }
+      .boot-card p {
+        margin: 0;
+        color: #475569;
+        font-size: 14px;
+      }
+      .boot-actions {
+        margin-top: 14px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .boot-actions a {
+        text-decoration: none;
+        border-radius: 10px;
+        padding: 9px 12px;
+        font-size: 13px;
+        border: 1px solid #dbe4ee;
+        color: #0f172a;
+        background: #fff;
+      }
+      .boot-actions a.primary {
+        background: #047857;
+        color: #fff;
+        border-color: #047857;
+      }
+      code {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        padding: 1px 6px;
+      }
+    </style>
+    <script>
+      (function () {
+        var repoBase = '/AgroCloud/#/'
+        var localDev = 'http://localhost:5173/AgroCloud/#/'
+        var isFileProtocol = window.location.protocol === 'file:'
+        var isGithubPages = window.location.hostname.indexOf('github.io') !== -1
+
+        if (isFileProtocol) {
+          window.location.replace(localDev)
+          return
+        }
+        if (isGithubPages) {
+          window.location.replace(repoBase)
+          return
+        }
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+          window.location.replace(localDev)
+          return
+        }
+        window.location.replace(repoBase)
+      })()
+    </script>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <div class="boot">
+      <div class="boot-card">
+        <h1>Opening Agri Cloud…</h1>
+        <p>
+          If redirect does not happen automatically, open:
+          <code>/AgroCloud/#/</code>
+        </p>
+        <div class="boot-actions">
+          <a class="primary" href="/AgroCloud/#/">Open App</a>
+          <a href="http://localhost:5173/AgroCloud/#/">Open Local Dev</a>
+        </div>
+      </div>
+    </div>
+    <noscript>JavaScript is required. Open <code>/AgroCloud/#/</code> manually.</noscript>
   </body>
-  </html>
+</html>
+

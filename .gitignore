@@ -1,6 +1,8 @@
 node_modules/
 dist/
 frontend/dist/
+backend/dist/
+*.log
 
 .env
 .env.*
@@ -20,6 +22,14 @@ test-results/
 
 .vite/
 .cache/
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
 
 _restore_tmp_*/
 backup_*.zip
+*.tmp
+*.bak
+coverage-final.json
+.nyc_output/

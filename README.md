@@ -1,59 +1,82 @@
 # Agri Cloud
 
-نظام إدارة زراعية مع واجهة **React + Vite** وخادم **Express** اختياري. المستودع منظم كـ **monorepo** (`frontend/` + `backend/`).
+Agri Cloud is a monorepo containing a React/Vite frontend and an Express backend.
 
-📁 راجع [`docs/REPOSITORY_STRUCTURE.md`](docs/REPOSITORY_STRUCTURE.md) لهيكل المجلدات وملاحظات النشر.
+## Project Structure
 
-## المتطلبات
+```text
+.
+├─ frontend/
+│  ├─ src/
+│  │  ├─ components/      # reusable UI and shared widgets
+│  │  ├─ pages/           # page-level features
+│  │  ├─ services/        # storage/network services
+│  │  ├─ store/           # app-wide state/context
+│  │  ├─ utils/           # helper utilities
+│  │  ├─ types/           # shared TS types
+│  │  └─ styles/          # global style assets
+│  ├─ public/             # static assets
+│  └─ config/
+├─ backend/
+│  ├─ server/             # current runtime entrypoint
+│  ├─ src/
+│  │  ├─ config/
+│  │  ├─ routes/
+│  │  │  ├─ v1/
+│  │  │  └─ v2/
+│  │  ├─ controllers/
+│  │  ├─ middleware/
+│  │  ├─ models/
+│  │  └─ services/
+│  ├─ tests/
+│  └─ docs/
+├─ .github/workflows/
+└─ index.html             # root entry gateway (redirects to app)
+```
 
-- Node.js **18+** (يُفضّل LTS)
-- npm **9+** (دعم workspaces)
+## Requirements
 
-## التثبيت
+- Node.js 18+
+- npm 9+
 
-من **جذر المستودع** (يثبّت كلا الحزمتين):
+## Install
+
+From repository root:
 
 ```bash
 npm install
 ```
 
-## التشغيل للتطوير
+## Development
 
-- **الواجهة + الخادم معاً:**
+- Frontend + backend:
 
 ```bash
 npm run dev
 ```
 
-- **واجهة فقط (Vite، غالباً `http://localhost:5173`):**
+- Frontend only:
 
 ```bash
 npm run dev:client
 ```
 
-- **خادم API فقط (`http://localhost:3001`):**
+- Backend only:
 
 ```bash
 npm run dev:server
 ```
 
-البروكسي في Vite يوجّه `/api` و `/ws` إلى الخادم المحلي.
-
-## البناء للإنتاج
+## Build and Preview
 
 ```bash
 npm run build
-```
-
-المخرجات: **`frontend/dist`**. الخلفية تخدم هذا المجلد عند تشغيل `npm run start -w backend`.
-
-معاينة الواجهة المبنية:
-
-```bash
 npm run preview
 ```
 
-## جودة الكود
+Frontend output is generated in `frontend/dist`.
+
+## Testing
 
 ```bash
 npm run typecheck
@@ -61,19 +84,8 @@ npm test
 npm run test:e2e
 ```
 
-## إعدادات النظام في المتصفح
+## Notes
 
-- المفتاح: `agri_system_settings_v1` في **localStorage**.
-- التفاصيل السابقة حول الثيم والقوائم لا تزال صالحة؛ المسارات أصبحت تحت `frontend/src/`.
-
-## صلاحيات
-
-- إعدادات النظام: `#/admin/system-settings` — للمستخدمين ذوي الصلاحية المناسبة (انظر الكود في `frontend/src`).
-
-## Docker
-
-```bash
-docker build -t agri-cloud .
-```
-
-يبني الواجهة ثم يشغّل الخلفية (منفذ **3001**).
+- System settings are stored in browser localStorage under `agri_system_settings_v1`.
+- Versioned backend routes are available under `/api/v1` and `/api/v2`.
+- Existing legacy API endpoints remain backward-compatible.
