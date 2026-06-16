@@ -1,0 +1,53 @@
+.si-copy-text-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.12);
+  color: #cbd5e1;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0.42;
+  transition:
+    opacity 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.si-copy-text-btn:hover,
+.si-copy-text-btn:focus-visible {
+  opacity: 1;
+  outline: none;
+  background: rgba(167, 139, 250, 0.2);
+  color: #f5f3ff;
+  box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.25);
+}
+
+.si-copy-text-btn--done {
+  opacity: 1;
+  background: rgba(52, 211, 153, 0.18);
+  color: #a7f3d0;
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.28);
+}
+
+.si-copy-text-btn__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.si-copy-text-btn--compact {
+  padding: 0;
+  min-width: 28px;
+  min-height: 28px;
+}
+
+.si-copy-text-btn--compact.si-copy-text-btn--done {
+  background: rgba(52, 211, 153, 0.22);
+}

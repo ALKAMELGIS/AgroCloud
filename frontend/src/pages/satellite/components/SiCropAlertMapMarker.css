@@ -1,0 +1,499 @@
+/* 3D alert beacons — control-room style markers at Agro_Structures centroids */
+
+.si-crop-alert-beacon-root {
+  position: relative;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  contain: layout style;
+}
+
+.si-crop-alert-beacon-root--popup-open {
+  z-index: 20;
+}
+
+.si-crop-alert-beacon-root__column {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  pointer-events: none;
+}
+
+.si-crop-alert-beacon-root__column > .si-crop-alert-map-popup {
+  position: absolute;
+  bottom: calc(100% + 16px);
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  width: max-content;
+  max-width: min(92vw, 420px);
+}
+
+.si-crop-alert-beacon-root--popup-open .si-crop-alert-beacon-root__column {
+  gap: 0;
+  padding-bottom: 0;
+}
+
+.si-crop-alert-beacon-root__column > * {
+  pointer-events: auto;
+}
+
+.si-crop-alert-hvd-beacon {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  pointer-events: auto;
+  z-index: 4;
+  transform: none;
+}
+
+.si-crop-alert-hvd-beacon__label {
+  white-space: nowrap;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #ecfdf5;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid color-mix(in srgb, var(--hvd-tone, #2e7d32) 55%, transparent);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.si-crop-alert-hvd-beacon--selected {
+  z-index: 6;
+}
+
+.si-crop-alert-beacon {
+  --beacon-color: #66ff66;
+  --beacon-scale: 1;
+  position: relative;
+  width: 0;
+  height: 0;
+  cursor: pointer;
+  user-select: none;
+  pointer-events: auto;
+  z-index: 4;
+}
+
+.si-crop-alert-beacon__scene {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 52px;
+  height: 62px;
+  transform: translate(-50%, -72%) scale(var(--beacon-scale));
+  transform-origin: 50% 100%;
+  perspective: 420px;
+  transform-style: preserve-3d;
+  contain: layout;
+}
+
+/* GPU-composited multi-ring pulse — severity via --pulse-* on parent */
+.si-crop-alert-beacon__pulse-stack {
+  position: absolute;
+  left: 50%;
+  top: 17px;
+  width: var(--pulse-base-size, 52px);
+  height: var(--pulse-base-size, 52px);
+  transform: translate(-50%, -50%) translateZ(0);
+  pointer-events: none;
+  will-change: transform;
+  contain: strict;
+  z-index: 0;
+}
+
+.si-crop-alert-beacon__pulse-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: var(--pulse-border-width, 2.5px) solid color-mix(in srgb, var(--beacon-color) 78%, #fff 22%);
+  opacity: 0;
+  transform: scale(0.5) translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  animation: si-crop-alert-beacon-multi-pulse var(--pulse-duration, 2.4s) cubic-bezier(0.14, 0.78, 0.22, 1)
+    infinite;
+  animation-delay: calc(var(--pulse-duration, 2.4s) * var(--pulse-index, 0) / max(var(--pulse-count, 1), 1));
+}
+
+.si-crop-alert-beacon__pulse-ring--dashed {
+  border-style: dashed;
+  border-width: 2px;
+}
+
+.si-crop-alert-beacon__pulse-ring--fill {
+  border: none;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--beacon-color) 42%, transparent) 0%,
+    color-mix(in srgb, var(--beacon-color) 12%, transparent) 52%,
+    transparent 72%
+  );
+}
+
+/* 🟢 Healthy / Growing — subtle slow pulse */
+.si-crop-alert-beacon--pulse-calm {
+  --pulse-duration: 3.4s;
+  --pulse-scale-max: 1.75;
+  --pulse-base-size: 50px;
+  --pulse-peak-opacity: 0.38;
+  --pulse-border-width: 2px;
+}
+
+/* 🟡 Watch — medium pulse */
+.si-crop-alert-beacon--pulse-watch {
+  --pulse-duration: 2s;
+  --pulse-scale-max: 2.15;
+  --pulse-base-size: 58px;
+  --pulse-peak-opacity: 0.62;
+  --pulse-border-width: 2.5px;
+}
+
+/* 🟠 Warning / Water stress — fast clear pulse */
+.si-crop-alert-beacon--pulse-warning {
+  --pulse-duration: 1.45s;
+  --pulse-scale-max: 2.45;
+  --pulse-base-size: 66px;
+  --pulse-peak-opacity: 0.78;
+  --pulse-border-width: 3px;
+}
+
+/* 🔴 Critical — strong multi-ring burst */
+.si-crop-alert-beacon--pulse-urgent {
+  --pulse-duration: 0.95s;
+  --pulse-scale-max: 3.1;
+  --pulse-base-size: 72px;
+  --pulse-peak-opacity: 0.95;
+  --pulse-border-width: 3px;
+}
+
+/* 🔵 Harvest approaching — dashed medium pulse */
+.si-crop-alert-beacon--pulse-harvest-approach {
+  --pulse-duration: 1.75s;
+  --pulse-scale-max: 2.2;
+  --pulse-base-size: 60px;
+  --pulse-peak-opacity: 0.68;
+  --pulse-border-width: 2.5px;
+}
+
+/* 🟣 Harvest detected — short sharp burst */
+.si-crop-alert-beacon--pulse-harvest-burst {
+  --pulse-duration: 1.15s;
+  --pulse-scale-max: 2.55;
+  --pulse-base-size: 64px;
+  --pulse-peak-opacity: 0.82;
+  --pulse-border-width: 2.5px;
+}
+
+/* 🟢 NDVI improvement alert */
+.si-crop-alert-beacon--pulse-improving {
+  --pulse-duration: 2.6s;
+  --pulse-scale-max: 1.65;
+  --pulse-base-size: 48px;
+  --pulse-peak-opacity: 0.42;
+  --pulse-border-width: 2px;
+}
+
+.si-crop-alert-beacon__shadow {
+  position: absolute;
+  left: 50%;
+  bottom: -2px;
+  width: 28px;
+  height: 10px;
+  margin-left: -14px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0) 72%);
+  filter: blur(1px);
+  transform: rotateX(72deg) translateZ(-8px);
+}
+
+.si-crop-alert-beacon__stem {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  width: 7px;
+  height: 22px;
+  margin-left: -3.5px;
+  border-radius: 4px;
+  opacity: 0.92;
+  box-shadow:
+    inset 1px 0 0 rgba(255, 255, 255, 0.35),
+    inset -1px 0 0 rgba(0, 0, 0, 0.2),
+    0 4px 10px rgba(0, 0, 0, 0.32);
+  transform: rotateX(18deg) translateZ(2px);
+}
+
+.si-crop-alert-beacon__orb {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 34px;
+  height: 34px;
+  margin-left: -17px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  background-image: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.42) 0%, transparent 44%);
+  transform: translateZ(14px);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+  z-index: 2;
+}
+
+/* Unified NDVI zone fallbacks — must match siCropAlertNdviZones.ts */
+.si-crop-alert-beacon--zone-bare {
+  --beacon-color: #d32f2f;
+}
+
+.si-crop-alert-beacon--zone-stress {
+  --beacon-color: #ff9800;
+}
+
+.si-crop-alert-beacon--zone-watch {
+  --beacon-color: #ffeb3b;
+}
+
+.si-crop-alert-beacon--zone-healthy {
+  --beacon-color: #aeea00;
+}
+
+.si-crop-alert-beacon--zone-growth {
+  --beacon-color: #2e7d32;
+}
+
+.si-crop-alert-beacon--zone-harvest-ready {
+  --beacon-color: #1b5e20;
+}
+
+.si-crop-alert-beacon--no-crop {
+  --beacon-color: #90a4ae;
+}
+
+.si-crop-alert-beacon--no-crop .si-crop-alert-beacon__pulse-stack {
+  display: none;
+}
+
+/* During pan/zoom — pause GPU-heavy pulse loops for smooth map interaction */
+.si-map-container--interacting .si-crop-alert-beacon__pulse-ring {
+  animation: none !important;
+  opacity: 0 !important;
+}
+
+.si-map-container--interacting .si-crop-alert-beacon__orb {
+  animation: none !important;
+}
+
+.si-map-container--interacting .si-crop-alert-beacon--pulse-urgent .si-crop-alert-beacon__orb,
+.si-map-container--interacting .si-crop-alert-beacon--pulse-warning .si-crop-alert-beacon__orb {
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.18),
+    0 4px 10px rgba(0, 0, 0, 0.35),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.2);
+}
+
+.si-crop-alert-beacon__orb-shine {
+  position: absolute;
+  inset: 4px 8px auto 6px;
+  height: 10px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+
+.si-crop-alert-beacon__delta-badge {
+  position: absolute;
+  right: -2px;
+  top: -4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 8px;
+  color: #fff;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  z-index: 4;
+  transform: translateZ(18px);
+}
+
+.si-crop-alert-beacon--delta-alert-red .si-crop-alert-beacon__delta-badge {
+  background: #d32f2f;
+}
+
+.si-crop-alert-beacon--delta-alert-green .si-crop-alert-beacon__delta-badge {
+  background: #2e7d32;
+}
+
+.si-crop-alert-beacon__ring,
+.si-crop-alert-beacon__ripple {
+  display: none;
+}
+
+.si-crop-alert-beacon__label {
+  position: absolute;
+  left: 50%;
+  top: calc(-72% * var(--beacon-scale) - 18px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #ecfdf5;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid color-mix(in srgb, var(--beacon-color) 55%, transparent);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.si-crop-alert-beacon:hover .si-crop-alert-beacon__orb,
+.si-crop-alert-beacon--selected .si-crop-alert-beacon__orb {
+  transform: translateZ(20px) scale(1.08);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.18),
+    0 0 26px color-mix(in srgb, var(--beacon-color) 72%, transparent),
+    0 10px 22px rgba(0, 0, 0, 0.48),
+    inset 0 -4px 8px rgba(0, 0, 0, 0.22);
+}
+
+.si-crop-alert-beacon--selected .si-crop-alert-beacon__scene {
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--beacon-color) 65%, transparent));
+}
+
+.si-crop-alert-beacon--pulse-critical .si-crop-alert-beacon__pulse-ring {
+  animation-duration: calc(var(--orb-blink-duration, 550ms) * 1.35);
+}
+
+.si-crop-alert-beacon--pulse-stress .si-crop-alert-beacon__pulse-ring {
+  animation-duration: calc(var(--orb-blink-duration, 1100ms) * 1.2);
+}
+
+.si-crop-alert-beacon--pulse-watch .si-crop-alert-beacon__pulse-ring {
+  animation-duration: calc(var(--orb-blink-duration, 2200ms) * 1.1);
+}
+
+/* ΔCHAS orb blink — color + frequency driven by risk tier only */
+.si-crop-alert-beacon__orb--dchas-critical {
+  animation: si-crop-alert-orb-blink var(--orb-blink-duration, 550ms) ease-in-out infinite;
+}
+
+.si-crop-alert-beacon__orb--dchas-stress {
+  animation: si-crop-alert-orb-blink var(--orb-blink-duration, 1100ms) ease-in-out infinite;
+}
+
+.si-crop-alert-beacon__orb--dchas-watch {
+  animation: si-crop-alert-orb-blink var(--orb-blink-duration, 2200ms) ease-in-out infinite;
+}
+
+.si-crop-alert-beacon__orb--dchas-stable,
+.si-crop-alert-beacon__orb--steady {
+  animation: none;
+}
+
+.si-crop-alert-beacon__orb--dchas-stable {
+  filter: brightness(1.06);
+}
+
+@keyframes si-crop-alert-orb-blink {
+  0%,
+  100% {
+    opacity: 1;
+    filter: brightness(1);
+    transform: translateZ(14px) scale(1);
+  }
+  50% {
+    opacity: 0.78;
+    filter: brightness(1.28);
+    transform: translateZ(14px) scale(1.07);
+  }
+}
+
+.si-crop-alert-beacon--dchas-critical {
+  --beacon-color: #d32f2f;
+}
+
+.si-crop-alert-beacon--dchas-stress {
+  --beacon-color: #ff9800;
+}
+
+.si-crop-alert-beacon--dchas-watch {
+  --beacon-color: #ffeb3b;
+}
+
+.si-crop-alert-beacon--dchas-stable {
+  --beacon-color: #2e7d32;
+}
+
+.si-crop-alert-beacon--urgent .si-crop-alert-beacon__orb {
+  animation: si-crop-alert-beacon-glow 0.95s ease-in-out infinite;
+}
+
+.si-crop-alert-beacon--pulse-warning .si-crop-alert-beacon__orb {
+  animation: si-crop-alert-beacon-glow 1.45s ease-in-out infinite;
+}
+
+.si-crop-alert-beacon--pulse-urgent .si-crop-alert-beacon__orb {
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.18),
+    0 0 32px color-mix(in srgb, var(--beacon-color) 85%, transparent),
+    0 0 56px color-mix(in srgb, var(--beacon-color) 45%, transparent),
+    0 8px 16px rgba(0, 0, 0, 0.42),
+    inset 0 -4px 8px rgba(0, 0, 0, 0.22);
+}
+
+@keyframes si-crop-alert-beacon-multi-pulse {
+  0% {
+    transform: scale(0.52) translateZ(0);
+    opacity: var(--pulse-peak-opacity, 0.75);
+  }
+  55% {
+    opacity: calc(var(--pulse-peak-opacity, 0.75) * 0.42);
+  }
+  100% {
+    transform: scale(var(--pulse-scale-max, 2.2)) translateZ(0);
+    opacity: 0;
+  }
+}
+
+@keyframes si-crop-alert-beacon-glow {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.22);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .si-crop-alert-beacon__pulse-ring,
+  .si-crop-alert-beacon__orb--dchas-critical,
+  .si-crop-alert-beacon__orb--dchas-stress,
+  .si-crop-alert-beacon__orb--dchas-watch,
+  .si-crop-alert-beacon--urgent .si-crop-alert-beacon__orb,
+  .si-crop-alert-beacon--pulse-warning .si-crop-alert-beacon__orb {
+    animation: none;
+  }
+
+  .si-crop-alert-beacon--pulse-urgent .si-crop-alert-beacon__pulse-ring:first-child,
+  .si-crop-alert-beacon--pulse-warning .si-crop-alert-beacon__pulse-ring:first-child {
+    opacity: 0.55;
+    transform: scale(1.15) translateZ(0);
+  }
+}

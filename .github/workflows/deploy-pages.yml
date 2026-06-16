@@ -1,0 +1,109 @@
+name: Deploy to GitHub Pages
+
+# CI builds the SPA with empty public env vars, copies frontend/dist to repo root on main,
+# then pushes [pages-sync]. GitHub Pages: Deploy from a branch → main → /(root).
+# Live app (HashRouter): https://alkamelgis.github.io/AgroCloud/#/
+#
+# Root SPA files are gitignored — never commit them from a local machine (local .env would embed secrets).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: pages
+  # New push supersedes an in-flight deploy so the latest code reaches Pages sooner (safe: each run is a full build + one commit).
+  cancel-in-progress: true
+
+jobs:
+  publish-to-main-root:
+    # Skip only the automated root sync commit from this workflow (avoids infinite loop). Do not skip user commits that merely mention [pages-sync] in the message body.
+    if: "${{ github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'chore(pages): sync SPA build to repo root') }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Force Pages to serve files from main (not Actions artifact)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PAGES_ADMIN_TOKEN: ${{ secrets.PAGES_ADMIN_TOKEN }}
+        run: node scripts/ensure-pages-legacy-main.mjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Build SPA for GitHub Pages (no local .env — safe for push protection)
+        env:
+          ENABLE_PWA: 'true'
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          VITE_MAPBOX_TOKEN: ''
+          VITE_MAPBOX_ACCESS_TOKEN: ''
+          VITE_GOOGLE_MAPS_API_KEY: ''
+          VITE_GOOGLE_MAPS_SERVER_API_KEY: ''
+          VITE_ARCGIS_PORTAL_TOKEN: ''
+          VITE_SENTINEL_HUB_WMS_INSTANCE_ID: ''
+          VITE_SENTINEL_HUB_ACCESS_TOKEN: ''
+          VITE_SENTINEL_HUB_CLIENT_ID: ''
+          VITE_SENTINEL_HUB_CLIENT_SECRET: ''
+          VITE_CDSE_CLIENT_ID: ''
+          VITE_CDSE_CLIENT_SECRET: ''
+          VITE_GEMINI_API_KEY: ''
+          VITE_OPENAI_API_KEY: ''
+          VITE_CLAUDE_API_KEY: ''
+          VITE_DEEPSEEK_API_KEY: ''
+          VITE_OPENWEATHER_API_KEY: ''
+          VITE_OPENROUTESERVICE: ''
+          VITE_DROPBOX_APP_KEY: ''
+          VITE_ONEDRIVE_CLIENT_ID: ''
+          VITE_GOOGLE_DRIVE_CLIENT_ID: ''
+          VITE_GOOGLE_DRIVE_API_KEY: ''
+        run: npm run build
+      - name: Prepare Pages dist + sanity-check
+        run: node scripts/pages-dist-check.mjs
+      - name: Sync dist to repository root and push main
+        run: |
+          set -euo pipefail
+          node scripts/sync-pages-dist-to-root.mjs --git-add
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --cached --quiet; then
+            echo "No SPA changes to commit at repo root."
+            exit 0
+          fi
+          git commit -m "chore(pages): sync SPA build to repo root [pages-sync]"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+      - name: Re-assert legacy Pages after push (GitHub may reset source)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PAGES_ADMIN_TOKEN: ${{ secrets.PAGES_ADMIN_TOKEN }}
+        run: node scripts/ensure-pages-legacy-main.mjs
+      - name: Drop legacy gh-pages branch (optional)
+        continue-on-error: true
+        run: git push origin --delete gh-pages
+      - name: Summary
+        run: |
+          {
+            echo "## GitHub Pages (main / root)"
+            echo "Build synced to \`main\` root (no local .env secrets). Pages: **Deploy from a branch** → **main** → **/(root)**."
+            echo ""
+            echo "| App |"
+            echo "| --- |"
+            echo "| [https://alkamelgis.github.io/AgroCloud/#/](https://alkamelgis.github.io/AgroCloud/#/) |"
+            echo ""
+            echo "**HTTPS:** Provided by GitHub Pages. **PWA:** enabled when \`ENABLE_PWA=true\`."
+            echo ""
+            echo "**Next:** [Production health check](https://github.com/${{ github.repository }}/actions/workflows/production-health.yml) runs after this workflow."
+            echo ""
+            echo "See [DEPLOYMENT.md](https://github.com/${{ github.repository }}/blob/main/DEPLOYMENT.md) for full-stack API hosting."
+          } >> "$GITHUB_STEP_SUMMARY"

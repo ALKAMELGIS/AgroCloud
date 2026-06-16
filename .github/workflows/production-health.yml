@@ -1,0 +1,25 @@
+name: Production health check
+
+on:
+  workflow_run:
+    workflows: ['Deploy to GitHub Pages']
+    types: [completed]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check live SPA shell
+        run: |
+          set -euo pipefail
+          URL="https://alkamelgis.github.io/AgroCloud/"
+          HTML=$(curl -fsSL "$URL")
+          echo "$HTML" | grep -q 'id="root"' || { echo "Missing #root in index.html"; exit 1; }
+          echo "$HTML" | grep -qE '(AgroCloud/)?assets/index-[^"]+\.js' || { echo "Missing built JS bundle reference"; exit 1; }
+          echo "$HTML" | grep -q 'manifest.webmanifest' || echo "WARN: manifest link not in HTML (PWA may still work via SW registration)"
+          curl -fsSI "https://alkamelgis.github.io/AgroCloud/manifest.webmanifest" | head -n 5
+          curl -fsSI "https://alkamelgis.github.io/AgroCloud/sw.js" | head -n 5
+          echo "Production smoke check passed for $URL"

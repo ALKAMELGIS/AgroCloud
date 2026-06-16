@@ -1,0 +1,226 @@
+/* Floating Map Assistant — bottom-right near zoom, draggable, minimal GIS-AI chrome */
+
+.si-map-float-ai {
+  position: absolute;
+  z-index: 85;
+  pointer-events: auto;
+  transition:
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .si-map-float-ai {
+    transition: none;
+  }
+}
+
+.si-map-float-ai--collapsed {
+  width: 56px;
+  height: 56px;
+}
+
+.si-map-float-ai__fab {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  border: 1px solid rgba(167, 139, 250, 0.45);
+  background: radial-gradient(circle at 30% 25%, rgba(196, 181, 253, 0.35), rgba(15, 23, 42, 0.92) 55%);
+  color: #e9d5ff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 0 0 1px rgba(2, 6, 23, 0.35),
+    0 12px 28px rgba(2, 6, 23, 0.55),
+    0 0 28px rgba(139, 92, 246, 0.25);
+  padding: 0;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.si-map-float-ai__fab:hover {
+  transform: translateY(-2px) scale(1.03);
+  border-color: rgba(196, 181, 253, 0.75);
+  box-shadow:
+    0 0 0 1px rgba(2, 6, 23, 0.4),
+    0 16px 36px rgba(2, 6, 23, 0.58),
+    0 0 36px rgba(167, 139, 250, 0.35);
+}
+
+.si-map-float-ai__fab:active {
+  transform: scale(0.97);
+}
+
+.si-map-float-ai__fab-glow {
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: conic-gradient(from 210deg, rgba(139, 92, 246, 0.45), rgba(34, 197, 94, 0.25), rgba(59, 130, 246, 0.4), rgba(139, 92, 246, 0.45));
+  opacity: 0.55;
+  filter: blur(10px);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.si-map-float-ai__fab-icon {
+  position: relative;
+  z-index: 1;
+  font-size: 22px;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(2, 6, 23, 0.45);
+}
+
+.si-map-float-ai__panel {
+  width: min(380px, calc(100vw - 28px));
+  max-height: min(72vh, 560px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.97), rgba(15, 23, 42, 0.94));
+  box-shadow:
+    0 0 0 1px rgba(2, 6, 23, 0.4),
+    0 20px 50px rgba(2, 6, 23, 0.55);
+  overflow: hidden;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.si-map-float-ai__chrome {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: grab;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.85);
+  background: rgba(30, 41, 59, 0.65);
+  user-select: none;
+  touch-action: none;
+}
+
+.si-map-float-ai__chrome:active {
+  cursor: grabbing;
+}
+
+.si-map-float-ai__drag-hint {
+  border: none;
+  background: transparent;
+  color: rgba(148, 163, 184, 0.95);
+  padding: 4px 6px;
+  border-radius: 8px;
+  cursor: grab;
+  font-size: 14px;
+}
+
+.si-map-float-ai__titles {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.si-map-float-ai__title {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #e2e8f0;
+}
+
+.si-map-float-ai__subtitle {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(167, 243, 208, 0.9);
+}
+
+.si-map-float-ai__chrome-actions {
+  display: inline-flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.si-map-float-ai__icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: rgba(15, 23, 42, 0.45);
+  color: #cbd5e1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.si-map-float-ai__icon-btn:hover {
+  background: rgba(51, 65, 85, 0.75);
+  color: #f8fafc;
+  border-color: rgba(129, 140, 248, 0.35);
+}
+
+.si-map-float-ai__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Inner Geo AI blocks inherit existing si-geo-explorer-* styles; tighten padding in float host */
+.si-map-float-ai__body .si-geo-explorer-root--unified {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  max-height: none;
+}
+
+.si-map-float-ai__body .si-geo-explorer {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+.si-map-float-ai__body .si-geo-explorer-messages {
+  max-height: min(38vh, 320px);
+}
+
+.si-geo-explorer-header--float {
+  padding-block: 6px 8px;
+}
+
+.si-geo-explorer-footnote--float {
+  font-size: 9px;
+  line-height: 1.35;
+  margin-top: 6px;
+  opacity: 0.92;
+}
+
+html[data-theme='light'] .si-map-float-ai__panel {
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(241, 245, 249, 0.96));
+  border-color: rgba(148, 163, 184, 0.45);
+}
+
+html[data-theme='light'] .si-map-float-ai__chrome {
+  background: rgba(241, 245, 249, 0.92);
+  border-bottom-color: rgba(148, 163, 184, 0.4);
+}
+
+html[data-theme='light'] .si-map-float-ai__title {
+  color: #0f172a;
+}
+
+html[data-theme='light'] .si-map-float-ai__subtitle {
+  color: #047857;
+}

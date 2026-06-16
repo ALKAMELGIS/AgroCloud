@@ -1,0 +1,5218 @@
+/* Agro Cloud Analytics — Develop Dashboard scoped styles */
+.develop-dashboard-root--empty {
+  flex: 1;
+  min-height: 0;
+  background: var(--ddb-surface, #ffffff);
+}
+
+.develop-dashboard-root {
+  --ddb-green: #2c7a4a;
+  --ddb-green-dark: #1f5e3a;
+  --ddb-green-soft: #e8f4ec;
+  --ddb-surface: #ffffff;
+  /* Power BI / Microsoft Fabric–aligned tokens for data panes */
+  --ddb-pbi-canvas: #f3f2f1;
+  --ddb-pbi-panel: #ffffff;
+  --ddb-pbi-border: #edebe9;
+  --ddb-pbi-border-strong: #c8c6c4;
+  --ddb-pbi-text: #323130;
+  --ddb-pbi-muted: #605e5c;
+  --ddb-pbi-subtle: #8a8886;
+  --ddb-pbi-placeholder: #a19f9d;
+  --ddb-pbi-blue: #1182d4;
+  --ddb-pbi-blue-dark: #106ebe;
+  --ddb-pbi-blue-soft: #deecf9;
+  --ddb-pbi-accent-green: #107c10;
+  --ddb-pbi-accent-green-soft: #dff6dd;
+  /* Canvas workspace — crisp “vector dashboard” tokens */
+  --ddb-canvas-grid-dot: rgba(15, 23, 42, 0.045);
+  --ddb-canvas-grid-line: rgba(148, 163, 184, 0.09);
+  --ddb-card-plot-bg: #fafcfd;
+  --ddb-card-plot-edge: rgba(226, 232, 240, 0.85);
+  font-family: 'Segoe UI', 'Inter', system-ui, sans-serif;
+  background: var(--ddb-surface);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.develop-dashboard-root *,
+.develop-dashboard-root *::before,
+.develop-dashboard-root *::after {
+  box-sizing: border-box;
+}
+
+.develop-dashboard-root .ddb-dashboard {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 14px;
+  padding: 10px 14px 14px;
+}
+
+.develop-dashboard-root .ddb-dashboard-body {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.develop-dashboard-root .ddb-topbar {
+  grid-column: 1 / -1;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+  border-radius: 28px;
+  padding: 9px 24px 11px;
+  margin-top: -4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.05);
+}
+
+.develop-dashboard-root .ddb-topbar-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-inline-start: auto;
+  flex-wrap: wrap;
+  padding: 4px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.develop-dashboard-root .ddb-topbar-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: #fff;
+  color: #334155;
+  border-radius: 12px;
+  width: 38px;
+  height: 38px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  position: relative;
+  transition:
+    transform 0.16s ease,
+    background 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.develop-dashboard-root .ddb-topbar-icon-btn:hover {
+  transform: translateY(-1px);
+  background: #f8fafc;
+  border-color: rgba(37, 99, 235, 0.32);
+  color: #1d4ed8;
+  box-shadow: 0 8px 14px rgba(59, 130, 246, 0.14);
+}
+
+.develop-dashboard-root .ddb-topbar-icon-btn.is-active {
+  background: #eef6ff;
+  border-color: rgba(37, 99, 235, 0.45);
+  color: #1e40af;
+  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.16);
+}
+
+.develop-dashboard-root .ddb-topbar-icon-btn--theme.is-active {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #f8fafc;
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.28);
+}
+
+.develop-dashboard-root .ddb-topbar-icon-badge {
+  position: absolute;
+  right: -4px;
+  top: -5px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 0.56rem;
+  font-weight: 800;
+  line-height: 1;
+  color: #0f172a;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: #ffffff;
+}
+
+.develop-dashboard-root .ddb-brand h1 {
+  margin: 0;
+  font-size: 1.4rem;
+  background: linear-gradient(135deg, #1f5e3a, #2b8c5e);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.develop-dashboard-root .ddb-layer-registry-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 0 2px 2px;
+}
+
+.develop-dashboard-root .ddb-layer-registry-head .ddb-section-title {
+  margin: 10px 0 14px 0;
+}
+
+.develop-dashboard-root .ddb-add-source-icon-btn {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: none;
+  border-radius: 16px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(155deg, #34a56b 0%, #2c7a4a 42%, #1a4d32 100%);
+  color: #fff;
+  box-shadow:
+    0 4px 16px rgba(22, 74, 47, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  transition:
+    transform 0.22s cubic-bezier(0.34, 1.2, 0.64, 1),
+    box-shadow 0.22s ease;
+}
+
+.develop-dashboard-root .ddb-add-source-icon-btn__glow {
+  position: absolute;
+  inset: -3px;
+  border-radius: 18px;
+  background: radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.45), transparent 55%);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.develop-dashboard-root .ddb-add-source-icon-btn i {
+  position: relative;
+  z-index: 1;
+  font-size: 1.32rem;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+}
+
+.develop-dashboard-root .ddb-add-source-icon-btn:hover,
+.develop-dashboard-root .ddb-add-source-icon-btn:focus-visible {
+  z-index: 40;
+  transform: translateY(-2px);
+  box-shadow:
+    0 8px 24px rgba(22, 74, 47, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+}
+
+.develop-dashboard-root .ddb-add-source-icon-btn:focus-visible {
+  outline: 2px solid #34a56b;
+  outline-offset: 3px;
+}
+
+.develop-dashboard-root .ddb-add-source-icon-btn:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.develop-dashboard-root .ddb-add-source-icon-btn::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 10px);
+  transform: translateX(-50%) translateY(-4px);
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(28, 77, 45, 0.96);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    visibility 0.2s;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.develop-dashboard-root .ddb-add-source-icon-btn::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 2px);
+  transform: translateX(-50%);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 7px solid rgba(28, 77, 45, 0.96);
+  border-top: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    visibility 0.2s;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.develop-dashboard-root .ddb-add-source-icon-btn:hover::after,
+.develop-dashboard-root .ddb-add-source-icon-btn:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.develop-dashboard-root .ddb-add-source-icon-btn:hover::before,
+.develop-dashboard-root .ddb-add-source-icon-btn:focus-visible::before {
+  opacity: 1;
+  visibility: visible;
+}
+
+.develop-dashboard-root .ddb-section-title {
+  position: relative;
+  z-index: 1;
+  margin: 10px auto 14px;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #ffffff, var(--ddb-green-soft));
+  border: 1px solid rgba(60, 172, 110, 0.18);
+  color: var(--ddb-green-dark);
+  cursor: default;
+  box-shadow: 0 2px 10px rgba(31, 94, 58, 0.06);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.develop-dashboard-root .ddb-section-title i {
+  font-size: 1.25rem;
+  color: var(--ddb-green);
+}
+
+.develop-dashboard-root .ddb-section-title:hover,
+.develop-dashboard-root .ddb-section-title:focus-within {
+  z-index: 40;
+  transform: translateY(-1px);
+  border-color: rgba(44, 122, 74, 0.35);
+  box-shadow: 0 6px 18px rgba(31, 94, 58, 0.1);
+}
+
+.develop-dashboard-root .ddb-section-title:focus-visible {
+  outline: 2px solid var(--ddb-green);
+  outline-offset: 3px;
+}
+
+.develop-dashboard-root .ddb-section-title-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.develop-dashboard-root .ddb-section-title::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 10px);
+  bottom: auto;
+  transform: translateX(-50%) translateY(-4px);
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(28, 77, 45, 0.96);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: normal;
+  max-width: min(240px, 72vw);
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    visibility 0.2s;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  z-index: 30;
+}
+
+.develop-dashboard-root .ddb-section-title::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 2px);
+  bottom: auto;
+  transform: translateX(-50%);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 7px solid rgba(28, 77, 45, 0.96);
+  border-top: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    visibility 0.2s;
+  z-index: 31;
+  pointer-events: none;
+}
+
+.develop-dashboard-root .ddb-section-title:hover::after,
+.develop-dashboard-root .ddb-section-title:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.develop-dashboard-root .ddb-section-title:hover::before,
+.develop-dashboard-root .ddb-section-title:focus-visible::before {
+  opacity: 1;
+  visibility: visible;
+}
+
+.develop-dashboard-root .ddb-layer-card {
+  background: #f9fbfd;
+  border-radius: 20px;
+  padding: 12px;
+  margin-bottom: 10px;
+  border: 1px solid #e6edea;
+  transition: 0.2s;
+}
+
+.develop-dashboard-root .ddb-layer-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.develop-dashboard-root .ddb-layer-name {
+  font-weight: 600;
+  flex: 1;
+  font-size: 0.85rem;
+}
+
+.develop-dashboard-root .ddb-layer-badge {
+  font-size: 10px;
+  background: #e0f0e6;
+  padding: 2px 10px;
+  border-radius: 30px;
+}
+
+.develop-dashboard-root .ddb-layer-actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.develop-dashboard-root .ddb-layer-check-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.develop-dashboard-root .ddb-layer-header-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.develop-dashboard-root .ddb-layer-origin-badge {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 30px;
+  background: #eef2f7;
+  color: #64748b;
+}
+
+.develop-dashboard-root .ddb-layer-origin-badge--user {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.develop-dashboard-root .ddb-layer-delete-btn {
+  margin-left: auto;
+  width: 36px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid rgba(185, 28, 28, 0.25);
+  background: #fff5f5;
+  color: #b91c1c;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.develop-dashboard-root .ddb-layer-delete-btn:hover {
+  background: #fee2e2;
+  border-color: rgba(185, 28, 28, 0.45);
+}
+
+.develop-dashboard-root .ddb-layer-delete-btn:focus-visible {
+  outline: 2px solid #b91c1c;
+  outline-offset: 2px;
+}
+
+.develop-dashboard-root .ddb-layer-group {
+  margin-bottom: 14px;
+}
+
+.develop-dashboard-root .ddb-layer-group:last-child {
+  margin-bottom: 0;
+}
+
+.develop-dashboard-root .ddb-layer-group-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  margin: 0 0 8px 4px;
+}
+
+.develop-dashboard-root .ddb-stats-config-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  align-items: center;
+}
+
+.develop-dashboard-root .ddb-stats-config-row select,
+.develop-dashboard-root .ddb-stats-config-row button {
+  flex: 1;
+  min-width: 100px;
+}
+
+.develop-dashboard-root .ddb-stats-cards-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.develop-dashboard-root .ddb-stat-card-custom {
+  background: #f6faf7;
+  border-radius: 20px;
+  padding: 10px;
+  text-align: center;
+  cursor: pointer;
+  border: 1px solid #e0ece4;
+  transition: 0.1s;
+}
+
+.develop-dashboard-root .ddb-stat-card-custom:hover {
+  background: #e9f3ed;
+}
+
+.develop-dashboard-root .ddb-stat-number {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #1b4d2b;
+}
+
+.develop-dashboard-root .ddb-stat-label {
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+/* Visualization types: 6 icons per row (flat white — no cool-toned panel wash) */
+.develop-dashboard-root .ddb-powerbi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 14px;
+  max-height: min(52vh, 480px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 12px;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+/* Chart grid: scrolls inside ddb-vis-chart-types__scroll only — no overlap with buttons */
+.develop-dashboard-root .ddb-powerbi-grid--in-right-sheet {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-auto-rows: minmax(40px, auto);
+  gap: 8px;
+  height: 100%;
+  max-height: 100%;
+  margin: 0;
+  padding: 10px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 12px;
+  scrollbar-gutter: stable;
+  background: #fff;
+  border: none;
+  box-shadow: none;
+}
+
+.develop-dashboard-root .ddb-powerbi-grid--in-right-sheet .ddb-chart-tool-item {
+  box-sizing: border-box;
+  aspect-ratio: unset;
+  height: 40px;
+  min-height: 40px;
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  border-radius: 2px;
+  border: 1px solid var(--ddb-pbi-border);
+  box-shadow: none;
+  background: var(--ddb-pbi-panel);
+  z-index: 0;
+}
+
+.develop-dashboard-root .ddb-powerbi-grid--in-right-sheet .ddb-chart-tool-item:hover {
+  transform: none;
+  border-color: var(--ddb-pbi-border-strong);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  background: var(--ddb-pbi-canvas);
+}
+
+.develop-dashboard-root .ddb-powerbi-grid--in-right-sheet .ddb-chart-tool-item i {
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.develop-dashboard-root .ddb-powerbi-grid--in-right-sheet .ddb-chart-tool-item.is-selected {
+  background: var(--ddb-pbi-blue-soft);
+  border-color: color-mix(in srgb, var(--ddb-pbi-blue) 45%, var(--ddb-pbi-border));
+  box-shadow:
+    0 0 0 1px var(--ddb-pbi-blue),
+    0 2px 8px rgba(17, 130, 212, 0.15);
+}
+
+.develop-dashboard-root .ddb-powerbi-grid--in-right-sheet::-webkit-scrollbar {
+  width: 6px;
+}
+
+.develop-dashboard-root .ddb-powerbi-grid--in-right-sheet::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.35);
+  border-radius: 999px;
+}
+
+.develop-dashboard-root .ddb-powerbi-grid--in-right-sheet::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.develop-dashboard-root .ddb-chart-tool-item {
+  appearance: none;
+  font: inherit;
+  margin: 0;
+  background: var(--ddb-pbi-panel);
+  border-radius: 2px;
+  padding: 6px 2px;
+  min-height: 40px;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    transform 0.2s cubic-bezier(0.34, 1.2, 0.64, 1),
+    box-shadow 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+  border: 1px solid var(--ddb-pbi-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  box-shadow: none;
+  position: relative;
+}
+
+.develop-dashboard-root .ddb-chart-tool-item:hover {
+  transform: translateY(-1px);
+  border-color: var(--ddb-pbi-border-strong);
+  background: var(--ddb-pbi-canvas);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.develop-dashboard-root .ddb-chart-tool-item i {
+  display: block;
+  font-size: 1.02rem;
+  line-height: 1;
+  color: var(--ddb-pbi-muted);
+}
+
+/* Font Awesome uses ::before — Power BI style blue accent when selected */
+.develop-dashboard-root .ddb-chart-tool-item:not(.is-selected) i,
+.develop-dashboard-root .ddb-chart-tool-item:not(.is-selected) i::before {
+  color: var(--ddb-pbi-muted);
+}
+
+.develop-dashboard-root .ddb-chart-tool-item:not(.is-selected):hover i,
+.develop-dashboard-root .ddb-chart-tool-item:not(.is-selected):hover i::before {
+  color: var(--ddb-pbi-blue);
+}
+
+.develop-dashboard-root .ddb-powerbi-grid--in-right-sheet .ddb-chart-tool-item:not(.is-selected):hover i,
+.develop-dashboard-root .ddb-powerbi-grid--in-right-sheet .ddb-chart-tool-item:not(.is-selected):hover i::before {
+  color: var(--ddb-pbi-blue);
+}
+
+.develop-dashboard-root .ddb-chart-tool-label-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.develop-dashboard-root .ddb-chart-tool-item.is-selected {
+  background: var(--ddb-pbi-blue-soft);
+  border-color: color-mix(in srgb, var(--ddb-pbi-blue) 50%, var(--ddb-pbi-border));
+  box-shadow:
+    0 0 0 1px var(--ddb-pbi-blue),
+    0 2px 10px rgba(17, 130, 212, 0.18);
+}
+
+.develop-dashboard-root .ddb-chart-tool-item.is-selected i,
+.develop-dashboard-root .ddb-chart-tool-item.is-selected i::before {
+  color: var(--ddb-pbi-blue);
+}
+
+.develop-dashboard-root .ddb-chart-tool-item.is-selected:hover {
+  background: color-mix(in srgb, var(--ddb-pbi-blue-soft) 92%, var(--ddb-pbi-panel));
+}
+
+.develop-dashboard-root .ddb-chart-tool-item.is-selected:hover i,
+.develop-dashboard-root .ddb-chart-tool-item.is-selected:hover i::before {
+  color: var(--ddb-pbi-blue-dark);
+}
+
+/* Custom stat card tool: config in Visualizations sheet */
+.develop-dashboard-root .ddb-vis-stat-card {
+  margin: 0 0 14px;
+  padding: 14px 14px 16px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid rgba(209, 226, 216, 0.95);
+  box-shadow:
+    0 8px 22px rgba(15, 60, 40, 0.07),
+    0 0 0 1px rgba(255, 255, 255, 0.85) inset;
+}
+
+.develop-dashboard-root .ddb-vis-stat-card__icon-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 12px;
+  background: linear-gradient(160deg, #d1fae5, #bbf7d0);
+  border: 1px solid rgba(21, 128, 61, 0.22);
+  color: var(--ddb-green-dark);
+  font-size: 1.05rem;
+}
+
+.develop-dashboard-root .ddb-vis-stat-card__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.develop-dashboard-root .ddb-vis-stat-card__row .ddb-vis-stat-select {
+  flex: 1 1 72px;
+  min-width: 0;
+  font-size: 0.68rem;
+  padding: 8px 10px;
+}
+
+.develop-dashboard-root .ddb-vis-stat-add {
+  width: 100%;
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  background: var(--ddb-green-dark);
+  border: none;
+  color: #fff;
+  cursor: pointer;
+}
+
+.develop-dashboard-root .ddb-vis-stat-add:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.develop-dashboard-root .ddb-vis-stat-add:not(:disabled):hover {
+  filter: brightness(1.06);
+}
+
+.develop-dashboard-root .ddb-vis-stat-add__icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--ddb-green);
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+  flex-shrink: 0;
+}
+
+.develop-dashboard-root .ddb-vis-stat-saved {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.develop-dashboard-root .ddb-vis-stat-saved-head {
+  margin: 0 0 8px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+}
+
+.develop-dashboard-root .ddb-stats-cards-container--in-sheet {
+  margin-top: 0;
+  max-height: min(40vh, 280px);
+}
+
+@media (max-width: 1100px) {
+  .develop-dashboard-root .ddb-dashboard-body {
+    flex-direction: column;
+  }
+
+  .develop-dashboard-root .ddb-right-wrap {
+    flex: 0 0 auto;
+    max-height: 200px;
+    flex-direction: column-reverse;
+  }
+
+  /* When the sheet is open, allow enough height so Chart types + actions do not overlap */
+  .develop-dashboard-root .ddb-right-wrap.is-open {
+    max-height: min(58vh, 520px);
+  }
+
+  .develop-dashboard-root .ddb-right-rail {
+    flex-direction: row;
+    width: 100%;
+    height: 58px;
+    min-height: 58px;
+    border-inline-start: none;
+    border-top: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  }
+
+  .develop-dashboard-root .ddb-right-rail-tab {
+    flex: 1 1 0;
+    flex-direction: row;
+    justify-content: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-bottom: none;
+    border-inline-end: 1px solid rgba(15, 23, 42, 0.06);
+  }
+
+  .develop-dashboard-root .ddb-right-rail-tab:last-child {
+    border-inline-end: none;
+  }
+
+  .develop-dashboard-root .ddb-right-rail-tab.is-active {
+    box-shadow: inset 0 -3px 0 var(--ddb-pbi-blue);
+  }
+
+  .develop-dashboard-root .ddb-right-rail-icon-wrap {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+  }
+
+  .develop-dashboard-root .ddb-right-rail-label {
+    font-size: 0.62rem;
+    max-height: none;
+  }
+
+  .develop-dashboard-root .ddb-right-wrap.is-open .ddb-right-sheet {
+    width: 100%;
+    min-width: 0;
+    max-height: min(56vh, 500px);
+  }
+}
+
+.develop-dashboard-root .ddb-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.develop-dashboard-root .ddb-main > .ddb-canvas-workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Power BI–style right rail: Filters | Visualizations | Build | Data | Link */
+.develop-dashboard-root .ddb-right-wrap {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: stretch;
+  min-height: 0;
+  max-height: 100%;
+  border-radius: 2px;
+  background: var(--ddb-pbi-canvas);
+  border: 1px solid var(--ddb-pbi-border);
+  box-shadow: 0 0.3px 0.9px rgba(0, 0, 0, 0.08), 0 1.6px 3.6px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.develop-dashboard-root .ddb-right-sheet {
+  width: 0;
+  min-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--ddb-pbi-panel);
+  border-inline-end: 1px solid var(--ddb-pbi-border);
+  transition:
+    width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+    min-width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.2s ease;
+}
+
+.develop-dashboard-root .ddb-right-wrap.is-open .ddb-right-sheet {
+  width: 320px;
+  min-width: 320px;
+  opacity: 1;
+}
+
+.develop-dashboard-root .ddb-right-sheet-head {
+  flex-shrink: 0;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--ddb-pbi-border);
+  background: var(--ddb-pbi-panel);
+}
+
+.develop-dashboard-root .ddb-right-sheet-head-main {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  min-width: 0;
+}
+
+.develop-dashboard-root .ddb-right-sheet-head-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.develop-dashboard-root .ddb-right-sheet-head--with-viz-tabs {
+  padding-bottom: 14px;
+  background: linear-gradient(180deg, var(--ddb-pbi-panel) 0%, #fafaf9 100%);
+}
+
+.develop-dashboard-root .ddb-vis-pane__subtitle {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ddb-pbi-text);
+}
+
+.develop-dashboard-root .ddb-vis-pane__tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--ddb-pbi-canvas);
+  border: 1px solid var(--ddb-pbi-border);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.85) inset;
+}
+
+.develop-dashboard-root .ddb-vis-pane__tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding-bottom: 10px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ddb-pbi-muted);
+  cursor: pointer;
+  font-size: 1.1rem;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.develop-dashboard-root .ddb-vis-pane__tab:hover {
+  color: var(--ddb-pbi-text);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.develop-dashboard-root .ddb-vis-pane__tab.is-active {
+  color: var(--ddb-pbi-text);
+  background: var(--ddb-pbi-panel);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    0 0 0 1px var(--ddb-pbi-border);
+}
+
+.develop-dashboard-root .ddb-vis-pane__tab.is-active::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 22px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--ddb-pbi-accent-green);
+}
+
+.develop-dashboard-root .ddb-vis-pane__tab-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.develop-dashboard-root .ddb-right-sheet-title {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--ddb-pbi-text);
+}
+
+.develop-dashboard-root .ddb-right-sheet-collapse {
+  width: 32px;
+  height: 32px;
+  border-radius: 2px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ddb-pbi-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.develop-dashboard-root .ddb-right-sheet-collapse:hover {
+  background: var(--ddb-pbi-canvas);
+  color: var(--ddb-pbi-text);
+  border-color: var(--ddb-pbi-border);
+}
+
+.develop-dashboard-root .ddb-right-sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 16px 20px;
+  background: var(--ddb-pbi-canvas);
+}
+
+.develop-dashboard-root .ddb-right-sheet-body--visualizations {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-x: hidden;
+}
+
+.develop-dashboard-root .ddb-right-sheet-body--viz-format,
+.develop-dashboard-root .ddb-right-sheet-body--viz-analysis {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+  padding-top: 12px;
+}
+
+.develop-dashboard-root .ddb-vis-format__search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(240px, 100%);
+  align-self: flex-start;
+  min-height: 34px;
+  padding: 6px 10px;
+  margin-bottom: 10px;
+  border-radius: 9px;
+  border: 1px solid var(--ddb-pbi-border);
+  background: var(--ddb-pbi-panel);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.develop-dashboard-root .ddb-vis-format__search-wrap > i {
+  font-size: 0.72rem;
+  color: var(--ddb-pbi-muted);
+}
+
+.develop-dashboard-root .ddb-vis-format__search {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font-size: 0.75rem;
+  color: var(--ddb-pbi-text);
+  outline: none;
+}
+
+.develop-dashboard-root .ddb-vis-format__search-wrap:focus-within {
+  border-color: color-mix(in srgb, var(--ddb-pbi-accent-green) 38%, var(--ddb-pbi-border));
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--ddb-pbi-accent-green) 15%, #ffffff),
+    0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.develop-dashboard-root .ddb-vis-format__search::placeholder {
+  color: var(--ddb-pbi-placeholder);
+}
+
+.develop-dashboard-root .ddb-vis-format__subtabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 12px;
+  border-bottom: 2px solid var(--ddb-pbi-border);
+}
+
+.develop-dashboard-root .ddb-vis-format__subtab {
+  flex: 1;
+  padding: 8px 4px 10px;
+  border: none;
+  background: transparent;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ddb-pbi-muted);
+  cursor: pointer;
+  position: relative;
+  transition: color 0.15s ease;
+}
+
+.develop-dashboard-root .ddb-vis-format__subtab:hover {
+  color: var(--ddb-pbi-text);
+}
+
+.develop-dashboard-root .ddb-vis-format__subtab.is-active {
+  color: var(--ddb-pbi-text);
+}
+
+.develop-dashboard-root .ddb-vis-format__subtab.is-active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  background: var(--ddb-pbi-accent-green);
+  border-radius: 2px 2px 0 0;
+}
+
+.develop-dashboard-root .ddb-vis-format__lead {
+  margin: 0 0 12px;
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  color: var(--ddb-pbi-muted);
+}
+
+.develop-dashboard-root .ddb-vis-general-quicktabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 0 1px 10px;
+  margin-bottom: 10px;
+}
+
+.develop-dashboard-root .ddb-vis-general-quicktab {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--ddb-pbi-border);
+  background: #ffffff;
+  color: var(--ddb-pbi-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.develop-dashboard-root .ddb-vis-general-quicktab:hover {
+  color: var(--ddb-pbi-text);
+  border-color: var(--ddb-pbi-border-strong);
+  transform: translateY(-1px);
+}
+
+.develop-dashboard-root .ddb-vis-general-quicktab.is-active {
+  color: #065f46;
+  border-color: color-mix(in srgb, var(--ddb-pbi-accent-green) 45%, var(--ddb-pbi-border));
+  background: linear-gradient(145deg, #ffffff, #ecfdf5);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ddb-pbi-accent-green) 20%, #ffffff);
+}
+
+.develop-dashboard-root .ddb-vis-format__scroll {
+  flex: 1;
+  min-height: 120px;
+  max-height: min(52vh, 420px);
+  overflow-y: auto;
+  padding-right: 2px;
+  border-radius: 10px;
+  border: 1px solid var(--ddb-pbi-border);
+  background: var(--ddb-pbi-panel);
+}
+
+.develop-dashboard-root .ddb-vis-format-acc {
+  border-bottom: 1px solid var(--ddb-pbi-border);
+}
+
+.develop-dashboard-root .ddb-vis-format-acc:last-child {
+  border-bottom: none;
+}
+
+.develop-dashboard-root .ddb-vis-format-acc__sum {
+  list-style: none;
+  cursor: pointer;
+  padding: 11px 14px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ddb-pbi-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.develop-dashboard-root .ddb-vis-format-acc__sum::-webkit-details-marker {
+  display: none;
+}
+
+.develop-dashboard-root .ddb-vis-format-acc__sum::before {
+  content: '\f054';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  font-size: 0.55rem;
+  color: var(--ddb-pbi-muted);
+  transition: transform 0.18s ease;
+}
+
+.develop-dashboard-root .ddb-vis-format-acc[open] .ddb-vis-format-acc__sum::before {
+  transform: rotate(90deg);
+}
+
+.develop-dashboard-root .ddb-vis-format-acc__body {
+  padding: 0 14px 12px 2rem;
+}
+
+.develop-dashboard-root .ddb-vis-format-acc__body--stack {
+  display: grid;
+  gap: 8px;
+  padding-inline-start: 14px;
+}
+
+.develop-dashboard-root .ddb-vis-format-acc--muted .ddb-vis-format-acc__sum {
+  color: var(--ddb-pbi-placeholder);
+}
+
+.develop-dashboard-root .ddb-vis-format__muted {
+  margin: 0;
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  color: var(--ddb-pbi-muted);
+}
+
+.develop-dashboard-root .ddb-vis-format-panel {
+  border-bottom: 1px solid var(--ddb-pbi-border);
+}
+
+.develop-dashboard-root .ddb-vis-format-card {
+  border: 1px solid var(--ddb-pbi-border);
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.develop-dashboard-root .ddb-vis-format-card__sum {
+  list-style: none;
+  cursor: pointer;
+  padding: 9px 11px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ddb-pbi-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.develop-dashboard-root .ddb-vis-format-card__sum::-webkit-details-marker {
+  display: none;
+}
+
+.develop-dashboard-root .ddb-vis-format-card__sum::before {
+  content: '\f054';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  font-size: 0.5rem;
+  color: var(--ddb-pbi-muted);
+  transition: transform 0.18s ease;
+}
+
+.develop-dashboard-root .ddb-vis-format-card[open] > .ddb-vis-format-card__sum::before {
+  transform: rotate(90deg);
+}
+
+.develop-dashboard-root .ddb-vis-format-card__sum--toggle {
+  justify-content: space-between;
+}
+
+.develop-dashboard-root .ddb-vis-format-card__sum--toggle::before {
+  display: none;
+}
+
+.develop-dashboard-root .ddb-vis-format-card__body {
+  display: grid;
+  gap: 10px;
+  padding: 0 11px 11px;
+}
+
+.develop-dashboard-root .ddb-vis-format-field {
+  display: grid;
+  gap: 6px;
+}
+
+.develop-dashboard-root .ddb-vis-format-field > span {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--ddb-pbi-muted);
+}
+
+.develop-dashboard-root .ddb-vis-format-field input,
+.develop-dashboard-root .ddb-vis-format-field select {
+  width: 100%;
+  min-height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--ddb-pbi-border-strong);
+  background: #ffffff;
+  color: var(--ddb-pbi-text);
+  font-size: 0.75rem;
+  padding: 6px 8px;
+}
+
+.develop-dashboard-root .ddb-vis-format-field input:focus-visible,
+.develop-dashboard-root .ddb-vis-format-field select:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ddb-pbi-blue) 45%, #ffffff);
+  outline-offset: 1px;
+}
+
+.develop-dashboard-root .ddb-vis-format-padding-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.develop-dashboard-root .ddb-vis-format-padding-grid label {
+  display: grid;
+  gap: 5px;
+}
+
+.develop-dashboard-root .ddb-vis-format-padding-grid span {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--ddb-pbi-muted);
+}
+
+.develop-dashboard-root .ddb-vis-format-padding-grid input {
+  min-height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--ddb-pbi-border-strong);
+  background: #ffffff;
+  color: var(--ddb-pbi-text);
+  font-size: 0.75rem;
+  padding: 5px 8px;
+}
+
+.develop-dashboard-root .ddb-vis-format-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+}
+
+.develop-dashboard-root .ddb-vis-format-toggle-row__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ddb-pbi-text);
+}
+
+.develop-dashboard-root .ddb-vis-switch {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.develop-dashboard-root .ddb-vis-switch__input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.develop-dashboard-root .ddb-vis-switch__ui {
+  display: block;
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--ddb-pbi-border-strong);
+  position: relative;
+  transition: background 0.2s ease;
+}
+
+.develop-dashboard-root .ddb-vis-switch__ui::after {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+
+.develop-dashboard-root .ddb-vis-switch__input:checked + .ddb-vis-switch__ui {
+  background: var(--ddb-pbi-accent-green);
+}
+
+.develop-dashboard-root .ddb-vis-switch__input:checked + .ddb-vis-switch__ui::after {
+  transform: translateX(16px);
+}
+
+.develop-dashboard-root .ddb-vis-switch__input:focus-visible + .ddb-vis-switch__ui {
+  outline: 2px solid var(--ddb-pbi-blue);
+  outline-offset: 2px;
+}
+
+.develop-dashboard-root .ddb-vis-analysis__lead {
+  margin: 0 0 14px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--ddb-pbi-muted);
+}
+
+.develop-dashboard-root .ddb-vis-analysis__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-radius: 12px;
+  border: 1px solid var(--ddb-pbi-border);
+  background: var(--ddb-pbi-panel);
+  overflow: hidden;
+}
+
+.develop-dashboard-root .ddb-vis-analysis__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--ddb-pbi-border);
+  font-size: 0.75rem;
+}
+
+.develop-dashboard-root .ddb-vis-analysis__item:last-child {
+  border-bottom: none;
+}
+
+.develop-dashboard-root .ddb-vis-analysis__item-label {
+  font-weight: 600;
+  color: var(--ddb-pbi-text);
+}
+
+.develop-dashboard-root .ddb-vis-analysis-chip {
+  min-width: 44px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--ddb-pbi-border);
+  background: var(--ddb-pbi-canvas);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--ddb-pbi-muted);
+  cursor: not-allowed;
+}
+
+.develop-dashboard-root .ddb-right-sheet-body--build-visual {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-x: hidden;
+  padding-top: 12px;
+}
+
+.develop-dashboard-root .ddb-build-visual-empty {
+  padding: 8px 4px 12px;
+  border-radius: 10px;
+  border: 1px solid #e1dfdd;
+  background: #faf9f8;
+}
+
+.develop-dashboard-root .ddb-build-visual-empty__title {
+  margin: 0 0 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #323130;
+}
+
+.develop-dashboard-root .ddb-build-visual-empty__text {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: #605e5c;
+}
+
+.develop-dashboard-root .ddb-vis-chart-types {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+  position: relative;
+  z-index: 0;
+  padding-bottom: 2px;
+}
+
+.develop-dashboard-root .ddb-vis-chart-types__head {
+  margin: 0;
+  flex-shrink: 0;
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ddb-pbi-muted);
+  padding: 0 4px 8px;
+  border-bottom: none;
+}
+
+/* Clips the icon grid so it never paints over the action buttons below */
+.develop-dashboard-root .ddb-vis-chart-types__scroll {
+  flex: 1 1 0;
+  min-height: 120px;
+  max-height: min(46vh, 400px);
+  overflow: hidden;
+  position: relative;
+  isolation: isolate;
+  border-radius: 2px;
+  border: 1px solid var(--ddb-pbi-border);
+  background: var(--ddb-pbi-panel);
+  box-shadow: 0 0.3px 0.9px rgba(0, 0, 0, 0.06);
+}
+
+.develop-dashboard-root .ddb-right-sheet-lead {
+  margin: 0 0 12px;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: #605e5c;
+}
+
+.develop-dashboard-root .ddb-right-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.develop-dashboard-root .ddb-right-filter-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #605e5c;
+}
+
+.develop-dashboard-root .ddb-right-filter-input {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #8a8886;
+  font-size: 0.8rem;
+  background: #fff;
+}
+
+.develop-dashboard-root .ddb-vis-add-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.develop-dashboard-root .ddb-vis-add-actions--below-charts {
+  flex-shrink: 0;
+  margin-top: 16px;
+  padding-top: 16px;
+  padding-bottom: 4px;
+  gap: 10px;
+  position: relative;
+  z-index: 2;
+  border-top: 1px solid var(--ddb-pbi-border);
+  background: var(--ddb-pbi-canvas);
+  box-shadow: none;
+}
+
+.develop-dashboard-root .ddb-vis-add-actions--below-charts .ddb-right-sheet-primary,
+.develop-dashboard-root .ddb-vis-add-actions--below-charts .ddb-right-sheet-secondary {
+  padding: 10px 14px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  min-height: 32px;
+  border-radius: 2px;
+  position: relative;
+  z-index: 1;
+}
+
+.develop-dashboard-root .ddb-right-sheet-primary {
+  width: 100%;
+  border-radius: 2px;
+  border: 1px solid transparent;
+  background: var(--ddb-pbi-blue);
+  color: #fff;
+  font-weight: 600;
+}
+
+.develop-dashboard-root .ddb-right-sheet-primary:hover {
+  background: var(--ddb-pbi-blue-dark);
+}
+
+.develop-dashboard-root .ddb-right-sheet-secondary {
+  width: 100%;
+  border-radius: 2px;
+  background: var(--ddb-pbi-panel);
+  border: 1px solid var(--ddb-pbi-border-strong);
+  color: var(--ddb-pbi-text);
+}
+
+.develop-dashboard-root .ddb-right-sheet-secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Build visual: Fabric / Power BI–style wells + field list */
+.develop-dashboard-root .ddb-vis-build-visual {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ddb-pbi-border);
+  background: transparent;
+}
+
+.develop-dashboard-root .ddb-vis-build-visual--solo {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+  flex: 1;
+  min-height: 0;
+  border-radius: 2px;
+  padding: 16px 16px 18px;
+  background: var(--ddb-pbi-panel);
+  border: 1px solid var(--ddb-pbi-border);
+  box-shadow: 0 0.3px 0.9px rgba(0, 0, 0, 0.06), 0 1.6px 3.6px rgba(0, 0, 0, 0.04);
+}
+
+.develop-dashboard-root .ddb-vis-build-visual__kicker {
+  margin: 0 0 14px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ddb-pbi-muted);
+}
+
+.develop-dashboard-root .ddb-vis-build-visual__title {
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ddb-pbi-muted);
+  margin-bottom: 12px;
+}
+
+.develop-dashboard-root .ddb-vis-bind-layer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.develop-dashboard-root .ddb-vis-bind-layer__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ddb-pbi-text);
+}
+
+.develop-dashboard-root .ddb-vis-bind-layer__select {
+  width: 100%;
+  font-size: 0.8125rem;
+  min-height: 32px;
+  border-radius: 2px;
+  border: 1px solid var(--ddb-pbi-border-strong);
+  padding: 4px 8px;
+  background: var(--ddb-pbi-panel);
+  color: var(--ddb-pbi-text);
+}
+
+.develop-dashboard-root .ddb-vis-well {
+  margin-bottom: 12px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.develop-dashboard-root .ddb-vis-well.is-drop-target {
+  background: rgba(219, 234, 254, 0.35);
+  border-radius: 8px;
+}
+
+.develop-dashboard-root .ddb-vis-well__label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ddb-pbi-text);
+  margin-bottom: 6px;
+}
+
+.develop-dashboard-root .ddb-vis-well__select {
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 2px;
+  border: 1px solid var(--ddb-pbi-border-strong);
+  background: var(--ddb-pbi-panel);
+  font-size: 0.8125rem;
+  color: var(--ddb-pbi-text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.develop-dashboard-root .ddb-vis-well__select:hover {
+  border-color: var(--ddb-pbi-muted);
+}
+
+.develop-dashboard-root .ddb-vis-well__select:focus {
+  outline: none;
+  border-color: var(--ddb-pbi-blue);
+  box-shadow: 0 0 0 1px var(--ddb-pbi-blue);
+}
+
+.develop-dashboard-root .ddb-vis-well__chip {
+  margin-top: 6px;
+  width: 100%;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px dashed rgba(17, 130, 212, 0.5);
+  border-radius: 8px;
+  background: #f8fbff;
+  color: #0f4c81;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 5px 8px;
+  cursor: grab;
+}
+
+.develop-dashboard-root .ddb-vis-well__chip:active {
+  cursor: grabbing;
+}
+
+.develop-dashboard-root .ddb-vis-well__chip i {
+  color: #64748b;
+}
+
+.develop-dashboard-root .ddb-vis-well__placeholder {
+  width: 100%;
+  min-height: 32px;
+  padding: 8px 10px;
+  border-radius: 2px;
+  border: 1px solid var(--ddb-pbi-border);
+  background: var(--ddb-pbi-canvas);
+  font-size: 0.8125rem;
+  color: var(--ddb-pbi-placeholder);
+  line-height: 1.35;
+}
+
+.develop-dashboard-root .ddb-vis-drill {
+  margin: 16px 0 12px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--ddb-pbi-border);
+}
+
+.develop-dashboard-root .ddb-vis-drill__title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ddb-pbi-text);
+  margin-bottom: 8px;
+}
+
+.develop-dashboard-root .ddb-vis-drill__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.8125rem;
+  color: var(--ddb-pbi-text);
+  margin-bottom: 8px;
+}
+
+.develop-dashboard-root .ddb-vis-fake-toggle {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 2px;
+  border: 1px solid var(--ddb-pbi-border-strong);
+  background: var(--ddb-pbi-canvas);
+  color: var(--ddb-pbi-muted);
+}
+
+.develop-dashboard-root .ddb-vis-fake-toggle.is-on {
+  background: var(--ddb-pbi-blue-soft);
+  border-color: color-mix(in srgb, var(--ddb-pbi-blue) 35%, var(--ddb-pbi-border-strong));
+  color: var(--ddb-pbi-blue-dark);
+}
+
+.develop-dashboard-root .ddb-vis-fields-block {
+  margin-top: 4px;
+  padding: 14px 0 0;
+  border-top: 1px solid var(--ddb-pbi-border);
+}
+
+.develop-dashboard-root .ddb-vis-fields-block__head {
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ddb-pbi-muted);
+  margin-bottom: 8px;
+}
+
+.develop-dashboard-root .ddb-vis-fields-block__hint {
+  margin: 0 0 10px;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--ddb-pbi-muted);
+}
+
+/* Build visual: tabbed / collapsible Fields panel (chevron + FIELDS + hint + checklist) */
+.develop-dashboard-root .ddb-build-fields-panel {
+  margin-top: 4px;
+  padding: 0;
+  border: 1px solid var(--ddb-pbi-border-strong);
+  border-radius: 2px;
+  background: var(--ddb-pbi-canvas);
+  overflow: hidden;
+}
+
+.develop-dashboard-root .ddb-build-fields-panel--top {
+  margin-top: 0;
+  margin-bottom: 4px;
+}
+
+.develop-dashboard-root .ddb-build-fields-panel--top + .ddb-vis-build-visual__kicker {
+  margin-top: 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--ddb-pbi-border);
+}
+
+.develop-dashboard-root .ddb-build-fields-panel__tab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  margin: 0;
+  border: none;
+  border-bottom: 1px solid var(--ddb-pbi-border);
+  background: var(--ddb-pbi-panel);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+.develop-dashboard-root .ddb-build-fields-panel__tab[aria-expanded='false'] {
+  border-bottom: none;
+}
+
+.develop-dashboard-root .ddb-build-fields-panel__tab:hover {
+  background: var(--ddb-pbi-canvas);
+}
+
+.develop-dashboard-root .ddb-build-fields-panel__title {
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ddb-pbi-muted);
+  flex: 1;
+}
+
+.develop-dashboard-root .ddb-build-fields-panel__chev {
+  flex-shrink: 0;
+  width: 1.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ddb-pbi-text);
+  font-size: 0.75rem;
+}
+
+.develop-dashboard-root .ddb-build-fields-panel__body {
+  padding: 12px 12px 14px;
+  background: var(--ddb-pbi-canvas);
+}
+
+.develop-dashboard-root .ddb-build-fields-panel__body .ddb-vis-fields-block__hint {
+  margin-top: 0;
+}
+
+.develop-dashboard-root .ddb-vis-field-check-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(240px, 38vh);
+  overflow-y: auto;
+  border: 1px solid var(--ddb-pbi-border-strong);
+  border-radius: 2px;
+  background: var(--ddb-pbi-panel);
+  scrollbar-width: thin;
+  scrollbar-color: var(--ddb-pbi-border-strong) transparent;
+}
+
+.develop-dashboard-root .ddb-vis-field-check-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 0.8125rem;
+  border-bottom: 1px solid var(--ddb-pbi-border);
+}
+
+.develop-dashboard-root .ddb-vis-field-check-row__main {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+  cursor: pointer;
+}
+
+.develop-dashboard-root .ddb-vis-field-check-list li:last-child .ddb-vis-field-check-row {
+  border-bottom: none;
+}
+
+.develop-dashboard-root .ddb-vis-field-check-row:hover {
+  background: var(--ddb-pbi-canvas);
+}
+
+.develop-dashboard-root .ddb-vis-field-check-row input {
+  flex-shrink: 0;
+}
+
+.develop-dashboard-root .ddb-vis-field-check-row__name {
+  min-width: 0;
+  word-break: break-word;
+  cursor: grab;
+}
+
+.develop-dashboard-root .ddb-vis-field-check-row__name:active {
+  cursor: grabbing;
+}
+
+.develop-dashboard-root .ddb-vis-field-pin-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--ddb-pbi-border-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: #605e5c;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.develop-dashboard-root .ddb-vis-field-pin-btn:hover {
+  border-color: var(--ddb-pbi-blue);
+  color: var(--ddb-pbi-blue);
+  background: #eef6fd;
+}
+
+/* Data pane: map layer cards live above field search (no duplicate sidebar registry header) */
+.develop-dashboard-root .ddb-data-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.develop-dashboard-root .ddb-data-map-layers {
+  flex-shrink: 0;
+  margin: 0 0 16px;
+  padding: 14px;
+  border-radius: 2px;
+  background: var(--ddb-pbi-panel);
+  border: 1px solid var(--ddb-pbi-border);
+  box-shadow: 0 0.3px 0.9px rgba(0, 0, 0, 0.06);
+}
+
+.develop-dashboard-root .ddb-data-map-layers-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--ddb-pbi-border);
+}
+
+.develop-dashboard-root .ddb-data-map-layers-title {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ddb-pbi-muted);
+}
+
+.develop-dashboard-root .ddb-data-add-source-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 6px 11px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(180deg, #10b981, #059669);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.22);
+  transition:
+    filter 0.15s ease,
+    transform 0.15s ease;
+}
+
+.develop-dashboard-root .ddb-data-add-source-btn:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+
+.develop-dashboard-root .ddb-data-add-source-btn:focus-visible {
+  outline: 2px solid rgba(5, 150, 105, 0.55);
+  outline-offset: 2px;
+}
+
+.develop-dashboard-root .ddb-data-map-layers-scroll {
+  max-height: min(28vh, 260px);
+  overflow-y: auto;
+  padding-right: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.develop-dashboard-root .ddb-data-map-layers-scroll .ddb-layer-card {
+  margin-bottom: 8px;
+}
+
+.develop-dashboard-root .ddb-data-map-layers-scroll .ddb-layer-card:last-child {
+  margin-bottom: 0;
+}
+
+.develop-dashboard-root .ddb-data-map-layers-empty {
+  margin: 0;
+  padding: 10px 6px;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: #64748b;
+  text-align: center;
+}
+
+.develop-dashboard-root .ddb-data-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 2px;
+  border: 1px solid var(--ddb-pbi-border-strong);
+  background: var(--ddb-pbi-panel);
+  margin-bottom: 16px;
+}
+
+.develop-dashboard-root .ddb-data-search-wrap i {
+  color: var(--ddb-pbi-muted);
+  font-size: 0.85rem;
+}
+
+.develop-dashboard-root .ddb-data-search {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  font-size: 0.8rem;
+  background: transparent;
+}
+
+.develop-dashboard-root .ddb-data-tree-section-label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ddb-pbi-muted);
+  margin: 0 0 8px 2px;
+}
+
+.develop-dashboard-root .ddb-data-table-block {
+  margin-bottom: 10px;
+  border-radius: 2px;
+  background: var(--ddb-pbi-panel);
+  border: 1px solid var(--ddb-pbi-border);
+}
+
+.develop-dashboard-root .ddb-data-table-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  color: #201f1e;
+}
+
+.develop-dashboard-root .ddb-data-table-toggle:hover {
+  background: #f3f2f1;
+}
+
+.develop-dashboard-root .ddb-data-table-icon {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #107c10;
+  font-size: 0.85rem;
+}
+
+.develop-dashboard-root .ddb-data-table-icon--csv {
+  color: #1b5e3c;
+}
+
+.develop-dashboard-root .ddb-data-table-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.develop-dashboard-root .ddb-data-table-meta {
+  font-size: 0.65rem;
+  color: #605e5c;
+  text-transform: uppercase;
+}
+
+.develop-dashboard-root .ddb-data-field-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0 8px 28px;
+  border-top: 1px solid #f3f2f1;
+}
+
+.develop-dashboard-root .ddb-data-field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 0;
+  font-size: 0.78rem;
+  color: #323130;
+}
+
+.develop-dashboard-root .ddb-data-field-type {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #107c10;
+  width: 22px;
+  text-align: center;
+}
+
+.develop-dashboard-root .ddb-data-remove-csv {
+  margin: 0 10px 8px;
+  padding: 4px 8px;
+  font-size: 0.68rem;
+  border: none;
+  background: transparent;
+  color: #a4262c;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.develop-dashboard-root .ddb-data-empty {
+  margin: 12px 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: #605e5c;
+}
+
+/* Right rail: Power BI–style vertical tabs (neutral + blue active stripe) */
+.develop-dashboard-root .ddb-right-rail {
+  flex: 0 0 72px;
+  width: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: stretch;
+  gap: 0;
+  background: var(--ddb-pbi-canvas);
+  border-inline-start: 1px solid var(--ddb-pbi-border);
+}
+
+.develop-dashboard-root .ddb-right-rail-tab {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 12px 6px;
+  border: none;
+  border-bottom: 1px solid var(--ddb-pbi-border);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  color: var(--ddb-pbi-muted);
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.develop-dashboard-root .ddb-right-rail-tab:last-child {
+  border-bottom: none;
+}
+
+.develop-dashboard-root .ddb-right-rail-tab:hover {
+  background: color-mix(in srgb, var(--ddb-pbi-panel) 88%, var(--ddb-pbi-canvas));
+  color: var(--ddb-pbi-text);
+}
+
+.develop-dashboard-root .ddb-right-rail-tab.is-active {
+  background: var(--ddb-pbi-panel);
+  box-shadow: inset 3px 0 0 var(--ddb-pbi-blue);
+  color: var(--ddb-pbi-text);
+}
+
+.develop-dashboard-root .ddb-right-rail-icon-wrap {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--ddb-pbi-panel);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+.develop-dashboard-root .ddb-right-rail-tab.is-active .ddb-right-rail-icon-wrap {
+  background: linear-gradient(145deg, #eff6ff, #dbeafe);
+  border-color: color-mix(in srgb, var(--ddb-pbi-blue) 40%, var(--ddb-pbi-border));
+  box-shadow: 0 8px 18px rgba(17, 130, 212, 0.18);
+}
+
+.develop-dashboard-root .ddb-right-rail-icon {
+  font-size: 1.08rem;
+  color: var(--ddb-pbi-muted);
+}
+
+.develop-dashboard-root .ddb-right-rail-icon::before {
+  color: inherit;
+}
+
+.develop-dashboard-root .ddb-right-rail-tab:hover .ddb-right-rail-icon,
+.develop-dashboard-root .ddb-right-rail-tab:hover .ddb-right-rail-icon::before {
+  color: var(--ddb-pbi-text);
+}
+
+.develop-dashboard-root .ddb-right-rail-tab.is-active .ddb-right-rail-icon {
+  color: var(--ddb-pbi-blue);
+}
+
+.develop-dashboard-root .ddb-right-rail-tab.is-active .ddb-right-rail-icon::before {
+  color: var(--ddb-pbi-blue);
+}
+
+.develop-dashboard-root .ddb-right-rail-tab.is-active:hover .ddb-right-rail-icon,
+.develop-dashboard-root .ddb-right-rail-tab.is-active:hover .ddb-right-rail-icon::before {
+  color: var(--ddb-pbi-blue-dark);
+}
+
+/* Collapsed rail: icon-only compact style */
+.develop-dashboard-root .ddb-right-wrap:not(.is-open) .ddb-right-rail {
+  flex: 0 0 76px;
+  width: 76px;
+}
+
+.develop-dashboard-root .ddb-right-wrap:not(.is-open) .ddb-right-rail-tab {
+  position: relative;
+  gap: 0;
+  padding: 12px 6px;
+  background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+}
+
+.develop-dashboard-root .ddb-right-wrap:not(.is-open) .ddb-right-rail-icon-wrap {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.develop-dashboard-root .ddb-right-wrap:not(.is-open) .ddb-right-rail-tab.is-active {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: inset 4px 0 0 var(--ddb-pbi-blue);
+}
+
+.develop-dashboard-root .ddb-right-wrap:not(.is-open) .ddb-right-rail-tab.is-active .ddb-right-rail-icon-wrap {
+  background: var(--ddb-pbi-blue-soft);
+  border-color: color-mix(in srgb, var(--ddb-pbi-blue) 35%, var(--ddb-pbi-border));
+}
+
+.develop-dashboard-root .ddb-right-wrap:not(.is-open) .ddb-right-rail-tab.is-active .ddb-right-rail-icon,
+.develop-dashboard-root .ddb-right-wrap:not(.is-open) .ddb-right-rail-tab.is-active .ddb-right-rail-icon::before {
+  color: var(--ddb-pbi-blue-dark);
+}
+
+.develop-dashboard-root .ddb-link-sheet-body {
+  padding-top: 10px;
+}
+
+.develop-dashboard-root .ddb-link-relation-card {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(16, 185, 129, 0.08), transparent 42%),
+    #fff;
+  border-radius: 16px;
+  padding: 14px 14px 16px;
+  border: 1px solid rgba(203, 213, 225, 0.92);
+  box-shadow:
+    0 10px 24px rgba(15, 23, 42, 0.09),
+    0 1px 0 rgba(255, 255, 255, 0.95) inset;
+}
+
+.develop-dashboard-root .ddb-link-relation-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.develop-dashboard-root .ddb-link-relation-card__icon-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 10px;
+  background: linear-gradient(160deg, #ecfdf5, #bbf7d0);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #065f46;
+  font-size: 0.95rem;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+}
+
+.develop-dashboard-root .ddb-link-calc-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(37, 99, 235, 0.24);
+  background: linear-gradient(160deg, #eff6ff, #dbeafe);
+  color: #1d4ed8;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.16);
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    filter 0.16s ease;
+}
+
+.develop-dashboard-root .ddb-link-calc-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.2);
+  filter: saturate(1.1);
+}
+
+.develop-dashboard-root .ddb-link-relation-card__lead {
+  margin: 0 0 12px;
+  font-size: 0.69rem;
+  line-height: 1.45;
+  color: #334155;
+  font-weight: 600;
+}
+
+.develop-dashboard-root .ddb-link-layer-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: #f8fafc;
+}
+
+.develop-dashboard-root .ddb-link-layer-search i {
+  color: #64748b;
+  font-size: 0.72rem;
+}
+
+.develop-dashboard-root .ddb-link-layer-search .ddb-input {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  min-height: 22px;
+  padding: 0;
+  font-size: 0.7rem;
+  color: #0f172a;
+}
+
+.develop-dashboard-root .ddb-link-layer-search .ddb-input:focus {
+  outline: none;
+}
+
+.develop-dashboard-root .ddb-link-layer-search--modal {
+  margin: 0 0 6px;
+}
+
+.develop-dashboard-root .ddb-link-relation-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.develop-dashboard-root .ddb-link-relation-row .ddb-link-relation-select {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 34px;
+  border-radius: 11px;
+  border-color: rgba(148, 163, 184, 0.5);
+  background: #fff;
+  color: #0f172a;
+  font-weight: 700;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  padding-right: 30px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.develop-dashboard-root .ddb-link-relation-arrow {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #0f766e;
+  background: rgba(236, 253, 245, 0.95);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  user-select: none;
+}
+
+.develop-dashboard-root .ddb-link-relation-arrow--bidir {
+  font-size: 0.86rem;
+}
+
+.develop-dashboard-root .ddb-link-relation-apply {
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 13px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  background: linear-gradient(145deg, #16a34a, #047857);
+  color: #ffffff;
+  box-shadow: 0 8px 16px rgba(5, 150, 105, 0.22);
+}
+
+.develop-dashboard-root .ddb-link-relation-apply:hover {
+  filter: brightness(1.06);
+}
+
+.develop-dashboard-root .ddb-link-relation-status {
+  margin-top: 10px;
+  text-align: center;
+  color: #047857;
+  font-size: 0.67rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.develop-dashboard-root .ddb-calc-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  background: rgba(2, 6, 23, 0.42);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.develop-dashboard-root .ddb-calc-modal {
+  width: min(560px, calc(100vw - 30px));
+  max-height: min(88vh, 760px);
+  overflow: auto;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(59, 130, 246, 0.08), transparent 34%),
+    #ffffff;
+  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.34);
+}
+
+.develop-dashboard-root .ddb-calc-modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+}
+
+.develop-dashboard-root .ddb-calc-modal__title {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #0f172a;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.develop-dashboard-root .ddb-calc-modal__close {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 9px;
+  background: #ffffff;
+  color: #334155;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.develop-dashboard-root .ddb-calc-modal__body {
+  padding: 12px 14px 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.develop-dashboard-root .ddb-calc-modal__field {
+  display: grid;
+  gap: 5px;
+}
+
+.develop-dashboard-root .ddb-calc-modal__field > span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.develop-dashboard-root .ddb-calc-modal__expr {
+  min-height: 120px;
+  resize: vertical;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  padding: 10px 11px;
+  font-size: 0.74rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  color: #0f172a;
+  background: #f8fafc;
+}
+
+.develop-dashboard-root .ddb-calc-modal__hint {
+  margin: 0;
+  font-size: 0.68rem;
+  color: #64748b;
+}
+
+.develop-dashboard-root .ddb-calc-modal__status {
+  margin: 0;
+  font-size: 0.69rem;
+  color: #0369a1;
+  font-weight: 700;
+}
+
+.develop-dashboard-root .ddb-calc-modal__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 14px 14px;
+  border-top: 1px solid rgba(226, 232, 240, 0.92);
+}
+
+.develop-dashboard-root .ddb-calc-modal__apply {
+  min-width: 108px;
+}
+
+.develop-dashboard-root .ddb-canvas-workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(16, 185, 129, 0.055), transparent 38%),
+    radial-gradient(circle at 0% 100%, rgba(59, 130, 246, 0.045), transparent 34%),
+    radial-gradient(var(--ddb-canvas-grid-dot) 0.8px, transparent 0.9px),
+    linear-gradient(var(--ddb-canvas-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--ddb-canvas-grid-line) 1px, transparent 1px),
+    #f7f9fb;
+  background-size:
+    auto,
+    auto,
+    20px 20px,
+    80px 80px,
+    80px 80px,
+    auto;
+  background-position:
+    0 0,
+    0 0,
+    0 0,
+    -1px -1px,
+    -1px -1px,
+    0 0;
+  border-radius: 28px;
+  padding: 22px 22px 28px;
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    0 12px 40px rgba(15, 23, 42, 0.06);
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  position: relative;
+}
+
+.develop-dashboard-root.ddb-theme-bw .ddb-canvas-workspace {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(148, 163, 184, 0.1), transparent 36%),
+    radial-gradient(circle at 0% 100%, rgba(100, 116, 139, 0.08), transparent 32%),
+    radial-gradient(rgba(15, 23, 42, 0.05) 0.8px, transparent 0.9px),
+    linear-gradient(rgba(148, 163, 184, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.1) 1px, transparent 1px),
+    #f3f4f6;
+  background-size:
+    auto,
+    auto,
+    20px 20px,
+    80px 80px,
+    80px 80px,
+    auto;
+  background-position: 0 0, 0 0, 0 0, -1px -1px, -1px -1px, 0 0;
+}
+
+.develop-dashboard-root.ddb-theme-bw .ddb-visual-card--canvas {
+  border-color: rgba(148, 163, 184, 0.55);
+  box-shadow: 0 12px 34px rgba(15, 23, 42, 0.12);
+}
+
+.develop-dashboard-root.ddb-theme-bw .ddb-visual-card--canvas .ddb-visual-card__header,
+.develop-dashboard-root.ddb-theme-bw .ddb-visual-card--canvas .ddb-visual-card__statstrip {
+  filter: grayscale(1);
+}
+
+.develop-dashboard-root.ddb-theme-bw .ddb-visual-card--canvas canvas {
+  filter: grayscale(1) contrast(1.02);
+}
+
+.develop-dashboard-root .ddb-canvas-workspace--field-map {
+  overflow: auto;
+}
+
+.develop-dashboard-root .ddb-canvas-workspace:not(.ddb-canvas-workspace--field-map) > .ddb-map-container {
+  flex: 0 0 38%;
+  min-height: 240px;
+}
+
+/* Default: no Map / Field Map / Filled Map selected — hide Leaflet card; user turns it on from Visualizations icons. */
+.develop-dashboard-root .ddb-canvas-workspace--map-hidden > .ddb-map-container {
+  display: none !important;
+}
+
+.develop-dashboard-root .ddb-canvas-workspace--map-hidden > .ddb-charts-host {
+  flex: 0 0 auto;
+  min-height: 0;
+  width: 100%;
+  overflow: visible;
+}
+
+/* Field map mode: scroll the whole workspace (map + charts), not a nested charts-only strip */
+.develop-dashboard-root .ddb-canvas-workspace--field-map > .ddb-charts-host {
+  flex: 0 0 auto;
+  min-height: 0;
+  width: 100%;
+  overflow: visible;
+}
+
+.develop-dashboard-root .ddb-charts-host {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: visible;
+  position: relative;
+  display: block;
+  isolation: isolate;
+}
+
+.develop-dashboard-root .ddb-map-container {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 28px;
+  overflow: visible;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+  position: relative;
+  min-height: 0;
+}
+
+.develop-dashboard-root .ddb-map-container__drag-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  background: linear-gradient(180deg, #f9fafb 0%, #ffffff 100%);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 22px 22px 0 0;
+  cursor: grab;
+  user-select: none;
+}
+
+.develop-dashboard-root .ddb-map-container__drag-header:active {
+  cursor: grabbing;
+}
+
+.develop-dashboard-root .ddb-map-container__drag-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ddb-green-dark);
+}
+
+.develop-dashboard-root .ddb-map-container__close {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 10px;
+  background: #fff;
+  color: #64748b;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.develop-dashboard-root .ddb-map-container__close:hover {
+  color: #b91c1c;
+  border-color: rgba(239, 68, 68, 0.35);
+  background: #fef2f2;
+}
+
+.develop-dashboard-root .ddb-map-container.ddb-map-container--canvas {
+  position: absolute;
+  z-index: 4;
+  margin: 0;
+  border-radius: 22px;
+  border-color: rgba(226, 232, 240, 0.98);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 12px 36px rgba(15, 23, 42, 0.1);
+}
+
+.develop-dashboard-root .ddb-map-container.ddb-map-container--canvas.ddb-map-container--dragging {
+  z-index: 90;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.16);
+  opacity: 0.98;
+}
+
+.develop-dashboard-root .ddb-map-container.ddb-map-container--canvas.ddb-map-container--resizing {
+  z-index: 90;
+}
+
+.develop-dashboard-root .ddb-map-container__canvas-resize {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 1004;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  cursor: nwse-resize;
+  display: grid;
+  place-items: center;
+}
+
+.develop-dashboard-root .ddb-map-container__resize-handle,
+.develop-dashboard-root .ddb-visual-card__resize-handle {
+  position: absolute;
+  z-index: 13;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.develop-dashboard-root .ddb-map-container__resize-handle {
+  width: 22px;
+  height: 22px;
+  border-radius: 10px;
+}
+
+.develop-dashboard-root .ddb-visual-card__resize-handle {
+  width: 18px;
+  height: 18px;
+  border-radius: 8px;
+}
+
+.develop-dashboard-root .ddb-map-container__resize-handle--n,
+.develop-dashboard-root .ddb-visual-card__resize-handle--n {
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+.develop-dashboard-root .ddb-map-container__resize-handle--s,
+.develop-dashboard-root .ddb-visual-card__resize-handle--s {
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+.develop-dashboard-root .ddb-map-container__resize-handle--e,
+.develop-dashboard-root .ddb-visual-card__resize-handle--e {
+  right: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+.develop-dashboard-root .ddb-map-container__resize-handle--w,
+.develop-dashboard-root .ddb-visual-card__resize-handle--w {
+  left: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+.develop-dashboard-root .ddb-map-container__resize-handle--ne,
+.develop-dashboard-root .ddb-visual-card__resize-handle--ne {
+  top: -10px;
+  right: -10px;
+  cursor: nesw-resize;
+}
+.develop-dashboard-root .ddb-map-container__resize-handle--nw,
+.develop-dashboard-root .ddb-visual-card__resize-handle--nw {
+  top: -10px;
+  left: -10px;
+  cursor: nwse-resize;
+}
+.develop-dashboard-root .ddb-map-container__resize-handle--se,
+.develop-dashboard-root .ddb-visual-card__resize-handle--se {
+  right: -10px;
+  bottom: -10px;
+  cursor: nwse-resize;
+}
+.develop-dashboard-root .ddb-map-container__resize-handle--sw,
+.develop-dashboard-root .ddb-visual-card__resize-handle--sw {
+  left: -10px;
+  bottom: -10px;
+  cursor: nesw-resize;
+}
+
+.develop-dashboard-root .ddb-map-container__resize-handle:hover,
+.develop-dashboard-root .ddb-visual-card__resize-handle:hover {
+  background: rgba(232, 244, 236, 0.95);
+  border-color: rgba(44, 122, 74, 0.35);
+}
+
+.develop-dashboard-root .ddb-map-container__canvas-resize:hover {
+  background: rgba(232, 244, 236, 0.95);
+  border-color: rgba(44, 122, 74, 0.35);
+}
+
+.develop-dashboard-root .ddb-map-container__split-resize {
+  position: absolute;
+  right: 12px;
+  bottom: 62px;
+  z-index: 1004;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  cursor: ns-resize;
+  display: grid;
+  place-items: center;
+}
+
+.develop-dashboard-root .ddb-map-container__split-resize:hover {
+  background: rgba(232, 244, 236, 0.95);
+  border-color: rgba(44, 122, 74, 0.35);
+}
+
+.develop-dashboard-root .ddb-map-inner {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  border-radius: 28px;
+  overflow: hidden;
+}
+
+.develop-dashboard-root .ddb-map-container:has(.ddb-map-container__drag-header) .ddb-map-inner {
+  border-radius: 0 0 28px 28px;
+}
+
+.develop-dashboard-root .ddb-map-tools {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  background: #fff;
+  border-radius: 40px;
+  padding: 6px 12px;
+  display: flex;
+  gap: 8px;
+  z-index: 1000;
+}
+
+/* Zoom/fit controls: keep green pills + white glyphs (global .ddb-btn:hover must not wash out icons). */
+.develop-dashboard-root .ddb-map-tools .ddb-btn {
+  background: linear-gradient(180deg, #10b981, #059669);
+  color: #fff;
+  min-width: 36px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.develop-dashboard-root .ddb-map-tools .ddb-btn:hover {
+  filter: brightness(1.06);
+  color: #fff;
+}
+
+.develop-dashboard-root .ddb-map-tools .ddb-btn i,
+.develop-dashboard-root .ddb-map-tools .ddb-btn i::before {
+  color: #fff;
+}
+
+.develop-dashboard-root .ddb-map-floating-rail {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1002;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 8px;
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.12);
+}
+
+.develop-dashboard-root .ddb-map-floating-rail-btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: #334155;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 1.05rem;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.develop-dashboard-root .ddb-map-floating-rail-btn:hover {
+  background: rgba(31, 94, 58, 0.08);
+  color: var(--ddb-green-dark);
+}
+
+.develop-dashboard-root .ddb-map-floating-rail-btn i,
+.develop-dashboard-root .ddb-map-floating-rail-btn i::before {
+  color: inherit;
+}
+
+.develop-dashboard-root .ddb-map-floating-rail-btn:hover i,
+.develop-dashboard-root .ddb-map-floating-rail-btn:hover i::before {
+  color: var(--ddb-green-dark);
+}
+
+.develop-dashboard-root .ddb-map-floating-rail-btn.is-active {
+  background: linear-gradient(160deg, #ecfdf5, #d1fae5);
+  color: var(--ddb-green-dark);
+  box-shadow: inset 0 0 0 1px rgba(21, 128, 61, 0.2);
+}
+
+.develop-dashboard-root .ddb-map-floating-rail-btn.is-active i,
+.develop-dashboard-root .ddb-map-floating-rail-btn.is-active i::before {
+  color: var(--ddb-green-dark);
+}
+
+.develop-dashboard-root .ddb-map-flyout-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 1001;
+  background: rgba(15, 23, 42, 0.12);
+  border-radius: 28px;
+}
+
+.develop-dashboard-root .ddb-map-flyout {
+  position: absolute;
+  top: 12px;
+  left: 64px;
+  right: 12px;
+  max-width: min(340px, calc(100% - 76px));
+  max-height: min(72vh, 420px);
+  z-index: 1003;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
+  overflow: hidden;
+}
+
+.develop-dashboard-root .ddb-map-flyout-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+}
+
+.develop-dashboard-root .ddb-map-flyout-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.develop-dashboard-root .ddb-map-flyout-close {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #475569;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.develop-dashboard-root .ddb-map-flyout-close:hover {
+  background: #e2e8f0;
+}
+
+.develop-dashboard-root .ddb-map-flyout-tabs {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 8px 10px 0;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+  background: #fafafa;
+}
+
+.develop-dashboard-root .ddb-map-flyout-tab {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 8px 4px 10px;
+  border-radius: 10px 10px 0 0;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 1rem;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+}
+
+.develop-dashboard-root .ddb-map-flyout-tab.is-active {
+  color: var(--ddb-green-dark);
+  border-bottom-color: var(--ddb-green-dark);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.develop-dashboard-root .ddb-map-flyout-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.develop-dashboard-root .ddb-map-flyout-lead {
+  margin: 0 0 16px;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.develop-dashboard-root .ddb-map-flyout-hint {
+  margin: 10px 0 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+.develop-dashboard-root .ddb-map-flyout-code {
+  font-size: 0.68rem;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: #f1f5f9;
+}
+
+.develop-dashboard-root .ddb-map-flyout-error {
+  margin: 8px 0 0;
+  font-size: 0.72rem;
+  color: #b91c1c;
+}
+
+.develop-dashboard-root .ddb-map-flyout-placeholder {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: #64748b;
+}
+
+.develop-dashboard-root .ddb-map-flyout-layer-cta {
+  width: 100%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 22px 16px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  color: #0c4a6e;
+  font-weight: 700;
+  font-size: 0.85rem;
+  transition: transform 0.15s ease;
+}
+
+.develop-dashboard-root .ddb-map-flyout-layer-cta:hover {
+  transform: translateY(-1px);
+}
+
+.develop-dashboard-root .ddb-map-flyout-layer-cta-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 1.5rem;
+  color: #0369a1;
+  box-shadow: 0 4px 14px rgba(3, 105, 161, 0.15);
+}
+
+.develop-dashboard-root .ddb-map-flyout-text-btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ddb-green-dark);
+  font-weight: 600;
+  font-size: 0.78rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.develop-dashboard-root .ddb-map-flyout-layer-section-title {
+  margin: 0 0 10px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.develop-dashboard-root .ddb-map-flyout-layer-list {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.develop-dashboard-root .ddb-map-flyout-layer-row {
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: #f8fafc;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.develop-dashboard-root .ddb-map-flyout-layer-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: #0f172a;
+}
+
+.develop-dashboard-root .ddb-map-flyout-layer-label input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--ddb-green-dark);
+}
+
+.develop-dashboard-root .ddb-map-flyout-layer-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.develop-dashboard-root .ddb-map-flyout-layer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-left: 26px;
+}
+
+.develop-dashboard-root .ddb-map-flyout-layer-count {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.develop-dashboard-root .ddb-map-flyout-layer-cta--compact {
+  flex-direction: row;
+  justify-content: center;
+  padding: 12px 14px;
+  gap: 10px;
+}
+
+.develop-dashboard-root .ddb-map-flyout-layer-cta--compact .ddb-map-flyout-layer-cta-icon {
+  width: 40px;
+  height: 40px;
+  font-size: 1.15rem;
+}
+
+.develop-dashboard-root .ddb-map-search-form {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.develop-dashboard-root .ddb-map-search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  font-size: 0.8rem;
+}
+
+.develop-dashboard-root .ddb-map-search-submit {
+  flex-shrink: 0;
+  border-radius: 12px;
+  padding-inline: 16px;
+}
+
+.develop-dashboard-root .ddb-map-flyout-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.develop-dashboard-root .ddb-map-flyout-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+
+.develop-dashboard-root .ddb-map-flyout-select {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  font-size: 0.8rem;
+  background: #fff;
+}
+
+.develop-dashboard-root .ddb-map-measure-result {
+  margin: 8px 0 4px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.develop-dashboard-root .ddb-map-measure-result-label {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.develop-dashboard-root .ddb-map-measure-result-value {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--ddb-green-dark);
+}
+
+.develop-dashboard-root .ddb-map-flyout-foot {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.develop-dashboard-root .ddb-map-flyout-primary {
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.develop-dashboard-root .ddb-map-flyout-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.develop-dashboard-root .ddb-map-arcgis-signin {
+  text-align: center;
+  padding: 8px 4px 4px;
+}
+
+.develop-dashboard-root .ddb-map-arcgis-logo {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 12px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #facc15, #eab308);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 1.4rem;
+  box-shadow: 0 6px 18px rgba(234, 179, 8, 0.35);
+}
+
+.develop-dashboard-root .ddb-map-arcgis-heading {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.develop-dashboard-root .ddb-map-arcgis-url {
+  margin: 0 0 12px;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.develop-dashboard-root .ddb-map-arcgis-url a {
+  color: var(--ddb-green);
+  font-weight: 600;
+}
+
+.develop-dashboard-root .ddb-map-arcgis-signin-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  font-weight: 700;
+}
+
+.develop-dashboard-root .ddb-visual-card {
+  background: #fff;
+  border-radius: 24px;
+  padding: 14px;
+  border: 1px solid #eef2f0;
+  position: relative;
+  transition:
+    box-shadow 0.25s ease,
+    border-color 0.2s ease;
+}
+
+/* Free-form canvas: absolute cards (drag header, resize corner) */
+.develop-dashboard-root .ddb-visual-card--canvas {
+  position: absolute;
+  z-index: 2;
+  margin: 0;
+  border: 1px solid rgba(226, 232, 240, 0.98);
+  border-radius: 22px;
+  background:
+    linear-gradient(165deg, rgba(255, 255, 255, 1) 0%, rgba(248, 250, 252, 0.96) 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.98) inset,
+    0 10px 28px rgba(15, 23, 42, 0.09),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+  transition:
+    box-shadow 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.2s ease,
+    transform 0.18s ease;
+}
+
+.develop-dashboard-root .ddb-visual-card--canvas:hover {
+  border-color: rgba(148, 163, 184, 0.55);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 1) inset,
+    0 18px 46px rgba(15, 23, 42, 0.11),
+    0 4px 12px rgba(59, 130, 246, 0.06);
+}
+
+.develop-dashboard-root .ddb-visual-card--canvas.ddb-visual-card--dragging {
+  z-index: 90;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.16);
+  opacity: 0.98;
+}
+
+.develop-dashboard-root .ddb-visual-card--canvas.ddb-visual-card--resizing {
+  z-index: 90;
+}
+
+.develop-dashboard-root .ddb-visual-card--canvas .ddb-visual-card__header {
+  cursor: grab;
+  user-select: none;
+}
+
+.develop-dashboard-root .ddb-visual-card--canvas .ddb-visual-card__header:active {
+  cursor: grabbing;
+}
+
+.develop-dashboard-root .ddb-visual-card__canvas-resize {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 12;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  cursor: nwse-resize;
+  display: grid;
+  place-items: center;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.develop-dashboard-root .ddb-visual-card__canvas-resize:hover {
+  background: rgba(232, 244, 236, 0.95);
+  border-color: rgba(44, 122, 74, 0.35);
+}
+
+.develop-dashboard-root .ddb-visual-card--canvas.ddb-visual-card--focus .ddb-visual-card__canvas-resize,
+.develop-dashboard-root .ddb-visual-card--canvas.ddb-visual-card--focus .ddb-visual-card__resize-handle {
+  display: none;
+}
+
+.develop-dashboard-root .ddb-visual-card__canvas-resize-grip {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  background:
+    linear-gradient(135deg, transparent 42%, rgba(44, 122, 74, 0.55) 42%, rgba(44, 122, 74, 0.55) 50%, transparent 50%),
+    linear-gradient(135deg, transparent 58%, rgba(44, 122, 74, 0.55) 58%, rgba(44, 122, 74, 0.55) 66%, transparent 66%);
+}
+
+.develop-dashboard-root .ddb-visual-card--canvas.ddb-visual-card--enhanced {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.develop-dashboard-root .ddb-visual-card--canvas.ddb-visual-card--enhanced .ddb-chart-svg-legend {
+  flex-shrink: 0;
+}
+
+.develop-dashboard-root .ddb-visual-card--canvas.ddb-visual-card--enhanced canvas {
+  flex: 1 1 auto;
+  min-height: 72px;
+  max-height: none !important;
+  height: auto !important;
+  border-radius: 14px;
+}
+
+.develop-dashboard-root .ddb-visual-card--enhanced {
+  padding: 0;
+  overflow: visible;
+  border-color: rgba(226, 232, 240, 0.95);
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.06);
+}
+
+.develop-dashboard-root .ddb-visual-placeholder-note {
+  margin: 0 14px 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+.develop-dashboard-root .ddb-visual-card--focus {
+  position: fixed !important;
+  inset: 20px;
+  z-index: 6000;
+  max-width: min(1100px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  margin: auto;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  overflow: auto;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.22) !important;
+  border: 1px solid rgba(31, 94, 58, 0.18) !important;
+}
+
+.develop-dashboard-root .ddb-visual-card__header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 14px 10px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.92);
+  background: linear-gradient(180deg, #f9fafb 0%, #ffffff 55%, #ffffff 100%);
+  border-radius: 22px 22px 0 0;
+}
+
+.develop-dashboard-root .ddb-visual-card__header .ddb-visual-title {
+  margin-bottom: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+}
+
+.develop-dashboard-root .ddb-visual-card--canvas .ddb-visual-card__header .ddb-visual-title {
+  color: var(--ddb-green-dark);
+}
+
+.develop-dashboard-root .ddb-visual-card--canvas .ddb-visual-card__header .ddb-visual-title i {
+  opacity: 0.92;
+  font-size: 0.92em;
+}
+
+.develop-dashboard-root .ddb-visual-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.develop-dashboard-root .ddb-visual-card__chart-type-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 24;
+  width: min(260px, calc(100% - 24px));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  overflow: hidden;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.14);
+}
+
+/* Author `display: grid` overrides the UA `[hidden]` rule — keep menus invisible until opened via icon */
+.develop-dashboard-root .ddb-visual-card__chart-type-menu[hidden] {
+  display: none !important;
+}
+
+.develop-dashboard-root .ddb-visual-card__chart-type-menu:not([hidden]) {
+  display: grid;
+}
+
+.develop-dashboard-root .ddb-visual-card__palette-menu {
+  position: absolute;
+  right: 40px;
+  top: calc(100% + 6px);
+  z-index: 24;
+  min-width: 172px;
+  max-height: min(70vh, 320px);
+  overflow-y: auto;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.14);
+  gap: 4px;
+}
+
+.develop-dashboard-root .ddb-visual-card__palette-menu[hidden] {
+  display: none !important;
+}
+
+.develop-dashboard-root .ddb-visual-card__palette-menu:not([hidden]) {
+  display: grid;
+}
+
+.develop-dashboard-root .ddb-visual-card__palette-item {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0f172a;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.develop-dashboard-root .ddb-visual-card__palette-item:hover {
+  border-color: rgba(37, 99, 235, 0.26);
+  background: #f8fbff;
+}
+
+.develop-dashboard-root .ddb-visual-card__palette-item.is-active {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(236, 253, 245, 0.9);
+  color: #065f46;
+}
+
+.develop-dashboard-root .ddb-visual-card__palette-swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.develop-dashboard-root .ddb-visual-card__palette-swatch i {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  display: inline-block;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.develop-dashboard-root .ddb-visual-card__palette-axis {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(226, 232, 240, 0.95);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.develop-dashboard-root .ddb-visual-card__palette-axis-title {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.develop-dashboard-root .ddb-visual-card__palette-axis-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.develop-dashboard-root .ddb-visual-card__palette-axis-row input[type='color'] {
+  width: 36px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 8px;
+  cursor: pointer;
+  background: #fff;
+}
+
+.develop-dashboard-root .ddb-visual-card__palette-axis-reset {
+  width: 100%;
+  margin-top: 2px;
+}
+
+.develop-dashboard-root .ddb-visual-card__chart-type-item {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  min-height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: #ffffff;
+  color: #64748b;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.develop-dashboard-root .ddb-visual-card__chart-type-item:hover {
+  border-color: rgba(37, 99, 235, 0.36);
+  color: #047857;
+  background: #eff6ff;
+}
+
+.develop-dashboard-root .ddb-visual-card__chart-type-item.is-active {
+  border-color: rgba(16, 185, 129, 0.5);
+  background: linear-gradient(145deg, #10b981, #059669);
+  color: #ffffff;
+  box-shadow: 0 6px 14px rgba(16, 185, 129, 0.25);
+}
+
+.develop-dashboard-root .ddb-visual-card__icon-btn {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 0.9rem;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.develop-dashboard-root .ddb-visual-card__icon-btn:hover {
+  background: rgba(31, 94, 58, 0.08);
+  color: var(--ddb-green-dark);
+}
+
+.develop-dashboard-root .ddb-visual-card__icon-btn:hover i,
+.develop-dashboard-root .ddb-visual-card__icon-btn:hover i::before {
+  color: var(--ddb-green-dark);
+}
+
+.develop-dashboard-root .ddb-visual-card__icon-btn--chart-type.is-active {
+  background: rgba(236, 253, 245, 0.92);
+  color: #047857;
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.32);
+}
+
+.develop-dashboard-root .ddb-visual-card__icon-btn--palette.is-active {
+  background: rgba(239, 246, 255, 0.95);
+  color: #1d4ed8;
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.3);
+}
+
+.develop-dashboard-root .ddb-visual-card__icon-btn--close:hover {
+  background: rgba(220, 38, 38, 0.09);
+  color: #b91c1c;
+}
+
+.develop-dashboard-root .ddb-visual-card__icon-btn--close:hover i,
+.develop-dashboard-root .ddb-visual-card__icon-btn--close:hover i::before {
+  color: #b91c1c;
+}
+
+.develop-dashboard-root .ddb-visual-card__statstrip {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 9px 12px;
+  background: linear-gradient(180deg, #f6f9fc 0%, #f8fafc 100%);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(44, 122, 74, 0.35) transparent;
+}
+
+.develop-dashboard-root .ddb-visual-card__statstrip::-webkit-scrollbar {
+  height: 5px;
+}
+
+.develop-dashboard-root .ddb-visual-card__statstrip::-webkit-scrollbar-thumb {
+  background: rgba(44, 122, 74, 0.28);
+  border-radius: 999px;
+}
+
+.develop-dashboard-root .ddb-visual-card__stat-btn {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: #fff;
+  color: #64748b;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 0.95rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
+}
+
+.develop-dashboard-root .ddb-visual-card__stat-btn:hover {
+  border-color: rgba(31, 94, 58, 0.2);
+  color: var(--ddb-green-dark);
+}
+
+.develop-dashboard-root .ddb-visual-card__stat-btn:hover i,
+.develop-dashboard-root .ddb-visual-card__stat-btn:hover i::before {
+  color: var(--ddb-green-dark);
+}
+
+.develop-dashboard-root .ddb-visual-card__stat-btn.is-active {
+  background: linear-gradient(145deg, var(--ddb-green) 0%, var(--ddb-green-dark) 100%);
+  border-color: var(--ddb-green-dark);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(44, 122, 74, 0.28);
+}
+
+.develop-dashboard-root .ddb-visual-card__stat-btn.is-active i,
+.develop-dashboard-root .ddb-visual-card__stat-btn.is-active i::before {
+  color: #fff;
+}
+
+/* Zoom hint removed — keep selector hidden if legacy markup appears */
+.develop-dashboard-root .ddb-visual-card__zoom-hint {
+  display: none !important;
+}
+
+/* Vector (SVG + DOM text) legend — sharp at any zoom; replaces raster Chart.js legend */
+.develop-dashboard-root .ddb-chart-svg-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 18px;
+  padding: 10px 14px 14px;
+  margin: 0;
+  user-select: none;
+  border-top: 1px solid rgba(241, 245, 249, 0.95);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(248, 250, 252, 0.65) 100%);
+}
+
+.develop-dashboard-root .ddb-chart-svg-legend__row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.develop-dashboard-root .ddb-chart-svg-legend__swatch {
+  flex-shrink: 0;
+  vertical-align: middle;
+  shape-rendering: geometricPrecision;
+  filter: drop-shadow(0 1px 1px rgba(15, 23, 42, 0.06));
+}
+
+.develop-dashboard-root .ddb-chart-svg-legend__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  letter-spacing: 0.015em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.develop-dashboard-root .ddb-visual-card--enhanced canvas {
+  display: block;
+  margin: 0 14px 0;
+  min-height: 240px;
+  height: clamp(220px, min(34vh, 38vw), 460px) !important;
+  max-height: none;
+  width: calc(100% - 28px) !important;
+  border-radius: 14px;
+  background: var(--ddb-card-plot-bg);
+  box-shadow: inset 0 0 0 1px var(--ddb-card-plot-edge);
+  image-rendering: auto;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  cursor: grab;
+}
+
+.develop-dashboard-root .ddb-visual-card--enhanced canvas:active {
+  cursor: grabbing;
+}
+
+.develop-dashboard-root .ddb-visual-card--enhanced .ddb-table-responsive {
+  margin: 0 14px 14px;
+}
+
+.develop-dashboard-root .ddb-visual-card__body-pad {
+  padding: 2px 14px 14px;
+  line-height: 1.5;
+}
+
+/* KPI-style cards: field label on top, numeric value below */
+.develop-dashboard-root .ddb-visual-card__kpi-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #64748b;
+  letter-spacing: 0.02em;
+  margin-bottom: 6px;
+}
+
+.develop-dashboard-root .ddb-visual-card__kpi-value {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.15;
+}
+
+.develop-dashboard-root .ddb-visual-card__kpi-value--md {
+  font-size: 1.75rem;
+  font-weight: 800;
+}
+
+.develop-dashboard-root .ddb-visual-card__kpi-value--gauge {
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.develop-dashboard-root .ddb-visual-card__kpi-meta {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-top: 6px;
+}
+
+.develop-dashboard-root .ddb-visual-card__filter-panel {
+  padding: 10px 14px 12px;
+  background: #fff;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+}
+
+.develop-dashboard-root .ddb-visual-card__filter-title {
+  margin: 0 0 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+
+.develop-dashboard-root .ddb-visual-card__filter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 140px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+
+.develop-dashboard-root .ddb-visual-card__filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: #334155;
+  cursor: pointer;
+}
+
+.develop-dashboard-root .ddb-visual-card__filter-apply {
+  width: 100%;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.72rem;
+}
+
+.develop-dashboard-root .ddb-visual-card__dropdown {
+  position: absolute;
+  right: 12px;
+  top: 48px;
+  z-index: 80;
+  min-width: 290px;
+  padding: 8px 6px;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.16);
+}
+
+.develop-dashboard-root .ddb-visual-card__menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 0.78rem;
+  color: #1e293b;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.develop-dashboard-root .ddb-visual-card__menu-item:hover {
+  background: rgba(15, 23, 42, 0.055);
+  color: #0f172a;
+}
+
+.develop-dashboard-root .ddb-visual-card__menu-item > i:first-child {
+  width: 16px;
+  color: #475569;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.develop-dashboard-root .ddb-visual-card__menu-item .ddb-visual-card__check {
+  opacity: 0;
+  color: #0f766e;
+}
+
+.develop-dashboard-root .ddb-visual-card__sort-item.is-active .ddb-visual-card__check {
+  opacity: 1;
+}
+
+.develop-dashboard-root .ddb-visual-card__menu-item > span {
+  flex: 1;
+  min-width: 0;
+}
+
+.develop-dashboard-root .ddb-visual-card__menu-chevron {
+  color: #64748b;
+  font-size: 0.7rem;
+}
+
+.develop-dashboard-root .ddb-visual-card__menu-sep {
+  height: 1px;
+  margin: 8px 8px;
+  background: rgba(226, 232, 240, 0.95);
+}
+
+.develop-dashboard-root .ddb-visual-card__menu-group {
+  position: relative;
+}
+
+.develop-dashboard-root .ddb-visual-card__submenu {
+  position: absolute;
+  top: 0;
+  right: calc(100% - 8px);
+  min-width: 230px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-6px);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+  z-index: 82;
+}
+
+.develop-dashboard-root .ddb-visual-card__menu-group:hover .ddb-visual-card__submenu {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.develop-dashboard-root .ddb-visual-card__submenu .ddb-visual-card__menu-item {
+  font-size: 0.74rem;
+  color: #1e3a8a;
+}
+
+.develop-dashboard-root .ddb-visual-card__submenu .ddb-visual-card__menu-item.is-active {
+  background: #ecfdf5;
+  color: #065f46;
+  font-weight: 700;
+}
+
+.develop-dashboard-root .ddb-visual-card__calc-item.is-active {
+  background: #ecfdf5;
+  color: #065f46;
+  font-weight: 700;
+}
+
+.develop-dashboard-root .ddb-visual-card__stat-chip {
+  margin: 8px 14px 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #ecfdf5, #f0fdf4);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ddb-green-dark);
+}
+
+.develop-dashboard-root .ddb-visual-title {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--ddb-green-dark);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .develop-dashboard-root .ddb-canvas-workspace {
+    padding: 14px 14px 20px;
+    gap: 12px;
+    border-radius: 22px;
+  }
+
+  .develop-dashboard-root .ddb-visual-card--enhanced canvas {
+    height: clamp(200px, 46vh, 400px) !important;
+  }
+}
+
+.develop-dashboard-root .ddb-charts-host canvas {
+  width: 100%;
+  max-height: none;
+}
+
+.develop-dashboard-root .ddb-table-responsive {
+  overflow-x: auto;
+  font-size: 0.7rem;
+}
+
+.develop-dashboard-root .ddb-table-responsive table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.develop-dashboard-root .ddb-table-responsive th,
+.develop-dashboard-root .ddb-table-responsive td {
+  border: 1px solid #ddd;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.develop-dashboard-root .ddb-visual-card--canvas .ddb-table-responsive {
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  overflow: hidden;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.75) inset;
+}
+
+.develop-dashboard-root .ddb-visual-card--canvas .ddb-table-responsive th {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  font-weight: 700;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  border-color: rgba(226, 232, 240, 0.95);
+}
+
+.develop-dashboard-root .ddb-visual-card--canvas .ddb-table-responsive td {
+  border-color: rgba(241, 245, 249, 0.98);
+  font-size: 0.72rem;
+  color: #1e293b;
+}
+
+/* Table / Matrix legend — categories or numeric bins; palette matches charts */
+.develop-dashboard-root .ddb-table-visual-legend {
+  margin: 14px 14px 16px;
+  padding: 0;
+}
+
+.develop-dashboard-root .ddb-visual-card--canvas .ddb-table-visual-legend {
+  margin-inline: 16px;
+  margin-bottom: 14px;
+}
+
+.develop-dashboard-root .ddb-table-visual-legend__title {
+  font-size: 0.8125rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+  margin: 0 0 10px;
+}
+
+.develop-dashboard-root .ddb-table-visual-legend__hint {
+  margin: 0 0 12px;
+  font-size: 0.68rem;
+  line-height: 1.45;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.develop-dashboard-root .ddb-table-visual-legend__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.98);
+  background: rgba(248, 250, 252, 0.92);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.develop-dashboard-root .ddb-table-visual-legend__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: #ffffff;
+}
+
+.develop-dashboard-root .ddb-table-visual-legend__line {
+  flex-shrink: 0;
+  width: 28px;
+  height: 4px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
+}
+
+.develop-dashboard-root .ddb-table-visual-legend__label {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.develop-dashboard-root .ddb-field,
+.develop-dashboard-root .ddb-select,
+.develop-dashboard-root .ddb-input {
+  padding: 8px 12px;
+  border-radius: 40px;
+  border: 1px solid #cfdfe8;
+  background: #fff;
+  font-size: 0.75rem;
+  width: 100%;
+}
+
+.develop-dashboard-root .ddb-btn {
+  padding: 8px 12px;
+  border-radius: 40px;
+  border: none;
+  background: var(--ddb-green);
+  color: #fff;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.develop-dashboard-root .ddb-btn:hover {
+  filter: brightness(1.05);
+}
+
+.develop-dashboard-root .ddb-btn.ddb-right-sheet-primary {
+  background: var(--ddb-pbi-blue);
+  border-radius: 2px;
+  border: 1px solid transparent;
+}
+
+.develop-dashboard-root .ddb-btn.ddb-right-sheet-primary:hover {
+  filter: none;
+  background: var(--ddb-pbi-blue-dark);
+}
+
+.develop-dashboard-root .ddb-btn.ddb-right-sheet-secondary {
+  background: var(--ddb-pbi-panel);
+  color: var(--ddb-pbi-text);
+  border: 1px solid var(--ddb-pbi-border-strong);
+  border-radius: 2px;
+}
+
+.develop-dashboard-root .ddb-btn.ddb-right-sheet-secondary:hover {
+  filter: none;
+  background: var(--ddb-pbi-canvas);
+}
+
+.develop-dashboard-root .ddb-small-btn {
+  background: #eef2f7;
+  color: #1f3b2c;
+  border: 1px solid #cfdfe8;
+}
+
+.develop-dashboard-root .ddb-link-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+
+.develop-dashboard-root .ddb-link-row .ddb-select {
+  flex: 1;
+}
+
+.develop-dashboard-root .ddb-hint {
+  font-size: 11px;
+  color: #4b6b5a;
+  margin-top: 8px;
+  text-align: center;
+}
+
+.develop-dashboard-root .ddb-layers-scroll {
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.develop-dashboard-root .ddb-new-layer-form {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Add Source Data modal — refined contemporary shell (Develop + Satellite) */
+.ddb-add-source-overlay {
+  background: rgba(15, 23, 42, 0.48) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.ddb-add-source-modal.gis-modal-compact {
+  max-width: 520px;
+  width: min(520px, calc(100vw - 28px));
+  border-radius: 22px;
+  overflow: hidden;
+  box-shadow:
+    0 24px 48px rgba(15, 60, 40, 0.14),
+    0 0 0 1px rgba(60, 172, 110, 0.12);
+}
+
+.ddb-add-source-modal.ddb-add-source-modal--home.gis-modal-compact {
+  position: relative;
+  max-width: 560px;
+  width: min(560px, calc(100vw - 28px));
+  border-radius: 24px;
+  overflow: hidden;
+  background: linear-gradient(165deg, #ffffff 0%, #f8fafc 52%, #f1f5f9 100%);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  color: #0f172a;
+  box-shadow:
+    0 28px 56px -16px rgba(15, 23, 42, 0.22),
+    0 12px 28px -12px rgba(16, 185, 129, 0.12),
+    0 0 0 1px rgba(255, 255, 255, 0.72) inset;
+}
+
+.ddb-add-source-modal.ddb-add-source-modal--home.gis-modal-compact::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 120% 85% at 100% -8%, rgba(52, 211, 153, 0.16), transparent 52%),
+    radial-gradient(ellipse 90% 70% at -10% 110%, rgba(56, 189, 248, 0.07), transparent 48%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ddb-add-source-modal.ddb-add-source-modal--home.gis-modal-compact > * {
+  position: relative;
+  z-index: 1;
+}
+
+.ddb-add-source-modal__head-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.ddb-add-source-lead--head {
+  margin: 8px 0 0;
+  padding: 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: #64748b;
+  font-weight: 450;
+  max-width: 54ch;
+}
+
+.ddb-add-source-modal--home .ddb-add-source-modal__head,
+.ddb-add-source-modal--home .gis-modal-compact-hero {
+  padding: 22px 24px 18px;
+  align-items: flex-start;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+  background: linear-gradient(
+    125deg,
+    rgba(255, 255, 255, 0.94) 0%,
+    rgba(236, 253, 245, 0.42) 38%,
+    rgba(248, 250, 252, 0.92) 100%
+  );
+}
+
+.ddb-add-source-modal--home .gis-modal-compact-hero-title {
+  margin: 0 0 8px;
+  font-size: 1.375rem;
+  font-weight: 780;
+  letter-spacing: -0.035em;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.ddb-add-source-modal--home .gis-modal-compact-hero-lead {
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: #64748b;
+  font-weight: 450;
+  max-width: 54ch;
+}
+
+.ddb-add-source-modal--home .gis-modal-compact-title {
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  font-size: 1.375rem;
+  font-weight: 780;
+  letter-spacing: -0.035em;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.ddb-add-source-modal--home .ddb-add-source-home {
+  padding: 18px 22px 20px;
+}
+
+.ddb-add-source-modal--home .ddb-add-source-lead {
+  color: #64748b;
+  margin-bottom: 14px;
+}
+
+.ddb-add-source-modal--home .gis-modal-footer {
+  background: rgba(248, 250, 252, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(226, 232, 240, 0.9) !important;
+}
+
+.ddb-add-source-modal--home .gis-modal-footer .gis-btn {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  color: #334155;
+  font-weight: 620;
+  border-radius: 999px;
+  padding: 10px 22px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.ddb-add-source-modal--home .gis-modal-footer .gis-btn:hover {
+  background: #ffffff;
+  border-color: rgba(100, 116, 139, 0.55);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+/* Satellite add-layer modal uses gis-link-btn for Cancel */
+.ddb-add-source-modal--home .gis-modal-footer .gis-link-btn {
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(255, 255, 255, 0.95);
+  color: #334155;
+  font-size: 0.875rem;
+  font-weight: 620;
+  padding: 10px 22px;
+  border-radius: 999px;
+  text-decoration: none;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease,
+    color 0.18s ease;
+}
+
+.ddb-add-source-modal--home .gis-modal-footer .gis-link-btn:hover {
+  background: #ffffff;
+  border-color: rgba(100, 116, 139, 0.55);
+  color: #0f172a;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+  text-decoration: none;
+}
+
+.ddb-add-source-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 22px !important;
+  border-top: 1px solid rgba(226, 232, 240, 0.9) !important;
+}
+
+/* Inner steps: tabs, ArcGIS / upload / URL — same light + green accent as الصورة 2 */
+.ddb-add-source-modal--home .gis-modal-compact-tabs {
+  background: #faf9f8;
+  border-bottom: 1px solid #edebe9;
+}
+
+.ddb-add-source-modal--home .gis-compact-tab {
+  color: #605e5c;
+}
+
+.ddb-add-source-modal--home .gis-compact-tab i {
+  color: #605e5c;
+}
+
+.ddb-add-source-modal--home .gis-compact-tab.active {
+  color: #0e6b0e;
+  border-color: #107c10;
+  background: #dff6dd;
+  box-shadow: none;
+}
+
+.ddb-add-source-modal--home .gis-compact-tab.active i {
+  color: #107c10;
+}
+
+.ddb-add-source-modal--home .gis-modal-body {
+  background: #ffffff;
+  color: #323130;
+}
+
+.ddb-add-source-modal--home .gis-modal-body > [role='tabpanel'] {
+  background: #faf9f8;
+  border: 1px solid #edebe9;
+  box-shadow: none;
+  color: #323130;
+}
+
+.ddb-add-source-modal--home .gis-input,
+.ddb-add-source-modal--home .gis-select {
+  background: #ffffff !important;
+  border: 1px solid #edebe9 !important;
+  color: #201f1e !important;
+}
+
+.ddb-add-source-modal--home .gis-input::placeholder {
+  color: #8a8886;
+}
+
+.ddb-add-source-modal--home .gis-form-label,
+.ddb-add-source-modal--home .gis-discover-meta {
+  color: #323130;
+}
+
+.ddb-add-source-modal--home .gis-btn-outline {
+  border-color: #107c10;
+  color: #107c10;
+  background: #ffffff;
+  font-weight: 600;
+}
+
+.ddb-add-source-modal--home .gis-btn-outline:hover:not(:disabled) {
+  background: #dff6dd;
+  border-color: #0e6b0e;
+  color: #0e6b0e;
+}
+
+.ddb-add-source-modal--home .gis-modal-compact .gis-discovered-add {
+  background: linear-gradient(180deg, #138213, #107c10) !important;
+  border: none !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(16, 124, 16, 0.32);
+}
+
+.ddb-add-source-modal--home .gis-modal-compact .gis-discovered-add:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.ddb-add-source-modal--home .gis-inline-error {
+  color: #a4262c;
+  background: #fde7e9;
+  border: 1px solid #f1aeb5;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.ddb-add-source-modal--home .ddb-hint {
+  color: #605e5c !important;
+}
+
+.ddb-add-source-modal--home .gis-select-wrap > i {
+  color: #605e5c;
+}
+
+.ddb-add-source-modal__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+  padding: 4px 4px 12px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+}
+
+.ddb-add-source-modal__head .gis-modal-compact-title {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.ddb-add-source-back {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.85);
+  color: #0f766e;
+  font-size: 0.8125rem;
+  font-weight: 640;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.ddb-add-source-back:hover {
+  background: #ffffff;
+  border-color: rgba(52, 211, 153, 0.45);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.07);
+}
+
+.ddb-add-source-home {
+  padding: 8px 4px 4px;
+  position: relative;
+}
+
+/* Get Data: full internal step (replaces inline flyout under the home card) */
+.ddb-add-source-get-data-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: min(48vh, 380px);
+  padding-top: 4px;
+  animation: ddb-get-data-page-in 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes ddb-get-data-page-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.ddb-get-data-menu--page {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(58vh, 500px);
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow:
+    0 4px 18px rgba(15, 23, 42, 0.07),
+    0 0 0 1px rgba(255, 255, 255, 0.75) inset;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ddb-get-data-menu--page .ddb-get-data-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
+.ddb-get-data-toolbar-mimic {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #faf9f8;
+  border-bottom: 1px solid #edebe9;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #323130;
+}
+
+.ddb-get-data-toolbar-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #605e5c;
+  font-size: 1rem;
+}
+
+.ddb-get-data-toolbar-label {
+  flex: 1;
+}
+
+.ddb-get-data-toolbar-chev {
+  font-size: 0.65rem;
+  color: #605e5c;
+}
+
+.ddb-add-source-lead {
+  margin: 0 0 16px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: #4a6670;
+}
+
+/* Add Source home — Power BI style: radio + icon badge + title / description */
+.ddb-add-source-radio-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ddb-add-source-radio-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(226, 232, 240, 0.98);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.88) 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 6px 18px rgba(15, 23, 42, 0.05);
+  cursor: pointer;
+  transition:
+    border-color 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.22s ease;
+}
+
+.ddb-add-source-radio-row:hover {
+  border-color: rgba(52, 211, 153, 0.45);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 10px 26px rgba(15, 23, 42, 0.08),
+    0 0 0 1px rgba(52, 211, 153, 0.12);
+  transform: translateY(-2px);
+  background: linear-gradient(145deg, #ffffff 0%, rgba(236, 253, 245, 0.55) 100%);
+}
+
+.ddb-add-source-radio-row:has(input:checked) {
+  border-color: rgba(16, 185, 129, 0.55);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 0 0 2px rgba(16, 185, 129, 0.2),
+    0 12px 28px rgba(16, 185, 129, 0.12);
+}
+
+.ddb-add-source-radio-row:has(input:focus-visible) {
+  outline: none;
+  border-color: rgba(16, 185, 129, 0.65);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 0 0 3px rgba(52, 211, 153, 0.35),
+    0 10px 24px rgba(15, 23, 42, 0.07);
+}
+
+.ddb-add-source-radio-row input[type='radio'] {
+  width: 18px;
+  height: 18px;
+  margin: 11px 0 0;
+  flex-shrink: 0;
+  accent-color: #059669;
+  cursor: pointer;
+}
+
+.ddb-add-source-radio-row__icon {
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  margin-top: 4px;
+  border-radius: 14px;
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.98) 0%, rgba(209, 250, 229, 0.85) 48%, rgba(167, 243, 208, 0.65) 100%);
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  color: #047857;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.12rem;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 8px 18px rgba(16, 185, 129, 0.12);
+  transition:
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.22s ease;
+}
+
+.ddb-add-source-radio-row:hover .ddb-add-source-radio-row__icon {
+  transform: scale(1.04);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.98) inset,
+    0 12px 24px rgba(16, 185, 129, 0.18);
+}
+
+.ddb-add-source-radio-row__icon--getdata {
+  gap: 4px;
+}
+
+.ddb-add-source-radio-row__icon--getdata i:last-child {
+  font-size: 0.92rem;
+  opacity: 0.92;
+}
+
+.ddb-add-source-radio-row__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 3px 0 2px;
+}
+
+.ddb-add-source-radio-row__title {
+  font-size: 0.9375rem;
+  font-weight: 680;
+  color: #0f172a;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+
+.ddb-add-source-radio-row__desc {
+  font-size: 0.78125rem;
+  line-height: 1.5;
+  color: #64748b;
+}
+
+.ddb-add-source-more {
+  margin-top: 18px;
+  width: 100%;
+  padding: 12px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-style: dashed;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.95), rgba(241, 245, 249, 0.75));
+  color: #0f766e;
+  font-size: 0.8125rem;
+  font-weight: 640;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.2s ease;
+}
+
+.ddb-add-source-more:hover {
+  background: linear-gradient(180deg, rgba(236, 253, 245, 0.95), rgba(209, 250, 229, 0.55));
+  border-color: rgba(52, 211, 153, 0.55);
+  color: #065f46;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(16, 185, 129, 0.12);
+}
+
+.ddb-add-source-modal--home .ddb-add-source-more {
+  margin-top: 16px;
+}
+
+.ddb-add-source-gis-hint {
+  margin: 0 0 14px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: #475569;
+}
+
+.ddb-add-source-loading,
+.ddb-add-source-empty {
+  padding: 28px 16px;
+  text-align: center;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.ddb-add-source-empty i {
+  font-size: 2rem;
+  color: #cbd5e1;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.ddb-add-source-empty p {
+  margin: 0;
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.45;
+}
+
+.ddb-gis-content-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: min(52vh, 420px);
+  overflow-y: auto;
+}
+
+.ddb-gis-content-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+}
+
+.ddb-gis-content-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ddb-gis-content-name {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #0f172a;
+}
+
+.ddb-gis-content-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ddb-gis-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #e8f4ec;
+  color: #1f5e3a;
+}
+
+.ddb-gis-badge--muted {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.ddb-gis-content-note {
+  font-size: 0.68rem;
+  color: #94a3b8;
+}
+
+.ddb-gis-content-add-btn {
+  box-sizing: border-box;
+  flex-shrink: 0;
+  width: 96px;
+  min-width: 96px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 4px;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  background: linear-gradient(145deg, #2c7a4a, #1f5e3a);
+  color: #fff;
+  transition: filter 0.15s ease, opacity 0.15s ease;
+}
+
+.ddb-gis-content-add-btn:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.ddb-gis-content-add-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Get Data — Power BI–style common sources (modal, outside .develop-dashboard-root parent for some nodes but classes are global) */
+.ddb-get-data-panel {
+  padding-top: 4px;
+}
+
+.ddb-get-data-menu {
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #e8e8e8;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  max-height: min(70vh, 520px);
+  display: flex;
+  flex-direction: column;
+}
+
+.ddb-get-data-section-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #323130;
+  padding: 12px 14px 8px;
+  background: #faf9f8;
+  border-bottom: 1px solid #edebe9;
+}
+
+.ddb-get-data-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  overflow-y: auto;
+}
+
+.ddb-get-data-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  color: #323130;
+  transition: background 0.12s ease;
+}
+
+.ddb-get-data-row:hover {
+  background: #f3f2f1;
+}
+
+.ddb-get-data-row:focus-visible {
+  outline: 2px solid #1b5e3c;
+  outline-offset: -2px;
+}
+
+.ddb-get-data-row-icon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.ddb-get-data-row-icon--muted {
+  color: #605e5c;
+}
+
+.ddb-get-data-row-label {
+  flex: 1;
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.ddb-get-data-external {
+  font-size: 0.72rem;
+  color: #605e5c;
+  margin-left: auto;
+}
+
+.ddb-get-data-row--footer {
+  padding: 10px 14px;
+}
+
+.ddb-get-data-divider {
+  height: 1px;
+  background: #edebe9;
+  margin: 0;
+}
+
+.ddb-get-data-more {
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  background: #faf9f8;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #1b5e3c;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease;
+}
+
+.ddb-get-data-more:hover {
+  background: #f3f2f1;
+}
+
+.ddb-get-data-notice {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(0, 120, 212, 0.08);
+  border: 1px solid rgba(0, 120, 212, 0.2);
+  color: #323130;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.ddb-get-data-notice i {
+  color: #1b5e3c;
+  margin-top: 2px;
+  flex-shrink: 0;
+}

@@ -1,0 +1,301 @@
+.si-layer-live-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 2px 8px;
+  color: #e2e8f0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.si-layer-live-legend__empty {
+  margin: 0;
+  opacity: 0.75;
+}
+
+.si-layer-live-legend__section {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.si-layer-live-legend__section.is-active {
+  border-color: rgba(34, 197, 94, 0.45);
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.12);
+}
+
+.si-layer-live-legend__header {
+  margin-bottom: 10px;
+}
+
+.si-layer-live-legend__badge {
+  display: inline-block;
+  margin-bottom: 6px;
+  margin-inline-end: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.si-layer-live-legend__are-badge {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.16);
+  color: #7dd3fc;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.si-layer-live-legend__are-disclaimer {
+  margin: 6px 0 0;
+  font-size: 9px;
+  line-height: 1.35;
+  color: #94a3b8;
+}
+
+.si-layer-live-legend__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.si-layer-live-legend__subtitle {
+  margin: 4px 0 0;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.si-layer-live-legend__scientific {
+  margin: 2px 0 0;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.si-layer-live-legend__bar {
+  height: 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.si-layer-live-legend__scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  color: #94a3b8;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.si-layer-live-legend__classes {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.si-layer-live-legend__class {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.si-layer-live-legend__swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  flex-shrink: 0;
+}
+
+.si-layer-live-legend__class-label {
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.si-layer-live-legend__class-range {
+  color: #94a3b8;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.si-layer-live-legend__composite {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.si-layer-live-legend__composite-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.si-layer-live-legend__note {
+  margin: 8px 0 0;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.si-layer-live-legend__catalog-title {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.si-layer-live-legend__catalog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: min(42vh, 360px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.si-layer-live-legend__catalog-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.si-layer-live-legend__catalog-group-title {
+  margin: 0;
+  padding: 0 2px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: #94a3b8;
+}
+
+.si-layer-live-legend__details {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.si-layer-live-legend__summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.si-layer-live-legend__summary::-webkit-details-marker {
+  display: none;
+}
+
+.si-layer-live-legend__summary-title {
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.si-layer-live-legend__summary-sub {
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+.si-layer-live-legend__details-body {
+  padding: 0 10px 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+/* Luxury white glass — light map toolbox surface */
+.si-sat-ctx-dock--light .si-layer-live-legend {
+  color: #334155;
+}
+
+.si-sat-ctx-dock--light .si-layer-live-legend__empty {
+  color: #64748b;
+  opacity: 1;
+}
+
+.si-sat-ctx-dock--light .si-layer-live-legend__section {
+  background: rgba(255, 255, 255, 0.58);
+  border-color: rgba(255, 255, 255, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 8px 24px rgba(15, 23, 42, 0.04);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+}
+
+.si-sat-ctx-dock--light .si-layer-live-legend__section.is-active {
+  border-color: rgba(5, 150, 105, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 0 0 1px rgba(16, 185, 129, 0.12),
+    0 10px 28px rgba(5, 150, 105, 0.08);
+}
+
+.si-sat-ctx-dock--light .si-layer-live-legend__badge {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+.si-sat-ctx-dock--light .si-layer-live-legend__title {
+  color: #0f172a;
+}
+
+.si-sat-ctx-dock--light .si-layer-live-legend__subtitle,
+.si-sat-ctx-dock--light .si-layer-live-legend__scale,
+.si-sat-ctx-dock--light .si-layer-live-legend__class-range,
+.si-sat-ctx-dock--light .si-layer-live-legend__note,
+.si-sat-ctx-dock--light .si-layer-live-legend__catalog-title,
+.si-sat-ctx-dock--light .si-layer-live-legend__summary-sub,
+.si-sat-ctx-dock--light .si-layer-live-legend__scientific {
+  color: #64748b;
+}
+
+.si-sat-ctx-dock--light .si-layer-live-legend__class-label,
+.si-sat-ctx-dock--light .si-layer-live-legend__summary-title {
+  color: #1e293b;
+}
+
+.si-sat-ctx-dock--light .si-layer-live-legend__bar {
+  border-color: rgba(148, 163, 184, 0.22);
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.si-sat-ctx-dock--light .si-layer-live-legend__swatch {
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+.si-sat-ctx-dock--light .si-layer-live-legend__details {
+  background: rgba(255, 255, 255, 0.48);
+  border-color: rgba(255, 255, 255, 0.68);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88);
+}
+
+.si-sat-ctx-dock--light .si-layer-live-legend__details-body {
+  border-top-color: rgba(148, 163, 184, 0.14);
+}
+
+.si-sat-ctx-dock--light .si-layer-live-legend__catalog-group-title {
+  color: #64748b;
+}
+
+.si-sat-ctx-dock--light .si-layer-live-legend__summary:hover {
+  background: rgba(255, 255, 255, 0.35);
+}

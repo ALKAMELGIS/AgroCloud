@@ -1,0 +1,2 @@
+/* Scoped Tailwind utilities only (no preflight) — coexists with global index.css */
+@tailwind utilities;

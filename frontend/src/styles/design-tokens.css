@@ -1,0 +1,27 @@
+/**
+ * Optional design-token layer: spacing, motion, layout.
+ * Consume via `var(--ds-…)` in new CSS; TS mirrors live in `components/system`.
+ */
+:root {
+  --ds-motion-instant: 80ms;
+  --ds-motion-fast: 150ms;
+  --ds-motion-md: 280ms;
+  --ds-motion-slow: 480ms;
+  --ds-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ds-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --ds-space-0: 0;
+  --ds-space-1: 0.25rem;
+  --ds-space-2: 0.5rem;
+  --ds-space-3: 0.75rem;
+  --ds-space-4: 1rem;
+  --ds-space-5: 1.25rem;
+  --ds-space-6: 1.5rem;
+  --ds-space-8: 2rem;
+  --ds-space-10: 2.5rem;
+  --ds-space-12: 3rem;
+
+  --ds-layout-page-pad: clamp(12px, 2.2vw, 24px);
+  --ds-layout-max-prose: 65ch;
+  --ds-layout-max-wide: 80rem;
+}

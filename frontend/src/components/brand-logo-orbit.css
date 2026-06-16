@@ -1,0 +1,37 @@
+/* Brand logo on splash (wide Elite mark or square mark). */
+
+.brand-logo-orbit {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.brand-logo-orbit--wide {
+  height: auto;
+}
+
+.brand-logo-orbit--wide .brand-logo-orbit__logo {
+  width: 100%;
+  height: auto;
+  max-height: none;
+  object-fit: contain;
+  object-position: center center;
+  pointer-events: none;
+  user-select: none;
+  filter: none;
+}
+
+.brand-logo-orbit__logo {
+  width: 78%;
+  height: auto;
+  max-height: 78%;
+  object-fit: contain;
+  object-position: center center;
+  pointer-events: none;
+  user-select: none;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  filter: none;
+}

@@ -1,0 +1,110 @@
+/**
+ * Mobile / installed PWA shell — fast touch UX on iOS & Android.
+ * Desktop layout unchanged (rules scoped to .agro-touch / .agro-standalone).
+ */
+
+html.agro-touch {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html.agro-touch body {
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Dynamic viewport height fallback when 100dvh is unavailable */
+html.agro-touch {
+  --app-vh-fallback: var(--app-vh, 100vh);
+}
+
+html.agro-touch .layout,
+html.agro-touch .app-layout {
+  height: calc(var(--app-vh-fallback) - var(--header-height, 56px));
+  min-height: calc(var(--app-vh-fallback) - var(--header-height, 56px));
+}
+
+html.agro-touch .layout.layout-sidebar.app-layout.app-layout--no-top-header,
+html.agro-touch .app-layout--no-top-header .layout {
+  height: var(--app-vh-fallback);
+  min-height: var(--app-vh-fallback);
+}
+
+/* Faster taps — no 300ms delay; keep text selectable in inputs */
+html.agro-touch :is(button, a, [role='button'], label, summary, .touch-target) {
+  touch-action: manipulation;
+}
+
+html.agro-touch input,
+html.agro-touch textarea,
+html.agro-touch select,
+html.agro-touch [contenteditable='true'] {
+  touch-action: auto;
+}
+
+html.agro-touch {
+  -webkit-tap-highlight-color: rgba(4, 120, 87, 0.14);
+}
+
+/* Safe areas: mobile browser + installed PWA (notch / home indicator) */
+@media (max-width: 1024px), (pointer: coarse) {
+  html.agro-touch .agri-header {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  html.agro-touch .app-layout > .content {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  html.agro-touch .pwa-install-root {
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  }
+
+  html.agro-touch .navmenu-flyout,
+  html.agro-touch .navmenu-drawer {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* Map full-bleed pages: prevent pull-to-refresh bounce over the map */
+html.agro-touch .app-layout--no-top-header,
+html.agro-touch .content--gis-content-portal,
+html.agro-touch .si-map-root,
+html.agro-touch .si-map-container {
+  overscroll-behavior: none;
+}
+
+/* Satellite weather panel — bottom sheet on narrow phones */
+@media (max-width: 640px) {
+  html.agro-touch .si-weather-panel-shell {
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0;
+    max-height: min(78dvh, calc(var(--app-vh-fallback) - env(safe-area-inset-top, 0px) - 48px));
+    border-radius: 18px 18px 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  html.agro-touch .si-weather-panel {
+    border-radius: 18px 18px 0 0;
+  }
+
+  html.agro-touch .si-weather-button {
+    width: 44px;
+    height: 44px;
+    font-size: 14px;
+  }
+}
+
+/* Standalone PWA: status bar blends with app chrome */
+html.agro-standalone {
+  color-scheme: light dark;
+}
+
+html.agro-standalone.agro-touch .agri-header {
+  padding-top: max(env(safe-area-inset-top, 0px), 4px);
+}

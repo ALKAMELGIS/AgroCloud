@@ -1,0 +1,3758 @@
+/* Floating analysis UX on Satellite Intelligence map — minimal, map-anchored */
+
+.si-map-analysis-timeline {
+  position: absolute;
+  z-index: 95;
+  left: 50%;
+  bottom: 118px;
+  transform: translateX(-50%);
+  width: min(96vw, 840px);
+  /* Pass wheel through gaps so scroll zoom still hits the map canvas. */
+  pointer-events: none;
+  contain: layout style;
+  animation: si-map-tl-in 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+  /* Inherit Satellite page accent when inside .si-page; fallbacks match EO / GIS defaults */
+  --si-tl-accent: var(--si-accent, #22c55e);
+  --si-tl-accent-strong: var(--si-accent-strong, #15803d);
+  --si-tl-accent-soft: var(--si-accent-soft, rgba(34, 197, 94, 0.14));
+  --si-tl-ring: var(--si-accent-ring, rgba(52, 211, 153, 0.38));
+  --si-tl-spectrum-a: rgba(255, 255, 255, 0.12);
+  --si-tl-spectrum-b: rgba(52, 211, 153, 0.55);
+  --si-tl-glass-bg: rgba(0, 0, 0, 0.52);
+  --si-tl-glass-bg-soft: rgba(0, 0, 0, 0.3);
+  --si-tl-glass-border: rgba(255, 255, 255, 0.12);
+  --si-tl-glass-highlight: rgba(255, 255, 255, 0.09);
+  --si-tl-text: #ffffff;
+  --si-tl-text-muted: rgba(255, 255, 255, 0.72);
+}
+
+@keyframes si-map-tl-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.si-map-analysis-timeline-inner {
+  pointer-events: auto;
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+  padding: 9px 14px 10px;
+  border-radius: 999px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 28%),
+    linear-gradient(165deg, rgba(0, 0, 0, 0.62) 0%, rgba(0, 0, 0, 0.42) 48%, rgba(0, 0, 0, 0.56) 100%);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.58),
+    0 8px 24px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.11),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28);
+  outline: none;
+  border: 1px solid var(--si-tl-glass-border);
+  backdrop-filter: blur(28px) saturate(1.18);
+  -webkit-backdrop-filter: blur(28px) saturate(1.18);
+}
+
+.si-map-analysis-timeline-inner--eo {
+  font-family: var(--ds-font-sans, ui-sans-serif, system-ui, sans-serif);
+}
+
+.si-map-analysis-timeline-transport {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  align-self: center;
+  padding: 3px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.si-map-analysis-tl-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: var(--si-tl-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  box-shadow: none;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    transform 0.12s ease;
+}
+
+.si-map-analysis-tl-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--si-tl-text);
+}
+
+.si-map-analysis-tl-play {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: #6ee7b7;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  box-shadow: none;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    transform 0.12s ease;
+}
+
+.si-map-analysis-tl-play:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(52, 211, 153, 0.35);
+  color: #a7f3d0;
+}
+
+.si-map-analysis-tl-play--on {
+  background: rgba(52, 211, 153, 0.16);
+  border-color: rgba(52, 211, 153, 0.42);
+  color: #ecfdf5;
+  box-shadow: none;
+}
+
+.si-map-analysis-timeline-track-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  justify-content: center;
+}
+
+.si-map-analysis-timeline-chips {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 3px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 6px;
+  margin: 0;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+  mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
+}
+
+.si-map-analysis-timeline-chips::-webkit-scrollbar {
+  display: none;
+  height: 0;
+}
+
+.si-map-analysis-timeline-chips--dense .si-map-analysis-chip {
+  font-size: 9px;
+  padding: 4px 7px;
+  border-radius: 8px;
+}
+
+.si-map-analysis-chip {
+  flex: 0 0 auto;
+  border: none;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--si-tl-text-muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
+  padding: 5px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  transition:
+    background 0.16s ease,
+    box-shadow 0.16s ease,
+    color 0.16s ease,
+    transform 0.12s ease;
+}
+
+.si-map-analysis-chip:hover {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--si-tl-text);
+}
+
+.si-map-analysis-chip--active {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.4);
+  color: #ffffff;
+}
+
+.si-map-analysis-timeline-scrub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 0;
+  padding: 0 2px;
+}
+
+.si-map-analysis-tl-nudge {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--si-tl-text-muted);
+  font-size: 9px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.si-map-analysis-tl-nudge:hover {
+  color: var(--si-tl-text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.si-map-analysis-timeline-scrub-core {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.si-map-analysis-timeline-range-edge {
+  flex: 0 1 76px;
+  font-size: 9px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--si-tl-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.95;
+}
+
+.si-map-analysis-timeline-range-edge:first-child {
+  text-align: left;
+}
+
+.si-map-analysis-timeline-range-edge:last-child {
+  text-align: right;
+}
+
+.si-map-analysis-timeline-progress-track {
+  position: relative;
+  flex: 1;
+  min-width: 56px;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.si-map-analysis-timeline-progress-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.04);
+  pointer-events: none;
+}
+
+.si-map-analysis-timeline-progress-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  transform-origin: left center;
+  background: linear-gradient(90deg, var(--si-tl-spectrum-a), rgba(52, 211, 153, 0.75), var(--si-tl-spectrum-b));
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+  pointer-events: none;
+  box-shadow: none;
+}
+
+[dir='rtl'] .si-map-analysis-timeline-progress-fill {
+  transform-origin: right center;
+}
+
+.si-map-analysis-timeline-meta {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+  min-width: 112px;
+  max-width: min(34vw, 210px);
+  padding-inline-start: 12px;
+  border-inline-start: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.si-map-analysis-timeline-date-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 0;
+  width: 100%;
+}
+
+.si-map-analysis-timeline-date-label {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--si-tl-text-muted);
+}
+
+.si-map-analysis-timeline-date {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--si-tl-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+  text-align: right;
+}
+
+.si-map-analysis-tl-speed {
+  border: none;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  color: var(--si-tl-text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  transition: background 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
+}
+
+.si-map-analysis-tl-speed:hover {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.35);
+  color: var(--si-tl-text);
+}
+
+html[data-theme='dark'] .si-map-analysis-timeline-inner {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0) 28%),
+    linear-gradient(165deg, rgba(0, 0, 0, 0.66) 0%, rgba(0, 0, 0, 0.46) 50%, rgba(0, 0, 0, 0.6) 100%);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .si-map-analysis-timeline {
+    animation: none;
+  }
+
+  .si-map-analysis-timeline-progress-fill {
+    transition: none;
+  }
+}
+
+html[data-theme='light'] .si-map-analysis-timeline-inner {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 28%),
+    linear-gradient(165deg, rgba(0, 0, 0, 0.64) 0%, rgba(0, 0, 0, 0.44) 48%, rgba(0, 0, 0, 0.58) 100%);
+  border-color: rgba(255, 255, 255, 0.13);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.58),
+    0 8px 24px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(28px) saturate(1.18);
+  -webkit-backdrop-filter: blur(28px) saturate(1.18);
+}
+
+html[data-theme='light'] .si-map-analysis-timeline-transport {
+  background: rgba(0, 0, 0, 0.3);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.09);
+}
+
+html[data-theme='light'] .si-map-analysis-tl-btn {
+  background: transparent;
+  color: var(--si-tl-text-muted);
+  box-shadow: none;
+}
+
+html[data-theme='light'] .si-map-analysis-tl-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--si-tl-text);
+  box-shadow: none;
+}
+
+html[data-theme='light'] .si-map-analysis-timeline-chips {
+  background: rgba(0, 0, 0, 0.36);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme='light'] .si-map-analysis-chip {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--si-tl-text-muted);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme='light'] .si-map-analysis-chip:hover {
+  background: rgba(255, 255, 255, 0.11);
+  color: var(--si-tl-text);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+
+html[data-theme='light'] .si-map-analysis-chip--active {
+  color: #fff;
+}
+
+html[data-theme='light'] .si-map-analysis-timeline-range-edge {
+  color: var(--si-tl-text-muted);
+  font-weight: 700;
+}
+
+html[data-theme='light'] .si-map-analysis-timeline-progress-track {
+  background: rgba(0, 0, 0, 0.42);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme='light'] .si-map-analysis-timeline-progress-fill {
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.28);
+}
+
+html[data-theme='light'] .si-map-analysis-timeline-date-label {
+  color: var(--si-tl-text-muted);
+}
+
+html[data-theme='light'] .si-map-analysis-timeline-date {
+  color: var(--si-tl-text);
+}
+
+html[data-theme='light'] .si-map-analysis-timeline-meta {
+  border-inline-start-color: rgba(255, 255, 255, 0.12);
+}
+
+html[data-theme='light'] .si-map-analysis-tl-speed {
+  color: var(--si-tl-text-muted);
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.11);
+}
+
+html[data-theme='light'] .si-map-analysis-tl-speed:hover {
+  color: var(--si-tl-text);
+  background: rgba(255, 255, 255, 0.11);
+  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.32);
+}
+
+html[data-theme='light'] .si-map-analysis-tl-nudge {
+  color: var(--si-tl-text-muted);
+}
+
+html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
+  color: var(--si-tl-text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* System theme: document has no data-theme on <html> when themeMode is "system" + OS light */
+@media (prefers-color-scheme: light) {
+  html:not([data-theme]) .si-map-analysis-timeline-inner {
+    background:
+      linear-gradient(145deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 28%),
+      linear-gradient(165deg, rgba(0, 0, 0, 0.64) 0%, rgba(0, 0, 0, 0.44) 48%, rgba(0, 0, 0, 0.58) 100%);
+    border-color: rgba(255, 255, 255, 0.13);
+    box-shadow:
+      0 24px 64px rgba(0, 0, 0, 0.58),
+      0 8px 24px rgba(0, 0, 0, 0.38),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.28);
+    backdrop-filter: blur(28px) saturate(1.18);
+    -webkit-backdrop-filter: blur(28px) saturate(1.18);
+  }
+
+  html:not([data-theme]) .si-map-analysis-timeline-transport {
+    background: rgba(0, 0, 0, 0.3);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.09);
+  }
+
+  html:not([data-theme]) .si-map-analysis-tl-btn {
+    background: transparent;
+    color: var(--si-tl-text-muted);
+    box-shadow: none;
+  }
+
+  html:not([data-theme]) .si-map-analysis-tl-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--si-tl-text);
+    box-shadow: none;
+  }
+
+  html:not([data-theme]) .si-map-analysis-timeline-chips {
+    background: rgba(0, 0, 0, 0.36);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+
+  html:not([data-theme]) .si-map-analysis-chip {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--si-tl-text-muted);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  }
+
+  html:not([data-theme]) .si-map-analysis-chip:hover {
+    background: rgba(255, 255, 255, 0.11);
+    color: var(--si-tl-text);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  }
+
+  html:not([data-theme]) .si-map-analysis-chip--active {
+    color: #fff;
+  }
+
+  html:not([data-theme]) .si-map-analysis-timeline-range-edge {
+    color: var(--si-tl-text-muted);
+    font-weight: 700;
+  }
+
+  html:not([data-theme]) .si-map-analysis-timeline-progress-track {
+    background: rgba(0, 0, 0, 0.42);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+
+  html:not([data-theme]) .si-map-analysis-timeline-progress-fill {
+    box-shadow: 0 0 12px rgba(52, 211, 153, 0.28);
+  }
+
+  html:not([data-theme]) .si-map-analysis-timeline-date-label {
+    color: var(--si-tl-text-muted);
+  }
+
+  html:not([data-theme]) .si-map-analysis-timeline-date {
+    color: var(--si-tl-text);
+  }
+
+  html:not([data-theme]) .si-map-analysis-timeline-meta {
+    border-inline-start-color: rgba(255, 255, 255, 0.12);
+  }
+
+  html:not([data-theme]) .si-map-analysis-tl-speed {
+    color: var(--si-tl-text-muted);
+    background: rgba(255, 255, 255, 0.07);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.11);
+  }
+
+  html:not([data-theme]) .si-map-analysis-tl-speed:hover {
+    color: var(--si-tl-text);
+    background: rgba(255, 255, 255, 0.11);
+    box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.32);
+  }
+
+  html:not([data-theme]) .si-map-analysis-tl-nudge {
+    color: var(--si-tl-text-muted);
+  }
+
+  html:not([data-theme]) .si-map-analysis-tl-nudge:hover {
+    color: var(--si-tl-text);
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+
+@media (max-width: 640px) {
+  .si-map-analysis-timeline {
+    width: min(96vw, 100%);
+    bottom: 108px;
+  }
+
+  .si-map-analysis-timeline-inner {
+    flex-wrap: wrap;
+    border-radius: 20px;
+    row-gap: 10px;
+  }
+
+  .si-map-analysis-timeline-track-wrap {
+    order: 3;
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .si-map-analysis-timeline-meta {
+    order: 2;
+    flex: 1 1 auto;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    max-width: none;
+    width: auto;
+    min-width: 0;
+    padding-inline-start: 10px;
+    border-inline-start: 1px solid rgba(148, 163, 184, 0.12);
+    margin-inline-start: auto;
+  }
+
+  .si-map-analysis-timeline-date-block {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .si-map-analysis-timeline-date {
+    text-align: left;
+  }
+
+  .si-map-analysis-timeline-transport {
+    order: 1;
+  }
+}
+
+/* Bottom icon toolbar */
+.si-map-analysis-toolbar {
+  position: absolute;
+  z-index: 96;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+  animation: si-map-tb-in 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes si-map-tb-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Embedded in Remote Sensing panel — full width, no float */
+.si-map-analysis-toolbar.si-map-analysis-toolbar--embedded {
+  position: static;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  transform: none;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  gap: 4px;
+  padding: 6px 8px;
+  margin: 0;
+  animation: none;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(167, 139, 250, 0.22);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.si-map-analysis-toolbar.si-map-analysis-toolbar--embedded.si-map-analysis-toolbar--compact-row {
+  min-height: 0;
+}
+
+.si-field-analysis .si-map-analysis-toolbar--embedded .si-map-analysis-tool {
+  width: 28px;
+  height: 28px;
+  font-size: 11px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.si-map-analysis-tool {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(30, 41, 59, 0.85);
+  color: #e2e8f0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.si-map-analysis-tool:hover {
+  border-color: rgba(167, 139, 250, 0.45);
+  color: #fff;
+}
+
+.si-map-analysis-tool--on {
+  border-color: rgba(52, 211, 153, 0.55);
+  background: rgba(6, 78, 59, 0.55);
+  color: #bbf7d0;
+}
+
+.si-map-analysis-tool--clear {
+  touch-action: manipulation;
+}
+
+.si-map-analysis-tool--clear:not(:disabled):hover {
+  border-color: rgba(251, 146, 60, 0.55);
+  color: #fed7aa;
+  background: rgba(154, 52, 18, 0.28);
+}
+
+.si-map-analysis-tool--clear:not(:disabled):active {
+  transform: scale(0.96);
+}
+
+.si-map-analysis-tool--clear:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.si-map-analysis-toolbar-sep {
+  width: 1px;
+  height: 18px;
+  background: rgba(148, 163, 184, 0.22);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+/* Charts dock */
+.si-map-analysis-charts {
+  position: absolute;
+  z-index: 130;
+  top: 100px;
+  right: 22px;
+  width: min(440px, calc(100vw - 40px));
+  max-height: min(72vh, 640px);
+  overflow: auto;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+  /* Opacity-only entrance so inline translate() for drag is never overridden */
+  animation: si-map-ch-in 0.35s ease;
+}
+
+@keyframes si-map-ch-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.si-map-analysis-charts-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.si-map-analysis-charts-head:active {
+  cursor: grabbing;
+}
+
+.si-map-analysis-charts--dragged {
+  animation: none;
+}
+
+.si-map-analysis-charts--dragging {
+  cursor: grabbing;
+  animation: none;
+}
+
+.si-map-analysis-charts--dragging .si-map-analysis-charts-head {
+  cursor: grabbing;
+}
+
+.si-map-analysis-charts-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.si-map-analysis-charts-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: #f1f5f9;
+  letter-spacing: 0.02em;
+}
+
+.si-map-analysis-charts-subtitle {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(148, 163, 184, 0.92);
+  line-height: 1.35;
+}
+
+.si-map-analysis-charts-multiline {
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.si-map-analysis-layer-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.si-map-analysis-layer-chip {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.55);
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.si-map-analysis-layer-chip--on {
+  border-color: rgba(74, 222, 128, 0.5);
+  background: rgba(34, 197, 94, 0.18);
+  color: #ecfdf5;
+}
+
+.si-map-analysis-layer-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Layer Live multi-select for AOI statistical charts */
+.si-layer-live-stats-select {
+  position: relative;
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.si-layer-live-stats-select__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 10px;
+  margin-bottom: 6px;
+}
+
+.si-layer-live-stats-select__kicker {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.95);
+}
+
+.si-layer-live-stats-select__primary {
+  font-size: 9px;
+  color: rgba(134, 239, 172, 0.95);
+}
+
+.si-layer-live-stats-select__primary strong {
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.si-layer-live-stats-select__quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.si-layer-live-stats-select__quick .si-map-analysis-layer-chip--primary {
+  box-shadow: inset 0 0 0 1px rgba(134, 239, 172, 0.45);
+}
+
+.si-layer-live-stats-select__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  background: rgba(15, 23, 42, 0.72);
+  color: #ecfdf5;
+  cursor: pointer;
+  text-align: left;
+}
+
+.si-layer-live-stats-select__trigger-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.si-layer-live-stats-select__abbr {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.si-layer-live-stats-select__count {
+  font-size: 9px;
+  font-weight: 500;
+  color: rgba(148, 163, 184, 0.95);
+}
+
+.si-layer-live-stats-select__chevron {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid rgba(148, 163, 184, 0.9);
+  border-bottom: 2px solid rgba(148, 163, 184, 0.9);
+  transform: rotate(45deg);
+  margin-top: -3px;
+  transition: transform 0.15s ease;
+}
+
+.si-layer-live-stats-select.is-open .si-layer-live-stats-select__chevron {
+  transform: rotate(-135deg);
+  margin-top: 3px;
+}
+
+.si-layer-live-stats-select__menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: min(320px, 52vh);
+  overflow: auto;
+  padding: 8px 0 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.96);
+  box-shadow: 0 16px 40px rgba(2, 6, 23, 0.55);
+}
+
+.si-layer-live-stats-select__hint {
+  margin: 0 10px 8px;
+  font-size: 9px;
+  line-height: 1.35;
+  color: rgba(148, 163, 184, 0.95);
+}
+
+.si-layer-live-stats-select__group + .si-layer-live-stats-select__group {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.si-layer-live-stats-select__group-label {
+  padding: 4px 10px 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.88);
+}
+
+.si-layer-live-stats-select__option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.si-layer-live-stats-select__option:hover,
+.si-layer-live-stats-select__option.is-checked {
+  background: rgba(51, 65, 85, 0.45);
+}
+
+.si-layer-live-stats-select__option.is-primary {
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.si-layer-live-stats-select__checkbox {
+  margin-top: 2px;
+  accent-color: #4ade80;
+  flex-shrink: 0;
+}
+
+.si-layer-live-stats-select__option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.si-layer-live-stats-select__option-abbr {
+  font-size: 11px;
+  font-weight: 700;
+  color: #f8fafc;
+  line-height: 1.15;
+}
+
+.si-layer-live-stats-select__option-science {
+  font-size: 8px;
+  line-height: 1.25;
+  color: rgba(148, 163, 184, 0.95);
+}
+
+.si-layer-live-stats-select__primary-badge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.si-layer-live-stats-select--compact .si-layer-live-stats-select__trigger {
+  min-height: 32px;
+}
+
+.si-layer-live-stats-select--disabled .si-layer-live-stats-select__trigger {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.si-map-analysis-charts-multiline .si-layer-live-stats-select {
+  margin-bottom: 8px;
+}
+
+.si-aoi-static-line-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 260px;
+  min-height: 220px;
+  border-radius: 12px;
+  padding: 8px 8px 4px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.si-aoi-static-line-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 0 2px 4px;
+  min-height: 28px;
+}
+
+.si-aoi-static-chart-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.si-aoi-static-chart-type-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.88);
+}
+
+.si-aoi-static-chart-type-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.si-aoi-static-chart-type-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.55);
+  color: #e2e8f0;
+  cursor: pointer;
+  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: filter 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.si-aoi-static-chart-type-icon:hover {
+  filter: brightness(1.06);
+  border-color: rgba(129, 140, 248, 0.4);
+}
+
+.si-aoi-static-chart-type-icon--active {
+  border-color: rgba(74, 222, 128, 0.45);
+  background: rgba(34, 197, 94, 0.14);
+  color: #ecfdf5;
+}
+
+.si-aoi-static-line-wrap--light .si-aoi-static-chart-type-label {
+  color: rgba(71, 85, 105, 0.95);
+}
+
+.si-aoi-static-line-wrap--light .si-aoi-static-chart-type-icon {
+  background: #ffffff;
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.22);
+}
+
+.si-aoi-static-line-wrap--light .si-aoi-static-chart-type-icon--active {
+  border-color: rgba(34, 197, 94, 0.55);
+  background: rgba(220, 252, 231, 0.88);
+  color: #14532d;
+}
+
+.si-aoi-static-line-chart-host {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.si-aoi-static-line-chart-title {
+  flex-shrink: 0;
+  padding: 0 4px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #e2e8f0;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+}
+
+.si-aoi-static-line-wrap--light .si-aoi-static-line-chart-title {
+  color: #0f172a;
+}
+
+.si-aoi-static-line-wrap--compact {
+  height: auto;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 5px 6px 4px;
+  border-radius: 10px;
+  gap: 0;
+}
+
+.si-aoi-static-line-wrap--compact .si-aoi-static-line-toolbar {
+  min-height: 22px;
+  padding: 0 0 3px;
+  gap: 4px;
+}
+
+.si-aoi-static-line-wrap--compact .si-aoi-static-chart-type-label {
+  font-size: 8px;
+}
+
+.si-aoi-static-line-wrap--compact .si-aoi-static-chart-type-icon,
+.si-aoi-static-line-wrap--compact .si-aoi-static-line-theme-toggle {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  font-size: 9px;
+}
+
+.si-aoi-static-line-wrap--compact .si-aoi-static-line-actions {
+  gap: 3px;
+}
+
+.si-aoi-static-line-wrap--compact .si-aoi-static-line-chart-host {
+  min-height: 120px;
+}
+
+.si-map-analysis-charts-embedded {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.si-map-analysis-charts-embedded .si-map-analysis-charts-multiline {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+  gap: 6px;
+}
+
+.si-aoi-static-line-wrap--dark {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.82), rgba(15, 23, 42, 0.64));
+  border-color: rgba(99, 102, 241, 0.22);
+}
+
+.si-aoi-static-line-wrap--light {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.14);
+}
+
+.si-aoi-static-line-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  z-index: 2;
+}
+
+.si-aoi-static-line-theme-toggle {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.58);
+  color: #f8fafc;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  cursor: pointer;
+  z-index: 2;
+  transition: filter 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.si-aoi-static-line-theme-toggle:hover {
+  filter: brightness(1.08);
+  border-color: rgba(129, 140, 248, 0.45);
+}
+
+.si-aoi-static-line-wrap--light .si-aoi-static-line-theme-toggle {
+  background: #ffffff;
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.22);
+}
+
+.si-aoi-static-line-empty {
+  padding: 20px 14px;
+  text-align: center;
+  background: rgba(30, 41, 59, 0.4);
+  border-radius: 12px;
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+}
+
+.si-aoi-static-line-empty-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #e2e8f0;
+}
+
+.si-aoi-static-line-empty-hint {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.45;
+  color: rgba(148, 163, 184, 0.95);
+}
+
+.si-map-analysis-charts-grid--below {
+  padding-top: 8px;
+}
+
+.si-map-analysis-charts-close {
+  border: none;
+  background: rgba(148, 163, 184, 0.12);
+  color: #cbd5e1;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.si-map-analysis-charts-close:hover {
+  background: rgba(248, 113, 113, 0.15);
+  color: #fecaca;
+}
+
+.si-map-analysis-charts-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px 14px;
+}
+
+.si-map-analysis-chart-card {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(30, 41, 59, 0.55);
+}
+
+.si-map-analysis-chart-kicker {
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.85);
+  margin-bottom: 8px;
+}
+
+.si-map-analysis-spark {
+  width: 100%;
+  height: 52px;
+  display: block;
+}
+
+.si-map-analysis-spark-path {
+  stroke: #6ee7b7;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.si-map-analysis-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.si-map-analysis-bar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(56px, 1.2fr) 44px;
+  gap: 8px;
+  align-items: center;
+  font-size: 10px;
+}
+
+.si-map-analysis-bar-name {
+  color: #cbd5e1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.si-map-analysis-bar-track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.65);
+  overflow: hidden;
+}
+
+.si-map-analysis-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #34d399, #22c55e);
+}
+
+.si-map-analysis-bar-val {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #e2e8f0;
+}
+
+.si-map-analysis-chart-card--pie .si-map-analysis-pie-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.si-map-analysis-pie-seg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: #cbd5e1;
+}
+
+.si-map-analysis-pie-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.si-map-analysis-pie-lbl {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.si-map-analysis-pie-pct {
+  font-variant-numeric: tabular-nums;
+  color: #94a3b8;
+}
+
+.si-map-analysis-charts-foot {
+  margin: 0;
+  padding: 0 14px 12px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: rgba(148, 163, 184, 0.88);
+}
+
+@media (max-width: 520px) {
+  .si-map-analysis-charts {
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: 168px;
+    width: auto;
+    max-height: 42vh;
+  }
+}
+
+/* Portal host: inside .mapboxgl-canvas-container — pass-through hits canvas except tool UI */
+.si-map-tools-dock-host {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* —— Calcite-style contextual dock (rail + panel) —— */
+.si-sat-ctx-dock {
+  --si-ctx-bg: rgba(0, 0, 0, 0.38);
+  --si-ctx-bg2: rgba(255, 255, 255, 0.07);
+  --si-ctx-border: rgba(255, 255, 255, 0.1);
+  --si-ctx-text: #ffffff;
+  --si-ctx-muted: rgba(255, 255, 255, 0.68);
+  --si-ctx-accent: #34d399;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  pointer-events: none;
+}
+
+/* Luxury black glass (map toolbox rail + panel) */
+.si-sat-ctx-dock--dark {
+  --si-ctx-bg: rgba(0, 0, 0, 0.42);
+  --si-ctx-bg2: rgba(255, 255, 255, 0.08);
+  --si-ctx-border: rgba(255, 255, 255, 0.1);
+  --si-ctx-text: #ffffff;
+  --si-ctx-muted: rgba(255, 255, 255, 0.72);
+}
+
+.si-sat-ctx-dock > * {
+  pointer-events: auto;
+}
+
+.si-sat-ctx-dock--map {
+  position: absolute;
+  z-index: 96;
+  /* Flush with canvas trailing edge (right in LTR, left in RTL); panel opens toward map center. */
+  inset-inline-end: 0;
+  inset-inline-start: auto;
+  top: 50%;
+  transform: translateY(-50%);
+  max-height: min(86vh, 760px);
+  flex-direction: row-reverse;
+  filter: drop-shadow(0 18px 40px rgba(2, 6, 23, 0.42));
+}
+
+/* Full-height map toolbox (Satellite Intelligence) — docked trailing edge, expand/collapse rail */
+.si-sat-ctx-dock--map.si-sat-ctx-dock--map-tall {
+  top: 0;
+  bottom: 0;
+  transform: none;
+  height: 100%;
+  max-height: none;
+  align-self: stretch;
+}
+
+.si-sat-ctx-dock--map-tall:not(.si-sat-ctx-dock--map-toolbox) .si-sat-ctx-rail {
+  height: 100%;
+  min-height: 0;
+  flex: 0 0 auto;
+  align-self: stretch;
+  border-radius: 0;
+  /* Outer edge = inline-end when toolbox is on the trailing side of the map */
+  border-start-end-radius: 14px;
+  border-end-end-radius: 14px;
+}
+
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--map-tall .si-sat-ctx-rail {
+  height: 100%;
+  min-height: 0;
+  flex: 0 0 auto;
+  align-self: stretch;
+}
+
+.si-sat-ctx-dock--map .si-sat-ctx-panel {
+  border-radius: 16px 0 0 16px;
+  border-inline-end: none;
+  border-inline-start: 1px solid var(--si-ctx-border);
+  box-shadow: -12px 0 40px rgba(2, 6, 23, 0.25);
+}
+
+.si-sat-ctx-dock.si-sat-ctx-dock--map[dir='rtl'] .si-sat-ctx-panel {
+  border-radius: 0 16px 16px 0;
+  border-inline-start: none;
+  border-inline-end: 1px solid var(--si-ctx-border);
+  box-shadow: 12px 0 40px rgba(2, 6, 23, 0.25);
+}
+
+.si-sat-ctx-dock--map-tall .si-sat-ctx-panel {
+  max-height: none;
+  height: 100%;
+  min-height: 0;
+}
+
+.si-sat-ctx-dock--map-tall .si-sat-ctx-panel-wrap {
+  max-height: none;
+}
+
+.si-sat-ctx-rail-footer--map {
+  display: none;
+}
+
+/* Map toolbox: no footer chevrons (strip hide / collapse controls removed) */
+.si-sat-ctx-dock--map-toolbox .si-sat-ctx-rail-footer {
+  display: none;
+}
+
+.si-sat-ctx-rail-strip-hide {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  color: var(--si-ctx-muted);
+  cursor: pointer;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.si-sat-ctx-rail-strip-hide:hover {
+  color: var(--si-ctx-text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-rail-strip-hide {
+  background: transparent;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-rail-strip-hide:hover {
+  background: var(--si-ctx-light-field);
+}
+
+/* Map toolbox minimized to edge: icon rail + clear “restore strip” control (no blank peek tab). */
+.si-sat-ctx-dock--map.si-sat-ctx-dock--map-strip-minimized {
+  filter: drop-shadow(0 14px 32px rgba(2, 6, 23, 0.4));
+}
+
+.si-sat-ctx-dock--map-strip-minimized .si-sat-ctx-rail {
+  width: 56px;
+  min-width: 56px;
+  max-width: 56px;
+  padding-inline: 7px;
+  /* Accent on the map-facing edge of the rail (inline-start when docked on inline-end) */
+  border-inline-start: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.si-sat-ctx-dock.si-sat-ctx-dock--map-strip-minimized[dir='rtl'] .si-sat-ctx-rail {
+  border-inline-start: none;
+  border-inline-end: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.si-sat-ctx-rail-strip-show {
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 4px 10px;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.78);
+  cursor: pointer;
+  font-size: 13px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition:
+    color 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    transform 0.14s ease;
+}
+
+.si-sat-ctx-rail-strip-show:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.si-sat-ctx-rail-strip-show:focus-visible {
+  outline: 2px solid rgba(52, 211, 153, 0.85);
+  outline-offset: 2px;
+}
+
+.si-sat-ctx-rail-strip-show__label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.15;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  user-select: none;
+  text-align: center;
+}
+
+.si-sat-ctx-dock--dark .si-sat-ctx-panel {
+  background: linear-gradient(
+    165deg,
+    rgba(0, 0, 0, 0.52) 0%,
+    rgba(0, 0, 0, 0.4) 100%
+  );
+  backdrop-filter: blur(22px) saturate(1.15);
+  -webkit-backdrop-filter: blur(22px) saturate(1.15);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: -14px 0 44px rgba(0, 0, 0, 0.45);
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-rail-strip-show {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+  border-color: rgba(5, 150, 105, 0.45);
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-rail-strip-show__label {
+  color: #047857;
+}
+
+.si-sat-ctx-dock[dir='rtl'] .si-sat-ctx-rail-collapse__icon-wrap i,
+.si-sat-ctx-dock[dir='rtl'] .si-sat-ctx-rail-collapse i,
+.si-sat-ctx-dock[dir='rtl'] .si-sat-ctx-rail-strip-hide i,
+.si-sat-ctx-dock[dir='rtl'] .si-sat-ctx-rail-strip-show i {
+  transform: scaleX(-1);
+}
+
+.si-sat-ctx-dock--embedded {
+  position: relative;
+  width: 100%;
+  min-height: 320px;
+  max-height: min(70vh, 640px);
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.35);
+  flex-direction: row-reverse;
+}
+
+.si-sat-ctx-dock--float-mode .si-sat-ctx-panel {
+  transform: translateX(2px) scale(1.01);
+  box-shadow:
+    0 28px 64px rgba(2, 6, 23, 0.55),
+    0 0 0 1px rgba(99, 102, 241, 0.12);
+}
+
+.si-sat-ctx-dock--light {
+  --si-ctx-bg: rgba(255, 255, 255, 0.68);
+  --si-ctx-bg2: rgba(255, 255, 255, 0.82);
+  --si-ctx-border: rgba(255, 255, 255, 0.72);
+  --si-ctx-border-soft: rgba(148, 163, 184, 0.2);
+  --si-ctx-text: #0f172a;
+  --si-ctx-muted: #64748b;
+  --si-ctx-accent: #059669;
+  --si-ctx-light-inset: rgba(255, 255, 255, 0.94);
+  --si-ctx-light-field: rgba(255, 255, 255, 0.42);
+  --si-ctx-light-field-hover: rgba(255, 255, 255, 0.72);
+  --si-ctx-glass-shadow: 0 20px 50px rgba(15, 23, 42, 0.07), 0 4px 14px rgba(15, 23, 42, 0.04);
+}
+
+/* Luxury white glass — contextual panel */
+.si-sat-ctx-dock--light .si-sat-ctx-panel {
+  background: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.9) 0%,
+    rgba(255, 255, 255, 0.74) 46%,
+    rgba(248, 250, 252, 0.8) 100%
+  );
+  backdrop-filter: blur(28px) saturate(1.35);
+  -webkit-backdrop-filter: blur(28px) saturate(1.35);
+  border-color: rgba(255, 255, 255, 0.78);
+  box-shadow:
+    var(--si-ctx-glass-shadow),
+    inset 0 1px 0 var(--si-ctx-light-inset);
+}
+
+.si-sat-ctx-dock--light.si-sat-ctx-dock--map {
+  filter: drop-shadow(0 16px 40px rgba(15, 23, 42, 0.06));
+}
+
+.si-sat-ctx-dock--light.si-sat-ctx-dock--map .si-sat-ctx-panel {
+  box-shadow:
+    -10px 0 36px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 var(--si-ctx-light-inset);
+}
+
+.si-sat-ctx-dock--light.si-sat-ctx-dock--map[dir='rtl'] .si-sat-ctx-panel {
+  box-shadow:
+    10px 0 36px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 var(--si-ctx-light-inset);
+}
+
+.si-sat-ctx-dock--light.si-sat-ctx-dock--map-strip-minimized {
+  filter: drop-shadow(0 12px 28px rgba(15, 23, 42, 0.05));
+}
+
+.si-sat-ctx-dock--light.si-sat-ctx-dock--map-strip-minimized .si-sat-ctx-rail {
+  border-inline-start-color: rgba(255, 255, 255, 0.65);
+}
+
+.si-sat-ctx-dock--light.si-sat-ctx-dock--map-strip-minimized[dir='rtl'] .si-sat-ctx-rail {
+  border-inline-end-color: rgba(255, 255, 255, 0.65);
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-panel-header {
+  border-bottom-color: var(--si-ctx-border-soft);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), transparent);
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-tabs {
+  border-bottom-color: var(--si-ctx-border-soft);
+}
+
+.si-sat-ctx-dock--light .si-map-analysis-layer-chip,
+.si-sat-ctx-dock--light .si-map-analysis-chart-card {
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--si-ctx-text);
+  border-color: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.si-sat-ctx-dock--light .si-layer-live-stats-select__trigger {
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--si-ctx-text);
+  border-color: rgba(5, 150, 105, 0.28);
+}
+
+.si-sat-ctx-dock--light .si-layer-live-stats-select__menu {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(148, 163, 184, 0.28);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+}
+
+.si-sat-ctx-dock--light .si-layer-live-stats-select__option-abbr {
+  color: var(--si-ctx-text);
+}
+
+.si-sat-ctx-dock--light .si-layer-live-stats-select__option-science,
+.si-sat-ctx-dock--light .si-layer-live-stats-select__hint,
+.si-sat-ctx-dock--light .si-layer-live-stats-select__count,
+.si-sat-ctx-dock--light .si-layer-live-stats-select__group-label,
+.si-sat-ctx-dock--light .si-layer-live-stats-select__kicker {
+  color: #64748b;
+}
+
+.si-sat-ctx-dock--light .si-layer-live-stats-select__option:hover,
+.si-sat-ctx-dock--light .si-layer-live-stats-select__option.is-checked {
+  background: rgba(241, 245, 249, 0.95);
+}
+
+.si-sat-ctx-dock--light .si-layer-live-stats-select__option.is-primary {
+  background: rgba(209, 250, 229, 0.55);
+}
+
+.si-sat-ctx-dock--light .si-env-toolbox-nav {
+  background: rgba(255, 255, 255, 0.35);
+  border-bottom-color: var(--si-ctx-border-soft);
+}
+
+.si-sat-ctx-dock--light .si-env-toolbox-back {
+  background: rgba(255, 255, 255, 0.62);
+  border-color: var(--si-ctx-border-soft);
+  color: var(--si-ctx-text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.si-sat-ctx-dock--light .si-env-toolbox-back:hover {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(5, 150, 105, 0.24);
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-panel-body .si-map-toolbox-layers-card .si-env-added-layers {
+  background: rgba(255, 255, 255, 0.42);
+  border-color: rgba(255, 255, 255, 0.65);
+}
+
+.si-sat-ctx-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 8px 6px 10px;
+  width: 52px;
+  flex-shrink: 0;
+  border-radius: 0 14px 14px 0;
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  border: 1px solid var(--si-ctx-border);
+}
+
+.si-sat-ctx-dock--dark .si-sat-ctx-rail {
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.58) 0%,
+    rgba(0, 0, 0, 0.4) 50%,
+    rgba(0, 0, 0, 0.52) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    -10px 0 36px rgba(0, 0, 0, 0.32);
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-rail {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.86) 0%,
+    rgba(255, 255, 255, 0.72) 50%,
+    rgba(248, 250, 252, 0.78) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 var(--si-ctx-light-inset),
+    -8px 0 28px rgba(15, 23, 42, 0.05);
+}
+
+.si-sat-ctx-dock--map:not(.si-sat-ctx-dock--map-toolbox) .si-sat-ctx-rail {
+  border-radius: 0;
+  border-start-end-radius: 14px;
+  border-end-end-radius: 14px;
+  transition:
+    width 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    padding 0.24s ease,
+    border-radius 0.2s ease;
+}
+
+.si-sat-ctx-dock.si-sat-ctx-dock--map:not(.si-sat-ctx-dock--map-toolbox)[dir='rtl'] .si-sat-ctx-rail {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+  border-start-start-radius: 14px;
+  border-end-start-radius: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .si-sat-ctx-dock--map .si-sat-ctx-rail,
+  .si-sat-ctx-panel-wrap,
+  .si-sat-ctx-dock--map .si-sat-ctx-rail-label,
+  .si-sat-ctx-dock--map-toolbox .si-sat-ctx-rail-btn--map .si-sat-ctx-rail-label,
+  .si-sat-ctx-dock--map-toolbox .si-sat-ctx-rail-brand {
+    transition: none !important;
+  }
+}
+
+.si-sat-ctx-rail--labeled {
+  width: min(220px, 38vw);
+  padding-inline: 8px;
+}
+
+.si-sat-ctx-dock--rail-narrow .si-sat-ctx-rail {
+  align-items: center;
+}
+
+.si-sat-ctx-dock--embedded .si-sat-ctx-rail {
+  border-radius: 0 12px 12px 0;
+}
+
+.si-sat-ctx-rail-sep {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--si-ctx-border);
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.si-sat-ctx-rail-spacer {
+  flex: 1 1 auto;
+  min-height: 8px;
+}
+
+.si-sat-ctx-rail-footer {
+  padding-top: 2px;
+  flex-shrink: 0;
+}
+
+.si-sat-ctx-rail-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--si-ctx-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.14s ease;
+}
+
+.si-sat-ctx-rail-btn--row {
+  width: 100%;
+  height: auto;
+  min-height: 40px;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+
+.si-sat-ctx-rail-label {
+  flex: 1;
+  min-width: 0;
+  text-align: start;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.si-sat-ctx-rail-label-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
+  color: var(--si-ctx-text);
+}
+
+.si-sat-ctx-dock--map .si-sat-ctx-rail-label {
+  transition:
+    opacity 0.2s ease,
+    transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.si-sat-ctx-rail-label-desc {
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--si-ctx-muted);
+}
+
+/* Map toolbox: brand + expand (labels) / collapse (icons) density */
+.si-sat-ctx-dock--map-toolbox .si-sat-ctx-rail-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 2px 8px;
+  margin-inline: -2px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--si-ctx-border);
+  flex-shrink: 0;
+  transition: opacity 0.2s ease;
+}
+
+.si-sat-ctx-dock--map-toolbox .si-sat-ctx-rail-brand--minimized {
+  justify-content: center;
+  padding-bottom: 6px;
+}
+
+/* Map toolbox icon rail: compact, equal icon cells and spacing */
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--rail-narrow {
+  --si-map-rail-cell: 32px;
+  --si-map-rail-icon: 13px;
+}
+
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--rail-narrow .si-sat-ctx-rail {
+  width: 44px;
+  padding: 6px 5px 8px;
+  gap: 4px;
+}
+
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--rail-narrow .si-sat-ctx-rail-brand {
+  padding: 2px 0 4px;
+  margin-bottom: 0;
+  justify-content: center;
+}
+
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--rail-narrow .si-sat-ctx-rail-brand__mark {
+  width: var(--si-map-rail-cell);
+  height: var(--si-map-rail-cell);
+  font-size: var(--si-map-rail-icon);
+}
+
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--rail-narrow .si-sat-ctx-rail-btn--map-collapsed {
+  width: var(--si-map-rail-cell);
+  height: var(--si-map-rail-cell);
+  min-width: var(--si-map-rail-cell);
+  min-height: var(--si-map-rail-cell);
+  border-radius: 0;
+  padding: 0;
+  font-size: var(--si-map-rail-icon);
+}
+
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--rail-narrow .si-sat-ctx-rail-btn--map-collapsed > i,
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--rail-narrow .si-sat-ctx-rail-brand__mark > i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  font-size: var(--si-map-rail-icon);
+  line-height: 1;
+}
+
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--rail-narrow .si-sat-ctx-rail-btn--add-gis .fa-circle-plus {
+  font-size: var(--si-map-rail-icon);
+}
+
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--rail-narrow .si-sat-ctx-rail-sep {
+  margin: 2px 8px;
+}
+
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--rail-narrow .si-sat-ctx-rail-add-gis-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+/* Extra-compact map toolbox rail (Satellite Intelligence compact rail) */
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--compact {
+  --si-map-rail-cell: 28px;
+  --si-map-rail-icon: 12px;
+}
+
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--compact .si-sat-ctx-rail {
+  width: 36px;
+  padding: 4px 3px 6px;
+  gap: 2px;
+}
+
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--compact .si-sat-ctx-rail-brand {
+  display: none;
+}
+
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--compact .si-sat-ctx-rail-btn {
+  width: var(--si-map-rail-cell);
+  height: var(--si-map-rail-cell);
+  min-width: var(--si-map-rail-cell);
+  min-height: var(--si-map-rail-cell);
+  font-size: var(--si-map-rail-icon);
+  border-radius: 6px;
+}
+
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--compact .si-sat-ctx-rail-btn--map-collapsed {
+  border-radius: 6px;
+}
+
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--compact .si-sat-ctx-rail-sep {
+  margin: 2px 6px;
+}
+
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--compact .si-sat-ctx-rail-strip-hide {
+  min-height: 28px;
+  font-size: 11px;
+}
+
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--rail-narrow .si-sat-ctx-rail-add-gis-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--map-strip-minimized .si-sat-ctx-rail {
+  width: 44px;
+  min-width: 44px;
+  max-width: 44px;
+  padding-inline: 5px;
+}
+
+/* Main Toolbox — sharp 90° corners on rail shell and icon cells */
+.si-sat-ctx-dock--map-toolbox .si-sat-ctx-rail,
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--map .si-sat-ctx-rail,
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--map-tall .si-sat-ctx-rail,
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--map[dir='rtl'] .si-sat-ctx-rail {
+  border-radius: 0;
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+}
+
+.si-sat-ctx-dock--map-toolbox .si-sat-ctx-panel,
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--map .si-sat-ctx-panel,
+.si-sat-ctx-dock--map-toolbox[dir='rtl'] .si-sat-ctx-panel,
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--map[dir='rtl'] .si-sat-ctx-panel,
+.si-sat-ctx-dock--map-toolbox .si-sat-ctx-panel-wrap {
+  border-radius: 0;
+}
+
+.si-sat-ctx-dock--map-toolbox .si-sat-ctx-rail-btn,
+.si-sat-ctx-dock--map-toolbox .si-sat-ctx-rail-btn--row,
+.si-sat-ctx-dock--map-toolbox .si-sat-ctx-rail-btn--map-collapsed,
+.si-sat-ctx-dock--map-toolbox .si-sat-ctx-rail-btn--map-expanded,
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--rail-narrow .si-sat-ctx-rail-btn--map-collapsed,
+.si-sat-ctx-dock--map-toolbox .si-sat-ctx-rail-collapse,
+.si-sat-ctx-dock--map-toolbox .si-sat-ctx-rail-brand__mark,
+.si-sat-ctx-dock--map-toolbox .si-sat-ctx-icon-btn,
+.si-sat-ctx-dock--map-toolbox .si-sat-ctx-subnav,
+.si-sat-ctx-dock--map-toolbox .si-sat-ctx-subnav-back,
+.si-sat-ctx-dock--map-toolbox .si-map-toolbox-add-gis-flyout,
+.si-sat-ctx-dock--map-toolbox .si-map-toolbox-add-gis-flyout__item,
+.si-sat-ctx-dock--map-toolbox .si-map-toolbox-layer-popup-cfg,
+.si-sat-ctx-dock--map-toolbox .si-map-toolbox-layer-popup-cfg__field select,
+.si-sat-ctx-dock--map-toolbox .si-map-toolbox-layer-popup-cfg__btn,
+.si-sat-ctx-dock--map-toolbox .si-sat-ctx-toolbox-opt-btn,
+.si-sat-ctx-dock--map-toolbox .si-smart-proc__context,
+.si-sat-ctx-dock--map-toolbox .si-smart-proc__cat-toggle,
+.si-sat-ctx-dock--map-toolbox .si-env-toolbox-back {
+  border-radius: 0;
+}
+
+/* Main Toolbox — embedded panels (Remote sensing, layers, STAC, …) */
+.si-sat-ctx-dock--map-toolbox .si-sat-ctx-panel-body :is(
+  button,
+  input,
+  select,
+  textarea,
+  .si-env-section-card,
+  .si-env-control-grid select,
+  .si-env-control-grid input,
+  .si-env-actions button,
+  .si-env-drawing-tools,
+  .si-env-drawing-tools--modern,
+  .si-drawtool,
+  .si-env-section-tabs button,
+  .si-env-index-note,
+  .si-env-stats,
+  .si-env-chart-card,
+  .si-env-indicator-card,
+  .si-env-wms-strip,
+  .si-env-wms-chips button,
+  .si-env-side-row,
+  .si-env-layer-item,
+  .si-env-layer-action-btn,
+  .si-map-toolbox-layers-card,
+  .si-field-analysis-timeline-btn,
+  .si-field-analysis-aoi-upload-btn,
+  .si-netflora-stat-card,
+  .si-netflora-class-row
+),
+.si-sat-ctx-dock--map-toolbox .si-sat-ctx-map-toolbox-host :is(
+  button,
+  input,
+  select,
+  textarea,
+  .si-env-section-card,
+  .si-env-control-grid select,
+  .si-env-control-grid input,
+  .si-env-actions button,
+  .si-env-drawing-tools,
+  .si-env-drawing-tools--modern,
+  .si-drawtool,
+  .si-env-section-tabs button,
+  .si-env-index-note,
+  .si-env-stats,
+  .si-env-chart-card,
+  .si-env-indicator-card,
+  .si-env-wms-strip,
+  .si-env-wms-chips button,
+  .si-env-side-row,
+  .si-env-layer-item,
+  .si-env-layer-action-btn,
+  .si-map-toolbox-layers-card,
+  .si-field-analysis-timeline-btn,
+  .si-field-analysis-aoi-upload-btn,
+  .si-netflora-stat-card,
+  .si-netflora-class-row
+) {
+  border-radius: 0 !important;
+}
+
+.si-sat-ctx-dock--map-toolbox .si-sat-ctx-rail-btn--map-expanded > i {
+  flex-shrink: 0;
+  width: 14px;
+  font-size: 13px;
+  text-align: center;
+}
+
+.si-sat-ctx-rail-group-kicker {
+  flex-shrink: 0;
+  padding: 4px 2px 2px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--si-ctx-muted);
+  opacity: 0.92;
+  user-select: none;
+}
+
+.si-sat-ctx-dock--rail-narrow .si-sat-ctx-rail-group-kicker {
+  text-align: center;
+  padding-inline: 0;
+}
+
+.si-sat-ctx-subnav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(2, 6, 23, 0.22);
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-subnav {
+  background: var(--si-ctx-light-field-hover);
+  border-color: var(--si-ctx-border-soft);
+  box-shadow: inset 0 1px 0 var(--si-ctx-light-inset);
+}
+
+.si-sat-ctx-subnav-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.35);
+  color: var(--si-ctx-text);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.si-sat-ctx-subnav-back:hover {
+  border-color: rgba(129, 140, 248, 0.45);
+  background: var(--si-ctx-bg2);
+}
+
+.si-sat-ctx-subnav-back i {
+  font-size: 12px;
+  color: var(--si-ctx-muted);
+}
+
+.si-sat-ctx-dock[dir='rtl'] .si-sat-ctx-subnav-back i {
+  transform: scaleX(-1);
+}
+
+.si-sat-ctx-subnav-crumb {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--si-ctx-muted);
+}
+
+.si-sat-ctx-layers-options-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.si-sat-ctx-layers-options-stack > p {
+  margin-top: 0;
+}
+
+.si-sat-ctx-toolbox-opt-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* Layers → Options: per-layer popup configuration (parent supplies JSX) */
+.si-map-toolbox-layer-popup-cfg {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(148, 163, 184, 0.22);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.si-map-toolbox-layer-popup-cfg .si-env-chart-title {
+  margin-bottom: 0;
+}
+
+.si-map-toolbox-layer-popup-cfg__hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--si-ctx-muted);
+}
+
+.si-map-toolbox-layer-popup-cfg__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--si-ctx-muted);
+}
+
+.si-map-toolbox-layer-popup-cfg__field select {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(129, 140, 248, 0.28);
+  background: rgba(30, 41, 59, 0.55);
+  color: var(--si-ctx-text);
+  font-size: 12px;
+}
+
+.si-sat-ctx-dock--light .si-map-toolbox-layer-popup-cfg__field select {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: var(--si-ctx-border-soft);
+  color: var(--si-ctx-text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.si-map-toolbox-layer-popup-cfg__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(52, 211, 153, 0.38);
+  background: rgba(16, 185, 129, 0.14);
+  color: var(--si-ctx-text);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.si-map-toolbox-layer-popup-cfg__btn:hover:not(:disabled) {
+  border-color: rgba(52, 211, 153, 0.55);
+  background: rgba(16, 185, 129, 0.22);
+}
+
+.si-map-toolbox-layer-popup-cfg__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.si-sat-ctx-dock--light .si-map-toolbox-layer-popup-cfg__btn {
+  background: rgba(5, 150, 105, 0.1);
+  border-color: rgba(5, 150, 105, 0.35);
+  color: #0f172a;
+}
+
+.si-sat-ctx-toolbox-opt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  justify-content: flex-start;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(129, 140, 248, 0.28);
+  background: rgba(30, 41, 59, 0.45);
+  color: var(--si-ctx-text);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-toolbox-opt-btn {
+  background: rgba(255, 255, 255, 0.55);
+  border-color: var(--si-ctx-border-soft);
+  color: var(--si-ctx-text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88);
+}
+
+.si-sat-ctx-toolbox-opt-btn:hover {
+  border-color: rgba(52, 211, 153, 0.45);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.si-sat-ctx-toolbox-opt-btn i {
+  width: 1.1rem;
+  text-align: center;
+  color: #a5b4fc;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-toolbox-opt-btn i {
+  color: #4f46e5;
+}
+
+.si-sat-ctx-rail-brand__mark {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 15px;
+  box-shadow: none;
+}
+
+.si-sat-ctx-rail-brand--open .si-sat-ctx-rail-brand__mark {
+  background: transparent;
+  color: #6ee7b7;
+}
+
+.si-sat-ctx-dock--dark .si-sat-ctx-rail-brand {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.si-sat-ctx-rail-brand__title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--si-ctx-muted);
+  line-height: 1.2;
+  min-width: 0;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-rail-brand__mark {
+  background: var(--si-ctx-light-field);
+  color: #4338ca;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-rail-brand--open .si-sat-ctx-rail-brand__mark {
+  background: rgba(5, 150, 105, 0.14);
+  color: #047857;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-rail-brand__title {
+  color: rgba(15, 23, 42, 0.55);
+}
+
+.si-sat-ctx-rail-btn--map {
+  position: relative;
+}
+
+.si-sat-ctx-rail-btn--map .si-sat-ctx-rail-label {
+  transition:
+    opacity 0.22s ease,
+    max-width 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.22s ease,
+    max-height 0.22s ease;
+}
+
+.si-sat-ctx-rail-btn--map-collapsed {
+  width: 46px;
+  height: 46px;
+  min-width: 46px;
+  min-height: 46px;
+  border-radius: 12px;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.si-sat-ctx-rail-btn--map-collapsed .si-sat-ctx-rail-label {
+  flex: 0 0 auto;
+  opacity: 0;
+  max-width: 0;
+  max-height: 0;
+  overflow: hidden;
+  transform: translateX(6px);
+  pointer-events: none;
+  margin: 0;
+  padding: 0;
+}
+
+.si-sat-ctx-dock[dir='rtl'] .si-sat-ctx-rail-btn--map-collapsed .si-sat-ctx-rail-label {
+  transform: translateX(-6px);
+}
+
+.si-sat-ctx-rail-btn--map-expanded {
+  width: 100%;
+  min-height: 48px;
+  padding-block: 10px;
+  padding-inline: 10px;
+  border-radius: 10px;
+  justify-content: flex-start;
+  align-items: flex-start;
+  gap: 12px;
+  box-shadow: none;
+}
+
+.si-sat-ctx-rail-btn--map-expanded .si-sat-ctx-rail-label-title {
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: 0.015em;
+}
+
+.si-sat-ctx-rail-btn--map-expanded .si-sat-ctx-rail-label-desc {
+  font-size: 11px;
+  line-height: 1.45;
+  opacity: 0.94;
+}
+
+.si-sat-ctx-rail-collapse__icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.si-sat-ctx-rail-collapse--map.si-sat-ctx-rail-collapse--labeled {
+  border: none;
+  background: transparent;
+}
+
+.si-sat-ctx-dock--dark .si-sat-ctx-rail-collapse {
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.si-sat-ctx-dock--dark .si-sat-ctx-rail-collapse:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-rail-collapse--map.si-sat-ctx-rail-collapse--labeled {
+  background: linear-gradient(160deg, var(--si-ctx-light-field-hover), var(--si-ctx-light-field));
+  border-color: rgba(5, 150, 105, 0.35);
+}
+
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--rail-narrow .si-sat-ctx-rail-collapse--map {
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 0;
+  padding: 8px 4px;
+  min-height: 48px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.si-sat-ctx-dock--dark.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--rail-narrow .si-sat-ctx-rail-collapse--map {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.si-sat-ctx-dock--light.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--rail-narrow .si-sat-ctx-rail-collapse--map {
+  background: var(--si-ctx-light-field);
+  border-color: rgba(100, 116, 139, 0.38);
+}
+
+.si-sat-ctx-dock[dir='rtl'] .si-sat-ctx-rail-label {
+  align-items: flex-end;
+  text-align: end;
+}
+
+.si-sat-ctx-rail-btn i {
+  color: inherit;
+}
+
+.si-sat-ctx-rail-btn:hover {
+  background: var(--si-ctx-bg2);
+  color: var(--si-ctx-text);
+  border-color: transparent;
+}
+
+.si-sat-ctx-rail-btn--active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+.si-sat-ctx-dock--dark .si-sat-ctx-rail-btn--active i {
+  color: #6ee7b7;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn--active {
+  color: #047857;
+  background: rgba(16, 185, 129, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn--active i {
+  color: #059669;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn:hover {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(5, 150, 105, 0.16);
+  color: #0f172a;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-rail-collapse {
+  background: rgba(255, 255, 255, 0.52);
+  border-color: var(--si-ctx-border-soft);
+  color: #64748b;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-rail-collapse:hover {
+  color: #047857;
+  border-color: rgba(5, 150, 105, 0.28);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.si-sat-ctx-rail-collapse {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 8px;
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.25);
+  color: var(--si-ctx-muted);
+  cursor: pointer;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.si-sat-ctx-rail-collapse--labeled {
+  justify-content: flex-start;
+  padding: 8px 10px;
+}
+
+.si-sat-ctx-rail-collapse-text {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.si-sat-ctx-dock--rail-narrow .si-sat-ctx-rail-collapse {
+  width: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  align-self: center;
+  font-size: 16px;
+  border-style: solid;
+  border-color: rgba(148, 163, 184, 0.35);
+  box-shadow: 0 2px 10px rgba(2, 6, 23, 0.2);
+}
+
+.si-sat-ctx-dock--rail-narrow .si-sat-ctx-rail-collapse i,
+.si-sat-ctx-dock--rail-narrow .si-sat-ctx-rail-collapse__icon-wrap i {
+  font-size: 1.05rem;
+}
+
+.si-sat-ctx-rail-collapse:hover {
+  color: var(--si-ctx-text);
+  border-color: rgba(129, 140, 248, 0.45);
+}
+
+.si-sat-ctx-rail-collapse:focus-visible {
+  outline: 2px solid rgba(129, 140, 248, 0.75);
+  outline-offset: 2px;
+}
+
+.si-sat-ctx-panel-wrap {
+  overflow: hidden;
+  transition:
+    width 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    flex-basis 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.22s ease;
+  opacity: 1;
+}
+
+.si-sat-ctx-dock--closed .si-sat-ctx-panel-wrap {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.si-sat-ctx-panel {
+  position: relative;
+  height: 100%;
+  min-height: 280px;
+  max-height: min(86vh, 760px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px 0 0 16px;
+  background: var(--si-ctx-bg);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--si-ctx-border);
+  border-inline-end: none;
+  box-shadow: -12px 0 40px rgba(2, 6, 23, 0.25);
+}
+
+.si-sat-ctx-dock--embedded .si-sat-ctx-panel {
+  border-radius: 12px 0 0 12px;
+  max-height: min(70vh, 640px);
+}
+
+.si-sat-ctx-dock[dir='rtl'] .si-sat-ctx-panel {
+  border-radius: 0 16px 16px 0;
+}
+
+.si-sat-ctx-dock[dir='rtl'].si-sat-ctx-dock--embedded .si-sat-ctx-panel {
+  border-radius: 0 12px 12px 0;
+}
+
+.si-sat-ctx-panel-resize {
+  position: absolute;
+  inset-inline-end: 0;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: ew-resize;
+  z-index: 3;
+  background: linear-gradient(270deg, rgba(99, 102, 241, 0.12), transparent);
+}
+
+.si-sat-ctx-dock[dir='rtl'] .si-sat-ctx-panel-resize {
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.12), transparent);
+}
+
+.si-sat-ctx-panel-resize:hover {
+  background: linear-gradient(270deg, rgba(52, 211, 153, 0.25), transparent);
+}
+
+.si-sat-ctx-dock[dir='rtl'] .si-sat-ctx-panel-resize:hover {
+  background: linear-gradient(90deg, rgba(52, 211, 153, 0.25), transparent);
+}
+
+.si-sat-ctx-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px 8px 14px;
+  border-bottom: 1px solid var(--si-ctx-border);
+  flex-shrink: 0;
+}
+
+.si-sat-ctx-panel-kicker {
+  display: block;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--si-ctx-muted);
+  margin-bottom: 2px;
+}
+
+.si-sat-ctx-panel-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--si-ctx-text);
+  letter-spacing: 0.01em;
+}
+
+.si-sat-ctx-panel-title--toolbox-embed-root {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+.si-sat-ctx-panel-header-actions {
+  display: inline-flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.si-sat-ctx-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.35);
+  color: var(--si-ctx-text);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-icon-btn {
+  background: rgba(255, 255, 255, 0.55);
+  border-color: var(--si-ctx-border-soft);
+  color: #334155;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(5, 150, 105, 0.22);
+  color: #047857;
+}
+
+.si-sat-ctx-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 12px 8px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  flex-shrink: 0;
+}
+
+.si-sat-ctx-tab {
+  flex: 1;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--si-ctx-muted);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.si-sat-ctx-icon-btn:hover {
+  border-color: rgba(129, 140, 248, 0.45);
+  background: var(--si-ctx-bg2);
+}
+
+.si-sat-ctx-tab--on {
+  background: rgba(99, 102, 241, 0.16);
+  color: var(--si-ctx-text);
+  border-color: rgba(129, 140, 248, 0.35);
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-tab--on {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(5, 150, 105, 0.22);
+  color: #047857;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.si-sat-ctx-panel-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.si-sat-ctx-panel-body-core {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 11px 10px 13px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Embedded contextual dock: width-first tool strip (two rows) + scrollable detail */
+.si-sat-ctx-panel-body--embedded-analysis {
+  gap: 0;
+}
+
+.si-sat-ctx-analysis-launcher {
+  display: grid;
+  grid-template-rows: auto auto;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 6px 8px;
+  flex-shrink: 0;
+  padding: 10px 12px 10px 14px;
+  border-bottom: 1px solid var(--si-ctx-border);
+  background: rgba(2, 6, 23, 0.22);
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-analysis-launcher {
+  background: rgba(255, 255, 255, 0.35);
+  border-bottom-color: var(--si-ctx-border-soft);
+}
+
+.si-sat-ctx-analysis-launcher-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 6px 4px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.35);
+  color: var(--si-ctx-muted);
+  cursor: pointer;
+  font-size: 15px;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.14s ease;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-analysis-launcher-btn {
+  background: rgba(255, 255, 255, 0.55);
+  border-color: var(--si-ctx-border-soft);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.si-sat-ctx-analysis-launcher-btn:hover {
+  border-color: rgba(129, 140, 248, 0.45);
+  color: var(--si-ctx-text);
+  background: var(--si-ctx-bg2);
+}
+
+.si-sat-ctx-analysis-launcher-btn--active {
+  border-color: rgba(52, 211, 153, 0.55);
+  background: rgba(6, 78, 59, 0.42);
+  color: #bbf7d0;
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.2);
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-analysis-launcher-btn--active {
+  color: #047857;
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(5, 150, 105, 0.45);
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.18);
+}
+
+.si-sat-ctx-analysis-launcher-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.15;
+  text-align: center;
+  text-transform: uppercase;
+  color: inherit;
+  opacity: 0.92;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* When the embedded panel is open, tool switching uses the launcher grid — hide duplicate rail icons */
+.si-sat-ctx-dock--embedded.si-map-analysis-toolbar--embedded.si-sat-ctx-dock--open .si-sat-ctx-rail-btn,
+.si-sat-ctx-dock--embedded.si-map-analysis-toolbar--embedded.si-sat-ctx-dock--open .si-sat-ctx-rail-sep,
+.si-sat-ctx-dock--embedded.si-map-analysis-toolbar--embedded.si-sat-ctx-dock--open .si-sat-ctx-rail-spacer {
+  display: none !important;
+}
+
+.si-sat-ctx-panel-body .si-map-toolbox-layers-card {
+  margin-bottom: 12px;
+}
+
+/* Layers block in map toolbox: same flat surface as Processing Options workspace */
+.si-sat-ctx-panel-body .si-map-toolbox-layers-card.si-env-section-card {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0 0 8px;
+  gap: 12px;
+}
+
+.si-sat-ctx-panel-footer {
+  flex-shrink: 0;
+  padding: 8px 14px 10px 16px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(2, 6, 23, 0.2);
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-panel-footer {
+  background: rgba(255, 255, 255, 0.38);
+  border-top-color: var(--si-ctx-border-soft);
+}
+
+.si-sat-ctx-footer-hint {
+  font-size: 10px;
+  line-height: 1.45;
+  color: var(--si-ctx-muted);
+}
+
+.si-sat-ctx-prose p {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--si-ctx-text);
+}
+
+.si-sat-ctx-muted {
+  color: var(--si-ctx-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.si-sat-ctx-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 11px;
+  color: var(--si-ctx-muted);
+  line-height: 1.5;
+}
+
+.si-sat-ctx-primary-btn {
+  margin-top: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(145deg, #22c55e, #16a34a);
+  color: #fff;
+  font-weight: 800;
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(22, 163, 74, 0.35);
+}
+
+.si-sat-ctx-primary-btn:hover {
+  filter: brightness(1.05);
+}
+
+.si-sat-ctx-aoi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.si-sat-ctx-aoi-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.4);
+  color: var(--si-ctx-text);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.si-sat-ctx-aoi-btn i {
+  font-size: 16px;
+}
+
+.si-sat-ctx-aoi-btn--on {
+  border-color: rgba(52, 211, 153, 0.55);
+  background: rgba(6, 78, 59, 0.45);
+  color: #bbf7d0;
+}
+
+.si-sat-ctx-aoi-btn--danger:not(:disabled):hover {
+  border-color: rgba(251, 146, 60, 0.55);
+  color: #fed7aa;
+}
+
+.si-sat-ctx-aoi-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.si-sat-ctx-charts-block .si-map-analysis-layer-toolbar {
+  margin-bottom: 10px;
+}
+
+.si-sat-ctx-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.si-field-analysis .si-map-analysis-toolbar--embedded {
+  margin: 0;
+  border: none;
+  background: transparent;
+}
+
+@media (max-width: 768px) {
+  .si-sat-ctx-dock--map {
+    inset-inline-end: 0;
+    inset-inline-start: auto;
+    top: auto;
+    bottom: 120px;
+    transform: none;
+    max-height: 48vh;
+    flex-direction: column-reverse;
+    width: auto;
+    max-width: calc(100vw - 16px);
+  }
+
+  .si-sat-ctx-dock--map:not(.si-sat-ctx-dock--map-toolbox) .si-sat-ctx-rail {
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: 100%;
+    max-width: 100%;
+    justify-content: flex-start;
+    align-items: stretch;
+    border-radius: 14px;
+  }
+
+  .si-sat-ctx-dock--map .si-sat-ctx-rail--labeled {
+    width: 100%;
+  }
+
+  .si-sat-ctx-dock--map .si-sat-ctx-rail-sep {
+    width: 100%;
+    height: 1px;
+    margin: 4px 0;
+  }
+
+  .si-sat-ctx-dock--map .si-sat-ctx-rail-footer {
+    width: 100%;
+    margin-top: 0;
+    padding-top: 4px;
+  }
+
+  .si-sat-ctx-dock--map .si-sat-ctx-rail-spacer {
+    display: none;
+  }
+
+  .si-sat-ctx-dock--map .si-sat-ctx-rail-btn--row {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .si-sat-ctx-dock--map:not(.si-sat-ctx-dock--map-toolbox) .si-sat-ctx-panel {
+    border-radius: 16px;
+    border: 1px solid var(--si-ctx-border);
+    max-height: 38vh;
+  }
+
+  .si-sat-ctx-dock--map .si-sat-ctx-panel-wrap {
+    width: 100% !important;
+    flex-basis: auto !important;
+  }
+
+  /* Full-height toolbox: keep vertical rail on small screens */
+  .si-sat-ctx-dock--map.si-sat-ctx-dock--map-tall {
+    top: 0;
+    bottom: 0;
+    inset-inline-end: 0;
+    inset-inline-start: auto;
+    max-height: none;
+    flex-direction: row-reverse;
+    width: auto;
+    max-width: none;
+  }
+
+  .si-sat-ctx-dock--map.si-sat-ctx-dock--map-tall:not(.si-sat-ctx-dock--map-toolbox) .si-sat-ctx-rail {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    width: auto;
+    max-width: min(220px, 42vw);
+    border-radius: 0;
+    border-start-end-radius: 14px;
+    border-end-end-radius: 14px;
+  }
+
+  .si-sat-ctx-dock.si-sat-ctx-dock--map.si-sat-ctx-dock--map-tall:not(.si-sat-ctx-dock--map-toolbox)[dir='rtl'] .si-sat-ctx-rail {
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+    border-start-start-radius: 14px;
+    border-end-start-radius: 14px;
+  }
+
+  .si-sat-ctx-dock--map.si-sat-ctx-dock--map-tall.si-sat-ctx-dock--rail-narrow .si-sat-ctx-rail {
+    max-width: 44px;
+  }
+
+  .si-sat-ctx-dock--map.si-sat-ctx-dock--map-tall.si-sat-ctx-dock--map-strip-minimized .si-sat-ctx-rail {
+    max-width: 56px;
+    width: 56px;
+    min-width: 56px;
+  }
+}
+
+/* —— Smart Processing workflow (inside map toolbox panel) —— */
+.si-smart-proc {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 2px 2px 8px;
+  min-height: 0;
+}
+
+.si-sat-ctx-panel-body-core > .si-smart-proc + .si-sat-ctx-prose,
+.si-sat-ctx-panel-body > .si-smart-proc + .si-sat-ctx-prose {
+  margin-top: 12px;
+}
+
+/* Map toolbox: portal mounts here — flush with dock chrome (no nested panel-body shell) */
+.si-sat-ctx-map-toolbox-host {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+.si-sat-ctx-map-toolbox-host .si-env-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.si-sat-ctx-map-toolbox-host
+  .si-env-panel.si-env-panel--satellite-toolbox.si-env-panel--single-surface
+  > :not(.si-env-panel-header) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.si-sat-ctx-panel.si-sat-ctx-panel--processing-embed-mode {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.si-sat-ctx-panel.si-sat-ctx-panel--processing-embed-mode .si-sat-ctx-panel-header {
+  flex-shrink: 0;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  border-bottom-color: rgba(148, 163, 184, 0.12);
+}
+
+.si-smart-proc__context {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(129, 140, 248, 0.22);
+  background: linear-gradient(165deg, rgba(30, 41, 59, 0.55), rgba(15, 23, 42, 0.35));
+}
+
+.si-sat-ctx-dock--light .si-smart-proc__context {
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.48));
+  border-color: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.si-smart-proc__context-kicker {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--si-ctx-muted);
+  margin-bottom: 6px;
+}
+
+.si-smart-proc__context-body {
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.45;
+  color: var(--si-ctx-text);
+}
+
+.si-smart-proc__context-hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--si-ctx-muted);
+}
+
+.si-smart-proc__quick {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.si-smart-proc__cat-head {
+  display: flex;
+  align-items: center;
+}
+
+.si-smart-proc__cat-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.35);
+  color: var(--si-ctx-text);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.si-sat-ctx-dock--light .si-smart-proc__cat-toggle {
+  background: rgba(255, 255, 255, 0.52);
+  border-color: var(--si-ctx-border-soft);
+  color: var(--si-ctx-text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88);
+}
+
+.si-smart-proc__cat-toggle:hover {
+  border-color: rgba(129, 140, 248, 0.45);
+  background: rgba(30, 41, 59, 0.45);
+}
+
+.si-sat-ctx-dock--light .si-smart-proc__cat-toggle:hover {
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(5, 150, 105, 0.2);
+}
+
+.si-smart-proc__cat-toggle--on {
+  border-color: rgba(52, 211, 153, 0.45);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.si-smart-proc__cat-title {
+  text-align: start;
+}
+
+.si-smart-proc__cat-sub {
+  margin: -2px 0 0;
+  padding: 0 2px;
+  font-size: 10px;
+  line-height: 1.45;
+  color: var(--si-ctx-muted);
+}
+
+.si-smart-proc__chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.si-smart-proc__chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 4.75rem;
+  padding: 8px 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.25);
+  color: var(--si-ctx-text);
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.si-sat-ctx-dock--light .si-smart-proc__chip {
+  background: var(--si-ctx-light-field);
+  border-color: rgba(100, 116, 139, 0.38);
+  color: var(--si-ctx-text);
+}
+
+.si-smart-proc__chip:hover {
+  border-color: rgba(99, 102, 241, 0.45);
+  transform: translateY(-1px);
+}
+
+.si-smart-proc__chip i {
+  font-size: 15px;
+  color: #a5b4fc;
+}
+
+.si-sat-ctx-dock--light .si-smart-proc__chip i {
+  color: #4f46e5;
+}
+
+.si-smart-proc__cats {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.si-smart-proc__cat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.si-smart-proc__tool-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.si-smart-proc__tool {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  row-gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(30, 41, 59, 0.28);
+  color: var(--si-ctx-text);
+  text-align: start;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.si-sat-ctx-dock--light .si-smart-proc__tool {
+  background: var(--si-ctx-light-field);
+  border-color: rgba(100, 116, 139, 0.32);
+}
+
+.si-smart-proc__tool:hover {
+  border-color: rgba(52, 211, 153, 0.35);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.si-smart-proc__tool i {
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-size: 15px;
+  color: #93c5fd;
+}
+
+.si-smart-proc__tool-label {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.si-smart-proc__tool-hint {
+  grid-column: 2;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--si-ctx-muted);
+}
+
+/* —— Map toolbox: Add GIS Layer (+) flyout —— */
+.si-sat-ctx-rail-add-gis-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.si-sat-ctx-rail-btn--add-gis .fa-circle-plus {
+  font-size: 15px;
+}
+
+.si-map-toolbox-add-gis-flyout {
+  position: absolute;
+  inset-inline-start: calc(100% + 6px);
+  top: 0;
+  z-index: 120;
+  min-width: 220px;
+  padding: 4px 0;
+  border-radius: 2px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  color: #1e293b;
+}
+
+.si-sat-ctx-dock--dark .si-map-toolbox-add-gis-flyout {
+  border-color: rgba(148, 163, 184, 0.28);
+  background: #1e293b;
+  color: #f1f5f9;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.si-map-toolbox-add-gis-flyout__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s ease;
+}
+
+.si-map-toolbox-add-gis-flyout__item:hover,
+.si-map-toolbox-add-gis-flyout__item:focus-visible {
+  background: rgba(59, 130, 246, 0.1);
+  outline: none;
+}
+
+.si-sat-ctx-dock--dark .si-map-toolbox-add-gis-flyout__item:hover,
+.si-sat-ctx-dock--dark .si-map-toolbox-add-gis-flyout__item:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.si-map-toolbox-add-gis-flyout__item i {
+  width: 18px;
+  text-align: center;
+  font-size: 14px;
+  opacity: 0.85;
+}
+
+/* GIS Content browse table inside toolbox panel */
+.si-gis-portal-browse {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  height: 100%;
+}
+
+.si-gis-portal-browse__lead {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--si-ctx-muted);
+}
+
+.si-gis-portal-browse__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  height: 34px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: var(--si-ctx-field, rgba(255, 255, 255, 0.06));
+}
+
+.si-sat-ctx-dock--light .si-gis-portal-browse__search {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+.si-gis-portal-browse__search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.si-gis-portal-browse__table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.si-sat-ctx-dock--light .si-gis-portal-browse__table-wrap {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.1);
+}
+
+.si-gis-portal-browse__table {
+  font-size: 12px;
+}
+
+.si-gis-portal-browse__table thead th {
+  background: rgba(241, 245, 249, 0.95);
+  color: #334155;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.1);
+}
+
+.si-sat-ctx-dock--dark .si-gis-portal-browse__table thead th {
+  background: rgba(15, 23, 42, 0.65);
+  color: #e2e8f0;
+}
+
+.si-gis-portal-browse__table tbody td {
+  color: inherit;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.si-gis-portal-browse__table tbody tr:hover {
+  background: rgba(4, 120, 87, 0.06);
+}
+
+.si-gis-portal-browse__table tbody tr.selected {
+  background: rgba(5, 150, 105, 0.12);
+}
+
+.si-gis-portal-browse__table .gis-portal-btn--row-action {
+  width: 96px;
+  min-width: 96px;
+  height: 28px;
+}
+
+.si-gis-portal-browse__table .gis-portal-btn {
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.si-gis-portal-browse__empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--si-ctx-muted);
+}
+
+.si-gis-portal-browse__status {
+  margin: 0;
+  font-size: 12px;
+  color: #059669;
+}
+
+.si-gis-portal-browse .gis-portal-type-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.si-gis-portal-browse .gis-portal-type-icon.tone-dashboard {
+  background: #fff3d6;
+  color: #b45309;
+}
+
+.si-gis-portal-browse .gis-portal-type-icon.tone-map {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.si-gis-portal-browse .gis-portal-type-icon.tone-layer {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.si-gis-portal-browse .gis-portal-type-icon.tone-scene {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.si-gis-portal-browse .gis-portal-type-icon.tone-default {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.si-gis-portal-browse .gis-portal-type-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.si-gis-portal-browse .gis-portal-title-link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--gis-system-green, #1b5e3c);
+  font-size: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+}
+
+.si-gis-portal-browse .gis-portal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 4px;
+  border: 1px solid var(--gis-system-green-mint, #6ee7b7);
+  background: var(--gis-system-green-btn-bg, #1b5e3c);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.si-gis-portal-browse .gis-portal-btn:hover:not(:disabled) {
+  background: var(--gis-system-green-deep, #004a36);
+  border-color: #34d399;
+  color: #ffffff;
+}
+
+.si-gis-portal-browse .gis-portal-title-link:hover {
+  text-decoration: underline;
+}
+
+.si-gis-portal-browse .gis-portal-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Main Toolbox — final 90° enforcement (beats later base + @media border-radius rules) */
+.si-sat-ctx-dock--map-toolbox,
+.si-sat-ctx-dock--map-toolbox * {
+  border-radius: 0 !important;
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  border-start-start-radius: 0 !important;
+  border-start-end-radius: 0 !important;
+  border-end-start-radius: 0 !important;
+  border-end-end-radius: 0 !important;
+}
+
+/* Map attribution sits flush with toolbox trailing edge — match 90° chrome */
+.si-page .si-map-container .mapboxgl-ctrl-attrib,
+.si-page .si-map-container .mapboxgl-ctrl-attrib-button {
+  border-radius: 0 !important;
+}

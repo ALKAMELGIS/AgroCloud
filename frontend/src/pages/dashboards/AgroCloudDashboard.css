@@ -1,0 +1,93 @@
+.agro-cloud-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding: 0 !important;
+  gap: 0;
+}
+
+.agro-cloud-frame-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  background: var(--ds-color-bg);
+}
+
+.agro-cloud-frame-wrap iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.agro-cloud-error {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--ds-color-danger);
+  font-size: 13px;
+}
+
+/* Keeps iframe mounted between navigations — see PersistentAgroCloudEmbed */
+.persistent-agro-cloud-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow: hidden;
+  background: var(--ds-color-bg);
+}
+
+.persistent-agro-cloud-layer:not(.persistent-agro-cloud-layer--active) {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.persistent-agro-cloud-layer-inner {
+  height: 100%;
+}
+
+.agro-cloud-route-fill {
+  flex: 1 1 auto;
+  min-height: min(480px, 70vh);
+}
+
+/*
+ * Mobile fit for embedded external dashboard:
+ * keep desktop canvas dimensions, then scale down uniformly so internal widgets do not overlap.
+ */
+@media (max-width: 900px) {
+  .agro-cloud-frame-wrap {
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    background: #031b14;
+  }
+
+  .agro-cloud-frame-wrap iframe {
+    position: relative;
+    inset: auto;
+    width: 1366px;
+    height: 820px;
+    transform-origin: top left;
+    transform: scale(calc((100vw - 20px) / 1366));
+  }
+
+  .agro-cloud-page,
+  .persistent-agro-cloud-layer-inner {
+    min-height: calc(820px * ((100vw - 20px) / 1366));
+  }
+}
+
+@media (max-width: 480px) {
+  .agro-cloud-frame-wrap iframe {
+    width: 1280px;
+    height: 780px;
+    transform: scale(calc((100vw - 16px) / 1280));
+  }
+
+  .agro-cloud-page,
+  .persistent-agro-cloud-layer-inner {
+    min-height: calc(780px * ((100vw - 16px) / 1280));
+  }
+}

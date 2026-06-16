@@ -1,0 +1,33 @@
+{
+  "name": "agri-cloud",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Agri Cloud — npm workspaces (frontend + backend)",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "node scripts/print-dev-urls.mjs && concurrently -n frontend,backend \"npm run dev -w frontend\" \"npm run dev -w backend\"",
+    "dev:clean": "node scripts/print-dev-urls.mjs && concurrently -n frontend,backend \"npm run dev:client:clean -w frontend\" \"npm run dev -w backend\"",
+    "dev:urls": "node scripts/print-dev-urls.mjs",
+    "dev:client": "npm run dev -w frontend",
+    "dev:server": "npm run dev -w backend",
+    "dev:client:clean": "npm run dev:client:clean -w frontend",
+    "build": "npm run build -w frontend",
+    "build:production": "node scripts/build-production.mjs",
+    "sync-pages-docs": "node scripts/sync-pages-docs.mjs",
+    "preview": "npm run preview -w frontend",
+    "typecheck": "npm run typecheck -w frontend",
+    "test": "npm run test -w frontend",
+    "test:e2e": "npm run test:e2e -w frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "overrides": {
+    "vite": {
+      "rollup": "4.60.0"
+    }
+  }
+}

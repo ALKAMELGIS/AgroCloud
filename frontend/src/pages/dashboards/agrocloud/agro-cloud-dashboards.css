@@ -1,0 +1,5621 @@
+/* AgroCloud Dashboards — gallery + editor (AgroCloud parity) */
+.agrocloud-dashboards {
+  --agrocloud-blue: #007ac2;
+  --agrocloud-blue-dark: #106ebe;
+  --agrocloud-blue-soft: #deecf9;
+  --agrocloud-text: #323130;
+  --agrocloud-muted: #605e5c;
+  --agrocloud-border: #edebe9;
+  --agrocloud-rail: #2b2b2b;
+  --agrocloud-rail-active: rgba(255, 255, 255, 0.1);
+  --agrocloud-rail-icon: #d1d1d1;
+  --agrocloud-rail-width: 192px;
+  --agrocloud-rail-collapsed-width: 42px;
+  --agrocloud-canvas: #faf9f8;
+  --agrocloud-panel-width: 300px;
+  font-family: 'Segoe UI', 'Avenir Next', system-ui, sans-serif;
+  color: var(--agrocloud-text);
+  background: #ffffff;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.agrocloud-dashboard-editor {
+  --agrocloud-blue: #007ac2;
+  --agrocloud-blue-dark: #106ebe;
+  --agrocloud-blue-soft: #deecf9;
+  --agrocloud-text: #323130;
+  --agrocloud-muted: #605e5c;
+  --agrocloud-border: #edebe9;
+  --agrocloud-rail: #2b2b2b;
+  --agrocloud-rail-active: rgba(255, 255, 255, 0.1);
+  --agrocloud-rail-icon: #d1d1d1;
+  --agrocloud-rail-width: 192px;
+  --agrocloud-rail-collapsed-width: 42px;
+  --agrocloud-canvas: #faf9f8;
+  --agrocloud-panel-width: 300px;
+  font-family: 'Segoe UI', 'Avenir Next', system-ui, sans-serif;
+  color: var(--agrocloud-text);
+  background: #ffffff;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+/* —— Gallery —— */
+.agrocloud-dashboards__topnav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--agrocloud-border);
+  background: #fff;
+}
+
+.agrocloud-dashboards__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.agrocloud-dashboards__brand-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 2px;
+  background: linear-gradient(135deg, #f4b942 0%, #e8912d 100%);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.agrocloud-dashboards__brand-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--agrocloud-text);
+}
+
+.agrocloud-dashboards__main {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px 28px 32px;
+}
+
+.agrocloud-dashboards__org-title {
+  margin: 0 0 18px;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--agrocloud-text);
+  letter-spacing: -0.02em;
+}
+
+.agrocloud-dashboards__tabs-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--agrocloud-border);
+}
+
+.agrocloud-dashboards__tabs {
+  display: flex;
+  gap: 24px;
+}
+
+.agrocloud-dashboards__tab {
+  position: relative;
+  padding: 0 2px 12px;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--agrocloud-muted);
+  cursor: pointer;
+}
+
+.agrocloud-dashboards__tab.is-active {
+  color: var(--agrocloud-text);
+}
+
+.agrocloud-dashboards__tab.is-active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--agrocloud-blue);
+}
+
+.agrocloud-dashboards__create-btn {
+  margin-bottom: 10px;
+  height: 32px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 2px;
+  background: var(--agrocloud-blue);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.agrocloud-dashboards__create-btn:hover {
+  background: var(--agrocloud-blue-dark);
+}
+
+.agrocloud-dashboards__toolbar {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 20px;
+  border: 1px solid var(--agrocloud-border);
+  border-radius: 2px;
+  background: #fff;
+}
+
+.agrocloud-dashboards__scope {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.agrocloud-dashboards__scope select {
+  width: 100%;
+  height: 32px;
+  padding: 0 28px 0 10px;
+  border: 1px solid var(--agrocloud-border);
+  border-radius: 2px;
+  background: #fff;
+  font-size: 13px;
+  color: var(--agrocloud-text);
+  appearance: none;
+}
+
+.agrocloud-dashboards__scope i {
+  position: absolute;
+  right: 10px;
+  pointer-events: none;
+  font-size: 11px;
+  color: var(--agrocloud-muted);
+}
+
+.agrocloud-dashboards__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--agrocloud-border);
+  border-radius: 2px;
+  background: #fff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.agrocloud-dashboards__search:focus-within {
+  border-color: var(--agrocloud-blue);
+  box-shadow: 0 0 0 1px var(--agrocloud-blue);
+}
+
+.agrocloud-dashboards__search i {
+  flex-shrink: 0;
+  color: var(--agrocloud-muted);
+  font-size: 14px;
+}
+
+.agrocloud-dashboards__search input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  outline: none;
+  font-size: 13px;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.agrocloud-dashboards__search input::-webkit-search-cancel-button,
+.agrocloud-dashboards__search input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.agrocloud-dashboards__tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--agrocloud-border);
+  border-radius: 2px;
+  background: #fff;
+  font-size: 13px;
+  color: var(--agrocloud-text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.agrocloud-dashboards__tool-btn i {
+  color: var(--agrocloud-muted);
+  font-size: 13px;
+}
+
+.agrocloud-dashboards__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 20px 18px;
+}
+
+.agrocloud-dashboards__card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.agrocloud-dashboards__card-thumb-btn {
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.agrocloud-dashboards__card-thumb {
+  aspect-ratio: 16 / 10;
+  border: 1px solid var(--agrocloud-border);
+  border-radius: 2px;
+  overflow: hidden;
+  background: #f3f2f1;
+}
+
+.agrocloud-dashboards__card-thumb--photo {
+  background:
+    linear-gradient(rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.08)),
+    linear-gradient(135deg, #1a3a5c 0%, #0d2137 40%, #2a5298 100%);
+}
+
+.agrocloud-dashboards__thumb-placeholder {
+  width: 100%;
+  height: 100%;
+  background:
+    linear-gradient(#deecf9 0 0) 12% 18% / 28% 22% no-repeat,
+    linear-gradient(#c7e0f4 0 0) 44% 18% / 22% 28% no-repeat,
+    linear-gradient(#007ac2 0 0) 70% 22% / 18% 18% no-repeat,
+    linear-gradient(#eef0f2 0 0) 12% 58% / 76% 34% no-repeat,
+    #f8fbfd;
+}
+
+.agrocloud-dashboards__card-title {
+  margin: 10px 0 4px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--agrocloud-text);
+}
+
+.agrocloud-dashboards__card-meta {
+  margin: 0;
+  font-size: 12px;
+  color: var(--agrocloud-muted);
+  line-height: 1.35;
+}
+
+.agrocloud-dashboards__card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.agrocloud-dashboards__desktop-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 12px;
+  background: var(--agrocloud-blue-soft);
+  color: var(--agrocloud-blue);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.agrocloud-dashboards__card-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.agrocloud-dashboards__card-actions button {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--agrocloud-muted);
+  cursor: pointer;
+}
+
+.agrocloud-dashboards__card-actions button:hover {
+  background: #f3f2f1;
+  color: var(--agrocloud-text);
+}
+
+.agrocloud-dashboards__empty-state {
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--agrocloud-muted);
+  font-size: 14px;
+}
+
+/* —— Editor —— */
+.agrocloud-dashboard-editor__rail {
+  width: var(--agrocloud-rail-width);
+  flex-shrink: 0;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: var(--agrocloud-rail);
+  color: var(--agrocloud-rail-icon);
+  z-index: 2;
+  transition: width 0.2s ease;
+  overflow: visible;
+}
+
+.agrocloud-dashboard-editor.is-rail-collapsed .agrocloud-dashboard-editor__rail {
+  width: var(--agrocloud-rail-collapsed-width);
+}
+
+.agrocloud-dashboard-editor__rail-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 8px 0 0;
+  gap: 0;
+  min-width: var(--agrocloud-rail-width);
+}
+
+.agrocloud-dashboard-editor.is-rail-collapsed .agrocloud-dashboard-editor__rail-nav {
+  min-width: var(--agrocloud-rail-collapsed-width);
+  align-items: center;
+}
+
+.agrocloud-dashboard-editor.is-rail-collapsed .agrocloud-dashboard-editor__rail-item {
+  justify-content: center;
+  width: var(--agrocloud-rail-collapsed-width);
+  padding: 0;
+}
+
+.agrocloud-dashboard-editor.is-rail-collapsed .agrocloud-dashboard-editor__rail-label {
+  display: none;
+}
+
+.agrocloud-dashboard-editor.is-rail-collapsed .agrocloud-dashboard-editor__rail-divider {
+  width: 32px;
+  margin: 6px auto;
+}
+
+.agrocloud-dashboard-editor.is-rail-collapsed .agrocloud-dashboard-editor__rail-add,
+.agrocloud-dashboard-editor.is-rail-collapsed .agrocloud-dashboard-editor__rail-save {
+  align-items: center;
+  width: var(--agrocloud-rail-collapsed-width);
+}
+
+.agrocloud-dashboard-editor__rail-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--agrocloud-rail-icon);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.2;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.agrocloud-dashboard-editor__rail-item svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.agrocloud-dashboard-editor__rail-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agrocloud-dashboard-editor__rail-item:hover,
+.agrocloud-dashboard-editor__rail-item.is-active {
+  background: var(--agrocloud-rail-active);
+  color: #ffffff;
+}
+
+.agrocloud-dashboard-editor__rail-item--add {
+  margin: 0;
+}
+
+.agrocloud-dashboard-editor__rail-divider {
+  height: 1px;
+  margin: 5px 12px;
+  background: rgba(255, 255, 255, 0.14);
+  flex-shrink: 0;
+}
+
+.agrocloud-dashboard-editor__rail-add,
+.agrocloud-dashboard-editor__rail-save {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+}
+
+.agrocloud-dashboard-editor__rail-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--agrocloud-rail-icon);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+
+.agrocloud-dashboard-editor__rail-toggle svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.agrocloud-dashboard-editor.is-rail-collapsed .agrocloud-dashboard-editor__rail-toggle {
+  justify-content: center;
+  padding: 0;
+}
+
+.agrocloud-dashboard-editor__rail-toggle-label {
+  white-space: nowrap;
+}
+
+.agrocloud-dashboard-editor.is-rail-collapsed .agrocloud-dashboard-editor__rail-toggle-label {
+  display: none;
+}
+
+.agrocloud-dashboard-editor__rail-toggle:hover {
+  background: var(--agrocloud-rail-active);
+  color: #fff;
+}
+
+/* legacy rail button aliases */
+.agrocloud-dashboard-editor__rail-top,
+.agrocloud-dashboard-editor__rail-btn,
+.agrocloud-dashboard-editor__rail-expand {
+  display: none;
+}
+
+.agrocloud-dashboard-editor.is-rail-collapsed .agrocloud-dashboard-editor__rail-top {
+  display: none;
+}
+
+.agrocloud-dashboard-editor__add-menu {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 8px);
+  z-index: 50;
+  width: 200px;
+  padding: 6px 0;
+  border: 1px solid var(--agrocloud-border);
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+}
+
+.agrocloud-dashboard-editor__add-menu::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 14px;
+  width: 0;
+  height: 0;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-right: 6px solid #fff;
+}
+
+.agrocloud-dashboard-editor__add-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+  color: #323130;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-editor__add-menu-item i {
+  width: 18px;
+  color: var(--agrocloud-muted);
+  text-align: center;
+}
+
+.agrocloud-dashboard-editor__add-menu-item:hover {
+  background: #f3f2f1;
+}
+
+.agrocloud-dashboard-editor__save-flyout {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 8px);
+  z-index: 50;
+  transform: translateY(-50%);
+  min-width: 148px;
+  padding: 4px 0;
+  border-radius: 4px;
+  background: #ffffff;
+  border: 1px solid #edebe9;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.agrocloud-dashboard-editor__save-flyout::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-right: 6px solid #ffffff;
+}
+
+.agrocloud-dashboard-editor__save-flyout-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.2;
+  color: #323130;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-editor__save-flyout-item i {
+  width: 16px;
+  flex-shrink: 0;
+  color: rgba(45, 45, 45, 0.88);
+  font-size: 14px;
+}
+
+.agrocloud-dashboard-editor__save-flyout-item:hover {
+  background: rgba(243, 244, 246, 0.95);
+  color: #201f1e;
+}
+
+/* legacy save menu alias */
+.agrocloud-dashboard-editor__save-menu {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 8px);
+  z-index: 50;
+  transform: translateY(-50%);
+  width: 120px;
+  padding: 4px 0;
+  border-radius: 4px;
+  background: #3b3a39;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.agrocloud-dashboard-editor__save-menu::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-right: 6px solid #3b3a39;
+}
+
+.agrocloud-dashboard-editor__save-menu button {
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+  color: #a19f9d;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-editor__save-menu button.is-highlight,
+.agrocloud-dashboard-editor__save-menu button:hover {
+  color: #fff;
+}
+
+.agrocloud-dashboard-editor__add-menu--panel {
+  position: static;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.agrocloud-dashboard-editor__add-menu--panel::before {
+  display: none;
+}
+
+.agrocloud-dashboard-editor__save-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.agrocloud-dashboard-editor__save-panel-btn {
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 14px;
+  border: 1px solid var(--agrocloud-border);
+  border-radius: 2px;
+  background: #fff;
+  color: #323130;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-editor__save-panel-btn.is-highlight,
+.agrocloud-dashboard-editor__save-panel-btn:hover {
+  background: var(--agrocloud-builder-link-soft);
+  border-color: rgba(46, 125, 50, 0.35);
+  color: var(--agrocloud-builder-link);
+}
+
+.agrocloud-dashboard-editor__workspace {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  background: #fff;
+}
+
+.agrocloud-dashboard-editor__panel {
+  flex: 0 0 var(--agrocloud-panel-width);
+  width: var(--agrocloud-panel-width);
+  min-width: var(--agrocloud-panel-width);
+  max-width: var(--agrocloud-panel-width);
+  align-self: stretch;
+  min-height: 0;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--agrocloud-border);
+  background: #fff;
+  z-index: 1;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.agrocloud-dashboard-editor__panel-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.agrocloud-dashboard-editor__canvas-area {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.agrocloud-dashboard-builder__canvas {
+  flex: 1;
+  min-height: 0;
+}
+
+.agrocloud-dashboard-editor__panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 14px 8px;
+  border-bottom: 1px solid var(--agrocloud-border);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+  background: #fff;
+}
+
+.agrocloud-dashboard-editor__panel-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--agrocloud-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 3;
+  pointer-events: auto;
+}
+
+.agrocloud-dashboard-editor__panel-close:hover {
+  background: #f3f2f1;
+  color: #323130;
+}
+
+.agrocloud-dashboard-editor__panel-head h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 400;
+}
+
+.agrocloud-dashboard-editor__view-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: #faf9f8;
+  border-bottom: 1px solid var(--agrocloud-border);
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.agrocloud-dashboard-editor__add-mobile {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid #323130;
+  border-radius: 2px;
+  background: #fff;
+  color: #323130;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-editor__view-tabs {
+  display: flex;
+  gap: 16px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--agrocloud-border);
+  flex-shrink: 0;
+}
+
+.agrocloud-dashboard-editor__view-tab {
+  position: relative;
+  padding: 9px 2px;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: #323130;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-editor__view-tab.is-active {
+  color: #323130;
+}
+
+.agrocloud-dashboard-editor__view-tab.is-active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--agrocloud-blue);
+}
+
+.agrocloud-dashboard-editor__canvas {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--agrocloud-canvas);
+}
+
+.agrocloud-dashboard-editor__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 20px 20px;
+  text-align: center;
+}
+
+.agrocloud-dashboard-editor__empty h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.agrocloud-dashboard-editor__empty p {
+  margin: 0 0 16px;
+  font-size: 12px;
+  color: var(--agrocloud-muted);
+}
+
+.agrocloud-dashboard-editor__add-element {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 16px;
+  background: var(--agrocloud-blue, #007ac2);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 122, 194, 0.35);
+  -webkit-text-fill-color: currentColor;
+}
+
+.agrocloud-dashboard-editor__empty--region .agrocloud-dashboard-editor__add-element {
+  border: 1px solid #edebe9;
+  background: #ffffff;
+  color: #323130;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.agrocloud-dashboard-editor__panel--view .agrocloud-dashboard-editor__panel-body {
+  padding: 0;
+}
+
+.agrocloud-dashboard-editor__elements {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 12px;
+  padding: 16px;
+}
+
+.agrocloud-dashboard-editor__element-chip {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 96px;
+  min-height: 80px;
+  padding: 12px;
+  border: 1px dashed var(--agrocloud-border);
+  border-radius: 2px;
+  background: #fff;
+  font-size: 12px;
+  text-align: center;
+}
+
+.agrocloud-dashboard-editor__element-chip > span:first-child {
+  font-weight: 600;
+}
+
+.agrocloud-dashboard-editor__element-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #605e5c;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+}
+
+.agrocloud-dashboard-editor__element-remove:hover {
+  background: #f3f2f1;
+  color: #323130;
+}
+
+.agrocloud-dashboard-editor__info-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px;
+  padding: 10px 12px;
+  border: 1px solid #cce5ff;
+  border-radius: 2px;
+  background: #f0f7ff;
+  font-size: 13px;
+  color: var(--agrocloud-text);
+}
+
+.agrocloud-dashboard-editor__info-box i {
+  color: var(--agrocloud-blue);
+}
+
+.agrocloud-dashboard-editor__panel-lede {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--agrocloud-muted);
+  border-bottom: 1px solid var(--agrocloud-border);
+}
+
+.agrocloud-dashboard-editor__theme-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.agrocloud-dashboard-editor__theme-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 14px 8px 11px;
+  border: none;
+  border-bottom: 1px solid var(--agrocloud-border);
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--agrocloud-text);
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-editor__theme-item:hover {
+  background: #faf9f8;
+}
+
+.agrocloud-dashboard-editor__theme-item.is-selected {
+  background: #f3f2f1;
+  box-shadow: inset 3px 0 0 #0079c1;
+}
+
+.agrocloud-dashboard-editor__theme-label {
+  font-weight: 400;
+}
+
+.agrocloud-dashboard-editor__theme-thumb {
+  width: 72px;
+  height: 44px;
+  border: 1px solid #c8c6c4;
+  border-radius: 0;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: #fff;
+  display: block;
+  line-height: 0;
+}
+
+.agrocloud-dashboard-editor__theme-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.agrocloud-dashboard-editor__panel--theme .agrocloud-dashboard-editor__panel-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+.agrocloud-dashboard-editor__panel--theme-customize .agrocloud-dashboard-editor__panel-body {
+  overflow-y: auto;
+  padding: 0;
+}
+
+.agrocloud-dashboard-editor__theme-footer {
+  flex-shrink: 0;
+  padding: 16px 14px 18px;
+  background: #fff;
+  border-top: 1px solid var(--agrocloud-border);
+  text-align: center;
+}
+
+.agrocloud-dashboard-editor__customize-theme {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 260px;
+  height: 32px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 16px;
+  background: #0079c1;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.agrocloud-dashboard-editor__customize-theme:hover {
+  background: #106ebe;
+  color: #ffffff;
+}
+
+.agrocloud-dashboard-editor__customize-theme:focus-visible {
+  outline: 2px solid #0079c1;
+  outline-offset: 2px;
+}
+
+.agrocloud-dashboard-editor__theme-customize-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 16px 0;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 2px;
+  background: transparent;
+  color: #0079c1;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-editor__theme-customize-back:hover {
+  background: #f3f2f1;
+}
+
+.agrocloud-dashboard-editor__theme-customize .agrocloud-dashboard-editor__accordion-body {
+  padding: 0 16px 16px;
+}
+
+.agrocloud-dashboard-editor__theme-customize-actions {
+  padding: 12px 16px 20px;
+  border-top: 1px solid var(--agrocloud-border);
+}
+
+.agrocloud-dashboard-editor__theme-reset {
+  width: 100%;
+  height: 32px;
+  border: 1px solid var(--agrocloud-border);
+  border-radius: 2px;
+  background: #fff;
+  color: var(--agrocloud-text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-editor__theme-reset:hover {
+  background: #f3f2f1;
+}
+
+.agrocloud-dashboard-editor__color-field {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.agrocloud-dashboard-editor__color-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agrocloud-dashboard-editor__color-input-wrap input[type='color'] {
+  width: 36px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--agrocloud-border);
+  border-radius: 2px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-editor__text-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--agrocloud-border);
+  border-radius: 2px;
+  font-size: 13px;
+  color: var(--agrocloud-text);
+}
+
+.agrocloud-dashboard-editor__text-input--compact {
+  flex: 1;
+  min-width: 0;
+}
+
+.agrocloud-dashboard-editor__range {
+  width: 100%;
+  margin: 4px 0 12px;
+  accent-color: #0079c1;
+}
+
+.agrocloud-dashboard-editor__panel--scroll .agrocloud-dashboard-editor__panel-body {
+  overflow-y: auto;
+}
+
+.agrocloud-dashboard-editor__panel--time-region .agrocloud-dashboard-editor__panel-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+.agrocloud-dashboard-editor__time-region {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0;
+}
+
+.agrocloud-dashboard-editor__panel--time-region .agrocloud-dashboard-editor__accordion {
+  padding: 0;
+}
+
+.agrocloud-dashboard-editor__panel--time-region .agrocloud-dashboard-editor__accordion-head {
+  padding: 10px 14px;
+  font-size: 12px;
+}
+
+.agrocloud-dashboard-editor__panel--time-region .agrocloud-dashboard-editor__accordion-icons {
+  gap: 8px;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.agrocloud-dashboard-editor__accordion-body--time,
+.agrocloud-dashboard-editor__accordion-body--prefixes {
+  padding: 0 14px 12px;
+  box-sizing: border-box;
+}
+
+.agrocloud-dashboard-editor__time-region-field {
+  margin-bottom: 8px;
+}
+
+.agrocloud-dashboard-editor__time-region-field:last-child {
+  margin-bottom: 0;
+}
+
+.agrocloud-dashboard-editor__panel--time-region .agrocloud-dashboard-editor__radio {
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.agrocloud-dashboard-editor__panel--time-region .agrocloud-dashboard-editor__radio input {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.agrocloud-dashboard-editor__panel--time-region .agrocloud-dashboard-editor__radio > span {
+  min-width: 0;
+  word-wrap: break-word;
+}
+
+.agrocloud-dashboard-editor__panel--time-region .agrocloud-dashboard-editor__field-hint {
+  margin: 2px 0 0 22px;
+  padding: 0 0 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--agrocloud-muted);
+}
+
+.agrocloud-dashboard-editor__panel--time-region .agrocloud-dashboard-editor__field-hint--block {
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.agrocloud-dashboard-editor__panel--time-region .agrocloud-dashboard-editor__field-label {
+  display: block;
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--agrocloud-muted);
+}
+
+.agrocloud-dashboard-editor__panel--time-region .agrocloud-dashboard-editor__select {
+  width: 100%;
+  max-width: 100%;
+  height: 28px;
+  margin: 0;
+  padding: 0 8px;
+  font-size: 11px;
+  box-sizing: border-box;
+}
+
+.agrocloud-dashboard-editor__panel--time-region .agrocloud-dashboard-editor__select--time-zone {
+  margin: 2px 0 0 22px;
+  width: calc(100% - 22px);
+}
+
+.agrocloud-dashboard-editor__unit-prefix-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--agrocloud-border);
+}
+
+.agrocloud-dashboard-editor__unit-prefix-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px 36px;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--agrocloud-border);
+  box-sizing: border-box;
+}
+
+.agrocloud-dashboard-editor__unit-prefix-label {
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--agrocloud-text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agrocloud-dashboard-editor__unit-prefix-symbol {
+  width: 36px;
+  height: 26px;
+  padding: 0 4px;
+  border: 1px solid #c8c6c4;
+  border-radius: 2px;
+  font-size: 11px;
+  text-align: center;
+  color: var(--agrocloud-text);
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.agrocloud-dashboard-editor__unit-prefix-symbol:disabled {
+  background: #f3f2f1;
+  color: var(--agrocloud-muted);
+}
+
+.agrocloud-dashboard-editor__unit-prefix-symbol-spacer {
+  width: 36px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.agrocloud-dashboard-editor__panel--time-region .agrocloud-dashboard-editor__toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 36px;
+  height: 18px;
+  justify-self: end;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-editor__panel--time-region .agrocloud-dashboard-editor__toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.agrocloud-dashboard-editor__panel--time-region .agrocloud-dashboard-editor__toggle-track {
+  position: relative;
+  display: block;
+  width: 36px;
+  height: 18px;
+  border-radius: 9px;
+  background: #c8c6c4;
+  transition: background 0.15s ease;
+}
+
+.agrocloud-dashboard-editor__panel--time-region .agrocloud-dashboard-editor__toggle-track::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  top: 2px;
+  left: 2px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 0.15s ease;
+}
+
+.agrocloud-dashboard-editor__panel--time-region .agrocloud-dashboard-editor__toggle input:checked + .agrocloud-dashboard-editor__toggle-track {
+  background: #0079c1;
+}
+
+.agrocloud-dashboard-editor__panel--time-region .agrocloud-dashboard-editor__toggle input:checked + .agrocloud-dashboard-editor__toggle-track::after {
+  transform: translateX(18px);
+}
+
+.agrocloud-dashboard-editor__panel--time-region .agrocloud-dashboard-editor__toggle input:disabled + .agrocloud-dashboard-editor__toggle-track {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.agrocloud-dashboard-editor__time-region-footer {
+  flex-shrink: 0;
+  padding: 12px 14px;
+  border-top: 1px solid var(--agrocloud-border);
+  background: #fff;
+  text-align: center;
+}
+
+.agrocloud-dashboard-editor__time-region-reset {
+  min-width: 72px;
+  height: 28px;
+  padding: 0 16px;
+  border: 1px solid #c8c6c4;
+  border-radius: 2px;
+  background: #fff;
+  color: var(--agrocloud-text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-editor__time-region-reset:hover {
+  background: #f3f2f1;
+}
+
+.agrocloud-dashboard-editor__accordion {
+  padding: 8px 0;
+}
+
+.agrocloud-dashboard-editor__accordion-section {
+  border-bottom: 1px solid var(--agrocloud-border);
+}
+
+.agrocloud-dashboard-editor__accordion-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--agrocloud-text);
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-editor__accordion-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--agrocloud-muted);
+  font-size: 12px;
+}
+
+.agrocloud-dashboard-editor__accordion-body {
+  padding: 0 16px 16px 32px;
+}
+
+.agrocloud-dashboard-editor__radio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: var(--agrocloud-text);
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-editor__radio input {
+  accent-color: var(--agrocloud-blue);
+}
+
+/* —— Create new dashboard —— */
+.agrocloud-dashboard-create {
+  --agrocloud-create-bg: #f9f9f9;
+  --agrocloud-create-input-border: #cccccc;
+  --agrocloud-create-primary: #6894c1;
+  --agrocloud-create-primary-hover: #5a86b5;
+  --agrocloud-create-cancel-bg: #f3f2f1;
+  --agrocloud-create-cancel-text: #5b6f86;
+  background: var(--agrocloud-create-bg);
+  min-height: 100%;
+}
+
+.agrocloud-dashboard-create__head {
+  padding: 18px 24px;
+  border-bottom: 1px solid #e1dfdd;
+  background: #fff;
+  text-align: center;
+}
+
+.agrocloud-dashboard-create__head h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--agrocloud-text);
+  letter-spacing: -0.01em;
+}
+
+.agrocloud-dashboard-create__body {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: 28px 24px 24px;
+  overflow: auto;
+}
+
+.agrocloud-dashboard-create__form {
+  width: min(560px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.agrocloud-dashboard-create__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.agrocloud-dashboard-create__field label {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--agrocloud-text);
+}
+
+.agrocloud-dashboard-create__req {
+  color: #a4262c;
+  margin-left: 1px;
+}
+
+.agrocloud-dashboard-create__field input[type='text'],
+.agrocloud-dashboard-create__field textarea,
+.agrocloud-dashboard-create__select-wrap select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--agrocloud-create-input-border);
+  border-radius: 0;
+  background: #ffffff;
+  color: var(--agrocloud-text);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.agrocloud-dashboard-create__field input[type='text'] {
+  height: 32px;
+  padding: 0 10px;
+}
+
+.agrocloud-dashboard-create__field textarea {
+  min-height: 108px;
+  padding: 8px 10px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.agrocloud-dashboard-create__select-wrap {
+  position: relative;
+}
+
+.agrocloud-dashboard-create__select-wrap select {
+  height: 32px;
+  padding: 0 32px 0 10px;
+  appearance: none;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-create__select-wrap select:invalid,
+.agrocloud-dashboard-create__select-wrap select option[value=''] {
+  color: var(--agrocloud-muted);
+}
+
+.agrocloud-dashboard-create__select-wrap i {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-size: 11px;
+  color: var(--agrocloud-muted);
+}
+
+.agrocloud-dashboard-create__error {
+  margin: 0;
+  font-size: 12px;
+  color: #a4262c;
+}
+
+.agrocloud-dashboard-create__foot {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 24px;
+  border-top: 1px solid #e1dfdd;
+  background: #fff;
+}
+
+.agrocloud-dashboard-create__cancel,
+.agrocloud-dashboard-create__submit {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.agrocloud-dashboard-create__cancel {
+  border: 1px solid #c8c6c4;
+  background: var(--agrocloud-create-cancel-bg);
+  color: var(--agrocloud-create-cancel-text);
+}
+
+.agrocloud-dashboard-create__cancel:hover {
+  background: #edebe9;
+}
+
+.agrocloud-dashboard-create__submit {
+  border: 1px solid var(--agrocloud-create-primary);
+  background: var(--agrocloud-create-primary);
+  color: #ffffff;
+}
+
+.agrocloud-dashboard-create__submit:hover {
+  background: var(--agrocloud-create-primary-hover);
+  border-color: var(--agrocloud-create-primary-hover);
+}
+
+/* —— Dashboard builder empty state —— */
+.agrocloud-dashboard-builder {
+  --agrocloud-builder-sidebar: #2b2b2b;
+  --agrocloud-rail-width: 192px;
+  --agrocloud-rail-collapsed-width: 42px;
+  --agrocloud-builder-sidebar-width: var(--agrocloud-rail-width);
+  --agrocloud-builder-sidebar-collapsed-width: var(--agrocloud-rail-collapsed-width);
+  --agrocloud-builder-link: #2e7d32;
+  --agrocloud-builder-link-soft: #e8f5e9;
+  --agrocloud-panel-width: 300px;
+  background: #ffffff;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.agrocloud-dashboard-builder__topnav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 0 14px 0 10px;
+  border-bottom: 1px solid #edebe9;
+  background: #ffffff;
+  flex-shrink: 0;
+}
+
+.agrocloud-dashboard-builder__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ArcGIS-style hamburger app menu */
+.agrocloud-dashboard-app-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.agrocloud-dashboard-app-menu__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  background: #f3f2f1;
+  color: #323130;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-app-menu__toggle:hover,
+.agrocloud-dashboard-app-menu__toggle.is-open {
+  background: #edebe9;
+}
+
+.agrocloud-dashboard-app-menu__bars {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 14px;
+}
+
+.agrocloud-dashboard-app-menu__bars span {
+  display: block;
+  width: 14px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: #323130;
+}
+
+.agrocloud-dashboard-app-menu__panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 100;
+  min-width: 260px;
+  padding: 4px 0;
+  border: 1px solid #edebe9;
+  border-radius: 2px;
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.agrocloud-dashboard-app-menu__item {
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: #323130;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.35;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-app-menu__item:hover,
+.agrocloud-dashboard-app-menu__item:focus-visible {
+  background: #f3f2f1;
+  outline: none;
+}
+
+.agrocloud-dashboard-builder__brand-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 2px;
+  background: linear-gradient(135deg, #f4b942 0%, #e8912d 100%);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.agrocloud-dashboard-builder__brand-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #323130;
+  white-space: nowrap;
+}
+
+.agrocloud-dashboard-builder__brand-letter {
+  font-size: 15px;
+  font-weight: 600;
+  color: #323130;
+  line-height: 1;
+}
+
+.agrocloud-dashboard-builder__shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.agrocloud-dashboard-builder__sidebar {
+  width: var(--agrocloud-builder-sidebar-width);
+  flex-shrink: 0;
+  align-self: stretch;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--agrocloud-builder-sidebar);
+  color: #d1d1d1;
+  z-index: 2;
+  transition: width 0.2s ease;
+  overflow: visible;
+}
+
+.agrocloud-dashboard-builder.is-sidebar-collapsed .agrocloud-dashboard-builder__sidebar {
+  width: var(--agrocloud-builder-sidebar-collapsed-width);
+}
+
+.agrocloud-dashboard-builder__sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  flex: 0 0 auto;
+  padding: 8px 0 0;
+  gap: 0;
+  min-width: var(--agrocloud-builder-sidebar-width);
+}
+
+.agrocloud-dashboard-builder.is-sidebar-collapsed .agrocloud-dashboard-builder__sidebar-nav {
+  min-width: var(--agrocloud-builder-sidebar-collapsed-width);
+  align-items: center;
+}
+
+.agrocloud-dashboard-builder.is-sidebar-collapsed .agrocloud-dashboard-builder__sidebar-item {
+  justify-content: center;
+  width: var(--agrocloud-builder-sidebar-collapsed-width);
+  padding: 0;
+  gap: 0;
+}
+
+.agrocloud-dashboard-builder.is-sidebar-collapsed .agrocloud-dashboard-builder__sidebar-label {
+  display: none;
+}
+
+.agrocloud-dashboard-builder.is-sidebar-collapsed .agrocloud-dashboard-builder__sidebar-divider {
+  width: 32px;
+  margin: 6px auto;
+}
+
+.agrocloud-dashboard-builder__sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: #d1d1d1;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.2;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.agrocloud-dashboard-builder__sidebar-item svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.agrocloud-dashboard-builder__sidebar-divider {
+  height: 1px;
+  margin: 6px 16px;
+  background: rgba(255, 255, 255, 0.14);
+  flex-shrink: 0;
+}
+
+.agrocloud-dashboard-builder__sidebar-add,
+.agrocloud-dashboard-builder__sidebar-save {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+}
+
+.agrocloud-dashboard-builder__sidebar-item--add {
+  margin: 0;
+}
+
+.agrocloud-dashboard-builder__sidebar-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agrocloud-dashboard-builder__sidebar-item:hover,
+.agrocloud-dashboard-builder__sidebar-item.is-active {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.agrocloud-dashboard-builder__sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  margin-top: auto;
+  padding: 0 12px 4px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: #d1d1d1;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+
+.agrocloud-dashboard-builder__sidebar-toggle svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.agrocloud-dashboard-builder.is-sidebar-collapsed .agrocloud-dashboard-builder__sidebar-toggle {
+  justify-content: center;
+  padding: 0 0 4px;
+}
+
+.agrocloud-dashboard-builder__sidebar-toggle-label {
+  white-space: nowrap;
+}
+
+.agrocloud-dashboard-builder.is-sidebar-collapsed .agrocloud-dashboard-builder__sidebar-toggle-label {
+  display: none;
+}
+
+.agrocloud-dashboard-builder__sidebar-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+/* legacy aliases removed — use sidebar-item / sidebar-toggle */
+.agrocloud-dashboard-builder__sidebar-icons,
+.agrocloud-dashboard-builder__sidebar-btn,
+.agrocloud-dashboard-builder__sidebar-expand {
+  display: none;
+}
+
+.agrocloud-dashboard-builder.is-sidebar-collapsed .agrocloud-dashboard-builder__sidebar-icons {
+  display: none;
+}
+
+.agrocloud-dashboard-builder__main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: #ffffff;
+  overflow: auto;
+}
+
+.agrocloud-dashboard-builder__empty {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 40px 28px 48px;
+  text-align: center;
+}
+
+.agrocloud-dashboard-builder__illustration {
+  display: block;
+  margin-bottom: 18px;
+}
+
+.agrocloud-dashboard-builder__empty h1 {
+  margin: 0 0 10px;
+  max-width: 460px;
+  font-size: 19px;
+  font-weight: 700;
+  color: #323130;
+  letter-spacing: -0.01em;
+}
+
+.agrocloud-dashboard-builder__empty p {
+  margin: 0 0 22px;
+  max-width: 420px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #605e5c;
+}
+
+.agrocloud-dashboard-builder__add-wrap {
+  position: relative;
+  margin-bottom: 22px;
+}
+
+/* Shared step-1 add trigger (+ circle) — canvas empty & builder empty */
+.agrocloud-dashboard-add-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.agrocloud-dashboard-add-circle {
+  width: 48px;
+  height: 48px;
+  border: 2px solid var(--dashboard-primary, #0079c1);
+  border-radius: 50%;
+  background: #ffffff;
+  color: var(--dashboard-primary, #0079c1);
+  font-size: 18px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.agrocloud-dashboard-add-circle:hover,
+.agrocloud-dashboard-add-circle.is-open {
+  background: rgba(0, 121, 193, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 121, 193, 0.2);
+}
+
+.agrocloud-dashboard-builder .agrocloud-dashboard-add-circle {
+  border-color: var(--agrocloud-builder-link);
+  color: var(--agrocloud-builder-link);
+}
+
+.agrocloud-dashboard-builder .agrocloud-dashboard-add-circle:hover,
+.agrocloud-dashboard-builder .agrocloud-dashboard-add-circle.is-open {
+  background: var(--agrocloud-builder-link-soft);
+  box-shadow: 0 2px 8px rgba(46, 125, 50, 0.2);
+}
+
+.agrocloud-dashboard-canvas__empty .agrocloud-dashboard-add-wrap {
+  margin-top: 4px;
+}
+
+.agrocloud-dashboard-canvas__empty .agrocloud-dashboard-editor__add-menu--inline {
+  z-index: 30;
+}
+
+.agrocloud-dashboard-builder__add-circle {
+  width: 48px;
+  height: 48px;
+  border: 2px solid var(--agrocloud-builder-link);
+  border-radius: 50%;
+  background: #ffffff;
+  color: var(--agrocloud-builder-link);
+  font-size: 18px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.agrocloud-dashboard-builder__add-circle:hover,
+.agrocloud-dashboard-builder__add-circle.is-open {
+  background: var(--agrocloud-builder-link-soft);
+  box-shadow: 0 2px 8px rgba(46, 125, 50, 0.2);
+}
+
+.agrocloud-dashboard-builder__add-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  width: 200px;
+  padding: 6px 0;
+  border: 1px solid #edebe9;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+  text-align: left;
+}
+
+.agrocloud-dashboard-builder__add-menu::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 6px solid #fff;
+}
+
+.agrocloud-dashboard-builder__add-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  color: #323130;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-builder__add-menu-item i {
+  width: 18px;
+  color: #605e5c;
+  text-align: center;
+}
+
+.agrocloud-dashboard-builder__add-menu-item:hover {
+  background: #f3f2f1;
+}
+
+.agrocloud-dashboard-builder__links {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.agrocloud-dashboard-builder__links a,
+.agrocloud-dashboard-builder__links button {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--agrocloud-builder-link);
+  cursor: pointer;
+  text-decoration: none;
+  font-family: inherit;
+}
+
+.agrocloud-dashboard-builder__links a:hover,
+.agrocloud-dashboard-builder__links button:hover {
+  text-decoration: underline;
+}
+
+/* —— Select a map (GIS Content picker) —— */
+.agrocloud-select-map-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.agrocloud-select-map-backdrop--stacked {
+  z-index: 5310;
+}
+
+.agrocloud-select-map {
+  width: min(960px, 100%);
+  max-height: min(720px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 2px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  font-family: 'Segoe UI', 'Avenir Next', system-ui, sans-serif;
+  color: #323130;
+}
+
+.agrocloud-select-map__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid #edebe9;
+}
+
+.agrocloud-select-map__header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 400;
+}
+
+.agrocloud-select-map__close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: #605e5c;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.agrocloud-select-map__tabs {
+  display: flex;
+  gap: 24px;
+  padding: 0 20px;
+  border-bottom: 1px solid #edebe9;
+}
+
+.agrocloud-select-map__tab {
+  position: relative;
+  padding: 12px 2px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: #605e5c;
+  cursor: pointer;
+}
+
+.agrocloud-select-map__tab.is-active {
+  color: #323130;
+}
+
+.agrocloud-select-map__tab.is-active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: #007ac2;
+}
+
+.agrocloud-select-map__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+  border-bottom: 1px solid #edebe9;
+}
+
+.agrocloud-select-map__folder {
+  min-width: 140px;
+  height: 32px;
+  padding: 0 28px 0 10px;
+  border: 1px solid #8a8886;
+  border-radius: 2px;
+  background: #fff;
+  font-size: 13px;
+  color: #323130;
+}
+
+.agrocloud-select-map__search {
+  flex: 1;
+  min-width: 180px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #8a8886;
+  border-radius: 2px;
+  background: #fff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.agrocloud-select-map__search:focus-within {
+  border-color: #0078d4;
+  box-shadow: 0 0 0 1px #0078d4;
+}
+
+.agrocloud-select-map__search i {
+  flex-shrink: 0;
+  color: #605e5c;
+  font-size: 13px;
+}
+
+.agrocloud-select-map__search input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  outline: none;
+  font-size: 13px;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.agrocloud-select-map__search input::-webkit-search-cancel-button,
+.agrocloud-select-map__search input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.agrocloud-select-map__tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #8a8886;
+  border-radius: 2px;
+  background: #fff;
+  font-size: 12px;
+  color: #323130;
+  cursor: pointer;
+}
+
+.agrocloud-select-map__grid-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 20px;
+  background: #faf9f8;
+}
+
+.agrocloud-select-map__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 16px;
+}
+
+.agrocloud-select-map__empty {
+  margin: 0;
+  padding: 48px 16px;
+  text-align: center;
+  color: #605e5c;
+  font-size: 14px;
+}
+
+.agrocloud-select-map__card {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  padding: 0;
+  border: 1px solid #edebe9;
+  border-radius: 2px;
+  background: #fff;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.agrocloud-select-map__card:hover,
+.agrocloud-select-map__card.is-selected {
+  border-color: #007ac2;
+  box-shadow: 0 0 0 1px #007ac2;
+}
+
+.agrocloud-select-map__card-thumb {
+  aspect-ratio: 16 / 10;
+  background: #f3f2f1;
+  overflow: hidden;
+}
+
+.agrocloud-select-map__card-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.agrocloud-select-map__card-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: #a19f9d;
+}
+
+.agrocloud-select-map__card-placeholder--web-map {
+  background: linear-gradient(135deg, #d4e8f7 0%, #e8f4e8 100%);
+  color: #007ac2;
+}
+
+.agrocloud-select-map__card-placeholder--scene,
+.agrocloud-select-map__card-placeholder--three-d-layer {
+  background: linear-gradient(135deg, #e8e4f0 0%, #d4e0f0 100%);
+  color: #5c2d91;
+}
+
+.agrocloud-select-map__card-placeholder--feature-layer {
+  background: linear-gradient(135deg, #e8f0e8 0%, #f0f0d4 100%);
+  color: #1b5e3c;
+}
+
+.agrocloud-select-map__card-body {
+  padding: 10px 12px 12px;
+}
+
+.agrocloud-select-map__card-title {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #323130;
+  line-height: 1.3;
+}
+
+.agrocloud-select-map__card-owner,
+.agrocloud-select-map__card-date {
+  margin: 0 0 2px;
+  font-size: 11px;
+  color: #605e5c;
+  line-height: 1.35;
+}
+
+.agrocloud-select-map__card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.agrocloud-select-map__type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid #007ac2;
+  border-radius: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #007ac2;
+  background: #fff;
+}
+
+.agrocloud-select-map__type-badge i {
+  font-size: 10px;
+}
+
+.agrocloud-select-map__card-icons {
+  display: inline-flex;
+  gap: 8px;
+  color: #c8c6c4;
+  font-size: 12px;
+}
+
+.agrocloud-select-map__footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 20px 16px;
+  border-top: 1px solid #edebe9;
+  background: #fff;
+}
+
+.agrocloud-select-map__cancel {
+  height: 32px;
+  padding: 0 16px;
+  border: 1px solid #8a8886;
+  border-radius: 2px;
+  background: #fff;
+  font-size: 13px;
+  color: #323130;
+  cursor: pointer;
+}
+
+.agrocloud-select-map__cancel:hover {
+  background: #f3f2f1;
+}
+
+.agrocloud-select-map__close {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.agrocloud-select-map__close:hover {
+  background: #f3f2f1;
+  border-radius: 2px;
+}
+
+.agrocloud-select-map__filter-wrap {
+  position: relative;
+}
+
+.agrocloud-select-map__tool-btn.is-active {
+  border-color: #007ac2;
+  color: #007ac2;
+}
+
+.agrocloud-select-map__filter-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 10;
+  min-width: 160px;
+  padding: 4px 0;
+  border: 1px solid #edebe9;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.agrocloud-select-map__filter-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.agrocloud-select-map__filter-item:hover,
+.agrocloud-select-map__filter-item.is-active {
+  background: #f3f2f1;
+  color: #007ac2;
+}
+
+.agrocloud-dashboard-editor__add-menu--inline {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+}
+
+.agrocloud-dashboard-editor__add-menu--fixed {
+  position: fixed;
+  top: 0;
+  left: 0;
+  transform: none;
+  z-index: 25000;
+  pointer-events: auto;
+}
+
+.agrocloud-dashboard-editor__add-menu--fixed::before {
+  left: -6px;
+  top: 14px;
+}
+
+.agrocloud-dashboard-editor__add-menu--below::before {
+  left: 50%;
+  top: -6px;
+  transform: translateX(-50%);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 6px solid #fff;
+  border-top: none;
+}
+
+.agrocloud-dashboard-editor__add-element-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.agrocloud-dashboard-editor__add-element-wrap--floating {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+}
+
+.agrocloud-dashboard-editor__empty--compact {
+  padding: 32px 16px 24px;
+}
+
+.agrocloud-dashboard-editor__source-actions {
+  padding: 12px 16px 0;
+}
+
+.agrocloud-dashboard-editor__source-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #007ac2;
+  border-radius: 2px;
+  background: #fff;
+  color: #007ac2;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-editor__source-add:hover {
+  background: #f3f9fd;
+}
+
+.agrocloud-dashboard-editor__source-widgets {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: #605e5c;
+}
+
+.agrocloud-dashboard-editor__source-list {
+  list-style: none;
+  margin: 0;
+  padding: 12px 16px;
+}
+
+.agrocloud-dashboard-editor__source-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 0;
+  border-bottom: 1px solid #edebe9;
+  font-size: 13px;
+}
+
+.agrocloud-dashboard-editor__source-item-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.agrocloud-dashboard-editor__source-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.agrocloud-dashboard-editor__source-configure {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #007ac2;
+  border-radius: 2px;
+  background: #fff;
+  color: #323130;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.agrocloud-dashboard-editor__source-configure:hover {
+  background: #f3f9fd;
+}
+
+.agrocloud-dashboard-editor__source-layers {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 2px;
+}
+
+.agrocloud-dashboard-editor__source-layers li {
+  padding: 4px 0;
+  font-size: 12px;
+  color: #323130;
+  border-top: 1px solid #f3f2f1;
+}
+
+.agrocloud-dashboard-editor__source-item span {
+  color: #605e5c;
+  font-size: 11px;
+}
+
+/* Configure data source modal (ArcGIS-style) */
+.agrocloud-configure-ds-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.agrocloud-configure-ds {
+  width: min(760px, 100%);
+  max-height: min(88vh, 720px);
+  background: #fff;
+  border-radius: 2px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+}
+
+.agrocloud-configure-ds__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid #edebe9;
+}
+
+.agrocloud-configure-ds__header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.agrocloud-configure-ds__close {
+  border: none;
+  background: transparent;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  color: #605e5c;
+}
+
+.agrocloud-configure-ds__columns-head {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 10px 16px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #605e5c;
+}
+
+.agrocloud-configure-ds__body {
+  flex: 1;
+  overflow: auto;
+  padding: 8px 16px 16px;
+}
+
+.agrocloud-configure-ds__source-row,
+.agrocloud-configure-ds__layer-row,
+.agrocloud-configure-ds__field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: center;
+}
+
+.agrocloud-configure-ds__source-row {
+  padding: 12px 0;
+  border-bottom: 1px solid #edebe9;
+}
+
+.agrocloud-configure-ds__source-replacement {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agrocloud-configure-ds__replacement-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.agrocloud-configure-ds__change-btn {
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #007ac2;
+  border-radius: 2px;
+  background: #fff;
+  color: #007ac2;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.agrocloud-configure-ds__change-btn:hover {
+  background: #f3f9fd;
+}
+
+.agrocloud-configure-ds__layer-block {
+  border-bottom: 1px solid #edebe9;
+  padding: 8px 0 4px;
+}
+
+.agrocloud-configure-ds__layer-current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.agrocloud-configure-ds__layer-current i {
+  color: #605e5c;
+}
+
+.agrocloud-configure-ds__select {
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #8a8886;
+  border-radius: 2px;
+  font-size: 12px;
+  background: #fff;
+}
+
+.agrocloud-configure-ds__select.is-invalid {
+  border-color: #a4262c;
+  background: #fef6f6;
+}
+
+.agrocloud-configure-ds__fields-block {
+  padding: 4px 0 8px 24px;
+}
+
+.agrocloud-configure-ds__fields-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  color: #007ac2;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.agrocloud-configure-ds__fields-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.agrocloud-configure-ds__field-current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.agrocloud-configure-ds__field-current i {
+  width: 14px;
+  color: #605e5c;
+  text-align: center;
+}
+
+.agrocloud-configure-ds__errors {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid #f1bbbc;
+  background: #fef6f6;
+  border-radius: 2px;
+  font-size: 12px;
+  color: #a4262c;
+}
+
+.agrocloud-configure-ds__errors p {
+  margin: 0 0 4px;
+}
+
+.agrocloud-configure-ds__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid #edebe9;
+}
+
+.agrocloud-configure-ds__cancel,
+.agrocloud-configure-ds__done {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 2px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.agrocloud-configure-ds__cancel {
+  border: 1px solid #007ac2;
+  background: #fff;
+  color: #007ac2;
+}
+
+.agrocloud-configure-ds__done {
+  border: 1px solid #007ac2;
+  background: #007ac2;
+  color: #fff;
+}
+
+.agrocloud-configure-ds__done:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.agrocloud-dashboard-editor__sharing-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0;
+}
+
+.agrocloud-dashboard-editor__sharing-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-editor__sharing-item:hover,
+.agrocloud-dashboard-editor__sharing-item.is-selected {
+  background: #f3f2f1;
+}
+
+.agrocloud-dashboard-editor__sharing-item.is-selected {
+  color: #007ac2;
+  font-weight: 600;
+}
+
+.agrocloud-dashboard-editor__settings-tab {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.agrocloud-dashboard-editor__field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #605e5c;
+}
+
+.agrocloud-dashboard-editor__select {
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #8a8886;
+  border-radius: 2px;
+  font-size: 13px;
+}
+
+/* —— Live dashboard canvas preview —— */
+.agrocloud-dashboard-canvas {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  background: var(--agrocloud-canvas, #faf9f8);
+}
+
+.agrocloud-dashboard-canvas--map-full {
+  overflow: hidden;
+}
+
+.agrocloud-dashboard-canvas--map-full .agrocloud-dashboard-canvas__layout--map-full {
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+}
+
+.agrocloud-dashboard-canvas--map-full .agrocloud-dashboard-canvas__layout--map-full.has-sidebar {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.agrocloud-dashboard-canvas--map-full .agrocloud-dashboard-canvas__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  grid-template-columns: 1fr;
+  align-content: stretch;
+}
+
+.agrocloud-dashboard-canvas--map-full .agrocloud-dashboard-canvas__widget--map {
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.agrocloud-dashboard-canvas--map-full .agrocloud-dashboard-canvas__widget--map .agrocloud-dashboard-canvas__widget-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0;
+  align-items: stretch;
+  align-self: stretch;
+}
+
+.agrocloud-dashboard-canvas--map-full .agrocloud-dashboard-canvas__map-host {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.agrocloud-dashboard-canvas--map-full .agrocloud-dashboard-canvas__map--live {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+}
+
+.agrocloud-dashboard-canvas--map-full .agrocloud-dashboard-canvas__map--live .leaflet-container {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0;
+}
+
+.agrocloud-dashboard-canvas--empty {
+  align-items: center;
+  justify-content: center;
+}
+
+.agrocloud-dashboard-canvas__empty {
+  max-width: 360px;
+  padding: 32px 24px;
+  text-align: center;
+}
+
+.agrocloud-dashboard-canvas__empty-icon {
+  font-size: 36px;
+  color: var(--dashboard-primary, #0079c1);
+  opacity: 0.65;
+  margin-bottom: 16px;
+}
+
+.agrocloud-dashboard-canvas__empty h2 {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.agrocloud-dashboard-canvas__empty p {
+  margin: 0 0 18px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--agrocloud-muted, #605e5c);
+}
+
+.agrocloud-dashboard-canvas__empty-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: -10px 0 14px !important;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--agrocloud-muted, #605e5c);
+}
+
+.agrocloud-dashboard-canvas__empty-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 16px;
+  background: var(--dashboard-primary, #0079c1);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-canvas__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--dashboard-widget-bg, #fff);
+  flex-shrink: 0;
+}
+
+.agrocloud-dashboard-canvas__header--compact {
+  padding: 6px 12px;
+}
+
+.agrocloud-dashboard-canvas__header--branded {
+  background: var(--dashboard-primary, #0079c1);
+  color: #fff;
+  border-bottom: none;
+}
+
+.agrocloud-dashboard-canvas__header--branded .agrocloud-dashboard-canvas__header-meta {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.agrocloud-dashboard-canvas__header-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.agrocloud-dashboard-canvas__logo {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dashboard-accent, #0079c1);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.agrocloud-dashboard-canvas__header--branded .agrocloud-dashboard-canvas__logo {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.agrocloud-dashboard-canvas__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.agrocloud-dashboard-canvas__header-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 0;
+  max-width: 48%;
+  font-size: 10px;
+  color: var(--agrocloud-muted, #605e5c);
+}
+
+.agrocloud-dashboard-canvas__clock {
+  font-size: 11px;
+  font-weight: 600;
+  color: inherit;
+  white-space: nowrap;
+}
+
+.agrocloud-dashboard-canvas__tz {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.agrocloud-dashboard-canvas__badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.agrocloud-dashboard-canvas__header-widgets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  flex-shrink: 0;
+  align-items: flex-start;
+}
+
+.agrocloud-dashboard-canvas__header-widgets > .agrocloud-dashboard-canvas__widget {
+  align-self: flex-start;
+}
+
+.agrocloud-dashboard-canvas__sidebar > .agrocloud-dashboard-canvas__widget {
+  align-self: stretch;
+}
+
+.agrocloud-dashboard-canvas__sidebar > .agrocloud-dashboard-canvas__widget.has-custom-size {
+  align-self: flex-start;
+}
+
+.agrocloud-dashboard-canvas__layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  padding: 12px 16px 16px;
+}
+
+.agrocloud-dashboard-canvas__layout.has-sidebar {
+  grid-template-columns: minmax(180px, 240px) 1fr;
+}
+
+.agrocloud-dashboard-canvas__sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.agrocloud-dashboard-canvas__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  gap: 0;
+  align-content: stretch;
+}
+
+.agrocloud-dashboard-layout-root {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.agrocloud-dashboard-layout-element-host {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.agrocloud-dashboard-layout-element-host > .agrocloud-dashboard-canvas__widget {
+  flex: 1;
+  min-height: 0;
+}
+
+.agrocloud-dashboard-layout-split {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  gap: 10px;
+  transition: gap 180ms ease-out;
+}
+
+.agrocloud-dashboard-layout-split--soft-gap {
+  gap: calc(10px + var(--layout-soft-gap, 12px));
+}
+
+.agrocloud-dashboard-layout-pane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  transition: flex 220ms ease-out, transform 220ms ease-out, box-shadow 180ms ease-out;
+}
+
+.agrocloud-dashboard-layout-element-host.is-drag-source {
+  opacity: 0.42;
+  transform: scale(0.985);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.agrocloud-dashboard-layout-element-host.is-drop-target .agrocloud-dashboard-canvas__widget {
+  box-shadow: 0 0 0 2px #0079c1, 0 4px 16px rgba(0, 121, 193, 0.22);
+}
+
+.agrocloud-dashboard-layout-element-host.is-precision-target .agrocloud-dashboard-canvas__widget {
+  box-shadow: 0 0 0 2px #2e7d32, 0 4px 16px rgba(46, 125, 50, 0.2);
+}
+
+.agrocloud-dashboard-canvas__widget.is-dragging-source {
+  opacity: 0.5;
+  filter: saturate(0.85);
+}
+
+.agrocloud-dashboard-canvas__widget.is-dragging-target {
+  outline: 2px solid #0079c1;
+  outline-offset: -2px;
+}
+
+body.agrocloud-dashboard-layout-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+body.agrocloud-dashboard-layout-dragging * {
+  cursor: grabbing !important;
+}
+
+.agrocloud-dashboard-layout-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 10000;
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(0, 121, 193, 0.94);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  transform-origin: top left;
+  animation: agrocloud-layout-ghost-in 140ms ease-out;
+}
+
+.agrocloud-dashboard-layout-ghost.is-precision {
+  background: rgba(46, 125, 50, 0.94);
+}
+
+@keyframes agrocloud-layout-ghost-in {
+  from {
+    opacity: 0;
+    transform: translate(var(--ghost-x, 12px), var(--ghost-y, 12px)) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translate(var(--ghost-x, 12px), var(--ghost-y, 12px)) scale(1);
+  }
+}
+
+.agrocloud-dashboard-layout-drop__soft-gap {
+  position: absolute;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.85), transparent);
+  animation: agrocloud-layout-gap-pulse 480ms ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+.agrocloud-dashboard-layout-drop__edge--top .agrocloud-dashboard-layout-drop__soft-gap,
+.agrocloud-dashboard-layout-drop__edge--bottom .agrocloud-dashboard-layout-drop__soft-gap {
+  left: 12%;
+  right: 12%;
+  height: 12px;
+}
+
+.agrocloud-dashboard-layout-drop__edge--top .agrocloud-dashboard-layout-drop__soft-gap {
+  bottom: 0;
+}
+
+.agrocloud-dashboard-layout-drop__edge--bottom .agrocloud-dashboard-layout-drop__soft-gap {
+  top: 0;
+}
+
+.agrocloud-dashboard-layout-drop__edge--left .agrocloud-dashboard-layout-drop__soft-gap,
+.agrocloud-dashboard-layout-drop__edge--right .agrocloud-dashboard-layout-drop__soft-gap {
+  top: 12%;
+  bottom: 12%;
+  width: 12px;
+}
+
+.agrocloud-dashboard-layout-drop__edge--left .agrocloud-dashboard-layout-drop__soft-gap {
+  right: 0;
+}
+
+.agrocloud-dashboard-layout-drop__edge--right .agrocloud-dashboard-layout-drop__soft-gap {
+  left: 0;
+}
+
+@keyframes agrocloud-layout-gap-pulse {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.agrocloud-dashboard-layout-drop.is-precision .agrocloud-dashboard-layout-drop__edge.is-active {
+  background: rgba(46, 125, 50, 0.38);
+  outline-color: #2e7d32;
+}
+
+.agrocloud-dashboard-layout-drop.is-snapped .agrocloud-dashboard-layout-drop__center.is-active {
+  box-shadow: inset 0 0 0 2px rgba(46, 125, 50, 0.65);
+}
+
+.agrocloud-dashboard-layout-drop__precision {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  opacity: 0.92;
+}
+
+.agrocloud-dashboard-element-menu__btn--drag {
+  touch-action: none;
+}
+
+
+.agrocloud-dashboard-layout-split--row {
+  flex-direction: column;
+}
+
+.agrocloud-dashboard-layout-split--column {
+  flex-direction: row;
+}
+
+.agrocloud-dashboard-layout-split--group {
+  gap: 0;
+}
+
+.agrocloud-dashboard-layout-split--group .agrocloud-dashboard-canvas__widget {
+  border-radius: 0;
+}
+
+.agrocloud-dashboard-layout-stack {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.agrocloud-dashboard-layout-stack__tabs {
+  display: flex;
+  gap: 2px;
+  padding: 4px 6px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.agrocloud-dashboard-layout-stack__tab {
+  border: 0;
+  border-radius: 4px 4px 0 0;
+  background: transparent;
+  color: #323130;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-layout-stack__tab.is-active {
+  background: #fff;
+  box-shadow: inset 0 2px 0 #0079c1;
+}
+
+.agrocloud-dashboard-layout-stack__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ArcGIS-style dock / stack / group drop indicators */
+.agrocloud-dashboard-layout-drop {
+  position: absolute;
+  inset: 0;
+  z-index: 700;
+  pointer-events: none;
+}
+
+.agrocloud-dashboard-layout-drop__edge {
+  position: absolute;
+  background: rgba(0, 121, 193, 0.18);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.agrocloud-dashboard-layout-drop__edge--top {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28%;
+}
+
+.agrocloud-dashboard-layout-drop__edge--bottom {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 28%;
+}
+
+.agrocloud-dashboard-layout-drop__edge--left {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 28%;
+}
+
+.agrocloud-dashboard-layout-drop__edge--right {
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 28%;
+}
+
+.agrocloud-dashboard-layout-drop__edge.is-active {
+  opacity: 1;
+  background: rgba(0, 121, 193, 0.42);
+  outline: 2px solid #0079c1;
+  outline-offset: -2px;
+}
+
+.agrocloud-dashboard-layout-drop__center {
+  position: absolute;
+  inset: 32%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(0, 121, 193, 0.08);
+  opacity: 0;
+  transition: opacity 120ms ease;
+  padding: 8px;
+}
+
+.agrocloud-dashboard-layout-drop__center.is-active {
+  opacity: 1;
+  background: rgba(0, 121, 193, 0.72);
+  outline: 2px solid #0079c1;
+}
+
+.agrocloud-dashboard-layout-drop.is-stack .agrocloud-dashboard-layout-drop__center.is-active {
+  background: rgba(0, 121, 193, 0.82);
+}
+
+.agrocloud-dashboard-layout-drop.is-group .agrocloud-dashboard-layout-drop__center.is-active {
+  background: rgba(46, 125, 50, 0.82);
+  outline-color: #2e7d32;
+}
+
+.agrocloud-dashboard-layout-drop.is-group .agrocloud-dashboard-layout-drop__edge.is-active {
+  background: rgba(46, 125, 50, 0.42);
+  outline-color: #2e7d32;
+}
+
+
+.agrocloud-dashboard-canvas__widget {
+  display: flex;
+  flex-direction: column;
+  min-height: 100px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  position: relative;
+}
+
+.agrocloud-dashboard-canvas__widget--compact .agrocloud-dashboard-canvas__widget-body {
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+}
+
+/* ArcGIS Dashboards — element menu (hover top-left) */
+.agrocloud-dashboard-element-menu {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 650;
+  display: flex;
+  flex-direction: column;
+  width: 32px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
+}
+
+.agrocloud-dashboard-canvas__widget:hover .agrocloud-dashboard-element-menu,
+.agrocloud-dashboard-canvas__widget:focus-within .agrocloud-dashboard-element-menu,
+.agrocloud-dashboard-element-menu:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.agrocloud-dashboard-element-menu__btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  background: #0079c1;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.agrocloud-dashboard-element-menu__btn:last-child {
+  border-bottom: 0;
+}
+
+.agrocloud-dashboard-element-menu__btn:hover {
+  background: #006ba6;
+}
+
+.agrocloud-dashboard-element-menu__btn--drag {
+  background: #005a8c;
+  cursor: grab;
+}
+
+.agrocloud-dashboard-element-menu__btn--drag:active {
+  cursor: grabbing;
+}
+
+.agrocloud-dashboard-element-menu__btn--resize {
+  background: #005a8c;
+  cursor: nwse-resize;
+}
+
+.agrocloud-dashboard-element-menu__btn--danger:hover {
+  background: #a4262c;
+}
+
+.agrocloud-dashboard-canvas__widget.has-custom-size {
+  flex: 0 0 auto;
+}
+
+.agrocloud-dashboard-layout-element-host > .agrocloud-dashboard-canvas__widget.has-custom-size {
+  flex: 0 0 auto;
+}
+
+.agrocloud-dashboard-canvas__widget.is-resizing {
+  outline: 2px solid #0079c1;
+  outline-offset: -2px;
+  z-index: 2;
+}
+
+.agrocloud-dashboard-canvas__widget-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 640;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: nwse-resize;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  touch-action: none;
+}
+
+.agrocloud-dashboard-canvas--edit .agrocloud-dashboard-canvas__widget-resize {
+  opacity: 0.72;
+}
+
+.agrocloud-dashboard-canvas__widget:hover .agrocloud-dashboard-canvas__widget-resize,
+.agrocloud-dashboard-canvas__widget:focus-within .agrocloud-dashboard-canvas__widget-resize,
+.agrocloud-dashboard-canvas__widget.is-resizing .agrocloud-dashboard-canvas__widget-resize {
+  opacity: 1;
+}
+
+.agrocloud-dashboard-canvas__widget-resize-grip {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid rgba(0, 121, 193, 0.85);
+  border-bottom: 2px solid rgba(0, 121, 193, 0.85);
+  pointer-events: none;
+}
+
+body.agrocloud-dashboard-element-resizing {
+  cursor: nwse-resize;
+  user-select: none;
+}
+
+body.agrocloud-dashboard-element-resizing * {
+  cursor: nwse-resize !important;
+}
+
+.agrocloud-dashboard-canvas__widget--wide {
+  grid-column: 1 / -1;
+  min-height: 200px;
+}
+
+.agrocloud-dashboard-canvas__widget--map {
+  min-height: 220px;
+}
+
+.agrocloud-dashboard-canvas__widget-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.agrocloud-dashboard-canvas__widget-head i {
+  color: var(--dashboard-primary, #0079c1);
+  font-size: 12px;
+}
+
+.agrocloud-dashboard-canvas__widget-body {
+  flex: 1;
+  padding: 10px;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.agrocloud-dashboard-canvas__widget-meta {
+  padding: 4px 10px 6px;
+  font-size: 10px;
+  color: var(--agrocloud-muted, #605e5c);
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.agrocloud-dashboard-canvas__map {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 160px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.agrocloud-dashboard-canvas__map--live {
+  background: #e8e8e8;
+}
+
+.agrocloud-dashboard-canvas__map--live .leaflet-container {
+  width: 100%;
+  height: 100%;
+  min-height: 180px;
+  font-family: inherit;
+}
+
+.agrocloud-dashboard-canvas__map--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 100%);
+}
+
+.agrocloud-dashboard-canvas__map-empty-msg {
+  margin: 0;
+  padding: 0 16px;
+  text-align: center;
+  font-size: 12px;
+  color: rgba(71, 85, 105, 0.95);
+}
+
+.agrocloud-dashboard-canvas__widget--map .agrocloud-dashboard-canvas__widget-body {
+  padding: 0;
+  align-items: stretch;
+  min-height: 180px;
+}
+
+.agrocloud-dashboard-canvas__map-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.agrocloud-dashboard-canvas__map-label {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.agrocloud-dashboard-canvas__indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.agrocloud-dashboard-canvas__indicator-value {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.agrocloud-dashboard-canvas__indicator-top,
+.agrocloud-dashboard-canvas__indicator-bottom {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.agrocloud-dashboard-canvas__indicator-field {
+  font-size: 10px;
+  color: var(--agrocloud-muted, #605e5c);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.agrocloud-dashboard-canvas__chart {
+  width: 100%;
+  height: 80px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+}
+
+.agrocloud-dashboard-canvas__chart--serial span {
+  width: 14%;
+  min-height: 8px;
+  border-radius: 2px 2px 0 0;
+}
+
+.agrocloud-dashboard-canvas__chart--pie {
+  align-items: center;
+  gap: 4px;
+}
+
+.agrocloud-dashboard-canvas__chart--pie span {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
+
+.agrocloud-dashboard-canvas__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  font-size: 11px;
+}
+
+.agrocloud-dashboard-canvas__list li {
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.agrocloud-dashboard-canvas__richtext,
+.agrocloud-dashboard-canvas__details {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  width: 100%;
+  text-align: left;
+}
+
+.agrocloud-dashboard-canvas__embedded {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--agrocloud-muted, #605e5c);
+  font-size: 11px;
+}
+
+/* —— View panel: layout modes & regions —— */
+.agrocloud-dashboard-editor__layout-modes {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.agrocloud-dashboard-editor__layout-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: #323130;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-editor__layout-mode.is-active {
+  border-color: var(--agrocloud-border);
+  background: #fff;
+  color: #323130;
+}
+
+.agrocloud-dashboard-editor__empty--region {
+  padding: 40px 20px 24px;
+}
+
+.agrocloud-dashboard-editor__empty--region h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #323130;
+}
+
+.agrocloud-dashboard-editor__empty--region p {
+  max-width: 240px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #323130;
+}
+
+.agrocloud-dashboard-editor__region-summary {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.agrocloud-dashboard-editor__region-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--agrocloud-border);
+  border-radius: 2px;
+  background: #fff;
+  font-size: 12px;
+}
+
+.agrocloud-dashboard-editor__region-muted {
+  color: var(--agrocloud-muted);
+}
+
+.agrocloud-dashboard-editor__region-edit,
+.agrocloud-dashboard-editor__region-add-widget {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--agrocloud-border);
+  border-radius: 2px;
+  background: #fff;
+  color: #323130;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-editor__region-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--agrocloud-muted);
+  line-height: 1.45;
+}
+
+.agrocloud-dashboard-editor__settings-tab--view {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.agrocloud-dashboard-editor__settings-intro {
+  margin: 0;
+  font-size: 12px;
+  color: var(--agrocloud-muted);
+  line-height: 1.45;
+}
+
+.agrocloud-dashboard-editor__toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.agrocloud-dashboard-editor__input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--agrocloud-border);
+  border-radius: 2px;
+  font-size: 12px;
+}
+
+.agrocloud-dashboard-editor__settings-note {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--agrocloud-border);
+  border-radius: 2px;
+  background: #faf9f8;
+  font-size: 11px;
+}
+
+.agrocloud-dashboard-editor__settings-note strong {
+  font-size: 12px;
+  color: var(--agrocloud-text);
+}
+
+.agrocloud-dashboard-editor__settings-note span {
+  color: var(--agrocloud-muted);
+}
+
+/* —— Header editor overlay —— */
+.agrocloud-dashboard-header-editor {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+
+.agrocloud-dashboard-header-editor__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 0 16px;
+  background: #2b2b2b;
+  color: #fff;
+}
+
+.agrocloud-dashboard-header-editor__top h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.agrocloud-dashboard-header-editor__close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 2px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-header-editor__body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+}
+
+.agrocloud-dashboard-header-editor__settings {
+  border-right: 1px solid var(--agrocloud-border);
+  overflow: auto;
+  padding: 12px 0;
+}
+
+.agrocloud-dashboard-header-editor__settings > h3 {
+  margin: 0 0 8px;
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--agrocloud-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.agrocloud-dashboard-header-editor__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-top: 1px solid var(--agrocloud-border);
+  background: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  color: #323130;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-header-editor__section-body {
+  padding: 0 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.agrocloud-dashboard-header-editor__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #323130;
+}
+
+.agrocloud-dashboard-header-editor__field input[type='text'],
+.agrocloud-dashboard-header-editor__field input[type='url'] {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--agrocloud-border);
+  border-radius: 2px;
+  font-size: 12px;
+}
+
+.agrocloud-dashboard-header-editor__field--color {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.agrocloud-dashboard-header-editor__field--color input[type='color'] {
+  width: 36px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--agrocloud-border);
+  border-radius: 2px;
+  background: transparent;
+}
+
+.agrocloud-dashboard-header-editor__segmented {
+  display: inline-flex;
+  border: 1px solid var(--agrocloud-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.agrocloud-dashboard-header-editor__segmented button {
+  height: 28px;
+  padding: 0 10px;
+  border: none;
+  background: #fff;
+  font-size: 12px;
+  color: #323130;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-header-editor__segmented button.is-active {
+  background: var(--agrocloud-blue-soft);
+  color: #323130;
+  font-weight: 600;
+}
+
+.agrocloud-dashboard-header-editor__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.agrocloud-dashboard-header-editor__preview {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px;
+  background: var(--agrocloud-canvas);
+  overflow: auto;
+}
+
+.agrocloud-dashboard-header-editor__preview-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: min(100%, 720px);
+  min-height: 52px;
+  padding: 10px 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 2px;
+}
+
+.agrocloud-dashboard-header-editor__preview-bar.has-margin {
+  margin-top: 8px;
+}
+
+.agrocloud-dashboard-header-editor__preview-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.agrocloud-dashboard-header-editor__preview-titles {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agrocloud-dashboard-header-editor__preview-titles.is-stacked {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.agrocloud-dashboard-header-editor__preview-logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.agrocloud-dashboard-header-editor__preview-logo-placeholder {
+  width: 28px;
+  height: 28px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.agrocloud-dashboard-header-editor__preview-menu {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-header-editor__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--agrocloud-border);
+}
+
+.agrocloud-dashboard-header-editor__btn {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-header-editor__btn--ghost {
+  border: 1px solid var(--agrocloud-border);
+  background: #fff;
+  color: var(--agrocloud-text);
+}
+
+.agrocloud-dashboard-header-editor__btn--primary {
+  border: none;
+  background: var(--agrocloud-blue);
+  color: #fff;
+}
+
+/* —— Canvas: configured header & mobile layout —— */
+.agrocloud-dashboard-canvas--mobile {
+  max-width: 390px;
+  margin: 0 auto;
+  border-left: 1px solid var(--agrocloud-border);
+  border-right: 1px solid var(--agrocloud-border);
+}
+
+.agrocloud-dashboard-canvas--mobile .agrocloud-dashboard-canvas__layout.has-sidebar {
+  grid-template-columns: 1fr;
+}
+
+.agrocloud-dashboard-canvas__header--configured .agrocloud-dashboard-canvas__header-brand {
+  flex-direction: row;
+  align-items: center;
+}
+
+.agrocloud-dashboard-canvas__header--configured.has-margin {
+  margin: 8px 12px 0;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 2px;
+}
+
+.agrocloud-dashboard-canvas__header-titles {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agrocloud-dashboard-canvas__header-titles.is-stacked {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.agrocloud-dashboard-canvas__subtitle {
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+.agrocloud-dashboard-canvas__header-logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.agrocloud-dashboard-canvas__header--configured .agrocloud-dashboard-canvas__header-meta {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  max-width: none;
+}
+
+.agrocloud-dashboard-canvas__menu-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 2px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.agrocloud-dashboard-canvas__sidebar-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  border: 1px dashed var(--agrocloud-border);
+  border-radius: 2px;
+  color: var(--agrocloud-muted);
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+/* —— Select a layer (ArcGIS Dashboards data picker) —— */
+.agrocloud-select-layer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 5100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.agrocloud-select-layer-backdrop--stacked {
+  z-index: 5300;
+}
+
+.agrocloud-select-layer {
+  width: min(640px, 100%);
+  min-height: min(420px, calc(100vh - 48px));
+  max-height: min(520px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 2px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  font-family: 'Segoe UI', 'Avenir Next', system-ui, sans-serif;
+  color: #323130;
+}
+
+.agrocloud-select-layer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid #edebe9;
+}
+
+.agrocloud-select-layer__header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+.agrocloud-select-layer__close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: #605e5c;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.agrocloud-select-layer__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.agrocloud-select-layer__empty {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 32px 32px;
+  text-align: center;
+}
+
+.agrocloud-select-layer__empty-title {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #323130;
+}
+
+.agrocloud-select-layer__empty-lead {
+  margin: 0 0 28px;
+  max-width: 420px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #605e5c;
+}
+
+.agrocloud-select-layer__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.agrocloud-select-layer__actions--inline {
+  margin-top: 20px;
+  padding-top: 8px;
+}
+
+.agrocloud-select-layer__btn-outline {
+  min-width: 168px;
+  padding: 7px 16px;
+  border: 1px solid #007ac2;
+  border-radius: 2px;
+  background: #fff;
+  color: #007ac2;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.agrocloud-select-layer__btn-outline:hover {
+  background: rgba(0, 122, 194, 0.06);
+}
+
+.agrocloud-select-layer__btn-outline:focus-visible {
+  outline: 2px solid rgba(0, 122, 194, 0.45);
+  outline-offset: 1px;
+}
+
+.agrocloud-select-layer__list-wrap {
+  padding: 20px 24px 16px;
+}
+
+.agrocloud-select-layer__list-lead {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #605e5c;
+}
+
+.agrocloud-select-layer__list {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+  border: 1px solid #edebe9;
+  border-radius: 2px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.agrocloud-select-layer__list-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-bottom: 1px solid #f3f2f1;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s ease;
+}
+
+.agrocloud-select-layer__list-item:last-child {
+  border-bottom: none;
+}
+
+.agrocloud-select-layer__list-item:hover {
+  background: #f3f2f1;
+}
+
+.agrocloud-select-layer__list-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #323130;
+}
+
+.agrocloud-select-layer__list-item-source {
+  font-size: 12px;
+  color: #605e5c;
+}
+
+.agrocloud-select-layer__footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 20px 16px;
+  border-top: 1px solid #edebe9;
+}
+
+.agrocloud-select-layer__btn-cancel {
+  min-width: 88px;
+  padding: 7px 16px;
+  border: 1px solid #007ac2;
+  border-radius: 2px;
+  background: #fff;
+  color: #007ac2;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.agrocloud-select-layer__btn-cancel:hover {
+  background: rgba(0, 122, 194, 0.06);
+}
+
+/* —— Configure Map widget (ArcGIS Dashboards) —— */
+.agrocloud-map-config-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 5200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.agrocloud-map-config {
+  width: min(920px, 100%);
+  height: min(640px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 2px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  font-family: 'Segoe UI', 'Avenir Next', system-ui, sans-serif;
+  color: #323130;
+}
+
+.agrocloud-map-config__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid #edebe9;
+}
+
+.agrocloud-map-config__header-text h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1.25;
+  color: #323130;
+}
+
+.agrocloud-map-config__type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 2px;
+  background: #f3f2f1;
+  color: #605e5c;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.agrocloud-map-config__close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 2px;
+  background: transparent;
+  color: #605e5c;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.agrocloud-map-config__close:hover {
+  background: #f3f2f1;
+}
+
+.agrocloud-map-config__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+}
+
+.agrocloud-map-config__nav {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+  border-right: 1px solid #edebe9;
+  background: #faf9f8;
+}
+
+.agrocloud-map-config__nav-item {
+  position: relative;
+  width: 100%;
+  padding: 10px 18px 10px 20px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+  color: #323130;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.agrocloud-map-config__nav-item:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.agrocloud-map-config__nav-item.is-active {
+  background: #f3f2f1;
+  font-weight: 600;
+}
+
+.agrocloud-map-config__nav-item.is-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #0079c1;
+}
+
+.agrocloud-map-config__panel {
+  min-width: 0;
+  overflow: auto;
+}
+
+.agrocloud-map-config__panel-inner {
+  padding: 20px 28px 28px;
+  max-width: 560px;
+}
+
+.agrocloud-map-config__panel-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #323130;
+}
+
+.agrocloud-map-config__panel-sub {
+  margin: 16px 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #323130;
+}
+
+.agrocloud-map-config__panel-note {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #605e5c;
+}
+
+.agrocloud-map-config__divider {
+  height: 1px;
+  margin: 0 0 16px;
+  background: #edebe9;
+}
+
+.agrocloud-map-config__field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.agrocloud-map-config__field--number .agrocloud-map-config__input {
+  max-width: 160px;
+}
+
+.agrocloud-map-config__field-label {
+  font-size: 12px;
+  color: #605e5c;
+}
+
+.agrocloud-map-config__input,
+.agrocloud-map-config__select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border: 1px solid #8a8886;
+  border-radius: 2px;
+  background: #fff;
+  font-size: 13px;
+  font-family: inherit;
+  color: #323130;
+}
+
+.agrocloud-map-config__segmented {
+  display: inline-flex;
+  border: 1px solid #0079c1;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.agrocloud-map-config__segment {
+  min-width: 72px;
+  padding: 6px 14px;
+  border: 0;
+  border-right: 1px solid #0079c1;
+  background: #fff;
+  color: #0079c1;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.agrocloud-map-config__segment:last-child {
+  border-right: 0;
+}
+
+.agrocloud-map-config__segment.is-active {
+  background: #0079c1;
+  color: #fff;
+}
+
+.agrocloud-map-config__toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f3f2f1;
+}
+
+.agrocloud-map-config__toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #323130;
+}
+
+.agrocloud-map-config__hint {
+  color: #605e5c;
+  font-size: 12px;
+}
+
+.agrocloud-map-config__toggle {
+  position: relative;
+  width: 40px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: #c8c6c4;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.agrocloud-map-config__toggle.is-on {
+  background: #0079c1;
+}
+
+.agrocloud-map-config__toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 120ms ease;
+}
+
+.agrocloud-map-config__toggle.is-on .agrocloud-map-config__toggle-knob {
+  transform: translateX(20px);
+}
+
+.agrocloud-map-config__color-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agrocloud-map-config__color-swatch {
+  width: 18px;
+  height: 18px;
+  border: 1px solid #c8c6c4;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.agrocloud-map-config__edit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.agrocloud-map-config__edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid #8a8886;
+  border-radius: 2px;
+  background: #fff;
+  color: #0079c1;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.agrocloud-map-config__section {
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #edebe9;
+}
+
+.agrocloud-map-config__section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0 0 10px;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: #323130;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.agrocloud-map-config__section-body {
+  padding-top: 4px;
+}
+
+.agrocloud-map-config__info-box {
+  padding: 14px 16px;
+  border: 1px solid rgba(0, 121, 193, 0.35);
+  border-radius: 2px;
+  background: rgba(0, 121, 193, 0.06);
+  color: #605e5c;
+  font-size: 13px;
+}
+
+.agrocloud-map-config__layer-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border: 1px solid #edebe9;
+  border-radius: 2px;
+  background: #faf9f8;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  color: #323130;
+}
+
+.agrocloud-map-config__layer-row-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.agrocloud-map-config__layer-row-text strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.agrocloud-map-config__layer-row-text small {
+  font-size: 11px;
+  color: #605e5c;
+}
+
+.agrocloud-map-config__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px 16px;
+  border-top: 1px solid #edebe9;
+}
+
+.agrocloud-map-config__cancel,
+.agrocloud-map-config__done {
+  min-width: 88px;
+  padding: 7px 18px;
+  border-radius: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.agrocloud-map-config__cancel {
+  border: 1px solid #0079c1;
+  background: #fff;
+  color: #0079c1;
+}
+
+.agrocloud-map-config__cancel:hover {
+  background: rgba(0, 121, 193, 0.06);
+}
+
+.agrocloud-map-config__done {
+  border: 1px solid #0079c1;
+  background: #0079c1;
+  color: #fff;
+}
+
+.agrocloud-map-config__done:hover {
+  background: #006ba6;
+}
+
+.agrocloud-dashboard-canvas__widget--map .agrocloud-dashboard-canvas__widget-body {
+  cursor: default;
+}
+
+.agrocloud-dashboard-canvas__map-host {
+  width: 100%;
+  height: 100%;
+  min-height: 180px;
+}
+
+.agrocloud-dashboard-canvas__map-host:focus-visible {
+  outline: 2px solid #0079c1;
+  outline-offset: -2px;
+}
+
+.agrocloud-dashboard-canvas__map-chrome {
+  position: absolute;
+  z-index: 500;
+  pointer-events: none;
+}
+
+.agrocloud-dashboard-canvas__map-chrome--scalebar {
+  left: 10px;
+  bottom: 10px;
+  padding: 2px 8px;
+  border: 1px solid #605e5c;
+  border-top: 2px solid #323130;
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 10px;
+  color: #323130;
+}
+
+.agrocloud-dashboard-canvas__map-chrome--zoom {
+  right: 8px;
+  top: 8px;
+  display: grid;
+  gap: 2px;
+  pointer-events: auto;
+}
+
+.agrocloud-dashboard-canvas__map-chrome--zoom button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #c8c6c4;
+  border-radius: 2px;
+  background: #fff;
+  color: #323130;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* —— Configure Indicator widget (ArcGIS Dashboards) —— */
+.agrocloud-indicator-config-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 5200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.agrocloud-indicator-config {
+  width: min(1120px, 100%);
+  height: min(680px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 2px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  font-family: 'Segoe UI', 'Avenir Next', system-ui, sans-serif;
+  color: #323130;
+}
+
+.agrocloud-indicator-config__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #edebe9;
+}
+
+.agrocloud-indicator-config__header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 400;
+}
+
+.agrocloud-indicator-config__close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 2px;
+  background: transparent;
+  color: #605e5c;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.agrocloud-indicator-config__close:hover {
+  background: #f3f2f1;
+}
+
+.agrocloud-indicator-config__workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 168px minmax(300px, 380px) minmax(0, 1fr);
+}
+
+.agrocloud-indicator-config__nav {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+  border-right: 1px solid #edebe9;
+  background: #faf9f8;
+}
+
+.agrocloud-indicator-config__nav-item {
+  position: relative;
+  padding: 10px 16px 10px 20px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+  color: #323130;
+  cursor: pointer;
+}
+
+.agrocloud-indicator-config__nav-item:hover {
+  background: #f3f2f1;
+}
+
+.agrocloud-indicator-config__nav-item.is-active {
+  background: #fff;
+  font-weight: 600;
+}
+
+.agrocloud-indicator-config__nav-item.is-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #0079c1;
+}
+
+.agrocloud-indicator-config__panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid #edebe9;
+  background: #fff;
+}
+
+.agrocloud-indicator-config__panel-title {
+  margin: 0;
+  padding: 16px 18px 10px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.agrocloud-indicator-config__panel-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 18px 16px;
+}
+
+.agrocloud-indicator-config__panel-sub {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #605e5c;
+}
+
+.agrocloud-indicator-config__panel-note {
+  margin: 0;
+  font-size: 12px;
+  color: #605e5c;
+}
+
+.agrocloud-indicator-config__section {
+  border-top: 1px solid #edebe9;
+}
+
+.agrocloud-indicator-config__section:first-child {
+  border-top: 0;
+}
+
+.agrocloud-indicator-config__section-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: #323130;
+  cursor: pointer;
+}
+
+.agrocloud-indicator-config__section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 12px;
+}
+
+.agrocloud-indicator-config__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.agrocloud-indicator-config__field-label {
+  font-size: 12px;
+  color: #323130;
+}
+
+.agrocloud-indicator-config__input,
+.agrocloud-indicator-config__select {
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid #c8c6c4;
+  border-radius: 2px;
+  background: #fff;
+  font-size: 13px;
+  color: #323130;
+}
+
+.agrocloud-indicator-config__layer-row,
+.agrocloud-indicator-config__edit-row,
+.agrocloud-indicator-config__toggle-row,
+.agrocloud-indicator-config__advanced-row,
+.agrocloud-indicator-config__icon-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.agrocloud-indicator-config__layer-value {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.agrocloud-indicator-config__change-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: #0079c1;
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.agrocloud-indicator-config__change-link:hover {
+  text-decoration: underline;
+}
+
+.agrocloud-indicator-config__outline-btn {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid #0079c1;
+  border-radius: 2px;
+  background: #fff;
+  color: #0079c1;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.agrocloud-indicator-config__outline-btn:hover {
+  background: rgba(0, 121, 193, 0.06);
+}
+
+.agrocloud-indicator-config__filter-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agrocloud-indicator-config__filter-panel {
+  padding: 12px;
+  background: #f3f2f1;
+  border: 1px solid #edebe9;
+  border-radius: 2px;
+}
+
+.agrocloud-indicator-config__filter-group + .agrocloud-indicator-config__filter-group {
+  margin-top: 10px;
+}
+
+.agrocloud-indicator-config__filter-join {
+  margin-bottom: 8px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #0079c1;
+}
+
+.agrocloud-indicator-config__filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agrocloud-indicator-config__filter-field-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 32px;
+  padding: 4px 28px 4px 8px;
+  border: 1px solid #c8c6c4;
+  border-radius: 2px;
+  background: #fff;
+  font-size: 13px;
+  color: #323130;
+}
+
+.agrocloud-indicator-config__filter-field-select.is-placeholder {
+  color: #a19f9d;
+}
+
+.agrocloud-indicator-config__filter-delete {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid #c8c6c4;
+  border-radius: 2px;
+  background: #fff;
+  color: #605e5c;
+  cursor: pointer;
+}
+
+.agrocloud-indicator-config__filter-delete:hover {
+  background: #faf9f8;
+}
+
+.agrocloud-indicator-config__filter-logic-row {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.agrocloud-indicator-config__filter-logic-btn {
+  min-width: 52px;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 1px solid #0079c1;
+  border-radius: 2px;
+  background: #fff;
+  color: #0079c1;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+
+.agrocloud-indicator-config__filter-logic-btn:hover {
+  background: rgba(0, 121, 193, 0.06);
+}
+
+.agrocloud-indicator-config__segmented {
+  display: inline-flex;
+  border: 1px solid #c8c6c4;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.agrocloud-indicator-config__segment {
+  min-width: 88px;
+  padding: 6px 12px;
+  border: 0;
+  border-right: 1px solid #c8c6c4;
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.agrocloud-indicator-config__segment:last-child {
+  border-right: 0;
+}
+
+.agrocloud-indicator-config__segment.is-active {
+  background: #0079c1;
+  color: #fff;
+}
+
+.agrocloud-indicator-config__field-select-wrap {
+  position: relative;
+}
+
+.agrocloud-indicator-config__field-key {
+  position: absolute;
+  right: 28px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #605e5c;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.agrocloud-indicator-config__toggle {
+  position: relative;
+  width: 40px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: #c8c6c4;
+  cursor: pointer;
+}
+
+.agrocloud-indicator-config__toggle.is-on {
+  background: #0079c1;
+}
+
+.agrocloud-indicator-config__toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 120ms ease;
+}
+
+.agrocloud-indicator-config__toggle.is-on .agrocloud-indicator-config__toggle-knob {
+  transform: translateX(20px);
+}
+
+.agrocloud-indicator-config__color-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agrocloud-indicator-config__color-swatch {
+  width: 18px;
+  height: 18px;
+  border: 1px solid #c8c6c4;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.agrocloud-indicator-config__edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid #c8c6c4;
+  border-radius: 2px;
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.agrocloud-indicator-config__text-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.agrocloud-indicator-config__text-input-wrap {
+  position: relative;
+}
+
+.agrocloud-indicator-config__text-input-wrap .agrocloud-indicator-config__input {
+  padding-right: 34px;
+}
+
+.agrocloud-indicator-config__var-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: #605e5c;
+  cursor: pointer;
+}
+
+.agrocloud-indicator-config__format-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agrocloud-indicator-config__format-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.agrocloud-indicator-config__format-color select {
+  width: 72px;
+  font-size: 11px;
+  border: 1px solid #c8c6c4;
+  border-radius: 2px;
+}
+
+.agrocloud-indicator-config__format-check input {
+  width: 14px;
+  height: 14px;
+}
+
+.agrocloud-indicator-config__format-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #c8c6c4;
+  border-radius: 2px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.agrocloud-indicator-config__format-btn.is-active {
+  background: #edebe9;
+}
+
+.agrocloud-indicator-config__format-size {
+  min-height: 28px;
+  padding: 0 6px;
+  border: 1px solid #c8c6c4;
+  border-radius: 2px;
+  font-size: 11px;
+}
+
+.agrocloud-indicator-config__advanced-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agrocloud-indicator-config__hint {
+  color: #605e5c;
+  font-size: 13px;
+}
+
+.agrocloud-indicator-config__preview-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #f3f2f1;
+}
+
+.agrocloud-indicator-config__preview-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 24px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.agrocloud-indicator-config__preview-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  min-height: 120px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 2px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+.agrocloud-indicator-config__preview-card.is-resizing {
+  outline: 2px solid #0079c1;
+  outline-offset: -2px;
+  z-index: 2;
+}
+
+.agrocloud-indicator-config__preview-card.has-custom-size .agrocloud-indicator-config__preview-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.agrocloud-indicator-config__preview-head {
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.agrocloud-indicator-config__preview-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 16px 12px;
+  text-align: center;
+}
+
+.agrocloud-indicator-config__preview-value {
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.agrocloud-indicator-config__preview-caption,
+.agrocloud-indicator-config__preview-updated {
+  font-size: 10px;
+  color: #605e5c;
+}
+
+.agrocloud-indicator-config__preview-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.agrocloud-indicator-config__preview-resize-grip {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid rgba(0, 121, 193, 0.85);
+  border-bottom: 2px solid rgba(0, 121, 193, 0.85);
+  pointer-events: none;
+}
+
+body.agrocloud-dashboard-element-resizing .agrocloud-indicator-config__preview-resize {
+  opacity: 1;
+}
+
+.agrocloud-indicator-config__data-table {
+  border-top: 1px solid #edebe9;
+  background: #fff;
+}
+
+.agrocloud-indicator-config__data-table-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border: 0;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.agrocloud-indicator-config__data-table-body {
+  max-height: 160px;
+  overflow: auto;
+  border-top: 1px solid #edebe9;
+}
+
+.agrocloud-indicator-config__data-table-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.agrocloud-indicator-config__data-table-body th,
+.agrocloud-indicator-config__data-table-body td {
+  padding: 6px 10px;
+  border-bottom: 1px solid #edebe9;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.agrocloud-indicator-config__data-table-body th {
+  background: #faf9f8;
+  font-weight: 600;
+}
+
+.agrocloud-indicator-config__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid #edebe9;
+}
+
+.agrocloud-indicator-config__cancel,
+.agrocloud-indicator-config__done {
+  min-width: 88px;
+  min-height: 32px;
+  padding: 0 16px;
+  border-radius: 2px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.agrocloud-indicator-config__cancel {
+  border: 1px solid #0079c1;
+  background: #fff;
+  color: #0079c1;
+}
+
+.agrocloud-indicator-config__cancel:hover {
+  background: rgba(0, 121, 193, 0.06);
+}
+
+.agrocloud-indicator-config__done {
+  border: 1px solid #0079c1;
+  background: #0079c1;
+  color: #fff;
+}
+
+.agrocloud-indicator-config__done:hover {
+  background: #006ba6;
+}

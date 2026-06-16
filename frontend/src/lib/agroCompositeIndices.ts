@@ -1,0 +1,428 @@
+/**
+ * AgroCloud composite agricultural indices derived from core interpretation layers:
+ * NDVI, NDMI, NDWI, SAVI (+ delta variants vs previous scene).
+ */
+
+import type { SentinelHubWmsLayerInfo } from './sentinelHubWmsLayers'
+import { AGRO_CHAS_EXPR } from './chasIndex'
+
+export const AGRO_CORE_INTERPRETATION_LAYER_IDS = ['NDVI', 'NDMI', 'NDWI', 'SAVI'] as const
+
+export type AgroCoreInterpretationLayerId = (typeof AGRO_CORE_INTERPRETATION_LAYER_IDS)[number]
+
+/** Full scientific names for Core Interpretation layers. */
+export const AGRO_CORE_LAYER_SCIENTIFIC_NAMES: Record<AgroCoreInterpretationLayerId, string> = {
+  NDVI: 'Normalized Difference Vegetation Index',
+  NDMI: 'Normalized Difference Moisture Index',
+  NDWI: 'Normalized Difference Water Index',
+  SAVI: 'Soil-Adjusted Vegetation Index',
+}
+
+export type AgroCompositeIndexDef = {
+  id: string
+  label: string
+  /** Full scientific / descriptive name shown beside the abbreviation in Layer select. */
+  scientificName: string
+  /** Evalscript expression using ndvi, ndmi, ndwi, savi variables. */
+  expr: string
+  /** Delta layer id (Δ prefix in UI). */
+  deltaId: string
+  deltaLabel: string
+}
+
+export type AgroCompositeCategory = {
+  id: string
+  groupLabel: string
+  indices: AgroCompositeIndexDef[]
+}
+
+/** Static composite indices grouped for Layer dropdown + Layer Live legend. */
+export const AGRO_COMPOSITE_CATEGORIES: readonly AgroCompositeCategory[] = [
+  {
+    id: 'vegetation-health',
+    groupLabel: '🌱 Vegetation Health Layer',
+    indices: [
+      {
+        id: 'VHS',
+        label: 'VHS',
+        scientificName: 'Vegetation Health Score',
+        deltaId: 'DVHS',
+        deltaLabel: 'ΔVHS',
+        expr: '(ndvi + savi) / 2',
+      },
+      {
+        id: 'VDI',
+        label: 'VDI',
+        scientificName: 'Vegetation Dryness Index',
+        deltaId: 'DVDI',
+        deltaLabel: 'ΔVDI',
+        expr: '0.7 * ndvi + 0.3 * savi',
+      },
+      {
+        id: 'CVI',
+        label: 'CVI',
+        scientificName: 'Composite Vegetation Index',
+        deltaId: 'DCVI',
+        deltaLabel: 'ΔCVI',
+        expr: '(ndvi + ndmi + savi) / 3',
+      },
+      {
+        id: 'CSI',
+        label: 'CSI',
+        scientificName: 'Crop Stress Index',
+        deltaId: 'DCSI',
+        deltaLabel: 'ΔCSI',
+        expr: '1 - ((ndvi + ndmi) / 2)',
+      },
+      {
+        id: 'WST',
+        label: 'WST',
+        scientificName: 'Water Stress Index',
+        deltaId: 'DWST',
+        deltaLabel: 'ΔWST',
+        expr: 'ndvi - ndmi',
+      },
+    ],
+  },
+  {
+    id: 'water-moisture',
+    groupLabel: '💧 Water & Moisture Layer',
+    indices: [
+      {
+        id: 'DRI',
+        label: 'DRI',
+        scientificName: 'Drought Risk Index',
+        deltaId: 'DDRI',
+        deltaLabel: 'ΔDRI',
+        expr: '1 - ((ndmi + ndwi) / 2)',
+      },
+      {
+        id: 'VMI',
+        label: 'VMI',
+        scientificName: 'Vegetation Moisture Index',
+        deltaId: 'DVMI',
+        deltaLabel: 'ΔVMI',
+        expr: '(ndmi + ndwi) / 2',
+      },
+      {
+        id: 'SMI',
+        label: 'SMI',
+        scientificName: 'Soil Moisture Index',
+        deltaId: 'DSMI',
+        deltaLabel: 'ΔSMI',
+        expr: '0.7 * ndmi + 0.3 * ndwi',
+      },
+      {
+        id: 'OIR',
+        label: 'OIR',
+        scientificName: 'Over-Irrigation Risk',
+        deltaId: 'DOIR',
+        deltaLabel: 'ΔOIR',
+        expr: 'ndwi - ndvi',
+      },
+    ],
+  },
+  {
+    id: 'irrigation-field',
+    groupLabel: '🚜 Irrigation & Field Management',
+    indices: [
+      {
+        id: 'IEI',
+        label: 'IEI',
+        scientificName: 'Irrigation Efficiency Index',
+        deltaId: 'DIEI',
+        deltaLabel: 'ΔIEI',
+        expr: 'savi === 0 ? 0 : ndmi / savi',
+      },
+      {
+        id: 'UII',
+        label: 'UII',
+        scientificName: 'Under-Irrigation Index',
+        deltaId: 'DUII',
+        deltaLabel: 'ΔUII',
+        expr: 'savi - ndmi',
+      },
+      {
+        id: 'FPR',
+        label: 'FPR',
+        scientificName: 'Field Performance Ratio',
+        deltaId: 'DFPR',
+        deltaLabel: 'ΔFPR',
+        expr: '(1 - ndvi) + (1 - ndmi)',
+      },
+      {
+        id: 'CPI',
+        label: 'CPI',
+        scientificName: 'Crop Production Index',
+        deltaId: 'DCPI',
+        deltaLabel: 'ΔCPI',
+        expr: '0.4 * ndvi + 0.3 * ndmi + 0.2 * savi + 0.1 * ndwi',
+      },
+    ],
+  },
+  {
+    id: 'growth-stability',
+    groupLabel: '🌾 Growth & Stability',
+    indices: [
+      {
+        id: 'GPI',
+        label: 'GPI',
+        scientificName: 'Growth Performance Index',
+        deltaId: 'DGPI',
+        deltaLabel: 'ΔGPI',
+        expr: '(ndvi + savi + ndmi) / 3',
+      },
+      {
+        id: 'CSI2',
+        label: 'CSI2',
+        scientificName: 'Canopy Stability Index II',
+        deltaId: 'DCSI2',
+        deltaLabel: 'ΔCSI2',
+        expr: '1 - Math.abs(ndvi - savi)',
+      },
+      {
+        id: 'CRI',
+        label: 'CRI',
+        scientificName: 'Crop Resilience Index',
+        deltaId: 'DCRI',
+        deltaLabel: 'ΔCRI',
+        expr: 'ndvi + ndmi',
+      },
+      {
+        id: 'VDG',
+        label: 'VDG',
+        scientificName: 'Vegetation Decline Gradient',
+        deltaId: 'DVDG',
+        deltaLabel: 'ΔVDG',
+        expr: '1 - ((ndvi + savi) / 2)',
+      },
+    ],
+  },
+  {
+    id: 'risk-composite',
+    groupLabel: '⚠️ Risk & Composite',
+    indices: [
+      {
+        id: 'ARI',
+        label: 'ARI',
+        scientificName: 'Agro Risk Index',
+        deltaId: 'DARI',
+        deltaLabel: 'ΔARI',
+        expr: '1 - ((ndvi + ndmi + ndwi + savi) / 4)',
+      },
+      {
+        id: 'CHS',
+        label: 'CHS',
+        scientificName: 'Composite Health Score',
+        deltaId: 'DCHS',
+        deltaLabel: 'ΔCHS',
+        expr: '(ndvi + ndmi + ndwi + savi) / 4',
+      },
+      {
+        id: 'CPS',
+        label: 'CPS',
+        scientificName: 'Crop Pressure Score',
+        deltaId: 'DCPS',
+        deltaLabel: 'ΔCPS',
+        expr: '(1 - ndvi) + (1 - ndmi)',
+      },
+    ],
+  },
+  {
+    id: 'crop',
+    groupLabel: '🌾 Crop',
+    indices: [
+      {
+        id: 'CHAS',
+        label: 'CHAS',
+        scientificName: 'Crop Health Analysis Score',
+        deltaId: 'DCHAS',
+        deltaLabel: 'ΔCHAS',
+        expr: AGRO_CHAS_EXPR,
+      },
+    ],
+  },
+] as const
+
+/** Weighted crop health score from NDVI + NDMI + Red Edge CI (production alert icon basis). */
+export { AGRO_CHAS_EXPR } from './chasIndex'
+
+const STATIC_BY_ID = new Map<string, AgroCompositeIndexDef>()
+const DELTA_BY_ID = new Map<string, AgroCompositeIndexDef>()
+const ALL_COMPOSITE_IDS = new Set<string>()
+
+for (const cat of AGRO_COMPOSITE_CATEGORIES) {
+  for (const idx of cat.indices) {
+    STATIC_BY_ID.set(idx.id.toUpperCase(), idx)
+    DELTA_BY_ID.set(idx.deltaId.toUpperCase(), idx)
+    ALL_COMPOSITE_IDS.add(idx.id.toUpperCase())
+    ALL_COMPOSITE_IDS.add(idx.deltaId.toUpperCase())
+  }
+}
+
+export const AGRO_DELTA_CATEGORIES: readonly AgroCompositeCategory[] = AGRO_COMPOSITE_CATEGORIES.map(cat => ({
+  id: `${cat.id}-delta`,
+  groupLabel: `${cat.groupLabel} (Delta)`,
+  indices: cat.indices.map(idx => ({
+    id: idx.deltaId,
+    label: idx.deltaLabel,
+    scientificName: `Change · ${idx.scientificName}`,
+    deltaId: idx.deltaId,
+    deltaLabel: idx.deltaLabel,
+    expr: idx.expr,
+  })),
+}))
+
+export function isAgroStaticCompositeLayerId(layerId: string): boolean {
+  return STATIC_BY_ID.has(String(layerId || '').trim().toUpperCase())
+}
+
+export function isAgroDeltaCompositeLayerId(layerId: string): boolean {
+  return DELTA_BY_ID.has(String(layerId || '').trim().toUpperCase())
+}
+
+export function isAgroCompositeLayerId(layerId: string): boolean {
+  const u = String(layerId || '').trim().toUpperCase()
+  return ALL_COMPOSITE_IDS.has(u)
+}
+
+export function resolveAgroCompositeIndexDef(layerId: string): AgroCompositeIndexDef | null {
+  const u = String(layerId || '').trim().toUpperCase()
+  return STATIC_BY_ID.get(u) ?? DELTA_BY_ID.get(u) ?? null
+}
+
+export function resolveAgroCompositeExpr(layerId: string, corePrefix = ''): string | null {
+  const def = resolveAgroCompositeIndexDef(layerId)
+  if (!def) return null
+  if (!corePrefix) return def.expr
+  return def.expr
+    .replace(/\bndvi\b/g, `${corePrefix}ndvi`)
+    .replace(/\bndmi\b/g, `${corePrefix}ndmi`)
+    .replace(/\bndwi\b/g, `${corePrefix}ndwi`)
+    .replace(/\bsavi\b/g, `${corePrefix}savi`)
+}
+
+/** Custom WMS layer entries injected after GetCapabilities parse. */
+export function buildAgroCloudCustomWmsLayerEntries(): SentinelHubWmsLayerInfo[] {
+  const out: SentinelHubWmsLayerInfo[] = [{ name: 'SAVI', title: 'SAVI' }]
+  const seen = new Set(out.map(l => l.name.toUpperCase()))
+  for (const id of ALL_COMPOSITE_IDS) {
+    if (seen.has(id)) continue
+    seen.add(id)
+    const def = STATIC_BY_ID.get(id) ?? DELTA_BY_ID.get(id)!
+    const label = DELTA_BY_ID.has(id) ? def.deltaLabel : def.label
+    out.push({ name: id, title: label })
+  }
+  return out
+}
+
+export type RemoteSensingLayerSelectOption = {
+  id: string
+  label: string
+  scientificName?: string
+}
+
+export type RemoteSensingLayerSelectGroup = {
+  id: string
+  label: string
+  options: RemoteSensingLayerSelectOption[]
+}
+
+/** Resolve scientific name for a layer id in the Remote Sensing dropdown. */
+export function resolveRemoteSensingLayerScientificName(layerId: string): string | undefined {
+  const u = String(layerId || '').trim().toUpperCase()
+  if (!u) return undefined
+  if (u in AGRO_CORE_LAYER_SCIENTIFIC_NAMES) {
+    return AGRO_CORE_LAYER_SCIENTIFIC_NAMES[u as AgroCoreInterpretationLayerId]
+  }
+  const composite = resolveAgroCompositeIndexDef(u)
+  if (composite) {
+    if (isAgroDeltaCompositeLayerId(u)) return `Change · ${composite.scientificName}`
+    return composite.scientificName
+  }
+  return undefined
+}
+
+export function buildRemoteSensingLayerSelectGroups(
+  capabilityLayers: Array<{ name: string; title?: string }>,
+): RemoteSensingLayerSelectGroup[] {
+  const byName = new Map<string, string>()
+  for (const layer of capabilityLayers) {
+    const id = String(layer.name || '').trim()
+    if (!id) continue
+    byName.set(id.toUpperCase(), String(layer.title || id).trim() || id)
+  }
+
+  const groups: RemoteSensingLayerSelectGroup[] = []
+
+  groups.push({
+    id: 'core',
+    label: 'Core Interpretation',
+    options: AGRO_CORE_INTERPRETATION_LAYER_IDS.map(id => ({
+      id,
+      label: id,
+      scientificName: AGRO_CORE_LAYER_SCIENTIFIC_NAMES[id],
+    })),
+  })
+
+  for (const cat of AGRO_COMPOSITE_CATEGORIES) {
+    groups.push({
+      id: cat.id,
+      label: cat.groupLabel,
+      options: cat.indices.map(idx => ({
+        id: idx.id,
+        label: idx.label,
+        scientificName: idx.scientificName,
+      })),
+    })
+  }
+
+  for (const cat of AGRO_DELTA_CATEGORIES) {
+    groups.push({
+      id: cat.id,
+      label: cat.groupLabel,
+      options: cat.indices.map(idx => ({
+        id: idx.id,
+        label: idx.label,
+        scientificName: idx.scientificName,
+      })),
+    })
+  }
+
+  const assigned = new Set<string>([
+    ...AGRO_CORE_INTERPRETATION_LAYER_IDS.map(s => s.toUpperCase()),
+    ...ALL_COMPOSITE_IDS,
+  ])
+
+  const standard = capabilityLayers
+    .map(l => {
+      const id = String(l.name || '').trim()
+      if (!id || assigned.has(id.toUpperCase())) return null
+      return { id, label: String(l.title || id).trim() || id, scientificName: undefined }
+    })
+    .filter((x): x is RemoteSensingLayerSelectOption => x != null)
+    .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
+
+  if (standard.length) {
+    groups.push({ id: 'sentinel-presets', label: 'Sentinel Hub layers', options: standard })
+  }
+
+  return groups.filter(g => g.options.length > 0)
+}
+
+/** Flat option list for Layer Live legend catalog (preserves group order). */
+export function flattenRemoteSensingLayerSelectGroups(
+  groups: RemoteSensingLayerSelectGroup[],
+): RemoteSensingLayerSelectOption[] {
+  const out: RemoteSensingLayerSelectOption[] = []
+  const seen = new Set<string>()
+  for (const group of groups) {
+    for (const opt of group.options) {
+      const key = opt.id.toUpperCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(opt)
+    }
+  }
+  return out
+}

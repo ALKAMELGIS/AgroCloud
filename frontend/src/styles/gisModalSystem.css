@@ -1,0 +1,806 @@
+/**
+ * AgroCloud GIS modal system — white surface, system green icons, dark grey text.
+ * Loaded after page-specific modal overrides (SatelliteIntelligence.css, gisGeoExplorerPanel.css).
+ */
+
+.gis-modal-overlay {
+  --gis-modal-bg: #ffffff;
+  --gis-modal-text: #475569;
+  --gis-modal-muted: #64748b;
+  --gis-modal-border: rgba(15, 23, 42, 0.1);
+  --gis-modal-green: #1b5e3c;
+  --gis-modal-green-deep: #004a36;
+  --gis-modal-green-soft: rgba(27, 94, 60, 0.12);
+  --gis-modal-green-border: rgba(27, 94, 60, 0.28);
+}
+
+.gis-modal-overlay.gis-map-add-layer-overlay,
+.gis-modal-overlay.si-add-layer-gis-overlay {
+  background: rgba(15, 23, 42, 0.35) !important;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.gis-modal.gis-modal-compact,
+.gis-modal-overlay .gis-modal.gis-modal-compact {
+  background: var(--gis-modal-bg) !important;
+  color: var(--gis-modal-text) !important;
+  border: 1px solid var(--gis-modal-border) !important;
+  border-radius: 0 !important;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.18) !important;
+}
+
+.gis-modal-overlay .gis-modal-compact-title,
+.gis-modal-overlay .gis-modal-compact-hero,
+.gis-modal-overlay .gis-modal-compact-hero-title,
+.gis-modal-overlay .gis-modal-header,
+.gis-modal-overlay .ddb-add-source-modal__head,
+.gis-modal-overlay .ddb-add-source-modal--home .gis-modal-compact-hero {
+  background: var(--gis-modal-bg) !important;
+  color: var(--gis-modal-text) !important;
+  border-bottom-color: var(--gis-modal-border) !important;
+  box-shadow: none !important;
+}
+
+.gis-modal-overlay #gis-add-layer-title,
+.gis-modal-overlay #si-layer-modal-title,
+.gis-modal-overlay .gis-modal-compact-hero-title,
+.gis-modal-overlay .gis-modal-compact-hero-lead,
+.gis-modal-overlay .gis-modal-title {
+  color: var(--gis-modal-text) !important;
+}
+
+.gis-modal-overlay .gis-modal-compact-hero-lead,
+.gis-modal-overlay .gis-content-muted {
+  color: var(--gis-modal-muted) !important;
+}
+
+.gis-modal-overlay .gis-modal-compact-tabs,
+.gis-modal-overlay .gis-modal-tabs {
+  background: var(--gis-modal-bg) !important;
+  border-bottom-color: var(--gis-modal-border) !important;
+}
+
+.gis-modal-overlay .gis-compact-tab {
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--gis-modal-muted) !important;
+  border-color: transparent !important;
+}
+
+.gis-modal-overlay .gis-compact-tab i {
+  color: var(--gis-modal-green) !important;
+}
+
+.gis-modal-overlay .gis-compact-tab:hover {
+  background: var(--gis-modal-green-soft) !important;
+  color: var(--gis-modal-text) !important;
+}
+
+.gis-modal-overlay .gis-compact-tab:hover i {
+  color: var(--gis-modal-green) !important;
+}
+
+.gis-modal-overlay .gis-compact-tab.active {
+  background: var(--gis-modal-green-soft) !important;
+  border-color: var(--gis-modal-green-border) !important;
+  color: var(--gis-modal-text) !important;
+  box-shadow: none !important;
+}
+
+.gis-modal-overlay .gis-compact-tab.active i {
+  color: var(--gis-modal-green) !important;
+}
+
+.gis-modal-overlay .gis-modal-compact .gis-modal-body,
+.gis-modal-overlay .gis-modal-body {
+  background: var(--gis-modal-bg) !important;
+  color: var(--gis-modal-text) !important;
+}
+
+.gis-modal-overlay .gis-modal-body > [role='tabpanel'],
+.gis-modal-overlay .gis-modal-compact .gis-modal-body > [role='tabpanel'] {
+  background: var(--gis-modal-bg) !important;
+  border: 1px solid var(--gis-modal-border) !important;
+  border-radius: 0 !important;
+  color: var(--gis-modal-text) !important;
+  box-shadow: none !important;
+}
+
+.gis-modal-overlay .gis-modal-footer {
+  background: var(--gis-modal-bg) !important;
+  border-top-color: var(--gis-modal-border) !important;
+}
+
+.gis-modal-overlay .gis-link-btn {
+  color: var(--gis-modal-muted) !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.gis-modal-overlay .gis-link-btn:hover {
+  color: var(--gis-modal-text) !important;
+}
+
+.gis-modal-overlay .gis-input,
+.gis-modal-overlay .gis-select,
+.gis-modal-overlay .gis-modal-compact .gis-input,
+.gis-modal-overlay .gis-modal-compact .gis-select {
+  background: var(--gis-modal-bg) !important;
+  border: 1px solid var(--gis-modal-border) !important;
+  color: var(--gis-modal-text) !important;
+  border-radius: 0 !important;
+}
+
+.gis-modal-overlay .gis-input::placeholder {
+  color: var(--gis-modal-muted) !important;
+}
+
+.gis-modal-overlay .gis-input:focus-visible,
+.gis-modal-overlay .gis-select:focus-visible {
+  border-color: var(--gis-modal-green) !important;
+  box-shadow: 0 0 0 2px var(--gis-modal-green-soft) !important;
+}
+
+.gis-modal-overlay .gis-form-label,
+.gis-modal-overlay .gis-label,
+.gis-modal-overlay .gis-discover-meta,
+.gis-modal-overlay .si-layer-field > span {
+  color: var(--gis-modal-muted) !important;
+}
+
+.gis-modal-overlay .gis-btn-outline {
+  background: var(--gis-modal-bg) !important;
+  border: 1px solid var(--gis-modal-green-border) !important;
+  color: var(--gis-modal-green) !important;
+  border-radius: 0 !important;
+}
+
+.gis-modal-overlay .gis-btn-outline i {
+  color: var(--gis-modal-green) !important;
+}
+
+.gis-modal-overlay .gis-btn-outline:hover:not(:disabled) {
+  background: var(--gis-modal-green-soft) !important;
+  border-color: var(--gis-modal-green) !important;
+  color: var(--gis-modal-green-deep) !important;
+}
+
+.gis-modal-overlay .gis-btn-primary-full {
+  background: var(--gis-modal-green) !important;
+  border-color: var(--gis-modal-green) !important;
+  color: #ffffff !important;
+  border-radius: 0 !important;
+}
+
+.gis-modal-overlay .gis-btn-primary-full:hover:not(:disabled) {
+  background: var(--gis-modal-green-deep) !important;
+  filter: none !important;
+}
+
+.gis-modal-overlay .gis-modal-icon {
+  background: var(--gis-modal-green-soft) !important;
+  border: 1px solid var(--gis-modal-green-border) !important;
+  color: var(--gis-modal-green) !important;
+  border-radius: 0 !important;
+}
+
+.gis-modal-overlay .gis-modal-compact-status {
+  color: #991b1b !important;
+  background: rgba(254, 226, 226, 0.85) !important;
+  border: 1px solid rgba(248, 113, 113, 0.35) !important;
+  border-radius: 0 !important;
+}
+
+.gis-modal-overlay .gis-discover-panel {
+  background: var(--gis-modal-bg) !important;
+  border: 1px solid var(--gis-modal-border) !important;
+  border-radius: 0 !important;
+}
+
+.gis-modal-overlay .gis-discovered-name {
+  color: var(--gis-modal-text) !important;
+}
+
+.gis-modal-overlay .gis-discovered-row {
+  border-top-color: var(--gis-modal-border) !important;
+}
+
+.gis-modal-overlay .gis-modal-compact .gis-dropzone {
+  background: var(--gis-modal-bg) !important;
+  border: 1px dashed var(--gis-modal-border) !important;
+  color: var(--gis-modal-text) !important;
+  border-radius: 0 !important;
+}
+
+.gis-modal-overlay .gis-modal-compact .gis-dropzone-icon i {
+  color: var(--gis-modal-green) !important;
+}
+
+.gis-modal-overlay .gis-modal-compact .gis-dropzone-text {
+  color: var(--gis-modal-text) !important;
+}
+
+.gis-modal-overlay .gis-modal-compact .gis-dropzone-subtext {
+  color: var(--gis-modal-muted) !important;
+}
+
+.gis-upload-cloud-sources,
+.gis-modal-overlay .gis-upload-cloud-sources {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.gis-upload-cloud-sources--four {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.gis-upload-cloud-sources__btn,
+.gis-modal-overlay .gis-upload-cloud-sources__btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 64px;
+  padding: 8px 6px;
+  border: 1px solid var(--gis-modal-border, rgba(15, 23, 42, 0.1));
+  border-radius: 6px;
+  background: #ffffff;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--gis-modal-text, #3f4654);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.gis-upload-cloud-sources__btn:hover:not(:disabled),
+.gis-modal-overlay .gis-upload-cloud-sources__btn:hover:not(:disabled) {
+  border-color: var(--gis-modal-green-border, rgba(27, 94, 60, 0.28));
+  background: var(--gis-modal-green-soft, rgba(27, 94, 60, 0.12));
+}
+
+.gis-upload-cloud-sources__btn.active,
+.gis-modal-overlay .gis-upload-cloud-sources__btn.active {
+  border-color: var(--gis-modal-green-border, rgba(27, 94, 60, 0.28));
+  background: var(--gis-modal-green-soft, rgba(27, 94, 60, 0.12));
+}
+
+.gis-upload-cloud-sources__btn:disabled,
+.gis-modal-overlay .gis-upload-cloud-sources__btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.gis-upload-cloud-sources__btn i,
+.gis-modal-overlay .gis-upload-cloud-sources__btn i {
+  font-size: 16px;
+  color: var(--gis-modal-green, #1b5e3c);
+}
+
+.gis-modal-overlay .si-add-source-modal.ddb-add-source-modal--home.gis-modal-compact::before {
+  display: none !important;
+}
+
+.gis-modal-overlay .si-add-source-option {
+  border: 1px solid var(--gis-modal-border) !important;
+  border-radius: 0 !important;
+  background: var(--gis-modal-bg) !important;
+  color: var(--gis-modal-text) !important;
+  box-shadow: none !important;
+}
+
+.gis-modal-overlay .si-add-source-option:hover {
+  border-color: var(--gis-modal-green-border) !important;
+  background: var(--gis-modal-green-soft) !important;
+  box-shadow: none !important;
+}
+
+.gis-modal-overlay .si-add-source-option.active {
+  border-color: var(--gis-modal-green) !important;
+  background: var(--gis-modal-green-soft) !important;
+  box-shadow: none !important;
+}
+
+.gis-modal-overlay .si-add-source-option-main strong {
+  color: var(--gis-modal-text) !important;
+}
+
+.gis-modal-overlay .si-add-source-option-main small {
+  color: var(--gis-modal-muted) !important;
+}
+
+.gis-modal-overlay .si-add-source-option-icon {
+  background: var(--gis-modal-green-soft) !important;
+  border: 1px solid var(--gis-modal-green-border) !important;
+  color: var(--gis-modal-green) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.gis-modal-overlay .si-add-source-option:hover .si-add-source-option-icon {
+  color: var(--gis-modal-green-deep) !important;
+  border-color: var(--gis-modal-green) !important;
+}
+
+.gis-modal-overlay .si-add-source-option-radio {
+  background: var(--gis-modal-bg) !important;
+  border-color: var(--gis-modal-muted) !important;
+}
+
+.gis-modal-overlay .si-add-source-option.active .si-add-source-option-radio {
+  border-color: var(--gis-modal-green) !important;
+}
+
+.gis-modal-overlay .si-add-source-option.active .si-add-source-option-radio::after {
+  background: var(--gis-modal-green) !important;
+  box-shadow: none !important;
+}
+
+.gis-modal-overlay .ddb-add-source-back {
+  background: var(--gis-modal-bg) !important;
+  border: 1px solid var(--gis-modal-border) !important;
+  color: var(--gis-modal-green) !important;
+  border-radius: 0 !important;
+}
+
+.gis-modal-overlay .ddb-add-source-back:hover {
+  background: var(--gis-modal-green-soft) !important;
+  border-color: var(--gis-modal-green) !important;
+  color: var(--gis-modal-green-deep) !important;
+}
+
+.gis-modal-overlay .si-add-source-gis-banner {
+  background: var(--gis-modal-green-soft) !important;
+  border: 1px solid var(--gis-modal-green-border) !important;
+  border-radius: 0 !important;
+}
+
+.gis-modal-overlay .si-add-source-gis-banner .ddb-add-source-gis-hint {
+  color: var(--gis-modal-text) !important;
+}
+
+.gis-modal-overlay .si-add-source-gis-banner .ddb-add-source-gis-hint strong {
+  color: var(--gis-modal-green) !important;
+}
+
+.gis-modal-overlay .si-upload-staged-card {
+  background: var(--gis-modal-bg) !important;
+  border: 1px solid var(--gis-modal-border) !important;
+  border-radius: 0 !important;
+}
+
+.gis-modal-overlay .si-upload-staged-name {
+  color: var(--gis-modal-text) !important;
+}
+
+.gis-modal-overlay .si-upload-staged-meta {
+  color: var(--gis-modal-muted) !important;
+}
+
+.gis-modal-overlay .si-upload-staged-clear {
+  background: var(--gis-modal-bg) !important;
+  border: 1px solid var(--gis-modal-border) !important;
+  color: var(--gis-modal-muted) !important;
+  border-radius: 0 !important;
+}
+
+.gis-modal-overlay .si-layer-advanced {
+  background: var(--gis-modal-bg) !important;
+  border: 1px solid var(--gis-modal-border) !important;
+  border-radius: 0 !important;
+}
+
+.gis-modal-overlay .si-layer-advanced summary {
+  color: var(--gis-modal-text) !important;
+}
+
+.gis-modal-overlay .si-layer-advanced small {
+  color: var(--gis-modal-muted) !important;
+}
+
+/* Symbology / style editor modal */
+.gis-modal-overlay .gis-modal.gis-modal-styles {
+  background: var(--gis-modal-bg) !important;
+  border: 1px solid var(--gis-modal-border) !important;
+  border-radius: 0 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  color: var(--gis-modal-text) !important;
+}
+
+.gis-modal-overlay .gis-modal.gis-modal-styles .gis-modal-body {
+  background: var(--gis-modal-bg) !important;
+}
+
+.gis-modal-overlay .gis-modal.gis-modal-styles .gis-modal-header {
+  background: var(--gis-modal-bg) !important;
+  border-bottom-color: var(--gis-modal-border) !important;
+}
+
+/* Add GIS Layer (tabs) — full white shell on Satellite Intelligence + GIS Map */
+.gis-modal-overlay.gis-map-add-layer-overlay {
+  z-index: 12100;
+}
+
+.gis-modal-overlay.gis-map-add-layer-overlay .gis-modal.gis-modal-compact,
+.gis-modal-overlay.gis-map-add-layer-overlay .si-add-source-modal.gis-modal.gis-modal-compact {
+  background: #ffffff !important;
+  color: var(--gis-modal-text) !important;
+  border: 1px solid var(--gis-modal-border) !important;
+  border-radius: 0 !important;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.14) !important;
+}
+
+.gis-modal-overlay.gis-map-add-layer-overlay .gis-modal-compact-title,
+.gis-modal-overlay.gis-map-add-layer-overlay #gis-add-layer-title,
+.gis-modal-overlay.gis-map-add-layer-overlay #si-layer-modal-title {
+  background: #ffffff !important;
+  color: #334155 !important;
+  border-bottom: 1px solid var(--gis-modal-border) !important;
+}
+
+.gis-modal-overlay.gis-map-add-layer-overlay .gis-modal-compact-tabs {
+  background: #ffffff !important;
+  border-bottom: 1px solid var(--gis-modal-border) !important;
+}
+
+.gis-modal-overlay.gis-map-add-layer-overlay .gis-compact-tab {
+  background: #ffffff !important;
+  color: var(--gis-modal-muted) !important;
+  border: 1px solid transparent !important;
+  box-shadow: none !important;
+}
+
+.gis-modal-overlay.gis-map-add-layer-overlay .gis-compact-tab i {
+  color: var(--gis-modal-green) !important;
+}
+
+.gis-modal-overlay.gis-map-add-layer-overlay .gis-compact-tab:hover {
+  background: var(--gis-modal-green-soft) !important;
+  border-color: var(--gis-modal-green-border) !important;
+  color: var(--gis-modal-text) !important;
+}
+
+.gis-modal-overlay.gis-map-add-layer-overlay .gis-compact-tab.active {
+  background: var(--gis-modal-green-soft) !important;
+  border-color: var(--gis-modal-green-border) !important;
+  color: #334155 !important;
+  box-shadow: none !important;
+}
+
+.gis-modal-overlay.gis-map-add-layer-overlay .gis-modal-compact .gis-modal-body,
+.gis-modal-overlay.gis-map-add-layer-overlay .gis-modal-body > [role='tabpanel'] {
+  background: #ffffff !important;
+  color: var(--gis-modal-text) !important;
+  border-color: var(--gis-modal-border) !important;
+}
+
+.gis-modal-overlay.gis-map-add-layer-overlay .gis-modal-footer {
+  background: #ffffff !important;
+  border-top: 1px solid var(--gis-modal-border) !important;
+}
+
+.gis-modal-overlay.gis-map-add-layer-overlay .gis-modal-footer .gis-link-btn {
+  color: var(--gis-modal-muted) !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.gis-modal-overlay.gis-map-add-layer-overlay .gis-modal-gis-content-hint {
+  background: #ffffff !important;
+  border: 1px solid var(--gis-modal-green-border) !important;
+  color: var(--gis-modal-text) !important;
+}
+
+.gis-modal-overlay.gis-map-add-layer-overlay .gis-modal-gis-content-hint strong {
+  color: var(--gis-modal-green) !important;
+}
+
+.gis-modal-overlay.gis-map-add-layer-overlay .gis-modal-gis-content-empty,
+.gis-modal-overlay.gis-map-add-layer-overlay .gis-modal-gis-content-loading {
+  color: var(--gis-modal-text) !important;
+}
+
+.gis-modal-overlay.gis-map-add-layer-overlay .gis-modal-gis-content-empty i {
+  color: var(--gis-modal-green) !important;
+}
+
+.gis-modal-overlay.gis-map-add-layer-overlay .gis-modal-gis-content-name {
+  color: #334155 !important;
+}
+
+.gis-modal-overlay.gis-map-add-layer-overlay .gis-modal-gis-content-row {
+  background: #ffffff !important;
+  border-color: var(--gis-modal-border) !important;
+}
+
+/* —— Get data (Add GIS Layer › Database tab) —— */
+.si-get-data-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+}
+
+.si-get-data-hero {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 2px 2px 14px;
+  border-bottom: 1px solid var(--gis-modal-border);
+}
+
+.si-get-data-hero-icon {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: var(--gis-modal-green-soft);
+  border: 1px solid var(--gis-modal-green-border);
+  color: var(--gis-modal-green);
+  font-size: 18px;
+}
+
+.si-get-data-hero-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.si-get-data-hero-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #334155;
+}
+
+.si-get-data-hero-sub {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.45;
+  color: var(--gis-modal-muted);
+}
+
+.si-get-data-scroll {
+  max-height: min(52vh, 440px);
+  overflow-y: auto;
+  padding-right: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.si-get-data-section-label {
+  margin: 0 0 8px;
+  padding: 0 2px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--gis-modal-muted);
+}
+
+.si-get-data-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.si-get-data-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 1);
+  background: rgba(255, 255, 255, 0.98);
+  color: var(--gis-modal-text);
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.12s ease;
+}
+
+.si-get-data-row:hover {
+  border-color: var(--gis-modal-green-border);
+  background: var(--gis-modal-green-soft);
+  box-shadow: 0 4px 14px rgba(27, 94, 60, 0.08);
+  transform: translateY(-1px);
+}
+
+.si-get-data-row-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--gis-modal-green-soft);
+  border: 1px solid var(--gis-modal-green-border);
+  color: var(--gis-modal-green);
+  font-size: 16px;
+}
+
+.si-get-data-row-icon--excel {
+  background: rgba(220, 252, 231, 0.95);
+  border-color: rgba(34, 197, 94, 0.22);
+  color: #15803d;
+}
+
+.si-get-data-row-icon--csv {
+  background: rgba(236, 253, 245, 0.95);
+  border-color: rgba(16, 185, 129, 0.22);
+  color: #047857;
+}
+
+.si-get-data-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.si-get-data-row-title {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  color: #334155;
+  line-height: 1.25;
+}
+
+.si-get-data-row-desc {
+  display: block;
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.45;
+  color: var(--gis-modal-muted);
+}
+
+.si-get-data-row-chevron {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--gis-modal-green);
+  opacity: 0.45;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.si-get-data-row:hover .si-get-data-row-chevron {
+  opacity: 1;
+  transform: translateX(2px);
+}
+
+.si-get-data-footer {
+  padding-top: 8px;
+  border-top: 1px solid var(--gis-modal-border);
+}
+
+.si-get-data-more-btn {
+  background: transparent;
+  border: none;
+  padding: 6px 2px;
+  color: var(--gis-modal-green);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+
+.si-get-data-more-btn:hover {
+  color: var(--gis-modal-green-deep);
+}
+
+.si-get-data-more-hint {
+  font-weight: 550;
+  color: var(--gis-modal-muted);
+  font-size: 12px;
+}
+
+.si-get-data-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--gis-modal-border);
+  background: #ffffff;
+  color: var(--gis-modal-green);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.si-get-data-back:hover {
+  border-color: var(--gis-modal-green-border);
+  background: var(--gis-modal-green-soft);
+}
+
+.si-get-data-sql-lead {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--gis-modal-muted);
+}
+
+.si-add-layer-gis-overlay:not(.gis-map-add-layer-overlay) .si-get-data-hero {
+  border-bottom-color: rgba(148, 163, 184, 0.14);
+}
+
+.si-add-layer-gis-overlay:not(.gis-map-add-layer-overlay) .si-get-data-hero-icon {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(129, 140, 248, 0.35);
+  color: #c7d2fe;
+}
+
+.si-add-layer-gis-overlay:not(.gis-map-add-layer-overlay) .si-get-data-hero-title {
+  color: #f8fafc;
+}
+
+.si-add-layer-gis-overlay:not(.gis-map-add-layer-overlay) .si-get-data-hero-sub,
+.si-add-layer-gis-overlay:not(.gis-map-add-layer-overlay) .si-get-data-section-label,
+.si-add-layer-gis-overlay:not(.gis-map-add-layer-overlay) .si-get-data-sql-lead {
+  color: #94a3b8;
+}
+
+.si-add-layer-gis-overlay:not(.gis-map-add-layer-overlay) .si-get-data-row {
+  border-color: rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.4);
+  color: #e2e8f0;
+}
+
+.si-add-layer-gis-overlay:not(.gis-map-add-layer-overlay) .si-get-data-row:hover {
+  border-color: rgba(129, 140, 248, 0.45);
+  background: rgba(30, 27, 75, 0.45);
+  box-shadow: none;
+}
+
+.si-add-layer-gis-overlay:not(.gis-map-add-layer-overlay) .si-get-data-row-title {
+  color: #f1f5f9;
+}
+
+.si-add-layer-gis-overlay:not(.gis-map-add-layer-overlay) .si-get-data-row-desc {
+  color: #94a3b8;
+}
+
+.si-add-layer-gis-overlay:not(.gis-map-add-layer-overlay) .si-get-data-row-icon {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(129, 140, 248, 0.28);
+  color: #c7d2fe;
+}
+
+.si-add-layer-gis-overlay:not(.gis-map-add-layer-overlay) .si-get-data-row-chevron {
+  color: #a5b4fc;
+}
+
+.si-add-layer-gis-overlay:not(.gis-map-add-layer-overlay) .si-get-data-footer {
+  border-top-color: rgba(148, 163, 184, 0.12);
+}
+
+.si-add-layer-gis-overlay:not(.gis-map-add-layer-overlay) .si-get-data-more-btn {
+  color: #a5b4fc;
+}
+
+.si-add-layer-gis-overlay:not(.gis-map-add-layer-overlay) .si-get-data-back {
+  background: rgba(15, 23, 42, 0.55);
+  border-color: rgba(148, 163, 184, 0.28);
+  color: #a5b4fc;
+}

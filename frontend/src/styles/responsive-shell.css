@@ -1,0 +1,62 @@
+/**
+ * Mobile-first responsive shell (Tailwind-aligned breakpoints: sm/md/lg/xl/2xl; +3xl in tailwind.config.js).
+ * Works with existing CSS variables — no Tailwind preflight.
+ * Optional: `npm i framer-motion` for motion primitives; shell animation uses CSS + prefers-reduced-motion.
+ */
+
+html {
+  overflow-x: clip;
+}
+
+body {
+  overflow-x: clip;
+}
+
+/* WCAG-aligned minimum touch target helper */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Flex/grid children that host Mapbox / Leaflet must shrink (prevents horizontal bleed) */
+.mapboxgl-map,
+.leaflet-container,
+.responsive-map-host {
+  min-width: 0;
+}
+
+/* Content mount: subtle entrance; disabled when user prefers reduced motion (global rule already zeroes animations) */
+@media (prefers-reduced-motion: no-preference) {
+  .app-layout > .content {
+    animation: app-shell-content-enter 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@keyframes app-shell-content-enter {
+  from {
+    opacity: 0.96;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Large / ultra-wide: keep readable line length on generic pages (not map full-bleed shells) */
+@media (min-width: 1920px) {
+  .page:not(.page-tight):not(.home-page) {
+    max-width: min(1760px, 100%);
+  }
+}
+
+/* Installed PWA (standalone): respect notch / home indicator without changing desktop layout */
+@media (display-mode: standalone) {
+  .agri-header {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .app-layout > .content {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}

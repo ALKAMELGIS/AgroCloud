@@ -1,0 +1,186 @@
+/**
+ * Home hub — glass cards, depth, dark mode (scoped under .home-hub).
+ */
+.home-hub {
+  --hh-pad: var(--ds-layout-page-pad, clamp(16px, 2.2vw, 28px));
+  --hh-radius: 1.25rem;
+  --hh-line: hsl(var(--border) / 0.55);
+}
+
+.home-hub__shell {
+  min-height: min(100vh, 100dvh);
+  padding: var(--hh-pad);
+  padding-bottom: max(var(--hh-pad), env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
+
+.home-hub__header {
+  max-width: 72rem;
+  margin: 0 auto 1.75rem;
+}
+
+.home-hub__title {
+  margin: 0 0 0.35rem;
+  font-size: clamp(1.35rem, 2.5vw, 1.75rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: hsl(var(--foreground));
+}
+
+.home-hub__subtitle {
+  margin: 0;
+  font-size: 0.9rem;
+  color: hsl(var(--muted-foreground));
+  max-width: 42rem;
+  line-height: 1.5;
+}
+
+.home-hub__grid {
+  max-width: 72rem;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 11.5rem), 1fr));
+  gap: clamp(0.75rem, 2vw, 1.25rem);
+}
+
+@media (min-width: 640px) {
+  .home-hub__grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+html[data-theme='light'] .home-hub__card {
+  background: rgba(255, 255, 255, 0.62);
+  border-color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(18px) saturate(1.06);
+  -webkit-backdrop-filter: blur(18px) saturate(1.06);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 1) inset,
+    0 12px 36px rgba(15, 23, 42, 0.06);
+}
+
+html[data-theme='light'] .home-hub__icon-wrap {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.home-hub__card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.65rem;
+  padding: 1.25rem 0.9rem 1.1rem;
+  border-radius: var(--hh-radius);
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid var(--hh-line);
+  background: hsl(var(--card) / 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow:
+    0 1px 0 hsl(0 0% 100% / 0.06) inset,
+    0 12px 40px hsl(15 23 42 / 0.06);
+  transition:
+    transform 0.22s var(--ds-ease-out, cubic-bezier(0.22, 1, 0.36, 1)),
+    box-shadow 0.22s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.home-hub__card:hover {
+  transform: translateY(-3px);
+  border-color: hsl(var(--primary) / 0.35);
+  box-shadow:
+    0 1px 0 hsl(0 0% 100% / 0.08) inset,
+    0 20px 50px hsl(15 23 42 / 0.12);
+}
+
+.home-hub__card:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
+}
+
+.home-hub__card--active {
+  border-color: hsl(var(--primary) / 0.55);
+  box-shadow:
+    0 0 0 1px hsl(var(--primary) / 0.2),
+    0 16px 48px hsl(var(--primary) / 0.12);
+}
+
+html[data-theme='dark'] .home-hub__card {
+  background: transparent;
+  border-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+
+html[data-theme='dark'] .home-hub__card:hover {
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-theme='dark'] .home-hub__icon-wrap {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+html[data-theme='dark'] .home-hub__title,
+html[data-theme='dark'] .home-hub__card-label {
+  color: #ffffff;
+}
+
+html[data-theme='dark'] .home-hub__subtitle {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.home-hub__icon-wrap {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  background: hsl(var(--muted) / 0.45);
+  border: 1px solid hsl(var(--border) / 0.4);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.home-hub__card:hover .home-hub__icon-wrap {
+  transform: scale(1.06);
+}
+
+.home-hub__card-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: hsl(var(--foreground));
+}
+
+.home-hub__badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: hsl(var(--muted) / 0.85);
+  color: hsl(var(--muted-foreground));
+  border: 1px solid hsl(var(--border) / 0.35);
+}
+
+.home-hub__badge--open {
+  background: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
+  border-color: hsl(var(--primary) / 0.25);
+}
+
+html[data-theme='dark'] .home-hub__badge--open {
+  background: hsl(var(--primary) / 0.18);
+  color: hsl(142 76% 73%);
+  border-color: hsl(var(--primary) / 0.35);
+}

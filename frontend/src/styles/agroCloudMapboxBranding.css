@@ -1,0 +1,50 @@
+/* Replace Mapbox wordmark with AgroCloud branding (logo control). */
+
+a.mapboxgl-ctrl-logo.agrocloud-mapbox-logo,
+.mapboxgl-ctrl-logo.agrocloud-mapbox-logo {
+  background-image: none !important;
+  width: auto !important;
+  min-width: 0 !important;
+  height: 23px !important;
+  padding: 0 2px 0 0 !important;
+  margin: 0 0 0 10px !important;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none !important;
+  cursor: default;
+  overflow: visible;
+}
+
+a.mapboxgl-ctrl-logo.agrocloud-mapbox-logo::before,
+.mapboxgl-ctrl-logo.agrocloud-mapbox-logo::before {
+  content: '';
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  background: var(--agrocloud-map-logo-mark, none) center / contain no-repeat;
+  filter: brightness(0) invert(1) drop-shadow(0 0 1px rgba(0, 0, 0, 0.85)) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
+}
+
+a.mapboxgl-ctrl-logo.agrocloud-mapbox-logo::after,
+.mapboxgl-ctrl-logo.agrocloud-mapbox-logo::after {
+  content: 'AgroCloud';
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  color: #ffffff;
+  text-shadow:
+    0 0 2px rgba(0, 0, 0, 0.9),
+    0 1px 3px rgba(0, 0, 0, 0.75);
+  white-space: nowrap;
+}
+
+/* Hide Esri/Mapbox "Tiles" attribution chip — branding control remains. */
+.mapboxgl-ctrl-attrib,
+.mapboxgl-ctrl-attrib-button {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}

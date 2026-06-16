@@ -1,0 +1,462 @@
+/* Floating Geo AI — bottom-left default; drag uses translate(x,y) from JS */
+
+.si-geo-ai-float {
+  position: absolute;
+  z-index: 132;
+  will-change: transform;
+  inset-inline-start: 20px;
+  inset-inline-end: auto;
+  bottom: max(148px, env(safe-area-inset-bottom, 0px) + 120px);
+  top: auto;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: calc(100vw - 32px);
+}
+
+.si-geo-ai-float--dragging {
+  pointer-events: auto;
+}
+
+.si-geo-ai-float--resizing {
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.si-geo-ai-float-inner {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.45));
+}
+
+.si-geo-ai-float-fab {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.92), rgba(17, 17, 38, 0.88));
+  backdrop-filter: blur(12px);
+  color: #a7f3d0;
+  cursor: grab;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.si-geo-ai-float-fab:hover {
+  border-color: rgba(52, 211, 153, 0.45);
+  transform: scale(1.04);
+}
+
+.si-geo-ai-float-fab:active {
+  cursor: grabbing;
+}
+
+.si-geo-ai-float-fab-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 24px;
+}
+
+.si-geo-ai-float-fab-mark-back {
+  position: absolute;
+  left: 1px;
+  top: 3px;
+  font-size: 17px;
+  opacity: 0.42;
+  color: #5eead4;
+  transform: translate(-4px, 3px) scale(0.94);
+  pointer-events: none;
+}
+
+.si-geo-ai-float-fab-mark-front {
+  position: relative;
+  font-size: 20px;
+  opacity: 0.98;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.35));
+  pointer-events: none;
+}
+
+.si-geo-ai-float-fab-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.si-geo-ai-float-panel {
+  position: relative;
+  width: min(400px, calc(100vw - 28px));
+  max-height: min(72vh, 640px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: linear-gradient(165deg, rgba(15, 23, 42, 0.94), rgba(8, 10, 22, 0.92));
+  backdrop-filter: blur(14px);
+  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  animation: si-geo-ai-float-in 0.28s ease;
+}
+
+/* User-controlled size (inline width/height from JS) */
+.si-geo-ai-float-panel--sized {
+  max-height: none;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+@keyframes si-geo-ai-float-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.si-geo-ai-float-panel--dragging {
+  animation: none;
+}
+
+.si-geo-ai-float-panel--resizing {
+  animation: none;
+}
+
+/* Minimal resize affordances — large hit targets, light visuals (touch-friendly) */
+.si-geo-ai-float-resize-handle {
+  position: absolute;
+  z-index: 24;
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  touch-action: none;
+  opacity: 0.22;
+  transition: opacity 0.14s ease, background 0.14s ease;
+}
+
+.si-geo-ai-float-panel:hover .si-geo-ai-float-resize-handle,
+.si-geo-ai-float-panel:focus-within .si-geo-ai-float-resize-handle,
+.si-geo-ai-float-panel--resizing .si-geo-ai-float-resize-handle {
+  opacity: 0.55;
+}
+
+.si-geo-ai-float-resize-handle:hover,
+.si-geo-ai-float-resize-handle:focus-visible {
+  opacity: 0.95 !important;
+  background: rgba(129, 140, 248, 0.12);
+  outline: none;
+}
+
+.si-geo-ai-float-resize-handle:focus-visible {
+  box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.45);
+}
+
+.si-geo-ai-float-resize-handle--n {
+  top: 0;
+  left: 22px;
+  right: 22px;
+  height: 10px;
+  cursor: ns-resize;
+}
+
+.si-geo-ai-float-resize-handle--s {
+  bottom: 0;
+  left: 22px;
+  right: 22px;
+  height: 10px;
+  cursor: ns-resize;
+}
+
+.si-geo-ai-float-resize-handle--e {
+  top: 46px;
+  right: 0;
+  bottom: 12px;
+  width: 12px;
+  cursor: ew-resize;
+}
+
+.si-geo-ai-float-resize-handle--w {
+  top: 46px;
+  left: 0;
+  bottom: 12px;
+  width: 12px;
+  cursor: ew-resize;
+}
+
+.si-geo-ai-float-resize-handle--nw {
+  top: 0;
+  left: 0;
+  width: 22px;
+  height: 22px;
+  cursor: nwse-resize;
+  border-radius: 14px 0 6px 0;
+}
+
+.si-geo-ai-float-resize-handle--ne {
+  top: 0;
+  right: 0;
+  width: 22px;
+  height: 22px;
+  cursor: nesw-resize;
+  border-radius: 0 14px 0 6px;
+}
+
+.si-geo-ai-float-resize-handle--sw {
+  bottom: 0;
+  left: 0;
+  width: 22px;
+  height: 22px;
+  cursor: nesw-resize;
+  border-radius: 0 6px 0 14px;
+}
+
+.si-geo-ai-float-resize-handle--se {
+  bottom: 0;
+  right: 0;
+  width: 22px;
+  height: 22px;
+  cursor: nwse-resize;
+  border-radius: 0 0 14px 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .si-geo-ai-float-resize-handle {
+    transition: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .si-geo-ai-float-resize-handle--e,
+  .si-geo-ai-float-resize-handle--w {
+    width: 16px;
+  }
+
+  .si-geo-ai-float-resize-handle--n,
+  .si-geo-ai-float-resize-handle--s {
+    height: 14px;
+  }
+
+  .si-geo-ai-float-resize-handle--nw,
+  .si-geo-ai-float-resize-handle--ne,
+  .si-geo-ai-float-resize-handle--sw,
+  .si-geo-ai-float-resize-handle--se {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+.si-geo-ai-float-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.si-geo-ai-float-head:active {
+  cursor: grabbing;
+}
+
+.si-geo-ai-float-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.si-geo-ai-float-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #f8fafc;
+  letter-spacing: -0.02em;
+}
+
+.si-geo-ai-float-sub {
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.95);
+}
+
+.si-geo-ai-float-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.si-geo-ai-float-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(2, 6, 23, 0.35);
+  color: #cbd5e1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.si-geo-ai-float-icon-btn:hover {
+  background: rgba(52, 211, 153, 0.12);
+  border-color: rgba(52, 211, 153, 0.35);
+  color: #ecfdf5;
+}
+
+.si-geo-ai-float-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 10px 12px;
+  display: flex;
+  flex-direction: column;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+}
+
+.si-geo-ai-float-body .si-geo-explorer-root.si-geo-explorer-root--unified {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.si-geo-ai-float-body .si-env-section-card.si-geo-explorer {
+  display: flex !important;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.si-geo-ai-float-body .si-geo-explorer-root--unified .si-geo-explorer {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  gap: 8px;
+}
+
+.si-geo-ai-float-body .si-geo-ai-model-tabs {
+  flex-shrink: 0;
+}
+
+.si-geo-ai-float-body .si-geo-explorer-messages {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.si-geo-ai-float-body .si-geo-explorer-row--model:has(.si-geo-explorer-dyn-table) {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.si-geo-ai-float-body .si-geo-explorer-row--model:has(.si-geo-explorer-dyn-table) .si-geo-explorer-bubble {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.si-geo-ai-float-body .si-geo-explorer-msg-stack:has(.si-geo-explorer-dyn-table) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.si-geo-ai-float-body .si-geo-explorer-msg-segment--media:has(.si-geo-explorer-dyn-table) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.si-geo-ai-float-body .si-geo-explorer-dyn-table {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.si-geo-ai-float-body .si-geo-explorer-dyn-table-toolbar,
+.si-geo-ai-float-body .si-geo-explorer-dyn-table-query-row,
+.si-geo-ai-float-body .si-geo-explorer-dyn-table-controls,
+.si-geo-ai-float-body .si-geo-explorer-dyn-table-chart,
+.si-geo-ai-float-body .si-geo-explorer-dyn-table-foot,
+.si-geo-ai-float-body .si-geo-explorer-dyn-table-pagination {
+  flex-shrink: 0;
+}
+
+.si-geo-ai-float-body .si-geo-explorer-dyn-table-scroll {
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.si-geo-ai-float-body .si-geo-explorer-composer-surface,
+.si-geo-ai-float-body .si-geo-explorer-error-row,
+.si-geo-ai-float-body .si-geo-explorer-pending-img,
+.si-geo-ai-float-body .si-geo-explorer-footnote {
+  flex-shrink: 0;
+}
+
+/* Flatten inner explorer chrome inside floating shell */
+.si-geo-ai-float-body .si-geo-explorer-root--unified {
+  min-height: 0;
+}
+
+.si-geo-ai-float-body .si-env-section-card.si-geo-explorer {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  gap: 10px;
+}
+
+.si-geo-ai-float-body .si-geo-explorer-header {
+  display: none !important;
+}
+
+@media (max-width: 520px) {
+  .si-geo-ai-float {
+    inset-inline-start: 12px;
+    bottom: max(160px, env(safe-area-inset-bottom, 0px) + 112px);
+  }
+
+  .si-geo-ai-float-panel--sized {
+    max-width: calc(100vw - 16px);
+  }
+}

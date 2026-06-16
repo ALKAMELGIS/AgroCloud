@@ -1,0 +1,527 @@
+/**
+ * Agro Cloud — App shell & design system layer (2026)
+ * Loaded after index.css. Uses existing --ds-* tokens; extends layout, motion, glass, toast, KPI.
+ */
+
+:root {
+  /* App shell gutters: 16–24px fluid (no edge-bleed; consistent with forms) */
+  --content-pad: clamp(16px, 2.2vw, 24px);
+  --page-stack-gap: clamp(12px, 1.8vw, 20px);
+  --app-radius-xl: 20px;
+  --app-radius-2xl: 24px;
+  --app-transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --app-transition-smooth: 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  --header-gradient-end: #0f3f2f;
+  --app-content-mesh: radial-gradient(1200px 600px at 10% -10%, rgba(4, 120, 87, 0.08), transparent 50%),
+    radial-gradient(900px 480px at 90% 0%, rgba(14, 165, 233, 0.06), transparent 45%),
+    radial-gradient(600px 400px at 50% 100%, rgba(168, 85, 247, 0.05), transparent 50%);
+}
+
+html[data-theme='light'] {
+  --app-content-mesh: radial-gradient(1200px 600px at 8% -8%, rgba(4, 120, 87, 0.04), transparent 52%),
+    radial-gradient(900px 480px at 92% 2%, rgba(14, 165, 233, 0.03), transparent 48%),
+    radial-gradient(700px 420px at 50% 100%, rgba(148, 163, 184, 0.04), transparent 55%);
+}
+
+html[data-theme='dark'] {
+  --header-gradient-end: #0a0a0a;
+  --app-content-mesh: none;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .ds-modal-overlay,
+  .ds-modal,
+  .ds-toast-host {
+    animation: none !important;
+  }
+}
+
+/* Main content: neutral by default (no mesh). */
+.app-layout {
+  min-width: 0;
+}
+
+.app-layout > .content {
+  background-color: var(--ds-color-bg);
+  background-image: none;
+  background-attachment: scroll;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  scroll-padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+}
+
+html[data-theme='light'] .app-layout > .content,
+html[data-theme='dark'] .app-layout > .content {
+  background-color: var(--ds-color-bg);
+  background-image: var(--app-content-mesh);
+  background-attachment: fixed;
+}
+
+.app-layout > .content.content--home-landing {
+  background-color: var(--ds-color-bg);
+  background-image: var(--app-content-mesh);
+  background-attachment: fixed;
+}
+
+/* Preserve legacy tinted mesh only on Agro Cloud Dashboard */
+.app-layout > .content.content--agro-cloud-dashboard {
+  background-color: var(--ds-color-bg-dashboard, #eef7f1);
+  background-image: var(--app-content-mesh);
+  background-attachment: fixed;
+}
+
+html[data-theme='dark'] .app-layout > .content.content--agro-cloud-dashboard {
+  background-color: var(--ds-color-bg);
+}
+
+/* Develop Dashboard (/dashboard/develop): full-bleed toolkit shell */
+.app-layout > .content.content--develop-dashboard {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.app-layout > .content.content--develop-dashboard .page.page-tight {
+  padding: 0;
+  gap: 0;
+  margin: 0;
+  max-width: none;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.app-layout > .content.content--develop-dashboard .page.agrocloud-dashboard-editor {
+  flex-direction: row;
+}
+
+.app-layout > .content.content--develop-dashboard .page.agrocloud-dashboard-builder {
+  flex-direction: column;
+}
+
+/* Full-width page canvas (no side gutters from max-width) */
+.app-layout > .content .page {
+  padding: var(--content-pad);
+  box-sizing: border-box;
+  max-width: none;
+  width: 100%;
+  min-width: 0;
+  margin-inline: 0;
+}
+
+/* Responsive shell — gutters stay within ~16–24px on tablet+ */
+@media (max-width: 767px) {
+  :root {
+    --content-pad: clamp(12px, 4vw, 18px);
+    --page-stack-gap: clamp(10px, 3vw, 16px);
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  :root {
+    --content-pad: clamp(16px, 2.4vw, 22px);
+  }
+}
+
+@media (min-width: 1440px) {
+  :root {
+    --content-pad: clamp(18px, 1.8vw, 24px);
+  }
+}
+
+@media (min-width: 1920px) {
+  :root {
+    --content-pad: clamp(18px, 1.5vw, 24px);
+  }
+}
+
+/* Elevated surfaces (glass + soft neumorphic lift) */
+.ds-surface {
+  background: color-mix(in srgb, var(--ds-color-surface) 88%, transparent);
+  backdrop-filter: blur(16px) saturate(1.15);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: var(--ds-shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  transition:
+    box-shadow var(--app-transition-smooth),
+    transform var(--app-transition-fast),
+    border-color var(--app-transition-fast);
+}
+
+html[data-theme='dark'] .ds-surface {
+  box-shadow: var(--ds-shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.ds-surface:hover {
+  box-shadow: var(--ds-shadow-md);
+}
+
+/* KPI grid (dashboard) */
+.ds-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: clamp(14px, 2vw, 20px);
+  margin-bottom: var(--ds-space-6);
+}
+
+.ds-kpi-card {
+  position: relative;
+  overflow: hidden;
+  padding: var(--ds-space-5);
+  border-radius: var(--app-radius-xl);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--ds-color-surface) 94%, transparent), var(--ds-color-surface));
+  border: 1px solid var(--ds-color-border);
+  box-shadow: var(--ds-shadow-sm);
+  transition:
+    transform var(--app-transition-fast),
+    box-shadow var(--app-transition-smooth);
+}
+
+.ds-kpi-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.35;
+  background: radial-gradient(420px 120px at 100% 0%, var(--ds-color-primary-soft), transparent 70%);
+  pointer-events: none;
+}
+
+.ds-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--ds-shadow-md);
+}
+
+.ds-kpi-label {
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ds-color-text-muted);
+  margin-bottom: 6px;
+}
+
+.ds-kpi-value {
+  font-size: clamp(1.35rem, 2.5vw, 1.85rem);
+  font-weight: var(--ds-weight-black);
+  letter-spacing: -0.03em;
+  color: var(--ds-color-text);
+  line-height: var(--ds-leading-tight);
+}
+
+.ds-kpi-meta {
+  margin-top: 8px;
+  font-size: var(--ds-text-xs);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ds-color-text-muted);
+}
+
+.ds-kpi-trend-up {
+  color: var(--ds-color-primary);
+  font-weight: var(--ds-weight-semibold);
+}
+
+.ds-kpi-trend-down {
+  color: var(--ds-color-danger);
+  font-weight: var(--ds-weight-semibold);
+}
+
+/* Dashboard chart shell */
+.ds-chart-shell {
+  border-radius: var(--app-radius-xl);
+  padding: var(--ds-space-5);
+  background: var(--ds-color-surface);
+  border: 1px solid var(--ds-color-border);
+  box-shadow: var(--ds-shadow-sm);
+  margin-bottom: var(--ds-space-6);
+  min-height: 280px;
+}
+
+.ds-chart-shell h2 {
+  margin: 0 0 var(--ds-space-4);
+  font-size: var(--ds-text-lg);
+  font-weight: var(--ds-weight-bold);
+  color: var(--ds-color-text);
+  letter-spacing: -0.02em;
+}
+
+.ds-chart-inner {
+  position: relative;
+  height: min(320px, 42vh);
+}
+
+/* Skeleton */
+@keyframes ds-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.ds-skeleton {
+  border-radius: var(--ds-radius-md);
+  background: linear-gradient(
+    110deg,
+    color-mix(in srgb, var(--ds-color-surface-2) 70%, transparent) 8%,
+    color-mix(in srgb, var(--ds-color-text) 8%, var(--ds-color-surface)) 18%,
+    color-mix(in srgb, var(--ds-color-surface-2) 70%, transparent) 33%
+  );
+  background-size: 200% 100%;
+  animation: ds-shimmer 1.35s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-skeleton {
+    animation: none;
+    background: var(--ds-color-surface-2);
+  }
+}
+
+/* Toast (global settings toast inherits) */
+.ds-toast-host {
+  position: fixed;
+  bottom: max(24px, env(safe-area-inset-bottom, 0px));
+  inset-inline-end: max(24px, env(safe-area-inset-end, 0px));
+  z-index: 99999;
+  max-width: min(400px, calc(100vw - 32px));
+  animation: ds-toast-in 0.38s var(--app-transition-smooth) both;
+}
+
+/* System Settings: footer save/cancel/reset sits bottom-end of content — lift toast so it does not overlap */
+.ds-toast-host--system-settings {
+  bottom: max(100px, calc(72px + env(safe-area-inset-bottom, 0px)));
+}
+
+@keyframes ds-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.system-settings-toast.ds-toast {
+  margin: 0;
+  padding: 14px 20px;
+  border-radius: var(--app-radius-xl);
+  font-weight: var(--ds-weight-medium);
+  border: 1px solid var(--ds-color-border);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.system-settings-toast-success.ds-toast {
+  background: color-mix(in srgb, var(--ds-color-primary-soft) 92%, var(--ds-color-surface));
+  border-color: color-mix(in srgb, var(--ds-color-primary) 28%, transparent);
+}
+
+.system-settings-toast-error.ds-toast {
+  background: color-mix(in srgb, rgba(220, 38, 38, 0.14) 85%, var(--ds-color-surface));
+  border-color: color-mix(in srgb, var(--ds-color-danger) 35%, transparent);
+}
+
+/* Tables / forms polish hooks */
+.ds-focus:focus-visible {
+  outline: none;
+  box-shadow: var(--ds-focus-ring);
+}
+
+.card.ds-lift {
+  transition:
+    transform var(--app-transition-fast),
+    box-shadow var(--app-transition-smooth);
+}
+
+.card.ds-lift:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--ds-shadow-md);
+}
+
+/* Sidebar: deeper glass in dark mode */
+html[data-theme='dark'] nav.navmenu {
+  background: color-mix(in srgb, var(--ds-color-surface) 88%, transparent);
+  border-right-color: var(--ds-color-border-strong);
+}
+
+html[data-theme='dark'] .nav-collapse-toggle {
+  background: rgba(30, 41, 59, 0.65);
+  border-color: var(--ds-color-border);
+}
+
+/* Modals — entrance + glassy overlay */
+@keyframes ds-modal-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ds-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.ds-modal-overlay {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: ds-modal-overlay-in 0.22s ease both;
+}
+
+.ds-modal {
+  border-radius: var(--app-radius-xl) !important;
+  animation: ds-modal-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  box-shadow: var(--ds-shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.5) !important;
+}
+
+html[data-theme='dark'] .ds-modal {
+  box-shadow: var(--ds-shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Top-level cards in app shell: subtle lift on hover */
+.app-layout .page > .card {
+  transition:
+    box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.2s ease;
+}
+.app-layout .page > .card:hover {
+  box-shadow: var(--ds-shadow-md);
+}
+
+/* Global square back control: light surface + dark chevron (all routes, incl. Users admin). */
+.back-btn,
+.app-back-icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+  color: rgba(15, 23, 42, 0.88);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 15px;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+}
+
+.back-btn:hover,
+.app-back-icon-btn:hover {
+  background: #f8fafc;
+  color: #0f172a;
+  border-color: rgba(37, 99, 235, 0.35);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+  transform: translateX(-3px) translateY(-1px);
+}
+
+.back-btn:focus,
+.app-back-icon-btn:focus {
+  outline: none;
+}
+
+.back-btn:focus-visible,
+.app-back-icon-btn:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.55);
+  outline-offset: 2px;
+}
+
+html[data-theme='dark'] .back-btn,
+html[data-theme='dark'] .app-back-icon-btn {
+  background: #ffffff;
+  color: #0f172a;
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+}
+
+html[data-theme='dark'] .back-btn:hover,
+html[data-theme='dark'] .app-back-icon-btn:hover {
+  background: #f1f5f9;
+  color: #020617;
+  border-color: rgba(96, 165, 250, 0.55);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
+}
+
+@media (max-width: 640px) {
+  .back-btn,
+  .app-back-icon-btn {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* Operations (/data/*): Fit layout — wide readable column (uses horizontal space without full-bleed stretch). */
+.content--operations-fit {
+  background-color: var(--ds-color-bg);
+  background-image: var(--app-content-mesh);
+  background-attachment: fixed;
+}
+
+html[data-theme='dark'] .content--operations-fit {
+  background-color: var(--ds-color-bg);
+}
+
+.content--operations-fit .ec-page:not(.workflow-shell-page) {
+  width: 100%;
+  max-width: min(1600px, 100%);
+  margin-inline: auto;
+  padding: var(--content-pad);
+  padding-bottom: clamp(20px, 3vw, 36px);
+  box-sizing: border-box;
+}
+
+/* Irrigation without unified workflow shell: inherit white canvas from .content--operations-fit */
+.content--operations-fit .irrigation-scheduling-modern.ec-page:not(.workflow-shell-page) {
+  background: transparent;
+}
+
+/* Sensors (/sensors/*): light gray canvas; inner layout is full-width with standard side gutters (no narrow centered column). */
+.content--sensors-fit {
+  background-color: var(--ds-color-bg);
+  background-image: var(--app-content-mesh);
+  background-attachment: fixed;
+}
+
+html[data-theme='dark'] .content--sensors-fit {
+  background-color: var(--ds-color-bg);
+}
+
+.content--sensors-fit .sensor-shell {
+  width: 100%;
+  min-width: 0;
+}

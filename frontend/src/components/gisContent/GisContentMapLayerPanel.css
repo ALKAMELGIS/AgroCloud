@@ -1,0 +1,60 @@
+.gis-map-layer-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.gis-map-layer-panel__muted {
+  margin: 0;
+  color: var(--item-pane-muted, #64748b);
+  font-size: 13px;
+}
+
+.gis-map-layer-panel__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.gis-map-layer-panel__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.gis-map-layer-panel__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.gis-map-layer-panel__field label {
+  font-weight: 600;
+  color: var(--item-pane-muted, #64748b);
+}
+
+.gis-map-layer-panel__field input[type='number'],
+.gis-map-layer-panel__field input[type='range'] {
+  width: 100%;
+}
+
+.gis-map-layer-panel__value {
+  font-size: 12px;
+  color: var(--item-pane-muted, #64748b);
+}
+
+.gis-map-layer-panel__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.gis-map-layer-panel__hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--item-pane-muted, #64748b);
+  line-height: 1.45;
+}

@@ -1,0 +1,299 @@
+/* Shared workflow hero + stepper (Data Entry page + Recipes page) */
+
+.workflow-shell-root {
+  --recipes-accent: #059669;
+  --recipes-accent-bright: #10b981;
+  --recipes-ink: #0f172a;
+  --recipes-muted: #64748b;
+}
+
+/*
+ * Framed canvas: centered column with max width — does not hug viewport edges on wide screens.
+ * On small screens, 100% minus padding keeps touch-friendly gutters.
+ */
+.workflow-shell-page {
+  /* Centered column; horizontal gutters capped at 24px (aligned with --content-pad) */
+  --workflow-column-max: 1280px;
+  --workflow-pad-y: clamp(12px, 2vw, 24px);
+  --workflow-pad-x: clamp(16px, 3vw, 24px);
+  --workflow-pad-b: clamp(18px, 2.8vw, 28px);
+  width: 100%;
+  max-width: min(var(--workflow-column-max), 100%);
+  margin-inline: auto;
+  padding: var(--workflow-pad-y) var(--workflow-pad-x)
+    max(var(--workflow-pad-b), calc(env(safe-area-inset-bottom, 0px) + 8px));
+  box-sizing: border-box;
+  /* Min canvas height on short screens; long forms extend naturally — scroll lives on <main.content> */
+  min-height: calc(100dvh - var(--topnav-height, 56px));
+  background: linear-gradient(180deg, #f1f5f9 0%, #f8fafc 48%, #f1f5f9 100%);
+  display: flex;
+  flex-direction: column;
+}
+
+.workflow-shell-inner {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.recipes-hero {
+  border-radius: 20px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: #ffffff;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 14px 42px rgba(15, 23, 42, 0.07),
+    0 2px 8px rgba(15, 23, 42, 0.04);
+  padding: clamp(18px, 2.4vw, 26px) clamp(16px, 2.2vw, 28px) clamp(16px, 2vw, 22px);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.recipes-hero__brand {
+  display: flex;
+  align-items: flex-start;
+  gap: clamp(14px, 2.5vw, 18px);
+}
+
+.recipes-hero__icon-wrap {
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  color: var(--recipes-accent);
+  background: linear-gradient(145deg, rgba(16, 185, 129, 0.14), rgba(5, 150, 105, 0.08));
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  box-shadow: 0 6px 18px rgba(5, 150, 105, 0.12);
+}
+
+.recipes-hero__text {
+  min-width: 0;
+  flex: 1;
+}
+
+.recipes-hero__title {
+  margin: 0;
+  font-size: clamp(1.35rem, 2.8vw, 1.75rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  color: var(--recipes-ink);
+  line-height: 1.2;
+}
+
+.recipes-hero__tagline {
+  margin: 8px 0 0;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--recipes-muted);
+  line-height: 1.55;
+  max-width: 52ch;
+}
+
+.recipes-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0;
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(226, 232, 240, 0.85);
+}
+
+.recipes-stepper__segment {
+  display: flex;
+  align-items: center;
+}
+
+.recipes-stepper__rail {
+  width: clamp(48px, 14vw, 140px);
+  height: 2px;
+  margin: 0 6px;
+  background: linear-gradient(90deg, rgba(226, 232, 240, 0.3), rgba(203, 213, 225, 0.95), rgba(226, 232, 240, 0.3));
+  border-radius: 2px;
+}
+
+.recipes-stepper__step {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  color: inherit;
+}
+
+.recipes-stepper__label {
+  font-size: 0.9375rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+/* Step 1 active on Data Entry page — green badge, dark label (pic 2) */
+.recipes-stepper__step--active-entry {
+  color: var(--recipes-ink);
+}
+
+.recipes-stepper__step--active-entry .recipes-stepper__badge {
+  background: linear-gradient(180deg, var(--recipes-accent-bright), var(--recipes-accent));
+  color: #ffffff;
+  box-shadow: 0 6px 16px rgba(5, 150, 105, 0.28);
+}
+
+.recipes-stepper__step--active-entry .recipes-stepper__label {
+  color: var(--recipes-ink);
+}
+
+/* Step 2 upcoming on Data Entry — outlined badge (pic 2) */
+.recipes-stepper__step--pending {
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px 2px;
+  border-radius: 12px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: inherit;
+}
+
+.recipes-stepper__step--pending:hover {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.recipes-stepper__badge--pending {
+  background: #ffffff !important;
+  border: 2px solid #e2e8f0 !important;
+  color: #94a3b8 !important;
+  box-shadow: none !important;
+}
+
+.recipes-stepper__step--pending .recipes-stepper__label {
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+.recipes-stepper__step--complete {
+  color: var(--recipes-ink);
+}
+
+.recipes-stepper__step--complete:hover .recipes-stepper__label {
+  color: var(--recipes-accent);
+}
+
+.recipes-stepper__step--complete .recipes-stepper__badge {
+  background: linear-gradient(180deg, var(--recipes-accent-bright), var(--recipes-accent));
+  color: #ffffff;
+  box-shadow: 0 6px 16px rgba(5, 150, 105, 0.28);
+}
+
+.recipes-stepper__step--current {
+  color: var(--recipes-accent);
+}
+
+.recipes-stepper__step--current .recipes-stepper__badge {
+  background: linear-gradient(180deg, var(--recipes-accent-bright), var(--recipes-accent));
+  color: #ffffff;
+  box-shadow: 0 6px 16px rgba(5, 150, 105, 0.32);
+}
+
+.recipes-stepper__badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 800;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+html[data-theme='dark'] .workflow-shell-page {
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+}
+
+html[data-theme='dark'] .recipes-hero {
+  background: rgba(15, 23, 42, 0.92);
+  border-color: rgba(51, 65, 85, 0.75);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+html[data-theme='dark'] .recipes-hero__title {
+  color: #f1f5f9;
+}
+
+html[data-theme='dark'] .recipes-hero__tagline {
+  color: #94a3b8;
+}
+
+html[data-theme='dark'] .recipes-hero__icon-wrap {
+  background: linear-gradient(145deg, rgba(16, 185, 129, 0.22), rgba(5, 150, 105, 0.1));
+  border-color: rgba(45, 212, 191, 0.25);
+  color: #5eead4;
+}
+
+html[data-theme='dark'] .recipes-stepper {
+  border-top-color: rgba(51, 65, 85, 0.7);
+}
+
+html[data-theme='dark'] .recipes-stepper__step--active-entry .recipes-stepper__label {
+  color: #f1f5f9;
+}
+
+html[data-theme='dark'] .recipes-stepper__badge--pending {
+  background: rgba(15, 23, 42, 0.6) !important;
+  border-color: rgba(71, 85, 105, 0.85) !important;
+  color: #94a3b8 !important;
+}
+
+html[data-theme='dark'] .recipes-stepper__step--pending .recipes-stepper__label {
+  color: #94a3b8;
+}
+
+html[data-theme='dark'] .recipes-stepper__step--complete {
+  color: #e2e8f0;
+}
+
+/* Data Entry pages — tokens + inner column (padding/canvas come from .workflow-shell-page) */
+.ec-page.workflow-shell-page {
+  --recipes-accent: #059669;
+  --recipes-accent-bright: #10b981;
+  --recipes-ink: #0f172a;
+  --recipes-muted: #64748b;
+}
+
+.ec-page.workflow-shell-page .ec-container {
+  /* Grow with form content — avoids viewport-height flex trapping that clips tall grids */
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(18px, 2vw, 24px);
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+  min-width: 0;
+}
+
+/* Match Recipes shell cards — full rail, consistent radius & elevation */
+.ec-page.workflow-shell-page .ec-card {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 20px;
+  border-color: rgba(226, 232, 240, 0.95);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    0 12px 36px rgba(15, 23, 42, 0.06);
+  /* Tall forms: clip horizontally only (rounded corners); allow vertical expansion */
+  overflow-x: hidden;
+  overflow-y: visible;
+}
+
+.ec-page.workflow-shell-page .ec-card-body {
+  padding: clamp(14px, 1.8vw, 22px) clamp(14px, 2vw, 22px);
+}
+

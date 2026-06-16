@@ -1,0 +1,564 @@
+import type { CropAlertFieldResult, CropAlertIndexSnapshot } from './siCropAlertEngine'
+import { deriveCoherentIndicesFromNdvi } from './siCropAlertEngine'
+import { subtractDaysFromIso } from './siSentinelImageryDate'
+import { resolveAgroStructuresFieldDisplayName } from './agroStructuresPrimaryAoi'
+import {
+  classifyCdsiInsightTier,
+  CDSI_INSIGHT_COLORS,
+  CDSI_INSIGHT_EMOJI,
+  CDSI_INSIGHT_LABELS,
+  CDSI_INSIGHT_TIERS,
+  CDSI_FORMULA_POPUP,
+  chasInputsFromSnapshot,
+  computeChas,
+  estimateSaviFromNdvi,
+  resolveDchasOrbPresentation,
+  resolveSmartCropInsightNeed,
+  type CdsiInsightTier,
+} from './siCropAlertDchasBeacon'
+import { classifyNdviLandZone } from './siCropAlertNdviZones'
+import { computeSiAoiFieldMetrics } from './siAoiFields'
+
+export type IndexTrendDirection = 'up' | 'down' | 'flat'
+
+export type IndexMinMaxMean = {
+  min: number
+  max: number
+  mean: number
+  trend: IndexTrendDirection
+}
+
+const INDEX_TREND_EPSILON = 0.004
+
+/** Compare newest vs previous scene (series is newest-first). */
+export function resolveIndexTrendFromSeries(values: number[]): IndexTrendDirection {
+  const nums = values.filter(v => Number.isFinite(v))
+  if (nums.length < 2) return 'flat'
+  const delta = nums[0]! - nums[1]!
+  if (Math.abs(delta) < INDEX_TREND_EPSILON) return 'flat'
+  return delta > 0 ? 'up' : 'down'
+}
+
+export type CropAlertPopupLandSplit = {
+  label: string
+  pct: number
+  color: string
+  areaHa: number | null
+}
+
+export type NdviFieldCoverage = {
+  vegetationPct: number
+  bareAreaPct: number
+  fieldAreaHa: number | null
+  /** Planted / vegetated area from NDVI share of field polygon. */
+  vegetationHa: number | null
+  /** Unplanted / bare share from NDVI analysis. */
+  bareAreaHa: number | null
+}
+
+export type CropAlertPopupViewModel = {
+  fieldName: string
+  fieldId: string
+  lat: number
+  lng: number
+  latLonLine: string
+  fieldInfoLine: string
+  cropStatus: {
+    ndvi: IndexMinMaxMean
+    ndmi: IndexMinMaxMean
+    ndwi: IndexMinMaxMean
+    savi: IndexMinMaxMean
+    evi: IndexMinMaxMean
+    lst: IndexMinMaxMean
+  }
+  chas: {
+    current: number
+    previous: number | null
+    deltaLabel: string
+  }
+  smartCropInsight: {
+    cdsi: number
+    tier: CdsiInsightTier
+    label: string
+    emoji: string
+    color: string
+    need: string
+    sceneDate: string
+    formula: string
+    tiers: Array<{ id: CdsiInsightTier; label: string; emoji: string; active: boolean }>
+  }
+  alert: {
+    level: string
+    trend: string
+    action: string
+  }
+  coverage: NdviFieldCoverage
+  /** Sentinel scene dates available for land-coverage date filter (newest first). */
+  sceneDates: string[]
+  chasTrend: {
+    labels: string[]
+    values: number[]
+  }
+  landSplit: CropAlertPopupLandSplit[]
+  interpretationLines: [string, string]
+  requestedDate: string
+  usedDate: string
+  analysisDate: string
+  dataSource: string
+  dataWarning: string | null
+  accentColor: string
+  layerLive: {
+    satellite: string
+    sensor: string
+    gsdM: number
+    sceneDate: string
+  }
+  landCover: {
+    label: string
+    color: string
+    interpretation: string
+  }
+  aoi: {
+    fieldName: string
+    fieldId: string
+    areaHa: number | null
+    structureType: string | null
+    farmCode: string | null
+  }
+}
+
+function clampPct(n: number): number {
+  return Math.max(0, Math.min(100, Math.round(n)))
+}
+
+export function formatPopupCoordLine(lat: number, lng: number): string {
+  const latAbs = Math.abs(lat).toFixed(3)
+  const lngAbs = Math.abs(lng).toFixed(3)
+  const latH = lat >= 0 ? 'N' : 'S'
+  const lngH = lng >= 0 ? 'E' : 'W'
+  return `${latAbs}°${latH} · ${lngAbs}°${lngH}`
+}
+
+function seriesMinMaxMean(values: number[], fallback: number): IndexMinMaxMean {
+  const nums = values.filter(v => Number.isFinite(v))
+  if (nums.length === 0) {
+    const v = Number(fallback.toFixed(3))
+    return { min: v, max: v, mean: v, trend: 'flat' }
+  }
+  const min = Math.min(...nums)
+  const max = Math.max(...nums)
+  const mean = nums.reduce((a, b) => a + b, 0) / nums.length
+  const fix = (n: number) => Number(n.toFixed(3))
+  return { min: fix(min), max: fix(max), mean: fix(mean), trend: resolveIndexTrendFromSeries(nums) }
+}
+
+function zonalToIndexMinMaxMean(
+  zonal: { min: number; max: number; mean: number },
+  trend: IndexTrendDirection,
+): IndexMinMaxMean {
+  return {
+    min: Number(zonal.min.toFixed(3)),
+    max: Number(zonal.max.toFixed(3)),
+    mean: Number(zonal.mean.toFixed(3)),
+    trend,
+  }
+}
+
+/** Layer Live AOI pixel min/max/mean for latest scene; trend from scene time series means. */
+export function resolveLayerLiveIndexMinMaxMean(
+  result: CropAlertFieldResult,
+): CropAlertPopupViewModel['cropStatus'] {
+  const z = result.layerLiveZonal
+  if (z) {
+    const ndviTrend = resolveIndexTrendFromSeries(result.ndviSceneValues)
+    const ndmiTrend = resolveIndexTrendFromSeries(resolveCropAlertIndexSceneValues(result, 'ndmi'))
+    const ndwiTrend = resolveIndexTrendFromSeries(resolveCropAlertIndexSceneValues(result, 'ndwi'))
+    const saviMin = estimateSaviFromNdvi(z.ndvi.min)
+    const saviMax = estimateSaviFromNdvi(z.ndvi.max)
+    const saviMean = estimateSaviFromNdvi(z.ndvi.mean)
+    const eviStats = z.evi
+      ? zonalToIndexMinMaxMean(z.evi, ndviTrend)
+      : {
+          min: Number((z.ndvi.min * 1.05).toFixed(3)),
+          max: Number((z.ndvi.max * 1.05).toFixed(3)),
+          mean: Number((z.ndvi.mean * 1.05).toFixed(3)),
+          trend: ndviTrend,
+        }
+    return {
+      ndvi: zonalToIndexMinMaxMean(z.ndvi, ndviTrend),
+      ndmi: zonalToIndexMinMaxMean(z.ndmi, ndmiTrend),
+      ndwi: zonalToIndexMinMaxMean(z.ndwi, ndwiTrend),
+      savi: {
+        min: Number(saviMin.toFixed(3)),
+        max: Number(saviMax.toFixed(3)),
+        mean: Number(saviMean.toFixed(3)),
+        trend: ndviTrend,
+      },
+      evi: eviStats,
+      lst: {
+        min: Number((38 - z.ndvi.max * 12).toFixed(1)),
+        max: Number((38 - z.ndvi.min * 12).toFixed(1)),
+        mean: Number((38 - z.ndvi.mean * 12).toFixed(1)),
+        trend: ndviTrend,
+      },
+    }
+  }
+
+  const saviCurrent = estimateSaviFromNdvi(result.current.ndvi)
+  const saviSeries = result.ndviSceneValues.map(estimateSaviFromNdvi)
+  const eviSeries = result.ndviSceneValues.map(v => v * 1.05)
+  return {
+    ndvi: seriesMinMaxMean(result.ndviSceneValues, result.current.ndvi),
+    ndmi: seriesMinMaxMean(resolveCropAlertIndexSceneValues(result, 'ndmi'), result.current.ndmi),
+    ndwi: seriesMinMaxMean(resolveCropAlertIndexSceneValues(result, 'ndwi'), result.current.ndwi),
+    savi: seriesMinMaxMean(saviSeries, saviCurrent),
+    evi: seriesMinMaxMean(eviSeries, result.current.evi ?? result.current.ndvi * 1.05),
+    lst: estimateLstMinMaxMean(result.current.ndvi, result.ndviSceneValues),
+  }
+}
+
+/** NDMI / NDWI scene arrays — fallback to current + 7d + 30d snapshots for cached results. */
+export function resolveCropAlertIndexSceneValues(
+  result: CropAlertFieldResult,
+  index: 'ndmi' | 'ndwi',
+): number[] {
+  const fromSeries = index === 'ndmi' ? result.ndmiSceneValues : result.ndwiSceneValues
+  if (Array.isArray(fromSeries) && fromSeries.length) {
+    return fromSeries.filter(v => Number.isFinite(v))
+  }
+  return [result.current[index], result.previous7[index], result.previous30[index]].filter(v =>
+    Number.isFinite(v),
+  )
+}
+
+/** Rough LST proxy (°C) from NDVI — field-level until Sentinel LST stats are wired. */
+export function estimateLstMinMaxMean(ndvi: number, sceneNdvi: number[] = []): IndexMinMaxMean {
+  const estimate = (v: number) => 38 - v * 12
+  const values = sceneNdvi.length ? sceneNdvi.map(estimate) : [estimate(ndvi)]
+  const nums = values.map(v => Number(v.toFixed(1)))
+  return {
+    min: Math.min(...nums),
+    max: Math.max(...nums),
+    mean: Number((nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(1)),
+    trend: resolveIndexTrendFromSeries(nums),
+  }
+}
+
+export function estimateFieldCoverage(ndvi: number): Pick<NdviFieldCoverage, 'vegetationPct' | 'bareAreaPct'> {
+  const v = Number.isFinite(ndvi) ? Math.max(0, Math.min(1, ndvi)) : 0
+  const vegetationPct = clampPct(v * 100)
+  const bareAreaPct = clampPct(100 - vegetationPct)
+  return { vegetationPct, bareAreaPct }
+}
+
+/** Field polygon area (ha) from Agro_Structures geometry when available. */
+export function resolveFieldAreaHaFromGeometry(geometry: GeoJSON.Geometry | null | undefined): number | null {
+  if (!geometry || typeof geometry !== 'object') return null
+  if (geometry.type !== 'Polygon' && geometry.type !== 'MultiPolygon') return null
+  const { areaHa } = computeSiAoiFieldMetrics(geometry)
+  if (!Number.isFinite(areaHa) || areaHa <= 0) return null
+  return Number(areaHa.toFixed(2))
+}
+
+/** NDVI-based planted / bare split — hectares proportional to the same percentages as Land Coverage. */
+export function estimateNdviFieldCoverage(ndvi: number, fieldAreaHa: number | null): NdviFieldCoverage {
+  const { vegetationPct, bareAreaPct } = estimateFieldCoverage(ndvi)
+  if (fieldAreaHa == null || !Number.isFinite(fieldAreaHa) || fieldAreaHa <= 0) {
+    return {
+      vegetationPct,
+      bareAreaPct,
+      fieldAreaHa: null,
+      vegetationHa: null,
+      bareAreaHa: null,
+    }
+  }
+  const vegetationHa = Number(((fieldAreaHa * vegetationPct) / 100).toFixed(2))
+  const bareAreaHa = Number((fieldAreaHa - vegetationHa).toFixed(2))
+  return {
+    vegetationPct,
+    bareAreaPct,
+    fieldAreaHa,
+    vegetationHa,
+    bareAreaHa,
+  }
+}
+
+/** Scene dates for popup land-coverage filter (newest → oldest). */
+export function listPopupSceneDates(result: CropAlertFieldResult): string[] {
+  const fromSeries = (result.ndviSceneDates ?? [])
+    .map(d => String(d || '').trim().slice(0, 10))
+    .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d))
+  if (fromSeries.length) return [...new Set(fromSeries)]
+  const fallback = String(result.usedDate ?? result.imageDate ?? result.analysisDate ?? '')
+    .trim()
+    .slice(0, 10)
+  return /^\d{4}-\d{2}-\d{2}$/.test(fallback) ? [fallback] : []
+}
+
+/** NDVI land split for a specific Sentinel scene date inside the field AOI. */
+export function estimateNdviFieldCoverageForScene(
+  result: CropAlertFieldResult,
+  sceneDate: string,
+): NdviFieldCoverage {
+  const want = sceneDate.trim().slice(0, 10)
+  const fieldAreaHa = resolveFieldAreaHaFromGeometry(result.geometry)
+  const newestScene = listPopupSceneDates(result)[0]
+  if (want && newestScene === want && Number.isFinite(result.current.ndvi)) {
+    return estimateNdviFieldCoverage(result.current.ndvi, fieldAreaHa)
+  }
+  const idx = (result.ndviSceneDates ?? []).findIndex(d => String(d).trim().slice(0, 10) === want)
+  const ndvi =
+    idx >= 0 && result.ndviSceneValues[idx] != null && Number.isFinite(result.ndviSceneValues[idx])
+      ? result.ndviSceneValues[idx]!
+      : result.current.ndvi
+  return estimateNdviFieldCoverage(ndvi, fieldAreaHa)
+}
+
+export function formatPopupAreaHa(ha: number | null | undefined): string {
+  if (ha == null || !Number.isFinite(ha)) return '—'
+  if (ha >= 100) return `${(ha / 100).toFixed(2)} km²`
+  return `${ha.toFixed(2)} ha`
+}
+
+const CHAS_TREND_POINT_COUNT = 3
+
+function formatChasTrendDateLabel(iso: string): string {
+  return iso.slice(5) || '—'
+}
+
+function resolveSceneIndexSnapshot(
+  result: CropAlertFieldResult,
+  sceneIndex: number,
+): CropAlertIndexSnapshot | null {
+  const ndvi = result.ndviSceneValues[sceneIndex]
+  const date = result.ndviSceneDates[sceneIndex]
+  if (!Number.isFinite(ndvi) || !date) return null
+
+  const ndmiRaw = result.ndmiSceneValues[sceneIndex]
+  const ndwiRaw = result.ndwiSceneValues[sceneIndex]
+  if (Number.isFinite(ndmiRaw) && Number.isFinite(ndwiRaw)) {
+    const derived = deriveCoherentIndicesFromNdvi(ndvi, result.fieldKey, date)
+    return {
+      ndvi,
+      ndmi: ndmiRaw,
+      ndwi: ndwiRaw,
+      evi: derived.evi,
+      ciRe: derived.ciRe,
+    }
+  }
+
+  const derived = deriveCoherentIndicesFromNdvi(ndvi, result.fieldKey, date)
+  return {
+    ndvi,
+    ndmi: Number.isFinite(ndmiRaw) ? ndmiRaw! : derived.ndmi,
+    ndwi: Number.isFinite(ndwiRaw) ? ndwiRaw! : derived.ndwi,
+    evi: derived.evi,
+    ciRe: derived.ciRe,
+  }
+}
+
+function resolveChasTrendSnapshotForScene(
+  result: CropAlertFieldResult,
+  sceneIndex: number,
+): CropAlertIndexSnapshot | null {
+  const sceneDate = result.ndviSceneDates[sceneIndex]?.trim().slice(0, 10)
+  if (!sceneDate) return resolveSceneIndexSnapshot(result, sceneIndex)
+
+  const zonal = result.layerLiveZonal
+  if (zonal && zonal.sceneDate === sceneDate) {
+    return {
+      ndvi: zonal.ndvi.mean,
+      ndmi: zonal.ndmi.mean,
+      ndwi: zonal.ndwi.mean,
+      evi: zonal.evi?.mean ?? zonal.ndvi.mean * 1.05,
+      ciRe: zonal.ciRe?.mean,
+    }
+  }
+
+  return resolveSceneIndexSnapshot(result, sceneIndex)
+}
+
+/** Three-point CHAS trend from Layer Live scene means (oldest → newest, aligned to scene dates). */
+export function buildChasTrendSeries(result: CropAlertFieldResult): { labels: string[]; values: number[] } {
+  const currentDate = (result.usedDate ?? result.analysisDate).trim()
+  const sceneCount = Math.min(
+    result.ndviSceneValues.filter(v => Number.isFinite(v)).length,
+    result.ndviSceneDates.length,
+  )
+
+  const trendPoints: Array<{ date: string; snapshot: CropAlertIndexSnapshot }> = []
+
+  if (sceneCount >= CHAS_TREND_POINT_COUNT) {
+    for (let i = CHAS_TREND_POINT_COUNT - 1; i >= 0; i -= 1) {
+      const snapshot = resolveChasTrendSnapshotForScene(result, i)
+      if (!snapshot) continue
+      trendPoints.push({ date: result.ndviSceneDates[i]!, snapshot })
+    }
+  } else if (sceneCount === 2) {
+    trendPoints.unshift({
+      date: subtractDaysFromIso(result.ndviSceneDates[1] ?? currentDate, 30),
+      snapshot: result.previous30,
+    })
+    for (const i of [1, 0]) {
+      const snapshot = resolveChasTrendSnapshotForScene(result, i)
+      if (!snapshot) continue
+      trendPoints.push({ date: result.ndviSceneDates[i]!, snapshot })
+    }
+  } else {
+    trendPoints.push(
+      { date: subtractDaysFromIso(currentDate, 30), snapshot: result.previous30 },
+      { date: subtractDaysFromIso(currentDate, 7), snapshot: result.previous7 },
+      { date: currentDate, snapshot: result.current },
+    )
+  }
+
+  const points = trendPoints.slice(-CHAS_TREND_POINT_COUNT)
+  return {
+    labels: points.map(p => formatChasTrendDateLabel(p.date)),
+    values: points.map(p => computeChas(chasInputsFromSnapshot(p.snapshot))),
+  }
+}
+
+export function resolveAlertAction(result: CropAlertFieldResult, level: string): string {
+  if (result.alertExplanation?.trim()) return result.alertExplanation.trim()
+  if (result.message?.trim()) return result.message.trim()
+  if (result.title?.trim() && result.title !== level) return result.title.trim()
+  return 'Continue routine monitoring · no immediate action required'
+}
+
+export function buildCropAlertPopupViewModel(result: CropAlertFieldResult): CropAlertPopupViewModel {
+  const orb = resolveDchasOrbPresentation(result)
+  const [lng, lat] = result.centroid
+  const fieldName = resolveAgroStructuresFieldDisplayName({
+    farmName: result.farmName,
+    farmCode: result.farmCode,
+    objectId: result.objectId,
+    structureType: result.structureType,
+  })
+  const fieldId = `#${result.objectId}`
+  const latLonLine = formatPopupCoordLine(lat, lng)
+  const fieldInfoLine = `${latLonLine} · ${fieldName} · ${fieldId}`
+
+  const trendLabel =
+    result.ndviTrendLabel ??
+    (result.trend === 'increasing'
+      ? 'Increasing'
+      : result.trend === 'decreasing'
+        ? 'Decreasing'
+        : 'Stable')
+
+  const deltaLabel =
+    orb.deltaChas != null ? `${orb.deltaChas >= 0 ? '+' : ''}${orb.deltaChas.toFixed(3)}` : '—'
+
+  const fieldAreaHa = resolveFieldAreaHaFromGeometry(result.geometry)
+  const sceneDates = listPopupSceneDates(result)
+  const coverageSceneDate =
+    sceneDates[0] ??
+    String(result.usedDate ?? result.imageDate ?? result.analysisDate ?? '')
+      .trim()
+      .slice(0, 10)
+  const coverage = estimateNdviFieldCoverageForScene(result, coverageSceneDate)
+  const zone = classifyNdviLandZone(result.current.ndvi)
+
+  const interpretationPrimary =
+    result.alertReasonLines[0] ??
+    `${orb.label} · ΔCHAS ${deltaLabel} (scene change detection)`
+  const interpretationSecondary =
+    result.alertReasonLines[1] ??
+    result.alertExplanation ??
+    zone.interpretation
+
+  const requestedDate = result.requestedDate || result.analysisDate
+  const usedDate = result.usedDate ?? result.imageDate ?? '—'
+  const cdsiTier = classifyCdsiInsightTier(orb.chasCurrent)
+  const smartCropInsight = {
+    cdsi: orb.chasCurrent,
+    tier: cdsiTier,
+    label: CDSI_INSIGHT_LABELS[cdsiTier],
+    emoji: CDSI_INSIGHT_EMOJI[cdsiTier],
+    color: CDSI_INSIGHT_COLORS[cdsiTier],
+    need: resolveSmartCropInsightNeed(cdsiTier, orb.deltaChas),
+    sceneDate: usedDate,
+    formula: CDSI_FORMULA_POPUP,
+    tiers: CDSI_INSIGHT_TIERS.map(id => ({
+      id,
+      label: CDSI_INSIGHT_LABELS[id],
+      emoji: CDSI_INSIGHT_EMOJI[id],
+      active: id === cdsiTier,
+    })),
+  }
+
+  const layerLiveSceneDate =
+    result.layerLiveZonal?.sceneDate?.trim().slice(0, 10) ||
+    (usedDate !== '—' ? usedDate : result.analysisDate)
+
+  return {
+    fieldName,
+    fieldId,
+    lat,
+    lng,
+    latLonLine,
+    fieldInfoLine,
+    cropStatus: resolveLayerLiveIndexMinMaxMean(result),
+    chas: {
+      current: orb.chasCurrent,
+      previous: orb.chasPrevious,
+      deltaLabel,
+    },
+    smartCropInsight,
+    alert: {
+      level: orb.label,
+      trend: trendLabel,
+      action: resolveAlertAction(result, orb.label),
+    },
+    coverage,
+    sceneDates,
+    chasTrend: buildChasTrendSeries(result),
+    landSplit: [
+      {
+        label: 'Vegetation',
+        pct: coverage.vegetationPct,
+        color: '#2e7d32',
+        areaHa: coverage.vegetationHa,
+      },
+      {
+        label: 'Bare Area',
+        pct: coverage.bareAreaPct,
+        color: '#d32f2f',
+        areaHa: coverage.bareAreaHa,
+      },
+    ],
+    interpretationLines: [interpretationPrimary, interpretationSecondary],
+    requestedDate,
+    usedDate,
+    analysisDate: result.analysisDate,
+    dataSource: result.dataSource,
+    dataWarning: result.dataWarning,
+    accentColor: orb.color,
+    layerLive: {
+      satellite: 'Sentinel-2',
+      sensor: 'MSI (L2A)',
+      gsdM: 10,
+      sceneDate: layerLiveSceneDate,
+    },
+    landCover: {
+      label: zone.label,
+      color: zone.color,
+      interpretation: zone.interpretation,
+    },
+    aoi: {
+      fieldName,
+      fieldId,
+      areaHa: fieldAreaHa,
+      structureType: result.structureType ?? null,
+      farmCode: result.farmCode ?? null,
+    },
+  }
+}
+
+export function formatIndexMinMaxMean(v: IndexMinMaxMean, digits = 2): string {
+  if (v.min === v.max && v.max === v.mean) {
+    return v.mean.toFixed(digits)
+  }
+  return `${v.min.toFixed(digits)} / ${v.max.toFixed(digits)} / ${v.mean.toFixed(digits)}`
+}

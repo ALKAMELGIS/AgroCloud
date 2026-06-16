@@ -1,0 +1,670 @@
+/* Sensor API integrations — Fit layout (soil / weather / irrigation / camera routes share this page). */
+
+.sensor-shell {
+  --sip-page-bg: transparent;
+  --sip-green: #2d5a27;
+  --sip-green-hover: #244622;
+  --sip-green-soft: #f0faf5;
+  --sip-green-active-text: #005d37;
+  --sip-slate: #546e7a;
+  --sip-border: #e2e8f0;
+  --sip-card-bg: #ffffff;
+
+  min-height: calc(100vh - 120px);
+  background: var(--sip-page-bg);
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html[data-theme='dark'] .sensor-shell {
+  background: transparent;
+}
+
+html[data-theme='dark'] .sensor-empty-card {
+  background: rgba(15, 23, 42, 0.45);
+  border-color: rgba(51, 65, 85, 0.65);
+}
+
+html[data-theme='dark'] .sensor-integration-card {
+  background: rgba(15, 23, 42, 0.42);
+  border-color: rgba(51, 65, 85, 0.65);
+}
+
+/* Full width of `<main>` minus app gutters (aligned with `--content-pad` from app-design-system). */
+.sensor-main {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+  padding: clamp(16px, 2.4vw, 24px) var(--content-pad, clamp(16px, 2.2vw, 24px)) clamp(22px, 3vw, 40px);
+  box-sizing: border-box;
+}
+
+.sensor-main-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-4);
+  flex-wrap: wrap;
+  margin-bottom: clamp(20px, 2.5vw, 28px);
+}
+
+.sensor-main-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+/* Match Operations `.ops-head-icon` language (squircle + pastel tint per section) */
+.sensor-page-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.sensor-page-icon i {
+  display: block;
+}
+
+.sensor-page-icon--emerald {
+  background: linear-gradient(145deg, rgba(16, 185, 129, 0.2), rgba(4, 120, 87, 0.06));
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  color: #047857;
+}
+
+.sensor-page-icon--sky {
+  background: linear-gradient(145deg, rgba(56, 189, 248, 0.22), rgba(14, 165, 233, 0.07));
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #0369a1;
+}
+
+.sensor-page-icon--cyan {
+  background: linear-gradient(145deg, rgba(6, 182, 212, 0.22), rgba(4, 120, 87, 0.07));
+  border: 1px solid rgba(6, 182, 212, 0.28);
+  color: #0e7490;
+}
+
+.sensor-page-icon--violet {
+  background: linear-gradient(145deg, rgba(167, 139, 250, 0.22), rgba(139, 92, 246, 0.07));
+  border: 1px solid rgba(139, 92, 246, 0.28);
+  color: #6d28d9;
+}
+
+.sensor-main-title {
+  margin: 0;
+  font-size: var(--ds-text-xl);
+  font-weight: 700;
+  color: var(--ds-color-text);
+  letter-spacing: -0.02em;
+}
+
+.sensor-main-lead {
+  margin: 8px 0 0;
+  font-size: var(--ds-text-xs);
+  color: var(--ds-color-text-muted);
+  max-width: min(72ch, 100%);
+  line-height: 1.55;
+}
+
+.sensor-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 18px;
+  font-size: var(--ds-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--sip-green);
+  color: #fff;
+  white-space: nowrap;
+}
+
+.sensor-btn-primary > .fa-solid {
+  font-size: 0.85em;
+  opacity: 0.95;
+}
+
+.sensor-btn-primary:hover:not(:disabled) {
+  background: var(--sip-green-hover);
+}
+
+.sensor-btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.sensor-btn-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--sip-border);
+  border-radius: 10px;
+  padding: 10px 18px;
+  font-size: var(--ds-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--sip-card-bg);
+  color: #374151;
+}
+
+.sensor-btn-outline > .fa-solid {
+  font-size: 0.85em;
+  opacity: 0.85;
+}
+
+.sensor-btn-outline:hover {
+  border-color: #cfd5d9;
+  background: #fafafa;
+}
+
+.sensor-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--sip-border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: var(--ds-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.sensor-btn-secondary:hover:not(:disabled) {
+  background: #e5e7eb;
+}
+
+.sensor-btn-secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.sensor-btn-text {
+  border: none;
+  background: none;
+  font-size: var(--ds-text-sm);
+  font-weight: 600;
+  color: var(--ds-color-text-muted);
+  cursor: pointer;
+  padding: 8px 12px;
+}
+
+.sensor-btn-text:hover {
+  color: var(--ds-color-text);
+}
+
+.sensor-btn-ghost {
+  border: none;
+  background: none;
+  font-size: var(--ds-text-xs);
+  font-weight: 600;
+  color: var(--ds-color-primary);
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.sensor-btn-ghost.danger {
+  color: var(--ds-color-danger, #b91c1c);
+}
+
+.sensor-flash {
+  margin-bottom: var(--ds-space-4);
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: var(--ds-text-xs);
+}
+
+.sensor-flash.ok {
+  background: var(--sip-green-soft);
+  border: 1px solid rgba(45, 90, 39, 0.2);
+  color: var(--ds-color-text);
+}
+
+.sensor-flash.err {
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  color: var(--ds-color-danger);
+}
+
+/* Empty state — light surface, minimal shadow (flat + modern) */
+.sensor-empty-card {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 16px;
+  padding: clamp(56px, 14vh, 104px) clamp(20px, 4vw, 40px);
+  text-align: center;
+  box-shadow: none;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.sensor-empty-text {
+  margin: 0 0 var(--ds-space-5);
+  font-size: var(--ds-text-sm);
+  color: #64748b;
+}
+
+/* Integration list */
+.sensor-integration-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: none;
+  width: 100%;
+}
+
+.sensor-integration-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--ds-space-4);
+  flex-wrap: wrap;
+  padding: var(--ds-space-4) var(--ds-space-5);
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 16px;
+  box-shadow: none;
+}
+
+.sensor-integration-name {
+  margin: 0 0 4px;
+  font-size: var(--ds-text-md);
+  font-weight: 700;
+  color: var(--ds-color-text);
+}
+
+.sensor-integration-meta {
+  margin: 0 0 6px;
+  font-size: var(--ds-text-xs);
+  color: var(--ds-color-text-muted);
+}
+
+.sensor-integration-url {
+  margin: 0;
+  font-size: 11px;
+  font-family: var(--ds-font-mono, ui-monospace, monospace);
+  color: #6b7280;
+  word-break: break-all;
+}
+
+.sensor-integration-card-aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.sensor-integration-card-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.sensor-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.sensor-badge-active {
+  background: var(--sip-green-soft);
+  color: var(--sip-green-active-text);
+}
+
+/* Modal — portaled to document.body; z-index above nav (~2600) */
+.sensor-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  box-sizing: border-box;
+  background: rgba(15, 23, 42, 0.48);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.sensor-modal {
+  width: min(680px, calc(100vw - 32px));
+  max-height: min(calc(100dvh - 32px), 900px);
+  margin: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.03),
+    0 24px 48px -12px rgba(15, 23, 42, 0.22),
+    0 12px 24px -8px rgba(15, 23, 42, 0.12);
+}
+
+.sensor-modal-header {
+  flex-shrink: 0;
+  padding: 22px 28px 18px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
+}
+
+.sensor-modal-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+}
+
+.sensor-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 26px 28px 28px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 48%, #f8fafc 100%);
+  scrollbar-gutter: stable;
+}
+
+.sensor-modal-body::-webkit-scrollbar {
+  width: 10px;
+}
+
+.sensor-modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sensor-modal-body::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.18);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.sensor-modal-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 18px 28px 22px;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  background: #ffffff;
+  box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.04);
+}
+
+@media (max-height: 720px) {
+  .sensor-modal-backdrop {
+    align-items: flex-start;
+    padding-top: max(12px, env(safe-area-inset-top));
+  }
+
+  .sensor-modal {
+    margin-top: 0;
+    max-height: calc(100dvh - 24px);
+  }
+}
+
+.sensor-modal-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sensor-modal-body .sensor-section-cap {
+  margin: 28px 0 12px;
+}
+
+.sensor-modal-body .sensor-section-cap:first-of-type {
+  margin-top: 10px;
+}
+
+.sensor-section-cap {
+  margin: var(--ds-space-4) 0 var(--ds-space-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.sensor-mapping-intro {
+  margin: 0 0 var(--ds-space-3);
+  font-size: var(--ds-text-xs);
+  color: var(--ds-color-text-muted);
+  line-height: 1.5;
+}
+
+.sensor-modal-body .sensor-mapping-intro {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  margin-bottom: 18px;
+}
+
+.sensor-form-grid {
+  display: grid;
+  gap: var(--ds-space-3);
+}
+
+.sensor-modal-body .sensor-form-grid,
+.sensor-modal-body .sensor-mapping-grid {
+  gap: 18px;
+}
+
+.sensor-form-grid-2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 640px) {
+  .sensor-form-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Outlined fields (label on border) */
+.sensor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+  margin-top: 4px;
+}
+
+.sensor-field.outlined {
+  padding-top: 6px;
+}
+
+.sensor-field-label {
+  position: absolute;
+  top: -2px;
+  left: 10px;
+  background: var(--sip-card-bg);
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  z-index: 1;
+}
+
+[dir='rtl'] .sensor-field-label {
+  left: auto;
+  right: 10px;
+}
+
+.sensor-field.outlined input,
+.sensor-field.outlined select,
+.sensor-field.outlined textarea {
+  width: 100%;
+  min-width: 0;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: var(--sip-card-bg);
+  color: var(--ds-color-text);
+  font-size: var(--ds-text-sm);
+  padding: 12px 12px;
+  font-family: inherit;
+  outline: none;
+}
+
+.sensor-modal-body .sensor-field.outlined input,
+.sensor-modal-body .sensor-field.outlined select,
+.sensor-modal-body .sensor-field.outlined textarea {
+  padding: 13px 14px;
+  border-color: #e2e8f0;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.sensor-modal-body .sensor-field-label {
+  background-color: #f1f5f9;
+}
+
+.sensor-field.outlined input:focus,
+.sensor-field.outlined select:focus,
+.sensor-field.outlined textarea:focus {
+  border-color: var(--sip-green);
+  box-shadow: 0 0 0 3px rgba(45, 90, 39, 0.15);
+}
+
+.sensor-field-hint {
+  font-size: 10px;
+  color: #9ca3af;
+  margin-top: 4px;
+  padding-inline-start: 4px;
+}
+
+.sensor-field-full {
+  grid-column: 1 / -1;
+}
+
+.sensor-mapping-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--ds-space-3);
+}
+
+@media (max-width: 560px) {
+  .sensor-mapping-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Modern switch (replaces default checkbox for “Active”) */
+.sensor-active-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: var(--ds-space-4);
+  cursor: pointer;
+  user-select: none;
+}
+
+.sensor-active-row:focus-within .sensor-switch-track {
+  box-shadow: 0 0 0 3px rgba(45, 90, 39, 0.22);
+}
+
+.sensor-switch-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  opacity: 0;
+}
+
+.sensor-switch-track {
+  position: relative;
+  flex-shrink: 0;
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #e8eaed 0%, #dfe3e8 100%);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+  transition: background 0.22s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.22s ease;
+}
+
+.sensor-switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #ffffff 0%, #f4f6f8 100%);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.12),
+    0 2px 6px rgba(0, 0, 0, 0.08);
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sensor-switch-input:checked + .sensor-switch-track {
+  background: linear-gradient(180deg, #34752e 0%, var(--sip-green, #2d5a27) 100%);
+  border-color: rgba(45, 90, 39, 0.35);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.15);
+}
+
+.sensor-switch-input:checked + .sensor-switch-track .sensor-switch-thumb {
+  transform: translateX(18px);
+}
+
+[dir='rtl'] .sensor-switch-input:checked + .sensor-switch-track .sensor-switch-thumb {
+  transform: translateX(-18px);
+}
+
+.sensor-switch-input:disabled + .sensor-switch-track {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.sensor-active-label {
+  font-size: var(--ds-text-sm);
+  font-weight: 600;
+  color: var(--ds-color-text);
+  line-height: 1.35;
+}
+
+.sensor-camera-doc {
+  margin: var(--ds-space-2) 0;
+  font-size: var(--ds-text-xs);
+  color: var(--ds-color-text-muted);
+}
+
+.sensor-camera-doc a {
+  color: var(--ds-color-primary);
+  word-break: break-all;
+}

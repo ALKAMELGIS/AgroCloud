@@ -1,0 +1,141 @@
+/* Crop Alert Layer HVD — lightweight SVG + progressive visual enhancement */
+
+.si-crop-alert-hvd-icon {
+  --hvd-size: 34px;
+  --hvd-tone: #2e7d32;
+  --hvd-pulse-ms: 2200ms;
+  position: relative;
+  width: var(--hvd-size);
+  height: var(--hvd-size);
+  display: inline-block;
+  flex-shrink: 0;
+  contain: layout style;
+}
+
+.si-crop-alert-hvd-icon__svg {
+  display: block;
+  width: var(--hvd-size);
+  height: var(--hvd-size);
+  transform: translateZ(0);
+  transition: transform 160ms ease, filter 160ms ease;
+}
+
+.si-crop-alert-hvd-icon__body-ring {
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 0.9;
+}
+
+.si-crop-alert-hvd-icon__leaf {
+  fill: rgba(255, 255, 255, 0.94);
+}
+
+.si-crop-alert-hvd-icon__alert-badge circle:first-child {
+  fill: #ffffff;
+}
+
+.si-crop-alert-hvd-icon__alert-badge rect,
+.si-crop-alert-hvd-icon__alert-badge circle:last-child {
+  fill: var(--hvd-tone);
+}
+
+.si-crop-alert-hvd-icon__hvd-badge rect {
+  fill: rgba(15, 23, 42, 0.82);
+  stroke: rgba(255, 255, 255, 0.72);
+  stroke-width: 0.35;
+}
+
+.si-crop-alert-hvd-icon__hvd-badge text {
+  fill: #ffffff;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 2.8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-anchor: middle;
+}
+
+.si-crop-alert-hvd-icon__shine {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* Flat load path — no gradients until enhanced */
+.si-crop-alert-hvd-icon:not(.si-crop-alert-hvd-icon--enhanced) .si-crop-alert-hvd-icon__body-gloss,
+.si-crop-alert-hvd-icon:not(.si-crop-alert-hvd-icon--enhanced) .si-crop-alert-hvd-icon__shine {
+  display: none;
+}
+
+.si-crop-alert-hvd-icon--enhanced .si-crop-alert-hvd-icon__svg {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.28));
+}
+
+.si-crop-alert-hvd-icon--enhanced.si-crop-alert-hvd-icon--selected .si-crop-alert-hvd-icon__svg,
+.si-crop-alert-hvd-icon--enhanced:hover .si-crop-alert-hvd-icon__svg {
+  transform: translateZ(0) scale(1.08);
+  filter:
+    drop-shadow(0 0 10px color-mix(in srgb, var(--hvd-tone) 62%, transparent))
+    drop-shadow(0 4px 10px rgba(0, 0, 0, 0.32));
+}
+
+.si-crop-alert-hvd-icon__pulse {
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--hvd-tone) 72%, #fff 28%);
+  opacity: 0;
+  transform: scale(0.55);
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation: si-crop-alert-hvd-pulse var(--hvd-pulse-ms, 2.2s) ease-out infinite;
+}
+
+.si-crop-alert-hvd-icon--rings .si-crop-alert-hvd-icon__pulse::after {
+  content: '';
+  position: absolute;
+  inset: -6%;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--hvd-tone) 48%, transparent);
+  opacity: 0;
+  animation: si-crop-alert-hvd-pulse var(--hvd-pulse-ms, 2.2s) ease-out infinite;
+  animation-delay: calc(var(--hvd-pulse-ms, 2.2s) * 0.35);
+}
+
+.si-crop-alert-hvd-icon--pulse.si-crop-alert-hvd-icon--tier-critical {
+  --hvd-pulse-ms: 950ms;
+}
+
+.si-crop-alert-hvd-icon--pulse.si-crop-alert-hvd-icon--tier-stress {
+  --hvd-pulse-ms: 1450ms;
+}
+
+.si-crop-alert-hvd-icon--pulse.si-crop-alert-hvd-icon--tier-watch {
+  --hvd-pulse-ms: 2200ms;
+}
+
+.si-map-container--interacting .si-crop-alert-hvd-icon__pulse,
+.si-map-container--interacting .si-crop-alert-hvd-icon__pulse::after {
+  animation: none !important;
+  opacity: 0 !important;
+}
+
+@keyframes si-crop-alert-hvd-pulse {
+  0% {
+    transform: scale(0.55);
+    opacity: 0.62;
+  }
+  70% {
+    opacity: 0.12;
+  }
+  100% {
+    transform: scale(1.85);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .si-crop-alert-hvd-icon__pulse,
+  .si-crop-alert-hvd-icon__pulse::after {
+    animation: none;
+    opacity: 0.35;
+    transform: scale(1.05);
+  }
+}

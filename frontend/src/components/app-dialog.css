@@ -1,0 +1,90 @@
+/* Centered app dialogs — above most page overlays (GIS modals ~7k+) */
+.app-dialog-overlay {
+  z-index: 24000;
+  backdrop-filter: blur(8px);
+}
+
+.app-dialog-modal {
+  width: min(440px, calc(100vw - 32px));
+  max-width: 440px;
+  border-radius: 18px;
+  box-shadow:
+    0 4px 6px rgba(15, 23, 42, 0.04),
+    0 24px 60px rgba(15, 23, 42, 0.18);
+}
+
+.app-dialog-title {
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+
+.app-dialog-message {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ds-color-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.app-dialog-input {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.app-dialog-actions {
+  flex-wrap: wrap;
+}
+
+:root[dir='rtl'] .app-dialog-actions {
+  flex-direction: row-reverse;
+}
+
+.app-dialog-btn {
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid var(--ds-color-border);
+  background: var(--ds-color-surface-2);
+  color: var(--ds-color-text);
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.app-dialog-btn:hover {
+  background: var(--ds-color-surface);
+  border-color: rgba(100, 116, 139, 0.45);
+}
+
+.app-dialog-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ds-focus-ring);
+}
+
+.app-dialog-btn--primary {
+  border-color: rgba(4, 120, 87, 0.45);
+  background: linear-gradient(180deg, rgba(5, 150, 105, 0.98), rgba(4, 120, 87, 0.98));
+  color: #ecfdf5;
+}
+
+.app-dialog-btn--primary:hover {
+  filter: brightness(1.05);
+  border-color: rgba(4, 120, 87, 0.65);
+}
+
+.app-dialog-btn--danger {
+  border-color: rgba(220, 38, 38, 0.45);
+  background: linear-gradient(180deg, #ef4444, #dc2626);
+  color: #fff;
+}
+
+.app-dialog-btn--danger:hover {
+  filter: brightness(1.06);
+  border-color: rgba(185, 28, 28, 0.85);
+}

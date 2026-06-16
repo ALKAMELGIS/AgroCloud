@@ -1,0 +1,199 @@
+.pwa-install-root {
+  position: fixed;
+  inset: auto 12px 12px 12px;
+  z-index: 12000;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+@media (min-width: 1025px) {
+  .pwa-install-root {
+    display: none;
+  }
+}
+
+.pwa-install-card {
+  pointer-events: auto;
+  width: min(100%, 420px);
+  border-radius: 18px;
+  border: 1px solid rgba(4, 120, 87, 0.22);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98) 0%, rgba(236, 253, 245, 0.96) 100%);
+  box-shadow: 0 22px 56px rgba(15, 23, 42, 0.22);
+  padding: 16px 16px 14px;
+  color: #0f172a;
+  animation: pwa-install-slide-up 0.38s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+html[data-theme='dark'] .pwa-install-card {
+  background: linear-gradient(165deg, rgba(15, 23, 42, 0.98) 0%, rgba(6, 78, 59, 0.92) 100%);
+  border-color: rgba(52, 211, 153, 0.28);
+  color: #f8fafc;
+}
+
+@keyframes pwa-install-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.pwa-install-card__head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 12px;
+}
+
+.pwa-install-card__mark {
+  color: #047857;
+  padding: 6px;
+  border-radius: 12px;
+  background: rgba(4, 120, 87, 0.1);
+  border: 1px solid rgba(4, 120, 87, 0.16);
+}
+
+html[data-theme='dark'] .pwa-install-card__mark {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(52, 211, 153, 0.24);
+}
+
+.pwa-install-card__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.pwa-install-card__sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(51, 65, 85, 0.92);
+}
+
+html[data-theme='dark'] .pwa-install-card__sub {
+  color: rgba(226, 232, 240, 0.88);
+}
+
+.pwa-install-card__close {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.pwa-install-features,
+.pwa-install-steps {
+  margin: 0 0 14px;
+  padding: 0 0 0 18px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.pwa-install-steps[dir='rtl'],
+[dir='rtl'] .pwa-install-steps {
+  padding: 0 18px 0 0;
+}
+
+.pwa-install-features {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pwa-install-features li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pwa-install-features i {
+  color: #047857;
+  width: 18px;
+  text-align: center;
+}
+
+html[data-theme='dark'] .pwa-install-features i {
+  color: #34d399;
+}
+
+.pwa-install-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pwa-install-btn {
+  flex: 1 1 auto;
+  min-height: 42px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 650;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.pwa-install-btn--primary {
+  background: linear-gradient(180deg, #059669 0%, #047857 100%);
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(4, 120, 87, 0.28);
+}
+
+.pwa-install-btn--ghost {
+  background: transparent;
+  border-color: rgba(100, 116, 139, 0.35);
+  color: inherit;
+}
+
+.pwa-install-fab {
+  position: fixed;
+  z-index: 11990;
+  right: max(14px, env(safe-area-inset-right, 0px));
+  bottom: max(14px, env(safe-area-inset-bottom, 0px));
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid rgba(4, 120, 87, 0.28);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #059669 0%, #047857 100%);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 650;
+  box-shadow: 0 14px 32px rgba(4, 120, 87, 0.34);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.pwa-install-fab i {
+  font-size: 15px;
+}
+
+.pwa-install-fab__label {
+  white-space: nowrap;
+}
+
+@media (min-width: 1025px) {
+  .pwa-install-fab {
+    display: none;
+  }
+}
+
+html[dir='rtl'] .pwa-install-fab {
+  right: auto;
+  left: max(14px, env(safe-area-inset-left, 0px));
+}

@@ -1,0 +1,2 @@
+export { AgriAppIcon } from './AgriAppIcon'
+

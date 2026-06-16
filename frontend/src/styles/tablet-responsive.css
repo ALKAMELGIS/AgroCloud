@@ -1,0 +1,38 @@
+/**
+ * Tablet-only responsive (768px–1023px).
+ * Desktop (≥1024px) and mobile (<768px) styles are not overridden here.
+ */
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  /* Wide tables and grids stay inside the viewport */
+  .app-layout > .content .page :is(table, .table-wrap, [class*='table-wrap'], [class*='__table-wrap']) {
+    max-width: 100%;
+  }
+
+  .app-layout > .content .page [class*='table-wrap'],
+  .admin-users__table-wrap,
+  .recipes-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Home hub: balanced tile grid on tablet widths */
+  .home-page {
+    padding: clamp(16px, 2.5vw, 28px);
+  }
+
+  .home-apps-list {
+    grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+    gap: clamp(10px, 2vw, 18px);
+  }
+
+  .home-quick-access {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+
+  /* Operations / data pages: prevent horizontal bleed */
+  .content--operations-fit .page,
+  .content--sensors-fit .page {
+    overflow-x: hidden;
+  }
+}
