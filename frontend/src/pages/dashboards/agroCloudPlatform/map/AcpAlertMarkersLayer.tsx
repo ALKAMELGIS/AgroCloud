@@ -6,7 +6,6 @@ import { filterCropAlertMarkersForViewport } from '../../../../lib/siCropAlertMa
 import type { LngLatBBox } from '../../../../lib/siMapViewport'
 import { SiCropAlertMapMarker } from '../../../satellite/components/SiCropAlertMapMarker'
 import { debounceAcpMap } from './acpMapInteraction'
-import { resolveAcpCoMarkerPixelOffset } from './acpMapMarkerLayout'
 
 type MarkerEntry = {
   marker: maplibregl.Marker
@@ -19,8 +18,8 @@ export type AcpAlertMarkersLayerProps = {
   selectedFieldKey: string | null
   viewportBbox: LngLatBBox | null
   enabled: boolean
-  coLocatedFieldKeys?: ReadonlySet<string>
   interactionSuspendedRef?: React.RefObject<boolean>
+  mapInteractEpoch?: number
   onSelect: (fieldKey: string) => void
 }
 
@@ -30,8 +29,8 @@ export function AcpAlertMarkersLayer({
   selectedFieldKey,
   viewportBbox,
   enabled,
-  coLocatedFieldKeys,
   interactionSuspendedRef,
+  mapInteractEpoch = 0,
   onSelect,
 }: AcpAlertMarkersLayerProps) {
   const markersRef = useRef<globalThis.Map<string, MarkerEntry>>(new globalThis.Map())
@@ -113,22 +112,18 @@ export function AcpAlertMarkersLayer({
       if (!Number.isFinite(lng) || !Number.isFinite(lat)) continue
 
       let entry = store.get(result.fieldKey)
-      const coLocated = Boolean(coLocatedFieldKeys?.has(result.fieldKey))
-      const markerOffset = resolveAcpCoMarkerPixelOffset('chas', coLocated)
 
       if (!entry) {
         const el = document.createElement('div')
         el.classList.add('acp-alert-marker-host')
-        if (coLocated) el.classList.add('acp-alert-marker-host--co-located')
-        const marker = new maplibregl.Marker({ element: el, anchor: 'center', offset: markerOffset })
+        const marker = new maplibregl.Marker({ element: el, anchor: 'center', offset: [0, 0] })
           .setLngLat([lng, lat])
           .addTo(map)
         entry = { marker, root: createRoot(el) }
         store.set(result.fieldKey, entry)
       } else {
         entry.marker.setLngLat([lng, lat])
-        entry.marker.setOffset(markerOffset)
-        entry.marker.getElement().classList.toggle('acp-alert-marker-host--co-located', coLocated)
+        entry.marker.setOffset([0, 0])
       }
 
       const hostEl = entry.marker.getElement()
@@ -142,13 +137,13 @@ export function AcpAlertMarkersLayer({
           popupOpen={popupFieldKey === result.fieldKey}
           dimmed={Boolean(popupFieldKey && popupFieldKey !== result.fieldKey)}
           iconSize="md"
+          popupVariant="mapPin"
           onSelect={handleSelect}
           onClosePopup={() => setPopupFieldKey(null)}
         />,
       )
     }
   }, [
-    coLocatedFieldKeys,
     enabled,
     handleSelect,
     interactionSuspendedRef,
@@ -157,6 +152,7 @@ export function AcpAlertMarkersLayer({
     selectedFieldKey,
     stableResults.length,
     visibleResults,
+    mapInteractEpoch,
   ])
 
   useEffect(() => () => {

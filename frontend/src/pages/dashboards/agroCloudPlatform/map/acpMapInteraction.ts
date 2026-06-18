@@ -3,17 +3,26 @@ import type { AcpMapLayerVisibility } from '../acpMapLayerVisibility'
 import { ACP_SOURCE_PORTAL_PREFIX } from './acpPortalMapLayers'
 
 const ACP_WMS_PREFIX = 'acp-sentinel-wms-'
+const ACP_LAYER_AOI_FILL = 'acp-aoi-fill'
+const ACP_LAYER_AOI_LINE = 'acp-aoi-line'
 
 function mapStyleLayers(map: MaplibreMap) {
   return map.getStyle()?.layers ?? []
 }
 
+function readLayerVisible(map: MaplibreMap, layerId: string): boolean {
+  if (!map.getLayer(layerId)) return false
+  return map.getLayoutProperty(layerId, 'visibility') !== 'none'
+}
+
 export type AcpMapSuspendSnapshot = {
   wmsVisible: boolean
   portalVisible: Record<string, boolean>
+  aoiFillVisible: boolean
+  aoiLineVisible: boolean
 }
 
-/** Hide heavy raster/portal overlays during pan/zoom — sources stay mounted (no reload flicker). */
+/** Hide heavy raster/portal/aoi overlays during pan/zoom — sources stay mounted (no reload flicker). */
 export function suspendAcpMapHeavyOverlays(
   map: MaplibreMap,
   portalLayerIds: string[],
@@ -29,6 +38,15 @@ export function suspendAcpMapHeavyOverlays(
     }
   }
 
+  const aoiFillVisible = readLayerVisible(map, ACP_LAYER_AOI_FILL)
+  const aoiLineVisible = readLayerVisible(map, ACP_LAYER_AOI_LINE)
+  if (map.getLayer(ACP_LAYER_AOI_FILL)) {
+    map.setLayoutProperty(ACP_LAYER_AOI_FILL, 'visibility', 'none')
+  }
+  if (map.getLayer(ACP_LAYER_AOI_LINE)) {
+    map.setLayoutProperty(ACP_LAYER_AOI_LINE, 'visibility', 'none')
+  }
+
   let wmsWasVisible = false
   for (const layer of mapStyleLayers(map)) {
     if (!layer.id.startsWith(ACP_WMS_PREFIX) || !layer.id.endsWith('-raster')) continue
@@ -37,7 +55,7 @@ export function suspendAcpMapHeavyOverlays(
     map.setLayoutProperty(layer.id, 'visibility', 'none')
   }
 
-  return { wmsVisible: wmsWasVisible, portalVisible }
+  return { wmsVisible: wmsWasVisible, portalVisible, aoiFillVisible, aoiLineVisible }
 }
 
 export function restoreAcpMapHeavyOverlays(
@@ -47,6 +65,17 @@ export function restoreAcpMapHeavyOverlays(
   wmsOnMap: boolean,
   suspendSnap: AcpMapSuspendSnapshot | null,
 ) {
+  if (visibility.aoi) {
+    if (map.getLayer(ACP_LAYER_AOI_FILL)) {
+      const show = suspendSnap?.aoiFillVisible !== false
+      map.setLayoutProperty(ACP_LAYER_AOI_FILL, 'visibility', show ? 'visible' : 'none')
+    }
+    if (map.getLayer(ACP_LAYER_AOI_LINE)) {
+      const show = suspendSnap?.aoiLineVisible !== false
+      map.setLayoutProperty(ACP_LAYER_AOI_LINE, 'visibility', show ? 'visible' : 'none')
+    }
+  }
+
   if (wmsOnMap && visibility.sentinelWms) {
     for (const layer of mapStyleLayers(map)) {
       if (!layer.id.startsWith(ACP_WMS_PREFIX) || !layer.id.endsWith('-raster')) continue

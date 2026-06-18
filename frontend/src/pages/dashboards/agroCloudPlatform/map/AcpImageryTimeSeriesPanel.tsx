@@ -21,6 +21,7 @@ import { useAcpPlatform } from '../acpPlatformContext'
 import {
   aggregateImageryTimeSeries,
   aggregateImageryTimeSeriesMulti,
+  buildImageryCorrelationScatterAnalysis,
   buildImageryPieChartSlices,
   buildImageryScatterPoints,
   buildImageryTimeSeriesLayerGroups,
@@ -30,6 +31,7 @@ import {
   splitSeriesByYear,
   yearSplitChartColors,
   type ImageryChartType,
+  type ImageryCorrelationScatterAnalysis,
   type ImageryTimeSeriesLayerSeries,
 } from '../acpImageryTimeSeries'
 import {
@@ -240,12 +242,56 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
     }
   }, [labels, layerSeries])
 
-  const scatterChartData = useMemo((): ChartData<'scatter'> => {
+  const scatterCorrelation = useMemo((): ImageryCorrelationScatterAnalysis | null => {
+    if (chartType !== 'scatter' || layerSeries.length < 2 || !labels.length) return null
+    const xSeries = layerSeries[0]!
+    const ySeries = layerSeries[1]!
+    return buildImageryCorrelationScatterAnalysis(
+      labels,
+      xSeries.layerId,
+      xSeries.values,
+      ySeries.layerId,
+      ySeries.values,
+    )
+  }, [chartType, labels, layerSeries])
+
+  const scatterChartData = useMemo((): ChartData<'scatter' | 'line'> => {
     if (!labels.length || !layerSeries.length) return { labels: [], datasets: [] }
+
+    if (scatterCorrelation && scatterCorrelation.points.length >= 2) {
+      const pointColor = imageryLayerChartColor(0)
+      return {
+        datasets: [
+          {
+            type: 'scatter' as const,
+            label: `${scatterCorrelation.xLayerId} vs ${scatterCorrelation.yLayerId}`,
+            data: scatterCorrelation.points.map(point => ({ x: point.x, y: point.y })),
+            borderColor: pointColor,
+            backgroundColor: `${pointColor}cc`,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+          },
+          {
+            type: 'line' as const,
+            label: `Regression · R²=${scatterCorrelation.regression.r2.toFixed(3)}`,
+            data: scatterCorrelation.regressionLine,
+            borderColor: '#f97316',
+            backgroundColor: '#f97316',
+            borderWidth: 2,
+            borderDash: [6, 4],
+            pointRadius: 0,
+            pointHoverRadius: 0,
+            fill: false,
+          },
+        ],
+      }
+    }
+
     return {
       datasets: layerSeries.map((entry, index) => {
         const color = imageryLayerChartColor(index)
         return {
+          type: 'scatter' as const,
           label: entry.layerId,
           data: buildImageryScatterPoints(labels, entry.values),
           borderColor: color,
@@ -255,7 +301,7 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
         }
       }),
     }
-  }, [labels, layerSeries])
+  }, [labels, layerSeries, scatterCorrelation])
 
   const cartesianChartOptions = useMemo(
     () => ({
@@ -307,33 +353,74 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
       animation: { duration: loading ? 0 : 280 },
       plugins: {
         legend: {
-          display: layerSeries.length > 1 || hasRun,
+          display: layerSeries.length > 0 || hasRun,
           labels: { color: '#cbd5e1', boxWidth: 10, font: { size: 10 } },
         },
-        tooltip: { bodyFont: { size: 10 }, titleFont: { size: 10 } },
+        tooltip: {
+          bodyFont: { size: 10 },
+          titleFont: { size: 10 },
+          callbacks: scatterCorrelation
+            ? {
+                label(context: { datasetIndex: number; dataIndex: number; parsed: { x: number; y: number } }) {
+                  if (context.datasetIndex !== 0) {
+                    return `y = ${context.parsed.y.toFixed(3)}`
+                  }
+                  const point = scatterCorrelation.points[context.dataIndex]
+                  const date = point?.date ?? ''
+                  return date
+                    ? `${date} · ${scatterCorrelation.xLayerId}=${context.parsed.x.toFixed(3)} · ${scatterCorrelation.yLayerId}=${context.parsed.y.toFixed(3)}`
+                    : `${scatterCorrelation.xLayerId}=${context.parsed.x.toFixed(3)} · ${scatterCorrelation.yLayerId}=${context.parsed.y.toFixed(3)}`
+                },
+              }
+            : undefined,
+        },
       },
-      scales: {
-        x: {
-          type: 'linear' as const,
-          ticks: {
-            color: '#94a3b8',
-            maxTicksLimit: 10,
-            font: { size: 9 },
-            callback: (value: string | number) => {
-              const ms = typeof value === 'number' ? value : Number(value)
-              if (!Number.isFinite(ms)) return ''
-              return new Date(ms).toISOString().slice(0, 10)
+      scales: scatterCorrelation
+        ? {
+            x: {
+              type: 'linear' as const,
+              title: {
+                display: true,
+                text: scatterCorrelation.xLayerId,
+                color: '#94a3b8',
+                font: { size: 10, weight: '600' as const },
+              },
+              ticks: { color: '#94a3b8', maxTicksLimit: 8, font: { size: 9 } },
+              grid: { color: 'rgba(255,255,255,0.06)' },
+            },
+            y: {
+              title: {
+                display: true,
+                text: scatterCorrelation.yLayerId,
+                color: '#94a3b8',
+                font: { size: 10, weight: '600' as const },
+              },
+              ticks: { color: '#94a3b8', font: { size: 9 } },
+              grid: { color: 'rgba(255,255,255,0.06)' },
+            },
+          }
+        : {
+            x: {
+              type: 'linear' as const,
+              ticks: {
+                color: '#94a3b8',
+                maxTicksLimit: 10,
+                font: { size: 9 },
+                callback: (value: string | number) => {
+                  const ms = typeof value === 'number' ? value : Number(value)
+                  if (!Number.isFinite(ms)) return ''
+                  return new Date(ms).toISOString().slice(0, 10)
+                },
+              },
+              grid: { color: 'rgba(255,255,255,0.06)' },
+            },
+            y: {
+              ticks: { color: '#94a3b8', font: { size: 9 } },
+              grid: { color: 'rgba(255,255,255,0.06)' },
             },
           },
-          grid: { color: 'rgba(255,255,255,0.06)' },
-        },
-        y: {
-          ticks: { color: '#94a3b8', font: { size: 9 } },
-          grid: { color: 'rgba(255,255,255,0.06)' },
-        },
-      },
     }),
-    [loading, layerSeries.length, hasRun],
+    [loading, layerSeries.length, hasRun, scatterCorrelation],
   )
 
   const layerSummary = selectedLayerIds.join(', ')
@@ -424,7 +511,10 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
 
         <div className="acp-ts__meta">
           <span>
-            {layerSummary} · {fromDate} → {toDate}
+            {layerSummary}
+            {chartType === 'scatter' && layerSeries.length >= 2
+              ? ` · correlation ${layerSeries[0]?.layerId} → ${layerSeries[1]?.layerId}`
+              : ` · ${fromDate} → ${toDate}`}
           </span>
           <span>{selectedFieldLabel}</span>
         </div>
@@ -452,6 +542,33 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
             </div>
           )}
         </div>
+
+        {chartType === 'scatter' && scatterCorrelation ? (
+          <div className="acp-ts__scatter-insight">
+            <div className="acp-ts__scatter-head">
+              <span className="acp-ts__scatter-r2">
+                R² = <strong>{scatterCorrelation.regression.r2.toFixed(3)}</strong>
+              </span>
+              <span
+                className={[
+                  'acp-ts__scatter-rel',
+                  `acp-ts__scatter-rel--${scatterCorrelation.relationship.strength}`,
+                  scatterCorrelation.relationship.direction !== 'none'
+                    ? `acp-ts__scatter-rel--${scatterCorrelation.relationship.direction}`
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+              >
+                {scatterCorrelation.relationship.label}
+              </span>
+            </div>
+            <p className="acp-ts__scatter-gis">{scatterCorrelation.gisInsight}</p>
+            <p className="acp-ts__scatter-agro">{scatterCorrelation.agroInsight}</p>
+          </div>
+        ) : chartType === 'scatter' && hasRun && labels.length && layerSeries.length < 2 ? (
+          <p className="acp-ts__scatter-hint">Select two layers to run correlation scatter with regression and R².</p>
+        ) : null}
 
         {error && hasRun && labels.length ? <p className="acp-ts__error">{error}</p> : null}
 

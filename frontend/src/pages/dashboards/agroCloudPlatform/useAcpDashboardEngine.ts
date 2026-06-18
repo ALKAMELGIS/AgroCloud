@@ -59,13 +59,16 @@ import {
   resolveAgroStructuresPortalSignature,
   type AcpStructuresLoadRequest,
 } from './acpStructuresLoadPolicy'
+import { emitAcpAoiSync, installAcpGisRepositoryAoiListener } from './acpAoiSyncBus'
 import {
   maskHasUncachedAlertFields,
   pruneCropAlertResultsToMask,
 } from './acpStructuresAlertSync'
 import {
   buildAcpScopeKpiTotals,
+  isAcpDistributionMapLinked,
   isAcpViewportScopeActive,
+  resolveAcpDistributionGeoFeatures,
   resolveAcpScopeGeoFeatures,
 } from './acpViewportScope'
 import { purgeAcpWmsCachesForReferenceDate } from './acpWmsSpecCache'
@@ -240,6 +243,7 @@ export function useAcpDashboardEngine() {
           scopedFeats,
           resultsRef.current!,
           countryDescriptionMapRef.current,
+          { analysisDate: s.analysisDate },
         ),
       })
     },
@@ -620,8 +624,16 @@ export function useAcpDashboardEngine() {
     const isFirstObservation = observedPortalAgroSigRef.current === null
     observedPortalAgroSigRef.current = portalAgroSig
     if (isFirstObservation) return
+    emitAcpAoiSync({ reason: 'portal', signature: portalAgroSig, force: true })
     void loadStructuresRef.current({ reason: 'portal', showLoadingBanner: false, force: true })
   }, [portalAgroSig])
+
+  useEffect(() => {
+    return installAcpGisRepositoryAoiListener(() => {
+      emitAcpAoiSync({ reason: 'gis-repository', signature: resolveAgroStructuresPortalSignature(), force: true })
+      void loadStructuresRef.current({ reason: 'portal', showLoadingBanner: false, force: true })
+    })
+  }, [])
 
   useEffect(() => {
     const fullLayer = fullLayerRef.current
@@ -721,8 +733,10 @@ export function useAcpDashboardEngine() {
   const scopeFieldRows = useMemo(() => {
     if (!scopeFeatures.length) return acp.scopedFieldRows
     const resultsMap = new Map(acp.allResults.map(r => [r.fieldKey, r]))
-    return buildFieldTableRows(scopeFeatures, resultsMap, countryDescriptionMap)
-  }, [acp.allResults, acp.scopedFieldRows, countryDescriptionMap, scopeFeatures])
+    return buildFieldTableRows(scopeFeatures, resultsMap, countryDescriptionMap, {
+      analysisDate: acp.analysisDate,
+    })
+  }, [acp.allResults, acp.analysisDate, acp.scopedFieldRows, countryDescriptionMap, scopeFeatures])
 
   const filteredRows = useMemo(
     () => applyDecisionFilter(scopeFieldRows, acp.decisionFilter),
@@ -746,11 +760,27 @@ export function useAcpDashboardEngine() {
     ],
   )
 
-  const distributionRows = scopeFieldRows
+  const distributionMapLinked = useMemo(
+    () => isAcpDistributionMapLinked(acp.mapView),
+    [acp.mapView.bbox],
+  )
+
+  const distributionFeatures = useMemo(
+    () => resolveAcpDistributionGeoFeatures(acp.aoiMask, acp.mapView, acp.countryFilter),
+    [acp.aoiMask, acp.countryFilter, acp.mapView],
+  )
+
+  const distributionRows = useMemo(() => {
+    if (!distributionFeatures.length) return []
+    const resultsMap = new Map(acp.allResults.map(r => [r.fieldKey, r]))
+    return buildFieldTableRows(distributionFeatures, resultsMap, countryDescriptionMap, {
+      analysisDate: acp.analysisDate,
+    })
+  }, [acp.allResults, acp.analysisDate, countryDescriptionMap, distributionFeatures])
 
   const distributionDonut = useMemo(
-    () => vegetationDonutFromRows(scopeFieldRows),
-    [scopeFieldRows],
+    () => vegetationDonutFromRows(distributionRows),
+    [distributionRows],
   )
 
   const countries = useMemo((): AcpCountryOption[] => {
@@ -806,6 +836,7 @@ export function useAcpDashboardEngine() {
     liveAlertRows,
     displayKpiTotals,
     viewportScopeActive,
+    distributionMapLinked,
     distributionDonut,
     distributionRows,
     countries,

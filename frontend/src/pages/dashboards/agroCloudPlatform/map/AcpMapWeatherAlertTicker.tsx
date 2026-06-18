@@ -43,7 +43,7 @@ function TickerFieldBlock({
         .join(' ')}
       onClick={() => onFocusField(entry)}
       title={`Focus ${displayName} on map`}
-      aria-label={`${displayName}, ${country}, ${formatTemp(snapshot)}, focus on map`}
+      aria-label={`${displayName}, ${country}, ${formatTemp(snapshot)}, rain ${rain}, humidity ${rh}, wind ${wind}`}
     >
       {alertActive ? (
         <span className={`acp-weather-ticker__alert acp-weather-ticker__alert--${level}`}>
@@ -63,15 +63,24 @@ function TickerFieldBlock({
       <span className="acp-weather-ticker__dot" aria-hidden>
         ·
       </span>
-      <span>Rain {rain}</span>
+      <span className="acp-weather-ticker__metric acp-weather-ticker__metric--rain" title={`Rain ${rain}`}>
+        <i className="fa-solid fa-cloud-rain" aria-hidden />
+        <span>{rain}</span>
+      </span>
       <span className="acp-weather-ticker__dot" aria-hidden>
         ·
       </span>
-      <span>RH {rh}</span>
+      <span className="acp-weather-ticker__metric acp-weather-ticker__metric--rh" title={`Humidity ${rh}`}>
+        <i className="fa-solid fa-droplet" aria-hidden />
+        <span>{rh}</span>
+      </span>
       <span className="acp-weather-ticker__dot" aria-hidden>
         ·
       </span>
-      <span>Wind {wind}</span>
+      <span className="acp-weather-ticker__metric acp-weather-ticker__metric--wind" title={`Wind ${wind}`}>
+        <i className="fa-solid fa-wind" aria-hidden />
+        <span>{wind}</span>
+      </span>
     </button>
   )
 }
@@ -112,6 +121,8 @@ export function AcpWeatherAlertTicker() {
   const acp = useAcpPlatform()
   const { fields, entries, error } = useAcpWeatherFieldData()
 
+  if (!acp.layerVisibility.liveAlertTicker) return null
+
   const scrollDurationS = useMemo(
     () => resolveAcpWeatherTickerScrollDurationS(entries.length),
     [entries.length],
@@ -133,7 +144,7 @@ export function AcpWeatherAlertTicker() {
       <div className="acp-weather-ticker" role="status" aria-live="polite">
         <span className="acp-weather-ticker__badge">
           <i className="fa-solid fa-cloud-bolt" aria-hidden />
-          Alert Weather
+          Live Alert
         </span>
         <div className="acp-weather-ticker__viewport">
           <p className="acp-weather-ticker__fallback">{error}</p>
@@ -143,10 +154,10 @@ export function AcpWeatherAlertTicker() {
   }
 
   return (
-    <div className="acp-weather-ticker" role="region" aria-label="Weather alert ticker">
+    <div className="acp-weather-ticker" role="region" aria-label="Live Alert weather ticker">
       <span className="acp-weather-ticker__badge">
         <i className="fa-solid fa-cloud-bolt" aria-hidden />
-        Alert Weather
+        Live Alert
       </span>
       <div className="acp-weather-ticker__viewport">
         <TickerTrack

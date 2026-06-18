@@ -5,11 +5,13 @@ import { subtractDaysFromIso } from './siSentinelImageryDate'
 import { resolveAgroStructuresFieldDisplayName } from './agroStructuresPrimaryAoi'
 import {
   classifyCdsiInsightTier,
+  classifyDchasRiskTier,
   CDSI_INSIGHT_COLORS,
   CDSI_INSIGHT_EMOJI,
   CDSI_INSIGHT_LABELS,
   CDSI_INSIGHT_TIERS,
   CDSI_FORMULA_POPUP,
+  DCHAS_RISK_LABELS,
   chasInputsFromSnapshot,
   computeChas,
   estimateSaviFromNdvi,
@@ -93,7 +95,7 @@ export type NdviFieldCoverage = {
 }
 
 export type PopupEmbeddedIndex = {
-  id: 'NDVI' | 'NDWI' | 'NDMI'
+  id: 'NDVI' | 'NDWI' | 'NDMI' | 'SAVI'
   label: string
   value: number
 }
@@ -107,6 +109,7 @@ export type PopupEmbeddedChasTrend = {
 export type PopupEmbeddedInsight = {
   summary: string
   action: string
+  alertLevel: string
   chasLabels: string[]
   chasValues: number[]
   indices: PopupEmbeddedIndex[]
@@ -402,7 +405,21 @@ export function formatPopupAreaHa(ha: number | null | undefined): string {
   return `${ha.toFixed(2)} ha`
 }
 
-const CHAS_TREND_POINT_COUNT = 3
+export const CHAS_TREND_POINT_COUNT = 3
+
+/** Pad CHAS trend to a fixed slot count (oldest → newest); missing slots use em-dash + NaN. */
+export function ensureChasTrendPointCount(
+  series: { labels: string[]; values: number[] },
+  count = CHAS_TREND_POINT_COUNT,
+): { labels: string[]; values: number[] } {
+  const labels = series.labels.slice(-count)
+  const values = series.values.slice(-count)
+  while (labels.length < count) {
+    labels.unshift('—')
+    values.unshift(Number.NaN)
+  }
+  return { labels, values }
+}
 
 function formatChasTrendDateLabel(iso: string): string {
   return iso.slice(5) || '—'
@@ -495,9 +512,170 @@ export function buildChasTrendSeries(result: CropAlertFieldResult): { labels: st
   }
 
   const points = trendPoints.slice(-CHAS_TREND_POINT_COUNT)
-  return {
+  return ensureChasTrendPointCount({
     labels: points.map(p => formatChasTrendDateLabel(p.date)),
     values: points.map(p => computeChas(chasInputsFromSnapshot(p.snapshot))),
+  })
+}
+
+/** Index snapshot for a Sentinel scene date — engine series first, then extended daily history. */
+export function resolvePopupSnapshotForSceneDate(
+  result: CropAlertFieldResult,
+  sceneDate: string,
+  dailyRows?: SentinelHubDailyIndexMeans[],
+): CropAlertIndexSnapshot | null {
+  const want = sceneDate.trim().slice(0, 10)
+  const idx = (result.ndviSceneDates ?? []).findIndex(d => String(d).trim().slice(0, 10) === want)
+  if (idx >= 0) return resolveChasTrendSnapshotForScene(result, idx)
+
+  const hist = (dailyRows ?? []).find(d => String(d.date || '').trim().slice(0, 10) === want)
+  if (hist?.ndvi != null && Number.isFinite(hist.ndvi)) {
+    const derived = deriveCoherentIndicesFromNdvi(hist.ndvi, result.fieldKey, want)
+    return {
+      ndvi: hist.ndvi,
+      ndmi: hist.ndmi ?? derived.ndmi,
+      ndwi: hist.ndwi ?? derived.ndwi,
+      evi: hist.evi ?? derived.evi,
+      ciRe: hist.ciRe ?? derived.ciRe,
+    }
+  }
+  return null
+}
+
+export function resolvePopupIndicesForSceneDate(
+  result: CropAlertFieldResult,
+  sceneDate: string,
+  dailyRows?: SentinelHubDailyIndexMeans[],
+): PopupEmbeddedIndex[] {
+  const snapshot = resolvePopupSnapshotForSceneDate(result, sceneDate, dailyRows)
+  if (snapshot) {
+    return [
+      { id: 'NDVI', label: 'NDVI', value: snapshot.ndvi },
+      { id: 'NDWI', label: 'NDWI', value: snapshot.ndwi },
+      { id: 'NDMI', label: 'NDMI', value: snapshot.ndmi },
+      { id: 'SAVI', label: 'SAVI', value: estimateSaviFromNdvi(snapshot.ndvi) },
+    ]
+  }
+  return resolveEmbeddedInsightIndices(result)
+}
+
+/** Three-point CHAS trend ending at the selected scene (oldest → newest labels). */
+export function buildChasTrendSeriesForSceneDate(
+  result: CropAlertFieldResult,
+  anchorDate: string,
+  dailyRows?: SentinelHubDailyIndexMeans[],
+): { labels: string[]; values: number[] } {
+  const dates = mergePopupSceneDatesWithHistory(result, dailyRows)
+  const anchor = anchorDate.trim().slice(0, 10)
+  const anchorIdx = dates.indexOf(anchor)
+  if (anchorIdx < 0) return buildChasTrendSeries(result)
+
+  const windowDates = dates.slice(anchorIdx, anchorIdx + CHAS_TREND_POINT_COUNT)
+  const chronological = [...windowDates].reverse()
+  const trendPoints: Array<{ date: string; value: number }> = []
+
+  for (const date of chronological) {
+    const snapshot = resolvePopupSnapshotForSceneDate(result, date, dailyRows)
+    if (!snapshot) continue
+    trendPoints.push({ date, value: computeChas(chasInputsFromSnapshot(snapshot)) })
+  }
+
+  if (trendPoints.length < 2) return buildChasTrendSeries(result)
+
+  if (trendPoints.length < CHAS_TREND_POINT_COUNT && anchorIdx === 0) {
+    const fallback = buildChasTrendSeries(result)
+    if (fallback.values.length >= trendPoints.length) {
+      return {
+        labels: fallback.labels.slice(-CHAS_TREND_POINT_COUNT),
+        values: fallback.values.slice(-CHAS_TREND_POINT_COUNT),
+      }
+    }
+  }
+
+  const points = trendPoints.slice(-CHAS_TREND_POINT_COUNT)
+  return ensureChasTrendPointCount({
+    labels: points.map(p => formatChasTrendDateLabel(p.date)),
+    values: points.map(p => p.value),
+  })
+}
+
+export function resolveDeltaChasForSceneDate(
+  result: CropAlertFieldResult,
+  sceneDate: string,
+  dailyRows?: SentinelHubDailyIndexMeans[],
+): number | null {
+  const dates = mergePopupSceneDatesWithHistory(result, dailyRows)
+  const anchor = sceneDate.trim().slice(0, 10)
+  const idx = dates.indexOf(anchor)
+  if (idx < 0) return null
+
+  const currentSnap = resolvePopupSnapshotForSceneDate(result, dates[idx]!, dailyRows)
+  const prevDate = dates[idx + 1]
+  const prevSnap = prevDate ? resolvePopupSnapshotForSceneDate(result, prevDate, dailyRows) : null
+  if (!currentSnap || !prevSnap) return null
+
+  const current = computeChas(chasInputsFromSnapshot(currentSnap))
+  const previous = computeChas(chasInputsFromSnapshot(prevSnap))
+  return Number((current - previous).toFixed(4))
+}
+
+export function resolveAlertPresentationForSceneDate(
+  result: CropAlertFieldResult,
+  sceneDate: string,
+  dailyRows?: SentinelHubDailyIndexMeans[],
+): { label: string; deltaChas: number | null; chasCurrent: number | null } {
+  const deltaChas = resolveDeltaChasForSceneDate(result, sceneDate, dailyRows)
+  const tier = classifyDchasRiskTier(deltaChas)
+  const snapshot = resolvePopupSnapshotForSceneDate(result, sceneDate, dailyRows)
+  const chasCurrent = snapshot ? computeChas(chasInputsFromSnapshot(snapshot)) : null
+  return { label: DCHAS_RISK_LABELS[tier], deltaChas, chasCurrent }
+}
+
+/** Embedded insight card values aligned to a user-selected Sentinel scene date. */
+export function buildEmbeddedInsightForSceneDate(
+  result: CropAlertFieldResult,
+  sceneDate: string,
+  dailyRows?: SentinelHubDailyIndexMeans[],
+): PopupEmbeddedInsight {
+  const chasSeries = buildChasTrendSeriesForSceneDate(result, sceneDate, dailyRows)
+  const indices = resolvePopupIndicesForSceneDate(result, sceneDate, dailyRows)
+  const deltaChas = resolveDeltaChasForSceneDate(result, sceneDate, dailyRows)
+  const alertPresentation = resolveAlertPresentationForSceneDate(result, sceneDate, dailyRows)
+  const snapshot = resolvePopupSnapshotForSceneDate(result, sceneDate, dailyRows)
+  const tier = classifyDchasRiskTier(deltaChas)
+  const action = resolveFarmerFieldAction(result, tier)
+  const patchedResult: CropAlertFieldResult = snapshot
+    ? {
+        ...result,
+        deltaChas: deltaChas ?? result.deltaChas ?? null,
+        alertReasonLines: [
+          `NDVI current = ${snapshot.ndvi.toFixed(2)}`,
+          `NDWI current = ${snapshot.ndwi.toFixed(2)}`,
+          `NDMI current = ${snapshot.ndmi.toFixed(2)}`,
+        ],
+      }
+    : { ...result, deltaChas: deltaChas ?? result.deltaChas ?? null }
+
+  const base = buildEmbeddedInsightInterpretation(
+    patchedResult,
+    chasSeries.labels,
+    chasSeries.values,
+    action,
+  )
+
+  return {
+    ...base,
+    action,
+    alertLevel: alertPresentation.label,
+    chasLabels: chasSeries.labels,
+    chasValues: chasSeries.values,
+    indices,
+    deltaChas,
+    chasTrend: {
+      labels: chasSeries.labels,
+      values: chasSeries.values,
+      direction: resolveChasTrendDirection(chasSeries.values),
+    },
   }
 }
 
@@ -509,19 +687,19 @@ export function resolveAlertAction(result: CropAlertFieldResult, _level: string)
 const CHAS_TREND_EPSILON = 0.008
 
 function resolveEmbeddedInsightIndices(result: CropAlertFieldResult): PopupEmbeddedIndex[] {
-  const parsed = new Map<'NDVI' | 'NDWI' | 'NDMI', number>()
+  const parsed = new Map<'NDVI' | 'NDWI' | 'NDMI' | 'SAVI', number>()
   for (const line of result.alertReasonLines ?? []) {
-    const match = line.match(/^(NDVI|NDWI|NDMI)\s+current\s*=\s*(-?\d+(?:\.\d+)?)/i)
+    const match = line.match(/^(NDVI|NDWI|NDMI|SAVI)\s+current\s*=\s*(-?\d+(?:\.\d+)?)/i)
     if (!match) continue
-    parsed.set(match[1]!.toUpperCase() as 'NDVI' | 'NDWI' | 'NDMI', Number(match[2]))
+    parsed.set(match[1]!.toUpperCase() as 'NDVI' | 'NDWI' | 'NDMI' | 'SAVI', Number(match[2]))
   }
-  return (['NDVI', 'NDWI', 'NDMI'] as const).map(id => ({
-    id,
-    label: id,
-    value:
-      parsed.get(id) ??
-      (id === 'NDVI' ? result.current.ndvi : id === 'NDWI' ? result.current.ndwi : result.current.ndmi),
-  }))
+  const ndvi = parsed.get('NDVI') ?? result.current.ndvi
+  return [
+    { id: 'NDVI', label: 'NDVI', value: ndvi },
+    { id: 'NDWI', label: 'NDWI', value: parsed.get('NDWI') ?? result.current.ndwi },
+    { id: 'NDMI', label: 'NDMI', value: parsed.get('NDMI') ?? result.current.ndmi },
+    { id: 'SAVI', label: 'SAVI', value: parsed.get('SAVI') ?? estimateSaviFromNdvi(ndvi) },
+  ]
 }
 
 function resolveChasTrendDirection(values: number[]): PopupEmbeddedChasTrend['direction'] {
@@ -581,6 +759,7 @@ export function buildEmbeddedInsightInterpretation(
   return {
     summary: summary || trimmedAction,
     action: trimmedAction,
+    alertLevel: resolveDchasOrbPresentation(result).label,
     chasLabels,
     chasValues,
     indices: resolveEmbeddedInsightIndices(result),

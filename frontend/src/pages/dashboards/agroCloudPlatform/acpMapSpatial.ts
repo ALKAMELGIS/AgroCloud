@@ -17,6 +17,7 @@ import {
   type CropAlertFieldResult,
 } from '../../../lib/siCropAlertEngine'
 import { resolveDchasOrbPresentation } from '../../../lib/siCropAlertDchasBeacon'
+import { resolveNdviForPopupSceneDate, resolveDeltaChasForSceneDate } from '../../../lib/siCropAlertMapPopupModel'
 import type { SentinelHubDailyIndexMeans } from '../../../lib/sentinelHubStatisticsApi'
 
 export type AcpGeoFeature = {
@@ -134,6 +135,10 @@ export type AcpFieldTableRow = {
   chas: number | null
   deltaChas: number | null
   coveragePct: number | null
+  /** NDVI coverage change direction — derived from ΔCHAS vs previous Alert scene. */
+  coverageTrend: AcpCoverageTrendDirection
+  /** ΔCHAS used for coverage trend (previous scene). */
+  coverageTrendDelta: number | null
   alertTier: string
   alertColor: string
   status: string
@@ -142,22 +147,124 @@ export type AcpFieldTableRow = {
   result: CropAlertFieldResult | null
 }
 
+export type AcpCoverageTrendDirection = 'up' | 'down' | 'flat' | null
+
+const COVERAGE_TREND_CHAS_EPS = 0.003
+const COVERAGE_TREND_NDVI_PCT_EPS = 0.5
+
+function resolveRowCoveragePct(result: CropAlertFieldResult | null, sceneDate?: string): number | null {
+  if (!result) return null
+  const want = sceneDate?.trim().slice(0, 10)
+  if (want && /^\d{4}-\d{2}-\d{2}$/.test(want)) {
+    const sceneNdvi = resolveNdviForPopupSceneDate(result, want)
+    if (Number.isFinite(sceneNdvi)) {
+      return Number((Math.min(100, Math.max(0, sceneNdvi * 100))).toFixed(1))
+    }
+  }
+  const layerMean = result.layerLiveZonal?.ndvi?.mean
+  if (layerMean != null && Number.isFinite(layerMean)) {
+    return Number((Math.min(100, Math.max(0, layerMean * 100))).toFixed(1))
+  }
+  if (result.current?.ndvi != null && Number.isFinite(result.current.ndvi)) {
+    return Number((Math.min(100, Math.max(0, result.current.ndvi * 100))).toFixed(1))
+  }
+  return null
+}
+
+function resolveRowDeltaChas(result: CropAlertFieldResult | null, sceneDate?: string): number | null {
+  if (!result) return null
+  const want = sceneDate?.trim().slice(0, 10)
+  if (want && /^\d{4}-\d{2}-\d{2}$/.test(want)) {
+    const sceneDelta = resolveDeltaChasForSceneDate(result, want)
+    if (sceneDelta != null && Number.isFinite(sceneDelta)) return sceneDelta
+  }
+  if (result.deltaChas != null && Number.isFinite(result.deltaChas)) return result.deltaChas
+  return null
+}
+
+/** Coverage % trend arrow — primary signal is ΔCHAS on the Alert layer scene date. */
+export function resolveFieldCoverageTrend(
+  deltaChas: number | null,
+  fallback?: { currentNdvi: number | null; previousNdvi: number | null },
+): AcpCoverageTrendDirection {
+  if (deltaChas != null && Number.isFinite(deltaChas)) {
+    if (Math.abs(deltaChas) < COVERAGE_TREND_CHAS_EPS) return 'flat'
+    return deltaChas > 0 ? 'up' : 'down'
+  }
+  const current = fallback?.currentNdvi
+  const previous = fallback?.previousNdvi
+  if (current != null && previous != null && Number.isFinite(current) && Number.isFinite(previous)) {
+    const pctDelta = (current - previous) * 100
+    if (Math.abs(pctDelta) < COVERAGE_TREND_NDVI_PCT_EPS) return 'flat'
+    return pctDelta > 0 ? 'up' : 'down'
+  }
+  return null
+}
+
+function resolveRowCurrentNdvi(result: CropAlertFieldResult | null, sceneDate?: string): number | null {
+  if (!result) return null
+  const want = sceneDate?.trim().slice(0, 10)
+  if (want && /^\d{4}-\d{2}-\d{2}$/.test(want)) {
+    const ndvi = resolveNdviForPopupSceneDate(result, want)
+    if (Number.isFinite(ndvi)) return Math.max(0, Math.min(1, ndvi))
+  }
+  const layerMean = result.layerLiveZonal?.ndvi?.mean
+  if (layerMean != null && Number.isFinite(layerMean)) return Math.max(0, Math.min(1, layerMean))
+  if (result.current?.ndvi != null && Number.isFinite(result.current.ndvi)) {
+    return Math.max(0, Math.min(1, result.current.ndvi))
+  }
+  return null
+}
+
+function resolveRowPreviousNdvi(result: CropAlertFieldResult | null, sceneDate?: string): number | null {
+  if (!result) return null
+  const want = sceneDate?.trim().slice(0, 10)
+  if (want && /^\d{4}-\d{2}-\d{2}$/.test(want)) {
+    const dates = [...(result.ndviSceneDates ?? [])]
+      .map(d => String(d || '').trim().slice(0, 10))
+      .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d))
+      .sort((a, b) => b.localeCompare(a))
+    const prevDate = resolvePreviousAnalyticsSceneDate(dates, want)
+    if (prevDate) {
+      const ndvi = resolveNdviForPopupSceneDate(result, prevDate)
+      if (Number.isFinite(ndvi)) return Math.max(0, Math.min(1, ndvi))
+    }
+  }
+  const prev7 = result.previous7?.ndvi
+  if (prev7 != null && Number.isFinite(prev7)) return Math.max(0, Math.min(1, prev7))
+  const scenes = result.ndviSceneValues
+  if (scenes && scenes.length >= 2 && Number.isFinite(scenes[1]!)) {
+    return Math.max(0, Math.min(1, scenes[1]!))
+  }
+  return null
+}
+
+export type BuildFieldTableRowsOptions = {
+  /** Daily Alert / WMS analysis date — drives coverage % and ΔCHAS trend. */
+  analysisDate?: string
+}
+
 export function buildFieldTableRows(
   features: AcpGeoFeature[],
   resultsByKey: Map<string, CropAlertFieldResult>,
   countryDescriptionMap?: Map<string, string> | null,
+  options?: BuildFieldTableRowsOptions,
 ): AcpFieldTableRow[] {
+  const sceneDate = options?.analysisDate?.trim().slice(0, 10)
   return features.map((f, i) => {
     const props = f.properties ?? {}
     const fieldKey = computeStableGisFeatureKey(f, i)
     const result = resultsByKey.get(fieldKey) ?? null
     const orb = result ? resolveDchasOrbPresentation(result) : null
     const areaHa = resolveAgroStructuresFeatureAreaHa(props, f.geometry)
-    const coverage = result?.layerLiveZonal?.ndvi?.mean
-      ? Math.min(100, Math.max(0, result.layerLiveZonal.ndvi.mean * 100))
-      : result?.current?.ndvi != null
-        ? Math.min(100, Math.max(0, result.current.ndvi * 100))
-        : null
+    const coverage = resolveRowCoveragePct(result, sceneDate)
+    const deltaChas = resolveRowDeltaChas(result, sceneDate) ?? orb?.deltaChas ?? null
+    const currentNdvi = resolveRowCurrentNdvi(result, sceneDate)
+    const previousNdvi = resolveRowPreviousNdvi(result, sceneDate)
+    const coverageTrend = resolveFieldCoverageTrend(deltaChas, {
+      currentNdvi,
+      previousNdvi,
+    })
     return {
       fieldKey,
       objectId: String(props.OBJECTID ?? props.objectid ?? i),
@@ -173,8 +280,10 @@ export function buildFieldTableRows(
         resolveAgroStructuresCountryDisplayName(props, countryDescriptionMap) || '—',
       areaHa: Number.isFinite(areaHa) && areaHa > 0 ? Number(areaHa.toFixed(2)) : 0,
       chas: result?.chasCurrent ?? orb?.chasCurrent ?? null,
-      deltaChas: result?.deltaChas ?? orb?.deltaChas ?? null,
-      coveragePct: coverage != null ? Number(coverage.toFixed(1)) : null,
+      deltaChas,
+      coveragePct: coverage,
+      coverageTrend,
+      coverageTrendDelta: deltaChas,
       alertTier: orb?.tier ?? 'stable',
       alertColor: orb?.color ?? '#9e9e9e',
       status: result?.title ?? '—',
@@ -226,6 +335,43 @@ export function resolveFieldNdviMean(row: AcpFieldTableRow): number | null {
     return Math.max(0, Math.min(1, current))
   }
   return null
+}
+
+/** NDVI mean for a specific Sentinel scene date (engine series + zonal fallback). */
+export function resolveFieldNdviMeanForSceneDate(row: AcpFieldTableRow, sceneDate: string): number | null {
+  const want = sceneDate.trim().slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(want)) return resolveFieldNdviMean(row)
+  if (!row.result) return null
+  const ndvi = resolveNdviForPopupSceneDate(row.result, want)
+  if (!Number.isFinite(ndvi)) return null
+  return Math.max(0, Math.min(1, ndvi))
+}
+
+/** Scene dates available for Distribution analytics (newest first). */
+export function listAnalyticsSceneDates(rows: AcpFieldTableRow[], chartLabels: string[] = []): string[] {
+  const dates = new Set<string>()
+  for (const raw of chartLabels) {
+    const d = String(raw || '').trim().slice(0, 10)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) dates.add(d)
+  }
+  for (const row of rows) {
+    for (const raw of row.result?.ndviSceneDates ?? []) {
+      const d = String(raw || '').trim().slice(0, 10)
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d)) dates.add(d)
+    }
+    const imageDate = row.imageDate?.trim().slice(0, 10)
+    if (imageDate && /^\d{4}-\d{2}-\d{2}$/.test(imageDate)) dates.add(imageDate)
+    const usedDate = String(row.result?.usedDate ?? '').trim().slice(0, 10)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(usedDate)) dates.add(usedDate)
+  }
+  return [...dates].sort((a, b) => b.localeCompare(a))
+}
+
+export function resolvePreviousAnalyticsSceneDate(sceneDates: string[], sceneDate: string): string | null {
+  const want = sceneDate.trim().slice(0, 10)
+  const idx = sceneDates.findIndex(d => d === want)
+  if (idx < 0 || idx + 1 >= sceneDates.length) return null
+  return sceneDates[idx + 1] ?? null
 }
 
 export type AcpVegetationDonutStats = {
@@ -323,13 +469,15 @@ export function vegetationDonutFromRows(
 export function vegetationDonutTrendFromRows(
   rows: AcpFieldTableRow[],
   totalAreaHaOverride?: number,
+  ndviResolver: (row: AcpFieldTableRow) => number | null = resolveFieldNdviMean,
+  previousNdviResolver: (row: AcpFieldTableRow) => number | null = resolveFieldNdviMeanPrevious,
 ): AcpVegetationDonutTrend {
-  const current = vegetationDonutFromRows(rows, totalAreaHaOverride)
+  const current = vegetationDonutFromRows(rows, totalAreaHaOverride, ndviResolver)
   if (current.analyzedFieldCount === 0) {
     return { plantedShareDelta: null, direction: null }
   }
 
-  const previous = vegetationDonutFromRows(rows, totalAreaHaOverride, resolveFieldNdviMeanPrevious)
+  const previous = vegetationDonutFromRows(rows, totalAreaHaOverride, previousNdviResolver)
   if (previous.analyzedFieldCount === 0) {
     return { plantedShareDelta: null, direction: null }
   }
@@ -342,6 +490,25 @@ export function vegetationDonutTrendFromRows(
     return { plantedShareDelta: delta, direction: 'flat' }
   }
   return { plantedShareDelta: delta, direction: delta > 0 ? 'up' : 'down' }
+}
+
+/** Planted-share trend for a selected scene vs the previous catalog scene. */
+export function vegetationDonutTrendForSceneDate(
+  rows: AcpFieldTableRow[],
+  sceneDate: string,
+  sceneDates: string[],
+  totalAreaHaOverride?: number,
+): AcpVegetationDonutTrend {
+  const previousDate = resolvePreviousAnalyticsSceneDate(sceneDates, sceneDate)
+  if (!previousDate) {
+    return vegetationDonutTrendFromRows(rows, totalAreaHaOverride)
+  }
+  return vegetationDonutTrendFromRows(
+    rows,
+    totalAreaHaOverride,
+    row => resolveFieldNdviMeanForSceneDate(row, sceneDate),
+    row => resolveFieldNdviMeanForSceneDate(row, previousDate),
+  )
 }
 
 export type AcpLayerLiveIndexStats = {

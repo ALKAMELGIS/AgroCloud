@@ -490,8 +490,8 @@ export function buildSentinelHubWmsAoiClipChunks(
       geometryWkt3857: multiPolygon3857Wkt([ring]),
       evalscriptB64,
       aoiBoundsLngLat: lngLatBoundsFromOuterRings([ring]),
-    }));
-    return capWmsDisplayChunks(singleRingParts, maxTiles);
+    }))
+    return singleRingParts
   }
 
   let groups = packOuterRingsIntoWktChunkGroups(simplified, evalscriptB64);

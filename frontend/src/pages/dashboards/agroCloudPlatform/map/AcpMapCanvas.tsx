@@ -26,6 +26,8 @@ import {
   buildAcpWmsExtentTileSignature,
   resolveAcpWmsClipForMapView,
 } from '../acpWmsClip'
+import { buildAcpAoiSyncSignature, emitAcpAoiSync } from '../acpAoiSyncBus'
+import { geojsonCollectionSignature } from '../acpStructuresLoadPolicy'
 import {
   buildAcpWmsChunkTileEntries,
   wmsLayerIdForChunk,
@@ -45,7 +47,6 @@ import {
 } from './acpMapViewPublish'
 import { AcpAlertMarkersLayer } from './AcpAlertMarkersLayer'
 import { AcpWeatherAlertMarkersLayer } from './AcpWeatherAlertMarkersLayer'
-import { buildAcpCoLocatedMarkerFieldKeys } from './acpMapMarkerLayout'
 import { useAcpWeatherFieldData } from './AcpWeatherFieldProvider'
 import { patchAoiWeatherOnMap, applyAoiWeatherFillPaint } from './acpWeatherAoiPaint'
 import { syncAcpCountryBoundaryLayers } from './acpCountryBoundaries'
@@ -421,12 +422,16 @@ function syncAoiLayers(
   aoiSyncRef?: { signature: string; selectedKey: string },
 ) {
   const syncState = aoiSyncRef ?? { signature: '', selectedKey: '' }
-  const signature = `${aoiMask.features.length}:${String(aoiMask.features[0]?.properties?.OBJECTID ?? '')}:${String(aoiMask.features[aoiMask.features.length - 1]?.properties?.OBJECTID ?? '')}`
+  const signature = geojsonCollectionSignature(aoiMask)
   const sourceMissing = !map.getSource(ACP_SOURCE_AOI)
   const geometryChanged = signature !== syncState.signature || sourceMissing
 
   if (geometryChanged) {
     syncState.signature = signature
+    emitAcpAoiSync({
+      reason: 'map',
+      signature: buildAcpAoiSyncSignature(aoiMask),
+    })
     const enriched = {
       ...aoiMask,
       features: aoiMask.features.map((f, i) => {
@@ -512,8 +517,10 @@ export function AcpMapCanvas() {
   weatherEntriesRef.current = weatherEntries
 
   const containerRef = useRef<HTMLDivElement>(null)
+  const mapShellRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MaplibreMap | null>(null)
   const [mapInstance, setMapInstance] = useState<MaplibreMap | null>(null)
+  const [mapInteractEpoch, setMapInteractEpoch] = useState(0)
   const { layers: portalLayers } = useAcpPortalMapLayers()
   const portalLayersSignature = useMemo(
     () =>
@@ -781,7 +788,13 @@ export function AcpMapCanvas() {
       attributionControl: false,
       fadeDuration: 0,
       preserveDrawingBuffer: false,
+      renderWorldCopies: false,
+      maxPitch: 0,
+      antialias: false,
     } as maplibregl.MapOptions & { preserveDrawingBuffer?: boolean })
+
+    map.dragRotate.disable()
+    map.touchZoomRotate.disableRotation()
 
     const publishView = () => {
       const b = map.getBounds()
@@ -816,13 +829,16 @@ export function AcpMapCanvas() {
       if (generation !== mapGenerationRef.current) return
       if (!map.isStyleLoaded()) return
       mapInteractingRef.current = true
+      mapShellRef.current?.classList.add('acp-map--interacting')
       suspendSnapRef.current = suspendAcpMapHeavyOverlays(map, portalLayerIdsRef.current)
     }
 
     const debouncedMoveEnd = debounceAcpMap(() => {
       if (generation !== mapGenerationRef.current) return
+      mapShellRef.current?.classList.remove('acp-map--interacting')
       if (!map.isStyleLoaded()) {
         mapInteractingRef.current = false
+        setMapInteractEpoch(epoch => epoch + 1)
         return
       }
       mapInteractingRef.current = false
@@ -867,7 +883,8 @@ export function AcpMapCanvas() {
         setAllWmsRasterLayersDisplay(map, wmsOnMap)
         setAoiFillSuppressed(map, wmsOnMap)
       }
-    }, 600)
+      setMapInteractEpoch(epoch => epoch + 1)
+    }, 320)
 
     map.on('movestart', onMoveStart)
     map.on('moveend', debouncedMoveEnd)
@@ -976,6 +993,18 @@ export function AcpMapCanvas() {
 
   useEffect(() => {
     const map = mapRef.current
+    if (!map || !map.isStyleLoaded() || !acp.aoiSyncRevision) return
+    sessionClipRef.current = null
+    wmsKeyRef.current = ''
+    applyAoiLayersRef.current(map)
+    const snap = acpRef.current
+    if (snap.aoiMask?.features.length && snap.layerVisibility.sentinelWms) {
+      applyWmsRef.current(map, true)
+    }
+  }, [acp.aoiSyncRevision, mapInstance])
+
+  useEffect(() => {
+    const map = mapRef.current
     if (!map || !map.isStyleLoaded() || !acp.aoiMask?.features.length) return
     applyWmsRef.current(map, true)
   }, [acp.countryFilter, acp.aoiMask, acp.wmsParams.revision, mapInstance])
@@ -1025,33 +1054,20 @@ export function AcpMapCanvas() {
 
   const alertResults = acp.allResults
 
-  const coLocatedMarkerFieldKeys = useMemo(() => {
-    if (!acp.layerVisibility.liveChas || !acp.layerVisibility.weatherAlerts) {
-      return new Set<string>()
-    }
-    return buildAcpCoLocatedMarkerFieldKeys(
-      alertResults.map(r => r.fieldKey),
-      weatherEntries.map(e => e.fieldKey),
-    )
-  }, [
-    acp.layerVisibility.liveChas,
-    acp.layerVisibility.weatherAlerts,
-    alertResults,
-    weatherEntries,
-  ])
-
   return (
-    <div className={`acp-map${wmsLoading ? ' acp-map--wms-loading' : ''}`}>
+    <div
+      ref={mapShellRef}
+      className={`acp-map${wmsLoading ? ' acp-map--wms-loading' : ''}`}
+    >
       <div ref={containerRef} className="acp-map__canvas" />
       <AcpWeatherAlertMarkersLayer
         map={mapInstance}
         entries={weatherEntries}
-        selectedFieldKey={acp.selectedFieldKey}
         tickerFocusFieldKey={acp.weatherTickerFocusFieldKey}
         viewportBbox={acp.mapView.bbox}
         enabled={acp.layerVisibility.weatherAlerts}
         interactionSuspendedRef={mapInteractingRef}
-        onSelect={handleAlertSelect}
+        mapInteractEpoch={mapInteractEpoch}
       />
       <AcpAlertMarkersLayer
         map={mapInstance}
@@ -1059,8 +1075,8 @@ export function AcpMapCanvas() {
         selectedFieldKey={acp.selectedFieldKey}
         viewportBbox={acp.mapView.bbox}
         enabled={acp.layerVisibility.liveChas}
-        coLocatedFieldKeys={coLocatedMarkerFieldKeys}
         interactionSuspendedRef={mapInteractingRef}
+        mapInteractEpoch={mapInteractEpoch}
         onSelect={handleAlertSelect}
       />
       <div className="acp-map__scope">

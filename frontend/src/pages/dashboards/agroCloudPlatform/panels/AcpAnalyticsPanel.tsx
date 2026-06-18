@@ -1,15 +1,20 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  listAnalyticsSceneDates,
+  resolveFieldNdviMeanForSceneDate,
   vegetationDonutFromRows,
-  vegetationDonutTrendFromRows,
+  vegetationDonutTrendForSceneDate,
   type AcpFieldTableRow,
 } from '../acpMapSpatial'
 import { useAcpPlatform } from '../acpPlatformContext'
-
-const ALL_FIELDS_KEY = '__all__'
+import { ACP_ANALYTICS_ALL_FIELDS_KEY, AcpAnalyticsFieldSelect } from './AcpAnalyticsFieldSelect'
+import { AcpAnalyticsSceneDateControl } from './AcpAnalyticsSceneDateControl'
 
 type Props = {
   distributionRows: AcpFieldTableRow[]
+  /** Distribution stats follow the visible map extent (zoom / pan). */
+  distributionMapLinked?: boolean
+  /** Fields table is scoped to the map viewport. */
   viewportScopeActive?: boolean
 }
 
@@ -54,10 +59,21 @@ function TrendIndicator({
   )
 }
 
-export function AcpAnalyticsPanel({ distributionRows, viewportScopeActive = false }: Props) {
+export function AcpAnalyticsPanel({
+  distributionRows,
+  distributionMapLinked = false,
+  viewportScopeActive = false,
+}: Props) {
   const acp = useAcpPlatform()
   const [tab, setTab] = useState<'vegetation' | 'alerts'>('vegetation')
-  const [fieldFilter, setFieldFilter] = useState(ALL_FIELDS_KEY)
+  const [fieldFilter, setFieldFilter] = useState(ACP_ANALYTICS_ALL_FIELDS_KEY)
+
+  useEffect(() => {
+    if (fieldFilter === ACP_ANALYTICS_ALL_FIELDS_KEY) return
+    if (!distributionRows.some(r => r.fieldKey === fieldFilter)) {
+      setFieldFilter(ACP_ANALYTICS_ALL_FIELDS_KEY)
+    }
+  }, [distributionRows, fieldFilter])
 
   const fieldOptions = useMemo(
     () =>
@@ -68,13 +84,45 @@ export function AcpAnalyticsPanel({ distributionRows, viewportScopeActive = fals
   )
 
   const scopedRows = useMemo(() => {
-    if (fieldFilter === ALL_FIELDS_KEY) return distributionRows
+    if (fieldFilter === ACP_ANALYTICS_ALL_FIELDS_KEY) return distributionRows
     const hit = distributionRows.find(r => r.fieldKey === fieldFilter)
     return hit ? [hit] : []
   }, [distributionRows, fieldFilter])
 
-  const stats = useMemo(() => vegetationDonutFromRows(scopedRows), [scopedRows])
-  const trend = useMemo(() => vegetationDonutTrendFromRows(scopedRows), [scopedRows])
+  const sceneDates = useMemo(
+    () => listAnalyticsSceneDates(distributionRows, acp.chartLabels),
+    [acp.chartLabels, distributionRows],
+  )
+
+  const activeSceneDate = useMemo(() => {
+    const want = acp.analysisDate.trim().slice(0, 10)
+    if (sceneDates.includes(want)) return want
+    return sceneDates[0] ?? want
+  }, [acp.analysisDate, sceneDates])
+
+  const handleSceneDateChange = useCallback(
+    (next: string) => {
+      const iso = next.trim().slice(0, 10)
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return
+      acp.setAutoFollowDate(false)
+      acp.setAnalysisDate(iso)
+      acp.commitWmsLayer({ startDate: iso, endDate: iso })
+      acp.refreshEngine()
+    },
+    [acp],
+  )
+
+  const stats = useMemo(
+    () =>
+      vegetationDonutFromRows(scopedRows, undefined, row =>
+        resolveFieldNdviMeanForSceneDate(row, activeSceneDate),
+      ),
+    [activeSceneDate, scopedRows],
+  )
+  const trend = useMemo(
+    () => vegetationDonutTrendForSceneDate(scopedRows, activeSceneDate, sceneDates),
+    [activeSceneDate, sceneDates, scopedRows],
+  )
 
   const alertCounts = useMemo(() => {
     return {
@@ -87,17 +135,27 @@ export function AcpAnalyticsPanel({ distributionRows, viewportScopeActive = fals
 
   const alertTotal = alertCounts.critical + alertCounts.high + alertCounts.warning + alertCounts.normal
   const alertPct = (n: number) => (alertTotal > 0 ? Math.round((n / alertTotal) * 100) : 0)
-  const showUnanalyzed = stats.unanalyzedHa > 0.01 && fieldFilter === ALL_FIELDS_KEY
+  const showUnanalyzed = stats.unanalyzedHa > 0.01 && fieldFilter === ACP_ANALYTICS_ALL_FIELDS_KEY
   const ringPlantedPct = stats.plantedSharePct
   const ringUnplantedPct = stats.unplantedSharePct
   const selectedFieldLabel =
-    fieldFilter === ALL_FIELDS_KEY
+    fieldFilter === ACP_ANALYTICS_ALL_FIELDS_KEY
       ? 'All fields'
       : fieldOptions.find(r => r.fieldKey === fieldFilter)?.displayName ?? 'Field'
 
   return (
     <section className="acp-analytics">
-      <h2 className="acp-analytics__title">Distribution</h2>
+      <div className="acp-analytics__head">
+        <h2 className="acp-analytics__title">Distribution</h2>
+        {tab === 'vegetation' ? (
+          <AcpAnalyticsSceneDateControl
+            sceneDates={sceneDates}
+            sceneDate={activeSceneDate}
+            onSceneDateChange={handleSceneDateChange}
+            loading={acp.sentinelLoading || acp.engineLoading}
+          />
+        ) : null}
+      </div>
 
       <div className="acp-pill-tabs acp-pill-tabs--dist" role="tablist">
         <button
@@ -121,28 +179,18 @@ export function AcpAnalyticsPanel({ distributionRows, viewportScopeActive = fals
       </div>
 
       {tab === 'vegetation' ? (
-        <label className="acp-analytics__field-select">
-          <span className="acp-analytics__field-select-label">Field</span>
-          <select
-            value={fieldFilter}
-            onChange={e => setFieldFilter(e.target.value)}
-            aria-label="Select field for vegetation coverage"
-          >
-            <option value={ALL_FIELDS_KEY}>All fields</option>
-            {fieldOptions.map(row => (
-              <option key={row.fieldKey} value={row.fieldKey}>
-                {row.displayName}
-              </option>
-            ))}
-          </select>
-        </label>
+        <AcpAnalyticsFieldSelect
+          options={fieldOptions}
+          value={fieldFilter}
+          onChange={setFieldFilter}
+          aria-label="Select field for vegetation coverage"
+        />
       ) : null}
 
       <p className="acp-analytics__scope">
-        {acp.analysisDate} · {stats.totalFieldCount} total fields · {stats.totalAreaHa.toFixed(0)} ha · NDVI
-        Live
-        {viewportScopeActive ? ' · map view' : ''}
-        {fieldFilter !== ALL_FIELDS_KEY ? ` · ${selectedFieldLabel}` : ''}
+        {stats.totalFieldCount} total fields · {stats.totalAreaHa.toFixed(0)} ha · NDVI scene
+        {distributionMapLinked ? ' · map view' : ''}
+        {fieldFilter !== ACP_ANALYTICS_ALL_FIELDS_KEY ? ` · ${selectedFieldLabel}` : ''}
         {stats.analyzedFieldCount > 0 && stats.analyzedFieldCount < stats.totalFieldCount
           ? ` · ${stats.analyzedFieldCount} analyzed`
           : ''}
@@ -242,9 +290,14 @@ export function AcpAnalyticsPanel({ distributionRows, viewportScopeActive = fals
       <button
         type="button"
         className={`acp-analytics__hint${viewportScopeActive ? ' is-on' : ''}`}
+        title={
+          distributionMapLinked
+            ? 'Distribution follows the map. Click to sync the fields table too.'
+            : 'Sync the fields table to the map viewport'
+        }
         onClick={() => acp.setScopeMode('viewport')}
       >
-        <i className="fa-solid fa-hand-pointer" aria-hidden /> Sync table to map view
+        <i className="fa-solid fa-hand-pointer" aria-hidden /> Sync fields table to map view
       </button>
     </section>
   )

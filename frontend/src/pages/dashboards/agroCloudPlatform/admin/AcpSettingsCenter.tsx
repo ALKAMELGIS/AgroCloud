@@ -63,8 +63,9 @@ const CHART_SERIES_OPTIONS: Array<{ id: 'ndvi' | 'chas' | 'ndmi'; label: string 
 const CORE_LAYER_OPTIONS: Array<{ key: AcpCoreMapLayerKey; label: string }> = [
   { key: 'aoi', label: 'AOI / Agro Structures' },
   { key: 'sentinelWms', label: 'Sentinel WMS overlay' },
-  { key: 'weatherAlerts', label: 'Weather Alerts (AOI)' },
-  { key: 'liveChas', label: 'Live CHAS markers' },
+  { key: 'liveAlertTicker', label: 'Live Alert · ticker bar' },
+  { key: 'weatherAlerts', label: 'Weather · map markers & AOI' },
+  { key: 'liveChas', label: 'Live Alerts · map markers' },
 ]
 
 const MAP_TOOLBAR_OPTIONS: Array<{ key: keyof AcpMapToolbarConfig; label: string }> = [
@@ -206,6 +207,7 @@ export function AcpSettingsCenter() {
         aoi: draftLayerVisibility.aoi,
         sentinelWms: draftLayerVisibility.sentinelWms,
         liveChas: draftLayerVisibility.liveChas,
+        liveAlertTicker: draftLayerVisibility.liveAlertTicker,
         weatherAlerts: draftLayerVisibility.weatherAlerts,
       },
       defaultPortalLayerVisibility: portalDefaults,
@@ -239,6 +241,7 @@ export function AcpSettingsCenter() {
         aoi: draftLayerVisibility.aoi,
         sentinelWms: draftLayerVisibility.sentinelWms,
         liveChas: draftLayerVisibility.liveChas,
+        liveAlertTicker: draftLayerVisibility.liveAlertTicker,
         weatherAlerts: draftLayerVisibility.weatherAlerts,
       },
     })

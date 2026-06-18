@@ -10,6 +10,9 @@ import {
   portfolioAreaPct,
   resolveAcpMapHomeTarget,
   resolveAcpFieldLocateCenter,
+  listAnalyticsSceneDates,
+  resolveFieldCoverageTrend,
+  resolveFieldNdviMeanForSceneDate,
   vegetationDonutFromRows,
   type AcpFieldTableRow,
 } from './acpMapSpatial'
@@ -88,6 +91,19 @@ describe('resolveAcpMapHomeTarget', () => {
   })
 })
 
+describe('resolveFieldCoverageTrend', () => {
+  it('uses ΔCHAS sign for coverage trend direction', () => {
+    expect(resolveFieldCoverageTrend(0.05)).toBe('up')
+    expect(resolveFieldCoverageTrend(-0.08)).toBe('down')
+    expect(resolveFieldCoverageTrend(0.001)).toBe('flat')
+  })
+
+  it('falls back to NDVI delta when ΔCHAS is missing', () => {
+    expect(resolveFieldCoverageTrend(null, { currentNdvi: 0.62, previousNdvi: 0.51 })).toBe('up')
+    expect(resolveFieldCoverageTrend(null, { currentNdvi: 0.4, previousNdvi: 0.55 })).toBe('down')
+  })
+})
+
 describe('buildFieldTableRows', () => {
   it('derives area (ha) from polygon geometry when Area_ha attribute is missing', () => {
     const rows = buildFieldTableRows(
@@ -137,6 +153,8 @@ describe('vegetationDonutFromRows', () => {
     chas: null,
     deltaChas: null,
     coveragePct: null,
+    coverageTrend: null,
+    coverageTrendDelta: null,
     alertTier: 'stable',
     alertColor: '#9e9e9e',
     status: '—',
@@ -197,6 +215,43 @@ describe('vegetationDonutFromRows', () => {
     expect(stats.totalAreaHa).toBe(100)
     expect(stats.vegetationPct).toBe(60)
     expect(stats.plantedSharePct).toBe(60)
+  })
+})
+
+describe('listAnalyticsSceneDates', () => {
+  it('merges chart labels and field scene dates newest-first', () => {
+    const rows: AcpFieldTableRow[] = [
+      {
+        fieldKey: 'f1',
+        objectId: '1',
+        displayName: 'A',
+        structureType: 'PIVOT',
+        countryCode: '1',
+        country: 'UAE',
+        areaHa: 10,
+        chas: null,
+        deltaChas: null,
+        coveragePct: null,
+    coverageTrend: null,
+    coverageTrendDelta: null,
+        alertTier: 'stable',
+        alertColor: '#9e9e9e',
+        status: '—',
+        severity: 'normal',
+        imageDate: '2026-06-10',
+        result: {
+          ndviSceneDates: ['2026-06-10', '2026-05-20'],
+          ndviSceneValues: [0.5, 0.7],
+          current: { ndvi: 0.5, ndmi: 0.1, ndwi: 0.1, evi: 0.5 },
+        } as AcpFieldTableRow['result'],
+      },
+    ]
+    expect(listAnalyticsSceneDates(rows, ['2026-04-20'])).toEqual([
+      '2026-06-10',
+      '2026-05-20',
+      '2026-04-20',
+    ])
+    expect(resolveFieldNdviMeanForSceneDate(rows[0]!, '2026-05-20')).toBeCloseTo(0.7, 2)
   })
 })
 

@@ -24,6 +24,32 @@ export function isAcpViewportScopeActive(
   )
 }
 
+/** Distribution donut follows the visible map extent whenever a bbox is published. */
+export function isAcpDistributionMapLinked(mapView: AcpMapViewSlice): boolean {
+  return Boolean(mapView.bbox)
+}
+
+export function resolveAcpDistributionGeoFeatures(
+  mask: GeoJSON.FeatureCollection | null | undefined,
+  mapView: AcpMapViewSlice,
+  countryFilter: string,
+): AcpGeoFeature[] {
+  if (!mask?.features?.length) return []
+
+  let features = mask.features as AcpGeoFeature[]
+  if (mapView.bbox) {
+    features = filterGeoJsonFeaturesInBBox(mask, mapView.bbox)
+  }
+
+  if (countryFilter && countryFilter !== 'all') {
+    features = features.filter(
+      f => resolveAgroStructuresCountry(f.properties ?? {}) === countryFilter,
+    )
+  }
+
+  return features
+}
+
 export function resolveAcpScopeGeoFeatures(
   mask: GeoJSON.FeatureCollection | null | undefined,
   mapView: AcpMapViewSlice,

@@ -1,4 +1,3 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useAcpPlatform } from '../acpPlatformContext'
 import {
   ACP_WEATHER_FETCH_DEBOUNCE_MS,
@@ -9,10 +8,12 @@ import {
   buildAcpFieldWeatherLayerEntries,
   type AcpFieldWeatherLayerEntry,
 } from './acpWeatherAlertLayerModel'
+import { isAcpWeatherFeedActive } from '../acpMapLayerVisibility'
 import {
   ACP_WEATHER_TICKER_MAX_FIELDS,
   resolveAcpWeatherTickerFields,
 } from './acpWeatherAlertTickerModel'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 export type AcpWeatherFieldContextValue = {
   fields: ReturnType<typeof resolveAcpWeatherTickerFields>
@@ -32,11 +33,19 @@ export function useAcpWeatherFieldData(): AcpWeatherFieldContextValue {
   return useContext(AcpWeatherFieldContext)
 }
 
+async function loadWeatherFields(
+  fields: ReturnType<typeof resolveAcpWeatherTickerFields>,
+): Promise<AcpFieldWeatherLayerEntry[]> {
+  const weatherByField = await fetchAcpWeatherByFieldKeys(fields)
+  return buildAcpFieldWeatherLayerEntries(fields, weatherByField)
+}
+
 export function AcpWeatherFieldProvider({ children }: { children: ReactNode }) {
   const acp = useAcpPlatform()
   const [entries, setEntries] = useState<AcpFieldWeatherLayerEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const fieldsRef = useRef<ReturnType<typeof resolveAcpWeatherTickerFields>>([])
 
   const fields = useMemo(
     () =>
@@ -56,13 +65,16 @@ export function AcpWeatherFieldProvider({ children }: { children: ReactNode }) {
       acp.mapView.zoom,
       acp.scopeMode,
       acp.selectedFieldKey,
+      acp.aoiSyncRevision,
     ],
   )
 
+  fieldsRef.current = fields
   const fieldsKey = useMemo(() => fields.map(f => f.fieldKey).join('|'), [fields])
+  const weatherFeedActive = isAcpWeatherFeedActive(acp.layerVisibility)
 
   useEffect(() => {
-    if (!fieldsKey) {
+    if (!weatherFeedActive || !fieldsKey) {
       setEntries([])
       setError(null)
       setLoading(false)
@@ -74,9 +86,8 @@ export function AcpWeatherFieldProvider({ children }: { children: ReactNode }) {
     const load = async () => {
       setLoading(true)
       try {
-        const weatherByField = await fetchAcpWeatherByFieldKeys(fields)
+        const next = await loadWeatherFields(fieldsRef.current)
         if (cancelled) return
-        const next = buildAcpFieldWeatherLayerEntries(fields, weatherByField)
         setEntries(next)
         setError(next.length ? null : 'Weather data unavailable')
       } catch {
@@ -93,7 +104,31 @@ export function AcpWeatherFieldProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(debounce)
       window.clearInterval(interval)
     }
-  }, [fields, fieldsKey])
+  }, [fieldsKey, weatherFeedActive])
+
+  /** Immediate resync when AOI / alerts bus fires — no debounce. */
+  useEffect(() => {
+    if (!acp.aoiSyncRevision || !weatherFeedActive || !fieldsKey) return
+
+    let cancelled = false
+    void (async () => {
+      setLoading(true)
+      try {
+        const next = await loadWeatherFields(fieldsRef.current)
+        if (cancelled) return
+        setEntries(next)
+        setError(next.length ? null : 'Weather data unavailable')
+      } catch {
+        if (!cancelled) setError('Weather alert feed temporarily unavailable')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [acp.aoiSyncRevision, fieldsKey, weatherFeedActive])
 
   const value = useMemo(
     () => ({ fields, entries, loading, error }),

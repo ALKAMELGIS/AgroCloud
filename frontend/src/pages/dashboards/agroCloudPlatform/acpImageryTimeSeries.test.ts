@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   aggregateImageryTimeSeries,
   aggregateImageryTimeSeriesMulti,
+  buildImageryCorrelationScatterAnalysis,
   buildImageryPieChartSlices,
   buildImageryScatterPoints,
   bucketImagerySeriesByMonth,
   buildImageryTimeSeriesLayerGroups,
+  classifyScatterRelationship,
+  computeLinearRegression,
   evaluateImageryLayerDailyValue,
   flattenImageryTimeSeriesLayerOptions,
 } from './acpImageryTimeSeries'
@@ -102,5 +105,30 @@ describe('acpImageryTimeSeries', () => {
     const points = buildImageryScatterPoints(['2026-06-01', '2026-06-10'], [0.6, NaN])
     expect(points).toHaveLength(1)
     expect(points[0]?.y).toBe(0.6)
+  })
+
+  it('computes correlation scatter regression, R², and relationship labels', () => {
+    const labels = ['2026-06-01', '2026-06-10', '2026-06-20', '2026-07-01']
+    const ndvi = [0.4, 0.5, 0.6, 0.7]
+    const ndmi = [0.1, 0.2, 0.3, 0.4]
+
+    const analysis = buildImageryCorrelationScatterAnalysis(labels, 'NDVI', ndvi, 'NDMI', ndmi)
+    expect(analysis).not.toBeNull()
+    expect(analysis!.points).toHaveLength(4)
+    expect(analysis!.regression.r2).toBeGreaterThan(0.95)
+    expect(analysis!.regression.slope).toBeGreaterThan(0)
+    expect(analysis!.relationship.label).toMatch(/Strong Positive/)
+    expect(analysis!.regressionLine).toHaveLength(2)
+    expect(analysis!.gisInsight).toContain('R²=')
+    expect(analysis!.agroInsight).toContain('Agro ·')
+
+    const regression = computeLinearRegression([
+      { x: 0.8, y: 0.2 },
+      { x: 0.6, y: 0.4 },
+      { x: 0.4, y: 0.6 },
+    ])
+    expect(regression).not.toBeNull()
+    expect(regression!.r).toBeLessThan(0)
+    expect(classifyScatterRelationship(regression!).direction).toBe('negative')
   })
 })

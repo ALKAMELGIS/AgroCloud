@@ -17,9 +17,9 @@ export const ACP_WEATHER_TICKER_MAX_FIELDS = 32
 export const ACP_WEATHER_TICKER_GRID_PRECISION = 2
 /** Visual separator between field blocks in the scrolling ticker. */
 export const ACP_WEATHER_TICKER_FIELD_SEPARATOR = '◆'
-/** ~24 seconds per field block — slow airport-style crawl. */
-export const ACP_WEATHER_TICKER_SECONDS_PER_FIELD = 24
-export const ACP_WEATHER_TICKER_MIN_DURATION_S = 240
+/** ~20 seconds per field block — slow airport-style crawl. */
+export const ACP_WEATHER_TICKER_SECONDS_PER_FIELD = 20
+export const ACP_WEATHER_TICKER_MIN_DURATION_S = 200
 
 export type AcpWeatherTickerField = {
   fieldKey: string

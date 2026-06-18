@@ -14,6 +14,7 @@ export type AcpDefaultLayerVisibility = {
   aoi: boolean
   sentinelWms: boolean
   liveChas: boolean
+  liveAlertTicker: boolean
   weatherAlerts: boolean
 }
 
@@ -121,7 +122,7 @@ export const DEFAULT_ACP_PLATFORM_CONFIG: AcpPlatformConfig = {
   basemapId: 'esri',
   wmsLayerName: 'NDVI',
   cloudCoverage: 20,
-  maxWmsLayers: 32,
+  maxWmsLayers: 64,
   clipMode: 'stable',
   mapScopeMode: 'viewport',
   autoRefreshMinutes: 0,
@@ -134,7 +135,13 @@ export const DEFAULT_ACP_PLATFORM_CONFIG: AcpPlatformConfig = {
     { id: 'indices', name: 'Indices analysis', collapsed: false },
   ],
   geodashApiUrl: '',
-  defaultLayerVisibility: { aoi: true, sentinelWms: true, liveChas: false, weatherAlerts: false },
+  defaultLayerVisibility: {
+    aoi: true,
+    sentinelWms: true,
+    liveChas: false,
+    liveAlertTicker: true,
+    weatherAlerts: false,
+  },
   defaultPortalLayerVisibility: {},
   defaultCountryFilter: 'all',
   mapToolbar: {

@@ -84,9 +84,9 @@ describe('acpWeatherAlertTickerModel', () => {
   })
 
   it('uses slow scroll duration scaled by field count', () => {
-    expect(resolveAcpWeatherTickerScrollDurationS(1)).toBe(240)
-    expect(resolveAcpWeatherTickerScrollDurationS(10)).toBe(240)
-    expect(resolveAcpWeatherTickerScrollDurationS(20)).toBe(480)
+    expect(resolveAcpWeatherTickerScrollDurationS(1)).toBe(200)
+    expect(resolveAcpWeatherTickerScrollDurationS(10)).toBe(200)
+    expect(resolveAcpWeatherTickerScrollDurationS(20)).toBe(400)
   })
 
   it('maps country coded values to ArcGIS descriptions', () => {

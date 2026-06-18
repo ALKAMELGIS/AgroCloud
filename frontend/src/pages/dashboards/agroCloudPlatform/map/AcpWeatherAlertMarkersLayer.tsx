@@ -15,23 +15,21 @@ type MarkerEntry = {
 export type AcpWeatherAlertMarkersLayerProps = {
   map: MapLibreMap | null
   entries: AcpFieldWeatherLayerEntry[]
-  selectedFieldKey: string | null
   tickerFocusFieldKey: string | null
   viewportBbox: LngLatBBox | null
   enabled: boolean
   interactionSuspendedRef?: React.RefObject<boolean>
-  onSelect: (fieldKey: string) => void
+  mapInteractEpoch?: number
 }
 
 export function AcpWeatherAlertMarkersLayer({
   map,
   entries,
-  selectedFieldKey,
   tickerFocusFieldKey,
   viewportBbox,
   enabled,
   interactionSuspendedRef,
-  onSelect,
+  mapInteractEpoch = 0,
 }: AcpWeatherAlertMarkersLayerProps) {
   const markersRef = useRef<globalThis.Map<string, MarkerEntry>>(new globalThis.Map())
   const [mapZoom, setMapZoom] = useState<number | null>(null)
@@ -55,10 +53,10 @@ export function AcpWeatherAlertMarkersLayer({
 
   const alwaysVisibleKeys = useMemo(() => {
     const keys = new Set<string>()
-    if (selectedFieldKey) keys.add(selectedFieldKey)
     if (popupFieldKey) keys.add(popupFieldKey)
+    if (tickerFocusFieldKey) keys.add(tickerFocusFieldKey)
     return keys
-  }, [popupFieldKey, selectedFieldKey])
+  }, [popupFieldKey, tickerFocusFieldKey])
 
   const entriesRef = useRef(entries)
   entriesRef.current = entries.length > 0 ? entries : entriesRef.current
@@ -74,13 +72,9 @@ export function AcpWeatherAlertMarkersLayer({
     )
   }, [alwaysVisibleKeys, mapZoom, stableEntries, viewportBbox])
 
-  const handleSelect = useCallback(
-    (fieldKey: string) => {
-      onSelect(fieldKey)
-      setPopupFieldKey(prev => (prev === fieldKey ? prev : fieldKey))
-    },
-    [onSelect],
-  )
+  const handleWeatherOpen = useCallback((fieldKey: string) => {
+    setPopupFieldKey(prev => (prev === fieldKey ? null : fieldKey))
+  }, [])
 
   useEffect(() => {
     if (interactionSuspendedRef?.current) return
@@ -124,7 +118,7 @@ export function AcpWeatherAlertMarkersLayer({
         const marker = new maplibregl.Marker({
           element: el,
           anchor: placement.anchor,
-          offset: [0, 0],
+          offset: placement.pixelOffset,
         })
           .setLngLat(placement.lngLat)
           .addTo(map)
@@ -132,8 +126,7 @@ export function AcpWeatherAlertMarkersLayer({
         store.set(entry.fieldKey, markerEntry)
       } else {
         markerEntry.marker.setLngLat(placement.lngLat)
-        markerEntry.marker.setOffset([0, 0])
-        markerEntry.marker.getElement().classList.remove('acp-weather-marker-host--co-located')
+        markerEntry.marker.setOffset(placement.pixelOffset)
       }
 
       const hostEl = markerEntry.marker.getElement()
@@ -145,23 +138,22 @@ export function AcpWeatherAlertMarkersLayer({
       markerEntry.root.render(
         <AcpWeatherAlertMarker
           entry={entry}
-          selected={selectedFieldKey === entry.fieldKey}
+          selected={popupFieldKey === entry.fieldKey}
           popupOpen={popupFieldKey === entry.fieldKey}
           dimmed={Boolean(popupFieldKey && popupFieldKey !== entry.fieldKey)}
-          onSelect={handleSelect}
+          onSelect={handleWeatherOpen}
           onClosePopup={() => setPopupFieldKey(null)}
         />,
       )
     }
   }, [
     enabled,
-    handleSelect,
     interactionSuspendedRef,
     map,
     popupFieldKey,
-    selectedFieldKey,
     stableEntries.length,
     visibleEntries,
+    mapInteractEpoch,
   ])
 
   useEffect(

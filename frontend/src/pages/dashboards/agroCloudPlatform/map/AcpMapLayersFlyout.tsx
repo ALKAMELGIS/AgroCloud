@@ -36,10 +36,21 @@ export function AcpMapLayersFlyout({ onClose }: Props) {
           <label className="acp-map-panel__layer-row">
             <input
               type="checkbox"
+              checked={layerVisibility.liveAlertTicker}
+              onChange={e => acp.setCoreLayerVisible('liveAlertTicker', e.target.checked)}
+              aria-label="Show Live Alert weather ticker bar"
+            />
+            <span>Live Alert · ticker bar</span>
+          </label>
+        </li>
+        <li>
+          <label className="acp-map-panel__layer-row">
+            <input
+              type="checkbox"
               checked={layerVisibility.weatherAlerts}
               onChange={e => acp.setCoreLayerVisible('weatherAlerts', e.target.checked)}
             />
-            <span>Weather Alerts (AOI) · map only</span>
+            <span>Weather · map markers &amp; AOI</span>
           </label>
         </li>
         <li>
@@ -49,7 +60,7 @@ export function AcpMapLayersFlyout({ onClose }: Props) {
               checked={layerVisibility.liveChas}
               onChange={e => acp.setCoreLayerVisible('liveChas', e.target.checked)}
             />
-            <span>Live CHAS</span>
+            <span>Live Alerts · map markers</span>
           </label>
         </li>
         {registry.activeItemIds.map(id => {

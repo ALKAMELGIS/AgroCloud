@@ -10,10 +10,19 @@ import { quantizeAcpMapViewBbox } from './map/acpMapViewPublish'
 /** Safety cap when viewport holds an extreme number of fields (rare). */
 export const ACP_WMS_VIEWPORT_RING_CAP = 128
 
-/** At/above this zoom, WMS load set follows map extent (spatial definition query). */
+/** At/above this zoom, prefer one WMS raster source per field ring (when under tile cap). */
 export const ACP_WMS_FIELD_CLIP_MIN_ZOOM = 8
 
 export const ACP_WMS_RASTER_LAYER_CLEAR_CAP = 48
+
+/** Prefetch buffer around map extent — pyramid: tighter at field zoom, wider at overview. */
+export function resolveAcpWmsExtentPrefetchBuffer(zoom: number): number {
+  if (zoom >= 12) return 0.06
+  if (zoom >= 10) return 0.08
+  if (zoom >= ACP_WMS_FIELD_CLIP_MIN_ZOOM) return 0.12
+  if (zoom >= 6) return 0.18
+  return 0.28
+}
 
 export type AcpWmsSessionClipOptions = {
   /** Current map extent — spatial definition query (intersects), not geometry clip. */
@@ -218,14 +227,23 @@ export function buildAcpWmsSessionClipSignature(clip: GeoJSON.FeatureCollection)
   return `${ids.length}:${ids.slice(0, 8).join(',')}..${ids.slice(-4).join(',')}`
 }
 
-/** Quantized extent tile — avoids WMS reload on minor pan jitter. */
+/** Quantized extent tile — pyramid bands avoid WMS reload on minor pan jitter. */
 export function buildAcpWmsExtentTileSignature(
   bbox: LngLatBBox | null,
   zoom: number,
 ): string {
   if (!bbox) return `z${Math.floor(zoom)}`
   const q = quantizeAcpMapViewBbox(bbox)
-  const zBand = zoom < ACP_WMS_FIELD_CLIP_MIN_ZOOM ? 'overview' : zoom < 10 ? 'z8' : zoom < 12 ? 'z10' : 'z12'
+  const zBand =
+    zoom < 6
+      ? 'z6'
+      : zoom < ACP_WMS_FIELD_CLIP_MIN_ZOOM
+        ? 'z7'
+        : zoom < 10
+          ? 'z9'
+          : zoom < 12
+            ? 'z11'
+            : 'z12'
   return `${zBand}:${q.map(v => v.toFixed(3)).join(',')}`
 }
 
@@ -259,18 +277,19 @@ export type AcpWmsMapViewClipInput = {
 
 /**
  * Resolve WMS load set for current map view.
- * - Overview: full country dataMask (all AOI polygons, merged WMS chunks).
- * - Field zoom: extent spatial filter + scale cap; each AOI keeps full polygon dataMask.
+ * - Always uses current map extent when bbox is available (pyramid prefetch buffer).
+ * - Overview without bbox: full country dataMask (packed WMS chunks).
+ * - Each AOI keeps its full polygon for dataMask — extent is a spatial definition query only.
  */
 export function resolveAcpWmsClipForMapView(
   aoiMask: GeoJSON.FeatureCollection,
   view: AcpWmsMapViewClipInput,
 ): GeoJSON.FeatureCollection {
   const zoom = view.zoom ?? 0
-  if (zoom >= ACP_WMS_FIELD_CLIP_MIN_ZOOM && view.bbox) {
-    // Live map extent for AOI pick — quantization is only for cache signatures.
+  if (view.bbox) {
+    const buffer = resolveAcpWmsExtentPrefetchBuffer(zoom)
     return buildAcpWmsExtentLoadSet(aoiMask, {
-      viewportBBox: expandLngLatBBox(view.bbox, 0.08),
+      viewportBBox: expandLngLatBBox(view.bbox, buffer),
       mapCenter: view.center ?? undefined,
       countryFilter: view.countryFilter,
       maxFeatures: 0,

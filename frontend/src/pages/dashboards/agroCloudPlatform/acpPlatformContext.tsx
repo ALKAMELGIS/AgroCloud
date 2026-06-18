@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -32,6 +33,12 @@ import {
   type AcpCoreMapLayerKey,
   type AcpMapLayerVisibility,
 } from './acpMapLayerVisibility'
+import {
+  buildAcpAoiSyncSignature,
+  emitAcpAoiSync,
+  subscribeAcpAoiSync,
+} from './acpAoiSyncBus'
+import { geojsonCollectionSignature } from './acpStructuresLoadPolicy'
 
 export type AcpMapViewState = {
   bbox: LngLatBBox | null
@@ -102,6 +109,8 @@ export type AcpPlatformContextValue = {
   registerEngineSnapshot: (snap: Partial<AcpEngineSnapshot>) => void
   refreshEngine: () => void
   refreshEngineRef: React.MutableRefObject<(() => void) | null>
+  /** Bumped on every AOI auto-sync (weather, alerts, WMS listeners). */
+  aoiSyncRevision: number
   mapHomeRef: MutableRefObject<(() => void) | null>
   mapFocusGeoJsonRef: MutableRefObject<((geojson: GeoJSON.FeatureCollection) => void) | null>
   countryFilter: string
@@ -206,6 +215,7 @@ export function AcpPlatformProvider({ children }: { children: ReactNode }) {
     }
   })
   const refreshEngineRef = useMemo(() => ({ current: null as (() => void) | null }), [])
+  const [aoiSyncRevision, setAoiSyncRevision] = useState(0)
   const mapHomeRef = useRef<(() => void) | null>(null)
   const mapFocusGeoJsonRef = useRef<((geojson: GeoJSON.FeatureCollection) => void) | null>(null)
 
@@ -230,8 +240,42 @@ export function AcpPlatformProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const registerEngineSnapshot = useCallback((snap: Partial<AcpEngineSnapshot>) => {
-    setEngineSnap(prev => ({ ...prev, ...snap }))
+    setEngineSnap(prev => {
+      const next = { ...prev, ...snap }
+      const maskChanged =
+        snap.aoiMask !== undefined &&
+        geojsonCollectionSignature(snap.aoiMask) !== geojsonCollectionSignature(prev.aoiMask)
+      const outlineChanged =
+        snap.structureMapOutline !== undefined &&
+        geojsonCollectionSignature(snap.structureMapOutline) !==
+          geojsonCollectionSignature(prev.structureMapOutline)
+      const alertsChanged =
+        snap.allResults !== undefined &&
+        snap.allResults
+          .map(r => r.fieldKey)
+          .sort()
+          .join('|') !==
+          prev.allResults
+            .map(r => r.fieldKey)
+            .sort()
+            .join('|')
+
+      if (maskChanged || outlineChanged) {
+        emitAcpAoiSync({
+          reason: 'engine',
+          signature: buildAcpAoiSyncSignature(next.aoiMask, next.structureMapOutline),
+        })
+      } else if (alertsChanged) {
+        emitAcpAoiSync({
+          reason: 'alerts',
+          signature: buildAcpAoiSyncSignature(next.aoiMask, next.structureMapOutline),
+        })
+      }
+      return next
+    })
   }, [])
+
+  useEffect(() => subscribeAcpAoiSync(() => setAoiSyncRevision(rev => rev + 1)), [])
 
   const refreshEngine = useCallback(() => {
     refreshEngineRef.current?.()
@@ -272,6 +316,7 @@ export function AcpPlatformProvider({ children }: { children: ReactNode }) {
         aoi: layerVisibility.aoi,
         sentinelWms: layerVisibility.sentinelWms,
         liveChas: layerVisibility.liveChas,
+        liveAlertTicker: layerVisibility.liveAlertTicker,
         weatherAlerts: layerVisibility.weatherAlerts,
       },
     }))
@@ -348,6 +393,7 @@ export function AcpPlatformProvider({ children }: { children: ReactNode }) {
       saveCurrentLayerDefaultsToConfig,
       saveCurrentPortalLayerDefaultsToConfig,
       portalLayerCount: engineSnap.portalLayerCount,
+      aoiSyncRevision,
       refreshEngine,
       refreshEngineRef,
       mapHomeRef,
@@ -384,6 +430,7 @@ export function AcpPlatformProvider({ children }: { children: ReactNode }) {
       applyDashboardDefaultsFromConfig,
       saveCurrentLayerDefaultsToConfig,
       saveCurrentPortalLayerDefaultsToConfig,
+      aoiSyncRevision,
       refreshEngine,
       refreshEngineRef,
       mapHomeRef,

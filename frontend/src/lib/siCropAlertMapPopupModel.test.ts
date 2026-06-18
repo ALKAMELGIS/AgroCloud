@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildChasTrendSeriesForSceneDate,
+  ensureChasTrendPointCount,
+  CHAS_TREND_POINT_COUNT,
   buildCropAlertPopupViewModel,
+  buildEmbeddedInsightForSceneDate,
   buildEmbeddedInsightInterpretation,
   estimateFieldCoverage,
   estimateNdviFieldCoverage,
   estimateNdviFieldCoverageForScene,
   mergePopupSceneDatesWithHistory,
+  resolveDeltaChasForSceneDate,
   resolveFieldAreaHaFromGeometry,
+  resolvePopupIndicesForSceneDate,
 } from './siCropAlertMapPopupModel'
 import { computeChas, chasInputsFromSnapshot, classifyCdsiInsightTier, CDSI_INSIGHT_EMOJI } from './siCropAlertDchasBeacon'
 import { deriveCoherentIndicesFromNdvi } from './siCropAlertEngine'
@@ -80,8 +86,9 @@ describe('siCropAlertMapPopupModel', () => {
     const vm = buildCropAlertPopupViewModel(result)
     expect(vm.embeddedInsight.chasLabels).toEqual(vm.chasTrend.labels)
     expect(vm.embeddedInsight.chasValues).toEqual(vm.chasTrend.values)
-    expect(vm.embeddedInsight.indices).toHaveLength(3)
+    expect(vm.embeddedInsight.indices).toHaveLength(4)
     expect(vm.embeddedInsight.indices[0]?.id).toBe('NDVI')
+    expect(vm.embeddedInsight.indices[3]?.id).toBe('SAVI')
     expect(vm.embeddedInsight.deltaChas).not.toBeNull()
     expect(vm.embeddedInsight.summary).toContain('NDVI current = 0.35')
     expect(vm.embeddedInsight.summary).toContain('CHAS trend')
@@ -302,5 +309,42 @@ describe('siCropAlertMapPopupModel', () => {
       { date: '2026-05-20', ndvi: 0.62, ndwi: 0.18, ndmi: 0.38, evi: 0.48, ciRe: 0.09 },
     ])
     expect(coverage.vegetationPct).toBe(62)
+  })
+
+  it('builds scene-date insight with indices, CHAS trend, and delta for historical scenes', () => {
+    const result = baseResult({
+      current: testSnapshot(0.51, 0.08, -0.35),
+      previous7: testSnapshot(0.61, 0.14, -0.22),
+      ndviSceneDates: ['2026-06-09', '2026-05-20', '2026-04-20'],
+      ndviSceneValues: [0.51, 0.61, 0.72],
+      ndmiSceneValues: [0.08, 0.14, 0.2],
+      ndwiSceneValues: [-0.35, -0.22, -0.1],
+    })
+
+    const indices = resolvePopupIndicesForSceneDate(result, '2026-05-20')
+    expect(indices.find(i => i.id === 'NDVI')?.value).toBeCloseTo(0.61, 2)
+
+    const trend = buildChasTrendSeriesForSceneDate(result, '2026-05-20')
+    expect(trend.labels).toEqual(['—', '04-20', '05-20'])
+    expect(trend.values).toHaveLength(CHAS_TREND_POINT_COUNT)
+
+    const latestTrend = buildChasTrendSeriesForSceneDate(result, '2026-06-09')
+    expect(latestTrend.labels).toEqual(['04-20', '05-20', '06-09'])
+    expect(latestTrend.values).toHaveLength(CHAS_TREND_POINT_COUNT)
+
+    const padded = ensureChasTrendPointCount({ labels: ['05-20'], values: [0.1] })
+    expect(padded.labels).toEqual(['—', '—', '05-20'])
+
+    const delta = resolveDeltaChasForSceneDate(result, '2026-06-09')
+    expect(delta).not.toBeNull()
+
+    const insight = buildEmbeddedInsightForSceneDate(result, '2026-05-20')
+    expect(insight.indices[0]?.value).toBeCloseTo(0.61, 2)
+    expect(insight.chasTrend.labels.length).toBe(CHAS_TREND_POINT_COUNT)
+    expect(insight.alertLevel).toBeTruthy()
+
+    const latestInsight = buildEmbeddedInsightForSceneDate(result, '2026-06-09')
+    expect(latestInsight.indices[0]?.value).toBeCloseTo(0.51, 2)
+    expect(latestInsight.indices[0]?.value).not.toBeCloseTo(insight.indices[0]!.value, 2)
   })
 })

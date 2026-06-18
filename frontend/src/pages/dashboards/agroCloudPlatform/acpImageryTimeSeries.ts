@@ -295,3 +295,238 @@ export function buildImageryScatterPoints(
   }
   return points
 }
+
+export type ImageryCorrelationPoint = { x: number; y: number; date: string }
+
+export type LinearRegressionResult = {
+  slope: number
+  intercept: number
+  r: number
+  r2: number
+  n: number
+}
+
+export type ScatterRelationshipStrength = 'strong' | 'moderate' | 'weak' | 'none'
+export type ScatterRelationshipDirection = 'positive' | 'negative' | 'none'
+
+export type ScatterRelationshipPresentation = {
+  strength: ScatterRelationshipStrength
+  direction: ScatterRelationshipDirection
+  label: string
+}
+
+export type ImageryCorrelationScatterAnalysis = {
+  xLayerId: string
+  yLayerId: string
+  points: ImageryCorrelationPoint[]
+  regression: LinearRegressionResult
+  relationship: ScatterRelationshipPresentation
+  gisInsight: string
+  agroInsight: string
+  regressionLine: ImageryScatterPoint[]
+}
+
+const SCATTER_RELATION_EPSILON = 0.015
+
+/** Pair observations by scene date for X vs Y correlation scatter. */
+export function buildImageryCorrelationPairs(
+  labels: string[],
+  xValues: number[],
+  yValues: number[],
+): ImageryCorrelationPoint[] {
+  const points: ImageryCorrelationPoint[] = []
+  for (let i = 0; i < labels.length; i++) {
+    const x = xValues[i]
+    const y = yValues[i]
+    if (x == null || y == null || !Number.isFinite(x) || !Number.isFinite(y)) continue
+    points.push({ x, y, date: labels[i]! })
+  }
+  return points
+}
+
+/** Ordinary least-squares regression with Pearson r and R². */
+export function computeLinearRegression(
+  points: Array<{ x: number; y: number }>,
+): LinearRegressionResult | null {
+  const finite = points.filter(p => Number.isFinite(p.x) && Number.isFinite(p.y))
+  if (finite.length < 2) return null
+
+  const n = finite.length
+  const sumX = finite.reduce((sum, p) => sum + p.x, 0)
+  const sumY = finite.reduce((sum, p) => sum + p.y, 0)
+  const sumXY = finite.reduce((sum, p) => sum + p.x * p.y, 0)
+  const sumX2 = finite.reduce((sum, p) => sum + p.x * p.x, 0)
+  const sumY2 = finite.reduce((sum, p) => sum + p.y * p.y, 0)
+
+  const denom = n * sumX2 - sumX * sumX
+  if (Math.abs(denom) < 1e-12) return null
+
+  const slope = (n * sumXY - sumX * sumY) / denom
+  const intercept = (sumY - slope * sumX) / n
+
+  const ssTot = sumY2 - (sumY * sumY) / n
+  const ssRes = finite.reduce((sum, p) => {
+    const predicted = slope * p.x + intercept
+    return sum + (p.y - predicted) ** 2
+  }, 0)
+  const r2 = ssTot > 1e-12 ? Math.max(0, Math.min(1, 1 - ssRes / ssTot)) : 0
+  const r = slope >= 0 ? Math.sqrt(r2) : -Math.sqrt(r2)
+
+  return { slope, intercept, r, r2, n }
+}
+
+export function buildRegressionLinePoints(
+  regression: LinearRegressionResult,
+  points: Array<{ x: number; y: number }>,
+): ImageryScatterPoint[] {
+  if (!points.length) return []
+  const xs = points.map(p => p.x)
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const span = maxX - minX
+  const pad = span > 0 ? span * 0.06 : Math.max(Math.abs(minX) * 0.05, 0.02)
+  const x1 = minX - pad
+  const x2 = maxX + pad
+  return [
+    { x: x1, y: regression.slope * x1 + regression.intercept },
+    { x: x2, y: regression.slope * x2 + regression.intercept },
+  ]
+}
+
+export function classifyScatterRelationship(regression: LinearRegressionResult): ScatterRelationshipPresentation {
+  const absR = Math.abs(regression.r)
+  if (absR < 0.15) {
+    return { strength: 'none', direction: 'none', label: 'No clear relationship' }
+  }
+
+  const strength: ScatterRelationshipStrength =
+    absR >= 0.7 ? 'strong' : absR >= 0.4 ? 'moderate' : 'weak'
+  const direction: ScatterRelationshipDirection =
+    regression.r >= SCATTER_RELATION_EPSILON
+      ? 'positive'
+      : regression.r <= -SCATTER_RELATION_EPSILON
+        ? 'negative'
+        : 'none'
+
+  const strengthLabel =
+    strength === 'strong' ? 'Strong' : strength === 'moderate' ? 'Moderate' : 'Weak'
+  const directionLabel =
+    direction === 'positive'
+      ? 'Positive'
+      : direction === 'negative'
+        ? 'Negative'
+        : 'Neutral'
+
+  return {
+    strength,
+    direction,
+    label: `${strengthLabel} ${directionLabel} Relationship`,
+  }
+}
+
+function layerPairKey(a: string, b: string): string {
+  return `${a.trim().toUpperCase()}|${b.trim().toUpperCase()}`
+}
+
+function buildLayerPairAgroInsight(
+  xLayerId: string,
+  yLayerId: string,
+  relationship: ScatterRelationshipPresentation,
+  regression: LinearRegressionResult,
+): string {
+  const key = layerPairKey(xLayerId, yLayerId)
+  const reverseKey = layerPairKey(yLayerId, xLayerId)
+  const pct = Math.round(regression.r2 * 100)
+  const { strength, direction } = relationship
+
+  const templates: Record<string, Partial<Record<ScatterRelationshipDirection, string>>> = {
+    'NDVI|NDMI': {
+      positive:
+        strength === 'strong'
+          ? 'Canopy vigor and canopy moisture index move together — uniform crop health with limited decoupled water stress across the field.'
+          : 'Vegetation greenness and moisture index generally rise together — biomass gains align with canopy water status.',
+      negative:
+        'Biomass increases while canopy moisture falls — early water-stress decoupling; review irrigation scheduling before yield loss.',
+    },
+    'NDVI|NDWI': {
+      positive:
+        'Surface water / canopy water signal tracks vegetation density — healthy transpiration balance supports productivity.',
+      negative:
+        'Higher NDVI with lower NDWI suggests moisture deficit under active canopy — prioritize targeted irrigation or scouting.',
+    },
+    'NDVI|CHAS': {
+      positive:
+        'Integrated crop health score rises with NDVI — Sentinel layers agree on improving agronomic condition.',
+      negative:
+        'Vegetation index improves while composite health score weakens — check nutrient, pest, or moisture constraints not captured by NDVI alone.',
+    },
+    'NDMI|NDWI': {
+      positive:
+        'Canopy moisture and water index co-vary — consistent hydrological status across the parcel.',
+      negative:
+        'Moisture indices diverge — possible canopy stress, drainage heterogeneity, or mixed crop stages within the AOI.',
+    },
+  }
+
+  const picked =
+    templates[key]?.[direction === 'none' ? 'positive' : direction] ??
+    templates[reverseKey]?.[direction === 'none' ? 'positive' : direction]
+
+  if (picked) return picked
+
+  if (strength === 'none') {
+    return `${yLayerId} does not explain a stable share of ${xLayerId} variation in this window — treat layers independently for management decisions.`
+  }
+
+  const coupling =
+    direction === 'negative'
+      ? 'inverse coupling'
+      : direction === 'positive'
+        ? 'co-movement'
+        : 'mixed coupling'
+  return `${yLayerId} explains ~${pct}% of ${xLayerId} variance (R²=${regression.r2.toFixed(3)}) — ${coupling} may drive productivity swings in this period.`
+}
+
+export function buildScatterGisInsight(
+  xLayerId: string,
+  yLayerId: string,
+  regression: LinearRegressionResult,
+  relationship: ScatterRelationshipPresentation,
+): string {
+  const pct = Math.round(regression.r2 * 100)
+  return `GIS · r=${regression.r.toFixed(3)} · R²=${regression.r2.toFixed(3)} (${pct}%) · n=${regression.n} scenes · slope ${regression.slope.toFixed(4)} Δ${yLayerId}/Δ${xLayerId} · ${relationship.label}`
+}
+
+export function buildScatterAgroInsight(
+  xLayerId: string,
+  yLayerId: string,
+  regression: LinearRegressionResult,
+  relationship: ScatterRelationshipPresentation,
+): string {
+  return `Agro · ${buildLayerPairAgroInsight(xLayerId, yLayerId, relationship, regression)}`
+}
+
+/** Correlation scatter analysis — X = first layer, Y = second layer, aligned by scene date. */
+export function buildImageryCorrelationScatterAnalysis(
+  labels: string[],
+  xLayerId: string,
+  xValues: number[],
+  yLayerId: string,
+  yValues: number[],
+): ImageryCorrelationScatterAnalysis | null {
+  const points = buildImageryCorrelationPairs(labels, xValues, yValues)
+  const regression = computeLinearRegression(points)
+  if (!regression) return null
+
+  const relationship = classifyScatterRelationship(regression)
+  return {
+    xLayerId,
+    yLayerId,
+    points,
+    regression,
+    relationship,
+    gisInsight: buildScatterGisInsight(xLayerId, yLayerId, regression, relationship),
+    agroInsight: buildScatterAgroInsight(xLayerId, yLayerId, regression, relationship),
+    regressionLine: buildRegressionLinePoints(regression, points),
+  }
+}

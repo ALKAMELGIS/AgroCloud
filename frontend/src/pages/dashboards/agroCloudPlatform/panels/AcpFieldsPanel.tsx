@@ -47,6 +47,45 @@ function alertIcon(row: AcpFieldTableRow) {
   )
 }
 
+function coverageTrendTitle(row: AcpFieldTableRow): string {
+  if (row.coverageTrendDelta != null && Number.isFinite(row.coverageTrendDelta)) {
+    const sign = row.coverageTrendDelta >= 0 ? '+' : ''
+    return `ΔCHAS ${sign}${row.coverageTrendDelta.toFixed(3)} vs previous Alert scene`
+  }
+  if (row.coverageTrend === 'up') return 'NDVI coverage rising vs previous scene'
+  if (row.coverageTrend === 'down') return 'NDVI coverage declining vs previous scene'
+  if (row.coverageTrend === 'flat') return 'NDVI coverage stable vs previous scene'
+  return 'Coverage trend unavailable'
+}
+
+function CoveragePctCell({ row }: { row: AcpFieldTableRow }) {
+  if (row.coveragePct == null) return <>—</>
+  const trend = row.coverageTrend
+  return (
+    <span className="acp-fields__coverage" title={coverageTrendTitle(row)}>
+      <span>{row.coveragePct.toFixed(0)}%</span>
+      {trend === 'up' ? (
+        <i
+          className="fa-solid fa-arrow-up acp-fields__coverage-trend acp-fields__coverage-trend--up"
+          aria-hidden
+        />
+      ) : null}
+      {trend === 'down' ? (
+        <i
+          className="fa-solid fa-arrow-down acp-fields__coverage-trend acp-fields__coverage-trend--down"
+          aria-hidden
+        />
+      ) : null}
+      {trend === 'flat' ? (
+        <i
+          className="fa-solid fa-minus acp-fields__coverage-trend acp-fields__coverage-trend--flat"
+          aria-hidden
+        />
+      ) : null}
+    </span>
+  )
+}
+
 function exportFieldsPdf(rows: AcpFieldTableRow[]) {
   const stamp = new Date().toISOString().slice(0, 10)
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
@@ -258,7 +297,9 @@ export function AcpFieldsPanel({ rows, countries, viewportScopeActive = false }:
                   <td className="acp-fields__name">{row.displayName}</td>
                   <td className="acp-fields__num">{row.chas != null ? row.chas.toFixed(3) : '—'}</td>
                   <td className="acp-fields__num">{row.areaHa.toFixed(2)}</td>
-                  <td className="acp-fields__num">{row.coveragePct != null ? `${row.coveragePct.toFixed(0)}%` : '—'}</td>
+                  <td className="acp-fields__num">
+                    <CoveragePctCell row={row} />
+                  </td>
                   <td>
                     <button
                       type="button"

@@ -1,5 +1,6 @@
 import {
   buildSentinelLayerLiveWmsTileSpecs,
+  SENTINEL_LAYER_LIVE_WMS_MAX_TILE_LAYERS_PLATFORM,
   type SentinelLayerLiveWmsTileSpec,
 } from '../../../lib/sentinelLayerLiveWmsEngine'
 import type { LngLatBBox } from '../../../lib/siMapViewport'
@@ -21,7 +22,47 @@ function fieldLayerKey(feature: GeoJSON.Feature, index: number, chunkIndex = 0):
   return chunkIndex > 0 ? `${id}-${chunkIndex}` : id
 }
 
-/** Build WMS tile specs — one MapLibre raster source per AOI when under platform cap. */
+function buildPackedWmsTileEntries(
+  clip: GeoJSON.FeatureCollection,
+  wmsLayerName: string,
+  startDate: string,
+  endDate: string,
+  cloudCoverage: number,
+  maxWmsLayers: number | undefined,
+  keyPrefix: string,
+): AcpWmsTileEntry[] {
+  const analysisDate = String(endDate || startDate || '').trim().slice(0, 10)
+  const fieldCount = clip.features.length
+  const wmsBuild = resolveAcpWmsBuildOptions(fieldCount, maxWmsLayers)
+  const tileCap = wmsBuild.maxTileLayers ?? SENTINEL_LAYER_LIVE_WMS_MAX_TILE_LAYERS_PLATFORM
+
+  const specs = buildSentinelLayerLiveWmsTileSpecs({
+    clipSource: clip,
+    wmsLayerName,
+    analysisDate,
+    startDate,
+    endDate,
+    cloudCoverage,
+    lookbackDays: 30,
+    wmsBuild: {
+      preferSingleRingChunks: false,
+      maxTileLayers: tileCap,
+      viewportBBox: null,
+    },
+  })
+
+  return specs.map((spec, index) => ({
+    layerKey: `${keyPrefix}${index}`,
+    spec,
+    rasterUrl: spec.url,
+    bounds: spec.boundsLngLat,
+  }))
+}
+
+/**
+ * Build WMS tile specs — one MapLibre raster source per AOI when under platform cap;
+ * otherwise packed multipolygon chunks that still include every ring in the load set.
+ */
 export function buildAcpWmsChunkTileEntries(
   clip: GeoJSON.FeatureCollection,
   wmsLayerName: string,
@@ -33,11 +74,13 @@ export function buildAcpWmsChunkTileEntries(
   const analysisDate = String(endDate || startDate || '').trim().slice(0, 10)
   if (!analysisDate || !clip.features.length) return []
 
-  const wmsBuild = resolveAcpWmsBuildOptions(clip.features.length, maxWmsLayers)
+  const fieldCount = clip.features.length
+  const wmsBuild = resolveAcpWmsBuildOptions(fieldCount, maxWmsLayers)
+  const tileCap = wmsBuild.maxTileLayers ?? SENTINEL_LAYER_LIVE_WMS_MAX_TILE_LAYERS_PLATFORM
   const perField =
     wmsBuild.preferSingleRingChunks &&
-    clip.features.length > 0 &&
-    clip.features.length <= (wmsBuild.maxTileLayers ?? clip.features.length)
+    fieldCount > 0 &&
+    fieldCount <= tileCap
 
   if (perField) {
     const entries: AcpWmsTileEntry[] = []
@@ -66,23 +109,15 @@ export function buildAcpWmsChunkTileEntries(
     return entries
   }
 
-  const specs = buildSentinelLayerLiveWmsTileSpecs({
-    clipSource: clip,
+  return buildPackedWmsTileEntries(
+    clip,
     wmsLayerName,
-    analysisDate,
     startDate,
     endDate,
     cloudCoverage,
-    lookbackDays: 30,
-    wmsBuild,
-  })
-
-  return specs.map((spec, index) => ({
-    layerKey: String(index),
-    spec,
-    rasterUrl: spec.url,
-    bounds: spec.boundsLngLat,
-  }))
+    maxWmsLayers,
+    'p-',
+  )
 }
 
 /** @deprecated */

@@ -1,15 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { useSiInstanceScope } from '../siInstanceScope'
 import type { CropAlertFieldResult } from '../../../lib/siCropAlertEngine'
 import {
-  fetchOpenMeteoWeather,
-  type OpenMeteoWeatherSnapshot,
-} from '../../../lib/openMeteoWeather'
-import {
   buildCropAlertPopupViewModel,
+  ensureChasTrendPointCount,
+  CHAS_TREND_POINT_COUNT,
   estimateNdviFieldCoverageForScene,
   formatPopupAreaHa,
   mergePopupSceneDatesWithHistory,
+  buildEmbeddedInsightForSceneDate,
   type NdviFieldCoverage,
 } from '../../../lib/siCropAlertMapPopupModel'
 import { resolveNearestValidSceneDate } from '../../../lib/siAdaptiveTemporalEngine'
@@ -20,6 +19,7 @@ import {
   mergeDailyIndexSeries,
   type SentinelHubDailyIndexMeans,
 } from '../../../lib/sentinelHubStatisticsApi'
+import { AcpPlatformContext } from '../../dashboards/agroCloudPlatform/acpPlatformContext'
 import './SiCropAlertMapPopup.css'
 
 export type SiCropAlertMapPopupProps = {
@@ -27,8 +27,8 @@ export type SiCropAlertMapPopupProps = {
   onClose: () => void
   /** Optional field coords override when cached result.centroid is missing. */
   coordsOverride?: { lat: number; lng: number } | null
-  weatherSnapshot?: OpenMeteoWeatherSnapshot | null
-  weatherLoading?: boolean
+  /** Compact card for map markers — fits without internal scroll. */
+  variant?: 'default' | 'mapPin'
 }
 
 const POPUP_SIZE_CONFIG = {
@@ -39,6 +39,16 @@ const POPUP_SIZE_CONFIG = {
   maxWidth: 400,
   minHeight: 280,
   maxHeight: 540,
+} as const
+
+const MAP_PIN_POPUP_SIZE_CONFIG = {
+  storageKey: 'si-crop-alert-popup-size-map-pin',
+  width: 292,
+  height: 0,
+  minWidth: 280,
+  maxWidth: 304,
+  minHeight: 0,
+  maxHeight: 0,
 } as const
 
 const LAND_DONUT_SIZE = 88
@@ -167,10 +177,11 @@ function ChasTrendLegend({ labels, values }: { labels: string[]; values: number[
   )
 }
 
-const INDEX_TONE_CLASS: Record<'NDVI' | 'NDWI' | 'NDMI', string> = {
+const INDEX_TONE_CLASS: Record<'NDVI' | 'NDWI' | 'NDMI' | 'SAVI', string> = {
   NDVI: 'si-crop-alert-map-popup__metric-chip--ndvi',
   NDWI: 'si-crop-alert-map-popup__metric-chip--ndwi',
   NDMI: 'si-crop-alert-map-popup__metric-chip--ndmi',
+  SAVI: 'si-crop-alert-map-popup__metric-chip--savi',
 }
 
 const CHAS_DIRECTION_LABEL = {
@@ -179,82 +190,153 @@ const CHAS_DIRECTION_LABEL = {
   stable: 'Stable',
 } as const
 
+type PopupEmbeddedIndexId = 'NDVI' | 'NDWI' | 'NDMI' | 'SAVI'
+
+type PopupEmbeddedInsightShape = {
+  summary: string
+  action: string
+  alertLevel: string
+  chasLabels: string[]
+  chasValues: number[]
+  indices: Array<{ id: PopupEmbeddedIndexId; label: string; value: number }>
+  chasTrend: { direction: 'rising' | 'declining' | 'stable' }
+  deltaChas: number | null
+}
+
+function PopupIndexGrid({
+  indices,
+  indexSubLabel,
+}: {
+  indices: PopupEmbeddedInsightShape['indices']
+  indexSubLabel: string
+}) {
+  return (
+    <div className="si-crop-alert-map-popup__metric-grid">
+      {indices.map(index => (
+        <div
+          key={index.id}
+          className={`si-crop-alert-map-popup__metric-chip ${INDEX_TONE_CLASS[index.id]}`}
+        >
+          <span className="si-crop-alert-map-popup__metric-label">{index.label}</span>
+          <strong
+            className={`si-crop-alert-map-popup__metric-value${
+              index.value < 0 ? ' si-crop-alert-map-popup__metric-value--negative' : ''
+            }`}
+          >
+            {index.value.toFixed(2)}
+          </strong>
+          <span className="si-crop-alert-map-popup__metric-sub">{indexSubLabel}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function PopupDeltaChasChip({ deltaChas }: { deltaChas: number }) {
+  return (
+    <div
+      className={`si-crop-alert-map-popup__delta-chip${
+        deltaChas < 0 ? ' si-crop-alert-map-popup__delta-chip--down' : ''
+      }`}
+    >
+      <span className="si-crop-alert-map-popup__delta-chip-label">ΔCHAS</span>
+      <strong className="si-crop-alert-map-popup__delta-chip-value">
+        {deltaChas >= 0 ? '+' : ''}
+        {deltaChas.toFixed(3)}
+      </strong>
+      <span className="si-crop-alert-map-popup__delta-chip-sub">vs previous scene</span>
+    </div>
+  )
+}
+
+function PopupActionBar({ action, mapPin }: { action: string; mapPin?: boolean }) {
+  const text = action.trim()
+  if (!text) return null
+  return (
+    <p
+      className={[
+        'si-crop-alert-map-popup__insight-action-bar',
+        mapPin ? 'si-crop-alert-map-popup__insight-action-bar--map-pin' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      title={text}
+    >
+      {mapPin ? <em className="si-crop-alert-map-popup__insight-action-tag">Action</em> : null}
+      {text}
+    </p>
+  )
+}
+
+function PopupChasTrendPanel({
+  insight,
+  mapPin,
+}: {
+  insight: PopupEmbeddedInsightShape
+  mapPin: boolean
+}) {
+  if (insight.chasLabels.length < 2) return null
+  return (
+    <div className="si-crop-alert-map-popup__chas-panel">
+      <div className="si-crop-alert-map-popup__chas-panel-head">
+        <span className="si-crop-alert-map-popup__chas-panel-title">CHAS trend</span>
+        <span
+          className={`si-crop-alert-map-popup__chas-direction si-crop-alert-map-popup__chas-direction--${insight.chasTrend.direction}`}
+        >
+          {CHAS_DIRECTION_LABEL[insight.chasTrend.direction]}
+        </span>
+      </div>
+      {mapPin ? (
+        <ChartsPanel embedded mapPin chasLabels={insight.chasLabels} chasValues={insight.chasValues} />
+      ) : (
+        <ChasTrendLegend labels={insight.chasLabels} values={insight.chasValues} />
+      )}
+    </div>
+  )
+}
+
 function EmbeddedInsightBoard({
   insight,
   dataWarning,
+  indexSubLabel = 'current',
+  variant = 'default',
 }: {
-  insight: {
-    summary: string
-    action: string
-    chasLabels: string[]
-    chasValues: number[]
-    indices: Array<{ id: 'NDVI' | 'NDWI' | 'NDMI'; label: string; value: number }>
-    chasTrend: { direction: 'rising' | 'declining' | 'stable' }
-    deltaChas: number | null
-  }
+  insight: PopupEmbeddedInsightShape
   dataWarning: string | null
+  indexSubLabel?: string
+  variant?: 'default' | 'mapPin'
 }) {
+  const isMapPin = variant === 'mapPin'
   const showWarning = Boolean(dataWarning?.trim()) && !isDateOnlyWarning(dataWarning)
-  const displayAction = insight.action.trim()
 
   return (
     <div
-      className="si-crop-alert-map-popup__insight si-crop-alert-map-popup__insight--embedded"
+      className={[
+        'si-crop-alert-map-popup__insight',
+        'si-crop-alert-map-popup__insight--embedded',
+        isMapPin ? 'si-crop-alert-map-popup__insight--map-pin' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       aria-label={insight.summary}
     >
-      <div className="si-crop-alert-map-popup__metric-grid">
-        {insight.indices.map(index => (
-          <div
-            key={index.id}
-            className={`si-crop-alert-map-popup__metric-chip ${INDEX_TONE_CLASS[index.id]}`}
-          >
-            <span className="si-crop-alert-map-popup__metric-label">{index.label}</span>
-            <strong
-              className={`si-crop-alert-map-popup__metric-value${
-                index.value < 0 ? ' si-crop-alert-map-popup__metric-value--negative' : ''
-              }`}
-            >
-              {index.value.toFixed(2)}
-            </strong>
-            <span className="si-crop-alert-map-popup__metric-sub">current</span>
+      {isMapPin ? (
+        <>
+          <div className="si-crop-alert-map-popup__priority-block">
+            {insight.deltaChas != null ? <PopupDeltaChasChip deltaChas={insight.deltaChas} /> : null}
+            <PopupActionBar action={insight.action} mapPin />
           </div>
-        ))}
-      </div>
-
-      {insight.chasLabels.length >= 2 ? (
-        <div className="si-crop-alert-map-popup__chas-panel">
-          <div className="si-crop-alert-map-popup__chas-panel-head">
-            <span className="si-crop-alert-map-popup__chas-panel-title">CHAS trend</span>
-            <span
-              className={`si-crop-alert-map-popup__chas-direction si-crop-alert-map-popup__chas-direction--${insight.chasTrend.direction}`}
-            >
-              {CHAS_DIRECTION_LABEL[insight.chasTrend.direction]}
-            </span>
-          </div>
-          <ChasTrendLegend labels={insight.chasLabels} values={insight.chasValues} />
-        </div>
-      ) : null}
-
-      {insight.deltaChas != null ? (
-        <div
-          className={`si-crop-alert-map-popup__delta-chip${
-            insight.deltaChas < 0 ? ' si-crop-alert-map-popup__delta-chip--down' : ''
-          }`}
-        >
-          <span className="si-crop-alert-map-popup__delta-chip-label">ΔCHAS</span>
-          <strong className="si-crop-alert-map-popup__delta-chip-value">
-            {insight.deltaChas >= 0 ? '+' : ''}
-            {insight.deltaChas.toFixed(3)}
-          </strong>
-          <span className="si-crop-alert-map-popup__delta-chip-sub">vs previous scene</span>
-        </div>
-      ) : null}
-
-      {displayAction ? (
-        <p className="si-crop-alert-map-popup__insight-action-bar" title={displayAction}>
-          {displayAction}
-        </p>
-      ) : null}
+          <PopupChasTrendPanel insight={insight} mapPin />
+          <PopupIndexGrid indices={insight.indices} indexSubLabel={indexSubLabel} />
+        </>
+      ) : (
+        <>
+          <PopupIndexGrid indices={insight.indices} indexSubLabel={indexSubLabel} />
+          <PopupChasTrendPanel insight={insight} mapPin={false} />
+          {insight.deltaChas != null ? <PopupDeltaChasChip deltaChas={insight.deltaChas} /> : null}
+          <PopupActionBar action={insight.action} />
+        </>
+      )}
 
       {showWarning ? (
         <div className="si-crop-alert-map-popup__insight-warn" title={dataWarning!}>
@@ -267,22 +349,21 @@ function EmbeddedInsightBoard({
 }
 
 type PopupEssentialsCardProps = {
-  embeddedInsight: {
-    summary: string
-    action: string
-    chasLabels: string[]
-    chasValues: number[]
-    indices: Array<{ id: 'NDVI' | 'NDWI' | 'NDMI'; label: string; value: number }>
-    chasTrend: { direction: 'rising' | 'declining' | 'stable' }
-    deltaChas: number | null
-  }
+  embeddedInsight: PopupEmbeddedInsightShape
   dataWarning: string | null
+  indexSubLabel?: string
+  variant?: 'default' | 'mapPin'
 }
 
-function PopupEssentialsCard({ embeddedInsight, dataWarning }: PopupEssentialsCardProps) {
+function PopupEssentialsCard({ embeddedInsight, dataWarning, indexSubLabel, variant }: PopupEssentialsCardProps) {
   return (
     <div className="si-crop-alert-map-popup__essentials">
-      <EmbeddedInsightBoard insight={embeddedInsight} dataWarning={dataWarning} />
+      <EmbeddedInsightBoard
+        insight={embeddedInsight}
+        dataWarning={dataWarning}
+        indexSubLabel={indexSubLabel}
+        variant={variant}
+      />
     </div>
   )
 }
@@ -292,6 +373,7 @@ type LandCoverageSceneDateControlProps = {
   sceneDate: string
   onSceneDateChange: (date: string) => void
   sceneHistoryLoading?: boolean
+  variant?: 'land' | 'mapPin'
 }
 
 function stopPopupPointerEvent(e: React.SyntheticEvent) {
@@ -324,6 +406,7 @@ function LandCoverageSceneDateControl({
   sceneDate,
   onSceneDateChange,
   sceneHistoryLoading = false,
+  variant = 'land',
 }: LandCoverageSceneDateControlProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const newest = sceneDates[0] ?? sceneDate
@@ -351,34 +434,58 @@ function LandCoverageSceneDateControl({
 
   return (
     <div
-      className="si-crop-alert-map-popup__land-date-wrap"
+      className={[
+        'si-crop-alert-map-popup__land-date-wrap',
+        variant === 'mapPin' ? 'si-crop-alert-map-popup__land-date-wrap--map-pin' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       onPointerDown={stopPopupPointerEvent}
     >
-      <span
-        className="si-crop-alert-map-popup__land-date-label"
-        role="button"
-        tabIndex={0}
-        onClick={openPicker}
-        onKeyDown={e => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            openPicker(e)
-          }
-        }}
-      >
-        Scene
-      </span>
+      {variant === 'mapPin' ? (
+        <button
+          type="button"
+          className="si-crop-alert-map-popup__scene-date-btn"
+          title={`Scene date · ${sceneDate}`}
+          aria-label="Select scene date for indices and CHAS"
+          aria-busy={sceneHistoryLoading}
+          onClick={openPicker}
+        >
+          <i className="fa-regular fa-calendar-days" aria-hidden />
+        </button>
+      ) : (
+        <span
+          className="si-crop-alert-map-popup__land-date-label"
+          role="button"
+          tabIndex={0}
+          onClick={openPicker}
+          onKeyDown={e => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              openPicker(e)
+            }
+          }}
+        >
+          Scene
+        </span>
+      )}
       <input
         ref={inputRef}
         type="date"
-        className="si-crop-alert-map-popup__land-date-select si-crop-alert-map-popup__land-date-input"
+        className={[
+          'si-crop-alert-map-popup__land-date-select',
+          'si-crop-alert-map-popup__land-date-input',
+          variant === 'mapPin' ? 'si-crop-alert-map-popup__land-date-input--map-pin' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
         value={sceneDate}
         min={minDate}
         max={maxDate}
         onChange={e => handleDateChange(e.target.value)}
         onClick={openPicker}
         onPointerDown={stopPopupPointerEvent}
-        aria-label="Pick scene date for land coverage"
+        aria-label="Pick scene date for field analytics"
         aria-busy={sceneHistoryLoading}
       />
     </div>
@@ -493,79 +600,10 @@ function resolvePopupIndexDataDate(vm: ReturnType<typeof buildCropAlertPopupView
   return raw.trim().slice(0, 10)
 }
 
-function WeatherMetricsStrip({
-  wx,
-  loading,
-}: {
-  wx: OpenMeteoWeatherSnapshot | null
-  loading: boolean
-}) {
-  const metrics = useMemo(
-    () => [
-      {
-        id: 'temp',
-        label: 'Temp',
-        title: 'Air temperature',
-        icon: 'fa-solid fa-temperature-three-quarters',
-        value: wx?.temperatureC != null ? `${wx.temperatureC.toFixed(1)}°` : '—',
-      },
-      {
-        id: 'humidity',
-        label: 'Humidity',
-        title: 'Relative humidity',
-        icon: 'fa-solid fa-droplet',
-        value: wx?.humidityPct != null ? `${Math.round(wx.humidityPct)}%` : '—',
-      },
-      {
-        id: 'wind',
-        label: 'Wind',
-        title: 'Wind speed',
-        icon: 'fa-solid fa-wind',
-        value: wx?.windSpeedKmh != null ? `${Math.round(wx.windSpeedKmh)} km/h` : '—',
-      },
-      {
-        id: 'rain',
-        label: 'Rain',
-        title: 'Precipitation',
-        icon: 'fa-solid fa-cloud-rain',
-        value: wx?.precipMm != null ? `${wx.precipMm.toFixed(1)} mm` : '—',
-      },
-    ],
-    [wx],
-  )
-
-  if (loading) {
-    return (
-      <div className="si-crop-alert-map-popup__weather-strip si-crop-alert-map-popup__weather-strip--loading">
-        <i className="fa-solid fa-spinner fa-spin" aria-hidden />
-        <span>Loading weather…</span>
-      </div>
-    )
-  }
-
-  return (
-    <div className="si-crop-alert-map-popup__weather-strip" role="group" aria-label="Field weather">
-      <div className="si-crop-alert-map-popup__weather-strip-grid">
-        {metrics.map(metric => (
-          <div
-            key={metric.id}
-            className={`si-crop-alert-map-popup__weather-strip-item si-crop-alert-map-popup__weather-strip-item--${metric.id}`}
-            title={`${metric.title}: ${metric.value}`}
-          >
-            <span className="si-crop-alert-map-popup__weather-strip-label">{metric.label}</span>
-            <span className="si-crop-alert-map-popup__weather-strip-value">
-              <i className={metric.icon} aria-hidden />
-              <em>{metric.value}</em>
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 const CHART_W = 268
 const CHART_H = 64
+const CHART_W_MAP_PIN = 276
+const CHART_H_MAP_PIN = 56
 /** CHAS is a 0–1 weighted index — fixed domain keeps sparkline height aligned with legend values. */
 const CHAS_SPARKLINE_DOMAIN_MIN = 0
 const CHAS_SPARKLINE_DOMAIN_MAX = 1
@@ -577,13 +615,18 @@ function resolveChasSparklineDomain(values: number[]): { min: number; max: numbe
   }
   const dataMin = Math.min(...nums)
   const dataMax = Math.max(...nums)
-  const span = dataMax - dataMin
+  let span = dataMax - dataMin
+  if (span <= 0) {
+    const mid = (dataMin + dataMax) / 2
+    const pad = Math.max(Math.abs(mid) * 0.2, 0.02)
+    return { min: mid - pad, max: mid + pad }
+  }
   if (span < 0.002) {
-    const pad = 0.015
-    return { min: Math.max(0, dataMin - pad), max: Math.min(1, dataMax + pad) }
+    const pad = Math.max(Math.abs(dataMin) * 0.15, 0.015)
+    return { min: dataMin - pad, max: dataMax + pad }
   }
   const pad = Math.max(span * 0.28, 0.008)
-  return { min: Math.max(0, dataMin - pad), max: Math.min(1, dataMax + pad) }
+  return { min: dataMin - pad, max: dataMax + pad }
 }
 
 function buildSparklinePath(
@@ -595,7 +638,11 @@ function buildSparklinePath(
   domainMax = CHAS_SPARKLINE_DOMAIN_MAX,
 ): string {
   if (values.length === 0) return ''
-  return computeSparklinePoints(values, width, height, pad, domainMin, domainMax)
+  const finite = computeSparklinePoints(values, width, height, pad, domainMin, domainMax).filter(p =>
+    Number.isFinite(p.v),
+  )
+  if (finite.length === 0) return ''
+  return finite
     .map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
     .join(' ')
 }
@@ -653,13 +700,15 @@ function buildSparklineAreaPath(
   domainMin = CHAS_SPARKLINE_DOMAIN_MIN,
   domainMax = CHAS_SPARKLINE_DOMAIN_MAX,
 ): string {
+  const finite = computeSparklinePoints(values, width, height, pad, domainMin, domainMax).filter(p =>
+    Number.isFinite(p.v),
+  )
   const line = buildSparklinePath(values, width, height, pad, domainMin, domainMax)
-  if (!line) return ''
-  const innerW = width - pad * 2
+  if (!line || finite.length === 0) return ''
   const innerH = height - pad * 2
-  const lastX = pad + (values.length === 1 ? innerW / 2 : innerW)
   const baseY = pad + innerH
-  const firstX = pad + (values.length === 1 ? innerW / 2 : 0)
+  const firstX = finite[0]!.x
+  const lastX = finite[finite.length - 1]!.x
   return `${line} L ${lastX.toFixed(1)},${baseY.toFixed(1)} L ${firstX.toFixed(1)},${baseY.toFixed(1)} Z`
 }
 
@@ -667,81 +716,115 @@ function ChartsPanel({
   chasLabels,
   chasValues,
   embedded = false,
+  mapPin = false,
 }: {
   chasLabels: string[]
   chasValues: number[]
   embedded?: boolean
+  mapPin?: boolean
 }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
-  const pad = 8
-  const domain = useMemo(() => resolveChasSparklineDomain(chasValues), [chasValues])
+  const pad = mapPin ? 8 : 8
+  const chartW = mapPin ? CHART_W_MAP_PIN : CHART_W
+  const chartH = mapPin ? CHART_H_MAP_PIN : CHART_H
+  const series = useMemo(
+    () =>
+      mapPin
+        ? ensureChasTrendPointCount({ labels: chasLabels, values: chasValues })
+        : { labels: chasLabels, values: chasValues },
+    [chasLabels, chasValues, mapPin],
+  )
+  const displayLabels = series.labels
+  const displayValues = series.values
+  const domain = useMemo(() => resolveChasSparklineDomain(displayValues), [displayValues])
   const points = useMemo(
-    () => computeSparklinePoints(chasValues, CHART_W, CHART_H, pad, domain.min, domain.max),
-    [chasValues, pad, domain.min, domain.max],
+    () => computeSparklinePoints(displayValues, chartW, chartH, pad, domain.min, domain.max),
+    [displayValues, pad, domain.min, domain.max, chartW, chartH],
   )
   const sparkPath = useMemo(
-    () => buildSparklinePath(chasValues, CHART_W, CHART_H, pad, domain.min, domain.max),
-    [chasValues, pad, domain.min, domain.max],
+    () => buildSparklinePath(displayValues, chartW, chartH, pad, domain.min, domain.max),
+    [displayValues, pad, domain.min, domain.max, chartW, chartH],
   )
   const sparkArea = useMemo(
-    () => buildSparklineAreaPath(chasValues, CHART_W, CHART_H, pad, domain.min, domain.max),
-    [chasValues, pad, domain.min, domain.max],
+    () => buildSparklineAreaPath(displayValues, chartW, chartH, pad, domain.min, domain.max),
+    [displayValues, pad, domain.min, domain.max, chartW, chartH],
   )
   const activeIndex = hoverIndex
-  const activePoint = activeIndex != null ? points[activeIndex] : null
+  const activePoint =
+    activeIndex != null && Number.isFinite(displayValues[activeIndex])
+      ? points[activeIndex]
+      : null
 
   const onChartPointerMove = useCallback(
     (e: ReactPointerEvent<SVGSVGElement>) => {
-      setHoverIndex(resolveNearestSparklineIndex(e.clientX, e.currentTarget, points, CHART_W))
+      if (mapPin) return
+      const idx = resolveNearestSparklineIndex(e.clientX, e.currentTarget, points, chartW)
+      if (!Number.isFinite(displayValues[idx])) return
+      setHoverIndex(idx)
     },
-    [points],
+    [points, chartW, displayValues, mapPin],
   )
 
   const onChartPointerLeave = useCallback(() => {
+    if (mapPin) return
     setHoverIndex(null)
-  }, [])
+  }, [mapPin])
 
-  const onLegendEnter = useCallback((index: number) => {
-    setHoverIndex(index)
-  }, [])
+  const onLegendEnter = useCallback(
+    (index: number) => {
+      if (!Number.isFinite(displayValues[index])) return
+      setHoverIndex(index)
+    },
+    [displayValues],
+  )
+
+  const legendCount = mapPin ? CHAS_TREND_POINT_COUNT : displayLabels.length
 
   const chartBody = (
     <>
       {!embedded ? (
         <h4 className="si-crop-alert-map-popup__chart-title">CHAS Trend</h4>
       ) : null}
-      <div className="si-crop-alert-map-popup__spark-wrap si-crop-alert-map-popup__spark-wrap--interactive">
-          {activePoint && activeIndex != null ? (
+      <div
+        className={[
+          'si-crop-alert-map-popup__spark-wrap',
+          mapPin ? '' : 'si-crop-alert-map-popup__spark-wrap--interactive',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+          {!mapPin && activePoint && activeIndex != null ? (
             <div
               className="si-crop-alert-map-popup__spark-tooltip"
               style={{
-                left: `${(activePoint.x / CHART_W) * 100}%`,
-                top: `${(activePoint.y / CHART_H) * 100}%`,
+                left: `${(activePoint.x / chartW) * 100}%`,
+                top: `${(activePoint.y / chartH) * 100}%`,
               }}
               aria-live="polite"
             >
               <span className="si-crop-alert-map-popup__spark-tooltip-date">
-                {chasLabels[activeIndex] || `S${activeIndex + 1}`}
+                {displayLabels[activeIndex] || `S${activeIndex + 1}`}
               </span>
               <strong className="si-crop-alert-map-popup__spark-tooltip-value">
-                {Number.isFinite(chasValues[activeIndex]) ? chasValues[activeIndex]!.toFixed(3) : '—'}
+                {Number.isFinite(displayValues[activeIndex]) ? displayValues[activeIndex]!.toFixed(3) : '—'}
               </strong>
             </div>
           ) : null}
           <svg
-            width={CHART_W}
-            height={CHART_H}
-            viewBox={`0 0 ${CHART_W} ${CHART_H}`}
+            width="100%"
+            height={chartH}
+            viewBox={`0 0 ${chartW} ${chartH}`}
+            preserveAspectRatio="xMidYMid meet"
             className="si-crop-alert-map-popup__spark"
-            onPointerMove={onChartPointerMove}
-            onPointerLeave={onChartPointerLeave}
+            onPointerMove={mapPin ? undefined : onChartPointerMove}
+            onPointerLeave={mapPin ? undefined : onChartPointerLeave}
             role="img"
             aria-label="CHAS trend chart"
           >
             {[0.25, 0.5, 0.75].map(t => {
-              const y = pad + (CHART_H - pad * 2) * (1 - t)
+              const y = pad + (chartH - pad * 2) * (1 - t)
               return (
-                <line key={t} x1={pad} y1={y} x2={CHART_W - pad} y2={y} className="si-crop-alert-map-popup__spark-grid" />
+                <line key={t} x1={pad} y1={y} x2={chartW - pad} y2={y} className="si-crop-alert-map-popup__spark-grid" />
               )
             })}
             {sparkArea ? (
@@ -761,11 +844,12 @@ function ChartsPanel({
                 x1={activePoint.x}
                 y1={pad}
                 x2={activePoint.x}
-                y2={CHART_H - pad}
+                y2={chartH - pad}
                 className="si-crop-alert-map-popup__spark-crosshair"
               />
             ) : null}
             {points.map(p => {
+              if (!Number.isFinite(p.v)) return null
               const isActive = activeIndex === p.i
               return (
                 <g key={p.i} className={isActive ? 'si-crop-alert-map-popup__spark-point--active' : undefined}>
@@ -774,7 +858,7 @@ function ChartsPanel({
                     cy={p.y}
                     r={isActive ? 8 : 7}
                     className="si-crop-alert-map-popup__spark-hit"
-                    onPointerEnter={() => setHoverIndex(p.i)}
+                    onPointerEnter={() => onLegendEnter(p.i)}
                   />
                   <circle
                     cx={p.x}
@@ -794,14 +878,22 @@ function ChartsPanel({
           </svg>
         </div>
         <ul
-          className="si-crop-alert-map-popup__chart-legend"
-          style={{ '--legend-count': chasLabels.length } as CSSProperties}
+          className={[
+            'si-crop-alert-map-popup__chart-legend',
+            mapPin ? 'si-crop-alert-map-popup__chart-legend--map-pin' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          style={{ '--legend-count': legendCount } as CSSProperties}
         >
-          {chasLabels.map((lbl, i) => (
+          {displayLabels.map((lbl, i) => {
+            const hasValue = Number.isFinite(displayValues[i])
+            return (
             <li
               key={`${lbl}-${i}`}
               className={[
                 'si-crop-alert-map-popup__chart-legend-item',
+                !hasValue ? 'si-crop-alert-map-popup__chart-legend-item--empty' : '',
                 activeIndex === i ? 'si-crop-alert-map-popup__chart-legend-item--active' : '',
               ]
                 .filter(Boolean)
@@ -811,10 +903,11 @@ function ChartsPanel({
             >
               <span className="si-crop-alert-map-popup__chart-legend-label">{lbl || `S${i + 1}`}</span>
               <span className="si-crop-alert-map-popup__chart-legend-value">
-                {Number.isFinite(chasValues[i]) ? chasValues[i]!.toFixed(3) : '—'}
+                {hasValue ? displayValues[i]!.toFixed(3) : '—'}
               </span>
             </li>
-          ))}
+            )
+          })}
         </ul>
     </>
   )
@@ -822,7 +915,13 @@ function ChartsPanel({
   if (embedded) {
     return (
       <div
-        className="si-crop-alert-map-popup__charts si-crop-alert-map-popup__charts--embedded"
+        className={[
+          'si-crop-alert-map-popup__charts',
+          'si-crop-alert-map-popup__charts--embedded',
+          mapPin ? 'si-crop-alert-map-popup__charts--map-pin' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
         style={{ '--chart-accent': CHART_ACCENT } as CSSProperties}
       >
         {chartBody}
@@ -944,19 +1043,15 @@ function FieldAnalyticsTabsCard({
 export function SiCropAlertMapPopup({
   result,
   onClose,
-  coordsOverride = null,
-  weatherSnapshot = null,
-  weatherLoading: weatherLoadingOverride,
+  variant = 'default',
 }: SiCropAlertMapPopupProps) {
+  const isMapPin = variant === 'mapPin'
+  const acp = useContext(AcpPlatformContext)
   const { scopedStorageKey } = useSiInstanceScope()
-  const preset = POPUP_SIZE_CONFIG
+  const preset = isMapPin ? MAP_PIN_POPUP_SIZE_CONFIG : POPUP_SIZE_CONFIG
   const popupSizeStorageKey = scopedStorageKey(preset.storageKey)
   const popupRef = useRef<HTMLDivElement>(null)
   const [cardSize, setCardSize] = useState<PopupSize>(() => loadPopupSize(popupSizeStorageKey))
-  const [weather, setWeather] = useState<OpenMeteoWeatherSnapshot | null>(weatherSnapshot)
-  const [weatherLoading, setWeatherLoading] = useState(
-    weatherLoadingOverride ?? weatherSnapshot == null,
-  )
 
   const vm = useMemo(() => buildCropAlertPopupViewModel(result), [result])
   const indexDataDate = useMemo(() => resolvePopupIndexDataDate(vm), [vm])
@@ -973,6 +1068,16 @@ export function SiCropAlertMapPopup({
       return sceneDates[0] ?? indexDataDate
     })
   }, [result.fieldKey, sceneDates, indexDataDate])
+
+  useEffect(() => {
+    if (!acp) return
+    const want = acp.analysisDate.trim().slice(0, 10)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(want)) return
+    const next = sceneDates.includes(want)
+      ? want
+      : resolveNearestValidSceneDate(want, sceneDates, 9999) ?? sceneDates[0] ?? want
+    setCoverageSceneDate(next)
+  }, [acp, acp?.analysisDate, sceneDates])
 
   useEffect(() => {
     if (!result.geometry) {
@@ -1029,6 +1134,12 @@ export function SiCropAlertMapPopup({
       const next = date.trim().slice(0, 10)
       if (!/^\d{4}-\d{2}-\d{2}$/.test(next)) return
       setCoverageSceneDate(next)
+      if (acp) {
+        acp.setAutoFollowDate(false)
+        acp.setAnalysisDate(next)
+        acp.commitWmsLayer({ startDate: next, endDate: next })
+        acp.refreshEngine()
+      }
       if (!result.geometry) return
       void fetchSentinelFieldIndexTimeSeriesForRange({
         geometry: result.geometry,
@@ -1042,52 +1153,24 @@ export function SiCropAlertMapPopup({
         })
       })
     },
-    [result.geometry],
+    [acp, result.geometry],
   )
 
-  const weatherLat = coordsOverride?.lat ?? vm.lat
-  const weatherLng = coordsOverride?.lng ?? vm.lng
-  const popupHeight = cardSize.height || preset.height
+  const popupHeight = isMapPin ? 0 : cardSize.height || preset.height
   const alertTone = vm.accentColor || '#ca8a04'
+  const selectedSceneDate = coverageSceneDate || indexDataDate
+  const latestSceneDate = sceneDates[0] ?? indexDataDate
+  const indexSubLabel =
+    selectedSceneDate === latestSceneDate ? 'current' : formatSceneDateShort(selectedSceneDate)
+  const displayEmbeddedInsight = useMemo(
+    () => buildEmbeddedInsightForSceneDate(result, selectedSceneDate, sceneHistory),
+    [result, sceneHistory, selectedSceneDate],
+  )
+  const displayAlertLevel = displayEmbeddedInsight.alertLevel || vm.alert.level
 
   useEffect(() => {
     setCardSize(loadPopupSize(popupSizeStorageKey))
   }, [popupSizeStorageKey])
-
-  useEffect(() => {
-    if (weatherSnapshot) {
-      setWeather(weatherSnapshot)
-      setWeatherLoading(false)
-      return
-    }
-    if (weatherLoadingOverride != null) {
-      setWeatherLoading(weatherLoadingOverride)
-    }
-  }, [weatherSnapshot, weatherLoadingOverride])
-
-  useEffect(() => {
-    if (weatherSnapshot) return
-    if (!Number.isFinite(weatherLat) || !Number.isFinite(weatherLng)) {
-      setWeather(null)
-      setWeatherLoading(false)
-      return
-    }
-    let cancelled = false
-    setWeatherLoading(true)
-    void fetchOpenMeteoWeather(weatherLat, weatherLng)
-      .then(data => {
-        if (!cancelled) setWeather(data)
-      })
-      .catch(() => {
-        if (!cancelled) setWeather(null)
-      })
-      .finally(() => {
-        if (!cancelled) setWeatherLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [weatherLat, weatherLng, weatherSnapshot])
 
   const persistSize = useCallback(
     (size: PopupSize) => {
@@ -1136,12 +1219,19 @@ export function SiCropAlertMapPopup({
   return (
     <div
       ref={popupRef}
-      className="si-crop-alert-map-popup si-crop-alert-map-popup--lux si-crop-alert-map-popup--compact"
+      className={[
+        'si-crop-alert-map-popup',
+        'si-crop-alert-map-popup--lux',
+        'si-crop-alert-map-popup--compact',
+        isMapPin ? 'si-crop-alert-map-popup--map-pin' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       style={
         {
           '--popup-accent': alertTone,
-          width: cardSize.width,
-          height: popupHeight,
+          width: isMapPin ? preset.width : cardSize.width,
+          ...(isMapPin ? {} : { height: popupHeight }),
         } as CSSProperties
       }
       onClick={e => e.stopPropagation()}
@@ -1151,11 +1241,53 @@ export function SiCropAlertMapPopup({
     >
       <div className="si-crop-alert-map-popup__glow" aria-hidden />
 
-      <header className="si-crop-alert-map-popup__head">
+      <header
+        className={[
+          'si-crop-alert-map-popup__head',
+          isMapPin ? 'si-crop-alert-map-popup__head--map-pin' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        {isMapPin ? (
+          <>
+            <button
+              type="button"
+              className="si-crop-alert-map-popup__head-close"
+              onClick={onClose}
+              aria-label="Close crop alert popup"
+            >
+              ×
+            </button>
+            <div className="si-crop-alert-map-popup__head-toolbar">
+              <div className="si-crop-alert-map-popup__head-identity">
+                <div className="si-crop-alert-map-popup__head-title-stack">
+                  <span className="si-crop-alert-map-popup__field-name" title={vm.fieldName}>
+                    {vm.fieldName}
+                  </span>
+                  <div className="si-crop-alert-map-popup__head-meta">
+                    {vm.fieldId.trim().toLowerCase() !== vm.fieldName.trim().toLowerCase() ? (
+                      <span className="si-crop-alert-map-popup__field-id">{vm.fieldId}</span>
+                    ) : null}
+                    <span className="si-crop-alert-map-popup__badge">{displayAlertLevel}</span>
+                  </div>
+                </div>
+              </div>
+              <LandCoverageSceneDateControl
+                variant="mapPin"
+                sceneDates={sceneDates}
+                sceneDate={selectedSceneDate}
+                onSceneDateChange={handleCoverageSceneDateChange}
+                sceneHistoryLoading={sceneHistoryLoading}
+              />
+            </div>
+          </>
+        ) : (
+          <>
         <div className="si-crop-alert-map-popup__head-main">
           <div className="si-crop-alert-map-popup__title-row">
             <span className="si-crop-alert-map-popup__field-id">{vm.fieldId}</span>
-            <span className="si-crop-alert-map-popup__badge">{vm.alert.level}</span>
+            <span className="si-crop-alert-map-popup__badge">{displayAlertLevel}</span>
           </div>
           <p className="si-crop-alert-map-popup__coords">{vm.latLonLine}</p>
           <div className="si-crop-alert-map-popup__head-dates">
@@ -1178,31 +1310,36 @@ export function SiCropAlertMapPopup({
             </button>
           </div>
         </div>
+          </>
+        )}
       </header>
-
-      <WeatherMetricsStrip wx={weather} loading={weatherLoading} />
 
       <div className="si-crop-alert-map-popup__body">
         <div className="si-crop-alert-map-popup__scroll" data-agrocloud-map-wheel-scroll>
           <section className="si-crop-alert-map-popup__section si-crop-alert-map-popup__section--essentials">
             <PopupEssentialsCard
-              embeddedInsight={vm.embeddedInsight}
+              embeddedInsight={displayEmbeddedInsight}
               dataWarning={vm.dataWarning}
+              indexSubLabel={isMapPin ? indexSubLabel : 'current'}
+              variant={isMapPin ? 'mapPin' : 'default'}
             />
           </section>
 
+          {isMapPin ? null : (
           <section className="si-crop-alert-map-popup__section si-crop-alert-map-popup__section--analytics">
             <FieldAnalyticsTabsCard
               coverage={coverageForScene}
               sceneDates={sceneDates}
-              sceneDate={coverageSceneDate || indexDataDate}
+              sceneDate={selectedSceneDate}
               onSceneDateChange={handleCoverageSceneDateChange}
               sceneHistoryLoading={sceneHistoryLoading}
-              chasLabels={vm.chasTrend.labels}
-              chasValues={vm.chasTrend.values}
+              chasLabels={displayEmbeddedInsight.chasLabels}
+              chasValues={displayEmbeddedInsight.chasValues}
             />
           </section>
+          )}
 
+          {isMapPin ? null : (
           <footer className="si-crop-alert-map-popup__foot">
             {vm.interpretationLines[1] ? (
               <p className="si-crop-alert-map-popup__footnote">
@@ -1213,9 +1350,11 @@ export function SiCropAlertMapPopup({
               {vm.analysisDate} · {vm.dataSource}
             </p>
           </footer>
+          )}
         </div>
       </div>
 
+      {isMapPin ? null : (
       <div
         className="si-crop-alert-map-popup__resize"
         role="separator"
@@ -1228,6 +1367,7 @@ export function SiCropAlertMapPopup({
           <path d="M9 5v4H5" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
         </svg>
       </div>
+      )}
 
       <span className="si-crop-alert-map-popup__tail" aria-hidden />
     </div>

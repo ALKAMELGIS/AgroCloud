@@ -38,6 +38,7 @@ function AgroCloudPlatformBody() {
     liveAlertRows,
     displayKpiTotals,
     viewportScopeActive,
+    distributionMapLinked,
     distributionRows,
     countries,
   } = useAcpDashboardEngine()
@@ -86,6 +87,7 @@ function AgroCloudPlatformBody() {
         {acp.config.panels.analytics ? (
           <AcpAnalyticsPanel
             distributionRows={distributionRows}
+            distributionMapLinked={distributionMapLinked}
             viewportScopeActive={viewportScopeActive}
           />
         ) : null}

@@ -80,6 +80,25 @@ describe('buildAcpWmsExtentLoadSet', () => {
     expect(clip.features.every(f => f.properties?.Country === 'UAE')).toBe(true)
   })
 
+  it('resolveAcpWmsClipForMapView uses extent filter at any zoom when bbox is set', () => {
+    const clipLow = resolveAcpWmsClipForMapView(fc, {
+      countryFilter: 'all',
+      zoom: 5,
+      bbox: [54.5, 23.5, 55.5, 24.5],
+      center: [55, 24],
+    })
+    expect(clipLow.features).toHaveLength(2)
+    expect(clipLow.features.every(f => f.properties?.Country === 'UAE')).toBe(true)
+
+    const clipHigh = resolveAcpWmsClipForMapView(fc, {
+      countryFilter: 'all',
+      zoom: 12,
+      bbox: [54.5, 23.5, 55.5, 24.5],
+      center: [55, 24],
+    })
+    expect(clipHigh.features).toHaveLength(2)
+  })
+
   it('resolveAcpWmsClipForMapView uses extent filter at field zoom (dynamic pan)', () => {
     const many: GeoJSON.FeatureCollection = {
       type: 'FeatureCollection',

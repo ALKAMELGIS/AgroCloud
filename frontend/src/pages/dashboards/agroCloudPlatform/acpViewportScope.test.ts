@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isAcpDistributionMapLinked,
   isAcpViewportScopeActive,
+  resolveAcpDistributionGeoFeatures,
   resolveAcpScopeGeoFeatures,
 } from './acpViewportScope'
 
@@ -56,5 +58,20 @@ describe('acpViewportScope', () => {
       'all',
     )
     expect(feats).toHaveLength(2)
+  })
+
+  it('links distribution to map bbox regardless of scope mode', () => {
+    expect(isAcpDistributionMapLinked({ bbox: [54.5, 23.5, 55.5, 24.5], zoom: 4 })).toBe(true)
+    expect(isAcpDistributionMapLinked({ bbox: null, zoom: 12 })).toBe(false)
+  })
+
+  it('filters distribution features to visible map extent on zoom and pan', () => {
+    const feats = resolveAcpDistributionGeoFeatures(
+      fc,
+      { bbox: [54.5, 23.5, 55.5, 24.5], zoom: 10 },
+      'all',
+    )
+    expect(feats).toHaveLength(1)
+    expect(feats[0]?.properties?.OBJECTID).toBe(1)
   })
 })

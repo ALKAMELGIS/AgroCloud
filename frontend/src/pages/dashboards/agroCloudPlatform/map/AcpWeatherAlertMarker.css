@@ -13,6 +13,14 @@
   gap: 6px;
 }
 
+.acp-weather-marker-root--popup-open .acp-weather-marker-root__column {
+  align-items: flex-end;
+}
+
+.acp-weather-marker-root--popup-open .acp-weather-popup {
+  margin-bottom: 4px;
+}
+
 .acp-weather-marker {
   display: inline-flex;
   align-items: center;
