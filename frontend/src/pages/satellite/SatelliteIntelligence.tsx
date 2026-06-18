@@ -309,7 +309,7 @@ import {
   useGisContentPortal,
 } from '../../lib/gisContentPortalStore';
 import { persistArcGisHostedFeatureLayerToGisContentPortal } from '../../lib/gisContentPortalPublish';
-import { isAgroStructuresPortalRow } from '../../lib/gisHostedFeatureLayerPortal';
+import { isAgroStructuresPortalRow, fetchHostedFeatureLayerGeoJsonFromServiceUrl } from '../../lib/gisHostedFeatureLayerPortal';
 import { listGisContentPortalSavedLayers, parseGisContentPortalLayerUrl, gisContentPortalLayerUrl } from '../../lib/gisContentPortalTableUtils';
 import { SatelliteGeoAiFloatingWidget } from './components/SatelliteGeoAiFloatingWidget';
 import { SatelliteAoiStaticChartsMapOverlay } from './components/SatelliteAoiStaticChartsMapOverlay';
@@ -4421,21 +4421,20 @@ export default function SatelliteIntelligence() {
       return;
     }
     setIsAddingDiscoveredArcgisLayer(true);
-    setAddLayerStatus('Adding selected layer...');
+    setAddLayerStatus('Downloading layer geometry…');
     try {
-      const qUrl = `${selectedDiscoveredArcgisUrl}/query?where=1%3D1&outFields=*&returnGeometry=true&f=geojson`;
-      const finalUrl = appendTokenIfAny(qUrl, addLayerToken);
       const tokenTrim = addLayerToken.trim() || undefined;
-      const [res, drawingInfoRaw, pjson] = await Promise.all([
-        fetch(finalUrl),
+      const data = await fetchHostedFeatureLayerGeoJsonFromServiceUrl(selectedDiscoveredArcgisUrl, tokenTrim, {
+        onProgress: progress => {
+          if (progress.phase === 'page') {
+            setAddLayerStatus(`Downloading geometry… ${progress.featureCount} features (page ${progress.page})`);
+          }
+        },
+      });
+      const [drawingInfoRaw, pjson] = await Promise.all([
         fetchArcgisLayerDrawingInfo(selectedDiscoveredArcgisUrl, tokenTrim),
         fetchArcgisLayerPjson(selectedDiscoveredArcgisUrl, tokenTrim),
       ]);
-      if (!res.ok) throw new Error(`query failed (${res.status})`);
-      const data = await res.json();
-      if (data?.type !== 'FeatureCollection' || !Array.isArray(data.features)) {
-        throw new Error('Service did not return GeoJSON features.');
-      }
       const arcgisDrawingInfo = drawingInfoRaw ? sanitizeArcgisDrawingInfoForClient(drawingInfoRaw) : null;
       const arcgisLayerDefinition = slimArcgisLayerDefinitionForStorage(pjson) ?? null;
       const selectedLayer = discoveredArcgisLayers.find(l => l.url === selectedDiscoveredArcgisUrl);
@@ -4799,13 +4798,8 @@ export default function SatelliteIntelligence() {
         syncLiveViewport(true);
         return;
       }
-      const data = await (async () => {
-        const qUrl = `${layer.sourceUrl}/query?where=1%3D1&outFields=*&returnGeometry=true&f=geojson`;
-        const res = await fetch(appendTokenIfAny(qUrl, layer.authToken || ''));
-        if (!res.ok) throw new Error(`query failed (${res.status})`);
-        return res.json();
-      })();
-      if (data?.type !== 'FeatureCollection' || !Array.isArray(data.features)) {
+      const data = await fetchHostedFeatureLayerGeoJsonFromServiceUrl(layer.sourceUrl, layer.authToken || undefined);
+      if (!data.features?.length) {
         throw new Error('Service did not return GeoJSON features.');
       }
       const [drawingInfoRaw, pjson] = await Promise.all([

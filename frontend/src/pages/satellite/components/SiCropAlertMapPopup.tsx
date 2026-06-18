@@ -3,19 +3,23 @@ import { useSiInstanceScope } from '../siInstanceScope'
 import type { CropAlertFieldResult } from '../../../lib/siCropAlertEngine'
 import {
   fetchOpenMeteoWeather,
-  wmoWeatherIconClass,
-  wmoWeatherToneClass,
   type OpenMeteoWeatherSnapshot,
 } from '../../../lib/openMeteoWeather'
 import {
   buildCropAlertPopupViewModel,
   estimateNdviFieldCoverageForScene,
   formatPopupAreaHa,
-  listPopupSceneDates,
-  type IndexMinMaxMean,
-  type IndexTrendDirection,
+  mergePopupSceneDatesWithHistory,
   type NdviFieldCoverage,
 } from '../../../lib/siCropAlertMapPopupModel'
+import { resolveNearestValidSceneDate } from '../../../lib/siAdaptiveTemporalEngine'
+import { CDSI_INSIGHT_FA_ICONS } from '../../../lib/siCropAlertDchasBeacon'
+import { fetchCropAlertSentinelHistoryExtension } from '../../../lib/siCropAlertSentinelLive'
+import {
+  fetchSentinelFieldIndexTimeSeriesForRange,
+  mergeDailyIndexSeries,
+  type SentinelHubDailyIndexMeans,
+} from '../../../lib/sentinelHubStatisticsApi'
 import './SiCropAlertMapPopup.css'
 
 export type SiCropAlertMapPopupProps = {
@@ -29,24 +33,73 @@ export type SiCropAlertMapPopupProps = {
 
 const POPUP_SIZE_CONFIG = {
   storageKey: 'si-crop-alert-popup-size',
-  width: 312,
-  height: 420,
-  minWidth: 268,
+  width: 320,
+  height: 360,
+  minWidth: 288,
   maxWidth: 400,
   minHeight: 280,
-  maxHeight: 560,
+  maxHeight: 540,
 } as const
 
-const INDEX_TONES = {
-  NDVI: '#16a34a',
-  NDMI: '#0d9488',
-  NDWI: '#2563eb',
-  SAVI: '#65a30d',
-  EVI: '#7c3aed',
-  LST: '#ea580c',
-  CHAS: '#0f766e',
-  DCHAS: '#b45309',
-} as const
+const LAND_DONUT_SIZE = 88
+const LAND_DONUT_R = 34
+const LAND_DONUT_STROKE = 13
+
+function LandCoverageVectorDonut({
+  vegetationPct,
+  bareAreaPct,
+}: {
+  vegetationPct: number
+  bareAreaPct: number
+}) {
+  const cx = LAND_DONUT_SIZE / 2
+  const cy = LAND_DONUT_SIZE / 2
+  const circumference = 2 * Math.PI * LAND_DONUT_R
+  const veg = Math.max(0, Math.min(100, vegetationPct))
+  const vegLen = (veg / 100) * circumference
+
+  return (
+    <svg
+      width={LAND_DONUT_SIZE}
+      height={LAND_DONUT_SIZE}
+      viewBox={`0 0 ${LAND_DONUT_SIZE} ${LAND_DONUT_SIZE}`}
+      className="si-crop-alert-map-popup__land-pie-svg"
+      role="img"
+      aria-label={`Vegetation ${vegetationPct}%, bare area ${bareAreaPct}%`}
+    >
+      <circle
+        cx={cx}
+        cy={cy}
+        r={LAND_DONUT_R}
+        fill="none"
+        stroke="#cbd5e1"
+        strokeWidth={LAND_DONUT_STROKE}
+      />
+      {veg > 0 ? (
+        <circle
+          cx={cx}
+          cy={cy}
+          r={LAND_DONUT_R}
+          fill="none"
+          stroke="#15803d"
+          strokeWidth={LAND_DONUT_STROKE}
+          strokeDasharray={`${vegLen} ${Math.max(0, circumference - vegLen)}`}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${cx} ${cy})`}
+        />
+      ) : null}
+      <text
+        x={cx}
+        y={cy}
+        textAnchor="middle"
+        dominantBaseline="central"
+        className="si-crop-alert-map-popup__land-pie-label"
+      >
+        {vegetationPct}%
+      </text>
+    </svg>
+  )
+}
 
 const CHART_ACCENT = '#0f766e'
 
@@ -91,62 +144,243 @@ function formatSceneDateShort(iso: string): string {
   return iso.length > 10 ? iso.slice(5) : iso
 }
 
-function resolveTrendPresentation(trend: string): { icon: string; label: string; title: string } {
-  const t = trend.toLowerCase()
-  if (t.includes('increas')) {
-    return { icon: 'fa-solid fa-arrow-trend-up', label: 'Rising', title: trend }
-  }
-  if (t.includes('decreas')) {
-    return { icon: 'fa-solid fa-arrow-trend-down', label: 'Falling', title: trend }
-  }
-  if (t.includes('stable')) {
-    return { icon: 'fa-solid fa-grip-lines', label: 'Stable', title: trend }
-  }
-  if (t.includes('latest') || t.includes('single')) {
-    return { icon: 'fa-solid fa-satellite', label: '1 scene', title: trend }
-  }
-  return { icon: 'fa-solid fa-chart-line', label: shortenCopy(trend, 16), title: trend }
-}
-
 function isDateOnlyWarning(w: string | null | undefined): boolean {
   return Boolean(w?.trim().startsWith('Requested Date:'))
 }
 
-type AlertInsightPanelProps = {
-  trend: string
-  action: string
-  requestedDate: string
-  usedDate: string
-  dataWarning: string | null
+function ChasTrendLegend({ labels, values }: { labels: string[]; values: number[] }) {
+  if (!labels.length) return null
+  return (
+    <ul
+      className="si-crop-alert-map-popup__chart-legend si-crop-alert-map-popup__chart-legend--flow"
+      style={{ '--legend-count': labels.length } as CSSProperties}
+    >
+      {labels.map((lbl, i) => (
+        <li key={`${lbl}-${i}`} className="si-crop-alert-map-popup__chart-legend-item">
+          <span className="si-crop-alert-map-popup__chart-legend-label">{lbl || `S${i + 1}`}</span>
+          <span className="si-crop-alert-map-popup__chart-legend-value">
+            {Number.isFinite(values[i]) ? values[i]!.toFixed(3) : '—'}
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
 }
 
-function AlertInsightPanel({ trend, action, dataWarning }: Omit<AlertInsightPanelProps, 'requestedDate' | 'usedDate'>) {
-  const trendUi = resolveTrendPresentation(trend)
+const INDEX_TONE_CLASS: Record<'NDVI' | 'NDWI' | 'NDMI', string> = {
+  NDVI: 'si-crop-alert-map-popup__metric-chip--ndvi',
+  NDWI: 'si-crop-alert-map-popup__metric-chip--ndwi',
+  NDMI: 'si-crop-alert-map-popup__metric-chip--ndmi',
+}
+
+const CHAS_DIRECTION_LABEL = {
+  rising: 'Rising',
+  declining: 'Declining',
+  stable: 'Stable',
+} as const
+
+function EmbeddedInsightBoard({
+  insight,
+  dataWarning,
+}: {
+  insight: {
+    summary: string
+    action: string
+    chasLabels: string[]
+    chasValues: number[]
+    indices: Array<{ id: 'NDVI' | 'NDWI' | 'NDMI'; label: string; value: number }>
+    chasTrend: { direction: 'rising' | 'declining' | 'stable' }
+    deltaChas: number | null
+  }
+  dataWarning: string | null
+}) {
   const showWarning = Boolean(dataWarning?.trim()) && !isDateOnlyWarning(dataWarning)
+  const displayAction = insight.action.trim()
 
   return (
-    <div className="si-crop-alert-map-popup__insight">
-      <div className="si-crop-alert-map-popup__insight-grid">
-        <div className="si-crop-alert-map-popup__insight-chip" title={trendUi.title}>
-          <div className="si-crop-alert-map-popup__insight-icon si-crop-alert-map-popup__insight-icon--trend" aria-hidden>
-            <i className={trendUi.icon} />
+    <div
+      className="si-crop-alert-map-popup__insight si-crop-alert-map-popup__insight--embedded"
+      aria-label={insight.summary}
+    >
+      <div className="si-crop-alert-map-popup__metric-grid">
+        {insight.indices.map(index => (
+          <div
+            key={index.id}
+            className={`si-crop-alert-map-popup__metric-chip ${INDEX_TONE_CLASS[index.id]}`}
+          >
+            <span className="si-crop-alert-map-popup__metric-label">{index.label}</span>
+            <strong
+              className={`si-crop-alert-map-popup__metric-value${
+                index.value < 0 ? ' si-crop-alert-map-popup__metric-value--negative' : ''
+              }`}
+            >
+              {index.value.toFixed(2)}
+            </strong>
+            <span className="si-crop-alert-map-popup__metric-sub">current</span>
           </div>
-          <p className="si-crop-alert-map-popup__insight-text">{trendUi.label}</p>
-        </div>
-        <div className="si-crop-alert-map-popup__insight-chip" title={action}>
-          <div className="si-crop-alert-map-popup__insight-icon si-crop-alert-map-popup__insight-icon--action" aria-hidden>
-            <i className="fa-solid fa-seedling" />
-          </div>
-          <p className="si-crop-alert-map-popup__insight-text">{shortenCopy(action)}</p>
-        </div>
+        ))}
       </div>
+
+      {insight.chasLabels.length >= 2 ? (
+        <div className="si-crop-alert-map-popup__chas-panel">
+          <div className="si-crop-alert-map-popup__chas-panel-head">
+            <span className="si-crop-alert-map-popup__chas-panel-title">CHAS trend</span>
+            <span
+              className={`si-crop-alert-map-popup__chas-direction si-crop-alert-map-popup__chas-direction--${insight.chasTrend.direction}`}
+            >
+              {CHAS_DIRECTION_LABEL[insight.chasTrend.direction]}
+            </span>
+          </div>
+          <ChasTrendLegend labels={insight.chasLabels} values={insight.chasValues} />
+        </div>
+      ) : null}
+
+      {insight.deltaChas != null ? (
+        <div
+          className={`si-crop-alert-map-popup__delta-chip${
+            insight.deltaChas < 0 ? ' si-crop-alert-map-popup__delta-chip--down' : ''
+          }`}
+        >
+          <span className="si-crop-alert-map-popup__delta-chip-label">ΔCHAS</span>
+          <strong className="si-crop-alert-map-popup__delta-chip-value">
+            {insight.deltaChas >= 0 ? '+' : ''}
+            {insight.deltaChas.toFixed(3)}
+          </strong>
+          <span className="si-crop-alert-map-popup__delta-chip-sub">vs previous scene</span>
+        </div>
+      ) : null}
+
+      {displayAction ? (
+        <p className="si-crop-alert-map-popup__insight-action-bar" title={displayAction}>
+          {displayAction}
+        </p>
+      ) : null}
 
       {showWarning ? (
         <div className="si-crop-alert-map-popup__insight-warn" title={dataWarning!}>
           <i className="fa-solid fa-triangle-exclamation" aria-hidden />
-          <span>{shortenCopy(dataWarning!, 72)}</span>
+          <span>{shortenCopy(dataWarning!, 64)}</span>
         </div>
       ) : null}
+    </div>
+  )
+}
+
+type PopupEssentialsCardProps = {
+  embeddedInsight: {
+    summary: string
+    action: string
+    chasLabels: string[]
+    chasValues: number[]
+    indices: Array<{ id: 'NDVI' | 'NDWI' | 'NDMI'; label: string; value: number }>
+    chasTrend: { direction: 'rising' | 'declining' | 'stable' }
+    deltaChas: number | null
+  }
+  dataWarning: string | null
+}
+
+function PopupEssentialsCard({ embeddedInsight, dataWarning }: PopupEssentialsCardProps) {
+  return (
+    <div className="si-crop-alert-map-popup__essentials">
+      <EmbeddedInsightBoard insight={embeddedInsight} dataWarning={dataWarning} />
+    </div>
+  )
+}
+
+type LandCoverageSceneDateControlProps = {
+  sceneDates: string[]
+  sceneDate: string
+  onSceneDateChange: (date: string) => void
+  sceneHistoryLoading?: boolean
+}
+
+function stopPopupPointerEvent(e: React.SyntheticEvent) {
+  e.stopPropagation()
+}
+
+function snapSceneDateToCatalog(picked: string, sceneDates: string[]): string {
+  const want = picked.trim().slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(want)) return want
+  if (!sceneDates.length || sceneDates.includes(want)) return want
+  return resolveNearestValidSceneDate(want, sceneDates, 9999) ?? sceneDates[0] ?? want
+}
+
+function openNativeDatePicker(input: HTMLInputElement | null) {
+  if (!input) return
+  input.focus({ preventScroll: true })
+  try {
+    if (typeof input.showPicker === 'function') {
+      input.showPicker()
+      return
+    }
+  } catch {
+    /* fall through */
+  }
+  input.click()
+}
+
+function LandCoverageSceneDateControl({
+  sceneDates,
+  sceneDate,
+  onSceneDateChange,
+  sceneHistoryLoading = false,
+}: LandCoverageSceneDateControlProps) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const newest = sceneDates[0] ?? sceneDate
+  const oldest = sceneDates[sceneDates.length - 1] ?? sceneDate
+  const minDate = useMemo(() => {
+    if (sceneDates.length >= 2) return oldest
+    const anchor = newest || sceneDate
+    const end = new Date(`${anchor}T12:00:00Z`)
+    end.setUTCDate(end.getUTCDate() - 120)
+    return end.toISOString().slice(0, 10)
+  }, [newest, oldest, sceneDate, sceneDates.length])
+  const maxDate = newest || sceneDate
+
+  const openPicker = useCallback((e: React.SyntheticEvent) => {
+    stopPopupPointerEvent(e)
+    openNativeDatePicker(inputRef.current)
+  }, [])
+
+  const handleDateChange = useCallback(
+    (raw: string) => {
+      onSceneDateChange(snapSceneDateToCatalog(raw, sceneDates))
+    },
+    [onSceneDateChange, sceneDates],
+  )
+
+  return (
+    <div
+      className="si-crop-alert-map-popup__land-date-wrap"
+      onPointerDown={stopPopupPointerEvent}
+    >
+      <span
+        className="si-crop-alert-map-popup__land-date-label"
+        role="button"
+        tabIndex={0}
+        onClick={openPicker}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            openPicker(e)
+          }
+        }}
+      >
+        Scene
+      </span>
+      <input
+        ref={inputRef}
+        type="date"
+        className="si-crop-alert-map-popup__land-date-select si-crop-alert-map-popup__land-date-input"
+        value={sceneDate}
+        min={minDate}
+        max={maxDate}
+        onChange={e => handleDateChange(e.target.value)}
+        onClick={openPicker}
+        onPointerDown={stopPopupPointerEvent}
+        aria-label="Pick scene date for land coverage"
+        aria-busy={sceneHistoryLoading}
+      />
     </div>
   )
 }
@@ -156,6 +390,7 @@ type LandCoverageStripProps = {
   sceneDates: string[]
   sceneDate: string
   onSceneDateChange: (date: string) => void
+  sceneHistoryLoading?: boolean
   embedded?: boolean
 }
 
@@ -164,6 +399,7 @@ function LandCoverageStrip({
   sceneDates,
   sceneDate,
   onSceneDateChange,
+  sceneHistoryLoading = false,
   embedded = false,
 }: LandCoverageStripProps) {
   const vegetationPct = coverage.vegetationPct
@@ -171,7 +407,6 @@ function LandCoverageStrip({
   const vegetationHa = coverage.vegetationHa
   const bareAreaHa = coverage.bareAreaHa
   const fieldAreaHa = coverage.fieldAreaHa
-  const vegAngle = (vegetationPct / 100) * 360
 
   return (
     <div
@@ -189,22 +424,13 @@ function LandCoverageStrip({
           </span>
         )}
         <div className="si-crop-alert-map-popup__land-head-meta">
-          {sceneDates.length > 1 ? (
-            <label className="si-crop-alert-map-popup__land-date-wrap">
-              <span className="si-crop-alert-map-popup__land-date-label">Scene</span>
-              <select
-                className="si-crop-alert-map-popup__land-date-select"
-                value={sceneDate}
-                onChange={e => onSceneDateChange(e.target.value)}
-                aria-label="Filter land coverage by scene date"
-              >
-                {sceneDates.map(d => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
-            </label>
-          ) : sceneDate ? (
-            <time className="si-crop-alert-map-popup__land-date" dateTime={sceneDate}>{sceneDate}</time>
+          {sceneDate ? (
+            <LandCoverageSceneDateControl
+              sceneDates={sceneDates.length ? sceneDates : [sceneDate]}
+              sceneDate={sceneDate}
+              onSceneDateChange={onSceneDateChange}
+              sceneHistoryLoading={sceneHistoryLoading}
+            />
           ) : null}
           {fieldAreaHa != null ? (
             <span className="si-crop-alert-map-popup__land-total" title="Field area">
@@ -215,75 +441,25 @@ function LandCoverageStrip({
         </div>
       </div>
 
-      <div
-        className="si-crop-alert-map-popup__land-pie"
-        style={{
-          background: `conic-gradient(from -90deg, #15803d 0deg ${vegAngle}deg, #cbd5e1 ${vegAngle}deg 360deg)`,
-        }}
-        role="img"
-        aria-label={`Vegetation ${vegetationPct}%, bare area ${bareAreaPct}%`}
-      >
-        <span className="si-crop-alert-map-popup__land-pie-hole" aria-hidden />
-      </div>
+      <LandCoverageVectorDonut vegetationPct={vegetationPct} bareAreaPct={bareAreaPct} />
 
       <div className="si-crop-alert-map-popup__land-metrics">
         <div className="si-crop-alert-map-popup__land-metric si-crop-alert-map-popup__land-metric--veg" title="Planted cover">
-          <i className="fa-solid fa-leaf" aria-hidden />
+          <span className="si-crop-alert-map-popup__land-metric-icon" aria-hidden>
+            <i className="fa-solid fa-leaf" />
+          </span>
           <em>{vegetationPct}%</em>
           {vegetationHa != null ? <small>{formatPopupAreaHa(vegetationHa)}</small> : null}
         </div>
         <div className="si-crop-alert-map-popup__land-metric si-crop-alert-map-popup__land-metric--bare" title="Bare area">
-          <i className="fa-solid fa-mountain-sun" aria-hidden />
+          <span className="si-crop-alert-map-popup__land-metric-icon" aria-hidden>
+            <i className="fa-solid fa-mountain-sun" />
+          </span>
           <em>{bareAreaPct}%</em>
           {bareAreaHa != null ? <small>{formatPopupAreaHa(bareAreaHa)}</small> : null}
         </div>
       </div>
     </div>
-  )
-}
-
-function resolveIndexTrendUi(trend: IndexTrendDirection): {
-  icon: string
-  label: string
-  mod: string
-} {
-  if (trend === 'up') {
-    return { icon: 'fa-arrow-trend-up', label: 'Rising vs previous scene', mod: '--up' }
-  }
-  if (trend === 'down') {
-    return { icon: 'fa-arrow-trend-down', label: 'Falling vs previous scene', mod: '--down' }
-  }
-  return { icon: 'fa-minus', label: 'Stable vs previous scene', mod: '--flat' }
-}
-
-function IndexTrendArrow({
-  trend,
-  tone,
-  compact,
-  inline: inlineMode,
-}: {
-  trend: IndexTrendDirection
-  tone?: string
-  compact?: boolean
-  inline?: boolean
-}) {
-  const ui = resolveIndexTrendUi(trend)
-  return (
-    <span
-      className={[
-        'si-crop-alert-map-popup__index-trend',
-        ui.mod ? `si-crop-alert-map-popup__index-trend${ui.mod}` : '',
-        compact ? 'si-crop-alert-map-popup__index-trend--compact' : '',
-        inlineMode ? 'si-crop-alert-map-popup__index-trend--inline' : '',
-      ]
-        .filter(Boolean)
-        .join(' ')}
-      style={tone ? ({ '--index-tone': tone } as CSSProperties) : undefined}
-      title={ui.label}
-      aria-label={ui.label}
-    >
-      <i className={`fa-solid ${ui.icon}`} aria-hidden />
-    </span>
   )
 }
 
@@ -299,8 +475,8 @@ function SmartCropInsightBadge({
       title={`CDSI ${insight.cdsi.toFixed(3)} · ${insight.label}`}
       aria-label={`${insight.label} · CDSI ${insight.cdsi.toFixed(3)}`}
     >
-      <span className="si-crop-alert-map-popup__smart-insight-emoji" aria-hidden>
-        {insight.emoji}
+      <span className="si-crop-alert-map-popup__smart-insight-icon" aria-hidden>
+        <i className={CDSI_INSIGHT_FA_ICONS[insight.tier]} />
       </span>
       <span className="si-crop-alert-map-popup__smart-insight-status">
         <strong>{insight.label}</strong>
@@ -312,154 +488,84 @@ function SmartCropInsightBadge({
   )
 }
 
-function formatIndexStatValue(value: number, digits = 2): string {
-  return Number.isFinite(value) ? value.toFixed(digits) : '—'
-}
-
-function scalarToIndexStats(
-  value: number | null | undefined,
-  trend: IndexTrendDirection = 'flat',
-): IndexMinMaxMean {
-  if (value == null || !Number.isFinite(value)) {
-    return { min: 0, max: 0, mean: 0, trend: 'flat' }
-  }
-  const v = Number(value.toFixed(3))
-  return { min: v, max: v, mean: v, trend }
-}
-
-function chasDeltaIndexStats(current: number, previous: number | null): IndexMinMaxMean {
-  if (previous == null || !Number.isFinite(previous)) {
-    return { min: 0, max: 0, mean: 0, trend: 'flat' }
-  }
-  const d = Number((current - previous).toFixed(3))
-  const trend: IndexTrendDirection = d > 0.001 ? 'up' : d < -0.001 ? 'down' : 'flat'
-  return { min: d, max: d, mean: d, trend }
-}
-
 function resolvePopupIndexDataDate(vm: ReturnType<typeof buildCropAlertPopupViewModel>): string {
   const raw = vm.usedDate || vm.layerLive.sceneDate || vm.analysisDate || ''
   return raw.trim().slice(0, 10)
 }
 
-function IndexMinMaxMeanStats({
-  stats,
-  digits = 2,
-  compact = false,
+function WeatherMetricsStrip({
+  wx,
+  loading,
 }: {
-  stats: IndexMinMaxMean
-  digits?: number
-  compact?: boolean
+  wx: OpenMeteoWeatherSnapshot | null
+  loading: boolean
 }) {
-  return (
-    <div
-      className={[
-        'si-crop-alert-map-popup__index-triple',
-        compact ? 'si-crop-alert-map-popup__index-triple--compact' : '',
-      ]
-        .filter(Boolean)
-        .join(' ')}
-    >
-      <div className="si-crop-alert-map-popup__index-stat">
-        <span>Min</span>
-        <em>{formatIndexStatValue(stats.min, digits)}</em>
-      </div>
-      <div className="si-crop-alert-map-popup__index-stat">
-        <span>Mean</span>
-        <em>{formatIndexStatValue(stats.mean, digits)}</em>
-      </div>
-      <div className="si-crop-alert-map-popup__index-stat">
-        <span>Max</span>
-        <em>{formatIndexStatValue(stats.max, digits)}</em>
-      </div>
-    </div>
+  const metrics = useMemo(
+    () => [
+      {
+        id: 'temp',
+        label: 'Temp',
+        title: 'Air temperature',
+        icon: 'fa-solid fa-temperature-three-quarters',
+        value: wx?.temperatureC != null ? `${wx.temperatureC.toFixed(1)}°` : '—',
+      },
+      {
+        id: 'humidity',
+        label: 'Humidity',
+        title: 'Relative humidity',
+        icon: 'fa-solid fa-droplet',
+        value: wx?.humidityPct != null ? `${Math.round(wx.humidityPct)}%` : '—',
+      },
+      {
+        id: 'wind',
+        label: 'Wind',
+        title: 'Wind speed',
+        icon: 'fa-solid fa-wind',
+        value: wx?.windSpeedKmh != null ? `${Math.round(wx.windSpeedKmh)} km/h` : '—',
+      },
+      {
+        id: 'rain',
+        label: 'Rain',
+        title: 'Precipitation',
+        icon: 'fa-solid fa-cloud-rain',
+        value: wx?.precipMm != null ? `${wx.precipMm.toFixed(1)} mm` : '—',
+      },
+    ],
+    [wx],
   )
-}
 
-type IndexStatCardProps = {
-  code: keyof typeof INDEX_TONES
-  stats: IndexMinMaxMean
-  digits?: number
-  dataDate?: string
-}
-
-function IndexStatCard({ code, stats, digits = 2, dataDate }: IndexStatCardProps) {
-  return (
-    <div
-      className="si-crop-alert-map-popup__index-card"
-      style={{ '--index-tone': INDEX_TONES[code] } as CSSProperties}
-    >
-      <div className="si-crop-alert-map-popup__index-head">
-        <span className="si-crop-alert-map-popup__index-code">{code}</span>
-        <IndexTrendArrow trend={stats.trend} tone={INDEX_TONES[code]} />
-      </div>
-      {dataDate ? (
-        <time className="si-crop-alert-map-popup__index-date" dateTime={dataDate}>
-          {dataDate}
-        </time>
-      ) : null}
-      <IndexMinMaxMeanStats stats={stats} digits={digits} />
-    </div>
-  )
-}
-
-function WeatherPanel({ wx, loading }: { wx: OpenMeteoWeatherSnapshot | null; loading: boolean }) {
   if (loading) {
     return (
-      <div className="si-crop-alert-map-popup__weather si-crop-alert-map-popup__weather--loading">
+      <div className="si-crop-alert-map-popup__weather-strip si-crop-alert-map-popup__weather-strip--loading">
         <i className="fa-solid fa-spinner fa-spin" aria-hidden />
         <span>Loading weather…</span>
       </div>
     )
   }
 
-  const toneClass = wmoWeatherToneClass(wx?.weatherCode)
-  const iconClass = wmoWeatherIconClass(wx?.weatherCode)
-  const condition = wx?.conditionLabel || '—'
-
   return (
-    <div className="si-crop-alert-map-popup__weather">
-      <div className={`si-crop-alert-map-popup__weather-icon ${toneClass}`} aria-hidden>
-        <i className={iconClass} />
-      </div>
-      <div className="si-crop-alert-map-popup__weather-body">
-        <p className="si-crop-alert-map-popup__weather-condition">{condition}</p>
-        <div className="si-crop-alert-map-popup__weather-metrics">
-          <span
-            className="si-crop-alert-map-popup__weather-metric si-crop-alert-map-popup__weather-metric--temp"
-            title="Temperature"
+    <div className="si-crop-alert-map-popup__weather-strip" role="group" aria-label="Field weather">
+      <div className="si-crop-alert-map-popup__weather-strip-grid">
+        {metrics.map(metric => (
+          <div
+            key={metric.id}
+            className={`si-crop-alert-map-popup__weather-strip-item si-crop-alert-map-popup__weather-strip-item--${metric.id}`}
+            title={`${metric.title}: ${metric.value}`}
           >
-            <i className="fa-solid fa-temperature-half" aria-hidden />
-            {wx?.temperatureC != null ? `${wx.temperatureC.toFixed(1)}°` : '—'}
-          </span>
-          <span
-            className="si-crop-alert-map-popup__weather-metric si-crop-alert-map-popup__weather-metric--humidity"
-            title="Humidity"
-          >
-            <i className="fa-solid fa-droplet" aria-hidden />
-            {wx?.humidityPct != null ? `${Math.round(wx.humidityPct)}%` : '—'}
-          </span>
-          <span
-            className="si-crop-alert-map-popup__weather-metric si-crop-alert-map-popup__weather-metric--wind"
-            title="Wind"
-          >
-            <i className="fa-solid fa-wind" aria-hidden />
-            {wx?.windSpeedKmh != null ? `${Math.round(wx.windSpeedKmh)} km/h` : '—'}
-          </span>
-          <span
-            className="si-crop-alert-map-popup__weather-metric si-crop-alert-map-popup__weather-metric--rain"
-            title="Rain"
-          >
-            <i className="fa-solid fa-cloud-rain" aria-hidden />
-            {wx?.precipMm != null ? `${wx.precipMm.toFixed(1)} mm` : '—'}
-          </span>
-        </div>
+            <span className="si-crop-alert-map-popup__weather-strip-label">{metric.label}</span>
+            <span className="si-crop-alert-map-popup__weather-strip-value">
+              <i className={metric.icon} aria-hidden />
+              <em>{metric.value}</em>
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   )
 }
 
 const CHART_W = 268
-const CHART_H = 76
+const CHART_H = 64
 /** CHAS is a 0–1 weighted index — fixed domain keeps sparkline height aligned with legend values. */
 const CHAS_SPARKLINE_DOMAIN_MIN = 0
 const CHAS_SPARKLINE_DOMAIN_MAX = 1
@@ -740,6 +846,7 @@ type FieldAnalyticsTabsCardProps = {
   sceneDates: string[]
   sceneDate: string
   onSceneDateChange: (date: string) => void
+  sceneHistoryLoading?: boolean
   chasLabels: string[]
   chasValues: number[]
 }
@@ -749,6 +856,7 @@ function FieldAnalyticsTabsCard({
   sceneDates,
   sceneDate,
   onSceneDateChange,
+  sceneHistoryLoading = false,
   chasLabels,
   chasValues,
 }: FieldAnalyticsTabsCardProps) {
@@ -813,6 +921,7 @@ function FieldAnalyticsTabsCard({
             sceneDates={sceneDates}
             sceneDate={sceneDate}
             onSceneDateChange={onSceneDateChange}
+            sceneHistoryLoading={sceneHistoryLoading}
           />
         ) : null}
       </div>
@@ -851,33 +960,91 @@ export function SiCropAlertMapPopup({
 
   const vm = useMemo(() => buildCropAlertPopupViewModel(result), [result])
   const indexDataDate = useMemo(() => resolvePopupIndexDataDate(vm), [vm])
-  const sceneDates = useMemo(() => listPopupSceneDates(result), [result])
+  const [sceneHistory, setSceneHistory] = useState<SentinelHubDailyIndexMeans[]>([])
+  const [sceneHistoryLoading, setSceneHistoryLoading] = useState(false)
+  const sceneDates = useMemo(
+    () => mergePopupSceneDatesWithHistory(result, sceneHistory),
+    [result, sceneHistory],
+  )
   const [coverageSceneDate, setCoverageSceneDate] = useState(() => indexDataDate)
   useEffect(() => {
-    const next = resolvePopupIndexDataDate(buildCropAlertPopupViewModel(result))
-    setCoverageSceneDate(prev => (sceneDates.includes(prev) ? prev : next))
-  }, [result.fieldKey, indexDataDate, sceneDates])
+    setCoverageSceneDate(prev => {
+      if (sceneDates.includes(prev)) return prev
+      return sceneDates[0] ?? indexDataDate
+    })
+  }, [result.fieldKey, sceneDates, indexDataDate])
+
+  useEffect(() => {
+    if (!result.geometry) {
+      setSceneHistory([])
+      return
+    }
+    let cancelled = false
+    const toIso = indexDataDate || new Date().toISOString().slice(0, 10)
+    const end = new Date(`${toIso}T12:00:00Z`)
+    end.setUTCDate(end.getUTCDate() - 120)
+    const fromIso = end.toISOString().slice(0, 10)
+    if (!fromIso || fromIso >= toIso) return
+
+    setSceneHistoryLoading(true)
+    void fetchCropAlertSentinelHistoryExtension(
+      [
+        {
+          fieldKey: result.fieldKey,
+          objectId: result.objectId,
+          farmName: result.farmName,
+          farmCode: result.farmCode,
+          structureType: result.structureType,
+          country: '',
+          city: '',
+          centroid: result.centroid,
+          geometry: result.geometry,
+        },
+      ],
+      { fromIso, toIso, concurrency: 1 },
+    )
+      .then(map => {
+        if (cancelled) return
+        setSceneHistory(map.get(result.fieldKey) ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setSceneHistory([])
+      })
+      .finally(() => {
+        if (!cancelled) setSceneHistoryLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [result.fieldKey, result.geometry, result.objectId, result.farmName, result.farmCode, result.structureType, result.centroid, indexDataDate])
+
   const coverageForScene = useMemo(
-    () => estimateNdviFieldCoverageForScene(result, coverageSceneDate || indexDataDate),
-    [result, coverageSceneDate, indexDataDate],
+    () => estimateNdviFieldCoverageForScene(result, coverageSceneDate || indexDataDate, sceneHistory),
+    [result, coverageSceneDate, indexDataDate, sceneHistory],
   )
-  const aoiIndexCards = useMemo(
-    () => [
-      { code: 'NDVI' as const, stats: vm.cropStatus.ndvi, digits: 2 },
-      { code: 'NDMI' as const, stats: vm.cropStatus.ndmi, digits: 2 },
-      { code: 'NDWI' as const, stats: vm.cropStatus.ndwi, digits: 2 },
-      { code: 'SAVI' as const, stats: vm.cropStatus.savi, digits: 2 },
-      { code: 'EVI' as const, stats: vm.cropStatus.evi, digits: 2 },
-      { code: 'LST' as const, stats: vm.cropStatus.lst, digits: 1 },
-      { code: 'CHAS' as const, stats: scalarToIndexStats(vm.chas.current), digits: 3 },
-      {
-        code: 'DCHAS' as const,
-        stats: chasDeltaIndexStats(vm.chas.current, vm.chas.previous),
-        digits: 3,
-      },
-    ],
-    [vm],
+
+  const handleCoverageSceneDateChange = useCallback(
+    (date: string) => {
+      const next = date.trim().slice(0, 10)
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(next)) return
+      setCoverageSceneDate(next)
+      if (!result.geometry) return
+      void fetchSentinelFieldIndexTimeSeriesForRange({
+        geometry: result.geometry,
+        fromIso: next,
+        toIso: next,
+      }).then(rows => {
+        if (!rows.length) return
+        setSceneHistory(prev => {
+          if (prev.some(row => String(row.date || '').trim().slice(0, 10) === next)) return prev
+          return mergeDailyIndexSeries(prev, rows)
+        })
+      })
+    },
+    [result.geometry],
   )
+
   const weatherLat = coordsOverride?.lat ?? vm.lat
   const weatherLng = coordsOverride?.lng ?? vm.lng
   const popupHeight = cardSize.height || preset.height
@@ -1013,57 +1180,24 @@ export function SiCropAlertMapPopup({
         </div>
       </header>
 
+      <WeatherMetricsStrip wx={weather} loading={weatherLoading} />
+
       <div className="si-crop-alert-map-popup__body">
         <div className="si-crop-alert-map-popup__scroll" data-agrocloud-map-wheel-scroll>
-          <section className="si-crop-alert-map-popup__section">
-            <WeatherPanel wx={weather} loading={weatherLoading} />
-          </section>
-
-          <section className="si-crop-alert-map-popup__section si-crop-alert-map-popup__section--indices">
-            <div className="si-crop-alert-map-popup__index-grid">
-              {aoiIndexCards.map(card => (
-                <IndexStatCard
-                  key={card.code}
-                  code={card.code}
-                  stats={card.stats}
-                  digits={card.digits}
-                  dataDate={indexDataDate}
-                />
-              ))}
-            </div>
-          </section>
-
-          <section className="si-crop-alert-map-popup__section">
-            <div className="si-crop-alert-map-popup__kpi-row">
-              <div className="si-crop-alert-map-popup__kpi">
-                <span>CHAS</span>
-                <em>{vm.chas.current.toFixed(3)}</em>
-              </div>
-              <div className="si-crop-alert-map-popup__kpi">
-                <span>Δ</span>
-                <em>{vm.chas.deltaLabel}</em>
-              </div>
-              <div className="si-crop-alert-map-popup__kpi">
-                <span>Prev</span>
-                <em>{vm.chas.previous != null ? vm.chas.previous.toFixed(3) : '—'}</em>
-              </div>
-            </div>
-          </section>
-
-          <section className="si-crop-alert-map-popup__section">
-            <AlertInsightPanel
-              trend={vm.alert.trend}
-              action={vm.alert.action}
+          <section className="si-crop-alert-map-popup__section si-crop-alert-map-popup__section--essentials">
+            <PopupEssentialsCard
+              embeddedInsight={vm.embeddedInsight}
               dataWarning={vm.dataWarning}
             />
           </section>
 
-          <section className="si-crop-alert-map-popup__section">
+          <section className="si-crop-alert-map-popup__section si-crop-alert-map-popup__section--analytics">
             <FieldAnalyticsTabsCard
               coverage={coverageForScene}
               sceneDates={sceneDates}
               sceneDate={coverageSceneDate || indexDataDate}
-              onSceneDateChange={setCoverageSceneDate}
+              onSceneDateChange={handleCoverageSceneDateChange}
+              sceneHistoryLoading={sceneHistoryLoading}
               chasLabels={vm.chasTrend.labels}
               chasValues={vm.chasTrend.values}
             />

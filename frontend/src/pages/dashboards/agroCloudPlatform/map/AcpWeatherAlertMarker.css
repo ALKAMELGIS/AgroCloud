@@ -1,0 +1,225 @@
+.acp-weather-marker-root {
+  pointer-events: auto;
+}
+
+.acp-weather-marker-root--dimmed {
+  opacity: 0.45;
+}
+
+.acp-weather-marker-root__column {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.acp-weather-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1;
+  white-space: nowrap;
+  color: #fff;
+}
+
+.acp-weather-marker__icon {
+  flex-shrink: 0;
+  font-size: 17px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9));
+}
+
+.acp-weather-marker__temp {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-shadow:
+    0 0 4px rgba(0, 0, 0, 0.95),
+    0 1px 3px rgba(0, 0, 0, 0.85),
+    -1px 0 2px rgba(0, 0, 0, 0.75),
+    1px 0 2px rgba(0, 0, 0, 0.75);
+}
+
+.acp-weather-marker--cond-clear .acp-weather-marker__icon {
+  color: #fbbf24;
+}
+
+.acp-weather-marker--cond-cloud .acp-weather-marker__icon {
+  color: #e2e8f0;
+}
+
+.acp-weather-marker--cond-rain .acp-weather-marker__icon {
+  color: #93c5fd;
+}
+
+.acp-weather-marker--cond-wind .acp-weather-marker__icon {
+  color: #67e8f9;
+}
+
+.acp-weather-marker--cond-storm .acp-weather-marker__icon {
+  color: #ddd6fe;
+}
+
+.acp-weather-marker--cond-snow .acp-weather-marker__icon {
+  color: #f0f9ff;
+}
+
+.acp-weather-marker--cond-fog .acp-weather-marker__icon {
+  color: #cbd5e1;
+}
+
+.acp-weather-marker--selected {
+  transform: scale(1.06);
+}
+
+.acp-weather-marker--selected .acp-weather-marker__temp {
+  color: #fef08a;
+}
+
+.acp-weather-marker--yellow .acp-weather-marker__icon {
+  filter: drop-shadow(0 0 5px rgba(250, 204, 21, 0.75));
+}
+
+.acp-weather-marker--orange .acp-weather-marker__icon {
+  filter: drop-shadow(0 0 6px rgba(249, 115, 22, 0.85));
+}
+
+.acp-weather-marker--red .acp-weather-marker__icon {
+  filter: drop-shadow(0 0 7px rgba(239, 68, 68, 0.95));
+  animation: acp-weather-marker-glow 1.6s ease-in-out infinite;
+}
+
+.acp-weather-marker--red .acp-weather-marker__temp {
+  color: #fecaca;
+}
+
+@keyframes acp-weather-marker-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.65));
+  }
+  50% {
+    filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.95));
+  }
+}
+
+.acp-weather-popup {
+  width: min(280px, calc(100vw - 32px));
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.28);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.acp-weather-popup__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.acp-weather-popup__header strong {
+  display: block;
+  font-size: 12px;
+}
+
+.acp-weather-popup__country {
+  display: block;
+  color: #64748b;
+  font-size: 10px;
+}
+
+.acp-weather-popup__close {
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  padding: 2px;
+}
+
+.acp-weather-popup__level {
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--acp-weather-level, #facc15);
+  color: #0f172a;
+  font-weight: 700;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.acp-weather-popup__alerts {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.acp-weather-popup__alerts li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: #f8fafc;
+}
+
+.acp-weather-popup__alerts i {
+  width: 14px;
+  text-align: center;
+  color: #334155;
+}
+
+.acp-weather-popup__metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.acp-weather-popup__metrics div {
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: #f1f5f9;
+}
+
+.acp-weather-popup__metrics dt {
+  margin: 0;
+  font-size: 9px;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.acp-weather-popup__metrics dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.acp-weather-popup__condition {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #475569;
+  font-size: 10px;
+}
+
+.acp-weather-marker-root--popup-open {
+  z-index: 1000;
+}

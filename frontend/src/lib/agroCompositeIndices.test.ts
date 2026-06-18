@@ -8,6 +8,7 @@ import {
   isAgroCompositeLayerId,
   isAgroDeltaCompositeLayerId,
   resolveAgroCompositeIndexDef,
+  resolveAgroStaticLayerIdForDelta,
 } from './agroCompositeIndices'
 
 describe('agroCompositeIndices', () => {
@@ -38,6 +39,8 @@ describe('agroCompositeIndices', () => {
     expect(isAgroCompositeLayerId('VHS')).toBe(true)
     expect(isAgroDeltaCompositeLayerId('DVHS')).toBe(true)
     expect(resolveAgroCompositeIndexDef('VHS')?.expr).toBe('(ndvi + savi) / 2')
+    expect(resolveAgroStaticLayerIdForDelta('DVHS')).toBe('VHS')
+    expect(resolveAgroStaticLayerIdForDelta('DCHAS')).toBe('CHAS')
   })
 
   it('registers CHAS crop alert score in Crop group', () => {

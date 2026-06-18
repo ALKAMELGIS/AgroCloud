@@ -59,6 +59,23 @@ const AGRO_STRUCTURES_SENTINEL_STRUCTURE_TYPE_LABEL_SET = new Set<string>(
   AGRO_STRUCTURES_SENTINEL_STRUCTURE_TYPE_LABELS.map(l => l.toLowerCase()),
 )
 
+/** ArcGIS codes shown on the map outline but excluded from Sentinel dataMask / WMS clip. */
+export const AGRO_STRUCTURES_MAP_OUTLINE_STRUCTURE_TYPE_CODES = [1000, 1001, 1002] as const
+
+export const AGRO_STRUCTURES_MAP_OUTLINE_STRUCTURE_TYPE_LABELS = [
+  'Greenhouse',
+  'Nethouse',
+  'Glasshouse',
+] as const
+
+const AGRO_STRUCTURES_MAP_OUTLINE_STRUCTURE_TYPE_CODE_SET = new Set<number>(
+  AGRO_STRUCTURES_MAP_OUTLINE_STRUCTURE_TYPE_CODES,
+)
+
+const AGRO_STRUCTURES_MAP_OUTLINE_STRUCTURE_TYPE_LABEL_SET = new Set<string>(
+  AGRO_STRUCTURES_MAP_OUTLINE_STRUCTURE_TYPE_LABELS.map(l => l.toLowerCase()),
+)
+
 /** Resolve Structure_Type to a canonical label (handles ArcGIS subtype codes + strings). */
 export function resolveAgroStructuresStructureTypeLabel(
   props: Record<string, unknown> | null | undefined,
@@ -90,7 +107,7 @@ function resolveAgroStructuresStructureTypeCode(
   return label ? (AGRO_STRUCTURES_STRUCTURE_TYPE_BY_LABEL.get(label.toLowerCase()) ?? null) : null
 }
 
-function resolveAgroStructuresFeatureAreaHa(
+export function resolveAgroStructuresFeatureAreaHa(
   props: Record<string, unknown>,
   geometry: unknown,
 ): number {
@@ -137,7 +154,70 @@ export function buildAgroStructuresStructureTypeTotals(
   })
 }
 
+export type AgroStructuresLayerKpiTotals = {
+  totalCount: number
+  totalAreaHa: number
+  /** Distinct Country coded values in scope (Agro_Structures). */
+  countryCount: number
+  byType: AgroStructuresStructureTypeTotal[]
+}
+
+/** Static KPI totals from the full Agro_Structures layer (all Structure_Type values). */
+export function buildAgroStructuresLayerKpiTotals(
+  geojson: { features?: unknown[] } | null | undefined,
+  options?: { countryFilter?: string },
+): AgroStructuresLayerKpiTotals {
+  const countryFilter = options?.countryFilter?.trim()
+  const features: Array<{ properties?: Record<string, unknown>; geometry?: unknown }> = []
+  for (const raw of Array.isArray(geojson?.features) ? geojson!.features! : []) {
+    const feature = raw as {
+      type?: string
+      properties?: Record<string, unknown>
+      geometry?: unknown
+    }
+    if (feature?.type !== 'Feature' || !isPolygonalAoiGeometry(feature.geometry)) continue
+    const props = feature.properties ?? {}
+    if (countryFilter && countryFilter !== 'all' && resolveAgroStructuresCountry(props) !== countryFilter) {
+      continue
+    }
+    features.push(feature)
+  }
+  const fc = { type: 'FeatureCollection' as const, features }
+  const byType = buildAgroStructuresStructureTypeTotals(fc)
+  let totalArea = 0
+  for (const feature of features) {
+    totalArea += resolveAgroStructuresFeatureAreaHa(feature.properties ?? {}, feature.geometry)
+  }
+  return {
+    byType,
+    totalCount: features.length,
+    totalAreaHa: Number(totalArea.toFixed(2)),
+    countryCount: countDistinctAgroStructureCountries(features),
+  }
+}
+
+function countDistinctAgroStructureCountries(
+  features: Array<{ properties?: Record<string, unknown> }>,
+): number {
+  const codes = new Set<string>()
+  for (const feature of features) {
+    const props = feature.properties ?? {}
+    const code = resolveAgroStructuresCountryCode(props)
+    if (code) {
+      codes.add(code)
+      continue
+    }
+    const label = resolveAgroStructuresCountry(props)
+    if (label && label !== 'Unknown') codes.add(label)
+  }
+  return codes.size
+}
+
 const AGRO_STRUCTURES_NAME_KEYS = [
+  'Field_Name',
+  'FIELD_NAME',
+  'field_name',
+  'fieldName',
   'Farm_Name',
   'FARM_NAME',
   'farm_name',
@@ -178,16 +258,20 @@ const AGRO_STRUCTURES_CODE_KEYS = [
   'parcel_id',
 ] as const
 
-const AGRO_STRUCTURES_COUNTRY_KEYS = [
-  'Country',
-  'COUNTRY',
-  'country',
+const AGRO_STRUCTURES_COUNTRY_CODE_KEYS = ['Country', 'COUNTRY', 'country'] as const
+
+const AGRO_STRUCTURES_COUNTRY_NAME_KEYS = [
   'Country_Name',
   'COUNTRY_NAME',
   'country_name',
   'Nation',
   'NATION',
   'nation',
+] as const
+
+const AGRO_STRUCTURES_COUNTRY_KEYS = [
+  ...AGRO_STRUCTURES_COUNTRY_CODE_KEYS,
+  ...AGRO_STRUCTURES_COUNTRY_NAME_KEYS,
 ] as const
 
 /** City / region locality from Agro_Structures (layer 21 exposes `Region`). */
@@ -255,9 +339,16 @@ export function resolveAgroStructuresFieldCode(props: Record<string, unknown>): 
   return readAgroStructuresPropString(props, AGRO_STRUCTURES_CODE_KEYS)
 }
 
+/** Country coded value from Agro_Structures (filter key — not display label). */
+export function resolveAgroStructuresCountryCode(props: Record<string, unknown>): string {
+  return readAgroStructuresPropString(props, AGRO_STRUCTURES_COUNTRY_CODE_KEYS)
+}
+
 /** Country from Agro_Structures attributes (Country, Country_Name, …). */
 export function resolveAgroStructuresCountry(props: Record<string, unknown>): string {
-  return readAgroStructuresPropString(props, AGRO_STRUCTURES_COUNTRY_KEYS)
+  const code = resolveAgroStructuresCountryCode(props)
+  if (code) return code
+  return readAgroStructuresPropString(props, AGRO_STRUCTURES_COUNTRY_NAME_KEYS)
 }
 
 /** City / region locality from Agro_Structures attributes (Region, City, …). */
@@ -321,6 +412,80 @@ export function resolveAgroStructuresCountryLabel(
     if (resolved && resolved !== code) return resolved
   }
   return code
+}
+
+/** Human-readable country label for UI — resolves ArcGIS coded-value descriptions. */
+export function resolveAgroStructuresCountryDisplayName(
+  props: Record<string, unknown>,
+  descriptionMap?: Map<string, string> | null,
+  arcDef?: ArcgisLayerDefLite | null,
+): string {
+  const code = resolveAgroStructuresCountryCode(props)
+  const nameField = readAgroStructuresPropString(props, AGRO_STRUCTURES_COUNTRY_NAME_KEYS)
+  if (code) {
+    const label = resolveAgroStructuresCountryLabel(code, descriptionMap, arcDef)
+    if (label !== code) return label
+    if (nameField && nameField !== code) return nameField
+    return code
+  }
+  if (nameField) return nameField
+  return 'Unknown'
+}
+
+/** Build code → label map from feature pairs (Country + Country_Name on same row). */
+export function buildAgroStructuresCountryDescriptionMapFromFeatures(
+  features: unknown[] | null | undefined,
+): Map<string, string> {
+  const out = new Map<string, string>()
+  if (!Array.isArray(features)) return out
+  for (const raw of features) {
+    const props =
+      raw && typeof raw === 'object' && 'properties' in raw
+        ? ((raw as { properties?: Record<string, unknown> }).properties ?? {})
+        : {}
+    const code = resolveAgroStructuresCountryCode(props)
+    const name = readAgroStructuresPropString(props, AGRO_STRUCTURES_COUNTRY_NAME_KEYS)
+    if (code && name && code !== name) out.set(code, name)
+  }
+  return out
+}
+
+let agroStructuresLayerDefCache: ArcgisLayerDefLite | null = null
+let agroStructuresLayerDefPromise: Promise<ArcgisLayerDefLite | null> | null = null
+
+/** Fetch Agro_Structures layer schema (fields + coded-value domains). */
+export async function fetchAgroStructuresLayerDefinition(
+  token?: string,
+): Promise<ArcgisLayerDefLite | null> {
+  if (agroStructuresLayerDefCache) return agroStructuresLayerDefCache
+  if (!agroStructuresLayerDefPromise) {
+    agroStructuresLayerDefPromise = (async () => {
+      try {
+        const params = new URLSearchParams({ f: 'json' })
+        const trimmed = token?.trim()
+        if (trimmed) params.set('token', trimmed)
+        const res = await fetch(`${AGRO_STRUCTURES_FS21_URL}?${params.toString()}`)
+        if (!res.ok) return null
+        const json = (await res.json()) as ArcgisLayerDefLite & { error?: { message?: string } }
+        if (json?.error?.message) return null
+        agroStructuresLayerDefCache = json
+        return json
+      } catch {
+        return null
+      } finally {
+        agroStructuresLayerDefPromise = null
+      }
+    })()
+  }
+  return agroStructuresLayerDefPromise
+}
+
+/** Country coded-value descriptions from layer schema (cached after first fetch). */
+export async function fetchAgroStructuresCountryDescriptionMap(
+  token?: string,
+): Promise<Map<string, string>> {
+  const arcDef = await fetchAgroStructuresLayerDefinition(token)
+  return buildAgroStructuresCountryDescriptionMap(arcDef)
 }
 
 /** Count + area (ha) per Country from the full Agro_Structures GeoJSON layer. */
@@ -409,6 +574,58 @@ export function filterAgroStructuresSentinelMaskFeatures(features: unknown[]): u
     const props = (raw as { properties?: Record<string, unknown> })?.properties ?? {}
     return isAgroStructuresSentinelMaskStructureType(props) && featureToPrimaryAoiFeature(raw) != null
   })
+}
+
+/** True when Structure_Type is Greenhouse, Nethouse, or Glasshouse (map outline only). */
+export function isAgroStructuresMapOutlineStructureType(
+  props: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!props || typeof props !== 'object') return false
+  const raw = props.Structure_Type ?? props.STRUCTURE_TYPE ?? props.structure_type
+  if (raw != null && raw !== '') {
+    const code = Number(raw)
+    if (
+      Number.isFinite(code) &&
+      AGRO_STRUCTURES_MAP_OUTLINE_STRUCTURE_TYPE_CODE_SET.has(code as 1000 | 1001 | 1002)
+    ) {
+      return true
+    }
+  }
+  const label = resolveAgroStructuresStructureTypeLabel(props).toLowerCase()
+  return AGRO_STRUCTURES_MAP_OUTLINE_STRUCTURE_TYPE_LABEL_SET.has(label)
+}
+
+export function filterAgroStructuresMapOutlineFeatures(features: unknown[]): unknown[] {
+  return features.filter(raw => {
+    const props = (raw as { properties?: Record<string, unknown> })?.properties ?? {}
+    return isAgroStructuresMapOutlineStructureType(props) && featureToPrimaryAoiFeature(raw) != null
+  })
+}
+
+function agroStructureFeatureDedupeKey(raw: unknown, index: number): string {
+  const props = (raw as { properties?: Record<string, unknown> })?.properties ?? {}
+  const id = props.OBJECTID ?? props.objectid ?? props.GlobalID ?? props.globalid ?? props.FID
+  if (id != null && String(id).trim()) return String(id).trim()
+  return `idx:${index}`
+}
+
+/** Map draw layer: Farm Plots + PIVOT (mask) plus greenhouse outline types (not in dataMask). */
+export function buildAgroStructuresMapOutlineGeoJson(
+  geojson: { type?: string; features?: unknown[] } | null | undefined,
+): { type: 'FeatureCollection'; features: unknown[] } | null {
+  if (!geojson || geojson.type !== 'FeatureCollection' || !Array.isArray(geojson.features)) return null
+  const maskFeatures = filterAgroStructuresSentinelMaskFeatures(geojson.features)
+  const outlineFeatures = filterAgroStructuresMapOutlineFeatures(geojson.features)
+  const seen = new Set<string>()
+  const merged: unknown[] = []
+  for (const raw of [...maskFeatures, ...outlineFeatures]) {
+    const key = agroStructureFeatureDedupeKey(raw, merged.length)
+    if (seen.has(key)) continue
+    seen.add(key)
+    merged.push(raw)
+  }
+  if (!merged.length) return null
+  return { type: 'FeatureCollection', features: merged }
 }
 
 /** ArcGIS SQL for server-side Structure_Type filter (Farm Plots + PIVOT only). */

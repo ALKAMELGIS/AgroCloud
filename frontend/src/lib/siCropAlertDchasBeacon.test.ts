@@ -9,6 +9,11 @@ import {
   classifyDchasRiskTier,
   computeChas,
   computeDeltaChas,
+  DCHAS_HEALTHY_COLOR,
+  DCHAS_ISOLATED_COLOR,
+  DCHAS_STABLE_COLOR,
+  normalizeDchasRiskTier,
+  resolveAcpFieldHvdColor,
   resolveDchasOrbPresentation,
 } from './siCropAlertDchasBeacon'
 
@@ -65,6 +70,22 @@ describe('siCropAlertDchasBeacon', () => {
     const chas = computeChas({ ndvi: 0.5, ndmi: 0.2, ciRe: 0.12 })
     expect(chas).toBeGreaterThan(0.2)
     expect(chas).toBeLessThan(0.5)
+  })
+
+  it('normalizes dashboard tier strings for HVD icons', () => {
+    expect(normalizeDchasRiskTier('critical')).toBe('critical')
+    expect(normalizeDchasRiskTier('warning')).toBe('stress')
+    expect(normalizeDchasRiskTier('healthy')).toBe('stable')
+  })
+
+  it('uses bright green for healthy stable fields and dark green for isolated stable', () => {
+    expect(resolveAcpFieldHvdColor({ alertTier: 'stable', severity: 'normal' })).toBe(
+      DCHAS_HEALTHY_COLOR,
+    )
+    expect(resolveAcpFieldHvdColor({ alertTier: 'stable', severity: 'warning' })).toBe(
+      DCHAS_ISOLATED_COLOR,
+    )
+    expect(DCHAS_HEALTHY_COLOR).toBe(DCHAS_STABLE_COLOR)
   })
 
   it('classifies ΔCHAS risk tiers', () => {

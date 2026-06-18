@@ -1,10 +1,17 @@
 import { memo, useId, type CSSProperties } from 'react'
 import type { DchasRiskTier } from '../../../lib/siCropAlertDchasBeacon'
-import { DCHAS_ORB_BLINK_MS, DCHAS_RISK_COLORS } from '../../../lib/siCropAlertDchasBeacon'
+import {
+  DCHAS_ORB_BLINK_MS,
+  DCHAS_ORB_RING_COUNT,
+  DCHAS_RISK_COLORS,
+  normalizeDchasRiskTier,
+} from '../../../lib/siCropAlertDchasBeacon'
 import { CROP_ALERT_HVD_VIEWBOX } from '../../../lib/cropAlertLayerHvdIcon'
 import './SiCropAlertHvdIcon.css'
 
-type Size = 'sm' | 'md' | 'lg'
+export type CropAlertHvdIconSize = 'sm' | 'md' | 'lg'
+
+type Size = CropAlertHvdIconSize
 
 type Props = {
   tier: DchasRiskTier
@@ -13,6 +20,8 @@ type Props = {
   pulseRings?: number
   size?: Size
   className?: string
+  /** Overrides tier palette (e.g. healthy vs isolated stable). */
+  color?: string
 }
 
 const SIZE_PX: Record<Size, number> = {
@@ -28,8 +37,9 @@ export const SiCropAlertHvdIcon = memo(function SiCropAlertHvdIcon({
   pulseRings = 0,
   size = 'md',
   className = '',
+  color: colorOverride,
 }: Props) {
-  const color = DCHAS_RISK_COLORS[tier]
+  const color = colorOverride ?? DCHAS_RISK_COLORS[tier]
   const blinkMs = DCHAS_ORB_BLINK_MS[tier]
   const px = SIZE_PX[size]
   const uid = useId().replace(/:/g, '')
@@ -79,7 +89,7 @@ export const SiCropAlertHvdIcon = memo(function SiCropAlertHvdIcon({
             <stop offset="100%" stopColor="rgba(255,255,255,0)" />
           </radialGradient>
         </defs>
-        <circle className="si-crop-alert-hvd-icon__body" cx="16" cy="16" r="11.5" fill={color} />
+        <circle className="si-crop-alert-hvd-icon__body" cx="16" cy="16" r="11.5" fill="var(--hvd-tone)" />
         <circle
           className="si-crop-alert-hvd-icon__body-gloss"
           cx="16"
@@ -103,6 +113,45 @@ export const SiCropAlertHvdIcon = memo(function SiCropAlertHvdIcon({
         </g>
         <circle className="si-crop-alert-hvd-icon__shine" cx="12.5" cy="11.5" r="4.5" fill={`url(#${glowGradId})`} />
       </svg>
+    </span>
+  )
+})
+
+export type CropAlertTierIconProps = {
+  tier: DchasRiskTier | string
+  size?: CropAlertHvdIconSize
+  enhanced?: boolean
+  pulseRings?: number
+  selected?: boolean
+  className?: string
+  title?: string
+  color?: string
+}
+
+/** HVD orb icon for tables, filters, and legends — same SVG as map markers. */
+export const CropAlertTierIcon = memo(function CropAlertTierIcon({
+  tier,
+  size = 'sm',
+  enhanced = false,
+  pulseRings,
+  selected,
+  className = '',
+  title,
+  color,
+}: CropAlertTierIconProps) {
+  const dchasTier = typeof tier === 'string' ? normalizeDchasRiskTier(tier) : tier
+  const rings = pulseRings ?? DCHAS_ORB_RING_COUNT[dchasTier]
+
+  return (
+    <span className={className} title={title}>
+      <SiCropAlertHvdIcon
+        tier={dchasTier}
+        size={size}
+        enhanced={enhanced}
+        pulseRings={rings}
+        selected={selected}
+        color={color}
+      />
     </span>
   )
 })

@@ -18,6 +18,7 @@ import { loadProductionEnv, resolveAgriDataPaths } from './loadProductionEnv.js'
 import { bootstrapApiSecretsFromEnv } from './bootstrapApiSecretsFromEnv.js'
 import { registerSentinelHubStatisticsRoutes } from './sentinelHubStatisticsProxy.js'
 import { registerGeocodeRoutes } from './geocodeProxy.js'
+import { registerAcpWeatherRoutes } from './acpWeatherRoutes.js'
 
 loadProductionEnv()
 
@@ -1672,6 +1673,7 @@ app.post('/api/esri-dashboards/sources/probe', async (req, res) => {
 
 registerSentinelHubStatisticsRoutes(app, { secretsFilePath: API_SECRETS_FILE })
 registerGeocodeRoutes(app)
+registerAcpWeatherRoutes(app)
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(FRONTEND_DIST, 'index.html'))

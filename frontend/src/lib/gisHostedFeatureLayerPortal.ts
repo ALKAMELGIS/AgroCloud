@@ -1,4 +1,9 @@
 import {
+  fetchArcGisFeatureLayerGeoJson,
+  type ArcGisFeatureLayerFetchProgress,
+  type GisHostedFeatureLayerGeoJson as ArcGisFetchedGeoJson,
+} from './arcgisFeatureLayerGeoJson'
+import {
   fetchAgroStructuresGeoJson,
   isAgroStructuresLayerUrl,
 } from './agroStructuresPrimaryAoi'
@@ -158,63 +163,30 @@ export function hasHostedFeatureLayerLiveSource(row: GisContentRow): boolean {
   return Boolean(resolveHostedFeatureLayerExternalUrl(row))
 }
 
-const ARCGIS_GEOJSON_PAGE_SIZE = 2000
-
-async function fetchArcGisFeatureLayerGeoJson(
-  serviceUrl: string,
-  token?: string,
-): Promise<GisHostedFeatureLayerGeoJson> {
-  const base = serviceUrl.replace(/\/+$/, '')
-  const features: GisHostedFeatureLayerGeoJson['features'] = []
-  let offset = 0
-  for (let page = 0; page < 50; page++) {
-    const params = new URLSearchParams({
-      where: '1=1',
-      outFields: '*',
-      returnGeometry: 'true',
-      outSR: '4326',
-      f: 'geojson',
-      resultRecordCount: String(ARCGIS_GEOJSON_PAGE_SIZE),
-      resultOffset: String(offset),
-    })
-    const auth = token?.trim()
-    if (auth) params.set('token', auth)
-    const res = await fetch(`${base}/query?${params.toString()}`)
-    if (!res.ok) throw new Error(`ArcGIS query failed (${res.status})`)
-    const data = (await res.json()) as {
-      type?: string
-      features?: GisHostedFeatureLayerGeoJson['features']
-      error?: { message?: string; details?: string[] }
-      properties?: { exceededTransferLimit?: boolean }
-    }
-    if (data?.error?.message) {
-      const details = Array.isArray(data.error.details) ? data.error.details.join(' ') : ''
-      throw new Error([data.error.message, details].filter(Boolean).join(' '))
-    }
-    if (data?.type !== 'FeatureCollection' || !Array.isArray(data.features)) {
-      throw new Error('ArcGIS service did not return GeoJSON features.')
-    }
-    features.push(...data.features)
-    if (!data.properties?.exceededTransferLimit || data.features.length < ARCGIS_GEOJSON_PAGE_SIZE) {
-      return { type: 'FeatureCollection', features }
-    }
-    offset += ARCGIS_GEOJSON_PAGE_SIZE
-  }
-  return { type: 'FeatureCollection', features }
-}
+export type { ArcGisFeatureLayerFetchProgress }
 
 /** Pull live GeoJSON directly from an ArcGIS FeatureServer layer URL. */
 export async function fetchHostedFeatureLayerGeoJsonFromServiceUrl(
   serviceUrl: string,
   token = getArcgisPortalToken(),
+  options?: {
+    onProgress?: (progress: ArcGisFeatureLayerFetchProgress) => void
+    signal?: AbortSignal
+  },
 ): Promise<GisHostedFeatureLayerGeoJson> {
   const url = serviceUrl.trim()
   if (!url) throw new Error('ArcGIS layer URL is required.')
   const geojson = isAgroStructuresLayerUrl(url)
     ? ((await fetchAgroStructuresGeoJson(token || undefined)) as GisHostedFeatureLayerGeoJson)
-    : await fetchArcGisFeatureLayerGeoJson(url, token)
+    : ((await fetchArcGisFeatureLayerGeoJson(url, {
+        token,
+        onProgress: options?.onProgress,
+        signal: options?.signal,
+      })) as ArcGisFetchedGeoJson)
   return normalizeHostedFeatureLayerGeoJson(geojson)
 }
+
+export { fetchArcGisFeatureLayerGeoJson, resolveArcGisFeatureLayerQueryProfile } from './arcgisFeatureLayerGeoJson'
 
 /** Pull live geometry from the linked ArcGIS FeatureServer (Agro_Structures uses optimized fetch). */
 export async function fetchHostedFeatureLayerLiveGeoJson(

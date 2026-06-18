@@ -1,5 +1,6 @@
 import type { CropAlertFieldResult, CropAlertIndexSnapshot } from './siCropAlertEngine'
 import { deriveCoherentIndicesFromNdvi } from './siCropAlertEngine'
+import { resolveFarmerFieldAction } from './farmerAlertAction'
 import { subtractDaysFromIso } from './siSentinelImageryDate'
 import { resolveAgroStructuresFieldDisplayName } from './agroStructuresPrimaryAoi'
 import {
@@ -18,6 +19,7 @@ import {
 } from './siCropAlertDchasBeacon'
 import { classifyNdviLandZone } from './siCropAlertNdviZones'
 import { computeSiAoiFieldMetrics } from './siAoiFields'
+import type { SentinelHubDailyIndexMeans } from './sentinelHubStatisticsApi'
 
 export type IndexTrendDirection = 'up' | 'down' | 'flat'
 
@@ -39,6 +41,40 @@ export function resolveIndexTrendFromSeries(values: number[]): IndexTrendDirecti
   return delta > 0 ? 'up' : 'down'
 }
 
+export type IndexTrendPresentation = {
+  icon: string
+  label: string
+  title: string
+  compareLine: string | null
+}
+
+/** Trend badge copy — compares latest vs previous Sentinel scene when dates are known. */
+export function resolveIndexTrendPresentation(
+  trend: IndexTrendDirection,
+  sceneDate?: string | null,
+  previousSceneDate?: string | null,
+): IndexTrendPresentation {
+  const base =
+    trend === 'up'
+      ? { icon: 'fa-arrow-trend-up', label: 'Rising', title: 'Rising vs previous scene' }
+      : trend === 'down'
+        ? { icon: 'fa-arrow-trend-down', label: 'Falling', title: 'Falling vs previous scene' }
+        : { icon: 'fa-minus', label: 'Stable', title: 'Stable vs previous scene' }
+
+  const latest = sceneDate?.trim().slice(0, 10) || null
+  const previous = previousSceneDate?.trim().slice(0, 10) || null
+  const compareLine = latest && previous ? `${previous} → ${latest}` : latest
+
+  const title =
+    latest && previous
+      ? `${base.title} (${previous} → ${latest})`
+      : latest
+        ? `${base.title} · ${latest}`
+        : base.title
+
+  return { ...base, title, compareLine }
+}
+
 export type CropAlertPopupLandSplit = {
   label: string
   pct: number
@@ -54,6 +90,28 @@ export type NdviFieldCoverage = {
   vegetationHa: number | null
   /** Unplanted / bare share from NDVI analysis. */
   bareAreaHa: number | null
+}
+
+export type PopupEmbeddedIndex = {
+  id: 'NDVI' | 'NDWI' | 'NDMI'
+  label: string
+  value: number
+}
+
+export type PopupEmbeddedChasTrend = {
+  labels: string[]
+  values: number[]
+  direction: 'rising' | 'declining' | 'stable'
+}
+
+export type PopupEmbeddedInsight = {
+  summary: string
+  action: string
+  chasLabels: string[]
+  chasValues: number[]
+  indices: PopupEmbeddedIndex[]
+  chasTrend: PopupEmbeddedChasTrend
+  deltaChas: number | null
 }
 
 export type CropAlertPopupViewModel = {
@@ -99,6 +157,7 @@ export type CropAlertPopupViewModel = {
     labels: string[]
     values: number[]
   }
+  embeddedInsight: PopupEmbeddedInsight
   landSplit: CropAlertPopupLandSplit[]
   interpretationLines: [string, string]
   requestedDate: string
@@ -295,22 +354,45 @@ export function listPopupSceneDates(result: CropAlertFieldResult): string[] {
   return /^\d{4}-\d{2}-\d{2}$/.test(fallback) ? [fallback] : []
 }
 
+/** Merge engine scene window with extended Sentinel daily history (newest → oldest). */
+export function mergePopupSceneDatesWithHistory(
+  result: CropAlertFieldResult,
+  dailyRows: SentinelHubDailyIndexMeans[] | undefined,
+): string[] {
+  const base = listPopupSceneDates(result)
+  const fromHistory = (dailyRows ?? [])
+    .filter(d => d.ndvi != null && Number.isFinite(d.ndvi))
+    .map(d => String(d.date || '').trim().slice(0, 10))
+    .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d))
+  const merged = [...new Set([...base, ...fromHistory])]
+  merged.sort((a, b) => b.localeCompare(a))
+  return merged
+}
+
+/** NDVI mean for a scene date — engine series first, then extended daily history. */
+export function resolveNdviForPopupSceneDate(
+  result: CropAlertFieldResult,
+  sceneDate: string,
+  dailyRows?: SentinelHubDailyIndexMeans[],
+): number {
+  const want = sceneDate.trim().slice(0, 10)
+  const idx = (result.ndviSceneDates ?? []).findIndex(d => String(d).trim().slice(0, 10) === want)
+  if (idx >= 0 && result.ndviSceneValues[idx] != null && Number.isFinite(result.ndviSceneValues[idx])) {
+    return result.ndviSceneValues[idx]!
+  }
+  const hist = (dailyRows ?? []).find(d => String(d.date || '').trim().slice(0, 10) === want)
+  if (hist?.ndvi != null && Number.isFinite(hist.ndvi)) return hist.ndvi
+  return result.current.ndvi
+}
+
 /** NDVI land split for a specific Sentinel scene date inside the field AOI. */
 export function estimateNdviFieldCoverageForScene(
   result: CropAlertFieldResult,
   sceneDate: string,
+  dailyRows?: SentinelHubDailyIndexMeans[],
 ): NdviFieldCoverage {
-  const want = sceneDate.trim().slice(0, 10)
   const fieldAreaHa = resolveFieldAreaHaFromGeometry(result.geometry)
-  const newestScene = listPopupSceneDates(result)[0]
-  if (want && newestScene === want && Number.isFinite(result.current.ndvi)) {
-    return estimateNdviFieldCoverage(result.current.ndvi, fieldAreaHa)
-  }
-  const idx = (result.ndviSceneDates ?? []).findIndex(d => String(d).trim().slice(0, 10) === want)
-  const ndvi =
-    idx >= 0 && result.ndviSceneValues[idx] != null && Number.isFinite(result.ndviSceneValues[idx])
-      ? result.ndviSceneValues[idx]!
-      : result.current.ndvi
+  const ndvi = resolveNdviForPopupSceneDate(result, sceneDate, dailyRows)
   return estimateNdviFieldCoverage(ndvi, fieldAreaHa)
 }
 
@@ -419,11 +501,92 @@ export function buildChasTrendSeries(result: CropAlertFieldResult): { labels: st
   }
 }
 
-export function resolveAlertAction(result: CropAlertFieldResult, level: string): string {
-  if (result.alertExplanation?.trim()) return result.alertExplanation.trim()
-  if (result.message?.trim()) return result.message.trim()
-  if (result.title?.trim() && result.title !== level) return result.title.trim()
-  return 'Continue routine monitoring · no immediate action required'
+export function resolveAlertAction(result: CropAlertFieldResult, _level: string): string {
+  const tier = resolveDchasOrbPresentation(result).tier
+  return resolveFarmerFieldAction(result, tier)
+}
+
+const CHAS_TREND_EPSILON = 0.008
+
+function resolveEmbeddedInsightIndices(result: CropAlertFieldResult): PopupEmbeddedIndex[] {
+  const parsed = new Map<'NDVI' | 'NDWI' | 'NDMI', number>()
+  for (const line of result.alertReasonLines ?? []) {
+    const match = line.match(/^(NDVI|NDWI|NDMI)\s+current\s*=\s*(-?\d+(?:\.\d+)?)/i)
+    if (!match) continue
+    parsed.set(match[1]!.toUpperCase() as 'NDVI' | 'NDWI' | 'NDMI', Number(match[2]))
+  }
+  return (['NDVI', 'NDWI', 'NDMI'] as const).map(id => ({
+    id,
+    label: id,
+    value:
+      parsed.get(id) ??
+      (id === 'NDVI' ? result.current.ndvi : id === 'NDWI' ? result.current.ndwi : result.current.ndmi),
+  }))
+}
+
+function resolveChasTrendDirection(values: number[]): PopupEmbeddedChasTrend['direction'] {
+  const vals = values.filter(v => Number.isFinite(v))
+  if (vals.length < 2) return 'stable'
+  const delta = vals[vals.length - 1]! - vals[0]!
+  if (delta > CHAS_TREND_EPSILON) return 'rising'
+  if (delta < -CHAS_TREND_EPSILON) return 'declining'
+  return 'stable'
+}
+
+/** Interpretive copy for embedded insight — same CHAS series as the popup charts tab. */
+export function buildEmbeddedInsightInterpretation(
+  result: CropAlertFieldResult,
+  chasLabels: string[],
+  chasValues: number[],
+  action: string,
+): PopupEmbeddedInsight {
+  const indexLines = (result.alertReasonLines ?? []).filter(line =>
+    /NDVI|NDWI|NDMI|SAVI/i.test(line),
+  )
+  const indicesLine = indexLines.length
+    ? indexLines.join(' · ')
+    : (result.alertReasonLines?.[0]?.trim() ?? '')
+
+  const vals = chasValues.filter(v => Number.isFinite(v))
+  let chasLine = ''
+  if (vals.length >= 2) {
+    const oldest = vals[0]!
+    const latest = vals[vals.length - 1]!
+    const delta = latest - oldest
+    const trend =
+      delta > CHAS_TREND_EPSILON ? 'rising' : delta < -CHAS_TREND_EPSILON ? 'declining' : 'stable'
+    const series = vals.map(v => v.toFixed(3)).join(' → ')
+    const dates = chasLabels.length === vals.length ? chasLabels.join(' → ') : null
+    chasLine = dates
+      ? `CHAS trend (${dates}): ${series} — ${trend}.`
+      : `CHAS trend: ${series} — ${trend}.`
+  } else if (vals.length === 1) {
+    chasLine = `CHAS ${vals[0]!.toFixed(3)} at latest scene.`
+  }
+
+  const deltaChas = result.deltaChas
+  const deltaLine =
+    deltaChas != null && Number.isFinite(deltaChas)
+      ? `ΔCHAS ${deltaChas >= 0 ? '+' : ''}${deltaChas.toFixed(3)} vs previous scene.`
+      : ''
+
+  const summary = [indicesLine, chasLine, deltaLine].filter(Boolean).join(' ')
+  const trimmedAction = action.trim()
+  const chasTrend = {
+    labels: chasLabels,
+    values: chasValues,
+    direction: resolveChasTrendDirection(chasValues),
+  }
+
+  return {
+    summary: summary || trimmedAction,
+    action: trimmedAction,
+    chasLabels,
+    chasValues,
+    indices: resolveEmbeddedInsightIndices(result),
+    chasTrend,
+    deltaChas: deltaChas != null && Number.isFinite(deltaChas) ? deltaChas : null,
+  }
 }
 
 export function buildCropAlertPopupViewModel(result: CropAlertFieldResult): CropAlertPopupViewModel {
@@ -492,6 +655,15 @@ export function buildCropAlertPopupViewModel(result: CropAlertFieldResult): Crop
     result.layerLiveZonal?.sceneDate?.trim().slice(0, 10) ||
     (usedDate !== '—' ? usedDate : result.analysisDate)
 
+  const chasTrend = buildChasTrendSeries(result)
+  const alertAction = resolveAlertAction(result, orb.label)
+  const embeddedInsight = buildEmbeddedInsightInterpretation(
+    result,
+    chasTrend.labels,
+    chasTrend.values,
+    alertAction,
+  )
+
   return {
     fieldName,
     fieldId,
@@ -509,11 +681,12 @@ export function buildCropAlertPopupViewModel(result: CropAlertFieldResult): Crop
     alert: {
       level: orb.label,
       trend: trendLabel,
-      action: resolveAlertAction(result, orb.label),
+      action: alertAction,
     },
     coverage,
     sceneDates,
-    chasTrend: buildChasTrendSeries(result),
+    chasTrend,
+    embeddedInsight,
     landSplit: [
       {
         label: 'Vegetation',
@@ -524,7 +697,7 @@ export function buildCropAlertPopupViewModel(result: CropAlertFieldResult): Crop
       {
         label: 'Bare Area',
         pct: coverage.bareAreaPct,
-        color: '#d32f2f',
+        color: '#94a3b8',
         areaHa: coverage.bareAreaHa,
       },
     ],

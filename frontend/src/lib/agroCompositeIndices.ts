@@ -291,6 +291,17 @@ export function resolveAgroCompositeIndexDef(layerId: string): AgroCompositeInde
   return STATIC_BY_ID.get(u) ?? DELTA_BY_ID.get(u) ?? null
 }
 
+/** Static layer id paired with a delta layer (e.g. DVHS → VHS). */
+export function resolveAgroStaticLayerIdForDelta(deltaLayerId: string): string | null {
+  const u = String(deltaLayerId || '').trim().toUpperCase()
+  for (const cat of AGRO_COMPOSITE_CATEGORIES) {
+    for (const idx of cat.indices) {
+      if (idx.deltaId.toUpperCase() === u) return idx.id
+    }
+  }
+  return null
+}
+
 export function resolveAgroCompositeExpr(layerId: string, corePrefix = ''): string | null {
   const def = resolveAgroCompositeIndexDef(layerId)
   if (!def) return null

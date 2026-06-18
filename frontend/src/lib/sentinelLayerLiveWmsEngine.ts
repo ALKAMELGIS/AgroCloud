@@ -23,8 +23,16 @@ import { geometryBBox } from './geoAiGeoJsonSpatial'
 import type { LngLatBBox } from './siMapViewport'
 
 export const SENTINEL_LAYER_LIVE_WMS_MAX_TILE_LAYERS = 8
+/** AgroCloud Platform — one GEOMETRY clip per visible PIVOT (up to this many MapLibre raster sources). */
+export const SENTINEL_LAYER_LIVE_WMS_MAX_TILE_LAYERS_PLATFORM = 64
 export const SENTINEL_LAYER_LIVE_INDEX_VISIBILITY_MIN: number | null = null
 export const SENTINEL_LAYER_LIVE_DEFAULT_CLOUD_COVERAGE = 20
+
+export type SentinelLayerLiveWmsBuildOptions = {
+  viewportBBox?: LngLatBBox | null
+  maxTileLayers?: number | null
+  preferSingleRingChunks?: boolean
+}
 
 export type SentinelLayerLiveWmsTileSpec = {
   url: string
@@ -60,16 +68,19 @@ export function resolveSentinelLayerLiveAoiBoundsLngLat(clipSource: unknown): Ln
   return padLngLatBBox([west, south, east, north])
 }
 
-/** Display chunks — same options as Satellite Intelligence map canvas. */
+/** Display chunks — Satellite Intelligence default (packed multipolygon, cap 8). */
 export function buildSentinelLayerLiveDisplayChunks(
   clipSource: unknown,
   wmsLayerName: string,
+  options?: SentinelLayerLiveWmsBuildOptions,
 ): SentinelHubWmsAoiClipPart[] {
+  const maxTileLayers =
+    options?.maxTileLayers !== undefined ? options.maxTileLayers : SENTINEL_LAYER_LIVE_WMS_MAX_TILE_LAYERS
   return buildSentinelHubWmsDisplayChunks(clipSource, wmsLayerName, {
     indexVisibilityMin: SENTINEL_LAYER_LIVE_INDEX_VISIBILITY_MIN,
-    viewportBBox: null,
-    maxTileLayers: SENTINEL_LAYER_LIVE_WMS_MAX_TILE_LAYERS,
-    preferSingleRingChunks: false,
+    viewportBBox: options?.viewportBBox ?? null,
+    maxTileLayers,
+    preferSingleRingChunks: options?.preferSingleRingChunks ?? false,
   })
 }
 
@@ -90,42 +101,80 @@ export function isSentinelLayerLiveWmsRenderReady(
   return isSentinelHubWmsRenderReady(wmsLayerName, chunks, { aoiBoundsLngLat })
 }
 
-/** Build GetMap tile URL templates — mirrors Satellite Intelligence `wmsTileUrls`. */
-export function buildSentinelLayerLiveWmsTileSpecs(options: {
-  clipSource: unknown
+/** Resolve WMS TIME= from explicit start/end or Sentinel Hub lookback ending on analysisDate. */
+export function resolveSentinelLayerLiveWmsTimeRange(options: {
   wmsLayerName: string
   analysisDate: string
-  cloudCoverage?: number
-  catalogSceneIsos?: string[]
+  startDate?: string
+  endDate?: string
   previousSceneDate?: string | null
+  catalogSceneIsos?: string[]
   timeSeriesStart?: string | null
-}): SentinelLayerLiveWmsTileSpec[] {
-  const wmsLayerName = String(options.wmsLayerName || '').trim()
-  if (!wmsLayerName) return []
+  lookbackDays?: number
+}): { timeStart: string; timeEnd: string } {
+  const endIso = String(options.endDate || options.analysisDate || '')
+    .trim()
+    .slice(0, 10)
+  const startIso = String(options.startDate || '').trim().slice(0, 10)
+  if (endIso && startIso && startIso < endIso) {
+    return { timeStart: startIso, timeEnd: endIso }
+  }
 
-  const analysisDate = String(options.analysisDate || '').trim().slice(0, 10)
-  if (!analysisDate) return []
-
-  const chunks = buildSentinelLayerLiveDisplayChunks(options.clipSource, wmsLayerName)
-  const aoiBoundsLngLat = resolveSentinelLayerLiveAoiBoundsLngLat(options.clipSource)
-  if (!isSentinelHubWmsRenderReady(wmsLayerName, chunks, { aoiBoundsLngLat })) return []
-
-  const catalog = getSentinelHubWmsLayerCatalog()
-  const getMapLayer = resolveSentinelHubWmsGetMapLayerName(wmsLayerName, catalog)
-
-  const deltaPreviousDate = isAgroDeltaCompositeLayerId(wmsLayerName)
-    ? resolveSentinelHubWmsDeltaPreviousDate(analysisDate, {
+  const deltaPreviousDate = isAgroDeltaCompositeLayerId(options.wmsLayerName)
+    ? resolveSentinelHubWmsDeltaPreviousDate(endIso || options.analysisDate, {
         autoPreviousSceneDate: options.previousSceneDate ?? undefined,
         catalogSceneIsos: options.catalogSceneIsos ?? [],
         timeSeriesStart: options.timeSeriesStart ?? undefined,
       })
     : null
 
-  const { timeStart, timeEnd } = resolveSentinelHubWmsTimeWindow(
+  return resolveSentinelHubWmsTimeWindow(
+    options.wmsLayerName,
+    endIso || options.analysisDate,
+    deltaPreviousDate,
+    options.lookbackDays != null ? { lookbackDays: options.lookbackDays } : undefined,
+  )
+}
+
+/** Build GetMap tile URL templates — mirrors Satellite Intelligence `wmsTileUrls`. */
+export function buildSentinelLayerLiveWmsTileSpecs(options: {
+  clipSource: unknown
+  wmsLayerName: string
+  analysisDate: string
+  startDate?: string
+  endDate?: string
+  cloudCoverage?: number
+  catalogSceneIsos?: string[]
+  previousSceneDate?: string | null
+  timeSeriesStart?: string | null
+  lookbackDays?: number
+  wmsBuild?: SentinelLayerLiveWmsBuildOptions
+}): SentinelLayerLiveWmsTileSpec[] {
+  const wmsLayerName = String(options.wmsLayerName || '').trim()
+  if (!wmsLayerName) return []
+
+  const analysisDate = String(options.analysisDate || options.endDate || options.startDate || '')
+    .trim()
+    .slice(0, 10)
+  if (!analysisDate) return []
+
+  const chunks = buildSentinelLayerLiveDisplayChunks(options.clipSource, wmsLayerName, options.wmsBuild)
+  const aoiBoundsLngLat = resolveSentinelLayerLiveAoiBoundsLngLat(options.clipSource)
+  if (!isSentinelHubWmsRenderReady(wmsLayerName, chunks, { aoiBoundsLngLat })) return []
+
+  const catalog = getSentinelHubWmsLayerCatalog()
+  const getMapLayer = resolveSentinelHubWmsGetMapLayerName(wmsLayerName, catalog)
+
+  const { timeStart, timeEnd } = resolveSentinelLayerLiveWmsTimeRange({
     wmsLayerName,
     analysisDate,
-    deltaPreviousDate,
-  )
+    startDate: options.startDate,
+    endDate: options.endDate,
+    previousSceneDate: options.previousSceneDate,
+    catalogSceneIsos: options.catalogSceneIsos,
+    timeSeriesStart: options.timeSeriesStart,
+    lookbackDays: options.lookbackDays,
+  })
   if (!timeStart || !timeEnd) return []
 
   const baseUrl = getSentinelHubWmsBaseUrl()

@@ -55,11 +55,20 @@ export type DchasOrbPresentation = {
   }
 }
 
+/** HVD Stable orb — light lime green (lemon) for dashboard readability. */
+export const DCHAS_STABLE_COLOR = '#aeea00'
+
+/** Healthy vigor — bright lime (same as stable orb on map). */
+export const DCHAS_HEALTHY_COLOR = DCHAS_STABLE_COLOR
+
+/** Isolated / stable fields — dark green for Decision Support & filters. */
+export const DCHAS_ISOLATED_COLOR = '#15803d'
+
 export const DCHAS_RISK_COLORS: Record<DchasRiskTier, string> = {
   critical: '#d32f2f',
   stress: '#ff9800',
   watch: '#ffeb3b',
-  stable: '#2e7d32',
+  stable: DCHAS_STABLE_COLOR,
 }
 
 export const DCHAS_RISK_LABELS: Record<DchasRiskTier, string> = {
@@ -89,6 +98,31 @@ export const DCHAS_ORB_RING_COUNT: Record<DchasRiskTier, number> = {
   stress: 3,
   watch: 2,
   stable: 0,
+}
+
+/** Healthy vs isolated stable fields — ACP tables, alerts, and decision cards. */
+export function resolveAcpFieldHvdColor(row: {
+  alertTier: string
+  severity: string
+}): string | undefined {
+  const tier = normalizeDchasRiskTier(row.alertTier)
+  if (tier !== 'stable') return undefined
+  return row.severity === 'normal' ? DCHAS_HEALTHY_COLOR : DCHAS_ISOLATED_COLOR
+}
+
+/** Map dashboard / engine tier strings to ΔCHAS orb tiers for HVD icons. */
+export function normalizeDchasRiskTier(tier: string): DchasRiskTier {
+  switch (tier) {
+    case 'critical':
+      return 'critical'
+    case 'stress':
+    case 'warning':
+      return 'stress'
+    case 'watch':
+      return 'watch'
+    default:
+      return 'stable'
+  }
 }
 
 /** Soil-adjusted vegetation proxy when SAVI band is unavailable (display only — not used in CHAS). */
@@ -130,8 +164,16 @@ export const CDSI_INSIGHT_EMOJI: Record<CdsiInsightTier, string> = {
   critical: '🚨',
 }
 
+/** Font Awesome vector icons for popup CDSI badge (replaces emoji for crisp rendering). */
+export const CDSI_INSIGHT_FA_ICONS: Record<CdsiInsightTier, string> = {
+  healthy: 'fa-solid fa-seedling',
+  stable: 'fa-solid fa-leaf',
+  warning: 'fa-solid fa-triangle-exclamation',
+  critical: 'fa-solid fa-bell',
+}
+
 export const CDSI_INSIGHT_COLORS: Record<CdsiInsightTier, string> = {
-  healthy: '#2e7d32',
+  healthy: DCHAS_STABLE_COLOR,
   stable: '#65a30d',
   warning: '#f59e0b',
   critical: '#dc2626',

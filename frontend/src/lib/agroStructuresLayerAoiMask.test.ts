@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   agroStructuresLayerAoiSignature,
   buildAgroStructuresLayerAoiMask,
+  buildAgroStructuresMapOutlineGeoJson,
   countAgroStructuresPolygons,
+  isAgroStructuresMapOutlineStructureType,
   isAgroStructuresSentinelMaskStructureType,
   resolveAgroStructuresStructureTypeLabel,
 } from './agroStructuresPrimaryAoi'
@@ -33,7 +35,29 @@ describe('layer-wide Agro_Structures AOI mask', () => {
     expect(resolveAgroStructuresStructureTypeLabel({ Structure_Type: 1000 })).toBe('Greenhouse')
     expect(resolveAgroStructuresStructureTypeLabel({ Structure_Type: 1001 })).toBe('Nethouse')
     expect(isAgroStructuresSentinelMaskStructureType({ Structure_Type: 1000 })).toBe(false)
+    expect(isAgroStructuresMapOutlineStructureType({ Structure_Type: 1000 })).toBe(true)
+    expect(isAgroStructuresMapOutlineStructureType({ Structure_Type: 1006 })).toBe(false)
     expect(isAgroStructuresSentinelMaskStructureType({ Structure_Type: 'PIVOT' })).toBe(true)
+  })
+
+  it('builds map outline from mask + greenhouse types without widening dataMask', () => {
+    const fc = {
+      type: 'FeatureCollection',
+      features: [
+        poly(1, 1007, ring),
+        poly(2, 1006, ring),
+        poly(3, 1000, ring),
+        poly(4, 1001, ring),
+        poly(5, 1002, ring),
+        poly(6, 1003, ring),
+      ],
+    }
+    const mask = buildAgroStructuresLayerAoiMask(fc)
+    const outline = buildAgroStructuresMapOutlineGeoJson(fc)
+    expect(mask?.features).toHaveLength(2)
+    expect(outline?.features).toHaveLength(5)
+    expect(countAgroStructuresPolygons(fc)).toBe(2)
+    expect(agroStructuresLayerAoiSignature(fc)).toContain('st:fp-pivot|n2')
   })
 
   it('builds mask only from Farm Plots and PIVOT polygons', () => {

@@ -8,6 +8,7 @@ import {
 
 const MARKER_VIEWPORT_EXPAND = 0.18
 const LOW_ZOOM_MARKER_CAP = 96
+const FIELD_ZOOM_MARKER_CAP = 48
 const LOW_ZOOM_THRESHOLD = 6
 
 function markerDisplayPriority(result: CropAlertFieldResult): number {
@@ -31,6 +32,15 @@ function resultIntersectsBBox(result: CropAlertFieldResult, bbox: LngLatBBox): b
   )
 }
 
+/** When a field popup is open, show only that marker to avoid icon overlap on the card. */
+export function filterMarkersForOpenPopup<T extends { fieldKey: string }>(
+  results: T[],
+  popupFieldKey: string | null,
+): T[] {
+  if (!popupFieldKey) return results
+  return results.filter(r => r.fieldKey === popupFieldKey)
+}
+
 /** Viewport-scoped marker list — caps density at low zoom while keeping critical alerts visible. */
 export function filterCropAlertMarkersForViewport(
   results: CropAlertFieldResult[],
@@ -51,14 +61,17 @@ export function filterCropAlertMarkersForViewport(
     }
   }
 
-  if (mapZoom == null || mapZoom >= LOW_ZOOM_THRESHOLD || visible.length <= LOW_ZOOM_MARKER_CAP) {
-    return visible
-  }
+  const cap =
+    mapZoom != null && mapZoom >= LOW_ZOOM_THRESHOLD
+      ? FIELD_ZOOM_MARKER_CAP
+      : LOW_ZOOM_MARKER_CAP
+
+  if (visible.length <= cap) return visible
 
   const pinnedResults = visible.filter(r => pinned.has(r.fieldKey))
   const rest = visible
     .filter(r => !pinned.has(r.fieldKey))
     .sort((a, b) => markerDisplayPriority(b) - markerDisplayPriority(a))
-  const cap = Math.max(LOW_ZOOM_MARKER_CAP - pinnedResults.length, 0)
-  return [...pinnedResults, ...rest.slice(0, cap)]
+  const slots = Math.max(cap - pinnedResults.length, 0)
+  return [...pinnedResults, ...rest.slice(0, slots)]
 }

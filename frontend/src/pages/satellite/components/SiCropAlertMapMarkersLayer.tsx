@@ -68,24 +68,28 @@ export const SiCropAlertMapMarkersLayer = memo(function SiCropAlertMapMarkersLay
 
   return (
     <>
-      {visibleResults.map(result => (
+      {visibleResults.map(result => {
+        const isPopupHost = popupFieldKey === result.fieldKey
+        return (
         <Marker
           key={`si-crop-alert-beacon-${result.fieldKey}`}
           longitude={result.centroid[0]}
           latitude={result.centroid[1]}
           anchor="center"
-          style={{ zIndex: selectedFieldKey === result.fieldKey ? 30 : 12 }}
+          style={{ zIndex: isPopupHost ? 1000 : selectedFieldKey === result.fieldKey ? 30 : 12 }}
         >
           <SiCropAlertMapMarker
             result={result}
             selected={selectedFieldKey === result.fieldKey}
-            popupOpen={popupFieldKey === result.fieldKey}
+            popupOpen={isPopupHost}
+            dimmed={Boolean(popupFieldKey && !isPopupHost)}
             iconSize={iconSize}
             onSelect={onSelect}
             onClosePopup={onClosePopup}
           />
         </Marker>
-      ))}
+        )
+      })}
     </>
   )
 })

@@ -7,8 +7,11 @@ import AgroCloudDashboard from '../pages/dashboards/AgroCloudDashboard'
 /** Eager-loaded: avoid full-route Suspense spinner on first paint / dashboard navigation */
 import Home from '../pages/Home'
 import Login from '../pages/Login'
-import DashboardOverview from '../pages/dashboards/Overview'
-import DevelopDashboard from '../pages/dashboards/DevelopDashboard'
+const DashboardOverview = lazy(() => import('../pages/dashboards/Overview'))
+const DevelopDashboard = lazy(() => import('../pages/dashboards/DevelopDashboard'))
+const AgroCloudPlatformDashboard = lazy(
+  () => import('../pages/dashboards/agroCloudPlatform/AgroCloudPlatformDashboard'),
+)
 const SatelliteIntelligence = lazy(() => import('../pages/satellite/SatelliteIntelligence'))
 const SatelliteMultidimensional = lazy(() => import('../pages/satellite/Multidimensional'))
 const GisMap = lazy(() => import('../pages/satellite/GisMap'))
@@ -34,6 +37,14 @@ const UsabilityTest = lazy(() => import('../pages/UsabilityTest'))
 const SystemSettings = lazy(() => import('../pages/admin/SystemSettings'))
 const SensorIntegrationPage = lazy(() => import('../pages/sensors/SensorIntegrationPage'))
 const GpsVehicleTracking = lazy(() => import('../pages/sensors/GpsVehicleTracking'))
+
+function RouteLoadingFallback({ label = 'Loading…' }: { label?: string }) {
+  return (
+    <div className="route-loading-fallback" role="status" aria-live="polite">
+      {label}
+    </div>
+  )
+}
 
 export default function AppRoutes() {
   const { settings } = useSystemSettings()
@@ -68,6 +79,14 @@ export default function AppRoutes() {
         <Route path="/dashboards/ai-chatbot" element={<DashboardAiChatbot />} />
         <Route path="/dashboards/model" element={<DashboardModel />} />
         <Route path="/dashboards/agro-cloud" element={<AgroCloudDashboard />} />
+        <Route
+          path="/dashboards/agro-cloud-platform"
+          element={
+            <Suspense fallback={<RouteLoadingFallback label="Loading AgroCloud Platform…" />}>
+              <AgroCloudPlatformDashboard />
+            </Suspense>
+          }
+        />
         <Route path="/dashboards/agro-dashboard" element={<Navigate to="/dashboards/agro-cloud" replace />} />
         <Route path="/dashboards/ai-agro-cloud" element={<AiAgroCloud />} />
         <Route path="/dashboards/ai-agro-chat" element={<AiAgroChat />} />
@@ -86,7 +105,14 @@ export default function AppRoutes() {
         <Route path="/admin/system-settings" element={<SystemSettings />} />
         <Route path="/style-guide" element={<StyleGuide />} />
         <Route path="/usability-test" element={<UsabilityTest />} />
-        <Route path="/dashboard/develop/*" element={<DevelopDashboard />} />
+        <Route
+          path="/dashboard/develop/*"
+          element={
+            <Suspense fallback={<RouteLoadingFallback label="Loading dashboard builder…" />}>
+              <DevelopDashboard />
+            </Suspense>
+          }
+        />
         <Route path="/dashboards/geodash" element={<Navigate to="/dashboards/agro-cloud" replace />} />
         <Route path="/dashboard/design" element={<Navigate to="/dashboards/overview" replace />} />
         {settings.customPages

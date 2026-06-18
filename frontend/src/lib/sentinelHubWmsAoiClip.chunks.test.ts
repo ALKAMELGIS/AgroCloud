@@ -1,9 +1,39 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildSentinelHubWmsDisplayChunks,
+  mergeWktChunkGroupsToCap,
   packOuterRingsIntoWktChunkGroups,
   packOuterRingsIntoWktChunks,
 } from './sentinelHubWmsAoiClip'
+
+describe('mergeWktChunkGroupsToCap', () => {
+  it('merges groups to cap while retaining all rings (full coverage)', () => {
+    const rings: [number, number][][] = []
+    for (let i = 0; i < 12; i++) {
+      const lng = 55 + (i % 4) * 0.02
+      const lat = 25 + Math.floor(i / 4) * 0.02
+      rings.push([
+        [lng, lat],
+        [lng + 0.008, lat],
+        [lng + 0.008, lat + 0.008],
+        [lng, lat + 0.008],
+        [lng, lat],
+      ])
+    }
+    const evalscriptB64 = btoa('//VERSION=3')
+    const groups = rings.map(ring => ({
+      geometryWkt3857: `POLYGON((${ring.map(([lng, lat]) => `${lng} ${lat}`).join(', ')}))`,
+      outerRings: [ring],
+    }))
+    expect(groups.length).toBeGreaterThan(8)
+
+    const merged = mergeWktChunkGroupsToCap(groups, 8, evalscriptB64)
+    expect(merged.length).toBeLessThanOrEqual(8)
+    expect(merged.length).toBeGreaterThan(0)
+    const mergedRingCount = merged.reduce((n, g) => n + g.outerRings.length, 0)
+    expect(mergedRingCount).toBe(rings.length)
+  })
+})
 
 describe('packOuterRingsIntoWktChunks', () => {
   it('packs many rings into fewer WKT parts under budget', () => {

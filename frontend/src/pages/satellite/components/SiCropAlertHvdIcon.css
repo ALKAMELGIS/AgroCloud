@@ -2,7 +2,7 @@
 
 .si-crop-alert-hvd-icon {
   --hvd-size: 34px;
-  --hvd-tone: #2e7d32;
+  --hvd-tone: #aeea00;
   --hvd-pulse-ms: 2200ms;
   position: relative;
   width: var(--hvd-size);

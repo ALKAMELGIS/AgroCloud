@@ -44,6 +44,68 @@ export type BuildSentinelHubWmsAoiClipOptions = {
   maxAoiClipRings?: number | null;
 };
 
+/** Merge WKT chunk groups down to maxGroups while keeping all rings (full AOI coverage). */
+export function mergeWktChunkGroupsToCap(
+  groups: WmsAoiWktChunkGroup[],
+  maxGroups: number,
+  evalscriptB64: string | null,
+): WmsAoiWktChunkGroup[] {
+  const cap = Math.max(1, Math.floor(maxGroups))
+  if (groups.length <= cap) return groups
+
+  const budget = wktBudgetForEvalscript(evalscriptB64)
+  let merged = [...groups]
+
+  const allRings = merged.flatMap(g => g.outerRings)
+  const allWkt = multiPolygon3857Wkt(allRings)
+  if (allWkt.length <= budget && cap >= 1) {
+    return [{ geometryWkt3857: allWkt, outerRings: allRings }]
+  }
+
+  while (merged.length > cap) {
+    let mergedPair = false
+    for (let i = 0; i < merged.length - 1; i++) {
+      const combinedRings = [...merged[i]!.outerRings, ...merged[i + 1]!.outerRings]
+      const wkt = multiPolygon3857Wkt(combinedRings)
+      if (wkt.length <= budget) {
+        const next: WmsAoiWktChunkGroup = { geometryWkt3857: wkt, outerRings: combinedRings }
+        merged = [...merged.slice(0, i), next, ...merged.slice(i + 2)]
+        mergedPair = true
+        break
+      }
+    }
+    if (mergedPair) continue
+
+    let bestI = 0
+    let bestJ = 1
+    let bestSize = Infinity
+    for (let i = 0; i < merged.length; i++) {
+      for (let j = i + 1; j < merged.length; j++) {
+        const combinedRings = [...merged[i]!.outerRings, ...merged[j]!.outerRings]
+        const wktLen = multiPolygon3857Wkt(combinedRings).length
+        if (wktLen <= budget && wktLen < bestSize) {
+          bestSize = wktLen
+          bestI = i
+          bestJ = j
+        }
+      }
+    }
+    if (bestSize < Infinity) {
+      const combinedRings = [...merged[bestI]!.outerRings, ...merged[bestJ]!.outerRings]
+      const next: WmsAoiWktChunkGroup = {
+        geometryWkt3857: multiPolygon3857Wkt(combinedRings),
+        outerRings: combinedRings,
+      }
+      merged = merged.filter((_, idx) => idx !== bestI && idx !== bestJ)
+      merged.push(next)
+      continue
+    }
+    break
+  }
+
+  return merged.length > cap ? merged.slice(0, cap) : merged
+}
+
 function capWmsDisplayChunks(
   chunks: SentinelHubWmsAoiClipPart[],
   maxTileLayers?: number | null,
@@ -432,8 +494,12 @@ export function buildSentinelHubWmsAoiClipChunks(
     return capWmsDisplayChunks(singleRingParts, maxTiles);
   }
 
-  const groups = packOuterRingsIntoWktChunkGroups(simplified, evalscriptB64);
+  let groups = packOuterRingsIntoWktChunkGroups(simplified, evalscriptB64);
   if (!groups.length) return [];
+
+  if (maxTiles != null && Number.isFinite(maxTiles) && maxTiles > 0 && groups.length > maxTiles) {
+    groups = mergeWktChunkGroupsToCap(groups, maxTiles, evalscriptB64);
+  }
 
   return groups.map(group => ({
     geometryWkt3857: group.geometryWkt3857,

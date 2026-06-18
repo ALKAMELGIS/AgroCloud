@@ -102,6 +102,23 @@ html[data-theme='dark'] .app-layout > .content.content--agro-cloud-dashboard {
   min-height: 0;
 }
 
+.app-layout > .content.content--agro-cloud-platform {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: #eef2f0;
+}
+
+.content.content--agro-cloud-platform > .acp-shell {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+}
+
 .app-layout > .content.content--develop-dashboard .page.page-tight {
   padding: 0;
   gap: 0;
@@ -524,4 +541,15 @@ html[data-theme='dark'] .content--sensors-fit {
 .content--sensors-fit .sensor-shell {
   width: 100%;
   min-width: 0;
+}
+
+/* Route-level lazy dashboard loading */
+.route-loading-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40vh;
+  padding: 2rem;
+  color: #64748b;
+  font-size: 0.95rem;
 }

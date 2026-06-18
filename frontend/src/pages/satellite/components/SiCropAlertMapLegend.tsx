@@ -2,12 +2,11 @@ import { CHAS_FORMULA_DOC } from '../../../lib/chasIndex'
 import {
   DCHAS_DELTA_CRITICAL,
   DCHAS_DELTA_STRESS,
-  DCHAS_ORB_BLINK_MS,
-  DCHAS_RISK_COLORS,
-  DCHAS_RISK_ICONS,
+  DCHAS_ORB_RING_COUNT,
   DCHAS_RISK_LABELS,
-  beaconIconForeground,
 } from '../../../lib/siCropAlertEngine'
+import { CropAlertTierIcon } from './SiCropAlertHvdIcon'
+import './SiCropAlertHvdIcon.css'
 import './SiCropAlertMapLegend.css'
 
 const DCHAS_LEGEND_ITEMS = [
@@ -39,34 +38,23 @@ export function SiCropAlertMapLegend() {
       <p className="si-crop-alert-map-legend__hint">
         Orb color + pulse = ΔCHAS only · CHAS = {CHAS_FORMULA_DOC} · CI_RE = RE/NIR − 1
       </p>
-      {DCHAS_LEGEND_ITEMS.map(item => {
-        const color = DCHAS_RISK_COLORS[item.tier]
-        const blinkMs = DCHAS_ORB_BLINK_MS[item.tier]
-        return (
-          <span
-            key={item.tier}
-            className="si-crop-alert-map-legend__item"
-            title={`${DCHAS_RISK_LABELS[item.tier]} · ${item.blink}`}
-          >
-            <span
-              className={[
-                'si-crop-alert-map-legend__orb',
-                blinkMs != null ? 'si-crop-alert-map-legend__orb--blink' : 'si-crop-alert-map-legend__orb--steady',
-              ].join(' ')}
-              style={{
-                backgroundColor: color,
-                color: beaconIconForeground(color),
-                ...(blinkMs != null ? { animationDuration: `${blinkMs}ms` } : {}),
-              }}
-              aria-hidden
-            >
-              <i className={`fa-solid ${DCHAS_RISK_ICONS[item.tier]}`} />
-            </span>
-            <span className="si-crop-alert-map-legend__label">{DCHAS_RISK_LABELS[item.tier]}</span>
-            <span className="si-crop-alert-map-legend__range">{item.rangeLabel}</span>
-          </span>
-        )
-      })}
+      {DCHAS_LEGEND_ITEMS.map(item => (
+        <span
+          key={item.tier}
+          className="si-crop-alert-map-legend__item"
+          title={`${DCHAS_RISK_LABELS[item.tier]} · ${item.blink}`}
+        >
+          <CropAlertTierIcon
+            tier={item.tier}
+            size="sm"
+            enhanced
+            pulseRings={DCHAS_ORB_RING_COUNT[item.tier]}
+            className="si-crop-alert-map-legend__icon"
+          />
+          <span className="si-crop-alert-map-legend__label">{DCHAS_RISK_LABELS[item.tier]}</span>
+          <span className="si-crop-alert-map-legend__range">{item.rangeLabel}</span>
+        </span>
+      ))}
     </div>
   )
 }

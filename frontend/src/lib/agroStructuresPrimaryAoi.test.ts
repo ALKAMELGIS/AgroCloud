@@ -4,6 +4,7 @@ import {
   agroStructuresHitPropertiesMatch,
   agroStructuresSentinelMaskSqlWhere,
   buildAgroStructuresBboxQueryUrl,
+  buildAgroStructuresLayerKpiTotals,
   buildAgroStructuresStructureTypeTotals,
   buildAgroStructuresCountryDescriptionMap,
   featureToPrimaryAoiFeature,
@@ -12,6 +13,8 @@ import {
   isAgroStructuresLayer,
   isAgroStructuresLayerUrl,
   normalizeArcgisLayerUrl,
+  resolveAgroStructuresCountryCode,
+  resolveAgroStructuresCountryDisplayName,
   resolveAgroStructuresCountryLabel,
   resolveAgroStructuresFieldDisplayName,
 } from './agroStructuresPrimaryAoi'
@@ -119,6 +122,11 @@ describe('agroStructuresPrimaryAoi', () => {
     expect(agroStructuresHitPropertiesMatch({ OBJECTID: '12' }, { OBJECTID: 12 })).toBe(true)
   })
 
+  it('resolveAgroStructuresCountryCode reads coded Country field only', () => {
+    expect(resolveAgroStructuresCountryCode({ Country: 1, Country_Name: 'UAE' })).toBe('1')
+    expect(resolveAgroStructuresCountryDisplayName({ Country: 1, Country_Name: 'UAE' })).toBe('UAE')
+  })
+
   it('builds country coded descriptions from layer schema', () => {
     const map = buildAgroStructuresCountryDescriptionMap({
       fields: [
@@ -212,5 +220,72 @@ describe('agroStructuresPrimaryAoi', () => {
     expect(totals.find(t => t.code === 1000)).toMatchObject({ label: 'Greenhouse', count: 1, areaHa: 2.5 })
     expect(totals.find(t => t.code === 1006)).toMatchObject({ label: 'PIVOT', count: 2, areaHa: 15 })
     expect(totals.find(t => t.code === 1007)?.count).toBe(0)
+  })
+
+  it('builds layer-wide KPI totals across all Structure_Type values', () => {
+    const ring = [
+      [55.1, 25.1],
+      [55.11, 25.1],
+      [55.11, 25.11],
+      [55.1, 25.11],
+      [55.1, 25.1],
+    ]
+    const totals = buildAgroStructuresLayerKpiTotals({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { OBJECTID: 1, Structure_Type: 1000, Area_ha: 2.5 },
+          geometry: { type: 'Polygon', coordinates: [ring] },
+        },
+        {
+          type: 'Feature',
+          properties: { OBJECTID: 2, Structure_Type: 1006, Area_ha: 10 },
+          geometry: { type: 'Polygon', coordinates: [ring] },
+        },
+        {
+          type: 'Feature',
+          properties: { OBJECTID: 3, Structure_Type: 1007, Area_ha: 5 },
+          geometry: { type: 'Polygon', coordinates: [ring] },
+        },
+      ],
+    })
+    expect(totals.totalCount).toBe(3)
+    expect(totals.totalAreaHa).toBe(17.5)
+    expect(totals.countryCount).toBe(0)
+    expect(totals.byType.find(t => t.code === 1000)?.count).toBe(1)
+    expect(totals.byType.find(t => t.code === 1006)?.count).toBe(1)
+    expect(totals.byType.find(t => t.code === 1007)?.count).toBe(1)
+  })
+
+  it('counts distinct countries from Agro_Structures features', () => {
+    const ring = [
+      [55.1, 25.1],
+      [55.11, 25.1],
+      [55.11, 25.11],
+      [55.1, 25.11],
+      [55.1, 25.1],
+    ]
+    const totals = buildAgroStructuresLayerKpiTotals({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { OBJECTID: 1, Country: 'UAE' },
+          geometry: { type: 'Polygon', coordinates: [ring] },
+        },
+        {
+          type: 'Feature',
+          properties: { OBJECTID: 2, Country: 'UAE' },
+          geometry: { type: 'Polygon', coordinates: [ring] },
+        },
+        {
+          type: 'Feature',
+          properties: { OBJECTID: 3, Country: 'Serbia' },
+          geometry: { type: 'Polygon', coordinates: [ring] },
+        },
+      ],
+    })
+    expect(totals.countryCount).toBe(2)
   })
 })

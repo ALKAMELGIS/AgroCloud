@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildCropAlertPopupViewModel,
+  buildEmbeddedInsightInterpretation,
   estimateFieldCoverage,
   estimateNdviFieldCoverage,
+  estimateNdviFieldCoverageForScene,
+  mergePopupSceneDatesWithHistory,
   resolveFieldAreaHaFromGeometry,
 } from './siCropAlertMapPopupModel'
 import { computeChas, chasInputsFromSnapshot, classifyCdsiInsightTier, CDSI_INSIGHT_EMOJI } from './siCropAlertDchasBeacon'
@@ -64,6 +67,35 @@ function baseResult(overrides: Partial<CropAlertFieldResult> = {}): CropAlertFie
 }
 
 describe('siCropAlertMapPopupModel', () => {
+  it('builds embedded insight aligned with CHAS chart series', () => {
+    const result = baseResult({
+      current: testSnapshot(0.55, 0.12, 0.1),
+      previous7: testSnapshot(0.58, 0.14, 0.12),
+      alertReasonLines: [
+        'NDVI current = 0.35',
+        'NDWI current = 0.12',
+        'NDMI current = 0.18',
+      ],
+    })
+    const vm = buildCropAlertPopupViewModel(result)
+    expect(vm.embeddedInsight.chasLabels).toEqual(vm.chasTrend.labels)
+    expect(vm.embeddedInsight.chasValues).toEqual(vm.chasTrend.values)
+    expect(vm.embeddedInsight.indices).toHaveLength(3)
+    expect(vm.embeddedInsight.indices[0]?.id).toBe('NDVI')
+    expect(vm.embeddedInsight.deltaChas).not.toBeNull()
+    expect(vm.embeddedInsight.summary).toContain('NDVI current = 0.35')
+    expect(vm.embeddedInsight.summary).toContain('CHAS trend')
+    expect(vm.embeddedInsight.action).toBe('Increase irrigation within 24–48 hours.')
+
+    const built = buildEmbeddedInsightInterpretation(
+      result,
+      vm.chasTrend.labels,
+      vm.chasTrend.values,
+      vm.alert.action,
+    )
+    expect(built.summary).toBe(vm.embeddedInsight.summary)
+  })
+
   it('builds field info line with lat/lon, name, and id', () => {
     const result = baseResult()
     const vm = buildCropAlertPopupViewModel(result)
@@ -121,6 +153,9 @@ describe('siCropAlertMapPopupModel', () => {
     const vm = buildCropAlertPopupViewModel(
       baseResult({
         current: { ndvi: 0.92, ndwi: 0.11, ndmi: 0.42, evi: 0.5 },
+        ndviSceneDates: ['2026-06-10'],
+        ndviSceneValues: [0.92],
+        usedDate: '2026-06-10',
         geometry: {
           type: 'Polygon',
           coordinates: [
@@ -225,5 +260,47 @@ describe('siCropAlertMapPopupModel', () => {
     const vm = buildCropAlertPopupViewModel(baseResult())
     expect(vm.cropStatus.ndmi.min).toBe(0.39)
     expect(vm.cropStatus.ndmi.max).toBe(0.42)
+  })
+
+  it('updates land coverage when a different scene date is selected', () => {
+    const geometry: GeoJSON.Polygon = {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [54.97, 24.71],
+          [54.98, 24.71],
+          [54.98, 24.72],
+          [54.97, 24.72],
+          [54.97, 24.71],
+        ],
+      ],
+    }
+    const result = baseResult({
+      current: testSnapshot(0.7, 0.42, 0.24),
+      geometry,
+      ndviSceneDates: ['2026-06-10', '2026-05-27'],
+      ndviSceneValues: [0.7, 0.55],
+    })
+    const latest = estimateNdviFieldCoverageForScene(result, '2026-06-10')
+    const older = estimateNdviFieldCoverageForScene(result, '2026-05-27')
+    expect(latest.vegetationPct).toBe(70)
+    expect(older.vegetationPct).toBe(55)
+    expect(latest.vegetationHa).not.toBe(older.vegetationHa)
+  })
+
+  it('merges extended daily history into popup scene dates', () => {
+    const result = baseResult({
+      ndviSceneDates: ['2026-06-10'],
+      ndviSceneValues: [0.81],
+    })
+    const merged = mergePopupSceneDatesWithHistory(result, [
+      { date: '2026-06-10', ndvi: 0.81, ndwi: 0.2, ndmi: 0.4, evi: 0.5, ciRe: 0.1 },
+      { date: '2026-05-20', ndvi: 0.62, ndwi: 0.18, ndmi: 0.38, evi: 0.48, ciRe: 0.09 },
+    ])
+    expect(merged).toEqual(['2026-06-10', '2026-05-20'])
+    const coverage = estimateNdviFieldCoverageForScene(result, '2026-05-20', [
+      { date: '2026-05-20', ndvi: 0.62, ndwi: 0.18, ndmi: 0.38, evi: 0.48, ciRe: 0.09 },
+    ])
+    expect(coverage.vegetationPct).toBe(62)
   })
 })

@@ -12,6 +12,7 @@ export type SiCropAlertMapMarkerProps = {
   result: CropAlertFieldResult
   selected: boolean
   popupOpen?: boolean
+  dimmed?: boolean
   iconSize?: HvdIconSize
   onSelect: (fieldKey: string) => void
   onClosePopup?: () => void
@@ -21,6 +22,7 @@ export const SiCropAlertMapMarker = memo(function SiCropAlertMapMarker({
   result,
   selected,
   popupOpen = false,
+  dimmed = false,
   iconSize = 'md',
   onSelect,
   onClosePopup,
@@ -37,6 +39,7 @@ export const SiCropAlertMapMarker = memo(function SiCropAlertMapMarker({
       className={[
         'si-crop-alert-beacon-root',
         popupOpen ? 'si-crop-alert-beacon-root--popup-open' : '',
+        dimmed ? 'si-crop-alert-beacon-root--dimmed' : '',
       ]
         .filter(Boolean)
         .join(' ')}

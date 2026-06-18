@@ -80,6 +80,7 @@ import { buildGisWebMapSnapshot, readGisWebMapSnapshot, type GisWebMapSnapshotV1
 import {
   type GisHostedFeatureLayerGeoJson,
   type GisHostedFeatureLayerSourceMethod,
+  fetchArcGisFeatureLayerGeoJson,
 } from '../../lib/gisHostedFeatureLayerPortal'
 import { gisContentPortalLayerUrl, listGisContentPortalSavedLayers, parseGisContentPortalLayerUrl } from '../../lib/gisContentPortalTableUtils'
 import { geoJsonForGisContentLayerSave, saveMapVectorLayerToGisContent } from '../../lib/gisMapLayerGisContentSave'
@@ -4229,27 +4230,19 @@ export default function GisMap() {
     }
   }
 
-  const fetchArcGisGeoJson = async (layerUrl: string, authToken?: string, opts?: { returnGeometry?: boolean }) => {
-    const returnGeometry = opts?.returnGeometry !== false
-    const url = buildArcGisUrl(`${layerUrl.replace(/\/+$/, '')}/query`, {
-      where: '1=1',
-      outFields: '*',
-      returnGeometry: returnGeometry ? 'true' : 'false',
-      outSR: '4326',
-      f: 'geojson',
-      resultRecordCount: '2000',
-      token: (authToken ?? '').trim(),
+  const fetchArcGisGeoJson = async (
+    layerUrl: string,
+    authToken?: string,
+    opts?: {
+      returnGeometry?: boolean
+      onProgress?: (progress: import('../../lib/arcgisFeatureLayerGeoJson').ArcGisFeatureLayerFetchProgress) => void
+    },
+  ) => {
+    return fetchArcGisFeatureLayerGeoJson(layerUrl, {
+      token: authToken,
+      returnGeometry: opts?.returnGeometry !== false,
+      onProgress: opts?.onProgress,
     })
-    const res = await fetch(url, { method: 'GET' })
-    const geojson = await res.json()
-    if (geojson?.error?.message) {
-      const details = Array.isArray(geojson?.error?.details) ? geojson.error.details.join(' ') : ''
-      throw new Error([geojson.error.message, details].filter(Boolean).join(' '))
-    }
-    if (!geojson || geojson.type !== 'FeatureCollection') {
-      throw new Error('Service did not return GeoJSON.')
-    }
-    return geojson
   }
 
   const fetchArcGisLayerDefinition = async (layerUrl: string, authToken?: string) => {
@@ -4362,7 +4355,14 @@ export default function GisMap() {
         return null
       })
       const hasGeometry = (def?.type && String(def.type).toLowerCase() === 'table') ? false : typeof def?.geometryType === 'string' ? true : l.kind !== 'table'
-      const geojson = await fetchArcGisGeoJson(l.url, token, { returnGeometry: hasGeometry })
+      const geojson = await fetchArcGisGeoJson(l.url, token, {
+        returnGeometry: hasGeometry,
+        onProgress: progress => {
+          if (progress.phase === 'page') {
+            setDiscoverError(`Downloading geometry… ${progress.featureCount} features (page ${progress.page})`)
+          }
+        },
+      })
       const name = layerName.trim() || l.name
       const hostedRow = publishVectorGeoJsonAsHostedFeatureLayer({
         title: name,
@@ -4389,6 +4389,7 @@ export default function GisMap() {
         arcgisStyleUrl: typeof def?.styleUrl === 'string' ? def.styleUrl : undefined,
       }
       setLayers(prev => [...prev, newLayer])
+      setDiscoverError(null)
       setSelectionNotice(`Published "${hostedRow.title}" as hosted feature layer in GIS Content.`)
       setIsAddOpen(false)
       setLayerName('')
