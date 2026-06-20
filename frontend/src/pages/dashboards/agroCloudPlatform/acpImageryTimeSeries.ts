@@ -87,7 +87,8 @@ function evaluateStaticLayerDailyValue(layerId: string, row: SentinelHubDailyInd
       return core.savi
     case 'EVI':
       return row.evi != null && Number.isFinite(row.evi) ? row.evi : null
-    case 'CHAS': {
+    case 'CHAS':
+    case 'CHAS_ALERT': {
       const chas = computeChas(chasInputsFromDaily(row))
       return Number.isFinite(chas) ? chas : null
     }
@@ -96,10 +97,6 @@ function evaluateStaticLayerDailyValue(layerId: string, row: SentinelHubDailyInd
   }
 
   if (!isAgroStaticCompositeLayerId(id)) return null
-  if (id === 'CHAS') {
-    const chas = computeChas(chasInputsFromDaily(row))
-    return Number.isFinite(chas) ? chas : null
-  }
   const expr = resolveAgroCompositeExpr(id)
   if (!expr) return null
   return evaluateCompositeExpr(expr, core)

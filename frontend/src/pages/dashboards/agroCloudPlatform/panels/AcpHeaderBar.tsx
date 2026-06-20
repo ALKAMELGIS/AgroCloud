@@ -1,8 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useAcpPlatform } from '../acpPlatformContext'
 import type { AcpKpiCardConfig } from '../acpPlatformConfig'
+import { useBreakpoint, isAcpCompactLayout } from '../hooks/useBreakpoint'
 
 const ELITE_AGRO_LOGO_SRC = `${import.meta.env.BASE_URL}elite-agro-projects-logo.png`
+
+const PRIMARY_KPI_IDS = new Set(['total-countries', 'total-fields', 'total-area'])
 
 function resolveKpiDisplay(
   card: AcpKpiCardConfig,
@@ -27,8 +30,36 @@ function resolveKpiDisplay(
   return { value: '—' }
 }
 
+function KpiCard({
+  card,
+  totals,
+}: {
+  card: AcpKpiCardConfig
+  totals: ReturnType<typeof useAcpPlatform>['kpiTotals']
+}) {
+  const display = resolveKpiDisplay(card, totals)
+  return (
+    <article
+      className={`acp-kpi-card${display.compact ? ' acp-kpi-card--compact' : ''}`}
+      title={card.label}
+    >
+      <span className="acp-kpi-card__icon-wrap" aria-hidden>
+        <i className={`fa-solid ${card.icon}`} />
+      </span>
+      <div className="acp-kpi-card__body">
+        <span className="acp-kpi-card__label">{card.label}</span>
+        <strong className="acp-kpi-card__value">{display.value}</strong>
+        {display.sub ? <span className="acp-kpi-card__sub">{display.sub}</span> : null}
+      </div>
+    </article>
+  )
+}
+
 export function AcpHeaderBar({ kpiTotals }: { kpiTotals?: ReturnType<typeof useAcpPlatform>['kpiTotals'] }) {
   const acp = useAcpPlatform()
+  const bp = useBreakpoint()
+  const compact = isAcpCompactLayout(bp)
+  const [kpisExpanded, setKpisExpanded] = useState(false)
   const totals = kpiTotals ?? acp.kpiTotals
   const now = new Date()
   const dateStr = now.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -38,8 +69,20 @@ export function AcpHeaderBar({ kpiTotals }: { kpiTotals?: ReturnType<typeof useA
     [acp.config.kpiCards],
   )
 
+  const primaryCards = useMemo(
+    () =>
+      compact
+        ? cards.filter(c => PRIMARY_KPI_IDS.has(c.id)).slice(0, 3)
+        : cards,
+    [cards, compact],
+  )
+  const extraCards = useMemo(
+    () => (compact ? cards.filter(c => !PRIMARY_KPI_IDS.has(c.id)) : []),
+    [cards, compact],
+  )
+
   return (
-    <header className="acp-header">
+    <header className={`acp-header${compact ? ' acp-header--compact' : ''}${kpisExpanded ? ' acp-header--kpis-expanded' : ''}`}>
       <div className="acp-header__bar">
         <div className="acp-header__brand">
           <span className="acp-header__elite" role="img" aria-label="Elite Agro Projects">
@@ -91,25 +134,25 @@ export function AcpHeaderBar({ kpiTotals }: { kpiTotals?: ReturnType<typeof useA
       </div>
 
       <div className="acp-header__kpis" role="region" aria-label="Structure KPIs">
-        {cards.map(card => {
-          const display = resolveKpiDisplay(card, totals)
-          return (
-            <article
-              key={card.id}
-              className={`acp-kpi-card${display.compact ? ' acp-kpi-card--compact' : ''}`}
-              title={card.label}
+        {primaryCards.map(card => (
+          <KpiCard key={card.id} card={card} totals={totals} />
+        ))}
+        {compact && extraCards.length ? (
+          <>
+            {kpisExpanded
+              ? extraCards.map(card => <KpiCard key={card.id} card={card} totals={totals} />)
+              : null}
+            <button
+              type="button"
+              className="acp-kpi-expand"
+              aria-expanded={kpisExpanded}
+              onClick={() => setKpisExpanded(v => !v)}
             >
-              <span className="acp-kpi-card__icon-wrap" aria-hidden>
-                <i className={`fa-solid ${card.icon}`} />
-              </span>
-              <div className="acp-kpi-card__body">
-                <span className="acp-kpi-card__label">{card.label}</span>
-                <strong className="acp-kpi-card__value">{display.value}</strong>
-                {display.sub ? <span className="acp-kpi-card__sub">{display.sub}</span> : null}
-              </div>
-            </article>
-          )
-        })}
+              <i className={`fa-solid fa-chevron-${kpisExpanded ? 'up' : 'down'}`} aria-hidden />
+              {kpisExpanded ? 'Less' : `+${extraCards.length} more`}
+            </button>
+          </>
+        ) : null}
       </div>
     </header>
   )

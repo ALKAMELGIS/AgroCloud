@@ -37,7 +37,7 @@ export function buildAcpWmsSpecCacheKey(params: {
     params.endDate,
     params.cloudCoverage,
     params.clipSignature,
-    'persist-v11-field-clip',
+    'persist-v12-extent-mask',
   ].join('|')
 }
 

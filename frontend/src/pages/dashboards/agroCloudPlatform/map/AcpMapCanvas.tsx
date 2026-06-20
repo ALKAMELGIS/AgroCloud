@@ -258,13 +258,16 @@ function syncBasemapLayers(map: MaplibreMap, basemapId: string) {
 function resolveWmsBeforeLayerId(map: MaplibreMap): string | undefined {
   if (map.getLayer(ACP_LAYER_AOI_LINE)) return ACP_LAYER_AOI_LINE
   if (map.getLayer(ACP_LAYER_AOI_FILL)) return ACP_LAYER_AOI_FILL
+  for (const layer of map.getStyle()?.layers ?? []) {
+    if (!layer.id.startsWith('acp-basemap-layer-')) return layer.id
+  }
   return undefined
 }
 
 function padEntryBounds(bounds: LngLatBBox): LngLatBBox {
   const [west, south, east, north] = bounds
-  const padX = Math.max((east - west) * 0.08, 2e-4)
-  const padY = Math.max((north - south) * 0.08, 2e-4)
+  const padX = Math.max((east - west) * 0.12, 4e-4)
+  const padY = Math.max((north - south) * 0.12, 4e-4)
   return [west - padX, south - padY, east + padX, north + padY]
 }
 
@@ -985,6 +988,18 @@ export function AcpMapCanvas() {
     if (!map || !map.isStyleLoaded()) return
     applyWmsLayers(map, false)
   }, [applyWmsLayers, acp.wmsParams, acp.layerVisibility.sentinelWms, acp.config.maxWmsLayers, mapInstance])
+
+  const mapViewWmsExtentSig = useMemo(
+    () => buildAcpWmsExtentTileSignature(acp.mapView.bbox, acp.mapView.zoom ?? 0),
+    [acp.mapView.bbox, acp.mapView.zoom],
+  )
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.isStyleLoaded() || mapInteractingRef.current) return
+    if (!acp.aoiMask?.features.length || !acp.layerVisibility.sentinelWms) return
+    applyWmsRef.current(map, true)
+  }, [mapViewWmsExtentSig, acp.aoiMask, acp.layerVisibility.sentinelWms, mapInstance])
 
   useEffect(() => {
     sessionClipRef.current = null

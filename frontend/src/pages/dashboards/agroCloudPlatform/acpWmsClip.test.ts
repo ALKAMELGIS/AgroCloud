@@ -152,7 +152,15 @@ describe('buildAcpWmsExtentLoadSet', () => {
     expect(buildAcpWmsExtentTileSignature(a, 12)).toBe(buildAcpWmsExtentTileSignature(b, 12))
   })
 
-  it('loads all viewport-intersecting fields at field zoom (not first-N slice)', () => {
+  it('returns empty load set when viewport excludes all AOIs (no country-wide fallback)', () => {
+    const clip = buildAcpWmsExtentLoadSet(fc, {
+      viewportBBox: [10, 10, 11, 11],
+      mapCenter: [10.5, 10.5],
+    })
+    expect(clip.features).toHaveLength(0)
+  })
+
+  it('sorts viewport-intersecting fields by map center before safety cap', () => {
     const many: GeoJSON.FeatureCollection = {
       type: 'FeatureCollection',
       features: Array.from({ length: 20 }, (_, i) => ({

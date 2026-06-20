@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import type { AcpCountryOption, AcpFieldTableRow } from '../acpMapSpatial'
@@ -6,12 +6,15 @@ import { useAcpPlatform } from '../acpPlatformContext'
 import { resolveAcpFieldHvdColor } from '../../../../lib/siCropAlertDchasBeacon'
 import { CropAlertTierIcon } from '../../../satellite/components/SiCropAlertHvdIcon'
 import { useAcpVirtualRows } from '../hooks/useAcpVirtualRows'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 import '../../../satellite/components/SiCropAlertHvdIcon.css'
 
 type Props = {
   rows: AcpFieldTableRow[]
   countries: AcpCountryOption[]
   viewportScopeActive?: boolean
+  drawerMode?: boolean
+  onDrawerClose?: () => void
 }
 
 type FieldsViewMode = 'table' | 'list'
@@ -111,8 +114,16 @@ function exportFieldsPdf(rows: AcpFieldTableRow[]) {
   doc.save(`acp-fields-${stamp}.pdf`)
 }
 
-export function AcpFieldsPanel({ rows, countries, viewportScopeActive = false }: Props) {
+export function AcpFieldsPanel({
+  rows,
+  countries,
+  viewportScopeActive = false,
+  drawerMode = false,
+  onDrawerClose,
+}: Props) {
   const acp = useAcpPlatform()
+  const bp = useBreakpoint()
+  const viewModeUserOverride = useRef(false)
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [alertsOnly, setAlertsOnly] = useState(false)
@@ -120,6 +131,12 @@ export function AcpFieldsPanel({ rows, countries, viewportScopeActive = false }:
   const [rowDensity, setRowDensity] = useState<FieldsRowDensity>(() => acp.config.fieldsPanel.defaultRowDensity)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const tableWrapRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (viewModeUserOverride.current) return
+    if (bp === 'mobile') setViewMode('list')
+    else setViewMode(acp.config.fieldsPanel.defaultViewMode)
+  }, [bp, acp.config.fieldsPanel.defaultViewMode])
 
   const visibleRows = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -200,7 +217,10 @@ export function AcpFieldsPanel({ rows, countries, viewportScopeActive = false }:
               className={`acp-fields__tool${viewMode === 'list' ? ' is-on' : ''}`}
               title={viewMode === 'list' ? 'Table view' : 'List view'}
               aria-pressed={viewMode === 'list'}
-              onClick={() => setViewMode(v => (v === 'table' ? 'list' : 'table'))}
+              onClick={() => {
+                viewModeUserOverride.current = true
+                setViewMode(v => (v === 'table' ? 'list' : 'table'))
+              }}
             >
               <i className="fa-solid fa-list" aria-hidden />
             </button>
@@ -221,6 +241,16 @@ export function AcpFieldsPanel({ rows, countries, viewportScopeActive = false }:
             >
               <i className="fa-solid fa-file-pdf" aria-hidden />
             </button>
+            {drawerMode && onDrawerClose ? (
+              <button
+                type="button"
+                className="acp-panel__drawer-close"
+                aria-label="Close fields panel"
+                onClick={onDrawerClose}
+              >
+                <i className="fa-solid fa-xmark" aria-hidden />
+              </button>
+            ) : null}
           </div>
         </div>
         {searchOpen ? (

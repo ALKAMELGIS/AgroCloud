@@ -103,7 +103,7 @@ export function mergeWktChunkGroupsToCap(
     break
   }
 
-  return merged.length > cap ? merged.slice(0, cap) : merged
+  return merged
 }
 
 function capWmsDisplayChunks(
@@ -112,7 +112,8 @@ function capWmsDisplayChunks(
 ): SentinelHubWmsAoiClipPart[] {
   const cap = maxTileLayers
   if (cap == null || !Number.isFinite(cap) || cap <= 0 || chunks.length <= cap) return chunks
-  return chunks.slice(0, cap)
+  // Never slice — dropping chunks hides AOIs outside the arbitrary first-N set.
+  return chunks
 }
 
 const MAX_WKT_CHARS = 5600;

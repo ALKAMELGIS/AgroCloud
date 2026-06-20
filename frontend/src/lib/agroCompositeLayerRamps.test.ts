@@ -43,12 +43,17 @@ describe('agroCompositeLayerRamps', () => {
     expect(dvhs.classColors.join(',')).not.toBe(diei.classColors.join(','))
   })
 
-  it('preserves CHAS alert and DCHAS alert_delta ramps unchanged', () => {
+  it('uses CHAS scientific raster ramp and CHAS_ALERT derived overlay', () => {
     const chas = resolveAgroCompositeTenClassRamp('CHAS')!
-    expect(chas.kind).toBe('alert')
+    expect(chas.kind).toBe('scientific')
     expect(chas.classLabels).toHaveLength(10)
-    expect(chas.classColors[0]).toBe(0xd73027)
+    expect(chas.classLabels[0]).toContain('Class 1')
+    expect(chas.classColors[0]).toBe(0x7f0000)
     expect(chas.classColors[9]).toBe(0x1a9850)
+
+    const chasAlert = resolveAgroCompositeTenClassRamp('CHAS_ALERT')!
+    expect(chasAlert.kind).toBe('alert_derived')
+    expect(chasAlert.subtitle).toContain('4-level')
 
     const dchas = resolveAgroCompositeTenClassRamp('DCHAS')!
     expect(dchas.kind).toBe('alert_delta')
@@ -60,6 +65,7 @@ describe('agroCompositeLayerRamps', () => {
     const ids = listAgroCompositeRampLayerIds()
     const fingerprints = new Map<string, string>()
     for (const id of ids) {
+      if (id === 'CHAS_ALERT') continue
       const fp = agroCompositeRampColorFingerprint(id)
       expect(fp, `${id} missing ramp`).toBeTruthy()
       const owner = fingerprints.get(fp!)

@@ -59,14 +59,20 @@ const baseResult = (overrides: Partial<CropAlertFieldResult> = {}): CropAlertFie
   }) as CropAlertFieldResult
 
 describe('siCropAlertDchasBeacon', () => {
-  it('classifies CDSI insight tiers from absolute score', () => {
-    expect(classifyCdsiInsightTier(0.52)).toBe('healthy')
-    expect(classifyCdsiInsightTier(0.38)).toBe('stable')
-    expect(classifyCdsiInsightTier(0.28)).toBe('warning')
-    expect(classifyCdsiInsightTier(0.18)).toBe('critical')
+  it('classifies CDSI insight tiers from CHAS alert rule engine', () => {
+    expect(classifyCdsiInsightTier(-0.15)).toBe('critical')
+    expect(classifyCdsiInsightTier(0.75)).toBe('healthy')
+    expect(classifyCdsiInsightTier(0.55)).toBe('stable')
+    expect(classifyCdsiInsightTier(0.15)).toBe('warning')
   })
 
-  it('computes CHAS from NDVI, NDMI, and CI_RE', () => {
+  it('computes CHAS fusion from NDVI, NDWI, NDMI, and SAVI', () => {
+    const chas = computeChas({ ndvi: 0.5, ndmi: 0.2, ndwi: 0.12, savi: 0.48 })
+    expect(chas).toBeGreaterThan(0.2)
+    expect(chas).toBeLessThan(0.5)
+  })
+
+  it('falls back to legacy CI_RE when NDWI is missing', () => {
     const chas = computeChas({ ndvi: 0.5, ndmi: 0.2, ciRe: 0.12 })
     expect(chas).toBeGreaterThan(0.2)
     expect(chas).toBeLessThan(0.5)
@@ -98,7 +104,7 @@ describe('siCropAlertDchasBeacon', () => {
     expect(classifyDchasRiskTier(0.08)).toBe('stable')
   })
 
-  it('maps orb color and blink only from ΔCHAS', () => {
+  it('maps orb tier from CHAS alert with ΔCHAS escalation', () => {
     const critical = resolveDchasOrbPresentation(
       baseResult({
         chasCurrent: 0.4,
@@ -138,8 +144,10 @@ describe('siCropAlertDchasBeacon', () => {
       baseResult({ chasCurrent: 0.45, chasPrevious: 0.53, deltaChas: -0.08 }),
     )
     const watch = resolveDchasOrbPresentation(
-      baseResult({ chasCurrent: 0.5, chasPrevious: 0.52, deltaChas: -0.02 }),
+      baseResult({ chasCurrent: 0.28, chasPrevious: 0.3, deltaChas: -0.02 }),
     )
+    expect(watch.tier).toBe('watch')
+    expect(watch.pulse.blinkMs).not.toBeNull()
     expect(critical.pulse.blinkMs!).toBeLessThan(stress.pulse.blinkMs!)
     expect(stress.pulse.blinkMs!).toBeLessThan(watch.pulse.blinkMs!)
   })

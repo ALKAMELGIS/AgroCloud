@@ -1,13 +1,19 @@
 /**
- * Advanced crop alert beacons — ΔCHAS (Change Detection Layer) drives orb color + pulse.
- * CHAS = w1·NDVI + w2·NDMI + w3·CI_RE · ΔCHAS = CHAS(t₂) − CHAS(t₁)
+ * Advanced crop alert beacons — CHAS Alert (derived from 10-class raster) + ΔCHAS trend overlay.
+ * CHAS = NDVI·NDWI·NDMI·SAVI fusion · Alert = rule engine on raster classes · ΔCHAS = change signal.
  */
 
 import {
   computeChas,
   computeCdsi,
   computeCiReFromNdre,
+  estimateSaviFromNdvi,
 } from './chasIndex'
+import {
+  classifyChasFusionToAlert,
+  classifyChasFusionToClassIndex,
+  type ChasAlertLevel,
+} from './chasAlertMapping'
 import type { CropAlertFieldResult, CropAlertIndexSnapshot } from './siCropAlertEngine'
 import { beaconIconForeground } from './siCropAlertNdviZones'
 import { snapshotFromNdviScene } from './siCropAlertNdviTimeSeries'
@@ -24,7 +30,13 @@ export {
   CHAS_WEIGHT_NDVI,
   CHAS_WEIGHT_NDMI,
   CHAS_WEIGHT_CI_RE,
+  CHAS_FUSION_WEIGHT_NDVI,
+  CHAS_FUSION_WEIGHT_NDWI,
+  CHAS_FUSION_WEIGHT_NDMI,
+  CHAS_FUSION_WEIGHT_SAVI,
   AGRO_CHAS_EXPR,
+  AGRO_CHAS_FUSION_EXPR,
+  estimateSaviFromNdvi,
   CHAS_FORMULA_DOC,
   CHAS_FORMULA_POPUP,
   CDSI_FORMULA_POPUP,
@@ -125,22 +137,37 @@ export function normalizeDchasRiskTier(tier: string): DchasRiskTier {
   }
 }
 
-/** Soil-adjusted vegetation proxy when SAVI band is unavailable (display only — not used in CHAS). */
-export function estimateSaviFromNdvi(ndvi: number): number {
-  const v = Number.isFinite(ndvi) ? ndvi : 0
-  return Math.max(-0.2, Math.min(1, v * 0.96 + 0.015))
+/** Map derived CHAS alert level → dashboard orb tier. */
+export function mapChasAlertLevelToDchasTier(level: ChasAlertLevel): DchasRiskTier {
+  switch (level) {
+    case 'CRITICAL':
+      return 'critical'
+    case 'ACTIVE':
+      return 'stress'
+    case 'WARNING':
+      return 'watch'
+    default:
+      return 'stable'
+  }
 }
 
-/** Build CHAS inputs from a crop alert index snapshot (includes optional ciRe / ndre). */
+/** Build CHAS fusion inputs from a crop alert index snapshot. */
 export function chasInputsFromSnapshot(snapshot: CropAlertIndexSnapshot): {
   ndvi: number
   ndmi: number
+  ndwi?: number | null
+  savi?: number | null
   ciRe?: number | null
   ndre?: number | null
 } {
   return {
     ndvi: snapshot.ndvi,
     ndmi: snapshot.ndmi,
+    ndwi: snapshot.ndwi,
+    savi:
+      snapshot.savi != null && Number.isFinite(snapshot.savi)
+        ? snapshot.savi
+        : estimateSaviFromNdvi(snapshot.ndvi),
     ciRe: snapshot.ciRe,
     ndre: snapshot.ndre,
   }
@@ -179,13 +206,14 @@ export const CDSI_INSIGHT_COLORS: Record<CdsiInsightTier, string> = {
   critical: '#dc2626',
 }
 
-/** Absolute CDSI thresholds aligned with CHAS Layer Live legend (NDVI+NDMI+CI_RE composite). */
+/** Absolute CDSI / CHAS alert tier — derived from 10-class raster rule engine (not raw thresholds). */
 export function classifyCdsiInsightTier(cdsi: number): CdsiInsightTier {
   if (!Number.isFinite(cdsi)) return 'warning'
-  if (cdsi >= 0.5) return 'healthy'
-  if (cdsi >= 0.35) return 'stable'
-  if (cdsi >= 0.22) return 'warning'
-  return 'critical'
+  const alert = classifyChasFusionToAlert(cdsi)
+  if (alert === 'CRITICAL') return 'critical'
+  if (alert === 'ACTIVE' || alert === 'WARNING') return 'warning'
+  const cls = classifyChasFusionToClassIndex(cdsi)
+  return cls >= 8 ? 'healthy' : 'stable'
 }
 
 export function resolveSmartCropInsightNeed(tier: CdsiInsightTier, deltaChas: number | null): string {
@@ -256,10 +284,15 @@ export function resolveDchasMetrics(result: CropAlertFieldResult): {
   return { chasCurrent, chasPrevious, deltaChas }
 }
 
-/** Full orb presentation for si-crop-alert-beacon__orb (color + blink + rings). */
+/** Full orb presentation — primary tier from CHAS Alert; ΔCHAS escalates pulse only. */
 export function resolveDchasOrbPresentation(result: CropAlertFieldResult): DchasOrbPresentation {
   const { chasCurrent, chasPrevious, deltaChas } = resolveDchasMetrics(result)
-  const tier = classifyDchasRiskTier(deltaChas)
+  let tier = mapChasAlertLevelToDchasTier(classifyChasFusionToAlert(chasCurrent))
+  if (deltaChas != null && deltaChas <= DCHAS_DELTA_CRITICAL && tier !== 'critical') {
+    tier = 'critical'
+  } else if (deltaChas != null && deltaChas <= DCHAS_DELTA_STRESS && tier === 'stable') {
+    tier = 'stress'
+  }
   const color = DCHAS_RISK_COLORS[tier]
   const blinkMs = DCHAS_ORB_BLINK_MS[tier]
 

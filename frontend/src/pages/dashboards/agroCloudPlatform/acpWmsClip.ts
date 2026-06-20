@@ -58,16 +58,26 @@ function sortFeaturesNearCenter(
   })
 }
 
-/** Definition query: features whose bbox intersects current extent (with prefetch buffer). */
+/** Definition query: features whose bbox intersects current extent (caller applies prefetch buffer). */
 function filterFeaturesInViewport(
   features: GeoJSON.Feature[],
   viewportBBox: LngLatBBox,
+  extraBuffer = 0,
 ): GeoJSON.Feature[] {
-  const expanded = expandLngLatBBox(viewportBBox, 0.15)
+  const expanded = extraBuffer > 0 ? expandLngLatBBox(viewportBBox, extraBuffer) : viewportBBox
   return features.filter(f => {
     const bb = geometryBBox(f.geometry as { type?: string; coordinates?: unknown })
     return Boolean(bb && bboxesIntersect(bb, expanded))
   })
+}
+
+function resolveViewportIntersectingFeatures(
+  features: GeoJSON.Feature[],
+  viewportBBox: LngLatBBox,
+): GeoJSON.Feature[] {
+  const inView = filterFeaturesInViewport(features, viewportBBox)
+  if (inView.length) return inView
+  return filterFeaturesInViewport(features, viewportBBox, 0.2)
 }
 
 /**
@@ -122,14 +132,16 @@ export function buildAcpWmsExtentLoadSet(
   }
 
   if (options?.viewportBBox) {
-    const inView = filterFeaturesInViewport(features, options.viewportBBox)
-    if (inView.length) {
-      features = inView
-      viewportFiltered = true
+    features = resolveViewportIntersectingFeatures(features, options.viewportBBox)
+    viewportFiltered = true
+  } else {
+    const center = options?.mapCenter
+    if (center && Number.isFinite(center[0]) && Number.isFinite(center[1])) {
+      features = sortFeaturesNearCenter(features, center)
     }
   }
 
-  if (!viewportFiltered) {
+  if (viewportFiltered) {
     const center = options?.mapCenter
     if (center && Number.isFinite(center[0]) && Number.isFinite(center[1])) {
       features = sortFeaturesNearCenter(features, center)
@@ -260,8 +272,7 @@ export function resolveAcpWmsBuildOptions(
     Math.max(configured, fieldCount > 0 ? Math.min(fieldCount, SENTINEL_LAYER_LIVE_WMS_MAX_TILE_LAYERS_PLATFORM) : configured),
   )
   return {
-    preferSingleRingChunks:
-      fieldCount > 0 && fieldCount <= SENTINEL_LAYER_LIVE_WMS_MAX_TILE_LAYERS_PLATFORM,
+    preferSingleRingChunks: fieldCount > 0 && fieldCount <= tileCap,
     maxTileLayers: tileCap,
     viewportBBox: null,
   }

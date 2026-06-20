@@ -6,6 +6,18 @@
 import type { SentinelHubWmsLayerInfo } from './sentinelHubWmsLayers'
 import { AGRO_CHAS_EXPR } from './chasIndex'
 
+/** Derived visualization layers — same fusion input, rule-engine styling only. */
+export const AGRO_DERIVED_LAYER_DEFS: readonly AgroCompositeIndexDef[] = [
+  {
+    id: 'CHAS_ALERT',
+    label: 'CHAS Alert',
+    scientificName: 'CHAS Alert Layer (derived 4-level rule engine)',
+    deltaId: 'CHAS_ALERT',
+    deltaLabel: 'CHAS Alert',
+    expr: AGRO_CHAS_EXPR,
+  },
+]
+
 export const AGRO_CORE_INTERPRETATION_LAYER_IDS = ['NDVI', 'NDMI', 'NDWI', 'SAVI'] as const
 
 export type AgroCoreInterpretationLayerId = (typeof AGRO_CORE_INTERPRETATION_LAYER_IDS)[number]
@@ -42,6 +54,14 @@ export const AGRO_COMPOSITE_CATEGORIES: readonly AgroCompositeCategory[] = [
     id: 'vegetation-health',
     groupLabel: '🌱 Vegetation Health Layer',
     indices: [
+      {
+        id: 'CVHI',
+        label: 'CVHI',
+        scientificName: 'Composite Vegetation Health Index (NDVI·NDMI·NDWI·SAVI mean)',
+        deltaId: 'DCVHI',
+        deltaLabel: 'ΔCVHI',
+        expr: '(ndvi + ndmi + ndwi + savi) / 4',
+      },
       {
         id: 'VHS',
         label: 'VHS',
@@ -235,7 +255,7 @@ export const AGRO_COMPOSITE_CATEGORIES: readonly AgroCompositeCategory[] = [
       {
         id: 'CHAS',
         label: 'CHAS',
-        scientificName: 'Crop Health Analysis Score',
+        scientificName: 'Crop Health Analysis Score (NDVI·NDWI·NDMI·SAVI fusion)',
         deltaId: 'DCHAS',
         deltaLabel: 'ΔCHAS',
         expr: AGRO_CHAS_EXPR,
@@ -244,7 +264,7 @@ export const AGRO_COMPOSITE_CATEGORIES: readonly AgroCompositeCategory[] = [
   },
 ] as const
 
-/** Weighted crop health score from NDVI + NDMI + Red Edge CI (production alert icon basis). */
+/** Four-index CHAS fusion (NDVI·NDWI·NDMI·SAVI) — scientific raster + derived alert layers. */
 export { AGRO_CHAS_EXPR } from './chasIndex'
 
 const STATIC_BY_ID = new Map<string, AgroCompositeIndexDef>()
@@ -260,6 +280,11 @@ for (const cat of AGRO_COMPOSITE_CATEGORIES) {
   }
 }
 
+for (const derived of AGRO_DERIVED_LAYER_DEFS) {
+  STATIC_BY_ID.set(derived.id.toUpperCase(), derived)
+  ALL_COMPOSITE_IDS.add(derived.id.toUpperCase())
+}
+
 export const AGRO_DELTA_CATEGORIES: readonly AgroCompositeCategory[] = AGRO_COMPOSITE_CATEGORIES.map(cat => ({
   id: `${cat.id}-delta`,
   groupLabel: `${cat.groupLabel} (Delta)`,
@@ -272,6 +297,11 @@ export const AGRO_DELTA_CATEGORIES: readonly AgroCompositeCategory[] = AGRO_COMP
     expr: idx.expr,
   })),
 }))
+
+export function isAgroDerivedLayerId(layerId: string): boolean {
+  const u = String(layerId || '').trim().toUpperCase()
+  return AGRO_DERIVED_LAYER_DEFS.some(d => d.id.toUpperCase() === u)
+}
 
 export function isAgroStaticCompositeLayerId(layerId: string): boolean {
   return STATIC_BY_ID.has(String(layerId || '').trim().toUpperCase())
@@ -381,6 +411,18 @@ export function buildRemoteSensingLayerSelectGroups(
       id: cat.id,
       label: cat.groupLabel,
       options: cat.indices.map(idx => ({
+        id: idx.id,
+        label: idx.label,
+        scientificName: idx.scientificName,
+      })),
+    })
+  }
+
+  if (AGRO_DERIVED_LAYER_DEFS.length) {
+    groups.push({
+      id: 'derived-alert',
+      label: '🚨 Derived Alert Layers',
+      options: AGRO_DERIVED_LAYER_DEFS.map(idx => ({
         id: idx.id,
         label: idx.label,
         scientificName: idx.scientificName,

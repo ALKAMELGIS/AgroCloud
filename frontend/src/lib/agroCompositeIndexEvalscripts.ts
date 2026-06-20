@@ -5,6 +5,7 @@
 
 import { resolveAgroCompositeExpr, resolveAgroCompositeIndexDef, isAgroDeltaCompositeLayerId } from './agroCompositeIndices'
 import { resolveAgroCompositeTenClassRamp } from './agroCompositeLayerRamps'
+import { CHAS_ALERT_RGB_01 } from './chasAlertMapping'
 
 type RampStop = [number, number]
 
@@ -91,6 +92,53 @@ const CLASS_RGB = [
 ];`
 
   return { classifyFn, rgbConst }
+}
+
+/** CHAS Alert — classifies fusion index then maps 10 classes → 4 alert colors (derived only). */
+export function buildChasAlertEvalscript(indexVisibilityMin: number | null = null): string | null {
+  const chasRamp = resolveAgroCompositeTenClassRamp('CHAS')
+  if (!chasRamp) return null
+  const expr = resolveAgroCompositeExpr('CHAS')
+  if (!expr) return null
+  const { classifyFn, rgbConst } = buildTenClassEvalscriptBlock(chasRamp)
+  const alertRgb = formatRgbList(CHAS_ALERT_RGB_01)
+
+  const mapAlertFn = `function mapClassToAlert(cls) {
+  if (cls <= 1) return 0;
+  if (cls <= 3) return 1;
+  if (cls <= 5) return 2;
+  return 3;
+}`
+
+  const alertRgbConst = `const ALERT_RGB = [
+   ${alertRgb}
+];`
+
+  return `//VERSION=3
+// CHAS Alert — derived 4-level overlay from CHAS 10-class raster logic
+function setup() {
+  return {
+    input: ["B03", "B04", "B05", "B08", "B8A", "B11", "dataMask"],
+    output: { bands: 4 }
+  };
+}
+
+${rgbConst}
+
+${alertRgbConst}
+
+${classifyFn}
+
+${mapAlertFn}
+
+function evaluatePixel(samples) {
+  ${CORE_INDICES_BLOCK}
+  let val = ${expr};
+  let cls = classifyVal(val);
+  let alertIdx = mapClassToAlert(cls);
+  let c = ALERT_RGB[alertIdx];
+  ${alphaBlock('val', indexVisibilityMin)}
+}`
 }
 
 /** Static composite index evalscript (single scene, 10-class). */
@@ -198,6 +246,9 @@ export function buildAgroCompositeLayerEvalscript(
   indexVisibilityMin: number | null = null,
 ): string | null {
   const u = String(layerId || '').trim().toUpperCase()
+  if (u === 'CHAS_ALERT') {
+    return buildChasAlertEvalscript(indexVisibilityMin)
+  }
   if (isAgroDeltaCompositeLayerId(u)) {
     return buildAgroCompositeDeltaEvalscript(u, indexVisibilityMin)
   }

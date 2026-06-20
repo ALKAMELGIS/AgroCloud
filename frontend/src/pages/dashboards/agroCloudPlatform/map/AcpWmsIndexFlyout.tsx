@@ -7,6 +7,7 @@ const WMS_INDICES = [
   { id: 'NDWI', letter: 'N' },
   { id: 'EVI', letter: 'E' },
   { id: 'CHAS', letter: 'C' },
+  { id: 'CHAS_ALERT', letter: 'A', short: 'Alert' },
 ] as const
 
 export function AcpWmsIndexGrid() {
@@ -14,16 +15,17 @@ export function AcpWmsIndexGrid() {
 
   return (
     <div className="acp-map-panel__wms-grid">
-      {WMS_INDICES.map(({ id, letter }) => (
+      {WMS_INDICES.map(({ id, letter, short }) => (
         <button
           key={id}
           type="button"
           className={`acp-map-panel__wms-btn${acp.selectedWmsLayer === id ? ' is-on' : ''}`}
           aria-pressed={acp.selectedWmsLayer === id}
           onClick={() => acp.setSelectedWmsLayer(id)}
+          title={id === 'CHAS_ALERT' ? 'CHAS Alert — derived 4-level overlay' : undefined}
         >
           <span className="acp-map-panel__wms-letter">{letter}</span>
-          <span>{id}</span>
+          <span>{short ?? id}</span>
         </button>
       ))}
     </div>

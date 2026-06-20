@@ -12,6 +12,7 @@ import MapGL, { Source, Layer, Marker } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import './SatelliteIntelligence.css';
 import './components/RemoteSensingPanel.css';
+import { RemoteSensingToolboxPanel } from './components/RemoteSensingToolboxPanel';
 import '../../styles/gisModalSystem.css';
 import '../dashboards/develop-dashboard.css';
 import { parseFile, parseRemoteUrlAsFile } from '../../utils/FileLoader';
@@ -125,8 +126,8 @@ import { appConfirm } from '../../lib/appDialog';
 import { loadGisMapSavedLayers } from '../../lib/gisMapLayerStore';
 import { computeStableGisFeatureKey } from '../../lib/gisFeatureStableKey';
 import { satelliteCustomLayersToGeoAiLayers } from '../../lib/geoAiMapLayerSources';
-import { RemoteSensingLayerSelect } from './components/RemoteSensingLayerSelect';
-import { SiAoiMaskBuilderPanel } from './components/SiAoiMaskBuilderPanel';
+import { MapToolboxLayerList, MapToolboxLayerRow } from './components/MapToolboxLayerList';
+import './components/MapToolboxLayerList.css';
 import { SiCropAlertCenterPanel } from './components/SiCropAlertCenterPanel';
 import { SiCropAlertMapMarkersLayer } from './components/SiCropAlertMapMarkersLayer';
 import { SiCropAlertMapLegend } from './components/SiCropAlertMapLegend';
@@ -2670,6 +2671,8 @@ export default function SatelliteIntelligence() {
   }, []);
 
   const [wmsLayer, setWmsLayer] = useState(SI_DEFAULT_LIVE_WMS_LAYER);
+  const [remoteSensingProvider, setRemoteSensingProvider] = useState('sentinel-hub');
+  const [remoteSensingCollection, setRemoteSensingCollection] = useState('sentinel-2-l2a');
   const [selectedDate, setSelectedDate] = useState<Date>(() => getDefaultSentinelImageryDate());
   /** When true, imagery date follows latest scene − 1 day for the active AOI. */
   const [imageryDateAutoFollow, setImageryDateAutoFollow] = useState(true);
@@ -2910,6 +2913,7 @@ export default function SatelliteIntelligence() {
     limit: false,
   });
   const [mapDrawTool, setMapDrawTool] = useState<MapDrawTool>('select');
+  const [mapPanLocked, setMapPanLocked] = useState(false);
   const [showEditHandles, setShowEditHandles] = useState(false);
   const [drawStyle, setDrawStyle] = useState<DrawStyleConfig>(() => ({ ...DEFAULT_DRAW_STYLE }));
   const [pointerLngLat, setPointerLngLat] = useState<[number, number] | null>(null);
@@ -7482,8 +7486,13 @@ export default function SatelliteIntelligence() {
   }, []);
 
   const setMapDragPanEnabled = (enabled: boolean) => {
+    setMapPanLocked(!enabled);
     setMapboxDragPanEnabled(getMapInstance(), enabled);
   };
+
+  const toggleMapPanLock = useCallback(() => {
+    setMapDragPanEnabled(mapPanLocked);
+  }, [mapPanLocked]);
 
   const endPolygonSketchDrag = useCallback(() => {
     if (polygonRingSketchDragRef.current === null) return;
@@ -7745,7 +7754,7 @@ export default function SatelliteIntelligence() {
   useLayoutEffect(() => {
     if (mapDrawTool !== 'polygon') return;
     if (polygonRingSketchDragRef.current !== null) return;
-    setMapDragPanEnabled(polygonRing.length === 0);
+    setMapDragPanEnabled(false);
   }, [mapDrawTool, polygonRing.length]);
 
   useEffect(() => {
@@ -7790,13 +7799,13 @@ export default function SatelliteIntelligence() {
     setCircleRefineActiveHandle(null);
     setShowEditHandles(tool === 'select' && !!drawnGeometryRef.current);
     setMapDrawTool(tool);
-    if (tool === 'rectangle' || tool === 'box_select' || tool === 'circle') {
-      setMapDragPanEnabled(false);
-    } else if (tool === 'polygon') {
-      setMapDragPanEnabled(true);
-    } else {
-      setMapDragPanEnabled(true);
-    }
+    const lockPan =
+      tool === 'rectangle' ||
+      tool === 'box_select' ||
+      tool === 'circle' ||
+      tool === 'polygon' ||
+      tool === 'polyline';
+    setMapDragPanEnabled(!lockPan);
   };
 
   const createSketchLayerOnMap = useCallback(() => {
@@ -8418,7 +8427,7 @@ export default function SatelliteIntelligence() {
       if (e.key === 'Backspace' && mapDrawToolRef.current === 'polygon' && polygonRingRef.current.length > 0) {
         e.preventDefault();
         polygonRingSketchDragRef.current = null;
-        setMapDragPanEnabled(true);
+        setMapDragPanEnabled(false);
         setPolygonRing(prev => prev.slice(0, -1));
         return;
       }
@@ -8438,7 +8447,10 @@ export default function SatelliteIntelligence() {
           dragRectCircleRef.current = null;
           setRectCirclePreview(null);
           setCircleRadiusM(null);
-          setMapDragPanEnabled(true);
+          const t = mapDrawToolRef.current;
+          setMapDragPanEnabled(
+            t !== 'rectangle' && t !== 'box_select' && t !== 'circle' && t !== 'polygon' && t !== 'polyline',
+          );
           return;
         }
         if (mapDrawToolRef.current === 'polygon' && polygonRingRef.current.length > 0) {
@@ -9983,23 +9995,14 @@ export default function SatelliteIntelligence() {
     });
   }, [cropAlertSettings, handleCropAlertSettingsChange]);
   const cropAlertLayerMeta = useMemo(() => {
-    const fieldCount = cropAlertFields.length;
-    if (fieldCount > 0) {
-      const liveSuffix =
-        cropAlertLiveFieldCount > 0 && cropAlertLiveFieldCount < fieldCount
-          ? ` · ${cropAlertLiveFieldCount} live`
-          : '';
-      return `${sentinelAoiLabel}${liveSuffix}`;
+    if (!cropAlertAoiMask) return 'mask required';
+    if (cropAlertFields.length > 0) {
+      return cropAlertLiveFieldCount > 0 && cropAlertLiveFieldCount < cropAlertFields.length
+        ? `Sentinel Live · ${cropAlertLiveFieldCount}/${cropAlertFields.length} live`
+        : `Sentinel Live · ${cropAlertFields.length} fields`;
     }
-    return cropAlertAoiMask
-      ? 'Sentinel Live · awaiting field analysis'
-      : 'Sentinel Live · Agro_Structures mask required';
-  }, [
-    cropAlertAoiMask,
-    cropAlertFields.length,
-    cropAlertLiveFieldCount,
-    sentinelAoiLabel,
-  ]);
+    return 'Sentinel Live · awaiting analysis';
+  }, [cropAlertAoiMask, cropAlertFields.length, cropAlertLiveFieldCount]);
   const currentBasemapLabel = currentBasemapEntry?.label || basemapId || 'Default basemap';
   const addedLayerEntries = useMemo(
     () => [
@@ -10126,62 +10129,26 @@ export default function SatelliteIntelligence() {
 
   const layersEnvMainTools = useMemo(
     () => (
-      <div className="si-env-section-card si-map-toolbox-layers-card">
-        <div className="si-env-added-layers">
-          <div className="si-env-added-layers-header">
-            <div className="si-env-chart-title">Added layers</div>
-          </div>
-          {userLayerEntries.length ? (
-            <div className="si-env-added-layers-list">
-              {userLayerEntries.map(layer => (
-                <div
-                  key={layer.id}
-                  data-si-env-layer-options-root={
-                    'actionable' in layer && layer.actionable && 'sourceLayerId' in layer && layer.sourceLayerId
-                      ? layer.sourceLayerId
-                      : undefined
-                  }
-                  className={`si-env-layer-item${layer.visible ? ' active' : ''}${!layer.toggleable ? ' static' : ''}${
-                    'actionable' in layer && layer.actionable ? ' si-env-layer-item--actionable' : ''
-                  }`}
-                  onClick={layer.toggleable ? layer.onToggle : undefined}
-                  role={layer.toggleable ? 'button' : undefined}
-                  tabIndex={layer.toggleable ? 0 : -1}
-                  onKeyDown={
-                    layer.toggleable
-                      ? e => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            layer.onToggle();
-                          }
-                        }
-                      : undefined
-                  }
-                  title={layer.toggleable ? 'Click to toggle visibility' : layer.label}
-                >
-                  <div className="si-env-layer-top">
-                    <div className="si-env-layer-info">
-                      <span className="si-env-layer-name">{layer.label}</span>
-                      {'meta' in layer && layer.meta ? <span className="si-env-layer-submeta">{layer.meta}</span> : null}
-                    </div>
-                    <div className="si-env-layer-top-side">
-                      <SiCopyTextButton
-                        text={'meta' in layer && layer.meta ? `${layer.label}\n${layer.meta}` : layer.label}
-                        className="si-env-layer-copy-btn"
-                        title="Copy layer name and details"
-                        ariaLabel={`Copy ${layer.label}`}
-                        variant="compact"
-                      />
-                      {layer.toggleable ? (
-                        <span className="si-env-layer-toggle" aria-hidden>
-                          <span className="si-env-layer-toggle-knob" />
-                        </span>
-                      ) : (
-                        <span className="si-env-layer-meta-static">always on</span>
-                      )}
-                    </div>
-                  </div>
-                  {'actionable' in layer && layer.actionable && 'sourceLayerId' in layer && layer.sourceLayerId ? (
+      <div className="si-env-section-card si-map-toolbox-layers-compact">
+        <MapToolboxLayerList layers={systemLayerEntries} />
+        {userLayerEntries.length ? (
+          <div className="si-mt-layer-list si-mt-layer-list--user">
+            {userLayerEntries.map(layer => (
+              <div
+                key={layer.id}
+                data-si-env-layer-options-root={
+                  'actionable' in layer && layer.actionable && 'sourceLayerId' in layer && layer.sourceLayerId
+                    ? layer.sourceLayerId
+                    : undefined
+                }
+              >
+              <MapToolboxLayerRow
+                label={layer.label}
+                visible={layer.visible}
+                toggleable={layer.toggleable}
+                onToggle={layer.onToggle}
+                actions={
+                  'actionable' in layer && layer.actionable && 'sourceLayerId' in layer && layer.sourceLayerId ? (
                     <div className="si-env-layer-actions">
                       {'supportsAoiEdit' in layer && layer.supportsAoiEdit ? (
                         <button
@@ -10383,14 +10350,13 @@ export default function SatelliteIntelligence() {
                         <i className="fa-solid fa-trash-can" aria-hidden />
                       </button>
                     </div>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="si-env-message">No layers added yet.</p>
-          )}
-        </div>
+                  ) : undefined
+                }
+              />
+              </div>
+            ))}
+          </div>
+        ) : null}
         {pivots.length > 0 ? (
           <p className="si-env-message">
             <strong>{pivots.length}</strong> field pivot feature{pivots.length === 1 ? '' : 's'} on map (same visibility as the
@@ -10400,6 +10366,7 @@ export default function SatelliteIntelligence() {
       </div>
     ),
     [
+      systemLayerEntries,
       userLayerEntries,
       customLayers,
       executeCustomLayerAction,
@@ -10417,61 +10384,8 @@ export default function SatelliteIntelligence() {
   /** Layers → Options: basemap, remote sensing overlay, STAC preview & footprints. */
   const layersEnvOptionsLayers = useMemo(
     () => (
-      <div className="si-env-section-card si-map-toolbox-layers-card si-map-toolbox-layers-card--options">
-        <div className="si-env-added-layers">
-          <div className="si-env-added-layers-header">
-            <div className="si-env-chart-title">Map layers</div>
-          </div>
-          {systemLayerEntries.length ? (
-            <div className="si-env-added-layers-list">
-              {systemLayerEntries.map(layer => (
-                <div
-                  key={layer.id}
-                  className={`si-env-layer-item${layer.visible ? ' active' : ''}${!layer.toggleable ? ' static' : ''}`}
-                  onClick={layer.toggleable ? layer.onToggle : undefined}
-                  role={layer.toggleable ? 'button' : undefined}
-                  tabIndex={layer.toggleable ? 0 : -1}
-                  onKeyDown={
-                    layer.toggleable
-                      ? e => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            layer.onToggle();
-                          }
-                        }
-                      : undefined
-                  }
-                  title={layer.toggleable ? 'Click to toggle visibility' : layer.label}
-                >
-                  <div className="si-env-layer-top">
-                    <div className="si-env-layer-info">
-                      <span className="si-env-layer-name">{layer.label}</span>
-                      {'meta' in layer && layer.meta ? <span className="si-env-layer-submeta">{layer.meta}</span> : null}
-                    </div>
-                    <div className="si-env-layer-top-side">
-                      <SiCopyTextButton
-                        text={'meta' in layer && layer.meta ? `${layer.label}\n${layer.meta}` : layer.label}
-                        className="si-env-layer-copy-btn"
-                        title="Copy layer name and details"
-                        ariaLabel={`Copy ${layer.label}`}
-                        variant="compact"
-                      />
-                      {layer.toggleable ? (
-                        <span className="si-env-layer-toggle" aria-hidden>
-                          <span className="si-env-layer-toggle-knob" />
-                        </span>
-                      ) : (
-                        <span className="si-env-layer-meta-static">always on</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="si-env-message">No map overlays active.</p>
-          )}
-        </div>
+      <div className="si-env-section-card si-map-toolbox-layers-compact">
+        <MapToolboxLayerList layers={systemLayerEntries} emptyMessage="No map overlays active." />
         <label className="si-stac-footprints-toggle">
           <input
             type="checkbox"
@@ -12644,255 +12558,87 @@ export default function SatelliteIntelligence() {
                       </div>
                     )}
                     {expandedEnvSection === 'remote-sensing' && (
-                      <div className="si-env-section-card si-field-analysis si-rs-panel si-rs-panel--glass">
-                        <div className="si-rs-panel__header">
-                          <h2 className="si-rs-panel__title">Remote Sensing</h2>
-                          <button
-                            type="button"
-                            className="si-rs-panel__close"
-                            onClick={() => setIsLayerDropdownOpen(false)}
-                            aria-label="Close panel"
-                          >
-                            <i className="fa-solid fa-xmark" aria-hidden />
-                          </button>
-                        </div>
-
-                        <div className="si-rs-panel__body">
-                          <div className="si-rs-panel__row">
-                            <span className="si-rs-panel__label">Date</span>
-                            <div className="si-rs-panel__control">
-                              <label className="si-rs-panel__field">
-                                <input
-                                  type="date"
-                                  value={wmsDate}
-                                  onChange={e => {
-                                    const v = e.target.value;
-                                    if (!v) return;
-                                    setImageryDateAutoFollow(false);
-                                    saveSentinelImageryDatePrefsForAoi(sentinelImageryAoiKey, {
-                                      autoFollow: false,
-                                      manualIso: v,
-                                    });
-                                    applySelectedDate(dateFromLocalIso(v));
-                                  }}
-                                  aria-label="Imagery date"
-                                />
-                              </label>
-                              <button
-                                type="button"
-                                className="si-rs-panel__icon-btn"
-                                onClick={resetSentinelImageryDateAuto}
-                                disabled={imageryDateAutoFollow && !isFetchingSentinelScenes}
-                                title="Reset to auto (latest valid Sentinel scene)"
-                                aria-label="Reset imagery date to auto"
-                              >
-                                <i className="fa-solid fa-rotate-left" aria-hidden />
-                              </button>
-                            </div>
-                          </div>
-                          {imageryDateAutoFollow ? (
-                            <p className="si-rs-panel__meta" role="status">
-                              Auto · requested {cropAlertRequestedDate} · scene {autoLiveScenes.currentSceneDate}
-                              {autoLiveScenes.previousSceneDate ? ` · prev ${autoLiveScenes.previousSceneDate}` : ''}
-                              {isFetchingSentinelScenes ? ' · updating…' : ''}
-                            </p>
-                          ) : sentinelFetchDate !== wmsDate ? (
-                            <p className="si-rs-panel__meta" role="status">
-                              Nearest scene {sentinelFetchDate}
-                              {sentinelFetchDate !== wmsDate ? ` (req. ${wmsDate})` : ''}
-                            </p>
-                          ) : null}
-
-                          <div className="si-rs-panel__row">
-                            <span className="si-rs-panel__label">Layer</span>
-                            <div className="si-rs-panel__control">
-                              <RemoteSensingLayerSelect
-                                groups={remoteSensingLayerSelectGroups}
-                                value={isLoadingLayers ? '' : wmsLayerSelectValue}
-                                onChange={layerId => {
-                                  setWmsLayer(layerId);
-                                  const ids = Object.keys(ENVIRONMENTAL_INDICES) as EnvironmentalIndexId[];
-                                  if (ids.includes(layerId as EnvironmentalIndexId)) {
-                                    setSelectedIndex(layerId as EnvironmentalIndexId);
-                                  }
-                                }}
-                                loading={isLoadingLayers}
-                                disabled={isLoadingLayers}
-                                aria-label="Layer"
-                              />
-                            </div>
-                          </div>
-
-                          {!isLoadingLayers && remoteSensingLayerOptions.length > 0 ? (
-                            <>
-                              <label className="si-rs-panel__check">
-                                <input
-                                  type="checkbox"
-                                  checked={isWmsOverlayVisible}
-                                  onChange={e => setIsWmsOverlayVisible(e.target.checked)}
-                                  aria-label="Show imagery layer on map"
-                                />
-                                <span>Show on map</span>
-                              </label>
-                              {isWmsOverlayVisible && !sentinelWmsZoomOk ? (
-                                <p className="si-rs-panel__meta si-rs-panel__meta--warn" role="status">
-                                  Zoom {sentinelWmsMinZoom}+ for Sentinel-2 (max 200&nbsp;m/px).
-                                </p>
-                              ) : null}
-                            </>
-                          ) : null}
-
-                          <div className="si-rs-panel__divider" aria-hidden />
-
-                          <button
-                            type="button"
-                            className="si-rs-panel__action"
-                            onClick={openAoiDataSourceUploader}
-                            title="Add Data Source (AOI): SHP (.zip), KML/KMZ, GeoJSON"
-                          >
-                            <i className="fa-solid fa-cloud-arrow-up" aria-hidden />
-                            <span>Add Data Source (AOI)</span>
-                          </button>
-
-                          <SiAoiMaskBuilderPanel
-                            settings={aoiMaskBuilderSettings}
-                            onChange={handleAoiMaskBuilderSettingsChange}
-                            customLayers={customLayers}
-                            sentinelLayerOptions={remoteSensingLayerOptions}
-                            maskFeatureCount={aoiMaskBuilderFeatureCount}
-                            selectedFeatureCount={aoiMaskBuilderSelectedKeys.size}
-                            flat
-                          />
-
-                          <div className="si-rs-panel__divider" aria-hidden />
-
-                          <div className="si-rs-panel__row si-rs-panel__row--pair">
-                            <label className="si-rs-panel__mini-field">
-                              <span className="si-rs-panel__label">Start</span>
-                              <input
-                                type="date"
-                                value={timeSeriesStart}
-                                onChange={e => {
-                                  setImageryDateAutoFollow(false);
-                                  setTimeSeriesStart(e.target.value);
-                                }}
-                                aria-label="Time series start"
-                              />
-                            </label>
-                            <label className="si-rs-panel__mini-field">
-                              <span className="si-rs-panel__label">End</span>
-                              <input
-                                type="date"
-                                value={timeSeriesEnd}
-                                onChange={e => {
-                                  setImageryDateAutoFollow(false);
-                                  setTimeSeriesEnd(e.target.value);
-                                }}
-                                aria-label="Time series end"
-                              />
-                            </label>
-                          </div>
-
-                          <div className="si-rs-panel__row si-rs-panel__row--tools">
-                            <span className="si-rs-panel__label">
-                              {hasActiveLayerSourceAoi ? 'Preview' : 'Draw'}
-                            </span>
-                            <div className="si-rs-panel__control si-rs-panel__control--stack">
-                              {hasActiveLayerSourceAoi ? (
-                                <p className="si-rs-panel__meta si-rs-panel__meta--preview">
-                                  Optional sub-area — separate from Layer Source.
-                                </p>
-                              ) : null}
-                              <div
-                                className="si-rs-panel__toolstrip"
-                                role="toolbar"
-                                aria-label={hasActiveLayerSourceAoi ? 'Preview zone drawing tools' : 'AOI drawing tools'}
-                              >
-                                <button
-                                  type="button"
-                                  className={`si-rs-panel__tool${mapDrawTool === 'rectangle' ? ' is-on' : ''}`}
-                                  title="Rectangle AOI"
-                                  aria-pressed={mapDrawTool === 'rectangle'}
-                                  onClick={() => applyMapDrawTool('rectangle')}
-                                >
-                                  <i className="fa-regular fa-square" aria-hidden />
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`si-rs-panel__tool${mapDrawTool === 'polygon' ? ' is-on' : ''}`}
-                                  title="Polygon AOI"
-                                  aria-pressed={mapDrawTool === 'polygon'}
-                                  onClick={() => applyMapDrawTool('polygon')}
-                                >
-                                  <i className="fa-solid fa-draw-polygon" aria-hidden />
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`si-rs-panel__tool${mapDrawTool === 'circle' ? ' is-on' : ''}`}
-                                  title="Circle AOI"
-                                  aria-pressed={mapDrawTool === 'circle'}
-                                  onClick={() => applyMapDrawTool('circle')}
-                                >
-                                  <i className="fa-regular fa-circle" aria-hidden />
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`si-rs-panel__tool${mapDrawTool === 'select' ? ' is-on' : ''}`}
-                                  title={drawnGeometry ? 'Select / edit AOI' : 'Select'}
-                                  aria-pressed={mapDrawTool === 'select'}
-                                  onClick={() => applyMapDrawTool('select')}
-                                >
-                                  <i className="fa-solid fa-arrow-pointer" aria-hidden />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="si-rs-panel__tool"
-                                  disabled={!satelliteHasClearableDrawing}
-                                  title="Clear drawing"
-                                  aria-label="Clear drawing"
-                                  onClick={clearSatelliteDrawingWithFade}
-                                >
-                                  <i className="fa-solid fa-eraser" aria-hidden />
-                                </button>
-                                <span className="si-rs-panel__tool-sep" aria-hidden />
-                                <button
-                                  type="button"
-                                  className={`si-rs-panel__tool${mapStaticChartsOpen ? ' is-on' : ''}`}
-                                  title={mapStaticChartsOpen ? 'Hide AOI charts on map' : 'Show AOI charts on map'}
-                                  aria-pressed={mapStaticChartsOpen}
-                                  onClick={() => setMapStaticChartsOpen(o => !o)}
-                                >
-                                  <i className="fa-solid fa-chart-pie" aria-hidden />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            className={
-                              'si-rs-panel__cta' +
-                              (fieldTimelineSessionActive ? ' si-rs-panel__cta--stop' : '')
-                            }
-                            onClick={onFieldAnalysisTimelinePrimaryClick}
-                            aria-label={
-                              fieldTimelineSessionActive
-                                ? 'Stop Timeline: pause map playback and clear weekly chips'
-                                : 'Generate weekly timeline from selected date range'
-                            }
-                          >
-                            <i
-                              className={fieldTimelineSessionActive ? 'fa-solid fa-stop' : 'fa-solid fa-chart-line'}
-                              aria-hidden
-                            />
-                            {fieldTimelineSessionActive ? 'Stop timeline' : 'Generate timeline'}
-                          </button>
-
-                          {fieldAnalysisStatus ? (
-                            <p className="si-rs-panel__status">{fieldAnalysisStatus}</p>
-                          ) : null}
-                        </div>
-                      </div>
+                      <RemoteSensingToolboxPanel
+                        provider={remoteSensingProvider}
+                        onProviderChange={setRemoteSensingProvider}
+                        collection={remoteSensingCollection}
+                        onCollectionChange={setRemoteSensingCollection}
+                        wmsDate={wmsDate}
+                        onWmsDateChange={v => {
+                          setImageryDateAutoFollow(false);
+                          saveSentinelImageryDatePrefsForAoi(sentinelImageryAoiKey, {
+                            autoFollow: false,
+                            manualIso: v,
+                          });
+                          applySelectedDate(dateFromLocalIso(v));
+                        }}
+                        onResetImageryDateAuto={resetSentinelImageryDateAuto}
+                        imageryDateAutoFollow={imageryDateAutoFollow}
+                        isFetchingSentinelScenes={isFetchingSentinelScenes}
+                        imageryDateMeta={
+                          imageryDateAutoFollow
+                            ? `Auto · requested ${cropAlertRequestedDate} · scene ${autoLiveScenes.currentSceneDate}${
+                                autoLiveScenes.previousSceneDate ? ` · prev ${autoLiveScenes.previousSceneDate}` : ''
+                              }${isFetchingSentinelScenes ? ' · updating…' : ''}`
+                            : sentinelFetchDate !== wmsDate
+                              ? `Nearest scene ${sentinelFetchDate}${sentinelFetchDate !== wmsDate ? ` (req. ${wmsDate})` : ''}`
+                              : null
+                        }
+                        layerGroups={remoteSensingLayerSelectGroups}
+                        layerValue={wmsLayerSelectValue}
+                        onLayerChange={layerId => {
+                          setWmsLayer(layerId);
+                          const ids = Object.keys(ENVIRONMENTAL_INDICES) as EnvironmentalIndexId[];
+                          if (ids.includes(layerId as EnvironmentalIndexId)) {
+                            setSelectedIndex(layerId as EnvironmentalIndexId);
+                          }
+                        }}
+                        isLoadingLayers={isLoadingLayers}
+                        showOnMap={isWmsOverlayVisible}
+                        onShowOnMapChange={setIsWmsOverlayVisible}
+                        showOnMapLabel={`Show ${wmsLayerSelectValue || 'layer'} on map`}
+                        wmsZoomWarning={
+                          isWmsOverlayVisible && !sentinelWmsZoomOk
+                            ? `Zoom ${sentinelWmsMinZoom}+ for Sentinel-2 (max 200 m/px).`
+                            : null
+                        }
+                        onAddDataSource={openAoiDataSourceUploader}
+                        aoiMaskBuilderSettings={aoiMaskBuilderSettings}
+                        onAoiMaskBuilderChange={handleAoiMaskBuilderSettingsChange}
+                        customLayers={customLayers}
+                        sentinelLayerOptions={remoteSensingLayerOptions}
+                        maskFeatureCount={aoiMaskBuilderFeatureCount}
+                        selectedFeatureCount={aoiMaskBuilderSelectedKeys.size}
+                        timeSeriesStart={timeSeriesStart}
+                        timeSeriesEnd={timeSeriesEnd}
+                        onTimeSeriesStartChange={v => {
+                          setImageryDateAutoFollow(false);
+                          setTimeSeriesStart(v);
+                        }}
+                        onTimeSeriesEndChange={v => {
+                          setImageryDateAutoFollow(false);
+                          setTimeSeriesEnd(v);
+                        }}
+                        mapDrawTool={mapDrawTool}
+                        mapPanLocked={mapPanLocked}
+                        onDrawTool={t => applyMapDrawTool(t as MapDrawTool)}
+                        onPanNavigate={() => {
+                          setMapDragPanEnabled(true);
+                          applyMapDrawTool('select');
+                        }}
+                        onToggleMapPanLock={toggleMapPanLock}
+                        onMeasureTool={() => applyMapDrawTool('polyline')}
+                        hasClearableDrawing={satelliteHasClearableDrawing}
+                        onClearDrawing={clearSatelliteDrawingWithFade}
+                        staticChartsOpen={mapStaticChartsOpen}
+                        onToggleStaticCharts={() => setMapStaticChartsOpen(o => !o)}
+                        onOpenLayerLegend={() => setLayerLiveLegendOpen(o => !o)}
+                        layerLegendOpen={layerLiveLegendOpen}
+                        fieldTimelineActive={fieldTimelineSessionActive}
+                        onTimelinePrimaryClick={onFieldAnalysisTimelinePrimaryClick}
+                        fieldAnalysisStatus={fieldAnalysisStatus}
+                        onClose={() => setIsLayerDropdownOpen(false)}
+                      />
                     )}
                     {expandedEnvSection === 'ai-detection-gis' && (
                       <div className="si-env-section-card si-field-analysis">

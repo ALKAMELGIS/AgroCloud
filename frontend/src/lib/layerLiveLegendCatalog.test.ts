@@ -60,11 +60,31 @@ describe('layerLiveLegendCatalog', () => {
     expect(spec?.subtitle).toContain('ΔIEI')
   })
 
-  it('resolves CHAS with alert legend and formula note', () => {
+  it('resolves CVHI composite classification with red-to-green ramp', () => {
+    const spec = resolveLayerLiveLegendSpec('CVHI', 'CVHI')
+    expect(spec?.kind).toBe('discrete')
+    expect(spec?.classes).toHaveLength(10)
+    expect(spec?.valueMin).toBe(-1)
+    expect(spec?.valueMax).toBe(1)
+    expect(spec?.classes?.[0]?.label).toContain('Extreme Vegetation Stress')
+    expect(spec?.classes?.[9]?.label).toContain('Excellent Vegetation Health')
+    expect(spec?.subtitle).toContain('composite')
+  })
+
+  it('resolves CHAS with 10-class scientific raster legend', () => {
     const spec = resolveLayerLiveLegendSpec('CHAS', 'CHAS')
     expect(spec?.classes).toHaveLength(10)
-    expect(spec?.subtitle).toContain('Crop Health')
-    expect(spec?.note).toContain('CI_RE')
-    expect(spec?.classes?.[0]?.label).toContain('Critical')
+    expect(spec?.subtitle).toContain('10-class')
+    expect(spec?.note).toContain('NDVI')
+    expect(spec?.note).toContain('SAVI')
+    expect(spec?.classes?.[0]?.label).toContain('Class 1')
+  })
+
+  it('resolves CHAS_ALERT with 4 derived alert levels', () => {
+    const spec = resolveLayerLiveLegendSpec('CHAS_ALERT', 'CHAS Alert')
+    expect(spec?.classes).toHaveLength(4)
+    expect(spec?.classes?.[0]?.label).toBe('CRITICAL')
+    expect(spec?.classes?.[3]?.label).toBe('SAFE')
+    expect(spec?.note).toContain('Derived from CHAS')
   })
 })

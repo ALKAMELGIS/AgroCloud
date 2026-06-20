@@ -11,6 +11,12 @@ describe('agroCompositeIndexEvalscripts', () => {
     expect(script).toContain('classifyVal')
   })
 
+  it('builds CVHI 4-index mean with ArcPy-aligned 10-class breaks', () => {
+    const script = buildAgroCompositeLayerEvalscript('CVHI')
+    expect(script).toContain('(ndvi + ndmi + ndwi + savi) / 4')
+    expect(script).toContain('const BREAKS = [-0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8]')
+  })
+
   it('builds delta evalscript with ORBIT mosaicking', () => {
     const script = buildAgroCompositeLayerEvalscript('DVHS')
     expect(script).toContain('Mosaicking.ORBIT')
@@ -33,11 +39,19 @@ describe('agroCompositeIndexEvalscripts', () => {
     expect(script).toContain('Mosaicking.ORBIT')
   })
 
-  it('builds CHAS with weighted core formula', () => {
+  it('builds CHAS with four-index fusion formula', () => {
     const script = buildAgroCompositeLayerEvalscript('CHAS')
-    expect(script).toContain('0.4 * ndvi + 0.35 * ndmi + 0.25 * ci_re')
-    expect(script).toContain('samples.B05 / samples.B08 - 1')
+    expect(script).toContain('0.35 * ndvi + 0.2 * ndwi + 0.25 * ndmi + 0.2 * savi')
     expect(script).toContain('CLASS_RGB')
+    expect(script).toContain('classifyVal')
+  })
+
+  it('builds CHAS_ALERT derived evalscript with 4-level mapping', () => {
+    const script = buildAgroCompositeLayerEvalscript('CHAS_ALERT')
+    expect(script).toContain('mapClassToAlert')
+    expect(script).toContain('ALERT_RGB')
+    expect(script).toContain('0.35 * ndvi + 0.2 * ndwi')
+    expect(script).not.toContain('Mosaicking.ORBIT')
   })
 
   it('builds DCHAS delta with ORBIT mosaicking', () => {
@@ -49,6 +63,7 @@ describe('agroCompositeIndexEvalscripts', () => {
   it('infers agro_composite profile for composite ids', () => {
     expect(inferWmsEvalProfile('CPI')).toBe('agro_composite')
     expect(inferWmsEvalProfile('DCPI')).toBe('agro_composite')
+    expect(inferWmsEvalProfile('CHAS_ALERT')).toBe('agro_composite')
     expect(inferWmsEvalProfile('NDVI')).toBe('ndvi')
   })
 })

@@ -1,0 +1,226 @@
+/* Compact map toolbox layer stack — display on/off toggles */
+
+.si-mt-layer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+}
+
+.si-mt-layer-list__empty {
+  margin: 0;
+  padding: 6px 4px;
+  font-size: 10px;
+  color: rgba(148, 163, 184, 0.88);
+}
+
+.si-mt-layer {
+  position: relative;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(8, 10, 14, 0.55);
+  overflow: hidden;
+}
+
+.si-mt-layer--on {
+  border-color: rgba(118, 242, 192, 0.22);
+  background: rgba(8, 12, 10, 0.62);
+}
+
+.si-mt-layer__accent {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+.si-mt-layer--on .si-mt-layer__accent {
+  background: #76f2c0;
+}
+
+.si-mt-layer__main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 34px;
+  padding: 4px 8px 4px 10px;
+}
+
+.si-mt-layer__text {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.si-mt-layer__name {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: rgba(248, 250, 252, 0.96);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.si-mt-layer__meta {
+  display: block;
+  font-size: 9px;
+  line-height: 1.25;
+  font-weight: 500;
+  color: rgba(148, 163, 184, 0.88);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.si-mt-layer__controls {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.si-mt-layer__copy {
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  min-height: 20px !important;
+  opacity: 0.35;
+}
+
+.si-mt-layer:hover .si-mt-layer__copy,
+.si-mt-layer__copy:focus-visible {
+  opacity: 1;
+}
+
+.si-mt-layer__always {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.82);
+  white-space: nowrap;
+}
+
+.si-mt-layer__switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  margin: 0;
+}
+
+.si-mt-layer__switch-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.si-mt-layer__switch-ui {
+  width: 28px;
+  height: 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(15, 23, 42, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.si-mt-layer__switch-ui::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #94a3b8;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.si-mt-layer__switch {
+  position: relative;
+  width: 28px;
+  height: 14px;
+}
+
+.si-mt-layer__switch-input:checked + .si-mt-layer__switch-ui {
+  background: rgba(71, 85, 105, 0.95);
+  border-color: rgba(148, 163, 184, 0.55);
+}
+
+.si-mt-layer__switch-input:checked + .si-mt-layer__switch-ui::after {
+  transform: translateX(14px);
+  background: #e2e8f0;
+}
+
+.si-mt-layer__switch-input:focus-visible + .si-mt-layer__switch-ui {
+  outline: 1px solid rgba(118, 242, 192, 0.45);
+  outline-offset: 2px;
+}
+
+.si-mt-layer__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  padding: 0 8px 5px 10px;
+}
+
+.si-mt-layer__actions .si-env-layer-action-btn {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  font-size: 10px;
+}
+
+.si-mt-layer-list--user {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.si-map-toolbox-layers-compact {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-theme='light'] .si-mt-layer {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
+html[data-theme='light'] .si-mt-layer--on {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(236, 253, 245, 0.72);
+}
+
+html[data-theme='light'] .si-mt-layer--on .si-mt-layer__accent {
+  background: #059669;
+}
+
+html[data-theme='light'] .si-mt-layer__name {
+  color: #0f172a;
+}
+
+html[data-theme='light'] .si-mt-layer__meta,
+html[data-theme='light'] .si-mt-layer__always {
+  color: #64748b;
+}
+
+html[data-theme='light'] .si-mt-layer-list__empty {
+  color: #64748b;
+}

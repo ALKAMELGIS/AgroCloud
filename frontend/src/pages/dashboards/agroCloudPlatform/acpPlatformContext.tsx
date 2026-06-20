@@ -449,4 +449,9 @@ export function useAcpPlatform(): AcpPlatformContextValue {
   return ctx
 }
 
+/** Optional platform context — null outside AgroCloud Platform dashboard. */
+export function useOptionalAcpPlatform(): AcpPlatformContextValue | null {
+  return useContext(AcpPlatformContext)
+}
+
 export type { GisContentRow }

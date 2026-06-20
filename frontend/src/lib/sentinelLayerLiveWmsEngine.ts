@@ -52,8 +52,8 @@ function padLngLatBBox(raw: LngLatBBox): LngLatBBox {
     south = c - eps
     north = c + eps
   }
-  const padX = Math.max((east - west) * 0.04, 2e-4)
-  const padY = Math.max((north - south) * 0.04, 2e-4)
+  const padX = Math.max((east - west) * 0.08, 4e-4)
+  const padY = Math.max((north - south) * 0.08, 4e-4)
   return [west - padX, south - padY, east + padX, north + padY]
 }
 

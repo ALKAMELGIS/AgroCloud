@@ -17,6 +17,8 @@ import {
   agroCompositeClassColorCss,
   resolveAgroCompositeTenClassRamp,
 } from './agroCompositeLayerRamps'
+import { CHAS_FORMULA_DOC } from './chasIndex'
+import { CHAS_ALERT_COLORS, CHAS_ALERT_LEVELS } from './chasAlertMapping'
 import {
   SENTINEL_EVI_RAMP,
   SENTINEL_GNDVI_RAMP,
@@ -380,13 +382,44 @@ const LEGEND_BY_PROFILE: Record<string, () => LayerLiveLegendSpec> = {
 function buildAgroCompositeLegendNote(layerId: string, isDelta: boolean): string | undefined {
   const u = String(layerId || '').trim().toUpperCase()
   if (u === 'CHAS') {
-    return 'CHAS = 0.4·NDVI + 0.35·NDMI + 0.25·CI_RE · CI_RE = RE/NIR − 1 · 🟢 >0.5 · 🟡 0.35–0.5 · 🟠 0.22–0.35 · 🔴 <0.22'
+    return `CHAS = ${CHAS_FORMULA_DOC} · 10-class pixel raster (Class 1 extreme stress → Class 10 optimal)`
+  }
+  if (u === 'CHAS_ALERT') {
+    return 'Derived from CHAS raster classes · Classes 1–2 Critical · 3–4 Active · 5–6 Warning · 7–10 Safe · no re-fusion'
   }
   if (u === 'DCHAS') {
-    return 'ΔCHAS = CHAS(t₂) − CHAS(t₁) · 🔴 Δ ≤ −0.15 · 🟠 Δ ≤ −0.05 · combine absolute CHAS + Δ for alert icons'
+    return 'ΔCHAS = CHAS(t₂) − CHAS(t₁) · trend overlay only · 🔴 Δ ≤ −0.15 · 🟠 Δ ≤ −0.05'
   }
   if (isDelta) return 'Δ > 0 → improvement · Δ < 0 → degradation · Δ ≈ 0 → stable'
   return 'Composite from NDVI, NDMI, NDWI, SAVI'
+}
+
+function buildChasAlertLegendClasses(): LayerLiveLegendClass[] {
+  return CHAS_ALERT_LEVELS.map(level => ({
+    label: level,
+    rangeLabel:
+      level === 'CRITICAL'
+        ? 'CHAS class 1–2'
+        : level === 'ACTIVE'
+          ? 'CHAS class 3–4'
+          : level === 'WARNING'
+            ? 'CHAS class 5–6'
+            : 'CHAS class 7–10',
+    color: CHAS_ALERT_COLORS[level],
+  }))
+}
+
+function buildChasAlertLegend(layerId: string): LayerLiveLegendSpec | null {
+  const def = resolveAgroCompositeIndexDef(layerId)
+  if (!def) return null
+  return {
+    id: layerId,
+    title: def.label,
+    subtitle: 'Derived 4-level alert overlay (rule engine on CHAS raster)',
+    kind: 'discrete',
+    classes: buildChasAlertLegendClasses(),
+    note: buildAgroCompositeLegendNote(layerId, false),
+  }
 }
 
 function buildCompositeTenClassLegendClasses(
@@ -408,6 +441,8 @@ function buildCompositeTenClassLegendClasses(
 }
 
 function buildAgroCompositeLegend(layerId: string): LayerLiveLegendSpec | null {
+  const u = String(layerId || '').trim().toUpperCase()
+  if (u === 'CHAS_ALERT') return buildChasAlertLegend(layerId)
   const def = resolveAgroCompositeIndexDef(layerId)
   if (!def) return null
   const ramp = resolveAgroCompositeTenClassRamp(layerId)

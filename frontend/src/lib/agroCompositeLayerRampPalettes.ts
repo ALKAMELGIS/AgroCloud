@@ -65,6 +65,36 @@ function deltaPalette(
  * Static composite palettes — low value → high value semantics per index physics.
  */
 export const AGRO_UNIQUE_LAYER_RAMP_PALETTES: Record<string, AgroLayerRampPalette> = {
+  // 🌱 Vegetation Health Layer — 10-class reclass (−1 → 1), red (critical) → dark green (excellent)
+  CVHI: {
+    valueMin: -1,
+    valueMax: 1,
+    anchors: anchors(
+      [0, '#b71c1c', 'Extreme stress'],
+      [0.11, '#c62828', 'Severe'],
+      [0.22, '#e53935', 'Very poor'],
+      [0.33, '#ef5350', 'Poor'],
+      [0.44, '#ff7043', 'Low health'],
+      [0.55, '#ffb300', 'Moderate stress'],
+      [0.66, '#9ccc65', 'Moderate health'],
+      [0.77, '#66bb6a', 'Good'],
+      [0.88, '#2e7d32', 'Very good'],
+      [1, '#1b5e20', 'Excellent'],
+    ),
+    classLabels: [
+      'Extreme Vegetation Stress',
+      'Severe Degradation',
+      'Very Poor Condition',
+      'Poor Vegetation',
+      'Low Vegetation Health',
+      'Moderate Stress',
+      'Moderate Vegetation Health',
+      'Good Vegetation Condition',
+      'Very Good Vegetation Health',
+      'Excellent Vegetation Health',
+    ],
+    subtitle: '4-index composite mean · 🔴 critical stress → 🟢 excellent canopy health',
+  },
   // 🌱 Vegetation Health Layer
   VHS: {
     valueMin: 0,
@@ -536,6 +566,7 @@ export const AGRO_UNIQUE_LAYER_RAMP_PALETTES: Record<string, AgroLayerRampPalett
   },
 
   // Δ layers — each with a unique stable-center hue
+  DCVHI: deltaPalette('CVHI', '#b71c1c', '#fff176', '#1b5e20', 'ΔCVHI · composite health decline → recovery'),
   DVHS: deltaPalette('VHS', '#8b0000', '#fffde7', '#1b4332', 'ΔVHS · unique crimson→cream→forest change ramp'),
   DVDI: deltaPalette('VDI', '#4e342e', '#eceff1', '#2e7d32', 'ΔVDI · brown dry decline · gray stable · green rehydration'),
   DCVI: deltaPalette('CVI', '#4a148c', '#e1bee7', '#1b4332', 'ΔCVI · purple loss · lilac stable · green gain'),

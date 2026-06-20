@@ -12,9 +12,9 @@ import {
 } from './agroCompositeIndices'
 
 describe('agroCompositeIndices', () => {
-  it('defines 21 static + 21 delta composite layers', () => {
+  it('defines 22 static + 22 delta composite layers', () => {
     const staticCount = AGRO_COMPOSITE_CATEGORIES.reduce((n, c) => n + c.indices.length, 0)
-    expect(staticCount).toBe(21)
+    expect(staticCount).toBe(22)
     expect(buildAgroCloudCustomWmsLayerEntries().some(l => l.name === 'CHAS')).toBe(true)
     expect(buildAgroCloudCustomWmsLayerEntries().some(l => l.name === 'DCHAS')).toBe(true)
   })
@@ -37,9 +37,13 @@ describe('agroCompositeIndices', () => {
 
   it('resolves VHS formula metadata', () => {
     expect(isAgroCompositeLayerId('VHS')).toBe(true)
+    expect(isAgroCompositeLayerId('CVHI')).toBe(true)
     expect(isAgroDeltaCompositeLayerId('DVHS')).toBe(true)
+    expect(isAgroDeltaCompositeLayerId('DCVHI')).toBe(true)
+    expect(resolveAgroCompositeIndexDef('CVHI')?.expr).toBe('(ndvi + ndmi + ndwi + savi) / 4')
     expect(resolveAgroCompositeIndexDef('VHS')?.expr).toBe('(ndvi + savi) / 2')
     expect(resolveAgroStaticLayerIdForDelta('DVHS')).toBe('VHS')
+    expect(resolveAgroStaticLayerIdForDelta('DCVHI')).toBe('CVHI')
     expect(resolveAgroStaticLayerIdForDelta('DCHAS')).toBe('CHAS')
   })
 

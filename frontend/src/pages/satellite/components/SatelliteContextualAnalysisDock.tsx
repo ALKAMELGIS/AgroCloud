@@ -286,7 +286,6 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
   const { scopedStorageKey } = useSiInstanceScope();
   const panelWidthMin = 260;
   const panelWidthDefault = 300;
-  const lsDockMode = scopedStorageKey('si-sat-ctx-dock-mode');
   const lsSurface = scopedStorageKey('si-sat-ctx-surface');
   const lsPanelW = scopedStorageKey('si-sat-ctx-panel-w');
   const lsRailLabeled = scopedStorageKey('si-sat-ctx-rail-labeled');
@@ -297,14 +296,6 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
 
   const [panelOpen, setPanelOpen] = useState(false);
   const [activeId, setActiveId] = useState<SatelliteContextPanelId | null>(null);
-  const [dockMode, setDockMode] = useState<'dock' | 'float'>(() => {
-    try {
-      const v = localStorage.getItem(lsDockMode);
-      return v === 'float' ? 'float' : 'dock';
-    } catch {
-      return 'dock';
-    }
-  });
   const [surface, setSurface] = useState<'dark' | 'light'>(() => {
     try {
       return localStorage.getItem(lsSurface) === 'light' ? 'light' : 'dark';
@@ -362,14 +353,6 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
       setActiveId(null)
     }
   }, [layerLiveLegendOpen, activeId])
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(lsDockMode, dockMode);
-    } catch {
-      /* ignore */
-    }
-  }, [dockMode]);
 
   useEffect(() => {
     try {
@@ -616,7 +599,6 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
     isMap ? 'si-sat-ctx-dock--map si-sat-ctx-dock--map-tall si-sat-ctx-dock--map-toolbox si-sat-ctx-dock--compact' : 'si-sat-ctx-dock--embedded',
     mapPanelCollapsed ? 'si-sat-ctx-dock--map-strip-minimized' : '',
     panelLayoutOpen ? 'si-sat-ctx-dock--open' : 'si-sat-ctx-dock--closed',
-    dockMode === 'float' ? 'si-sat-ctx-dock--float-mode' : '',
     surface === 'light' ? 'si-sat-ctx-dock--light' : 'si-sat-ctx-dock--dark',
     railWide ? 'si-sat-ctx-dock--rail-labeled' : 'si-sat-ctx-dock--rail-narrow',
     className.trim(),
@@ -842,15 +824,6 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
                     onClick={() => setSurface(s => (s === 'dark' ? 'light' : 'dark'))}
                   >
                     <i className={`fa-solid ${surface === 'dark' ? 'fa-sun' : 'fa-moon'}`} aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    className="si-sat-ctx-icon-btn"
-                    title={dockMode === 'dock' ? 'Floating style' : 'Docked style'}
-                    aria-label="Toggle dock or float appearance"
-                    onClick={() => setDockMode(m => (m === 'dock' ? 'float' : 'dock'))}
-                  >
-                    <i className={`fa-solid ${dockMode === 'dock' ? 'fa-window-restore' : 'fa-table-columns'}`} aria-hidden />
                   </button>
                   <button type="button" className="si-sat-ctx-icon-btn" title="Close" aria-label="Close panel" onClick={closePanel}>
                     <i className="fa-solid fa-xmark" aria-hidden />
@@ -1112,10 +1085,6 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
                           </button>
                           <span className="si-sat-ctx-subnav-crumb">Layers · Options</span>
                         </div>
-                        <p>
-                          <strong>Options</strong> — map layers (basemap, remote sensing, STAC), processing tools, and
-                          per-layer identify popups.
-                        </p>
                         <div className="si-sat-ctx-toolbox-opt-actions" role="group" aria-label="Open processing sections">
                           {(
                             ['remote-sensing', 'ai-detection-gis', 'table-geo-ai'] as SmartProcessingSectionId[]
@@ -1156,9 +1125,7 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
                 <span className="si-sat-ctx-footer-hint">
                   {activeId === 'aoi'
                     ? 'Polygon: Shift constrains angles · Circle: Enter commits · Clear restores pan.'
-                    : activeId === 'layers' && isMap
-                      ? 'Main: your added layers and actions. Options: basemap, overlays, STAC, and popup settings.'
-                      : 'Drag the inner edge to resize. Click the active tool again to collapse.'}
+                    : 'Drag the inner edge to resize. Click the active tool again to collapse.'}
                 </span>
               </footer>
             </>

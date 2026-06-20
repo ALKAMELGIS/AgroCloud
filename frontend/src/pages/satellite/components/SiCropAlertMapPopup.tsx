@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { useSiInstanceScope } from '../siInstanceScope'
 import type { CropAlertFieldResult } from '../../../lib/siCropAlertEngine'
 import {
@@ -19,7 +19,7 @@ import {
   mergeDailyIndexSeries,
   type SentinelHubDailyIndexMeans,
 } from '../../../lib/sentinelHubStatisticsApi'
-import { AcpPlatformContext } from '../../dashboards/agroCloudPlatform/acpPlatformContext'
+import { useOptionalAcpPlatform } from '../../dashboards/agroCloudPlatform/acpPlatformContext'
 import './SiCropAlertMapPopup.css'
 
 export type SiCropAlertMapPopupProps = {
@@ -1046,7 +1046,7 @@ export function SiCropAlertMapPopup({
   variant = 'default',
 }: SiCropAlertMapPopupProps) {
   const isMapPin = variant === 'mapPin'
-  const acp = useContext(AcpPlatformContext)
+  const acp = useOptionalAcpPlatform()
   const { scopedStorageKey } = useSiInstanceScope()
   const preset = isMapPin ? MAP_PIN_POPUP_SIZE_CONFIG : POPUP_SIZE_CONFIG
   const popupSizeStorageKey = scopedStorageKey(preset.storageKey)
