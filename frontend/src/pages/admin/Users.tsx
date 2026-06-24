@@ -1021,6 +1021,8 @@ export default function Users({ embedded }: { embedded?: boolean } = {}) {
         >
           <option value="All">All Statuses</option>
           <option value="Active">Active</option>
+          <option value="Pending Verification">Pending Verification</option>
+          <option value="Pending Approval">Pending Approval</option>
           <option value="Inactive">Inactive</option>
           <option value="Suspended">Suspended</option>
           <option value="Invited">Invited</option>
@@ -1443,6 +1445,8 @@ export default function Users({ embedded }: { embedded?: boolean } = {}) {
                       className="ec-input"
                     >
                       <option value="Active">Active</option>
+                      <option value="Pending Verification">Pending Verification</option>
+          <option value="Pending Approval">Pending Approval</option>
                       <option value="Inactive">Inactive</option>
                       <option value="Suspended">Suspended</option>
                     </select>

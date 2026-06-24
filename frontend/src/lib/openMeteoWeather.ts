@@ -12,6 +12,20 @@ export type OpenMeteoDailyForecast = {
   conditionLabel: string
 }
 
+/** Daily row with wind/humidity for historical or future picker dates. */
+export type OpenMeteoDailyDetail = OpenMeteoDailyForecast & {
+  windSpeedKmh: number | null
+  windDirectionDeg: number | null
+  windDirectionLabel: string
+  humidityPct: number | null
+}
+
+/** Earliest selectable date in the Open-Meteo historical archive picker. */
+export const OPEN_METEO_ARCHIVE_MIN_DATE = '1950-01-01'
+
+/** Open-Meteo forecast horizon (days including today). */
+export const OPEN_METEO_FORECAST_MAX_DAYS = 16
+
 export type OpenMeteoHourlyPoint = {
   time: string
   temperatureC: number | null
@@ -242,6 +256,58 @@ function shiftIsoDate(iso: string, years: number): string {
   return `${String(ny).padStart(4, '0')}-${String(nm).padStart(2, '0')}-${String(nd).padStart(2, '0')}`
 }
 
+function addDaysToIso(iso: string, days: number): string {
+  const base = new Date(`${iso}T12:00:00Z`)
+  if (Number.isNaN(base.getTime())) return iso
+  base.setUTCDate(base.getUTCDate() + days)
+  return base.toISOString().slice(0, 10)
+}
+
+export function resolveOpenMeteoDatePickerBounds(todayIso: string): { min: string; max: string } {
+  return {
+    min: OPEN_METEO_ARCHIVE_MIN_DATE,
+    max: addDaysToIso(todayIso, OPEN_METEO_FORECAST_MAX_DAYS - 1),
+  }
+}
+
+export function clampOpenMeteoPickerDate(iso: string, todayIso: string): string {
+  const { min, max } = resolveOpenMeteoDatePickerBounds(todayIso)
+  if (iso < min) return min
+  if (iso > max) return max
+  return iso
+}
+
+function dailyDetailFromRaw(
+  dateIso: string,
+  daily: {
+    weather_code?: number[]
+    temperature_2m_max?: number[]
+    temperature_2m_min?: number[]
+    precipitation_sum?: number[]
+    wind_speed_10m_max?: number[]
+    wind_direction_10m_dominant?: number[]
+    relative_humidity_2m_mean?: number[]
+  },
+  index = 0,
+): OpenMeteoDailyDetail | null {
+  const wc = daily.weather_code?.[index] ?? null
+  const tMax = daily.temperature_2m_max?.[index] ?? null
+  const tMin = daily.temperature_2m_min?.[index] ?? null
+  const windDir = daily.wind_direction_10m_dominant?.[index] ?? null
+  return {
+    date: dateIso,
+    tempMaxC: tMax,
+    tempMinC: tMin,
+    precipMm: daily.precipitation_sum?.[index] ?? null,
+    weatherCode: wc,
+    conditionLabel: wmoWeatherLabel(wc),
+    windSpeedKmh: daily.wind_speed_10m_max?.[index] ?? null,
+    windDirectionDeg: windDir,
+    windDirectionLabel: windDirectionLabel(windDir),
+    humidityPct: daily.relative_humidity_2m_mean?.[index] ?? null,
+  }
+}
+
 function parseHourlySeries(data: Record<string, unknown>): OpenMeteoHourlyPoint[] {
   const hourly = data.hourly as
     | {
@@ -278,6 +344,32 @@ function parseNextHours(points: OpenMeteoHourlyPoint[], fromIso: string, max = 2
 }
 
 async function fetchArchiveDailyPoint(lat: number, lng: number, dateIso: string): Promise<OpenMeteoTemporalCard | null> {
+  const detail = await fetchArchiveDailyDetail(lat, lng, dateIso)
+  if (!detail) return null
+  const tempC =
+    detail.tempMaxC != null && detail.tempMinC != null
+      ? Math.round((detail.tempMaxC + detail.tempMinC) / 2)
+      : detail.tempMaxC ?? detail.tempMinC ?? null
+  return {
+    key: dateIso,
+    title: '',
+    date: dateIso,
+    tempC,
+    weatherCode: detail.weatherCode,
+    conditionLabel: detail.conditionLabel,
+    windSpeedKmh: detail.windSpeedKmh,
+    windDirectionLabel: detail.windDirectionLabel,
+    humidityPct: detail.humidityPct,
+    precipMm: detail.precipMm,
+  }
+}
+
+async function fetchArchiveDailyDetail(
+  lat: number,
+  lng: number,
+  dateIso: string,
+): Promise<OpenMeteoDailyDetail | null> {
+  if (dateIso < OPEN_METEO_ARCHIVE_MIN_DATE) return null
   const url = new URL('https://archive-api.open-meteo.com/v1/archive')
   url.searchParams.set('latitude', String(lat))
   url.searchParams.set('longitude', String(lng))
@@ -285,7 +377,7 @@ async function fetchArchiveDailyPoint(lat: number, lng: number, dateIso: string)
   url.searchParams.set('end_date', dateIso)
   url.searchParams.set(
     'daily',
-    'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,relative_humidity_2m_mean',
+    'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant,relative_humidity_2m_mean',
   )
   url.searchParams.set('timezone', 'auto')
   const res = await fetch(url.toString())
@@ -299,27 +391,60 @@ async function fetchArchiveDailyPoint(lat: number, lng: number, dateIso: string)
         temperature_2m_min?: number[]
         precipitation_sum?: number[]
         wind_speed_10m_max?: number[]
+        wind_direction_10m_dominant?: number[]
         relative_humidity_2m_mean?: number[]
       }
     | undefined
   if (!daily?.time?.length) return null
-  const wc = daily.weather_code?.[0] ?? null
-  const tMax = daily.temperature_2m_max?.[0] ?? null
-  const tMin = daily.temperature_2m_min?.[0] ?? null
-  const tempC =
-    tMax != null && tMin != null ? Math.round((tMax + tMin) / 2) : tMax ?? tMin ?? null
-  return {
-    key: dateIso,
-    title: '',
-    date: dateIso,
-    tempC,
-    weatherCode: wc,
-    conditionLabel: wmoWeatherLabel(wc),
-    windSpeedKmh: daily.wind_speed_10m_max?.[0] ?? null,
-    windDirectionLabel: '—',
-    humidityPct: daily.relative_humidity_2m_mean?.[0] ?? null,
-    precipMm: daily.precipitation_sum?.[0] ?? null,
-  }
+  return dailyDetailFromRaw(dateIso, daily, 0)
+}
+
+async function fetchForecastDailyDetail(
+  lat: number,
+  lng: number,
+  dateIso: string,
+): Promise<OpenMeteoDailyDetail | null> {
+  const url = new URL('https://api.open-meteo.com/v1/forecast')
+  url.searchParams.set('latitude', String(lat))
+  url.searchParams.set('longitude', String(lng))
+  url.searchParams.set('timezone', 'auto')
+  url.searchParams.set('start_date', dateIso)
+  url.searchParams.set('end_date', dateIso)
+  url.searchParams.set(
+    'daily',
+    'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant,relative_humidity_2m_mean',
+  )
+  const res = await fetch(url.toString())
+  if (!res.ok) return null
+  const data = (await res.json()) as Record<string, unknown>
+  const daily = data.daily as
+    | {
+        time?: string[]
+        weather_code?: number[]
+        temperature_2m_max?: number[]
+        temperature_2m_min?: number[]
+        precipitation_sum?: number[]
+        wind_speed_10m_max?: number[]
+        wind_direction_10m_dominant?: number[]
+        relative_humidity_2m_mean?: number[]
+      }
+    | undefined
+  if (!daily?.time?.length) return null
+  return dailyDetailFromRaw(dateIso, daily, 0)
+}
+
+/** Load one calendar day from archive (past) or forecast (future) for the date picker. */
+export async function fetchOpenMeteoDailyForDate(
+  lat: number,
+  lng: number,
+  dateIso: string,
+  todayIso: string,
+): Promise<OpenMeteoDailyDetail | null> {
+  const clamped = clampOpenMeteoPickerDate(dateIso, todayIso)
+  if (clamped < OPEN_METEO_ARCHIVE_MIN_DATE) return null
+  if (clamped < todayIso) return fetchArchiveDailyDetail(lat, lng, clamped)
+  if (clamped > todayIso) return fetchForecastDailyDetail(lat, lng, clamped)
+  return null
 }
 
 export async function fetchOpenMeteoTemporalComparison(
@@ -460,7 +585,7 @@ export async function fetchOpenMeteoWeather(lat: number, lng: number): Promise<O
   url.searchParams.set('timezone', 'auto')
   url.searchParams.set('current', 'temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_direction_10m')
   url.searchParams.set('daily', 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum')
-  url.searchParams.set('forecast_days', '7')
+  url.searchParams.set('forecast_days', String(OPEN_METEO_FORECAST_MAX_DAYS))
   url.searchParams.set('hourly', 'temperature_2m,weather_code,precipitation,relative_humidity_2m,wind_speed_10m,surface_pressure')
 
   const res = await fetch(url.toString())

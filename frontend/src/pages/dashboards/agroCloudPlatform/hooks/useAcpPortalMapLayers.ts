@@ -10,6 +10,11 @@ import {
 import { hostedFeatureLayerGeoJsonForRow } from '../../../../lib/gisHostedFeatureLayerPortal'
 import type { GisContentRepositoryMapLayer } from '../../../../hooks/useGisContentRepositoryMapLayers'
 import { isAcpExcludedPortalMapRow } from '../map/acpPortalMapLayers'
+import { isAcpOgcRasterPortalRow } from '../../../../lib/acpOgcLayerMeta'
+
+export type AcpPortalMapLayerEntry = GisContentRepositoryMapLayer & {
+  isOgcRaster: boolean
+}
 
 export function useAcpPortalMapLayers() {
   const portal = useGisContentPortal()
@@ -30,7 +35,7 @@ export function useAcpPortalMapLayers() {
     let cancelled = false
     for (const id of activeIds) {
       const row = getGisContentRowById(id)
-      if (!row) continue
+      if (!row || isAcpOgcRasterPortalRow(row)) continue
       void (async () => {
         try {
           const payload = await buildGisContentMapLayerPayloadAsync(row)
@@ -62,8 +67,8 @@ export function useAcpPortalMapLayers() {
     }
   }, [registryKey, portal.version])
 
-  const layers = useMemo((): GisContentRepositoryMapLayer[] => {
-    const out: GisContentRepositoryMapLayer[] = []
+  const layers = useMemo((): AcpPortalMapLayerEntry[] => {
+    const out: AcpPortalMapLayerEntry[] = []
     registry.activeItemIds.forEach((id, index) => {
       const row = getGisContentRowById(id)
       if (!row || isGisContentRowInRecycle(row) || isAcpExcludedPortalMapRow(row)) return
@@ -72,14 +77,16 @@ export function useAcpPortalMapLayers() {
         opacity: 1,
         order: index,
       }
-      if (!config.visible) return
-      const geojson =
-        geojsonById[id] ?? (hostedFeatureLayerGeoJsonForRow(row) as GeoJSON.FeatureCollection)
+      const isOgcRaster = isAcpOgcRasterPortalRow(row)
+      const geojson = isOgcRaster
+        ? ({ type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection)
+        : (geojsonById[id] ?? (hostedFeatureLayerGeoJsonForRow(row) as GeoJSON.FeatureCollection))
       out.push({
         row,
         config: { ...config, order: config.order ?? index },
         geojson,
         payload: buildGisContentMapLayerPayload(row),
+        isOgcRaster,
       })
     })
     return out.sort((a, b) => a.config.order - b.config.order)

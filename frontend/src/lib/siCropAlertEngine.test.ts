@@ -9,6 +9,7 @@ import {
   evaluateCropAlertField,
   extractCropAlertFieldsFromMask,
   isCropAlertResultsCacheFresh,
+  loadCropAlertEngineSettingsForSatellitePage,
   normalizeCropAlertEngineSettings,
   runCropAlertEngine,
   sampleSentinelIndexForField,
@@ -129,6 +130,18 @@ describe('siCropAlertEngine', () => {
     expect(migrated.showLegend).toBe(true)
     expect(migrated.aoiMode).toBe('agro-default')
     expect(migrated.schemaVersion).toBe(CROP_ALERT_ENGINE_SETTINGS_SCHEMA_VERSION)
+  })
+
+  it('loadCropAlertEngineSettingsForSatellitePage defaults layers OFF', () => {
+    const key = 'test-si-crop-alert-engine'
+    const migrationKey = `${key}:si-layer-defaults-v2`
+    localStorage.removeItem(key)
+    localStorage.removeItem(migrationKey)
+    const loaded = loadCropAlertEngineSettingsForSatellitePage({ engineKey: key })
+    expect(loaded.enabled).toBe(false)
+    expect(loaded.showLegend).toBe(false)
+    localStorage.removeItem(key)
+    localStorage.removeItem(migrationKey)
   })
 
   it('normalizeCropAlertEngineSettings defaults enabled to ON', () => {

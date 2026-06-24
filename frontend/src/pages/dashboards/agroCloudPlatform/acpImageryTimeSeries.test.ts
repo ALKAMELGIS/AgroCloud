@@ -11,6 +11,8 @@ import {
   computeLinearRegression,
   evaluateImageryLayerDailyValue,
   flattenImageryTimeSeriesLayerOptions,
+  pruneImageryTimeSeriesToObservations,
+  pruneSingleLayerImagerySeries,
 } from './acpImageryTimeSeries'
 import type { SentinelHubDailyIndexMeans } from '../../../lib/sentinelHubStatisticsApi'
 
@@ -78,9 +80,29 @@ describe('acpImageryTimeSeries', () => {
     expect(multi.labels).toEqual(['2026-06-01', '2026-06-10'])
     expect(multi.series).toHaveLength(2)
     expect(multi.series[0]?.layerId).toBe('NDVI')
-    expect(multi.series[0]?.values[1]).toBe(0.8)
-    expect(multi.series[1]?.layerId).toBe('NDMI')
+    expect(multi.series[0]?.values[0]).toBe(0.6)
     expect(multi.series[1]?.values[1]).toBe(0.4)
+  })
+
+  it('prunes dates without finite layer values', () => {
+    const labels = ['2026-06-01', '2026-06-02', '2026-06-03']
+    const series = [
+      { layerId: 'NDVI', values: [0.5, NaN, 0.7] },
+      { layerId: 'NDMI', values: [NaN, 0.3, NaN] },
+    ]
+    const pruned = pruneImageryTimeSeriesToObservations(labels, series)
+    expect(pruned.labels).toEqual(['2026-06-01', '2026-06-02', '2026-06-03'])
+    expect(pruned.series[0]?.values).toEqual([0.5, NaN, 0.7])
+    expect(pruned.series[1]?.values).toEqual([NaN, 0.3, NaN])
+  })
+
+  it('prunes single-layer series to observation dates only', () => {
+    const { labels, values } = pruneSingleLayerImagerySeries(
+      ['2026-06-01', '2026-06-02'],
+      [0.42, NaN],
+    )
+    expect(labels).toEqual(['2026-06-01'])
+    expect(values).toEqual([0.42])
   })
 
   it('builds pie slices by layer mean or monthly buckets', () => {

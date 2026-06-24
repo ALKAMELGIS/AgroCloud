@@ -30,7 +30,30 @@ const menuItems: MenuItem[] = [
     items: [
       { label: { en: 'Develop Dashboard', ar: 'تطوير لوحة التحكم' }, icon: 'fa-solid fa-grip', to: '/dashboard/develop' },
       { label: { en: 'Agro Cloud Dashboard', ar: 'لوحة Agro Cloud' }, icon: 'fa-solid fa-chart-pie', to: '/dashboards/agro-cloud' },
+      {
+        label: { en: 'AgroCloud Platform', ar: 'منصة AgroCloud' },
+        icon: 'fa-solid fa-seedling',
+        to: '/dashboards/agro-cloud-platform',
+      },
     ]
+  },
+  {
+    id: 'application',
+    label: { en: 'Application', ar: 'التطبيقات' },
+    icon: 'fa-solid fa-cubes',
+    color: '#0EA5E9',
+    items: [
+      {
+        label: { en: 'AgroCloud Management', ar: 'إدارة AgroCloud' },
+        icon: 'fa-solid fa-building-user',
+        to: '/applications/agrocloud-management',
+      },
+      {
+        label: { en: 'AgroCloud Platform', ar: 'منصة AgroCloud' },
+        icon: 'fa-solid fa-seedling',
+        to: '/dashboards/agro-cloud-platform',
+      },
+    ],
   },
   {
     id: 'satellite',

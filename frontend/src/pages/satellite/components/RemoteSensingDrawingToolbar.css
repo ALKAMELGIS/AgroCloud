@@ -1,0 +1,56 @@
+/* Compact drawing strip — matches si-rs-panel__toolgrid (Map navigation) */
+.si-rs-draw {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.si-rs-draw__stack {
+  margin: 0;
+}
+
+.si-rs-draw__bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.si-rs-draw__mode.si-rs-panel__tool {
+  flex-shrink: 0;
+}
+
+.si-rs-draw__toolgrid {
+  display: grid;
+  grid-template-columns: repeat(4, 32px);
+  gap: 4px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.si-rs-draw__clear {
+  min-height: 30px;
+  padding: 5px 10px;
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  border-style: dashed;
+  border-color: rgba(248, 113, 113, 0.32);
+  background: rgba(248, 113, 113, 0.05);
+  color: rgba(252, 165, 165, 0.92);
+}
+
+.si-rs-draw__clear:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.1);
+  border-color: rgba(248, 113, 113, 0.42);
+}
+
+.si-rs-draw__clear:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.si-rs-draw__clear i {
+  font-size: 10px;
+}

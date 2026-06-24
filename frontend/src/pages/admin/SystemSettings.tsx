@@ -5,12 +5,14 @@ import * as yup from 'yup'
 import { useLanguage } from '../../lib/i18n'
 import { hasPermission, normalizeRole, readCurrentUser } from '../../lib/auth'
 import { NAV_DEFAULT_GROUPS, NAV_GROUP_IDS } from '../../nav/navManifest'
+import { isExternalPageLink } from '../../lib/defaultPageLinks'
 import {
   DEFAULT_SYSTEM_SETTINGS,
   DIRECTORY_ROLES_CANONICAL,
   loadSystemSettings,
   mergeWithDefaults,
   normalizeAppPath,
+  sanitizeExternalUrl,
 } from '../../services/settingsStorage'
 import { applyThemeToDocument, useSystemSettings } from '../../store/SystemSettingsContext'
 import { clearCustomUserApiTokenEverywhere } from '../../lib/browserApiSecretsVault'
@@ -18,6 +20,7 @@ import { getUserApiTokenValue, persistUserApiTokenValue } from '../../lib/custom
 import type { CustomApiTokenSlot, CustomPageRecord, SystemSettingsPersistedV1 } from '../../types/systemSettings'
 import './system-settings.css'
 import { NavGroupEditor } from './system-settings/NavGroupEditor'
+import { createPageLinkRecord, LinkManagementSection } from './system-settings/LinkManagementSection'
 import {
   getArcgisPortalTokenBrowserOverride,
   persistArcgisPortalTokenInBrowser,
@@ -402,6 +405,10 @@ export default function SystemSettings() {
           return
         }
       }
+      if (p.bindTarget === 'external' && !sanitizeExternalUrl(p.externalUrl)) {
+        pushToast('error', `Page link "${p.name}": enter a valid http/https URL.`)
+        return
+      }
     }
     saveDraft()
   }
@@ -485,6 +492,11 @@ export default function SystemSettings() {
     setDraft(d => ({ ...d, customPages: [...d.customPages, rec] }))
   }
 
+  const addPageLink = () => {
+    const rec = createPageLinkRecord()
+    setDraft(d => ({ ...d, customPages: [...d.customPages, rec] }))
+  }
+
   const updatePage = (id: string, patch: Partial<CustomPageRecord>) => {
     setDraft(d => ({
       ...d,
@@ -535,6 +547,7 @@ export default function SystemSettings() {
   const pageRows = draft.customPages
     .map((page, index) => ({ page, index }))
     .filter(({ page }) => {
+      if (isExternalPageLink(page)) return false
       if (pageGroupFilter !== 'all' && (page.navGroupId || 'data') !== pageGroupFilter) return false
       const q = pageQuery.trim().toLowerCase()
       if (!q) return true
@@ -837,8 +850,19 @@ export default function SystemSettings() {
             </h2>
             <p className="sys-settings-panel__desc">
               Override labels (EN/AR), Font Awesome icon classes, and visibility. Drag rows to reorder groups or items.
+              Use <strong>Link Management</strong> to bind in-app routes to external URLs.
             </p>
           </div>
+
+          <LinkManagementSection
+            language={language}
+            pages={draft.customPages}
+            onAdd={addPageLink}
+            onUpdate={updatePage}
+            onRemove={removePage}
+          />
+
+          <hr className="sys-divider" />
 
           {dataNavGroup ? (
             <section
@@ -936,8 +960,8 @@ export default function SystemSettings() {
               <h2>Dynamic pages</h2>
               <p>
                 Register routes and choose which sidebar group they appear under — same flyout ids as the manifest (
-                <code dir="ltr">nav-group-data</code>, <code dir="ltr">nav-group-sensors</code>, …). Adjust names (EN/AR),
-                path, icon, and optional <code dir="ltr">subitemClass</code> to match existing sublist rows.
+                <code dir="ltr">nav-group-data</code>, <code dir="ltr">nav-group-sensors</code>, …). For external URLs,
+                use <strong>Navigation → Link Management → Add Page Link</strong>.
               </p>
             </div>
             <button type="button" className="gis-btn gis-btn-primary sys-pages-add" onClick={addPage}>
@@ -1070,8 +1094,24 @@ export default function SystemSettings() {
                           <option value="gis">GIS Map</option>
                           <option value="satellite-indices">Satellite Intelligence</option>
                           <option value="dashboards-overview">Dashboard overview</option>
+                          <option value="external">External URL (page link)</option>
                         </select>
                       </div>
+                      {p.bindTarget === 'external' ? (
+                        <div className="sys-page-field sys-page-field--wide">
+                          <label htmlFor={`page-exturl-${p.id}`}>External URL</label>
+                          <input
+                            id={`page-exturl-${p.id}`}
+                            className="gis-input"
+                            dir="ltr"
+                            type="url"
+                            placeholder="https://"
+                            value={p.externalUrl ?? ''}
+                            onChange={e => updatePage(p.id, { externalUrl: e.target.value })}
+                            spellCheck={false}
+                          />
+                        </div>
+                      ) : null}
                       <div className="sys-page-field">
                         <label htmlFor={`page-navgrp-${p.id}`}>Sidebar group</label>
                         <select

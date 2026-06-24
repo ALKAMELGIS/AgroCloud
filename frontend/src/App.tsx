@@ -41,6 +41,8 @@ class AppErrorBoundary extends Component<{ children: JSX.Element }, { err: AppEr
       const reason = (e as any).reason
       const msg = reason instanceof Error ? reason.message : typeof reason === 'string' ? reason : ''
       if (msg.includes('Style is not done loading')) return
+      if (reason instanceof DOMException && reason.name === 'AbortError') return
+      if (reason instanceof Error && reason.name === 'AbortError') return
       const details = reason instanceof Error ? reason.stack : undefined
       this.setState({ err: { error: reason ?? e, kind: 'window', details } })
       try {

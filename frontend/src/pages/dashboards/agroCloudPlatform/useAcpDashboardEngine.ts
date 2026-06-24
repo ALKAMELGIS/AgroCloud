@@ -47,6 +47,7 @@ import { useAcpPlatform } from './acpPlatformContext'
 import type { AcpPlatformConfig } from './acpPlatformConfig'
 import { isAcpExcludedPortalMapRow } from './map/acpPortalMapLayers'
 import {
+  buildAcpPortfolioCountryOptions,
   buildFieldTableRows,
   filterGeoJsonFeaturesInBBox,
   vegetationDonutFromRows,
@@ -329,7 +330,7 @@ export function useAcpDashboardEngine() {
 
       const seriesMap = s.alertSettings.enabled
         ? await fetchCropAlertSentinelLiveBatch(fetchFields, referenceDate, {
-            concurrency: 6,
+            concurrency: 8,
             signal: ac.signal,
             cacheScope: 'standalone',
           })
@@ -746,10 +747,15 @@ export function useAcpDashboardEngine() {
   const liveAlertRows = filteredRows
 
   const displayKpiTotals = useMemo(
-    () =>
-      viewportScopeActive
-        ? buildAcpScopeKpiTotals(acp.aoiMask, acp.mapView, acp.scopeMode, acp.countryFilter)
-        : acp.kpiTotals,
+    () => {
+      if (viewportScopeActive) {
+        return buildAcpScopeKpiTotals(acp.aoiMask, acp.mapView, acp.scopeMode, acp.countryFilter)
+      }
+      if (acp.countryFilter && acp.countryFilter !== 'all' && acp.aoiMask?.features.length) {
+        return buildAgroStructuresLayerKpiTotals(acp.aoiMask, { countryFilter: acp.countryFilter })
+      }
+      return acp.kpiTotals
+    },
     [
       acp.aoiMask,
       acp.countryFilter,
@@ -783,24 +789,11 @@ export function useAcpDashboardEngine() {
     [distributionRows],
   )
 
-  const countries = useMemo((): AcpCountryOption[] => {
-    const codes = new Set<string>()
-    for (const r of scopeFieldRows) {
-      if (r.countryCode && r.countryCode !== '—') codes.add(r.countryCode)
-    }
-    const sorted = [...codes].sort((a, b) => {
-      const la = resolveAgroStructuresCountryLabel(a, countryDescriptionMap)
-      const lb = resolveAgroStructuresCountryLabel(b, countryDescriptionMap)
-      return la.localeCompare(lb, undefined, { sensitivity: 'base' })
-    })
-    return [
-      { value: 'all', label: 'All countries' },
-      ...sorted.map(code => ({
-        value: code,
-        label: resolveAgroStructuresCountryLabel(code, countryDescriptionMap),
-      })),
-    ]
-  }, [scopeFieldRows, countryDescriptionMap])
+  const countries = useMemo(
+    (): AcpCountryOption[] =>
+      buildAcpPortfolioCountryOptions(acp.aoiMask, countryDescriptionMap),
+    [acp.aoiMask, countryDescriptionMap],
+  )
 
   useEffect(() => {
     const registry = getGisContentMapRegistry()

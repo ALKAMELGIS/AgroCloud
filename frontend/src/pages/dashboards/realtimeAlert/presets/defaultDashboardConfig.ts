@@ -1,0 +1,37 @@
+import type { RealtimeAlertDashboardConfig } from '../types/realtimeAlert.types'
+
+export const REALTIME_ALERT_CONFIG_LS = 'realtime_alert_dashboard_config_v1'
+
+export const DEFAULT_REALTIME_ALERT_CONFIG: RealtimeAlertDashboardConfig = {
+  schemaVersion: 1,
+  title: 'Realtime Alert Dashboard',
+  theme: { primary: '#1b5e3c', radius: 12 },
+  kpiElements: [
+    { id: 'kpi-fields', label: 'Active Fields', metric: 'field_count', visible: true },
+    { id: 'kpi-alerts', label: 'Active Alerts', metric: 'alert_count', visible: true },
+    { id: 'kpi-critical', label: 'Critical Zones', metric: 'critical_count', visible: true },
+    { id: 'kpi-weather', label: 'Weather Risk', metric: 'weather_risk', visible: true },
+    { id: 'kpi-coverage', label: 'Imagery Coverage', metric: 'coverage_pct', visible: true },
+  ],
+  map: { defaultLayer: 'NDVI', showZones: true, showAlertOrbs: true },
+  charts: { pestEtl: true, diseaseEtl: true, zonePie: true },
+  alerts: {
+    indices: { NDVI: true, NDMI: true, NDWI: true, SAVI: true, CHAS: true, DCHAS: true },
+    chasFormulaDoc: '0.35·NDVI + 0.2·NDWI + 0.25·NDMI + 0.2·SAVI',
+  },
+}
+
+export function loadRealtimeAlertConfig(): RealtimeAlertDashboardConfig {
+  try {
+    const raw = localStorage.getItem(REALTIME_ALERT_CONFIG_LS)
+    if (!raw) return DEFAULT_REALTIME_ALERT_CONFIG
+    const parsed = JSON.parse(raw) as Partial<RealtimeAlertDashboardConfig>
+    return { ...DEFAULT_REALTIME_ALERT_CONFIG, ...parsed, kpiElements: parsed.kpiElements ?? DEFAULT_REALTIME_ALERT_CONFIG.kpiElements }
+  } catch {
+    return DEFAULT_REALTIME_ALERT_CONFIG
+  }
+}
+
+export function persistRealtimeAlertConfig(config: RealtimeAlertDashboardConfig): void {
+  localStorage.setItem(REALTIME_ALERT_CONFIG_LS, JSON.stringify(config))
+}

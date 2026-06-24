@@ -1,0 +1,29 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "zoneId": "A", "label": "Zone A", "risk": "warning" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[55.92, 25.68], [55.96, 25.68], [55.96, 25.72], [55.92, 25.72], [55.92, 25.68]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zoneId": "B", "label": "Zone B", "risk": "active" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[55.96, 25.68], [56.0, 25.68], [56.0, 25.72], [55.96, 25.72], [55.96, 25.68]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zoneId": "C", "label": "Zone C", "risk": "safe" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[55.92, 25.64], [56.0, 25.64], [56.0, 25.68], [55.92, 25.68], [55.92, 25.64]]]
+      }
+    }
+  ]
+}

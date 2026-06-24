@@ -1,4 +1,5 @@
 import type { FilterSpecification, Map as MaplibreMap } from 'maplibre-gl'
+import type { GisContentMapLayerConfig } from '../../../../lib/gisContentRepository'
 import { isAgroStructuresPortalRow, isWorldCountriesPortalRow } from '../../../../lib/gisHostedFeatureLayerPortal'
 import type { GisContentRow } from '../../../master/gisContentPortalData'
 import type { AcpMapLayerVisibility } from '../acpMapLayerVisibility'
@@ -7,6 +8,12 @@ import {
   WORLD_COUNTRIES_GIS_CONTENT_PORTAL_ID,
 } from '../../../../lib/gisContentPortalPublish'
 import { unregisterGisContentMapLayer } from '../../../../lib/gisContentPortalStore'
+import {
+  buildAcpPortalAttributeFilter,
+  combineAcpPortalFilters,
+  resolveAcpPortalLayerPaintWithConfig,
+  type AcpPortalLayerAttributeFilter,
+} from './acpPortalLayerStyle'
 
 export const ACP_SOURCE_PORTAL_PREFIX = 'acp-portal-'
 
@@ -134,6 +141,8 @@ export type AcpPortalMapLayerEntry = {
   row: GisContentRow
   geojson: GeoJSON.FeatureCollection
   visible: boolean
+  config?: GisContentMapLayerConfig
+  attributeFilter?: AcpPortalLayerAttributeFilter
 }
 
 export function syncAcpPortalMapLayers(
@@ -146,17 +155,19 @@ export function syncAcpPortalMapLayers(
 
   const beforeId = options?.beforeLayerId ?? resolveInsertBeforeId(map)
   const activeSourceIds = new Set<string>()
+  const sorted = [...layers].sort((a, b) => (a.config?.order ?? 0) - (b.config?.order ?? 0))
 
-  for (const entry of layers) {
+  for (const entry of sorted) {
     const { row, geojson } = entry
     if (!geojson?.features?.length) continue
 
     const sourceId = acpPortalSourceId(row.id)
     activeSourceIds.add(sourceId)
-    const paint = resolveAcpPortalLayerPaint(row)
+    const paint = resolveAcpPortalLayerPaintWithConfig(row, entry.config)
     const fillOpacity =
       options?.suppressAgroStructuresFill && isAgroStructuresPortalRow(row) ? 0 : paint.fillOpacity
     const portalVisible = visibility.portal[row.id] !== false && entry.visible
+    const attrFilter = buildAcpPortalAttributeFilter(entry.attributeFilter ?? null)
 
     const geojsonSig = portalGeojsonSignature(geojson)
     const existing = map.getSource(sourceId) as maplibregl.GeoJSONSource | undefined
@@ -180,6 +191,9 @@ export function syncAcpPortalMapLayers(
     const fillId = `${sourceId}-fill`
     const lineId = `${sourceId}-line`
     const circleId = `${sourceId}-circle`
+    const fillFilter = combineAcpPortalFilters(ACP_PORTAL_FILL_FILTER, attrFilter)
+    const lineFilter = combineAcpPortalFilters(ACP_PORTAL_LINE_FILTER, attrFilter)
+    const pointFilter = combineAcpPortalFilters(ACP_PORTAL_POINT_FILTER, attrFilter)
 
     if (!map.getLayer(fillId)) {
       map.addLayer(
@@ -187,17 +201,21 @@ export function syncAcpPortalMapLayers(
           id: fillId,
           type: 'fill',
           source: sourceId,
-          filter: ACP_PORTAL_FILL_FILTER,
+          filter: fillFilter,
           paint: {
             'fill-color': paint.fillColor,
             'fill-opacity': fillOpacity,
           },
+          minzoom: paint.minZoom,
+          maxzoom: paint.maxZoom,
         },
         beforeId,
       )
     } else {
       map.setPaintProperty(fillId, 'fill-color', paint.fillColor)
       map.setPaintProperty(fillId, 'fill-opacity', fillOpacity)
+      map.setFilter(fillId, fillFilter)
+      if (paint.minZoom != null) map.setLayerZoomRange(fillId, paint.minZoom, paint.maxZoom ?? 24)
     }
 
     if (!map.getLayer(lineId)) {
@@ -206,18 +224,23 @@ export function syncAcpPortalMapLayers(
           id: lineId,
           type: 'line',
           source: sourceId,
-          filter: ACP_PORTAL_LINE_FILTER,
+          filter: lineFilter,
           paint: {
             'line-color': paint.lineColor,
             'line-width': paint.lineWidth,
-            'line-opacity': 0.95,
+            'line-opacity': paint.lineOpacity,
           },
+          minzoom: paint.minZoom,
+          maxzoom: paint.maxZoom,
         },
         beforeId,
       )
     } else {
       map.setPaintProperty(lineId, 'line-color', paint.lineColor)
       map.setPaintProperty(lineId, 'line-width', paint.lineWidth)
+      map.setPaintProperty(lineId, 'line-opacity', paint.lineOpacity)
+      map.setFilter(lineId, lineFilter)
+      if (paint.minZoom != null) map.setLayerZoomRange(lineId, paint.minZoom, paint.maxZoom ?? 24)
     }
 
     if (!map.getLayer(circleId)) {
@@ -226,18 +249,38 @@ export function syncAcpPortalMapLayers(
           id: circleId,
           type: 'circle',
           source: sourceId,
-          filter: ACP_PORTAL_POINT_FILTER,
+          filter: pointFilter,
           paint: {
             'circle-color': paint.circleColor,
             'circle-radius': paint.circleRadius,
-            'circle-opacity': 0.92,
+            'circle-opacity': paint.circleOpacity,
           },
+          minzoom: paint.minZoom,
+          maxzoom: paint.maxZoom,
         },
         beforeId,
       )
+    } else {
+      map.setPaintProperty(circleId, 'circle-color', paint.circleColor)
+      map.setPaintProperty(circleId, 'circle-radius', paint.circleRadius)
+      map.setPaintProperty(circleId, 'circle-opacity', paint.circleOpacity)
+      map.setFilter(circleId, pointFilter)
+      if (paint.minZoom != null) map.setLayerZoomRange(circleId, paint.minZoom, paint.maxZoom ?? 24)
     }
 
     setPortalLayerVisibility(map, row.id, portalVisible)
+  }
+
+  for (let i = sorted.length - 1; i >= 0; i -= 1) {
+    const rowId = sorted[i]!.row.id
+    for (const lid of acpPortalLayerIds(rowId)) {
+      if (!map.getLayer(lid)) continue
+      try {
+        map.moveLayer(lid, beforeId)
+      } catch {
+        /* order best-effort */
+      }
+    }
   }
 
   for (const layer of map.getStyle()?.layers ?? []) {

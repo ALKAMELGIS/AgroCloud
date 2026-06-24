@@ -38,6 +38,14 @@ function readStore(filePath) {
   }
 }
 
+export function readAdminDirectoryStore(filePath) {
+  return readStore(filePath)
+}
+
+export function writeAdminDirectoryStore(filePath, data) {
+  return writeStore(filePath, data)
+}
+
 function writeStore(filePath, data) {
   const dir = path.dirname(filePath)
   try {

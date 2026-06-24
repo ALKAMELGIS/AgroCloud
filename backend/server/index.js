@@ -2,7 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import { WebSocketServer } from 'ws'
 import OpenAI from 'openai'
-import nodemailer from 'nodemailer'
+import { hasSmtpConfig as checkSmtpConfig, sendMailWithFallback } from './smtpTransport.js'
 import { spawn } from 'child_process'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -19,6 +19,12 @@ import { bootstrapApiSecretsFromEnv } from './bootstrapApiSecretsFromEnv.js'
 import { registerSentinelHubStatisticsRoutes } from './sentinelHubStatisticsProxy.js'
 import { registerGeocodeRoutes } from './geocodeProxy.js'
 import { registerAcpWeatherRoutes } from './acpWeatherRoutes.js'
+import {
+  applyStaticCacheHeaders,
+  httpsRedirectMiddleware,
+  securityHeadersMiddleware,
+} from './securityMiddleware.js'
+import { registerAuthRoutes } from './authService.js'
 
 loadProductionEnv()
 
@@ -38,6 +44,10 @@ const CORS_EXTRA = String(process.env.CORS_ALLOWED_ORIGINS || '')
   .map((s) => s.trim())
   .filter(Boolean)
 const CORS_DEFAULT_ORIGINS = [
+  'https://elite.geosyntra.org',
+  'https://eliteagrocloud.com',
+  'https://www.eliteagrocloud.com',
+  'https://agri-cloud-frontend-production.up.railway.app',
   'https://alkamelgis.github.io',
   'http://localhost:5174',
   'http://127.0.0.1:5174',
@@ -45,6 +55,9 @@ const CORS_DEFAULT_ORIGINS = [
   'http://127.0.0.1:3011',
 ]
 const corsAllowed = new Set([...CORS_DEFAULT_ORIGINS, ...CORS_EXTRA])
+
+app.use(httpsRedirectMiddleware)
+app.use(securityHeadersMiddleware)
 
 app.use(
   cors({
@@ -105,11 +118,13 @@ app.get('*', (req, res, next) => {
     if (accept.includes('br') && fs.existsSync(`${filePath}.br`)) {
       res.setHeader('Content-Encoding', 'br')
       res.type(ext)
+      applyStaticCacheHeaders(res, filePath)
       return res.sendFile(`${filePath}.br`)
     }
     if (accept.includes('gzip') && fs.existsSync(`${filePath}.gz`)) {
       res.setHeader('Content-Encoding', 'gzip')
       res.type(ext)
+      applyStaticCacheHeaders(res, filePath)
       return res.sendFile(`${filePath}.gz`)
     }
     return next()
@@ -118,7 +133,13 @@ app.get('*', (req, res, next) => {
   }
 })
 
-app.use(express.static(FRONTEND_DIST))
+app.use(
+  express.static(FRONTEND_DIST, {
+    setHeaders(res, filePath) {
+      applyStaticCacheHeaders(res, filePath)
+    },
+  }),
+)
 
 // New versioned API gateway: /api/v1/* and /api/v2/*
 app.use('/api', versionedRoutes)
@@ -136,7 +157,7 @@ const GITHUB_OAUTH_REDIRECT_URL = String(
 )
 const APP_ORIGIN_ENV = String(process.env.APP_ORIGIN || '').trim()
 const LISTEN_HOST = String(process.env.HOST || '0.0.0.0').trim() || '0.0.0.0'
-const API_PORT = Number(process.env.PORT || 3011)
+const API_PORT = Number(process.env.PORT || 3000)
 const WS_PORT = Number(process.env.WS_PORT || 3012)
 
 /** SPA shell URL for OAuth redirects (HashRouter under /AgroCloud/). */
@@ -144,8 +165,9 @@ function resolveAppOrigin(req) {
   if (APP_ORIGIN_ENV) return APP_ORIGIN_ENV.replace(/\/$/, '')
   const proto = String(req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim() || 'http'
   const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim()
-  if (!host) return 'http://localhost:5174/AgroCloud'
-  return `${proto}://${host}/AgroCloud`
+  if (!host) return 'http://localhost:5174'
+  const originPath = APP_ORIGIN_ENV ? '' : '/AgroCloud'
+  return `${proto}://${host}${originPath}`
 }
 
 function appHashRoute(req, route, query = '') {
@@ -160,13 +182,6 @@ const ghStates = new Map()
 const ghEvents = []
 const authEvents = []
 
-const SMTP_HOST = String(process.env.SMTP_HOST || '').trim()
-const SMTP_PORT = Number(process.env.SMTP_PORT || 587)
-const SMTP_USER = String(process.env.SMTP_USER || '').trim()
-const SMTP_PASS = String(process.env.SMTP_PASS || '').trim()
-const SMTP_FROM = String(process.env.SMTP_FROM || SMTP_USER || 'noreply@agri-cloud.local').trim()
-const SMTP_SECURE = String(process.env.SMTP_SECURE || '').trim().toLowerCase() === 'true'
-
 function addAuthEvent(action, payload = {}) {
   authEvents.push({
     id: randomUUID(),
@@ -178,27 +193,24 @@ function addAuthEvent(action, payload = {}) {
 }
 
 function hasSmtpConfig() {
-  return Boolean(SMTP_HOST && SMTP_PORT && SMTP_USER && SMTP_PASS)
+  return checkSmtpConfig(process.env)
 }
 
 async function sendMail({ to, subject, text, html }) {
-  const transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: SMTP_PORT,
-    secure: SMTP_SECURE,
-    auth: {
-      user: SMTP_USER,
-      pass: SMTP_PASS,
-    },
-  })
-  await transporter.sendMail({
-    from: SMTP_FROM,
-    to,
-    subject,
-    text,
-    html,
-  })
+  const { info, host } = await sendMailWithFallback({ to, subject, text, html })
+  if (process.env.NODE_ENV !== 'production') {
+    console.info('[smtp] sent via', host, { to, messageId: info?.messageId })
+  }
 }
+
+registerAuthRoutes(app, {
+  adminDirectoryFile: ADMIN_DIRECTORY_FILE,
+  sendMail,
+  hasSmtpConfig,
+  addAuthEvent,
+  appName: 'Agro Cloud',
+  canonicalBaseUrl: process.env.VITE_APP_CANONICAL_URL || process.env.APP_ORIGIN || '',
+})
 
 function parseCookies(header) {
   const out = {}
@@ -1676,6 +1688,7 @@ registerGeocodeRoutes(app)
 registerAcpWeatherRoutes(app)
 
 app.get('*', (req, res) => {
+  applyStaticCacheHeaders(res, 'index.html')
   res.sendFile(path.join(FRONTEND_DIST, 'index.html'))
 })
 
@@ -1686,15 +1699,26 @@ const server = app.listen(API_PORT, LISTEN_HOST, () => {
   console.log(`API listening on http://${LISTEN_HOST === '0.0.0.0' ? 'localhost' : LISTEN_HOST}:${API_PORT} (bind ${LISTEN_HOST})`)
 })
 
-const wss = new WebSocketServer({ host: LISTEN_HOST, port: WS_PORT })
-function broadcast(obj) {
-  const msg = JSON.stringify(obj)
-  wss.clients.forEach(c => { if (c.readyState === 1) c.send(msg) })
+/** Shared-hosting (Hostinger): only one port — attach WS to the HTTP server instead of WS_PORT. */
+let wss
+try {
+  wss = new WebSocketServer({ server })
+} catch (error) {
+  console.warn('WebSocket server disabled:', error?.message || error)
 }
-setInterval(() => {
-  broadcast({ topic: 'sensor/ec', payload: (Math.random() * 2 + 1).toFixed(2) })
-  broadcast({ topic: 'sensor/ph', payload: (Math.random() * 2 + 6).toFixed(2) })
-}, 3000)
+function broadcast(obj) {
+  if (!wss) return
+  const msg = JSON.stringify(obj)
+  wss.clients.forEach((c) => {
+    if (c.readyState === 1) c.send(msg)
+  })
+}
+if (wss) {
+  setInterval(() => {
+    broadcast({ topic: 'sensor/ec', payload: (Math.random() * 2 + 1).toFixed(2) })
+    broadcast({ topic: 'sensor/ph', payload: (Math.random() * 2 + 6).toFixed(2) })
+  }, 3000)
+}
 
 process.on('SIGINT', () => {
   server.close(() => process.exit(0))

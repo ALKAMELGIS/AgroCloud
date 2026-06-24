@@ -33,6 +33,7 @@ export type SentinelHubSceneZonalStats = {
   ndmi: SentinelHubIndexZonalStats
   ndwi: SentinelHubIndexZonalStats
   evi: SentinelHubIndexZonalStats
+  savi?: SentinelHubIndexZonalStats
   ciRe?: SentinelHubIndexZonalStats
 }
 
@@ -42,6 +43,7 @@ export type SentinelHubDailyIndexMeans = {
   ndwi: number | null
   ndmi: number | null
   evi: number | null
+  savi: number | null
   ciRe: number | null
   /** Pixel min/max/mean inside AOI from Statistical API (Layer Live). */
   zonal?: Partial<SentinelHubSceneZonalStats>
@@ -80,6 +82,11 @@ type StatsApiResponse = {
 }
 
 let oauthCache: { token: string; expiresAt: number } | null = null
+
+/** Dedup + short TTL cache for identical Statistical API POST bodies. */
+const STATS_RESULT_CACHE_TTL_MS = 12 * 60_000
+const statsResultCache = new Map<string, { data: SentinelHubDailyIndexMeans[]; expiresAt: number }>()
+const statsInFlight = new Map<string, Promise<SentinelHubDailyIndexMeans[]>>()
 
 function envClientId(): string {
   const raw = import.meta.env.VITE_SENTINEL_HUB_CLIENT_ID
@@ -169,7 +176,7 @@ function setup() {
     output: [
       {
         id: "indices",
-        bands: ["ndvi", "ndwi", "ndmi", "evi", "ci_re"],
+        bands: ["ndvi", "ndwi", "ndmi", "evi", "savi", "ci_re"],
         sampleType: "FLOAT32"
       },
       {
@@ -190,10 +197,13 @@ function evaluatePixel(samples) {
   var ndmi = dNdmi > 1e-6 ? (samples.B08 - samples.B11) / dNdmi : NaN;
   var eviDen = samples.B08 + 6.0 * samples.B04 - 7.5 * samples.B02 + 1.0;
   var evi = eviDen > 1e-6 ? 2.5 * (samples.B08 - samples.B04) / eviDen : NaN;
+  var L = 0.5;
+  var saviDen = samples.B08 + samples.B04 + L;
+  var savi = saviDen > 1e-6 ? (samples.B08 - samples.B04) / saviDen * (1.0 + L) : NaN;
   var ci_re = samples.B08 > 1e-6 ? samples.B05 / samples.B08 - 1 : NaN;
   var valid = samples.dataMask && !cloud && !isNaN(ndvi);
   return {
-    indices: [ndvi, ndwi, ndmi, evi, ci_re],
+    indices: [ndvi, ndwi, ndmi, evi, savi, ci_re],
     dataMask: [valid ? 1 : 0]
   };
 }`
@@ -208,7 +218,7 @@ function setup() {
     output: [
       {
         id: "indices",
-        bands: ["ndvi", "ndwi", "ndmi", "evi", "ci_re"],
+        bands: ["ndvi", "ndwi", "ndmi", "evi", "savi", "ci_re"],
         sampleType: "FLOAT32"
       },
       {
@@ -227,10 +237,13 @@ function evaluatePixel(samples) {
   var ndmi = dNdmi > 1e-6 ? (samples.B08 - samples.B11) / dNdmi : NaN;
   var eviDen = samples.B08 + 6.0 * samples.B04 - 7.5 * samples.B02 + 1.0;
   var evi = eviDen > 1e-6 ? 2.5 * (samples.B08 - samples.B04) / eviDen : NaN;
+  var L = 0.5;
+  var saviDen = samples.B08 + samples.B04 + L;
+  var savi = saviDen > 1e-6 ? (samples.B08 - samples.B04) / saviDen * (1.0 + L) : NaN;
   var ci_re = samples.B08 > 1e-6 ? samples.B05 / samples.B08 - 1 : NaN;
   var valid = samples.dataMask && !isNaN(ndvi);
   return {
-    indices: [ndvi, ndwi, ndmi, evi, ci_re],
+    indices: [ndvi, ndwi, ndmi, evi, savi, ci_re],
     dataMask: [valid ? 1 : 0]
   };
 }`
@@ -370,6 +383,7 @@ function buildMultiIndexStatisticsCalculations(): Record<string, unknown> {
         ndwi: {},
         ndmi: {},
         evi: {},
+        savi: {},
         ci_re: {},
       },
     },
@@ -471,12 +485,14 @@ export function parseSentinelHubStatsResponse(json: StatsApiResponse): SentinelH
     const ndmiStats = readBandStats(row, 'ndmi')
     const ndwiStats = readBandStats(row, 'ndwi')
     const eviStats = readBandStats(row, 'evi')
+    const saviStats = readBandStats(row, 'savi')
     const ciReStats = readBandStats(row, 'ci_re')
     const zonal: Partial<SentinelHubSceneZonalStats> = {}
     if (ndviStats) zonal.ndvi = ndviStats
     if (ndmiStats) zonal.ndmi = ndmiStats
     if (ndwiStats) zonal.ndwi = ndwiStats
     if (eviStats) zonal.evi = eviStats
+    if (saviStats) zonal.savi = saviStats
     if (ciReStats) zonal.ciRe = ciReStats
     out.push({
       date,
@@ -484,6 +500,7 @@ export function parseSentinelHubStatsResponse(json: StatsApiResponse): SentinelH
       ndwi: ndwiStats?.mean ?? null,
       ndmi: ndmiStats?.mean ?? null,
       evi: eviStats?.mean ?? null,
+      savi: saviStats?.mean ?? null,
       ciRe: ciReStats?.mean ?? null,
       zonal: Object.keys(zonal).length ? zonal : undefined,
     })
@@ -544,6 +561,7 @@ export function mergeDailyIndexSeries(
         ndwi: row.ndwi ?? prev.ndwi,
         ndmi: row.ndmi ?? prev.ndmi,
         evi: row.evi ?? prev.evi,
+        savi: row.savi ?? prev.savi,
         ciRe: row.ciRe ?? prev.ciRe,
         zonal: row.zonal ?? prev.zonal,
       })
@@ -641,23 +659,72 @@ async function postSentinelStatisticsRequest(
   body: Record<string, unknown>,
   signal?: AbortSignal,
 ): Promise<SentinelHubDailyIndexMeans[]> {
-  if (isSentinelHubStatisticsDirectConfigured()) {
-    try {
-      const json = await postSentinelStatisticsDirect(body, signal)
-      return parseSentinelHubStatsResponse(json)
-    } catch {
-      /* fall through to server proxy */
+  const cacheKey = JSON.stringify(body)
+  const cached = statsResultCache.get(cacheKey)
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.data
+  }
+
+  const inFlight = statsInFlight.get(cacheKey)
+  if (inFlight) {
+    return inFlight
+  }
+
+  const promise = (async (): Promise<SentinelHubDailyIndexMeans[]> => {
+    let daily: SentinelHubDailyIndexMeans[]
+    if (isSentinelHubStatisticsDirectConfigured()) {
+      try {
+        const json = await postSentinelStatisticsDirect(body, signal)
+        daily = parseSentinelHubStatsResponse(json)
+        statsResultCache.set(cacheKey, {
+          data: daily,
+          expiresAt: Date.now() + STATS_RESULT_CACHE_TTL_MS,
+        })
+        return daily
+      } catch {
+        /* fall through to server proxy */
+      }
     }
-  }
 
-  if (mayUseSentinelHubStatisticsProxy()) {
-    const json = await postSentinelStatisticsViaProxy(body, signal)
-    return parseSentinelHubStatsResponse(json)
-  }
+    if (mayUseSentinelHubStatisticsProxy()) {
+      const json = await postSentinelStatisticsViaProxy(body, signal)
+      daily = parseSentinelHubStatsResponse(json)
+      statsResultCache.set(cacheKey, {
+        data: daily,
+        expiresAt: Date.now() + STATS_RESULT_CACHE_TTL_MS,
+      })
+      return daily
+    }
 
-  throw new Error(
-    'Configure Sentinel Hub OAuth (VITE_SENTINEL_HUB_CLIENT_ID/SECRET) or a private access token for field NDVI alerts.',
-  )
+    throw new Error(
+      'Configure Sentinel Hub OAuth (VITE_SENTINEL_HUB_CLIENT_ID/SECRET) or a private access token for field NDVI alerts.',
+    )
+  })()
+
+  statsInFlight.set(cacheKey, promise)
+  try {
+    return await promise
+  } finally {
+    statsInFlight.delete(cacheKey)
+  }
+}
+
+async function mapPoolStatistics<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (!items.length) return []
+  const out: R[] = new Array(items.length)
+  let next = 0
+  const runners = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++
+      out[i] = await worker(items[i]!, i)
+    }
+  })
+  await Promise.all(runners)
+  return out
 }
 
 function buildStatisticsRequestBody(
@@ -725,33 +792,37 @@ export async function fetchSentinelFieldIndexByCatalogScenes(
   const dates = options.sceneDates.slice(0, 8)
   if (!dates.length) return []
 
-  const out: SentinelHubDailyIndexMeans[] = []
-  for (const sceneDate of dates) {
-    if (options.signal?.aborted) break
+  const rows = await mapPoolStatistics(dates, 4, async sceneDate => {
+    if (options?.signal?.aborted) return null
     try {
       let row = await fetchSentinelFieldIndexForSceneDate(options.geometry, sceneDate, {
         maxCloudCoverage: options.maxCloudCoverage ?? 90,
         relaxedCloudMask: false,
-        signal: options.signal,
+        signal: options?.signal,
       })
       if (!row || row.ndvi == null) {
         row = await fetchSentinelFieldIndexForSceneDate(options.geometry, sceneDate, {
           maxCloudCoverage: 95,
           relaxedCloudMask: true,
-          signal: options.signal,
+          signal: options?.signal,
         })
       }
-      if (row && (row.ndvi != null || row.ndwi != null || row.ndmi != null)) out.push(row)
+      if (row && (row.ndvi != null || row.ndwi != null || row.ndmi != null)) return row
     } catch {
       /* try next scene */
     }
-  }
-  return out.sort((a, b) => a.date.localeCompare(b.date))
+    return null
+  })
+
+  return rows
+    .filter((row): row is SentinelHubDailyIndexMeans => row != null)
+    .sort((a, b) => a.date.localeCompare(b.date))
 }
 
 export async function fetchSentinelFieldIndexTimeSeries(
   options: FetchSentinelFieldStatsOptions,
 ): Promise<SentinelHubDailyIndexMeans[]> {
+  if (!options?.geometry) return []
   const geom = simplifyGeometryForSentinelStats(options.geometry)
   if (!geom) return []
 
@@ -766,7 +837,7 @@ export async function fetchSentinelFieldIndexTimeSeries(
       maxCloudCoverage: options.maxCloudCoverage,
       relaxedCloudMask: options.relaxedCloudMask,
     }),
-    options.signal,
+    options?.signal,
   )
 }
 
@@ -783,6 +854,7 @@ export type FetchSentinelFieldIndexRangeOptions = {
 export async function fetchSentinelFieldIndexTimeSeriesForRange(
   options: FetchSentinelFieldIndexRangeOptions,
 ): Promise<SentinelHubDailyIndexMeans[]> {
+  if (!options?.geometry) return []
   const geom = simplifyGeometryForSentinelStats(options.geometry)
   if (!geom) return []
 
@@ -796,7 +868,7 @@ export async function fetchSentinelFieldIndexTimeSeriesForRange(
       maxCloudCoverage: options.maxCloudCoverage,
       relaxedCloudMask: options.relaxedCloudMask,
     }),
-    options.signal,
+    options?.signal,
   )
 }
 

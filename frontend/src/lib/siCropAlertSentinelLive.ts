@@ -177,6 +177,19 @@ function buildTemporalSyntheticDaily(
   })
 }
 
+export function getCachedCropAlertFieldSentinelSeries(
+  fieldKey: string,
+  referenceDate: string,
+  lookbackDays: number = CROP_ALERT_SENTINEL_LOOKBACK_DAYS,
+  cacheScope?: CropAlertSentinelCacheScope,
+): SentinelHubFieldTimeSeries | null {
+  const key = cacheKey(fieldKey, referenceDate, lookbackDays)
+  const resolved = resolveSeriesCacheScope(cacheScope)
+  const cached = getSeriesCache(resolved).get(key)
+  if (cached && Date.now() - cached.fetchedAt < SERIES_CACHE_TTL_MS) return cached
+  return readSeriesFromSession(key, resolved)
+}
+
 async function resolveFieldDailySeries(
   field: CropAlertFieldInput,
   referenceDate: string,
@@ -203,37 +216,42 @@ async function resolveFieldDailySeries(
     lastError = err instanceof Error ? err.message : String(err)
   }
 
+  const catalogDates = options?.catalogSceneIsos ?? []
   if (!hasValidIndexDaily(daily)) {
-    try {
-      const relaxed = await fetchSentinelFieldIndexTimeSeries({
+    const sceneDates =
+      catalogDates.length > 0 ? pickCatalogSceneDatesForFetch(catalogDates, referenceDate, 8) : []
+
+    const [relaxedSettled, catalogSettled] = await Promise.allSettled([
+      fetchSentinelFieldIndexTimeSeries({
         geometry: field.geometry,
         referenceDate,
         signal: options?.signal,
         maxCloudCoverage: 95,
         relaxedCloudMask: true,
         lookbackDays,
-      })
-      daily = mergeDailyIndexSeries(daily, relaxed)
-    } catch (err) {
-      lastError = err instanceof Error ? err.message : String(err)
-    }
-  }
+      }),
+      sceneDates.length
+        ? fetchSentinelFieldIndexByCatalogScenes({
+            geometry: field.geometry,
+            sceneDates,
+            maxCloudCoverage: 90,
+            signal: options?.signal,
+          })
+        : Promise.resolve([] as SentinelHubDailyIndexMeans[]),
+    ])
 
-  const catalogDates = options?.catalogSceneIsos ?? []
-  if (!hasValidIndexDaily(daily) && catalogDates.length) {
-    const sceneDates = pickCatalogSceneDatesForFetch(catalogDates, referenceDate, 8)
-    if (sceneDates.length) {
-      try {
-        const byScene = await fetchSentinelFieldIndexByCatalogScenes({
-          geometry: field.geometry,
-          sceneDates,
-          maxCloudCoverage: 90,
-          signal: options?.signal,
-        })
-        daily = mergeDailyIndexSeries(daily, byScene)
-      } catch (err) {
-        lastError = err instanceof Error ? err.message : String(err)
-      }
+    if (relaxedSettled.status === 'fulfilled') {
+      daily = mergeDailyIndexSeries(daily, relaxedSettled.value)
+    } else {
+      lastError = relaxedSettled.reason instanceof Error ? relaxedSettled.reason.message : String(relaxedSettled.reason)
+    }
+
+    if (catalogSettled.status === 'fulfilled') {
+      daily = mergeDailyIndexSeries(daily, catalogSettled.value)
+    } else if (catalogSettled.status === 'rejected') {
+      const catalogErr =
+        catalogSettled.reason instanceof Error ? catalogSettled.reason.message : String(catalogSettled.reason)
+      lastError = lastError ?? catalogErr
     }
   }
 
@@ -471,6 +489,8 @@ export async function fetchCropAlertSentinelLiveBatch(
     cacheScope?: CropAlertSentinelCacheScope
   },
 ): Promise<Map<string, SentinelHubFieldTimeSeries>> {
+  const lookbackDays = options?.lookbackDays ?? CROP_ALERT_SENTINEL_LOOKBACK_DAYS
+  const cacheScope = resolveSeriesCacheScope(options?.cacheScope)
   const total = fields.length
   let done = 0
   let live = 0
@@ -488,15 +508,40 @@ export async function fetchCropAlertSentinelLiveBatch(
     }
   }
 
-  const results = await mapPool(fields, options?.concurrency ?? 5, async field => {
+  const map = new Map<string, SentinelHubFieldTimeSeries>()
+  const toFetch: CropAlertFieldInput[] = []
+
+  for (const field of fields) {
+    if (options?.signal?.aborted) break
+    const cached = getCachedCropAlertFieldSentinelSeries(
+      field.fieldKey,
+      referenceDate,
+      lookbackDays,
+      cacheScope,
+    )
+    if (cached) {
+      getSeriesCache(cacheScope).set(cacheKey(field.fieldKey, referenceDate, lookbackDays), cached)
+      map.set(field.fieldKey, cached)
+      done += 1
+      if (cached.source === 'live' && !cached.syntheticFill) live += 1
+      else if (cached.error) failed += 1
+      else sampled += 1
+      options?.onFieldSeries?.(field, cached)
+      throttledEmit()
+      continue
+    }
+    toFetch.push(field)
+  }
+
+  const fetched = await mapPool(toFetch, options?.concurrency ?? 8, async field => {
     if (options?.signal?.aborted) {
       return { fieldKey: field.fieldKey, daily: [], fetchedAt: Date.now(), source: 'sample' as const, error: 'aborted' }
     }
     const series = await fetchOneFieldSeries(field, referenceDate, {
       signal: options?.signal,
       catalogSceneIsos: options?.catalogSceneIsos,
-      lookbackDays: options?.lookbackDays,
-      cacheScope: options?.cacheScope,
+      lookbackDays,
+      cacheScope,
     })
     done += 1
     if (series.source === 'live' && !series.syntheticFill) live += 1
@@ -507,16 +552,15 @@ export async function fetchCropAlertSentinelLiveBatch(
     return series
   })
 
+  for (const row of fetched) map.set(row.fieldKey, row)
   emit()
-
-  const map = new Map<string, SentinelHubFieldTimeSeries>()
-  for (const row of results) map.set(row.fieldKey, row)
   return map
 }
 
 export function clearCropAlertSentinelCache(scope?: CropAlertSentinelCacheScope): void {
   const resolved = resolveSeriesCacheScope(scope)
   getSeriesCache(resolved).clear()
+  historyRangeCache.clear()
   if (typeof window !== 'undefined') {
     try {
       window.sessionStorage.removeItem(seriesSessionStorageKey(resolved))
@@ -527,32 +571,113 @@ export function clearCropAlertSentinelCache(scope?: CropAlertSentinelCacheScope)
 }
 
 /** Extend cached daily series with older history (charts) without re-fetching the recent window. */
+const HISTORY_RANGE_CACHE_TTL_MS = 15 * 60_000
+const historyRangeCache = new Map<string, { daily: SentinelHubDailyIndexMeans[]; expiresAt: number }>()
+
+function historyRangeCacheKey(fieldKey: string, fromIso: string, toIso: string): string {
+  return `${fieldKey}|${fromIso}|${toIso}`
+}
+
+async function resolveFieldDailySeriesForRange(
+  field: CropAlertFieldInput,
+  fromIso: string,
+  toIso: string,
+  options?: { signal?: AbortSignal },
+): Promise<{ daily: SentinelHubDailyIndexMeans[]; error?: string }> {
+  if (!field.geometry) {
+    return { daily: [], error: 'Missing field geometry' }
+  }
+
+  const rangeKey = historyRangeCacheKey(field.fieldKey, fromIso, toIso)
+  const cached = historyRangeCache.get(rangeKey)
+  if (cached && Date.now() < cached.expiresAt) {
+    return { daily: cached.daily }
+  }
+
+  let daily: SentinelHubDailyIndexMeans[] = []
+  let lastError: string | undefined
+
+  try {
+    daily = await fetchSentinelFieldIndexTimeSeriesForRange({
+      geometry: field.geometry,
+      fromIso,
+      toIso,
+      signal: options?.signal,
+    })
+  } catch (err) {
+    lastError = err instanceof Error ? err.message : String(err)
+  }
+
+  if (!hasValidIndexDaily(daily)) {
+    try {
+      const relaxed = await fetchSentinelFieldIndexTimeSeriesForRange({
+        geometry: field.geometry,
+        fromIso,
+        toIso,
+        maxCloudCoverage: 95,
+        relaxedCloudMask: true,
+        signal: options?.signal,
+      })
+      daily = mergeDailyIndexSeries(daily, relaxed)
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err)
+    }
+  }
+
+  if (!hasValidIndexDaily(daily)) {
+    const spanDays = Math.max(
+      1,
+      Math.ceil((Date.parse(`${toIso}T12:00:00Z`) - Date.parse(`${fromIso}T12:00:00Z`)) / 86400000) + 1,
+    )
+    try {
+      const window = await resolveFieldDailySeries(field, toIso, {
+        lookbackDays: Math.min(spanDays, 365),
+        signal: options?.signal,
+      })
+      const clipped = window.daily.filter(d => d.date >= fromIso && d.date <= toIso)
+      daily = mergeDailyIndexSeries(daily, clipped)
+      if (!hasValidIndexDaily(daily) && window.error) lastError = window.error
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err)
+    }
+  }
+
+  const clipped = daily
+    .filter(d => d.date >= fromIso && d.date <= toIso)
+    .sort((a, b) => a.date.localeCompare(b.date))
+
+  if (hasValidIndexDaily(clipped)) {
+    historyRangeCache.set(rangeKey, {
+      daily: clipped,
+      expiresAt: Date.now() + HISTORY_RANGE_CACHE_TTL_MS,
+    })
+  }
+
+  return { daily: clipped, error: hasValidIndexDaily(clipped) ? undefined : lastError }
+}
+
 export async function fetchCropAlertSentinelHistoryExtension(
   fields: CropAlertFieldInput[],
-  options: {
+  options?: {
     fromIso: string
     toIso: string
     concurrency?: number
     signal?: AbortSignal
   },
 ): Promise<Map<string, SentinelHubDailyIndexMeans[]>> {
+  if (!options) return new Map()
   const fromIso = options.fromIso.trim().slice(0, 10)
   const toIso = options.toIso.trim().slice(0, 10)
   if (!fromIso || !toIso || fromIso >= toIso) return new Map()
 
-  const results = await mapPool(fields, options.concurrency ?? 6, async field => {
-    if (options.signal?.aborted || !field.geometry) return { fieldKey: field.fieldKey, daily: [] as SentinelHubDailyIndexMeans[] }
-    try {
-      const daily = await fetchSentinelFieldIndexTimeSeriesForRange({
-        geometry: field.geometry,
-        fromIso,
-        toIso,
-        signal: options.signal,
-      })
-      return { fieldKey: field.fieldKey, daily }
-    } catch {
+  const results = await mapPool(fields, options.concurrency ?? 8, async field => {
+    if (options?.signal?.aborted) {
       return { fieldKey: field.fieldKey, daily: [] as SentinelHubDailyIndexMeans[] }
     }
+    const resolved = await resolveFieldDailySeriesForRange(field, fromIso, toIso, {
+      signal: options?.signal,
+    })
+    return { fieldKey: field.fieldKey, daily: resolved.daily }
   })
 
   const map = new Map<string, SentinelHubDailyIndexMeans[]>()
@@ -560,4 +685,31 @@ export async function fetchCropAlertSentinelHistoryExtension(
     if (row.daily.length) map.set(row.fieldKey, row.daily)
   }
   return map
+}
+
+/** Build daily rows from engine scene series when Statistical range fetch is empty. */
+export function buildDailySeriesFromEngineScenes(
+  result: CropAlertFieldResult,
+  fromIso: string,
+  toIso: string,
+): SentinelHubDailyIndexMeans[] {
+  const dates = result.ndviSceneDates ?? []
+  const out: SentinelHubDailyIndexMeans[] = []
+  for (let i = 0; i < dates.length; i++) {
+    const date = String(dates[i] ?? '').slice(0, 10)
+    if (!date || date < fromIso || date > toIso) continue
+    const ndvi = result.ndviSceneValues[i]
+    const ndmi = result.ndmiSceneValues[i]
+    const ndwi = result.ndwiSceneValues[i]
+    if (ndvi == null && ndmi == null && ndwi == null) continue
+    out.push({
+      date,
+      ndvi: ndvi ?? null,
+      ndmi: ndmi ?? null,
+      ndwi: ndwi ?? null,
+      evi: null,
+      ciRe: result.current?.ciRe ?? null,
+    })
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date))
 }

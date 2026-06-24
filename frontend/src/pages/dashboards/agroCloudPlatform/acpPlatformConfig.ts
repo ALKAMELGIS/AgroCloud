@@ -27,12 +27,15 @@ export type AcpPanelVisibility = {
 }
 
 export type AcpMapToolbarConfig = {
+  search: boolean
   addData: boolean
   legend: boolean
   home: boolean
   layers: boolean
   basemap: boolean
   timeSeries: boolean
+  weather: boolean
+  view3d: boolean
 }
 
 export type AcpFieldsPanelDefaults = {
@@ -145,12 +148,15 @@ export const DEFAULT_ACP_PLATFORM_CONFIG: AcpPlatformConfig = {
   defaultPortalLayerVisibility: {},
   defaultCountryFilter: 'all',
   mapToolbar: {
+    search: true,
     addData: true,
     legend: true,
     home: true,
     layers: true,
     basemap: true,
     timeSeries: true,
+    weather: true,
+    view3d: true,
   },
   panels: {
     fields: true,
@@ -186,6 +192,8 @@ export function loadAcpPlatformConfig(): AcpPlatformConfig {
       mapToolbar: {
         ...DEFAULT_ACP_PLATFORM_CONFIG.mapToolbar,
         ...parsed.mapToolbar,
+        search: true,
+        addData: true,
       },
       defaultPortalLayerVisibility: {
         ...DEFAULT_ACP_PLATFORM_CONFIG.defaultPortalLayerVisibility,

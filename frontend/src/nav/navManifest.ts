@@ -36,6 +36,8 @@ export type NavTranslationKey =
   | 'githubIntegration'
   | 'systemSettings'
   | 'customPage'
+  | 'application'
+  | 'agroCloudManagement'
 
 export type NavLeafDef = {
   id: string
@@ -88,6 +90,21 @@ export const NAV_DEFAULT_GROUPS: NavGroupDef[] = [
         i18nKey: 'agroCloudPlatform',
         defaultIcon: 'fa-solid fa-seedling',
         subitemClass: 'nav-item-dashboard-platform',
+      },
+    ],
+  },
+  {
+    id: 'application',
+    i18nKey: 'application',
+    defaultIcon: 'fa-solid fa-cubes',
+    headerClass: 'nav-header-application',
+    children: [
+      {
+        id: 'application-agrocloud-management',
+        path: '/applications/agrocloud-management',
+        i18nKey: 'agroCloudManagement',
+        defaultIcon: 'fa-solid fa-building-user',
+        subitemClass: 'nav-item-agrocloud-management',
       },
     ],
   },
@@ -274,6 +291,7 @@ export const NAV_GROUP_IDS = NAV_DEFAULT_GROUPS.map(g => g.id)
 export function defaultSubitemClassForNavGroup(groupId: string): string {
   const map: Record<string, string> = {
     dashboard: 'nav-item-dashboard-edit',
+    application: 'nav-item-agrocloud-management',
     aiAgroCloud: 'nav-item-ai-agro-chat',
     satellite: 'nav-item-indices',
     data: 'nav-item-ec-ph',
@@ -370,7 +388,13 @@ export function mergeNavigationManifest(
     const labelEn = o?.labelEn?.trim() || ''
     const labelAr = o?.labelAr?.trim() || ''
     const order = settings.navItemOrders[g.id] ?? []
-    const baseKids = sortByIdList(g.children.map(resolveLeaf), order).filter(c => c.visible)
+    const customPagePaths = new Set(
+      (settings.customPages ?? [])
+        .filter(p => p.visible !== false)
+        .map(p => normalizeAppPath(p.path)),
+    )
+    const baseKids = sortByIdList(g.children.map(resolveLeaf), order)
+      .filter(c => c.visible && !customPagePaths.has(normalizeAppPath(c.path)))
     const customKids = (settings.customPages ?? [])
       .filter(p => p.visible !== false && normalizedNavGroupId(p.navGroupId) === g.id)
       .map(customPageToMergedLeaf)

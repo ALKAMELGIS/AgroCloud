@@ -163,8 +163,7 @@ export function AcpFieldsPanel({
   const virtual = useAcpVirtualRows(visibleRows, tableWrapRef, rowHeight)
 
   const selectField = (fieldKey: string) => {
-    acp.setSelectedFieldKey(fieldKey)
-    acp.setScopeMode('selection')
+    acp.bindMapFieldSelection(fieldKey)
   }
 
   const locateField = (fieldKey: string) => {
@@ -178,7 +177,10 @@ export function AcpFieldsPanel({
           <span className="acp-panel__label">
             <i className="fa-solid fa-globe" aria-hidden /> Countries
           </span>
-          <select value={acp.countryFilter} onChange={e => acp.setCountryFilter(e.target.value)}>
+          <select
+            value={acp.countryFilter}
+            onChange={e => acp.selectPortfolioCountry(e.target.value)}
+          >
             {countries.map(option => (
               <option key={option.value} value={option.value}>
                 {option.label}

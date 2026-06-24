@@ -13,7 +13,7 @@ import {
 } from '../../../lib/siCropAlertMapPopupModel'
 import { resolveNearestValidSceneDate } from '../../../lib/siAdaptiveTemporalEngine'
 import { CDSI_INSIGHT_FA_ICONS } from '../../../lib/siCropAlertDchasBeacon'
-import { fetchCropAlertSentinelHistoryExtension } from '../../../lib/siCropAlertSentinelLive'
+import { fetchCropAlertSentinelHistoryExtension, buildDailySeriesFromEngineScenes, getCachedCropAlertFieldSentinelSeries } from '../../../lib/siCropAlertSentinelLive'
 import {
   fetchSentinelFieldIndexTimeSeriesForRange,
   mergeDailyIndexSeries,
@@ -158,25 +158,6 @@ function isDateOnlyWarning(w: string | null | undefined): boolean {
   return Boolean(w?.trim().startsWith('Requested Date:'))
 }
 
-function ChasTrendLegend({ labels, values }: { labels: string[]; values: number[] }) {
-  if (!labels.length) return null
-  return (
-    <ul
-      className="si-crop-alert-map-popup__chart-legend si-crop-alert-map-popup__chart-legend--flow"
-      style={{ '--legend-count': labels.length } as CSSProperties}
-    >
-      {labels.map((lbl, i) => (
-        <li key={`${lbl}-${i}`} className="si-crop-alert-map-popup__chart-legend-item">
-          <span className="si-crop-alert-map-popup__chart-legend-label">{lbl || `S${i + 1}`}</span>
-          <span className="si-crop-alert-map-popup__chart-legend-value">
-            {Number.isFinite(values[i]) ? values[i]!.toFixed(3) : '—'}
-          </span>
-        </li>
-      ))}
-    </ul>
-  )
-}
-
 const INDEX_TONE_CLASS: Record<'NDVI' | 'NDWI' | 'NDMI' | 'SAVI', string> = {
   NDVI: 'si-crop-alert-map-popup__metric-chip--ndvi',
   NDWI: 'si-crop-alert-map-popup__metric-chip--ndwi',
@@ -268,29 +249,124 @@ function PopupActionBar({ action, mapPin }: { action: string; mapPin?: boolean }
   )
 }
 
-function PopupChasTrendPanel({
+type ChasAnalyticsTab = 'distribution' | 'trend'
+
+type PopupChasCoverageProps = {
+  coverage: NdviFieldCoverage
+  sceneDates: string[]
+  sceneDate: string
+  onSceneDateChange: (date: string) => void
+  sceneHistoryLoading?: boolean
+}
+
+function PopupChasAnalyticsPanel({
   insight,
   mapPin,
+  coverage,
+  sceneDates,
+  sceneDate,
+  onSceneDateChange,
+  sceneHistoryLoading = false,
 }: {
   insight: PopupEmbeddedInsightShape
   mapPin: boolean
-}) {
-  if (insight.chasLabels.length < 2) return null
+} & Partial<PopupChasCoverageProps>) {
+  const [tab, setTab] = useState<ChasAnalyticsTab>('distribution')
+  const canShowTrend = insight.chasLabels.length >= 2
+
+  useEffect(() => {
+    if (tab === 'trend' && !canShowTrend) setTab('distribution')
+  }, [tab, canShowTrend])
+
   return (
     <div className="si-crop-alert-map-popup__chas-panel">
-      <div className="si-crop-alert-map-popup__chas-panel-head">
-        <span className="si-crop-alert-map-popup__chas-panel-title">CHAS trend</span>
-        <span
-          className={`si-crop-alert-map-popup__chas-direction si-crop-alert-map-popup__chas-direction--${insight.chasTrend.direction}`}
-        >
-          {CHAS_DIRECTION_LABEL[insight.chasTrend.direction]}
-        </span>
+      <div
+        className={[
+          'si-crop-alert-map-popup__chas-panel-head',
+          'si-crop-alert-map-popup__chas-panel-head--tabbed',
+        ].join(' ')}
+      >
+        <div className="si-crop-alert-map-popup__chas-tabs" role="tablist" aria-label="CHAS analytics">
+          <button
+            type="button"
+            role="tab"
+            id="si-popup-chas-tab-distribution"
+            aria-selected={tab === 'distribution'}
+            aria-controls="si-popup-chas-panel-distribution"
+            className={[
+              'si-crop-alert-map-popup__chas-tab',
+              tab === 'distribution' ? 'si-crop-alert-map-popup__chas-tab--active' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            onClick={() => setTab('distribution')}
+          >
+            <i className="fa-solid fa-chart-pie" aria-hidden />
+            <span>Distribution</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="si-popup-chas-tab-trend"
+            aria-selected={tab === 'trend'}
+            aria-controls="si-popup-chas-panel-trend"
+            disabled={!canShowTrend}
+            className={[
+              'si-crop-alert-map-popup__chas-tab',
+              tab === 'trend' ? 'si-crop-alert-map-popup__chas-tab--active' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            onClick={() => setTab('trend')}
+          >
+            <i className="fa-solid fa-chart-line" aria-hidden />
+            <span>Trend</span>
+          </button>
+        </div>
+        {tab === 'trend' && canShowTrend ? (
+          <span
+            className={`si-crop-alert-map-popup__chas-direction si-crop-alert-map-popup__chas-direction--${insight.chasTrend.direction}`}
+          >
+            {CHAS_DIRECTION_LABEL[insight.chasTrend.direction]}
+          </span>
+        ) : null}
       </div>
-      {mapPin ? (
-        <ChartsPanel embedded mapPin chasLabels={insight.chasLabels} chasValues={insight.chasValues} />
-      ) : (
-        <ChasTrendLegend labels={insight.chasLabels} values={insight.chasValues} />
-      )}
+
+      <div
+        id="si-popup-chas-panel-distribution"
+        role="tabpanel"
+        aria-labelledby="si-popup-chas-tab-distribution"
+        hidden={tab !== 'distribution'}
+        className="si-crop-alert-map-popup__chas-panel-body"
+      >
+        {tab === 'distribution' && coverage ? (
+          <LandCoverageStrip
+            embedded
+            hideSceneDateControl={mapPin}
+            coverage={coverage}
+            sceneDates={sceneDates ?? []}
+            sceneDate={sceneDate ?? ''}
+            onSceneDateChange={onSceneDateChange ?? (() => {})}
+            sceneHistoryLoading={sceneHistoryLoading}
+          />
+        ) : null}
+      </div>
+
+      <div
+        id="si-popup-chas-panel-trend"
+        role="tabpanel"
+        aria-labelledby="si-popup-chas-tab-trend"
+        hidden={tab !== 'trend'}
+        className="si-crop-alert-map-popup__chas-panel-body"
+      >
+        {tab === 'trend' && canShowTrend ? (
+          mapPin ? (
+            <ChartsPanel embedded mapPin chasLabels={insight.chasLabels} chasValues={insight.chasValues} />
+          ) : (
+            <ChartsPanel embedded chasLabels={insight.chasLabels} chasValues={insight.chasValues} />
+          )
+        ) : null}
+      </div>
     </div>
   )
 }
@@ -300,12 +376,17 @@ function EmbeddedInsightBoard({
   dataWarning,
   indexSubLabel = 'current',
   variant = 'default',
+  coverage,
+  sceneDates,
+  sceneDate,
+  onSceneDateChange,
+  sceneHistoryLoading,
 }: {
   insight: PopupEmbeddedInsightShape
   dataWarning: string | null
   indexSubLabel?: string
   variant?: 'default' | 'mapPin'
-}) {
+} & Partial<PopupChasCoverageProps>) {
   const isMapPin = variant === 'mapPin'
   const showWarning = Boolean(dataWarning?.trim()) && !isDateOnlyWarning(dataWarning)
 
@@ -326,13 +407,20 @@ function EmbeddedInsightBoard({
             {insight.deltaChas != null ? <PopupDeltaChasChip deltaChas={insight.deltaChas} /> : null}
             <PopupActionBar action={insight.action} mapPin />
           </div>
-          <PopupChasTrendPanel insight={insight} mapPin />
+          <PopupChasAnalyticsPanel
+            insight={insight}
+            mapPin
+            coverage={coverage}
+            sceneDates={sceneDates}
+            sceneDate={sceneDate}
+            onSceneDateChange={onSceneDateChange}
+            sceneHistoryLoading={sceneHistoryLoading}
+          />
           <PopupIndexGrid indices={insight.indices} indexSubLabel={indexSubLabel} />
         </>
       ) : (
         <>
           <PopupIndexGrid indices={insight.indices} indexSubLabel={indexSubLabel} />
-          <PopupChasTrendPanel insight={insight} mapPin={false} />
           {insight.deltaChas != null ? <PopupDeltaChasChip deltaChas={insight.deltaChas} /> : null}
           <PopupActionBar action={insight.action} />
         </>
@@ -353,9 +441,19 @@ type PopupEssentialsCardProps = {
   dataWarning: string | null
   indexSubLabel?: string
   variant?: 'default' | 'mapPin'
-}
+} & Partial<PopupChasCoverageProps>
 
-function PopupEssentialsCard({ embeddedInsight, dataWarning, indexSubLabel, variant }: PopupEssentialsCardProps) {
+function PopupEssentialsCard({
+  embeddedInsight,
+  dataWarning,
+  indexSubLabel,
+  variant,
+  coverage,
+  sceneDates,
+  sceneDate,
+  onSceneDateChange,
+  sceneHistoryLoading,
+}: PopupEssentialsCardProps) {
   return (
     <div className="si-crop-alert-map-popup__essentials">
       <EmbeddedInsightBoard
@@ -363,6 +461,11 @@ function PopupEssentialsCard({ embeddedInsight, dataWarning, indexSubLabel, vari
         dataWarning={dataWarning}
         indexSubLabel={indexSubLabel}
         variant={variant}
+        coverage={coverage}
+        sceneDates={sceneDates}
+        sceneDate={sceneDate}
+        onSceneDateChange={onSceneDateChange}
+        sceneHistoryLoading={sceneHistoryLoading}
       />
     </div>
   )
@@ -499,6 +602,7 @@ type LandCoverageStripProps = {
   onSceneDateChange: (date: string) => void
   sceneHistoryLoading?: boolean
   embedded?: boolean
+  hideSceneDateControl?: boolean
 }
 
 function LandCoverageStrip({
@@ -508,6 +612,7 @@ function LandCoverageStrip({
   onSceneDateChange,
   sceneHistoryLoading = false,
   embedded = false,
+  hideSceneDateControl = false,
 }: LandCoverageStripProps) {
   const vegetationPct = coverage.vegetationPct
   const bareAreaPct = coverage.bareAreaPct
@@ -531,7 +636,7 @@ function LandCoverageStrip({
           </span>
         )}
         <div className="si-crop-alert-map-popup__land-head-meta">
-          {sceneDate ? (
+          {!hideSceneDateControl && sceneDate ? (
             <LandCoverageSceneDateControl
               sceneDates={sceneDates.length ? sceneDates : [sceneDate]}
               sceneDate={sceneDate}
@@ -938,7 +1043,7 @@ function ChartsPanel({
   )
 }
 
-type FieldAnalyticsTab = 'coverage' | 'chas'
+type FieldAnalyticsTab = 'distribution' | 'trend'
 
 type FieldAnalyticsTabsCardProps = {
   coverage: NdviFieldCoverage
@@ -959,7 +1064,12 @@ function FieldAnalyticsTabsCard({
   chasLabels,
   chasValues,
 }: FieldAnalyticsTabsCardProps) {
-  const [tab, setTab] = useState<FieldAnalyticsTab>('coverage')
+  const [tab, setTab] = useState<FieldAnalyticsTab>('distribution')
+  const canShowTrend = chasLabels.length >= 2
+
+  useEffect(() => {
+    if (tab === 'trend' && !canShowTrend) setTab('distribution')
+  }, [tab, canShowTrend])
 
   return (
     <div className="si-crop-alert-map-popup__analytics-card">
@@ -972,48 +1082,49 @@ function FieldAnalyticsTabsCard({
           <button
             type="button"
             role="tab"
-            id="si-popup-analytics-tab-coverage"
-            aria-selected={tab === 'coverage'}
-            aria-controls="si-popup-analytics-panel-coverage"
+            id="si-popup-analytics-tab-distribution"
+            aria-selected={tab === 'distribution'}
+            aria-controls="si-popup-analytics-panel-distribution"
             className={[
               'si-crop-alert-map-popup__analytics-tab',
-              tab === 'coverage' ? 'si-crop-alert-map-popup__analytics-tab--active' : '',
+              tab === 'distribution' ? 'si-crop-alert-map-popup__analytics-tab--active' : '',
             ]
               .filter(Boolean)
               .join(' ')}
-            onClick={() => setTab('coverage')}
+            onClick={() => setTab('distribution')}
           >
             <i className="fa-solid fa-chart-pie" aria-hidden />
-            <span>Land split</span>
+            <span>Distribution</span>
           </button>
           <button
             type="button"
             role="tab"
-            id="si-popup-analytics-tab-chas"
-            aria-selected={tab === 'chas'}
-            aria-controls="si-popup-analytics-panel-chas"
+            id="si-popup-analytics-tab-trend"
+            aria-selected={tab === 'trend'}
+            aria-controls="si-popup-analytics-panel-trend"
+            disabled={!canShowTrend}
             className={[
               'si-crop-alert-map-popup__analytics-tab',
-              tab === 'chas' ? 'si-crop-alert-map-popup__analytics-tab--active' : '',
+              tab === 'trend' ? 'si-crop-alert-map-popup__analytics-tab--active' : '',
             ]
               .filter(Boolean)
               .join(' ')}
-            onClick={() => setTab('chas')}
+            onClick={() => setTab('trend')}
           >
             <i className="fa-solid fa-chart-line" aria-hidden />
-            <span>CHAS trend</span>
+            <span>Trend</span>
           </button>
         </div>
       </header>
 
       <div
-        id="si-popup-analytics-panel-coverage"
+        id="si-popup-analytics-panel-distribution"
         role="tabpanel"
-        aria-labelledby="si-popup-analytics-tab-coverage"
-        hidden={tab !== 'coverage'}
+        aria-labelledby="si-popup-analytics-tab-distribution"
+        hidden={tab !== 'distribution'}
         className="si-crop-alert-map-popup__analytics-panel"
       >
-        {tab === 'coverage' ? (
+        {tab === 'distribution' ? (
           <LandCoverageStrip
             embedded
             coverage={coverage}
@@ -1026,13 +1137,13 @@ function FieldAnalyticsTabsCard({
       </div>
 
       <div
-        id="si-popup-analytics-panel-chas"
+        id="si-popup-analytics-panel-trend"
         role="tabpanel"
-        aria-labelledby="si-popup-analytics-tab-chas"
-        hidden={tab !== 'chas'}
+        aria-labelledby="si-popup-analytics-tab-trend"
+        hidden={tab !== 'trend'}
         className="si-crop-alert-map-popup__analytics-panel"
       >
-        {tab === 'chas' ? (
+        {tab === 'trend' && canShowTrend ? (
           <ChartsPanel embedded chasLabels={chasLabels} chasValues={chasValues} />
         ) : null}
       </div>
@@ -1047,7 +1158,7 @@ export function SiCropAlertMapPopup({
 }: SiCropAlertMapPopupProps) {
   const isMapPin = variant === 'mapPin'
   const acp = useOptionalAcpPlatform()
-  const { scopedStorageKey } = useSiInstanceScope()
+  const { scopedStorageKey, scope } = useSiInstanceScope()
   const preset = isMapPin ? MAP_PIN_POPUP_SIZE_CONFIG : POPUP_SIZE_CONFIG
   const popupSizeStorageKey = scopedStorageKey(preset.storageKey)
   const popupRef = useRef<HTMLDivElement>(null)
@@ -1092,6 +1203,25 @@ export function SiCropAlertMapPopup({
     if (!fromIso || fromIso >= toIso) return
 
     setSceneHistoryLoading(true)
+
+    const engineRows = buildDailySeriesFromEngineScenes(result, fromIso, toIso)
+    const cachedSeries = getCachedCropAlertFieldSentinelSeries(
+      result.fieldKey,
+      toIso,
+      30,
+      scope,
+    )
+    const cachedInRange = (cachedSeries?.daily ?? []).filter(d => d.date >= fromIso && d.date <= toIso)
+    const prefilled = mergeDailyIndexSeries(engineRows, cachedInRange)
+
+    if (prefilled.length >= 3) {
+      setSceneHistory(prefilled)
+      setSceneHistoryLoading(false)
+      return () => {
+        cancelled = true
+      }
+    }
+
     void fetchCropAlertSentinelHistoryExtension(
       [
         {
@@ -1106,11 +1236,12 @@ export function SiCropAlertMapPopup({
           geometry: result.geometry,
         },
       ],
-      { fromIso, toIso, concurrency: 1 },
+      { fromIso, toIso, concurrency: 4 },
     )
       .then(map => {
         if (cancelled) return
-        setSceneHistory(map.get(result.fieldKey) ?? [])
+        const fetched = map.get(result.fieldKey) ?? []
+        setSceneHistory(mergeDailyIndexSeries(prefilled, fetched))
       })
       .catch(() => {
         if (!cancelled) setSceneHistory([])
@@ -1122,7 +1253,7 @@ export function SiCropAlertMapPopup({
     return () => {
       cancelled = true
     }
-  }, [result.fieldKey, result.geometry, result.objectId, result.farmName, result.farmCode, result.structureType, result.centroid, indexDataDate])
+  }, [result.fieldKey, result.geometry, result.objectId, result.farmName, result.farmCode, result.structureType, result.centroid, indexDataDate, scope])
 
   const coverageForScene = useMemo(
     () => estimateNdviFieldCoverageForScene(result, coverageSceneDate || indexDataDate, sceneHistory),
@@ -1322,6 +1453,11 @@ export function SiCropAlertMapPopup({
               dataWarning={vm.dataWarning}
               indexSubLabel={isMapPin ? indexSubLabel : 'current'}
               variant={isMapPin ? 'mapPin' : 'default'}
+              coverage={coverageForScene}
+              sceneDates={sceneDates}
+              sceneDate={selectedSceneDate}
+              onSceneDateChange={handleCoverageSceneDateChange}
+              sceneHistoryLoading={sceneHistoryLoading}
             />
           </section>
 

@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react'
 import Home from '../Home'
 import Overview from '../dashboards/Overview'
+import ExternalPageLink from './ExternalPageLink'
 
 const GisMap = lazy(() => import('../satellite/GisMap'))
 const SatelliteIntelligence = lazy(() => import('../satellite/SatelliteIntelligence'))
@@ -14,9 +15,23 @@ function Placeholder({ title }: { title: string }) {
   )
 }
 
-export type BindTarget = 'placeholder' | 'home' | 'gis' | 'satellite-indices' | 'dashboards-overview'
+export type BindTarget =
+  | 'placeholder'
+  | 'home'
+  | 'gis'
+  | 'satellite-indices'
+  | 'dashboards-overview'
+  | 'external'
 
-export default function DynamicBindPage({ bindTarget, title }: { bindTarget: BindTarget; title: string }) {
+export default function DynamicBindPage({
+  bindTarget,
+  title,
+  externalUrl,
+}: {
+  bindTarget: BindTarget
+  title: string
+  externalUrl?: string
+}) {
   const fb = <div style={{ padding: 16 }}>Loading…</div>
   switch (bindTarget) {
     case 'home':
@@ -43,6 +58,8 @@ export default function DynamicBindPage({ bindTarget, title }: { bindTarget: Bin
           <Overview />
         </Suspense>
       )
+    case 'external':
+      return <ExternalPageLink url={externalUrl ?? ''} title={title} />
     default:
       return <Placeholder title={title} />
   }

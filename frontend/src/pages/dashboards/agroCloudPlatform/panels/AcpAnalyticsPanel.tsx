@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   listAnalyticsSceneDates,
   resolveFieldNdviMeanForSceneDate,
@@ -66,28 +66,43 @@ export function AcpAnalyticsPanel({
 }: Props) {
   const acp = useAcpPlatform()
   const [tab, setTab] = useState<'vegetation' | 'alerts'>('vegetation')
-  const [fieldFilter, setFieldFilter] = useState(ACP_ANALYTICS_ALL_FIELDS_KEY)
 
-  useEffect(() => {
-    if (fieldFilter === ACP_ANALYTICS_ALL_FIELDS_KEY) return
-    if (!distributionRows.some(r => r.fieldKey === fieldFilter)) {
-      setFieldFilter(ACP_ANALYTICS_ALL_FIELDS_KEY)
-    }
-  }, [distributionRows, fieldFilter])
+  const fieldFilter = acp.selectedFieldKey ?? ACP_ANALYTICS_ALL_FIELDS_KEY
 
-  const fieldOptions = useMemo(
-    () =>
-      [...distributionRows]
-        .filter(r => r.areaHa > 0)
-        .sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' })),
-    [distributionRows],
+  const handleFieldFilterChange = useCallback(
+    (fieldKey: string) => {
+      if (fieldKey === ACP_ANALYTICS_ALL_FIELDS_KEY) {
+        acp.bindMapFieldSelection(null)
+        return
+      }
+      acp.bindMapFieldSelection(fieldKey)
+    },
+    [acp],
   )
+
+  const fieldOptions = useMemo(() => {
+    const base = [...distributionRows]
+      .filter(r => r.areaHa > 0)
+      .sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }))
+    if (
+      acp.selectedFieldKey &&
+      !base.some(row => row.fieldKey === acp.selectedFieldKey)
+    ) {
+      const selectedRow =
+        acp.scopedFieldRows.find(row => row.fieldKey === acp.selectedFieldKey) ??
+        distributionRows.find(row => row.fieldKey === acp.selectedFieldKey)
+      if (selectedRow) base.unshift(selectedRow)
+    }
+    return base
+  }, [acp.scopedFieldRows, acp.selectedFieldKey, distributionRows])
 
   const scopedRows = useMemo(() => {
     if (fieldFilter === ACP_ANALYTICS_ALL_FIELDS_KEY) return distributionRows
-    const hit = distributionRows.find(r => r.fieldKey === fieldFilter)
+    const hit =
+      distributionRows.find(r => r.fieldKey === fieldFilter) ??
+      acp.scopedFieldRows.find(r => r.fieldKey === fieldFilter)
     return hit ? [hit] : []
-  }, [distributionRows, fieldFilter])
+  }, [acp.scopedFieldRows, distributionRows, fieldFilter])
 
   const sceneDates = useMemo(
     () => listAnalyticsSceneDates(distributionRows, acp.chartLabels),
@@ -182,7 +197,7 @@ export function AcpAnalyticsPanel({
         <AcpAnalyticsFieldSelect
           options={fieldOptions}
           value={fieldFilter}
-          onChange={setFieldFilter}
+          onChange={handleFieldFilterChange}
           aria-label="Select field for vegetation coverage"
         />
       ) : null}

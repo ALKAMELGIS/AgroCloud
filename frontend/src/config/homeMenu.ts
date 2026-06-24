@@ -23,6 +23,7 @@ export type MenuItem = {
 
 const GROUP_TITLE: Record<string, { en: string; ar: string }> = {
   dashboard: { en: 'Dashboard', ar: 'لوحة التحكم' },
+  application: { en: 'Application', ar: 'التطبيقات' },
   aiAgroCloud: { en: 'AI AgroCloud', ar: 'سحابة Agro الذكية' },
   satellite: { en: 'Satellite Imagery', ar: 'صور الأقمار الصناعية' },
   data: { en: 'Operations', ar: 'العمليات' },
@@ -34,6 +35,8 @@ const GROUP_TITLE: Record<string, { en: string; ar: string }> = {
 const LEAF_TITLE: Record<string, { en: string; ar: string }> = {
   developDashboard: { en: 'Develop Dashboard', ar: 'تطوير لوحة التحكم' },
   agroCloudDashboard: { en: 'Agro Cloud Dashboard', ar: 'لوحة Agro Cloud' },
+  agroCloudPlatform: { en: 'AgroCloud Platform', ar: 'منصة AgroCloud' },
+  agroCloudManagement: { en: 'AgroCloud Management', ar: 'إدارة AgroCloud' },
   aiAgroChat: { en: 'AI Agro-Chat', ar: 'محادثة Agro الذكية' },
   satelliteIntelligence: { en: 'Satellite Intelligence', ar: 'التحليل الفضائي الذكي' },
   gisMap: { en: 'GIS Map', ar: 'خريطة GIS' },
@@ -121,6 +124,7 @@ export const HOME_QUICK_TILES: MenuItem[] = [
 /** Visual order on the home grid (matches common hub layout). */
 export const HOME_TILE_ORDER = [
   'dashboard',
+  'application',
   'satellite',
   'data',
   'sensors',

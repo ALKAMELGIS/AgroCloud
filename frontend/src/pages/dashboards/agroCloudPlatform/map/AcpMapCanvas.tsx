@@ -7,13 +7,16 @@ import {
   sentinelHubWmsMinZoomForLatitude,
 } from '../../../../lib/sentinelHubWmsLayers'
 import { geometryBBox } from '../../../../lib/geoAiGeoJsonSpatial'
+import { getGisContentRowById } from '../../../../lib/gisContentPortalStore'
 import { useAcpPortalMapLayers } from '../hooks/useAcpPortalMapLayers'
 import { useAcpPlatform } from '../acpPlatformContext'
 import type { AcpMapLayerVisibility } from '../acpMapLayerVisibility'
 import {
   applyAcpPortalLayerVisibility,
+  ACP_SOURCE_PORTAL_PREFIX,
   syncAcpPortalMapLayers,
 } from './acpPortalMapLayers'
+import { syncAcpOgcRasterLayers } from './acpOgcRasterLayers'
 import {
   buildAcpWmsSpecCacheKey,
   buildAcpWmsPersistentRecord,
@@ -26,7 +29,13 @@ import {
   buildAcpWmsExtentTileSignature,
   resolveAcpWmsClipForMapView,
 } from '../acpWmsClip'
+import {
+  buildAcpWmsChunkLayerKey,
+  normalizeAcpWmsLayerId,
+  resolveAcpWmsLayerOpacity,
+} from '../acpWmsLayerCatalog'
 import { buildAcpAoiSyncSignature, emitAcpAoiSync } from '../acpAoiSyncBus'
+import { ACP_MAP_LAYER_COUNTRY_SCOPE } from '../acpCountryActionBus'
 import { geojsonCollectionSignature } from '../acpStructuresLoadPolicy'
 import {
   buildAcpWmsChunkTileEntries,
@@ -37,7 +46,11 @@ import {
 import type { LngLatBBox } from '../../../../lib/siMapViewport'
 import {
   debounceAcpMap,
+  isAcpMapStyleReady,
   restoreAcpMapHeavyOverlays,
+  safeAcpMapResize,
+  safeAcpRasterSetBounds,
+  safeAcpRasterSetTiles,
   suspendAcpMapHeavyOverlays,
   type AcpMapSuspendSnapshot,
 } from './acpMapInteraction'
@@ -47,8 +60,10 @@ import {
 } from './acpMapViewPublish'
 import { AcpAlertMarkersLayer } from './AcpAlertMarkersLayer'
 import { AcpWeatherAlertMarkersLayer } from './AcpWeatherAlertMarkersLayer'
+import { AcpWeatherIntelligenceChrome } from './AcpWeatherIntelligenceChrome'
 import { useAcpWeatherFieldData } from './AcpWeatherFieldProvider'
 import { patchAoiWeatherOnMap, applyAoiWeatherFillPaint } from './acpWeatherAoiPaint'
+import { useAcpMap3dCamera } from './useAcpMap3dCamera'
 import { syncAcpCountryBoundaryLayers } from './acpCountryBoundaries'
 import {
   ACP_BASEMAP_LAYER_CAP,
@@ -57,11 +72,13 @@ import {
 import {
   isAgroStructuresMapOutlineStructureType,
 } from '../../../../lib/agroStructuresPrimaryAoi'
+import { AGRO_CLOUD_MAP_MAX_PITCH } from '../../../../lib/agroCloudMapNavigation'
 import {
   ACP_DEFAULT_MAP_CENTER,
   ACP_INITIAL_MAP_ZOOM,
   ACP_FIELD_LOCATE_MIN_ZOOM,
   applyAcpMapFocusTarget,
+  resolveAcpDefaultMapFocusTarget,
   resolveAcpMapFocusTargetFromGeoJson,
   resolveAcpMapHomeTarget,
   resolveAcpFieldLocateCenter,
@@ -75,6 +92,9 @@ import {
 const ACP_SOURCE_AOI = 'acp-aoi'
 const ACP_LAYER_AOI_FILL = 'acp-aoi-fill'
 const ACP_LAYER_AOI_LINE = 'acp-aoi-line'
+const ACP_PORTAL_PICK_SOURCE = 'acp-portal-pick'
+const ACP_PORTAL_PICK_FILL = 'acp-portal-pick-fill'
+const ACP_PORTAL_PICK_LINE = 'acp-portal-pick-line'
 const ACP_WMS_PREFIX = 'acp-sentinel-wms-'
 const ACP_WMS_LEGACY_INDEX_CAP = 48
 const WMS_TARGET_OPACITY = 1
@@ -134,13 +154,12 @@ function readMapViewFromMap(map: MaplibreMap) {
 
 function resolveWmsClipFromMap(
   aoiMask: GeoJSON.FeatureCollection,
-  countryFilter: string,
   map: MaplibreMap,
   maxWmsLayers: number,
 ) {
   const view = readMapViewFromMap(map)
   return resolveAcpWmsClipForMapView(aoiMask, {
-    countryFilter,
+    countryFilter: ACP_MAP_LAYER_COUNTRY_SCOPE,
     zoom: view.zoom,
     bbox: view.bbox,
     center: view.center,
@@ -202,6 +221,7 @@ function firstOverlayLayerId(map: MaplibreMap): string | undefined {
 }
 
 function syncBasemapLayers(map: MaplibreMap, basemapId: string) {
+  if (!isAcpMapStyleReady(map)) return
   const specs = resolveAcpBasemapRasterLayers(basemapId)
   const beforeId = firstOverlayLayerId(map)
 
@@ -209,8 +229,7 @@ function syncBasemapLayers(map: MaplibreMap, basemapId: string) {
     const spec = specs[index]!
     const existing = map.getSource(spec.sourceId) as RasterSourceMutable | undefined
 
-    if (existing && typeof existing.setTiles === 'function') {
-      existing.setTiles(spec.tiles)
+    if (existing && safeAcpRasterSetTiles(existing, spec.tiles)) {
       if (map.getLayer(spec.layerId)) {
         map.setPaintProperty(spec.layerId, 'raster-opacity', spec.opacity)
       } else {
@@ -335,6 +354,39 @@ function resolveEntryRasterBounds(entry: AcpWmsTileEntry): [number, number, numb
   return boundsTupleFromBBox(padEntryBounds(raw))
 }
 
+function parseWmsIdFromChunkSourceId(sourceId: string): string | null {
+  const prefix = 'acp-sentinel-wms-c-'
+  if (!sourceId.startsWith(prefix)) return null
+  const body = sourceId.slice(prefix.length)
+  const split = body.split('__')
+  return split.length > 1 ? split[0] : null
+}
+
+function applyWmsLayerOpacities(
+  map: MaplibreMap,
+  activeLayers: string[],
+  primaryLayerId: string,
+  wmsOnMap: boolean,
+) {
+  const activeSet = new Set(activeLayers.map(normalizeAcpWmsLayerId))
+  const primary = normalizeAcpWmsLayerId(primaryLayerId)
+  for (const layer of map.getStyle()?.layers ?? []) {
+    if (!layer.id.startsWith(ACP_WMS_PREFIX) || !layer.id.endsWith('-raster')) continue
+    const sid = layerSourceId(layer)
+    const wmsId = parseWmsIdFromChunkSourceId(sid)
+    const active = wmsId ? activeSet.has(wmsId) : activeSet.has(primary)
+    const opacity = wmsOnMap
+      ? wmsId
+        ? resolveAcpWmsLayerOpacity(wmsId, primary, active)
+        : active
+          ? 1
+          : 0
+      : 0
+    map.setPaintProperty(layer.id, 'raster-opacity', opacity)
+    map.setLayoutProperty(layer.id, 'visibility', opacity > 0 ? 'visible' : 'none')
+  }
+}
+
 function syncWmsChunkLayers(
   map: MaplibreMap,
   entries: AcpWmsTileEntry[],
@@ -342,6 +394,7 @@ function syncWmsChunkLayers(
   urlByChunk: globalThis.Map<string, string>,
   minZoom: number,
 ) {
+  if (!isAcpMapStyleReady(map)) return
   const activeKeys = new Set(entries.map(entry => entry.layerKey))
 
   for (const entry of entries) {
@@ -355,12 +408,10 @@ function syncWmsChunkLayers(
 
     if (existing && typeof existing.setTiles === 'function') {
       if (urlChanged) {
-        existing.setTiles([spec.url])
+        if (!safeAcpRasterSetTiles(existing, [spec.url])) continue
         urlByChunk.set(entry.layerKey, spec.url)
       }
-      if (typeof existing.setBounds === 'function') {
-        existing.setBounds(boundsTuple ?? null)
-      }
+      safeAcpRasterSetBounds(existing, boundsTuple)
       if (!map.getLayer(lid)) {
         map.addLayer(
           {
@@ -524,13 +575,26 @@ export function AcpMapCanvas() {
   const mapRef = useRef<MaplibreMap | null>(null)
   const [mapInstance, setMapInstance] = useState<MaplibreMap | null>(null)
   const [mapInteractEpoch, setMapInteractEpoch] = useState(0)
+
+  useAcpMap3dCamera({
+    mapRef,
+    mapInstance,
+    mapShellRef,
+    basemapId: acp.config.basemapId,
+    viewMode3d: acp.mapViewMode3d,
+    setViewMode3d: acp.setMapViewMode3d,
+  })
+
   const { layers: portalLayers } = useAcpPortalMapLayers()
   const portalLayersSignature = useMemo(
     () =>
       portalLayers
-        .map(pl => `${pl.row.id}:${pl.geojson.features?.length ?? 0}:${pl.config.visible}`)
+        .map(pl => {
+          const filter = acp.portalLayerFilters[pl.row.id]
+          return `${pl.row.id}:${pl.isOgcRaster ? 'ogc' : (pl.geojson.features?.length ?? 0)}:${pl.config.visible}:${pl.config.opacity}:${pl.config.order}:${filter?.property ?? ''}:${filter?.value ?? ''}`
+        })
         .join('|'),
-    [portalLayers],
+    [portalLayers, acp.portalLayerFilters],
   )
   const applyPortalLayersRef = useRef<(map: MaplibreMap) => void>(() => {})
   const portalAppliedSigRef = useRef('')
@@ -553,8 +617,7 @@ export function AcpMapCanvas() {
 
 
   const handleAlertSelect = useCallback((fieldKey: string) => {
-    acpRef.current.setSelectedFieldKey(fieldKey)
-    acpRef.current.setScopeMode('selection')
+    acpRef.current.bindMapFieldSelection(fieldKey)
   }, [])
 
   const applyAoiLayers = useCallback((map: MaplibreMap) => {
@@ -562,7 +625,7 @@ export function AcpMapCanvas() {
     const mapOutline = resolveAcpMapDrawGeoJson(
       snap.aoiMask,
       snap.structureMapOutline,
-      snap.countryFilter,
+      ACP_MAP_LAYER_COUNTRY_SCOPE,
     )
     if (!mapOutline?.features?.length) return
     const selectedObjectId = snap.selectedFieldKey
@@ -606,22 +669,39 @@ export function AcpMapCanvas() {
 
   const applyPortalLayers = useCallback(
     (map: MaplibreMap) => {
-      if (portalAppliedSigRef.current === portalLayersSignature) return
-      portalAppliedSigRef.current = portalLayersSignature
       const snap = acpRef.current
+      const beforeLayerId = map.getLayer(ACP_LAYER_AOI_FILL) ? ACP_LAYER_AOI_FILL : undefined
+      const vectorLayers = portalLayers.filter(pl => !pl.isOgcRaster)
+      const ogcLayers = portalLayers.filter(pl => pl.isOgcRaster)
+
       syncAcpPortalMapLayers(
         map,
-        portalLayers.map(pl => ({
+        vectorLayers.map(pl => ({
           row: pl.row,
           geojson: pl.geojson as GeoJSON.FeatureCollection,
-          visible: pl.config.visible,
+          visible: pl.config.visible !== false,
+          config: pl.config,
+          attributeFilter: snap.portalLayerFilters[pl.row.id] ?? null,
         })),
         snap.layerVisibility,
         {
-          beforeLayerId: map.getLayer(ACP_LAYER_AOI_FILL) ? ACP_LAYER_AOI_FILL : undefined,
+          beforeLayerId,
           suppressAgroStructuresFill: snap.layerVisibility.aoi,
         },
       )
+
+      syncAcpOgcRasterLayers(
+        map,
+        ogcLayers.map(pl => ({
+          row: pl.row,
+          config: pl.config,
+          visible: pl.config.visible !== false,
+        })),
+        snap.layerVisibility,
+        { beforeLayerId },
+      )
+
+      portalAppliedSigRef.current = portalLayersSignature
     },
     [portalLayersSignature, portalLayers],
   )
@@ -629,6 +709,8 @@ export function AcpMapCanvas() {
   applyPortalLayersRef.current = applyPortalLayers
 
   const applyWmsLayers = useCallback((map: MaplibreMap, force = false) => {
+    if (!isAcpMapStyleReady(map) || map !== mapRef.current) return
+    try {
     const snap = acpRef.current
     if (!snap.aoiMask?.features.length) return
     if (!map.isStyleLoaded()) return
@@ -645,6 +727,11 @@ export function AcpMapCanvas() {
     }
 
     const wms = snap.wmsParams
+    const activeLayers = snap.activeWmsLayers.length
+      ? snap.activeWmsLayers.map(normalizeAcpWmsLayerId)
+      : [normalizeAcpWmsLayerId(wms.layerId)]
+    const layersSig = [...activeLayers].sort().join('+')
+
     if (wms.revision !== wmsRevisionRef.current) {
       wmsRevisionRef.current = wms.revision
       wmsKeyRef.current = ''
@@ -653,27 +740,11 @@ export function AcpMapCanvas() {
     // Extent definition query + full dataMask polygons per loaded AOI.
     const wmsClip = resolveWmsClipFromMap(
       snap.aoiMask,
-      snap.countryFilter,
       map,
       snap.config.maxWmsLayers,
     )
     if (!wmsClip.features.length) {
       setAllWmsRasterLayersDisplay(map, false)
-      setWmsLoadingRef.current(false)
-      return
-    }
-
-    const previewEntries = buildAcpWmsChunkTileEntries(
-      wmsClip,
-      wms.layerId,
-      wms.startDate,
-      wms.endDate,
-      wms.cloudCoverage,
-      snap.config.maxWmsLayers,
-    )
-    if (!previewEntries.length) {
-      setAllWmsRasterLayersDisplay(map, false)
-      setAoiFillSuppressed(map, false)
       setWmsLoadingRef.current(false)
       return
     }
@@ -688,7 +759,7 @@ export function AcpMapCanvas() {
     }
 
     const cacheKey = buildAcpWmsSpecCacheKey({
-      wmsLayer: wms.layerId,
+      wmsLayer: layersSig,
       startDate: wms.startDate,
       endDate: wms.endDate,
       cloudCoverage: wms.cloudCoverage,
@@ -698,6 +769,7 @@ export function AcpMapCanvas() {
     const needsSync = force || cacheKey !== wmsKeyRef.current || !wmsChunkLayersPresent(map)
     if (!needsSync) {
       setAllWmsRasterLayersDisplay(map, wmsOnMap)
+      applyWmsLayerOpacities(map, activeLayers, snap.selectedWmsLayer, wmsOnMap)
       setAoiFillSuppressed(map, wmsOnMap)
       return
     }
@@ -705,6 +777,19 @@ export function AcpMapCanvas() {
     wmsKeyRef.current = cacheKey
     const beforeId = resolveWmsBeforeLayerId(map)
     const urlByChunk = wmsUrlByChunkRef.current
+
+    const buildEntriesForLayer = (layerId: string) =>
+      buildAcpWmsChunkTileEntries(
+        wmsClip,
+        layerId,
+        wms.startDate,
+        wms.endDate,
+        wms.cloudCoverage,
+        snap.config.maxWmsLayers,
+      ).map(entry => ({
+        ...entry,
+        layerKey: buildAcpWmsChunkLayerKey(layerId, entry.layerKey),
+      }))
 
     const applyEntries = (entries: AcpWmsTileEntry[], showLoading: boolean) => {
       if (!entries.length) {
@@ -714,13 +799,16 @@ export function AcpMapCanvas() {
       }
       const minZoom = sentinelHubWmsMinZoomForLatitude(map.getCenter().lat)
       syncWmsChunkLayers(map, entries, beforeId, urlByChunk, minZoom)
+      applyWmsLayerOpacities(map, activeLayers, snap.selectedWmsLayer, wmsOnMap)
       if (showLoading) {
         setWmsLoadingRef.current(true)
-        map.once('idle', () => setWmsLoadingRef.current(false))
+        map.once('idle', () => {
+          if (map !== mapRef.current) return
+          setWmsLoadingRef.current(false)
+        })
       } else {
         setWmsLoadingRef.current(false)
       }
-      setAllWmsRasterLayersDisplay(map, wmsOnMap)
       setAoiFillSuppressed(map, wmsOnMap)
     }
 
@@ -742,7 +830,7 @@ export function AcpMapCanvas() {
       }
 
       setWmsLoadingRef.current(true)
-      const entries = previewEntries
+      const entries = activeLayers.flatMap(layerId => buildEntriesForLayer(layerId))
       if (wmsKeyRef.current !== requestKey) return
       if (!entries.length) {
         setWmsLoadingRef.current(false)
@@ -754,7 +842,7 @@ export function AcpMapCanvas() {
       persistAcpWmsSpecCache(
         buildAcpWmsPersistentRecord({
           cacheKey: requestKey,
-          wmsLayer: wms.layerId,
+          wmsLayer: layersSig,
           startDate: wms.startDate,
           endDate: wms.endDate,
           cloudCoverage: wms.cloudCoverage,
@@ -762,7 +850,12 @@ export function AcpMapCanvas() {
           entries,
         }),
       )
-    })()
+    })().catch(() => {
+      setWmsLoadingRef.current(false)
+    })
+    } catch {
+      setWmsLoadingRef.current(false)
+    }
   }, [])
 
   const applyWmsRef = useRef(applyWmsLayers)
@@ -792,7 +885,7 @@ export function AcpMapCanvas() {
       fadeDuration: 0,
       preserveDrawingBuffer: false,
       renderWorldCopies: false,
-      maxPitch: 0,
+      maxPitch: AGRO_CLOUD_MAP_MAX_PITCH,
       antialias: false,
     } as maplibregl.MapOptions & { preserveDrawingBuffer?: boolean })
 
@@ -811,11 +904,12 @@ export function AcpMapCanvas() {
       acpRef.current.setMapView({ bbox, zoom, center })
     }
 
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), 'bottom-right')
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right')
 
     const onLoad = () => {
       if (generation !== mapGenerationRef.current) return
       map.resize()
+      applyAcpMapFocusTarget(map, resolveAcpDefaultMapFocusTarget(), { animate: false })
       publishView()
       clearLegacyWmsRasterLayers(map)
       applyAoiLayersRef.current(map)
@@ -863,7 +957,6 @@ export function AcpMapCanvas() {
         const view = readMapViewFromMap(map)
         const wmsClip = resolveWmsClipFromMap(
           snap.aoiMask,
-          snap.countryFilter,
           map,
           snap.config.maxWmsLayers,
         )
@@ -889,26 +982,78 @@ export function AcpMapCanvas() {
       setMapInteractEpoch(epoch => epoch + 1)
     }, 320)
 
-    map.on('movestart', onMoveStart)
-    map.on('moveend', debouncedMoveEnd)
-    map.on('click', ACP_LAYER_AOI_FILL, e => {
+    const onAoiClick = (e: maplibregl.MapLayerMouseEvent) => {
+      if (generation !== mapGenerationRef.current) return
       const f = e.features?.[0]
       if (!f?.properties) return
       const objectId = String(f.properties.__acpFieldKey ?? f.properties.OBJECTID ?? '')
       if (!objectId) return
       const hit = acpRef.current.allResults.find(r => String(r.objectId) === objectId)
       if (hit?.fieldKey) handleAlertSelect(hit.fieldKey)
-    })
+    }
+
+    const onPortalLayerClick = (e: maplibregl.MapMouseEvent) => {
+      if (generation !== mapGenerationRef.current) return
+      const pickLayers = (map.getStyle()?.layers ?? [])
+        .map(layer => layer.id)
+        .filter(
+          id =>
+            id.startsWith(ACP_SOURCE_PORTAL_PREFIX) &&
+            (id.endsWith('-fill') || id.endsWith('-circle')),
+        )
+      if (!pickLayers.length) return
+      const hits = map.queryRenderedFeatures(e.point, { layers: pickLayers })
+      const f = hits[0]
+      if (!f?.layer?.id) return
+      const rowId = f.layer.id
+        .replace(ACP_SOURCE_PORTAL_PREFIX, '')
+        .replace(/-(fill|circle)$/, '')
+      const row = getGisContentRowById(rowId)
+      acpRef.current.setSelectedPortalFeature({
+        layerId: rowId,
+        layerTitle: row?.title ?? 'GIS layer',
+        feature: {
+          type: 'Feature',
+          geometry: f.geometry as GeoJSON.Geometry,
+          properties: { ...(f.properties ?? {}) },
+        },
+      })
+      const objectId = String(f.properties?.OBJECTID ?? f.properties?.objectid ?? '')
+      if (objectId) {
+        const fieldHit = acpRef.current.allResults.find(r => String(r.objectId) === objectId)
+        if (fieldHit?.fieldKey) handleAlertSelect(fieldHit.fieldKey)
+      }
+    }
+
+    map.on('movestart', onMoveStart)
+    map.on('moveend', debouncedMoveEnd)
+    map.on('click', ACP_LAYER_AOI_FILL, onAoiClick)
+    map.on('click', onPortalLayerClick)
 
     mapRef.current = map
     setMapInstance(map)
 
-    const ro = new ResizeObserver(() => map.resize())
+    const ro = new ResizeObserver(() => {
+      if (generation !== mapGenerationRef.current) return
+      safeAcpMapResize(mapRef.current)
+    })
     ro.observe(container)
 
     return () => {
+      mapGenerationRef.current += 1
+      mapInteractingRef.current = false
+      suspendSnapRef.current = null
       ro.disconnect()
-      map.remove()
+      map.off('load', onLoad)
+      map.off('movestart', onMoveStart)
+      map.off('moveend', debouncedMoveEnd)
+      map.off('click', ACP_LAYER_AOI_FILL, onAoiClick)
+      map.off('click', onPortalLayerClick)
+      try {
+        map.remove()
+      } catch {
+        /* already removed */
+      }
       mapRef.current = null
       setMapInstance(null)
     }
@@ -927,11 +1072,21 @@ export function AcpMapCanvas() {
       const target = resolveAcpMapFocusTargetFromGeoJson(geojson)
       if (target) applyAcpMapFocusTarget(map, target)
     }
+    acp.mapFlyToRef.current = (lng: number, lat: number, zoom?: number) => {
+      const map = mapRef.current
+      if (!map || !Number.isFinite(lng) || !Number.isFinite(lat)) return
+      map.flyTo({
+        center: [lng, lat],
+        zoom: Math.max(map.getZoom(), zoom ?? ACP_FIELD_LOCATE_MIN_ZOOM),
+        duration: 800,
+      })
+    }
     return () => {
       acp.mapHomeRef.current = null
       acp.mapFocusGeoJsonRef.current = null
+      acp.mapFlyToRef.current = null
     }
-  }, [acp.mapHomeRef, acp.mapFocusGeoJsonRef, acp.aoiMask, acp.structureMapOutline, mapInstance])
+  }, [acp.mapHomeRef, acp.mapFocusGeoJsonRef, acp.mapFlyToRef, acp.aoiMask, acp.structureMapOutline, mapInstance])
 
   useEffect(() => {
     const map = mapRef.current
@@ -949,7 +1104,7 @@ export function AcpMapCanvas() {
     const map = mapRef.current
     if (!map || !map.isStyleLoaded()) return
     applyAoiLayers(map)
-  }, [applyAoiLayers, acp.aoiMask, acp.structureMapOutline, acp.selectedFieldKey, acp.countryFilter, mapInstance])
+  }, [applyAoiLayers, acp.aoiMask, acp.structureMapOutline, acp.selectedFieldKey, mapInstance])
 
   useEffect(() => {
     const map = mapRef.current
@@ -958,7 +1113,7 @@ export function AcpMapCanvas() {
     const mapOutline = resolveAcpMapDrawGeoJson(
       snap.aoiMask,
       snap.structureMapOutline,
-      snap.countryFilter,
+      ACP_MAP_LAYER_COUNTRY_SCOPE,
     )
     if (!mapOutline?.features.length) {
       applyAoiWeatherFillPaint(map, snap.layerVisibility.weatherAlerts)
@@ -975,9 +1130,18 @@ export function AcpMapCanvas() {
     acp.layerVisibility.weatherAlerts,
     acp.aoiMask,
     acp.structureMapOutline,
-    acp.countryFilter,
     mapInstance,
   ])
+
+  useEffect(() => {
+    const map = mapRef.current
+    const snap = acpRef.current
+    if (!map || !map.isStyleLoaded() || !snap.countryFocusSeq) return
+    const aoi = snap.aoiMask
+    if (!aoi?.features.length) return
+    const target = resolveAcpMapHomeTarget(aoi, snap.countryFilter)
+    applyAcpMapFocusTarget(map, target, { animate: true })
+  }, [acp.countryFocusSeq, acp.countryFilter, mapInstance])
 
   useEffect(() => {
     portalLayerIdsRef.current = portalLayers.map(pl => pl.row.id)
@@ -987,7 +1151,7 @@ export function AcpMapCanvas() {
     const map = mapRef.current
     if (!map || !map.isStyleLoaded()) return
     applyWmsLayers(map, false)
-  }, [applyWmsLayers, acp.wmsParams, acp.layerVisibility.sentinelWms, acp.config.maxWmsLayers, mapInstance])
+  }, [applyWmsLayers, acp.wmsParams, acp.activeWmsLayers, acp.selectedWmsLayer, acp.layerVisibility.sentinelWms, acp.config.maxWmsLayers, mapInstance])
 
   const mapViewWmsExtentSig = useMemo(
     () => buildAcpWmsExtentTileSignature(acp.mapView.bbox, acp.mapView.zoom ?? 0),
@@ -1004,7 +1168,7 @@ export function AcpMapCanvas() {
   useEffect(() => {
     sessionClipRef.current = null
     wmsKeyRef.current = ''
-  }, [acp.aoiMask, acp.countryFilter, acp.wmsParams.revision])
+  }, [acp.aoiMask, acp.wmsParams.revision])
 
   useEffect(() => {
     const map = mapRef.current
@@ -1017,12 +1181,6 @@ export function AcpMapCanvas() {
       applyWmsRef.current(map, true)
     }
   }, [acp.aoiSyncRevision, mapInstance])
-
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map || !map.isStyleLoaded() || !acp.aoiMask?.features.length) return
-    applyWmsRef.current(map, true)
-  }, [acp.countryFilter, acp.aoiMask, acp.wmsParams.revision, mapInstance])
 
   useEffect(() => {
     const map = mapRef.current
@@ -1041,6 +1199,47 @@ export function AcpMapCanvas() {
       portalLayers.map(pl => pl.row.id),
     )
   }, [acp.layerVisibility, portalLayers, mapInstance])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.isStyleLoaded()) return
+    const feature = acp.selectedPortalFeature?.feature
+    const collection: GeoJSON.FeatureCollection = feature
+      ? { type: 'FeatureCollection', features: [feature] }
+      : { type: 'FeatureCollection', features: [] }
+    const beforeId = map.getLayer(ACP_LAYER_AOI_FILL) ? ACP_LAYER_AOI_FILL : undefined
+    const existing = map.getSource(ACP_PORTAL_PICK_SOURCE) as maplibregl.GeoJSONSource | undefined
+    if (existing?.setData) {
+      existing.setData(collection as GeoJSON.FeatureCollection)
+    } else if (feature) {
+      map.addSource(ACP_PORTAL_PICK_SOURCE, {
+        type: 'geojson',
+        data: collection as GeoJSON.FeatureCollection,
+      })
+      map.addLayer(
+        {
+          id: ACP_PORTAL_PICK_FILL,
+          type: 'fill',
+          source: ACP_PORTAL_PICK_SOURCE,
+          filter: ['match', ['geometry-type'], ['Polygon', 'MultiPolygon'], true, false],
+          paint: { 'fill-color': '#fbbf24', 'fill-opacity': 0.38 },
+        },
+        beforeId,
+      )
+      map.addLayer(
+        {
+          id: ACP_PORTAL_PICK_LINE,
+          type: 'line',
+          source: ACP_PORTAL_PICK_SOURCE,
+          paint: { 'line-color': '#f59e0b', 'line-width': 3 },
+        },
+        beforeId,
+      )
+    }
+    const vis = feature ? 'visible' : 'none'
+    if (map.getLayer(ACP_PORTAL_PICK_FILL)) map.setLayoutProperty(ACP_PORTAL_PICK_FILL, 'visibility', vis)
+    if (map.getLayer(ACP_PORTAL_PICK_LINE)) map.setLayoutProperty(ACP_PORTAL_PICK_LINE, 'visibility', vis)
+  }, [acp.selectedPortalFeature, mapInstance])
 
   useEffect(() => {
     const map = mapRef.current
@@ -1094,26 +1293,7 @@ export function AcpMapCanvas() {
         mapInteractEpoch={mapInteractEpoch}
         onSelect={handleAlertSelect}
       />
-      <div className="acp-map__scope">
-        <button
-          type="button"
-          className={acp.scopeMode === 'viewport' ? 'is-on' : ''}
-          onClick={() => acp.setScopeMode('viewport')}
-        >
-          Viewport
-        </button>
-        <button
-          type="button"
-          className={acp.scopeMode === 'global' ? 'is-on' : ''}
-          onClick={() => {
-            acp.setScopeMode('global')
-            acp.setSelectedFieldKey(null)
-            acp.mapHomeRef.current?.()
-          }}
-        >
-          Global
-        </button>
-      </div>
+      <AcpWeatherIntelligenceChrome map={mapInstance} mapShellRef={mapShellRef} />
     </div>
   )
 }

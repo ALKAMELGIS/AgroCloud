@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { extractCropAlertFieldsFromMask } from '../../../lib/siCropAlertEngine'
 import {
+  ACP_DEFAULT_MAP_BOUNDS,
   ACP_DEFAULT_MAP_CENTER,
+  ACP_DEFAULT_MAP_MAX_ZOOM,
   ACP_DEFAULT_MAP_ZOOM,
-  ACP_GLOBAL_EXTENT_MAX_DEG,
-  ACP_GLOBAL_FITBOUNDS_MAX_ZOOM,
   ACP_FITBOUNDS_MIN_ZOOM,
   buildFieldTableRows,
   portfolioAreaPct,
+  resolveAcpDefaultMapFocusTarget,
   resolveAcpMapHomeTarget,
   resolveAcpFieldLocateCenter,
   listAnalyticsSceneDates,
@@ -18,7 +19,7 @@ import {
 } from './acpMapSpatial'
 
 describe('resolveAcpMapHomeTarget', () => {
-  it('fits full global portfolio when AOI spans continents', () => {
+  it('uses Africa–Europe default framing for global home', () => {
     const fc: GeoJSON.FeatureCollection = {
       type: 'FeatureCollection',
       features: [
@@ -41,11 +42,10 @@ describe('resolveAcpMapHomeTarget', () => {
       ],
     }
     const target = resolveAcpMapHomeTarget(fc, 'all')
-    expect(target.mode).toBe('bounds')
+    expect(target).toEqual(resolveAcpDefaultMapFocusTarget())
     if (target.mode === 'bounds') {
-      const [[west], [east]] = target.bounds
-      expect(east - west).toBeGreaterThan(ACP_GLOBAL_EXTENT_MAX_DEG)
-      expect(target.maxZoom).toBe(ACP_GLOBAL_FITBOUNDS_MAX_ZOOM)
+      expect(target.bounds).toEqual(ACP_DEFAULT_MAP_BOUNDS)
+      expect(target.maxZoom).toBe(ACP_DEFAULT_MAP_MAX_ZOOM)
       expect(target.minZoom).toBeNull()
     }
   })
@@ -81,13 +81,12 @@ describe('resolveAcpMapHomeTarget', () => {
     }
   })
 
-  it('uses continental default center when no features', () => {
+  it('uses continental default bounds when no features', () => {
     const target = resolveAcpMapHomeTarget({ type: 'FeatureCollection', features: [] }, 'all')
-    expect(target).toEqual({
-      mode: 'center',
-      center: ACP_DEFAULT_MAP_CENTER,
-      zoom: ACP_DEFAULT_MAP_ZOOM,
-    })
+    expect(target).toEqual(resolveAcpDefaultMapFocusTarget())
+    if (target.mode === 'bounds') {
+      expect(target.bounds).toEqual(ACP_DEFAULT_MAP_BOUNDS)
+    }
   })
 })
 

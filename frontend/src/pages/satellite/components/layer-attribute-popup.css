@@ -346,5 +346,37 @@
 @media (max-width: 480px) {
   .gis-map-popup.gis-map-popup--arcgis {
     width: calc(100vw - 16px);
+    max-height: min(88dvh, calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px));
+  }
+
+  .gis-map-popup--arcgis .gis-map-popup-header {
+    padding: 12px 14px;
+  }
+
+  .gis-map-popup--arcgis .gis-map-popup-title {
+    font-size: 15px;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .gis-map-popup--arcgis .gis-map-popup-body {
+    max-height: calc(var(--gis-popup-max-h) - 140px);
+  }
+
+  .lap-body--arcgis .gis-map-popup-row {
+    grid-template-columns: 1fr;
+  }
+
+  .lap-body--arcgis .gis-map-popup-k,
+  .lap-body--arcgis .gis-map-popup-v {
+    padding: 10px 12px;
+  }
+
+  .lap-body--arcgis .gis-map-popup-v {
+    border-top: 1px solid var(--arcgis-popup-line);
+    text-align: left;
   }
 }

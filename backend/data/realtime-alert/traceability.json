@@ -1,0 +1,34 @@
+{
+  "rows": [
+    {
+      "id": "tr-001",
+      "batchId": "BATCH-2026-0617-A",
+      "fieldName": "Pivot-12",
+      "zone": "A",
+      "action": "Irrigation increase",
+      "status": "completed",
+      "recordedAt": "2026-06-17T08:30:00Z",
+      "operator": "Field Ops"
+    },
+    {
+      "id": "tr-002",
+      "batchId": "BATCH-2026-0616-B",
+      "fieldName": "Plot-07",
+      "zone": "B",
+      "action": "Scouting — pest trap check",
+      "status": "in_progress",
+      "recordedAt": "2026-06-16T14:15:00Z",
+      "operator": "Scout Team"
+    },
+    {
+      "id": "tr-003",
+      "batchId": "BATCH-2026-0615-C",
+      "fieldName": "Greenhouse-03",
+      "zone": "C",
+      "action": "Fertigation recipe adjust",
+      "status": "pending",
+      "recordedAt": "2026-06-15T09:00:00Z",
+      "operator": "Agronomist"
+    }
+  ]
+}

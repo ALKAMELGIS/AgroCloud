@@ -108,3 +108,52 @@ export function debounceAcpMap<T extends (...args: never[]) => void>(
     }, waitMs)
   }
 }
+
+type RasterSourceMutable = {
+  setTiles?: (tiles: string[]) => void
+  setBounds?: (bounds: [number, number, number, number] | null) => void
+}
+
+/** True when the map style is still mounted (safe for layer/source mutations). */
+export function isAcpMapStyleReady(map: MaplibreMap | null | undefined): map is MaplibreMap {
+  if (!map) return false
+  try {
+    return Boolean(map.getStyle())
+  } catch {
+    return false
+  }
+}
+
+export function safeAcpMapResize(map: MaplibreMap | null | undefined): void {
+  if (!isAcpMapStyleReady(map)) return
+  try {
+    map.resize()
+  } catch {
+    /* map removed mid-resize */
+  }
+}
+
+export function safeAcpRasterSetTiles(
+  source: RasterSourceMutable | undefined,
+  tiles: string[],
+): boolean {
+  if (!source || typeof source.setTiles !== 'function') return false
+  try {
+    source.setTiles(tiles)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function safeAcpRasterSetBounds(
+  source: RasterSourceMutable | undefined,
+  bounds: [number, number, number, number] | null | undefined,
+): void {
+  if (!source || typeof source.setBounds !== 'function') return
+  try {
+    source.setBounds(bounds ?? null)
+  } catch {
+    /* source detached */
+  }
+}

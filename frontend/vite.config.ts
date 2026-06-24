@@ -12,6 +12,16 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { appConfig } from './config/app'
 import { API_PORT, VITE_PORT, WS_PORT } from '../scripts/devPorts.mjs'
 
+/** Root `/` for custom domains; default `/AgroCloud/` for GitHub Pages. */
+function resolveBuildBasePath(): string {
+  const raw = String(process.env.VITE_BASE_PATH || process.env.AGRO_BASE_PATH || '').trim()
+  if (raw === '/') return '/'
+  if (raw.length > 0) return raw.endsWith('/') ? raw : `${raw}/`
+  return appConfig.basePath
+}
+
+const buildBasePath = resolveBuildBasePath()
+
 const gzipAsync = promisify(gzip)
 const brotliAsync = promisify(brotliCompress)
 
@@ -107,7 +117,7 @@ function buildCompressionPlugin(): Plugin {
 
 /** Vite serves `base` with a trailing slash; `/AgroCloud` (no slash) returns 404. Browsers/bookmarks often omit it. */
 function agroCloudBaseTrailingSlashRedirect(): Plugin {
-  const baseWithSlash = appConfig.basePath
+  const baseWithSlash = buildBasePath === '/' ? '/' : buildBasePath
   const noTrailingSlash = baseWithSlash.replace(/\/$/, '')
   const redirect: (req: IncomingMessage, res: ServerResponse, next: () => void) => void = (req, res, next) => {
     const raw = req.url ?? ''
@@ -151,9 +161,12 @@ function pagesBuildStamp(): Plugin {
   }
 }
 
-/** Production HTML: canonical URL for GitHub Pages (see appConfig.productionPublicUrl). */
+/** Production HTML: canonical URL (custom domain or GitHub Pages). */
 function productionCanonicalLink(): Plugin {
-  const href = appConfig.productionPublicUrl
+  const href =
+    String(process.env.VITE_APP_CANONICAL_URL || process.env.APP_ORIGIN || appConfig.productionPublicUrl)
+      .trim()
+      .replace(/\/$/, '') + '/'
   return {
     name: 'agri-production-canonical',
     apply: 'build',
@@ -169,7 +182,7 @@ function productionCanonicalLink(): Plugin {
  * Normalize to `.../AgroCloud/#/` before the app bundle runs.
  */
 function ghPagesHashAndSlashRedirect(): Plugin {
-  const base = appConfig.basePath
+  const base = buildBasePath
   const withSlash = base.endsWith('/') ? base : `${base}/`
   const noSlash = withSlash.replace(/\/$/, '')
   const marker = 'data-agro-gh-pages-redirect'
@@ -185,7 +198,7 @@ function ghPagesHashAndSlashRedirect(): Plugin {
 }
 
 export default defineConfig({
-  base: appConfig.basePath,
+  base: buildBasePath,
   /** Load `VITE_*` from repo-root `.env` (shared with Node backend). */
   envDir: resolve(__dirname, '..'),
   resolve: {
@@ -252,30 +265,6 @@ export default defineConfig({
               skipWaiting: true,
               runtimeCaching: [
                 {
-                  urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-                  handler: 'CacheFirst',
-                  options: {
-                    cacheName: 'agro-google-fonts-css',
-                    expiration: { maxEntries: 12, maxAgeSeconds: 60 * 60 * 24 * 365 },
-                  },
-                },
-                {
-                  urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-                  handler: 'CacheFirst',
-                  options: {
-                    cacheName: 'agro-google-fonts-files',
-                    expiration: { maxEntries: 24, maxAgeSeconds: 60 * 60 * 24 * 365 },
-                  },
-                },
-                {
-                  urlPattern: /^https:\/\/cdnjs\.cloudflare\.com\/.*/i,
-                  handler: 'StaleWhileRevalidate',
-                  options: {
-                    cacheName: 'agro-cdn-cdnjs',
-                    expiration: { maxEntries: 16, maxAgeSeconds: 60 * 60 * 24 * 30 },
-                  },
-                },
-                {
                   urlPattern: /^https:\/\/api\.open-meteo\.com\/.*/i,
                   handler: 'StaleWhileRevalidate',
                   options: {
@@ -309,6 +298,7 @@ export default defineConfig({
               'agrocloud-logo-core.png',
               'agrocloud-mark-leaves.png',
               'elite-agro-logo-white.png',
+              'agrocloud-app-icon.svg',
               'favicon.png',
               'favicon-16x16.png',
               'favicon-32x32.png',
@@ -317,26 +307,31 @@ export default defineConfig({
               'apple-touch-icon-167.png',
               'pwa-192x192.png',
               'pwa-512x512.png',
-              'maskable-512x512.png',
             ],
             manifest: {
-              id: appConfig.basePath,
+              id: buildBasePath,
               name: 'AgroCloud — Smart Agriculture & GIS',
               short_name: 'AgroCloud',
               description:
                 'Elite AgroCloud: smart agriculture, satellite intelligence, GIS maps, and field operations.',
-              start_url: appConfig.basePath,
-              scope: appConfig.basePath,
+              start_url: buildBasePath,
+              scope: buildBasePath,
               display: 'standalone',
               display_override: ['standalone', 'minimal-ui', 'browser'],
               orientation: 'any',
-              background_color: '#f0fdf4',
+              background_color: '#ffffff',
               theme_color: '#047857',
               lang: 'en',
               dir: 'ltr',
               categories: ['business', 'productivity', 'utilities'],
               prefer_related_applications: false,
               icons: [
+                {
+                  src: 'agrocloud-app-icon.svg',
+                  sizes: 'any',
+                  type: 'image/svg+xml',
+                  purpose: 'any',
+                },
                 {
                   src: 'pwa-192x192.png',
                   sizes: '192x192',
@@ -367,30 +362,24 @@ export default defineConfig({
                   type: 'image/png',
                   purpose: 'any',
                 },
-                {
-                  src: 'maskable-512x512.png',
-                  sizes: '512x512',
-                  type: 'image/png',
-                  purpose: 'maskable',
-                },
               ],
               shortcuts: [
                 {
                   name: 'Home',
                   short_name: 'Home',
-                  url: `${appConfig.basePath}#/`,
+                  url: `${buildBasePath === '/' ? '/' : buildBasePath}#/`,
                   icons: [{ src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' }],
                 },
                 {
                   name: 'Satellite Intelligence',
                   short_name: 'Satellite',
-                  url: `${appConfig.basePath}#/satellite/indices`,
+                  url: `${buildBasePath === '/' ? '/' : buildBasePath}#/satellite/indices`,
                   icons: [{ src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' }],
                 },
                 {
                   name: 'GIS Map',
                   short_name: 'GIS',
-                  url: `${appConfig.basePath}#/satellite/gis`,
+                  url: `${buildBasePath === '/' ? '/' : buildBasePath}#/satellite/gis`,
                   icons: [{ src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' }],
                 },
               ],

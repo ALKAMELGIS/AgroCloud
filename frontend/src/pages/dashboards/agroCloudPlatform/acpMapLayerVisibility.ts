@@ -25,8 +25,9 @@ export const DEFAULT_ACP_MAP_LAYER_VISIBILITY: AcpMapLayerVisibility = {
   portal: {},
 }
 
-export function isAcpWeatherFeedActive(visibility: Pick<AcpMapLayerVisibility, 'liveAlertTicker' | 'weatherAlerts'>): boolean {
-  return visibility.liveAlertTicker || visibility.weatherAlerts
+export function isAcpWeatherFeedActive(_visibility: Pick<AcpMapLayerVisibility, 'liveAlertTicker' | 'weatherAlerts'>): boolean {
+  // Live Alert ticker bar is always on — keep weather feed active for it.
+  return true
 }
 
 export function isAcpPortalLayerVisible(visibility: AcpMapLayerVisibility, layerId: string): boolean {
@@ -41,7 +42,7 @@ export function buildAcpLayerVisibilityFromDefaults(
     aoi: defaults.aoi,
     sentinelWms: defaults.sentinelWms,
     liveChas: defaults.liveChas,
-    liveAlertTicker: defaults.liveAlertTicker,
+    liveAlertTicker: true,
     weatherAlerts: defaults.weatherAlerts,
     portal: { ...portalDefaults },
   }

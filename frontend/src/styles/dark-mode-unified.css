@@ -59,6 +59,43 @@ html[data-theme='light'] .page i[class*='fa-']:not(.app-icon):not(.icon) {
   color: currentColor;
 }
 
+/* Light: enforce dark readable typography across app tools and pages */
+html[data-theme='light'] .app-layout,
+html[data-theme='light'] .page,
+html[data-theme='light'] .gis-page-padding {
+  color: var(--ds-color-text);
+}
+
+html[data-theme='light'] .app-layout h1,
+html[data-theme='light'] .app-layout h2,
+html[data-theme='light'] .app-layout h3,
+html[data-theme='light'] .app-layout h4,
+html[data-theme='light'] .page h1,
+html[data-theme='light'] .page h2,
+html[data-theme='light'] .page h3,
+html[data-theme='light'] .page h4,
+html[data-theme='light'] .ds-modal-title,
+html[data-theme='light'] .page-title {
+  color: #0f172a;
+}
+
+html[data-theme='light'] .ds-card,
+html[data-theme='light'] .card,
+html[data-theme='light'] .ec-card {
+  color: var(--ds-color-text);
+}
+
+html[data-theme='light'] input,
+html[data-theme='light'] select,
+html[data-theme='light'] textarea {
+  color: var(--ds-color-text);
+}
+
+html[data-theme='light'] label,
+html[data-theme='light'] .ds-label {
+  color: var(--ds-color-text);
+}
+
 /* ========== Dark ========== */
 
 @media (prefers-color-scheme: dark) {

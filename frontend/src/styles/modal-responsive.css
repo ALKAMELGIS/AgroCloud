@@ -1,0 +1,408 @@
+/**
+ * Global responsive modal / popup system.
+ * Centers dialogs in the viewport, constrains size, enables internal scroll,
+ * and enlarges touch targets on phones and tablets.
+ */
+
+:root {
+  --modal-overlay-pad: clamp(12px, 3vw, 20px);
+  --modal-safe-top: env(safe-area-inset-top, 0px);
+  --modal-safe-right: env(safe-area-inset-right, 0px);
+  --modal-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --modal-safe-left: env(safe-area-inset-left, 0px);
+  --modal-max-height: min(
+    88dvh,
+    calc(
+      100dvh - var(--modal-overlay-pad) * 2 - var(--modal-safe-top) - var(--modal-safe-bottom)
+    )
+  );
+  --modal-touch-min: 44px;
+  --modal-input-font: 16px;
+}
+
+/* ── Overlay shells: safe padding + scrollable backdrop when content is tall ── */
+
+.ds-modal-overlay,
+.gis-modal-overlay,
+.app-dialog-overlay,
+.sensor-modal-backdrop,
+.report-modal-overlay,
+.report-modal-overlay.open {
+  box-sizing: border-box;
+  padding:
+    max(var(--modal-overlay-pad), var(--modal-safe-top))
+    max(var(--modal-overlay-pad), var(--modal-safe-right))
+    max(var(--modal-overlay-pad), var(--modal-safe-bottom))
+    max(var(--modal-overlay-pad), var(--modal-safe-left));
+  align-items: center;
+  justify-content: center;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.develop-dashboard-root .ddb-calc-modal-backdrop {
+  box-sizing: border-box;
+  padding:
+    max(var(--modal-overlay-pad), var(--modal-safe-top))
+    max(var(--modal-overlay-pad), var(--modal-safe-right))
+    max(var(--modal-overlay-pad), var(--modal-safe-bottom))
+    max(var(--modal-overlay-pad), var(--modal-safe-left));
+  place-items: center;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Modal panels: flex column, bounded height ── */
+
+.ds-modal,
+.app-dialog-modal {
+  width: min(560px, calc(100vw - var(--modal-overlay-pad) * 2 - var(--modal-safe-left) - var(--modal-safe-right)));
+  max-width: 100%;
+  max-height: var(--modal-max-height);
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.gis-modal {
+  width: min(760px, calc(100vw - var(--modal-overlay-pad) * 2 - var(--modal-safe-left) - var(--modal-safe-right)));
+  max-width: 100%;
+  max-height: var(--modal-max-height);
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.gis-modal.gis-modal-compact,
+.gis-modal.gis-modal-compact.gis-modal-docs-wide,
+.ddb-add-source-modal.gis-modal-compact {
+  width: min(560px, calc(100vw - var(--modal-overlay-pad) * 2 - var(--modal-safe-left) - var(--modal-safe-right)));
+  max-width: 100%;
+  max-height: var(--modal-max-height);
+}
+
+.gis-modal.gis-modal-styles {
+  width: min(920px, calc(100vw - var(--modal-overlay-pad) * 2 - var(--modal-safe-left) - var(--modal-safe-right)));
+  max-width: 100%;
+  max-height: var(--modal-max-height);
+}
+
+.sensor-modal,
+.develop-dashboard-root .ddb-calc-modal,
+.report-modal-container {
+  width: min(680px, calc(100vw - var(--modal-overlay-pad) * 2 - var(--modal-safe-left) - var(--modal-safe-right)));
+  max-width: 100%;
+  max-height: var(--modal-max-height);
+  margin: auto;
+  box-sizing: border-box;
+}
+
+.develop-dashboard-root .ddb-calc-modal {
+  width: min(560px, calc(100vw - var(--modal-overlay-pad) * 2 - var(--modal-safe-left) - var(--modal-safe-right)));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Scrollable body regions ── */
+
+.ds-modal-body,
+.app-dialog-modal .ds-modal-body,
+.gis-modal-body,
+.gis-modal-compact .gis-modal-body,
+.gis-modal.gis-modal-styles .gis-modal-body,
+.gis-modal-docs .gis-modal-body--docs,
+.develop-dashboard-root .ddb-calc-modal__body,
+.report-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+
+.ds-modal-header,
+.ds-modal-actions,
+.gis-modal-header,
+.gis-modal-footer,
+.gis-modal-compact-title,
+.gis-modal-compact-tabs,
+.gis-modal-tabs,
+.gis-modal-actions,
+.gis-style-footer,
+.develop-dashboard-root .ddb-calc-modal__head,
+.develop-dashboard-root .ddb-calc-modal__foot,
+.report-modal-header,
+.report-modal-footer {
+  flex-shrink: 0;
+}
+
+/* ── Touch-friendly controls inside modals ── */
+
+.ds-modal-header .ds-btn,
+.gis-modal-close-btn,
+.gis-icon-btn,
+.gis-modal-footer .gis-btn,
+.gis-modal-footer .gis-link-btn,
+.gis-modal-actions .gis-btn,
+.gis-compact-tab,
+.app-dialog-btn,
+.develop-dashboard-root .ddb-calc-modal__close,
+.develop-dashboard-root .ddb-calc-modal__apply,
+.sensor-modal-footer button,
+.report-modal-close-btn {
+  min-height: var(--modal-touch-min);
+}
+
+.ds-modal-header .ds-btn,
+.gis-modal-close-btn,
+.gis-icon-btn,
+.develop-dashboard-root .ddb-calc-modal__close,
+.report-modal-close-btn {
+  min-width: var(--modal-touch-min);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ds-input,
+.gis-input,
+.gis-select,
+.gis-modal-compact .gis-input,
+.gis-modal-compact .gis-select,
+.app-dialog-input,
+.develop-dashboard-root .ddb-calc-modal__expr,
+.sensor-modal-body input,
+.sensor-modal-body select,
+.sensor-modal-body textarea {
+  min-height: var(--modal-touch-min);
+  box-sizing: border-box;
+}
+
+.gis-modal-compact .gis-btn,
+.gis-modal-footer .gis-btn-primary-full,
+.gis-modal-footer .gis-btn-outline,
+.gis-upload-cloud-sources__btn {
+  min-height: var(--modal-touch-min);
+}
+
+/* Prevent iOS zoom-on-focus for modal fields */
+@media (max-width: 767px) {
+  .ds-modal .ds-input,
+  .gis-modal .gis-input,
+  .gis-modal .gis-select,
+  .gis-modal .gis-textarea,
+  .app-dialog-input,
+  .sensor-modal-body input,
+  .sensor-modal-body select,
+  .sensor-modal-body textarea,
+  .develop-dashboard-root .ddb-calc-modal__expr {
+    font-size: var(--modal-input-font);
+  }
+}
+
+/* ── GIS modal tabs & cloud pickers on narrow screens ── */
+
+@media (max-width: 640px) {
+  .gis-modal-compact-tabs,
+  .gis-modal-tabs {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .gis-compact-tab {
+    flex: 1 1 calc(50% - 6px);
+    min-height: var(--modal-touch-min);
+    justify-content: center;
+  }
+
+  .gis-upload-cloud-sources,
+  .gis-upload-cloud-sources--four,
+  .gis-modal-overlay .gis-upload-cloud-sources,
+  .gis-modal-overlay .gis-upload-cloud-sources--four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .gis-upload-cloud-sources__btn,
+  .gis-modal-overlay .gis-upload-cloud-sources__btn {
+    min-height: calc(var(--modal-touch-min) + 12px);
+    font-size: 11px;
+  }
+
+  .si-get-data-scroll {
+    max-height: min(42dvh, 360px);
+  }
+
+  .gis-map-popup.gis-map-popup--arcgis,
+  .gis-map-popup--arcgis.maximized {
+    width: calc(100vw - var(--modal-overlay-pad) * 2 - var(--modal-safe-left) - var(--modal-safe-right));
+    max-height: var(--modal-max-height);
+  }
+
+  .gis-map-popup--arcgis .gis-map-popup-headbtn,
+  .gis-map-popup-footer-btn {
+    width: var(--modal-touch-min);
+    height: var(--modal-touch-min);
+  }
+
+  .gis-map-popup--arcgis .gis-map-popup-toolbtn {
+    min-height: var(--modal-touch-min);
+    padding-inline: 14px;
+  }
+
+  .app-dialog-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .app-dialog-actions .app-dialog-btn {
+    width: 100%;
+  }
+
+  .ds-modal-actions {
+    flex-wrap: wrap;
+    justify-content: stretch;
+    gap: 8px;
+  }
+
+  .ds-modal-actions > * {
+    flex: 1 1 auto;
+    min-width: min(100%, 140px);
+  }
+}
+
+/* ── Phone typography & spacing ── */
+
+@media (max-width: 480px) {
+  :root {
+    --modal-overlay-pad: 10px;
+    --modal-max-height: min(
+      92dvh,
+      calc(
+        100dvh - var(--modal-overlay-pad) * 2 - var(--modal-safe-top) - var(--modal-safe-bottom)
+      )
+    );
+  }
+
+  .ds-modal-header {
+    height: auto;
+    min-height: var(--modal-touch-min);
+    padding: 10px 12px;
+  }
+
+  .ds-modal-title,
+  .app-dialog-title {
+    font-size: 15px;
+    line-height: 1.3;
+    padding-inline-end: 8px;
+  }
+
+  .ds-modal-body,
+  .app-dialog-modal .ds-modal-body {
+    padding: 12px;
+  }
+
+  .ds-modal-actions,
+  .app-dialog-actions {
+    padding: 10px 12px;
+  }
+
+  .gis-modal.gis-modal-compact .gis-modal-header {
+    height: auto;
+    min-height: var(--modal-touch-min);
+    padding: 10px 12px;
+  }
+
+  .gis-modal.gis-modal-compact .gis-modal-title {
+    font-size: 15px;
+    line-height: 1.3;
+  }
+
+  .gis-modal.gis-modal-compact .gis-modal-body,
+  .gis-modal-compact .gis-modal-body {
+    padding: 12px;
+  }
+
+  .gis-modal-footer {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .report-modal-overlay {
+    padding:
+      max(10px, var(--modal-safe-top))
+      max(10px, var(--modal-safe-right))
+      max(10px, var(--modal-safe-bottom))
+      max(10px, var(--modal-safe-left));
+  }
+
+  .report-modal-container {
+    width: 100%;
+    height: auto;
+    max-height: var(--modal-max-height);
+    border-radius: 18px;
+  }
+}
+
+/* ── ACP map weather popups ── */
+
+@media (max-width: 640px) {
+  .acp-weather-popup {
+    width: min(calc(100vw - 20px), 320px);
+    max-height: min(60dvh, 360px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 12px 14px;
+    font-size: 12px;
+  }
+
+  .acp-weather-popup__close {
+    min-width: var(--modal-touch-min);
+    min-height: var(--modal-touch-min);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .acp-weather-popup__header strong {
+    font-size: 14px;
+  }
+}
+
+/* ── Landscape phones: favor vertical space for scroll ── */
+
+@media (max-height: 520px) and (orientation: landscape) {
+  :root {
+    --modal-max-height: min(
+      94dvh,
+      calc(
+        100dvh - var(--modal-overlay-pad) * 2 - var(--modal-safe-top) - var(--modal-safe-bottom)
+      )
+    );
+  }
+
+  .gis-modal-overlay,
+  .ds-modal-overlay {
+    align-items: flex-start;
+    padding-block: max(8px, var(--modal-safe-top)) max(8px, var(--modal-safe-bottom));
+  }
+
+  .ds-modal,
+  .gis-modal,
+  .gis-modal.gis-modal-compact,
+  .app-dialog-modal {
+    margin-block: auto;
+  }
+}

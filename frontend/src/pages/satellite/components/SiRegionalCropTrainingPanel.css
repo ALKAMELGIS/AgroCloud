@@ -1,0 +1,317 @@
+.si-regional-train {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 12px 12px;
+}
+
+.si-regional-train__hint {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.45;
+  color: rgba(203, 213, 225, 0.88);
+}
+
+.si-regional-train__section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.si-regional-train__label {
+  margin: 0;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.si-regional-train__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.si-regional-train__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(226, 232, 240, 0.82);
+  font-size: 9px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.si-regional-train__chip.is-on {
+  border-color: rgba(34, 197, 94, 0.45);
+  background: rgba(34, 197, 94, 0.12);
+  color: rgba(240, 253, 244, 0.95);
+}
+
+.si-regional-train__swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.si-regional-train__swatch--lg {
+  width: 12px;
+  height: 12px;
+}
+
+.si-regional-train__active-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.si-regional-train__select {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(15, 23, 42, 0.65);
+  color: rgba(248, 250, 252, 0.92);
+  font-size: 11px;
+}
+
+.si-regional-train__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.si-regional-train__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.si-regional-train__btn--primary {
+  background: linear-gradient(135deg, #15803d, #22c55e);
+  color: #f0fdf4;
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.si-regional-train__btn--ghost {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.si-regional-train__btn--ghost.is-active {
+  border-color: rgba(56, 189, 248, 0.5);
+  background: rgba(56, 189, 248, 0.12);
+}
+
+.si-regional-train__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.si-regional-train__meta {
+  margin: 0;
+  font-size: 9px;
+  color: rgba(148, 163, 184, 0.95);
+}
+
+.si-regional-train__empty {
+  margin: 0;
+  font-size: 9px;
+  color: rgba(148, 163, 184, 0.8);
+}
+
+.si-regional-train__samples,
+.si-regional-train__assignments {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 120px;
+  overflow: auto;
+}
+
+.si-regional-train__samples li,
+.si-regional-train__assignments li {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 9px;
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.si-regional-train__assignments li {
+  grid-template-columns: auto 1fr auto;
+}
+
+.si-regional-train__sample-crop {
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.si-regional-train__sample-scenes {
+  font-size: 8px;
+  color: rgba(100, 116, 139, 0.95);
+}
+
+.si-regional-train__sample-del {
+  border: none;
+  background: transparent;
+  color: rgba(248, 113, 113, 0.85);
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.si-regional-train__season {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 8px;
+  color: rgba(148, 163, 184, 0.88);
+}
+
+.si-regional-train__overlay-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  color: rgba(203, 213, 225, 0.9);
+  cursor: pointer;
+}
+
+.si-regional-train__status {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  font-size: 9px;
+  color: rgba(220, 252, 231, 0.95);
+}
+
+.si-regional-train__conf {
+  font-size: 8px;
+  color: rgba(148, 163, 184, 0.95);
+}
+
+.si-regional-train__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.si-regional-train__legend-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 8px;
+  color: rgba(203, 213, 225, 0.9);
+}
+
+.si-crop-class__modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 8px 10px 0;
+}
+
+.si-crop-class__mode {
+  padding: 7px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(203, 213, 225, 0.88);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.si-crop-class__mode.is-active {
+  border-color: rgba(34, 197, 94, 0.45);
+  background: rgba(34, 197, 94, 0.12);
+  color: rgba(240, 253, 244, 0.96);
+}
+
+/* Light theme — dark readable text */
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-regional-train__hint,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-regional-train__meta,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-regional-train__empty,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-regional-train__season,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-regional-train__conf,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-regional-train__sample-crop,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-regional-train__sample-scenes {
+  color: #475569;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-regional-train__label {
+  color: #64748b;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-regional-train__chip,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-regional-train__overlay-toggle,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-regional-train__legend-row,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-regional-train__samples li,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-regional-train__assignments li {
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(148, 163, 184, 0.24);
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-regional-train__chip.is-on {
+  background: rgba(209, 250, 229, 0.95);
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #047857;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-regional-train__select {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(148, 163, 184, 0.32);
+  color: #0f172a;
+  color-scheme: light;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-regional-train__btn--ghost {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(148, 163, 184, 0.28);
+  color: #0f172a;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-regional-train__btn--ghost.is-active {
+  background: rgba(224, 242, 254, 0.95);
+  border-color: rgba(14, 165, 233, 0.45);
+  color: #0369a1;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-regional-train__btn--primary {
+  color: #065f46;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-regional-train__status {
+  background: rgba(236, 253, 245, 0.95);
+  border-color: rgba(16, 185, 129, 0.28);
+  color: #047857;
+}

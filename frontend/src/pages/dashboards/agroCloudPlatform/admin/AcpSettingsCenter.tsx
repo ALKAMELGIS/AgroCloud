@@ -60,21 +60,24 @@ const CHART_SERIES_OPTIONS: Array<{ id: 'ndvi' | 'chas' | 'ndmi'; label: string 
   { id: 'ndmi', label: 'NDMI' },
 ]
 
-const CORE_LAYER_OPTIONS: Array<{ key: AcpCoreMapLayerKey; label: string }> = [
+const CORE_LAYER_OPTIONS: Array<{ key: AcpCoreMapLayerKey; label: string; locked?: boolean }> = [
   { key: 'aoi', label: 'AOI / Agro Structures' },
   { key: 'sentinelWms', label: 'Sentinel WMS overlay' },
-  { key: 'liveAlertTicker', label: 'Live Alert · ticker bar' },
+  { key: 'liveAlertTicker', label: 'Live Alert · ticker bar (always on)', locked: true },
   { key: 'weatherAlerts', label: 'Weather · map markers & AOI' },
   { key: 'liveChas', label: 'Live Alerts · map markers' },
 ]
 
-const MAP_TOOLBAR_OPTIONS: Array<{ key: keyof AcpMapToolbarConfig; label: string }> = [
-  { key: 'addData', label: 'Add data' },
+const MAP_TOOLBAR_OPTIONS: Array<{ key: keyof AcpMapToolbarConfig; label: string; locked?: boolean }> = [
+  { key: 'search', label: 'Search (always on)', locked: true },
+  { key: 'addData', label: 'Add data (always on)', locked: true },
   { key: 'legend', label: 'Legend' },
   { key: 'home', label: 'Home / extent' },
   { key: 'layers', label: 'Layers' },
   { key: 'basemap', label: 'Basemap' },
   { key: 'timeSeries', label: 'Time series' },
+  { key: 'weather', label: 'Weather Intelligence (map toggle)' },
+  { key: 'view3d', label: '2D / 3D map view' },
 ]
 
 export function AcpSettingsCenter() {
@@ -147,6 +150,7 @@ export function AcpSettingsCenter() {
 
   const setDraftCoreLayerVisible = useCallback(
     (key: AcpCoreMapLayerKey, visible: boolean) => {
+      if (key === 'liveAlertTicker') return
       setDraftLayerVisibility(prev => ({ ...prev, [key]: visible }))
       acp.setCoreLayerVisible(key, visible)
     },
@@ -207,7 +211,7 @@ export function AcpSettingsCenter() {
         aoi: draftLayerVisibility.aoi,
         sentinelWms: draftLayerVisibility.sentinelWms,
         liveChas: draftLayerVisibility.liveChas,
-        liveAlertTicker: draftLayerVisibility.liveAlertTicker,
+        liveAlertTicker: true,
         weatherAlerts: draftLayerVisibility.weatherAlerts,
       },
       defaultPortalLayerVisibility: portalDefaults,
@@ -241,7 +245,7 @@ export function AcpSettingsCenter() {
         aoi: draftLayerVisibility.aoi,
         sentinelWms: draftLayerVisibility.sentinelWms,
         liveChas: draftLayerVisibility.liveChas,
-        liveAlertTicker: draftLayerVisibility.liveAlertTicker,
+        liveAlertTicker: true,
         weatherAlerts: draftLayerVisibility.weatherAlerts,
       },
     })
@@ -397,11 +401,12 @@ export function AcpSettingsCenter() {
               </div>
               <h3 className="acp-settings__section-title">Core layers</h3>
               <div className="acp-settings__form">
-                {CORE_LAYER_OPTIONS.map(({ key, label }) => (
-                  <label key={key} className="acp-settings__check">
+                {CORE_LAYER_OPTIONS.map(({ key, label, locked }) => (
+                  <label key={key} className={`acp-settings__check${locked ? ' acp-settings__check--locked' : ''}`}>
                     <input
                       type="checkbox"
-                      checked={draftLayerVisibility[key]}
+                      checked={locked ? true : draftLayerVisibility[key]}
+                      disabled={locked}
                       onChange={e => setDraftCoreLayerVisible(key, e.target.checked)}
                     />
                     {label}
@@ -724,11 +729,12 @@ export function AcpSettingsCenter() {
               </div>
               <h3 className="acp-settings__section-title">Map toolbar buttons</h3>
               <div className="acp-settings__form">
-                {MAP_TOOLBAR_OPTIONS.map(({ key, label }) => (
-                  <label key={key} className="acp-settings__check">
+                {MAP_TOOLBAR_OPTIONS.map(({ key, label, locked }) => (
+                  <label key={key} className={`acp-settings__check${locked ? ' acp-settings__check--locked' : ''}`}>
                     <input
                       type="checkbox"
-                      checked={draftConfig.mapToolbar[key]}
+                      checked={locked ? true : draftConfig.mapToolbar[key]}
+                      disabled={locked}
                       onChange={e =>
                         patchDraftConfig({
                           mapToolbar: { ...draftConfig.mapToolbar, [key]: e.target.checked },

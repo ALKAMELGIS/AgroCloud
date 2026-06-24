@@ -7,6 +7,7 @@ import {
   isAgroCompositeLayerId,
   isAgroDeltaCompositeLayerId,
 } from './agroCompositeIndices'
+import { CROP_CLASSIFICATION_WMS_LAYER, isCropClassificationLayerId } from './siCropClassification'
 import { resolvePreviousValidSceneDate } from './siAdaptiveTemporalEngine'
 import { subtractDaysFromIso } from './siSentinelImageryDate'
 import { getSentinelHubAccessToken } from './sentinelHubAccessToken'
@@ -303,6 +304,7 @@ const CORE_INTERPRETATION_WMS_IDS = new Set(['NDVI', 'NDMI', 'NDWI', 'SAVI'])
 export function usesSentinelHubWmsCustomEvalscript(layerName: string): boolean {
   const upper = String(layerName || '').trim().toUpperCase()
   if (!upper) return false
+  if (isCropClassificationLayerId(upper)) return true
   if (isAgroCloudCustomWmsLayer(upper)) return true
   if (CORE_INTERPRETATION_WMS_IDS.has(upper)) return true
   if (isAgroCompositeLayerId(upper) || isAgroDeltaCompositeLayerId(upper)) return true
@@ -350,9 +352,10 @@ export function mergeAgroCloudCustomWmsLayers(
   layers: SentinelHubWmsLayerInfo[],
 ): SentinelHubWmsLayerInfo[] {
   const names = new Set(layers.map(l => String(l.name || '').trim().toUpperCase()))
-  const extra = AGRO_CLOUD_CUSTOM_WMS_LAYERS.filter(
-    l => !names.has(String(l.name || '').trim().toUpperCase()),
-  )
+  const extra = [
+    ...AGRO_CLOUD_CUSTOM_WMS_LAYERS.filter(l => !names.has(String(l.name || '').trim().toUpperCase())),
+    ...(names.has(CROP_CLASSIFICATION_WMS_LAYER.name.toUpperCase()) ? [] : [CROP_CLASSIFICATION_WMS_LAYER]),
+  ]
   if (!extra.length) return layers
   return [...layers, ...extra]
 }
@@ -395,6 +398,13 @@ export function resolveSentinelHubWmsTimeWindow(
 ): { timeStart: string; timeEnd: string } {
   const current = String(currentDate || '').trim().slice(0, 10)
   if (!current) return { timeStart: '', timeEnd: '' }
+  if (isCropClassificationLayerId(logicalLayerName)) {
+    const days = options?.lookbackDays ?? 120
+    return {
+      timeStart: subtractDaysFromIso(current, days),
+      timeEnd: current,
+    }
+  }
   if (
     isAgroDeltaCompositeLayerId(logicalLayerName) &&
     previousDate &&

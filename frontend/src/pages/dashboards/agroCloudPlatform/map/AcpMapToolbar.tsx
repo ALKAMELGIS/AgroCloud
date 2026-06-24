@@ -5,23 +5,25 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
-  useMemo,
   useState,
 } from 'react'
-import { useGisContentPortal } from '../../../../lib/gisContentPortalStore'
 import { useAcpPlatform } from '../acpPlatformContext'
-import { addAcpGisPortalRowToMap } from './acpGisPortalActions'
-import { isAcpExcludedPortalMapRow } from './acpPortalMapLayers'
+import { AcpAddGisLayerPanel } from './AcpAddGisLayerPanel'
 import { AcpEsriBasemapFlyout } from './AcpEsriBasemapFlyout'
 import { AcpMapLayersFlyout } from './AcpMapLayersFlyout'
 import { AcpMapLegendFlyout } from './AcpMapLegendFlyout'
 import { AcpMapPanel } from './AcpMapPanel'
+import { AcpMapSearchPanel } from './AcpMapSearchPanel'
+import { AcpMapToolErrorBoundary } from './AcpMapToolErrorBoundary'
+import { AcpHideToolbarIcon } from './AcpHideToolbarIcon'
 
 const AcpImageryTimeSeriesPanel = lazy(() =>
   import('./AcpImageryTimeSeriesPanel').then(m => ({ default: m.AcpImageryTimeSeriesPanel })),
 )
 
-type AcpMapPanelId = 'adddata' | 'legend' | 'layers' | 'basemap' | 'timeseries'
+type AcpMapPanelId = 'search' | 'adddata' | 'legend' | 'layers' | 'basemap' | 'timeseries'
+
+export type { AcpMapPanelId }
 
 export type AcpMapToolbarHandle = {
   closePanel: () => void
@@ -36,52 +38,30 @@ type AcpMapToolbarProps = {
 }
 
 function AcpMapToolPanel({ panel, onClose }: { panel: AcpMapPanelId; onClose: () => void }) {
-  switch (panel) {
-    case 'adddata':
-      return <AcpAddDataPanel onClose={onClose} />
-    case 'legend':
-      return <AcpMapLegendFlyout onClose={onClose} />
-    case 'layers':
-      return <AcpMapLayersFlyout onClose={onClose} />
-    case 'basemap':
-      return <AcpEsriBasemapFlyout onClose={onClose} />
-    case 'timeseries':
-      return (
-        <Suspense fallback={<p className="acp-map-panel__empty">Loading chart…</p>}>
-          <AcpImageryTimeSeriesPanel onClose={onClose} />
-        </Suspense>
-      )
-    default:
-      return null
-  }
-}
+  const body = (() => {
+    switch (panel) {
+      case 'search':
+        return <AcpMapSearchPanel onClose={onClose} />
+      case 'adddata':
+        return <AcpAddGisLayerPanel onClose={onClose} />
+      case 'legend':
+        return <AcpMapLegendFlyout onClose={onClose} />
+      case 'layers':
+        return <AcpMapLayersFlyout onClose={onClose} />
+      case 'basemap':
+        return <AcpEsriBasemapFlyout onClose={onClose} />
+      case 'timeseries':
+        return (
+          <Suspense fallback={<p className="acp-map-panel__empty">Loading chart…</p>}>
+            <AcpImageryTimeSeriesPanel onClose={onClose} />
+          </Suspense>
+        )
+      default:
+        return null
+    }
+  })()
 
-function ScopeToggleCompact() {
-  const acp = useAcpPlatform()
-  return (
-    <div className="acp-tools-dock__scope" role="group" aria-label="Map scope">
-      <button
-        type="button"
-        className={`acp-tools-dock__scope-btn${acp.scopeMode === 'viewport' ? ' is-on' : ''}`}
-        aria-pressed={acp.scopeMode === 'viewport'}
-        onClick={() => acp.setScopeMode('viewport')}
-      >
-        Viewport
-      </button>
-      <button
-        type="button"
-        className={`acp-tools-dock__scope-btn${acp.scopeMode === 'global' ? ' is-on' : ''}`}
-        aria-pressed={acp.scopeMode === 'global'}
-        onClick={() => {
-          acp.setScopeMode('global')
-          acp.setSelectedFieldKey(null)
-          acp.mapHomeRef.current?.()
-        }}
-      >
-        Global
-      </button>
-    </div>
-  )
+  return <AcpMapToolErrorBoundary>{body}</AcpMapToolErrorBoundary>
 }
 
 export const AcpMapToolbar = forwardRef<AcpMapToolbarHandle, AcpMapToolbarProps>(function AcpMapToolbar(
@@ -108,7 +88,7 @@ export const AcpMapToolbar = forwardRef<AcpMapToolbarHandle, AcpMapToolbarProps>
 
   const togglePanel = useCallback(
     (id: AcpMapPanelId) => {
-      if (id === 'adddata' && !toolbar.addData) return
+      if (id === 'search' && !toolbar.search) return
       if (id === 'legend' && !toolbar.legend) return
       if (id === 'layers' && !toolbar.layers) return
       if (id === 'basemap' && !toolbar.basemap) return
@@ -131,17 +111,28 @@ export const AcpMapToolbar = forwardRef<AcpMapToolbarHandle, AcpMapToolbarProps>
 
   const railButtons = (
     <>
-      {toolbar.addData ? (
+      {toolbar.search ? (
         <button
           type="button"
-          className={`acp-map-rail__btn${activePanel === 'adddata' ? ' is-on' : ''}`}
-          title="Add data"
-          aria-pressed={activePanel === 'adddata'}
-          onClick={() => togglePanel('adddata')}
+          className={`acp-map-rail__btn${activePanel === 'search' ? ' is-on' : ''}`}
+          title="Search map"
+          aria-label="Search map"
+          aria-pressed={activePanel === 'search'}
+          onClick={() => togglePanel('search')}
         >
           <i className="fa-solid fa-magnifying-glass" aria-hidden="true" />
         </button>
       ) : null}
+      <button
+        type="button"
+        className={`acp-map-rail__btn${activePanel === 'adddata' ? ' is-on' : ''}`}
+        title="Add GIS Layer Data"
+        aria-label="Add GIS Layer Data"
+        aria-pressed={activePanel === 'adddata'}
+        onClick={() => togglePanel('adddata')}
+      >
+        <i className="fa-solid fa-circle-plus" aria-hidden="true" />
+      </button>
       {toolbar.legend ? (
         <button
           type="button"
@@ -156,6 +147,21 @@ export const AcpMapToolbar = forwardRef<AcpMapToolbarHandle, AcpMapToolbarProps>
       {toolbar.home ? (
         <button type="button" className="acp-map-rail__btn" title="Home" onClick={goHome}>
           <i className="fa-solid fa-house" aria-hidden="true" />
+        </button>
+      ) : null}
+      {toolbar.view3d ? (
+        <button
+          type="button"
+          className={`acp-map-rail__btn${acp.mapViewMode3d ? ' is-on' : ''}`}
+          title={acp.mapViewMode3d ? 'Switch to 2D map' : 'Switch to 3D map (right-drag to orbit)'}
+          aria-label={acp.mapViewMode3d ? 'Switch to 2D map' : 'Switch to 3D map'}
+          aria-pressed={acp.mapViewMode3d}
+          onClick={acp.toggleMapViewMode3d}
+        >
+          <i
+            className={`fa-solid ${acp.mapViewMode3d ? 'fa-map' : 'fa-cube'}`}
+            aria-hidden="true"
+          />
         </button>
       ) : null}
       {toolbar.layers ? (
@@ -203,8 +209,21 @@ export const AcpMapToolbar = forwardRef<AcpMapToolbarHandle, AcpMapToolbarProps>
           </div>
         ) : null}
         <div className="acp-tools-dock">
-          <ScopeToggleCompact />
-          <nav className="acp-tools-dock__rail acp-map-rail" aria-label="Map tools">
+          <button
+            type="button"
+            className="acp-map-rail__btn acp-map-rail__btn--toggle acp-map-rail__btn--toggle-dock"
+            title={railCollapsed ? 'Show map tools' : 'Hide toolbar'}
+            aria-label={railCollapsed ? 'Show map tools' : 'Hide toolbar'}
+            aria-expanded={!railCollapsed}
+            onClick={toggleRail}
+          >
+            <AcpHideToolbarIcon collapsed={railCollapsed} />
+          </button>
+          <nav
+            className="acp-map-rail acp-tools-dock__rail"
+            aria-label="Map tools"
+            hidden={railCollapsed}
+          >
             {railButtons}
           </nav>
         </div>
@@ -213,7 +232,12 @@ export const AcpMapToolbar = forwardRef<AcpMapToolbarHandle, AcpMapToolbarProps>
   }
 
   return (
-    <div className={`acp-map-chrome${activePanel ? ' acp-map-chrome--panel-open' : ''}`}>
+    <div
+      className={[
+        'acp-map-chrome',
+        activePanel ? ' acp-map-chrome--panel-open' : '',
+      ].join('')}
+    >
       {activePanel && !railCollapsed ? (
         <div className="acp-map-tool-panel">
           <AcpMapToolPanel panel={activePanel} onClose={closePanel} />
@@ -229,10 +253,7 @@ export const AcpMapToolbar = forwardRef<AcpMapToolbarHandle, AcpMapToolbarProps>
           aria-expanded={!railCollapsed}
           onClick={toggleRail}
         >
-          <i
-            className={`fa-solid ${railCollapsed ? 'fa-chevrons-down' : 'fa-chevrons-up'}`}
-            aria-hidden="true"
-          />
+          <AcpHideToolbarIcon collapsed={railCollapsed} />
         </button>
 
         <nav className="acp-map-rail acp-map-toolbar__tools" aria-label="Map tools" hidden={railCollapsed}>
@@ -242,55 +263,3 @@ export const AcpMapToolbar = forwardRef<AcpMapToolbarHandle, AcpMapToolbarProps>
     </div>
   )
 })
-
-function AcpAddDataPanel({ onClose }: { onClose: () => void }) {
-  const portal = useGisContentPortal()
-  const acp = useAcpPlatform()
-  const layers = useMemo(
-    () => portal.rows.filter(r => r.type === 'feature-layer' && !isAcpExcludedPortalMapRow(r)),
-    [portal.rows],
-  )
-  const [addingId, setAddingId] = useState<string | null>(null)
-  const [status, setStatus] = useState<string | null>(null)
-
-  const onAdd = useCallback(
-    (row: (typeof layers)[number]) => {
-      setAddingId(row.id)
-      setStatus(null)
-      void (async () => {
-        try {
-          const result = await addAcpGisPortalRowToMap(row)
-          if (result.isAgroStructures) acp.refreshEngine()
-          else if (result.geojson) acp.mapFocusGeoJsonRef.current?.(result.geojson)
-          setStatus(result.message)
-          onClose()
-        } catch (err) {
-          setStatus(err instanceof Error ? err.message : `Failed to add "${row.title}".`)
-        } finally {
-          setAddingId(null)
-        }
-      })()
-    },
-    [acp, onClose],
-  )
-
-  return (
-    <AcpMapPanel title="Add data" onClose={onClose}>
-      <ul className="acp-map-panel__add-list">
-        {layers.map(row => (
-          <li key={row.id}>
-            <button type="button" disabled={addingId === row.id} onClick={() => onAdd(row)}>
-              {addingId === row.id ? 'Adding…' : row.title}
-            </button>
-          </li>
-        ))}
-      </ul>
-      {!layers.length ? <p className="acp-map-panel__empty">No hosted layers.</p> : null}
-      {status ? (
-        <p className="acp-map-panel__empty" role="status">
-          {status}
-        </p>
-      ) : null}
-    </AcpMapPanel>
-  )
-}

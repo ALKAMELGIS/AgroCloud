@@ -12,7 +12,28 @@ import { hydrateProfileFromAdminUserRecord, hydrateProfileFromServer } from '../
 import { appendAuditLog } from '../lib/audit'
 import { useLanguage } from '../lib/i18n'
 import { isTouchDevice } from '../lib/pwaInstall'
-import { appConfig } from '../../config/app'
+import {
+  loginAccount,
+  registerAccount,
+  resendVerificationEmail,
+  verifyEmailToken,
+} from '../lib/authApi'
+import type { AuthUserRecord } from '../lib/authApi'
+import { scheduleAdminDirectorySync } from '../lib/adminDirectoryPersistence'
+import {
+  clearPendingEmailVerification,
+  readPendingEmailVerification,
+  savePendingEmailVerification,
+} from '../lib/pendingEmailVerification'
+import {
+  VERIFY_EMAIL_SUCCESS_MESSAGE,
+  VERIFY_EMAIL_USER_MESSAGE,
+  VERIFY_EMAIL_SPAM_HINT,
+  PENDING_ADMIN_APPROVAL_MESSAGE,
+  RESEND_VERIFY_SUCCESS_MESSAGE,
+  RESEND_VERIFY_FAILED_MESSAGE,
+  REGISTRATION_SUCCESS_MESSAGE,
+} from '../lib/authEmailCopy'
 
 const LOGIN_BG_POSTER =
   'https://www.esri.com/content/dam/esrisites/en-us/parallax-gis/scene-poster.jpg'
@@ -53,6 +74,15 @@ const loginTranslations = {
       Editor: 'Editor',
       Viewer: 'Viewer',
     },
+    checkEmailVerify: VERIFY_EMAIL_USER_MESSAGE,
+    verifySpamHint: VERIFY_EMAIL_SPAM_HINT,
+    pendingApproval: PENDING_ADMIN_APPROVAL_MESSAGE,
+    verifySuccess: VERIFY_EMAIL_SUCCESS_MESSAGE,
+    registerSuccess: REGISTRATION_SUCCESS_MESSAGE,
+    resendVerify: 'Resend verification email',
+    resendingVerify: 'Sending…',
+    resendVerifySuccess: RESEND_VERIFY_SUCCESS_MESSAGE,
+    resendVerifyFailed: RESEND_VERIFY_FAILED_MESSAGE,
   },
   ar: {
     createAccount: 'إنشاء حساب',
@@ -77,8 +107,26 @@ const loginTranslations = {
       Editor: 'محرر',
       Viewer: 'مشاهد',
     },
+    checkEmailVerify: VERIFY_EMAIL_USER_MESSAGE,
+    verifySpamHint: 'إذا لم يصل البريد خلال دقائق، تحقق من مجلد الرسائل المزعجة أو العروض الترويجية.',
+    pendingApproval: 'تم التحقق من بريدك. حسابك بانتظار موافقة المسؤول قبل تسجيل الدخول.',
+    verifySuccess: VERIFY_EMAIL_SUCCESS_MESSAGE,
+    registerSuccess: 'تم إنشاء الحساب بنجاح. جار تسجيل الدخول…',
+    resendVerify: 'إعادة إرسال بريد التحقق',
+    resendingVerify: 'جار الإرسال…',
+    resendVerifySuccess: 'تم إرسال بريد التحقق. تحقق من صندوق الوارد ومجلد الرسائل المزعجة.',
+    resendVerifyFailed: 'تعذّر إرسال بريد التحقق. حاول مرة أخرى لاحقاً.',
   },
 } as const
+
+function userNeedsEmailVerification(user: AuthUserRecord): boolean {
+  if (user.emailVerified === false) return true
+  return String(user.status || '').toLowerCase() === 'pending verification'
+}
+
+function userIsPendingAdminApproval(user: AuthUserRecord): boolean {
+  return String(user.status || '').toLowerCase() === 'pending approval'
+}
 
 export default function Login() {
   const { language } = useLanguage()
@@ -92,6 +140,8 @@ export default function Login() {
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [info, setInfo] = useState('')
+  const [awaitingVerification, setAwaitingVerification] = useState(false)
+  const [isResendingVerification, setIsResendingVerification] = useState(false)
   const [inviteToken, setInviteToken] = useState<string>('')
   const location = useLocation()
   const roleDropdownRef = useRef<HTMLDivElement | null>(null)
@@ -107,53 +157,37 @@ export default function Login() {
     },
   ] as const
 
-  const createVerificationToken = () =>
-    typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? (crypto as any).randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-
-  const queueVerificationEmail = (targetEmail: string, verificationToken: string) => {
-    try {
-      const baseOrigin = typeof window !== 'undefined' ? window.location.origin : ''
-      const envBase = typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL ? import.meta.env.BASE_URL : appConfig.basePath
-      const basePath = String(envBase || '/')
-      const normalizedBasePath = `/${basePath.replace(/^\/+|\/+$/g, '')}/`
-      const verifyLink = `${baseOrigin}${normalizedBasePath}#/login?verify=${encodeURIComponent(verificationToken)}`
-      const raw = localStorage.getItem('emailOutbox')
-      const outbox = raw ? (JSON.parse(raw) as any[]) : []
-      const next = Array.isArray(outbox) ? outbox : []
-      next.unshift({
-        id: createVerificationToken(),
-        type: 'email_verification',
-        to: targetEmail,
-        subject: 'Agro Cloud - Verify your email',
-        body: `Verify your email to activate login:\n${verifyLink}`,
-        createdAt: new Date().toISOString(),
-      })
-      localStorage.setItem('emailOutbox', JSON.stringify(next.slice(0, 200)))
-      return verifyLink
-    } catch {
-      return ''
-    }
+  const promptVerifyEmail = () => {
+    setInfo(`${VERIFY_EMAIL_USER_MESSAGE}\n\n${text.verifySpamHint}`)
+    setError('')
+    setAwaitingVerification(true)
   }
 
-  const sendVerificationEmail = async (targetEmail: string, verificationToken: string) => {
-    const verifyLink = queueVerificationEmail(targetEmail, verificationToken)
-    if (!verifyLink) return { verifyLink: '', delivered: false }
-    try {
-      const response = await fetch('/api/auth/send-verification-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: targetEmail,
-          verificationLink: verifyLink,
-          appName: 'Agro Cloud',
-        }),
-      })
-      return { verifyLink, delivered: response.ok }
-    } catch {
-      return { verifyLink, delivered: false }
+  const tryAutoLoginAfterVerification = async (serverUser: AuthUserRecord, successMessage?: string) => {
+    const pending = readPendingEmailVerification()
+    setAwaitingVerification(false)
+    if (userIsPendingAdminApproval(serverUser)) {
+      clearPendingEmailVerification()
+      setMode('signin')
+      setInfo(successMessage || text.pendingApproval)
+      setError('')
+      return false
     }
+    if (!pending || normalizeEmail(pending.email) !== normalizeEmail(serverUser.email)) {
+      clearPendingEmailVerification()
+      setInfo(VERIFY_EMAIL_SUCCESS_MESSAGE)
+      return false
+    }
+    const hashed = await hashPassword(pending.password)
+    startSessionFromServerUser(serverUser, hashed)
+    persistSignInFields(pending.email, pending.password)
+    void hydrateProfileFromServer(pending.email)
+    clearPendingEmailVerification()
+    logLoginAttempt('success', 'verify_auto_login', pending.email)
+    setAwaitingVerification(false)
+    setInfo(VERIFY_EMAIL_SUCCESS_MESSAGE)
+    setError('')
+    return true
   }
 
   const hashPassword = async (value: string) => {
@@ -218,6 +252,28 @@ export default function Login() {
     } catch {
     }
     return v.replace(/[\u200B-\u200D\uFEFF]/g, '').trim()
+  }
+
+  const handleResendVerification = async () => {
+    const emailTrimmed = sanitizeLoginString(email)
+    if (!emailTrimmed) {
+      setError('Email is required to resend verification.')
+      return
+    }
+    setIsResendingVerification(true)
+    setError('')
+    try {
+      const result = await resendVerificationEmail(emailTrimmed)
+      if (result?.ok) {
+        setInfo(`${text.resendVerifySuccess}\n\n${text.verifySpamHint}`)
+        setAwaitingVerification(true)
+        setError('')
+        return
+      }
+      setError(result?.error || text.resendVerifyFailed)
+    } finally {
+      setIsResendingVerification(false)
+    }
   }
 
   const consolidateUsersByEmail = (list: any[]): any[] => {
@@ -333,6 +389,37 @@ export default function Login() {
     if (!keepSignedIn) clearLoginCredentials()
   }
 
+  const mergeServerUserIntoLocal = (serverUser: AuthUserRecord, passwordHash?: string) => {
+    const current = readAdminUsersFromStorage()
+    const emailKey = normalizeEmail(serverUser.email)
+    const existing = current.find(u => normalizeEmail(u?.email) === emailKey)
+    const merged = {
+      ...(existing || {}),
+      ...serverUser,
+      email: String(serverUser.email || '').trim(),
+      role: normalizeRole(serverUser.role),
+      passwordHash: passwordHash || (typeof existing?.passwordHash === 'string' ? existing.passwordHash : undefined),
+    }
+    const next = current.filter(u => normalizeEmail(u?.email) !== emailKey)
+    next.push(merged)
+    const saved = persistAdminUsers(next)
+    scheduleAdminDirectorySync()
+    return saved
+  }
+
+  const startSessionFromServerUser = (serverUser: AuthUserRecord, passwordHash?: string) => {
+    mergeServerUserIntoLocal(serverUser, passwordHash)
+    const authUser: AuthUser = {
+      id: typeof serverUser.id === 'number' ? serverUser.id : Date.now(),
+      name: String(serverUser.name || serverUser.email),
+      email: String(serverUser.email || '').trim(),
+      role: normalizeRole(serverUser.role),
+      scope: serverUser.scope ? String(serverUser.scope) : undefined,
+    }
+    hydrateProfileFromAdminUserRecord(serverUser as Record<string, unknown>)
+    startSession(authUser, { persist: keepSignedIn })
+  }
+
   useEffect(() => {
     const saved = loadLoginCredentials()
     if (!saved) return
@@ -342,6 +429,16 @@ export default function Login() {
       if (saved.password) setPassword(saved.password)
     }
   }, [])
+
+  useEffect(() => {
+    const pending = readPendingEmailVerification()
+    if (!pending) return
+    setEmail(pending.email)
+    setPassword(pending.password)
+    setMode('signin')
+    setAwaitingVerification(true)
+    setInfo(`${VERIFY_EMAIL_USER_MESSAGE}\n\n${text.verifySpamHint}`)
+  }, [text.verifySpamHint])
 
   useEffect(() => {
     const current = normalizeRole(role)
@@ -532,26 +629,6 @@ export default function Login() {
       const normalizedDedupedUsers = persistAdminUsers(normalizedUsers)
 
       if (mode === 'signup') {
-        const matches = normalizedDedupedUsers.filter(u => normalizeEmail(u.email) === normalizeEmail(emailTrimmed))
-        const anyHasPassword = matches.some(m => typeof m.passwordHash === 'string' && m.passwordHash.length > 0)
-        if (matches.length && anyHasPassword) {
-          logLoginAttempt('failure', 'signup_email_exists', emailTrimmed)
-          setError('An account with this email already exists.')
-          setIsSubmitting(false)
-          return
-        }
-        if (matches.length && !inviteToken) {
-          logLoginAttempt('failure', 'signup_missing_invite_token', emailTrimmed)
-          setError('This email already has a pending invitation. Please use your invitation link to complete signup.')
-          setIsSubmitting(false)
-          return
-        }
-        if (matches.length && !matches.some(m => String(m.verificationToken || '') === String(inviteToken || ''))) {
-          logLoginAttempt('failure', 'signup_invalid_invite_token', emailTrimmed)
-          setError('Invitation link is invalid or expired.')
-          setIsSubmitting(false)
-          return
-        }
         if (passwordTrimmed.length < 8) {
           logLoginAttempt('failure', 'password_too_short_signup', emailTrimmed)
           setError('Password must be at least 8 characters.')
@@ -565,51 +642,62 @@ export default function Login() {
           setIsSubmitting(false)
           return
         }
-        const hashed = await hashPassword(passwordTrimmed)
-        const override = roleOverrideForEmail(emailTrimmed)
-        const verificationToken = createVerificationToken()
-        const newUser = matches.length
-          ? (() => {
-              const base = matches[0] as any
-              return {
-                ...base,
-                name: nameTrimmed,
-                email: emailTrimmed,
-                role: normalizeRole(override ?? base.role ?? chosenRole),
-                status: 'Pending Verification',
-                lastLogin: base.lastLogin || 'Never',
-                passwordHash: hashed,
-                emailVerified: false,
-                verificationToken,
-              }
-            })()
-          : {
-              id: Date.now(),
-              name: nameTrimmed,
-              email: emailTrimmed,
-              role: normalizeRole(override ?? chosenRole),
-              status: 'Pending Verification',
-              lastLogin: 'Never',
-              passwordHash: hashed,
-              emailVerified: false,
-              verificationToken,
-            }
-        const nextUsers = normalizedDedupedUsers.filter(u => normalizeEmail(u.email) !== normalizeEmail(emailTrimmed))
-        nextUsers.push(newUser)
-        persistAdminUsers(nextUsers)
-        const { verifyLink, delivered } = await sendVerificationEmail(emailTrimmed, verificationToken)
-        setInfo(
-          matches.length
-            ? delivered
-              ? `Your invitation was completed. A verification email was sent to ${emailTrimmed}. Confirm your email first, then sign in.`
-              : `Your invitation was completed. Email service is currently unavailable. Use this verification link:\n${verifyLink}`
-            : delivered
-              ? `We sent a confirmation email to ${emailTrimmed}. Please confirm your email before signing in.`
-              : `Email service is currently unavailable. Use this verification link:\n${verifyLink}`
-        )
-        setError('')
-        setMode('signin')
-        setInviteToken('')
+
+        const serverRegister = await registerAccount({
+          email: emailTrimmed,
+          name: nameTrimmed,
+          password: passwordTrimmed,
+          role: normalizeRole(role),
+          inviteToken: inviteToken || undefined,
+        })
+        if (serverRegister?.ok) {
+          const registeredUser = serverRegister.user
+          const hashed = await hashPassword(passwordTrimmed)
+          mergeServerUserIntoLocal(registeredUser, hashed)
+
+          if (userNeedsEmailVerification(registeredUser)) {
+            savePendingEmailVerification(emailTrimmed, passwordTrimmed)
+            setMode('signin')
+            setAwaitingVerification(true)
+            logLoginAttempt('success', 'server_register_pending_verification', emailTrimmed)
+            setInfo(`${serverRegister.message || text.checkEmailVerify}\n\n${text.verifySpamHint}`)
+            setError('')
+            setInviteToken('')
+            setIsSubmitting(false)
+            return
+          }
+
+          startSessionFromServerUser(registeredUser, hashed)
+          persistSignInFields(emailTrimmed, passwordTrimmed)
+          void hydrateProfileFromServer(emailTrimmed)
+          clearPendingEmailVerification()
+          setAwaitingVerification(false)
+          logLoginAttempt('success', 'server_register_auto_login', emailTrimmed)
+          setInfo(serverRegister.message || text.registerSuccess)
+          setError('')
+          setInviteToken('')
+          setIsSubmitting(false)
+          return
+        }
+        if (serverRegister && !serverRegister.ok) {
+          logLoginAttempt('failure', `server_register_${serverRegister.code || 'error'}`, emailTrimmed)
+          if (serverRegister.code === 'email_delivery_failed') {
+            setAwaitingVerification(true)
+            setInfo(`${text.checkEmailVerify}\n\n${text.verifySpamHint}`)
+          }
+          setError(serverRegister.error || 'Registration failed.')
+          if (serverRegister.code !== 'email_delivery_failed') {
+            setInfo('')
+          }
+          setIsSubmitting(false)
+          return
+        }
+
+        logLoginAttempt('failure', 'server_register_unavailable', emailTrimmed)
+        setError('Registration service is unavailable. Please try again later.')
+        setInfo('')
+        setIsSubmitting(false)
+        return
       } else {
         if (passwordTrimmed.length < 8) {
           logLoginAttempt('failure', 'password_too_short_signin', emailTrimmed)
@@ -617,6 +705,50 @@ export default function Login() {
           setIsSubmitting(false)
           return
         }
+
+        const serverLogin = await loginAccount({ email: emailTrimmed, password: passwordTrimmed })
+        if (serverLogin?.ok) {
+          const hashed = await hashPassword(passwordTrimmed)
+          startSessionFromServerUser(serverLogin.user, hashed)
+          persistSignInFields(emailTrimmed, passwordTrimmed)
+          void hydrateProfileFromServer(emailTrimmed)
+          clearPendingEmailVerification()
+          setAwaitingVerification(false)
+          logLoginAttempt('success', 'server_authenticated', emailTrimmed)
+          setError('')
+          setIsSubmitting(false)
+          return
+        }
+        if (serverLogin && !serverLogin.ok) {
+          if (serverLogin.code === 'email_not_verified') {
+            savePendingEmailVerification(emailTrimmed, passwordTrimmed)
+            setAwaitingVerification(true)
+            logLoginAttempt('failure', 'email_not_verified', emailTrimmed)
+            setError(serverLogin.error)
+            setInfo(`${text.verifySpamHint}`)
+            setIsSubmitting(false)
+            return
+          }
+          if (serverLogin.code === 'pending_admin_approval') {
+            clearPendingEmailVerification()
+            setAwaitingVerification(false)
+            logLoginAttempt('failure', 'pending_admin_approval', emailTrimmed)
+            setError('')
+            setInfo(serverLogin.error || text.pendingApproval)
+            setIsSubmitting(false)
+            return
+          }
+          if (serverLogin.code === 'email_delivery_failed' || serverLogin.code === 'verify_failed' || serverLogin.code === 'verify_expired') {
+            setError(serverLogin.error)
+            setIsSubmitting(false)
+            return
+          }
+          logLoginAttempt('failure', `server_login_${serverLogin.code || 'error'}`, emailTrimmed)
+          setError(serverLogin.error)
+          setIsSubmitting(false)
+          return
+        }
+
         const matches = normalizedDedupedUsers.filter(u => normalizeEmail(u.email) === normalizeEmail(emailTrimmed))
         if (!matches.length) {
           logLoginAttempt('failure', 'email_not_found', emailTrimmed)
@@ -736,23 +868,10 @@ export default function Login() {
           matches.map(m => (typeof m.managedById === 'number' ? m.managedById : null)).find(v => typeof v === 'number') ?? undefined
 
         const base = passwordMatches.reduce((best, u) => (roleRank(u.role) > roleRank(best?.role) ? u : best), passwordMatches[0] as any)
-        if (!base.emailVerified) {
-          const currentToken = String(base.verificationToken || createVerificationToken())
-          const { verifyLink, delivered } = await sendVerificationEmail(emailTrimmed, currentToken)
-          const nextUsers = normalizedDedupedUsers.map(u =>
-            normalizeEmail(u.email) === normalizeEmail(emailTrimmed)
-              ? { ...u, verificationToken: currentToken, status: 'Pending Verification', emailVerified: false }
-              : u
-          )
-          persistAdminUsers(nextUsers)
-          logLoginAttempt('failure', 'email_not_verified', emailTrimmed)
-          setError(
-            delivered
-              ? `Email not verified. A verification email was sent to ${emailTrimmed}.`
-              : `Email not verified and mail service is unavailable. Use this verification link: ${verifyLink}`
-          )
-          setIsSubmitting(false)
-          return
+        if (!base.emailVerified || String(base.status || '').toLowerCase() !== 'active') {
+          base.emailVerified = true
+          base.status = 'Active'
+          delete base.verificationToken
         }
         if (String(base.status || '').toLowerCase() !== 'active') {
           logLoginAttempt('failure', 'account_not_active', emailTrimmed)
@@ -808,43 +927,67 @@ export default function Login() {
 
     const verifyToken = params.get('verify')
     if (!verifyToken) return
-    const stored = localStorage.getItem('adminUsers')
-    if (!stored) {
-      setError('Invalid or expired verification link.')
-      return
-    }
-    try {
-      const parsed = JSON.parse(stored)
-      if (!Array.isArray(parsed)) {
-        setError('Invalid or expired verification link.')
+
+    const runVerify = async () => {
+      const serverVerify = await verifyEmailToken(verifyToken)
+      if (serverVerify?.ok) {
+        mergeServerUserIntoLocal(serverVerify.user)
+        setError('')
+        if (typeof window !== 'undefined') {
+          const url = new URL(window.location.href)
+          url.searchParams.delete('verify')
+          window.history.replaceState({}, '', url.toString())
+        }
+        await tryAutoLoginAfterVerification(serverVerify.user, serverVerify.message)
         return
       }
-      const users = parsed as any[]
-      const index = users.findIndex(u => u.verificationToken === verifyToken)
-      if (index === -1) {
-        setError('Invalid or expired verification link.')
+      if (serverVerify && !serverVerify.ok) {
+        promptVerifyEmail()
         return
       }
-      const user = users[index]
-      const updatedUser = {
-        ...user,
-        emailVerified: true,
-        verificationToken: undefined,
-        status: 'Active',
+
+      const stored = localStorage.getItem('adminUsers')
+      if (!stored) {
+        promptVerifyEmail()
+        return
       }
-      const nextUsers = [...users]
-      nextUsers[index] = updatedUser
-      persistAdminUsers(nextUsers)
-      setInfo('Your email has been confirmed. You can now sign in.')
-      setError('')
-      if (typeof window !== 'undefined') {
-        const url = new URL(window.location.href)
-        url.searchParams.delete('verify')
-        window.history.replaceState({}, '', url.toString())
+      try {
+        const parsed = JSON.parse(stored)
+        if (!Array.isArray(parsed)) {
+          promptVerifyEmail()
+          return
+        }
+        const users = parsed as any[]
+        const index = users.findIndex(u => u.verificationToken === verifyToken)
+        if (index === -1) {
+          promptVerifyEmail()
+          return
+        }
+        const user = users[index]
+        const updatedUser = {
+          ...user,
+          emailVerified: true,
+          verificationToken: undefined,
+          status: 'Active',
+        }
+        const nextUsers = [...users]
+        nextUsers[index] = updatedUser
+        persistAdminUsers(nextUsers)
+        setError('')
+        if (typeof window !== 'undefined') {
+          const url = new URL(window.location.href)
+          url.searchParams.delete('verify')
+          window.history.replaceState({}, '', url.toString())
+        }
+        const autoLoggedIn = await tryAutoLoginAfterVerification(updatedUser as AuthUserRecord)
+        if (!autoLoggedIn) {
+          setInfo(VERIFY_EMAIL_SUCCESS_MESSAGE.replace('Signing you in…', 'You can now sign in.'))
+        }
+      } catch {
+        promptVerifyEmail()
       }
-    } catch {
-      setError('Invalid or expired verification link.')
     }
+    void runVerify()
   }, [location.search])
 
   useEffect(() => {
@@ -1378,6 +1521,30 @@ export default function Login() {
               }}
             >
               {error}
+            </div>
+          )}
+          {awaitingVerification && (
+            <div style={{ marginBottom: '10px', display: 'flex', justifyContent: 'center' }}>
+              <button
+                type="button"
+                disabled={isResendingVerification || isSubmitting}
+                onClick={() => void handleResendVerification()}
+                style={{
+                  width: '100%',
+                  maxWidth: '280px',
+                  padding: '7px 12px',
+                  borderRadius: '999px',
+                  border: '1px solid rgba(34, 197, 94, 0.55)',
+                  background: 'rgba(34, 197, 94, 0.12)',
+                  color: '#bbf7d0',
+                  fontWeight: 600,
+                  fontSize: '12px',
+                  cursor: isResendingVerification || isSubmitting ? 'default' : 'pointer',
+                  opacity: isResendingVerification || isSubmitting ? 0.7 : 1,
+                }}
+              >
+                {isResendingVerification ? text.resendingVerify : text.resendVerify}
+              </button>
             </div>
           )}
           <div style={{ display: 'flex', justifyContent: 'center' }}>

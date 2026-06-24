@@ -56,8 +56,29 @@
   bottom: calc(100% + 10px);
   left: 50%;
   transform: translateX(-50%);
-  width: 292px;
-  max-width: min(calc(100vw - 16px), 304px);
+  width: min(calc(100vw - 20px), 304px);
+  max-width: min(calc(100vw - 20px), 340px);
+}
+
+@media (max-width: 640px) {
+  .si-crop-alert-beacon-root__column > .si-crop-alert-map-popup {
+    max-width: min(calc(100vw - 20px), 420px);
+    width: min(calc(100vw - 20px), 420px);
+  }
+
+  .si-crop-alert-beacon-root--map-pin .si-crop-alert-beacon-root__column > .si-crop-alert-map-popup {
+    width: min(calc(100vw - 20px), 340px);
+    max-width: calc(100vw - 20px);
+  }
+
+  .si-crop-alert-beacon-root--map-pin.si-crop-alert-beacon-root--pin-left
+    .si-crop-alert-beacon-root__column
+    > .si-crop-alert-map-popup,
+  .si-crop-alert-beacon-root--map-pin.si-crop-alert-beacon-root--pin-right
+    .si-crop-alert-beacon-root__column
+    > .si-crop-alert-map-popup {
+    transform: translateX(-50%);
+  }
 }
 
 .si-crop-alert-beacon-root--map-pin.si-crop-alert-beacon-root--pin-left

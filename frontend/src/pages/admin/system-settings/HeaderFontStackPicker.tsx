@@ -3,7 +3,6 @@ import type { AppLanguage } from '../../../lib/i18n'
 import type { ThemeMode } from '../../../types/systemSettings'
 import {
   FONT_CATEGORY_LABEL,
-  HEADER_FONT_GOOGLE_STYLESHEET_HREF,
   HEADER_FONT_PRESETS,
   findPresetByCss,
   getSmartFontAdvice,
@@ -17,18 +16,6 @@ import {
 const CATEGORY_ORDER: FontCategoryId[] = ['design', 'system', 'modern', 'elegant', 'mono', 'arabic']
 
 const PREVIEW_SAMPLE = 'AgroCloud · أجرو'
-
-const GF_LINK_ID = 'hs-header-font-google-bundle'
-
-function injectGoogleFontBundle() {
-  if (typeof document === 'undefined') return
-  if (document.getElementById(GF_LINK_ID)) return
-  const link = document.createElement('link')
-  link.id = GF_LINK_ID
-  link.rel = 'stylesheet'
-  link.href = HEADER_FONT_GOOGLE_STYLESHEET_HREF
-  document.head.appendChild(link)
-}
 
 export type HeaderFontStackPickerProps = {
   id?: string
@@ -52,10 +39,6 @@ export function HeaderFontStackPicker({
   const [query, setQuery] = useState('')
   const [prefersDark, setPrefersDark] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    injectGoogleFontBundle()
-  }, [])
 
   useEffect(() => {
     const mq = window.matchMedia?.('(prefers-color-scheme: dark)')

@@ -84,6 +84,8 @@ const navTranslations = {
     dashboardSettings: 'Dashboard Settings',
     systemSettings: 'System Settings',
     customPage: 'Custom page',
+    application: 'Application',
+    agroCloudManagement: 'AgroCloud Management',
   },
   ar: {
     account: 'الحساب',
@@ -138,6 +140,8 @@ const navTranslations = {
     dashboardSettings: 'إعدادات لوحة التحكم',
     systemSettings: 'إعدادات النظام',
     customPage: 'صفحة مخصصة',
+    application: 'التطبيقات',
+    agroCloudManagement: 'إدارة AgroCloud',
   },
 } as const
 
@@ -389,6 +393,7 @@ export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobile
     })
     if (custom?.navGroupId) return custom.navGroupId
     if (path.startsWith('/dashboards/ai-agro-')) return 'aiAgroCloud'
+    if (path.startsWith('/applications/')) return 'application'
     if (path.startsWith('/dashboard')) return 'dashboard'
     if (path.startsWith('/satellite/')) return 'satellite'
     if (path.startsWith('/data/')) return 'data'

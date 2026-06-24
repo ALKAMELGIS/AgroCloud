@@ -37,6 +37,7 @@ const UsabilityTest = lazy(() => import('../pages/UsabilityTest'))
 const SystemSettings = lazy(() => import('../pages/admin/SystemSettings'))
 const SensorIntegrationPage = lazy(() => import('../pages/sensors/SensorIntegrationPage'))
 const GpsVehicleTracking = lazy(() => import('../pages/sensors/GpsVehicleTracking'))
+const AgroCloudManagement = lazy(() => import('../pages/applications/AgroCloudManagement'))
 
 function RouteLoadingFallback({ label = 'Loading…' }: { label?: string }) {
   return (
@@ -90,6 +91,14 @@ export default function AppRoutes() {
         <Route path="/dashboards/agro-dashboard" element={<Navigate to="/dashboards/agro-cloud" replace />} />
         <Route path="/dashboards/ai-agro-cloud" element={<AiAgroCloud />} />
         <Route path="/dashboards/ai-agro-chat" element={<AiAgroChat />} />
+        <Route
+          path="/applications/agrocloud-management"
+          element={
+            <Suspense fallback={<RouteLoadingFallback label="Loading AgroCloud Management…" />}>
+              <AgroCloudManagement />
+            </Suspense>
+          }
+        />
         <Route path="/dashboards/esri-app" element={<Navigate to="/" replace />} />
         <Route path="/master/gis-content" element={<MasterGisContent />} />
         <Route path="/master/gis-content/item/:itemId" element={<MasterGisContentItem />} />
@@ -121,7 +130,13 @@ export default function AppRoutes() {
             <Route
               key={p.id}
               path={p.path.replace(/^\//, '')}
-              element={<DynamicBindPage bindTarget={p.bindTarget} title={p.name} />}
+              element={
+                <DynamicBindPage
+                  bindTarget={p.bindTarget}
+                  title={p.name}
+                  externalUrl={p.externalUrl}
+                />
+              }
             />
           ))}
         <Route path="*" element={<Navigate to="/" replace />} />

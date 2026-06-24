@@ -119,9 +119,7 @@ function TickerTrack({
 
 export function AcpWeatherAlertTicker() {
   const acp = useAcpPlatform()
-  const { fields, entries, error } = useAcpWeatherFieldData()
-
-  if (!acp.layerVisibility.liveAlertTicker) return null
+  const { fields, entries, loading, error } = useAcpWeatherFieldData()
 
   const scrollDurationS = useMemo(
     () => resolveAcpWeatherTickerScrollDurationS(entries.length),
@@ -136,36 +134,33 @@ export function AcpWeatherAlertTicker() {
     [acp],
   )
 
-  if (!fields.length) return null
-
-  if (!entries.length) {
-    if (!error) return null
-    return (
-      <div className="acp-weather-ticker" role="status" aria-live="polite">
-        <span className="acp-weather-ticker__badge">
-          <i className="fa-solid fa-cloud-bolt" aria-hidden />
-          Live Alert
-        </span>
-        <div className="acp-weather-ticker__viewport">
-          <p className="acp-weather-ticker__fallback">{error}</p>
-        </div>
-      </div>
-    )
-  }
+  const fallbackMessage = useMemo(() => {
+    if (!fields.length) return 'Loading field coverage…'
+    if (loading && !entries.length) return 'Loading live weather…'
+    if (error) return error
+    if (!entries.length) return 'Weather data unavailable'
+    return null
+  }, [entries.length, error, fields.length, loading])
 
   return (
-    <div className="acp-weather-ticker" role="region" aria-label="Live Alert weather ticker">
+    <div className="acp-weather-ticker acp-weather-ticker--persistent" role="region" aria-label="Live Alert weather ticker">
       <span className="acp-weather-ticker__badge">
         <i className="fa-solid fa-cloud-bolt" aria-hidden />
         Live Alert
       </span>
       <div className="acp-weather-ticker__viewport">
-        <TickerTrack
-          entries={entries}
-          onFocusField={focusFieldOnMap}
-          durationS={scrollDurationS}
-          duplicate
-        />
+        {fallbackMessage ? (
+          <p className="acp-weather-ticker__fallback" role="status" aria-live="polite">
+            {fallbackMessage}
+          </p>
+        ) : (
+          <TickerTrack
+            entries={entries}
+            onFocusField={focusFieldOnMap}
+            durationS={scrollDurationS}
+            duplicate
+          />
+        )}
       </div>
     </div>
   )

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Almarai:wght@400;700;800&family=Tajawal:wght@400;500;700;800;900&display=swap');
+/* Typography: self-hosted via src/styles/fonts-local.css (no Google Fonts CDN). */
 
 /* Workflow data-entry shells use padding from .workflow-shell-page (no double gutter) */
 .ec-page:not(.workflow-shell-page) {

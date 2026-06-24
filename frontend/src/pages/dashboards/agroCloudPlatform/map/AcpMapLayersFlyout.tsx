@@ -1,10 +1,9 @@
 import { useMemo } from 'react'
 import { getGisContentMapRegistry, useGisContentPortal } from '../../../../lib/gisContentPortalStore'
-import { isAgroStructuresPortalRow } from '../../../../lib/gisHostedFeatureLayerPortal'
 import { useAcpPlatform } from '../acpPlatformContext'
 import { AcpMapPanel } from './AcpMapPanel'
-import { AcpWmsIndexGrid } from './AcpWmsIndexFlyout'
-import { isAcpExcludedPortalMapRow } from './acpPortalMapLayers'
+import { AcpLayerLiveDropdown } from './AcpLayerLiveDropdown'
+import { AcpPortalLayerControls } from './AcpPortalLayerControls'
 
 type Props = { onClose: () => void }
 
@@ -15,7 +14,7 @@ export function AcpMapLayersFlyout({ onClose }: Props) {
   const { layerVisibility } = acp
 
   return (
-    <AcpMapPanel title="Layers" onClose={onClose}>
+    <AcpMapPanel title="Layers" onClose={onClose} className="acp-map-panel--layers">
       <ul className="acp-map-panel__layer-list">
         <li>
           <label className="acp-map-panel__layer-row acp-map-panel__layer-row--sentinel">
@@ -25,23 +24,12 @@ export function AcpMapLayersFlyout({ onClose }: Props) {
               onChange={e => acp.setCoreLayerVisible('sentinelWms', e.target.checked)}
               aria-label="Show imagery layer on map"
             />
-            <span>Show on map · Sentinel {acp.selectedWmsLayer}</span>
+            <span>Show on map · {acp.activeWmsLayers.join(' + ') || acp.selectedWmsLayer}</span>
           </label>
         </li>
-        <li className="acp-map-panel__layer-section">
-          <span className="acp-map-panel__layer-section-label">Sentinel index</span>
-          <AcpWmsIndexGrid />
-        </li>
-        <li>
-          <label className="acp-map-panel__layer-row">
-            <input
-              type="checkbox"
-              checked={layerVisibility.liveAlertTicker}
-              onChange={e => acp.setCoreLayerVisible('liveAlertTicker', e.target.checked)}
-              aria-label="Show Live Alert weather ticker bar"
-            />
-            <span>Live Alert · ticker bar</span>
-          </label>
+        <li className="acp-map-panel__layer-section acp-map-panel__layer-section--layer-live">
+          <span className="acp-map-panel__layer-section-label">Layer Live</span>
+          <AcpLayerLiveDropdown variant="panel" />
         </li>
         <li>
           <label className="acp-map-panel__layer-row">
@@ -63,28 +51,12 @@ export function AcpMapLayersFlyout({ onClose }: Props) {
             <span>Live Alerts · map markers</span>
           </label>
         </li>
-        {registry.activeItemIds.map(id => {
-          const row = portal.rows.find(r => r.id === id)
-          if (!row || isAcpExcludedPortalMapRow(row)) return null
-          const isAgroStructures = isAgroStructuresPortalRow(row)
-          const visible = acp.isPortalLayerVisible(id)
-          return (
-            <li key={id}>
-              <label className="acp-map-panel__layer-row">
-                <input
-                  type="checkbox"
-                  checked={visible}
-                  onChange={e => {
-                    const on = e.target.checked
-                    acp.setPortalLayerVisible(id, on)
-                    if (isAgroStructures) acp.setCoreLayerVisible('aoi', on)
-                  }}
-                />
-                <span>{row.title}</span>
-              </label>
-            </li>
-          )
-        })}
+        {registry.activeItemIds.length ? (
+          <li className="acp-map-panel__layer-section">
+            <span className="acp-map-panel__layer-section-label">Added GIS layers</span>
+            <AcpPortalLayerControls />
+          </li>
+        ) : null}
       </ul>
     </AcpMapPanel>
   )

@@ -133,13 +133,19 @@ export default function HeaderBar({ onToggleMobileNav, mobileNavOpen = false }: 
         ) : null}
       </div>
       <div className={`header-center${hs.showCenterLogo ? '' : ' header-center--hidden'}`}>
-        <img
-          className="brand-logo"
-          src={centerLogoSrc}
-          alt="Elite Agro Projects"
-          loading="lazy"
-          decoding="async"
-        />
+        <span className="header-center__logo" role="img" aria-label="Elite Agro Projects">
+          <img
+            className="brand-logo"
+            src={centerLogoSrc}
+            alt=""
+            width={300}
+            height={48}
+            loading="eager"
+            decoding="async"
+            fetchPriority="high"
+            draggable={false}
+          />
+        </span>
       </div>
       <div className="header-right"></div>
     </header>

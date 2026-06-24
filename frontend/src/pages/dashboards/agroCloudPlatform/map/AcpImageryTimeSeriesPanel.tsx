@@ -15,7 +15,7 @@ import {
   type ChartData,
 } from 'chart.js'
 import { Bar, Line, Pie, Scatter } from 'react-chartjs-2'
-import { fetchCropAlertSentinelHistoryExtension } from '../../../../lib/siCropAlertSentinelLive'
+import { fetchCropAlertSentinelHistoryExtension, buildDailySeriesFromEngineScenes } from '../../../../lib/siCropAlertSentinelLive'
 import { acpDefaultLayerIdsFromChartSeries } from '../acpSettingsBundle'
 import { useAcpPlatform } from '../acpPlatformContext'
 import {
@@ -28,6 +28,8 @@ import {
   defaultImageryDateRange,
   flattenImageryTimeSeriesLayerOptions,
   imageryLayerChartColor,
+  pruneImageryTimeSeriesToObservations,
+  pruneSingleLayerImagerySeries,
   splitSeriesByYear,
   yearSplitChartColors,
   type ImageryChartType,
@@ -117,15 +119,6 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
   }, [fieldOptions, acp.selectedFieldKey])
 
   useEffect(() => {
-    setSelectedLayerIds(prev => {
-      const valid = prev.filter(id => layerOptions.some(o => o.id === id))
-      if (valid.length) return valid
-      if (layerOptions.some(o => o.id === acp.selectedWmsLayer)) return [acp.selectedWmsLayer]
-      return layerOptions[0]?.id ? [layerOptions[0].id] : ['NDVI']
-    })
-  }, [acp.selectedWmsLayer, layerOptions])
-
-  useEffect(() => {
     if (selectedLayerIds.length > 1 && splitByYears) setSplitByYears(false)
   }, [selectedLayerIds.length, splitByYears])
 
@@ -133,10 +126,22 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
     if ((chartType === 'pie' || chartType === 'scatter') && splitByYears) setSplitByYears(false)
   }, [chartType, splitByYears])
 
+  const invalidateResults = useCallback(() => {
+    setHasRun(false)
+    setLabels([])
+    setLayerSeries([])
+    setError(null)
+  }, [])
+
   const selectedFieldLabel =
     fieldOptions.find(o => o.fieldKey === selectedFieldKey)?.displayName ?? '—'
 
   const runAnalysis = useCallback(async () => {
+    setHasRun(true)
+    setError(null)
+    setLabels([])
+    setLayerSeries([])
+
     if (!selectedFieldKey) {
       setError('Select a field from Agro Structures.')
       return
@@ -154,27 +159,41 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
     const layerIds = selectedLayerIds.length ? selectedLayerIds : ['NDVI']
 
     setLoading(true)
-    setError(null)
-    setHasRun(true)
     try {
-      const historyMap = await fetchCropAlertSentinelHistoryExtension([field], {
+      let historyMap = await fetchCropAlertSentinelHistoryExtension([field], {
         fromIso: fromDate,
         toIso: toDate,
         concurrency: 4,
       })
+
+      if (!historyMap.get(field.fieldKey)?.length) {
+        const engineHit = acp.allResults.find(r => r.fieldKey === field.fieldKey)
+        if (engineHit) {
+          const fallbackDaily = buildDailySeriesFromEngineScenes(engineHit, fromDate, toDate)
+          if (fallbackDaily.length) {
+            historyMap = new Map(historyMap)
+            historyMap.set(field.fieldKey, fallbackDaily)
+          }
+        }
+      }
+
       if (layerIds.length === 1) {
-        const single = aggregateImageryTimeSeries(historyMap, [field.fieldKey], layerIds[0]!)
+        const raw = aggregateImageryTimeSeries(historyMap, [field.fieldKey], layerIds[0]!)
+        const single = pruneSingleLayerImagerySeries(raw.labels, raw.values)
         setLabels(single.labels)
         setLayerSeries([{ layerId: layerIds[0]!, values: single.values }])
-        if (!single.labels.length) setError('No observations in this date range.')
+        if (!single.labels.length) {
+          setError('No observations in this date range — try widening dates or check Sentinel coverage.')
+        }
       } else {
-        const multi = aggregateImageryTimeSeriesMulti(historyMap, [field.fieldKey], layerIds)
+        const raw = aggregateImageryTimeSeriesMulti(historyMap, [field.fieldKey], layerIds)
+        const multi = pruneImageryTimeSeriesToObservations(raw.labels, raw.series)
         setLabels(multi.labels)
         setLayerSeries(multi.series)
-        if (!multi.labels.length) setError('No observations in this date range.')
+        if (!multi.labels.length) {
+          setError('No observations in this date range — try widening dates or check Sentinel coverage.')
+        }
       }
-      const primary = layerIds[0]!
-      if (primary !== acp.selectedWmsLayer) acp.setSelectedWmsLayer(primary)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed')
       setLabels([])
@@ -182,7 +201,14 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
     } finally {
       setLoading(false)
     }
-  }, [acp.aoiMask, acp.selectedWmsLayer, selectedFieldKey, fromDate, toDate, selectedLayerIds, acp])
+  }, [
+    acp.aoiMask,
+    acp.allResults,
+    selectedFieldKey,
+    fromDate,
+    toDate,
+    selectedLayerIds,
+  ])
 
   const chartData = useMemo((): ChartData<'line' | 'bar'> => {
     if (!labels.length || !layerSeries.length) {
@@ -458,7 +484,12 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
             <span>Field Name</span>
             <select
               value={selectedFieldKey}
-              onChange={e => setSelectedFieldKey(e.target.value)}
+              onChange={e => {
+                invalidateResults()
+                const key = e.target.value
+                setSelectedFieldKey(key)
+                if (key) acp.bindMapFieldSelection(key)
+              }}
               disabled={!fieldOptions.length}
             >
               {!fieldOptions.length ? (
@@ -476,22 +507,42 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
             <AcpImageryLayerMultiSelect
               groups={layerGroups}
               selectedIds={selectedLayerIds}
-              onSelectedIdsChange={setSelectedLayerIds}
+              onSelectedIdsChange={ids => {
+                invalidateResults()
+                setSelectedLayerIds(ids)
+              }}
             />
           </div>
           <div className="acp-ts__date-range">
             <label className="acp-ts__field acp-ts__field--date">
               <span>From</span>
-              <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} />
+              <input
+                type="date"
+                value={fromDate}
+                onChange={e => {
+                  invalidateResults()
+                  setFromDate(e.target.value)
+                }}
+              />
             </label>
             <label className="acp-ts__field acp-ts__field--date">
               <span>To</span>
-              <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} />
+              <input
+                type="date"
+                value={toDate}
+                onChange={e => {
+                  invalidateResults()
+                  setToDate(e.target.value)
+                }}
+              />
             </label>
           </div>
           <label className="acp-ts__field">
             <span>Chart</span>
-            <select value={chartType} onChange={e => setChartType(e.target.value as ImageryChartType)}>
+            <select
+              value={chartType}
+              onChange={e => setChartType(e.target.value as ImageryChartType)}
+            >
               <option value="line">Line</option>
               <option value="area">Area</option>
               <option value="bar">Bar</option>
@@ -509,15 +560,17 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
           </button>
         </div>
 
-        <div className="acp-ts__meta">
-          <span>
-            {layerSummary}
-            {chartType === 'scatter' && layerSeries.length >= 2
-              ? ` · correlation ${layerSeries[0]?.layerId} → ${layerSeries[1]?.layerId}`
-              : ` · ${fromDate} → ${toDate}`}
-          </span>
-          <span>{selectedFieldLabel}</span>
-        </div>
+        {hasRun ? (
+          <div className="acp-ts__meta">
+            <span>
+              {layerSummary}
+              {chartType === 'scatter' && layerSeries.length >= 2
+                ? ` · correlation ${layerSeries[0]?.layerId} → ${layerSeries[1]?.layerId}`
+                : ` · ${fromDate} → ${toDate}`}
+            </span>
+            <span>{selectedFieldLabel}</span>
+          </div>
+        ) : null}
 
         <div className="acp-ts__chart-wrap">
           {loading ? (
@@ -538,7 +591,9 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
             )
           ) : (
             <div className="acp-ts__placeholder">
-              {error ?? 'Select a field and click Apply to generate analysis.'}
+              {hasRun && error
+                ? error
+                : 'Select filters and click Apply to generate analysis.'}
             </div>
           )}
         </div>

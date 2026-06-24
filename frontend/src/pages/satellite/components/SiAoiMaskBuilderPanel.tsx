@@ -77,8 +77,7 @@ export function SiAoiMaskBuilderPanel({
     patch({ filterValues: [...new Set(next)] })
   }
 
-  const rowClass = flat ? 'si-aoi-mask-builder__row' : undefined
-  const fieldLabel = (text: string, htmlFor?: string) =>
+  const fieldLabel = (text: string) =>
     flat ? (
       <span className="si-rs-panel__label">{text}</span>
     ) : (
@@ -91,10 +90,10 @@ export function SiAoiMaskBuilderPanel({
     key?: string,
   ) =>
     flat ? (
-      <div key={key} className={rowClass}>
+      <label key={key} className="si-rs-panel__stack">
         {fieldLabel(label)}
-        <div className="si-rs-panel__control">{control}</div>
-      </div>
+        {control}
+      </label>
     ) : (
       <label key={key} className="si-field-analysis-field si-field-analysis-field--labeled">
         {fieldLabel(label)}
@@ -104,68 +103,60 @@ export function SiAoiMaskBuilderPanel({
 
   return (
     <div className={`si-aoi-mask-builder${flat ? ' si-aoi-mask-builder--flat' : ''}`}>
-      <div className="si-aoi-mask-builder__head">
-        {flat ? (
-          <>
-            <span className="si-aoi-mask-builder__head-label">Mask</span>
-            <div className="si-aoi-mask-builder__head-main">
-              <span className="si-aoi-mask-builder__title">AOI mask</span>
-              <label className="si-aoi-mask-builder__enable">
-                <input
-                  type="checkbox"
-                  checked={settings.enabled}
-                  onChange={e => {
-                    const enabled = e.target.checked
-                    if (enabled && settings.filterValues.length === 0 && settings.maskMode === 'filtered-features') {
-                      patch({
-                        enabled,
-                        filterField: settings.filterField || 'Structure_Type',
-                        filterValues: ['1006', '1007'],
-                      })
-                      return
-                    }
-                    patch({ enabled })
-                  }}
-                  aria-label="Enable AOI Mask Builder"
-                />
-                <span>Enable</span>
-              </label>
-            </div>
-          </>
-        ) : (
-          <>
-            <h3 className="si-aoi-mask-builder__title">AOI Mask Builder</h3>
-            <label className="si-aoi-mask-builder__enable">
-              <input
-                type="checkbox"
-                checked={settings.enabled}
-                onChange={e => {
-                  const enabled = e.target.checked
-                  if (enabled && settings.filterValues.length === 0 && settings.maskMode === 'filtered-features') {
-                    patch({
-                      enabled,
-                      filterField: settings.filterField || 'Structure_Type',
-                      filterValues: ['1006', '1007'],
-                    })
-                    return
-                  }
-                  patch({ enabled })
-                }}
-                aria-label="Enable AOI Mask Builder"
-              />
-              <span>Enable</span>
-            </label>
-          </>
-        )}
-      </div>
+      {flat ? (
+        <label className="si-rs-panel__show-box">
+          <input
+            type="checkbox"
+            checked={settings.enabled}
+            onChange={e => {
+              const enabled = e.target.checked
+              if (enabled && settings.filterValues.length === 0 && settings.maskMode === 'filtered-features') {
+                patch({
+                  enabled,
+                  filterField: settings.filterField || 'Structure_Type',
+                  filterValues: ['1006', '1007'],
+                })
+                return
+              }
+              patch({ enabled })
+            }}
+            aria-label="Enable AOI mask"
+          />
+          <span>AOI mask</span>
+        </label>
+      ) : (
+        <div className="si-aoi-mask-builder__head">
+          <h3 className="si-aoi-mask-builder__title">AOI Mask Builder</h3>
+          <label className="si-aoi-mask-builder__enable">
+            <input
+              type="checkbox"
+              checked={settings.enabled}
+              onChange={e => {
+                const enabled = e.target.checked
+                if (enabled && settings.filterValues.length === 0 && settings.maskMode === 'filtered-features') {
+                  patch({
+                    enabled,
+                    filterField: settings.filterField || 'Structure_Type',
+                    filterValues: ['1006', '1007'],
+                  })
+                  return
+                }
+                patch({ enabled })
+              }}
+              aria-label="Enable AOI Mask Builder"
+            />
+            <span>Enable</span>
+          </label>
+        </div>
+      )}
 
       {settings.enabled ? (
         flat ? (
-          <div className="si-aoi-mask-builder__fields">
+          <>
             {renderField(
               'Source',
               <select
-                className="si-field-analysis-select"
+                className="si-rs-panel__select"
                 value={settings.sourceLayerId}
                 onChange={e => {
                   const sourceLayerId = e.target.value
@@ -194,7 +185,7 @@ export function SiAoiMaskBuilderPanel({
             {renderField(
               'Field',
               <select
-                className="si-field-analysis-select"
+                className="si-rs-panel__select"
                 value={settings.filterField}
                 onChange={e => patch({ filterField: e.target.value, filterValues: [] })}
                 disabled={!fieldOptions.length}
@@ -213,8 +204,8 @@ export function SiAoiMaskBuilderPanel({
               'filter-field',
             )}
             {settings.maskMode === 'filtered-features' ? (
-              <div className="si-aoi-mask-builder__row">
-                <span className="si-rs-panel__label">Values</span>
+              <div className="si-rs-panel__stack">
+                <span className="si-rs-panel__label">Filter values</span>
                 <div className="si-aoi-mask-builder__values">
                   {valueOptions.length === 0 ? (
                     <p className="si-aoi-mask-builder__empty">No values for this field.</p>
@@ -238,7 +229,7 @@ export function SiAoiMaskBuilderPanel({
             {renderField(
               'Sentinel',
               <select
-                className="si-field-analysis-select"
+                className="si-rs-panel__select"
                 value={settings.sentinelLayerId || defaultSentinelLayerId}
                 onChange={e => patch({ sentinelLayerId: e.target.value })}
                 aria-label="Sentinel analysis layer"
@@ -254,7 +245,7 @@ export function SiAoiMaskBuilderPanel({
             {renderField(
               'Mode',
               <select
-                className="si-field-analysis-select"
+                className="si-rs-panel__select"
                 value={settings.maskMode}
                 onChange={e => patch({ maskMode: e.target.value as SiAoiMaskMode })}
                 aria-label="Mask mode"
@@ -270,7 +261,7 @@ export function SiAoiMaskBuilderPanel({
             {renderField(
               'Display',
               <select
-                className="si-field-analysis-select"
+                className="si-rs-panel__select"
                 value={settings.displayMode}
                 onChange={e => patch({ displayMode: e.target.value as SiAoiMaskDisplayMode })}
                 aria-label="Display mode"
@@ -283,16 +274,16 @@ export function SiAoiMaskBuilderPanel({
               </select>,
               'display-mode',
             )}
-            <label className="si-field-analysis-checkbox-row si-aoi-mask-builder__live">
+            <label className="si-rs-panel__show-box">
               <input
                 type="checkbox"
                 checked={settings.liveUpdate}
                 onChange={e => patch({ liveUpdate: e.target.checked })}
                 aria-label="Live update mask on filter change"
               />
-              <span>Live update</span>
+              <span>Live mask update</span>
             </label>
-            <p className="si-field-analysis-wms-zoom-hint" role="status">
+            <p className="si-rs-panel__meta si-rs-panel__meta--inline" role="status">
               {settings.maskMode === 'selected-features' ? (
                 <>
                   Selection <strong>{selectedFeatureCount}</strong> · Mask <strong>{maskFeatureCount}</strong>
@@ -305,12 +296,12 @@ export function SiAoiMaskBuilderPanel({
             </p>
             <button
               type="button"
-              className="si-aoi-mask-builder__reset"
+              className="si-rs-panel__action si-rs-panel__action--ghost"
               onClick={() => onChange({ ...DEFAULT_SI_AOI_MASK_BUILDER_SETTINGS })}
             >
-              Reset defaults
+              Reset mask defaults
             </button>
-          </div>
+          </>
         ) : (
       <fieldset className="si-aoi-mask-builder__fieldset">
         <label className="si-field-analysis-field si-field-analysis-field--labeled">

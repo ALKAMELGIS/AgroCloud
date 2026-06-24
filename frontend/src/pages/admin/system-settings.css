@@ -1052,6 +1052,98 @@ html[data-theme='dark'] .sys-settings-tab:hover:not(.sys-settings-tab--active) {
   background: color-mix(in srgb, var(--ds-color-info) 12%, transparent);
 }
 
+/* Link Management — external page links in Navigation tab */
+.sys-link-mgmt {
+  margin-bottom: 28px;
+  padding: 20px 22px;
+  border-radius: var(--sys-radius);
+  border: 1px solid color-mix(in srgb, var(--ds-color-primary) 22%, var(--ds-color-border));
+  background: color-mix(in srgb, var(--ds-color-primary) 4%, var(--ds-color-surface));
+}
+
+.sys-link-mgmt__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.sys-link-mgmt__add {
+  flex-shrink: 0;
+}
+
+.sys-link-mgmt__empty {
+  margin: 0;
+}
+
+.sys-link-mgmt__list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sys-link-mgmt__card {
+  padding: 16px 18px;
+  border-radius: var(--sys-radius-sm);
+  border: 1px solid var(--ds-color-border);
+  background: var(--ds-color-surface);
+}
+
+.sys-link-mgmt__card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.sys-link-mgmt__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--ds-color-primary) 14%, transparent);
+  color: var(--ds-color-primary);
+  font-size: 1.05rem;
+}
+
+.sys-link-mgmt__card-titles {
+  flex: 1;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sys-link-mgmt__card-titles code {
+  font-size: 0.78rem;
+  color: var(--ds-color-text-muted);
+}
+
+.sys-link-mgmt__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
+.sys-page-field--wide {
+  grid-column: 1 / -1;
+}
+
+.sys-page-field--checkbox {
+  display: flex;
+  align-items: flex-end;
+}
+
+@media (max-width: 720px) {
+  .sys-link-mgmt__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Drag list — group order */
 .sys-section-label {
   font-size: 0.72rem;

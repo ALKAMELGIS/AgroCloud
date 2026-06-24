@@ -733,6 +733,12 @@ html[data-theme='dark'] .admin-users__pager {
   color: #0369a1;
   border-color: rgba(14, 165, 233, 0.3);
 }
+.admin-users-pill--status-pending-verification,
+.admin-users-pill--status-pending-approval {
+  background: #fef9c3;
+  color: #a16207;
+  border-color: rgba(234, 179, 8, 0.35);
+}
 .admin-users-pill--status-deleted,
 .admin-users-pill--status-unknown {
   background: #f1f5f9;
@@ -760,6 +766,12 @@ html[data-theme='dark'] .admin-users-pill--status-invited {
   background: rgba(56, 189, 248, 0.14);
   color: #7dd3fc;
   border-color: rgba(56, 189, 248, 0.35);
+}
+html[data-theme='dark'] .admin-users-pill--status-pending-verification,
+html[data-theme='dark'] .admin-users-pill--status-pending-approval {
+  background: rgba(234, 179, 8, 0.14);
+  color: #fde047;
+  border-color: rgba(250, 204, 21, 0.35);
 }
 html[data-theme='dark'] .admin-users-pill--status-deleted,
 html[data-theme='dark'] .admin-users-pill--status-unknown {

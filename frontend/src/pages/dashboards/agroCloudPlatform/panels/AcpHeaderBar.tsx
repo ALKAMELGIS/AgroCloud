@@ -1,11 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useAcpPlatform } from '../acpPlatformContext'
 import type { AcpKpiCardConfig } from '../acpPlatformConfig'
 import { useBreakpoint, isAcpCompactLayout } from '../hooks/useBreakpoint'
 
 const ELITE_AGRO_LOGO_SRC = `${import.meta.env.BASE_URL}elite-agro-projects-logo.png`
-
-const PRIMARY_KPI_IDS = new Set(['total-countries', 'total-fields', 'total-area'])
 
 function resolveKpiDisplay(
   card: AcpKpiCardConfig,
@@ -59,7 +57,6 @@ export function AcpHeaderBar({ kpiTotals }: { kpiTotals?: ReturnType<typeof useA
   const acp = useAcpPlatform()
   const bp = useBreakpoint()
   const compact = isAcpCompactLayout(bp)
-  const [kpisExpanded, setKpisExpanded] = useState(false)
   const totals = kpiTotals ?? acp.kpiTotals
   const now = new Date()
   const dateStr = now.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -69,20 +66,8 @@ export function AcpHeaderBar({ kpiTotals }: { kpiTotals?: ReturnType<typeof useA
     [acp.config.kpiCards],
   )
 
-  const primaryCards = useMemo(
-    () =>
-      compact
-        ? cards.filter(c => PRIMARY_KPI_IDS.has(c.id)).slice(0, 3)
-        : cards,
-    [cards, compact],
-  )
-  const extraCards = useMemo(
-    () => (compact ? cards.filter(c => !PRIMARY_KPI_IDS.has(c.id)) : []),
-    [cards, compact],
-  )
-
   return (
-    <header className={`acp-header${compact ? ' acp-header--compact' : ''}${kpisExpanded ? ' acp-header--kpis-expanded' : ''}`}>
+    <header className={`acp-header${compact ? ' acp-header--compact' : ''}`}>
       <div className="acp-header__bar">
         <div className="acp-header__brand">
           <span className="acp-header__elite" role="img" aria-label="Elite Agro Projects">
@@ -90,7 +75,9 @@ export function AcpHeaderBar({ kpiTotals }: { kpiTotals?: ReturnType<typeof useA
               className="acp-header__elite-logo"
               src={ELITE_AGRO_LOGO_SRC}
               alt=""
-              decoding="sync"
+              width={272}
+              height={42}
+              decoding="async"
               fetchPriority="high"
               draggable={false}
             />
@@ -134,25 +121,9 @@ export function AcpHeaderBar({ kpiTotals }: { kpiTotals?: ReturnType<typeof useA
       </div>
 
       <div className="acp-header__kpis" role="region" aria-label="Structure KPIs">
-        {primaryCards.map(card => (
+        {cards.map(card => (
           <KpiCard key={card.id} card={card} totals={totals} />
         ))}
-        {compact && extraCards.length ? (
-          <>
-            {kpisExpanded
-              ? extraCards.map(card => <KpiCard key={card.id} card={card} totals={totals} />)
-              : null}
-            <button
-              type="button"
-              className="acp-kpi-expand"
-              aria-expanded={kpisExpanded}
-              onClick={() => setKpisExpanded(v => !v)}
-            >
-              <i className={`fa-solid fa-chevron-${kpisExpanded ? 'up' : 'down'}`} aria-hidden />
-              {kpisExpanded ? 'Less' : `+${extraCards.length} more`}
-            </button>
-          </>
-        ) : null}
       </div>
     </header>
   )

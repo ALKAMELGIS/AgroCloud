@@ -1,0 +1,22 @@
+{
+  "farms": [
+    { "id": "farm-elite-1", "label": "Elite Agro — North", "country": "UAE" },
+    { "id": "farm-elite-2", "label": "Elite Agro — South", "country": "UAE" }
+  ],
+  "crops": [
+    { "id": "tomato", "label": "Tomato" },
+    { "id": "cucumber", "label": "Cucumber" },
+    { "id": "pepper", "label": "Bell Pepper" }
+  ],
+  "locations": [
+    { "id": "rak", "label": "Ras Al Khaimah" },
+    { "id": "auh", "label": "Abu Dhabi" }
+  ],
+  "defaults": {
+    "farmId": "farm-elite-1",
+    "cropId": "tomato",
+    "locationId": "rak",
+    "sowingDate": "2026-01-15",
+    "analysisDate": "2026-06-17"
+  }
+}

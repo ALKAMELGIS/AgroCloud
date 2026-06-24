@@ -7,10 +7,11 @@ import { AcpFieldsPanel } from './panels/AcpFieldsPanel'
 import { AcpDecisionPanel } from './panels/AcpDecisionPanel'
 import { AcpLiveAlertsPanel } from './panels/AcpLiveAlertsPanel'
 import { AcpAnalyticsPanel } from './panels/AcpAnalyticsPanel'
-import { AcpMapToolbar, type AcpMapToolbarHandle } from './map/AcpMapToolbar'
+import { AcpMapToolbar, type AcpMapPanelId, type AcpMapToolbarHandle } from './map/AcpMapToolbar'
 import { AcpWeatherAlertTicker } from './map/AcpMapWeatherAlertTicker'
 import { AcpWeatherFieldProvider } from './map/AcpWeatherFieldProvider'
 import { useAcpPlatform } from './acpPlatformContext'
+import { AcpMapToolErrorBoundary } from './map/AcpMapToolErrorBoundary'
 import { purgeWorldCountriesFromAcpMapRegistry } from './map/acpPortalMapLayers'
 import { isAcpCompactLayout, useBreakpoint } from './hooks/useBreakpoint'
 
@@ -24,8 +25,6 @@ const AcpTimeSeriesChart = lazy(() =>
   import('./panels/AcpTimeSeriesChart').then(m => ({ default: m.AcpTimeSeriesChart })),
 )
 
-type AcpMobileTab = 'map' | 'fields' | 'right'
-
 function MapCanvasFallback() {
   return (
     <div className="acp-map-stage__loading" role="status" aria-live="polite">
@@ -34,13 +33,40 @@ function MapCanvasFallback() {
   )
 }
 
+function AcpSectionNav({ showFields, showRight }: { showFields: boolean; showRight: boolean }) {
+  const jump = useCallback((id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
+  return (
+    <nav className="acp-section-nav" role="navigation" aria-label="Dashboard sections">
+      {showFields ? (
+        <button type="button" className="acp-section-nav__btn" onClick={() => jump('acp-section-fields')}>
+          <i className="fa-solid fa-list" aria-hidden />
+          <span>Fields</span>
+        </button>
+      ) : null}
+      <button type="button" className="acp-section-nav__btn" onClick={() => jump('acp-section-map')}>
+        <i className="fa-solid fa-map" aria-hidden />
+        <span>Map</span>
+      </button>
+      {showRight ? (
+        <button type="button" className="acp-section-nav__btn" onClick={() => jump('acp-section-insights')}>
+          <i className="fa-solid fa-chart-pie" aria-hidden />
+          <span>Insights</span>
+        </button>
+      ) : null}
+    </nav>
+  )
+}
+
 function AgroCloudPlatformBody() {
   const acp = useAcpPlatform()
   const bp = useBreakpoint()
   const compact = isAcpCompactLayout(bp)
   const mapToolbarRef = useRef<AcpMapToolbarHandle>(null)
-  const [mobileTab, setMobileTab] = useState<AcpMobileTab>('map')
-  const [toolPanelOpen, setToolPanelOpen] = useState(false)
+  const [activeMapPanel, setActiveMapPanel] = useState<AcpMapPanelId | null>(null)
+  const toolPanelOpen = activeMapPanel != null
   const {
     filteredRows,
     liveAlertRows,
@@ -56,48 +82,20 @@ function AgroCloudPlatformBody() {
   }, [])
 
   useEffect(() => {
-    if (!compact) {
-      setMobileTab('map')
-      setToolPanelOpen(false)
-    }
+    if (!compact) setActiveMapPanel(null)
   }, [compact])
 
-  const closeSheets = useCallback(() => {
-    setMobileTab('map')
-    mapToolbarRef.current?.closePanel()
-  }, [])
-
   const onMapPanelOpen = useCallback(() => {
-    setMobileTab('map')
-  }, [])
-
-  const selectMobileTab = useCallback(
-    (tab: AcpMobileTab) => {
-      if (tab === 'map') {
-        closeSheets()
-        return
-      }
-      mapToolbarRef.current?.closePanel()
-      setMobileTab(prev => (prev === tab ? 'map' : tab))
-    },
-    [closeSheets],
-  )
-
-  useEffect(() => {
-    if (mobileTab === 'map' && !toolPanelOpen) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeSheets()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [mobileTab, toolPanelOpen, closeSheets])
+    if (!compact) return
+    document.getElementById('acp-section-map')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [compact])
 
   const shellClass = [
     'acp-shell',
+    `acp-shell--${bp}`,
     compact ? 'acp-shell--compact' : '',
-    mobileTab === 'fields' ? 'acp-shell--tab-fields' : '',
-    mobileTab === 'right' ? 'acp-shell--tab-right' : '',
     toolPanelOpen ? 'acp-shell--tool-panel' : '',
+    acp.config.panels.timeSeriesChart ? 'acp-shell--has-timeseries-chart' : '',
   ]
     .filter(Boolean)
     .join(' ')
@@ -107,20 +105,7 @@ function AgroCloudPlatformBody() {
     acp.config.panels.decision || acp.config.panels.liveAlerts || acp.config.panels.analytics
 
   const insightsPanel = showRight ? (
-    <aside className="acp-panel acp-right">
-      {compact ? (
-        <div className="acp-right__drawer-bar">
-          <span className="acp-right__drawer-title">Insights</span>
-          <button
-            type="button"
-            className="acp-panel__drawer-close"
-            aria-label="Close insights panel"
-            onClick={closeSheets}
-          >
-            <i className="fa-solid fa-xmark" aria-hidden />
-          </button>
-        </div>
-      ) : null}
+    <aside className="acp-panel acp-right" id="acp-section-insights">
       {acp.config.panels.decision ? <AcpDecisionPanel /> : null}
       {acp.config.panels.liveAlerts ? (
         <AcpLiveAlertsPanel
@@ -139,95 +124,98 @@ function AgroCloudPlatformBody() {
     </aside>
   ) : null
 
-  return (
-    <div className={shellClass}>
-      <AcpHeaderBar kpiTotals={displayKpiTotals} />
-      {showFields ? (
-        <AcpFieldsPanel
-          rows={filteredRows}
-          countries={countries}
-          viewportScopeActive={viewportScopeActive}
-          drawerMode={compact}
-          onDrawerClose={closeSheets}
-        />
-      ) : null}
-      <section className="acp-map-stage">
+  const fieldsPanelInner = showFields ? (
+    <AcpFieldsPanel
+      rows={filteredRows}
+      countries={countries}
+      viewportScopeActive={viewportScopeActive}
+    />
+  ) : null
+
+  const fieldsPanel = fieldsPanelInner ? (
+    compact ? (
+      <div id="acp-section-fields" className="acp-compact-section">
+        {fieldsPanelInner}
+      </div>
+    ) : (
+      <div id="acp-section-fields">{fieldsPanelInner}</div>
+    )
+  ) : null
+
+  const timeSeriesChart = acp.config.panels.timeSeriesChart ? (
+    <Suspense fallback={null}>
+      <AcpTimeSeriesChart />
+    </Suspense>
+  ) : null
+
+  const mapStage = (
+    <section
+      id="acp-section-map"
+      className="acp-map-stage"
+    >
         <AcpWeatherFieldProvider>
-          <AcpWeatherAlertTicker />
+        <AcpWeatherAlertTicker />
+        <AcpMapToolErrorBoundary>
           <Suspense fallback={<MapCanvasFallback />}>
             <AcpMapCanvas />
           </Suspense>
-        </AcpWeatherFieldProvider>
-        {!compact ? (
-          <AcpMapToolbar ref={mapToolbarRef} layout="overlay" onPanelOpen={onMapPanelOpen} />
-        ) : null}
-        {acp.engineError ? (
-          <div className="acp-status-bar acp-status-bar--err" role="alert">
-            {acp.engineError}
-          </div>
-        ) : acp.engineLoading && !acp.structuresHydrated ? (
-          <div className="acp-status-bar" role="status">
-            Loading Agro_Structures…
-          </div>
-        ) : acp.sentinelLoading ? (
-          <div className="acp-status-bar" role="status">
-            Loading Sentinel Live…
-          </div>
-        ) : null}
-      </section>
-      {!compact ? insightsPanel : null}
+        </AcpMapToolErrorBoundary>
+      </AcpWeatherFieldProvider>
+      {!compact ? (
+        <AcpMapToolbar
+          ref={mapToolbarRef}
+          layout="overlay"
+          onPanelOpen={onMapPanelOpen}
+          onActivePanelChange={setActiveMapPanel}
+        />
+      ) : null}
+      {acp.engineError ? (
+        <div className="acp-status-bar acp-status-bar--err" role="alert">
+          {acp.engineError}
+        </div>
+      ) : acp.engineLoading && !acp.structuresHydrated ? (
+        <div className="acp-status-bar" role="status">
+          Loading Agro_Structures…
+        </div>
+      ) : acp.sentinelLoading ? (
+        <div className="acp-status-bar" role="status">
+          Loading Sentinel Live…
+        </div>
+      ) : null}
+      {!compact ? timeSeriesChart : null}
+    </section>
+  )
+
+  return (
+    <div className={shellClass}>
+      <AcpHeaderBar kpiTotals={displayKpiTotals} />
+
       {compact ? (
         <>
-          {mobileTab === 'right' ? insightsPanel : null}
+          <div className="acp-compact-main">
+            {mapStage}
+            {fieldsPanel}
+            {showRight ? (
+              <div className="acp-compact-section acp-compact-section--insights">{insightsPanel}</div>
+            ) : null}
+            {timeSeriesChart}
+          </div>
           <AcpMapToolbar
             ref={mapToolbarRef}
             layout="docked"
             onPanelOpen={onMapPanelOpen}
-            onActivePanelChange={panel => setToolPanelOpen(Boolean(panel))}
+            onActivePanelChange={setActiveMapPanel}
           />
-          <nav className="acp-bottom-bar" role="tablist" aria-label="Dashboard navigation">
-            {showFields ? (
-              <button
-                type="button"
-                role="tab"
-                className={`acp-bottom-bar__btn${mobileTab === 'fields' ? ' is-active' : ''}`}
-                aria-selected={mobileTab === 'fields'}
-                onClick={() => selectMobileTab('fields')}
-              >
-                <i className="fa-solid fa-list" aria-hidden />
-                <span>Fields</span>
-              </button>
-            ) : null}
-            <button
-              type="button"
-              role="tab"
-              className={`acp-bottom-bar__btn acp-bottom-bar__btn--map${mobileTab === 'map' ? ' is-active' : ''}`}
-              aria-selected={mobileTab === 'map'}
-              onClick={() => selectMobileTab('map')}
-            >
-              <i className="fa-solid fa-map" aria-hidden />
-              <span>Map</span>
-            </button>
-            {showRight ? (
-              <button
-                type="button"
-                role="tab"
-                className={`acp-bottom-bar__btn${mobileTab === 'right' ? ' is-active' : ''}`}
-                aria-selected={mobileTab === 'right'}
-                onClick={() => selectMobileTab('right')}
-              >
-                <i className="fa-solid fa-chart-pie" aria-hidden />
-                <span>Insights</span>
-              </button>
-            ) : null}
-          </nav>
+          <AcpSectionNav showFields={showFields} showRight={showRight} />
         </>
-      ) : null}
-      {acp.config.panels.timeSeriesChart ? (
-        <Suspense fallback={null}>
-          <AcpTimeSeriesChart />
-        </Suspense>
-      ) : null}
+      ) : (
+        <>
+          {fieldsPanel}
+          {mapStage}
+          {insightsPanel}
+        </>
+      )}
+
       <Suspense fallback={null}>
         <AcpSettingsCenter />
       </Suspense>

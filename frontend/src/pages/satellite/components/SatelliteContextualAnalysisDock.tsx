@@ -19,6 +19,7 @@ export type SatelliteContextPanelId =
   | 'add-gis-layer'
   | 'remote-sensing'
   | 'crop-alerts'
+  | 'crop-classification'
   | 'layer-live-legend'
   | 'ai-detection-gis'
   | 'table-geo-ai'
@@ -69,6 +70,7 @@ export type SatelliteContextualAnalysisDockProps = {
     | 'layers'
     | 'remote-sensing'
     | 'crop-alerts'
+    | 'crop-classification'
     | 'ai-detection-gis'
     | 'table-geo-ai'
     | null;
@@ -118,6 +120,13 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     label: 'Crop alerts',
     title: 'Agro Sentinel Alert Engine',
     hint: 'Real-time NDVI/NDWI/NDMI monitoring for Farm Plots & PIVOT.',
+  },
+  {
+    id: 'crop-classification',
+    icon: 'fa-solid fa-wheat-awn',
+    label: 'Crop class',
+    title: 'Crop Classification',
+    hint: 'Multi-temporal crop / land-cover map clipped to your AOI.',
   },
   {
     id: 'layer-live-legend',
@@ -203,6 +212,7 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
   'add-gis-layer',
   'remote-sensing',
   'crop-alerts',
+  'crop-classification',
   'layer-live-legend',
   'ai-detection-gis',
   'table-geo-ai',
@@ -212,11 +222,12 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
 const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
   'remote-sensing',
   'crop-alerts',
+  'crop-classification',
   'ai-detection-gis',
 ]);
 
 const RAIL_GROUPS_MAP: SatelliteContextPanelId[][] = [
-  ['layers', 'remote-sensing', 'crop-alerts', 'layer-live-legend'],
+  ['layers', 'remote-sensing', 'crop-alerts', 'crop-classification', 'layer-live-legend'],
   ['ai-detection-gis', 'table-geo-ai'],
 ];
 
@@ -908,59 +919,30 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
                     )}
                     {activeId === 'aoi' && (
                       <div className="si-sat-ctx-aoi-tools">
-                        <p className="si-sat-ctx-muted">Draw or edit the analysis boundary.</p>
-                        <div className="si-sat-ctx-aoi-grid" role="group" aria-label="AOI draw tools">
-                          <button
-                            type="button"
-                            className={`si-sat-ctx-aoi-btn ${mapTool === 'rectangle' ? 'si-sat-ctx-aoi-btn--on' : ''}`}
-                            aria-pressed={mapTool === 'rectangle'}
-                            title="Rectangle AOI"
-                            onClick={() => onMapTool('rectangle')}
-                          >
-                            <i className="fa-regular fa-square" aria-hidden />
-                            <span>Rectangle</span>
-                          </button>
-                          <button
-                            type="button"
-                            className={`si-sat-ctx-aoi-btn ${mapTool === 'polygon' ? 'si-sat-ctx-aoi-btn--on' : ''}`}
-                            aria-pressed={mapTool === 'polygon'}
-                            title="Polygon AOI"
-                            onClick={() => onMapTool('polygon')}
-                          >
-                            <i className="fa-solid fa-draw-polygon" aria-hidden />
-                            <span>Polygon</span>
-                          </button>
-                          <button
-                            type="button"
-                            className={`si-sat-ctx-aoi-btn ${mapTool === 'circle' ? 'si-sat-ctx-aoi-btn--on' : ''}`}
-                            aria-pressed={mapTool === 'circle'}
-                            title="Circle AOI"
-                            onClick={() => onMapTool('circle')}
-                          >
-                            <i className="fa-regular fa-circle" aria-hidden />
-                            <span>Circle</span>
-                          </button>
-                          <button
-                            type="button"
-                            className={`si-sat-ctx-aoi-btn ${mapTool === 'select' ? 'si-sat-ctx-aoi-btn--on' : ''}`}
-                            aria-pressed={mapTool === 'select'}
-                            title={hasAoi ? 'Select / edit AOI' : 'Select'}
-                            onClick={() => onMapTool('select')}
-                          >
-                            <i className="fa-solid fa-arrow-pointer" aria-hidden />
-                            <span>Select</span>
-                          </button>
-                          <button
-                            type="button"
-                            className="si-sat-ctx-aoi-btn si-sat-ctx-aoi-btn--danger"
-                            disabled={!hasClearableDrawing}
-                            title="Clear drawing"
-                            onClick={() => onClearDrawing?.()}
-                          >
-                            <i className="fa-solid fa-eraser" aria-hidden />
-                            <span>Clear</span>
-                          </button>
-                        </div>
+                        <p className="si-sat-ctx-muted">
+                          AOI sketching lives in <strong>Remote Sensing → Drawing tools</strong> so it stays isolated from
+                          layers and other analyses.
+                        </p>
+                        <button
+                          type="button"
+                          className="si-sat-ctx-primary-btn"
+                          onClick={() => onMapTool('polygon')}
+                        >
+                          Open Remote Sensing drawing
+                        </button>
+                        {hasAoi ? (
+                          <p className="si-sat-ctx-muted">An AOI is committed on the map.</p>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="si-sat-ctx-aoi-btn si-sat-ctx-aoi-btn--danger"
+                          disabled={!hasClearableDrawing}
+                          title="Clear AOI sketch only — analysis layers stay visible"
+                          onClick={() => onClearDrawing?.()}
+                        >
+                          <i className="fa-solid fa-eraser" aria-hidden />
+                          <span>Clear drawing</span>
+                        </button>
                       </div>
                     )}
                     {activeId === 'charts' &&
@@ -1109,25 +1091,13 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
                         </div>
                         {mapToolboxLayersOptionsExtra}
                       </div>
-                    ) : (
-                      <p className="si-sat-ctx-muted">
-                        Tool-specific advanced options will appear here as features are extended.
-                      </p>
-                    )}
+                    ) : null}
                   </div>
                 )}
                     </div>
               </div>
                 </>
               )}
-
-              <footer className="si-sat-ctx-panel-footer">
-                <span className="si-sat-ctx-footer-hint">
-                  {activeId === 'aoi'
-                    ? 'Polygon: Shift constrains angles · Circle: Enter commits · Clear restores pan.'
-                    : 'Drag the inner edge to resize. Click the active tool again to collapse.'}
-                </span>
-              </footer>
             </>
           ) : null}
         </aside>

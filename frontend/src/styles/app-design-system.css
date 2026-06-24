@@ -543,6 +543,23 @@ html[data-theme='dark'] .content--sensors-fit {
   min-width: 0;
 }
 
+/* Map UI panels — opaque surfaces above map markers (shared stack) */
+:root {
+  --app-map-ui-chrome-z: 60;
+  --app-map-ui-panel-z: 1200;
+  --app-map-marker-z: 5;
+}
+
+.map-ui-panel-isolate,
+.si-env-panel.si-env-panel--mapbox-drop {
+  isolation: isolate;
+  background-color: var(--ds-color-surface, #fff);
+}
+
+.si-env-panel.si-env-panel--mapbox-drop {
+  z-index: max(var(--app-map-ui-chrome-z), 120);
+}
+
 /* Route-level lazy dashboard loading */
 .route-loading-fallback {
   display: flex;

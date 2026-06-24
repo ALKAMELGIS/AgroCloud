@@ -2,14 +2,18 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSiInstanceScope } from '../siInstanceScope';
 import './WeatherIntelligencePanel.css';
 import {
+  clampOpenMeteoPickerDate,
+  fetchOpenMeteoDailyForDate,
   fetchOpenMeteoTemporalComparison,
   fetchOpenMeteoTimeHistory,
   fetchOpenMeteoWeather,
   geocodePlaceQuery,
   metricLabel,
+  resolveOpenMeteoDatePickerBounds,
   reversePlaceLabel,
   wmoWeatherIconClass,
   wmoWeatherToneClass,
+  type OpenMeteoDailyDetail,
   type OpenMeteoTemporalCard,
   type OpenMeteoTimeHistory,
   type OpenMeteoWeatherSnapshot,
@@ -32,6 +36,8 @@ type WeatherIntelligencePanelProps = {
   onMapPickToggle: (active: boolean) => void;
   onBeginMapPick?: () => void;
   mapboxToken?: string;
+  /** Narrower default size for AgroCloud Platform map overlay. */
+  layout?: 'default' | 'acp-compact';
 };
 
 type PanelView = 'forecast' | 'history';
@@ -41,6 +47,12 @@ const MIN_W = 268;
 const MIN_H = 300;
 const DEFAULT_W = 308;
 const DEFAULT_H = 440;
+const ACP_MIN_W = 248;
+const ACP_MIN_H = 280;
+const ACP_DEFAULT_W = 272;
+const ACP_DEFAULT_H = 400;
+const ACP_HISTORY_PANEL_H = 460;
+const ACP_HISTORY_MIN_H = 300;
 /** Fixed layout size for Time History (timeline + 3 insight cards). */
 const HISTORY_PANEL_W = 412;
 const HISTORY_PANEL_H = 748;
@@ -56,9 +68,13 @@ function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
-function readPanelGeom(storageKey: string): PanelGeom {
+function readPanelGeom(storageKey: string, compact = false): PanelGeom {
+  const minW = compact ? ACP_MIN_W : MIN_W;
+  const minH = compact ? ACP_MIN_H : MIN_H;
+  const defaultW = compact ? ACP_DEFAULT_W : DEFAULT_W;
+  const defaultH = compact ? ACP_DEFAULT_H : DEFAULT_H;
   if (typeof window === 'undefined') {
-    return { x: 12, y: 68, w: DEFAULT_W, h: DEFAULT_H };
+    return { x: 12, y: 68, w: defaultW, h: defaultH };
   }
   try {
     const raw = window.localStorage.getItem(storageKey);
@@ -73,18 +89,18 @@ function readPanelGeom(storageKey: string): PanelGeom {
       return {
         x: p.x,
         y: p.y,
-        w: clamp(p.w, MIN_W, Math.min(520, window.innerWidth - 24)),
-        h: clamp(p.h, MIN_H, Math.min(Math.round(window.innerHeight * 0.9), window.innerHeight - 24)),
+        w: clamp(p.w, minW, Math.min(compact ? 360 : 520, window.innerWidth - 24)),
+        h: clamp(p.h, minH, Math.min(Math.round(window.innerHeight * 0.9), window.innerHeight - 24)),
       };
     }
   } catch {
     /* ignore */
   }
   return {
-    x: 12,
+    x: compact ? Math.max(8, window.innerWidth - defaultW - 12) : 12,
     y: 68,
-    w: Math.min(DEFAULT_W, window.innerWidth - 24),
-    h: Math.min(DEFAULT_H, Math.round(window.innerHeight * 0.72)),
+    w: Math.min(defaultW, window.innerWidth - 24),
+    h: Math.min(defaultH, Math.round(window.innerHeight * 0.72)),
   };
 }
 
@@ -157,9 +173,22 @@ function filterHistoryByRange(history: OpenMeteoTimeHistory, start: string, end:
   return { ...history, points, startDate: start, endDate: end };
 }
 
-function fitHistoryPanelGeom(prev: PanelGeom): PanelGeom {
+function fitHistoryPanelGeom(prev: PanelGeom, compact = false): PanelGeom {
   if (typeof window === 'undefined') {
-    return { x: 12, y: 68, w: HISTORY_PANEL_W, h: HISTORY_PANEL_H };
+    return compact
+      ? { x: prev.x, y: prev.y, w: ACP_DEFAULT_W, h: ACP_HISTORY_PANEL_H }
+      : { x: 12, y: 68, w: HISTORY_PANEL_W, h: HISTORY_PANEL_H };
+  }
+  if (compact) {
+    const w = clamp(prev.w, ACP_MIN_W, Math.min(360, window.innerWidth - 24));
+    const h = clamp(
+      Math.max(prev.h, ACP_HISTORY_PANEL_H),
+      ACP_HISTORY_MIN_H,
+      Math.min(Math.round(window.innerHeight * 0.78), window.innerHeight - 24),
+    );
+    const x = clamp(prev.x, 4, Math.max(4, window.innerWidth - w - 4));
+    const y = clamp(prev.y, 4, Math.max(4, window.innerHeight - h - 4));
+    return { x, y, w, h };
   }
   const w = clamp(HISTORY_PANEL_W, HISTORY_MIN_W, Math.min(520, window.innerWidth - 24));
   const h = clamp(
@@ -172,8 +201,8 @@ function fitHistoryPanelGeom(prev: PanelGeom): PanelGeom {
   return { x, y, w, h };
 }
 
-function useWeatherPanelGeometry(panelGeomLs: string) {
-  const [geom, setGeom] = useState<PanelGeom>(() => readPanelGeom(panelGeomLs));
+function useWeatherPanelGeometry(panelGeomLs: string, compact = false) {
+  const [geom, setGeom] = useState<PanelGeom>(() => readPanelGeom(panelGeomLs, compact));
   const geomRef = useRef(geom);
   geomRef.current = geom;
 
@@ -234,9 +263,9 @@ function useWeatherPanelGeometry(panelGeomLs: string) {
       const startX = e.clientX;
       const startY = e.clientY;
       const origin = { ...geomRef.current };
-      const minW = opts?.minW ?? MIN_W;
-      const minH = opts?.minH ?? MIN_H;
-      const maxW = Math.min(520, window.innerWidth - origin.x - 8);
+      const minW = opts?.minW ?? (compact ? ACP_MIN_W : MIN_W);
+      const minH = opts?.minH ?? (compact ? ACP_MIN_H : MIN_H);
+      const maxW = Math.min(compact ? 360 : 520, window.innerWidth - origin.x - 8);
       const maxH = Math.min(Math.round(window.innerHeight * 0.92), window.innerHeight - origin.y - 8);
       const onMove = (ev: PointerEvent) => {
         setGeom({
@@ -253,7 +282,7 @@ function useWeatherPanelGeometry(panelGeomLs: string) {
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
     },
-    [persist],
+    [persist, compact],
   );
 
   return { geom, setGeom, startDrag, startResize };
@@ -268,9 +297,11 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
   onMapPickToggle,
   onBeginMapPick,
   mapboxToken,
+  layout = 'default',
 }) => {
+  const compact = layout === 'acp-compact';
   const { scopedStorageKey } = useSiInstanceScope();
-  const panelGeomLs = scopedStorageKey(PANEL_GEOM_LS);
+  const panelGeomLs = scopedStorageKey(compact ? 'agri_acp_weather_panel_geom_v1' : PANEL_GEOM_LS);
   const [searchText, setSearchText] = useState('');
   const [searchBusy, setSearchBusy] = useState(false);
   const [snapshot, setSnapshot] = useState<OpenMeteoWeatherSnapshot | null>(null);
@@ -287,7 +318,9 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
   const [historyMetric, setHistoryMetric] = useState<WeatherHistoryMetric>('temp');
   const [historyDateStart, setHistoryDateStart] = useState('');
   const [historyDateEnd, setHistoryDateEnd] = useState('');
-  const { geom, setGeom, startDrag, startResize } = useWeatherPanelGeometry(panelGeomLs);
+  const [selectedDayDetail, setSelectedDayDetail] = useState<OpenMeteoDailyDetail | null>(null);
+  const [dayDetailLoading, setDayDetailLoading] = useState(false);
+  const { geom, setGeom, startDrag, startResize } = useWeatherPanelGeometry(panelGeomLs, compact);
 
   const loadWeather = useCallback(async (lat: number, lng: number) => {
     setLoading(true);
@@ -295,7 +328,8 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
     try {
       const data = await fetchOpenMeteoWeather(lat, lng);
       setSnapshot(data);
-      setSelectedDate(todayIsoInTimezone(data.timezone));
+      const today = todayIsoInTimezone(data.timezone);
+      setSelectedDate(prev => clampOpenMeteoPickerDate(prev, today));
     } catch (e) {
       setSnapshot(null);
       setError(e instanceof Error ? e.message : 'Failed to load weather');
@@ -335,18 +369,60 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
 
   const tz = snapshot?.timezone ?? 'UTC';
   const todayIso = useMemo(() => todayIsoInTimezone(tz), [tz, snapshot?.observedAt]);
+  const datePickerBounds = useMemo(() => resolveOpenMeteoDatePickerBounds(todayIso), [todayIso]);
   const isToday = selectedDate === todayIso;
 
-  const dailyRow = useMemo(() => {
+  const snapshotDailyRow = useMemo(() => {
     if (!snapshot) return null;
     return snapshot.daily.find(d => d.date === selectedDate) ?? null;
   }, [snapshot, selectedDate]);
 
+  const resolvedDay = isToday ? null : selectedDayDetail ?? snapshotDailyRow;
+
+  useEffect(() => {
+    if (!open || !location || !snapshot || isToday) {
+      setSelectedDayDetail(null);
+      setDayDetailLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setDayDetailLoading(true);
+    void fetchOpenMeteoDailyForDate(location.lat, location.lng, selectedDate, todayIso)
+      .then(row => {
+        if (!cancelled) setSelectedDayDetail(row);
+      })
+      .catch(() => {
+        if (!cancelled) setSelectedDayDetail(null);
+      })
+      .finally(() => {
+        if (!cancelled) setDayDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, location.lat, location.lng, selectedDate, todayIso, isToday, snapshot]);
+
+  const dailyRow = resolvedDay;
+
   const displayTemp = isToday
     ? snapshot?.temperatureC
-    : dailyRow?.tempMaxC ?? dailyRow?.tempMinC ?? null;
+    : dailyRow && 'tempMaxC' in dailyRow
+      ? dailyRow.tempMaxC != null && dailyRow.tempMinC != null
+        ? Math.round((dailyRow.tempMaxC + dailyRow.tempMinC) / 2)
+        : dailyRow.tempMaxC ?? dailyRow.tempMinC ?? null
+      : null;
   const displayCode = isToday ? snapshot?.weatherCode : dailyRow?.weatherCode ?? null;
-  const displayCondition = isToday ? snapshot?.conditionLabel : dailyRow?.conditionLabel ?? '—';
+  const displayCondition = isToday
+    ? snapshot?.conditionLabel
+    : dayDetailLoading && !dailyRow
+      ? 'Loading…'
+      : dailyRow?.conditionLabel ?? '—';
+  const displayWindKmh = isToday ? snapshot?.windSpeedKmh : (dailyRow as OpenMeteoDailyDetail | null)?.windSpeedKmh ?? null;
+  const displayWindDir = isToday
+    ? snapshot?.windDirectionLabel
+    : (dailyRow as OpenMeteoDailyDetail | null)?.windDirectionLabel ?? '—';
+  const displayHumidity = isToday ? snapshot?.humidityPct : (dailyRow as OpenMeteoDailyDetail | null)?.humidityPct ?? null;
+  const displayPrecip = isToday ? snapshot?.precipMm : dailyRow?.precipMm ?? null;
   const heroToneClass = wmoWeatherToneClass(displayCode);
 
   const coordLine = `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`;
@@ -373,10 +449,10 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
             : dailyRow?.tempMaxC ?? dailyRow?.tempMinC ?? null,
         weatherCode: displayCode,
         conditionLabel: displayCondition,
-        windSpeedKmh: isToday ? snapshot.windSpeedKmh : null,
-        windDirectionLabel: isToday ? snapshot.windDirectionLabel : '—',
-        humidityPct: isToday ? snapshot.humidityPct : null,
-        precipMm: isToday ? snapshot.precipMm : dailyRow?.precipMm ?? null,
+        windSpeedKmh: isToday ? snapshot.windSpeedKmh : displayWindKmh,
+        windDirectionLabel: isToday ? snapshot.windDirectionLabel : displayWindDir,
+        humidityPct: isToday ? snapshot.humidityPct : displayHumidity,
+        precipMm: isToday ? snapshot.precipMm : displayPrecip,
       },
     )
       .then(cards => {
@@ -399,6 +475,10 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
     dailyRow,
     displayCode,
     displayCondition,
+    displayWindKmh,
+    displayWindDir,
+    displayHumidity,
+    displayPrecip,
   ]);
 
   const filteredHistory = useMemo(() => {
@@ -434,6 +514,12 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
 
   const handleToday = () => setSelectedDate(todayIso);
 
+  const handleDateChange = (next: string) => {
+    if (!next) return;
+    setSelectedDate(clampOpenMeteoPickerDate(next, todayIso));
+    setSelectedDayDetail(null);
+  };
+
   const handlePickLocation = () => {
     setError(null);
     if (onBeginMapPick) onBeginMapPick();
@@ -442,7 +528,7 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
 
   const openHistory = () => {
     setPanelView('history');
-    setGeom(g => fitHistoryPanelGeom(g));
+    setGeom(g => fitHistoryPanelGeom(g, compact));
   };
 
   const closeHistory = () => setPanelView('forecast');
@@ -485,7 +571,7 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
 
   return (
     <div
-      className={`si-weather-panel-shell${panelView === 'history' ? ' si-weather-panel-shell--history' : ''}`}
+      className={`si-weather-panel-shell${panelView === 'history' ? ' si-weather-panel-shell--history' : ''}${compact ? ' si-weather-panel-shell--acp-compact' : ''}`}
       style={{ left: geom.x, top: geom.y, width: geom.w, height: geom.h }}
       role="dialog"
       aria-label="Weather Intelligence"
@@ -664,9 +750,9 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
                   <input
                     type="date"
                     value={selectedDate}
-                    min={snapshot?.daily[0]?.date}
-                    max={snapshot?.daily[snapshot.daily.length - 1]?.date}
-                    onChange={e => setSelectedDate(e.target.value)}
+                    min={datePickerBounds.min}
+                    max={datePickerBounds.max}
+                    onChange={e => handleDateChange(e.target.value)}
                     disabled={!snapshot}
                     aria-label="Forecast date"
                   />
@@ -691,7 +777,9 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
                   <span className="si-weather-panel__temp">
                     {displayTemp != null && Number.isFinite(displayTemp) ? `${Math.round(displayTemp)}°C` : '—'}
                   </span>
-                  <span className="si-weather-panel__condition">{loading ? 'Loading…' : displayCondition}</span>
+                  <span className="si-weather-panel__condition">
+                    {loading ? 'Loading…' : displayCondition}
+                  </span>
                   {!isToday && dailyRow ? (
                     <span className="si-weather-panel__range">
                       {dailyRow.tempMinC != null ? `${Math.round(dailyRow.tempMinC)}°` : '—'} –{' '}
@@ -706,8 +794,8 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
                   <i className="fa-solid fa-wind si-wx-metric-icon--wind" aria-hidden />
                   <span className="si-weather-panel__metric-label">Wind</span>
                   <span className="si-weather-panel__metric-value">
-                    {isToday && snapshot?.windSpeedKmh != null
-                      ? `${Math.round(snapshot.windSpeedKmh)} km/h ${snapshot.windDirectionLabel}`
+                    {displayWindKmh != null
+                      ? `${Math.round(displayWindKmh)} km/h ${displayWindDir}`
                       : '—'}
                   </span>
                 </div>
@@ -715,16 +803,14 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
                   <i className="fa-solid fa-droplet si-wx-metric-icon--humidity" aria-hidden />
                   <span className="si-weather-panel__metric-label">Humidity</span>
                   <span className="si-weather-panel__metric-value">
-                    {isToday && snapshot?.humidityPct != null ? `${Math.round(snapshot.humidityPct)}%` : '—'}
+                    {displayHumidity != null ? `${Math.round(displayHumidity)}%` : '—'}
                   </span>
                 </div>
                 <div className="si-weather-panel__metric">
                   <i className="fa-solid fa-cloud-rain si-wx-metric-icon--precip" aria-hidden />
                   <span className="si-weather-panel__metric-label">Precip.</span>
                   <span className="si-weather-panel__metric-value">
-                    {(isToday ? snapshot?.precipMm : dailyRow?.precipMm) != null
-                      ? `${(isToday ? snapshot!.precipMm! : dailyRow!.precipMm!).toFixed(1)} mm`
-                      : '—'}
+                    {displayPrecip != null ? `${displayPrecip.toFixed(1)} mm` : '—'}
                   </span>
                 </div>
               </div>
@@ -814,7 +900,7 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
                             <button
                               type="button"
                               className={isSel ? 'active' : ''}
-                              onClick={() => setSelectedDate(day.date)}
+                              onClick={() => handleDateChange(day.date)}
                             >
                               <span className="si-weather-panel__compare-date">{formatPanelDate(day.date, tz)}</span>
                               <span
@@ -849,15 +935,24 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
         <div
           className="si-weather-panel__resize"
           role="separator"
-          aria-label="Resize weather panel"
-          title="Drag to resize"
+          aria-label="Resize card"
+          title="Resize Card"
           onPointerDown={e =>
             startResize(
               e,
-              panelView === 'history' ? { minW: HISTORY_MIN_W, minH: HISTORY_MIN_H } : undefined,
+              panelView === 'history'
+                ? compact
+                  ? { minW: ACP_MIN_W, minH: ACP_HISTORY_MIN_H }
+                  : { minW: HISTORY_MIN_W, minH: HISTORY_MIN_H }
+                : undefined,
             )
           }
-        />
+        >
+          <svg viewBox="0 0 10 10" aria-hidden className="si-weather-panel__resize-grip">
+            <path d="M9 1v8H1" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+            <path d="M9 5v4H5" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+          </svg>
+        </div>
       </div>
     </div>
   );

@@ -336,17 +336,22 @@ a:focus-visible {
 }
 
 .ds-modal {
-  width: 560px;
+  width: min(560px, calc(100vw - 32px));
   max-width: 100%;
+  max-height: min(88dvh, calc(100dvh - 32px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: var(--ds-color-surface);
   border: 1px solid var(--ds-color-border);
   border-radius: var(--ds-radius-lg);
   box-shadow: var(--ds-shadow-lg);
-  overflow: hidden;
 }
 
 .ds-modal-header {
   height: 52px;
+  min-height: 52px;
+  flex-shrink: 0;
   padding: 0 14px;
   display: flex;
   align-items: center;
@@ -360,10 +365,16 @@ a:focus-visible {
 }
 
 .ds-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 14px;
 }
 
 .ds-modal-actions {
+  flex-shrink: 0;
   padding: 12px 14px;
   border-top: 1px solid var(--ds-color-border);
   display: flex;
@@ -5128,9 +5139,9 @@ aside {
   padding: 12px;
   border: 1px solid rgba(255, 255, 255, 0.84);
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.94);
+  background: #ffffff;
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.18);
-  backdrop-filter: blur(18px);
+  isolation: isolate;
 }
 
 :root[dir='rtl'] .gis-map-tool-panel {

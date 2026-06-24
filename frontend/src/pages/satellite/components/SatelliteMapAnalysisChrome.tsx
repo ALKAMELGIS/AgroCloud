@@ -31,7 +31,7 @@ export type SatelliteMapAnalysisToolbarProps = {
   onMapTool: (tool: 'rectangle' | 'polygon' | 'circle' | 'select') => void;
   /** AOI sketch committed or any drawing/edit session active — disables Clear when false */
   hasClearableDrawing?: boolean;
-  /** Clear all AOI graphics, exit drawing mode, restore pan; leaves basemap / imagery layers intact */
+  /** Clear committed AOI sketch + drafts only; analysis / imagery layers remain on map */
   onClearDrawing?: () => void;
   hasAoi: boolean;
   staticChartsOpen: boolean;
@@ -153,6 +153,7 @@ export type SatelliteMapAnalysisChromeProps = {
     | 'layers'
     | 'remote-sensing'
     | 'crop-alerts'
+    | 'crop-classification'
     | 'ai-detection-gis'
     | 'table-geo-ai'
     | null;

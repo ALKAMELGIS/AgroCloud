@@ -220,6 +220,40 @@ export function aggregateImageryTimeSeriesMulti(
   return { labels, series }
 }
 
+/** Keep only dates where at least one layer has a finite zonal mean. */
+export function pruneImageryTimeSeriesToObservations(
+  labels: string[],
+  series: ImageryTimeSeriesLayerSeries[],
+): { labels: string[]; series: ImageryTimeSeriesLayerSeries[] } {
+  if (!labels.length || !series.length) return { labels: [], series: [] }
+  const keepIndexes: number[] = []
+  for (let i = 0; i < labels.length; i++) {
+    const hasValue = series.some(s => {
+      const v = s.values[i]
+      return v != null && Number.isFinite(v)
+    })
+    if (hasValue) keepIndexes.push(i)
+  }
+  if (!keepIndexes.length) {
+    return { labels: [], series: series.map(s => ({ layerId: s.layerId, values: [] })) }
+  }
+  return {
+    labels: keepIndexes.map(i => labels[i]!),
+    series: series.map(s => ({
+      layerId: s.layerId,
+      values: keepIndexes.map(i => s.values[i]!),
+    })),
+  }
+}
+
+export function pruneSingleLayerImagerySeries(
+  labels: string[],
+  values: number[],
+): { labels: string[]; values: number[] } {
+  const pruned = pruneImageryTimeSeriesToObservations(labels, [{ layerId: 'L', values }])
+  return { labels: pruned.labels, values: pruned.series[0]?.values ?? [] }
+}
+
 export function defaultImageryDateRange(referenceIso: string, lookbackDays = 90): { from: string; to: string } {
   const to = referenceIso.slice(0, 10)
   const end = new Date(`${to}T12:00:00Z`)

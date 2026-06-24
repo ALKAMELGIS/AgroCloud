@@ -313,6 +313,50 @@ export function loadCropAlertEngineSettings(options?: { engineKey?: string }): C
   }
 }
 
+const SI_CROP_ALERT_LAYER_DEFAULTS_V2_SUFFIX = ':si-layer-defaults-v2'
+
+/** Satellite Intelligence — layers off until the user toggles them on. */
+export function loadCropAlertEngineSettingsForSatellitePage(options?: {
+  engineKey?: string
+}): CropAlertEngineSettings {
+  const storageKey = options?.engineKey ?? SI_CROP_ALERT_ENGINE_LS_KEY
+  const migrationKey = `${storageKey}${SI_CROP_ALERT_LAYER_DEFAULTS_V2_SUFFIX}`
+  const closedDefaults = () =>
+    normalizeCropAlertEngineSettings({ enabled: false, showLegend: false })
+
+  if (typeof window === 'undefined') return closedDefaults()
+
+  try {
+    const raw = window.localStorage.getItem(storageKey)
+    if (!raw) {
+      const defaults = closedDefaults()
+      persistCropAlertEngineSettings(defaults, { engineKey: storageKey })
+      window.localStorage.setItem(migrationKey, '1')
+      return defaults
+    }
+
+    let parsed = normalizeCropAlertEngineSettings(JSON.parse(raw) as Partial<CropAlertEngineSettings>)
+    if ((parsed.schemaVersion ?? 1) < CROP_ALERT_ENGINE_SETTINGS_SCHEMA_VERSION) {
+      parsed = normalizeCropAlertEngineSettings({
+        ...parsed,
+        schemaVersion: CROP_ALERT_ENGINE_SETTINGS_SCHEMA_VERSION,
+      })
+    }
+
+    if (!window.localStorage.getItem(migrationKey)) {
+      parsed = { ...parsed, enabled: false, showLegend: false }
+      window.localStorage.setItem(migrationKey, '1')
+    }
+
+    persistCropAlertEngineSettings(parsed, { engineKey: storageKey })
+    return parsed
+  } catch {
+    const defaults = closedDefaults()
+    persistCropAlertEngineSettings(defaults, { engineKey: storageKey })
+    return defaults
+  }
+}
+
 export function persistCropAlertEngineSettings(
   settings: CropAlertEngineSettings,
   options?: { engineKey?: string },

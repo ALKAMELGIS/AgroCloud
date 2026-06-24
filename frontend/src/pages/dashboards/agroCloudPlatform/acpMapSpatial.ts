@@ -3,6 +3,7 @@ import {
   resolveAgroStructuresCountry,
   resolveAgroStructuresCountryCode,
   resolveAgroStructuresCountryDisplayName,
+  resolveAgroStructuresCountryLabel,
   resolveAgroStructuresFeatureAreaHa,
   resolveAgroStructuresFieldDisplayName,
   resolveAgroStructuresStructureTypeLabel,
@@ -120,6 +121,31 @@ export const ACP_FIELD_LOCATE_MIN_ZOOM = 12
 export type AcpCountryOption = {
   value: string
   label: string
+}
+
+/** Country picker options from full portfolio — independent of active country filter. */
+export function buildAcpPortfolioCountryOptions(
+  mask: GeoJSON.FeatureCollection | null | undefined,
+  countryDescriptionMap?: Map<string, string>,
+): AcpCountryOption[] {
+  const codes = new Set<string>()
+  for (const raw of mask?.features ?? []) {
+    const props = (raw as GeoJSON.Feature).properties ?? {}
+    const code = resolveAgroStructuresCountry(props as Record<string, unknown>)
+    if (code && code !== 'Unknown' && code !== '—') codes.add(code)
+  }
+  const sorted = [...codes].sort((a, b) => {
+    const la = resolveAgroStructuresCountryLabel(a, countryDescriptionMap)
+    const lb = resolveAgroStructuresCountryLabel(b, countryDescriptionMap)
+    return la.localeCompare(lb, undefined, { sensitivity: 'base' })
+  })
+  return [
+    { value: 'all', label: 'All countries' },
+    ...sorted.map(code => ({
+      value: code,
+      label: resolveAgroStructuresCountryLabel(code, countryDescriptionMap),
+    })),
+  ]
 }
 
 export type AcpFieldTableRow = {
@@ -560,10 +586,18 @@ export function aggregateLayerLiveIndexStats(
   }
 }
 
-/** Continental default — Red Sea / Africa–Europe framing (matches Global home view). */
-export const ACP_DEFAULT_MAP_CENTER: [number, number] = [28, 22]
-export const ACP_DEFAULT_MAP_ZOOM = 2.5
-export const ACP_INITIAL_MAP_ZOOM = 2.5
+/** Default framing — full Africa + most of Europe (Global home / initial load). */
+export const ACP_DEFAULT_MAP_BOUNDS: [[number, number], [number, number]] = [
+  [-19, -36],
+  [54, 62],
+]
+
+/** Continental default — Africa–Europe center (fallback before fitBounds). */
+export const ACP_DEFAULT_MAP_CENTER: [number, number] = [17.5, 13]
+export const ACP_DEFAULT_MAP_ZOOM = 2.1
+export const ACP_INITIAL_MAP_ZOOM = 2.1
+/** Max zoom when fitting the default Africa–Europe extent. */
+export const ACP_DEFAULT_MAP_MAX_ZOOM = 5
 /** Regional field zoom when a single country / small AOI is selected. */
 export const ACP_FITBOUNDS_MAX_ZOOM = 13
 export const ACP_FITBOUNDS_MIN_ZOOM = 9
@@ -622,30 +656,40 @@ export function resolveAcpMapFocusTargetFromGeoJson(
   }
 }
 
-/** Resolve map home / initial fit — global portfolio shows all fields; country filter zooms regionally. */
+export function resolveAcpDefaultMapFocusTarget(): AcpMapFocusTarget {
+  return {
+    mode: 'bounds',
+    bounds: ACP_DEFAULT_MAP_BOUNDS,
+    maxZoom: ACP_DEFAULT_MAP_MAX_ZOOM,
+    minZoom: null,
+  }
+}
+
+/** Resolve map home / initial fit — global uses Africa–Europe; country filter zooms regionally. */
 export function resolveAcpMapHomeTarget(
   fc: GeoJSON.FeatureCollection,
   countryFilter = 'all',
 ): AcpMapFocusTarget {
-  let features = fc.features
-  if (countryFilter && countryFilter !== 'all') {
-    features = features.filter(f => {
-      const props = (f as GeoJSON.Feature).properties as Record<string, unknown> | undefined
-      return resolveAgroStructuresCountry(props ?? {}) === countryFilter
-    })
+  if (!countryFilter || countryFilter === 'all') {
+    return resolveAcpDefaultMapFocusTarget()
   }
+
+  let features = fc.features
+  features = features.filter(f => {
+    const props = (f as GeoJSON.Feature).properties as Record<string, unknown> | undefined
+    return resolveAgroStructuresCountry(props ?? {}) === countryFilter
+  })
   if (!features.length) {
-    return { mode: 'center', center: ACP_DEFAULT_MAP_CENTER, zoom: ACP_DEFAULT_MAP_ZOOM }
+    return resolveAcpDefaultMapFocusTarget()
   }
 
   const scoped: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features }
   const bounds = featureCollectionLngLatBounds(scoped)
   if (!bounds) {
-    return { mode: 'center', center: ACP_DEFAULT_MAP_CENTER, zoom: ACP_DEFAULT_MAP_ZOOM }
+    return resolveAcpDefaultMapFocusTarget()
   }
 
-  const isGlobalPortfolio =
-    countryFilter === 'all' && boundsSpanDegrees(bounds) > ACP_GLOBAL_EXTENT_MAX_DEG
+  const isGlobalPortfolio = boundsSpanDegrees(bounds) > ACP_GLOBAL_EXTENT_MAX_DEG
 
   return {
     mode: 'bounds',

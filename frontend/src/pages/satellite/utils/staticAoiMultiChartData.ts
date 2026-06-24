@@ -123,7 +123,7 @@ function aoiNoise(aoiKey: string | null, layerId: string, weekIdx: number): numb
   return n / 10000 - 0.1;
 }
 
-function metaFor(layerId: string) {
+export function metaForLayerLiveStats(layerId: string) {
   const u = String(layerId || '').trim().toUpperCase()
   const known = STATIC_AOI_CHART_LAYER_OPTIONS.find(o => o.id === u)
   if (known) return known
@@ -143,7 +143,7 @@ export function staticAoiLayerMeanForWeek(
   aoiKey: string | null,
   anchorWeeklyMean: number,
 ): number {
-  const { range } = metaFor(layerId);
+  const { range } = metaForLayerLiveStats(layerId);
   const span = range[1] - range[0];
   const seasonal = Math.sin((weekIdx / Math.max(1, totalWeeks - 1)) * Math.PI);
   const phase = (simpleHash(layerId) % 23) / 120;
@@ -190,7 +190,7 @@ export function buildStaticAoiMultiChartDatasets(
   const n = weekly.length;
   const labels = weekly.map(w => formatStaticChartWeekLabel(w.startDate));
   const datasets = layerIds.map((id, di) => {
-    const opt = metaFor(id);
+    const opt = metaForLayerLiveStats(id);
     const color = DATASET_COLORS[di % DATASET_COLORS.length]!;
     const data = weekly.map((w, i) => staticAoiLayerMeanForWeek(id, i, n, aoiKey, w.mean));
     return {

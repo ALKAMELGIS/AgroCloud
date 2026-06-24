@@ -5,6 +5,7 @@ import {
   augmentCustomApiTokenSlotsFromVault,
   restoreBrowserApiSecretsFromVaultIntoLocalStorage,
 } from '../lib/browserApiSecretsVault'
+import { DEFAULT_PAGE_LINKS } from '../lib/defaultPageLinks'
 import type { CustomApiTokenSlot, CustomPageRecord, SystemSettingsPersistedV1 } from '../types/systemSettings'
 
 import { SETTINGS_STORAGE_KEY } from './persistedStorageKeys'
@@ -160,9 +161,7 @@ export function mergeWithDefaults(partial: Partial<SystemSettingsPersistedV1>): 
       partial.navItemOrders && typeof partial.navItemOrders === 'object' ? { ...partial.navItemOrders } : {},
     navOverrides:
       partial.navOverrides && typeof partial.navOverrides === 'object' ? { ...partial.navOverrides } : {},
-    customPages: Array.isArray(partial.customPages)
-      ? partial.customPages.map(sanitizeCustomPage).filter(Boolean) as CustomPageRecord[]
-      : [],
+    customPages: mergeCustomPagesWithDefaults(partial.customPages),
     customApiTokenSlots: Array.isArray(partial.customApiTokenSlots)
       ? (partial.customApiTokenSlots as unknown[])
           .map(sanitizeCustomApiTokenSlot)
@@ -228,11 +227,42 @@ export function mergeWithDefaults(partial: Partial<SystemSettingsPersistedV1>): 
   }
 }
 
-const KNOWN_NAV_GROUP_IDS = ['dashboard', 'aiAgroCloud', 'satellite', 'data', 'sensors', 'master', 'admin'] as const
+const KNOWN_NAV_GROUP_IDS = [
+  'dashboard',
+  'application',
+  'aiAgroCloud',
+  'satellite',
+  'data',
+  'sensors',
+  'master',
+  'admin',
+] as const
 
 function sanitizeNavGroupId(raw: unknown): string {
   const id = String(raw ?? 'data').trim()
   return (KNOWN_NAV_GROUP_IDS as readonly string[]).includes(id) ? id : 'data'
+}
+
+export function sanitizeExternalUrl(raw: unknown): string {
+  const s = String(raw ?? '').trim()
+  if (!s) return ''
+  try {
+    const u = new URL(s)
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return ''
+    return u.href
+  } catch {
+    return ''
+  }
+}
+
+function mergeCustomPagesWithDefaults(raw: unknown): CustomPageRecord[] {
+  const fromUser = Array.isArray(raw)
+    ? (raw.map(sanitizeCustomPage).filter(Boolean) as CustomPageRecord[])
+    : []
+  const byPath = new Set(fromUser.map(p => p.path))
+  const byId = new Set(fromUser.map(p => p.id))
+  const defaults = DEFAULT_PAGE_LINKS.filter(d => !byPath.has(d.path) && !byId.has(d.id))
+  return [...defaults, ...fromUser]
 }
 
 function sanitizeCustomPage(raw: unknown): CustomPageRecord | null {
@@ -246,13 +276,17 @@ function sanitizeCustomPage(raw: unknown): CustomPageRecord | null {
   const iconClass = String(r.iconClass ?? 'fa-solid fa-file').trim() || 'fa-solid fa-file'
   const visible = r.visible !== false
   const bindTarget = (
-    ['placeholder', 'home', 'gis', 'satellite-indices', 'dashboards-overview'].includes(String(r.bindTarget))
+    ['placeholder', 'home', 'gis', 'satellite-indices', 'dashboards-overview', 'external'].includes(
+      String(r.bindTarget),
+    )
       ? r.bindTarget
       : 'placeholder'
   ) as CustomPageRecord['bindTarget']
   const navGroupId = sanitizeNavGroupId(r.navGroupId)
   const subRaw = r.subitemClass != null ? String(r.subitemClass).trim().slice(0, 160) : ''
+  const externalUrl = bindTarget === 'external' ? sanitizeExternalUrl(r.externalUrl) : ''
   if (path === '/dashboards/agro-dashboard' || path === '/dashboards/esri-app') return null
+  if (bindTarget === 'external' && !externalUrl) return null
   return {
     id,
     name,
@@ -262,6 +296,7 @@ function sanitizeCustomPage(raw: unknown): CustomPageRecord | null {
     visible,
     bindTarget,
     navGroupId,
+    ...(bindTarget === 'external' ? { externalUrl } : {}),
     ...(subRaw ? { subitemClass: subRaw } : {}),
   }
 }

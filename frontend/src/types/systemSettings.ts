@@ -21,8 +21,10 @@ export type CustomPageRecord = {
   path: string
   iconClass: string
   visible: boolean
-  /** Which built-in screen to render */
-  bindTarget: 'placeholder' | 'home' | 'gis' | 'satellite-indices' | 'dashboards-overview'
+  /** Which built-in screen to render — `external` opens {@link externalUrl} inside the app shell */
+  bindTarget: 'placeholder' | 'home' | 'gis' | 'satellite-indices' | 'dashboards-overview' | 'external'
+  /** Required when bindTarget is `external` */
+  externalUrl?: string
   /**
    * Sidebar group id — matches NAV_DEFAULT_GROUPS / DOM sublists (`nav-group-${id}`).
    * Use `data` for Operations (nav-group-data).

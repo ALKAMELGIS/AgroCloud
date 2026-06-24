@@ -288,7 +288,7 @@ export function AcpLiveAlertsPanel({
   }, [rows, subFilter, query])
 
   const selectField = (fieldKey: string) => {
-    acp.requestFieldLocate(fieldKey)
+    acp.bindMapFieldSelection(fieldKey)
   }
 
   return (

@@ -12,6 +12,7 @@ const REPO_ROOT = path.join(SERVER_DIR, '..', '..')
 
 /** Dev ports from repo `.env` must win over shell (Geosyntra often exports 3001/5173). */
 const DEV_PORT_KEYS = new Set(['PORT', 'WS_PORT', 'VITE_DEV_PORT'])
+const PRODUCTION_PORT_KEYS = new Set(['PORT', 'WS_PORT'])
 
 function parseEnvFile(content) {
   for (const line of content.split('\n')) {
@@ -23,8 +24,13 @@ function parseEnvFile(content) {
     if (!key) continue
     if (
       !DEV_PORT_KEYS.has(key) &&
-      Object.prototype.hasOwnProperty.call(process.env, key)
+      Object.prototype.hasOwnProperty.call(process.env, key) &&
+      String(process.env[key] ?? '').trim()
     ) {
+      continue
+    }
+    // Never let .env files override hosting panel PORT (Hostinger/LiteSpeed proxy).
+    if (PRODUCTION_PORT_KEYS.has(key) && String(process.env.NODE_ENV || '').toLowerCase() === 'production') {
       continue
     }
     let value = trimmed.slice(eq + 1).trim()
@@ -39,9 +45,18 @@ function parseEnvFile(content) {
 }
 
 function loadEnvFiles() {
-  for (const name of ['.env.production', '.env']) {
-    const filePath = path.join(REPO_ROOT, name)
-    if (!fs.existsSync(filePath)) continue
+  const candidates = [
+    path.join(REPO_ROOT, '.env.production'),
+    path.join(REPO_ROOT, 'hostinger-production.env'),
+    path.join(process.cwd(), '.env.production'),
+    path.join(process.cwd(), 'hostinger-production.env'),
+    path.join(REPO_ROOT, '.env'),
+    path.join(process.cwd(), '.env'),
+  ]
+  const seen = new Set()
+  for (const filePath of candidates) {
+    if (seen.has(filePath) || !fs.existsSync(filePath)) continue
+    seen.add(filePath)
     try {
       parseEnvFile(fs.readFileSync(filePath, 'utf8'))
     } catch {
@@ -102,6 +117,13 @@ export function normalizeProductionEnv() {
   mirrorViteFrom(['GOOGLE_MAPS_API_KEY', 'GOOGLE_MAPS_SERVER_API_KEY'], 'VITE_GOOGLE_MAPS_API_KEY')
   mirrorViteFrom(['MAPBOX_TOKEN'], 'VITE_MAPBOX_TOKEN')
   mirrorViteFrom(['MAPBOX_TOKEN'], 'VITE_MAPBOX_ACCESS_TOKEN')
+  mirrorViteFrom(['APP_ORIGIN'], 'VITE_APP_CANONICAL_URL')
+  if (!String(process.env.VITE_BASE_PATH || process.env.AGRO_BASE_PATH || '').trim()) {
+    const origin = pickEnv('APP_ORIGIN')
+    if (origin && !origin.includes('github.io')) {
+      process.env.VITE_BASE_PATH = '/'
+    }
+  }
 
   const dataDir = pickEnv('AGRI_DATA_DIR')
   if (dataDir) {

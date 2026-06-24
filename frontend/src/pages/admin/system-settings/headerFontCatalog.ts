@@ -22,30 +22,8 @@ export const FONT_CATEGORY_LABEL: Record<FontCategoryId, string> = {
   arabic: 'Arabic support',
 }
 
-/** Single stylesheet — injected once when font picker mounts */
-export const HEADER_FONT_GOOGLE_STYLESHEET_HREF =
-  'https://fonts.googleapis.com/css2?' +
-  [
-    'family=IBM+Plex+Sans+Arabic:wght@400;500;600;700',
-    'family=Inter:wght@400;500;600;700;800',
-    'family=Cairo:wght@400;500;600;700',
-    'family=Cormorant+Garamond:wght@400;600;700',
-    'family=Fira+Code:wght@400;600',
-    'family=JetBrains+Mono:wght@400;600',
-    'family=Lora:wght@400;600;700',
-    'family=Merriweather:wght@400;700',
-    'family=Montserrat:wght@400;600;700;800',
-    'family=Noto+Kufi+Arabic:wght@400;600;700',
-    'family=Noto+Naskh+Arabic:wght@400;600;700',
-    'family=Nunito:wght@400;600;700;800',
-    'family=Open+Sans:wght@400;600;700;800',
-    'family=Playfair+Display:wght@400;600;700',
-    'family=Poppins:wght@400;600;700;800',
-    'family=Roboto:wght@400;500;700',
-    'family=Source+Code+Pro:wght@400;600',
-    'family=Tajawal:wght@400;500;700',
-  ].join('&') +
-  '&display=swap'
+/** Font picker presets — all families below are bundled via `src/styles/fonts-local.css` (no CDN). */
+export const HEADER_FONT_LOCAL_BUNDLE_LOADED = true
 
 export const HEADER_FONT_PRESETS: FontPreset[] = [
   {

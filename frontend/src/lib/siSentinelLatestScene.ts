@@ -10,6 +10,14 @@ export const PC_SENTINEL_STAC_SEARCH_URL = 'https://planetarycomputer.microsoft.
 
 export const SI_SENTINEL_SCENE_CATALOG_LOOKBACK_DAYS = 120
 
+const SCENE_CATALOG_CACHE_TTL_MS = 20 * 60_000
+const sceneCatalogCache = new Map<string, { catalog: SentinelSceneCatalog; expiresAt: number }>()
+const sceneCatalogInFlight = new Map<string, Promise<SentinelSceneCatalog>>()
+
+function sceneCatalogCacheKey(body: Record<string, unknown>): string {
+  return JSON.stringify(body)
+}
+
 export type SentinelSceneCatalog = {
   latestSceneIso: string | null
   sceneIsos: string[]
@@ -106,19 +114,46 @@ export async function fetchSentinelSceneCatalogForAoi(
     return { latestSceneIso: null, sceneIsos: [], fetchedAt: Date.now() }
   }
 
-  try {
-    const response = await fetch(PC_SENTINEL_STAC_SEARCH_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/geo+json' },
-      body: JSON.stringify(body),
-      signal: options?.signal,
-    })
-    if (!response.ok) {
+  const cacheKey = sceneCatalogCacheKey(body)
+  const cached = sceneCatalogCache.get(cacheKey)
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.catalog
+  }
+
+  const inFlight = sceneCatalogInFlight.get(cacheKey)
+  if (inFlight) {
+    return inFlight
+  }
+
+  const promise = (async (): Promise<SentinelSceneCatalog> => {
+    try {
+      const response = await fetch(PC_SENTINEL_STAC_SEARCH_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/geo+json' },
+        body: JSON.stringify(body),
+        signal: options?.signal,
+      })
+      if (!response.ok) {
+        return { latestSceneIso: null, sceneIsos: [], fetchedAt: Date.now() }
+      }
+      const data = (await response.json()) as { features?: Array<{ properties?: { datetime?: string } }> }
+      const catalog = parseSentinelSceneCatalogFromStacFeatures(
+        Array.isArray(data?.features) ? data.features : [],
+      )
+      sceneCatalogCache.set(cacheKey, {
+        catalog,
+        expiresAt: Date.now() + SCENE_CATALOG_CACHE_TTL_MS,
+      })
+      return catalog
+    } catch {
       return { latestSceneIso: null, sceneIsos: [], fetchedAt: Date.now() }
     }
-    const data = (await response.json()) as { features?: Array<{ properties?: { datetime?: string } }> }
-    return parseSentinelSceneCatalogFromStacFeatures(Array.isArray(data?.features) ? data.features : [])
-  } catch {
-    return { latestSceneIso: null, sceneIsos: [], fetchedAt: Date.now() }
+  })()
+
+  sceneCatalogInFlight.set(cacheKey, promise)
+  try {
+    return await promise
+  } finally {
+    sceneCatalogInFlight.delete(cacheKey)
   }
 }

@@ -17,10 +17,9 @@ export type SentinelIndexEvalProfile =
 type RampStop = [number, number]
 
 /**
- * Sentinel Hub custom-script NDVI step color map (repository NDVI script).
- * @see https://custom-scripts.sentinel-hub.com/
+ * NDVI stress / vigor below Good growth (0.42) — step ramp unchanged.
  */
-export const SENTINEL_NDVI_COLORMAP: RampStop[] = [
+export const SENTINEL_NDVI_LOW_COLORMAP: RampStop[] = [
   [-1.0, 0x000000],
   [-0.2, 0xa50026],
   [0.0, 0xd73027],
@@ -28,16 +27,31 @@ export const SENTINEL_NDVI_COLORMAP: RampStop[] = [
   [0.2, 0xfdae61],
   [0.3, 0xfee08b],
   [0.4, 0xffffbf],
-  [0.5, 0xd9ef8b],
-  [0.6, 0xa6d96a],
-  [0.7, 0x66bd63],
-  [0.8, 0x1a9850],
-  [0.9, 0x006837],
 ]
 
-/** Step sampling — matches findColor() in the custom NDVI evalscript. */
-export function sampleSentinelNdviColorMap(ndvi: number): number {
-  const pairs = SENTINEL_NDVI_COLORMAP
+/**
+ * Smooth light → dark forest green for Good / Strong / Harvest growth (NDVI ≥ 0.42).
+ * Good growth 0.42–0.52 · Strong growth 0.52–0.62 · Harvest ready ≥ 0.62
+ */
+export const SENTINEL_NDVI_VEGETATION_GROWTH_RAMP: RampStop[] = [
+  [0.42, 0x9ccc65],
+  [0.47, 0x7cb342],
+  [0.52, 0x43a047],
+  [0.57, 0x388e3c],
+  [0.62, 0x2e7d32],
+  [0.72, 0x1b5e20],
+  [0.85, 0x0f2e1a],
+  [1.0, 0x052e16],
+]
+
+/** Full NDVI ramp (low step + growth gradient) for legend gradient bar. */
+export const SENTINEL_NDVI_COLORMAP: RampStop[] = [
+  ...SENTINEL_NDVI_LOW_COLORMAP,
+  ...SENTINEL_NDVI_VEGETATION_GROWTH_RAMP.filter(([v]) => v > 0.4),
+]
+
+function sampleSentinelNdviLowColorMap(ndvi: number): number {
+  const pairs = SENTINEL_NDVI_LOW_COLORMAP
   if (!pairs.length) return 0
   for (let i = 1; i < pairs.length; i++) {
     if (ndvi <= pairs[i]![0]) return pairs[i - 1]![1]
@@ -45,8 +59,17 @@ export function sampleSentinelNdviColorMap(ndvi: number): number {
   return pairs[pairs.length - 1]![1]
 }
 
-/** NDVI Live WMS ramp — Sentinel Hub repository colors (legend gradient). */
-export const SENTINEL_NDVI_AGRICULTURAL_RAMP: RampStop[] = SENTINEL_NDVI_COLORMAP
+/** Matches findColor() in the NDVI WMS evalscript — step below 0.42, smooth gradient above. */
+export function sampleSentinelNdviColorMap(ndvi: number): number {
+  if (ndvi < 0.42) return sampleSentinelNdviLowColorMap(ndvi)
+  return sampleSentinelMoistureRampColor(ndvi, SENTINEL_NDVI_VEGETATION_GROWTH_RAMP)
+}
+
+/** NDVI Live WMS ramp — legend gradient (low stress + growth greens). */
+export const SENTINEL_NDVI_AGRICULTURAL_RAMP: RampStop[] = [
+  ...SENTINEL_NDVI_LOW_COLORMAP,
+  ...SENTINEL_NDVI_VEGETATION_GROWTH_RAMP,
+]
 
 /** Nine upper bounds → 10 NDVI classes (agricultural ramp). */
 export const SENTINEL_NDVI_10_CLASS_BREAKS: readonly number[] = [
@@ -444,24 +467,28 @@ function formatRgb01Triple(hex: number): string {
   return `[${r.toFixed(5)}, ${g.toFixed(5)}, ${b.toFixed(5)}]`
 }
 
-/** NDVI: 10-class cloud-masked ramp on B08/B04 — dataMask alpha (AOI GEOMETRY clip). */
+function formatRampRgbStopsForEval(ramp: readonly RampStop[]): string {
+  return ramp.map(([v, hex]) => `[${v}, ${formatRgb01Triple(hex)}]`).join(',\n  ')
+}
+
+/** NDVI: cloud-masked continuous ramp on B08/B04 — dataMask alpha (AOI GEOMETRY clip). */
 export function buildSentinelNdviTenClassEvalscript(indexVisibilityMin: number | null = null): string {
   const thr =
     indexVisibilityMin != null && Number.isFinite(indexVisibilityMin)
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
-  const classRgbList = SENTINEL_NDVI_10_CLASS_COLORS.map(c => formatRgb01Triple(c)).join(', ')
-  const colorMapLiteral = SENTINEL_NDVI_COLORMAP.map(([v, hex]) => `[${v}, ${hexColorLiteral(hex)}]`).join(', ')
+  const lowMapLiteral = formatRampRgbStopsForEval(SENTINEL_NDVI_LOW_COLORMAP)
+  const growthRampLiteral = formatRampRgbStopsForEval(SENTINEL_NDVI_VEGETATION_GROWTH_RAMP)
 
   const vegetationReturn =
     thr == null
-      ? 'return CLASS_RGB[cls].concat(samples.dataMask);'
+      ? 'return findColor(val).concat(samples.dataMask);'
       : `let a = samples.dataMask * (val >= ${thr} ? 1.0 : 0.0);
-    return CLASS_RGB[cls].concat(a);`
+    return findColor(val).concat(a);`
 
   return `//VERSION=3
-// NDVI — 10 classes, SCL cloud mask + B08/B04 (Sentinel-2 L2A standard)
+// NDVI — step ramp < 0.42, smooth growth greens ≥ 0.42, SCL cloud mask + B08/B04
 function setup() {
   return {
     input: ["B02", "B03", "B04", "B08", "B8A", "SCL", "dataMask"],
@@ -469,24 +496,41 @@ function setup() {
   };
 }
 
-const ndviColorMap = [
-  ${colorMapLiteral}
+const NDVI_LOW_MAP = [
+  ${lowMapLiteral}
+];
+const NDVI_GROWTH_RAMP = [
+  ${growthRampLiteral}
 ];
 
-const CLASS_RGB = [${classRgbList}];
-const BREAKS = [${formatNumberList(SENTINEL_NDVI_10_CLASS_BREAKS)}];
+function blendRgb(c0, c1, t) {
+  t = Math.max(0, Math.min(1, t));
+  return [
+    c0[0] + (c1[0] - c0[0]) * t,
+    c0[1] + (c1[1] - c0[1]) * t,
+    c0[2] + (c1[2] - c0[2]) * t
+  ];
+}
 
-function ndviClass(val) {
-  if (val < BREAKS[0]) return 0;
-  if (val < BREAKS[1]) return 1;
-  if (val < BREAKS[2]) return 2;
-  if (val < BREAKS[3]) return 3;
-  if (val < BREAKS[4]) return 4;
-  if (val < BREAKS[5]) return 5;
-  if (val < BREAKS[6]) return 6;
-  if (val < BREAKS[7]) return 7;
-  if (val < BREAKS[8]) return 8;
-  return 9;
+function findColor(val) {
+  var low = NDVI_LOW_MAP;
+  for (var i = 1; i < low.length; i++) {
+    if (val <= low[i][0]) return low[i - 1][1];
+  }
+  if (val < 0.42) return low[low.length - 1][1];
+  var ramp = NDVI_GROWTH_RAMP;
+  if (val <= ramp[0][0]) return ramp[0][1];
+  if (val >= ramp[ramp.length - 1][0]) return ramp[ramp.length - 1][1];
+  for (var j = 0; j < ramp.length - 1; j++) {
+    var v0 = ramp[j][0], c0 = ramp[j][1];
+    var v1 = ramp[j + 1][0], c1 = ramp[j + 1][1];
+    if (val >= v0 && val <= v1) {
+      var span = v1 - v0;
+      var t = span > 0 ? (val - v0) / span : 0;
+      return blendRgb(c0, c1, t);
+    }
+  }
+  return ramp[ramp.length - 1][1];
 }
 
 function evaluatePixel(samples) {
@@ -495,7 +539,6 @@ function evaluatePixel(samples) {
   if (!samples.dataMask || cloud) return [0, 0, 0, 0];
   let val = index(samples.B08, samples.B04);
   if (!isFinite(val)) return [0, 0, 0, 0];
-  let cls = ndviClass(val);
   ${vegetationReturn}
 }`
 }

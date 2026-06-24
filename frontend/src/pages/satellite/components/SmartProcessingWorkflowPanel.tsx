@@ -5,6 +5,7 @@ export type SmartProcessingSectionId =
   | 'layers'
   | 'remote-sensing'
   | 'crop-alerts'
+  | 'crop-classification'
   | 'ai-detection-gis'
   | 'table-geo-ai';
 
@@ -26,6 +27,7 @@ const QUICK_LINKS: Array<{ id: SmartProcessingSectionId; icon: string; label: st
   { id: 'layers', icon: 'fa-solid fa-layer-group', label: 'Layers' },
   { id: 'remote-sensing', icon: 'fa-solid fa-satellite-dish', label: 'Remote sensing' },
   { id: 'crop-alerts', icon: 'fa-solid fa-wheat-awn-circle-exclamation', label: 'Crop alerts' },
+  { id: 'crop-classification', icon: 'fa-solid fa-wheat-awn', label: 'Crop classification' },
   { id: 'ai-detection-gis', icon: 'fa-solid fa-magnifying-glass-location', label: 'AI Detection in GIS' },
   { id: 'table-geo-ai', icon: 'fa-solid fa-comments', label: 'Geo AI' },
 ];
@@ -82,6 +84,13 @@ const WORKFLOW_ROWS: Array<{
         label: 'Agro Sentinel alerts',
         hint: 'Real-time crop health, water stress, and harvest signals from Sentinel Live.',
         target: 'crop-alerts',
+      },
+      {
+        id: 'crop-classification',
+        icon: 'fa-solid fa-wheat-awn',
+        label: 'Crop classification',
+        hint: 'Multi-temporal Sentinel crop / land-cover classes inside your AOI.',
+        target: 'crop-classification',
       },
     ],
   },
