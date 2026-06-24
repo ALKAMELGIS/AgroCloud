@@ -37,6 +37,16 @@ const REPO_ROOT = path.join(SERVER_DIR, '..', '..')
 /** Vite production output (`npm run build` in `frontend/`). Override with AGRI_FRONTEND_DIST. */
 const FRONTEND_DIST = process.env.AGRI_FRONTEND_DIST || path.join(REPO_ROOT, 'frontend', 'dist')
 
+/** `/AgroCloud` on GitHub Pages / Railway; empty when `VITE_BASE_PATH=/` (custom domain root). */
+function resolveSpaBasePath() {
+  const raw = String(process.env.VITE_BASE_PATH || process.env.AGRO_BASE_PATH || '').trim()
+  if (!raw || raw === '/') return ''
+  const trimmed = raw.endsWith('/') ? raw.slice(0, -1) : raw
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+}
+
+const SPA_BASE = resolveSpaBasePath()
+
 const app = express()
 
 const CORS_EXTRA = String(process.env.CORS_ALLOWED_ORIGINS || '')
@@ -108,7 +118,8 @@ app.get('*', (req, res, next) => {
   try {
     if (req.method !== 'GET') return next()
     const accept = String(req.headers['accept-encoding'] || '')
-    const urlPath = req.path
+    let urlPath = req.path
+    if (SPA_BASE && urlPath.startsWith(`${SPA_BASE}/`)) urlPath = urlPath.slice(SPA_BASE.length) || '/'
     if (!urlPath.startsWith('/assets/') && !urlPath.endsWith('.js') && !urlPath.endsWith('.css')) return next()
     const distPath = FRONTEND_DIST
     const filePath = path.join(distPath, urlPath)
@@ -134,12 +145,17 @@ app.get('*', (req, res, next) => {
 })
 
 app.use(
+  (SPA_BASE || '/'),
   express.static(FRONTEND_DIST, {
     setHeaders(res, filePath) {
       applyStaticCacheHeaders(res, filePath)
     },
   }),
 )
+
+if (SPA_BASE) {
+  app.get('/', (_req, res) => res.redirect(301, `${SPA_BASE}/`))
+}
 
 // New versioned API gateway: /api/v1/* and /api/v2/*
 app.use('/api', versionedRoutes)
@@ -1687,7 +1703,13 @@ registerSentinelHubStatisticsRoutes(app, { secretsFilePath: API_SECRETS_FILE })
 registerGeocodeRoutes(app)
 registerAcpWeatherRoutes(app)
 
-app.get('*', (req, res) => {
+app.get('*', (req, res, next) => {
+  if (req.method !== 'GET') return next()
+  const p = req.path
+  if (SPA_BASE) {
+    if (p === '/') return res.redirect(301, `${SPA_BASE}/`)
+    if (!p.startsWith(SPA_BASE)) return next()
+  }
   applyStaticCacheHeaders(res, 'index.html')
   res.sendFile(path.join(FRONTEND_DIST, 'index.html'))
 })

@@ -11,9 +11,10 @@ RUN npm ci
 
 COPY . .
 
-RUN npm run build
-
 ENV NODE_ENV=production
+ENV VITE_BASE_PATH=/AgroCloud/
+RUN npm run build:production
+
 EXPOSE 3001
 
-CMD ["npm", "run", "start", "-w", "backend"]
+CMD ["npm", "start"]
