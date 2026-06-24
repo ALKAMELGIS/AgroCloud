@@ -265,6 +265,27 @@ export default defineConfig({
               skipWaiting: true,
               runtimeCaching: [
                 {
+                  urlPattern: ({ request, url }) =>
+                    request.destination === 'script' && url.pathname.startsWith('/assets/'),
+                  handler: 'NetworkFirst',
+                  options: {
+                    cacheName: 'agro-assets',
+                    expiration: { maxEntries: 64, maxAgeSeconds: 60 * 60 * 24 },
+                    cacheableResponse: { statuses: [0, 200] },
+                    networkTimeoutSeconds: 8,
+                  },
+                },
+                {
+                  urlPattern: ({ request }) => request.mode === 'navigate',
+                  handler: 'NetworkFirst',
+                  options: {
+                    cacheName: 'agro-html-shell',
+                    expiration: { maxEntries: 4, maxAgeSeconds: 60 * 60 },
+                    cacheableResponse: { statuses: [0, 200] },
+                    networkTimeoutSeconds: 6,
+                  },
+                },
+                {
                   urlPattern: /^https:\/\/api\.open-meteo\.com\/.*/i,
                   handler: 'StaleWhileRevalidate',
                   options: {
