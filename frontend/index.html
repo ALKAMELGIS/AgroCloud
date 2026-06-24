@@ -10,7 +10,7 @@
       ;(function () {
         try {
           var h = typeof location !== 'undefined' ? String(location.hostname || '') : ''
-          if (!h || h === 'localhost' || h === '127.0.0.1') return
+          if (h.indexOf('github.io') === -1) return
           var curEl = document.querySelector('meta[name="agro-pages-build"]')
           var cur = curEl && curEl.getAttribute('content')
           if (!cur) return

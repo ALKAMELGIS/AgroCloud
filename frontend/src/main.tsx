@@ -52,9 +52,6 @@ const registerServiceWorker = () => {
   void import('virtual:pwa-register').then(({ registerSW }) => {
     registerSW({
       immediate: true,
-      onNeedRefresh() {
-        window.location.reload()
-      },
       onRegisterError(error) {
         console.warn('[PWA] Service worker registration failed:', error)
       },
@@ -62,9 +59,15 @@ const registerServiceWorker = () => {
   })
 }
 
-const purgeStaleServiceWorkerCaches = (resetKey: string) => {
-  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return Promise.resolve(false)
-  const canReload = typeof sessionStorage !== 'undefined' && !safeSessionGetItem(resetKey)
+if (pwaEnabled) {
+  if (isTouchDevice()) {
+    deferAfterFirstPaint(registerServiceWorker, 4000)
+  } else {
+    registerServiceWorker()
+  }
+} else if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  const resetKey = 'sw_reset_v2'
+  const canReload = typeof window !== 'undefined' && typeof sessionStorage !== 'undefined' && !safeSessionGetItem(resetKey)
   const hadController = Boolean(navigator.serviceWorker.controller)
 
   const unregisterPromise =
@@ -87,33 +90,18 @@ const purgeStaleServiceWorkerCaches = (resetKey: string) => {
           .catch(() => false)
       : Promise.resolve(false)
 
-  return Promise.all([unregisterPromise, clearCachePromise]).then(([hadRegs]) => {
+  Promise.all([unregisterPromise, clearCachePromise]).then(([hadRegs]) => {
     if (canReload && (hadRegs || hadController)) {
       safeSessionSetItem(resetKey, '1')
       const hash = typeof window.location.hash === 'string' ? window.location.hash : ''
       const onLoginRoute = /^#\/login(\?|$|\/)/i.test(hash)
       if (!onLoginRoute) {
         window.location.reload()
-        return true
       }
+      return
     }
     if (typeof sessionStorage !== 'undefined') safeSessionRemoveItem(resetKey)
-    return false
   })
-}
-
-if (pwaEnabled) {
-  const swResetKey = 'sw_reset_v3'
-  void purgeStaleServiceWorkerCaches(swResetKey).then((reloaded) => {
-    if (reloaded) return
-    if (isTouchDevice()) {
-      deferAfterFirstPaint(registerServiceWorker, 4000)
-    } else {
-      registerServiceWorker()
-    }
-  })
-} else if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-  void purgeStaleServiceWorkerCaches('sw_reset_v3')
 }
 
 initMobileAppShell()
