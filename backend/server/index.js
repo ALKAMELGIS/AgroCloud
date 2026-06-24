@@ -66,6 +66,7 @@ app.use(
       try {
         const u = new URL(origin)
         if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') return callback(null, true)
+        if (u.hostname.endsWith('.up.railway.app')) return callback(null, true)
       } catch {
         // ignore
       }

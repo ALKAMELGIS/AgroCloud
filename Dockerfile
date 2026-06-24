@@ -11,9 +11,10 @@ RUN npm ci
 
 COPY . .
 
-RUN npm run build
+ENV NODE_ENV=production HOST=0.0.0.0 VITE_BASE_PATH=/
 
-ENV NODE_ENV=production
-EXPOSE 3001
+RUN npm run build:production
+
+EXPOSE 3000
 
 CMD ["npm", "run", "start", "-w", "backend"]
