@@ -13,8 +13,16 @@ import type { RemoteSensingLayerSelectGroup } from '../../../lib/agroCompositeIn
 import './LayerLiveLegendFloatingPanel.css'
 
 const POS_KEY_BASE = 'si-layer-live-float-pos-v2'
+const SIZE_KEY_BASE = 'si-layer-live-float-size-v1'
+
+/** Resize bounds (card width × scrollable body height), in px. */
+const MIN_W = 240
+const MAX_W = 560
+const MIN_BODY_H = 150
+const MAX_BODY_H = 760
 
 type SavedPos = { x: number; y: number }
+type SavedSize = { w: number; h: number }
 
 function readSavedPos(storageKey: string): SavedPos | null {
   try {
@@ -38,6 +46,31 @@ function writeSavedPos(p: SavedPos, storageKey: string) {
   }
 }
 
+function readSavedSize(storageKey: string): SavedSize | null {
+  try {
+    const raw = localStorage.getItem(storageKey)
+    if (!raw) return null
+    const j = JSON.parse(raw) as { w?: unknown; h?: unknown }
+    if (typeof j.w === 'number' && typeof j.h === 'number' && Number.isFinite(j.w) && Number.isFinite(j.h)) {
+      return {
+        w: Math.min(MAX_W, Math.max(MIN_W, j.w)),
+        h: Math.min(MAX_BODY_H, Math.max(MIN_BODY_H, j.h)),
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
+function writeSavedSize(s: SavedSize, storageKey: string) {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(s))
+  } catch {
+    /* ignore */
+  }
+}
+
 type LayerLiveLegendFloatingPanelProps = {
   open: boolean
   onClose: () => void
@@ -46,6 +79,13 @@ type LayerLiveLegendFloatingPanelProps = {
   layerOptions: Array<{ id: string; label?: string }>
   layerGroups?: RemoteSensingLayerSelectGroup[]
   activeLayerId?: string
+  /** AOI geometry for per-class Total Area in the legend. */
+  aoiGeometry?: GeoJSON.Geometry | GeoJSON.Feature | null
+  /** Scene date (ISO) the classification map is rendered for. */
+  sceneDate?: string
+  /** Optional multi-temporal series window shown in the metadata grid. */
+  seriesStart?: string
+  seriesEnd?: string
 }
 
 export function LayerLiveLegendFloatingPanel({
@@ -55,15 +95,23 @@ export function LayerLiveLegendFloatingPanel({
   layerOptions,
   layerGroups,
   activeLayerId,
+  aoiGeometry,
+  sceneDate,
+  seriesStart,
+  seriesEnd,
 }: LayerLiveLegendFloatingPanelProps) {
   const { scopedStorageKey } = useSiInstanceScope()
   const posStorageKey = scopedStorageKey(POS_KEY_BASE)
+  const sizeStorageKey = scopedStorageKey(SIZE_KEY_BASE)
   const rootRef = useRef<HTMLElement | null>(null)
   const dragRef = useRef<{ dx: number; dy: number; startX: number; startY: number; w: number; h: number } | null>(
     null,
   )
+  const resizeRef = useRef<{ startX: number; startY: number; startW: number; startH: number } | null>(null)
   const [pos, setPos] = useState<SavedPos | null>(() => readSavedPos(posStorageKey))
+  const [size, setSize] = useState<SavedSize | null>(() => readSavedSize(sizeStorageKey))
   const [dragging, setDragging] = useState(false)
+  const [resizing, setResizing] = useState(false)
 
   const clampToContainer = useCallback(
     (x: number, y: number, elW: number, elH: number) => {
@@ -143,6 +191,79 @@ export function LayerLiveLegendFloatingPanel({
     }
   }, [])
 
+  // ── Resize (bottom-right handle) ───────────────────────────────────────
+  const onResizePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLElement>) => {
+      if (e.button !== 0) return
+      const root = rootRef.current
+      if (!root) return
+      const r = root.getBoundingClientRect()
+      const bodyEl = root.querySelector('.si-layer-live-float__body') as HTMLElement | null
+      const bodyH = bodyEl ? bodyEl.getBoundingClientRect().height : 320
+      resizeRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        startW: r.width,
+        startH: size?.h ?? bodyH,
+      }
+      setResizing(true)
+      ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
+      e.preventDefault()
+      e.stopPropagation()
+    },
+    [size],
+  )
+
+  const onResizePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLElement>) => {
+      if (!resizeRef.current) return
+      const box = containerRef.current?.getBoundingClientRect()
+      const root = rootRef.current
+      const dx = e.clientX - resizeRef.current.startX
+      const dy = e.clientY - resizeRef.current.startY
+      // Keep the card inside the map container as it grows.
+      let maxW = MAX_W
+      let maxH = MAX_BODY_H
+      if (box && root) {
+        const r = root.getBoundingClientRect()
+        maxW = Math.min(MAX_W, box.right - 12 - r.left)
+        maxH = Math.min(MAX_BODY_H, box.bottom - 12 - r.top - 52 /* header */)
+      }
+      const w = Math.max(MIN_W, Math.min(maxW, resizeRef.current.startW + dx))
+      const h = Math.max(MIN_BODY_H, Math.min(maxH, resizeRef.current.startH + dy))
+      setSize({ w, h })
+    },
+    [containerRef],
+  )
+
+  const onResizePointerUp = useCallback(
+    (e: React.PointerEvent<HTMLElement>) => {
+      if (resizeRef.current) {
+        resizeRef.current = null
+        setSize(s => {
+          if (s) writeSavedSize(s, sizeStorageKey)
+          return s
+        })
+      }
+      setResizing(false)
+      try {
+        ;(e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId)
+      } catch {
+        /* ignore */
+      }
+    },
+    [sizeStorageKey],
+  )
+
+  const resetSize = useCallback(() => {
+    setSize(null)
+    try {
+      localStorage.removeItem(sizeStorageKey)
+    } catch {
+      /* ignore */
+    }
+  }, [sizeStorageKey])
+
   useEffect(() => {
     const onResize = () => {
       setPos(p => {
@@ -160,15 +281,16 @@ export function LayerLiveLegendFloatingPanel({
 
   if (!open) return null
 
-  const style: CSSProperties =
-    pos != null
-      ? { left: pos.x, top: pos.y, right: 'auto', bottom: 'auto' }
-      : {}
+  const style: CSSProperties = {
+    ...(pos != null ? { left: pos.x, top: pos.y, right: 'auto', bottom: 'auto' } : {}),
+    ...(size != null ? { width: size.w } : {}),
+  }
+  const bodyStyle: CSSProperties = size != null ? { maxHeight: size.h } : {}
 
   return (
     <aside
       ref={rootRef}
-      className={`si-layer-live-float${dragging ? ' si-layer-live-float--dragging' : ''}`}
+      className={`si-layer-live-float${dragging ? ' si-layer-live-float--dragging' : ''}${resizing ? ' si-layer-live-float--resizing' : ''}`}
       style={style}
       dir="ltr"
       role="dialog"
@@ -202,14 +324,32 @@ export function LayerLiveLegendFloatingPanel({
             <i className="fa-solid fa-xmark" aria-hidden />
           </button>
         </div>
-        <div className="si-layer-live-float__body">
+        <div className="si-layer-live-float__body" style={bodyStyle}>
           <LayerLiveLegendPanel
             layerOptions={layerOptions}
             layerGroups={layerGroups}
             activeLayerId={activeLayerId}
+            aoiGeometry={aoiGeometry}
+            sceneDate={sceneDate}
+            seriesStart={seriesStart}
+            seriesEnd={seriesEnd}
             activeOnly
           />
         </div>
+        <button
+          type="button"
+          className="si-layer-live-float__resize"
+          data-drag-exclude
+          onPointerDown={onResizePointerDown}
+          onPointerMove={onResizePointerMove}
+          onPointerUp={onResizePointerUp}
+          onPointerCancel={onResizePointerUp}
+          onDoubleClick={resetSize}
+          aria-label="Resize legend card (double-click to reset)"
+          title="Drag to resize · double-click to reset"
+        >
+          <i className="fa-solid fa-up-right-and-down-left-from-center" aria-hidden />
+        </button>
       </div>
     </aside>
   )

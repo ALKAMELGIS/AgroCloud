@@ -1,0 +1,161 @@
+/* Floating, compact drawing widget — docked over the map canvas (modern glass) */
+.si-map-draw-widget {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 7px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(8, 11, 18, 0.92));
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  pointer-events: auto;
+  animation: si-map-draw-widget-in 0.16s ease-out;
+}
+
+@keyframes si-map-draw-widget-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.si-map-draw-widget__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px 0 4px;
+  color: rgba(167, 243, 208, 0.95);
+}
+
+.si-map-draw-widget__brand i {
+  font-size: 11px;
+}
+
+.si-map-draw-widget__brand-text {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.si-map-draw-widget__sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 1px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.si-map-draw-widget__tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.si-map-draw-widget__tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(226, 232, 240, 0.9);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease, transform 0.08s ease;
+}
+
+.si-map-draw-widget__tool:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.si-map-draw-widget__tool:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.si-map-draw-widget__tool.is-on {
+  background: linear-gradient(180deg, rgba(52, 211, 153, 0.32), rgba(16, 185, 129, 0.2));
+  border-color: rgba(52, 211, 153, 0.5);
+  color: #ecfdf5;
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.25), 0 4px 12px rgba(16, 185, 129, 0.25);
+}
+
+.si-map-draw-widget__tool:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.si-map-draw-widget__tool--clear {
+  color: rgba(252, 165, 165, 0.92);
+}
+
+.si-map-draw-widget__tool--clear:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.si-map-draw-widget__close {
+  color: rgba(148, 163, 184, 0.95);
+}
+
+.si-map-draw-widget__close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+}
+
+/* Light theme — clean white glass */
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-map-draw-widget {
+  border-color: rgba(148, 163, 184, 0.3);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(248, 250, 252, 0.95));
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-map-draw-widget__brand-text {
+  color: #0f172a;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-map-draw-widget__brand i {
+  color: #059669;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-map-draw-widget__sep {
+  background: rgba(15, 23, 42, 0.12);
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-map-draw-widget__tool {
+  background: rgba(15, 23, 42, 0.03);
+  color: #334155;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-map-draw-widget__tool:hover:not(:disabled) {
+  background: rgba(15, 23, 42, 0.07);
+  border-color: rgba(148, 163, 184, 0.35);
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-map-draw-widget__tool.is-on {
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.18), rgba(5, 150, 105, 0.12));
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #065f46;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-map-draw-widget__tool--clear {
+  color: #dc2626;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-map-draw-widget__close {
+  color: #64748b;
+}

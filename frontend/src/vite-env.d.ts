@@ -7,6 +7,8 @@ interface ImportMetaEnv {
   readonly VITE_OPENAI_API_KEY?: string
   readonly VITE_DEEPSEEK_API_KEY?: string
   readonly VITE_CLAUDE_API_KEY?: string
+  readonly VITE_OLLAMA_BASE_URL?: string
+  readonly VITE_OLLAMA_MODEL?: string
   readonly VITE_OPENWEATHER_API_KEY?: string
   readonly VITE_OPENROUTESERVICE?: string
   readonly VITE_SENTINEL_HUB_ACCESS_TOKEN?: string

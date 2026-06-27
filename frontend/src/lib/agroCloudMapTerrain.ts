@@ -15,6 +15,8 @@ export const ESRI_WORLD_TERRAIN_ATTRIBUTION =
   'Elevation © Esri — WorldElevation3D/Terrain3D'
 
 export const TOPOGRAPHIC_3D_BASEMAP_ID = '3d-topographic'
+/** Esri World Imagery (Satellite) draped over the Esri WorldElevation3D mesh. */
+export const SATELLITE_3D_BASEMAP_ID = '3d-satellite'
 export const ESRI_WORLD_TERRAIN_SOURCE_ID = 'esri-terrain'
 /** @deprecated Alias — same as {@link ESRI_WORLD_TERRAIN_SOURCE_ID}. */
 export const AGRO_CLOUD_TERRAIN_DEM_SOURCE_ID = ESRI_WORLD_TERRAIN_SOURCE_ID
@@ -71,12 +73,21 @@ export function is3dTopographicBasemapId(id: string): boolean {
   return id === TOPOGRAPHIC_3D_BASEMAP_ID
 }
 
+export function is3dSatelliteBasemapId(id: string): boolean {
+  return id === SATELLITE_3D_BASEMAP_ID
+}
+
+/** Any dedicated elevation/terrain basemap (topo relief or draped satellite imagery). */
+export function isTerrain3dBasemapId(id: string): boolean {
+  return is3dTopographicBasemapId(id) || is3dSatelliteBasemapId(id)
+}
+
 export function shouldEnableAgroCloudTerrain3d(opts: {
   basemapId?: string
   pitch?: number
 }): boolean {
   if (!canUseEsriWorldTerrainDem()) return false
-  if (opts.basemapId && is3dTopographicBasemapId(opts.basemapId)) return true
+  if (opts.basemapId && isTerrain3dBasemapId(opts.basemapId)) return true
   const pitch = typeof opts.pitch === 'number' ? opts.pitch : 0
   return pitch >= AGRO_CLOUD_TERRAIN_PITCH_THRESHOLD
 }
@@ -111,6 +122,61 @@ export function build3dTopographicFlatFallbackStyle(): Record<string, unknown> {
     })
   })
   return { version: 8 as const, name: '3D Topographic (2D fallback)', sources, layers }
+}
+
+export function build3dSatelliteLeafletLayers(): { url: string; attribution: string; opacity?: number }[] {
+  return [{ url: esriTile('World_Imagery'), attribution: ATTR_ESRI }]
+}
+
+export function build3dSatelliteFlatFallbackStyle(): Record<string, unknown> {
+  return {
+    version: 8 as const,
+    name: 'Satellite 3D (2D fallback)',
+    sources: {
+      'sat3d-base': {
+        type: 'raster',
+        tiles: [esriTile('World_Imagery')],
+        tileSize: 256,
+        attribution: ATTR_ESRI,
+      },
+    },
+    layers: [{ id: 'sat3d-base-layer', type: 'raster', source: 'sat3d-base', paint: BASEMAP_RASTER_PAINT }],
+  }
+}
+
+/**
+ * Mapbox GL style: Esri World Imagery (Satellite) as a plain raster basemap.
+ *
+ * The DEM mesh is intentionally NOT baked into the style. Instead the dynamic
+ * terrain controller (`syncAgroCloudTerrain3d`) adds the Esri WorldElevation3D
+ * source and calls `setTerrain` only AFTER the DEM source has loaded — this
+ * avoids the `_updateTerrain` race that fires before DEM tiles arrive and would
+ * otherwise cancel terrain entirely. Because the basemap id is a recognised
+ * terrain-3d id, the mesh is enabled as soon as the basemap is active, and the
+ * opaque imagery drapes over the relief once the camera tilts.
+ */
+export function build3dSatelliteMapboxStyle(): Record<string, unknown> {
+  return {
+    version: 8 as const,
+    name: 'Satellite 3D',
+    projection: { name: 'globe' },
+    sources: {
+      'sat3d-base': {
+        type: 'raster',
+        tiles: [esriTile('World_Imagery')],
+        tileSize: 256,
+        attribution: ATTR_ESRI,
+      },
+    },
+    layers: [
+      {
+        id: AGRO_CLOUD_TOPO_BASE_LAYER_ID,
+        type: 'raster',
+        source: 'sat3d-base',
+        paint: BASEMAP_RASTER_PAINT,
+      },
+    ],
+  }
 }
 
 /** Mapbox GL style: hillshade + DEM under topo basemap (basemap covers terrain tile gaps). */

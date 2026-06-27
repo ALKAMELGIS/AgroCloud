@@ -1019,6 +1019,148 @@ async function postSentinelHistogramRequest(
   )
 }
 
+export type SentinelHubGenericHistogram = {
+  date: string
+  bins: NdviHistogramBin[]
+  overflow: number
+  underflow: number
+  sampleCount: number
+}
+
+function readNamedHistogramBand(
+  outputs: NonNullable<StatsApiResponse['data']>[number],
+  outputId: string,
+): StatsHistogramBand | null {
+  const band = (outputs?.outputs as Record<string, { bands?: Record<string, StatsHistogramBand> }> | undefined)?.[
+    outputId
+  ]?.bands?.[outputId]
+  return band ?? null
+}
+
+function parseGenericHistogramResponse(json: StatsApiResponse, outputId: string): SentinelHubGenericHistogram[] {
+  if (!Array.isArray(json.data)) return []
+  const out: SentinelHubGenericHistogram[] = []
+  for (const row of json.data) {
+    const date = intervalStartIso(row.interval)
+    if (!date) continue
+    const band = readNamedHistogramBand(row, outputId)
+    const hist = band?.histogram
+    const bins: NdviHistogramBin[] = (hist?.bins ?? [])
+      .map(b => ({ lowEdge: Number(b.lowEdge), highEdge: Number(b.highEdge), count: Number(b.count) || 0 }))
+      .filter(b => Number.isFinite(b.lowEdge) && Number.isFinite(b.highEdge))
+    out.push({
+      date,
+      bins,
+      overflow: Number(hist?.overflow) || 0,
+      underflow: Number(hist?.underflow) || 0,
+      sampleCount: Number(band?.stats?.sampleCount) || 0,
+    })
+  }
+  return out
+}
+
+function buildGenericIndexHistogramRequestBody(options: {
+  geom: GeoJSON.Geometry
+  fromIso: string
+  toIso: string
+  evalscript: string
+  outputId: string
+  binEdges: number[]
+  maxCloudCoverage?: number
+  resolutionMeters?: number
+}): Record<string, unknown> {
+  const res = Math.max(10, options.resolutionMeters ?? 10)
+  return {
+    input: {
+      bounds: {
+        geometry: options.geom,
+        properties: { crs: 'http://www.opengis.net/def/crs/EPSG/0/4326' },
+      },
+      data: [
+        {
+          type: 'sentinel-2-l2a',
+          dataFilter: {
+            mosaickingOrder: 'leastCC',
+            maxCloudCoverage: options.maxCloudCoverage ?? 65,
+          },
+        },
+      ],
+    },
+    aggregation: {
+      timeRange: { from: `${options.fromIso}T00:00:00Z`, to: `${options.toIso}T00:00:00Z` },
+      aggregationInterval: { of: 'P1D' },
+      evalscript: options.evalscript,
+      resx: res,
+      resy: res,
+    },
+    calculations: {
+      [options.outputId]: {
+        histograms: { [options.outputId]: { bins: options.binEdges } },
+        statistics: { [options.outputId]: {} },
+      },
+    },
+  }
+}
+
+async function postGenericHistogramRequest(
+  body: Record<string, unknown>,
+  outputId: string,
+  signal?: AbortSignal,
+): Promise<SentinelHubGenericHistogram[]> {
+  if (isSentinelHubStatisticsDirectConfigured()) {
+    try {
+      const json = await postSentinelStatisticsDirect(body, signal)
+      return parseGenericHistogramResponse(json, outputId)
+    } catch {
+      /* fall through to proxy */
+    }
+  }
+  if (mayUseSentinelHubStatisticsProxy()) {
+    const json = await postSentinelStatisticsViaProxy(body, signal)
+    return parseGenericHistogramResponse(json, outputId)
+  }
+  throw new Error(
+    'Configure Sentinel Hub OAuth (VITE_SENTINEL_HUB_CLIENT_ID/SECRET) or a private access token for class-area statistics.',
+  )
+}
+
+/**
+ * Per-class pixel histogram for any single-band index evalscript inside an AOI.
+ * `binEdges` are passed verbatim to the Statistical API (supports non-uniform class breaks),
+ * so each returned bin maps 1:1 to a classification class.
+ */
+export async function fetchSentinelIndexClassHistogramForSceneDate(options: {
+  geometry: GeoJSON.Geometry
+  sceneDate: string
+  evalscript: string
+  outputId: string
+  binEdges: number[]
+  maxCloudCoverage?: number
+  resolutionMeters?: number
+  signal?: AbortSignal
+}): Promise<SentinelHubGenericHistogram | null> {
+  const geom = simplifyGeometryForSentinelStats(options.geometry)
+  if (!geom || options.binEdges.length < 2) return null
+  const fromIso = options.sceneDate.trim().slice(0, 10)
+  if (!fromIso) return null
+  const toIso = addDaysToIso(fromIso, 1)
+  const rows = await postGenericHistogramRequest(
+    buildGenericIndexHistogramRequestBody({
+      geom,
+      fromIso,
+      toIso,
+      evalscript: options.evalscript,
+      outputId: options.outputId,
+      binEdges: options.binEdges,
+      maxCloudCoverage: options.maxCloudCoverage,
+      resolutionMeters: options.resolutionMeters,
+    }),
+    options.outputId,
+    options.signal,
+  )
+  return rows.find(r => r.date === fromIso) ?? rows[0] ?? null
+}
+
 /** Fetch NDVI pixel histogram for one scene date (dominant-class source of truth). */
 export async function fetchSentinelFieldNdviHistogramForSceneDate(
   geometry: GeoJSON.Geometry,

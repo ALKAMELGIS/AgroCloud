@@ -460,86 +460,45 @@ function evaluatePixel(samples) {
 }`
 }
 
-function formatRgb01Triple(hex: number): string {
-  const r = ((hex >>> 16) & 0xff) / 255
-  const g = ((hex >>> 8) & 0xff) / 255
-  const b = (hex & 0xff) / 255
-  return `[${r.toFixed(5)}, ${g.toFixed(5)}, ${b.toFixed(5)}]`
-}
-
-function formatRampRgbStopsForEval(ramp: readonly RampStop[]): string {
-  return ramp.map(([v, hex]) => `[${v}, ${formatRgb01Triple(hex)}]`).join(',\n  ')
-}
-
-/** NDVI: cloud-masked continuous ramp on B08/B04 — dataMask alpha (AOI GEOMETRY clip). */
+/**
+ * NDVI Live WMS — lightweight ColorRampVisualizer on B08/B04 with dataMask alpha.
+ *
+ * Intentionally minimal so the visible raster appears FAST and fills the whole AOI
+ * (no SCL cloud masking → no transparent holes, only 3 input bands, a short
+ * evalscript that keeps the WMS GEOMETRY-clip URL well under the length budget).
+ * Per-class pixel-area analysis runs separately, after the layer is shown.
+ */
 export function buildSentinelNdviTenClassEvalscript(indexVisibilityMin: number | null = null): string {
   const thr =
     indexVisibilityMin != null && Number.isFinite(indexVisibilityMin)
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
-  const lowMapLiteral = formatRampRgbStopsForEval(SENTINEL_NDVI_LOW_COLORMAP)
-  const growthRampLiteral = formatRampRgbStopsForEval(SENTINEL_NDVI_VEGETATION_GROWTH_RAMP)
-
-  const vegetationReturn =
+  const alphaBlock =
     thr == null
-      ? 'return findColor(val).concat(samples.dataMask);'
-      : `let a = samples.dataMask * (val >= ${thr} ? 1.0 : 0.0);
-    return findColor(val).concat(a);`
+      ? 'return imgVals.concat(samples.dataMask);'
+      : `var a = samples.dataMask * (ndvi >= ${thr} ? 1.0 : 0.0);
+  return imgVals.concat(a);`
 
   return `//VERSION=3
-// NDVI — step ramp < 0.42, smooth growth greens ≥ 0.42, SCL cloud mask + B08/B04
+// NDVI — agricultural color ramp on B08/B04, dataMask alpha (fast AOI clip)
 function setup() {
   return {
-    input: ["B02", "B03", "B04", "B08", "B8A", "SCL", "dataMask"],
+    input: ["B04", "B08", "dataMask"],
     output: { bands: 4 }
   };
 }
 
-const NDVI_LOW_MAP = [
-  ${lowMapLiteral}
-];
-const NDVI_GROWTH_RAMP = [
-  ${growthRampLiteral}
+const ramp = [
+   ${formatRampForEvalscript(SENTINEL_NDVI_AGRICULTURAL_RAMP)}
 ];
 
-function blendRgb(c0, c1, t) {
-  t = Math.max(0, Math.min(1, t));
-  return [
-    c0[0] + (c1[0] - c0[0]) * t,
-    c0[1] + (c1[1] - c0[1]) * t,
-    c0[2] + (c1[2] - c0[2]) * t
-  ];
-}
-
-function findColor(val) {
-  var low = NDVI_LOW_MAP;
-  for (var i = 1; i < low.length; i++) {
-    if (val <= low[i][0]) return low[i - 1][1];
-  }
-  if (val < 0.42) return low[low.length - 1][1];
-  var ramp = NDVI_GROWTH_RAMP;
-  if (val <= ramp[0][0]) return ramp[0][1];
-  if (val >= ramp[ramp.length - 1][0]) return ramp[ramp.length - 1][1];
-  for (var j = 0; j < ramp.length - 1; j++) {
-    var v0 = ramp[j][0], c0 = ramp[j][1];
-    var v1 = ramp[j + 1][0], c1 = ramp[j + 1][1];
-    if (val >= v0 && val <= v1) {
-      var span = v1 - v0;
-      var t = span > 0 ? (val - v0) / span : 0;
-      return blendRgb(c0, c1, t);
-    }
-  }
-  return ramp[ramp.length - 1][1];
-}
+const visualizer = new ColorRampVisualizer(ramp);
 
 function evaluatePixel(samples) {
-  var scl = samples.SCL;
-  var cloud = scl == 3 || scl == 8 || scl == 9 || scl == 10 || scl == 11;
-  if (!samples.dataMask || cloud) return [0, 0, 0, 0];
-  let val = index(samples.B08, samples.B04);
-  if (!isFinite(val)) return [0, 0, 0, 0];
-  ${vegetationReturn}
+  let ndvi = index(samples.B08, samples.B04);
+  let imgVals = visualizer.process(ndvi);
+  ${alphaBlock}
 }`
 }
 

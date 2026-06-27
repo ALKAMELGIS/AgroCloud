@@ -804,3 +804,288 @@
   border-color: rgba(148, 163, 184, 0.28);
   color: #a5b4fc;
 }
+
+/* ============================================================
+   GIS Map · "Add Source Data" picker (image-2 parity)
+   Self-contained so it renders correctly on the standalone GIS
+   Map page without depending on SatelliteIntelligence.css.
+   ============================================================ */
+.gis-map-source-picker.gis-modal-overlay {
+  z-index: 12100;
+  background: rgba(2, 6, 23, 0.78);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  backdrop-filter: blur(16px) saturate(1.15);
+}
+
+.gis-map-source-picker .si-add-source-modal.gis-modal.gis-modal-compact {
+  max-width: 560px;
+  width: min(560px, calc(100vw - 24px));
+  border-radius: 22px;
+  background: linear-gradient(160deg, #0c1426 0%, #0a0f1e 100%);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  color: #e2e8f0;
+  overflow: hidden;
+  box-shadow: 0 32px 90px rgba(2, 6, 23, 0.62);
+}
+
+/* Hero (home) + form head */
+.gis-map-source-picker .gis-modal-compact-hero {
+  padding: 22px 24px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  background: linear-gradient(118deg, rgba(30, 27, 75, 0.5) 0%, rgba(15, 23, 42, 0.25) 100%);
+}
+
+.gis-map-source-picker .gis-modal-compact-hero-title {
+  margin: 0 0 6px;
+  font-size: 1.3rem;
+  font-weight: 780;
+  letter-spacing: -0.03em;
+  color: #f8fafc;
+  line-height: 1.2;
+}
+
+.gis-map-source-picker .gis-modal-compact-hero-lead {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #94a3b8;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+/* Option list */
+.gis-map-source-picker .si-add-source-options {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px 16px;
+}
+
+.gis-map-source-picker .si-add-source-option {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.55);
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.gis-map-source-picker .si-add-source-option:hover {
+  border-color: rgba(74, 222, 128, 0.42);
+  background: rgba(30, 41, 59, 0.72);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px rgba(2, 6, 23, 0.35);
+}
+
+.gis-map-source-picker .si-add-source-option:focus-visible {
+  outline: none;
+  border-color: rgba(129, 140, 248, 0.6);
+  box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.28);
+}
+
+/* image 2 has no radio bullet */
+.gis-map-source-picker .si-add-source-option-radio {
+  display: none;
+}
+
+.gis-map-source-picker .si-add-source-option-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(129, 140, 248, 0.35);
+  font-size: 18px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: transform 0.18s ease;
+}
+
+.gis-map-source-picker .si-add-source-option:hover .si-add-source-option-icon {
+  transform: scale(1.04);
+}
+
+.gis-map-source-picker .si-add-source-option-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.gis-map-source-picker .si-add-source-option-main strong {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+
+.gis-map-source-picker .si-add-source-option-main small {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  line-height: 1.45;
+}
+
+.gis-map-source-picker .si-add-source-option-chevron {
+  color: #64748b;
+  font-size: 13px;
+  align-self: center;
+  justify-self: end;
+  transition: transform 0.18s ease, color 0.18s ease;
+}
+
+.gis-map-source-picker .si-add-source-option:hover .si-add-source-option-chevron {
+  color: #86efac;
+  transform: translateX(2px);
+}
+
+/* Footer (Cancel) */
+.gis-map-source-picker .gis-modal-footer {
+  padding: 14px 18px;
+  background: rgba(2, 6, 23, 0.5);
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.gis-map-source-picker .gis-link-btn {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(30, 41, 59, 0.85);
+  color: #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 18px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.gis-map-source-picker .gis-link-btn:hover {
+  background: rgba(51, 65, 85, 0.95);
+  border-color: rgba(74, 222, 128, 0.4);
+  color: #ecfdf5;
+}
+
+/* ---- Form view (after a source is chosen): themed head + back ---- */
+.gis-map-source-picker .ddb-add-source-modal__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  background: linear-gradient(118deg, rgba(30, 27, 75, 0.5) 0%, rgba(15, 23, 42, 0.25) 100%);
+}
+
+.gis-map-source-picker .ddb-add-source-modal__head .gis-modal-compact-title {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 1.15rem;
+  font-weight: 760;
+  color: #f8fafc;
+}
+
+.gis-map-source-picker .ddb-add-source-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.65);
+  color: #a5b4fc;
+  font-size: 0.8rem;
+  font-weight: 650;
+  padding: 8px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.gis-map-source-picker .ddb-add-source-back:hover {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(74, 222, 128, 0.45);
+  color: #ecfdf5;
+  transform: translateY(-1px);
+}
+
+/* Dark theme the form surfaces so the flow stays cohesive with the picker */
+.gis-map-source-picker .gis-modal-compact-tabs {
+  padding: 8px 12px;
+  gap: 6px;
+  background: rgba(2, 6, 23, 0.45);
+}
+
+.gis-map-source-picker .gis-compact-tab {
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.gis-map-source-picker .gis-compact-tab i {
+  color: #94a3b8;
+}
+
+.gis-map-source-picker .gis-compact-tab:hover {
+  border-color: rgba(129, 140, 248, 0.35);
+}
+
+.gis-map-source-picker .gis-compact-tab:hover i {
+  color: #cbd5e1;
+}
+
+.gis-map-source-picker .gis-compact-tab.active {
+  border-color: rgba(74, 222, 128, 0.45);
+  background: linear-gradient(180deg, rgba(22, 101, 52, 0.45), rgba(15, 23, 42, 0.85));
+}
+
+.gis-map-source-picker .gis-compact-tab.active i {
+  color: #86efac;
+}
+
+.gis-map-source-picker .gis-modal-body {
+  background: rgba(15, 23, 42, 0.35);
+  color: #e2e8f0;
+}
+
+.gis-map-source-picker .gis-modal-gis-content-hint,
+.gis-map-source-picker .gis-dropzone-subtext,
+.gis-map-source-picker .gis-form-label,
+.gis-map-source-picker .gis-discover-meta {
+  color: #cbd5e1;
+}
+
+.gis-map-source-picker .gis-input,
+.gis-map-source-picker .gis-select {
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  color: #f1f5f9;
+}
+
+.gis-map-source-picker .gis-input::placeholder {
+  color: #64748b;
+}
+
+.gis-map-source-picker .gis-input:focus-visible,
+.gis-map-source-picker .gis-select:focus-visible {
+  border-color: rgba(74, 222, 128, 0.5);
+  box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.15);
+}
+
+.gis-map-source-picker .gis-dropzone {
+  background: rgba(2, 6, 23, 0.4);
+  border-color: rgba(148, 163, 184, 0.28);
+}
+
+.gis-map-source-picker .gis-dropzone-text {
+  color: #e2e8f0;
+}
+
+@media (max-width: 600px) {
+  .gis-map-source-picker .si-add-source-modal.gis-modal.gis-modal-compact {
+    width: calc(100vw - 16px);
+    border-radius: 18px;
+  }
+}

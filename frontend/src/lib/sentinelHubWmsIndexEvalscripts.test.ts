@@ -7,20 +7,20 @@ import {
 import { buildSentinelHubWmsAoiClip, inferWmsEvalProfile } from './sentinelHubWmsAoiClip'
 
 describe('sentinelHubWmsIndexEvalscripts', () => {
-  it('NDVI evalscript uses cloud-masked continuous ramp on B08/B04 with transparent NoData', () => {
+  it('NDVI evalscript uses a fast color ramp on B08/B04 with dataMask alpha (no SCL holes)', () => {
     const script = buildSentinelIndexColorRampEvalscript('ndvi')
     expect(script).toContain('index(samples.B08, samples.B04)')
     expect(script).toContain('samples.dataMask')
-    expect(script).toContain('scl == 3')
-    expect(script).not.toContain('samples.SCL == 4')
-    expect(script).toContain('function findColor(val)')
-    expect(script).toContain('NDVI_GROWTH_RAMP')
-    expect(script).toContain('function blendRgb')
-    expect(script).not.toContain('CLASS_RGB')
-    expect(script).not.toContain('function ndviClass(val)')
-    expect(script).toContain('return [0, 0, 0, 0]')
-    expect(script).toContain('0.84314, 0.18824, 0.15294')
-    expect(script).not.toContain('ColorRampVisualizer')
+    expect(script).toContain('ColorRampVisualizer')
+    expect(script).toContain('visualizer.process(ndvi)')
+    // Fast/complete render: no per-pixel SCL cloud masking and no heavy gradient code.
+    expect(script).not.toContain('SCL')
+    expect(script).not.toContain('scl == 3')
+    expect(script).not.toContain('function findColor(val)')
+    expect(script).not.toContain('function blendRgb')
+    expect(script).not.toContain('return [0, 0, 0, 0]')
+    // Only the 3 bands needed for NDVI are requested.
+    expect(script).toContain('["B04", "B08", "dataMask"]')
   })
 
   it('NDVI growth ramp samples smooth light-to-dark greens for legend and raster parity', () => {

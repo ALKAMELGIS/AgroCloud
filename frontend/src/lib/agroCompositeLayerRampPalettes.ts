@@ -23,6 +23,21 @@ function anchors(...pairs: [number, string, string][]): AgroLayerRampAnchor[] {
   return pairs.map(([t, hex, label]) => ({ t, hex: h(hex), label }))
 }
 
+/** Linear RGB blend between two packed hex colors (amt 0 → a, 1 → b). */
+function mixHex(a: number, b: number, amt: number): number {
+  const t = Math.max(0, Math.min(1, amt))
+  const ar = (a >> 16) & 0xff
+  const ag = (a >> 8) & 0xff
+  const ab = a & 0xff
+  const br = (b >> 16) & 0xff
+  const bg = (b >> 8) & 0xff
+  const bb = b & 0xff
+  const r = Math.round(ar + (br - ar) * t)
+  const g = Math.round(ag + (bg - ag) * t)
+  const bl = Math.round(ab + (bb - ab) * t)
+  return ((r << 16) | (g << 8) | bl) >>> 0
+}
+
 function deltaLabels(shortName: string): readonly string[] {
   return [
     `Strong ${shortName} decline`,
@@ -38,7 +53,14 @@ function deltaLabels(shortName: string): readonly string[] {
   ]
 }
 
-/** Unique delta palettes — decline (left) → stable center → gain (right). */
+/**
+ * Unique delta palettes — smooth diverging ramp with 10 visibly distinct steps.
+ *
+ * The strong decline / gain colors anchor the dark, saturated extremes; toward
+ * the stable center each side fades through progressively lighter mid-tones, so
+ * every class is a clear, gradual step (dark → light → dark) rather than four
+ * near-identical shades on each wing.
+ */
 function deltaPalette(
   shortName: string,
   decline: string,
@@ -46,16 +68,30 @@ function deltaPalette(
   gain: string,
   subtitle: string,
 ): AgroLayerRampPalette {
+  const declineHex = h(decline)
+  const stableHex = h(stable)
+  const gainHex = h(gain)
+
+  // Light tints near the neutral center (blend the strong hue toward stable).
+  const declineLight = mixHex(declineHex, stableHex, 0.78)
+  const gainLight = mixHex(gainHex, stableHex, 0.78)
+  const declineMid = mixHex(declineHex, declineLight, 0.45)
+  const gainMid = mixHex(gainHex, gainLight, 0.45)
+
+  const rampAnchors: AgroLayerRampAnchor[] = [
+    { t: 0, hex: declineHex, label: 'Strong decline' },
+    { t: 0.22, hex: declineMid, label: 'Moderate decline' },
+    { t: 0.44, hex: declineLight, label: 'Slight decline' },
+    { t: 0.5, hex: stableHex, label: 'Stable' },
+    { t: 0.56, hex: gainLight, label: 'Slight gain' },
+    { t: 0.78, hex: gainMid, label: 'Moderate gain' },
+    { t: 1, hex: gainHex, label: 'Strong gain' },
+  ]
+
   return {
     valueMin: -0.4,
     valueMax: 0.4,
-    anchors: anchors(
-      [0, decline, 'Strong decline'],
-      [0.35, decline, 'Decline'],
-      [0.5, stable, 'Stable'],
-      [0.65, gain, 'Improvement'],
-      [1, gain, 'Strong gain'],
-    ),
+    anchors: rampAnchors,
     classLabels: deltaLabels(shortName),
     subtitle,
   }
@@ -565,6 +601,77 @@ export const AGRO_UNIQUE_LAYER_RAMP_PALETTES: Record<string, AgroLayerRampPalett
     subtitle: 'Crop pressure · mint = low stress load · violet = extreme pressure',
   },
 
+  // 🧂 Soil & Salinity Layer — Low → High salinity (green = non-saline → maroon = extreme)
+  NDSI: {
+    valueMin: -0.6,
+    valueMax: 0.4,
+    anchors: anchors(
+      [0, '#1b5e20', 'Non-saline'],
+      [0.33, '#fdd835', 'Slight salinity'],
+      [0.66, '#ef6c00', 'High salinity'],
+      [1, '#7f0000', 'Extreme salinity'],
+    ),
+    classLabels: [
+      'Non-saline',
+      'Very low salinity',
+      'Low salinity',
+      'Slight salinity',
+      'Moderate salinity',
+      'Moderately high',
+      'High salinity',
+      'Very high salinity',
+      'Severe salinity',
+      'Extreme salinity',
+    ],
+    subtitle: 'NDSI (B11−B8)/(B11+B8) · Low → High · 🟢 non-saline → 🔴 extreme salinity',
+  },
+  SI: {
+    valueMin: 0,
+    valueMax: 0.4,
+    anchors: anchors(
+      [0, '#00695c', 'Non-saline'],
+      [0.33, '#cddc39', 'Slight salinity'],
+      [0.66, '#f4511e', 'High salinity'],
+      [1, '#880e4f', 'Extreme salinity'],
+    ),
+    classLabels: [
+      'Non-saline',
+      'Very low salinity',
+      'Low salinity',
+      'Slight salinity',
+      'Moderate salinity',
+      'Moderately high',
+      'High salinity',
+      'Very high salinity',
+      'Severe salinity',
+      'Extreme salinity',
+    ],
+    subtitle: 'SI √(B3·B4) · Low → High · 🟢 dark soil → 🔴 bright saline crust',
+  },
+  SSI: {
+    valueMin: -0.4,
+    valueMax: 0.8,
+    anchors: anchors(
+      [0, '#0d47a1', 'Non-saline'],
+      [0.33, '#4dd0e1', 'Slight salinity'],
+      [0.66, '#ffa726', 'High salinity'],
+      [1, '#3e2723', 'Extreme salinity'],
+    ),
+    classLabels: [
+      'Non-saline',
+      'Very low salinity',
+      'Low salinity',
+      'Slight salinity',
+      'Moderate salinity',
+      'Moderately high',
+      'High salinity',
+      'Very high salinity',
+      'Severe salinity',
+      'Extreme salinity',
+    ],
+    subtitle: 'SSI (NDSI + SI) · Low → High · combined normalized + brightness salinity',
+  },
+
   // Δ layers — each with a unique stable-center hue
   DCVHI: deltaPalette('CVHI', '#b71c1c', '#fff176', '#1b5e20', 'ΔCVHI · composite health decline → recovery'),
   DVHS: deltaPalette('VHS', '#8b0000', '#fffde7', '#1b4332', 'ΔVHS · unique crimson→cream→forest change ramp'),
@@ -587,4 +694,7 @@ export const AGRO_UNIQUE_LAYER_RAMP_PALETTES: Record<string, AgroLayerRampPalett
   DARI: deltaPalette('ARI', '#d50000', '#fffde7', '#00c853', 'ΔARI · rising composite risk · risk reduction'),
   DCHS: deltaPalette('CHS', '#880e4f', '#f8bbd0', '#004d40', 'ΔCHS · composite health drop · recovery'),
   DCPS: deltaPalette('CPS', '#4a148c', '#e1bee7', '#e8f5e9', 'ΔCPS · pressure increase · relief'),
+  DNDSI: deltaPalette('NDSI', '#1b5e20', '#fff9c4', '#7f0000', 'ΔNDSI · salinity easing · salinity build-up'),
+  DSI: deltaPalette('SI', '#00695c', '#e0f2f1', '#6a1b9a', 'ΔSI · brightness/salinity decline · increase'),
+  DSSI: deltaPalette('SSI', '#0d47a1', '#eceff1', '#3e2723', 'ΔSSI · combined salinity decline · increase'),
 }

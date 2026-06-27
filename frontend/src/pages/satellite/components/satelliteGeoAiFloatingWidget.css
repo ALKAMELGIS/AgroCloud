@@ -114,10 +114,12 @@
   animation: si-geo-ai-float-in 0.28s ease;
 }
 
-/* User-controlled size (inline width/height from JS) */
+/* User-controlled size (inline width/height from JS). The max caps mirror the JS
+   viewport clamp so the panel can never overflow on small screens. */
 .si-geo-ai-float-panel--sized {
-  max-height: none;
-  max-width: none;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -450,13 +452,73 @@
   display: none !important;
 }
 
-@media (max-width: 520px) {
+/* Compact typography inside the floating shell */
+.si-geo-ai-float-body .si-geo-explorer-bubble {
+  font-size: 11px;
+  line-height: 1.4;
+  padding: 8px 10px;
+}
+
+.si-geo-ai-float-body .si-geo-explorer-bubble-text {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* Compact composer inside the floating shell: smaller action icons + a
+   comfortable, well-proportioned writing area. */
+.si-geo-ai-float-body .si-geo-explorer-composer-surface {
+  padding: 8px 9px;
+  gap: 7px;
+  border-radius: 12px;
+}
+
+.si-geo-ai-float-body .si-geo-explorer-input {
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 8px 10px;
+  min-height: 56px;
+  border-radius: 10px;
+}
+
+.si-geo-ai-float-body .si-geo-explorer-composer-toolbar {
+  gap: 6px;
+}
+
+.si-geo-ai-float-body .si-geo-explorer-composer-toolbar-start {
+  gap: 4px;
+  padding: 3px 5px;
+  border-radius: 9px;
+}
+
+.si-geo-ai-float-body .si-geo-explorer-composer-icon-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  font-size: 10px;
+}
+
+.si-geo-ai-float-body .si-geo-explorer-composer-lang-badge {
+  font-size: 5px;
+  padding: 1px 2px;
+}
+
+@media (max-width: 600px) {
   .si-geo-ai-float {
-    inset-inline-start: 12px;
-    bottom: max(160px, env(safe-area-inset-bottom, 0px) + 112px);
+    inset-inline-start: 10px;
+    inset-inline-end: 10px;
+    bottom: max(132px, env(safe-area-inset-bottom, 0px) + 96px);
+    max-width: calc(100vw - 20px);
   }
 
   .si-geo-ai-float-panel--sized {
-    max-width: calc(100vw - 16px);
+    max-width: calc(100vw - 20px);
+  }
+
+  .si-geo-ai-float-head {
+    padding: 10px 12px 8px;
+  }
+
+  .si-geo-ai-float-body {
+    padding: 0 8px 10px;
   }
 }

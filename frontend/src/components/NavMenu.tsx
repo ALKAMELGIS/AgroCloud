@@ -639,15 +639,18 @@ export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobile
 
         <li className="navmenu-utility navmenu-utility-theme">
           <button
-            className="group-header nav-header-theme navmenu-icon-only"
+            className={`nav-theme-toggle ${themeIsDark ? 'is-dark' : 'is-light'}`}
             type="button"
+            role="switch"
+            aria-checked={!themeIsDark}
             aria-label={themeIsDark ? t.switchToLight : t.switchToDark}
             title={themeIsDark ? t.switchToLight : t.switchToDark}
             onClick={toggleThemeMode}
           >
-            <span className="icon">
-              <i className={themeIsDark ? 'fa-solid fa-moon' : 'fa-solid fa-sun'} aria-hidden />
-            </span>
+            <i
+              className={`nav-theme-toggle__icon fa-regular ${themeIsDark ? 'fa-moon' : 'fa-sun'}`}
+              aria-hidden
+            />
           </button>
         </li>
 

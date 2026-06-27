@@ -1,7 +1,13 @@
 import { useMemo } from 'react'
 import { buildLayerLiveLegendList, type LayerLiveLegendSpec } from '../../../lib/layerLiveLegendCatalog'
 import { resolveRemoteSensingLayerScientificName, type RemoteSensingLayerSelectGroup } from '../../../lib/agroCompositeIndices'
-import { isAnalyticalResolutionLayer, resolveAnalyticalResolutionMeta } from '../../../lib/siAnalyticalResolutionEngine'
+import {
+  isAnalyticalResolutionLayer,
+  resolveAnalyticalResolutionMeta,
+  SENTINEL2_NATIVE_GSD_M,
+} from '../../../lib/siAnalyticalResolutionEngine'
+import { formatAreaHa, formatAreaKm2, formatAreaM2, type LayerClassAreaRow } from '../../../lib/siLayerClassAreaEngine'
+import { useLayerClassAreas } from './useLayerClassAreas'
 import './LayerLiveLegendPanel.css'
 
 type LayerOption = { id: string; label?: string }
@@ -12,9 +18,48 @@ type LayerLiveLegendPanelProps = {
   activeLayerId?: string
   /** When true, only render the active layer card (for map float). */
   activeOnly?: boolean
+  /** AOI geometry used to compute per-class Total Area in the active card. */
+  aoiGeometry?: GeoJSON.Geometry | GeoJSON.Feature | null
+  /** Scene date (ISO) the active classification map is rendered for. */
+  sceneDate?: string
+  /** Optional multi-temporal series window shown in the metadata grid. */
+  seriesStart?: string
+  seriesEnd?: string
 }
 
-export function LayerLiveLegendBody({ spec }: { spec: LayerLiveLegendSpec }) {
+/** Parse "Low → High" style endpoints out of a subtitle ("· Low → High ·"). */
+function parseScaleEnds(subtitle?: string): { low: string; high: string } {
+  if (subtitle && subtitle.includes('→')) {
+    const idx = subtitle.indexOf('→')
+    const low = subtitle.slice(0, idx).split('·').pop()?.trim()
+    const high = subtitle.slice(idx + 1).split('·')[0]?.trim()
+    if (low && high && low.length <= 24 && high.length <= 24) return { low, high }
+  }
+  return { low: 'Low', high: 'High' }
+}
+
+/** Continuous vertical ramp aligned with the class rows (top = first class). */
+function buildVerticalGradient(spec: LayerLiveLegendSpec): string | null {
+  if (spec.classes?.length) {
+    const colors = spec.classes.map(c => c.color)
+    if (colors.length === 1) return colors[0]!
+    return `linear-gradient(to bottom, ${colors.join(', ')})`
+  }
+  return spec.gradientCss ?? null
+}
+
+function formatScaleValue(v: number): string {
+  if (Number.isInteger(v)) return String(v)
+  return v.toFixed(2).replace(/\.?0+$/, '')
+}
+
+export function LayerLiveLegendBody({
+  spec,
+  classAreas,
+}: {
+  spec: LayerLiveLegendSpec
+  classAreas?: LayerClassAreaRow[]
+}) {
   if (spec.kind === 'composite' && spec.compositeBands?.length) {
     return (
       <div className="si-layer-live-legend__composite">
@@ -33,35 +78,97 @@ export function LayerLiveLegendBody({ spec }: { spec: LayerLiveLegendSpec }) {
     return spec.note ? <p className="si-layer-live-legend__note">{spec.note}</p> : null
   }
 
+  const hasScale = spec.valueMin != null && spec.valueMax != null
+  const parsedEnds = parseScaleEnds(spec.subtitle)
+  const ends = {
+    low: spec.scaleLabels?.low ?? parsedEnds.low,
+    mid: spec.scaleLabels?.mid ?? '',
+    high: spec.scaleLabels?.high ?? parsedEnds.high,
+  }
+  const verticalGradient = buildVerticalGradient(spec)
+  const hasArea = !!classAreas?.length
+
+  if (!spec.classes?.length) {
+    return (
+      <>
+        {spec.gradientCss ? (
+          <div className="si-layer-live-legend__bar" style={{ background: spec.gradientCss }} role="img" aria-label={`${spec.title} color ramp`} />
+        ) : null}
+        {hasScale ? (
+          <div className="si-layer-live-legend__scale" aria-hidden>
+            <span>{spec.valueMin}</span>
+            <span>{spec.valueMax}</span>
+          </div>
+        ) : null}
+        {spec.note ? <p className="si-layer-live-legend__note">{spec.note}</p> : null}
+      </>
+    )
+  }
+
   return (
-    <>
-      {spec.gradientCss ? (
-        <div
-          className="si-layer-live-legend__bar"
-          style={{ background: spec.gradientCss }}
-          role="img"
-          aria-label={`${spec.title} color ramp`}
-        />
-      ) : null}
-      {spec.valueMin != null && spec.valueMax != null ? (
-        <div className="si-layer-live-legend__scale" aria-hidden>
-          <span>{spec.valueMin}</span>
-          <span>{spec.valueMax}</span>
+    <div className="si-lll-scale">
+      {hasScale ? (
+        <div className="si-lll-scale-head" aria-hidden>
+          <div className="si-lll-scale-end is-low">
+            <span className="si-lll-scale-end-k">{ends.low}</span>
+            <span className="si-lll-scale-end-v">{formatScaleValue(spec.valueMin!)}</span>
+          </div>
+          <div className="si-lll-scale-end is-mid">
+            {ends.mid ? <span className="si-lll-scale-end-k">{ends.mid}</span> : null}
+            {ends.mid ? null : (
+              <span className="si-lll-scale-end-v">{formatScaleValue((spec.valueMin! + spec.valueMax!) / 2)}</span>
+            )}
+          </div>
+          <div className="si-lll-scale-end is-high">
+            <span className="si-lll-scale-end-k">{ends.high}</span>
+            <span className="si-lll-scale-end-v">{formatScaleValue(spec.valueMax!)}</span>
+          </div>
         </div>
       ) : null}
-      {spec.classes?.length ? (
-        <ul className="si-layer-live-legend__classes">
-          {spec.classes.map(row => (
-            <li key={`${row.label}-${row.rangeLabel}`} className="si-layer-live-legend__class">
-              <span className="si-layer-live-legend__swatch" style={{ background: row.color }} aria-hidden />
-              <span className="si-layer-live-legend__class-label">{row.label}</span>
-              <span className="si-layer-live-legend__class-range">{row.rangeLabel}</span>
-            </li>
-          ))}
+
+      <div className={`si-lll-scale-body${hasArea ? ' has-area' : ''}`}>
+        {verticalGradient ? (
+          <span
+            className="si-lll-vbar"
+            style={{ background: verticalGradient }}
+            role="img"
+            aria-label={`${spec.title} color ramp`}
+          />
+        ) : null}
+        <ul className="si-lll-rows">
+          {spec.classes.map((row, i) => {
+            const area = classAreas?.[i]
+            const hasName = !!row.label && row.label.trim() !== row.rangeLabel.trim()
+            return (
+              <li key={`${row.label}-${row.rangeLabel}-${i}`} className="si-lll-row">
+                <span className="si-lll-row-swatch" style={{ background: row.color }} aria-hidden />
+                <div className="si-lll-row-main">
+                  {hasName ? <span className="si-lll-row-name">{row.label}</span> : null}
+                  <span className={`si-lll-row-range${hasName ? '' : ' is-primary'}`}>{row.rangeLabel}</span>
+                </div>
+                {area ? (
+                  <div
+                    className="si-lll-row-area"
+                    title={`${area.count.toLocaleString('en-US')} px · ${formatAreaHa(area.areaHa)} ha · ${formatAreaM2(area.areaM2)} m² · ${formatAreaKm2(area.areaKm2)} km² · ${area.pctOfAoi.toFixed(1)}% of AOI`}
+                  >
+                    <span className="si-lll-area-line">
+                      <i className="si-lll-area-u">ha</i>
+                      <b>{formatAreaHa(area.areaHa)}</b>
+                    </span>
+                    <span className="si-lll-area-line is-m2">
+                      <i className="si-lll-area-u">m²</i>
+                      <b>{formatAreaM2(area.areaM2)}</b>
+                    </span>
+                    <span className="si-lll-area-pct">{area.pctOfAoi.toFixed(1)}%</span>
+                  </div>
+                ) : null}
+              </li>
+            )
+          })}
         </ul>
-      ) : null}
+      </div>
       {spec.note ? <p className="si-layer-live-legend__note">{spec.note}</p> : null}
-    </>
+    </div>
   )
 }
 
@@ -69,37 +176,109 @@ export function LayerLiveLegendActiveCard({
   spec,
   activeLayerId,
   variant = 'inline',
+  aoiGeometry,
+  sceneDate,
+  seriesStart,
+  seriesEnd,
 }: {
   spec: LayerLiveLegendSpec
   activeLayerId?: string
   variant?: 'inline' | 'float'
+  aoiGeometry?: GeoJSON.Geometry | GeoJSON.Feature | null
+  sceneDate?: string
+  seriesStart?: string
+  seriesEnd?: string
 }) {
   const scientificName = activeLayerId ? resolveRemoteSensingLayerScientificName(activeLayerId) : undefined
   const areMeta = resolveAnalyticalResolutionMeta()
   const showAre = activeLayerId ? isAnalyticalResolutionLayer(activeLayerId) : false
+
+  const { result: areaResult, loading: areaLoading, error: areaError, supported: areaSupported } =
+    useLayerClassAreas({
+      geometry: aoiGeometry,
+      layerId: activeLayerId,
+      sceneDate,
+      enabled: !!aoiGeometry,
+    })
+
+  const hasAoi = !!aoiGeometry
+  const totalHa = areaResult ? areaResult.aoiAreaM2 / 10_000 : 0
+  const imageryDate = areaResult?.sceneDate || sceneDate || '—'
+  const providerLabel = `Sentinel Hub · ${SENTINEL2_NATIVE_GSD_M} m`
+  const seriesLabel = seriesStart && seriesEnd ? `${seriesStart} → ${seriesEnd}` : null
+
+  // The color key always shows each index's FIXED ramp (colors + class ranges
+  // exactly as defined in the index code). When an AOI classification completes
+  // the per-class Total Area (ha + m²) is appended to each fixed class.
+  const analysisDone = areaSupported && hasAoi && !!areaResult
+
   return (
     <section
-      className={`si-layer-live-legend__section is-active${variant === 'float' ? ' si-layer-live-legend__section--float' : ''}`}
+      className={`si-layer-live-legend__section is-active si-lll-scientific${variant === 'float' ? ' si-layer-live-legend__section--float' : ''}`}
       aria-label={`Active layer: ${spec.title}`}
     >
       <header className="si-layer-live-legend__header">
-        <span className="si-layer-live-legend__badge">Active</span>
-        {showAre ? (
-          <span className="si-layer-live-legend__are-badge" title={areMeta.disclaimer}>
-            {areMeta.badgeShort}
-          </span>
-        ) : null}
-        <h3 className="si-layer-live-legend__title">{spec.title}</h3>
+        <div className="si-lll-titlebar">
+          <h3 className="si-layer-live-legend__title">{spec.title}</h3>
+          <div className="si-lll-badges">
+            <span className="si-layer-live-legend__badge">Active</span>
+            {showAre ? (
+              <span className="si-layer-live-legend__are-badge" title={areMeta.disclaimer}>
+                {areMeta.badgeShort}
+              </span>
+            ) : null}
+          </div>
+        </div>
         {scientificName ? <p className="si-layer-live-legend__scientific">{scientificName}</p> : null}
+
+        <dl className="si-lll-meta-grid">
+          <div className="si-lll-meta">
+            <dt>Imagery</dt>
+            <dd>{imageryDate}</dd>
+          </div>
+          <div className="si-lll-meta">
+            <dt>Provider</dt>
+            <dd>{providerLabel}</dd>
+          </div>
+          {seriesLabel ? (
+            <div className="si-lll-meta">
+              <dt>Series</dt>
+              <dd>{seriesLabel}</dd>
+            </div>
+          ) : null}
+          <div className="si-lll-meta">
+            <dt>End date</dt>
+            <dd>{imageryDate}</dd>
+          </div>
+        </dl>
+
         {spec.subtitle ? <p className="si-layer-live-legend__subtitle">{spec.subtitle}</p> : null}
         {showAre ? <p className="si-layer-live-legend__are-disclaimer">{areMeta.badgeLong}</p> : null}
+        {hasAoi && areaSupported ? (
+          <div className="si-layer-live-legend__area-summary" aria-live="polite">
+            {areaLoading ? (
+              <span className="si-layer-live-legend__area-status">
+                <i className="fa-solid fa-circle-notch fa-spin" aria-hidden /> Computing class areas…
+              </span>
+            ) : areaError ? (
+              <span className="si-layer-live-legend__area-status is-error" title={areaError}>
+                <i className="fa-solid fa-triangle-exclamation" aria-hidden /> Area unavailable
+              </span>
+            ) : areaResult ? (
+              <span className="si-layer-live-legend__area-status">
+                <i className="fa-solid fa-ruler-combined" aria-hidden /> Total AOI {formatAreaHa(totalHa)} ha
+                <span className="si-layer-live-legend__area-status-sub"> · {areaResult.sceneDate}</span>
+              </span>
+            ) : null}
+          </div>
+        ) : null}
       </header>
-      <LayerLiveLegendBody spec={spec} />
+      <LayerLiveLegendBody spec={spec} classAreas={analysisDone ? areaResult?.rows : undefined} />
     </section>
   )
 }
 
-export function LayerLiveLegendPanel({ layerOptions, layerGroups, activeLayerId, activeOnly = false }: LayerLiveLegendPanelProps) {
+export function LayerLiveLegendPanel({ layerOptions, layerGroups, activeLayerId, activeOnly = false, aoiGeometry, sceneDate, seriesStart, seriesEnd }: LayerLiveLegendPanelProps) {
   const legendById = useMemo(() => {
     const map = new Map<string, LayerLiveLegendSpec>()
     for (const opt of layerOptions) {
@@ -136,7 +315,15 @@ export function LayerLiveLegendPanel({ layerOptions, layerGroups, activeLayerId,
     }
     return (
       <div className="si-layer-live-legend si-layer-live-legend--active-only" dir="ltr">
-        <LayerLiveLegendActiveCard spec={activeSpec} activeLayerId={activeLayerId} variant="float" />
+        <LayerLiveLegendActiveCard
+          spec={activeSpec}
+          activeLayerId={activeLayerId}
+          variant="float"
+          aoiGeometry={aoiGeometry}
+          sceneDate={sceneDate}
+          seriesStart={seriesStart}
+          seriesEnd={seriesEnd}
+        />
       </div>
     )
   }
@@ -144,7 +331,14 @@ export function LayerLiveLegendPanel({ layerOptions, layerGroups, activeLayerId,
   return (
     <div className="si-layer-live-legend" dir="ltr">
       {activeSpec ? (
-        <LayerLiveLegendActiveCard spec={activeSpec} activeLayerId={activeLayerId} />
+        <LayerLiveLegendActiveCard
+          spec={activeSpec}
+          activeLayerId={activeLayerId}
+          aoiGeometry={aoiGeometry}
+          sceneDate={sceneDate}
+          seriesStart={seriesStart}
+          seriesEnd={seriesEnd}
+        />
       ) : null}
 
       <section className="si-layer-live-legend__catalog" aria-label="All Layer Live keys">

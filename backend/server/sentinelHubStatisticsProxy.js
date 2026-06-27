@@ -173,6 +173,27 @@ async function resolveAuth(secretsFilePath) {
 }
 
 /**
+ * Resolve an OAuth bearer + Process API URL for raw imagery requests (AOI fetch).
+ * Returns null when only a public WMS token is available (Process API needs OAuth).
+ * @param {string} secretsFilePath
+ * @returns {Promise<{ token: string; processUrl: string } | null>}
+ */
+export async function resolveSentinelHubProcessAuth(secretsFilePath) {
+  const auth = await resolveAuth(secretsFilePath)
+  if (!auth) return null
+  return { token: auth.token, processUrl: auth.statisticsUrl.replace('/statistics', '/process') }
+}
+
+/**
+ * WMS config (access token + instance id) for AOI imagery via OGC WMS — no OAuth required.
+ * @param {string} secretsFilePath
+ * @returns {{ accessToken: string; instanceId: string }}
+ */
+export function resolveSentinelHubWmsConfig(secretsFilePath) {
+  return pickWmsConfig(secretsFilePath)
+}
+
+/**
  * @param {string} secretsFilePath
  * @param {Record<string, unknown>} body
  */

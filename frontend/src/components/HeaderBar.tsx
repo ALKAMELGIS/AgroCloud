@@ -1,4 +1,5 @@
 import './header.css'
+import './lux-theme.css'
 import { useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { AgroCloudMark } from './AgroCloudMark'
 import { normalizeHeaderLogoText } from '../services/settingsStorage'
@@ -19,13 +20,20 @@ export default function HeaderBar({ onToggleMobileNav, mobileNavOpen = false }: 
   const logoIconSrc = settings.logoIcon.trim()
   const hs = settings.headerSettings
 
-  const centerLogoSrc = useMemo(() => {
+  const isDarkTheme = useMemo(() => {
     const prefersDark = typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)')?.matches
-    const isDark = settings.themeMode === 'dark' || (settings.themeMode === 'system' && prefersDark)
-    if (isDark && settings.logoDark.trim()) return settings.logoDark.trim()
-    if (!isDark && settings.logoLight.trim()) return settings.logoLight.trim()
+    return settings.themeMode === 'dark' || (settings.themeMode === 'system' && prefersDark)
+  }, [settings.themeMode])
+
+  const centerLogoSrc = useMemo(() => {
+    if (isDarkTheme && settings.logoDark.trim()) return settings.logoDark.trim()
+    if (!isDarkTheme && settings.logoLight.trim()) return settings.logoLight.trim()
     return settings.logoLight.trim() || settings.logoDark.trim() || DEFAULT_CENTER_LOGO
-  }, [settings.themeMode, settings.logoLight, settings.logoDark])
+  }, [isDarkTheme, settings.logoLight, settings.logoDark])
+
+  // White brand assets become invisible on the ivory luxury header → mark them
+  // so the lux theme can render them dark via an auto-contrast filter.
+  const centerLogoIsWhite = /white|light/i.test(centerLogoSrc) || centerLogoSrc === DEFAULT_CENTER_LOGO
   const usesDefaultMark =
     !logoIconSrc && !hs.logoSvg.trim().startsWith('<svg')
 
@@ -133,7 +141,11 @@ export default function HeaderBar({ onToggleMobileNav, mobileNavOpen = false }: 
         ) : null}
       </div>
       <div className={`header-center${hs.showCenterLogo ? '' : ' header-center--hidden'}`}>
-        <span className="header-center__logo" role="img" aria-label="Elite Agro Projects">
+        <span
+          className={`header-center__logo${!isDarkTheme && centerLogoIsWhite ? ' header-center__logo--invert' : ''}`}
+          role="img"
+          aria-label="Elite Agro Projects"
+        >
           <img
             className="brand-logo"
             src={centerLogoSrc}

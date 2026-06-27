@@ -840,6 +840,8 @@ export default function GisMap() {
   const [measurementVerticalLoading, setMeasurementVerticalLoading] = useState(false)
   const [measurementVerticalError, setMeasurementVerticalError] = useState<string | null>(null)
   const [tab, setTab] = useState<AddLayerTab>('arcgis')
+  /** 'home' = source-picker list (Add Source Data); 'form' = selected source form. */
+  const [addView, setAddView] = useState<'home' | 'form'>('home')
   const [serviceUrl, setServiceUrl] = useState('')
   const [token, setToken] = useState(() => (typeof window !== 'undefined' ? getArcgisPortalToken() : ''))
   const [layerName, setLayerName] = useState('')
@@ -994,7 +996,8 @@ export default function GisMap() {
     setIsDragOver(false)
     setUploadFile(null)
     setRemoteDataUrl('')
-    setTab(initialTab ?? 'arcgis')
+    setTab(initialTab ?? 'giscontent')
+    setAddView(initialTab ? 'form' : 'home')
     setServiceUrl('')
     setDiscoveredLayers([])
     setSelectedDiscoveredUrl('')
@@ -1233,16 +1236,42 @@ export default function GisMap() {
     globeBasemapSwapRef.current = globeBasemapId
     gisBasemapRasterFallbackRef.current = false
     setGlobeLoaded(false)
+    // Preserve the exact camera (center/zoom/bearing/pitch) across the basemap
+    // swap so the viewport never resets or re-zooms when the base layer changes.
+    let preservedCamera: { center: [number, number]; zoom: number; bearing: number; pitch: number } | null = null
+    try {
+      const c = map.getCenter?.()
+      if (c) {
+        preservedCamera = {
+          center: [c.lng, c.lat],
+          zoom: map.getZoom?.() ?? globeViewStateLiveRef.current.zoom,
+          bearing: map.getBearing?.() ?? 0,
+          pitch: map.getPitch?.() ?? globeViewStateLiveRef.current.pitch ?? 0,
+        }
+      }
+    } catch {
+      preservedCamera = null
+    }
+    const restoreCamera = () => {
+      if (!preservedCamera) return
+      try {
+        map.jumpTo?.(preservedCamera)
+      } catch {
+        /* ignore */
+      }
+    }
     const finish = () => {
       setGlobeLoaded(true)
       try {
         map.setProjection({ name: 'globe' })
-        const livePitch = typeof map.getPitch === 'function' ? map.getPitch() : globeViewStateLiveRef.current.pitch ?? 0
+        restoreCamera()
+        const livePitch = preservedCamera?.pitch ?? (typeof map.getPitch === 'function' ? map.getPitch() : globeViewStateLiveRef.current.pitch ?? 0)
         warmAgroCloudTerrainDemSource(map)
         syncAgroCloudTerrain3d(map, globeBasemapId, livePitch)
         ensureAgroCloudMapScrollZoom(map)
         if (is3dTopographicBasemapId(globeBasemapId)) {
-          map.easeTo({ pitch: Math.max(livePitch, 55), duration: 0 })
+          // Keep center/zoom but apply the 3D tilt for topographic basemaps.
+          map.easeTo({ center: preservedCamera?.center, zoom: preservedCamera?.zoom, pitch: Math.max(livePitch, 55), duration: 0 })
         }
       } catch {
         /* ignore */
@@ -1250,6 +1279,7 @@ export default function GisMap() {
     }
     try {
       map.setStyle(globeMapStyle as any)
+      restoreCamera()
       if (typeof map.isStyleLoaded === 'function' && map.isStyleLoaded()) finish()
       else map.once('style.load', finish)
     } catch {
@@ -9489,16 +9519,121 @@ export default function GisMap() {
       ) : null}
 
       {isAddOpen ? (
-        <div className="gis-modal-overlay gis-map-add-layer-overlay" role="presentation" onClick={closeAddLayerModal}>
+        <div
+          className={`gis-modal-overlay gis-map-source-picker${addView === 'form' ? ' gis-map-source-picker--form' : ''}`}
+          role="presentation"
+          onClick={closeAddLayerModal}
+        >
           <div
-            className="gis-modal gis-modal-compact"
+            className={`gis-modal gis-modal-compact si-add-source-modal ddb-add-source-modal${addView === 'home' ? ' ddb-add-source-modal--home' : ''}`}
             role="dialog"
             aria-modal="true"
             aria-labelledby="gis-add-layer-title"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="gis-modal-compact-title" id="gis-add-layer-title">
-              Add GIS Layer
+            {addView === 'home' ? (
+              <>
+                <div className="gis-modal-compact-hero">
+                  <h2 className="gis-modal-compact-hero-title" id="gis-add-layer-title">
+                    Add Source Data
+                  </h2>
+                  <p className="gis-modal-compact-hero-lead">Choose a source to add layers to this map.</p>
+                </div>
+                <div className="si-add-source-options" role="radiogroup" aria-label="Layer source type">
+                  {([
+                    {
+                      id: 'giscontent' as AddLayerTab,
+                      title: 'Select from GIS Content',
+                      sub: 'Layers saved in GIS Content (this browser).',
+                      icon: 'fa-solid fa-layer-group',
+                      iconStyle: {
+                        background: 'linear-gradient(155deg, rgba(168, 85, 247, 0.28) 0%, rgba(15, 23, 42, 0.75) 100%)',
+                        borderColor: 'rgba(192, 132, 252, 0.45)',
+                        color: '#d8b4fe',
+                      },
+                    },
+                    {
+                      id: 'arcgis' as AddLayerTab,
+                      title: 'ArcGIS Server layer URL',
+                      sub: 'Connect to a feature service and pick a layer.',
+                      icon: 'fa-solid fa-link',
+                      iconStyle: {
+                        background: 'linear-gradient(155deg, rgba(99, 102, 241, 0.28) 0%, rgba(15, 23, 42, 0.75) 100%)',
+                        borderColor: 'rgba(129, 140, 248, 0.5)',
+                        color: '#a5b4fc',
+                      },
+                    },
+                    {
+                      id: 'upload' as AddLayerTab,
+                      title: 'Upload a file',
+                      sub: 'GeoJSON, KML, KMZ, Shapefile, CSV, and more.',
+                      icon: 'fa-solid fa-file-arrow-up',
+                      iconStyle: {
+                        background: 'linear-gradient(155deg, rgba(34, 197, 94, 0.26) 0%, rgba(15, 23, 42, 0.75) 100%)',
+                        borderColor: 'rgba(74, 222, 128, 0.5)',
+                        color: '#86efac',
+                      },
+                    },
+                    {
+                      id: 'url' as AddLayerTab,
+                      title: 'From URL',
+                      sub: 'Remote GeoJSON, ZIP, KML, or raster/image service.',
+                      icon: 'fa-solid fa-globe',
+                      iconStyle: {
+                        background: 'linear-gradient(155deg, rgba(14, 165, 233, 0.26) 0%, rgba(15, 23, 42, 0.75) 100%)',
+                        borderColor: 'rgba(56, 189, 248, 0.5)',
+                        color: '#7dd3fc',
+                      },
+                    },
+                    {
+                      id: 'database' as AddLayerTab,
+                      title: 'Get Data',
+                      sub: 'Excel, CSV, SQL, Web, OData sources.',
+                      icon: 'fa-solid fa-database',
+                      iconStyle: {
+                        background: 'linear-gradient(155deg, rgba(139, 92, 246, 0.28) 0%, rgba(15, 23, 42, 0.75) 100%)',
+                        borderColor: 'rgba(167, 139, 250, 0.5)',
+                        color: '#c4b5fd',
+                      },
+                    },
+                  ]).map(opt => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      className="si-add-source-option"
+                      onClick={() => {
+                        setTab(opt.id)
+                        setDiscoverError(null)
+                        setAddView('form')
+                      }}
+                    >
+                      <span className="si-add-source-option-radio" aria-hidden />
+                      <span className="si-add-source-option-icon" aria-hidden style={opt.iconStyle}>
+                        <i className={opt.icon} />
+                      </span>
+                      <span className="si-add-source-option-main">
+                        <strong>{opt.title}</strong>
+                        <small>{opt.sub}</small>
+                      </span>
+                      <i className="fa-solid fa-chevron-right si-add-source-option-chevron" aria-hidden />
+                    </button>
+                  ))}
+                </div>
+                <div className="gis-modal-footer">
+                  <button className="gis-link-btn" type="button" onClick={closeAddLayerModal}>
+                    Cancel
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+            <div className="ddb-add-source-modal__head">
+              <div className="gis-modal-compact-title" id="gis-add-layer-title">
+                Add GIS Layer
+              </div>
+              <button type="button" className="ddb-add-source-back" onClick={() => setAddView('home')}>
+                <i className="fa-solid fa-arrow-left" aria-hidden /> All sources
+              </button>
             </div>
 
             <div className="gis-modal-compact-tabs" role="tablist" aria-label="Add GIS layer source">
@@ -9990,6 +10125,8 @@ export default function GisMap() {
                 Cancel
               </button>
             </div>
+              </>
+            )}
           </div>
         </div>
       ) : null}

@@ -69,6 +69,29 @@ function userWantsMapFirstLayerBrowse(query: string, lookupTokens: string[], has
   return false
 }
 
+/**
+ * "Show me Dubai", "اعرض دبي على الخريطة", "where is Riyadh", … — a request to
+ * navigate the map to a place anywhere in the world (no dataset needed). These
+ * must NOT be answered with a layer-stats message; the pipeline geocodes the
+ * place and flies the map there. Excludes anything analytical/tabular so genuine
+ * statistics ("sum of area", "group by", "attribute table") still run locally.
+ */
+function isWorldPlaceNavigationQuery(query: string): boolean {
+  const q = query.trim()
+  if (!q || q.length > 120) return false
+  const navEn =
+    /\b(show(?:\s+me)?|display|find|locate|go\s+to|navigate(?:\s+to)?|take\s+me\s+to|where\s+is|where's|map\s+of|center\s+on|fly\s+to|zoom\s+to)\b/i
+  const navAr = /(?:اعرض|أعرض|اظهر|أظهر|ابحث(?:\s+عن)?|انتقل|اذهب|روح|وين|أين|اين|موقع|على\s+الخريطة|في\s+الخريطة)/
+  if (!navEn.test(q) && !navAr.test(q)) return false
+  const analyticEn =
+    /\b(sum|total|average|mean|median|stdev|stddev|min|max|count|group\s*by|statistics?|stat\b|calculate\s+field|select\s+by\s+location|within|intersect|buffer|where\b|histogram|distribution|table|spreadsheet|attribute|records?|features?|rows?|filter)\b/i
+  const analyticAr = /(?:مجموع|اجمالي|إجمالي|متوسط|وسيط|عدد|إحصاء|احصاء|تجميع|حسب|ضمن|يتقاطع|تقاطع|نطاق|جدول|حقل|أكبر|اكبر|أصغر|اصغر|سجلات|معالم)/
+  if (analyticEn.test(q) || analyticAr.test(q)) return false
+  // Comparison / numeric filters (e.g. "area > 100") are analytical — keep local.
+  if (/[<>]=?/.test(q) || /\b[A-Za-z_]\w*\s*=\s*['"\d]/.test(q)) return false
+  return true
+}
+
 function mapFirstSelectionsFromRows(rows: ScopedFeatureRow[]): GeoAiMapFirstSelection[] {
   const out: GeoAiMapFirstSelection[] = []
   for (const r of rows) {
@@ -399,6 +422,30 @@ function queryFeaturesTable(
 export function runGeoAiStatsCommand(query: string, layers: GeoAiMapLayer[]): GeoAiStatsResult | null {
   const q = query.trim()
   if (!q) return null
+
+  // World place search ("show me Dubai", "اعرض دبي على الخريطة"). These must fly
+  // the map to the geocoded place — NOT be answered with a layer-stats table.
+  // Keep it LOCAL only when the user is clearly pointing at loaded data:
+  //   (a) a code / quoted token that actually matches a loaded feature, or
+  //   (b) an explicitly quoted layer name that exists in the loaded layers.
+  // A loose preposition hint ("…in map", "…on screen") must NOT keep it local —
+  // otherwise world places like "Dubai" get hijacked by the stats engine.
+  if (isWorldPlaceNavigationQuery(q)) {
+    const navTokens = extractLookupTokens(q)
+    const navScope = collectScope(q, layers)
+    const matchesLoadedFeature =
+      navTokens.length > 0 && navScope.features.some(r => rowMatchesLookupTokens(r, navTokens))
+    // A loaded layer's full name appears as a whole word in the query (quoted or
+    // not) — e.g. "show me Parcels". normalizeLayerName keeps words space-split,
+    // so a word-boundary match avoids false hits on fillers like "in"/"map".
+    const blob = ` ${normalizeLayerName(q)} `
+    const referencesLoadedLayer = layers.some(l => {
+      const ln = normalizeLayerName(l.name)
+      return ln.length >= 3 && blob.includes(` ${ln} `)
+    })
+    if (!matchesLoadedFeature && !referencesLoadedLayer) return null
+  }
+
   const lookupTokensEarly = extractLookupTokens(q)
   const shortCodeLookup =
     lookupTokensEarly.length > 0 &&

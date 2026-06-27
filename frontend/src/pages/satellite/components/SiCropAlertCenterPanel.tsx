@@ -91,10 +91,7 @@ export function SiCropAlertCenterPanel({
   return (
     <div className="si-crop-alert">
       <div className="si-crop-alert__header">
-        <div>
-          <div className="si-crop-alert__kicker">Sentinel Live · Real-Time</div>
-          <h3 className="si-crop-alert__title">Agro Sentinel Alert Engine</h3>
-        </div>
+        <div />
         <label className="si-crop-alert__power">
           <input
             type="checkbox"
@@ -122,146 +119,171 @@ export function SiCropAlertCenterPanel({
           </div>
         </div>
 
-        <div className="si-crop-alert__divider" aria-hidden />
-
-        <p className="si-crop-alert__label">AOI Source</p>
-        <div className="si-crop-alert__aoi-row">
-          <label className="si-crop-alert__radio">
-            <input
-              type="radio"
-              name="crop-alert-aoi"
-              checked={settings.aoiMode === 'agro-default'}
-              onChange={() => patch({ aoiMode: 'agro-default' })}
-            />
-            <span>Agro_Structures · Farm Plots &amp; PIVOT</span>
-          </label>
-          <label className="si-crop-alert__radio">
-            <input
-              type="radio"
-              name="crop-alert-aoi"
-              checked={settings.aoiMode === 'builder'}
-              onChange={() => patch({ aoiMode: 'builder' })}
-            />
-            <span>AOI Mask Builder (custom)</span>
-          </label>
-        </div>
-        <p className="si-crop-alert__hint">
-          Image date: <strong>{referenceDate}</strong>
-          {userRequestedDate !== referenceDate ? (
-            <>
-              {' '}
-              · Selected <strong>{userRequestedDate}</strong>
-            </>
-          ) : null}
-          {lastRunAt ? ` · Updated ${new Date(lastRunAt).toLocaleTimeString()}` : ''}
-          {liveFieldCount > 0 ? ` · Sentinel Live ${liveFieldCount}/${fieldCount}` : ''}
-        </p>
-        {imageryContext.warningMessage ? (
-          <p className="si-crop-alert__imagery-warn" role="status">
-            {imageryContext.warningMessage}
-          </p>
-        ) : null}
-        <p className="si-crop-alert__hint si-crop-alert__hint--meta">
-          Analysis date: <strong>{imageryContext.analysisDate}</strong> · Data source:{' '}
-          <strong>{imageryContext.dataSource}</strong>
-        </p>
-        {isRunning && progress ? (
-          <div className="si-crop-alert__progress" role="status">
-            <div
-              className="si-crop-alert__progress-bar"
-              style={{
-                width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 0}%`,
-              }}
-            />
-            <span>
-              Fetching Sentinel stats {progress.done}/{progress.total}
-              {progress.live ? ` · ${progress.live} live` : ''}
-            </span>
+        <section className="si-crop-alert__section">
+          <p className="si-crop-alert__label">AOI Source</p>
+          <div className="si-crop-alert__aoi-row">
+            <label className="si-crop-alert__radio">
+              <input
+                type="radio"
+                name="crop-alert-aoi"
+                checked={settings.aoiMode === 'agro-default'}
+                onChange={() => patch({ aoiMode: 'agro-default' })}
+              />
+              <span>Agro_Structures · Farm Plots &amp; PIVOT</span>
+            </label>
+            <label className="si-crop-alert__radio">
+              <input
+                type="radio"
+                name="crop-alert-aoi"
+                checked={settings.aoiMode === 'builder'}
+                onChange={() => patch({ aoiMode: 'builder' })}
+              />
+              <span>AOI Mask Builder (custom)</span>
+            </label>
           </div>
-        ) : null}
-        <button
-          type="button"
-          className="si-crop-alert__refresh"
-          onClick={onRefresh}
-          disabled={!settings.enabled || isRunning}
-        >
-          <i className={`fa-solid ${isRunning ? 'fa-spinner fa-spin' : 'fa-rotate'}`} aria-hidden />
-          {isRunning ? 'Analyzing…' : 'Run analysis now'}
-        </button>
 
-        <div className="si-crop-alert__divider" aria-hidden />
+          <dl className="si-crop-alert__meta">
+            <div className="si-crop-alert__meta-row">
+              <dt>Image date</dt>
+              <dd>
+                {referenceDate}
+                {userRequestedDate !== referenceDate ? ` · Selected ${userRequestedDate}` : ''}
+              </dd>
+            </div>
+            <div className="si-crop-alert__meta-row">
+              <dt>Analysis date</dt>
+              <dd>{imageryContext.analysisDate}</dd>
+            </div>
+            <div className="si-crop-alert__meta-row">
+              <dt>Data source</dt>
+              <dd>{imageryContext.dataSource}</dd>
+            </div>
+            {lastRunAt ? (
+              <div className="si-crop-alert__meta-row">
+                <dt>Updated</dt>
+                <dd>{new Date(lastRunAt).toLocaleTimeString()}</dd>
+              </div>
+            ) : null}
+            {liveFieldCount > 0 ? (
+              <div className="si-crop-alert__meta-row">
+                <dt>Sentinel Live</dt>
+                <dd>
+                  {liveFieldCount}/{fieldCount}
+                </dd>
+              </div>
+            ) : null}
+          </dl>
 
-        <p className="si-crop-alert__label">Alert Source</p>
-        <div className="si-crop-alert__chips">
-          {INDEX_OPTIONS.map(id => (
-            <label key={id} className="si-crop-alert__chip">
+          {imageryContext.warningMessage ? (
+            <p className="si-crop-alert__imagery-warn" role="status">
+              {imageryContext.warningMessage}
+            </p>
+          ) : null}
+
+          {isRunning && progress ? (
+            <div className="si-crop-alert__progress" role="status">
+              <div
+                className="si-crop-alert__progress-bar"
+                style={{
+                  width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 0}%`,
+                }}
+              />
+              <span>
+                Fetching Sentinel stats {progress.done}/{progress.total}
+                {progress.live ? ` · ${progress.live} live` : ''}
+              </span>
+            </div>
+          ) : null}
+
+          <button
+            type="button"
+            className="si-crop-alert__refresh"
+            onClick={onRefresh}
+            disabled={!settings.enabled || isRunning}
+          >
+            <i className={`fa-solid ${isRunning ? 'fa-spinner fa-spin' : 'fa-rotate'}`} aria-hidden />
+            {isRunning ? 'Analyzing…' : 'Run analysis now'}
+          </button>
+        </section>
+
+        <section className="si-crop-alert__section">
+          <p className="si-crop-alert__label">Alert Source</p>
+          <div className="si-crop-alert__chips">
+            {INDEX_OPTIONS.map(id => (
+              <label key={id} className="si-crop-alert__chip">
+                <input
+                  type="checkbox"
+                  checked={settings.indices[id]}
+                  onChange={e => patch({ indices: { ...settings.indices, [id]: e.target.checked } })}
+                />
+                <span>{id}</span>
+              </label>
+            ))}
+          </div>
+        </section>
+
+        <section className="si-crop-alert__section">
+          <p className="si-crop-alert__label">Alert Types</p>
+          <div className="si-crop-alert__chips">
+            {ALERT_TYPE_OPTIONS.map(opt => (
+              <label key={opt.id} className="si-crop-alert__chip">
+                <input
+                  type="checkbox"
+                  checked={settings.alertTypes[opt.id]}
+                  onChange={e =>
+                    patch({ alertTypes: { ...settings.alertTypes, [opt.id]: e.target.checked } })
+                  }
+                />
+                <span>{opt.label}</span>
+              </label>
+            ))}
+          </div>
+        </section>
+
+        <section className="si-crop-alert__section">
+          <p className="si-crop-alert__label">Notifications</p>
+          <div className="si-crop-alert__notify-row">
+            <label className="si-crop-alert__chip">
               <input
                 type="checkbox"
-                checked={settings.indices[id]}
-                onChange={e => patch({ indices: { ...settings.indices, [id]: e.target.checked } })}
+                checked={settings.notifyInApp}
+                onChange={e => patch({ notifyInApp: e.target.checked })}
               />
-              <span>{id}</span>
+              <span>In-App</span>
             </label>
-          ))}
-        </div>
-
-        <div className="si-crop-alert__divider" aria-hidden />
-
-        <p className="si-crop-alert__label">Alert Types</p>
-        <div className="si-crop-alert__chips">
-          {ALERT_TYPE_OPTIONS.map(opt => (
-            <label key={opt.id} className="si-crop-alert__chip">
-              <input
-                type="checkbox"
-                checked={settings.alertTypes[opt.id]}
-                onChange={e =>
-                  patch({ alertTypes: { ...settings.alertTypes, [opt.id]: e.target.checked } })
-                }
-              />
-              <span>{opt.label}</span>
+            <label className="si-crop-alert__chip si-crop-alert__chip--soon">
+              <input type="checkbox" checked={settings.notifyEmail} disabled />
+              <span>Email</span>
             </label>
-          ))}
-        </div>
+            <label className="si-crop-alert__chip si-crop-alert__chip--soon">
+              <input type="checkbox" checked={settings.notifySms} disabled />
+              <span>SMS</span>
+            </label>
+            <label className="si-crop-alert__chip si-crop-alert__chip--soon">
+              <input type="checkbox" checked={settings.notifyPush} disabled />
+              <span>Push</span>
+            </label>
+          </div>
+        </section>
 
-        <div className="si-crop-alert__divider" aria-hidden />
-
-        <p className="si-crop-alert__label">Notifications</p>
-        <div className="si-crop-alert__notify-row">
-          <label className="si-crop-alert__chip">
-            <input
-              type="checkbox"
-              checked={settings.notifyInApp}
-              onChange={e => patch({ notifyInApp: e.target.checked })}
-            />
-            <span>In-App</span>
-          </label>
-          <label className="si-crop-alert__chip si-crop-alert__chip--soon">
-            <input type="checkbox" checked={settings.notifyEmail} disabled />
-            <span>Email</span>
-          </label>
-          <label className="si-crop-alert__chip si-crop-alert__chip--soon">
-            <input type="checkbox" checked={settings.notifySms} disabled />
-            <span>SMS</span>
-          </label>
-          <label className="si-crop-alert__chip si-crop-alert__chip--soon">
-            <input type="checkbox" checked={settings.notifyPush} disabled />
-            <span>Push</span>
-          </label>
-        </div>
-
-        <div className="si-crop-alert__divider" aria-hidden />
-
-        <div className="si-crop-alert__legend">
-          {STATUS_FILTER.slice(0, 8).map(st => (
-            <span key={st} className="si-crop-alert__legend-item">
-              <i className="si-crop-alert__dot" style={{ background: CROP_ALERT_STATUS_COLORS[st] }} aria-hidden />
-              {CROP_ALERT_STATUS_LABELS[st]}
-            </span>
-          ))}
-        </div>
+        <section className="si-crop-alert__section">
+          <p className="si-crop-alert__label">Status Legend</p>
+          <div className="si-crop-alert__legend">
+            {STATUS_FILTER.slice(0, 8).map(st => (
+              <span key={st} className="si-crop-alert__legend-item">
+                <i className="si-crop-alert__dot" style={{ background: CROP_ALERT_STATUS_COLORS[st] }} aria-hidden />
+                {CROP_ALERT_STATUS_LABELS[st]}
+              </span>
+            ))}
+          </div>
+        </section>
 
         {selected ? (
-          <div className="si-crop-alert__detail" role="region" aria-label="Selected field alert">
+          <section
+            className="si-crop-alert__section si-crop-alert__section--detail"
+            role="region"
+            aria-label="Selected field alert"
+          >
             <div className="si-crop-alert__detail-head">
               <strong>{selected.farmName || selected.farmCode || `#${selected.objectId}`}</strong>
               <span
@@ -290,12 +312,10 @@ export function SiCropAlertCenterPanel({
                 <span>Trend {selected.trend}</span>
               </div>
             ) : null}
-          </div>
+          </section>
         ) : null}
 
-        <div className="si-crop-alert__divider" aria-hidden />
-
-        <div className="si-crop-alert__feed">
+        <section className="si-crop-alert__section si-crop-alert__feed">
           <p className="si-crop-alert__label">Alert Center</p>
           {alertsFeed.length === 0 ? (
             <p className="si-crop-alert__empty">
@@ -327,7 +347,7 @@ export function SiCropAlertCenterPanel({
               ))}
             </ul>
           )}
-        </div>
+        </section>
       </div>
     </div>
   )

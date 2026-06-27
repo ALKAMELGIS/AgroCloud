@@ -384,8 +384,8 @@ export function GeoExplorerGeminiInputRow(props: GeoExplorerGeminiInputRowProps)
   const showSuggestPanel =
     smartSuggestionsEnabled && !busy && (composerFocused || qRaw.length > 0) && visibleChips.length > 0
 
-  const showOptimizeChrome =
-    smartSuggestionsEnabled && !busy && (composerFocused || qRaw.length > 0)
+  // Smart suggestions / Optimize chrome is hidden from the composer.
+  const showOptimizeChrome = false
 
   const optimizePack = useMemo(
     () => buildOptimizePack(qRaw, availableLayers, availableFields, availableNumericFields, availableGeometryOps),

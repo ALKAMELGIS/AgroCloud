@@ -1,6 +1,8 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLanguage } from '@/lib/i18n';
 import { useSiInstanceScope } from '../siInstanceScope';
+// Map overlay event isolation — keeps panel clicks/scroll from leaking to the map.
+import { useMapOverlayIsolation } from '../useMapOverlayIsolation';
 import type { AoiStaticExportLngLat, AoiStaticMultiLayerLineChartDataset } from './AoiStaticMultiLayerLineChart';
 import { AoiStaticMultiLayerLineChart } from './AoiStaticMultiLayerLineChart';
 import type { RemoteSensingLayerSelectGroup } from '../../../lib/agroCompositeIndices'
@@ -13,7 +15,6 @@ import {
   MapToolboxAddGisLayerFlyout,
   type MapToolboxAddGisLayerAction,
 } from './MapToolboxAddGisLayerFlyout';
-
 export type SatelliteContextPanelId =
   | 'layers'
   | 'add-gis-layer'
@@ -22,6 +23,8 @@ export type SatelliteContextPanelId =
   | 'crop-classification'
   | 'layer-live-legend'
   | 'ai-detection-gis'
+  | 'tree-detections'
+  | 'hydro-watershed'
   | 'table-geo-ai'
   | 'spatial'
   | 'aoi'
@@ -72,6 +75,8 @@ export type SatelliteContextualAnalysisDockProps = {
     | 'crop-alerts'
     | 'crop-classification'
     | 'ai-detection-gis'
+    | 'tree-detections'
+    | 'hydro-watershed'
     | 'table-geo-ai'
     | null;
   /** Called with the embed host element whenever the map panel mounts/updates; null when unmounted. */
@@ -97,6 +102,16 @@ export type SatelliteContextualAnalysisDockProps = {
   /** Layer Live legend pinned on map (right float). */
   layerLiveLegendOpen?: boolean;
   onLayerLiveLegendOpenChange?: (open: boolean) => void;
+  /** Main toolbox: Edit/draw activation toggle for the system drawing tool. */
+  mapToolboxDrawingActive?: boolean;
+  /** Toggle the system drawing tool from the Main toolbox Edit button. */
+  onMapToolboxToggleDrawing?: () => void;
+  /** Main toolbox: active measurement mode or null when off. */
+  measureMode?: string | null;
+  /** Open the unified measurement panel from the Main toolbox Measure button. */
+  onMeasureOpenPanel?: () => void;
+  /** Turn measurement off / clear the current measurement. */
+  onMeasureClear?: () => void;
 };
 
 const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; title: string; hint: string }> = [
@@ -124,9 +139,9 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
   {
     id: 'crop-classification',
     icon: 'fa-solid fa-wheat-awn',
-    label: 'Crop class',
-    title: 'Crop Classification',
-    hint: 'Multi-temporal crop / land-cover map clipped to your AOI.',
+    label: 'Crop AI',
+    title: 'Prithvi Crop Classification',
+    hint: 'AOI → Sentinel/HLS → Prithvi inference → classified map.',
   },
   {
     id: 'layer-live-legend',
@@ -141,6 +156,20 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     label: 'AI Detection in GIS',
     title: 'AI Detection in GIS',
     hint: 'Map-aware detection and inspect workflows.',
+  },
+  {
+    id: 'tree-detections',
+    icon: 'fa-solid fa-tree',
+    label: 'Tree Detections',
+    title: 'Tree Detections',
+    hint: 'AOI → auto-detect & classify tree crowns from VHR imagery.',
+  },
+  {
+    id: 'hydro-watershed',
+    icon: 'fa-solid fa-water',
+    label: 'Hydro Watershed',
+    title: 'Hydro Watershed Workflow',
+    hint: 'AOI → DEM, flow, streams, watershed & mesh for distributed hydrology.',
   },
   {
     id: 'table-geo-ai',
@@ -215,6 +244,8 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
   'crop-classification',
   'layer-live-legend',
   'ai-detection-gis',
+  'tree-detections',
+  'hydro-watershed',
   'table-geo-ai',
 ]);
 
@@ -224,11 +255,13 @@ const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
   'crop-alerts',
   'crop-classification',
   'ai-detection-gis',
+  'tree-detections',
+  'hydro-watershed',
 ]);
 
 const RAIL_GROUPS_MAP: SatelliteContextPanelId[][] = [
   ['layers', 'remote-sensing', 'crop-alerts', 'crop-classification', 'layer-live-legend'],
-  ['ai-detection-gis', 'table-geo-ai'],
+  ['ai-detection-gis', 'tree-detections', 'hydro-watershed', 'table-geo-ai'],
 ];
 
 const RAIL_BY_ID = RAIL.reduce(
@@ -292,6 +325,10 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
     mapToolboxLayerLiveLegend,
     layerLiveLegendOpen = false,
     onLayerLiveLegendOpenChange,
+    mapToolboxDrawingActive = false,
+    onMapToolboxToggleDrawing,
+    measureMode = null,
+    onMeasureOpenPanel,
   } = props;
 
   const { scopedStorageKey } = useSiInstanceScope();
@@ -304,6 +341,12 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
   const lsMapRailLabeled = scopedStorageKey('si-sat-map-ctx-rail-labeled');
 
   const [addGisFlyoutOpen, setAddGisFlyoutOpen] = useState(false);
+  // Capture all pointer/touch/wheel events on the dock so they never pan, zoom,
+  // or click the map canvas beneath it. The map-variant dock is portaled INSIDE
+  // the Mapbox canvas container (see MapToolsDock), so React synthetic handlers
+  // alone fire too late — `native` adds DOM listeners that stop the gesture
+  // before it reaches Mapbox's own pan/zoom handlers.
+  const panelIsolationProps = useMapOverlayIsolation(true, { native: variant === 'map' });
 
   const [panelOpen, setPanelOpen] = useState(false);
   const [activeId, setActiveId] = useState<SatelliteContextPanelId | null>(null);
@@ -314,7 +357,7 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
       return 'dark';
     }
   });
-  const [panelWidth, setPanelWidth] = useState(() => {
+  const [panelWidth] = useState(() => {
     try {
       const n = Number(localStorage.getItem(lsPanelW));
       if (Number.isFinite(n) && n >= panelWidthMin && n <= 560) return n;
@@ -353,7 +396,6 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
       return false
     }
   });
-  const resizeRef = useRef<{ startX: number; startW: number } | null>(null);
   const lastActiveRef = useRef<SatelliteContextPanelId>('layers');
   /** When minimizing the map toolbox strip, remember label mode so restoring the strip does not reset it. */
   const mapRailLabeledBeforeStripHideRef = useRef<boolean | null>(null);
@@ -532,30 +574,6 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
     [onMapToolboxEmbedHost],
   );
 
-  const onResizePointerDown = useCallback(
-    (e: React.PointerEvent) => {
-      e.preventDefault();
-      resizeRef.current = { startX: e.clientX, startW: panelWidth };
-      const onMove = (ev: PointerEvent) => {
-        if (!resizeRef.current) return;
-        let dx = ev.clientX - resizeRef.current.startX;
-        if (variant === 'map' && direction === 'rtl') dx = -dx;
-        const next = Math.min(560, Math.max(panelWidthMin, resizeRef.current.startW - dx));
-        setPanelWidth(next);
-      };
-      const onUp = () => {
-        resizeRef.current = null;
-        window.removeEventListener('pointermove', onMove);
-        window.removeEventListener('pointerup', onUp);
-        window.removeEventListener('pointercancel', onUp);
-      };
-      window.addEventListener('pointermove', onMove);
-      window.addEventListener('pointerup', onUp);
-      window.addEventListener('pointercancel', onUp);
-    },
-    [panelWidth, variant, direction, panelWidthMin],
-  );
-
   const activeMeta =
     activeId === 'add-gis-layer'
       ? {
@@ -621,7 +639,7 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
     railWide ? item.title : `${item.title} — ${item.hint}`;
 
   return (
-    <div className={rootClass} role="presentation" dir={direction}>
+    <div className={rootClass} role="presentation" dir={direction} {...panelIsolationProps}>
       <nav
         className={'si-sat-ctx-rail' + (railWide ? ' si-sat-ctx-rail--labeled' : '')}
         aria-label={isMap ? 'Map toolbox' : 'Analysis contextual tools'}
@@ -683,6 +701,51 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
               />
             ) : null}
           </div>
+        ) : null}
+        {isMap && !mapStripHidden && onMapToolboxToggleDrawing ? (
+          <button
+            type="button"
+            className={
+              'si-sat-ctx-rail-btn si-sat-ctx-rail-btn--map si-sat-ctx-rail-btn--edit-activation' +
+              (railWide ? ' si-sat-ctx-rail-btn--row si-sat-ctx-rail-btn--map-expanded' : ' si-sat-ctx-rail-btn--map-collapsed') +
+              (mapToolboxDrawingActive ? ' si-sat-ctx-rail-btn--active' : '')
+            }
+            title={mapToolboxDrawingActive ? 'Drawing tool on — click to turn off' : 'Edit — activate drawing tool'}
+            aria-label={mapToolboxDrawingActive ? 'Drawing tool on' : 'Edit — activate drawing tool'}
+            aria-pressed={mapToolboxDrawingActive}
+            onClick={() => onMapToolboxToggleDrawing()}
+          >
+            <i className="fa-solid fa-pen-to-square" aria-hidden />
+            {railWide ? (
+              <span className="si-sat-ctx-rail-label">
+                <span className="si-sat-ctx-rail-label-title">Edit</span>
+                <span className="si-sat-ctx-rail-label-desc">Activate drawing tool</span>
+              </span>
+            ) : null}
+          </button>
+        ) : null}
+        {isMap && !mapStripHidden && onMeasureOpenPanel ? (
+          <button
+            id="map-toolbox-measure-btn"
+            type="button"
+            className={
+              'si-sat-ctx-rail-btn si-sat-ctx-rail-btn--map si-sat-ctx-rail-btn--measure' +
+              (railWide ? ' si-sat-ctx-rail-btn--row si-sat-ctx-rail-btn--map-expanded' : ' si-sat-ctx-rail-btn--map-collapsed') +
+              (measureMode ? ' si-sat-ctx-rail-btn--active' : '')
+            }
+            title={measureMode ? 'Measurement tools on' : 'Measure — distance, area, terrain'}
+            aria-label="Measurement tools"
+            aria-pressed={!!measureMode}
+            onClick={() => onMeasureOpenPanel()}
+          >
+            <i className="fa-solid fa-ruler-combined" aria-hidden />
+            {railWide ? (
+              <span className="si-sat-ctx-rail-label">
+                <span className="si-sat-ctx-rail-label-title">Measure</span>
+                <span className="si-sat-ctx-rail-label-desc">Distance, area & terrain</span>
+              </span>
+            ) : null}
+          </button>
         ) : null}
         {isMap && !mapStripHidden ? (
           <div className="si-sat-ctx-rail-sep" role="separator" aria-hidden />
@@ -810,7 +873,6 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
         >
           {panelOpen && activeId ? (
             <>
-              <div className="si-sat-ctx-panel-resize" onPointerDown={onResizePointerDown} title="Resize panel" />
               <header className="si-sat-ctx-panel-header">
                 <div className="si-sat-ctx-panel-header-text">
                   {isMap && processingDropdownOpen && processingEmbedTitle ? (
@@ -1066,28 +1128,6 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
                             <span>Main</span>
                           </button>
                           <span className="si-sat-ctx-subnav-crumb">Layers · Options</span>
-                        </div>
-                        <div className="si-sat-ctx-toolbox-opt-actions" role="group" aria-label="Open processing sections">
-                          {(
-                            ['remote-sensing', 'ai-detection-gis', 'table-geo-ai'] as SmartProcessingSectionId[]
-                          ).map(sid => (
-                            <button
-                              key={sid}
-                              type="button"
-                              className="si-sat-ctx-toolbox-opt-btn"
-                              onClick={() => {
-                                if (isMap && sid === 'table-geo-ai' && onGeoAiFloatingRailToggle) {
-                                  onGeoAiFloatingRailToggle();
-                                  return;
-                                }
-                                openPanel(sid as SatelliteContextPanelId);
-                                onProcessingWorkflowNavigate(sid, { fromDockOptions: true });
-                              }}
-                            >
-                              <i className={RAIL_BY_ID[sid].icon} aria-hidden />
-                              <span>Open {RAIL_BY_ID[sid].label}</span>
-                            </button>
-                          ))}
                         </div>
                         {mapToolboxLayersOptionsExtra}
                       </div>

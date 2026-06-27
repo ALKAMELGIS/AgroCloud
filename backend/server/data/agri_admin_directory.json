@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "updatedAt": "2026-06-26T14:40:27.041Z",
+  "users": [
+    {
+      "id": 1782414394512,
+      "name": "Alkamel GIS",
+      "email": "alkamelgis@gmail.com",
+      "role": "Admin",
+      "status": "Active",
+      "lastLogin": "26/06/2026, 6:40:26 PM",
+      "emailVerified": true,
+      "passwordHash": "b03ddf3ca2e714a6548e7495e2a03f5e824eaac9837cd7f159c67b90fb4b7342"
+    }
+  ],
+  "auditLog": [
+    {
+      "id": "2bd4b979-5c91-41f2-a9f7-240793bdc0f8",
+      "at": "2026-06-26T14:40:26.546Z",
+      "entity": "auth",
+      "entityId": "alkamelgis@gmail.com",
+      "action": "login_success",
+      "actorEmail": "Alkamelgis@gmail.com",
+      "meta": {
+        "reason": "server_authenticated",
+        "mode": "signin",
+        "keepSignedIn": true,
+        "deviceName": "Windows · Edge",
+        "atLocal": "26/06/2026, 6:40:26 PM"
+      }
+    }
+  ]
+}

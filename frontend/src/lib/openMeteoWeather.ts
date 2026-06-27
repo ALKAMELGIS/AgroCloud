@@ -527,6 +527,47 @@ export async function fetchOpenMeteoTimeHistory(
   return { timezone: tz, startDate, endDate, points }
 }
 
+/**
+ * Fetch an arbitrary historical hourly series for an explicit [startIso, endIso]
+ * date range from the Open-Meteo **archive** API (ERA5), which reaches back to
+ * {@link OPEN_METEO_ARCHIVE_MIN_DATE} (1950-01-01). Use this for date-range
+ * exports/charts so old dates are actually retrieved (the forecast endpoint only
+ * exposes the last ~30 days via `past_days`).
+ */
+export async function fetchOpenMeteoHistoryRange(
+  lat: number,
+  lng: number,
+  startIso: string,
+  endIso: string,
+): Promise<OpenMeteoTimeHistory> {
+  // Clamp to the archive's supported window and ensure start <= end.
+  let start = startIso < OPEN_METEO_ARCHIVE_MIN_DATE ? OPEN_METEO_ARCHIVE_MIN_DATE : startIso
+  let end = endIso
+  if (start > end) {
+    const tmp = start
+    start = end
+    end = tmp
+  }
+  const url = new URL('https://archive-api.open-meteo.com/v1/archive')
+  url.searchParams.set('latitude', String(lat))
+  url.searchParams.set('longitude', String(lng))
+  url.searchParams.set('timezone', 'auto')
+  url.searchParams.set('start_date', start)
+  url.searchParams.set('end_date', end)
+  url.searchParams.set(
+    'hourly',
+    'temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,wind_direction_10m,surface_pressure,weather_code',
+  )
+  const res = await fetch(url.toString())
+  if (!res.ok) throw new Error(`Open-Meteo archive HTTP ${res.status}`)
+  const data = (await res.json()) as Record<string, unknown>
+  const tz = typeof data.timezone === 'string' ? data.timezone : 'UTC'
+  const points = parseHourlySeries(data)
+  const startDate = points[0]?.time.slice(0, 10) ?? start
+  const endDate = points[points.length - 1]?.time.slice(0, 10) ?? end
+  return { timezone: tz, startDate, endDate, points }
+}
+
 export function metricValueFromHourly(point: OpenMeteoHourlyPoint, metric: WeatherHistoryMetric): number | null {
   switch (metric) {
     case 'temp':

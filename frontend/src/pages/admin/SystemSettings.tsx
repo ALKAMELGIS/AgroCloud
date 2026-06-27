@@ -51,6 +51,14 @@ import {
   persistDeepseekApiKeyInBrowser,
 } from '../../lib/deepseekApiKey'
 import {
+  DEFAULT_OLLAMA_BASE_URL,
+  DEFAULT_OLLAMA_MODEL,
+  getOllamaBaseUrlBrowserOverride,
+  getOllamaModelBrowserOverride,
+  persistOllamaBaseUrlInBrowser,
+  persistOllamaModelInBrowser,
+} from '../../lib/ollamaConfig'
+import {
   getOpenWeatherMapApiKeyBrowserOverride,
   persistOpenWeatherMapApiKeyInBrowser,
 } from '../../lib/openWeatherMapApiKey'
@@ -168,6 +176,8 @@ export default function SystemSettings() {
   const [geminiApiKeyDraft, setGeminiApiKeyDraft] = useState('')
   const [claudeApiKeyDraft, setClaudeApiKeyDraft] = useState('')
   const [deepseekApiKeyDraft, setDeepseekApiKeyDraft] = useState('')
+  const [ollamaBaseUrlDraft, setOllamaBaseUrlDraft] = useState('')
+  const [ollamaModelDraft, setOllamaModelDraft] = useState('')
   const [openWeatherMapApiKeyDraft, setOpenWeatherMapApiKeyDraft] = useState('')
   const [customUserTokenDrafts, setCustomUserTokenDrafts] = useState<Record<string, string>>({})
   const [addApiModalOpen, setAddApiModalOpen] = useState(false)
@@ -255,6 +265,8 @@ export default function SystemSettings() {
       setGeminiApiKeyDraft(getGeminiApiKeyBrowserOverride())
       setClaudeApiKeyDraft(getClaudeApiKeyBrowserOverride())
       setDeepseekApiKeyDraft(getDeepseekApiKeyBrowserOverride())
+      setOllamaBaseUrlDraft(getOllamaBaseUrlBrowserOverride())
+      setOllamaModelDraft(getOllamaModelBrowserOverride())
       setOpenWeatherMapApiKeyDraft(getOpenWeatherMapApiKeyBrowserOverride())
     }
     refreshApiDrafts()
@@ -1736,6 +1748,77 @@ export default function SystemSettings() {
                 {language === 'ar'
                   ? 'اختياري لمحادثة AI Agro-Chat عند اختيار DeepSeek. الطرف: api.deepseek.com.'
                   : 'Optional: powers AI Agro-Chat when “DeepSeek” is selected. Endpoint: api.deepseek.com.'}
+              </p>
+            </div>
+
+            <div className="sys-api-tokens-card">
+              <h3 className="sys-settings-panel__title sys-settings-api-h3">
+                <i className="fa-solid fa-server" aria-hidden />
+                {language === 'ar' ? 'Ollama (محلي)' : 'Ollama (local)'}
+              </h3>
+              <p className="sys-settings-panel__desc sys-settings-api-envnote">
+                {language === 'ar'
+                  ? 'لا يتطلب مفتاح API — يعمل محلياً. شغّل "ollama serve" ونزّل نموذجاً (مثل "ollama pull llama3.1").'
+                  : 'No API key needed — runs locally. Start with "ollama serve" and pull a model (e.g. "ollama pull llama3.1").'}
+              </p>
+              <ApiTokenMergeField
+                id="sys-ollama-base-url"
+                label={language === 'ar' ? 'عنوان خادم Ollama' : 'Ollama server URL'}
+                value={ollamaBaseUrlDraft}
+                onChange={setOllamaBaseUrlDraft}
+                placeholder={DEFAULT_OLLAMA_BASE_URL}
+                onSave={async () => {
+                  persistOllamaBaseUrlInBrowser(ollamaBaseUrlDraft)
+                  pushToast(
+                    'success',
+                    language === 'ar' ? 'تم حفظ عنوان خادم Ollama في هذا المتصفح.' : 'Ollama server URL saved in this browser.',
+                  )
+                }}
+                onClear={async () => {
+                  persistOllamaBaseUrlInBrowser('')
+                  setOllamaBaseUrlDraft('')
+                  pushToast(
+                    'success',
+                    language === 'ar' ? 'تمت إعادة عنوان Ollama إلى الافتراضي.' : 'Ollama server URL reset to default.',
+                  )
+                }}
+                saveTitle={language === 'ar' ? 'حفظ' : 'Save'}
+                clearTitle={language === 'ar' ? 'مسح' : 'Clear'}
+                saveAria={language === 'ar' ? 'حفظ عنوان Ollama' : 'Save Ollama server URL'}
+                clearAria={language === 'ar' ? 'مسح عنوان Ollama' : 'Clear Ollama server URL'}
+                actionsGroupLabel={language === 'ar' ? 'إجراءات عنوان Ollama' : 'Ollama server URL actions'}
+              />
+              <ApiTokenMergeField
+                id="sys-ollama-model"
+                label={language === 'ar' ? 'نموذج Ollama' : 'Ollama model'}
+                value={ollamaModelDraft}
+                onChange={setOllamaModelDraft}
+                placeholder={DEFAULT_OLLAMA_MODEL}
+                onSave={async () => {
+                  persistOllamaModelInBrowser(ollamaModelDraft)
+                  pushToast(
+                    'success',
+                    language === 'ar' ? 'تم حفظ نموذج Ollama في هذا المتصفح.' : 'Ollama model saved in this browser.',
+                  )
+                }}
+                onClear={async () => {
+                  persistOllamaModelInBrowser('')
+                  setOllamaModelDraft('')
+                  pushToast(
+                    'success',
+                    language === 'ar' ? 'تمت إعادة نموذج Ollama إلى الافتراضي.' : 'Ollama model reset to default.',
+                  )
+                }}
+                saveTitle={language === 'ar' ? 'حفظ' : 'Save'}
+                clearTitle={language === 'ar' ? 'مسح' : 'Clear'}
+                saveAria={language === 'ar' ? 'حفظ نموذج Ollama' : 'Save Ollama model'}
+                clearAria={language === 'ar' ? 'مسح نموذج Ollama' : 'Clear Ollama model'}
+                actionsGroupLabel={language === 'ar' ? 'إجراءات نموذج Ollama' : 'Ollama model actions'}
+              />
+              <p className="sys-settings-panel__desc sys-settings-api-hint">
+                {language === 'ar'
+                  ? 'يشغّل تبويب Geo AI → Ollama محلياً وبدون اتصال. الافتراضي: http://localhost:11434 · llama3.1.'
+                  : 'Powers Geo AI → Ollama tab locally / offline. Defaults: http://localhost:11434 · llama3.1.'}
               </p>
             </div>
 

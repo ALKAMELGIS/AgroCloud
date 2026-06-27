@@ -13,6 +13,8 @@ type WeatherTimeHistoryChartProps = {
   timezone: string;
   startDate: string;
   endDate: string;
+  minDate?: string;
+  maxDate?: string;
   onRangeChange: (start: string, end: string) => void;
   onExport?: () => void;
 };
@@ -463,6 +465,8 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
   timezone,
   startDate,
   endDate,
+  minDate,
+  maxDate,
   onRangeChange,
   onExport,
 }) => {
@@ -1112,7 +1116,8 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
           <input
             type="date"
             value={startDate}
-            max={endDate}
+            min={minDate}
+            max={endDate || maxDate}
             onChange={e => onRangeChange(e.target.value, endDate)}
           />
         </label>
@@ -1121,7 +1126,8 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
           <input
             type="date"
             value={endDate}
-            min={startDate}
+            min={startDate || minDate}
+            max={maxDate}
             onChange={e => onRangeChange(startDate, e.target.value)}
           />
         </label>

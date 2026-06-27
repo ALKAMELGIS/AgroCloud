@@ -30,7 +30,16 @@ export type ParsedData =
 type ParseOptions = {
   signal?: AbortSignal;
   onProgress?: (pct: number) => void;
+  /**
+   * Geographic placement for plain (non-georeferenced) image overlays
+   * (PNG/JPG/WebP/GIF/BMP). Normally the caller passes the current map bounds so
+   * the image drops onto the visible view. Defaults to a small box near [0,0].
+   */
+  imagePlacementBounds?: { west: number; south: number; east: number; north: number };
 };
+
+/** Raster image formats that carry NO georeferencing (placed on the current view). */
+export const PLAIN_IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp']);
 
 function readAsArrayBuffer(file: File, opts?: ParseOptions): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
@@ -355,6 +364,89 @@ async function tryZipAsGeoJsonArchive(file: File, opts?: ParseOptions): Promise<
   return { type: 'geojson', data: normalized, filename: file.name, crsHint: pick.name };
 }
 
+/** Read intrinsic pixel dimensions of an image file (createImageBitmap, with an <img> fallback). */
+async function readImageSize(file: File): Promise<{ width: number; height: number }> {
+  try {
+    if (typeof createImageBitmap === 'function') {
+      const bmp = await createImageBitmap(file);
+      const size = { width: bmp.width, height: bmp.height };
+      bmp.close?.();
+      if (size.width > 0 && size.height > 0) return size;
+    }
+  } catch {
+    /* fall through to <img> */
+  }
+  return await new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const size = { width: img.naturalWidth || img.width, height: img.naturalHeight || img.height };
+      URL.revokeObjectURL(url);
+      if (size.width > 0 && size.height > 0) resolve(size);
+      else reject(new Error('Image has no readable dimensions.'));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Could not read this image (unsupported or corrupt file).'));
+    };
+    img.src = url;
+  });
+}
+
+/**
+ * Aspect-preserving placement of a non-georeferenced image overlay: centred on,
+ * and fitted within, the supplied geographic bounds (cos-latitude corrected so
+ * the image is not east-west stretched).
+ */
+function fitImageWithinBounds(
+  bounds: { west: number; south: number; east: number; north: number },
+  width: number,
+  height: number,
+): RasterMapCoordinates {
+  const cx = (bounds.east + bounds.west) / 2;
+  const cy = (bounds.north + bounds.south) / 2;
+  const cosLat = Math.max(1e-6, Math.cos((cy * Math.PI) / 180));
+  const viewWm = Math.abs(bounds.east - bounds.west) * cosLat;
+  const viewHm = Math.abs(bounds.north - bounds.south);
+  const imgAspect = width > 0 && height > 0 ? width / height : 1;
+  // Fit the image rectangle inside the view rectangle, preserving aspect.
+  let wm = viewWm;
+  let hm = wm / imgAspect;
+  if (hm > viewHm) {
+    hm = viewHm;
+    wm = hm * imgAspect;
+  }
+  const halfWdeg = wm / cosLat / 2;
+  const halfHdeg = hm / 2;
+  return mapboxImageCoordinatesFromBounds(cx - halfWdeg, cy - halfHdeg, cx + halfWdeg, cy + halfHdeg);
+}
+
+/**
+ * Parse a plain raster image (PNG/JPG/WebP/GIF/BMP) into a map-ready overlay.
+ * These formats carry no CRS, so the overlay is placed on the current map view
+ * (passed via `opts.imagePlacementBounds`) preserving the image aspect ratio.
+ */
+async function parsePlainImageToRaster(file: File, opts?: ParseOptions): Promise<ParsedData> {
+  const { width, height } = await readImageSize(file);
+  const bounds =
+    opts?.imagePlacementBounds && Number.isFinite(opts.imagePlacementBounds.west)
+      ? opts.imagePlacementBounds
+      : { west: -0.05, south: -0.05, east: 0.05, north: 0.05 };
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  const bands = ext === 'png' || ext === 'webp' || ext === 'gif' ? 4 : 3;
+  return {
+    type: 'raster',
+    filename: file.name,
+    // PNG/JPG/… can be used directly as a Mapbox image-source URL (no re-encode).
+    previewObjectUrl: URL.createObjectURL(file),
+    coordinates: fitImageWithinBounds(bounds, width, height),
+    crsHint: 'Image overlay (no georeferencing — placed on current map view)',
+    widthPx: width,
+    heightPx: height,
+    bands,
+  };
+}
+
 export const parseFile = async (file: File, opts?: ParseOptions): Promise<ParsedData> => {
   const filename = file.name;
   if (file.size > MAX_PARSE_BYTES) {
@@ -468,6 +560,8 @@ export const parseFile = async (file: File, opts?: ParseOptions): Promise<Parsed
     throw new Error('Please compress your Shapefile (.shp, .shx, .dbf, …) into a single .zip before uploading.');
   } else if (extension === 'tif' || extension === 'tiff') {
     return parseGeoTiffToRaster(file, opts);
+  } else if (extension && PLAIN_IMAGE_EXTENSIONS.has(extension)) {
+    return parsePlainImageToRaster(file, opts);
   } else if (extension === 'ifc') {
     if (file.size < 32) throw new Error('IFC file is empty or truncated.');
     const head = await readSliceAsText(file, 0, Math.min(8192, file.size));
@@ -526,6 +620,12 @@ function extensionFromMime(mime: string | null): string | null {
     'application/vnd.google-earth.kmz': 'kmz',
     'image/tiff': 'tiff',
     'image/geotiff': 'tiff',
+    'image/png': 'png',
+    'image/jpeg': 'jpg',
+    'image/jpg': 'jpg',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+    'image/bmp': 'bmp',
   };
   return map[base] ?? null;
 }

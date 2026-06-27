@@ -121,6 +121,9 @@ export function RemoteSensingLayerSelect({
                     }}
                   >
                     <span className="si-rs-layer-select__abbr">{opt.label}</span>
+                    {opt.scientificName ? (
+                      <span className="si-rs-layer-select__science">{opt.scientificName}</span>
+                    ) : null}
                   </button>
                 )
               })}

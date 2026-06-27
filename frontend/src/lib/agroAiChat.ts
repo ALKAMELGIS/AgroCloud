@@ -86,3 +86,55 @@ export async function agroChatWithDeepSeek(params: {
   if (!text) throw new Error('Empty DeepSeek response')
   return text
 }
+
+/** Same-origin backend proxy → Ollama native `/api/chat` (avoids browser CORS). */
+export const OLLAMA_CHAT_PROXY_URL = '/api/ollama/chat'
+export const OLLAMA_STATUS_PROXY_URL = '/api/ollama/status'
+
+/**
+ * Local Ollama via the backend proxy (`/api/ollama/chat` → Ollama `/api/chat`).
+ *
+ * The browser cannot call the Ollama daemon (`:11434`) directly — its CORS
+ * policy rejects the app origin, surfacing as "Failed to fetch". The backend
+ * (same Node process) forwards to Ollama's native chat endpoint with no CORS.
+ * Needs no API key — only the base URL of the running Ollama server and a model
+ * pulled locally (e.g. `ollama pull llama3.1`).
+ */
+export async function agroChatWithOllama(params: {
+  baseUrl: string
+  model: string
+  system: string
+  turns: AgroChatTurn[]
+  userMessage: string
+}): Promise<string> {
+  const { baseUrl, model, system, turns, userMessage } = params
+  const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [{ role: 'system', content: system }]
+  for (const t of turns) {
+    messages.push({ role: t.role === 'user' ? 'user' : 'assistant', content: t.text })
+  }
+  messages.push({ role: 'user', content: userMessage })
+
+  const root = (baseUrl || 'http://localhost:11434').trim().replace(/\/+$/, '')
+  const usableModel = (model || 'llama3.1').trim()
+
+  let res: Response
+  try {
+    res = await fetch(OLLAMA_CHAT_PROXY_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ baseUrl: root, model: usableModel, messages }),
+    })
+  } catch (err) {
+    throw new Error(
+      `Could not reach the app server to proxy Ollama. ${err instanceof Error ? err.message : ''}`.trim(),
+    )
+  }
+
+  const data = (await res.json().catch(() => ({}))) as { error?: string; reply?: string }
+  if (!res.ok) {
+    throw new Error(data?.error || res.statusText || `HTTP ${res.status}`)
+  }
+  const text = (data.reply || '').trim()
+  if (!text) throw new Error('Empty Ollama response')
+  return text
+}

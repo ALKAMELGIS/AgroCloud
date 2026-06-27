@@ -50,6 +50,13 @@ export type LayerLiveLegendCompositeBand = {
   color: string
 }
 
+/** Semantic low / mid / high captions shown in the scientific scale header. */
+export type LayerLiveLegendScaleLabels = {
+  low: string
+  mid: string
+  high: string
+}
+
 export type LayerLiveLegendSpec = {
   id: string
   title: string
@@ -59,6 +66,8 @@ export type LayerLiveLegendSpec = {
   gradientCss?: string
   valueMin?: number
   valueMax?: number
+  /** Semantic captions for the 3-cell scale header (matches the NDVI scientific layout). */
+  scaleLabels?: LayerLiveLegendScaleLabels
   compositeBands?: LayerLiveLegendCompositeBand[]
   note?: string
 }
@@ -134,7 +143,7 @@ function buildClassesFromBreaks(
 }
 
 const NDVI_CLASS_LABELS = [
-  'Bare / failure',
+  'Water / No Vegetation',
   'Very low vigor',
   'High stress',
   'Crop stress',
@@ -143,7 +152,7 @@ const NDVI_CLASS_LABELS = [
   'Moderate health',
   'Good growth',
   'Strong growth',
-  'Harvest ready',
+  'Very Dense / Vigorous Vegetation',
 ] as const
 
 const NDWI_CLASS_LABELS = [
@@ -176,6 +185,7 @@ function buildRampDiscreteClasses(
   ramp: RampStop,
   count: number,
   labelPrefix: string,
+  labels?: readonly string[],
 ): LayerLiveLegendClass[] {
   const min = ramp[0]![0]
   const max = ramp[ramp.length - 1]![0]
@@ -186,7 +196,7 @@ function buildRampDiscreteClasses(
     const hi = i === count - 1 ? max : min + step * (i + 1)
     const mid = (lo + hi) / 2
     classes.push({
-      label: `${labelPrefix} ${i + 1}`,
+      label: labels?.[i] ?? `${labelPrefix} ${i + 1}`,
       rangeLabel:
         i === 0
           ? `< ${formatIndexValue(hi)}`
@@ -234,6 +244,7 @@ function buildNdviLegend(): LayerLiveLegendSpec {
     kind: 'discrete',
     valueMin: -1,
     valueMax: 1,
+    scaleLabels: { low: 'Water / dry soil', mid: 'Moderate canopy', high: 'Dense vegetation' },
     gradientCss: rampToGradientCss(SENTINEL_NDVI_AGRICULTURAL_RAMP),
     classes: buildClassesFromBreaks(
       SENTINEL_NDVI_10_CLASS_BREAKS,
@@ -251,6 +262,7 @@ function buildNdwiLegend(): LayerLiveLegendSpec {
     kind: 'discrete',
     valueMin: -1,
     valueMax: 1,
+    scaleLabels: { low: 'Dry / bare soil', mid: 'Damp transition', high: 'Open water' },
     gradientCss: rampToGradientCss(SENTINEL_NDWI_RAMP),
     classes: buildClassesFromBreaks(
       SENTINEL_NDWI_10_CLASS_BREAKS,
@@ -268,6 +280,7 @@ function buildNdmiLegend(): LayerLiveLegendSpec {
     kind: 'discrete',
     valueMin: -0.8,
     valueMax: 0.8,
+    scaleLabels: { low: 'Moisture stress', mid: 'Moist canopy', high: 'Saturated' },
     gradientCss: rampToGradientCss(SENTINEL_NDMI_MOISTURE_RAMP),
     classes: buildClassesFromBreaks(
       SENTINEL_NDMI_10_CLASS_BREAKS,
@@ -282,7 +295,9 @@ function buildIndexRampLegend(
   title: string,
   subtitle: string,
   ramp: RampStop,
-  classCount = 8,
+  classCount = 10,
+  scaleLabels: LayerLiveLegendScaleLabels = { low: 'Low', mid: 'Moderate', high: 'High' },
+  classLabels?: readonly string[],
 ): LayerLiveLegendSpec {
   return {
     id,
@@ -291,10 +306,25 @@ function buildIndexRampLegend(
     kind: 'discrete',
     valueMin: ramp[0]![0],
     valueMax: ramp[ramp.length - 1]![0],
+    scaleLabels,
     gradientCss: rampToGradientCss(ramp),
-    classes: buildRampDiscreteClasses(ramp, classCount, title),
+    classes: buildRampDiscreteClasses(ramp, classCount, title, classLabels),
   }
 }
+
+/** Cover-graded class names for SAVI (low value → high value). */
+const SAVI_CLASS_LABELS = [
+  'Bare / non-veg',
+  'Very sparse cover',
+  'Sparse cover',
+  'Low cover',
+  'Low–moderate cover',
+  'Moderate cover',
+  'Moderate–high cover',
+  'High cover',
+  'Dense cover',
+  'Very dense cover',
+] as const
 
 function buildTrueColorLegend(title: string): LayerLiveLegendSpec {
   return {
@@ -370,12 +400,46 @@ const LEGEND_BY_PROFILE: Record<string, () => LayerLiveLegendSpec> = {
   ndvi: buildNdviLegend,
   ndwi: buildNdwiLegend,
   ndmi: buildNdmiLegend,
-  mndwi: () => buildIndexRampLegend('mndwi', 'MNDWI', 'Modified water index', SENTINEL_MNDWI_RAMP),
-  ndsi: () => buildIndexRampLegend('ndsi', 'NDSI', 'Snow / ice index', SENTINEL_NDSI_RAMP),
-  evi: () => buildIndexRampLegend('evi', 'EVI', 'Enhanced vegetation index', SENTINEL_EVI_RAMP),
-  savi: () => buildIndexRampLegend('savi', 'SAVI', 'Soil-adjusted vegetation index', SENTINEL_SAVI_RAMP),
-  gndvi: () => buildIndexRampLegend('gndvi', 'GNDVI', 'Green NDVI', SENTINEL_GNDVI_RAMP),
-  ndre: () => buildIndexRampLegend('ndre', 'NDRE', 'Red-edge chlorophyll proxy', SENTINEL_NDRE_RAMP),
+  mndwi: () =>
+    buildIndexRampLegend('mndwi', 'MNDWI', 'Modified water index', SENTINEL_MNDWI_RAMP, 10, {
+      low: 'Dry land',
+      mid: 'Wet soil',
+      high: 'Open water',
+    }),
+  ndsi: () =>
+    buildIndexRampLegend('ndsi', 'NDSI', 'Snow / ice index', SENTINEL_NDSI_RAMP, 10, {
+      low: 'No snow',
+      mid: 'Partial snow',
+      high: 'Snow / ice',
+    }),
+  evi: () =>
+    buildIndexRampLegend('evi', 'EVI', 'Enhanced vegetation index', SENTINEL_EVI_RAMP, 10, {
+      low: 'Bare / sparse',
+      mid: 'Moderate canopy',
+      high: 'Dense vegetation',
+    }),
+  savi: () =>
+    buildIndexRampLegend(
+      'savi',
+      'SAVI',
+      'Soil-adjusted vegetation — 10 classes; reduced soil brightness bias.',
+      SENTINEL_SAVI_RAMP,
+      10,
+      { low: 'Sparse cover', mid: 'Moderate cover', high: 'Dense cover' },
+      SAVI_CLASS_LABELS,
+    ),
+  gndvi: () =>
+    buildIndexRampLegend('gndvi', 'GNDVI', 'Green NDVI', SENTINEL_GNDVI_RAMP, 10, {
+      low: 'Low chlorophyll',
+      mid: 'Moderate',
+      high: 'High chlorophyll',
+    }),
+  ndre: () =>
+    buildIndexRampLegend('ndre', 'NDRE', 'Red-edge chlorophyll proxy', SENTINEL_NDRE_RAMP, 10, {
+      low: 'Low chlorophyll',
+      mid: 'Moderate',
+      high: 'High chlorophyll',
+    }),
 }
 
 
@@ -449,6 +513,8 @@ function buildAgroCompositeLegend(layerId: string): LayerLiveLegendSpec | null {
   if (!ramp) return null
   const isDelta = isAgroDeltaCompositeLayerId(layerId)
   const title = isDelta ? def.deltaLabel : def.label
+  const lowLabel = ramp.classLabels[0]?.trim() || (isDelta ? 'Decline' : 'Low')
+  const highLabel = ramp.classLabels[ramp.classLabels.length - 1]?.trim() || (isDelta ? 'Improvement' : 'High')
   return {
     id: layerId,
     title,
@@ -457,6 +523,7 @@ function buildAgroCompositeLegend(layerId: string): LayerLiveLegendSpec | null {
     gradientCss: rampToGradientCss(ramp.gradientStops),
     valueMin: ramp.valueMin,
     valueMax: ramp.valueMax,
+    scaleLabels: { low: lowLabel, mid: isDelta ? 'Stable' : 'Moderate', high: highLabel },
     classes: buildCompositeTenClassLegendClasses(ramp),
     note: buildAgroCompositeLegendNote(layerId, isDelta),
   }

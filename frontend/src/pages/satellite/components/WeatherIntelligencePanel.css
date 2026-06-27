@@ -66,8 +66,11 @@
 .si-weather-panel-shell {
   position: fixed;
   z-index: 1200;
-  min-width: 268px;
-  min-height: 300px;
+  box-sizing: border-box;
+  /* Never let the min-size exceed the viewport (prevents horizontal scroll /
+     off-screen edges on small screens). */
+  min-width: min(252px, calc(100vw - 16px));
+  min-height: min(248px, calc(100dvh - 16px));
   max-width: calc(100vw - 12px);
   max-height: min(calc(100dvh - 12px), calc(var(--app-vh-fallback, 100vh) - 12px));
   pointer-events: auto;
@@ -75,15 +78,19 @@
   color: var(--si-wx-text);
 }
 
-/* Time History — pinned layout size on open (412×748, fits timeline + 3 insight cards) */
+.si-weather-panel-shell * {
+  box-sizing: border-box;
+}
+
+/* Time History — preferred layout size on open (fits timeline + 3 insight cards) */
 .si-weather-panel-shell--history {
-  min-width: 380px;
-  min-height: 680px;
+  min-width: min(300px, calc(100vw - 16px));
+  min-height: min(420px, calc(100dvh - 16px));
 }
 
 .si-weather-panel-shell--history.si-weather-panel-shell--acp-compact {
-  min-width: 248px;
-  min-height: 300px;
+  min-width: min(240px, calc(100vw - 16px));
+  min-height: min(280px, calc(100dvh - 16px));
 }
 
 .si-weather-panel-shell--history.si-weather-panel-shell--acp-compact .si-weather-panel__body {
@@ -1779,20 +1786,133 @@
 }
 
 /* Weather panel stays dark glass in all app themes */
-html[data-theme='light'] .si-weather-toggle,
-html[data-theme='light'] .si-weather-panel-shell {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-weather-toggle,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-weather-panel-shell {
   --si-wx-glass: rgba(14, 14, 16, 0.82);
   --si-wx-field: rgba(255, 255, 255, 0.05);
 }
 
-html[data-theme='light'] .si-weather-panel {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-weather-panel {
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.07) 0%, transparent 36%),
     linear-gradient(180deg, rgba(12, 12, 14, 0.9) 0%, rgba(6, 6, 8, 0.94) 100%);
   color: #ffffff;
 }
 
-html[data-theme='light'] .si-weather-panel input,
-html[data-theme='light'] .si-weather-panel button {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-weather-panel input,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-weather-panel button {
   color-scheme: dark;
+}
+
+/* ── Responsive: Tablet (≤ 820px) — trim paddings, keep everything visible ── */
+@media (max-width: 820px) {
+  .si-weather-panel__header {
+    padding: 7px 10px 8px;
+  }
+
+  .si-weather-panel__body {
+    padding: 7px 8px 6px;
+    gap: 6px;
+  }
+
+  .si-weather-panel__hero {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .si-weather-panel__temp {
+    font-size: 20px;
+  }
+
+  .si-weather-panel__hero-icon {
+    font-size: 24px;
+    width: 32px;
+  }
+
+  .si-wx-history__plot {
+    height: 124px;
+  }
+
+  .si-wx-history__insight-card {
+    min-height: 148px;
+  }
+}
+
+/* ── Responsive: Mobile (≤ 560px) — single-column, compact, no overflow ── */
+@media (max-width: 560px) {
+  .si-weather-panel {
+    border-radius: 14px;
+    font-size: 10px;
+  }
+
+  .si-weather-panel__header {
+    padding: 6px 9px 7px;
+    gap: 8px;
+  }
+
+  .si-weather-panel__title {
+    font-size: 12px;
+  }
+
+  .si-weather-panel__icon-btn {
+    width: 26px;
+    height: 26px;
+  }
+
+  .si-weather-panel__body {
+    padding: 6px 7px 6px;
+    gap: 6px;
+  }
+
+  .si-weather-panel__metrics {
+    gap: 4px;
+  }
+
+  .si-weather-panel__metric {
+    padding: 6px 3px;
+  }
+
+  /* Stack the rich Time-History insight cards so nothing is clipped. */
+  .si-wx-history__insights {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .si-wx-history__insight-card {
+    min-height: 0;
+  }
+
+  .si-wx-history__plot {
+    height: 116px;
+  }
+
+  .si-wx-history__metric-tab {
+    min-width: 44px;
+  }
+
+  .si-weather-panel__temp {
+    font-size: 19px;
+  }
+}
+
+/* ── Responsive: very small phones (≤ 380px) — tightest spacing ── */
+@media (max-width: 380px) {
+  .si-weather-panel__body {
+    padding: 5px 6px 5px;
+    gap: 5px;
+  }
+
+  .si-weather-panel__hero {
+    padding: 7px;
+    gap: 7px;
+  }
+
+  .si-weather-panel__toolbar {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .si-weather-panel__date {
+    max-width: none;
+  }
 }

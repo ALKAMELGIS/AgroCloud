@@ -373,10 +373,25 @@
 
 .si-rs-panel .si-rs-layer-select__option {
   padding: 5px 9px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
 }
 
 .si-rs-panel .si-rs-layer-select__option .si-rs-layer-select__abbr {
   font-size: 10px;
+}
+
+/* Scientific name — small, light, wraps without forcing the menu wider. */
+.si-rs-panel .si-rs-layer-select__science {
+  display: block;
+  font-size: 8px;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: 0;
+  white-space: normal;
+  opacity: 0.8;
 }
 
 /* AOI mask builder — flat siblings inside Remote Sensing panel (display:contents) */
@@ -624,33 +639,33 @@
   font-size: 9px;
 }
 
-html[data-theme='light'] .si-rs-panel__select {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__select {
   background-color: rgba(255, 255, 255, 0.96);
   border-color: rgba(148, 163, 184, 0.32);
   color: #0f172a;
   color-scheme: light;
 }
 
-html[data-theme='light'] .si-rs-panel__show-box {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__show-box {
   background: rgba(248, 250, 252, 0.92);
   border-color: rgba(148, 163, 184, 0.28);
   color: #0f172a;
 }
 
-html[data-theme='light'] .si-rs-panel__section-kicker {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__section-kicker {
   color: #64748b;
 }
 
-html[data-theme='light'] .si-rs-panel__meta--lock {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__meta--lock {
   color: #047857;
 }
 
-html[data-theme='light'] .si-rs-panel--toolbox-v2 .si-rs-panel__field input[type='date'],
-html[data-theme='light'] .si-rs-panel--toolbox-v2 .si-rs-panel__mini-field input[type='date'] {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel--toolbox-v2 .si-rs-panel__field input[type='date'],
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel--toolbox-v2 .si-rs-panel__mini-field input[type='date'] {
   background: rgba(255, 255, 255, 0.96);
 }
 
-html[data-theme='light'] .si-rs-panel--toolbox-v2 .si-rs-panel__action {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel--toolbox-v2 .si-rs-panel__action {
   background: rgba(255, 255, 255, 0.92);
 }
 
@@ -661,7 +676,7 @@ html[data-theme='light'] .si-rs-panel--toolbox-v2 .si-rs-panel__action {
   border-radius: 0 !important;
 }
 
-html[data-theme='light'] .si-rs-panel--glass {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel--glass {
   background: linear-gradient(
     165deg,
     rgba(255, 255, 255, 0.92) 0%,
@@ -672,110 +687,110 @@ html[data-theme='light'] .si-rs-panel--glass {
   color: #0f172a;
 }
 
-html[data-theme='light'] .si-rs-panel__header {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__header {
   border-bottom-color: rgba(15, 23, 42, 0.08);
 }
 
-html[data-theme='light'] .si-rs-panel__title {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__title {
   color: #0f172a;
 }
 
-html[data-theme='light'] .si-rs-panel__label,
-html[data-theme='light'] .si-rs-panel .si-aoi-mask-builder--flat .si-aoi-mask-builder__head-label,
-html[data-theme='light'] .si-rs-panel .si-aoi-mask-builder--flat .si-aoi-mask-builder__values > .si-field-analysis-label {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__label,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-aoi-mask-builder--flat .si-aoi-mask-builder__head-label,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-aoi-mask-builder--flat .si-aoi-mask-builder__values > .si-field-analysis-label {
   color: #475569;
 }
 
-html[data-theme='light'] .si-rs-panel__meta {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__meta {
   color: #334155;
 }
 
-html[data-theme='light'] .si-rs-panel__meta--warn,
-html[data-theme='light'] .si-rs-panel__meta--preview {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__meta--warn,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__meta--preview {
   color: #b45309;
 }
 
-html[data-theme='light'] .si-rs-panel__field input[type='date'],
-html[data-theme='light'] .si-rs-panel__mini-field input[type='date'],
-html[data-theme='light'] .si-rs-panel .si-field-analysis-select,
-html[data-theme='light'] .si-rs-panel .si-rs-layer-select__trigger {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__field input[type='date'],
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__mini-field input[type='date'],
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-field-analysis-select,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-rs-layer-select__trigger {
   background: rgba(255, 255, 255, 0.92);
   border-color: rgba(148, 163, 184, 0.32);
   color: #0f172a;
   color-scheme: light;
 }
 
-html[data-theme='light'] .si-rs-panel__check,
-html[data-theme='light'] .si-rs-panel .si-aoi-mask-builder--flat .si-aoi-mask-builder__title,
-html[data-theme='light'] .si-rs-panel .si-aoi-mask-builder--flat .si-aoi-mask-builder__enable,
-html[data-theme='light'] .si-rs-panel .si-aoi-mask-builder--flat .si-field-analysis-checkbox-row {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__check,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-aoi-mask-builder--flat .si-aoi-mask-builder__title,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-aoi-mask-builder--flat .si-aoi-mask-builder__enable,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-aoi-mask-builder--flat .si-field-analysis-checkbox-row {
   color: #0f172a;
 }
 
-html[data-theme='light'] .si-rs-panel__action {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__action {
   background: rgba(255, 255, 255, 0.88);
   border-color: rgba(148, 163, 184, 0.28);
   color: #0f172a;
 }
 
-html[data-theme='light'] .si-rs-panel__action:hover {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__action:hover {
   background: rgba(236, 253, 245, 0.95);
   border-color: rgba(16, 185, 129, 0.38);
   color: #065f46;
 }
 
-html[data-theme='light'] .si-rs-panel__icon-btn,
-html[data-theme='light'] .si-rs-panel__tool {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__icon-btn,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__tool {
   background: rgba(255, 255, 255, 0.88);
   border-color: rgba(148, 163, 184, 0.28);
   color: #334155;
 }
 
-html[data-theme='light'] .si-rs-panel__icon-btn:hover:not(:disabled),
-html[data-theme='light'] .si-rs-panel__tool:hover:not(:disabled) {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__icon-btn:hover:not(:disabled),
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__tool:hover:not(:disabled) {
   background: rgba(236, 253, 245, 0.95);
   border-color: rgba(16, 185, 129, 0.35);
   color: #047857;
 }
 
-html[data-theme='light'] .si-rs-panel__tool.is-on {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__tool.is-on {
   background: rgba(209, 250, 229, 0.95);
   border-color: rgba(16, 185, 129, 0.45);
   color: #047857;
 }
 
-html[data-theme='light'] .si-rs-panel__tool-sep {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__tool-sep {
   background: rgba(15, 23, 42, 0.1);
 }
 
-html[data-theme='light'] .si-rs-panel__cta {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__cta {
   color: #065f46;
   background: linear-gradient(180deg, rgba(209, 250, 229, 0.98), rgba(167, 243, 208, 0.82));
   border-color: rgba(16, 185, 129, 0.42);
 }
 
-html[data-theme='light'] .si-rs-panel__cta:hover {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__cta:hover {
   background: linear-gradient(180deg, rgba(167, 243, 208, 0.98), rgba(110, 231, 183, 0.88));
   border-color: rgba(5, 150, 105, 0.5);
 }
 
-html[data-theme='light'] .si-rs-panel__cta--stop {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__cta--stop {
   color: #991b1b;
   background: linear-gradient(180deg, rgba(254, 226, 226, 0.98), rgba(254, 202, 202, 0.85));
   border-color: rgba(239, 68, 68, 0.35);
 }
 
-html[data-theme='light'] .si-rs-panel__status {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__status {
   color: #0369a1;
 }
 
-html[data-theme='light'] .si-rs-panel__close {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__close {
   background: rgba(255, 255, 255, 0.9);
   border-color: rgba(148, 163, 184, 0.28);
   color: #475569;
 }
 
-html[data-theme='light'] .si-rs-panel__divider {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__divider {
   background: linear-gradient(
     90deg,
     transparent,
@@ -785,56 +800,141 @@ html[data-theme='light'] .si-rs-panel__divider {
   );
 }
 
-html[data-theme='light'] .si-rs-panel .si-rs-layer-select__menu {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-rs-layer-select__menu {
   background: rgba(255, 255, 255, 0.98);
   border-color: rgba(148, 163, 184, 0.28);
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
 }
 
-html[data-theme='light'] .si-rs-panel .si-rs-layer-select__abbr,
-html[data-theme='light'] .si-rs-panel .si-rs-layer-select__option .si-rs-layer-select__abbr {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-rs-layer-select__abbr,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-rs-layer-select__option .si-rs-layer-select__abbr {
   color: #0f172a;
 }
 
-html[data-theme='light'] .si-rs-panel .si-rs-layer-select__science,
-html[data-theme='light'] .si-rs-panel .si-rs-layer-select__option .si-rs-layer-select__science {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-rs-layer-select__science,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-rs-layer-select__option .si-rs-layer-select__science {
   color: #475569;
 }
 
-html[data-theme='light'] .si-rs-panel .si-rs-layer-select__group-label {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-rs-layer-select__group-label {
   color: #64748b;
 }
 
-html[data-theme='light'] .si-rs-panel .si-rs-layer-select__option {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-rs-layer-select__option {
   color: #0f172a;
 }
 
-html[data-theme='light'] .si-rs-panel .si-rs-layer-select__option:hover,
-html[data-theme='light'] .si-rs-panel .si-rs-layer-select__option.is-active {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-rs-layer-select__option:hover,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-rs-layer-select__option.is-active {
   background: rgba(14, 165, 233, 0.12);
 }
 
-html[data-theme='light'] .si-rs-panel .si-rs-layer-select__chevron {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-rs-layer-select__chevron {
   border-top-color: #475569;
 }
 
-html[data-theme='light'] .si-rs-panel .si-rs-layer-select__are {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-rs-layer-select__are {
   background: rgba(14, 165, 233, 0.14);
   color: #0369a1;
 }
 
-html[data-theme='light'] .si-rs-panel .si-aoi-mask-builder--flat .si-field-analysis-wms-zoom-hint {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-aoi-mask-builder--flat .si-field-analysis-wms-zoom-hint {
   color: #475569;
 }
 
-html[data-theme='light'] .si-rs-panel .si-aoi-mask-builder--flat .si-aoi-mask-builder__reset {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-aoi-mask-builder--flat .si-aoi-mask-builder__reset {
   color: #334155;
   background: rgba(255, 255, 255, 0.88);
   border-color: rgba(148, 163, 184, 0.28);
 }
 
-html[data-theme='light'] .si-rs-panel .si-aoi-mask-builder--flat .si-aoi-mask-builder__value-chip {
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-aoi-mask-builder--flat .si-aoi-mask-builder__value-chip {
   color: #0f172a;
   background: rgba(255, 255, 255, 0.82);
   border-color: rgba(148, 163, 184, 0.24);
+}
+
+/* ============================================================
+   DARK THEME — panel-wrap parity
+   In dark theme every text/label inside the panel is WHITE, and
+   every option control (select, inputs, boxes, buttons, menus)
+   uses a luxurious deep-black surface with white text.
+   ============================================================ */
+
+/* Text / labels → white */
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel__title,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel__check,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel .si-aoi-mask-builder--flat .si-aoi-mask-builder__title,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel .si-aoi-mask-builder--flat .si-aoi-mask-builder__enable,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel .si-aoi-mask-builder--flat .si-field-analysis-checkbox-row {
+  color: #ffffff;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel__label,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel--flat .si-rs-panel__label,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel .si-aoi-mask-builder--flat .si-aoi-mask-builder__head-label,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel .si-aoi-mask-builder--flat .si-aoi-mask-builder__values > .si-field-analysis-label,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel__meta,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel__section-kicker {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+/* Option controls → luxurious black + white text */
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel__select,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel__field input[type='date'],
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel__mini-field input[type='date'],
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel .si-field-analysis-select,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel .si-rs-layer-select__trigger,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel--toolbox-v2 .si-rs-panel__field input[type='date'],
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel--toolbox-v2 .si-rs-panel__mini-field input[type='date'] {
+  background: linear-gradient(180deg, rgba(20, 26, 38, 0.96) 0%, rgba(7, 10, 17, 0.96) 100%);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  color-scheme: dark;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel__show-box {
+  background: linear-gradient(180deg, rgba(20, 26, 38, 0.96) 0%, rgba(7, 10, 17, 0.96) 100%);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel__action,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel__icon-btn,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel__tool,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel__close {
+  background: linear-gradient(180deg, rgba(20, 26, 38, 0.94) 0%, rgba(7, 10, 17, 0.94) 100%);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel__action:hover:not(:disabled),
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel__icon-btn:hover:not(:disabled),
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel__tool:hover:not(:disabled) {
+  background: linear-gradient(180deg, rgba(28, 36, 52, 0.96) 0%, rgba(12, 17, 27, 0.96) 100%);
+  border-color: rgba(52, 211, 153, 0.42);
+  color: #ffffff;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel .si-rs-layer-select__menu {
+  background: linear-gradient(180deg, rgba(17, 22, 34, 0.98) 0%, rgba(6, 9, 15, 0.98) 100%);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel .si-rs-layer-select__option,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel .si-rs-layer-select__abbr,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel .si-rs-layer-select__option .si-rs-layer-select__abbr {
+  color: #ffffff;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel .si-rs-layer-select__science,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel .si-rs-layer-select__group-label {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel .si-aoi-mask-builder--flat .si-aoi-mask-builder__value-chip {
+  color: #ffffff;
+  background: linear-gradient(180deg, rgba(20, 26, 38, 0.9) 0%, rgba(7, 10, 17, 0.9) 100%);
+  border-color: rgba(255, 255, 255, 0.12);
 }

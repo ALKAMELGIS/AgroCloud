@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="AgroCloud app icon">
+  <defs>
+    <linearGradient id="bgGlow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f8fafc"/>
+    </linearGradient>
+    <linearGradient id="greenA" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22c55e"/>
+      <stop offset="1" stop-color="#15803d"/>
+    </linearGradient>
+    <linearGradient id="greenB" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#86efac"/>
+      <stop offset="1" stop-color="#16a34a"/>
+    </linearGradient>
+    <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#14532d" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+
+  <rect x="8" y="8" width="496" height="496" rx="112" fill="url(#bgGlow)"/>
+
+  <g filter="url(#softShadow)">
+    <ellipse cx="256" cy="264" rx="172" ry="156" fill="none" stroke="url(#greenA)" stroke-width="26"/>
+    <ellipse cx="256" cy="264" rx="196" ry="126" fill="none" stroke="url(#greenB)" stroke-width="18" transform="rotate(-26 256 264)"/>
+    <ellipse cx="256" cy="264" rx="204" ry="118" fill="none" stroke="#166534" stroke-opacity="0.8" stroke-width="8" transform="rotate(22 256 264)"/>
+  </g>
+
+  <circle cx="256" cy="300" r="84" fill="#dcfce7"/>
+  <path d="M210 348c-38-16-58-48-56-92 31 7 57 25 71 54 9 18 9 28-15 38z" fill="url(#greenB)"/>
+  <path d="M304 348c37-18 56-49 54-92-31 8-56 25-69 54-8 18-8 28 15 38z" fill="url(#greenA)"/>
+  <path d="M256 228v138" stroke="#14532d" stroke-width="9" stroke-linecap="round"/>
+
+  <g transform="translate(256 178)">
+    <rect x="-92" y="-17" width="184" height="34" rx="17" fill="url(#greenA)" transform="rotate(-16)"/>
+    <rect x="-26" y="-12" width="52" height="24" rx="12" fill="#166534"/>
+    <rect x="-115" y="-24" width="22" height="48" rx="11" fill="#15803d"/>
+    <rect x="93" y="-24" width="22" height="48" rx="11" fill="#15803d"/>
+    <circle cx="-110" cy="-41" r="18" fill="none" stroke="#15803d" stroke-width="7"/>
+    <circle cx="110" cy="-41" r="18" fill="none" stroke="#15803d" stroke-width="7"/>
+    <circle cx="-146" cy="-21" r="18" fill="none" stroke="#15803d" stroke-width="7"/>
+    <circle cx="146" cy="-21" r="18" fill="none" stroke="#15803d" stroke-width="7"/>
+  </g>
+</svg>

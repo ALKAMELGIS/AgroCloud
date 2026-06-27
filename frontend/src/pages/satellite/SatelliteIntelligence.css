@@ -1978,7 +1978,27 @@ main.content > .si-page {
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
-  z-index: 10;
+  /* Sits ABOVE the weather toggle so the open basemap gallery (which floats
+     downward over the weather button) is never covered by the weather icon. */
+  z-index: 50;
+}
+
+/* Layer Live index imagery toggle — basemap-style circular button on the map. */
+.si-layer-live-toggle {
+  position: relative;
+  z-index: 5;
+}
+
+.si-layer-live-button.active {
+  background: linear-gradient(135deg, #22c55e, #15803d);
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.55), 0 0 22px rgba(22, 163, 74, 0.45);
+}
+
+/* Weather control is the lower layer in this cluster — the basemap gallery
+   popover must always render in front of the weather icon when open. */
+.si-map-floating-controls__left .si-weather-toggle {
+  position: relative;
+  z-index: 5;
 }
 
 
@@ -2012,7 +2032,302 @@ main.content > .si-page {
   box-shadow: 0 0 0 1px var(--si-accent-ring), 0 0 22px rgba(22, 163, 74, 0.4);
 }
 
+.si-map-floating-controls__left .si-view3d-toggle {
+  position: relative;
+  z-index: 5;
+}
+/* While the elevation/terrain popover is open, lift its whole stacking context
+   above the sibling icons (Key legend, weather, …) so the panel overlays them
+   instead of being covered — without shifting any icon. */
+.si-map-floating-controls__left .si-view3d-toggle.is-open {
+  z-index: 60;
+}
+.si-view3d-button {
+  position: relative;
+}
+
+/* Merged 3D control: main 2D/3D toggle + an options chevron in one cluster. */
+.si-view3d-cluster {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 2px;
+}
+.si-view3d-opts-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  align-self: stretch;
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.78);
+  color: #cbd5e1;
+  font-size: 9px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.si-view3d-opts-btn:hover {
+  color: #f8fafc;
+  border-color: rgba(74, 222, 128, 0.5);
+  background: rgba(22, 101, 52, 0.45);
+}
+.si-view3d-opts-btn.active {
+  color: #f8fafc;
+  border-color: rgba(74, 222, 128, 0.6);
+  background: var(--si-accent-strong, #15803d);
+}
+.si-view3d-opts-btn.active i {
+  transform: rotate(180deg);
+}
+.si-view3d-opts-btn i {
+  transition: transform 0.15s ease;
+}
+.si-view3d-button__tag {
+  position: absolute;
+  bottom: -3px;
+  right: -3px;
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  padding: 2px 3px;
+  border-radius: 5px;
+  background: #020617;
+  border: 1px solid rgba(148, 163, 184, 0.6);
+  color: #e5e7eb;
+}
+.si-view3d-button.active .si-view3d-button__tag {
+  background: var(--si-accent-strong, #15803d);
+  border-color: transparent;
+  color: #f9fafb;
+}
+
+/* ── Legend tool toggle (sole control point for the map legend) ───────────── */
+.si-map-floating-controls__left .si-legend-toggle {
+  position: relative;
+  z-index: 6;
+}
+.si-legend-button {
+  position: relative;
+}
+.si-legend-button.active .si-view3d-button__tag {
+  background: var(--si-accent-strong, #15803d);
+  border-color: transparent;
+  color: #f9fafb;
+}
+
+/* ── Terrain 3D control (Elevation & Contour) ─────────────────────────────── */
+.si-map-floating-controls__left .si-terrain3d-toggle {
+  position: relative;
+  z-index: 6;
+}
+.si-terrain3d-button {
+  position: relative;
+}
+.si-terrain3d-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 248px;
+  max-width: calc(100vw - 28px);
+  padding: 12px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #0b1220 0%, #070b15 100%);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.6), 0 4px 14px rgba(2, 6, 23, 0.4);
+  color: #e2e8f0;
+  z-index: 30;
+}
+.si-terrain3d-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.si-terrain3d-panel__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #f1f5f9;
+}
+.si-terrain3d-panel__title i {
+  color: #4ade80;
+}
+.si-terrain3d-panel__close {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.6);
+  color: #cbd5e1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.si-terrain3d-panel__close:hover {
+  border-color: rgba(248, 113, 113, 0.5);
+  color: #fca5a5;
+}
+
+.si-terrain3d-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.55);
+  color: inherit;
+}
+.si-terrain3d-status.on {
+  border-color: rgba(74, 222, 128, 0.55);
+  background: linear-gradient(180deg, rgba(22, 101, 52, 0.4), rgba(15, 23, 42, 0.7));
+}
+.si-terrain3d-status__icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(74, 222, 128, 0.14);
+  color: #86efac;
+  font-size: 15px;
+}
+.si-terrain3d-status__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.si-terrain3d-status__text strong {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+.si-terrain3d-status__text small {
+  font-size: 0.7rem;
+  color: #94a3b8;
+}
+.si-terrain3d-status__state {
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.25);
+  color: #cbd5e1;
+}
+.si-terrain3d-status__state.on {
+  background: rgba(34, 197, 94, 0.22);
+  color: #86efac;
+}
+
+.si-terrain3d-opt {
+  margin-top: 12px;
+  transition: opacity 0.15s ease;
+}
+.si-terrain3d-opt.is-disabled {
+  opacity: 0.4;
+}
+.si-terrain3d-opt__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.si-terrain3d-opt__label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+.si-terrain3d-opt__val {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #f1f5f9;
+}
+.si-terrain3d-range {
+  width: 100%;
+  accent-color: #22c55e;
+  cursor: pointer;
+}
+.si-terrain3d-range:disabled {
+  cursor: not-allowed;
+}
+
+.si-terrain3d-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  margin-top: 12px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.5);
+  color: inherit;
+  cursor: pointer;
+}
+.si-terrain3d-check:hover:not(.is-disabled) {
+  border-color: rgba(74, 222, 128, 0.4);
+}
+.si-terrain3d-check.is-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.si-terrain3d-check__box {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  border-radius: 5px;
+  border: 1.5px solid rgba(148, 163, 184, 0.5);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #052e16;
+}
+.si-terrain3d-check.on .si-terrain3d-check__box {
+  background: #22c55e;
+  border-color: #22c55e;
+}
+.si-terrain3d-check__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.si-terrain3d-check__text strong {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+.si-terrain3d-check__text small {
+  font-size: 0.69rem;
+  color: #94a3b8;
+}
+
 .si-basemap-widget {
+  /* Popover: floats out of normal flow so opening the gallery never pushes
+     the weather button (or any sibling) — zero layout shift. */
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  /* Always in front of the weather icon / sibling controls when open. */
+  z-index: 60;
   background: radial-gradient(circle at top left, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.92));
   border-radius: 14px;
   border: 1px solid rgba(31, 41, 55, 0.95);
@@ -2021,6 +2336,25 @@ main.content > .si-page {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  transform-origin: top left;
+  animation: si-basemap-widget-pop 0.16s ease-out;
+}
+
+@keyframes si-basemap-widget-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .si-basemap-widget {
+    animation: none;
+  }
 }
 
 .si-basemap-widget--grid {
@@ -4246,30 +4580,102 @@ html[data-theme='light'] .si-env-layer-options-menu__item > i {
 .si-map-search-result {
   width: 100%;
   text-align: left;
-  padding: 6px 8px;
+  padding: 7px 9px;
   border-radius: 8px;
   border: none;
   background: transparent;
   cursor: pointer;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 9px;
   color: #e5e7eb;
   font-size: 11px;
   transition: all 0.15s;
 }
 
-.si-map-search-result:hover {
-  background: rgba(15, 23, 42, 0.9);
+.si-map-search-result:hover,
+.si-map-search-result.is-active {
+  background: rgba(37, 99, 235, 0.22);
+}
+
+.si-map-search-result-icon {
+  margin-top: 2px;
+  color: #60a5fa;
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+
+.si-map-search-result-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .si-map-search-result-title {
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .si-map-search-result-subtitle {
   font-size: 10px;
   color: #9ca3af;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Dropped search pin + pulsing highlight (Google-Maps style). */
+.si-map-search-pin {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+}
+.si-map-search-pin__icon {
+  position: relative;
+  z-index: 2;
+  font-size: 26px;
+  color: #ef4444;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+.si-map-search-pin__pulse {
+  position: absolute;
+  left: 50%;
+  bottom: 1px;
+  width: 14px;
+  height: 14px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.45);
+  z-index: 1;
+  animation: si-map-search-pin-pulse 1.8s ease-out infinite;
+}
+@keyframes si-map-search-pin-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5);
+    opacity: 0.9;
+  }
+  70% {
+    box-shadow: 0 0 0 18px rgba(239, 68, 68, 0);
+    opacity: 0.4;
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    opacity: 0.9;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .si-map-search-pin__pulse {
+    animation: none;
+  }
 }
 
 /* Sidebar (Satellite Panel) */
@@ -4728,6 +5134,131 @@ input:checked + .slider:before {
 
 .si-draw-live-hud-hint {
   color: #86efac;
+}
+
+/* Standalone Measure tool HUD (top-left of the map). */
+.si-measure-hud {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  z-index: 6;
+  width: 230px;
+  max-width: 92vw;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  color: #f8fafc;
+  overflow: hidden;
+  backdrop-filter: blur(6px);
+}
+
+.si-measure-hud__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.22), rgba(245, 158, 11, 0.04));
+  border-bottom: 1px solid rgba(245, 158, 11, 0.28);
+}
+
+.si-measure-hud__head > i {
+  color: #fbbf24;
+  font-size: 13px;
+}
+
+.si-measure-hud__title {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.si-measure-hud__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.si-measure-hud__close:hover {
+  background: rgba(239, 68, 68, 0.25);
+  color: #fff;
+}
+
+.si-measure-hud__metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+}
+
+.si-measure-hud__metric {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.si-measure-hud__metric-label {
+  font-size: 11px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.si-measure-hud__metric-value {
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #f8fafc;
+}
+
+.si-measure-hud__metric--primary .si-measure-hud__metric-value {
+  font-size: 18px;
+  color: #fbbf24;
+}
+
+.si-measure-hud__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(2, 6, 23, 0.4);
+}
+
+.si-measure-hud__hint {
+  flex: 1;
+  font-size: 10.5px;
+  line-height: 1.3;
+  color: #94a3b8;
+}
+
+.si-measure-hud__btn {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border: none;
+  border-radius: 7px;
+  background: #f59e0b;
+  color: #1f1300;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.si-measure-hud__btn:hover {
+  background: #fbbf24;
 }
 
 .si-web-map-tools {
@@ -10859,4 +11390,458 @@ html[data-theme='light'] .si-env-panel.si-env-panel--satellite-toolbox.si-env-pa
   .si-map-container--globe-cockpit::before {
     transition: none;
   }
+}
+
+/* ============================================================
+   "Add Source Data" — luxurious modern picker (image-2 parity)
+   A clean light card with pastel icon tiles, descriptions, a
+   chevron affordance and a Cancel footer. Overrides the dark
+   base styling for the home (source-picker) step only.
+   ============================================================ */
+.si-add-layer-gis-overlay .si-add-source-modal--lux.si-add-source-modal.gis-modal.gis-modal-compact {
+  max-width: 392px !important;
+  width: min(392px, calc(100vw - 28px)) !important;
+  max-height: min(84vh, 660px) !important;
+  margin: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  border-radius: 22px !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(15, 23, 42, 0.06) !important;
+  box-shadow: 0 40px 100px rgba(2, 6, 23, 0.5), 0 6px 18px rgba(2, 6, 23, 0.22) !important;
+  color: #0f172a !important;
+  overflow: hidden !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux.si-add-source-modal.gis-modal.gis-modal-compact::before {
+  display: none !important;
+}
+
+/* Hero */
+.si-add-layer-gis-overlay .si-add-source-modal--lux.ddb-add-source-modal--home .gis-modal-compact-hero {
+  padding: 18px 20px 10px !important;
+  background: #ffffff !important;
+  border-bottom: none !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux.ddb-add-source-modal--home .gis-modal-compact-hero-title,
+.si-add-layer-gis-overlay .si-add-source-modal--lux #si-layer-modal-title.gis-modal-compact-hero-title {
+  margin: 0 0 4px !important;
+  color: #0f172a !important;
+  font-size: 1.2rem !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.03em !important;
+  line-height: 1.15 !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux.ddb-add-source-modal--home .gis-modal-compact-hero-lead {
+  margin: 0 !important;
+  color: #64748b !important;
+  font-size: 0.8rem !important;
+  font-weight: 500 !important;
+  line-height: 1.45 !important;
+}
+
+/* Option list — full-bleed rows with separators on a soft gradient */
+.si-add-layer-gis-overlay .si-add-source-modal--lux.ddb-add-source-modal--home .si-add-source-options {
+  display: block !important;
+  gap: 0 !important;
+  padding: 4px 0 0 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #eef1f6 100%) !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux.ddb-add-source-modal--home .si-add-source-option {
+  display: grid !important;
+  grid-template-columns: 34px minmax(0, 1fr) 12px !important;
+  align-items: center !important;
+  gap: 12px !important;
+  width: 100% !important;
+  text-align: left !important;
+  padding: 10px 18px !important;
+  border: none !important;
+  border-top: 1px solid rgba(15, 23, 42, 0.07) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  cursor: pointer;
+  transition: background 0.15s ease !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux.ddb-add-source-modal--home .si-add-source-option:hover {
+  background: rgba(15, 23, 42, 0.035) !important;
+  transform: none !important;
+  box-shadow: none !important;
+  border-color: rgba(15, 23, 42, 0.07) !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux.ddb-add-source-modal--home .si-add-source-option:focus-visible {
+  outline: none;
+  background: rgba(99, 102, 241, 0.08) !important;
+  box-shadow: inset 0 0 0 2px rgba(99, 102, 241, 0.3) !important;
+}
+
+/* Pastel icon tile (background/color set inline per option) */
+.si-add-layer-gis-overlay .si-add-source-modal--lux.ddb-add-source-modal--home .si-add-source-option-icon {
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 10px !important;
+  border: none !important;
+  box-shadow: none !important;
+  font-size: 13px !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux.ddb-add-source-modal--home .si-add-source-option:hover .si-add-source-option-icon {
+  transform: scale(1.05) !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux.ddb-add-source-modal--home .si-add-source-option-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux.ddb-add-source-modal--home .si-add-source-option-main strong {
+  color: #0f172a !important;
+  font-size: 0.86rem !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.01em !important;
+  line-height: 1.25 !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux.ddb-add-source-modal--home .si-add-source-option-main small {
+  color: #64748b !important;
+  font-size: 0.72rem !important;
+  font-weight: 500 !important;
+  line-height: 1.35 !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux.ddb-add-source-modal--home .si-add-source-option-chevron {
+  color: #94a3b8 !important;
+  font-size: 11px !important;
+  justify-self: end;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux.ddb-add-source-modal--home .si-add-source-option:hover .si-add-source-option-chevron {
+  color: #475569 !important;
+  transform: translateX(2px);
+}
+
+/* Footer with Cancel */
+.si-add-layer-gis-overlay .si-add-source-modal--lux.ddb-add-source-modal--home .si-add-source-footer.gis-modal-footer {
+  padding: 12px 18px !important;
+  background: #eef1f6 !important;
+  border-top: 1px solid rgba(15, 23, 42, 0.07) !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux.ddb-add-source-modal--home .si-add-source-footer .gis-link-btn {
+  border: 1px solid rgba(15, 23, 42, 0.16) !important;
+  background: #ffffff !important;
+  color: #334155 !important;
+  border-radius: 10px !important;
+  padding: 7px 20px !important;
+  font-size: 0.82rem !important;
+  font-weight: 650 !important;
+  box-shadow: 0 1px 2px rgba(2, 6, 23, 0.06) !important;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux.ddb-add-source-modal--home .si-add-source-footer .gis-link-btn:hover {
+  background: #f8fafc !important;
+  border-color: rgba(15, 23, 42, 0.26) !important;
+  color: #0f172a !important;
+}
+
+@media (max-width: 620px) {
+  .si-add-layer-gis-overlay .si-add-source-modal--lux.ddb-add-source-modal--home .gis-modal-compact-hero {
+    padding: 20px 18px 12px !important;
+  }
+  .si-add-layer-gis-overlay .si-add-source-modal--lux.ddb-add-source-modal--home .si-add-source-option {
+    padding: 13px 18px !important;
+  }
+}
+
+/* =============================================================================
+ * Add Source Data — UNIFIED LIGHT THEME for the inner pages
+ * Every sub-page (source forms, tabs, "Get data") shares the exact same
+ * luxurious light surface as the home picker: white card, slate type, emerald
+ * accents. Overrides the legacy dark styling of the inner views.
+ * ========================================================================== */
+
+/* Header / title / "All options" back */
+.si-add-layer-gis-overlay .si-add-source-modal--lux .ddb-add-source-modal__head {
+  padding: 14px 18px 10px !important;
+  background: #ffffff !important;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.07) !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux .gis-modal-compact-title {
+  color: #0f172a !important;
+  font-size: 1.02rem !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux .ddb-add-source-back {
+  border: 1px solid rgba(15, 23, 42, 0.14) !important;
+  background: #ffffff !important;
+  color: #334155 !important;
+  border-radius: 10px !important;
+  padding: 6px 12px !important;
+  font-size: 0.78rem !important;
+  font-weight: 650 !important;
+  box-shadow: 0 1px 2px rgba(2, 6, 23, 0.05) !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux .ddb-add-source-back:hover {
+  background: #f8fafc !important;
+  border-color: rgba(5, 150, 105, 0.4) !important;
+  color: #047857 !important;
+}
+
+/* Icon tab strip */
+.si-add-layer-gis-overlay .si-add-source-modal--lux .gis-modal-compact-tabs {
+  background: #f8fafc !important;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.07) !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux .gis-compact-tab,
+.si-add-layer-gis-overlay .si-add-source-modal--lux .gis-compact-tab i {
+  background: #ffffff !important;
+  border: 1px solid rgba(15, 23, 42, 0.1) !important;
+  color: #475569 !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux .gis-compact-tab i {
+  border: none !important;
+  background: transparent !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux .gis-compact-tab:hover,
+.si-add-layer-gis-overlay .si-add-source-modal--lux .gis-compact-tab:hover i {
+  color: #0f172a !important;
+  border-color: rgba(5, 150, 105, 0.32) !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux .gis-compact-tab.active,
+.si-add-layer-gis-overlay .si-add-source-modal--lux .gis-compact-tab.active i {
+  background: rgba(16, 185, 129, 0.12) !important;
+  border-color: rgba(5, 150, 105, 0.45) !important;
+  color: #047857 !important;
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.18) !important;
+}
+
+/* Body surface (scrolls within the flex column so the modal stays compact).
+   Specificity chained with .gis-modal-compact so it beats the legacy dark body. */
+.si-add-layer-gis-overlay .si-add-source-modal--lux.gis-modal-compact .gis-modal-body,
+.si-add-layer-gis-overlay .si-add-source-modal--lux.gis-modal-compact .ddb-add-source-gis-list {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* Home option list also scrolls within the compact column (no clipping) */
+.si-add-layer-gis-overlay .si-add-source-modal--lux.ddb-add-source-modal--home .si-add-source-options {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+}
+
+/* "Get data" inner page */
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-get-data-hero {
+  border-bottom-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-get-data-hero-icon {
+  background: #dcfce7 !important;
+  border-color: rgba(22, 163, 74, 0.22) !important;
+  color: #16a34a !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-get-data-hero-title,
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-get-data-row-title {
+  color: #0f172a !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-get-data-hero-sub,
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-get-data-section-label,
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-get-data-sql-lead,
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-get-data-row-desc {
+  color: #64748b !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-get-data-row {
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 2px rgba(2, 6, 23, 0.04) !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-get-data-row:hover {
+  border-color: rgba(5, 150, 105, 0.4) !important;
+  background: rgba(16, 185, 129, 0.06) !important;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.1) !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-get-data-row-icon {
+  background: #dcfce7 !important;
+  border-color: rgba(22, 163, 74, 0.22) !important;
+  color: #16a34a !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-get-data-row-chevron,
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-get-data-more-btn {
+  color: #059669 !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-get-data-footer {
+  border-top-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-get-data-back {
+  background: #ffffff !important;
+  border: 1px solid rgba(15, 23, 42, 0.14) !important;
+  color: #475569 !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-get-data-back:hover {
+  border-color: rgba(5, 150, 105, 0.4) !important;
+  background: #f8fafc !important;
+  color: #047857 !important;
+}
+
+/* Form controls */
+.si-add-layer-gis-overlay .si-add-source-modal--lux .gis-input,
+.si-add-layer-gis-overlay .si-add-source-modal--lux .gis-select,
+.si-add-layer-gis-overlay .si-add-source-modal--lux .gis-textarea,
+.si-add-layer-gis-overlay .si-add-source-modal--lux textarea,
+.si-add-layer-gis-overlay .si-add-source-modal--lux input[type='text'],
+.si-add-layer-gis-overlay .si-add-source-modal--lux input[type='url'],
+.si-add-layer-gis-overlay .si-add-source-modal--lux input[type='number'] {
+  background: #ffffff !important;
+  border: 1px solid rgba(15, 23, 42, 0.16) !important;
+  color: #0f172a !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux .gis-input::placeholder,
+.si-add-layer-gis-overlay .si-add-source-modal--lux textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux .gis-input:focus,
+.si-add-layer-gis-overlay .si-add-source-modal--lux textarea:focus {
+  border-color: rgba(5, 150, 105, 0.5) !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14) !important;
+}
+
+/* Status line */
+.si-add-layer-gis-overlay .si-add-source-modal--lux .gis-modal-compact-status {
+  color: #475569 !important;
+}
+
+/* Shared footer (inner pages) — single Cancel, white pill like home */
+.si-add-layer-gis-overlay .si-add-source-modal--lux .gis-modal-footer {
+  padding: 14px 22px !important;
+  background: #f8fafc !important;
+  border-top: 1px solid rgba(15, 23, 42, 0.07) !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux .gis-modal-footer .gis-link-btn {
+  border: 1px solid rgba(15, 23, 42, 0.16) !important;
+  background: #ffffff !important;
+  color: #334155 !important;
+  border-radius: 12px !important;
+  padding: 9px 24px !important;
+  font-weight: 650 !important;
+  box-shadow: 0 1px 2px rgba(2, 6, 23, 0.06) !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux .gis-modal-footer .gis-link-btn:hover {
+  background: #f1f5f9 !important;
+  border-color: rgba(15, 23, 42, 0.26) !important;
+  color: #0f172a !important;
+}
+
+/* ---- Upload inner page (drop zone, staged card, progress, fields) ----
+   Same luxurious light surface: white card, green icon, black type. */
+/* Tab panels share the white modal surface (override legacy dark translucent
+   panel that otherwise paints a gray card over the white body). */
+.si-add-layer-gis-overlay .si-add-source-modal--lux.gis-modal-compact .gis-modal-body > [role='tabpanel'] {
+  background: #ffffff !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  color: #0f172a !important;
+}
+
+.si-add-layer-gis-overlay .si-add-source-modal--lux.gis-modal-compact .gis-dropzone {
+  border: 1px dashed rgba(22, 163, 74, 0.45) !important;
+  background: #f8fafc !important;
+  color: #334155 !important;
+}
+.si-add-layer-gis-overlay .si-add-source-modal--lux.gis-modal-compact .gis-dropzone:hover,
+.si-add-layer-gis-overlay .si-add-source-modal--lux.gis-modal-compact .gis-dropzone:focus-visible,
+.si-add-layer-gis-overlay .si-add-source-modal--lux.gis-modal-compact .gis-dropzone.drag-over {
+  border-color: rgba(22, 163, 74, 0.7) !important;
+  background: rgba(16, 185, 129, 0.08) !important;
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.16) !important;
+}
+.si-add-layer-gis-overlay .si-add-source-modal--lux.gis-modal-compact .gis-dropzone-icon i {
+  color: #16a34a !important;
+}
+.si-add-layer-gis-overlay .si-add-source-modal--lux.gis-modal-compact .gis-dropzone-text {
+  color: #0f172a !important;
+}
+.si-add-layer-gis-overlay .si-add-source-modal--lux.gis-modal-compact .gis-dropzone-subtext {
+  color: #64748b !important;
+}
+
+/* Staged file card */
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-upload-staged-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(15, 23, 42, 0.12) !important;
+  box-shadow: 0 1px 2px rgba(2, 6, 23, 0.05) !important;
+}
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-upload-staged-name {
+  color: #0f172a !important;
+}
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-upload-staged-meta {
+  color: #64748b !important;
+}
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-upload-staged-clear {
+  background: #ffffff !important;
+  border: 1px solid rgba(15, 23, 42, 0.16) !important;
+  color: #475569 !important;
+}
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-upload-staged-clear:hover {
+  border-color: rgba(220, 38, 38, 0.4) !important;
+  color: #dc2626 !important;
+}
+
+/* Progress + field labels + advanced */
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-upload-progress__label {
+  color: #475569 !important;
+}
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-layer-field > span {
+  color: #334155 !important;
+}
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-layer-advanced summary {
+  color: #334155 !important;
+}
+.si-add-layer-gis-overlay .si-add-source-modal--lux .si-layer-advanced small {
+  color: #64748b !important;
+}
+
+/* Inner page icon tiles → unified green (match the lux home picker) */
+.si-add-layer-gis-overlay .si-add-source-modal--lux .gis-compact-tab.active,
+.si-add-layer-gis-overlay .si-add-source-modal--lux .gis-compact-tab.active i {
+  background: rgba(16, 185, 129, 0.14) !important;
+  border-color: rgba(22, 163, 74, 0.5) !important;
+  color: #15803d !important;
 }

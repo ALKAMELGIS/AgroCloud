@@ -1653,15 +1653,17 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
 }
 
 .si-sat-ctx-dock--dark .si-sat-ctx-panel {
+  /* Premium black — opaque surface so panel text/labels read with high
+     contrast (no map bleed-through that washes out white type). */
   background: linear-gradient(
     165deg,
-    rgba(0, 0, 0, 0.52) 0%,
-    rgba(0, 0, 0, 0.4) 100%
+    rgba(13, 16, 23, 0.98) 0%,
+    rgba(7, 10, 16, 0.98) 100%
   );
   backdrop-filter: blur(22px) saturate(1.15);
   -webkit-backdrop-filter: blur(22px) saturate(1.15);
   border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: -14px 0 44px rgba(0, 0, 0, 0.45);
+  box-shadow: -14px 0 44px rgba(0, 0, 0, 0.5);
 }
 
 .si-sat-ctx-dock--light .si-sat-ctx-rail-strip-show {
@@ -2631,10 +2633,68 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
   color: #0f172a;
 }
 
+/* =============================================================================
+ * Luxury rail icons — crisp, high-contrast, theme-consistent in BOTH modes.
+ * Resting icons read clearly (no washed-out faint glyphs), active = emerald,
+ * hover deepens to near-black (light) / pure white (dark).
+ * ========================================================================== */
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn i,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn--row,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn--map-collapsed,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn--map-expanded,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn--map-expanded > i {
+  color: #1e293b; /* slate-800 — ~12:1 on the white rail */
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn:hover,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn:hover i {
+  color: #0f172a;
+}
+
+.si-sat-ctx-dock--dark .si-sat-ctx-rail-btn,
+.si-sat-ctx-dock--dark .si-sat-ctx-rail-btn i,
+.si-sat-ctx-dock--dark .si-sat-ctx-rail-btn--row,
+.si-sat-ctx-dock--dark .si-sat-ctx-rail-btn--map-collapsed,
+.si-sat-ctx-dock--dark .si-sat-ctx-rail-btn--map-expanded,
+.si-sat-ctx-dock--dark .si-sat-ctx-rail-btn--map-expanded > i {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.si-sat-ctx-dock--dark .si-sat-ctx-rail-btn:hover,
+.si-sat-ctx-dock--dark .si-sat-ctx-rail-btn:hover i {
+  color: #ffffff;
+}
+
+/* Active stays emerald (defined above) — re-assert icon tint after the resets. */
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn--active,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn--active i {
+  color: #059669;
+}
+
+.si-sat-ctx-dock--dark .si-sat-ctx-rail-btn--active i {
+  color: #6ee7b7;
+}
+
+/* Rail text labels (labeled rail) — match icon contrast for readable wordmarks. */
+.si-sat-ctx-dock--light .si-sat-ctx-rail-label,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-label-title {
+  color: #1e293b;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-rail-label-desc {
+  color: #64748b;
+}
+
+.si-sat-ctx-dock--dark .si-sat-ctx-rail-label,
+.si-sat-ctx-dock--dark .si-sat-ctx-rail-label-title {
+  color: rgba(255, 255, 255, 0.9);
+}
+
 .si-sat-ctx-dock--light .si-sat-ctx-rail-collapse {
   background: rgba(255, 255, 255, 0.52);
   border-color: var(--si-ctx-border-soft);
-  color: #64748b;
+  color: #334155;
 }
 
 .si-sat-ctx-dock--light .si-sat-ctx-rail-collapse:hover {
@@ -2722,6 +2782,9 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
   border: 1px solid var(--si-ctx-border);
   border-inline-end: none;
   box-shadow: -12px 0 40px rgba(2, 6, 23, 0.25);
+  /* Solid hit target: the panel owns every pointer/touch event over its area so
+     nothing falls through to the map canvas behind it. */
+  pointer-events: auto;
 }
 
 .si-sat-ctx-dock--embedded .si-sat-ctx-panel {
@@ -3545,6 +3608,51 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
   opacity: 0.85;
 }
 
+/* Measure flyout (reuses add-gis flyout shell) */
+.si-map-toolbox-measure-flyout__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.si-map-toolbox-measure-flyout__label {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.si-map-toolbox-measure-flyout__desc {
+  font-size: 11px;
+  line-height: 1.2;
+  opacity: 0.62;
+}
+
+.si-map-toolbox-add-gis-flyout__item.is-active {
+  background: rgba(59, 130, 246, 0.14);
+}
+
+.si-sat-ctx-dock--dark .si-map-toolbox-add-gis-flyout__item.is-active {
+  background: rgba(96, 165, 250, 0.18);
+}
+
+.si-map-toolbox-measure-flyout__check {
+  color: #2563eb;
+  font-size: 12px !important;
+  width: auto !important;
+  opacity: 1 !important;
+}
+
+.si-map-toolbox-measure-flyout__clear {
+  border-top: 1px solid rgba(148, 163, 184, 0.28);
+  color: #dc2626;
+}
+
+.si-sat-ctx-dock--dark .si-map-toolbox-measure-flyout__clear {
+  color: #f87171;
+}
+
 /* GIS Content browse table inside toolbox panel */
 .si-gis-portal-browse {
   display: flex;
@@ -3755,4 +3863,319 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
 .si-page .si-map-container .mapboxgl-ctrl-attrib,
 .si-page .si-map-container .mapboxgl-ctrl-attrib-button {
   border-radius: 0 !important;
+}
+
+/* ============================================================================
+   LUXURY PANEL REDESIGN — Enterprise-grade GIS context dock
+   ----------------------------------------------------------------------------
+   • Deep-black luxury surface in BOTH light and dark modes (the panel never
+     turns white). Light mode → clear light-gray / white text; Dark mode →
+     pure white text. The only difference between modes is text shade.
+   • One elegant modern typeface across every element (Inter · --ds-font-sans).
+   • Soft shadows + subtle glassmorphism; hairline borders; reduced visual noise.
+   • Small, clean, uniform icons with a clear typographic hierarchy.
+   • A single emerald accent replaces the mixed indigo/emerald chrome.
+   This block is intentionally last so it wins at equal specificity.
+   ========================================================================== */
+
+.si-sat-ctx-dock {
+  /* Unified luxury palette */
+  --lux-font: var(--ds-font-sans, Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
+  --lux-black-1: #090b0f;      /* deepest */
+  --lux-black-2: #0e1118;      /* panel top */
+  --lux-rail-1: #0c0e13;
+  --lux-rail-2: #08090d;
+  --lux-hairline: rgba(255, 255, 255, 0.07);
+  --lux-hairline-strong: rgba(255, 255, 255, 0.13);
+  --lux-accent: #34d399;
+  --lux-accent-soft: rgba(52, 211, 153, 0.14);
+  --lux-accent-line: rgba(52, 211, 153, 0.34);
+  --lux-fill: rgba(255, 255, 255, 0.045);
+  --lux-fill-hover: rgba(255, 255, 255, 0.08);
+  --lux-soft-shadow:
+    0 26px 64px rgba(0, 0, 0, 0.6),
+    0 2px 18px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  font-family: var(--lux-font);
+}
+
+/* Single elegant font for every text node in the dock (Font Awesome <i> keeps
+   its own glyph font via .fa-* and is unaffected by inheritance). */
+.si-sat-ctx-dock,
+.si-sat-ctx-panel,
+.si-sat-ctx-rail,
+.si-sat-ctx-panel-title,
+.si-sat-ctx-panel-kicker,
+.si-sat-ctx-tab,
+.si-sat-ctx-rail-label-title,
+.si-sat-ctx-rail-label-desc,
+.si-sat-ctx-rail-brand__title {
+  font-family: var(--lux-font);
+}
+
+/* ---- Mode tokens: same black surface, text shade differs ----------------- */
+.si-sat-ctx-dock--dark {
+  --si-ctx-text: #ffffff;                       /* pure white in dark */
+  --si-ctx-muted: rgba(255, 255, 255, 0.6);
+  --si-ctx-bg2: var(--lux-fill-hover);
+  --si-ctx-border: var(--lux-hairline);
+  --si-ctx-accent: var(--lux-accent);
+}
+
+.si-sat-ctx-dock--light {
+  --si-ctx-text: #e9edf3;                        /* clear light gray / white */
+  --si-ctx-muted: rgba(233, 237, 243, 0.56);
+  --si-ctx-bg2: var(--lux-fill-hover);
+  --si-ctx-border: var(--lux-hairline);
+  --si-ctx-border-soft: var(--lux-hairline);
+  --si-ctx-accent: var(--lux-accent);
+  --si-ctx-light-inset: rgba(255, 255, 255, 0.05);
+  --si-ctx-light-field: var(--lux-fill);
+  --si-ctx-light-field-hover: var(--lux-fill-hover);
+  --si-ctx-glass-shadow: var(--lux-soft-shadow);
+}
+
+/* ---- Panel surface (identical luxury black in both modes) ---------------- */
+.si-sat-ctx-dock--dark .si-sat-ctx-panel,
+.si-sat-ctx-dock--light .si-sat-ctx-panel {
+  background: linear-gradient(168deg, var(--lux-black-2) 0%, var(--lux-black-1) 100%);
+  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  border-color: var(--lux-hairline);
+  box-shadow: var(--lux-soft-shadow);
+  color: var(--si-ctx-text);
+}
+
+/* ---- Rail surface -------------------------------------------------------- */
+.si-sat-ctx-dock--dark .si-sat-ctx-rail,
+.si-sat-ctx-dock--light .si-sat-ctx-rail {
+  background: linear-gradient(180deg, var(--lux-rail-1) 0%, var(--lux-rail-2) 100%);
+  border-color: var(--lux-hairline);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    -10px 0 34px rgba(0, 0, 0, 0.38);
+}
+
+/* ---- Header & hierarchy -------------------------------------------------- */
+.si-sat-ctx-panel-header,
+.si-sat-ctx-dock--light .si-sat-ctx-panel-header {
+  padding: 14px 14px 11px;
+  background: transparent;
+  border-bottom: 1px solid var(--lux-hairline);
+}
+
+.si-sat-ctx-panel-kicker {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: var(--si-ctx-muted);
+  margin-bottom: 3px;
+}
+
+.si-sat-ctx-panel-title,
+.si-sat-ctx-panel-title--toolbox-embed-root {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  color: var(--si-ctx-text);
+}
+
+/* ---- Header icon buttons: small, clean, uniform -------------------------- */
+.si-sat-ctx-icon-btn,
+.si-sat-ctx-dock--light .si-sat-ctx-icon-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--lux-fill);
+  border: 1px solid var(--lux-hairline);
+  color: var(--si-ctx-muted);
+  font-size: 12px;
+  box-shadow: none;
+}
+
+.si-sat-ctx-icon-btn:hover,
+.si-sat-ctx-dock--light .si-sat-ctx-icon-btn:hover {
+  background: var(--lux-fill-hover);
+  border-color: var(--lux-hairline-strong);
+  color: var(--si-ctx-text);
+}
+
+/* ---- Tabs: single emerald accent, no indigo noise ------------------------ */
+.si-sat-ctx-tabs,
+.si-sat-ctx-dock--light .si-sat-ctx-tabs {
+  padding: 0 14px 10px;
+  background: transparent;
+  border-bottom: 1px solid var(--lux-hairline);
+}
+
+.si-sat-ctx-tab {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--si-ctx-muted);
+  border-radius: 8px;
+}
+
+.si-sat-ctx-tab:hover {
+  color: var(--si-ctx-text);
+  background: var(--lux-fill);
+}
+
+.si-sat-ctx-tab--on,
+.si-sat-ctx-dock--light .si-sat-ctx-tab--on {
+  background: var(--lux-accent-soft);
+  border-color: var(--lux-accent-line);
+  color: var(--si-ctx-text);
+  box-shadow: none;
+}
+
+/* ---- Rail buttons: small unified icons, subtle emerald active ------------ */
+.si-sat-ctx-rail-btn {
+  color: var(--si-ctx-muted);
+  border-radius: 9px;
+  font-size: 14px;
+}
+
+.si-sat-ctx-rail-btn i,
+.si-sat-ctx-rail-brand__mark > i {
+  font-size: 14px;
+}
+
+.si-sat-ctx-rail-btn:hover,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn:hover {
+  background: var(--lux-fill-hover);
+  color: var(--si-ctx-text);
+  border-color: transparent;
+}
+
+.si-sat-ctx-rail-btn--active,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn--active {
+  background: var(--lux-accent-soft);
+  color: var(--si-ctx-text);
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px var(--lux-accent-line);
+}
+
+.si-sat-ctx-dock--dark .si-sat-ctx-rail-btn--active i,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn--active i {
+  color: var(--lux-accent);
+}
+
+.si-sat-ctx-rail-label-title {
+  font-weight: 600;
+  color: var(--si-ctx-text);
+}
+
+.si-sat-ctx-rail-label-desc {
+  color: var(--si-ctx-muted);
+}
+
+/* ---- Rail brand / toolbox header ----------------------------------------- */
+.si-sat-ctx-rail-brand__mark,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-brand__mark {
+  background: transparent;
+  color: var(--si-ctx-muted);
+}
+
+.si-sat-ctx-rail-brand--open .si-sat-ctx-rail-brand__mark,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-brand--open .si-sat-ctx-rail-brand__mark {
+  background: transparent;
+  color: var(--lux-accent);
+}
+
+.si-sat-ctx-rail-brand__title,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-brand__title {
+  color: var(--si-ctx-muted);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+/* ---- Separators / strip controls: quieter -------------------------------- */
+.si-sat-ctx-rail-sep {
+  background: var(--lux-hairline);
+  opacity: 1;
+}
+
+.si-sat-ctx-rail-strip-hide,
+.si-sat-ctx-rail-strip-show,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-strip-show {
+  background: transparent;
+  color: var(--si-ctx-muted);
+  border-color: transparent;
+}
+
+.si-sat-ctx-rail-strip-hide:hover,
+.si-sat-ctx-rail-strip-show:hover {
+  background: var(--lux-fill);
+  color: var(--si-ctx-text);
+}
+
+.si-sat-ctx-rail-strip-show__label,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-strip-show__label {
+  color: var(--si-ctx-muted);
+}
+
+/* ---- Embedded analysis launcher: calm, on-black -------------------------- */
+.si-sat-ctx-analysis-launcher,
+.si-sat-ctx-dock--light .si-sat-ctx-analysis-launcher {
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--lux-hairline);
+}
+
+/* ---- Body content surfaces stay on the luxury black (light mode parity) -- */
+.si-sat-ctx-dock--light .si-map-analysis-chart-card,
+.si-sat-ctx-dock--light .si-map-analysis-layer-chip {
+  background: var(--lux-fill);
+  border-color: var(--lux-hairline);
+  color: var(--si-ctx-text);
+  box-shadow: none;
+}
+
+.si-sat-ctx-dock--light .si-layer-live-stats-select__trigger,
+.si-sat-ctx-dock--light .si-layer-live-stats-select__menu {
+  background: var(--lux-black-2);
+  border-color: var(--lux-hairline);
+  color: var(--si-ctx-text);
+}
+
+.si-sat-ctx-dock--light .si-layer-live-stats-select__option:hover,
+.si-sat-ctx-dock--light .si-layer-live-stats-select__option.is-checked {
+  background: var(--lux-fill-hover);
+  color: var(--si-ctx-text);
+}
+
+.si-sat-ctx-prose,
+.si-sat-ctx-prose p,
+.si-sat-ctx-prose strong {
+  color: var(--si-ctx-text);
+}
+
+.si-sat-ctx-muted,
+.si-sat-ctx-dock--light .si-sat-ctx-muted {
+  color: var(--si-ctx-muted);
+}
+
+/* ---- Primary / AOI buttons: unified emerald ------------------------------ */
+.si-sat-ctx-primary-btn,
+.si-sat-ctx-dock--light .si-sat-ctx-primary-btn {
+  background: var(--lux-accent-soft);
+  border: 1px solid var(--lux-accent-line);
+  color: #d1fae5;
+}
+
+.si-sat-ctx-primary-btn:hover {
+  background: rgba(52, 211, 153, 0.2);
+  color: #ffffff;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .si-sat-ctx-rail-btn,
+  .si-sat-ctx-icon-btn,
+  .si-sat-ctx-tab {
+    transition:
+      background 0.18s ease,
+      color 0.18s ease,
+      border-color 0.18s ease,
+      box-shadow 0.18s ease;
+  }
 }

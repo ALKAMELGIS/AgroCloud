@@ -2,10 +2,7 @@ import type { RemoteSensingLayerSelectGroup } from '../../../lib/agroCompositeIn
 import type { SiAoiMaskBuilderSettings } from '../../../lib/siAoiMaskBuilder'
 import { RemoteSensingLayerSelect } from './RemoteSensingLayerSelect'
 import { SiAoiMaskBuilderPanel } from './SiAoiMaskBuilderPanel'
-import {
-  RemoteSensingDrawingToolbar,
-  type RemoteSensingDrawingTool,
-} from './RemoteSensingDrawingToolbar'
+import type { RemoteSensingDrawingTool } from './RemoteSensingDrawingToolbar'
 
 export const REMOTE_SENSING_PROVIDERS = [{ id: 'sentinel-hub', label: 'Sentinel Hub' }] as const
 
@@ -120,7 +117,6 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
   return (
     <div className="si-env-section-card si-field-analysis si-rs-panel si-rs-panel--glass si-rs-panel--toolbox-v2 si-rs-panel--flat">
       <div className="si-rs-panel__header">
-        <h2 className="si-rs-panel__title">Remote Sensing</h2>
         <button type="button" className="si-rs-panel__close" onClick={onClose} aria-label="Close panel">
           <i className="fa-solid fa-xmark" aria-hidden />
         </button>
@@ -265,15 +261,6 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
             </span>
           </label>
         </div>
-
-        <RemoteSensingDrawingToolbar
-          drawingModeActive={rsDrawingModeActive}
-          onDrawingModeChange={onRsDrawingModeChange}
-          activeTool={rsDrawingTool}
-          onToolChange={onRsDrawingToolChange}
-          hasClearableDrawing={hasClearableDrawing}
-          onClearDrawing={onClearDrawing}
-        />
 
         <label className="si-rs-panel__stack">
           <span className="si-rs-panel__label">Map navigation</span>

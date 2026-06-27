@@ -1,0 +1,16 @@
+# AI Tree Detection inference microservice.
+#
+# DEFAULT engine: DeepForest — auto-downloads a pretrained tree-crown model on
+# first run (no manual weights needed). https://github.com/weecology/DeepForest
+deepforest>=1.4.0
+
+# HTTP service
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+pillow>=10.0.0
+python-multipart>=0.0.9
+
+# OPTIONAL: YOLO engine. Uncomment + provide a weights file via MODEL_PATH
+# (e.g. best.pt from https://anapgit.scanlab.gr/yolo-trees/ai-tree-detection)
+# to use Ultralytics YOLO instead of DeepForest.
+# ultralytics>=8.2.0

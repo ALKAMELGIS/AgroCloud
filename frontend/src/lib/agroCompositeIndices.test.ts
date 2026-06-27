@@ -12,9 +12,9 @@ import {
 } from './agroCompositeIndices'
 
 describe('agroCompositeIndices', () => {
-  it('defines 22 static + 22 delta composite layers', () => {
+  it('defines 25 static + 25 delta composite layers', () => {
     const staticCount = AGRO_COMPOSITE_CATEGORIES.reduce((n, c) => n + c.indices.length, 0)
-    expect(staticCount).toBe(22)
+    expect(staticCount).toBe(25)
     expect(buildAgroCloudCustomWmsLayerEntries().some(l => l.name === 'CHAS')).toBe(true)
     expect(buildAgroCloudCustomWmsLayerEntries().some(l => l.name === 'DCHAS')).toBe(true)
   })

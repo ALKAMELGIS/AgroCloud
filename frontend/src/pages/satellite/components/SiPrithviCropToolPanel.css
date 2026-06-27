@@ -1,0 +1,334 @@
+.prithvi-tool {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 12px;
+  color: #0f1b2d;
+}
+
+.prithvi-tool__head { display: flex; flex-direction: column; gap: 4px; }
+.prithvi-tool__title { font-size: 13px; font-weight: 700; letter-spacing: 0.2px; color: #0a1422; }
+.prithvi-tool__sub { margin: 0; font-size: 11px; color: #3a4658; line-height: 1.4; }
+
+.prithvi-tool__tabs {
+  display: flex;
+  gap: 6px;
+  background: rgba(15, 27, 45, 0.06);
+  padding: 3px;
+  border-radius: 10px;
+}
+.prithvi-tool__tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #1f2a3c;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.prithvi-tool__tab.is-active {
+  background: #ffffff;
+  color: #0a1422;
+  box-shadow: 0 1px 3px rgba(15, 27, 45, 0.18), inset 0 0 0 1px rgba(184, 150, 86, 0.55);
+}
+
+.prithvi-tool__section { display: flex; flex-direction: column; gap: 10px; }
+
+.prithvi-tool__row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.prithvi-tool__dates { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.prithvi-tool__dates label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: #3a4658; font-weight: 600; }
+.prithvi-tool__dates input {
+  background: #ffffff;
+  border: 1px solid rgba(15, 27, 45, 0.22);
+  border-radius: 8px;
+  color: #0a1422;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.prithvi-tool__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0a1422;
+  background: #ffffff;
+  border: 1px solid rgba(15, 27, 45, 0.2);
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+.prithvi-tool__btn:hover { background: #f1f4f9; }
+.prithvi-tool__btn:disabled { opacity: 0.45; cursor: not-allowed; }
+/* Refined emerald CTA with a fine champagne-gold hairline — a luxe, GIS-grade
+ * action rather than an "AI" neon gradient. */
+.prithvi-tool__btn.is-primary {
+  color: #f7f1e2;
+  background: linear-gradient(180deg, #1f7d5c 0%, #14573f 100%);
+  border: 1px solid rgba(184, 150, 86, 0.55);
+  box-shadow: 0 4px 14px rgba(20, 87, 63, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  letter-spacing: 0.2px;
+}
+.prithvi-tool__btn.is-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #248a67 0%, #166349 100%);
+  border-color: rgba(206, 172, 101, 0.7);
+}
+.prithvi-tool__btn.is-primary:active:not(:disabled) {
+  background: linear-gradient(180deg, #155f44 0%, #103f2e 100%);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+.prithvi-tool__btn.is-danger {
+  color: #f7f1e2;
+  background: linear-gradient(180deg, #a8443c 0%, #8a352e 100%);
+  border: 1px solid rgba(184, 150, 86, 0.35);
+}
+.prithvi-tool__btn.is-danger:hover:not(:disabled) { background: linear-gradient(180deg, #b54b42 0%, #973a32 100%); }
+
+.prithvi-tool__chip {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(15, 27, 45, 0.08);
+  color: #3a4658;
+}
+.prithvi-tool__chip.is-ok { background: rgba(34, 160, 90, 0.18); color: #156b3f; }
+
+.prithvi-tool__note {
+  margin: 0;
+  font-size: 10.8px;
+  line-height: 1.5;
+  color: #33414f;
+  background: rgba(184, 150, 86, 0.1);
+  border-left: 2px solid rgba(184, 150, 86, 0.65);
+  padding: 7px 9px;
+  border-radius: 6px;
+}
+.prithvi-tool__note code { font-size: 10px; background: rgba(15, 27, 45, 0.1); color: #0a1422; padding: 1px 4px; border-radius: 4px; }
+
+.prithvi-tool__examples { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.prithvi-tool__examples-label { font-size: 11px; color: #3a4658; }
+.prithvi-tool__example {
+  font-size: 11px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid rgba(15, 27, 45, 0.2);
+  color: #1f2a3c;
+  cursor: pointer;
+}
+.prithvi-tool__example:hover:not(:disabled) { background: #f1f4f9; }
+.prithvi-tool__example:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.prithvi-tool__pipeline { display: flex; flex-direction: column; gap: 8px; }
+.prithvi-tool__progress {
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(15, 27, 45, 0.12);
+  overflow: hidden;
+}
+.prithvi-tool__progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #15795a, #1f7d5c 55%, #caa765);
+  transition: width 0.4s ease;
+}
+.prithvi-tool__steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.prithvi-tool__step { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: #8a94a3; }
+.prithvi-tool__step-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8.5px;
+  background: rgba(15, 27, 45, 0.14);
+  color: #ffffff;
+  flex: 0 0 auto;
+}
+.prithvi-tool__step.is-active { color: #0a1422; }
+.prithvi-tool__step.is-active .prithvi-tool__step-dot { background: #1f7d5c; }
+.prithvi-tool__step.is-done { color: #1f2a3c; }
+.prithvi-tool__step.is-done .prithvi-tool__step-dot { background: #15795a; color: #ffffff; }
+
+.prithvi-tool__status { font-size: 11px; color: #33414f; }
+.prithvi-tool__status.is-error { color: #c0392b; }
+.prithvi-tool__error {
+  font-size: 10.8px;
+  color: #a32820;
+  background: rgba(216, 70, 63, 0.1);
+  border-radius: 6px;
+  padding: 6px 8px;
+  line-height: 1.4;
+}
+
+.prithvi-tool__results { display: flex; flex-direction: column; gap: 10px; }
+.prithvi-tool__grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.prithvi-tool__tile { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.prithvi-tool__tile img,
+.prithvi-tool__tile-empty {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 8px;
+  background: rgba(15, 27, 45, 0.05);
+  border: 1px solid rgba(15, 27, 45, 0.12);
+}
+.prithvi-tool__tile-empty { display: flex; align-items: center; justify-content: center; font-size: 22px; color: #9aa4b2; }
+.prithvi-tool__tile figcaption { font-size: 10.5px; color: #3a4658; text-align: center; }
+
+.prithvi-tool__legend {
+  background: rgba(15, 27, 45, 0.04);
+  border: 1px solid rgba(184, 150, 86, 0.22);
+  border-radius: 10px;
+  padding: 10px;
+}
+.prithvi-tool__legend-title { font-size: 11px; font-weight: 700; margin-bottom: 8px; color: #0a1422; letter-spacing: 0.3px; }
+.prithvi-tool__legend-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px 10px;
+}
+.prithvi-tool__legend-list li { display: flex; align-items: center; gap: 7px; font-size: 10.8px; color: #1f2a3c; }
+.prithvi-tool__swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  flex: 0 0 auto;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.prithvi-tool__country {
+  font-size: 11.5px;
+  color: #0a1422;
+  background: rgba(31, 122, 76, 0.1);
+  border: 1px solid rgba(31, 122, 76, 0.25);
+  border-radius: 8px;
+  padding: 7px 10px;
+}
+.prithvi-tool__country strong { color: #145a32; }
+.prithvi-tool__country-src { color: #6b7686; font-size: 10px; }
+
+.prithvi-tool__stats {
+  background: rgba(15, 27, 45, 0.04);
+  border: 1px solid rgba(184, 150, 86, 0.22);
+  border-radius: 10px;
+  padding: 10px;
+}
+.prithvi-tool__stats-title { font-size: 11px; font-weight: 700; margin-bottom: 6px; color: #0a1422; letter-spacing: 0.3px; }
+.prithvi-tool__stats-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.prithvi-tool__stats-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: #1f2a3c;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(15, 27, 45, 0.06);
+}
+.prithvi-tool__stats-list li:last-child { border-bottom: 0; padding-bottom: 0; }
+.prithvi-tool__stats-pct {
+  font-weight: 700;
+  color: #9a7b3f;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.2px;
+}
+
+@media (max-width: 520px) {
+  .prithvi-tool__grid { grid-template-columns: repeat(2, 1fr); }
+  .prithvi-tool__legend-list { grid-template-columns: 1fr; }
+}
+
+/* =============================================================================
+ * DARK THEME — panel-wrap typography parity
+ * This tool is authored with dark ink for a light card; when it lives on the
+ * premium-black dock surface (dark theme) every label/heading/body must turn
+ * WHITE for readability. Accent chips, the active (white) tab, the colored
+ * legend swatches and CTA buttons keep their own colors.
+ * (Light theme already uses black ink — no change needed there.)
+ * ========================================================================== */
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool {
+  color: #e7edf5;
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__title,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__legend-title,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__stats-title,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__step.is-active {
+  color: #ffffff;
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__legend-list li,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__stats-list li,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__step.is-done {
+  color: rgba(255, 255, 255, 0.9);
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__sub,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__tab,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__dates label,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__chip,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__note,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__examples-label,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__status,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__tile figcaption {
+  color: rgba(255, 255, 255, 0.74);
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__step,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__country-src {
+  color: rgba(255, 255, 255, 0.6);
+}
+/* Keep the active (white) tab readable — dark ink on its white pill. */
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__tab.is-active {
+  color: #0a1422;
+}
+/* Soft inner cards: subtle light wash so they read as premium panels. */
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__tabs,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__chip {
+  background: rgba(255, 255, 255, 0.08);
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__legend,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__stats {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.025));
+  border: 1px solid rgba(212, 184, 122, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__stats-list li {
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__note code {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__country {
+  color: #ffffff;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.025));
+  border-color: rgba(212, 184, 122, 0.22);
+}
+/* Emphasis values → champagne gold for a luxe, refined read on obsidian. */
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__stats-pct {
+  color: #e0c081;
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__country strong {
+  color: #ecd6a3;
+}
+/* Semantic "ready/ok" stays a soft, non-neon emerald. */
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__chip.is-ok {
+  color: #93cdb1;
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__status.is-error {
+  color: #fca5a5;
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__tile-empty {
+  color: rgba(255, 255, 255, 0.5);
+}

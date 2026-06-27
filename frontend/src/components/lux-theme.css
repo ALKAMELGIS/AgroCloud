@@ -1,0 +1,185 @@
+/* =============================================================================
+ * lux-theme-light — a professional "luxury light" theme layer.
+ *
+ *   • lux-theme-light            → auto-contrast text tokens (black on light,
+ *                                  white on dark) usable anywhere.
+ *   • lux-theme-light--header    → a refined ivory/pearl luxury header with an
+ *                                  emerald hairline accent and dark brand text.
+ *   • nav-theme-toggle           → a minimal sun/moon Light/Dark icon button.
+ *
+ * The header variant is applied by HeaderBar only while the app is in a light
+ * theme; the dark theme keeps the signature emerald chrome untouched.
+ * ========================================================================== */
+
+/* ---- Auto Contrast Text System (Readability Optimization) ----------------- */
+.lux-theme-light {
+  --lux-bg: #f6f8f5;
+  --lux-fg: #0f172a;          /* near-black on light surfaces */
+  --lux-fg-soft: rgba(15, 23, 42, 0.66);
+  --lux-accent: #004a36;      /* brand emerald */
+  --lux-accent-soft: rgba(0, 74, 54, 0.12);
+  --lux-line: rgba(0, 74, 54, 0.16);
+}
+
+html[data-theme='dark'] .lux-theme-light,
+.lux-theme-light.lux-theme-light--on-dark {
+  --lux-bg: #0b1220;
+  --lux-fg: #ffffff;          /* white on dark surfaces */
+  --lux-fg-soft: rgba(255, 255, 255, 0.72);
+  --lux-accent: #34d399;
+  --lux-accent-soft: rgba(52, 211, 153, 0.16);
+  --lux-line: rgba(255, 255, 255, 0.12);
+}
+
+/* Any element opting into the auto-contrast text system */
+.lux-auto-contrast {
+  color: var(--lux-fg);
+}
+.lux-auto-contrast--soft {
+  color: var(--lux-fg-soft);
+}
+
+/* =============================================================================
+ * Luxury LIGHT header
+ * ========================================================================== */
+header.agri-header.lux-theme-light--header {
+  --lux-bg: #f7f9f6;
+  --lux-fg: #0f172a;
+  --lux-fg-soft: rgba(15, 23, 42, 0.62);
+  --lux-accent: #004a36;
+  --lux-accent-soft: rgba(0, 74, 54, 0.1);
+  --lux-line: rgba(0, 74, 54, 0.18);
+
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f7f9f6 58%, #eef3ec 100%);
+  color: var(--lux-fg);
+  border-bottom: 1px solid var(--lux-line);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 8px 26px rgba(8, 36, 27, 0.1);
+}
+
+/* Replace the dark-header bottom mist with a crisp emerald hairline accent */
+header.agri-header.lux-theme-light--header::before {
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(0, 74, 54, 0.28) 18%,
+    rgba(0, 74, 54, 0.28) 82%,
+    transparent 100%
+  );
+  height: 2px;
+}
+
+header.agri-header.lux-theme-light--header .header-left {
+  color: var(--lux-fg);
+}
+
+/* Brand wordmark: auto-contrast dark, overriding the global forced-white rules */
+html[data-theme='light'] header.agri-header.lux-theme-light--header .header-left .logo-text,
+html[data-theme='light'] header.agri-header.lux-theme-light--header .header-brand-lockup .logo-text,
+html:not([data-theme]) header.agri-header.lux-theme-light--header .header-left .logo-text,
+header.agri-header.lux-theme-light--header .header-left .logo-text {
+  color: var(--lux-fg) !important;
+  -webkit-text-fill-color: var(--lux-fg) !important;
+  text-shadow: none;
+}
+
+/* Brand icon plate: light emerald glass instead of white-on-green */
+header.agri-header.lux-theme-light--header .logo-icon:not(.logo-icon--mark):not(:has(.logo-icon__mark)) {
+  background: var(--lux-accent-soft);
+  border-color: var(--lux-line);
+  color: var(--lux-accent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 6px 16px rgba(8, 36, 27, 0.12);
+}
+
+header.agri-header.lux-theme-light--header .logo-icon__mark,
+header.agri-header.lux-theme-light--header .header-mobile-nav-toggle {
+  color: var(--lux-accent);
+  filter: none;
+}
+
+/* The default brand PNG is white — render it dark so it stays legible on the
+ * ivory header. Only applied when the logo is detected as a white asset. */
+header.agri-header.lux-theme-light--header .header-center__logo--invert .brand-logo {
+  filter: brightness(0) opacity(0.9);
+}
+
+header.agri-header.lux-theme-light--header .header-center__logo--invert:hover .brand-logo {
+  filter: brightness(0) opacity(1);
+}
+
+/* =============================================================================
+ * Interactive Light / Dark toggle (Switch to Light Mode)
+ * ========================================================================== */
+.navmenu-utility-theme {
+  display: flex;
+  align-items: center;
+}
+
+/* Minimal, modern theme toggle — a single small sun/moon icon that swaps with
+   the active mode, styled to match the system's icon buttons. */
+.nav-theme-toggle {
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e5e7eb;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.14s ease;
+}
+
+.nav-theme-toggle__icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.nav-theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.26);
+  color: #ffffff;
+}
+
+.nav-theme-toggle:active {
+  transform: scale(0.94);
+}
+
+.nav-theme-toggle:focus-visible {
+  outline: none;
+  border-color: rgba(52, 211, 153, 0.7);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.28);
+}
+
+/* Light surface (ivory header) → dark, legible icon button */
+html[data-theme='light'] .nav-theme-toggle,
+.lux-theme-light .nav-theme-toggle {
+  border-color: rgba(0, 74, 54, 0.18);
+  background: rgba(0, 74, 54, 0.06);
+  color: #0f3d2e;
+}
+
+html[data-theme='light'] .nav-theme-toggle:hover,
+.lux-theme-light .nav-theme-toggle:hover {
+  background: rgba(0, 74, 54, 0.12);
+  border-color: rgba(0, 74, 54, 0.3);
+  color: #004a36;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-theme-toggle {
+    transition: none;
+  }
+}

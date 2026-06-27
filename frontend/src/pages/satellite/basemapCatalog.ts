@@ -5,8 +5,11 @@
  */
 
 import {
+  build3dSatelliteLeafletLayers,
+  build3dSatelliteMapboxStyle,
   build3dTopographicLeafletLayers,
   build3dTopographicMapboxStyle,
+  SATELLITE_3D_BASEMAP_ID,
   TOPOGRAPHIC_3D_BASEMAP_ID,
 } from '../../lib/agroCloudMapTerrain'
 import { getGoogleMapsApiKeyFromEnv } from '../../lib/googleMapsApiKey'
@@ -157,6 +160,13 @@ export function buildBasemapCatalog(_legacyMapboxToken = '', _options?: BuildBas
             '© OpenStreetMap contributors, SRTM | © OpenTopoMap (CC-BY-SA)',
         },
       ],
+    },
+    {
+      id: SATELLITE_3D_BASEMAP_ID,
+      label: 'Satellite 3D (Esri Imagery + Terrain)',
+      mapboxStyle: build3dSatelliteMapboxStyle(),
+      leafletLayers: build3dSatelliteLeafletLayers(),
+      terrain3d: true,
     },
     {
       id: TOPOGRAPHIC_3D_BASEMAP_ID,

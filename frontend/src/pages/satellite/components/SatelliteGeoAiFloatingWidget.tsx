@@ -14,10 +14,17 @@ function clamp(n: number, min: number, max: number) {
 }
 
 function defaultSize(): StoredSize {
-  if (typeof window === 'undefined') return { w: 400, h: 520 };
-  const w = Math.min(400, window.innerWidth - 28);
-  const h = Math.min(560, Math.max(320, Math.round(window.innerHeight * 0.56)));
-  return { w, h };
+  if (typeof window === 'undefined') return { w: 360, h: 460 };
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  // Compact by default; on small/mobile screens grow toward full so it always
+  // fits the device. Always clamped to the viewport so it stays responsive.
+  const compact = vw > 600;
+  const w = compact ? Math.min(360, vw - 32) : Math.max(260, vw - 20);
+  const h = compact
+    ? Math.min(480, Math.max(300, Math.round(vh * 0.5)))
+    : Math.min(Math.round(vh * 0.72), vh - 130);
+  return { w: Math.round(Math.max(260, w)), h: Math.round(Math.max(280, h)) };
 }
 
 function readStoredPos(storageKey: string): StoredPos | null {
@@ -391,11 +398,20 @@ export function SatelliteGeoAiFloatingWidget({
   useEffect(() => {
     if (!expanded) return;
     const onWin = () => {
-      setPanelSize(s => clampSize(s));
-      setOffset(o => clampOffsetToViewport(o));
+      // Re-fit the panel and its position to the new viewport so it stays fully
+      // visible on every screen / orientation change.
+      setPanelSize(s => {
+        const c = clampSize(s);
+        setOffset(o => clampOffsetToViewport(o, c));
+        return c;
+      });
     };
     window.addEventListener('resize', onWin, { passive: true });
-    return () => window.removeEventListener('resize', onWin);
+    window.addEventListener('orientationchange', onWin, { passive: true });
+    return () => {
+      window.removeEventListener('resize', onWin);
+      window.removeEventListener('orientationchange', onWin);
+    };
   }, [expanded, clampOffsetToViewport, clampSize]);
 
   const transformStyle = useMemo(

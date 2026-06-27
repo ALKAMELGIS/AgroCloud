@@ -30,6 +30,68 @@
   max-width: 100%;
 }
 
+/* Activation row — the toggle that surfaces the floating drawing widget on the map */
+.si-rs-draw__activate {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(226, 232, 240, 0.92);
+  cursor: pointer;
+  text-align: start;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.si-rs-draw__activate i {
+  font-size: 12px;
+  color: rgba(148, 163, 184, 0.95);
+  flex-shrink: 0;
+}
+
+.si-rs-draw__activate-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.si-rs-draw__activate-state {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+  color: rgba(203, 213, 225, 0.9);
+  flex-shrink: 0;
+}
+
+.si-rs-draw__activate:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.si-rs-draw__activate.is-on {
+  background: linear-gradient(180deg, rgba(52, 211, 153, 0.16), rgba(16, 185, 129, 0.08));
+  border-color: rgba(52, 211, 153, 0.4);
+  color: #ecfdf5;
+}
+
+.si-rs-draw__activate.is-on i {
+  color: #34d399;
+}
+
+.si-rs-draw__activate-state.is-on {
+  background: rgba(52, 211, 153, 0.22);
+  color: #d1fae5;
+}
+
 .si-rs-draw__clear {
   min-height: 30px;
   padding: 5px 10px;

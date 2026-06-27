@@ -1,0 +1,6 @@
+# Trained model weights are large (≈88 MB / 176 MB) — never commit them.
+best.pt
+best.onnx
+*.pt
+*.onnx
+__pycache__/

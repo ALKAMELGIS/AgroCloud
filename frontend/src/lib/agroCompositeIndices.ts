@@ -249,6 +249,36 @@ export const AGRO_COMPOSITE_CATEGORIES: readonly AgroCompositeCategory[] = [
     ],
   },
   {
+    id: 'soil-salinity',
+    groupLabel: '🧂 Soil & Salinity Layer',
+    indices: [
+      {
+        id: 'NDSI',
+        label: 'NDSI',
+        scientificName: 'Normalized Difference Salinity Index ((B11−B8)/(B11+B8))',
+        deltaId: 'DNDSI',
+        deltaLabel: 'ΔNDSI',
+        expr: 'ndsi',
+      },
+      {
+        id: 'SI',
+        label: 'SI',
+        scientificName: 'Salinity Index (√(B3·B4))',
+        deltaId: 'DSI',
+        deltaLabel: 'ΔSI',
+        expr: 'si',
+      },
+      {
+        id: 'SSI',
+        label: 'SSI',
+        scientificName: 'Soil Salinity Index (NDSI + SI)',
+        deltaId: 'DSSI',
+        deltaLabel: 'ΔSSI',
+        expr: 'ssi',
+      },
+    ],
+  },
+  {
     id: 'crop',
     groupLabel: '🌾 Crop',
     indices: [

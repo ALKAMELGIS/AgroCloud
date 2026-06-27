@@ -155,6 +155,8 @@ export type SatelliteMapAnalysisChromeProps = {
     | 'crop-alerts'
     | 'crop-classification'
     | 'ai-detection-gis'
+    | 'tree-detections'
+    | 'hydro-watershed'
     | 'table-geo-ai'
     | null;
   onMapToolboxEmbedHost?: (el: HTMLDivElement | null) => void;
@@ -176,6 +178,16 @@ export type SatelliteMapAnalysisChromeProps = {
   mapToolboxLayerLiveLegend?: ReactNode;
   layerLiveLegendOpen?: boolean;
   onLayerLiveLegendOpenChange?: (open: boolean) => void;
+  /** Main toolbox Edit button: whether the system drawing tool is active. */
+  mapToolboxDrawingActive?: boolean;
+  /** Main toolbox Edit button: toggle the system drawing tool. */
+  onMapToolboxToggleDrawing?: () => void;
+  /** Main toolbox Measure tool: active measurement mode (or null). */
+  measureMode?: string | null;
+  /** Main toolbox Measure tool: open the unified measurement panel. */
+  onMeasureOpenPanel?: () => void;
+  /** Main toolbox Measure tool: stop / clear measuring. */
+  onMeasureClear?: () => void;
 };
 
 function sparkPath(values: number[], w: number, h: number): string {
@@ -240,6 +252,11 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
     mapToolboxLayerLiveLegend,
     layerLiveLegendOpen,
     onLayerLiveLegendOpenChange,
+    mapToolboxDrawingActive,
+    onMapToolboxToggleDrawing,
+    measureMode,
+    onMeasureOpenPanel,
+    onMeasureClear,
   } = props;
 
   const activeFull =
@@ -320,6 +337,11 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
       mapToolboxLayerLiveLegend={mapToolboxLayerLiveLegend}
       layerLiveLegendOpen={layerLiveLegendOpen}
       onLayerLiveLegendOpenChange={onLayerLiveLegendOpenChange}
+      mapToolboxDrawingActive={mapToolboxDrawingActive}
+      onMapToolboxToggleDrawing={onMapToolboxToggleDrawing}
+      measureMode={measureMode}
+      onMeasureOpenPanel={onMeasureOpenPanel}
+      onMeasureClear={onMeasureClear}
     />
   ) : null;
 

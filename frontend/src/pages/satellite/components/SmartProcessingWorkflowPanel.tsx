@@ -7,6 +7,8 @@ export type SmartProcessingSectionId =
   | 'crop-alerts'
   | 'crop-classification'
   | 'ai-detection-gis'
+  | 'tree-detections'
+  | 'hydro-watershed'
   | 'table-geo-ai';
 
 export type SmartProcessingWorkflowPanelProps = {
@@ -27,8 +29,10 @@ const QUICK_LINKS: Array<{ id: SmartProcessingSectionId; icon: string; label: st
   { id: 'layers', icon: 'fa-solid fa-layer-group', label: 'Layers' },
   { id: 'remote-sensing', icon: 'fa-solid fa-satellite-dish', label: 'Remote sensing' },
   { id: 'crop-alerts', icon: 'fa-solid fa-wheat-awn-circle-exclamation', label: 'Crop alerts' },
-  { id: 'crop-classification', icon: 'fa-solid fa-wheat-awn', label: 'Crop classification' },
+  { id: 'crop-classification', icon: 'fa-solid fa-wheat-awn', label: 'Crop AI' },
   { id: 'ai-detection-gis', icon: 'fa-solid fa-magnifying-glass-location', label: 'AI Detection in GIS' },
+  { id: 'tree-detections', icon: 'fa-solid fa-tree', label: 'Tree Detections' },
+  { id: 'hydro-watershed', icon: 'fa-solid fa-water', label: 'Hydro Watershed' },
   { id: 'table-geo-ai', icon: 'fa-solid fa-comments', label: 'Geo AI' },
 ];
 
@@ -88,9 +92,16 @@ const WORKFLOW_ROWS: Array<{
       {
         id: 'crop-classification',
         icon: 'fa-solid fa-wheat-awn',
-        label: 'Crop classification',
-        hint: 'Multi-temporal Sentinel crop / land-cover classes inside your AOI.',
+        label: 'Crop classification (Prithvi)',
+        hint: 'AOI → Sentinel/HLS multi-temporal → Prithvi-100M inference → classified map.',
         target: 'crop-classification',
+      },
+      {
+        id: 'hydro-watershed',
+        icon: 'fa-solid fa-water',
+        label: 'Hydro Watershed Workflow',
+        hint: 'AOI → DEM, slope, flow accumulation, stream network, watershed & mesh for distributed hydrology.',
+        target: 'hydro-watershed',
       },
     ],
   },
@@ -105,6 +116,13 @@ const WORKFLOW_ROWS: Array<{
         label: 'Geo AI & copilot',
         hint: 'Natural language and semi-structured geospatial requests.',
         target: 'table-geo-ai',
+      },
+      {
+        id: 'tree-detections',
+        icon: 'fa-solid fa-tree',
+        label: 'Tree Detections (VHRTrees)',
+        hint: 'Draw an AOI → auto-detect & classify individual tree crowns from VHR imagery as an interactive overlay.',
+        target: 'tree-detections',
       },
     ],
   },

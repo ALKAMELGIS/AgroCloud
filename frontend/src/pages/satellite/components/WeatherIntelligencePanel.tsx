@@ -4,6 +4,7 @@ import './WeatherIntelligencePanel.css';
 import {
   clampOpenMeteoPickerDate,
   fetchOpenMeteoDailyForDate,
+  fetchOpenMeteoHistoryRange,
   fetchOpenMeteoTemporalComparison,
   fetchOpenMeteoTimeHistory,
   fetchOpenMeteoWeather,
@@ -43,23 +44,41 @@ type WeatherIntelligencePanelProps = {
 type PanelView = 'forecast' | 'history';
 
 const PANEL_GEOM_LS = 'agri_si_weather_panel_geom_v1';
-const MIN_W = 268;
-const MIN_H = 300;
-const DEFAULT_W = 308;
-const DEFAULT_H = 440;
-const ACP_MIN_W = 248;
-const ACP_MIN_H = 280;
-const ACP_DEFAULT_W = 272;
-const ACP_DEFAULT_H = 400;
-const ACP_HISTORY_PANEL_H = 460;
-const ACP_HISTORY_MIN_H = 300;
-/** Fixed layout size for Time History (timeline + 3 insight cards). */
-const HISTORY_PANEL_W = 412;
-const HISTORY_PANEL_H = 748;
-const HISTORY_MIN_W = 380;
-const HISTORY_MIN_H = 680;
+const MIN_W = 252;
+const MIN_H = 248;
+const DEFAULT_W = 288;
+const DEFAULT_H = 372;
+const ACP_MIN_W = 240;
+const ACP_MIN_H = 248;
+const ACP_DEFAULT_W = 264;
+const ACP_DEFAULT_H = 372;
+const ACP_HISTORY_PANEL_H = 440;
+const ACP_HISTORY_MIN_H = 280;
+/** Preferred layout size for Time History (timeline + 3 insight cards). */
+const HISTORY_PANEL_W = 372;
+const HISTORY_PANEL_H = 600;
+const HISTORY_MIN_W = 300;
+const HISTORY_MIN_H = 420;
 
 type PanelGeom = { x: number; y: number; w: number; h: number };
+
+/**
+ * Keep a panel geometry fully inside the viewport (with an 8px margin) so no
+ * edge is ever clipped or pushed off-screen, on any screen size.
+ */
+function clampGeomToViewport(g: PanelGeom, minW: number, minH: number): PanelGeom {
+  if (typeof window === 'undefined') return g;
+  const margin = 8;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const availW = Math.max(160, vw - margin * 2);
+  const availH = Math.max(160, vh - margin * 2);
+  const w = clamp(g.w, Math.min(minW, availW), availW);
+  const h = clamp(g.h, Math.min(minH, availH), availH);
+  const x = clamp(g.x, margin, Math.max(margin, vw - w - margin));
+  const y = clamp(g.y, margin, Math.max(margin, vh - h - margin));
+  return { x, y, w, h };
+}
 
 const HISTORY_METRICS: WeatherHistoryMetric[] = ['temp', 'rain', 'humid', 'wind', 'press'];
 const HISTORY_RANGES = [7, 14, 30] as const;
@@ -86,22 +105,21 @@ function readPanelGeom(storageKey: string, compact = false): PanelGeom {
       Number.isFinite(p.w) &&
       Number.isFinite(p.h)
     ) {
-      return {
-        x: p.x,
-        y: p.y,
-        w: clamp(p.w, minW, Math.min(compact ? 360 : 520, window.innerWidth - 24)),
-        h: clamp(p.h, minH, Math.min(Math.round(window.innerHeight * 0.9), window.innerHeight - 24)),
-      };
+      return clampGeomToViewport(p, minW, minH);
     }
   } catch {
     /* ignore */
   }
-  return {
-    x: compact ? Math.max(8, window.innerWidth - defaultW - 12) : 12,
-    y: 68,
-    w: Math.min(defaultW, window.innerWidth - 24),
-    h: Math.min(defaultH, Math.round(window.innerHeight * 0.72)),
-  };
+  return clampGeomToViewport(
+    {
+      x: compact ? Math.max(8, window.innerWidth - defaultW - 12) : 12,
+      y: 68,
+      w: defaultW,
+      h: defaultH,
+    },
+    minW,
+    minH,
+  );
 }
 
 function todayIsoInTimezone(tz: string): string {
@@ -180,25 +198,15 @@ function fitHistoryPanelGeom(prev: PanelGeom, compact = false): PanelGeom {
       : { x: 12, y: 68, w: HISTORY_PANEL_W, h: HISTORY_PANEL_H };
   }
   if (compact) {
-    const w = clamp(prev.w, ACP_MIN_W, Math.min(360, window.innerWidth - 24));
-    const h = clamp(
-      Math.max(prev.h, ACP_HISTORY_PANEL_H),
-      ACP_HISTORY_MIN_H,
-      Math.min(Math.round(window.innerHeight * 0.78), window.innerHeight - 24),
-    );
-    const x = clamp(prev.x, 4, Math.max(4, window.innerWidth - w - 4));
-    const y = clamp(prev.y, 4, Math.max(4, window.innerHeight - h - 4));
-    return { x, y, w, h };
+    const w = Math.max(prev.w, ACP_DEFAULT_W);
+    const h = Math.max(prev.h, ACP_HISTORY_PANEL_H);
+    return clampGeomToViewport({ x: prev.x, y: prev.y, w, h }, ACP_MIN_W, ACP_HISTORY_MIN_H);
   }
-  const w = clamp(HISTORY_PANEL_W, HISTORY_MIN_W, Math.min(520, window.innerWidth - 24));
-  const h = clamp(
-    HISTORY_PANEL_H,
+  return clampGeomToViewport(
+    { x: prev.x, y: prev.y, w: HISTORY_PANEL_W, h: HISTORY_PANEL_H },
+    HISTORY_MIN_W,
     HISTORY_MIN_H,
-    Math.min(Math.round(window.innerHeight * 0.92), window.innerHeight - 24),
   );
-  const x = clamp(prev.x, 4, Math.max(4, window.innerWidth - w - 4));
-  const y = clamp(prev.y, 4, Math.max(4, window.innerHeight - h - 4));
-  return { x, y, w, h };
 }
 
 function useWeatherPanelGeometry(panelGeomLs: string, compact = false) {
@@ -213,6 +221,22 @@ function useWeatherPanelGeometry(panelGeomLs: string, compact = false) {
       /* ignore */
     }
   }, [panelGeomLs]);
+
+  // Keep the panel inside the viewport whenever the window is resized / rotated
+  // so no edge is ever pushed off-screen on Desktop, Tablet or Mobile.
+  useEffect(() => {
+    const minW = compact ? ACP_MIN_W : MIN_W;
+    const minH = compact ? ACP_MIN_H : MIN_H;
+    const onResize = () => {
+      setGeom(prev => clampGeomToViewport(prev, minW, minH));
+    };
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+    };
+  }, [compact]);
 
   const startDrag = useCallback(
     (e: React.PointerEvent<HTMLElement>) => {
@@ -348,6 +372,24 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
     } catch (e) {
       setHistoryData(null);
       setError(e instanceof Error ? e.message : 'Failed to load weather history');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  // Load an explicit historical range from the Open-Meteo archive (ERA5), which
+  // reaches back to 1950 — so date-range exports actually contain old dates
+  // (the forecast endpoint only exposes the last ~30 days).
+  const loadHistoryRange = useCallback(async (lat: number, lng: number, startIso: string, endIso: string) => {
+    setHistoryLoading(true);
+    setError(null);
+    try {
+      const data = await fetchOpenMeteoHistoryRange(lat, lng, startIso, endIso);
+      setHistoryData(data);
+      setHistoryDateStart(startIso);
+      setHistoryDateEnd(endIso);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load historical weather range');
     } finally {
       setHistoryLoading(false);
     }
@@ -542,7 +584,8 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
           `${p.time},${p.temperatureC ?? ''},${p.precipitationMm ?? ''},${p.humidityPct ?? ''},${p.windSpeedKmh ?? ''},${p.pressureHpa ?? ''}`,
       )
       .join('\n');
-    const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8' });
+    // Prepend a UTF-8 BOM so Excel opens the sheet with correct encoding.
+    const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -701,9 +744,19 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
                   timezone={filteredHistory.timezone}
                   startDate={historyDateStart}
                   endDate={historyDateEnd}
+                  minDate={datePickerBounds.min}
+                  maxDate={todayIso}
                   onRangeChange={(start, end) => {
                     setHistoryDateStart(start);
                     setHistoryDateEnd(end);
+                    // When the requested window reaches beyond the currently loaded
+                    // (recent) series on either side, pull the archive so historical
+                    // dates back to 1950 are actually fetched and exportable.
+                    const loadedStart = historyData?.startDate ?? '';
+                    const loadedEnd = historyData?.endDate ?? '';
+                    if (start && end && (!loadedStart || start < loadedStart || end > loadedEnd)) {
+                      void loadHistoryRange(location.lat, location.lng, start, end);
+                    }
                   }}
                   onExport={exportHistoryCsv}
                 />

@@ -3,7 +3,6 @@ import cors from 'cors'
 import { WebSocketServer } from 'ws'
 import OpenAI from 'openai'
 import { hasSmtpConfig as checkSmtpConfig, sendMailWithFallback } from './smtpTransport.js'
-import { spawn } from 'child_process'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'crypto'
@@ -19,6 +18,8 @@ import { bootstrapApiSecretsFromEnv } from './bootstrapApiSecretsFromEnv.js'
 import { registerSentinelHubStatisticsRoutes } from './sentinelHubStatisticsProxy.js'
 import { registerGeocodeRoutes } from './geocodeProxy.js'
 import { registerAcpWeatherRoutes } from './acpWeatherRoutes.js'
+import { registerCropClassificationRoutes } from './cropClassificationProxy.js'
+import { registerTreeDetectionRoutes } from './treeDetectionProxy.js'
 import {
   applyStaticCacheHeaders,
   httpsRedirectMiddleware,
@@ -157,7 +158,7 @@ const GITHUB_OAUTH_REDIRECT_URL = String(
 )
 const APP_ORIGIN_ENV = String(process.env.APP_ORIGIN || '').trim()
 const LISTEN_HOST = String(process.env.HOST || '0.0.0.0').trim() || '0.0.0.0'
-const API_PORT = Number(process.env.PORT || 3000)
+const API_PORT = Number(process.env.PORT || 3011)
 const WS_PORT = Number(process.env.WS_PORT || 3012)
 
 /** SPA shell URL for OAuth redirects (HashRouter under /AgroCloud/). */
@@ -501,53 +502,6 @@ app.post('/api/github/webhook', (req, res) => {
   } catch {
   }
   res.json({ ok: true })
-})
-
-app.post('/api/tree-detection', (req, res) => {
-  const { aoi, apiKey } = req.body
-  
-  if (!aoi) {
-    return res.status(400).json({ error: 'AOI is required' })
-  }
-
-  const pythonScript = path.join(SERVER_DIR, 'sam_detector.py')
-  
-  // Use 'python' or 'python3' depending on environment.
-  // Assuming 'python' is available in path.
-  const pythonProcess = spawn('python', [pythonScript])
-  
-  let dataString = ''
-  let errorString = ''
-
-  pythonProcess.stdout.on('data', (data) => {
-    dataString += data.toString()
-  })
-
-  pythonProcess.stderr.on('data', (data) => {
-    errorString += data.toString()
-  })
-
-  pythonProcess.on('close', (code) => {
-    if (code !== 0) {
-      console.error('Python script error:', errorString)
-      return res.status(500).json({ error: 'Tree detection failed', details: errorString })
-    }
-    
-    try {
-      const result = JSON.parse(dataString)
-      if (result.error) {
-        return res.status(500).json(result)
-      }
-      res.json(result)
-    } catch (e) {
-      console.error('Failed to parse Python output:', dataString)
-      res.status(500).json({ error: 'Invalid response from detection engine', raw: dataString })
-    }
-  })
-
-  // Send input to Python script
-  pythonProcess.stdin.write(JSON.stringify({ aoi, apiKey }))
-  pythonProcess.stdin.end()
 })
 
 app.post('/api/ai/analyze', (req, res) => {
@@ -1571,6 +1525,73 @@ app.post('/api/ai/chat', async (req, res) => {
   }
 })
 
+// --- Local Ollama proxy ------------------------------------------------------
+// Browsers can't call the Ollama daemon (:11434) directly — Ollama's CORS policy
+// rejects the app origin, surfacing as "Failed to fetch". We proxy through the
+// backend (same Node process, no CORS) using Ollama's native /api/chat endpoint.
+const OLLAMA_DEFAULT_BASE_URL = 'http://127.0.0.1:11434'
+
+function normalizeOllamaBaseUrl(raw) {
+  let value = String(raw || '').trim() || OLLAMA_DEFAULT_BASE_URL
+  value = value.replace(/\/+$/, '')
+  // Node's fetch (undici) resolves `localhost` to ::1 (IPv6) first, but Ollama
+  // binds to 127.0.0.1 (IPv4) by default → "fetch failed". Force IPv4 so the
+  // server-side fetch reaches the daemon the same way `curl` does.
+  value = value.replace(/^(https?:\/\/)localhost(?=[:/]|$)/i, '$1127.0.0.1')
+  return value
+}
+
+app.get('/api/ollama/status', async (req, res) => {
+  const baseUrl = normalizeOllamaBaseUrl(req.query.baseUrl)
+  try {
+    const r = await fetch(`${baseUrl}/api/tags`, { headers: { Accept: 'application/json' } })
+    const data = await r.json().catch(() => ({}))
+    if (!r.ok) return res.status(502).json({ reachable: false, baseUrl, error: `Ollama HTTP ${r.status}` })
+    const models = Array.isArray(data?.models) ? data.models.map((m) => m?.name).filter(Boolean) : []
+    return res.json({ reachable: true, baseUrl, models })
+  } catch (e) {
+    return res
+      .status(502)
+      .json({ reachable: false, baseUrl, error: e instanceof Error ? e.message : 'unreachable' })
+  }
+})
+
+app.post('/api/ollama/chat', async (req, res) => {
+  const { baseUrl: rawBase, model, messages } = req.body || {}
+  const baseUrl = normalizeOllamaBaseUrl(rawBase)
+  const usableModel = String(model || 'llama3.1').trim()
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: 'messages[] is required' })
+  }
+  try {
+    const r = await fetch(`${baseUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ model: usableModel, messages, stream: false }),
+    })
+    const text = await r.text()
+    let data = null
+    try {
+      data = JSON.parse(text)
+    } catch {
+      data = null
+    }
+    if (!r.ok) {
+      const msg = data?.error || text.slice(0, 240) || `Ollama HTTP ${r.status}`
+      const code = r.status >= 400 && r.status < 600 ? r.status : 502
+      return res.status(code).json({ error: msg })
+    }
+    const reply = String(data?.message?.content ?? '').trim()
+    return res.json({ reply, model: data?.model || usableModel })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'unreachable'
+    return res.status(502).json({
+      error:
+        `Could not reach Ollama at ${baseUrl}. Is it running? Start it with "ollama serve" and pull a model (e.g. "ollama pull ${usableModel}"). ${msg}`.trim(),
+    })
+  }
+})
+
 const ESRI_DASHBOARDS_FILE = path.join(SERVER_DIR, 'esri_dashboards.json')
 
 function readEsriDashboards() {
@@ -1686,6 +1707,8 @@ app.post('/api/esri-dashboards/sources/probe', async (req, res) => {
 registerSentinelHubStatisticsRoutes(app, { secretsFilePath: API_SECRETS_FILE })
 registerGeocodeRoutes(app)
 registerAcpWeatherRoutes(app)
+registerCropClassificationRoutes(app, { secretsFilePath: API_SECRETS_FILE, broadcast })
+registerTreeDetectionRoutes(app)
 
 app.get('*', (req, res) => {
   applyStaticCacheHeaders(res, 'index.html')

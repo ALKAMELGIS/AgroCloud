@@ -42,11 +42,14 @@ function formatRgbList(rgb: readonly [number, number, number][]): string {
     .join(',\n   ')
 }
 
-const CORE_INDICES_BLOCK = `let ndvi = index(samples.B08, samples.B04);
+export const CORE_INDICES_BLOCK = `let ndvi = index(samples.B08, samples.B04);
   let savi = ((samples.B08 - samples.B04) * 1.5) / (samples.B08 + samples.B04 + 0.5);
   let ndmi = index(samples.B08, samples.B11);
   let ndwi = index(samples.B03, samples.B08);
-  let ci_re = samples.B08 > 1e-6 ? samples.B05 / samples.B08 - 1 : NaN;`
+  let ci_re = samples.B08 > 1e-6 ? samples.B05 / samples.B08 - 1 : NaN;
+  let ndsi = index(samples.B11, samples.B08);
+  let si = Math.sqrt(Math.max(0, samples.B03 * samples.B04));
+  let ssi = ndsi + si;`
 
 const CORE_AT_FN = `function coreAt(samples) {
   let ndvi = index(samples.B08, samples.B04);
@@ -54,7 +57,10 @@ const CORE_AT_FN = `function coreAt(samples) {
   let ndmi = index(samples.B08, samples.B11);
   let ndwi = index(samples.B03, samples.B08);
   let ci_re = samples.B08 > 1e-6 ? samples.B05 / samples.B08 - 1 : NaN;
-  return { ndvi: ndvi, savi: savi, ndmi: ndmi, ndwi: ndwi, ci_re: ci_re };
+  let ndsi = index(samples.B11, samples.B08);
+  let si = Math.sqrt(Math.max(0, samples.B03 * samples.B04));
+  let ssi = ndsi + si;
+  return { ndvi: ndvi, savi: savi, ndmi: ndmi, ndwi: ndwi, ci_re: ci_re, ndsi: ndsi, si: si, ssi: ssi };
 }`
 
 function alphaBlock(indexVar: string, indexVisibilityMin: number | null, maskVar = 'samples.dataMask'): string {
@@ -221,6 +227,9 @@ function compositeValue(c) {
   let ndwi = c.ndwi;
   let savi = c.savi;
   let ci_re = c.ci_re;
+  let ndsi = c.ndsi;
+  let si = c.si;
+  let ssi = c.ssi;
   return ${expr};
 }
 
