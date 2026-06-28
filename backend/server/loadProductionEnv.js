@@ -98,6 +98,7 @@ export function normalizeProductionEnv() {
   aliasEnv('OPENAI_API_KEY', ['OPENAI'])
   aliasEnv('DEEPSEEK_API_KEY', ['DEEPSEEK'])
   aliasEnv('MAPBOX_TOKEN', ['VITE_MAPBOX_TOKEN', 'VITE_MAPBOX_ACCESS_TOKEN'])
+  aliasEnv('ARCGIS_PORTAL_TOKEN', ['ARCGIS_TOKEN', 'VITE_ARCGIS_PORTAL_TOKEN'])
 
   mirrorViteFrom(['GEMINI_API_KEY'], 'VITE_GEMINI_API_KEY')
   mirrorViteFrom(['OPENAI_API_KEY', 'OPENAI'], 'VITE_OPENAI_API_KEY')
@@ -117,6 +118,7 @@ export function normalizeProductionEnv() {
   mirrorViteFrom(['GOOGLE_MAPS_API_KEY', 'GOOGLE_MAPS_SERVER_API_KEY'], 'VITE_GOOGLE_MAPS_API_KEY')
   mirrorViteFrom(['MAPBOX_TOKEN'], 'VITE_MAPBOX_TOKEN')
   mirrorViteFrom(['MAPBOX_TOKEN'], 'VITE_MAPBOX_ACCESS_TOKEN')
+  mirrorViteFrom(['ARCGIS_PORTAL_TOKEN'], 'VITE_ARCGIS_PORTAL_TOKEN')
   mirrorViteFrom(['APP_ORIGIN'], 'VITE_APP_CANONICAL_URL')
   if (!String(process.env.VITE_BASE_PATH || process.env.AGRO_BASE_PATH || '').trim()) {
     const origin = pickEnv('APP_ORIGIN')

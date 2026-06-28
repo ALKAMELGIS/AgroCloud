@@ -2644,12 +2644,12 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
 .si-sat-ctx-dock--light .si-sat-ctx-rail-btn--map-collapsed,
 .si-sat-ctx-dock--light .si-sat-ctx-rail-btn--map-expanded,
 .si-sat-ctx-dock--light .si-sat-ctx-rail-btn--map-expanded > i {
-  color: #1e293b; /* slate-800 — ~12:1 on the white rail */
+  color: rgba(255, 255, 255, 0.82); /* matte off-white — readable on the black lux rail */
 }
 
 .si-sat-ctx-dock--light .si-sat-ctx-rail-btn:hover,
 .si-sat-ctx-dock--light .si-sat-ctx-rail-btn:hover i {
-  color: #0f172a;
+  color: #ffffff;
 }
 
 .si-sat-ctx-dock--dark .si-sat-ctx-rail-btn,
@@ -2679,11 +2679,11 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
 /* Rail text labels (labeled rail) — match icon contrast for readable wordmarks. */
 .si-sat-ctx-dock--light .si-sat-ctx-rail-label,
 .si-sat-ctx-dock--light .si-sat-ctx-rail-label-title {
-  color: #1e293b;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .si-sat-ctx-dock--light .si-sat-ctx-rail-label-desc {
-  color: #64748b;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .si-sat-ctx-dock--dark .si-sat-ctx-rail-label,

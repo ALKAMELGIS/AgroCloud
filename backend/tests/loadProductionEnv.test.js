@@ -46,6 +46,14 @@ test('normalizeProductionEnv mirrors MAPBOX_TOKEN to VITE_MAPBOX_TOKEN', () => {
   })
 })
 
+test('normalizeProductionEnv aliases + mirrors ArcGIS portal token', () => {
+  withEnv({ ARCGIS_TOKEN: 'arc.test' }, () => {
+    normalizeProductionEnv()
+    assert.equal(process.env.ARCGIS_PORTAL_TOKEN, 'arc.test')
+    assert.equal(process.env.VITE_ARCGIS_PORTAL_TOKEN, 'arc.test')
+  })
+})
+
 test('resolveAgriDataPaths uses AGRI_DATA_DIR-derived files', () => {
   withEnv(
     {

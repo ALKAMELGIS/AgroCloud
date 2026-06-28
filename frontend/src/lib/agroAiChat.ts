@@ -91,6 +91,31 @@ export async function agroChatWithDeepSeek(params: {
 export const OLLAMA_CHAT_PROXY_URL = '/api/ollama/chat'
 export const OLLAMA_STATUS_PROXY_URL = '/api/ollama/status'
 
+export type OllamaHealth = { reachable: boolean; baseUrl: string; models: string[]; error?: string }
+
+/**
+ * Health check for the local Ollama daemon via the backend proxy. Used to gate
+ * chat requests and to drive provider fallback (don't bother calling a dead
+ * daemon). Never throws — returns `{ reachable: false }` on any failure.
+ */
+export async function checkOllamaHealth(baseUrl: string): Promise<OllamaHealth> {
+  const root = (baseUrl || 'http://localhost:11434').trim().replace(/\/+$/, '')
+  try {
+    const res = await fetch(`${OLLAMA_STATUS_PROXY_URL}?baseUrl=${encodeURIComponent(root)}`, {
+      headers: { Accept: 'application/json' },
+    })
+    const data = (await res.json().catch(() => ({}))) as Partial<OllamaHealth>
+    if (!res.ok || !data?.reachable) {
+      return { reachable: false, baseUrl: root, models: [], error: data?.error || `HTTP ${res.status}` }
+    }
+    return { reachable: true, baseUrl: root, models: Array.isArray(data.models) ? data.models : [] }
+  } catch (err) {
+    return { reachable: false, baseUrl: root, models: [], error: err instanceof Error ? err.message : 'unreachable' }
+  }
+}
+
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
+
 /**
  * Local Ollama via the backend proxy (`/api/ollama/chat` → Ollama `/api/chat`).
  *
@@ -117,24 +142,41 @@ export async function agroChatWithOllama(params: {
   const root = (baseUrl || 'http://localhost:11434').trim().replace(/\/+$/, '')
   const usableModel = (model || 'llama3.1').trim()
 
-  let res: Response
-  try {
-    res = await fetch(OLLAMA_CHAT_PROXY_URL, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ baseUrl: root, model: usableModel, messages }),
-    })
-  } catch (err) {
-    throw new Error(
-      `Could not reach the app server to proxy Ollama. ${err instanceof Error ? err.message : ''}`.trim(),
-    )
-  }
+  // Retry transient failures (proxy not ready, daemon warming up, 502 from the
+  // proxy). 4xx (bad request / model not found) is returned immediately — no
+  // point retrying a deterministic error.
+  const maxAttempts = 3
+  let lastError = ''
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let res: Response
+    try {
+      res = await fetch(OLLAMA_CHAT_PROXY_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ baseUrl: root, model: usableModel, messages }),
+      })
+    } catch (err) {
+      lastError = `Could not reach the app server to proxy Ollama. ${err instanceof Error ? err.message : ''}`.trim()
+      if (attempt < maxAttempts) {
+        await sleep(500 * attempt)
+        continue
+      }
+      throw new Error(lastError)
+    }
 
-  const data = (await res.json().catch(() => ({}))) as { error?: string; reply?: string }
-  if (!res.ok) {
-    throw new Error(data?.error || res.statusText || `HTTP ${res.status}`)
+    const data = (await res.json().catch(() => ({}))) as { error?: string; reply?: string }
+    if (!res.ok) {
+      lastError = data?.error || res.statusText || `HTTP ${res.status}`
+      const transient = res.status >= 500 || res.status === 408 || res.status === 429
+      if (transient && attempt < maxAttempts) {
+        await sleep(500 * attempt)
+        continue
+      }
+      throw new Error(lastError)
+    }
+    const text = (data.reply || '').trim()
+    if (!text) throw new Error('Empty Ollama response')
+    return text
   }
-  const text = (data.reply || '').trim()
-  if (!text) throw new Error('Empty Ollama response')
-  return text
+  throw new Error(lastError || 'Ollama request failed')
 }

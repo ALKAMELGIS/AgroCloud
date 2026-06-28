@@ -1541,10 +1541,38 @@ function normalizeOllamaBaseUrl(raw) {
   return value
 }
 
+// Resilient fetch for the Ollama daemon: bounded timeout + retry on transient
+// connection failures (daemon still warming up, model loading, brief socket
+// resets). Only network-level throws are retried — HTTP error responses are
+// returned to the caller untouched so they can decide on fallback.
+async function fetchOllamaWithRetry(url, options = {}, { retries = 2, backoffMs = 500, timeoutMs = 60000 } = {}) {
+  let lastErr
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+      return await fetch(url, { ...options, signal: controller.signal })
+    } catch (e) {
+      lastErr = e
+      if (attempt < retries) {
+        await new Promise((resolve) => setTimeout(resolve, backoffMs * (attempt + 1)))
+      }
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+  throw lastErr
+}
+
 app.get('/api/ollama/status', async (req, res) => {
   const baseUrl = normalizeOllamaBaseUrl(req.query.baseUrl)
   try {
-    const r = await fetch(`${baseUrl}/api/tags`, { headers: { Accept: 'application/json' } })
+    // Health check: short timeout, single retry — must stay snappy for polling.
+    const r = await fetchOllamaWithRetry(
+      `${baseUrl}/api/tags`,
+      { headers: { Accept: 'application/json' } },
+      { retries: 1, backoffMs: 300, timeoutMs: 5000 },
+    )
     const data = await r.json().catch(() => ({}))
     if (!r.ok) return res.status(502).json({ reachable: false, baseUrl, error: `Ollama HTTP ${r.status}` })
     const models = Array.isArray(data?.models) ? data.models.map((m) => m?.name).filter(Boolean) : []
@@ -1564,11 +1592,17 @@ app.post('/api/ollama/chat', async (req, res) => {
     return res.status(400).json({ error: 'messages[] is required' })
   }
   try {
-    const r = await fetch(`${baseUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ model: usableModel, messages, stream: false }),
-    })
+    const r = await fetchOllamaWithRetry(
+      `${baseUrl}/api/chat`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ model: usableModel, messages, stream: false }),
+      },
+      // Generation can take a while on first load (model swap into VRAM); allow a
+      // longer timeout, retry twice on transient connection failures.
+      { retries: 2, backoffMs: 600, timeoutMs: 120000 },
+    )
     const text = await r.text()
     let data = null
     try {

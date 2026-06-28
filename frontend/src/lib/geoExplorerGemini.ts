@@ -188,6 +188,35 @@ export function parseMapQueryLngLat(text: string): [number, number] | null {
   return null;
 }
 
+/**
+ * Loose fallback: extract the first plausible WGS84 coordinate pair from model
+ * prose (e.g. "Dubai, United Arab Emirates — 25.2048, 55.2708") when the model
+ * answered a "locate / show me X" question but omitted the MAP_QUERY / MAP_ACTION
+ * tag. The Geo AI prose convention is "lat, lng"; ranges are validated and the
+ * swapped order is tried as a fallback. Returns [lng, lat] or null.
+ *
+ * To avoid false positives on normalized index values ("NDVI 0.5, 0.3"), at
+ * least one of the two numbers must have |value| >= 1, and both must carry a
+ * decimal point. Skipped entirely when a structured tag is already present.
+ */
+export function parseLooseLatLngFromReply(text: string): [number, number] | null {
+  if (!text) return null;
+  if (/MAP_QUERY:/i.test(text) || /MAP_ACTION:/i.test(text)) return null;
+  const re = /(-?\d{1,3}\.\d+)\s*[,/]\s*(-?\d{1,3}\.\d+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
+    if (Math.abs(a) < 1 && Math.abs(b) < 1) continue;
+    // Prose convention is "lat, lng" → return as [lng, lat].
+    if (isValidLngLat(b, a)) return [b, a];
+    // Tolerate "lng, lat".
+    if (isValidLngLat(a, b)) return [a, b];
+  }
+  return null;
+}
+
 export function messageDisplayText(msg: GeoExplorerMessage): string {
   const chunks: string[] = [];
   for (const p of msg.parts) {

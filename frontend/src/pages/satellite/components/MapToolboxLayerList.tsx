@@ -21,6 +21,8 @@ export type MapToolboxLayerListItem = {
   onRemove?: () => void
   /** Legacy inline action buttons (kept for base-overlay rows). */
   actions?: ReactNode
+  /** Modern single-control actions rendered in the header next to the toggle (e.g. ⋯ options menu). */
+  headerActions?: ReactNode
 }
 
 type MapToolboxLayerRowProps = Omit<MapToolboxLayerListItem, 'id'>
@@ -209,6 +211,7 @@ export function MapToolboxLayerRow({
   onExport,
   onRemove,
   actions,
+  headerActions,
 }: MapToolboxLayerRowProps) {
   const hasMenu = !!(onRemove || onExport || (typeof opacity === 'number' && onOpacityChange))
   return (
@@ -255,6 +258,8 @@ export function MapToolboxLayerRow({
               onExport={onExport}
               onRemove={onRemove}
             />
+          ) : headerActions ? (
+            <div className="si-mt-layer__header-actions">{headerActions}</div>
           ) : (
             <SiCopyTextButton
               text={label}

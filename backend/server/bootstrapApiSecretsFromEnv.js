@@ -5,14 +5,27 @@
 
 import { mergeAndWriteApiSecrets, readApiSecretsFile } from './apiSecretsPersistence.js'
 
-/** @type {Record<string, string>} env var → builtin secret key */
+/**
+ * @type {Record<string, string>} env var → builtin secret key.
+ * Multiple aliases per secret are accepted so the value can be set with whichever
+ * name the hosting panel / .env already uses. The first non-empty match wins.
+ */
 const ENV_TO_BUILTIN = {
   MAPBOX_TOKEN: 'mapboxToken',
   VITE_MAPBOX_TOKEN: 'mapboxToken',
+  MAPBOX_ACCESS_TOKEN: 'mapboxToken',
+  ARCGIS_PORTAL_TOKEN: 'arcgisPortalToken',
+  VITE_ARCGIS_PORTAL_TOKEN: 'arcgisPortalToken',
+  ARCGIS_TOKEN: 'arcgisPortalToken',
   OPENWEATHERMAP_API_KEY: 'openWeatherMapApiKey',
+  OPENWEATHER_API_KEY: 'openWeatherMapApiKey',
   SENTINEL_HUB_ACCESS_TOKEN: 'sentinelHubAccessToken',
+  SENTINELHUB_ACCESS_TOKEN: 'sentinelHubAccessToken',
   SENTINEL_HUB_WMS_INSTANCE_ID: 'sentinelHubWmsInstanceId',
+  SENTINELHUB_WMS_INSTANCE_ID: 'sentinelHubWmsInstanceId',
   GEMINI_API_KEY: 'geminiApiKey',
+  CLAUDE_API_KEY: 'claudeApiKey',
+  ANTHROPIC_API_KEY: 'claudeApiKey',
   DEEPSEEK_API_KEY: 'deepseekApiKey',
 }
 
@@ -27,6 +40,7 @@ function pickEnvValue(envKey) {
 export function bootstrapApiSecretsFromEnv(secretsFilePath) {
   const patch = {}
   for (const [envKey, builtinKey] of Object.entries(ENV_TO_BUILTIN)) {
+    if (patch[builtinKey]) continue // first non-empty alias wins
     const value = pickEnvValue(envKey)
     if (value) patch[builtinKey] = value
   }

@@ -3579,6 +3579,64 @@ html[data-theme='light'] .si-env-layer-options-menu__item > i {
   box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.28);
 }
 
+/* Modern layer row: a single ⋯ options menu in the header next to the toggle
+   (replaces the legacy inline icon-button row). */
+.si-mt-layer__header-actions {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Let the header ⋯ dropdown escape the compact card (which clips with
+   overflow:hidden) so the full options menu is visible. */
+.si-env-user-layer-row > .si-mt-layer {
+  overflow: visible;
+}
+
+.si-env-layer-actions.si-env-layer-actions--menu-only {
+  margin: 0;
+  padding: 0;
+  border-top: none;
+  width: auto;
+  gap: 0;
+  flex-wrap: nowrap;
+}
+
+.si-env-layer-actions--menu-only .si-env-layer-action-btn--menu {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border-color: transparent;
+  background: transparent;
+  color: rgba(203, 213, 225, 0.85);
+  box-shadow: none;
+}
+
+.si-env-layer-actions--menu-only .si-env-layer-action-btn--menu > i {
+  font-size: 12px;
+}
+
+.si-env-layer-actions--menu-only .si-env-layer-action-btn--menu:hover {
+  border-color: rgba(125, 211, 252, 0.34);
+  background: rgba(59, 130, 246, 0.18);
+  color: #f0f9ff;
+  box-shadow: none;
+}
+
+/* Right-align the dropdown so it stays inside the panel when the trigger sits
+   at the right edge of the header. */
+.si-env-layer-actions--menu-only .si-env-layer-options-menu {
+  left: auto;
+  right: 0;
+}
+
+html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-btn--menu {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-btn--menu:hover {
+  color: #ffffff;
+}
+
 .si-layer-action-modal-overlay {
   position: fixed;
   inset: 0;

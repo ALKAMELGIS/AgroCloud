@@ -3,7 +3,7 @@
  * Mirrors the coordinate preference rules in runGeoExplorerGeminiTurn (layer hint vs MAP_QUERY).
  */
 
-import { parseMapQueryLngLat } from './geoExplorerGemini'
+import { parseLooseLatLngFromReply, parseMapQueryLngLat } from './geoExplorerGemini'
 import {
   extractGeoExplorerLayerHint,
   findLngLatFromLayerQuery,
@@ -37,7 +37,10 @@ export function resolveGeoAiPinFromUserTextAndReply(
   reply: string,
   combinedLayers: GeoAiMapLayer[],
 ): GeoAiResolvedPin | null {
-  let mapQueryCoords = parseMapQueryLngLat(reply)
+  // Prefer the structured MAP_QUERY tag; fall back to a loose coordinate pair in
+  // the prose so place answers ("Dubai … — 25.2048, 55.2708") still fly even when
+  // the model omits the tag. The loose pair still passes the safety gate below.
+  let mapQueryCoords = parseMapQueryLngLat(reply) ?? parseLooseLatLngFromReply(reply)
   const trimmed = userText.trim()
   const layerHit: LayerQueryMatch | null =
     trimmed.length > 0 ? findLngLatFromLayerQuery(trimmed, combinedLayers) : null

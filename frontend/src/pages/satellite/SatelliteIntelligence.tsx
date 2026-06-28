@@ -273,7 +273,7 @@ import {
   ESRI_WORLD_TERRAIN_SOURCE_ID,
 } from '../../lib/agroCloudMapTerrain';
 import { useOpenWeatherMapApiKey } from '../../hooks/useOpenWeatherMapApiKey';
-import { agroChatWithDeepSeek, agroChatWithOllama } from '../../lib/agroAiChat';
+import { agroChatWithDeepSeek, agroChatWithGemini, agroChatWithOllama } from '../../lib/agroAiChat';
 import {
   buildBasemapCatalog,
   catalogEntryById,
@@ -2828,7 +2828,7 @@ const SI_GEO_AI_WELCOME_GEMINI_TEXT =
 
 /** Static welcome for Claude / DeepSeek data assistant tab. */
 const SI_GEO_AI_WELCOME_DATA_ASSISTANT_TEXT =
-  'Ask about GIS layers using natural language. The app runs **Select by attributes**, **SQL WHERE**, and **Select by location** (within / intersect) on loaded vectors first — results appear as **interactive tables** (sort, filter, multi-select, export) and sync to the map.';
+  "Hello! I'm Agro Cloud - GeoAI - Describe a place, upload an image, or ask for directions.";
 
 export default function SatelliteIntelligence() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -5363,47 +5363,54 @@ export default function SatelliteIntelligence() {
     let cancelled = false;
     const mount = async () => {
       const token = getArcgisPortalToken();
+      const emptyGeoJson = { type: 'FeatureCollection' as const, features: [] as unknown[] };
+      // 1) Mount the layer shell immediately so it ALWAYS appears in the Layers
+      //    panel and can render viewport features — independent of the optional
+      //    ArcGIS metadata fetch below (which may fail on token/CORS issues).
+      if (cancelled) return;
+      setCustomLayers(prev => {
+        if (prev.some(l => isAgroStructuresLayer(l))) return prev;
+        return [
+          ...prev,
+          {
+            id: AGRO_STRUCTURES_PRIMARY_LAYER_ID,
+            name: 'Agro_Structures',
+            geojson: emptyGeoJson,
+            visible: true,
+            source: 'arcgis' as const,
+            sourceUrl: AGRO_STRUCTURES_FS21_URL,
+            authToken: token || undefined,
+            arcgisLayerDefinition: null,
+            ...siDefaultPortalVectorLayerFields(),
+            useArcGisSymbology: false,
+          },
+        ];
+      });
+      setStacStatus('Agro_Structures ready — loading visible fields for current map extent…');
+      // 2) Best-effort: enrich the shell with the ArcGIS layer definition
+      //    (fields / symbology). Failure here must NOT remove the layer.
       try {
         const pjson = await fetchArcgisLayerPjson(AGRO_STRUCTURES_FS21_URL, token || undefined);
         const arcgisLayerDefinition = slimArcgisLayerDefinitionForStorage(pjson) ?? null;
-        const emptyGeoJson = { type: 'FeatureCollection' as const, features: [] as unknown[] };
-        if (cancelled) return;
+        if (cancelled || !arcgisLayerDefinition) return;
         setCustomLayers(prev => {
           const existingIdx = prev.findIndex(l => isAgroStructuresLayer(l));
-          if (existingIdx >= 0) {
-            const existing = prev[existingIdx]!;
-            const needsHydrate = layerNeedsAoiMaskFieldHydration(existing);
-            if (!needsHydrate && existing.arcgisLayerDefinition?.fields?.length) return prev;
-            const next = [...prev];
-            next[existingIdx] = {
-              ...existing,
-              arcgisLayerDefinition: arcgisLayerDefinition ?? existing.arcgisLayerDefinition ?? null,
-              source: 'arcgis' as const,
-              sourceUrl: AGRO_STRUCTURES_FS21_URL,
-            };
-            return next;
-          }
-          return [
-            ...prev,
-            {
-              id: AGRO_STRUCTURES_PRIMARY_LAYER_ID,
-              name: 'Agro_Structures',
-              geojson: emptyGeoJson,
-              visible: true,
-              source: 'arcgis' as const,
-              sourceUrl: AGRO_STRUCTURES_FS21_URL,
-              authToken: token || undefined,
-              arcgisLayerDefinition,
-              ...siDefaultPortalVectorLayerFields(),
-              useArcGisSymbology: false,
-            },
-          ];
+          if (existingIdx < 0) return prev;
+          const existing = prev[existingIdx]!;
+          const needsHydrate = layerNeedsAoiMaskFieldHydration(existing);
+          if (!needsHydrate && existing.arcgisLayerDefinition?.fields?.length) return prev;
+          const next = [...prev];
+          next[existingIdx] = {
+            ...existing,
+            arcgisLayerDefinition: arcgisLayerDefinition ?? existing.arcgisLayerDefinition ?? null,
+            source: 'arcgis' as const,
+            sourceUrl: AGRO_STRUCTURES_FS21_URL,
+          };
+          return next;
         });
-        setStacStatus('Agro_Structures ready — loading visible fields for current map extent…');
       } catch (err) {
-        setStacStatus(
-          err instanceof Error ? err.message : 'Could not load Agro_Structures primary AOI layer.',
-        );
+        // Metadata is optional — the shell + viewport features still work without it.
+        console.warn('[agro-structures] layer definition fetch failed; shell mounted without metadata.', err);
       }
     };
     void mount();
@@ -8411,13 +8418,34 @@ export default function SatelliteIntelligence() {
               .map(p => p.text)
               .join('\n'),
           }));
-          const reply = await agroChatWithOllama({
-            baseUrl,
-            model,
-            system,
-            turns,
-            userMessage: trimmed,
-          });
+          // Try local Ollama first; on failure, automatically fall back to a
+          // cloud provider whose key is configured (DeepSeek → Gemini) so the
+          // chat keeps working even when the daemon is down / not installed.
+          let reply: string;
+          try {
+            reply = await agroChatWithOllama({
+              baseUrl,
+              model,
+              system,
+              turns,
+              userMessage: trimmed,
+            });
+          } catch (ollamaErr) {
+            const ollamaMsg = ollamaErr instanceof Error ? ollamaErr.message : 'unreachable';
+            const dsKey = deepseekApiKey.trim();
+            const gemKey = geminiApiKey.trim();
+            if (dsKey) {
+              const fb = await agroChatWithDeepSeek({ apiKey: dsKey, system, turns, userMessage: trimmed });
+              reply = `> ⚠️ Ollama unavailable (${ollamaMsg}). Answered with DeepSeek fallback.\n\n${fb}`;
+            } else if (gemKey) {
+              const fb = await agroChatWithGemini({ apiKey: gemKey, systemInstruction: system, turns, userMessage: trimmed });
+              reply = `> ⚠️ Ollama unavailable (${ollamaMsg}). Answered with Gemini fallback.\n\n${fb}`;
+            } else {
+              throw new Error(
+                `${ollamaMsg}. No fallback provider configured — add a DeepSeek or Gemini key in System Settings → API Tokens to keep chatting when Ollama is offline.`,
+              );
+            }
+          }
           const aid =
             typeof crypto !== 'undefined' && 'randomUUID' in crypto
               ? crypto.randomUUID()
@@ -8444,6 +8472,8 @@ export default function SatelliteIntelligence() {
     openWeatherApiKey,
     geoAiPinLngLat,
     geoAiInspectCard,
+    deepseekApiKey,
+    geminiApiKey,
   ]);
 
   const onGeoExplorerAttachChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -12429,76 +12459,14 @@ export default function SatelliteIntelligence() {
                 visible={layer.visible}
                 toggleable={layer.toggleable}
                 onToggle={layer.onToggle}
-                actions={
+                headerActions={
                   'actionable' in layer && layer.actionable && 'sourceLayerId' in layer && layer.sourceLayerId ? (
-                    <div className="si-env-layer-actions">
-                      {'supportsAoiEdit' in layer && layer.supportsAoiEdit ? (
-                        <button
-                          type="button"
-                          className="si-env-layer-action-btn"
-                          title="Use as AOI for analysis"
-                          aria-label={`Use ${layer.label} as AOI`}
-                          onClick={e => handleLayerActionClick(e, 'editAoi', layer.sourceLayerId)}
-                        >
-                          <i className="fa-solid fa-draw-polygon" aria-hidden />
-                        </button>
-                      ) : null}
-                      {'supportsRename' in layer && layer.supportsRename ? (
-                        <button
-                          type="button"
-                          className="si-env-layer-action-btn"
-                          title="Rename layer"
-                          aria-label={`Rename ${layer.label}`}
-                          onClick={e => handleLayerActionClick(e, 'rename', layer.sourceLayerId)}
-                        >
-                          <i className="fa-solid fa-pen-to-square" aria-hidden />
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="si-env-layer-action-btn"
-                        title="Sync layer"
-                        aria-label={`Sync ${layer.label}`}
-                        onClick={e => handleLayerActionClick(e, 'sync', layer.sourceLayerId)}
-                      >
-                        <i
-                          className={
-                            syncingLayerId === layer.sourceLayerId ? 'fa-solid fa-rotate-right fa-spin' : 'fa-solid fa-rotate-right'
-                          }
-                        />
-                      </button>
-                      <button
-                        type="button"
-                        className="si-env-layer-action-btn"
-                        title="Open tables"
-                        aria-label={`Open tables for ${layer.label}`}
-                        onClick={e => handleLayerActionClick(e, 'table', layer.sourceLayerId)}
-                      >
-                        <i className="fa-solid fa-table-cells" aria-hidden />
-                      </button>
-                      <button
-                        type="button"
-                        className="si-env-layer-action-btn"
-                        title="Symbology"
-                        aria-label={`Symbology for ${layer.label}`}
-                        onClick={e => handleLayerActionClick(e, 'symbology', layer.sourceLayerId)}
-                      >
-                        <i className="fa-solid fa-sliders" aria-hidden />
-                      </button>
-                      <button
-                        type="button"
-                        className="si-env-layer-action-btn"
-                        title="Legend"
-                        aria-label={`Legend for ${layer.label}`}
-                        onClick={e => handleLayerActionClick(e, 'legend', layer.sourceLayerId)}
-                      >
-                        <i className="fa-solid fa-key" aria-hidden />
-                      </button>
+                    <div className="si-env-layer-actions si-env-layer-actions--menu-only">
                       <div className="si-env-layer-actions-more-wrap">
                         <button
                           type="button"
                           className="si-env-layer-action-btn si-env-layer-action-btn--menu"
-                          title="Layer options (zoom, table, pop-ups, opacity, order…)"
+                          title="Layer options (zoom, table, symbology, pop-ups, opacity, order…)"
                           aria-label={`Layer options for ${layer.label}`}
                           aria-haspopup="menu"
                           aria-expanded={layerOptionsMenuLayerId === layer.sourceLayerId}
@@ -12507,7 +12475,7 @@ export default function SatelliteIntelligence() {
                             setLayerOptionsMenuLayerId(v => (v === layer.sourceLayerId ? null : layer.sourceLayerId!));
                           }}
                         >
-                          <i className="fa-solid fa-ellipsis-vertical" aria-hidden />
+                          <i className="fa-solid fa-ellipsis" aria-hidden />
                         </button>
                         {layerOptionsMenuLayerId === layer.sourceLayerId
                           ? (() => {
@@ -12622,15 +12590,6 @@ export default function SatelliteIntelligence() {
                             })()
                           : null}
                       </div>
-                      <button
-                        type="button"
-                        className="si-env-layer-action-btn si-env-layer-action-btn--danger"
-                        title="Remove layer"
-                        aria-label={`Remove ${layer.label} from map`}
-                        onClick={e => handleLayerActionClick(e, 'remove', layer.sourceLayerId)}
-                      >
-                        <i className="fa-solid fa-trash-can" aria-hidden />
-                      </button>
                     </div>
                   ) : undefined
                 }
@@ -14541,7 +14500,7 @@ export default function SatelliteIntelligence() {
                               className={`si-geo-ai-model-tab${geoAiModelTab === 'ollama' ? ' si-geo-ai-model-tab--active' : ''}`}
                               onClick={() => setGeoAiModelTab('ollama')}
                             >
-                              Ollama
+                              AgroCloud AI Chat
                             </button>
                           </div>
 
@@ -15312,21 +15271,6 @@ export default function SatelliteIntelligence() {
                   >
                     <i className={`fa-solid ${is3DView ? 'fa-map' : 'fa-cube'}`} aria-hidden />
                     <span className="si-view3d-button__tag">{is3DView ? '2D' : '3D'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`si-view3d-opts-btn ${isTerrain3dPanelOpen ? 'active' : ''}`}
-                    title="Elevation & terrain options"
-                    aria-label="Elevation and terrain options"
-                    aria-haspopup="dialog"
-                    aria-pressed={isTerrain3dPanelOpen}
-                    aria-expanded={isTerrain3dPanelOpen}
-                    onClick={() => {
-                      setIsTerrain3dPanelOpen(v => !v);
-                      setIsBasemapOpen(false);
-                    }}
-                  >
-                    <i className="fa-solid fa-chevron-down" aria-hidden />
                   </button>
                 </div>
                 {isTerrain3dPanelOpen ? (

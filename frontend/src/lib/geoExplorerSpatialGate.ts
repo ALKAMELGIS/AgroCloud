@@ -36,10 +36,10 @@ export function spatialLang(userText: string): 'ar' | 'en' {
 }
 
 const NAV_VERB_EN =
-  /\b(zoom|fly|center|centre|pan|pin|goto|go\s+to|navigate|locate|where\s+is|where's|map\s+of|show\s+(?:me\s+)?(?:on\s+)?(?:the\s+)?map|display\s+(?:on\s+)?(?:the\s+)?map|open\s+(?:the\s+)?map\s+to|coordinates?\b|lat(?:itude)?\b|lon(?:gitude)?\b)\b/i
+  /\b(zoom|fly|center|centre|pan|pin|goto|go\s+to|take\s+me\s+to|navigate|locate|find\s+(?:me\s+)?(?:the\s+)?|where\s+is|where's|map\s+of|show\s+(?:me\s+)?|display\s+|open\s+(?:the\s+)?map\s+to|coordinates?\b|lat(?:itude)?\b|lon(?:gitude)?\b)\b/i
 
 const NAV_AR =
-  /أين\s|موقع|إحداثيات|خط\s+العرض|خط\s+الطول|قرّب|تكبير|تصغير|عرض\s+على\s+الخريطة|وجّه\s+الخريطة|انتقل\s+إلى/i
+  /أين\s|أرني|ارني|اعرض|إعرض|وين|فين|موقع|إحداثيات|خط\s+العرض|خط\s+الطول|قرّب|تكبير|تصغير|عرض\s+على\s+الخريطة|وجّه\s+الخريطة|انتقل\s+إلى|اذهب\s+إلى|خذني\s+إلى/i
 
 const TABULAR_ANALYSIS_EN =
   /\b(filter|filtering|condition|criteria|comparison\s+operator|attribute\s+table|tabular|statistics|stats|group\s+by|calculate\s+field|selection\s+rows|feature\s+values|only\s+have\s+layer\s+summary|full\s+attribute\s+table)\b/i
