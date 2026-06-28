@@ -58,6 +58,18 @@ function loadBlocklist() {
     .filter((l) => l && !l.startsWith('#'))
 }
 
+/**
+ * Full token strings that are intentionally public (e.g. a URL-restricted Mapbox `pk.` token
+ * embedded for a static GitHub Pages deploy). Supplied via env so the value is never committed.
+ * A rule match is ignored when it is a substring of an allowed token.
+ */
+function loadAllowlist() {
+  return String(process.env.PAGES_SECRET_SCAN_ALLOW || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length >= 16)
+}
+
 function walkFiles(dir, out = []) {
   if (!fs.existsSync(dir)) return out
   for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -75,6 +87,9 @@ function walkFiles(dir, out = []) {
 export function scanDistForSecrets(distPath = distDir) {
   const errors = []
   const blocklist = loadBlocklist()
+  const allowlist = loadAllowlist()
+  const isAllowed = (matched) =>
+    allowlist.some((token) => token.includes(matched) || matched.includes(token))
 
   if (!fs.existsSync(distPath)) {
     return { ok: false, errors: [`dist not found: ${distPath}`] }
@@ -97,9 +112,15 @@ export function scanDistForSecrets(distPath = distDir) {
     }
 
     for (const rule of RULES) {
-      if (rule.pattern.test(text)) {
+      const re = new RegExp(
+        rule.pattern.source,
+        rule.pattern.flags.includes('g') ? rule.pattern.flags : rule.pattern.flags + 'g',
+      )
+      let match
+      while ((match = re.exec(text))) {
+        if (isAllowed(match[0])) continue
         errors.push(`${rel}: ${rule.hint} [${rule.id}]`)
-        rule.pattern.lastIndex = 0
+        break
       }
     }
   }

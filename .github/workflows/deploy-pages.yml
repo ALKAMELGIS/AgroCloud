@@ -49,8 +49,12 @@ jobs:
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
-          VITE_MAPBOX_TOKEN: ''
-          VITE_MAPBOX_ACCESS_TOKEN: ''
+          # Public, URL-restricted Mapbox token embedded for the static deploy (set repo Variable VITE_MAPBOX_TOKEN).
+          # Empty when unset → token-free build (unchanged behavior). Restrict the token to www.eliteagrocloud.com in Mapbox.
+          VITE_MAPBOX_TOKEN: ${{ vars.VITE_MAPBOX_TOKEN }}
+          VITE_MAPBOX_ACCESS_TOKEN: ${{ vars.VITE_MAPBOX_TOKEN }}
+          # Optional: backend that serves GET/PUT /api/system/api-secrets (CORS) to hydrate ArcGIS/other tokens at runtime.
+          VITE_AGRI_API_SECRETS_URL: ${{ vars.VITE_AGRI_API_SECRETS_URL }}
           VITE_GOOGLE_MAPS_API_KEY: ''
           VITE_GOOGLE_MAPS_SERVER_API_KEY: ''
           VITE_ARCGIS_PORTAL_TOKEN: ''
@@ -72,6 +76,9 @@ jobs:
           VITE_GOOGLE_DRIVE_API_KEY: ''
         run: npm run build
       - name: Prepare Pages dist + sanity-check
+        env:
+          # Allow the intentionally-public, URL-restricted Mapbox token through the embedded-secret scanner.
+          PAGES_SECRET_SCAN_ALLOW: ${{ vars.VITE_MAPBOX_TOKEN }}
         run: node scripts/pages-dist-check.mjs
       - name: Sync dist to repository root and push main
         run: |
