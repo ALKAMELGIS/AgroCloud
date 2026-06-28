@@ -143,6 +143,104 @@ const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, m
  * Needs no API key — only the base URL of the running Ollama server and a model
  * pulled locally (e.g. `ollama pull llama3.1`).
  */
+function buildOllamaMessages(
+  system: string,
+  turns: AgroChatTurn[],
+  userMessage: string,
+): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
+  const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+    { role: 'system', content: system },
+  ]
+  for (const t of turns) {
+    messages.push({ role: t.role === 'user' ? 'user' : 'assistant', content: t.text })
+  }
+  messages.push({ role: 'user', content: userMessage })
+  return messages
+}
+
+/**
+ * Streaming local-Ollama chat: renders tokens as they are generated so the first
+ * words appear in ~1–2s instead of waiting for the whole answer. `onToken` is
+ * called with each incremental delta; the full reply is returned at the end.
+ *
+ * Throws if the daemon is unreachable or the model errors *before* any token —
+ * the caller can then fall back to a cloud provider. Once tokens have streamed
+ * we never retry (that would duplicate output), so a mid-stream drop returns
+ * whatever was received.
+ */
+export async function agroChatWithOllamaStream(params: {
+  baseUrl: string
+  model: string
+  system: string
+  turns: AgroChatTurn[]
+  userMessage: string
+  onToken: (delta: string) => void
+  signal?: AbortSignal
+}): Promise<string> {
+  const { baseUrl, model, system, turns, userMessage, onToken, signal } = params
+  const root = (baseUrl || 'http://localhost:11434').trim().replace(/\/+$/, '')
+  const usableModel = (model || 'llama3.1').trim()
+  const messages = buildOllamaMessages(system, turns, userMessage)
+
+  let res: Response
+  try {
+    res = await fetch(OLLAMA_CHAT_PROXY_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ baseUrl: root, model: usableModel, messages, stream: true }),
+      signal,
+    })
+  } catch (err) {
+    throw new Error(
+      `Could not reach the app server to proxy Ollama. ${err instanceof Error ? err.message : ''}`.trim(),
+    )
+  }
+
+  if (!res.ok || !res.body) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(data?.error || res.statusText || `HTTP ${res.status}`)
+  }
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let full = ''
+
+  const consumeLine = (line: string) => {
+    const trimmed = line.trim()
+    if (!trimmed) return
+    let obj: { message?: { content?: string }; error?: string; done?: boolean }
+    try {
+      obj = JSON.parse(trimmed)
+    } catch {
+      return // ignore partial / non-JSON keep-alive lines
+    }
+    if (obj.error) throw new Error(obj.error)
+    const delta = obj.message?.content
+    if (delta) {
+      full += delta
+      onToken(delta)
+    }
+  }
+
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    let nl = buffer.indexOf('\n')
+    while (nl !== -1) {
+      consumeLine(buffer.slice(0, nl))
+      buffer = buffer.slice(nl + 1)
+      nl = buffer.indexOf('\n')
+    }
+  }
+  if (buffer.trim()) consumeLine(buffer)
+
+  const text = full.trim()
+  if (!text) throw new Error('Empty Ollama response')
+  return text
+}
+
 export async function agroChatWithOllama(params: {
   baseUrl: string
   model: string
@@ -151,11 +249,7 @@ export async function agroChatWithOllama(params: {
   userMessage: string
 }): Promise<string> {
   const { baseUrl, model, system, turns, userMessage } = params
-  const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [{ role: 'system', content: system }]
-  for (const t of turns) {
-    messages.push({ role: t.role === 'user' ? 'user' : 'assistant', content: t.text })
-  }
-  messages.push({ role: 'user', content: userMessage })
+  const messages = buildOllamaMessages(system, turns, userMessage)
 
   const root = (baseUrl || 'http://localhost:11434').trim().replace(/\/+$/, '')
   const usableModel = (model || 'llama3.1').trim()

@@ -94,10 +94,14 @@ export async function predictTreeBoxes(
     )
   }
   const json = (await res.json().catch(() => ({}))) as { boxes?: YoloTreeBox[]; error?: string }
-  if (res.status === 503) {
+  // 503 (unconfigured) and 502/504 (proxy could not reach / timed out talking to
+  // the model service) all mean the hosted model is momentarily unavailable.
+  // Flag these as "offline" so the caller can degrade gracefully to the on-device
+  // fallback detector instead of surfacing a blocking error.
+  if (res.status === 503 || res.status === 502 || res.status === 504) {
     throw new TreeDetectionServiceError(
       json?.error ||
-          'YOLO model is offline — run backend/services/tree-detection and set TREE_DETECTION_URL on the backend to enable tree detection.',
+          'Tree-detection model service is offline — run backend/services/tree-detection to enable the hosted model.',
       true,
     )
   }

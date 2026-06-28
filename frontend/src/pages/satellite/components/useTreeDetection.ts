@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   bboxForTileRange,
   buildTreeImageryMosaic,
@@ -68,8 +68,9 @@ function stableGeometryKey(geometry: GeoJSON.Geometry | GeoJSON.Feature): string
 
 /**
  * Tree Detections orchestration: fetch CORS-safe imagery for the AOI, run the
- * crown-detection engine, and expose results — auto-running whenever the AOI,
- * provider, or sensitivity changes.
+ * crown-detection engine, and expose results. The run is RUN-only — it executes
+ * solely when the user presses Run/Re-run (via `rerun()`), never automatically
+ * when the AOI, provider, sensitivity or mode changes.
  */
 export function useTreeDetection({ geometry, provider, enabled, sensitivity, mode, tuning }: Params): UseTreeDetectionState & {
   rerun: () => void
@@ -93,11 +94,28 @@ export function useTreeDetection({ geometry, provider, enabled, sensitivity, mod
 
   const active = enabled && !!geomKey && !!geometry
 
+  // Latest inputs, read at run time. The detection run is driven ONLY by the
+  // user pressing Run/Re-run (manualEpoch) — it is never auto-triggered by AOI,
+  // provider, sensitivity or mode changes.
+  const paramsRef = useRef({ geometry, provider, effectiveTuning, effectiveSensitivity, analysisMode })
+  paramsRef.current = { geometry, provider, effectiveTuning, effectiveSensitivity, analysisMode }
+  const runControllerRef = useRef<AbortController | null>(null)
+
+  // Reset to idle when the tool closes or the AOI changes (stale results no
+  // longer match a new AOI). Also aborts any in-flight run.
   useEffect(() => {
-    if (!active || !geometry) {
-      setState({ phase: 'idle', result: null, error: null, busy: false, usedLocalFallback: false })
-      return
-    }
+    runControllerRef.current?.abort()
+    runControllerRef.current = null
+    setState({ phase: 'idle', result: null, error: null, busy: false, usedLocalFallback: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, geomKey])
+
+  // Execute a detection pass ONLY when the user presses Run/Re-run. manualEpoch
+  // starts at 0 (no auto-run on mount) and increments on each button press.
+  useEffect(() => {
+    if (manualEpoch === 0) return
+    const { geometry, provider, effectiveTuning, effectiveSensitivity, analysisMode } = paramsRef.current
+    if (!geometry) return
 
     const bbox = geometryBBox(geometry)
     if (!bbox) {
@@ -113,7 +131,8 @@ export function useTreeDetection({ geometry, provider, enabled, sensitivity, mod
 
     let cancelled = false
     const controller = new AbortController()
-    const timer = window.setTimeout(async () => {
+    runControllerRef.current = controller
+    void (async () => {
       setState(prev => ({ ...prev, phase: 'fetching', busy: true, error: null }))
       const isDone = () => cancelled || controller.signal.aborted
       try {
@@ -123,9 +142,13 @@ export function useTreeDetection({ geometry, provider, enabled, sensitivity, mod
         const detectProvider = TREE_IMAGERY_PROVIDERS[provider]?.corsSafe ? provider : 'esri'
         const providerDef = TREE_IMAGERY_PROVIDERS[detectProvider]
         const centerLat = (bbox.north + bbox.south) / 2
-        // YOLO confidence threshold from sensitivity: higher sensitivity → lower
-        // threshold (more trees). 0 → 0.6 (strict), 1 → ~0.05 (permissive).
-        const scoreThreshold = Math.max(0.05, Math.min(0.6, 0.6 - effectiveSensitivity * 0.55))
+        // Confidence threshold from sensitivity. The DeepForest tree-crown model
+        // emits LOW scores — even over dense canopy the strongest crowns score
+        // ~0.6 and most valid detections sit at 0.1–0.4 — so the usable range is
+        // ~0.05 (aggressive) to ~0.35 (conservative), NOT 0.05–0.6. A higher cap
+        // silently discards almost every real detection, which reads as "no
+        // results". Default sensitivity 0.5 → ~0.20.
+        const scoreThreshold = Math.max(0.05, Math.min(0.5, 0.35 - effectiveSensitivity * 0.3))
 
         // Detect crowns for ONE mosaic. Prefer the hosted model; if it is
         // offline/unconfigured, transparently fall back to the on-device
@@ -282,15 +305,14 @@ export function useTreeDetection({ geometry, provider, enabled, sensitivity, mod
               : 'Tree detection failed.'
         setState({ phase: 'error', result: null, error: message, busy: false, usedLocalFallback: false })
       }
-    }, 500)
+    })()
 
     return () => {
       cancelled = true
       controller.abort()
-      window.clearTimeout(timer)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, geomKey, provider, effectiveSensitivity, analysisMode, manualEpoch])
+  }, [manualEpoch])
 
   const rerun = useCallback(() => setManualEpoch(e => e + 1), [])
 

@@ -157,6 +157,7 @@ export type SatelliteMapAnalysisChromeProps = {
     | 'ai-detection-gis'
     | 'tree-detections'
     | 'hydro-watershed'
+    | 'flood-monitoring'
     | 'table-geo-ai'
     | null;
   onMapToolboxEmbedHost?: (el: HTMLDivElement | null) => void;

@@ -91,3 +91,11 @@ credentials.json
 
 # GeoDash FastAPI local SQLite
 services/geodash-api/geodash.sqlite
+
+# Tree-detection Python microservice local runtime (large venv, model cache, logs)
+backend/services/tree-detection/.venv/
+backend/services/tree-detection/lightning_logs/
+backend/services/tree-detection/*_log.txt
+
+# Local scratch / sampling scripts
+.sample_grd.mjs

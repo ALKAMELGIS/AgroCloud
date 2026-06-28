@@ -20,6 +20,7 @@ import { registerGeocodeRoutes } from './geocodeProxy.js'
 import { registerAcpWeatherRoutes } from './acpWeatherRoutes.js'
 import { registerCropClassificationRoutes } from './cropClassificationProxy.js'
 import { registerTreeDetectionRoutes } from './treeDetectionProxy.js'
+import { registerFloodMonitoringRoutes } from './floodMonitoringProxy.js'
 import { registerEsriTerrainTileRoutes } from './esriTerrainRgbTiles.js'
 import {
   applyStaticCacheHeaders,
@@ -1608,7 +1609,7 @@ app.post('/api/ollama/warm', async (req, res) => {
 })
 
 app.post('/api/ollama/chat', async (req, res) => {
-  const { baseUrl: rawBase, model, messages, options: clientOptions, keepAlive } = req.body || {}
+  const { baseUrl: rawBase, model, messages, options: clientOptions, keepAlive, stream: wantStream } = req.body || {}
   const baseUrl = normalizeOllamaBaseUrl(rawBase)
   const usableModel = String(model || 'llama3.1').trim()
   if (!Array.isArray(messages) || messages.length === 0) {
@@ -1627,6 +1628,53 @@ app.post('/api/ollama/chat', async (req, res) => {
     top_p: 0.9,
     ...(clientOptions && typeof clientOptions === 'object' ? clientOptions : {}),
   }
+
+  // Streaming path: forward Ollama's native NDJSON stream straight to the client
+  // so tokens render as they are generated (first token in ~1–2s instead of
+  // waiting for the whole answer). This is the dominant perceived-speed win.
+  if (wantStream) {
+    try {
+      const upstream = await fetchOllamaWithRetry(
+        `${baseUrl}/api/chat`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' },
+          body: JSON.stringify({ model: usableModel, messages, stream: true, keep_alive, options }),
+        },
+        // Only the initial connect is retried; once tokens flow we must not re-send.
+        { retries: 2, backoffMs: 600, timeoutMs: 120000 },
+      )
+      if (!upstream.ok || !upstream.body) {
+        const errText = await upstream.text().catch(() => '')
+        let parsed = null
+        try { parsed = JSON.parse(errText) } catch { parsed = null }
+        const msg = parsed?.error || errText.slice(0, 240) || `Ollama HTTP ${upstream.status}`
+        const code = upstream.status >= 400 && upstream.status < 600 ? upstream.status : 502
+        return res.status(code).json({ error: msg })
+      }
+      res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8')
+      res.setHeader('Cache-Control', 'no-store, no-transform')
+      res.setHeader('X-Accel-Buffering', 'no')
+      res.flushHeaders?.()
+      for await (const chunk of upstream.body) {
+        res.write(chunk)
+        res.flush?.()
+      }
+      return res.end()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'unreachable'
+      if (res.headersSent) {
+        // Stream already started — close it; the client treats a truncated stream as done.
+        try { res.end() } catch { /* socket already gone */ }
+        return undefined
+      }
+      return res.status(502).json({
+        error:
+          `Could not reach Ollama at ${baseUrl}. Is it running? Start it with "ollama serve" and pull a model (e.g. "ollama pull ${usableModel}"). ${msg}`.trim(),
+      })
+    }
+  }
+
   try {
     const r = await fetchOllamaWithRetry(
       `${baseUrl}/api/chat`,
@@ -1779,6 +1827,7 @@ registerGeocodeRoutes(app)
 registerAcpWeatherRoutes(app)
 registerCropClassificationRoutes(app, { secretsFilePath: API_SECRETS_FILE, broadcast })
 registerTreeDetectionRoutes(app)
+registerFloodMonitoringRoutes(app, { secretsFilePath: API_SECRETS_FILE, broadcast })
 registerEsriTerrainTileRoutes(app)
 
 /**

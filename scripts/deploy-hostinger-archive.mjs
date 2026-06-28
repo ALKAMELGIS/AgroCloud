@@ -26,6 +26,10 @@ const EXCLUDE_DIRS = new Set([
   'test-results',
   'coverage',
   '.vite',
+  // Python tree-detection microservice runs separately (not on Hostinger Node);
+  // never bundle its multi-GB venv / model cache / logs into the deploy archive.
+  '.venv',
+  'lightning_logs',
 ])
 
 const EXCLUDE_FILES = new Set(['hostinger-deploy.zip', 'hostinger-deploy.tar.gz', '.env'])

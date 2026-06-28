@@ -274,7 +274,7 @@ import {
   setAgroCloudTerrainExaggeration,
 } from '../../lib/agroCloudMapTerrain';
 import { useOpenWeatherMapApiKey } from '../../hooks/useOpenWeatherMapApiKey';
-import { agroChatWithDeepSeek, agroChatWithGemini, agroChatWithOllama, warmOllama } from '../../lib/agroAiChat';
+import { agroChatWithDeepSeek, agroChatWithGemini, agroChatWithOllamaStream, warmOllama } from '../../lib/agroAiChat';
 import {
   buildBasemapCatalog,
   catalogEntryById,
@@ -364,6 +364,8 @@ import {
 } from '../../lib/geoAiCommandExecutor';
 import { TreeDetectionsPanel } from './components/TreeDetectionsPanel';
 import { useTreeDetection } from './components/useTreeDetection';
+import { FloodMonitoringPanel, type FloodLayerKind } from './components/FloodMonitoringPanel';
+import { useFloodMonitoring } from './components/useFloodMonitoring';
 import { downloadTreeShapefile } from '../../lib/treeDetection/shapefileExport';
 import {
   searchPlaces,
@@ -533,6 +535,7 @@ type MapToolboxSectionId =
   | 'ai-detection-gis'
   | 'tree-detections'
   | 'hydro-watershed'
+  | 'flood-monitoring'
   | 'table-geo-ai';
 
 type GeoAiInspectCardState = {
@@ -3397,6 +3400,7 @@ export default function SatelliteIntelligence() {
     | 'ai-detection-gis'
     | 'tree-detections'
     | 'hydro-watershed'
+    | 'flood-monitoring'
     | 'table-geo-ai'
   >('source');
 
@@ -3725,18 +3729,26 @@ export default function SatelliteIntelligence() {
     void warmOllama(ollamaConfig.baseUrl, ollamaConfig.model);
   }, [geoAiModelTab, ollamaConfig.baseUrl, ollamaConfig.model]);
   const [geoAiChatMessages, setGeoAiChatMessages] = useState<GeoExplorerMessage[]>([]);
+  const geoAiChatMessagesRef = useRef<GeoExplorerMessage[]>([]);
+  geoAiChatMessagesRef.current = geoAiChatMessages;
   const [geoAiClaudeVisibleCount, setGeoAiClaudeVisibleCount] = useState(GEO_AI_CHAT_PAGE_SIZE);
   const [geoAiDraft, setGeoAiDraft] = useState('');
   const [geoAiBusy, setGeoAiBusy] = useState(false);
   const [geoAiChatError, setGeoAiChatError] = useState('');
   const geoAiInFlightRef = useRef(false);
   const [geoDeepseekChatMessages, setGeoDeepseekChatMessages] = useState<GeoExplorerMessage[]>([]);
+  const geoDeepseekChatMessagesRef = useRef<GeoExplorerMessage[]>([]);
+  geoDeepseekChatMessagesRef.current = geoDeepseekChatMessages;
   const [geoAiDeepseekVisibleCount, setGeoAiDeepseekVisibleCount] = useState(GEO_AI_CHAT_PAGE_SIZE);
   const [geoDeepseekDraft, setGeoDeepseekDraft] = useState('');
   const [geoDeepseekBusy, setGeoDeepseekBusy] = useState(false);
   const [geoDeepseekChatError, setGeoDeepseekChatError] = useState('');
   const geoDeepseekInFlightRef = useRef(false);
   const [geoOllamaChatMessages, setGeoOllamaChatMessages] = useState<GeoExplorerMessage[]>([]);
+  // Latest committed messages — read at send time so the async turn doesn't depend
+  // on the state-updater (which React invokes twice under StrictMode).
+  const geoOllamaChatMessagesRef = useRef<GeoExplorerMessage[]>([]);
+  geoOllamaChatMessagesRef.current = geoOllamaChatMessages;
   const [geoAiOllamaVisibleCount, setGeoAiOllamaVisibleCount] = useState(GEO_AI_CHAT_PAGE_SIZE);
   const [geoOllamaDraft, setGeoOllamaDraft] = useState('');
   const [geoOllamaBusy, setGeoOllamaBusy] = useState(false);
@@ -8362,10 +8374,10 @@ export default function SatelliteIntelligence() {
     geoAiInFlightRef.current = true;
     setGeoAiBusy(true);
 
-    setGeoAiChatMessages(prev => {
-      const userMsg: GeoExplorerMessage = { id: userId, role: 'user', parts: [{ type: 'text', text: trimmed }] };
-      const historyWithUser = [...prev, userMsg];
-      queueMicrotask(async () => {
+    const userMsg: GeoExplorerMessage = { id: userId, role: 'user', parts: [{ type: 'text', text: trimmed }] };
+    const historyWithUser = [...geoAiChatMessagesRef.current, userMsg];
+    setGeoAiChatMessages(prev => [...prev, userMsg]);
+    queueMicrotask(async () => {
         try {
           const savedLayersForStats = await loadGisMapSavedLayers();
           const mergedLayersForStats: GeoAiMapLayer[] = [
@@ -8449,8 +8461,6 @@ export default function SatelliteIntelligence() {
           setGeoAiBusy(false);
         }
       });
-      return historyWithUser;
-    });
   }, [
     claudeApiKey,
     geoAiDraft,
@@ -8485,10 +8495,10 @@ export default function SatelliteIntelligence() {
     geoDeepseekInFlightRef.current = true;
     setGeoDeepseekBusy(true);
 
-    setGeoDeepseekChatMessages(prev => {
-      const userMsg: GeoExplorerMessage = { id: userId, role: 'user', parts: [{ type: 'text', text: trimmed }] };
-      const historyWithUser = [...prev, userMsg];
-      queueMicrotask(async () => {
+    const userMsg: GeoExplorerMessage = { id: userId, role: 'user', parts: [{ type: 'text', text: trimmed }] };
+    const historyWithUser = [...geoDeepseekChatMessagesRef.current, userMsg];
+    setGeoDeepseekChatMessages(prev => [...prev, userMsg]);
+    queueMicrotask(async () => {
         try {
           const savedLayersForStats = await loadGisMapSavedLayers();
           const mergedLayersForStats: GeoAiMapLayer[] = [
@@ -8573,8 +8583,6 @@ export default function SatelliteIntelligence() {
           setGeoDeepseekBusy(false);
         }
       });
-      return historyWithUser;
-    });
   }, [
     deepseekApiKey,
     geoDeepseekDraft,
@@ -8610,10 +8618,11 @@ export default function SatelliteIntelligence() {
     geoOllamaInFlightRef.current = true;
     setGeoOllamaBusy(true);
 
-    setGeoOllamaChatMessages(prev => {
-      const userMsg: GeoExplorerMessage = { id: userId, role: 'user', parts: [{ type: 'text', text: trimmed }] };
-      const historyWithUser = [...prev, userMsg];
-      queueMicrotask(async () => {
+    const userMsg: GeoExplorerMessage = { id: userId, role: 'user', parts: [{ type: 'text', text: trimmed }] };
+    const historyWithUser = [...geoOllamaChatMessagesRef.current, userMsg];
+    // Pure state update (no side effects in the updater → safe under StrictMode).
+    setGeoOllamaChatMessages(prev => [...prev, userMsg]);
+    queueMicrotask(async () => {
         try {
           const savedLayersForStats = await loadGisMapSavedLayers();
           const mergedLayersForStats: GeoAiMapLayer[] = [
@@ -8678,22 +8687,42 @@ export default function SatelliteIntelligence() {
               .map(p => p.text)
               .join('\n'),
           }));
-          // Try local Ollama first; on failure, automatically fall back to a
-          // cloud provider whose key is configured (DeepSeek → Gemini) so the
-          // chat keeps working even when the daemon is down / not installed.
+          // Try local Ollama first (streamed token-by-token for a fast-feeling
+          // reply); on failure, automatically fall back to a cloud provider whose
+          // key is configured (DeepSeek → Gemini) so the chat keeps working even
+          // when the daemon is down / not installed.
+          const aid =
+            typeof crypto !== 'undefined' && 'randomUUID' in crypto
+              ? crypto.randomUUID()
+              : `goll-m-${Date.now()}`;
+          // Pre-create the assistant bubble so streamed tokens render into it.
+          setGeoOllamaChatMessages(h => [...h, { id: aid, role: 'model', parts: [{ type: 'text', text: '' }] }]);
+          const setAssistantText = (text: string) =>
+            setGeoOllamaChatMessages(h =>
+              h.map(m => (m.id === aid ? { ...m, parts: [{ type: 'text', text }] } : m)),
+            );
+
           let reply: string;
           try {
-            reply = await agroChatWithOllama({
+            let streamed = '';
+            reply = await agroChatWithOllamaStream({
               baseUrl,
               model,
               system,
               turns,
               userMessage: trimmed,
+              onToken: delta => {
+                if (!streamed) setGeoOllamaBusy(false); // first token → drop the "Thinking…" indicator
+                streamed += delta;
+                setAssistantText(streamed);
+              },
             });
+            setAssistantText(reply);
           } catch (ollamaErr) {
             const ollamaMsg = ollamaErr instanceof Error ? ollamaErr.message : 'unreachable';
             const dsKey = deepseekApiKey.trim();
             const gemKey = geminiApiKey.trim();
+            setAssistantText(''); // discard any partial Ollama output before the fallback answer
             if (dsKey) {
               const fb = await agroChatWithDeepSeek({ apiKey: dsKey, system, turns, userMessage: trimmed });
               reply = `> ⚠️ Ollama unavailable (${ollamaMsg}). Answered with DeepSeek fallback.\n\n${fb}`;
@@ -8701,16 +8730,13 @@ export default function SatelliteIntelligence() {
               const fb = await agroChatWithGemini({ apiKey: gemKey, systemInstruction: system, turns, userMessage: trimmed });
               reply = `> ⚠️ Ollama unavailable (${ollamaMsg}). Answered with Gemini fallback.\n\n${fb}`;
             } else {
+              setGeoOllamaChatMessages(h => h.filter(m => m.id !== aid)); // remove the empty bubble
               throw new Error(
                 `${ollamaMsg}. No fallback provider configured — add a DeepSeek or Gemini key in System Settings → API Tokens to keep chatting when Ollama is offline.`,
               );
             }
+            setAssistantText(reply);
           }
-          const aid =
-            typeof crypto !== 'undefined' && 'randomUUID' in crypto
-              ? crypto.randomUUID()
-              : `goll-m-${Date.now()}`;
-          setGeoOllamaChatMessages(h => [...h, { id: aid, role: 'model', parts: [{ type: 'text', text: reply }] }]);
           await applySatelliteGeoAiMapUi(trimmed, reply);
           runGeoAiMapCommandsRef.current?.(reply);
         } catch (e) {
@@ -8720,8 +8746,6 @@ export default function SatelliteIntelligence() {
           setGeoOllamaBusy(false);
         }
       });
-      return historyWithUser;
-    });
   }, [
     ollamaConfig,
     geoOllamaDraft,
@@ -9554,7 +9578,8 @@ export default function SatelliteIntelligence() {
     } else if (
       expandedEnvSection === 'remote-sensing' ||
       expandedEnvSection === 'tree-detections' ||
-      expandedEnvSection === 'hydro-watershed'
+      expandedEnvSection === 'hydro-watershed' ||
+      expandedEnvSection === 'flood-monitoring'
     ) {
       setCropClassDrawingModeActive(false);
       mapDrawOwnerRef.current = 'remote-sensing';
@@ -9649,6 +9674,120 @@ export default function SatelliteIntelligence() {
       }
     })();
   }, [hydro]);
+
+  // ── Flood Monitoring (SAR-based change detection) ────────────────────────
+  const FLOOD_RASTER_LAYER_ID = 'flood-extent-raster';
+  const FLOOD_CHANGE_LAYER_ID = 'flood-change-raster';
+  const FLOOD_VECTOR_LAYER_ID = 'flood-boundaries-vector';
+  const isoDaysAgo = (days: number) => new Date(Date.now() - days * 86400_000).toISOString().slice(0, 10);
+  const flood = useFloodMonitoring();
+  const [floodPostDate, setFloodPostDate] = useState<string>(() => isoDaysAgo(5));
+  const [floodPreDate, setFloodPreDate] = useState<string>(() => isoDaysAgo(35));
+  const [floodThresholdDb, setFloodThresholdDb] = useState<number>(-17);
+  const [floodLayerVisible, setFloodLayerVisible] = useState<Record<FloodLayerKind, boolean>>({
+    flood: true,
+    vector: true,
+    change: false,
+  });
+  const floodLayerVisibleRef = useRef(floodLayerVisible);
+  floodLayerVisibleRef.current = floodLayerVisible;
+
+  const handleFloodRun = useCallback(() => {
+    const geometry = getDrawnGeometry(drawnGeometryRef.current);
+    if (!geometry || !floodPostDate) return;
+    flood.run({
+      aoi: geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon,
+      postDate: floodPostDate,
+      preDate: floodPreDate || undefined,
+      threshold: floodThresholdDb,
+    });
+  }, [flood, floodPostDate, floodPreDate, floodThresholdDb]);
+
+  // Publish flood outputs as separate Layer Manager layers (raster + change + vector).
+  const floodPublishedKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    const result = flood.result;
+    if (!result) return;
+    const key = `${result.stats.postDate}|${result.stats.preDate}|${result.stats.thresholdDb}`;
+    if (floodPublishedKeyRef.current === key) return;
+    floodPublishedKeyRef.current = key;
+    const [w, s, e, n] = result.bounds;
+    const coordinates: RasterMapCoordinates = [
+      [w, n],
+      [e, n],
+      [e, s],
+      [w, s],
+    ];
+    const footprint = siRasterExtentFootprint(coordinates);
+    const vis = floodLayerVisibleRef.current;
+    setCustomLayers(prev => {
+      const without = prev.filter(
+        l => l.id !== FLOOD_RASTER_LAYER_ID && l.id !== FLOOD_CHANGE_LAYER_ID && l.id !== FLOOD_VECTOR_LAYER_ID,
+      );
+      return [
+        ...without,
+        {
+          id: FLOOD_RASTER_LAYER_ID,
+          name: 'Flood Extent (SAR)',
+          geojson: footprint,
+          visible: vis.flood,
+          source: 'api',
+          renderMode: 'raster',
+          raster: { url: result.flood.url, coordinates },
+          ephemeral: true,
+          mapOpacity: 0.8,
+        },
+        {
+          id: FLOOD_CHANGE_LAYER_ID,
+          name: 'Flood Change Detection',
+          geojson: footprint,
+          visible: vis.change,
+          source: 'api',
+          renderMode: 'raster',
+          raster: { url: result.change.url, coordinates },
+          ephemeral: true,
+          mapOpacity: 0.75,
+        },
+        {
+          id: FLOOD_VECTOR_LAYER_ID,
+          name: 'Flood Boundaries',
+          geojson: result.vector as any,
+          visible: vis.vector,
+          source: 'api',
+          renderMode: 'vector',
+          ephemeral: true,
+          ...siDefaultNewVectorLayerFields(),
+        },
+      ];
+    });
+  }, [flood.result]);
+
+  const handleFloodToggleLayer = useCallback((kind: FloodLayerKind, visible: boolean) => {
+    setFloodLayerVisible(prev => ({ ...prev, [kind]: visible }));
+    const id =
+      kind === 'flood' ? FLOOD_RASTER_LAYER_ID : kind === 'change' ? FLOOD_CHANGE_LAYER_ID : FLOOD_VECTOR_LAYER_ID;
+    setCustomLayers(prev => prev.map(l => (l.id === id ? { ...l, visible } : l)));
+  }, []);
+
+  const handleFloodZoomToLayer = useCallback(() => {
+    const b = flood.result?.bounds;
+    if (!b) return;
+    const map = mapRef.current?.getMap?.() ?? mapRef.current;
+    if (!map || typeof map.fitBounds !== 'function') return;
+    map.fitBounds(
+      [
+        [b[0], b[1]],
+        [b[2], b[3]],
+      ],
+      { padding: 60, duration: 700, maxZoom: 17 },
+    );
+  }, [flood.result]);
+
+  const handleFloodExportGeoJson = useCallback(() => {
+    const fc = flood.result?.vector;
+    if (!fc || !fc.features.length) return;
+    downloadTextFile('flood-boundaries.geojson', JSON.stringify(fc, null, 2), 'application/geo+json');
+  }, [flood.result]);
 
   const handleMapPointerDown = (evt: any) => {
     const orig = evt.originalEvent as MouseEvent | undefined;
@@ -15673,6 +15812,8 @@ export default function SatelliteIntelligence() {
                                 ? 'Tree Detections'
                               : expandedEnvSection === 'hydro-watershed'
                                 ? 'Hydro Watershed Workflow'
+                              : expandedEnvSection === 'flood-monitoring'
+                                ? 'Flood Monitoring (SAR-Based)'
                                 : expandedEnvSection === 'layers'
                                   ? 'Layers'
                                   : expandedEnvSection === 'source'
@@ -15922,6 +16063,33 @@ export default function SatelliteIntelligence() {
                           onRemoveStep={hydro.removeStep}
                           onExportRaster={hydro.exportRaster}
                           onRunAll={handleHydroRunAll}
+                          onClose={() => setIsLayerDropdownOpen(false)}
+                        />
+                      </div>
+                    )}
+                    {expandedEnvSection === 'flood-monitoring' && (
+                      <div className="si-env-section-card si-rs-panel--glass">
+                        <FloodMonitoringPanel
+                          hasAoi={!!drawnGeometry}
+                          configured={flood.config?.configured ?? false}
+                          configHint={flood.config?.hint ?? null}
+                          phase={flood.phase}
+                          busy={flood.busy}
+                          progress={flood.progress}
+                          message={flood.message}
+                          error={flood.error}
+                          result={flood.result}
+                          preDate={floodPreDate}
+                          postDate={floodPostDate}
+                          thresholdDb={floodThresholdDb}
+                          onPreDateChange={setFloodPreDate}
+                          onPostDateChange={setFloodPostDate}
+                          onThresholdChange={setFloodThresholdDb}
+                          layerVisible={floodLayerVisible}
+                          onToggleLayer={handleFloodToggleLayer}
+                          onRun={handleFloodRun}
+                          onZoomToLayer={handleFloodZoomToLayer}
+                          onExportGeoJson={handleFloodExportGeoJson}
                           onClose={() => setIsLayerDropdownOpen(false)}
                         />
                       </div>

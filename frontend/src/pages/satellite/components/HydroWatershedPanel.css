@@ -1,19 +1,26 @@
-/* Hydro Watershed — modern enterprise-GIS tool panel.
-   Tight, legible, fully self-contained (no overflow / no overlap), responsive. */
+/* Hydro Watershed — black glassmorphism. Black glassy buttons, white icons & text. */
 
 .si-hydro {
-  --hy-accent: #38bdf8;
-  --hy-accent-deep: #2563eb;
-  --hy-text: #e6edf6;
-  --hy-muted: #93a4b8;
-  --hy-surface: rgba(15, 23, 42, 0.55);
-  --hy-border: rgba(148, 163, 184, 0.16);
+  --hy-text: #f4f6f9;
+  --hy-muted: #a6adb8;
+  --hy-border: rgba(255, 255, 255, 0.12);
+  --hy-border-soft: rgba(255, 255, 255, 0.08);
+  /* Luxurious black glass surface */
+  --hy-glass: linear-gradient(180deg, rgba(38, 38, 42, 0.55), rgba(8, 8, 10, 0.68));
+  --hy-glass-flat: rgba(10, 10, 12, 0.55);
+  --hy-blur: saturate(1.2) blur(12px);
   box-sizing: border-box;
   width: 100%;
   max-width: 100%;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(6, 6, 8, 0.86), rgba(0, 0, 0, 0.92));
+  border: 1px solid var(--hy-border-soft);
+  -webkit-backdrop-filter: var(--hy-blur);
+  backdrop-filter: var(--hy-blur);
   color: var(--hy-text);
   font-size: 12px;
   line-height: 1.35;
@@ -35,16 +42,15 @@
 
 .si-hydro__brand-icon {
   flex: none;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
   display: grid;
   place-items: center;
-  /* Flat utility-tool tile (matches the step icons) — avoids the glossy
-     gradient/glow that reads as an "AI" badge. */
-  background: rgba(14, 165, 233, 0.16);
+  background: var(--hy-glass);
   border: 1px solid var(--hy-border);
-  color: var(--hy-accent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 3px 10px rgba(0, 0, 0, 0.5);
+  color: #ffffff;
   font-size: 14px;
 }
 
@@ -61,6 +67,7 @@
   font-weight: 700;
   letter-spacing: 0.01em;
   line-height: 1.2;
+  color: #ffffff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -78,20 +85,22 @@
 
 .si-hydro__close {
   flex: none;
-  border: none;
-  background: rgba(148, 163, 184, 0.12);
-  color: #cbd5e1;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
+  border: 1px solid var(--hy-border);
+  background: var(--hy-glass);
+  color: #ffffff;
+  width: 27px;
+  height: 27px;
+  border-radius: 8px;
   cursor: pointer;
   display: grid;
   place-items: center;
   font-size: 12px;
-  transition: background 0.15s ease;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 .si-hydro__close:hover {
-  background: rgba(148, 163, 184, 0.24);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 /* ── AOI hint ───────────────────────────────────────────────────────────── */
@@ -100,10 +109,10 @@
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  border-radius: 8px;
-  background: rgba(14, 165, 233, 0.1);
-  border: 1px dashed rgba(56, 189, 248, 0.4);
-  color: #7dd3fc;
+  border-radius: 9px;
+  background: var(--hy-glass-flat);
+  border: 1px dashed rgba(255, 255, 255, 0.22);
+  color: var(--hy-text);
   font-size: 11px;
   min-width: 0;
 }
@@ -114,7 +123,7 @@
   white-space: nowrap;
 }
 
-/* ── Toolbar (sensitivity + run-all) ────────────────────────────────────── */
+/* ── Toolbar ────────────────────────────────────────────────────────────── */
 .si-hydro__toolbar {
   display: flex;
   align-items: center;
@@ -130,8 +139,8 @@
   flex: 1 1 130px;
   min-width: 0;
   padding: 6px 9px;
-  border-radius: 8px;
-  background: var(--hy-surface);
+  border-radius: 9px;
+  background: var(--hy-glass-flat);
   border: 1px solid var(--hy-border);
   color: var(--hy-muted);
 }
@@ -142,42 +151,48 @@
 .si-hydro__sens input {
   flex: 1;
   min-width: 0;
-  accent-color: var(--hy-accent);
+  accent-color: #ffffff;
 }
 
-/* Execute-analysis button — flat, solid, enterprise-GIS (no gradient/glow). */
+/* Run-analysis button — luxurious black glass, white label + icon. */
 .si-hydro__runall {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  padding: 8px 14px;
-  border: 1px solid #1e40af;
-  border-radius: 6px;
-  background: #2563eb;
-  color: #fff;
-  font-weight: 600;
+  gap: 8px;
+  padding: 9px 16px;
+  border: 1px solid var(--hy-border);
+  border-radius: 10px;
+  background: var(--hy-glass);
+  -webkit-backdrop-filter: var(--hy-blur);
+  backdrop-filter: var(--hy-blur);
+  color: #ffffff;
+  font-weight: 650;
   font-size: 12px;
   letter-spacing: 0.01em;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.12s ease, border-color 0.12s ease;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 6px 18px rgba(0, 0, 0, 0.55);
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+.si-hydro__runall i {
+  font-size: 12px;
 }
 .si-hydro__runall:hover:not(:disabled) {
-  background: #1d4ed8;
-  border-color: #1e3a8a;
+  background: linear-gradient(180deg, rgba(54, 54, 60, 0.6), rgba(14, 14, 16, 0.72));
+  border-color: rgba(255, 255, 255, 0.22);
 }
 .si-hydro__runall:active:not(:disabled) {
-  background: #1e40af;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 .si-hydro__runall:focus-visible {
-  outline: 2px solid #93c5fd;
+  outline: 2px solid rgba(255, 255, 255, 0.5);
   outline-offset: 1px;
 }
 .si-hydro__runall:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
@@ -189,8 +204,8 @@
   align-items: center;
   gap: 7px;
   padding: 7px 9px;
-  border-radius: 7px;
-  background: rgba(239, 68, 68, 0.12);
+  border-radius: 8px;
+  background: rgba(60, 18, 18, 0.5);
   border: 1px solid rgba(248, 113, 113, 0.35);
   color: #fca5a5;
   font-size: 11px;
@@ -200,11 +215,11 @@
   margin-top: 8px;
 }
 
-/* ── Tool grid (auto-fit → never overflows, collapses to 1 col when narrow) ─ */
+/* ── Tool grid ──────────────────────────────────────────────────────────── */
 .si-hydro__grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 5px;
+  gap: 6px;
 }
 
 .si-hydro__card {
@@ -212,26 +227,27 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  padding: 5px 8px;
-  border-radius: 8px;
-  background: var(--hy-surface);
-  border: 1px solid var(--hy-border);
+  padding: 6px 9px;
+  border-radius: 10px;
+  background: var(--hy-glass-flat);
+  border: 1px solid var(--hy-border-soft);
+  -webkit-backdrop-filter: var(--hy-blur);
+  backdrop-filter: var(--hy-blur);
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 .si-hydro__card.is-done {
-  border-color: rgba(56, 189, 248, 0.42);
-  background: rgba(8, 47, 73, 0.42);
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(20, 20, 22, 0.62);
 }
 .si-hydro__card.is-error {
   border-color: rgba(248, 113, 113, 0.4);
 }
 
-/* Run button — icon · label · state. min-width:0 lets the label ellipsis-wrap
-   instead of forcing the card wider than its grid track. */
+/* Run button (icon · label · state) */
 .si-hydro__run {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   width: 100%;
   min-width: 0;
   border: none;
@@ -243,23 +259,26 @@
 }
 .si-hydro__run:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
 .si-hydro__run-icon {
   flex: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
   display: grid;
   place-items: center;
-  background: rgba(14, 165, 233, 0.16);
-  color: var(--hy-accent);
+  background: var(--hy-glass);
+  border: 1px solid var(--hy-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  color: #ffffff;
   font-size: 11px;
 }
 .si-hydro__card.is-done .si-hydro__run-icon {
-  background: rgba(56, 189, 248, 0.26);
-  color: #e0f2fe;
+  background: linear-gradient(180deg, rgba(58, 58, 64, 0.6), rgba(16, 16, 18, 0.72));
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #ffffff;
 }
 
 .si-hydro__run-label {
@@ -268,6 +287,7 @@
   font-weight: 600;
   font-size: 11px;
   line-height: 1.15;
+  color: #ffffff;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -277,45 +297,46 @@
 
 .si-hydro__run-play {
   flex: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
+  width: 19px;
+  height: 19px;
+  border-radius: 6px;
   display: grid;
   place-items: center;
-  background: rgba(148, 163, 184, 0.16);
-  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--hy-border-soft);
+  color: #ffffff;
   font-size: 8px;
 }
 .si-hydro__run:hover:not(:disabled) .si-hydro__run-play {
-  background: rgba(14, 165, 233, 0.4);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.26);
 }
 
-/* ── Result layer (stats + actions) ─────────────────────────────────────── */
+/* ── Result layer ───────────────────────────────────────────────────────── */
 .si-hydro__layer {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  border-top: 1px solid var(--hy-border-soft);
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-width: 0;
 }
 
-/* Stream classification model switch (Strahler / Shreve). */
+/* Stream classification model switch */
 .si-hydro__model {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 2px;
   padding: 2px;
   border: 1px solid var(--hy-border);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.4);
+  border-radius: 9px;
+  background: var(--hy-glass-flat);
 }
 .si-hydro__model-opt {
   appearance: none;
   border: 0;
-  border-radius: 6px;
+  border-radius: 7px;
   padding: 5px 6px;
   font-size: 11px;
   font-weight: 600;
@@ -329,8 +350,10 @@
   color: var(--hy-text);
 }
 .si-hydro__model-opt.is-on {
-  color: #f8fafc;
-  background: #2563eb;
+  color: #ffffff;
+  background: var(--hy-glass);
+  border: 1px solid var(--hy-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .si-hydro__stats {
@@ -358,7 +381,7 @@
 }
 .si-hydro__stat dd {
   margin: 0;
-  color: #f1f5f9;
+  color: #ffffff;
   font-weight: 600;
   font-size: 10.5px;
   text-align: right;
@@ -373,38 +396,40 @@
   flex-wrap: wrap;
 }
 
+/* Action buttons — black glass, white icon/text. */
 .si-hydro__act {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 5px;
-  height: 26px;
-  padding: 0 8px;
+  height: 27px;
+  padding: 0 9px;
   border: 1px solid var(--hy-border);
-  border-radius: 7px;
-  background: rgba(148, 163, 184, 0.1);
-  color: #cbd5e1;
+  border-radius: 8px;
+  background: var(--hy-glass);
+  -webkit-backdrop-filter: var(--hy-blur);
+  backdrop-filter: var(--hy-blur);
+  color: #ffffff;
   cursor: pointer;
   font-size: 10.5px;
   font-weight: 600;
   white-space: nowrap;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 .si-hydro__act i {
   font-size: 11px;
 }
 .si-hydro__act:hover {
-  background: rgba(56, 189, 248, 0.18);
-  border-color: rgba(56, 189, 248, 0.4);
-  color: #e0f2fe;
+  background: linear-gradient(180deg, rgba(54, 54, 60, 0.6), rgba(14, 14, 16, 0.72));
+  border-color: rgba(255, 255, 255, 0.22);
 }
 .si-hydro__act.is-on {
-  background: rgba(14, 165, 233, 0.28);
-  border-color: rgba(56, 189, 248, 0.5);
-  color: #e0f2fe;
+  background: linear-gradient(180deg, rgba(64, 64, 70, 0.62), rgba(18, 18, 20, 0.74));
+  border-color: rgba(255, 255, 255, 0.3);
 }
 .si-hydro__act--danger:hover {
-  background: rgba(239, 68, 68, 0.18);
+  background: rgba(120, 28, 28, 0.5);
   border-color: rgba(248, 113, 113, 0.45);
   color: #fecaca;
 }
@@ -412,7 +437,6 @@
   line-height: 1;
 }
 
-/* Compact actions when the card track is narrow: hide the export label. */
 @media (max-width: 360px) {
   .si-hydro {
     font-size: 11.5px;

@@ -9,6 +9,7 @@ export type SmartProcessingSectionId =
   | 'ai-detection-gis'
   | 'tree-detections'
   | 'hydro-watershed'
+  | 'flood-monitoring'
   | 'table-geo-ai';
 
 export type SmartProcessingWorkflowPanelProps = {
