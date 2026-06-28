@@ -1970,6 +1970,34 @@ main.content > .si-page {
   pointer-events: auto;
 }
 
+/* Compact map control column — smaller circular buttons (search, imagery,
+   basemap, weather/temperature, 3D, legend). Scoped to the left floating
+   column so the same classes used elsewhere keep their default size. */
+.si-map-floating-controls__left {
+  gap: 6px;
+}
+.si-map-floating-controls__left .si-basemap-button,
+.si-map-floating-controls__left .si-map-search-toggle,
+.si-map-floating-controls__left .si-weather-button {
+  width: 27px;
+  height: 27px;
+  font-size: 10px;
+}
+.si-map-floating-controls__left .si-map-search-icon {
+  font-size: 10px;
+}
+.si-map-floating-controls__left .si-view3d-opts-btn {
+  width: 14px;
+  font-size: 8px;
+  border-radius: 7px;
+}
+.si-map-floating-controls__left .si-view3d-button__tag {
+  font-size: 7px;
+  padding: 1px 2px;
+  bottom: -2px;
+  right: -2px;
+}
+
 .si-basemap-toggle {
   position: relative;
   left: auto;

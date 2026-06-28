@@ -166,7 +166,7 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
   },
   {
     id: 'hydro-watershed',
-    icon: 'fa-solid fa-water',
+    icon: 'fa-solid fa-mountain-sun',
     label: 'Hydro Watershed',
     title: 'Hydro Watershed Workflow',
     hint: 'AOI → DEM, flow, streams, watershed & mesh for distributed hydrology.',
@@ -260,8 +260,8 @@ const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
 ]);
 
 const RAIL_GROUPS_MAP: SatelliteContextPanelId[][] = [
-  ['layers', 'remote-sensing', 'crop-alerts', 'crop-classification', 'layer-live-legend'],
-  ['ai-detection-gis', 'tree-detections', 'hydro-watershed', 'table-geo-ai'],
+  ['layers', 'remote-sensing', 'crop-alerts', 'crop-classification', 'layer-live-legend', 'hydro-watershed'],
+  ['ai-detection-gis', 'tree-detections', 'table-geo-ai'],
 ];
 
 const RAIL_BY_ID = RAIL.reduce(
