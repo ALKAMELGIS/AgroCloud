@@ -11,6 +11,7 @@ import {
   useDirectoryRoleCatalog,
 } from '../../lib/roleCatalog'
 import { readProfileExtra } from '../../lib/userProfilePersistence'
+import { sha256Hex } from '../../lib/sha256'
 import { appendAuditLog, AUDIT_LOG_STORAGE_KEY, readAuditLog } from '../../lib/audit'
 import {
   flushAdminDirectoryToServer,
@@ -431,14 +432,7 @@ export default function Users({ embedded }: { embedded?: boolean } = {}) {
     const pattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     return pattern.test(email)
   }
-  const hashPassword = async (password: string) => {
-    const encoder = new TextEncoder()
-    const data = encoder.encode(password)
-    const buffer = await crypto.subtle.digest('SHA-256', data)
-    const hashArray = Array.from(new Uint8Array(buffer))
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
-    return hashHex
-  }
+  const hashPassword = (password: string) => sha256Hex(password)
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault()

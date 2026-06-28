@@ -24,6 +24,26 @@ import { isTouchDevice } from './lib/pwaInstall'
 import { bootstrapMapboxAccessTokenPersistence } from './lib/mapboxAccessToken'
 import { restoreBrowserApiSecretsFromVaultIntoLocalStorage } from './lib/browserApiSecretsVault'
 
+/**
+ * Upgrade plain HTTP to HTTPS on the public site. Web Crypto (`crypto.subtle`) is only available
+ * in secure contexts, so logging in over http://www.eliteagrocloud.com would otherwise fail (and
+ * passwords would travel in cleartext). Dev hosts (localhost / LAN IPs) are intentionally skipped.
+ */
+if (typeof window !== 'undefined' && window.location.protocol === 'http:') {
+  const host = window.location.hostname
+  const isLocalHost =
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === '0.0.0.0' ||
+    host === '::1' ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+  if (!isLocalHost) {
+    window.location.replace(window.location.href.replace(/^http:/, 'https:'))
+  }
+}
+
 const safeSessionGetItem = (key: string) => {
   try {
     return sessionStorage.getItem(key)

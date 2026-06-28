@@ -12,6 +12,7 @@ import { hydrateProfileFromAdminUserRecord, hydrateProfileFromServer } from '../
 import { appendAuditLog } from '../lib/audit'
 import { useLanguage } from '../lib/i18n'
 import { isTouchDevice } from '../lib/pwaInstall'
+import { sha256Base64, sha256Hex } from '../lib/sha256'
 import {
   loginAccount,
   registerAccount,
@@ -190,23 +191,9 @@ export default function Login() {
     return true
   }
 
-  const hashPassword = async (value: string) => {
-    const encoder = new TextEncoder()
-    const data = encoder.encode(value)
-    const buffer = await crypto.subtle.digest('SHA-256', data)
-    const hashArray = Array.from(new Uint8Array(buffer))
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
-  }
+  const hashPassword = (value: string) => sha256Hex(value)
 
-  const hashPasswordBase64 = async (value: string) => {
-    const encoder = new TextEncoder()
-    const data = encoder.encode(value)
-    const buffer = await crypto.subtle.digest('SHA-256', data)
-    const bytes = new Uint8Array(buffer)
-    let binary = ''
-    for (const b of bytes) binary += String.fromCharCode(b)
-    return btoa(binary)
-  }
+  const hashPasswordBase64 = (value: string) => sha256Base64(value)
 
   const isSha256Hex = (value: unknown): boolean =>
     typeof value === 'string' && /^[a-f0-9]{64}$/i.test(String(value).trim())
