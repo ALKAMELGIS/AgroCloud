@@ -1,8 +1,8 @@
 name: Deploy to GitHub Pages
 
-# CI builds the SPA with empty public env vars, copies frontend/dist to repo root on main,
-# then pushes [pages-sync]. GitHub Pages: Deploy from a branch → main → /(root).
-# Live app (HashRouter): https://alkamelgis.github.io/AgroCloud/#/
+# CI builds the SPA with empty public env vars (base "/" for the custom domain), copies frontend/dist
+# to repo root on main, then pushes [pages-sync]. GitHub Pages: Deploy from a branch → main → /(root).
+# Live app (HashRouter): https://www.eliteagrocloud.com/#/
 #
 # Root SPA files are gitignored — never commit them from a local machine (local .env would embed secrets).
 on:
@@ -43,6 +43,9 @@ jobs:
       - name: Build SPA for GitHub Pages (no local .env — safe for push protection)
         env:
           ENABLE_PWA: 'true'
+          # Custom domain (CNAME www.eliteagrocloud.com) is served at the domain root, so build with base "/".
+          VITE_BASE_PATH: '/'
+          VITE_APP_CANONICAL_URL: 'https://www.eliteagrocloud.com/'
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
@@ -99,7 +102,7 @@ jobs:
             echo ""
             echo "| App |"
             echo "| --- |"
-            echo "| [https://alkamelgis.github.io/AgroCloud/#/](https://alkamelgis.github.io/AgroCloud/#/) |"
+            echo "| [https://www.eliteagrocloud.com/#/](https://www.eliteagrocloud.com/#/) |"
             echo ""
             echo "**HTTPS:** Provided by GitHub Pages. **PWA:** enabled when \`ENABLE_PWA=true\`."
             echo ""
