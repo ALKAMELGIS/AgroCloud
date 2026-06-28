@@ -300,6 +300,36 @@
   border-top: 1px solid var(--arcgis-popup-line);
 }
 
+/* Geo AI map-anchored identify popup — small-to-medium (opened by clicking the
+   dropped pin, never auto-shown). */
+.si-geo-ai-inspect-marker .gis-map-popup.gis-map-popup--arcgis {
+  width: min(290px, calc(100vw - 24px));
+  --gis-popup-max-h: min(46vh, 320px);
+}
+
+.si-geo-ai-inspect-marker .gis-map-popup--arcgis.maximized {
+  width: min(380px, calc(100vw - 24px));
+  --gis-popup-max-h: min(64vh, 460px);
+}
+
+.si-geo-ai-inspect-marker .gis-map-popup--arcgis .gis-map-popup-title {
+  font-size: 14px;
+}
+
+.si-geo-ai-inspect-marker .lap-body--arcgis,
+.si-geo-ai-inspect-marker .lap-body--arcgis .gis-map-popup-v {
+  font-size: 12px;
+}
+
+.si-geo-ai-inspect-marker .lap-body--arcgis .gis-map-popup-k {
+  font-size: 10px;
+}
+
+.si-geo-ai-inspect-marker .lap-body--arcgis .gis-map-popup-k,
+.si-geo-ai-inspect-marker .lap-body--arcgis .gis-map-popup-v {
+  padding: 7px 10px;
+}
+
 .si-feature-identify-card.gis-map-popup {
   position: relative;
   pointer-events: auto;

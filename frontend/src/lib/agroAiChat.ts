@@ -90,6 +90,24 @@ export async function agroChatWithDeepSeek(params: {
 /** Same-origin backend proxy → Ollama native `/api/chat` (avoids browser CORS). */
 export const OLLAMA_CHAT_PROXY_URL = '/api/ollama/chat'
 export const OLLAMA_STATUS_PROXY_URL = '/api/ollama/status'
+export const OLLAMA_WARM_PROXY_URL = '/api/ollama/warm'
+
+/**
+ * Preload the model into memory so the user's first chat turn returns quickly
+ * (skips the multi-second cold load into VRAM). Fire-and-forget — never throws.
+ */
+export async function warmOllama(baseUrl: string, model: string): Promise<void> {
+  const root = (baseUrl || 'http://localhost:11434').trim().replace(/\/+$/, '')
+  try {
+    await fetch(OLLAMA_WARM_PROXY_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ baseUrl: root, model: (model || 'llama3.1').trim() }),
+    })
+  } catch {
+    /* warm-up is best-effort; ignore failures */
+  }
+}
 
 export type OllamaHealth = { reachable: boolean; baseUrl: string; models: string[]; error?: string }
 

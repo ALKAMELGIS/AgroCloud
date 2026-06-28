@@ -273,7 +273,7 @@ import {
   ESRI_WORLD_TERRAIN_SOURCE_ID,
 } from '../../lib/agroCloudMapTerrain';
 import { useOpenWeatherMapApiKey } from '../../hooks/useOpenWeatherMapApiKey';
-import { agroChatWithDeepSeek, agroChatWithGemini, agroChatWithOllama } from '../../lib/agroAiChat';
+import { agroChatWithDeepSeek, agroChatWithGemini, agroChatWithOllama, warmOllama } from '../../lib/agroAiChat';
 import {
   buildBasemapCatalog,
   catalogEntryById,
@@ -1520,6 +1520,12 @@ interface CustomLayer {
   popupConfig?: SiLayerPopupConfig | null;
   /** 0.05–1 — scales vector/raster layer draw opacity on the map (GIS-style transparency). */
   mapOpacity?: number;
+  /** Attribute field used to label features on the map (GIS-style labeling). Empty/undefined = off. */
+  labelFieldName?: string | null;
+  /** Human-readable definition query text the user typed (e.g. `crop = wheat`). Empty/undefined = show all. */
+  definitionQueryText?: string | null;
+  /** Compiled Mapbox filter expression derived from `definitionQueryText`. */
+  definitionFilter?: unknown[] | null;
   /** Polygon / point fill tint (GIS `fillColor`). */
   fillColor?: string;
   /** Stroke width (GIS `weight`). */
@@ -1661,6 +1667,13 @@ function parseStoredCustomLayers(raw: string | null): CustomLayer[] {
             x.mapOpacity >= 0.05 &&
             x.mapOpacity <= 1
               ? x.mapOpacity
+              : undefined,
+          labelFieldName: typeof x.labelFieldName === 'string' && x.labelFieldName.trim() ? x.labelFieldName : undefined,
+          definitionQueryText:
+            typeof x.definitionQueryText === 'string' && x.definitionQueryText.trim() ? x.definitionQueryText : undefined,
+          definitionFilter:
+            typeof x.definitionQueryText === 'string' && x.definitionQueryText.trim()
+              ? siCompileDefinitionQuery(x.definitionQueryText) ?? undefined
               : undefined,
           fillColor: typeof x.fillColor === 'string' ? x.fillColor : undefined,
           weight: typeof x.weight === 'number' && Number.isFinite(x.weight) ? x.weight : undefined,
@@ -1818,11 +1831,57 @@ type SiMapboxCanvasLike = {
   removeLayer(id: string): void;
   removeSource(id: string): void;
   setPaintProperty?(layerId: string, name: string, value: unknown): void;
+  setLayoutProperty?(layerId: string, name: string, value: unknown): void;
+  setFilter?(layerId: string, filter: unknown): void;
   getStyle(): { layers?: Array<{ id: string }> };
   triggerRepaint?(): void;
 };
 
-const SI_MAPBOX_CUSTOM_LAYER_SUFFIXES = ['-fill', '-line', '-circle', '-cluster', '-cluster-count', '-raster'] as const;
+const SI_MAPBOX_CUSTOM_LAYER_SUFFIXES = ['-fill', '-line', '-circle', '-cluster', '-cluster-count', '-raster', '-label'] as const;
+
+/**
+ * Compile a simple `field op value` definition query into a Mapbox filter expression.
+ * Supported operators: `=`, `==`, `!=`, `>`, `>=`, `<`, `<=`, `~` (case-insensitive contains).
+ * `fieldNames` (optional) is used to resolve the field name case-insensitively. Returns
+ * `null` when the text cannot be parsed.
+ */
+function siCompileDefinitionQuery(text: string, fieldNames?: string[]): unknown[] | null {
+  const raw = String(text || '').trim();
+  if (!raw) return null;
+  const m = raw.match(/^\s*([^<>=!~]+?)\s*(>=|<=|!=|==|=|>|<|~)\s*(.+?)\s*$/);
+  if (!m) return null;
+  let field = m[1].trim().replace(/^["'\[]+|["'\]]+$/g, '').trim();
+  const op = m[2];
+  let valueRaw = m[3].trim().replace(/^["']|["']$/g, '');
+  if (!field) return null;
+  if (Array.isArray(fieldNames) && fieldNames.length) {
+    const hit = fieldNames.find(f => f.toLowerCase() === field.toLowerCase());
+    if (hit) field = hit;
+  }
+  const num = Number(valueRaw);
+  const isNum = valueRaw !== '' && Number.isFinite(num);
+  const getStr = ['to-string', ['get', field]];
+  const getNum = ['to-number', ['get', field]];
+  switch (op) {
+    case '~':
+      return ['!=', ['index-of', valueRaw.toLowerCase(), ['downcase', getStr]], -1];
+    case '!=':
+      return isNum ? ['!=', getNum, num] : ['!=', getStr, valueRaw];
+    case '=':
+    case '==':
+      return isNum ? ['==', getNum, num] : ['==', getStr, valueRaw];
+    case '>':
+      return isNum ? ['>', getNum, num] : ['>', getStr, valueRaw];
+    case '>=':
+      return isNum ? ['>=', getNum, num] : ['>=', getStr, valueRaw];
+    case '<':
+      return isNum ? ['<', getNum, num] : ['<', getStr, valueRaw];
+    case '<=':
+      return isNum ? ['<=', getNum, num] : ['<=', getStr, valueRaw];
+    default:
+      return null;
+  }
+}
 
 function siRemoveMapboxCustomLayerStack(map: SiMapboxCanvasLike, sourceId: string) {
   for (const suffix of SI_MAPBOX_CUSTOM_LAYER_SUFFIXES) {
@@ -1946,21 +2005,84 @@ function siPaintCustomLayersOnMapboxCanvas(
       const fillId = `${sourceId}-fill`;
       const lineId = `${sourceId}-line`;
       const circleId = `${sourceId}-circle`;
+      const labelId = `${sourceId}-label`;
+
+      // Definition query — combine the user's compiled filter (e.g. `crop = wheat`)
+      // with each geometry-type base filter so only matching features are drawn.
+      const defFilter =
+        Array.isArray(layer.definitionFilter) && layer.definitionFilter.length ? layer.definitionFilter : null;
+      const withDef = (base: unknown): unknown =>
+        defFilter ? (Array.isArray(base) ? ['all', base, defFilter] : defFilter) : base;
+      const fillFilter = withDef(st.fillFilter);
+      const lineFilter = withDef(st.lineFilter);
+      const pointFilter = withDef(st.pointFilter);
 
       if (!map.getLayer(fillId)) {
-        map.addLayer({ id: fillId, type: 'fill', source: sourceId, filter: st.fillFilter, paint: fillPaint }, beforeId);
+        map.addLayer({ id: fillId, type: 'fill', source: sourceId, filter: fillFilter, paint: fillPaint }, beforeId);
       } else {
         siApplyMapboxPaintProps(map, fillId, fillPaint);
+        try { map.setFilter?.(fillId, fillFilter); } catch { /* ignore */ }
       }
       if (!map.getLayer(lineId)) {
-        map.addLayer({ id: lineId, type: 'line', source: sourceId, filter: st.lineFilter, paint: linePaint }, beforeId);
+        map.addLayer({ id: lineId, type: 'line', source: sourceId, filter: lineFilter, paint: linePaint }, beforeId);
       } else {
         siApplyMapboxPaintProps(map, lineId, linePaint);
+        try { map.setFilter?.(lineId, lineFilter); } catch { /* ignore */ }
       }
       if (!map.getLayer(circleId)) {
-        map.addLayer({ id: circleId, type: 'circle', source: sourceId, filter: st.pointFilter, paint: circlePaint }, beforeId);
+        map.addLayer({ id: circleId, type: 'circle', source: sourceId, filter: pointFilter, paint: circlePaint }, beforeId);
       } else {
         siApplyMapboxPaintProps(map, circleId, circlePaint);
+        try { map.setFilter?.(circleId, pointFilter); } catch { /* ignore */ }
+      }
+
+      // Labeling — one text label per feature drawn from the chosen attribute field.
+      const labelField =
+        typeof layer.labelFieldName === 'string' && layer.labelFieldName.trim() ? layer.labelFieldName.trim() : '';
+      if (labelField) {
+        const textField = ['coalesce', ['to-string', ['get', labelField]], ''];
+        const labelLayout = {
+          'text-field': textField,
+          'text-size': 12,
+          'text-anchor': 'center',
+          'text-justify': 'center',
+          'text-allow-overlap': false,
+          'text-padding': 2,
+          'symbol-placement': 'point',
+        };
+        const labelPaint = {
+          'text-color': '#f8fafc',
+          'text-halo-color': 'rgba(2, 6, 23, 0.9)',
+          'text-halo-width': 1.4,
+          'text-opacity': op,
+        };
+        if (!map.getLayer(labelId)) {
+          map.addLayer(
+            {
+              id: labelId,
+              type: 'symbol',
+              source: sourceId,
+              ...(defFilter ? { filter: defFilter } : {}),
+              layout: labelLayout,
+              paint: labelPaint,
+            },
+            beforeId,
+          );
+        } else {
+          try {
+            map.setLayoutProperty?.(labelId, 'text-field', textField);
+            map.setFilter?.(labelId, defFilter);
+          } catch {
+            /* ignore */
+          }
+          siApplyMapboxPaintProps(map, labelId, labelPaint);
+        }
+      } else if (map.getLayer(labelId)) {
+        try {
+          map.removeLayer(labelId);
+        } catch {
+          /* ignore */
+        }
       }
     } catch (err) {
       console.warn('Satellite Intelligence: could not paint custom layer on map canvas', sourceId, err);
@@ -3207,7 +3329,7 @@ export default function SatelliteIntelligence() {
       customLayersForMapPaint
         .map(
           l =>
-            `${l.id}:${l.visible ? 1 : 0}:${l.renderMode ?? 'vector'}:${Array.isArray(l.geojson?.features) ? l.geojson.features.length : 0}:${l.color ?? ''}:${l.fillColor ?? ''}:${l.weight ?? ''}:${l.polygonFillAlpha ?? ''}:${l.mapOpacity ?? 1}`,
+            `${l.id}:${l.visible ? 1 : 0}:${l.renderMode ?? 'vector'}:${Array.isArray(l.geojson?.features) ? l.geojson.features.length : 0}:${l.color ?? ''}:${l.fillColor ?? ''}:${l.weight ?? ''}:${l.polygonFillAlpha ?? ''}:${l.mapOpacity ?? 1}:${l.labelFieldName ?? ''}:${l.definitionQueryText ?? ''}`,
         )
         .join('|'),
     [customLayersForMapPaint],
@@ -3562,6 +3684,11 @@ export default function SatelliteIntelligence() {
   const [geoAiPinLngLat, setGeoAiPinLngLat] = useState<[number, number] | null>(null);
   const [geoAiInspectPopups, setGeoAiInspectPopups] = useState<GeoAiInspectPopupState[]>([]);
   const geoAiInspectCard = geoAiInspectPopups.length > 0 ? geoAiInspectPopups[0]! : null;
+  /**
+   * A resolved inspect card that is held back from auto-opening. The map drops a
+   * pin and the user clicks it to open the popup (no automatic pop-up).
+   */
+  const [geoAiPendingInspectCard, setGeoAiPendingInspectCard] = useState<GeoAiInspectCardState | null>(null);
   const [geoAiPopupMode, setGeoAiPopupMode] = useState<GeoAiPopupMode>(() =>
     readStoredGeoAiPopupMode(siScope.scopedStorageKey(GEO_AI_POPUP_MODE_LS_KEY)),
   );
@@ -3589,6 +3716,13 @@ export default function SatelliteIntelligence() {
   const geoExplorerFileInputRef = useRef<HTMLInputElement | null>(null);
   const geoExplorerInFlightRef = useRef(false);
   const [geoAiModelTab, setGeoAiModelTab] = useState<'gemini' | 'claude' | 'deepseek' | 'ollama'>('gemini');
+
+  // Preload the local model when the AgroCloud AI Chat (Ollama) tab opens so the
+  // first answer returns quickly instead of paying the cold model-load cost.
+  useEffect(() => {
+    if (geoAiModelTab !== 'ollama') return;
+    void warmOllama(ollamaConfig.baseUrl, ollamaConfig.model);
+  }, [geoAiModelTab, ollamaConfig.baseUrl, ollamaConfig.model]);
   const [geoAiChatMessages, setGeoAiChatMessages] = useState<GeoExplorerMessage[]>([]);
   const [geoAiClaudeVisibleCount, setGeoAiClaudeVisibleCount] = useState(GEO_AI_CHAT_PAGE_SIZE);
   const [geoAiDraft, setGeoAiDraft] = useState('');
@@ -3812,6 +3946,22 @@ export default function SatelliteIntelligence() {
     [wrapInspectPopup],
   );
 
+  /**
+   * Stage an inspect card WITHOUT auto-opening it: close any open popup and keep
+   * the card pending so the user opens it by clicking the dropped map pin.
+   * (Replaces the previous behaviour where Geo AI answers popped up a card.)
+   */
+  const stageGeoAiInspectCard = useCallback((card: GeoAiInspectCardState) => {
+    setGeoAiInspectPopups([]);
+    setGeoAiPendingInspectCard(card);
+  }, []);
+
+  /** Open the staged card (invoked when the user clicks the Geo AI / search pin). */
+  const openStagedGeoAiInspectCard = useCallback(() => {
+    if (!geoAiPendingInspectCard) return;
+    setGeoAiInspectCard(geoAiPendingInspectCard);
+  }, [geoAiPendingInspectCard, setGeoAiInspectCard]);
+
   const mergeGeoAiInspectFromMapOrTable = useCallback(
     (card: GeoAiInspectCardState, linkForKey: GeoExplorerMapLink | null) => {
       const fk = linkForKey?.type === 'feature' ? stableFeatureLinkKey(linkForKey) : null;
@@ -3992,7 +4142,7 @@ export default function SatelliteIntelligence() {
               queryContext: userTextForMapFallback,
               inspectCoords: { lng: me.coords[0], lat: me.coords[1] },
             });
-            setGeoAiInspectCard({
+            stageGeoAiInspectCard({
               title: me.layerHit.layerName,
               rows: built.rows,
               inspect: built.inspect,
@@ -4001,7 +4151,7 @@ export default function SatelliteIntelligence() {
               ...pickGeoAiHumanPlaceFields(me.layerHit.properties),
             });
           } else {
-            setGeoAiInspectCard({
+            stageGeoAiInspectCard({
               title: 'Location',
               rows: [
                 { label: 'Longitude', value: me.coords[0].toFixed(6) },
@@ -4013,6 +4163,7 @@ export default function SatelliteIntelligence() {
           }
         } else {
           setGeoAiInspectCard(null);
+          setGeoAiPendingInspectCard(null);
         }
       } catch (e) {
         setGeoExplorerChatError(e instanceof Error ? e.message : String(e));
@@ -4029,6 +4180,7 @@ export default function SatelliteIntelligence() {
       geoAiPinLngLat,
       geoAiInspectCard,
       is3DView,
+      stageGeoAiInspectCard,
     ],
   );
 
@@ -6423,6 +6575,106 @@ export default function SatelliteIntelligence() {
     setLayerPopupCfgOpen(true);
   }, []);
 
+  /** Candidate attribute field names for a layer (ArcGIS schema first, else feature props). */
+  const collectCustomLayerFieldNames = useCallback((layer: CustomLayer): string[] => {
+    const names = new Set<string>();
+    const arcFields = layer.arcgisLayerDefinition?.fields;
+    if (Array.isArray(arcFields)) {
+      for (const f of arcFields) {
+        const n = (f as { name?: unknown })?.name;
+        if (typeof n === 'string' && n.trim()) names.add(n.trim());
+      }
+    }
+    if (names.size === 0) {
+      const feats = Array.isArray(layer.geojson?.features) ? layer.geojson!.features : [];
+      for (const ft of feats.slice(0, 50)) {
+        const props = (ft as { properties?: Record<string, unknown> })?.properties;
+        if (props && typeof props === 'object') {
+          for (const k of Object.keys(props)) names.add(k);
+        }
+      }
+    }
+    return [...names];
+  }, []);
+
+  // Labeling — pick an attribute field; features get a text label drawn from it.
+  const promptCustomLayerLabeling = useCallback(
+    (layerId: string) => {
+      setLayerOptionsMenuLayerId(null);
+      const layer = customLayers.find(l => l.id === layerId);
+      if (!layer) return;
+      if (layer.renderMode === 'raster') {
+        setStacStatus('Labeling applies to vector layers.');
+        return;
+      }
+      const fields = collectCustomLayerFieldNames(layer);
+      if (fields.length === 0) {
+        setStacStatus('No attribute fields available to label this layer. Zoom in to load features, then try again.');
+        return;
+      }
+      const current = typeof layer.labelFieldName === 'string' ? layer.labelFieldName : '';
+      const list = fields.slice(0, 40).join(', ');
+      const raw = window.prompt(
+        `Label features by field (leave empty to turn labels off).\n\nAvailable fields:\n${list}`,
+        current,
+      );
+      if (raw === null) return;
+      const next = raw.trim();
+      if (next && !fields.some(f => f.toLowerCase() === next.toLowerCase())) {
+        setStacStatus(`Field "${next}" not found on this layer.`);
+        return;
+      }
+      const resolved = next ? fields.find(f => f.toLowerCase() === next.toLowerCase())! : '';
+      setCustomLayers(prev => prev.map(l => (l.id === layerId ? { ...l, labelFieldName: resolved || null } : l)));
+      setStacStatus(resolved ? `Labels on — showing "${resolved}".` : 'Labels turned off.');
+    },
+    [customLayers, collectCustomLayerFieldNames],
+  );
+
+  // Definition query — filter which features are drawn using a simple `field op value` expression.
+  const promptCustomLayerDefinitionQuery = useCallback(
+    (layerId: string) => {
+      setLayerOptionsMenuLayerId(null);
+      const layer = customLayers.find(l => l.id === layerId);
+      if (!layer) return;
+      if (layer.renderMode === 'raster') {
+        setStacStatus('Definition queries apply to vector layers.');
+        return;
+      }
+      const fields = collectCustomLayerFieldNames(layer);
+      const list = fields.slice(0, 40).join(', ');
+      const current = typeof layer.definitionQueryText === 'string' ? layer.definitionQueryText : '';
+      const raw = window.prompt(
+        `Definition query — only matching features are shown.\n` +
+          `Examples:  crop = wheat   |   area > 1000   |   status != closed   |   name ~ farm\n` +
+          `Operators: = , != , > , >= , < , <= , ~ (contains). Leave empty to clear.\n\n` +
+          (list ? `Available fields:\n${list}` : ''),
+        current,
+      );
+      if (raw === null) return;
+      const text = raw.trim();
+      if (!text) {
+        setCustomLayers(prev =>
+          prev.map(l => (l.id === layerId ? { ...l, definitionQueryText: null, definitionFilter: null } : l)),
+        );
+        setStacStatus('Definition query cleared — showing all features.');
+        return;
+      }
+      const compiled = siCompileDefinitionQuery(text, fields);
+      if (!compiled) {
+        setStacStatus('Could not parse query. Use: field op value  (op = , != , > , >= , < , <= , ~).');
+        return;
+      }
+      setCustomLayers(prev =>
+        prev.map(l =>
+          l.id === layerId ? { ...l, definitionQueryText: text, definitionFilter: compiled } : l,
+        ),
+      );
+      setStacStatus(`Definition query applied: ${text}`);
+    },
+    [customLayers, collectCustomLayerFieldNames],
+  );
+
   useEffect(() => {
     if (!layerOptionsMenuLayerId) return;
     const esc = (e: KeyboardEvent) => {
@@ -7713,6 +7965,7 @@ export default function SatelliteIntelligence() {
     setGeoExplorerChatError('');
     setGeoAiPinLngLat(null);
     setGeoAiInspectPopups([]);
+    setGeoAiPendingInspectCard(null);
     setGeoAiTableSelectionsByTableId({});
     setGeoAiTableMapFocusKey(null);
     geoAiLastUserMapQueryRef.current = '';
@@ -7726,6 +7979,7 @@ export default function SatelliteIntelligence() {
     setGeoAiDraft('');
     setGeoAiChatError('');
     setGeoAiInspectPopups([]);
+    setGeoAiPendingInspectCard(null);
     setGeoAiTableSelectionsByTableId({});
     setGeoAiTableMapFocusKey(null);
     geoAiLastUserMapQueryRef.current = '';
@@ -7739,6 +7993,7 @@ export default function SatelliteIntelligence() {
     setGeoDeepseekDraft('');
     setGeoDeepseekChatError('');
     setGeoAiInspectPopups([]);
+    setGeoAiPendingInspectCard(null);
     setGeoAiTableSelectionsByTableId({});
     setGeoAiTableMapFocusKey(null);
     geoAiLastUserMapQueryRef.current = '';
@@ -7752,6 +8007,7 @@ export default function SatelliteIntelligence() {
     setGeoOllamaDraft('');
     setGeoOllamaChatError('');
     setGeoAiInspectPopups([]);
+    setGeoAiPendingInspectCard(null);
     setGeoAiTableSelectionsByTableId({});
     setGeoAiTableMapFocusKey(null);
     geoAiLastUserMapQueryRef.current = '';
@@ -7782,6 +8038,7 @@ export default function SatelliteIntelligence() {
       const pin = resolveGeoAiPinFromUserTextAndReply(userText, reply, combined);
       if (!pin) {
         setGeoAiInspectCard(null);
+        setGeoAiPendingInspectCard(null);
         return;
       }
       setGeoAiPinLngLat(pin.coords);
@@ -7805,7 +8062,7 @@ export default function SatelliteIntelligence() {
           queryContext: userText,
           inspectCoords: { lng: pin.coords[0], lat: pin.coords[1] },
         });
-        setGeoAiInspectCard({
+        stageGeoAiInspectCard({
           title: pin.layerHit.layerName,
           rows: built.rows,
           inspect: built.inspect,
@@ -7814,7 +8071,7 @@ export default function SatelliteIntelligence() {
           ...pickGeoAiHumanPlaceFields(pin.layerHit.properties),
         });
       } else {
-        setGeoAiInspectCard({
+        stageGeoAiInspectCard({
           title: 'Location',
           rows: [
             { label: 'Longitude', value: pin.coords[0].toFixed(6) },
@@ -7825,7 +8082,7 @@ export default function SatelliteIntelligence() {
         });
       }
     },
-    [customLayers, is3DView],
+    [customLayers, is3DView, stageGeoAiInspectCard],
   );
 
   useEffect(() => {
@@ -12121,7 +12378,7 @@ export default function SatelliteIntelligence() {
               const top = results[0];
               if (!top) return;
               handleSelectSearchResult(top);
-              setGeoAiInspectCard({
+              stageGeoAiInspectCard({
                 title: top.label,
                 rows: [
                   ...(top.subtitle ? [{ label: 'Location', value: top.subtitle }] : []),
@@ -12180,6 +12437,7 @@ export default function SatelliteIntelligence() {
       mapboxToken,
       getMapProximity,
       handleSelectSearchResult,
+      stageGeoAiInspectCard,
     ],
   );
   const runGeoAiMapCommandsRef = useRef(runGeoAiMapCommandsFromReply);
@@ -12573,14 +12831,28 @@ export default function SatelliteIntelligence() {
                                   {showSync
                                     ? mi('Refresh layer data', 'fa-solid fa-rotate-right', () => void executeCustomLayerAction('sync', lid))
                                     : null}
-                                  {mi('Labeling (Pro-style)', 'fa-solid fa-tag', () => {}, {
-                                    disabled: true,
-                                    hint: 'Planned — use Symbology for value-based display today.',
-                                  })}
-                                  {mi('Definition query…', 'fa-solid fa-filter', () => {}, {
-                                    disabled: true,
-                                    hint: 'Planned — filter from the attribute table for now.',
-                                  })}
+                                  {mi(
+                                    L.labelFieldName ? `Labeling: ${L.labelFieldName}` : 'Labeling…',
+                                    'fa-solid fa-tag',
+                                    () => promptCustomLayerLabeling(lid),
+                                    {
+                                      disabled: isRaster,
+                                      hint: isRaster
+                                        ? 'Labeling applies to vector layers.'
+                                        : 'Show a text label on each feature from an attribute field.',
+                                    },
+                                  )}
+                                  {mi(
+                                    L.definitionQueryText ? `Definition query: ${L.definitionQueryText}` : 'Definition query…',
+                                    'fa-solid fa-filter',
+                                    () => promptCustomLayerDefinitionQuery(lid),
+                                    {
+                                      disabled: isRaster,
+                                      hint: isRaster
+                                        ? 'Definition queries apply to vector layers.'
+                                        : 'Show only features matching a field expression (e.g. crop = wheat).',
+                                    },
+                                  )}
                                   <div className="si-env-layer-options-menu__sep" role="separator" />
                                   {mi('Remove from map', 'fa-solid fa-trash-can', () => void executeCustomLayerAction('remove', lid), {
                                     danger: true,
@@ -13531,6 +13803,24 @@ export default function SatelliteIntelligence() {
                   </Source>
                 ) : null}
 
+                {geoAiPinLngLat && geoAiPendingInspectCard ? (
+                  <Marker longitude={geoAiPinLngLat[0]} latitude={geoAiPinLngLat[1]} anchor="center">
+                    <button
+                      type="button"
+                      className="si-geo-ai-pin-open"
+                      title={`Show details — ${geoAiPendingInspectCard.title}`}
+                      aria-label={`Show details for ${geoAiPendingInspectCard.title}`}
+                      onPointerDown={e => e.stopPropagation()}
+                      onClick={e => {
+                        e.stopPropagation();
+                        openStagedGeoAiInspectCard();
+                      }}
+                    >
+                      <span className="si-geo-ai-pin-open__ring" aria-hidden />
+                    </button>
+                  </Marker>
+                ) : null}
+
                 {draftDrawGeoJson ? (
                   <Source id="si-draw-draft" type="geojson" data={draftDrawGeoJson as any}>
                     <Layer
@@ -13682,7 +13972,23 @@ export default function SatelliteIntelligence() {
 
                 {searchPin && (
                   <Marker longitude={searchPin.lng} latitude={searchPin.lat} anchor="bottom">
-                    <div className="si-map-search-pin" title={searchPin.label}>
+                    <div
+                      className={
+                        'si-map-search-pin' + (geoAiPendingInspectCard ? ' si-map-search-pin--clickable' : '')
+                      }
+                      title={geoAiPendingInspectCard ? `Show details — ${searchPin.label}` : searchPin.label}
+                      role={geoAiPendingInspectCard ? 'button' : undefined}
+                      aria-label={geoAiPendingInspectCard ? `Show details for ${searchPin.label}` : undefined}
+                      onPointerDown={geoAiPendingInspectCard ? e => e.stopPropagation() : undefined}
+                      onClick={
+                        geoAiPendingInspectCard
+                          ? e => {
+                              e.stopPropagation();
+                              openStagedGeoAiInspectCard();
+                            }
+                          : undefined
+                      }
+                    >
                       <span className="si-map-search-pin__pulse" aria-hidden />
                       <i className="fa-solid fa-location-dot si-map-search-pin__icon" aria-hidden />
                     </div>

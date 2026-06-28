@@ -4764,6 +4764,55 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
   }
 }
 
+/* Click target shown when a Geo AI answer has staged an inspect card — the user
+   clicks the pin to open the (small) popup; nothing pops up automatically. */
+.si-map-search-pin--clickable {
+  cursor: pointer;
+}
+
+.si-geo-ai-pin-open {
+  width: 42px;
+  height: 42px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.si-geo-ai-pin-open__ring {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid rgba(167, 139, 250, 0.95);
+  box-shadow: 0 0 0 4px rgba(167, 139, 250, 0.18);
+  animation: si-geo-ai-pin-open-pulse 1.8s ease-out infinite;
+}
+
+@keyframes si-geo-ai-pin-open-pulse {
+  0% {
+    transform: scale(0.65);
+    opacity: 0.95;
+  }
+  70% {
+    transform: scale(1.2);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .si-geo-ai-pin-open__ring {
+    animation: none;
+  }
+}
+
 /* Sidebar (Satellite Panel) */
 .si-sidebar {
   position: absolute;

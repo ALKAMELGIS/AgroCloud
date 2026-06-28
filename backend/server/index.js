@@ -1584,12 +1584,47 @@ app.get('/api/ollama/status', async (req, res) => {
   }
 })
 
+// Warm-up: preload a model into memory so the user's first chat turn returns
+// quickly instead of paying the cold model-load cost. Fire-and-forget friendly.
+app.post('/api/ollama/warm', async (req, res) => {
+  const baseUrl = normalizeOllamaBaseUrl(req.body?.baseUrl)
+  const usableModel = String(req.body?.model || 'llama3.1').trim()
+  try {
+    const r = await fetchOllamaWithRetry(
+      `${baseUrl}/api/generate`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        // No prompt → Ollama just loads the model and keeps it resident.
+        body: JSON.stringify({ model: usableModel, keep_alive: '30m' }),
+      },
+      { retries: 1, backoffMs: 400, timeoutMs: 60000 },
+    )
+    return res.json({ warmed: r.ok, model: usableModel })
+  } catch (e) {
+    return res.status(502).json({ warmed: false, error: e instanceof Error ? e.message : 'unreachable' })
+  }
+})
+
 app.post('/api/ollama/chat', async (req, res) => {
-  const { baseUrl: rawBase, model, messages } = req.body || {}
+  const { baseUrl: rawBase, model, messages, options: clientOptions, keepAlive } = req.body || {}
   const baseUrl = normalizeOllamaBaseUrl(rawBase)
   const usableModel = String(model || 'llama3.1').trim()
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'messages[] is required' })
+  }
+  // Speed levers (callers may override):
+  //  • keep_alive — keep the model resident so back-to-back turns skip the
+  //    multi-second reload into VRAM (the dominant local-Ollama latency).
+  //  • num_predict — cap output length so answers return promptly instead of
+  //    rambling; temperature/top_p tuned for quick, focused replies.
+  const keep_alive =
+    typeof keepAlive === 'string' && keepAlive.trim() ? keepAlive.trim() : '30m'
+  const options = {
+    num_predict: 1024,
+    temperature: 0.4,
+    top_p: 0.9,
+    ...(clientOptions && typeof clientOptions === 'object' ? clientOptions : {}),
   }
   try {
     const r = await fetchOllamaWithRetry(
@@ -1597,7 +1632,7 @@ app.post('/api/ollama/chat', async (req, res) => {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ model: usableModel, messages, stream: false }),
+        body: JSON.stringify({ model: usableModel, messages, stream: false, keep_alive, options }),
       },
       // Generation can take a while on first load (model swap into VRAM); allow a
       // longer timeout, retry twice on transient connection failures.
