@@ -1,10 +1,248 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   PIPELINE_STAGES,
   PRITHVI_CROP_CLASSES,
   type CropClassificationJob,
 } from '../../../lib/siPrithviCropPipeline'
 import './SiPrithviCropToolPanel.css'
+
+type CropStat = { id?: string; name: string; pct: number; areaHa?: number }
+type CropLegendItem = { id: string | number; name: string; color: string }
+
+const EARTH_R = 6378137 // WGS84 equatorial radius (m)
+const D2R = Math.PI / 180
+
+/** Spherical ring area (m²) — same formula as the Measurement tool. */
+function ringAreaM2(ring: number[][]): number {
+  const n = ring.length
+  if (n < 3) return 0
+  let total = 0
+  for (let i = 0; i < n; i += 1) {
+    const [lng1, lat1] = ring[i]!
+    const [lng2, lat2] = ring[(i + 1) % n]!
+    total += (lng2 - lng1) * D2R * (2 + Math.sin(lat1 * D2R) + Math.sin(lat2 * D2R))
+  }
+  return Math.abs((total * EARTH_R * EARTH_R) / 2)
+}
+
+function polygonAreaM2(rings: number[][][]): number {
+  if (!rings || !rings.length) return 0
+  let a = ringAreaM2(rings[0]!)
+  for (let i = 1; i < rings.length; i += 1) a -= ringAreaM2(rings[i]!)
+  return Math.max(a, 0)
+}
+
+/** Total geodesic area of an AOI polygon/multipolygon, in hectares. */
+function geometryAreaHa(geom: GeoJSON.Polygon | GeoJSON.MultiPolygon | null): number | undefined {
+  if (!geom) return undefined
+  let m2 = 0
+  if (geom.type === 'Polygon') m2 = polygonAreaM2(geom.coordinates as unknown as number[][][])
+  else if (geom.type === 'MultiPolygon') {
+    for (const poly of geom.coordinates as unknown as number[][][][]) m2 += polygonAreaM2(poly)
+  }
+  if (!Number.isFinite(m2) || m2 <= 0) return undefined
+  return m2 / 10000
+}
+
+/** Area in hectares with adaptive precision (the panel reports area by hectare). */
+function formatCropArea(ha?: number): string {
+  if (ha == null || !Number.isFinite(ha)) return '—'
+  if (ha <= 0) return '0 ha'
+  if (ha < 0.01) return '<0.01 ha'
+  const decimals = ha >= 100 ? 0 : ha >= 10 ? 1 : 2
+  return `${ha.toLocaleString(undefined, { maximumFractionDigits: decimals })} ha`
+}
+
+/**
+ * Tabbed crop-composition view: a statistical Table, a Pie (share %) with a key,
+ * and a Bar chart (area per crop). Colors are matched from the prediction legend.
+ */
+function CropCompositionStats({
+  stats,
+  legendItems,
+  aoiAreaHa,
+}: {
+  stats: CropStat[]
+  legendItems: CropLegendItem[]
+  aoiAreaHa?: number
+}) {
+  const [tab, setTab] = useState<'table' | 'pie' | 'bar'>('table')
+
+  const colorByName = useMemo(() => {
+    const m = new Map<string, string>()
+    legendItems.forEach(l => m.set(l.name.toLowerCase(), l.color))
+    return m
+  }, [legendItems])
+
+  const enriched = useMemo(
+    () =>
+      stats.map(s => {
+        // Prefer a backend-provided area; otherwise derive hectares from the AOI
+        // total area distributed by this class's share (pct).
+        const areaHa = Number.isFinite(s.areaHa)
+          ? s.areaHa
+          : aoiAreaHa != null
+            ? (aoiAreaHa * (s.pct || 0)) / 100
+            : undefined
+        return { ...s, areaHa, color: colorByName.get(s.name.toLowerCase()) ?? '#94a3b8' }
+      }),
+    [stats, colorByName, aoiAreaHa],
+  )
+
+  const pctSum = useMemo(() => enriched.reduce((a, s) => a + (s.pct || 0), 0) || 1, [enriched])
+  const totalHa = useMemo(() => enriched.reduce((a, s) => a + (s.areaHa ?? 0), 0), [enriched])
+  const hasArea = useMemo(() => enriched.some(s => Number.isFinite(s.areaHa)), [enriched])
+
+  const pieWedges = useMemo(() => {
+    const R = 46
+    const cx = 50
+    const cy = 50
+    let angle = -Math.PI / 2
+    return enriched.map(s => {
+      const frac = (s.pct || 0) / pctSum
+      const a0 = angle
+      const a1 = angle + frac * Math.PI * 2
+      angle = a1
+      const x0 = cx + R * Math.cos(a0)
+      const y0 = cy + R * Math.sin(a0)
+      const x1 = cx + R * Math.cos(a1)
+      const y1 = cy + R * Math.sin(a1)
+      const large = a1 - a0 > Math.PI ? 1 : 0
+      const d =
+        frac >= 0.999
+          ? `M ${cx} ${cy - R} A ${R} ${R} 0 1 1 ${cx - 0.01} ${cy - R} Z`
+          : `M ${cx} ${cy} L ${x0.toFixed(2)} ${y0.toFixed(2)} A ${R} ${R} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)} Z`
+      return { d, color: s.color, key: s.id ?? s.name }
+    })
+  }, [enriched, pctSum])
+
+  const bars = useMemo(() => {
+    const copy = [...enriched]
+    copy.sort((p, q) => (hasArea ? (q.areaHa ?? 0) - (p.areaHa ?? 0) : q.pct - p.pct))
+    const max = hasArea
+      ? Math.max(...copy.map(s => s.areaHa ?? 0), 0.0001)
+      : Math.max(...copy.map(s => s.pct), 0.0001)
+    return copy.map(s => ({ ...s, w: ((hasArea ? s.areaHa ?? 0 : s.pct) / max) * 100 }))
+  }, [enriched, hasArea])
+
+  return (
+    <div className="prithvi-tool__stats">
+      <div className="prithvi-tool__stats-head">
+        <div className="prithvi-tool__stats-title">Crop composition</div>
+        <div className="prithvi-comp-tabs" role="tablist" aria-label="Crop composition view">
+          {(['table', 'pie', 'bar'] as const).map(t => (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              aria-selected={tab === t}
+              className={'prithvi-comp-tab' + (tab === t ? ' is-active' : '')}
+              onClick={() => setTab(t)}
+            >
+              <i
+                className={
+                  t === 'table'
+                    ? 'fa-solid fa-table-list'
+                    : t === 'pie'
+                      ? 'fa-solid fa-chart-pie'
+                      : 'fa-solid fa-chart-column'
+                }
+                aria-hidden
+              />
+              <span>{t === 'table' ? 'Table' : t === 'pie' ? 'Pie' : 'Bar'}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === 'table' ? (
+        <div className="prithvi-comp-table" role="table">
+          <div className="prithvi-comp-table__head" role="row">
+            <span role="columnheader">Class</span>
+            <span className="num" role="columnheader">%</span>
+            <span className="num" role="columnheader">Area (ha)</span>
+          </div>
+          {enriched.map(s => (
+            <div className="prithvi-comp-table__row" role="row" key={s.id ?? s.name}>
+              <span className="prithvi-comp-table__name" role="cell">
+                <span className="prithvi-tool__swatch" style={{ background: s.color }} />
+                {s.name}
+              </span>
+              <span className="num prithvi-tool__stats-pct" role="cell">
+                {s.pct}%
+              </span>
+              <span className="num prithvi-comp-table__area" role="cell">
+                {formatCropArea(s.areaHa)}
+              </span>
+            </div>
+          ))}
+          {hasArea ? (
+            <div className="prithvi-comp-table__foot" role="row">
+              <span role="cell">Total</span>
+              <span className="num" role="cell">
+                100%
+              </span>
+              <span className="num" role="cell">
+                {formatCropArea(totalHa)}
+              </span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {tab === 'pie' ? (
+        <div className="prithvi-comp-pie">
+          <svg
+            viewBox="0 0 100 100"
+            className="prithvi-comp-pie__svg"
+            role="img"
+            aria-label="Crop composition pie chart"
+          >
+            {pieWedges.map(w => (
+              <path key={w.key} d={w.d} fill={w.color} stroke="rgba(0,0,0,0.25)" strokeWidth={0.4} />
+            ))}
+          </svg>
+          <ul className="prithvi-comp-pie__legend">
+            {enriched.map(s => (
+              <li key={s.id ?? s.name}>
+                <span className="prithvi-tool__swatch" style={{ background: s.color }} />
+                <span className="prithvi-comp-pie__legend-name">{s.name}</span>
+                <span className="prithvi-comp-pie__legend-pct">{s.pct}%</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {tab === 'bar' ? (
+        <div className="prithvi-comp-bars">
+          {bars.map(s => (
+            <div className="prithvi-comp-bar" key={s.id ?? s.name}>
+              <div className="prithvi-comp-bar__top">
+                <span className="prithvi-comp-bar__name">
+                  <span className="prithvi-tool__swatch" style={{ background: s.color }} />
+                  {s.name}
+                </span>
+                <span className="prithvi-comp-bar__val">
+                  {hasArea ? formatCropArea(s.areaHa) : `${s.pct}%`}
+                </span>
+              </div>
+              <div className="prithvi-comp-bar__track">
+                <div
+                  className="prithvi-comp-bar__fill"
+                  style={{ width: `${Math.max(s.w, 1.5)}%`, background: s.color }}
+                />
+              </div>
+            </div>
+          ))}
+          <div className="prithvi-comp-bars__cap">
+            {hasArea ? `Total area · ${formatCropArea(totalHa)}` : 'Share of classified area'}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
 
 export type SiPrithviCropToolPanelProps = {
   aoiGeometry: GeoJSON.Polygon | GeoJSON.MultiPolygon | null
@@ -48,6 +286,7 @@ export function SiPrithviCropToolPanel(props: SiPrithviCropToolPanelProps) {
   } = props
 
   const hasAoi = Boolean(aoiGeometry)
+  const aoiAreaHa = useMemo(() => geometryAreaHa(aoiGeometry), [aoiGeometry])
   const result = job?.status === 'done' ? job.result : null
   const scenes = result?.scenes
   const prediction = result?.prediction
@@ -178,17 +417,7 @@ export function SiPrithviCropToolPanel(props: SiPrithviCropToolPanelProps) {
             </button>
           ) : null}
           {classStats && classStats.length ? (
-            <div className="prithvi-tool__stats">
-              <div className="prithvi-tool__stats-title">Crop composition</div>
-              <ul className="prithvi-tool__stats-list">
-                {classStats.map(s => (
-                  <li key={s.id ?? s.name}>
-                    <span>{s.name}</span>
-                    <span className="prithvi-tool__stats-pct">{s.pct}%</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <CropCompositionStats stats={classStats} legendItems={legendItems} aoiAreaHa={aoiAreaHa} />
           ) : null}
         </div>
       ) : null}
