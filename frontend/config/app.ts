@@ -2,7 +2,7 @@ export const appConfig = {
   appName: 'Agri Cloud System',
   repoName: 'AgroCloud',
   basePath: '/AgroCloud/',
-  /** Canonical GitHub Pages URL (no hash). Hash routes use `/#/…` in the browser. */
-  productionPublicUrl: 'https://alkamelgis.github.io/AgroCloud/',
+  /** Canonical production URL (no hash) used for SEO. Custom domain served at root via GitHub Pages CNAME. */
+  productionPublicUrl: 'https://www.eliteagrocloud.com/',
 } as const
 
