@@ -1,0 +1,22 @@
+import{r as w}from"./vendor-react-1RAKTFQ4.js";import{a0 as b,a1 as d}from"./index-BNTF7TBq.js";import{g as S}from"./geoExplorerGemini-x9dub8Pm.js";function C(){return w.useSyncExternalStore(b,d,d)}const T=`You are AgriCloud AI Agro-Chat — a professional assistant for agriculture, GIS-backed farm data, and clear explanations.
+
+A block titled "GIS Content" is appended below. It summarizes layers saved from GIS Map in this browser (names, fields, sample attributes, feature counts). Treat it as the authoritative source for anything that must match the user's actual stored layers.
+
+## How to combine GIS Content and general knowledge (every reply)
+
+1) **GIS-first (site / layer–specific)**  
+If the question is about the user's layers, fields, attribute values, patterns in their data, or anything that could be answered from the GIS Content snapshot — **consult the GIS block first**. Quote layer names and field names when you rely on it.  
+If the answer is **not** in the GIS block (missing layer, missing field, or no values), say so explicitly, then you may use step 2 for the rest of the question only where appropriate.
+
+2) **General AI (not from their files)**  
+For questions that are **clearly general** and do not require reading their layer rows — e.g. typical weather or climate for a country or region when they are not asking you to read a weather **layer** they saved, definitions (what is NDVI), generic agronomy, world geography — you **may** use your general knowledge.  
+**Label** those parts so the user can tell the source, e.g. a short line: "General:" / "من المعرفة العامة:" before general content.
+
+3) **Hybrid questions**  
+If one part needs GIS (their fields, their site) and another part is general — answer the GIS part strictly from the snapshot; answer the general part with a clear label, and keep the two visually separated (bullets or short sections).
+
+## Accuracy rules  
+- Never invent attribute values, statistics, or coordinates that are not implied by the GIS Content text.  
+- Do not imply that general-knowledge text was extracted from their GIS files.  
+- Prefer concise structure: short headings, bullets, brief paragraphs.  
+- **Reply language:** Follow the "UI locale — reply language" line appended immediately after this system block (English or Arabic per user app settings).`;function I(s,r){const a=s.map(o=>({role:o.role==="assistant"?"model":"user",parts:[{text:o.text}]}));return a.push({role:"user",parts:[{text:r}]}),a}async function v(s){const{apiKey:r,systemInstruction:a,turns:o,userMessage:h}=s;return S({apiKey:r,systemInstruction:a,contents:I(o,h)})}const k="deepseek-chat";async function O(s){var u,i,e,t,l;const{apiKey:r,system:a,turns:o,userMessage:h}=s,p=[{role:"system",content:a}];for(const m of o)p.push({role:m.role==="user"?"user":"assistant",content:m.text});p.push({role:"user",content:h});const n=await fetch("https://api.deepseek.com/v1/chat/completions",{method:"POST",headers:{"content-type":"application/json",authorization:`Bearer ${r}`},body:JSON.stringify({model:k,messages:p,max_tokens:4096})}),c=await n.json().catch(()=>({}));if(!n.ok)throw new Error(((u=c==null?void 0:c.error)==null?void 0:u.message)||n.statusText||`HTTP ${n.status}`);const y=(l=(t=(e=(i=c.choices)==null?void 0:i[0])==null?void 0:e.message)==null?void 0:t.content)==null?void 0:l.trim();if(!y)throw new Error("Empty DeepSeek response");return y}const x="/api/ollama/chat",g=s=>new Promise(r=>setTimeout(r,s));async function D(s){const{baseUrl:r,model:a,system:o,turns:h,userMessage:p}=s,n=[{role:"system",content:o}];for(const e of h)n.push({role:e.role==="user"?"user":"assistant",content:e.text});n.push({role:"user",content:p});const c=(r||"http://localhost:11434").trim().replace(/\/+$/,""),y=(a||"llama3.1").trim(),u=3;let i="";for(let e=1;e<=u;e++){let t;try{t=await fetch(x,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({baseUrl:c,model:y,messages:n})})}catch(f){if(i=`Could not reach the app server to proxy Ollama. ${f instanceof Error?f.message:""}`.trim(),e<u){await g(500*e);continue}throw new Error(i)}const l=await t.json().catch(()=>({}));if(!t.ok){if(i=(l==null?void 0:l.error)||t.statusText||`HTTP ${t.status}`,(t.status>=500||t.status===408||t.status===429)&&e<u){await g(500*e);continue}throw new Error(i)}const m=(l.reply||"").trim();if(!m)throw new Error("Empty Ollama response");return m}throw new Error(i||"Ollama request failed")}export{T as A,O as a,D as b,v as c,C as u};
