@@ -271,6 +271,7 @@ import {
   TOPOGRAPHIC_3D_BASEMAP_ID,
   warmAgroCloudTerrainDemSource,
   ESRI_WORLD_TERRAIN_SOURCE_ID,
+  setAgroCloudTerrainExaggeration,
 } from '../../lib/agroCloudMapTerrain';
 import { useOpenWeatherMapApiKey } from '../../hooks/useOpenWeatherMapApiKey';
 import { agroChatWithDeepSeek, agroChatWithGemini, agroChatWithOllama, warmOllama } from '../../lib/agroAiChat';
@@ -4974,6 +4975,8 @@ export default function SatelliteIntelligence() {
   const handleTerrainExaggerationChange = useCallback(
     (ex: number) => {
       setTerrainExaggeration(ex);
+      // Keep the shared terrain controller in sync so camera moves/syncs don't reset the relief.
+      setAgroCloudTerrainExaggeration(ex);
       if (is3DViewRef.current) applyTerrainExaggeration(ex);
     },
     [applyTerrainExaggeration],

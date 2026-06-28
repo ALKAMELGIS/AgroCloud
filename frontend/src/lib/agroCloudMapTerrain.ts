@@ -1,15 +1,59 @@
 /**
  * Mapbox GL 3D terrain (DEM mesh) for AgroCloud maps.
  * Esri WorldElevation3D Terrain3D — public, no Mapbox token.
- * DEM + hillshade sit *below* basemap rasters so tile gaps never show on top.
+ *
+ * Esri serves elevation as LERC, which neither Mapbox GL JS (no `addProtocol`) nor MapLibre can turn
+ * into a `raster-dem` source client-side. The backend (`/api/terrain/esri-rgb/{z}/{x}/{y}`) decodes
+ * LERC and re-encodes it as standard Mapbox terrain-RGB PNG tiles, which both engines read directly
+ * over plain HTTP. The Esri World Hillshade raster is overlaid on the topographic basemap for crisp
+ * relief shading; raster analysis layers drape over the mesh automatically.
  * @see https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer
  */
 
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services'
 const ATTR_ESRI = 'Tiles © Esri'
-/** Esri global 3D terrain (orthometric meters, multi-source DEM). */
+/** Esri global 3D terrain (orthometric meters, multi-source DEM) — raw HTTPS LERC tile endpoint. */
 export const ESRI_WORLD_TERRAIN_TILE_URL =
   'https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer/tile/{z}/{y}/{x}'
+
+/**
+ * Backend proxy that decodes Esri LERC tiles and re-serves them as Mapbox terrain-RGB PNGs.
+ * Path is resolved against the current origin at runtime (dev: Vite proxies `/api` → backend;
+ * full-stack: same-origin). Mapbox/MapLibre require an absolute URL, so {@link buildEsriTerrainDemTilesUrl}
+ * prepends `location.origin`.
+ */
+export const ESRI_WORLD_TERRAIN_DEM_TILE_PATH = '/api/terrain/esri-rgb/{z}/{x}/{y}'
+
+/**
+ * Origin that serves the terrain proxy. Same-origin when the app runs behind the Node API
+ * (dev via the Vite `/api` proxy, or full-stack hosting). On static hosts (GitHub Pages) there is
+ * no local `/api`, so we reuse the configured backend origin (`VITE_AGRI_API_SECRETS_URL`) — the
+ * same server that decodes the LERC tiles and already allows cross-origin tile requests.
+ */
+function resolveTerrainApiOrigin(): string {
+  const sameOrigin =
+    typeof window !== 'undefined' && window.location?.origin ? window.location.origin : ''
+  const configured =
+    typeof import.meta.env.VITE_AGRI_API_SECRETS_URL === 'string'
+      ? import.meta.env.VITE_AGRI_API_SECRETS_URL.trim()
+      : ''
+  if (configured) {
+    try {
+      return new URL(configured, sameOrigin || 'http://localhost').origin
+    } catch {
+      /* malformed override — fall back to same-origin */
+    }
+  }
+  return sameOrigin
+}
+
+/** Absolute terrain-RGB tile template (origin-prefixed) for Mapbox/MapLibre `raster-dem` sources. */
+export function buildEsriTerrainDemTilesUrl(): string {
+  return `${resolveTerrainApiOrigin()}${ESRI_WORLD_TERRAIN_DEM_TILE_PATH}`
+}
+
+/** Esri World Hillshade (multi-directional) raster — overlaid on the topographic basemap. */
+export const ESRI_WORLD_HILLSHADE_TILE_URL = `${ESRI}/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}`
 
 export const ESRI_WORLD_TERRAIN_ATTRIBUTION =
   'Elevation © Esri — WorldElevation3D/Terrain3D'
@@ -22,20 +66,47 @@ export const ESRI_WORLD_TERRAIN_SOURCE_ID = 'esri-terrain'
 export const AGRO_CLOUD_TERRAIN_DEM_SOURCE_ID = ESRI_WORLD_TERRAIN_SOURCE_ID
 export const AGRO_CLOUD_HILLSHADE_LAYER_ID = 'agrocloud-hillshade'
 export const AGRO_CLOUD_TOPO_BASE_LAYER_ID = 'topo-base-layer'
+/** Esri World Hillshade raster overlay (sits on top of the topo basemap). */
+export const AGRO_CLOUD_ESRI_HILLSHADE_SOURCE_ID = 'esri-world-hillshade'
+export const AGRO_CLOUD_ESRI_HILLSHADE_LAYER_ID = 'agrocloud-esri-hillshade'
 
 /** Pitch (degrees) at which DEM mesh is enabled during mouse orbit / tilt. */
 export const AGRO_CLOUD_TERRAIN_PITCH_THRESHOLD = 8
 
-const TERRAIN_EXAGGERATION = 1.5
-const TERRAIN_EXAGGERATION_PITCHED = 1.85
+const TERRAIN_EXAGGERATION_DEFAULT = 1.5
+const TERRAIN_EXAGGERATION_MIN = 1
+const TERRAIN_EXAGGERATION_MAX = 8
 /** Lower max zoom = fewer tiles, faster load; mesh still drapes basemap at high zoom. */
 const ESRI_TERRAIN_DEM_MAX_ZOOM = 13
+
+/** User-adjustable vertical exaggeration ("relief height"), shared by all maps. */
+let currentTerrainExaggeration = TERRAIN_EXAGGERATION_DEFAULT
+
+export function setAgroCloudTerrainExaggeration(value: number): number {
+  if (Number.isFinite(value)) {
+    currentTerrainExaggeration = Math.max(
+      TERRAIN_EXAGGERATION_MIN,
+      Math.min(TERRAIN_EXAGGERATION_MAX, value),
+    )
+  }
+  return currentTerrainExaggeration
+}
+
+export function getAgroCloudTerrainExaggeration(): number {
+  return currentTerrainExaggeration
+}
 
 const HILLSHADE_PAINT = {
   'hillshade-exaggeration': 0.45,
   'hillshade-shadow-color': '#3d3629',
   'hillshade-highlight-color': '#f8f6f0',
   'hillshade-illumination-direction': 335,
+}
+
+/** Esri World Hillshade raster overlay paint — semi-transparent so topo labels/terrain read through. */
+const ESRI_HILLSHADE_OVERLAY_PAINT = {
+  'raster-fade-duration': 0,
+  'raster-opacity': 0.5,
 }
 
 const BASEMAP_RASTER_PAINT = {
@@ -47,16 +118,29 @@ function esriTile(servicePath: string): string {
   return `${ESRI}/${servicePath}/MapServer/tile/{z}/{y}/{x}`
 }
 
-/** Esri WorldElevation3D raster-dem source for Mapbox GL / MapLibre. */
+/**
+ * Esri WorldElevation3D raster-dem source for Mapbox GL / MapLibre.
+ * Tiles are served as Mapbox terrain-RGB PNGs by the backend proxy, so `encoding: 'mapbox'`.
+ */
 export function buildEsriWorldTerrainDemSourceSpec(): Record<string, unknown> {
   return {
     type: 'raster-dem',
-    tiles: [ESRI_WORLD_TERRAIN_TILE_URL],
+    tiles: [buildEsriTerrainDemTilesUrl()],
     tileSize: 256,
-    encoding: 'terrarium',
+    encoding: 'mapbox',
     minzoom: 0,
     maxzoom: ESRI_TERRAIN_DEM_MAX_ZOOM,
     attribution: ESRI_WORLD_TERRAIN_ATTRIBUTION,
+  }
+}
+
+/** Esri World Hillshade raster source spec (overlay above the topographic basemap). */
+export function buildEsriWorldHillshadeSourceSpec(): Record<string, unknown> {
+  return {
+    type: 'raster',
+    tiles: [ESRI_WORLD_HILLSHADE_TILE_URL],
+    tileSize: 256,
+    attribution: ATTR_ESRI,
   }
 }
 
@@ -92,8 +176,9 @@ export function shouldEnableAgroCloudTerrain3d(opts: {
   return pitch >= AGRO_CLOUD_TERRAIN_PITCH_THRESHOLD
 }
 
-function terrainExaggerationForPitch(pitch: number): number {
-  return pitch >= 35 ? TERRAIN_EXAGGERATION_PITCHED : TERRAIN_EXAGGERATION
+function terrainExaggerationForPitch(_pitch: number): number {
+  // The user-controlled "relief height" is authoritative across pitch changes.
+  return currentTerrainExaggeration
 }
 
 export function build3dTopographicLeafletLayers(): { url: string; attribution: string; opacity?: number }[] {
@@ -179,7 +264,13 @@ export function build3dSatelliteMapboxStyle(): Record<string, unknown> {
   }
 }
 
-/** Mapbox GL style: hillshade + DEM under topo basemap (basemap covers terrain tile gaps). */
+/**
+ * Mapbox GL style: Esri elevation mesh + topographic basemap + Esri World Hillshade overlay.
+ *
+ * Layer order (bottom→top): computed hillshade (fills DEM tile gaps, hidden under opaque basemap)
+ * → topo basemap raster → Esri World Hillshade overlay (semi-transparent relief). Raster analysis
+ * layers added later sit above this stack and drape over the terrain mesh automatically.
+ */
 export function build3dTopographicMapboxStyle(): Record<string, unknown> {
   return {
     version: 8 as const,
@@ -192,6 +283,7 @@ export function build3dTopographicMapboxStyle(): Record<string, unknown> {
         tileSize: 256,
         attribution: ATTR_ESRI,
       },
+      [AGRO_CLOUD_ESRI_HILLSHADE_SOURCE_ID]: buildEsriWorldHillshadeSourceSpec(),
       [ESRI_WORLD_TERRAIN_SOURCE_ID]: buildEsriWorldTerrainDemSourceSpec(),
     },
     layers: [
@@ -207,10 +299,16 @@ export function build3dTopographicMapboxStyle(): Record<string, unknown> {
         source: 'topo-base',
         paint: BASEMAP_RASTER_PAINT,
       },
+      {
+        id: AGRO_CLOUD_ESRI_HILLSHADE_LAYER_ID,
+        type: 'raster',
+        source: AGRO_CLOUD_ESRI_HILLSHADE_SOURCE_ID,
+        paint: ESRI_HILLSHADE_OVERLAY_PAINT,
+      },
     ],
     terrain: {
       source: ESRI_WORLD_TERRAIN_SOURCE_ID,
-      exaggeration: TERRAIN_EXAGGERATION,
+      exaggeration: currentTerrainExaggeration,
     },
   }
 }

@@ -20,6 +20,7 @@ import { registerGeocodeRoutes } from './geocodeProxy.js'
 import { registerAcpWeatherRoutes } from './acpWeatherRoutes.js'
 import { registerCropClassificationRoutes } from './cropClassificationProxy.js'
 import { registerTreeDetectionRoutes } from './treeDetectionProxy.js'
+import { registerEsriTerrainTileRoutes } from './esriTerrainRgbTiles.js'
 import {
   applyStaticCacheHeaders,
   httpsRedirectMiddleware,
@@ -1778,6 +1779,7 @@ registerGeocodeRoutes(app)
 registerAcpWeatherRoutes(app)
 registerCropClassificationRoutes(app, { secretsFilePath: API_SECRETS_FILE, broadcast })
 registerTreeDetectionRoutes(app)
+registerEsriTerrainTileRoutes(app)
 
 /**
  * Static asset requests (hashed JS/CSS chunks, fonts, images, etc.) must never fall back to
