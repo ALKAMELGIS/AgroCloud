@@ -1,5 +1,6 @@
 import './AgroCloudPlatformDashboard.css'
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { lazyWithRetry } from '../../../lib/lazyWithRetry'
 import { AcpPlatformProvider } from './acpPlatformContext'
 import { useAcpDashboardEngine } from './useAcpDashboardEngine'
 import { AcpHeaderBar } from './panels/AcpHeaderBar'
@@ -15,14 +16,17 @@ import { AcpMapToolErrorBoundary } from './map/AcpMapToolErrorBoundary'
 import { purgeWorldCountriesFromAcpMapRegistry } from './map/acpPortalMapLayers'
 import { isAcpCompactLayout, useBreakpoint } from './hooks/useBreakpoint'
 
-const AcpMapCanvas = lazy(() =>
-  import('./map/AcpMapCanvas').then(m => ({ default: m.AcpMapCanvas })),
+const AcpMapCanvas = lazyWithRetry(
+  () => import('./map/AcpMapCanvas').then(m => ({ default: m.AcpMapCanvas })),
+  'AcpMapCanvas',
 )
-const AcpSettingsCenter = lazy(() =>
-  import('./admin/AcpSettingsCenter').then(m => ({ default: m.AcpSettingsCenter })),
+const AcpSettingsCenter = lazyWithRetry(
+  () => import('./admin/AcpSettingsCenter').then(m => ({ default: m.AcpSettingsCenter })),
+  'AcpSettingsCenter',
 )
-const AcpTimeSeriesChart = lazy(() =>
-  import('./panels/AcpTimeSeriesChart').then(m => ({ default: m.AcpTimeSeriesChart })),
+const AcpTimeSeriesChart = lazyWithRetry(
+  () => import('./panels/AcpTimeSeriesChart').then(m => ({ default: m.AcpTimeSeriesChart })),
+  'AcpTimeSeriesChart',
 )
 
 function MapCanvasFallback() {

@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useEffect, useState } from 'react'
+import { Component, Suspense, useEffect, useState, type ReactNode } from 'react'
 import { HashRouter, Navigate, useLocation } from 'react-router-dom'
 import { AppDialogProvider } from './components/AppDialogProvider'
 import HeaderBar from './components/HeaderBar'
@@ -7,7 +7,8 @@ import AppRoutes from './routes/AppRoutes'
 import PersistentAgroCloudEmbed from './components/PersistentAgroCloudEmbed'
 import PwaInstallPrompt from './components/PwaInstallPrompt'
 import PwaInstallFab from './components/PwaInstallFab'
-const SplashScreen = lazy(() => import('./components/SplashScreen'))
+import { isDynamicImportError, lazyWithRetry } from './lib/lazyWithRetry'
+const SplashScreen = lazyWithRetry(() => import('./components/SplashScreen'), 'SplashScreen')
 import { AuthProvider, useAuth } from './state/auth'
 import { LanguageProvider } from './lib/i18n'
 import { SystemSettingsProvider } from './store/SystemSettingsContext'
@@ -18,7 +19,7 @@ type AppErrorState = {
   details?: string
 } | null
 
-class AppErrorBoundary extends Component<{ children: JSX.Element }, { err: AppErrorState }> {
+class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErrorState }> {
   state: { err: AppErrorState } = { err: null }
   private onUnhandledRejection?: (e: PromiseRejectionEvent) => void
   private onErrorEvent?: (e: ErrorEvent) => void
@@ -28,11 +29,27 @@ class AppErrorBoundary extends Component<{ children: JSX.Element }, { err: AppEr
   }
 
   componentDidCatch(error: unknown) {
+    if (AppErrorBoundary.recoverFromStaleChunk(error)) return
     try {
       const message = error instanceof Error ? error.message : String(error)
       console.error('[AppErrorBoundary]', message, error)
     } catch {
     }
+  }
+
+  /** Stale-deploy chunk failures should self-heal with a one-time reload, not a dead-end screen. */
+  private static recoverFromStaleChunk(error: unknown): boolean {
+    if (typeof window === 'undefined') return false
+    if (!isDynamicImportError(error)) return false
+    const guardKey = 'agro_boundary_chunk_reload'
+    try {
+      if (sessionStorage.getItem(guardKey)) return false
+      sessionStorage.setItem(guardKey, '1')
+    } catch {
+      return false
+    }
+    window.location.reload()
+    return true
   }
 
   componentDidMount() {
@@ -43,6 +60,7 @@ class AppErrorBoundary extends Component<{ children: JSX.Element }, { err: AppEr
       if (msg.includes('Style is not done loading')) return
       if (reason instanceof DOMException && reason.name === 'AbortError') return
       if (reason instanceof Error && reason.name === 'AbortError') return
+      if (AppErrorBoundary.recoverFromStaleChunk(reason)) return
       const details = reason instanceof Error ? reason.stack : undefined
       this.setState({ err: { error: reason ?? e, kind: 'window', details } })
       try {
@@ -54,6 +72,7 @@ class AppErrorBoundary extends Component<{ children: JSX.Element }, { err: AppEr
       const err = e?.error
       const msg = err instanceof Error ? err.message : typeof err === 'string' ? err : String(e?.message ?? '')
       if (msg.includes('Style is not done loading')) return
+      if (AppErrorBoundary.recoverFromStaleChunk(err ?? e?.message)) return
       const details = typeof e?.error?.stack === 'string' ? e.error.stack : undefined
       this.setState({ err: { error: e.error ?? e.message, kind: 'window', details } })
       try {

@@ -1,12 +1,12 @@
 import {
   forwardRef,
-  lazy,
   Suspense,
   useCallback,
   useEffect,
   useImperativeHandle,
   useState,
 } from 'react'
+import { lazyWithRetry } from '../../../../lib/lazyWithRetry'
 import { useAcpPlatform } from '../acpPlatformContext'
 import { AcpAddGisLayerPanel } from './AcpAddGisLayerPanel'
 import { AcpEsriBasemapFlyout } from './AcpEsriBasemapFlyout'
@@ -17,8 +17,9 @@ import { AcpMapSearchPanel } from './AcpMapSearchPanel'
 import { AcpMapToolErrorBoundary } from './AcpMapToolErrorBoundary'
 import { AcpHideToolbarIcon } from './AcpHideToolbarIcon'
 
-const AcpImageryTimeSeriesPanel = lazy(() =>
-  import('./AcpImageryTimeSeriesPanel').then(m => ({ default: m.AcpImageryTimeSeriesPanel })),
+const AcpImageryTimeSeriesPanel = lazyWithRetry(
+  () => import('./AcpImageryTimeSeriesPanel').then(m => ({ default: m.AcpImageryTimeSeriesPanel })),
+  'AcpImageryTimeSeriesPanel',
 )
 
 type AcpMapPanelId = 'search' | 'adddata' | 'legend' | 'layers' | 'basemap' | 'timeseries'

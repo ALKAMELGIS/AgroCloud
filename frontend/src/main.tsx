@@ -46,6 +46,23 @@ const safeSessionRemoveItem = (key: string) => {
   }
 }
 
+/**
+ * Vite fires `vite:preloadError` when a code-split chunk preload fails — almost always because a
+ * new deploy changed chunk hashes and this tab still holds a stale index.html. Reload once (guarded)
+ * to fetch the fresh shell + current chunk names instead of leaving the user on a dead page.
+ */
+if (typeof window !== 'undefined') {
+  window.addEventListener('vite:preloadError', () => {
+    const guardKey = 'agro_preload_error_reload'
+    if (safeSessionGetItem(guardKey)) return
+    safeSessionSetItem(guardKey, '1')
+    window.location.reload()
+  })
+  window.addEventListener('load', () => {
+    safeSessionRemoveItem('agro_preload_error_reload')
+  })
+}
+
 const pwaEnabled = import.meta.env.VITE_ENABLE_PWA === 'true'
 
 const registerServiceWorker = () => {

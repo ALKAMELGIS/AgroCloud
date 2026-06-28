@@ -1,10 +1,11 @@
-import { Suspense, lazy } from 'react'
+import { Suspense } from 'react'
 import Home from '../Home'
 import Overview from '../dashboards/Overview'
 import ExternalPageLink from './ExternalPageLink'
+import { lazyWithRetry } from '../../lib/lazyWithRetry'
 
-const GisMap = lazy(() => import('../satellite/GisMap'))
-const SatelliteIntelligence = lazy(() => import('../satellite/SatelliteIntelligence'))
+const GisMap = lazyWithRetry(() => import('../satellite/GisMap'), 'GisMap')
+const SatelliteIntelligence = lazyWithRetry(() => import('../satellite/SatelliteIntelligence'), 'SatelliteIntelligence')
 
 function Placeholder({ title }: { title: string }) {
   return (

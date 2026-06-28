@@ -1779,7 +1779,27 @@ registerAcpWeatherRoutes(app)
 registerCropClassificationRoutes(app, { secretsFilePath: API_SECRETS_FILE, broadcast })
 registerTreeDetectionRoutes(app)
 
+/**
+ * Static asset requests (hashed JS/CSS chunks, fonts, images, etc.) must never fall back to
+ * the SPA shell. A stale client (cached index.html after a redeploy) may request an old chunk
+ * hash that no longer exists; returning index.html (HTML) for a `.js` request makes the browser
+ * fail with "Failed to fetch dynamically imported module". Returning a clean 404 instead lets the
+ * client detect the stale-deploy case and recover by reloading to fetch the fresh index.html.
+ */
+function looksLikeStaticAsset(urlPath) {
+  if (urlPath.startsWith('/assets/')) return true
+  const ext = path.extname(urlPath).toLowerCase()
+  if (!ext || ext === '.html') return false
+  return /\.(js|mjs|css|map|wasm|json|webmanifest|png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|eot|txt|xml)$/i.test(
+    urlPath,
+  )
+}
+
 app.get('*', (req, res) => {
+  if (looksLikeStaticAsset(req.path)) {
+    res.setHeader('Cache-Control', 'no-store')
+    return res.status(404).type('txt').send('Not found')
+  }
   applyStaticCacheHeaders(res, 'index.html')
   res.sendFile(path.join(FRONTEND_DIST, 'index.html'))
 })
