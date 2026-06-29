@@ -4221,14 +4221,45 @@ export default function GisMap() {
     return trimmed
   }
 
+  /** Matches a direct single layer/table URL, e.g. `…/MapServer/124` or `…/FeatureServer/3`. */
+  const arcgisDirectLayerUrlRe = /\/(?:MapServer|FeatureServer)\/(\d+)\/?$/i
+
   const discoverArcGisLayers = async () => {
-    const base = normalizeArcGisServiceUrl(serviceUrl)
-    if (!base) return
+    const cleaned = serviceUrl.trim().replace(/#.*$/, '').replace(/\?.*$/, '').replace(/\/+$/, '')
+    if (!cleaned) return
     setIsDiscovering(true)
     setDiscoverError(null)
     setDiscoveredLayers([])
     setSelectedDiscoveredUrl('')
     try {
+      // Direct single-layer/table URL (…/MapServer/124): load THAT layer's definition
+      // instead of enumerating the whole service root. Many secured/grouped service roots
+      // don't list their layers, so stripping to the root would wrongly report
+      // "No layers/tables found" even when the specific layer is valid open data.
+      const directMatch = cleaned.match(arcgisDirectLayerUrlRe)
+      if (directMatch) {
+        const def = await fetchArcGisLayerDefinition(cleaned, token)
+        const id = typeof def?.id === 'number' ? def.id : Number(directMatch[1])
+        const name =
+          typeof def?.name === 'string' && def.name.trim() ? (def.name as string) : `Layer ${id}`
+        const isTable = typeof def?.type === 'string' && /table/i.test(def.type)
+        const discovered = [
+          {
+            id,
+            name,
+            kind: (isTable ? 'table' : 'layer') as 'layer' | 'table',
+            url: cleaned,
+            geometryType: typeof def?.geometryType === 'string' ? (def.geometryType as string) : undefined,
+          },
+        ]
+        setDiscoveredLayers(discovered)
+        setSelectedDiscoveredUrl(discovered[0].url)
+        setLayerName(prev => (prev.trim() ? prev : discovered[0].name))
+        return
+      }
+
+      // Service root URL → enumerate its layers + tables.
+      const base = normalizeArcGisServiceUrl(serviceUrl)
       const url = buildArcGisUrl(base, { f: 'json', token: token.trim() })
       const res = await fetch(url, { method: 'GET' })
       const json = await res.json()
@@ -4248,7 +4279,9 @@ export default function GisMap() {
           geometryType: typeof l?.geometryType === 'string' ? (l.geometryType as string) : undefined,
         }))
       if (discovered.length === 0) {
-        throw new Error('No layers/tables found in this service URL.')
+        throw new Error(
+          'No layers/tables found in this service URL. For a single layer, paste its full URL ending in the layer id (e.g. …/MapServer/124).',
+        )
       }
       setDiscoveredLayers(discovered)
       setSelectedDiscoveredUrl(discovered[0].url)
