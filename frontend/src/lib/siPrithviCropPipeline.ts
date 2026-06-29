@@ -157,13 +157,65 @@ async function startJob(body: Record<string, unknown>): Promise<string> {
   return json.jobId as string
 }
 
-export function startAoiJob(input: RunAoiInput): Promise<string> {
-  return startJob({
+/**
+ * In-browser job registry for the client-side country engine. On a static
+ * deployment (no Node backend) AOI classification runs entirely in the browser;
+ * its progressive snapshots are stored here so the existing `getJob`/`pollJob`
+ * polling flow works unchanged (no UI changes required).
+ */
+const localJobs = new Map<string, CropClassificationJob>()
+
+function newLocalJobId(): string {
+  const rnd =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  return `local-${rnd}`
+}
+
+export async function startAoiJob(input: RunAoiInput): Promise<string> {
+  // Prefer the backend when one is reachable (same-origin Node or a configured
+  // remote origin) — it also unlocks the heavy Prithvi engine. Otherwise fall
+  // back to the deterministic country engine running fully in the browser so the
+  // tool keeps working on a static deployment with no API.
+  const backendReachable = await ensureBackendAvailable()
+  if (backendReachable || configuredApiOrigin()) {
+    return startJob({
+      mode: 'aoi',
+      aoi: input.aoi,
+      season: input.season,
+      timesteps: input.timesteps ?? 3,
+    })
+  }
+
+  const jobId = newLocalJobId()
+  localJobs.set(jobId, {
+    id: jobId,
     mode: 'aoi',
-    aoi: input.aoi,
-    season: input.season,
-    timesteps: input.timesteps ?? 3,
+    status: 'queued',
+    progress: 0,
+    message: 'Starting in-browser classification…',
+    result: null,
+    error: null,
   })
+  // Lazy-load the engine so its code is only fetched when actually needed (and
+  // kept out of the initial bundle on backend-served deployments).
+  void import('./siCropClassificationClientEngine')
+    .then(({ runClientAoiCropClassification }) =>
+      runClientAoiCropClassification(jobId, input, job => localJobs.set(jobId, job)),
+    )
+    .catch(err => {
+      localJobs.set(jobId, {
+        id: jobId,
+        mode: 'aoi',
+        status: 'error',
+        progress: 1,
+        message: 'Pipeline failed.',
+        result: null,
+        error: String((err as Error)?.message || err),
+      })
+    })
+  return jobId
 }
 
 export function startChipJob(imageUrl: string): Promise<string> {
@@ -171,6 +223,9 @@ export function startChipJob(imageUrl: string): Promise<string> {
 }
 
 export async function getJob(jobId: string): Promise<CropClassificationJob> {
+  // Client-side (in-browser) jobs are served from the local registry.
+  const local = localJobs.get(jobId)
+  if (local) return local
   const res = await fetch(cropApiUrl(`/jobs/${jobId}`))
   noteApiResponse(res.status)
   const json = await res.json().catch(() => ({}))

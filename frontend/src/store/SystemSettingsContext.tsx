@@ -21,7 +21,7 @@ import {
 } from '../services/settingsStorage'
 import type { SystemSettingsPersistedV1 } from '../types/systemSettings'
 import { useLanguage } from '../lib/i18n'
-import { hydrateBrowserApiSecretsFromServer } from '../lib/apiSecretsServerPersistence'
+import { ensureBrowserApiSecretsHydrated } from '../lib/apiSecretsServerPersistence'
 
 type ToastState = { kind: 'success' | 'error'; message: string } | null
 
@@ -108,7 +108,8 @@ export function SystemSettingsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false
-    void hydrateBrowserApiSecretsFromServer().then(() => {
+    // Shares the single in-flight hydration kicked off early in main.tsx (deduped).
+    void ensureBrowserApiSecretsHydrated().then(() => {
       if (cancelled) return
       scheduleBrowserApiSecretsVaultSnapshot()
     })

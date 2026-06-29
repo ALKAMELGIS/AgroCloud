@@ -134,6 +134,29 @@ export async function hydrateBrowserApiSecretsFromServer(): Promise<boolean> {
   }
 }
 
+let hydrationPromise: Promise<boolean> | null = null
+
+/**
+ * Run the server→browser secrets hydration exactly once per page load and share the
+ * in-flight promise across every caller.
+ *
+ * Why this matters for "works on every device / shared link":
+ * the WMS instance id, Sentinel access token and Mapbox token resolve from
+ * `localStorage` first — values that only exist on the machine where they were saved
+ * via System Settings. They never travel with a shared URL or to a fresh browser.
+ * Kicking this off as early as possible (from `main.tsx`, before the first map mounts)
+ * lets a configured backend (`VITE_AGRI_API_SECRETS_URL`) populate those tokens up
+ * front, so the globe and Sentinel-2 layers initialise with the real credentials
+ * instead of the public/placeholder fallbacks. Deduping avoids a redundant second
+ * fetch from `SystemSettingsContext`.
+ */
+export function ensureBrowserApiSecretsHydrated(): Promise<boolean> {
+  if (!hydrationPromise) {
+    hydrationPromise = hydrateBrowserApiSecretsFromServer().catch(() => false)
+  }
+  return hydrationPromise
+}
+
 export type PersistApiSecretsResult = { ok: true } | { ok: false; error: string }
 
 export async function persistApiSecretsPatchToServer(patch: ApiSecretsClientPatch): Promise<PersistApiSecretsResult> {

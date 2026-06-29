@@ -104,12 +104,14 @@ export function normalizeProductionEnv() {
   mirrorViteFrom(['OPENAI_API_KEY', 'OPENAI'], 'VITE_OPENAI_API_KEY')
   mirrorViteFrom(['DEEPSEEK_API_KEY', 'DEEPSEEK'], 'VITE_DEEPSEEK_API_KEY')
   mirrorViteFrom(['OPENROUTESERVICE'], 'VITE_OPENROUTESERVICE')
+  // Client-safe Sentinel Hub config (used directly by the browser for WMS tiles / token Bearer).
   mirrorViteFrom(['SENTINEL_HUB_ACCESS_TOKEN'], 'VITE_SENTINEL_HUB_ACCESS_TOKEN')
   mirrorViteFrom(['SENTINEL_HUB_WMS_INSTANCE_ID'], 'VITE_SENTINEL_HUB_WMS_INSTANCE_ID')
-  mirrorViteFrom(['SENTINEL_HUB_CLIENT_ID'], 'VITE_SENTINEL_HUB_CLIENT_ID')
-  mirrorViteFrom(['SENTINEL_HUB_CLIENT_SECRET'], 'VITE_SENTINEL_HUB_CLIENT_SECRET')
-  mirrorViteFrom(['CDSE_CLIENT_ID', 'COPERNICUS_CLIENT_ID'], 'VITE_CDSE_CLIENT_ID')
-  mirrorViteFrom(['CDSE_CLIENT_SECRET', 'COPERNICUS_CLIENT_SECRET'], 'VITE_CDSE_CLIENT_SECRET')
+  // SECURITY: never mirror OAuth client secrets into VITE_* — Vite inlines VITE_* literals into the
+  // public client bundle, which would ship the secret to every browser. The Sentinel Hub / CDSE OAuth
+  // client id+secret stay server-side only (read here under their canonical names) and are used solely
+  // by the `/api/sentinel-hub/statistics` proxy. The browser authenticates via the access token above
+  // or routes statistics through that proxy.
   mirrorViteFrom(['OPENWEATHERMAP_API_KEY'], 'VITE_OPENWEATHER_API_KEY')
   mirrorViteFrom(
     ['GOOGLE_MAPS_SERVER_API_KEY', 'GOOGLE_MAPS_API_KEY'],

@@ -89,12 +89,21 @@ const STATS_RESULT_CACHE_TTL_MS = 12 * 60_000
 const statsResultCache = new Map<string, { data: SentinelHubDailyIndexMeans[]; expiresAt: number }>()
 const statsInFlight = new Map<string, Promise<SentinelHubDailyIndexMeans[]>>()
 
+/**
+ * SECURITY: the OAuth client id/secret are only ever consumed in DEV (local Vite), where minting a
+ * browser token is a developer convenience. In a production build we deliberately ignore them so the
+ * client secret is never used (and `build-pages-public` / the deploy workflow already ship them empty).
+ * Production browsers authenticate Sentinel Hub with the hydrated access token (Bearer) or route
+ * statistics through the server-side `/api/sentinel-hub/statistics` proxy that holds the secret.
+ */
 function envClientId(): string {
+  if (!import.meta.env.DEV) return ''
   const raw = import.meta.env.VITE_SENTINEL_HUB_CLIENT_ID
   return typeof raw === 'string' ? raw.trim() : ''
 }
 
 function envClientSecret(): string {
+  if (!import.meta.env.DEV) return ''
   const raw = import.meta.env.VITE_SENTINEL_HUB_CLIENT_SECRET
   return typeof raw === 'string' ? raw.trim() : ''
 }

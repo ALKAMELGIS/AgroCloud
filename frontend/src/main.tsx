@@ -23,6 +23,7 @@ import { initMobileAppShell } from './lib/initMobileAppShell'
 import { isTouchDevice } from './lib/pwaInstall'
 import { bootstrapMapboxAccessTokenPersistence } from './lib/mapboxAccessToken'
 import { restoreBrowserApiSecretsFromVaultIntoLocalStorage } from './lib/browserApiSecretsVault'
+import { ensureBrowserApiSecretsHydrated } from './lib/apiSecretsServerPersistence'
 import { installApiFetchGuard } from './lib/apiFetchGuard'
 
 // Install the global `/api/*` circuit-breaker before anything else can fire a request. On a static
@@ -150,6 +151,13 @@ if (pwaEnabled) {
 initMobileAppShell()
 restoreBrowserApiSecretsFromVaultIntoLocalStorage()
 bootstrapMapboxAccessTokenPersistence()
+
+// Hydrate server-stored API tokens (Mapbox + Sentinel Hub WMS instance/access token) as early as
+// possible — before the first map mounts — so a configured backend (VITE_AGRI_API_SECRETS_URL)
+// supplies the real credentials on EVERY device / shared link, not just the browser where they were
+// saved. Fire-and-forget: when no backend is reachable this resolves to false and the app proceeds
+// with build-time env / public fallbacks. Map layers also re-render on the change events it emits.
+void ensureBrowserApiSecretsHydrated()
 
 deferAfterFirstPaint(() => {
   initClientErrorMonitoring()
