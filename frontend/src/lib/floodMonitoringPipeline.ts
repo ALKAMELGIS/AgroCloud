@@ -85,33 +85,86 @@ function floodApiUrl(path: string): string {
   return apiUrl(`/api/flood-monitoring${path}`)
 }
 
-/** Error thrown when this static deployment has no backend to run the pipeline against. */
+/** Error thrown when a probed backend route turns out to be unreachable mid-request. */
 function backendUnavailableError(): Error {
-  return new Error(
-    'Flood monitoring needs the Node backend. This static deployment has no API — set VITE_AGRI_API_SECRETS_URL to your backend origin.',
-  )
+  return new Error('Flood monitoring backend became unreachable. Please retry.')
+}
+
+/**
+ * In-browser job registry for the client-side flood engine.
+ *
+ * On a static deployment with no Node backend, the SAR pipeline runs fully in the
+ * browser (Sentinel-1 via the Microsoft Planetary Computer, no auth). Its progressive
+ * snapshots are stored here so the existing `getFloodJob`/`pollFloodJob` polling flow
+ * works unchanged (no UI changes required).
+ */
+const localJobs = new Map<string, FloodMonitoringJob>()
+
+function newLocalJobId(): string {
+  const rnd =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  return `local-${rnd}`
 }
 
 export async function fetchFloodMonitoringConfig(): Promise<FloodMonitoringConfig | null> {
-  // Proactively confirm a live backend before touching `/api/*`. On static hosts the
-  // health probe fails up-front, so we never fire the doomed `/config` GET that 404s
-  // and floods the console.
-  if (!(await ensureBackendAvailable())) return null
+  // Prefer a live backend (it unlocks the optional Sentinel Hub / CDSE OAuth higher-tier
+  // source). When none is reachable — static deployment / shared link — the tool still
+  // runs fully in the browser against the Planetary Computer (free, no auth), so report
+  // `configured: true` instead of gating the panel behind "source unavailable".
+  if (!(await ensureBackendAvailable())) {
+    return {
+      configured: true,
+      source: 'sentinel-1-rtc (planetary computer · in-browser)',
+      hint: null,
+    }
+  }
   try {
     const res = await fetch(floodApiUrl('/config'))
     noteApiResponse(res.status)
-    if (!res.ok) return null
+    if (!res.ok) {
+      return { configured: true, source: 'sentinel-1-rtc (planetary computer · in-browser)', hint: null }
+    }
     return (await res.json()) as FloodMonitoringConfig
   } catch {
-    return null
+    return { configured: true, source: 'sentinel-1-rtc (planetary computer · in-browser)', hint: null }
   }
 }
 
 export async function startFloodJob(input: RunFloodInput): Promise<string> {
-  // No co-located backend → don't POST to the static CDN (returns 405). Probe first and
-  // fail fast with a clear, actionable message instead of a doomed network request.
-  if (!(await ensureBackendAvailable()) && !configuredApiOrigin()) {
-    throw backendUnavailableError()
+  // Prefer the backend when one is reachable (same-origin Node or a configured remote
+  // origin) — it also unlocks the optional Sentinel Hub / CDSE OAuth source. Otherwise
+  // run the SAR pipeline fully in the browser so Flood Monitoring works on a static
+  // deployment with the SAME Sentinel-1 data the local backend uses (Planetary Computer).
+  const backendReachable = await ensureBackendAvailable()
+  if (!backendReachable && !configuredApiOrigin()) {
+    const jobId = newLocalJobId()
+    localJobs.set(jobId, {
+      id: jobId,
+      status: 'queued',
+      progress: 0.02,
+      message: 'Queued (in-browser SAR engine)',
+      result: null,
+      error: null,
+    })
+    // Lazy-load the engine so its code (incl. the geotiff decoder) is only fetched when
+    // actually needed and stays out of the initial bundle on backend-served deployments.
+    void import('./floodMonitoringClientEngine')
+      .then(({ runClientFloodMonitoring }) =>
+        runClientFloodMonitoring(jobId, input, job => localJobs.set(jobId, job)),
+      )
+      .catch(err => {
+        localJobs.set(jobId, {
+          id: jobId,
+          status: 'error',
+          progress: 1,
+          message: 'Flood analysis failed.',
+          result: null,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      })
+    return jobId
   }
   let res: Response
   try {
@@ -141,6 +194,9 @@ export async function startFloodJob(input: RunFloodInput): Promise<string> {
 }
 
 export async function getFloodJob(jobId: string): Promise<FloodMonitoringJob> {
+  // Client-side (in-browser) jobs are served from the local registry.
+  const local = localJobs.get(jobId)
+  if (local) return local
   const res = await fetch(floodApiUrl(`/jobs/${jobId}`))
   noteApiResponse(res.status)
   const json = await res.json().catch(() => ({}))
