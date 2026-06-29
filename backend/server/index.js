@@ -144,6 +144,14 @@ app.use(
   }),
 )
 
+// Lightweight liveness probe used by the frontend circuit breaker to decide,
+// with a single request, whether a co-located backend exists. Static-only
+// deployments (no Node server) return 404 here, which trips the breaker once
+// and suppresses the flood of /api/* errors on the rest of the page load.
+app.get('/api/health', (_req, res) => {
+  res.status(200).json({ status: 'ok' })
+})
+
 // New versioned API gateway: /api/v1/* and /api/v2/*
 app.use('/api', versionedRoutes)
 // Backward compatibility bridge: map /api/v1/* to existing /api/* handlers below.

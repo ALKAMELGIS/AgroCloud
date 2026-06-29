@@ -14,6 +14,7 @@ import {
 } from './siCropAlertDominantNdvi'
 import { addDaysToIso, localIsoDate, subtractDaysFromIso } from './siSentinelImageryDate'
 import { applyAnalyticalResolutionToZonalMean } from './siAnalyticalResolutionEngine'
+import { apiUrl, isBackendKnownUnavailable, noteApiResponse } from './apiOrigin'
 
 export const SENTINEL_HUB_STATISTICS_URL = 'https://services.sentinel-hub.com/api/v1/statistics'
 export const SENTINEL_HUB_OAUTH_URL = 'https://services.sentinel-hub.com/oauth/token'
@@ -159,6 +160,9 @@ function isSentinelHubStatisticsDirectConfigured(): boolean {
 function mayUseSentinelHubStatisticsProxy(): boolean {
   if (import.meta.env.DEV) return true
   if (typeof window !== 'undefined' && /github\.io$/i.test(window.location.hostname)) return false
+  // Runtime circuit breaker: once the same-origin backend proxy has answered with
+  // 404/405/501 (static deployment without an Express backend), stop hitting it.
+  if (isBackendKnownUnavailable()) return false
   return true
 }
 
@@ -618,7 +622,7 @@ async function postSentinelStatisticsViaProxy(
   body: Record<string, unknown>,
   signal?: AbortSignal,
 ): Promise<StatsApiResponse> {
-  const res = await fetch(SENTINEL_HUB_STATISTICS_PROXY_URL, {
+  const res = await fetch(apiUrl(SENTINEL_HUB_STATISTICS_PROXY_URL), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -627,6 +631,11 @@ async function postSentinelStatisticsViaProxy(
     body: JSON.stringify(body),
     signal,
   })
+
+  // Trip the runtime circuit breaker when the same-origin backend proxy route is
+  // missing (404/405/501 on a static deployment without an Express backend), so
+  // subsequent calls skip the proxy entirely instead of flooding the console.
+  noteApiResponse(res.status)
 
   const text = await res.text()
   let json: StatsApiResponse & { error?: string | { message?: string } }

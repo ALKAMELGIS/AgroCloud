@@ -1,4 +1,5 @@
 import { fetchOpenMeteoWeather, type OpenMeteoWeatherSnapshot } from '../../../../lib/openMeteoWeather'
+import { apiUrl, ensureBackendAvailable, noteApiResponse } from '../../../../lib/apiOrigin'
 import {
   groupWeatherTickerFieldsByGrid,
   weatherGridKey,
@@ -58,8 +59,11 @@ async function fetchWeatherCached(lat: number, lng: number): Promise<OpenMeteoWe
 async function fetchWeatherViaApi(
   fields: AcpWeatherTickerField[],
 ): Promise<Map<string, OpenMeteoWeatherSnapshot> | null> {
+  // Static deployments have no co-located backend; probe once up-front and skip the doomed
+  // POST entirely so the client-side Open-Meteo path handles it (avoids 404/405 console errors).
+  if (!(await ensureBackendAvailable())) return null
   try {
-    const res = await fetch('/api/acp/weather/fields', {
+    const res = await fetch(apiUrl('/api/acp/weather/fields'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
@@ -70,6 +74,7 @@ async function fetchWeatherViaApi(
         })),
       }),
     })
+    noteApiResponse(res.status)
     if (!res.ok) return null
     const data = (await res.json()) as {
       fields?: ApiWeatherFieldSnapshot[]
@@ -142,10 +147,12 @@ export type AcpWeatherLayerConfig = {
 }
 
 export async function fetchAcpWeatherLayerConfig(): Promise<AcpWeatherLayerConfig | null> {
+  if (!(await ensureBackendAvailable())) return null
   try {
-    const res = await fetch('/api/acp/weather/layer-config', {
+    const res = await fetch(apiUrl('/api/acp/weather/layer-config'), {
       headers: { Accept: 'application/json' },
     })
+    noteApiResponse(res.status)
     if (!res.ok) return null
     const data = (await res.json()) as AcpWeatherLayerConfig
     if (typeof data.weatherAlertsVisible !== 'boolean') return null

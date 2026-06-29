@@ -58,33 +58,32 @@ describe('agroCloudMapTerrain', () => {
     expect(spec.tiles[0]).not.toContain('elevation3d.arcgis.com')
   })
 
-  it('stacks topo basemap with a draped DEM mesh and an Esri World Hillshade overlay', () => {
+  it('builds a flat topo basemap + Esri World Hillshade overlay without baking in the DEM mesh', () => {
+    // The DEM mesh (raster-dem source + `setTerrain`) is intentionally NOT baked
+    // into the style. It is added at runtime only after the backend terrain proxy
+    // is confirmed reachable, so static/backend-less hosts degrade gracefully to
+    // this flat style instead of flooding the console with /api/terrain 404s.
     const style = build3dTopographicMapboxStyle() as {
       sources: Record<string, { type: string; tiles?: string[]; encoding?: string }>
       layers: { id: string; type: string }[]
       terrain?: { source: string; exaggeration: number }
     }
 
-    const demSource = style.sources[ESRI_WORLD_TERRAIN_SOURCE_ID]
-    expect(demSource).toMatchObject({ type: 'raster-dem', encoding: 'mapbox' })
-    expect(demSource.tiles?.[0].endsWith(ESRI_WORLD_TERRAIN_DEM_TILE_PATH)).toBe(true)
+    // No DEM source and no terrain block until the runtime controller adds them.
+    expect(style.sources[ESRI_WORLD_TERRAIN_SOURCE_ID]).toBeUndefined()
+    expect(style.terrain).toBeUndefined()
+
+    // Layer order (bottom→top): topo basemap raster → Esri World Hillshade overlay.
     expect(style.layers[0]).toMatchObject({
-      id: AGRO_CLOUD_HILLSHADE_LAYER_ID,
-      type: 'hillshade',
-    })
-    expect(style.layers[1]).toMatchObject({
       id: AGRO_CLOUD_TOPO_BASE_LAYER_ID,
       type: 'raster',
     })
-    // Esri World Hillshade is overlaid on top of the topo basemap raster.
-    expect(style.layers[2]).toMatchObject({
+    expect(style.layers[1]).toMatchObject({
       id: AGRO_CLOUD_ESRI_HILLSHADE_LAYER_ID,
       type: 'raster',
     })
-    expect(style.terrain).toMatchObject({
-      source: ESRI_WORLD_TERRAIN_SOURCE_ID,
-      exaggeration: getAgroCloudTerrainExaggeration(),
-    })
+    // The computed-hillshade layer (sourced from the DEM) is not present yet.
+    expect(style.layers.some((l) => l.id === AGRO_CLOUD_HILLSHADE_LAYER_ID)).toBe(false)
   })
 
   it('clamps and shares the user-adjustable terrain exaggeration', () => {

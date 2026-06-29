@@ -7,6 +7,13 @@
  * @see backend/server/floodMonitoringProxy.js
  */
 
+import {
+  apiUrl,
+  configuredApiOrigin,
+  ensureBackendAvailable,
+  noteApiResponse,
+} from './apiOrigin'
+
 export type FloodMonitoringJobStatus =
   | 'queued'
   | 'fetching'
@@ -73,11 +80,26 @@ export const FLOOD_PIPELINE_STAGES: Array<{ status: FloodMonitoringJobStatus; la
   { status: 'done', label: 'Flood extent ready' },
 ]
 
-const BASE = '/api/flood-monitoring'
+/** Backend path for a flood-monitoring sub-route (resolved via the shared origin helper). */
+function floodApiUrl(path: string): string {
+  return apiUrl(`/api/flood-monitoring${path}`)
+}
+
+/** Error thrown when this static deployment has no backend to run the pipeline against. */
+function backendUnavailableError(): Error {
+  return new Error(
+    'Flood monitoring needs the Node backend. This static deployment has no API — set VITE_AGRI_API_SECRETS_URL to your backend origin.',
+  )
+}
 
 export async function fetchFloodMonitoringConfig(): Promise<FloodMonitoringConfig | null> {
+  // Proactively confirm a live backend before touching `/api/*`. On static hosts the
+  // health probe fails up-front, so we never fire the doomed `/config` GET that 404s
+  // and floods the console.
+  if (!(await ensureBackendAvailable())) return null
   try {
-    const res = await fetch(`${BASE}/config`)
+    const res = await fetch(floodApiUrl('/config'))
+    noteApiResponse(res.status)
     if (!res.ok) return null
     return (await res.json()) as FloodMonitoringConfig
   } catch {
@@ -86,24 +108,41 @@ export async function fetchFloodMonitoringConfig(): Promise<FloodMonitoringConfi
 }
 
 export async function startFloodJob(input: RunFloodInput): Promise<string> {
-  const res = await fetch(`${BASE}/run`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      aoi: input.aoi,
-      postDate: input.postDate,
-      preDate: input.preDate || undefined,
-      threshold: input.threshold,
-    }),
-  })
+  // No co-located backend → don't POST to the static CDN (returns 405). Probe first and
+  // fail fast with a clear, actionable message instead of a doomed network request.
+  if (!(await ensureBackendAvailable()) && !configuredApiOrigin()) {
+    throw backendUnavailableError()
+  }
+  let res: Response
+  try {
+    res = await fetch(floodApiUrl('/run'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        aoi: input.aoi,
+        postDate: input.postDate,
+        preDate: input.preDate || undefined,
+        threshold: input.threshold,
+      }),
+    })
+  } catch {
+    throw new Error('Cannot reach the flood-monitoring backend. Check your connection or backend URL.')
+  }
+  const unreachable = noteApiResponse(res.status)
   const json = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(json?.error || `Failed to start flood job (HTTP ${res.status})`)
+  if (!res.ok) {
+    if (unreachable && !configuredApiOrigin()) {
+      throw backendUnavailableError()
+    }
+    throw new Error(json?.error || `Failed to start flood job (HTTP ${res.status})`)
+  }
   if (!json?.jobId) throw new Error('Backend did not return a jobId')
   return json.jobId as string
 }
 
 export async function getFloodJob(jobId: string): Promise<FloodMonitoringJob> {
-  const res = await fetch(`${BASE}/jobs/${jobId}`)
+  const res = await fetch(floodApiUrl(`/jobs/${jobId}`))
+  noteApiResponse(res.status)
   const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(json?.error || `Job lookup failed (HTTP ${res.status})`)
   return json as FloodMonitoringJob

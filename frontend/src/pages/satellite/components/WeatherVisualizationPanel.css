@@ -1,0 +1,583 @@
+/* Weather visualization — luxury black glass tools panel + map overlays */
+
+.si-wviz-shell {
+  --si-wviz-glass: rgba(14, 14, 16, 0.82);
+  --si-wviz-glass-deep: rgba(8, 8, 10, 0.9);
+  --si-wviz-border: rgba(255, 255, 255, 0.1);
+  --si-wviz-inset: rgba(255, 255, 255, 0.08);
+  --si-wviz-text: #ffffff;
+  --si-wviz-accent: #22c55e;
+  --si-wviz-ring: rgba(52, 211, 153, 0.5);
+  --si-wviz-field: rgba(255, 255, 255, 0.05);
+  --si-wviz-field-border: rgba(255, 255, 255, 0.1);
+  --si-wviz-field-active: rgba(52, 211, 153, 0.14);
+  --si-wviz-shadow:
+    0 28px 72px rgba(0, 0, 0, 0.88),
+    0 0 0 1px rgba(255, 255, 255, 0.06);
+  --si-wviz-blur: blur(40px) saturate(1.22);
+
+  position: fixed;
+  z-index: 1200;
+  box-sizing: border-box;
+  min-width: min(268px, calc(100vw - 16px));
+  max-width: calc(100vw - 12px);
+  max-height: calc(100dvh - 12px);
+  pointer-events: auto;
+  color: var(--si-wviz-text);
+  animation: si-wviz-in 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.si-wviz-shell * {
+  box-sizing: border-box;
+}
+
+@keyframes si-wviz-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.si-wviz-panel {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 16px;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.07) 0%, transparent 36%),
+    linear-gradient(180deg, rgba(12, 12, 14, 0.9) 0%, rgba(6, 6, 8, 0.94) 100%);
+  border: 1px solid var(--si-wviz-border);
+  box-shadow: var(--si-wviz-shadow), inset 0 1px 0 var(--si-wviz-inset);
+  backdrop-filter: var(--si-wviz-blur);
+  -webkit-backdrop-filter: var(--si-wviz-blur);
+  color: var(--si-wviz-text);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.si-wviz-panel--min {
+  height: auto;
+}
+
+/* Header */
+.si-wviz-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  background: rgba(0, 0, 0, 0.22);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  user-select: none;
+}
+
+.si-wviz-drag {
+  cursor: grab;
+  touch-action: none;
+}
+
+.si-wviz-drag:active {
+  cursor: grabbing;
+}
+
+.si-wviz-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.si-wviz-brand-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: linear-gradient(160deg, rgba(56, 189, 248, 0.4), rgba(52, 211, 153, 0.22));
+  color: #e0f2fe;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.si-wviz-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.si-wviz-actions {
+  display: flex;
+  gap: 5px;
+  flex-shrink: 0;
+  cursor: default;
+}
+
+.si-wviz-icon-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.si-wviz-icon-btn:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.si-wviz-icon-btn.active {
+  border-color: var(--si-wviz-ring);
+  background: var(--si-wviz-field-active);
+  color: #6ee7b7;
+}
+
+/* Body */
+.si-wviz-body {
+  flex: 1;
+  min-height: 0;
+  padding: 10px 11px 11px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.si-wviz-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.si-wviz-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 99px;
+}
+
+.si-wviz-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.si-wviz-section-label {
+  font-size: 8px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.si-wviz-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.si-wviz-section-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.si-wviz-link {
+  border: none;
+  background: transparent;
+  color: #4ade80;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  padding: 0;
+}
+
+.si-wviz-link:hover {
+  color: #86efac;
+  text-decoration: underline;
+}
+
+/* Preset grid */
+.si-wviz-presets {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.si-wviz-preset {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 9px 2px 6px;
+  border-radius: 10px;
+  background: var(--si-wviz-field);
+  border: 1px solid var(--si-wviz-field-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  color: #ffffff;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.12s;
+}
+
+.si-wviz-preset:hover {
+  background: rgba(255, 255, 255, 0.09);
+  transform: translateY(-1px);
+}
+
+.si-wviz-preset i {
+  font-size: 14px;
+  filter: drop-shadow(0 0 8px currentColor);
+}
+
+.si-wviz-preset-label {
+  font-size: 6.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.si-wviz-preset.active {
+  border-color: var(--si-wviz-ring);
+  background: var(--si-wviz-field-active);
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.si-wviz-preset.active .si-wviz-preset-label {
+  color: #ffffff;
+}
+
+/* Preset icon tones */
+.si-wviz-tone--clear i { color: #fbbf24; }
+.si-wviz-tone--cloud i { color: #cbd5f5; }
+.si-wviz-tone--rain i { color: #60a5fa; }
+.si-wviz-tone--snow i { color: #e0f2fe; }
+.si-wviz-tone--fog i { color: #e2e8f0; }
+.si-wviz-tone--storm i { color: #c4b5fd; }
+
+/* Scene slides */
+.si-wviz-section--slides {
+  flex: 1;
+  min-height: 0;
+}
+
+.si-wviz-empty {
+  margin: 0;
+  font-size: 9px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--si-wviz-field);
+  border: 1px dashed var(--si-wviz-field-border);
+}
+
+.si-wviz-slides {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 160px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.si-wviz-slide {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.si-wviz-slide-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 9px;
+  background: var(--si-wviz-field);
+  border: 1px solid var(--si-wviz-field-border);
+  color: #ffffff;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.si-wviz-slide-main:hover {
+  border-color: var(--si-wviz-ring);
+  background: var(--si-wviz-field-active);
+}
+
+.si-wviz-slide-icon {
+  font-size: 11px;
+  color: #93c5fd;
+  flex-shrink: 0;
+}
+
+.si-wviz-slide-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 9px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.si-wviz-slide-play {
+  font-size: 8px;
+  color: #4ade80;
+  flex-shrink: 0;
+}
+
+.si-wviz-slide-del {
+  width: 28px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  border: 1px solid rgba(248, 113, 113, 0.28);
+  background: rgba(248, 113, 113, 0.1);
+  color: #fca5a5;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.si-wviz-slide-del:hover {
+  background: rgba(248, 113, 113, 0.2);
+  border-color: rgba(248, 113, 113, 0.5);
+}
+
+/* Settings */
+.si-wviz-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px;
+  border-radius: 10px;
+  background: var(--si-wviz-field);
+  border: 1px solid var(--si-wviz-field-border);
+}
+
+.si-wviz-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.si-wviz-settings-label {
+  font-size: 9px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.si-wviz-settings-val {
+  font-size: 9px;
+  font-weight: 700;
+  color: #6ee7b7;
+  font-variant-numeric: tabular-nums;
+}
+
+.si-wviz-range {
+  width: 100%;
+  accent-color: var(--si-wviz-accent);
+  cursor: pointer;
+}
+
+/* Reset */
+.si-wviz-reset {
+  flex-shrink: 0;
+  width: 100%;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.si-wviz-reset:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.si-wviz-reset i {
+  font-size: 10px;
+  color: #fbbf24;
+}
+
+/* Keep dark glass in all themes */
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-wviz-shell {
+  --si-wviz-glass: rgba(14, 14, 16, 0.82);
+  --si-wviz-field: rgba(255, 255, 255, 0.05);
+}
+
+/* ───────────────────────────── Map overlay ───────────────────────────── */
+
+.si-wviz-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.si-wviz-overlay-tint {
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: multiply;
+}
+
+.si-wviz-overlay--clear .si-wviz-overlay-tint {
+  mix-blend-mode: screen;
+  background:
+    radial-gradient(120% 80% at 70% -10%, rgba(255, 236, 170, 0.32), transparent 55%),
+    linear-gradient(180deg, rgba(255, 247, 214, 0.14), transparent 40%);
+}
+
+.si-wviz-overlay--cloudy .si-wviz-overlay-tint {
+  background:
+    radial-gradient(140% 90% at 50% -20%, rgba(190, 200, 214, 0.5), transparent 60%),
+    linear-gradient(180deg, rgba(150, 160, 175, 0.4), rgba(120, 130, 145, 0.18) 60%);
+}
+
+.si-wviz-overlay--rain .si-wviz-overlay-tint {
+  background:
+    radial-gradient(140% 90% at 50% -10%, rgba(90, 104, 124, 0.55), transparent 60%),
+    linear-gradient(180deg, rgba(60, 72, 92, 0.5), rgba(40, 50, 66, 0.4));
+}
+
+.si-wviz-overlay--snow .si-wviz-overlay-tint {
+  mix-blend-mode: screen;
+  background:
+    radial-gradient(140% 100% at 50% -10%, rgba(235, 244, 252, 0.4), transparent 60%),
+    linear-gradient(180deg, rgba(214, 228, 240, 0.28), transparent 55%);
+}
+
+.si-wviz-overlay--fog .si-wviz-overlay-tint {
+  background:
+    linear-gradient(180deg, rgba(214, 218, 224, 0.78), rgba(196, 202, 210, 0.62));
+}
+
+.si-wviz-overlay--storm .si-wviz-overlay-tint {
+  background:
+    radial-gradient(140% 90% at 50% -10%, rgba(60, 66, 86, 0.6), transparent 60%),
+    linear-gradient(180deg, rgba(34, 40, 58, 0.62), rgba(20, 24, 38, 0.5));
+}
+
+/* Rain */
+.si-wviz-overlay-rain {
+  position: absolute;
+  inset: -20%;
+  background-image:
+    repeating-linear-gradient(
+      102deg,
+      rgba(255, 255, 255, 0) 0,
+      rgba(255, 255, 255, 0) 6px,
+      rgba(214, 230, 255, 0.5) 6px,
+      rgba(214, 230, 255, 0.5) 7px
+    );
+  background-size: 100% 100%;
+  opacity: 0.55;
+  animation: si-wviz-rain 0.6s linear infinite;
+}
+
+@keyframes si-wviz-rain {
+  from { transform: translate3d(0, -14%, 0); }
+  to { transform: translate3d(-6%, 14%, 0); }
+}
+
+/* Snow */
+.si-wviz-overlay-snow {
+  position: absolute;
+  inset: -20%;
+  background-image:
+    radial-gradient(2.4px 2.4px at 20% 30%, rgba(255, 255, 255, 0.95), transparent),
+    radial-gradient(2px 2px at 60% 70%, rgba(255, 255, 255, 0.85), transparent),
+    radial-gradient(2.8px 2.8px at 80% 20%, rgba(255, 255, 255, 0.92), transparent),
+    radial-gradient(1.8px 1.8px at 40% 80%, rgba(255, 255, 255, 0.8), transparent),
+    radial-gradient(2.2px 2.2px at 10% 60%, rgba(255, 255, 255, 0.88), transparent);
+  background-size: 320px 320px;
+  opacity: 0.85;
+  animation: si-wviz-snow 6s linear infinite;
+}
+
+@keyframes si-wviz-snow {
+  from { transform: translate3d(0, -16%, 0); }
+  to { transform: translate3d(4%, 16%, 0); }
+}
+
+/* Fog drift */
+.si-wviz-overlay-fog {
+  position: absolute;
+  inset: -30%;
+  background:
+    radial-gradient(60% 40% at 30% 50%, rgba(255, 255, 255, 0.4), transparent 70%),
+    radial-gradient(50% 36% at 70% 40%, rgba(255, 255, 255, 0.32), transparent 70%);
+  filter: blur(8px);
+  animation: si-wviz-fog 14s ease-in-out infinite alternate;
+}
+
+@keyframes si-wviz-fog {
+  from { transform: translate3d(-4%, 0, 0); }
+  to { transform: translate3d(4%, 2%, 0); }
+}
+
+/* Lightning flash */
+.si-wviz-overlay-flash {
+  position: absolute;
+  inset: 0;
+  background: rgba(226, 232, 255, 0.9);
+  opacity: 0;
+  animation: si-wviz-flash 7s ease-out infinite;
+}
+
+@keyframes si-wviz-flash {
+  0%, 92%, 100% { opacity: 0; }
+  93% { opacity: 0.55; }
+  94% { opacity: 0.05; }
+  95% { opacity: 0.5; }
+  97% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .si-wviz-overlay-rain,
+  .si-wviz-overlay-snow,
+  .si-wviz-overlay-fog,
+  .si-wviz-overlay-flash {
+    animation: none;
+  }
+}

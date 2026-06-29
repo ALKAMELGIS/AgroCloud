@@ -7,6 +7,13 @@
  * @see backend/server/cropClassificationProxy.js
  */
 
+import {
+  apiUrl,
+  configuredApiOrigin,
+  ensureBackendAvailable,
+  noteApiResponse,
+} from './apiOrigin'
+
 export type CropClassificationClass = {
   id: number
   name: string
@@ -85,19 +92,34 @@ export type RunAoiInput = {
   timesteps?: number
 }
 
-const BASE = '/api/crop-classification'
+/** Backend path for a crop-classification sub-route (resolved via the shared origin helper). */
+function cropApiUrl(path: string): string {
+  return apiUrl(`/api/crop-classification${path}`)
+}
+
+/** Error thrown when this static deployment has no backend to run the pipeline against. */
+function backendUnavailableError(): Error {
+  return new Error(
+    'Crop classification needs the Node backend. This static deployment has no API — set VITE_AGRI_API_SECRETS_URL to your backend origin.',
+  )
+}
 
 /**
  * Build a CORS-safe URL for a Hugging Face Space prediction image so it can be
  * used as a Mapbox/MapLibre `image` source (the HF file endpoint omits CORS headers).
  */
 export function cropPredictionImageUrl(remoteUrl: string): string {
-  return `${BASE}/proxy-image?url=${encodeURIComponent(remoteUrl)}`
+  return cropApiUrl(`/proxy-image?url=${encodeURIComponent(remoteUrl)}`)
 }
 
 export async function fetchCropClassificationConfig(): Promise<CropClassificationConfig | null> {
+  // Proactively confirm a live backend before touching `/api/*`. On static hosts the
+  // health probe fails up-front, so we never fire the doomed `/config` GET that 404s
+  // and floods the console.
+  if (!(await ensureBackendAvailable())) return null
   try {
-    const res = await fetch(`${BASE}/config`)
+    const res = await fetch(cropApiUrl('/config'))
+    noteApiResponse(res.status)
     if (!res.ok) return null
     return (await res.json()) as CropClassificationConfig
   } catch {
@@ -106,13 +128,31 @@ export async function fetchCropClassificationConfig(): Promise<CropClassificatio
 }
 
 async function startJob(body: Record<string, unknown>): Promise<string> {
-  const res = await fetch(`${BASE}/run`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+  // No co-located backend → don't POST to the static CDN (returns 405). Probe first and
+  // fail fast with a clear, actionable message instead of a doomed network request.
+  if (!(await ensureBackendAvailable()) && !configuredApiOrigin()) {
+    throw backendUnavailableError()
+  }
+  let res: Response
+  try {
+    res = await fetch(cropApiUrl('/run'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  } catch {
+    throw new Error('Cannot reach the crop-classification backend. Check your connection or backend URL.')
+  }
+  const unreachable = noteApiResponse(res.status)
   const json = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(json?.error || `Failed to start job (HTTP ${res.status})`)
+  if (!res.ok) {
+    // On static hosting (e.g. GitHub Pages) there is no Node API at this origin,
+    // so the CDN rejects the POST with 404/405. Point the build at the backend.
+    if (unreachable && !configuredApiOrigin()) {
+      throw backendUnavailableError()
+    }
+    throw new Error(json?.error || `Failed to start job (HTTP ${res.status})`)
+  }
   if (!json?.jobId) throw new Error('Backend did not return a jobId')
   return json.jobId as string
 }
@@ -131,7 +171,8 @@ export function startChipJob(imageUrl: string): Promise<string> {
 }
 
 export async function getJob(jobId: string): Promise<CropClassificationJob> {
-  const res = await fetch(`${BASE}/jobs/${jobId}`)
+  const res = await fetch(cropApiUrl(`/jobs/${jobId}`))
+  noteApiResponse(res.status)
   const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(json?.error || `Job lookup failed (HTTP ${res.status})`)
   return json as CropClassificationJob

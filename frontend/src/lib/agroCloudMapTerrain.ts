@@ -10,6 +10,8 @@
  * @see https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer
  */
 
+import { ensureBackendAvailable, resolveApiOrigin } from './apiOrigin'
+
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services'
 const ATTR_ESRI = 'Tiles © Esri'
 /** Esri global 3D terrain (orthometric meters, multi-source DEM) — raw HTTPS LERC tile endpoint. */
@@ -31,20 +33,7 @@ export const ESRI_WORLD_TERRAIN_DEM_TILE_PATH = '/api/terrain/esri-rgb/{z}/{x}/{
  * same server that decodes the LERC tiles and already allows cross-origin tile requests.
  */
 function resolveTerrainApiOrigin(): string {
-  const sameOrigin =
-    typeof window !== 'undefined' && window.location?.origin ? window.location.origin : ''
-  const configured =
-    typeof import.meta.env.VITE_AGRI_API_SECRETS_URL === 'string'
-      ? import.meta.env.VITE_AGRI_API_SECRETS_URL.trim()
-      : ''
-  if (configured) {
-    try {
-      return new URL(configured, sameOrigin || 'http://localhost').origin
-    } catch {
-      /* malformed override — fall back to same-origin */
-    }
-  }
-  return sameOrigin
+  return resolveApiOrigin()
 }
 
 /** Absolute terrain-RGB tile template (origin-prefixed) for Mapbox/MapLibre `raster-dem` sources. */
@@ -144,8 +133,51 @@ export function buildEsriWorldHillshadeSourceSpec(): Record<string, unknown> {
   }
 }
 
+/**
+ * Terrain availability tri-state shared across all maps:
+ *   `null`  – not probed yet (optimistic: callers may attempt terrain)
+ *   `true`  – backend terrain proxy responded, DEM tiles are decodable
+ *   `false` – no co-located backend (static host) or proxy returned 404/405/501
+ *
+ * The DEM mesh is only ever requested once this resolves to `true`, so static
+ * deployments (GitHub Pages, or a CDN-hosted SPA whose `/api/*` routes 404)
+ * silently fall back to the flat topo/satellite rasters instead of flooding the
+ * console with hundreds of failed `/api/terrain/esri-rgb/*` tile requests.
+ */
+let terrainApiAvailability: boolean | null = null
+let terrainApiProbe: Promise<boolean> | null = null
+
+/**
+ * Resolve whether the terrain proxy is reachable by delegating to the shared
+ * circuit breaker ({@link ensureBackendAvailable}). That probe does a single
+ * `GET /api/health` and validates the response is genuine JSON (not an SPA
+ * `index.html` fallback served with a 200), so static hosts — and any custom
+ * domain whose `/api/*` routes 404/405 or return the SPA shell — resolve to
+ * `false` without ever touching `/api/terrain/esri-rgb/*`. The result is cached
+ * here so repeated basemap/pitch changes never re-probe.
+ */
+export function ensureTerrainApiAvailable(): Promise<boolean> {
+  if (terrainApiAvailability !== null) return Promise.resolve(terrainApiAvailability)
+  if (terrainApiProbe) return terrainApiProbe
+  terrainApiProbe = (async () => {
+    try {
+      terrainApiAvailability = await ensureBackendAvailable()
+    } catch {
+      // Any unexpected failure — degrade gracefully to the flat raster basemap.
+      terrainApiAvailability = false
+    }
+    return terrainApiAvailability
+  })()
+  return terrainApiProbe
+}
+
+/**
+ * Synchronous best-effort check. Returns `false` only once the proxy is *known*
+ * to be unreachable; optimistic (`true`) while the probe is pending so the first
+ * basemap selection can kick off terrain loading immediately.
+ */
 export function canUseEsriWorldTerrainDem(): boolean {
-  return true
+  return terrainApiAvailability !== false
 }
 
 /** @deprecated Esri terrain replaced Mapbox DEM; kept for import compatibility. */
@@ -265,11 +297,18 @@ export function build3dSatelliteMapboxStyle(): Record<string, unknown> {
 }
 
 /**
- * Mapbox GL style: Esri elevation mesh + topographic basemap + Esri World Hillshade overlay.
+ * Mapbox GL style: topographic basemap + Esri World Hillshade overlay.
  *
- * Layer order (bottom→top): computed hillshade (fills DEM tile gaps, hidden under opaque basemap)
- * → topo basemap raster → Esri World Hillshade overlay (semi-transparent relief). Raster analysis
- * layers added later sit above this stack and drape over the terrain mesh automatically.
+ * The DEM mesh (raster-dem source, computed-hillshade layer and `setTerrain`) is
+ * intentionally NOT baked into the style. It is added at runtime by
+ * {@link syncAgroCloudTerrain3d} only AFTER the backend terrain proxy has been
+ * confirmed reachable (see {@link ensureTerrainApiAvailable}). On static hosts
+ * with no `/api/terrain/*` proxy this keeps the basemap fully functional while
+ * skipping the DEM tiles entirely — no 404 floods, no "Map Error" spam.
+ *
+ * Layer order (bottom→top): topo basemap raster → Esri World Hillshade overlay
+ * (semi-transparent relief). Raster analysis layers added later sit above this
+ * stack and drape over the terrain mesh automatically once it is enabled.
  */
 export function build3dTopographicMapboxStyle(): Record<string, unknown> {
   return {
@@ -284,15 +323,8 @@ export function build3dTopographicMapboxStyle(): Record<string, unknown> {
         attribution: ATTR_ESRI,
       },
       [AGRO_CLOUD_ESRI_HILLSHADE_SOURCE_ID]: buildEsriWorldHillshadeSourceSpec(),
-      [ESRI_WORLD_TERRAIN_SOURCE_ID]: buildEsriWorldTerrainDemSourceSpec(),
     },
     layers: [
-      {
-        id: AGRO_CLOUD_HILLSHADE_LAYER_ID,
-        type: 'hillshade',
-        source: ESRI_WORLD_TERRAIN_SOURCE_ID,
-        paint: HILLSHADE_PAINT,
-      },
       {
         id: AGRO_CLOUD_TOPO_BASE_LAYER_ID,
         type: 'raster',
@@ -306,10 +338,6 @@ export function build3dTopographicMapboxStyle(): Record<string, unknown> {
         paint: ESRI_HILLSHADE_OVERLAY_PAINT,
       },
     ],
-    terrain: {
-      source: ESRI_WORLD_TERRAIN_SOURCE_ID,
-      exaggeration: currentTerrainExaggeration,
-    },
   }
 }
 
@@ -486,6 +514,15 @@ function removeLegacyTerrainSources(map: MapboxMapLike): void {
 /** Preload Esri DEM tiles (source only, no visible mesh) for fast 2D→3D transition. */
 export function warmAgroCloudTerrainDemSource(map: MapboxMapLike | null | undefined): void {
   if (!map || typeof map.isStyleLoaded !== 'function' || !map.isStyleLoaded()) return
+  // Never add the DEM source until the backend terrain proxy is confirmed
+  // reachable. On static/backend-less hosts adding it would fire one
+  // `/api/terrain/esri-rgb/*` request per visible tile (hundreds of 404s plus
+  // "Map Error" spam). While the probe is pending we kick it off and bail; the
+  // controller re-runs once it resolves to `true`.
+  if (terrainApiAvailability !== true) {
+    void ensureTerrainApiAvailable()
+    return
+  }
   try {
     removeLegacyTerrainSources(map)
     if (!map.getSource?.(ESRI_WORLD_TERRAIN_SOURCE_ID)) {
@@ -599,6 +636,15 @@ function whenDemSourceReady(map: MapboxMapLike, generation: number, run: () => v
   pollTimer = window.setTimeout(poll, 50)
 }
 
+/**
+ * Does the current basemap / camera pitch call for a 3D mesh, ignoring backend
+ * availability? Used to decide whether it's worth probing the terrain proxy.
+ */
+function wantsTerrainForView(basemapId: string, pitch: number): boolean {
+  if (basemapId && isTerrain3dBasemapId(basemapId)) return true
+  return pitch >= AGRO_CLOUD_TERRAIN_PITCH_THRESHOLD
+}
+
 /** Enable or disable 3D terrain mesh after style load, basemap swap, or pitch change. */
 export function syncAgroCloudTerrain3d(
   map: MapboxMapLike | null | undefined,
@@ -608,20 +654,34 @@ export function syncAgroCloudTerrain3d(
   if (!map || !isMapStyleReady(map)) return
 
   const generation = bumpTerrainSyncGeneration(map)
-  warmAgroCloudTerrainDemSource(map)
-
   const livePitch = readLivePitch(map, pitch ?? 0)
-  const enable = shouldEnableAgroCloudTerrain3d({ basemapId, pitch: livePitch })
   const showHillshade = is3dTopographicBasemapId(basemapId)
 
-  if (!enable) {
+  // No mesh wanted for this view → tear down immediately, no probe needed.
+  if (!wantsTerrainForView(basemapId, livePitch)) {
     disableTerrainMesh(map)
     return
   }
 
-  whenDemSourceReady(map, generation, () => {
+  // Mesh wanted. Confirm the terrain proxy is reachable BEFORE adding the DEM
+  // source, so backend-less hosts make at most one probe request instead of
+  // flooding `/api/terrain/esri-rgb/*` with hundreds of 404s. The probe result
+  // is cached, so repeated basemap/pitch changes never re-hit the network.
+  void ensureTerrainApiAvailable().then((available) => {
     if (!isTerrainSyncCurrent(map, generation)) return
-    applyTerrainMesh(map, livePitch, showHillshade, generation)
+    if (!isMapStyleReady(map)) return
+
+    if (!available) {
+      // Graceful degradation: keep the flat topo/satellite raster basemap.
+      disableTerrainMesh(map)
+      return
+    }
+
+    warmAgroCloudTerrainDemSource(map)
+    whenDemSourceReady(map, generation, () => {
+      if (!isTerrainSyncCurrent(map, generation)) return
+      applyTerrainMesh(map, livePitch, showHillshade, generation)
+    })
   })
 }
 

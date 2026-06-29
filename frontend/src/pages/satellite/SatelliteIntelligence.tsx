@@ -244,8 +244,10 @@ import { runGeoAiStatsCommand, type GeoAiMapFirstSelection } from '../../lib/geo
 import { resolveGeoAiPinFromUserTextAndReply } from '../../lib/geoAiResolveMapCoords';
 import { buildGeoAiFullWeatherSessionAppend } from '../../lib/geoAiWeatherContext';
 import {
+  installSiGlobeWebglContextRecovery,
   siBrowserReportsMicrosoftEdge,
   siMapErrorSuggestsGlobeOrWebglFailure,
+  siNextBackoffDelayMs,
 } from '../../lib/siMapboxGlobeCompat';
 import {
   applySiGlobeCockpitFog,
@@ -397,6 +399,12 @@ import { SatelliteGeoAiFloatingWidget } from './components/SatelliteGeoAiFloatin
 import { SatelliteAoiStaticChartsMapOverlay } from './components/SatelliteAoiStaticChartsMapOverlay';
 import { SatelliteMapProcessingOptionsPortal } from './components/SatelliteMapProcessingOptionsPortal';
 import { WeatherIntelligencePanel, type WeatherLocation } from './components/WeatherIntelligencePanel';
+import {
+  WeatherVisualizationPanel,
+  WeatherVizOverlay,
+  type WeatherVizCamera,
+  type WeatherVizPresetId,
+} from './components/WeatherVisualizationPanel';
 import { reversePlaceLabel } from '../../lib/openMeteoWeather';
 import { SiFeatureInspectPopup } from './components/SiFeatureInspectPopup';
 import { SiLayerPopupConfigurator } from './components/SiLayerPopupConfigurator';
@@ -432,6 +440,10 @@ import {
 
 const EMPTY_MAP_STYLE: any = {
   version: 8,
+  // Bake the globe projection into the style itself so an imperative `setStyle()`
+  // (basemap structural swap) never momentarily drops the map back to Mercator /
+  // a black canvas before the React `projection` prop is re-applied.
+  projection: { name: 'globe' },
   sources: {},
   layers: [
     {
@@ -517,7 +529,9 @@ function siBuildStableRasterStyle(specs: SiRasterSpec[]): any {
       paint: { 'raster-fade-duration': 0, 'raster-opacity': spec.opacity },
     });
   });
-  return { version: 8 as const, sources, layers };
+  // Bake the globe projection into the rebuilt style so the globe survives the
+  // in-place `setStyle()` swap (no black/flat flash before the prop re-applies).
+  return { version: 8 as const, projection: { name: 'globe' }, sources, layers };
 }
 
 const PC_STAC_SEARCH_URL = 'https://planetarycomputer.microsoft.com/api/stac/v1/search';
@@ -3044,6 +3058,9 @@ export default function SatelliteIntelligence() {
   const [isWeatherIntelOpen, setIsWeatherIntelOpen] = useState(false);
   const [weatherPickOnMap, setWeatherPickOnMap] = useState(false);
   const [weatherLocation, setWeatherLocation] = useState<WeatherLocation | null>(null);
+  const [isWeatherVizOpen, setIsWeatherVizOpen] = useState(false);
+  const [weatherVizPreset, setWeatherVizPreset] = useState<WeatherVizPresetId | null>(null);
+  const [weatherVizIntensity, setWeatherVizIntensity] = useState(70);
   const weatherPickOnMapRef = useRef(false);
   useEffect(() => {
     weatherPickOnMapRef.current = weatherPickOnMap;
@@ -3775,6 +3792,16 @@ export default function SatelliteIntelligence() {
   /** One-shot fallback to Mercator when Globe/WebGL errors (e.g. some Edge + GPU combos). */
   const siGlobeWebglFailoverRef = useRef(false);
   const siGlobeCockpitBootRef = useRef(false);
+  /** True while the WebGL context is lost (between contextlost and contextrestored). */
+  const siWebglContextLostRef = useRef(false);
+  /** Bounded retry counter for the "map style never became ready" watchdog. */
+  const siMapLoadRetryRef = useRef(0);
+  /** Bounded retry bookkeeping for Sentinel-2 WMS tile errors (reset per layer/date/AOI). */
+  const sentinelTileRetryRef = useRef<{ key: string; attempts: number; timer: number | null }>({
+    key: '',
+    attempts: 0,
+    timer: null,
+  });
   const basemapRasterFallbackRef = useRef(false);
   const tryFallbackBasemapFromTileError = useCallback((url: string, status?: number) => {
     if (basemapRasterFallbackRef.current) return;
@@ -12184,22 +12211,76 @@ export default function SatelliteIntelligence() {
     };
   }, [customLayersForMapPaint, isMapStyleReady, customLayersMapEpoch, sentinelWmsOnMap]);
 
+  /**
+   * Map-load watchdog with bounded automatic retry (exponential backoff).
+   *
+   * If the style never reports ready (slow GPU, transient WebGL/init hiccup), keep
+   * re-asserting the globe projection / fog / camera, and on later attempts force a
+   * full `setStyle()` rebuild so the globe reappears instead of staying black. As a
+   * final safety net it flips into 3D-globe failover. The retry counter resets the
+   * moment the style becomes ready (see the projection-retry effect below).
+   */
   useEffect(() => {
-    if (isMapStyleReady) return;
-    const timeoutMs = siBrowserReportsMicrosoftEdge() ? 3500 : 6000;
-    const t = window.setTimeout(() => {
-      if (isMapStyleReady) return;
-      setStacStatus('Map is taking longer than expected to load, retrying globe rendering.');
+    if (isMapStyleReady) {
+      siMapLoadRetryRef.current = 0;
+      return;
+    }
+    const MAX_RETRIES = 6;
+    const firstDelayMs = siBrowserReportsMicrosoftEdge() ? 3500 : 6000;
+    let timer: number | null = null;
+
+    const attempt = () => {
+      if (isMapStyleReady) {
+        siMapLoadRetryRef.current = 0;
+        return;
+      }
       const map = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+      const n = siMapLoadRetryRef.current;
+      setStacStatus('Map is taking longer than expected to load — retrying globe rendering.');
       siEnsureGlobeProjection();
       applySiGlobeCockpitFog(map);
       syncAgroCloudMapboxCamera(map, SI_GLOBE_COCKPIT_2D_VIEW);
-    }, timeoutMs);
-    return () => window.clearTimeout(t);
-  }, [isMapStyleReady, siEnsureGlobeProjection]);
+
+      // After a couple of soft retries, force a full style rebuild to recover a
+      // canvas that initialised into a blank/black state.
+      if (n >= 2 && map && typeof map.setStyle === 'function') {
+        try {
+          map.setStyle(effectiveMapStyle as any);
+          if (typeof map.isStyleLoaded === 'function' && map.isStyleLoaded()) {
+            setIsMapStyleReady(true);
+          } else if (typeof map.once === 'function') {
+            map.once('style.load', () => setIsMapStyleReady(true));
+          }
+        } catch {
+          /* ignore — next attempt or 3D failover will recover */
+        }
+      }
+
+      siMapLoadRetryRef.current = n + 1;
+      if (siMapLoadRetryRef.current >= MAX_RETRIES) {
+        // Last resort: switch to the 3D globe terrain view, which uses a different
+        // basemap/style path and reliably re-renders the globe.
+        if (!siGlobeWebglFailoverRef.current) {
+          siGlobeWebglFailoverRef.current = true;
+          siEnterGlobe3dView();
+        }
+        return;
+      }
+      timer = window.setTimeout(attempt, siNextBackoffDelayMs(siMapLoadRetryRef.current, {
+        baseMs: 1200,
+        maxMs: 9000,
+      }));
+    };
+
+    timer = window.setTimeout(attempt, firstDelayMs);
+    return () => {
+      if (timer != null) window.clearTimeout(timer);
+    };
+  }, [isMapStyleReady, siEnsureGlobeProjection, effectiveMapStyle, siEnterGlobe3dView]);
 
   useEffect(() => {
     if (!isMapStyleReady) return;
+    siMapLoadRetryRef.current = 0;
     const map = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
     siEnsureGlobeProjection();
     applySiGlobeCockpitFog(map);
@@ -12217,6 +12298,56 @@ export default function SatelliteIntelligence() {
       timers.forEach(id => window.clearTimeout(id));
     };
   }, [isMapStyleReady, activeBasemapId, siEnsureGlobeProjection]);
+
+  /**
+   * Genuine WebGL context-loss / context-restored recovery — the real fix for the
+   * "globe disappears / goes black" failure when the browser or GPU driver drops the
+   * WebGL context (tab backgrounding, GPU reset, memory pressure; common on Edge and
+   * low-VRAM machines). Mapbox only emits a generic `error` for this (unreliably), so
+   * without this the canvas stays black forever. We `preventDefault()` on loss so the
+   * browser restores the context, then re-apply style/projection/fog/camera/terrain
+   * and force overlays + Sentinel tiles to repaint so the globe always comes back.
+   */
+  useEffect(() => {
+    if (!isMapLoaded) return;
+    const map = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+    if (!map) return;
+
+    const cleanup = installSiGlobeWebglContextRecovery(map, {
+      onContextLost: () => {
+        siWebglContextLostRef.current = true;
+        setStacStatus('Graphics context was lost — restoring the globe…');
+      },
+      onContextRestored: () => {
+        siWebglContextLostRef.current = false;
+        try {
+          // Rebuild the style on the restored context, then re-assert the globe look.
+          if (typeof map.setStyle === 'function') {
+            map.setStyle(effectiveMapStyle as any);
+          }
+          siEnsureGlobeProjection();
+          applySiGlobeCockpitFog(map);
+          syncAgroCloudMapboxCamera(map, viewStateLiveRef.current);
+          warmAgroCloudTerrainDemSource(map);
+          syncAgroCloudTerrain3d(map, activeBasemapId, viewStateLiveRef.current.pitch);
+        } catch {
+          /* ignore — staggered retries below still re-assert the globe */
+        }
+        // Force overlays (Added layers) and Sentinel tiles to repaint on the new context.
+        sentinelWmsTilesSyncedRef.current = '';
+        setCustomLayersMapEpoch(epoch => epoch + 1);
+        setStacStatus('Globe rendering restored.');
+        // Some drivers restore the context a frame before it can draw; re-assert briefly.
+        [120, 400, 900].forEach(ms =>
+          window.setTimeout(() => {
+            siEnsureGlobeProjection();
+            applySiGlobeCockpitFog(map);
+          }, ms),
+        );
+      },
+    });
+    return cleanup;
+  }, [isMapLoaded, effectiveMapStyle, activeBasemapId, siEnsureGlobeProjection]);
 
   /** Enable DEM terrain mesh whenever the camera tilts into 3D (Shift+drag orbit or navigation). */
   useEffect(() => {
@@ -13543,6 +13674,98 @@ export default function SatelliteIntelligence() {
     activeAoiMaskKey,
   ]);
 
+  /**
+   * Automatic retry for failed Sentinel-2 WMS tiles (transient Sentinel Hub 5xx /
+   * rate-limit / network blips). Re-issuing `setTiles(...)` with the same URLs makes
+   * Mapbox drop the source's tile cache and re-request, so imagery self-heals without
+   * touching the basemap or the globe. Bounded with exponential backoff and reset
+   * whenever the layer/date/AOI changes, so a genuinely empty scene won't loop forever.
+   */
+  useEffect(() => {
+    if (!isMapStyleReady || !sentinelWmsOnMap) return;
+    const map = mapRef.current?.getMap?.() ?? mapRef.current;
+    if (!map?.on) return;
+
+    const retryKey = wmsRasterSourceRefreshKey;
+    if (sentinelTileRetryRef.current.key !== retryKey) {
+      if (sentinelTileRetryRef.current.timer != null) {
+        window.clearTimeout(sentinelTileRetryRef.current.timer);
+      }
+      sentinelTileRetryRef.current = { key: retryKey, attempts: 0, timer: null };
+    }
+    const MAX_TILE_RETRIES = 3;
+
+    const isSentinelTileError = (e: any): boolean => {
+      const url = String(e?.error?.url || e?.url || '');
+      const sourceId = String(e?.sourceId || '');
+      return (
+        sourceId.startsWith('sentinel-source-') ||
+        url.includes('services.sentinel-hub.com/ogc/wms') ||
+        url.includes('sh.dataspace.copernicus.eu/ogc/wms')
+      );
+    };
+
+    const reloadSentinelSources = () => {
+      for (let i = 0; i < sentinelHubWmsDisplayChunks.length; i++) {
+        const src = map.getSource?.(`sentinel-source-${i}`) as
+          | { setTiles?: (tiles: string[]) => void }
+          | null
+          | undefined;
+        const url = wmsTileUrls[i];
+        if (src && typeof src.setTiles === 'function' && url) {
+          try {
+            src.setTiles([url]);
+          } catch {
+            /* ignore source race during style rebuild */
+          }
+        }
+      }
+    };
+
+    const handleTileError = (e: any) => {
+      if (!isSentinelTileError(e)) return;
+      const state = sentinelTileRetryRef.current;
+      if (state.timer != null || state.attempts >= MAX_TILE_RETRIES) {
+        if (state.attempts >= MAX_TILE_RETRIES) {
+          setStacStatus('Satellite imagery is temporarily unavailable — basemap stays active.');
+        }
+        return;
+      }
+      const delay = siNextBackoffDelayMs(state.attempts, { baseMs: 800, maxMs: 6000 });
+      state.attempts += 1;
+      setStacStatus(`Reloading satellite imagery (attempt ${state.attempts}/${MAX_TILE_RETRIES})…`);
+      state.timer = window.setTimeout(() => {
+        sentinelTileRetryRef.current.timer = null;
+        reloadSentinelSources();
+      }, delay);
+    };
+
+    // A successful settle clears the failure budget so future blips get fresh retries.
+    const handleIdle = () => {
+      const state = sentinelTileRetryRef.current;
+      if (state.attempts > 0 && state.timer == null) {
+        state.attempts = 0;
+      }
+    };
+
+    map.on('error', handleTileError);
+    map.on('idle', handleIdle);
+    return () => {
+      try {
+        map.off('error', handleTileError);
+        map.off('idle', handleIdle);
+      } catch {
+        /* ignore */
+      }
+    };
+  }, [
+    isMapStyleReady,
+    sentinelWmsOnMap,
+    wmsRasterSourceRefreshKey,
+    wmsTileUrls,
+    sentinelHubWmsDisplayChunks,
+  ]);
+
   /** Keep Agro_Structures boundaries above Sentinel raster; hide vector fill while WMS is active. */
   useLayoutEffect(() => {
     if (!isMapStyleReady) return;
@@ -14737,6 +14960,10 @@ export default function SatelliteIntelligence() {
 
           </MapGL>
 
+          {isWeatherVizOpen ? (
+            <WeatherVizOverlay preset={weatherVizPreset} intensity={weatherVizIntensity} />
+          ) : null}
+
           {cropAlertSettings.enabled && cropAlertSettings.showLegend && cropAlertResultsOnMap.length > 0 ? (
             <SiCropAlertMapLegend />
           ) : null}
@@ -14778,6 +15005,39 @@ export default function SatelliteIntelligence() {
               mapPickActive={weatherPickOnMap}
               onMapPickToggle={setWeatherPickOnMap}
               mapboxToken={mapboxToken}
+            />
+          ) : null}
+
+          {isWeatherVizOpen ? (
+            <WeatherVisualizationPanel
+              open
+              onClose={() => setIsWeatherVizOpen(false)}
+              preset={weatherVizPreset}
+              onPresetChange={setWeatherVizPreset}
+              getMap={() => (mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current)}
+              intensity={weatherVizIntensity}
+              onIntensityChange={setWeatherVizIntensity}
+              getCamera={(): WeatherVizCamera | null => {
+                const v = viewStateLiveRef.current ?? viewState;
+                if (!v) return null;
+                return {
+                  longitude: typeof v.longitude === 'number' ? v.longitude : 0,
+                  latitude: typeof v.latitude === 'number' ? v.latitude : 0,
+                  zoom: typeof v.zoom === 'number' ? v.zoom : 2,
+                  pitch: typeof v.pitch === 'number' ? v.pitch : 0,
+                  bearing: typeof v.bearing === 'number' ? v.bearing : 0,
+                };
+              }}
+              onApplyCamera={cam => {
+                setViewState(prev => ({
+                  ...prev,
+                  longitude: cam.longitude,
+                  latitude: cam.latitude,
+                  zoom: cam.zoom,
+                  pitch: cam.pitch,
+                  bearing: cam.bearing,
+                }));
+              }}
             />
           ) : null}
 
@@ -15705,6 +15965,21 @@ export default function SatelliteIntelligence() {
                   }}
                 >
                   <i className="fa-solid fa-temperature-half" aria-hidden />
+                </button>
+              </div>
+              <div className="si-weather-toggle">
+                <button
+                  type="button"
+                  className={`si-weather-button ${isWeatherVizOpen ? 'active' : ''}`}
+                  title="Weather visualization"
+                  aria-label="Weather visualization"
+                  aria-pressed={isWeatherVizOpen}
+                  onClick={() => {
+                    setIsWeatherVizOpen(open => !open);
+                    setIsBasemapOpen(false);
+                  }}
+                >
+                  <i className="fa-solid fa-cloud-sun-rain" aria-hidden />
                 </button>
               </div>
               <div className={`si-view3d-toggle si-view3d-toggle--merged ${isTerrain3dPanelOpen ? 'is-open' : ''}`}>

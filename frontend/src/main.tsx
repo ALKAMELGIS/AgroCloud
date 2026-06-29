@@ -23,6 +23,12 @@ import { initMobileAppShell } from './lib/initMobileAppShell'
 import { isTouchDevice } from './lib/pwaInstall'
 import { bootstrapMapboxAccessTokenPersistence } from './lib/mapboxAccessToken'
 import { restoreBrowserApiSecretsFromVaultIntoLocalStorage } from './lib/browserApiSecretsVault'
+import { installApiFetchGuard } from './lib/apiFetchGuard'
+
+// Install the global `/api/*` circuit-breaker before anything else can fire a request. On a static
+// deployment without a co-located backend this short-circuits doomed internal API calls to a
+// synthetic 503 instead of flooding the console with 404/405 errors.
+installApiFetchGuard()
 
 /**
  * Upgrade plain HTTP to HTTPS on the public site. Web Crypto (`crypto.subtle`) is only available
