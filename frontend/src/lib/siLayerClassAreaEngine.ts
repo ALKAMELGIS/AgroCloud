@@ -266,36 +266,51 @@ export async function fetchLayerClassAreas(
   const pixelAreaM2 = pixelAreaM2ForResolution(resolutionMeters)
   const marker = indexValueHistogramMarker(options.layerId, breakdown.edges)
 
-  const runHistogram = (relaxed: boolean, maxCloudCoverage?: number) =>
+  const runHistogram = (opts: { relaxed: boolean; maxCloudCoverage?: number; searchWindowDays?: number }) =>
     fetchSentinelIndexClassHistogramForSceneDate({
       geometry,
       sceneDate,
-      evalscript: buildLayerIndexEvalscript(breakdown.indexExpr, marker, { relaxed }),
+      evalscript: buildLayerIndexEvalscript(breakdown.indexExpr, marker, { relaxed: opts.relaxed }),
       outputId: 'idx',
       binEdges: breakdown.edges,
-      maxCloudCoverage,
+      maxCloudCoverage: opts.maxCloudCoverage,
       resolutionMeters,
+      searchWindowDays: opts.searchWindowDays,
       signal: options.signal,
     })
 
-  // Strict pass (SCL cloud mask). If it classifies zero valid pixels — e.g. a
-  // hazy / partly-cloudy scene masked the whole AOI — retry without the cloud
-  // mask so the legend reports real per-class areas instead of all-zeros.
-  let histogram = await runHistogram(false, options.maxCloudCoverage)
-  let computed = histogram ? computeClassAreaRows(histogram, classCount, pixelAreaM2) : null
-
-  if (!computed || computed.totalCount === 0) {
-    const relaxedHistogram = await runHistogram(true, Math.max(options.maxCloudCoverage ?? 0, 95))
-    if (relaxedHistogram) {
-      const relaxedComputed = computeClassAreaRows(relaxedHistogram, classCount, pixelAreaM2)
-      if (relaxedComputed.totalCount > 0) {
-        histogram = relaxedHistogram
-        computed = relaxedComputed
-      }
-    }
+  const tryPass = async (opts: {
+    relaxed: boolean
+    maxCloudCoverage?: number
+    searchWindowDays?: number
+  }): Promise<{ histogram: SentinelHubGenericHistogram; computed: ReturnType<typeof computeClassAreaRows> } | null> => {
+    const histogram = await runHistogram(opts)
+    if (!histogram) return null
+    const computed = computeClassAreaRows(histogram, classCount, pixelAreaM2)
+    return computed.totalCount > 0 ? { histogram, computed } : null
   }
 
-  if (!histogram || !computed) return null
+  // Fallback ladder — each pass only "wins" if it classifies real pixels:
+  //   1. Strict, exact day  (SCL cloud mask, the scene shown on the map).
+  //   2. Relaxed, exact day (drop cloud mask for hazy/partly-cloudy scenes).
+  //   3. Relaxed, windowed  (nearest acquisition within ~12 days) — Sentinel-2's
+  //      ~5-day revisit means the exact day often has no acquisition over the AOI,
+  //      so without this the legend would read all-zeros for valid AOIs.
+  let hit =
+    (await tryPass({ relaxed: false, maxCloudCoverage: options.maxCloudCoverage })) ??
+    (await tryPass({ relaxed: true, maxCloudCoverage: Math.max(options.maxCloudCoverage ?? 0, 95) })) ??
+    (await tryPass({ relaxed: true, maxCloudCoverage: 100, searchWindowDays: 12 }))
+
+  // Last resort: keep the exact-day strict histogram (all-zeros) so the panel can
+  // still report the class structure rather than disappearing entirely.
+  if (!hit) {
+    const histogram = await runHistogram({ relaxed: false, maxCloudCoverage: options.maxCloudCoverage })
+    if (!histogram) return null
+    hit = { histogram, computed: computeClassAreaRows(histogram, classCount, pixelAreaM2) }
+  }
+
+  const histogram = hit.histogram
+  const computed = hit.computed
 
   const aoiAreaM2 = geodesicAreaM2(geometry)
   return {

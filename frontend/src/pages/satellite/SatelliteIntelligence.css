@@ -1983,6 +1983,23 @@ main.content > .si-page {
   height: 27px;
   font-size: 10px;
 }
+/* Optically uniform icon glyphs across every left-dock button. Font Awesome
+   glyphs have different intrinsic widths/masses (the thermometer is narrow,
+   while the cloud / cube / layers glyphs are wide), so a shared button
+   font-size alone still looks uneven. Normalise each icon into the same
+   centred square box at one size so all dock icons read as the same size. */
+.si-map-floating-controls__left .si-map-search-toggle > i,
+.si-map-floating-controls__left .si-basemap-button > i,
+.si-map-floating-controls__left .si-weather-button > i {
+  font-size: 13px;
+  line-height: 1;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
 .si-map-floating-controls__left .si-map-search-icon {
   font-size: 10px;
 }

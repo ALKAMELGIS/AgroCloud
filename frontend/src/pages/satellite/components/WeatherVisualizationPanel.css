@@ -107,12 +107,29 @@
   flex-shrink: 0;
 }
 
+.si-wviz-brand-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
 .si-wviz-title {
   margin: 0;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.01em;
   color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.si-wviz-subtitle {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.5);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -403,10 +420,273 @@
   font-variant-numeric: tabular-nums;
 }
 
-.si-wviz-range {
-  width: 100%;
-  accent-color: var(--si-wviz-accent);
+/* ───────────────────────────── Transport ───────────────────────────── */
+.si-wviz-transport {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.si-wviz-play {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 32px;
+  border-radius: 9px;
+  border: 1px solid rgba(52, 211, 153, 0.4);
+  background: linear-gradient(180deg, rgba(52, 211, 153, 0.24), rgba(34, 197, 94, 0.14));
+  color: #d1fae5;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.si-wviz-play:hover {
+  border-color: var(--si-wviz-ring);
+  background: linear-gradient(180deg, rgba(52, 211, 153, 0.34), rgba(34, 197, 94, 0.2));
+}
+
+.si-wviz-play.is-playing {
+  border-color: rgba(250, 204, 21, 0.4);
+  background: linear-gradient(180deg, rgba(250, 204, 21, 0.18), rgba(245, 158, 11, 0.1));
+  color: #fde68a;
+}
+
+.si-wviz-transport-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.si-wviz-transport-btn:hover {
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.si-wviz-speedpill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 9px;
+  border: 1px solid var(--si-wviz-field-border);
+  background: var(--si-wviz-field);
+  color: #93c5fd;
+  font-size: 9px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ───────────────────────────── Controls ───────────────────────────── */
+.si-wviz-ctl {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.si-wviz-ctl-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.si-wviz-ctl-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.si-wviz-ctl-label i {
+  width: 13px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 10px;
+}
+
+.si-wviz-ctl-val {
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #6ee7b7;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Styled range with a coloured fill up to the thumb */
+.si-wviz-range {
+  --si-wviz-fill: var(--si-wviz-accent);
+  --si-wviz-pct: 0%;
+  width: 100%;
+  height: 16px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+
+.si-wviz-range::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 99px;
+  background:
+    linear-gradient(90deg, var(--si-wviz-fill) 0 var(--si-wviz-pct), rgba(255, 255, 255, 0.12) var(--si-wviz-pct) 100%);
+}
+
+.si-wviz-range::-moz-range-track {
+  height: 5px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.si-wviz-range::-moz-range-progress {
+  height: 5px;
+  border-radius: 99px;
+  background: var(--si-wviz-fill);
+}
+
+.si-wviz-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid var(--si-wviz-fill);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+}
+
+.si-wviz-range::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid var(--si-wviz-fill);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+}
+
+/* ───────────────────────────── Wind dial ───────────────────────────── */
+.si-wviz-wind {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.si-wviz-dial {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(94, 234, 212, 0.12), transparent 62%),
+    rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 6px rgba(255, 255, 255, 0.03);
+  cursor: grab;
+  touch-action: none;
+}
+
+.si-wviz-dial:active {
+  cursor: grabbing;
+}
+
+.si-wviz-dial:focus-visible {
+  outline: 2px solid var(--si-wviz-ring);
+  outline-offset: 2px;
+}
+
+.si-wviz-dial-tick {
+  position: absolute;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.5);
+  transform: translate(-50%, -50%);
+}
+
+.si-wviz-dial-tick--n { left: 50%; top: 9px; }
+.si-wviz-dial-tick--s { left: 50%; top: calc(100% - 9px); }
+.si-wviz-dial-tick--e { left: calc(100% - 8px); top: 50%; }
+.si-wviz-dial-tick--w { left: 8px; top: 50%; }
+
+.si-wviz-dial-arrow {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 16px;
+  color: #5eead4;
+  font-size: 14px;
+  transform-origin: 50% 50%;
+  transition: transform 0.12s ease-out;
+  filter: drop-shadow(0 0 5px rgba(94, 234, 212, 0.6));
+}
+
+.si-wviz-dial-arrow i {
+  transform: rotate(-45deg);
+}
+
+.si-wviz-dial-hub {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #5eead4;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 8px rgba(94, 234, 212, 0.8);
+}
+
+.si-wviz-wind-readout {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.si-wviz-wind-big {
+  font-size: 16px;
+  font-weight: 800;
+  color: #ffffff;
+  line-height: 1;
+}
+
+.si-wviz-wind-deg {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.si-wviz-wind-sub {
+  font-size: 9px;
+  font-weight: 700;
+  color: #5eead4;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Reset */
@@ -445,139 +725,14 @@
   --si-wviz-field: rgba(255, 255, 255, 0.05);
 }
 
-/* ───────────────────────────── Map overlay ───────────────────────────── */
+/* ───────────────────────────── Map overlay (canvas) ───────────────────────────── */
 
-.si-wviz-overlay {
+.si-wviz-canvas {
   position: absolute;
   inset: 0;
   z-index: 5;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
-  overflow: hidden;
-}
-
-.si-wviz-overlay-tint {
-  position: absolute;
-  inset: 0;
-  mix-blend-mode: multiply;
-}
-
-.si-wviz-overlay--clear .si-wviz-overlay-tint {
-  mix-blend-mode: screen;
-  background:
-    radial-gradient(120% 80% at 70% -10%, rgba(255, 236, 170, 0.32), transparent 55%),
-    linear-gradient(180deg, rgba(255, 247, 214, 0.14), transparent 40%);
-}
-
-.si-wviz-overlay--cloudy .si-wviz-overlay-tint {
-  background:
-    radial-gradient(140% 90% at 50% -20%, rgba(190, 200, 214, 0.5), transparent 60%),
-    linear-gradient(180deg, rgba(150, 160, 175, 0.4), rgba(120, 130, 145, 0.18) 60%);
-}
-
-.si-wviz-overlay--rain .si-wviz-overlay-tint {
-  background:
-    radial-gradient(140% 90% at 50% -10%, rgba(90, 104, 124, 0.55), transparent 60%),
-    linear-gradient(180deg, rgba(60, 72, 92, 0.5), rgba(40, 50, 66, 0.4));
-}
-
-.si-wviz-overlay--snow .si-wviz-overlay-tint {
-  mix-blend-mode: screen;
-  background:
-    radial-gradient(140% 100% at 50% -10%, rgba(235, 244, 252, 0.4), transparent 60%),
-    linear-gradient(180deg, rgba(214, 228, 240, 0.28), transparent 55%);
-}
-
-.si-wviz-overlay--fog .si-wviz-overlay-tint {
-  background:
-    linear-gradient(180deg, rgba(214, 218, 224, 0.78), rgba(196, 202, 210, 0.62));
-}
-
-.si-wviz-overlay--storm .si-wviz-overlay-tint {
-  background:
-    radial-gradient(140% 90% at 50% -10%, rgba(60, 66, 86, 0.6), transparent 60%),
-    linear-gradient(180deg, rgba(34, 40, 58, 0.62), rgba(20, 24, 38, 0.5));
-}
-
-/* Rain */
-.si-wviz-overlay-rain {
-  position: absolute;
-  inset: -20%;
-  background-image:
-    repeating-linear-gradient(
-      102deg,
-      rgba(255, 255, 255, 0) 0,
-      rgba(255, 255, 255, 0) 6px,
-      rgba(214, 230, 255, 0.5) 6px,
-      rgba(214, 230, 255, 0.5) 7px
-    );
-  background-size: 100% 100%;
-  opacity: 0.55;
-  animation: si-wviz-rain 0.6s linear infinite;
-}
-
-@keyframes si-wviz-rain {
-  from { transform: translate3d(0, -14%, 0); }
-  to { transform: translate3d(-6%, 14%, 0); }
-}
-
-/* Snow */
-.si-wviz-overlay-snow {
-  position: absolute;
-  inset: -20%;
-  background-image:
-    radial-gradient(2.4px 2.4px at 20% 30%, rgba(255, 255, 255, 0.95), transparent),
-    radial-gradient(2px 2px at 60% 70%, rgba(255, 255, 255, 0.85), transparent),
-    radial-gradient(2.8px 2.8px at 80% 20%, rgba(255, 255, 255, 0.92), transparent),
-    radial-gradient(1.8px 1.8px at 40% 80%, rgba(255, 255, 255, 0.8), transparent),
-    radial-gradient(2.2px 2.2px at 10% 60%, rgba(255, 255, 255, 0.88), transparent);
-  background-size: 320px 320px;
-  opacity: 0.85;
-  animation: si-wviz-snow 6s linear infinite;
-}
-
-@keyframes si-wviz-snow {
-  from { transform: translate3d(0, -16%, 0); }
-  to { transform: translate3d(4%, 16%, 0); }
-}
-
-/* Fog drift */
-.si-wviz-overlay-fog {
-  position: absolute;
-  inset: -30%;
-  background:
-    radial-gradient(60% 40% at 30% 50%, rgba(255, 255, 255, 0.4), transparent 70%),
-    radial-gradient(50% 36% at 70% 40%, rgba(255, 255, 255, 0.32), transparent 70%);
-  filter: blur(8px);
-  animation: si-wviz-fog 14s ease-in-out infinite alternate;
-}
-
-@keyframes si-wviz-fog {
-  from { transform: translate3d(-4%, 0, 0); }
-  to { transform: translate3d(4%, 2%, 0); }
-}
-
-/* Lightning flash */
-.si-wviz-overlay-flash {
-  position: absolute;
-  inset: 0;
-  background: rgba(226, 232, 255, 0.9);
-  opacity: 0;
-  animation: si-wviz-flash 7s ease-out infinite;
-}
-
-@keyframes si-wviz-flash {
-  0%, 92%, 100% { opacity: 0; }
-  93% { opacity: 0.55; }
-  94% { opacity: 0.05; }
-  95% { opacity: 0.5; }
-  97% { opacity: 0; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .si-wviz-overlay-rain,
-  .si-wviz-overlay-snow,
-  .si-wviz-overlay-fog,
-  .si-wviz-overlay-flash {
-    animation: none;
-  }
+  display: block;
 }

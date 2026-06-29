@@ -402,8 +402,9 @@ import { WeatherIntelligencePanel, type WeatherLocation } from './components/Wea
 import {
   WeatherVisualizationPanel,
   WeatherVizOverlay,
+  DEFAULT_WEATHER_SIM,
   type WeatherVizCamera,
-  type WeatherVizPresetId,
+  type WeatherSimState,
 } from './components/WeatherVisualizationPanel';
 import { reversePlaceLabel } from '../../lib/openMeteoWeather';
 import { SiFeatureInspectPopup } from './components/SiFeatureInspectPopup';
@@ -3059,8 +3060,7 @@ export default function SatelliteIntelligence() {
   const [weatherPickOnMap, setWeatherPickOnMap] = useState(false);
   const [weatherLocation, setWeatherLocation] = useState<WeatherLocation | null>(null);
   const [isWeatherVizOpen, setIsWeatherVizOpen] = useState(false);
-  const [weatherVizPreset, setWeatherVizPreset] = useState<WeatherVizPresetId | null>(null);
-  const [weatherVizIntensity, setWeatherVizIntensity] = useState(70);
+  const [weatherSim, setWeatherSim] = useState<WeatherSimState>(DEFAULT_WEATHER_SIM);
   const weatherPickOnMapRef = useRef(false);
   useEffect(() => {
     weatherPickOnMapRef.current = weatherPickOnMap;
@@ -14961,7 +14961,7 @@ export default function SatelliteIntelligence() {
           </MapGL>
 
           {isWeatherVizOpen ? (
-            <WeatherVizOverlay preset={weatherVizPreset} intensity={weatherVizIntensity} />
+            <WeatherVizOverlay sim={weatherSim} />
           ) : null}
 
           {cropAlertSettings.enabled && cropAlertSettings.showLegend && cropAlertResultsOnMap.length > 0 ? (
@@ -15012,11 +15012,10 @@ export default function SatelliteIntelligence() {
             <WeatherVisualizationPanel
               open
               onClose={() => setIsWeatherVizOpen(false)}
-              preset={weatherVizPreset}
-              onPresetChange={setWeatherVizPreset}
+              sim={weatherSim}
+              onChange={patch => setWeatherSim(prev => ({ ...prev, ...patch }))}
+              onReset={() => setWeatherSim(DEFAULT_WEATHER_SIM)}
               getMap={() => (mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current)}
-              intensity={weatherVizIntensity}
-              onIntensityChange={setWeatherVizIntensity}
               getCamera={(): WeatherVizCamera | null => {
                 const v = viewStateLiveRef.current ?? viewState;
                 if (!v) return null;

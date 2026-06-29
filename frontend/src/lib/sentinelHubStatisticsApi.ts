@@ -1133,10 +1133,55 @@ async function postGenericHistogramRequest(
   )
 }
 
+/** Total classified pixels in a histogram row (bins + over/underflow). */
+function histogramRowTotal(row: SentinelHubGenericHistogram): number {
+  const bins = row.bins.reduce((sum, b) => sum + (Number(b.count) || 0), 0)
+  return bins + (Number(row.overflow) || 0) + (Number(row.underflow) || 0)
+}
+
+function daysBetweenIso(a: string, b: string): number {
+  const ta = Date.parse(`${a}T00:00:00Z`)
+  const tb = Date.parse(`${b}T00:00:00Z`)
+  if (!Number.isFinite(ta) || !Number.isFinite(tb)) return 0
+  return Math.abs(ta - tb) / 86_400_000
+}
+
+/**
+ * Pick the most usable acquisition from a windowed result: prefer the exact day
+ * when it carries pixels, otherwise the day with the most classified pixels,
+ * lightly biased toward the day nearest the requested scene date.
+ */
+function pickBestHistogramRow(
+  rows: SentinelHubGenericHistogram[],
+  targetIso: string,
+): SentinelHubGenericHistogram | null {
+  if (!rows.length) return null
+  const exact = rows.find(r => r.date === targetIso)
+  if (exact && histogramRowTotal(exact) > 0) return exact
+  let best: SentinelHubGenericHistogram | null = null
+  let bestScore = -1
+  for (const row of rows) {
+    const total = histogramRowTotal(row)
+    if (total <= 0) continue
+    // Coverage dominates; nearness only breaks ties between similarly-covered days.
+    const score = total - daysBetweenIso(row.date, targetIso)
+    if (score > bestScore) {
+      bestScore = score
+      best = row
+    }
+  }
+  return best ?? exact ?? rows[0] ?? null
+}
+
 /**
  * Per-class pixel histogram for any single-band index evalscript inside an AOI.
  * `binEdges` are passed verbatim to the Statistical API (supports non-uniform class breaks),
  * so each returned bin maps 1:1 to a classification class.
+ *
+ * When `searchWindowDays > 0` the request widens to `[sceneDate − window, sceneDate + 1]`
+ * and returns the nearest acquisition that actually carries pixels. This is essential
+ * because Sentinel-2's ~5-day revisit means the exact scene day frequently has no
+ * acquisition over the AOI — without the window the class-area legend reads all zeros.
  */
 export async function fetchSentinelIndexClassHistogramForSceneDate(options: {
   geometry: GeoJSON.Geometry
@@ -1146,13 +1191,16 @@ export async function fetchSentinelIndexClassHistogramForSceneDate(options: {
   binEdges: number[]
   maxCloudCoverage?: number
   resolutionMeters?: number
+  searchWindowDays?: number
   signal?: AbortSignal
 }): Promise<SentinelHubGenericHistogram | null> {
   const geom = simplifyGeometryForSentinelStats(options.geometry)
   if (!geom || options.binEdges.length < 2) return null
-  const fromIso = options.sceneDate.trim().slice(0, 10)
-  if (!fromIso) return null
-  const toIso = addDaysToIso(fromIso, 1)
+  const sceneIso = options.sceneDate.trim().slice(0, 10)
+  if (!sceneIso) return null
+  const windowDays = Math.max(0, Math.round(options.searchWindowDays ?? 0))
+  const fromIso = windowDays > 0 ? subtractDaysFromIso(sceneIso, windowDays) : sceneIso
+  const toIso = addDaysToIso(sceneIso, 1)
   const rows = await postGenericHistogramRequest(
     buildGenericIndexHistogramRequestBody({
       geom,
@@ -1167,7 +1215,8 @@ export async function fetchSentinelIndexClassHistogramForSceneDate(options: {
     options.outputId,
     options.signal,
   )
-  return rows.find(r => r.date === fromIso) ?? rows[0] ?? null
+  if (windowDays > 0) return pickBestHistogramRow(rows, sceneIso)
+  return rows.find(r => r.date === sceneIso) ?? rows[0] ?? null
 }
 
 /** Fetch NDVI pixel histogram for one scene date (dominant-class source of truth). */
