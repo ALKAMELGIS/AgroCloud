@@ -458,33 +458,35 @@
   border: 1px solid var(--si-flood-line);
   background: var(--si-flood-surface);
   border-radius: 9px;
-  padding: 8px 10px;
+  padding: 6px 8px;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 5px;
+  min-width: 0;
 }
 .si-flood__panel-label {
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.07em;
   color: var(--si-flood-muted);
 }
 
 .si-flood__chart {
   display: grid;
-  grid-template-columns: 68px 1fr;
-  gap: 12px;
+  grid-template-columns: 50px 1fr;
+  gap: 9px;
   align-items: center;
+  min-width: 0;
 }
 .si-flood__donut {
   position: relative;
-  width: 68px;
-  height: 68px;
+  width: 50px;
+  height: 50px;
 }
 .si-flood__donut svg {
-  width: 68px;
-  height: 68px;
+  width: 50px;
+  height: 50px;
 }
 .si-flood__donut-hole {
   fill: #11161f;
@@ -496,20 +498,20 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
+  gap: 0;
   pointer-events: none;
 }
 .si-flood__donut-center strong {
-  font-size: 12px;
+  font-size: 9.5px;
   font-weight: 750;
   color: #e8edf3;
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
 .si-flood__donut-center span {
-  font-size: 8px;
+  font-size: 6.5px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--si-flood-muted);
 }
@@ -517,38 +519,45 @@
 .si-flood__legend {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+  min-width: 0;
 }
 .si-flood__legend-row {
   display: grid;
-  grid-template-columns: 11px 1fr auto;
+  grid-template-columns: 9px minmax(0, 1fr) auto;
   grid-template-areas: 'swatch label count' 'bar bar bar';
   align-items: center;
-  gap: 4px 8px;
+  gap: 2px 6px;
+  min-width: 0;
 }
 .si-flood__legend-swatch {
   grid-area: swatch;
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
   border: 1px solid rgba(255, 255, 255, 0.15);
 }
 .si-flood__legend-label {
   grid-area: label;
-  font-size: 10.5px;
+  min-width: 0;
+  font-size: 9px;
   font-weight: 600;
   color: var(--si-flood-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .si-flood__legend-count {
   grid-area: count;
-  font-size: 10.5px;
+  font-size: 9px;
   font-weight: 750;
   font-variant-numeric: tabular-nums;
   color: #e8edf3;
+  white-space: nowrap;
 }
 .si-flood__legend-bar {
   grid-area: bar;
-  height: 3px;
+  height: 2.5px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.1);
   overflow: hidden;
