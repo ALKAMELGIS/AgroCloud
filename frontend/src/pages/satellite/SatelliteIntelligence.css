@@ -1432,17 +1432,18 @@ main.content > .si-page {
 }
 
 .si-add-layer-gis-overlay:not(.gis-map-add-layer-overlay) .gis-btn-outline {
-  border-color: rgba(74, 222, 128, 0.45) !important;
-  color: #86efac !important;
-  background: rgba(15, 23, 42, 0.6) !important;
   border-radius: 12px !important;
-  font-weight: 650;
+  background: linear-gradient(180deg, rgba(34, 197, 94, 0.95), rgba(21, 128, 61, 0.92)) !important;
+  border: 1px solid rgba(74, 222, 128, 0.45) !important;
+  color: #ffffff !important;
+  font-weight: 700;
+  box-shadow: 0 10px 28px rgba(22, 163, 74, 0.28);
 }
 
 .si-add-layer-gis-overlay:not(.gis-map-add-layer-overlay) .gis-btn-outline:hover:not(:disabled) {
-  background: rgba(22, 101, 52, 0.35) !important;
+  filter: brightness(1.06);
   border-color: rgba(74, 222, 128, 0.65) !important;
-  color: #ecfdf5 !important;
+  color: #ffffff !important;
 }
 
 .si-add-layer-gis-overlay:not(.gis-map-add-layer-overlay) .gis-btn-primary-full {
