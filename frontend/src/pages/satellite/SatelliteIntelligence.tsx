@@ -5219,17 +5219,47 @@ export default function SatelliteIntelligence() {
     setIsConnectingLayer(true);
     setAddLayerStatus('Connecting to ArcGIS service...');
     try {
-      const clean = baseUrl.replace(/[?].*$/, '').replace(/\/+$/, '');
-      const serviceBase = /\/FeatureServer\/\d+$/i.test(clean)
-        ? clean.replace(/\/\d+$/i, '')
-        : /\/FeatureServer$/i.test(clean)
-          ? clean
-          : `${clean}/FeatureServer`;
+      const clean = baseUrl.replace(/[?#].*$/, '').replace(/\/+$/, '');
+
+      // Direct single-layer/table URL (…/MapServer/124 or …/FeatureServer/3): load THAT
+      // layer's own definition instead of enumerating the service root. Many secured/grouped
+      // roots don't list their layers, so stripping to the root would wrongly report
+      // "No layers/tables found" even when the specific layer is valid open data.
+      const directMatch = clean.match(/\/(?:MapServer|FeatureServer)\/(\d+)$/i);
+      if (directMatch) {
+        const defUrl = appendTokenIfAny(`${clean}?f=pjson`, addLayerToken);
+        const defRes = await fetch(defUrl);
+        if (!defRes.ok) throw new Error(`discover failed (${defRes.status})`);
+        const def = await defRes.json();
+        if (def?.error?.message) throw new Error(def.error.message);
+        const id = typeof def?.id === 'number' ? def.id : Number(directMatch[1]);
+        const name = typeof def?.name === 'string' && def.name.trim() ? (def.name as string) : `Layer ${id}`;
+        const isTable = typeof def?.type === 'string' && /table/i.test(def.type);
+        const single = [
+          {
+            id,
+            name,
+            kind: (isTable ? 'table' : 'layer') as 'layer' | 'table',
+            url: clean,
+            geometryType: typeof def?.geometryType === 'string' ? (def.geometryType as string) : undefined,
+          },
+        ];
+        setDiscoveredArcgisLayers(single);
+        setSelectedDiscoveredArcgisUrl(single[0].url);
+        if (!addLayerName.trim()) setAddLayerName(single[0].name);
+        setAddLayerStatus('Found 1 layer/table. Select one and click Add.');
+        return;
+      }
+
+      // Service root URL → enumerate. Accept both MapServer and FeatureServer roots;
+      // otherwise assume a service folder and try its FeatureServer endpoint.
+      const serviceBase = /\/(?:MapServer|FeatureServer)$/i.test(clean) ? clean : `${clean}/FeatureServer`;
 
       const discoverUrl = appendTokenIfAny(`${serviceBase}?f=pjson`, addLayerToken);
       const discoverRes = await fetch(discoverUrl);
       if (!discoverRes.ok) throw new Error(`discover failed (${discoverRes.status})`);
       const discover = await discoverRes.json();
+      if (discover?.error?.message) throw new Error(discover.error.message);
       const discovered = [
         ...(Array.isArray(discover?.layers) ? discover.layers.map((l: any) => ({ ...l, kind: 'layer' as const })) : []),
         ...(Array.isArray(discover?.tables) ? discover.tables.map((t: any) => ({ ...t, kind: 'table' as const })) : []),
@@ -5244,7 +5274,9 @@ export default function SatelliteIntelligence() {
         }));
 
       if (!discovered.length) {
-        throw new Error('No layers/tables found in this service URL.');
+        throw new Error(
+          'No layers/tables found in this service URL. For a single layer, paste its full URL ending in the layer id (e.g. …/MapServer/124).',
+        );
       }
 
       setDiscoveredArcgisLayers(discovered);
