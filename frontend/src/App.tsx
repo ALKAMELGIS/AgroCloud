@@ -7,7 +7,12 @@ import AppRoutes from './routes/AppRoutes'
 import PersistentAgroCloudEmbed from './components/PersistentAgroCloudEmbed'
 import PwaInstallPrompt from './components/PwaInstallPrompt'
 import PwaInstallFab from './components/PwaInstallFab'
-import { isDynamicImportError, lazyWithRetry } from './lib/lazyWithRetry'
+import {
+  clearStaleChunkRecoveryState,
+  isDynamicImportError,
+  lazyWithRetry,
+  reloadWithCacheBust,
+} from './lib/lazyWithRetry'
 const SplashScreen = lazyWithRetry(() => import('./components/SplashScreen'), 'SplashScreen')
 import { AuthProvider, useAuth } from './state/auth'
 import { LanguageProvider } from './lib/i18n'
@@ -38,17 +43,21 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
   }
 
   /** Stale-deploy chunk failures should self-heal with a one-time reload, not a dead-end screen. */
+  private static readonly STALE_CHUNK_GUARD = 'agro_boundary_chunk_reload'
+
   private static recoverFromStaleChunk(error: unknown): boolean {
     if (typeof window === 'undefined') return false
     if (!isDynamicImportError(error)) return false
-    const guardKey = 'agro_boundary_chunk_reload'
+    const guardKey = AppErrorBoundary.STALE_CHUNK_GUARD
     try {
       if (sessionStorage.getItem(guardKey)) return false
       sessionStorage.setItem(guardKey, '1')
     } catch {
       return false
     }
-    window.location.reload()
+    // Cache-busting reload so the recovery fetches a FRESH index.html instead of the stale,
+    // CDN-cached document that still references chunk hashes the new deploy deleted.
+    reloadWithCacheBust()
     return true
   }
 
@@ -135,7 +144,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
         <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>حدث خطأ ومنع الصفحة من التحميل</div>
         <div style={{ marginBottom: 12, color: '#444' }}>{message}</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-          <button type="button" className="gis-btn" onClick={() => window.location.reload()}>
+          <button type="button" className="gis-btn" onClick={() => reloadWithCacheBust()}>
             Reload
           </button>
           <button
@@ -168,6 +177,12 @@ function AppShell() {
   useEffect(() => {
     setMobileNavOpen(false)
   }, [location.pathname])
+
+  // The app rendered successfully — drop the one-shot stale-chunk reload guard and strip the
+  // `_cb` cache-bust param so a FUTURE deploy can self-heal again (and the URL stays clean).
+  useEffect(() => {
+    clearStaleChunkRecoveryState(['agro_boundary_chunk_reload'])
+  }, [])
 
   const isOnLogin = location.pathname === '/login'
   const showChrome = !!user && !isOnLogin

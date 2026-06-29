@@ -15,6 +15,48 @@ import { lazy, type ComponentType } from 'react'
 
 const RELOAD_GUARD_PREFIX = 'agro_chunk_reload:'
 
+/** Query param appended to bust the CDN/browser cache of `index.html` on recovery. */
+const CACHE_BUST_PARAM = '_cb'
+
+/**
+ * Reload the page in a way that bypasses the cached `index.html`.
+ *
+ * The live site serves `index.html` with `Cache-Control: max-age=600` behind a CDN, so a plain
+ * `location.reload()` after a deploy can re-fetch the STALE document that still points at chunk
+ * hashes the new build deleted (→ the same dynamic-import 404 loops forever until the one-shot guard
+ * gives up on a dead-end error screen). Appending a unique query value makes the CDN/browser treat it
+ * as a distinct URL, so the fresh `index.html` with the current chunk names is fetched instead.
+ */
+export function reloadWithCacheBust(): void {
+  if (typeof window === 'undefined') return
+  try {
+    const url = new URL(window.location.href)
+    url.searchParams.set(CACHE_BUST_PARAM, Date.now().toString(36))
+    window.location.replace(url.toString())
+  } catch {
+    try {
+      window.location.reload()
+    } catch {
+      /* noop */
+    }
+  }
+}
+
+/** After a successful load, drop the recovery guard + strip the `_cb` param from the address bar. */
+export function clearStaleChunkRecoveryState(guardKeys: string[] = []): void {
+  if (typeof window === 'undefined') return
+  for (const key of guardKeys) safeSessionRemove(key)
+  try {
+    const url = new URL(window.location.href)
+    if (url.searchParams.has(CACHE_BUST_PARAM)) {
+      url.searchParams.delete(CACHE_BUST_PARAM)
+      window.history.replaceState(window.history.state, '', url.toString())
+    }
+  } catch {
+    /* noop */
+  }
+}
+
 function isDynamicImportError(error: unknown): boolean {
   const message =
     error instanceof Error ? error.message : typeof error === 'string' ? error : String(error ?? '')
@@ -73,8 +115,9 @@ export function lazyWithRetry<T extends ComponentType<any>>(
     } catch (error) {
       if (isDynamicImportError(error) && !safeSessionGet(guardKey)) {
         safeSessionSet(guardKey, '1')
-        // Reload to pull the fresh index.html + current chunk hashes.
-        window.location.reload()
+        // Cache-busting reload to pull the fresh index.html + current chunk hashes
+        // (a plain reload can re-serve the stale, CDN-cached index.html).
+        reloadWithCacheBust()
         // Return a never-resolving promise so React keeps showing the Suspense fallback
         // (instead of flashing an error) until the reload takes over.
         return new Promise<{ default: T }>(() => {})
