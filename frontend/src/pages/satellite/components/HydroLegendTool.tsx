@@ -4,7 +4,17 @@ import type { HydroStepState } from './useHydroWatershed'
 import { useMapOverlayIsolation } from '../useMapOverlayIsolation'
 import './HydroLegendTool.css'
 
-const STEP_ORDER: HydroStepId[] = ['dem', 'hillshade', 'slope', 'flow-accum', 'watershed', 'streams', 'mesh']
+const STEP_ORDER: HydroStepId[] = [
+  'dem',
+  'hillshade',
+  'slope',
+  'flow-accum',
+  'watershed',
+  'basins',
+  'streams',
+  'contours',
+  'mesh',
+]
 
 const STEP_TITLE: Record<HydroStepId, string> = {
   dem: 'Elevation',
@@ -12,7 +22,9 @@ const STEP_TITLE: Record<HydroStepId, string> = {
   slope: 'Slope',
   'flow-accum': 'Flow accumulation',
   streams: 'Stream network',
+  contours: 'Contours',
   watershed: 'Watershed',
+  basins: 'Drainage basins',
   mesh: 'Mesh',
 }
 

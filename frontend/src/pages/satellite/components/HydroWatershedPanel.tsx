@@ -15,9 +15,22 @@ const STEPS: StepMeta[] = [
   { id: 'slope', icon: 'fa-solid fa-chart-line', label: 'Slope' },
   { id: 'flow-accum', icon: 'fa-solid fa-water', label: 'Flow accumulation' },
   { id: 'streams', icon: 'fa-solid fa-timeline', label: 'Stream network' },
+  { id: 'contours', icon: 'fa-solid fa-bullseye', label: 'Contours' },
   { id: 'watershed', icon: 'fa-solid fa-fill-drip', label: 'Watershed' },
-  { id: 'mesh', icon: 'fa-solid fa-diagram-project', label: 'Mesh' },
+  { id: 'basins', icon: 'fa-solid fa-layer-group', label: 'Drainage basins' },
 ]
+
+const CONTOUR_INTERVALS: Array<{ value: number; label: string }> = [
+  { value: 0, label: 'Auto' },
+  { value: 5, label: '5 m' },
+  { value: 10, label: '10 m' },
+  { value: 20, label: '20 m' },
+  { value: 25, label: '25 m' },
+  { value: 50, label: '50 m' },
+  { value: 100, label: '100 m' },
+]
+
+const BASIN_COUNTS = [4, 6, 8, 12]
 
 type HydroWatershedPanelProps = {
   steps: Record<HydroStepId, HydroStepState>
@@ -26,12 +39,17 @@ type HydroWatershedPanelProps = {
   hasAoi: boolean
   streamModel: 'strahler' | 'shreve'
   onStreamModelChange: (model: 'strahler' | 'shreve') => void
+  /** Contour interval (m); 0 = auto. */
+  contourInterval: number
+  onContourIntervalChange: (interval: number) => void
+  /** Number of largest drainage basins to delineate. */
+  basinCount: number
+  onBasinCountChange: (count: number) => void
   onRunStep: (id: HydroStepId) => void
   onToggleVisible: (id: HydroStepId) => void
   onRemoveStep: (id: HydroStepId) => void
   onExportRaster: (id: HydroStepId) => void
   onRunAll: () => void
-  onClose: () => void
 }
 
 export function HydroWatershedPanel({
@@ -41,12 +59,15 @@ export function HydroWatershedPanel({
   hasAoi,
   streamModel,
   onStreamModelChange,
+  contourInterval,
+  onContourIntervalChange,
+  basinCount,
+  onBasinCountChange,
   onRunStep,
   onToggleVisible,
   onRemoveStep,
   onExportRaster,
   onRunAll,
-  onClose,
 }: HydroWatershedPanelProps) {
   return (
     <div className="si-hydro">
@@ -58,9 +79,6 @@ export function HydroWatershedPanel({
           <span className="si-hydro__title">Hydro Watershed</span>
           <span className="si-hydro__subtitle">Terrain hydrology workflow</span>
         </span>
-        <button type="button" className="si-hydro__close" onClick={onClose} aria-label="Close panel">
-          <i className="fa-solid fa-xmark" aria-hidden />
-        </button>
       </header>
 
       <div className="si-hydro__toolbar">
@@ -145,6 +163,40 @@ export function HydroWatershedPanel({
                         Shreve
                       </button>
                     </div>
+                  ) : null}
+                  {step.id === 'contours' ? (
+                    <label className="si-hydro__opt" title="Contour interval">
+                      <span className="si-hydro__opt-label">Interval</span>
+                      <select
+                        className="si-hydro__opt-select"
+                        value={contourInterval}
+                        onChange={e => onContourIntervalChange(Number(e.target.value))}
+                        aria-label="Contour interval"
+                      >
+                        {CONTOUR_INTERVALS.map(o => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                  {step.id === 'basins' ? (
+                    <label className="si-hydro__opt" title="Number of basins">
+                      <span className="si-hydro__opt-label">Basins</span>
+                      <select
+                        className="si-hydro__opt-select"
+                        value={basinCount}
+                        onChange={e => onBasinCountChange(Number(e.target.value))}
+                        aria-label="Number of drainage basins"
+                      >
+                        {BASIN_COUNTS.map(c => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   ) : null}
                   {st.result.stats.length ? (
                     <dl className="si-hydro__stats">

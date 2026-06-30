@@ -282,7 +282,6 @@ export function SiPrithviCropToolPanel(props: SiPrithviCropToolPanelProps) {
     isRunning,
     onRunAoi,
     onCancel,
-    onAddToMap,
   } = props
 
   const hasAoi = Boolean(aoiGeometry)
@@ -310,6 +309,20 @@ export function SiPrithviCropToolPanel(props: SiPrithviCropToolPanelProps) {
     }
     return PRITHVI_CROP_CLASSES.map(c => ({ id: c.id, name: c.name, color: c.color }))
   }, [result])
+
+  // Dynamic legend: after a classification run, only show the crop classes that
+  // are actually present in the prediction (derived from classStats), instead of
+  // the full model class list. Before any run, the full reference legend is kept.
+  const displayLegendItems = useMemo(() => {
+    if (result && classStats && classStats.length) {
+      const present = new Set(
+        classStats.map(s => String(s.name ?? '').toLowerCase()).filter(Boolean),
+      )
+      const filtered = legendItems.filter(l => present.has(l.name.toLowerCase()))
+      return filtered.length ? filtered : legendItems
+    }
+    return legendItems
+  }, [result, classStats, legendItems])
 
   return (
     <div className="prithvi-tool" dir="auto">
@@ -411,24 +424,19 @@ export function SiPrithviCropToolPanel(props: SiPrithviCropToolPanelProps) {
               </figure>
             ))}
           </div>
-          {prediction?.url && prediction?.bounds && onAddToMap ? (
-            <button type="button" className="prithvi-tool__btn is-primary" onClick={onAddToMap}>
-              <i className="fa-solid fa-layer-group" aria-hidden /> Add Crop Type layer to map
-            </button>
-          ) : null}
           {classStats && classStats.length ? (
             <CropCompositionStats stats={classStats} legendItems={legendItems} aoiAreaHa={aoiAreaHa} />
           ) : null}
         </div>
       ) : null}
 
-      {/* Legend */}
+      {/* Legend — dynamic after a run (only detected crops), reference before. */}
       <div className="prithvi-tool__legend">
         <div className="prithvi-tool__legend-title">
-          {result?.legend && result.legend.length ? 'Crop Type legend' : 'Model prediction legend'}
+          {result ? 'Detected crop types' : 'Model prediction legend'}
         </div>
         <ul className="prithvi-tool__legend-list">
-          {legendItems.map(c => (
+          {displayLegendItems.map(c => (
             <li key={c.id}>
               <span className="prithvi-tool__swatch" style={{ background: c.color }} />
               {c.name}

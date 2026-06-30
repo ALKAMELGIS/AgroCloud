@@ -36,7 +36,6 @@ type TreeDetectionsPanelProps = {
   onExport: () => void
   onExportShapefile: () => void
   onZoomToLayer: () => void
-  onClose: () => void
 }
 
 const PHASE_LABEL: Record<TreeDetectionPhase, string> = {
@@ -67,7 +66,6 @@ export function TreeDetectionsPanel({
   onExport,
   onExportShapefile,
   onZoomToLayer,
-  onClose,
 }: TreeDetectionsPanelProps) {
   const stats = result?.stats
   const providerEntries = Object.values(TREE_IMAGERY_PROVIDERS)
@@ -75,12 +73,6 @@ export function TreeDetectionsPanel({
 
   return (
     <div className="si-tree-detect">
-      <div className="si-tree-detect__head">
-        <button type="button" className="si-tree-detect__close" onClick={onClose} aria-label="Close panel">
-          <i className="fa-solid fa-xmark" aria-hidden />
-        </button>
-      </div>
-
       <section className="si-tree-detect__card">
         <header className="si-tree-detect__card-label">1 · Analysis mode</header>
         <div className="si-tree-detect__modes" role="radiogroup" aria-label="Analysis mode">

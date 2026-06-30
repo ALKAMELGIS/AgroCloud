@@ -25,6 +25,10 @@ type Params = {
   geometry: GeoJSON.Geometry | GeoJSON.Feature | null | undefined
   enabled: boolean
   sensitivity?: number
+  /** Contour interval (m); 0/undefined = auto. */
+  contourInterval?: number
+  /** Number of largest drainage basins to delineate. */
+  basinCount?: number
 }
 
 function stableGeometryKey(geometry: GeoJSON.Geometry | GeoJSON.Feature): string {
@@ -46,7 +50,7 @@ function stableGeometryKey(geometry: GeoJSON.Geometry | GeoJSON.Feature): string
  * runs each terrain-hydrology step on demand so results stream onto the map as
  * independent layers.
  */
-export function useHydroWatershed({ geometry, enabled, sensitivity }: Params) {
+export function useHydroWatershed({ geometry, enabled, sensitivity, contourInterval, basinCount }: Params) {
   const geomKey = useMemo(() => (geometry ? stableGeometryKey(geometry) : ''), [geometry])
   const hasAoi = !!geomKey && !!geometry
 
@@ -56,7 +60,9 @@ export function useHydroWatershed({ geometry, enabled, sensitivity }: Params) {
     slope: { ...EMPTY_STEP },
     'flow-accum': { ...EMPTY_STEP },
     streams: { ...EMPTY_STEP },
+    contours: { ...EMPTY_STEP },
     watershed: { ...EMPTY_STEP },
+    basins: { ...EMPTY_STEP },
     mesh: { ...EMPTY_STEP },
   }))
   const [demLoading, setDemLoading] = useState(false)
@@ -66,6 +72,13 @@ export function useHydroWatershed({ geometry, enabled, sensitivity }: Params) {
   const maskRef = useRef<Uint8Array | null>(null)
   const demKeyRef = useRef<string>('')
   const abortRef = useRef<AbortController | null>(null)
+
+  // Live option refs so runStep always reads the latest contour/basin settings
+  // without needing to be recreated (and re-trigger callers' effects).
+  const contourIntervalRef = useRef(contourInterval)
+  contourIntervalRef.current = contourInterval
+  const basinCountRef = useRef(basinCount)
+  basinCountRef.current = basinCount
 
   // Invalidate the cached DEM/mask when the AOI changes so the *next* run computes
   // against the new geometry. Existing result layers are intentionally kept on the
@@ -130,6 +143,8 @@ export function useHydroWatershed({ geometry, enabled, sensitivity }: Params) {
           dem,
           aoiMask: maskRef.current,
           sensitivity: sensitivity ?? 0.5,
+          contourInterval: contourIntervalRef.current,
+          basinCount: basinCountRef.current,
         }
         const result = HYDRO_COMPUTE[id](ctx)
         setSteps(prev => ({

@@ -6,7 +6,9 @@ import React, {
   useLayoutEffect,
   useCallback,
   useDeferredValue,
+  type ReactNode,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import MapGL, { Source, Layer, Marker } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -63,6 +65,7 @@ import { useClaudeApiKey } from '../../hooks/useClaudeApiKey';
 import { useDeepseekApiKey } from '../../hooks/useDeepseekApiKey';
 import { useOllamaConfig } from '../../hooks/useOllamaConfig';
 import { getArcgisPortalToken } from '../../lib/arcgisPortalToken';
+import { fetchArcGisFeatureLayerGeoJson } from '../../lib/arcgisFeatureLayerGeoJson';
 import { getMapboxAccessToken, getMapboxGlRendererToken } from '../../lib/mapboxAccessToken';
 import { subscribeSentinelHubAccessToken } from '../../lib/sentinelHubAccessToken';
 import { getSentinelHubWmsBaseUrl, subscribeSentinelHubWmsInstance } from '../../lib/sentinelHubWmsInstance';
@@ -299,6 +302,7 @@ import {
   sanitizeArcgisDrawingInfoForClient,
   slimArcgisLayerDefinitionForStorage,
 } from '../../lib/arcgisDrawingInfoMapbox';
+import { arcgisExtentToWgs84BBox } from '../../lib/arcgisImageServer';
 import {
   arcLegendLabelForFieldValue,
   buildArcFieldsByLower,
@@ -379,6 +383,9 @@ import type { TreeImageryProviderId } from '../../lib/treeDetection/webMercatorT
 import type { TreeAnalysisMode } from '../../lib/treeDetection/treeDetectionEngine';
 import { HydroWatershedPanel } from './components/HydroWatershedPanel';
 import { useHydroWatershed } from './components/useHydroWatershed';
+import { WellSiteRecommendationPanel } from './components/WellSiteRecommendationPanel';
+import { useWellSiteRecommendation } from './components/useWellSiteRecommendation';
+import type { WellSitePoint } from '../../lib/hydroWatershed/hydroEngine';
 import type { HydroStepId } from '../../lib/hydroWatershed/hydroEngine';
 import { GisPortalBrowseLayersPanel } from './components/GisPortalBrowseLayersPanel';
 import { GisUploadCloudSources } from '../../components/GisUploadCloudSources';
@@ -461,7 +468,7 @@ const EMPTY_MAP_STYLE: any = {
  *
  * Every basemap in the catalogue is a raster-tile style. By rebuilding each one
  * with FIXED source/layer ids we can swap basemaps by only replacing the tile
- * URLs of the existing sources (`source.setTiles(...)`) — never re-creating the
+ * URLs of the existing sources (`source.setTiles(...)`) â€” never re-creating the
  * map, never calling setStyle/fitBounds/jumpTo. The camera (center/zoom/pitch/
  * bearing) and every overlay stay exactly in place, with no flicker.
  */
@@ -550,6 +557,7 @@ type MapToolboxSectionId =
   | 'ai-detection-gis'
   | 'tree-detections'
   | 'hydro-watershed'
+  | 'well-site'
   | 'flood-monitoring'
   | 'table-geo-ai';
 
@@ -590,7 +598,7 @@ const GEO_AI_MAX_INSPECT_POPUPS = 22;
 /** When a vector layer has at least this many Point/MultiPoint features, enable Mapbox clustering on that source. */
 const GEO_AI_CLUSTER_POINT_THRESHOLD = 28;
 
-/** Cap geometry sent to Mapbox for table↔map highlight (full selection stays in the table). */
+/** Cap geometry sent to Mapbox for tableâ†”map highlight (full selection stays in the table). */
 const SI_GEO_AI_MAP_HIGHLIGHT_MAX_LINKS = 2800;
 
 type NetfloraDetectionMode = 'aoi_first' | 'full_then_clip';
@@ -681,19 +689,22 @@ const HYDRO_STEP_ORDER: HydroStepId[] = [
   'slope',
   'flow-accum',
   'watershed',
+  'basins',
   'streams',
-  'mesh',
+  'contours',
 ];
 
 /** Human labels for Hydro layers shown in the Layers panel. */
 const HYDRO_STEP_LABELS: Record<HydroStepId, string> = {
-  dem: 'Hydro · Elevation',
-  hillshade: 'Hydro · Hillshade',
-  slope: 'Hydro · Slope',
-  'flow-accum': 'Hydro · Flow accumulation',
-  streams: 'Hydro · Stream network',
-  watershed: 'Hydro · Watershed',
-  mesh: 'Hydro · Mesh',
+  dem: 'Hydro Â· Elevation',
+  hillshade: 'Hydro Â· Hillshade',
+  slope: 'Hydro Â· Slope',
+  'flow-accum': 'Hydro Â· Flow accumulation',
+  streams: 'Hydro Â· Stream network',
+  contours: 'Hydro Â· Contours',
+  watershed: 'Hydro Â· Watershed',
+  basins: 'Hydro Â· Drainage basins',
+  mesh: 'Hydro Â· Mesh',
 };
 
 const DATABASE_PLATFORM_OPTIONS = [
@@ -1223,7 +1234,7 @@ function getStacItemThumbCandidateUrls(item: any, connection?: StacConnectionCon
   /**
    * For Mapbox `image` sources the bitmap is stretched to the scene bbox. If we try small STAC
    * `thumbnail` URLs first, fetchStacMapOverlayBlobUrl used to accept 256px images and the map looked blocky.
-   * Planetary Computer `item/preview.png` supports up to 4096px — try those first for map overlays.
+   * Planetary Computer `item/preview.png` supports up to 4096px â€” try those first for map overlays.
    */
   if (mapOv && usePcPreview && coll && id) {
     for (const sz of [4096, 3072, 2560, 2048, 1536, 1280, 1024]) {
@@ -1450,7 +1461,7 @@ function StacExploreThumb({ hrefList, reactKey }: { hrefList: string[]; reactKey
   }, [cleanList.length, revokeBlob]);
 
   if (!cleanList.length || broken) {
-    return <div className="si-explore-result-thumb-ph">—</div>;
+    return <div className="si-explore-result-thumb-ph">â€”</div>;
   }
   if (src == null) {
     return <div className="si-explore-result-thumb-ph si-explore-result-thumb-loading" />;
@@ -1479,7 +1490,7 @@ function getStacItemSensorLabel(item: any): string {
   if (p.platform) return String(p.platform);
   if (p.constellation) return String(p.constellation);
   if (Array.isArray(p.instruments) && p.instruments.length) return String(p.instruments[0]);
-  return String(item?.collection ?? '—');
+  return String(item?.collection ?? 'â€”');
 }
 
 const EXPLORE_RESULTS_PAGE_SIZE = 25;
@@ -1525,7 +1536,7 @@ interface CustomLayer {
   useArcGisSymbology?: boolean;
   /** Fields/types/domains for attribute table (coded-value descriptions). */
   arcgisLayerDefinition?: ArcgisLayerDefLite | null;
-  /** Saved symbology (GIS Map–aligned); drives Style dialog defaults. */
+  /** Saved symbology (GIS Mapâ€“aligned); drives Style dialog defaults. */
   symbology?: SymbologyConfig;
   /** When set to `raster`, `raster` uses a Mapbox image source instead of GeoJSON vectors. */
   renderMode?: 'vector' | 'raster';
@@ -1537,7 +1548,7 @@ interface CustomLayer {
   bimBlobUrl?: string;
   /** Map identify popup: field visibility, order, groups, and view mode. */
   popupConfig?: SiLayerPopupConfig | null;
-  /** 0.05–1 — scales vector/raster layer draw opacity on the map (GIS-style transparency). */
+  /** 0.05â€“1 â€” scales vector/raster layer draw opacity on the map (GIS-style transparency). */
   mapOpacity?: number;
   /** Attribute field used to label features on the map (GIS-style labeling). Empty/undefined = off. */
   labelFieldName?: string | null;
@@ -1554,9 +1565,14 @@ interface CustomLayer {
   pointRadius?: number;
   fillStyle?: 'solid' | 'pattern' | 'hatch' | 'gradient';
   blendMode?: 'normal' | 'multiply' | 'screen' | 'overlay' | 'darken' | 'lighten';
+  /** Render point features as a registered marker icon (e.g. water-drop) instead of a flat circle. */
+  markerImageId?: 'si-water-drop';
 }
 
 const SI_TABLE_MAX_FEATURES = 10000;
+
+/** Stable id for the Well Site Recommendation output layer in the Layers panel. */
+const WELLSITE_RECOMMENDED_LAYER_ID = 'wellsite-recommended-wells';
 
 type SiTableSearchMode = 'description' | 'code' | 'both';
 type SiTableFilterOperator = 'contains' | 'equals' | 'not_equals' | 'empty' | 'not_empty';
@@ -1854,9 +1870,72 @@ type SiMapboxCanvasLike = {
   setFilter?(layerId: string, filter: unknown): void;
   getStyle(): { layers?: Array<{ id: string }> };
   triggerRepaint?(): void;
+  hasImage?(id: string): boolean;
+  addImage?(id: string, image: unknown, options?: { pixelRatio?: number }): void;
 };
 
-const SI_MAPBOX_CUSTOM_LAYER_SUFFIXES = ['-fill', '-line', '-circle', '-cluster', '-cluster-count', '-raster', '-label'] as const;
+/**
+ * Register (once) a luxurious blue water-drop marker icon in the map sprite so
+ * point layers (e.g. Recommended Wells) can render as water points instead of
+ * flat circles. Returns true when the image is available for use.
+ */
+function siEnsureWaterDropImage(map: SiMapboxCanvasLike, id: 'si-water-drop' = 'si-water-drop'): boolean {
+  try {
+    if (typeof map.hasImage === 'function' && map.hasImage(id)) return true;
+    if (typeof map.addImage !== 'function' || typeof document === 'undefined') return false;
+    const ratio = 2;
+    const W = 30;
+    const H = 40;
+    const canvas = document.createElement('canvas');
+    canvas.width = W * ratio;
+    canvas.height = H * ratio;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return false;
+    ctx.scale(ratio, ratio);
+
+    const cx = W / 2;
+    const cy = 15;
+    const r = 11;
+    const tipY = H - 2.5;
+
+    // Teardrop silhouette: top circle blended into a pointed tip.
+    ctx.beginPath();
+    ctx.moveTo(cx, tipY);
+    ctx.quadraticCurveTo(cx - r, cy + (tipY - cy) * 0.34, cx - r, cy);
+    ctx.arc(cx, cy, r, Math.PI, 0, true);
+    ctx.quadraticCurveTo(cx + r, cy + (tipY - cy) * 0.34, cx, tipY);
+    ctx.closePath();
+
+    const grad = ctx.createLinearGradient(0, cy - r, 0, tipY);
+    grad.addColorStop(0, '#7dd3fc');
+    grad.addColorStop(0.5, '#38bdf8');
+    grad.addColorStop(1, '#0284c7');
+    ctx.shadowColor = 'rgba(2, 23, 51, 0.45)';
+    ctx.shadowBlur = 3;
+    ctx.shadowOffsetY = 1.5;
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+    ctx.stroke();
+
+    // Glossy highlight.
+    ctx.beginPath();
+    ctx.ellipse(cx - 3.2, cy - 2.6, 3.1, 4.4, -0.5, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.fill();
+
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    map.addImage(id, img, { pixelRatio: ratio });
+    return typeof map.hasImage === 'function' ? map.hasImage(id) : true;
+  } catch {
+    return false;
+  }
+}
+
+const SI_MAPBOX_CUSTOM_LAYER_SUFFIXES = ['-fill', '-line', '-circle', '-marker', '-cluster', '-cluster-count', '-raster', '-label'] as const;
 
 /**
  * Compile a simple `field op value` definition query into a Mapbox filter expression.
@@ -1918,6 +1997,140 @@ function siRemoveMapboxCustomLayerStack(map: SiMapboxCanvasLike, sourceId: strin
   }
 }
 
+/**
+ * Show/hide every sub-layer (fill, line, circle, cluster, raster, labelâ€¦) of a custom layer
+ * via the Mapbox `visibility` layout property. Toggling visibility â€” instead of removing and
+ * re-adding the layer stack â€” is instant, keeps all geometry types in sync, and preserves the
+ * exact draw order (z-index) when a layer is switched back on (QGIS/ArcGIS-style behaviour).
+ */
+function siSetMapboxCustomLayerStackVisibility(
+  map: SiMapboxCanvasLike,
+  sourceId: string,
+  visible: boolean,
+) {
+  if (typeof map.setLayoutProperty !== 'function') return;
+  const value = visible ? 'visible' : 'none';
+  for (const suffix of SI_MAPBOX_CUSTOM_LAYER_SUFFIXES) {
+    const lid = `${sourceId}${suffix}`;
+    if (!map.getLayer(lid)) continue;
+    try {
+      map.setLayoutProperty(lid, 'visibility', value);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/**
+ * Floating, portal-positioned layer-options menu (ArcGIS / layer-tree style). The â‹¯
+ * trigger lives inline in the layer row, but the menu is rendered to document.body and
+ * positioned via the trigger's bounding box so it never gets clipped by the compact
+ * panel's overflow and always floats cleanly above the dock.
+ */
+function SiLayerOptionsMenuPortal({
+  open,
+  layerLabel,
+  onToggleOpen,
+  children,
+}: {
+  open: boolean;
+  layerLabel: string;
+  onToggleOpen: () => void;
+  children: ReactNode;
+}) {
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const popRef = useRef<HTMLDivElement | null>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
+
+  const place = useCallback(() => {
+    const btn = btnRef.current;
+    if (!btn) return;
+    const r = btn.getBoundingClientRect();
+    const width = 224;
+    const margin = 8;
+    const gap = 6;
+    // Measure the real menu height when available so tall menus are positioned
+    // (and clamped) to stay fully on screen — never clipped by the viewport edge.
+    const measured = popRef.current?.scrollHeight ?? 0;
+    const estHeight = Math.min(Math.max(measured || 380, 220), window.innerHeight - margin * 2);
+    let left = r.right - width;
+    if (left < margin) left = margin;
+    if (left + width > window.innerWidth - margin) left = window.innerWidth - margin - width;
+
+    const spaceBelow = window.innerHeight - r.bottom - gap - margin;
+    const spaceAbove = r.top - gap - margin;
+    let top: number;
+    let maxHeight: number;
+    if (estHeight <= spaceBelow || spaceBelow >= spaceAbove) {
+      // Open downward (preferred when it fits or there's more room below).
+      top = r.bottom + gap;
+      maxHeight = Math.max(160, Math.min(estHeight, spaceBelow));
+    } else {
+      // Flip above the trigger and clamp to the room available there.
+      maxHeight = Math.max(160, Math.min(estHeight, spaceAbove));
+      top = Math.max(margin, r.top - gap - maxHeight);
+    }
+    setCoords({ top, left, maxHeight });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (open) place();
+    else setCoords(null);
+  }, [open, place]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onReflow = () => place();
+    window.addEventListener('resize', onReflow);
+    window.addEventListener('scroll', onReflow, true);
+    return () => {
+      window.removeEventListener('resize', onReflow);
+      window.removeEventListener('scroll', onReflow, true);
+    };
+  }, [open, place]);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        className={'si-env-layer-action-btn si-env-layer-action-btn--menu' + (open ? ' is-active' : '')}
+        title="Layer options (zoom, table, symbology, pop-ups, opacity, orderâ€¦)"
+        aria-label={`Layer options for ${layerLabel}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={e => {
+          e.stopPropagation();
+          onToggleOpen();
+        }}
+      >
+        <i className="fa-solid fa-ellipsis" aria-hidden />
+      </button>
+      {open
+        ? createPortal(
+            <div
+              ref={popRef}
+              className="si-env-layer-options-menu si-env-layer-options-menu--floating"
+              role="menu"
+              style={{
+                position: 'fixed',
+                top: coords ? coords.top : -9999,
+                left: coords ? coords.left : -9999,
+                maxHeight: coords ? coords.maxHeight : undefined,
+                visibility: coords ? 'visible' : 'hidden',
+              }}
+              onMouseDown={e => e.stopPropagation()}
+              onClick={e => e.stopPropagation()}
+            >
+              {children}
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
+  );
+}
+
 function siMapboxInsertBeforeId(map: SiMapboxCanvasLike): string | undefined {
   try {
     const layers = map.getStyle()?.layers;
@@ -1958,9 +2171,13 @@ function siPaintCustomLayersOnMapboxCanvas(
   const beforeId = siMapboxInsertBeforeId(map);
 
   for (const layer of layers) {
-    if (!layer.visible || !layer.geojson) continue;
+    // Layers with no geometry yet (e.g. an empty shell awaiting features) are skipped.
+    // Hidden layers are NOT skipped: we keep their stack mounted and flip the Mapbox
+    // `visibility` property so toggling is instant and preserves draw order (z-index).
+    if (!layer.geojson) continue;
     const sourceId = siSafeMapboxLayerId(layer.id);
     nextSourceIds.add(sourceId);
+    const layerVisible = layer.visible !== false;
     const op = layer.mapOpacity ?? 1;
 
     try {
@@ -1979,6 +2196,7 @@ function siPaintCustomLayersOnMapboxCanvas(
               id: rasterId,
               type: 'raster',
               source: sourceId,
+              layout: { visibility: layerVisible ? 'visible' : 'none' },
               paint: { 'raster-opacity': 0.92 * op, 'raster-fade-duration': 0 },
             },
             beforeId,
@@ -1986,6 +2204,7 @@ function siPaintCustomLayersOnMapboxCanvas(
         } else {
           siApplyMapboxPaintProps(map, rasterId, { 'raster-opacity': 0.92 * op });
         }
+        siSetMapboxCustomLayerStackVisibility(map, sourceId, layerVisible);
         continue;
       }
 
@@ -2016,17 +2235,32 @@ function siPaintCustomLayersOnMapboxCanvas(
         op,
       );
       const circlePaintRaw = siScalePaintOpacityByFactor(st.circlePaint as Record<string, unknown>, op);
-      const circlePaint =
+      let circlePaint =
         op < 0.999 && circlePaintRaw['circle-opacity'] === undefined
           ? { ...circlePaintRaw, 'circle-opacity': op }
           : circlePaintRaw;
 
+      // Marker mode: points render as a registered icon (e.g. water-drop). The
+      // circle stays mounted but fully transparent so hit-testing / identify keep
+      // working; the visible glyph is the icon symbol drawn on top.
+      const markerImageId = layer.markerImageId;
+      const useMarker = !!markerImageId && siEnsureWaterDropImage(map, markerImageId);
+      if (useMarker) {
+        circlePaint = {
+          ...circlePaint,
+          'circle-radius': typeof layer.pointRadius === 'number' ? Math.max(6, layer.pointRadius) : 8,
+          'circle-opacity': 0,
+          'circle-stroke-width': 0,
+        };
+      }
+
       const fillId = `${sourceId}-fill`;
       const lineId = `${sourceId}-line`;
       const circleId = `${sourceId}-circle`;
+      const markerId = `${sourceId}-marker`;
       const labelId = `${sourceId}-label`;
 
-      // Definition query — combine the user's compiled filter (e.g. `crop = wheat`)
+      // Definition query â€” combine the user's compiled filter (e.g. `crop = wheat`)
       // with each geometry-type base filter so only matching features are drawn.
       const defFilter =
         Array.isArray(layer.definitionFilter) && layer.definitionFilter.length ? layer.definitionFilter : null;
@@ -2036,31 +2270,59 @@ function siPaintCustomLayersOnMapboxCanvas(
       const lineFilter = withDef(st.lineFilter);
       const pointFilter = withDef(st.pointFilter);
 
+      const initialVisibility = { visibility: layerVisible ? 'visible' : 'none' } as const;
       if (!map.getLayer(fillId)) {
-        map.addLayer({ id: fillId, type: 'fill', source: sourceId, filter: fillFilter, paint: fillPaint }, beforeId);
+        map.addLayer({ id: fillId, type: 'fill', source: sourceId, filter: fillFilter, layout: initialVisibility, paint: fillPaint }, beforeId);
       } else {
         siApplyMapboxPaintProps(map, fillId, fillPaint);
         try { map.setFilter?.(fillId, fillFilter); } catch { /* ignore */ }
       }
       if (!map.getLayer(lineId)) {
-        map.addLayer({ id: lineId, type: 'line', source: sourceId, filter: lineFilter, paint: linePaint }, beforeId);
+        map.addLayer({ id: lineId, type: 'line', source: sourceId, filter: lineFilter, layout: initialVisibility, paint: linePaint }, beforeId);
       } else {
         siApplyMapboxPaintProps(map, lineId, linePaint);
         try { map.setFilter?.(lineId, lineFilter); } catch { /* ignore */ }
       }
       if (!map.getLayer(circleId)) {
-        map.addLayer({ id: circleId, type: 'circle', source: sourceId, filter: pointFilter, paint: circlePaint }, beforeId);
+        map.addLayer({ id: circleId, type: 'circle', source: sourceId, filter: pointFilter, layout: initialVisibility, paint: circlePaint }, beforeId);
       } else {
         siApplyMapboxPaintProps(map, circleId, circlePaint);
         try { map.setFilter?.(circleId, pointFilter); } catch { /* ignore */ }
       }
 
-      // Labeling — one text label per feature drawn from the chosen attribute field.
+      // Icon marker (water-drop) drawn above the transparent circle.
+      if (useMarker) {
+        const markerSize = typeof layer.pointRadius === 'number' ? Math.max(0.6, layer.pointRadius / 9) : 0.85;
+        const markerLayout = {
+          visibility: layerVisible ? 'visible' : 'none',
+          'icon-image': markerImageId,
+          'icon-size': markerSize,
+          'icon-anchor': 'bottom',
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
+        };
+        const markerPaint = { 'icon-opacity': op };
+        if (!map.getLayer(markerId)) {
+          map.addLayer({ id: markerId, type: 'symbol', source: sourceId, filter: pointFilter, layout: markerLayout, paint: markerPaint }, beforeId);
+        } else {
+          try {
+            map.setLayoutProperty?.(markerId, 'icon-image', markerImageId);
+            map.setLayoutProperty?.(markerId, 'icon-size', markerSize);
+            map.setFilter?.(markerId, pointFilter);
+          } catch { /* ignore */ }
+          siApplyMapboxPaintProps(map, markerId, markerPaint);
+        }
+      } else if (map.getLayer(markerId)) {
+        try { map.removeLayer(markerId); } catch { /* ignore */ }
+      }
+
+      // Labeling â€” one text label per feature drawn from the chosen attribute field.
       const labelField =
         typeof layer.labelFieldName === 'string' && layer.labelFieldName.trim() ? layer.labelFieldName.trim() : '';
       if (labelField) {
         const textField = ['coalesce', ['to-string', ['get', labelField]], ''];
         const labelLayout = {
+          visibility: layerVisible ? 'visible' : 'none',
           'text-field': textField,
           'text-size': 12,
           'text-anchor': 'center',
@@ -2103,11 +2365,18 @@ function siPaintCustomLayersOnMapboxCanvas(
           /* ignore */
         }
       }
+
+      // Sync the show/hide toggle to the map: flip every sub-layer's `visibility`
+      // in lock-step so fill + line + circle + label respond together and the draw
+      // order is preserved when the layer is switched back on.
+      siSetMapboxCustomLayerStackVisibility(map, sourceId, layerVisible);
     } catch (err) {
       console.warn('Satellite Intelligence: could not paint custom layer on map canvas', sourceId, err);
     }
   }
 
+  // Only layers that were truly removed from the panel (not merely hidden) are torn
+  // down here â€” hidden layers stay mounted with visibility:none for instant toggling.
   for (const staleId of trackedSourceIds) {
     if (!nextSourceIds.has(staleId)) siRemoveMapboxCustomLayerStack(map, staleId);
   }
@@ -2121,9 +2390,9 @@ function siPaintCustomLayersOnMapboxCanvas(
   }
 }
 
-/** Mapbox layer id `${sourceId}-fill|line|circle|cluster|cluster-count` → custom layer source id. */
+/** Mapbox layer id `${sourceId}-fill|line|circle|cluster|cluster-count` â†’ custom layer source id. */
 function siVectorLayerIdToCustomSourceId(mapboxLayerId: string): string | null {
-  const m = mapboxLayerId.match(/^(.+)-(fill|line|circle|cluster|cluster-count)$/);
+  const m = mapboxLayerId.match(/^(.+)-(fill|line|circle|marker|cluster|cluster-count)$/);
   return m ? m[1] : null;
 }
 
@@ -2188,7 +2457,7 @@ function siSanitizeIdentifyProperties(raw: Record<string, unknown> | null | unde
   return out;
 }
 
-/** Line / point fallback when honoring ArcGIS drawingInfo — avoids Mapbox brand greens on service symbology. */
+/** Line / point fallback when honoring ArcGIS drawingInfo â€” avoids Mapbox brand greens on service symbology. */
 const SI_ARCGIS_MAPBOX_NEUTRAL_LINE = 'rgba(148, 163, 184, 0.55)';
 const SI_ARCGIS_MAPBOX_NEUTRAL_STROKE = 'rgba(15, 23, 42, 0.72)';
 
@@ -2322,61 +2591,61 @@ type SiGetDataSourceEntry = {
   action: SiGetDataPickAction;
 };
 
-/** Power BI–style “Common data sources” — routes into existing Satellite import tabs / SQL profile. */
+/** Power BIâ€“style â€œCommon data sourcesâ€ â€” routes into existing Satellite import tabs / SQL profile. */
 const SI_GET_DATA_COMMON_SOURCES: SiGetDataSourceEntry[] = [
   {
     id: 'excel',
     title: 'Excel workbook',
-    description: '.xlsx / .xls — use Upload after saving as CSV (with lat/lon) or as GeoJSON for mapping.',
+    description: '.xlsx / .xls â€” use Upload after saving as CSV (with lat/lon) or as GeoJSON for mapping.',
     iconClass: 'fa-solid fa-file-excel',
     action: { kind: 'tab', tab: 'upload', statusHint: 'Excel: convert to CSV with coordinates or GeoJSON, then use Upload.' },
   },
   {
     id: 'csv',
     title: 'Text / CSV',
-    description: 'Delimited text — include latitude / longitude columns for point layers.',
+    description: 'Delimited text â€” include latitude / longitude columns for point layers.',
     iconClass: 'fa-solid fa-file-csv',
-    action: { kind: 'tab', tab: 'upload', statusHint: 'CSV: Upload tab — ensure lat/lon column names (lat, lon, latitude, longitude, …).' },
+    action: { kind: 'tab', tab: 'upload', statusHint: 'CSV: Upload tab â€” ensure lat/lon column names (lat, lon, latitude, longitude, â€¦).' },
   },
   {
     id: 'json-geojson',
     title: 'JSON / GeoJSON file',
-    description: 'FeatureCollection or single Feature — same as spatial upload.',
+    description: 'FeatureCollection or single Feature â€” same as spatial upload.',
     iconClass: 'fa-solid fa-file-code',
     action: { kind: 'tab', tab: 'upload', statusHint: 'Upload .json or .geojson from the Upload tab.' },
   },
   {
     id: 'semantic-models',
-    title: 'Semantic model (Power BI–style)',
-    description: 'Hosted datasets — connect via SQL or OData when your workspace exposes them.',
+    title: 'Semantic model (Power BIâ€“style)',
+    description: 'Hosted datasets â€” connect via SQL or OData when your workspace exposes them.',
     iconClass: 'fa-solid fa-chart-simple',
-    action: { kind: 'toast', message: 'Semantic models require a workspace connector — use SQL or OData for now.' },
+    action: { kind: 'toast', message: 'Semantic models require a workspace connector â€” use SQL or OData for now.' },
   },
   {
     id: 'dataflows',
     title: 'Dataflows',
-    description: 'Prepared ETL outputs — planned for enterprise connector.',
+    description: 'Prepared ETL outputs â€” planned for enterprise connector.',
     iconClass: 'fa-solid fa-diagram-project',
-    action: { kind: 'toast', message: 'Dataflows connector is not wired yet — export to CSV/Parquet or use Web / SQL.' },
+    action: { kind: 'toast', message: 'Dataflows connector is not wired yet â€” export to CSV/Parquet or use Web / SQL.' },
   },
   {
     id: 'dataverse',
     title: 'Dataverse',
-    description: 'Microsoft Dataverse / Dynamics tables — OData or SQL gateway.',
+    description: 'Microsoft Dataverse / Dynamics tables â€” OData or SQL gateway.',
     iconClass: 'fa-solid fa-cloud',
     action: { kind: 'toast', message: 'Dataverse: use OData feed URL from the Web tab when available from your tenant.' },
   },
   {
     id: 'sql-server',
     title: 'SQL Server',
-    description: 'Relational database — connection profile (in-app, future gateway).',
+    description: 'Relational database â€” connection profile (in-app, future gateway).',
     iconClass: 'fa-solid fa-server',
     action: { kind: 'sql', platform: 'SQL Server' },
   },
   {
     id: 'analysis-services',
     title: 'Analysis Services',
-    description: 'Tabular / multidimensional — use SQL transport or export to CSV for this client.',
+    description: 'Tabular / multidimensional â€” use SQL transport or export to CSV for this client.',
     iconClass: 'fa-solid fa-cube',
     action: { kind: 'toast', message: 'Analysis Services: use SQL connection string profile below, or export a slice to CSV.' },
   },
@@ -2397,7 +2666,7 @@ const SI_GET_DATA_COMMON_SOURCES: SiGetDataSourceEntry[] = [
   {
     id: 'snowflake',
     title: 'Snowflake',
-    description: 'Cloud warehouse — JDBC/ODBC-style profile fields.',
+    description: 'Cloud warehouse â€” JDBC/ODBC-style profile fields.',
     iconClass: 'fa-solid fa-snowflake',
     action: { kind: 'sql', platform: 'Snowflake' },
   },
@@ -2411,26 +2680,26 @@ const SI_GET_DATA_COMMON_SOURCES: SiGetDataSourceEntry[] = [
   {
     id: 'web',
     title: 'Web',
-    description: 'Anonymous HTTP — GeoJSON, ZIP, KML, or other file URLs.',
+    description: 'Anonymous HTTP â€” GeoJSON, ZIP, KML, or other file URLs.',
     iconClass: 'fa-solid fa-globe',
     action: { kind: 'tab', tab: 'url', statusHint: 'Paste a direct https URL to GeoJSON, ZIP (shapefile/KMZ), or KML.' },
   },
   {
     id: 'odata',
     title: 'OData feed',
-    description: 'Open Data Protocol — public TripPin sample URL prefilled; replace with your service root.',
+    description: 'Open Data Protocol â€” public TripPin sample URL prefilled; replace with your service root.',
     iconClass: 'fa-solid fa-table-list',
     action: {
       kind: 'tab',
       tab: 'url',
       presetRemoteUrl: 'https://services.odata.org/V4/TripPinServiceRW/',
-      statusHint: 'OData: URL tab opened — replace with your $metadata root or file export URL when supported.',
+      statusHint: 'OData: URL tab opened â€” replace with your $metadata root or file export URL when supported.',
     },
   },
   {
     id: 'rest-json',
     title: 'REST API (JSON)',
-    description: 'GET endpoint returning GeoJSON or downloadable JSON — same as From URL.',
+    description: 'GET endpoint returning GeoJSON or downloadable JSON â€” same as From URL.',
     iconClass: 'fa-solid fa-code',
     action: { kind: 'tab', tab: 'url', statusHint: 'REST JSON: use From URL with a stable GeoJSON or file endpoint.' },
   },
@@ -2444,21 +2713,21 @@ const SI_GET_DATA_COMMON_SOURCES: SiGetDataSourceEntry[] = [
   {
     id: 'shapefile',
     title: 'Shapefile (ZIP)',
-    description: 'Esri shapefile compressed in .zip — use Upload.',
+    description: 'Esri shapefile compressed in .zip â€” use Upload.',
     iconClass: 'fa-solid fa-draw-polygon',
-    action: { kind: 'tab', tab: 'upload', statusHint: 'Shapefile: Upload tab — .zip containing .shp/.dbf/.shx.' },
+    action: { kind: 'tab', tab: 'upload', statusHint: 'Shapefile: Upload tab â€” .zip containing .shp/.dbf/.shx.' },
   },
   {
     id: 'kml-kmz',
     title: 'KML / KMZ',
-    description: 'Google Earth / OGC KML — upload or URL.',
+    description: 'Google Earth / OGC KML â€” upload or URL.',
     iconClass: 'fa-solid fa-location-dot',
     action: { kind: 'tab', tab: 'upload', statusHint: 'KML/KMZ: use Upload, or paste a .kml/.kmz URL under From URL.' },
   },
   {
     id: 'arcgis',
     title: 'ArcGIS Feature Service',
-    description: 'FeatureServer layer URL — discover and add layers.',
+    description: 'FeatureServer layer URL â€” discover and add layers.',
     iconClass: 'fa-solid fa-link',
     action: { kind: 'tab', tab: 'arcgis', statusHint: 'ArcGIS: paste Feature Service URL, then Connect & Discover.' },
   },
@@ -2490,7 +2759,7 @@ function siGetDataMenuSections(): Array<{ id: string; title: string; sources: Si
 
 type EnvironmentalIndexId = 'NDWI' | 'NDMI' | 'EVI' | 'SAVI' | 'NDSI' | 'LST';
 
-/** ArcGIS-style tool ids: order matches vertical toolbar (draw → sep → selection). */
+/** ArcGIS-style tool ids: order matches vertical toolbar (draw â†’ sep â†’ selection). */
 type MapDrawTool =
   | 'select'
   | 'point'
@@ -2525,19 +2794,19 @@ function clampUnit(t: number) {
 function environmentalIndicatorSummary(indexId: EnvironmentalIndexId, mean: number): string {
   if (indexId === 'LST') {
     if (mean < 22) return 'Cooler surface temperatures across the sampled period.';
-    if (mean < 32) return 'Moderate land-surface temperatures — typical mixed land.';
-    return 'Warm thermal signal — possible bare soil, urban, or water stress.';
+    if (mean < 32) return 'Moderate land-surface temperatures â€” typical mixed land.';
+    return 'Warm thermal signal â€” possible bare soil, urban, or water stress.';
   }
   if (mean < 0.2) {
-    return 'Low vegetation response — bare soil, built-up areas, or water (typical in arid regions).';
+    return 'Low vegetation response â€” bare soil, built-up areas, or water (typical in arid regions).';
   }
   if (mean < 0.4) {
-    return 'Sparse or stressed vegetation — shrubs, sparse crops, or mixed desert patches.';
+    return 'Sparse or stressed vegetation â€” shrubs, sparse crops, or mixed desert patches.';
   }
   if (mean < 0.6) {
-    return 'Moderate healthy vegetation — grassland or active agricultural canopy.';
+    return 'Moderate healthy vegetation â€” grassland or active agricultural canopy.';
   }
-  return 'Strong vegetation signal — dense canopy or well-irrigated crops.';
+  return 'Strong vegetation signal â€” dense canopy or well-irrigated crops.';
 }
 
 function createPointFeature(lng: number, lat: number) {
@@ -2847,7 +3116,7 @@ function arcgisLegendPreviewRows(
       });
     const sliced = sorted.slice(0, max);
     return sliced.map((br: any, i: number) => {
-      const label = `${br?.minValue ?? ''} – ${br?.maxValue ?? ''}`;
+      const label = `${br?.minValue ?? ''} â€“ ${br?.maxValue ?? ''}`;
       const color =
         ramp != null
           ? rampColorAt(ramp, i, Math.max(sliced.length, 1))
@@ -3009,19 +3278,19 @@ export default function SatelliteIntelligence() {
   const [remoteSensingProvider, setRemoteSensingProvider] = useState('sentinel-hub');
   const [remoteSensingCollection, setRemoteSensingCollection] = useState('sentinel-2-l2a');
   const [selectedDate, setSelectedDate] = useState<Date>(() => getDefaultSentinelImageryDate());
-  /** When true, imagery date follows latest scene − 1 day for the active AOI. */
+  /** When true, imagery date follows latest scene âˆ’ 1 day for the active AOI. */
   const [imageryDateAutoFollow, setImageryDateAutoFollow] = useState(true);
   const [sentinelSceneCatalog, setSentinelSceneCatalog] = useState<SentinelSceneCatalog | null>(null);
   const [isFetchingSentinelScenes, setIsFetchingSentinelScenes] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
-  /** Raster/vector MapGL children — toggled off during basemap style swap; dock stays mounted via isMapLoaded. */
+  /** Raster/vector MapGL children â€” toggled off during basemap style swap; dock stays mounted via isMapLoaded. */
   const [isMapStyleReady, setIsMapStyleReady] = useState(false);
   /** Bumps when the Mapbox style is ready again so overlay sources remount on the canvas. */
   const [customLayersMapEpoch, setCustomLayersMapEpoch] = useState(0);
   const prevMapStyleReadyRef = useRef(isMapStyleReady);
   const [layerPopupCfgPickId, setLayerPopupCfgPickId] = useState<string | null>(null);
   const [layerPopupCfgOpen, setLayerPopupCfgOpen] = useState(false);
-  /** Layer row “⋯” context menu (ArcGIS-style options). */
+  /** Layer row â€œâ‹¯â€ context menu (ArcGIS-style options). */
   const [layerOptionsMenuLayerId, setLayerOptionsMenuLayerId] = useState<string | null>(null);
   const [customLayers, setCustomLayers] = useState<CustomLayer[]>(() => {
     if (typeof window === 'undefined') return [];
@@ -3113,7 +3382,7 @@ export default function SatelliteIntelligence() {
   }, [selectedIndex]);
   const [selectedPivotId, setSelectedPivotId] = useState('all');
   const [weeklyComposites, setWeeklyComposites] = useState<WeeklyComposite[]>([]);
-  /** True only after the user (or RS Run path) successfully builds the field timeline — drives Generate ⟷ Stop label. */
+  /** True only after the user (or RS Run path) successfully builds the field timeline â€” drives Generate âŸ· Stop label. */
   const [fieldTimelineSessionActive, setFieldTimelineSessionActive] = useState(false);
   const [stacItems, setStacItems] = useState<any[]>([]);
   const [stacStatus, setStacStatus] = useState('Ready to search Planetary Computer STAC.');
@@ -3183,7 +3452,7 @@ export default function SatelliteIntelligence() {
   );
   const [cropClassificationRunning, setCropClassificationRunning] = useState(false);
   const cropClassificationRunTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** Isolated study AOI for Crop Classification — never mixed with Remote Sensing sketch. */
+  /** Isolated study AOI for Crop Classification â€” never mixed with Remote Sensing sketch. */
   const [cropClassAoiGeometry, setCropClassAoiGeometry] = useState<any | null>(null);
   const [cropClassDrawingModeActive, setCropClassDrawingModeActive] = useState(false);
   const [mapDrawOwner, setMapDrawOwner] = useState<'remote-sensing' | 'crop-classification'>('remote-sensing');
@@ -3218,6 +3487,9 @@ export default function SatelliteIntelligence() {
   const [portalBrowseStatus, setPortalBrowseStatus] = useState('');
   const [isImportingRemoteLayer, setIsImportingRemoteLayer] = useState(false);
   const [activeLayerActionDialog, setActiveLayerActionDialog] = useState<null | { mode: 'table' | 'symbology' | 'legend'; layerId: string }>(null);
+  const [siTableServiceGeojson, setSiTableServiceGeojson] = useState<null | { layerId: string; geojson: any }>(null);
+  const [siTableServiceLoading, setSiTableServiceLoading] = useState(false);
+  const [siTableServiceError, setSiTableServiceError] = useState<string | null>(null);
   const [syncingLayerId, setSyncingLayerId] = useState<string | null>(null);
   const [tableSearchText, setTableSearchText] = useState('');
   const [tableSearchMode, setTableSearchMode] = useState<SiTableSearchMode>('description');
@@ -3300,7 +3572,7 @@ export default function SatelliteIntelligence() {
   const [aoiLayerOpacity, setAoiLayerOpacity] = useState(1);
   /** User-controlled on/off for the base map raster layer(s). */
   const [basemapVisible, setBasemapVisible] = useState(true);
-  /** Unified Measurement tool (Main toolbox) — isolated from AOI drawing. */
+  /** Unified Measurement tool (Main toolbox) â€” isolated from AOI drawing. */
   const [measureMode, setMeasureMode] = useState<MeasureMode | null>(null);
   const [measurePoints, setMeasurePoints] = useState<MeasurePoint[]>([]);
   const [measureFinished, setMeasureFinished] = useState(false);
@@ -3310,7 +3582,7 @@ export default function SatelliteIntelligence() {
   const [measureCompleted, setMeasureCompleted] = useState<
     Array<{ id: string; mode: MeasureMode; points: MeasurePoint[] }>
   >([]);
-  /** Primary AOI from Agro_Structures FeatureServer/21 — drives Sentinel Live GEOMETRY + dataMask clip. */
+  /** Primary AOI from Agro_Structures FeatureServer/21 â€” drives Sentinel Live GEOMETRY + dataMask clip. */
   const agroStructuresPrimaryAoiLoadRef = useRef(false);
   const agroStructuresViewportCacheRef = useRef(new SiViewportFeatureCache());
   const liveViewportFetchAbortRef = useRef<AbortController | null>(null);
@@ -3417,6 +3689,7 @@ export default function SatelliteIntelligence() {
     | 'ai-detection-gis'
     | 'tree-detections'
     | 'hydro-watershed'
+    | 'well-site'
     | 'flood-monitoring'
     | 'table-geo-ai'
   >('source');
@@ -3449,7 +3722,7 @@ export default function SatelliteIntelligence() {
     const ctrl = new AbortController();
     cropAiAbortRef.current = ctrl;
     void pollJob(jobId, job => setCropAiJob(job), ctrl.signal).catch(() => {
-      /* aborted or network error — last snapshot already shown */
+      /* aborted or network error â€” last snapshot already shown */
     });
   }, []);
 
@@ -3462,7 +3735,7 @@ export default function SatelliteIntelligence() {
       mode: 'aoi',
       status: 'queued',
       progress: 0,
-      message: 'Starting…',
+      message: 'Startingâ€¦',
       result: null,
       error: null,
     });
@@ -3488,7 +3761,7 @@ export default function SatelliteIntelligence() {
         mode: 'chip',
         status: 'queued',
         progress: 0,
-        message: 'Starting…',
+        message: 'Startingâ€¦',
         result: null,
         error: null,
       });
@@ -3529,7 +3802,7 @@ export default function SatelliteIntelligence() {
   /**
    * Clip the (rectangular) prediction raster to the AOI polygon using a canvas
    * mask, so only pixels inside the drawn area are shown. The image is stretched
-   * linearly across the bbox on the map, so we map polygon → pixels linearly in
+   * linearly across the bbox on the map, so we map polygon â†’ pixels linearly in
    * lng/lat to keep the clip edge aligned with the AOI outline. Returns a blob URL.
    */
   const clipRasterToAoi = useCallback(
@@ -3700,7 +3973,7 @@ export default function SatelliteIntelligence() {
     base64: string;
   } | null>(null);
   const [geoExplorerBusy, setGeoExplorerBusy] = useState(false);
-  /** Distinguishes full send vs in-place question edit so the UI shows “Updating…” instead of “Thinking…”. */
+  /** Distinguishes full send vs in-place question edit so the UI shows â€œUpdatingâ€¦â€ instead of â€œThinkingâ€¦â€. */
   const [geoExplorerAwaitKind, setGeoExplorerAwaitKind] = useState<'send' | 'edit'>('send');
   const [geoExplorerChatError, setGeoExplorerChatError] = useState('');
   const [geoAiPinLngLat, setGeoAiPinLngLat] = useState<[number, number] | null>(null);
@@ -3714,7 +3987,7 @@ export default function SatelliteIntelligence() {
   const [geoAiPopupMode, setGeoAiPopupMode] = useState<GeoAiPopupMode>(() =>
     readStoredGeoAiPopupMode(siScope.scopedStorageKey(GEO_AI_POPUP_MODE_LS_KEY)),
   );
-  /** When true, row highlight / map identify do not pan or zoom the map (use row “zoom” icon to fly there). */
+  /** When true, row highlight / map identify do not pan or zoom the map (use row â€œzoomâ€ icon to fly there). */
   const [geoAiExplorationMode, setGeoAiExplorationMode] = useState(() => {
     try {
       const v =
@@ -3731,13 +4004,13 @@ export default function SatelliteIntelligence() {
     {},
   );
   const [geoAiTableMapFocusKey, setGeoAiTableMapFocusKey] = useState<string | null>(null);
-  /** Last Geo AI user message (any model) — drives inspect-popup field pick + map identify context. */
+  /** Last Geo AI user message (any model) â€” drives inspect-popup field pick + map identify context. */
   const geoAiLastUserMapQueryRef = useRef<string>('');
   const geoAiReverseGeocodeKeyRef = useRef<string>('');
   const geoAiSuppressPopupsUntilRef = useRef(0);
   const geoExplorerFileInputRef = useRef<HTMLInputElement | null>(null);
   const geoExplorerInFlightRef = useRef(false);
-  const [geoAiModelTab, setGeoAiModelTab] = useState<'gemini' | 'claude' | 'deepseek' | 'ollama'>('gemini');
+  const [geoAiModelTab, setGeoAiModelTab] = useState<'gemini' | 'claude' | 'deepseek' | 'ollama'>('ollama');
 
   // Preload the local model when the AgroCloud AI Chat (Ollama) tab opens so the
   // first answer returns quickly instead of paying the cold model-load cost.
@@ -3762,7 +4035,7 @@ export default function SatelliteIntelligence() {
   const [geoDeepseekChatError, setGeoDeepseekChatError] = useState('');
   const geoDeepseekInFlightRef = useRef(false);
   const [geoOllamaChatMessages, setGeoOllamaChatMessages] = useState<GeoExplorerMessage[]>([]);
-  // Latest committed messages — read at send time so the async turn doesn't depend
+  // Latest committed messages â€” read at send time so the async turn doesn't depend
   // on the state-updater (which React invokes twice under StrictMode).
   const geoOllamaChatMessagesRef = useRef<GeoExplorerMessage[]>([]);
   geoOllamaChatMessagesRef.current = geoOllamaChatMessages;
@@ -3808,7 +4081,7 @@ export default function SatelliteIntelligence() {
     if (!basemapTileErrorShouldFallback(url, status)) return;
     basemapRasterFallbackRef.current = true;
     setBasemapId(RASTER_BASEMAP_FALLBACK_ID);
-    setStacStatus('Basemap tiles unavailable — using Esri World Imagery.');
+    setStacStatus('Basemap tiles unavailable â€” using Esri World Imagery.');
   }, []);
   const siTableFeatureKeyCacheRef = useRef<Map<object, string>>(new Map());
   const drawnGeometryRef = useRef<any | null>(null);
@@ -3821,7 +4094,7 @@ export default function SatelliteIntelligence() {
   isSketchDrawingActiveRef.current = rsDrawingModeActive || cropClassDrawingModeActive;
   const activeDrawGeomRef = () =>
     mapDrawOwnerRef.current === 'crop-classification' ? cropClassAoiGeometryRef : drawnGeometryRef;
-  /** Primary Layer Source mask (Agro_Structures / AOI Mask Builder) — never mixed with preview sketch. */
+  /** Primary Layer Source mask (Agro_Structures / AOI Mask Builder) â€” never mixed with preview sketch. */
   const primaryLayerSourceMaskRef = useRef<GeoJSON.FeatureCollection | GeoJSON.Feature | null>(null);
   const hasActiveLayerSourceAoiRef = useRef(false);
   const dragRectCircleRef = useRef<null | { kind: 'rectangle' | 'circle' | 'box_select'; start: [number, number] }>(null);
@@ -3844,7 +4117,7 @@ export default function SatelliteIntelligence() {
   // Keep the Measurement panel's clicks/wheel from leaking to the map underneath.
   const measureHudIsolationProps = useMapOverlayIsolation(measurePanelOpen || measureMode != null, { native: true });
   // Fully isolate the floating processing stack (Remote Sensing, Crop Alerts,
-  // Crop AI, AI Detection, Tree, Hydro) from the map — pan/zoom/rotate/wheel and
+  // Crop AI, AI Detection, Tree, Hydro) from the map â€” pan/zoom/rotate/wheel and
   // every pointer/touch gesture stay inside the panel, in all tools and modes.
   const processingPanelIsolationProps = useMapOverlayIsolation(isLayerDropdownOpen, { native: true });
   const mapDrawToolRef = useRef<MapDrawTool>('select');
@@ -4129,7 +4402,7 @@ export default function SatelliteIntelligence() {
             const raw =
               typeof localStorage !== 'undefined' ? localStorage.getItem(DEVELOP_DATA_CONTEXT_LS_KEY) : null;
             if (raw?.trim()) {
-              developAppend = `### Develop Dashboard — Data pane snapshot (JSON)\n${raw.slice(0, 14000)}`;
+              developAppend = `### Develop Dashboard â€” Data pane snapshot (JSON)\n${raw.slice(0, 14000)}`;
             }
           } catch {
             /* ignore */
@@ -4147,7 +4420,7 @@ export default function SatelliteIntelligence() {
           inspectAnchorLngLat:
             geoAiInspectCard != null ? ([geoAiInspectCard.lng, geoAiInspectCard.lat] as [number, number]) : null,
           mapPopup: null,
-          addedLayersHeading: '### Satellite — Added layers (this map — si-env / vector layers)',
+          addedLayersHeading: '### Satellite â€” Added layers (this map â€” si-env / vector layers)',
           attachGisSavedLayers: true,
           extraSystemAppend:
             [geoAiLiveMapStateBlockRef.current, developAppend].filter(Boolean).join('\n\n') || undefined,
@@ -4232,7 +4505,7 @@ export default function SatelliteIntelligence() {
       const apiKey = geminiApiKey.trim();
       if (!apiKey) {
         setGeoExplorerChatError(
-          'Add a Gemini API key: System Settings → API Tokens → Gemini API (saved in this browser), or set VITE_GEMINI_API_KEY at build time. Never commit keys to Git.',
+          'Add a Gemini API key: System Settings â†’ API Tokens â†’ Gemini API (saved in this browser), or set VITE_GEMINI_API_KEY at build time. Never commit keys to Git.',
         );
         return;
       }
@@ -4524,13 +4797,13 @@ export default function SatelliteIntelligence() {
       const title = wmsLayers.find(l => l.name === wmsLayer)?.title || wmsLayer;
       opts.push({
         id: `wms:${wmsLayer}`,
-        label: `Raster · Sentinel WMS · ${title} (${localIsoDate(selectedDate)})`,
+        label: `Raster Â· Sentinel WMS Â· ${title} (${localIsoDate(selectedDate)})`,
       });
     }
     for (const layer of customLayers) {
       const geom = getLayerGeometryKind(layer.geojson);
       const kind = geom === 'point' || geom === 'line' || geom === 'polygon' ? 'Vector' : 'Layer';
-      opts.push({ id: `layer:${layer.id}`, label: `${kind} · ${layer.name}` });
+      opts.push({ id: `layer:${layer.id}`, label: `${kind} Â· ${layer.name}` });
     }
     return opts;
   }, [customLayers, selectedDate, wmsLayer, wmsLayers]);
@@ -4757,7 +5030,7 @@ export default function SatelliteIntelligence() {
       setMapDrawTool('select');
       setMapDragPanEnabled(true);
       setFieldAnalysisStatus(
-        `Preview zone loaded from "${layerName}". Layer Source mask unchanged — analysis is separate.`,
+        `Preview zone loaded from "${layerName}". Layer Source mask unchanged â€” analysis is separate.`,
       );
       return true;
     }
@@ -4792,9 +5065,9 @@ export default function SatelliteIntelligence() {
     let rasterPreviewUrl: string | null = null;
     setSiUploadPhase('reading');
     setSiUploadProgressPct(2);
-    setAddLayerStatus('Reading file…');
+    setAddLayerStatus('Reading fileâ€¦');
     try {
-      // Plain images (PNG/JPG/…) carry no CRS — give the parser the current map
+      // Plain images (PNG/JPG/â€¦) carry no CRS â€” give the parser the current map
       // bounds so the overlay drops onto whatever the user is looking at.
       let imagePlacementBounds: { west: number; south: number; east: number; north: number } | undefined;
       try {
@@ -4809,7 +5082,7 @@ export default function SatelliteIntelligence() {
           };
         }
       } catch {
-        /* no live map bounds — parser falls back to a default extent */
+        /* no live map bounds â€” parser falls back to a default extent */
       }
       const parsed = await parseFile(file, {
         onProgress: pct => setSiUploadProgressPct(Math.round(2 + pct * 0.35)),
@@ -4817,7 +5090,7 @@ export default function SatelliteIntelligence() {
       });
       setSiUploadPhase('processing');
       setSiUploadProgressPct(40);
-      setAddLayerStatus('Processing…');
+      setAddLayerStatus('Processingâ€¦');
 
       if (parsed.type === 'table') {
         throw new Error('This CSV has no latitude/longitude columns. Add lat/lon columns or use GeoJSON / KML / SHP (.zip).');
@@ -4851,7 +5124,7 @@ export default function SatelliteIntelligence() {
             },
           },
         ]);
-        setAddLayerStatus(`Completed: ${rasterFormat} "${layerName}" (${parsed.widthPx}×${parsed.heightPx}px, ${parsed.bands} band(s)).`);
+        setAddLayerStatus(`Completed: ${rasterFormat} "${layerName}" (${parsed.widthPx}Ã—${parsed.heightPx}px, ${parsed.bands} band(s)).`);
         setSiUploadProgressPct(100);
         setSiUploadPhase('completed');
         setAddLayerName('');
@@ -4975,7 +5248,7 @@ export default function SatelliteIntelligence() {
     setSiUploadProgressPct(0);
     const mb = file.size / (1024 * 1024);
     setAddLayerStatus(
-      `Ready: ${file.name} (${mb >= 0.01 ? mb.toFixed(2) : '<0.01'} MB). Click “Import to map” to add.`,
+      `Ready: ${file.name} (${mb >= 0.01 ? mb.toFixed(2) : '<0.01'} MB). Click â€œImport to mapâ€ to add.`,
     );
     event.target.value = '';
   };
@@ -4993,7 +5266,7 @@ export default function SatelliteIntelligence() {
   };
 
   const toggle3DView = () => {
-    // Smooth, in-place toggle — never rebuilds the style; layers / AOI / zoom stay.
+    // Smooth, in-place toggle â€” never rebuilds the style; layers / AOI / zoom stay.
     if (is3DViewRef.current) siExitTo2dView();
     else siEnterGlobe3dView();
   };
@@ -5047,7 +5320,7 @@ export default function SatelliteIntelligence() {
     }
   }, []);
 
-  /** Explicit 3D globe tilt (globe button / WebGL recovery) — does not change pan/zoom/orbit handlers. */
+  /** Explicit 3D globe tilt (globe button / WebGL recovery) â€” does not change pan/zoom/orbit handlers. */
   const siEnterGlobe3dView = useCallback(() => {
     siGlobeWebglFailoverRef.current = false;
     setIs3DView(true);
@@ -5095,7 +5368,7 @@ export default function SatelliteIntelligence() {
   }, [siEnsureGlobeProjection]);
 
   /**
-   * Smooth return to flat 2D — eases pitch/bearing to 0 on the *same* map
+   * Smooth return to flat 2D â€” eases pitch/bearing to 0 on the *same* map
    * instance (no setStyle / fitBounds / jumpTo), so layers, AOI, zoom and center
    * are all preserved. Terrain is left enabled during the tilt-down and only
    * disabled once the camera settles (on moveend) so the transition never pops.
@@ -5221,7 +5494,7 @@ export default function SatelliteIntelligence() {
     try {
       const clean = baseUrl.replace(/[?#].*$/, '').replace(/\/+$/, '');
 
-      // Direct single-layer/table URL (…/MapServer/124 or …/FeatureServer/3): load THAT
+      // Direct single-layer/table URL (â€¦/MapServer/124 or â€¦/FeatureServer/3): load THAT
       // layer's own definition instead of enumerating the service root. Many secured/grouped
       // roots don't list their layers, so stripping to the root would wrongly report
       // "No layers/tables found" even when the specific layer is valid open data.
@@ -5251,7 +5524,7 @@ export default function SatelliteIntelligence() {
         return;
       }
 
-      // Service root URL → enumerate. Accept both MapServer and FeatureServer roots;
+      // Service root URL â†’ enumerate. Accept both MapServer and FeatureServer roots;
       // otherwise assume a service folder and try its FeatureServer endpoint.
       const serviceBase = /\/(?:MapServer|FeatureServer)$/i.test(clean) ? clean : `${clean}/FeatureServer`;
 
@@ -5275,7 +5548,7 @@ export default function SatelliteIntelligence() {
 
       if (!discovered.length) {
         throw new Error(
-          'No layers/tables found in this service URL. For a single layer, paste its full URL ending in the layer id (e.g. …/MapServer/124).',
+          'No layers/tables found in this service URL. For a single layer, paste its full URL ending in the layer id (e.g. â€¦/MapServer/124).',
         );
       }
 
@@ -5298,13 +5571,13 @@ export default function SatelliteIntelligence() {
       return;
     }
     setIsAddingDiscoveredArcgisLayer(true);
-    setAddLayerStatus('Downloading layer geometry…');
+    setAddLayerStatus('Downloading layer geometryâ€¦');
     try {
       const tokenTrim = addLayerToken.trim() || undefined;
       const data = await fetchHostedFeatureLayerGeoJsonFromServiceUrl(selectedDiscoveredArcgisUrl, tokenTrim, {
         onProgress: progress => {
           if (progress.phase === 'page') {
-            setAddLayerStatus(`Downloading geometry… ${progress.featureCount} features (page ${progress.page})`);
+            setAddLayerStatus(`Downloading geometryâ€¦ ${progress.featureCount} features (page ${progress.page})`);
           }
         },
       });
@@ -5368,7 +5641,7 @@ export default function SatelliteIntelligence() {
   const addGisPortalRowToMap = useCallback(
     (row: GisContentRow) => {
       if (isGisContentRowInRecycle(row)) {
-        setPortalBrowseStatus('This item is in the Recycle bin — restore it from GIS Content first.');
+        setPortalBrowseStatus('This item is in the Recycle bin â€” restore it from GIS Content first.');
         setStacStatus('Cannot add a recycled GIS Content item to the map.');
         return;
       }
@@ -5464,7 +5737,7 @@ export default function SatelliteIntelligence() {
         throw new Error('Remote file is a table CSV without latitude/longitude columns.');
       }
       if (parsed.type === 'bim') {
-        throw new Error('IFC must be uploaded from disk — remote IFC import is not enabled here.');
+        throw new Error('IFC must be uploaded from disk â€” remote IFC import is not enabled here.');
       }
       const id = `remote-${Date.now()}`;
       const baseName = addLayerName.trim() || parsed.filename || 'Remote Layer';
@@ -5582,7 +5855,7 @@ export default function SatelliteIntelligence() {
     });
   };
 
-  /** Mount Agro_Structures FS/21 layer shell — viewport lazy-loads features on pan/zoom. */
+  /** Mount Agro_Structures FS/21 layer shell â€” viewport lazy-loads features on pan/zoom. */
   useEffect(() => {
     if (agroStructuresPrimaryAoiLoadRef.current) return;
     agroStructuresPrimaryAoiLoadRef.current = true;
@@ -5591,7 +5864,7 @@ export default function SatelliteIntelligence() {
       const token = getArcgisPortalToken();
       const emptyGeoJson = { type: 'FeatureCollection' as const, features: [] as unknown[] };
       // 1) Mount the layer shell immediately so it ALWAYS appears in the Layers
-      //    panel and can render viewport features — independent of the optional
+      //    panel and can render viewport features â€” independent of the optional
       //    ArcGIS metadata fetch below (which may fail on token/CORS issues).
       if (cancelled) return;
       setCustomLayers(prev => {
@@ -5612,7 +5885,7 @@ export default function SatelliteIntelligence() {
           },
         ];
       });
-      setStacStatus('Agro_Structures ready — loading visible fields for current map extent…');
+      setStacStatus('Agro_Structures ready â€” loading visible fields for current map extentâ€¦');
       // 2) Best-effort: enrich the shell with the ArcGIS layer definition
       //    (fields / symbology). Failure here must NOT remove the layer.
       try {
@@ -5635,7 +5908,7 @@ export default function SatelliteIntelligence() {
           return next;
         });
       } catch (err) {
-        // Metadata is optional — the shell + viewport features still work without it.
+        // Metadata is optional â€” the shell + viewport features still work without it.
         console.warn('[agro-structures] layer definition fetch failed; shell mounted without metadata.', err);
       }
     };
@@ -5678,7 +5951,7 @@ export default function SatelliteIntelligence() {
               : item,
           ),
         );
-        setStacStatus('Agro_Structures cache cleared — reloading visible extent…');
+        setStacStatus('Agro_Structures cache cleared â€” reloading visible extentâ€¦');
         syncLiveViewport(true);
         return;
       }
@@ -5712,7 +5985,7 @@ export default function SatelliteIntelligence() {
     }
   };
 
-  /** Capture viewport bbox in a ref only — no React state during pan/zoom (prevents repaint storms). */
+  /** Capture viewport bbox in a ref only â€” no React state during pan/zoom (prevents repaint storms). */
   const captureLiveViewportExtent = useCallback((): LngLatBBox | null => {
     const map = mapRef.current?.getMap?.() ?? mapRef.current;
     let displayBbox = readMapLngLatBBox(map);
@@ -5783,7 +6056,7 @@ export default function SatelliteIntelligence() {
       const updatedViewport = cache.featureCollectionInBBox(expandLngLatBBox(displayBbox, SI_VIEWPORT_PREFETCH_RATIO));
       const allCached = cache.allFeatureCollection();
       setStacStatus(
-        `Agro_Structures · ${updatedViewport.features.length} visible (${allCached.features.length} cached) · Farm Plots & PIVOT`,
+        `Agro_Structures Â· ${updatedViewport.features.length} visible (${allCached.features.length} cached) Â· Farm Plots & PIVOT`,
       );
     } catch (err) {
       if (!ac.signal.aborted && err instanceof Error && err.name !== 'AbortError') {
@@ -5871,10 +6144,26 @@ export default function SatelliteIntelligence() {
     };
   }, [isMapLoaded, syncLiveViewport, freezeViewportPipeline]);
 
-  const activeDialogLayer = useMemo(
-    () => (activeLayerActionDialog ? customLayers.find(layer => layer.id === activeLayerActionDialog.layerId) ?? null : null),
-    [activeLayerActionDialog, customLayers],
-  );
+  const activeDialogLayer = useMemo(() => {
+    const base = activeLayerActionDialog
+      ? customLayers.find(layer => layer.id === activeLayerActionDialog.layerId) ?? null
+      : null;
+    if (!base) return null;
+    // Viewport-lazy ArcGIS layers (e.g. Agro_Structures) keep an empty/sparse
+    // local geojson, so the attribute table would read no rows. When we've
+    // fetched the full feature set from the service for this layer, merge it in
+    // so columns, rows, search, and selection all work against real data.
+    if (siTableServiceGeojson && siTableServiceGeojson.layerId === base.id) {
+      const localCount = Array.isArray(base.geojson?.features) ? base.geojson.features.length : 0;
+      const fetchedCount = Array.isArray(siTableServiceGeojson.geojson?.features)
+        ? siTableServiceGeojson.geojson.features.length
+        : 0;
+      if (fetchedCount > localCount) {
+        return { ...base, geojson: siTableServiceGeojson.geojson };
+      }
+    }
+    return base;
+  }, [activeLayerActionDialog, customLayers, siTableServiceGeojson]);
 
   const activeLayerColumns = useMemo(() => {
     if (!activeDialogLayer) return [] as string[];
@@ -6007,8 +6296,59 @@ export default function SatelliteIntelligence() {
     setTableShowSelectedOnly(false);
     setTableSelectedKeys(new Set());
     setTableToolsCollapsed(true);
-    setSiLayerTableModalHeight(Math.min(780, Math.max(400, Math.round(window.innerHeight * 0.76))));
+    setSiLayerTableModalHeight(Math.min(520, Math.max(280, Math.round(window.innerHeight * 0.46))));
     setDraggingSiTableField(null);
+  }, [activeLayerActionDialog]);
+
+  // When the attribute table / symbology / legend opens for an ArcGIS-backed
+  // layer whose local geojson is empty/sparse (viewport-lazy layers such as
+  // Agro_Structures), fetch the full feature set straight from the service so
+  // those tools work against real data instead of "No attributes found".
+  useEffect(() => {
+    const mode = activeLayerActionDialog?.mode;
+    if (!activeLayerActionDialog || (mode !== 'table' && mode !== 'symbology' && mode !== 'legend')) {
+      setSiTableServiceGeojson(null);
+      setSiTableServiceLoading(false);
+      setSiTableServiceError(null);
+      return;
+    }
+    const layer = customLayersRef.current.find(l => l.id === activeLayerActionDialog.layerId);
+    if (!layer) return;
+    const localCount = Array.isArray(layer.geojson?.features) ? layer.geojson.features.length : 0;
+    const sourceUrl = typeof layer.sourceUrl === 'string' ? layer.sourceUrl.trim() : '';
+    const isArcgis = layer.source === 'arcgis' || /\/(Feature|Map)Server\/\d+/i.test(sourceUrl);
+    // Local dataset already usable, or nothing to fetch from.
+    if (!sourceUrl || !isArcgis || localCount >= 50) {
+      setSiTableServiceGeojson(null);
+      setSiTableServiceError(null);
+      return;
+    }
+
+    let cancelled = false;
+    const controller = new AbortController();
+    setSiTableServiceLoading(true);
+    setSiTableServiceError(null);
+    setSiTableServiceGeojson(null);
+    void (async () => {
+      try {
+        const token = layer.authToken || getArcgisPortalToken() || undefined;
+        const fc = await fetchArcGisFeatureLayerGeoJson(sourceUrl, { token, signal: controller.signal });
+        if (cancelled) return;
+        setSiTableServiceGeojson({ layerId: layer.id, geojson: fc });
+      } catch (err) {
+        if (cancelled || controller.signal.aborted) return;
+        setSiTableServiceError(
+          err instanceof Error ? err.message : 'Could not load layer attributes from the service.',
+        );
+      } finally {
+        if (!cancelled) setSiTableServiceLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [activeLayerActionDialog]);
 
   const startSiLayerTableModalResize = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -6016,10 +6356,11 @@ export default function SatelliteIntelligence() {
     e.preventDefault();
     const startY = e.clientY;
     const startH = siLayerTableModalHeight;
-    const maxH = Math.max(420, Math.round(window.innerHeight * 0.92));
-    const minH = 360;
+    const maxH = Math.max(360, Math.round(window.innerHeight * 0.85));
+    const minH = 240;
     const onMove = (ev: PointerEvent) => {
-      const delta = ev.clientY - startY;
+      // Bottom-docked: dragging the top edge upward grows the panel.
+      const delta = startY - ev.clientY;
       setSiLayerTableModalHeight(Math.max(minH, Math.min(maxH, Math.round(startH + delta))));
     };
     const onUp = () => {
@@ -6254,7 +6595,7 @@ export default function SatelliteIntelligence() {
             setStacStatus('Could not load a supported ArcGIS renderer (drawingInfo) for this layer.');
             return;
           }
-          /** Keep the service renderer intact — do not slice unique/class lists (applySymbology… caps categories). */
+          /** Keep the service renderer intact â€” do not slice unique/class lists (applySymbologyâ€¦ caps categories). */
           const baked = sanitizeArcgisDrawingInfoForClient(di) as Record<string, unknown> | null;
           if (!baked || !arcgisDrawingInfoToFillPaint(baked)) {
             setStacStatus('Could not apply symbology to this layer renderer.');
@@ -6575,7 +6916,7 @@ export default function SatelliteIntelligence() {
     });
   }, []);
 
-  // ── Drag-to-reorder for user-added layers ───────────────────────────────
+  // â”€â”€ Drag-to-reorder for user-added layers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Moves the dragged layer to the dropped layer's slot (full splice, not a
   // swap) so dragging across several rows lands exactly where the user drops.
   // The customLayers array order drives the on-map draw order.
@@ -6592,6 +6933,22 @@ export default function SatelliteIntelligence() {
       cp.splice(to, 0, moved!);
       return cp;
     });
+  }, []);
+
+  // User-defined draw order for analysis result layers (AOI + Hydro steps).
+  // Holds analysis entry ids (e.g. 'drawn-aoi', 'hydro-elevation') top â†’ bottom.
+  const [analysisLayerOrder, setAnalysisLayerOrder] = useState<string[]>([]);
+  const orderedAnalysisLayerEntryIdsRef = useRef<string[]>([]);
+  const reorderAnalysisLayers = useCallback((draggedId: string, targetId: string) => {
+    if (!draggedId || !targetId || draggedId === targetId) return;
+    const cur = orderedAnalysisLayerEntryIdsRef.current;
+    const from = cur.indexOf(draggedId);
+    const to = cur.indexOf(targetId);
+    if (from < 0 || to < 0 || from === to) return;
+    const cp = [...cur];
+    const [moved] = cp.splice(from, 1);
+    cp.splice(to, 0, moved!);
+    setAnalysisLayerOrder(cp);
   }, []);
 
   const zoomToCustomLayerExtent = useCallback(
@@ -6618,6 +6975,42 @@ export default function SatelliteIntelligence() {
         );
         return;
       }
+      const feats = Array.isArray(layer.geojson?.features) ? layer.geojson.features : [];
+      if (feats.length > 0) {
+        focusGeoJsonOnMap(layer.geojson);
+        return;
+      }
+      // Viewport-lazy ArcGIS layers (e.g. Agro_Structures) hold no local
+      // features until you pan over them, so zoom to the layer's published
+      // service extent instead of the empty geojson bounds.
+      const sourceUrl = typeof layer.sourceUrl === 'string' ? layer.sourceUrl.trim() : '';
+      const isArcgis = layer.source === 'arcgis' || /\/(Feature|Map)Server\/\d+/i.test(sourceUrl);
+      if (sourceUrl && isArcgis) {
+        setStacStatus(`Zooming to â€œ${layer.name}â€â€¦`);
+        void (async () => {
+          try {
+            const pjson = await fetchArcgisLayerPjson(sourceUrl, layer.authToken || getArcgisPortalToken() || undefined);
+            const ext = (pjson?.extent ?? pjson?.fullExtent) as any;
+            const bbox = ext ? arcgisExtentToWgs84BBox(ext) : null;
+            if (!bbox) {
+              setStacStatus(`â€œ${layer.name}â€ has no extent to zoom to.`);
+              return;
+            }
+            const mapInstance = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+            mapInstance?.fitBounds?.(
+              [
+                [bbox[0], bbox[1]],
+                [bbox[2], bbox[3]],
+              ],
+              { padding: 80, duration: 800, maxZoom: 17 },
+            );
+            setStacStatus(`Zoomed to â€œ${layer.name}â€.`);
+          } catch {
+            setStacStatus(`Could not zoom to â€œ${layer.name}â€.`);
+          }
+        })();
+        return;
+      }
       focusGeoJsonOnMap(layer.geojson);
     },
     [customLayers, focusGeoJsonOnMap],
@@ -6629,7 +7022,7 @@ export default function SatelliteIntelligence() {
       const layer = customLayers.find(l => l.id === layerId);
       if (!layer) return;
       const curPct = Math.round((layer.mapOpacity ?? 1) * 100);
-      const raw = window.prompt('Layer opacity (10–100%)', String(curPct));
+      const raw = window.prompt('Layer opacity (10â€“100%)', String(curPct));
       if (raw === null) return;
       const n = Number.parseInt(String(raw).trim().replace(/%/g, ''), 10);
       if (!Number.isFinite(n) || n < 10 || n > 100) {
@@ -6671,7 +7064,7 @@ export default function SatelliteIntelligence() {
     return [...names];
   }, []);
 
-  // Labeling — pick an attribute field; features get a text label drawn from it.
+  // Labeling â€” pick an attribute field; features get a text label drawn from it.
   const promptCustomLayerLabeling = useCallback(
     (layerId: string) => {
       setLayerOptionsMenuLayerId(null);
@@ -6700,12 +7093,12 @@ export default function SatelliteIntelligence() {
       }
       const resolved = next ? fields.find(f => f.toLowerCase() === next.toLowerCase())! : '';
       setCustomLayers(prev => prev.map(l => (l.id === layerId ? { ...l, labelFieldName: resolved || null } : l)));
-      setStacStatus(resolved ? `Labels on — showing "${resolved}".` : 'Labels turned off.');
+      setStacStatus(resolved ? `Labels on â€” showing "${resolved}".` : 'Labels turned off.');
     },
     [customLayers, collectCustomLayerFieldNames],
   );
 
-  // Definition query — filter which features are drawn using a simple `field op value` expression.
+  // Definition query â€” filter which features are drawn using a simple `field op value` expression.
   const promptCustomLayerDefinitionQuery = useCallback(
     (layerId: string) => {
       setLayerOptionsMenuLayerId(null);
@@ -6719,7 +7112,7 @@ export default function SatelliteIntelligence() {
       const list = fields.slice(0, 40).join(', ');
       const current = typeof layer.definitionQueryText === 'string' ? layer.definitionQueryText : '';
       const raw = window.prompt(
-        `Definition query — only matching features are shown.\n` +
+        `Definition query â€” only matching features are shown.\n` +
           `Examples:  crop = wheat   |   area > 1000   |   status != closed   |   name ~ farm\n` +
           `Operators: = , != , > , >= , < , <= , ~ (contains). Leave empty to clear.\n\n` +
           (list ? `Available fields:\n${list}` : ''),
@@ -6731,7 +7124,7 @@ export default function SatelliteIntelligence() {
         setCustomLayers(prev =>
           prev.map(l => (l.id === layerId ? { ...l, definitionQueryText: null, definitionFilter: null } : l)),
         );
-        setStacStatus('Definition query cleared — showing all features.');
+        setStacStatus('Definition query cleared â€” showing all features.');
         return;
       }
       const compiled = siCompileDefinitionQuery(text, fields);
@@ -6756,6 +7149,9 @@ export default function SatelliteIntelligence() {
     };
     const close = (ev: MouseEvent) => {
       const el = ev.target as HTMLElement | null;
+      // The options menu is portalled to <body>, so it is not inside the row host.
+      // Keep it open for any click landing inside the floating popover (so its items fire).
+      if (el && el.closest('.si-env-layer-options-menu')) return;
       const host = document.querySelector(`[data-si-env-layer-options-root="${layerOptionsMenuLayerId}"]`);
       if (host && el && host.contains(el)) return;
       setLayerOptionsMenuLayerId(null);
@@ -6914,7 +7310,7 @@ export default function SatelliteIntelligence() {
   );
 
   const pivots = useMemo<PivotFeature[]>(() => {
-    /** Pivot polygons must not float as a “phantom” layer when the user turned the vector layer off. */
+    /** Pivot polygons must not float as a â€œphantomâ€ layer when the user turned the vector layer off. */
     const uploaded = customLayers.find(
       layer =>
         layer.visible !== false &&
@@ -7061,11 +7457,11 @@ export default function SatelliteIntelligence() {
       return;
     }
     setFieldTimelineSessionActive(true);
-    setFieldAnalysisStatus('Loading Sentinel statistics for AOI…');
+    setFieldAnalysisStatus('Loading Sentinel statistics for AOIâ€¦');
     void aoiLiveTimeSeries.refresh().then(() => {
       if (aoiLiveTimeSeries.source === 'live' && aoiLiveTimeSeries.weekly.length) {
         setFieldAnalysisStatus(
-          `Live timeline: ${aoiLiveTimeSeries.weekly.length} week(s) · ${aoiStatsSampleMode === 'pixel' ? 'pixel' : 'AOI mean'} · ${selectedIndexConfig.label}.`,
+          `Live timeline: ${aoiLiveTimeSeries.weekly.length} week(s) Â· ${aoiStatsSampleMode === 'pixel' ? 'pixel' : 'AOI mean'} Â· ${selectedIndexConfig.label}.`,
         );
       } else if (aoiLiveTimeSeries.error) {
         setFieldAnalysisStatus(aoiLiveTimeSeries.error);
@@ -7112,12 +7508,12 @@ export default function SatelliteIntelligence() {
   const flyToStacItemExtent = (item: any) => {
     const geom = stacItemFootprintGeometry(item);
     if (!geom) {
-      setStacStatus('لا توجد هندسة footprint لهذا العنصر.');
+      setStacStatus('Ù„Ø§ ØªÙˆØ¬Ø¯ Ù‡Ù†Ø¯Ø³Ø© footprint Ù„Ù‡Ø°Ø§ Ø§Ù„Ø¹Ù†ØµØ±.');
       return;
     }
     const b = getGeoJsonBounds({ type: 'Feature', geometry: geom, properties: {} });
     if (!b) {
-      setStacStatus('لا يمكن حساب الحدود لهذا العنصر.');
+      setStacStatus('Ù„Ø§ ÙŠÙ…ÙƒÙ† Ø­Ø³Ø§Ø¨ Ø§Ù„Ø­Ø¯ÙˆØ¯ Ù„Ù‡Ø°Ø§ Ø§Ù„Ø¹Ù†ØµØ±.');
       return;
     }
     const map = mapRef.current?.getMap?.() ?? mapRef.current;
@@ -7138,18 +7534,18 @@ export default function SatelliteIntelligence() {
       if (gbounds) bbox = [...gbounds];
     }
     if (!candidates.length || !bbox || bbox.length < 4) {
-      setStacStatus('لا توجد صورة مصغّرة أو حدود bbox لهذا العنصر.');
+      setStacStatus('Ù„Ø§ ØªÙˆØ¬Ø¯ ØµÙˆØ±Ø© Ù…ØµØºÙ‘Ø±Ø© Ø£Ùˆ Ø­Ø¯ÙˆØ¯ bbox Ù„Ù‡Ø°Ø§ Ø§Ù„Ø¹Ù†ØµØ±.');
       return;
     }
     const [w, s, e, n] = bbox;
     if (![w, s, e, n].every(Number.isFinite)) {
-      setStacStatus('بيانات bbox غير صالحة لهذا العنصر.');
+      setStacStatus('Ø¨ÙŠØ§Ù†Ø§Øª bbox ØºÙŠØ± ØµØ§Ù„Ø­Ø© Ù„Ù‡Ø°Ø§ Ø§Ù„Ø¹Ù†ØµØ±.');
       return;
     }
-    setStacStatus('جارٍ تحميل المعاينة على الخريطة…');
+    setStacStatus('Ø¬Ø§Ø±Ù ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ù…Ø¹Ø§ÙŠÙ†Ø© Ø¹Ù„Ù‰ Ø§Ù„Ø®Ø±ÙŠØ·Ø©â€¦');
     const blobUrl = await fetchStacMapOverlayBlobUrl(candidates);
     if (!blobUrl) {
-      setStacStatus('تعذر تحميل صورة المعاينة على الخريطة (تحقق من الاتصال أو جرّب عنصراً آخر).');
+      setStacStatus('ØªØ¹Ø°Ø± ØªØ­Ù…ÙŠÙ„ ØµÙˆØ±Ø© Ø§Ù„Ù…Ø¹Ø§ÙŠÙ†Ø© Ø¹Ù„Ù‰ Ø§Ù„Ø®Ø±ÙŠØ·Ø© (ØªØ­Ù‚Ù‚ Ù…Ù† Ø§Ù„Ø§ØªØµØ§Ù„ Ø£Ùˆ Ø¬Ø±Ù‘Ø¨ Ø¹Ù†ØµØ±Ø§Ù‹ Ø¢Ø®Ø±).');
       return;
     }
     setStacMapThumb(prev => {
@@ -7166,7 +7562,7 @@ export default function SatelliteIntelligence() {
           ? `STAC imagery: ${itemId}`
           : 'STAC imagery preview',
     );
-    setStacStatus(`معاينة على الخريطة: ${String(item.id ?? '')}`);
+    setStacStatus(`Ù…Ø¹Ø§ÙŠÙ†Ø© Ø¹Ù„Ù‰ Ø§Ù„Ø®Ø±ÙŠØ·Ø©: ${String(item.id ?? '')}`);
   };
 
   useEffect(() => {
@@ -7840,8 +8236,8 @@ export default function SatelliteIntelligence() {
     const delta = m[m.length - 1] - m[0];
     const eps = selectedIndex === 'LST' ? 0.5 : 0.02;
     if (Math.abs(delta) < eps) return { tone: 'stable' as const, text: 'Nearly stable across weeks in this preview.' };
-    if (delta > 0) return { tone: 'up' as const, text: `Rising signal (≈ ${delta.toFixed(3)} last − first week).` };
-    return { tone: 'down' as const, text: `Falling signal (≈ ${Math.abs(delta).toFixed(3)} last − first week).` };
+    if (delta > 0) return { tone: 'up' as const, text: `Rising signal (â‰ˆ ${delta.toFixed(3)} last âˆ’ first week).` };
+    return { tone: 'down' as const, text: `Falling signal (â‰ˆ ${Math.abs(delta).toFixed(3)} last âˆ’ first week).` };
   }, [weeklyComposites, selectedIndex]);
 
   const recomputeDrawnAoiStats = (geometry: any | null) => {
@@ -8206,7 +8602,7 @@ export default function SatelliteIntelligence() {
     const apiKey = geminiApiKey.trim();
     if (!apiKey) {
       setGeoExplorerChatError(
-        'Add a Gemini API key: System Settings → API Tokens → Gemini API (saved in this browser), or set VITE_GEMINI_API_KEY at build time. Never commit keys to Git.'
+        'Add a Gemini API key: System Settings â†’ API Tokens â†’ Gemini API (saved in this browser), or set VITE_GEMINI_API_KEY at build time. Never commit keys to Git.'
       );
       return;
     }
@@ -8418,7 +8814,7 @@ export default function SatelliteIntelligence() {
     const apiKey = claudeApiKey.trim();
     if (!apiKey) {
       setGeoAiChatError(
-        'Add a Claude API key: System Settings → API Tokens → Claude API (Anthropic), or set VITE_CLAUDE_API_KEY at build time. Never commit keys to Git.',
+        'Add a Claude API key: System Settings â†’ API Tokens â†’ Claude API (Anthropic), or set VITE_CLAUDE_API_KEY at build time. Never commit keys to Git.',
       );
       return;
     }
@@ -8539,7 +8935,7 @@ export default function SatelliteIntelligence() {
     const apiKey = deepseekApiKey.trim();
     if (!apiKey) {
       setGeoDeepseekChatError(
-        'Add a DeepSeek API key: System Settings → API Tokens → DeepSeek, or set VITE_DEEPSEEK_API_KEY at build time. Never commit keys to Git.',
+        'Add a DeepSeek API key: System Settings â†’ API Tokens â†’ DeepSeek, or set VITE_DEEPSEEK_API_KEY at build time. Never commit keys to Git.',
       );
       return;
     }
@@ -8662,7 +9058,7 @@ export default function SatelliteIntelligence() {
     const model = ollamaConfig.model.trim();
     if (!baseUrl) {
       setGeoOllamaChatError(
-        'Set the Ollama server URL: System Settings → API Tokens → Ollama (default http://localhost:11434), or VITE_OLLAMA_BASE_URL. Run "ollama serve" and pull a model first.',
+        'Set the Ollama server URL: System Settings â†’ API Tokens â†’ Ollama (default http://localhost:11434), or VITE_OLLAMA_BASE_URL. Run "ollama serve" and pull a model first.',
       );
       return;
     }
@@ -8679,7 +9075,7 @@ export default function SatelliteIntelligence() {
 
     const userMsg: GeoExplorerMessage = { id: userId, role: 'user', parts: [{ type: 'text', text: trimmed }] };
     const historyWithUser = [...geoOllamaChatMessagesRef.current, userMsg];
-    // Pure state update (no side effects in the updater → safe under StrictMode).
+    // Pure state update (no side effects in the updater â†’ safe under StrictMode).
     setGeoOllamaChatMessages(prev => [...prev, userMsg]);
     queueMicrotask(async () => {
         try {
@@ -8748,7 +9144,7 @@ export default function SatelliteIntelligence() {
           }));
           // Try local Ollama first (streamed token-by-token for a fast-feeling
           // reply); on failure, automatically fall back to a cloud provider whose
-          // key is configured (DeepSeek → Gemini) so the chat keeps working even
+          // key is configured (DeepSeek â†’ Gemini) so the chat keeps working even
           // when the daemon is down / not installed.
           const aid =
             typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -8771,7 +9167,7 @@ export default function SatelliteIntelligence() {
               turns,
               userMessage: trimmed,
               onToken: delta => {
-                if (!streamed) setGeoOllamaBusy(false); // first token → drop the "Thinking…" indicator
+                if (!streamed) setGeoOllamaBusy(false); // first token â†’ drop the "Thinkingâ€¦" indicator
                 streamed += delta;
                 setAssistantText(streamed);
               },
@@ -8784,14 +9180,14 @@ export default function SatelliteIntelligence() {
             setAssistantText(''); // discard any partial Ollama output before the fallback answer
             if (dsKey) {
               const fb = await agroChatWithDeepSeek({ apiKey: dsKey, system, turns, userMessage: trimmed });
-              reply = `> ⚠️ Ollama unavailable (${ollamaMsg}). Answered with DeepSeek fallback.\n\n${fb}`;
+              reply = `> âš ï¸ Ollama unavailable (${ollamaMsg}). Answered with DeepSeek fallback.\n\n${fb}`;
             } else if (gemKey) {
               const fb = await agroChatWithGemini({ apiKey: gemKey, systemInstruction: system, turns, userMessage: trimmed });
-              reply = `> ⚠️ Ollama unavailable (${ollamaMsg}). Answered with Gemini fallback.\n\n${fb}`;
+              reply = `> âš ï¸ Ollama unavailable (${ollamaMsg}). Answered with Gemini fallback.\n\n${fb}`;
             } else {
               setGeoOllamaChatMessages(h => h.filter(m => m.id !== aid)); // remove the empty bubble
               throw new Error(
-                `${ollamaMsg}. No fallback provider configured — add a DeepSeek or Gemini key in System Settings → API Tokens to keep chatting when Ollama is offline.`,
+                `${ollamaMsg}. No fallback provider configured â€” add a DeepSeek or Gemini key in System Settings â†’ API Tokens to keep chatting when Ollama is offline.`,
               );
             }
             setAssistantText(reply);
@@ -8824,7 +9220,7 @@ export default function SatelliteIntelligence() {
     e.target.value = '';
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      setGeoExplorerChatError('Please attach an image file (PNG, JPEG, WebP, …).');
+      setGeoExplorerChatError('Please attach an image file (PNG, JPEG, WebP, â€¦).');
       return;
     }
     const reader = new FileReader();
@@ -8900,7 +9296,7 @@ export default function SatelliteIntelligence() {
     });
     if (!created) {
       if (!opts?.silent) {
-        setFieldAnalysisStatus('Overlap with an existing field — adjust or turn off “no overlap”.');
+        setFieldAnalysisStatus('Overlap with an existing field â€” adjust or turn off â€œno overlapâ€.');
       }
       return false;
     }
@@ -8941,7 +9337,7 @@ export default function SatelliteIntelligence() {
       setSelectedFieldId(null);
       if (hasActiveLayerSourceAoiRef.current) {
         setFieldAnalysisStatus(
-          'Preview zone saved — charts and spot analysis use this area only; Layer Source mask is unchanged.',
+          'Preview zone saved â€” charts and spot analysis use this area only; Layer Source mask is unchanged.',
         );
       } else {
         registerMultiAoiWorkspace(next, `Drawn AOI ${multiAoiItems.length + 1}`, 'drawn', { setActiveFirst: true });
@@ -9200,7 +9596,7 @@ export default function SatelliteIntelligence() {
     ]);
     applyMapDrawTool('polygon');
     setRsDrawingModeActive(true);
-    setStacStatus('Sketch layer created — draw on the map to add features.');
+    setStacStatus('Sketch layer created â€” draw on the map to add features.');
   }, []);
 
   const handleMapToolboxAddGisLayerAction = useCallback((action: MapToolboxAddGisLayerAction) => {
@@ -9376,7 +9772,7 @@ export default function SatelliteIntelligence() {
     applyMapDrawTool(tool);
   }, []);
 
-  /* ── Unified Measurement tool (Main toolbox): isolated multi-mode measuring ── */
+  /* â”€â”€ Unified Measurement tool (Main toolbox): isolated multi-mode measuring â”€â”€ */
   /** Sample terrain elevation (m) at a coordinate when 3D terrain is active. */
   const sampleMeasureElevation = useCallback((lng: number, lat: number): number | null => {
     const map = mapRef.current?.getMap?.() ?? mapRef.current;
@@ -9417,7 +9813,7 @@ export default function SatelliteIntelligence() {
   }, [archiveFinishedMeasure]);
 
   const openMeasurePanel = useCallback(() => {
-    // Measurement works in isolation — turn off any AOI drawing first.
+    // Measurement works in isolation â€” turn off any AOI drawing first.
     if (rsDrawingModeActiveRef.current) handleRsDrawingModeChange(false);
     if (cropClassDrawingModeActiveRef.current) handleCropClassDrawingModeChange(false);
     applyMapDrawTool('select');
@@ -9487,7 +9883,7 @@ export default function SatelliteIntelligence() {
     const spec = getMeasureModeSpec(mode);
     const pts = measurePointsRef.current;
     let next = pts;
-    // A double-click finish appends a duplicate vertex — drop it.
+    // A double-click finish appends a duplicate vertex â€” drop it.
     if (pts.length >= 2) {
       const a = pts[pts.length - 1];
       const b = pts[pts.length - 2];
@@ -9638,6 +10034,7 @@ export default function SatelliteIntelligence() {
       expandedEnvSection === 'remote-sensing' ||
       expandedEnvSection === 'tree-detections' ||
       expandedEnvSection === 'hydro-watershed' ||
+      expandedEnvSection === 'well-site' ||
       expandedEnvSection === 'flood-monitoring'
     ) {
       setCropClassDrawingModeActive(false);
@@ -9646,7 +10043,7 @@ export default function SatelliteIntelligence() {
     }
   }, [expandedEnvSection]);
 
-  // ── Tree Detections (VHRTrees-style crown detection) ────────────────────
+  // â”€â”€ Tree Detections (VHRTrees-style crown detection) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const treeDetectionsActive = expandedEnvSection === 'tree-detections';
   const treeDetection = useTreeDetection({
     geometry: drawnGeometry ?? null,
@@ -9656,7 +10053,7 @@ export default function SatelliteIntelligence() {
     mode: treeAnalysisMode,
   });
 
-  // Apply the confidence-filter slider: only trees scoring ≥ treeConfidenceMin
+  // Apply the confidence-filter slider: only trees scoring â‰¥ treeConfidenceMin
   // are shown on the map, counted, exported, and zoomed to.
   const treeFilteredGeojson = useMemo<GeoJSON.FeatureCollection | null>(() => {
     const fc = treeDetection.result?.geojson;
@@ -9714,16 +10111,23 @@ export default function SatelliteIntelligence() {
 
   const treeDetectionOverlayData = treeFilteredGeojson;
 
-  // ── Hydro Watershed Workflow (DEM → flow → streams → basin → mesh) ───────
+  // â”€â”€ Hydro Watershed Workflow (DEM â†’ flow â†’ streams â†’ basin â†’ mesh) â”€â”€â”€â”€â”€â”€â”€
   const hydroWatershedActive = expandedEnvSection === 'hydro-watershed';
   // Stream-density sensitivity is fixed at the balanced default (slider removed).
   const [hydroSensitivity] = useState(0.5);
-  // Stream classification model — switchable on the map (Strahler ↔ Shreve).
+  // Stream classification model â€” switchable on the map (Strahler â†” Shreve).
   const [hydroStreamModel, setHydroStreamModel] = useState<'strahler' | 'shreve'>('strahler');
+  // Contour interval (m; 0 = auto) and number of drainage basins to delineate.
+  const [hydroContourInterval, setHydroContourInterval] = useState(0);
+  const [hydroBasinCount, setHydroBasinCount] = useState(6);
+  // Show elevation labels on contour lines (toggled from the layer options menu).
+  const [hydroContourLabels, setHydroContourLabels] = useState(true);
   const hydro = useHydroWatershed({
     geometry: drawnGeometry ?? null,
     enabled: hydroWatershedActive,
     sensitivity: hydroSensitivity,
+    contourInterval: hydroContourInterval,
+    basinCount: hydroBasinCount,
   });
   const handleHydroRunAll = useCallback(() => {
     void (async () => {
@@ -9734,7 +10138,68 @@ export default function SatelliteIntelligence() {
     })();
   }, [hydro]);
 
-  // ── Flood Monitoring (SAR-based change detection) ────────────────────────
+  // Re-run Contours / Basins when their option changes (the option refs are
+  // refreshed on render, so re-running here picks up the latest interval/count).
+  const hydroContoursDone = hydro.steps.contours?.status === 'done';
+  const hydroBasinsDone = hydro.steps.basins?.status === 'done';
+  const hydroOptionsReady = useRef(false);
+  useEffect(() => {
+    if (!hydroOptionsReady.current) {
+      hydroOptionsReady.current = true;
+      return;
+    }
+    if (hydroWatershedActive && hydroContoursDone) void hydro.runStep('contours');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydroContourInterval]);
+  useEffect(() => {
+    if (hydroWatershedActive && hydroBasinsDone) void hydro.runStep('basins');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydroBasinCount]);
+
+  // â”€â”€ Well Site Recommendation (Hydro-AI) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const wellSiteActive = expandedEnvSection === 'well-site';
+  const wellSite = useWellSiteRecommendation({
+    geometry: drawnGeometry ?? null,
+    enabled: wellSiteActive,
+    topN: 8,
+  });
+  const handleWellSiteZoomToPoint = useCallback((point: WellSitePoint) => {
+    const map = mapRef.current?.getMap?.() ?? mapRef.current;
+    if (!map?.flyTo) return;
+    map.flyTo({ center: [point.lng, point.lat], zoom: Math.max(map.getZoom?.() ?? 13, 15), duration: 900 });
+  }, []);
+
+  // Publish the latest recommended wells as a first-class Layers-panel layer
+  // (Shapefile-style point layer with the full attribute table). Refreshing the
+  // analysis replaces its geometry/attributes while preserving any user styling.
+  useEffect(() => {
+    const fc = wellSite.result?.pointsGeoJson;
+    if (!fc || !Array.isArray(fc.features) || !fc.features.length) return;
+    setCustomLayers(prev => {
+      const idx = prev.findIndex(l => l.id === WELLSITE_RECOMMENDED_LAYER_ID);
+      if (idx === -1) {
+        const layer: CustomLayer = {
+          id: WELLSITE_RECOMMENDED_LAYER_ID,
+          name: 'Recommended Wells (Hydro-AI)',
+          geojson: fc,
+          visible: true,
+          source: 'api',
+          ephemeral: true,
+          color: '#1e3a8a',
+          fillColor: '#3b82f6',
+          pointRadius: 6,
+          weight: 2,
+          labelFieldName: 'rank',
+        };
+        return [...prev, layer];
+      }
+      const next = prev.slice();
+      next[idx] = { ...next[idx], geojson: fc, markerImageId: undefined };
+      return next;
+    });
+  }, [wellSite.result]);
+
+  // â”€â”€ Flood Monitoring (SAR-based change detection) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const FLOOD_RASTER_LAYER_ID = 'flood-extent-raster';
   const FLOOD_CHANGE_LAYER_ID = 'flood-change-raster';
   const FLOOD_VECTOR_LAYER_ID = 'flood-boundaries-vector';
@@ -10326,6 +10791,7 @@ export default function SatelliteIntelligence() {
       } else {
         ids.push(`${sid}-fill`, `${sid}-line`, `${sid}-circle`);
       }
+      if (layer.markerImageId) ids.push(`${sid}-marker`);
     }
     if (showStacFootprintsOnMap && stacFootprintsGeoJson.features.length > 0) {
       ids.push('si-stac-footprints-fill', 'si-stac-footprints-line');
@@ -11133,7 +11599,7 @@ export default function SatelliteIntelligence() {
     hasActiveLayerSourceAoiRef.current = hasActiveLayerSourceAoi;
   }, [primaryLayerSourceMask, hasActiveLayerSourceAoi]);
 
-  /** User sketch — takes priority over farm / viewport masks for live index WMS clip. */
+  /** User sketch â€” takes priority over farm / viewport masks for live index WMS clip. */
   const drawnAoiClipCollection = useMemo(
     () => normalizeDrawnAoiClipCollection(drawnGeometry),
     [drawnGeometry],
@@ -11143,19 +11609,19 @@ export default function SatelliteIntelligence() {
     [drawnAoiClipCollection],
   );
 
-  /** Crop Classification study AOI — isolated from Remote Sensing sketch layer. */
+  /** Crop Classification study AOI â€” isolated from Remote Sensing sketch layer. */
   const cropClassAoiClipCollection = useMemo(
     () => normalizeDrawnAoiClipCollection(cropClassAoiGeometry),
     [cropClassAoiGeometry],
   );
 
-  /** Sentinel WMS / Live clip — Layer Source only; preview sketch never replaces the farm mask. */
+  /** Sentinel WMS / Live clip â€” Layer Source only; preview sketch never replaces the farm mask. */
   const effectiveSentinelAoiSource = useMemo(
     () => primaryLayerSourceMask ?? drawnGeometry,
     [primaryLayerSourceMask, drawnGeometry],
   );
   /**
-   * Stable Agro Structures AOI for WMS tiles — fixed extent, unaffected by pan/zoom.
+   * Stable Agro Structures AOI for WMS tiles â€” fixed extent, unaffected by pan/zoom.
    * Standalone Remote Sensing: only user-drawn sketch (or mask builder); no full-canvas fallback.
    */
   const sentinelHubWmsTileClipSource = useMemo(() => {
@@ -11178,7 +11644,7 @@ export default function SatelliteIntelligence() {
     agroStructuresLayerAoiMask,
   ]);
   /**
-   * Live Layer canvas source — viewport-scoped on standalone; stable AOI on dashboard embed.
+   * Live Layer canvas source â€” viewport-scoped on standalone; stable AOI on dashboard embed.
    */
   const sentinelHubWmsClipSource = useMemo(() => {
     if (freezeViewportPipeline) {
@@ -11237,11 +11703,11 @@ export default function SatelliteIntelligence() {
     agroStructuresLayerAoiMask,
   ]);
 
-  /** Show on map — raster pairs with AOI clip; no full-canvas overlay without geometry. */
+  /** Show on map â€” raster pairs with AOI clip; no full-canvas overlay without geometry. */
   const sentinelWmsOnMap = sentinelVisible && !!activeWmsLayer && hasRasterDisplayClipAoi;
 
   /**
-   * Drawing an AOI refreshes the clipped tiles but does NOT auto-show the layer —
+   * Drawing an AOI refreshes the clipped tiles but does NOT auto-show the layer â€”
    * the user explicitly enables it via the "Show on map" toggle.
    */
   useEffect(() => {
@@ -11296,11 +11762,11 @@ export default function SatelliteIntelligence() {
       );
     }
     if (agroStructuresLayerAoiMask) {
-      return `Sentinel Live · Farm Plots & PIVOT (${agroStructuresFieldCount})`;
+      return `Sentinel Live Â· Farm Plots & PIVOT (${agroStructuresFieldCount})`;
     }
     if (drawnGeometry && hasActiveLayerSourceAoi) return 'Preview zone (separate from Layer Source)';
     if (drawnGeometry) return 'Index raster (drawn AOI clip)';
-    if (hasActiveLayerSourceAoi) return 'Sentinel Live · Layer Source mask';
+    if (hasActiveLayerSourceAoi) return 'Sentinel Live Â· Layer Source mask';
     return 'Draw an AOI to show index raster';
   }, [
     aoiMaskBuilderSettings,
@@ -11367,7 +11833,7 @@ export default function SatelliteIntelligence() {
 
   const cropAlertResultsOnMap = useMemo(() => {
     if (!cropAlertResults.length) return cropAlertResults;
-    // Always show analyzed beacons on the map — viewport filter hid markers after pan/zoom races.
+    // Always show analyzed beacons on the map â€” viewport filter hid markers after pan/zoom races.
     return cropAlertResults;
   }, [cropAlertResults]);
 
@@ -11531,7 +11997,7 @@ export default function SatelliteIntelligence() {
           for (const r of fallbackResults) cropAlertResultsByKeyRef.current.set(r.fieldKey, r);
           setCropAlertResults([...cropAlertResultsByKeyRef.current.values()]);
           setCropAlertLastRunAt(Date.now());
-          setStacStatus('Crop alerts: using field model — configure Sentinel OAuth for live NDVI.');
+          setStacStatus('Crop alerts: using field model â€” configure Sentinel OAuth for live NDVI.');
         } else if (!ac.signal.aborted) {
           setCropAlertLiveFieldCount(0);
           setCropAlertLastRunAt(Date.now());
@@ -11604,7 +12070,7 @@ export default function SatelliteIntelligence() {
       setRegionalCropTraining(prev => ({
         ...prev,
         loading: true,
-        statusMessage: `Extracting spectral signature for ${field.name}…`,
+        statusMessage: `Extracting spectral signature for ${field.name}â€¦`,
       }))
       try {
         const features = await extractSpectralFeaturesForGeometry(
@@ -11631,7 +12097,7 @@ export default function SatelliteIntelligence() {
           pickMode: false,
           samples: [...prev.samples.filter(s => s.fieldId !== field.id), sample],
           statusMessage: features
-            ? `Sample added: ${field.name} → ${crop.label} (${features.sceneCount} scenes).`
+            ? `Sample added: ${field.name} â†’ ${crop.label} (${features.sceneCount} scenes).`
             : `Sample saved for ${field.name} but no clear Sentinel scenes in season range.`,
         }))
       } catch (err) {
@@ -11689,7 +12155,7 @@ export default function SatelliteIntelligence() {
     setRegionalCropTraining(prev => ({
       ...prev,
       loading: true,
-      statusMessage: 'Calibrating regional crop assignments…',
+      statusMessage: 'Calibrating regional crop assignmentsâ€¦',
     }))
     try {
       const fieldFeatures = new Map<string, Awaited<ReturnType<typeof extractSpectralFeaturesForGeometry>>>()
@@ -11758,7 +12224,7 @@ export default function SatelliteIntelligence() {
       ...season,
       active: true,
       analysisStep: 4,
-      statusMessage: 'Building multi-temporal stack and classifying pixels inside AOI…',
+      statusMessage: 'Building multi-temporal stack and classifying pixels inside AOIâ€¦',
     }));
     setIsWmsOverlayVisible(true);
     setWmsLayer(CROP_CLASSIFICATION_LAYER_ID);
@@ -11768,7 +12234,7 @@ export default function SatelliteIntelligence() {
       setCropClassificationSettings(prev => ({
         ...prev,
         lastRunAt: Date.now(),
-        statusMessage: `Classification layer active · ${season.seasonStart} → ${season.seasonEnd} · clipped to AOI.`,
+        statusMessage: `Classification layer active Â· ${season.seasonStart} â†’ ${season.seasonEnd} Â· clipped to AOI.`,
       }));
       cropClassificationRunTimerRef.current = null;
     }, 650);
@@ -11998,7 +12464,7 @@ export default function SatelliteIntelligence() {
     [currentBasemapEntry],
   );
   /**
-   * Ordered raster specs for the active basemap — only for PURE raster styles
+   * Ordered raster specs for the active basemap â€” only for PURE raster styles
    * (these support the flicker-free in-place tile swap). Styles with terrain
    * (3D Topographic) yield [] here and fall back to a full style rebuild.
    */
@@ -12016,14 +12482,14 @@ export default function SatelliteIntelligence() {
   /** How many raster layers the currently-applied basemap style has. */
   const siBasemapLayerCountRef = useRef(activeBasemapRasterSpecs.length);
 
-  /** Swap raster basemap in-place (same as GIS Map) — avoids black globe when react-map-gl style prop alone updates. */
+  /** Swap raster basemap in-place (same as GIS Map) â€” avoids black globe when react-map-gl style prop alone updates. */
   useEffect(() => {
     const map = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
     if (!map || siBasemapSwapRef.current === activeBasemapId) return;
 
-    // ── Fast path: pure tile swap ───────────────────────────────────────────
+    // â”€â”€ Fast path: pure tile swap â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // When the new basemap has the same raster-layer structure as the current
-    // one (the common case — all single-layer imagery/street basemaps), replace
+    // one (the common case â€” all single-layer imagery/street basemaps), replace
     // ONLY the tile URLs of the already-present sources. The map instance, the
     // style, the camera (center/zoom/pitch/bearing) and every overlay stay
     // untouched: no setStyle, no jumpTo/fitBounds, no flicker, no zoom motion.
@@ -12062,7 +12528,7 @@ export default function SatelliteIntelligence() {
       }
     }
 
-    // ── Fallback path: structural change → rebuild style, preserve camera ────
+    // â”€â”€ Fallback path: structural change â†’ rebuild style, preserve camera â”€â”€â”€â”€
     siBasemapSwapRef.current = activeBasemapId;
     siBasemapLayerCountRef.current = specs.length;
     basemapRasterFallbackRef.current = false;
@@ -12087,7 +12553,7 @@ export default function SatelliteIntelligence() {
     const restoreCamera = () => {
       if (!preservedCamera) return;
       try {
-        // jumpTo is instantaneous — restores the viewport with no animation or reload.
+        // jumpTo is instantaneous â€” restores the viewport with no animation or reload.
         map.jumpTo?.(preservedCamera);
       } catch {
         /* ignore */
@@ -12268,7 +12734,7 @@ export default function SatelliteIntelligence() {
       }
       const map = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
       const n = siMapLoadRetryRef.current;
-      setStacStatus('Map is taking longer than expected to load — retrying globe rendering.');
+      setStacStatus('Map is taking longer than expected to load â€” retrying globe rendering.');
       siEnsureGlobeProjection();
       applySiGlobeCockpitFog(map);
       syncAgroCloudMapboxCamera(map, SI_GLOBE_COCKPIT_2D_VIEW);
@@ -12284,7 +12750,7 @@ export default function SatelliteIntelligence() {
             map.once('style.load', () => setIsMapStyleReady(true));
           }
         } catch {
-          /* ignore — next attempt or 3D failover will recover */
+          /* ignore â€” next attempt or 3D failover will recover */
         }
       }
 
@@ -12332,7 +12798,7 @@ export default function SatelliteIntelligence() {
   }, [isMapStyleReady, activeBasemapId, siEnsureGlobeProjection]);
 
   /**
-   * Genuine WebGL context-loss / context-restored recovery — the real fix for the
+   * Genuine WebGL context-loss / context-restored recovery â€” the real fix for the
    * "globe disappears / goes black" failure when the browser or GPU driver drops the
    * WebGL context (tab backgrounding, GPU reset, memory pressure; common on Edge and
    * low-VRAM machines). Mapbox only emits a generic `error` for this (unreliably), so
@@ -12348,7 +12814,7 @@ export default function SatelliteIntelligence() {
     const cleanup = installSiGlobeWebglContextRecovery(map, {
       onContextLost: () => {
         siWebglContextLostRef.current = true;
-        setStacStatus('Graphics context was lost — restoring the globe…');
+        setStacStatus('Graphics context was lost â€” restoring the globeâ€¦');
       },
       onContextRestored: () => {
         siWebglContextLostRef.current = false;
@@ -12363,7 +12829,7 @@ export default function SatelliteIntelligence() {
           warmAgroCloudTerrainDemSource(map);
           syncAgroCloudTerrain3d(map, activeBasemapId, viewStateLiveRef.current.pitch);
         } catch {
-          /* ignore — staggered retries below still re-assert the globe */
+          /* ignore â€” staggered retries below still re-assert the globe */
         }
         // Force overlays (Added layers) and Sentinel tiles to repaint on the new context.
         sentinelWmsTilesSyncedRef.current = '';
@@ -12502,7 +12968,7 @@ export default function SatelliteIntelligence() {
           : undefined;
       const note = !classes
         ? geoAiClassAreas.loading
-          ? 'per-class area computing…'
+          ? 'per-class area computingΓÇª'
           : geoAiClassAreas.error
             ? `per-class area unavailable (${geoAiClassAreas.error})`
             : !drawnGeometry
@@ -12569,7 +13035,7 @@ export default function SatelliteIntelligence() {
   const geoAiLiveMapStateBlockRef = useRef(geoAiLiveMapStateBlock);
   geoAiLiveMapStateBlockRef.current = geoAiLiveMapStateBlock;
 
-  // Execute MAP_ACTION:{…} commands the assistant emits (layer toggle/opacity,
+  // Execute MAP_ACTION:{ΓÇª} commands the assistant emits (layer toggle/opacity,
   // zoom-to-AOI/layer, basemap switch, fly-to) against the live map.
   const runGeoAiMapCommandsFromReply = useCallback(
     (reply: string) => {
@@ -12698,7 +13164,7 @@ export default function SatelliteIntelligence() {
               /* search failure is non-fatal */
             }
           })();
-          return `Searching the map for "${q}"…`;
+          return `Searching the map for "${q}"ΓÇª`;
         },
         identifyBasemap: (lng, lat) => {
           const map = mapRef.current?.getMap?.() ?? mapRef.current;
@@ -12833,7 +13299,7 @@ export default function SatelliteIntelligence() {
           onToggle: () => toggleCustomLayerVisibility(layer.id, !layer.visible),
         };
       }),
-      // Hydro Watershed results — each completed step is published to the Layers
+      // Hydro Watershed results ΓÇö each completed step is published to the Layers
       // panel automatically with show/hide + export + delete (no AOI background).
       ...HYDRO_STEP_ORDER.filter(stepId => hydro.steps[stepId]?.status === 'done' && !!hydro.steps[stepId]?.result).map(
         stepId => {
@@ -12853,6 +13319,16 @@ export default function SatelliteIntelligence() {
             onToggle: () => hydro.toggleVisible(stepId),
             onExport: canExport ? () => hydro.exportRaster(stepId) : undefined,
             onRemove: () => hydro.removeStep(stepId),
+            ...(stepId === 'contours'
+              ? {
+                  labelsToggle: {
+                    visible: hydroContourLabels,
+                    onToggle: () => setHydroContourLabels(v => !v),
+                    labelOn: 'Hide elevation labels',
+                    labelOff: 'Show elevation labels',
+                  },
+                }
+              : {}),
           };
         },
       ),
@@ -12867,6 +13343,7 @@ export default function SatelliteIntelligence() {
       customLayers,
       drawnGeometry,
       hydro,
+      hydroContourLabels,
       isStacThumbVisible,
       sentinelAoiLabel,
       sentinelWmsOnMap,
@@ -12886,7 +13363,7 @@ export default function SatelliteIntelligence() {
     [addedLayerEntries],
   );
 
-  /** Analysis result layers (AOI + Hydro Watershed steps) — shown in the Main tab. */
+  /** Analysis result layers (AOI + Hydro Watershed steps) ΓÇö shown in the Main tab. */
   const isAnalysisLayerId = useCallback(
     (id: string) => id === 'drawn-aoi' || id.startsWith('hydro-'),
     [],
@@ -12895,13 +13372,26 @@ export default function SatelliteIntelligence() {
     () => systemLayerEntries.filter(layer => isAnalysisLayerId(layer.id)),
     [systemLayerEntries, isAnalysisLayerId],
   );
-  /** Base map / index / preview overlays — shown in the Options tab. */
+  /** Analysis layers reordered by the user's drag order (stable for unranked rows). */
+  const orderedAnalysisLayerEntries = useMemo(() => {
+    if (!analysisLayerOrder.length) return [...analysisLayerEntries];
+    const rank = new Map(analysisLayerOrder.map((id, i) => [id, i]));
+    return [...analysisLayerEntries].sort((a, b) => {
+      const ra = rank.has(a.id) ? rank.get(a.id)! : Number.POSITIVE_INFINITY;
+      const rb = rank.has(b.id) ? rank.get(b.id)! : Number.POSITIVE_INFINITY;
+      return ra - rb;
+    });
+  }, [analysisLayerEntries, analysisLayerOrder]);
+  useEffect(() => {
+    orderedAnalysisLayerEntryIdsRef.current = orderedAnalysisLayerEntries.map(e => e.id);
+  }, [orderedAnalysisLayerEntries]);
+  /** Base map / index / preview overlays ΓÇö shown in the Options tab. */
   const baseOverlayEntries = useMemo(
     () => systemLayerEntries.filter(layer => !isAnalysisLayerId(layer.id)),
     [systemLayerEntries, isAnalysisLayerId],
   );
 
-  /** Shared “Main tools” layers UI: user-added layers (map toolbox Main tab). */
+  /** Shared ΓÇ£Main toolsΓÇ¥ layers UI: user-added layers (map toolbox Main tab). */
   const mapToolboxBrowseLayersPanel = useMemo(
     () => (
       <GisPortalBrowseLayersPanel
@@ -12933,7 +13423,13 @@ export default function SatelliteIntelligence() {
       <div className="si-env-section-card si-map-toolbox-layers-compact">
         {/* Analysis result layers (AOI + Hydro Watershed) are shown here in Main.
             Base map / index / preview overlays live in the Options tab. */}
-        {analysisLayerEntries.length ? <MapToolboxLayerList layers={analysisLayerEntries} /> : null}
+        {orderedAnalysisLayerEntries.length ? (
+          <MapToolboxLayerList
+            layers={orderedAnalysisLayerEntries}
+            reorderable
+            onReorder={reorderAnalysisLayers}
+          />
+        ) : null}
         {userLayerEntries.length ? (
           <div className="si-mt-layer-list si-mt-layer-list--user">
             {userLayerEntries.map(layer => {
@@ -13026,20 +13522,13 @@ export default function SatelliteIntelligence() {
                   'actionable' in layer && layer.actionable && 'sourceLayerId' in layer && layer.sourceLayerId ? (
                     <div className="si-env-layer-actions si-env-layer-actions--menu-only">
                       <div className="si-env-layer-actions-more-wrap">
-                        <button
-                          type="button"
-                          className="si-env-layer-action-btn si-env-layer-action-btn--menu"
-                          title="Layer options (zoom, table, symbology, pop-ups, opacity, order…)"
-                          aria-label={`Layer options for ${layer.label}`}
-                          aria-haspopup="menu"
-                          aria-expanded={layerOptionsMenuLayerId === layer.sourceLayerId}
-                          onClick={e => {
-                            e.stopPropagation();
-                            setLayerOptionsMenuLayerId(v => (v === layer.sourceLayerId ? null : layer.sourceLayerId!));
-                          }}
+                        <SiLayerOptionsMenuPortal
+                          open={layerOptionsMenuLayerId === layer.sourceLayerId}
+                          layerLabel={layer.label}
+                          onToggleOpen={() =>
+                            setLayerOptionsMenuLayerId(v => (v === layer.sourceLayerId ? null : layer.sourceLayerId!))
+                          }
                         >
-                          <i className="fa-solid fa-ellipsis" aria-hidden />
-                        </button>
                         {layerOptionsMenuLayerId === layer.sourceLayerId
                           ? (() => {
                               const lid = layer.sourceLayerId!;
@@ -13075,7 +13564,7 @@ export default function SatelliteIntelligence() {
                                 </button>
                               );
                               return (
-                                <div className="si-env-layer-options-menu" role="menu" onClick={e => e.stopPropagation()}>
+                                <>
                                   {mi('Zoom to layer', 'fa-solid fa-magnifying-glass-location', () => zoomToCustomLayerExtent(lid))}
                                   <div className="si-env-layer-options-menu__sep" role="separator" />
                                   {mi('Attribute table', 'fa-solid fa-table-cells', () => void executeCustomLayerAction('table', lid))}
@@ -13091,7 +13580,7 @@ export default function SatelliteIntelligence() {
                                       hint: isRaster ? 'Pop-up configuration applies to vector layers.' : undefined,
                                     },
                                   )}
-                                  {mi('Layer opacity…', 'fa-solid fa-droplet', () => promptCustomLayerMapOpacity(lid))}
+                                  {mi('Layer opacityΓÇª', 'fa-solid fa-droplet', () => promptCustomLayerMapOpacity(lid))}
                                   <div className="si-env-layer-options-menu__sep" role="separator" />
                                   {mi('Bring forward (draw order)', 'fa-solid fa-arrow-up', () => moveCustomLayerInStack(lid, 1), {
                                     disabled: ix < 0 || ix >= customLayers.length - 1,
@@ -13137,7 +13626,7 @@ export default function SatelliteIntelligence() {
                                     ? mi('Refresh layer data', 'fa-solid fa-rotate-right', () => void executeCustomLayerAction('sync', lid))
                                     : null}
                                   {mi(
-                                    L.labelFieldName ? `Labeling: ${L.labelFieldName}` : 'Labeling…',
+                                    L.labelFieldName ? `Labeling: ${L.labelFieldName}` : 'LabelingΓÇª',
                                     'fa-solid fa-tag',
                                     () => promptCustomLayerLabeling(lid),
                                     {
@@ -13148,7 +13637,7 @@ export default function SatelliteIntelligence() {
                                     },
                                   )}
                                   {mi(
-                                    L.definitionQueryText ? `Definition query: ${L.definitionQueryText}` : 'Definition query…',
+                                    L.definitionQueryText ? `Definition query: ${L.definitionQueryText}` : 'Definition queryΓÇª',
                                     'fa-solid fa-filter',
                                     () => promptCustomLayerDefinitionQuery(lid),
                                     {
@@ -13162,10 +13651,11 @@ export default function SatelliteIntelligence() {
                                   {mi('Remove from map', 'fa-solid fa-trash-can', () => void executeCustomLayerAction('remove', lid), {
                                     danger: true,
                                   })}
-                                </div>
+                                </>
                               );
                             })()
                           : null}
+                        </SiLayerOptionsMenuPortal>
                       </div>
                     </div>
                   ) : undefined
@@ -13179,7 +13669,8 @@ export default function SatelliteIntelligence() {
       </div>
     ),
     [
-      analysisLayerEntries,
+      orderedAnalysisLayerEntries,
+      reorderAnalysisLayers,
       userLayerEntries,
       customLayers,
       draggingLayerId,
@@ -13197,7 +13688,7 @@ export default function SatelliteIntelligence() {
     ],
   );
 
-  /** Layers → Options: basemap, remote sensing overlay, STAC preview & footprints. */
+  /** Layers ΓåÆ Options: basemap, remote sensing overlay, STAC preview & footprints. */
   const layersEnvOptionsLayers = useMemo(
     () => (
       <div className="si-env-section-card si-map-toolbox-layers-compact">
@@ -13229,7 +13720,7 @@ export default function SatelliteIntelligence() {
                   onChange={e => setLayerPopupCfgPickId(e.target.value || null)}
                   aria-label="Select layer for popup configuration"
                 >
-                  <option value="">Select a layer…</option>
+                  <option value="">Select a layerΓÇª</option>
                   {vectorLayers.map(l => (
                     <option key={l.id} value={l.id}>
                       {l.name}
@@ -13246,7 +13737,7 @@ export default function SatelliteIntelligence() {
                 }}
               >
                 <i className="fa-solid fa-gear" aria-hidden />
-                <span>Open configuration…</span>
+                <span>Open configurationΓÇª</span>
               </button>
             </>
           ) : null}
@@ -13464,7 +13955,7 @@ export default function SatelliteIntelligence() {
     ],
   );
 
-  /** Sentinel Hub WMS — AOI clip when geometry exists; hidden when sketch cleared. */
+  /** Sentinel Hub WMS ΓÇö AOI clip when geometry exists; hidden when sketch cleared. */
   const cropClassificationWmsClipSource = useMemo(() => {
     if (!cropClassificationSettings.active) return null;
     return cropClassAoiClipCollection ?? cropClassAoiGeometry ?? null;
@@ -13601,7 +14092,7 @@ export default function SatelliteIntelligence() {
     return [w - padX, s - padY, e + padX, n + padY];
   }, [sentinelHubWmsTileClipSource]);
 
-  /** AOI bounds for Sentinel WMS — keep tiles georeferenced to the mask, not the moving viewport. */
+  /** AOI bounds for Sentinel WMS ΓÇö keep tiles georeferenced to the mask, not the moving viewport. */
   const wmsRasterTileBoundsLngLat = wmsRasterAoiBoundsLngLat;
 
   const resolveSentinelWmsChunkBounds = useCallback(
@@ -13759,13 +14250,13 @@ export default function SatelliteIntelligence() {
       const state = sentinelTileRetryRef.current;
       if (state.timer != null || state.attempts >= MAX_TILE_RETRIES) {
         if (state.attempts >= MAX_TILE_RETRIES) {
-          setStacStatus('Satellite imagery is temporarily unavailable — basemap stays active.');
+          setStacStatus('Satellite imagery is temporarily unavailable ΓÇö basemap stays active.');
         }
         return;
       }
       const delay = siNextBackoffDelayMs(state.attempts, { baseMs: 800, maxMs: 6000 });
       state.attempts += 1;
-      setStacStatus(`Reloading satellite imagery (attempt ${state.attempts}/${MAX_TILE_RETRIES})…`);
+      setStacStatus(`Reloading satellite imagery (attempt ${state.attempts}/${MAX_TILE_RETRIES})ΓÇª`);
       state.timer = window.setTimeout(() => {
         sentinelTileRetryRef.current.timer = null;
         reloadSentinelSources();
@@ -13873,7 +14364,7 @@ export default function SatelliteIntelligence() {
     return computeMeasurement(measureMode, measurePoints, preview, measureUnits, measureFinished, 'active');
   }, [measureMode, measurePoints, measureFinished, pointerLngLat, measureUnits]);
 
-  /** Active sketch + all kept-on-map measurements → one overlay FeatureCollection + label set. */
+  /** Active sketch + all kept-on-map measurements ΓåÆ one overlay FeatureCollection + label set. */
   const measureRender = useMemo(() => {
     const features: any[] = [];
     const labels: Array<{ id: string; lng: number; lat: number; text: string }> = [];
@@ -13969,7 +14460,7 @@ export default function SatelliteIntelligence() {
                       : `${(circleRefineHud.radiusM / 1000).toFixed(2)} km`}
                   </span>
                   <span className="si-draw-live-hud-sep" aria-hidden>
-                    ·
+                    ┬╖
                   </span>
                   <span>
                     D{' '}
@@ -13978,13 +14469,13 @@ export default function SatelliteIntelligence() {
                       : `${(circleRefineHud.diameterM / 1000).toFixed(2)} km`}
                   </span>
                   <span className="si-draw-live-hud-sep" aria-hidden>
-                    ·
+                    ┬╖
                   </span>
                   <span>
                     A{' '}
                     {circleRefineHud.areaHa < 100
                       ? `${circleRefineHud.areaHa.toFixed(2)} ha`
-                      : `${(circleRefineHud.areaHa / 100).toFixed(2)} km²`}
+                      : `${(circleRefineHud.areaHa / 100).toFixed(2)} km┬▓`}
                   </span>
                 </span>
               ) : null}
@@ -14205,7 +14696,7 @@ export default function SatelliteIntelligence() {
                     <button
                       type="button"
                       className="si-geo-ai-pin-open"
-                      title={`Show details — ${geoAiPendingInspectCard.title}`}
+                      title={`Show details ΓÇö ${geoAiPendingInspectCard.title}`}
                       aria-label={`Show details for ${geoAiPendingInspectCard.title}`}
                       onPointerDown={e => e.stopPropagation()}
                       onClick={e => {
@@ -14373,7 +14864,7 @@ export default function SatelliteIntelligence() {
                       className={
                         'si-map-search-pin' + (geoAiPendingInspectCard ? ' si-map-search-pin--clickable' : '')
                       }
-                      title={geoAiPendingInspectCard ? `Show details — ${searchPin.label}` : searchPin.label}
+                      title={geoAiPendingInspectCard ? `Show details ΓÇö ${searchPin.label}` : searchPin.label}
                       role={geoAiPendingInspectCard ? 'button' : undefined}
                       aria-label={geoAiPendingInspectCard ? `Show details for ${searchPin.label}` : undefined}
                       onPointerDown={geoAiPendingInspectCard ? e => e.stopPropagation() : undefined}
@@ -14400,7 +14891,7 @@ export default function SatelliteIntelligence() {
                       filter={['==', ['geometry-type'], 'Polygon']}
                       paint={{
                         'fill-color': hasActiveLayerSourceAoi ? '#f59e0b' : drawStyle.fillColor,
-                        // AOI is shown as a boundary outline only — the fill is fully
+                        // AOI is shown as a boundary outline only ΓÇö the fill is fully
                         // disabled so analysis layers (Watershed / Streams / Basins /
                         // imagery) read clearly over the map with no coloured background.
                         'fill-opacity': 0,
@@ -14490,9 +14981,44 @@ export default function SatelliteIntelligence() {
                           </Source>
                         );
                       }
+                      if (res.render === 'contours') {
+                        return (
+                          <Source key={`hydro-${stepId}`} id={`hydro-${stepId}-source`} type="geojson" data={res.data as any}>
+                            <Layer
+                              id={`hydro-${stepId}-line`}
+                              type="line"
+                              layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+                              paint={{
+                                'line-color': '#92400e',
+                                'line-opacity': 0.85 * userOpacity,
+                                'line-width': ['case', ['==', ['get', 'index'], 1], 1.8, 0.7] as any,
+                              }}
+                            />
+                            <Layer
+                              id={`hydro-${stepId}-label`}
+                              type="symbol"
+                              filter={['==', ['get', 'index'], 1] as any}
+                              layout={{
+                                visibility: hydroContourLabels ? 'visible' : 'none',
+                                'symbol-placement': 'line',
+                                'text-field': ['concat', ['to-string', ['get', 'elev']], ' m'] as any,
+                                'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'] as any,
+                                'text-size': 10,
+                                'symbol-spacing': 220,
+                              }}
+                              paint={{
+                                'text-color': '#7c2d12',
+                                'text-halo-color': 'rgba(255,255,255,0.9)',
+                                'text-halo-width': 1.3,
+                                'text-opacity': userOpacity,
+                              }}
+                            />
+                          </Source>
+                        );
+                      }
                       if (res.render === 'streams') {
                         // Classify by the user-selected model; the paint expression is
-                        // rebuilt whenever `hydroStreamModel` changes → instant re-colour.
+                        // rebuilt whenever `hydroStreamModel` changes ΓåÆ instant re-colour.
                         const isShreve = hydroStreamModel === 'shreve';
                         const prop = isShreve ? 'shreve' : 'strahler';
                         const maxVal = Math.max(
@@ -14500,7 +15026,7 @@ export default function SatelliteIntelligence() {
                           isShreve ? res.maxShreve ?? 1 : res.maxStrahler ?? 1,
                         );
                         const mid = 1 + (maxVal - 1) / 2;
-                        // Distinct colour per order/magnitude: cool (low) → warm (high).
+                        // Distinct colour per order/magnitude: cool (low) ΓåÆ warm (high).
                         const colorRamp: any = isShreve
                           ? [
                               'interpolate',
@@ -14563,6 +15089,24 @@ export default function SatelliteIntelligence() {
                         </Source>
                       );
                     })}
+                {/* Well Site Recommendation (Hydro-AI) ΓÇö suitability heatmap (points render via the managed custom layer). */}
+                {wellSite.result && wellSite.heatVisible ? (
+                  <Source
+                    id="wellsite-heat-source"
+                    type="image"
+                    url={wellSite.result.raster.dataUrl}
+                    coordinates={wellSite.result.raster.coordinates as any}
+                  >
+                    <Layer
+                      id="wellsite-heat-raster"
+                      type="raster"
+                      paint={{
+                        'raster-opacity': (wellSite.result.raster.opacity ?? 0.78) * wellSite.opacity,
+                        'raster-fade-duration': 0,
+                      }}
+                    />
+                  </Source>
+                ) : null}
                 {aoiFieldsMapGeoJson ? (
                   <Source id="si-aoi-fields-source" type="geojson" data={aoiFieldsMapGeoJson as any}>
                     <Layer
@@ -14896,7 +15440,7 @@ export default function SatelliteIntelligence() {
                           onClick={() => setMultiAoiPopupIds(prev => prev.filter(x => x !== pid))}
                           aria-label="Close AOI popup"
                         >
-                          ×
+                          ├ù
                         </button>
                       </div>
                       <div className="si-multi-aoi-popup__row">
@@ -14905,11 +15449,11 @@ export default function SatelliteIntelligence() {
                       </div>
                       <div className="si-multi-aoi-popup__row">
                         <span>Mean</span>
-                        <em>{row.analysis ? row.analysis.mean.toFixed(3) : '—'}</em>
+                        <em>{row.analysis ? row.analysis.mean.toFixed(3) : 'ΓÇö'}</em>
                       </div>
                       <div className="si-multi-aoi-popup__row">
                         <span>Range</span>
-                        <em>{row.analysis ? `${row.analysis.min.toFixed(3)} .. ${row.analysis.max.toFixed(3)}` : '—'}</em>
+                        <em>{row.analysis ? `${row.analysis.min.toFixed(3)} .. ${row.analysis.max.toFixed(3)}` : 'ΓÇö'}</em>
                       </div>
                     </div>
                   </Marker>
@@ -15316,7 +15860,7 @@ export default function SatelliteIntelligence() {
                                     </div>
                                     <div className="si-geo-explorer-bubble si-geo-explorer-bubble--typing">
                                       <i className="fa-solid fa-spinner fa-spin" aria-hidden />{' '}
-                                      {geoExplorerAwaitKind === 'edit' ? 'Updating…' : 'Thinking…'}
+                                      {geoExplorerAwaitKind === 'edit' ? 'UpdatingΓÇª' : 'ThinkingΓÇª'}
                                     </div>
                                   </div>
                                 ) : null}
@@ -15458,7 +16002,7 @@ export default function SatelliteIntelligence() {
                                       <i className="fa-solid fa-robot" />
                                     </div>
                                     <div className="si-geo-explorer-bubble si-geo-explorer-bubble--typing">
-                                      <i className="fa-solid fa-spinner fa-spin" aria-hidden /> Thinking…
+                                      <i className="fa-solid fa-spinner fa-spin" aria-hidden /> ThinkingΓÇª
                                     </div>
                                   </div>
                                 ) : null}
@@ -15501,8 +16045,8 @@ export default function SatelliteIntelligence() {
                                 showAttach={false}
                                 placeholder={
                                   geoAiModelTab === 'claude'
-                                    ? 'e.g. List layer names and fields from the attached GIS / Develop data…'
-                                    : 'e.g. Summarize saved layers and Develop Dashboard fields (same context as Claude)…'
+                                    ? 'e.g. List layer names and fields from the attached GIS / Develop dataΓÇª'
+                                    : 'e.g. Summarize saved layers and Develop Dashboard fields (same context as Claude)ΓÇª'
                                 }
                                 textareaAriaLabel={
                                   geoAiModelTab === 'claude' ? 'Geo AI Claude message' : 'Geo AI DeepSeek message'
@@ -15516,13 +16060,13 @@ export default function SatelliteIntelligence() {
                               <p className="si-geo-explorer-footnote">
                                 {geoAiModelTab === 'claude' ? (
                                   <>
-                                    Powered by Anthropic Claude. Set <code>VITE_CLAUDE_API_KEY</code> or System Settings → API
-                                    Tokens → Claude API. Context is rebuilt each send from GIS Content + Develop Dashboard Data.
+                                    Powered by Anthropic Claude. Set <code>VITE_CLAUDE_API_KEY</code> or System Settings ΓåÆ API
+                                    Tokens ΓåÆ Claude API. Context is rebuilt each send from GIS Content + Develop Dashboard Data.
                                   </>
                                 ) : (
                                   <>
-                                    Powered by DeepSeek. Set <code>VITE_DEEPSEEK_API_KEY</code> or System Settings → API Tokens
-                                    → DeepSeek. Same GIS + Develop context as Claude; rebuilt each send.
+                                    Powered by DeepSeek. Set <code>VITE_DEEPSEEK_API_KEY</code> or System Settings ΓåÆ API Tokens
+                                    ΓåÆ DeepSeek. Same GIS + Develop context as Claude; rebuilt each send.
                                   </>
                                 )}
                               </p>
@@ -15610,7 +16154,7 @@ export default function SatelliteIntelligence() {
                                       <i className="fa-solid fa-robot" />
                                     </div>
                                     <div className="si-geo-explorer-bubble si-geo-explorer-bubble--typing">
-                                      <i className="fa-solid fa-spinner fa-spin" aria-hidden /> Thinking…
+                                      <i className="fa-solid fa-spinner fa-spin" aria-hidden /> ThinkingΓÇª
                                     </div>
                                   </div>
                                 ) : null}
@@ -15635,7 +16179,7 @@ export default function SatelliteIntelligence() {
                                 busy={geoOllamaBusy}
                                 pendingImage={null}
                                 showAttach={false}
-                                placeholder="e.g. Summarize saved layers (runs locally via Ollama — same GIS + Develop context)…"
+                                placeholder="e.g. Summarize saved layers (runs locally via Ollama ΓÇö same GIS + Develop context)ΓÇª"
                                 textareaAriaLabel="Geo AI Ollama message"
                                 availableLayers={geoAiSuggestContext.layers}
                                 availableFields={geoAiSuggestContext.fields}
@@ -15644,14 +16188,14 @@ export default function SatelliteIntelligence() {
                                 smartSuggestionsEnabled={geoAiSmartSuggestionsEnabled}
                               />
                               <p className="si-geo-explorer-footnote">
-                                Powered by local Ollama ({ollamaConfig.model}). Set the server URL &amp; model in System Settings →
-                                API Tokens → Ollama (default http://localhost:11434). Runs offline; same GIS + Develop context as
+                                Powered by local Ollama ({ollamaConfig.model}). Set the server URL &amp; model in System Settings ΓåÆ
+                                API Tokens ΓåÆ Ollama (default http://localhost:11434). Runs offline; same GIS + Develop context as
                                 Claude.
                               </p>
                             </>
                           ) : null}
                           {geoAiPopupMode === 'docked' && geoAiInspectPopups.length > 0 ? (
-                            <div className="si-geo-ai-inspect-dock-panel" role="region" aria-label="Identify — docked">
+                            <div className="si-geo-ai-inspect-dock-panel" role="region" aria-label="Identify ΓÇö docked">
                               {geoAiInspectPopups.map((pop, popIdx) => (
                                 <SiFeatureInspectPopup
                                   key={pop.id}
@@ -15982,7 +16526,7 @@ export default function SatelliteIntelligence() {
                   className={`si-weather-button ${
                     weatherPickOnMap || (isWeatherIntelOpen && weatherLocation) ? 'active' : ''
                   }`}
-                  title="Open-Meteo · Weather Intelligence"
+                  title="Open-Meteo ┬╖ Weather Intelligence"
                   onClick={() => {
                     const engaged = weatherPickOnMap || isWeatherIntelOpen;
                     if (engaged) {
@@ -16046,7 +16590,7 @@ export default function SatelliteIntelligence() {
                     <div className={`si-terrain3d-opt ${is3DView ? '' : 'is-disabled'}`}>
                       <div className="si-terrain3d-opt__row">
                         <span className="si-terrain3d-opt__label">Relief height</span>
-                        <span className="si-terrain3d-opt__val">{terrainExaggeration.toFixed(2)}×</span>
+                        <span className="si-terrain3d-opt__val">{terrainExaggeration.toFixed(2)}├ù</span>
                       </div>
                       <input
                         type="range"
@@ -16209,9 +16753,9 @@ export default function SatelliteIntelligence() {
                         isFetchingSentinelScenes={isFetchingSentinelScenes}
                         imageryDateMeta={
                           imageryDateAutoFollow
-                            ? `Auto · requested ${cropAlertRequestedDate} · scene ${autoLiveScenes.currentSceneDate}${
-                                autoLiveScenes.previousSceneDate ? ` · prev ${autoLiveScenes.previousSceneDate}` : ''
-                              }${isFetchingSentinelScenes ? ' · updating…' : ''}`
+                            ? `Auto ┬╖ requested ${cropAlertRequestedDate} ┬╖ scene ${autoLiveScenes.currentSceneDate}${
+                                autoLiveScenes.previousSceneDate ? ` ┬╖ prev ${autoLiveScenes.previousSceneDate}` : ''
+                              }${isFetchingSentinelScenes ? ' ┬╖ updatingΓÇª' : ''}`
                             : sentinelFetchDate !== wmsDate
                               ? `Nearest scene ${sentinelFetchDate}${sentinelFetchDate !== wmsDate ? ` (req. ${wmsDate})` : ''}`
                               : null
@@ -16338,7 +16882,7 @@ export default function SatelliteIntelligence() {
                           error={treeDetection.error}
                           notice={
                             treeDetection.usedLocalFallback
-                              ? 'Model service offline — used the on-device detector. Start backend/services/tree-detection for higher accuracy.'
+                              ? 'Model service offline ΓÇö used the on-device detector. Start backend/services/tree-detection for higher accuracy.'
                               : null
                           }
                           result={treeDetection.result}
@@ -16351,7 +16895,6 @@ export default function SatelliteIntelligence() {
                           onExport={handleTreeDetectExport}
                           onExportShapefile={handleTreeDetectExportShapefile}
                           onZoomToLayer={handleTreeZoomToLayer}
-                          onClose={() => setIsLayerDropdownOpen(false)}
                         />
                       </div>
                     )}
@@ -16364,12 +16907,40 @@ export default function SatelliteIntelligence() {
                           hasAoi={hydro.hasAoi}
                           streamModel={hydroStreamModel}
                           onStreamModelChange={setHydroStreamModel}
+                          contourInterval={hydroContourInterval}
+                          onContourIntervalChange={setHydroContourInterval}
+                          basinCount={hydroBasinCount}
+                          onBasinCountChange={setHydroBasinCount}
                           onRunStep={hydro.runStep}
                           onToggleVisible={hydro.toggleVisible}
                           onRemoveStep={hydro.removeStep}
                           onExportRaster={hydro.exportRaster}
                           onRunAll={handleHydroRunAll}
-                          onClose={() => setIsLayerDropdownOpen(false)}
+                        />
+                      </div>
+                    )}
+                    {expandedEnvSection === 'well-site' && (
+                      <div className="si-env-section-card si-rs-panel--glass">
+                        <WellSiteRecommendationPanel
+                          status={wellSite.status}
+                          hasAoi={wellSite.hasAoi}
+                          demLoading={wellSite.demLoading}
+                          demError={wellSite.demError}
+                          error={wellSite.error}
+                          points={wellSite.result?.points ?? []}
+                          stats={wellSite.result?.stats ?? []}
+                          legendSwatches={wellSite.result?.raster.legend?.swatches ?? []}
+                          heatVisible={wellSite.heatVisible}
+                          opacity={wellSite.opacity}
+                          hasResult={!!wellSite.result}
+                          onRun={wellSite.run}
+                          onToggleHeat={wellSite.toggleHeat}
+                          onOpacityChange={wellSite.setOpacity}
+                          onExportGeoTiff={wellSite.exportHeatGeoTiff}
+                          onExportGeoJson={wellSite.exportPointsGeoJson}
+                          onExportCsv={wellSite.exportPointsCsv}
+                          onExportXlsx={wellSite.exportXlsx}
+                          onZoomToPoint={handleWellSiteZoomToPoint}
                         />
                       </div>
                     )}
@@ -16499,7 +17070,7 @@ export default function SatelliteIntelligence() {
                       id: 'ifc',
                       tab: 'upload' as AddLayerTab,
                       title: 'IFC / BIM model',
-                      sub: 'Import IFC 2×3 or IFC4 as discipline BIM layers on the map.',
+                      sub: 'Import IFC 2├ù3 or IFC4 as discipline BIM layers on the map.',
                       icon: 'fa-solid fa-building',
                       iconStyle: { background: '#ffedd5', color: '#ea580c' },
                     },
@@ -16603,7 +17174,7 @@ export default function SatelliteIntelligence() {
                                 className={`gis-modal-gis-content-add-btn__icon fa-solid ${busy ? 'fa-spinner fa-spin' : 'fa-plus'}`}
                                 aria-hidden
                               />
-                              <span className="gis-modal-gis-content-add-btn__label">{busy ? 'Adding…' : 'Add'}</span>
+                              <span className="gis-modal-gis-content-add-btn__label">{busy ? 'AddingΓÇª' : 'Add'}</span>
                             </button>
                           </li>
                         );
@@ -16634,8 +17205,8 @@ export default function SatelliteIntelligence() {
                       type="button"
                       role="tab"
                       aria-selected={addLayerTab === 'giscontent'}
-                      aria-label="GIS Content — hosted feature layers"
-                      title="GIS Content — saved hosted layers"
+                      aria-label="GIS Content ΓÇö hosted feature layers"
+                      title="GIS Content ΓÇö saved hosted layers"
                       className={(addLayerTab === 'giscontent' ? 'gis-compact-tab active' : 'gis-compact-tab') + ' gis-compact-tab--icon'}
                       onClick={() => setAddLayerTab('giscontent')}
                     >
@@ -16735,7 +17306,7 @@ export default function SatelliteIntelligence() {
                                 className={`gis-modal-gis-content-add-btn__icon fa-solid ${busy ? 'fa-spinner fa-spin' : 'fa-plus'}`}
                                 aria-hidden
                               />
-                              <span className="gis-modal-gis-content-add-btn__label">{busy ? 'Adding…' : 'Add'}</span>
+                              <span className="gis-modal-gis-content-add-btn__label">{busy ? 'AddingΓÇª' : 'Add'}</span>
                             </button>
                           </li>
                         );
@@ -16808,7 +17379,7 @@ export default function SatelliteIntelligence() {
                           onClick={addSelectedDiscoveredArcgisLayer}
                           disabled={!selectedDiscoveredArcgisUrl || isAddingDiscoveredArcgisLayer}
                         >
-                          {isAddingDiscoveredArcgisLayer ? 'Adding…' : 'Add'}
+                          {isAddingDiscoveredArcgisLayer ? 'AddingΓÇª' : 'Add'}
                         </button>
                       </div>
                     </div>
@@ -16868,7 +17439,7 @@ export default function SatelliteIntelligence() {
                             setAddLayerStatus('More spatial formats: use Upload, From URL, Raster, or ArcGIS tabs in the bar above.');
                           }}
                         >
-                          More… <span className="si-get-data-more-hint">(all GIS / BIM upload formats)</span>
+                          MoreΓÇª <span className="si-get-data-more-hint">(all GIS / BIM upload formats)</span>
                         </button>
                       </div>
                     </div>
@@ -16877,7 +17448,7 @@ export default function SatelliteIntelligence() {
                       <button type="button" className="si-get-data-back" onClick={() => setSiGetDataStep('menu')}>
                         <i className="fa-solid fa-arrow-left" aria-hidden /> Common data sources
                       </button>
-                      <p className="si-get-data-sql-lead">Database connection — profile is stored in-app for future gateway support.</p>
+                      <p className="si-get-data-sql-lead">Database connection ΓÇö profile is stored in-app for future gateway support.</p>
                       <div className="si-layer-form-grid-2">
                         <label className="si-layer-field">
                           <span>Database Platform</span>
@@ -16919,7 +17490,7 @@ export default function SatelliteIntelligence() {
                           </label>
                           <label className="si-layer-field">
                             <span>Password</span>
-                            <input type="password" className="gis-input" placeholder="••••••••" value={dbPassword} onChange={e => setDbPassword(e.target.value)} />
+                            <input type="password" className="gis-input" placeholder="ΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇó" value={dbPassword} onChange={e => setDbPassword(e.target.value)} />
                           </label>
                         </div>
                       ) : null}
@@ -16979,7 +17550,7 @@ export default function SatelliteIntelligence() {
                   />
                   <button type="button" className="gis-btn-primary-full" onClick={() => void importRemoteUrlLayer()} disabled={isImportingRemoteLayer}>
                     <i className="fa-solid fa-cloud-arrow-down" aria-hidden />{' '}
-                    {isImportingRemoteLayer ? 'Importing…' : addLayerTab === 'raster' ? 'Import Raster path / URL' : 'Import from URL'}
+                    {isImportingRemoteLayer ? 'ImportingΓÇª' : addLayerTab === 'raster' ? 'Import Raster path / URL' : 'Import from URL'}
                   </button>
                 </div>
               ) : (
@@ -17021,7 +17592,7 @@ export default function SatelliteIntelligence() {
                             setSiUploadProgressPct(0);
                             const mb = file.size / (1024 * 1024);
                             setAddLayerStatus(
-                              `Ready: ${file.name} (${mb >= 0.01 ? mb.toFixed(2) : '<0.01'} MB). Click “Import to map”.`,
+                              `Ready: ${file.name} (${mb >= 0.01 ? mb.toFixed(2) : '<0.01'} MB). Click ΓÇ£Import to mapΓÇ¥.`,
                             );
                           }}
                         >
@@ -17030,7 +17601,7 @@ export default function SatelliteIntelligence() {
                           </div>
                           <div className="gis-dropzone-text">Drop a file here or click to browse</div>
                           <div className="gis-dropzone-subtext">
-                            SHP (.zip) · GeoJSON · KML / KMZ · CSV (lat/lon) · GeoTIFF (.tif / .tiff) · Image (PNG / JPG) · IFC (.ifc)
+                            SHP (.zip) ┬╖ GeoJSON ┬╖ KML / KMZ ┬╖ CSV (lat/lon) ┬╖ GeoTIFF (.tif / .tiff) ┬╖ Image (PNG / JPG) ┬╖ IFC (.ifc)
                           </div>
                         </div>
                         <GisUploadCloudSources
@@ -17041,7 +17612,7 @@ export default function SatelliteIntelligence() {
                             setSiUploadProgressPct(0);
                             const mb = file.size / (1024 * 1024);
                             setAddLayerStatus(
-                              `Ready: ${file.name} (${mb >= 0.01 ? mb.toFixed(2) : '<0.01'} MB). Click “Import to map”.`,
+                              `Ready: ${file.name} (${mb >= 0.01 ? mb.toFixed(2) : '<0.01'} MB). Click ΓÇ£Import to mapΓÇ¥.`,
                             );
                           }}
                           onStatus={setAddLayerStatus}
@@ -17051,7 +17622,7 @@ export default function SatelliteIntelligence() {
                             <div className="si-upload-staged-main">
                               <span className="si-upload-staged-name">{siUploadStagedFile.name}</span>
                               <span className="si-upload-staged-meta">
-                                {(siUploadStagedFile.size / (1024 * 1024)).toFixed(2)} MB ·{' '}
+                                {(siUploadStagedFile.size / (1024 * 1024)).toFixed(2)} MB ┬╖{' '}
                                 {String(siUploadStagedFile.name.split('.').pop() || '').toUpperCase()}
                               </span>
                             </div>
@@ -17081,7 +17652,7 @@ export default function SatelliteIntelligence() {
                               <div className="si-upload-progress__fill" style={{ width: `${siUploadProgressPct}%` }} />
                             </div>
                             <div className="si-upload-progress__label">
-                              {siUploadPhase === 'reading' ? 'Uploading / reading' : 'Processing'} · {siUploadProgressPct}%
+                              {siUploadPhase === 'reading' ? 'Uploading / reading' : 'Processing'} ┬╖ {siUploadProgressPct}%
                             </div>
                           </div>
                         ) : null}
@@ -17093,7 +17664,7 @@ export default function SatelliteIntelligence() {
                           disabled={siUploadBusy}
                         >
                           <i className="fa-solid fa-circle-check" aria-hidden />{' '}
-                          {siUploadBusy ? 'Working…' : siUploadStagedFile ? 'Import to map' : 'Import to map (choose file first)'}
+                          {siUploadBusy ? 'WorkingΓÇª' : siUploadStagedFile ? 'Import to map' : 'Import to map (choose file first)'}
                         </button>
                       </>
                     );
@@ -17163,7 +17734,7 @@ export default function SatelliteIntelligence() {
                       <span className="si-layer-action-modal-table-title" aria-hidden>
                         <AgroCloudMark size={28} className="gis-table-browser-mark" title="Table Browser" />
                       </span>
-                      <span>Table Browser — {activeDialogLayer.name}</span>
+                      <span>Table Browser ΓÇö {activeDialogLayer.name}</span>
                     </>
                   ) : (
                     `Legend - ${activeDialogLayer.name}`
@@ -17184,7 +17755,7 @@ export default function SatelliteIntelligence() {
                       className={`gis-workspace-sidebar gis-table-dock-sidebar si-layer-action-table-tools${
                         tableToolsCollapsed ? ' collapsed' : ''
                       }`}
-                      aria-label="GIS workspace — table tools, search, and filters"
+                      aria-label="GIS workspace ΓÇö table tools, search, and filters"
                     >
                       <div className="gis-workspace-sidebar__scope" aria-hidden={tableToolsCollapsed ? true : undefined}>
                         <AgroCloudMark size={22} className="gis-table-browser-mark" title="Table Browser" />
@@ -17252,7 +17823,7 @@ export default function SatelliteIntelligence() {
                           title="Refresh"
                         >
                           <i className="fa-solid fa-rotate-right" aria-hidden />
-                          <span className="gis-table-tooltext">{syncingLayerId === activeDialogLayer.id ? 'Refreshing…' : 'Refresh'}</span>
+                          <span className="gis-table-tooltext">{syncingLayerId === activeDialogLayer.id ? 'RefreshingΓÇª' : 'Refresh'}</span>
                         </button>
                         <div className="gis-table-toolsep" role="separator" />
                         <button className="gis-table-toolbtn" type="button" onClick={exportTableAsCsv} title="Export CSV">
@@ -17743,14 +18314,14 @@ export default function SatelliteIntelligence() {
                               <div className="gis-style-field">
                                 <div className="gis-style-label">Visualization style</div>
                                 <div className="gis-style-readonly" title={visLabel}>
-                                  {renderer ? visLabel : 'Loading or unavailable — sync the layer if symbols look wrong.'}
+                                  {renderer ? visLabel : 'Loading or unavailable ΓÇö sync the layer if symbols look wrong.'}
                                 </div>
                               </div>
                               <div className="gis-style-field">
                                 <div className="gis-style-label">Linked custom style (when unchecked)</div>
                                 <div className="gis-style-readonly">
                                   {styleLabel}
-                                  {symbologyDraft.field ? ` · ${symbologyDraft.field}` : ''}
+                                  {symbologyDraft.field ? ` ┬╖ ${symbologyDraft.field}` : ''}
                                 </div>
                               </div>
                             </div>
@@ -17865,7 +18436,7 @@ export default function SatelliteIntelligence() {
                         if (symbologyDraft.style === 'threshold_markers') {
                           items.push({ label: 'Base', kind, color: baseStroke, width: baseWeight });
                           items.push({
-                            label: `Marker ≥ ${ctx.threshold.toFixed(2)}`,
+                            label: `Marker ΓëÑ ${ctx.threshold.toFixed(2)}`,
                             kind: 'point',
                             color: '#ef4444',
                             width: 4,
@@ -17877,7 +18448,7 @@ export default function SatelliteIntelligence() {
                         for (let i = 0; i < Math.min(classes, breaks.length - 1); i += 1) {
                           const a = breaks[i];
                           const b = breaks[i + 1];
-                          const label = `${a.toFixed(2)} – ${b.toFixed(2)}`;
+                          const label = `${a.toFixed(2)} ΓÇô ${b.toFixed(2)}`;
                           const color = showColor ? ctx.colors[i] ?? baseStroke : baseStroke;
                           const width = showSize ? ctx.widths[i] ?? baseWeight : baseWeight;
                           const dash = symbologyDraft.style === 'dot_density' ? ctx.dotDashes[i] : undefined;
@@ -18326,7 +18897,7 @@ export default function SatelliteIntelligence() {
                     onChange={e => setStacModalDraft(d => ({ ...d, customCatalogBaseUrl: e.target.value }))}
                     placeholder="https://example.com/stac/v1"
                   />
-                  <small className="si-stac-field-hint">Provide API root (…/v1) or a full …/search URL.</small>
+                  <small className="si-stac-field-hint">Provide API root (ΓÇª/v1) or a full ΓÇª/search URL.</small>
                 </label>
               ) : null}
 
@@ -18356,7 +18927,7 @@ export default function SatelliteIntelligence() {
                         autoComplete="off"
                         value={stacModalDraft.bearerToken}
                         onChange={e => setStacModalDraft(d => ({ ...d, bearerToken: e.target.value }))}
-                        placeholder="Session only — not saved to disk"
+                        placeholder="Session only ΓÇö not saved to disk"
                       />
                     </label>
                   ) : null}
@@ -18478,11 +19049,11 @@ export default function SatelliteIntelligence() {
                   onClick={openAcsPicker}
                   aria-expanded={isAcsPickerOpen}
                 >
-                  <span className="si-stac-cloud-summary-chevron" aria-hidden>▸</span>
+                  <span className="si-stac-cloud-summary-chevron" aria-hidden>Γû╕</span>
                   <span className="si-stac-cloud-summary-label">Cloud Storage Connections (Optional)</span>
                   <span
                     className="si-stac-info-icon"
-                    title="ملفات .acs من https://github.com/Esri/arcgis-for-mpc — للمرجعية؛ ArcGIS Pro يستهلكها محلياً"
+                    title="┘à┘ä┘ü╪º╪¬ .acs ┘à┘å https://github.com/Esri/arcgis-for-mpc ΓÇö ┘ä┘ä┘à╪▒╪¼╪╣┘è╪⌐╪¢ ArcGIS Pro ┘è╪│╪¬┘ç┘ä┘â┘ç╪º ┘à╪¡┘ä┘è╪º┘ï"
                     onPointerDown={e => e.stopPropagation()}
                   >
                     <i className="fa-solid fa-circle-info" aria-hidden />
@@ -18491,7 +19062,7 @@ export default function SatelliteIntelligence() {
                 <div className="si-stac-details-inner si-stac-cloud-summary-body">
                   {stacModalDraft.cloudStorageEntries.length === 0 ? (
                     <p className="si-stac-cloud-hint">
-                      انقر <strong>Cloud Storage Connections</strong> لفتح نافذة اختيار الملفات أو المسارات.
+                      ╪º┘å┘é╪▒ <strong>Cloud Storage Connections</strong> ┘ä┘ü╪¬╪¡ ┘å╪º┘ü╪░╪⌐ ╪º╪«╪¬┘è╪º╪▒ ╪º┘ä┘à┘ä┘ü╪º╪¬ ╪ú┘ê ╪º┘ä┘à╪│╪º╪▒╪º╪¬.
                     </p>
                   ) : (
                     <ul className="si-stac-cloud-list si-stac-cloud-list--compact">
@@ -18560,15 +19131,15 @@ export default function SatelliteIntelligence() {
               <div className="si-acs-picker-header">
                 <div>
                   <h2 id="si-acs-picker-title">Add Cloud Storage Connection File</h2>
-                  <p className="si-acs-picker-subtitle">إضافة ملفات (.acs) أو مسارات — المتصفح يعرض أسماء الملفات المختارة؛ الصيغة الكاملة تُلصَق يدوياً</p>
+                  <p className="si-acs-picker-subtitle">╪Ñ╪╢╪º┘ü╪⌐ ┘à┘ä┘ü╪º╪¬ (.acs) ╪ú┘ê ┘à╪│╪º╪▒╪º╪¬ ΓÇö ╪º┘ä┘à╪¬╪╡┘ü╪¡ ┘è╪╣╪▒╪╢ ╪ú╪│┘à╪º╪í ╪º┘ä┘à┘ä┘ü╪º╪¬ ╪º┘ä┘à╪«╪¬╪º╪▒╪⌐╪¢ ╪º┘ä╪╡┘è╪║╪⌐ ╪º┘ä┘â╪º┘à┘ä╪⌐ ╪¬┘Å┘ä╪╡┘Ä┘é ┘è╪»┘ê┘è╪º┘ï</p>
                 </div>
                 <button type="button" className="si-stac-modal-close" aria-label="Close" onClick={cancelAcsPicker}>
                   <i className="fa-solid fa-xmark" />
                 </button>
               </div>
               <div className="si-acs-picker-breadcrumb-row">
-                <span className="si-acs-breadcrumb" title="مثال هيكل مجلدات MPC">
-                  Downloads <span className="si-acs-bc-sep">›</span> arcgis-for-mpc-main <span className="si-acs-bc-sep">›</span> AMPC_Resources <span className="si-acs-bc-sep">›</span> ACS_Files
+                <span className="si-acs-breadcrumb" title="┘à╪½╪º┘ä ┘ç┘è┘â┘ä ┘à╪¼┘ä╪»╪º╪¬ MPC">
+                  Downloads <span className="si-acs-bc-sep">ΓÇ║</span> arcgis-for-mpc-main <span className="si-acs-bc-sep">ΓÇ║</span> AMPC_Resources <span className="si-acs-bc-sep">ΓÇ║</span> ACS_Files
                 </span>
                 <input
                   type="search"
@@ -18586,7 +19157,7 @@ export default function SatelliteIntelligence() {
                 </div>
                 <ul className="si-acs-file-list">
                   {acsPickerStaging.length === 0 ? (
-                    <li className="si-acs-file-list-empty">No files selected — use Browse to choose .acs files</li>
+                    <li className="si-acs-file-list-empty">No files selected ΓÇö use Browse to choose .acs files</li>
                   ) : (
                     acsPickerStaging
                       .filter(
@@ -18623,7 +19194,7 @@ export default function SatelliteIntelligence() {
                     value={acsPickerManualPath}
                     onChange={e => setAcsPickerManualPath(e.target.value)}
                     rows={3}
-                    placeholder="C:\Users\…\esrims_pc_sentinel-2-l2a.acs"
+                    placeholder="C:\Users\ΓÇª\esrims_pc_sentinel-2-l2a.acs"
                   />
                 </label>
                 <div className="si-acs-picker-bottom-bar">
@@ -18634,7 +19205,7 @@ export default function SatelliteIntelligence() {
                     </select>
                   </label>
                   <button type="button" className="si-acs-browse-btn" onClick={() => acsFileInputRef.current?.click()}>
-                    <i className="fa-solid fa-folder-open" aria-hidden /> Browse…
+                    <i className="fa-solid fa-folder-open" aria-hidden /> BrowseΓÇª
                   </button>
                   <div className="si-acs-picker-okcancel">
                     <button type="button" className="si-stac-modal-cancel" onClick={cancelAcsPicker}>

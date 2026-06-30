@@ -29,7 +29,9 @@ export type HydroStepId =
   | 'slope'
   | 'flow-accum'
   | 'streams'
+  | 'contours'
   | 'watershed'
+  | 'basins'
   | 'mesh'
 
 export type HydroRasterResult = {
@@ -51,7 +53,7 @@ export type HydroVectorResult = {
   kind: 'vector'
   data: GeoJSON.FeatureCollection
   /** Hint for the renderer to pick the right paint. */
-  render: 'streams' | 'mesh' | 'watershed-line'
+  render: 'streams' | 'mesh' | 'watershed-line' | 'contours'
   /** Highest Strahler stream order in the network (streams only). */
   maxStrahler?: number
   /** Highest Shreve stream magnitude in the network (streams only). */
@@ -89,6 +91,10 @@ export type HydroComputeContext = {
   aoiMask: Uint8Array | null
   /** 0..1 — raises/lowers the stream extraction threshold. */
   sensitivity: number
+  /** Contour interval in metres; 0/undefined = auto (≈ elevation range / 20). */
+  contourInterval?: number
+  /** Number of largest drainage basins to delineate & colour (default 6). */
+  basinCount?: number
 }
 
 // ── Shared D8 topology (cached per DEM compute context) ─────────────────────────
@@ -789,13 +795,223 @@ export function computeMesh(ctx: HydroComputeContext): HydroStepResult {
   }
 }
 
+// ── Contours (marching squares iso-elevation lines) ─────────────────────────────
+
+const CONTOUR_RAMP: Array<[number, number, number]> = [
+  [49, 130, 84],
+  [120, 158, 74],
+  [196, 175, 92],
+  [183, 130, 73],
+  [150, 100, 70],
+  [222, 222, 222],
+]
+
+/** "Nice" contour interval (1/2/5 × 10ⁿ) for an elevation range / target count. */
+function niceInterval(range: number, target = 18): number {
+  if (!(range > 0)) return 10
+  const raw = range / target
+  const mag = 10 ** Math.floor(Math.log10(raw))
+  const norm = raw / mag
+  const step = norm <= 1.5 ? 1 : norm <= 3 ? 2 : norm <= 7 ? 5 : 10
+  return Math.max(1, step * mag)
+}
+
+export function computeContours(ctx: HydroComputeContext): HydroStepResult {
+  const { dem, aoiMask } = ctx
+  const { width: w, height: h, elev } = dem
+  const [eMin, eMax] = minMaxFinite(elev, aoiMask)
+  const range = eMax - eMin
+  const interval =
+    ctx.contourInterval && ctx.contourInterval > 0 ? ctx.contourInterval : niceInterval(range)
+
+  // Cap the number of levels so a tiny interval can't explode the geometry.
+  const firstLevel = Math.ceil(eMin / interval) * interval
+  const levels: number[] = []
+  for (let lv = firstLevel; lv <= eMax && levels.length < 80; lv += interval) levels.push(lv)
+
+  const at = (x: number, y: number): number => elev[y * w + x]!
+  const inAoi = (x: number, y: number): boolean => !aoiMask || !!aoiMask[y * w + x]
+  const crossing = (
+    ax: number,
+    ay: number,
+    za: number,
+    bx: number,
+    by: number,
+    zb: number,
+    L: number,
+  ): [number, number] => {
+    const t = (L - za) / (zb - za || 1e-9)
+    return dem.pxToLngLat(ax + 0.5 + (bx - ax) * t, ay + 0.5 + (by - ay) * t)
+  }
+
+  const features: GeoJSON.Feature[] = []
+  for (const L of levels) {
+    const isIndex = Math.round(L / interval) % 5 === 0
+    for (let y = 0; y < h - 1; y += 1) {
+      for (let x = 0; x < w - 1; x += 1) {
+        // Clip to AOI on the square's anchor cell.
+        if (!inAoi(x, y)) continue
+        const z0 = at(x, y) // top-left
+        const z1 = at(x + 1, y) // top-right
+        const z2 = at(x + 1, y + 1) // bottom-right
+        const z3 = at(x, y + 1) // bottom-left
+        if (!Number.isFinite(z0 + z1 + z2 + z3)) continue
+        const pts: Array<[number, number]> = []
+        // Edge order: top, right, bottom, left.
+        if (z0 < L !== z1 < L) pts.push(crossing(x, y, z0, x + 1, y, z1, L))
+        if (z1 < L !== z2 < L) pts.push(crossing(x + 1, y, z1, x + 1, y + 1, z2, L))
+        if (z2 < L !== z3 < L) pts.push(crossing(x + 1, y + 1, z2, x, y + 1, z3, L))
+        if (z3 < L !== z0 < L) pts.push(crossing(x, y + 1, z3, x, y, z0, L))
+        const props = { elev: Math.round(L), index: isIndex ? 1 : 0 }
+        if (pts.length === 2) {
+          features.push({
+            type: 'Feature',
+            properties: props,
+            geometry: { type: 'LineString', coordinates: [pts[0]!, pts[1]!] },
+          })
+        } else if (pts.length === 4) {
+          features.push({
+            type: 'Feature',
+            properties: props,
+            geometry: { type: 'LineString', coordinates: [pts[0]!, pts[1]!] },
+          })
+          features.push({
+            type: 'Feature',
+            properties: props,
+            geometry: { type: 'LineString', coordinates: [pts[2]!, pts[3]!] },
+          })
+        }
+      }
+    }
+  }
+
+  return {
+    kind: 'vector',
+    render: 'contours',
+    data: { type: 'FeatureCollection', features },
+    legend: {
+      title: 'Elevation contours',
+      kind: 'gradient',
+      swatches: rampSwatches(CONTOUR_RAMP),
+      minLabel: `${Math.round(eMin)} m`,
+      maxLabel: `${Math.round(eMax)} m`,
+      note: `Interval ${interval} m · bold every ${interval * 5} m`,
+    },
+    stats: [
+      { label: 'Contour interval', value: `${interval} m` },
+      { label: 'Levels', value: String(levels.length) },
+      { label: 'Segments', value: features.length.toLocaleString() },
+      { label: 'Elevation range', value: `${Math.round(eMin)}–${Math.round(eMax)} m` },
+    ],
+  }
+}
+
+// ── Basins (multi-outlet drainage sub-basins) ───────────────────────────────────
+
+const BASIN_PALETTE: Array<[number, number, number]> = [
+  [31, 119, 180],
+  [255, 127, 14],
+  [44, 160, 44],
+  [214, 39, 40],
+  [148, 103, 189],
+  [140, 86, 75],
+  [227, 119, 194],
+  [188, 189, 34],
+  [23, 190, 207],
+  [26, 152, 80],
+  [255, 187, 120],
+  [197, 176, 213],
+]
+
+export function computeBasins(ctx: HydroComputeContext): HydroStepResult {
+  const { dem, aoiMask } = ctx
+  const { width: w, height: h } = dem
+  const { down } = getFlowModel(dem)
+  const n = w * h
+  const wanted = Math.max(2, Math.min(12, Math.round(ctx.basinCount ?? 6)))
+
+  // Terminal outlet per cell (follow D8 to a grid-edge exit / sink), with path caching.
+  const terminal = new Int32Array(n).fill(-2) // -2 unknown
+  const path: number[] = []
+  for (let s = 0; s < n; s += 1) {
+    let c = s
+    path.length = 0
+    while (c >= 0 && terminal[c] === -2) {
+      path.push(c)
+      const d = down[c]!
+      if (d < 0) {
+        terminal[c] = c // c is its own outlet (drains off-grid)
+        break
+      }
+      c = d
+    }
+    const end = c >= 0 ? terminal[c]! : path[path.length - 1] ?? -1
+    for (const p of path) terminal[p] = end
+  }
+
+  // Size each basin (in-AOI cells only) and rank the largest.
+  const sizes = new Map<number, number>()
+  for (let i = 0; i < n; i += 1) {
+    if (aoiMask && !aoiMask[i]) continue
+    const t = terminal[i]!
+    if (t < 0) continue
+    sizes.set(t, (sizes.get(t) ?? 0) + 1)
+  }
+  const ranked = [...sizes.entries()].sort((a, b) => b[1] - a[1])
+  const topOutlets = ranked.slice(0, wanted)
+  const rankByOutlet = new Map<number, number>()
+  topOutlets.forEach(([outlet], idx) => rankByOutlet.set(outlet, idx))
+
+  const cellArea = dem.metersPerPixel * dem.metersPerPixel
+  const basinId = new Float32Array(n) // 0 = none/minor
+  const dataUrl = rasterToDataUrl(dem, aoiMask, i => {
+    const t = terminal[i]!
+    const rank = rankByOutlet.get(t)
+    if (rank === undefined) {
+      basinId[i] = 0
+      return [120, 120, 120, 70] // minor basins → faint grey
+    }
+    basinId[i] = rank + 1
+    const [r, g, b] = BASIN_PALETTE[rank % BASIN_PALETTE.length]!
+    return [r, g, b, 180]
+  })
+
+  const largestKm2 = topOutlets.length ? (topOutlets[0]![1] * cellArea) / 1e6 : 0
+  const swatches: HydroLegendSwatch[] = topOutlets.map(([, size], idx) => ({
+    color: rgbCss(BASIN_PALETTE[idx % BASIN_PALETTE.length]!),
+    label: `Basin ${idx + 1} · ${((size * cellArea) / 1e6).toFixed(2)} km²`,
+  }))
+
+  return {
+    kind: 'raster',
+    dataUrl,
+    coordinates: dem.cornerCoords,
+    opacity: 0.8,
+    band: bandOf(dem, basinId, 'Drainage basins (id)'),
+    legend: {
+      title: 'Drainage basins',
+      kind: 'classes',
+      swatches,
+      note: `${topOutlets.length} largest basins`,
+    },
+    stats: [
+      { label: 'Basins (total)', value: sizes.size.toLocaleString() },
+      { label: 'Delineated', value: String(topOutlets.length) },
+      { label: 'Largest basin', value: `${largestKm2.toFixed(2)} km²` },
+      { label: 'Resolution', value: `${dem.metersPerPixel.toFixed(0)} m/px` },
+    ],
+  }
+}
+
 export const HYDRO_COMPUTE: Record<HydroStepId, (ctx: HydroComputeContext) => HydroStepResult> = {
   dem: computeDem,
   hillshade: computeHillshade,
   slope: computeSlope,
   'flow-accum': computeFlowAccumulation,
   streams: computeStreams,
+  contours: computeContours,
   watershed: computeWatershed,
+  basins: computeBasins,
   mesh: computeMesh,
 }
 
@@ -853,6 +1069,319 @@ export function buildAoiMask(
     }
   }
   return mask
+}
+
+// ── Well Site Recommendation (Hydro-AI) ─────────────────────────────────────────
+//
+// Multi-criteria suitability model for siting water wells, derived from the same
+// DEM pipeline. Each in-AOI cell gets a 0..1 suitability score combining:
+//   ✔ low / moderate elevation (groundwater potential)
+//   ✔ gentle slope (stable drilling + infiltration)
+//   ✔ high flow accumulation (recharge potential zones)
+//   ❌ very steep slopes (penalised)
+// Outputs a RdYlGn suitability heatmap raster + the top-N spaced drilling points.
+
+/** Diverging RdYlGn ramp, low→high suitability. */
+const WELLSITE_RAMP: Array<[number, number, number]> = [
+  [165, 0, 38],
+  [215, 48, 39],
+  [253, 174, 97],
+  [254, 224, 139],
+  [166, 217, 106],
+  [102, 189, 99],
+  [26, 152, 80],
+]
+
+/**
+ * Per-well attribute schema (Shapefile-style). Terrain fields are computed
+ * directly from the DEM; Hydrogeology / Soil / Recharge fields are physically
+ * motivated proxy estimates derived from terrain (no external soil/climate data),
+ * so `confidence` flags how reliable the estimate is.
+ */
+export type WellSiteAttributes = {
+  well_name: string
+  rank: number
+  longitude: number
+  latitude: number
+  // ── Terrain (exact, DEM-derived) ──
+  elev_m: number
+  slope_pc: number
+  flow_acc: number
+  twi: number
+  // ── Hydrogeology (estimated) ──
+  aq_prob: number
+  aq_type: string
+  /** Estimated depth to the water table (m below ground). */
+  water_table_m: number
+  depth_m: number
+  yield_m3d: number
+  // ── Soil (estimated) ──
+  soil_perm: string
+  soil_type: string
+  infil_rate: number
+  // ── Recharge (estimated) ──
+  rch_dist_m: number
+  rain_mm: number
+  runoff_idx: number
+  // ── Decision ──
+  well_score: number
+  confidence: string
+  risk_lvl: string
+}
+
+export type WellSitePoint = {
+  lng: number
+  lat: number
+  /** Suitability 0..100. */
+  score: number
+  /** 1 = best. */
+  rank: number
+  /** Ground elevation (m) at the cell. */
+  elevation: number
+  /** Local slope (degrees) at the cell. */
+  slopeDeg: number
+  /** Full Shapefile-style attribute record. */
+  attributes: WellSiteAttributes
+}
+
+export type WellSiteResult = {
+  raster: HydroRasterResult
+  points: WellSitePoint[]
+  /** GeoJSON FeatureCollection of the recommended drilling points (export). */
+  pointsGeoJson: GeoJSON.FeatureCollection
+  stats: Array<{ label: string; value: string }>
+}
+
+export type WellSiteOptions = {
+  /** Number of recommended drilling points (5–10). */
+  topN?: number
+  /** Slope (deg) at/above which a cell is treated as too steep. */
+  steepDeg?: number
+}
+
+/**
+ * Compute the well-site suitability heatmap + recommended drilling points for the
+ * AOI. Pure DEM-derived (elevation, slope, flow accumulation); soil / land-use /
+ * groundwater proxies are folded in when available but optional here.
+ */
+export function computeWellSiteSuitability(
+  ctx: HydroComputeContext,
+  options: WellSiteOptions = {},
+): WellSiteResult {
+  const topN = Math.max(1, Math.min(12, Math.round(options.topN ?? 8)))
+  const steepDeg = options.steepDeg ?? 22
+  const { dem, aoiMask } = ctx
+  const { width: w, height: h, elev, metersPerPixel: cs } = dem
+  const n = w * h
+  const { accum } = getFlowModel(dem)
+
+  const [eMin, eMax] = minMaxFinite(elev, aoiMask)
+  const eSpan = eMax - eMin || 1
+
+  let aMax = 1
+  for (let i = 0; i < n; i += 1) {
+    if (aoiMask && !aoiMask[i]) continue
+    const a = accum[i]!
+    if (Number.isFinite(a) && a > aMax) aMax = a
+  }
+  const logAMax = Math.log(aMax + 1) || 1
+
+  const suit = new Float32Array(n).fill(NaN)
+  const slopeArr = new Float32Array(n).fill(NaN)
+  const z = (xx: number, yy: number): number => elev[yy * w + xx]!
+  let slopeSum = 0
+  let slopeCount = 0
+
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      const i = y * w + x
+      if (aoiMask && !aoiMask[i]) continue
+      const xm = x > 0 ? x - 1 : x
+      const xp = x < w - 1 ? x + 1 : x
+      const ym = y > 0 ? y - 1 : y
+      const yp = y < h - 1 ? y + 1 : y
+      // Horn's method gradient.
+      const dzdx =
+        (z(xp, ym) + 2 * z(xp, y) + z(xp, yp) - (z(xm, ym) + 2 * z(xm, y) + z(xm, yp))) / (8 * cs)
+      const dzdy =
+        (z(xm, yp) + 2 * z(x, yp) + z(xp, yp) - (z(xm, ym) + 2 * z(x, ym) + z(xp, ym))) / (8 * cs)
+      const slopeDeg = (Math.atan(Math.hypot(dzdx, dzdy)) * 180) / Math.PI
+      slopeArr[i] = slopeDeg
+      slopeSum += slopeDeg
+      slopeCount += 1
+
+      const normElev = Math.max(0, Math.min(1, (elev[i]! - eMin) / eSpan))
+      const sElev = 1 - normElev
+      const sSlope = 1 - Math.min(1, slopeDeg / steepDeg)
+      const sFlow = Math.log((Number.isFinite(accum[i]!) ? accum[i]! : 1) + 1) / logAMax
+      let score = 0.25 * sElev + 0.35 * sSlope + 0.4 * sFlow
+      if (slopeDeg > steepDeg) score *= 0.25 // steep-slope penalty
+      suit[i] = Math.max(0, Math.min(1, score))
+    }
+  }
+
+  const dataUrl = rasterToDataUrl(dem, aoiMask, i => {
+    const v = suit[i]!
+    if (!Number.isFinite(v)) return [0, 0, 0, 0]
+    const [r, g, b] = rampColor(WELLSITE_RAMP, v)
+    return [r, g, b, 205]
+  })
+
+  // Top-N points via greedy non-maximum suppression for spatial spread.
+  const order: number[] = []
+  for (let i = 0; i < n; i += 1) if (Number.isFinite(suit[i]!)) order.push(i)
+  order.sort((a, b) => suit[b]! - suit[a]!)
+  const minSepPx = Math.max(5, Math.round(Math.min(w, h) / 9))
+  const picked: number[] = []
+  for (const i of order) {
+    if (picked.length >= topN) break
+    const x = i % w
+    const y = (i / w) | 0
+    let ok = true
+    for (const p of picked) {
+      const px = p % w
+      const py = (p / w) | 0
+      if (Math.hypot(px - x, py - y) < minSepPx) {
+        ok = false
+        break
+      }
+    }
+    if (ok) picked.push(i)
+  }
+
+  const cellArea = cs * cs
+  const round = (v: number, d = 0): number => {
+    const f = 10 ** d
+    return Math.round(v * f) / f
+  }
+
+  const buildAttributes = (i: number, idx: number, lng: number, lat: number): WellSiteAttributes => {
+    const elevM = elev[i]!
+    const slopeDeg = Number.isFinite(slopeArr[i]!) ? slopeArr[i]! : 0
+    const slopeRad = (slopeDeg * Math.PI) / 180
+    const tanS = Math.max(Math.tan(slopeRad), 0.001)
+    const acc = Number.isFinite(accum[i]!) ? accum[i]! : 1
+    const twi = Math.log((acc * cellArea) / tanS)
+    const normElev = Math.max(0, Math.min(1, (elevM - eMin) / eSpan))
+    const sFlow = Math.log(acc + 1) / logAMax
+    const normSlope = Math.min(1, slopeDeg / steepDeg)
+    const scoreUnit = suit[i]!
+
+    // Aquifer probability proxy: recharge convergence (flow) + flat terrain.
+    const aqProb = Math.max(0, Math.min(1, 0.55 * sFlow + 0.45 * (1 - normSlope)))
+
+    // Aquifer / lithology class from terrain regime.
+    let aqType: string
+    if (slopeDeg < 3 && sFlow > 0.45) aqType = 'Alluvial'
+    else if (slopeDeg < 8) aqType = 'Sedimentary'
+    else if (slopeDeg < 15) aqType = 'Fractured'
+    else aqType = 'Hard rock'
+
+    // Estimated depth to the water table: shallower near recharge / low flat terrain.
+    const waterTableM = Math.max(1, Math.min(80, 4 + normElev * 45 + slopeDeg * 0.4 - aqProb * 12 - sFlow * 8))
+    // Expected drilling depth: deeper for high/steep terrain, shallower near recharge.
+    const depthM = Math.max(8, Math.min(150, 20 + normElev * 70 + slopeDeg * 1.2 - aqProb * 18))
+    // Expected sustainable yield.
+    const yieldM3d = Math.max(2, Math.min(600, aqProb * 420 + sFlow * 90))
+
+    // Soil regime tied to lithology proxy.
+    const soilByType: Record<string, { perm: string; type: string; infil: number }> = {
+      Alluvial: { perm: 'High', type: 'Sandy loam', infil: 28 },
+      Sedimentary: { perm: 'Moderate', type: 'Loam', infil: 13 },
+      Fractured: { perm: 'Moderate', type: 'Silty clay', infil: 8 },
+      'Hard rock': { perm: 'Low', type: 'Rocky / thin', infil: 3 },
+    }
+    const soil = soilByType[aqType]!
+
+    // Recharge proximity proxy: high TWI / convergence ⇒ closer to recharge.
+    const rchDistM = Math.max(15, Math.min(2500, 900 * (1 - sFlow)))
+    const rainMm = 100 // regional baseline estimate (no climate input)
+    const runoffIdx = Math.max(0, Math.min(1, 0.15 + normSlope * 0.7 - aqProb * 0.1))
+
+    const wellScore = Math.round(scoreUnit * 100)
+    const confidence = wellScore >= 80 ? 'High' : wellScore >= 60 ? 'Medium' : 'Low'
+    const riskLvl =
+      slopeDeg > steepDeg * 0.7 || sFlow > 0.92
+        ? 'High'
+        : slopeDeg > steepDeg * 0.4
+          ? 'Moderate'
+          : 'Low'
+
+    return {
+      well_name: `Well site ${idx + 1}`,
+      rank: idx + 1,
+      longitude: round(lng, 6),
+      latitude: round(lat, 6),
+      elev_m: round(elevM),
+      slope_pc: round(Math.tan(slopeRad) * 100, 1),
+      flow_acc: round(acc),
+      twi: round(twi, 2),
+      aq_prob: round(aqProb, 2),
+      aq_type: aqType,
+      water_table_m: round(waterTableM, 1),
+      depth_m: round(depthM),
+      yield_m3d: round(yieldM3d),
+      soil_perm: soil.perm,
+      soil_type: soil.type,
+      infil_rate: round(soil.infil + (1 - normSlope) * 4, 1),
+      rch_dist_m: round(rchDistM),
+      rain_mm: rainMm,
+      runoff_idx: round(runoffIdx, 2),
+      well_score: wellScore,
+      confidence,
+      risk_lvl: riskLvl,
+    }
+  }
+
+  const points: WellSitePoint[] = picked.map((i, idx) => {
+    const [lng, lat] = dem.pxToLngLat((i % w) + 0.5, ((i / w) | 0) + 0.5)
+    return {
+      lng,
+      lat,
+      score: Math.round(suit[i]! * 100),
+      rank: idx + 1,
+      elevation: Math.round(elev[i]!),
+      slopeDeg: Number(slopeArr[i]!.toFixed(1)),
+      attributes: buildAttributes(i, idx, lng, lat),
+    }
+  })
+
+  const pointsGeoJson: GeoJSON.FeatureCollection = {
+    type: 'FeatureCollection',
+    features: points.map(p => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+      properties: { ...p.attributes },
+    })),
+  }
+
+  const meanSlope = slopeCount ? slopeSum / slopeCount : 0
+
+  return {
+    raster: {
+      kind: 'raster',
+      dataUrl,
+      coordinates: dem.cornerCoords,
+      opacity: 0.78,
+      band: bandOf(dem, suit, 'Well-site suitability (0..1)'),
+      legend: {
+        title: 'Well-site suitability',
+        kind: 'gradient',
+        swatches: rampSwatches(WELLSITE_RAMP),
+        minLabel: 'Low',
+        maxLabel: 'High',
+        note: 'DEM-derived estimate (elevation · slope · flow)',
+      },
+    },
+    points,
+    pointsGeoJson,
+    stats: [
+      { label: 'Recommended sites', value: String(points.length) },
+      { label: 'Best score', value: points.length ? `${points[0]!.score}%` : '—' },
+      { label: 'Mean slope', value: `${meanSlope.toFixed(1)}°` },
+      { label: 'Resolution', value: `${dem.metersPerPixel.toFixed(0)} m/px` },
+    ],
+  }
 }
 
 export type { LngLatBBox }

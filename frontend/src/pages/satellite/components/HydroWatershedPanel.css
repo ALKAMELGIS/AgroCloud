@@ -356,6 +356,42 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
+/* Contour interval / basin count option */
+.si-hydro__opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 2px 2px 8px;
+  border: 1px solid var(--hy-border);
+  border-radius: 9px;
+  background: var(--hy-glass-flat);
+}
+.si-hydro__opt-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--hy-muted);
+}
+.si-hydro__opt-select {
+  appearance: none;
+  border: 1px solid var(--hy-border);
+  border-radius: 7px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--hy-glass);
+  cursor: pointer;
+}
+.si-hydro__opt-select:focus-visible {
+  outline: 2px solid rgba(56, 189, 248, 0.6);
+  outline-offset: 1px;
+}
+.si-hydro__opt-select option {
+  color: #0f172a;
+}
+
 .si-hydro__stats {
   margin: 0;
   display: flex;

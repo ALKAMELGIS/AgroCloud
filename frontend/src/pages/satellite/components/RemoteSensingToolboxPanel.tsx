@@ -98,10 +98,6 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
     onRsDrawingModeChange,
     rsDrawingTool,
     onRsDrawingToolChange,
-    mapPanLocked,
-    onPanNavigate,
-    onToggleMapPanLock,
-    onMeasureTool,
     hasClearableDrawing,
     onClearDrawing,
     staticChartsOpen,
@@ -111,17 +107,10 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
     fieldTimelineActive,
     onTimelinePrimaryClick,
     fieldAnalysisStatus,
-    onClose,
   } = props
 
   return (
     <div className="si-env-section-card si-field-analysis si-rs-panel si-rs-panel--glass si-rs-panel--toolbox-v2 si-rs-panel--flat">
-      <div className="si-rs-panel__header">
-        <button type="button" className="si-rs-panel__close" onClick={onClose} aria-label="Close panel">
-          <i className="fa-solid fa-xmark" aria-hidden />
-        </button>
-      </div>
-
       <div className="si-rs-panel__body si-rs-panel__body--flat">
         <div className="si-rs-panel__flat-grid si-rs-panel__flat-grid--2">
           <label className="si-rs-panel__stack">
@@ -263,36 +252,8 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
         </div>
 
         <label className="si-rs-panel__stack">
-          <span className="si-rs-panel__label">Map navigation</span>
-          <div className="si-rs-panel__toolgrid" role="toolbar" aria-label="Map navigation tools">
-            <button
-              type="button"
-              className={`si-rs-panel__tool${!mapPanLocked ? ' is-on' : ''}`}
-              title="Pan map"
-              aria-pressed={!mapPanLocked}
-              onClick={onPanNavigate}
-            >
-              <i className="fa-solid fa-hand" aria-hidden />
-            </button>
-            <button
-              type="button"
-              className="si-rs-panel__tool"
-              title="Measure distance"
-              aria-label="Measure distance"
-              onClick={onMeasureTool}
-            >
-              <i className="fa-solid fa-ruler-combined" aria-hidden />
-            </button>
-            <button
-              type="button"
-              className={`si-rs-panel__tool si-rs-panel__tool--pan-lock${mapPanLocked ? ' is-on' : ''}`}
-              title={mapPanLocked ? 'Map pan locked — click to unlock' : 'Lock map pan'}
-              aria-pressed={mapPanLocked}
-              aria-label={mapPanLocked ? 'Map pan locked' : 'Lock map pan'}
-              onClick={onToggleMapPanLock}
-            >
-              <i className="fa-solid fa-up-down-left-right" aria-hidden />
-            </button>
+          <span className="si-rs-panel__label">Map tools</span>
+          <div className="si-rs-panel__toolgrid" role="toolbar" aria-label="Map tools">
             <button
               type="button"
               className={`si-rs-panel__tool${staticChartsOpen ? ' is-on' : ''}`}

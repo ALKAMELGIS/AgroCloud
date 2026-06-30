@@ -25,6 +25,29 @@ function collectLayerFieldKeys(geojson: unknown): string[] {
   return [...s].sort((a, b) => a.localeCompare(b));
 }
 
+/** Field names from the ArcGIS layer schema, preserving service order. */
+function collectArcgisFieldKeys(def: ArcgisLayerDefLite | null | undefined): string[] {
+  const fields = (def as { fields?: Array<{ name?: unknown }> } | null | undefined)?.fields;
+  if (!Array.isArray(fields)) return [];
+  const s = new Set<string>();
+  for (const f of fields) {
+    const n = (f as { name?: unknown })?.name;
+    if (typeof n === 'string' && n.trim() && !n.startsWith('mapbox_')) s.add(n.trim());
+  }
+  return [...s];
+}
+
+/**
+ * Field keys for the popup config. Viewport-lazy ArcGIS layers (e.g.
+ * Agro_Structures) keep an empty local geojson, so fall back to the layer's
+ * published field schema so there is always something to configure.
+ */
+function resolveLayerFieldKeys(layer: SiLayerPopupConfiguratorLayer): string[] {
+  const fromGeo = collectLayerFieldKeys(layer.geojson);
+  if (fromGeo.length) return fromGeo;
+  return collectArcgisFieldKeys(layer.arcgisLayerDefinition);
+}
+
 function mergeFieldOrder(order: string[], all: string[]): string[] {
   const o = order.filter(k => all.includes(k));
   const rest = all.filter(k => !o.includes(k));
@@ -46,17 +69,20 @@ type Props = {
 };
 
 export function SiLayerPopupConfigurator({ layer, onSave, onClose }: Props) {
-  const allKeys = useMemo(() => collectLayerFieldKeys(layer.geojson), [layer.geojson, layer.id]);
+  const allKeys = useMemo(
+    () => resolveLayerFieldKeys(layer),
+    [layer.geojson, layer.arcgisLayerDefinition, layer.id],
+  );
   const [draft, setDraft] = useState<SiLayerPopupConfig>(() => normalizeSiLayerPopupConfig(layer.popupConfig));
   const [orderedKeys, setOrderedKeys] = useState<string[]>(() =>
-    mergeFieldOrder(normalizeSiLayerPopupConfig(layer.popupConfig).fieldOrder, collectLayerFieldKeys(layer.geojson)),
+    mergeFieldOrder(normalizeSiLayerPopupConfig(layer.popupConfig).fieldOrder, resolveLayerFieldKeys(layer)),
   );
 
   useEffect(() => {
     const cfg = normalizeSiLayerPopupConfig(layer.popupConfig);
     setDraft(cfg);
-    setOrderedKeys(mergeFieldOrder(cfg.fieldOrder, collectLayerFieldKeys(layer.geojson)));
-  }, [layer.id, layer.popupConfig, layer.geojson]);
+    setOrderedKeys(mergeFieldOrder(cfg.fieldOrder, resolveLayerFieldKeys(layer)));
+  }, [layer.id, layer.popupConfig, layer.geojson, layer.arcgisLayerDefinition]);
 
   const hidden = useMemo(() => new Set(draft.hiddenFieldKeys), [draft.hiddenFieldKeys]);
 

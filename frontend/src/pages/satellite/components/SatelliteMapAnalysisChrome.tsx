@@ -157,6 +157,7 @@ export type SatelliteMapAnalysisChromeProps = {
     | 'ai-detection-gis'
     | 'tree-detections'
     | 'hydro-watershed'
+    | 'well-site'
     | 'flood-monitoring'
     | 'table-geo-ai'
     | null;

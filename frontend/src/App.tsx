@@ -140,26 +140,173 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
     }
 
     return (
-      <div style={{ padding: 16, maxWidth: 900, margin: '0 auto' }}>
-        <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>حدث خطأ ومنع الصفحة من التحميل</div>
-        <div style={{ marginBottom: 12, color: '#444' }}>{message}</div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-          <button type="button" className="gis-btn" onClick={() => reloadWithCacheBust()}>
-            Reload
-          </button>
-          <button
-            type="button"
-            className="gis-btn"
-            onClick={() => {
-              void reset()
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 2147483600,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 24,
+          overflow: 'auto',
+          color: '#0f172a',
+          fontFamily:
+            "'Inter', 'Segoe UI', 'Tahoma', system-ui, -apple-system, sans-serif",
+          background:
+            'radial-gradient(1100px 560px at 12% -12%, rgba(16,185,129,0.10), transparent 60%), radial-gradient(1000px 560px at 112% 112%, rgba(56,189,248,0.10), transparent 58%), linear-gradient(160deg, #ffffff 0%, #f4f7fb 52%, #eef2f7 100%)',
+        }}
+      >
+        <div
+          role="alertdialog"
+          aria-labelledby="agro-err-title"
+          style={{
+            position: 'relative',
+            width: '100%',
+            maxWidth: 540,
+            borderRadius: 24,
+            padding: '36px 32px 28px',
+            color: '#0f172a',
+            background: 'linear-gradient(180deg, #ffffff 0%, #fbfdff 100%)',
+            border: '1px solid rgba(15,23,42,0.08)',
+            boxShadow:
+              '0 40px 90px -40px rgba(15,23,42,0.35), 0 4px 14px rgba(15,23,42,0.06), inset 0 1px 0 rgba(255,255,255,0.9)',
+            textAlign: 'center',
+          }}
+        >
+          <div
+            aria-hidden
+            style={{
+              width: 72,
+              height: 72,
+              margin: '0 auto 20px',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 34,
+              fontWeight: 800,
+              color: '#dc2626',
+              background:
+                'radial-gradient(circle at 30% 25%, #fee2e2, #fff5f5)',
+              border: '1px solid rgba(220,38,38,0.28)',
+              boxShadow: '0 0 0 8px rgba(220,38,38,0.05)',
             }}
           >
-            Reset App Storage
-          </button>
+            <span style={{ lineHeight: 1 }}>!</span>
+          </div>
+
+          <div
+            id="agro-err-title"
+            dir="rtl"
+            style={{ fontSize: 22, fontWeight: 800, letterSpacing: '0.01em', marginBottom: 6, color: '#0b1220' }}
+          >
+            حدث خطأ ومنع الصفحة من التحميل
+          </div>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: '#475569', marginBottom: 20 }}>
+            Something went wrong while loading the page
+          </div>
+
+          <div
+            dir="auto"
+            style={{
+              fontSize: 13.5,
+              lineHeight: 1.6,
+              color: '#1f2937',
+              background: '#f8fafc',
+              border: '1px solid rgba(15,23,42,0.08)',
+              borderRadius: 14,
+              padding: '13px 15px',
+              marginBottom: 24,
+              wordBreak: 'break-word',
+            }}
+          >
+            {message}
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              gap: 10,
+              flexWrap: 'wrap',
+              justifyContent: 'center',
+              marginBottom: this.state.err.details ? 18 : 0,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => reloadWithCacheBust()}
+              style={{
+                appearance: 'none',
+                cursor: 'pointer',
+                border: 'none',
+                borderRadius: 12,
+                padding: '12px 24px',
+                fontSize: 14,
+                fontWeight: 700,
+                color: '#ffffff',
+                background: 'linear-gradient(180deg, #10b981, #059669)',
+                boxShadow: '0 12px 26px -12px rgba(5,150,105,0.65)',
+              }}
+            >
+              Reload Page
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void reset()
+              }}
+              style={{
+                appearance: 'none',
+                cursor: 'pointer',
+                borderRadius: 12,
+                padding: '12px 24px',
+                fontSize: 14,
+                fontWeight: 700,
+                color: '#0f172a',
+                background: '#ffffff',
+                border: '1px solid rgba(15,23,42,0.16)',
+                boxShadow: '0 2px 8px rgba(15,23,42,0.05)',
+              }}
+            >
+              Reset App Storage
+            </button>
+          </div>
+
+          {this.state.err.details ? (
+            <details style={{ textAlign: 'left', marginTop: 4 }}>
+              <summary
+                style={{
+                  cursor: 'pointer',
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  color: '#475569',
+                  letterSpacing: '0.02em',
+                  userSelect: 'none',
+                }}
+              >
+                Technical details
+              </summary>
+              <pre
+                style={{
+                  marginTop: 10,
+                  maxHeight: 220,
+                  background: '#f8fafc',
+                  border: '1px solid rgba(15,23,42,0.08)',
+                  borderRadius: 10,
+                  padding: 12,
+                  overflow: 'auto',
+                  whiteSpace: 'pre-wrap',
+                  fontSize: 11.5,
+                  lineHeight: 1.5,
+                  color: '#334155',
+                }}
+              >
+                {this.state.err.details}
+              </pre>
+            </details>
+          ) : null}
         </div>
-        {this.state.err.details ? (
-          <pre style={{ background: '#f6f6f6', padding: 12, overflow: 'auto', whiteSpace: 'pre-wrap' }}>{this.state.err.details}</pre>
-        ) : null}
       </div>
     )
   }

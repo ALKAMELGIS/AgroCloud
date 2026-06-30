@@ -9,6 +9,7 @@ export type SmartProcessingSectionId =
   | 'ai-detection-gis'
   | 'tree-detections'
   | 'hydro-watershed'
+  | 'well-site'
   | 'flood-monitoring'
   | 'table-geo-ai';
 
@@ -103,6 +104,13 @@ const WORKFLOW_ROWS: Array<{
         label: 'Hydro Watershed Workflow',
         hint: 'AOI → DEM, slope, flow accumulation, stream network, watershed & mesh for distributed hydrology.',
         target: 'hydro-watershed',
+      },
+      {
+        id: 'well-site',
+        icon: 'fa-solid fa-droplet',
+        label: 'Well Site Recommendation (Hydro-AI)',
+        hint: 'AOI → DEM, slope, flow → suitability heatmap + top recommended drilling sites.',
+        target: 'well-site',
       },
     ],
   },

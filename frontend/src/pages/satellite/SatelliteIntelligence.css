@@ -3457,6 +3457,56 @@ html[data-theme='light'] .si-env-side-row--selected {
   text-align: left;
 }
 
+/* Floating popover variant — rendered to document.body so it never clips inside the
+   compact panel; sits above the dock with a luxe glassy translucent-black sheet and
+   animates in like a pro GIS layer-tree menu. Compact so every option fits with no scroll. */
+.si-env-layer-options-menu--floating {
+  z-index: 4200;
+  width: 224px;
+  max-width: calc(100vw - 16px);
+  max-height: min(86vh, 520px);
+  padding: 5px;
+  border-radius: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(168deg, rgba(13, 16, 23, 0.72) 0%, rgba(8, 10, 15, 0.82) 100%);
+  backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.62),
+    0 2px 10px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  animation: si-env-layer-menu-in 0.12s ease-out;
+}
+.si-env-layer-options-menu--floating .si-env-layer-options-menu__item {
+  padding: 6px 9px;
+  border-radius: 8px;
+  font-size: 10.5px;
+}
+.si-env-layer-options-menu--floating .si-env-layer-options-menu__item > i {
+  color: #6ee7b7;
+}
+.si-env-layer-options-menu--floating .si-env-layer-options-menu__item:hover:not(:disabled) {
+  background: rgba(110, 231, 183, 0.14);
+  color: #ffffff;
+}
+.si-env-layer-options-menu--floating .si-env-layer-options-menu__item--danger:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.16);
+}
+.si-env-layer-options-menu--floating .si-env-layer-options-menu__sep {
+  margin: 3px 8px;
+  background: rgba(255, 255, 255, 0.08);
+}
+@keyframes si-env-layer-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .si-env-layer-options-menu__sep {
   height: 1px;
   margin: 4px 8px;
@@ -3633,6 +3683,12 @@ html[data-theme='light'] .si-env-layer-options-menu__item > i {
   font-size: 12px;
 }
 
+.si-env-layer-actions--menu-only .si-env-layer-action-btn--menu.is-active {
+  border-color: rgba(125, 211, 252, 0.45);
+  background: rgba(59, 130, 246, 0.24);
+  color: #f0f9ff;
+}
+
 .si-env-layer-actions--menu-only .si-env-layer-action-btn--menu:hover {
   border-color: rgba(125, 211, 252, 0.34);
   background: rgba(59, 130, 246, 0.18);
@@ -3683,6 +3739,37 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* ArcGIS-Online-style bottom dock: the attribute table snaps to the bottom of
+   the screen as a responsive, ~half-height panel so the map stays visible and
+   interactive above it. Scoped via :has so other action modals stay centered. */
+.si-layer-action-modal-overlay:has(.si-layer-action-modal--gis-table) {
+  align-items: flex-end;
+  justify-content: stretch;
+  padding: 0;
+  background: transparent;
+  pointer-events: none;
+}
+.si-layer-action-modal-overlay:has(.si-layer-action-modal--gis-table) .si-layer-action-modal--gis-table {
+  pointer-events: auto;
+  width: 100%;
+  max-width: 100%;
+  max-height: 60vh;
+  border-radius: 14px 14px 0 0;
+  border-bottom: none;
+  box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.55);
+}
+/* Bottom dock → drag from the top edge to resize taller/shorter. */
+.si-layer-action-modal-overlay:has(.si-layer-action-modal--gis-table) .si-layer-action-modal-resize {
+  order: -1;
+  border-top: none;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+}
+@media (max-width: 720px) {
+  .si-layer-action-modal-overlay:has(.si-layer-action-modal--gis-table) .si-layer-action-modal--gis-table {
+    max-height: 72vh;
+  }
 }
 
 .si-layer-action-modal--gis-table .si-layer-action-modal-body {
@@ -3882,6 +3969,303 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
   background: #f1f5f9;
   font-weight: 700;
   color: #334155;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Table Browser — luxurious black glassmorphism theme.
+   Scoped to .si-layer-action-modal--gis-table so other table usages stay light.
+   Black glassy surfaces, white text, subtle frosted depth.
+   ─────────────────────────────────────────────────────────────────────────── */
+.si-layer-action-modal.si-layer-action-modal--gis-table {
+  --lx-text: #f5f7fa;
+  --lx-muted: #aab2bf;
+  --lx-border: rgba(255, 255, 255, 0.12);
+  --lx-border-soft: rgba(255, 255, 255, 0.07);
+  --lx-surface: rgba(255, 255, 255, 0.05);
+  --lx-surface-2: rgba(255, 255, 255, 0.08);
+  --lx-hover: rgba(255, 255, 255, 0.12);
+  --lx-accent: #34d399;
+  background: linear-gradient(180deg, rgba(20, 22, 30, 0.9), rgba(2, 3, 6, 0.96));
+  border: 1px solid var(--lx-border);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  -webkit-backdrop-filter: saturate(1.25) blur(16px);
+  backdrop-filter: saturate(1.25) blur(16px);
+  color: var(--lx-text);
+}
+
+.si-layer-action-modal--gis-table .si-layer-action-modal-header {
+  border-bottom: 1px solid var(--lx-border);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0));
+}
+.si-layer-action-modal--gis-table .si-layer-action-modal-header h3 {
+  color: var(--lx-text);
+}
+.si-layer-action-modal--gis-table .si-layer-action-modal-table-title {
+  background: linear-gradient(180deg, rgba(52, 211, 153, 0.22), rgba(16, 185, 129, 0.12));
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  color: #d1fae5;
+}
+.si-layer-action-modal--gis-table .si-layer-action-close {
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-border);
+  color: var(--lx-text);
+}
+.si-layer-action-modal--gis-table .si-layer-action-close:hover {
+  background: var(--lx-hover);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+/* Resize handle */
+.si-layer-action-modal--gis-table .si-layer-action-modal-resize {
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
+  border-top: 1px solid var(--lx-border-soft);
+}
+.si-layer-action-modal--gis-table .si-layer-action-modal-resize:hover {
+  background: linear-gradient(to bottom, rgba(52, 211, 153, 0.32), rgba(52, 211, 153, 0.12));
+}
+
+/* Left tool rail */
+.si-layer-action-modal--gis-table .si-layer-action-table-tools {
+  background: transparent;
+  border: none;
+}
+.si-layer-action-modal--gis-table .gis-table-toolbtn,
+.si-layer-action-modal--gis-table .si-layer-action-table-tools button {
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-border-soft);
+  color: var(--lx-text);
+}
+.si-layer-action-modal--gis-table .gis-table-toolbtn:hover:not(:disabled),
+.si-layer-action-modal--gis-table .si-layer-action-table-tools button:hover:not(:disabled) {
+  background: var(--lx-hover);
+  border-color: var(--lx-border);
+  color: #ffffff;
+  box-shadow: none;
+}
+.si-layer-action-modal--gis-table .gis-table-toolbtn i,
+.si-layer-action-modal--gis-table .gis-table-toolbtn .gis-table-tooltext {
+  color: var(--lx-text);
+}
+.si-layer-action-modal--gis-table .gis-table-toolbtn:hover:not(:disabled) i,
+.si-layer-action-modal--gis-table .gis-table-toolbtn:hover:not(:disabled) .gis-table-tooltext {
+  color: var(--lx-accent);
+}
+.si-layer-action-modal--gis-table .gis-table-toolbtn:disabled {
+  opacity: 0.4;
+}
+.si-layer-action-modal--gis-table .gis-table-toolsep {
+  background: var(--lx-border-soft);
+  border-color: var(--lx-border-soft);
+}
+.si-layer-action-modal--gis-table .gis-workspace-sidebar__scope-label {
+  color: var(--lx-text);
+}
+.si-layer-action-modal--gis-table .gis-workspace-sidebar__scope-hint {
+  color: var(--lx-muted);
+}
+
+/* Accordions (search / filter / hub) */
+.si-layer-action-modal--gis-table .gis-workspace-acc {
+  border-color: var(--lx-border-soft);
+}
+.si-layer-action-modal--gis-table .gis-workspace-acc__summary {
+  color: var(--lx-text);
+}
+.si-layer-action-modal--gis-table .gis-workspace-acc__body,
+.si-layer-action-modal--gis-table .gis-workspace-acc__body p {
+  color: var(--lx-muted);
+}
+.si-layer-action-modal--gis-table .gis-table-controls label > span,
+.si-layer-action-modal--gis-table .gis-table-advanced-controls label > span,
+.si-layer-action-modal--gis-table .gis-table-domain-toggle > span {
+  color: var(--lx-muted);
+}
+.si-layer-action-modal--gis-table select,
+.si-layer-action-modal--gis-table input[type='text'],
+.si-layer-action-modal--gis-table .gis-table-search input {
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-border);
+  color: var(--lx-text);
+}
+.si-layer-action-modal--gis-table select option {
+  background: #14161e;
+  color: var(--lx-text);
+}
+.si-layer-action-modal--gis-table input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+.si-layer-action-modal--gis-table .gis-table-search i {
+  color: var(--lx-muted);
+}
+.si-layer-action-modal--gis-table .gis-table-filter-clear {
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-border);
+  color: var(--lx-text);
+}
+
+/* Meta line + sub-header */
+.si-layer-action-modal--gis-table .si-table-modal-subheader,
+.si-layer-action-modal--gis-table .gis-table-dock-header {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01));
+  border-bottom: 1px solid var(--lx-border-soft);
+}
+.si-layer-action-modal--gis-table .si-table-modal-meta,
+.si-layer-action-modal--gis-table .gis-table-dock-meta {
+  color: var(--lx-text);
+}
+/* "Showing N of N feature(s)" bar — dark luxe glass to match the modal. */
+.si-layer-action-modal--gis-table .gis-layer-table-meta,
+.si-layer-action-modal--gis-table .gis-layer-table-meta--table-only {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01));
+  border-bottom: 1px solid var(--lx-border-soft);
+  color: var(--lx-muted);
+}
+.si-layer-action-modal--gis-table .gis-layer-table-metatext {
+  color: var(--lx-muted);
+}
+
+/* Table surface */
+.si-layer-action-modal--gis-table .si-layer-action-table-wrap {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--lx-border-soft);
+}
+.si-layer-action-modal--gis-table .si-layer-action-table,
+.si-layer-action-modal--gis-table .gis-layer-table {
+  background: transparent;
+  color: var(--lx-text);
+}
+.si-layer-action-modal--gis-table .si-layer-action-table th,
+.si-layer-action-modal--gis-table .gis-layer-table thead th {
+  /* Opaque dark — header is position:sticky, so rows must not bleed through. */
+  background: linear-gradient(180deg, #20232e, #15171f);
+  color: var(--lx-text);
+  border-bottom: 1px solid var(--lx-border);
+}
+.si-layer-action-modal--gis-table .si-layer-action-table td,
+.si-layer-action-modal--gis-table .gis-layer-table tbody td {
+  color: var(--lx-text);
+  border-bottom: 1px solid var(--lx-border-soft);
+}
+.si-layer-action-modal--gis-table .gis-layer-table tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.05);
+}
+.si-layer-action-modal--gis-table .gis-layer-table tbody tr.gis-row-selected td {
+  background: rgba(52, 211, 153, 0.16);
+}
+.si-layer-action-modal--gis-table .gis-domain-cell {
+  color: var(--lx-text);
+}
+.si-layer-action-modal--gis-table .gis-table-column-label {
+  color: var(--lx-text);
+}
+.si-layer-action-modal--gis-table .gis-table-column-label > i.fa-grip-vertical {
+  color: var(--lx-muted);
+}
+.si-layer-action-modal--gis-table .gis-table-column-actions button,
+.si-layer-action-modal--gis-table .gis-table-rowbtn {
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-border-soft);
+  color: var(--lx-text);
+}
+.si-layer-action-modal--gis-table .gis-table-column-actions button:hover:not(:disabled),
+.si-layer-action-modal--gis-table .gis-table-rowbtn:hover {
+  background: var(--lx-hover);
+  color: #ffffff;
+}
+.si-layer-action-modal--gis-table .gis-table-column-dragging {
+  background: rgba(52, 211, 153, 0.18);
+}
+.si-layer-action-modal--gis-table .gis-fieldvis-trigger {
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-border-soft);
+  color: var(--lx-text);
+}
+.si-layer-action-modal--gis-table .gis-fieldvis-trigger:hover,
+.si-layer-action-modal--gis-table .gis-fieldvis-trigger--open {
+  background: var(--lx-hover);
+  border-color: var(--lx-border);
+  color: #ffffff;
+}
+.si-layer-action-modal--gis-table input[type='checkbox'] {
+  accent-color: var(--lx-accent);
+}
+.si-layer-action-modal--gis-table mark {
+  background: rgba(250, 204, 21, 0.32);
+  color: #fffbeb;
+}
+
+/* Empty / loading / error states */
+.si-layer-action-modal--gis-table .si-layer-action-empty {
+  color: var(--lx-muted);
+}
+.si-layer-action-modal--gis-table .si-layer-action-empty--error {
+  color: #fca5a5;
+}
+
+/* ── Compact & harmonious sizing ─────────────────────────────────────────── */
+.si-layer-action-modal--gis-table .si-layer-action-modal-header {
+  padding: 9px 12px;
+}
+.si-layer-action-modal--gis-table .si-layer-action-modal-header h3 {
+  font-size: 13px;
+}
+.si-layer-action-modal--gis-table .si-layer-action-modal-table-title {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+.si-layer-action-modal--gis-table .si-layer-action-modal-table-title .gis-table-browser-mark {
+  width: 20px;
+  height: 20px;
+}
+.si-layer-action-modal--gis-table .si-layer-action-close {
+  width: 26px;
+  height: 26px;
+}
+.si-layer-action-modal--gis-table .si-layer-action-modal-body {
+  padding: 8px;
+}
+.si-layer-action-modal--gis-table .si-layer-action-table-layout {
+  gap: 7px;
+}
+/* Two stacked info bars → slim, even strips with matching rhythm. */
+.si-layer-action-modal--gis-table .gis-table-dock-header,
+.si-layer-action-modal--gis-table .si-table-modal-subheader {
+  padding: 5px 10px;
+  margin-bottom: 0;
+}
+.si-layer-action-modal--gis-table .gis-layer-table-meta,
+.si-layer-action-modal--gis-table .gis-layer-table-meta--table-only {
+  padding: 5px 10px;
+  gap: 6px;
+}
+.si-layer-action-modal--gis-table .si-table-modal-meta,
+.si-layer-action-modal--gis-table .gis-table-dock-meta,
+.si-layer-action-modal--gis-table .gis-layer-table-metatext {
+  font-size: 11px;
+  font-weight: 700;
+}
+/* Tighter table rows for a denser, neater grid. */
+.si-layer-action-modal--gis-table .si-layer-action-table,
+.si-layer-action-modal--gis-table .gis-layer-table {
+  font-size: 11px;
+}
+.si-layer-action-modal--gis-table .si-layer-action-table th,
+.si-layer-action-modal--gis-table .si-layer-action-table td,
+.si-layer-action-modal--gis-table .gis-layer-table th,
+.si-layer-action-modal--gis-table .gis-layer-table td {
+  padding: 5px 9px;
+}
+/* Slimmer left tool rail buttons. */
+.si-layer-action-modal--gis-table .gis-table-toolbtn {
+  height: 32px;
+  border-radius: 9px;
+  font-size: 11.5px;
+}
+.si-layer-action-modal--gis-table .gis-table-toolbtn i {
+  width: 18px;
+  height: 18px;
+  font-size: 12px;
 }
 
 .si-layer-action-form {
@@ -4139,6 +4523,18 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
   margin: 0;
   font-size: 12px;
   color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+}
+
+.si-layer-action-empty--loading {
+  color: #0f766e;
+}
+
+.si-layer-action-empty--error {
+  color: #b91c1c;
 }
 
 .si-layer-action-legend {
@@ -9061,6 +9457,12 @@ input.si-explore-date-input-linked[type='date'] {
 
 .si-geo-explorer-row--model .si-geo-explorer-avatar {
   background: linear-gradient(145deg, #6d28d9, #312e81);
+}
+
+/* An empty model row (no rendered content / empty bubble) must not appear as a blank gap. */
+.si-geo-explorer-row--model:empty,
+.si-geo-explorer-row--model:has(> .si-geo-explorer-bubble:empty) {
+  display: none !important;
 }
 
 .si-geo-explorer-bubble {

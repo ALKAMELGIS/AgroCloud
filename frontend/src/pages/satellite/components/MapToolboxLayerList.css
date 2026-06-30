@@ -103,6 +103,65 @@
   white-space: nowrap;
 }
 
+/* Inline status text (GIS-style): bold name + muted status on one line. */
+.si-mt-layer__status {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 9px;
+  line-height: 1.25;
+  font-weight: 500;
+  color: rgba(148, 163, 184, 0.85);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Inline row variant — name + status sit on the same baseline (image-matched). */
+.si-mt-layer--inline .si-mt-layer__main {
+  gap: 8px;
+}
+.si-mt-layer--inline .si-mt-layer__text {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 8px;
+}
+.si-mt-layer--inline .si-mt-layer__name {
+  flex: 0 1 auto;
+}
+
+/* Eye visibility control (QGIS/ArcGIS-style) used by user layers. */
+.si-mt-layer__eye {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(148, 163, 184, 0.72);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.si-mt-layer__eye:hover {
+  background: rgba(148, 163, 184, 0.16);
+  color: #e2e8f0;
+}
+.si-mt-layer__eye.is-on {
+  color: #76f2c0;
+}
+.si-mt-layer__eye:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 1px;
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-mt-layer__eye {
+  color: #64748b;
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-mt-layer__eye.is-on {
+  color: #059669;
+}
+
 .si-mt-layer__controls {
   flex-shrink: 0;
   display: flex;
@@ -136,16 +195,14 @@
   position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: flex-start;
   cursor: pointer;
   margin: 0;
-}
-
-.si-mt-layer__switch-input {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-  pointer-events: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .si-mt-layer__switch-ui {
@@ -176,17 +233,17 @@
   height: 14px;
 }
 
-.si-mt-layer__switch-input:checked + .si-mt-layer__switch-ui {
+.si-mt-layer__switch.is-on .si-mt-layer__switch-ui {
   background: rgba(71, 85, 105, 0.95);
   border-color: rgba(148, 163, 184, 0.55);
 }
 
-.si-mt-layer__switch-input:checked + .si-mt-layer__switch-ui::after {
+.si-mt-layer__switch.is-on .si-mt-layer__switch-ui::after {
   transform: translateX(14px);
   background: #e2e8f0;
 }
 
-.si-mt-layer__switch-input:focus-visible + .si-mt-layer__switch-ui {
+.si-mt-layer__switch:focus-visible .si-mt-layer__switch-ui {
   outline: 1px solid rgba(118, 242, 192, 0.45);
   outline-offset: 2px;
 }
@@ -233,44 +290,72 @@
 }
 
 /* ── ⋯ Options button + ArcGIS-style dropdown menu ───────────────────────── */
+/* Matches the user-layer ⋯ trigger (si-env-layer-action-btn--menu): a clean,
+   borderless, transparent icon button with a subtle blue hover/active tint. */
 .si-mt-layer__opts-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 6px;
-  background: rgba(15, 23, 42, 0.4);
-  color: #cbd5e1;
-  font-size: 11px;
+  width: 26px;
+  height: 26px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(203, 213, 225, 0.85);
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  box-shadow: none;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
 }
-.si-mt-layer__opts-btn:hover,
+.si-mt-layer__opts-btn > i {
+  font-size: 12px;
+  line-height: 1;
+}
+.si-mt-layer__opts-btn:hover {
+  color: #f0f9ff;
+  border-color: rgba(125, 211, 252, 0.34);
+  background: rgba(59, 130, 246, 0.18);
+}
 .si-mt-layer__opts-btn.is-open {
-  color: #f8fafc;
-  border-color: rgba(56, 189, 248, 0.5);
-  background: rgba(56, 189, 248, 0.16);
+  color: #f0f9ff;
+  border-color: rgba(125, 211, 252, 0.45);
+  background: rgba(59, 130, 246, 0.24);
+}
+.si-mt-layer__opts-btn:focus-visible {
+  outline: none;
+  border-color: rgba(147, 197, 253, 0.55);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.32);
 }
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-mt-layer__opts-btn {
-  background: rgba(241, 245, 249, 0.9);
-  border-color: rgba(148, 163, 184, 0.4);
-  color: #475569;
+  background: transparent;
+  border-color: transparent;
+  color: rgba(71, 85, 105, 0.9);
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-mt-layer__opts-btn:hover {
+  color: #1d4ed8;
+  background: rgba(59, 130, 246, 0.12);
 }
 
-/* Portal popover (rendered on document.body) — clean white ArcGIS-style sheet. */
+/* Portal popover (rendered on document.body) — luxe glassy translucent-black sheet
+   matching the added-layer options menu, so every analysis layer shares one design. */
 .si-mt-layer-menu {
   position: fixed;
-  z-index: 4000;
+  z-index: 4200;
   width: 224px;
   max-width: calc(100vw - 16px);
-  padding: 6px;
-  border-radius: 12px;
-  background: #ffffff;
-  border: 1px solid rgba(15, 23, 42, 0.1);
-  box-shadow: 0 18px 50px rgba(2, 6, 23, 0.28), 0 2px 8px rgba(2, 6, 23, 0.12);
-  color: #0f172a;
+  padding: 5px;
+  border-radius: 13px;
+  background: linear-gradient(168deg, rgba(13, 16, 23, 0.72) 0%, rgba(8, 10, 15, 0.82) 100%);
+  backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.62),
+    0 2px 10px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  color: #e2e8f0;
   animation: si-mt-menu-in 0.12s ease-out;
 }
 @keyframes si-mt-menu-in {
@@ -290,14 +375,15 @@
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  background: rgba(37, 99, 235, 0.1);
-  color: #2563eb;
+  background: rgba(52, 211, 153, 0.14);
+  color: #6ee7b7;
   font-size: 11px;
   flex: none;
 }
 .si-mt-layer-menu__name {
   font-size: 12px;
   font-weight: 700;
+  color: #f8fafc;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -311,34 +397,34 @@
   align-items: center;
   font-size: 11px;
   font-weight: 600;
-  color: #334155;
+  color: #cbd5e1;
   margin-bottom: 5px;
 }
 .si-mt-layer-menu__opacity-val {
   font-variant-numeric: tabular-nums;
-  color: #2563eb;
+  color: #6ee7b7;
 }
 .si-mt-layer-menu__opacity input[type='range'] {
   width: 100%;
-  accent-color: #2563eb;
+  accent-color: #34d399;
   cursor: pointer;
 }
 .si-mt-layer-menu__sep {
   height: 1px;
-  margin: 2px 6px;
-  background: rgba(15, 23, 42, 0.08);
+  margin: 3px 8px;
+  background: rgba(255, 255, 255, 0.08);
 }
 .si-mt-layer-menu__item {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 8px 10px;
+  padding: 7px 10px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 8px;
   background: transparent;
-  color: #1e293b;
-  font-size: 12px;
+  color: #e2e8f0;
+  font-size: 11.5px;
   font-weight: 500;
   text-align: left;
   cursor: pointer;
@@ -347,27 +433,27 @@
 .si-mt-layer-menu__item i {
   width: 14px;
   text-align: center;
-  color: #64748b;
+  color: #6ee7b7;
 }
 .si-mt-layer-menu__item:hover {
-  background: rgba(37, 99, 235, 0.1);
-  color: #1d4ed8;
+  background: rgba(110, 231, 183, 0.14);
+  color: #ffffff;
 }
 .si-mt-layer-menu__item:hover i {
-  color: #1d4ed8;
+  color: #a7f3d0;
 }
 .si-mt-layer-menu__item--danger {
-  color: #b91c1c;
+  color: #fecaca;
 }
 .si-mt-layer-menu__item--danger i {
-  color: #dc2626;
+  color: #f87171;
 }
 .si-mt-layer-menu__item--danger:hover {
-  background: rgba(220, 38, 38, 0.1);
-  color: #991b1b;
+  background: rgba(248, 113, 113, 0.16);
+  color: #fff1f2;
 }
 .si-mt-layer-menu__item--danger:hover i {
-  color: #b91c1c;
+  color: #fca5a5;
 }
 
 .si-mt-layer-list--user {
@@ -376,28 +462,63 @@
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-/* Drag-to-reorder user layers (grip + drop feedback). */
+/* Drag-to-reorder user layers — flat (no outer box): just grip + the layer content. */
 .si-env-user-layer-row {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   gap: 2px;
-  border-radius: 9px;
   position: relative;
+  border-radius: 7px;
+  border: 0;
+  background: transparent;
 }
 .si-env-user-layer-row > .si-mt-layer {
   flex: 1 1 auto;
   min-width: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+}
+/* Inline (eye-style) rows — flat (no box), compact. Shared by every analysis-tool,
+   added, and base-overlay layer so they all match the Agro_Structures row design. */
+.si-mt-layer--inline {
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+}
+.si-mt-layer--inline .si-mt-layer__accent {
+  display: none;
+}
+.si-mt-layer--inline .si-mt-layer__main {
+  min-height: 24px;
+  padding: 2px 4px 2px 6px;
+  gap: 6px;
+}
+.si-mt-layer--inline .si-mt-layer__name {
+  font-size: 10.5px;
+}
+.si-mt-layer--inline .si-mt-layer__status {
+  font-size: 8.5px;
+}
+.si-mt-layer--inline .si-mt-layer__eye {
+  width: 20px;
+  height: 20px;
+  font-size: 11px;
+}
+/* Inside the draggable user-row the grip supplies the left inset. */
+.si-env-user-layer-row .si-mt-layer--inline .si-mt-layer__main {
+  padding-left: 4px;
 }
 .si-env-user-layer-grip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 18px;
-  margin: 4px 0;
-  border-radius: 6px;
+  width: 16px;
+  align-self: stretch;
+  border-radius: 5px;
   color: #94a3b8;
-  font-size: 11px;
+  font-size: 10px;
   cursor: grab;
   user-select: none;
   touch-action: none;

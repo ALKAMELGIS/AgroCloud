@@ -25,6 +25,7 @@ export type SatelliteContextPanelId =
   | 'ai-detection-gis'
   | 'tree-detections'
   | 'hydro-watershed'
+  | 'well-site'
   | 'flood-monitoring'
   | 'table-geo-ai'
   | 'spatial'
@@ -78,6 +79,7 @@ export type SatelliteContextualAnalysisDockProps = {
     | 'ai-detection-gis'
     | 'tree-detections'
     | 'hydro-watershed'
+    | 'well-site'
     | 'flood-monitoring'
     | 'table-geo-ai'
     | null;
@@ -174,6 +176,13 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     hint: 'AOI → DEM, flow, streams, watershed & mesh for distributed hydrology.',
   },
   {
+    id: 'well-site',
+    icon: 'fa-solid fa-droplet',
+    label: 'Well Site',
+    title: 'Well Site Recommendation (Hydro-AI)',
+    hint: 'AOI → DEM, slope, flow → suitability heatmap & top drilling sites.',
+  },
+  {
     id: 'flood-monitoring',
     icon: 'fa-solid fa-house-flood-water',
     label: 'Flood (SAR)',
@@ -255,6 +264,7 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
   'ai-detection-gis',
   'tree-detections',
   'hydro-watershed',
+  'well-site',
   'flood-monitoring',
   'table-geo-ai',
 ]);
@@ -267,12 +277,13 @@ const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
   'ai-detection-gis',
   'tree-detections',
   'hydro-watershed',
+  'well-site',
   'flood-monitoring',
 ]);
 
 const RAIL_GROUPS_MAP: SatelliteContextPanelId[][] = [
   ['layers', 'remote-sensing', 'crop-alerts', 'crop-classification', 'layer-live-legend', 'hydro-watershed'],
-  ['ai-detection-gis', 'tree-detections', 'flood-monitoring', 'table-geo-ai'],
+  ['ai-detection-gis', 'tree-detections', 'well-site', 'flood-monitoring', 'table-geo-ai'],
 ];
 
 const RAIL_BY_ID = RAIL.reduce(

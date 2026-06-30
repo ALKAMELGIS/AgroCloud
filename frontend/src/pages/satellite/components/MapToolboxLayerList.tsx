@@ -19,10 +19,16 @@ export type MapToolboxLayerListItem = {
   onExport?: () => void
   /** Optional removal from the map. */
   onRemove?: () => void
+  /** Optional on-map label toggle (e.g. contour elevation labels). */
+  labelsToggle?: { visible: boolean; onToggle: () => void; labelOn?: string; labelOff?: string }
   /** Legacy inline action buttons (kept for base-overlay rows). */
   actions?: ReactNode
   /** Modern single-control actions rendered in the header next to the toggle (e.g. ⋯ options menu). */
   headerActions?: ReactNode
+  /** Visibility control style: 'switch' (pill toggle, default) or 'eye' (GIS-style eye icon). */
+  toggleStyle?: 'switch' | 'eye'
+  /** Hide the vector/raster type badge (used when a drag grip takes that slot). */
+  showTypeIcon?: boolean
 }
 
 type MapToolboxLayerRowProps = Omit<MapToolboxLayerListItem, 'id'>
@@ -37,6 +43,7 @@ function LayerOptionsMenu({
   onOpacityChange,
   onExport,
   onRemove,
+  labelsToggle,
 }: {
   label: string
   kind?: 'raster' | 'vector'
@@ -46,6 +53,7 @@ function LayerOptionsMenu({
   onOpacityChange?: (value: number) => void
   onExport?: () => void
   onRemove?: () => void
+  labelsToggle?: { visible: boolean; onToggle: () => void; labelOn?: string; labelOff?: string }
 }) {
   const [open, setOpen] = useState(false)
   const btnRef = useRef<HTMLButtonElement | null>(null)
@@ -141,7 +149,24 @@ function LayerOptionsMenu({
                 </button>
               ) : null}
 
-              {onToggle && hasOpacity ? <div className="si-mt-layer-menu__sep" /> : null}
+              {labelsToggle ? (
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={labelsToggle.visible}
+                  className="si-mt-layer-menu__item"
+                  onClick={() => labelsToggle.onToggle()}
+                >
+                  <i className="fa-solid fa-tag" aria-hidden />
+                  <span>
+                    {labelsToggle.visible
+                      ? labelsToggle.labelOn ?? 'Hide labels'
+                      : labelsToggle.labelOff ?? 'Show labels'}
+                  </span>
+                </button>
+              ) : null}
+
+              {(onToggle || labelsToggle) && hasOpacity ? <div className="si-mt-layer-menu__sep" /> : null}
 
               {hasOpacity ? (
                 <div className="si-mt-layer-menu__opacity">
@@ -202,6 +227,7 @@ function LayerOptionsMenu({
 
 export function MapToolboxLayerRow({
   label,
+  meta,
   visible,
   toggleable,
   onToggle,
@@ -210,15 +236,21 @@ export function MapToolboxLayerRow({
   onOpacityChange,
   onExport,
   onRemove,
+  labelsToggle,
   actions,
   headerActions,
+  toggleStyle = 'eye',
+  showTypeIcon = true,
 }: MapToolboxLayerRowProps) {
-  const hasMenu = !!(onRemove || onExport || (typeof opacity === 'number' && onOpacityChange))
+  const hasMenu = !!(onRemove || onExport || labelsToggle || (typeof opacity === 'number' && onOpacityChange))
+  const isEyeStyle = toggleStyle === 'eye'
   return (
-    <div className={`si-mt-layer${visible ? ' si-mt-layer--on' : ''}${!toggleable ? ' si-mt-layer--static' : ''}`}>
+    <div
+      className={`si-mt-layer${visible ? ' si-mt-layer--on' : ''}${!toggleable ? ' si-mt-layer--static' : ''}`}
+    >
       <div className="si-mt-layer__accent" aria-hidden />
       <div className="si-mt-layer__main">
-        {kind ? (
+        {kind && showTypeIcon ? (
           <span
             className={`si-mt-layer__type si-mt-layer__type--${kind}`}
             title={kind === 'raster' ? 'Raster layer' : 'Vector layer'}
@@ -231,19 +263,38 @@ export function MapToolboxLayerRow({
           <span className="si-mt-layer__name" title={label}>
             {label}
           </span>
+          {meta ? (
+            <span className="si-mt-layer__status" title={meta}>
+              {meta}
+            </span>
+          ) : null}
         </div>
         <div className="si-mt-layer__controls">
           {toggleable ? (
-            <label className="si-mt-layer__switch" title={visible ? 'Display on' : 'Display off'}>
-              <input
-                type="checkbox"
-                className="si-mt-layer__switch-input"
-                checked={visible}
-                onChange={() => onToggle()}
+            isEyeStyle ? (
+              <button
+                type="button"
+                className={`si-mt-layer__eye${visible ? ' is-on' : ''}`}
+                title={visible ? 'Hide layer' : 'Show layer'}
+                aria-pressed={visible}
+                aria-label={visible ? 'Hide layer' : 'Show layer'}
+                onClick={() => onToggle()}
+              >
+                <i className={`fa-solid ${visible ? 'fa-eye' : 'fa-eye-slash'}`} aria-hidden />
+              </button>
+            ) : (
+              <button
+                type="button"
+                role="switch"
+                aria-checked={visible}
+                className={`si-mt-layer__switch${visible ? ' is-on' : ''}`}
+                title={visible ? 'Display on — click to hide' : 'Display off — click to show'}
                 aria-label={`${visible ? 'Turn off' : 'Turn on'} ${label}`}
-              />
-              <span className="si-mt-layer__switch-ui" aria-hidden />
-            </label>
+                onClick={() => onToggle()}
+              >
+                <span className="si-mt-layer__switch-ui" aria-hidden />
+              </button>
+            )
           ) : (
             <span className="si-mt-layer__always">Always on</span>
           )}
@@ -257,6 +308,7 @@ export function MapToolboxLayerRow({
               onOpacityChange={onOpacityChange}
               onExport={onExport}
               onRemove={onRemove}
+              labelsToggle={labelsToggle}
             />
           ) : headerActions ? (
             <div className="si-mt-layer__header-actions">{headerActions}</div>
@@ -279,31 +331,131 @@ export function MapToolboxLayerRow({
 export function MapToolboxLayerList({
   layers,
   emptyMessage = 'No layers on map.',
+  rowToggleStyle = 'eye',
+  reorderable = false,
+  onReorder,
 }: {
   layers: MapToolboxLayerListItem[]
   emptyMessage?: string
+  /** Default visibility-control style for every row (rows can still override per-item). */
+  rowToggleStyle?: 'switch' | 'eye'
+  /** Show a drag grip and allow drag/keyboard reordering of the rows. */
+  reorderable?: boolean
+  /** Called with (draggedId, targetId) when a row is dropped onto another. */
+  onReorder?: (draggedId: string, targetId: string) => void
 }) {
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [dropId, setDropId] = useState<string | null>(null)
+
   if (!layers.length) {
     return <p className="si-mt-layer-list__empty">{emptyMessage}</p>
   }
+
+  const renderRow = (layer: MapToolboxLayerListItem, showTypeIcon = true) => (
+    <MapToolboxLayerRow
+      label={layer.label}
+      meta={layer.meta}
+      visible={layer.visible}
+      toggleable={layer.toggleable}
+      onToggle={layer.onToggle}
+      kind={layer.kind}
+      opacity={layer.opacity}
+      onOpacityChange={layer.onOpacityChange}
+      onExport={layer.onExport}
+      onRemove={layer.onRemove}
+      labelsToggle={layer.labelsToggle}
+      actions={layer.actions}
+      headerActions={layer.headerActions}
+      toggleStyle={layer.toggleStyle ?? rowToggleStyle}
+      showTypeIcon={showTypeIcon}
+    />
+  )
+
+  if (!reorderable || !onReorder) {
+    return (
+      <div className="si-mt-layer-list" role="list" aria-label="Map layers">
+        {layers.map(layer => (
+          <div key={layer.id}>{renderRow(layer)}</div>
+        ))}
+      </div>
+    )
+  }
+
+  const canReorder = layers.length > 1
+
   return (
-    <div className="si-mt-layer-list" role="list" aria-label="Map layers">
-      {layers.map(layer => (
-        <MapToolboxLayerRow
-          key={layer.id}
-          label={layer.label}
-          meta={layer.meta}
-          visible={layer.visible}
-          toggleable={layer.toggleable}
-          onToggle={layer.onToggle}
-          kind={layer.kind}
-          opacity={layer.opacity}
-          onOpacityChange={layer.onOpacityChange}
-          onExport={layer.onExport}
-          onRemove={layer.onRemove}
-          actions={layer.actions}
-        />
-      ))}
+    <div className="si-mt-layer-list si-mt-layer-list--user" role="list" aria-label="Map layers">
+      {layers.map((layer, idx) => {
+        const isDragging = draggingId === layer.id
+        const isDrop = dropId === layer.id && draggingId !== layer.id
+        return (
+          <div
+            key={layer.id}
+            className={
+              'si-env-user-layer-row' +
+              (isDragging ? ' is-dragging' : '') +
+              (isDrop ? ' is-drop-target' : '')
+            }
+            onDragOver={
+              canReorder
+                ? e => {
+                    if (!draggingId) return
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = 'move'
+                    if (dropId !== layer.id) setDropId(layer.id)
+                  }
+                : undefined
+            }
+            onDrop={
+              canReorder
+                ? e => {
+                    e.preventDefault()
+                    if (draggingId && draggingId !== layer.id) onReorder(draggingId, layer.id)
+                    setDraggingId(null)
+                    setDropId(null)
+                  }
+                : undefined
+            }
+            onDragLeave={
+              canReorder ? () => setDropId(prev => (prev === layer.id ? null : prev)) : undefined
+            }
+          >
+            <span
+              className="si-env-user-layer-grip"
+              role="button"
+              tabIndex={0}
+              draggable
+              title="Drag to reposition"
+              aria-label={`Drag to reposition ${layer.label}`}
+              onDragStart={e => {
+                setDraggingId(layer.id)
+                e.dataTransfer.effectAllowed = 'move'
+                try {
+                  e.dataTransfer.setData('text/plain', layer.id)
+                } catch {
+                  /* some browsers disallow setData here */
+                }
+              }}
+              onDragEnd={() => {
+                setDraggingId(null)
+                setDropId(null)
+              }}
+              onKeyDown={e => {
+                if (e.key === 'ArrowUp' && idx > 0) {
+                  e.preventDefault()
+                  onReorder(layer.id, layers[idx - 1]!.id)
+                } else if (e.key === 'ArrowDown' && idx < layers.length - 1) {
+                  e.preventDefault()
+                  onReorder(layer.id, layers[idx + 1]!.id)
+                }
+              }}
+            >
+              <i className="fa-solid fa-grip-vertical" aria-hidden />
+            </span>
+            {renderRow(layer, false)}
+          </div>
+        )
+      })}
     </div>
   )
 }
