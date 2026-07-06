@@ -300,13 +300,12 @@ async function computeClassHistogramViaWms(wmsConfig, body, marker) {
         Math.abs(new Date(`${a}T12:00:00Z`).getTime() - refTime) -
         Math.abs(new Date(`${b}T12:00:00Z`).getTime() - refTime),
     )
-    .slice(0, 8)
+    .slice(0, 4)
 
   const gridCloudCoverage = Math.max(requestedCc, 95)
   for (const sceneDate of ordered) {
-    let grid
     try {
-      grid = await fetchWmsClassGridForScene({
+      const grid = await fetchWmsClassGridForScene({
         baseUrl,
         accessToken,
         layer,
@@ -316,12 +315,12 @@ async function computeClassHistogramViaWms(wmsConfig, body, marker) {
         timeStart: sceneDate,
         timeEnd: addDaysToIso(sceneDate, 1),
       })
+      const { counts, sampleCount } = classifyGridToCounts(grid, marker, binEdges)
+      if (sampleCount > 0) {
+        return buildHistogramCompatibleResponse(sceneDate, outputId, binEdges, counts, sampleCount)
+      }
     } catch {
       continue
-    }
-    const { counts, sampleCount } = classifyGridToCounts(grid, marker, binEdges)
-    if (sampleCount > 0) {
-      return buildHistogramCompatibleResponse(sceneDate, outputId, binEdges, counts, sampleCount)
     }
   }
 

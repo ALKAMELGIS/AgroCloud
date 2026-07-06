@@ -64,51 +64,30 @@ export function useLayerClassAreas({
     }
 
     let cancelled = false
-    let idleId: number | null = null
     const controller = new AbortController()
+    // Keep the previous per-class rows visible while refreshing (no blank legend flash).
     setState(prev => ({ ...prev, loading: true, error: null, supported: true }))
 
-    const run = () => {
-      if (cancelled) return
-      fetchLayerClassAreas({
-        geometry,
-        layerId,
-        sceneDate: dateKey,
-        maxCloudCoverage,
-        signal: controller.signal,
+    fetchLayerClassAreas({
+      geometry,
+      layerId,
+      sceneDate: dateKey,
+      maxCloudCoverage,
+      signal: controller.signal,
+    })
+      .then(result => {
+        if (cancelled) return
+        setState({ result, loading: false, error: null, supported: true })
       })
-        .then(result => {
-          if (cancelled) return
-          setState({ result, loading: false, error: null, supported: true })
-        })
-        .catch((err: unknown) => {
-          if (cancelled || controller.signal.aborted) return
-          const message = err instanceof Error ? err.message : 'Failed to compute class areas'
-          setState({ result: null, loading: false, error: message, supported: true })
-        })
-    }
-
-    // Debounce, then defer the heavy Statistical API request to browser idle so the
-    // visible WMS index tiles paint FIRST — the legend analyzes pixel areas only
-    // *after* the layer has appeared, instead of competing with it for bandwidth.
-    const ric = (window as unknown as {
-      requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number
-    }).requestIdleCallback
-    const timer = window.setTimeout(() => {
-      if (cancelled) return
-      if (typeof ric === 'function') {
-        idleId = ric(run, { timeout: 1500 })
-      } else {
-        run()
-      }
-    }, 650)
+      .catch((err: unknown) => {
+        if (cancelled || controller.signal.aborted) return
+        const message = err instanceof Error ? err.message : 'Failed to compute class areas'
+        setState(prev => ({ ...prev, loading: false, error: message, supported: true }))
+      })
 
     return () => {
       cancelled = true
       controller.abort()
-      window.clearTimeout(timer)
-      const cic = (window as unknown as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback
-      if (idleId != null && typeof cic === 'function') cic(idleId)
     }
     // geomKey + dateKey + layerId capture all inputs that change the request.
     // eslint-disable-next-line react-hooks/exhaustive-deps

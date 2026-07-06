@@ -10,6 +10,14 @@ const SENTINEL_HUB_ACCESS_TOKEN_EVENT = 'agri-sentinel-hub-access-token-changed'
 /** Public read-only token for Sentinel Hub featured collections (not a private secret). */
 export const SENTINEL_HUB_PUBLIC_WMS_ACCESS_TOKEN = 'PUBLIC_DATA_FEATURED_COLLECTIONS'
 
+/**
+ * Sentinel Hub OGC WMS instance access key (PLAK…).
+ * Valid for Layer Live / WMS GetMap — not as a Statistical / Process API Bearer token.
+ */
+export function isSentinelHubWmsInstanceAccessToken(token: string): boolean {
+  return /^PLAK/i.test(String(token || '').trim())
+}
+
 function envToken(): string {
   const raw = import.meta.env.VITE_SENTINEL_HUB_ACCESS_TOKEN
   return typeof raw === 'string' ? raw.trim() : ''

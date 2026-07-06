@@ -76,10 +76,15 @@ function isLikelyJwt(token) {
   return token.split('.').length >= 3
 }
 
+/** OGC WMS instance key (PLAK…) — Layer Live only, not Statistical API Bearer auth. */
+function isWmsInstanceAccessToken(token) {
+  return /^PLAK/i.test(String(token || '').trim())
+}
+
 function isPrivateAccessToken(token) {
   if (!token || token === SENTINEL_HUB_PUBLIC_WMS_ACCESS_TOKEN) return false
-  if (isLikelyJwt(token)) return true
-  return token.length > 20
+  if (isWmsInstanceAccessToken(token)) return false
+  return isLikelyJwt(token)
 }
 
 function isPublicWmsToken(token) {

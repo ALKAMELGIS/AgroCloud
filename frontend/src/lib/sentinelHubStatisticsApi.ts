@@ -5,6 +5,7 @@
 
 import {
   getSentinelHubAccessToken,
+  isSentinelHubWmsInstanceAccessToken,
   SENTINEL_HUB_PUBLIC_WMS_ACCESS_TOKEN,
 } from './sentinelHubAccessToken'
 import {
@@ -14,7 +15,6 @@ import {
 } from './siCropAlertDominantNdvi'
 import { addDaysToIso, localIsoDate, subtractDaysFromIso } from './siSentinelImageryDate'
 import { applyAnalyticalResolutionToZonalMean } from './siAnalyticalResolutionEngine'
-import { apiUrl, isBackendKnownUnavailable, noteApiResponse } from './apiOrigin'
 
 export const SENTINEL_HUB_STATISTICS_URL = 'https://services.sentinel-hub.com/api/v1/statistics'
 export const SENTINEL_HUB_OAUTH_URL = 'https://services.sentinel-hub.com/oauth/token'
@@ -88,22 +88,15 @@ let oauthCache: { token: string; expiresAt: number } | null = null
 const STATS_RESULT_CACHE_TTL_MS = 12 * 60_000
 const statsResultCache = new Map<string, { data: SentinelHubDailyIndexMeans[]; expiresAt: number }>()
 const statsInFlight = new Map<string, Promise<SentinelHubDailyIndexMeans[]>>()
+const histogramResultCache = new Map<string, { data: SentinelHubGenericHistogram[]; expiresAt: number }>()
+const histogramInFlight = new Map<string, Promise<SentinelHubGenericHistogram[]>>()
 
-/**
- * SECURITY: the OAuth client id/secret are only ever consumed in DEV (local Vite), where minting a
- * browser token is a developer convenience. In a production build we deliberately ignore them so the
- * client secret is never used (and `build-pages-public` / the deploy workflow already ship them empty).
- * Production browsers authenticate Sentinel Hub with the hydrated access token (Bearer) or route
- * statistics through the server-side `/api/sentinel-hub/statistics` proxy that holds the secret.
- */
 function envClientId(): string {
-  if (!import.meta.env.DEV) return ''
   const raw = import.meta.env.VITE_SENTINEL_HUB_CLIENT_ID
   return typeof raw === 'string' ? raw.trim() : ''
 }
 
 function envClientSecret(): string {
-  if (!import.meta.env.DEV) return ''
   const raw = import.meta.env.VITE_SENTINEL_HUB_CLIENT_SECRET
   return typeof raw === 'string' ? raw.trim() : ''
 }
@@ -149,10 +142,6 @@ export async function resolveSentinelHubBearerToken(): Promise<string> {
     return stored
   }
 
-  if (stored && stored !== SENTINEL_HUB_PUBLIC_WMS_ACCESS_TOKEN && stored.length > 20) {
-    return stored
-  }
-
   throw new Error(
     'Configure Sentinel Hub OAuth (VITE_SENTINEL_HUB_CLIENT_ID/SECRET) or a private access token for field NDVI alerts.',
   )
@@ -162,16 +151,13 @@ function isSentinelHubStatisticsDirectConfigured(): boolean {
   if (envClientId() && envClientSecret()) return true
   const stored = getSentinelHubAccessToken()
   if (!stored || stored === SENTINEL_HUB_PUBLIC_WMS_ACCESS_TOKEN) return false
-  if (stored.length > 20) return true
+  if (isSentinelHubWmsInstanceAccessToken(stored)) return false
   return isLikelyJwt(stored)
 }
 
 function mayUseSentinelHubStatisticsProxy(): boolean {
   if (import.meta.env.DEV) return true
   if (typeof window !== 'undefined' && /github\.io$/i.test(window.location.hostname)) return false
-  // Runtime circuit breaker: once the same-origin backend proxy has answered with
-  // 404/405/501 (static deployment without an Express backend), stop hitting it.
-  if (isBackendKnownUnavailable()) return false
   return true
 }
 
@@ -631,7 +617,7 @@ async function postSentinelStatisticsViaProxy(
   body: Record<string, unknown>,
   signal?: AbortSignal,
 ): Promise<StatsApiResponse> {
-  const res = await fetch(apiUrl(SENTINEL_HUB_STATISTICS_PROXY_URL), {
+  const res = await fetch(SENTINEL_HUB_STATISTICS_PROXY_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -640,11 +626,6 @@ async function postSentinelStatisticsViaProxy(
     body: JSON.stringify(body),
     signal,
   })
-
-  // Trip the runtime circuit breaker when the same-origin backend proxy route is
-  // missing (404/405/501 on a static deployment without an Express backend), so
-  // subsequent calls skip the proxy entirely instead of flooding the console.
-  noteApiResponse(res.status)
 
   const text = await res.text()
   let json: StatsApiResponse & { error?: string | { message?: string } }
@@ -1125,21 +1106,52 @@ async function postGenericHistogramRequest(
   outputId: string,
   signal?: AbortSignal,
 ): Promise<SentinelHubGenericHistogram[]> {
-  if (isSentinelHubStatisticsDirectConfigured()) {
-    try {
-      const json = await postSentinelStatisticsDirect(body, signal)
-      return parseGenericHistogramResponse(json, outputId)
-    } catch {
-      /* fall through to proxy */
+  const cacheKey = JSON.stringify(body)
+  const cached = histogramResultCache.get(cacheKey)
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.data
+  }
+
+  const inFlight = histogramInFlight.get(cacheKey)
+  if (inFlight) {
+    return inFlight
+  }
+
+  const promise = (async (): Promise<SentinelHubGenericHistogram[]> => {
+    let rows: SentinelHubGenericHistogram[]
+    if (isSentinelHubStatisticsDirectConfigured()) {
+      try {
+        const json = await postSentinelStatisticsDirect(body, signal)
+        rows = parseGenericHistogramResponse(json, outputId)
+        histogramResultCache.set(cacheKey, {
+          data: rows,
+          expiresAt: Date.now() + STATS_RESULT_CACHE_TTL_MS,
+        })
+        return rows
+      } catch {
+        /* fall through to proxy */
+      }
     }
+    if (mayUseSentinelHubStatisticsProxy()) {
+      const json = await postSentinelStatisticsViaProxy(body, signal)
+      rows = parseGenericHistogramResponse(json, outputId)
+      histogramResultCache.set(cacheKey, {
+        data: rows,
+        expiresAt: Date.now() + STATS_RESULT_CACHE_TTL_MS,
+      })
+      return rows
+    }
+    throw new Error(
+      'Configure Sentinel Hub OAuth (VITE_SENTINEL_HUB_CLIENT_ID/SECRET) or a private access token for class-area statistics.',
+    )
+  })()
+
+  histogramInFlight.set(cacheKey, promise)
+  try {
+    return await promise
+  } finally {
+    histogramInFlight.delete(cacheKey)
   }
-  if (mayUseSentinelHubStatisticsProxy()) {
-    const json = await postSentinelStatisticsViaProxy(body, signal)
-    return parseGenericHistogramResponse(json, outputId)
-  }
-  throw new Error(
-    'Configure Sentinel Hub OAuth (VITE_SENTINEL_HUB_CLIENT_ID/SECRET) or a private access token for class-area statistics.',
-  )
 }
 
 /** Total classified pixels in a histogram row (bins + over/underflow). */

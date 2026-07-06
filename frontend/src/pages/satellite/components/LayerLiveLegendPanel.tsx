@@ -6,7 +6,13 @@ import {
   resolveAnalyticalResolutionMeta,
   SENTINEL2_NATIVE_GSD_M,
 } from '../../../lib/siAnalyticalResolutionEngine'
-import { formatAreaHa, formatAreaKm2, formatAreaM2, type LayerClassAreaRow } from '../../../lib/siLayerClassAreaEngine'
+import {
+  formatAreaHa,
+  formatAreaKm2,
+  formatAreaM2,
+  geodesicAreaM2,
+  type LayerClassAreaRow,
+} from '../../../lib/siLayerClassAreaEngine'
 import { useLayerClassAreas } from './useLayerClassAreas'
 import './LayerLiveLegendPanel.css'
 
@@ -202,15 +208,15 @@ export function LayerLiveLegendActiveCard({
     })
 
   const hasAoi = !!aoiGeometry
-  const totalHa = areaResult ? areaResult.aoiAreaM2 / 10_000 : 0
+  const instantAoiHa = useMemo(() => {
+    if (!aoiGeometry) return 0
+    return geodesicAreaM2(aoiGeometry) / 10_000
+  }, [aoiGeometry])
+  const totalHa = areaResult ? areaResult.aoiAreaM2 / 10_000 : instantAoiHa
   const imageryDate = areaResult?.sceneDate || sceneDate || '—'
   const providerLabel = `Sentinel Hub · ${SENTINEL2_NATIVE_GSD_M} m`
   const seriesLabel = seriesStart && seriesEnd ? `${seriesStart} → ${seriesEnd}` : null
-
-  // The color key always shows each index's FIXED ramp (colors + class ranges
-  // exactly as defined in the index code). When an AOI classification completes
-  // the per-class Total Area (ha + m²) is appended to each fixed class.
-  const analysisDone = areaSupported && hasAoi && !!areaResult
+  const classAreaRows = areaResult?.rows
 
   return (
     <section
@@ -256,24 +262,27 @@ export function LayerLiveLegendActiveCard({
         {showAre ? <p className="si-layer-live-legend__are-disclaimer">{areMeta.badgeLong}</p> : null}
         {hasAoi && areaSupported ? (
           <div className="si-layer-live-legend__area-summary" aria-live="polite">
-            {areaLoading ? (
-              <span className="si-layer-live-legend__area-status">
-                <i className="fa-solid fa-circle-notch fa-spin" aria-hidden /> Computing class areas…
-              </span>
-            ) : areaError ? (
+            {areaError ? (
               <span className="si-layer-live-legend__area-status is-error" title={areaError}>
                 <i className="fa-solid fa-triangle-exclamation" aria-hidden /> Area unavailable
               </span>
-            ) : areaResult ? (
+            ) : (
               <span className="si-layer-live-legend__area-status">
                 <i className="fa-solid fa-ruler-combined" aria-hidden /> Total AOI {formatAreaHa(totalHa)} ha
-                <span className="si-layer-live-legend__area-status-sub"> · {areaResult.sceneDate}</span>
+                {areaResult?.sceneDate ? (
+                  <span className="si-layer-live-legend__area-status-sub"> · {areaResult.sceneDate}</span>
+                ) : sceneDate ? (
+                  <span className="si-layer-live-legend__area-status-sub"> · {sceneDate.slice(0, 10)}</span>
+                ) : null}
+                {areaLoading && !classAreaRows?.length ? (
+                  <span className="si-layer-live-legend__area-status-sub"> · classifying…</span>
+                ) : null}
               </span>
-            ) : null}
+            )}
           </div>
         ) : null}
       </header>
-      <LayerLiveLegendBody spec={spec} classAreas={analysisDone ? areaResult?.rows : undefined} />
+      <LayerLiveLegendBody spec={spec} classAreas={classAreaRows} />
     </section>
   )
 }

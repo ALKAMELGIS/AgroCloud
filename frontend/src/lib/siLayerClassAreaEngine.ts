@@ -279,32 +279,37 @@ export async function fetchLayerClassAreas(
       signal: options.signal,
     })
 
-  const tryPass = async (opts: {
-    relaxed: boolean
-    maxCloudCoverage?: number
-    searchWindowDays?: number
-  }): Promise<{ histogram: SentinelHubGenericHistogram; computed: ReturnType<typeof computeClassAreaRows> } | null> => {
-    const histogram = await runHistogram(opts)
+  const finishPass = (
+    histogram: SentinelHubGenericHistogram | null,
+  ): { histogram: SentinelHubGenericHistogram; computed: ReturnType<typeof computeClassAreaRows> } | null => {
     if (!histogram) return null
     const computed = computeClassAreaRows(histogram, classCount, pixelAreaM2)
     return computed.totalCount > 0 ? { histogram, computed } : null
   }
 
-  // Fallback ladder — each pass only "wins" if it classifies real pixels:
-  //   1. Strict, exact day  (SCL cloud mask, the scene shown on the map).
-  //   2. Relaxed, exact day (drop cloud mask for hazy/partly-cloudy scenes).
-  //   3. Relaxed, windowed  (nearest acquisition within ~12 days) — Sentinel-2's
-  //      ~5-day revisit means the exact day often has no acquisition over the AOI,
-  //      so without this the legend would read all-zeros for valid AOIs.
-  let hit =
-    (await tryPass({ relaxed: false, maxCloudCoverage: options.maxCloudCoverage })) ??
-    (await tryPass({ relaxed: true, maxCloudCoverage: Math.max(options.maxCloudCoverage ?? 0, 95) })) ??
-    (await tryPass({ relaxed: true, maxCloudCoverage: 100, searchWindowDays: 12 }))
+  // Fast path: one widened request (±12 days, relaxed cloud mask). The server-side
+  // WMS fallback already searches nearby scenes — avoid serial passes that block the legend.
+  let hit = finishPass(
+    await runHistogram({
+      relaxed: true,
+      maxCloudCoverage: Math.max(options.maxCloudCoverage ?? 0, 95),
+      searchWindowDays: 12,
+    }),
+  )
 
-  // Last resort: keep the exact-day strict histogram (all-zeros) so the panel can
-  // still report the class structure rather than disappearing entirely.
+  // Only if the fast pass returned zero pixels, retry the exact scene day once.
   if (!hit) {
-    const histogram = await runHistogram({ relaxed: false, maxCloudCoverage: options.maxCloudCoverage })
+    hit = finishPass(
+      await runHistogram({ relaxed: false, maxCloudCoverage: options.maxCloudCoverage }),
+    )
+  }
+
+  if (!hit) {
+    const histogram = await runHistogram({
+      relaxed: true,
+      maxCloudCoverage: 100,
+      searchWindowDays: 12,
+    })
     if (!histogram) return null
     hit = { histogram, computed: computeClassAreaRows(histogram, classCount, pixelAreaM2) }
   }
