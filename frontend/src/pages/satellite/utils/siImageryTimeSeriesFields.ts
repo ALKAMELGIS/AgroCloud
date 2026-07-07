@@ -1,34 +1,18 @@
-import {
-  buildAgroStructureFieldOptions,
-  resolveAgroStructureFieldByKey,
-  type AcpStructureFieldOption,
-} from '../../dashboards/agroCloudPlatform/acpMapSpatial';
-import type { CropAlertFieldInput } from '../../../lib/siCropAlertEngine';
+import { resolveAgroStructureFieldByKey } from '../../dashboards/agroCloudPlatform/acpMapSpatial';import type { CropAlertFieldInput } from '../../../lib/siCropAlertEngine';
 import type { SiAoiFieldRecord } from '../../../lib/siAoiFields';
+import {
+  SI_IMAGERY_COMMITTED_AOI_KEY,
+} from './siImageryTimeSeriesAoi';
 
-export const SI_IMAGERY_COMMITTED_AOI_KEY = '__aoi__';
-
-export function buildSiImageryFieldOptions(
-  agroStructuresMask: GeoJSON.FeatureCollection | null | undefined,
-  aoiFields: SiAoiFieldRecord[],
-  committedAoiGeometry: GeoJSON.Geometry | null | undefined,
-): AcpStructureFieldOption[] {
-  const agro = buildAgroStructureFieldOptions(agroStructuresMask);
-  if (agro.length) return agro;
-  if (aoiFields.length) {
-    return aoiFields
-      .map(f => ({
-        fieldKey: f.id,
-        displayName: f.name,
-        objectId: f.id,
-      }))
-      .sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }));
-  }
-  if (committedAoiGeometry) {
-    return [{ fieldKey: SI_IMAGERY_COMMITTED_AOI_KEY, displayName: 'Committed AOI', objectId: 'aoi' }];
-  }
-  return [];
-}
+export {
+  buildSiImageryFieldAoiOptionGroups,
+  buildSiImageryFieldOptions,
+  flattenImageryFieldAoiOptions,
+  SI_IMAGERY_COMMITTED_AOI_KEY,
+  SI_IMAGERY_DRAW_AOI_ACTION_KEY,
+  type ImageryAoi,
+  type ImageryFieldAoiOptionGroups,
+} from './siImageryTimeSeriesAoi';
 
 function ringCentroid(ring: number[][]): [number, number] {
   if (!ring.length) return [0, 0];
@@ -69,7 +53,7 @@ export function resolveSiImageryField(
     return {
       fieldKey,
       objectId: 'aoi',
-      farmName: 'Committed AOI',
+      farmName: 'Current Map AOI',
       farmCode: '',
       structureType: 'AOI',
       country: '',

@@ -294,6 +294,84 @@ export function bucketImagerySeriesByMonth(
   }
 }
 
+export type ImageryTimeAggregation = 'day' | 'week' | 'month' | 'year'
+
+export const IMAGERY_TIME_AGGREGATION_OPTIONS: Array<{ id: ImageryTimeAggregation; label: string }> = [
+  { id: 'day', label: 'Day' },
+  { id: 'week', label: 'Week' },
+  { id: 'month', label: 'Month' },
+  { id: 'year', label: 'Year' },
+]
+
+/** ISO week bucket key (e.g. 2026-W27) for a scene date YYYY-MM-DD. */
+export function imageryPeriodKey(isoDate: string, aggregation: ImageryTimeAggregation): string {
+  const date = isoDate.trim().slice(0, 10)
+  if (!date || date.length < 10) return ''
+  if (aggregation === 'day') return date
+  if (aggregation === 'month') return date.slice(0, 7)
+  if (aggregation === 'year') return date.slice(0, 4)
+  const [y, m, d] = date.split('-').map(Number) as [number, number, number]
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return date
+  const utc = new Date(Date.UTC(y, m - 1, d))
+  utc.setUTCDate(utc.getUTCDate() + 4 - (utc.getUTCDay() || 7))
+  const isoYear = utc.getUTCFullYear()
+  const yearStart = new Date(Date.UTC(isoYear, 0, 1))
+  const week = Math.ceil((((utc.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+  return `${isoYear}-W${String(week).padStart(2, '0')}`
+}
+
+export type ImageryAggregatedTimeSeries = {
+  labels: string[]
+  layerSeries: ImageryTimeSeriesLayerSeries[]
+  /** Last scene date in each bucket — used for map sync when a period is clicked. */
+  anchorDates: string[]
+}
+
+/** Mean-aggregate daily scene statistics into week / month / year buckets (day = passthrough). */
+export function aggregateImagerySeriesByPeriod(
+  labels: string[],
+  series: ImageryTimeSeriesLayerSeries[],
+  aggregation: ImageryTimeAggregation,
+): ImageryAggregatedTimeSeries {
+  if (aggregation === 'day' || !labels.length || !series.length) {
+    return {
+      labels: [...labels],
+      layerSeries: series.map(entry => ({ layerId: entry.layerId, values: [...entry.values] })),
+      anchorDates: [...labels],
+    }
+  }
+
+  const bucketIndices = new Map<string, number[]>()
+  const bucketAnchor = new Map<string, string>()
+
+  for (let i = 0; i < labels.length; i++) {
+    const key = imageryPeriodKey(labels[i]!, aggregation)
+    if (!key) continue
+    const indices = bucketIndices.get(key) ?? []
+    indices.push(i)
+    bucketIndices.set(key, indices)
+    bucketAnchor.set(key, labels[i]!)
+  }
+
+  const sortedKeys = [...bucketIndices.keys()].sort((a, b) => a.localeCompare(b))
+  const layerSeries: ImageryTimeSeriesLayerSeries[] = series.map(entry => ({
+    layerId: entry.layerId,
+    values: sortedKeys.map(key => {
+      const indices = bucketIndices.get(key) ?? []
+      const vals = indices
+        .map(i => entry.values[i])
+        .filter((v): v is number => v != null && Number.isFinite(v))
+      return vals.length ? vals.reduce((sum, v) => sum + v, 0) / vals.length : NaN
+    }),
+  }))
+
+  return {
+    labels: sortedKeys,
+    layerSeries,
+    anchorDates: sortedKeys.map(key => bucketAnchor.get(key) ?? key),
+  }
+}
+
 /** Pie — multi-layer: mean share per layer; single layer: monthly means. */
 export function buildImageryPieChartSlices(
   labels: string[],

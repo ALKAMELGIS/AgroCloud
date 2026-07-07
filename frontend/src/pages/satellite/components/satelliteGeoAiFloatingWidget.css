@@ -273,10 +273,11 @@
 .si-geo-ai-float-head {
   flex-shrink: 0;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 12px 14px 10px;
+  gap: 6px;
+  padding: 5px 8px;
+  min-height: 32px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.14);
   cursor: grab;
   user-select: none;
@@ -290,43 +291,45 @@
 .si-geo-ai-float-head-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
   min-width: 0;
 }
 
 .si-geo-ai-float-title {
-  font-size: 13px;
-  font-weight: 800;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
   color: #f8fafc;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
 }
 
 .si-geo-ai-float-sub {
-  font-size: 9px;
-  font-weight: 750;
-  letter-spacing: 0.12em;
+  font-size: 7px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(148, 163, 184, 0.95);
+  color: rgba(148, 163, 184, 0.9);
 }
 
 .si-geo-ai-float-actions {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-shrink: 0;
 }
 
 .si-geo-ai-float-icon-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
   border: 1px solid rgba(148, 163, 184, 0.22);
   background: rgba(2, 6, 23, 0.35);
   color: #cbd5e1;
   cursor: pointer;
   display: grid;
   place-items: center;
-  font-size: 12px;
+  font-size: 9px;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
@@ -370,6 +373,35 @@
 
 .si-geo-ai-float-body .si-geo-ai-model-tabs {
   flex-shrink: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 3px;
+  margin: 0 0 5px;
+  padding: 0;
+}
+
+.si-geo-ai-float-body .si-geo-ai-model-tab--icon {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0;
+  border-radius: 5px;
+  display: inline-grid;
+  place-items: center;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0;
+  font-weight: 600;
+}
+
+.si-geo-ai-float-body .si-geo-ai-model-tab--icon i {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.si-geo-ai-float-body .si-geo-ai-model-tab--icon.si-geo-ai-model-tab--active {
+  box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.35);
 }
 
 .si-geo-ai-float-body .si-geo-explorer-messages {
@@ -464,12 +496,24 @@
   line-height: 1.4;
 }
 
-/* Compact composer inside the floating shell: smaller action icons + a
-   comfortable, well-proportioned writing area. */
+/* Flat composer — no nested card chrome inside floating shell */
 .si-geo-ai-float-body .si-geo-explorer-composer-surface {
-  padding: 8px 9px;
-  gap: 7px;
-  border-radius: 12px;
+  margin-top: 4px;
+  padding: 0;
+  gap: 6px;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.si-geo-ai-float-body .si-geo-explorer-composer-surface[data-voice-state='listening'],
+.si-geo-ai-float-body .si-geo-explorer-composer-surface[data-voice-state='capturing'] {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
 }
 
 .si-geo-ai-float-body .si-geo-explorer-input {
@@ -486,8 +530,10 @@
 
 .si-geo-ai-float-body .si-geo-explorer-composer-toolbar-start {
   gap: 4px;
-  padding: 3px 5px;
-  border-radius: 9px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 0;
 }
 
 .si-geo-ai-float-body .si-geo-explorer-composer-icon-btn {
@@ -515,7 +561,8 @@
   }
 
   .si-geo-ai-float-head {
-    padding: 10px 12px 8px;
+    padding: 4px 6px;
+    min-height: 28px;
   }
 
   .si-geo-ai-float-body {

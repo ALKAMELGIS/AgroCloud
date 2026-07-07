@@ -117,6 +117,22 @@
   height: 108px;
 }
 
+.si-weather-panel-shell--acp-compact.si-weather-panel-shell--history .si-wx-history__plot--pie {
+  height: auto;
+  min-height: 132px;
+}
+
+.si-weather-panel-shell--acp-compact.si-weather-panel-shell--history .si-wx-history__main-pie-stage {
+  width: 88px;
+  height: 88px;
+  min-width: 88px;
+  min-height: 88px;
+}
+
+.si-weather-panel-shell--acp-compact.si-weather-panel-shell--history .si-wx-history__main-pie-key-list {
+  max-height: 96px;
+}
+
 .si-weather-panel-shell--acp-compact.si-weather-panel-shell--history .si-wx-history__insights {
   grid-template-columns: 1fr;
   gap: 6px;
@@ -1197,6 +1213,195 @@
   height: 142px;
   overflow: hidden;
   padding: 4px 6px 0;
+}
+
+.si-wx-history__plot--pie {
+  height: auto;
+  min-height: 148px;
+  max-height: 220px;
+  overflow: visible;
+  padding: 6px 8px 4px;
+}
+
+.si-wx-history__main-pie-stack {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+}
+
+.si-wx-history__main-pie-stage {
+  width: 108px;
+  height: 108px;
+  min-width: 108px;
+  min-height: 108px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.01) 72%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    inset 0 8px 18px rgba(255, 255, 255, 0.04);
+}
+
+.si-wx-history__main-pie {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.si-wx-history__main-pie-ring {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 0.75;
+}
+
+.si-wx-history__main-pie-slice {
+  stroke: rgba(255, 255, 255, 0.22);
+  stroke-width: 0.85;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  transition: opacity 0.18s ease;
+}
+
+.si-wx-history__main-pie-label {
+  fill: rgba(255, 255, 255, 0.95);
+  font-size: 8px;
+  font-weight: 800;
+  pointer-events: none;
+  paint-order: stroke fill;
+  stroke: rgba(0, 0, 0, 0.45);
+  stroke-width: 2px;
+}
+
+.si-wx-history__main-pie-label--sm {
+  font-size: 7px;
+  stroke-width: 1.5px;
+}
+
+.si-wx-history__main-pie-center {
+  fill: rgba(255, 255, 255, 0.92);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.si-wx-history__main-pie-center-sub {
+  fill: rgba(255, 255, 255, 0.48);
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.si-wx-history__main-pie-key {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.si-wx-history__main-pie-key-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.si-wx-history__main-pie-key-title {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.si-wx-history__main-pie-key-meta {
+  font-size: 8px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.si-wx-history__main-pie-key-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-height: 120px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.si-wx-history__main-pie-key-row {
+  display: grid;
+  grid-template-columns: 10px 1fr auto auto;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.si-wx-history__main-pie-key-row:last-child {
+  border-bottom: none;
+}
+
+.si-wx-history__main-pie-key-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.si-wx-history__main-pie-key-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.si-wx-history__main-pie-key-val {
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.88);
+  white-space: nowrap;
+}
+
+.si-wx-history__main-pie-key-unit {
+  margin-left: 1px;
+  font-size: 8px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.si-wx-history__main-pie-key-pct {
+  min-width: 2.4rem;
+  text-align: right;
+  font-weight: 800;
+  font-size: 9px;
+  color: rgba(167, 243, 208, 0.92);
+}
+
+:root[dir='rtl'] .si-wx-history__main-pie-stack {
+  flex-direction: row-reverse;
+}
+
+:root[dir='rtl'] .si-wx-history__main-pie-key-pct {
+  text-align: left;
 }
 
 .si-wx-history__chart {
