@@ -102,6 +102,11 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
   const [labels, setLabels] = useState<string[]>([])
   const [layerSeries, setLayerSeries] = useState<ImageryTimeSeriesLayerSeries[]>([])
   const [hasRun, setHasRun] = useState(false)
+  const [analysisDurationMs, setAnalysisDurationMs] = useState<number | null>(null)
+  const [analysisElapsedMs, setAnalysisElapsedMs] = useState(0)
+  const runAnalysisRef = useRef<() => Promise<void>>(() => Promise.resolve())
+  const autoRunReadyRef = useRef(false)
+  const prevAutoRunDatesRef = useRef({ from: '', to: '' })
 
   useEffect(() => {
     if (!fieldOptions.length) {
@@ -131,7 +136,19 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
     setLabels([])
     setLayerSeries([])
     setError(null)
+    setAnalysisDurationMs(null)
+    autoRunReadyRef.current = false
   }, [])
+
+  const syncMapToChartDate = useCallback(
+    (isoDate: string) => {
+      const day = isoDate.trim().slice(0, 10)
+      if (!day || day.length < 10) return
+      acp.setAutoFollowDate(false)
+      acp.setAnalysisDate(day)
+    },
+    [acp],
+  )
 
   const selectedFieldLabel =
     fieldOptions.find(o => o.fieldKey === selectedFieldKey)?.displayName ?? '—'
@@ -158,6 +175,8 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
 
     const layerIds = selectedLayerIds.length ? selectedLayerIds : ['NDVI']
 
+    const startedAt = performance.now()
+    setAnalysisElapsedMs(0)
     setLoading(true)
     try {
       let historyMap = await fetchCropAlertSentinelHistoryExtension([field], {
@@ -199,7 +218,10 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
       setLabels([])
       setLayerSeries([])
     } finally {
+      setAnalysisDurationMs(Math.max(0, Math.round(performance.now() - startedAt)))
       setLoading(false)
+      autoRunReadyRef.current = true
+      prevAutoRunDatesRef.current = { from: fromDate, to: toDate }
     }
   }, [
     acp.aoiMask,
@@ -209,6 +231,35 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
     toDate,
     selectedLayerIds,
   ])
+
+  runAnalysisRef.current = runAnalysis
+
+  useEffect(() => {
+    if (!loading) return
+    const tick = () => setAnalysisElapsedMs(ms => ms + 100)
+    const id = window.setInterval(tick, 100)
+    return () => window.clearInterval(id)
+  }, [loading])
+
+  useEffect(() => {
+    if (!autoRunReadyRef.current || !selectedFieldKey || loading) return
+    if (!fromDate || !toDate || fromDate >= toDate) return
+    const prev = prevAutoRunDatesRef.current
+    if (prev.from === fromDate && prev.to === toDate) return
+    const id = window.setTimeout(() => void runAnalysisRef.current(), 650)
+    return () => window.clearTimeout(id)
+  }, [fromDate, toDate, selectedFieldKey, loading])
+
+  const chartDateClickHandler = useCallback(
+    (_event: unknown, elements: Array<{ index: number; datasetIndex?: number }>) => {
+      if (!elements.length) return
+      const el = elements[0]!
+      if (el.datasetIndex != null && el.datasetIndex > 0) return
+      const date = labels[el.index]
+      if (date) syncMapToChartDate(date)
+    },
+    [labels, syncMapToChartDate],
+  )
 
   const chartData = useMemo((): ChartData<'line' | 'bar'> => {
     if (!labels.length || !layerSeries.length) {
@@ -334,12 +385,19 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
       responsive: true,
       maintainAspectRatio: false,
       animation: { duration: loading ? 0 : 280 },
+      onClick: chartDateClickHandler,
       plugins: {
         legend: {
           display: splitByYears || layerSeries.length > 1 || hasRun,
           labels: { color: '#cbd5e1', boxWidth: 10, font: { size: 10 } },
         },
-        tooltip: { bodyFont: { size: 10 }, titleFont: { size: 10 } },
+        tooltip: {
+          bodyFont: { size: 10 },
+          titleFont: { size: 10 },
+          callbacks: {
+            afterBody: () => ['Click point to set map date'],
+          },
+        },
       },
       scales: {
         x: {
@@ -352,7 +410,7 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
         },
       },
     }),
-    [loading, splitByYears, layerSeries.length, hasRun],
+    [loading, splitByYears, layerSeries.length, hasRun, chartDateClickHandler],
   )
 
   const pieChartOptions = useMemo(
@@ -377,6 +435,7 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
       responsive: true,
       maintainAspectRatio: false,
       animation: { duration: loading ? 0 : 280 },
+      onClick: chartDateClickHandler,
       plugins: {
         legend: {
           display: layerSeries.length > 0 || hasRun,
@@ -446,8 +505,15 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
             },
           },
     }),
-    [loading, layerSeries.length, hasRun, scatterCorrelation],
+    [loading, layerSeries.length, hasRun, scatterCorrelation, chartDateClickHandler],
   )
+
+  const formatAnalysisSpeed = (ms: number) => {
+    if (ms < 1000) return `${ms} ms`
+    return `${(ms / 1000).toFixed(1)} s`
+  }
+
+  const observationCount = labels.length
 
   const layerSummary = selectedLayerIds.join(', ')
 
@@ -515,24 +581,36 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
           </div>
           <div className="acp-ts__date-range">
             <label className="acp-ts__field acp-ts__field--date">
-              <span>From</span>
+              <span>Start Date</span>
               <input
                 type="date"
                 value={fromDate}
+                max={toDate || undefined}
                 onChange={e => {
-                  invalidateResults()
-                  setFromDate(e.target.value)
+                  const next = e.target.value
+                  setFromDate(next)
+                  if (next && toDate && next >= toDate) {
+                    setError('Start Date must be before End Date.')
+                  } else {
+                    setError(null)
+                  }
                 }}
               />
             </label>
             <label className="acp-ts__field acp-ts__field--date">
-              <span>To</span>
+              <span>End Date</span>
               <input
                 type="date"
                 value={toDate}
+                min={fromDate || undefined}
                 onChange={e => {
-                  invalidateResults()
-                  setToDate(e.target.value)
+                  const next = e.target.value
+                  setToDate(next)
+                  if (fromDate && next && fromDate >= next) {
+                    setError('End Date must be after Start Date.')
+                  } else {
+                    setError(null)
+                  }
                 }}
               />
             </label>
@@ -567,6 +645,8 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
               {chartType === 'scatter' && layerSeries.length >= 2
                 ? ` · correlation ${layerSeries[0]?.layerId} → ${layerSeries[1]?.layerId}`
                 : ` · ${fromDate} → ${toDate}`}
+              {observationCount ? ` · ${observationCount} obs` : ''}
+              {analysisDurationMs != null ? ` · ${formatAnalysisSpeed(analysisDurationMs)}` : ''}
             </span>
             <span>{selectedFieldLabel}</span>
           </div>
@@ -574,7 +654,20 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
 
         <div className="acp-ts__chart-wrap">
           {loading ? (
-            <div className="acp-ts__skeleton" aria-hidden="true">
+            <div className="acp-ts__skeleton" role="status" aria-live="polite" aria-busy="true">
+              <div className="acp-ts__skeleton-head">
+                <span className="acp-ts__skeleton-range">
+                  {fromDate} → {toDate}
+                </span>
+                <span className="acp-ts__skeleton-speed">
+                  <i className="fa-solid fa-bolt" aria-hidden="true" />
+                  {formatAnalysisSpeed(analysisElapsedMs)}
+                </span>
+              </div>
+              <p className="acp-ts__skeleton-status">
+                Fetching Sentinel history for <strong>{selectedFieldLabel}</strong>
+                {selectedLayerIds.length ? ` · ${selectedLayerIds.join(', ')}` : ''}
+              </p>
               <div className="acp-ts__skeleton-bar" />
               <div className="acp-ts__skeleton-bar acp-ts__skeleton-bar--short" />
               <div className="acp-ts__skeleton-chart" />
@@ -593,10 +686,17 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
             <div className="acp-ts__placeholder">
               {hasRun && error
                 ? error
-                : 'Select filters and click Apply to generate analysis.'}
+                : 'Set Start Date and End Date, then click Apply — the chart updates automatically when dates change.'}
             </div>
           )}
         </div>
+
+        {hasRun && labels.length && !loading ? (
+          <p className="acp-ts__chart-hint">
+            <i className="fa-solid fa-hand-pointer" aria-hidden="true" /> Click any point to set the map
+            analysis date · Map date: <strong>{acp.analysisDate}</strong>
+          </p>
+        ) : null}
 
         {chartType === 'scatter' && scatterCorrelation ? (
           <div className="acp-ts__scatter-insight">

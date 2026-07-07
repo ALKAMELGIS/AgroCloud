@@ -190,6 +190,10 @@ export type SatelliteMapAnalysisChromeProps = {
   onMeasureOpenPanel?: () => void;
   /** Main toolbox Measure tool: stop / clear measuring. */
   onMeasureClear?: () => void;
+  /** Imagery Time Series toolbox panel body. */
+  mapToolboxImageryTimeSeriesPanel?: ReactNode;
+  onImageryTimeSeriesRailOpen?: () => void;
+  onImageryTimeSeriesActiveChange?: (active: boolean) => void;
 };
 
 function sparkPath(values: number[], w: number, h: number): string {
@@ -259,6 +263,9 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
     measureMode,
     onMeasureOpenPanel,
     onMeasureClear,
+    mapToolboxImageryTimeSeriesPanel,
+    onImageryTimeSeriesRailOpen,
+    onImageryTimeSeriesActiveChange,
   } = props;
 
   const activeFull =
@@ -344,6 +351,9 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
       measureMode={measureMode}
       onMeasureOpenPanel={onMeasureOpenPanel}
       onMeasureClear={onMeasureClear}
+      mapToolboxImageryTimeSeriesPanel={mapToolboxImageryTimeSeriesPanel}
+      onImageryTimeSeriesRailOpen={onImageryTimeSeriesRailOpen}
+      onImageryTimeSeriesActiveChange={onImageryTimeSeriesActiveChange}
     />
   ) : null;
 

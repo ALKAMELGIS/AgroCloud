@@ -7,6 +7,12 @@
  * @see backend/server/cropClassificationProxy.js
  */
 
+import { assertCropPanelProvider } from './cropSupervised/cropDataProvider'
+import type { CropDataProviderId } from './cropSupervised/cropDataProvider'
+import type { CropPipelineProfileId } from './cropSupervised/cropProviderPipelineProfile'
+
+export type { CropDataProviderId } from './cropSupervised/cropDataProvider'
+
 import {
   apiUrl,
   configuredApiOrigin,
@@ -65,14 +71,37 @@ export type CropClassLegendItem = {
   kind?: 'crop' | 'landcover'
 }
 
+export type CropClassificationMode = 'ai-prithvi' | 'supervised-ground-truth'
+
+export const SUPERVISED_PIPELINE_STAGES: Array<{ status: CropClassificationJobStatus; label: string }> = [
+  { status: 'fetching', label: 'Fetch multi-date imagery' },
+  { status: 'preprocessing', label: 'Extract training signatures' },
+  { status: 'inferring', label: 'Train RF + classify AOI' },
+  { status: 'done', label: 'Classification + confidence maps' },
+]
+
+export type SupervisedAccuracySummary = {
+  overallAccuracy: number
+  holdoutFraction: number
+  trainSamples: number
+  testSamples: number
+  confusionMatrix: { labels: string[]; matrix: number[][] }
+  perClass: Array<{ name: string; precision: number; recall: number; f1: number; support: number }>
+}
+
 export type CropClassificationResult = {
-  engine?: 'country' | 'prithvi'
+  engine?: 'country' | 'prithvi' | 'supervised'
+  dataProvider?: CropDataProviderId
+  pipelineProfile?: CropPipelineProfileId
   country?: { code: string; name: string; source: string } | null
   legend?: CropClassLegendItem[] | null
   scenes?: { t1: string | null; t2: string | null; t3: string | null }
   dates?: string[]
   prediction?: { url: string | null; bounds: [number, number, number, number] | null }
+  confidence?: { url: string | null; bounds: [number, number, number, number] | null }
   classStats?: Array<{ id?: string; name: string; pct: number; areaHa?: number }> | null
+  accuracy?: SupervisedAccuracySummary | null
+  signatures?: Array<{ className: string; meanFeatures: number[]; sampleCount: number }> | null
   inferenceAvailable?: boolean
 }
 
@@ -90,6 +119,12 @@ export type RunAoiInput = {
   aoi: GeoJSON.Polygon | GeoJSON.MultiPolygon
   season: { start: string; end: string }
   timesteps?: number
+  dataProvider?: CropDataProviderId
+}
+
+export type RunSupervisedAoiInput = RunAoiInput & {
+  samples: import('./cropSupervised/types').CropTrainingSample[]
+  holdoutFraction?: number
 }
 
 /** Backend path for a crop-classification sub-route (resolved via the shared origin helper). */
@@ -174,6 +209,7 @@ function newLocalJobId(): string {
 }
 
 export async function startAoiJob(input: RunAoiInput): Promise<string> {
+  assertCropPanelProvider(input.dataProvider ?? 'satellite')
   // Prefer the backend when one is reachable (same-origin Node or a configured
   // remote origin) — it also unlocks the heavy Prithvi engine. Otherwise fall
   // back to the deterministic country engine running fully in the browser so the
@@ -185,6 +221,7 @@ export async function startAoiJob(input: RunAoiInput): Promise<string> {
       aoi: input.aoi,
       season: input.season,
       timesteps: input.timesteps ?? 3,
+      dataProvider: input.dataProvider ?? 'satellite',
     })
   }
 
@@ -211,6 +248,37 @@ export async function startAoiJob(input: RunAoiInput): Promise<string> {
         status: 'error',
         progress: 1,
         message: 'Pipeline failed.',
+        result: null,
+        error: String((err as Error)?.message || err),
+      })
+    })
+  return jobId
+}
+
+/** Start a supervised (ground-truth) classification job — always runs in-browser. */
+export async function startSupervisedAoiJob(input: RunSupervisedAoiInput): Promise<string> {
+  assertCropPanelProvider(input.dataProvider ?? 'satellite')
+  const jobId = newLocalJobId()
+  localJobs.set(jobId, {
+    id: jobId,
+    mode: 'aoi',
+    status: 'queued',
+    progress: 0,
+    message: 'Starting supervised classification…',
+    result: null,
+    error: null,
+  })
+  void import('./cropSupervised/siCropSupervisedPipeline')
+    .then(({ runSupervisedCropClassification }) =>
+      runSupervisedCropClassification(jobId, input, job => localJobs.set(jobId, job)),
+    )
+    .catch(err => {
+      localJobs.set(jobId, {
+        id: jobId,
+        mode: 'aoi',
+        status: 'error',
+        progress: 1,
+        message: 'Supervised pipeline failed.',
         result: null,
         error: String((err as Error)?.message || err),
       })

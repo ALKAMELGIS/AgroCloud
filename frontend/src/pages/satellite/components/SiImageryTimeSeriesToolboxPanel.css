@@ -1,0 +1,187 @@
+.si-its-toolbox {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.si-sat-ctx-dock--light .si-its-toolbox {
+  color: #1a2433;
+}
+
+.si-its-toolbox__lead {
+  margin: 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.si-sat-ctx-dock--light .si-its-toolbox__lead {
+  color: rgba(15, 27, 45, 0.62);
+}
+
+.si-its-toolbox__warn {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  color: rgba(255, 237, 180, 0.92);
+}
+
+.si-sat-ctx-dock--light .si-its-toolbox__warn {
+  background: rgba(251, 191, 36, 0.14);
+  color: #7c5a10;
+}
+
+.si-its-toolbox__dates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.si-its-toolbox__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.si-its-toolbox__label {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.si-sat-ctx-dock--light .si-its-toolbox__label {
+  color: rgba(15, 27, 45, 0.5);
+}
+
+.si-its-toolbox__field input[type='date'] {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 30px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-family: inherit;
+  color: rgba(255, 255, 255, 0.78);
+  background: rgba(6, 8, 12, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color-scheme: dark;
+}
+
+.si-sat-ctx-dock--light .si-its-toolbox__field input[type='date'] {
+  color: #1a2433;
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(15, 27, 45, 0.12);
+  color-scheme: light;
+}
+
+.si-its-toolbox__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.si-its-toolbox__cta {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 12px;
+  border: none;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.88);
+  background: linear-gradient(180deg, rgba(56, 189, 148, 0.35), rgba(16, 120, 92, 0.42));
+  border: 1px solid rgba(110, 231, 183, 0.28);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.si-its-toolbox__cta:hover:not(:disabled) {
+  background: linear-gradient(180deg, rgba(56, 189, 148, 0.48), rgba(16, 120, 92, 0.55));
+}
+
+.si-its-toolbox__cta:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.si-its-toolbox__cta--stop {
+  background: linear-gradient(180deg, rgba(248, 113, 113, 0.28), rgba(185, 28, 28, 0.35));
+  border-color: rgba(248, 113, 113, 0.32);
+}
+
+.si-its-toolbox__map-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  font-size: 10.5px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.68);
+  background: rgba(6, 8, 12, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.si-its-toolbox__map-btn--on {
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(110, 231, 183, 0.4);
+  background: rgba(16, 120, 92, 0.22);
+}
+
+.si-sat-ctx-dock--light .si-its-toolbox__map-btn {
+  color: #1a2433;
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(15, 27, 45, 0.12);
+}
+
+.si-its-toolbox__status {
+  margin: 0;
+  font-size: 10.5px;
+  color: rgba(110, 231, 183, 0.82);
+}
+
+.si-sat-ctx-dock--light .si-its-toolbox__status {
+  color: #0f766e;
+}
+
+.si-its-toolbox__muted {
+  margin: 0;
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.si-sat-ctx-dock--light .si-its-toolbox__muted {
+  color: rgba(15, 27, 45, 0.5);
+}
+
+.si-its-toolbox__chart {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.si-its-toolbox__chart-kicker {
+  margin: 0;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.si-sat-ctx-dock--light .si-its-toolbox__chart-kicker {
+  color: rgba(15, 27, 45, 0.5);
+}

@@ -505,11 +505,17 @@ export function registerCropClassificationRoutes(app, { secretsFilePath, broadca
     if (!season?.start || !season?.end) {
       return res.status(400).json({ error: 'season { start, end } (YYYY-MM-DD) is required.' })
     }
+    const dataProvider = String(body.dataProvider || 'satellite')
+    if (dataProvider !== 'satellite' && dataProvider !== 'raster') {
+      return res.status(400).json({
+        error: `Crop Classification in this API supports Satellite or Raster (PNG, GeoTIFF) only. Use the dedicated module for "${dataProvider}".`,
+      })
+    }
     const job = newJob({ mode })
     res.status(202).json({ jobId: job.id })
     void runPipeline(
       job,
-      { mode, aoi, season, timesteps: body.timesteps, engine: body.engine },
+      { mode, aoi, season, timesteps: body.timesteps, engine: body.engine, dataProvider },
       { secretsFilePath, broadcast },
     )
   })

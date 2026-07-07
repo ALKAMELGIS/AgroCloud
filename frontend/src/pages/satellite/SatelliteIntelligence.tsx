@@ -9,7 +9,7 @@ import React, {
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import MapGL, { Source, Layer, Marker } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import './SatelliteIntelligence.css';
@@ -179,14 +179,25 @@ import {
 } from '../../lib/siCropAlertImageryValidation';
 import './components/SiCropAlertCenterPanel.css';
 import { SiPrithviCropToolPanel } from './components/SiPrithviCropToolPanel';
+import { SiImageryTimeSeriesToolboxPanel } from './components/SiImageryTimeSeriesToolboxPanel';
 import {
   fetchCropClassificationConfig,
   startAoiJob,
+  startSupervisedAoiJob,
   startChipJob,
   pollJob,
   cropPredictionImageUrl,
   type CropClassificationJob,
+  type CropClassificationMode,
 } from '../../lib/siPrithviCropPipeline';
+import type { CropTrainingSample } from '../../lib/cropSupervised/types';
+import { validateTrainingSamples } from '../../lib/cropSupervised/trainingSampleValidator';
+import {
+  DEFAULT_CROP_DATA_PROVIDER,
+  getCropProviderRedirect,
+  isCropPanelProvider,
+  type CropDataProviderId,
+} from '../../lib/cropSupervised/cropDataProvider';
 import {
   CROP_CLASSIFICATION_LAYER_ID,
   DEFAULT_CROP_CLASSIFICATION_SETTINGS,
@@ -3242,6 +3253,7 @@ const SI_GEO_AI_WELCOME_DATA_ASSISTANT_TEXT =
 
 export default function SatelliteIntelligence() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const siScope = useSiInstanceScope();
   const siStyleClipboardLs = siScope.scopedStorageKey(SI_MAPBOX_STYLE_CLIPBOARD_LS);
   const siStyleStudioPrefsLs = siScope.scopedStorageKey(SI_MAPBOX_STYLE_STUDIO_PREFS_LS);
@@ -3369,6 +3381,7 @@ export default function SatelliteIntelligence() {
     });
   }, []);
   const [mapStaticChartsOpen, setMapStaticChartsOpen] = useState(false);
+  const [imageryTimeSeriesToolboxOpen, setImageryTimeSeriesToolboxOpen] = useState(false);
   const [aoiStatsPixel, setAoiStatsPixel] = useState<{ lng: number; lat: number } | null>(null);
   const [layerLiveStatsLayers, setLayerLiveStatsLayers] = useState<LayerLiveStatsLayerId[]>(() =>
     defaultStaticAoiComparisonLayers(),
@@ -3700,12 +3713,25 @@ export default function SatelliteIntelligence() {
     const start = new Date(end.getTime() - 150 * 86400000);
     return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
   });
+  const [cropAiMode, setCropAiMode] = useState<CropClassificationMode>('ai-prithvi');
+  const [cropAiDataProvider, setCropAiDataProvider] =
+    useState<CropDataProviderId>(DEFAULT_CROP_DATA_PROVIDER);
+  const [cropAiTrainingSamples, setCropAiTrainingSamples] = useState<CropTrainingSample[]>([]);
   const [cropAiJob, setCropAiJob] = useState<CropClassificationJob | null>(null);
   const [cropAiSelfInference, setCropAiSelfInference] = useState(false);
   const cropAiAbortRef = useRef<AbortController | null>(null);
   const cropAiAoiRef = useRef<any | null>(null);
   const cropAiRunning =
     !!cropAiJob && cropAiJob.status !== 'done' && cropAiJob.status !== 'error';
+
+  const cropAiSamplesValidation = useMemo(
+    () =>
+      validateTrainingSamples(
+        cropAiTrainingSamples,
+        (drawnGeometry?.geometry ?? null) as GeoJSON.Polygon | GeoJSON.MultiPolygon | null,
+      ),
+    [cropAiTrainingSamples, drawnGeometry],
+  );
 
   useEffect(() => {
     let alive = true;
@@ -3729,17 +3755,34 @@ export default function SatelliteIntelligence() {
   const handleCropAiRunAoi = useCallback(() => {
     const geometry = drawnGeometryRef.current?.geometry ?? drawnGeometry?.geometry;
     if (!geometry) return;
+    if (!isCropPanelProvider(cropAiDataProvider)) return;
+    if (cropAiMode === 'supervised-ground-truth' && !cropAiSamplesValidation.valid) return;
     cropAiAoiRef.current = geometry;
     setCropAiJob({
       id: 'pending',
       mode: 'aoi',
       status: 'queued',
       progress: 0,
-      message: 'Startingâ€¦',
+      message: 'Starting…',
       result: null,
       error: null,
     });
-    void startAoiJob({ aoi: geometry, season: cropAiSeason, timesteps: 3 })
+    const start =
+      cropAiMode === 'supervised-ground-truth'
+        ? startSupervisedAoiJob({
+            aoi: geometry,
+            season: cropAiSeason,
+            timesteps: 5,
+            samples: cropAiTrainingSamples,
+            dataProvider: cropAiDataProvider,
+          })
+        : startAoiJob({
+            aoi: geometry,
+            season: cropAiSeason,
+            timesteps: 3,
+            dataProvider: cropAiDataProvider,
+          });
+    void start
       .then(trackCropAiJob)
       .catch(err =>
         setCropAiJob({
@@ -3752,7 +3795,15 @@ export default function SatelliteIntelligence() {
           error: String(err?.message || err),
         }),
       );
-  }, [cropAiSeason, drawnGeometry, trackCropAiJob]);
+  }, [
+    cropAiDataProvider,
+    cropAiMode,
+    cropAiSamplesValidation.valid,
+    cropAiSeason,
+    cropAiTrainingSamples,
+    drawnGeometry,
+    trackCropAiJob,
+  ]);
 
   const handleCropAiRunChip = useCallback(
     (imageUrl: string) => {
@@ -3798,13 +3849,8 @@ export default function SatelliteIntelligence() {
   }, []);
 
   const CROP_AI_PREDICTION_LAYER_ID = 'crop-ai-prediction';
+  const CROP_AI_CONFIDENCE_LAYER_ID = 'crop-ai-confidence';
 
-  /**
-   * Clip the (rectangular) prediction raster to the AOI polygon using a canvas
-   * mask, so only pixels inside the drawn area are shown. The image is stretched
-   * linearly across the bbox on the map, so we map polygon â†’ pixels linearly in
-   * lng/lat to keep the clip edge aligned with the AOI outline. Returns a blob URL.
-   */
   const clipRasterToAoi = useCallback(
     async (
       imageUrl: string,
@@ -3860,14 +3906,20 @@ export default function SatelliteIntelligence() {
     [],
   );
 
-  const addCropAiPredictionLayer = useCallback(
-    async (job: CropClassificationJob | null) => {
-      const url = job?.result?.prediction?.url;
-      const bounds = job?.result?.prediction?.bounds;
+  const addCropAiRasterLayer = useCallback(
+    async (
+      job: CropClassificationJob | null,
+      layerId: string,
+      layerName: string,
+      rasterKey: 'prediction' | 'confidence',
+      mapOpacity: number,
+    ) => {
+      const raster = job?.result?.[rasterKey];
+      const url = raster?.url;
+      const bounds = raster?.bounds;
       if (!url || !Array.isArray(bounds) || bounds.length < 4) return;
       const boundsTuple = bounds as [number, number, number, number];
       const [w, s, e, n] = boundsTuple;
-      // Mapbox image source corner order: TL, TR, BR, BL ([lng, lat]).
       const coordinates: RasterMapCoordinates = [
         [w, n],
         [e, n],
@@ -3875,8 +3927,6 @@ export default function SatelliteIntelligence() {
         [w, s],
       ];
       const aoiGeometry = cropAiAoiRef.current ?? drawnGeometryRef.current?.geometry ?? null;
-      // Country engine returns a same-origin data: URL; only the HF Space (chip
-      // mode) needs the CORS proxy.
       const proxiedUrl = /^https?:\/\//i.test(url) ? cropPredictionImageUrl(url) : url;
       const finalUrl = aoiGeometry
         ? await clipRasterToAoi(proxiedUrl, boundsTuple, aoiGeometry)
@@ -3885,28 +3935,42 @@ export default function SatelliteIntelligence() {
         ? { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: aoiGeometry }] }
         : siRasterExtentFootprint(coordinates);
       setCustomLayers(prev => {
-        const stale = prev.find(l => l.id === CROP_AI_PREDICTION_LAYER_ID);
+        const stale = prev.find(l => l.id === layerId);
         if (stale?.raster?.url?.startsWith('blob:') && stale.raster.url !== finalUrl) {
           URL.revokeObjectURL(stale.raster.url);
         }
-        const without = prev.filter(l => l.id !== CROP_AI_PREDICTION_LAYER_ID);
+        const without = prev.filter(l => l.id !== layerId);
         return [
           ...without,
           {
-            id: CROP_AI_PREDICTION_LAYER_ID,
-            name: 'Crop Type',
+            id: layerId,
+            name: layerName,
             geojson: outline,
             visible: true,
             source: 'api',
             renderMode: 'raster',
             raster: { url: finalUrl, coordinates },
             ephemeral: true,
-            mapOpacity: 0.9,
+            mapOpacity,
           },
         ];
       });
     },
     [clipRasterToAoi],
+  );
+
+  const addCropAiPredictionLayer = useCallback(
+    async (job: CropClassificationJob | null) => {
+      await addCropAiRasterLayer(job, CROP_AI_PREDICTION_LAYER_ID, 'Crop Type', 'prediction', 0.9);
+    },
+    [addCropAiRasterLayer],
+  );
+
+  const addCropAiConfidenceLayer = useCallback(
+    async (job: CropClassificationJob | null) => {
+      await addCropAiRasterLayer(job, CROP_AI_CONFIDENCE_LAYER_ID, 'Crop Confidence', 'confidence', 0.75);
+    },
+    [addCropAiRasterLayer],
   );
 
   // Auto-publish the Prithvi prediction to the map as a "Crop Type" layer.
@@ -5433,8 +5497,30 @@ export default function SatelliteIntelligence() {
     openAddLayerModal();
     setSiAddLayerWizard('source-forms');
     setAddLayerTab('upload');
-    setAddLayerStatus('Upload vector, raster, or BIM: browse or drop a file, preview details, then Import to map.');
   };
+
+  const handleCropAiProviderRedirect = useCallback(
+    (id: CropDataProviderId) => {
+      const redirect = getCropProviderRedirect(id);
+      if (!redirect) return;
+      if (redirect.kind === 'section') {
+        setExpandedEnvSection(redirect.target as 'remote-sensing');
+        setIsLayerDropdownOpen(true);
+        if (id === 'drone-imagery') openAoiDataSourceUploader();
+        return;
+      }
+      navigate(redirect.target);
+    },
+    [navigate],
+  );
+
+  const handleCropAiDataProviderChange = useCallback(
+    (id: CropDataProviderId) => {
+      setCropAiDataProvider(id);
+      if (!isCropPanelProvider(id)) handleCropAiProviderRedirect(id);
+    },
+    [handleCropAiProviderRedirect],
+  );
 
   const closeAddLayerModal = () => {
     setIsAddLayerModalOpen(false);
@@ -7406,7 +7492,7 @@ export default function SatelliteIntelligence() {
   const aoiStatsSampleMode: AoiStatsSampleMode = aoiStatsPixel ? 'pixel' : 'aoi';
 
   const aoiStatsFetchEnabled = Boolean(
-    (mapStaticChartsOpen || fieldTimelineSessionActive) && aoiStatsGeometry,
+    (mapStaticChartsOpen || fieldTimelineSessionActive || imageryTimeSeriesToolboxOpen) && aoiStatsGeometry,
   );
 
   const aoiLiveTimeSeries = useAoiLiveTimeSeries({
@@ -13418,6 +13504,10 @@ export default function SatelliteIntelligence() {
     [remoteSensingLayerOptions, remoteSensingLayerSelectGroups, wmsLayerSelectValue, drawnGeometry, sentinelFetchDate, timeSeriesStart, timeSeriesEnd],
   );
 
+  const handleImageryTimeSeriesRailOpen = useCallback(() => {
+    setMapStaticChartsOpen(true);
+  }, []);
+
   const layersEnvMainTools = useMemo(
     () => (
       <div className="si-env-section-card si-map-toolbox-layers-compact">
@@ -13858,6 +13948,54 @@ export default function SatelliteIntelligence() {
   const staticAoiChartExportLngLatPerRow = useMemo(
     () => buildStaticAoiExportLngLatPerRow(drawnGeometry, staticAoiMultiLineData.labels.length),
     [drawnGeometry, staticAoiMultiLineData.labels.length, staticAoiChartAoiKey],
+  );
+
+  const mapToolboxImageryTimeSeriesPanel = useMemo(
+    () => (
+      <SiImageryTimeSeriesToolboxPanel
+        hasAoi={!!drawnGeometry}
+        indexLabel={selectedIndexConfig.label}
+        timeSeriesStart={timeSeriesStart}
+        timeSeriesEnd={timeSeriesEnd}
+        onTimeSeriesStartChange={v => {
+          setImageryDateAutoFollow(false);
+          setTimeSeriesStart(v);
+        }}
+        onTimeSeriesEndChange={v => {
+          setImageryDateAutoFollow(false);
+          setTimeSeriesEnd(v);
+        }}
+        fieldTimelineActive={fieldTimelineSessionActive}
+        onTimelinePrimaryClick={onFieldAnalysisTimelinePrimaryClick}
+        fieldAnalysisStatus={fieldAnalysisStatus}
+        staticChartsOpen={mapStaticChartsOpen}
+        onToggleStaticCharts={() => setMapStaticChartsOpen(o => !o)}
+        layerLiveStatsLayerGroups={remoteSensingLayerSelectGroups}
+        layerLiveStatsLayers={layerLiveStatsLayers}
+        onLayerLiveStatsLayersChange={setLayerLiveStatsLayers}
+        primaryLayerId={wmsLayerSelectValue}
+        staticMultiLineLabels={staticAoiMultiLineData.labels}
+        staticMultiLineDatasets={staticAoiMultiLineData.datasets}
+        staticMultiLineHasLst={staticAoiMultiLineData.hasLst}
+        staticChartExportLngLatPerRow={staticAoiChartExportLngLatPerRow}
+      />
+    ),
+    [
+      drawnGeometry,
+      selectedIndexConfig.label,
+      timeSeriesStart,
+      timeSeriesEnd,
+      fieldTimelineSessionActive,
+      fieldAnalysisStatus,
+      mapStaticChartsOpen,
+      remoteSensingLayerSelectGroups,
+      layerLiveStatsLayers,
+      wmsLayerSelectValue,
+      staticAoiMultiLineData.labels,
+      staticAoiMultiLineData.datasets,
+      staticAoiMultiLineData.hasLst,
+      staticAoiChartExportLngLatPerRow,
+    ],
   );
 
   const satelliteActiveChipId = useMemo(() => {
@@ -16296,6 +16434,9 @@ export default function SatelliteIntelligence() {
             onMapToolboxAddGisLayerPrimaryClick={() => openAddLayerModal({ tab: 'giscontent', wizard: 'home' })}
             mapToolboxBrowseLayersPanel={mapToolboxBrowseLayersPanel}
             mapToolboxLayerLiveLegend={mapToolboxLayerLiveLegend}
+            mapToolboxImageryTimeSeriesPanel={mapToolboxImageryTimeSeriesPanel}
+            onImageryTimeSeriesRailOpen={handleImageryTimeSeriesRailOpen}
+            onImageryTimeSeriesActiveChange={setImageryTimeSeriesToolboxOpen}
             layerLiveLegendOpen={layerLiveLegendOpen}
             onLayerLiveLegendOpenChange={setLayerLiveLegendOpen}
             mapToolboxDrawingActive={rsDrawingModeActive}
@@ -16721,6 +16862,13 @@ export default function SatelliteIntelligence() {
                         <SiPrithviCropToolPanel
                           aoiGeometry={drawnGeometry?.geometry ?? null}
                           hasSelfInference={cropAiSelfInference}
+                          dataProvider={cropAiDataProvider}
+                          onDataProviderChange={handleCropAiDataProviderChange}
+                          mode={cropAiMode}
+                          onModeChange={setCropAiMode}
+                          trainingSamples={cropAiTrainingSamples}
+                          onTrainingSamplesChange={setCropAiTrainingSamples}
+                          samplesValid={cropAiSamplesValidation.valid}
                           season={cropAiSeason}
                           onSeasonChange={setCropAiSeason}
                           job={cropAiJob}
@@ -16730,6 +16878,7 @@ export default function SatelliteIntelligence() {
                           onRunChip={handleCropAiRunChip}
                           onCancel={handleCropAiCancel}
                           onAddToMap={() => void addCropAiPredictionLayer(cropAiJob)}
+                          onAddConfidenceToMap={() => void addCropAiConfidenceLayer(cropAiJob)}
                         />
                       </div>
                     )}

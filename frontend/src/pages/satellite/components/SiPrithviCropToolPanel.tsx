@@ -1,9 +1,19 @@
 import { useMemo, useState } from 'react'
+import type { CropTrainingSample } from '../../../lib/cropSupervised/types'
+import {
+  CROP_DATA_PROVIDERS,
+  isCropPanelProvider,
+  type CropDataProviderId,
+} from '../../../lib/cropSupervised/cropDataProvider'
 import {
   PIPELINE_STAGES,
   PRITHVI_CROP_CLASSES,
+  SUPERVISED_PIPELINE_STAGES,
   type CropClassificationJob,
+  type CropClassificationMode,
 } from '../../../lib/siPrithviCropPipeline'
+import { SiCropAccuracyReport } from './SiCropAccuracyReport'
+import { SiCropTrainingSamplesPanel } from './SiCropTrainingSamplesPanel'
 import './SiPrithviCropToolPanel.css'
 
 type CropStat = { id?: string; name: string; pct: number; areaHa?: number }
@@ -247,6 +257,13 @@ function CropCompositionStats({
 export type SiPrithviCropToolPanelProps = {
   aoiGeometry: GeoJSON.Polygon | GeoJSON.MultiPolygon | null
   hasSelfInference: boolean
+  dataProvider: CropDataProviderId
+  onDataProviderChange: (id: CropDataProviderId) => void
+  mode: CropClassificationMode
+  onModeChange: (mode: CropClassificationMode) => void
+  trainingSamples: CropTrainingSample[]
+  onTrainingSamplesChange: (samples: CropTrainingSample[]) => void
+  samplesValid: boolean
   season: { start: string; end: string }
   onSeasonChange: (season: { start: string; end: string }) => void
   job: CropClassificationJob | null
@@ -256,6 +273,7 @@ export type SiPrithviCropToolPanelProps = {
   onRunChip: (imageUrl: string) => void
   onCancel: () => void
   onAddToMap?: () => void
+  onAddConfidenceToMap?: () => void
 }
 
 function stageState(
@@ -276,31 +294,53 @@ function stageState(
 export function SiPrithviCropToolPanel(props: SiPrithviCropToolPanelProps) {
   const {
     aoiGeometry,
+    dataProvider,
+    onDataProviderChange,
+    mode,
+    onModeChange,
+    trainingSamples,
+    onTrainingSamplesChange,
+    samplesValid,
     season,
     onSeasonChange,
     job,
     isRunning,
     onRunAoi,
     onCancel,
+    onAddToMap,
+    onAddConfidenceToMap,
   } = props
 
+  const isSupervised = mode === 'supervised-ground-truth'
+  const providerSupported = isCropPanelProvider(dataProvider)
+  const pipelineStages = isSupervised ? SUPERVISED_PIPELINE_STAGES : PIPELINE_STAGES
   const hasAoi = Boolean(aoiGeometry)
+  const controlsDisabled = isRunning || !providerSupported
+  const canRun = providerSupported && hasAoi && (!isSupervised || samplesValid)
   const aoiAreaHa = useMemo(() => geometryAreaHa(aoiGeometry), [aoiGeometry])
   const result = job?.status === 'done' ? job.result : null
   const scenes = result?.scenes
   const prediction = result?.prediction
+  const confidence = result?.confidence
   const country = result?.country ?? null
   const classStats = result?.classStats ?? null
+  const accuracy = result?.accuracy ?? null
   const progressPct = Math.round((job?.progress ?? 0) * 100)
 
   const sceneTiles = useMemo(
-    () => [
-      { key: 'T1', src: scenes?.t1 ?? null },
-      { key: 'T2', src: scenes?.t2 ?? null },
-      { key: 'T3', src: scenes?.t3 ?? null },
-      { key: 'Crop Type', src: prediction?.url ?? null },
-    ],
-    [scenes, prediction],
+    () =>
+      isSupervised
+        ? [
+            { key: 'Crop Type', src: prediction?.url ?? null },
+            { key: 'Confidence', src: confidence?.url ?? null },
+          ]
+        : [
+            { key: 'T1', src: scenes?.t1 ?? null },
+            { key: 'T2', src: scenes?.t2 ?? null },
+            { key: 'T3', src: scenes?.t3 ?? null },
+            { key: 'Crop Type', src: prediction?.url ?? null },
+          ],
+    [isSupervised, scenes, prediction, confidence],
   )
 
   const legendItems = useMemo(() => {
@@ -330,6 +370,60 @@ export function SiPrithviCropToolPanel(props: SiPrithviCropToolPanelProps) {
         <div className="prithvi-tool__title">Crop Classification</div>
       </header>
 
+      <div className="prithvi-tool__provider">
+        <label className="prithvi-tool__provider-label" htmlFor="crop-data-provider">
+          Data Provider
+        </label>
+        <select
+          id="crop-data-provider"
+          className="prithvi-tool__provider-select"
+          value={dataProvider}
+          disabled={isRunning}
+          onChange={e => onDataProviderChange(e.target.value as CropDataProviderId)}
+        >
+          {CROP_DATA_PROVIDERS.map(p => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="prithvi-tool__tabs" role="tablist" aria-label="Classification mode">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={!isSupervised}
+          className={`prithvi-tool__tab${!isSupervised ? ' is-active' : ''}`}
+          disabled={isRunning}
+          title="AI zero-shot classification (Prithvi)"
+          onClick={() => onModeChange('ai-prithvi')}
+        >
+          Un Supervised
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={isSupervised}
+          className={`prithvi-tool__tab${isSupervised ? ' is-active' : ''}`}
+          disabled={isRunning}
+          title="Supervised classification from ground-truth samples"
+          onClick={() => onModeChange('supervised-ground-truth')}
+        >
+          Supervised
+        </button>
+      </div>
+
+      {isSupervised ? (
+        <SiCropTrainingSamplesPanel
+          samples={trainingSamples}
+          onSamplesChange={onTrainingSamplesChange}
+          aoiGeometry={aoiGeometry}
+          disabled={controlsDisabled}
+        />
+      ) : null}
+
+      {providerSupported ? (
       <div className="prithvi-tool__section">
         <div className="prithvi-tool__dates">
           <label>
@@ -338,7 +432,7 @@ export function SiPrithviCropToolPanel(props: SiPrithviCropToolPanelProps) {
               type="date"
               value={season.start}
               max={season.end}
-              disabled={isRunning}
+              disabled={controlsDisabled}
               onChange={e => onSeasonChange({ ...season, start: e.target.value })}
             />
           </label>
@@ -348,7 +442,7 @@ export function SiPrithviCropToolPanel(props: SiPrithviCropToolPanelProps) {
               type="date"
               value={season.end}
               min={season.start}
-              disabled={isRunning}
+              disabled={controlsDisabled}
               onChange={e => onSeasonChange({ ...season, end: e.target.value })}
             />
           </label>
@@ -364,13 +458,15 @@ export function SiPrithviCropToolPanel(props: SiPrithviCropToolPanelProps) {
               type="button"
               className="prithvi-tool__btn is-primary"
               onClick={onRunAoi}
-              disabled={!hasAoi}
+              disabled={!canRun}
             >
-              <i className="fa-solid fa-play" aria-hidden /> Run classification
+              <i className="fa-solid fa-play" aria-hidden />{' '}
+              {isSupervised ? 'Run supervised classification' : 'Run classification'}
             </button>
           )}
         </div>
       </div>
+      ) : null}
 
       {/* Pipeline stepper */}
       {job ? (
@@ -379,7 +475,7 @@ export function SiPrithviCropToolPanel(props: SiPrithviCropToolPanelProps) {
             <div className="prithvi-tool__progress-bar" style={{ width: `${progressPct}%` }} />
           </div>
           <ol className="prithvi-tool__steps">
-            {PIPELINE_STAGES.map(stage => {
+            {pipelineStages.map(stage => {
               const st = stageState(job, stage.status)
               return (
                 <li key={stage.status} className={`prithvi-tool__step is-${st}`}>
@@ -426,6 +522,19 @@ export function SiPrithviCropToolPanel(props: SiPrithviCropToolPanelProps) {
           </div>
           {classStats && classStats.length ? (
             <CropCompositionStats stats={classStats} legendItems={legendItems} aoiAreaHa={aoiAreaHa} />
+          ) : null}
+          {accuracy ? <SiCropAccuracyReport accuracy={accuracy} /> : null}
+          {result?.prediction?.url && onAddToMap ? (
+            <div className="prithvi-tool__row">
+              <button type="button" className="prithvi-tool__btn" onClick={onAddToMap}>
+                <i className="fa-solid fa-layer-group" aria-hidden /> Add classification to map
+              </button>
+              {confidence?.url && onAddConfidenceToMap ? (
+                <button type="button" className="prithvi-tool__btn" onClick={onAddConfidenceToMap}>
+                  <i className="fa-solid fa-chart-area" aria-hidden /> Add confidence map
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
       ) : null}

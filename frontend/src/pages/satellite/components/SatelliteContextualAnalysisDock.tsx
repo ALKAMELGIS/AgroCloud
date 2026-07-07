@@ -21,6 +21,7 @@ export type SatelliteContextPanelId =
   | 'remote-sensing'
   | 'crop-alerts'
   | 'crop-classification'
+  | 'imagery-time-series'
   | 'layer-live-legend'
   | 'ai-detection-gis'
   | 'tree-detections'
@@ -116,6 +117,12 @@ export type SatelliteContextualAnalysisDockProps = {
   onMeasureOpenPanel?: () => void;
   /** Turn measurement off / clear the current measurement. */
   onMeasureClear?: () => void;
+  /** Imagery Time Series toolbox panel (date range, layers, chart). */
+  mapToolboxImageryTimeSeriesPanel?: ReactNode;
+  /** Fired when Imagery Time Series dock panel opens (map overlay + live fetch). */
+  onImageryTimeSeriesRailOpen?: () => void;
+  /** Fired when Imagery Time Series dock panel active state changes. */
+  onImageryTimeSeriesActiveChange?: (active: boolean) => void;
 };
 
 const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; title: string; hint: string }> = [
@@ -146,6 +153,13 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     label: 'Crop AI',
     title: 'Prithvi Crop Classification',
     hint: 'AOI → Sentinel/HLS → Prithvi inference → classified map.',
+  },
+  {
+    id: 'imagery-time-series',
+    icon: 'fa-solid fa-chart-line',
+    label: 'Time Series',
+    title: 'Imagery Time Series',
+    hint: 'Multi-layer timeline charts synced with map playback.',
   },
   {
     id: 'layer-live-legend',
@@ -260,6 +274,7 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
   'remote-sensing',
   'crop-alerts',
   'crop-classification',
+  'imagery-time-series',
   'layer-live-legend',
   'ai-detection-gis',
   'tree-detections',
@@ -282,7 +297,7 @@ const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
 ]);
 
 const RAIL_GROUPS_MAP: SatelliteContextPanelId[][] = [
-  ['layers', 'remote-sensing', 'crop-alerts', 'crop-classification', 'layer-live-legend', 'hydro-watershed'],
+  ['layers', 'remote-sensing', 'crop-alerts', 'crop-classification', 'imagery-time-series', 'layer-live-legend', 'hydro-watershed'],
   ['ai-detection-gis', 'tree-detections', 'well-site', 'flood-monitoring', 'table-geo-ai'],
 ];
 
@@ -351,6 +366,9 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
     onMapToolboxToggleDrawing,
     measureMode = null,
     onMeasureOpenPanel,
+    mapToolboxImageryTimeSeriesPanel,
+    onImageryTimeSeriesRailOpen,
+    onImageryTimeSeriesActiveChange,
   } = props;
 
   const { scopedStorageKey } = useSiInstanceScope();
@@ -428,6 +446,10 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
       setActiveId(null)
     }
   }, [layerLiveLegendOpen, activeId])
+
+  useEffect(() => {
+    onImageryTimeSeriesActiveChange?.(panelOpen && activeId === 'imagery-time-series')
+  }, [panelOpen, activeId, onImageryTimeSeriesActiveChange])
 
   useEffect(() => {
     try {
@@ -542,6 +564,18 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
         onGeoAiFloatingRailToggle?.();
         return;
       }
+      if (isMapVariant && id === 'imagery-time-series') {
+        if (panelOpen && activeId === id) {
+          setPanelOpen(false);
+          return;
+        }
+        if (isMapVariant && processingDropdownOpen) {
+          onToolboxPanelClose?.();
+        }
+        openPanel(id);
+        onImageryTimeSeriesRailOpen?.();
+        return;
+      }
       if (isMapVariant && MAP_RAIL_FLOAT_IDS.has(id) && onProcessingWorkflowNavigate) {
         if (panelOpen && activeId === id) {
           setPanelOpen(false);
@@ -572,6 +606,7 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
       onProcessingWorkflowNavigate,
       onToolboxPanelClose,
       onGeoAiFloatingRailToggle,
+      onImageryTimeSeriesRailOpen,
       layerLiveLegendOpen,
       onLayerLiveLegendOpenChange,
       openPanel,
@@ -991,6 +1026,7 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
                 {innerTab === 'main' ? (
                   <>
                     {activeId === 'layers' && mapToolboxLayersMain}
+                    {activeId === 'imagery-time-series' && mapToolboxImageryTimeSeriesPanel}
                     {activeId === 'add-gis-layer' && mapToolboxBrowseLayersPanel}
                     {activeId === 'layer-live-legend' && !isMap && mapToolboxLayerLiveLegend}
                     {activeId === 'spatial' && (

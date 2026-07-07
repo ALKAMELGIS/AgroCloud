@@ -19,6 +19,8 @@ import {
   resolveSentinelHubWmsEvalscriptProxyLayerName,
 } from './sentinelHubWmsLayers'
 import { getSentinelHubWmsBaseUrl } from './sentinelHubWmsInstance'
+import { assertCropPanelProvider } from './cropSupervised/cropDataProvider'
+import { resolveCropPipelineProfile } from './cropSupervised/cropProviderPipelineProfile'
 import type {
   CropClassificationJob,
   CropClassificationJobStatus,
@@ -994,6 +996,15 @@ export async function runClientAoiCropClassification(
     if (typeof document === 'undefined' || typeof createImageBitmap === 'undefined') {
       return fail('Client crop classification requires a browser environment.')
     }
+    try {
+      assertCropPanelProvider(input.dataProvider ?? 'satellite')
+    } catch (err) {
+      return fail(String((err as Error)?.message || err))
+    }
+    const pipelineProfile = resolveCropPipelineProfile(
+      input.dataProvider ?? 'satellite',
+      'ai-prithvi',
+    )
     onUpdate(snapshot(jobId, 'fetching', 0.06, 'Detecting country from AOI…'))
     const country = await detectCountryFromAoi(input.aoi)
     const profile = cropProfileForCountry(country.code)
@@ -1057,6 +1068,8 @@ export async function runClientAoiCropClassification(
       error: null,
       result: {
         engine: 'country',
+        dataProvider: input.dataProvider ?? 'satellite',
+        pipelineProfile: pipelineProfile.id,
         country: { code: country.code, name: profile.country, source: country.source },
         legend: profile.classes,
         scenes: { t1: previews[0] || null, t2: previews[1] || null, t3: previews[2] || null },
