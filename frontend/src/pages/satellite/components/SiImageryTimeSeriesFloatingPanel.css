@@ -1,15 +1,24 @@
 .si-its-float {
-  position: absolute;
-  top: max(72px, env(safe-area-inset-top, 0px) + 56px);
-  left: max(14px, env(safe-area-inset-left, 0px) + 10px);
+  position: fixed;
+  top: 72px;
+  left: 14px;
   right: auto;
-  z-index: 146;
+  z-index: 9200;
   pointer-events: auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
   animation: si-its-float-in 240ms cubic-bezier(0.22, 1, 0.36, 1);
   touch-action: auto;
+}
+
+.si-its-float__chrome {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  pointer-events: auto;
 }
 
 .si-its-float--dragging,
@@ -53,12 +62,17 @@
   cursor: grab;
   touch-action: none;
   flex-shrink: 0;
-  min-height: 34px;
-  padding: 6px 8px;
+  min-height: 38px;
+  padding: 7px 10px;
   user-select: none;
+  -webkit-user-select: none;
 }
 
 .si-its-float--dragging .si-its-float__head {
+  cursor: grabbing;
+}
+
+.si-its-float--dragging .si-its-float__grip {
   cursor: grabbing;
 }
 
@@ -68,18 +82,21 @@
   gap: 8px;
   min-width: 0;
   flex: 1;
+  cursor: inherit;
 }
 
 .si-its-float__grip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 22px;
-  border-radius: 4px;
-  color: rgba(255, 255, 255, 0.45);
-  background: rgba(255, 255, 255, 0.06);
+  width: 22px;
+  height: 26px;
+  border-radius: 5px;
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.08);
   flex: none;
+  cursor: grab;
+  touch-action: none;
 }
 
 .si-its-float__title {

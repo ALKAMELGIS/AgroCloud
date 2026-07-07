@@ -115,32 +115,46 @@ export function SiImageryIndexInterpretationCard({
         <span className="acp-ts__interpret-title">Index interpretation</span>
       </div>
 
-      <dl className="acp-ts__interpret-stats">
-        <div>
-          <dt>Index</dt>
-          <dd>{interpretation.layerId}</dd>
-        </div>
-        <div>
-          <dt>Acquisition</dt>
-          <dd>{formatSceneDate(interpretation.sceneDate)}</dd>
-        </div>
-        <div>
-          <dt>Mean</dt>
-          <dd>{interpretation.mean.toFixed(3)}</dd>
-        </div>
-        <div>
-          <dt>Min / Max</dt>
-          <dd>
-            {interpretation.min?.toFixed(3) ?? '—'} / {interpretation.max?.toFixed(3) ?? '—'}
-          </dd>
-        </div>
+      <p className="acp-ts__interpret-stats" aria-label="Index statistics">
+        <span className="acp-ts__interpret-stat">
+          <span className="acp-ts__interpret-stat-k">Index</span>
+          <span className="acp-ts__interpret-stat-v">{interpretation.layerId}</span>
+        </span>
+        <span className="acp-ts__interpret-stat-sep" aria-hidden>
+          ·
+        </span>
+        <span className="acp-ts__interpret-stat">
+          <span className="acp-ts__interpret-stat-k">Date</span>
+          <span className="acp-ts__interpret-stat-v">{formatSceneDate(interpretation.sceneDate)}</span>
+        </span>
+        <span className="acp-ts__interpret-stat-sep" aria-hidden>
+          ·
+        </span>
+        <span className="acp-ts__interpret-stat">
+          <span className="acp-ts__interpret-stat-k">Mean</span>
+          <span className="acp-ts__interpret-stat-v">{interpretation.mean.toFixed(3)}</span>
+        </span>
+        <span className="acp-ts__interpret-stat-sep" aria-hidden>
+          ·
+        </span>
+        <span className="acp-ts__interpret-stat">
+          <span className="acp-ts__interpret-stat-k">Min/Max</span>
+          <span className="acp-ts__interpret-stat-v">
+            {interpretation.min?.toFixed(3) ?? '—'}/{interpretation.max?.toFixed(3) ?? '—'}
+          </span>
+        </span>
         {interpretation.stdDev != null ? (
-          <div>
-            <dt>Std dev</dt>
-            <dd>{interpretation.stdDev.toFixed(3)}</dd>
-          </div>
+          <>
+            <span className="acp-ts__interpret-stat-sep" aria-hidden>
+              ·
+            </span>
+            <span className="acp-ts__interpret-stat">
+              <span className="acp-ts__interpret-stat-k">σ</span>
+              <span className="acp-ts__interpret-stat-v">{interpretation.stdDev.toFixed(3)}</span>
+            </span>
+          </>
         ) : null}
-      </dl>
+      </p>
 
       <p className="acp-ts__interpret-line acp-ts__interpret-line--narrative">{buildNarrative(interpretation)}</p>
 

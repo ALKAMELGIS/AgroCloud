@@ -7,21 +7,22 @@ import {
   type CSSProperties,
   type RefObject,
 } from 'react';
+import { createPortal } from 'react-dom';
 import type { SiAoiFieldRecord } from '../../../lib/siAoiFields';
 import { useSiInstanceScope } from '../siInstanceScope';
 import { useMapOverlayIsolation } from '../useMapOverlayIsolation';
 import { SiImageryTimeSeriesPanel } from './SiImageryTimeSeriesPanel';
 import './SiImageryTimeSeriesFloatingPanel.css';
 
-const POS_KEY_BASE = 'si-its-float-pos-v1';
+const POS_KEY_BASE = 'si-its-float-pos-v2';
 const SIZE_KEY_BASE = 'si-its-float-size-v1';
 
 const MIN_W = 300;
 const MAX_W = 960;
 const MIN_BODY_H = 240;
 const MAX_BODY_H = 900;
-const DEFAULT_W = 420;
 const DEFAULT_BODY_H = 520;
+const VIEWPORT_PAD = 8;
 
 type SavedPos = { x: number; y: number };
 type SavedSize = { w: number; h: number };
@@ -73,9 +74,20 @@ function writeSavedSize(s: SavedSize, storageKey: string) {
   }
 }
 
+function clampToViewport(x: number, y: number, elW: number, elH: number): SavedPos {
+  const pad = VIEWPORT_PAD;
+  const maxX = Math.max(pad, window.innerWidth - elW - pad);
+  const maxY = Math.max(pad, window.innerHeight - elH - pad);
+  return {
+    x: Math.min(maxX, Math.max(pad, x)),
+    y: Math.min(maxY, Math.max(pad, y)),
+  };
+}
+
 export type SiImageryTimeSeriesFloatingPanelProps = {
   open: boolean;
   onClose: () => void;
+  /** Used only for the initial open position anchor (map area). */
   containerRef: RefObject<HTMLElement | null>;
   agroStructuresMask: GeoJSON.FeatureCollection | null;
   aoiFields: SiAoiFieldRecord[];
@@ -107,264 +119,170 @@ export function SiImageryTimeSeriesFloatingPanel({
   const { ref: isolationRef, ...isolationHandlers } = isolation;
   const rootRef = useRef<HTMLElement | null>(null);
   const headRef = useRef<HTMLElement | null>(null);
-  const dragRef = useRef<{
-    pointerId: number;
-    dx: number;
-    dy: number;
-    w: number;
-    h: number;
-    captureEl: HTMLElement;
-  } | null>(null);
-  const resizeRef = useRef<{
-    pointerId: number;
-    startX: number;
-    startY: number;
-    startW: number;
-    startH: number;
-    captureEl: HTMLElement;
-  } | null>(null);
+  const dragRef = useRef<{ dx: number; dy: number; w: number; h: number } | null>(null);
+  const resizeRef = useRef<{ startX: number; startY: number; startW: number; startH: number } | null>(null);
   const [pos, setPos] = useState<SavedPos | null>(() => readSavedPos(posStorageKey));
   const [size, setSize] = useState<SavedSize | null>(() => readSavedSize(sizeStorageKey));
   const [dragging, setDragging] = useState(false);
   const [resizing, setResizing] = useState(false);
 
-  const setRootRef = useCallback(
+  const setBodyIsolationRef = useCallback(
     (node: HTMLElement | null) => {
-      rootRef.current = node;
       isolationRef?.(node);
     },
     [isolationRef],
   );
 
-  const clampToContainer = useCallback(
-    (x: number, y: number, elW: number, elH: number) => {
-      const box = containerRef.current?.getBoundingClientRect();
-      if (!box) return { x, y };
-      const pad = 6;
-      const maxX = Math.max(pad, box.width - elW - pad);
-      const maxY = Math.max(pad, box.height - elH - pad);
-      return {
-        x: Math.min(maxX, Math.max(pad, x)),
-        y: Math.min(maxY, Math.max(pad, y)),
-      };
-    },
-    [containerRef],
-  );
-
-  const clampSize = useCallback(
-    (w: number, h: number) => {
-      const box = containerRef.current?.getBoundingClientRect();
-      const headH = headRef.current?.offsetHeight ?? 32;
-      const pad = 12;
-      let maxW = MAX_W;
-      let maxH = MAX_BODY_H;
-      if (box) {
-        maxW = Math.min(MAX_W, Math.max(MIN_W, box.width - pad));
-        maxH = Math.min(MAX_BODY_H, Math.max(MIN_BODY_H, box.height - headH - pad));
-      }
-      return {
-        w: Math.min(maxW, Math.max(MIN_W, w)),
-        h: Math.min(maxH, Math.max(MIN_BODY_H, h)),
-      };
-    },
-    [containerRef],
-  );
+  const clampSize = useCallback((w: number, h: number) => {
+    const headH = headRef.current?.offsetHeight ?? 34;
+    const pad = VIEWPORT_PAD;
+    const maxW = Math.min(MAX_W, Math.max(MIN_W, window.innerWidth - pad * 2));
+    const maxH = Math.min(MAX_BODY_H, Math.max(MIN_BODY_H, window.innerHeight - headH - pad * 2));
+    return {
+      w: Math.min(maxW, Math.max(MIN_W, w)),
+      h: Math.min(maxH, Math.max(MIN_BODY_H, h)),
+    };
+  }, []);
 
   useLayoutEffect(() => {
-    if (!open || !rootRef.current || !containerRef.current) return;
-    const box = containerRef.current.getBoundingClientRect();
+    if (!open || !rootRef.current) return;
     const r = rootRef.current.getBoundingClientRect();
     setPos(p => {
-      const origin = p ?? { x: r.left - box.left, y: r.top - box.top };
-      const next = clampToContainer(origin.x, origin.y, r.width, r.height);
-      if (p && next.x === p.x && next.y === p.y) return p;
-      return next;
+      if (p) return clampToViewport(p.x, p.y, r.width, r.height);
+      const box = containerRef.current?.getBoundingClientRect();
+      const anchorX = box ? box.left + 10 : 14;
+      const anchorY = box ? box.top + 56 : 72;
+      return clampToViewport(anchorX, anchorY, r.width, r.height);
     });
-  }, [open, clampToContainer, containerRef]);
+  }, [open, containerRef]);
 
-  const onDragPointerDown = useCallback(
+  const onDragPointerDown = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest('button, a, input, select, textarea, [data-drag-exclude]')) return;
+    const root = rootRef.current;
+    if (!root) return;
+    const r = root.getBoundingClientRect();
+    dragRef.current = { dx: e.clientX - r.left, dy: e.clientY - r.top, w: r.width, h: r.height };
+    setDragging(true);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const onDragPointerMove = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    if (!dragRef.current) return;
+    const nx = e.clientX - dragRef.current.dx;
+    const ny = e.clientY - dragRef.current.dy;
+    setPos(clampToViewport(nx, ny, dragRef.current.w, dragRef.current.h));
+    e.preventDefault();
+  }, []);
+
+  const onDragPointerUp = useCallback(
     (e: React.PointerEvent<HTMLElement>) => {
-      if (e.button !== 0) return;
-      if ((e.target as HTMLElement).closest('button, a, input, select, textarea, [data-drag-exclude]')) return;
-      const root = rootRef.current;
-      const box = containerRef.current?.getBoundingClientRect();
-      if (!root || !box) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const captureEl = e.currentTarget;
-      try {
-        captureEl.setPointerCapture(e.pointerId);
-      } catch {
-        /* ignore */
+      if (dragRef.current) {
+        dragRef.current = null;
+        setPos(p => {
+          if (p) writeSavedPos(p, posStorageKey);
+          return p;
+        });
       }
-      const r = root.getBoundingClientRect();
-      const origin = pos ?? { x: r.left - box.left, y: r.top - box.top };
-      if (!pos) setPos(origin);
-      dragRef.current = {
-        pointerId: e.pointerId,
-        dx: e.clientX - r.left,
-        dy: e.clientY - r.top,
-        w: r.width,
-        h: r.height,
-        captureEl,
-      };
-      setDragging(true);
-    },
-    [containerRef, pos],
-  );
-
-  const onDragPointerMove = useCallback(
-    (e: PointerEvent) => {
-      const d = dragRef.current;
-      const box = containerRef.current?.getBoundingClientRect();
-      if (!d || e.pointerId !== d.pointerId || !box) return;
-      e.preventDefault();
-      const nx = e.clientX - box.left - d.dx;
-      const ny = e.clientY - box.top - d.dy;
-      setPos(clampToContainer(nx, ny, d.w, d.h));
-    },
-    [clampToContainer, containerRef],
-  );
-
-  const endDrag = useCallback(
-    (e: PointerEvent) => {
-      const d = dragRef.current;
-      if (!d || e.pointerId !== d.pointerId) return;
-      try {
-        d.captureEl.releasePointerCapture(e.pointerId);
-      } catch {
-        /* ignore */
-      }
-      dragRef.current = null;
       setDragging(false);
-      setPos(p => {
-        if (p) writeSavedPos(p, posStorageKey);
-        return p;
-      });
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
     },
     [posStorageKey],
   );
-
-  useEffect(() => {
-    if (!dragging) return;
-    const move = (e: PointerEvent) => onDragPointerMove(e);
-    const end = (e: PointerEvent) => endDrag(e);
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', end);
-    window.addEventListener('pointercancel', end);
-    return () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', end);
-      window.removeEventListener('pointercancel', end);
-    };
-  }, [dragging, endDrag, onDragPointerMove]);
 
   const onResizePointerDown = useCallback(
     (e: React.PointerEvent<HTMLElement>) => {
       if (e.button !== 0) return;
       const root = rootRef.current;
       if (!root) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const captureEl = e.currentTarget;
-      try {
-        captureEl.setPointerCapture(e.pointerId);
-      } catch {
-        /* ignore */
-      }
       const r = root.getBoundingClientRect();
       const body = root.querySelector<HTMLElement>('.acp-map-panel__body');
       const bodyH = body?.getBoundingClientRect().height ?? size?.h ?? DEFAULT_BODY_H;
       const startW = size?.w ?? r.width;
       const startH = size?.h ?? bodyH;
       if (!size) setSize(clampSize(startW, startH));
-      resizeRef.current = {
-        pointerId: e.pointerId,
-        startX: e.clientX,
-        startY: e.clientY,
-        startW,
-        startH,
-        captureEl,
-      };
+      resizeRef.current = { startX: e.clientX, startY: e.clientY, startW, startH };
       setResizing(true);
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      e.preventDefault();
+      e.stopPropagation();
     },
     [clampSize, size],
   );
 
   const onResizePointerMove = useCallback(
-    (e: PointerEvent) => {
-      const r = resizeRef.current;
-      if (!r || e.pointerId !== r.pointerId) return;
-      e.preventDefault();
-      const nw = r.startW + (e.clientX - r.startX);
-      const nh = r.startH + (e.clientY - r.startY);
+    (e: React.PointerEvent<HTMLElement>) => {
+      if (!resizeRef.current) return;
+      const nw = resizeRef.current.startW + (e.clientX - resizeRef.current.startX);
+      const nh = resizeRef.current.startH + (e.clientY - resizeRef.current.startY);
       setSize(clampSize(nw, nh));
+      e.preventDefault();
     },
     [clampSize],
   );
 
-  const endResize = useCallback(
-    (e: PointerEvent) => {
-      const r = resizeRef.current;
-      if (!r || e.pointerId !== r.pointerId) return;
+  const onResizePointerUp = useCallback(
+    (e: React.PointerEvent<HTMLElement>) => {
+      if (resizeRef.current) {
+        resizeRef.current = null;
+        setSize(s => {
+          if (s) writeSavedSize(s, sizeStorageKey);
+          return s;
+        });
+        setPos(p => {
+          if (!p || !rootRef.current) return p;
+          const r = rootRef.current.getBoundingClientRect();
+          const next = clampToViewport(p.x, p.y, r.width, r.height);
+          if (next.x === p.x && next.y === p.y) return p;
+          writeSavedPos(next, posStorageKey);
+          return next;
+        });
+      }
+      setResizing(false);
       try {
-        r.captureEl.releasePointerCapture(e.pointerId);
+        e.currentTarget.releasePointerCapture(e.pointerId);
       } catch {
         /* ignore */
       }
-      resizeRef.current = null;
-      setResizing(false);
-      setSize(s => {
-        if (s) writeSavedSize(s, sizeStorageKey);
-        return s;
-      });
-      setPos(p => {
-        if (!p || !rootRef.current || !containerRef.current) return p;
-        const box = containerRef.current.getBoundingClientRect();
-        const el = rootRef.current.getBoundingClientRect();
-        const next = clampToContainer(el.left - box.left, el.top - box.top, el.width, el.height);
-        if (next.x === p.x && next.y === p.y) return p;
-        writeSavedPos(next, posStorageKey);
-        return next;
-      });
     },
-    [clampToContainer, containerRef, posStorageKey, sizeStorageKey],
+    [posStorageKey, sizeStorageKey],
   );
-
-  useEffect(() => {
-    if (!resizing) return;
-    const move = (e: PointerEvent) => onResizePointerMove(e);
-    const end = (e: PointerEvent) => endResize(e);
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', end);
-    window.addEventListener('pointercancel', end);
-    return () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', end);
-      window.removeEventListener('pointercancel', end);
-    };
-  }, [resizing, endResize, onResizePointerMove]);
 
   useEffect(() => {
     const onWinResize = () => {
       setSize(s => (s ? clampSize(s.w, s.h) : s));
       setPos(p => {
-        if (!p || !rootRef.current || !containerRef.current) return p;
-        const box = containerRef.current.getBoundingClientRect();
-        const el = rootRef.current.getBoundingClientRect();
-        const next = clampToContainer(el.left - box.left, el.top - box.top, el.width, el.height);
+        if (!p || !rootRef.current) return p;
+        const r = rootRef.current.getBoundingClientRect();
+        const next = clampToViewport(p.x, p.y, r.width, r.height);
         if (next.x === p.x && next.y === p.y) return p;
         return next;
       });
     };
     window.addEventListener('resize', onWinResize);
     return () => window.removeEventListener('resize', onWinResize);
-  }, [clampSize, clampToContainer, containerRef]);
+  }, [clampSize]);
 
-  if (!open) return null;
+  if (!open || typeof document === 'undefined') return null;
 
   const style: CSSProperties = {
-    ...(pos != null ? { left: pos.x, top: pos.y, right: 'auto', bottom: 'auto' } : {}),
+    position: 'fixed',
+    zIndex: 9200,
+    ...(pos != null ? { left: pos.x, top: pos.y, right: 'auto', bottom: 'auto' } : { left: 14, top: 72 }),
     ...(size != null ? { width: size.w, maxHeight: 'none' } : {}),
   };
   const bodyStyle: CSSProperties =
@@ -372,9 +290,9 @@ export function SiImageryTimeSeriesFloatingPanel({
       ? { height: size.h, minHeight: size.h, maxHeight: size.h, flex: '0 0 auto' }
       : { minHeight: MIN_BODY_H };
 
-  return (
+  const panel = (
     <aside
-      ref={setRootRef}
+      ref={rootRef}
       className={
         'si-its-float acp-shell acp-map-panel acp-map-panel--timeseries' +
         (size != null ? ' si-its-float--sized' : '') +
@@ -386,13 +304,15 @@ export function SiImageryTimeSeriesFloatingPanel({
       role="dialog"
       aria-label="Imagery Time Series"
       aria-modal="false"
-      {...isolationHandlers}
     >
       <header
         ref={headRef}
         className="acp-map-panel__head si-its-float__head"
         onPointerDown={onDragPointerDown}
-        title="Drag to move panel"
+        onPointerMove={onDragPointerMove}
+        onPointerUp={onDragPointerUp}
+        onPointerCancel={onDragPointerUp}
+        title="Drag to move anywhere on screen"
       >
         <span className="si-its-float__head-main">
           <span className="si-its-float__grip" aria-hidden>
@@ -411,29 +331,40 @@ export function SiImageryTimeSeriesFloatingPanel({
           <i className="fa-solid fa-xmark" aria-hidden />
         </button>
       </header>
-      <div className="acp-map-panel__body si-its-float__body" style={bodyStyle} data-agrocloud-map-wheel-scroll="">
-        <SiImageryTimeSeriesPanel
-          agroStructuresMask={agroStructuresMask}
-          aoiFields={aoiFields}
-          committedAoiGeometry={committedAoiGeometry}
-          defaultLayerId={defaultLayerId}
-          analysisDate={analysisDate}
-          onMapDateFromChart={onMapDateFromChart}
-          selectedFieldKey={selectedFieldKey}
-          onSelectedFieldKeyChange={onSelectedFieldKeyChange}
-        />
-      </div>
       <div
-        className="si-its-float__resize"
-        role="separator"
-        aria-orientation="horizontal"
-        aria-label="Resize panel"
-        title="Drag to resize"
-        data-drag-exclude
-        onPointerDown={onResizePointerDown}
+        ref={setBodyIsolationRef}
+        className="si-its-float__chrome"
+        {...isolationHandlers}
       >
-        <i className="fa-solid fa-up-right-and-down-left-from-center" aria-hidden />
+        <div className="acp-map-panel__body si-its-float__body" style={bodyStyle} data-agrocloud-map-wheel-scroll="">
+          <SiImageryTimeSeriesPanel
+            agroStructuresMask={agroStructuresMask}
+            aoiFields={aoiFields}
+            committedAoiGeometry={committedAoiGeometry}
+            defaultLayerId={defaultLayerId}
+            analysisDate={analysisDate}
+            onMapDateFromChart={onMapDateFromChart}
+            selectedFieldKey={selectedFieldKey}
+            onSelectedFieldKeyChange={onSelectedFieldKeyChange}
+          />
+        </div>
+        <div
+          className="si-its-float__resize"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="Resize panel"
+          title="Drag to resize"
+          data-drag-exclude
+          onPointerDown={onResizePointerDown}
+          onPointerMove={onResizePointerMove}
+          onPointerUp={onResizePointerUp}
+          onPointerCancel={onResizePointerUp}
+        >
+          <i className="fa-solid fa-up-right-and-down-left-from-center" aria-hidden />
+        </div>
       </div>
     </aside>
   );
+
+  return createPortal(panel, document.body);
 }
