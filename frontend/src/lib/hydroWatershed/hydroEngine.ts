@@ -266,6 +266,12 @@ function getFlowModel(dem: DemGrid): FlowModel {
   return model
 }
 
+/** Filled DEM + D8 flow accumulation (cached per grid) for MCDA well-suitability scoring. */
+export function getDemHydrologyModel(dem: DemGrid): { accum: Float32Array; filled: Float32Array } {
+  const m = getFlowModel(dem)
+  return { accum: m.accum, filled: m.filled }
+}
+
 // ── Raster colourisation ────────────────────────────────────────────────────────
 
 type RGBA = [number, number, number, number]

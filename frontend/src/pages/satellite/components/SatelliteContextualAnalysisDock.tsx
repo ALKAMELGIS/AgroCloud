@@ -27,6 +27,7 @@ export type SatelliteContextPanelId =
   | 'tree-detections'
   | 'hydro-watershed'
   | 'well-site'
+  | 'well-suitability'
   | 'flood-monitoring'
   | 'table-geo-ai'
   | 'spatial'
@@ -81,6 +82,7 @@ export type SatelliteContextualAnalysisDockProps = {
     | 'tree-detections'
     | 'hydro-watershed'
     | 'well-site'
+    | 'well-suitability'
     | 'flood-monitoring'
     | 'table-geo-ai'
     | null;
@@ -117,12 +119,12 @@ export type SatelliteContextualAnalysisDockProps = {
   onMeasureOpenPanel?: () => void;
   /** Turn measurement off / clear the current measurement. */
   onMeasureClear?: () => void;
-  /** Imagery Time Series toolbox panel (date range, layers, chart). */
-  mapToolboxImageryTimeSeriesPanel?: ReactNode;
-  /** Fired when Imagery Time Series dock panel opens (map overlay + live fetch). */
-  onImageryTimeSeriesRailOpen?: () => void;
-  /** Fired when Imagery Time Series dock panel active state changes. */
-  onImageryTimeSeriesActiveChange?: (active: boolean) => void;
+  /** Imagery Time Series floating panel open state (map variant). */
+  imageryTimeSeriesOpen?: boolean;
+  onImageryTimeSeriesOpenChange?: (open: boolean) => void;
+  /** Go To XY coordinate bar open state (map variant). */
+  goToXyOpen?: boolean;
+  onGoToXyOpenChange?: (open: boolean) => void;
 };
 
 const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; title: string; hint: string }> = [
@@ -195,6 +197,13 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     label: 'Well Site',
     title: 'Well Site Recommendation (Hydro-AI)',
     hint: 'AOI → DEM, slope, flow → suitability heatmap & top drilling sites.',
+  },
+  {
+    id: 'well-suitability',
+    icon: 'fa-solid fa-bore-hole',
+    label: 'Well Suitability',
+    title: 'Well Suitability (MCDA)',
+    hint: 'Multi-criteria groundwater potential — ranked sites, confidence & MCDA heatmap.',
   },
   {
     id: 'flood-monitoring',
@@ -280,6 +289,7 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
   'tree-detections',
   'hydro-watershed',
   'well-site',
+  'well-suitability',
   'flood-monitoring',
   'table-geo-ai',
 ]);
@@ -293,12 +303,13 @@ const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
   'tree-detections',
   'hydro-watershed',
   'well-site',
+  'well-suitability',
   'flood-monitoring',
 ]);
 
 const RAIL_GROUPS_MAP: SatelliteContextPanelId[][] = [
   ['layers', 'remote-sensing', 'crop-alerts', 'crop-classification', 'imagery-time-series', 'layer-live-legend', 'hydro-watershed'],
-  ['ai-detection-gis', 'tree-detections', 'well-site', 'flood-monitoring', 'table-geo-ai'],
+  ['ai-detection-gis', 'tree-detections', 'well-site', 'well-suitability', 'flood-monitoring', 'table-geo-ai'],
 ];
 
 const RAIL_BY_ID = RAIL.reduce(
@@ -366,9 +377,10 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
     onMapToolboxToggleDrawing,
     measureMode = null,
     onMeasureOpenPanel,
-    mapToolboxImageryTimeSeriesPanel,
-    onImageryTimeSeriesRailOpen,
-    onImageryTimeSeriesActiveChange,
+    imageryTimeSeriesOpen = false,
+    onImageryTimeSeriesOpenChange,
+    goToXyOpen = false,
+    onGoToXyOpenChange,
   } = props;
 
   const { scopedStorageKey } = useSiInstanceScope();
@@ -448,8 +460,11 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
   }, [layerLiveLegendOpen, activeId])
 
   useEffect(() => {
-    onImageryTimeSeriesActiveChange?.(panelOpen && activeId === 'imagery-time-series')
-  }, [panelOpen, activeId, onImageryTimeSeriesActiveChange])
+    if (imageryTimeSeriesOpen) return
+    if (activeId === 'imagery-time-series') {
+      setActiveId(null)
+    }
+  }, [imageryTimeSeriesOpen, activeId])
 
   useEffect(() => {
     try {
@@ -565,15 +580,11 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
         return;
       }
       if (isMapVariant && id === 'imagery-time-series') {
-        if (panelOpen && activeId === id) {
-          setPanelOpen(false);
-          return;
-        }
-        if (isMapVariant && processingDropdownOpen) {
-          onToolboxPanelClose?.();
-        }
-        openPanel(id);
-        onImageryTimeSeriesRailOpen?.();
+        onImageryTimeSeriesOpenChange?.(!imageryTimeSeriesOpen);
+        return;
+      }
+      if (isMapVariant && id === 'go-to-xy') {
+        onGoToXyOpenChange?.(!goToXyOpen);
         return;
       }
       if (isMapVariant && MAP_RAIL_FLOAT_IDS.has(id) && onProcessingWorkflowNavigate) {
@@ -606,7 +617,10 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
       onProcessingWorkflowNavigate,
       onToolboxPanelClose,
       onGeoAiFloatingRailToggle,
-      onImageryTimeSeriesRailOpen,
+      imageryTimeSeriesOpen,
+      onImageryTimeSeriesOpenChange,
+      goToXyOpen,
+      onGoToXyOpenChange,
       layerLiveLegendOpen,
       onLayerLiveLegendOpenChange,
       openPanel,
@@ -804,6 +818,28 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
             ) : null}
           </button>
         ) : null}
+        {isMap && !mapStripHidden && onGoToXyOpenChange ? (
+          <button
+            type="button"
+            className={
+              'si-sat-ctx-rail-btn si-sat-ctx-rail-btn--map si-sat-ctx-rail-btn--go-to-xy' +
+              (railWide ? ' si-sat-ctx-rail-btn--row si-sat-ctx-rail-btn--map-expanded' : ' si-sat-ctx-rail-btn--map-collapsed') +
+              (goToXyOpen ? ' si-sat-ctx-rail-btn--active' : '')
+            }
+            title="Go To XY — jump to coordinates on the map"
+            aria-label="Go To XY"
+            aria-pressed={goToXyOpen}
+            onClick={() => onGoToXyOpenChange(!goToXyOpen)}
+          >
+            <i className="fa-solid fa-crosshairs" aria-hidden />
+            {railWide ? (
+              <span className="si-sat-ctx-rail-label">
+                <span className="si-sat-ctx-rail-label-title">Go To XY</span>
+                <span className="si-sat-ctx-rail-label-desc">Center map on coordinates</span>
+              </span>
+            ) : null}
+          </button>
+        ) : null}
         {isMap && !mapStripHidden ? (
           <div className="si-sat-ctx-rail-sep" role="separator" aria-hidden />
         ) : null}
@@ -819,6 +855,7 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
                   processingEmbedSection === item.id) ||
                 (item.id === 'table-geo-ai' && geoAiFloatingOpen) ||
                 (item.id === 'layer-live-legend' && layerLiveLegendOpen) ||
+                (item.id === 'imagery-time-series' && imageryTimeSeriesOpen) ||
                 (activeId === item.id &&
                   (MAP_RAIL_FLOAT_IDS.has(item.id) ? !panelOpen : panelOpen));
               return (
@@ -1026,7 +1063,6 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
                 {innerTab === 'main' ? (
                   <>
                     {activeId === 'layers' && mapToolboxLayersMain}
-                    {activeId === 'imagery-time-series' && mapToolboxImageryTimeSeriesPanel}
                     {activeId === 'add-gis-layer' && mapToolboxBrowseLayersPanel}
                     {activeId === 'layer-live-legend' && !isMap && mapToolboxLayerLiveLegend}
                     {activeId === 'spatial' && (

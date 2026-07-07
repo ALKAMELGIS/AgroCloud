@@ -11937,6 +11937,19 @@ html[data-theme='light'] .si-env-panel.si-env-panel--satellite-toolbox.si-env-pa
     transform 280ms ease;
 }
 
+.si-map-container--globe-cockpit.si-map-container--timeline-active .si-map-analysis-timeline,
+.si-map-container--globe-cockpit.si-map-container--interacting .si-map-analysis-timeline {
+  opacity: 1;
+  pointer-events: none;
+  transform: translateY(0);
+}
+
+.si-map-container--globe-cockpit.si-map-container--interacting .si-map-analysis-pill {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
 .si-map-container--globe-cockpit:not(.si-map-container--interacting) .si-map-floating-controls {
   opacity: 0.92;
 }

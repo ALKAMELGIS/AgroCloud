@@ -158,6 +158,7 @@ export type SatelliteMapAnalysisChromeProps = {
     | 'tree-detections'
     | 'hydro-watershed'
     | 'well-site'
+    | 'well-suitability'
     | 'flood-monitoring'
     | 'table-geo-ai'
     | null;
@@ -190,10 +191,11 @@ export type SatelliteMapAnalysisChromeProps = {
   onMeasureOpenPanel?: () => void;
   /** Main toolbox Measure tool: stop / clear measuring. */
   onMeasureClear?: () => void;
-  /** Imagery Time Series toolbox panel body. */
-  mapToolboxImageryTimeSeriesPanel?: ReactNode;
-  onImageryTimeSeriesRailOpen?: () => void;
-  onImageryTimeSeriesActiveChange?: (active: boolean) => void;
+  /** Imagery Time Series floating panel open state (map variant). */
+  imageryTimeSeriesOpen?: boolean;
+  onImageryTimeSeriesOpenChange?: (open: boolean) => void;
+  goToXyOpen?: boolean;
+  onGoToXyOpenChange?: (open: boolean) => void;
 };
 
 function sparkPath(values: number[], w: number, h: number): string {
@@ -263,9 +265,10 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
     measureMode,
     onMeasureOpenPanel,
     onMeasureClear,
-    mapToolboxImageryTimeSeriesPanel,
-    onImageryTimeSeriesRailOpen,
-    onImageryTimeSeriesActiveChange,
+    imageryTimeSeriesOpen,
+    onImageryTimeSeriesOpenChange,
+    goToXyOpen,
+    onGoToXyOpenChange,
   } = props;
 
   const activeFull =
@@ -351,9 +354,10 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
       measureMode={measureMode}
       onMeasureOpenPanel={onMeasureOpenPanel}
       onMeasureClear={onMeasureClear}
-      mapToolboxImageryTimeSeriesPanel={mapToolboxImageryTimeSeriesPanel}
-      onImageryTimeSeriesRailOpen={onImageryTimeSeriesRailOpen}
-      onImageryTimeSeriesActiveChange={onImageryTimeSeriesActiveChange}
+      imageryTimeSeriesOpen={imageryTimeSeriesOpen}
+      onImageryTimeSeriesOpenChange={onImageryTimeSeriesOpenChange}
+      goToXyOpen={goToXyOpen}
+      onGoToXyOpenChange={onGoToXyOpenChange}
     />
   ) : null;
 

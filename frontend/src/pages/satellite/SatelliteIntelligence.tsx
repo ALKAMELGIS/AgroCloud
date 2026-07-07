@@ -179,7 +179,8 @@ import {
 } from '../../lib/siCropAlertImageryValidation';
 import './components/SiCropAlertCenterPanel.css';
 import { SiPrithviCropToolPanel } from './components/SiPrithviCropToolPanel';
-import { SiImageryTimeSeriesToolboxPanel } from './components/SiImageryTimeSeriesToolboxPanel';
+import { SiImageryTimeSeriesFloatingPanel } from './components/SiImageryTimeSeriesFloatingPanel';
+import { SiGoToXyBar } from './components/SiGoToXyBar';
 import {
   fetchCropClassificationConfig,
   startAoiJob,
@@ -396,7 +397,10 @@ import { HydroWatershedPanel } from './components/HydroWatershedPanel';
 import { useHydroWatershed } from './components/useHydroWatershed';
 import { WellSiteRecommendationPanel } from './components/WellSiteRecommendationPanel';
 import { useWellSiteRecommendation } from './components/useWellSiteRecommendation';
+import { WellSuitabilityPanel } from './components/WellSuitabilityPanel';
+import { useWellSuitabilityAnalysis } from './components/useWellSuitabilityAnalysis';
 import type { WellSitePoint } from '../../lib/hydroWatershed/hydroEngine';
+import type { WellSuitabilitySite } from '../../lib/hydroWatershed/wellSuitabilityMcdaEngine';
 import type { HydroStepId } from '../../lib/hydroWatershed/hydroEngine';
 import { GisPortalBrowseLayersPanel } from './components/GisPortalBrowseLayersPanel';
 import { GisUploadCloudSources } from '../../components/GisUploadCloudSources';
@@ -569,6 +573,7 @@ type MapToolboxSectionId =
   | 'tree-detections'
   | 'hydro-watershed'
   | 'well-site'
+  | 'well-suitability'
   | 'flood-monitoring'
   | 'table-geo-ai';
 
@@ -1584,6 +1589,7 @@ const SI_TABLE_MAX_FEATURES = 10000;
 
 /** Stable id for the Well Site Recommendation output layer in the Layers panel. */
 const WELLSITE_RECOMMENDED_LAYER_ID = 'wellsite-recommended-wells';
+const WELL_SUITABILITY_LAYER_ID = 'well-suitability-ranked-sites';
 
 type SiTableSearchMode = 'description' | 'code' | 'both';
 type SiTableFilterOperator = 'contains' | 'equals' | 'not_equals' | 'empty' | 'not_empty';
@@ -3381,7 +3387,9 @@ export default function SatelliteIntelligence() {
     });
   }, []);
   const [mapStaticChartsOpen, setMapStaticChartsOpen] = useState(false);
-  const [imageryTimeSeriesToolboxOpen, setImageryTimeSeriesToolboxOpen] = useState(false);
+  const [imageryTimeSeriesOpen, setImageryTimeSeriesOpen] = useState(false);
+  const [goToXyOpen, setGoToXyOpen] = useState(false);
+  const [goToXyMarker, setGoToXyMarker] = useState<{ lng: number; lat: number } | null>(null);
   const [aoiStatsPixel, setAoiStatsPixel] = useState<{ lng: number; lat: number } | null>(null);
   const [layerLiveStatsLayers, setLayerLiveStatsLayers] = useState<LayerLiveStatsLayerId[]>(() =>
     defaultStaticAoiComparisonLayers(),
@@ -3703,6 +3711,7 @@ export default function SatelliteIntelligence() {
     | 'tree-detections'
     | 'hydro-watershed'
     | 'well-site'
+    | 'well-suitability'
     | 'flood-monitoring'
     | 'table-geo-ai'
   >('source');
@@ -7491,8 +7500,8 @@ export default function SatelliteIntelligence() {
 
   const aoiStatsSampleMode: AoiStatsSampleMode = aoiStatsPixel ? 'pixel' : 'aoi';
 
-  const aoiStatsFetchEnabled = Boolean(
-    (mapStaticChartsOpen || fieldTimelineSessionActive || imageryTimeSeriesToolboxOpen) && aoiStatsGeometry,
+  const rsAoiStatsFetchEnabled = Boolean(
+    (mapStaticChartsOpen || fieldTimelineSessionActive) && aoiStatsGeometry,
   );
 
   const aoiLiveTimeSeries = useAoiLiveTimeSeries({
@@ -7502,7 +7511,7 @@ export default function SatelliteIntelligence() {
     primaryLayerId: wmsLayer.trim() || selectedIndex,
     weeklyWindows,
     sampleMode: aoiStatsSampleMode,
-    enabled: aoiStatsFetchEnabled,
+    enabled: rsAoiStatsFetchEnabled,
   });
 
   const exploreEffectiveDatetime = useMemo(() => {
@@ -7537,22 +7546,14 @@ export default function SatelliteIntelligence() {
       setFieldAnalysisStatus('Choose a valid start and end date for the time series.');
       return;
     }
-    if (!drawnGeometry?.geometry) {
+    if (!aoiStatsGeometry) {
       setFieldAnalysisStatus('Draw an AOI on the map, then generate the timeline.');
       setFieldTimelineSessionActive(false);
       return;
     }
     setFieldTimelineSessionActive(true);
-    setFieldAnalysisStatus('Loading Sentinel statistics for AOIâ€¦');
-    void aoiLiveTimeSeries.refresh().then(() => {
-      if (aoiLiveTimeSeries.source === 'live' && aoiLiveTimeSeries.weekly.length) {
-        setFieldAnalysisStatus(
-          `Live timeline: ${aoiLiveTimeSeries.weekly.length} week(s) Â· ${aoiStatsSampleMode === 'pixel' ? 'pixel' : 'AOI mean'} Â· ${selectedIndexConfig.label}.`,
-        );
-      } else if (aoiLiveTimeSeries.error) {
-        setFieldAnalysisStatus(aoiLiveTimeSeries.error);
-      }
-    });
+    setWeeklyComposites(synthesizeWeeklyComposites(0));
+    setFieldAnalysisStatus('Loading Sentinel statistics for AOI…');
   };
 
   const stopFieldAnalysisTimeline = useCallback(() => {
@@ -7563,8 +7564,29 @@ export default function SatelliteIntelligence() {
   }, []);
 
   useEffect(() => {
-    if (weeklyComposites.length === 0) setFieldTimelineSessionActive(false);
-  }, [weeklyComposites.length]);
+    if (!fieldTimelineSessionActive) return;
+    if (aoiLiveTimeSeries.loading) {
+      setFieldAnalysisStatus('Loading Sentinel statistics for AOI…');
+      return;
+    }
+    if (aoiLiveTimeSeries.source === 'live' && aoiLiveTimeSeries.weekly.length) {
+      setFieldAnalysisStatus(
+        `Live timeline: ${aoiLiveTimeSeries.weekly.length} week(s) · ${aoiStatsSampleMode === 'pixel' ? 'pixel' : 'AOI mean'} · ${selectedIndexConfig.label}.`,
+      );
+      return;
+    }
+    if (aoiLiveTimeSeries.error) {
+      setFieldAnalysisStatus(aoiLiveTimeSeries.error);
+    }
+  }, [
+    fieldTimelineSessionActive,
+    aoiLiveTimeSeries.loading,
+    aoiLiveTimeSeries.source,
+    aoiLiveTimeSeries.weekly.length,
+    aoiLiveTimeSeries.error,
+    aoiStatsSampleMode,
+    selectedIndexConfig.label,
+  ]);
 
   /**
    * Bridge the live AOI statistics into the timeline strip. `weeklyComposites`
@@ -7589,7 +7611,6 @@ export default function SatelliteIntelligence() {
     }
     generateFieldAnalysisTimeline();
   };
-
 
   const flyToStacItemExtent = (item: any) => {
     const geom = stacItemFootprintGeometry(item);
@@ -10121,6 +10142,7 @@ export default function SatelliteIntelligence() {
       expandedEnvSection === 'tree-detections' ||
       expandedEnvSection === 'hydro-watershed' ||
       expandedEnvSection === 'well-site' ||
+      expandedEnvSection === 'well-suitability' ||
       expandedEnvSection === 'flood-monitoring'
     ) {
       setCropClassDrawingModeActive(false);
@@ -10255,6 +10277,18 @@ export default function SatelliteIntelligence() {
     map.flyTo({ center: [point.lng, point.lat], zoom: Math.max(map.getZoom?.() ?? 13, 15), duration: 900 });
   }, []);
 
+  const wellSuitabilityActive = expandedEnvSection === 'well-suitability';
+  const wellSuitability = useWellSuitabilityAnalysis({
+    geometry: drawnGeometry ?? null,
+    enabled: wellSuitabilityActive,
+    topN: 10,
+  });
+  const handleWellSuitabilityZoomToPoint = useCallback((point: WellSuitabilitySite) => {
+    const map = mapRef.current?.getMap?.() ?? mapRef.current;
+    if (!map?.flyTo) return;
+    map.flyTo({ center: [point.lng, point.lat], zoom: Math.max(map.getZoom?.() ?? 13, 15), duration: 900 });
+  }, []);
+
   // Publish the latest recommended wells as a first-class Layers-panel layer
   // (Shapefile-style point layer with the full attribute table). Refreshing the
   // analysis replaces its geometry/attributes while preserving any user styling.
@@ -10284,6 +10318,33 @@ export default function SatelliteIntelligence() {
       return next;
     });
   }, [wellSite.result]);
+
+  useEffect(() => {
+    const fc = wellSuitability.result?.pointsGeoJson;
+    if (!fc || !Array.isArray(fc.features) || !fc.features.length) return;
+    setCustomLayers(prev => {
+      const idx = prev.findIndex(l => l.id === WELL_SUITABILITY_LAYER_ID);
+      if (idx === -1) {
+        const layer: CustomLayer = {
+          id: WELL_SUITABILITY_LAYER_ID,
+          name: 'Well Suitability (MCDA)',
+          geojson: fc,
+          visible: true,
+          source: 'api',
+          ephemeral: true,
+          color: '#065f46',
+          fillColor: '#10b981',
+          pointRadius: 7,
+          weight: 2,
+          labelFieldName: 'rank',
+        };
+        return [...prev, layer];
+      }
+      const next = prev.slice();
+      next[idx] = { ...next[idx], geojson: fc, markerImageId: undefined };
+      return next;
+    });
+  }, [wellSuitability.result]);
 
   // â”€â”€ Flood Monitoring (SAR-based change detection) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const FLOOD_RASTER_LAYER_ID = 'flood-extent-raster';
@@ -13504,10 +13565,6 @@ export default function SatelliteIntelligence() {
     [remoteSensingLayerOptions, remoteSensingLayerSelectGroups, wmsLayerSelectValue, drawnGeometry, sentinelFetchDate, timeSeriesStart, timeSeriesEnd],
   );
 
-  const handleImageryTimeSeriesRailOpen = useCallback(() => {
-    setMapStaticChartsOpen(true);
-  }, []);
-
   const layersEnvMainTools = useMemo(
     () => (
       <div className="si-env-section-card si-map-toolbox-layers-compact">
@@ -13948,54 +14005,6 @@ export default function SatelliteIntelligence() {
   const staticAoiChartExportLngLatPerRow = useMemo(
     () => buildStaticAoiExportLngLatPerRow(drawnGeometry, staticAoiMultiLineData.labels.length),
     [drawnGeometry, staticAoiMultiLineData.labels.length, staticAoiChartAoiKey],
-  );
-
-  const mapToolboxImageryTimeSeriesPanel = useMemo(
-    () => (
-      <SiImageryTimeSeriesToolboxPanel
-        hasAoi={!!drawnGeometry}
-        indexLabel={selectedIndexConfig.label}
-        timeSeriesStart={timeSeriesStart}
-        timeSeriesEnd={timeSeriesEnd}
-        onTimeSeriesStartChange={v => {
-          setImageryDateAutoFollow(false);
-          setTimeSeriesStart(v);
-        }}
-        onTimeSeriesEndChange={v => {
-          setImageryDateAutoFollow(false);
-          setTimeSeriesEnd(v);
-        }}
-        fieldTimelineActive={fieldTimelineSessionActive}
-        onTimelinePrimaryClick={onFieldAnalysisTimelinePrimaryClick}
-        fieldAnalysisStatus={fieldAnalysisStatus}
-        staticChartsOpen={mapStaticChartsOpen}
-        onToggleStaticCharts={() => setMapStaticChartsOpen(o => !o)}
-        layerLiveStatsLayerGroups={remoteSensingLayerSelectGroups}
-        layerLiveStatsLayers={layerLiveStatsLayers}
-        onLayerLiveStatsLayersChange={setLayerLiveStatsLayers}
-        primaryLayerId={wmsLayerSelectValue}
-        staticMultiLineLabels={staticAoiMultiLineData.labels}
-        staticMultiLineDatasets={staticAoiMultiLineData.datasets}
-        staticMultiLineHasLst={staticAoiMultiLineData.hasLst}
-        staticChartExportLngLatPerRow={staticAoiChartExportLngLatPerRow}
-      />
-    ),
-    [
-      drawnGeometry,
-      selectedIndexConfig.label,
-      timeSeriesStart,
-      timeSeriesEnd,
-      fieldTimelineSessionActive,
-      fieldAnalysisStatus,
-      mapStaticChartsOpen,
-      remoteSensingLayerSelectGroups,
-      layerLiveStatsLayers,
-      wmsLayerSelectValue,
-      staticAoiMultiLineData.labels,
-      staticAoiMultiLineData.datasets,
-      staticAoiMultiLineData.hasLst,
-      staticAoiChartExportLngLatPerRow,
-    ],
   );
 
   const satelliteActiveChipId = useMemo(() => {
@@ -14573,6 +14582,10 @@ export default function SatelliteIntelligence() {
               : ''
           }${weatherPickOnMap ? ' si-map-container--weather-pick' : ''}${
             globeCockpit2dActive ? ' si-map-container--globe-cockpit' : ''
+          }${
+            weeklyComposites.length > 0 || fieldTimelineSessionActive
+              ? ' si-map-container--timeline-active'
+              : ''
           }`}
           title={siMapDrawingTitle || undefined}
         >
@@ -14996,6 +15009,14 @@ export default function SatelliteIntelligence() {
                   </Marker>
                 ))}
 
+                {goToXyMarker ? (
+                  <Marker longitude={goToXyMarker.lng} latitude={goToXyMarker.lat} anchor="bottom">
+                    <div className="si-map-search-pin si-map-search-pin--goto-xy" title="Go To XY marker">
+                      <i className="fa-solid fa-location-dot si-map-search-pin__icon" aria-hidden />
+                    </div>
+                  </Marker>
+                ) : null}
+
                 {searchPin && (
                   <Marker longitude={searchPin.lng} latitude={searchPin.lat} anchor="bottom">
                     <div
@@ -15241,6 +15262,41 @@ export default function SatelliteIntelligence() {
                       paint={{
                         'raster-opacity': (wellSite.result.raster.opacity ?? 0.78) * wellSite.opacity,
                         'raster-fade-duration': 0,
+                      }}
+                    />
+                  </Source>
+                ) : null}
+                {wellSuitability.result && wellSuitability.heatVisible ? (
+                  <Source
+                    id="well-suit-heat-source"
+                    type="image"
+                    url={wellSuitability.result.raster.dataUrl}
+                    coordinates={wellSuitability.result.raster.coordinates as any}
+                  >
+                    <Layer
+                      id="well-suit-heat-raster"
+                      type="raster"
+                      paint={{
+                        'raster-opacity':
+                          (wellSuitability.result.raster.opacity ?? 0.78) * wellSuitability.opacity,
+                        'raster-fade-duration': 0,
+                      }}
+                    />
+                  </Source>
+                ) : null}
+                {wellSuitability.result?.streams && wellSuitability.streamsVisible ? (
+                  <Source
+                    id="well-suit-streams-source"
+                    type="geojson"
+                    data={wellSuitability.result.streams.data as any}
+                  >
+                    <Layer
+                      id="well-suit-streams-line"
+                      type="line"
+                      paint={{
+                        'line-color': '#38bdf8',
+                        'line-opacity': 0.85,
+                        'line-width': 1.2,
                       }}
                     />
                   </Source>
@@ -15693,6 +15749,43 @@ export default function SatelliteIntelligence() {
             sceneDate={sentinelFetchDate}
             seriesStart={timeSeriesStart}
             seriesEnd={timeSeriesEnd}
+          />
+
+          <SiImageryTimeSeriesFloatingPanel
+            open={imageryTimeSeriesOpen}
+            onClose={() => setImageryTimeSeriesOpen(false)}
+            containerRef={siMapContainerRef}
+            agroStructuresMask={agroStructuresLayerAoiMask}
+            aoiFields={aoiFields}
+            committedAoiGeometry={drawnGeometry?.geometry ?? null}
+            defaultLayerId={wmsLayerSelectValue}
+            analysisDate={imageryDateAutoFollow ? localIsoDate() : localIsoDate(selectedDate)}
+            onMapDateFromChart={iso => {
+              setImageryDateAutoFollow(false);
+              applySelectedDate(dateFromLocalIso(iso));
+            }}
+          />
+
+          <SiGoToXyBar
+            open={goToXyOpen}
+            onClose={() => setGoToXyOpen(false)}
+            longitude={viewState.longitude}
+            latitude={viewState.latitude}
+            bottomOffset={weeklyComposites.length > 0 ? 92 : 12}
+            onFlyTo={(lng, lat, opts) => {
+              setViewState(v => ({
+                ...v,
+                longitude: lng,
+                latitude: lat,
+                zoom: opts?.panOnly
+                  ? typeof v.zoom === 'number'
+                    ? v.zoom
+                    : 12
+                  : Math.max(typeof v.zoom === 'number' ? v.zoom : 2, 14),
+                transitionDuration: 700,
+              }));
+            }}
+            onPlaceMarker={(lng, lat) => setGoToXyMarker({ lng, lat })}
           />
 
           {isWeatherIntelOpen && weatherLocation ? (
@@ -16398,7 +16491,7 @@ export default function SatelliteIntelligence() {
             timelinePlaying={isTimelinePlaying}
             onTogglePlay={() => setIsTimelinePlaying(p => !p)}
             onStep={handleSatelliteTimelineStep}
-            timelineVisible={weeklyComposites.length > 0}
+            timelineVisible={weeklyComposites.length > 0 || fieldTimelineSessionActive}
             timelinePlaybackMs={timelinePlaybackMs}
             onCycleTimelineSpeed={cycleTimelinePlaybackSpeed}
             mapTool={satelliteToolbarTool}
@@ -16434,9 +16527,10 @@ export default function SatelliteIntelligence() {
             onMapToolboxAddGisLayerPrimaryClick={() => openAddLayerModal({ tab: 'giscontent', wizard: 'home' })}
             mapToolboxBrowseLayersPanel={mapToolboxBrowseLayersPanel}
             mapToolboxLayerLiveLegend={mapToolboxLayerLiveLegend}
-            mapToolboxImageryTimeSeriesPanel={mapToolboxImageryTimeSeriesPanel}
-            onImageryTimeSeriesRailOpen={handleImageryTimeSeriesRailOpen}
-            onImageryTimeSeriesActiveChange={setImageryTimeSeriesToolboxOpen}
+            imageryTimeSeriesOpen={imageryTimeSeriesOpen}
+            onImageryTimeSeriesOpenChange={setImageryTimeSeriesOpen}
+            goToXyOpen={goToXyOpen}
+            onGoToXyOpenChange={setGoToXyOpen}
             layerLiveLegendOpen={layerLiveLegendOpen}
             onLayerLiveLegendOpenChange={setLayerLiveLegendOpen}
             mapToolboxDrawingActive={rsDrawingModeActive}
@@ -16803,6 +16897,10 @@ export default function SatelliteIntelligence() {
                                 ? 'Tree Detections'
                               : expandedEnvSection === 'hydro-watershed'
                                 ? 'Hydro Watershed Workflow'
+                              : expandedEnvSection === 'well-site'
+                                ? 'Well Site (Hydro-AI)'
+                              : expandedEnvSection === 'well-suitability'
+                                ? 'Well Suitability (MCDA)'
                               : expandedEnvSection === 'flood-monitoring'
                                 ? 'Flood Monitoring (SAR-Based)'
                                 : expandedEnvSection === 'layers'
@@ -16957,8 +17055,6 @@ export default function SatelliteIntelligence() {
                         onMeasureTool={() => applyMapDrawTool('polyline')}
                         hasClearableDrawing={satelliteHasClearableDrawing}
                         onClearDrawing={clearSatelliteDrawingImmediate}
-                        staticChartsOpen={mapStaticChartsOpen}
-                        onToggleStaticCharts={() => setMapStaticChartsOpen(o => !o)}
                         onOpenLayerLegend={() => setLayerLiveLegendOpen(o => !o)}
                         layerLegendOpen={layerLiveLegendOpen}
                         fieldTimelineActive={fieldTimelineSessionActive}
@@ -17090,6 +17186,42 @@ export default function SatelliteIntelligence() {
                           onExportCsv={wellSite.exportPointsCsv}
                           onExportXlsx={wellSite.exportXlsx}
                           onZoomToPoint={handleWellSiteZoomToPoint}
+                        />
+                      </div>
+                    )}
+                    {expandedEnvSection === 'well-suitability' && (
+                      <div className="si-env-section-card si-rs-panel--glass">
+                        <WellSuitabilityPanel
+                          status={wellSuitability.status}
+                          hasAoi={wellSuitability.hasAoi}
+                          demLoading={wellSuitability.demLoading}
+                          demError={wellSuitability.demError}
+                          error={wellSuitability.error}
+                          progressLabel={wellSuitability.progress?.label ?? null}
+                          progressPct={wellSuitability.progress?.pct ?? 0}
+                          weights={wellSuitability.weights}
+                          topN={wellSuitability.topN}
+                          points={wellSuitability.result?.points ?? []}
+                          stats={wellSuitability.result?.stats ?? []}
+                          legendSwatches={wellSuitability.result?.raster.legend?.swatches ?? []}
+                          heatVisible={wellSuitability.heatVisible}
+                          streamsVisible={wellSuitability.streamsVisible}
+                          opacity={wellSuitability.opacity}
+                          hasResult={!!wellSuitability.result}
+                          onRun={wellSuitability.run}
+                          onWeightChange={wellSuitability.setCriterionWeight}
+                          onTopNChange={wellSuitability.setTopN}
+                          onToggleHeat={wellSuitability.toggleHeat}
+                          onToggleStreams={wellSuitability.toggleStreams}
+                          onOpacityChange={wellSuitability.setOpacity}
+                          onExportGeoTiff={wellSuitability.exportHeatGeoTiff}
+                          onExportGeoJson={wellSuitability.exportPointsGeoJson}
+                          onExportCsv={wellSuitability.exportPointsCsv}
+                          onExportXlsx={wellSuitability.exportXlsx}
+                          onExportPdf={wellSuitability.exportPdf}
+                          onExportShapefile={() => void wellSuitability.exportShapefile()}
+                          onExportKmz={() => void wellSuitability.exportKmz()}
+                          onZoomToPoint={handleWellSuitabilityZoomToPoint}
                         />
                       </div>
                     )}

@@ -53,8 +53,6 @@ export type RemoteSensingToolboxPanelProps = {
   onMeasureTool: () => void
   hasClearableDrawing: boolean
   onClearDrawing: () => void
-  staticChartsOpen: boolean
-  onToggleStaticCharts: () => void
   onOpenLayerLegend: () => void
   layerLegendOpen: boolean
   fieldTimelineActive: boolean
@@ -100,8 +98,6 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
     onRsDrawingToolChange,
     hasClearableDrawing,
     onClearDrawing,
-    staticChartsOpen,
-    onToggleStaticCharts,
     onOpenLayerLegend,
     layerLegendOpen,
     fieldTimelineActive,
@@ -254,15 +250,6 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
         <label className="si-rs-panel__stack">
           <span className="si-rs-panel__label">Map tools</span>
           <div className="si-rs-panel__toolgrid" role="toolbar" aria-label="Map tools">
-            <button
-              type="button"
-              className={`si-rs-panel__tool${staticChartsOpen ? ' is-on' : ''}`}
-              title={staticChartsOpen ? 'Hide AOI charts on map' : 'Show AOI charts on map'}
-              aria-pressed={staticChartsOpen}
-              onClick={onToggleStaticCharts}
-            >
-              <i className="fa-solid fa-chart-pie" aria-hidden />
-            </button>
             <button
               type="button"
               className={`si-rs-panel__tool${layerLegendOpen ? ' is-on' : ''}`}

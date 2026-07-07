@@ -10,6 +10,7 @@ export type SmartProcessingSectionId =
   | 'tree-detections'
   | 'hydro-watershed'
   | 'well-site'
+  | 'well-suitability'
   | 'flood-monitoring'
   | 'table-geo-ai';
 
@@ -111,6 +112,13 @@ const WORKFLOW_ROWS: Array<{
         label: 'Well Site Recommendation (Hydro-AI)',
         hint: 'AOI → DEM, slope, flow → suitability heatmap + top recommended drilling sites.',
         target: 'well-site',
+      },
+      {
+        id: 'well-suitability',
+        icon: 'fa-solid fa-bore-hole',
+        label: 'Well Suitability (MCDA)',
+        hint: 'Multi-criteria groundwater potential — AHP weights, ranked sites & confidence scores.',
+        target: 'well-suitability',
       },
     ],
   },
