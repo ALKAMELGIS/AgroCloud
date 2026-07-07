@@ -196,6 +196,114 @@ export type ImageryTimeSeriesLayerSeries = {
   values: number[]
 }
 
+export type ImageryTimeAggregation = 'day' | 'week' | 'month' | 'year'
+
+export type AggregatedImageryChart = {
+  /** Stable period keys (ISO date for day, YYYY-MM, YYYY-Www, YYYY). */
+  labels: string[]
+  /** Human-readable x-axis labels. */
+  displayLabels: string[]
+  series: ImageryTimeSeriesLayerSeries[]
+  /** Last observation date in each period — used for map sync & interpretation. */
+  periodAnchorDate: Map<string, string>
+}
+
+function isoWeekPeriodKey(isoDate: string): string {
+  const date = new Date(`${isoDate.slice(0, 10)}T12:00:00Z`)
+  if (Number.isNaN(date.getTime())) return isoDate.slice(0, 10)
+  const day = date.getUTCDay() || 7
+  date.setUTCDate(date.getUTCDate() + 4 - day)
+  const year = date.getUTCFullYear()
+  const jan1 = new Date(Date.UTC(year, 0, 1))
+  const week = Math.ceil(((date.getTime() - jan1.getTime()) / 86_400_000 + 1) / 7)
+  return `${year}-W${String(week).padStart(2, '0')}`
+}
+
+export function imageryTimePeriodKey(isoDate: string, aggregation: ImageryTimeAggregation): string {
+  const d = isoDate.trim().slice(0, 10)
+  if (!d) return ''
+  if (aggregation === 'day') return d
+  if (aggregation === 'month') return d.slice(0, 7)
+  if (aggregation === 'year') return d.slice(0, 4)
+  return isoWeekPeriodKey(d)
+}
+
+export function formatImageryTimePeriodLabel(key: string, aggregation: ImageryTimeAggregation): string {
+  if (aggregation === 'day') return key
+  if (aggregation === 'month') return key
+  if (aggregation === 'year') return key
+  return key.replace('-W', ' W')
+}
+
+/** Client-side re-bucketing of daily chart series into week / month / year means. */
+export function aggregateImageryChartByTimePeriod(
+  labels: string[],
+  series: ImageryTimeSeriesLayerSeries[],
+  aggregation: ImageryTimeAggregation,
+): AggregatedImageryChart {
+  if (!labels.length || !series.length) {
+    return { labels: [], displayLabels: [], series: [], periodAnchorDate: new Map() }
+  }
+  if (aggregation === 'day') {
+    return {
+      labels: [...labels],
+      displayLabels: [...labels],
+      series: series.map(s => ({ layerId: s.layerId, values: [...s.values] })),
+      periodAnchorDate: new Map(labels.map(d => [d, d])),
+    }
+  }
+
+  type Bucket = { dates: string[]; layerValues: Map<string, number[]> }
+  const buckets = new Map<string, Bucket>()
+  const order: string[] = []
+
+  for (let i = 0; i < labels.length; i += 1) {
+    const date = labels[i]!
+    const key = imageryTimePeriodKey(date, aggregation)
+    if (!key) continue
+    if (!buckets.has(key)) {
+      buckets.set(key, { dates: [], layerValues: new Map() })
+      order.push(key)
+    }
+    const bucket = buckets.get(key)!
+    bucket.dates.push(date)
+    for (const entry of series) {
+      const value = entry.values[i]
+      if (value == null || !Number.isFinite(value)) continue
+      const arr = bucket.layerValues.get(entry.layerId) ?? []
+      arr.push(value)
+      bucket.layerValues.set(entry.layerId, arr)
+    }
+  }
+
+  order.sort((a, b) => {
+    const da = buckets.get(a)!.dates.sort()[0] ?? a
+    const db = buckets.get(b)!.dates.sort()[0] ?? b
+    return da.localeCompare(db)
+  })
+
+  const periodAnchorDate = new Map<string, string>()
+  for (const key of order) {
+    const dates = [...buckets.get(key)!.dates].sort()
+    periodAnchorDate.set(key, dates[dates.length - 1] ?? key)
+  }
+
+  const aggSeries = series.map(entry => ({
+    layerId: entry.layerId,
+    values: order.map(key => {
+      const vals = buckets.get(key)!.layerValues.get(entry.layerId) ?? []
+      return meanOf(vals) ?? NaN
+    }),
+  }))
+
+  return {
+    labels: order,
+    displayLabels: order.map(k => formatImageryTimePeriodLabel(k, aggregation)),
+    series: aggSeries,
+    periodAnchorDate,
+  }
+}
+
 /** Multi-layer timeline — shared sorted date axis, one value array per layer. */
 export function aggregateImageryTimeSeriesMulti(
   dailyMaps: Map<string, SentinelHubDailyIndexMeans[]>,
@@ -291,84 +399,6 @@ export function bucketImagerySeriesByMonth(
   return {
     labels: sorted.map(([month]) => month),
     values: sorted.map(([, bucket]) => meanOf(bucket) ?? 0),
-  }
-}
-
-export type ImageryTimeAggregation = 'day' | 'week' | 'month' | 'year'
-
-export const IMAGERY_TIME_AGGREGATION_OPTIONS: Array<{ id: ImageryTimeAggregation; label: string }> = [
-  { id: 'day', label: 'Day' },
-  { id: 'week', label: 'Week' },
-  { id: 'month', label: 'Month' },
-  { id: 'year', label: 'Year' },
-]
-
-/** ISO week bucket key (e.g. 2026-W27) for a scene date YYYY-MM-DD. */
-export function imageryPeriodKey(isoDate: string, aggregation: ImageryTimeAggregation): string {
-  const date = isoDate.trim().slice(0, 10)
-  if (!date || date.length < 10) return ''
-  if (aggregation === 'day') return date
-  if (aggregation === 'month') return date.slice(0, 7)
-  if (aggregation === 'year') return date.slice(0, 4)
-  const [y, m, d] = date.split('-').map(Number) as [number, number, number]
-  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return date
-  const utc = new Date(Date.UTC(y, m - 1, d))
-  utc.setUTCDate(utc.getUTCDate() + 4 - (utc.getUTCDay() || 7))
-  const isoYear = utc.getUTCFullYear()
-  const yearStart = new Date(Date.UTC(isoYear, 0, 1))
-  const week = Math.ceil((((utc.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
-  return `${isoYear}-W${String(week).padStart(2, '0')}`
-}
-
-export type ImageryAggregatedTimeSeries = {
-  labels: string[]
-  layerSeries: ImageryTimeSeriesLayerSeries[]
-  /** Last scene date in each bucket — used for map sync when a period is clicked. */
-  anchorDates: string[]
-}
-
-/** Mean-aggregate daily scene statistics into week / month / year buckets (day = passthrough). */
-export function aggregateImagerySeriesByPeriod(
-  labels: string[],
-  series: ImageryTimeSeriesLayerSeries[],
-  aggregation: ImageryTimeAggregation,
-): ImageryAggregatedTimeSeries {
-  if (aggregation === 'day' || !labels.length || !series.length) {
-    return {
-      labels: [...labels],
-      layerSeries: series.map(entry => ({ layerId: entry.layerId, values: [...entry.values] })),
-      anchorDates: [...labels],
-    }
-  }
-
-  const bucketIndices = new Map<string, number[]>()
-  const bucketAnchor = new Map<string, string>()
-
-  for (let i = 0; i < labels.length; i++) {
-    const key = imageryPeriodKey(labels[i]!, aggregation)
-    if (!key) continue
-    const indices = bucketIndices.get(key) ?? []
-    indices.push(i)
-    bucketIndices.set(key, indices)
-    bucketAnchor.set(key, labels[i]!)
-  }
-
-  const sortedKeys = [...bucketIndices.keys()].sort((a, b) => a.localeCompare(b))
-  const layerSeries: ImageryTimeSeriesLayerSeries[] = series.map(entry => ({
-    layerId: entry.layerId,
-    values: sortedKeys.map(key => {
-      const indices = bucketIndices.get(key) ?? []
-      const vals = indices
-        .map(i => entry.values[i])
-        .filter((v): v is number => v != null && Number.isFinite(v))
-      return vals.length ? vals.reduce((sum, v) => sum + v, 0) / vals.length : NaN
-    }),
-  }))
-
-  return {
-    labels: sortedKeys,
-    layerSeries,
-    anchorDates: sortedKeys.map(key => bucketAnchor.get(key) ?? key),
   }
 }
 

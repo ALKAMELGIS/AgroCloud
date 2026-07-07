@@ -16,6 +16,7 @@ const CDSE_OAUTH_URL =
   'https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token'
 const CDSE_STATISTICS_URL = 'https://sh.dataspace.copernicus.eu/api/v1/statistics'
 const SENTINEL_HUB_PUBLIC_WMS_ACCESS_TOKEN = 'PUBLIC_DATA_FEATURED_COLLECTIONS'
+const WMS_STATS_TIMEOUT_MS = 240_000
 
 /** @type {Map<string, { token: string; expiresAt: number }>} */
 const oauthCache = new Map()
@@ -239,7 +240,19 @@ export async function postSentinelStatistics(secretsFilePath, body) {
 
   const wms = pickWmsConfig(secretsFilePath)
   if (isWmsStatisticsFallbackReady(wms.accessToken, wms.instanceId)) {
-    return postSentinelStatisticsViaWms(wms, body)
+    let timeoutId
+    const timeout = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        const err = new Error('WMS statistics timed out — try a shorter date range.')
+        err.status = 504
+        reject(err)
+      }, WMS_STATS_TIMEOUT_MS)
+    })
+    try {
+      return await Promise.race([postSentinelStatisticsViaWms(wms, body), timeout])
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId)
+    }
   }
 
   const err = new Error(describeSentinelHubStatisticsConfig(secretsFilePath).hint)

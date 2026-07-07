@@ -137,7 +137,6 @@ export function AcpImageryLayerMultiSelect({
               aria-label="Search layers"
             />
           </div>
-          <p className="acp-ts-layer-select__hint">Check layers to compare on the timeline chart.</p>
           {filteredGroups.length ? (
             filteredGroups.map(group => (
               <div key={group.id} className="acp-ts-layer-select__group">

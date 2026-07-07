@@ -2,6 +2,7 @@ import type { CropAlertFieldInput } from './siCropAlertEngine'
 import { mapPool } from './siCropAlertSentinelLive'
 import {
   fetchSentinelFieldIndexTimeSeriesForRange,
+  fetchSentinelHubStatisticsProxyStatus,
   hasValidIndexDaily,
   mergeDailyIndexSeries,
   type SentinelHubDailyIndexMeans,
@@ -17,6 +18,8 @@ import {
 
 export const DEFAULT_IMAGERY_TS_CLOUD_FILTER = 65
 export const IMAGERY_TS_CHUNK_DAYS = 90
+/** Smaller chunks when the server uses WMS zonal fallback (many per-scene GetMap calls). */
+export const IMAGERY_TS_WMS_CHUNK_DAYS = 28
 export const IMAGERY_TS_FETCH_CONCURRENCY = 3
 
 export type ImageryDateChunk = { fromIso: string; toIso: string }
@@ -114,25 +117,31 @@ async function fetchChunkDaily(
 
   const promise = (async () => {
     if (signal?.aborted) return []
-    let daily = await fetchSentinelFieldIndexTimeSeriesForRange({
-      geometry,
-      fromIso: chunk.fromIso,
-      toIso: chunk.toIso,
-      maxCloudCoverage: cloudFilter,
-      signal,
-    })
-    if (!hasValidIndexDaily(daily) && !signal?.aborted) {
-      const relaxed = await fetchSentinelFieldIndexTimeSeriesForRange({
+    try {
+      let daily = await fetchSentinelFieldIndexTimeSeriesForRange({
         geometry,
         fromIso: chunk.fromIso,
         toIso: chunk.toIso,
-        maxCloudCoverage: 95,
-        relaxedCloudMask: true,
+        maxCloudCoverage: cloudFilter,
         signal,
       })
-      daily = mergeDailyIndexSeries(daily, relaxed)
+      if (!hasValidIndexDaily(daily) && !signal?.aborted) {
+        const relaxed = await fetchSentinelFieldIndexTimeSeriesForRange({
+          geometry,
+          fromIso: chunk.fromIso,
+          toIso: chunk.toIso,
+          maxCloudCoverage: 95,
+          relaxedCloudMask: true,
+          signal,
+        })
+        daily = mergeDailyIndexSeries(daily, relaxed)
+      }
+      return daily.filter(row => row.date >= rangeFrom && row.date <= rangeTo)
+    } catch (err) {
+      if (signal?.aborted) return []
+      console.warn('[imagery-ts] chunk fetch failed', chunk, err)
+      return []
     }
-    return daily.filter(row => row.date >= rangeFrom && row.date <= rangeTo)
   })()
 
   chunkInflight.set(chunkKey, promise)
@@ -195,7 +204,17 @@ export async function fetchImageryTimeSeriesProgressive(
 
     const cached = await readImageryTsCache(cacheKey)
     let merged = cached?.daily ?? []
-    const chunks = planImageryDateChunks(fromIso, toIso)
+
+    const proxyStatus = await fetchSentinelHubStatisticsProxyStatus({ signal: options.signal })
+    if (proxyStatus && !proxyStatus.configured) {
+      throw new Error(
+        proxyStatus.hint ||
+          'Sentinel Hub statistics are not configured on the server — set SENTINEL_HUB_WMS_INSTANCE_ID or CDSE OAuth credentials.',
+      )
+    }
+    const chunkDays =
+      proxyStatus?.mode === 'wms-zonal' ? IMAGERY_TS_WMS_CHUNK_DAYS : IMAGERY_TS_CHUNK_DAYS
+    const chunks = planImageryDateChunks(fromIso, toIso, chunkDays)
     const chunksTotal = chunks.length
 
     if (cached?.daily?.length && isImageryTsCacheStaleButUsable(cached)) {
@@ -299,6 +318,12 @@ export async function fetchImageryTimeSeriesProgressive(
     }
 
     await mergeChain
+
+    if (!merged.length && chunksTotal > 0 && !options.signal?.aborted) {
+      throw new Error(
+        'Could not load Sentinel statistics — ensure the AgroCloud backend is running (npm run dev) and try a shorter date range.',
+      )
+    }
 
     if (options.signal?.aborted) {
       emit(merged, {

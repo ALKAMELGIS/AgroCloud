@@ -48,14 +48,6 @@ type XAxisLabel = {
 type PlotCoord = { x: number; y: number; v: number };
 type DailyBucket = { date: string; label: string; value: number };
 type PieSlice = { d: string; color: string; key: string };
-type PieSliceDetail = PieSlice & {
-  label: string;
-  value: number;
-  pct: number;
-  midAngle: number;
-  labelX: number;
-  labelY: number;
-};
 type HeatCell = { x: number; y: number; w: number; h: number; opacity: number; key: string };
 type TreemapCell = { x: number; y: number; w: number; h: number; color: string; key: string };
 
@@ -85,14 +77,7 @@ function valueToT(value: number, min: number, max: number): number {
   return Math.max(0, Math.min(1, (value - min) / (max - min)));
 }
 
-/** Solid emerald palette for vector pie slices */
-function luxuryPieFill(t: number): string {
-  const u = Math.max(0, Math.min(1, t));
-  const light = 32 + u * 30;
-  return `hsl(158, 54%, ${light.toFixed(1)}%)`;
-}
-
-/** Single-hue luxury gradient — emerald glass (Bar & area) */
+/** Single-hue luxury gradient — emerald glass (Bar & Pie) */
 function luxuryMonoFill(t: number): string {
   const u = Math.max(0, Math.min(1, t));
   const light = 38 + u * 34;
@@ -131,6 +116,30 @@ function buildWindRoseBins(points: OpenMeteoHourlyPoint[]): WindRoseBin[] {
   }));
 }
 
+function buildValueColoredPieSlices(
+  buckets: DailyBucket[],
+  min: number,
+  max: number,
+  cx: number,
+  cy: number,
+  outerR: number,
+  innerR: number,
+): PieSlice[] {
+  const total = buckets.reduce((sum, b) => sum + Math.max(b.value, 0), 0);
+  if (total <= 0) return [];
+  let angle = -Math.PI / 2;
+  return buckets.map(b => {
+    const slice = (Math.max(b.value, 0) / total) * Math.PI * 2;
+    const start = angle;
+    const end = angle + slice;
+    angle = end;
+    return {
+      key: b.date,
+      color: luxuryMonoFill(valueToT(b.value, min, max)),
+      d: ringSlicePath(cx, cy, outerR, innerR, start, end),
+    };
+  });
+}
 
 function chartDef(id: ChartVisual): ChartVisualDef {
   return CHART_VISUALS.find(v => v.id === id) ?? CHART_VISUALS[1];
@@ -290,40 +299,6 @@ function ringSlicePath(
     `A ${innerR} ${innerR} 0 ${large} 0 ${i0.x.toFixed(1)} ${i0.y.toFixed(1)}`,
     'Z',
   ].join(' ');
-}
-
-function buildDetailedPieSlices(
-  buckets: DailyBucket[],
-  min: number,
-  max: number,
-  cx: number,
-  cy: number,
-  outerR: number,
-  innerR: number,
-): PieSliceDetail[] {
-  const total = buckets.reduce((sum, b) => sum + Math.max(b.value, 0), 0);
-  if (total <= 0) return [];
-  let angle = -Math.PI / 2;
-  return buckets.map(b => {
-    const value = Math.max(b.value, 0);
-    const slice = (value / total) * Math.PI * 2;
-    const start = angle;
-    const end = angle + slice;
-    const midAngle = (start + end) / 2;
-    angle = end;
-    const labelR = innerR > 0 ? (innerR + outerR) / 2 : outerR * 0.62;
-    return {
-      key: b.date,
-      label: b.label,
-      value: b.value,
-      pct: (value / total) * 100,
-      color: luxuryPieFill(valueToT(b.value, min, max)),
-      d: ringSlicePath(cx, cy, outerR, innerR, start, end),
-      midAngle,
-      labelX: cx + Math.cos(midAngle) * labelR,
-      labelY: cy + Math.sin(midAngle) * labelR,
-    };
-  });
 }
 
 function buildPieSlices(
@@ -672,31 +647,6 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
   const scatterRadius = values.length > 120 ? 1.8 : values.length > 60 ? 2.2 : 2.8;
   const showTimeAxis = TIME_AXIS_CHARTS.has(chartVisual);
   const activeTitle = chartDef(chartVisual).title;
-  const isCircularChart = chartVisual === 'pie' || chartVisual === 'donut';
-
-  const mainPie = useMemo(() => {
-    if (!dailyBuckets.length || !finite.length) return null;
-    const vals = dailyBuckets.map(b => b.value);
-    const min = Math.min(...vals);
-    const max = Math.max(...vals);
-    const size = 120;
-    const cx = size / 2;
-    const cy = size / 2;
-    const outerR = 52;
-    const innerR = chartVisual === 'donut' ? 28 : 0;
-    const slices = buildDetailedPieSlices(dailyBuckets, min, max, cx, cy, outerR, innerR);
-    const total = dailyBuckets.reduce((s, b) => s + Math.max(b.value, 0), 0);
-    const legend = [...slices]
-      .sort((a, b) => b.pct - a.pct)
-      .map(s => ({
-        key: s.key,
-        label: s.label,
-        pct: s.pct,
-        color: s.color,
-        valueText: s.value.toFixed(metric === 'press' ? 0 : 1),
-      }));
-    return { size, cx, cy, slices, legend, total, innerR, outerR };
-  }, [dailyBuckets, finite.length, chartVisual, metric]);
 
   const statCards = [
     { id: 'min', label: 'Min', value: fmt(stats.min), kind: 'min' as const },
@@ -751,15 +701,15 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
     const cx = size / 2;
     const cy = size / 2;
     const outerR = 40;
-    const slices = buildDetailedPieSlices(insightBuckets, min, max, cx, cy, outerR, 0);
+    const slices = buildValueColoredPieSlices(insightBuckets, min, max, cx, cy, outerR, 0);
     const total = insightBuckets.reduce((s, b) => s + Math.max(b.value, 0), 0);
-    const legend = slices
-      .map(s => ({
-        key: s.key,
-        label: s.label,
-        pct: s.pct,
-        color: s.color,
-        valueText: s.value.toFixed(metric === 'press' ? 0 : 1),
+    const legend = insightBuckets
+      .map(b => ({
+        key: b.date,
+        label: b.label,
+        pct: total > 0 ? (Math.max(b.value, 0) / total) * 100 : 0,
+        color: luxuryMonoFill(valueToT(b.value, min, max)),
+        valueText: b.value.toFixed(metric === 'press' ? 0 : 1),
       }))
       .sort((a, b) => b.pct - a.pct);
     return { size, slices, legend, cx, cy, total };
@@ -813,103 +763,7 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
           <ChartTypePicker chartVisual={chartVisual} onChange={setChartVisual} />
         </div>
 
-        <div className={`si-wx-history__plot${isCircularChart ? ' si-wx-history__plot--pie' : ''}`}>
-          {isCircularChart && mainPie ? (
-            <div className="si-wx-history__main-pie-stack">
-              <div className="si-wx-history__main-pie-stage">
-                <svg
-                  className="si-wx-history__main-pie"
-                  viewBox={`0 0 ${mainPie.size} ${mainPie.size}`}
-                  preserveAspectRatio="xMidYMid meet"
-                  role="img"
-                  aria-label={`${metricLabel(metric)} ${activeTitle}`}
-                >
-                  <defs>
-                    <filter id="si-wx-pie-shadow" x="-20%" y="-20%" width="140%" height="140%">
-                      <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="rgba(0,0,0,0.35)" />
-                    </filter>
-                  </defs>
-                  <circle
-                    cx={mainPie.cx}
-                    cy={mainPie.cy}
-                    r={mainPie.outerR + 1}
-                    className="si-wx-history__main-pie-ring"
-                  />
-                  {mainPie.slices.map(s => (
-                    <path
-                      key={s.key}
-                      d={s.d}
-                      fill={s.color}
-                      className="si-wx-history__main-pie-slice"
-                      filter="url(#si-wx-pie-shadow)"
-                    />
-                  ))}
-                  {mainPie.slices
-                    .filter(s => s.pct >= 6)
-                    .map(s => (
-                      <text
-                        key={`${s.key}-pct`}
-                        x={s.labelX}
-                        y={s.labelY}
-                        className="si-wx-history__main-pie-label"
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                      >
-                        {s.pct >= 10 ? `${Math.round(s.pct)}%` : `${s.pct.toFixed(1)}%`}
-                      </text>
-                    ))}
-                  {chartVisual === 'donut' ? (
-                    <>
-                      <text
-                        x={mainPie.cx}
-                        y={mainPie.cy - 4}
-                        className="si-wx-history__main-pie-center"
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                      >
-                        {fmt(stats.avg)}
-                      </text>
-                      <text
-                        x={mainPie.cx}
-                        y={mainPie.cy + 9}
-                        className="si-wx-history__main-pie-center-sub"
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                      >
-                        avg
-                      </text>
-                    </>
-                  ) : null}
-                </svg>
-              </div>
-              <div className="si-wx-history__main-pie-key">
-                <div className="si-wx-history__main-pie-key-head">
-                  <span className="si-wx-history__main-pie-key-title">Distribution</span>
-                  <span className="si-wx-history__main-pie-key-meta">{unit}</span>
-                </div>
-                <ul className="si-wx-history__main-pie-key-list">
-                  {mainPie.legend.map(row => (
-                    <li key={row.key} className="si-wx-history__main-pie-key-row">
-                      <span
-                        className="si-wx-history__main-pie-key-swatch"
-                        style={{ background: row.color }}
-                        aria-hidden
-                      />
-                      <span className="si-wx-history__main-pie-key-label">{row.label}</span>
-                      <span className="si-wx-history__main-pie-key-val">
-                        {row.valueText}
-                        <span className="si-wx-history__main-pie-key-unit">{unit}</span>
-                      </span>
-                      <span className="si-wx-history__main-pie-key-pct">{row.pct.toFixed(1)}%</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          ) : isCircularChart ? (
-            <p className="si-wx-history__insight-empty">No share data</p>
-          ) : (
-          <>
+        <div className="si-wx-history__plot">
           <svg
             className="si-wx-history__chart"
             viewBox={`0 0 ${chart.W} ${chart.H}`}
@@ -1079,8 +933,6 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
           chartVisual === 'scatter' ? (
             <span className="si-wx-history__y-unit">{unit}</span>
           ) : null}
-          </>
-          )}
         </div>
 
         {showTimeAxis && xAxisLabels.length ? (
@@ -1228,22 +1080,8 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
                     aria-label={`Daily ${metricLabel(metric)} share`}
                   >
                     {miniPie.slices.map(s => (
-                      <path key={s.key} d={s.d} fill={s.color} className="si-wx-history__main-pie-slice" />
+                      <path key={s.key} d={s.d} fill={s.color} className="si-wx-history__insight-pie-slice" />
                     ))}
-                    {miniPie.slices
-                      .filter(s => s.pct >= 8)
-                      .map(s => (
-                        <text
-                          key={`${s.key}-lbl`}
-                          x={s.labelX}
-                          y={s.labelY}
-                          className="si-wx-history__main-pie-label si-wx-history__main-pie-label--sm"
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                        >
-                          {Math.round(s.pct)}%
-                        </text>
-                      ))}
                   </svg>
                 </div>
                 <div className="si-wx-history__insight-key">

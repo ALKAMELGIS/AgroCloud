@@ -5,8 +5,7 @@ import {
   buildImageryCorrelationScatterAnalysis,
   buildImageryPieChartSlices,
   buildImageryScatterPoints,
-  aggregateImagerySeriesByPeriod,
-  imageryPeriodKey,
+  aggregateImageryChartByTimePeriod,
   bucketImagerySeriesByMonth,
   buildImageryTimeSeriesLayerGroups,
   classifyScatterRelationship,
@@ -107,6 +106,24 @@ describe('acpImageryTimeSeries', () => {
     expect(values).toEqual([0.42])
   })
 
+  it('aggregates daily chart series by week, month, and year', () => {
+    const labels = ['2026-06-01', '2026-06-10', '2026-06-15', '2026-07-05']
+    const series = [{ layerId: 'NDVI', values: [0.6, 0.8, 0.7, 0.5] }]
+
+    const monthly = aggregateImageryChartByTimePeriod(labels, series, 'month')
+    expect(monthly.labels).toEqual(['2026-06', '2026-07'])
+    expect(monthly.series[0]?.values[0]).toBeCloseTo(0.7, 2)
+    expect(monthly.periodAnchorDate.get('2026-06')).toBe('2026-06-15')
+
+    const yearly = aggregateImageryChartByTimePeriod(labels, series, 'year')
+    expect(yearly.labels).toEqual(['2026'])
+    expect(yearly.series[0]?.values[0]).toBeCloseTo(0.65, 2)
+
+    const daily = aggregateImageryChartByTimePeriod(labels, series, 'day')
+    expect(daily.labels).toEqual(labels)
+    expect(daily.series[0]?.values).toEqual(series[0]!.values)
+  })
+
   it('builds pie slices by layer mean or monthly buckets', () => {
     const multi = buildImageryPieChartSlices(
       ['2026-06-01', '2026-06-10'],
@@ -123,21 +140,6 @@ describe('acpImageryTimeSeries', () => {
       [0.6, 0.8, 0.5],
     )
     expect(monthly.labels).toEqual(['2026-06', '2026-07'])
-  })
-
-  it('aggregates daily series by week, month, and year', () => {
-    const labels = ['2026-06-01', '2026-06-10', '2026-07-05', '2027-01-15']
-    const series = [{ layerId: 'NDVI', values: [0.4, 0.6, 0.5, 0.7] }]
-
-    const monthly = aggregateImagerySeriesByPeriod(labels, series, 'month')
-    expect(monthly.labels).toEqual(['2026-06', '2026-07', '2027-01'])
-    expect(monthly.layerSeries[0]!.values[0]).toBeCloseTo(0.5, 2)
-
-    const yearly = aggregateImagerySeriesByPeriod(labels, series, 'year')
-    expect(yearly.labels).toEqual(['2026', '2027'])
-    expect(yearly.layerSeries[0]!.values[0]).toBeCloseTo(0.5, 2)
-
-    expect(imageryPeriodKey('2026-06-10', 'week')).toMatch(/^2026-W\d{2}$/)
   })
 
   it('builds scatter points from scene dates', () => {

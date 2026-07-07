@@ -21,6 +21,69 @@ export const SENTINEL_HUB_OAUTH_URL = 'https://services.sentinel-hub.com/oauth/t
 export const SENTINEL_HUB_STATISTICS_PROXY_URL = '/api/sentinel-hub/statistics'
 export const SENTINEL_HUB_STATISTICS_STATUS_URL = '/api/sentinel-hub/statistics/status'
 
+export type SentinelHubStatisticsProxyStatus = {
+  configured: boolean
+  mode: 'none' | 'statistical-api' | 'wms-zonal'
+  wmsReady?: boolean
+  publicWmsOnly?: boolean
+  oauthConfigured?: boolean
+  hint?: string
+}
+
+let statsProxyStatusCache: { status: SentinelHubStatisticsProxyStatus; at: number } | null = null
+const STATS_PROXY_STATUS_TTL_MS = 60_000
+
+/** Server-side statistics proxy health (WMS zonal vs Statistical API). */
+export async function fetchSentinelHubStatisticsProxyStatus(options?: {
+  signal?: AbortSignal
+  refresh?: boolean
+}): Promise<SentinelHubStatisticsProxyStatus | null> {
+  if (
+    !options?.refresh &&
+    statsProxyStatusCache &&
+    Date.now() - statsProxyStatusCache.at < STATS_PROXY_STATUS_TTL_MS
+  ) {
+    return statsProxyStatusCache.status
+  }
+  if (!mayUseSentinelHubStatisticsProxy()) return null
+  try {
+    const res = await fetch(SENTINEL_HUB_STATISTICS_STATUS_URL, {
+      headers: { Accept: 'application/json' },
+      signal: options?.signal,
+    })
+    if (!res.ok) return null
+    const json = (await res.json()) as SentinelHubStatisticsProxyStatus
+    statsProxyStatusCache = { status: json, at: Date.now() }
+    return json
+  } catch {
+    return null
+  }
+}
+
+function extractStatisticsProxyErrorMessage(json: unknown, text: string, status: number): string {
+  if (json && typeof json === 'object') {
+    const payload = json as Record<string, unknown>
+    if (typeof payload.error === 'string' && payload.error.trim()) return payload.error.trim()
+    if (payload.error && typeof payload.error === 'object') {
+      const nested = payload.error as Record<string, unknown>
+      if (typeof nested.message === 'string' && nested.message.trim()) return nested.message.trim()
+    }
+    if (typeof payload.message === 'string' && payload.message.trim()) return payload.message.trim()
+  }
+  const trimmed = text.trim()
+  if (trimmed && trimmed !== '{}') return trimmed.slice(0, 240)
+  if (status === 404) {
+    return 'Sentinel Hub statistics API route not found — start the AgroCloud backend (npm run dev).'
+  }
+  if (status === 502 || status === 503) {
+    return 'AgroCloud backend unavailable — run npm run dev from the repo root (API port 3011).'
+  }
+  if (status === 504) {
+    return 'Statistics request timed out — try a shorter date range or fewer fields.'
+  }
+  return `Sentinel Hub Statistics proxy HTTP ${status}`
+}
+
 export const CROP_ALERT_SENTINEL_LOOKBACK_DAYS = 30
 
 export type SentinelHubIndexZonalStats = {
@@ -636,17 +699,11 @@ async function postSentinelStatisticsViaProxy(
   }
 
   if (!res.ok) {
-    const message =
-      typeof json.error === 'string'
-        ? json.error
-        : json.error?.message || text.slice(0, 240) || `Sentinel Hub Statistics proxy HTTP ${res.status}`
+    const message = extractStatisticsProxyErrorMessage(json, text, res.status)
     if (res.status === 404 && message.includes('Route not found')) {
       throw new Error(
         'Sentinel Hub statistics API route is unavailable — restart the AgroCloud backend (npm run dev:clean).',
       )
-    }
-    if (res.status === 503) {
-      throw new Error(message)
     }
     throw new Error(message)
   }
@@ -670,16 +727,30 @@ async function postSentinelStatisticsRequest(
   }
 
   const promise = (async (): Promise<SentinelHubDailyIndexMeans[]> => {
-    let daily: SentinelHubDailyIndexMeans[]
+    const storeAndReturn = (json: StatsApiResponse) => {
+      const daily = parseSentinelHubStatsResponse(json)
+      statsResultCache.set(cacheKey, {
+        data: daily,
+        expiresAt: Date.now() + STATS_RESULT_CACHE_TTL_MS,
+      })
+      return daily
+    }
+
+    // In local dev, prefer the backend proxy (WMS zonal or server OAuth) over browser-direct calls.
+    if (import.meta.env.DEV && mayUseSentinelHubStatisticsProxy()) {
+      try {
+        const json = await postSentinelStatisticsViaProxy(body, signal)
+        return storeAndReturn(json)
+      } catch (proxyErr) {
+        if (!isSentinelHubStatisticsDirectConfigured()) throw proxyErr
+        /* fall through to direct Statistical API when configured */
+      }
+    }
+
     if (isSentinelHubStatisticsDirectConfigured()) {
       try {
         const json = await postSentinelStatisticsDirect(body, signal)
-        daily = parseSentinelHubStatsResponse(json)
-        statsResultCache.set(cacheKey, {
-          data: daily,
-          expiresAt: Date.now() + STATS_RESULT_CACHE_TTL_MS,
-        })
-        return daily
+        return storeAndReturn(json)
       } catch {
         /* fall through to server proxy */
       }
@@ -687,12 +758,7 @@ async function postSentinelStatisticsRequest(
 
     if (mayUseSentinelHubStatisticsProxy()) {
       const json = await postSentinelStatisticsViaProxy(body, signal)
-      daily = parseSentinelHubStatsResponse(json)
-      statsResultCache.set(cacheKey, {
-        data: daily,
-        expiresAt: Date.now() + STATS_RESULT_CACHE_TTL_MS,
-      })
-      return daily
+      return storeAndReturn(json)
     }
 
     throw new Error(

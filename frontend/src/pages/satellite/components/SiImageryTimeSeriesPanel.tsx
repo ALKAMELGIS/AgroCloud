@@ -12,18 +12,12 @@ import {
   Legend,
   PieController,
   ScatterController,
-  DoughnutController,
   type ChartData,
 } from 'chart.js'
-
-export type ImageryTimeSeriesPanelTab = 'chart' | 'statistics' | 'interpretation' | 'coverage'
 import { Bar, Line, Pie, Scatter } from 'react-chartjs-2'
 import { useImageryTimeSeriesStream } from '../hooks/useImageryTimeSeriesStream'
 import { useImageryIndexInterpretation } from '../hooks/useImageryIndexInterpretation'
-import { useImageryVegetationCoverage } from '../hooks/useImageryVegetationCoverage'
 import { SiImageryIndexInterpretationCard } from './SiImageryIndexInterpretationCard'
-import { SiImageryStatisticsTab } from './time-series/SiImageryStatisticsTab'
-import { SiImageryVegetationCoverageTab } from './time-series/SiImageryVegetationCoverageTab'
 import type { SiAoiFieldRecord } from '../../../lib/siAoiFields'
 import {
   buildImageryCorrelationScatterAnalysis,
@@ -31,34 +25,21 @@ import {
   buildImageryScatterPoints,
   buildImageryTimeSeriesLayerGroups,
   defaultImageryDateRange,
-  aggregateImagerySeriesByPeriod,
-  IMAGERY_TIME_AGGREGATION_OPTIONS,
   imageryLayerChartColor,
   splitSeriesByYear,
   yearSplitChartColors,
+  aggregateImageryChartByTimePeriod,
   type ImageryChartType,
   type ImageryCorrelationScatterAnalysis,
   type ImageryTimeAggregation,
   type ImageryTimeSeriesLayerSeries,
 } from '../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import { AcpImageryLayerMultiSelect } from '../../dashboards/agroCloudPlatform/map/AcpImageryLayerMultiSelect'
-import { SiImageryFieldAoiSelect } from './SiImageryFieldAoiSelect'
-import { SiImageryPeriodSelect } from './SiImageryPeriodSelect'
 import {
-  buildSiImageryFieldAoiOptionGroups,
-  flattenImageryFieldAoiOptions,
-  isImageryFieldAoiActionKey,
+  buildSiImageryFieldOptions,
+  resolveSiImageryField,
   SI_IMAGERY_COMMITTED_AOI_KEY,
-} from '../utils/siImageryTimeSeriesAoi'
-import { resolveSiImageryField } from '../utils/siImageryTimeSeriesFields'
-import { TimeSeriesExportMenu } from './timeSeriesReport/ExportManager'
-import { TimeSeriesReportConfigModal } from './timeSeriesReport/TimeSeriesReportConfigModal'
-import {
-  generateFullTimeSeriesReport,
-  runTimeSeriesExport,
-} from '../lib/timeSeriesReport/exportManager'
-import type { TimeSeriesExportKind, TimeSeriesReportConfig } from '../lib/timeSeriesReport/timeSeriesReportTypes'
-import { appAlert } from '../../../lib/appDialog'
+} from '../utils/siImageryTimeSeriesFields'
 import '../../dashboards/agroCloudPlatform/AgroCloudPlatformDashboard.css'
 
 ChartJS.register(
@@ -73,7 +54,6 @@ ChartJS.register(
   Legend,
   PieController,
   ScatterController,
-  DoughnutController,
 )
 
 export type SiImageryTimeSeriesPanelProps = {
@@ -85,7 +65,6 @@ export type SiImageryTimeSeriesPanelProps = {
   onMapDateFromChart: (iso: string) => void
   selectedFieldKey?: string | null
   onSelectedFieldKeyChange?: (fieldKey: string) => void
-  onRequestDrawAoi?: () => void
   chartLookbackDays?: number
 }
 
@@ -98,7 +77,6 @@ export function SiImageryTimeSeriesPanel({
   onMapDateFromChart,
   selectedFieldKey: selectedFieldKeyProp,
   onSelectedFieldKeyChange,
-  onRequestDrawAoi,
   chartLookbackDays = 90,
 }: SiImageryTimeSeriesPanelProps) {
   const chartRef = useRef<ChartJS | null>(null)
@@ -108,14 +86,9 @@ export function SiImageryTimeSeriesPanel({
     [referenceDate, chartLookbackDays],
   )
 
-  const fieldAoiGroups = useMemo(
-    () => buildSiImageryFieldAoiOptionGroups(agroStructuresMask, aoiFields, committedAoiGeometry),
-    [agroStructuresMask, aoiFields, committedAoiGeometry],
-  )
-
   const fieldOptions = useMemo(
-    () => flattenImageryFieldAoiOptions(fieldAoiGroups),
-    [fieldAoiGroups],
+    () => buildSiImageryFieldOptions(agroStructuresMask, aoiFields, committedAoiGeometry),
+    [agroStructuresMask, aoiFields, committedAoiGeometry],
   )
 
   const layerGroups = useMemo(() => buildImageryTimeSeriesLayerGroups(), [])
@@ -133,13 +106,11 @@ export function SiImageryTimeSeriesPanel({
   const [dateError, setDateError] = useState<string | null>(null)
   const [analysisElapsedMs, setAnalysisElapsedMs] = useState(0)
   const [selectedChartDate, setSelectedChartDate] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<ImageryTimeSeriesPanelTab>('chart')
-  const [reportOpen, setReportOpen] = useState(false)
-  const [exportBusy, setExportBusy] = useState(false)
-  const [reportGenerating, setReportGenerating] = useState(false)
+  const [interpretationOpen, setInterpretationOpen] = useState(false)
   const runAnalysisRef = useRef<() => Promise<void>>(() => Promise.resolve())
   const autoRunReadyRef = useRef(false)
   const prevAutoRunDatesRef = useRef({ from: '', to: '' })
+  const prevDrawnAoiKeyRef = useRef('')
 
   const resolvedField = useMemo(
     () =>
@@ -150,8 +121,8 @@ export function SiImageryTimeSeriesPanel({
   )
 
   const {
-    labels,
-    layerSeries,
+    labels: rawLabels,
+    layerSeries: rawLayerSeries,
     dailyRows,
     loading,
     refreshing,
@@ -170,18 +141,25 @@ export function SiImageryTimeSeriesPanel({
     prefetchLookbackDays: chartLookbackDays,
   })
 
-  const primaryLayerId = selectedLayerIds[0]?.trim() || 'NDVI'
-
-  const chartAggregation = chartType === 'scatter' ? 'day' : timeAggregation
-
-  const {
-    labels: displayLabels,
-    layerSeries: displayLayerSeries,
-    anchorDates: chartAnchorDates,
-  } = useMemo(
-    () => aggregateImagerySeriesByPeriod(labels, layerSeries, chartAggregation),
-    [labels, layerSeries, chartAggregation],
+  const aggregatedChart = useMemo(
+    () => aggregateImageryChartByTimePeriod(rawLabels, rawLayerSeries, timeAggregation),
+    [rawLabels, rawLayerSeries, timeAggregation],
   )
+
+  const labels = aggregatedChart.labels
+  const chartLabels = aggregatedChart.displayLabels
+  const layerSeries = aggregatedChart.series
+  const periodAnchorDate = aggregatedChart.periodAnchorDate
+
+  const resolvePeriodMapDate = useCallback(
+    (periodKey: string): string => {
+      const anchor = periodAnchorDate.get(periodKey)
+      return (anchor ?? periodKey).trim().slice(0, 10)
+    },
+    [periodAnchorDate],
+  )
+
+  const primaryLayerId = selectedLayerIds[0]?.trim() || 'NDVI'
 
   const primaryChartValues = useMemo(() => {
     const series = layerSeries.find(s => s.layerId.toUpperCase() === primaryLayerId.toUpperCase())
@@ -189,44 +167,29 @@ export function SiImageryTimeSeriesPanel({
   }, [layerSeries, primaryLayerId])
 
   const interpretSceneDate = useMemo(() => {
-    const picked = selectedChartDate?.trim().slice(0, 10)
-    if (picked && labels.includes(picked)) return picked
+    const picked = selectedChartDate?.trim()
+    if (picked) {
+      if (labels.includes(picked)) return resolvePeriodMapDate(picked)
+      const day = picked.slice(0, 10)
+      if (rawLabels.includes(day)) return day
+    }
     const mapDay = referenceDate.trim().slice(0, 10)
-    if (mapDay && labels.includes(mapDay)) return mapDay
-    return labels[labels.length - 1] ?? ''
-  }, [selectedChartDate, referenceDate, labels])
+    if (mapDay && rawLabels.includes(mapDay)) return mapDay
+    const lastKey = labels[labels.length - 1]
+    return lastKey ? resolvePeriodMapDate(lastKey) : ''
+  }, [selectedChartDate, referenceDate, labels, rawLabels, resolvePeriodMapDate])
 
   const interpretationSupported =
     hasRun && labels.length > 0 && chartType !== 'scatter' && chartType !== 'pie'
-
-  const interpretationEnabled = activeTab === 'interpretation' && interpretationSupported
 
   const { interpretation, loadingAreas } = useImageryIndexInterpretation({
     field: resolvedField,
     layerId: primaryLayerId,
     sceneDate: interpretSceneDate,
     dailyRows,
-    chartLabels: labels,
+    chartLabels: chartLabels,
     chartValues: primaryChartValues,
-    enabled: interpretationEnabled,
-  })
-
-  const coverageEnabled = activeTab === 'coverage' && hasRun && labels.length > 0
-
-  const {
-    summary: coverageSummary,
-    comparison: coverageComparison,
-    trend: coverageTrend,
-    insights: coverageInsights,
-    loading: coverageLoading,
-    supported: coverageSupported,
-  } = useImageryVegetationCoverage({
-    field: resolvedField,
-    layerId: primaryLayerId,
-    sceneDate: interpretSceneDate,
-    chartLabels: labels,
-    chartValues: primaryChartValues,
-    enabled: coverageEnabled,
+    enabled: interpretationOpen && interpretationSupported,
   })
 
   const handleInvalidate = useCallback(() => {
@@ -234,34 +197,44 @@ export function SiImageryTimeSeriesPanel({
     autoRunReadyRef.current = false
     setDateError(null)
     setSelectedChartDate(null)
-    setActiveTab('chart')
+    setInterpretationOpen(false)
   }, [invalidateResults])
 
   const displayError = dateError || error
 
   useEffect(() => {
-    const selectable = fieldOptions.filter(o => !o.disabled)
-    if (!selectable.length) {
+    if (!fieldOptions.length) {
       setSelectedFieldKey('')
       return
     }
     const external = selectedFieldKeyProp?.trim()
-    if (external && !isImageryFieldAoiActionKey(external) && selectable.some(o => o.fieldKey === external)) {
+    if (external && fieldOptions.some(o => o.fieldKey === external)) {
       setSelectedFieldKey(external)
       return
     }
     setSelectedFieldKey(prev =>
-      prev && selectable.some(o => o.fieldKey === prev) ? prev : selectable[0]!.fieldKey,
+      prev && fieldOptions.some(o => o.fieldKey === prev) ? prev : fieldOptions[0]!.fieldKey,
     )
   }, [fieldOptions, selectedFieldKeyProp])
 
   useEffect(() => {
-    if (!committedAoiGeometry || !selectedFieldKey) return
-    if (selectedFieldKey !== SI_IMAGERY_COMMITTED_AOI_KEY) return
-    if (fieldOptions.some(o => o.fieldKey === SI_IMAGERY_COMMITTED_AOI_KEY && !o.disabled)) return
-    const fallback = fieldOptions.find(o => o.fieldKey !== SI_IMAGERY_COMMITTED_AOI_KEY && !o.disabled)
-    if (fallback) setSelectedFieldKey(fallback.fieldKey)
-  }, [committedAoiGeometry, selectedFieldKey, fieldOptions])
+    if (!committedAoiGeometry) {
+      prevDrawnAoiKeyRef.current = ''
+      return
+    }
+    let geomKey = ''
+    try {
+      geomKey = JSON.stringify(committedAoiGeometry)
+    } catch {
+      return
+    }
+    if (!geomKey || geomKey === prevDrawnAoiKeyRef.current) return
+    prevDrawnAoiKeyRef.current = geomKey
+    if (!fieldOptions.some(o => o.fieldKey === SI_IMAGERY_COMMITTED_AOI_KEY)) return
+    setSelectedFieldKey(SI_IMAGERY_COMMITTED_AOI_KEY)
+    onSelectedFieldKeyChange?.(SI_IMAGERY_COMMITTED_AOI_KEY)
+    invalidateResults()
+  }, [committedAoiGeometry, fieldOptions, onSelectedFieldKeyChange, invalidateResults])
 
   useEffect(() => {
     if (selectedLayerIds.length > 1 && splitByYears) setSplitByYears(false)
@@ -294,94 +267,6 @@ export function SiImageryTimeSeriesPanel({
     prevAutoRunDatesRef.current = { from: fromDate, to: toDate }
   }, [runAnalysis, fromDate, toDate])
 
-  const handleAnalyze = useCallback(async () => {
-    if (!selectedFieldKey || dateError) return
-    await runAnalysisWrapped()
-    setActiveTab('interpretation')
-  }, [selectedFieldKey, dateError, runAnalysisWrapped])
-
-  const exportInputBase = useMemo(
-    () => ({
-      title: `Agro Intelligence Report — ${selectedFieldLabel}`,
-      projectName: 'AgroCloud Satellite Intelligence',
-      field: resolvedField,
-      fieldName: selectedFieldLabel,
-      fieldKey: selectedFieldKey,
-      layerIds: selectedLayerIds,
-      fromDate,
-      toDate,
-      aggregation: timeAggregation,
-      labels,
-      layerSeries,
-      dailyRows,
-      referenceDate,
-      selectedChartDate,
-      chartType,
-    }),
-    [
-      selectedFieldLabel,
-      resolvedField,
-      selectedFieldKey,
-      selectedLayerIds,
-      fromDate,
-      toDate,
-      timeAggregation,
-      labels,
-      layerSeries,
-      dailyRows,
-      referenceDate,
-      selectedChartDate,
-      chartType,
-    ],
-  )
-
-  const handleExport = useCallback(
-    async (kind: TimeSeriesExportKind) => {
-      if (!hasRun || !labels.length) {
-        await appAlert('Run analysis first to export results.')
-        return
-      }
-      setExportBusy(true)
-      try {
-        const ok = await runTimeSeriesExport(kind, {
-          ...exportInputBase,
-          chartRef: chartRef.current,
-        })
-        if (!ok) await appAlert('Export could not be completed. Check field geometry and data.')
-      } finally {
-        setExportBusy(false)
-      }
-    },
-    [exportInputBase, hasRun, labels.length],
-  )
-
-  const handleGenerateReport = useCallback(
-    async (config: TimeSeriesReportConfig) => {
-      if (!hasRun || !labels.length) {
-        await appAlert('Run analysis first to generate a report.')
-        return
-      }
-      setReportGenerating(true)
-      try {
-        const ok = await generateFullTimeSeriesReport(
-          {
-            ...exportInputBase,
-            chartRef: chartRef.current,
-          },
-          config,
-        )
-        if (ok) {
-          setReportOpen(false)
-        } else {
-          await appAlert('Report generation failed. Check field geometry and analysis data.')
-        }
-      } finally {
-        setReportGenerating(false)
-      }
-    },
-    [exportInputBase, hasRun, labels.length],
-  )
-
   runAnalysisRef.current = runAnalysisWrapped
 
   useEffect(() => {
@@ -405,22 +290,22 @@ export function SiImageryTimeSeriesPanel({
       if (!elements.length) return
       const el = elements[0]!
       if (el.datasetIndex != null && el.datasetIndex > 0) return
-      const date = chartAnchorDates[el.index] ?? displayLabels[el.index]
-      if (date) {
-        setSelectedChartDate(date)
-        syncMapToChartDate(date)
+      const periodKey = labels[el.index]
+      if (periodKey) {
+        setSelectedChartDate(periodKey)
+        syncMapToChartDate(resolvePeriodMapDate(periodKey))
       }
     },
-    [chartAnchorDates, displayLabels, syncMapToChartDate],
+    [labels, syncMapToChartDate, resolvePeriodMapDate],
   )
 
   const chartData = useMemo((): ChartData<'line' | 'bar'> => {
-    if (!displayLabels.length || !displayLayerSeries.length) {
+    if (!chartLabels.length || !layerSeries.length) {
       return { labels: [], datasets: [] }
     }
-    if (splitByYears && displayLayerSeries.length === 1 && chartAggregation === 'day') {
-      const values = displayLayerSeries[0]!.values
-      const splits = splitSeriesByYear(displayLabels, values)
+    if (splitByYears && layerSeries.length === 1 && timeAggregation === 'day') {
+      const values = layerSeries[0]!.values
+      const splits = splitSeriesByYear(labels, values)
       const colors = yearSplitChartColors()
       return {
         labels: splits[0]?.labels ?? [],
@@ -437,8 +322,8 @@ export function SiImageryTimeSeriesPanel({
       }
     }
     return {
-      labels: displayLabels,
-      datasets: displayLayerSeries.map((entry, index) => {
+      labels: chartLabels,
+      datasets: layerSeries.map((entry, index) => {
         const color = imageryLayerChartColor(index)
         return {
           label: entry.layerId,
@@ -452,11 +337,30 @@ export function SiImageryTimeSeriesPanel({
         }
       }),
     }
-  }, [displayLabels, displayLayerSeries, splitByYears, chartType, chartAggregation])
+  }, [chartLabels, labels, layerSeries, splitByYears, chartType, timeAggregation])
 
   const pieChartData = useMemo((): ChartData<'pie'> => {
-    if (!displayLabels.length || !displayLayerSeries.length) return { labels: [], datasets: [] }
-    const slices = buildImageryPieChartSlices(displayLabels, displayLayerSeries)
+    if (!chartLabels.length || !layerSeries.length) return { labels: [], datasets: [] }
+    if (layerSeries.length === 1 && timeAggregation !== 'day') {
+      const values = layerSeries[0]!.values
+      const slices = chartLabels
+        .map((label, i) => ({ label, value: values[i] }))
+        .filter(row => row.value != null && Number.isFinite(row.value))
+      if (!slices.length) return { labels: [], datasets: [] }
+      return {
+        labels: slices.map(s => s.label),
+        datasets: [
+          {
+            label: `${timeAggregation} mean`,
+            data: slices.map(s => s.value as number),
+            backgroundColor: slices.map((_, i) => `${imageryLayerChartColor(i)}cc`),
+            borderColor: '#0a0a0a',
+            borderWidth: 1,
+          },
+        ],
+      }
+    }
+    const slices = buildImageryPieChartSlices(labels, layerSeries)
     if (!slices.labels.length) return { labels: [], datasets: [] }
     return {
       labels: slices.labels,
@@ -470,23 +374,28 @@ export function SiImageryTimeSeriesPanel({
         },
       ],
     }
-  }, [displayLabels, displayLayerSeries])
+  }, [chartLabels, labels, layerSeries, timeAggregation])
+
+  const scatterAxisDates = useMemo(
+    () => labels.map(key => resolvePeriodMapDate(key)),
+    [labels, resolvePeriodMapDate],
+  )
 
   const scatterCorrelation = useMemo((): ImageryCorrelationScatterAnalysis | null => {
-    if (chartType !== 'scatter' || layerSeries.length < 2 || !labels.length) return null
+    if (chartType !== 'scatter' || layerSeries.length < 2 || !scatterAxisDates.length) return null
     const xSeries = layerSeries[0]!
     const ySeries = layerSeries[1]!
     return buildImageryCorrelationScatterAnalysis(
-      labels,
+      scatterAxisDates,
       xSeries.layerId,
       xSeries.values,
       ySeries.layerId,
       ySeries.values,
     )
-  }, [chartType, labels, layerSeries])
+  }, [chartType, scatterAxisDates, layerSeries])
 
   const scatterChartData = useMemo((): ChartData<'scatter' | 'line'> => {
-    if (!labels.length || !layerSeries.length) return { labels: [], datasets: [] }
+    if (!scatterAxisDates.length || !layerSeries.length) return { labels: [], datasets: [] }
 
     if (scatterCorrelation && scatterCorrelation.points.length >= 2) {
       const pointColor = imageryLayerChartColor(0)
@@ -523,7 +432,7 @@ export function SiImageryTimeSeriesPanel({
         return {
           type: 'scatter' as const,
           label: entry.layerId,
-          data: buildImageryScatterPoints(labels, entry.values),
+          data: buildImageryScatterPoints(scatterAxisDates, entry.values),
           borderColor: color,
           backgroundColor: `${color}cc`,
           pointRadius: 4,
@@ -531,7 +440,7 @@ export function SiImageryTimeSeriesPanel({
         }
       }),
     }
-  }, [labels, layerSeries, scatterCorrelation])
+  }, [scatterAxisDates, layerSeries, scatterCorrelation])
 
   const cartesianChartOptions = useMemo(
     () => ({
@@ -541,7 +450,7 @@ export function SiImageryTimeSeriesPanel({
       onClick: chartDateClickHandler,
       plugins: {
         legend: {
-          display: splitByYears || displayLayerSeries.length > 1 || hasRun,
+          display: splitByYears || layerSeries.length > 1 || hasRun,
           labels: { color: '#cbd5e1', boxWidth: 10, font: { size: 10 } },
         },
         tooltip: {
@@ -563,7 +472,7 @@ export function SiImageryTimeSeriesPanel({
         },
       },
     }),
-    [loading, splitByYears, displayLayerSeries.length, hasRun, chartDateClickHandler],
+    [loading, splitByYears, layerSeries.length, hasRun, chartDateClickHandler],
   )
 
   const pieChartOptions = useMemo(
@@ -666,28 +575,71 @@ export function SiImageryTimeSeriesPanel({
     return `${(ms / 1000).toFixed(1)} s`
   }
 
-  const observationCount = displayLabels.length
-
-  const aggregationLabel =
-    IMAGERY_TIME_AGGREGATION_OPTIONS.find(o => o.id === chartAggregation)?.label ?? 'Day'
+  const observationCount = labels.length
 
   const layerSummary = selectedLayerIds.join(', ')
+
+  const aggregationLabel =
+    timeAggregation === 'day'
+      ? 'Daily'
+      : timeAggregation === 'week'
+        ? 'Weekly'
+        : timeAggregation === 'month'
+          ? 'Monthly'
+          : 'Yearly'
+
+  const exportTable = useCallback(() => {
+    if (!chartLabels.length || !layerSeries.length) return
+    const header = ['period', ...layerSeries.map(s => s.layerId)].join(',')
+    const rows = chartLabels.map((period, rowIndex) =>
+      [period, ...layerSeries.map(s => s.values[rowIndex] ?? '')].join(','),
+    )
+    const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `imagery-timeseries-${layerSeries.map(s => s.layerId.toLowerCase()).join('-')}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [chartLabels, layerSeries])
+
+  const exportFigure = useCallback(() => {
+    const chart = chartRef.current
+    if (!chart) return
+    const url = chart.toBase64Image('image/png', 1)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `imagery-timeseries-${layerSeries.map(s => s.layerId.toLowerCase()).join('-')}.png`
+    a.click()
+  }, [layerSeries])
 
   return (
     <div className="acp-ts">
         <div className="acp-ts__toolbar">
-          <SiImageryFieldAoiSelect
-            groups={fieldAoiGroups}
-            value={selectedFieldKey}
-            onRequestDrawAoi={onRequestDrawAoi}
-            onChange={key => {
-              handleInvalidate()
-              setSelectedFieldKey(key)
-              onSelectedFieldKeyChange?.(key)
-            }}
-          />
+          <label className="acp-ts__field acp-ts__field--grow">
+            <span>Field Name</span>
+            <select
+              value={selectedFieldKey}
+              onChange={e => {
+                handleInvalidate()
+                const key = e.target.value
+                setSelectedFieldKey(key)
+                if (key) onSelectedFieldKeyChange?.(key)
+              }}
+              disabled={!fieldOptions.length}
+            >
+              {!fieldOptions.length ? (
+                <option value="">No Agro Structures fields</option>
+              ) : (
+                fieldOptions.map(opt => (
+                  <option key={opt.fieldKey} value={opt.fieldKey}>
+                    {opt.displayName}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
           <div className="acp-ts__field acp-ts__field--layer acp-ts__field--grow">
-            <span className="acp-ts__field-label">Layer</span>
             <AcpImageryLayerMultiSelect
               groups={layerGroups}
               selectedIds={selectedLayerIds}
@@ -733,12 +685,32 @@ export function SiImageryTimeSeriesPanel({
               />
             </label>
           </div>
-          <SiImageryPeriodSelect
-            value={timeAggregation}
-            disabled={chartType === 'scatter'}
-            disabledTitle="Scatter correlation uses daily scenes"
-            onChange={setTimeAggregation}
-          />
+          <div className="acp-ts__field acp-ts__field--aggregate">
+            <span>Aggregate</span>
+            <div className="acp-ts__aggregate" role="group" aria-label="Time aggregation">
+              {(
+                [
+                  ['day', 'Day'],
+                  ['week', 'Week'],
+                  ['month', 'Month'],
+                  ['year', 'Year'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`acp-ts__aggregate-btn${timeAggregation === value ? ' is-on' : ''}`}
+                  aria-pressed={timeAggregation === value}
+                  onClick={() => {
+                    setTimeAggregation(value)
+                    setSelectedChartDate(null)
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           <label className="acp-ts__field">
             <span>Chart</span>
             <select
@@ -752,43 +724,15 @@ export function SiImageryTimeSeriesPanel({
               <option value="scatter">Scatter</option>
             </select>
           </label>
-        </div>
-
-        <div className="acp-ts__actions">
           <button
             type="button"
-            className="acp-ts__analyze"
-            onClick={() => void handleAnalyze()}
-            disabled={loading || !selectedFieldKey || Boolean(dateError)}
+            className="acp-ts__apply"
+            onClick={() => void runAnalysisWrapped()}
+            disabled={loading || !selectedFieldKey}
           >
-            {loading ? 'Analyzing…' : 'Analyze'}
+            {loading ? 'Running…' : 'Apply'}
           </button>
-          <button
-            type="button"
-            className="acp-ts__report"
-            onClick={() => setReportOpen(true)}
-            disabled={!selectedFieldKey}
-          >
-            Generate Full Report
-          </button>
-          <TimeSeriesExportMenu
-            disabled={!hasRun || !displayLabels.length}
-            busy={exportBusy}
-            onExport={handleExport}
-          />
         </div>
-
-        <TimeSeriesReportConfigModal
-          open={reportOpen}
-          onClose={() => setReportOpen(false)}
-          onGenerate={handleGenerateReport}
-          fieldName={selectedFieldLabel}
-          layerIds={selectedLayerIds}
-          fromDate={fromDate}
-          toDate={toDate}
-          aggregation={timeAggregation}
-          generating={reportGenerating}
-        />
 
         {hasRun ? (
           <div className="acp-ts__meta">
@@ -797,51 +741,16 @@ export function SiImageryTimeSeriesPanel({
               {chartType === 'scatter' && layerSeries.length >= 2
                 ? ` · correlation ${layerSeries[0]?.layerId} → ${layerSeries[1]?.layerId}`
                 : ` · ${fromDate} → ${toDate}`}
-              {chartType !== 'scatter' ? ` · ${aggregationLabel}` : ''}
-              {observationCount ? ` · ${observationCount} obs` : ''}
+              {observationCount ? ` · ${observationCount} pts` : ''}
+              {hasRun ? ` · ${aggregationLabel}` : ''}
               {analysisDurationMs != null ? ` · ${formatAnalysisSpeed(analysisDurationMs)}` : ''}
             </span>
             <span>{selectedFieldLabel}</span>
           </div>
         ) : null}
 
-        {hasRun && labels.length ? (
-          <div className="acp-ts__view-tabs" role="tablist" aria-label="Time series views">
-            {(
-              [
-                { id: 'chart' as const, label: 'Chart', icon: 'fa-chart-line' },
-                { id: 'statistics' as const, label: 'Statistics', icon: 'fa-table' },
-                { id: 'interpretation' as const, label: 'Interpretation', icon: 'fa-lightbulb', disabled: !interpretationSupported },
-                { id: 'coverage' as const, label: 'Vegetation Coverage', icon: 'fa-leaf', emoji: '🌿' },
-              ] as const
-            ).map(tab => (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                id={`acp-ts-tab-${tab.id}`}
-                aria-selected={activeTab === tab.id}
-                aria-controls={`acp-ts-panel-${tab.id}`}
-                className={'acp-ts__view-tab' + (activeTab === tab.id ? ' is-active' : '')}
-                disabled={'disabled' in tab && tab.disabled}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                {'emoji' in tab && tab.emoji ? (
-                  <span className="acp-ts__view-tab-emoji" aria-hidden="true">
-                    {tab.emoji}
-                  </span>
-                ) : (
-                  <i className={'fa-solid ' + tab.icon} aria-hidden="true" />
-                )}
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        ) : null}
-
-        {activeTab === 'chart' ? (
-        <div className="acp-ts__chart-wrap" id="acp-ts-panel-chart" role="tabpanel" aria-labelledby="acp-ts-tab-chart">
-          {hasRun && displayLabels.length ? (
+        <div className="acp-ts__chart-wrap">
+          {hasRun && labels.length ? (
             <>
               {chartType === 'bar' ? (
                 <Bar ref={chartRef as never} data={chartData as ChartData<'bar'>} options={cartesianChartOptions} />
@@ -927,9 +836,8 @@ export function SiImageryTimeSeriesPanel({
             </div>
           )}
         </div>
-        ) : null}
 
-        {activeTab === 'chart' && hasRun && displayLabels.length ? (
+        {hasRun && labels.length ? (
           <p className="acp-ts__chart-hint">
             <i className="fa-solid fa-hand-pointer" aria-hidden="true" /> Click any point to set the map
             analysis date · Map date: <strong>{analysisDate}</strong>
@@ -942,7 +850,7 @@ export function SiImageryTimeSeriesPanel({
           </p>
         ) : null}
 
-        {activeTab === 'chart' && chartType === 'scatter' && scatterCorrelation ? (
+        {chartType === 'scatter' && scatterCorrelation ? (
           <div className="acp-ts__scatter-insight">
             <div className="acp-ts__scatter-head">
               <span className="acp-ts__scatter-r2">
@@ -965,82 +873,57 @@ export function SiImageryTimeSeriesPanel({
             <p className="acp-ts__scatter-gis">{scatterCorrelation.gisInsight}</p>
             <p className="acp-ts__scatter-agro">{scatterCorrelation.agroInsight}</p>
           </div>
-        ) : activeTab === 'chart' && chartType === 'scatter' && hasRun && labels.length && layerSeries.length < 2 ? (
+        ) : chartType === 'scatter' && hasRun && labels.length && layerSeries.length < 2 ? (
           <p className="acp-ts__scatter-hint">Select two layers to run correlation scatter with regression and R².</p>
         ) : null}
 
-        {activeTab === 'chart' && displayError && hasRun && labels.length ? (
-          <p className="acp-ts__error">{displayError}</p>
-        ) : null}
+        {displayError && hasRun && labels.length ? <p className="acp-ts__error">{displayError}</p> : null}
 
-        {activeTab === 'statistics' ? (
-          <div id="acp-ts-panel-statistics" role="tabpanel" aria-labelledby="acp-ts-tab-statistics">
-            <SiImageryStatisticsTab layerSeries={layerSeries} labels={labels} />
-          </div>
-        ) : null}
-
-        {activeTab === 'interpretation' ? (
-          <div id="acp-ts-panel-interpretation" role="tabpanel" aria-labelledby="acp-ts-tab-interpretation">
-            {interpretationSupported ? (
-              <SiImageryIndexInterpretationCard
-                interpretation={interpretation}
-                loadingAreas={loadingAreas}
-              />
-            ) : (
-              <div className="acp-ts__interpret acp-ts__interpret--empty" role="status">
-                Interpretation is available for line and bar charts with a single time series.
-              </div>
-            )}
-          </div>
-        ) : null}
-
-        {activeTab === 'coverage' ? (
-          <div id="acp-ts-panel-coverage" role="tabpanel" aria-labelledby="acp-ts-tab-coverage">
-            <SiImageryVegetationCoverageTab
-              summary={coverageSummary}
-              comparison={coverageComparison}
-              trend={coverageTrend}
-              insights={coverageInsights}
-              loading={coverageLoading}
-              supported={coverageSupported}
-              geometry={resolvedField?.geometry ?? null}
-              layerId={primaryLayerId}
-              sceneDate={interpretSceneDate}
-            />
-          </div>
+        {interpretationOpen && interpretationSupported ? (
+          <SiImageryIndexInterpretationCard
+            interpretation={interpretation}
+            loadingAreas={loadingAreas}
+          />
         ) : null}
 
         <div className="acp-ts__foot">
-          {activeTab === 'chart' ? (
           <label className="acp-ts__toggle">
             <input
               type="checkbox"
               checked={splitByYears}
-              disabled={
-                selectedLayerIds.length > 1 ||
-                chartType === 'pie' ||
-                chartType === 'scatter' ||
-                timeAggregation !== 'day'
-              }
+              disabled={selectedLayerIds.length > 1 || chartType === 'pie' || chartType === 'scatter' || timeAggregation !== 'day'}
               onChange={e => setSplitByYears(e.target.checked)}
             />
             Split by years
-            {selectedLayerIds.length > 1 ||
-            chartType === 'pie' ||
-            chartType === 'scatter' ||
-            timeAggregation !== 'day' ? (
+            {selectedLayerIds.length > 1 || chartType === 'pie' || chartType === 'scatter' || timeAggregation !== 'day' ? (
               <span className="acp-ts__toggle-hint">
                 {timeAggregation !== 'day'
-                  ? ' (daily view only)'
+                  ? ' (daily only)'
                   : chartType === 'pie' || chartType === 'scatter'
                     ? ' (cartesian charts only)'
                     : ' (single layer only)'}
               </span>
             ) : null}
           </label>
-          ) : (
-            <span className="acp-ts__foot-spacer" />
-          )}
+          <div className="acp-ts__exports">
+            <button
+              type="button"
+              className={'acp-ts__exports-interpret' + (interpretationOpen ? ' is-on' : '')}
+              title="Interpret Selected Value"
+              aria-label="Interpret Selected Value"
+              aria-pressed={interpretationOpen}
+              disabled={!interpretationSupported}
+              onClick={() => setInterpretationOpen(open => !open)}
+            >
+              <i className="fa-solid fa-lightbulb" aria-hidden="true" /> Interpretation
+            </button>
+            <button type="button" onClick={exportFigure} disabled={!labels.length}>
+              <i className="fa-solid fa-download" aria-hidden="true" /> Figure
+            </button>
+            <button type="button" onClick={exportTable} disabled={!labels.length}>
+              <i className="fa-solid fa-download" aria-hidden="true" /> Table
+            </button>
+          </div>
         </div>
     </div>
   )

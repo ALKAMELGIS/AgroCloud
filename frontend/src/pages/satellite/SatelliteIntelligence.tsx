@@ -180,7 +180,6 @@ import {
 import './components/SiCropAlertCenterPanel.css';
 import { SiPrithviCropToolPanel } from './components/SiPrithviCropToolPanel';
 import { SiImageryTimeSeriesFloatingPanel } from './components/SiImageryTimeSeriesFloatingPanel';
-import { SI_IMAGERY_COMMITTED_AOI_KEY } from './utils/siImageryTimeSeriesAoi';
 import { SiGoToXyBar } from './components/SiGoToXyBar';
 import {
   fetchCropClassificationConfig,
@@ -3389,8 +3388,6 @@ export default function SatelliteIntelligence() {
   }, []);
   const [mapStaticChartsOpen, setMapStaticChartsOpen] = useState(false);
   const [imageryTimeSeriesOpen, setImageryTimeSeriesOpen] = useState(false);
-  const [imageryTsFieldKey, setImageryTsFieldKey] = useState<string | null>(null);
-  const imageryTsPendingDrawRef = useRef(false);
   const [goToXyOpen, setGoToXyOpen] = useState(false);
   const [goToXyMarker, setGoToXyMarker] = useState<{ lng: number; lat: number } | null>(null);
   const [aoiStatsPixel, setAoiStatsPixel] = useState<{ lng: number; lat: number } | null>(null);
@@ -8468,13 +8465,6 @@ export default function SatelliteIntelligence() {
   }, [drawTargetMode]);
 
   useEffect(() => {
-    if (!imageryTsPendingDrawRef.current || !imageryTimeSeriesOpen) return;
-    if (!drawnGeometry?.geometry) return;
-    imageryTsPendingDrawRef.current = false;
-    setImageryTsFieldKey(SI_IMAGERY_COMMITTED_AOI_KEY);
-  }, [drawnGeometry, imageryTimeSeriesOpen]);
-
-  useEffect(() => {
     aoiFieldsRef.current = aoiFields;
   }, [aoiFields]);
 
@@ -9840,13 +9830,6 @@ export default function SatelliteIntelligence() {
     setRsDrawingModeActive(true);
     if (tool) applyMapDrawTool(tool);
   }, []);
-
-  const handleImageryTsRequestDrawAoi = useCallback(() => {
-    imageryTsPendingDrawRef.current = true;
-    setDrawTargetMode('aoi');
-    drawTargetModeRef.current = 'aoi';
-    openRemoteSensingDrawing('polygon');
-  }, [openRemoteSensingDrawing]);
 
   const handleRsDrawingModeChange = useCallback(
     (active: boolean) => {
@@ -15781,9 +15764,6 @@ export default function SatelliteIntelligence() {
               setImageryDateAutoFollow(false);
               applySelectedDate(dateFromLocalIso(iso));
             }}
-            selectedFieldKey={imageryTsFieldKey}
-            onSelectedFieldKeyChange={setImageryTsFieldKey}
-            onRequestDrawAoi={handleImageryTsRequestDrawAoi}
           />
 
           <SiGoToXyBar
@@ -16004,45 +15984,37 @@ export default function SatelliteIntelligence() {
                               type="button"
                               role="tab"
                               aria-selected={geoAiModelTab === 'claude'}
-                              title="Claude"
-                              aria-label="Claude"
-                              className={`si-geo-ai-model-tab si-geo-ai-model-tab--icon${geoAiModelTab === 'claude' ? ' si-geo-ai-model-tab--active' : ''}`}
+                              className={`si-geo-ai-model-tab${geoAiModelTab === 'claude' ? ' si-geo-ai-model-tab--active' : ''}`}
                               onClick={() => setGeoAiModelTab('claude')}
                             >
-                              <i className="fa-solid fa-wand-magic-sparkles" aria-hidden="true" />
+                              Claude
                             </button>
                             <button
                               type="button"
                               role="tab"
                               aria-selected={geoAiModelTab === 'deepseek'}
-                              title="DeepSeek"
-                              aria-label="DeepSeek"
-                              className={`si-geo-ai-model-tab si-geo-ai-model-tab--icon${geoAiModelTab === 'deepseek' ? ' si-geo-ai-model-tab--active' : ''}`}
+                              className={`si-geo-ai-model-tab${geoAiModelTab === 'deepseek' ? ' si-geo-ai-model-tab--active' : ''}`}
                               onClick={() => setGeoAiModelTab('deepseek')}
                             >
-                              <i className="fa-solid fa-bolt" aria-hidden="true" />
+                              DeepSeek
                             </button>
                             <button
                               type="button"
                               role="tab"
                               aria-selected={geoAiModelTab === 'gemini'}
-                              title="Gemini"
-                              aria-label="Gemini"
-                              className={`si-geo-ai-model-tab si-geo-ai-model-tab--icon${geoAiModelTab === 'gemini' ? ' si-geo-ai-model-tab--active' : ''}`}
+                              className={`si-geo-ai-model-tab${geoAiModelTab === 'gemini' ? ' si-geo-ai-model-tab--active' : ''}`}
                               onClick={() => setGeoAiModelTab('gemini')}
                             >
-                              <i className="fa-solid fa-gem" aria-hidden="true" />
+                              Gemini
                             </button>
                             <button
                               type="button"
                               role="tab"
                               aria-selected={geoAiModelTab === 'ollama'}
-                              title="AgroCloud AI Chat"
-                              aria-label="AgroCloud AI Chat"
-                              className={`si-geo-ai-model-tab si-geo-ai-model-tab--icon${geoAiModelTab === 'ollama' ? ' si-geo-ai-model-tab--active' : ''}`}
+                              className={`si-geo-ai-model-tab${geoAiModelTab === 'ollama' ? ' si-geo-ai-model-tab--active' : ''}`}
                               onClick={() => setGeoAiModelTab('ollama')}
                             >
-                              <i className="fa-solid fa-seedling" aria-hidden="true" />
+                              AgroCloud AI Chat
                             </button>
                           </div>
 
@@ -16446,6 +16418,11 @@ export default function SatelliteIntelligence() {
                                 availableGeometryOps={geoAiSuggestContext.geometryOps}
                                 smartSuggestionsEnabled={geoAiSmartSuggestionsEnabled}
                               />
+                              <p className="si-geo-explorer-footnote">
+                                Powered by local Ollama ({ollamaConfig.model}). Set the server URL &amp; model in System Settings ΓåÆ
+                                API Tokens ΓåÆ Ollama (default http://localhost:11434). Runs offline; same GIS + Develop context as
+                                Claude.
+                              </p>
                             </>
                           ) : null}
                           {geoAiPopupMode === 'docked' && geoAiInspectPopups.length > 0 ? (

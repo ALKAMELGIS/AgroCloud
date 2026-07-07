@@ -97,7 +97,6 @@ export type SiImageryTimeSeriesFloatingPanelProps = {
   onMapDateFromChart: (iso: string) => void;
   selectedFieldKey?: string | null;
   onSelectedFieldKeyChange?: (fieldKey: string) => void;
-  onRequestDrawAoi?: () => void;
 };
 
 export function SiImageryTimeSeriesFloatingPanel({
@@ -112,7 +111,6 @@ export function SiImageryTimeSeriesFloatingPanel({
   onMapDateFromChart,
   selectedFieldKey,
   onSelectedFieldKeyChange,
-  onRequestDrawAoi,
 }: SiImageryTimeSeriesFloatingPanelProps) {
   const { scopedStorageKey } = useSiInstanceScope();
   const posStorageKey = scopedStorageKey(POS_KEY_BASE);
@@ -348,7 +346,6 @@ export function SiImageryTimeSeriesFloatingPanel({
             onMapDateFromChart={onMapDateFromChart}
             selectedFieldKey={selectedFieldKey}
             onSelectedFieldKeyChange={onSelectedFieldKeyChange}
-            onRequestDrawAoi={onRequestDrawAoi}
           />
         </div>
         <div
