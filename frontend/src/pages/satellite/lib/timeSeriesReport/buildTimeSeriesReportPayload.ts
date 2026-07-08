@@ -7,6 +7,8 @@ import type { SentinelHubDailyIndexMeans } from '../../../../lib/sentinelHubStat
 import type { CropAlertFieldInput } from '../../../../lib/siCropAlertEngine'
 import type { ImageryTimeSeriesLayerSeries } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import { fetchFieldMapSnapshot } from './timeSeriesMapSnapshot'
+import { buildTimeSeriesMapSnapshotGroups } from './timeSeriesExcelMapSnapshots'
+import { buildVegetationCoverageTimeline } from './vegetationCoverageTimeline'
 import {
   buildTimeSeriesExecutiveSummary,
   computeLayerMedian,
@@ -61,6 +63,9 @@ export type BuildTimeSeriesReportPayloadInput = {
   dailyRows: SentinelHubDailyIndexMeans[]
   mapboxToken?: string
   includeMap?: boolean
+  includeMapSnapshots?: boolean
+  includeVegetationCoverageTimeline?: boolean
+  periodAnchorDates?: Record<string, string>
 }
 
 function resolveDailyMean(rows: SentinelHubDailyIndexMeans[], layerId: string, date: string): number | null {
@@ -143,6 +148,37 @@ export async function buildTimeSeriesReportPayload(
       ? await fetchFieldMapSnapshot(geometry, input.mapboxToken, 520, 360)
       : null
 
+  const mapSnapshotGroups =
+    input.includeMapSnapshots !== false && geometry
+      ? await buildTimeSeriesMapSnapshotGroups({
+          geometry,
+          layerIds: input.layerIds,
+          chartLabels: input.chartLabels,
+          displayLabels: input.displayLabels,
+          layerSeries: input.layerSeries,
+          dailyRows: input.dailyRows,
+          periodAnchorDates: input.periodAnchorDates ?? {},
+          areaHa,
+          interpretations,
+          mapboxToken: input.mapboxToken,
+        })
+      : []
+
+  const ndviSeries =
+    input.layerSeries.find(s => s.layerId.toUpperCase() === 'NDVI') ?? null
+
+  const vegetationCoverageTimeline = geometry
+    ? await buildVegetationCoverageTimeline({
+        geometry,
+        chartLabels: input.chartLabels,
+        displayLabels: input.displayLabels,
+        periodAnchorDates: input.periodAnchorDates,
+        dailyRows: input.dailyRows,
+        ndviSeries,
+        enrichWithHistograms: input.includeVegetationCoverageTimeline !== false,
+      })
+    : []
+
   return {
     projectName: input.projectName?.trim() || 'AgroCloud Satellite Intelligence',
     generatedAt: new Date().toISOString(),
@@ -171,5 +207,7 @@ export async function buildTimeSeriesReportPayload(
     executive,
     geometry,
     mapImageDataUrl,
+    mapSnapshotGroups,
+    vegetationCoverageTimeline,
   }
 }

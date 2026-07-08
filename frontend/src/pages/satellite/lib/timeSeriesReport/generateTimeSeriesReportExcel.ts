@@ -1,7 +1,12 @@
 import ExcelJS from 'exceljs'
 import { resolveIndexThresholdProfile } from '../../../../lib/imageryIndexInterpretationEngine'
 import { renderExcelTrendCharts } from './timeSeriesExcelChartRenderer'
+import { buildMapSnapshotsSheet } from './timeSeriesExcelMapSnapshots'
 import type { TimeSeriesReportPayload } from './timeSeriesReportTypes'
+import {
+  latestVegetationCoverageSummary,
+  type VegetationCoveragePoint,
+} from './vegetationCoverageTimeline'
 
 const BRAND_DARK = 'FF064E3B'
 const BRAND = 'FF047857'
@@ -87,6 +92,19 @@ function meanValue(series: LayerRow): number | null {
 }
 
 function vegetationCoverage(payload: TimeSeriesReportPayload) {
+  const timeline = payload.vegetationCoverageTimeline ?? []
+  const latest = latestVegetationCoverageSummary(timeline)
+  if (latest) {
+    return {
+      plantedPct: latest.vegetationCoveragePct,
+      unplantedPct: latest.bareCoveragePct,
+      plantedHa: latest.vegetationAreaHa,
+      unplantedHa: latest.bareAreaHa,
+      acquisitionDate: latest.date,
+      dominantClass: latest.dominantClass,
+      fromTimeline: true as const,
+    }
+  }
   const cov = payload.primaryInterpretation?.coverage ?? []
   const totalHa = payload.location.areaHa
   const plantedTiers = new Set(['healthy', 'moderate', 'stress'])
@@ -99,6 +117,9 @@ function vegetationCoverage(payload: TimeSeriesReportPayload) {
     unplantedPct: adjustedUnplanted,
     plantedHa: totalHa > 0 ? (totalHa * plantedPct) / 100 : 0,
     unplantedHa: totalHa > 0 ? (totalHa * adjustedUnplanted) / 100 : 0,
+    acquisitionDate: payload.period.acquisitionDate,
+    dominantClass: payload.primaryInterpretation?.meanLabel ?? '—',
+    fromTimeline: false as const,
   }
 }
 
@@ -163,7 +184,7 @@ function lastFourWeekTrend(values: Array<number | null>): string {
 }
 
 function buildDashboardSheet(wb: ExcelJS.Workbook, payload: TimeSeriesReportPayload): void {
-  const ws = wb.addWorksheet('Dashboard', { views: [{ showGridLines: true }] })
+  const ws = wb.addWorksheet('Analytics Summary', { views: [{ showGridLines: true }] })
   ws.columns = [
     { width: 22 },
     { width: 18 },
@@ -226,14 +247,30 @@ function buildDashboardSheet(wb: ExcelJS.Workbook, payload: TimeSeriesReportPayl
   row++
 
   const veg = vegetationCoverage(payload)
+  ws.getCell(row, 1).value = 'Acquisition date (snapshot)'
+  ws.getCell(row, 1).font = { bold: true, size: 9 }
+  ws.getCell(row, 2).value = veg.acquisitionDate || payload.period.acquisitionDate
+  ws.mergeCells(row, 2, row, 4)
+  row++
+  ws.getCell(row, 1).value = 'Dominant class'
+  ws.getCell(row, 1).font = { bold: true, size: 9 }
+  ws.getCell(row, 2).value = veg.dominantClass
+  ws.mergeCells(row, 2, row, 4)
+  row++
+  ws.getCell(row, 1).value =
+    'Coverage is calculated independently for each acquisition date (see Vegetation Coverage Timeline sheet). Summary below = latest scene.'
+  ws.getCell(row, 1).font = { italic: true, size: 8, color: { argb: MUTED } }
+  ws.mergeCells(row, 1, row, 5)
+  row++
+
   const covHeader = ws.getRow(row)
   covHeader.values = ['Class', 'Coverage (%)', 'Area (ha)']
   styleTableHeader(covHeader)
   row++
 
   const covRows = [
-    ['Planted Area', veg.plantedPct, fmtHaNum(veg.plantedHa)],
-    ['Unplanted Area', veg.unplantedPct, fmtHaNum(veg.unplantedHa)],
+    ['Planted Area (Vegetation)', veg.plantedPct, fmtHaNum(veg.plantedHa)],
+    ['Unplanted Area (Bare / critical)', veg.unplantedPct, fmtHaNum(veg.unplantedHa)],
   ]
   covRows.forEach((vals, i) => {
     const r = ws.getRow(row)
@@ -334,7 +371,7 @@ function buildDashboardSheet(wb: ExcelJS.Workbook, payload: TimeSeriesReportPayl
 }
 
 function buildDataSheet(wb: ExcelJS.Workbook, payload: TimeSeriesReportPayload): void {
-  const ws = wb.addWorksheet('Data')
+  const ws = wb.addWorksheet('Time Series Data')
   const layers = payload.charts.series
   const headers = ['Period', 'Week #', ...layers.map(s => s.layerId.toUpperCase()), 'Vigor Class']
   ws.columns = headers.map((h, i) => ({ width: i === 0 ? 14 : i === 1 ? 8 : 12 }))
@@ -424,7 +461,7 @@ function buildAnalysisSheet(wb: ExcelJS.Workbook, payload: TimeSeriesReportPaylo
   }
 
   row++
-  ws.getCell(row, 2).value = `Generated ${payload.generatedAt.replace('T', ' ').slice(0, 19)} UTC by ${payload.projectName}. Dashboard and Data sheets summarize AOI statistics, vegetation coverage, and time-series observations for operational monitoring and stakeholder reporting.`
+  ws.getCell(row, 2).value = `Generated ${payload.generatedAt.replace('T', ' ').slice(0, 19)} UTC by ${payload.projectName}. Analytics Summary and Time Series Data summarize AOI statistics; Map Snapshots shows per-index timeline maps aligned with the chart.`
   ws.getCell(row, 2).font = { italic: true, size: 9, color: { argb: MUTED } }
   ws.getCell(row, 2).alignment = { wrapText: true }
 }
@@ -510,6 +547,82 @@ async function buildChartsSheet(wb: ExcelJS.Workbook, payload: TimeSeriesReportP
   ws.mergeCells(noteRow, 1, noteRow, 10)
 }
 
+function buildVegetationCoverageTimelineSheet(
+  wb: ExcelJS.Workbook,
+  timeline: VegetationCoveragePoint[],
+  payload: TimeSeriesReportPayload,
+): void {
+  const ws = wb.addWorksheet('Vegetation Coverage Timeline', {
+    views: [{ showGridLines: true }],
+  })
+  ws.columns = [
+    { width: 14 },
+    { width: 12 },
+    { width: 16 },
+    { width: 18 },
+    { width: 14 },
+    { width: 18 },
+    { width: 12 },
+    { width: 28 },
+  ]
+
+  ws.getCell('A1').value = 'Vegetation Coverage Timeline — Per Acquisition Date'
+  styleTitle(ws.getCell('A1'))
+  ws.mergeCells('A1:H1')
+
+  ws.getCell('A2').value =
+    `${payload.location.fieldName} · AOI ${fmtHa(payload.location.areaHa)} · NDVI classification (Healthy / Moderate / Stress = Vegetation; Critical = Bare)`
+  ws.getCell('A2').font = { size: 9, color: { argb: MUTED } }
+  ws.mergeCells('A2:H2')
+
+  const header = ws.getRow(4)
+  header.values = [
+    'Date',
+    'NDVI Mean',
+    'Vegetation Coverage %',
+    'Vegetation Area (ha)',
+    'AOI Area (ha)',
+    'Dominant Class',
+    'Trend',
+    'Class distribution',
+  ]
+  styleTableHeader(header)
+
+  if (!timeline.length) {
+    ws.getCell(5, 1).value =
+      'No per-date coverage rows — ensure an AOI is selected and NDVI observations exist in the analysis period.'
+    ws.getCell(5, 1).font = { italic: true, size: 9, color: { argb: MUTED } }
+    ws.mergeCells(5, 1, 5, 8)
+    return
+  }
+
+  timeline.forEach((p, i) => {
+    const r = ws.getRow(5 + i)
+    const classDist = p.classes
+      .filter(c => c.pct > 0.5)
+      .map(c => `${c.label} ${c.pct.toFixed(0)}%`)
+      .join(' · ')
+    r.values = [
+      p.date,
+      p.ndviMean != null ? fmtNum(p.ndviMean, 4) : '—',
+      Number(p.vegetationCoveragePct.toFixed(1)),
+      Number(p.vegetationAreaHa.toFixed(p.vegetationAreaHa >= 100 ? 1 : 2)),
+      Number(p.aoiAreaHa.toFixed(p.aoiAreaHa >= 100 ? 1 : 2)),
+      p.dominantClass,
+      p.trend,
+      classDist || '—',
+    ]
+    styleDataRow(r, i % 2 === 1)
+    r.getCell(3).numFmt = '0.0"%"'
+  })
+
+  const noteRow = 5 + timeline.length + 2
+  ws.getCell(noteRow, 1).value =
+    'Each row is computed independently for that satellite acquisition date on the active AOI (not a static field average). Histogram-enriched scenes use Sentinel Hub NDVI class areas when available; other dates use NDVI zonal/mean classification estimates.'
+  ws.getCell(noteRow, 1).font = { italic: true, size: 8, color: { argb: MUTED } }
+  ws.mergeCells(noteRow, 1, noteRow, 8)
+}
+
 export async function buildTimeSeriesReportWorkbook(payload: TimeSeriesReportPayload): Promise<ExcelJS.Workbook> {
   const wb = new ExcelJS.Workbook()
   wb.creator = payload.projectName
@@ -517,6 +630,8 @@ export async function buildTimeSeriesReportWorkbook(payload: TimeSeriesReportPay
 
   buildDashboardSheet(wb, payload)
   buildDataSheet(wb, payload)
+  buildVegetationCoverageTimelineSheet(wb, payload.vegetationCoverageTimeline ?? [], payload)
+  buildMapSnapshotsSheet(wb, payload.mapSnapshotGroups)
   await buildChartsSheet(wb, payload)
   buildAnalysisSheet(wb, payload)
 
@@ -529,6 +644,8 @@ export function buildTimeSeriesReportWorkbookSync(payload: TimeSeriesReportPaylo
   wb.created = new Date()
   buildDashboardSheet(wb, payload)
   buildDataSheet(wb, payload)
+  buildVegetationCoverageTimelineSheet(wb, payload.vegetationCoverageTimeline ?? [], payload)
+  buildMapSnapshotsSheet(wb, payload.mapSnapshotGroups)
   buildAnalysisSheet(wb, payload)
   return wb
 }
@@ -577,10 +694,30 @@ export function exportTimeSeriesCsvReport(payload: TimeSeriesReportPayload): voi
   lines.push(`Vegetation Health Summary,${esc(exec.indexKpis.find(k => k.label === 'MEAN NDVI')?.sublabel ?? exec.cropHealth)}`)
   lines.push('')
   lines.push('Vegetation Coverage')
+  lines.push(`Acquisition Date,${esc(veg.acquisitionDate)}`)
+  lines.push(`Dominant Class,${esc(veg.dominantClass)}`)
   lines.push('Class,Coverage (%),Area (ha)')
-  lines.push(`Planted Area,${veg.plantedPct.toFixed(1)},${fmtHaNum(veg.plantedHa)}`)
-  lines.push(`Unplanted Area,${veg.unplantedPct.toFixed(1)},${fmtHaNum(veg.unplantedHa)}`)
+  lines.push(`Planted Area (Vegetation),${veg.plantedPct.toFixed(1)},${fmtHaNum(veg.plantedHa)}`)
+  lines.push(`Unplanted Area (Bare / critical),${veg.unplantedPct.toFixed(1)},${fmtHaNum(veg.unplantedHa)}`)
   lines.push('')
+  if (payload.vegetationCoverageTimeline?.length) {
+    lines.push('Vegetation Coverage Timeline')
+    lines.push('Date,NDVI Mean,Vegetation Coverage %,Vegetation Area (ha),AOI Area (ha),Dominant Class,Trend')
+    for (const p of payload.vegetationCoverageTimeline) {
+      lines.push(
+        [
+          esc(p.date),
+          p.ndviMean != null ? fmtNum(p.ndviMean, 4) : '',
+          p.vegetationCoveragePct.toFixed(1),
+          fmtHaNum(p.vegetationAreaHa),
+          fmtHaNum(p.aoiAreaHa),
+          esc(p.dominantClass),
+          esc(p.trend),
+        ].join(','),
+      )
+    }
+    lines.push('')
+  }
   lines.push('Executive Summary')
   lines.push(esc(exec.narrative))
   lines.push('')

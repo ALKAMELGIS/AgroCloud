@@ -41,6 +41,7 @@ import {
   SI_IMAGERY_COMMITTED_AOI_KEY,
 } from '../utils/siImageryTimeSeriesFields'
 import { TimeSeriesExportManager } from './timeSeriesReport/ExportManager'
+import { SiDynamicMapSnapshotsPanel } from './SiDynamicMapSnapshotsPanel'
 import '../../dashboards/agroCloudPlatform/AgroCloudPlatformDashboard.css'
 
 ChartJS.register(
@@ -114,6 +115,12 @@ export function SiImageryTimeSeriesPanel({
   const [dateError, setDateError] = useState<string | null>(null)
   const [selectedChartDate, setSelectedChartDate] = useState<string | null>(null)
   const [interpretationOpen, setInterpretationOpen] = useState(false)
+  const [mapSnapshotsOpen, setMapSnapshotsOpen] = useState(false)
+  const [showVegCoverage, setShowVegCoverage] = useState(true)
+  const [vegTimeline, setVegTimeline] = useState<
+    import('../lib/timeSeriesReport/vegetationCoverageTimeline').VegetationCoveragePoint[]
+  >([])
+  const [vegTimelineLoading, setVegTimelineLoading] = useState(false)
   const runAnalysisRef = useRef<() => Promise<void>>(() => Promise.resolve())
   const autoRunReadyRef = useRef(false)
   const prevAutoRunDatesRef = useRef({ from: '', to: '' })
@@ -158,6 +165,67 @@ export function SiImageryTimeSeriesPanel({
   const chartLabels = aggregatedChart.displayLabels
   const layerSeries = aggregatedChart.series
   const periodAnchorDate = aggregatedChart.periodAnchorDate
+  const periodAnchorDates = useMemo(
+    () => Object.fromEntries(periodAnchorDate.entries()),
+    [periodAnchorDate],
+  )
+
+  useEffect(() => {
+    if (!hasRun || !resolvedField?.geometry || !labels.length) {
+      setVegTimeline([])
+      return
+    }
+    let cancelled = false
+    const ac = new AbortController()
+    setVegTimelineLoading(true)
+    void (async () => {
+      try {
+        const { buildVegetationCoverageTimeline } = await import(
+          '../lib/timeSeriesReport/vegetationCoverageTimeline'
+        )
+        const ndviSeries = layerSeries.find(s => s.layerId.toUpperCase() === 'NDVI') ?? null
+        const timeline = await buildVegetationCoverageTimeline({
+          geometry: resolvedField.geometry,
+          chartLabels: labels,
+          displayLabels: chartLabels,
+          periodAnchorDates,
+          dailyRows,
+          ndviSeries,
+          enrichWithHistograms: false,
+          signal: ac.signal,
+        })
+        if (!cancelled && !ac.signal.aborted) setVegTimeline(timeline)
+      } catch {
+        if (!cancelled) setVegTimeline([])
+      } finally {
+        if (!cancelled) setVegTimelineLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+      ac.abort()
+    }
+  }, [
+    hasRun,
+    resolvedField?.geometry,
+    labels,
+    chartLabels,
+    periodAnchorDates,
+    dailyRows,
+    layerSeries,
+  ])
+
+  const vegCoverageChartValues = useMemo(() => {
+    if (!showVegCoverage || !vegTimeline.length || !labels.length) return null
+    const byDate = new Map(vegTimeline.map(p => [p.date, p.vegetationCoveragePct]))
+    return labels.map(key => {
+      const scene = (periodAnchorDates[key] ?? key).trim().slice(0, 10)
+      const pct = byDate.get(scene)
+      return pct != null && Number.isFinite(pct) ? Number(pct.toFixed(2)) : null
+    })
+  }, [showVegCoverage, vegTimeline, labels, periodAnchorDates])
+
+  const latestVegPoint = vegTimeline.length ? vegTimeline[vegTimeline.length - 1]! : null
 
   const resolvePeriodMapDate = useCallback(
     (periodKey: string): string => {
@@ -344,21 +412,40 @@ export function SiImageryTimeSeriesPanel({
     }
     return {
       labels: chartLabels,
-      datasets: layerSeries.map((entry, index) => {
-        const color = imageryLayerChartColor(index)
-        return {
-          label: entry.layerId,
-          data: entry.values,
-          borderColor: color,
-          backgroundColor: chartType === 'area' ? `${color}33` : chartType === 'bar' ? `${color}88` : color,
-          fill: chartType === 'area',
-          tension: 0.25,
-          pointRadius: 2,
-          borderWidth: 1.5,
-        }
-      }),
+      datasets: [
+        ...layerSeries.map((entry, index) => {
+          const color = imageryLayerChartColor(index)
+          return {
+            label: entry.layerId,
+            data: entry.values,
+            borderColor: color,
+            backgroundColor: chartType === 'area' ? `${color}33` : chartType === 'bar' ? `${color}88` : color,
+            fill: chartType === 'area',
+            tension: 0.25,
+            pointRadius: 2,
+            borderWidth: 1.5,
+            yAxisID: 'y',
+          }
+        }),
+        ...(vegCoverageChartValues
+          ? [
+              {
+                label: 'Vegetation Coverage %',
+                data: vegCoverageChartValues as number[],
+                borderColor: '#047857',
+                backgroundColor: 'rgba(4, 120, 87, 0.12)',
+                borderDash: [5, 4],
+                fill: false,
+                tension: 0.25,
+                pointRadius: 2.5,
+                borderWidth: 2,
+                yAxisID: 'yCoverage',
+              },
+            ]
+          : []),
+      ],
     }
-  }, [chartLabels, labels, layerSeries, splitByYears, chartType, timeAggregation])
+  }, [chartLabels, labels, layerSeries, splitByYears, chartType, timeAggregation, vegCoverageChartValues])
 
   const pieChartData = useMemo((): ChartData<'pie'> => {
     if (!chartLabels.length || !layerSeries.length) return { labels: [], datasets: [] }
@@ -471,8 +558,8 @@ export function SiImageryTimeSeriesPanel({
       layout: { padding: { top: 4, right: 6, bottom: 2, left: 2 } },
       onClick: chartDateClickHandler,
       plugins: {
-        legend: {
-          display: splitByYears || layerSeries.length > 1 || hasRun,
+          legend: {
+          display: splitByYears || layerSeries.length > 1 || hasRun || !!vegCoverageChartValues,
           labels: { color: '#cbd5e1', boxWidth: 10, font: { size: 10 } },
         },
         tooltip: {
@@ -499,9 +586,38 @@ export function SiImageryTimeSeriesPanel({
           ticks: { color: '#94a3b8', font: { size: 9 } },
           grid: { color: 'rgba(255,255,255,0.06)' },
         },
+        ...(vegCoverageChartValues
+          ? {
+              yCoverage: {
+                position: 'right' as const,
+                min: 0,
+                max: 100,
+                ticks: {
+                  color: '#34d399',
+                  font: { size: 9 },
+                  callback: (v: string | number) => `${v}%`,
+                },
+                grid: { drawOnChartArea: false },
+                title: {
+                  display: true,
+                  text: 'Veg. Coverage %',
+                  color: '#34d399',
+                  font: { size: 9 },
+                },
+              },
+            }
+          : {}),
       },
     }),
-    [chartReady, splitByYears, layerSeries.length, hasRun, chartDateClickHandler, chartLabels.length],
+    [
+      chartReady,
+      splitByYears,
+      layerSeries.length,
+      hasRun,
+      chartDateClickHandler,
+      chartLabels.length,
+      vegCoverageChartValues,
+    ],
   )
 
   const pieChartOptions = useMemo(
@@ -753,6 +869,52 @@ export function SiImageryTimeSeriesPanel({
           </div>
         ) : null}
 
+        {hasRun && chartReady && latestVegPoint ? (
+          <div className="acp-ts__veg-summary" aria-label="Vegetation coverage snapshot">
+            <div className="acp-ts__veg-summary-main">
+              <strong>Vegetation Coverage</strong>
+              <span className="acp-ts__veg-summary-date">{latestVegPoint.date}</span>
+              {vegTimelineLoading ? (
+                <span className="acp-ts__veg-summary-busy">
+                  <i className="fa-solid fa-spinner fa-spin" aria-hidden />
+                </span>
+              ) : null}
+            </div>
+            <div className="acp-ts__veg-summary-kpis">
+              <div>
+                <em>Coverage</em>
+                <strong>{latestVegPoint.vegetationCoveragePct.toFixed(0)}%</strong>
+              </div>
+              <div>
+                <em>Veg. area</em>
+                <strong>
+                  {latestVegPoint.vegetationAreaHa >= 100
+                    ? `${latestVegPoint.vegetationAreaHa.toFixed(1)} ha`
+                    : `${latestVegPoint.vegetationAreaHa.toFixed(2)} ha`}
+                </strong>
+              </div>
+              <div>
+                <em>AOI</em>
+                <strong>
+                  {latestVegPoint.aoiAreaHa >= 100
+                    ? `${latestVegPoint.aoiAreaHa.toFixed(1)} ha`
+                    : `${latestVegPoint.aoiAreaHa.toFixed(2)} ha`}
+                </strong>
+              </div>
+              <div>
+                <em>Dominant</em>
+                <strong>{latestVegPoint.dominantClass}</strong>
+              </div>
+              <div>
+                <em>NDVI</em>
+                <strong>
+                  {latestVegPoint.ndviMean != null ? latestVegPoint.ndviMean.toFixed(3) : '—'}
+                </strong>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <div className="acp-ts__chart-wrap" ref={chartWrapRef}>
           {hasRun && chartReady ? (
             <>
@@ -838,6 +1000,18 @@ export function SiImageryTimeSeriesPanel({
           />
         ) : null}
 
+        <SiDynamicMapSnapshotsPanel
+          open={mapSnapshotsOpen}
+          geometry={resolvedField?.geometry ?? committedAoiGeometry}
+          layerIds={selectedLayerIds}
+          sceneDate={interpretSceneDate || referenceDate}
+          fieldName={selectedFieldLabel}
+          dailyRows={dailyRows}
+          layerSeries={layerSeries}
+          mapboxToken={mapboxToken}
+          enabled={hasRun && !!selectedLayerIds.length}
+        />
+
         <div className="acp-ts__foot">
           <label className="acp-ts__toggle">
             <input
@@ -857,6 +1031,18 @@ export function SiImageryTimeSeriesPanel({
               </span>
             ) : null}
           </label>
+          <label className="acp-ts__toggle">
+            <input
+              type="checkbox"
+              checked={showVegCoverage}
+              disabled={!hasRun || chartType === 'pie' || chartType === 'scatter'}
+              onChange={e => setShowVegCoverage(e.target.checked)}
+            />
+            Veg. Coverage trend
+            {chartType === 'pie' || chartType === 'scatter' ? (
+              <span className="acp-ts__toggle-hint"> (line / area / bar)</span>
+            ) : null}
+          </label>
           <div className="acp-ts__exports">
             <button
               type="button"
@@ -868,6 +1054,17 @@ export function SiImageryTimeSeriesPanel({
               onClick={() => setInterpretationOpen(open => !open)}
             >
               <i className="fa-solid fa-lightbulb" aria-hidden="true" /> Interpretation
+            </button>
+            <button
+              type="button"
+              className={'acp-ts__exports-interpret' + (mapSnapshotsOpen ? ' is-on' : '')}
+              title="Dynamic Map Snapshots for selected layers"
+              aria-label="Dynamic Map Snapshots"
+              aria-pressed={mapSnapshotsOpen}
+              disabled={!hasRun || !selectedLayerIds.length}
+              onClick={() => setMapSnapshotsOpen(open => !open)}
+            >
+              <i className="fa-solid fa-map" aria-hidden="true" /> Map Snapshots
             </button>
             <TimeSeriesExportManager
               disabled={!labels.length || !hasRun}
@@ -885,6 +1082,7 @@ export function SiImageryTimeSeriesPanel({
               chartRef={chartRef}
               chartType={chartType}
               mapboxToken={mapboxToken}
+              periodAnchorDates={periodAnchorDates}
               projectName={projectName}
               generatedBy={generatedBy}
             />

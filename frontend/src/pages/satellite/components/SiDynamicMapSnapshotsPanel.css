@@ -1,0 +1,239 @@
+.si-dyn-snap {
+  margin-top: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid rgba(6, 78, 59, 0.18);
+  background: linear-gradient(180deg, rgba(236, 253, 245, 0.55), rgba(248, 250, 252, 0.92));
+}
+
+.si-dyn-snap__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin-bottom: 0.65rem;
+}
+
+.si-dyn-snap__title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #064e3b;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.si-dyn-snap__sub {
+  margin: 0.2rem 0 0;
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.si-dyn-snap__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.si-dyn-snap__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid rgba(6, 78, 59, 0.25);
+  background: #fff;
+  color: #065f46;
+  border-radius: 6px;
+  padding: 0.28rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.si-dyn-snap__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.si-dyn-snap__btn--primary {
+  background: #065f46;
+  color: #fff;
+  border-color: #064e3b;
+}
+
+.si-dyn-snap__error {
+  margin: 0 0 0.5rem;
+  color: #b91c1c;
+  font-size: 0.78rem;
+}
+
+.si-dyn-snap__hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.si-dyn-snap__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.65rem;
+}
+
+.si-dyn-snap__card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.55rem;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.si-dyn-snap__card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+}
+
+.si-dyn-snap__card-head strong {
+  color: #064e3b;
+}
+
+.si-dyn-snap__card-head span {
+  color: #64748b;
+  font-size: 0.7rem;
+}
+
+.si-dyn-snap__preview {
+  position: relative;
+  aspect-ratio: 3 / 2;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #0f172a;
+}
+
+.si-dyn-snap__preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.si-dyn-snap__preview-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0.75rem;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 0.72rem;
+}
+
+.si-dyn-snap__badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.12rem 0.35rem;
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #fde68a;
+}
+
+.si-dyn-snap__preview-busy {
+  position: absolute;
+  inset: 0;
+  background: rgba(248, 250, 252, 0.35);
+  pointer-events: none;
+}
+
+.si-dyn-snap__stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.2rem;
+  margin: 0;
+}
+
+.si-dyn-snap__stats div {
+  text-align: center;
+}
+
+.si-dyn-snap__stats dt {
+  margin: 0;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #94a3b8;
+}
+
+.si-dyn-snap__stats dd {
+  margin: 0.1rem 0 0;
+  font-size: 0.72rem;
+  font-weight: 650;
+  color: #0f172a;
+}
+
+.si-dyn-snap__legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.55rem;
+}
+
+.si-dyn-snap__legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  font-size: 0.64rem;
+  color: #475569;
+}
+
+.si-dyn-snap__legend span {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.si-dyn-snap__legend-note {
+  margin: 0;
+  font-size: 0.66rem;
+  color: #64748b;
+}
+
+.si-dyn-snap__meta {
+  margin: 0;
+  font-size: 0.62rem;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+
+.si-dyn-snap__card-export {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: none;
+  background: transparent;
+  color: #047857;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.si-dyn-snap__card-export:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

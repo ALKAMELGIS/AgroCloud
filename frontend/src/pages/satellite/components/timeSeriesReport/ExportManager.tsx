@@ -23,6 +23,7 @@ export type TimeSeriesExportManagerProps = {
   chartRef: React.RefObject<ChartJS | null>
   chartType?: ImageryChartType
   mapboxToken?: string
+  periodAnchorDates?: Record<string, string>
   projectName?: string
   generatedBy?: string
 }
@@ -51,6 +52,7 @@ export function TimeSeriesExportManager({
   chartRef,
   chartType = 'line',
   mapboxToken,
+  periodAnchorDates,
   projectName,
   generatedBy,
 }: TimeSeriesExportManagerProps) {
@@ -89,6 +91,7 @@ export function TimeSeriesExportManager({
             layerSeries,
             dailyRows,
             mapboxToken,
+            periodAnchorDates,
             chartRef,
             chartType,
             config: { projectName, generatedBy },
@@ -115,6 +118,7 @@ export function TimeSeriesExportManager({
       layerSeries,
       dailyRows,
       mapboxToken,
+      periodAnchorDates,
       chartRef,
       chartType,
       projectName,

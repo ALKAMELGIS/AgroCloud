@@ -5,6 +5,29 @@ export type LngLatBbox = {
   maxLat: number
 }
 
+export function bbox4326FromGeometry(
+  geometry: GeoJSON.Geometry | null | undefined,
+  padRatio = 0.08,
+): [number, number, number, number] | null {
+  const bbox = bboxFromGeometry(geometry, padRatio)
+  if (!bbox) return null
+  return [bbox.minLng, bbox.minLat, bbox.maxLng, bbox.maxLat]
+}
+
+function lngLatTo3857(lng: number, lat: number): [number, number] {
+  const x = (lng * 20037508.34) / 180
+  const clamped = Math.max(-85.05112878, Math.min(85.05112878, lat))
+  const y = Math.log(Math.tan(((90 + clamped) * Math.PI) / 360)) / (Math.PI / 180)
+  return [x, (y * 20037508.34) / 180]
+}
+
+export function bbox3857From4326(bbox4326: [number, number, number, number]): [number, number, number, number] {
+  const [w, s, e, n] = bbox4326
+  const [minX, minY] = lngLatTo3857(w, s)
+  const [maxX, maxY] = lngLatTo3857(e, n)
+  return [minX, minY, maxX, maxY]
+}
+
 function walkCoords(node: unknown, out: [number, number][]): void {
   if (!node) return
   if (
@@ -48,9 +71,9 @@ export function bboxFromGeometry(
   }
 }
 
-async function fetchUrlAsDataUrl(url: string): Promise<string | null> {
+async function fetchUrlAsDataUrl(url: string, signal?: AbortSignal): Promise<string | null> {
   try {
-    const res = await fetch(url)
+    const res = await fetch(url, { signal })
     if (!res.ok) return null
     const blob = await res.blob()
     const mime = blob.type || 'image/jpeg'
@@ -82,6 +105,78 @@ export async function fetchFieldMapSnapshot(
     `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/${bboxPath}/${widthPx}x${heightPx}@2x` +
     `?padding=40&logo=false&attribution=false&access_token=${encodeURIComponent(token)}`
   return fetchUrlAsDataUrl(url)
+}
+
+export function dataUrlToPngBase64(dataUrl: string | null | undefined): string | null {
+  if (!dataUrl) return null
+  const idx = dataUrl.indexOf(',')
+  return idx >= 0 ? dataUrl.slice(idx + 1) : dataUrl
+}
+
+/** Fetch a single Sentinel Hub WMS index map for AOI + scene date (PNG base64, no prefix). */
+export async function fetchIndexLayerMapSnapshotBase64(options: {
+  geometry: GeoJSON.Geometry
+  layerId: string
+  sceneDate: string
+  widthPx?: number
+  heightPx?: number
+  signal?: AbortSignal
+}): Promise<string | null> {
+  const bbox4326 = bbox4326FromGeometry(options.geometry)
+  if (!bbox4326) return null
+
+  const { buildSentinelHubWmsAoiClip } = await import('../../../../lib/sentinelHubWmsAoiClip')
+  const {
+    buildSentinelHubWmsGetMapUrlParts,
+    getSentinelHubWmsLayerCatalog,
+    resolveSentinelHubWmsGetMapLayerName,
+    resolveSentinelHubWmsTimeWindow,
+  } = await import('../../../../lib/sentinelHubWmsLayers')
+  const { getSentinelHubWmsBaseUrl } = await import('../../../../lib/sentinelHubWmsInstance')
+
+  const layerId = options.layerId.trim().toUpperCase()
+  const sceneDate = options.sceneDate.trim().slice(0, 10)
+  if (!layerId || !sceneDate) return null
+
+  const drawn = { type: 'Feature' as const, geometry: options.geometry, properties: {} }
+  const clip = buildSentinelHubWmsAoiClip(drawn, layerId)
+  const catalog = getSentinelHubWmsLayerCatalog()
+  const wmsLayer = resolveSentinelHubWmsGetMapLayerName(layerId, catalog)
+  const { timeStart, timeEnd } = resolveSentinelHubWmsTimeWindow(layerId, sceneDate, null, {
+    lookbackDays: 14,
+  })
+  const bbox3857 = bbox3857From4326(bbox4326)
+  const [minX, minY, maxX, maxY] = bbox3857
+  const width = options.widthPx ?? 420
+  const height = options.heightPx ?? 300
+
+  let url = buildSentinelHubWmsGetMapUrlParts({
+    baseUrl: getSentinelHubWmsBaseUrl(),
+    layer: wmsLayer,
+    timeStart,
+    timeEnd,
+    cloudCoverage: 60,
+    geometryWkt3857: clip.geometryWkt3857 ?? undefined,
+    evalscriptB64: clip.evalscriptB64 ?? undefined,
+    tilePixels: Math.max(width, height),
+  })
+  url = url.replace('{bbox-epsg-3857}', `${minX},${minY},${maxX},${maxY}`)
+
+  const dataUrl = await fetchUrlAsDataUrl(url, options.signal)
+  return dataUrlToPngBase64(dataUrl)
+}
+
+/** Same as {@link fetchIndexLayerMapSnapshotBase64} but returns a full data URL for UI previews. */
+export async function fetchIndexLayerMapSnapshotDataUrl(options: {
+  geometry: GeoJSON.Geometry
+  layerId: string
+  sceneDate: string
+  widthPx?: number
+  heightPx?: number
+  signal?: AbortSignal
+}): Promise<string | null> {
+  const base64 = await fetchIndexLayerMapSnapshotBase64(options)
+  return base64 ? `data:image/png;base64,${base64}` : null
 }
 
 export function mapLngLatToBox(

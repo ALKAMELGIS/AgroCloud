@@ -1,6 +1,7 @@
 import type { ImageryIndexInterpretation } from '../../../../lib/imageryIndexInterpretationEngine'
 import type { ImageryTimeSeriesLayerSeries } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import type { TimeSeriesExecutiveSummary } from './timeSeriesReportExecutive'
+import type { VegetationCoveragePoint } from './vegetationCoverageTimeline'
 
 export type TimeSeriesTrendLabel = 'Increasing' | 'Decreasing' | 'Stable'
 
@@ -32,6 +33,28 @@ export type TimeSeriesReportCharts = {
   series: ImageryTimeSeriesLayerSeries[]
 }
 
+export type TimeSeriesMapSnapshot = {
+  layerId: string
+  layerLabel: string
+  sceneDate: string
+  periodLabel: string
+  /** PNG base64 without data-URL prefix — ready for ExcelJS addImage. */
+  imageBase64: string | null
+  dataSource: string
+  mean: number | null
+  min: number | null
+  max: number | null
+  areaHa: number
+  legendText: string
+  notes: string
+}
+
+export type TimeSeriesMapSnapshotGroup = {
+  layerId: string
+  title: string
+  snapshots: TimeSeriesMapSnapshot[]
+}
+
 export type TimeSeriesReportPayload = {
   projectName: string
   generatedAt: string
@@ -46,6 +69,8 @@ export type TimeSeriesReportPayload = {
   executive: TimeSeriesExecutiveSummary
   geometry: GeoJSON.Geometry | null
   mapImageDataUrl: string | null
+  mapSnapshotGroups: TimeSeriesMapSnapshotGroup[]
+  vegetationCoverageTimeline: VegetationCoveragePoint[]
 }
 
 export type TimeSeriesReportConfig = {

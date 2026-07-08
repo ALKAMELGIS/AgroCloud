@@ -22,18 +22,27 @@ const DEFAULT_CONFIG: TimeSeriesReportConfig = {
   includeInterpretation: true,
 }
 
-async function buildExportPayload(ctx: TimeSeriesExportContext) {
+async function buildExportPayload(
+  ctx: TimeSeriesExportContext,
+  options?: { includeMapSnapshots?: boolean; enrichVegetationCoverage?: boolean },
+) {
   const config = { ...DEFAULT_CONFIG, ...ctx.config }
   return buildTimeSeriesReportPayload({
     ...ctx,
     projectName: config.projectName,
     generatedBy: config.generatedBy,
     includeMap: config.includeMap,
+    includeMapSnapshots: options?.includeMapSnapshots ?? true,
+    includeVegetationCoverageTimeline: options?.enrichVegetationCoverage ?? true,
+    periodAnchorDates: ctx.periodAnchorDates,
   })
 }
 
 export async function generateFullTimeSeriesReport(ctx: TimeSeriesExportContext): Promise<void> {
-  const payload = await buildExportPayload(ctx)
+  const payload = await buildExportPayload(ctx, {
+    includeMapSnapshots: false,
+    enrichVegetationCoverage: false,
+  })
   await generateTimeSeriesReportPdf(payload, {
     chart: ctx.chartRef?.current ?? null,
     chartType: ctx.chartType ?? 'line',
@@ -51,12 +60,18 @@ export async function runTimeSeriesExport(
       await generateFullTimeSeriesReport(ctx)
       break
     case 'csv': {
-      const payload = await buildExportPayload(ctx)
+      const payload = await buildExportPayload(ctx, {
+        includeMapSnapshots: false,
+        enrichVegetationCoverage: false,
+      })
       exportTimeSeriesCsvReport(payload)
       break
     }
     case 'excel': {
-      const payload = await buildExportPayload(ctx)
+      const payload = await buildExportPayload(ctx, {
+        includeMapSnapshots: true,
+        enrichVegetationCoverage: true,
+      })
       await generateTimeSeriesReportExcel(payload)
       break
     }

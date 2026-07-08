@@ -90,6 +90,28 @@ function samplePayload(): TimeSeriesReportPayload {
     executive,
     geometry: null,
     mapImageDataUrl: null,
+    mapSnapshotGroups: [],
+    vegetationCoverageTimeline: [
+      {
+        date: '2026-07-05',
+        periodLabel: '2026-W28',
+        ndviMean: 0.48,
+        ndviMin: 0.2,
+        ndviMax: 0.7,
+        vegetationCoveragePct: 74,
+        vegetationAreaHa: 71.7,
+        vegetationAreaM2: 717000,
+        bareCoveragePct: 26,
+        bareAreaHa: 25.1,
+        aoiAreaHa: 96.8,
+        aoiAreaM2: 968000,
+        dominantClass: 'Moderate vigor',
+        dominantTier: 'moderate',
+        classes: [],
+        source: 'mean-estimate',
+        trend: 'Stable',
+      },
+    ],
   }
 }
 
@@ -156,9 +178,15 @@ describe('timeSeriesReport', () => {
     expect(summary.moistureStatus).toContain('NDMI')
   })
 
-  it('builds excel workbook with dashboard, data, charts, and analysis sheets', async () => {
+  it('builds excel workbook with summary, data, veg coverage, map snapshots, and analysis sheets', async () => {
     const { buildTimeSeriesReportWorkbookSync } = await import('./generateTimeSeriesReportExcel')
     const wb = buildTimeSeriesReportWorkbookSync(samplePayload())
-    expect(wb.worksheets.map(w => w.name)).toEqual(['Dashboard', 'Data', 'Analysis & Recommendations'])
+    expect(wb.worksheets.map(w => w.name)).toEqual([
+      'Analytics Summary',
+      'Time Series Data',
+      'Vegetation Coverage Timeline',
+      'Map Snapshots',
+      'Analysis & Recommendations',
+    ])
   })
 })
