@@ -141,7 +141,7 @@
   flex: 1 1 auto;
   min-height: 200px;
   height: auto !important;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .si-its-float .acp-ts__chart-wrap--overlays {
@@ -159,15 +159,14 @@
   flex: 1 1 0;
   min-height: 200px;
   height: auto !important;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .si-its-float.si-its-float--sized .acp-ts__chart-wrap--overlays {
   min-height: 260px;
 }
 
-.si-its-float .acp-ts__workspace-pane--interpret .acp-ts__interpret,
-.si-its-float .acp-ts__chart-wrap--interpret-tab .acp-ts__interpret {
+.si-its-float .acp-ts__interpret {
   background: linear-gradient(168deg, rgba(12, 12, 14, 0.82) 0%, rgba(2, 2, 4, 0.9) 100%);
   -webkit-backdrop-filter: blur(22px) saturate(1.4);
   backdrop-filter: blur(22px) saturate(1.4);
@@ -175,10 +174,10 @@
   box-shadow:
     0 12px 36px rgba(0, 0, 0, 0.55),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  max-height: none;
-  height: auto;
-  min-height: 100%;
-  overflow: visible;
+  max-height: min(42vh, 280px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .si-its-float__resize {

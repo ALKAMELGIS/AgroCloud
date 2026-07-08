@@ -67,38 +67,4 @@ describe('etIndex', () => {
     const populated = counts.filter(c => c > 0).length
     expect(populated).toBe(10)
   })
-
-  it('spreads skewed low-ET mass across all 10 classes (no collapsed zeros)', () => {
-    // ~Real map case: almost all pixels in 0–1 mm/day, empty fine bins to 15.
-    const bins = [
-      { lowEdge: 0, highEdge: 0.25, count: 83000 },
-      { lowEdge: 0.25, highEdge: 0.5, count: 39500 },
-      { lowEdge: 0.5, highEdge: 0.75, count: 42200 },
-      { lowEdge: 0.75, highEdge: 1, count: 42000 },
-      ...Array.from({ length: 56 }, (_, i) => ({
-        lowEdge: 1 + i * 0.25,
-        highEdge: 1.25 + i * 0.25,
-        count: 0,
-      })),
-    ]
-    const edges = etPercentileClassEdgesFromFineBins(bins, 10)
-    expect(edges).toBeTruthy()
-    expect(edges!).toHaveLength(11)
-    // High edge must be the data max (~1), not the empty histogram ceiling (15).
-    expect(edges![edges!.length - 1]!).toBeLessThanOrEqual(1.05)
-    // All interior breaks strictly increasing and within data span.
-    for (let i = 1; i < edges!.length; i += 1) {
-      expect(edges![i]!).toBeGreaterThan(edges![i - 1]!)
-    }
-    const counts = rebinFineHistogramToClassCounts(bins, edges!)
-    expect(counts).toHaveLength(10)
-    expect(counts.every(c => c > 0)).toBe(true)
-    const total = counts.reduce((s, c) => s + c, 0)
-    expect(total).toBe(83000 + 39500 + 42200 + 42000)
-    // Each class ~10% of AOI mass (±3% tolerance for discrete rounding).
-    for (const c of counts) {
-      expect(c / total).toBeGreaterThan(0.05)
-      expect(c / total).toBeLessThan(0.18)
-    }
-  })
 })

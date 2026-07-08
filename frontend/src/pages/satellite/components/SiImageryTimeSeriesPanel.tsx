@@ -114,10 +114,8 @@ export function SiImageryTimeSeriesPanel({
   const [splitByYears, setSplitByYears] = useState(false)
   const [dateError, setDateError] = useState<string | null>(null)
   const [selectedChartDate, setSelectedChartDate] = useState<string | null>(null)
-  /** Chart workspace tab — Interpretation reuses the chart area (no extra vertical stack). */
-  const [chartWorkspaceTab, setChartWorkspaceTab] = useState<'chart' | 'interpretation'>('chart')
+  const [interpretationOpen, setInterpretationOpen] = useState(false)
   const [mapSnapshotsOpen, setMapSnapshotsOpen] = useState(false)
-  const interpretationOpen = chartWorkspaceTab === 'interpretation'
   const [vegTimeline, setVegTimeline] = useState<
     import('../lib/timeSeriesReport/vegetationCoverageTimeline').VegetationCoveragePoint[]
   >([])
@@ -125,12 +123,6 @@ export function SiImageryTimeSeriesPanel({
     import('../lib/timeSeriesReport/estimatedWaterLossTimeline').EstimatedWaterLossPoint[]
   >([])
   const [waterLossLoading, setWaterLossLoading] = useState(false)
-
-  /** ET chart/KPI appear only when ET is selected like any other layer — never as a permanent overlay. */
-  const etLayerSelected = useMemo(
-    () => selectedLayerIds.some(id => String(id || '').trim().toUpperCase() === 'ET'),
-    [selectedLayerIds],
-  )
   const runAnalysisRef = useRef<() => Promise<void>>(() => Promise.resolve())
   const autoRunReadyRef = useRef(false)
   const prevAutoRunDatesRef = useRef({ from: '', to: '' })
@@ -247,6 +239,9 @@ export function SiImageryTimeSeriesPanel({
     layerSeries,
   ])
 
+  /** ET chart series comes only from selected layers (same as NDVI/NDMI) — no permanent overlay. */
+  const etLayerSelected = selectedLayerIds.some(id => id.trim().toUpperCase() === 'ET')
+
   const latestWaterPoint =
     etLayerSelected && waterLossTimeline.length
       ? waterLossTimeline[waterLossTimeline.length - 1]!
@@ -298,7 +293,7 @@ export function SiImageryTimeSeriesPanel({
       const scene = interpretation?.sceneDate?.trim().slice(0, 10)
       if (scene) onMapDateFromChart(scene)
       if (actionId === 'inspect-stress' || actionId === 'scout-moderate') {
-        setChartWorkspaceTab('interpretation')
+        setInterpretationOpen(true)
       }
     },
     [interpretation?.sceneDate, onMapDateFromChart],
@@ -309,19 +304,8 @@ export function SiImageryTimeSeriesPanel({
     autoRunReadyRef.current = false
     setDateError(null)
     setSelectedChartDate(null)
-    setChartWorkspaceTab('chart')
+    setInterpretationOpen(false)
   }, [invalidateResults])
-
-  const openInterpretationTab = useCallback(() => {
-    if (!interpretationSupported) return
-    setChartWorkspaceTab(prev => (prev === 'interpretation' ? 'chart' : 'interpretation'))
-  }, [interpretationSupported])
-
-  useEffect(() => {
-    if (!interpretationSupported && chartWorkspaceTab === 'interpretation') {
-      setChartWorkspaceTab('chart')
-    }
-  }, [interpretationSupported, chartWorkspaceTab])
 
   const displayError = dateError || error
 
@@ -451,9 +435,8 @@ export function SiImageryTimeSeriesPanel({
       datasets: [
         ...layerSeries.map((entry, index) => {
           const color = imageryLayerChartColor(index)
-          const isEt = String(entry.layerId || '').toUpperCase() === 'ET'
           return {
-            label: isEt ? 'ET (mm/day)' : entry.layerId,
+            label: entry.layerId,
             data: entry.values,
             borderColor: color,
             backgroundColor: chartType === 'area' ? `${color}33` : chartType === 'bar' ? `${color}88` : color,
@@ -461,7 +444,7 @@ export function SiImageryTimeSeriesPanel({
             tension: 0.25,
             pointRadius: 2,
             borderWidth: 1.5,
-            yAxisID: isEt && layerSeries.length > 1 ? 'yET' : 'y',
+            yAxisID: 'y',
           }
         }),
       ],
@@ -571,10 +554,6 @@ export function SiImageryTimeSeriesPanel({
     }
   }, [scatterAxisDates, layerSeries, scatterCorrelation])
 
-  const etWithOtherLayers =
-    etLayerSelected && layerSeries.some(s => String(s.layerId || '').toUpperCase() !== 'ET')
-  const hasSecondaryOverlays = etWithOtherLayers
-
   const cartesianChartOptions = useMemo(
     () => ({
       responsive: true,
@@ -582,8 +561,8 @@ export function SiImageryTimeSeriesPanel({
       animation: { duration: chartReady ? 280 : 0 },
       layout: {
         padding: {
-          top: hasSecondaryOverlays ? 18 : 14,
-          right: hasSecondaryOverlays ? 6 : 10,
+          top: 14,
+          right: 10,
           bottom: 8,
           left: 6,
         },
@@ -630,46 +609,9 @@ export function SiImageryTimeSeriesPanel({
           ticks: { color: '#94a3b8', font: { size: 9 }, padding: 6 },
           grid: { color: 'rgba(255,255,255,0.06)' },
         },
-        ...(etWithOtherLayers
-          ? {
-              yET: {
-                position: 'right' as const,
-                beginAtZero: true,
-                grace: '12%',
-                ticks: {
-                  color: '#38bdf8',
-                  font: { size: 9 },
-                  padding: 8,
-                  maxTicksLimit: 6,
-                  callback: (v: string | number) => {
-                    const n = typeof v === 'number' ? v : Number(v)
-                    if (!Number.isFinite(n)) return `${v}`
-                    return n >= 10 ? n.toFixed(1) : n.toFixed(2)
-                  },
-                },
-                grid: { drawOnChartArea: false },
-                title: {
-                  display: true,
-                  text: 'ET mm/d',
-                  color: '#38bdf8',
-                  font: { size: 9 },
-                  padding: { top: 2, bottom: 2 },
-                },
-              },
-            }
-          : {}),
       },
     }),
-    [
-      chartReady,
-      splitByYears,
-      layerSeries.length,
-      hasRun,
-      chartDateClickHandler,
-      chartLabels.length,
-      etWithOtherLayers,
-      hasSecondaryOverlays,
-    ],
+    [chartReady, splitByYears, layerSeries.length, hasRun, chartDateClickHandler, chartLabels.length],
   )
 
   const pieChartOptions = useMemo(
@@ -985,52 +927,9 @@ export function SiImageryTimeSeriesPanel({
           </div>
         ) : null}
 
-        <div
-          className={
-            'acp-ts__chart-wrap' +
-            (hasSecondaryOverlays && chartWorkspaceTab === 'chart' ? ' acp-ts__chart-wrap--overlays' : '') +
-            (chartWorkspaceTab === 'interpretation' ? ' acp-ts__chart-wrap--interpret-tab' : '')
-          }
-          ref={chartWrapRef}
-        >
-          {interpretationSupported ? (
-            <div className="acp-ts__workspace-tabs" role="tablist" aria-label="Time series workspace">
-              <button
-                type="button"
-                role="tab"
-                className={
-                  'acp-ts__workspace-tab' + (chartWorkspaceTab === 'chart' ? ' is-active' : '')
-                }
-                aria-selected={chartWorkspaceTab === 'chart'}
-                onClick={() => setChartWorkspaceTab('chart')}
-              >
-                <i className="fa-solid fa-chart-line" aria-hidden="true" /> Chart
-              </button>
-              <button
-                type="button"
-                role="tab"
-                className={
-                  'acp-ts__workspace-tab' +
-                  (chartWorkspaceTab === 'interpretation' ? ' is-active' : '')
-                }
-                aria-selected={chartWorkspaceTab === 'interpretation'}
-                onClick={() => setChartWorkspaceTab('interpretation')}
-              >
-                <i className="fa-solid fa-lightbulb" aria-hidden="true" /> Interpretation
-              </button>
-            </div>
-          ) : null}
-
-          {chartWorkspaceTab === 'interpretation' && interpretationSupported ? (
-            <div className="acp-ts__workspace-pane acp-ts__workspace-pane--interpret" role="tabpanel">
-              <SiImageryIndexInterpretationCard
-                interpretation={interpretation}
-                loadingAreas={loadingAreas}
-                onAction={handleInterpretationAction}
-              />
-            </div>
-          ) : hasRun && chartReady ? (
-            <div className="acp-ts__workspace-pane acp-ts__workspace-pane--chart" role="tabpanel">
+        <div className="acp-ts__chart-wrap" ref={chartWrapRef}>
+          {hasRun && chartReady ? (
+            <>
               {chartType === 'bar' ? (
                 <Bar ref={chartRef as never} data={chartData as ChartData<'bar'>} options={cartesianChartOptions} />
               ) : chartType === 'pie' ? (
@@ -1040,7 +939,7 @@ export function SiImageryTimeSeriesPanel({
               ) : (
                 <Line ref={chartRef as never} data={chartData as ChartData<'line'>} options={cartesianChartOptions} />
               )}
-            </div>
+            </>
           ) : loading && !hasChartData ? (
             <div className="acp-ts__skeleton acp-ts__skeleton--atomic" role="status" aria-live="polite" aria-busy="true">
               <div className="acp-ts__skeleton-spinner" aria-hidden="true">
@@ -1063,7 +962,7 @@ export function SiImageryTimeSeriesPanel({
           )}
         </div>
 
-        {hasRun && chartReady && chartWorkspaceTab === 'chart' ? (
+        {hasRun && chartReady ? (
           <p className="acp-ts__chart-hint">
             <i className="fa-solid fa-hand-pointer" aria-hidden="true" /> Click any point to set the map
             analysis date · Map date: <strong>{analysisDate}</strong>
@@ -1105,6 +1004,14 @@ export function SiImageryTimeSeriesPanel({
 
         {displayError && hasRun && labels.length ? <p className="acp-ts__error">{displayError}</p> : null}
 
+        {interpretationOpen && interpretationSupported ? (
+          <SiImageryIndexInterpretationCard
+            interpretation={interpretation}
+            loadingAreas={loadingAreas}
+            onAction={handleInterpretationAction}
+          />
+        ) : null}
+
         <SiDynamicMapSnapshotsPanel
           open={mapSnapshotsOpen}
           geometry={resolvedField?.geometry ?? committedAoiGeometry}
@@ -1140,11 +1047,11 @@ export function SiImageryTimeSeriesPanel({
             <button
               type="button"
               className={'acp-ts__exports-interpret' + (interpretationOpen ? ' is-on' : '')}
-              title="Open Interpretation in the chart area"
-              aria-label="Interpretation"
+              title="Interpret Selected Value"
+              aria-label="Interpret Selected Value"
               aria-pressed={interpretationOpen}
               disabled={!interpretationSupported}
-              onClick={openInterpretationTab}
+              onClick={() => setInterpretationOpen(open => !open)}
             >
               <i className="fa-solid fa-lightbulb" aria-hidden="true" /> Interpretation
             </button>

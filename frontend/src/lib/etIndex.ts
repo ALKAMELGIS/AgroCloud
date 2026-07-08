@@ -193,10 +193,8 @@ export function etFineHistogramEdges(maxMm = 15, step = 0.25): number[] {
 }
 
 /**
- * Build 10 AOI-relative ET class edges from a fine histogram via CDF interpolation.
- * Equal-mass deciles → Extremely Low (0–10%) … Exceptional (90–100%).
- * Interpolates *inside* wide bins so a skewed AOI still gets 10 distinct edges
- * across the actual data range (avoids collapsing empty high classes to maxMm).
+ * Build 10 AOI-relative ET class edges from a sorted ascending fine histogram.
+ * Deciles of the cumulative pixel mass → Very Low (0–10%) … Exceptional (90–100%).
  * Returns `edges` length 11, or null when sample mass is too small / degenerate.
  */
 export function etPercentileClassEdgesFromFineBins(
@@ -204,80 +202,39 @@ export function etPercentileClassEdgesFromFineBins(
   classCount = 10,
 ): number[] | null {
   if (!bins.length || classCount < 2) return null
-  const sorted = [...bins]
-    .filter(b => Number.isFinite(b.lowEdge) && Number.isFinite(b.highEdge))
-    .sort((a, b) => a.lowEdge - b.lowEdge)
+  const sorted = [...bins].sort((a, b) => a.lowEdge - b.lowEdge)
   const total = sorted.reduce((s, b) => s + Math.max(0, b.count || 0), 0)
   if (total < classCount) return null
 
-  // Empirical CDF nodes: (value, cumulative fraction) at each bin boundary.
-  // Skip empty fine bins so the data max is the last *populated* edge — not the
-  // absolute histogram ceiling (e.g. 15 mm) which caused collapsed high classes.
-  const cdfX: number[] = []
-  const cdfY: number[] = []
+  const edges: number[] = [sorted[0]!.lowEdge]
   let cumulative = 0
+  let nextTarget = 1
+
   for (const bin of sorted) {
-    const c = Math.max(0, bin.count || 0)
-    if (c <= 0) continue
-    if (cdfX.length === 0) {
-      cdfX.push(Number(bin.lowEdge.toFixed(6)))
-      cdfY.push(0)
+    cumulative += Math.max(0, bin.count || 0)
+    while (nextTarget < classCount && cumulative / total >= nextTarget / classCount) {
+      const edge = Number(bin.highEdge.toFixed(4))
+      if (edge > edges[edges.length - 1]!) edges.push(edge)
+      nextTarget += 1
     }
-    cumulative += c
-    const x = Number(bin.highEdge.toFixed(6))
-    if (x <= cdfX[cdfX.length - 1]!) {
-      cdfY[cdfY.length - 1] = cumulative / total
-      continue
-    }
-    cdfX.push(x)
-    cdfY.push(cumulative / total)
-  }
-  if (cdfX.length < 2 || cdfY[cdfY.length - 1]! < 0.999) return null
-
-  const quantileAt = (p: number): number => {
-    const target = Math.max(0, Math.min(1, p))
-    if (target <= 0) return cdfX[0]!
-    if (target >= 1) return cdfX[cdfX.length - 1]!
-    for (let i = 1; i < cdfX.length; i += 1) {
-      const y0 = cdfY[i - 1]!
-      const y1 = cdfY[i]!
-      if (target > y1) continue
-      if (y1 <= y0) return cdfX[i]!
-      const t = (target - y0) / (y1 - y0)
-      return Number((cdfX[i - 1]! + t * (cdfX[i]! - cdfX[i - 1]!)).toFixed(6))
-    }
-    return cdfX[cdfX.length - 1]!
   }
 
-  const edges: number[] = [Number(cdfX[0]!.toFixed(6))]
-  for (let k = 1; k < classCount; k += 1) {
-    edges.push(quantileAt(k / classCount))
+  const lastHigh = sorted[sorted.length - 1]!.highEdge
+  while (edges.length < classCount) {
+    edges.push(Number(lastHigh.toFixed(4)))
   }
-  edges.push(Number(cdfX[cdfX.length - 1]!.toFixed(6)))
+  edges.push(Number(Math.max(lastHigh, edges[edges.length - 1]!).toFixed(4)))
 
-  // Enforce strictly increasing edges; if the distribution is nearly flat, spread
-  // leftover width evenly so every class keeps a usable interval for legend labels.
-  const span = Math.max(1e-6, edges[edges.length - 1]! - edges[0]!)
-  const minStep = Math.max(1e-4, span / (classCount * 50))
+  // Ensure strictly increasing edges (collapse plateaus by tiny epsilon).
   for (let i = 1; i < edges.length; i += 1) {
     if (edges[i]! <= edges[i - 1]!) {
-      edges[i] = Number((edges[i - 1]! + minStep).toFixed(6))
+      edges[i] = Number((edges[i - 1]! + 0.001).toFixed(4))
     }
-  }
-  // Keep the final edge at least as high as the data max (after epsilon bumps).
-  const dataMax = cdfX[cdfX.length - 1]!
-  if (edges[edges.length - 1]! < dataMax) {
-    edges[edges.length - 1] = Number(dataMax.toFixed(6))
   }
   return edges.length === classCount + 1 ? edges : null
 }
 
-/**
- * Aggregate fine-bin counts into per-class counts for ascending `edges` (len = classes+1).
- * Splits each fine bin *proportionally by overlap* across class intervals so a bin that
- * straddles several percentile classes contributes to each — no empty classes from
- * midpoint-only assignment when mass is concentrated in a few fine bins.
- */
+/** Aggregate fine-bin counts into per-class counts for ascending `edges` (len = classes+1). */
 export function rebinFineHistogramToClassCounts(
   bins: Array<{ lowEdge: number; highEdge: number; count: number }>,
   edges: number[],
@@ -289,56 +246,21 @@ export function rebinFineHistogramToClassCounts(
   for (const bin of bins) {
     const c = Math.max(0, bin.count || 0)
     if (!c) continue
-    const lo = bin.lowEdge
-    const hi = bin.highEdge
-    const width = hi - lo
-    if (!(width > 0)) {
-      // Degenerate bin → nearest class by midpoint.
-      const mid = (lo + hi) / 2
-      let bi = n - 1
-      for (let i = 0; i < n; i += 1) {
-        if (mid >= edges[i]! && (i === n - 1 || mid < edges[i + 1]!)) {
-          bi = i
-          break
-        }
-      }
-      counts[bi]! += c
-      continue
-    }
-
-    let assigned = 0
+    const mid = (bin.lowEdge + bin.highEdge) / 2
+    let bi = n - 1
     for (let i = 0; i < n; i += 1) {
-      const clo = edges[i]!
-      const chi = edges[i + 1]!
-      const overlap = Math.max(0, Math.min(hi, chi) - Math.max(lo, clo))
-      if (overlap <= 0) continue
-      const share = (overlap / width) * c
-      counts[i]! += share
-      assigned += share
+      if (mid >= edges[i]! && mid < edges[i + 1]!) {
+        bi = i
+        break
+      }
+      if (mid < edges[0]!) {
+        bi = 0
+        break
+      }
     }
-    // Residual (bin outside all edges) → clamp to nearest extreme class.
-    const residual = c - assigned
-    if (residual > 1e-9) {
-      if (hi <= edges[0]!) counts[0]! += residual
-      else counts[n - 1]! += residual
-    }
+    counts[bi]! += c
   }
-
-  // Round to whole pixels while preserving total mass.
-  const rawTotal = counts.reduce((s, v) => s + v, 0)
-  if (rawTotal <= 0) return counts.map(() => 0)
-  const rounded = counts.map(v => Math.floor(v))
-  let left = Math.round(rawTotal) - rounded.reduce((s, v) => s + v, 0)
-  // Largest-remainder method for fairness across classes.
-  const fracOrder = counts
-    .map((v, i) => ({ i, frac: v - Math.floor(v) }))
-    .sort((a, b) => b.frac - a.frac)
-  for (const { i } of fracOrder) {
-    if (left <= 0) break
-    rounded[i]! += 1
-    left -= 1
-  }
-  return rounded
+  return counts
 }
 
 /** Mid-values for ColorRampVisualizer given ascending edges. */
