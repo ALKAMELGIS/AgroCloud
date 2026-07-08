@@ -33,6 +33,7 @@ export type SatelliteAoiStaticChartsMapOverlayProps = {
   staticMultiLineLabels: string[];
   staticMultiLineDatasets: AoiStaticMultiLayerLineChartDataset[];
   staticMultiLineHasLst: boolean;
+  staticMultiLineHasEt?: boolean;
   staticChartExportLngLatPerRow?: AoiStaticExportLngLat[];
   weeklyMeans: number[];
   pivotBars: Array<{ name: string; value: number }>;
@@ -70,6 +71,7 @@ export function SatelliteAoiStaticChartsMapOverlay({
   staticMultiLineLabels,
   staticMultiLineDatasets,
   staticMultiLineHasLst,
+  staticMultiLineHasEt = false,
   staticChartExportLngLatPerRow,
   weeklyMeans,
   pivotBars,
@@ -182,6 +184,7 @@ export function SatelliteAoiStaticChartsMapOverlay({
         labels={staticMultiLineLabels}
         datasets={staticMultiLineDatasets}
         hasLst={staticMultiLineHasLst}
+        hasEt={staticMultiLineHasEt}
         exportLngLatPerRow={staticChartExportLngLatPerRow}
         compact={compact}
       />

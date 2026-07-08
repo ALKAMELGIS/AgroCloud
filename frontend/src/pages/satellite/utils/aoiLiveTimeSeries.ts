@@ -2,6 +2,7 @@
  * Live AOI / pixel time series from Sentinel Hub Statistical API.
  */
 
+import { evaluateImageryLayerDailyValue } from '../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import type { SentinelHubDailyIndexMeans } from '../../../lib/sentinelHubStatisticsApi'
 import {
   buildStaticAoiMultiChartDatasets,
@@ -34,6 +35,7 @@ export type AoiLiveChartBuild = {
     yAxisID: string
   }>
   hasLst: boolean
+  hasEt: boolean
 }
 
 const DATASET_COLORS = ['#4f46e5', '#0d9488', '#ca8a04', '#b91c1c', '#7c3aed', '#15803d', '#0369a1']
@@ -135,7 +137,7 @@ export function buildLiveAoiMultiChartDatasets(
   anchorWeeklyMeans: number[],
 ): AoiLiveChartBuild {
   if (!weekly.length || !layerIds.length || !daily.length) {
-    return { labels: [], datasets: [], hasLst: false }
+    return { labels: [], datasets: [], hasLst: false, hasEt: false }
   }
   const n = weekly.length
   const labels = weekly.map(w => formatStaticChartWeekLabel(w.startDate))
@@ -144,26 +146,39 @@ export function buildLiveAoiMultiChartDatasets(
     const color = DATASET_COLORS[di % DATASET_COLORS.length]!
     const key = layerIdToDailyKey(id)
     const data = weekly.map((week, i) => {
+      if (id.trim().toUpperCase() === 'ET') {
+        const vals: number[] = []
+        for (const row of daily) {
+          if (row.date < week.startDate || row.date > week.endDate) continue
+          const v = evaluateImageryLayerDailyValue('ET', row)
+          if (v != null && Number.isFinite(v)) vals.push(v)
+        }
+        if (vals.length) {
+          return Number((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2))
+        }
+      }
       if (key) {
         const live = meanDailyInWindow(daily, week.startDate, week.endDate, key)
-        if (live != null) return Number(live.toFixed(id === 'LST' ? 2 : 3))
+        if (live != null) return Number(live.toFixed(id === 'LST' || id === 'ET' ? 2 : 3))
       }
       const anchor = anchorWeeklyMeans[i] ?? week.mean ?? 0
       return staticAoiLayerMeanForWeek(id, i, n, aoiKey, anchor)
     })
+    const u = id.trim().toUpperCase()
     return {
       id,
       label: opt.label,
       data,
       borderColor: color,
       backgroundColor: `${color}22`,
-      yAxisID: id === 'LST' ? 'yLST' : 'yIndex',
+      yAxisID: u === 'LST' ? 'yLST' : u === 'ET' ? 'yET' : 'yIndex',
     }
   })
   return {
     labels,
     datasets,
     hasLst: layerIds.some(l => l.trim().toUpperCase() === 'LST'),
+    hasEt: layerIds.some(l => l.trim().toUpperCase() === 'ET'),
   }
 }
 
@@ -182,5 +197,6 @@ export function buildAoiMultiChartDatasets(
   return {
     ...built,
     hasLst: layerIds.some(l => l.trim().toUpperCase() === 'LST'),
+    hasEt: layerIds.some(l => l.trim().toUpperCase() === 'ET'),
   }
 }

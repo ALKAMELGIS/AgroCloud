@@ -8,6 +8,7 @@ import type { CropAlertFieldInput } from '../../../../lib/siCropAlertEngine'
 import type { ImageryTimeSeriesLayerSeries } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import { fetchFieldMapSnapshot } from './timeSeriesMapSnapshot'
 import { buildTimeSeriesMapSnapshotGroups } from './timeSeriesExcelMapSnapshots'
+import { buildEstimatedWaterLossTimeline } from './estimatedWaterLossTimeline'
 import { buildVegetationCoverageTimeline } from './vegetationCoverageTimeline'
 import {
   buildTimeSeriesExecutiveSummary,
@@ -179,6 +180,18 @@ export async function buildTimeSeriesReportPayload(
       })
     : []
 
+  const estimatedWaterLossTimeline = geometry
+    ? buildEstimatedWaterLossTimeline({
+        geometry,
+        chartLabels: input.chartLabels,
+        displayLabels: input.displayLabels,
+        periodAnchorDates: input.periodAnchorDates,
+        dailyRows: input.dailyRows,
+        layerSeries: input.layerSeries,
+        vegetationCoverageTimeline,
+      })
+    : []
+
   return {
     projectName: input.projectName?.trim() || 'AgroCloud Satellite Intelligence',
     generatedAt: new Date().toISOString(),
@@ -209,5 +222,6 @@ export async function buildTimeSeriesReportPayload(
     mapImageDataUrl,
     mapSnapshotGroups,
     vegetationCoverageTimeline,
+    estimatedWaterLossTimeline,
   }
 }

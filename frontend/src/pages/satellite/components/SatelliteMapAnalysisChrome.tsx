@@ -52,6 +52,7 @@ export type SatelliteMapAnalysisToolbarProps = {
   staticMultiLineLabels?: string[];
   staticMultiLineDatasets?: AoiStaticMultiLayerLineChartDataset[];
   staticMultiLineHasLst?: boolean;
+  staticMultiLineHasEt?: boolean;
   /** One WGS84 point per timeline row for CSV export (inside AOI when polygon). */
   staticChartExportLngLatPerRow?: AoiStaticExportLngLat[];
 };
@@ -77,6 +78,7 @@ export function SatelliteMapAnalysisToolbar({
   staticMultiLineLabels = [],
   staticMultiLineDatasets = [],
   staticMultiLineHasLst = false,
+  staticMultiLineHasEt = false,
   staticChartExportLngLatPerRow,
 }: SatelliteMapAnalysisToolbarProps) {
   return (
@@ -97,6 +99,7 @@ export function SatelliteMapAnalysisToolbar({
       staticMultiLineLabels={staticMultiLineLabels}
       staticMultiLineDatasets={staticMultiLineDatasets}
       staticMultiLineHasLst={staticMultiLineHasLst}
+      staticMultiLineHasEt={staticMultiLineHasEt}
       staticChartExportLngLatPerRow={staticChartExportLngLatPerRow}
       layerLiveStatsLayerGroups={layerLiveStatsLayerGroups}
       layerLiveStatsLayers={layerLiveStatsLayers}
@@ -135,6 +138,7 @@ export type SatelliteMapAnalysisChromeProps = {
   staticMultiLineLabels: string[];
   staticMultiLineDatasets: AoiStaticMultiLayerLineChartDataset[];
   staticMultiLineHasLst: boolean;
+  staticMultiLineHasEt?: boolean;
   staticChartExportLngLatPerRow?: AoiStaticExportLngLat[];
   layerLiveStatsLayerGroups: RemoteSensingLayerSelectGroup[];
   layerLiveStatsLayers: LayerLiveStatsLayerId[];
@@ -242,6 +246,7 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
     staticMultiLineLabels,
     staticMultiLineDatasets,
     staticMultiLineHasLst,
+    staticMultiLineHasEt = false,
     staticChartExportLngLatPerRow,
     layerLiveStatsLayerGroups,
     layerLiveStatsLayers,
@@ -333,6 +338,7 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
       staticMultiLineLabels={staticMultiLineLabels}
       staticMultiLineDatasets={staticMultiLineDatasets}
       staticMultiLineHasLst={staticMultiLineHasLst}
+      staticMultiLineHasEt={staticMultiLineHasEt}
       staticChartExportLngLatPerRow={staticChartExportLngLatPerRow}
       layerLiveStatsLayerGroups={layerLiveStatsLayerGroups}
       layerLiveStatsLayers={layerLiveStatsLayers}

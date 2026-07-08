@@ -37,6 +37,8 @@ export type WmsAoiEvalProfile =
 export type BuildSentinelHubWmsAoiClipOptions = {
   /** When set (0–1), multiply alpha by (index >= minIndex) for index-style profiles (e.g. NDVI). Ignored for RGB-only profiles. */
   indexVisibilityMin?: number | null;
+  /** Acquisition date (YYYY-MM-DD) — drives seasonal ET energy factor. */
+  sceneDate?: string | null;
   /** When set, only include AOI rings intersecting this WGS84 bbox (viewport lazy clip). */
   viewportBBox?: LngLatBBox | null;
   /** Cap simultaneous WMS tile layers (packed multipolygon GEOMETRY clips). */
@@ -241,7 +243,8 @@ export function inferWmsEvalProfile(layerName: string): WmsAoiEvalProfile {
   if (u.includes('SAVI')) return 'savi';
   if (u.includes('NDVI')) return 'ndvi';
   if (u.includes('EVI') && !u.includes('NEVI')) return 'evi';
-  if (u.includes('NDMI') || u.includes('MOISTURE')) return 'ndmi';
+  if (u.includes('NDMI') || (u.includes('MOISTURE') && !u.includes('EVAPO'))) return 'ndmi';
+  if (u === 'ET' || u.includes('EVAPOTRANSPIRATION') || u.includes('EVAPO')) return 'et';
   if (u.includes('NDWI') || u.includes('WATER')) return 'ndwi';
   if (u.includes('FALSE') || u.includes('SWIR') || u.includes('COLOR_INFRARED')) return 'false_color';
   if (u.includes('TRUE') || u.includes('NATURAL') || u.includes('RGB')) return 'true_color';
@@ -258,6 +261,7 @@ function buildEvalscriptV3(
   profile: WmsAoiEvalProfile,
   indexVisibilityMin: number | null,
   layerName: string,
+  sceneDate?: string | null,
 ): string {
   if (profile === 'agro_composite') {
     return buildAgroCompositeLayerEvalscript(layerName, indexVisibilityMin) ?? '';
@@ -266,7 +270,7 @@ function buildEvalscriptV3(
     return buildCropClassificationEvalscript();
   }
   if (isSentinelIndexColorRampProfile(profile)) {
-    return buildSentinelIndexColorRampEvalscript(profile, indexVisibilityMin);
+    return buildSentinelIndexColorRampEvalscript(profile, indexVisibilityMin, { sceneDate });
   }
 
   switch (profile) {
@@ -390,7 +394,7 @@ function buildEvalscriptB64ForLayer(
   const inferred = inferWmsEvalProfile(layerName);
   const profile = inferred === 'native' ? 'true_color' : inferred;
   const indexMin = options?.indexVisibilityMin ?? null;
-  let evalPlain = buildEvalscriptV3(profile, indexMin, layerName);
+  let evalPlain = buildEvalscriptV3(profile, indexMin, layerName, options?.sceneDate);
   return evalPlain ? evalscriptToBase64Param(evalPlain) : null;
 }
 

@@ -56,6 +56,8 @@ export type AoiStaticMultiLayerLineChartProps = {
   datasets: AoiStaticMultiLayerLineChartDataset[];
   /** When true, show right axis for land-surface temperature. */
   hasLst: boolean;
+  /** When true, show ET (mm/day) axis. */
+  hasEt?: boolean;
   /** One WGS84 point per timeline row for CSV export (inside AOI when provided). */
   exportLngLatPerRow?: AoiStaticExportLngLat[];
   /** Tighter layout for floating dashboard cards — external title, legend below chart. */
@@ -97,6 +99,7 @@ export function AoiStaticMultiLayerLineChart({
   labels,
   datasets,
   hasLst,
+  hasEt = false,
   exportLngLatPerRow,
   compact = false,
 }: AoiStaticMultiLayerLineChartProps) {
@@ -260,10 +263,26 @@ export function AoiStaticMultiLayerLineChart({
           grid: { drawOnChartArea: false },
           ticks: { color: tickColor, font: { size: compact ? 8 : 11 } },
         },
+        yET: {
+          type: 'linear' as const,
+          position: 'right' as const,
+          display: hasEt && datasets.some(d => d.yAxisID === 'yET'),
+          offset: hasLst,
+          title: {
+            display: true,
+            text: 'ET (mm/day)',
+            color: labelColor,
+            font: { size: compact ? 9 : 11, weight: 600 },
+          },
+          grid: { drawOnChartArea: false },
+          ticks: { color: tickColor, font: { size: compact ? 8 : 11 } },
+          suggestedMin: 0,
+          suggestedMax: 10,
+        },
       },
     };
     return base;
-  }, [title, datasets, hasLst, titleColor, labelColor, tickColor, gridColor, isLight, zoomCfg, compact]);
+  }, [title, datasets, hasLst, hasEt, titleColor, labelColor, tickColor, gridColor, isLight, zoomCfg, compact]);
 
   const lineOptions = useMemo(() => cartesianOptions as ChartOptions<'line'>, [cartesianOptions]);
 

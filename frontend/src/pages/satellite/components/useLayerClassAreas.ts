@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   fetchLayerClassAreas,
   layerSupportsClassArea,
@@ -34,6 +34,20 @@ function stableGeometryKey(geometry: GeoJSON.Geometry | GeoJSON.Feature): string
   }
 }
 
+/** True when a fetch was cancelled by AbortController (do not show as UI error). */
+export function isClassAreaAbortError(err: unknown): boolean {
+  if (err == null) return false
+  if (typeof DOMException !== 'undefined' && err instanceof DOMException && err.name === 'AbortError') {
+    return true
+  }
+  if (err instanceof Error) {
+    if (err.name === 'AbortError') return true
+    const msg = err.message.toLowerCase()
+    if (msg.includes('aborted') || msg.includes('abort')) return true
+  }
+  return false
+}
+
 /**
  * Per-class Total Area for the active index layer inside an AOI, refreshed in
  * real time whenever the AOI geometry, layer, or scene date changes.
@@ -53,17 +67,19 @@ export function useLayerClassAreas({
     error: null,
     supported,
   })
+  const requestGenRef = useRef(0)
 
   const dateKey = String(sceneDate || '').trim().slice(0, 10)
   const active = enabled && supported && !!geomKey && !!dateKey && !!layerId
 
   useEffect(() => {
     if (!active || !geometry || !layerId) {
+      requestGenRef.current += 1
       setState({ result: null, loading: false, error: null, supported })
       return
     }
 
-    let cancelled = false
+    const requestId = ++requestGenRef.current
     const controller = new AbortController()
     // Keep the previous per-class rows visible while refreshing (no blank legend flash).
     setState(prev => ({ ...prev, loading: true, error: null, supported: true }))
@@ -76,17 +92,26 @@ export function useLayerClassAreas({
       signal: controller.signal,
     })
       .then(result => {
-        if (cancelled) return
+        if (requestId !== requestGenRef.current) return
+        if (controller.signal.aborted) return
         setState({ result, loading: false, error: null, supported: true })
       })
       .catch((err: unknown) => {
-        if (cancelled || controller.signal.aborted) return
+        if (requestId !== requestGenRef.current) return
+        if (controller.signal.aborted || isClassAreaAbortError(err)) {
+          // Aborted refresh — keep prior areas, drop the busy state.
+          setState(prev => ({ ...prev, loading: false }))
+          return
+        }
         const message = err instanceof Error ? err.message : 'Failed to compute class areas'
         setState(prev => ({ ...prev, loading: false, error: message, supported: true }))
       })
 
     return () => {
-      cancelled = true
+      // Invalidate this request so a late resolve/reject cannot wipe the next fetch.
+      if (requestGenRef.current === requestId) {
+        requestGenRef.current += 1
+      }
       controller.abort()
     }
     // geomKey + dateKey + layerId capture all inputs that change the request.

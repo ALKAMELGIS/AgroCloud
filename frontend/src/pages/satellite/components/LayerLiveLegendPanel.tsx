@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { buildLayerLiveLegendList, type LayerLiveLegendSpec } from '../../../lib/layerLiveLegendCatalog'
+import { applyEtLegendClassEdges, buildLayerLiveLegendList, type LayerLiveLegendSpec } from '../../../lib/layerLiveLegendCatalog'
 import { resolveRemoteSensingLayerScientificName, type RemoteSensingLayerSelectGroup } from '../../../lib/agroCompositeIndices'
 import {
   isAnalyticalResolutionLayer,
@@ -217,20 +217,29 @@ export function LayerLiveLegendActiveCard({
   const providerLabel = `Sentinel Hub · ${SENTINEL2_NATIVE_GSD_M} m`
   const seriesLabel = seriesStart && seriesEnd ? `${seriesStart} → ${seriesEnd}` : null
   const classAreaRows = areaResult?.rows
+  const displaySpec = useMemo(() => {
+    if (String(activeLayerId || '').toUpperCase() !== 'ET') return spec
+    return applyEtLegendClassEdges(spec, areaResult?.classEdges, areaResult?.classificationMode)
+  }, [spec, activeLayerId, areaResult?.classEdges, areaResult?.classificationMode])
 
   return (
     <section
       className={`si-layer-live-legend__section is-active si-lll-scientific${variant === 'float' ? ' si-layer-live-legend__section--float' : ''}`}
-      aria-label={`Active layer: ${spec.title}`}
+      aria-label={`Active layer: ${displaySpec.title}`}
     >
       <header className="si-layer-live-legend__header">
         <div className="si-lll-titlebar">
-          <h3 className="si-layer-live-legend__title">{spec.title}</h3>
+          <h3 className="si-layer-live-legend__title">{displaySpec.title}</h3>
           <div className="si-lll-badges">
             <span className="si-layer-live-legend__badge">Active</span>
             {showAre ? (
               <span className="si-layer-live-legend__are-badge" title={areMeta.disclaimer}>
                 {areMeta.badgeShort}
+              </span>
+            ) : null}
+            {areaResult?.classificationMode === 'percentile' ? (
+              <span className="si-layer-live-legend__badge" title="Classes are AOI percentiles for this scene">
+                Deciles
               </span>
             ) : null}
           </div>
@@ -258,11 +267,11 @@ export function LayerLiveLegendActiveCard({
           </div>
         </dl>
 
-        {spec.subtitle ? <p className="si-layer-live-legend__subtitle">{spec.subtitle}</p> : null}
+        {displaySpec.subtitle ? <p className="si-layer-live-legend__subtitle">{displaySpec.subtitle}</p> : null}
         {showAre ? <p className="si-layer-live-legend__are-disclaimer">{areMeta.badgeLong}</p> : null}
         {hasAoi && areaSupported ? (
           <div className="si-layer-live-legend__area-summary" aria-live="polite">
-            {areaError ? (
+            {areaError && !/abort/i.test(areaError) ? (
               <span className="si-layer-live-legend__area-status is-error" title={areaError}>
                 <i className="fa-solid fa-triangle-exclamation" aria-hidden /> Area unavailable
               </span>
@@ -282,7 +291,7 @@ export function LayerLiveLegendActiveCard({
           </div>
         ) : null}
       </header>
-      <LayerLiveLegendBody spec={spec} classAreas={classAreaRows} />
+      <LayerLiveLegendBody spec={displaySpec} classAreas={classAreaRows} />
     </section>
   )
 }

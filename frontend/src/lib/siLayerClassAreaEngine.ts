@@ -15,6 +15,14 @@ import {
 } from './agroCompositeIndices'
 import { resolveAgroCompositeTenClassRamp } from './agroCompositeLayerRamps'
 import {
+  buildEtIndexExpr,
+  etFineHistogramEdges,
+  etPercentileClassEdgesFromFineBins,
+  etSeasonFactor,
+  rebinFineHistogramToClassCounts,
+  SENTINEL_ET_10_CLASS_BREAKS,
+} from './etIndex'
+import {
   SENTINEL_NDMI_10_CLASS_BREAKS,
   SENTINEL_NDVI_10_CLASS_BREAKS,
   SENTINEL_NDWI_10_CLASS_BREAKS,
@@ -67,6 +75,13 @@ export type LayerClassAreaResult = {
   analyzedAreaM2: number
   sampleCount: number
   sceneDate: string
+  /**
+   * Class break edges used for this result (length = classes + 1).
+   * For ET this is the AOI percentile ramp when available.
+   */
+  classEdges?: number[]
+  /** Classification mode: fixed catalog breaks vs AOI-relative percentiles. */
+  classificationMode?: 'fixed' | 'percentile'
 }
 
 const CORE_INDEX_EXPR: Record<string, string> = {
@@ -74,6 +89,8 @@ const CORE_INDEX_EXPR: Record<string, string> = {
   NDWI: 'ndwi',
   NDMI: 'ndmi',
   SAVI: 'savi',
+  // Placeholder — ET expression is rebuilt per scene date (season factor).
+  ET: buildEtIndexExpr(0.85),
 }
 
 /** Numeric class edges + index expression for a layer, or null if unsupported. */
@@ -94,6 +111,10 @@ export function resolveLayerClassBreakdown(layerId: string): LayerClassBreakdown
   if (u === 'NDVI') return { edges: [-1, ...SENTINEL_NDVI_10_CLASS_BREAKS, 1], indexExpr: expr }
   if (u === 'NDWI') return { edges: [-1, ...SENTINEL_NDWI_10_CLASS_BREAKS, 1], indexExpr: expr }
   if (u === 'NDMI') return { edges: [-0.8, ...SENTINEL_NDMI_10_CLASS_BREAKS, 0.8], indexExpr: expr }
+  if (u === 'ET') {
+    // Absolute fallback edges; AOI percentile edges replace these after the fine histogram pass.
+    return { edges: [0, ...SENTINEL_ET_10_CLASS_BREAKS, 10], indexExpr: buildEtIndexExpr(0.85) }
+  }
   // SAVI — equal-width 10 classes over its display range.
   if (u === 'SAVI') {
     const min = -0.5
@@ -113,7 +134,16 @@ export function layerSupportsClassArea(layerId: string): boolean {
 /** WMS-fallback classification marker for plain index value histograms. */
 function indexValueHistogramMarker(layerId: string, edges: number[]): string | null {
   const u = String(layerId || '').trim().toUpperCase()
-  const index = u === 'NDWI' ? 'ndwi' : u === 'NDVI' ? 'ndvi' : u === 'SAVI' ? 'savi' : null
+  const index =
+    u === 'NDWI'
+      ? 'ndwi'
+      : u === 'NDVI'
+        ? 'ndvi'
+        : u === 'SAVI'
+          ? 'savi'
+          : u === 'ET'
+            ? 'et'
+            : null
   if (!index) return null
   return JSON.stringify({ mode: 'value', index, edges, outputId: 'idx' })
 }
@@ -241,10 +271,10 @@ export type FetchLayerClassAreasOptions = {
 }
 
 /**
- * End-to-end: resolve the layer's FIXED class breaks (from each index's code
- * ramp) → fetch the index histogram inside the AOI → per-class areas aligned to
- * those fixed classes. No dynamic/adaptive ramp generation — the colors and
- * ranges are exactly the ones defined in the index code.
+ * End-to-end: resolve class breaks → fetch index histogram inside the AOI →
+ * per-class areas. Most layers use FIXED catalog breaks. ET uses a fine
+ * histogram then AOI-relative percentiles (deciles) so Very Low…Exceptional
+ * each get ~10% of the AOI distribution for that scene date.
  */
 export async function fetchLayerClassAreas(
   options: FetchLayerClassAreasOptions,
@@ -261,25 +291,40 @@ export async function fetchLayerClassAreas(
   const sceneDate = String(options.sceneDate || '').trim().slice(0, 10)
   if (!sceneDate) return null
 
-  const classCount = breakdown.edges.length - 1
+  if (options.signal?.aborted) {
+    throw new DOMException('The operation was aborted.', 'AbortError')
+  }
+
+  const layerU = String(options.layerId || '').trim().toUpperCase()
+  const isEt = layerU === 'ET'
+  const season = isEt ? etSeasonFactor(sceneDate) : 0.85
+  const indexExpr = isEt ? buildEtIndexExpr(season) : breakdown.indexExpr
+  const classCount = isEt ? 10 : breakdown.edges.length - 1
+  const histEdges = isEt ? etFineHistogramEdges(15, 0.25) : breakdown.edges
   const resolutionMeters = options.resolutionMeters ?? 10
   const pixelAreaM2 = pixelAreaM2ForResolution(resolutionMeters)
-  const marker = indexValueHistogramMarker(options.layerId, breakdown.edges)
+  const marker = indexValueHistogramMarker(options.layerId, isEt ? histEdges : breakdown.edges)
 
-  const runHistogram = (opts: { relaxed: boolean; maxCloudCoverage?: number; searchWindowDays?: number }) =>
+  const runHistogram = (opts: {
+    relaxed: boolean
+    maxCloudCoverage?: number
+    searchWindowDays?: number
+    edges: number[]
+    expr: string
+  }) =>
     fetchSentinelIndexClassHistogramForSceneDate({
       geometry,
       sceneDate,
-      evalscript: buildLayerIndexEvalscript(breakdown.indexExpr, marker, { relaxed: opts.relaxed }),
+      evalscript: buildLayerIndexEvalscript(opts.expr, marker, { relaxed: opts.relaxed }),
       outputId: 'idx',
-      binEdges: breakdown.edges,
+      binEdges: opts.edges,
       maxCloudCoverage: opts.maxCloudCoverage,
       resolutionMeters,
       searchWindowDays: opts.searchWindowDays,
       signal: options.signal,
     })
 
-  const finishPass = (
+  const finishFixed = (
     histogram: SentinelHubGenericHistogram | null,
   ): { histogram: SentinelHubGenericHistogram; computed: ReturnType<typeof computeClassAreaRows> } | null => {
     if (!histogram) return null
@@ -287,45 +332,128 @@ export async function fetchLayerClassAreas(
     return computed.totalCount > 0 ? { histogram, computed } : null
   }
 
-  // Fast path: one widened request (±12 days, relaxed cloud mask). The server-side
-  // WMS fallback already searches nearby scenes — avoid serial passes that block the legend.
-  let hit = finishPass(
-    await runHistogram({
-      relaxed: true,
-      maxCloudCoverage: Math.max(options.maxCloudCoverage ?? 0, 95),
-      searchWindowDays: 12,
-    }),
-  )
+  const finishEtPercentile = (
+    histogram: SentinelHubGenericHistogram | null,
+  ): {
+    histogram: SentinelHubGenericHistogram
+    computed: ReturnType<typeof computeClassAreaRows>
+    edges: number[]
+    mode: 'fixed' | 'percentile'
+  } | null => {
+    if (!histogram || !histogram.bins.length) return null
+    const pctEdges = etPercentileClassEdgesFromFineBins(histogram.bins, 10)
+    const edges = pctEdges ?? [0, ...SENTINEL_ET_10_CLASS_BREAKS, 10]
+    const mode: 'fixed' | 'percentile' = pctEdges ? 'percentile' : 'fixed'
+    const finalCounts = rebinFineHistogramToClassCounts(histogram.bins, edges)
 
-  // Only if the fast pass returned zero pixels, retry the exact scene day once.
-  if (!hit) {
-    hit = finishPass(
-      await runHistogram({ relaxed: false, maxCloudCoverage: options.maxCloudCoverage }),
-    )
+    const totalCount = finalCounts.reduce((s, c) => s + c, 0)
+    if (totalCount <= 0) return null
+    const px = pixelAreaM2 > 0 ? pixelAreaM2 : SENTINEL_STATS_PIXEL_AREA_M2
+    const rows: LayerClassAreaRow[] = finalCounts.map((count, classIndex) => {
+      const areaM2 = count * px
+      return {
+        classIndex,
+        count,
+        areaM2,
+        areaHa: areaM2 / 10_000,
+        areaKm2: areaM2 / 1_000_000,
+        pctOfAoi: totalCount > 0 ? (count / totalCount) * 100 : 0,
+      }
+    })
+    return {
+      histogram,
+      edges,
+      mode,
+      computed: {
+        rows,
+        analyzedAreaM2: totalCount * px,
+        sampleCount: histogram.sampleCount,
+        totalCount,
+      },
+    }
   }
 
-  if (!hit) {
-    const histogram = await runHistogram({
+  // Fast path: one widened request (±12 days, relaxed cloud mask).
+  let etHit:
+    | {
+        histogram: SentinelHubGenericHistogram
+        computed: ReturnType<typeof computeClassAreaRows>
+        edges: number[]
+        mode: 'fixed' | 'percentile'
+      }
+    | null = null
+  let fixedHit:
+    | { histogram: SentinelHubGenericHistogram; computed: ReturnType<typeof computeClassAreaRows> }
+    | null = null
+
+  const first = await runHistogram({
+    relaxed: true,
+    maxCloudCoverage: Math.max(options.maxCloudCoverage ?? 0, 95),
+    searchWindowDays: 12,
+    edges: histEdges,
+    expr: indexExpr,
+  })
+
+  if (isEt) {
+    etHit = finishEtPercentile(first)
+  } else {
+    fixedHit = finishFixed(first)
+  }
+
+  if (options.signal?.aborted) {
+    throw new DOMException('The operation was aborted.', 'AbortError')
+  }
+
+  if (!(isEt ? etHit : fixedHit)) {
+    const second = await runHistogram({
+      relaxed: false,
+      maxCloudCoverage: options.maxCloudCoverage,
+      edges: histEdges,
+      expr: indexExpr,
+    })
+    if (isEt) etHit = finishEtPercentile(second)
+    else fixedHit = finishFixed(second)
+  }
+
+  if (options.signal?.aborted) {
+    throw new DOMException('The operation was aborted.', 'AbortError')
+  }
+
+  if (!(isEt ? etHit : fixedHit)) {
+    const third = await runHistogram({
       relaxed: true,
       maxCloudCoverage: 100,
       searchWindowDays: 12,
+      edges: histEdges,
+      expr: indexExpr,
     })
-    if (!histogram) return null
-    hit = { histogram, computed: computeClassAreaRows(histogram, classCount, pixelAreaM2) }
+    if (!third) return null
+    if (isEt) {
+      etHit = finishEtPercentile(third)
+      if (!etHit) {
+        etHit = {
+          histogram: third,
+          edges: [0, ...SENTINEL_ET_10_CLASS_BREAKS, 10],
+          mode: 'fixed',
+          computed: computeClassAreaRows(third, 10, pixelAreaM2),
+        }
+      }
+    } else {
+      fixedHit = { histogram: third, computed: computeClassAreaRows(third, classCount, pixelAreaM2) }
+    }
   }
 
-  const histogram = hit.histogram
-  const computed = hit.computed
-
+  const histogram = isEt ? etHit!.histogram : fixedHit!.histogram
+  const computed = isEt ? etHit!.computed : fixedHit!.computed
   const aoiAreaM2 = geodesicAreaM2(geometry)
   return {
     rows: computed.rows,
     aoiAreaM2,
     analyzedAreaM2: computed.analyzedAreaM2,
     sampleCount: computed.sampleCount,
-    // The engine may resolve a nearby scene when the exact day has no usable
-    // acquisition — report the actual scene date that produced the pixels.
     sceneDate: histogram.date || sceneDate,
+    classEdges: isEt ? etHit!.edges : breakdown.edges,
+    classificationMode: isEt ? etHit!.mode : 'fixed',
   }
 }
 

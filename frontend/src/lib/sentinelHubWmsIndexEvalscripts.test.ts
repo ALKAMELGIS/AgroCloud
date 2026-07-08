@@ -66,8 +66,11 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
 
   it('SAVI and NDMI profiles are inferred from layer names', () => {
     expect(inferWmsEvalProfile('SAVI')).toBe('savi')
+    expect(inferWmsEvalProfile('ET')).toBe('et')
+    expect(inferWmsEvalProfile('Evapotranspiration')).toBe('et')
     expect(inferWmsEvalProfile('Moisture index')).toBe('ndmi')
-    expect(inferWmsEvalProfile('NDSI')).toBe('ndsi')
+    // NDSI is registered as an agro composite (soil/salinity family).
+    expect(inferWmsEvalProfile('NDSI')).toBe('agro_composite')
     expect(inferWmsEvalProfile('MNDWI')).toBe('mndwi')
   })
 

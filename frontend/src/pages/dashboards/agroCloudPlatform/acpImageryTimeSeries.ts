@@ -9,6 +9,7 @@ import {
   resolveAgroStaticLayerIdForDelta,
   type RemoteSensingLayerSelectGroup,
 } from '../../../lib/agroCompositeIndices'
+import { estimateEtMmDayFromMoisture } from '../../../lib/etIndex'
 import { estimateSaviFromNdvi } from '../../../lib/siCropAlertDchasBeacon'
 
 export type ImageryChartType = 'line' | 'area' | 'bar' | 'pie' | 'scatter'
@@ -87,6 +88,21 @@ function evaluateStaticLayerDailyValue(layerId: string, row: SentinelHubDailyInd
       return core.savi
     case 'EVI':
       return row.evi != null && Number.isFinite(row.evi) ? row.evi : null
+    case 'ET': {
+      const ndmi = row.ndmi != null && Number.isFinite(row.ndmi) ? row.ndmi : null
+      let ndwi = row.ndwi != null && Number.isFinite(row.ndwi) ? row.ndwi : null
+      if (ndmi == null) return null
+      if (ndwi == null) {
+        // Same estimate as timeSeriesReportExecutive.estimateNdwiFromNdmi
+        ndwi = Math.max(-0.2, Math.min(0.45, ndmi * 0.85))
+      }
+      if (!Number.isFinite(ndwi)) return null
+      const ndvi = row.ndvi != null && Number.isFinite(row.ndvi) ? row.ndvi : null
+      return estimateEtMmDayFromMoisture(ndmi, ndwi, {
+        sceneDate: row.date,
+        ndvi,
+      })
+    }
     case 'CHAS':
     case 'CHAS_ALERT': {
       const chas = computeChas(chasInputsFromDaily(row))

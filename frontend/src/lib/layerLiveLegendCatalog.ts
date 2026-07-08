@@ -25,6 +25,12 @@ import {
   STRESS_ZONE_TIER_ORDER,
 } from './siStressZonesMapping'
 import {
+  SENTINEL_ET_10_CLASS_BREAKS,
+  SENTINEL_ET_10_CLASS_COLORS,
+  SENTINEL_ET_10_CLASS_LABELS,
+  SENTINEL_ET_RAMP,
+} from './etIndex'
+import {
   SENTINEL_EVI_RAMP,
   SENTINEL_GNDVI_RAMP,
   SENTINEL_MNDWI_RAMP,
@@ -295,6 +301,59 @@ function buildNdmiLegend(): LayerLiveLegendSpec {
   }
 }
 
+function buildEtLegend(): LayerLiveLegendSpec {
+  return {
+    id: 'et',
+    title: 'ET',
+    subtitle: 'Evapotranspiration (mm/day) — AOI relative 10-class · Low → High demand',
+    kind: 'discrete',
+    valueMin: 0,
+    valueMax: 10,
+    scaleLabels: { low: 'Low ET', mid: 'Moderate ET', high: 'High ET' },
+    gradientCss: rampToGradientCss(SENTINEL_ET_RAMP),
+    classes: buildClassesFromBreaks(
+      SENTINEL_ET_10_CLASS_BREAKS,
+      SENTINEL_ET_10_CLASS_COLORS,
+      SENTINEL_ET_10_CLASS_LABELS,
+    ),
+    note:
+      'ET = MoistureDemand × Season × Kc × 10 mm/day · Moisture = 1 − (0.6×NDMI + 0.4×NDWI) · Kc from NDVI · Classes = AOI percentiles (deciles) per scene',
+  }
+}
+
+/** Remap ET legend class range labels to AOI percentile edges (length 11). */
+export function applyEtLegendClassEdges(
+  spec: LayerLiveLegendSpec,
+  edges: number[] | null | undefined,
+  mode?: 'fixed' | 'percentile' | null,
+): LayerLiveLegendSpec {
+  if (!edges || edges.length < 2) return spec
+  const interior = edges.length >= 11 ? edges.slice(1, -1) : edges.slice(1, edges.length - 1)
+  if (interior.length < 1) return spec
+  const classes = buildClassesFromBreaks(
+    interior,
+    SENTINEL_ET_10_CLASS_COLORS,
+    SENTINEL_ET_10_CLASS_LABELS,
+  )
+  const lo = edges[0]!
+  const hi = edges[edges.length - 1]!
+  return {
+    ...spec,
+    valueMin: lo,
+    valueMax: hi,
+    classes,
+    scaleLabels: {
+      low: mode === 'percentile' ? 'P0–10%' : 'Low ET',
+      mid: mode === 'percentile' ? 'P40–50%' : 'Moderate ET',
+      high: mode === 'percentile' ? 'P90–100%' : 'High ET',
+    },
+    note:
+      mode === 'percentile'
+        ? `AOI percentile classes for this scene · ET = Moisture × Season × Kc × 10 mm/day · range ${lo.toFixed(2)}–${hi.toFixed(2)} mm/day`
+        : spec.note,
+  }
+}
+
 function buildIndexRampLegend(
   id: string,
   title: string,
@@ -405,6 +464,7 @@ const LEGEND_BY_PROFILE: Record<string, () => LayerLiveLegendSpec> = {
   ndvi: buildNdviLegend,
   ndwi: buildNdwiLegend,
   ndmi: buildNdmiLegend,
+  et: buildEtLegend,
   mndwi: () =>
     buildIndexRampLegend('mndwi', 'MNDWI', 'Modified water index', SENTINEL_MNDWI_RAMP, 10, {
       low: 'Dry land',

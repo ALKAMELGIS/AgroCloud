@@ -107,8 +107,34 @@ function samplePayload(): TimeSeriesReportPayload {
         aoiAreaM2: 968000,
         dominantClass: 'Moderate vigor',
         dominantTier: 'moderate',
-        classes: [],
+        classes: [
+          { tier: 'healthy', label: 'Healthy vegetation', color: '#22c55e', pct: 40, areaHa: 38.7, areaM2: 387000 },
+          { tier: 'moderate', label: 'Moderate vigor', color: '#eab308', pct: 34, areaHa: 32.9, areaM2: 329000 },
+          { tier: 'stress', label: 'Stressed vegetation', color: '#f97316', pct: 18, areaHa: 17.4, areaM2: 174000 },
+          { tier: 'critical', label: 'Bare / no cover', color: '#ef4444', pct: 8, areaHa: 7.7, areaM2: 77000 },
+        ],
         source: 'mean-estimate',
+        trend: 'Stable',
+      },
+    ],
+    estimatedWaterLossTimeline: [
+      {
+        date: '2026-07-05',
+        periodLabel: '2026-W28',
+        moistureScore: 0.16,
+        waterLossIndexPct: 84,
+        etMmDay: 5.04,
+        waterLossM3Day: 4878.7,
+        waterLossM3HaDay: 50.4,
+        ndmi: 0.12,
+        ndwi: 0.1,
+        ndwiEstimated: false,
+        vegetationCoveragePct: 74,
+        vegetationAreaHa: 71.7,
+        aoiAreaHa: 96.8,
+        waterStressLevel: 'Critical',
+        source: 'satellite-index',
+        highWaterLoss: true,
         trend: 'Stable',
       },
     ],
@@ -185,8 +211,32 @@ describe('timeSeriesReport', () => {
       'Analytics Summary',
       'Time Series Data',
       'Vegetation Coverage Timeline',
+      'Estimated Water Loss Timeline',
       'Map Snapshots',
       'Analysis & Recommendations',
     ])
+
+    const vegSheet = wb.getWorksheet('Vegetation Coverage Timeline')!
+    const header = vegSheet.getRow(4)
+    expect(header.getCell(8).value).toBe('Class distribution (%)')
+    expect(header.getCell(9).value).toBe('Healthy (ha)')
+    expect(header.getCell(10).value).toBe('Healthy (m²)')
+    expect(header.getCell(16).value).toBe('Bare (m²)')
+
+    const dataRow = vegSheet.getRow(5)
+    expect(dataRow.getCell(9).value).toBe(38.7)
+    expect(dataRow.getCell(10).value).toBe(387000)
+    expect(dataRow.getCell(15).value).toBe(7.7)
+    expect(dataRow.getCell(16).value).toBe(77000)
+
+    const waterSheet = wb.getWorksheet('Estimated Water Loss Timeline')!
+    const waterHeader = waterSheet.getRow(4)
+    expect(waterHeader.getCell(1).value).toBe('Acquisition Date')
+    expect(waterHeader.getCell(2).value).toBe('Estimated Water Loss Index (%)')
+    expect(waterHeader.getCell(3).value).toBe('Estimated Water Loss (m³/day)')
+    expect(waterHeader.getCell(9).value).toBe('Water Stress Level')
+    const waterRow = waterSheet.getRow(5)
+    expect(waterRow.getCell(2).value).toBe(84)
+    expect(waterRow.getCell(9).value).toBe('Critical')
   })
 })

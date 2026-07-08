@@ -135,6 +135,19 @@ const NDMI_PROFILE: IndexThresholdProfile = {
   ],
 }
 
+/** ET invertHealth: higher ET demand ↔ higher irrigation need / stress for dryland irrigation monitoring. */
+const ET_PROFILE: IndexThresholdProfile = {
+  id: 'ET',
+  label: 'ET',
+  invertHealth: true,
+  tiers: [
+    { tier: 'healthy', min: 0, max: 3, label: 'Low ET demand', color: '#22c55e' },
+    { tier: 'moderate', min: 3, max: 5.5, label: 'Moderate ET', color: '#eab308' },
+    { tier: 'stress', min: 5.5, max: 7.5, label: 'High ET demand', color: '#f97316' },
+    { tier: 'critical', min: 7.5, max: 10.5, label: 'Exceptional ET demand', color: '#ef4444' },
+  ],
+}
+
 const NDRE_PROFILE: IndexThresholdProfile = {
   id: 'NDRE',
   label: 'NDRE',
@@ -177,6 +190,7 @@ const PROFILE_BY_ID: Record<string, IndexThresholdProfile> = {
   GNDVI: GNDVI_PROFILE,
   NDWI: NDWI_PROFILE,
   NDMI: NDMI_PROFILE,
+  ET: ET_PROFILE,
   NDRE: NDRE_PROFILE,
   NBR: NBR_PROFILE,
   CI_RE: NDRE_PROFILE,
@@ -351,6 +365,7 @@ function buildSummaryLine(
   mean: number,
   meanBand: IndexTierBand,
   sceneDate: string,
+  totalAreaHa = 0,
 ): string {
   const v = mean.toFixed(2)
   const id = profile.id
@@ -362,6 +377,14 @@ function buildSummaryLine(
   }
   if (id === 'NDMI') {
     return `Canopy moisture is ${meanBand.label.toLowerCase()} (mean NDMI ${v}) on ${sceneDate}.`
+  }
+  if (id === 'ET') {
+    const lossHaDay = (mean * 10).toFixed(1)
+    const lossDay =
+      totalAreaHa > 0 ? (mean * totalAreaHa * 10).toFixed(0) : null
+    return lossDay != null
+      ? `Mean ET: ${v} mm/day (${meanBand.label}) · Water loss ${lossDay} m³/day (${lossHaDay} m³/ha/day) · ${sceneDate}.`
+      : `Mean ET: ${v} mm/day (${meanBand.label}) · ${lossHaDay} m³/ha/day · ${sceneDate}.`
   }
   if (id === 'SAVI' || id === 'MSAVI') {
     return `Mean ${profile.label}: ${v} — ${meanBand.label.toLowerCase()} with limited soil influence.`
@@ -524,7 +547,7 @@ export function buildImageryIndexInterpretation(
   }
 
   const resolvedDate = input.histogram?.sceneDate ?? row?.date ?? sceneDate
-  const summaryLine = buildSummaryLine(profile, mean, meanBand, resolvedDate)
+  const summaryLine = buildSummaryLine(profile, mean, meanBand, resolvedDate, totalAreaHa)
   const coverageLine = buildCoverageLine(profile, coverage, totalAreaHa)
   const actionsLine = actions
     .slice(0, 3)

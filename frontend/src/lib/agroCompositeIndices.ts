@@ -27,7 +27,7 @@ export const AGRO_DERIVED_LAYER_DEFS: readonly AgroCompositeIndexDef[] = [
   },
 ]
 
-export const AGRO_CORE_INTERPRETATION_LAYER_IDS = ['NDVI', 'NDMI', 'NDWI', 'SAVI'] as const
+export const AGRO_CORE_INTERPRETATION_LAYER_IDS = ['NDVI', 'NDMI', 'NDWI', 'SAVI', 'ET'] as const
 
 export type AgroCoreInterpretationLayerId = (typeof AGRO_CORE_INTERPRETATION_LAYER_IDS)[number]
 
@@ -37,6 +37,7 @@ export const AGRO_CORE_LAYER_SCIENTIFIC_NAMES: Record<AgroCoreInterpretationLaye
   NDMI: 'Normalized Difference Moisture Index',
   NDWI: 'Normalized Difference Water Index',
   SAVI: 'Soil-Adjusted Vegetation Index',
+  ET: 'Evapotranspiration (moisture-proxy mm/day)',
 }
 
 export type AgroCompositeIndexDef = {
@@ -384,7 +385,10 @@ export function resolveAgroCompositeExpr(layerId: string, corePrefix = ''): stri
 
 /** Custom WMS layer entries injected after GetCapabilities parse. */
 export function buildAgroCloudCustomWmsLayerEntries(): SentinelHubWmsLayerInfo[] {
-  const out: SentinelHubWmsLayerInfo[] = [{ name: 'SAVI', title: 'SAVI' }]
+  const out: SentinelHubWmsLayerInfo[] = [
+    { name: 'SAVI', title: 'SAVI' },
+    { name: 'ET', title: 'Evapotranspiration' },
+  ]
   const seen = new Set(out.map(l => l.name.toUpperCase()))
   for (const id of ALL_COMPOSITE_IDS) {
     if (seen.has(id)) continue

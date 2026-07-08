@@ -3,6 +3,7 @@ export const ACP_WMS_LAYER_CATALOG = [
   { id: 'NDMI', letter: 'N', label: 'NDMI' },
   { id: 'NDWI', letter: 'N', label: 'NDWI' },
   { id: 'EVI', letter: 'E', label: 'EVI' },
+  { id: 'ET', letter: 'E', label: 'ET' },
   { id: 'CHAS', letter: 'C', label: 'CHAS' },
   { id: 'CHAS_ALERT', letter: 'A', label: 'Alert' },
 ] as const

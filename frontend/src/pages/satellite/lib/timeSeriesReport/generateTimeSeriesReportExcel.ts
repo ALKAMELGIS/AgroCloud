@@ -4,6 +4,11 @@ import { renderExcelTrendCharts } from './timeSeriesExcelChartRenderer'
 import { buildMapSnapshotsSheet } from './timeSeriesExcelMapSnapshots'
 import type { TimeSeriesReportPayload } from './timeSeriesReportTypes'
 import {
+  latestEstimatedWaterLossSummary,
+  type EstimatedWaterLossPoint,
+  WATER_LOSS_INDEX_ET_REF_MM,
+} from './estimatedWaterLossTimeline'
+import {
   latestVegetationCoverageSummary,
   type VegetationCoveragePoint,
 } from './vegetationCoverageTimeline'
@@ -31,6 +36,36 @@ function fmtHa(ha: number): string {
 function fmtHaNum(ha: number): number | string {
   if (!Number.isFinite(ha) || ha <= 0) return '—'
   return Number(ha.toFixed(ha >= 100 ? 1 : 2))
+}
+
+function fmtSqMNum(m2: number): number | string {
+  if (!Number.isFinite(m2) || m2 <= 0) return '—'
+  return Math.round(m2)
+}
+
+type VegClassTier = 'healthy' | 'moderate' | 'stress' | 'critical'
+
+function classForTier(
+  classes: VegetationCoveragePoint['classes'],
+  tier: VegClassTier,
+): VegetationCoveragePoint['classes'][number] | undefined {
+  return classes.find(c => c.tier === tier)
+}
+
+function formatClassDistributionPct(classes: VegetationCoveragePoint['classes']): string {
+  const text = classes
+    .filter(c => c.pct > 0.5)
+    .map(c => `${c.label} ${c.pct.toFixed(0)}%`)
+    .join(' · ')
+  return text || '—'
+}
+
+function vegClassAreaColumns(classes: VegetationCoveragePoint['classes']): Array<number | string> {
+  const tiers: VegClassTier[] = ['healthy', 'moderate', 'stress', 'critical']
+  return tiers.flatMap(tier => {
+    const c = classForTier(classes, tier)
+    return [fmtHaNum(c?.areaHa ?? 0), fmtSqMNum(c?.areaM2 ?? 0)]
+  })
 }
 
 function stdDev(nums: number[]): number | null {
@@ -279,6 +314,55 @@ function buildDashboardSheet(wb: ExcelJS.Workbook, payload: TimeSeriesReportPayl
     r.getCell(2).numFmt = '0.0"%"'
     row++
   })
+
+  row++
+  const waterLatest = latestEstimatedWaterLossSummary(payload.estimatedWaterLossTimeline ?? [])
+  ws.getCell(row, 1).value = 'Estimated Water Loss'
+  styleSection(ws.getCell(row, 1))
+  ws.mergeCells(row, 1, row, 5)
+  row++
+  ws.getCell(row, 1).value =
+    'Per-date water loss for irrigation management (see Estimated Water Loss Timeline). Summary below = latest scene. ET path when available; otherwise Moisture Score = 0.6×NDMI + 0.4×NDWI.'
+  ws.getCell(row, 1).font = { italic: true, size: 8, color: { argb: MUTED } }
+  ws.mergeCells(row, 1, row, 5)
+  row++
+  if (waterLatest) {
+    const waterHdr = ws.getRow(row)
+    waterHdr.values = [
+      'Acquisition Date',
+      'Water Loss Index %',
+      'Loss (m³/day)',
+      'Loss (m³/ha/day)',
+      'Stress Level',
+      'Source',
+    ]
+    styleTableHeader(waterHdr)
+    row++
+    const waterRow = ws.getRow(row)
+    waterRow.values = [
+      waterLatest.date,
+      Number(waterLatest.waterLossIndexPct.toFixed(1)),
+      Number(waterLatest.waterLossM3Day.toFixed(1)),
+      Number(waterLatest.waterLossM3HaDay.toFixed(2)),
+      waterLatest.waterStressLevel,
+      waterLatest.source === 'et' ? 'Evapotranspiration (ET)' : 'Satellite index estimate',
+    ]
+    styleDataRow(waterRow, false)
+    if (waterLatest.highWaterLoss) {
+      waterRow.eachCell(cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } }
+        cell.font = { ...(cell.font ?? {}), bold: true, color: { argb: 'FF9A3412' } }
+      })
+    }
+    waterRow.getCell(2).numFmt = '0.0"%"'
+    row++
+  } else {
+    ws.getCell(row, 1).value =
+      'No estimated water loss rows — ensure AOI is selected and NDMI/NDWI (or ET) are available for acquisition dates.'
+    ws.getCell(row, 1).font = { italic: true, size: 9, color: { argb: MUTED } }
+    ws.mergeCells(row, 1, row, 5)
+    row++
+  }
 
   row++
   const layerIds = layers.map(s => s.layerId.toUpperCase())
@@ -555,6 +639,7 @@ function buildVegetationCoverageTimelineSheet(
   const ws = wb.addWorksheet('Vegetation Coverage Timeline', {
     views: [{ showGridLines: true }],
   })
+  const lastCol = 16
   ws.columns = [
     { width: 14 },
     { width: 12 },
@@ -564,16 +649,24 @@ function buildVegetationCoverageTimelineSheet(
     { width: 18 },
     { width: 12 },
     { width: 28 },
+    { width: 12 },
+    { width: 14 },
+    { width: 12 },
+    { width: 14 },
+    { width: 12 },
+    { width: 14 },
+    { width: 12 },
+    { width: 14 },
   ]
 
   ws.getCell('A1').value = 'Vegetation Coverage Timeline — Per Acquisition Date'
   styleTitle(ws.getCell('A1'))
-  ws.mergeCells('A1:H1')
+  ws.mergeCells(1, 1, 1, lastCol)
 
   ws.getCell('A2').value =
     `${payload.location.fieldName} · AOI ${fmtHa(payload.location.areaHa)} · NDVI classification (Healthy / Moderate / Stress = Vegetation; Critical = Bare)`
   ws.getCell('A2').font = { size: 9, color: { argb: MUTED } }
-  ws.mergeCells('A2:H2')
+  ws.mergeCells(2, 1, 2, lastCol)
 
   const header = ws.getRow(4)
   header.values = [
@@ -584,7 +677,15 @@ function buildVegetationCoverageTimelineSheet(
     'AOI Area (ha)',
     'Dominant Class',
     'Trend',
-    'Class distribution',
+    'Class distribution (%)',
+    'Healthy (ha)',
+    'Healthy (m²)',
+    'Moderate (ha)',
+    'Moderate (m²)',
+    'Stressed (ha)',
+    'Stressed (m²)',
+    'Bare (ha)',
+    'Bare (m²)',
   ]
   styleTableHeader(header)
 
@@ -592,16 +693,12 @@ function buildVegetationCoverageTimelineSheet(
     ws.getCell(5, 1).value =
       'No per-date coverage rows — ensure an AOI is selected and NDVI observations exist in the analysis period.'
     ws.getCell(5, 1).font = { italic: true, size: 9, color: { argb: MUTED } }
-    ws.mergeCells(5, 1, 5, 8)
+    ws.mergeCells(5, 1, 5, lastCol)
     return
   }
 
   timeline.forEach((p, i) => {
     const r = ws.getRow(5 + i)
-    const classDist = p.classes
-      .filter(c => c.pct > 0.5)
-      .map(c => `${c.label} ${c.pct.toFixed(0)}%`)
-      .join(' · ')
     r.values = [
       p.date,
       p.ndviMean != null ? fmtNum(p.ndviMean, 4) : '—',
@@ -610,7 +707,8 @@ function buildVegetationCoverageTimelineSheet(
       Number(p.aoiAreaHa.toFixed(p.aoiAreaHa >= 100 ? 1 : 2)),
       p.dominantClass,
       p.trend,
-      classDist || '—',
+      formatClassDistributionPct(p.classes),
+      ...vegClassAreaColumns(p.classes),
     ]
     styleDataRow(r, i % 2 === 1)
     r.getCell(3).numFmt = '0.0"%"'
@@ -618,9 +716,104 @@ function buildVegetationCoverageTimelineSheet(
 
   const noteRow = 5 + timeline.length + 2
   ws.getCell(noteRow, 1).value =
-    'Each row is computed independently for that satellite acquisition date on the active AOI (not a static field average). Histogram-enriched scenes use Sentinel Hub NDVI class areas when available; other dates use NDVI zonal/mean classification estimates.'
+    'Each row is computed independently for that satellite acquisition date on the active AOI (not a static field average). Class distribution area columns report per-tier totals in hectares and square metres. Histogram-enriched scenes use Sentinel Hub NDVI class areas when available; other dates use NDVI zonal/mean classification estimates.'
   ws.getCell(noteRow, 1).font = { italic: true, size: 8, color: { argb: MUTED } }
-  ws.mergeCells(noteRow, 1, noteRow, 8)
+  ws.mergeCells(noteRow, 1, noteRow, lastCol)
+}
+
+function buildEstimatedWaterLossTimelineSheet(
+  wb: ExcelJS.Workbook,
+  timeline: EstimatedWaterLossPoint[],
+  payload: TimeSeriesReportPayload,
+): void {
+  const ws = wb.addWorksheet('Estimated Water Loss Timeline', {
+    views: [{ showGridLines: true }],
+  })
+  const lastCol = 11
+  ws.columns = [
+    { width: 14 },
+    { width: 16 },
+    { width: 16 },
+    { width: 16 },
+    { width: 10 },
+    { width: 10 },
+    { width: 14 },
+    { width: 14 },
+    { width: 14 },
+    { width: 12 },
+    { width: 12 },
+  ]
+
+  ws.getCell('A1').value = 'Estimated Water Loss Timeline — Per Acquisition Date'
+  styleTitle(ws.getCell('A1'))
+  ws.mergeCells(1, 1, 1, lastCol)
+
+  ws.getCell('A2').value =
+    `${payload.location.fieldName} · AOI ${fmtHa(payload.location.areaHa)} · Moisture Score = 0.6×NDMI + 0.4×NDWI · Index ET proxy ${WATER_LOSS_INDEX_ET_REF_MM} mm/day · Volume = ET × Area(ha) × 10`
+  ws.getCell('A2').font = { size: 9, color: { argb: MUTED } }
+  ws.mergeCells(2, 1, 2, lastCol)
+
+  const header = ws.getRow(4)
+  header.values = [
+    'Acquisition Date',
+    'Estimated Water Loss Index (%)',
+    'Estimated Water Loss (m³/day)',
+    'Estimated Water Loss (m³/ha/day)',
+    'NDMI',
+    'NDWI',
+    'Vegetation Coverage (%)',
+    'Vegetation Area (ha)',
+    'Water Stress Level',
+    'Trend',
+    'Source',
+  ]
+  styleTableHeader(header)
+
+  if (!timeline.length) {
+    ws.getCell(5, 1).value =
+      'No per-date water loss rows — ensure an AOI is selected and NDMI/NDWI observations (or ET) exist for the analysis period.'
+    ws.getCell(5, 1).font = { italic: true, size: 9, color: { argb: MUTED } }
+    ws.mergeCells(5, 1, 5, lastCol)
+    return
+  }
+
+  timeline.forEach((p, i) => {
+    const r = ws.getRow(5 + i)
+    r.values = [
+      p.date,
+      Number(p.waterLossIndexPct.toFixed(1)),
+      Number(p.waterLossM3Day.toFixed(1)),
+      Number(p.waterLossM3HaDay.toFixed(2)),
+      p.ndmi != null ? fmtNum(p.ndmi, 4) : '—',
+      p.ndwi != null ? `${fmtNum(p.ndwi, 4)}${p.ndwiEstimated ? ' (est.)' : ''}` : '—',
+      Number(p.vegetationCoveragePct.toFixed(1)),
+      Number(p.vegetationAreaHa.toFixed(p.vegetationAreaHa >= 100 ? 1 : 2)),
+      p.waterStressLevel,
+      p.trend,
+      p.source === 'et' ? 'ET' : 'Satellite index',
+    ]
+    styleDataRow(r, i % 2 === 1)
+    if (p.highWaterLoss) {
+      r.eachCell(cell => {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: p.waterStressLevel === 'Critical' ? 'FFFECACA' : 'FFFFEDD5' },
+        }
+        if (cell.col === 9) {
+          cell.font = { bold: true, color: { argb: p.waterStressLevel === 'Critical' ? 'FF991B1B' : 'FF9A3412' } }
+        }
+      })
+    }
+    r.getCell(2).numFmt = '0.0"%"'
+    r.getCell(7).numFmt = '0.0"%"'
+  })
+
+  const noteRow = 5 + timeline.length + 2
+  ws.getCell(noteRow, 1).value =
+    'Each row is recalculated independently for that satellite acquisition on the active AOI. When actual ET (mm/day) is available: Water Loss (m³/day) = ET × AOI (ha) × 10. Otherwise Moisture Score = 0.6×NDMI + 0.4×NDWI; Water Loss Index = 1 − Moisture Score; ET proxy = Index × 6 mm/day. High / Critical stress rows are highlighted for irrigation priority.'
+  ws.getCell(noteRow, 1).font = { italic: true, size: 8, color: { argb: MUTED } }
+  ws.mergeCells(noteRow, 1, noteRow, lastCol)
 }
 
 export async function buildTimeSeriesReportWorkbook(payload: TimeSeriesReportPayload): Promise<ExcelJS.Workbook> {
@@ -631,6 +824,7 @@ export async function buildTimeSeriesReportWorkbook(payload: TimeSeriesReportPay
   buildDashboardSheet(wb, payload)
   buildDataSheet(wb, payload)
   buildVegetationCoverageTimelineSheet(wb, payload.vegetationCoverageTimeline ?? [], payload)
+  buildEstimatedWaterLossTimelineSheet(wb, payload.estimatedWaterLossTimeline ?? [], payload)
   buildMapSnapshotsSheet(wb, payload.mapSnapshotGroups)
   await buildChartsSheet(wb, payload)
   buildAnalysisSheet(wb, payload)
@@ -645,6 +839,7 @@ export function buildTimeSeriesReportWorkbookSync(payload: TimeSeriesReportPaylo
   buildDashboardSheet(wb, payload)
   buildDataSheet(wb, payload)
   buildVegetationCoverageTimelineSheet(wb, payload.vegetationCoverageTimeline ?? [], payload)
+  buildEstimatedWaterLossTimelineSheet(wb, payload.estimatedWaterLossTimeline ?? [], payload)
   buildMapSnapshotsSheet(wb, payload.mapSnapshotGroups)
   buildAnalysisSheet(wb, payload)
   return wb
@@ -702,8 +897,11 @@ export function exportTimeSeriesCsvReport(payload: TimeSeriesReportPayload): voi
   lines.push('')
   if (payload.vegetationCoverageTimeline?.length) {
     lines.push('Vegetation Coverage Timeline')
-    lines.push('Date,NDVI Mean,Vegetation Coverage %,Vegetation Area (ha),AOI Area (ha),Dominant Class,Trend')
+    lines.push(
+      'Date,NDVI Mean,Vegetation Coverage %,Vegetation Area (ha),AOI Area (ha),Dominant Class,Trend,Class distribution (%),Healthy (ha),Healthy (m²),Moderate (ha),Moderate (m²),Stressed (ha),Stressed (m²),Bare (ha),Bare (m²)',
+    )
     for (const p of payload.vegetationCoverageTimeline) {
+      const areaCols = vegClassAreaColumns(p.classes)
       lines.push(
         [
           esc(p.date),
@@ -713,6 +911,32 @@ export function exportTimeSeriesCsvReport(payload: TimeSeriesReportPayload): voi
           fmtHaNum(p.aoiAreaHa),
           esc(p.dominantClass),
           esc(p.trend),
+          esc(formatClassDistributionPct(p.classes)),
+          ...areaCols.map(v => (typeof v === 'number' ? String(v) : esc(String(v)))),
+        ].join(','),
+      )
+    }
+    lines.push('')
+  }
+  if (payload.estimatedWaterLossTimeline?.length) {
+    lines.push('Estimated Water Loss Timeline')
+    lines.push(
+      'Acquisition Date,Estimated Water Loss Index (%),Estimated Water Loss (m³/day),Estimated Water Loss (m³/ha/day),NDMI,NDWI,Vegetation Coverage (%),Vegetation Area (ha),Water Stress Level,Trend,Source',
+    )
+    for (const p of payload.estimatedWaterLossTimeline) {
+      lines.push(
+        [
+          esc(p.date),
+          p.waterLossIndexPct.toFixed(1),
+          p.waterLossM3Day.toFixed(1),
+          p.waterLossM3HaDay.toFixed(2),
+          p.ndmi != null ? fmtNum(p.ndmi, 4) : '',
+          p.ndwi != null ? fmtNum(p.ndwi, 4) : '',
+          p.vegetationCoveragePct.toFixed(1),
+          fmtHaNum(p.vegetationAreaHa),
+          esc(p.waterStressLevel),
+          esc(p.trend),
+          esc(p.source === 'et' ? 'ET' : 'Satellite index'),
         ].join(','),
       )
     }

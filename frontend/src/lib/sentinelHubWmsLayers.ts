@@ -299,7 +299,7 @@ export function usesSentinelHubWmsClientEvalscript(
 }
 
 /** Core interpretation layers always rendered via client EVALSCRIPT on a band proxy. */
-const CORE_INTERPRETATION_WMS_IDS = new Set(['NDVI', 'NDMI', 'NDWI', 'SAVI'])
+const CORE_INTERPRETATION_WMS_IDS = new Set(['NDVI', 'NDMI', 'NDWI', 'SAVI', 'ET'])
 
 export function usesSentinelHubWmsCustomEvalscript(layerName: string): boolean {
   const upper = String(layerName || '').trim().toUpperCase()
@@ -325,6 +325,7 @@ export function getBootstrapSentinelWmsLayers(): SentinelHubWmsLayerInfo[] {
     { name: 'NDMI', title: 'Normalized Difference Moisture Index' },
     { name: 'NDWI', title: 'Normalized Difference Water Index' },
     { name: 'SAVI', title: 'Soil-Adjusted Vegetation Index' },
+    { name: 'ET', title: 'Evapotranspiration' },
   ])
 }
 

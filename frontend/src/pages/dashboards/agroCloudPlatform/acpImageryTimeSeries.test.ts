@@ -37,6 +37,7 @@ describe('acpImageryTimeSeries', () => {
     expect(groups.some(g => g.label.includes('Vegetation Health'))).toBe(true)
     expect(groups.some(g => g.label.includes('Delta'))).toBe(true)
     expect(flat.some(o => o.id === 'NDVI')).toBe(true)
+    expect(flat.some(o => o.id === 'ET')).toBe(true)
     expect(flat.some(o => o.id === 'VHS')).toBe(true)
     expect(flat.some(o => o.id === 'DVHS')).toBe(true)
     expect(flat.some(o => o.id === 'CHAS')).toBe(true)
@@ -47,6 +48,10 @@ describe('acpImageryTimeSeries', () => {
   it('evaluates composite and core indices from daily means', () => {
     const row = dailyRow({ ndvi: 0.8, ndmi: 0.4, ndwi: 0.2 })
     expect(evaluateImageryLayerDailyValue('NDVI', row)).toBe(0.8)
+    expect(evaluateImageryLayerDailyValue('ET', row)).toBeCloseTo(
+      Math.max(0, Math.min(1, 1 - (0.6 * 0.4 + 0.4 * 0.2))) * 10,
+      2,
+    )
     expect(evaluateImageryLayerDailyValue('VHS', row)).toBeCloseTo(0.79, 2)
     expect(evaluateImageryLayerDailyValue('CHAS', row)).not.toBeNull()
   })

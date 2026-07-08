@@ -57,6 +57,7 @@ export type SatelliteContextualAnalysisDockProps = {
   staticMultiLineLabels?: string[];
   staticMultiLineDatasets?: AoiStaticMultiLayerLineChartDataset[];
   staticMultiLineHasLst?: boolean;
+  staticMultiLineHasEt?: boolean;
   staticChartExportLngLatPerRow?: AoiStaticExportLngLat[];
   layerLiveStatsLayerGroups?: RemoteSensingLayerSelectGroup[];
   layerLiveStatsLayers?: LayerLiveStatsLayerId[];
@@ -365,6 +366,7 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
     staticMultiLineLabels = [],
     staticMultiLineDatasets = [],
     staticMultiLineHasLst = false,
+    staticMultiLineHasEt = false,
     staticChartExportLngLatPerRow,
     layerLiveStatsLayerGroups = [],
     layerLiveStatsLayers = [],
@@ -1169,6 +1171,7 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
                             labels={staticMultiLineLabels}
                             datasets={staticMultiLineDatasets}
                             hasLst={staticMultiLineHasLst}
+                            hasEt={staticMultiLineHasEt}
                             exportLngLatPerRow={staticChartExportLngLatPerRow}
                           />
                         </div>

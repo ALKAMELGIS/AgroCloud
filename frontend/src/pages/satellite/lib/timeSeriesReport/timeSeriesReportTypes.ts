@@ -1,5 +1,6 @@
 import type { ImageryIndexInterpretation } from '../../../../lib/imageryIndexInterpretationEngine'
 import type { ImageryTimeSeriesLayerSeries } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import type { EstimatedWaterLossPoint } from './estimatedWaterLossTimeline'
 import type { TimeSeriesExecutiveSummary } from './timeSeriesReportExecutive'
 import type { VegetationCoveragePoint } from './vegetationCoverageTimeline'
 
@@ -71,6 +72,7 @@ export type TimeSeriesReportPayload = {
   mapImageDataUrl: string | null
   mapSnapshotGroups: TimeSeriesMapSnapshotGroup[]
   vegetationCoverageTimeline: VegetationCoveragePoint[]
+  estimatedWaterLossTimeline: EstimatedWaterLossPoint[]
 }
 
 export type TimeSeriesReportConfig = {

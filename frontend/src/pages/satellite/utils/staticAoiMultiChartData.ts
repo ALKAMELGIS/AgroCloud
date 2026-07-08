@@ -22,6 +22,7 @@ export type StaticAoiChartLayerId =
   | 'EVI'
   | 'SAVI'
   | 'NDSI'
+  | 'ET'
   | 'LST';
 
 /** Any Layer Live layer id used for multi-layer statistical analysis. */
@@ -39,11 +40,12 @@ export const STATIC_AOI_CHART_LAYER_OPTIONS: Array<{
   { id: 'SAVI', label: 'SAVI', subtitle: 'Soil-adjusted vegetation', range: [-1, 1] },
   { id: 'EVI', label: 'EVI', subtitle: 'Enhanced vegetation', range: [-1, 1] },
   { id: 'NDSI', label: 'NDSI', subtitle: 'Snow / bright surfaces', range: [-1, 1] },
+  { id: 'ET', label: 'ET', subtitle: 'Evapotranspiration (mm/day)', range: [0, 10] },
   { id: 'LST', label: 'LST', subtitle: 'Land surface temperature (°C)', range: [15, 45] },
 ];
 
 /** One-click chips for core AOI chart indices (shown above the full Layer Live checklist). */
-export const LAYER_LIVE_STATS_QUICK_ACCESS_IDS = ['NDVI', 'NDMI', 'NDWI', 'SAVI', 'LST'] as const
+export const LAYER_LIVE_STATS_QUICK_ACCESS_IDS = ['NDVI', 'NDMI', 'NDWI', 'SAVI', 'ET', 'LST'] as const
 
 export type LayerLiveStatsQuickAccessId = (typeof LAYER_LIVE_STATS_QUICK_ACCESS_IDS)[number]
 
@@ -110,6 +112,10 @@ export function layerLiveStatsIncludesLst(ids: LayerLiveStatsLayerId[]): boolean
   return ids.some(id => id.trim().toUpperCase() === 'LST')
 }
 
+export function layerLiveStatsIncludesEt(ids: LayerLiveStatsLayerId[]): boolean {
+  return ids.some(id => id.trim().toUpperCase() === 'ET')
+}
+
 function simpleHash(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i++) {
@@ -150,14 +156,19 @@ export function staticAoiLayerMeanForWeek(
   const anchor01 =
     layerId === 'LST'
       ? (anchorWeeklyMean - 15) / 30
-      : Math.max(0, Math.min(1, (anchorWeeklyMean - range[0]) / (span || 1)));
+      : layerId === 'ET'
+        ? Math.max(0, Math.min(1, anchorWeeklyMean / 10))
+        : Math.max(0, Math.min(1, (anchorWeeklyMean - range[0]) / (span || 1)));
   const mix = 0.55 * seasonal + 0.45 * (anchor01 * 2 - 1) * 0.35;
   const base =
     layerId === 'LST'
       ? 24 + seasonal * 11 + phase * 4
-      : range[0] + span * (0.38 + mix * 0.32 + phase * 0.08);
+      : layerId === 'ET'
+        ? 3.5 + seasonal * 3.5 + phase * 1.2
+        : range[0] + span * (0.38 + mix * 0.32 + phase * 0.08);
   const v = base + aoiNoise(aoiKey, layerId, weekIdx);
-  if (layerId === 'LST') return Number(Math.max(range[0], Math.min(range[1], v)).toFixed(2));
+  if (layerId === 'LST' || layerId === 'ET')
+    return Number(Math.max(range[0], Math.min(range[1], v)).toFixed(2));
   return Number(Math.max(range[0], Math.min(range[1], v)).toFixed(3));
 }
 
@@ -199,7 +210,7 @@ export function buildStaticAoiMultiChartDatasets(
       data,
       borderColor: color,
       backgroundColor: `${color}22`,
-      yAxisID: id === 'LST' ? 'yLST' : 'yIndex',
+      yAxisID: id === 'LST' ? 'yLST' : id === 'ET' ? 'yET' : 'yIndex',
     };
   });
   return { labels, datasets };

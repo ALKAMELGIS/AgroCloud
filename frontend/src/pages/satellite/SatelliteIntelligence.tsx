@@ -470,6 +470,7 @@ import {
   buildStaticAoiMultiChartDatasets,
   defaultStaticAoiComparisonLayers,
   layerLiveStatsIncludesLst,
+  layerLiveStatsIncludesEt,
   sortLayerLiveStatsLayerIds,
   type LayerLiveStatsLayerId,
 } from './utils/staticAoiMultiChartData';
@@ -1154,6 +1155,14 @@ function buildProcessingPreviewSpecsForItem(
     if (id === 'NDRE') return [{ assets: [NIR, RE], expression: `(${NIR}-${RE})/(${NIR}+${RE}+1e-6)`, rescale: '-1,1', colormapName: 'rdylgn' }];
     if (id === 'BSI') return [{ assets: [SWIR1, RED, NIR, BLUE], expression: `((${SWIR1}+${RED})-(${NIR}+${BLUE}))/((${SWIR1}+${RED})+(${NIR}+${BLUE})+1e-6)`, rescale: '-1,1', colormapName: 'rdbu' }];
     if (id === 'MNDWI') return [{ assets: [GREEN, SWIR1], expression: `(${GREEN}-${SWIR1})/(${GREEN}+${SWIR1}+1e-6)`, rescale: '-1,1', colormapName: 'rdbu' }];
+    if (id === 'ET') {
+      return [{
+        assets: [NIR, SWIR1, GREEN],
+        expression: `Math.max(0,Math.min(1,1-(0.6*((${NIR}-${SWIR1})/(${NIR}+${SWIR1}+1e-6))+0.4*((${GREEN}-${NIR})/(${GREEN}+${NIR}+1e-6)))))*10`,
+        rescale: '0,10',
+        colormapName: 'plasma',
+      }];
+    }
   }
 
   if (templateId === 'ndvi_s2' || templateId === 'ndvi_landsat') {
@@ -1907,10 +1916,43 @@ type SiMapboxCanvasLike = {
   setLayoutProperty?(layerId: string, name: string, value: unknown): void;
   setFilter?(layerId: string, filter: unknown): void;
   getStyle(): { layers?: Array<{ id: string }> };
+  moveLayer?(id: string, beforeId?: string): void;
   triggerRepaint?(): void;
   hasImage?(id: string): boolean;
   addImage?(id: string, image: unknown, options?: { pixelRatio?: number }): void;
 };
+
+/** Mapbox GL JS v3 globe / Standard lighting: custom layers go dark unless emissive. */
+const SI_DRAW_FILL_EMISSIVE = { 'fill-emissive-strength': 1 } as const;
+const SI_DRAW_LINE_EMISSIVE = { 'line-emissive-strength': 1 } as const;
+const SI_DRAW_CIRCLE_EMISSIVE = { 'circle-emissive-strength': 1 } as const;
+
+const SI_AOI_DRAW_LAYER_IDS = [
+  'drawn-index-geometry-fill',
+  'drawn-index-geometry-line-halo',
+  'drawn-index-geometry-line',
+  'drawn-index-geometry-point',
+  'si-draw-draft-fill',
+  'si-draw-draft-poly-halo',
+  'si-draw-draft-poly-line',
+  'si-draw-draft-line',
+  'si-draw-draft-close-hint',
+  'si-draw-draft-vertex',
+  'si-draw-draft-pt',
+  'si-edit-handles-circles',
+] as const;
+
+/** Keep AOI sketch layers at the top of the Mapbox style stack. */
+function siRaiseAoiDrawingLayers(map: SiMapboxCanvasLike): void {
+  if (typeof map.moveLayer !== 'function') return;
+  for (const layerId of SI_AOI_DRAW_LAYER_IDS) {
+    try {
+      if (map.getLayer(layerId)) map.moveLayer(layerId);
+    } catch {
+      /* ignore race during style rebuild */
+    }
+  }
+}
 
 /**
  * Register (once) a luxurious blue water-drop marker icon in the map sprite so
@@ -2426,6 +2468,8 @@ function siPaintCustomLayersOnMapboxCanvas(
   } catch {
     /* ignore */
   }
+  // Portal / custom vectors remount above React-managed AOI sketch layers — restore draw stack.
+  siRaiseAoiDrawingLayers(map);
 }
 
 /** Mapbox layer id `${sourceId}-fill|line|circle|cluster|cluster-count` â†’ custom layer source id. */
@@ -2795,7 +2839,7 @@ function siGetDataMenuSections(): Array<{ id: string; title: string; sources: Si
   })).filter(section => section.sources.length > 0)
 }
 
-type EnvironmentalIndexId = 'NDWI' | 'NDMI' | 'EVI' | 'SAVI' | 'NDSI' | 'LST';
+type EnvironmentalIndexId = 'NDWI' | 'NDMI' | 'EVI' | 'SAVI' | 'NDSI' | 'ET' | 'LST';
 
 /** ArcGIS-style tool ids: order matches vertical toolbar (draw â†’ sep â†’ selection). */
 type MapDrawTool =
@@ -2832,19 +2876,25 @@ function clampUnit(t: number) {
 function environmentalIndicatorSummary(indexId: EnvironmentalIndexId, mean: number): string {
   if (indexId === 'LST') {
     if (mean < 22) return 'Cooler surface temperatures across the sampled period.';
-    if (mean < 32) return 'Moderate land-surface temperatures â€” typical mixed land.';
-    return 'Warm thermal signal â€” possible bare soil, urban, or water stress.';
+    if (mean < 32) return 'Moderate land-surface temperatures — typical mixed land.';
+    return 'Warm thermal signal — possible bare soil, urban, or water stress.';
+  }
+  if (indexId === 'ET') {
+    if (mean < 3) return 'Low ET demand — cooler canopy / higher moisture retention.';
+    if (mean < 5.5) return 'Moderate ET — typical mid-season crop water demand.';
+    if (mean < 7.5) return 'Elevated ET — prioritize irrigation scouting.';
+    return 'High ET demand — strong evaporative stress risk for the AOI.';
   }
   if (mean < 0.2) {
-    return 'Low vegetation response â€” bare soil, built-up areas, or water (typical in arid regions).';
+    return 'Low vegetation response — bare soil, built-up areas, or water (typical in arid regions).';
   }
   if (mean < 0.4) {
-    return 'Sparse or stressed vegetation â€” shrubs, sparse crops, or mixed desert patches.';
+    return 'Sparse or stressed vegetation — shrubs, sparse crops, or mixed desert patches.';
   }
   if (mean < 0.6) {
-    return 'Moderate healthy vegetation â€” grassland or active agricultural canopy.';
+    return 'Moderate healthy vegetation — grassland or active agricultural canopy.';
   }
-  return 'Strong vegetation signal â€” dense canopy or well-irrigated crops.';
+  return 'Strong vegetation signal — dense canopy or well-irrigated crops.';
 }
 
 function createPointFeature(lng: number, lat: number) {
@@ -2957,6 +3007,14 @@ const ENVIRONMENTAL_INDICES: Record<EnvironmentalIndexId, {
     range: [-1, 1],
     palette: ['#334155', '#e0f2fe', '#ffffff', '#bae6fd'],
     description: 'Snow or bright surface response.',
+  },
+  ET: {
+    label: 'ET',
+    collection: 'sentinel-2-l2a',
+    formula: 'ET = (1 − (0.6×NDMI + 0.4×NDWI)) × 10 mm/day',
+    range: [0, 10],
+    palette: ['#1e3a8a', '#0ea5e9', '#22c55e', '#fde047', '#ef4444'],
+    description: 'Evapotranspiration moisture proxy (mm/day) for irrigation demand.',
   },
   LST: {
     label: 'LST',
@@ -14447,6 +14505,7 @@ export default function SatelliteIntelligence() {
         labels: [] as string[],
         datasets: [] as AoiStaticMultiLayerLineChartDataset[],
         hasLst: false,
+        hasEt: false,
       };
     }
     const built = buildStaticAoiMultiChartDatasets(
@@ -14458,6 +14517,7 @@ export default function SatelliteIntelligence() {
       labels: built.labels,
       datasets: built.datasets,
       hasLst: layerLiveStatsIncludesLst(layerLiveStatsLayers),
+      hasEt: layerLiveStatsIncludesEt(layerLiveStatsLayers),
     };
   }, [weeklyComposites, layerLiveStatsLayers, staticAoiChartAoiKey]);
 
@@ -14593,10 +14653,11 @@ export default function SatelliteIntelligence() {
   const sentinelHubWmsDisplayChunks = useMemo(() => {
     return buildSentinelHubWmsDisplayChunks(effectiveSentinelHubWmsTileClipSource, activeWmsLayer, {
       indexVisibilityMin: WMS_AOI_INDEX_VISIBILITY_MIN,
+      sceneDate: sentinelFetchDate,
       viewportBBox: null,
       maxTileLayers: SI_WMS_MAX_TILE_LAYERS,
     });
-  }, [effectiveSentinelHubWmsTileClipSource, activeWmsLayer]);
+  }, [effectiveSentinelHubWmsTileClipSource, activeWmsLayer, sentinelFetchDate]);
   const sentinelHubWmsAoiClip = sentinelHubWmsDisplayChunks[0] ?? {
     geometryWkt3857: null,
     evalscriptB64: null,
@@ -14904,7 +14965,7 @@ export default function SatelliteIntelligence() {
     sentinelHubWmsDisplayChunks,
   ]);
 
-  /** Keep Agro_Structures boundaries above Sentinel raster; hide vector fill while WMS is active. */
+  /** Keep AOI sketch above Sentinel raster and Agro vector fills. */
   useLayoutEffect(() => {
     if (!isMapStyleReady) return;
     const map = mapRef.current?.getMap?.() ?? mapRef.current;
@@ -14942,13 +15003,47 @@ export default function SatelliteIntelligence() {
       } catch {
         /* ignore map/source race during style rebuild */
       }
-      raise('si-agro-structures-boundary-line');
+      // Portal vectors / AOI masks above imagery…
       raise('si-agro-structures-boundary-fill');
-      raise(agroLineId);
+      raise('si-agro-structures-boundary-line');
       raise(agroFillId);
+      raise(agroLineId);
+      raise('si-crop-class-aoi-fill');
+      raise('si-crop-class-aoi-line');
+      raise('si-aoi-fields-fill');
+      raise('si-aoi-fields-line');
+      // …then drawing preview + committed AOI last so sketches stay visible.
+      siRaiseAoiDrawingLayers(map);
     };
     sync();
-    map.once('idle', sync);
+    const onIdle = () => sync();
+    const onSourceData = (e: { isSourceLoaded?: boolean; sourceId?: string }) => {
+      if (!e?.isSourceLoaded) return;
+      const sid = String(e.sourceId || '');
+      if (
+        sid.startsWith('sentinel-source-') ||
+        sid === 'si-draw-draft' ||
+        sid.startsWith('drawn-index-geometry') ||
+        sid.includes('agro') ||
+        sid.includes(agroSid)
+      ) {
+        sync();
+      }
+    };
+    try {
+      map.on('idle', onIdle);
+      map.on('sourcedata', onSourceData);
+    } catch {
+      /* ignore */
+    }
+    return () => {
+      try {
+        map.off('idle', onIdle);
+        map.off('sourcedata', onSourceData);
+      } catch {
+        /* ignore */
+      }
+    };
   }, [
     isMapStyleReady,
     sentinelWmsOnMap,
@@ -14957,6 +15052,10 @@ export default function SatelliteIntelligence() {
     customLayersMapEpoch,
     sentinelHubWmsDisplayChunks.length,
     activeWmsLayer,
+    draftDrawGeoJson,
+    drawnGeometry,
+    mapDrawTool,
+    rsDrawingModeActive,
   ]);
 
   const circleRefineHud = useMemo(() => {
@@ -15328,99 +15427,6 @@ export default function SatelliteIntelligence() {
                   </Marker>
                 ) : null}
 
-                {draftDrawGeoJson ? (
-                  <Source id="si-draw-draft" type="geojson" data={draftDrawGeoJson as any}>
-                    <Layer
-                      id="si-draw-draft-fill"
-                      type="fill"
-                      filter={['==', ['geometry-type'], 'Polygon']}
-                      paint={{
-                        'fill-color': drawStyle.fillColor,
-                        'fill-opacity': Math.min(0.45, drawStyle.fillOpacity + 0.12) * drawVisualOpacity,
-                      }}
-                    />
-                    <Layer
-                      id="si-draw-draft-line"
-                      type="line"
-                      filter={[
-                        'all',
-                        ['==', ['geometry-type'], 'LineString'],
-                        ['!=', ['get', 'draftRole'], 'closeHint'],
-                      ]}
-                      paint={{
-                        'line-color': drawStyle.strokeColor,
-                        'line-width': drawStyle.strokeWidth,
-                        'line-dasharray': [2, 2],
-                        'line-opacity': 0.9 * drawVisualOpacity,
-                      }}
-                    />
-                    <Layer
-                      id="si-draw-draft-close-hint"
-                      type="line"
-                      filter={['==', ['get', 'draftRole'], 'closeHint']}
-                      paint={{
-                        'line-color': '#4ade80',
-                        'line-width': Math.max(2, drawStyle.strokeWidth),
-                        'line-dasharray': [1, 2],
-                        'line-opacity': 0.95 * drawVisualOpacity,
-                      }}
-                    />
-                    <Layer
-                      id="si-draw-draft-vertex"
-                      type="circle"
-                      filter={[
-                        'any',
-                        ['==', ['get', 'draftRole'], 'polyVertex'],
-                        ['==', ['get', 'draftRole'], 'circleCenter'],
-                        ['==', ['get', 'draftRole'], 'circleCardinal'],
-                      ]}
-                      paint={{
-                        'circle-radius': [
-                          'match',
-                          ['get', 'draftRole'],
-                          'circleCenter',
-                          12,
-                          'circleCardinal',
-                          10,
-                          9,
-                        ] as any,
-                        'circle-color': [
-                          'match',
-                          ['get', 'draftRole'],
-                          'circleCenter',
-                          '#fbbf24',
-                          'circleCardinal',
-                          '#86efac',
-                          '#bbf7d0',
-                        ] as any,
-                        'circle-stroke-width': 2,
-                        'circle-stroke-color': '#14532d',
-                        'circle-opacity': drawVisualOpacity,
-                        'circle-stroke-opacity': drawVisualOpacity,
-                      }}
-                    />
-                    <Layer
-                      id="si-draw-draft-pt"
-                      type="circle"
-                      filter={[
-                        'all',
-                        ['==', ['geometry-type'], 'Point'],
-                        ['!=', ['get', 'draftRole'], 'polyVertex'],
-                        ['!=', ['get', 'draftRole'], 'circleCenter'],
-                        ['!=', ['get', 'draftRole'], 'circleCardinal'],
-                      ]}
-                      paint={{
-                        'circle-radius': 6,
-                        'circle-color': drawStyle.strokeColor,
-                        'circle-stroke-width': 2,
-                        'circle-stroke-color': '#0f172a',
-                        'circle-opacity': drawVisualOpacity,
-                        'circle-stroke-opacity': drawVisualOpacity,
-                      }}
-                    />
-                  </Source>
-                ) : null}
-
                 {measureRender.geojson ? (
                   <Source id="si-measure-source" type="geojson" data={measureRender.geojson as any}>
                     <Layer
@@ -15510,22 +15516,6 @@ export default function SatelliteIntelligence() {
                   </Marker>
                 )}
 
-                {drawnGeometry && (
-                  <Source id="drawn-index-geometry-source" type="geojson" data={drawnGeometry as any}>
-                    <Layer
-                      id="drawn-index-geometry-fill"
-                      type="fill"
-                      filter={['==', ['geometry-type'], 'Polygon']}
-                      paint={{
-                        'fill-color': hasActiveLayerSourceAoi ? '#f59e0b' : drawStyle.fillColor,
-                        // AOI is shown as a boundary outline only ΓÇö the fill is fully
-                        // disabled so analysis layers (Watershed / Streams / Basins /
-                        // imagery) read clearly over the map with no coloured background.
-                        'fill-opacity': 0,
-                      }}
-                    />
-                  </Source>
-                )}
                 {cropClassAoiGeometry ? (
                   <Source id="si-crop-class-aoi-source" type="geojson" data={cropClassAoiGeometry as any}>
                     <Layer
@@ -15907,6 +15897,7 @@ export default function SatelliteIntelligence() {
                         'circle-stroke-color': '#0f172a',
                         'circle-opacity': 0.95 * drawVisualOpacity,
                         'circle-stroke-opacity': drawVisualOpacity,
+                        ...SI_DRAW_CIRCLE_EMISSIVE,
                       }}
                     />
                   </Source>
@@ -16034,34 +16025,203 @@ export default function SatelliteIntelligence() {
             )}
 
             {isMapStyleReady && drawnGeometry && aoiLayerVisible ? (
+              <Source id="drawn-index-geometry-source" type="geojson" data={drawnGeometry as any}>
+                <Layer
+                  id="drawn-index-geometry-fill"
+                  type="fill"
+                  filter={['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]]}
+                  paint={{
+                    'fill-color': hasActiveLayerSourceAoi ? '#f59e0b' : drawStyle.fillColor,
+                    // Keep a light fill so the sketch remains visible over basemap / imagery.
+                    'fill-opacity':
+                      Math.min(0.35, Math.max(0.12, drawStyle.fillOpacity)) *
+                      drawVisualOpacity *
+                      aoiLayerOpacity,
+                    ...SI_DRAW_FILL_EMISSIVE,
+                  }}
+                />
+              </Source>
+            ) : null}
+
+            {isMapStyleReady && drawnGeometry && aoiLayerVisible ? (
               <Source id="drawn-index-geometry-outline-source" type="geojson" data={drawnGeometry as any}>
+                <Layer
+                  id="drawn-index-geometry-line-halo"
+                  type="line"
+                  filter={[
+                    'in',
+                    ['geometry-type'],
+                    ['literal', ['LineString', 'MultiLineString', 'Polygon', 'MultiPolygon']],
+                  ]}
+                  paint={{
+                    'line-color': '#0f172a',
+                    'line-width': [
+                      'case',
+                      ['in', ['geometry-type'], ['literal', ['LineString', 'MultiLineString']]],
+                      Math.max(5, drawStyle.strokeWidth + 4),
+                      Math.max(5, drawStyle.strokeWidth + 3),
+                    ],
+                    'line-opacity': 0.8 * drawVisualOpacity * aoiLayerOpacity,
+                    'line-blur': 0.2,
+                    ...SI_DRAW_LINE_EMISSIVE,
+                  }}
+                />
                 <Layer
                   id="drawn-index-geometry-line"
                   type="line"
-                  filter={['in', ['geometry-type'], ['literal', ['LineString', 'Polygon']]]}
+                  filter={[
+                    'in',
+                    ['geometry-type'],
+                    ['literal', ['LineString', 'MultiLineString', 'Polygon', 'MultiPolygon']],
+                  ]}
                   paint={{
                     'line-color': hasActiveLayerSourceAoi ? '#fbbf24' : drawStyle.strokeColor,
                     'line-width': [
                       'case',
-                      ['==', ['geometry-type'], 'LineString'],
-                      Math.max(2, drawStyle.strokeWidth + 1),
-                      drawStyle.strokeWidth,
+                      ['in', ['geometry-type'], ['literal', ['LineString', 'MultiLineString']]],
+                      Math.max(2.5, drawStyle.strokeWidth + 1),
+                      Math.max(2.5, drawStyle.strokeWidth),
                     ],
                     'line-opacity': drawVisualOpacity * aoiLayerOpacity,
                     ...(hasActiveLayerSourceAoi ? { 'line-dasharray': [2, 2] as [number, number] } : {}),
+                    ...SI_DRAW_LINE_EMISSIVE,
                   }}
                 />
                 <Layer
                   id="drawn-index-geometry-point"
                   type="circle"
-                  filter={['==', ['geometry-type'], 'Point']}
+                  filter={['in', ['geometry-type'], ['literal', ['Point', 'MultiPoint']]]}
                   paint={{
                     'circle-radius': drawStyle.pointRadius,
                     'circle-color': drawStyle.fillColor,
                     'circle-opacity': Math.min(1, drawStyle.fillOpacity + 0.55) * drawVisualOpacity * aoiLayerOpacity,
-                    'circle-stroke-color': drawStyle.strokeColor,
-                    'circle-stroke-width': Math.max(1, drawStyle.strokeWidth / 2),
+                    'circle-stroke-color': '#0f172a',
+                    'circle-stroke-width': Math.max(2, drawStyle.strokeWidth / 2),
                     'circle-stroke-opacity': drawVisualOpacity * aoiLayerOpacity,
+                    ...SI_DRAW_CIRCLE_EMISSIVE,
+                  }}
+                />
+              </Source>
+            ) : null}
+
+            {/* Draft sketch must mount after Sentinel rasters so vertices/lines stay visible while drawing. */}
+            {isMapStyleReady && draftDrawGeoJson ? (
+              <Source id="si-draw-draft" type="geojson" data={draftDrawGeoJson as any}>
+                <Layer
+                  id="si-draw-draft-fill"
+                  type="fill"
+                  filter={['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]]}
+                  paint={{
+                    'fill-color': drawStyle.fillColor,
+                    'fill-opacity': Math.min(0.45, drawStyle.fillOpacity + 0.12) * drawVisualOpacity,
+                    ...SI_DRAW_FILL_EMISSIVE,
+                  }}
+                />
+                {/* Dark halo so green strokes remain visible over NDVI / cropland imagery. */}
+                <Layer
+                  id="si-draw-draft-poly-halo"
+                  type="line"
+                  filter={['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]]}
+                  paint={{
+                    'line-color': '#0f172a',
+                    'line-width': Math.max(5, drawStyle.strokeWidth + 3),
+                    'line-opacity': 0.85 * drawVisualOpacity,
+                    'line-blur': 0.25,
+                    ...SI_DRAW_LINE_EMISSIVE,
+                  }}
+                />
+                <Layer
+                  id="si-draw-draft-poly-line"
+                  type="line"
+                  filter={['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]]}
+                  paint={{
+                    'line-color': drawStyle.strokeColor,
+                    'line-width': Math.max(2.5, drawStyle.strokeWidth),
+                    'line-opacity': 0.98 * drawVisualOpacity,
+                    ...SI_DRAW_LINE_EMISSIVE,
+                  }}
+                />
+                <Layer
+                  id="si-draw-draft-line"
+                  type="line"
+                  filter={[
+                    'all',
+                    ['in', ['geometry-type'], ['literal', ['LineString', 'MultiLineString']]],
+                    ['!=', ['get', 'draftRole'], 'closeHint'],
+                  ]}
+                  paint={{
+                    'line-color': drawStyle.strokeColor,
+                    'line-width': Math.max(2.5, drawStyle.strokeWidth),
+                    'line-dasharray': [2, 2],
+                    'line-opacity': 0.95 * drawVisualOpacity,
+                    ...SI_DRAW_LINE_EMISSIVE,
+                  }}
+                />
+                <Layer
+                  id="si-draw-draft-close-hint"
+                  type="line"
+                  filter={['==', ['get', 'draftRole'], 'closeHint']}
+                  paint={{
+                    'line-color': '#4ade80',
+                    'line-width': Math.max(2, drawStyle.strokeWidth),
+                    'line-dasharray': [1, 2],
+                    'line-opacity': 0.95 * drawVisualOpacity,
+                    ...SI_DRAW_LINE_EMISSIVE,
+                  }}
+                />
+                <Layer
+                  id="si-draw-draft-vertex"
+                  type="circle"
+                  filter={[
+                    'any',
+                    ['==', ['get', 'draftRole'], 'polyVertex'],
+                    ['==', ['get', 'draftRole'], 'circleCenter'],
+                    ['==', ['get', 'draftRole'], 'circleCardinal'],
+                  ]}
+                  paint={{
+                    'circle-radius': [
+                      'match',
+                      ['get', 'draftRole'],
+                      'circleCenter',
+                      12,
+                      'circleCardinal',
+                      10,
+                      9,
+                    ] as any,
+                    'circle-color': [
+                      'match',
+                      ['get', 'draftRole'],
+                      'circleCenter',
+                      '#fbbf24',
+                      'circleCardinal',
+                      '#86efac',
+                      '#fef08a',
+                    ] as any,
+                    'circle-stroke-width': 2.5,
+                    'circle-stroke-color': '#0f172a',
+                    'circle-opacity': drawVisualOpacity,
+                    'circle-stroke-opacity': drawVisualOpacity,
+                    ...SI_DRAW_CIRCLE_EMISSIVE,
+                  }}
+                />
+                <Layer
+                  id="si-draw-draft-pt"
+                  type="circle"
+                  filter={[
+                    'all',
+                    ['==', ['geometry-type'], 'Point'],
+                    ['!=', ['get', 'draftRole'], 'polyVertex'],
+                    ['!=', ['get', 'draftRole'], 'circleCenter'],
+                    ['!=', ['get', 'draftRole'], 'circleCardinal'],
+                  ]}
+                  paint={{
+                    'circle-radius': 7,
+                    'circle-color': drawStyle.strokeColor,
+                    'circle-stroke-width': 2.5,
+                    'circle-stroke-color': '#0f172a',
+                    'circle-opacity': drawVisualOpacity,
+                    'circle-stroke-opacity': drawVisualOpacity,
+                    ...SI_DRAW_CIRCLE_EMISSIVE,
                   }}
                 />
               </Source>
@@ -16400,6 +16560,7 @@ export default function SatelliteIntelligence() {
             staticMultiLineLabels={staticAoiMultiLineData.labels}
             staticMultiLineDatasets={staticAoiMultiLineData.datasets}
             staticMultiLineHasLst={staticAoiMultiLineData.hasLst}
+            staticMultiLineHasEt={staticAoiMultiLineData.hasEt}
             staticChartExportLngLatPerRow={staticAoiChartExportLngLatPerRow}
             weeklyMeans={satelliteWeeklyMeans}
             pivotBars={satellitePivotBars}
@@ -16988,6 +17149,7 @@ export default function SatelliteIntelligence() {
             staticMultiLineLabels={staticAoiMultiLineData.labels}
             staticMultiLineDatasets={staticAoiMultiLineData.datasets}
             staticMultiLineHasLst={staticAoiMultiLineData.hasLst}
+            staticMultiLineHasEt={staticAoiMultiLineData.hasEt}
             staticChartExportLngLatPerRow={staticAoiChartExportLngLatPerRow}
             layerLiveStatsLayerGroups={remoteSensingLayerSelectGroups}
             layerLiveStatsLayers={layerLiveStatsLayers}

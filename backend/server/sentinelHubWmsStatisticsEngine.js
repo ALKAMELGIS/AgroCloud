@@ -70,6 +70,77 @@ const WMS_CLASS_GRID_EVALSCRIPT_B64 = Buffer.from(WMS_CLASS_GRID_EVALSCRIPT, 'ut
   'base64',
 )
 
+/**
+ * Moisture grid for ET class areas: R=NDMI, G=NDWI, B=unused, A=valid.
+ * ET (mm/day) = clamp(1 − (0.6×NDMI + 0.4×NDWI), 0, 1) × 10 — classified
+ * into the request binEdges directly per pixel.
+ */
+const WMS_ET_CLASS_GRID_EVALSCRIPT = `//VERSION=3
+function setup() {
+  return {
+    input: [{ bands: ["B03", "B08", "B11", "SCL", "dataMask"] }],
+    output: { bands: 4, sampleType: "UINT8" }
+  };
+}
+function evaluatePixel(s) {
+  var scl = s.SCL;
+  var cloud = (scl == 3 || scl == 8 || scl == 9 || scl == 10 || scl == 11);
+  if (!s.dataMask || cloud) return [0, 0, 0, 0];
+  var dNdmi = s.B08 + s.B11;
+  var ndmi = dNdmi > 1e-6 ? (s.B08 - s.B11) / dNdmi : 0;
+  var dNdwi = s.B03 + s.B08;
+  var ndwi = dNdwi > 1e-6 ? (s.B03 - s.B08) / dNdwi : 0;
+  function enc(v) { return Math.max(0, Math.min(254, Math.round((v + 1) * 127))); }
+  return [enc(ndmi), enc(ndwi), 0, 255];
+}`
+
+const WMS_ET_CLASS_GRID_EVALSCRIPT_B64 = Buffer.from(WMS_ET_CLASS_GRID_EVALSCRIPT, 'utf8').toString(
+  'base64',
+)
+
+/** FAO-style ET proxy ceiling (mm/day) — must match frontend etIndex.ET_REF_MM_DAY. */
+const ET_REF_MM_DAY = 10
+
+function dayOfYearFromIso(isoDate) {
+  const day = String(isoDate || '').trim().slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return 180
+  const d = new Date(`${day}T12:00:00Z`)
+  if (Number.isNaN(d.getTime())) return 180
+  const start = Date.UTC(d.getUTCFullYear(), 0, 0)
+  return Math.round((d.getTime() - start) / 86_400_000)
+}
+
+/** Northern-hemisphere seasonal energy ~0.45 winter → 1.0 peak summer. */
+function etSeasonFactor(isoOrDoy) {
+  const doy =
+    typeof isoOrDoy === 'number' && Number.isFinite(isoOrDoy)
+      ? Math.max(1, Math.min(366, Math.round(isoOrDoy)))
+      : dayOfYearFromIso(isoOrDoy)
+  const phase = Math.sin((2 * Math.PI * (doy - 80)) / 365)
+  return 0.45 + 0.55 * (0.5 + 0.5 * phase)
+}
+
+/**
+ * ET (mm/day) = moistureDemand × season × mid-season Kc × ref.
+ * Moisture demand = clamp(1 − (0.6×NDMI + 0.4×NDWI), 0, 1).
+ * Kc defaults to 0.85 when NDVI not available on the moisture grid.
+ */
+function estimateEtMmDayFromMoisture(ndmi, ndwi, options = {}) {
+  const moisture = 0.6 * ndmi + 0.4 * ndwi
+  const demand = Math.max(0, Math.min(1, 1 - moisture))
+  const season =
+    typeof options.seasonFactor === 'number' && Number.isFinite(options.seasonFactor)
+      ? Math.max(0.35, Math.min(1.15, options.seasonFactor))
+      : etSeasonFactor(options.sceneDate)
+  const kc =
+    typeof options.kc === 'number' && Number.isFinite(options.kc)
+      ? Math.max(0.15, Math.min(1.35, options.kc))
+      : 0.85
+  return demand * season * kc * ET_REF_MM_DAY
+}
+
+export { estimateEtMmDayFromMoisture, etSeasonFactor }
+
 /** Extract the AGRO_CLASS_HISTOGRAM marker JSON embedded in a request evalscript. */
 function parseAgroClassMarker(evalscript) {
   const text = String(evalscript || '')
@@ -91,7 +162,7 @@ function landClassFor(value, breaks) {
 }
 
 /** Place a value into the histogram bin index for ascending `binEdges`, clamped to extremes. */
-function binIndexFor(value, binEdges) {
+export function binIndexFor(value, binEdges) {
   const nBins = binEdges.length - 1
   if (nBins < 1) return -1
   if (value < binEdges[0]) return 0
@@ -148,7 +219,28 @@ function decodeClassGridPng(buffer) {
     nir[p] = png.data[i + 2] / 200
     valid[p] = 1
   }
-  return { ndvi, ndwi, nir, valid, width: png.width, height: png.height }
+  return { ndvi, ndwi, nir, valid, width: png.width, height: png.height, kind: 'veg' }
+}
+
+/** Decode the NDMI/NDWI moisture grid PNG (ET class areas). */
+function decodeEtClassGridPng(buffer) {
+  const png = PNG.sync.read(buffer)
+  const n = png.width * png.height
+  const ndmi = new Float32Array(n)
+  const ndwi = new Float32Array(n)
+  const valid = new Uint8Array(n)
+  for (let p = 0; p < n; p += 1) {
+    const i = p * 4
+    const a = png.data[i + 3]
+    if (a < 128) {
+      valid[p] = 0
+      continue
+    }
+    ndmi[p] = png.data[i] / 127 - 1
+    ndwi[p] = png.data[i + 1] / 127 - 1
+    valid[p] = 1
+  }
+  return { ndmi, ndwi, valid, width: png.width, height: png.height, kind: 'et' }
 }
 
 async function fetchWmsClassGridForScene(options) {
@@ -158,6 +250,7 @@ async function fetchWmsClassGridForScene(options) {
   const mpp = 10
   const width = Math.max(64, Math.min(1024, Math.round(spanX / mpp)))
   const height = Math.max(64, Math.min(1024, Math.round(spanY / mpp)))
+  const forEt = options.mode === 'et'
   const url = buildWmsGetMapUrl({
     baseUrl: options.baseUrl,
     accessToken: options.accessToken,
@@ -169,7 +262,7 @@ async function fetchWmsClassGridForScene(options) {
     timeEnd: options.timeEnd,
     cloudCoverage: options.cloudCoverage,
     format: 'image/png',
-    evalscriptB64: WMS_CLASS_GRID_EVALSCRIPT_B64,
+    evalscriptB64: forEt ? WMS_ET_CLASS_GRID_EVALSCRIPT_B64 : WMS_CLASS_GRID_EVALSCRIPT_B64,
     geometryWkt3857: options.geometryWkt3857,
   })
   const res = await fetch(url, { headers: { Accept: 'image/png' } })
@@ -177,11 +270,12 @@ async function fetchWmsClassGridForScene(options) {
     const text = await res.text().catch(() => '')
     throw new Error(`WMS class grid GetMap failed (${res.status}): ${text.slice(0, 160)}`)
   }
-  return decodeClassGridPng(Buffer.from(await res.arrayBuffer()))
+  const buffer = Buffer.from(await res.arrayBuffer())
+  return forEt ? decodeEtClassGridPng(buffer) : decodeClassGridPng(buffer)
 }
 
 /** Classify a decoded WMS index grid into per-class pixel counts for `binEdges`. */
-function classifyGridToCounts(grid, marker, binEdges) {
+export function classifyGridToCounts(grid, marker, binEdges, options = {}) {
   const counts = new Array(binEdges.length - 1).fill(0)
   let sampleCount = 0
   const isAdaptive = marker.mode === 'adaptive'
@@ -189,26 +283,35 @@ function classifyGridToCounts(grid, marker, binEdges) {
   const landBreaks = Array.isArray(marker.landBreaks) ? marker.landBreaks : []
   const valueIndex = String(marker.index || 'ndvi')
   const n = grid.width * grid.height
+  const sceneDate = options.sceneDate || null
 
   for (let p = 0; p < n; p += 1) {
     if (!grid.valid[p]) continue
-    const ndvi = grid.ndvi[p]
-    const ndwi = grid.ndwi[p]
-    const nir = grid.nir[p]
-    const red = 1 + ndvi > 1e-6 ? (nir * (1 - ndvi)) / (1 + ndvi) : 0
-    const savi = ((nir - red) / (nir + red + 0.5)) * 1.5
 
     let value
-    if (isAdaptive) {
+    if (valueIndex === 'et' || grid.kind === 'et') {
+      // Direct per-pixel ET (mm/day) from moisture × season × Kc — never reuse NDVI bins.
+      const ndmi = grid.ndmi ? grid.ndmi[p] : 0
+      const ndwi = grid.ndwi[p]
+      value = estimateEtMmDayFromMoisture(ndmi, ndwi, { sceneDate })
+    } else if (isAdaptive) {
+      const ndvi = grid.ndvi[p]
+      const ndwi = grid.ndwi[p]
+      const nir = grid.nir[p]
+      const red = 1 + ndvi > 1e-6 ? (nir * (1 - ndvi)) / (1 + ndvi) : 0
+      const savi = ((nir - red) / (nir + red + 0.5)) * 1.5
       const veg = kind === 'savi' ? savi : ndvi
       const water = ndwi > 0 && nir < 0.12 && veg < 0.1
       value = water ? 0 : landClassFor(veg, landBreaks)
     } else if (valueIndex === 'ndwi') {
-      value = ndwi
+      value = grid.ndwi[p]
     } else if (valueIndex === 'savi') {
-      value = savi
+      const ndvi = grid.ndvi[p]
+      const nir = grid.nir[p]
+      const red = 1 + ndvi > 1e-6 ? (nir * (1 - ndvi)) / (1 + ndvi) : 0
+      value = ((nir - red) / (nir + red + 0.5)) * 1.5
     } else {
-      value = ndvi
+      value = grid.ndvi[p]
     }
 
     const bi = binIndexFor(value, binEdges)
@@ -303,6 +406,7 @@ async function computeClassHistogramViaWms(wmsConfig, body, marker) {
     .slice(0, 4)
 
   const gridCloudCoverage = Math.max(requestedCc, 95)
+  const etMode = String(marker.index || '').toLowerCase() === 'et'
   for (const sceneDate of ordered) {
     try {
       const grid = await fetchWmsClassGridForScene({
@@ -314,8 +418,11 @@ async function computeClassHistogramViaWms(wmsConfig, body, marker) {
         cloudCoverage: gridCloudCoverage,
         timeStart: sceneDate,
         timeEnd: addDaysToIso(sceneDate, 1),
+        mode: etMode ? 'et' : 'veg',
       })
-      const { counts, sampleCount } = classifyGridToCounts(grid, marker, binEdges)
+      const { counts, sampleCount } = classifyGridToCounts(grid, marker, binEdges, {
+        sceneDate,
+      })
       if (sampleCount > 0) {
         return buildHistogramCompatibleResponse(sceneDate, outputId, binEdges, counts, sampleCount)
       }

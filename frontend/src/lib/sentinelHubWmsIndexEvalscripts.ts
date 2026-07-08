@@ -1,3 +1,13 @@
+import {
+  buildEtWmsIndexSetup,
+  etClassCenterValues,
+  etSeasonFactor,
+  ET_WMS_INDEX_SETUP,
+  SENTINEL_ET_10_CLASS_BREAKS,
+  SENTINEL_ET_10_CLASS_VALUES,
+  SENTINEL_ET_RAMP,
+} from './etIndex'
+
 /**
  * Sentinel Hub Evalscript v3 — ColorRampVisualizer palettes for Live WMS index layers.
  * @see https://custom-scripts.sentinel-hub.com/
@@ -13,6 +23,7 @@ export type SentinelIndexEvalProfile =
   | 'gndvi'
   | 'ndsi'
   | 'ndre'
+  | 'et'
 
 type RampStop = [number, number]
 
@@ -332,6 +343,12 @@ const INDEX_EVAL_SPECS: Record<SentinelIndexEvalProfile, IndexEvalSpec> = {
     indexExpr: 'let ndre = index(samples.B08, samples.B05);',
     ramp: SENTINEL_NDRE_RAMP,
   },
+  et: {
+    inputs: ['B03', 'B04', 'B08', 'B11', 'dataMask'],
+    indexVar: 'et',
+    indexExpr: ET_WMS_INDEX_SETUP,
+    ramp: SENTINEL_ET_RAMP,
+  },
 }
 
 function hexColorLiteral(hex: number): string {
@@ -460,6 +477,96 @@ function evaluatePixel(samples) {
 }`
 }
 
+/** ET — seasonal/Kc moisture-proxy ET (mm/day); absolute or AOI percentile 10-class breaks. */
+export function buildSentinelEtTenClassEvalscript(
+  indexVisibilityMin: number | null = null,
+  options?: {
+    sceneDate?: string | null
+    /** Ascending interior breaks (length 9) or full edges (length 11). */
+    classBreaks?: readonly number[] | null
+    classCenters?: readonly number[] | null
+  },
+): string {
+  const season = etSeasonFactor(options?.sceneDate)
+  const setupEt = buildEtWmsIndexSetup(season)
+
+  let breaks = SENTINEL_ET_10_CLASS_BREAKS
+  let centers = SENTINEL_ET_10_CLASS_VALUES
+  const raw = options?.classBreaks
+  if (raw && raw.length >= 9) {
+    const interior =
+      raw.length === 11
+        ? raw.slice(1, -1)
+        : raw.length === 9
+          ? raw
+          : raw.slice(1, 10)
+    if (interior.length === 9) {
+      breaks = interior as typeof SENTINEL_ET_10_CLASS_BREAKS
+      const edges =
+        raw.length === 11
+          ? raw
+          : [0, ...interior, Math.max(10, interior[interior.length - 1]! + 1)]
+      centers = (options?.classCenters?.length === 10
+        ? options.classCenters
+        : etClassCenterValues(edges)) as typeof SENTINEL_ET_10_CLASS_VALUES
+    }
+  }
+
+  const thr =
+    indexVisibilityMin != null && Number.isFinite(indexVisibilityMin)
+      ? Math.max(0, Math.min(15, indexVisibilityMin))
+      : null
+
+  const alphaBlock =
+    thr == null
+      ? 'return imgVals.concat(samples.dataMask);'
+      : `var a = samples.dataMask * (et >= ${thr} ? 1.0 : 0.0);
+  return imgVals.concat(a);`
+
+  const coloredRamp: RampStop[] = centers.map((v, i) => [
+    v,
+    SENTINEL_ET_RAMP[Math.min(i, SENTINEL_ET_RAMP.length - 1)]![1],
+  ])
+
+  return `//VERSION=3
+// ET — seasonal × Kc × moisture demand (mm/day), 10 classes
+function setup() {
+  return {
+    input: ["B03", "B04", "B08", "B11", "dataMask"],
+    output: { bands: 4 }
+  };
+}
+
+const etRamp = [
+   ${formatRampForEvalscript(coloredRamp)}
+];
+
+const viz = new ColorRampVisualizer(etRamp);
+
+const BREAKS = [${formatNumberList(breaks)}];
+const CLASS_VAL = [${formatNumberList(centers)}];
+
+function etClass(val) {
+  if (val < BREAKS[0]) return 0;
+  if (val < BREAKS[1]) return 1;
+  if (val < BREAKS[2]) return 2;
+  if (val < BREAKS[3]) return 3;
+  if (val < BREAKS[4]) return 4;
+  if (val < BREAKS[5]) return 5;
+  if (val < BREAKS[6]) return 6;
+  if (val < BREAKS[7]) return 7;
+  if (val < BREAKS[8]) return 8;
+  return 9;
+}
+
+function evaluatePixel(samples) {
+  ${setupEt}
+  let cls = etClass(et);
+  let imgVals = viz.process(CLASS_VAL[cls]);
+  ${alphaBlock}
+}`
+}
+
 /**
  * NDVI Live WMS — lightweight ColorRampVisualizer on B08/B04 with dataMask alpha.
  *
@@ -506,6 +613,7 @@ function evaluatePixel(samples) {
 export function buildSentinelIndexColorRampEvalscript(
   profile: SentinelIndexEvalProfile,
   indexVisibilityMin: number | null = null,
+  options?: { sceneDate?: string | null },
 ): string {
   if (profile === 'ndvi') {
     return buildSentinelNdviTenClassEvalscript(indexVisibilityMin)
@@ -515,6 +623,11 @@ export function buildSentinelIndexColorRampEvalscript(
   }
   if (profile === 'ndmi') {
     return buildSentinelNdmiTenClassEvalscript(indexVisibilityMin)
+  }
+  if (profile === 'et') {
+    return buildSentinelEtTenClassEvalscript(indexVisibilityMin, {
+      sceneDate: options?.sceneDate,
+    })
   }
 
   const spec = INDEX_EVAL_SPECS[profile]
@@ -555,3 +668,11 @@ export function isSentinelIndexColorRampProfile(
 ): profile is SentinelIndexEvalProfile {
   return profile in INDEX_EVAL_SPECS
 }
+
+export {
+  SENTINEL_ET_10_CLASS_BREAKS,
+  SENTINEL_ET_10_CLASS_COLORS,
+  SENTINEL_ET_10_CLASS_LABELS,
+  SENTINEL_ET_10_CLASS_VALUES,
+  SENTINEL_ET_RAMP,
+} from './etIndex'

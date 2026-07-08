@@ -33,6 +33,25 @@ export type SentinelHubStatisticsProxyStatus = {
 let statsProxyStatusCache: { status: SentinelHubStatisticsProxyStatus; at: number } | null = null
 const STATS_PROXY_STATUS_TTL_MS = 60_000
 
+function isAbortError(err: unknown): boolean {
+  if (err == null) return false
+  if (typeof DOMException !== 'undefined' && err instanceof DOMException && err.name === 'AbortError') {
+    return true
+  }
+  if (err instanceof Error) {
+    if (err.name === 'AbortError') return true
+    const msg = err.message.toLowerCase()
+    if (msg.includes('aborted') || msg.includes('the operation was aborted')) return true
+  }
+  return false
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new DOMException('The operation was aborted.', 'AbortError')
+  }
+}
+
 /** Server-side statistics proxy health (WMS zonal vs Statistical API). */
 export async function fetchSentinelHubStatisticsProxyStatus(options?: {
   signal?: AbortSignal
@@ -649,7 +668,9 @@ async function postSentinelStatisticsDirect(
   body: Record<string, unknown>,
   signal?: AbortSignal,
 ): Promise<StatsApiResponse> {
+  throwIfAborted(signal)
   const token = await resolveSentinelHubBearerToken()
+  throwIfAborted(signal)
   const res = await fetch(SENTINEL_HUB_STATISTICS_URL, {
     method: 'POST',
     headers: {
@@ -680,6 +701,7 @@ async function postSentinelStatisticsViaProxy(
   body: Record<string, unknown>,
   signal?: AbortSignal,
 ): Promise<StatsApiResponse> {
+  throwIfAborted(signal)
   const res = await fetch(SENTINEL_HUB_STATISTICS_PROXY_URL, {
     method: 'POST',
     headers: {
@@ -742,6 +764,7 @@ async function postSentinelStatisticsRequest(
         const json = await postSentinelStatisticsViaProxy(body, signal)
         return storeAndReturn(json)
       } catch (proxyErr) {
+        if (isAbortError(proxyErr) || signal?.aborted) throw proxyErr
         if (!isSentinelHubStatisticsDirectConfigured()) throw proxyErr
         /* fall through to direct Statistical API when configured */
       }
@@ -751,7 +774,8 @@ async function postSentinelStatisticsRequest(
       try {
         const json = await postSentinelStatisticsDirect(body, signal)
         return storeAndReturn(json)
-      } catch {
+      } catch (directErr) {
+        if (isAbortError(directErr) || signal?.aborted) throw directErr
         /* fall through to server proxy */
       }
     }
@@ -1069,7 +1093,8 @@ async function postSentinelHistogramRequest(
     try {
       const json = await postSentinelStatisticsDirect(body, signal)
       return parseSentinelHubNdviHistogramResponse(json)
-    } catch {
+    } catch (err) {
+      if (isAbortError(err) || signal?.aborted) throw err
       /* fall through to server proxy */
     }
   }
@@ -1172,15 +1197,20 @@ async function postGenericHistogramRequest(
   outputId: string,
   signal?: AbortSignal,
 ): Promise<SentinelHubGenericHistogram[]> {
+  throwIfAborted(signal)
   const cacheKey = JSON.stringify(body)
   const cached = histogramResultCache.get(cacheKey)
   if (cached && Date.now() < cached.expiresAt) {
     return cached.data
   }
 
-  const inFlight = histogramInFlight.get(cacheKey)
-  if (inFlight) {
-    return inFlight
+  // Never join an in-flight request that can be aborted by another caller —
+  // sharing a signalled fetch causes "signal is aborted" to leak into active legends.
+  if (!signal) {
+    const inFlight = histogramInFlight.get(cacheKey)
+    if (inFlight) {
+      return inFlight
+    }
   }
 
   const promise = (async (): Promise<SentinelHubGenericHistogram[]> => {
@@ -1194,7 +1224,8 @@ async function postGenericHistogramRequest(
           expiresAt: Date.now() + STATS_RESULT_CACHE_TTL_MS,
         })
         return rows
-      } catch {
+      } catch (err) {
+        if (isAbortError(err) || signal?.aborted) throw err
         /* fall through to proxy */
       }
     }
@@ -1212,11 +1243,15 @@ async function postGenericHistogramRequest(
     )
   })()
 
-  histogramInFlight.set(cacheKey, promise)
+  if (!signal) {
+    histogramInFlight.set(cacheKey, promise)
+  }
   try {
     return await promise
   } finally {
-    histogramInFlight.delete(cacheKey)
+    if (!signal) {
+      histogramInFlight.delete(cacheKey)
+    }
   }
 }
 

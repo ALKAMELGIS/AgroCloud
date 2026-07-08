@@ -4018,17 +4018,215 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
   color: #f8fafc;
 }
 
+.acp-ts__water-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 0 0 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(56, 189, 248, 0.32);
+  background: linear-gradient(90deg, rgba(12, 74, 110, 0.4), rgba(10, 10, 10, 0.65));
+}
+
+.acp-ts__water-summary--alert {
+  border-color: rgba(249, 115, 22, 0.55);
+  background: linear-gradient(90deg, rgba(124, 45, 18, 0.45), rgba(10, 10, 10, 0.7));
+}
+
+.acp-ts__water-summary-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: #e0f2fe;
+}
+
+.acp-ts__water-summary-main strong {
+  color: #7dd3fc;
+  font-weight: 700;
+}
+
+.acp-ts__water-summary-date {
+  color: #94a3b8;
+  font-size: 9px;
+}
+
+.acp-ts__water-summary-busy {
+  color: #38bdf8;
+  font-size: 10px;
+}
+
+.acp-ts__water-stress {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.acp-ts__water-stress--low {
+  color: #bae6fd;
+  border-color: rgba(56, 189, 248, 0.4);
+  background: rgba(14, 165, 233, 0.15);
+}
+
+.acp-ts__water-stress--moderate {
+  color: #fde68a;
+  border-color: rgba(234, 179, 8, 0.45);
+  background: rgba(234, 179, 8, 0.15);
+}
+
+.acp-ts__water-stress--high {
+  color: #fdba74;
+  border-color: rgba(249, 115, 22, 0.5);
+  background: rgba(249, 115, 22, 0.18);
+}
+
+.acp-ts__water-stress--critical {
+  color: #fecaca;
+  border-color: rgba(239, 68, 68, 0.55);
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.acp-ts__water-summary-kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.acp-ts__water-summary-kpis div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 3.6rem;
+}
+
+.acp-ts__water-summary-kpis em {
+  font-style: normal;
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #7dd3fc;
+}
+
+.acp-ts__water-summary-kpis strong {
+  font-size: 10px;
+  font-weight: 650;
+  color: #f8fafc;
+}
+
 .acp-ts__chart-wrap {
-  height: 220px;
-  min-height: 180px;
+  height: 260px;
+  min-height: 220px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
   background: #0a0a0a;
-  padding: 4px 4px 14px;
+  /* Extra top/bottom so axis ticks (e.g. 0.35 / 100%) never clip. */
+  padding: 10px 8px 12px;
   position: relative;
   z-index: 2;
   isolation: isolate;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.acp-ts__chart-wrap--overlays {
+  height: 320px;
+  min-height: 280px;
+  padding: 12px 8px 14px;
+}
+
+.acp-ts__chart-wrap--interpret-tab {
   overflow: hidden;
+  padding-top: 8px;
+}
+
+.acp-ts__chart-wrap canvas {
+  max-width: 100%;
+  display: block;
+}
+
+.acp-ts__workspace-tabs {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  align-self: flex-start;
+}
+
+.acp-ts__workspace-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.acp-ts__workspace-tab i {
+  font-size: 9px;
+  opacity: 0.9;
+}
+
+.acp-ts__workspace-tab:hover {
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.acp-ts__workspace-tab.is-active {
+  color: #ecfdf5;
+  background: linear-gradient(180deg, rgba(52, 211, 153, 0.28), rgba(16, 185, 129, 0.16));
+  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.28);
+}
+
+.acp-ts__workspace-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+}
+
+.acp-ts__workspace-pane--chart {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.acp-ts__workspace-pane--chart > * {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+
+.acp-ts__workspace-pane--interpret {
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+.acp-ts__workspace-pane--interpret .acp-ts__interpret {
+  margin-top: 0;
+  height: 100%;
+  max-height: none;
+  box-sizing: border-box;
 }
 
 .acp-ts__placeholder {
