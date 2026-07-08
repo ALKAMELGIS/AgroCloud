@@ -1,0 +1,1 @@
+import{a as i}from"./SatelliteIntelligence-s14awFPz.js";function s(e,t){i(e);const r=e==="raster"?"uploaded-raster":"sentinel-live";return t==="supervised-ground-truth"?{id:"sentinel-wms-ndvi",source:r,normalization:"spectral-rf",timestepsDefault:5}:{id:"sentinel-wms-ndvi",source:r,normalization:"ndvi-phenology",timestepsDefault:3}}export{s as r};
