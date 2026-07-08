@@ -6,6 +6,7 @@
 import { resolveAgroCompositeExpr, resolveAgroCompositeIndexDef, isAgroDeltaCompositeLayerId } from './agroCompositeIndices'
 import { resolveAgroCompositeTenClassRamp } from './agroCompositeLayerRamps'
 import { CHAS_ALERT_RGB_01 } from './chasAlertMapping'
+import { buildStressZonesWmsEvalscript } from './siStressZonesEvalscript'
 
 type RampStop = [number, number]
 
@@ -257,6 +258,9 @@ export function buildAgroCompositeLayerEvalscript(
   const u = String(layerId || '').trim().toUpperCase()
   if (u === 'CHAS_ALERT') {
     return buildChasAlertEvalscript(indexVisibilityMin)
+  }
+  if (u === 'STRESS_ZONES') {
+    return buildStressZonesWmsEvalscript(indexVisibilityMin)
   }
   if (isAgroDeltaCompositeLayerId(u)) {
     return buildAgroCompositeDeltaEvalscript(u, indexVisibilityMin)

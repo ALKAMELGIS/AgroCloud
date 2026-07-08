@@ -5,6 +5,7 @@ export type SmartProcessingSectionId =
   | 'layers'
   | 'remote-sensing'
   | 'crop-alerts'
+  | 'stress-zones'
   | 'crop-classification'
   | 'ai-detection-gis'
   | 'tree-detections'
@@ -32,6 +33,7 @@ const QUICK_LINKS: Array<{ id: SmartProcessingSectionId; icon: string; label: st
   { id: 'layers', icon: 'fa-solid fa-layer-group', label: 'Layers' },
   { id: 'remote-sensing', icon: 'fa-solid fa-satellite-dish', label: 'Remote sensing' },
   { id: 'crop-alerts', icon: 'fa-solid fa-wheat-awn-circle-exclamation', label: 'Crop alerts' },
+  { id: 'stress-zones', icon: 'fa-solid fa-heart-pulse', label: 'Stress Zones ⭐' },
   { id: 'crop-classification', icon: 'fa-solid fa-wheat-awn', label: 'Crop AI' },
   { id: 'ai-detection-gis', icon: 'fa-solid fa-magnifying-glass-location', label: 'AI Detection in GIS' },
   { id: 'tree-detections', icon: 'fa-solid fa-tree', label: 'Tree Detections' },
@@ -91,6 +93,13 @@ const WORKFLOW_ROWS: Array<{
         label: 'Agro Sentinel alerts',
         hint: 'Real-time crop health, water stress, and harvest signals from Sentinel Live.',
         target: 'crop-alerts',
+      },
+      {
+        id: 'stress-zones',
+        icon: 'fa-solid fa-heart-pulse',
+        label: 'Stress Zones Detection',
+        hint: 'CHAS fusion map with healthy, mild, moderate, severe, and bare soil zones.',
+        target: 'stress-zones',
       },
       {
         id: 'crop-classification',

@@ -1,0 +1,208 @@
+.si-stress-zones {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 11px;
+  color: #e2e8f0;
+}
+
+.si-stress-zones__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.si-stress-zones__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.si-stress-zones__sub {
+  margin: 2px 0 0;
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.si-stress-zones__refresh {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(4, 120, 87, 0.25);
+  color: #ecfdf5;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.si-stress-zones__formula {
+  margin: 0;
+  font-size: 9px;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+.si-stress-zones__toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.si-stress-zones__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: #cbd5e1;
+}
+
+.si-stress-zones__error {
+  margin: 0;
+  color: #f87171;
+  font-size: 10px;
+}
+
+.si-stress-zones__kpis {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.si-stress-zones__kpi {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.si-stress-zones__kpi span {
+  font-size: 9px;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.si-stress-zones__kpi strong {
+  font-size: 12px;
+  color: #f8fafc;
+}
+
+.si-stress-zones__indices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 10px;
+  color: #cbd5e1;
+}
+
+.si-stress-zones__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+
+.si-stress-zones__table th,
+.si-stress-zones__table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  text-align: left;
+}
+
+.si-stress-zones__table th {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.si-stress-zones__row {
+  cursor: pointer;
+}
+
+.si-stress-zones__row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.si-stress-zones__swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.si-stress-zones__insight {
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.si-stress-zones__insight strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  color: #a7f3d0;
+}
+
+.si-stress-zones__insight p {
+  margin: 2px 0 6px;
+  color: #e2e8f0;
+  line-height: 1.4;
+}
+
+.si-stress-zones__ts h4 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  color: #f8fafc;
+}
+
+.si-stress-zones__ts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.si-stress-zones__ts-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 9px;
+  color: #cbd5e1;
+  padding: 3px 0;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.06);
+}
+
+.si-stress-zones__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.si-stress-zones__legend li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  color: #94a3b8;
+}
+
+.si-stress-zones__legend span {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.si-stress-zones__loading,
+.si-stress-zones__hint {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 10px;
+}

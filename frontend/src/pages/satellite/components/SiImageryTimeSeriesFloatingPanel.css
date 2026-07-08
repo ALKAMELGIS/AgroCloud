@@ -1,7 +1,7 @@
 .si-its-float {
   position: fixed;
-  top: 72px;
-  left: 14px;
+  top: 147px;
+  left: 110px;
   right: auto;
   z-index: 9200;
   pointer-events: auto;
@@ -49,13 +49,20 @@
 
 /* Override global acp-map-panel caps so user resize is not clipped. */
 .si-its-float.acp-map-panel--timeseries {
-  width: min(420px, calc(100vw - 28px));
+  width: min(518px, calc(100vw - 28px));
   max-height: none !important;
   height: auto;
 }
 
 .si-its-float.si-its-float--sized {
   max-height: none !important;
+}
+
+.si-its-float.si-its-float--sized .si-its-float__chrome {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .si-its-float .si-its-float__head {
@@ -116,8 +123,11 @@
 }
 
 .si-its-float.si-its-float--sized .si-its-float__body {
-  flex: 0 0 auto;
-  overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .si-its-float .acp-ts {
@@ -130,12 +140,20 @@
 .si-its-float .acp-ts__chart-wrap {
   flex: 1 1 auto;
   min-height: 160px;
-  height: auto;
+  height: auto !important;
+}
+
+.si-its-float.si-its-float--sized .acp-ts {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 .si-its-float.si-its-float--sized .acp-ts__chart-wrap {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 120px;
+  height: auto !important;
 }
 
 .si-its-float .acp-ts__interpret {
@@ -146,6 +164,10 @@
   box-shadow:
     0 12px 36px rgba(0, 0, 0, 0.55),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  max-height: min(42vh, 280px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .si-its-float__resize {

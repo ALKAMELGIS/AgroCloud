@@ -72,7 +72,6 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
     onResetImageryDateAuto,
     imageryDateAutoFollow,
     isFetchingSentinelScenes,
-    imageryDateMeta,
     layerGroups,
     layerValue,
     onLayerChange,
@@ -167,11 +166,6 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
             </button>
           </div>
         </label>
-        {imageryDateMeta ? (
-          <p className="si-rs-panel__meta si-rs-panel__meta--inline" role="status">
-            {imageryDateMeta}
-          </p>
-        ) : null}
 
         <label className="si-rs-panel__stack">
           <span className="si-rs-panel__label">Index layer</span>

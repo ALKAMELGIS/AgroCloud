@@ -153,6 +153,7 @@ export type SatelliteMapAnalysisChromeProps = {
     | 'layers'
     | 'remote-sensing'
     | 'crop-alerts'
+    | 'stress-zones'
     | 'crop-classification'
     | 'ai-detection-gis'
     | 'tree-detections'
@@ -191,6 +192,10 @@ export type SatelliteMapAnalysisChromeProps = {
   onMeasureOpenPanel?: () => void;
   /** Main toolbox Measure tool: stop / clear measuring. */
   onMeasureClear?: () => void;
+  /** Main toolbox Select tool: feature selection mode active. */
+  mapToolboxSelectionActive?: boolean;
+  /** Toggle GIS feature selection from the map toolbox rail. */
+  onMapToolboxToggleSelection?: () => void;
   /** Imagery Time Series floating panel open state (map variant). */
   imageryTimeSeriesOpen?: boolean;
   onImageryTimeSeriesOpenChange?: (open: boolean) => void;
@@ -265,6 +270,8 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
     measureMode,
     onMeasureOpenPanel,
     onMeasureClear,
+    mapToolboxSelectionActive,
+    onMapToolboxToggleSelection,
     imageryTimeSeriesOpen,
     onImageryTimeSeriesOpenChange,
     goToXyOpen,
@@ -354,6 +361,8 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
       measureMode={measureMode}
       onMeasureOpenPanel={onMeasureOpenPanel}
       onMeasureClear={onMeasureClear}
+      mapToolboxSelectionActive={mapToolboxSelectionActive}
+      onMapToolboxToggleSelection={onMapToolboxToggleSelection}
       imageryTimeSeriesOpen={imageryTimeSeriesOpen}
       onImageryTimeSeriesOpenChange={onImageryTimeSeriesOpenChange}
       goToXyOpen={goToXyOpen}

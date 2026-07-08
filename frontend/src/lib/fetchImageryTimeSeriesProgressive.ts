@@ -9,18 +9,25 @@ import {
 } from './sentinelHubStatisticsApi'
 import {
   buildImageryTsCacheKey,
+  buildImageryTsChunkCacheKey,
   geometryHashForImageryCache,
   isImageryTsCacheFresh,
   isImageryTsCacheStaleButUsable,
   readImageryTsCache,
+  readImageryTsChunkCache,
   writeImageryTsCache,
+  writeImageryTsChunkCache,
 } from './imageryTimeSeriesCache'
 
 export const DEFAULT_IMAGERY_TS_CLOUD_FILTER = 65
 export const IMAGERY_TS_CHUNK_DAYS = 90
+/** Smallest first window for fast chart paint (~1–2 s target). */
+export const IMAGERY_TS_PREVIEW_DAYS = 14
 /** Smaller chunks when the server uses WMS zonal fallback (many per-scene GetMap calls). */
-export const IMAGERY_TS_WMS_CHUNK_DAYS = 28
-export const IMAGERY_TS_FETCH_CONCURRENCY = 3
+export const IMAGERY_TS_WMS_CHUNK_DAYS = 56
+export const IMAGERY_TS_FETCH_CONCURRENCY = 4
+export const IMAGERY_TS_WMS_FETCH_CONCURRENCY = 6
+export const IMAGERY_TS_PROXY_STATUS_TIMEOUT_MS = 250
 
 export type ImageryDateChunk = { fromIso: string; toIso: string }
 
@@ -52,31 +59,45 @@ function daysBetweenInclusive(fromIso: string, toIso: string): number {
   return Math.max(1, Math.ceil((to - from) / 86400000) + 1)
 }
 
-/** Split a range into chunks with the most recent window first for fast first paint. */
+/** Split a range into chunks — preview window first, then older ranges. */
 export function planImageryDateChunks(
   fromIso: string,
   toIso: string,
   maxChunkDays = IMAGERY_TS_CHUNK_DAYS,
+  previewDays = IMAGERY_TS_PREVIEW_DAYS,
 ): ImageryDateChunk[] {
   const from = fromIso.trim().slice(0, 10)
   const to = toIso.trim().slice(0, 10)
   if (!from || !to || from >= to) return []
   const totalDays = daysBetweenInclusive(from, to)
-  if (totalDays <= maxChunkDays) return [{ fromIso: from, toIso: to }]
+  if (totalDays <= maxChunkDays && totalDays <= previewDays) {
+    return [{ fromIso: from, toIso: to }]
+  }
 
   const chunks: ImageryDateChunk[] = []
-  const recentFrom = addDaysToIso(to, -(maxChunkDays - 1))
-  const recentStart = recentFrom < from ? from : recentFrom
-  chunks.push({ fromIso: recentStart, toIso: to })
 
-  let cursorEnd = addDaysToIso(recentStart, -1)
+  if (previewDays > 0 && totalDays > previewDays) {
+    const previewFrom = addDaysToIso(to, -(previewDays - 1))
+    const previewStart = previewFrom < from ? from : previewFrom
+    chunks.push({ fromIso: previewStart, toIso: to })
+  }
+
+  let cursorEnd = chunks.length
+    ? addDaysToIso(chunks[0]!.fromIso, -1)
+    : to
+
+  if (cursorEnd < from) {
+    return chunks.length ? chunks : [{ fromIso: from, toIso: to }]
+  }
+
   while (cursorEnd >= from) {
     const chunkFrom = addDaysToIso(cursorEnd, -(maxChunkDays - 1))
     const start = chunkFrom < from ? from : chunkFrom
     chunks.push({ fromIso: start, toIso: cursorEnd })
     cursorEnd = addDaysToIso(start, -1)
   }
-  return chunks
+
+  return chunks.length ? chunks : [{ fromIso: from, toIso: to }]
 }
 
 export function countImageryObservations(daily: SentinelHubDailyIndexMeans[]): number {
@@ -111,12 +132,18 @@ async function fetchChunkDaily(
   cloudFilter: number,
   signal?: AbortSignal,
 ): Promise<SentinelHubDailyIndexMeans[]> {
-  const chunkKey = `${geometryHashForImageryCache(geometry)}|${chunk.fromIso}|${chunk.toIso}|${cloudFilter}`
+  const geomHash = geometryHashForImageryCache(geometry)
+  const chunkCacheKey = buildImageryTsChunkCacheKey(geomHash, chunk.fromIso, chunk.toIso, cloudFilter)
+  const chunkKey = `${geomHash}|${chunk.fromIso}|${chunk.toIso}|${cloudFilter}`
   const existing = chunkInflight.get(chunkKey)
   if (existing) return existing
 
   const promise = (async () => {
     if (signal?.aborted) return []
+    const cachedChunk = await readImageryTsChunkCache(chunkCacheKey)
+    if (cachedChunk?.length) {
+      return cachedChunk.filter(row => row.date >= rangeFrom && row.date <= rangeTo)
+    }
     try {
       let daily = await fetchSentinelFieldIndexTimeSeriesForRange({
         geometry,
@@ -136,7 +163,9 @@ async function fetchChunkDaily(
         })
         daily = mergeDailyIndexSeries(daily, relaxed)
       }
-      return daily.filter(row => row.date >= rangeFrom && row.date <= rangeTo)
+      const filtered = daily.filter(row => row.date >= rangeFrom && row.date <= rangeTo)
+      if (filtered.length) void writeImageryTsChunkCache(chunkCacheKey, daily)
+      return filtered
     } catch (err) {
       if (signal?.aborted) return []
       console.warn('[imagery-ts] chunk fetch failed', chunk, err)
@@ -202,10 +231,28 @@ export async function fetchImageryTimeSeriesProgressive(
       return []
     }
 
-    const cached = await readImageryTsCache(cacheKey)
+    emit([], {
+      phase: 'fetching',
+      message: 'Loading imagery…',
+      chunksDone: 0,
+      chunksTotal: 0,
+      observations: 0,
+      percent: 0,
+      fromCache: false,
+      refreshing: false,
+    })
+
+    const cachedPromise = readImageryTsCache(cacheKey)
+    const statusPromise = Promise.race([
+      fetchSentinelHubStatisticsProxyStatus({ signal: options.signal }),
+      new Promise<null>(resolve => {
+        setTimeout(() => resolve(null), IMAGERY_TS_PROXY_STATUS_TIMEOUT_MS)
+      }),
+    ])
+
+    const [cached, proxyStatus] = await Promise.all([cachedPromise, statusPromise])
     let merged = cached?.daily ?? []
 
-    const proxyStatus = await fetchSentinelHubStatisticsProxyStatus({ signal: options.signal })
     if (proxyStatus && !proxyStatus.configured) {
       throw new Error(
         proxyStatus.hint ||
@@ -214,6 +261,9 @@ export async function fetchImageryTimeSeriesProgressive(
     }
     const chunkDays =
       proxyStatus?.mode === 'wms-zonal' ? IMAGERY_TS_WMS_CHUNK_DAYS : IMAGERY_TS_CHUNK_DAYS
+    const fetchConcurrency =
+      options.concurrency ??
+      (proxyStatus?.mode === 'wms-zonal' ? IMAGERY_TS_WMS_FETCH_CONCURRENCY : IMAGERY_TS_FETCH_CONCURRENCY)
     const chunks = planImageryDateChunks(fromIso, toIso, chunkDays)
     const chunksTotal = chunks.length
 
@@ -235,7 +285,7 @@ export async function fetchImageryTimeSeriesProgressive(
     if (!merged.length) {
       emit(merged, {
         phase: 'fetching',
-        message: 'Loading imagery…',
+        message: 'Fetching recent scenes…',
         chunksDone: 0,
         chunksTotal,
         observations: 0,
@@ -248,17 +298,14 @@ export async function fetchImageryTimeSeriesProgressive(
     let chunksDone = 0
     let mergeChain = Promise.resolve()
 
-    const reportMerge = (rows: SentinelHubDailyIndexMeans[], complete: boolean, refreshing: boolean) => {
-      mergeChain = mergeChain.then(async () => {
+    const reportMerge = (
+      rows: SentinelHubDailyIndexMeans[],
+      complete: boolean,
+      refreshing: boolean,
+    ) => {
+      mergeChain = mergeChain.then(() => {
         merged = mergeDailyIndexSeries(merged, rows)
         chunksDone += 1
-        await writeImageryTsCache(cacheKey, {
-          fieldKey: field.fieldKey,
-          fromIso,
-          toIso,
-          cloudFilter,
-          daily: merged,
-        })
         emit(merged, {
           phase: complete ? 'complete' : 'fetching',
           message: complete
@@ -271,25 +318,19 @@ export async function fetchImageryTimeSeriesProgressive(
           fromCache: false,
           refreshing,
         })
+        void writeImageryTsCache(cacheKey, {
+          fieldKey: field.fieldKey,
+          fromIso,
+          toIso,
+          cloudFilter,
+          daily: merged,
+        })
       })
       return mergeChain
     }
 
-    const [firstChunk, ...restChunks] = chunks
-    if (firstChunk && !options.signal?.aborted) {
-      const firstRows = await fetchChunkDaily(
-        field.geometry!,
-        firstChunk,
-        fromIso,
-        toIso,
-        cloudFilter,
-        options.signal,
-      )
-      await reportMerge(firstRows, !restChunks.length, !!cached?.daily?.length)
-    }
-
-    if (restChunks.length && !options.signal?.aborted) {
-      await mapPool(restChunks, options.concurrency ?? IMAGERY_TS_FETCH_CONCURRENCY, async chunk => {
+    if (chunks.length && !options.signal?.aborted) {
+      await mapPool(chunks, fetchConcurrency, async chunk => {
         if (options.signal?.aborted) return []
         const rows = await fetchChunkDaily(
           field.geometry!,

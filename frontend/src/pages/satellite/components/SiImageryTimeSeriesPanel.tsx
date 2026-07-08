@@ -17,7 +17,7 @@ import {
 import { Bar, Line, Pie, Scatter } from 'react-chartjs-2'
 import { useImageryTimeSeriesStream } from '../hooks/useImageryTimeSeriesStream'
 import { useImageryIndexInterpretation } from '../hooks/useImageryIndexInterpretation'
-import { SiImageryIndexInterpretationCard } from './SiImageryIndexInterpretationCard'
+import { SiImageryIndexInterpretationCard, type ImageryInterpretationActionId } from './SiImageryIndexInterpretationCard'
 import type { SiAoiFieldRecord } from '../../../lib/siAoiFields'
 import {
   buildImageryCorrelationScatterAnalysis,
@@ -40,6 +40,7 @@ import {
   resolveSiImageryField,
   SI_IMAGERY_COMMITTED_AOI_KEY,
 } from '../utils/siImageryTimeSeriesFields'
+import { TimeSeriesExportManager } from './timeSeriesReport/ExportManager'
 import '../../dashboards/agroCloudPlatform/AgroCloudPlatformDashboard.css'
 
 ChartJS.register(
@@ -66,6 +67,9 @@ export type SiImageryTimeSeriesPanelProps = {
   selectedFieldKey?: string | null
   onSelectedFieldKeyChange?: (fieldKey: string) => void
   chartLookbackDays?: number
+  mapboxToken?: string
+  projectName?: string
+  generatedBy?: string
 }
 
 export function SiImageryTimeSeriesPanel({
@@ -78,8 +82,12 @@ export function SiImageryTimeSeriesPanel({
   selectedFieldKey: selectedFieldKeyProp,
   onSelectedFieldKeyChange,
   chartLookbackDays = 90,
+  mapboxToken,
+  projectName,
+  generatedBy,
 }: SiImageryTimeSeriesPanelProps) {
   const chartRef = useRef<ChartJS | null>(null)
+  const chartWrapRef = useRef<HTMLDivElement | null>(null)
   const referenceDate = analysisDate.trim().slice(0, 10) || new Date().toISOString().slice(0, 10)
   const defaultRange = useMemo(
     () => defaultImageryDateRange(referenceDate, chartLookbackDays),
@@ -104,7 +112,6 @@ export function SiImageryTimeSeriesPanel({
   const [toDate, setToDate] = useState(defaultRange.to)
   const [splitByYears, setSplitByYears] = useState(false)
   const [dateError, setDateError] = useState<string | null>(null)
-  const [analysisElapsedMs, setAnalysisElapsedMs] = useState(0)
   const [selectedChartDate, setSelectedChartDate] = useState<string | null>(null)
   const [interpretationOpen, setInterpretationOpen] = useState(false)
   const runAnalysisRef = useRef<() => Promise<void>>(() => Promise.resolve())
@@ -126,10 +133,11 @@ export function SiImageryTimeSeriesPanel({
     dailyRows,
     loading,
     refreshing,
-    progress,
     error,
     hasRun,
     analysisDurationMs,
+    hasChartData,
+    chartReady,
     run: runAnalysis,
     invalidateResults,
   } = useImageryTimeSeriesStream({
@@ -138,7 +146,7 @@ export function SiImageryTimeSeriesPanel({
     toDate,
     layerIds: selectedLayerIds,
     referenceDate,
-    prefetchLookbackDays: chartLookbackDays,
+    prefetchLookbackDays: Math.max(chartLookbackDays, 365),
   })
 
   const aggregatedChart = useMemo(
@@ -191,6 +199,17 @@ export function SiImageryTimeSeriesPanel({
     chartValues: primaryChartValues,
     enabled: interpretationOpen && interpretationSupported,
   })
+
+  const handleInterpretationAction = useCallback(
+    (actionId: ImageryInterpretationActionId) => {
+      const scene = interpretation?.sceneDate?.trim().slice(0, 10)
+      if (scene) onMapDateFromChart(scene)
+      if (actionId === 'inspect-stress' || actionId === 'scout-moderate') {
+        setInterpretationOpen(true)
+      }
+    },
+    [interpretation?.sceneDate, onMapDateFromChart],
+  )
 
   const handleInvalidate = useCallback(() => {
     invalidateResults()
@@ -261,7 +280,6 @@ export function SiImageryTimeSeriesPanel({
     fieldOptions.find(o => o.fieldKey === selectedFieldKey)?.displayName ?? '—'
 
   const runAnalysisWrapped = useCallback(async () => {
-    setAnalysisElapsedMs(0)
     await runAnalysis()
     autoRunReadyRef.current = true
     prevAutoRunDatesRef.current = { from: fromDate, to: toDate }
@@ -270,20 +288,23 @@ export function SiImageryTimeSeriesPanel({
   runAnalysisRef.current = runAnalysisWrapped
 
   useEffect(() => {
-    if (!loading) return
-    const tick = () => setAnalysisElapsedMs(ms => ms + 100)
-    const id = window.setInterval(tick, 100)
-    return () => window.clearInterval(id)
-  }, [loading])
+    const el = chartWrapRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => {
+      chartRef.current?.resize()
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [chartReady, chartType])
 
   useEffect(() => {
-    if (!autoRunReadyRef.current || !selectedFieldKey || loading) return
+    if (!autoRunReadyRef.current || !selectedFieldKey || (loading && !hasChartData)) return
     if (!fromDate || !toDate || fromDate >= toDate) return
     const prev = prevAutoRunDatesRef.current
     if (prev.from === fromDate && prev.to === toDate) return
     const id = window.setTimeout(() => void runAnalysisRef.current(), 650)
     return () => window.clearTimeout(id)
-  }, [fromDate, toDate, selectedFieldKey, loading])
+  }, [fromDate, toDate, selectedFieldKey, loading, hasChartData])
 
   const chartDateClickHandler = useCallback(
     (_event: unknown, elements: Array<{ index: number; datasetIndex?: number }>) => {
@@ -446,7 +467,8 @@ export function SiImageryTimeSeriesPanel({
     () => ({
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: loading ? 0 : 280 },
+      animation: { duration: chartReady ? 280 : 0 },
+      layout: { padding: { top: 4, right: 6, bottom: 2, left: 2 } },
       onClick: chartDateClickHandler,
       plugins: {
         legend: {
@@ -463,7 +485,14 @@ export function SiImageryTimeSeriesPanel({
       },
       scales: {
         x: {
-          ticks: { color: '#94a3b8', maxTicksLimit: 10, font: { size: 9 } },
+          ticks: {
+            color: '#94a3b8',
+            maxTicksLimit: Math.min(12, Math.max(chartLabels.length, 4)),
+            autoSkip: chartLabels.length > 12,
+            maxRotation: chartLabels.length > 8 ? 40 : 0,
+            minRotation: chartLabels.length > 8 ? 25 : 0,
+            font: { size: 9 },
+          },
           grid: { color: 'rgba(255,255,255,0.06)' },
         },
         y: {
@@ -472,14 +501,14 @@ export function SiImageryTimeSeriesPanel({
         },
       },
     }),
-    [loading, splitByYears, layerSeries.length, hasRun, chartDateClickHandler],
+    [chartReady, splitByYears, layerSeries.length, hasRun, chartDateClickHandler, chartLabels.length],
   )
 
   const pieChartOptions = useMemo(
     () => ({
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: loading ? 0 : 280 },
+      animation: { duration: chartReady ? 280 : 0 },
       plugins: {
         legend: {
           display: true,
@@ -489,14 +518,14 @@ export function SiImageryTimeSeriesPanel({
         tooltip: { bodyFont: { size: 10 }, titleFont: { size: 10 } },
       },
     }),
-    [loading],
+    [chartReady, hasChartData],
   )
 
   const scatterChartOptions = useMemo(
     () => ({
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: loading ? 0 : 280 },
+      animation: { duration: chartReady ? 280 : 0 },
       onClick: chartDateClickHandler,
       plugins: {
         legend: {
@@ -567,7 +596,7 @@ export function SiImageryTimeSeriesPanel({
             },
           },
     }),
-    [loading, layerSeries.length, hasRun, scatterCorrelation, chartDateClickHandler],
+    [chartReady, layerSeries.length, hasRun, scatterCorrelation, chartDateClickHandler],
   )
 
   const formatAnalysisSpeed = (ms: number) => {
@@ -587,31 +616,6 @@ export function SiImageryTimeSeriesPanel({
         : timeAggregation === 'month'
           ? 'Monthly'
           : 'Yearly'
-
-  const exportTable = useCallback(() => {
-    if (!chartLabels.length || !layerSeries.length) return
-    const header = ['period', ...layerSeries.map(s => s.layerId)].join(',')
-    const rows = chartLabels.map((period, rowIndex) =>
-      [period, ...layerSeries.map(s => s.values[rowIndex] ?? '')].join(','),
-    )
-    const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `imagery-timeseries-${layerSeries.map(s => s.layerId.toLowerCase()).join('-')}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-  }, [chartLabels, layerSeries])
-
-  const exportFigure = useCallback(() => {
-    const chart = chartRef.current
-    if (!chart) return
-    const url = chart.toBase64Image('image/png', 1)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `imagery-timeseries-${layerSeries.map(s => s.layerId.toLowerCase()).join('-')}.png`
-    a.click()
-  }, [layerSeries])
 
   return (
     <div className="acp-ts">
@@ -728,13 +732,13 @@ export function SiImageryTimeSeriesPanel({
             type="button"
             className="acp-ts__apply"
             onClick={() => void runAnalysisWrapped()}
-            disabled={loading || !selectedFieldKey}
+            disabled={(loading && !hasChartData) || !selectedFieldKey}
           >
-            {loading ? 'Running…' : 'Apply'}
+            {loading && !hasChartData ? 'Running…' : refreshing ? 'Updating…' : 'Apply'}
           </button>
         </div>
 
-        {hasRun ? (
+        {hasRun && chartReady ? (
           <div className="acp-ts__meta">
             <span>
               {layerSummary}
@@ -749,8 +753,8 @@ export function SiImageryTimeSeriesPanel({
           </div>
         ) : null}
 
-        <div className="acp-ts__chart-wrap">
-          {hasRun && labels.length ? (
+        <div className="acp-ts__chart-wrap" ref={chartWrapRef}>
+          {hasRun && chartReady ? (
             <>
               {chartType === 'bar' ? (
                 <Bar ref={chartRef as never} data={chartData as ChartData<'bar'>} options={cartesianChartOptions} />
@@ -761,72 +765,19 @@ export function SiImageryTimeSeriesPanel({
               ) : (
                 <Line ref={chartRef as never} data={chartData as ChartData<'line'>} options={cartesianChartOptions} />
               )}
-              {loading || refreshing ? (
-                <div
-                  className="acp-ts__progress"
-                  role="status"
-                  aria-live="polite"
-                  aria-busy={loading || refreshing}
-                >
-                  <div className="acp-ts__progress-head">
-                    <span>{progress.message || 'Loading imagery…'}</span>
-                    <span className="acp-ts__progress-speed">
-                      <i className="fa-solid fa-bolt" aria-hidden="true" />
-                      {formatAnalysisSpeed(analysisElapsedMs)}
-                    </span>
-                  </div>
-                  {progress.chunksTotal > 0 ? (
-                    <div
-                      className="acp-ts__progress-bar"
-                      role="progressbar"
-                      aria-valuenow={progress.percent}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                    >
-                      <span style={{ width: `${progress.percent}%` }} />
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
             </>
-          ) : loading ? (
-            <div className="acp-ts__skeleton" role="status" aria-live="polite" aria-busy="true">
-              <div className="acp-ts__skeleton-head">
-                <span className="acp-ts__skeleton-range">
-                  {fromDate} → {toDate}
-                </span>
-                <span className="acp-ts__skeleton-speed">
-                  <i className="fa-solid fa-bolt" aria-hidden="true" />
-                  {formatAnalysisSpeed(analysisElapsedMs)}
-                </span>
+          ) : loading && !hasChartData ? (
+            <div className="acp-ts__skeleton acp-ts__skeleton--atomic" role="status" aria-live="polite" aria-busy="true">
+              <div className="acp-ts__skeleton-spinner" aria-hidden="true">
+                <i className="fa-solid fa-spinner fa-spin" />
               </div>
-              <p className="acp-ts__skeleton-status">
-                {progress.message || 'Preparing chart…'}
-                {selectedFieldLabel !== '—' ? (
-                  <>
-                    {' '}
-                    for <strong>{selectedFieldLabel}</strong>
-                  </>
-                ) : null}
-                {selectedLayerIds.length ? ` · ${selectedLayerIds.join(', ')}` : ''}
-              </p>
-              {progress.chunksTotal > 0 ? (
-                <div
-                  className="acp-ts__progress-bar acp-ts__progress-bar--skeleton"
-                  role="progressbar"
-                  aria-valuenow={progress.percent}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                >
-                  <span style={{ width: `${Math.max(progress.percent, 8)}%` }} />
-                </div>
-              ) : (
-                <>
-                  <div className="acp-ts__skeleton-bar" />
-                  <div className="acp-ts__skeleton-bar acp-ts__skeleton-bar--short" />
-                </>
-              )}
-              <div className="acp-ts__skeleton-chart" />
+              <p className="acp-ts__skeleton-status">Loading imagery…</p>
+              {selectedFieldLabel !== '—' ? (
+                <p className="acp-ts__skeleton-context">
+                  {selectedFieldLabel}
+                  {selectedLayerIds.length ? ` · ${selectedLayerIds.join(', ')}` : ''}
+                </p>
+              ) : null}
             </div>
           ) : (
             <div className="acp-ts__placeholder">
@@ -837,7 +788,7 @@ export function SiImageryTimeSeriesPanel({
           )}
         </div>
 
-        {hasRun && labels.length ? (
+        {hasRun && chartReady ? (
           <p className="acp-ts__chart-hint">
             <i className="fa-solid fa-hand-pointer" aria-hidden="true" /> Click any point to set the map
             analysis date · Map date: <strong>{analysisDate}</strong>
@@ -883,6 +834,7 @@ export function SiImageryTimeSeriesPanel({
           <SiImageryIndexInterpretationCard
             interpretation={interpretation}
             loadingAreas={loadingAreas}
+            onAction={handleInterpretationAction}
           />
         ) : null}
 
@@ -917,12 +869,25 @@ export function SiImageryTimeSeriesPanel({
             >
               <i className="fa-solid fa-lightbulb" aria-hidden="true" /> Interpretation
             </button>
-            <button type="button" onClick={exportFigure} disabled={!labels.length}>
-              <i className="fa-solid fa-download" aria-hidden="true" /> Figure
-            </button>
-            <button type="button" onClick={exportTable} disabled={!labels.length}>
-              <i className="fa-solid fa-download" aria-hidden="true" /> Table
-            </button>
+            <TimeSeriesExportManager
+              disabled={!labels.length || !hasRun}
+              field={resolvedField}
+              fieldName={selectedFieldLabel}
+              fieldKey={selectedFieldKey}
+              fromDate={fromDate}
+              toDate={toDate}
+              acquisitionDate={interpretSceneDate}
+              layerIds={selectedLayerIds}
+              chartLabels={labels}
+              displayLabels={chartLabels}
+              layerSeries={layerSeries}
+              dailyRows={dailyRows}
+              chartRef={chartRef}
+              chartType={chartType}
+              mapboxToken={mapboxToken}
+              projectName={projectName}
+              generatedBy={generatedBy}
+            />
           </div>
         </div>
     </div>

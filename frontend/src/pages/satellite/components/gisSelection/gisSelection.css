@@ -1,0 +1,434 @@
+.si-map-tools-dock-host .gis-sel-toolbar,
+.gis-sel-toolbar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9100;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(168deg, rgba(16, 16, 20, 0.92) 0%, rgba(6, 6, 10, 0.96) 100%);
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  backdrop-filter: blur(18px) saturate(1.35);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+  max-width: calc(100% - 24px);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.gis-sel-toolbar__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #e2e8f0;
+}
+
+.gis-sel-toolbar__sep {
+  width: 1px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+}
+
+.gis-sel-toolbar__group {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.gis-sel-toolbar__btn,
+.gis-sel-toolbar__mode,
+.gis-sel-toolbar__query {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #cbd5e1;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.gis-sel-toolbar__btn:hover,
+.gis-sel-toolbar__mode:hover,
+.gis-sel-toolbar__query:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
+}
+
+.gis-sel-toolbar__btn.is-on,
+.gis-sel-toolbar__mode.is-on {
+  border-color: rgba(96, 165, 250, 0.55);
+  background: rgba(59, 130, 246, 0.22);
+  color: #93c5fd;
+}
+
+.gis-sel-toolbar__modes {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.gis-sel-toolbar__query span {
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.gis-sel-results,
+.gis-sel-query-panel,
+.gis-sel-layers {
+  position: absolute;
+  right: 12px;
+  top: 56px;
+  z-index: 9090;
+  width: min(320px, calc(100% - 24px));
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(168deg, rgba(14, 14, 18, 0.94) 0%, rgba(4, 4, 8, 0.98) 100%);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+  color: #e2e8f0;
+}
+
+.gis-sel-layers {
+  top: auto;
+  bottom: 12px;
+  right: 12px;
+}
+
+.gis-sel-results__head,
+.gis-sel-query-panel__head,
+.gis-sel-layers__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.gis-sel-results__head button,
+.gis-sel-query-panel__head button,
+.gis-sel-layers__head button {
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.gis-sel-results__body,
+.gis-sel-query-panel__body {
+  padding: 10px;
+  max-height: min(420px, calc(100vh - 180px));
+  overflow: auto;
+}
+
+.gis-sel-results__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.gis-sel-results__metrics div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.gis-sel-results__metrics strong {
+  font-size: 16px;
+  color: #f8fafc;
+}
+
+.gis-sel-results__metrics span {
+  font-size: 9px;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.gis-sel-results__layers {
+  margin-bottom: 10px;
+  padding-top: 2px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.gis-sel-results__layers-title {
+  margin: 8px 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.gis-sel-results__layers-empty {
+  margin: 8px 0 0;
+  font-size: 10px;
+  color: #64748b;
+}
+
+.gis-sel-layers__body {
+  padding: 8px 10px 10px;
+}
+
+.gis-sel-results__layers .gis-sel-layers__list {
+  max-height: 160px;
+}
+
+.gis-sel-results__stats-title {
+  margin: 0 0 6px;
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.gis-sel-results__stats ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 5px;
+  max-height: 140px;
+  overflow: auto;
+}
+
+.gis-sel-results__stats li {
+  display: grid;
+  gap: 2px;
+  font-size: 9px;
+  color: #cbd5e1;
+}
+
+.gis-sel-results__field {
+  font-weight: 700;
+  color: #93c5fd;
+}
+
+.gis-sel-results__actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.gis-sel-results__actions button {
+  flex: 1;
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.gis-sel-results__actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.gis-sel-query-panel__field {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 8px;
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.gis-sel-query-panel__field textarea,
+.gis-sel-query-panel__field select,
+.gis-sel-query-panel__field input {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #f8fafc;
+  font-size: 11px;
+  padding: 6px 8px;
+}
+
+.gis-sel-query-panel__hint {
+  margin: 0 0 8px;
+  font-size: 9px;
+  color: #64748b;
+}
+
+.gis-sel-query-panel__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+  max-height: 80px;
+  overflow: auto;
+}
+
+.gis-sel-query-panel__chip {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #cbd5e1;
+  font-size: 9px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.gis-sel-query-panel__apply {
+  width: 100%;
+  height: 30px;
+  border: none;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.gis-sel-query-panel__apply:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.gis-sel-layers__list {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  max-height: 220px;
+  overflow: auto;
+  display: grid;
+  gap: 4px;
+}
+
+.gis-sel-layers__list label {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: #cbd5e1;
+  cursor: pointer;
+}
+
+.gis-sel-layers__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gis-sel-layers__count {
+  font-variant-numeric: tabular-nums;
+  color: #64748b;
+}
+
+[dir='rtl'] .gis-sel-toolbar {
+  direction: rtl;
+}
+
+[dir='rtl'] .gis-sel-results,
+[dir='rtl'] .gis-sel-query-panel,
+[dir='rtl'] .gis-sel-layers,
+[dir='rtl'] .gis-sel-attr-table {
+  right: auto;
+  left: 12px;
+}
+
+.gis-sel-attr-table {
+  position: fixed;
+  top: 108px;
+  right: 12px;
+  z-index: 12050;
+  width: min(560px, calc(100vw - 24px));
+  max-height: min(420px, calc(100vh - 140px));
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.96);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  color: #e2e8f0;
+}
+
+.gis-sel-attr-table__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.gis-sel-attr-table__close {
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.gis-sel-attr-table__body {
+  padding: 8px;
+  overflow: hidden;
+}
+
+.gis-sel-attr-table__empty {
+  margin: 0;
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.gis-sel-attr-table__scroll {
+  overflow: auto;
+  max-height: 340px;
+}
+
+.gis-sel-attr-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+
+.gis-sel-attr-table th,
+.gis-sel-attr-table td {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  padding: 4px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.gis-sel-attr-table th {
+  position: sticky;
+  top: 0;
+  background: #1e293b;
+  color: #cbd5e1;
+}
+
+.gis-sel-attr-table td {
+  color: #e2e8f0;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

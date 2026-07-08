@@ -14,18 +14,22 @@ import { useMapOverlayIsolation } from '../useMapOverlayIsolation';
 import { SiImageryTimeSeriesPanel } from './SiImageryTimeSeriesPanel';
 import './SiImageryTimeSeriesFloatingPanel.css';
 
-const POS_KEY_BASE = 'si-its-float-pos-v2';
-const SIZE_KEY_BASE = 'si-its-float-size-v1';
+const POS_KEY_BASE = 'si-its-float-pos-v3';
+const SIZE_KEY_BASE = 'si-its-float-size-v2';
 
 const MIN_W = 300;
 const MAX_W = 960;
 const MIN_BODY_H = 240;
 const MAX_BODY_H = 900;
-const DEFAULT_BODY_H = 520;
 const VIEWPORT_PAD = 8;
 
 type SavedPos = { x: number; y: number };
 type SavedSize = { w: number; h: number };
+
+const DEFAULT_BODY_H = 333;
+const DEFAULT_W = 518;
+const DEFAULT_POS: SavedPos = { x: 110, y: 147 };
+const DEFAULT_SIZE: SavedSize = { w: DEFAULT_W, h: DEFAULT_BODY_H };
 
 function readSavedPos(storageKey: string): SavedPos | null {
   try {
@@ -74,6 +78,26 @@ function writeSavedSize(s: SavedSize, storageKey: string) {
   }
 }
 
+function clampDefaultSize(): SavedSize {
+  const pad = VIEWPORT_PAD;
+  const headH = 38;
+  return {
+    w: Math.min(MAX_W, Math.max(MIN_W, Math.min(DEFAULT_SIZE.w, window.innerWidth - pad * 2))),
+    h: Math.min(
+      MAX_BODY_H,
+      Math.max(MIN_BODY_H, Math.min(DEFAULT_SIZE.h, window.innerHeight - headH - pad * 2)),
+    ),
+  };
+}
+
+function readInitialPos(storageKey: string): SavedPos {
+  return readSavedPos(storageKey) ?? DEFAULT_POS;
+}
+
+function readInitialSize(storageKey: string): SavedSize {
+  return readSavedSize(storageKey) ?? clampDefaultSize();
+}
+
 function clampToViewport(x: number, y: number, elW: number, elH: number): SavedPos {
   const pad = VIEWPORT_PAD;
   const maxX = Math.max(pad, window.innerWidth - elW - pad);
@@ -97,6 +121,7 @@ export type SiImageryTimeSeriesFloatingPanelProps = {
   onMapDateFromChart: (iso: string) => void;
   selectedFieldKey?: string | null;
   onSelectedFieldKeyChange?: (fieldKey: string) => void;
+  mapboxToken?: string;
 };
 
 export function SiImageryTimeSeriesFloatingPanel({
@@ -111,6 +136,7 @@ export function SiImageryTimeSeriesFloatingPanel({
   onMapDateFromChart,
   selectedFieldKey,
   onSelectedFieldKeyChange,
+  mapboxToken,
 }: SiImageryTimeSeriesFloatingPanelProps) {
   const { scopedStorageKey } = useSiInstanceScope();
   const posStorageKey = scopedStorageKey(POS_KEY_BASE);
@@ -119,10 +145,16 @@ export function SiImageryTimeSeriesFloatingPanel({
   const { ref: isolationRef, ...isolationHandlers } = isolation;
   const rootRef = useRef<HTMLElement | null>(null);
   const headRef = useRef<HTMLElement | null>(null);
-  const dragRef = useRef<{ dx: number; dy: number; w: number; h: number } | null>(null);
-  const resizeRef = useRef<{ startX: number; startY: number; startW: number; startH: number } | null>(null);
-  const [pos, setPos] = useState<SavedPos | null>(() => readSavedPos(posStorageKey));
-  const [size, setSize] = useState<SavedSize | null>(() => readSavedSize(sizeStorageKey));
+  const dragRef = useRef<{ pointerId: number; dx: number; dy: number; w: number; h: number } | null>(null);
+  const resizeRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startW: number;
+    startH: number;
+  } | null>(null);
+  const [pos, setPos] = useState<SavedPos>(() => readInitialPos(posStorageKey));
+  const [size, setSize] = useState<SavedSize>(() => readInitialSize(sizeStorageKey));
   const [dragging, setDragging] = useState(false);
   const [resizing, setResizing] = useState(false);
 
@@ -147,14 +179,9 @@ export function SiImageryTimeSeriesFloatingPanel({
   useLayoutEffect(() => {
     if (!open || !rootRef.current) return;
     const r = rootRef.current.getBoundingClientRect();
-    setPos(p => {
-      if (p) return clampToViewport(p.x, p.y, r.width, r.height);
-      const box = containerRef.current?.getBoundingClientRect();
-      const anchorX = box ? box.left + 10 : 14;
-      const anchorY = box ? box.top + 56 : 72;
-      return clampToViewport(anchorX, anchorY, r.width, r.height);
-    });
-  }, [open, containerRef]);
+    setPos(p => clampToViewport(p.x, p.y, r.width, r.height));
+    setSize(s => clampSize(s.w, s.h));
+  }, [open, clampSize]);
 
   const onDragPointerDown = useCallback((e: React.PointerEvent<HTMLElement>) => {
     if (e.button !== 0) return;
@@ -162,111 +189,129 @@ export function SiImageryTimeSeriesFloatingPanel({
     const root = rootRef.current;
     if (!root) return;
     const r = root.getBoundingClientRect();
-    dragRef.current = { dx: e.clientX - r.left, dy: e.clientY - r.top, w: r.width, h: r.height };
+    dragRef.current = {
+      pointerId: e.pointerId,
+      dx: e.clientX - r.left,
+      dy: e.clientY - r.top,
+      w: r.width,
+      h: r.height,
+    };
     setDragging(true);
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      /* ignore */
-    }
     e.preventDefault();
     e.stopPropagation();
   }, []);
 
-  const onDragPointerMove = useCallback((e: React.PointerEvent<HTMLElement>) => {
-    if (!dragRef.current) return;
-    const nx = e.clientX - dragRef.current.dx;
-    const ny = e.clientY - dragRef.current.dy;
-    setPos(clampToViewport(nx, ny, dragRef.current.w, dragRef.current.h));
-    e.preventDefault();
+  const onDragPointerMove = useCallback((e: PointerEvent) => {
+    const drag = dragRef.current;
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    const nx = e.clientX - drag.dx;
+    const ny = e.clientY - drag.dy;
+    setPos(clampToViewport(nx, ny, drag.w, drag.h));
   }, []);
 
-  const onDragPointerUp = useCallback(
-    (e: React.PointerEvent<HTMLElement>) => {
-      if (dragRef.current) {
-        dragRef.current = null;
-        setPos(p => {
-          if (p) writeSavedPos(p, posStorageKey);
-          return p;
-        });
-      }
+  const endDrag = useCallback(
+    (e: PointerEvent) => {
+      const drag = dragRef.current;
+      if (!drag || e.pointerId !== drag.pointerId) return;
+      dragRef.current = null;
       setDragging(false);
-      try {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      } catch {
-        /* ignore */
-      }
+      setPos(p => {
+        if (p) writeSavedPos(p, posStorageKey);
+        return p;
+      });
     },
     [posStorageKey],
   );
+
+  useEffect(() => {
+    if (!dragging) return;
+    window.addEventListener('pointermove', onDragPointerMove, { passive: true });
+    window.addEventListener('pointerup', endDrag);
+    window.addEventListener('pointercancel', endDrag);
+    return () => {
+      window.removeEventListener('pointermove', onDragPointerMove);
+      window.removeEventListener('pointerup', endDrag);
+      window.removeEventListener('pointercancel', endDrag);
+    };
+  }, [dragging, endDrag, onDragPointerMove]);
 
   const onResizePointerDown = useCallback(
     (e: React.PointerEvent<HTMLElement>) => {
       if (e.button !== 0) return;
       const root = rootRef.current;
       if (!root) return;
-      const r = root.getBoundingClientRect();
-      const body = root.querySelector<HTMLElement>('.acp-map-panel__body');
-      const bodyH = body?.getBoundingClientRect().height ?? size?.h ?? DEFAULT_BODY_H;
-      const startW = size?.w ?? r.width;
-      const startH = size?.h ?? bodyH;
-      if (!size) setSize(clampSize(startW, startH));
-      resizeRef.current = { startX: e.clientX, startY: e.clientY, startW, startH };
+      const startW = size.w;
+      const startH = size.h;
+      resizeRef.current = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        startW,
+        startH,
+      };
       setResizing(true);
-      try {
-        e.currentTarget.setPointerCapture(e.pointerId);
-      } catch {
-        /* ignore */
-      }
       e.preventDefault();
       e.stopPropagation();
     },
-    [clampSize, size],
+    [size],
   );
 
   const onResizePointerMove = useCallback(
-    (e: React.PointerEvent<HTMLElement>) => {
-      if (!resizeRef.current) return;
-      const nw = resizeRef.current.startW + (e.clientX - resizeRef.current.startX);
-      const nh = resizeRef.current.startH + (e.clientY - resizeRef.current.startY);
+    (e: PointerEvent) => {
+      const resize = resizeRef.current;
+      if (!resize || e.pointerId !== resize.pointerId) return;
+      const nw = resize.startW + (e.clientX - resize.startX);
+      const nh = resize.startH + (e.clientY - resize.startY);
       setSize(clampSize(nw, nh));
-      e.preventDefault();
     },
     [clampSize],
   );
 
-  const onResizePointerUp = useCallback(
-    (e: React.PointerEvent<HTMLElement>) => {
-      if (resizeRef.current) {
-        resizeRef.current = null;
-        setSize(s => {
-          if (s) writeSavedSize(s, sizeStorageKey);
-          return s;
-        });
-        setPos(p => {
-          if (!p || !rootRef.current) return p;
-          const r = rootRef.current.getBoundingClientRect();
-          const next = clampToViewport(p.x, p.y, r.width, r.height);
-          if (next.x === p.x && next.y === p.y) return p;
-          writeSavedPos(next, posStorageKey);
-          return next;
-        });
-      }
+  const endResize = useCallback(
+    (e: PointerEvent) => {
+      const resize = resizeRef.current;
+      if (!resize || e.pointerId !== resize.pointerId) return;
+      resizeRef.current = null;
       setResizing(false);
-      try {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      } catch {
-        /* ignore */
-      }
+      setSize(s => {
+        if (s) writeSavedSize(s, sizeStorageKey);
+        return s;
+      });
+      setPos(p => {
+        if (!p || !rootRef.current) return p;
+        const r = rootRef.current.getBoundingClientRect();
+        const next = clampToViewport(p.x, p.y, r.width, r.height);
+        if (next.x === p.x && next.y === p.y) return p;
+        writeSavedPos(next, posStorageKey);
+        return next;
+      });
     },
     [posStorageKey, sizeStorageKey],
   );
 
   useEffect(() => {
+    if (!resizing) return;
+    window.addEventListener('pointermove', onResizePointerMove, { passive: true });
+    window.addEventListener('pointerup', endResize);
+    window.addEventListener('pointercancel', endResize);
+    return () => {
+      window.removeEventListener('pointermove', onResizePointerMove);
+      window.removeEventListener('pointerup', endResize);
+      window.removeEventListener('pointercancel', endResize);
+    };
+  }, [endResize, onResizePointerMove, resizing]);
+
+  const resetSize = useCallback(() => {
+    const next = clampDefaultSize();
+    setSize(next);
+    writeSavedSize(next, sizeStorageKey);
+  }, [sizeStorageKey]);
+
+  useEffect(() => {
     const onWinResize = () => {
-      setSize(s => (s ? clampSize(s.w, s.h) : s));
+      setSize(s => (s ? clampSize(s.w, s.h) : clampDefaultSize()));
       setPos(p => {
-        if (!p || !rootRef.current) return p;
+        if (!rootRef.current) return p;
         const r = rootRef.current.getBoundingClientRect();
         const next = clampToViewport(p.x, p.y, r.width, r.height);
         if (next.x === p.x && next.y === p.y) return p;
@@ -282,20 +327,25 @@ export function SiImageryTimeSeriesFloatingPanel({
   const style: CSSProperties = {
     position: 'fixed',
     zIndex: 9200,
-    ...(pos != null ? { left: pos.x, top: pos.y, right: 'auto', bottom: 'auto' } : { left: 14, top: 72 }),
-    ...(size != null ? { width: size.w, maxHeight: 'none' } : {}),
+    left: pos.x,
+    top: pos.y,
+    right: 'auto',
+    bottom: 'auto',
+    width: size.w,
+    maxHeight: 'none',
   };
-  const bodyStyle: CSSProperties =
-    size != null
-      ? { height: size.h, minHeight: size.h, maxHeight: size.h, flex: '0 0 auto' }
-      : { minHeight: MIN_BODY_H };
+  const bodyStyle: CSSProperties = {
+    height: size.h,
+    minHeight: size.h,
+    maxHeight: size.h,
+    flex: '0 0 auto',
+  };
 
   const panel = (
     <aside
       ref={rootRef}
       className={
-        'si-its-float acp-shell acp-map-panel acp-map-panel--timeseries' +
-        (size != null ? ' si-its-float--sized' : '') +
+        'si-its-float acp-shell acp-map-panel acp-map-panel--timeseries si-its-float--sized' +
         (dragging ? ' si-its-float--dragging' : '') +
         (resizing ? ' si-its-float--resizing' : '')
       }
@@ -309,9 +359,6 @@ export function SiImageryTimeSeriesFloatingPanel({
         ref={headRef}
         className="acp-map-panel__head si-its-float__head"
         onPointerDown={onDragPointerDown}
-        onPointerMove={onDragPointerMove}
-        onPointerUp={onDragPointerUp}
-        onPointerCancel={onDragPointerUp}
         title="Drag to move anywhere on screen"
       >
         <span className="si-its-float__head-main">
@@ -331,12 +378,14 @@ export function SiImageryTimeSeriesFloatingPanel({
           <i className="fa-solid fa-xmark" aria-hidden />
         </button>
       </header>
-      <div
-        ref={setBodyIsolationRef}
-        className="si-its-float__chrome"
-        {...isolationHandlers}
-      >
-        <div className="acp-map-panel__body si-its-float__body" style={bodyStyle} data-agrocloud-map-wheel-scroll="">
+      <div className="si-its-float__chrome">
+        <div
+          ref={setBodyIsolationRef}
+          className="acp-map-panel__body si-its-float__body"
+          style={bodyStyle}
+          data-agrocloud-map-wheel-scroll=""
+          {...isolationHandlers}
+        >
           <SiImageryTimeSeriesPanel
             agroStructuresMask={agroStructuresMask}
             aoiFields={aoiFields}
@@ -346,22 +395,20 @@ export function SiImageryTimeSeriesFloatingPanel({
             onMapDateFromChart={onMapDateFromChart}
             selectedFieldKey={selectedFieldKey}
             onSelectedFieldKeyChange={onSelectedFieldKeyChange}
+            mapboxToken={mapboxToken}
           />
         </div>
-        <div
+        <button
+          type="button"
           className="si-its-float__resize"
-          role="separator"
-          aria-orientation="horizontal"
-          aria-label="Resize panel"
-          title="Drag to resize"
+          aria-label="Resize panel (double-click to reset)"
+          title="Drag to resize · double-click to reset"
           data-drag-exclude
           onPointerDown={onResizePointerDown}
-          onPointerMove={onResizePointerMove}
-          onPointerUp={onResizePointerUp}
-          onPointerCancel={onResizePointerUp}
+          onDoubleClick={resetSize}
         >
           <i className="fa-solid fa-up-right-and-down-left-from-center" aria-hidden />
-        </div>
+        </button>
       </div>
     </aside>
   );

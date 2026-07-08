@@ -20,6 +20,7 @@ export type SatelliteContextPanelId =
   | 'add-gis-layer'
   | 'remote-sensing'
   | 'crop-alerts'
+  | 'stress-zones'
   | 'crop-classification'
   | 'imagery-time-series'
   | 'layer-live-legend'
@@ -77,6 +78,7 @@ export type SatelliteContextualAnalysisDockProps = {
     | 'layers'
     | 'remote-sensing'
     | 'crop-alerts'
+    | 'stress-zones'
     | 'crop-classification'
     | 'ai-detection-gis'
     | 'tree-detections'
@@ -119,6 +121,10 @@ export type SatelliteContextualAnalysisDockProps = {
   onMeasureOpenPanel?: () => void;
   /** Turn measurement off / clear the current measurement. */
   onMeasureClear?: () => void;
+  /** Main toolbox: GIS feature selection mode active. */
+  mapToolboxSelectionActive?: boolean;
+  /** Toggle GIS feature selection from the Main toolbox Select button. */
+  onMapToolboxToggleSelection?: () => void;
   /** Imagery Time Series floating panel open state (map variant). */
   imageryTimeSeriesOpen?: boolean;
   onImageryTimeSeriesOpenChange?: (open: boolean) => void;
@@ -148,6 +154,13 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     label: 'Crop alerts',
     title: 'Agro Sentinel Alert Engine',
     hint: 'Real-time NDVI/NDWI/NDMI monitoring for Farm Plots & PIVOT.',
+  },
+  {
+    id: 'stress-zones',
+    icon: 'fa-solid fa-heart-pulse',
+    label: 'Stress Zones ⭐',
+    title: 'Stress Zones Detection',
+    hint: 'CHAS fusion stress map — healthy, mild, moderate, severe, and bare soil zones.',
   },
   {
     id: 'crop-classification',
@@ -282,6 +295,7 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
   'add-gis-layer',
   'remote-sensing',
   'crop-alerts',
+  'stress-zones',
   'crop-classification',
   'imagery-time-series',
   'layer-live-legend',
@@ -298,6 +312,7 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
 const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
   'remote-sensing',
   'crop-alerts',
+  'stress-zones',
   'crop-classification',
   'ai-detection-gis',
   'tree-detections',
@@ -308,7 +323,7 @@ const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
 ]);
 
 const RAIL_GROUPS_MAP: SatelliteContextPanelId[][] = [
-  ['layers', 'remote-sensing', 'crop-alerts', 'crop-classification', 'imagery-time-series', 'layer-live-legend', 'hydro-watershed'],
+  ['layers', 'remote-sensing', 'crop-alerts', 'stress-zones', 'crop-classification', 'imagery-time-series', 'layer-live-legend', 'hydro-watershed'],
   ['ai-detection-gis', 'tree-detections', 'well-site', 'well-suitability', 'flood-monitoring', 'table-geo-ai'],
 ];
 
@@ -377,6 +392,9 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
     onMapToolboxToggleDrawing,
     measureMode = null,
     onMeasureOpenPanel,
+    onMeasureClear,
+    mapToolboxSelectionActive = false,
+    onMapToolboxToggleSelection,
     imageryTimeSeriesOpen = false,
     onImageryTimeSeriesOpenChange,
     goToXyOpen = false,
@@ -791,6 +809,29 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
               <span className="si-sat-ctx-rail-label">
                 <span className="si-sat-ctx-rail-label-title">Edit</span>
                 <span className="si-sat-ctx-rail-label-desc">Activate drawing tool</span>
+              </span>
+            ) : null}
+          </button>
+        ) : null}
+        {isMap && !mapStripHidden && onMapToolboxToggleSelection ? (
+          <button
+            id="map-toolbox-select-btn"
+            type="button"
+            className={
+              'si-sat-ctx-rail-btn si-sat-ctx-rail-btn--map si-sat-ctx-rail-btn--select' +
+              (railWide ? ' si-sat-ctx-rail-btn--row si-sat-ctx-rail-btn--map-expanded' : ' si-sat-ctx-rail-btn--map-collapsed') +
+              (mapToolboxSelectionActive ? ' si-sat-ctx-rail-btn--active' : '')
+            }
+            title={mapToolboxSelectionActive ? 'Selection tools on — click to turn off' : 'Select — rectangle, polygon, lasso & query'}
+            aria-label={mapToolboxSelectionActive ? 'Selection tools on' : 'Select features on map'}
+            aria-pressed={mapToolboxSelectionActive}
+            onClick={() => onMapToolboxToggleSelection()}
+          >
+            <i className="fa-solid fa-object-group" aria-hidden />
+            {railWide ? (
+              <span className="si-sat-ctx-rail-label">
+                <span className="si-sat-ctx-rail-label-title">Select</span>
+                <span className="si-sat-ctx-rail-label-desc">Interactive feature selection</span>
               </span>
             ) : null}
           </button>

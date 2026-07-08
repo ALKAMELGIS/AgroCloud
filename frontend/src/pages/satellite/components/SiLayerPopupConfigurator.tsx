@@ -188,6 +188,14 @@ export function SiLayerPopupConfigurator({ layer, onSave, onClose }: Props) {
             <label>
               <input
                 type="checkbox"
+                checked={draft.popupEnabled !== false}
+                onChange={e => setDraft(d => ({ ...d, popupEnabled: e.target.checked }))}
+              />{' '}
+              Enable map identify popup
+            </label>
+            <label>
+              <input
+                type="checkbox"
                 checked={draft.showRelated}
                 onChange={e => setDraft(d => ({ ...d, showRelated: e.target.checked }))}
               />{' '}

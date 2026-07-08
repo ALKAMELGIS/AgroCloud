@@ -15,6 +15,8 @@ export type SiLayerPopupDensityMode = 'auto' | 'compact' | 'tabbed' | 'relations
 
 export type SiLayerPopupConfig = {
   v: 1;
+  /** When false, map identify skips the popup (highlight still applies). */
+  popupEnabled: boolean;
   /** Property keys hidden in popups. */
   hiddenFieldKeys: string[];
   /** Preferred order (keys not listed follow in discovery order). */
@@ -29,6 +31,7 @@ export type SiLayerPopupConfig = {
 
 export const defaultSiLayerPopupConfig = (): SiLayerPopupConfig => ({
   v: 1,
+  popupEnabled: true,
   hiddenFieldKeys: [],
   fieldOrder: [],
   groups: [],
@@ -69,6 +72,7 @@ export function normalizeSiLayerPopupConfig(raw: unknown): SiLayerPopupConfig {
       : d.densityMode;
   return {
     v: 1,
+    popupEnabled: typeof o.popupEnabled === 'boolean' ? o.popupEnabled : d.popupEnabled,
     hiddenFieldKeys: hidden,
     fieldOrder: order,
     groups,
@@ -78,4 +82,8 @@ export function normalizeSiLayerPopupConfig(raw: unknown): SiLayerPopupConfig {
     viewMode,
     densityMode,
   };
+}
+
+export function isSiLayerPopupEnabled(config?: SiLayerPopupConfig | null): boolean {
+  return normalizeSiLayerPopupConfig(config ?? undefined).popupEnabled !== false;
 }

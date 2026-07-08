@@ -5,6 +5,7 @@
 
 import type { SentinelHubWmsLayerInfo } from './sentinelHubWmsLayers'
 import { AGRO_CHAS_EXPR } from './chasIndex'
+import { STRESS_ZONES_CHAS_EXPR } from './siStressZonesEngine'
 
 /** Derived visualization layers — same fusion input, rule-engine styling only. */
 export const AGRO_DERIVED_LAYER_DEFS: readonly AgroCompositeIndexDef[] = [
@@ -15,6 +16,14 @@ export const AGRO_DERIVED_LAYER_DEFS: readonly AgroCompositeIndexDef[] = [
     deltaId: 'CHAS_ALERT',
     deltaLabel: 'CHAS Alert',
     expr: AGRO_CHAS_EXPR,
+  },
+  {
+    id: 'STRESS_ZONES',
+    label: 'Stress Zones',
+    scientificName: 'AI Stress Zones (CHAS fusion + 5-class stress map)',
+    deltaId: 'STRESS_ZONES',
+    deltaLabel: 'Stress Zones',
+    expr: STRESS_ZONES_CHAS_EXPR,
   },
 ]
 

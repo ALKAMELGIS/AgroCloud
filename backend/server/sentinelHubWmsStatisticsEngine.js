@@ -9,7 +9,7 @@ const SENTINEL_HUB_PUBLIC_WMS_ACCESS_TOKEN = 'PUBLIC_DATA_FEATURED_COLLECTIONS'
 const PC_SENTINEL_STAC_SEARCH_URL = 'https://planetarycomputer.microsoft.com/api/stac/v1/search'
 const WMS_TILE_PIXELS = 256
 const MAX_SCENE_FETCHES = 160
-const WMS_FETCH_CONCURRENCY = 4
+const WMS_FETCH_CONCURRENCY = 6
 
 /** @type {Map<string, { layer: string; expiresAt: number }>} */
 const wmsProxyLayerCache = new Map()

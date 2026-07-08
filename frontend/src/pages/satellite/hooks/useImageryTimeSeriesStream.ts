@@ -2,16 +2,23 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CropAlertFieldInput } from '../../../lib/siCropAlertEngine'
 import {
   fetchImageryTimeSeriesProgressive,
+  IMAGERY_TS_WMS_CHUNK_DAYS,
+  planImageryDateChunks,
   prefetchImageryTimeSeriesRecent,
   type ImageryTimeSeriesProgress,
 } from '../../../lib/fetchImageryTimeSeriesProgressive'
 import {
   buildImageryTsCacheKey,
+  buildImageryTsChunkCacheKey,
+  findImageryTsOverlappingDaily,
   geometryHashForImageryCache,
   getImageryTsMemoryCache,
   isImageryTsCacheFresh,
+  isImageryTsCacheStaleButUsable,
+  readImageryTsCache,
+  readImageryTsChunkCache,
 } from '../../../lib/imageryTimeSeriesCache'
-import type { SentinelHubDailyIndexMeans } from '../../../lib/sentinelHubStatisticsApi'
+import { mergeDailyIndexSeries, type SentinelHubDailyIndexMeans } from '../../../lib/sentinelHubStatisticsApi'
 import {
   aggregateImageryTimeSeries,
   aggregateImageryTimeSeriesMulti,
@@ -55,6 +62,31 @@ const IDLE_PROGRESS: ImageryTimeSeriesProgress = {
   refreshing: false,
 }
 
+const CLOUD_FILTER = 65
+
+async function hydrateDailyFromChunkCaches(
+  geometryHash: string,
+  fromIso: string,
+  toIso: string,
+): Promise<SentinelHubDailyIndexMeans[]> {
+  const chunks = planImageryDateChunks(fromIso, toIso, IMAGERY_TS_WMS_CHUNK_DAYS)
+  if (!chunks.length) return []
+
+  const hits = await Promise.all(
+    chunks.map(chunk =>
+      readImageryTsChunkCache(
+        buildImageryTsChunkCacheKey(geometryHash, chunk.fromIso, chunk.toIso, CLOUD_FILTER),
+      ),
+    ),
+  )
+
+  let merged: SentinelHubDailyIndexMeans[] = []
+  for (const hit of hits) {
+    if (hit?.length) merged = mergeDailyIndexSeries(merged, hit)
+  }
+  return merged.filter(row => row.date >= fromIso && row.date <= toIso)
+}
+
 export type UseImageryTimeSeriesStreamOptions = {
   field: CropAlertFieldInput | null
   fromDate: string
@@ -70,7 +102,7 @@ export function useImageryTimeSeriesStream({
   toDate,
   layerIds,
   referenceDate,
-  prefetchLookbackDays = 90,
+  prefetchLookbackDays = 365,
 }: UseImageryTimeSeriesStreamOptions) {
   const [labels, setLabels] = useState<string[]>([])
   const [layerSeries, setLayerSeries] = useState<ImageryTimeSeriesLayerSeries[]>([])
@@ -83,7 +115,6 @@ export function useImageryTimeSeriesStream({
   const [analysisDurationMs, setAnalysisDurationMs] = useState<number | null>(null)
 
   const abortRef = useRef<AbortController | null>(null)
-  const lastKnownRef = useRef<Map<string, ImageryTimeSeriesChartState & { layerIds: string[] }>>(new Map())
   const runGenerationRef = useRef(0)
 
   const buildCacheKey = useCallback(() => {
@@ -93,16 +124,13 @@ export function useImageryTimeSeriesStream({
       geometryHash: geometryHashForImageryCache(field.geometry),
       fromIso: fromDate,
       toIso: toDate,
-      cloudFilter: 65,
+      cloudFilter: CLOUD_FILTER,
     })
   }, [field, fromDate, toDate])
 
-  const applyChartState = useCallback((chart: ImageryTimeSeriesChartState, cacheKey: string, ids: string[]) => {
+  const applyChartState = useCallback((chart: ImageryTimeSeriesChartState) => {
     setLabels(chart.labels)
     setLayerSeries(chart.layerSeries)
-    if (chart.labels.length) {
-      lastKnownRef.current.set(cacheKey, { ...chart, layerIds: [...ids] })
-    }
   }, [])
 
   const abort = useCallback(() => {
@@ -125,66 +153,120 @@ export function useImageryTimeSeriesStream({
 
     const ids = layerIds.length ? layerIds : ['NDVI']
     const cacheKey = buildCacheKey()
+    const geometryHash = geometryHashForImageryCache(field.geometry)
     const generation = ++runGenerationRef.current
 
     abort()
     const ac = new AbortController()
     abortRef.current = ac
 
+    const showInstant = (daily: SentinelHubDailyIndexMeans[], fromCache: boolean) => {
+      if (generation !== runGenerationRef.current || ac.signal.aborted) return false
+      setDailyRows(daily)
+      applyChartState(dailyToChartState(daily, field.fieldKey, ids))
+      setLoading(false)
+      setRefreshing(fromCache)
+      setError(null)
+      return daily.length > 0
+    }
+
     const memCached = cacheKey ? getImageryTsMemoryCache(cacheKey) : null
-    if (memCached?.daily?.length) {
-      setDailyRows(memCached.daily)
-      const chart = dailyToChartState(memCached.daily, field.fieldKey, ids)
-      applyChartState(chart, cacheKey, ids)
-      const fresh = isImageryTsCacheFresh(memCached)
-      setLoading(!fresh)
-      setRefreshing(!fresh)
+    if (memCached?.daily?.length && isImageryTsCacheFresh(memCached)) {
+      showInstant(memCached.daily, false)
       setProgress({
-        phase: fresh ? 'complete' : 'cache',
-        message: fresh ? 'Loaded from cache' : 'Showing cached observations…',
+        phase: 'complete',
+        message: 'Loaded from cache',
         chunksDone: 0,
         chunksTotal: 0,
-        observations: chart.labels.length,
-        percent: fresh ? 100 : 0,
+        observations: memCached.daily.length,
+        percent: 100,
         fromCache: true,
-        refreshing: !fresh,
+        refreshing: false,
       })
-      if (fresh) {
-        setAnalysisDurationMs(0)
-        return
+      setAnalysisDurationMs(0)
+      return
+    }
+
+    let instantDaily = findImageryTsOverlappingDaily({
+      fieldKey: field.fieldKey,
+      geometryHash,
+      fromIso: fromDate,
+      toIso: toDate,
+      cloudFilter: CLOUD_FILTER,
+    })
+    let hasInstantChart = instantDaily.length > 0 && showInstant(instantDaily, true)
+
+    if (!hasInstantChart) {
+      instantDaily = await hydrateDailyFromChunkCaches(geometryHash, fromDate, toDate)
+      hasInstantChart = instantDaily.length > 0 && showInstant(instantDaily, true)
+    }
+
+    if (!hasInstantChart && cacheKey) {
+      const stored = await readImageryTsCache(cacheKey)
+      if (stored?.daily?.length && isImageryTsCacheStaleButUsable(stored)) {
+        hasInstantChart = showInstant(stored.daily, !isImageryTsCacheFresh(stored))
+        if (isImageryTsCacheFresh(stored)) {
+          setProgress({
+            phase: 'complete',
+            message: 'Loaded from cache',
+            chunksDone: 0,
+            chunksTotal: 0,
+            observations: stored.daily.length,
+            percent: 100,
+            fromCache: true,
+            refreshing: false,
+          })
+          setAnalysisDurationMs(0)
+          return
+        }
       }
-    } else {
-      const lastKnown = lastKnownRef.current.get(cacheKey)
-      if (lastKnown && lastKnown.layerIds.join(',') === ids.join(',')) {
-        applyChartState(lastKnown, cacheKey, ids)
-      }
+    }
+
+    if (generation !== runGenerationRef.current || ac.signal.aborted) return
+
+    if (!hasInstantChart) {
+      setLabels([])
+      setLayerSeries([])
+      setDailyRows([])
       setLoading(true)
       setRefreshing(false)
+    } else {
+      setRefreshing(true)
     }
+
+    setProgress({
+      phase: 'fetching',
+      message: hasInstantChart ? 'Updating imagery…' : 'Loading imagery…',
+      chunksDone: 0,
+      chunksTotal: 0,
+      observations: instantDaily.length,
+      percent: 0,
+      fromCache: hasInstantChart,
+      refreshing: hasInstantChart,
+    })
 
     const startedAt = performance.now()
     try {
-      await fetchImageryTimeSeriesProgressive(field, {
+      const daily = await fetchImageryTimeSeriesProgressive(field, {
         fromIso: fromDate,
         toIso: toDate,
         signal: ac.signal,
-        onProgress: ({ daily, progress: prog }) => {
+        onProgress: ({ progress: prog }) => {
           if (generation !== runGenerationRef.current || ac.signal.aborted) return
-          setDailyRows(daily)
-          const chart = dailyToChartState(daily, field.fieldKey, ids)
-          applyChartState(chart, cacheKey, ids)
           setProgress(prog)
-          setLoading(prog.phase === 'fetching' || prog.phase === 'cache')
-          setRefreshing(prog.refreshing)
-          if (!chart.labels.length && prog.phase === 'complete') {
-            setError('No observations in this date range — try widening dates or check Sentinel coverage.')
-          } else if (chart.labels.length) {
-            setError(null)
-          }
         },
       })
+      if (generation !== runGenerationRef.current || ac.signal.aborted) return
+      setDailyRows(daily)
+      const chart = dailyToChartState(daily, field.fieldKey, ids)
+      applyChartState(chart)
+      if (!chart.labels.length) {
+        setError('No observations in this date range — try widening dates or check Sentinel coverage.')
+      } else {
+        setError(null)
+      }
     } catch (err) {
-      if (!ac.signal.aborted && generation === runGenerationRef.current) {
+      if (!ac.signal.aborted && generation === runGenerationRef.current && !hasInstantChart) {
         setError(err instanceof Error ? err.message : 'Analysis failed')
       }
     } finally {
@@ -226,6 +308,8 @@ export function useImageryTimeSeriesStream({
     error,
     hasRun,
     analysisDurationMs,
+    hasChartData: labels.length > 0,
+    chartReady: labels.length > 0 && !loading,
     run,
     abort,
     invalidateResults,

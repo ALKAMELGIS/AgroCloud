@@ -81,7 +81,7 @@ export function resolveLayerClassBreakdown(layerId: string): LayerClassBreakdown
   const u = String(layerId || '').trim().toUpperCase()
   if (!u) return null
 
-  if (isAgroCompositeLayerId(u) && !isAgroDeltaCompositeLayerId(u) && u !== 'CHAS_ALERT') {
+  if (isAgroCompositeLayerId(u) && !isAgroDeltaCompositeLayerId(u) && u !== 'CHAS_ALERT' && u !== 'STRESS_ZONES') {
     const ramp = resolveAgroCompositeTenClassRamp(u)
     const expr = resolveAgroCompositeExpr(u)
     if (!ramp || !expr) return null

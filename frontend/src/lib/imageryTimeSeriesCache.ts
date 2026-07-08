@@ -202,3 +202,129 @@ export function isImageryTsCacheStaleButUsable(record: ImageryTimeSeriesCacheRec
   if (!record?.daily?.length) return false
   return Date.now() - record.savedAt < IMAGERY_TS_STALE_MS
 }
+
+export function buildImageryTsChunkCacheKey(
+  geometryHash: string,
+  fromIso: string,
+  toIso: string,
+  cloudFilter: number,
+): string {
+  return ['chunk', geometryHash, fromIso.trim().slice(0, 10), toIso.trim().slice(0, 10), cloudFilter, 'v1'].join('|')
+}
+
+type ImageryTsChunkCacheRecord = {
+  cacheKey: string
+  daily: SentinelHubDailyIndexMeans[]
+  savedAt: number
+  expiresAt: number
+}
+
+const chunkMemoryCache = new Map<string, ImageryTsChunkCacheRecord>()
+
+function isChunkCacheUsable(record: ImageryTsChunkCacheRecord | null): boolean {
+  if (!record?.daily?.length) return false
+  return Date.now() - record.savedAt < IMAGERY_TS_STALE_MS
+}
+
+export function getImageryTsChunkMemoryCache(chunkKey: string): ImageryTsChunkCacheRecord | null {
+  const hit = chunkMemoryCache.get(chunkKey)
+  return hit?.daily?.length ? hit : null
+}
+
+export async function readImageryTsChunkCache(chunkKey: string): Promise<SentinelHubDailyIndexMeans[] | null> {
+  const mem = getImageryTsChunkMemoryCache(chunkKey)
+  if (mem && isChunkCacheUsable(mem)) return mem.daily
+
+  try {
+    const db = await openImageryTsIdb()
+    const record = await new Promise<ImageryTsChunkCacheRecord | null>((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly')
+      const req = tx.objectStore(IDB_STORE).get(chunkKey)
+      req.onerror = () => reject(req.error)
+      req.onsuccess = () => resolve((req.result as ImageryTsChunkCacheRecord | undefined) ?? null)
+    })
+    db.close()
+    if (record?.daily?.length && isChunkCacheUsable(record)) {
+      chunkMemoryCache.set(chunkKey, record)
+      return record.daily
+    }
+  } catch {
+    /* idb unavailable */
+  }
+  return null
+}
+
+export async function writeImageryTsChunkCache(
+  chunkKey: string,
+  daily: SentinelHubDailyIndexMeans[],
+): Promise<void> {
+  if (!daily.length) return
+  const now = Date.now()
+  const record: ImageryTsChunkCacheRecord = {
+    cacheKey: chunkKey,
+    daily,
+    savedAt: now,
+    expiresAt: now + IMAGERY_TS_CACHE_TTL_MS,
+  }
+  chunkMemoryCache.set(chunkKey, record)
+  try {
+    const db = await openImageryTsIdb()
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite')
+      const req = tx.objectStore(IDB_STORE).put(record)
+      req.onerror = () => reject(req.error)
+      req.onsuccess = () => resolve()
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error ?? new Error('idb chunk write failed'))
+    })
+    db.close()
+  } catch {
+    /* idb unavailable */
+  }
+}
+
+/** Merge any in-memory range caches that overlap the requested window (instant Apply). */
+export function findImageryTsOverlappingDaily(params: {
+  fieldKey: string
+  geometryHash: string
+  fromIso: string
+  toIso: string
+  cloudFilter: number
+}): SentinelHubDailyIndexMeans[] {
+  const from = params.fromIso.trim().slice(0, 10)
+  const to = params.toIso.trim().slice(0, 10)
+  if (!from || !to || from >= to) return []
+
+  const byDate = new Map<string, SentinelHubDailyIndexMeans>()
+
+  const ingest = (daily: SentinelHubDailyIndexMeans[]) => {
+    for (const row of daily) {
+      if (row.date < from || row.date > to) continue
+      byDate.set(row.date, row)
+    }
+  }
+
+  for (const record of memoryCache.values()) {
+    if (record.fieldKey !== params.fieldKey) continue
+    if (record.cloudFilter !== params.cloudFilter) continue
+    const parts = record.cacheKey.split('|')
+    if (parts[1] !== params.geometryHash) continue
+    if (record.toIso < from || record.fromIso > to) continue
+    if (!isImageryTsCacheStaleButUsable(record) && !isImageryTsCacheFresh(record)) continue
+    ingest(record.daily)
+  }
+
+  for (const record of chunkMemoryCache.values()) {
+    if (!isChunkCacheUsable(record)) continue
+    const parts = record.cacheKey.split('|')
+    if (parts[1] !== params.geometryHash) continue
+    const chunkFrom = parts[2]
+    const chunkTo = parts[3]
+    const chunkCloud = Number(parts[4])
+    if (chunkCloud !== params.cloudFilter) continue
+    if (!chunkFrom || !chunkTo || chunkTo < from || chunkFrom > to) continue
+    ingest(record.daily)
+  }
+
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
+}

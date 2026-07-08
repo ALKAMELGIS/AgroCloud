@@ -54,6 +54,13 @@ describe('agroCompositeIndexEvalscripts', () => {
     expect(script).not.toContain('Mosaicking.ORBIT')
   })
 
+  it('builds STRESS_ZONES 5-class evalscript with user CHAS weights', () => {
+    const script = buildAgroCompositeLayerEvalscript('STRESS_ZONES')
+    expect(script).toContain('0.4 * ndvi + 0.25 * ndmi')
+    expect(script).toContain('ZONE_RGB')
+    expect(script).not.toContain('Mosaicking.ORBIT')
+  })
+
   it('builds DCHAS delta with ORBIT mosaicking', () => {
     const script = buildAgroCompositeLayerEvalscript('DCHAS')
     expect(script).toContain('Mosaicking.ORBIT')

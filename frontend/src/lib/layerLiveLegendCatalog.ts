@@ -20,6 +20,11 @@ import {
 import { CHAS_FORMULA_DOC } from './chasIndex'
 import { CHAS_ALERT_COLORS, CHAS_ALERT_LEVELS } from './chasAlertMapping'
 import {
+  STRESS_ZONE_COLORS,
+  STRESS_ZONE_LABELS,
+  STRESS_ZONE_TIER_ORDER,
+} from './siStressZonesMapping'
+import {
   SENTINEL_EVI_RAMP,
   SENTINEL_GNDVI_RAMP,
   SENTINEL_MNDWI_RAMP,
@@ -451,6 +456,9 @@ function buildAgroCompositeLegendNote(layerId: string, isDelta: boolean): string
   if (u === 'CHAS_ALERT') {
     return 'Derived from CHAS raster classes · Classes 1–2 Critical · 3–4 Active · 5–6 Warning · 7–10 Safe · no re-fusion'
   }
+  if (u === 'STRESS_ZONES') {
+    return 'CHAS = 0.4·NDVI + 0.25·NDMI + 0.2·SAVI + 0.15·NDWI · Stress Score = 1 − CHAS · 5-class stress zones'
+  }
   if (u === 'DCHAS') {
     return 'ΔCHAS = CHAS(t₂) − CHAS(t₁) · trend overlay only · 🔴 Δ ≤ −0.15 · 🟠 Δ ≤ −0.05'
   }
@@ -486,6 +494,22 @@ function buildChasAlertLegend(layerId: string): LayerLiveLegendSpec | null {
   }
 }
 
+function buildStressZonesLegend(layerId: string): LayerLiveLegendSpec | null {
+  const def = resolveAgroCompositeIndexDef(layerId)
+  if (!def) return null
+  return {
+    id: layerId,
+    title: def.label,
+    subtitle: 'AI stress zones from Sentinel-2 fusion indices',
+    kind: 'discrete',
+    classes: STRESS_ZONE_TIER_ORDER.map(tier => ({
+      label: STRESS_ZONE_LABELS[tier],
+      color: STRESS_ZONE_COLORS[tier],
+    })),
+    note: buildAgroCompositeLegendNote(layerId, false),
+  }
+}
+
 function buildCompositeTenClassLegendClasses(
   ramp: NonNullable<ReturnType<typeof resolveAgroCompositeTenClassRamp>>,
 ): LayerLiveLegendClass[] {
@@ -507,6 +531,7 @@ function buildCompositeTenClassLegendClasses(
 function buildAgroCompositeLegend(layerId: string): LayerLiveLegendSpec | null {
   const u = String(layerId || '').trim().toUpperCase()
   if (u === 'CHAS_ALERT') return buildChasAlertLegend(layerId)
+  if (u === 'STRESS_ZONES') return buildStressZonesLegend(layerId)
   const def = resolveAgroCompositeIndexDef(layerId)
   if (!def) return null
   const ramp = resolveAgroCompositeTenClassRamp(layerId)

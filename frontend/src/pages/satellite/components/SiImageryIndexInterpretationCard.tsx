@@ -1,8 +1,24 @@
 import type { CoverageTierStats, ImageryIndexInterpretation } from '../../../lib/imageryIndexInterpretationEngine'
 
+export type ImageryInterpretationActionId =
+  | 'scout-moderate'
+  | 'inspect-stress'
+  | 'schedule-irrigation'
+  | 'review-nutrition'
+  | 'export-interpretation'
+
+export type InterpretationActionItem = {
+  id: ImageryInterpretationActionId | `engine-${number}`
+  tone: 'ok' | 'warn' | 'alert'
+  text: string
+  actionable?: boolean
+  icon?: string
+}
+
 export type SiImageryIndexInterpretationCardProps = {
   interpretation: ImageryIndexInterpretation | null
   loadingAreas?: boolean
+  onAction?: (actionId: ImageryInterpretationActionId) => void
 }
 
 function formatHa(ha: number): string {
@@ -55,6 +71,70 @@ function buildNarrative(interpretation: ImageryIndexInterpretation): string {
   return text
 }
 
+function buildContextualActions(interpretation: ImageryIndexInterpretation): InterpretationActionItem[] {
+  const moderate = coverageForTier(interpretation.coverage, 'moderate')
+  const stress = coverageForTier(interpretation.coverage, 'stress')
+  const critical = coverageForTier(interpretation.coverage, 'critical')
+  const stressedPct = (stress?.pct ?? 0) + (critical?.pct ?? 0)
+  const stressedHa = (stress?.areaHa ?? 0) + (critical?.areaHa ?? 0)
+
+  const items: InterpretationActionItem[] = interpretation.actions.map((a, i) => ({
+    id: `engine-${i}` as const,
+    tone: a.tone,
+    text: a.text,
+  }))
+
+  if (moderate && moderate.pct >= 8) {
+    items.push({
+      id: 'scout-moderate',
+      tone: 'warn',
+      text: `Scout moderate-vigor zones (${formatPct(moderate.pct)}% · ${formatHa(moderate.areaHa)} ha).`,
+      actionable: true,
+      icon: 'fa-solid fa-binoculars',
+    })
+  }
+
+  if (stressedPct >= 5) {
+    items.push({
+      id: 'inspect-stress',
+      tone: stressedPct >= 15 ? 'alert' : 'warn',
+      text: `Inspect stressed areas on map (${formatPct(stressedPct)}% · ${formatHa(stressedHa)} ha).`,
+      actionable: true,
+      icon: 'fa-solid fa-map-location-dot',
+    })
+  }
+
+  const layer = interpretation.layerId.toUpperCase()
+  if (layer === 'NDWI' || layer === 'NDMI') {
+    if (interpretation.meanTier === 'stress' || interpretation.meanTier === 'critical') {
+      items.push({
+        id: 'schedule-irrigation',
+        tone: 'warn',
+        text: 'Review irrigation scheduling for the selected date.',
+        actionable: true,
+        icon: 'fa-solid fa-droplet',
+      })
+    }
+  } else if (layer === 'NDRE' || layer === 'CI_RE' || layer === 'CIRE') {
+    if (interpretation.meanTier === 'moderate' || interpretation.meanTier === 'stress') {
+      items.push({
+        id: 'review-nutrition',
+        tone: 'warn',
+        text: 'Review nitrogen application in moderate or stressed zones.',
+        actionable: true,
+        icon: 'fa-solid fa-leaf',
+      })
+    }
+  }
+
+  const seen = new Set<string>()
+  return items.filter(a => {
+    if (seen.has(a.text)) return false
+    seen.add(a.text)
+    return true
+  })
+}
+
 function CoverageRow({ label, tier }: { label: string; tier?: CoverageTierStats }) {
   if (!tier || tier.pct <= 0) return null
   return (
@@ -70,6 +150,7 @@ function CoverageRow({ label, tier }: { label: string; tier?: CoverageTierStats 
 export function SiImageryIndexInterpretationCard({
   interpretation,
   loadingAreas = false,
+  onAction,
 }: SiImageryIndexInterpretationCardProps) {
   if (!interpretation) {
     return (
@@ -82,26 +163,26 @@ export function SiImageryIndexInterpretationCard({
   const healthy = coverageForTier(interpretation.coverage, 'healthy')
   const moderate = coverageForTier(interpretation.coverage, 'moderate')
   const stress = coverageForTier(interpretation.coverage, 'stress')
-  const stressed = coverageForTier(interpretation.coverage, 'stress')
   const critical = coverageForTier(interpretation.coverage, 'critical')
-  const stressedCombinedPct =
-    (stress?.pct ?? 0) + (critical?.pct ?? 0)
+  const stressedCombinedPct = (stress?.pct ?? 0) + (critical?.pct ?? 0)
   const stressedCombinedHa = (stress?.areaHa ?? 0) + (critical?.areaHa ?? 0)
   const stressedCombinedM2 = (stress?.areaM2 ?? 0) + (critical?.areaM2 ?? 0)
 
-  const extraActions: string[] = []
-  if (stressedCombinedPct >= 5) {
-    extraActions.push('Inspect stressed zones.')
-    extraActions.push('Monitor pests and irrigation if stress increases.')
-  }
+  const actionItems = buildContextualActions(interpretation)
+  const quickActions = actionItems.filter(a => a.actionable).slice(0, 3)
 
-  const allActions = [
-    ...interpretation.actions.map(a => ({ tone: a.tone, text: a.text })),
-    ...extraActions.map(text => ({ tone: 'warn' as const, text })),
-  ]
-  const uniqueActions = allActions.filter(
-    (a, i, arr) => arr.findIndex(x => x.text === a.text) === i,
-  )
+  const handleActionClick = (item: InterpretationActionItem) => {
+    if (!item.actionable || !onAction) return
+    if (
+      item.id === 'scout-moderate' ||
+      item.id === 'inspect-stress' ||
+      item.id === 'schedule-irrigation' ||
+      item.id === 'review-nutrition' ||
+      item.id === 'export-interpretation'
+    ) {
+      onAction(item.id)
+    }
+  }
 
   return (
     <div className="acp-ts__interpret" aria-live="polite">
@@ -158,6 +239,53 @@ export function SiImageryIndexInterpretationCard({
 
       <p className="acp-ts__interpret-line acp-ts__interpret-line--narrative">{buildNarrative(interpretation)}</p>
 
+      <section className="acp-ts__interpret-actions-block" aria-label="Recommended actions">
+        <h4 className="acp-ts__interpret-actions-title">
+          <i className="fa-solid fa-bolt" aria-hidden /> Actions
+        </h4>
+        {actionItems.length ? (
+          <ul className="acp-ts__interpret-actions-list">
+            {actionItems.slice(0, 5).map(action => (
+              <li
+                key={action.id}
+                className={
+                  action.tone === 'ok'
+                    ? 'acp-ts__interpret-action--ok'
+                    : action.tone === 'alert'
+                      ? 'acp-ts__interpret-action--alert'
+                      : 'acp-ts__interpret-action--warn'
+                }
+              >
+                {action.tone === 'ok' ? '✓' : '⚠'} {action.text}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="acp-ts__interpret-line acp-ts__interpret-line--actions">
+            No specific actions — conditions are within expected range.
+          </p>
+        )}
+        {quickActions.length ? (
+          <div className="acp-ts__interpret-action-chips">
+            {quickActions.map(action => (
+              <button
+                key={`chip-${action.id}`}
+                type="button"
+                className={`acp-ts__interpret-action-chip acp-ts__interpret-action-chip--${action.tone}${
+                  onAction ? '' : ' acp-ts__interpret-action-chip--static'
+                }`}
+                title={action.text}
+                disabled={!onAction}
+                onClick={() => handleActionClick(action)}
+              >
+                {action.icon ? <i className={action.icon} aria-hidden /> : null}
+                <span>{action.text}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </section>
+
       <div className="acp-ts__interpret-coverage-grid">
         <CoverageRow label="Healthy" tier={healthy} />
         <CoverageRow label="Moderate" tier={moderate} />
@@ -169,32 +297,11 @@ export function SiImageryIndexInterpretationCard({
               {formatM2(stressedCombinedM2)} m²
             </span>
           </div>
-        ) : (
-          <CoverageRow label="Stressed" tier={stressed} />
-        )}
+        ) : null}
         {loadingAreas ? (
           <span className="acp-ts__interpret-loading">Refining area statistics…</span>
         ) : null}
       </div>
-
-      {uniqueActions.length ? (
-        <ul className="acp-ts__interpret-actions-list">
-          {uniqueActions.slice(0, 4).map(action => (
-            <li
-              key={action.text}
-              className={
-                action.tone === 'ok'
-                  ? 'acp-ts__interpret-action--ok'
-                  : action.tone === 'alert'
-                    ? 'acp-ts__interpret-action--alert'
-                    : 'acp-ts__interpret-action--warn'
-              }
-            >
-              {action.tone === 'ok' ? '✓' : '⚠'} {action.text}
-            </li>
-          ))}
-        </ul>
-      ) : null}
     </div>
   )
 }
