@@ -255,17 +255,27 @@ export const SENTINEL_GNDVI_RAMP: RampStop[] = [
   [1, 0x004400],
 ]
 
-/** NDSI: snow / ice (dark → white). */
-export const SENTINEL_NDSI_RAMP: RampStop[] = [
-  [-1, 0x1b1b1b],
-  [-0.2, 0x616161],
-  [0, 0x9e9e9e],
-  [0.1, 0xbdbdbd],
-  [0.25, 0xe0e0e0],
-  [0.4, 0xf5f5f5],
-  [0.6, 0xffffff],
-  [1, 0xffffff],
+/** NDSI snow / ice — 10 discrete classes (no snow → dense snow). */
+export const SENTINEL_NDSI_10_CLASS_COLORS: readonly number[] = [
+  0x4a4a4a, 0x7b9ebd, 0xb3d9ff, 0x80deea, 0x29b6f6, 0x1e88e5, 0x1565c0, 0x0d47a1, 0xe3f2fd,
+  0xffffff,
 ]
+
+/** Nine interior breaks across −1…1 for 10 NDSI classes. */
+export const SENTINEL_NDSI_10_CLASS_BREAKS: readonly number[] = [
+  -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8,
+]
+
+/** Class representative NDSI for ColorRampVisualizer.process(). */
+export const SENTINEL_NDSI_10_CLASS_VALUES: readonly number[] = [
+  -0.9, -0.7, -0.5, -0.3, -0.1, 0.1, 0.3, 0.5, 0.7, 0.9,
+]
+
+/** NDSI: snow / ice (dark gray → blue → white). */
+export const SENTINEL_NDSI_RAMP: RampStop[] = SENTINEL_NDSI_10_CLASS_VALUES.map((v, i) => [
+  v,
+  SENTINEL_NDSI_10_CLASS_COLORS[i]!,
+])
 
 /** NDRE: red-edge chlorophyll / nitrogen proxy. */
 export const SENTINEL_NDRE_RAMP: RampStop[] = [
@@ -609,6 +619,63 @@ function evaluatePixel(samples) {
 }`
 }
 
+/** NDSI: 10-class snow / ice ramp (B03 / B11). */
+export function buildSentinelNdsiTenClassEvalscript(indexVisibilityMin: number | null = null): string {
+  const thr =
+    indexVisibilityMin != null && Number.isFinite(indexVisibilityMin)
+      ? Math.max(-1, Math.min(1, indexVisibilityMin))
+      : null
+
+  const alphaBlock =
+    thr == null
+      ? 'return imgVals.concat(samples.dataMask);'
+      : `var a = samples.dataMask * (val >= ${thr} ? 1.0 : 0.0);
+  return imgVals.concat(a);`
+
+  const coloredRamp: RampStop[] = SENTINEL_NDSI_10_CLASS_VALUES.map((v, i) => [
+    v,
+    SENTINEL_NDSI_10_CLASS_COLORS[i]!,
+  ])
+
+  return `//VERSION=3
+// NDSI — 10 classes, snow / ice ramp (B03 / B11)
+function setup() {
+  return {
+    input: ["B03", "B11", "dataMask"],
+    output: { bands: 4 }
+  };
+}
+
+const snowRamp = [
+   ${formatRampForEvalscript(coloredRamp)}
+];
+
+const viz = new ColorRampVisualizer(snowRamp);
+
+const BREAKS = [${formatNumberList(SENTINEL_NDSI_10_CLASS_BREAKS)}];
+const CLASS_VAL = [${formatNumberList(SENTINEL_NDSI_10_CLASS_VALUES)}];
+
+function ndsiClass(val) {
+  if (val < BREAKS[0]) return 0;
+  if (val < BREAKS[1]) return 1;
+  if (val < BREAKS[2]) return 2;
+  if (val < BREAKS[3]) return 3;
+  if (val < BREAKS[4]) return 4;
+  if (val < BREAKS[5]) return 5;
+  if (val < BREAKS[6]) return 6;
+  if (val < BREAKS[7]) return 7;
+  if (val < BREAKS[8]) return 8;
+  return 9;
+}
+
+function evaluatePixel(samples) {
+  let val = index(samples.B03, samples.B11);
+  let cls = ndsiClass(val);
+  let imgVals = viz.process(CLASS_VAL[cls]);
+  ${alphaBlock}
+}`
+}
+
 /** Build Evalscript v3 with ColorRampVisualizer + dataMask alpha for WMS AOI clip. */
 export function buildSentinelIndexColorRampEvalscript(
   profile: SentinelIndexEvalProfile,
@@ -628,6 +695,9 @@ export function buildSentinelIndexColorRampEvalscript(
     return buildSentinelEtTenClassEvalscript(indexVisibilityMin, {
       sceneDate: options?.sceneDate,
     })
+  }
+  if (profile === 'ndsi') {
+    return buildSentinelNdsiTenClassEvalscript(indexVisibilityMin)
   }
 
   const spec = INDEX_EVAL_SPECS[profile]

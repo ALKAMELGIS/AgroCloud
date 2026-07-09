@@ -7,7 +7,7 @@ export const IMAGERY_TS_STALE_MS = 24 * 60 * 60_000
 const IDB_NAME = 'agrocloud_imagery_ts_cache'
 const IDB_STORE = 'series'
 const IDB_VERSION = 1
-const CACHE_API_NAME = 'agrocloud-imagery-ts-v1'
+const CACHE_API_NAME = 'agrocloud-imagery-ts-v5'
 
 export type ImageryTimeSeriesCacheRecord = {
   cacheKey: string
@@ -47,6 +47,7 @@ export function buildImageryTsCacheKey(params: {
   fromIso: string
   toIso: string
   cloudFilter: number
+  statsMode?: string
 }): string {
   return [
     params.fieldKey,
@@ -54,7 +55,8 @@ export function buildImageryTsCacheKey(params: {
     params.fromIso,
     params.toIso,
     params.cloudFilter,
-    'v1',
+    params.statsMode ?? 'multi',
+    'v5',
   ].join('|')
 }
 
@@ -208,8 +210,9 @@ export function buildImageryTsChunkCacheKey(
   fromIso: string,
   toIso: string,
   cloudFilter: number,
+  statsMode = 'multi',
 ): string {
-  return ['chunk', geometryHash, fromIso.trim().slice(0, 10), toIso.trim().slice(0, 10), cloudFilter, 'v1'].join('|')
+  return ['chunk', geometryHash, fromIso.trim().slice(0, 10), toIso.trim().slice(0, 10), cloudFilter, statsMode, 'v5'].join('|')
 }
 
 type ImageryTsChunkCacheRecord = {
@@ -290,10 +293,12 @@ export function findImageryTsOverlappingDaily(params: {
   fromIso: string
   toIso: string
   cloudFilter: number
+  statsMode?: string
 }): SentinelHubDailyIndexMeans[] {
   const from = params.fromIso.trim().slice(0, 10)
   const to = params.toIso.trim().slice(0, 10)
   if (!from || !to || from >= to) return []
+  const wantStatsMode = params.statsMode ?? 'multi'
 
   const byDate = new Map<string, SentinelHubDailyIndexMeans>()
 
@@ -309,6 +314,7 @@ export function findImageryTsOverlappingDaily(params: {
     if (record.cloudFilter !== params.cloudFilter) continue
     const parts = record.cacheKey.split('|')
     if (parts[1] !== params.geometryHash) continue
+    if ((parts[5] ?? 'multi') !== wantStatsMode) continue
     if (record.toIso < from || record.fromIso > to) continue
     if (!isImageryTsCacheStaleButUsable(record) && !isImageryTsCacheFresh(record)) continue
     ingest(record.daily)
@@ -318,6 +324,7 @@ export function findImageryTsOverlappingDaily(params: {
     if (!isChunkCacheUsable(record)) continue
     const parts = record.cacheKey.split('|')
     if (parts[1] !== params.geometryHash) continue
+    if ((parts[5] ?? 'multi') !== wantStatsMode) continue
     const chunkFrom = parts[2]
     const chunkTo = parts[3]
     const chunkCloud = Number(parts[4])

@@ -1,15 +1,18 @@
 import type { RemoteSensingLayerSelectGroup } from '../../../lib/agroCompositeIndices'
+import {
+  remoteSensingCollectionsForProvider,
+  remoteSensingProviderDef,
+  remoteSensingProviderOptions,
+} from '../../../lib/remoteSensingProviders'
 import type { SiAoiMaskBuilderSettings } from '../../../lib/siAoiMaskBuilder'
 import { RemoteSensingLayerSelect } from './RemoteSensingLayerSelect'
+import { SiRsPanelSelect } from './SiRsPanelSelect'
 import { SiAoiMaskBuilderPanel } from './SiAoiMaskBuilderPanel'
 import type { RemoteSensingDrawingTool } from './RemoteSensingDrawingToolbar'
 
-export const REMOTE_SENSING_PROVIDERS = [{ id: 'sentinel-hub', label: 'Sentinel Hub' }] as const
+export const REMOTE_SENSING_PROVIDERS = remoteSensingProviderOptions()
 
-export const REMOTE_SENSING_COLLECTIONS = [
-  { id: 'sentinel-2-l2a', label: 'Sentinel-2 L2A' },
-  { id: 'sentinel-2-l1c', label: 'Sentinel-2 L1C' },
-] as const
+export const REMOTE_SENSING_COLLECTIONS = remoteSensingCollectionsForProvider('sentinel-hub')
 
 export type RemoteSensingDrawTool = RemoteSensingDrawingTool | 'select' | 'polyline' | string
 
@@ -104,41 +107,38 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
     fieldAnalysisStatus,
   } = props
 
+  const providerMeta = remoteSensingProviderDef(provider)
+  const collectionOptions = remoteSensingCollectionsForProvider(provider)
+
   return (
     <div className="si-env-section-card si-field-analysis si-rs-panel si-rs-panel--glass si-rs-panel--toolbox-v2 si-rs-panel--flat">
       <div className="si-rs-panel__body si-rs-panel__body--flat">
         <div className="si-rs-panel__flat-grid si-rs-panel__flat-grid--2">
           <label className="si-rs-panel__stack">
             <span className="si-rs-panel__label">Provider</span>
-            <select
-              className="si-rs-panel__select"
+            <SiRsPanelSelect
+              options={REMOTE_SENSING_PROVIDERS}
               value={provider}
-              onChange={e => onProviderChange(e.target.value)}
+              onChange={onProviderChange}
               aria-label="Satellite provider"
-            >
-              {REMOTE_SENSING_PROVIDERS.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
+            />
           </label>
           <label className="si-rs-panel__stack">
             <span className="si-rs-panel__label">Collection</span>
-            <select
-              className="si-rs-panel__select"
+            <SiRsPanelSelect
+              options={collectionOptions}
               value={collection}
-              onChange={e => onCollectionChange(e.target.value)}
+              onChange={onCollectionChange}
               aria-label="Sensor or collection"
-            >
-              {REMOTE_SENSING_COLLECTIONS.map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
+            />
           </label>
         </div>
+
+        {!providerMeta.integrated && providerMeta.hint ? (
+          <p className="si-rs-panel__meta si-rs-panel__meta--inline" role="status">
+            <i className="fa-solid fa-circle-info" aria-hidden /> {providerMeta.hint}
+          </p>
+        ) : null}
 
         <label className="si-rs-panel__stack">
           <span className="si-rs-panel__label">Imagery date</span>

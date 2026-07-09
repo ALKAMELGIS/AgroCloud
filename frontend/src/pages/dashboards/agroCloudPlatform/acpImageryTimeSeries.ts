@@ -41,16 +41,34 @@ type CoreVars = {
   ndwi: number
   savi: number
   ci_re: number
+  /** (B11−B8)/(B11+B8) — same as index(B11,B08) in composite evalscripts. */
+  ndsi: number
+  /** √(B03·B04) — NaN when band reflectance is unavailable in daily stats. */
+  si: number
+  ssi: number
+}
+
+/** Salinity NDSI from NDMI: index(B11,B08) = −index(B08,B11). */
+export function ndsiSalinityFromNdmi(ndmi: number | null | undefined): number | null {
+  if (ndmi == null || !Number.isFinite(ndmi)) return null
+  return Number((-ndmi).toFixed(4))
 }
 
 function coreVarsFromDaily(row: SentinelHubDailyIndexMeans): CoreVars | null {
   if (row.ndvi == null || !Number.isFinite(row.ndvi)) return null
+  const ndmi = row.ndmi != null && Number.isFinite(row.ndmi) ? row.ndmi : 0
+  const ndsi = ndsiSalinityFromNdmi(row.ndmi) ?? NaN
+  const si = NaN
+  const ssi = Number.isFinite(ndsi) && Number.isFinite(si) ? ndsi + si : NaN
   return {
     ndvi: row.ndvi,
-    ndmi: row.ndmi != null && Number.isFinite(row.ndmi) ? row.ndmi : 0,
+    ndmi,
     ndwi: row.ndwi != null && Number.isFinite(row.ndwi) ? row.ndwi : 0,
     savi: estimateSaviFromNdvi(row.ndvi),
     ci_re: row.ciRe != null && Number.isFinite(row.ciRe) ? row.ciRe : 0,
+    ndsi,
+    si,
+    ssi,
   }
 }
 
@@ -62,10 +80,23 @@ function evaluateCompositeExpr(expr: string, vars: CoreVars): number | null {
       'ndwi',
       'savi',
       'ci_re',
+      'ndsi',
+      'si',
+      'ssi',
       'Math',
       `"use strict"; return (${expr});`,
     )
-    const value = fn(vars.ndvi, vars.ndmi, vars.ndwi, vars.savi, vars.ci_re, Math)
+    const value = fn(
+      vars.ndvi,
+      vars.ndmi,
+      vars.ndwi,
+      vars.savi,
+      vars.ci_re,
+      vars.ndsi,
+      vars.si,
+      vars.ssi,
+      Math,
+    )
     return typeof value === 'number' && Number.isFinite(value) ? value : null
   } catch {
     return null
@@ -74,6 +105,15 @@ function evaluateCompositeExpr(expr: string, vars: CoreVars): number | null {
 
 function evaluateStaticLayerDailyValue(layerId: string, row: SentinelHubDailyIndexMeans): number | null {
   const id = layerId.trim().toUpperCase()
+
+  if (id === 'NDSI') {
+    return row.ndsi != null && Number.isFinite(row.ndsi) ? Number(row.ndsi.toFixed(4)) : null
+  }
+
+  if (id === 'SAL_NDSI') {
+    return ndsiSalinityFromNdmi(row.ndmi)
+  }
+
   const core = coreVarsFromDaily(row)
   if (!core) return null
 
@@ -123,6 +163,73 @@ export function evaluateImageryLayerDailyValue(layerId: string, row: SentinelHub
   const id = layerId.trim().toUpperCase()
   if (isAgroDeltaCompositeLayerId(id)) return null
   return evaluateStaticLayerDailyValue(id, row)
+}
+
+/** True when cached daily rows include at least one finite value for the layer. */
+export function imageryDailyRowsSupportLayer(
+  rows: SentinelHubDailyIndexMeans[],
+  layerId: string,
+): boolean {
+  if (!rows.length) return false
+  return rows.some(row => {
+    const v = evaluateImageryLayerDailyValue(layerId, row)
+    return v != null && Number.isFinite(v)
+  })
+}
+
+/** True when every selected layer can be derived from the cached daily rows. */
+export function imageryDailyRowsSupportLayers(
+  rows: SentinelHubDailyIndexMeans[],
+  layerIds: string[],
+): boolean {
+  const ids = layerIds.length ? layerIds : ['NDVI']
+  return ids.every(id => imageryDailyRowsSupportLayer(rows, id))
+}
+
+/** Legacy imagery cache rows stored NDVI/NDMI but not snow NDSI (B03/B11) before the channel was added. */
+export function dailyRowsLackSnowNdsiChannel(rows: SentinelHubDailyIndexMeans[]): boolean {
+  if (!rows.length) return false
+  return !rows.some(row => row.ndsi != null && Number.isFinite(row.ndsi))
+}
+
+export type NdsiZonalChartBands = {
+  mean: Array<number | null>
+  min: Array<number | null>
+  max: Array<number | null>
+}
+
+/** Align snow NDSI zonal min/mean/max to chart label dates (one value per acquisition day). */
+export function buildNdsiZonalChartBands(
+  labels: string[],
+  dailyRows: SentinelHubDailyIndexMeans[],
+): NdsiZonalChartBands {
+  const byDate = new Map(dailyRows.map(row => [row.date.slice(0, 10), row]))
+  const mean: Array<number | null> = []
+  const min: Array<number | null> = []
+  const max: Array<number | null> = []
+  for (const key of labels) {
+    const day = key.slice(0, 10)
+    const row = byDate.get(day)
+    const zonal = row?.zonal?.ndsi
+    const m = row ? evaluateImageryLayerDailyValue('NDSI', row) : null
+    mean.push(m != null && Number.isFinite(m) ? m : null)
+    min.push(zonal?.min != null && Number.isFinite(zonal.min) ? zonal.min : m)
+    max.push(zonal?.max != null && Number.isFinite(zonal.max) ? zonal.max : m)
+  }
+  return { mean, min, max }
+}
+
+/** Selected layers need a fresh statistics fetch because cached daily rows lack required bands. */
+export function imageryDailyRowsNeedRefetchForLayers(
+  rows: SentinelHubDailyIndexMeans[],
+  layerIds: string[],
+): boolean {
+  const ids = layerIds.length ? layerIds : ['NDVI']
+  if (!rows.length) return false
+  if (ids.some(id => id.trim().toUpperCase() === 'NDSI') && dailyRowsLackSnowNdsiChannel(rows)) {
+    return true
+  }
+  return false
 }
 
 function meanFieldValueForDate(
@@ -376,6 +483,35 @@ export function pruneSingleLayerImagerySeries(
 ): { labels: string[]; values: number[] } {
   const pruned = pruneImageryTimeSeriesToObservations(labels, [{ layerId: 'L', values }])
   return { labels: pruned.labels, values: pruned.series[0]?.values ?? [] }
+}
+
+/** Clip chart series to the toolbar Start/End date window (inclusive, ISO yyyy-mm-dd). */
+export function filterImageryTimeSeriesByDateRange(
+  labels: string[],
+  series: ImageryTimeSeriesLayerSeries[],
+  fromIso: string,
+  toIso: string,
+): { labels: string[]; series: ImageryTimeSeriesLayerSeries[] } {
+  if (!labels.length || !series.length) return { labels: [], series: [] }
+  const from = fromIso.trim().slice(0, 10)
+  const to = toIso.trim().slice(0, 10)
+  if (!from || !to || from > to) return { labels: [], series: series.map(s => ({ layerId: s.layerId, values: [] })) }
+
+  const keepIndexes: number[] = []
+  for (let i = 0; i < labels.length; i++) {
+    const day = String(labels[i] ?? '').slice(0, 10)
+    if (day >= from && day <= to) keepIndexes.push(i)
+  }
+  if (!keepIndexes.length) {
+    return { labels: [], series: series.map(s => ({ layerId: s.layerId, values: [] })) }
+  }
+  return {
+    labels: keepIndexes.map(i => labels[i]!),
+    series: series.map(s => ({
+      layerId: s.layerId,
+      values: keepIndexes.map(i => s.values[i] ?? null),
+    })),
+  }
 }
 
 export function defaultImageryDateRange(referenceIso: string, lookbackDays = 90): { from: string; to: string } {

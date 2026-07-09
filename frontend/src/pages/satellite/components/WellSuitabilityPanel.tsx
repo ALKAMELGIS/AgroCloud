@@ -107,6 +107,7 @@ export function WellSuitabilityPanel({
               <i className={`fa-solid ${f.icon}`} aria-hidden /> {f.label}
             </span>
             <input
+              className="si-well-suit__range"
               type="range"
               min={0}
               max={1}
@@ -122,6 +123,7 @@ export function WellSuitabilityPanel({
         <label className="si-well-suit__topn">
           <span>Sites to rank</span>
           <input
+            className="si-well-suit__range"
             type="range"
             min={5}
             max={20}
@@ -195,6 +197,7 @@ export function WellSuitabilityPanel({
             <div className="si-wellsite__opacity">
               <i className="fa-solid fa-circle-half-stroke" aria-hidden />
               <input
+                className="si-well-suit__range"
                 type="range"
                 min={0}
                 max={1}
@@ -293,7 +296,7 @@ export function WellSuitabilityPanel({
                 <i className="fa-solid fa-file-pdf" aria-hidden />
                 <span className="si-hydro__act-text">PDF</span>
               </button>
-              <button type="button" className="si-hydro__act" onClick={onExportXlsx} title="Excel workbook">
+              <button type="button" className="si-hydro__act" onClick={onExportXlsx} title="Excel workbook (ranked sites, water table, MCDA weights)">
                 <i className="fa-solid fa-file-excel" aria-hidden />
                 <span className="si-hydro__act-text">Excel</span>
               </button>

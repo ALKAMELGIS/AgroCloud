@@ -118,6 +118,8 @@ export type SentinelHubSceneZonalStats = {
   evi: SentinelHubIndexZonalStats
   savi?: SentinelHubIndexZonalStats
   ciRe?: SentinelHubIndexZonalStats
+  /** Snow NDSI (B03−B11)/(B03+B11) zonal min/max/mean. */
+  ndsi?: SentinelHubIndexZonalStats
 }
 
 export type SentinelHubDailyIndexMeans = {
@@ -128,6 +130,8 @@ export type SentinelHubDailyIndexMeans = {
   evi: number | null
   savi: number | null
   ciRe: number | null
+  /** Snow / ice NDSI: (B03−B11)/(B03+B11). */
+  ndsi?: number | null
   /** Pixel min/max/mean inside AOI from Statistical API (Layer Live). */
   zonal?: Partial<SentinelHubSceneZonalStats>
 }
@@ -257,7 +261,7 @@ function setup() {
     output: [
       {
         id: "indices",
-        bands: ["ndvi", "ndwi", "ndmi", "evi", "savi", "ci_re"],
+        bands: ["ndvi", "ndwi", "ndmi", "evi", "savi", "ci_re", "ndsi"],
         sampleType: "FLOAT32"
       },
       {
@@ -282,9 +286,11 @@ function evaluatePixel(samples) {
   var saviDen = samples.B08 + samples.B04 + L;
   var savi = saviDen > 1e-6 ? (samples.B08 - samples.B04) / saviDen * (1.0 + L) : NaN;
   var ci_re = samples.B08 > 1e-6 ? samples.B05 / samples.B08 - 1 : NaN;
-  var valid = samples.dataMask && !cloud && !isNaN(ndvi);
+  var dNdSnow = samples.B03 + samples.B11;
+  var ndsi = dNdSnow > 1e-6 ? (samples.B03 - samples.B11) / dNdSnow : NaN;
+  var valid = samples.dataMask && !cloud && (dNdvi > 1e-6 || dNdSnow > 1e-6);
   return {
-    indices: [ndvi, ndwi, ndmi, evi, savi, ci_re],
+    indices: [ndvi, ndwi, ndmi, evi, savi, ci_re, ndsi],
     dataMask: [valid ? 1 : 0]
   };
 }`
@@ -299,7 +305,7 @@ function setup() {
     output: [
       {
         id: "indices",
-        bands: ["ndvi", "ndwi", "ndmi", "evi", "savi", "ci_re"],
+        bands: ["ndvi", "ndwi", "ndmi", "evi", "savi", "ci_re", "ndsi"],
         sampleType: "FLOAT32"
       },
       {
@@ -322,11 +328,51 @@ function evaluatePixel(samples) {
   var saviDen = samples.B08 + samples.B04 + L;
   var savi = saviDen > 1e-6 ? (samples.B08 - samples.B04) / saviDen * (1.0 + L) : NaN;
   var ci_re = samples.B08 > 1e-6 ? samples.B05 / samples.B08 - 1 : NaN;
-  var valid = samples.dataMask && !isNaN(ndvi);
+  var dNdSnow = samples.B03 + samples.B11;
+  var ndsi = dNdSnow > 1e-6 ? (samples.B03 - samples.B11) / dNdSnow : NaN;
+  var valid = samples.dataMask && (dNdvi > 1e-6 || dNdSnow > 1e-6);
   return {
-    indices: [ndvi, ndwi, ndmi, evi, savi, ci_re],
+    indices: [ndvi, ndwi, ndmi, evi, savi, ci_re, ndsi],
     dataMask: [valid ? 1 : 0]
   };
+}`
+
+/** Snow NDSI only — validity from B03+B11 (no NDVI / vegetation requirement). */
+export const SNOW_NDSI_INDEX_EVALSCRIPT = `//VERSION=3
+function setup() {
+  return {
+    input: [{ bands: ["B03", "B11", "SCL", "dataMask"] }],
+    output: [
+      { id: "indices", bands: ["ndsi"], sampleType: "FLOAT32" },
+      { id: "dataMask", bands: 1 }
+    ]
+  };
+}
+function evaluatePixel(samples) {
+  var scl = samples.SCL;
+  var cloud = (scl == 3 || scl == 8 || scl == 9 || scl == 10 || scl == 11);
+  if (!samples.dataMask || cloud) return { indices: [NaN], dataMask: [0] };
+  var d = samples.B03 + samples.B11;
+  if (d <= 1e-6) return { indices: [NaN], dataMask: [0] };
+  return { indices: [(samples.B03 - samples.B11) / d], dataMask: [1] };
+}`
+
+/** Relaxed snow NDSI — cloud filter only via maxCloudCoverage. */
+export const SNOW_NDSI_RELAXED_INDEX_EVALSCRIPT = `//VERSION=3
+function setup() {
+  return {
+    input: [{ bands: ["B03", "B11", "dataMask"] }],
+    output: [
+      { id: "indices", bands: ["ndsi"], sampleType: "FLOAT32" },
+      { id: "dataMask", bands: 1 }
+    ]
+  };
+}
+function evaluatePixel(samples) {
+  if (!samples.dataMask) return { indices: [NaN], dataMask: [0] };
+  var d = samples.B03 + samples.B11;
+  if (d <= 1e-6) return { indices: [NaN], dataMask: [0] };
+  return { indices: [(samples.B03 - samples.B11) / d], dataMask: [1] };
 }`
 
 /** Raw Sentinel-2 L2A reflectance bands for Layer Live pixel inspect. */
@@ -466,9 +512,32 @@ function buildMultiIndexStatisticsCalculations(): Record<string, unknown> {
         evi: {},
         savi: {},
         ci_re: {},
+        ndsi: {},
       },
     },
   }
+}
+
+function buildSnowNdsiStatisticsCalculations(): Record<string, unknown> {
+  return {
+    indices: {
+      statistics: {
+        ndsi: {},
+      },
+    },
+  }
+}
+
+export type ImageryStatisticsFetchMode = 'multi' | 'snow-ndsi'
+
+export function resolveImageryStatisticsFetchMode(layerIds: string[] | undefined): ImageryStatisticsFetchMode {
+  const ids = (layerIds?.length ? layerIds : ['NDVI']).map(id => id.trim().toUpperCase())
+  if (ids.length === 1 && ids[0] === 'NDSI') return 'snow-ndsi'
+  return 'multi'
+}
+
+export function imageryStatisticsFetchNeedsSnowNdsi(layerIds: string[] | undefined): boolean {
+  return (layerIds ?? []).some(id => id.trim().toUpperCase() === 'NDSI')
 }
 
 function buildRawBandStatisticsCalculations(): Record<string, unknown> {
@@ -568,6 +637,7 @@ export function parseSentinelHubStatsResponse(json: StatsApiResponse): SentinelH
     const eviStats = readBandStats(row, 'evi')
     const saviStats = readBandStats(row, 'savi')
     const ciReStats = readBandStats(row, 'ci_re')
+    const ndsiStats = readBandStats(row, 'ndsi')
     const zonal: Partial<SentinelHubSceneZonalStats> = {}
     if (ndviStats) zonal.ndvi = ndviStats
     if (ndmiStats) zonal.ndmi = ndmiStats
@@ -575,6 +645,7 @@ export function parseSentinelHubStatsResponse(json: StatsApiResponse): SentinelH
     if (eviStats) zonal.evi = eviStats
     if (saviStats) zonal.savi = saviStats
     if (ciReStats) zonal.ciRe = ciReStats
+    if (ndsiStats) zonal.ndsi = ndsiStats
     out.push({
       date,
       ndvi: ndviStats?.mean ?? null,
@@ -583,6 +654,7 @@ export function parseSentinelHubStatsResponse(json: StatsApiResponse): SentinelH
       evi: eviStats?.mean ?? null,
       savi: saviStats?.mean ?? null,
       ciRe: ciReStats?.mean ?? null,
+      ndsi: ndsiStats?.mean ?? null,
       zonal: Object.keys(zonal).length ? zonal : undefined,
     })
   }
@@ -622,7 +694,16 @@ export type FetchSentinelFieldStatsOptions = {
 }
 
 export function hasValidIndexDaily(daily: SentinelHubDailyIndexMeans[]): boolean {
-  return daily.some(d => d.ndvi != null || d.ndwi != null || d.ndmi != null)
+  return daily.some(
+    d =>
+      d.ndvi != null ||
+      d.ndwi != null ||
+      d.ndmi != null ||
+      d.ndsi != null ||
+      d.evi != null ||
+      d.savi != null ||
+      d.ciRe != null,
+  )
 }
 
 export function mergeDailyIndexSeries(
@@ -644,6 +725,7 @@ export function mergeDailyIndexSeries(
         evi: row.evi ?? prev.evi,
         savi: row.savi ?? prev.savi,
         ciRe: row.ciRe ?? prev.ciRe,
+        ndsi: row.ndsi ?? prev.ndsi,
         zonal: row.zonal ?? prev.zonal,
       })
     }
@@ -820,8 +902,20 @@ function buildStatisticsRequestBody(
   geom: GeoJSON.Geometry,
   fromIso: string,
   toIso: string,
-  options?: { maxCloudCoverage?: number; relaxedCloudMask?: boolean },
+  options?: { maxCloudCoverage?: number; relaxedCloudMask?: boolean; layerIds?: string[] },
 ): Record<string, unknown> {
+  const mode = resolveImageryStatisticsFetchMode(options?.layerIds)
+  const relaxed = options?.relaxedCloudMask
+  const evalscript =
+    mode === 'snow-ndsi'
+      ? relaxed
+        ? SNOW_NDSI_RELAXED_INDEX_EVALSCRIPT
+        : SNOW_NDSI_INDEX_EVALSCRIPT
+      : relaxed
+        ? CROP_ALERT_RELAXED_INDEX_EVALSCRIPT
+        : CROP_ALERT_MULTI_INDEX_EVALSCRIPT
+  const calculations =
+    mode === 'snow-ndsi' ? buildSnowNdsiStatisticsCalculations() : buildMultiIndexStatisticsCalculations()
   return {
     input: {
       bounds: {
@@ -844,13 +938,11 @@ function buildStatisticsRequestBody(
         to: `${toIso}T00:00:00Z`,
       },
       aggregationInterval: { of: 'P1D' },
-      evalscript: options?.relaxedCloudMask
-        ? CROP_ALERT_RELAXED_INDEX_EVALSCRIPT
-        : CROP_ALERT_MULTI_INDEX_EVALSCRIPT,
+      evalscript,
       resx: 10,
       resy: 10,
     },
-    calculations: buildMultiIndexStatisticsCalculations(),
+    calculations,
   }
 }
 
@@ -937,6 +1029,7 @@ export type FetchSentinelFieldIndexRangeOptions = {
   maxCloudCoverage?: number
   relaxedCloudMask?: boolean
   signal?: AbortSignal
+  layerIds?: string[]
 }
 
 /** Zonal mean indices for an explicit calendar range (inclusive end date). */
@@ -956,6 +1049,7 @@ export async function fetchSentinelFieldIndexTimeSeriesForRange(
     buildStatisticsRequestBody(geom, fromIso, toExclusive, {
       maxCloudCoverage: options.maxCloudCoverage,
       relaxedCloudMask: options.relaxedCloudMask,
+      layerIds: options.layerIds,
     }),
     options?.signal,
   )

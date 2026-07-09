@@ -71,6 +71,11 @@ declare module '*.svg' {
   export default src
 }
 
+declare module '*.docx?url' {
+  const src: string
+  export default src
+}
+
 declare module 'leaflet/dist/images/marker-icon-2x.png' {
   const src: string
   export default src

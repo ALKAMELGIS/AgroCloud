@@ -370,7 +370,7 @@ export async function computeWellSuitabilityMcda(
     if (!Number.isFinite(v)) return [0, 0, 0, 0]
     const cls = classFromScore(v)
     const [r, g, b] = CLASS_COLORS[cls]
-    return [r, g, b, 210]
+    return [r, g, b, 255]
   })
 
   report?.('ranking', 0.9)
@@ -500,7 +500,7 @@ export async function computeWellSuitabilityMcda(
       kind: 'raster',
       dataUrl,
       coordinates: dem.cornerCoords,
-      opacity: 0.78,
+      opacity: 1,
       band: bandOf(dem, composite, 'Groundwater potential (0..1)'),
       legend: {
         title: 'Groundwater potential (MCDA)',

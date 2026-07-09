@@ -4,11 +4,12 @@ import {
   parseSentinelHubStatsResponse,
   pickCatalogSceneDatesForFetch,
   pickDailyIndexValue,
+  resolveImageryStatisticsFetchMode,
   simplifyGeometryForSentinelStats,
 } from './sentinelHubStatisticsApi'
 
 describe('sentinelHubStatisticsApi', () => {
-  it('parseSentinelHubStatsResponse extracts daily means', () => {
+  it('parseSentinelHubStatsResponse extracts daily means including snow NDSI', () => {
     const daily = parseSentinelHubStatsResponse({
       status: 'OK',
       data: [
@@ -21,6 +22,7 @@ describe('sentinelHubStatisticsApi', () => {
                 ndwi: { stats: { mean: 0.18, sampleCount: 120, noDataCount: 4 } },
                 ndmi: { stats: { mean: 0.31, sampleCount: 120, noDataCount: 4 } },
                 evi: { stats: { mean: 0.44, sampleCount: 120, noDataCount: 4 } },
+                ndsi: { stats: { mean: -0.08, sampleCount: 120, noDataCount: 4 } },
               },
             },
           },
@@ -30,6 +32,13 @@ describe('sentinelHubStatisticsApi', () => {
     expect(daily).toHaveLength(1)
     expect(daily[0]?.date).toBe('2026-06-08')
     expect(daily[0]?.ndvi).toBe(0.62)
+    expect(daily[0]?.ndsi).toBe(-0.08)
+  })
+
+  it('resolveImageryStatisticsFetchMode uses snow evalscript for NDSI-only', () => {
+    expect(resolveImageryStatisticsFetchMode(['NDSI'])).toBe('snow-ndsi')
+    expect(resolveImageryStatisticsFetchMode(['NDVI'])).toBe('multi')
+    expect(resolveImageryStatisticsFetchMode(['NDVI', 'NDSI'])).toBe('multi')
   })
 
   it('pickDailyIndexValue finds nearest date', () => {

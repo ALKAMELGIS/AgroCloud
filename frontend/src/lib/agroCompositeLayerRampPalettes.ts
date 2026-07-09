@@ -602,7 +602,7 @@ export const AGRO_UNIQUE_LAYER_RAMP_PALETTES: Record<string, AgroLayerRampPalett
   },
 
   // 🧂 Soil & Salinity Layer — Low → High salinity (green = non-saline → maroon = extreme)
-  NDSI: {
+  SAL_NDSI: {
     valueMin: -0.6,
     valueMax: 0.4,
     anchors: anchors(
@@ -623,7 +623,7 @@ export const AGRO_UNIQUE_LAYER_RAMP_PALETTES: Record<string, AgroLayerRampPalett
       'Severe salinity',
       'Extreme salinity',
     ],
-    subtitle: 'NDSI (B11−B8)/(B11+B8) · Low → High · 🟢 non-saline → 🔴 extreme salinity',
+    subtitle: 'Salinity NDSI (B11−B8)/(B11+B8) · Low → High · 🟢 non-saline → 🔴 extreme salinity',
   },
   SI: {
     valueMin: 0,
@@ -669,7 +669,7 @@ export const AGRO_UNIQUE_LAYER_RAMP_PALETTES: Record<string, AgroLayerRampPalett
       'Severe salinity',
       'Extreme salinity',
     ],
-    subtitle: 'SSI (NDSI + SI) · Low → High · combined normalized + brightness salinity',
+    subtitle: 'SSI (Salinity NDSI + SI) · Low → High · combined normalized + brightness salinity',
   },
 
   // Δ layers — each with a unique stable-center hue
@@ -694,7 +694,7 @@ export const AGRO_UNIQUE_LAYER_RAMP_PALETTES: Record<string, AgroLayerRampPalett
   DARI: deltaPalette('ARI', '#d50000', '#fffde7', '#00c853', 'ΔARI · rising composite risk · risk reduction'),
   DCHS: deltaPalette('CHS', '#880e4f', '#f8bbd0', '#004d40', 'ΔCHS · composite health drop · recovery'),
   DCPS: deltaPalette('CPS', '#4a148c', '#e1bee7', '#e8f5e9', 'ΔCPS · pressure increase · relief'),
-  DNDSI: deltaPalette('NDSI', '#1b5e20', '#fff9c4', '#7f0000', 'ΔNDSI · salinity easing · salinity build-up'),
+  DSAL_NDSI: deltaPalette('SAL_NDSI', '#1b5e20', '#fff9c4', '#7f0000', 'ΔSalinity NDSI · salinity easing · salinity build-up'),
   DSI: deltaPalette('SI', '#00695c', '#e0f2f1', '#6a1b9a', 'ΔSI · brightness/salinity decline · increase'),
   DSSI: deltaPalette('SSI', '#0d47a1', '#eceff1', '#3e2723', 'ΔSSI · combined salinity decline · increase'),
 }

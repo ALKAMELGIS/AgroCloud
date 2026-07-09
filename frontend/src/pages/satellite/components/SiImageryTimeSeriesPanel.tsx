@@ -29,6 +29,8 @@ import {
   splitSeriesByYear,
   yearSplitChartColors,
   aggregateImageryChartByTimePeriod,
+  filterImageryTimeSeriesByDateRange,
+  buildNdsiZonalChartBands,
   type ImageryChartType,
   type ImageryCorrelationScatterAnalysis,
   type ImageryTimeAggregation,
@@ -42,6 +44,7 @@ import {
 } from '../utils/siImageryTimeSeriesFields'
 import { TimeSeriesExportManager } from './timeSeriesReport/ExportManager'
 import { SiDynamicMapSnapshotsPanel } from './SiDynamicMapSnapshotsPanel'
+import { SiImageryWeatherTab } from './SiImageryWeatherTab'
 import '../../dashboards/agroCloudPlatform/AgroCloudPlatformDashboard.css'
 
 ChartJS.register(
@@ -64,6 +67,8 @@ export type SiImageryTimeSeriesPanelProps = {
   committedAoiGeometry: GeoJSON.Geometry | null
   defaultLayerId: string
   analysisDate: string
+  /** When true, end/start dates track latest scene (`analysisDate`) until the user edits them. */
+  imageryDateAutoFollow?: boolean
   onMapDateFromChart: (iso: string) => void
   selectedFieldKey?: string | null
   onSelectedFieldKeyChange?: (fieldKey: string) => void
@@ -71,6 +76,8 @@ export type SiImageryTimeSeriesPanelProps = {
   mapboxToken?: string
   projectName?: string
   generatedBy?: string
+  onStormMapOverlayChange?: (overlay: import('../lib/imageryStormAnalysis').SiTsWeatherStormMapOverlay | null) => void
+  stormOverlayDismissEpoch?: number
 }
 
 export function SiImageryTimeSeriesPanel({
@@ -79,6 +86,7 @@ export function SiImageryTimeSeriesPanel({
   committedAoiGeometry,
   defaultLayerId,
   analysisDate,
+  imageryDateAutoFollow = true,
   onMapDateFromChart,
   selectedFieldKey: selectedFieldKeyProp,
   onSelectedFieldKeyChange,
@@ -86,6 +94,8 @@ export function SiImageryTimeSeriesPanel({
   mapboxToken,
   projectName,
   generatedBy,
+  onStormMapOverlayChange,
+  stormOverlayDismissEpoch = 0,
 }: SiImageryTimeSeriesPanelProps) {
   const chartRef = useRef<ChartJS | null>(null)
   const chartWrapRef = useRef<HTMLDivElement | null>(null)
@@ -114,7 +124,7 @@ export function SiImageryTimeSeriesPanel({
   const [splitByYears, setSplitByYears] = useState(false)
   const [dateError, setDateError] = useState<string | null>(null)
   const [selectedChartDate, setSelectedChartDate] = useState<string | null>(null)
-  const [interpretationOpen, setInterpretationOpen] = useState(false)
+  const [activePanelTab, setActivePanelTab] = useState<'chart' | 'interpretation' | 'weather'>('chart')
   const [mapSnapshotsOpen, setMapSnapshotsOpen] = useState(false)
   const [vegTimeline, setVegTimeline] = useState<
     import('../lib/timeSeriesReport/vegetationCoverageTimeline').VegetationCoveragePoint[]
@@ -126,7 +136,21 @@ export function SiImageryTimeSeriesPanel({
   const runAnalysisRef = useRef<() => Promise<void>>(() => Promise.resolve())
   const autoRunReadyRef = useRef(false)
   const prevAutoRunDatesRef = useRef({ from: '', to: '' })
+  const prevLayerIdsRef = useRef<string[]>(selectedLayerIds)
   const prevDrawnAoiKeyRef = useRef('')
+  const datesManuallyEditedRef = useRef(false)
+
+  useEffect(() => {
+    if (imageryDateAutoFollow) datesManuallyEditedRef.current = false
+  }, [imageryDateAutoFollow])
+
+  useEffect(() => {
+    if (!imageryDateAutoFollow || datesManuallyEditedRef.current) return
+    const next = defaultImageryDateRange(referenceDate, chartLookbackDays)
+    setFromDate(next.from)
+    setToDate(next.to)
+    setDateError(null)
+  }, [imageryDateAutoFollow, referenceDate, chartLookbackDays])
 
   const resolvedField = useMemo(
     () =>
@@ -158,9 +182,28 @@ export function SiImageryTimeSeriesPanel({
     prefetchLookbackDays: Math.max(chartLookbackDays, 365),
   })
 
+  const rangeFilteredChart = useMemo(
+    () => filterImageryTimeSeriesByDateRange(rawLabels, rawLayerSeries, fromDate, toDate),
+    [rawLabels, rawLayerSeries, fromDate, toDate],
+  )
+
+  const filteredDailyRows = useMemo(
+    () =>
+      dailyRows.filter(row => {
+        const day = row.date.slice(0, 10)
+        return day >= fromDate && day <= toDate
+      }),
+    [dailyRows, fromDate, toDate],
+  )
+
   const aggregatedChart = useMemo(
-    () => aggregateImageryChartByTimePeriod(rawLabels, rawLayerSeries, timeAggregation),
-    [rawLabels, rawLayerSeries, timeAggregation],
+    () =>
+      aggregateImageryChartByTimePeriod(
+        rangeFilteredChart.labels,
+        rangeFilteredChart.series,
+        timeAggregation,
+      ),
+    [rangeFilteredChart.labels, rangeFilteredChart.series, timeAggregation],
   )
 
   const labels = aggregatedChart.labels
@@ -196,7 +239,7 @@ export function SiImageryTimeSeriesPanel({
           chartLabels: labels,
           displayLabels: chartLabels,
           periodAnchorDates,
-          dailyRows,
+          dailyRows: filteredDailyRows,
           ndviSeries,
           enrichWithHistograms: false,
           signal: ac.signal,
@@ -208,7 +251,7 @@ export function SiImageryTimeSeriesPanel({
           chartLabels: labels,
           displayLabels: chartLabels,
           periodAnchorDates,
-          dailyRows,
+          dailyRows: filteredDailyRows,
           layerSeries,
           vegetationCoverageTimeline: timeline,
           signal: ac.signal,
@@ -235,7 +278,7 @@ export function SiImageryTimeSeriesPanel({
     labels,
     chartLabels,
     periodAnchorDates,
-    dailyRows,
+    filteredDailyRows,
     layerSeries,
   ])
 
@@ -256,6 +299,15 @@ export function SiImageryTimeSeriesPanel({
   )
 
   const primaryLayerId = selectedLayerIds[0]?.trim() || 'NDVI'
+  const ndsiSnowOnly =
+    selectedLayerIds.length === 1 && selectedLayerIds[0]!.trim().toUpperCase() === 'NDSI'
+
+  const ndsiZonalBands = useMemo(
+    () => (ndsiSnowOnly ? buildNdsiZonalChartBands(labels, filteredDailyRows) : null),
+    [ndsiSnowOnly, labels, filteredDailyRows],
+  )
+
+  const weatherTabSupported = hasRun && chartReady && !!resolvedField?.geometry
 
   const primaryChartValues = useMemo(() => {
     const series = layerSeries.find(s => s.layerId.toUpperCase() === primaryLayerId.toUpperCase())
@@ -268,12 +320,14 @@ export function SiImageryTimeSeriesPanel({
       if (labels.includes(picked)) return resolvePeriodMapDate(picked)
       const day = picked.slice(0, 10)
       if (rawLabels.includes(day)) return day
+      if (rangeFilteredChart.labels.some(l => l.slice(0, 10) === day)) return day
     }
     const mapDay = referenceDate.trim().slice(0, 10)
     if (mapDay && rawLabels.includes(mapDay)) return mapDay
+    if (mapDay && rangeFilteredChart.labels.some(l => l.slice(0, 10) === mapDay)) return mapDay
     const lastKey = labels[labels.length - 1]
     return lastKey ? resolvePeriodMapDate(lastKey) : ''
-  }, [selectedChartDate, referenceDate, labels, rawLabels, resolvePeriodMapDate])
+  }, [selectedChartDate, referenceDate, labels, rawLabels, rangeFilteredChart.labels, resolvePeriodMapDate])
 
   const interpretationSupported =
     hasRun && labels.length > 0 && chartType !== 'scatter' && chartType !== 'pie'
@@ -282,10 +336,10 @@ export function SiImageryTimeSeriesPanel({
     field: resolvedField,
     layerId: primaryLayerId,
     sceneDate: interpretSceneDate,
-    dailyRows,
+    dailyRows: filteredDailyRows,
     chartLabels: chartLabels,
     chartValues: primaryChartValues,
-    enabled: interpretationOpen && interpretationSupported,
+    enabled: activePanelTab === 'interpretation' && interpretationSupported,
   })
 
   const handleInterpretationAction = useCallback(
@@ -293,7 +347,7 @@ export function SiImageryTimeSeriesPanel({
       const scene = interpretation?.sceneDate?.trim().slice(0, 10)
       if (scene) onMapDateFromChart(scene)
       if (actionId === 'inspect-stress' || actionId === 'scout-moderate') {
-        setInterpretationOpen(true)
+        setActivePanelTab('interpretation')
       }
     },
     [interpretation?.sceneDate, onMapDateFromChart],
@@ -304,7 +358,7 @@ export function SiImageryTimeSeriesPanel({
     autoRunReadyRef.current = false
     setDateError(null)
     setSelectedChartDate(null)
-    setInterpretationOpen(false)
+    setActivePanelTab('chart')
   }, [invalidateResults])
 
   const displayError = dateError || error
@@ -368,9 +422,9 @@ export function SiImageryTimeSeriesPanel({
     fieldOptions.find(o => o.fieldKey === selectedFieldKey)?.displayName ?? '—'
 
   const runAnalysisWrapped = useCallback(async () => {
-    await runAnalysis()
-    autoRunReadyRef.current = true
     prevAutoRunDatesRef.current = { from: fromDate, to: toDate }
+    autoRunReadyRef.current = true
+    await runAnalysis()
   }, [runAnalysis, fromDate, toDate])
 
   runAnalysisRef.current = runAnalysisWrapped
@@ -386,13 +440,50 @@ export function SiImageryTimeSeriesPanel({
   }, [chartReady, chartType])
 
   useEffect(() => {
-    if (!autoRunReadyRef.current || !selectedFieldKey || (loading && !hasChartData)) return
+    if (!hasRun || !selectedFieldKey || dateError) return
     if (!fromDate || !toDate || fromDate >= toDate) return
     const prev = prevAutoRunDatesRef.current
     if (prev.from === fromDate && prev.to === toDate) return
+    setSelectedChartDate(null)
     const id = window.setTimeout(() => void runAnalysisRef.current(), 650)
     return () => window.clearTimeout(id)
-  }, [fromDate, toDate, selectedFieldKey, loading, hasChartData])
+  }, [fromDate, toDate, selectedFieldKey, hasRun, dateError])
+
+  useEffect(() => {
+    if (hasRun || loading) return
+    if (!selectedFieldKey || !fromDate || !toDate || fromDate >= toDate || dateError) return
+    const id = window.setTimeout(() => void runAnalysisRef.current(), 500)
+    return () => window.clearTimeout(id)
+  }, [selectedFieldKey, fromDate, toDate, selectedLayerIds, hasRun, loading, dateError])
+
+  useEffect(() => {
+    const id = defaultLayerId.trim()
+    if (!id) return
+    setSelectedLayerIds(prev => {
+      if (prev.length !== 1) return prev
+      if (prev[0]!.trim().toUpperCase() === id.toUpperCase()) return prev
+      return [id]
+    })
+  }, [defaultLayerId])
+
+  useEffect(() => {
+    const prev = prevLayerIdsRef.current
+    const same =
+      prev.length === selectedLayerIds.length &&
+      prev.every((layerId, index) => layerId === selectedLayerIds[index])
+    prevLayerIdsRef.current = selectedLayerIds
+    if (same || loading) return
+    if (!selectedFieldKey || !fromDate || !toDate || fromDate >= toDate || dateError) return
+    const id = window.setTimeout(() => void runAnalysisRef.current(), 400)
+    return () => window.clearTimeout(id)
+  }, [selectedLayerIds, hasRun, loading, selectedFieldKey, fromDate, toDate, dateError])
+
+  useEffect(() => {
+    if (!hasRun || loading || labels.length > 0 || error) return
+    if (!selectedFieldKey || !fromDate || !toDate || fromDate >= toDate || dateError) return
+    const id = window.setTimeout(() => void runAnalysisRef.current(), 600)
+    return () => window.clearTimeout(id)
+  }, [hasRun, loading, labels.length, error, selectedFieldKey, fromDate, toDate, dateError, selectedLayerIds])
 
   const chartDateClickHandler = useCallback(
     (_event: unknown, elements: Array<{ index: number; datasetIndex?: number }>) => {
@@ -403,9 +494,12 @@ export function SiImageryTimeSeriesPanel({
       if (periodKey) {
         setSelectedChartDate(periodKey)
         syncMapToChartDate(resolvePeriodMapDate(periodKey))
+        if (chartType !== 'scatter' && chartType !== 'pie') {
+          setActivePanelTab('interpretation')
+        }
       }
     },
-    [labels, syncMapToChartDate, resolvePeriodMapDate],
+    [labels, syncMapToChartDate, resolvePeriodMapDate, chartType],
   )
 
   const chartData = useMemo((): ChartData<'line' | 'bar'> => {
@@ -433,23 +527,55 @@ export function SiImageryTimeSeriesPanel({
     return {
       labels: chartLabels,
       datasets: [
-        ...layerSeries.map((entry, index) => {
+        ...layerSeries.flatMap((entry, index) => {
           const color = imageryLayerChartColor(index)
-          return {
-            label: entry.layerId,
-            data: entry.values,
-            borderColor: color,
-            backgroundColor: chartType === 'area' ? `${color}33` : chartType === 'bar' ? `${color}88` : color,
-            fill: chartType === 'area',
-            tension: 0.25,
-            pointRadius: 2,
-            borderWidth: 1.5,
-            yAxisID: 'y',
+          const isNdsiLayer = entry.layerId.trim().toUpperCase() === 'NDSI'
+          const datasets: Array<Record<string, unknown>> = [
+            {
+              label: isNdsiLayer ? 'NDSI mean' : entry.layerId,
+              data: entry.values,
+              borderColor: color,
+              backgroundColor: chartType === 'area' ? `${color}33` : chartType === 'bar' ? `${color}88` : color,
+              fill: chartType === 'area',
+              tension: 0.25,
+              pointRadius: 2,
+              borderWidth: isNdsiLayer ? 2.25 : 1.5,
+              yAxisID: 'y',
+            },
+          ]
+          if (isNdsiLayer && ndsiZonalBands && chartType === 'line') {
+            datasets.push(
+              {
+                label: 'NDSI min',
+                data: ndsiZonalBands.min,
+                borderColor: '#7dd3fc',
+                backgroundColor: 'transparent',
+                borderDash: [4, 3],
+                fill: false,
+                tension: 0.25,
+                pointRadius: 0,
+                borderWidth: 1.25,
+                yAxisID: 'y',
+              },
+              {
+                label: 'NDSI max',
+                data: ndsiZonalBands.max,
+                borderColor: '#e0f2fe',
+                backgroundColor: 'transparent',
+                borderDash: [2, 2],
+                fill: false,
+                tension: 0.25,
+                pointRadius: 0,
+                borderWidth: 1.25,
+                yAxisID: 'y',
+              },
+            )
           }
+          return datasets
         }),
       ],
     }
-  }, [chartLabels, labels, layerSeries, splitByYears, chartType, timeAggregation])
+  }, [chartLabels, labels, layerSeries, splitByYears, chartType, timeAggregation, ndsiZonalBands])
 
   const pieChartData = useMemo((): ChartData<'pie'> => {
     if (!chartLabels.length || !layerSeries.length) return { labels: [], datasets: [] }
@@ -587,7 +713,20 @@ export function SiImageryTimeSeriesPanel({
           bodyFont: { size: 10 },
           titleFont: { size: 10 },
           callbacks: {
-            afterBody: () => ['Click point to set map date'],
+            afterBody: (items: Array<{ parsed: { y: number | null } }>) => {
+              const lines = ['Click point to set map date']
+              const ys = items.map(item => item.parsed.y).filter(v => v != null && Number.isFinite(v)) as number[]
+              if (ys.length >= 2) {
+                const spread = Math.max(...ys) - Math.min(...ys)
+                if (spread > 0.0001) lines.push(`Range spread: ${spread.toFixed(3)}`)
+              }
+              return lines
+            },
+            label(ctx: { dataset: { label?: string }; parsed: { y: number | null } }) {
+              const v = ctx.parsed.y
+              if (v == null || !Number.isFinite(v)) return `${ctx.dataset.label ?? 'Value'}: —`
+              return `${ctx.dataset.label ?? 'Value'}: ${v.toFixed(4)}`
+            },
           },
         },
       },
@@ -716,6 +855,8 @@ export function SiImageryTimeSeriesPanel({
 
   const observationCount = labels.length
 
+  const chartVisible = hasRun && labels.length > 0 && !loading
+
   const layerSummary = selectedLayerIds.join(', ')
 
   const aggregationLabel =
@@ -758,7 +899,7 @@ export function SiImageryTimeSeriesPanel({
               groups={layerGroups}
               selectedIds={selectedLayerIds}
               onSelectedIdsChange={ids => {
-                handleInvalidate()
+                setSelectedChartDate(null)
                 setSelectedLayerIds(ids)
               }}
             />
@@ -772,6 +913,7 @@ export function SiImageryTimeSeriesPanel({
                 max={toDate || undefined}
                 onChange={e => {
                   const next = e.target.value
+                  datesManuallyEditedRef.current = true
                   setFromDate(next)
                   if (next && toDate && next >= toDate) {
                     setDateError('Start Date must be before End Date.')
@@ -789,6 +931,7 @@ export function SiImageryTimeSeriesPanel({
                 min={fromDate || undefined}
                 onChange={e => {
                   const next = e.target.value
+                  datesManuallyEditedRef.current = true
                   setToDate(next)
                   if (fromDate && next && fromDate >= next) {
                     setDateError('End Date must be after Start Date.')
@@ -848,7 +991,63 @@ export function SiImageryTimeSeriesPanel({
           </button>
         </div>
 
-        {hasRun && chartReady ? (
+        <div className="acp-ts__tabs" role="tablist" aria-label="Time series views">
+          <button
+            type="button"
+            role="tab"
+            id="acp-ts-tab-chart"
+            className={'acp-ts__tab' + (activePanelTab === 'chart' ? ' is-active' : '')}
+            aria-selected={activePanelTab === 'chart'}
+            aria-controls="acp-ts-panel-chart"
+            onClick={() => setActivePanelTab('chart')}
+          >
+            <i className="fa-solid fa-chart-line" aria-hidden="true" /> Chart
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="acp-ts-tab-interpretation"
+            className={'acp-ts__tab' + (activePanelTab === 'interpretation' ? ' is-active' : '')}
+            aria-selected={activePanelTab === 'interpretation'}
+            aria-controls="acp-ts-panel-interpretation"
+            disabled={!interpretationSupported}
+            title={
+              interpretationSupported
+                ? 'Index interpretation for the selected chart date'
+                : 'Interpretation is available for line, area, and bar charts'
+            }
+            onClick={() => setActivePanelTab('interpretation')}
+          >
+            <i className="fa-solid fa-lightbulb" aria-hidden="true" /> Interpretation
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="acp-ts-tab-weather"
+            className={'acp-ts__tab' + (activePanelTab === 'weather' ? ' is-active' : '')}
+            aria-selected={activePanelTab === 'weather'}
+            aria-controls="acp-ts-panel-weather"
+            disabled={!weatherTabSupported}
+            title={
+              weatherTabSupported
+                ? 'Compare AOI weather with vegetation indices'
+                : 'Run analysis to enable weather comparison'
+            }
+            onClick={() => setActivePanelTab('weather')}
+          >
+            <i className="fa-solid fa-cloud-sun-rain" aria-hidden="true" /> Weather
+          </button>
+        </div>
+
+        <div className="acp-ts__panels">
+          <div
+            id="acp-ts-panel-chart"
+            role="tabpanel"
+            aria-labelledby="acp-ts-tab-chart"
+            className="acp-ts__panel acp-ts__panel--chart"
+            hidden={activePanelTab !== 'chart'}
+          >
+        {chartVisible ? (
           <div className="acp-ts__meta">
             <span>
               {layerSummary}
@@ -863,7 +1062,7 @@ export function SiImageryTimeSeriesPanel({
           </div>
         ) : null}
 
-        {hasRun && chartReady && latestWaterPoint ? (
+        {chartVisible && latestWaterPoint ? (
           <div
             className={
               'acp-ts__water-summary' +
@@ -871,8 +1070,11 @@ export function SiImageryTimeSeriesPanel({
             }
             aria-label="Estimated water loss snapshot"
           >
-            <div className="acp-ts__water-summary-main">
-              <strong>Estimated Water Loss</strong>
+            <div className="acp-ts__water-summary-head">
+              <span className="acp-ts__water-summary-icon" aria-hidden>
+                <i className="fa-solid fa-droplet" />
+              </span>
+              <span className="acp-ts__water-summary-label">Water Loss</span>
               <span className="acp-ts__water-summary-date">{latestWaterPoint.date}</span>
               <span
                 className={
@@ -888,47 +1090,35 @@ export function SiImageryTimeSeriesPanel({
                 </span>
               ) : null}
             </div>
-            <div className="acp-ts__water-summary-kpis">
-              <div>
-                <em>Loss index</em>
+            <div className="acp-ts__water-summary-body">
+              <div className="acp-ts__water-summary-hero" aria-label="Loss index">
                 <strong>{latestWaterPoint.waterLossIndexPct.toFixed(0)}%</strong>
+                <em>loss index</em>
               </div>
-              <div>
-                <em>m³/day</em>
-                <strong>
-                  {latestWaterPoint.waterLossM3Day >= 1000
-                    ? `${(latestWaterPoint.waterLossM3Day / 1000).toFixed(1)}k`
-                    : latestWaterPoint.waterLossM3Day.toFixed(0)}
-                </strong>
-              </div>
-              <div>
-                <em>m³/ha/day</em>
-                <strong>{latestWaterPoint.waterLossM3HaDay.toFixed(1)}</strong>
-              </div>
-              <div>
-                <em>NDMI</em>
-                <strong>
-                  {latestWaterPoint.ndmi != null ? latestWaterPoint.ndmi.toFixed(3) : '—'}
-                </strong>
-              </div>
-              <div>
-                <em>NDWI</em>
-                <strong>
-                  {latestWaterPoint.ndwi != null
-                    ? `${latestWaterPoint.ndwi.toFixed(3)}${latestWaterPoint.ndwiEstimated ? '*' : ''}`
-                    : '—'}
-                </strong>
-              </div>
-              <div>
-                <em>Trend</em>
-                <strong>{latestWaterPoint.trend}</strong>
+              <span className="acp-ts__water-summary-vrule" aria-hidden />
+              <div className="acp-ts__water-summary-strip">
+                <span className="acp-ts__water-summary-stat">
+                  <em>m³/day</em>
+                  <strong>
+                    {latestWaterPoint.waterLossM3Day >= 1000
+                      ? `${(latestWaterPoint.waterLossM3Day / 1000).toFixed(1)}k`
+                      : latestWaterPoint.waterLossM3Day.toFixed(0)}
+                  </strong>
+                </span>
+                <span className="acp-ts__water-summary-sep" aria-hidden>
+                  ·
+                </span>
+                <span className="acp-ts__water-summary-stat">
+                  <em>m³/ha/day</em>
+                  <strong>{latestWaterPoint.waterLossM3HaDay.toFixed(1)}</strong>
+                </span>
               </div>
             </div>
           </div>
         ) : null}
 
         <div className="acp-ts__chart-wrap" ref={chartWrapRef}>
-          {hasRun && chartReady ? (
+          {chartVisible ? (
             <>
               {chartType === 'bar' ? (
                 <Bar ref={chartRef as never} data={chartData as ChartData<'bar'>} options={cartesianChartOptions} />
@@ -940,12 +1130,14 @@ export function SiImageryTimeSeriesPanel({
                 <Line ref={chartRef as never} data={chartData as ChartData<'line'>} options={cartesianChartOptions} />
               )}
             </>
-          ) : loading && !hasChartData ? (
+          ) : (loading && !hasChartData) || (refreshing && hasRun && !chartVisible) ? (
             <div className="acp-ts__skeleton acp-ts__skeleton--atomic" role="status" aria-live="polite" aria-busy="true">
               <div className="acp-ts__skeleton-spinner" aria-hidden="true">
                 <i className="fa-solid fa-spinner fa-spin" />
               </div>
-              <p className="acp-ts__skeleton-status">Loading imagery…</p>
+              <p className="acp-ts__skeleton-status">
+                {refreshing ? `Updating ${layerSummary || 'layer'}…` : 'Loading imagery…'}
+              </p>
               {selectedFieldLabel !== '—' ? (
                 <p className="acp-ts__skeleton-context">
                   {selectedFieldLabel}
@@ -955,21 +1147,25 @@ export function SiImageryTimeSeriesPanel({
             </div>
           ) : (
             <div className="acp-ts__placeholder">
-              {hasRun && displayError
+              {displayError
                 ? displayError
-                : 'Set Start Date and End Date, then click Apply — the chart updates automatically when dates change.'}
+                : hasRun && (loading || refreshing)
+                  ? `Loading ${layerSummary || 'layer'} analysis…`
+                  : hasRun && !labels.length
+                    ? `No ${layerSummary || 'layer'} observations in this date range — try widening dates or check Sentinel coverage.`
+                    : 'Select a field and date range — analysis starts automatically.'}
             </div>
           )}
         </div>
 
-        {hasRun && chartReady ? (
+        {chartVisible ? (
           <p className="acp-ts__chart-hint">
             <i className="fa-solid fa-hand-pointer" aria-hidden="true" /> Click any point to set the map
-            analysis date · Map date: <strong>{analysisDate}</strong>
+            analysis date and open <strong>Interpretation</strong> · Map date: <strong>{analysisDate}</strong>
             {interpretSceneDate ? (
               <>
                 {' '}
-                · Interpret: <strong>{interpretSceneDate}</strong>
+                · Scene: <strong>{interpretSceneDate}</strong>
               </>
             ) : null}
           </p>
@@ -1004,13 +1200,65 @@ export function SiImageryTimeSeriesPanel({
 
         {displayError && hasRun && labels.length ? <p className="acp-ts__error">{displayError}</p> : null}
 
-        {interpretationOpen && interpretationSupported ? (
-          <SiImageryIndexInterpretationCard
-            interpretation={interpretation}
-            loadingAreas={loadingAreas}
-            onAction={handleInterpretationAction}
-          />
-        ) : null}
+          </div>
+
+          <div
+            id="acp-ts-panel-interpretation"
+            role="tabpanel"
+            aria-labelledby="acp-ts-tab-interpretation"
+            className="acp-ts__panel acp-ts__panel--interpret"
+            hidden={activePanelTab !== 'interpretation'}
+          >
+            {interpretationSupported ? (
+              <>
+                <p className="acp-ts__interpret-tab-hint">
+                  {interpretSceneDate ? (
+                    <>
+                      Scene <strong>{interpretSceneDate}</strong> · {primaryLayerId.toUpperCase()} · click chart
+                      points on the Chart tab to change date
+                    </>
+                  ) : (
+                    'Run analysis and select a chart point to interpret index values for that date.'
+                  )}
+                </p>
+                <SiImageryIndexInterpretationCard
+                  interpretation={interpretation}
+                  loadingAreas={loadingAreas}
+                  onAction={handleInterpretationAction}
+                />
+              </>
+            ) : (
+              <div className="acp-ts__interpret acp-ts__interpret--empty" role="status">
+                Interpretation is available for line, area, and bar charts after analysis completes.
+              </div>
+            )}
+          </div>
+
+          <div
+            id="acp-ts-panel-weather"
+            role="tabpanel"
+            aria-labelledby="acp-ts-tab-weather"
+            className="acp-ts__panel acp-ts__panel--weather"
+            hidden={activePanelTab !== 'weather'}
+          >
+            <SiImageryWeatherTab
+              active={activePanelTab === 'weather'}
+              hasRun={hasRun}
+              chartReady={chartReady}
+              geometry={resolvedField?.geometry ?? null}
+              fromDate={fromDate}
+              toDate={toDate}
+              chartLabels={labels}
+              displayLabels={chartLabels}
+              timeAggregation={timeAggregation}
+              layerSeries={layerSeries}
+              primaryLayerId={primaryLayerId}
+              fieldLabel={selectedFieldLabel}
+              onStormMapOverlayChange={onStormMapOverlayChange}
+              stormOverlayDismissEpoch={stormOverlayDismissEpoch}
+            />
+          </div>
+        </div>
 
         <SiDynamicMapSnapshotsPanel
           open={mapSnapshotsOpen}
@@ -1018,7 +1266,7 @@ export function SiImageryTimeSeriesPanel({
           layerIds={selectedLayerIds}
           sceneDate={interpretSceneDate || referenceDate}
           fieldName={selectedFieldLabel}
-          dailyRows={dailyRows}
+          dailyRows={filteredDailyRows}
           layerSeries={layerSeries}
           mapboxToken={mapboxToken}
           enabled={hasRun && !!selectedLayerIds.length}
@@ -1046,17 +1294,6 @@ export function SiImageryTimeSeriesPanel({
           <div className="acp-ts__exports">
             <button
               type="button"
-              className={'acp-ts__exports-interpret' + (interpretationOpen ? ' is-on' : '')}
-              title="Interpret Selected Value"
-              aria-label="Interpret Selected Value"
-              aria-pressed={interpretationOpen}
-              disabled={!interpretationSupported}
-              onClick={() => setInterpretationOpen(open => !open)}
-            >
-              <i className="fa-solid fa-lightbulb" aria-hidden="true" /> Interpretation
-            </button>
-            <button
-              type="button"
               className={'acp-ts__exports-interpret' + (mapSnapshotsOpen ? ' is-on' : '')}
               title="Dynamic Map Snapshots for selected layers"
               aria-label="Dynamic Map Snapshots"
@@ -1078,11 +1315,12 @@ export function SiImageryTimeSeriesPanel({
               chartLabels={labels}
               displayLabels={chartLabels}
               layerSeries={layerSeries}
-              dailyRows={dailyRows}
+              dailyRows={filteredDailyRows}
               chartRef={chartRef}
               chartType={chartType}
               mapboxToken={mapboxToken}
               periodAnchorDates={periodAnchorDates}
+              timeAggregation={timeAggregation}
               projectName={projectName}
               generatedBy={generatedBy}
             />

@@ -4,6 +4,7 @@ import {
   exportTimeSeriesCsvReport,
   generateTimeSeriesReportExcel,
 } from './generateTimeSeriesReportExcel'
+import { generateTimeSeriesReportDocx } from './generateTimeSeriesReportDocx'
 import { exportChartPng } from './timeSeriesReportExports'
 import type { ImageryChartType } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import type { TimeSeriesExportKind, TimeSeriesReportConfig } from './timeSeriesReportTypes'
@@ -73,6 +74,14 @@ export async function runTimeSeriesExport(
         enrichVegetationCoverage: true,
       })
       await generateTimeSeriesReportExcel(payload)
+      break
+    }
+    case 'docx': {
+      const payload = await buildExportPayload(ctx, {
+        includeMapSnapshots: true,
+        enrichVegetationCoverage: true,
+      })
+      await generateTimeSeriesReportDocx(payload)
       break
     }
     case 'png':

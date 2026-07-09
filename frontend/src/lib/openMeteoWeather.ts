@@ -31,6 +31,8 @@ export type OpenMeteoHourlyPoint = {
   temperatureC: number | null
   weatherCode: number | null
   precipitationMm: number | null
+  /** Snowfall depth per hour (cm) from ERA5 archive when available. */
+  snowfallCm: number | null
   humidityPct: number | null
   windSpeedKmh: number | null
   windDirectionDeg: number | null
@@ -319,6 +321,7 @@ function parseHourlySeries(data: Record<string, unknown>): OpenMeteoHourlyPoint[
         wind_speed_10m?: number[]
         wind_direction_10m?: number[]
         surface_pressure?: number[]
+        snowfall?: number[]
       }
     | undefined
   const out: OpenMeteoHourlyPoint[] = []
@@ -329,6 +332,7 @@ function parseHourlySeries(data: Record<string, unknown>): OpenMeteoHourlyPoint[
       temperatureC: hourly.temperature_2m?.[i] ?? null,
       weatherCode: hourly.weather_code?.[i] ?? null,
       precipitationMm: hourly.precipitation?.[i] ?? null,
+      snowfallCm: hourly.snowfall?.[i] ?? null,
       humidityPct: hourly.relative_humidity_2m?.[i] ?? null,
       windSpeedKmh: hourly.wind_speed_10m?.[i] ?? null,
       windDirectionDeg: hourly.wind_direction_10m?.[i] ?? null,
@@ -556,7 +560,7 @@ export async function fetchOpenMeteoHistoryRange(
   url.searchParams.set('end_date', end)
   url.searchParams.set(
     'hourly',
-    'temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,wind_direction_10m,surface_pressure,weather_code',
+    'temperature_2m,relative_humidity_2m,precipitation,snowfall,wind_speed_10m,wind_direction_10m,surface_pressure,weather_code',
   )
   const res = await fetch(url.toString())
   if (!res.ok) throw new Error(`Open-Meteo archive HTTP ${res.status}`)

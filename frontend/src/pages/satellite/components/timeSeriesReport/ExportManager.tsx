@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Chart as ChartJS } from 'chart.js'
-import type { ImageryChartType } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryChartType, ImageryTimeAggregation } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import type { ImageryTimeSeriesLayerSeries } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import type { CropAlertFieldInput } from '../../../../lib/siCropAlertEngine'
 import type { SentinelHubDailyIndexMeans } from '../../../../lib/sentinelHubStatisticsApi'
@@ -24,12 +24,14 @@ export type TimeSeriesExportManagerProps = {
   chartType?: ImageryChartType
   mapboxToken?: string
   periodAnchorDates?: Record<string, string>
+  timeAggregation?: ImageryTimeAggregation
   projectName?: string
   generatedBy?: string
 }
 
 const EXPORT_OPTIONS: Array<{ kind: TimeSeriesExportKind; label: string; icon: string; primary?: boolean }> = [
   { kind: 'pdf', label: 'Executive PDF', icon: 'fa-file-pdf', primary: true },
+  { kind: 'docx', label: 'Intelligence Report (Word)', icon: 'fa-file-word' },
   { kind: 'excel', label: 'Analytics Report (Excel)', icon: 'fa-file-excel' },
   { kind: 'csv', label: 'Summary Table (CSV)', icon: 'fa-table' },
   { kind: 'png', label: 'Figure (PNG)', icon: 'fa-image' },
@@ -53,6 +55,7 @@ export function TimeSeriesExportManager({
   chartType = 'line',
   mapboxToken,
   periodAnchorDates,
+  timeAggregation = 'day',
   projectName,
   generatedBy,
 }: TimeSeriesExportManagerProps) {
@@ -92,6 +95,7 @@ export function TimeSeriesExportManager({
             dailyRows,
             mapboxToken,
             periodAnchorDates,
+            timeAggregation,
             chartRef,
             chartType,
             config: { projectName, generatedBy },
@@ -119,6 +123,7 @@ export function TimeSeriesExportManager({
       dailyRows,
       mapboxToken,
       periodAnchorDates,
+      timeAggregation,
       chartRef,
       chartType,
       projectName,

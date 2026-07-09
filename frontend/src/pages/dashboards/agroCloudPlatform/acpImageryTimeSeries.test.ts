@@ -12,8 +12,13 @@ import {
   computeLinearRegression,
   evaluateImageryLayerDailyValue,
   flattenImageryTimeSeriesLayerOptions,
+  imageryDailyRowsSupportLayer,
+  imageryDailyRowsSupportLayers,
+  dailyRowsLackSnowNdsiChannel,
+  imageryDailyRowsNeedRefetchForLayers,
   pruneImageryTimeSeriesToObservations,
   pruneSingleLayerImagerySeries,
+  buildNdsiZonalChartBands,
 } from './acpImageryTimeSeries'
 import type { SentinelHubDailyIndexMeans } from '../../../lib/sentinelHubStatisticsApi'
 
@@ -25,6 +30,7 @@ function dailyRow(overrides: Partial<SentinelHubDailyIndexMeans> = {}): Sentinel
     ndmi: 0.4,
     evi: 0.82,
     ciRe: 0.12,
+    ndsi: 0.15,
     ...overrides,
   }
 }
@@ -54,6 +60,73 @@ describe('acpImageryTimeSeries', () => {
     )
     expect(evaluateImageryLayerDailyValue('VHS', row)).toBeCloseTo(0.79, 2)
     expect(evaluateImageryLayerDailyValue('CHAS', row)).not.toBeNull()
+    expect(evaluateImageryLayerDailyValue('NDSI', row)).toBe(0.15)
+    expect(evaluateImageryLayerDailyValue('SAL_NDSI', row)).toBeCloseTo(-0.4, 4)
+  })
+
+  it('detects when cached daily rows lack a selected layer', () => {
+    const ndviOnly = [dailyRow({ ndsi: undefined })]
+    expect(imageryDailyRowsSupportLayer(ndviOnly, 'NDVI')).toBe(true)
+    expect(imageryDailyRowsSupportLayer(ndviOnly, 'NDSI')).toBe(false)
+    expect(imageryDailyRowsSupportLayers(ndviOnly, ['NDVI', 'NDSI'])).toBe(false)
+    expect(imageryDailyRowsSupportLayers([dailyRow()], ['NDSI'])).toBe(true)
+  })
+
+  it('builds snow NDSI time series from daily means', () => {
+    const map = new Map<string, SentinelHubDailyIndexMeans[]>([
+      [
+        'f1',
+        [
+          dailyRow({ date: '2026-06-01', ndvi: 0.6, ndmi: 0.3, ndsi: 0.1 }),
+          dailyRow({ date: '2026-06-10', ndvi: 0.8, ndmi: 0.4, ndsi: 0.2 }),
+        ],
+      ],
+    ])
+    const series = aggregateImageryTimeSeries(map, ['f1'], 'NDSI')
+    expect(series.labels).toEqual(['2026-06-01', '2026-06-10'])
+    expect(series.values[0]).toBeCloseTo(0.1, 4)
+    expect(series.values[1]).toBeCloseTo(0.2, 4)
+  })
+
+  it('detects legacy cache rows missing snow NDSI channel', () => {
+    const legacy = dailyRow({ ndsi: undefined })
+    const nullOnly = dailyRow({ ndsi: null })
+    const modern = dailyRow({ ndsi: -0.12 })
+    expect(dailyRowsLackSnowNdsiChannel([legacy])).toBe(true)
+    expect(dailyRowsLackSnowNdsiChannel([nullOnly])).toBe(true)
+    expect(dailyRowsLackSnowNdsiChannel([legacy, dailyRow({ ndsi: undefined })])).toBe(true)
+    expect(dailyRowsLackSnowNdsiChannel([modern])).toBe(false)
+    expect(imageryDailyRowsNeedRefetchForLayers([legacy], ['NDSI'])).toBe(true)
+    expect(imageryDailyRowsNeedRefetchForLayers([nullOnly], ['NDSI'])).toBe(true)
+    expect(imageryDailyRowsNeedRefetchForLayers([modern], ['NDSI'])).toBe(false)
+    expect(imageryDailyRowsSupportLayer([modern], 'NDSI')).toBe(true)
+  })
+
+  it('builds NDSI zonal min/mean/max bands aligned to chart labels', () => {
+    const rows = [
+      dailyRow({ date: '2026-06-01', ndsi: -0.1, zonal: { ndsi: { min: -0.2, max: 0.05, mean: -0.1 } } }),
+      dailyRow({ date: '2026-06-10', ndsi: 0.15, zonal: { ndsi: { min: 0.1, max: 0.2, mean: 0.15 } } }),
+    ]
+    const bands = buildNdsiZonalChartBands(['2026-06-01', '2026-06-10'], rows)
+    expect(bands.mean[0]).toBeCloseTo(-0.1, 4)
+    expect(bands.min[0]).toBeCloseTo(-0.2, 4)
+    expect(bands.max[1]).toBeCloseTo(0.2, 4)
+  })
+
+  it('builds salinity NDSI time series from NDMI daily means', () => {
+    const map = new Map<string, SentinelHubDailyIndexMeans[]>([
+      [
+        'f1',
+        [
+          dailyRow({ date: '2026-06-01', ndvi: 0.6, ndmi: 0.3 }),
+          dailyRow({ date: '2026-06-10', ndvi: 0.8, ndmi: 0.4 }),
+        ],
+      ],
+    ])
+    const series = aggregateImageryTimeSeries(map, ['f1'], 'SAL_NDSI')
+    expect(series.labels).toEqual(['2026-06-01', '2026-06-10'])
+    expect(series.values[0]).toBeCloseTo(-0.3, 4)
+    expect(series.values[1]).toBeCloseTo(-0.4, 4)
   })
 
   it('builds delta time series from consecutive static composite scenes', () => {

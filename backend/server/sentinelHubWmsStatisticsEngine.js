@@ -31,11 +31,14 @@ function evaluatePixel(s) {
   var ndwi = dNdwi > 1e-6 ? (s.B03 - s.B08) / dNdwi : 0;
   var dNdmi = s.B08 + s.B11;
   var ndmi = dNdmi > 1e-6 ? (s.B08 - s.B11) / dNdmi : 0;
+  var dNdSnow = s.B03 + s.B11;
+  var ndsi = dNdSnow > 1e-6 ? (s.B03 - s.B11) / dNdSnow : 0;
   function enc(v) {
     if (isNaN(v)) return 0;
-    return Math.max(0, Math.min(254, Math.round((v + 1) * 127)));
+    var raw = Math.round((v + 1) * 127);
+    return Math.max(1, Math.min(254, raw === 0 ? 1 : raw));
   }
-  return [enc(ndvi), enc(ndwi), enc(ndmi), 255];
+  return [enc(ndvi), enc(ndwi), enc(ndmi), enc(ndsi)];
 }`
 
 const WMS_STATS_EVALSCRIPT_B64 = Buffer.from(WMS_ZONAL_STATS_EVALSCRIPT, 'utf8').toString('base64')
@@ -540,25 +543,35 @@ export function decodeWmsZonalStatsFromPng(buffer) {
   let ndviSum = 0
   let ndwiSum = 0
   let ndmiSum = 0
+  let ndsiSum = 0
+  let ndsiMin = Number.POSITIVE_INFINITY
+  let ndsiMax = Number.NEGATIVE_INFINITY
   let count = 0
   for (let i = 0; i < png.data.length; i += 4) {
     const r = png.data[i]
     const g = png.data[i + 1]
     const b = png.data[i + 2]
     const a = png.data[i + 3]
-    if (a < 128 || (r === 0 && g === 0 && b === 0)) continue
+    if (r === 0 && g === 0 && b === 0 && a === 0) continue
+    const ndsiVal = a / 127 - 1
     ndviSum += r / 127 - 1
     ndwiSum += g / 127 - 1
     ndmiSum += b / 127 - 1
+    ndsiSum += ndsiVal
+    if (ndsiVal < ndsiMin) ndsiMin = ndsiVal
+    if (ndsiVal > ndsiMax) ndsiMax = ndsiVal
     count += 1
   }
   if (count === 0) {
-    return { ndvi: null, ndwi: null, ndmi: null, sampleCount: 0 }
+    return { ndvi: null, ndwi: null, ndmi: null, ndsi: null, ndsiMin: null, ndsiMax: null, sampleCount: 0 }
   }
   return {
     ndvi: Number((ndviSum / count).toFixed(4)),
     ndwi: Number((ndwiSum / count).toFixed(4)),
     ndmi: Number((ndmiSum / count).toFixed(4)),
+    ndsi: Number((ndsiSum / count).toFixed(4)),
+    ndsiMin: Number(ndsiMin.toFixed(4)),
+    ndsiMax: Number(ndsiMax.toFixed(4)),
     sampleCount: count,
   }
 }
@@ -790,6 +803,15 @@ function buildStatisticalApiCompatibleResponse(rows) {
                 noDataCount: row.ndmi == null ? row.sampleCount : 0,
               },
             },
+            ndsi: {
+              stats: {
+                mean: row.ndsi,
+                min: row.ndsiMin ?? row.ndsi,
+                max: row.ndsiMax ?? row.ndsi,
+                sampleCount: row.sampleCount,
+                noDataCount: row.ndsi == null ? row.sampleCount : 0,
+              },
+            },
             evi: {
               stats: {
                 mean: null,
@@ -868,14 +890,41 @@ export async function postSentinelStatisticsViaWms(wmsConfig, body) {
         timeStart: sceneDate,
         timeEnd: addDaysToIso(sceneDate, 1),
       })
-      if (stats.sampleCount === 0 || stats.ndvi == null) return null
+      if (stats.sampleCount === 0) {
+        return { skip: { date: sceneDate, reason: 'no valid pixels after cloud mask' } }
+      }
+      if (stats.ndsi == null && stats.ndvi == null) {
+        return { skip: { date: sceneDate, reason: 'decode returned null NDSI and NDVI' } }
+      }
       return { date: sceneDate, ...stats }
-    } catch {
-      return null
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return { skip: { date: sceneDate, reason: `WMS fetch failed: ${message.slice(0, 120)}` } }
     }
   })
 
-  const validRows = rows.filter(Boolean).sort((a, b) => a.date.localeCompare(b.date))
+  const skippedScenes = rows
+    .filter(row => row && 'skip' in row && row.skip)
+    .map(row => row.skip)
+  const validRows = rows
+    .filter(row => row && !('skip' in row && row.skip))
+    .sort((a, b) => a.date.localeCompare(b.date))
+
+  const snowNdsiRequest = String(body?.aggregation?.evalscript || '').includes('bands: ["B03", "B11"')
+  if (snowNdsiRequest || process.env.DEBUG_NDSI_TS === '1') {
+    console.log('[NDSI snow time series · WMS]', {
+      fromIso,
+      toIso,
+      cloudCoverage,
+      totalScenes: sceneDates.length,
+      scenesAfterCloudFilter: validRows.length,
+      computedNdsiCount: validRows.filter(row => row.ndsi != null && Number.isFinite(row.ndsi)).length,
+      skippedScenes: skippedScenes.length,
+      skippedSample: skippedScenes.slice(0, 12),
+      chartPoints: validRows.slice(0, 12).map(row => ({ date: row.date, ndsi: row.ndsi })),
+    })
+  }
+
   return buildStatisticalApiCompatibleResponse(validRows)
 }
 

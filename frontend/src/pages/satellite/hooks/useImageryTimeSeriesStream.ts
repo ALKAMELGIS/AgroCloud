@@ -24,8 +24,18 @@ import {
   aggregateImageryTimeSeriesMulti,
   pruneImageryTimeSeriesToObservations,
   pruneSingleLayerImagerySeries,
+  imageryDailyRowsSupportLayers,
+  imageryDailyRowsNeedRefetchForLayers,
   type ImageryTimeSeriesLayerSeries,
 } from '../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import {
+  resolveImageryStatisticsFetchMode,
+  imageryStatisticsFetchNeedsSnowNdsi,
+} from '../../../lib/sentinelHubStatisticsApi'
+import {
+  buildNdsiSnowTimeSeriesDebugReport,
+  logNdsiSnowTimeSeriesDebug,
+} from '../../../lib/ndsiSnowTimeSeriesDebug'
 
 export type ImageryTimeSeriesChartState = {
   labels: string[]
@@ -68,6 +78,7 @@ async function hydrateDailyFromChunkCaches(
   geometryHash: string,
   fromIso: string,
   toIso: string,
+  statsMode: 'snow-ndsi' | 'multi',
 ): Promise<SentinelHubDailyIndexMeans[]> {
   const chunks = planImageryDateChunks(fromIso, toIso, IMAGERY_TS_WMS_CHUNK_DAYS)
   if (!chunks.length) return []
@@ -75,7 +86,7 @@ async function hydrateDailyFromChunkCaches(
   const hits = await Promise.all(
     chunks.map(chunk =>
       readImageryTsChunkCache(
-        buildImageryTsChunkCacheKey(geometryHash, chunk.fromIso, chunk.toIso, CLOUD_FILTER),
+        buildImageryTsChunkCacheKey(geometryHash, chunk.fromIso, chunk.toIso, CLOUD_FILTER, statsMode),
       ),
     ),
   )
@@ -116,17 +127,20 @@ export function useImageryTimeSeriesStream({
 
   const abortRef = useRef<AbortController | null>(null)
   const runGenerationRef = useRef(0)
+  const ndsiRefetchKeyRef = useRef('')
 
   const buildCacheKey = useCallback(() => {
     if (!field?.geometry) return ''
+    const ids = layerIds.length ? layerIds : ['NDVI']
     return buildImageryTsCacheKey({
       fieldKey: field.fieldKey,
       geometryHash: geometryHashForImageryCache(field.geometry),
       fromIso: fromDate,
       toIso: toDate,
       cloudFilter: CLOUD_FILTER,
+      statsMode: resolveImageryStatisticsFetchMode(ids),
     })
-  }, [field, fromDate, toDate])
+  }, [field, fromDate, toDate, layerIds])
 
   const applyChartState = useCallback((chart: ImageryTimeSeriesChartState) => {
     setLabels(chart.labels)
@@ -162,29 +176,35 @@ export function useImageryTimeSeriesStream({
 
     const showInstant = (daily: SentinelHubDailyIndexMeans[], fromCache: boolean) => {
       if (generation !== runGenerationRef.current || ac.signal.aborted) return false
+      if (!daily.length) return false
+      if (imageryDailyRowsNeedRefetchForLayers(daily, ids)) return false
+      if (!imageryDailyRowsSupportLayers(daily, ids)) return false
+      const chart = dailyToChartState(daily, field.fieldKey, ids)
+      if (!chart.labels.length) return false
       setDailyRows(daily)
-      applyChartState(dailyToChartState(daily, field.fieldKey, ids))
+      applyChartState(chart)
       setLoading(false)
       setRefreshing(fromCache)
       setError(null)
-      return daily.length > 0
+      return true
     }
 
     const memCached = cacheKey ? getImageryTsMemoryCache(cacheKey) : null
     if (memCached?.daily?.length && isImageryTsCacheFresh(memCached)) {
-      showInstant(memCached.daily, false)
-      setProgress({
-        phase: 'complete',
-        message: 'Loaded from cache',
-        chunksDone: 0,
-        chunksTotal: 0,
-        observations: memCached.daily.length,
-        percent: 100,
-        fromCache: true,
-        refreshing: false,
-      })
-      setAnalysisDurationMs(0)
-      return
+      if (showInstant(memCached.daily, false)) {
+        setProgress({
+          phase: 'complete',
+          message: 'Loaded from cache',
+          chunksDone: 0,
+          chunksTotal: 0,
+          observations: memCached.daily.length,
+          percent: 100,
+          fromCache: true,
+          refreshing: false,
+        })
+        setAnalysisDurationMs(0)
+        return
+      }
     }
 
     let instantDaily = findImageryTsOverlappingDaily({
@@ -193,19 +213,25 @@ export function useImageryTimeSeriesStream({
       fromIso: fromDate,
       toIso: toDate,
       cloudFilter: CLOUD_FILTER,
+      statsMode: resolveImageryStatisticsFetchMode(ids),
     })
-    let hasInstantChart = instantDaily.length > 0 && showInstant(instantDaily, true)
+    let hasInstantChart = showInstant(instantDaily, true)
 
     if (!hasInstantChart) {
-      instantDaily = await hydrateDailyFromChunkCaches(geometryHash, fromDate, toDate)
-      hasInstantChart = instantDaily.length > 0 && showInstant(instantDaily, true)
+      instantDaily = await hydrateDailyFromChunkCaches(
+        geometryHash,
+        fromDate,
+        toDate,
+        resolveImageryStatisticsFetchMode(ids),
+      )
+      hasInstantChart = showInstant(instantDaily, true)
     }
 
     if (!hasInstantChart && cacheKey) {
       const stored = await readImageryTsCache(cacheKey)
       if (stored?.daily?.length && isImageryTsCacheStaleButUsable(stored)) {
         hasInstantChart = showInstant(stored.daily, !isImageryTsCacheFresh(stored))
-        if (isImageryTsCacheFresh(stored)) {
+        if (hasInstantChart && isImageryTsCacheFresh(stored)) {
           setProgress({
             phase: 'complete',
             message: 'Loaded from cache',
@@ -250,6 +276,7 @@ export function useImageryTimeSeriesStream({
       const daily = await fetchImageryTimeSeriesProgressive(field, {
         fromIso: fromDate,
         toIso: toDate,
+        layerIds: ids,
         signal: ac.signal,
         onProgress: ({ progress: prog }) => {
           if (generation !== runGenerationRef.current || ac.signal.aborted) return
@@ -261,9 +288,18 @@ export function useImageryTimeSeriesStream({
       const chart = dailyToChartState(daily, field.fieldKey, ids)
       applyChartState(chart)
       if (!chart.labels.length) {
-        setError('No observations in this date range — try widening dates or check Sentinel coverage.')
+        setError(
+          `No ${ids.join(', ')} observations in this date range — try widening dates or check Sentinel coverage.`,
+        )
       } else {
         setError(null)
+      }
+      if (imageryStatisticsFetchNeedsSnowNdsi(ids)) {
+        logNdsiSnowTimeSeriesDebug(
+          'stream run complete',
+          buildNdsiSnowTimeSeriesDebugReport(daily, ids, fromDate, toDate, resolveImageryStatisticsFetchMode(ids)),
+          { chartLabels: chart.labels.length, chartPoints: chart.layerSeries[0]?.values.length ?? 0 },
+        )
       }
     } catch (err) {
       if (!ac.signal.aborted && generation === runGenerationRef.current && !hasInstantChart) {
@@ -277,6 +313,39 @@ export function useImageryTimeSeriesStream({
       }
     }
   }, [field, fromDate, toDate, layerIds, buildCacheKey, applyChartState, abort])
+
+  /** Re-aggregate the chart when layers change — instant switch (e.g. NDVI → NDSI) without clearing daily rows. */
+  useEffect(() => {
+    if (!field || !dailyRows.length || loading) return
+    const ids = layerIds.length ? layerIds : ['NDVI']
+
+    if (imageryDailyRowsNeedRefetchForLayers(dailyRows, ids) && hasRun) {
+      const refetchKey = `${field.fieldKey}|${ids.join(',')}`
+      if (ndsiRefetchKeyRef.current !== refetchKey) {
+        ndsiRefetchKeyRef.current = refetchKey
+        setError(null)
+        void run()
+      }
+      return
+    }
+    ndsiRefetchKeyRef.current = ''
+
+    const chart = dailyToChartState(dailyRows, field.fieldKey, ids)
+    applyChartState(chart)
+    if (!chart.labels.length) {
+      if (imageryDailyRowsSupportLayers(dailyRows, ids)) {
+        setError(
+          `No ${ids.join(', ')} observations in this date range — try widening dates or check Sentinel coverage.`,
+        )
+      } else {
+        setError(
+          `No ${ids.join(', ')} observations in this date range — try widening dates or check Sentinel coverage.`,
+        )
+      }
+    } else if (!refreshing) {
+      setError(null)
+    }
+  }, [layerIds, field, dailyRows, loading, refreshing, applyChartState, hasRun, run])
 
   const invalidateResults = useCallback(() => {
     abort()

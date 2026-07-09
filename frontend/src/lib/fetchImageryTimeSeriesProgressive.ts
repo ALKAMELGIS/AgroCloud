@@ -4,9 +4,15 @@ import {
   fetchSentinelFieldIndexTimeSeriesForRange,
   fetchSentinelHubStatisticsProxyStatus,
   hasValidIndexDaily,
+  imageryStatisticsFetchNeedsSnowNdsi,
   mergeDailyIndexSeries,
+  resolveImageryStatisticsFetchMode,
   type SentinelHubDailyIndexMeans,
 } from './sentinelHubStatisticsApi'
+import {
+  buildNdsiSnowTimeSeriesDebugReport,
+  logNdsiSnowTimeSeriesDebug,
+} from './ndsiSnowTimeSeriesDebug'
 import {
   buildImageryTsCacheKey,
   buildImageryTsChunkCacheKey,
@@ -106,6 +112,7 @@ export function countImageryObservations(daily: SentinelHubDailyIndexMeans[]): n
       row.ndvi != null ||
       row.ndwi != null ||
       row.ndmi != null ||
+      row.ndsi != null ||
       row.evi != null ||
       row.savi != null ||
       row.ciRe != null,
@@ -130,11 +137,19 @@ async function fetchChunkDaily(
   rangeFrom: string,
   rangeTo: string,
   cloudFilter: number,
+  layerIds: string[],
   signal?: AbortSignal,
 ): Promise<SentinelHubDailyIndexMeans[]> {
+  const statsMode = resolveImageryStatisticsFetchMode(layerIds)
   const geomHash = geometryHashForImageryCache(geometry)
-  const chunkCacheKey = buildImageryTsChunkCacheKey(geomHash, chunk.fromIso, chunk.toIso, cloudFilter)
-  const chunkKey = `${geomHash}|${chunk.fromIso}|${chunk.toIso}|${cloudFilter}`
+  const chunkCacheKey = buildImageryTsChunkCacheKey(
+    geomHash,
+    chunk.fromIso,
+    chunk.toIso,
+    cloudFilter,
+    statsMode,
+  )
+  const chunkKey = `${geomHash}|${chunk.fromIso}|${chunk.toIso}|${cloudFilter}|${statsMode}`
   const existing = chunkInflight.get(chunkKey)
   if (existing) return existing
 
@@ -150,6 +165,7 @@ async function fetchChunkDaily(
         fromIso: chunk.fromIso,
         toIso: chunk.toIso,
         maxCloudCoverage: cloudFilter,
+        layerIds,
         signal,
       })
       if (!hasValidIndexDaily(daily) && !signal?.aborted) {
@@ -159,6 +175,7 @@ async function fetchChunkDaily(
           toIso: chunk.toIso,
           maxCloudCoverage: 95,
           relaxedCloudMask: true,
+          layerIds,
           signal,
         })
         daily = mergeDailyIndexSeries(daily, relaxed)
@@ -188,6 +205,7 @@ export type FetchImageryTimeSeriesProgressiveOptions = {
   toIso: string
   maxCloudCoverage?: number
   concurrency?: number
+  layerIds?: string[]
   signal?: AbortSignal
   onProgress?: (payload: ImageryTimeSeriesProgressPayload) => void
 }
@@ -201,12 +219,15 @@ export async function fetchImageryTimeSeriesProgressive(
   if (!field.geometry || !fromIso || !toIso || fromIso >= toIso) return []
 
   const cloudFilter = options.maxCloudCoverage ?? DEFAULT_IMAGERY_TS_CLOUD_FILTER
+  const layerIds = options.layerIds?.length ? options.layerIds : ['NDVI']
+  const statsMode = resolveImageryStatisticsFetchMode(layerIds)
   const cacheKey = buildImageryTsCacheKey({
     fieldKey: field.fieldKey,
     geometryHash: geometryHashForImageryCache(field.geometry),
     fromIso,
     toIso,
     cloudFilter,
+    statsMode,
   })
 
   const existingRun = runInflight.get(cacheKey)
@@ -338,6 +359,7 @@ export async function fetchImageryTimeSeriesProgressive(
           fromIso,
           toIso,
           cloudFilter,
+          layerIds,
           options.signal,
         )
         await reportMerge(rows, false, !!cached?.daily?.length)
@@ -363,6 +385,18 @@ export async function fetchImageryTimeSeriesProgressive(
     if (!merged.length && chunksTotal > 0 && !options.signal?.aborted) {
       throw new Error(
         'Could not load Sentinel statistics — ensure the AgroCloud backend is running (npm run dev) and try a shorter date range.',
+      )
+    }
+
+    if (imageryStatisticsFetchNeedsSnowNdsi(layerIds) && merged.length) {
+      logNdsiSnowTimeSeriesDebug(
+        'fetch complete',
+        buildNdsiSnowTimeSeriesDebugReport(merged, layerIds, fromIso, toIso, statsMode),
+        {
+          proxyMode: proxyStatus?.mode ?? 'unknown',
+          chunksTotal,
+          observations: countImageryObservations(merged),
+        },
       )
     }
 

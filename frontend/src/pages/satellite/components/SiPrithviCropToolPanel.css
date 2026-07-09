@@ -718,3 +718,243 @@
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-comp-bars__cap {
   color: rgba(255, 255, 255, 0.55);
 }
+
+.prithvi-tool__sub--head {
+  margin: 0;
+  font-size: 10.5px;
+  opacity: 0.75;
+}
+
+.prithvi-tool__workspace-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 2px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(15, 27, 45, 0.08);
+}
+
+.prithvi-tool__workspace-tab {
+  flex: 1 1 calc(33% - 4px);
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 5px 4px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: rgba(15, 27, 45, 0.65);
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.prithvi-tool__workspace-tab i { font-size: 10px; opacity: 0.8; }
+
+.prithvi-tool__workspace-tab.is-active {
+  background: #fff;
+  color: #0a1422;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.prithvi-tool__section-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(15, 27, 45, 0.55);
+  margin-bottom: 2px;
+}
+
+.prithvi-tool__stack { display: flex; flex-direction: column; gap: 5px; }
+
+.prithvi-tool__mode-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.prithvi-tool__mode-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: start;
+  padding: 8px 9px;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 27, 45, 0.12);
+  background: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.prithvi-tool__mode-card strong { font-size: 11px; }
+.prithvi-tool__mode-card span { font-size: 10px; line-height: 1.35; opacity: 0.75; }
+
+.prithvi-tool__mode-card.is-active {
+  border-color: rgba(16, 120, 72, 0.45);
+  background: rgba(16, 120, 72, 0.08);
+}
+
+.prithvi-tool__class-count output {
+  font-size: 11px;
+  font-weight: 700;
+  color: #107848;
+}
+
+.prithvi-tool__workflow-card {
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 27, 45, 0.1);
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.prithvi-tool__workflow-name {
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.prithvi-tool__workflow-steps {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 10.5px;
+  line-height: 1.45;
+  opacity: 0.85;
+}
+
+.prithvi-datasource__drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 88px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1.5px dashed rgba(15, 27, 45, 0.2);
+  background: rgba(255, 255, 255, 0.45);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.prithvi-datasource__drop.is-active {
+  border-color: rgba(16, 120, 72, 0.55);
+  background: rgba(16, 120, 72, 0.06);
+}
+
+.prithvi-datasource__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  color: rgba(15, 27, 45, 0.65);
+  text-align: center;
+}
+
+.prithvi-datasource__empty i { font-size: 18px; opacity: 0.55; }
+.prithvi-datasource__hint { font-size: 9.5px; opacity: 0.7; }
+
+.prithvi-datasource__preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.prithvi-datasource__thumb {
+  width: 52px;
+  height: 52px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid rgba(15, 27, 45, 0.12);
+  flex-shrink: 0;
+}
+
+.prithvi-datasource__thumb--icon {
+  display: grid;
+  place-items: center;
+  background: rgba(15, 27, 45, 0.06);
+  font-size: 20px;
+  opacity: 0.6;
+}
+
+.prithvi-datasource__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 10.5px;
+}
+
+.prithvi-datasource__meta strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prithvi-datasource__details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+  margin: 0;
+  font-size: 10px;
+}
+
+.prithvi-datasource__details > div { display: flex; flex-direction: column; gap: 1px; }
+
+.prithvi-datasource__details dt {
+  margin: 0;
+  font-weight: 600;
+  opacity: 0.6;
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+.prithvi-datasource__details dd { margin: 0; font-weight: 500; }
+
+.prithvi-supervised-samples__drop { min-height: 56px; margin-bottom: 6px; }
+
+.prithvi-tool__export-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__workspace-tabs {
+  background: rgba(0, 0, 0, 0.25);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__workspace-tab {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__workspace-tab.is-active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__mode-card {
+  background: rgba(6, 8, 12, 0.45);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__mode-card.is-active {
+  background: rgba(16, 120, 72, 0.15);
+  border-color: rgba(16, 120, 72, 0.4);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-datasource__drop {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(6, 8, 12, 0.35);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__workflow-card {
+  background: rgba(6, 8, 12, 0.45);
+  border-color: rgba(255, 255, 255, 0.1);
+}

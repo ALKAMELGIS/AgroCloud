@@ -58,6 +58,17 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
     expect(script).toContain('samples.dataMask')
   })
 
+  it('NDSI evalscript uses 10-class snow ramp on B03/B11', () => {
+    const script = buildSentinelIndexColorRampEvalscript('ndsi')
+    expect(script).toContain('ColorRampVisualizer')
+    expect(script).toContain('index(samples.B03, samples.B11)')
+    expect(script).toContain('0x4a4a4a')
+    expect(script).toContain('0xffffff')
+    expect(script).toContain('function ndsiClass(val)')
+    expect(script).toContain('viz.process(CLASS_VAL[cls])')
+    expect(script).toContain('samples.dataMask')
+  })
+
   it('SAVI evalscript uses soil-adjusted formula on B08/B04', () => {
     const script = buildSentinelIndexColorRampEvalscript('savi')
     expect(script).toContain('1.5) / (samples.B08 + samples.B04 + 0.5)')
@@ -69,8 +80,9 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
     expect(inferWmsEvalProfile('ET')).toBe('et')
     expect(inferWmsEvalProfile('Evapotranspiration')).toBe('et')
     expect(inferWmsEvalProfile('Moisture index')).toBe('ndmi')
-    // NDSI is registered as an agro composite (soil/salinity family).
-    expect(inferWmsEvalProfile('NDSI')).toBe('agro_composite')
+    // Core snow index — not the soil salinity composite.
+    expect(inferWmsEvalProfile('NDSI')).toBe('ndsi')
+    expect(inferWmsEvalProfile('SAL_NDSI')).toBe('agro_composite')
     expect(inferWmsEvalProfile('MNDWI')).toBe('mndwi')
   })
 

@@ -6,6 +6,7 @@ import { geodesicAreaM2 } from '../../../../lib/siLayerClassAreaEngine'
 import type { SentinelHubDailyIndexMeans } from '../../../../lib/sentinelHubStatisticsApi'
 import type { CropAlertFieldInput } from '../../../../lib/siCropAlertEngine'
 import type { ImageryTimeSeriesLayerSeries } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryTimeAggregation } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import { fetchFieldMapSnapshot } from './timeSeriesMapSnapshot'
 import { buildTimeSeriesMapSnapshotGroups } from './timeSeriesExcelMapSnapshots'
 import { buildEstimatedWaterLossTimeline } from './estimatedWaterLossTimeline'
@@ -16,6 +17,8 @@ import {
   estimateNdwiFromNdmi,
   type TimeSeriesExecutiveSummary,
 } from './timeSeriesReportExecutive'
+import { buildTimeSeriesWeatherTimeline } from './timeSeriesWeatherTimeline'
+import { geometryMetrics } from '../../../../lib/geoAiLiveMapContext'
 import type {
   TimeSeriesLayerStatistics,
   TimeSeriesReportPayload,
@@ -67,6 +70,7 @@ export type BuildTimeSeriesReportPayloadInput = {
   includeMapSnapshots?: boolean
   includeVegetationCoverageTimeline?: boolean
   periodAnchorDates?: Record<string, string>
+  timeAggregation?: ImageryTimeAggregation
 }
 
 function resolveDailyMean(rows: SentinelHubDailyIndexMeans[], layerId: string, date: string): number | null {
@@ -81,6 +85,7 @@ export async function buildTimeSeriesReportPayload(
   const acquisitionDate = input.acquisitionDate.trim().slice(0, 10)
   const geometry = input.field?.geometry ?? null
   const areaHa = geometry ? geodesicAreaM2(geometry) / 10_000 : 0
+  const centroid = geometry ? geometryMetrics(geometry)?.centroid ?? null : null
 
   const statistics = input.layerSeries.map(s =>
     computeLayerStatistics(s.layerId, input.chartLabels, s.values),
@@ -192,6 +197,18 @@ export async function buildTimeSeriesReportPayload(
       })
     : []
 
+  const weatherTimeline = geometry
+    ? await buildTimeSeriesWeatherTimeline({
+        geometry,
+        fromDate: input.fromDate,
+        toDate: input.toDate,
+        chartLabels: input.chartLabels,
+        displayLabels: input.displayLabels,
+        timeAggregation: input.timeAggregation ?? 'day',
+        layerSeries: input.layerSeries,
+      })
+    : null
+
   return {
     projectName: input.projectName?.trim() || 'AgroCloud Satellite Intelligence',
     generatedAt: new Date().toISOString(),
@@ -200,8 +217,8 @@ export async function buildTimeSeriesReportPayload(
       fieldName: input.fieldName,
       fieldKey: input.fieldKey,
       areaHa,
-      centroidLng: null,
-      centroidLat: null,
+      centroidLng: centroid?.[0] ?? null,
+      centroidLat: centroid?.[1] ?? null,
     },
     period: {
       from: input.fromDate,
@@ -223,5 +240,6 @@ export async function buildTimeSeriesReportPayload(
     mapSnapshotGroups,
     vegetationCoverageTimeline,
     estimatedWaterLossTimeline,
+    weatherTimeline,
   }
 }

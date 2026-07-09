@@ -30,6 +30,15 @@ describe('layerLiveLegendCatalog', () => {
     expect(spec?.gradientCss).toContain('linear-gradient')
   })
 
+  it('resolves NDSI snow index with the 10-step blue snow ramp', () => {
+    const spec = resolveLayerLiveLegendSpec('NDSI', 'NDSI')
+    expect(spec?.title).toBe('NDSI')
+    expect(spec?.classes).toHaveLength(10)
+    expect(spec?.classes?.[0]?.color).toBe('#4a4a4a')
+    expect(spec?.classes?.[9]?.color).toBe('#ffffff')
+    expect(spec?.classes?.[4]?.color).toBe('#29b6f6')
+  })
+
   it('resolves true color and SAR layers', () => {
     expect(resolveLayerLiveLegendSpec('TRUE_COLOR', 'True Color')?.kind).toBe('composite')
     expect(resolveLayerLiveLegendSpec('VV', 'VV - decibel gamma0')?.kind).toBe('sar')

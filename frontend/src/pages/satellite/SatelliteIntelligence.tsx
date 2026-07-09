@@ -190,6 +190,7 @@ import {
 import './components/SiCropAlertCenterPanel.css';
 import { SiPrithviCropToolPanel } from './components/SiPrithviCropToolPanel';
 import { SiImageryTimeSeriesFloatingPanel } from './components/SiImageryTimeSeriesFloatingPanel';
+import type { SiTsWeatherStormMapOverlay } from './lib/imageryStormAnalysis';
 import { SiGoToXyBar } from './components/SiGoToXyBar';
 import {
   fetchCropClassificationConfig,
@@ -199,16 +200,24 @@ import {
   pollJob,
   cropPredictionImageUrl,
   type CropClassificationJob,
-  type CropClassificationMode,
 } from '../../lib/siPrithviCropPipeline';
 import type { CropTrainingSample } from '../../lib/cropSupervised/types';
 import { validateTrainingSamples } from '../../lib/cropSupervised/trainingSampleValidator';
 import {
+  DEFAULT_CROP_ANALYSIS_MODE,
+  DEFAULT_UNSUPERVISED_CLASS_COUNT,
+  toLegacyClassificationMode,
+  type CropAnalysisModeId,
+} from '../../lib/cropSupervised/cropAnalysisModes';
+import {
+  cropProviderRequiresUpload,
   DEFAULT_CROP_DATA_PROVIDER,
-  getCropProviderRedirect,
   isCropPanelProvider,
+  normalizeCropDataProvider,
   type CropDataProviderId,
 } from '../../lib/cropSupervised/cropDataProvider';
+import type { CropImageryDataset } from '../../lib/cropSupervised/cropImageryDataset';
+import { resolveCropAiWorkflow } from '../../lib/cropSupervised/cropAiWorkflow';
 import {
   CROP_CLASSIFICATION_LAYER_ID,
   DEFAULT_CROP_CLASSIFICATION_SETTINGS,
@@ -253,7 +262,10 @@ import {
   fetchSentinelSceneCatalogForAoi,
   type SentinelSceneCatalog,
 } from '../../lib/siSentinelLatestScene';
-import { geoExplorerTargetZoomForPinSource, runGeoExplorerGeminiTurn } from '../../lib/runGeoExplorerGeminiTurn';
+import {
+  defaultCollectionForProvider,
+  remoteSensingCollectionsForProvider,
+} from '../../lib/remoteSensingProviders';
 import { pickGeoAiHumanPlaceFields, type GeoAiMapLayer } from '../../lib/geoExplorerLayerContext';
 import { buildGeoAiInspectCardContent, type SiPopupInspectPayload } from '../../lib/siLayerPopupInspect';
 import { normalizeSiLayerPopupConfig, type SiLayerPopupConfig } from '../../lib/siLayerPopupConfig';
@@ -424,6 +436,7 @@ import type { HydroStepId } from '../../lib/hydroWatershed/hydroEngine';
 import { GisPortalBrowseLayersPanel } from './components/GisPortalBrowseLayersPanel';
 import { GisUploadCloudSources } from '../../components/GisUploadCloudSources';
 import type { MapToolboxAddGisLayerAction } from './components/MapToolboxAddGisLayerFlyout';
+import { SiAddSourceAnchoredPanel } from './components/SiAddSourceAnchoredPanel';
 import { type GisContentRow, gisContentPortalDisplayTypeLabel } from '../master/gisContentPortalData';
 import {
   buildGisContentMapLayerPayload,
@@ -1566,6 +1579,8 @@ interface WmsLayerInfo {
   title: string;
 }
 
+const SI_TS_WEATHER_STORM_LAYER_ID = 'si-ts-weather-storm';
+
 interface CustomLayer {
   id: string;
   name: string;
@@ -1619,7 +1634,21 @@ const SI_LAYER_ACTION_TABLE_ID = 'layer-action-table';
 
 /** Stable id for the Well Site Recommendation output layer in the Layers panel. */
 const WELLSITE_RECOMMENDED_LAYER_ID = 'wellsite-recommended-wells';
-const WELL_SUITABILITY_LAYER_ID = 'well-suitability-ranked-sites';
+const WELL_SUITABILITY_MCDA_LAYER_PREFIX = 'well-suit-mcda-';
+
+function wellSuitabilityMcdaRunLabel(seq: number): string {
+  const ts = new Date().toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return `MCDA Potential #${seq} (${ts})`;
+}
+
+function isWellSuitabilityMcdaLayerId(id: string): boolean {
+  return id.startsWith(WELL_SUITABILITY_MCDA_LAYER_PREFIX);
+}
 
 type SiTableSearchMode = 'description' | 'code' | 'both';
 type SiTableFilterOperator = 'contains' | 'equals' | 'not_equals' | 'empty' | 'not_empty';
@@ -2237,6 +2266,7 @@ function siPaintCustomLayersOnMapboxCanvas(
             coordinates: layer.raster.coordinates,
           });
         }
+        const rasterOpacity = isWellSuitabilityMcdaLayerId(layer.id) ? op : 0.92 * op;
         if (!map.getLayer(rasterId)) {
           map.addLayer(
             {
@@ -2244,12 +2274,12 @@ function siPaintCustomLayersOnMapboxCanvas(
               type: 'raster',
               source: sourceId,
               layout: { visibility: layerVisible ? 'visible' : 'none' },
-              paint: { 'raster-opacity': 0.92 * op, 'raster-fade-duration': 0 },
+              paint: { 'raster-opacity': rasterOpacity, 'raster-fade-duration': 0 },
             },
             beforeId,
           );
         } else {
-          siApplyMapboxPaintProps(map, rasterId, { 'raster-opacity': 0.92 * op });
+          siApplyMapboxPaintProps(map, rasterId, { 'raster-opacity': rasterOpacity });
         }
         siSetMapboxCustomLayerStackVisibility(map, sourceId, layerVisible);
         continue;
@@ -2971,7 +3001,7 @@ const ENVIRONMENTAL_INDICES: Record<EnvironmentalIndexId, {
     formula: '(B03 - B11) / (B03 + B11)',
     range: [-1, 1],
     palette: ['#334155', '#e0f2fe', '#ffffff', '#bae6fd'],
-    description: 'Snow or bright surface response.',
+    description: 'Normalized Difference Snow Index — snow and bright surface response.',
   },
   ET: {
     label: 'ET',
@@ -3339,6 +3369,14 @@ export default function SatelliteIntelligence() {
   const [wmsLayer, setWmsLayer] = useState(SI_DEFAULT_LIVE_WMS_LAYER);
   const [remoteSensingProvider, setRemoteSensingProvider] = useState('sentinel-hub');
   const [remoteSensingCollection, setRemoteSensingCollection] = useState('sentinel-2-l2a');
+
+  const handleRemoteSensingProviderChange = useCallback((id: string) => {
+    setRemoteSensingProvider(id);
+    const cols = remoteSensingCollectionsForProvider(id);
+    const next =
+      cols.find(c => c.id === remoteSensingCollection)?.id ?? defaultCollectionForProvider(id);
+    setRemoteSensingCollection(next);
+  }, [remoteSensingCollection]);
   const [selectedDate, setSelectedDate] = useState<Date>(() => getDefaultSentinelImageryDate());
   /** When true, imagery date follows latest scene âˆ’ 1 day for the active AOI. */
   const [imageryDateAutoFollow, setImageryDateAutoFollow] = useState(true);
@@ -3432,6 +3470,46 @@ export default function SatelliteIntelligence() {
   }, []);
   const [mapStaticChartsOpen, setMapStaticChartsOpen] = useState(false);
   const [imageryTimeSeriesOpen, setImageryTimeSeriesOpen] = useState(false);
+  const [tsWeatherStormOverlay, setTsWeatherStormOverlay] = useState<SiTsWeatherStormMapOverlay | null>(null);
+  const [tsWeatherStormDismissEpoch, setTsWeatherStormDismissEpoch] = useState(0);
+
+  useEffect(() => {
+    if (!imageryTimeSeriesOpen || !tsWeatherStormOverlay) {
+      setCustomLayers(prev => prev.filter(l => l.id !== SI_TS_WEATHER_STORM_LAYER_ID));
+      return;
+    }
+    const { geometry, fillColor, lineColor, fillOpacity, mode } = tsWeatherStormOverlay;
+    const name = mode === 'snow_storm' ? 'Snow Storm' : 'Storm Alert';
+    const geojson = {
+      type: 'FeatureCollection',
+      features: [{ type: 'Feature', properties: { name }, geometry }],
+    };
+    setCustomLayers(prev => {
+      const next: CustomLayer = {
+        id: SI_TS_WEATHER_STORM_LAYER_ID,
+        name,
+        geojson,
+        visible: true,
+        ephemeral: true,
+        source: 'api',
+        color: lineColor,
+        fillColor,
+        mapOpacity: 1,
+        polygonFillAlpha: fillOpacity,
+        weight: 2.5,
+      };
+      const idx = prev.findIndex(l => l.id === SI_TS_WEATHER_STORM_LAYER_ID);
+      if (idx < 0) return [...prev, next];
+      const copy = [...prev];
+      copy[idx] = { ...copy[idx], ...next };
+      return copy;
+    });
+  }, [imageryTimeSeriesOpen, tsWeatherStormOverlay]);
+
+  useEffect(() => {
+    if (!imageryTimeSeriesOpen) setTsWeatherStormOverlay(null);
+  }, [imageryTimeSeriesOpen]);
+
   const [goToXyOpen, setGoToXyOpen] = useState(false);
   const [goToXyMarker, setGoToXyMarker] = useState<{ lng: number; lat: number } | null>(null);
   const [aoiStatsPixel, setAoiStatsPixel] = useState<{ lng: number; lat: number } | null>(null);
@@ -3574,6 +3652,13 @@ export default function SatelliteIntelligence() {
   const [tableShowSelectedOnly, setTableShowSelectedOnly] = useState(false);
   const [tableSelectedKeys, setTableSelectedKeys] = useState<Set<string>>(() => new Set());
   const [tableToolsCollapsed, setTableToolsCollapsed] = useState(true);
+  const [tableWinMinimized, setTableWinMinimized] = useState(false);
+  const [tableWinMaximized, setTableWinMaximized] = useState(false);
+  const [tableWinFiltersOpen, setTableWinFiltersOpen] = useState(false);
+  const [tableWinOffset, setTableWinOffset] = useState({ x: 0, y: 0 });
+  const tableWinDragRef = useRef<{ px: number; py: number; ox: number; oy: number } | null>(null);
+  const [siTableColWidths, setSiTableColWidths] = useState<Record<string, number>>({});
+  const siTableColResizeRef = useRef<{ field: string; startX: number; startW: number } | null>(null);
   const [draggingSiTableField, setDraggingSiTableField] = useState<string | null>(null);
   const [hiddenSiTableFieldsByLayerId, setHiddenSiTableFieldsByLayerId] = useState<Record<string, Set<string>>>({});
   const [siTableFieldOrderByLayerId, setSiTableFieldOrderByLayerId] = useState<Record<string, string[]>>({});
@@ -3791,9 +3876,11 @@ export default function SatelliteIntelligence() {
     const start = new Date(end.getTime() - 150 * 86400000);
     return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
   });
-  const [cropAiMode, setCropAiMode] = useState<CropClassificationMode>('ai-prithvi');
+  const [cropAiAnalysisMode, setCropAiAnalysisMode] = useState<CropAnalysisModeId>(DEFAULT_CROP_ANALYSIS_MODE);
+  const [cropAiUnsupervisedClassCount, setCropAiUnsupervisedClassCount] = useState(DEFAULT_UNSUPERVISED_CLASS_COUNT);
   const [cropAiDataProvider, setCropAiDataProvider] =
     useState<CropDataProviderId>(DEFAULT_CROP_DATA_PROVIDER);
+  const [cropAiDataset, setCropAiDataset] = useState<CropImageryDataset | null>(null);
   const [cropAiTrainingSamples, setCropAiTrainingSamples] = useState<CropTrainingSample[]>([]);
   const [cropAiJob, setCropAiJob] = useState<CropClassificationJob | null>(null);
   const [cropAiSelfInference, setCropAiSelfInference] = useState(false);
@@ -3806,9 +3893,12 @@ export default function SatelliteIntelligence() {
     () =>
       validateTrainingSamples(
         cropAiTrainingSamples,
-        (drawnGeometry?.geometry ?? null) as GeoJSON.Polygon | GeoJSON.MultiPolygon | null,
+        (cropClassAoiGeometry?.geometry ?? drawnGeometry?.geometry ?? null) as
+          | GeoJSON.Polygon
+          | GeoJSON.MultiPolygon
+          | null,
       ),
-    [cropAiTrainingSamples, drawnGeometry],
+    [cropAiTrainingSamples, cropClassAoiGeometry, drawnGeometry],
   );
 
   useEffect(() => {
@@ -3831,11 +3921,38 @@ export default function SatelliteIntelligence() {
   }, []);
 
   const handleCropAiRunAoi = useCallback(() => {
-    const geometry = drawnGeometryRef.current?.geometry ?? drawnGeometry?.geometry;
+    const geometry =
+      (cropClassAoiGeometryRef.current?.geometry ??
+        cropClassAoiGeometry?.geometry ??
+        drawnGeometryRef.current?.geometry ??
+        drawnGeometry?.geometry) as GeoJSON.Polygon | GeoJSON.MultiPolygon | undefined;
     if (!geometry) return;
     if (!isCropPanelProvider(cropAiDataProvider)) return;
-    if (cropAiMode === 'supervised-ground-truth' && !cropAiSamplesValidation.valid) return;
-    cropAiAoiRef.current = geometry;
+
+    const workflow = resolveCropAiWorkflow(cropAiDataProvider, cropAiAnalysisMode, cropAiDataset);
+    const legacyMode = toLegacyClassificationMode(cropAiAnalysisMode);
+
+    if (workflow.requiresUpload && !cropAiDataset) return;
+    if (cropAiAnalysisMode === 'supervised' && !cropAiSamplesValidation.valid) return;
+
+    if (
+      workflow.requiresUpload &&
+      cropAiDataset?.metadata.kind === 'point-cloud' &&
+      !cropAiDataset.previewUrl
+    ) {
+      setCropAiJob({
+        id: 'error',
+        mode: 'aoi',
+        status: 'error',
+        progress: 1,
+        message: 'LiDAR point cloud requires a GeoTIFF DEM/DSM for in-browser analysis.',
+        result: null,
+        error: 'Convert LAS/LAZ to a georeferenced DEM GeoTIFF or upload a canopy height model.',
+      });
+      return;
+    }
+
+    cropAiAoiRef.current = { geometry };
     setCropAiJob({
       id: 'pending',
       mode: 'aoi',
@@ -3845,21 +3962,28 @@ export default function SatelliteIntelligence() {
       result: null,
       error: null,
     });
+
+    const provider = normalizeCropDataProvider(cropAiDataProvider);
+    const chipUrl = cropAiDataset?.previewUrl;
+
     const start =
-      cropAiMode === 'supervised-ground-truth'
-        ? startSupervisedAoiJob({
-            aoi: geometry,
-            season: cropAiSeason,
-            timesteps: 5,
-            samples: cropAiTrainingSamples,
-            dataProvider: cropAiDataProvider,
-          })
-        : startAoiJob({
-            aoi: geometry,
-            season: cropAiSeason,
-            timesteps: 3,
-            dataProvider: cropAiDataProvider,
-          });
+      workflow.requiresUpload && chipUrl && cropAiAnalysisMode !== 'supervised'
+        ? startChipJob(chipUrl)
+        : legacyMode === 'supervised-ground-truth'
+          ? startSupervisedAoiJob({
+              aoi: geometry,
+              season: cropAiSeason,
+              timesteps: 5,
+              samples: cropAiTrainingSamples,
+              dataProvider: provider,
+            })
+          : startAoiJob({
+              aoi: geometry,
+              season: cropAiSeason,
+              timesteps: cropAiAnalysisMode === 'unsupervised' ? 5 : 3,
+              dataProvider: provider,
+            });
+
     void start
       .then(trackCropAiJob)
       .catch(err =>
@@ -3874,11 +3998,13 @@ export default function SatelliteIntelligence() {
         }),
       );
   }, [
+    cropAiAnalysisMode,
     cropAiDataProvider,
-    cropAiMode,
+    cropAiDataset,
     cropAiSamplesValidation.valid,
     cropAiSeason,
     cropAiTrainingSamples,
+    cropClassAoiGeometry,
     drawnGeometry,
     trackCropAiJob,
   ]);
@@ -3920,9 +4046,9 @@ export default function SatelliteIntelligence() {
   }, []);
 
   const handleCropAiPickAoi = useCallback(() => {
-    mapDrawOwnerRef.current = 'remote-sensing';
-    setMapDrawOwner('remote-sensing');
-    setRsDrawingModeActive(true);
+    mapDrawOwnerRef.current = 'crop-classification';
+    setMapDrawOwner('crop-classification');
+    setCropClassDrawingModeActive(true);
     applyMapDrawTool('polygon');
   }, []);
 
@@ -5569,28 +5695,10 @@ export default function SatelliteIntelligence() {
     setAddLayerTab('upload');
   };
 
-  const handleCropAiProviderRedirect = useCallback(
-    (id: CropDataProviderId) => {
-      const redirect = getCropProviderRedirect(id);
-      if (!redirect) return;
-      if (redirect.kind === 'section') {
-        setExpandedEnvSection(redirect.target as 'remote-sensing');
-        setIsLayerDropdownOpen(true);
-        if (id === 'drone-imagery') openAoiDataSourceUploader();
-        return;
-      }
-      navigate(redirect.target);
-    },
-    [navigate],
-  );
-
-  const handleCropAiDataProviderChange = useCallback(
-    (id: CropDataProviderId) => {
-      setCropAiDataProvider(id);
-      if (!isCropPanelProvider(id)) handleCropAiProviderRedirect(id);
-    },
-    [handleCropAiProviderRedirect],
-  );
+  const handleCropAiDataProviderChange = useCallback((id: CropDataProviderId) => {
+    setCropAiDataProvider(id);
+    setCropAiDataset(null);
+  }, []);
 
   const closeAddLayerModal = () => {
     setIsAddLayerModalOpen(false);
@@ -6492,6 +6600,11 @@ export default function SatelliteIntelligence() {
     setTableShowSelectedOnly(false);
     setTableSelectedKeys(new Set());
     setTableToolsCollapsed(true);
+    setTableWinMinimized(false);
+    setTableWinMaximized(false);
+    setTableWinFiltersOpen(false);
+    setTableWinOffset({ x: 0, y: 0 });
+    setSiTableColWidths({});
     setDraggingSiTableField(null);
   }, [activeLayerActionDialog]);
 
@@ -6935,6 +7048,63 @@ export default function SatelliteIntelligence() {
       { padding: 80, duration: 800 },
     );
   };
+
+  const onTableWinTitlePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (tableWinMinimized || tableWinMaximized) return;
+      if ((e.target as HTMLElement).closest('button')) return;
+      tableWinDragRef.current = {
+        px: e.clientX,
+        py: e.clientY,
+        ox: tableWinOffset.x,
+        oy: tableWinOffset.y,
+      };
+      e.currentTarget.setPointerCapture(e.pointerId);
+    },
+    [tableWinMinimized, tableWinMaximized, tableWinOffset],
+  );
+
+  const onTableWinTitlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const d = tableWinDragRef.current;
+    if (!d) return;
+    setTableWinOffset({ x: d.ox + e.clientX - d.px, y: d.oy + e.clientY - d.py });
+  }, []);
+
+  const onTableWinTitlePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    tableWinDragRef.current = null;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const startSiTableColResize = useCallback((field: string, e: React.PointerEvent<HTMLSpanElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const th = (e.currentTarget as HTMLElement).closest('th');
+    const startW = th?.getBoundingClientRect().width ?? siTableColWidths[field] ?? 96;
+    siTableColResizeRef.current = { field, startX: e.clientX, startW };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }, [siTableColWidths]);
+
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const r = siTableColResizeRef.current;
+      if (!r) return;
+      const next = Math.max(56, Math.round(r.startW + e.clientX - r.startX));
+      setSiTableColWidths(prev => ({ ...prev, [r.field]: next }));
+    };
+    const onUp = () => {
+      siTableColResizeRef.current = null;
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+  }, []);
 
   const exportTableAsCsv = () => {
     if (!activeDialogLayer || !visibleSiTableFields.length) return;
@@ -10563,17 +10733,64 @@ export default function SatelliteIntelligence() {
     });
   }, [wellSite.result]);
 
+  const wellSuitabilityPublishedResultRef = useRef<typeof wellSuitability.result>(null);
+  const wellSuitabilityRunSeqRef = useRef(0);
+  const wellSuitabilityActiveRunIdRef = useRef<string | null>(null);
+
+  // Publish each MCDA run as separate map + Display Layers entries (heatmap, streams, sites).
   useEffect(() => {
-    const fc = wellSuitability.result?.pointsGeoJson;
-    if (!fc || !Array.isArray(fc.features) || !fc.features.length) return;
+    const result = wellSuitability.result;
+    if (!result || wellSuitability.status !== 'done') return;
+    if (wellSuitabilityPublishedResultRef.current === result) return;
+    wellSuitabilityPublishedResultRef.current = result;
+
+    wellSuitabilityRunSeqRef.current += 1;
+    const seq = wellSuitabilityRunSeqRef.current;
+    const runId = `${WELL_SUITABILITY_MCDA_LAYER_PREFIX}${Date.now()}-${seq}`;
+    wellSuitabilityActiveRunIdRef.current = runId;
+
+    const runLabel = wellSuitabilityMcdaRunLabel(seq);
+    const coordinates = result.raster.coordinates;
+    const footprint = siRasterExtentFootprint(coordinates);
+    const heatId = `${runId}-heat`;
+    const streamsId = `${runId}-streams`;
+    const sitesId = `${runId}-sites`;
+
     setCustomLayers(prev => {
-      const idx = prev.findIndex(l => l.id === WELL_SUITABILITY_LAYER_ID);
-      if (idx === -1) {
-        const layer: CustomLayer = {
-          id: WELL_SUITABILITY_LAYER_ID,
-          name: 'Well Suitability (MCDA)',
-          geojson: fc,
-          visible: true,
+      const next: CustomLayer[] = [
+        ...prev,
+        {
+          id: heatId,
+          name: `${runLabel} — Heatmap`,
+          geojson: footprint,
+          visible: wellSuitability.heatVisible,
+          source: 'api',
+          renderMode: 'raster',
+          raster: { url: result.raster.dataUrl, coordinates },
+          ephemeral: true,
+          mapOpacity: wellSuitability.opacity ?? 1,
+        },
+      ];
+      if (result.streams?.data) {
+        next.push({
+          id: streamsId,
+          name: `${runLabel} — Streams`,
+          geojson: result.streams.data,
+          visible: wellSuitability.streamsVisible,
+          source: 'api',
+          renderMode: 'vector',
+          ephemeral: true,
+          color: '#38bdf8',
+          weight: 1.2,
+          mapOpacity: 1,
+        });
+      }
+      if (result.pointsGeoJson?.features?.length) {
+        next.push({
+          id: sitesId,
+          name: `${runLabel} — Ranked Sites`,
+          geojson: result.pointsGeoJson,
+          visible: wellSuitability.pointsVisible,
           source: 'api',
           ephemeral: true,
           color: '#065f46',
@@ -10581,14 +10798,38 @@ export default function SatelliteIntelligence() {
           pointRadius: 7,
           weight: 2,
           labelFieldName: 'rank',
-        };
-        return [...prev, layer];
+          mapOpacity: 1,
+        });
       }
-      const next = prev.slice();
-      next[idx] = { ...next[idx], geojson: fc, markerImageId: undefined };
       return next;
     });
-  }, [wellSuitability.result]);
+  }, [wellSuitability.result, wellSuitability.status]);
+
+  // Keep the toolbox toggles in sync with the latest MCDA run layers on the map.
+  useEffect(() => {
+    const runId = wellSuitabilityActiveRunIdRef.current;
+    if (!runId || !wellSuitability.result) return;
+    setCustomLayers(prev =>
+      prev.map(l => {
+        if (l.id === `${runId}-heat`) {
+          return { ...l, visible: wellSuitability.heatVisible, mapOpacity: wellSuitability.opacity };
+        }
+        if (l.id === `${runId}-streams`) {
+          return { ...l, visible: wellSuitability.streamsVisible };
+        }
+        if (l.id === `${runId}-sites`) {
+          return { ...l, visible: wellSuitability.pointsVisible };
+        }
+        return l;
+      }),
+    );
+  }, [
+    wellSuitability.heatVisible,
+    wellSuitability.streamsVisible,
+    wellSuitability.pointsVisible,
+    wellSuitability.opacity,
+    wellSuitability.result,
+  ]);
 
   // â”€â”€ Flood Monitoring (SAR-based change detection) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const FLOOD_RASTER_LAYER_ID = 'flood-extent-raster';
@@ -12088,6 +12329,7 @@ export default function SatelliteIntelligence() {
     [customLayers],
   );
   const agroStructuresLayerAoiMask = useMemo(() => {
+    if (!agroStructuresLayer) return null;
     if (aoiMaskBuilderSettings.enabled) {
       return buildAgroStructuresLayerAoiMask(agroStructuresLayer?.geojson ?? null);
     }
@@ -12106,7 +12348,7 @@ export default function SatelliteIntelligence() {
     return null;
   }, [
     aoiMaskBuilderSettings.enabled,
-    agroStructuresLayer?.geojson,
+    agroStructuresLayer,
     agroStructuresViewportGeoJson,
     isWmsOverlayVisible,
     activeWmsLayer,
@@ -12151,9 +12393,6 @@ export default function SatelliteIntelligence() {
     [aoiMaskBuilderSettings, aoiMaskBuilderMask, aoiMaskBuilderSelectedKeys],
   );
   const aoiMaskBuilderFeatureCount = aoiMaskBuilderMask?.features?.length ?? 0;
-  const activeAoiBoundaryMask = aoiMaskBuilderSettings.enabled
-    ? (aoiMaskBuilderMask ?? agroStructuresLayerAoiMask)
-    : agroStructuresLayerAoiMask;
   const activeAoiMaskKey = useMemo(() => {
     if (aoiMaskBuilderSettings.enabled) return aoiMaskBuilderMaskKey;
     if (freezeViewportPipeline) return agroStructuresLayerAoiKey;
@@ -12442,9 +12681,29 @@ export default function SatelliteIntelligence() {
     saveRegionalCropTrainingState(sentinelImageryAoiKey, regionalCropTraining);
   }, [sentinelImageryAoiKey, regionalCropTraining]);
 
+  const [imageryCalendarDay, setImageryCalendarDay] = useState(() => localIsoDate());
+
+  /** Re-resolve auto imagery when the local calendar day rolls over (daily refresh). */
+  useEffect(() => {
+    const tick = () => {
+      const today = localIsoDate();
+      setImageryCalendarDay(prev => (prev === today ? prev : today));
+    };
+    tick();
+    const intervalId = window.setInterval(tick, 60_000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') tick();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+
   const autoLiveScenes = useMemo(
-    () => resolveAutoLiveScenePair(sentinelSceneCatalog?.sceneIsos ?? []),
-    [sentinelSceneCatalog?.sceneIsos],
+    () => resolveAutoLiveScenePair(sentinelSceneCatalog?.sceneIsos ?? [], new Date()),
+    [sentinelSceneCatalog?.sceneIsos, imageryCalendarDay],
   );
 
   /** Crop alerts always request from today in auto mode; used scene comes from Statistical API backward search. */
@@ -13056,7 +13315,10 @@ export default function SatelliteIntelligence() {
     if (!imageryDateAutoFollow) return;
 
     const syncAutoImageryDate = () => {
-      const target = autoLiveScenes.currentSceneDate;
+      const target = resolveAutoLiveScenePair(
+        sentinelSceneCatalog?.sceneIsos ?? [],
+        new Date(),
+      ).currentSceneDate;
       setSelectedDate(prev => {
         if (localIsoDate(prev) === target) return prev;
         return dateFromLocalIso(target);
@@ -13076,7 +13338,7 @@ export default function SatelliteIntelligence() {
       window.clearInterval(intervalId);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [imageryDateAutoFollow, autoLiveScenes.currentSceneDate, sentinelSceneCatalog?.sceneIsos]);
+  }, [imageryDateAutoFollow, imageryCalendarDay, sentinelSceneCatalog?.sceneIsos]);
 
   useEffect(() => {
     if (!aoiMaskBuilderSettings.enabled || !aoiMaskBuilderSettings.liveUpdate) return;
@@ -13904,7 +14166,12 @@ export default function SatelliteIntelligence() {
             },
           ]
         : []),
-      ...customLayers.map(layer => {
+      ...customLayers
+        .filter(
+          layer =>
+            !isWellSuitabilityMcdaLayerId(layer.id) && layer.id !== SI_TS_WEATHER_STORM_LAYER_ID,
+        )
+        .map(layer => {
         const featureCount = Array.isArray(layer.geojson?.features) ? layer.geojson.features.length : 0;
         const lower = layer.name.toLowerCase();
         const isUploadAoiLayer =
@@ -13937,6 +14204,50 @@ export default function SatelliteIntelligence() {
           onToggle: () => toggleCustomLayerVisibility(layer.id, !layer.visible),
         };
       }),
+      ...customLayers
+        .filter(layer => isWellSuitabilityMcdaLayerId(layer.id))
+        .sort((a, b) => b.id.localeCompare(a.id))
+        .map(layer => ({
+          id: layer.id,
+          label: layer.name,
+          meta: 'MCDA groundwater analysis',
+          visible: layer.visible,
+          toggleable: true,
+          actionable: false,
+          kind: layer.renderMode === 'raster' ? ('raster' as const) : ('vector' as const),
+          opacity: layer.mapOpacity ?? 1,
+          onOpacityChange: (v: number) => {
+            setCustomLayers(prev => prev.map(l => (l.id === layer.id ? { ...l, mapOpacity: v } : l)));
+            if (layer.id === `${wellSuitabilityActiveRunIdRef.current}-heat`) {
+              wellSuitability.setOpacity(v);
+            }
+          },
+          onToggle: () => toggleCustomLayerVisibility(layer.id, !layer.visible),
+          onZoomTo: () => zoomToCustomLayerExtent(layer.id),
+          onRemove: () => setCustomLayers(prev => prev.filter(l => l.id !== layer.id)),
+        })),
+      ...customLayers
+        .filter(layer => layer.id === SI_TS_WEATHER_STORM_LAYER_ID)
+        .map(layer => ({
+          id: `custom-${layer.id}`,
+          label: layer.name,
+          meta: 'Weather storm analysis',
+          visible: layer.visible,
+          toggleable: true,
+          actionable: false,
+          kind: 'vector' as const,
+          opacity: layer.mapOpacity ?? 1,
+          onOpacityChange: (v: number) => {
+            setCustomLayers(prev => prev.map(l => (l.id === layer.id ? { ...l, mapOpacity: v } : l)));
+          },
+          onToggle: () => toggleCustomLayerVisibility(layer.id, !layer.visible),
+          onZoomTo: () => zoomToCustomLayerExtent(layer.id),
+          onRemove: () => {
+            setTsWeatherStormOverlay(null);
+            setTsWeatherStormDismissEpoch(n => n + 1);
+            setCustomLayers(prev => prev.filter(l => l.id !== SI_TS_WEATHER_STORM_LAYER_ID));
+          },
+        })),
       // Hydro Watershed results ΓÇö each completed step is published to the Layers
       // panel automatically with show/hide + export + delete (no AOI background).
       ...HYDRO_STEP_ORDER.filter(stepId => hydro.steps[stepId]?.status === 'done' && !!hydro.steps[stepId]?.result).map(
@@ -13988,6 +14299,9 @@ export default function SatelliteIntelligence() {
       sentinelVisible,
       stacMapThumb,
       stacMapThumbLabel,
+      toggleCustomLayerVisibility,
+      zoomToCustomLayerExtent,
+      wellSuitability.setOpacity,
     ],
   );
 
@@ -14003,7 +14317,11 @@ export default function SatelliteIntelligence() {
 
   /** Analysis result layers (AOI + Hydro Watershed steps) ΓÇö shown in the Main tab. */
   const isAnalysisLayerId = useCallback(
-    (id: string) => id === 'drawn-aoi' || id.startsWith('hydro-'),
+    (id: string) =>
+      id === 'drawn-aoi' ||
+      id === `custom-${SI_TS_WEATHER_STORM_LAYER_ID}` ||
+      id.startsWith('hydro-') ||
+      isWellSuitabilityMcdaLayerId(id),
     [],
   );
   const analysisLayerEntries = useMemo(
@@ -14997,10 +15315,19 @@ export default function SatelliteIntelligence() {
       raise('si-draw-draft-close-hint');
       raise('si-draw-draft-vertex');
       raise('si-draw-draft-pt');
-      raise('si-agro-structures-boundary-line');
-      raise('si-agro-structures-boundary-fill');
       raise(agroLineId);
       raise(agroFillId);
+      try {
+        const mcdaLayerIds = (map.getStyle()?.layers ?? [])
+          .map(l => l.id)
+          .filter(
+            (id): id is string =>
+              !!id && id.includes('well-suit-mcda') && !id.includes('label') && !id.includes('symbol'),
+          );
+        for (const mcdaId of mcdaLayerIds) raise(mcdaId);
+      } catch {
+        /* ignore */
+      }
     };
     sync();
     map.once('idle', sync);
@@ -15793,41 +16120,6 @@ export default function SatelliteIntelligence() {
                     />
                   </Source>
                 ) : null}
-                {wellSuitability.result && wellSuitability.heatVisible ? (
-                  <Source
-                    id="well-suit-heat-source"
-                    type="image"
-                    url={wellSuitability.result.raster.dataUrl}
-                    coordinates={wellSuitability.result.raster.coordinates as any}
-                  >
-                    <Layer
-                      id="well-suit-heat-raster"
-                      type="raster"
-                      paint={{
-                        'raster-opacity':
-                          (wellSuitability.result.raster.opacity ?? 0.78) * wellSuitability.opacity,
-                        'raster-fade-duration': 0,
-                      }}
-                    />
-                  </Source>
-                ) : null}
-                {wellSuitability.result?.streams && wellSuitability.streamsVisible ? (
-                  <Source
-                    id="well-suit-streams-source"
-                    type="geojson"
-                    data={wellSuitability.result.streams.data as any}
-                  >
-                    <Layer
-                      id="well-suit-streams-line"
-                      type="line"
-                      paint={{
-                        'line-color': '#38bdf8',
-                        'line-opacity': 0.85,
-                        'line-width': 1.2,
-                      }}
-                    />
-                  </Source>
-                ) : null}
                 {aoiFieldsMapGeoJson ? (
                   <Source id="si-aoi-fields-source" type="geojson" data={aoiFieldsMapGeoJson as any}>
                     <Layer
@@ -16019,32 +16311,6 @@ export default function SatelliteIntelligence() {
                   </Source>
                 ))
               : null}
-
-            {isMapStyleReady && activeAoiBoundaryMask ? (
-              <Source
-                id="si-agro-structures-boundary"
-                type="geojson"
-                data={activeAoiBoundaryMask as GeoJSON.FeatureCollection}
-              >
-                <Layer
-                  id="si-agro-structures-boundary-fill"
-                  type="fill"
-                  paint={{
-                    'fill-color': '#38bdf8',
-                    'fill-opacity': 0.06,
-                  }}
-                />
-                <Layer
-                  id="si-agro-structures-boundary-line"
-                  type="line"
-                  paint={{
-                    'line-color': '#38bdf8',
-                    'line-width': 2.25,
-                    'line-opacity': 0.95,
-                  }}
-                />
-              </Source>
-            ) : null}
 
             {isMapStyleReady && cropAlertSettings.enabled && cropAlertResultsOnMap.length > 0 ? (
               <SiCropAlertMapMarkersLayer
@@ -16303,12 +16569,15 @@ export default function SatelliteIntelligence() {
             aoiFields={aoiFields}
             committedAoiGeometry={drawnGeometry?.geometry ?? null}
             defaultLayerId={wmsLayerSelectValue}
-            analysisDate={imageryDateAutoFollow ? localIsoDate() : localIsoDate(selectedDate)}
+            analysisDate={imageryDateAutoFollow ? sentinelFetchDate : localIsoDate(selectedDate)}
+            imageryDateAutoFollow={imageryDateAutoFollow}
             onMapDateFromChart={iso => {
               setImageryDateAutoFollow(false);
               applySelectedDate(dateFromLocalIso(iso));
             }}
             mapboxToken={mapboxToken}
+            onStormMapOverlayChange={setTsWeatherStormOverlay}
+            stormOverlayDismissEpoch={tsWeatherStormDismissEpoch}
           />
 
           <SiGoToXyBar
@@ -17066,7 +17335,11 @@ export default function SatelliteIntelligence() {
             geoAiFloatingOpen={geoAiFloatingOpen}
             onGeoAiFloatingRailToggle={onGeoAiFloatingRailToggle}
             onMapToolboxAddGisLayerAction={handleMapToolboxAddGisLayerAction}
-            onMapToolboxAddGisLayerPrimaryClick={() => openAddLayerModal({ tab: 'giscontent', wizard: 'home' })}
+            onMapToolboxAddGisLayerPrimaryClick={() => {
+              if (isAddLayerModalOpen) closeAddLayerModal();
+              else openAddLayerModal({ tab: 'giscontent', wizard: 'home' });
+            }}
+            mapToolboxAddGisPanelOpen={isAddLayerModalOpen}
             mapToolboxBrowseLayersPanel={mapToolboxBrowseLayersPanel}
             mapToolboxLayerLiveLegend={mapToolboxLayerLiveLegend}
             imageryTimeSeriesOpen={imageryTimeSeriesOpen}
@@ -17538,12 +17811,21 @@ export default function SatelliteIntelligence() {
                     {expandedEnvSection === 'crop-classification' && (
                       <div className="si-env-section-card si-rs-panel--glass">
                         <SiPrithviCropToolPanel
-                          aoiGeometry={drawnGeometry?.geometry ?? null}
+                          aoiGeometry={
+                            (cropClassAoiGeometry?.geometry ?? drawnGeometry?.geometry ?? null) as
+                              | GeoJSON.Polygon
+                              | GeoJSON.MultiPolygon
+                              | null
+                          }
                           hasSelfInference={cropAiSelfInference}
                           dataProvider={cropAiDataProvider}
                           onDataProviderChange={handleCropAiDataProviderChange}
-                          mode={cropAiMode}
-                          onModeChange={setCropAiMode}
+                          dataset={cropAiDataset}
+                          onDatasetChange={setCropAiDataset}
+                          analysisMode={cropAiAnalysisMode}
+                          onAnalysisModeChange={setCropAiAnalysisMode}
+                          unsupervisedClassCount={cropAiUnsupervisedClassCount}
+                          onUnsupervisedClassCountChange={setCropAiUnsupervisedClassCount}
                           trainingSamples={cropAiTrainingSamples}
                           onTrainingSamplesChange={setCropAiTrainingSamples}
                           samplesValid={cropAiSamplesValidation.valid}
@@ -17551,22 +17833,39 @@ export default function SatelliteIntelligence() {
                           onSeasonChange={setCropAiSeason}
                           job={cropAiJob}
                           isRunning={cropAiRunning}
+                          isFetchingSentinelScenes={isFetchingSentinelScenes}
                           onPickAoi={handleCropAiPickAoi}
                           onRunAoi={handleCropAiRunAoi}
-                          onRunChip={handleCropAiRunChip}
                           onCancel={handleCropAiCancel}
                           onAddToMap={() => void addCropAiPredictionLayer(cropAiJob)}
                           onAddConfidenceToMap={() => void addCropAiConfidenceLayer(cropAiJob)}
+                          imagePlacementBounds={(() => {
+                            try {
+                              const mapForBounds = mapRef.current?.getMap
+                                ? mapRef.current.getMap()
+                                : mapRef.current;
+                              const b = mapForBounds?.getBounds?.();
+                              if (!b) return undefined;
+                              return {
+                                west: b.getWest(),
+                                south: b.getSouth(),
+                                east: b.getEast(),
+                                north: b.getNorth(),
+                              };
+                            } catch {
+                              return undefined;
+                            }
+                          })()}
                         />
                       </div>
                     )}
                     {expandedEnvSection === 'remote-sensing' && (
                       <RemoteSensingToolboxPanel
                         provider={remoteSensingProvider}
-                        onProviderChange={setRemoteSensingProvider}
+                        onProviderChange={handleRemoteSensingProviderChange}
                         collection={remoteSensingCollection}
                         onCollectionChange={setRemoteSensingCollection}
-                        wmsDate={wmsDate}
+                        wmsDate={imageryDateAutoFollow ? sentinelFetchDate : wmsDate}
                         onWmsDateChange={v => {
                           setImageryDateAutoFollow(false);
                           saveSentinelImageryDatePrefsForAoi(sentinelImageryAoiKey, {
@@ -17879,59 +18178,62 @@ export default function SatelliteIntelligence() {
           })()
         : null}
       {isAddLayerModalOpen ? (
-        <div
-          className={`gis-modal-overlay si-add-layer-gis-overlay${siAddLayerWizard === 'tabs' ? ' gis-map-add-layer-overlay' : ''}`}
-          role="presentation"
-          onMouseDown={e => {
-            if (e.target === e.currentTarget) closeAddLayerModal();
-          }}
+        <SiAddSourceAnchoredPanel
+          open={isAddLayerModalOpen}
+          onClose={closeAddLayerModal}
+          wide={siAddLayerWizard !== 'home'}
+          ariaLabelledBy="si-layer-modal-title"
+          panelClassName={`si-add-source-modal si-add-source-modal--anchored ddb-add-source-modal si-add-source-modal--compact${
+            siAddLayerWizard === 'home' ? ' ddb-add-source-modal--home' : ''
+          }${siAddLayerWizard === 'tabs' ? ' si-add-source-modal--tabs' : ''}`}
         >
-          <div
-            className={`si-add-source-modal gis-modal gis-modal-compact ddb-add-source-modal si-add-source-modal--lux${siAddLayerWizard === 'home' ? ' ddb-add-source-modal--home' : ''}`}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="si-layer-modal-title"
-            onMouseDown={e => e.stopPropagation()}
-          >
             {siAddLayerWizard === 'home' ? (
               <>
-                <div className="gis-modal-compact-hero">
-                  <h2 className="gis-modal-compact-hero-title" id="si-layer-modal-title">
-                    Add Source Data
+                <div className="si-add-source-anchored__head">
+                  <h2 className="si-add-source-anchored__title" id="si-layer-modal-title">
+                    Add source
                   </h2>
-                  <p className="gis-modal-compact-hero-lead">Choose a source to add layers to this map.</p>
+                  <button
+                    type="button"
+                    className="si-add-source-anchored__close"
+                    onClick={closeAddLayerModal}
+                    aria-label="Close"
+                  >
+                    <i className="fa-solid fa-xmark" aria-hidden />
+                  </button>
                 </div>
+                <p className="si-add-source-anchored__lead">Choose a data source for this map.</p>
                 <div className="si-add-source-options" role="radiogroup" aria-label="Layer source type">
                   {[
                     {
                       id: 'giscontent',
                       tab: 'giscontent' as AddLayerTab,
-                      title: 'Select from GIS Content',
-                      sub: 'Layers saved in GIS Content (this browser).',
+                      title: 'GIS Content',
+                      sub: 'Saved layers in this browser.',
                       icon: 'fa-solid fa-layer-group',
                       iconStyle: { background: '#ede9fe', color: '#7c3aed' },
                     },
                     {
                       id: 'arcgis',
                       tab: 'arcgis' as AddLayerTab,
-                      title: 'ArcGIS Server layer URL',
-                      sub: 'Connect to a feature service and pick a layer.',
+                      title: 'ArcGIS URL',
+                      sub: 'Feature service layer URL.',
                       icon: 'fa-solid fa-link',
                       iconStyle: { background: '#e0e7ff', color: '#4f46e5' },
                     },
                     {
                       id: 'upload',
                       tab: 'upload' as AddLayerTab,
-                      title: 'Upload a file',
-                      sub: 'GeoJSON, KML, KMZ, Shapefile, CSV, GeoTIFF, PNG / JPG, IFC (.ifc), and more.',
+                      title: 'Upload file',
+                      sub: 'GeoJSON, SHP, KML, GeoTIFF…',
                       icon: 'fa-solid fa-file-arrow-up',
                       iconStyle: { background: '#d1fae5', color: '#059669' },
                     },
                     {
                       id: 'ifc',
                       tab: 'upload' as AddLayerTab,
-                      title: 'IFC / BIM model',
-                      sub: 'Import IFC 2├ù3 or IFC4 as discipline BIM layers on the map.',
+                      title: 'IFC / BIM',
+                      sub: 'IFC 2×3 or IFC4 model.',
                       icon: 'fa-solid fa-building',
                       iconStyle: { background: '#ffedd5', color: '#ea580c' },
                     },
@@ -17939,15 +18241,15 @@ export default function SatelliteIntelligence() {
                       id: 'url',
                       tab: 'url' as AddLayerTab,
                       title: 'From URL',
-                      sub: 'Remote GeoJSON, ZIP, or KML.',
+                      sub: 'Remote GeoJSON, KML, ZIP.',
                       icon: 'fa-solid fa-globe',
                       iconStyle: { background: '#e0f2fe', color: '#0284c7' },
                     },
                     {
                       id: 'raster',
                       tab: 'raster' as AddLayerTab,
-                      title: 'Raster path / URL',
-                      sub: 'GeoTIFF, image service, or tile endpoint.',
+                      title: 'Raster URL',
+                      sub: 'GeoTIFF or image tiles.',
                       icon: 'fa-regular fa-image',
                       iconStyle: { background: '#fce7f3', color: '#db2777' },
                     },
@@ -17955,7 +18257,7 @@ export default function SatelliteIntelligence() {
                       id: 'database',
                       tab: 'database' as AddLayerTab,
                       title: 'Get Data',
-                      sub: 'Excel, CSV, SQL, Web, OData sources.',
+                      sub: 'Excel, CSV, SQL, OData.',
                       icon: 'fa-solid fa-database',
                       iconStyle: { background: '#ede9fe', color: '#7c3aed' },
                     },
@@ -17970,11 +18272,7 @@ export default function SatelliteIntelligence() {
                         else setSiAddLayerWizard('source-forms');
                       }}
                     >
-                      <span
-                        className="si-add-source-option-icon"
-                        aria-hidden
-                        style={{ background: '#dcfce7', color: '#16a34a' }}
-                      >
+                      <span className="si-add-source-option-icon" aria-hidden>
                         <i className={opt.icon} />
                       </span>
                       <span className="si-add-source-option-main">
@@ -17985,17 +18283,12 @@ export default function SatelliteIntelligence() {
                     </button>
                   ))}
                 </div>
-                <div className="gis-modal-footer si-add-source-footer">
-                  <button type="button" className="gis-link-btn" onClick={closeAddLayerModal}>
-                    Cancel
-                  </button>
-                </div>
               </>
             ) : siAddLayerWizard === 'gis-list' ? (
               <>
                 <div className="ddb-add-source-modal__head">
                   <div className="gis-modal-compact-title" id="si-layer-modal-title">
-                    Add Source Data
+                    GIS Content
                   </div>
                   <button type="button" className="ddb-add-source-back" onClick={goSiAddLayerWizardHome}>
                     <i className="fa-solid fa-arrow-left" aria-hidden /> All options
@@ -18543,19 +18836,21 @@ export default function SatelliteIntelligence() {
                 </button>
               </div>
             ) : null}
-          </div>
-        </div>
+        </SiAddSourceAnchoredPanel>
       ) : null}
       {activeLayerActionDialog && activeDialogLayer ? (
         <div
-          className="si-layer-action-modal-overlay"
+          className={
+            'si-layer-action-modal-overlay' +
+            (activeLayerActionDialog.mode === 'table' ? ' si-layer-action-modal-overlay--gis-attr' : '')
+          }
           role="dialog"
           aria-modal="true"
           aria-labelledby="si-layer-action-title"
           onMouseDown={e => {
             if (e.target === e.currentTarget) {
               if (activeLayerActionDialog.mode === 'symbology') cancelSiSymbologyDialog();
-              else setActiveLayerActionDialog(null);
+              else if (activeLayerActionDialog.mode !== 'table') setActiveLayerActionDialog(null);
             }
           }}
         >
@@ -18563,7 +18858,18 @@ export default function SatelliteIntelligence() {
             className={
               activeLayerActionDialog.mode === 'symbology'
                 ? 'si-layer-action-modal gis-modal gis-modal-styles'
-                : `si-layer-action-modal${activeLayerActionDialog.mode === 'table' ? ' si-layer-action-modal--gis-table' : ''}`
+                : `si-layer-action-modal${activeLayerActionDialog.mode === 'table' ? ' si-layer-action-modal--gis-table' : ''}${
+                    activeLayerActionDialog.mode === 'table' && tableWinMinimized ? ' is-minimized' : ''
+                  }${activeLayerActionDialog.mode === 'table' && tableWinMaximized ? ' is-maximized' : ''}${
+                    activeLayerActionDialog.mode === 'table' && (tableWinOffset.x || tableWinOffset.y)
+                      ? ' is-dragged'
+                      : ''
+                  }`
+            }
+            style={
+              activeLayerActionDialog.mode === 'table' && !tableWinMinimized && !tableWinMaximized
+                ? { transform: `translate(${tableWinOffset.x}px, ${tableWinOffset.y}px)` }
+                : undefined
             }
             onMouseDown={e => e.stopPropagation()}
           >
@@ -18586,20 +18892,66 @@ export default function SatelliteIntelligence() {
                   <i className="fa-solid fa-xmark" aria-hidden="true" />
                 </button>
               </div>
+            ) : activeLayerActionDialog.mode === 'table' ? (
+              <div
+                className="si-gis-attr-win__titlebar"
+                onPointerDown={onTableWinTitlePointerDown}
+                onPointerMove={onTableWinTitlePointerMove}
+                onPointerUp={onTableWinTitlePointerUp}
+              >
+                <AgroCloudMark size={18} className="si-gis-attr-win__mark" title="Table" />
+                <div className="si-gis-attr-win__title-wrap">
+                  <h3 className="si-gis-attr-win__title" id="si-layer-action-title">
+                    {activeDialogLayer.name}
+                  </h3>
+                  <span className="si-gis-attr-win__subtitle">Attribute table</span>
+                </div>
+                <span className="si-gis-attr-win__records">
+                  {activeTableFeatures.length} record{activeTableFeatures.length === 1 ? '' : 's'}
+                </span>
+                <div className="si-gis-attr-win__winbtns">
+                  <button
+                    type="button"
+                    className="si-gis-attr-win__winbtn"
+                    onClick={() => setTableWinMinimized(v => !v)}
+                    aria-label={tableWinMinimized ? 'Restore table' : 'Minimize table'}
+                    title={tableWinMinimized ? 'Restore' : 'Minimize'}
+                  >
+                    <i className="fa-solid fa-minus" aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    className="si-gis-attr-win__winbtn"
+                    onClick={() => {
+                      if (tableWinMinimized) {
+                        setTableWinMinimized(false);
+                        return;
+                      }
+                      setTableWinMaximized(v => !v);
+                      if (!tableWinMaximized) setTableWinOffset({ x: 0, y: 0 });
+                    }}
+                    aria-label={tableWinMaximized ? 'Restore table size' : 'Maximize table'}
+                    title={tableWinMaximized ? 'Restore' : 'Maximize'}
+                  >
+                    <i
+                      className={`fa-regular ${tableWinMaximized ? 'fa-window-restore' : 'fa-square'}`}
+                      aria-hidden
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    className="si-gis-attr-win__winbtn si-gis-attr-win__winbtn--close"
+                    onClick={() => setActiveLayerActionDialog(null)}
+                    aria-label="Close table"
+                    title="Close"
+                  >
+                    <i className="fa-solid fa-xmark" aria-hidden />
+                  </button>
+                </div>
+              </div>
             ) : (
               <div className="si-layer-action-modal-header">
-                <h3 id="si-layer-action-title">
-                  {activeLayerActionDialog.mode === 'table' ? (
-                    <>
-                      <span className="si-layer-action-modal-table-title" aria-hidden>
-                        <AgroCloudMark size={28} className="gis-table-browser-mark" title="Table Browser" />
-                      </span>
-                      <span>Table Browser ΓÇö {activeDialogLayer.name}</span>
-                    </>
-                  ) : (
-                    `Legend - ${activeDialogLayer.name}`
-                  )}
-                </h3>
+                <h3 id="si-layer-action-title">{`Legend - ${activeDialogLayer.name}`}</h3>
                 <button type="button" className="si-layer-action-close" onClick={() => setActiveLayerActionDialog(null)} aria-label="Close layer dialog">
                   <i className="fa-solid fa-xmark" />
                 </button>
@@ -18608,219 +18960,168 @@ export default function SatelliteIntelligence() {
             <div className={activeLayerActionDialog.mode === 'symbology' ? 'gis-modal-body' : 'si-layer-action-modal-body'}>
               {activeLayerActionDialog.mode === 'table' ? (
                 activeLayerColumns.length ? (
-                  <div
-                    className={`si-layer-action-table-layout si-layer-action-table-layout--gis${tableToolsCollapsed ? ' si-layer-action-table-layout--tools-collapsed' : ''}`}
-                  >
-                    <aside
-                      className={`gis-workspace-sidebar gis-table-dock-sidebar si-layer-action-table-tools${
-                        tableToolsCollapsed ? ' collapsed' : ''
-                      }`}
-                      aria-label="GIS workspace ΓÇö table tools, search, and filters"
-                    >
-                      <div className="gis-workspace-sidebar__scope" aria-hidden={tableToolsCollapsed ? true : undefined}>
-                        <AgroCloudMark size={22} className="gis-table-browser-mark" title="Table Browser" />
-                        <div className="gis-workspace-sidebar__scope-text">
-                          <span className="gis-workspace-sidebar__scope-label">Table Browser</span>
-                          <span className="gis-workspace-sidebar__scope-hint">Attribute workspace</span>
+                  <div className="si-gis-attr-win">
+                    {!tableWinMinimized ? (
+                      <>
+                        <div className="si-gis-attr-win__toolbar" role="toolbar" aria-label="Table tools">
+                          <button
+                            className="si-gis-attr-win__tool"
+                            type="button"
+                            onClick={() => void zoomSiTableToSelection()}
+                            disabled={tableSelectedKeys.size === 0}
+                            title="Zoom to selection"
+                          >
+                            <i className="fa-solid fa-magnifying-glass-plus" aria-hidden />
+                          </button>
+                          <button className="si-gis-attr-win__tool" type="button" onClick={siTableGoHome} title="Home">
+                            <i className="fa-solid fa-house" aria-hidden />
+                          </button>
+                          <span className="si-gis-attr-win__toolsep" aria-hidden />
+                          <button
+                            className="si-gis-attr-win__tool"
+                            type="button"
+                            onClick={() => setTableSelectedKeys(new Set())}
+                            disabled={tableSelectedKeys.size === 0}
+                            title="Clear selection"
+                          >
+                            <i className="fa-solid fa-eraser" aria-hidden />
+                          </button>
+                          <button
+                            className="si-gis-attr-win__tool"
+                            type="button"
+                            onClick={() => setTableShowSelectedOnly(true)}
+                            disabled={tableSelectedKeys.size === 0}
+                            title="Show selected"
+                          >
+                            <i className="fa-solid fa-filter" aria-hidden />
+                          </button>
+                          <button
+                            className="si-gis-attr-win__tool"
+                            type="button"
+                            onClick={() => setTableShowSelectedOnly(false)}
+                            disabled={!tableShowSelectedOnly}
+                            title="Show all"
+                          >
+                            <i className="fa-solid fa-list" aria-hidden />
+                          </button>
+                          <span className="si-gis-attr-win__toolsep" aria-hidden />
+                          <button
+                            className="si-gis-attr-win__tool"
+                            type="button"
+                            onClick={() => void refreshArcgisLayer(activeDialogLayer)}
+                            disabled={
+                              activeDialogLayer.source !== 'arcgis' ||
+                              !activeDialogLayer.sourceUrl?.trim() ||
+                              syncingLayerId === activeDialogLayer.id
+                            }
+                            title="Refresh"
+                          >
+                            <i className="fa-solid fa-rotate-right" aria-hidden />
+                          </button>
+                          <span className="si-gis-attr-win__toolsep" aria-hidden />
+                          <button className="si-gis-attr-win__tool" type="button" onClick={exportTableAsCsv} title="Export CSV">
+                            <i className="fa-solid fa-file-export" aria-hidden />
+                          </button>
+                          <button className="si-gis-attr-win__tool" type="button" onClick={saveSiTableFormat} title="Save format">
+                            <i className="fa-solid fa-floppy-disk" aria-hidden />
+                          </button>
+                          <button className="si-gis-attr-win__tool" type="button" onClick={applySiTableFormat} title="Apply format">
+                            <i className="fa-solid fa-layer-group" aria-hidden />
+                          </button>
                         </div>
-                      </div>
-                      <div className="gis-workspace-sidebar__tools" role="toolbar" aria-label="Table actions">
-                        <button
-                          className="gis-table-toolbtn"
-                          type="button"
-                          onClick={() => void zoomSiTableToSelection()}
-                          disabled={tableSelectedKeys.size === 0}
-                          title="Zoom to selection"
-                        >
-                          <i className="fa-solid fa-magnifying-glass-plus" aria-hidden />
-                          <span className="gis-table-tooltext">Zoom to selection</span>
-                        </button>
-                        <button className="gis-table-toolbtn" type="button" onClick={siTableGoHome} title="Home">
-                          <i className="fa-solid fa-house" aria-hidden />
-                          <span className="gis-table-tooltext">Home</span>
-                        </button>
-                        <div className="gis-table-toolsep" role="separator" />
-                        <button
-                          className="gis-table-toolbtn"
-                          type="button"
-                          onClick={() => setTableSelectedKeys(new Set())}
-                          disabled={tableSelectedKeys.size === 0}
-                          title="Clear selection"
-                        >
-                          <i className="fa-solid fa-eraser" aria-hidden />
-                          <span className="gis-table-tooltext">Clear selection</span>
-                        </button>
-                        <button
-                          className="gis-table-toolbtn"
-                          type="button"
-                          onClick={() => setTableShowSelectedOnly(true)}
-                          disabled={tableSelectedKeys.size === 0}
-                          title="Show selected"
-                        >
-                          <i className="fa-solid fa-filter" aria-hidden />
-                          <span className="gis-table-tooltext">Show selected</span>
-                        </button>
-                        <button
-                          className="gis-table-toolbtn"
-                          type="button"
-                          onClick={() => setTableShowSelectedOnly(false)}
-                          disabled={!tableShowSelectedOnly}
-                          title="Show all"
-                        >
-                          <i className="fa-solid fa-list" aria-hidden />
-                          <span className="gis-table-tooltext">Show all</span>
-                        </button>
-                        <div className="gis-table-toolsep" role="separator" />
-                        <button
-                          className="gis-table-toolbtn"
-                          type="button"
-                          onClick={() => void refreshArcgisLayer(activeDialogLayer)}
-                          disabled={
-                            activeDialogLayer.source !== 'arcgis' ||
-                            !activeDialogLayer.sourceUrl?.trim() ||
-                            syncingLayerId === activeDialogLayer.id
-                          }
-                          title="Refresh"
-                        >
-                          <i className="fa-solid fa-rotate-right" aria-hidden />
-                          <span className="gis-table-tooltext">{syncingLayerId === activeDialogLayer.id ? 'RefreshingΓÇª' : 'Refresh'}</span>
-                        </button>
-                        <div className="gis-table-toolsep" role="separator" />
-                        <button className="gis-table-toolbtn" type="button" onClick={exportTableAsCsv} title="Export CSV">
-                          <i className="fa-solid fa-file-export" aria-hidden />
-                          <span className="gis-table-tooltext">Export CSV</span>
-                        </button>
-                        <button className="gis-table-toolbtn" type="button" onClick={saveSiTableFormat} title="Save format">
-                          <i className="fa-solid fa-floppy-disk" aria-hidden />
-                          <span className="gis-table-tooltext">Save format</span>
-                        </button>
-                        <button className="gis-table-toolbtn" type="button" onClick={applySiTableFormat} title="Apply format">
-                          <i className="fa-solid fa-layer-group" aria-hidden />
-                          <span className="gis-table-tooltext">Apply format</span>
-                        </button>
-                      </div>
-                      <div className="gis-workspace-sidebar__rich" role="region" aria-label="Table search and filters">
-                        <details className="gis-workspace-acc">
-                          <summary className="gis-workspace-acc__summary">Search &amp; browse</summary>
-                          <div className="gis-workspace-acc__body gis-workspace-acc__body--stack">
-                            <div className="gis-table-controls gis-table-controls--workspace">
-                              <label className="gis-table-domain-toggle">
-                                <span>Search mode</span>
-                                <select
-                                  value={tableSearchMode}
-                                  onChange={e => setTableSearchMode(e.target.value as SiTableSearchMode)}
-                                  aria-label="Table search mode"
-                                >
-                                  <option value="description">Description</option>
-                                  <option value="code">Code</option>
-                                  <option value="both">Both</option>
-                                </select>
-                              </label>
-                              <label className="gis-table-search">
-                                <i className="fa-solid fa-magnifying-glass" aria-hidden />
-                                <input
-                                  value={tableSearchText}
-                                  onChange={e => setTableSearchText(e.target.value)}
-                                  placeholder={
-                                    tableSearchMode === 'code'
-                                      ? 'Search codes...'
-                                      : tableSearchMode === 'both'
-                                        ? 'Search descriptions or codes...'
-                                        : 'Search descriptions...'
-                                  }
-                                  aria-label="Search table"
-                                />
-                              </label>
-                            </div>
-                          </div>
-                        </details>
-                        <details className="gis-workspace-acc">
-                          <summary className="gis-workspace-acc__summary">Field filter</summary>
-                          <div className="gis-workspace-acc__body gis-workspace-acc__body--stack">
-                            <div className="gis-table-advanced-controls gis-table-advanced-controls--workspace" aria-label="Advanced table filter">
-                              <label>
-                                <span>Filter field</span>
-                                <select value={tableFilterField} onChange={e => setTableFilterField(e.target.value)}>
-                                  <option value="">All records</option>
-                                  {orderedSiTableFields.map(f => (
-                                    <option key={f} value={f}>
-                                      {f}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-                              <label>
-                                <span>Rule</span>
-                                <select
-                                  value={tableFilterOperator}
-                                  onChange={e => setTableFilterOperator(e.target.value as SiTableFilterOperator)}
-                                >
-                                  <option value="contains">Contains</option>
-                                  <option value="equals">Equals</option>
-                                  <option value="not_equals">Not equals</option>
-                                  <option value="empty">Is empty</option>
-                                  <option value="not_empty">Is not empty</option>
-                                </select>
-                              </label>
-                              <label>
-                                <span>Value</span>
-                                <input
-                                  value={tableFilterValue}
-                                  onChange={e => setTableFilterValue(e.target.value)}
-                                  disabled={tableFilterOperator === 'empty' || tableFilterOperator === 'not_empty'}
-                                  placeholder="Filter value"
-                                />
-                              </label>
-                              <button
-                                className="gis-table-filter-clear"
-                                type="button"
-                                onClick={() => {
-                                  setTableFilterField('');
-                                  setTableFilterOperator('contains');
-                                  setTableFilterValue('');
-                                }}
+                        <div className="si-gis-attr-win__searchbar">
+                          <label className="si-gis-attr-win__search">
+                            <i className="fa-solid fa-magnifying-glass" aria-hidden />
+                            <input
+                              value={tableSearchText}
+                              onChange={e => setTableSearchText(e.target.value)}
+                              placeholder="Search attributes…"
+                              aria-label="Search table"
+                            />
+                          </label>
+                          <select
+                            className="si-gis-attr-win__searchmode"
+                            value={tableSearchMode}
+                            onChange={e => setTableSearchMode(e.target.value as SiTableSearchMode)}
+                            aria-label="Search mode"
+                          >
+                            <option value="description">Description</option>
+                            <option value="code">Code</option>
+                            <option value="both">Both</option>
+                          </select>
+                          <button
+                            type="button"
+                            className={`si-gis-attr-win__filterbtn${tableWinFiltersOpen ? ' is-on' : ''}`}
+                            onClick={() => setTableWinFiltersOpen(v => !v)}
+                            aria-pressed={tableWinFiltersOpen}
+                            title="Field filter"
+                          >
+                            <i className="fa-solid fa-sliders" aria-hidden />
+                          </button>
+                        </div>
+                        {tableWinFiltersOpen ? (
+                          <div className="si-gis-attr-win__filters" aria-label="Advanced table filter">
+                            <label>
+                              <span>Field</span>
+                              <select value={tableFilterField} onChange={e => setTableFilterField(e.target.value)}>
+                                <option value="">All records</option>
+                                {orderedSiTableFields.map(f => (
+                                  <option key={f} value={f}>
+                                    {f}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label>
+                              <span>Rule</span>
+                              <select
+                                value={tableFilterOperator}
+                                onChange={e => setTableFilterOperator(e.target.value as SiTableFilterOperator)}
                               >
-                                Clear filter
-                              </button>
-                            </div>
+                                <option value="contains">Contains</option>
+                                <option value="equals">Equals</option>
+                                <option value="not_equals">Not equals</option>
+                                <option value="empty">Is empty</option>
+                                <option value="not_empty">Is not empty</option>
+                              </select>
+                            </label>
+                            <label>
+                              <span>Value</span>
+                              <input
+                                value={tableFilterValue}
+                                onChange={e => setTableFilterValue(e.target.value)}
+                                disabled={tableFilterOperator === 'empty' || tableFilterOperator === 'not_empty'}
+                                placeholder="Filter value"
+                              />
+                            </label>
+                            <button
+                              className="si-gis-attr-win__filterclear"
+                              type="button"
+                              onClick={() => {
+                                setTableFilterField('');
+                                setTableFilterOperator('contains');
+                                setTableFilterValue('');
+                              }}
+                            >
+                              Clear
+                            </button>
                           </div>
-                        </details>
-                        <details className="gis-workspace-acc">
-                          <summary className="gis-workspace-acc__summary">Map &amp; analysis hub</summary>
-                          <div className="gis-workspace-acc__body gis-workspace-acc__body--prose">
-                            <p>
-                              Layer styling, pop-ups, GeoAI, and map tools use the main Satellite Intelligence panels so they are not
-                              duplicated in this table workspace.
-                            </p>
-                          </div>
-                        </details>
-                      </div>
-                      <button
-                        className="gis-table-toolbtn gis-table-toolbtn--icon-only gis-workspace-sidebar__collapse"
-                        type="button"
-                        onClick={() => setTableToolsCollapsed(v => !v)}
-                        aria-expanded={!tableToolsCollapsed}
-                        aria-label={tableToolsCollapsed ? 'Expand workspace' : 'Collapse workspace'}
-                        title={tableToolsCollapsed ? 'Expand workspace' : 'Collapse workspace'}
-                      >
-                        <i className={tableToolsCollapsed ? 'fa-solid fa-angles-right' : 'fa-solid fa-angles-left'} aria-hidden />
-                      </button>
-                    </aside>
-                    <div className="si-layer-action-table-main gis-layer-table-wrap gis-table-dock-table">
-                      <div className="gis-table-dock-header si-table-modal-subheader">
-                        <div className="gis-table-dock-meta si-table-modal-meta">
-                          {activeTableFeatures.length} record{activeTableFeatures.length === 1 ? '' : 's'}, {tableSelectedKeys.size} selected
+                        ) : null}
+                        <div className="si-gis-attr-win__status">
+                          <span>
+                            {tableShowSelectedOnly
+                              ? `Selected: ${siFilteredTableFeatures.length}`
+                              : `Showing ${siFilteredTableFeatures.length}`}{' '}
+                            of {activeTableFeatures.length}
+                          </span>
+                          <span>{tableSelectedKeys.size} selected</span>
+                          {activeTableFeatures.length >= SI_TABLE_MAX_FEATURES
+                            ? ` · first ${SI_TABLE_MAX_FEATURES} loaded`
+                            : null}
                         </div>
-                      </div>
-                      <div className="gis-layer-table-meta gis-layer-table-meta--table-only">
-                        <div className="gis-layer-table-metatext">
-                          {tableShowSelectedOnly ? `Showing selected: ${siFilteredTableFeatures.length}` : `Showing ${siFilteredTableFeatures.length}`}{' '}
-                          of {activeTableFeatures.length} feature(s)
-                          {activeTableFeatures.length >= SI_TABLE_MAX_FEATURES ? ` (first ${SI_TABLE_MAX_FEATURES} loaded)` : ''}
-                        </div>
-                      </div>
-                      <div className="si-layer-action-table-wrap">
-                        <table className="gis-layer-table si-layer-action-table">
+                        <div className="si-gis-attr-win__grid">
+                          <div className="si-layer-action-table-wrap">
+                            <table className="gis-layer-table si-layer-action-table">
                           <thead>
                             <tr>
                               <th className="gis-layer-table-select">
@@ -18861,6 +19162,10 @@ export default function SatelliteIntelligence() {
                                   key={f}
                                   draggable
                                   className={draggingSiTableField === f ? 'gis-table-column-dragging' : undefined}
+                                  style={{
+                                    width: siTableColWidths[f] ? `${siTableColWidths[f]}px` : undefined,
+                                    minWidth: siTableColWidths[f] ? `${siTableColWidths[f]}px` : '88px',
+                                  }}
                                   title="Drag to reorder column"
                                   onDragStart={e => {
                                     setDraggingSiTableField(f);
@@ -18902,6 +19207,13 @@ export default function SatelliteIntelligence() {
                                       </button>
                                     </span>
                                   </span>
+                                  <span
+                                    className="si-gis-attr-col-resize"
+                                    role="separator"
+                                    aria-orientation="vertical"
+                                    aria-label={`Resize ${f} column`}
+                                    onPointerDown={e => startSiTableColResize(f, e)}
+                                  />
                                 </th>
                               ))}
                               <th className="gis-layer-table-actions" aria-label="Actions" />
@@ -19007,8 +19319,10 @@ export default function SatelliteIntelligence() {
                             })}
                           </tbody>
                         </table>
-                      </div>
-                    </div>
+                          </div>
+                        </div>
+                      </>
+                    ) : null}
                   </div>
                 ) : (
                   <p className="si-layer-action-empty">No attributes found for this layer.</p>

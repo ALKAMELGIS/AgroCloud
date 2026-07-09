@@ -38,14 +38,37 @@ export function RemoteSensingLayerSelect({
   'aria-label': ariaLabel = 'Layer',
 }: RemoteSensingLayerSelectProps) {
   const listboxId = useId()
+  const searchId = useId()
   const rootRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
 
   const selected = useMemo(() => findSelectedOption(groups, value), [groups, value])
   const selectedLabel = selected?.label ?? value
 
+  const filteredGroups = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return groups
+    return groups
+      .map(group => {
+        const groupMatch = group.label.toLowerCase().includes(q)
+        const options = group.options.filter(opt => {
+          if (groupMatch) return true
+          const hay = [opt.label, opt.id, opt.scientificName ?? ''].join(' ').toLowerCase()
+          return hay.includes(q)
+        })
+        return options.length ? { ...group, options } : null
+      })
+      .filter((g): g is RemoteSensingLayerSelectGroup => g != null)
+  }, [groups, query])
+
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      setQuery('')
+      return
+    }
+    const t = window.setTimeout(() => searchRef.current?.focus(), 0)
     const onPointerDown = (event: MouseEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
     }
@@ -55,6 +78,7 @@ export function RemoteSensingLayerSelect({
     document.addEventListener('mousedown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
     return () => {
+      window.clearTimeout(t)
       document.removeEventListener('mousedown', onPointerDown)
       document.removeEventListener('keydown', onKeyDown)
     }
@@ -102,33 +126,51 @@ export function RemoteSensingLayerSelect({
 
       {open ? (
         <div id={listboxId} className="si-rs-layer-select__menu" role="listbox" aria-label={ariaLabel}>
-          {groups.map(group => (
-            <div key={group.id} className="si-rs-layer-select__group">
-              <div className="si-rs-layer-select__group-label">{group.label}</div>
-              {group.options.map(opt => {
-                const active = opt.id.toUpperCase() === value.trim().toUpperCase()
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    role="option"
-                    aria-selected={active}
-                    className={`si-rs-layer-select__option${active ? ' is-active' : ''}`}
-                    title={layerOptionTitle(opt)}
-                    onClick={() => {
-                      onChange(opt.id)
-                      setOpen(false)
-                    }}
-                  >
-                    <span className="si-rs-layer-select__abbr">{opt.label}</span>
-                    {opt.scientificName ? (
-                      <span className="si-rs-layer-select__science">{opt.scientificName}</span>
-                    ) : null}
-                  </button>
-                )
-              })}
-            </div>
-          ))}
+          <div className="si-rs-layer-select__search-wrap">
+            <i className="fa-solid fa-magnifying-glass si-rs-layer-select__search-icon" aria-hidden />
+            <input
+              ref={searchRef}
+              id={searchId}
+              type="search"
+              className="si-rs-layer-select__search"
+              placeholder="Search layers…"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => e.stopPropagation()}
+              aria-label="Search layers"
+            />
+          </div>
+          {filteredGroups.length ? (
+            filteredGroups.map(group => (
+              <div key={group.id} className="si-rs-layer-select__group">
+                <div className="si-rs-layer-select__group-label">{group.label}</div>
+                {group.options.map(opt => {
+                  const active = opt.id.toUpperCase() === value.trim().toUpperCase()
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      className={`si-rs-layer-select__option${active ? ' is-active' : ''}`}
+                      title={layerOptionTitle(opt)}
+                      onClick={() => {
+                        onChange(opt.id)
+                        setOpen(false)
+                      }}
+                    >
+                      <span className="si-rs-layer-select__abbr">{opt.label}</span>
+                      {opt.scientificName ? (
+                        <span className="si-rs-layer-select__science">{opt.scientificName}</span>
+                      ) : null}
+                    </button>
+                  )
+                })}
+              </div>
+            ))
+          ) : (
+            <p className="si-rs-layer-select__empty">No layers match &ldquo;{query.trim()}&rdquo;</p>
+          )}
         </div>
       ) : null}
     </div>

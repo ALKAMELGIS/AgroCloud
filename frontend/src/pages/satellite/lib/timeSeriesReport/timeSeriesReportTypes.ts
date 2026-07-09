@@ -3,6 +3,7 @@ import type { ImageryTimeSeriesLayerSeries } from '../../../dashboards/agroCloud
 import type { EstimatedWaterLossPoint } from './estimatedWaterLossTimeline'
 import type { TimeSeriesExecutiveSummary } from './timeSeriesReportExecutive'
 import type { VegetationCoveragePoint } from './vegetationCoverageTimeline'
+import type { TimeSeriesWeatherBlock } from './timeSeriesWeatherTimeline'
 
 export type TimeSeriesTrendLabel = 'Increasing' | 'Decreasing' | 'Stable'
 
@@ -73,6 +74,7 @@ export type TimeSeriesReportPayload = {
   mapSnapshotGroups: TimeSeriesMapSnapshotGroup[]
   vegetationCoverageTimeline: VegetationCoveragePoint[]
   estimatedWaterLossTimeline: EstimatedWaterLossPoint[]
+  weatherTimeline: TimeSeriesWeatherBlock | null
 }
 
 export type TimeSeriesReportConfig = {
@@ -82,4 +84,4 @@ export type TimeSeriesReportConfig = {
   includeInterpretation: boolean
 }
 
-export type TimeSeriesExportKind = 'pdf' | 'excel' | 'csv' | 'png' | 'geojson'
+export type TimeSeriesExportKind = 'pdf' | 'docx' | 'excel' | 'csv' | 'png' | 'geojson'

@@ -7,7 +7,7 @@
  * @see backend/server/cropClassificationProxy.js
  */
 
-import { assertCropPanelProvider } from './cropSupervised/cropDataProvider'
+import { assertCropPanelProvider, normalizeApiDataProvider } from './cropSupervised/cropDataProvider'
 import type { CropDataProviderId } from './cropSupervised/cropDataProvider'
 import type { CropPipelineProfileId } from './cropSupervised/cropProviderPipelineProfile'
 
@@ -221,7 +221,7 @@ export async function startAoiJob(input: RunAoiInput): Promise<string> {
       aoi: input.aoi,
       season: input.season,
       timesteps: input.timesteps ?? 3,
-      dataProvider: input.dataProvider ?? 'satellite',
+      dataProvider: normalizeApiDataProvider(input.dataProvider ?? 'satellite'),
     })
   }
 

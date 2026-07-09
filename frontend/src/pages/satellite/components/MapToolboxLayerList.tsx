@@ -19,6 +19,8 @@ export type MapToolboxLayerListItem = {
   onExport?: () => void
   /** Optional removal from the map. */
   onRemove?: () => void
+  /** Optional zoom-to-extent action. */
+  onZoomTo?: () => void
   /** Optional on-map label toggle (e.g. contour elevation labels). */
   labelsToggle?: { visible: boolean; onToggle: () => void; labelOn?: string; labelOff?: string }
   /** Legacy inline action buttons (kept for base-overlay rows). */
@@ -43,6 +45,7 @@ function LayerOptionsMenu({
   onOpacityChange,
   onExport,
   onRemove,
+  onZoomTo,
   labelsToggle,
 }: {
   label: string
@@ -53,6 +56,7 @@ function LayerOptionsMenu({
   onOpacityChange?: (value: number) => void
   onExport?: () => void
   onRemove?: () => void
+  onZoomTo?: () => void
   labelsToggle?: { visible: boolean; onToggle: () => void; labelOn?: string; labelOff?: string }
 }) {
   const [open, setOpen] = useState(false)
@@ -103,6 +107,7 @@ function LayerOptionsMenu({
   }, [open, place])
 
   const hasOpacity = typeof opacity === 'number' && !!onOpacityChange
+  const hasMenu = !!(onRemove || onExport || onZoomTo || labelsToggle || hasOpacity)
 
   return (
     <>
@@ -135,6 +140,21 @@ function LayerOptionsMenu({
                   {label}
                 </span>
               </div>
+
+              {onZoomTo ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="si-mt-layer-menu__item"
+                  onClick={() => {
+                    onZoomTo()
+                    setOpen(false)
+                  }}
+                >
+                  <i className="fa-solid fa-magnifying-glass-location" aria-hidden />
+                  <span>Zoom to layer</span>
+                </button>
+              ) : null}
 
               {onToggle ? (
                 <button
@@ -236,13 +256,20 @@ export function MapToolboxLayerRow({
   onOpacityChange,
   onExport,
   onRemove,
+  onZoomTo,
   labelsToggle,
   actions,
   headerActions,
   toggleStyle = 'eye',
   showTypeIcon = true,
 }: MapToolboxLayerRowProps) {
-  const hasMenu = !!(onRemove || onExport || labelsToggle || (typeof opacity === 'number' && onOpacityChange))
+  const hasMenu = !!(
+    onRemove ||
+    onExport ||
+    onZoomTo ||
+    labelsToggle ||
+    (typeof opacity === 'number' && onOpacityChange)
+  )
   const isEyeStyle = toggleStyle === 'eye'
   return (
     <div
@@ -308,6 +335,7 @@ export function MapToolboxLayerRow({
               onOpacityChange={onOpacityChange}
               onExport={onExport}
               onRemove={onRemove}
+              onZoomTo={onZoomTo}
               labelsToggle={labelsToggle}
             />
           ) : headerActions ? (
@@ -363,6 +391,7 @@ export function MapToolboxLayerList({
       onOpacityChange={layer.onOpacityChange}
       onExport={layer.onExport}
       onRemove={layer.onRemove}
+      onZoomTo={layer.onZoomTo}
       labelsToggle={layer.labelsToggle}
       actions={layer.actions}
       headerActions={layer.headerActions}

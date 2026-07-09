@@ -233,6 +233,7 @@ function multiPolygon3857Wkt(rings: [number, number][][]): string {
 export function inferWmsEvalProfile(layerName: string): WmsAoiEvalProfile {
   const u = String(layerName || '').toUpperCase();
   if (isCropClassificationLayerId(u)) return 'crop_classification';
+  if (u === 'NDSI') return 'ndsi';
   if (isAgroCompositeLayerId(u)) return 'agro_composite';
   if (usesPresetSentinelHubWmsLayer(layerName)) return 'native';
   if (u.includes('GNDVI')) return 'gndvi';

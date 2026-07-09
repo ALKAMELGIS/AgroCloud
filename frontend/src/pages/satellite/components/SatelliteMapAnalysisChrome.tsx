@@ -181,6 +181,7 @@ export type SatelliteMapAnalysisChromeProps = {
   ) => void;
   /** Opens the full Add GIS Layer modal from the map toolbox + button (GIS Map parity). */
   onMapToolboxAddGisLayerPrimaryClick?: () => void;
+  mapToolboxAddGisPanelOpen?: boolean;
   mapToolboxBrowseLayersPanel?: ReactNode;
   /** Layer Live NDVI legend panel for Main toolbox. */
   mapToolboxLayerLiveLegend?: ReactNode;
@@ -266,6 +267,7 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
     onGeoAiFloatingRailToggle,
     onMapToolboxAddGisLayerAction,
     onMapToolboxAddGisLayerPrimaryClick,
+    mapToolboxAddGisPanelOpen,
     mapToolboxBrowseLayersPanel,
     mapToolboxLayerLiveLegend,
     layerLiveLegendOpen,
@@ -358,6 +360,7 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
       onGeoAiFloatingRailToggle={onGeoAiFloatingRailToggle}
       onMapToolboxAddGisLayerAction={onMapToolboxAddGisLayerAction}
       onMapToolboxAddGisLayerPrimaryClick={onMapToolboxAddGisLayerPrimaryClick}
+      mapToolboxAddGisPanelOpen={mapToolboxAddGisPanelOpen}
       mapToolboxBrowseLayersPanel={mapToolboxBrowseLayersPanel}
       mapToolboxLayerLiveLegend={mapToolboxLayerLiveLegend}
       layerLiveLegendOpen={layerLiveLegendOpen}

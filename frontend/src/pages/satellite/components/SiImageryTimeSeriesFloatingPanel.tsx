@@ -118,10 +118,13 @@ export type SiImageryTimeSeriesFloatingPanelProps = {
   committedAoiGeometry: GeoJSON.Geometry | null;
   defaultLayerId: string;
   analysisDate: string;
+  imageryDateAutoFollow?: boolean;
   onMapDateFromChart: (iso: string) => void;
   selectedFieldKey?: string | null;
   onSelectedFieldKeyChange?: (fieldKey: string) => void;
   mapboxToken?: string;
+  onStormMapOverlayChange?: (overlay: import('../lib/imageryStormAnalysis').SiTsWeatherStormMapOverlay | null) => void;
+  stormOverlayDismissEpoch?: number;
 };
 
 export function SiImageryTimeSeriesFloatingPanel({
@@ -133,10 +136,13 @@ export function SiImageryTimeSeriesFloatingPanel({
   committedAoiGeometry,
   defaultLayerId,
   analysisDate,
+  imageryDateAutoFollow = true,
   onMapDateFromChart,
   selectedFieldKey,
   onSelectedFieldKeyChange,
   mapboxToken,
+  onStormMapOverlayChange,
+  stormOverlayDismissEpoch = 0,
 }: SiImageryTimeSeriesFloatingPanelProps) {
   const { scopedStorageKey } = useSiInstanceScope();
   const posStorageKey = scopedStorageKey(POS_KEY_BASE);
@@ -392,10 +398,13 @@ export function SiImageryTimeSeriesFloatingPanel({
             committedAoiGeometry={committedAoiGeometry}
             defaultLayerId={defaultLayerId}
             analysisDate={analysisDate}
+            imageryDateAutoFollow={imageryDateAutoFollow}
             onMapDateFromChart={onMapDateFromChart}
             selectedFieldKey={selectedFieldKey}
             onSelectedFieldKeyChange={onSelectedFieldKeyChange}
             mapboxToken={mapboxToken}
+            onStormMapOverlayChange={onStormMapOverlayChange}
+            stormOverlayDismissEpoch={stormOverlayDismissEpoch}
           />
         </div>
         <button

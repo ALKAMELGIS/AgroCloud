@@ -103,8 +103,10 @@ export type SatelliteContextualAnalysisDockProps = {
   onGeoAiFloatingRailToggle?: () => void;
   /** Map toolbox + → Add GIS layer source actions (URL, file, sketch, media). */
   onMapToolboxAddGisLayerAction?: (action: MapToolboxAddGisLayerAction) => void;
-  /** When set, the + button opens the full Add GIS Layer modal (GIS Map parity) instead of the flyout. */
+  /** When set, the + button opens the compact Add source panel anchored to the rail. */
   onMapToolboxAddGisLayerPrimaryClick?: () => void;
+  /** Highlights the + button while the anchored add-source panel is open. */
+  mapToolboxAddGisPanelOpen?: boolean;
   /** Browse layers panel body (GIS Content portal table). */
   mapToolboxBrowseLayersPanel?: ReactNode;
   /** Layer Live NDVI legend (Main toolbox panel). */
@@ -167,8 +169,8 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     id: 'crop-classification',
     icon: 'fa-solid fa-wheat-awn',
     label: 'Crop AI',
-    title: 'Prithvi Crop Classification',
-    hint: 'AOI → Sentinel/HLS → Prithvi inference → classified map.',
+    title: 'Crop AI Classification',
+    hint: 'Satellite · drone · LiDAR · user raster → multi-mode AI classification.',
   },
   {
     id: 'imagery-time-series',
@@ -386,6 +388,7 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
     onGeoAiFloatingRailToggle,
     onMapToolboxAddGisLayerAction,
     onMapToolboxAddGisLayerPrimaryClick,
+    mapToolboxAddGisPanelOpen = false,
     mapToolboxBrowseLayersPanel,
     mapToolboxLayerLiveLegend,
     layerLiveLegendOpen = false,
@@ -761,12 +764,12 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
                 'si-sat-ctx-rail-btn si-sat-ctx-rail-btn--map si-sat-ctx-rail-btn--add-gis' +
                 (isMap && railWide ? ' si-sat-ctx-rail-btn--row si-sat-ctx-rail-btn--map-expanded' : '') +
                 (isMap && !railWide ? ' si-sat-ctx-rail-btn--map-collapsed' : '') +
-                (addGisFlyoutOpen || activeId === 'add-gis-layer' ? ' si-sat-ctx-rail-btn--active' : '')
+                (addGisFlyoutOpen || mapToolboxAddGisPanelOpen || activeId === 'add-gis-layer' ? ' si-sat-ctx-rail-btn--active' : '')
               }
               title="Add GIS Layer"
               aria-label="Add GIS Layer"
               aria-haspopup={onMapToolboxAddGisLayerPrimaryClick ? undefined : 'menu'}
-              aria-expanded={onMapToolboxAddGisLayerPrimaryClick ? undefined : addGisFlyoutOpen}
+              aria-expanded={onMapToolboxAddGisLayerPrimaryClick ? !!mapToolboxAddGisPanelOpen : addGisFlyoutOpen}
               onClick={() => {
                 if (onMapToolboxAddGisLayerPrimaryClick) {
                   setAddGisFlyoutOpen(false);

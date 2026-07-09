@@ -49,7 +49,7 @@ const INITIAL: WellSuitabilityState = {
   heatVisible: true,
   streamsVisible: true,
   pointsVisible: true,
-  opacity: 0.78,
+  opacity: 1,
   progress: null,
 }
 
@@ -176,7 +176,7 @@ export function useWellSuitabilityAnalysis({ geometry, enabled, topN: topNProp }
         heatVisible: true,
         streamsVisible: true,
         pointsVisible: true,
-        opacity: prev.opacity || result.raster.opacity || 0.78,
+        opacity: 1,
         progress: { phase: 'done', pct: 1, label: PHASE_LABELS.done },
       }))
     } catch (err) {

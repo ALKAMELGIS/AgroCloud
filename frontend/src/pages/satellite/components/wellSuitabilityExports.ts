@@ -67,6 +67,127 @@ function escapeXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
+function round(v: number, d = 2): number {
+  const f = 10 ** d
+  return Math.round(v * f) / f
+}
+
+function percentile(sorted: number[], p: number): number {
+  if (!sorted.length) return NaN
+  if (sorted.length === 1) return sorted[0]!
+  const idx = (sorted.length - 1) * p
+  const lo = Math.floor(idx)
+  const hi = Math.ceil(idx)
+  if (lo === hi) return sorted[lo]!
+  return sorted[lo]! + (sorted[hi]! - sorted[lo]!) * (idx - lo)
+}
+
+type NumericStats = {
+  count: number
+  min: number
+  max: number
+  mean: number
+  median: number
+  std: number
+  p25: number
+  p75: number
+  range: number
+}
+
+function describeWaterTable(values: number[]): NumericStats {
+  const arr = values.filter(v => Number.isFinite(v)).sort((a, b) => a - b)
+  const count = arr.length
+  if (!count) {
+    return { count: 0, min: NaN, max: NaN, mean: NaN, median: NaN, std: NaN, p25: NaN, p75: NaN, range: NaN }
+  }
+  const sum = arr.reduce((s, v) => s + v, 0)
+  const mean = sum / count
+  const variance = arr.reduce((s, v) => s + (v - mean) ** 2, 0) / count
+  const min = arr[0]!
+  const max = arr[count - 1]!
+  return {
+    count,
+    min,
+    max,
+    mean,
+    median: percentile(arr, 0.5),
+    std: Math.sqrt(variance),
+    p25: percentile(arr, 0.25),
+    p75: percentile(arr, 0.75),
+    range: max - min,
+  }
+}
+
+function buildWaterTableSheet(result: WellSuitabilityResult): (string | number)[][] {
+  const points = result.points
+  const n = points.length
+  const rows: (string | number)[][] = [
+    ['Groundwater MCDA — Water Table Analysis'],
+    ['Generated', new Date().toISOString()],
+    ['Ranked sites', n],
+    [],
+    [
+      'Rank',
+      'Longitude',
+      'Latitude',
+      'Elevation (m)',
+      'Water table depth (m)',
+      'Drill depth (m)',
+      'Stream dist (m)',
+      'Recharge %',
+      'Aquifer type',
+      'Potential class',
+      'Potential %',
+      'Confidence %',
+    ],
+    ...points.map(p => [
+      p.rank,
+      round(p.lng, 6),
+      round(p.lat, 6),
+      p.elevationM,
+      p.staticWaterLevelM,
+      p.drillingDepthM,
+      p.streamDistM,
+      p.rechargePotential,
+      p.aquiferType,
+      p.potentialClass,
+      p.potentialScore,
+      p.confidencePct,
+    ]),
+  ]
+
+  if (!n) return rows
+
+  const depths = points.map(p => p.staticWaterLevelM)
+  const wt = describeWaterTable(depths)
+  const shallow = points.filter(p => p.staticWaterLevelM <= 10).length
+  const moderate = points.filter(p => p.staticWaterLevelM > 10 && p.staticWaterLevelM < 40).length
+  const deep = points.filter(p => p.staticWaterLevelM >= 40).length
+
+  rows.push(
+    [],
+    ['Water table summary (depth to static water level, m)'],
+    ['Metric', 'Value'],
+    ['Sites', wt.count],
+    ['Shallowest (m)', round(wt.min, 1)],
+    ['Deepest (m)', round(wt.max, 1)],
+    ['Mean depth (m)', round(wt.mean, 1)],
+    ['Median depth (m)', round(wt.median, 1)],
+    ['Std deviation (m)', round(wt.std, 1)],
+    ['P25 (m)', round(wt.p25, 1)],
+    ['P75 (m)', round(wt.p75, 1)],
+    ['Shallow sites (≤10 m)', shallow],
+    ['Moderate depth (10–40 m)', moderate],
+    ['Deep sites (≥40 m)', deep],
+    [
+      'Note',
+      'Estimated from MCDA terrain/hydrology proxies (elevation, slope, flow, geology). Validate with field survey or borehole logs.',
+    ],
+  )
+
+  return rows
+}
+
 export function exportWellSuitabilityWorkbook(result: WellSuitabilityResult): boolean {
   const wb = XLSX.utils.book_new()
   const rows = result.points.map(p => ({
@@ -77,7 +198,9 @@ export function exportWellSuitabilityWorkbook(result: WellSuitabilityResult): bo
     'Confidence %': p.confidencePct,
     Class: p.potentialClass,
     'Drilling depth (m)': p.drillingDepthM,
+    'Water table depth (m)': p.staticWaterLevelM,
     'Static WL (m)': p.staticWaterLevelM,
+    'Elevation (m)': p.elevationM,
     'Stream dist (m)': p.streamDistM,
     'Recharge %': p.rechargePotential,
     'Slope (°)': p.slopeDeg,
@@ -87,6 +210,25 @@ export function exportWellSuitabilityWorkbook(result: WellSuitabilityResult): bo
   }))
   const ws = XLSX.utils.json_to_sheet(rows)
   XLSX.utils.book_append_sheet(wb, ws, 'Ranked sites')
+
+  const waterTableAoa = buildWaterTableSheet(result)
+  const waterTableSheet = XLSX.utils.aoa_to_sheet(waterTableAoa)
+  waterTableSheet['!cols'] = [
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 20 },
+    { wch: 16 },
+    { wch: 14 },
+    { wch: 12 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 12 },
+    { wch: 12 },
+  ]
+  XLSX.utils.book_append_sheet(wb, waterTableSheet, 'Water Table')
+
   const wRows = Object.entries(result.weightsUsed).map(([k, v]) => ({
     Criterion: k,
     Weight: v,
@@ -123,6 +265,7 @@ export function exportWellSuitabilityPdf(result: WellSuitabilityResult): boolean
     `${p.potentialScore}%`,
     `${p.confidencePct}%`,
     p.potentialClass,
+    `${p.staticWaterLevelM} m`,
     `${p.drillingDepthM} m`,
     p.aquiferType,
   ])
@@ -131,7 +274,7 @@ export function exportWellSuitabilityPdf(result: WellSuitabilityResult): boolean
     startY: (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY
       ? (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8
       : 40,
-    head: [['#', 'Lat, Lon', 'Potential', 'Conf.', 'Class', 'Depth', 'Aquifer']],
+    head: [['#', 'Lat, Lon', 'Potential', 'Conf.', 'Class', 'Water table', 'Drill depth', 'Aquifer']],
     body: tableRows,
     styles: { fontSize: 7 },
     headStyles: { fillColor: [22, 101, 52] },

@@ -19,6 +19,7 @@ export function SiCropTrainingSamplesPanel({
   const inputRef = useRef<HTMLInputElement>(null)
   const [parsing, setParsing] = useState(false)
   const [parseError, setParseError] = useState<string | null>(null)
+  const [dropActive, setDropActive] = useState(false)
 
   const validation: TrainingSampleValidation = validateTrainingSamples(samples, aoiGeometry)
 
@@ -53,19 +54,38 @@ export function SiCropTrainingSamplesPanel({
     <div className="prithvi-tool__section prithvi-supervised-samples">
       <div className="prithvi-tool__legend-title">Training samples (ground truth)</div>
       <p className="prithvi-tool__sub">
-        Upload SHP/ZIP, GeoJSON, KML/KMZ, or CSV (lat/lng + class column). Each feature needs a crop class label.
+        Upload SHP/ZIP, GeoJSON, KML/KMZ, CSV (lat/lng + class), or raster labels. Each feature needs a crop class label.
       </p>
 
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept=".zip,.shp,.geojson,.json,.kml,.kmz,.csv,.gpkg,.tif,.tiff"
+        disabled={disabled || parsing}
+        style={{ display: 'none' }}
+        onChange={e => void handleFiles(e.target.files)}
+      />
+
+      <div
+        className={`prithvi-datasource__drop prithvi-supervised-samples__drop${dropActive ? ' is-active' : ''}`}
+        onDragEnter={e => {
+          e.preventDefault()
+          if (!disabled) setDropActive(true)
+        }}
+        onDragOver={e => e.preventDefault()}
+        onDragLeave={() => setDropActive(false)}
+        onDrop={e => {
+          e.preventDefault()
+          setDropActive(false)
+          if (!disabled && !parsing) void handleFiles(e.dataTransfer.files)
+        }}
+      >
+        <i className="fa-solid fa-cloud-arrow-up" aria-hidden />
+        <span>Drag &amp; drop training files</span>
+      </div>
+
       <div className="prithvi-tool__row">
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          accept=".zip,.shp,.geojson,.json,.kml,.kmz,.csv,.gpkg"
-          disabled={disabled || parsing}
-          style={{ display: 'none' }}
-          onChange={e => void handleFiles(e.target.files)}
-        />
         <button
           type="button"
           className="prithvi-tool__btn"

@@ -138,6 +138,7 @@ function samplePayload(): TimeSeriesReportPayload {
         trend: 'Stable',
       },
     ],
+    weatherTimeline: null,
   }
 }
 

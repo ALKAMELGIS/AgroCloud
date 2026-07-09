@@ -38,6 +38,8 @@ import {
   SENTINEL_NDMI_10_CLASS_COLORS,
   SENTINEL_NDMI_MOISTURE_RAMP,
   SENTINEL_NDRE_RAMP,
+  SENTINEL_NDSI_10_CLASS_BREAKS,
+  SENTINEL_NDSI_10_CLASS_COLORS,
   SENTINEL_NDSI_RAMP,
   SENTINEL_NDVI_10_CLASS_BREAKS,
   SENTINEL_NDVI_10_CLASS_COLORS,
@@ -192,6 +194,19 @@ const NDMI_CLASS_LABELS = [
   'Saturated',
 ] as const
 
+const NDSI_CLASS_LABELS = [
+  'No snow / bare',
+  'Very unlikely snow',
+  'Unlikely snow',
+  'Low snow signal',
+  'Marginal snow',
+  'Possible snow',
+  'Partial snow',
+  'Moderate snow',
+  'High snow / ice',
+  'Dense snow / ice',
+] as const
+
 function buildRampDiscreteClasses(
   ramp: RampStop,
   count: number,
@@ -297,6 +312,24 @@ function buildNdmiLegend(): LayerLiveLegendSpec {
       SENTINEL_NDMI_10_CLASS_BREAKS,
       SENTINEL_NDMI_10_CLASS_COLORS,
       NDMI_CLASS_LABELS,
+    ),
+  }
+}
+
+function buildNdsiLegend(): LayerLiveLegendSpec {
+  return {
+    id: 'ndsi',
+    title: 'NDSI',
+    subtitle: 'Snow / ice index ((B03−B11)/(B03+B11)) · 10 classes',
+    kind: 'discrete',
+    valueMin: -1,
+    valueMax: 1,
+    scaleLabels: { low: 'No snow', mid: 'Partial snow', high: 'Snow / ice' },
+    gradientCss: rampToGradientCss(SENTINEL_NDSI_RAMP),
+    classes: buildClassesFromBreaks(
+      SENTINEL_NDSI_10_CLASS_BREAKS,
+      SENTINEL_NDSI_10_CLASS_COLORS,
+      NDSI_CLASS_LABELS,
     ),
   }
 }
@@ -471,12 +504,7 @@ const LEGEND_BY_PROFILE: Record<string, () => LayerLiveLegendSpec> = {
       mid: 'Wet soil',
       high: 'Open water',
     }),
-  ndsi: () =>
-    buildIndexRampLegend('ndsi', 'NDSI', 'Snow / ice index', SENTINEL_NDSI_RAMP, 10, {
-      low: 'No snow',
-      mid: 'Partial snow',
-      high: 'Snow / ice',
-    }),
+  ndsi: buildNdsiLegend,
   evi: () =>
     buildIndexRampLegend('evi', 'EVI', 'Enhanced vegetation index', SENTINEL_EVI_RAMP, 10, {
       low: 'Bare / sparse',
