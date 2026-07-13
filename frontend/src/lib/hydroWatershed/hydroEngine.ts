@@ -803,15 +803,6 @@ export function computeMesh(ctx: HydroComputeContext): HydroStepResult {
 
 // ── Contours (marching squares iso-elevation lines) ─────────────────────────────
 
-const CONTOUR_RAMP: Array<[number, number, number]> = [
-  [49, 130, 84],
-  [120, 158, 74],
-  [196, 175, 92],
-  [183, 130, 73],
-  [150, 100, 70],
-  [222, 222, 222],
-]
-
 /** "Nice" contour interval (1/2/5 × 10ⁿ) for an elevation range / target count. */
 function niceInterval(range: number, target = 18): number {
   if (!(range > 0)) return 10
@@ -897,11 +888,14 @@ export function computeContours(ctx: HydroComputeContext): HydroStepResult {
     data: { type: 'FeatureCollection', features },
     legend: {
       title: 'Elevation contours',
-      kind: 'gradient',
-      swatches: rampSwatches(CONTOUR_RAMP),
-      minLabel: `${Math.round(eMin)} m`,
-      maxLabel: `${Math.round(eMax)} m`,
-      note: `Interval ${interval} m · bold every ${interval * 5} m`,
+      kind: 'classes',
+      swatches: [
+        { color: '#991b1b', label: 'High elevation' },
+        { color: '#1d4ed8', label: 'Low elevation' },
+        { color: '#64748b', label: `Interval line (${interval} m)` },
+        { color: '#0f172a', label: `Index line (every ${interval * 5} m)` },
+      ],
+      note: `${Math.round(eMin)}–${Math.round(eMax)} m`,
     },
     stats: [
       { label: 'Contour interval', value: `${interval} m` },

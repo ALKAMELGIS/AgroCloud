@@ -7,15 +7,15 @@ import {
   type LngLatBbox,
 } from '../../pages/satellite/lib/timeSeriesReport/timeSeriesMapSnapshot'
 
-const SNAPSHOT_WIDTH = 720
+const SNAPSHOT_WIDTH = 900
 const SNAPSHOT_HEIGHT = 520
 const MARGIN = 44
+const LEGEND_GAP = 12
 const TITLE_H = 36
 const FOOTER_H = 18
-const MAP_X = MARGIN
 const MAP_Y = TITLE_H + 8
-const MAP_W = SNAPSHOT_WIDTH - MARGIN * 2
 const MAP_H = SNAPSHOT_HEIGHT - TITLE_H - FOOTER_H - 16
+const BASE_MAP_W = SNAPSHOT_WIDTH - MARGIN * 2
 
 export type HydroRasterCoordinates = [
   [number, number],
@@ -24,10 +24,25 @@ export type HydroRasterCoordinates = [
   [number, number],
 ]
 
+type SnapshotLayout = {
+  mapX: number
+  mapY: number
+  mapW: number
+  mapH: number
+  legendX: number
+  legendPanelW: number
+}
+
 function parseCssColor(color: string): string {
   const c = color.trim()
   if (!c || c === 'transparent' || c.includes('rgba(0,0,0,0)')) return '#cbd5e1'
   return c
+}
+
+function legendRowCount(legend: HydroLegend): number {
+  if (legend.kind === 'gradient') return 1
+  const labeled = legend.swatches.filter(s => (s.label || '').trim())
+  return labeled.length || Math.min(legend.swatches.length, 1)
 }
 
 function measureLegendBox(legend: HydroLegend): { width: number; height: number } {
@@ -37,10 +52,35 @@ function measureLegendBox(legend: HydroLegend): { width: number; height: number 
   if (legend.kind === 'gradient') {
     return { width: 210, height: titleH + pad + 12 + 14 + pad + (legend.note ? 12 : 4) }
   }
-  const labeled = legend.swatches.filter(s => (s.label || '').trim())
-  const rows = labeled.length || Math.min(legend.swatches.length, 1)
+  const rows = legendRowCount(legend)
   const noteH = legend.note ? 12 : 0
-  return { width: 215, height: titleH + pad + rows * rowH + pad + noteH }
+  const longestLabel = legend.swatches.reduce((max, s) => Math.max(max, (s.label || '').length), 0)
+  const width = Math.min(230, Math.max(165, longestLabel * 5.2 + 42))
+  return { width, height: titleH + pad + rows * rowH + pad + noteH }
+}
+
+function resolveSnapshotLayout(legend?: HydroLegend): SnapshotLayout {
+  if (!legend) {
+    return {
+      mapX: MARGIN,
+      mapY: MAP_Y,
+      mapW: BASE_MAP_W,
+      mapH: MAP_H,
+      legendX: 0,
+      legendPanelW: 0,
+    }
+  }
+  const box = measureLegendBox(legend)
+  const legendPanelW = Math.min(248, Math.max(152, box.width + 20))
+  const mapW = SNAPSHOT_WIDTH - MARGIN - LEGEND_GAP - legendPanelW - MARGIN
+  return {
+    mapX: MARGIN,
+    mapY: MAP_Y,
+    mapW,
+    mapH: MAP_H,
+    legendX: MARGIN + mapW + LEGEND_GAP,
+    legendPanelW,
+  }
 }
 
 function loadImage(dataUrl: string): Promise<HTMLImageElement> {
@@ -214,26 +254,29 @@ function drawMapNeatline(ctx: CanvasRenderingContext2D, x: number, y: number, w:
   ctx.restore()
 }
 
-function drawLegend(
+function drawLegendPanel(
   ctx: CanvasRenderingContext2D,
-  legend: HydroLegend | undefined,
-  mapX: number,
-  mapY: number,
-  mapW: number,
-  mapH: number,
+  legend: HydroLegend,
+  layout: SnapshotLayout,
 ): void {
-  if (!legend) return
   const pad = 8
   const titleH = 16
   const rowH = 15
   const { width: boxW, height: boxH } = measureLegendBox(legend)
-  const x = mapX + mapW - boxW - 10
-  const y = mapY + mapH - boxH - 10
+  const panelW = layout.legendPanelW
+  const x = layout.legendX + Math.max(0, (panelW - boxW) / 2)
+  const y = layout.mapY + 2
 
   ctx.save()
+  ctx.strokeStyle = '#cbd5e1'
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(layout.legendX - LEGEND_GAP / 2, layout.mapY)
+  ctx.lineTo(layout.legendX - LEGEND_GAP / 2, layout.mapY + layout.mapH)
+  ctx.stroke()
+
   ctx.fillStyle = 'rgba(255,255,255,0.97)'
   ctx.strokeStyle = '#94a3b8'
-  ctx.lineWidth = 1
   ctx.fillRect(x, y, boxW, boxH)
   ctx.strokeRect(x + 0.5, y + 0.5, boxW - 1, boxH - 1)
 
@@ -272,7 +315,7 @@ function drawLegend(
     const labeled = legend.swatches.filter(s => (s.label || '').trim())
     const rows = labeled.length ? labeled : legend.swatches
     let cy = y + titleH + pad
-    for (const sw of rows.slice(0, 8)) {
+    for (const sw of rows.slice(0, 12)) {
       const swatchTop = cy + 1
       ctx.fillStyle = parseCssColor(sw.color)
       ctx.fillRect(x + pad, swatchTop, 12, 10)
@@ -340,7 +383,22 @@ function drawImageToProjectedQuad(
   ctx.restore()
 }
 
-function drawVectorLayer(
+function contourElevBounds(features: GeoJSON.Feature[]): { minElev: number; maxElev: number } {
+  let minElev = Infinity
+  let maxElev = -Infinity
+  for (const f of features) {
+    const elev = Number(f.properties?.elev)
+    if (!Number.isFinite(elev)) continue
+    minElev = Math.min(minElev, elev)
+    maxElev = Math.max(maxElev, elev)
+  }
+  if (!Number.isFinite(minElev) || !Number.isFinite(maxElev)) {
+    return { minElev: 0, maxElev: 0 }
+  }
+  return { minElev, maxElev }
+}
+
+function drawContourLayer(
   ctx: CanvasRenderingContext2D,
   result: HydroStepResult,
   bbox: LngLatBbox,
@@ -349,7 +407,53 @@ function drawVectorLayer(
   w: number,
   h: number,
 ): void {
-  if (result.kind !== 'vector') return
+  const features = result.data.features ?? []
+  const { minElev, maxElev } = contourElevBounds(features)
+  ctx.save()
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  for (const f of features) {
+    if (!f.geometry || f.geometry.type !== 'LineString') continue
+    const coords = f.geometry.coordinates as [number, number][]
+    const elev = Number(f.properties?.elev ?? 0)
+    const isIndex = Number(f.properties?.index ?? 0) === 1
+    const isHigh = elev >= maxElev
+    const isLow = elev <= minElev
+    let stroke = '#64748b'
+    let lineWidth = 0.85
+    if (isIndex) {
+      stroke = '#0f172a'
+      lineWidth = 2.2
+    } else if (isHigh) {
+      stroke = '#991b1b'
+      lineWidth = 1.6
+    } else if (isLow) {
+      stroke = '#1d4ed8'
+      lineWidth = 1.6
+    }
+    ctx.strokeStyle = stroke
+    ctx.lineWidth = lineWidth
+    ctx.beginPath()
+    const [sx, sy] = projectCoord(coords[0]!, bbox, x, y, w, h)
+    ctx.moveTo(sx, sy)
+    for (let i = 1; i < coords.length; i += 1) {
+      const [px, py] = projectCoord(coords[i]!, bbox, x, y, w, h)
+      ctx.lineTo(px, py)
+    }
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
+function drawStreamLayer(
+  ctx: CanvasRenderingContext2D,
+  result: HydroStepResult,
+  bbox: LngLatBbox,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): void {
   const features = result.data.features ?? []
   ctx.save()
   ctx.lineCap = 'round'
@@ -372,6 +476,23 @@ function drawVectorLayer(
     ctx.stroke()
   }
   ctx.restore()
+}
+
+function drawVectorLayer(
+  ctx: CanvasRenderingContext2D,
+  result: HydroStepResult,
+  bbox: LngLatBbox,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): void {
+  if (result.kind !== 'vector') return
+  if (result.render === 'contours') {
+    drawContourLayer(ctx, result, bbox, x, y, w, h)
+    return
+  }
+  drawStreamLayer(ctx, result, bbox, x, y, w, h)
 }
 
 function drawCoordFooter(ctx: CanvasRenderingContext2D, bbox: LngLatBbox, width: number, height: number): void {
@@ -405,7 +526,7 @@ export async function fetchHydroBasemapForExtent(
   extent: LngLatBbox,
   signal?: AbortSignal,
 ): Promise<string | null> {
-  return fetchEsriSatelliteBasemapForBbox(extent, MAP_W, MAP_H, signal)
+  return fetchEsriSatelliteBasemapForBbox(extent, BASE_MAP_W, MAP_H, signal)
 }
 
 export async function compositeHydroMapSnapshot(options: {
@@ -419,6 +540,9 @@ export async function compositeHydroMapSnapshot(options: {
   vectorResult?: HydroStepResult | null
   legend?: HydroLegend
 }): Promise<string | null> {
+  const layout = resolveSnapshotLayout(options.legend)
+  const { mapX, mapY, mapW, mapH } = layout
+
   const canvas = document.createElement('canvas')
   canvas.width = SNAPSHOT_WIDTH
   canvas.height = SNAPSHOT_HEIGHT
@@ -431,20 +555,20 @@ export async function compositeHydroMapSnapshot(options: {
 
   ctx.save()
   ctx.beginPath()
-  ctx.rect(MAP_X, MAP_Y, MAP_W, MAP_H)
+  ctx.rect(mapX, mapY, mapW, mapH)
   ctx.clip()
 
   if (options.basemapDataUrl) {
     try {
       const basemap = await loadImage(options.basemapDataUrl)
-      ctx.drawImage(basemap, MAP_X, MAP_Y, MAP_W, MAP_H)
+      ctx.drawImage(basemap, mapX, mapY, mapW, mapH)
     } catch {
       ctx.fillStyle = '#94a3b8'
-      ctx.fillRect(MAP_X, MAP_Y, MAP_W, MAP_H)
+      ctx.fillRect(mapX, mapY, mapW, mapH)
     }
   } else {
     ctx.fillStyle = '#94a3b8'
-    ctx.fillRect(MAP_X, MAP_Y, MAP_W, MAP_H)
+    ctx.fillRect(mapX, mapY, mapW, mapH)
   }
 
   if (options.layerDataUrl) {
@@ -456,15 +580,15 @@ export async function compositeHydroMapSnapshot(options: {
           layer,
           options.rasterCoordinates,
           options.extent,
-          MAP_X,
-          MAP_Y,
-          MAP_W,
-          MAP_H,
+          mapX,
+          mapY,
+          mapW,
+          mapH,
         )
       } else {
         ctx.save()
         ctx.globalAlpha = 0.82
-        ctx.drawImage(layer, MAP_X, MAP_Y, MAP_W, MAP_H)
+        ctx.drawImage(layer, mapX, mapY, mapW, mapH)
         ctx.restore()
       }
     } catch {
@@ -473,16 +597,18 @@ export async function compositeHydroMapSnapshot(options: {
   }
 
   if (options.vectorResult) {
-    drawVectorLayer(ctx, options.vectorResult, options.extent, MAP_X, MAP_Y, MAP_W, MAP_H)
+    drawVectorLayer(ctx, options.vectorResult, options.extent, mapX, mapY, mapW, mapH)
   }
 
-  drawAoiOutline(ctx, options.geometry, options.extent, MAP_X, MAP_Y, MAP_W, MAP_H)
+  drawAoiOutline(ctx, options.geometry, options.extent, mapX, mapY, mapW, mapH)
   ctx.restore()
 
-  drawMapNeatline(ctx, MAP_X, MAP_Y, MAP_W, MAP_H)
-  drawNorthArrow(ctx, MAP_X + 22, MAP_Y + 28)
-  drawScaleBar(ctx, options.extent, MAP_X + 12, MAP_Y + MAP_H - 12, MAP_W)
-  drawLegend(ctx, options.legend, MAP_X, MAP_Y, MAP_W, MAP_H)
+  drawMapNeatline(ctx, mapX, mapY, mapW, mapH)
+  drawNorthArrow(ctx, mapX + 22, mapY + 28)
+  drawScaleBar(ctx, options.extent, mapX + 12, mapY + mapH - 12, mapW)
+  if (options.legend) {
+    drawLegendPanel(ctx, options.legend, layout)
+  }
   drawCoordFooter(ctx, options.extent, SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT)
 
   return dataUrlToPngBase64(canvas.toDataURL('image/png'))
