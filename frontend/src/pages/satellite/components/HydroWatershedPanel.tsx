@@ -50,6 +50,9 @@ type HydroWatershedPanelProps = {
   onRemoveStep: (id: HydroStepId) => void
   onExportRaster: (id: HydroStepId) => void
   onRunAll: () => void
+  onExportReport?: () => void
+  exportReportBusy?: boolean
+  exportReportLabel?: string
 }
 
 export function HydroWatershedPanel({
@@ -68,7 +71,11 @@ export function HydroWatershedPanel({
   onRemoveStep,
   onExportRaster,
   onRunAll,
+  onExportReport,
+  exportReportBusy,
+  exportReportLabel,
 }: HydroWatershedPanelProps) {
+  const anyDone = Object.values(steps).some(st => st.status === 'done')
   return (
     <div className="si-hydro">
       <header className="si-hydro__head">
@@ -95,6 +102,22 @@ export function HydroWatershedPanel({
           )}
           <span>Run analysis</span>
         </button>
+        {onExportReport ? (
+          <button
+            type="button"
+            className="si-hydro__export-report"
+            onClick={onExportReport}
+            disabled={!hasAoi || !anyDone || exportReportBusy || demLoading}
+            title="Export Hydro Watershed & Flood Risk Assessment Report (Word)"
+          >
+            {exportReportBusy ? (
+              <i className="fa-solid fa-circle-notch fa-spin" aria-hidden />
+            ) : (
+              <i className="fa-solid fa-file-word" aria-hidden />
+            )}
+            <span>{exportReportLabel ?? 'Export Hydro Report'}</span>
+          </button>
+        ) : null}
       </div>
 
       {demError ? (

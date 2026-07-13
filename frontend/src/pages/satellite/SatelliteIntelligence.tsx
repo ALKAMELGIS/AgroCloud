@@ -122,6 +122,7 @@ import {
   teardownSiSentinelAoiWmsPingPongStack,
   type SiSentinelAoiWmsPingPongRuntime,
 } from '../../lib/siSentinelAoiWmsImperative';
+import { syncSiMapAnalysisLayerOrder } from '../../lib/siMapAnalysisLayerOrder';
 import {
   AGRO_STRUCTURES_FS21_URL,
   AGRO_STRUCTURES_PRIMARY_LAYER_ID,
@@ -368,6 +369,7 @@ import {
   basemapTileErrorShouldFallback,
   getBasemapThumbnail,
   isGoogleEarthBasemapId,
+  isSatelliteImageryBasemapId,
   mapboxGlStyleForEntry,
   pickDefaultBasemapId,
   resolveBasemapId,
@@ -506,6 +508,7 @@ import { useWellSuitabilityAnalysis } from './components/useWellSuitabilityAnaly
 import type { WellSitePoint } from '../../lib/hydroWatershed/hydroEngine';
 import type { WellSuitabilitySite } from '../../lib/hydroWatershed/wellSuitabilityMcdaEngine';
 import type { HydroStepId } from '../../lib/hydroWatershed/hydroEngine';
+import { generateHydroWatershedReportDocx } from '../../lib/hydroWatershed/generateHydroReportDocx';
 import { GisPortalBrowseLayersPanel } from './components/GisPortalBrowseLayersPanel';
 import { GisUploadCloudSources } from '../../components/GisUploadCloudSources';
 import type { MapToolboxAddGisLayerAction } from './components/MapToolboxAddGisLayerFlyout';
@@ -4017,6 +4020,7 @@ export default function SatelliteIntelligence() {
    * 2D restores whatever the user had before. Only restored when we auto-swapped.
    */
   const basemapBefore3dRef = useRef<string | null>(null);
+  const basemapBeforeAnalysisRef = useRef<string | null>(null);
   /** Terrain 3D control (Elevation & Contour): popover open, contour overlay, relief height. */
   const [isTerrain3dPanelOpen, setIsTerrain3dPanelOpen] = useState(false);
   /** DEM vertical exaggeration applied to the 3D terrain mesh (1.0 = real, higher = dramatic). */
@@ -11849,6 +11853,37 @@ export default function SatelliteIntelligence() {
       }
     })();
   }, [hydro]);
+  const [hydroExportBusy, setHydroExportBusy] = useState(false);
+  const [hydroExportLabel, setHydroExportLabel] = useState<string | undefined>(undefined);
+  const handleHydroExportReport = useCallback(() => {
+    const geom = drawnGeometry?.geometry;
+    if (!geom) return;
+    setHydroExportBusy(true);
+    setHydroExportLabel('Preparing report…');
+    void (async () => {
+      try {
+        await generateHydroWatershedReportDocx({
+          geometry: geom,
+          aoiName:
+            (drawnGeometry?.properties?.name as string | undefined) ??
+            (drawnGeometry?.properties?.fieldName as string | undefined) ??
+            'Hydro Study Area',
+          steps: hydro.steps,
+          mapboxToken,
+          projectName: 'GeoSyntra Hydro Intelligence',
+          generatedBy: 'GeoSyntra',
+          onProgress: (done, total, label) => {
+            setHydroExportLabel(`Maps ${done}/${total}: ${label}`);
+          },
+        });
+      } catch (err) {
+        console.error('Hydro report export failed', err);
+      } finally {
+        setHydroExportBusy(false);
+        setHydroExportLabel(undefined);
+      }
+    })();
+  }, [drawnGeometry, hydro.steps, mapboxToken]);
 
   // Re-run Contours / Basins when their option changes (the option refs are
   // refreshed on render, so re-running here picks up the latest interval/count).
@@ -13855,6 +13890,25 @@ export default function SatelliteIntelligence() {
   /** Show on map — independent Edit AOI and Layers AOI toggles. */
   const sentinelWmsOnMap = sentinelDrawWmsOnMap || sentinelLayerAoiWmsOnMap;
 
+  const syncAnalysisMapLayerOrder = useCallback(() => {
+    const map = mapRef.current?.getMap?.() ?? mapRef.current;
+    if (!map?.isStyleLoaded?.()) return;
+    const agroSid = siSafeMapboxLayerId(AGRO_STRUCTURES_PRIMARY_LAYER_ID);
+    const agroFillId = `${agroSid}-fill`;
+    const agroLineId = `${agroSid}-line`;
+    const layer = customLayersRef.current.find(l => String(l.id) === AGRO_STRUCTURES_PRIMARY_LAYER_ID);
+    const useAgSymbology = layer ? siLayerUsesArcgisOnlineSymbology(layer) : false;
+    const restoreOp = (layer?.mapOpacity ?? 1) * (layer?.polygonFillAlpha ?? SI_PORTAL_LAYER_VISIBLE_FILL_ALPHA);
+    syncSiMapAnalysisLayerOrder(map, {
+      agroFillId,
+      agroLineId,
+      freezeLayerAoiRasterOrder: aoiLayerModeWmsActiveRef.current,
+      suppressAgroFillWhenWms: sentinelWmsOnMap,
+      restoreAgroFillOpacity: restoreOp,
+      useAgSymbology,
+    });
+  }, [sentinelWmsOnMap]);
+
   /**
    * Drawing an AOI refreshes the clipped tiles but does NOT auto-show the layer â€”
    * the user explicitly enables it via the "Show on map" toggle.
@@ -14756,6 +14810,27 @@ export default function SatelliteIntelligence() {
     aoiMaskBuilderSettings.sentinelLayerId,
   ]);
   const activeBasemapId = useMemo(() => pickDefaultBasemapId(basemapId), [basemapId]);
+
+  /** Keep satellite imagery under analysis rasters while Sentinel WMS is active. */
+  useEffect(() => {
+    if (!sentinelWmsOnMap) {
+      if (basemapBeforeAnalysisRef.current) {
+        setBasemapId(basemapBeforeAnalysisRef.current);
+        basemapBeforeAnalysisRef.current = null;
+      }
+      return;
+    }
+    if (isSatelliteImageryBasemapId(activeBasemapId)) {
+      if (!basemapVisible) setBasemapVisible(true);
+      return;
+    }
+    if (!basemapBeforeAnalysisRef.current) {
+      basemapBeforeAnalysisRef.current = activeBasemapId;
+    }
+    setBasemapId(pickDefaultBasemapId(RASTER_BASEMAP_FALLBACK_ID));
+    setBasemapVisible(true);
+  }, [sentinelWmsOnMap, activeBasemapId, basemapVisible]);
+
   const currentBasemapEntry = useMemo(() => {
     return (
       catalogEntryById(basemapCatalog, activeBasemapId) ??
@@ -16746,7 +16821,10 @@ export default function SatelliteIntelligence() {
     const chunkCountChanged = runtime.mountedChunkCount !== chunkCount;
 
     if (chunkCountChanged || layerAoiPingPongSyncKeyRef.current === '') {
-      ensureSiSentinelAoiWmsPingPongStackOnMap(map, stack, effectiveSentinelWmsMinZoom, runtime);
+      const agroSid = siSafeMapboxLayerId(AGRO_STRUCTURES_PRIMARY_LAYER_ID);
+      ensureSiSentinelAoiWmsPingPongStackOnMap(map, stack, effectiveSentinelWmsMinZoom, runtime, {
+        beforeLayerId: `${agroSid}-line`,
+      });
     }
 
     if (!chunkCountChanged && layerAoiPingPongSyncKeyRef.current === syncKey) {
@@ -16762,6 +16840,7 @@ export default function SatelliteIntelligence() {
     } else {
       hideSiSentinelAoiWmsPingPongStack(map, stack, runtime, layerOpacity);
     }
+    syncAnalysisMapLayerOrder();
   }, [
     isMapStyleReady,
     sentinelLayerAoiWmsMounted,
@@ -16770,6 +16849,7 @@ export default function SatelliteIntelligence() {
     effectiveSentinelWmsMinZoom,
     sentinelLayerAoiWmsOnMap,
     aoiMaskDisplayOpacity,
+    syncAnalysisMapLayerOrder,
   ]);
 
   /**
@@ -16937,103 +17017,20 @@ export default function SatelliteIntelligence() {
     };
   }, [isMapStyleReady, sentinelWmsOnMap, wmsRasterSourceRefreshKey, sentinelWmsStacks]);
 
-  /** Keep Agro_Structures boundaries above Sentinel; keep drawn AOI under imagery layers. */
+  /** Keep analysis rasters above satellite basemap and below vector AOI boundaries. */
   useLayoutEffect(() => {
     if (!isMapStyleReady) return;
     const map = mapRef.current?.getMap?.() ?? mapRef.current;
     if (!map?.isStyleLoaded?.()) return;
-    const agroSid = siSafeMapboxLayerId(AGRO_STRUCTURES_PRIMARY_LAYER_ID);
-    const agroFillId = `${agroSid}-fill`;
-    const agroLineId = `${agroSid}-line`;
-    const raise = (layerId: string) => {
-      try {
-        if (map.getLayer(layerId)) map.moveLayer(layerId);
-      } catch {
-        /* ignore race during style rebuild */
-      }
-    };
-    /** Place `layerId` immediately under `beforeId` (or under the lowest sentinel). */
-    const placeUnder = (layerId: string, beforeId: string | null) => {
-      try {
-        if (!map.getLayer(layerId)) return;
-        if (beforeId && map.getLayer(beforeId)) map.moveLayer(layerId, beforeId);
-      } catch {
-        /* ignore */
-      }
-    };
     const sync = () => {
       if (siMapContainerRef.current?.classList.contains('si-map-container--interacting')) return;
-      try {
-        const styleLayers = map.getStyle()?.layers ?? [];
-        const sentinelIds = styleLayers
-          .map(l => l.id)
-          .filter((id): id is string => !!id && isSiSentinelAoiWmsMapLayerId(id));
-        const firstSentinel = sentinelIds[0] ?? null;
-        const freezeLayerAoiRasterOrder = aoiLayerModeWmsActiveRef.current;
-
-        // Drawn AOI stays UNDER imagery / analysis layers (fill + outline).
-        for (const aoiId of [
-          'drawn-index-geometry-fill',
-          'drawn-index-geometry-line',
-          'drawn-index-geometry-point',
-          'si-crop-class-aoi-fill',
-          'si-crop-class-aoi-line',
-        ]) {
-          placeUnder(aoiId, firstSentinel);
-        }
-
-        // Then raise Sentinel above any residual AOI order, but below field boundaries.
-        for (const sid of sentinelIds) {
-          if (
-            freezeLayerAoiRasterOrder &&
-            sid.startsWith(`${SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX}-layer-`)
-          ) {
-            continue;
-          }
-          if (!map.getLayer(sid)) continue;
-          if (map.getLayer(agroLineId)) map.moveLayer(sid, agroLineId);
-          else if (map.getLayer(agroFillId)) map.moveLayer(sid, agroFillId);
-          else map.moveLayer(sid);
-        }
-        if (sentinelWmsOnMap && map.getLayer(agroFillId)) {
-          const layer = customLayersRef.current.find(l => String(l.id) === AGRO_STRUCTURES_PRIMARY_LAYER_ID);
-          const useAgSymbology = layer ? siLayerUsesArcgisOnlineSymbology(layer) : false;
-          if (!useAgSymbology) {
-            map.setPaintProperty?.(agroFillId, 'fill-opacity', 0);
-          }
-        } else if (map.getLayer(agroFillId)) {
-          const layer = customLayersRef.current.find(l => String(l.id) === AGRO_STRUCTURES_PRIMARY_LAYER_ID);
-          const useAgSymbology = layer ? siLayerUsesArcgisOnlineSymbology(layer) : false;
-          if (!useAgSymbology) {
-            const op = layer?.mapOpacity ?? 1;
-            const pfa = layer?.polygonFillAlpha ?? SI_PORTAL_LAYER_VISIBLE_FILL_ALPHA;
-            map.setPaintProperty?.(agroFillId, 'fill-opacity', pfa * op);
-          }
-        }
-      } catch {
-        /* ignore map/source race during style rebuild */
-      }
-      // Live digitizing preview stays on top so vertices remain visible while drawing.
-      raise('si-draw-draft-fill');
-      raise('si-draw-draft-line');
-      raise('si-draw-draft-close-hint');
-      raise('si-draw-draft-vertex');
-      raise('si-draw-draft-pt');
-      raise(agroLineId);
-      raise(agroFillId);
-      try {
-        const mcdaLayerIds = (map.getStyle()?.layers ?? [])
-          .map(l => l.id)
-          .filter(
-            (id): id is string =>
-              !!id && id.includes('well-suit-mcda') && !id.includes('label') && !id.includes('symbol'),
-          );
-        for (const mcdaId of mcdaLayerIds) raise(mcdaId);
-      } catch {
-        /* ignore */
-      }
+      syncAnalysisMapLayerOrder();
     };
     sync();
+    map.on('idle', sync);
+    return () => {
+      map.off('idle', sync);
+    };
   }, [
     isMapStyleReady,
     sentinelWmsOnMap,
@@ -17045,6 +17042,7 @@ export default function SatelliteIntelligence() {
     draftDrawGeoJson,
     drawnGeometry,
     mapDrawTool,
+    syncAnalysisMapLayerOrder,
   ]);
 
   const circleRefineHud = useMemo(() => {
@@ -19789,6 +19787,9 @@ export default function SatelliteIntelligence() {
                           onRemoveStep={hydro.removeStep}
                           onExportRaster={hydro.exportRaster}
                           onRunAll={handleHydroRunAll}
+                          onExportReport={handleHydroExportReport}
+                          exportReportBusy={hydroExportBusy}
+                          exportReportLabel={hydroExportLabel}
                         />
                       </div>
                     )}

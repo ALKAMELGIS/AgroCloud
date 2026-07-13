@@ -16,6 +16,11 @@ export type TimeSeriesExportContext = BuildTimeSeriesReportPayloadInput & {
   config?: Partial<TimeSeriesReportConfig>
 }
 
+export type TimeSeriesExportOptions = {
+  signal?: AbortSignal
+  onMapSnapshotProgress?: (completed: number, total: number) => void
+}
+
 const DEFAULT_CONFIG: TimeSeriesReportConfig = {
   projectName: 'AgroCloud Satellite Intelligence',
   generatedBy: 'AgroCloud',
@@ -25,7 +30,12 @@ const DEFAULT_CONFIG: TimeSeriesReportConfig = {
 
 async function buildExportPayload(
   ctx: TimeSeriesExportContext,
-  options?: { includeMapSnapshots?: boolean; enrichVegetationCoverage?: boolean },
+  options?: {
+    includeMapSnapshots?: boolean
+    enrichVegetationCoverage?: boolean
+    signal?: AbortSignal
+    onMapSnapshotProgress?: (completed: number, total: number) => void
+  },
 ) {
   const config = { ...DEFAULT_CONFIG, ...ctx.config }
   return buildTimeSeriesReportPayload({
@@ -36,6 +46,8 @@ async function buildExportPayload(
     includeMapSnapshots: options?.includeMapSnapshots ?? true,
     includeVegetationCoverageTimeline: options?.enrichVegetationCoverage ?? true,
     periodAnchorDates: ctx.periodAnchorDates,
+    signal: options?.signal ?? ctx.signal,
+    onMapSnapshotProgress: options?.onMapSnapshotProgress ?? ctx.onMapSnapshotProgress,
   })
 }
 
@@ -55,7 +67,12 @@ export async function runTimeSeriesExport(
   ctx: TimeSeriesExportContext,
   layerSeries: ImageryTimeSeriesLayerSeries[],
   chartLabels: string[],
+  options?: TimeSeriesExportOptions,
 ): Promise<void> {
+  const snapshotOpts = {
+    signal: options?.signal,
+    onMapSnapshotProgress: options?.onMapSnapshotProgress,
+  }
   switch (kind) {
     case 'pdf':
       await generateFullTimeSeriesReport(ctx)
@@ -72,6 +89,7 @@ export async function runTimeSeriesExport(
       const payload = await buildExportPayload(ctx, {
         includeMapSnapshots: true,
         enrichVegetationCoverage: true,
+        ...snapshotOpts,
       })
       await generateTimeSeriesReportExcel(payload)
       break
@@ -80,6 +98,7 @@ export async function runTimeSeriesExport(
       const payload = await buildExportPayload(ctx, {
         includeMapSnapshots: true,
         enrichVegetationCoverage: true,
+        ...snapshotOpts,
       })
       await generateTimeSeriesReportDocx(payload)
       break

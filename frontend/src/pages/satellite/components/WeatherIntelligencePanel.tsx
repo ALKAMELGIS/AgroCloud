@@ -21,6 +21,8 @@ import {
   type WeatherHistoryMetric,
 } from '../../../lib/openMeteoWeather';
 import { WeatherTimeHistoryChart } from './WeatherTimeHistoryChart';
+import { buildWeatherClimateReportPayload } from '../lib/weatherClimateReport/weatherClimateAnalysisEngine';
+import { generateWeatherClimateReportExcel } from '../lib/weatherClimateReport/generateWeatherClimateReportExcel';
 
 export type WeatherLocation = {
   lat: number;
@@ -39,6 +41,8 @@ type WeatherIntelligencePanelProps = {
   mapboxToken?: string;
   /** Narrower default size for AgroCloud Platform map overlay. */
   layout?: 'default' | 'acp-compact';
+  /** Optional AOI / field name for climate report exports. */
+  aoiName?: string;
 };
 
 type PanelView = 'forecast' | 'history';
@@ -322,6 +326,7 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
   onBeginMapPick,
   mapboxToken,
   layout = 'default',
+  aoiName,
 }) => {
   const compact = layout === 'acp-compact';
   const { scopedStorageKey } = useSiInstanceScope();
@@ -342,6 +347,8 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
   const [historyMetric, setHistoryMetric] = useState<WeatherHistoryMetric>('temp');
   const [historyDateStart, setHistoryDateStart] = useState('');
   const [historyDateEnd, setHistoryDateEnd] = useState('');
+  const [climateExportBusy, setClimateExportBusy] = useState(false);
+  const [climateExportProgress, setClimateExportProgress] = useState('');
   const [selectedDayDetail, setSelectedDayDetail] = useState<OpenMeteoDailyDetail | null>(null);
   const [dayDetailLoading, setDayDetailLoading] = useState(false);
   const { geom, setGeom, startDrag, startResize } = useWeatherPanelGeometry(panelGeomLs, compact);
@@ -575,23 +582,41 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
 
   const closeHistory = () => setPanelView('forecast');
 
-  const exportHistoryCsv = () => {
-    if (!filteredHistory?.points.length) return;
-    const header = 'time,temperature_c,precip_mm,humidity_pct,wind_kmh,pressure_hpa\n';
-    const rows = filteredHistory.points
-      .map(
-        p =>
-          `${p.time},${p.temperatureC ?? ''},${p.precipitationMm ?? ''},${p.humidityPct ?? ''},${p.windSpeedKmh ?? ''},${p.pressureHpa ?? ''}`,
-      )
-      .join('\n');
-    // Prepend a UTF-8 BOM so Excel opens the sheet with correct encoding.
-    const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `weather-history-${location.lat.toFixed(2)}-${location.lng.toFixed(2)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const exportClimateReport = async () => {
+    if (!filteredHistory?.points.length || climateExportBusy) return;
+    setClimateExportBusy(true);
+    setClimateExportProgress('Preparing climate data…');
+    setError(null);
+    try {
+      const start = historyDateStart || filteredHistory.startDate;
+      const end = historyDateEnd || filteredHistory.endDate;
+      setClimateExportProgress('Fetching historical archive…');
+      const history = await fetchOpenMeteoHistoryRange(location.lat, location.lng, start, end);
+      if (!history.points.length) {
+        throw new Error('No weather records available for the selected period.');
+      }
+      setClimateExportProgress('Analyzing climate trends…');
+      const payload = buildWeatherClimateReportPayload({
+        aoiName: aoiName?.trim() || location.label,
+        aoiLocation: location.label,
+        lat: location.lat,
+        lng: location.lng,
+        timezone: history.timezone,
+        elevationM: snapshot?.elevationM ?? null,
+        analysisStart: start,
+        analysisEnd: end,
+        loadedStart: historyData?.startDate ?? history.startDate,
+        loadedEnd: historyData?.endDate ?? history.endDate,
+        hourlyRecords: history.points,
+      });
+      setClimateExportProgress('Generating Excel report…');
+      await generateWeatherClimateReportExcel(payload);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Climate report export failed');
+    } finally {
+      setClimateExportBusy(false);
+      setClimateExportProgress('');
+    }
   };
 
   const enrichLabel = useCallback(async () => {
@@ -758,10 +783,14 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
                       void loadHistoryRange(location.lat, location.lng, start, end);
                     }
                   }}
-                  onExport={exportHistoryCsv}
+                  onExport={() => void exportClimateReport()}
+                  exportLoading={climateExportBusy}
+                  exportProgressLabel={climateExportProgress || 'Export Climate Report (XLSX)'}
                 />
               ) : (
-                <p className="si-wx-history__loading">No historical data for this range.</p>
+                <p className="si-wx-history__loading">
+                  {climateExportBusy ? climateExportProgress || 'Generating climate report…' : 'No historical data for this range.'}
+                </p>
               )}
             </>
           ) : (

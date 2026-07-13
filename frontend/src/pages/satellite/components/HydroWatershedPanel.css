@@ -196,6 +196,38 @@
   cursor: not-allowed;
 }
 
+.si-hydro__export-report {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid rgba(59, 130, 246, 0.45);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(30, 58, 138, 0.55), rgba(15, 23, 42, 0.72));
+  -webkit-backdrop-filter: var(--hy-blur);
+  backdrop-filter: var(--hy-blur);
+  color: #ffffff;
+  font-weight: 650;
+  font-size: 11px;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.si-hydro__export-report i {
+  font-size: 12px;
+  color: #93c5fd;
+}
+.si-hydro__export-report:hover:not(:disabled) {
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.65), rgba(15, 23, 42, 0.82));
+  border-color: rgba(147, 197, 253, 0.55);
+}
+.si-hydro__export-report:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* ── Errors ─────────────────────────────────────────────────────────────── */
 .si-hydro__error,
 .si-hydro__card-err {

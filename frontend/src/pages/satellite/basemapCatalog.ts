@@ -445,6 +445,17 @@ export function basemapTileErrorShouldFallback(url: string, status?: number): bo
   return status === 403 || status === 401
 }
 
+export function isSatelliteImageryBasemapId(id: string): boolean {
+  const resolved = resolveBasemapId(id)
+  return (
+    resolved === RASTER_BASEMAP_FALLBACK_ID ||
+    resolved === GOOGLE_EARTH_BASEMAP_ID ||
+    resolved === 'esri' ||
+    resolved === 'satellite-3d' ||
+    /satellite|imagery/i.test(resolved)
+  )
+}
+
 /** @deprecated Mapbox basemaps removed; kept for import compatibility. */
 export const BASEMAP_CATALOG_OPTS_SATELLITE_NO_MAPBOX_VECTOR: BuildBasemapCatalogOptions = {
   includeMapboxVectorBasemaps: false,

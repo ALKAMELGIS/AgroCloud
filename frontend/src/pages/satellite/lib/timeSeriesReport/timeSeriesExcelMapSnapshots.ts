@@ -5,8 +5,9 @@ import type { ImageryIndexInterpretation } from '../../../../lib/imageryIndexInt
 import { resolveLayerLiveLegendSpec } from '../../../../lib/layerLiveLegendCatalog'
 import type { SentinelHubDailyIndexMeans } from '../../../../lib/sentinelHubStatisticsApi'
 import {
+  compositeAoiMapSnapshotBase64,
   dataUrlToPngBase64,
-  fetchFieldMapSnapshot,
+  fetchSatelliteBasemapSnapshot,
   fetchIndexLayerMapSnapshotBase64,
 } from './timeSeriesMapSnapshot'
 import type { TimeSeriesMapSnapshot, TimeSeriesMapSnapshotGroup } from './timeSeriesReportTypes'
@@ -16,7 +17,9 @@ const SECTION_FILL = 'FFE2F5EE'
 const INK = 'FF0F172A'
 const MUTED = 'FF64748B'
 const DATA_SOURCE = 'Sentinel-2 L2A (Sentinel Hub WMS)'
-const MAX_SNAPSHOTS_PER_LAYER = 8
+const SNAPSHOT_WIDTH = 480
+const SNAPSHOT_HEIGHT = 320
+const SNAPSHOT_CONCURRENCY = 2
 
 function fmtNum(n: number | null | undefined, digits = 4): string {
   if (n == null || !Number.isFinite(n)) return '—'
@@ -40,12 +43,15 @@ function formatLegendText(layerId: string): string {
   if (!spec) return layerId
   if (spec.classes?.length) {
     return spec.classes
-      .slice(0, 6)
+      .slice(0, 8)
       .map(c => {
         const range = c.rangeLabel ? ` (${c.rangeLabel})` : ''
         return `${c.label}${range}`
       })
       .join(' · ')
+  }
+  if (spec.gradientCss && spec.valueMin != null && spec.valueMax != null) {
+    return `${spec.title}: ${spec.valueMin} → ${spec.valueMax}`
   }
   return spec.subtitle || spec.title || layerId
 }
@@ -94,15 +100,38 @@ function buildSnapshotNotes(
   return `${layerId} AOI mean ${fmtNum(mean, 4)} for this scene — compare with prior periods in the time series chart.`
 }
 
-function pickSnapshotIndices(count: number): number[] {
-  if (count <= MAX_SNAPSHOTS_PER_LAYER) {
-    return Array.from({ length: count }, (_, i) => i)
+export type TimeSeriesSnapshotPeriod = {
+  periodIndex: number
+  sceneDate: string
+  periodLabel: string
+  periodKey: string
+}
+
+/** Collect every chart period in chronological order (deduped by scene date). */
+export function collectTimeSeriesSnapshotPeriods(input: {
+  chartLabels: string[]
+  displayLabels: string[]
+  periodAnchorDates: Record<string, string>
+}): TimeSeriesSnapshotPeriod[] {
+  const seen = new Set<string>()
+  const out: TimeSeriesSnapshotPeriod[] = []
+
+  for (let i = 0; i < input.chartLabels.length; i += 1) {
+    const periodKey = input.chartLabels[i]!
+    const sceneDate = (input.periodAnchorDates[periodKey] ?? periodKey).trim().slice(0, 10)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(sceneDate)) continue
+    if (seen.has(sceneDate)) continue
+    seen.add(sceneDate)
+    out.push({
+      periodIndex: i,
+      sceneDate,
+      periodLabel: input.displayLabels[i] ?? periodKey,
+      periodKey,
+    })
   }
-  const out: number[] = []
-  for (let i = 0; i < MAX_SNAPSHOTS_PER_LAYER; i += 1) {
-    out.push(Math.round((i * (count - 1)) / (MAX_SNAPSHOTS_PER_LAYER - 1)))
-  }
-  return [...new Set(out)].sort((a, b) => a - b)
+
+  out.sort((a, b) => a.sceneDate.localeCompare(b.sceneDate) || a.periodIndex - b.periodIndex)
+  return out
 }
 
 async function mapPool<T, R>(
@@ -112,7 +141,7 @@ async function mapPool<T, R>(
 ): Promise<R[]> {
   const results: R[] = new Array(items.length)
   let next = 0
-  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+  const workers = Array.from({ length: Math.min(concurrency, Math.max(items.length, 1)) }, async () => {
     while (next < items.length) {
       const i = next
       next += 1
@@ -121,6 +150,46 @@ async function mapPool<T, R>(
   })
   await Promise.all(workers)
   return results
+}
+
+async function fetchSnapshotImageBase64(input: {
+  geometry: GeoJSON.Geometry
+  layerId: string
+  sceneDate: string
+  basemapDataUrl: string | null
+  basemapBase64: string | null
+  signal?: AbortSignal
+}): Promise<string | null> {
+  let indexBase64: string | null = null
+  try {
+    indexBase64 = await fetchIndexLayerMapSnapshotBase64({
+      geometry: input.geometry,
+      layerId: input.layerId,
+      sceneDate: input.sceneDate,
+      widthPx: SNAPSHOT_WIDTH,
+      heightPx: SNAPSHOT_HEIGHT,
+      signal: input.signal,
+    })
+  } catch {
+    indexBase64 = null
+  }
+
+  if (!indexBase64 && !input.basemapDataUrl) {
+    return input.basemapBase64
+  }
+
+  try {
+    return await compositeAoiMapSnapshotBase64({
+      geometry: input.geometry,
+      basemapDataUrl: input.basemapDataUrl,
+      indexBase64,
+      layerId: input.layerId,
+      widthPx: SNAPSHOT_WIDTH,
+      heightPx: SNAPSHOT_HEIGHT,
+    })
+  } catch {
+    return indexBase64 ?? input.basemapBase64
+  }
 }
 
 export type BuildTimeSeriesMapSnapshotGroupsInput = {
@@ -134,47 +203,70 @@ export type BuildTimeSeriesMapSnapshotGroupsInput = {
   areaHa: number
   interpretations: ImageryIndexInterpretation[]
   mapboxToken?: string
+  signal?: AbortSignal
+  onProgress?: (completed: number, total: number) => void
 }
 
 export async function buildTimeSeriesMapSnapshotGroups(
   input: BuildTimeSeriesMapSnapshotGroupsInput,
 ): Promise<TimeSeriesMapSnapshotGroup[]> {
   const groups: TimeSeriesMapSnapshotGroup[] = []
-  const basemapFallback = await fetchFieldMapSnapshot(input.geometry, input.mapboxToken, 420, 300)
-  const basemapBase64 = dataUrlToPngBase64(basemapFallback)
+  const periods = collectTimeSeriesSnapshotPeriods({
+    chartLabels: input.chartLabels,
+    displayLabels: input.displayLabels,
+    periodAnchorDates: input.periodAnchorDates,
+  })
+
+  if (!periods.length) return groups
+
+  const basemapDataUrl = await fetchSatelliteBasemapSnapshot(
+    input.geometry,
+    input.mapboxToken,
+    SNAPSHOT_WIDTH,
+    SNAPSHOT_HEIGHT,
+    input.signal,
+  )
+  const basemapBase64 = dataUrlToPngBase64(basemapDataUrl)
+
+  const totalJobs = input.layerIds.length * periods.length
+  let completed = 0
 
   for (const layerId of input.layerIds) {
+    if (input.signal?.aborted) break
     const series = input.layerSeries.find(s => s.layerId.toUpperCase() === layerId.toUpperCase())
     if (!series) continue
 
-    const periodIndices: Array<{ periodIndex: number; sceneDate: string; periodLabel: string }> = []
-    for (let i = 0; i < input.chartLabels.length; i += 1) {
-      const v = series.values[i]
-      if (v == null || !Number.isFinite(v)) continue
-      const periodKey = input.chartLabels[i]!
-      const sceneDate = (input.periodAnchorDates[periodKey] ?? periodKey).trim().slice(0, 10)
-      const periodLabel = input.displayLabels[i] ?? periodKey
-      periodIndices.push({ periodIndex: i, sceneDate, periodLabel })
-    }
+    const snapshots = await mapPool(periods, SNAPSHOT_CONCURRENCY, async entry => {
+      if (input.signal?.aborted) {
+        return {
+          layerId: layerId.toUpperCase(),
+          layerLabel: layerId.toUpperCase(),
+          sceneDate: entry.sceneDate,
+          periodLabel: entry.periodLabel,
+          imageBase64: basemapBase64,
+          dataSource: DATA_SOURCE,
+          mean: null,
+          min: null,
+          max: null,
+          areaHa: input.areaHa,
+          legendText: formatLegendText(layerId),
+          notes: 'Export cancelled.',
+        } satisfies TimeSeriesMapSnapshot
+      }
 
-    if (!periodIndices.length) continue
-
-    const picked = pickSnapshotIndices(periodIndices.length).map(i => periodIndices[i]!)
-
-    const snapshots = await mapPool(picked, 3, async entry => {
       const periodMean = series.values[entry.periodIndex] ?? null
       const stats = resolveSceneStats(layerId, entry.sceneDate, periodMean, input.dailyRows)
-      let imageBase64: string | null = null
-      try {
-        imageBase64 = await fetchIndexLayerMapSnapshotBase64({
-          geometry: input.geometry,
-          layerId,
-          sceneDate: entry.sceneDate,
-        })
-      } catch {
-        imageBase64 = null
-      }
-      if (!imageBase64) imageBase64 = basemapBase64
+      const imageBase64 = await fetchSnapshotImageBase64({
+        geometry: input.geometry,
+        layerId,
+        sceneDate: entry.sceneDate,
+        basemapDataUrl,
+        basemapBase64,
+        signal: input.signal,
+      })
+
+      completed += 1
+      input.onProgress?.(completed, totalJobs)
 
       return {
         layerId: layerId.toUpperCase(),
@@ -224,7 +316,7 @@ export function buildMapSnapshotsSheet(wb: ExcelJS.Workbook, groups: TimeSeriesM
   ws.mergeCells('A1:G1')
 
   ws.getCell('A2').value =
-    'AOI index maps organized by analysis layer and acquisition date (aligned with the Imagery Time Series panel).'
+    'AOI index maps for every period in the Imagery Time Series chart (start/end date and aggregation), organized by analysis layer.'
   ws.getCell('A2').font = { size: 9, color: { argb: MUTED } }
   ws.mergeCells('A2:G2')
 

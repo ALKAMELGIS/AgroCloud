@@ -138,7 +138,7 @@ export function buildTimeSeriesDocxDocumentXml(model: TimeSeriesDocxModel): stri
     parts.push(docxSectionHeading('Map Snapshots — Full Time Series'))
     parts.push(
       docxItalicNote(
-        'AOI index maps for every acquisition date, organized by analysis layer. Data source: Sentinel-2 L2A (Sentinel Hub WMS).',
+        'AOI index maps for every period in the Imagery Time Series chart (start/end date and aggregation), organized by analysis layer. Each map includes satellite basemap, index raster, and AOI boundary. Data source: Sentinel-2 L2A (Sentinel Hub WMS).',
       ),
     )
     for (const layer of model.mapLayers) {

@@ -37,6 +37,10 @@ export type OpenMeteoHourlyPoint = {
   windSpeedKmh: number | null
   windDirectionDeg: number | null
   pressureHpa: number | null
+  /** FAO ET0 hourly (mm) when requested from archive/forecast. */
+  et0Mm: number | null
+  /** Mean shortwave radiation (W/m²) when available. */
+  shortwaveRadiationWm2: number | null
 }
 
 export type OpenMeteoWeatherSnapshot = {
@@ -322,6 +326,8 @@ function parseHourlySeries(data: Record<string, unknown>): OpenMeteoHourlyPoint[
         wind_direction_10m?: number[]
         surface_pressure?: number[]
         snowfall?: number[]
+        et0_fao_evapotranspiration?: number[]
+        shortwave_radiation?: number[]
       }
     | undefined
   const out: OpenMeteoHourlyPoint[] = []
@@ -337,6 +343,8 @@ function parseHourlySeries(data: Record<string, unknown>): OpenMeteoHourlyPoint[
       windSpeedKmh: hourly.wind_speed_10m?.[i] ?? null,
       windDirectionDeg: hourly.wind_direction_10m?.[i] ?? null,
       pressureHpa: hourly.surface_pressure?.[i] ?? null,
+      et0Mm: hourly.et0_fao_evapotranspiration?.[i] ?? null,
+      shortwaveRadiationWm2: hourly.shortwave_radiation?.[i] ?? null,
     })
   }
   return out
@@ -519,7 +527,7 @@ export async function fetchOpenMeteoTimeHistory(
   url.searchParams.set('forecast_days', '1')
   url.searchParams.set(
     'hourly',
-    'temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,wind_direction_10m,surface_pressure,weather_code',
+    'temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,wind_direction_10m,surface_pressure,weather_code,et0_fao_evapotranspiration,shortwave_radiation',
   )
   const res = await fetch(url.toString())
   if (!res.ok) throw new Error(`Open-Meteo hourly HTTP ${res.status}`)
@@ -560,7 +568,7 @@ export async function fetchOpenMeteoHistoryRange(
   url.searchParams.set('end_date', end)
   url.searchParams.set(
     'hourly',
-    'temperature_2m,relative_humidity_2m,precipitation,snowfall,wind_speed_10m,wind_direction_10m,surface_pressure,weather_code',
+    'temperature_2m,relative_humidity_2m,precipitation,snowfall,wind_speed_10m,wind_direction_10m,surface_pressure,weather_code,et0_fao_evapotranspiration,shortwave_radiation',
   )
   const res = await fetch(url.toString())
   if (!res.ok) throw new Error(`Open-Meteo archive HTTP ${res.status}`)

@@ -6,6 +6,7 @@
 
 import type { Map as MapboxMap } from 'mapbox-gl'
 import { SENTINEL_HUB_WMS_TILE_PIXELS } from './sentinelHubWmsLayers'
+import { resolveSiAnalysisRasterBeforeLayerId } from './siMapAnalysisLayerOrder'
 import {
   resolveSiSentinelAoiWmsChunkBounds,
   type SiSentinelAoiWmsStackState,
@@ -107,6 +108,7 @@ function ensurePingPongRasterPair(
   stack: SiSentinelAoiWmsStackState,
   chunkIdx: number,
   minZoom: number,
+  beforeLayerId?: string,
 ): void {
   const chunk = stack.displayChunks[chunkIdx]
   const bounds = resolveSiSentinelAoiWmsChunkBounds(stack, chunk)
@@ -127,17 +129,21 @@ function ensurePingPongRasterPair(
     }
 
     if (!map.getLayer(layerId)) {
-      map.addLayer({
-        id: layerId,
-        type: 'raster',
-        source: sourceId,
-        layout: { visibility: 'none' },
-        paint: {
-          'raster-opacity': 0,
-          'raster-fade-duration': 0,
-          'raster-resampling': 'linear',
+      const beforeId = beforeLayerId ?? resolveSiAnalysisRasterBeforeLayerId(map)
+      map.addLayer(
+        {
+          id: layerId,
+          type: 'raster',
+          source: sourceId,
+          layout: { visibility: 'none' },
+          paint: {
+            'raster-opacity': 0,
+            'raster-fade-duration': 0,
+            'raster-resampling': 'linear',
+          },
         },
-      })
+        beforeId,
+      )
     }
   }
 }
@@ -161,10 +167,12 @@ export function ensureSiSentinelAoiWmsPingPongStackOnMap(
   stack: SiSentinelAoiWmsStackState,
   minZoom: number,
   runtime: SiSentinelAoiWmsPingPongRuntime,
+  options?: { beforeLayerId?: string },
 ): void {
+  const beforeLayerId = options?.beforeLayerId ?? resolveSiAnalysisRasterBeforeLayerId(map)
   const chunkCount = stack.displayChunks.length
   for (let i = 0; i < chunkCount; i++) {
-    ensurePingPongRasterPair(map, stack, i, minZoom)
+    ensurePingPongRasterPair(map, stack, i, minZoom, beforeLayerId)
   }
   for (let i = chunkCount; i < runtime.mountedChunkCount; i++) {
     removePingPongRasterPair(map, stack.idPrefix, i)

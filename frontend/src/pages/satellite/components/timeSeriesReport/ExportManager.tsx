@@ -61,6 +61,7 @@ export function TimeSeriesExportManager({
 }: TimeSeriesExportManagerProps) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [mapProgress, setMapProgress] = useState<{ done: number; total: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
 
@@ -78,6 +79,7 @@ export function TimeSeriesExportManager({
       setOpen(false)
       setError(null)
       setBusy(true)
+      setMapProgress(null)
       try {
         await runTimeSeriesExport(
           kind,
@@ -102,11 +104,15 @@ export function TimeSeriesExportManager({
           },
           layerSeries,
           chartLabels,
+          {
+            onMapSnapshotProgress: (done, total) => setMapProgress({ done, total }),
+          },
         )
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Export failed')
       } finally {
         setBusy(false)
+        setMapProgress(null)
       }
     },
     [
@@ -143,7 +149,11 @@ export function TimeSeriesExportManager({
         title="Export analysis"
       >
         <i className={'fa-solid ' + (busy ? 'fa-spinner fa-spin' : 'fa-file-export')} aria-hidden="true" />
-        {busy ? 'Exporting…' : 'Export'}
+        {busy
+          ? mapProgress
+            ? `Maps ${mapProgress.done}/${mapProgress.total}…`
+            : 'Exporting…'
+          : 'Export'}
       </button>
       {open ? (
         <div className="acp-ts-export__menu" role="menu">

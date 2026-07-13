@@ -1,11 +1,39 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Filler,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Bar, Line } from 'react-chartjs-2';
+import {
   metricLabel,
   metricUnit,
   metricValueFromHourly,
   type OpenMeteoHourlyPoint,
   type WeatherHistoryMetric,
 } from '../../../lib/openMeteoWeather';
+import {
+  buildWeatherDailySeries,
+  buildWeatherHistoryChartSeries,
+  type WeatherTimeAggregation,
+} from '../lib/weatherHistoryChartAggregate';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Filler,
+  Tooltip,
+  Legend,
+);
 
 type WeatherTimeHistoryChartProps = {
   points: OpenMeteoHourlyPoint[];
@@ -17,6 +45,8 @@ type WeatherTimeHistoryChartProps = {
   maxDate?: string;
   onRangeChange: (start: string, end: string) => void;
   onExport?: () => void;
+  exportLoading?: boolean;
+  exportProgressLabel?: string;
 };
 
 type ChartVisual =
@@ -67,6 +97,13 @@ const CHART_VISUALS: ChartVisualDef[] = [
 const PRIMARY_CHART_VISUALS = CHART_VISUALS.filter(v => v.primary);
 const MORE_CHART_VISUALS = CHART_VISUALS.filter(v => !v.primary);
 const TIME_AXIS_CHARTS = new Set<ChartVisual>(['line', 'bar', 'area', 'scatter', 'heatmap', 'treemap']);
+const CARTESIAN_CHART_JS = new Set<ChartVisual>(['line', 'bar', 'area']);
+const WEATHER_AGGREGATE_OPTIONS: Array<{ value: WeatherTimeAggregation; label: string }> = [
+  { value: 'day', label: 'Day' },
+  { value: 'week', label: 'Week' },
+  { value: 'month', label: 'Month' },
+  { value: 'year', label: 'Year' },
+];
 
 const WIND_DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'] as const;
 
@@ -469,17 +506,38 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
   maxDate,
   onRangeChange,
   onExport,
+  exportLoading = false,
+  exportProgressLabel,
 }) => {
   const [chartVisual, setChartVisual] = useState<ChartVisual>('line');
+  const [timeAggregation, setTimeAggregation] = useState<WeatherTimeAggregation>('day');
+  const [chartReady, setChartReady] = useState(false);
 
-  const values = useMemo(
-    () => points.map(p => metricValueFromHourly(p, metric)),
-    [points, metric],
+  useEffect(() => {
+    const t = window.setTimeout(() => setChartReady(true), 40);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  const chartSeries = useMemo(
+    () => buildWeatherHistoryChartSeries(points, metric, timeAggregation),
+    [points, metric, timeAggregation],
   );
-  const finite = useMemo(() => finiteValues(values), [values]);
-  const dailyBuckets = useMemo(() => dailyAggregates(points, values), [points, values]);
 
-  const xAxisLabels = useMemo(() => buildXAxisLabels(points, timezone), [points, timezone]);
+  const values = useMemo(() => chartSeries.values, [chartSeries.values]);
+  const finite = useMemo(() => finiteValues(values), [values]);
+  const dailyBuckets = useMemo(() => {
+    const daily = buildWeatherDailySeries(points, metric);
+    return daily.map(d => ({
+      date: d.date,
+      label: d.date.slice(5),
+      value: d.value,
+    }));
+  }, [points, metric]);
+
+  const xAxisLabels = useMemo(() => {
+    if (CARTESIAN_CHART_JS.has(chartVisual)) return [];
+    return buildXAxisLabels(points, timezone);
+  }, [points, timezone, chartVisual]);
 
   const stats = useMemo(() => {
     if (!finite.length) return { min: null, avg: null, max: null, n: 0 };
@@ -488,6 +546,8 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
     const avg = finite.reduce((a, b) => a + b, 0) / finite.length;
     return { min, max, avg, n: finite.length };
   }, [finite]);
+
+  const useChartJs = CARTESIAN_CHART_JS.has(chartVisual);
 
   const chart = useMemo(() => {
     const W = 560;
@@ -644,6 +704,100 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
   const fmt = (v: number | null) =>
     v != null && Number.isFinite(v) ? `${v.toFixed(metric === 'press' ? 0 : 1)}${unit}` : '—';
 
+  const chartJsData = useMemo(
+    () => ({
+      labels: chartSeries.displayLabels,
+      datasets: [
+        {
+          label: `${metricLabel(metric)} (${unit})`,
+          data: chartSeries.values,
+          borderColor: '#34d399',
+          backgroundColor:
+            chartVisual === 'bar' ? 'rgba(52, 211, 153, 0.55)' : 'rgba(52, 211, 153, 0.18)',
+          fill: chartVisual === 'area' || chartVisual === 'line',
+          tension: 0.28,
+          borderWidth: chartVisual === 'bar' ? 1 : 2,
+          pointRadius:
+            chartSeries.values.length > 160 ? 0 : chartSeries.values.length > 80 ? 1.5 : 2.5,
+          pointHoverRadius: 4,
+          pointBackgroundColor: '#6ee7b7',
+          pointBorderColor: '#064e3b',
+          pointBorderWidth: 1,
+          spanGaps: true,
+        },
+      ],
+    }),
+    [chartSeries.displayLabels, chartSeries.values, metric, unit, chartVisual],
+  );
+
+  const chartJsOptions = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: chartReady ? 280 : 0 },
+      interaction: { mode: 'index' as const, intersect: false },
+      layout: { padding: { top: 12, right: 8, bottom: 4, left: 2 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(15, 23, 42, 0.94)',
+          borderColor: 'rgba(52, 211, 153, 0.35)',
+          borderWidth: 1,
+          titleFont: { size: 10, weight: '600' as const },
+          bodyFont: { size: 10 },
+          callbacks: {
+            title: (items: Array<{ dataIndex: number }>) => {
+              const idx = items[0]?.dataIndex ?? 0;
+              return chartSeries.labels[idx] ?? '';
+            },
+            label: (ctx: { parsed: { y: number | null } }) => {
+              const v = ctx.parsed.y;
+              if (v == null || !Number.isFinite(v)) return `${metricLabel(metric)}: —`;
+              return `${metricLabel(metric)}: ${v.toFixed(metric === 'press' ? 0 : 2)} ${unit}`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: 'rgba(255, 255, 255, 0.55)',
+            maxTicksLimit: Math.min(14, Math.max(chartSeries.displayLabels.length, 4)),
+            autoSkip: chartSeries.displayLabels.length > 10,
+            maxRotation: chartSeries.displayLabels.length > 8 ? 40 : 0,
+            minRotation: chartSeries.displayLabels.length > 8 ? 20 : 0,
+            font: { size: 9 },
+            padding: 6,
+          },
+          grid: { color: 'rgba(255, 255, 255, 0.06)' },
+          border: { color: 'rgba(255, 255, 255, 0.08)' },
+        },
+        y: {
+          grace: '8%',
+          ticks: {
+            color: 'rgba(255, 255, 255, 0.55)',
+            font: { size: 9 },
+            padding: 6,
+            callback: (value: string | number) => {
+              const n = Number(value);
+              if (!Number.isFinite(n)) return value;
+              return metric === 'temp' ? Math.round(n) : n.toFixed(metric === 'rain' ? 1 : 0);
+            },
+          },
+          grid: { color: 'rgba(255, 255, 255, 0.06)' },
+          border: { color: 'rgba(255, 255, 255, 0.08)' },
+          title: {
+            display: true,
+            text: unit,
+            color: 'rgba(255, 255, 255, 0.45)',
+            font: { size: 9, weight: '600' as const },
+          },
+        },
+      },
+    }),
+    [chartReady, chartSeries.displayLabels.length, chartSeries.labels, metric, unit],
+  );
+
   const scatterRadius = values.length > 120 ? 1.8 : values.length > 60 ? 2.2 : 2.8;
   const showTimeAxis = TIME_AXIS_CHARTS.has(chartVisual);
   const activeTitle = chartDef(chartVisual).title;
@@ -652,7 +806,7 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
     { id: 'min', label: 'Min', value: fmt(stats.min), kind: 'min' as const },
     { id: 'avg', label: 'Avg', value: fmt(stats.avg), kind: 'avg' as const },
     { id: 'max', label: 'Max', value: fmt(stats.max), kind: 'max' as const },
-    { id: 'n', label: 'Samples', value: String(stats.n), kind: 'samples' as const },
+    { id: 'n', label: 'Points', value: String(stats.n), kind: 'samples' as const },
   ];
 
   const insightBuckets = useMemo(() => dailyBuckets.slice(-8), [dailyBuckets]);
@@ -763,7 +917,45 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
           <ChartTypePicker chartVisual={chartVisual} onChange={setChartVisual} />
         </div>
 
-        <div className="si-wx-history__plot">
+        <div className="si-wx-history__chart-controls">
+          <div className="si-wx-history__field si-wx-history__field--aggregate">
+            <span className="si-wx-history__field-label">Aggregate</span>
+            <div className="si-wx-history__aggregate" role="group" aria-label="Time aggregation">
+              {WEATHER_AGGREGATE_OPTIONS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`si-wx-history__aggregate-btn${timeAggregation === value ? ' is-on' : ''}`}
+                  aria-pressed={timeAggregation === value}
+                  onClick={() => setTimeAggregation(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <span className="si-wx-history__chart-meta">
+            {chartSeries.values.length.toLocaleString()} points · {metricLabel(metric)} ·{' '}
+            {timeAggregation}
+          </span>
+        </div>
+
+        <div
+          className={`si-wx-history__plot${useChartJs ? ' si-wx-history__plot--chartjs' : ''}`}
+        >
+          {useChartJs ? (
+            <div className="si-wx-history__chart-canvas-wrap">
+              {chartSeries.values.length ? (
+                chartVisual === 'bar' ? (
+                  <Bar data={chartJsData} options={chartJsOptions} />
+                ) : (
+                  <Line data={chartJsData} options={chartJsOptions} />
+                )
+              ) : (
+                <p className="si-wx-history__chart-empty">No data for this aggregation.</p>
+              )}
+            </div>
+          ) : (
           <svg
             className="si-wx-history__chart"
             viewBox={`0 0 ${chart.W} ${chart.H}`}
@@ -927,15 +1119,17 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
               </g>
             ) : null}
           </svg>
-          {chartVisual === 'line' ||
+          )}
+          {!useChartJs &&
+          (chartVisual === 'line' ||
           chartVisual === 'bar' ||
           chartVisual === 'area' ||
-          chartVisual === 'scatter' ? (
+          chartVisual === 'scatter') ? (
             <span className="si-wx-history__y-unit">{unit}</span>
           ) : null}
         </div>
 
-        {showTimeAxis && xAxisLabels.length ? (
+        {!useChartJs && showTimeAxis && xAxisLabels.length ? (
           <div className="si-wx-history__xaxis" aria-hidden>
             {xAxisLabels.map((xl, i) => (
               <div
@@ -1084,25 +1278,19 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
                     ))}
                   </svg>
                 </div>
-                <div className="si-wx-history__insight-key">
-                  <div className="si-wx-history__insight-key-head">
-                    <span className="si-wx-history__insight-key-title">Distribution</span>
-                    <span className="si-wx-history__insight-key-meta">{unit}</span>
-                  </div>
-                  <ul className="si-wx-history__insight-key-list">
-                    {miniPie.legend.map(row => (
-                      <li key={row.key} className="si-wx-history__insight-key-row">
-                        <span className="si-wx-history__insight-key-swatch" style={{ background: row.color }} aria-hidden />
-                        <span className="si-wx-history__insight-key-label">{row.label}</span>
-                        <span className="si-wx-history__insight-key-val">
-                          {row.valueText}
-                          <span className="si-wx-history__insight-key-unit">{unit}</span>
-                        </span>
-                        <span className="si-wx-history__insight-key-pct">{row.pct.toFixed(1)}%</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                <ul className="si-wx-history__insight-key-list" aria-label={`${metricLabel(metric)} distribution`}>
+                  {miniPie.legend.map(row => (
+                    <li key={row.key} className="si-wx-history__insight-key-row">
+                      <span className="si-wx-history__insight-key-swatch" style={{ background: row.color }} aria-hidden />
+                      <span className="si-wx-history__insight-key-label">{row.label}</span>
+                      <span className="si-wx-history__insight-key-val">
+                        {row.valueText}
+                        <span className="si-wx-history__insight-key-unit">{unit}</span>
+                      </span>
+                      <span className="si-wx-history__insight-key-pct">{row.pct.toFixed(1)}%</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             ) : (
               <p className="si-wx-history__insight-empty">No share data</p>
@@ -1132,8 +1320,18 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
           />
         </label>
         {onExport ? (
-          <button type="button" className="si-wx-history__export" title="Export CSV" onClick={onExport}>
-            <i className="fa-solid fa-file-export" aria-hidden />
+          <button
+            type="button"
+            className={`si-wx-history__export${exportLoading ? ' si-wx-history__export--busy' : ''}`}
+            title={exportProgressLabel || 'Export Climate Report (XLSX)'}
+            onClick={onExport}
+            disabled={exportLoading}
+            aria-busy={exportLoading}
+          >
+            <i
+              className={`fa-solid ${exportLoading ? 'fa-spinner fa-spin' : 'fa-file-excel'}`}
+              aria-hidden
+            />
           </button>
         ) : null}
       </div>

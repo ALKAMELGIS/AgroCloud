@@ -7,7 +7,7 @@ import type { SentinelHubDailyIndexMeans } from '../../../../lib/sentinelHubStat
 import type { CropAlertFieldInput } from '../../../../lib/siCropAlertEngine'
 import type { ImageryTimeSeriesLayerSeries } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import type { ImageryTimeAggregation } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
-import { fetchFieldMapSnapshot } from './timeSeriesMapSnapshot'
+import { fetchSatelliteBasemapSnapshot } from './timeSeriesMapSnapshot'
 import { buildTimeSeriesMapSnapshotGroups } from './timeSeriesExcelMapSnapshots'
 import { buildEstimatedWaterLossTimeline } from './estimatedWaterLossTimeline'
 import { buildVegetationCoverageTimeline } from './vegetationCoverageTimeline'
@@ -71,6 +71,8 @@ export type BuildTimeSeriesReportPayloadInput = {
   includeVegetationCoverageTimeline?: boolean
   periodAnchorDates?: Record<string, string>
   timeAggregation?: ImageryTimeAggregation
+  signal?: AbortSignal
+  onMapSnapshotProgress?: (completed: number, total: number) => void
 }
 
 function resolveDailyMean(rows: SentinelHubDailyIndexMeans[], layerId: string, date: string): number | null {
@@ -151,7 +153,7 @@ export async function buildTimeSeriesReportPayload(
 
   const mapImageDataUrl =
     input.includeMap !== false
-      ? await fetchFieldMapSnapshot(geometry, input.mapboxToken, 520, 360)
+      ? await fetchSatelliteBasemapSnapshot(geometry, input.mapboxToken, 520, 360)
       : null
 
   const mapSnapshotGroups =
@@ -167,6 +169,8 @@ export async function buildTimeSeriesReportPayload(
           areaHa,
           interpretations,
           mapboxToken: input.mapboxToken,
+          signal: input.signal,
+          onProgress: input.onMapSnapshotProgress,
         })
       : []
 

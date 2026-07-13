@@ -1,0 +1,32 @@
+.si-map-analysis-legend-overlay {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  z-index: 6;
+  max-width: min(300px, calc(100% - 120px));
+  pointer-events: none;
+}
+
+.si-map-analysis-legend-overlay .si-layer-live-legend__section--float {
+  margin: 0;
+  max-height: min(42vh, 360px);
+  overflow: auto;
+  pointer-events: auto;
+  border-radius: 12px;
+  box-shadow:
+    0 12px 32px rgba(2, 6, 23, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.si-map-container--timeline-active .si-map-analysis-legend-overlay {
+  bottom: 56px;
+}
+
+@media (max-width: 720px) {
+  .si-map-analysis-legend-overlay {
+    max-width: min(260px, calc(100% - 80px));
+    left: 8px;
+    bottom: 8px;
+  }
+}

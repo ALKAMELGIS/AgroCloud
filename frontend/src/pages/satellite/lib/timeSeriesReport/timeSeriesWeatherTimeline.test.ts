@@ -19,6 +19,8 @@ function hourly(date: string, hour: number, overrides: Partial<OpenMeteoHourlyPo
     windDirectionDeg: 90,
     pressureHpa: 1013,
     snowfallCm: null,
+    et0Mm: null,
+    shortwaveRadiationWm2: null,
     ...overrides,
   }
 }
