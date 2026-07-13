@@ -3,19 +3,22 @@ import {
   bboxFromGeometry,
   dataUrlToPngBase64,
   fetchEsriSatelliteBasemapForBbox,
+  fitLngLatBboxToMapAspect,
   mapLngLatToMercatorBox,
   type LngLatBbox,
 } from '../../pages/satellite/lib/timeSeriesReport/timeSeriesMapSnapshot'
 
-const SNAPSHOT_WIDTH = 900
-const SNAPSHOT_HEIGHT = 520
-const MARGIN = 44
-const LEGEND_GAP = 12
+/** Fixed frame for every hydro report map — keeps basemap scale + circle AOIs equal. */
+const SNAPSHOT_WIDTH = 820
+const SNAPSHOT_HEIGHT = 560
+const MARGIN = 32
 const TITLE_H = 36
 const FOOTER_H = 18
+const LEGEND_STRIP_H = 112
+const MAP_X = MARGIN
 const MAP_Y = TITLE_H + 8
-const MAP_H = SNAPSHOT_HEIGHT - TITLE_H - FOOTER_H - 16
-const BASE_MAP_W = SNAPSHOT_WIDTH - MARGIN * 2
+export const HYDRO_REPORT_MAP_W = SNAPSHOT_WIDTH - MARGIN * 2
+export const HYDRO_REPORT_MAP_H = SNAPSHOT_HEIGHT - TITLE_H - FOOTER_H - LEGEND_STRIP_H - 16
 
 export type HydroRasterCoordinates = [
   [number, number],
@@ -23,15 +26,6 @@ export type HydroRasterCoordinates = [
   [number, number],
   [number, number],
 ]
-
-type SnapshotLayout = {
-  mapX: number
-  mapY: number
-  mapW: number
-  mapH: number
-  legendX: number
-  legendPanelW: number
-}
 
 function parseCssColor(color: string): string {
   const c = color.trim()
@@ -48,39 +42,15 @@ function legendRowCount(legend: HydroLegend): number {
 function measureLegendBox(legend: HydroLegend): { width: number; height: number } {
   const pad = 8
   const titleH = 16
-  const rowH = 15
+  const rowH = 14
   if (legend.kind === 'gradient') {
-    return { width: 210, height: titleH + pad + 12 + 14 + pad + (legend.note ? 12 : 4) }
+    return { width: 220, height: titleH + pad + 12 + 14 + pad + (legend.note ? 12 : 4) }
   }
-  const rows = legendRowCount(legend)
+  const rows = Math.min(legendRowCount(legend), 8)
   const noteH = legend.note ? 12 : 0
   const longestLabel = legend.swatches.reduce((max, s) => Math.max(max, (s.label || '').length), 0)
-  const width = Math.min(230, Math.max(165, longestLabel * 5.2 + 42))
+  const width = Math.min(280, Math.max(170, longestLabel * 5.1 + 42))
   return { width, height: titleH + pad + rows * rowH + pad + noteH }
-}
-
-function resolveSnapshotLayout(legend?: HydroLegend): SnapshotLayout {
-  if (!legend) {
-    return {
-      mapX: MARGIN,
-      mapY: MAP_Y,
-      mapW: BASE_MAP_W,
-      mapH: MAP_H,
-      legendX: 0,
-      legendPanelW: 0,
-    }
-  }
-  const box = measureLegendBox(legend)
-  const legendPanelW = Math.min(248, Math.max(152, box.width + 20))
-  const mapW = SNAPSHOT_WIDTH - MARGIN - LEGEND_GAP - legendPanelW - MARGIN
-  return {
-    mapX: MARGIN,
-    mapY: MAP_Y,
-    mapW,
-    mapH: MAP_H,
-    legendX: MARGIN + mapW + LEGEND_GAP,
-    legendPanelW,
-  }
 }
 
 function loadImage(dataUrl: string): Promise<HTMLImageElement> {
@@ -123,15 +93,20 @@ function padBbox(bbox: LngLatBbox, ratio = 0.08): LngLatBbox {
   }
 }
 
-/** North-up 2D Web Mercator extent shared by basemap, rasters, vectors, and AOI outline. */
+/**
+ * North-up 2D Web Mercator extent shared by basemap, rasters, vectors, and AOI outline.
+ * Aspect-matched to the report map frame so circle AOIs stay circular (not ellipses).
+ */
 export function resolveHydroSnapshotExtent(
   geometry: GeoJSON.Geometry,
   rasterCoordinates?: HydroRasterCoordinates | null,
 ): LngLatBbox | null {
   const geomBbox = bboxFromGeometry(geometry, 0.04)
   if (!geomBbox) return null
-  if (!rasterCoordinates) return padBbox(geomBbox, 0.1)
-  return padBbox(mergeBboxes(geomBbox, bboxFromCornerCoords(rasterCoordinates)), 0.06)
+  const padded = rasterCoordinates
+    ? padBbox(mergeBboxes(geomBbox, bboxFromCornerCoords(rasterCoordinates)), 0.06)
+    : padBbox(geomBbox, 0.1)
+  return fitLngLatBboxToMapAspect(padded, HYDRO_REPORT_MAP_W, HYDRO_REPORT_MAP_H)
 }
 
 function drawRing(
@@ -166,7 +141,7 @@ function drawAoiOutline(
 ): void {
   ctx.save()
   ctx.strokeStyle = '#fbbf24'
-  ctx.lineWidth = 2
+  ctx.lineWidth = 2.25
   const type = geometry.type
   if (type === 'Polygon') {
     ;(geometry.coordinates as [number, number][][]).forEach(ring => drawRing(ctx, ring, bbox, x, y, w, h))
@@ -203,19 +178,21 @@ function formatScaleDistance(meters: number): string {
   return `${Math.round(meters)} m`
 }
 
-function drawScaleBar(ctx: CanvasRenderingContext2D, bbox: LngLatBbox, x: number, y: number, w: number): void {
+function drawScaleBar(ctx: CanvasRenderingContext2D, bbox: LngLatBbox, mapX: number, mapY: number, mapW: number, mapH: number): void {
   const lat = (bbox.minLat + bbox.maxLat) / 2
   const metersPerDegLng = 111320 * Math.cos((lat * Math.PI) / 180)
   const spanM = Math.max((bbox.maxLng - bbox.minLng) * metersPerDegLng, 1)
   const candidates = [50, 100, 250, 500, 1000, 2000, 5000, 10000, 20000, 50000]
-  const targetPx = w * 0.22
+  const targetPx = mapW * 0.2
   let best = candidates[0]!
   for (const c of candidates) {
-    const px = (c / spanM) * w
+    const px = (c / spanM) * mapW
     if (px <= targetPx) best = c
     else break
   }
-  const barPx = Math.max(40, (best / spanM) * w)
+  const barPx = Math.max(40, (best / spanM) * mapW)
+  const x = mapX + mapW - barPx - 18
+  const y = mapY + mapH - 12
   ctx.save()
   ctx.fillStyle = 'rgba(255,255,255,0.92)'
   ctx.strokeStyle = '#0f172a'
@@ -254,31 +231,28 @@ function drawMapNeatline(ctx: CanvasRenderingContext2D, x: number, y: number, w:
   ctx.restore()
 }
 
-function drawLegendPanel(
+/** Legend in the reserved strip below the map — bottom-left, never overlaps map content. */
+function drawLegendBottomLeft(
   ctx: CanvasRenderingContext2D,
   legend: HydroLegend,
-  layout: SnapshotLayout,
+  mapX: number,
+  mapBottom: number,
 ): void {
   const pad = 8
   const titleH = 16
-  const rowH = 15
+  const rowH = 14
   const { width: boxW, height: boxH } = measureLegendBox(legend)
-  const panelW = layout.legendPanelW
-  const x = layout.legendX + Math.max(0, (panelW - boxW) / 2)
-  const y = layout.mapY + 2
+  const maxH = LEGEND_STRIP_H - 8
+  const h = Math.min(boxH, maxH)
+  const x = mapX
+  const y = mapBottom + 6
 
   ctx.save()
-  ctx.strokeStyle = '#cbd5e1'
-  ctx.lineWidth = 1
-  ctx.beginPath()
-  ctx.moveTo(layout.legendX - LEGEND_GAP / 2, layout.mapY)
-  ctx.lineTo(layout.legendX - LEGEND_GAP / 2, layout.mapY + layout.mapH)
-  ctx.stroke()
-
-  ctx.fillStyle = 'rgba(255,255,255,0.97)'
+  ctx.fillStyle = 'rgba(255,255,255,0.98)'
   ctx.strokeStyle = '#94a3b8'
-  ctx.fillRect(x, y, boxW, boxH)
-  ctx.strokeRect(x + 0.5, y + 0.5, boxW - 1, boxH - 1)
+  ctx.lineWidth = 1
+  ctx.fillRect(x, y, boxW, h)
+  ctx.strokeRect(x + 0.5, y + 0.5, boxW - 1, h - 1)
 
   ctx.fillStyle = '#064e3b'
   ctx.font = 'bold 11px system-ui,sans-serif'
@@ -315,7 +289,8 @@ function drawLegendPanel(
     const labeled = legend.swatches.filter(s => (s.label || '').trim())
     const rows = labeled.length ? labeled : legend.swatches
     let cy = y + titleH + pad
-    for (const sw of rows.slice(0, 12)) {
+    const maxRows = Math.max(1, Math.floor((h - titleH - pad - (legend.note ? 12 : 0)) / rowH))
+    for (const sw of rows.slice(0, maxRows)) {
       const swatchTop = cy + 1
       ctx.fillStyle = parseCssColor(sw.color)
       ctx.fillRect(x + pad, swatchTop, 12, 10)
@@ -328,7 +303,7 @@ function drawLegendPanel(
       ctx.fillText((sw.label || '').trim() || 'Class', x + pad + 18, cy + 10)
       cy += rowH
     }
-    if (legend.note) {
+    if (legend.note && cy + 10 < y + h) {
       ctx.fillStyle = '#64748b'
       ctx.font = '8px system-ui,sans-serif'
       ctx.fillText(legend.note, x + pad, cy + 2)
@@ -526,7 +501,7 @@ export async function fetchHydroBasemapForExtent(
   extent: LngLatBbox,
   signal?: AbortSignal,
 ): Promise<string | null> {
-  return fetchEsriSatelliteBasemapForBbox(extent, BASE_MAP_W, MAP_H, signal)
+  return fetchEsriSatelliteBasemapForBbox(extent, HYDRO_REPORT_MAP_W, HYDRO_REPORT_MAP_H, signal)
 }
 
 export async function compositeHydroMapSnapshot(options: {
@@ -540,8 +515,10 @@ export async function compositeHydroMapSnapshot(options: {
   vectorResult?: HydroStepResult | null
   legend?: HydroLegend
 }): Promise<string | null> {
-  const layout = resolveSnapshotLayout(options.legend)
-  const { mapX, mapY, mapW, mapH } = layout
+  const mapX = MAP_X
+  const mapY = MAP_Y
+  const mapW = HYDRO_REPORT_MAP_W
+  const mapH = HYDRO_REPORT_MAP_H
 
   const canvas = document.createElement('canvas')
   canvas.width = SNAPSHOT_WIDTH
@@ -605,9 +582,9 @@ export async function compositeHydroMapSnapshot(options: {
 
   drawMapNeatline(ctx, mapX, mapY, mapW, mapH)
   drawNorthArrow(ctx, mapX + 22, mapY + 28)
-  drawScaleBar(ctx, options.extent, mapX + 12, mapY + mapH - 12, mapW)
+  drawScaleBar(ctx, options.extent, mapX, mapY, mapW, mapH)
   if (options.legend) {
-    drawLegendPanel(ctx, options.legend, layout)
+    drawLegendBottomLeft(ctx, options.legend, mapX, mapY + mapH)
   }
   drawCoordFooter(ctx, options.extent, SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT)
 

@@ -138,7 +138,7 @@ export function buildTimeSeriesDocxDocumentXml(model: TimeSeriesDocxModel): stri
     parts.push(docxSectionHeading('Map Snapshots — Full Time Series'))
     parts.push(
       docxItalicNote(
-        'AOI index maps for every period in the Imagery Time Series chart (start/end date and aggregation), organized by analysis layer. Each map includes satellite basemap, index raster, and AOI boundary. Data source: Sentinel-2 L2A (Sentinel Hub WMS).',
+        'AOI index maps for every period in the Imagery Time Series chart (start/end date and aggregation), organized by analysis layer. Each map includes satellite basemap, index raster, AOI boundary, and bottom-left legend. Data source: Sentinel-2 L2A (Sentinel Hub WMS).',
       ),
     )
     for (const layer of model.mapLayers) {
@@ -153,11 +153,54 @@ export function buildTimeSeriesDocxDocumentXml(model: TimeSeriesDocxModel): stri
     }
   }
 
+  if (model.cumulativeMapLayers.length) {
+    parts.push(docxSectionHeading('Cumulative Maps — Peak of Period Composites'))
+    parts.push(
+      docxItalicNote(
+        'Appendix maps for each selected layer, one composite per year/month/week (matching the chart aggregation; day mode uses year buckets). Scene chosen as the peak index observation within each period.',
+      ),
+    )
+    for (const layer of model.cumulativeMapLayers) {
+      parts.push(docxSectionHeading(layer.title))
+      parts.push(docxMapGrid(layer.snapshots))
+      if (layer.legend) parts.push(docxItalicNote(`Legend: ${layer.legend}`))
+      if (layer.narrative) parts.push(docxBodyParagraph(layer.narrative))
+    }
+  }
+
+  if (model.correlationBlocks.length) {
+    parts.push(docxSectionHeading('Correlation Analysis — Scatter Plots & R²'))
+    parts.push(
+      docxItalicNote(
+        'Pairwise relationship among selected layers. R² and Pearson r quantify linear association for interpretation and crop/agronomy insight.',
+      ),
+    )
+    for (const block of model.correlationBlocks) {
+      parts.push(docxSectionHeading(block.title))
+      parts.push(docxItalicNote(block.r2Label))
+      if (block.rId) {
+        parts.push(docxInlineImage(block.rId, CHART_IMAGE_CX, CHART_IMAGE_CY))
+      }
+      parts.push(docxBodyParagraph(block.gisInsight))
+      parts.push(docxBodyParagraph(block.agroInsight))
+    }
+  }
+
   parts.push(docxSectionHeading('Data Quality Notes'))
   parts.push(docxBodyParagraph(model.dataQualityNotes))
 
   parts.push(docxSectionHeading('Recommendations'))
   parts.push(docxBulletList(model.recommendations))
+
+  if (model.cropRecommendationBullets.length) {
+    parts.push(docxSectionHeading('Crop Planting Recommendations'))
+    parts.push(
+      docxItalicNote(
+        'Screening advice from AOI location, satellite vigor/moisture, weather (ERA5), and optional salinity indices. Validate with soil lab tests, DEM/topography, and local agronomy before large-scale planting.',
+      ),
+    )
+    parts.push(docxBulletList(model.cropRecommendationBullets))
+  }
 
   parts.push(docxItalicNote(model.footerNote))
 

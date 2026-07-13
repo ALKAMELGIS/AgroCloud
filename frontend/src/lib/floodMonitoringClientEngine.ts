@@ -520,11 +520,13 @@ export async function runClientFloodMonitoring(
 
     let preMask: WaterMask | null = null
     let preSceneDate: string | null = null
+    let preItemId: string | null = null
     if (postDate && preDate && preDate !== postDate) {
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
       onUpdate(snapshot(jobId, 'fetching', 0.4, `Fetching Sentinel-1 (pre-event ${preDate})…`))
       const preScene = await fetchS1FromPlanetaryComputer(bbox, preDate, maxDim, signal)
       preSceneDate = preScene.usedDate || preDate
+      preItemId = preScene.itemId || null
       const preWater = waterMaskFromS1(preScene, waterDb)
       preMask = resampleNearest(preWater, W, H)
     }
@@ -579,6 +581,10 @@ export async function runClientFloodMonitoring(
       preDate: preMask ? preSceneDate || (preDate as string) : null,
       postDate: postScene.usedDate || eventDate,
       resolution: `${W}×${H}px`,
+      postItemId: postScene.itemId || null,
+      preItemId,
+      polarization: 'VV',
+      sourceLabel: postScene.source || 'Sentinel-1',
     }
 
     const classStats: FloodClassStat[] = preMask

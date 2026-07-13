@@ -26,6 +26,9 @@ type FloodMonitoringPanelProps = {
   onRun: () => void
   onZoomToLayer: () => void
   onExportGeoJson: () => void
+  onExportReport?: () => void
+  exportReportBusy?: boolean
+  exportReportLabel?: string | null
   onClose: () => void
 }
 
@@ -108,6 +111,9 @@ export function FloodMonitoringPanel({
   onRun,
   onZoomToLayer,
   onExportGeoJson,
+  onExportReport,
+  exportReportBusy = false,
+  exportReportLabel = null,
   onClose,
 }: FloodMonitoringPanelProps) {
   const stats = result?.stats
@@ -123,8 +129,8 @@ export function FloodMonitoringPanel({
           <i className="fa-solid fa-house-flood-water" aria-hidden />
         </span>
         <span className="si-flood__brand-text">
-          <span className="si-flood__brand-title">Flood Mapping</span>
-          <span className="si-flood__brand-sub">Sentinel-1 · C-band SAR</span>
+          <span className="si-flood__brand-title">SAR Flood Intelligence</span>
+          <span className="si-flood__brand-sub">Sentinel-1 · Flood Detection &amp; Report</span>
         </span>
         <button type="button" className="si-flood__close" onClick={onClose} aria-label="Collapse">
           <i className="fa-solid fa-chevron-up" aria-hidden />
@@ -320,6 +326,22 @@ export function FloodMonitoringPanel({
             <button type="button" className="si-flood__action" onClick={onExportGeoJson} title="Export flood boundaries">
               <i className="fa-solid fa-download" aria-hidden /> Export GeoJSON
             </button>
+            {onExportReport ? (
+              <button
+                type="button"
+                className="si-flood__action si-flood__action--report"
+                onClick={onExportReport}
+                disabled={exportReportBusy}
+                title="Export SAR Flood Intelligence Report (Word + Excel)"
+              >
+                {exportReportBusy ? (
+                  <i className="fa-solid fa-circle-notch fa-spin" aria-hidden />
+                ) : (
+                  <i className="fa-solid fa-file-word" aria-hidden />
+                )}
+                {exportReportBusy ? exportReportLabel || 'Exporting…' : 'Export Flood Report'}
+              </button>
+            ) : null}
           </div>
         </section>
       ) : null}

@@ -50,6 +50,15 @@ export type TimeSeriesDocxModel = {
   weatherTableRows: string[][]
   weatherCorrelationNotes: string[]
   weatherDataSource: string
+  correlationBlocks: Array<{
+    title: string
+    rId: string | null
+    r2Label: string
+    gisInsight: string
+    agroInsight: string
+  }>
+  cumulativeMapLayers: DocxMapLayerBlock[]
+  cropRecommendationBullets: string[]
   footerNote: string
 }
 
@@ -306,6 +315,46 @@ export async function buildTimeSeriesDocxModel(
     })
   }
 
+  const cumulativeMapLayers: DocxMapLayerBlock[] = []
+  for (const group of payload.cumulativeMapSnapshotGroups ?? []) {
+    const snapshots: DocxMapLayerBlock['snapshots'] = []
+    for (const snap of group.snapshots) {
+      if (!snap.imageBase64) continue
+      const rId = nextRid(1, imageCounter)
+      imageCounter++
+      images.push({ rId, fileName: `image${imageCounter}.png`, base64: snap.imageBase64 })
+      snapshots.push({
+        date: snap.periodLabel || snap.sceneDate,
+        label: `${snap.layerLabel} ${fmtNum(snap.mean, 4)}`,
+        rId,
+      })
+    }
+    if (!snapshots.length) continue
+    cumulativeMapLayers.push({
+      title: group.title,
+      legend: group.snapshots[0]?.legendText ?? '',
+      narrative: group.snapshots[group.snapshots.length - 1]?.notes ?? '',
+      snapshots,
+    })
+  }
+
+  const correlationBlocks: TimeSeriesDocxModel['correlationBlocks'] = []
+  for (const block of payload.correlationBlocks ?? []) {
+    let rId: string | null = null
+    if (block.chartBase64) {
+      rId = nextRid(1, imageCounter)
+      imageCounter++
+      images.push({ rId, fileName: `image${imageCounter}.png`, base64: block.chartBase64 })
+    }
+    correlationBlocks.push({
+      title: `${block.xLayerId} × ${block.yLayerId} · ${block.relationshipLabel}`,
+      rId,
+      r2Label: `R²=${block.r2.toFixed(3)} · r=${block.r.toFixed(3)} · n=${block.n} · slope=${block.slope.toFixed(4)}`,
+      gisInsight: block.gisInsight,
+      agroInsight: block.agroInsight,
+    })
+  }
+
   const model: TimeSeriesDocxModel = {
     projectName: payload.projectName,
     generatedBy: payload.generatedBy,
@@ -337,6 +386,9 @@ export async function buildTimeSeriesDocxModel(
     }`,
     recommendations: exec.recommendations,
     mapLayers,
+    cumulativeMapLayers,
+    correlationBlocks,
+    cropRecommendationBullets: payload.cropRecommendations ?? [],
     chartImages,
     weatherChartRId,
     weatherSummaryRows,
@@ -344,7 +396,7 @@ export async function buildTimeSeriesDocxModel(
     weatherTableRows,
     weatherCorrelationNotes,
     weatherDataSource,
-    footerNote: `Generated ${payload.generatedAt.replace('T', ' ').slice(0, 19)} UTC by ${payload.projectName}. Analytics Summary and Time Series Data summarize AOI statistics; Weather Timeline uses ERA5 reanalysis at the AOI centroid; Map Snapshots shows per-index timeline maps aligned with the chart.`,
+    footerNote: `Generated ${payload.generatedAt.replace('T', ' ').slice(0, 19)} UTC by ${payload.projectName}. Includes period atlas maps, cumulative peak-of-period composites, R² correlation scatter plots, and crop planting recommendations from AOI climate/moisture/salinity screening.`,
   }
 
   return { model, images }

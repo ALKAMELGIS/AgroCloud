@@ -9,6 +9,7 @@ import type { ImageryTimeSeriesLayerSeries } from '../../../dashboards/agroCloud
 import type { ImageryTimeAggregation } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import { fetchSatelliteBasemapSnapshot } from './timeSeriesMapSnapshot'
 import { buildTimeSeriesMapSnapshotGroups } from './timeSeriesExcelMapSnapshots'
+import { buildCumulativeMapSnapshotGroups } from './timeSeriesCumulativeMaps'
 import { buildEstimatedWaterLossTimeline } from './estimatedWaterLossTimeline'
 import { buildVegetationCoverageTimeline } from './vegetationCoverageTimeline'
 import {
@@ -18,6 +19,11 @@ import {
   type TimeSeriesExecutiveSummary,
 } from './timeSeriesReportExecutive'
 import { buildTimeSeriesWeatherTimeline } from './timeSeriesWeatherTimeline'
+import { buildTimeSeriesCorrelationBlocks } from './timeSeriesScatterChartRenderer'
+import {
+  buildCropPlantingRecommendations,
+  resolveSalinityMeanFromStats,
+} from './timeSeriesCropRecommendations'
 import { geometryMetrics } from '../../../../lib/geoAiLiveMapContext'
 import type {
   TimeSeriesLayerStatistics,
@@ -138,7 +144,7 @@ export async function buildTimeSeriesReportPayload(
     saviEstimated = true
   }
 
-  const executive: TimeSeriesExecutiveSummary = buildTimeSeriesExecutiveSummary({
+  const executiveBase: TimeSeriesExecutiveSummary = buildTimeSeriesExecutiveSummary({
     primary: primaryInterpretation,
     ndviMean,
     ndmiMean,
@@ -153,7 +159,7 @@ export async function buildTimeSeriesReportPayload(
 
   const mapImageDataUrl =
     input.includeMap !== false
-      ? await fetchSatelliteBasemapSnapshot(geometry, input.mapboxToken, 520, 360)
+      ? await fetchSatelliteBasemapSnapshot(geometry, input.mapboxToken, 520, 390)
       : null
 
   const mapSnapshotGroups =
@@ -171,6 +177,25 @@ export async function buildTimeSeriesReportPayload(
           mapboxToken: input.mapboxToken,
           signal: input.signal,
           onProgress: input.onMapSnapshotProgress,
+        })
+      : []
+
+  const cumulativeMapSnapshotGroups =
+    input.includeMapSnapshots !== false && geometry
+      ? await buildCumulativeMapSnapshotGroups({
+          geometry,
+          layerIds: input.layerIds,
+          dailyRows: input.dailyRows,
+          timeAggregation: input.timeAggregation,
+          areaHa,
+          mapboxToken: input.mapboxToken,
+          signal: input.signal,
+          onProgress: (done, total) => {
+            input.onMapSnapshotProgress?.(
+              mapSnapshotGroups.reduce((n, g) => n + g.snapshots.length, 0) + done,
+              mapSnapshotGroups.reduce((n, g) => n + g.snapshots.length, 0) + total,
+            )
+          },
         })
       : []
 
@@ -213,6 +238,28 @@ export async function buildTimeSeriesReportPayload(
       })
     : null
 
+  const correlationBlocks = buildTimeSeriesCorrelationBlocks({
+    labels: input.displayLabels.length ? input.displayLabels : input.chartLabels,
+    series: input.layerSeries,
+    layerIds: input.layerIds,
+  })
+
+  const cropRec = buildCropPlantingRecommendations({
+    centroidLat: centroid?.[1] ?? null,
+    centroidLng: centroid?.[0] ?? null,
+    areaHa,
+    weather: weatherTimeline,
+    statistics,
+    salinityMean: resolveSalinityMeanFromStats(statistics),
+    ndviMean,
+    ndmiMean,
+  })
+
+  const executive: TimeSeriesExecutiveSummary = {
+    ...executiveBase,
+    recommendations: [...new Set([...executiveBase.recommendations, ...cropRec.bullets])].slice(0, 12),
+  }
+
   return {
     projectName: input.projectName?.trim() || 'AgroCloud Satellite Intelligence',
     generatedAt: new Date().toISOString(),
@@ -242,8 +289,11 @@ export async function buildTimeSeriesReportPayload(
     geometry,
     mapImageDataUrl,
     mapSnapshotGroups,
+    cumulativeMapSnapshotGroups,
     vegetationCoverageTimeline,
     estimatedWaterLossTimeline,
     weatherTimeline,
+    correlationBlocks,
+    cropRecommendations: cropRec.bullets,
   }
 }

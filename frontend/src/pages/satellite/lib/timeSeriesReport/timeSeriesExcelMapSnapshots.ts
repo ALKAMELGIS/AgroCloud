@@ -9,6 +9,8 @@ import {
   dataUrlToPngBase64,
   fetchSatelliteBasemapSnapshot,
   fetchIndexLayerMapSnapshotBase64,
+  resolveTimeSeriesSnapshotExtent,
+  resolveTimeSeriesSnapshotLayout,
 } from './timeSeriesMapSnapshot'
 import type { TimeSeriesMapSnapshot, TimeSeriesMapSnapshotGroup } from './timeSeriesReportTypes'
 
@@ -17,8 +19,9 @@ const SECTION_FILL = 'FFE2F5EE'
 const INK = 'FF0F172A'
 const MUTED = 'FF64748B'
 const DATA_SOURCE = 'Sentinel-2 L2A (Sentinel Hub WMS)'
-const SNAPSHOT_WIDTH = 480
-const SNAPSHOT_HEIGHT = 320
+/** Canvas includes map + bottom legend strip (no legend overlap). */
+const SNAPSHOT_WIDTH = 520
+const SNAPSHOT_HEIGHT = 390
 const SNAPSHOT_CONCURRENCY = 2
 
 function fmtNum(n: number | null | undefined, digits = 4): string {
@@ -158,6 +161,7 @@ async function fetchSnapshotImageBase64(input: {
   sceneDate: string
   basemapDataUrl: string | null
   basemapBase64: string | null
+  extent: ReturnType<typeof resolveTimeSeriesSnapshotExtent>
   signal?: AbortSignal
 }): Promise<string | null> {
   let indexBase64: string | null = null
@@ -168,6 +172,7 @@ async function fetchSnapshotImageBase64(input: {
       sceneDate: input.sceneDate,
       widthPx: SNAPSHOT_WIDTH,
       heightPx: SNAPSHOT_HEIGHT,
+      extent: input.extent,
       signal: input.signal,
     })
   } catch {
@@ -186,6 +191,7 @@ async function fetchSnapshotImageBase64(input: {
       layerId: input.layerId,
       widthPx: SNAPSHOT_WIDTH,
       heightPx: SNAPSHOT_HEIGHT,
+      extent: input.extent,
     })
   } catch {
     return indexBase64 ?? input.basemapBase64
@@ -218,6 +224,9 @@ export async function buildTimeSeriesMapSnapshotGroups(
   })
 
   if (!periods.length) return groups
+
+  const layout = resolveTimeSeriesSnapshotLayout(SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT)
+  const extent = resolveTimeSeriesSnapshotExtent(input.geometry, layout.mapW, layout.mapH)
 
   const basemapDataUrl = await fetchSatelliteBasemapSnapshot(
     input.geometry,
@@ -262,6 +271,7 @@ export async function buildTimeSeriesMapSnapshotGroups(
         sceneDate: entry.sceneDate,
         basemapDataUrl,
         basemapBase64,
+        extent,
         signal: input.signal,
       })
 

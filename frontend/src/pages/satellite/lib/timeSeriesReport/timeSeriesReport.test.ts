@@ -91,6 +91,7 @@ function samplePayload(): TimeSeriesReportPayload {
     geometry: null,
     mapImageDataUrl: null,
     mapSnapshotGroups: [],
+    cumulativeMapSnapshotGroups: [],
     vegetationCoverageTimeline: [
       {
         date: '2026-07-05',
@@ -139,6 +140,8 @@ function samplePayload(): TimeSeriesReportPayload {
       },
     ],
     weatherTimeline: null,
+    correlationBlocks: [],
+    cropRecommendations: [],
   }
 }
 

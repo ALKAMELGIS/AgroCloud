@@ -57,6 +57,20 @@ export type TimeSeriesMapSnapshotGroup = {
   snapshots: TimeSeriesMapSnapshot[]
 }
 
+export type TimeSeriesCorrelationReportBlock = {
+  xLayerId: string
+  yLayerId: string
+  r: number
+  r2: number
+  n: number
+  slope: number
+  intercept: number
+  relationshipLabel: string
+  gisInsight: string
+  agroInsight: string
+  chartBase64: string | null
+}
+
 export type TimeSeriesReportPayload = {
   projectName: string
   generatedAt: string
@@ -72,9 +86,13 @@ export type TimeSeriesReportPayload = {
   geometry: GeoJSON.Geometry | null
   mapImageDataUrl: string | null
   mapSnapshotGroups: TimeSeriesMapSnapshotGroup[]
+  /** Peak-of-period composite maps appended after the full period atlas. */
+  cumulativeMapSnapshotGroups: TimeSeriesMapSnapshotGroup[]
   vegetationCoverageTimeline: VegetationCoveragePoint[]
   estimatedWaterLossTimeline: EstimatedWaterLossPoint[]
   weatherTimeline: TimeSeriesWeatherBlock | null
+  correlationBlocks: TimeSeriesCorrelationReportBlock[]
+  cropRecommendations: string[]
 }
 
 export type TimeSeriesReportConfig = {

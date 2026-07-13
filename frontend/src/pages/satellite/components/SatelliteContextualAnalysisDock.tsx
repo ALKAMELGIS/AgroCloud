@@ -225,8 +225,8 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     id: 'flood-monitoring',
     icon: 'fa-solid fa-house-flood-water',
     label: 'Flood (SAR)',
-    title: 'Flood Monitoring (SAR-Based)',
-    hint: 'AOI → Sentinel-1 SAR change detection → flood extent, boundaries & stats.',
+    title: 'Flood Monitoring (SAR) — Intelligence Report',
+    hint: 'AOI → Sentinel-1 SAR change detection → flood extent, boundaries, stats & DOCX/Excel report.',
   },
   {
     id: 'table-geo-ai',

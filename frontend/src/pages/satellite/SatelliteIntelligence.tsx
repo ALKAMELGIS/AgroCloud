@@ -509,6 +509,7 @@ import type { WellSitePoint } from '../../lib/hydroWatershed/hydroEngine';
 import type { WellSuitabilitySite } from '../../lib/hydroWatershed/wellSuitabilityMcdaEngine';
 import type { HydroStepId } from '../../lib/hydroWatershed/hydroEngine';
 import { generateHydroWatershedReportDocx } from '../../lib/hydroWatershed/generateHydroReportDocx';
+import { generateSarFloodIntelligenceReport } from '../../lib/sarFloodReport/generateSarFloodReportDocx';
 import { GisPortalBrowseLayersPanel } from './components/GisPortalBrowseLayersPanel';
 import { GisUploadCloudSources } from '../../components/GisUploadCloudSources';
 import type { MapToolboxAddGisLayerAction } from './components/MapToolboxAddGisLayerFlyout';
@@ -12170,6 +12171,41 @@ export default function SatelliteIntelligence() {
     downloadTextFile('flood-boundaries.geojson', JSON.stringify(fc, null, 2), 'application/geo+json');
   }, [flood.result]);
 
+  const [floodExportBusy, setFloodExportBusy] = useState(false);
+  const [floodExportLabel, setFloodExportLabel] = useState<string | undefined>(undefined);
+  const handleFloodExportReport = useCallback(() => {
+    const geom = drawnGeometry?.geometry;
+    const result = flood.result;
+    if (!geom || !result) return;
+    setFloodExportBusy(true);
+    setFloodExportLabel('Preparing report…');
+    void (async () => {
+      try {
+        const demResult = hydro.steps.dem?.status === 'done' ? hydro.steps.dem.result : null;
+        const elevBand = demResult?.kind === 'raster' ? demResult.band ?? null : null;
+        await generateSarFloodIntelligenceReport({
+          geometry: geom,
+          aoiName:
+            (drawnGeometry?.properties?.name as string | undefined) ??
+            (drawnGeometry?.properties?.fieldName as string | undefined) ??
+            'Flood Study Area',
+          result,
+          elevBand,
+          projectName: 'GeoSyntra SAR Flood Intelligence',
+          generatedBy: 'GeoSyntra',
+          onProgress: (done, total, label) => {
+            setFloodExportLabel(`Maps ${done}/${total}: ${label}`);
+          },
+        });
+      } catch (err) {
+        console.error('SAR flood report export failed', err);
+      } finally {
+        setFloodExportBusy(false);
+        setFloodExportLabel(undefined);
+      }
+    })();
+  }, [drawnGeometry, flood.result, hydro.steps.dem]);
+
   const handleMapPointerDown = (evt: any) => {
     const orig = evt.originalEvent as MouseEvent | undefined;
     if (orig && 'button' in orig) {
@@ -19877,6 +19913,9 @@ export default function SatelliteIntelligence() {
                           onRun={handleFloodRun}
                           onZoomToLayer={handleFloodZoomToLayer}
                           onExportGeoJson={handleFloodExportGeoJson}
+                          onExportReport={handleFloodExportReport}
+                          exportReportBusy={floodExportBusy}
+                          exportReportLabel={floodExportLabel}
                           onClose={() => setIsLayerDropdownOpen(false)}
                         />
                       </div>

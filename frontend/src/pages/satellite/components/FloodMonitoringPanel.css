@@ -645,6 +645,7 @@
 /* ── Result actions ────────────────────────────────────────────────────────── */
 .si-flood__result-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 .si-flood__action {
@@ -669,6 +670,20 @@
 .si-flood__action:hover {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.16);
+}
+.si-flood__action:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.si-flood__action--report {
+  flex: 1 1 100%;
+  background: rgba(6, 78, 59, 0.35);
+  border-color: rgba(52, 211, 153, 0.35);
+  color: #d1fae5;
+}
+.si-flood__action--report:hover:not(:disabled) {
+  background: rgba(6, 78, 59, 0.5);
+  border-color: rgba(52, 211, 153, 0.55);
 }
 
 /* ── Light theme ───────────────────────────────────────────────────────────── */

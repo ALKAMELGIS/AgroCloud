@@ -37,6 +37,11 @@ export type FloodMonitoringStats = {
   preDate: string | null
   postDate: string | null
   resolution: string
+  /** Optional scene / acquisition metadata for reporting. */
+  postItemId?: string | null
+  preItemId?: string | null
+  polarization?: string | null
+  sourceLabel?: string | null
 }
 
 export type FloodMonitoringResult = {

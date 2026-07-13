@@ -2,7 +2,6 @@ import type { LayerLiveLegendSpec } from '../../../../lib/layerLiveLegendCatalog
 import { resolveLayerLiveLegendSpec } from '../../../../lib/layerLiveLegendCatalog'
 import {
   buildTreeImageryMosaic,
-  geometryBBox,
   lngLatToWorldPx,
   TREE_IMAGERY_PROVIDERS,
 } from '../../../../lib/treeDetection/webMercatorTiles'
@@ -28,6 +27,88 @@ function lngLatTo3857(lng: number, lat: number): [number, number] {
   const clamped = Math.max(-85.05112878, Math.min(85.05112878, lat))
   const y = Math.log(Math.tan(((90 + clamped) * Math.PI) / 360)) / (Math.PI / 180)
   return [x, (y * 20037508.34) / 180]
+}
+
+function mercatorToLngLat(x: number, y: number): [number, number] {
+  const lng = (x * 180) / 20037508.34
+  const lat = (Math.atan(Math.exp((y * Math.PI) / 20037508.34)) * 360) / Math.PI - 90
+  return [lng, lat]
+}
+
+/**
+ * Expand a WGS84 bbox in Web Mercator so its aspect ratio matches the map frame.
+ * Prevents circles / equal-scale shapes from becoming ellipses when X and Y are
+ * stretched independently into a non-matching canvas.
+ */
+export function fitLngLatBboxToMapAspect(
+  bbox: LngLatBbox,
+  mapW: number,
+  mapH: number,
+): LngLatBbox {
+  const frameW = Math.max(mapW, 1)
+  const frameH = Math.max(mapH, 1)
+  const targetAspect = frameW / frameH
+  const [mx0, myS] = lngLatTo3857(bbox.minLng, bbox.minLat)
+  const [mx1, myN] = lngLatTo3857(bbox.maxLng, bbox.maxLat)
+  let halfW = Math.max(mx1 - mx0, 1e-6) / 2
+  let halfH = Math.max(myN - myS, 1e-6) / 2
+  const cx = (mx0 + mx1) / 2
+  const cy = (myS + myN) / 2
+  const currentAspect = (halfW * 2) / (halfH * 2)
+  if (currentAspect > targetAspect) {
+    halfH = halfW / targetAspect
+  } else {
+    halfW = halfH * targetAspect
+  }
+  const [minLng, minLat] = mercatorToLngLat(cx - halfW, cy - halfH)
+  const [maxLng, maxLat] = mercatorToLngLat(cx + halfW, cy + halfH)
+  return { minLng, minLat, maxLng, maxLat }
+}
+
+/** Fixed layout: map frame on top, legend strip below (no overlap). */
+export type TimeSeriesSnapshotLayout = {
+  mapX: number
+  mapY: number
+  mapW: number
+  mapH: number
+  legendX: number
+  legendY: number
+  legendMaxW: number
+  legendStripH: number
+}
+
+export function resolveTimeSeriesSnapshotLayout(
+  canvasW: number,
+  canvasH: number,
+): TimeSeriesSnapshotLayout {
+  const margin = 8
+  const legendStripH = Math.min(80, Math.max(58, Math.round(canvasH * 0.17)))
+  const mapX = margin
+  const mapY = margin
+  const mapW = Math.max(40, canvasW - margin * 2)
+  const mapH = Math.max(40, canvasH - margin * 2 - legendStripH - 4)
+  return {
+    mapX,
+    mapY,
+    mapW,
+    mapH,
+    legendX: mapX,
+    legendY: mapY + mapH + 6,
+    legendMaxW: Math.min(240, mapW),
+    legendStripH,
+  }
+}
+
+/** Aspect-matched geographic extent for time-series report map frames (keeps circle AOIs circular). */
+export function resolveTimeSeriesSnapshotExtent(
+  geometry: GeoJSON.Geometry,
+  mapW: number,
+  mapH: number,
+  padRatio = 0.1,
+): LngLatBbox | null {
+  const raw = bboxFromGeometry(geometry, padRatio)
+  if (!raw) return null
+  return fitLngLatBboxToMapAspect(raw, mapW, mapH)
 }
 
 export function bbox3857From4326(bbox4326: [number, number, number, number]): [number, number, number, number] {
@@ -164,35 +245,11 @@ export async function fetchEsriSatelliteBasemapSnapshot(
   heightPx = 320,
   signal?: AbortSignal,
 ): Promise<string | null> {
-  const bbox = geometryBBox(geometry)
-  if (!bbox) return null
-
-  const mosaic = await buildTreeImageryMosaic({
-    bbox,
-    provider: TREE_IMAGERY_PROVIDERS.esri,
-    maxTiles: 16,
-    maxZoom: 18,
-    signal,
-  })
-  if (!mosaic) return null
-
-  const [wx0, wyNorth] = lngLatToWorldPx(bbox.west, bbox.north, mosaic.zoom)
-  const [wx1, wySouth] = lngLatToWorldPx(bbox.east, bbox.south, mosaic.zoom)
-  const sx = wx0 - mosaic.originWorldPxX
-  const sy = wyNorth - mosaic.originWorldPxY
-  const sw = Math.max(wx1 - wx0, 1)
-  const sh = Math.max(wySouth - wyNorth, 1)
-
-  const canvas = document.createElement('canvas')
-  canvas.width = widthPx
-  canvas.height = heightPx
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return null
-
-  ctx.fillStyle = '#334155'
-  ctx.fillRect(0, 0, widthPx, heightPx)
-  ctx.drawImage(mosaic.canvas, sx, sy, sw, sh, 0, 0, widthPx, heightPx)
-  return canvas.toDataURL('image/jpeg', 0.92)
+  if (!geometry) return null
+  const layout = resolveTimeSeriesSnapshotLayout(widthPx, heightPx)
+  const extent = resolveTimeSeriesSnapshotExtent(geometry, layout.mapW, layout.mapH)
+  if (!extent) return null
+  return fetchEsriSatelliteBasemapForBbox(extent, layout.mapW, layout.mapH, signal)
 }
 
 /** Esri World Imagery basemap (preferred) with optional Mapbox satellite fallback. */
@@ -237,10 +294,24 @@ export async function fetchIndexLayerMapSnapshotBase64(options: {
   sceneDate: string
   widthPx?: number
   heightPx?: number
+  /** Precomputed aspect-matched extent; defaults to fitted geometry bbox. */
+  extent?: LngLatBbox | null
   signal?: AbortSignal
 }): Promise<string | null> {
-  const bbox4326 = bbox4326FromGeometry(options.geometry)
-  if (!bbox4326) return null
+  const width = options.widthPx ?? 420
+  const height = options.heightPx ?? 300
+  const layout = resolveTimeSeriesSnapshotLayout(width, height)
+  const extent =
+    options.extent ??
+    resolveTimeSeriesSnapshotExtent(options.geometry, layout.mapW, layout.mapH)
+  if (!extent) return null
+
+  const bbox4326: [number, number, number, number] = [
+    extent.minLng,
+    extent.minLat,
+    extent.maxLng,
+    extent.maxLat,
+  ]
 
   const { buildSentinelHubWmsAoiClip } = await import('../../../../lib/sentinelHubWmsAoiClip')
   const {
@@ -264,8 +335,8 @@ export async function fetchIndexLayerMapSnapshotBase64(options: {
   })
   const bbox3857 = bbox3857From4326(bbox4326)
   const [minX, minY, maxX, maxY] = bbox3857
-  const width = options.widthPx ?? 420
-  const height = options.heightPx ?? 300
+  const mapW = layout.mapW
+  const mapH = layout.mapH
 
   let url = buildSentinelHubWmsGetMapUrlParts({
     baseUrl: getSentinelHubWmsBaseUrl(),
@@ -275,8 +346,12 @@ export async function fetchIndexLayerMapSnapshotBase64(options: {
     cloudCoverage: 60,
     geometryWkt3857: clip.geometryWkt3857 ?? undefined,
     evalscriptB64: clip.evalscriptB64 ?? undefined,
-    tilePixels: Math.max(width, height),
+    tilePixels: Math.max(mapW, mapH),
   })
+  // Request pixel size matches map frame aspect so circle AOIs stay circular (no square→rect stretch).
+  url = url
+    .replace(/WIDTH=\d+/i, `WIDTH=${Math.round(mapW)}`)
+    .replace(/HEIGHT=\d+/i, `HEIGHT=${Math.round(mapH)}`)
   url = url.replace('{bbox-epsg-3857}', `${minX},${minY},${maxX},${maxY}`)
 
   const dataUrl = await fetchUrlAsDataUrl(url, options.signal)
@@ -331,11 +406,11 @@ function drawRing(
   h: number,
 ): void {
   if (ring.length < 2) return
-  const [x0, y0] = mapLngLatToBox(ring[0]![0], ring[0]![1], bbox, padX, padY, w, h)
+  const [x0, y0] = mapLngLatToMercatorBox(ring[0]![0], ring[0]![1], bbox, padX, padY, w, h)
   ctx.beginPath()
   ctx.moveTo(x0, y0)
   for (let i = 1; i < ring.length; i += 1) {
-    const [xi, yi] = mapLngLatToBox(ring[i]![0], ring[i]![1], bbox, padX, padY, w, h)
+    const [xi, yi] = mapLngLatToMercatorBox(ring[i]![0], ring[i]![1], bbox, padX, padY, w, h)
     ctx.lineTo(xi, yi)
   }
   ctx.closePath()
@@ -438,12 +513,18 @@ export async function compositeAoiMapSnapshotBase64(options: {
   legendSpec?: LayerLiveLegendSpec | null
   widthPx?: number
   heightPx?: number
+  /** Aspect-matched extent; computed automatically when omitted. */
+  extent?: LngLatBbox | null
 }): Promise<string | null> {
-  const bbox = bboxFromGeometry(options.geometry)
-  if (!bbox) return null
-  const width = options.widthPx ?? 480
-  const height = options.heightPx ?? 320
-  const pad = 0
+  const width = options.widthPx ?? 520
+  const height = options.heightPx ?? 390
+  const layout = resolveTimeSeriesSnapshotLayout(width, height)
+  const extent =
+    options.extent ??
+    resolveTimeSeriesSnapshotExtent(options.geometry, layout.mapW, layout.mapH)
+  if (!extent) return null
+
+  const { mapX, mapY, mapW, mapH, legendX, legendY, legendMaxW } = layout
 
   const canvas = document.createElement('canvas')
   canvas.width = width
@@ -451,13 +532,21 @@ export async function compositeAoiMapSnapshotBase64(options: {
   const ctx = canvas.getContext('2d')
   if (!ctx) return null
 
-  ctx.fillStyle = '#475569'
+  ctx.fillStyle = '#f8fafc'
   ctx.fillRect(0, 0, width, height)
+
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(mapX, mapY, mapW, mapH)
+  ctx.clip()
+
+  ctx.fillStyle = '#475569'
+  ctx.fillRect(mapX, mapY, mapW, mapH)
 
   if (options.basemapDataUrl) {
     try {
       const basemap = await loadImage(options.basemapDataUrl)
-      ctx.drawImage(basemap, pad, pad, width - pad * 2, height - pad * 2)
+      ctx.drawImage(basemap, mapX, mapY, mapW, mapH)
     } catch {
       /* basemap optional */
     }
@@ -468,20 +557,25 @@ export async function compositeAoiMapSnapshotBase64(options: {
       const index = await loadImage(`data:image/png;base64,${options.indexBase64}`)
       ctx.save()
       ctx.globalAlpha = 0.94
-      ctx.drawImage(index, pad, pad, width - pad * 2, height - pad * 2)
+      ctx.drawImage(index, mapX, mapY, mapW, mapH)
       ctx.restore()
     } catch {
       /* index optional */
     }
   }
 
-  drawAoiOutline(ctx, options.geometry, bbox, pad, pad, width - pad * 2, height - pad * 2)
+  drawAoiOutline(ctx, options.geometry, extent, mapX, mapY, mapW, mapH)
+  ctx.restore()
+
+  ctx.strokeStyle = '#1e293b'
+  ctx.lineWidth = 1.25
+  ctx.strokeRect(mapX + 0.5, mapY + 0.5, mapW - 1, mapH - 1)
 
   const legend =
     options.legendSpec ??
     (options.layerId ? resolveLayerLiveLegendSpec(options.layerId, options.layerId) : null)
   if (legend) {
-    drawSnapshotLegend(ctx, legend, width - 228, height - 78, 220)
+    drawSnapshotLegend(ctx, legend, legendX, legendY, legendMaxW)
   }
 
   const dataUrl = canvas.toDataURL('image/png')
