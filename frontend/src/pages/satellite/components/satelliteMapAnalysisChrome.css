@@ -1452,9 +1452,31 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
 .si-map-tools-dock-host {
   position: absolute;
   inset: 0;
-  z-index: 3;
+  z-index: 280;
   pointer-events: none;
   overflow: visible;
+  isolation: isolate;
+}
+
+/* Map-anchored markers / popups stay below the toolbox dock and analysis panels */
+.si-map-container .mapboxgl-marker {
+  z-index: 20;
+}
+
+.si-map-container .mapboxgl-marker:hover {
+  z-index: 24;
+}
+
+.si-map-container .si-geo-ai-inspect-marker,
+.si-map-container .si-multi-aoi-popup-marker,
+.si-map-container .si-stress-zones-popup-marker,
+.si-map-container .si-weather-map-pin,
+.si-map-container .si-crop-alert-beacon {
+  z-index: 28;
+}
+
+.si-map-container .si-crop-alert-beacon-root--popup-open {
+  z-index: 28;
 }
 
 /* —— Calcite-style contextual dock (rail + panel) —— */
@@ -1486,7 +1508,7 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
 
 .si-sat-ctx-dock--map {
   position: absolute;
-  z-index: 96;
+  z-index: 1;
   /* Flush with canvas trailing edge (right in LTR, left in RTL); panel opens toward map center. */
   inset-inline-end: 0;
   inset-inline-start: auto;

@@ -76,20 +76,34 @@ export const SiCropAlertMapMarker = memo(function SiCropAlertMapMarker({
       return
     }
 
+    let raf = 0
+    let lastKey = ''
+
     const sync = () => {
       const popup = columnRef.current?.querySelector('.si-crop-alert-map-popup') as HTMLElement | null
       if (!popup) return
-      setMapPinPlacement(resolveMapPinPlacement(popup))
+      const next = resolveMapPinPlacement(popup)
+      const key = `${next.horizontal}:${next.vertical}`
+      if (key === lastKey) return
+      lastKey = key
+      setMapPinPlacement(next)
     }
 
-    sync()
-    const frame = requestAnimationFrame(sync)
-    window.addEventListener('resize', sync)
-    const ro = new ResizeObserver(sync)
+    const schedule = () => {
+      if (raf) return
+      raf = window.requestAnimationFrame(() => {
+        raf = 0
+        sync()
+      })
+    }
+
+    schedule()
+    window.addEventListener('resize', schedule)
+    const ro = new ResizeObserver(schedule)
     if (columnRef.current) ro.observe(columnRef.current)
     return () => {
-      cancelAnimationFrame(frame)
-      window.removeEventListener('resize', sync)
+      if (raf) window.cancelAnimationFrame(raf)
+      window.removeEventListener('resize', schedule)
       ro.disconnect()
     }
   }, [popupOpen, popupVariant, result.fieldKey])

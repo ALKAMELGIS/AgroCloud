@@ -394,6 +394,23 @@
   opacity: 0.8;
 }
 
+/* AOI layer mode — flat siblings inside Remote Sensing panel */
+.si-rs-panel--flat .si-aoi-layer-mode--flat {
+  display: contents;
+}
+
+.si-rs-panel__stack--section {
+  gap: 6px;
+}
+
+.si-rs-panel__stack--section > .si-rs-panel__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.95);
+}
+
 /* AOI mask builder — flat siblings inside Remote Sensing panel (display:contents) */
 .si-rs-panel--flat .si-aoi-mask-builder--flat {
   display: contents;

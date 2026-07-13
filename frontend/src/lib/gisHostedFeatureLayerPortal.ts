@@ -6,6 +6,7 @@ import {
 import {
   fetchAgroStructuresGeoJson,
   isAgroStructuresLayerUrl,
+  resolveAgroStructuresLayerUrl,
 } from './agroStructuresPrimaryAoi'
 import { isWorldCountriesLayerUrl } from './worldCountriesLayer'
 import { getArcgisPortalToken } from './arcgisPortalToken'
@@ -174,7 +175,7 @@ export async function fetchHostedFeatureLayerGeoJsonFromServiceUrl(
     signal?: AbortSignal
   },
 ): Promise<GisHostedFeatureLayerGeoJson> {
-  const url = serviceUrl.trim()
+  const url = resolveAgroStructuresLayerUrl(serviceUrl.trim())
   if (!url) throw new Error('ArcGIS layer URL is required.')
   const geojson = isAgroStructuresLayerUrl(url)
     ? ((await fetchAgroStructuresGeoJson(token || undefined)) as GisHostedFeatureLayerGeoJson)

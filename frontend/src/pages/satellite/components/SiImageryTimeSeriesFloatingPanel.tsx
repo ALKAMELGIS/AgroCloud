@@ -122,6 +122,7 @@ export type SiImageryTimeSeriesFloatingPanelProps = {
   onMapDateFromChart: (iso: string) => void;
   selectedFieldKey?: string | null;
   onSelectedFieldKeyChange?: (fieldKey: string) => void;
+  onHighlightFieldKeysChange?: (fieldKeys: string[]) => void;
   mapboxToken?: string;
   onStormMapOverlayChange?: (overlay: import('../lib/imageryStormAnalysis').SiTsWeatherStormMapOverlay | null) => void;
   stormOverlayDismissEpoch?: number;
@@ -140,6 +141,7 @@ export function SiImageryTimeSeriesFloatingPanel({
   onMapDateFromChart,
   selectedFieldKey,
   onSelectedFieldKeyChange,
+  onHighlightFieldKeysChange,
   mapboxToken,
   onStormMapOverlayChange,
   stormOverlayDismissEpoch = 0,
@@ -402,6 +404,7 @@ export function SiImageryTimeSeriesFloatingPanel({
             onMapDateFromChart={onMapDateFromChart}
             selectedFieldKey={selectedFieldKey}
             onSelectedFieldKeyChange={onSelectedFieldKeyChange}
+            onHighlightFieldKeysChange={onHighlightFieldKeysChange}
             mapboxToken={mapboxToken}
             onStormMapOverlayChange={onStormMapOverlayChange}
             stormOverlayDismissEpoch={stormOverlayDismissEpoch}

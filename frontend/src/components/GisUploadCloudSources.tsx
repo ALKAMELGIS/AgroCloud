@@ -47,7 +47,6 @@ export function GisUploadCloudSources({
       await pickCloudUploadFile(id, {
         onFile: file => {
           onFile(file);
-          onStatus?.(`Ready: ${file.name}. Review and import to map.`);
           setBusySource(null);
         },
         onError: message => {

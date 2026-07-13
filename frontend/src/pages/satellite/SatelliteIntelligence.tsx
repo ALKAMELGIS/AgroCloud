@@ -81,13 +81,11 @@ import {
   isAgroDeltaCompositeLayerId,
 } from '../../lib/agroCompositeIndices';
 import {
-  buildSentinelHubWmsGetMapUrlParts,
   getBootstrapSentinelWmsLayers,
   getSentinelHubWmsLayerCatalog,
   mergeAgroCloudCustomWmsLayers,
   parseSentinelHubWmsCapabilities,
   pickDefaultSentinelWmsLayer,
-  resolveSentinelHubWmsGetMapLayerName,
   resolveSentinelHubWmsDeltaPreviousDate,
   resolveSentinelHubWmsTimeWindow,
   sentinelHubWmsMinZoomForLatitude,
@@ -95,8 +93,35 @@ import {
   SI_DEFAULT_LIVE_WMS_LAYER,
   appendSentinelHubWmsAccessToken,
 } from '../../lib/sentinelHubWmsLayers';
-import { buildSentinelHubWmsAoiClip, buildSentinelHubWmsDisplayChunks, getDrawnGeometry, isSentinelHubWmsRenderReady } from '../../lib/sentinelHubWmsAoiClip';
+import { getDrawnGeometry } from '../../lib/sentinelHubWmsAoiClip';
 import { drawnAoiClipSignature, normalizeDrawnAoiClipCollection } from './siDrawnAoiLiveIndex';
+import {
+  buildSiSentinelAoiWmsStackState,
+  isSiSentinelAoiWmsMapLayerId,
+  isSiSentinelAoiWmsMapSourceId,
+  resolveSiSentinelAoiWmsChunkBounds,
+  SI_SENTINEL_DRAW_WMS_ID_PREFIX,
+  SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX,
+  siSentinelAoiWmsLayerId,
+  siSentinelAoiWmsSourceId,
+} from '../../lib/siSentinelAoiWmsStack';
+import {
+  setSiSentinelAoiWmsLayerPresentation,
+  siSentinelAoiWmsChunkKey,
+  syncSiSentinelAoiWmsChunkBounds,
+  syncSiSentinelAoiWmsChunkTiles,
+} from '../../lib/siSentinelAoiWmsFlickerFree';
+import {
+  createSiSentinelAoiWmsPingPongRuntime,
+  ensureSiSentinelAoiWmsPingPongStackOnMap,
+  hideSiSentinelAoiWmsPingPongStack,
+  isSiSentinelAoiWmsPingPongMapId,
+  reloadSiSentinelAoiWmsPingPongStackTiles,
+  resetSiSentinelAoiWmsPingPongRuntime,
+  revealSiSentinelAoiWmsPingPongStack,
+  teardownSiSentinelAoiWmsPingPongStack,
+  type SiSentinelAoiWmsPingPongRuntime,
+} from '../../lib/siSentinelAoiWmsImperative';
 import {
   AGRO_STRUCTURES_FS21_URL,
   AGRO_STRUCTURES_PRIMARY_LAYER_ID,
@@ -104,10 +129,29 @@ import {
   buildAgroStructuresLayerAoiMask,
   countAgroStructuresPolygons,
   fetchAgroStructuresGeoJson,
-  fetchAgroStructuresGeoJsonInBbox,
   findAgroStructuresFeatureInLayer,
   isAgroStructuresLayer,
+  isAgroStructuresLayerUrl,
+  normalizeAgroStructuresFeatureForSymbology,
+  resolveAgroStructuresLayerUrl,
 } from '../../lib/agroStructuresPrimaryAoi';
+import { connectArcGisFeatureServiceUrl } from '../../lib/arcgisServiceDiscover';
+import {
+  arcgisDynamicDebug,
+  arcGisLayerExtentWgs84,
+  buildArcGisImageServerRasterTiles,
+  buildArcGisMapServerRasterTiles,
+  buildArcGisVectorTileConfig,
+  createEmptyArcGisFeatureCollection,
+  detectArcGisServiceTypeFromUrl,
+  fetchArcGisFeatureGeoJsonInBbox,
+  shouldUseArcGisViewportStreaming,
+  slimArcGisLayersForStorage,
+  type ArcGisRasterTilesConfig,
+  type ArcGisLayerMetadata,
+  type ArcGisServiceType,
+  type ArcGisVectorTilesConfig,
+} from '../../lib/arcgisDynamicLayer';
 import {
   approximateLngLatBBoxFromViewState,
   expandLngLatBBox,
@@ -122,6 +166,7 @@ import {
 import {
   mergeMapMetrics,
   readMapMetricsFromViewState,
+  shouldFreezeLayerAoiViewportPipeline,
   shouldFreezeViewportDataPipeline,
   shouldSkipLiveViewportWorkOnMove,
   SI_MAP_METRICS_COMMIT_MS,
@@ -195,29 +240,11 @@ import { SiGoToXyBar } from './components/SiGoToXyBar';
 import {
   fetchCropClassificationConfig,
   startAoiJob,
-  startSupervisedAoiJob,
   startChipJob,
   pollJob,
   cropPredictionImageUrl,
   type CropClassificationJob,
 } from '../../lib/siPrithviCropPipeline';
-import type { CropTrainingSample } from '../../lib/cropSupervised/types';
-import { validateTrainingSamples } from '../../lib/cropSupervised/trainingSampleValidator';
-import {
-  DEFAULT_CROP_ANALYSIS_MODE,
-  DEFAULT_UNSUPERVISED_CLASS_COUNT,
-  toLegacyClassificationMode,
-  type CropAnalysisModeId,
-} from '../../lib/cropSupervised/cropAnalysisModes';
-import {
-  cropProviderRequiresUpload,
-  DEFAULT_CROP_DATA_PROVIDER,
-  isCropPanelProvider,
-  normalizeCropDataProvider,
-  type CropDataProviderId,
-} from '../../lib/cropSupervised/cropDataProvider';
-import type { CropImageryDataset } from '../../lib/cropSupervised/cropImageryDataset';
-import { resolveCropAiWorkflow } from '../../lib/cropSupervised/cropAiWorkflow';
 import {
   CROP_CLASSIFICATION_LAYER_ID,
   DEFAULT_CROP_CLASSIFICATION_SETTINGS,
@@ -242,12 +269,21 @@ import {
   layerNeedsAoiMaskFieldHydration,
   loadSiAoiMaskBuilderSettings,
   persistSiAoiMaskBuilderSettings,
-  resolveSiAoiMaskBuilderClipGeoJson,
+  listSiAoiLayerModeOptions,
   siAoiMaskBuilderDisplayOpacityMultiplier,
   siAoiMaskBuilderSignature,
   siAoiMaskBuilderStatusLabel,
   type SiAoiMaskBuilderSettings,
 } from '../../lib/siAoiMaskBuilder';
+import {
+  getCachedSiAoiLayerModeClipMask,
+  siAoiLayerModeChunksCacheKey,
+  siAoiLayerModeClipMaskCacheKey,
+  siAoiLayerModeMaskCacheKey,
+  siAoiLayerModeSettingsPinKey,
+  siAoiLayerModeWarmChunksCacheKey,
+  type SiAoiLayerModeClipMask,
+} from '../../lib/siAoiLayerModeClipCache';
 import {
   dateFromLocalIso,
   getDefaultSentinelImageryDate,
@@ -337,14 +373,24 @@ import {
   resolveBasemapId,
 } from './basemapCatalog';
 import {
+  arcgisDrawingInfoPaintSig,
   arcgisDrawingInfoToFillPaint,
   arcgisDrawingInfoToLinePaint,
+  arcgisDrawingInfoToCirclePaint,
   fetchArcgisLayerDrawingInfo,
   fetchArcgisLayerPjson,
+  flattenArcgisUniqueValueInfos,
   pickRendererPrimaryField,
+  resolveLayerArcgisDrawingInfo,
   sanitizeArcgisDrawingInfoForClient,
   slimArcgisLayerDefinitionForStorage,
 } from '../../lib/arcgisDrawingInfoMapbox';
+import { sanitizeMapboxPaint } from '../../lib/mapboxPaintSanitize';
+import {
+  buildArcgisPointIconImageMatch,
+  buildArcgisPointIconLayerSpec,
+  type ArcgisPointIconLayerSpec,
+} from '../../lib/arcgisPointSymbolMapbox';
 import { arcgisExtentToWgs84BBox } from '../../lib/arcgisImageServer';
 import {
   arcLegendLabelForFieldValue,
@@ -363,6 +409,7 @@ import {
   getNumericFields,
   inferVisualizationFromArcgisRenderer,
   normalizeSymbologyForLayer,
+  resolveLayerGeometryKind,
   type SymbologyContext,
 } from './symbologyHelpers';
 import {
@@ -393,6 +440,8 @@ import type { AoiStaticMultiLayerLineChartDataset } from './components/AoiStatic
 import { SatelliteMapAnalysisChrome, type MapToolboxNavigateHandler } from './components/SatelliteMapAnalysisChrome';
 import { LayerLiveLegendPanel } from './components/LayerLiveLegendPanel';
 import { LayerLiveLegendFloatingPanel } from './components/LayerLiveLegendFloatingPanel';
+import { GisFloatingWorkspacePanel } from './components/GisFloatingWorkspacePanel';
+import { SiSymbologyStudioPanel } from './components/SiSymbologyStudioPanel';
 import { useLayerClassAreas } from './components/useLayerClassAreas';
 import { resolveLayerLiveLegendSpec } from '../../lib/layerLiveLegendCatalog';
 import {
@@ -412,6 +461,30 @@ import {
   type GeoAiMapCommandHandlers,
 } from '../../lib/geoAiCommandExecutor';
 import { TreeDetectionsPanel } from './components/TreeDetectionsPanel';
+import { SiAiDetectionGisPanel } from './components/aiDetection/SiAiDetectionGisPanel';
+import {
+  isRasterDataFile,
+  isWorldFileOnly,
+  pickRasterUploadFiles,
+  processRasterFiles,
+  rasterNeedsWorldSidecar,
+  validateRasterImageFile,
+  worldFileExtensionForRaster,
+  type AiDlProcessedRaster,
+} from '../../lib/aiDetection/siAiDlRasterPipeline';
+import {
+  footprintGeoJsonFromMapCoordinates,
+  syncMapboxGeoreferencedImageLayer,
+} from '../../lib/raster/siRasterMapLayer';
+import {
+  createSiBimImportLayer,
+  createSiRasterImportLayer,
+  createSiVectorImportLayer,
+  formatSiLayerMetaSummary,
+  type SiCustomLayerBase,
+} from '../../lib/siCustomLayerFactory';
+import { downloadBlobUrlFile, downloadGeoJsonFile } from '../../lib/siLayerExport';
+import type { AiDlMapLayerRasterRef } from './components/aiDetection/SiAiDlDetectObjectsPanel';
 import { useTreeDetection } from './components/useTreeDetection';
 import { FloodMonitoringPanel, type FloodLayerKind } from './components/FloodMonitoringPanel';
 import { useFloodMonitoring } from './components/useFloodMonitoring';
@@ -437,6 +510,7 @@ import { GisPortalBrowseLayersPanel } from './components/GisPortalBrowseLayersPa
 import { GisUploadCloudSources } from '../../components/GisUploadCloudSources';
 import type { MapToolboxAddGisLayerAction } from './components/MapToolboxAddGisLayerFlyout';
 import { SiAddSourceAnchoredPanel } from './components/SiAddSourceAnchoredPanel';
+import { SiAddArcGisLayerPanel } from './components/SiAddArcGisLayerPanel';
 import { type GisContentRow, gisContentPortalDisplayTypeLabel } from '../master/gisContentPortalData';
 import {
   buildGisContentMapLayerPayload,
@@ -447,7 +521,11 @@ import {
   useGisContentPortal,
 } from '../../lib/gisContentPortalStore';
 import { persistArcGisHostedFeatureLayerToGisContentPortal } from '../../lib/gisContentPortalPublish';
-import { isAgroStructuresPortalRow, fetchHostedFeatureLayerGeoJsonFromServiceUrl } from '../../lib/gisHostedFeatureLayerPortal';
+import {
+  isAgroStructuresPortalRow,
+  fetchHostedFeatureLayerGeoJsonFromServiceUrl,
+  resolveHostedFeatureLayerExternalUrl,
+} from '../../lib/gisHostedFeatureLayerPortal';
 import { listGisContentPortalSavedLayers, parseGisContentPortalLayerUrl, gisContentPortalLayerUrl } from '../../lib/gisContentPortalTableUtils';
 import { SatelliteGeoAiFloatingWidget } from './components/SatelliteGeoAiFloatingWidget';
 import { SatelliteAoiStaticChartsMapOverlay } from './components/SatelliteAoiStaticChartsMapOverlay';
@@ -462,6 +540,7 @@ import {
 } from './components/WeatherVisualizationPanel';
 import { reversePlaceLabel } from '../../lib/openMeteoWeather';
 import { SiFeatureInspectPopup } from './components/SiFeatureInspectPopup';
+import { SiMapDockAwareMarker } from './components/SiMapDockAwareMarker';
 import { SiLayerPopupConfigurator } from './components/SiLayerPopupConfigurator';
 import {
   buildSiAoiFieldRecord,
@@ -597,19 +676,19 @@ const GEO_AI_CHAT_PAGE_SIZE = 40;
 
 /** Sections shown inside the map toolbox processing portal. */
 type MapToolboxSectionId =
-  | 'source'
-  | 'layers'
-  | 'remote-sensing'
-  | 'crop-alerts'
-  | 'stress-zones'
-  | 'crop-classification'
-  | 'ai-detection-gis'
-  | 'tree-detections'
-  | 'hydro-watershed'
-  | 'well-site'
-  | 'well-suitability'
-  | 'flood-monitoring'
-  | 'table-geo-ai';
+ | 'source'
+ | 'layers'
+ | 'remote-sensing'
+ | 'crop-alerts'
+ | 'stress-zones'
+ | 'crop-classification'
+ | 'ai-detection-gis'
+ | 'tree-detections'
+ | 'hydro-watershed'
+ | 'well-site'
+ | 'well-suitability'
+ | 'flood-monitoring'
+ | 'table-geo-ai';
 
 type GeoAiInspectCardState = {
   title: string;
@@ -1592,6 +1671,8 @@ interface CustomLayer {
   authToken?: string;
   /** Sanitized ArcGIS `drawingInfo` for Mapbox paint (unique value, class breaks, simple). */
   arcgisDrawingInfo?: Record<string, unknown> | null;
+  /** Pristine ArcGIS `drawingInfo` from REST — never overwritten by custom symbology bake. */
+  arcgisDrawingInfoService?: Record<string, unknown> | null;
   /** When true, map uses `arcgisDrawingInfo` instead of a single layer color. */
   useArcGisSymbology?: boolean;
   /** Fields/types/domains for attribute table (coded-value descriptions). */
@@ -1603,7 +1684,18 @@ interface CustomLayer {
   raster?: { url: string; coordinates: RasterMapCoordinates };
   /** Session-only layers (GeoTIFF preview / IFC) are not written to localStorage. */
   ephemeral?: boolean;
-  importMetadata?: { format?: string; crs?: string; bytes?: number };
+  importMetadata?: {
+    format?: string;
+    crs?: string;
+    bytes?: number;
+    geometryType?: 'point' | 'line' | 'polygon' | 'raster' | 'mixed' | 'unknown';
+    featureCount?: number;
+    widthPx?: number;
+    heightPx?: number;
+    bands?: number;
+    sourceUrl?: string;
+    importedAt?: string;
+  };
   /** Original IFC blob URL for future viewer hooks (session only). */
   bimBlobUrl?: string;
   /** Map identify popup: field visibility, order, groups, and view mode. */
@@ -1627,6 +1719,14 @@ interface CustomLayer {
   blendMode?: 'normal' | 'multiply' | 'screen' | 'overlay' | 'darken' | 'lighten';
   /** Render point features as a registered marker icon (e.g. water-drop) instead of a flat circle. */
   markerImageId?: 'si-water-drop';
+  /** ArcGIS REST service type for dynamically imported layers. */
+  arcgisServiceType?: ArcGisServiceType;
+  /** When true, feature geometry is lazy-loaded by map viewport (not stored in localStorage). */
+  viewportStreaming?: boolean;
+  /** Mapbox raster tile URLs for ArcGIS Map/Image services. */
+  arcgisRasterTiles?: ArcGisRasterTilesConfig;
+  /** Mapbox vector tile URLs for ArcGIS Vector Tile services. */
+  arcgisVectorTiles?: ArcGisVectorTilesConfig;
 }
 
 const SI_TABLE_MAX_FEATURES = 10000;
@@ -1722,42 +1822,79 @@ function parseStoredCustomLayers(raw: string | null): CustomLayer[] {
           typeof x === 'object' &&
           typeof (x as CustomLayer).id === 'string' &&
           typeof (x as CustomLayer).name === 'string' &&
-          (x as CustomLayer).geojson &&
-          typeof (x as CustomLayer).geojson === 'object' &&
-          typeof (x as CustomLayer).visible === 'boolean',
+          typeof (x as CustomLayer).visible === 'boolean' &&
+          (((x as CustomLayer).geojson && typeof (x as CustomLayer).geojson === 'object') ||
+            ((x as CustomLayer).source === 'arcgis' &&
+              typeof (x as CustomLayer).sourceUrl === 'string' &&
+              !!(x as CustomLayer).sourceUrl?.trim())),
       )
       .map((x: any) => {
         const migratedSym = migrateStoredSymbology(x.symbology);
         let symbology = migratedSym;
+        const portalId =
+          typeof x.sourceUrl === 'string' ? parseGisContentPortalLayerUrl(x.sourceUrl) : null;
+        const portalRow = portalId ? getGisContentRowById(portalId) : null;
+        const portalArcgisUrl = portalRow ? resolveHostedFeatureLayerExternalUrl(portalRow) : null;
+        const hasArcgisRestSource =
+          x.source === 'arcgis' ||
+          Boolean(portalArcgisUrl) ||
+          (typeof x.sourceUrl === 'string' &&
+            /\/(FeatureServer|MapServer)\/\d+\/?$/i.test(x.sourceUrl.trim()));
+        let useArcGisSymbologyResolved =
+          typeof x.useArcGisSymbology === 'boolean'
+            ? x.useArcGisSymbology
+            : hasArcgisRestSource
+              ? true
+              : undefined;
         if (
+          hasArcgisRestSource &&
+          useArcGisSymbologyResolved !== false &&
+          symbology?.useArcGisOnline !== false
+        ) {
+          symbology = { ...(symbology ?? {}), useArcGisOnline: true };
+        } else if (
+          x.source === 'arcgis' &&
+          useArcGisSymbologyResolved !== false &&
+          symbology?.useArcGisOnline !== false
+        ) {
+          symbology = { ...(symbology ?? {}), useArcGisOnline: true };
+        } else if (
           typeof symbology?.useArcGisOnline !== 'boolean' &&
           (x.source === 'arcgis' ||
             (x.arcgisDrawingInfo && typeof x.arcgisDrawingInfo === 'object') ||
             (x.arcgisLayerDefinition && typeof x.arcgisLayerDefinition === 'object') ||
             (typeof x.sourceUrl === 'string' && x.sourceUrl.trim()))
         ) {
-          const fallbackOnline = typeof x.useArcGisSymbology === 'boolean' ? x.useArcGisSymbology : true;
+          const fallbackOnline = useArcGisSymbologyResolved !== false;
           symbology = { ...(symbology ?? {}), useArcGisOnline: fallbackOnline };
         }
+        const sanitizedDrawingInfo =
+          x.arcgisDrawingInfo && typeof x.arcgisDrawingInfo === 'object'
+            ? (sanitizeArcgisDrawingInfoForClient(x.arcgisDrawingInfo) as Record<string, unknown> | null) ?? undefined
+            : undefined;
+        const sanitizedServiceDi =
+          x.arcgisDrawingInfoService && typeof x.arcgisDrawingInfoService === 'object'
+            ? (sanitizeArcgisDrawingInfoForClient(x.arcgisDrawingInfoService) as Record<string, unknown> | null) ??
+              undefined
+            : undefined;
+        const wantsOnline = symbology?.useArcGisOnline === true;
         return {
           id: String(x.id),
           name: String(x.name),
-          geojson: x.geojson,
+          geojson:
+            x.geojson && typeof x.geojson === 'object'
+              ? x.geojson
+              : x.source === 'arcgis'
+                ? createEmptyArcGisFeatureCollection()
+                : undefined,
           visible: Boolean(x.visible),
           color: typeof x.color === 'string' ? x.color : undefined,
           source: x.source === 'arcgis' || x.source === 'upload' || x.source === 'api' || x.source === 'stac' ? x.source : undefined,
           sourceUrl: typeof x.sourceUrl === 'string' ? x.sourceUrl : undefined,
           authToken: typeof x.authToken === 'string' ? x.authToken : undefined,
-          arcgisDrawingInfo:
-            x.arcgisDrawingInfo && typeof x.arcgisDrawingInfo === 'object' ? (x.arcgisDrawingInfo as Record<string, unknown>) : undefined,
-          useArcGisSymbology:
-            x.source === 'arcgis'
-              ? typeof x.useArcGisSymbology === 'boolean'
-                ? x.useArcGisSymbology
-                : true
-              : typeof x.useArcGisSymbology === 'boolean'
-                ? x.useArcGisSymbology
-                : undefined,
+          arcgisDrawingInfo: wantsOnline ? undefined : sanitizedDrawingInfo,
+          arcgisDrawingInfoService: wantsOnline ? undefined : sanitizedServiceDi,
+          useArcGisSymbology: useArcGisSymbologyResolved,
           arcgisLayerDefinition:
             x.arcgisLayerDefinition && typeof x.arcgisLayerDefinition === 'object'
               ? (x.arcgisLayerDefinition as ArcgisLayerDefLite)
@@ -1810,6 +1947,41 @@ function parseStoredCustomLayers(raw: string | null): CustomLayer[] {
             x.blendMode === 'lighten' ||
             x.blendMode === 'normal'
               ? x.blendMode
+              : undefined,
+          arcgisServiceType: (() => {
+            if (
+              x.arcgisServiceType === 'feature' ||
+              x.arcgisServiceType === 'map' ||
+              x.arcgisServiceType === 'vector-tile' ||
+              x.arcgisServiceType === 'image'
+            ) {
+              return x.arcgisServiceType
+            }
+            if (x.source === 'arcgis' && typeof x.sourceUrl === 'string') {
+              const detected = detectArcGisServiceTypeFromUrl(x.sourceUrl)
+              return detected !== 'unknown' ? detected : ('feature' as const)
+            }
+            return undefined
+          })(),
+          viewportStreaming:
+            typeof x.viewportStreaming === 'boolean'
+              ? x.viewportStreaming
+              : x.source === 'arcgis' &&
+                  typeof x.sourceUrl === 'string' &&
+                  isAgroStructuresLayerUrl(x.sourceUrl)
+                ? true
+                : undefined,
+          arcgisRasterTiles:
+            x.arcgisRasterTiles &&
+            typeof x.arcgisRasterTiles === 'object' &&
+            Array.isArray(x.arcgisRasterTiles.tiles)
+              ? (x.arcgisRasterTiles as ArcGisRasterTilesConfig)
+              : undefined,
+          arcgisVectorTiles:
+            x.arcgisVectorTiles &&
+            typeof x.arcgisVectorTiles === 'object' &&
+            Array.isArray(x.arcgisVectorTiles.tiles)
+              ? (x.arcgisVectorTiles as ArcGisVectorTilesConfig)
               : undefined,
         };
       });
@@ -1947,6 +2119,7 @@ type SiMapboxCanvasLike = {
   getStyle(): { layers?: Array<{ id: string }> };
   triggerRepaint?(): void;
   hasImage?(id: string): boolean;
+  loadImage?(url: string, callback: (error?: Error, image?: HTMLImageElement | ImageBitmap) => void): void;
   addImage?(id: string, image: unknown, options?: { pixelRatio?: number }): void;
 };
 
@@ -2011,7 +2184,72 @@ function siEnsureWaterDropImage(map: SiMapboxCanvasLike, id: 'si-water-drop' = '
   }
 }
 
-const SI_MAPBOX_CUSTOM_LAYER_SUFFIXES = ['-fill', '-line', '-circle', '-marker', '-cluster', '-cluster-count', '-raster', '-label'] as const;
+function siEnsureArcgisPointIconImages(
+  map: SiMapboxCanvasLike,
+  spec: ArcgisPointIconLayerSpec,
+  onReady: () => void,
+): boolean {
+  const entries = spec.entries;
+  if (!entries.length) return false;
+  let pending = 0;
+  for (const entry of entries) {
+    try {
+      if (typeof map.hasImage === 'function' && map.hasImage(entry.imageId)) continue;
+    } catch {
+      /* ignore */
+    }
+    pending += 1;
+    const done = () => {
+      pending -= 1;
+      if (pending <= 0) onReady();
+    };
+    if (entry.imageUrl.startsWith('data:') && typeof document !== 'undefined') {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          if (typeof map.hasImage === 'function' && map.hasImage(entry.imageId)) {
+            done();
+            return;
+          }
+          map.addImage?.(entry.imageId, img, { pixelRatio: 2 });
+        } catch (err) {
+          console.error('[si-point-symbol] Failed to register data-url icon', entry.imageId, err);
+        }
+        done();
+      };
+      img.onerror = () => {
+        console.error('[si-point-symbol] Failed to load data-url icon', entry.imageId);
+        done();
+      };
+      img.src = entry.imageUrl;
+      continue;
+    }
+    if (typeof map.loadImage === 'function') {
+      map.loadImage(entry.imageUrl, (err, image) => {
+        if (err || !image) {
+          console.error('[si-point-symbol] Failed to load icon url', entry.imageUrl, err);
+          done();
+          return;
+        }
+        try {
+          if (typeof map.hasImage === 'function' && map.hasImage(entry.imageId)) {
+            done();
+            return;
+          }
+          map.addImage?.(entry.imageId, image);
+        } catch (addErr) {
+          console.error('[si-point-symbol] Failed to add icon image', entry.imageId, addErr);
+        }
+        done();
+      });
+    } else {
+      done();
+    }
+  }
+  return pending === 0;
+}
+
+const SI_MAPBOX_CUSTOM_LAYER_SUFFIXES = ['-fill', '-line', '-circle', '-marker', '-arcgis-icon', '-cluster', '-cluster-count', '-raster', '-arcgis-raster', '-label'] as const;
 
 /**
  * Compile a simple `field op value` definition query into a Mapbox filter expression.
@@ -2067,6 +2305,21 @@ function siRemoveMapboxCustomLayerStack(map: SiMapboxCanvasLike, sourceId: strin
     }
   }
   try {
+    const style = map.getStyle();
+    const vtLayerIds = (style.layers ?? [])
+      .map(l => l.id)
+      .filter(id => id.startsWith(`${sourceId}-vt-`));
+    for (const lid of vtLayerIds) {
+      try {
+        if (map.getLayer(lid)) map.removeLayer(lid);
+      } catch {
+        /* ignore */
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
     if (map.getSource(sourceId)) map.removeSource(sourceId);
   } catch {
     /* ignore */
@@ -2074,7 +2327,7 @@ function siRemoveMapboxCustomLayerStack(map: SiMapboxCanvasLike, sourceId: strin
 }
 
 /**
- * Show/hide every sub-layer (fill, line, circle, cluster, raster, labelâ€¦) of a custom layer
+ * Show/hide every sub-layer (fill, line, circle, cluster, raster, label...) of a custom layer
  * via the Mapbox `visibility` layout property. Toggling visibility â€” instead of removing and
  * re-adding the layer stack â€” is instant, keeps all geometry types in sync, and preserves the
  * exact draw order (z-index) when a layer is switched back on (QGIS/ArcGIS-style behaviour).
@@ -2098,7 +2351,7 @@ function siSetMapboxCustomLayerStackVisibility(
 }
 
 /**
- * Floating, portal-positioned layer-options menu (ArcGIS / layer-tree style). The â‹¯
+ * Floating, portal-positioned layer-options menu (ArcGIS / layer-tree style). The ...
  * trigger lives inline in the layer row, but the menu is rendered to document.body and
  * positioned via the trigger's bounding box so it never gets clipped by the compact
  * panel's overflow and always floats cleanly above the dock.
@@ -2171,7 +2424,7 @@ function SiLayerOptionsMenuPortal({
         ref={btnRef}
         type="button"
         className={'si-env-layer-action-btn si-env-layer-action-btn--menu' + (open ? ' is-active' : '')}
-        title="Layer options (zoom, table, symbology, pop-ups, opacity, orderâ€¦)"
+        title="Layer options (zoom, table, symbology, pop-ups, opacity, order...)"
         aria-label={`Layer options for ${layerLabel}`}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -2228,7 +2481,8 @@ function siApplyMapboxPaintProps(
   paint: Record<string, unknown>,
 ) {
   if (!map.getLayer(layerId) || typeof map.setPaintProperty !== 'function') return;
-  for (const [name, value] of Object.entries(paint)) {
+  const safePaint = sanitizeMapboxPaint(paint);
+  for (const [name, value] of Object.entries(safePaint)) {
     try {
       map.setPaintProperty(layerId, name, value);
     } catch {
@@ -2237,58 +2491,156 @@ function siApplyMapboxPaintProps(
   }
 }
 
+const siCustomLayerGeoJsonPaintSigBySourceId = new Map<string, string>();
+
+function siCustomLayerGeoJsonPaintSig(geojson: unknown): string {
+  const features = Array.isArray((geojson as { features?: unknown[] })?.features)
+    ? (geojson as { features: unknown[] }).features
+    : [];
+  if (!features.length) return 'empty';
+  return `n:${features.length}`;
+}
+
 function siPaintCustomLayersOnMapboxCanvas(
   map: SiMapboxCanvasLike,
   layers: CustomLayer[],
   trackedSourceIds: Set<string>,
-  options?: { suppressPrimaryAoiFill?: boolean },
+  options?: { suppressPrimaryAoiFill?: boolean; onArcgisIconsLoaded?: () => void },
 ) {
   const nextSourceIds = new Set<string>();
   const beforeId = siMapboxInsertBeforeId(map);
 
   for (const layer of layers) {
-    // Layers with no geometry yet (e.g. an empty shell awaiting features) are skipped.
-    // Hidden layers are NOT skipped: we keep their stack mounted and flip the Mapbox
-    // `visibility` property so toggling is instant and preserves draw order (z-index).
-    if (!layer.geojson) continue;
+    // Layers with no geometry yet (e.g. an empty shell awaiting features) are skipped,
+    // except ArcGIS raster/vector-tile layers that mount tile sources directly.
+    const hasTileSource =
+      (layer.arcgisRasterTiles?.tiles?.length ?? 0) > 0 || (layer.arcgisVectorTiles?.tiles?.length ?? 0) > 0;
+    if (!layer.geojson && !hasTileSource) continue;
     const sourceId = siSafeMapboxLayerId(layer.id);
     nextSourceIds.add(sourceId);
     const layerVisible = layer.visible !== false;
     const op = layer.mapOpacity ?? 1;
 
     try {
-      if (layer.renderMode === 'raster' && layer.raster?.url && layer.raster.coordinates) {
-        const rasterId = `${sourceId}-raster`;
-        if (!map.getSource(sourceId)) {
-          map.addSource(sourceId, {
-            type: 'image',
-            url: layer.raster.url,
-            coordinates: layer.raster.coordinates,
+      if (layer.arcgisRasterTiles?.tiles?.length) {
+        const rasterSrcId = sourceId;
+        if (!map.getSource(rasterSrcId)) {
+          map.addSource(rasterSrcId, {
+            type: 'raster',
+            tiles: layer.arcgisRasterTiles.tiles,
+            tileSize: layer.arcgisRasterTiles.tileSize ?? 256,
           });
+          arcgisDynamicDebug('source_created', { layerId: layer.id, kind: 'arcgis-raster-tiles' });
         }
-        const rasterOpacity = isWellSuitabilityMcdaLayerId(layer.id) ? op : 0.92 * op;
+        const rasterId = `${sourceId}-arcgis-raster`;
+        const rasterOpacity = 0.92 * op;
         if (!map.getLayer(rasterId)) {
           map.addLayer(
             {
               id: rasterId,
               type: 'raster',
-              source: sourceId,
+              source: rasterSrcId,
               layout: { visibility: layerVisible ? 'visible' : 'none' },
               paint: { 'raster-opacity': rasterOpacity, 'raster-fade-duration': 0 },
             },
             beforeId,
           );
+          arcgisDynamicDebug('layer_added', { layerId: layer.id, mapboxLayerId: rasterId });
         } else {
           siApplyMapboxPaintProps(map, rasterId, { 'raster-opacity': rasterOpacity });
+          try {
+            map.setLayoutProperty?.(rasterId, 'visibility', layerVisible ? 'visible' : 'none');
+          } catch {
+            /* ignore */
+          }
         }
-        siSetMapboxCustomLayerStackVisibility(map, sourceId, layerVisible);
+        continue;
+      }
+
+      if (layer.arcgisVectorTiles?.tiles?.length) {
+        if (!map.getSource(sourceId)) {
+          map.addSource(sourceId, {
+            type: 'vector',
+            tiles: layer.arcgisVectorTiles.tiles,
+            minzoom: layer.arcgisVectorTiles.minzoom ?? 0,
+            maxzoom: layer.arcgisVectorTiles.maxzoom ?? 22,
+          });
+          arcgisDynamicDebug('source_created', { layerId: layer.id, kind: 'arcgis-vector-tiles' });
+        }
+        const sourceLayers = layer.arcgisVectorTiles.sourceLayers?.length
+          ? layer.arcgisVectorTiles.sourceLayers
+          : ['layer'];
+        const initialVisibility = { visibility: layerVisible ? 'visible' : 'none' } as const;
+        sourceLayers.forEach((srcLayer, idx) => {
+          const safe = srcLayer.replace(/[^a-zA-Z0-9_-]/g, '_') || `layer-${idx}`;
+          const fillId = `${sourceId}-vt-fill-${safe}`;
+          const lineId = `${sourceId}-vt-line-${safe}`;
+          if (!map.getLayer(fillId)) {
+            map.addLayer(
+              {
+                id: fillId,
+                type: 'fill',
+                source: sourceId,
+                'source-layer': srcLayer,
+                layout: initialVisibility,
+                paint: {
+                  'fill-color': layer.fillColor || layer.color || '#38bdf8',
+                  'fill-opacity': (layer.polygonFillAlpha ?? 0.35) * op,
+                },
+              },
+              beforeId,
+            );
+            arcgisDynamicDebug('layer_added', { layerId: layer.id, mapboxLayerId: fillId });
+          }
+          if (!map.getLayer(lineId)) {
+            map.addLayer(
+              {
+                id: lineId,
+                type: 'line',
+                source: sourceId,
+                'source-layer': srcLayer,
+                layout: initialVisibility,
+                paint: {
+                  'line-color': layer.color || '#38bdf8',
+                  'line-width': layer.weight ?? 1.5,
+                  'line-opacity': op,
+                },
+              },
+              beforeId,
+            );
+            arcgisDynamicDebug('layer_added', { layerId: layer.id, mapboxLayerId: lineId });
+          } else {
+            try {
+              map.setLayoutProperty?.(fillId, 'visibility', layerVisible ? 'visible' : 'none');
+              map.setLayoutProperty?.(lineId, 'visibility', layerVisible ? 'visible' : 'none');
+            } catch {
+              /* ignore */
+            }
+          }
+        });
+        continue;
+      }
+
+      if (layer.renderMode === 'raster' && layer.raster?.url && layer.raster.coordinates) {
+        const rasterOpacity = isWellSuitabilityMcdaLayerId(layer.id) ? op : op;
+        syncMapboxGeoreferencedImageLayer(map, sourceId, layer.raster.url, layer.raster.coordinates, {
+          visible: layerVisible,
+          opacity: rasterOpacity,
+          beforeId,
+        });
         continue;
       }
 
       const src = map.getSource(sourceId) as { setData?: (d: unknown) => void } | undefined;
+      const paintSig = siCustomLayerGeoJsonPaintSig(layer.geojson);
+      const prevPaintSig = siCustomLayerGeoJsonPaintSigBySourceId.get(sourceId);
       if (src?.setData) {
-        src.setData(layer.geojson);
+        if (paintSig !== prevPaintSig) {
+          src.setData(layer.geojson);
+          siCustomLayerGeoJsonPaintSigBySourceId.set(sourceId, paintSig);
+        }
       } else {
+        siCustomLayerGeoJsonPaintSigBySourceId.delete(sourceId);
         siRemoveMapboxCustomLayerStack(map, sourceId);
         map.addSource(sourceId, {
           type: 'geojson',
@@ -2300,18 +2652,24 @@ function siPaintCustomLayersOnMapboxCanvas(
       }
 
       const st = siLayerMapboxStylePack(layer);
-      let fillPaint = siScalePaintOpacityByFactor(st.fillPaint as Record<string, unknown>, op);
+      let fillPaint = sanitizeMapboxPaint(siScalePaintOpacityByFactor(st.fillPaint as Record<string, unknown>, op));
+      const useAgSymbology = siLayerUsesArcgisOnlineSymbology(layer);
       if (
         options?.suppressPrimaryAoiFill &&
-        String(layer.id) === AGRO_STRUCTURES_PRIMARY_LAYER_ID
+        String(layer.id) === AGRO_STRUCTURES_PRIMARY_LAYER_ID &&
+        !useAgSymbology
       ) {
         fillPaint = { ...fillPaint, 'fill-opacity': 0 };
       }
-      const linePaint = siMapboxZoomScaledLinePaint(
-        siScalePaintOpacityByFactor(st.linePaint as Record<string, unknown>, op),
-        op,
+      const linePaint = sanitizeMapboxPaint(
+        siMapboxZoomScaledLinePaint(
+          siScalePaintOpacityByFactor(st.linePaint as Record<string, unknown>, op),
+          op,
+        ),
       );
-      const circlePaintRaw = siScalePaintOpacityByFactor(st.circlePaint as Record<string, unknown>, op);
+      const circlePaintRaw = sanitizeMapboxPaint(
+        siScalePaintOpacityByFactor(st.circlePaint as Record<string, unknown>, op),
+      );
       let circlePaint =
         op < 0.999 && circlePaintRaw['circle-opacity'] === undefined
           ? { ...circlePaintRaw, 'circle-opacity': op }
@@ -2329,6 +2687,33 @@ function siPaintCustomLayersOnMapboxCanvas(
           'circle-opacity': 0,
           'circle-stroke-width': 0,
         };
+      }
+
+      const arcgisIconId = `${sourceId}-arcgis-icon`;
+      const pointGeomKind = resolveLayerGeometryKind(layer.geojson, layer.arcgisLayerDefinition);
+      const pointIconSpec =
+        !useMarker &&
+        siLayerUsesArcgisOnlineSymbology(layer) &&
+        pointGeomKind === 'point' &&
+        resolveLayerArcgisDrawingInfo(layer)
+          ? buildArcgisPointIconLayerSpec(resolveLayerArcgisDrawingInfo(layer), sourceId)
+          : null;
+      let useArcgisPointIcons = false;
+      if (pointIconSpec) {
+        useArcgisPointIcons = siEnsureArcgisPointIconImages(map, pointIconSpec, () => {
+          options?.onArcgisIconsLoaded?.();
+        });
+        if (useArcgisPointIcons) {
+          circlePaint = {
+            ...circlePaint,
+            'circle-radius':
+              typeof circlePaint['circle-radius'] === 'number'
+                ? Math.max(4, circlePaint['circle-radius'] as number)
+                : 6,
+            'circle-opacity': 0,
+            'circle-stroke-width': 0,
+          };
+        }
       }
 
       const fillId = `${sourceId}-fill`;
@@ -2391,6 +2776,38 @@ function siPaintCustomLayersOnMapboxCanvas(
         }
       } else if (map.getLayer(markerId)) {
         try { map.removeLayer(markerId); } catch { /* ignore */ }
+      }
+
+      if (useArcgisPointIcons && pointIconSpec) {
+        const iconLayout = {
+          visibility: layerVisible ? 'visible' : 'none',
+          'icon-image': buildArcgisPointIconImageMatch(pointIconSpec),
+          'icon-size': pointIconSpec.iconSize,
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
+        };
+        const iconPaint = { 'icon-opacity': op };
+        if (!map.getLayer(arcgisIconId)) {
+          map.addLayer(
+            { id: arcgisIconId, type: 'symbol', source: sourceId, filter: pointFilter, layout: iconLayout, paint: iconPaint },
+            beforeId,
+          );
+        } else {
+          try {
+            map.setLayoutProperty?.(arcgisIconId, 'icon-image', iconLayout['icon-image']);
+            map.setLayoutProperty?.(arcgisIconId, 'icon-size', iconLayout['icon-size']);
+            map.setFilter?.(arcgisIconId, pointFilter);
+          } catch {
+            /* ignore */
+          }
+          siApplyMapboxPaintProps(map, arcgisIconId, iconPaint);
+        }
+      } else if (map.getLayer(arcgisIconId)) {
+        try {
+          map.removeLayer(arcgisIconId);
+        } catch {
+          /* ignore */
+        }
       }
 
       // Labeling â€” one text label per feature drawn from the chosen attribute field.
@@ -2480,7 +2897,7 @@ function siIdentifyLayerIsSkippable(layerId: string): boolean {
   if (layerId.startsWith('si-geo-ai-sel-')) return true;
   if (layerId.startsWith('si-draw-draft')) return true;
   if (layerId.startsWith('si-edit-handles')) return true;
-  if (layerId === 'sentinel-layer' || layerId.startsWith('sentinel-layer-') || layerId === 'si-stac-thumb-layer') return true;
+  if (layerId === 'sentinel-layer' || isSiSentinelAoiWmsMapLayerId(layerId) || layerId === 'si-stac-thumb-layer') return true;
   if (layerId === 'background') return true;
   return false;
 }
@@ -2538,6 +2955,93 @@ function siSanitizeIdentifyProperties(raw: Record<string, unknown> | null | unde
 const SI_ARCGIS_MAPBOX_NEUTRAL_LINE = 'rgba(148, 163, 184, 0.55)';
 const SI_ARCGIS_MAPBOX_NEUTRAL_STROKE = 'rgba(15, 23, 42, 0.72)';
 
+function siArcgisDrawingInfoFetchUrl(
+  layer: Pick<CustomLayer, 'id' | 'sourceUrl' | 'name' | 'source'>,
+): string {
+  const raw = String(layer.sourceUrl || '').trim();
+  if (!raw) return '';
+
+  const portalId = parseGisContentPortalLayerUrl(raw);
+  if (portalId) {
+    const row = getGisContentRowById(portalId);
+    const external = row ? resolveHostedFeatureLayerExternalUrl(row) : null;
+    if (external) {
+      return isAgroStructuresLayer(layer) ? resolveAgroStructuresLayerUrl(external) : external;
+    }
+    return '';
+  }
+
+  if (isAgroStructuresLayer(layer)) {
+    return resolveAgroStructuresLayerUrl(raw || AGRO_STRUCTURES_FS21_URL);
+  }
+
+  if (/https?:\/\//i.test(raw) && /\/(FeatureServer|MapServer)\/\d+\/?$/i.test(raw)) {
+    return raw;
+  }
+
+  return layer.source === 'arcgis' ? raw : '';
+}
+
+function siLayerHasArcgisRestSource(
+  layer: Pick<CustomLayer, 'id' | 'sourceUrl' | 'name' | 'source'>,
+): boolean {
+  return Boolean(siArcgisDrawingInfoFetchUrl(layer));
+}
+
+function siLayerSupportsArcgisOnlineSymbology(layer: CustomLayer): boolean {
+  if (layer.renderMode === 'raster') return false;
+  if (layer.arcgisServiceType === 'map' || layer.arcgisServiceType === 'image') return false;
+  return siLayerHasArcgisRestSource(layer);
+}
+
+function siApplyArcgisOnlineSymbologyOnImport(layer: CustomLayer): CustomLayer {
+  if (!siLayerSupportsArcgisOnlineSymbology(layer)) return layer;
+  const serviceDi =
+    layer.arcgisDrawingInfoService ??
+    (layer.arcgisDrawingInfo ? (layer.arcgisDrawingInfo as Record<string, unknown>) : undefined);
+  return {
+    ...layer,
+    useArcGisSymbology: true,
+    symbology: {
+      ...(layer.symbology ?? {}),
+      useArcGisOnline: true,
+    },
+    arcgisDrawingInfoService: serviceDi,
+    arcgisDrawingInfo: undefined,
+  };
+}
+
+/** Whether the user wants ArcGIS Online renderer symbology (vs Symbology Studio overrides). */
+function siLayerWantsArcgisOnlineSymbology(layer: CustomLayer): boolean {
+  if (layer.symbology?.useArcGisOnline === true) return true;
+  if (layer.symbology?.useArcGisOnline === false) return false;
+  if (layer.useArcGisSymbology === true) return true;
+  if (layer.useArcGisSymbology === false) return false;
+  return layer.source === 'arcgis' || siLayerHasArcgisRestSource(layer);
+}
+
+/** Whether the map can paint vectors using ArcGIS `drawingInfo` right now. */
+function siLayerUsesArcgisOnlineSymbology(layer: CustomLayer): boolean {
+  if (!siLayerWantsArcgisOnlineSymbology(layer)) return false;
+  return Boolean(resolveLayerArcgisDrawingInfo(layer));
+}
+
+function siArcgisDrawingTransparencyFactor(drawingInfo: unknown): number {
+  const t = (drawingInfo as { transparency?: unknown } | null)?.transparency;
+  if (typeof t !== 'number' || !Number.isFinite(t)) return 1;
+  return Math.max(0, Math.min(1, 1 - t / 100));
+}
+
+function siRasterLayerPaintSig(layer: CustomLayer): string {
+  if (layer.renderMode !== 'raster' || !layer.raster) return '';
+  const coords = layer.raster.coordinates;
+  const coordSig = Array.isArray(coords)
+    ? coords.map(p => `${Number(p[0]).toFixed(6)},${Number(p[1]).toFixed(6)}`).join(';')
+    : '';
+  const urlTail = layer.raster.url ? layer.raster.url.slice(-32) : '';
+  return `raster:${urlTail}:${coordSig}`;
+}
+
 function pickSiCustomLayerStyleSnapshot(l: CustomLayer): Partial<CustomLayer> {
   return {
     symbology: l.symbology ? { ...l.symbology } : undefined,
@@ -2552,6 +3056,7 @@ function pickSiCustomLayerStyleSnapshot(l: CustomLayer): Partial<CustomLayer> {
     mapOpacity: l.mapOpacity,
     useArcGisSymbology: l.useArcGisSymbology,
     arcgisDrawingInfo: l.arcgisDrawingInfo,
+    arcgisDrawingInfoService: l.arcgisDrawingInfoService,
   };
 }
 
@@ -2563,16 +3068,72 @@ function siLayerMapboxStylePack(layer: CustomLayer): {
   linePaint: Record<string, unknown>;
   circlePaint: Record<string, unknown>;
 } {
-  const useAg = layer.source === 'arcgis' && layer.useArcGisSymbology !== false && layer.arcgisDrawingInfo;
+  const wantsAg = siLayerWantsArcgisOnlineSymbology(layer);
+  const resolvedDi = resolveLayerArcgisDrawingInfo(layer);
+  const useAg = wantsAg && Boolean(resolvedDi);
+  const geomKind = resolveLayerGeometryKind(layer.geojson, layer.arcgisLayerDefinition);
+  if (wantsAg && !resolvedDi) {
+    return {
+      fillFilter: SI_MAPBOX_POLY_FILTER,
+      lineFilter: SI_MAPBOX_LINE_POLY_FILTER,
+      pointFilter: SI_MAPBOX_POINT_FILTER,
+      fillPaint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': 0 },
+      linePaint: {
+        'line-color': SI_ARCGIS_MAPBOX_NEUTRAL_LINE,
+        'line-width': 1.25,
+        'line-opacity': 0.35,
+      },
+      circlePaint: {
+        'circle-radius': 4,
+        'circle-color': SI_ARCGIS_MAPBOX_NEUTRAL_LINE,
+        'circle-stroke-width': 1,
+        'circle-stroke-color': SI_ARCGIS_MAPBOX_NEUTRAL_STROKE,
+        'circle-opacity': 0.35,
+      },
+    };
+  }
   if (useAg) {
-    const di = layer.arcgisDrawingInfo as any;
-    const fill = arcgisDrawingInfoToFillPaint(di);
-    const line = arcgisDrawingInfoToLinePaint(di, SI_ARCGIS_MAPBOX_NEUTRAL_LINE);
-    if (fill) {
-      const outlineDriven = Object.prototype.hasOwnProperty.call(fill, 'fill-outline-color');
+    const di = resolvedDi as any;
+    const transparencyFactor = siArcgisDrawingTransparencyFactor(di);
+    let fill = arcgisDrawingInfoToFillPaint(di);
+    let line = arcgisDrawingInfoToLinePaint(di, SI_ARCGIS_MAPBOX_NEUTRAL_LINE);
+    let circle = geomKind === 'point' ? arcgisDrawingInfoToCirclePaint(di) : null;
+    if (!circle && geomKind === 'point') {
+      console.warn('[si-point-symbol] Failed to map ArcGIS point symbology to Mapbox circle paint', {
+        layerId: layer.id,
+        rendererType: di?.renderer?.type,
+      });
+    }
+    if (fill && transparencyFactor < 0.999) {
+      fill = siScalePaintOpacityByFactor(fill as Record<string, unknown>, transparencyFactor) as typeof fill;
+    }
+    if (line && transparencyFactor < 0.999) {
+      line = siScalePaintOpacityByFactor(line as Record<string, unknown>, transparencyFactor) as typeof line;
+    }
+    if (circle && transparencyFactor < 0.999) {
+      circle = siScalePaintOpacityByFactor(circle, transparencyFactor);
+    }
+    if (geomKind === 'point' && circle) {
       return {
         fillFilter: SI_MAPBOX_POLY_FILTER,
-        lineFilter: outlineDriven ? SI_MAPBOX_LINE_ONLY_FILTER : SI_MAPBOX_LINE_POLY_FILTER,
+        lineFilter: SI_MAPBOX_LINE_ONLY_FILTER,
+        pointFilter: SI_MAPBOX_POINT_FILTER,
+        fillPaint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': 0 },
+        linePaint: (line ?? {
+          'line-color': SI_ARCGIS_MAPBOX_NEUTRAL_LINE,
+          'line-width': 1,
+          'line-opacity': 0,
+        }) as Record<string, unknown>,
+        circlePaint: circle,
+      };
+    }
+    if (fill) {
+      return {
+        fillFilter: SI_MAPBOX_POLY_FILTER,
+        // Always draw polygon rings on the line layer — outline-only ArcGIS subtypes
+        // (PIVOT, Farm Plots, Dates Farm) rely on line-color; fill-outline-color alone
+        // hides features when match keys miss.
+        lineFilter: SI_MAPBOX_LINE_POLY_FILTER,
         pointFilter: SI_MAPBOX_POINT_FILTER,
         fillPaint: fill as Record<string, unknown>,
         linePaint: (line ?? {
@@ -2619,9 +3180,20 @@ function siLayerMapboxStylePack(layer: CustomLayer): {
     fillStyle: layer.fillStyle as any,
     canUseArcGisOnline:
       layer.source === 'arcgis' ||
+      siLayerHasArcgisRestSource(layer) ||
       Boolean(layer.arcgisDrawingInfo) ||
       Boolean((layer.arcgisLayerDefinition as any)?.drawingInfo),
   });
+}
+
+function siNormalizeLayerGeojsonForSymbology(layer: CustomLayer): CustomLayer['geojson'] {
+  if (!siLayerWantsArcgisOnlineSymbology(layer) || !isAgroStructuresLayer(layer)) return layer.geojson;
+  const features = layer.geojson?.features;
+  if (!Array.isArray(features) || !features.length) return layer.geojson;
+  return {
+    ...layer.geojson,
+    features: features.map(f => normalizeAgroStructuresFeatureForSymbology(f) as GeoJSON.Feature),
+  };
 }
 
 /** Multiply numeric *-opacity paint props for per-layer transparency (Mapbox GL). */
@@ -2640,7 +3212,7 @@ function siScalePaintOpacityByFactor(paint: Record<string, unknown>, factor: num
 function persistCustomLayersToStorage(layers: CustomLayer[], storageKey = SATELLITE_CUSTOM_LAYERS_STORAGE_KEY) {
   if (typeof window === 'undefined') return;
   try {
-    const storable = layers.filter(l => !l.ephemeral);
+    const storable = slimArcGisLayersForStorage(layers.filter(l => !l.ephemeral));
     window.localStorage.setItem(storageKey, JSON.stringify(storable));
   } catch (e) {
     console.warn('Satellite Intelligence: could not persist custom layers', e);
@@ -2655,10 +3227,10 @@ type SiBakeRamp = SymbologyColorRamp | 'service';
 type AddLayerTab = 'giscontent' | 'arcgis' | 'upload' | 'database' | 'url' | 'raster';
 
 type SiGetDataPickAction =
-  | { kind: 'tab'; tab: AddLayerTab; presetRemoteUrl?: string; statusHint?: string }
-  | { kind: 'gis-map' }
-  | { kind: 'sql'; platform: (typeof DATABASE_PLATFORM_OPTIONS)[number] }
-  | { kind: 'toast'; message: string };
+ | { kind: 'tab'; tab: AddLayerTab; presetRemoteUrl?: string; statusHint?: string }
+ | { kind: 'gis-map' }
+ | { kind: 'sql'; platform: (typeof DATABASE_PLATFORM_OPTIONS)[number] }
+ | { kind: 'toast'; message: string };
 
 type SiGetDataSourceEntry = {
   id: string;
@@ -2668,7 +3240,7 @@ type SiGetDataSourceEntry = {
   action: SiGetDataPickAction;
 };
 
-/** Power BIâ€“style â€œCommon data sourcesâ€ â€” routes into existing Satellite import tabs / SQL profile. */
+/** Power BIâ€“style "Common data sources" â€” routes into existing Satellite import tabs / SQL profile. */
 const SI_GET_DATA_COMMON_SOURCES: SiGetDataSourceEntry[] = [
   {
     id: 'excel',
@@ -2682,7 +3254,7 @@ const SI_GET_DATA_COMMON_SOURCES: SiGetDataSourceEntry[] = [
     title: 'Text / CSV',
     description: 'Delimited text â€” include latitude / longitude columns for point layers.',
     iconClass: 'fa-solid fa-file-csv',
-    action: { kind: 'tab', tab: 'upload', statusHint: 'CSV: Upload tab â€” ensure lat/lon column names (lat, lon, latitude, longitude, â€¦).' },
+    action: { kind: 'tab', tab: 'upload', statusHint: 'CSV: Upload tab â€” ensure lat/lon column names (lat, lon, latitude, longitude, ...).' },
   },
   {
     id: 'json-geojson',
@@ -2838,16 +3410,16 @@ type EnvironmentalIndexId = 'NDWI' | 'NDMI' | 'EVI' | 'SAVI' | 'NDSI' | 'ET' | '
 
 /** ArcGIS-style tool ids: order matches vertical toolbar (draw â†’ sep â†’ selection). */
 type MapDrawTool =
-  | 'select'
-  | 'point'
-  | 'polyline'
-  | 'polygon'
-  | 'rectangle'
-  | 'circle'
-  | 'freehand'
-  | 'text'
-  | 'box_select'
-  | 'lasso';
+ | 'select'
+ | 'point'
+ | 'polyline'
+ | 'polygon'
+ | 'rectangle'
+ | 'circle'
+ | 'freehand'
+ | 'text'
+ | 'box_select'
+ | 'lasso';
 
 const RS_SKETCH_DRAW_TOOLS = new Set<MapDrawTool>(['point', 'polygon', 'rectangle', 'circle']);
 
@@ -3030,14 +3602,6 @@ const SI_SYMBOLOGY_BAKE_RAMPS: Record<SymbologyColorRamp, string[]> = {
   magma: ['#000004', '#3b0f70', '#8c2981', '#de4968', '#fe9f6d', '#fcfdbf'],
   turbo: ['#30123b', '#3b4cc0', '#26a6d1', '#3de07e', '#f9e721', '#f20c0c'],
 };
-
-const SI_STYLE_PRESET_CHIPS: Array<{ id: string; label: string; patch: Partial<SiLayerAppearancePersisted> }> = [
-  { id: 'carto', label: 'Carto outline', patch: { strokeStyle: 'solid', weight: 2.5, polygonFillAlpha: 0.28, fillStyle: 'solid', blendMode: 'normal' } },
-  { id: 'soft', label: 'Soft fill', patch: { polygonFillAlpha: 0.5, weight: 1, opacity: 0.92, fillStyle: 'solid', blendMode: 'normal' } },
-  { id: 'survey', label: 'Survey dashed', patch: { strokeStyle: 'dashed', weight: 2, polygonFillAlpha: 0.22, fillStyle: 'pattern', blendMode: 'normal' } },
-  { id: 'bold', label: 'Bold lines', patch: { weight: 5, strokeStyle: 'solid', polygonFillAlpha: 0.4, pointRadius: 10, blendMode: 'normal' } },
-  { id: 'multiply', label: 'Multiply blend', patch: { blendMode: 'multiply', polygonFillAlpha: 0.45, fillStyle: 'solid' } },
-];
 
 function esriColorArrayToCss(c: unknown): string | null {
   if (!Array.isArray(c) || c.length < 3) return null;
@@ -3319,6 +3883,7 @@ const REMOTE_SENSING_HIDDEN_LAYER_IDS = new Set([
   'NDRE',
   'BSI',
   'MNDWI',
+  'NDSI',
 ]);
 const DEFAULT_MPC_CATALOG_URL = 'https://planetarycomputer.microsoft.com/catalog';
 const DEFAULT_MPC_ACS_ZIP_PATH = 'C:\\Users\\mohamed.abass.WUSOOM\\Downloads\\ACS_Files.zip';
@@ -3337,6 +3902,7 @@ export default function SatelliteIntelligence() {
   const siScope = useSiInstanceScope();
   const siStyleClipboardLs = siScope.scopedStorageKey(SI_MAPBOX_STYLE_CLIPBOARD_LS);
   const siStyleStudioPrefsLs = siScope.scopedStorageKey(SI_MAPBOX_STYLE_STUDIO_PREFS_LS);
+  const siSymbologyFloatLs = siScope.scopedStorageKey('si-symbology-float-v1');
   const gisContentPortal = useGisContentPortal();
   const gisContentDeepLinkRef = useRef<string | null>(null);
   const mapboxToken = useMapboxAccessToken();
@@ -3390,7 +3956,7 @@ export default function SatelliteIntelligence() {
   const prevMapStyleReadyRef = useRef(isMapStyleReady);
   const [layerPopupCfgPickId, setLayerPopupCfgPickId] = useState<string | null>(null);
   const [layerPopupCfgOpen, setLayerPopupCfgOpen] = useState(false);
-  /** Layer row â€œâ‹¯â€ context menu (ArcGIS-style options). */
+  /** Layer row "..." context menu (ArcGIS-style options). */
   const [layerOptionsMenuLayerId, setLayerOptionsMenuLayerId] = useState<string | null>(null);
   const [customLayers, setCustomLayers] = useState<CustomLayer[]>(() => {
     if (typeof window === 'undefined') return [];
@@ -3629,17 +4195,19 @@ export default function SatelliteIntelligence() {
   const [addLayerName, setAddLayerName] = useState('');
   const [addLayerStatus, setAddLayerStatus] = useState('');
   const [siUploadStagedFile, setSiUploadStagedFile] = useState<File | null>(null);
+  const [siUploadCompanionFiles, setSiUploadCompanionFiles] = useState<File[]>([]);
   const [siUploadPhase, setSiUploadPhase] = useState<'idle' | 'reading' | 'processing' | 'completed' | 'failed'>('idle');
   const [siUploadProgressPct, setSiUploadProgressPct] = useState(0);
   const [siUploadDropActive, setSiUploadDropActive] = useState(false);
   const [isConnectingLayer, setIsConnectingLayer] = useState(false);
   const [discoveredArcgisLayers, setDiscoveredArcgisLayers] = useState<Array<{ id: number; name: string; url: string; kind: 'layer' | 'table'; geometryType?: string }>>([]);
   const [selectedDiscoveredArcgisUrl, setSelectedDiscoveredArcgisUrl] = useState('');
+  const [siArcgisFieldStep, setSiArcgisFieldStep] = useState<'menu' | 'url' | 'token' | 'name'>('menu');
   const [isAddingDiscoveredArcgisLayer, setIsAddingDiscoveredArcgisLayer] = useState(false);
   const [addingPortalRowId, setAddingPortalRowId] = useState<string | null>(null);
   const [portalBrowseStatus, setPortalBrowseStatus] = useState('');
   const [isImportingRemoteLayer, setIsImportingRemoteLayer] = useState(false);
-  const [activeLayerActionDialog, setActiveLayerActionDialog] = useState<null | { mode: 'table' | 'symbology' | 'legend'; layerId: string }>(null);
+  const [activeLayerActionDialog, setActiveLayerActionDialog] = useState<null | { mode: 'table' | 'symbology' | 'legend' | 'metadata'; layerId: string }>(null);
   const [siTableServiceGeojson, setSiTableServiceGeojson] = useState<null | { layerId: string; geojson: any }>(null);
   const [siTableServiceLoading, setSiTableServiceLoading] = useState(false);
   const [siTableServiceError, setSiTableServiceError] = useState<string | null>(null);
@@ -3662,6 +4230,7 @@ export default function SatelliteIntelligence() {
   const [draggingSiTableField, setDraggingSiTableField] = useState<string | null>(null);
   const [hiddenSiTableFieldsByLayerId, setHiddenSiTableFieldsByLayerId] = useState<Record<string, Set<string>>>({});
   const [siTableFieldOrderByLayerId, setSiTableFieldOrderByLayerId] = useState<Record<string, string[]>>({});
+  const [siSymbologySearch, setSiSymbologySearch] = useState('');
   const [symbologyDraft, setSymbologyDraft] = useState<SiSymbologyDraft>({
     useArcGisOnline: true,
     style: 'color',
@@ -3682,6 +4251,94 @@ export default function SatelliteIntelligence() {
   const customLayersRef = useRef(customLayers);
   customLayersRef.current = customLayers;
   const syncLiveViewportRef = useRef<(immediate?: boolean) => void>(() => {});
+  const siArcgisDrawingInfoInflightRef = useRef(new Set<string>());
+  const siPrefetchArcgisDrawingInfo = useCallback(
+    async (
+      layerId: string,
+      sourceUrl: string,
+      authToken?: string,
+      opts?: { enableSymbology?: boolean; forceRefresh?: boolean },
+    ) => {
+      const inflightKey = `${layerId}:${sourceUrl}`;
+      if (!opts?.forceRefresh && siArcgisDrawingInfoInflightRef.current.has(inflightKey)) return;
+      siArcgisDrawingInfoInflightRef.current.add(inflightKey);
+      try {
+        const [drawingInfoRaw, pjson] = await Promise.all([
+          fetchArcgisLayerDrawingInfo(sourceUrl, authToken),
+          fetchArcgisLayerPjson(sourceUrl, authToken),
+        ]);
+        const serviceDi = drawingInfoRaw ? sanitizeArcgisDrawingInfoForClient(drawingInfoRaw) : null;
+        if (!serviceDi) return;
+        const arcgisLayerDefinition = slimArcgisLayerDefinitionForStorage(pjson) ?? null;
+        const inferred = inferVisualizationFromArcgisRenderer((serviceDi as any)?.renderer);
+        const enable = opts?.enableSymbology !== false;
+        setCustomLayers(prev =>
+          prev.map(l => {
+            if (l.id !== layerId) return l;
+            return {
+              ...l,
+              arcgisDrawingInfoService: serviceDi,
+              arcgisDrawingInfo: enable ? serviceDi : l.arcgisDrawingInfo,
+              arcgisLayerDefinition: arcgisLayerDefinition ?? l.arcgisLayerDefinition ?? null,
+              useArcGisSymbology: enable ? true : l.useArcGisSymbology,
+              symbology: enable
+                ? {
+                    ...(l.symbology ?? {}),
+                    ...inferred,
+                    useArcGisOnline: true,
+                  }
+                : l.symbology,
+            };
+          }),
+        );
+        setCustomLayersMapEpoch(epoch => epoch + 1);
+      } catch {
+        /* renderer optional */
+      } finally {
+        siArcgisDrawingInfoInflightRef.current.delete(inflightKey);
+      }
+    },
+    [],
+  );
+  const siArcgisBootPrefetchDoneRef = useRef(false);
+  const registerImportedCustomLayer = useCallback((layer: SiCustomLayerBase | CustomLayer) => {
+    const prepared = siApplyArcgisOnlineSymbologyOnImport(layer as CustomLayer);
+    const supportsArcgis = siLayerSupportsArcgisOnlineSymbology(prepared);
+    const withSymbology: CustomLayer = {
+      ...prepared,
+      symbology:
+        prepared.symbology ??
+        normalizeSymbologyForLayer(prepared.geojson, prepared.source, undefined, supportsArcgis),
+    };
+    setCustomLayers(prev => [...prev, withSymbology]);
+    setCustomLayersMapEpoch(epoch => epoch + 1);
+    if (supportsArcgis) {
+      const fetchUrl = siArcgisDrawingInfoFetchUrl(withSymbology);
+      if (fetchUrl) {
+        void siPrefetchArcgisDrawingInfo(withSymbology.id, fetchUrl, withSymbology.authToken, {
+          enableSymbology: true,
+          forceRefresh: true,
+        });
+      }
+    }
+    return withSymbology.id;
+  }, [siPrefetchArcgisDrawingInfo]);
+  useEffect(() => {
+    if (siArcgisBootPrefetchDoneRef.current) return;
+    const layers = customLayers.filter(
+      l => siLayerWantsArcgisOnlineSymbology(l) && siArcgisDrawingInfoFetchUrl(l),
+    );
+    if (!layers.length) return;
+    siArcgisBootPrefetchDoneRef.current = true;
+    for (const layer of layers) {
+      const fetchUrl = siArcgisDrawingInfoFetchUrl(layer);
+      if (!fetchUrl) continue;
+      void siPrefetchArcgisDrawingInfo(layer.id, fetchUrl, layer.authToken, {
+        enableSymbology: true,
+        forceRefresh: true,
+      });
+    }
+  }, [customLayers, siPrefetchArcgisDrawingInfo]);
   const siImperativeCustomLayerSourceIdsRef = useRef(new Set<string>());
   const siStyleSessionBackupRef = useRef<{ layerId: string; snap: Partial<CustomLayer> } | null>(null);
   const siSymbologyLiveLayerIdRef = useRef<string | null>(null);
@@ -3758,35 +4415,75 @@ export default function SatelliteIntelligence() {
   >([]);
   /** Primary AOI from Agro_Structures FeatureServer/21 â€” drives Sentinel Live GEOMETRY + dataMask clip. */
   const agroStructuresPrimaryAoiLoadRef = useRef(false);
-  const agroStructuresViewportCacheRef = useRef(new SiViewportFeatureCache());
+  const agroViewportCacheResetRef = useRef(false);
+
+  /** One-time: refetch Agro_Structures with all Structure_Type subtypes (not Sentinel-only cache). */
+  useEffect(() => {
+    if (agroViewportCacheResetRef.current) return;
+    const agro = customLayersRef.current.find(l => isAgroStructuresLayer(l) && l.viewportStreaming);
+    if (!agro) return;
+    agroViewportCacheResetRef.current = true;
+    arcgisViewportCacheByLayerIdRef.current.delete(agro.id);
+    arcgisViewportGeoJsonByLayerIdRef.current.delete(agro.id);
+    setArcgisViewportRevision(v => v + 1);
+    syncLiveViewportRef.current(true);
+  }, []);
+  const arcgisViewportCacheByLayerIdRef = useRef(new Map<string, SiViewportFeatureCache>());
+  const arcgisViewportGeoJsonByLayerIdRef = useRef(
+    new Map<string, { type: 'FeatureCollection'; features: unknown[] }>(),
+  );
+  const [arcgisViewportRevision, setArcgisViewportRevision] = useState(0);
   const liveViewportFetchAbortRef = useRef<AbortController | null>(null);
   const liveViewportDebounceTimerRef = useRef<number | null>(null);
   const liveViewportMoveThrottleRef = useRef<number | null>(null);
   const liveViewportDisplayBBoxRef = useRef<LngLatBBox | null>(null);
   const mapMetricsCommitTimerRef = useRef<number | null>(null);
   const liveViewportBboxCommitTimerRef = useRef<number | null>(null);
-  const sentinelWmsTilesSyncedRef = useRef('');
+  const sentinelWmsTilesSyncedRef = useRef<Record<string, string>>({});
+  const sentinelWmsAppliedTileUrlsRef = useRef<Map<string, string>>(new Map());
+  const sentinelWmsAppliedBoundsRef = useRef<Map<string, string>>(new Map());
+  const layerAoiWmsPingPongRef = useRef<SiSentinelAoiWmsPingPongRuntime>(createSiSentinelAoiWmsPingPongRuntime());
+  const layerAoiWmsPingPongCacheKeyRef = useRef('');
+  const layerAoiPingPongSyncKeyRef = useRef('');
+  const layerAoiWmsStackRef = useRef<ReturnType<typeof buildSiSentinelAoiWmsStackState> | null>(null);
+  const suppressPrimaryAoiFillMountedRef = useRef(false);
+  const suppressPrimaryAoiFillRef = useRef(false);
+  const [sentinelWmsSourcesHeld, setSentinelWmsSourcesHeld] = useState(false);
+  const aoiLayerModePinnedClipRef = useRef<{ pinKey: string; mask: SiAoiLayerModeClipMask } | null>(null);
+  const aoiLayerModeWmsActiveRef = useRef(false);
+  const [pinnedSentinelWmsMinZoom, setPinnedSentinelWmsMinZoom] = useState<number | null>(null);
   const freezeViewportPipeline = shouldFreezeViewportDataPipeline(siScope.isIsolated);
+  const layersAoiViewportFrozen = aoiMaskBuilderSettings.enabled;
+  const effectiveViewportFrozen = shouldFreezeLayerAoiViewportPipeline(
+    layersAoiViewportFrozen,
+    freezeViewportPipeline,
+  );
   const cropAlertResultsStorageKey = useMemo(
     () => siScope.scopedStorageKey(SI_CROP_ALERT_RESULTS_LS_KEY),
     [siScope.scopedStorageKey],
   );
   const [liveViewportDisplayBBox, setLiveViewportDisplayBBox] = useState<LngLatBBox | null>(null);
-  const [agroStructuresViewportGeoJson, setAgroStructuresViewportGeoJson] = useState<{
-    type: 'FeatureCollection';
-    features: unknown[];
-  } | null>(null);
   const cropAlertResultsByKeyRef = useRef(new Map<string, CropAlertFieldResult>());
+
   const customLayersForMapPaint = useMemo(() => {
-    if (freezeViewportPipeline) return customLayers;
-    const viewportHasFeatures =
-      Array.isArray(agroStructuresViewportGeoJson?.features) &&
-      agroStructuresViewportGeoJson.features.length > 0;
-    if (!viewportHasFeatures) return customLayers;
-    return customLayers.map(layer =>
-      isAgroStructuresLayer(layer) ? { ...layer, geojson: agroStructuresViewportGeoJson } : layer,
-    );
-  }, [customLayers, agroStructuresViewportGeoJson, freezeViewportPipeline]);
+    if (effectiveViewportFrozen) {
+      return customLayers.map(layer => {
+        const geojson = siNormalizeLayerGeojsonForSymbology(layer);
+        return geojson !== layer.geojson ? { ...layer, geojson } : layer;
+      });
+    }
+    return customLayers.map(layer => {
+      let next = layer;
+      if (layer.viewportStreaming && layer.source === 'arcgis') {
+        const viewport = arcgisViewportGeoJsonByLayerIdRef.current.get(layer.id);
+        if (viewport?.features?.length) {
+          next = { ...layer, geojson: viewport };
+        }
+      }
+      const geojson = siNormalizeLayerGeojsonForSymbology(next);
+      return geojson !== next.geojson ? { ...next, geojson } : next;
+    });
+  }, [customLayers, arcgisViewportRevision, effectiveViewportFrozen]);
   const customLayersForMapPaintRef = useRef(customLayersForMapPaint);
   customLayersForMapPaintRef.current = customLayersForMapPaint;
 
@@ -3796,7 +4493,7 @@ export default function SatelliteIntelligence() {
       customLayersForMapPaint
         .map(
           l =>
-            `${l.id}:${l.visible ? 1 : 0}:${l.renderMode ?? 'vector'}:${Array.isArray(l.geojson?.features) ? l.geojson.features.length : 0}:${l.color ?? ''}:${l.fillColor ?? ''}:${l.weight ?? ''}:${l.polygonFillAlpha ?? ''}:${l.mapOpacity ?? 1}:${l.labelFieldName ?? ''}:${l.definitionQueryText ?? ''}`,
+            `${l.id}:${l.visible ? 1 : 0}:${l.renderMode ?? 'vector'}:${siRasterLayerPaintSig(l)}:${Array.isArray(l.geojson?.features) ? l.geojson.features.length : 0}:${l.color ?? ''}:${l.fillColor ?? ''}:${l.weight ?? ''}:${l.polygonFillAlpha ?? ''}:${l.mapOpacity ?? 1}:${l.labelFieldName ?? ''}:${l.definitionQueryText ?? ''}:${l.useArcGisSymbology ? 1 : 0}:${l.symbology?.useArcGisOnline ? 1 : 0}:${arcgisDrawingInfoPaintSig(resolveLayerArcgisDrawingInfo(l))}:${l.arcgisDrawingInfoService ? 1 : 0}`,
         )
         .join('|'),
     [customLayersForMapPaint],
@@ -3855,19 +4552,19 @@ export default function SatelliteIntelligence() {
   const [treeAnalysisMode, setTreeAnalysisMode] = useState<TreeAnalysisMode>('detect');
   const [treeConfidenceMin, setTreeConfidenceMin] = useState(0);
   const [expandedEnvSection, setExpandedEnvSection] = useState<
-    | 'source'
-    | 'layers'
-    | 'remote-sensing'
-    | 'crop-alerts'
-    | 'stress-zones'
-    | 'crop-classification'
-    | 'ai-detection-gis'
-    | 'tree-detections'
-    | 'hydro-watershed'
-    | 'well-site'
-    | 'well-suitability'
-    | 'flood-monitoring'
-    | 'table-geo-ai'
+  | 'source'
+  | 'layers'
+  | 'remote-sensing'
+  | 'crop-alerts'
+  | 'stress-zones'
+  | 'crop-classification'
+  | 'ai-detection-gis'
+  | 'tree-detections'
+  | 'hydro-watershed'
+  | 'well-site'
+  | 'well-suitability'
+  | 'flood-monitoring'
+  | 'table-geo-ai'
   >('source');
 
   // --- Prithvi crop classification tool (Toolbox) ---
@@ -3876,30 +4573,12 @@ export default function SatelliteIntelligence() {
     const start = new Date(end.getTime() - 150 * 86400000);
     return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
   });
-  const [cropAiAnalysisMode, setCropAiAnalysisMode] = useState<CropAnalysisModeId>(DEFAULT_CROP_ANALYSIS_MODE);
-  const [cropAiUnsupervisedClassCount, setCropAiUnsupervisedClassCount] = useState(DEFAULT_UNSUPERVISED_CLASS_COUNT);
-  const [cropAiDataProvider, setCropAiDataProvider] =
-    useState<CropDataProviderId>(DEFAULT_CROP_DATA_PROVIDER);
-  const [cropAiDataset, setCropAiDataset] = useState<CropImageryDataset | null>(null);
-  const [cropAiTrainingSamples, setCropAiTrainingSamples] = useState<CropTrainingSample[]>([]);
   const [cropAiJob, setCropAiJob] = useState<CropClassificationJob | null>(null);
   const [cropAiSelfInference, setCropAiSelfInference] = useState(false);
   const cropAiAbortRef = useRef<AbortController | null>(null);
   const cropAiAoiRef = useRef<any | null>(null);
   const cropAiRunning =
     !!cropAiJob && cropAiJob.status !== 'done' && cropAiJob.status !== 'error';
-
-  const cropAiSamplesValidation = useMemo(
-    () =>
-      validateTrainingSamples(
-        cropAiTrainingSamples,
-        (cropClassAoiGeometry?.geometry ?? drawnGeometry?.geometry ?? null) as
-          | GeoJSON.Polygon
-          | GeoJSON.MultiPolygon
-          | null,
-      ),
-    [cropAiTrainingSamples, cropClassAoiGeometry, drawnGeometry],
-  );
 
   useEffect(() => {
     let alive = true;
@@ -3921,38 +4600,9 @@ export default function SatelliteIntelligence() {
   }, []);
 
   const handleCropAiRunAoi = useCallback(() => {
-    const geometry =
-      (cropClassAoiGeometryRef.current?.geometry ??
-        cropClassAoiGeometry?.geometry ??
-        drawnGeometryRef.current?.geometry ??
-        drawnGeometry?.geometry) as GeoJSON.Polygon | GeoJSON.MultiPolygon | undefined;
+    const geometry = drawnGeometryRef.current?.geometry ?? drawnGeometry?.geometry;
     if (!geometry) return;
-    if (!isCropPanelProvider(cropAiDataProvider)) return;
-
-    const workflow = resolveCropAiWorkflow(cropAiDataProvider, cropAiAnalysisMode, cropAiDataset);
-    const legacyMode = toLegacyClassificationMode(cropAiAnalysisMode);
-
-    if (workflow.requiresUpload && !cropAiDataset) return;
-    if (cropAiAnalysisMode === 'supervised' && !cropAiSamplesValidation.valid) return;
-
-    if (
-      workflow.requiresUpload &&
-      cropAiDataset?.metadata.kind === 'point-cloud' &&
-      !cropAiDataset.previewUrl
-    ) {
-      setCropAiJob({
-        id: 'error',
-        mode: 'aoi',
-        status: 'error',
-        progress: 1,
-        message: 'LiDAR point cloud requires a GeoTIFF DEM/DSM for in-browser analysis.',
-        result: null,
-        error: 'Convert LAS/LAZ to a georeferenced DEM GeoTIFF or upload a canopy height model.',
-      });
-      return;
-    }
-
-    cropAiAoiRef.current = { geometry };
+    cropAiAoiRef.current = geometry;
     setCropAiJob({
       id: 'pending',
       mode: 'aoi',
@@ -3962,29 +4612,7 @@ export default function SatelliteIntelligence() {
       result: null,
       error: null,
     });
-
-    const provider = normalizeCropDataProvider(cropAiDataProvider);
-    const chipUrl = cropAiDataset?.previewUrl;
-
-    const start =
-      workflow.requiresUpload && chipUrl && cropAiAnalysisMode !== 'supervised'
-        ? startChipJob(chipUrl)
-        : legacyMode === 'supervised-ground-truth'
-          ? startSupervisedAoiJob({
-              aoi: geometry,
-              season: cropAiSeason,
-              timesteps: 5,
-              samples: cropAiTrainingSamples,
-              dataProvider: provider,
-            })
-          : startAoiJob({
-              aoi: geometry,
-              season: cropAiSeason,
-              timesteps: cropAiAnalysisMode === 'unsupervised' ? 5 : 3,
-              dataProvider: provider,
-            });
-
-    void start
+    void startAoiJob({ aoi: geometry, season: cropAiSeason, timesteps: 3 })
       .then(trackCropAiJob)
       .catch(err =>
         setCropAiJob({
@@ -3997,17 +4625,7 @@ export default function SatelliteIntelligence() {
           error: String(err?.message || err),
         }),
       );
-  }, [
-    cropAiAnalysisMode,
-    cropAiDataProvider,
-    cropAiDataset,
-    cropAiSamplesValidation.valid,
-    cropAiSeason,
-    cropAiTrainingSamples,
-    cropClassAoiGeometry,
-    drawnGeometry,
-    trackCropAiJob,
-  ]);
+  }, [cropAiSeason, drawnGeometry, trackCropAiJob]);
 
   const handleCropAiRunChip = useCallback(
     (imageUrl: string) => {
@@ -4016,7 +4634,7 @@ export default function SatelliteIntelligence() {
         mode: 'chip',
         status: 'queued',
         progress: 0,
-        message: 'Startingâ€¦',
+        message: 'Starting...',
         result: null,
         error: null,
       });
@@ -4046,14 +4664,13 @@ export default function SatelliteIntelligence() {
   }, []);
 
   const handleCropAiPickAoi = useCallback(() => {
-    mapDrawOwnerRef.current = 'crop-classification';
-    setMapDrawOwner('crop-classification');
-    setCropClassDrawingModeActive(true);
+    mapDrawOwnerRef.current = 'remote-sensing';
+    setMapDrawOwner('remote-sensing');
+    setRsDrawingModeActive(true);
     applyMapDrawTool('polygon');
   }, []);
 
   const CROP_AI_PREDICTION_LAYER_ID = 'crop-ai-prediction';
-  const CROP_AI_CONFIDENCE_LAYER_ID = 'crop-ai-confidence';
 
   const clipRasterToAoi = useCallback(
     async (
@@ -4110,17 +4727,10 @@ export default function SatelliteIntelligence() {
     [],
   );
 
-  const addCropAiRasterLayer = useCallback(
-    async (
-      job: CropClassificationJob | null,
-      layerId: string,
-      layerName: string,
-      rasterKey: 'prediction' | 'confidence',
-      mapOpacity: number,
-    ) => {
-      const raster = job?.result?.[rasterKey];
-      const url = raster?.url;
-      const bounds = raster?.bounds;
+  const addCropAiPredictionLayer = useCallback(
+    async (job: CropClassificationJob | null) => {
+      const url = job?.result?.prediction?.url;
+      const bounds = job?.result?.prediction?.bounds;
       if (!url || !Array.isArray(bounds) || bounds.length < 4) return;
       const boundsTuple = bounds as [number, number, number, number];
       const [w, s, e, n] = boundsTuple;
@@ -4139,42 +4749,28 @@ export default function SatelliteIntelligence() {
         ? { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: aoiGeometry }] }
         : siRasterExtentFootprint(coordinates);
       setCustomLayers(prev => {
-        const stale = prev.find(l => l.id === layerId);
+        const stale = prev.find(l => l.id === CROP_AI_PREDICTION_LAYER_ID);
         if (stale?.raster?.url?.startsWith('blob:') && stale.raster.url !== finalUrl) {
           URL.revokeObjectURL(stale.raster.url);
         }
-        const without = prev.filter(l => l.id !== layerId);
+        const without = prev.filter(l => l.id !== CROP_AI_PREDICTION_LAYER_ID);
         return [
           ...without,
           {
-            id: layerId,
-            name: layerName,
+            id: CROP_AI_PREDICTION_LAYER_ID,
+            name: 'Crop Type',
             geojson: outline,
             visible: true,
             source: 'api',
             renderMode: 'raster',
             raster: { url: finalUrl, coordinates },
             ephemeral: true,
-            mapOpacity,
+            mapOpacity: 0.9,
           },
         ];
       });
     },
     [clipRasterToAoi],
-  );
-
-  const addCropAiPredictionLayer = useCallback(
-    async (job: CropClassificationJob | null) => {
-      await addCropAiRasterLayer(job, CROP_AI_PREDICTION_LAYER_ID, 'Crop Type', 'prediction', 0.9);
-    },
-    [addCropAiRasterLayer],
-  );
-
-  const addCropAiConfidenceLayer = useCallback(
-    async (job: CropClassificationJob | null) => {
-      await addCropAiRasterLayer(job, CROP_AI_CONFIDENCE_LAYER_ID, 'Crop Confidence', 'confidence', 0.75);
-    },
-    [addCropAiRasterLayer],
   );
 
   // Auto-publish the Prithvi prediction to the map as a "Crop Type" layer.
@@ -4241,7 +4837,7 @@ export default function SatelliteIntelligence() {
     base64: string;
   } | null>(null);
   const [geoExplorerBusy, setGeoExplorerBusy] = useState(false);
-  /** Distinguishes full send vs in-place question edit so the UI shows â€œUpdatingâ€¦â€ instead of â€œThinkingâ€¦â€. */
+  /** Distinguishes full send vs in-place question edit so the UI shows "Updating..." instead of "Thinking...". */
   const [geoExplorerAwaitKind, setGeoExplorerAwaitKind] = useState<'send' | 'edit'>('send');
   const [geoExplorerChatError, setGeoExplorerChatError] = useState('');
   const [geoAiPinLngLat, setGeoAiPinLngLat] = useState<[number, number] | null>(null);
@@ -4255,7 +4851,7 @@ export default function SatelliteIntelligence() {
   const [geoAiPopupMode, setGeoAiPopupMode] = useState<GeoAiPopupMode>(() =>
     readStoredGeoAiPopupMode(siScope.scopedStorageKey(GEO_AI_POPUP_MODE_LS_KEY)),
   );
-  /** When true, row highlight / map identify do not pan or zoom the map (use row â€œzoomâ€ icon to fly there). */
+  /** When true, row highlight / map identify do not pan or zoom the map (use row "zoom" icon to fly there). */
   const [geoAiExplorationMode, setGeoAiExplorationMode] = useState(() => {
     try {
       const v =
@@ -4393,6 +4989,7 @@ export default function SatelliteIntelligence() {
   const rsDrawingModeActiveRef = useRef(false);
   rsDrawingModeActiveRef.current = rsDrawingModeActive;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const siUploadBundleRef = useRef<File[]>([]);
   const geoExplorerMessagesRef = useRef<HTMLDivElement | null>(null);
   const geoAiClaudeMessagesRef = useRef<HTMLDivElement | null>(null);
   const geoAiDeepseekMessagesRef = useRef<HTMLDivElement | null>(null);
@@ -5053,20 +5650,29 @@ export default function SatelliteIntelligence() {
 
   const netfloraInputLayerOptions = useMemo(() => {
     const opts: Array<{ id: string; label: string }> = [];
-    if (wmsLayer.trim()) {
-      const title = wmsLayers.find(l => l.name === wmsLayer)?.title || wmsLayer;
-      opts.push({
-        id: `wms:${wmsLayer}`,
-        label: `Raster Â· Sentinel WMS Â· ${title} (${localIsoDate(selectedDate)})`,
-      });
-    }
     for (const layer of customLayers) {
-      const geom = getLayerGeometryKind(layer.geojson);
-      const kind = geom === 'point' || geom === 'line' || geom === 'polygon' ? 'Vector' : 'Layer';
-      opts.push({ id: `layer:${layer.id}`, label: `${kind} Â· ${layer.name}` });
+      if (layer.renderMode === 'raster' || layer.arcgisRasterTiles?.tiles?.length) {
+        opts.push({ id: `layer:${layer.id}`, label: layer.name });
+      }
     }
     return opts;
-  }, [customLayers, selectedDate, wmsLayer, wmsLayers]);
+  }, [customLayers]);
+
+  const netfloraOutputLayerOptions = useMemo(() => {
+    const opts: Array<{ id: string; label: string }> = [];
+    for (const layer of customLayers) {
+      if (layer.renderMode === 'raster' || layer.arcgisRasterTiles?.tiles?.length) continue;
+      const geom = getLayerGeometryKind(layer.geojson);
+      if (geom === 'point' || geom === 'line' || geom === 'polygon') {
+        opts.push({ id: `layer:${layer.id}`, label: layer.name });
+      }
+    }
+    return opts;
+  }, [customLayers]);
+
+  const openAiDetectionLayersPanel = useCallback(() => {
+    onProcessingWorkflowNavigateMapToolbox('layers');
+  }, [onProcessingWorkflowNavigateMapToolbox]);
 
   const runNetfloraDetection = useCallback(() => {
     if (!netfloraUploadedResults?.features?.length) {
@@ -5321,13 +5927,281 @@ export default function SatelliteIntelligence() {
     }
   };
 
+  const handleAiDlDetectionExport = useCallback(
+    (geojson: GeoJSON.FeatureCollection, name: string) => {
+      const id = `ai-dl-detections-${Date.now()}`
+      setCustomLayers(prev => [
+        ...prev,
+        {
+          id,
+          name,
+          geojson,
+          visible: true,
+          source: 'upload',
+          ...siDefaultNewVectorLayerFields(),
+          importMetadata: { format: 'Feature Layer', crs: 'EPSG:4326' },
+        },
+      ])
+      focusGeoJsonOnMap(geojson)
+    },
+    [focusGeoJsonOnMap],
+  )
+
+  const getAiDlMapBounds = useCallback(() => {
+    try {
+      const mapInstance = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+      const b = mapInstance?.getBounds?.();
+      if (!b) return undefined;
+      return { west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() };
+    } catch {
+      return undefined;
+    }
+  }, []);
+
+  const resolveAiDlMapLayer = useCallback(
+    (layerKey: string): AiDlMapLayerRasterRef | null => {
+      const id = layerKey.startsWith('layer:') ? layerKey.slice(6) : layerKey;
+      const layer = customLayers.find(l => l.id === id);
+      if (!layer) return null;
+      return {
+        layerId: layer.id,
+        label: layer.name,
+        previewUrl: layer.raster?.url,
+        coordinates: layer.raster?.coordinates,
+        serviceUrl: layer.sourceUrl,
+      };
+    },
+    [customLayers],
+  );
+
+  const handleAiDlRasterProcessed = useCallback(
+    (raster: AiDlProcessedRaster) => {
+      if (raster.sourceKind === 'map-layer' && raster.layerId) {
+        const existing = customLayers.find(l => l.id === raster.layerId);
+        if (existing?.geojson) {
+          focusGeoJsonOnMap(existing.geojson);
+          return;
+        }
+      }
+      const outline = footprintGeoJsonFromMapCoordinates(raster.coordinates);
+      if (!raster.previewUrl && !raster.serviceUrl) {
+        focusGeoJsonOnMap(outline);
+        return;
+      }
+      setCustomLayers(prev => [
+        ...prev.filter(l => l.id !== raster.id),
+        {
+          id: raster.id,
+          name: raster.label,
+          geojson: outline,
+          visible: true,
+          source: raster.serviceUrl ? 'api' : 'upload',
+          sourceUrl: raster.serviceUrl,
+          renderMode: 'raster',
+          raster: raster.previewUrl
+            ? { url: raster.previewUrl, coordinates: raster.coordinates }
+            : undefined,
+          ephemeral: true,
+          importMetadata: {
+            format: raster.validation.format,
+            crs: raster.validation.targetCrs,
+          },
+        },
+      ]);
+      focusGeoJsonOnMap(outline);
+    },
+    [customLayers, focusGeoJsonOnMap],
+  );
+
+  const getSiUploadMapBounds = useCallback(() => {
+    try {
+      const mapForBounds = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+      const b = mapForBounds?.getBounds?.();
+      if (!b) return undefined;
+      return {
+        west: b.getWest(),
+        south: b.getSouth(),
+        east: b.getEast(),
+        north: b.getNorth(),
+      };
+    } catch {
+      return undefined;
+    }
+  }, []);
+
+  const addProcessedRasterToMap = useCallback(
+    (raster: AiDlProcessedRaster, layerName?: string) => {
+      const name = layerName?.trim() || raster.label.replace(/\.[^.]+$/, '') || raster.label;
+      const outline = footprintGeoJsonFromMapCoordinates(raster.coordinates);
+      const layer = createSiRasterImportLayer({
+        name,
+        geojson: outline,
+        source: raster.serviceUrl ? 'api' : 'upload',
+        sourceUrl: raster.serviceUrl,
+        format: raster.validation.format,
+        crs: raster.validation.sourceCrs,
+        widthPx: raster.validation.widthPx,
+        heightPx: raster.validation.heightPx,
+        bands: raster.validation.bands,
+        raster: raster.previewUrl
+          ? { url: raster.previewUrl, coordinates: raster.coordinates }
+          : { url: '', coordinates: raster.coordinates },
+        ephemeral: true,
+      });
+      if (!raster.previewUrl) layer.raster = undefined;
+      const id = registerImportedCustomLayer(layer);
+      focusGeoJsonOnMap(outline);
+      return { id, name };
+    },
+    [focusGeoJsonOnMap, registerImportedCustomLayer],
+  );
+
+  const importAoiRasterFiles = async (files: File[]) => {
+    setSiUploadPhase('reading');
+    setSiUploadProgressPct(2);
+    setAddLayerStatus('Reading raster…');
+    let rasterPreviewUrl: string | null = null;
+
+    try {
+      console.info('[si-raster-import] start', {
+        fileCount: files.length,
+        files: files.map(f => ({ name: f.name, size: f.size, type: f.type })),
+      });
+
+      const picked = pickRasterUploadFiles(files);
+      if (!picked) {
+        throw new Error('No raster image selected. Choose GeoTIFF, PNG, or JPG/JPEG.');
+      }
+      if (files.every(f => isWorldFileOnly(f))) {
+        throw new Error(
+          'Choose a raster image (.tif, .png, .jpg) together with its world file (.pgw, .jgw, .tfw) and optional .prj.',
+        );
+      }
+
+      const { raster, companions } = picked;
+      validateRasterImageFile(raster);
+
+      setSiUploadProgressPct(5);
+      const result = await processRasterFiles([raster, ...companions]);
+      rasterPreviewUrl = result.previewUrl || null;
+      console.info('[si-raster-import] processed', {
+        label: result.label,
+        crs: result.validation.sourceCrs,
+        widthPx: result.validation.widthPx,
+        heightPx: result.validation.heightPx,
+        coordinates: result.coordinates,
+      });
+
+      setSiUploadPhase('processing');
+      setSiUploadProgressPct(70);
+      setAddLayerStatus('Placing raster on the map…');
+
+      const layerName = addLayerName.trim() || raster.name.replace(/\.[^.]+$/, '') || raster.name;
+      const placed = addProcessedRasterToMap(result, layerName);
+      setCustomLayersMapEpoch(epoch => epoch + 1);
+
+      const map = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+      if (map && result.previewUrl && result.coordinates) {
+        const sourceId = siSafeMapboxLayerId(placed.id);
+        try {
+          syncMapboxGeoreferencedImageLayer(map, sourceId, result.previewUrl, result.coordinates, {
+            visible: true,
+            opacity: 1,
+          });
+          map.triggerRepaint?.();
+          console.info('[si-raster-import] map layer synced', { sourceId, layerId: placed.id });
+        } catch (mapErr) {
+          console.error('[si-raster-import] map sync failed', mapErr);
+        }
+      }
+
+      const dims =
+        result.validation.widthPx > 0
+          ? `${result.validation.widthPx}×${result.validation.heightPx}px, ${result.validation.bands} band(s)`
+          : 'service raster';
+      setAddLayerStatus(`Completed: ${result.validation.format} "${placed.name}" (${dims}, ${result.validation.sourceCrs}).`);
+      setSiUploadProgressPct(100);
+      setSiUploadPhase('completed');
+      setAddLayerName('');
+      setSiUploadStagedFile(null);
+      setSiUploadCompanionFiles([]);
+      siUploadBundleRef.current = [];
+      setIsAddLayerModalOpen(false);
+      setFieldAnalysisStatus(
+        `Raster "${placed.name}" is georeferenced on the map. Draw a polygon AOI if you need to clip analysis to an area.`,
+      );
+    } catch (error) {
+      console.error('[si-raster-import] failed', error);
+      if (rasterPreviewUrl) URL.revokeObjectURL(rasterPreviewUrl);
+      setSiUploadPhase('failed');
+      setSiUploadProgressPct(0);
+      setAddLayerStatus(error instanceof Error ? error.message : 'Failed to import raster.');
+    }
+  };
+
+  const stageSiUploadFiles = (files: File[]) => {
+    const list = Array.from(files).filter(Boolean);
+    if (!list.length) return;
+
+    const bundle: File[] = [...siUploadBundleRef.current];
+    for (const f of list) {
+      if (!bundle.some(b => b.name === f.name && b.size === f.size && b.lastModified === f.lastModified)) {
+        bundle.push(f);
+      }
+    }
+    siUploadBundleRef.current = bundle;
+
+    if (bundle.every(f => isWorldFileOnly(f))) {
+      setAddLayerStatus('Choose a raster image (.tif, .png, .jpg) together with its world file (.pgw, .jgw, .tfw) and optional .prj.');
+      return;
+    }
+
+    const picked = pickRasterUploadFiles(bundle);
+    if (picked) {
+      setSiUploadStagedFile(picked.raster);
+      setSiUploadCompanionFiles(picked.companions);
+      setSiUploadPhase('idle');
+      setSiUploadProgressPct(0);
+      if (rasterNeedsWorldSidecar(picked.raster, picked.companions)) {
+        const wfExt = worldFileExtensionForRaster(picked.raster.name);
+        setAddLayerStatus(
+          `Selected ${picked.raster.name} — add its world file (.${wfExt ?? 'jgw / pgw / tfw'}) and optional .prj.`,
+        );
+        return;
+      }
+      setAddLayerStatus('Importing raster to map…');
+      void importAoiRasterFiles(bundle);
+      return;
+    }
+
+    const file = list[0];
+    siUploadBundleRef.current = [file];
+    setSiUploadStagedFile(file);
+    setSiUploadCompanionFiles([]);
+    setSiUploadPhase('idle');
+    setSiUploadProgressPct(0);
+    setAddLayerStatus('');
+    if (!isRasterDataFile(file)) {
+      void importAoiDataSourceFile(file);
+    }
+  };
+
   const importAoiDataSourceFile = async (file: File) => {
+    if (isRasterDataFile(file)) {
+      const bundle =
+        siUploadBundleRef.current.length > 0
+          ? siUploadBundleRef.current
+          : [file, ...siUploadCompanionFiles];
+      await importAoiRasterFiles(bundle);
+      return;
+    }
+
     let rasterPreviewUrl: string | null = null;
     setSiUploadPhase('reading');
     setSiUploadProgressPct(2);
-    setAddLayerStatus('Reading fileâ€¦');
+    setAddLayerStatus('Reading file...');
     try {
-      // Plain images (PNG/JPG/â€¦) carry no CRS â€” give the parser the current map
+      // Plain images (PNG/JPG/...) carry no CRS â€” give the parser the current map
       // bounds so the overlay drops onto whatever the user is looking at.
       let imagePlacementBounds: { west: number; south: number; east: number; north: number } | undefined;
       try {
@@ -5350,7 +6224,7 @@ export default function SatelliteIntelligence() {
       });
       setSiUploadPhase('processing');
       setSiUploadProgressPct(40);
-      setAddLayerStatus('Processingâ€¦');
+      setAddLayerStatus('Processing...');
 
       if (parsed.type === 'table') {
         throw new Error('This CSV has no latitude/longitude columns. Add lat/lon columns or use GeoJSON / KML / SHP (.zip).');
@@ -5361,60 +6235,22 @@ export default function SatelliteIntelligence() {
       const layerName = addLayerName.trim() || baseName || file.name;
 
       if (parsed.type === 'raster') {
-        rasterPreviewUrl = parsed.previewObjectUrl;
-        const rasterExt = (file.name.split('.').pop() || '').toLowerCase();
-        const rasterFormat =
-          rasterExt === 'tif' || rasterExt === 'tiff' ? 'GeoTIFF' : `Image (${rasterExt.toUpperCase()})`;
-        const outline = siRasterExtentFootprint(parsed.coordinates);
-        setCustomLayers(prev => [
-          ...prev,
-          {
-            id,
-            name: layerName,
-            geojson: outline,
-            visible: true,
-            source: 'upload',
-            renderMode: 'raster',
-            raster: { url: parsed.previewObjectUrl, coordinates: parsed.coordinates },
-            ephemeral: true,
-            importMetadata: {
-              format: rasterFormat,
-              crs: parsed.crsHint,
-              bytes: file.size,
-            },
-          },
-        ]);
-        setAddLayerStatus(`Completed: ${rasterFormat} "${layerName}" (${parsed.widthPx}Ã—${parsed.heightPx}px, ${parsed.bands} band(s)).`);
-        setSiUploadProgressPct(100);
-        setSiUploadPhase('completed');
-        setAddLayerName('');
-        setSiUploadStagedFile(null);
-        setIsAddLayerModalOpen(false);
-        focusGeoJsonOnMap(outline);
-        setFieldAnalysisStatus(
-          rasterFormat === 'GeoTIFF'
-            ? `Raster "${layerName}" is on the map. Draw a polygon AOI if you need to clip analysis to an area.`
-            : `Image overlay "${layerName}" was placed on the current map view (no georeferencing in ${rasterFormat}). Pan/zoom before importing to change where it lands.`,
+        throw new Error(
+          'Georeferenced rasters require a world file (.jgw/.pgw/.tfw). Select the image and sidecar files together.',
         );
-        return;
       }
 
       if (parsed.type === 'bim') {
         const bimBlobUrl = URL.createObjectURL(file);
         const footprint = siBimAnchorFootprint(viewState.longitude, viewState.latitude);
-        setCustomLayers(prev => [
-          ...prev,
-          {
-            id,
-            name: layerName,
-            geojson: footprint,
-            visible: true,
-            source: 'upload',
-            ephemeral: true,
-            bimBlobUrl,
-            importMetadata: { format: 'IFC', bytes: parsed.byteLength },
-          },
-        ]);
+        const layer = createSiBimImportLayer({
+          id,
+          name: layerName,
+          geojson: footprint,
+          bimBlobUrl,
+          bytes: parsed.byteLength,
+        });
+        registerImportedCustomLayer(layer);
         setAddLayerStatus(`Completed: IFC "${layerName}" anchored to the map (${Math.round(parsed.byteLength / 1024)} KB).`);
         setSiUploadProgressPct(100);
         setSiUploadPhase('completed');
@@ -5423,7 +6259,7 @@ export default function SatelliteIntelligence() {
         setIsAddLayerModalOpen(false);
         focusGeoJsonOnMap(footprint);
         setFieldAnalysisStatus(
-          `IFC "${layerName}" stored for this session. Download from layer metadata or open in your BIM tool for full 3D geometry.`,
+          `IFC "${layerName}" stored for this session. Open layer metadata to download the IFC file.`,
         );
         return;
       }
@@ -5437,22 +6273,33 @@ export default function SatelliteIntelligence() {
         throw new Error('No drawable features found. Check CRS and geometry types in the source file.');
       }
 
-      setCustomLayers(prev => [
-        ...prev,
-        {
+      const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+      const formatLabel =
+        ext === 'shp' || ext === 'zip'
+          ? 'Shapefile'
+          : ext === 'kml' || ext === 'kmz'
+            ? 'KML/KMZ'
+            : ext === 'gpx'
+              ? 'GPX'
+              : ext === 'csv'
+                ? 'CSV'
+                : ext === 'geojson' || ext === 'json'
+                  ? 'GeoJSON'
+                  : parsed.crsHint
+                    ? `Vector (${parsed.crsHint})`
+                    : 'Vector';
+
+      registerImportedCustomLayer(
+        createSiVectorImportLayer({
           id,
           name: layerName,
           geojson: geo,
-          visible: true,
           source: 'upload',
-          ...siDefaultNewVectorLayerFields(),
-          importMetadata: {
-            format: parsed.crsHint ? `Vector (${parsed.crsHint})` : 'Vector',
-            crs: parsed.crsHint,
-            bytes: file.size,
-          },
-        },
-      ]);
+          format: formatLabel,
+          crs: parsed.crsHint,
+          bytes: file.size,
+        }),
+      );
       setAddLayerStatus(`Completed: vector layer "${layerName}" (${featureCount} feature${featureCount === 1 ? '' : 's'}).`);
       setSiUploadProgressPct(100);
       setSiUploadPhase('completed');
@@ -5501,15 +6348,9 @@ export default function SatelliteIntelligence() {
   };
 
   const handleLayerFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setSiUploadStagedFile(file);
-    setSiUploadPhase('idle');
-    setSiUploadProgressPct(0);
-    const mb = file.size / (1024 * 1024);
-    setAddLayerStatus(
-      `Ready: ${file.name} (${mb >= 0.01 ? mb.toFixed(2) : '<0.01'} MB). Click â€œImport to mapâ€ to add.`,
-    );
+    const files = event.target.files;
+    if (!files?.length) return;
+    stageSiUploadFiles(Array.from(files));
     event.target.value = '';
   };
 
@@ -5519,7 +6360,15 @@ export default function SatelliteIntelligence() {
 
   const commitSiLayerUpload = () => {
     if (!siUploadStagedFile) {
-      setAddLayerStatus('Choose a file (browse) or drop one on the upload area, then click Import to map.');
+      setAddLayerStatus('Choose a file or drop one on the upload area.');
+      return;
+    }
+    const bundle =
+      siUploadBundleRef.current.length > 0
+        ? siUploadBundleRef.current
+        : [siUploadStagedFile, ...siUploadCompanionFiles];
+    if (isRasterDataFile(siUploadStagedFile)) {
+      void importAoiRasterFiles(bundle);
       return;
     }
     void importAoiDataSourceFile(siUploadStagedFile);
@@ -5689,35 +6538,31 @@ export default function SatelliteIntelligence() {
     setIsAddLayerModalOpen(true);
   };
 
-  const openAoiDataSourceUploader = () => {
-    openAddLayerModal();
-    setSiAddLayerWizard('source-forms');
-    setAddLayerTab('upload');
-  };
-
-  const handleCropAiDataProviderChange = useCallback((id: CropDataProviderId) => {
-    setCropAiDataProvider(id);
-    setCropAiDataset(null);
-  }, []);
-
   const closeAddLayerModal = () => {
     setIsAddLayerModalOpen(false);
     setSiAddLayerWizard('home');
     setAddLayerStatus('');
     setSiGetDataStep('menu');
     setSiUploadStagedFile(null);
+    setSiUploadCompanionFiles([]);
     setSiUploadPhase('idle');
     setSiUploadProgressPct(0);
     setSiUploadDropActive(false);
     setDiscoveredArcgisLayers([]);
     setSelectedDiscoveredArcgisUrl('');
+    setSiArcgisFieldStep('menu');
   };
+
+  useEffect(() => {
+    if (addLayerTab !== 'arcgis') setSiArcgisFieldStep('menu');
+  }, [addLayerTab]);
 
   const goSiAddLayerWizardHome = () => {
     setSiAddLayerWizard('home');
     setAddLayerTab('giscontent');
     setAddLayerStatus('');
     setSiUploadStagedFile(null);
+    setSiUploadCompanionFiles([]);
     setSiUploadPhase('idle');
     setSiUploadProgressPct(0);
     setSiUploadDropActive(false);
@@ -5751,77 +6596,20 @@ export default function SatelliteIntelligence() {
       setAddLayerStatus('Enter ArcGIS Feature Service URL.');
       return;
     }
-    let baseUrl = raw;
-    if (!/^https?:\/\//i.test(baseUrl)) baseUrl = `https://${baseUrl}`;
     setIsConnectingLayer(true);
     setAddLayerStatus('Connecting to ArcGIS service...');
     try {
-      const clean = baseUrl.replace(/[?#].*$/, '').replace(/\/+$/, '');
-
-      // Direct single-layer/table URL (â€¦/MapServer/124 or â€¦/FeatureServer/3): load THAT
-      // layer's own definition instead of enumerating the service root. Many secured/grouped
-      // roots don't list their layers, so stripping to the root would wrongly report
-      // "No layers/tables found" even when the specific layer is valid open data.
-      const directMatch = clean.match(/\/(?:MapServer|FeatureServer)\/(\d+)$/i);
-      if (directMatch) {
-        const defUrl = appendTokenIfAny(`${clean}?f=pjson`, addLayerToken);
-        const defRes = await fetch(defUrl);
-        if (!defRes.ok) throw new Error(`discover failed (${defRes.status})`);
-        const def = await defRes.json();
-        if (def?.error?.message) throw new Error(def.error.message);
-        const id = typeof def?.id === 'number' ? def.id : Number(directMatch[1]);
-        const name = typeof def?.name === 'string' && def.name.trim() ? (def.name as string) : `Layer ${id}`;
-        const isTable = typeof def?.type === 'string' && /table/i.test(def.type);
-        const single = [
-          {
-            id,
-            name,
-            kind: (isTable ? 'table' : 'layer') as 'layer' | 'table',
-            url: clean,
-            geometryType: typeof def?.geometryType === 'string' ? (def.geometryType as string) : undefined,
-          },
-        ];
-        setDiscoveredArcgisLayers(single);
-        setSelectedDiscoveredArcgisUrl(single[0].url);
-        if (!addLayerName.trim()) setAddLayerName(single[0].name);
-        setAddLayerStatus('Found 1 layer/table. Select one and click Add.');
-        return;
-      }
-
-      // Service root URL â†’ enumerate. Accept both MapServer and FeatureServer roots;
-      // otherwise assume a service folder and try its FeatureServer endpoint.
-      const serviceBase = /\/(?:MapServer|FeatureServer)$/i.test(clean) ? clean : `${clean}/FeatureServer`;
-
-      const discoverUrl = appendTokenIfAny(`${serviceBase}?f=pjson`, addLayerToken);
-      const discoverRes = await fetch(discoverUrl);
-      if (!discoverRes.ok) throw new Error(`discover failed (${discoverRes.status})`);
-      const discover = await discoverRes.json();
-      if (discover?.error?.message) throw new Error(discover.error.message);
-      const discovered = [
-        ...(Array.isArray(discover?.layers) ? discover.layers.map((l: any) => ({ ...l, kind: 'layer' as const })) : []),
-        ...(Array.isArray(discover?.tables) ? discover.tables.map((t: any) => ({ ...t, kind: 'table' as const })) : []),
-      ]
-        .filter((l: any) => typeof l?.id === 'number' && typeof l?.name === 'string')
-        .map((l: any) => ({
-          id: l.id as number,
-          name: l.name as string,
-          kind: l.kind as 'layer' | 'table',
-          url: `${serviceBase}/${l.id}`,
-          geometryType: typeof l?.geometryType === 'string' ? (l.geometryType as string) : undefined,
-        }));
-
-      if (!discovered.length) {
-        throw new Error(
-          'No layers/tables found in this service URL. For a single layer, paste its full URL ending in the layer id (e.g. â€¦/MapServer/124).',
-        );
-      }
-
-      setDiscoveredArcgisLayers(discovered);
-      setSelectedDiscoveredArcgisUrl(discovered[0].url);
-      if (!addLayerName.trim()) {
-        setAddLayerName(discovered[0].name);
-      }
-      setAddLayerStatus(`Found ${discovered.length} layer/table(s). Select one and click Add.`);
+      const { layers, selected } = await connectArcGisFeatureServiceUrl(raw, addLayerToken, {
+        resolveUrl: resolveAgroStructuresLayerUrl,
+      });
+      setDiscoveredArcgisLayers(layers);
+      setSelectedDiscoveredArcgisUrl(selected.url);
+      if (!addLayerName.trim()) setAddLayerName(selected.name);
+      setAddLayerStatus(
+        layers.length === 1
+          ? 'Found 1 layer/table. Select one and click Add.'
+          : `Found ${layers.length} layer/table(s). Select one and click Add.`,
+      );
     } catch (error) {
       setAddLayerStatus(error instanceof Error ? error.message : 'Failed to connect ArcGIS layer.');
     } finally {
@@ -5835,13 +6623,13 @@ export default function SatelliteIntelligence() {
       return;
     }
     setIsAddingDiscoveredArcgisLayer(true);
-    setAddLayerStatus('Downloading layer geometryâ€¦');
+    setAddLayerStatus('Downloading layer geometry...');
     try {
       const tokenTrim = addLayerToken.trim() || undefined;
       const data = await fetchHostedFeatureLayerGeoJsonFromServiceUrl(selectedDiscoveredArcgisUrl, tokenTrim, {
         onProgress: progress => {
           if (progress.phase === 'page') {
-            setAddLayerStatus(`Downloading geometryâ€¦ ${progress.featureCount} features (page ${progress.page})`);
+            setAddLayerStatus(`Downloading geometry... ${progress.featureCount} features (page ${progress.page})`);
           }
         },
       });
@@ -5861,22 +6649,22 @@ export default function SatelliteIntelligence() {
       });
       const portalLayerUrl = gisContentPortalLayerUrl(hostedRow.id);
       const id = `arcgis-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      setCustomLayers(prev => [
-        ...prev,
-        {
+      registerImportedCustomLayer(
+        createSiVectorImportLayer({
           id,
           name: hostedRow.title,
           geojson: data,
-          visible: true,
           source: 'arcgis',
           sourceUrl: portalLayerUrl,
           authToken: tokenTrim,
-          ...siDefaultNewVectorLayerFields(),
           arcgisDrawingInfo,
-          useArcGisSymbology: false,
+          useArcGisSymbology: true,
           arcgisLayerDefinition,
-        },
-      ]);
+          arcgisServiceType: 'feature',
+          format: 'ArcGIS Feature Service',
+          crs: 'EPSG:4326',
+        }),
+      );
       const bounds = getGeoJsonBounds(data);
       if (bounds) {
         const mapInstance = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
@@ -5915,13 +6703,33 @@ export default function SatelliteIntelligence() {
           const payload = await buildGisContentMapLayerPayloadAsync(row);
           const agroStructures = isAgroStructuresPortalRow(row);
           if (agroStructures) {
+            const token = getArcgisPortalToken() || undefined;
             setCustomLayers(prev => {
-              const primaryIdx = prev.findIndex(l => String(l.id) === AGRO_STRUCTURES_PRIMARY_LAYER_ID);
-              if (primaryIdx < 0) return prev;
-              return prev.map((l, i) =>
-                i === primaryIdx ? { ...l, visible: true, name: row.title || l.name } : l,
-              );
+              const primaryIdx = prev.findIndex(l => isAgroStructuresLayer(l));
+              if (primaryIdx >= 0) {
+                return prev.map((l, i) =>
+                  i === primaryIdx ? { ...l, visible: true, name: row.title || l.name } : l,
+                );
+              }
+              return [
+                ...prev,
+                {
+                  id: AGRO_STRUCTURES_PRIMARY_LAYER_ID,
+                  name: row.title || 'Agro_Structures',
+                  geojson: createEmptyArcGisFeatureCollection(),
+                  visible: true,
+                  source: 'arcgis' as const,
+                  sourceUrl: AGRO_STRUCTURES_FS21_URL,
+                  authToken: token,
+                  arcgisServiceType: 'feature' as const,
+                  viewportStreaming: true,
+                  ...siDefaultPortalVectorLayerFields(),
+                  useArcGisSymbology: true,
+                  symbology: { useArcGisOnline: true },
+                },
+              ];
             });
+            void siPrefetchArcgisDrawingInfo(AGRO_STRUCTURES_PRIMARY_LAYER_ID, AGRO_STRUCTURES_FS21_URL, token);
             syncLiveViewportRef.current(true);
             const msg = `Synced "${row.title}" from live Agro_Structures service.`;
             setPortalBrowseStatus(msg);
@@ -5929,37 +6737,55 @@ export default function SatelliteIntelligence() {
             focusGeoJsonOnMap(payload.geojson);
             return;
           }
-          setCustomLayers(prev => {
-            const existingIdx = prev.findIndex(
-              l => parseGisContentPortalLayerUrl(String(l.sourceUrl || '')) === row.id,
-            );
-            if (existingIdx >= 0) {
-              return prev.map((l, i) =>
+          const externalUrl = resolveHostedFeatureLayerExternalUrl(row);
+          const token = getArcgisPortalToken() || undefined;
+          const existingIdx = customLayersRef.current.findIndex(
+            l => parseGisContentPortalLayerUrl(String(l.sourceUrl || '')) === row.id,
+          );
+          if (existingIdx >= 0) {
+            const existingId = customLayersRef.current[existingIdx]?.id;
+            setCustomLayers(prev =>
+              prev.map((l, i) =>
                 i === existingIdx
-                  ? {
+                  ? siApplyArcgisOnlineSymbologyOnImport({
                       ...l,
-                      ...siDefaultPortalVectorLayerFields(),
-                      symbology: undefined,
                       visible: true,
                       name: payload.name,
                       geojson: payload.geojson,
-                    }
+                      authToken: externalUrl ? token ?? l.authToken : l.authToken,
+                    })
                   : l,
-              );
+              ),
+            );
+            if (externalUrl && existingId) {
+              void siPrefetchArcgisDrawingInfo(existingId, externalUrl, token, {
+                enableSymbology: true,
+                forceRefresh: true,
+              });
             }
-            return [
-              ...prev,
-              {
+          } else {
+            registerImportedCustomLayer(
+              createSiVectorImportLayer({
                 id: payload.id,
                 name: payload.name,
                 geojson: payload.geojson,
-                visible: true,
                 source: 'api',
                 sourceUrl: payload.sourceUrl,
-                ...siDefaultPortalVectorLayerFields(),
-              },
-            ];
-          });
+                authToken: externalUrl ? token : undefined,
+                format: 'GIS Content',
+                crs: 'EPSG:4326',
+                portalStyle: !externalUrl,
+                portalColors: externalUrl
+                  ? undefined
+                  : {
+                      color: SI_PORTAL_LAYER_VISIBLE_OUTLINE,
+                      fillColor: SI_PORTAL_LAYER_VISIBLE_OUTLINE,
+                      weight: 2.25,
+                      polygonFillAlpha: SI_PORTAL_LAYER_VISIBLE_FILL_ALPHA,
+                    },
+              }),
+            );
+          }
           focusGeoJsonOnMap(payload.geojson);
           const msg = `Added "${row.title}" from GIS Content.`;
           setPortalBrowseStatus(msg);
@@ -5973,7 +6799,7 @@ export default function SatelliteIntelligence() {
         }
       })();
     },
-    [focusGeoJsonOnMap],
+    [focusGeoJsonOnMap, siPrefetchArcgisDrawingInfo, registerImportedCustomLayer],
   );
 
   const addGisPortalRowFromAddLayerModal = useCallback(
@@ -6008,24 +6834,19 @@ export default function SatelliteIntelligence() {
 
       if (parsed.type === 'raster') {
         const outline = siRasterExtentFootprint(parsed.coordinates);
-        setCustomLayers(prev => [
-          ...prev,
-          {
+        registerImportedCustomLayer(
+          createSiRasterImportLayer({
             id,
             name: baseName,
             geojson: outline,
-            visible: true,
             source: 'api',
             sourceUrl: raw,
-            renderMode: 'raster',
+            format: 'GeoTIFF',
+            crs: parsed.crsHint,
             raster: { url: parsed.previewObjectUrl, coordinates: parsed.coordinates },
             ephemeral: true,
-            importMetadata: {
-              format: 'GeoTIFF',
-              crs: parsed.crsHint,
-            },
-          },
-        ]);
+          }),
+        );
         setAddLayerStatus(`Imported remote GeoTIFF: ${parsed.filename}`);
         setAddLayerName('');
         setAddLayerRemoteUrl('');
@@ -6034,18 +6855,17 @@ export default function SatelliteIntelligence() {
         return;
       }
 
-      setCustomLayers(prev => [
-        ...prev,
-        {
+      registerImportedCustomLayer(
+        createSiVectorImportLayer({
           id,
           name: baseName,
           geojson: parsed.data,
-          visible: true,
           source: 'api',
           sourceUrl: raw,
-          ...siDefaultNewVectorLayerFields(),
-        },
-      ]);
+          format: parsed.crsHint ? `Vector (${parsed.crsHint})` : 'Vector',
+          crs: parsed.crsHint,
+        }),
+      );
       setAddLayerStatus(`Imported remote layer: ${parsed.filename}`);
       setAddLayerName('');
       setAddLayerRemoteUrl('');
@@ -6106,81 +6926,268 @@ export default function SatelliteIntelligence() {
     );
   };
 
+  const [isAddArcGisLayerPanelOpen, setIsAddArcGisLayerPanelOpen] = useState(false);
+
+  const addArcGisDynamicLayer = useCallback(
+    async (payload: {
+      name: string
+      url: string
+      serviceType: ArcGisServiceType
+      visible: boolean
+      mapOpacity: number
+      metadata: ArcGisLayerMetadata
+    }) => {
+      const token = getArcgisPortalToken() || undefined;
+      const drawingInfoRaw = payload.metadata.drawingInfo ?? null;
+      const arcgisDrawingInfo = drawingInfoRaw ? sanitizeArcgisDrawingInfoForClient(drawingInfoRaw) : null;
+      const arcgisLayerDefinition = slimArcgisLayerDefinitionForStorage({
+        fields: payload.metadata.fields,
+        drawingInfo: drawingInfoRaw,
+        geometryType: payload.metadata.geometryType,
+        name: payload.metadata.name,
+      }) ?? null;
+
+      const id = `arcgis-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const portalColors = {
+        color: SI_PORTAL_LAYER_VISIBLE_OUTLINE,
+        fillColor: SI_PORTAL_LAYER_VISIBLE_OUTLINE,
+        weight: 2.25,
+        polygonFillAlpha: SI_PORTAL_LAYER_VISIBLE_FILL_ALPHA,
+      };
+
+      if (payload.serviceType === 'feature') {
+        const useViewport = shouldUseArcGisViewportStreaming({
+          serviceType: 'feature',
+          layerUrl: payload.url,
+          name: payload.name,
+          geometryType: payload.metadata.geometryType,
+          maxRecordCount: payload.metadata.maxRecordCount,
+          supportsQuery: payload.metadata.supportsQuery,
+        });
+        if (useViewport) {
+          const layer = createSiVectorImportLayer({
+            id,
+            name: payload.name,
+            geojson: createEmptyArcGisFeatureCollection(),
+            source: 'arcgis',
+            sourceUrl: payload.url,
+            authToken: token,
+            arcgisDrawingInfo,
+            useArcGisSymbology: true,
+            arcgisLayerDefinition,
+            arcgisServiceType: 'feature',
+            viewportStreaming: true,
+            format: 'ArcGIS Feature Service',
+            crs: 'EPSG:4326',
+            portalStyle: true,
+            portalColors,
+          });
+          layer.visible = payload.visible;
+          layer.mapOpacity = payload.mapOpacity;
+          registerImportedCustomLayer(layer);
+          arcgisDynamicDebug('layer_added', { layerId: id, mode: 'viewport-streaming' });
+          setStacStatus(`Added "${payload.name}" — loading features for the current map extent…`);
+          syncLiveViewportRef.current(true);
+        } else {
+          setStacStatus(`Downloading "${payload.name}"…`);
+          const data = await fetchHostedFeatureLayerGeoJsonFromServiceUrl(payload.url, token);
+          const layer = createSiVectorImportLayer({
+            id,
+            name: payload.name,
+            geojson: data,
+            source: 'arcgis',
+            sourceUrl: payload.url,
+            authToken: token,
+            arcgisDrawingInfo,
+            useArcGisSymbology: true,
+            arcgisLayerDefinition,
+            arcgisServiceType: 'feature',
+            viewportStreaming: false,
+            format: 'ArcGIS Feature Service',
+            crs: 'EPSG:4326',
+            portalStyle: true,
+            portalColors,
+          });
+          layer.visible = payload.visible;
+          layer.mapOpacity = payload.mapOpacity;
+          registerImportedCustomLayer(layer);
+          arcgisDynamicDebug('features_loaded', { layerId: id, count: data.features?.length ?? 0 });
+          const bounds = getGeoJsonBounds(data);
+          if (bounds) {
+            const mapInstance = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+            mapInstance?.fitBounds?.(
+              [
+                [bounds[0], bounds[1]],
+                [bounds[2], bounds[3]],
+              ],
+              { padding: 80, duration: 800 },
+            );
+          }
+          setStacStatus(`Added ArcGIS layer: ${payload.name}`);
+        }
+        return;
+      }
+
+      if (payload.serviceType === 'map') {
+        const layer = createSiRasterImportLayer({
+          id,
+          name: payload.name,
+          geojson: createEmptyArcGisFeatureCollection(),
+          source: 'arcgis',
+          sourceUrl: payload.url,
+          authToken: token,
+          format: 'ArcGIS Map Service',
+          crs: 'EPSG:3857',
+          arcgisServiceType: 'map',
+          arcgisRasterTiles: buildArcGisMapServerRasterTiles(payload.url, token),
+          raster: { url: '', coordinates: [[0, 0], [0, 0], [0, 0], [0, 0]] },
+          ephemeral: false,
+        });
+        layer.visible = payload.visible;
+        layer.mapOpacity = payload.mapOpacity;
+        layer.raster = undefined;
+        registerImportedCustomLayer(layer);
+        arcgisDynamicDebug('layer_added', { layerId: id, mode: 'map-raster-tiles' });
+      } else if (payload.serviceType === 'image') {
+        const layer = createSiRasterImportLayer({
+          id,
+          name: payload.name,
+          geojson: createEmptyArcGisFeatureCollection(),
+          source: 'arcgis',
+          sourceUrl: payload.url,
+          authToken: token,
+          format: 'ArcGIS Image Service',
+          crs: 'EPSG:3857',
+          arcgisServiceType: 'image',
+          arcgisRasterTiles: buildArcGisImageServerRasterTiles(payload.url, token),
+          raster: { url: '', coordinates: [[0, 0], [0, 0], [0, 0], [0, 0]] },
+          ephemeral: false,
+        });
+        layer.visible = payload.visible;
+        layer.mapOpacity = payload.mapOpacity;
+        layer.raster = undefined;
+        registerImportedCustomLayer(layer);
+        arcgisDynamicDebug('layer_added', { layerId: id, mode: 'image-raster-tiles' });
+      } else if (payload.serviceType === 'vector-tile') {
+        const vt = await buildArcGisVectorTileConfig(payload.url, token);
+        const layer = createSiVectorImportLayer({
+          id,
+          name: payload.name,
+          geojson: createEmptyArcGisFeatureCollection(),
+          source: 'arcgis',
+          sourceUrl: payload.url,
+          authToken: token,
+          arcgisDrawingInfo,
+          useArcGisSymbology: true,
+          arcgisLayerDefinition,
+          arcgisServiceType: 'vector-tile',
+          format: 'ArcGIS Vector Tiles',
+          portalStyle: true,
+          portalColors,
+        });
+        layer.arcgisVectorTiles = vt;
+        layer.visible = payload.visible;
+        layer.mapOpacity = payload.mapOpacity;
+        registerImportedCustomLayer(layer);
+        arcgisDynamicDebug('layer_added', { layerId: id, mode: 'vector-tiles' });
+      }
+
+      const bbox = arcGisLayerExtentWgs84(payload.metadata);
+      if (bbox) {
+        const mapInstance = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+        mapInstance?.fitBounds?.(
+          [
+            [bbox[0], bbox[1]],
+            [bbox[2], bbox[3]],
+          ],
+          { padding: 80, duration: 800, maxZoom: 17 },
+        );
+      }
+      setStacStatus(`Added ArcGIS layer: ${payload.name}`);
+    },
+    [registerImportedCustomLayer],
+  );
+
+  /** Hydrate persisted ArcGIS dynamic layers after reload (metadata + tile configs). */
+  useEffect(() => {
+    if (agroStructuresPrimaryAoiLoadRef.current) return;
+    agroStructuresPrimaryAoiLoadRef.current = true;
+    const restorable = customLayersRef.current.filter(
+      l => l.source === 'arcgis' && typeof l.sourceUrl === 'string' && !!l.sourceUrl.trim(),
+    );
+    if (!restorable.length) return;
+    void (async () => {
+      const token = getArcgisPortalToken() || undefined;
+      for (const layer of restorable) {
+        try {
+          if (layer.arcgisServiceType === 'map' && !layer.arcgisRasterTiles) {
+            setCustomLayers(prev =>
+              prev.map(item =>
+                item.id === layer.id
+                  ? {
+                      ...item,
+                      arcgisServiceType: item.arcgisServiceType ?? detectArcGisServiceTypeFromUrl(String(item.sourceUrl)),
+                      renderMode: 'raster',
+                      arcgisRasterTiles: buildArcGisMapServerRasterTiles(String(item.sourceUrl), item.authToken || token),
+                    }
+                  : item,
+              ),
+            );
+          } else if (
+            (layer.arcgisServiceType === 'image' || detectArcGisServiceTypeFromUrl(String(layer.sourceUrl)) === 'image') &&
+            !layer.arcgisRasterTiles
+          ) {
+            setCustomLayers(prev =>
+              prev.map(item =>
+                item.id === layer.id
+                  ? {
+                      ...item,
+                      renderMode: 'raster',
+                      arcgisRasterTiles: buildArcGisImageServerRasterTiles(String(item.sourceUrl), item.authToken || token),
+                    }
+                  : item,
+              ),
+            );
+          } else if (layer.arcgisServiceType === 'vector-tile' && !layer.arcgisVectorTiles) {
+            const vt = await buildArcGisVectorTileConfig(String(layer.sourceUrl), layer.authToken || token);
+            setCustomLayers(prev =>
+              prev.map(item => (item.id === layer.id ? { ...item, arcgisVectorTiles: vt } : item)),
+            );
+          } else if (
+            layer.arcgisServiceType === 'feature' &&
+            layer.viewportStreaming &&
+            (!layer.arcgisLayerDefinition?.fields?.length || layerNeedsAoiMaskFieldHydration(layer))
+          ) {
+            const pjson = await fetchArcgisLayerPjson(String(layer.sourceUrl), layer.authToken || token);
+            const arcgisLayerDefinition = slimArcgisLayerDefinitionForStorage(pjson) ?? null;
+            if (arcgisLayerDefinition) {
+              setCustomLayers(prev =>
+                prev.map(item =>
+                  item.id === layer.id ? { ...item, arcgisLayerDefinition } : item,
+                ),
+              );
+            }
+          }
+          arcgisDynamicDebug('restored', { layerId: layer.id, type: layer.arcgisServiceType });
+        } catch (err) {
+          console.warn('[arcgis-dynamic] restore failed', layer.id, err);
+        }
+      }
+      syncLiveViewportRef.current(true);
+    })();
+  }, []);
+
   const toggleCustomLayerVisibility = (id: string, visible: boolean) => {
     setCustomLayers(prev => {
       const next = prev.map(layer => (layer.id === id ? { ...layer, visible } : layer));
-      if (visible) {
-        const layer = next.find(l => l.id === id);
-        if (layer?.geojson) {
-          queueMicrotask(() => focusGeoJsonOnMap(layer.geojson));
-        }
+      const layer = next.find(l => l.id === id);
+      arcgisDynamicDebug('visibility_changed', { layerId: id, visible });
+      if (visible && layer?.geojson) {
+        queueMicrotask(() => focusGeoJsonOnMap(layer.geojson));
       }
       return next;
     });
   };
-
-  /** Mount Agro_Structures FS/21 layer shell â€” viewport lazy-loads features on pan/zoom. */
-  useEffect(() => {
-    if (agroStructuresPrimaryAoiLoadRef.current) return;
-    agroStructuresPrimaryAoiLoadRef.current = true;
-    let cancelled = false;
-    const mount = async () => {
-      const token = getArcgisPortalToken();
-      const emptyGeoJson = { type: 'FeatureCollection' as const, features: [] as unknown[] };
-      // 1) Mount the layer shell immediately so it ALWAYS appears in the Layers
-      //    panel and can render viewport features â€” independent of the optional
-      //    ArcGIS metadata fetch below (which may fail on token/CORS issues).
-      if (cancelled) return;
-      setCustomLayers(prev => {
-        if (prev.some(l => isAgroStructuresLayer(l))) return prev;
-        return [
-          ...prev,
-          {
-            id: AGRO_STRUCTURES_PRIMARY_LAYER_ID,
-            name: 'Agro_Structures',
-            geojson: emptyGeoJson,
-            visible: true,
-            source: 'arcgis' as const,
-            sourceUrl: AGRO_STRUCTURES_FS21_URL,
-            authToken: token || undefined,
-            arcgisLayerDefinition: null,
-            ...siDefaultPortalVectorLayerFields(),
-            useArcGisSymbology: false,
-          },
-        ];
-      });
-      setStacStatus('Agro_Structures ready â€” loading visible fields for current map extentâ€¦');
-      // 2) Best-effort: enrich the shell with the ArcGIS layer definition
-      //    (fields / symbology). Failure here must NOT remove the layer.
-      try {
-        const pjson = await fetchArcgisLayerPjson(AGRO_STRUCTURES_FS21_URL, token || undefined);
-        const arcgisLayerDefinition = slimArcgisLayerDefinitionForStorage(pjson) ?? null;
-        if (cancelled || !arcgisLayerDefinition) return;
-        setCustomLayers(prev => {
-          const existingIdx = prev.findIndex(l => isAgroStructuresLayer(l));
-          if (existingIdx < 0) return prev;
-          const existing = prev[existingIdx]!;
-          const needsHydrate = layerNeedsAoiMaskFieldHydration(existing);
-          if (!needsHydrate && existing.arcgisLayerDefinition?.fields?.length) return prev;
-          const next = [...prev];
-          next[existingIdx] = {
-            ...existing,
-            arcgisLayerDefinition: arcgisLayerDefinition ?? existing.arcgisLayerDefinition ?? null,
-            source: 'arcgis' as const,
-            sourceUrl: AGRO_STRUCTURES_FS21_URL,
-          };
-          return next;
-        });
-      } catch (err) {
-        // Metadata is optional â€” the shell + viewport features still work without it.
-        console.warn('[agro-structures] layer definition fetch failed; shell mounted without metadata.', err);
-      }
-    };
-    void mount();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const refreshArcgisLayer = async (layer: CustomLayer) => {
     if (layer.source !== 'arcgis' || !layer.sourceUrl) {
@@ -6190,12 +7197,13 @@ export default function SatelliteIntelligence() {
     setSyncingLayerId(layer.id);
     setStacStatus(`Syncing "${layer.name}"...`);
     try {
-      if (isAgroStructuresLayer(layer)) {
-        agroStructuresViewportCacheRef.current.clear();
-        setAgroStructuresViewportGeoJson({ type: 'FeatureCollection', features: [] });
+      if (layer.viewportStreaming) {
+        arcgisViewportCacheByLayerIdRef.current.get(layer.id)?.clear();
+        arcgisViewportGeoJsonByLayerIdRef.current.delete(layer.id);
+        setArcgisViewportRevision(v => v + 1);
         setCustomLayers(prev =>
           prev.map(item =>
-            item.id === layer.id ? { ...item, geojson: { type: 'FeatureCollection', features: [] } } : item,
+            item.id === layer.id ? { ...item, geojson: createEmptyArcGisFeatureCollection() } : item,
           ),
         );
         const [drawingInfoRaw, pjson] = await Promise.all([
@@ -6209,13 +7217,17 @@ export default function SatelliteIntelligence() {
             item.id === layer.id
               ? {
                   ...item,
-                  arcgisDrawingInfo: arcgisDrawingInfo ?? item.arcgisDrawingInfo ?? null,
+                  arcgisDrawingInfoService: arcgisDrawingInfo ?? item.arcgisDrawingInfoService ?? null,
+                  arcgisDrawingInfo:
+                    item.symbology?.useArcGisOnline !== false
+                      ? (arcgisDrawingInfo ?? item.arcgisDrawingInfo ?? null)
+                      : (item.arcgisDrawingInfo ?? arcgisDrawingInfo ?? null),
                   arcgisLayerDefinition,
                 }
               : item,
           ),
         );
-        setStacStatus('Agro_Structures cache cleared â€” reloading visible extentâ€¦');
+        setStacStatus(`"${layer.name}" cache cleared — reloading visible extent…`);
         syncLiveViewport(true);
         return;
       }
@@ -6235,7 +7247,11 @@ export default function SatelliteIntelligence() {
             ? {
                 ...item,
                 geojson: data,
-                arcgisDrawingInfo: arcgisDrawingInfo ?? item.arcgisDrawingInfo ?? null,
+                arcgisDrawingInfoService: arcgisDrawingInfo ?? item.arcgisDrawingInfoService ?? null,
+                arcgisDrawingInfo:
+                  item.symbology?.useArcGisOnline !== false
+                    ? (arcgisDrawingInfo ?? item.arcgisDrawingInfo ?? null)
+                    : (item.arcgisDrawingInfo ?? arcgisDrawingInfo ?? null),
                 arcgisLayerDefinition,
               }
             : item,
@@ -6261,37 +7277,65 @@ export default function SatelliteIntelligence() {
     return displayBbox;
   }, []);
 
-  const syncAgroStructuresViewportGeoJson = useCallback((displayBbox: LngLatBBox) => {
-    const cache = agroStructuresViewportCacheRef.current;
+  const syncArcGisViewportLayersGeoJson = useCallback((displayBbox: LngLatBBox) => {
+    if (aoiLayerModeWmsActiveRef.current) return;
     const clipBbox = expandLngLatBBox(displayBbox, SI_VIEWPORT_PREFETCH_RATIO);
-    setAgroStructuresViewportGeoJson(cache.featureCollectionInBBox(clipBbox));
+    const streamingLayers = customLayersRef.current.filter(
+      l => l.viewportStreaming && l.source === 'arcgis' && l.sourceUrl,
+    );
+    if (!streamingLayers.length) return;
+    let changed = false;
+    for (const layer of streamingLayers) {
+      const cache =
+        arcgisViewportCacheByLayerIdRef.current.get(layer.id) ?? new SiViewportFeatureCache();
+      arcgisViewportCacheByLayerIdRef.current.set(layer.id, cache);
+      const nextFc = cache.featureCollectionInBBox(clipBbox);
+      const prev = arcgisViewportGeoJsonByLayerIdRef.current.get(layer.id);
+      const prevCount = prev?.features?.length ?? 0;
+      const nextCount = nextFc.features.length;
+      if (prevCount !== nextCount || prev !== nextFc) {
+        arcgisViewportGeoJsonByLayerIdRef.current.set(layer.id, nextFc);
+        changed = true;
+      }
+    }
+    if (changed) setArcgisViewportRevision(v => v + 1);
   }, []);
 
   const commitLiveViewportExtent = useCallback(
     (displayBbox: LngLatBBox) => {
-      if (freezeViewportPipeline) return;
+      if (effectiveViewportFrozen || aoiLayerModeWmsActiveRef.current) return;
       setLiveViewportDisplayBBox(displayBbox);
-      syncAgroStructuresViewportGeoJson(displayBbox);
+      syncArcGisViewportLayersGeoJson(displayBbox);
     },
-    [freezeViewportPipeline, syncAgroStructuresViewportGeoJson],
+    [effectiveViewportFrozen, syncArcGisViewportLayersGeoJson],
   );
 
   const applyLiveViewportExtent = useCallback(() => {
     const displayBbox = captureLiveViewportExtent();
     if (!displayBbox) return;
-    if (freezeViewportPipeline) return;
+    if (effectiveViewportFrozen || aoiLayerModeWmsActiveRef.current) return;
     commitLiveViewportExtent(displayBbox);
-  }, [captureLiveViewportExtent, commitLiveViewportExtent, freezeViewportPipeline]);
+  }, [captureLiveViewportExtent, commitLiveViewportExtent, effectiveViewportFrozen]);
 
-  const fetchAgroStructuresForViewport = useCallback(async () => {
+  const fetchArcGisViewportLayersForExtent = useCallback(async () => {
     if (freezeViewportPipeline) return;
     const displayBbox = captureLiveViewportExtent();
     if (!displayBbox) return;
 
+    const streamingLayers = customLayersRef.current.filter(
+      l => l.viewportStreaming && l.source === 'arcgis' && l.sourceUrl,
+    );
+    if (!streamingLayers.length) return;
+
     const prefetchBbox = expandLngLatBBox(displayBbox);
-    const cache = agroStructuresViewportCacheRef.current;
-    if (cache.isPrefetchCovered(prefetchBbox)) {
-      syncAgroStructuresViewportGeoJson(displayBbox);
+    const pendingLayers = streamingLayers.filter(layer => {
+      const cache =
+        arcgisViewportCacheByLayerIdRef.current.get(layer.id) ?? new SiViewportFeatureCache();
+      arcgisViewportCacheByLayerIdRef.current.set(layer.id, cache);
+      return !cache.isPrefetchCovered(prefetchBbox);
+    });
+    if (!pendingLayers.length) {
+      syncArcGisViewportLayersGeoJson(displayBbox);
       return;
     }
 
@@ -6301,46 +7345,64 @@ export default function SatelliteIntelligence() {
 
     try {
       const token = getArcgisPortalToken();
-      let data;
-      try {
-        data = await fetchAgroStructuresGeoJsonInBbox(prefetchBbox, token, ac.signal);
-      } catch (err) {
-        if (ac.signal.aborted) return;
-        if (token?.trim()) {
-          data = await fetchAgroStructuresGeoJsonInBbox(prefetchBbox, undefined, ac.signal);
-        } else {
-          throw err;
-        }
-      }
-      if (ac.signal.aborted) return;
-
-      cache.merge(data.features);
-      cache.markTileFetched(prefetchBbox);
-      syncAgroStructuresViewportGeoJson(displayBbox);
-      const updatedViewport = cache.featureCollectionInBBox(expandLngLatBBox(displayBbox, SI_VIEWPORT_PREFETCH_RATIO));
-      const allCached = cache.allFeatureCollection();
-      setStacStatus(
-        `Agro_Structures Â· ${updatedViewport.features.length} visible (${allCached.features.length} cached) Â· Farm Plots & PIVOT`,
+      await Promise.all(
+        pendingLayers.map(async layer => {
+          const cache = arcgisViewportCacheByLayerIdRef.current.get(layer.id)!;
+          const sourceUrl = resolveAgroStructuresLayerUrl(String(layer.sourceUrl || '').trim());
+          let data;
+          try {
+            data = await fetchArcGisFeatureGeoJsonInBbox(
+              sourceUrl,
+              prefetchBbox,
+              layer.authToken || token || undefined,
+              ac.signal,
+            );
+          } catch (err) {
+            if (ac.signal.aborted) return;
+            if ((layer.authToken || token)?.trim()) {
+              data = await fetchArcGisFeatureGeoJsonInBbox(sourceUrl, prefetchBbox, undefined, ac.signal);
+            } else {
+              throw err;
+            }
+          }
+          if (ac.signal.aborted) return;
+          const features = isAgroStructuresLayer(layer)
+            ? data.features.map(normalizeAgroStructuresFeatureForSymbology)
+            : data.features;
+          cache.merge(features);
+          cache.markTileFetched(prefetchBbox);
+        }),
       );
+      if (ac.signal.aborted) return;
+      syncArcGisViewportLayersGeoJson(displayBbox);
+      const statusParts = pendingLayers.map(layer => {
+        const cache = arcgisViewportCacheByLayerIdRef.current.get(layer.id);
+        const visible = cache?.featureCollectionInBBox(
+          expandLngLatBBox(displayBbox, SI_VIEWPORT_PREFETCH_RATIO),
+        );
+        return `${layer.name}: ${visible?.features.length ?? 0} visible`;
+      });
+      if (statusParts.length) setStacStatus(`ArcGIS viewport · ${statusParts.join(' · ')}`);
     } catch (err) {
       if (!ac.signal.aborted && err instanceof Error && err.name !== 'AbortError') {
         setStacStatus(err.message);
       }
     }
-  }, [captureLiveViewportExtent, freezeViewportPipeline, syncAgroStructuresViewportGeoJson]);
+  }, [captureLiveViewportExtent, freezeViewportPipeline, syncArcGisViewportLayersGeoJson]);
 
-  const scheduleAgroStructuresViewportFetch = useCallback(() => {
+  const scheduleArcGisViewportFetch = useCallback(() => {
     if (freezeViewportPipeline) return;
+    if (aoiLayerModeWmsActiveRef.current) return;
     if (liveViewportDebounceTimerRef.current != null) {
       window.clearTimeout(liveViewportDebounceTimerRef.current);
     }
     liveViewportDebounceTimerRef.current = window.setTimeout(() => {
-      void fetchAgroStructuresForViewport();
+      void fetchArcGisViewportLayersForExtent();
     }, SI_VIEWPORT_DEBOUNCE_MS);
-  }, [fetchAgroStructuresForViewport, freezeViewportPipeline]);
+  }, [fetchArcGisViewportLayersForExtent, freezeViewportPipeline]);
 
   const scheduleLiveViewportExtentCommit = useCallback(() => {
-    if (freezeViewportPipeline) return;
+    if (effectiveViewportFrozen || aoiLayerModeWmsActiveRef.current) return;
     if (liveViewportBboxCommitTimerRef.current != null) {
       window.clearTimeout(liveViewportBboxCommitTimerRef.current);
     }
@@ -6349,41 +7411,41 @@ export default function SatelliteIntelligence() {
       const displayBbox = liveViewportDisplayBBoxRef.current;
       if (!displayBbox) return;
       commitLiveViewportExtent(displayBbox);
-      scheduleAgroStructuresViewportFetch();
+      scheduleArcGisViewportFetch();
     }, SI_VIEWPORT_DEBOUNCE_MS);
-  }, [commitLiveViewportExtent, freezeViewportPipeline, scheduleAgroStructuresViewportFetch]);
+  }, [commitLiveViewportExtent, effectiveViewportFrozen, scheduleArcGisViewportFetch]);
 
   const applyLiveViewportExtentThrottled = useCallback(() => {
+    if (effectiveViewportFrozen || aoiLayerModeWmsActiveRef.current) return;
     captureLiveViewportExtent();
-    if (freezeViewportPipeline) return;
     if (liveViewportMoveThrottleRef.current != null) {
       return;
     }
     liveViewportMoveThrottleRef.current = window.setTimeout(() => {
       liveViewportMoveThrottleRef.current = null;
     }, SI_VIEWPORT_MOVE_THROTTLE_MS);
-    scheduleAgroStructuresViewportFetch();
-  }, [captureLiveViewportExtent, freezeViewportPipeline, scheduleAgroStructuresViewportFetch]);
+    scheduleArcGisViewportFetch();
+  }, [captureLiveViewportExtent, effectiveViewportFrozen, scheduleArcGisViewportFetch]);
 
   const syncLiveViewport = useCallback(
     (immediate = false) => {
-      if (freezeViewportPipeline) return;
+      if (effectiveViewportFrozen || aoiLayerModeWmsActiveRef.current) return;
       const displayBbox = captureLiveViewportExtent();
       if (!displayBbox) return;
       commitLiveViewportExtent(displayBbox);
 
       if (immediate) {
-        void fetchAgroStructuresForViewport();
+        void fetchArcGisViewportLayersForExtent();
         return;
       }
-      scheduleAgroStructuresViewportFetch();
+      scheduleArcGisViewportFetch();
     },
     [
       captureLiveViewportExtent,
       commitLiveViewportExtent,
-      fetchAgroStructuresForViewport,
-      freezeViewportPipeline,
-      scheduleAgroStructuresViewportFetch,
+      fetchArcGisViewportLayersForExtent,
+      effectiveViewportFrozen,
+      scheduleArcGisViewportFetch,
     ],
   );
   syncLiveViewportRef.current = syncLiveViewport;
@@ -6562,9 +7624,9 @@ export default function SatelliteIntelligence() {
     if (!activeDialogLayer) return null;
     const canUseArcGisOnline =
       activeDialogLayer.source === 'arcgis' ||
+      siLayerHasArcgisRestSource(activeDialogLayer) ||
       Boolean(activeDialogLayer.arcgisDrawingInfo) ||
-      Boolean((activeDialogLayer.arcgisLayerDefinition as any)?.drawingInfo) ||
-      Boolean(activeDialogLayer.sourceUrl?.trim());
+      Boolean((activeDialogLayer.arcgisLayerDefinition as any)?.drawingInfo);
     return normalizeSymbologyForLayer(activeDialogLayer.geojson, activeDialogLayer.source, symbologyDraft, canUseArcGisOnline);
   }, [activeDialogLayer, symbologyDraft]);
 
@@ -6582,9 +7644,9 @@ export default function SatelliteIntelligence() {
       Boolean(
         activeDialogLayer &&
           (activeDialogLayer.source === 'arcgis' ||
+            siLayerHasArcgisRestSource(activeDialogLayer) ||
             activeDialogLayer.arcgisDrawingInfo ||
-            (activeDialogLayer.arcgisLayerDefinition as any)?.drawingInfo ||
-            activeDialogLayer.sourceUrl?.trim()),
+            (activeDialogLayer.arcgisLayerDefinition as any)?.drawingInfo),
       ),
     [activeDialogLayer],
   );
@@ -6690,9 +7752,9 @@ export default function SatelliteIntelligence() {
       const ren = di?.renderer;
       const t = String(ren?.type || '');
       let maxCat = 8;
-      if (t === 'uniqueValue' && Array.isArray(ren.uniqueValueInfos)) {
-        const n = ren.uniqueValueInfos.length;
-        maxCat = n > 0 ? Math.min(8, n) : 8;
+      if (t === 'uniqueValue') {
+        const n = flattenArcgisUniqueValueInfos(ren).length;
+        maxCat = n > 0 ? n : 8;
       } else if (t === 'classBreaks' && Array.isArray(ren.classBreakInfos)) {
         const n = ren.classBreakInfos.filter((br: any) => Number.isFinite(Number(br?.maxValue))).length;
         maxCat = n > 0 ? Math.min(8, n) : 8;
@@ -6717,6 +7779,15 @@ export default function SatelliteIntelligence() {
         arcgisMaxCategories: maxCat,
       });
       setSiSymbologyAppearance(appearanceFromSiCustomLayerFields(layer));
+      if (!layer.arcgisDrawingInfoService && !layer.arcgisDrawingInfo) {
+        const fetchUrl = siArcgisDrawingInfoFetchUrl(layer);
+        if (fetchUrl) {
+          void siPrefetchArcgisDrawingInfo(lid, fetchUrl, layer.authToken, {
+            enableSymbology: resolvedUseArcGisOnline,
+            forceRefresh: resolvedUseArcGisOnline,
+          });
+        }
+      }
       return;
     }
 
@@ -6731,7 +7802,31 @@ export default function SatelliteIntelligence() {
         colorRamp: normalized.colorRamp,
         threshold: normalized.threshold,
       };
-      setCustomLayers(prev => prev.map(l => (l.id === lid ? { ...l, symbology: symSave } : l)));
+      setCustomLayers(prev =>
+        prev.map(l => {
+          if (l.id !== lid) return l;
+          let geojson = l.geojson;
+          if (isAgroStructuresLayer(l) && geojson?.features?.length) {
+            geojson = {
+              ...geojson,
+              features: geojson.features.map(f => normalizeAgroStructuresFeatureForSymbology(f) as GeoJSON.Feature),
+            };
+          }
+          return {
+            ...l,
+            geojson,
+            symbology: symSave,
+            useArcGisSymbology: canUse ? true : false,
+          };
+        }),
+      );
+      const fetchUrl = siArcgisDrawingInfoFetchUrl(layer);
+      if (fetchUrl) {
+        void siPrefetchArcgisDrawingInfo(lid, fetchUrl, layer.authToken, {
+          enableSymbology: true,
+          forceRefresh: true,
+        });
+      }
       return;
     }
     const normalized = normalizeSymbologyForLayer(layer.geojson, layer.source, symbologyDraft, canUse);
@@ -6751,6 +7846,7 @@ export default function SatelliteIntelligence() {
           ? {
               ...l,
               symbology: symSave,
+              useArcGisSymbology: false,
               color: ap.color,
               fillColor: ap.fillColor,
               weight: ap.weight,
@@ -6764,7 +7860,7 @@ export default function SatelliteIntelligence() {
           : l,
       ),
     );
-  }, [activeLayerActionDialog, symbologyDraft, siSymbologyAppearance]);
+  }, [activeLayerActionDialog, symbologyDraft, siSymbologyAppearance, siPrefetchArcgisDrawingInfo]);
 
   const cancelSiSymbologyDialog = useCallback(() => {
     const b = siStyleSessionBackupRef.current;
@@ -6867,24 +7963,28 @@ export default function SatelliteIntelligence() {
           : rampHex[Math.max(0, Math.min(rampHex.length - 1, normalized.classes - 1))] ?? '#22c55e';
 
       if (hasArcgisRendererSupport) {
-        let di =
-          activeDialogLayer.arcgisDrawingInfo ??
-          (sanitizeArcgisDrawingInfoForClient((activeDialogLayer.arcgisLayerDefinition as any)?.drawingInfo) as Record<
-            string,
-            unknown
-          > | null);
-        if (!di && activeDialogLayer.sourceUrl?.trim()) {
-          const raw = await fetchArcgisLayerDrawingInfo(activeDialogLayer.sourceUrl!, activeDialogLayer.authToken);
-          di = (raw && sanitizeArcgisDrawingInfoForClient(raw)) || null;
-        }
-
         if (symbologyDraft.useArcGisOnline) {
-          if (!di || !arcgisDrawingInfoToFillPaint(di)) {
+          const fetchUrl = siArcgisDrawingInfoFetchUrl(activeDialogLayer);
+          let serviceDi: Record<string, unknown> | null = null;
+          if (fetchUrl) {
+            const raw = await fetchArcgisLayerDrawingInfo(fetchUrl, activeDialogLayer.authToken);
+            serviceDi = (raw && sanitizeArcgisDrawingInfoForClient(raw)) || null;
+          }
+          if (!serviceDi) {
+            serviceDi =
+              activeDialogLayer.arcgisDrawingInfoService &&
+              typeof activeDialogLayer.arcgisDrawingInfoService === 'object'
+                ? (sanitizeArcgisDrawingInfoForClient(activeDialogLayer.arcgisDrawingInfoService) as Record<
+                    string,
+                    unknown
+                  > | null)
+                : resolveLayerArcgisDrawingInfo(activeDialogLayer);
+          }
+          if (!serviceDi || !arcgisDrawingInfoToFillPaint(serviceDi)) {
             setStacStatus('Could not load a supported ArcGIS renderer (drawingInfo) for this layer.');
             return;
           }
-          /** Keep the service renderer intact â€” do not slice unique/class lists (applySymbologyâ€¦ caps categories). */
-          const baked = sanitizeArcgisDrawingInfoForClient(di) as Record<string, unknown> | null;
+          const baked = sanitizeArcgisDrawingInfoForClient(serviceDi) as Record<string, unknown> | null;
           if (!baked || !arcgisDrawingInfoToFillPaint(baked)) {
             setStacStatus('Could not apply symbology to this layer renderer.');
             return;
@@ -6895,6 +7995,7 @@ export default function SatelliteIntelligence() {
                 ? {
                     ...l,
                     ...appearancePatch,
+                    arcgisDrawingInfoService: baked,
                     arcgisDrawingInfo: baked,
                     useArcGisSymbology: true,
                     color: ap.color || nextColor,
@@ -6905,6 +8006,18 @@ export default function SatelliteIntelligence() {
             ),
           );
         } else {
+          let di =
+            activeDialogLayer.arcgisDrawingInfoService &&
+            typeof activeDialogLayer.arcgisDrawingInfoService === 'object'
+              ? (sanitizeArcgisDrawingInfoForClient(activeDialogLayer.arcgisDrawingInfoService) as Record<
+                  string,
+                  unknown
+                > | null)
+              : resolveLayerArcgisDrawingInfo(activeDialogLayer);
+          if (!di && activeDialogLayer.sourceUrl?.trim()) {
+            const raw = await fetchArcgisLayerDrawingInfo(activeDialogLayer.sourceUrl!, activeDialogLayer.authToken);
+            di = (raw && sanitizeArcgisDrawingInfoForClient(raw)) || null;
+          }
           const maxForBake = normalized.classes;
           const baked = di
             ? applySymbologyToArcgisDrawingInfo(di as Record<string, unknown>, normalized.colorRamp, maxForBake)
@@ -6977,6 +8090,41 @@ export default function SatelliteIntelligence() {
     },
     [activeDialogLayer, canUseArcGisOnline],
   );
+
+  const onArcgisSymbologyToggleOn = useCallback(() => {
+    if (!activeDialogLayer) return;
+    const lid = activeDialogLayer.id;
+    const fetchUrl = siArcgisDrawingInfoFetchUrl(activeDialogLayer);
+
+    updateSymbologyDraft({ useArcGisOnline: true });
+
+    setCustomLayers(prev =>
+      prev.map(l => {
+        if (l.id !== lid) return l;
+        let geojson = l.geojson;
+        if (isAgroStructuresLayer(l) && geojson?.features?.length) {
+          geojson = {
+            ...geojson,
+            features: geojson.features.map(f => normalizeAgroStructuresFeatureForSymbology(f) as GeoJSON.Feature),
+          };
+        }
+        return {
+          ...l,
+          geojson,
+          arcgisDrawingInfo: undefined,
+          useArcGisSymbology: true,
+          symbology: { ...(l.symbology ?? {}), useArcGisOnline: true },
+        };
+      }),
+    );
+
+    if (fetchUrl) {
+      void siPrefetchArcgisDrawingInfo(lid, fetchUrl, activeDialogLayer.authToken, {
+        enableSymbology: true,
+        forceRefresh: true,
+      });
+    }
+  }, [activeDialogLayer, updateSymbologyDraft, siPrefetchArcgisDrawingInfo]);
 
   const moveSiTableColumn = (from: string, to: string) => {
     if (!activeDialogLayer || !from || !to || from === to) return;
@@ -7179,8 +8327,34 @@ export default function SatelliteIntelligence() {
     }
   };
 
+  const exportCustomLayerData = useCallback((layerId: string) => {
+    const layer = customLayers.find(l => l.id === layerId);
+    if (!layer) return;
+    setLayerOptionsMenuLayerId(null);
+    if (layer.bimBlobUrl) {
+      downloadBlobUrlFile(layer.bimBlobUrl, `${layer.name.replace(/[^\w.-]+/g, '_')}.ifc`);
+      setStacStatus(`Downloading IFC file for "${layer.name}".`);
+      return;
+    }
+    if (layer.renderMode === 'raster' || layer.arcgisRasterTiles) {
+      setStacStatus(
+        layer.sourceUrl
+          ? `Raster "${layer.name}" — source: ${layer.sourceUrl}`
+          : `Raster "${layer.name}" is session-only. Re-import the original file to export.`,
+      );
+      return;
+    }
+    const features = Array.isArray(layer.geojson?.features) ? layer.geojson.features : [];
+    if (!features.length) {
+      setStacStatus(`Layer "${layer.name}" has no features to export yet. Pan/zoom to load data.`);
+      return;
+    }
+    downloadGeoJsonFile(layer.geojson, layer.name);
+    setStacStatus(`Exported "${layer.name}" as GeoJSON.`);
+  }, [customLayers]);
+
   const executeCustomLayerAction = useCallback(async (
-    action: 'sync' | 'table' | 'symbology' | 'legend' | 'remove' | 'rename' | 'editAoi',
+    action: 'sync' | 'table' | 'symbology' | 'legend' | 'remove' | 'rename' | 'editAoi' | 'metadata' | 'export',
     layerId: string,
   ) => {
     setLayerOptionsMenuLayerId(null);
@@ -7194,6 +8368,11 @@ export default function SatelliteIntelligence() {
       if (!ok) return;
       if (layer.raster?.url?.startsWith('blob:')) URL.revokeObjectURL(layer.raster.url);
       if (layer.bimBlobUrl?.startsWith('blob:')) URL.revokeObjectURL(layer.bimBlobUrl);
+      if (layer.source === 'arcgis') {
+        arcgisViewportCacheByLayerIdRef.current.delete(layerId);
+        arcgisViewportGeoJsonByLayerIdRef.current.delete(layerId);
+        arcgisDynamicDebug('layer_removed', { layerId, name: layer.name });
+      }
       setCustomLayers(prev => prev.filter(item => item.id !== layerId));
       setActiveLayerActionDialog(prev => (prev?.layerId === layerId ? null : prev));
       setStacStatus(`Removed layer "${layer.name}".`);
@@ -7225,6 +8404,14 @@ export default function SatelliteIntelligence() {
       setStacStatus(`AOI analysis now uses "${layer.name}".`);
       return;
     }
+    if (action === 'export') {
+      exportCustomLayerData(layerId);
+      return;
+    }
+    if (action === 'metadata') {
+      setActiveLayerActionDialog({ mode: 'metadata', layerId });
+      return;
+    }
     if (action === 'table') {
       setActiveLayerActionDialog({ mode: 'table', layerId });
       return;
@@ -7234,7 +8421,7 @@ export default function SatelliteIntelligence() {
       return;
     }
     setActiveLayerActionDialog({ mode: 'legend', layerId });
-  }, [customLayers, refreshArcgisLayer, applyUploadedAoiToAnalysis, focusGeoJsonOnMap]);
+  }, [customLayers, refreshArcgisLayer, applyUploadedAoiToAnalysis, focusGeoJsonOnMap, exportCustomLayerData]);
 
   const handleLayerActionClick = async (
     event: React.MouseEvent<HTMLButtonElement>,
@@ -7331,14 +8518,14 @@ export default function SatelliteIntelligence() {
       const sourceUrl = typeof layer.sourceUrl === 'string' ? layer.sourceUrl.trim() : '';
       const isArcgis = layer.source === 'arcgis' || /\/(Feature|Map)Server\/\d+/i.test(sourceUrl);
       if (sourceUrl && isArcgis) {
-        setStacStatus(`Zooming to â€œ${layer.name}â€â€¦`);
+        setStacStatus(`Zooming to "${layer.name}"...`);
         void (async () => {
           try {
             const pjson = await fetchArcgisLayerPjson(sourceUrl, layer.authToken || getArcgisPortalToken() || undefined);
             const ext = (pjson?.extent ?? pjson?.fullExtent) as any;
             const bbox = ext ? arcgisExtentToWgs84BBox(ext) : null;
             if (!bbox) {
-              setStacStatus(`â€œ${layer.name}â€ has no extent to zoom to.`);
+              setStacStatus(`"${layer.name}" has no extent to zoom to.`);
               return;
             }
             const mapInstance = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
@@ -7349,9 +8536,9 @@ export default function SatelliteIntelligence() {
               ],
               { padding: 80, duration: 800, maxZoom: 17 },
             );
-            setStacStatus(`Zoomed to â€œ${layer.name}â€.`);
+            setStacStatus(`Zoomed to "${layer.name}".`);
           } catch {
-            setStacStatus(`Could not zoom to â€œ${layer.name}â€.`);
+            setStacStatus(`Could not zoom to "${layer.name}".`);
           }
         })();
         return;
@@ -7458,7 +8645,7 @@ export default function SatelliteIntelligence() {
       const current = typeof layer.definitionQueryText === 'string' ? layer.definitionQueryText : '';
       const raw = window.prompt(
         `Definition query â€” only matching features are shown.\n` +
-          `Examples:  crop = wheat   |   area > 1000   |   status != closed   |   name ~ farm\n` +
+          `Examples:  crop = wheat | area > 1000 | status != closed | name ~ farm\n` +
           `Operators: = , != , > , >= , < , <= , ~ (contains). Leave empty to clear.\n\n` +
           (list ? `Available fields:\n${list}` : ''),
         current,
@@ -7655,7 +8842,7 @@ export default function SatelliteIntelligence() {
   );
 
   const pivots = useMemo<PivotFeature[]>(() => {
-    /** Pivot polygons must not float as a â€œphantomâ€ layer when the user turned the vector layer off. */
+    /** Pivot polygons must not float as a "phantom" layer when the user turned the vector layer off. */
     const uploaded = customLayers.find(
       layer =>
         layer.visible !== false &&
@@ -7865,12 +9052,12 @@ export default function SatelliteIntelligence() {
   const flyToStacItemExtent = (item: any) => {
     const geom = stacItemFootprintGeometry(item);
     if (!geom) {
-      setStacStatus('Ù„Ø§ ØªÙˆØ¬Ø¯ Ù‡Ù†Ø¯Ø³Ø© footprint Ù„Ù‡Ø°Ø§ Ø§Ù„Ø¹Ù†ØµØ±.');
+      setStacStatus('No footprint geometry found for this item.');
       return;
     }
     const b = getGeoJsonBounds({ type: 'Feature', geometry: geom, properties: {} });
     if (!b) {
-      setStacStatus('Ù„Ø§ ÙŠÙ…ÙƒÙ† Ø­Ø³Ø§Ø¨ Ø§Ù„Ø­Ø¯ÙˆØ¯ Ù„Ù‡Ø°Ø§ Ø§Ù„Ø¹Ù†ØµØ±.');
+      setStacStatus('Could not compute bounds for this item.');
       return;
     }
     const map = mapRef.current?.getMap?.() ?? mapRef.current;
@@ -7891,18 +9078,18 @@ export default function SatelliteIntelligence() {
       if (gbounds) bbox = [...gbounds];
     }
     if (!candidates.length || !bbox || bbox.length < 4) {
-      setStacStatus('Ù„Ø§ ØªÙˆØ¬Ø¯ ØµÙˆØ±Ø© Ù…ØµØºÙ‘Ø±Ø© Ø£Ùˆ Ø­Ø¯ÙˆØ¯ bbox Ù„Ù‡Ø°Ø§ Ø§Ù„Ø¹Ù†ØµØ±.');
+      setStacStatus('No thumbnail image or bbox found for this item.');
       return;
     }
     const [w, s, e, n] = bbox;
     if (![w, s, e, n].every(Number.isFinite)) {
-      setStacStatus('Ø¨ÙŠØ§Ù†Ø§Øª bbox ØºÙŠØ± ØµØ§Ù„Ø­Ø© Ù„Ù‡Ø°Ø§ Ø§Ù„Ø¹Ù†ØµØ±.');
+      setStacStatus('Invalid bbox coordinates for this item.');
       return;
     }
-    setStacStatus('Ø¬Ø§Ø±Ù ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ù…Ø¹Ø§ÙŠÙ†Ø© Ø¹Ù„Ù‰ Ø§Ù„Ø®Ø±ÙŠØ·Ø©â€¦');
+    setStacStatus('Loading preview on the map...');
     const blobUrl = await fetchStacMapOverlayBlobUrl(candidates);
     if (!blobUrl) {
-      setStacStatus('ØªØ¹Ø°Ø± ØªØ­Ù…ÙŠÙ„ ØµÙˆØ±Ø© Ø§Ù„Ù…Ø¹Ø§ÙŠÙ†Ø© Ø¹Ù„Ù‰ Ø§Ù„Ø®Ø±ÙŠØ·Ø© (ØªØ­Ù‚Ù‚ Ù…Ù† Ø§Ù„Ø§ØªØµØ§Ù„ Ø£Ùˆ Ø¬Ø±Ù‘Ø¨ Ø¹Ù†ØµØ±Ø§Ù‹ Ø¢Ø®Ø±).');
+      setStacStatus('Could not load preview on the map (check the connection or try another item).');
       return;
     }
     setStacMapThumb(prev => {
@@ -7919,7 +9106,7 @@ export default function SatelliteIntelligence() {
           ? `STAC imagery: ${itemId}`
           : 'STAC imagery preview',
     );
-    setStacStatus(`Ù…Ø¹Ø§ÙŠÙ†Ø© Ø¹Ù„Ù‰ Ø§Ù„Ø®Ø±ÙŠØ·Ø©: ${String(item.id ?? '')}`);
+    setStacStatus(`Ù…عا�ŠÙ†ة ع�„Ù‰ ا�„خر�Šطة: ${String(item.id ?? '')}`);
   };
 
   useEffect(() => {
@@ -8630,7 +9817,7 @@ export default function SatelliteIntelligence() {
     }
     drawnGeometryRef.current = geometry;
     setDrawnGeometry(geometry);
-    sentinelWmsTilesSyncedRef.current = '';
+    sentinelWmsTilesSyncedRef.current = {};
   };
 
   const updateDrawnStats = (geometry: any | null) => {
@@ -8641,7 +9828,7 @@ export default function SatelliteIntelligence() {
     }
     drawnGeometryRef.current = geometry;
     setDrawnGeometry(geometry);
-    if (geometry) sentinelWmsTilesSyncedRef.current = '';
+    if (geometry) sentinelWmsTilesSyncedRef.current = {};
     recomputeDrawnAoiStats(geometry);
   };
 
@@ -9678,7 +10865,7 @@ export default function SatelliteIntelligence() {
               turns,
               userMessage: trimmed,
               onToken: delta => {
-                if (!streamed) setGeoOllamaBusy(false); // first token â†’ drop the "Thinkingâ€¦" indicator
+                if (!streamed) setGeoOllamaBusy(false); // first token â†’ drop the "Thinking..." indicator
                 streamed += delta;
                 setAssistantText(streamed);
               },
@@ -9731,7 +10918,7 @@ export default function SatelliteIntelligence() {
     e.target.value = '';
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      setGeoExplorerChatError('Please attach an image file (PNG, JPEG, WebP, â€¦).');
+      setGeoExplorerChatError('Please attach an image file (PNG, JPEG, WebP, ...).');
       return;
     }
     const reader = new FileReader();
@@ -9807,7 +10994,7 @@ export default function SatelliteIntelligence() {
     });
     if (!created) {
       if (!opts?.silent) {
-        setFieldAnalysisStatus('Overlap with an existing field â€” adjust or turn off â€œno overlapâ€.');
+        setFieldAnalysisStatus('Overlap with an existing field â€” adjust or turn off "no overlap".');
       }
       return false;
     }
@@ -10124,6 +11311,9 @@ export default function SatelliteIntelligence() {
     switch (action) {
       case 'browse':
         openAddLayerModal({ tab: 'giscontent', wizard: 'home' });
+        break;
+      case 'arcgis':
+        setIsAddArcGisLayerPanelOpen(true);
         break;
       case 'url':
         openAddLayerModal({
@@ -10521,7 +11711,7 @@ export default function SatelliteIntelligence() {
       ...prev,
       statusMessage: 'Study AOI cleared (classification layer unchanged).',
     }));
-    sentinelWmsTilesSyncedRef.current = '';
+    sentinelWmsTilesSyncedRef.current = {};
   }, [resetActiveSketchDraftState]);
 
   /**
@@ -12115,8 +13305,8 @@ export default function SatelliteIntelligence() {
 
   const aoiFieldsMapLinePaint = useMemo(
     () =>
-      ({
-        'line-color': ['get', 'strokeColor'],
+      sanitizeMapboxPaint({
+        'line-color': ['coalesce', ['get', 'strokeColor'], '#4ade80'],
         'line-width': [
           'case',
           ['==', ['get', 'id'], selectedFieldId ?? '__si_none__'],
@@ -12124,16 +13314,16 @@ export default function SatelliteIntelligence() {
           ['coalesce', ['get', 'strokeWidth'], 2],
         ],
         'line-opacity': drawVisualOpacity,
-      }) as Record<string, unknown>,
+      }),
     [selectedFieldId, drawVisualOpacity],
   );
 
   const aoiFieldsMapFillPaint = useMemo(
     () =>
-      ({
-        'fill-color': ['get', 'fillColor'],
+      sanitizeMapboxPaint({
+        'fill-color': ['coalesce', ['get', 'fillColor'], '#22c55e'],
         'fill-opacity': ['*', ['coalesce', ['get', 'fillOpacity'], 0], drawVisualOpacity],
-      }) as Record<string, unknown>,
+      }),
     [drawVisualOpacity],
   );
 
@@ -12322,12 +13512,17 @@ export default function SatelliteIntelligence() {
     () => sentinelHubWmsMinZoomForLatitude(mapLatitude),
     [mapLatitude],
   );
-  const sentinelWmsZoomOk = typeof mapZoom === 'number' && mapZoom >= sentinelWmsMinZoom;
-  const sentinelVisible = isWmsOverlayVisible && !!activeWmsLayer;
+  const effectiveSentinelWmsMinZoom = pinnedSentinelWmsMinZoom ?? sentinelWmsMinZoom;
+  const sentinelWmsZoomOk = typeof mapZoom === 'number' && mapZoom >= effectiveSentinelWmsMinZoom;
   const agroStructuresLayer = useMemo(
     () => customLayers.find(l => isAgroStructuresLayer(l) && l.visible !== false) ?? null,
     [customLayers],
   );
+  const agroStructuresViewportGeoJson = useMemo(() => {
+    const layer = customLayers.find(l => isAgroStructuresLayer(l) && l.viewportStreaming);
+    if (!layer) return null;
+    return arcgisViewportGeoJsonByLayerIdRef.current.get(layer.id) ?? null;
+  }, [customLayers, arcgisViewportRevision]);
   const agroStructuresLayerAoiMask = useMemo(() => {
     if (!agroStructuresLayer) return null;
     if (aoiMaskBuilderSettings.enabled) {
@@ -12362,10 +13557,31 @@ export default function SatelliteIntelligence() {
     () => countAgroStructuresPolygons(agroStructuresLayerAoiMask),
     [agroStructuresLayerAoiMask],
   );
-  const aoiMaskBuilderSourceLayer = useMemo(
+  /**
+   * Clip mask source layer — full-layer geo when available; viewport geo only as fallback.
+   * Once Show on map is active, mask is pinned and this record stays stable across pan/zoom.
+   */
+  const aoiMaskBuilderBaseLayer = useMemo(
     () => customLayers.find(l => String(l.id) === aoiMaskBuilderSettings.sourceLayerId) ?? null,
     [customLayers, aoiMaskBuilderSettings.sourceLayerId],
   );
+  const aoiMaskBuilderSourceLayer = useMemo(() => {
+    const layer = aoiMaskBuilderBaseLayer;
+    if (!layer) return null;
+    if (aoiMaskBuilderSettings.enabled) return layer;
+    const hasFullGeo =
+      Array.isArray(layer.geojson?.features) && layer.geojson.features.length > 0;
+    if (hasFullGeo) return layer;
+    if (layer.viewportStreaming && layer.source === 'arcgis') {
+      const viewport = arcgisViewportGeoJsonByLayerIdRef.current.get(layer.id);
+      if (viewport?.features?.length) return { ...layer, geojson: viewport };
+    }
+    return layer;
+  }, [
+    aoiMaskBuilderBaseLayer,
+    aoiMaskBuilderSettings.enabled,
+    arcgisViewportRevision,
+  ]);
   const aoiMaskBuilderSelectedKeys = useMemo(() => {
     if (activeDialogLayer && String(activeDialogLayer.id) === aoiMaskBuilderSettings.sourceLayerId) {
       return tableSelectedKeys;
@@ -12373,26 +13589,93 @@ export default function SatelliteIntelligence() {
     return new Set<string>();
   }, [activeDialogLayer, aoiMaskBuilderSettings.sourceLayerId, tableSelectedKeys]);
   const aoiMaskBuilderMask = useMemo(() => {
-    if (!aoiMaskBuilderSettings.enabled) return null;
-    return resolveSiAoiMaskBuilderClipGeoJson(
+    if (!aoiMaskBuilderSettings.sourceLayerId || !aoiMaskBuilderSourceLayer) return null;
+    return getCachedSiAoiLayerModeClipMask(
       aoiMaskBuilderSourceLayer,
       aoiMaskBuilderSettings,
       aoiMaskBuilderSelectedKeys,
     );
   }, [
-    aoiMaskBuilderSettings.enabled,
     aoiMaskBuilderSettings.sourceLayerId,
+    aoiMaskBuilderSettings.maskMode,
     aoiMaskBuilderSettings.filterField,
     aoiMaskBuilderSettings.filterValues,
-    aoiMaskBuilderSettings.maskMode,
     aoiMaskBuilderSourceLayer,
     aoiMaskBuilderSelectedKeys,
   ]);
-  const aoiMaskBuilderMaskKey = useMemo(
-    () => siAoiMaskBuilderSignature(aoiMaskBuilderSettings, aoiMaskBuilderMask, aoiMaskBuilderSelectedKeys),
-    [aoiMaskBuilderSettings, aoiMaskBuilderMask, aoiMaskBuilderSelectedKeys],
+  /** Warm prefetch mask — prefer full-layer geometry so tiles match first enable. */
+  const aoiMaskBuilderWarmMask = useMemo(() => {
+    if (!aoiMaskBuilderSettings.sourceLayerId) return null;
+    const hasFullGeo =
+      Array.isArray(aoiMaskBuilderBaseLayer?.geojson?.features) &&
+      aoiMaskBuilderBaseLayer!.geojson!.features!.length > 0;
+    if (hasFullGeo && aoiMaskBuilderBaseLayer) {
+      return getCachedSiAoiLayerModeClipMask(
+        aoiMaskBuilderBaseLayer,
+        aoiMaskBuilderSettings,
+        aoiMaskBuilderSelectedKeys,
+      );
+    }
+    return aoiMaskBuilderMask;
+  }, [
+    aoiMaskBuilderSettings,
+    aoiMaskBuilderBaseLayer,
+    aoiMaskBuilderMask,
+    aoiMaskBuilderSelectedKeys,
+  ]);
+  const aoiLayerModeSettingsPinKey = useMemo(
+    () => siAoiLayerModeSettingsPinKey(aoiMaskBuilderSettings, aoiMaskBuilderSelectedKeys, aoiMaskBuilderBaseLayer),
+    [
+      aoiMaskBuilderSettings,
+      aoiMaskBuilderSelectedKeys,
+      aoiMaskBuilderBaseLayer,
+    ],
   );
-  const aoiMaskBuilderFeatureCount = aoiMaskBuilderMask?.features?.length ?? 0;
+
+  useEffect(() => {
+    if (!aoiMaskBuilderWarmMask?.features?.length) return;
+    const hasFullGeo =
+      Array.isArray(aoiMaskBuilderBaseLayer?.geojson?.features) &&
+      aoiMaskBuilderBaseLayer!.geojson!.features!.length > 0;
+    if (!hasFullGeo) return;
+    aoiLayerModePinnedClipRef.current = {
+      pinKey: aoiLayerModeSettingsPinKey,
+      mask: aoiMaskBuilderWarmMask,
+    };
+  }, [aoiMaskBuilderWarmMask, aoiMaskBuilderBaseLayer, aoiLayerModeSettingsPinKey]);
+
+  useEffect(() => {
+    const pin = aoiLayerModePinnedClipRef.current;
+    if (!pin || pin.pinKey === aoiLayerModeSettingsPinKey) return;
+    aoiLayerModePinnedClipRef.current = null;
+  }, [aoiLayerModeSettingsPinKey]);
+
+  const aoiLayerModeActiveMask = useMemo(() => {
+    if (!aoiMaskBuilderSettings.enabled) return null;
+    const pin = aoiLayerModePinnedClipRef.current;
+    if (pin?.pinKey === aoiLayerModeSettingsPinKey && pin.mask?.features?.length) {
+      return pin.mask;
+    }
+    if (aoiMaskBuilderMask?.features?.length) {
+      aoiLayerModePinnedClipRef.current = { pinKey: aoiLayerModeSettingsPinKey, mask: aoiMaskBuilderMask };
+      return aoiMaskBuilderMask;
+    }
+    return pin?.pinKey === aoiLayerModeSettingsPinKey ? pin.mask : null;
+  }, [
+    aoiMaskBuilderSettings.enabled,
+    aoiMaskBuilderMask,
+    aoiLayerModeSettingsPinKey,
+  ]);
+  const aoiMaskBuilderMaskKey = useMemo(
+    () =>
+      siAoiMaskBuilderSignature(
+        { ...aoiMaskBuilderSettings, enabled: Boolean(aoiLayerModeActiveMask) },
+        aoiLayerModeActiveMask,
+        aoiMaskBuilderSelectedKeys,
+      ),
+    [aoiMaskBuilderSettings, aoiLayerModeActiveMask, aoiMaskBuilderSelectedKeys],
+  );
+  const aoiMaskBuilderFeatureCount = aoiLayerModeActiveMask?.features?.length ?? aoiMaskBuilderMask?.features?.length ?? 0;
   const activeAoiMaskKey = useMemo(() => {
     if (aoiMaskBuilderSettings.enabled) return aoiMaskBuilderMaskKey;
     if (freezeViewportPipeline) return agroStructuresLayerAoiKey;
@@ -12413,9 +13696,9 @@ export default function SatelliteIntelligence() {
   const primaryLayerSourceMask = useMemo(
     () =>
       aoiMaskBuilderSettings.enabled
-        ? (aoiMaskBuilderMask ?? agroStructuresLayerAoiMask)
+        ? (aoiLayerModeActiveMask ?? agroStructuresLayerAoiMask)
         : agroStructuresLayerAoiMask,
-    [aoiMaskBuilderSettings.enabled, aoiMaskBuilderMask, agroStructuresLayerAoiMask],
+    [aoiMaskBuilderSettings.enabled, aoiLayerModeActiveMask, agroStructuresLayerAoiMask],
   );
   const hasActiveLayerSourceAoi = !!primaryLayerSourceMask;
   useEffect(() => {
@@ -12432,6 +13715,37 @@ export default function SatelliteIntelligence() {
     () => drawnAoiClipSignature(drawnAoiClipCollection),
     [drawnAoiClipCollection],
   );
+  const hasDrawnAoiClip = Boolean(drawnAoiClipCollection?.features?.length);
+  const sentinelDrawIndexActive = isWmsOverlayVisible;
+  const sentinelLayerAoiIndexActive = aoiMaskBuilderSettings.enabled;
+
+  useEffect(() => {
+    aoiLayerModeWmsActiveRef.current = aoiMaskBuilderSettings.enabled;
+    const layerAoiWarmNow =
+      Boolean(aoiMaskBuilderSettings.sourceLayerId) && Boolean(aoiMaskBuilderWarmMask?.features?.length);
+    if (!aoiMaskBuilderSettings.enabled && !layerAoiWarmNow) {
+      setPinnedSentinelWmsMinZoom(null);
+      return;
+    }
+    if (aoiMaskBuilderSettings.enabled || layerAoiWarmNow) {
+      setPinnedSentinelWmsMinZoom(prev => (prev == null ? sentinelWmsMinZoom : prev));
+    }
+  }, [
+    aoiMaskBuilderSettings.enabled,
+    aoiMaskBuilderSettings.sourceLayerId,
+    aoiMaskBuilderWarmMask,
+    sentinelWmsMinZoom,
+  ]);
+
+  /** Prefetch Layers AOI WMS sources while warm mask is ready (instant Show on map). */
+  useEffect(() => {
+    if (!aoiMaskBuilderWarmMask?.features?.length) return;
+    setSentinelWmsSourcesHeld(true);
+  }, [aoiMaskBuilderWarmMask]);
+
+  const sentinelIndexDisplayActive =
+    !!activeWmsLayer && (sentinelDrawIndexActive || sentinelLayerAoiIndexActive);
+  const sentinelVisible = sentinelIndexDisplayActive;
 
   /** Crop Classification study AOI â€” isolated from Remote Sensing sketch layer. */
   const cropClassAoiClipCollection = useMemo(
@@ -12439,18 +13753,25 @@ export default function SatelliteIntelligence() {
     [cropClassAoiGeometry],
   );
 
-  /** Sentinel WMS / Live clip â€” Layer Source only; preview sketch never replaces the farm mask. */
-  const effectiveSentinelAoiSource = useMemo(
-    () => primaryLayerSourceMask ?? drawnGeometry,
-    [primaryLayerSourceMask, drawnGeometry],
-  );
+  /** Sentinel scene catalog AOI — Edit draw takes precedence over Layers vector when both are active. */
+  const effectiveSentinelAoiSource = useMemo(() => {
+    if (isWmsOverlayVisible && drawnAoiClipCollection?.features?.length) return drawnAoiClipCollection;
+    if (aoiMaskBuilderSettings.enabled && aoiLayerModeActiveMask) return aoiLayerModeActiveMask;
+    return drawnAoiClipCollection ?? drawnGeometry ?? null;
+  }, [
+    isWmsOverlayVisible,
+    drawnAoiClipCollection,
+    aoiMaskBuilderSettings.enabled,
+    aoiLayerModeActiveMask,
+    drawnGeometry,
+  ]);
   /**
    * Stable Agro Structures AOI for WMS tiles â€” fixed extent, unaffected by pan/zoom.
    * Standalone Remote Sensing: only user-drawn sketch (or mask builder); no full-canvas fallback.
    */
   const sentinelHubWmsTileClipSource = useMemo(() => {
     if (aoiMaskBuilderSettings.enabled) {
-      return effectiveSentinelAoiSource ?? drawnAoiClipCollection ?? drawnGeometry ?? null;
+      return aoiLayerModeActiveMask ?? null;
     }
     if (drawnAoiClipCollection?.features?.length) {
       return drawnAoiClipCollection;
@@ -12461,9 +13782,8 @@ export default function SatelliteIntelligence() {
     return null;
   }, [
     aoiMaskBuilderSettings.enabled,
-    effectiveSentinelAoiSource,
+    aoiLayerModeActiveMask,
     drawnAoiClipCollection,
-    drawnGeometry,
     freezeViewportPipeline,
     agroStructuresLayerAoiMask,
   ]);
@@ -12475,15 +13795,17 @@ export default function SatelliteIntelligence() {
       return sentinelHubWmsTileClipSource;
     }
     if (aoiMaskBuilderSettings.enabled) {
-      return effectiveSentinelAoiSource ?? drawnAoiClipCollection ?? drawnGeometry ?? null;
+      return aoiLayerModeActiveMask ?? null;
     }
     if (drawnAoiClipCollection?.features?.length) {
       return drawnAoiClipCollection;
     }
     if (liveViewportDisplayBBox) {
       const clipBbox = expandLngLatBBox(liveViewportDisplayBBox, SI_VIEWPORT_PREFETCH_RATIO);
-      const fc = agroStructuresViewportCacheRef.current.featureCollectionInBBox(clipBbox);
-      const viewportMask = buildAgroStructuresLayerAoiMask(fc);
+      const agroLayer = customLayers.find(l => isAgroStructuresLayer(l));
+      const cache = agroLayer ? arcgisViewportCacheByLayerIdRef.current.get(agroLayer.id) : null;
+      const fc = cache?.featureCollectionInBBox(clipBbox);
+      const viewportMask = fc ? buildAgroStructuresLayerAoiMask(fc) : null;
       if (viewportMask?.features?.length) return viewportMask;
     }
     if (
@@ -12493,13 +13815,12 @@ export default function SatelliteIntelligence() {
       const viewportMask = buildAgroStructuresLayerAoiMask(agroStructuresViewportGeoJson);
       if (viewportMask) return viewportMask;
     }
-    if (effectiveSentinelAoiSource) return effectiveSentinelAoiSource;
     return drawnGeometry ?? null;
   }, [
     freezeViewportPipeline,
     sentinelHubWmsTileClipSource,
     aoiMaskBuilderSettings.enabled,
-    effectiveSentinelAoiSource,
+    aoiLayerModeActiveMask,
     drawnAoiClipCollection,
     drawnGeometry,
     agroStructuresViewportGeoJson,
@@ -12510,25 +13831,29 @@ export default function SatelliteIntelligence() {
     [drawnAoiClipCollection, effectiveSentinelAoiSource],
   );
 
-  /** Index raster displays only when clipped to an AOI (sketch, mask builder, or dashboard farm mask). */
-  const hasRasterDisplayClipAoi = useMemo(() => {
-    if (aoiMaskBuilderSettings.enabled && aoiMaskBuilderMask?.features?.length) return true;
-    if (drawnAoiClipCollection?.features?.length) return true;
+  /** Index raster displays when either independent clip path has geometry. */
+  const hasDrawRasterClipAoi = useMemo(() => {
+    if (isWmsOverlayVisible && drawnAoiClipCollection?.features?.length) return true;
     if (cropClassificationSettings.active && cropClassAoiClipCollection?.features?.length) return true;
-    if (freezeViewportPipeline && agroStructuresLayerAoiMask?.features?.length) return true;
+    if (freezeViewportPipeline && isWmsOverlayVisible && agroStructuresLayerAoiMask?.features?.length) return true;
     return false;
   }, [
-    aoiMaskBuilderSettings.enabled,
-    aoiMaskBuilderMask,
+    isWmsOverlayVisible,
     drawnAoiClipCollection,
     cropClassificationSettings.active,
     cropClassAoiClipCollection,
     freezeViewportPipeline,
     agroStructuresLayerAoiMask,
   ]);
+  const hasLayerRasterClipAoi = useMemo(
+    () => aoiMaskBuilderSettings.enabled && Boolean(aoiLayerModeActiveMask?.features?.length),
+    [aoiMaskBuilderSettings.enabled, aoiLayerModeActiveMask],
+  );
+  const sentinelDrawWmsOnMap = sentinelDrawIndexActive && hasDrawRasterClipAoi;
+  const sentinelLayerAoiWmsOnMap = sentinelLayerAoiIndexActive && hasLayerRasterClipAoi;
 
-  /** Show on map â€” raster pairs with AOI clip; no full-canvas overlay without geometry. */
-  const sentinelWmsOnMap = sentinelVisible && !!activeWmsLayer && hasRasterDisplayClipAoi;
+  /** Show on map — independent Edit AOI and Layers AOI toggles. */
+  const sentinelWmsOnMap = sentinelDrawWmsOnMap || sentinelLayerAoiWmsOnMap;
 
   /**
    * Drawing an AOI refreshes the clipped tiles but does NOT auto-show the layer â€”
@@ -12536,7 +13861,7 @@ export default function SatelliteIntelligence() {
    */
   useEffect(() => {
     if (!drawnAoiClipCollection?.features?.length) return;
-    sentinelWmsTilesSyncedRef.current = '';
+    sentinelWmsTilesSyncedRef.current = {};
   }, [drawnAoiClipCollection, drawnAoiClipKey]);
 
   useEffect(() => {
@@ -12549,42 +13874,51 @@ export default function SatelliteIntelligence() {
   /** Preload Agro_Structures as soon as Layer Live is enabled. */
   useEffect(() => {
     if (freezeViewportPipeline) return;
-    if (!isMapLoaded || !sentinelWmsOnMap || aoiMaskBuilderSettings.enabled || !agroStructuresLayer) return;
+    if (!isMapLoaded || !sentinelDrawWmsOnMap || !agroStructuresLayer) return;
     syncLiveViewport(true);
   }, [
     freezeViewportPipeline,
     isMapLoaded,
-    sentinelWmsOnMap,
-    aoiMaskBuilderSettings.enabled,
+    sentinelDrawWmsOnMap,
     agroStructuresLayer,
     syncLiveViewport,
   ]);
 
-  /** Fetch Agro_Structures when Layer Live is on but the viewport cache has no visible fields yet. */
+  /** Fetch viewport-streaming ArcGIS layers when Layer Live is on but cache is empty. */
   useEffect(() => {
     if (freezeViewportPipeline) return;
-    if (!isMapLoaded || !sentinelWmsOnMap || aoiMaskBuilderSettings.enabled || !agroStructuresLayer) return;
+    if (!isMapLoaded || !sentinelDrawWmsOnMap || !agroStructuresLayer) return;
     const visibleCount = agroStructuresViewportGeoJson?.features?.length ?? 0;
     if (visibleCount > 0) return;
-    void fetchAgroStructuresForViewport();
+    void fetchArcGisViewportLayersForExtent();
   }, [
     freezeViewportPipeline,
     isMapLoaded,
-    sentinelWmsOnMap,
-    aoiMaskBuilderSettings.enabled,
+    sentinelDrawWmsOnMap,
     agroStructuresLayer,
     agroStructuresViewportGeoJson,
-    fetchAgroStructuresForViewport,
+    fetchArcGisViewportLayersForExtent,
   ]);
 
   const sentinelAoiLabel = useMemo(() => {
-    if (aoiMaskBuilderSettings.enabled && aoiMaskBuilderMask) {
-      return siAoiMaskBuilderStatusLabel(
-        aoiMaskBuilderSettings,
-        String(aoiMaskBuilderSourceLayer?.name ?? 'Layer'),
-        aoiMaskBuilderFeatureCount,
+    const parts: string[] = [];
+    if (hasDrawnAoiClip && isWmsOverlayVisible) {
+      parts.push(
+        `Edit AOI · ${drawnAoiClipCollection!.features.length} feature${
+          drawnAoiClipCollection!.features.length === 1 ? '' : 's'
+        }`,
       );
     }
+    if (aoiMaskBuilderSettings.enabled && aoiLayerModeActiveMask) {
+      parts.push(
+        siAoiMaskBuilderStatusLabel(
+          aoiMaskBuilderSettings,
+          String(aoiMaskBuilderSourceLayer?.name ?? 'Layer'),
+          aoiMaskBuilderFeatureCount,
+        ),
+      );
+    }
+    if (parts.length) return parts.join(' · ');
     if (agroStructuresLayerAoiMask) {
       return `Sentinel Live Â· Farm Plots & PIVOT (${agroStructuresFieldCount})`;
     }
@@ -12594,9 +13928,12 @@ export default function SatelliteIntelligence() {
     return 'Draw an AOI to show index raster';
   }, [
     aoiMaskBuilderSettings,
-    aoiMaskBuilderMask,
+    aoiLayerModeActiveMask,
     aoiMaskBuilderSourceLayer?.name,
     aoiMaskBuilderFeatureCount,
+    hasDrawnAoiClip,
+    isWmsOverlayVisible,
+    drawnAoiClipCollection,
     agroStructuresLayerAoiMask,
     agroStructuresFieldCount,
     drawnGeometry,
@@ -12629,17 +13966,85 @@ export default function SatelliteIntelligence() {
     };
   }, [aoiMaskBuilderSettings.enabled, aoiMaskBuilderSourceLayer?.id, aoiMaskBuilderSourceLayer?.sourceUrl]);
 
+  const aoiLayerModeOptions = useMemo(
+    () => listSiAoiLayerModeOptions(customLayersForMapPaint),
+    [customLayersForMapPaint],
+  );
+
+  const handleAoiLayerModeChange = useCallback(
+    (next: SiAoiMaskBuilderSettings) => {
+      const normalized: SiAoiMaskBuilderSettings = {
+        ...next,
+        maskMode:
+          next.maskMode === 'selected-features' ? 'selected-features' : 'entire-layer',
+        displayMode: 'transparent-outside',
+        liveUpdate: true,
+      };
+      setAoiMaskBuilderSettings(normalized);
+      persistSiAoiMaskBuilderSettings(normalized, {
+        storageKey: siScope.scopedStorageKey(SI_AOI_MASK_BUILDER_LS_KEY),
+      });
+      if (normalized.enabled) {
+        let pinMask = aoiMaskBuilderWarmMask ?? aoiMaskBuilderMask;
+        if (!pinMask?.features?.length && aoiMaskBuilderBaseLayer?.viewportStreaming) {
+          const cache = arcgisViewportCacheByLayerIdRef.current.get(aoiMaskBuilderBaseLayer.id);
+          const fc = cache?.allFeatureCollection();
+          if (fc?.features?.length) {
+            pinMask = getCachedSiAoiLayerModeClipMask(
+              { ...aoiMaskBuilderBaseLayer, geojson: fc },
+              normalized,
+              aoiMaskBuilderSelectedKeys,
+            );
+          }
+        }
+        if (pinMask?.features?.length) {
+          aoiLayerModePinnedClipRef.current = {
+            pinKey: siAoiLayerModeSettingsPinKey(normalized, aoiMaskBuilderSelectedKeys, aoiMaskBuilderBaseLayer),
+            mask: pinMask,
+          };
+        }
+        setSentinelWmsSourcesHeld(true);
+      }
+    },
+    [siScope, aoiMaskBuilderMask, aoiMaskBuilderWarmMask, aoiMaskBuilderSelectedKeys, aoiMaskBuilderBaseLayer],
+  );
+
+  const handleIndexShowOnMapChange = useCallback(
+    (checked: boolean) => {
+      setIsWmsOverlayVisible(checked);
+      if (checked) setSentinelWmsSourcesHeld(true);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!aoiLayerModeOptions.length) return;
+    setAoiMaskBuilderSettings(prev => {
+      if (aoiLayerModeOptions.some(o => o.id === prev.sourceLayerId)) return prev;
+      const next = { ...prev, sourceLayerId: aoiLayerModeOptions[0]!.id };
+      persistSiAoiMaskBuilderSettings(next, {
+        storageKey: siScope.scopedStorageKey(SI_AOI_MASK_BUILDER_LS_KEY),
+      });
+      return next;
+    });
+  }, [aoiLayerModeOptions, siScope]);
+
+  useEffect(() => {
+    if (!aoiMaskBuilderSettings.enabled) return;
+    const layer = customLayers.find(l => String(l.id) === aoiMaskBuilderSettings.sourceLayerId);
+    if (!layer?.viewportStreaming) return;
+    void fetchArcGisViewportLayersForExtent();
+  }, [
+    aoiMaskBuilderSettings.enabled,
+    aoiMaskBuilderSettings.sourceLayerId,
+    customLayers,
+    fetchArcGisViewportLayersForExtent,
+  ]);
+
   const handleCropAlertSettingsChange = useCallback((next: CropAlertEngineSettings) => {
     setCropAlertSettings(next);
     persistCropAlertEngineSettings(next, {
       engineKey: siScope.scopedStorageKey(SI_CROP_ALERT_ENGINE_LS_KEY),
-    });
-  }, [siScope]);
-
-  const handleAoiMaskBuilderSettingsChange = useCallback((next: SiAoiMaskBuilderSettings) => {
-    setAoiMaskBuilderSettings(next);
-    persistSiAoiMaskBuilderSettings(next, {
-      storageKey: siScope.scopedStorageKey(SI_AOI_MASK_BUILDER_LS_KEY),
     });
   }, [siScope]);
 
@@ -12967,7 +14372,7 @@ export default function SatelliteIntelligence() {
       setRegionalCropTraining(prev => ({
         ...prev,
         loading: true,
-        statusMessage: `Extracting spectral signature for ${field.name}â€¦`,
+        statusMessage: `Extracting spectral signature for ${field.name}...`,
       }))
       try {
         const features = await extractSpectralFeaturesForGeometry(
@@ -13052,7 +14457,7 @@ export default function SatelliteIntelligence() {
     setRegionalCropTraining(prev => ({
       ...prev,
       loading: true,
-      statusMessage: 'Calibrating regional crop assignmentsâ€¦',
+      statusMessage: 'Calibrating regional crop assignments...',
     }))
     try {
       const fieldFeatures = new Map<string, Awaited<ReturnType<typeof extractSpectralFeaturesForGeometry>>>()
@@ -13121,11 +14526,11 @@ export default function SatelliteIntelligence() {
       ...season,
       active: true,
       analysisStep: 4,
-      statusMessage: 'Building multi-temporal stack and classifying pixels inside AOIâ€¦',
+      statusMessage: 'Building multi-temporal stack and classifying pixels inside AOI...',
     }));
     setIsWmsOverlayVisible(true);
     setWmsLayer(CROP_CLASSIFICATION_LAYER_ID);
-    sentinelWmsTilesSyncedRef.current = '';
+    sentinelWmsTilesSyncedRef.current = {};
     cropClassificationRunTimerRef.current = window.setTimeout(() => {
       setCropClassificationRunning(false);
       setCropClassificationSettings(prev => ({
@@ -13150,12 +14555,12 @@ export default function SatelliteIntelligence() {
       seasonStart: prev.seasonStart || season.seasonStart,
       seasonEnd: wmsDate,
     }));
-    sentinelWmsTilesSyncedRef.current = '';
+    sentinelWmsTilesSyncedRef.current = {};
   }, [wmsDate, cropClassificationSettings.active]);
 
   useEffect(() => {
     if (!cropClassificationSettings.active || !cropClassificationHasAoi) return;
-    sentinelWmsTilesSyncedRef.current = '';
+    sentinelWmsTilesSyncedRef.current = {};
   }, [cropClassAoiClipCollection, cropClassAoiGeometry, cropClassificationSettings.active, cropClassificationHasAoi]);
 
   useEffect(() => {
@@ -13345,7 +14750,6 @@ export default function SatelliteIntelligence() {
     const sid = aoiMaskBuilderSettings.sentinelLayerId.trim();
     if (!sid) return;
     setWmsLayer(prev => (prev === sid ? prev : sid));
-    setIsWmsOverlayVisible(true);
   }, [
     aoiMaskBuilderSettings.enabled,
     aoiMaskBuilderSettings.liveUpdate,
@@ -13501,6 +14905,7 @@ export default function SatelliteIntelligence() {
   useEffect(() => {
     if (isMapStyleReady && !prevMapStyleReadyRef.current) {
       setCustomLayersMapEpoch(epoch => epoch + 1);
+      resetSiSentinelAoiWmsPingPongRuntime(layerAoiWmsPingPongRef.current);
     }
     prevMapStyleReadyRef.current = isMapStyleReady;
   }, [isMapStyleReady]);
@@ -13532,6 +14937,7 @@ export default function SatelliteIntelligence() {
   /** Remount overlay sources whenever Added layers change while the style is ready. */
   useEffect(() => {
     if (!isMapStyleReady) return;
+    if (aoiLayerModeWmsActiveRef.current) return;
     setCustomLayersMapEpoch(epoch => epoch + 1);
   }, [customLayersCanvasSig, isMapStyleReady]);
 
@@ -13581,7 +14987,10 @@ export default function SatelliteIntelligence() {
         map,
         customLayersForMapPaintRef.current,
         siImperativeCustomLayerSourceIdsRef.current,
-        { suppressPrimaryAoiFill: sentinelWmsOnMap },
+        {
+          suppressPrimaryAoiFill: suppressPrimaryAoiFillRef.current,
+          onArcgisIconsLoaded: () => setCustomLayersMapEpoch(epoch => epoch + 1),
+        },
       );
     };
 
@@ -13607,7 +15016,7 @@ export default function SatelliteIntelligence() {
       }
       siImperativeCustomLayerSourceIdsRef.current.clear();
     };
-  }, [customLayersForMapPaint, isMapStyleReady, customLayersMapEpoch, sentinelWmsOnMap]);
+  }, [customLayersForMapPaint, isMapStyleReady, customLayersMapEpoch]);
 
   /**
    * Map-load watchdog with bounded automatic retry (exponential backoff).
@@ -13714,7 +15123,7 @@ export default function SatelliteIntelligence() {
     const cleanup = installSiGlobeWebglContextRecovery(map, {
       onContextLost: () => {
         siWebglContextLostRef.current = true;
-        setStacStatus('Graphics context was lost â€” restoring the globeâ€¦');
+        setStacStatus('Graphics context was lost â€” restoring the globe...');
       },
       onContextRestored: () => {
         siWebglContextLostRef.current = false;
@@ -13732,7 +15141,7 @@ export default function SatelliteIntelligence() {
           /* ignore â€” staggered retries below still re-assert the globe */
         }
         // Force overlays (Added layers) and Sentinel tiles to repaint on the new context.
-        sentinelWmsTilesSyncedRef.current = '';
+        sentinelWmsTilesSyncedRef.current = {};
         setCustomLayersMapEpoch(epoch => epoch + 1);
         setStacStatus('Globe rendering restored.');
         // Some drivers restore the context a frame before it can draw; re-assert briefly.
@@ -13768,7 +15177,9 @@ export default function SatelliteIntelligence() {
     );
   }, [isMapLoaded, isMapStyleReady]);
 
-  const toggleWmsOverlayVisibility = () => setIsWmsOverlayVisible(v => !v);
+  const toggleWmsOverlayVisibility = useCallback(() => {
+    handleIndexShowOnMapChange(!isWmsOverlayVisible);
+  }, [handleIndexShowOnMapChange, isWmsOverlayVisible]);
   const toggleStacThumbVisibility = () => setIsStacThumbVisible(v => !v);
   const currentBasemapLabel = currentBasemapEntry?.label || basemapId || 'Default basemap';
 
@@ -13868,7 +15279,7 @@ export default function SatelliteIntelligence() {
           : undefined;
       const note = !classes
         ? geoAiClassAreas.loading
-          ? 'per-class area computingΓÇª'
+          ? 'per-class area computing...'
           : geoAiClassAreas.error
             ? `per-class area unavailable (${geoAiClassAreas.error})`
             : !drawnGeometry
@@ -13935,7 +15346,7 @@ export default function SatelliteIntelligence() {
   const geoAiLiveMapStateBlockRef = useRef(geoAiLiveMapStateBlock);
   geoAiLiveMapStateBlockRef.current = geoAiLiveMapStateBlock;
 
-  // Execute MAP_ACTION:{ΓÇª} commands the assistant emits (layer toggle/opacity,
+  // Execute MAP_ACTION:{...} commands the assistant emits (layer toggle/opacity,
   // zoom-to-AOI/layer, basemap switch, fly-to) against the live map.
   const runGeoAiMapCommandsFromReply = useCallback(
     (reply: string) => {
@@ -14064,7 +15475,7 @@ export default function SatelliteIntelligence() {
               /* search failure is non-fatal */
             }
           })();
-          return `Searching the map for "${q}"ΓÇª`;
+          return `Searching the map for "${q}"...`;
         },
         identifyBasemap: (lng, lat) => {
           const map = mapRef.current?.getMap?.() ?? mapRef.current;
@@ -14177,12 +15588,25 @@ export default function SatelliteIntelligence() {
         const isUploadAoiLayer =
           layer.source === 'upload' &&
           pickFirstPolygonAoiFeature(layer.geojson) !== null;
+        const isRaster =
+          layer.renderMode === 'raster' ||
+          !!layer.arcgisRasterTiles ||
+          layer.importMetadata?.geometryType === 'raster';
+        const metaSummary = formatSiLayerMetaSummary(layer.importMetadata);
         const sourceType =
-          layer.renderMode === 'raster' || layer.importMetadata?.format === 'GeoTIFF'
-            ? layer.importMetadata?.format && layer.importMetadata.format.startsWith('Image (')
-              ? `${layer.importMetadata.format} overlay`
+          layer.source === 'arcgis'
+            ? layer.arcgisServiceType === 'vector-tile'
+              ? 'ArcGIS Vector Tiles'
+              : layer.arcgisServiceType === 'map'
+                ? 'ArcGIS Map Service'
+                : layer.arcgisServiceType === 'image'
+                  ? 'ArcGIS Image Service'
+                  : 'ArcGIS Feature Service'
+            : isRaster
+            ? layer.importMetadata?.format && !layer.importMetadata.format.startsWith('Image (')
+              ? layer.importMetadata.format
               : 'GeoTIFF raster'
-            : layer.importMetadata?.format === 'IFC' || layer.bimBlobUrl
+            : layer.importMetadata?.format === 'IFC (BIM)' || layer.bimBlobUrl
               ? 'IFC (BIM anchor)'
               : lower.includes('arcgis')
                 ? 'ArcGIS'
@@ -14191,13 +15615,27 @@ export default function SatelliteIntelligence() {
                   : lower.includes('shp') || lower.includes('shape')
                     ? 'SHP'
                     : 'Vector layer';
+        const metaParts = [
+          isUploadAoiLayer ? 'AOI data source' : null,
+          sourceType,
+          metaSummary || null,
+          !metaSummary && featureCount ? `${featureCount} feature${featureCount === 1 ? '' : 's'}` : null,
+        ].filter(Boolean);
         return {
           id: `custom-${layer.id}`,
           label: layer.name,
-          meta: `${isUploadAoiLayer ? 'AOI data source - ' : ''}${sourceType}${featureCount ? ` - ${featureCount} feature${featureCount === 1 ? '' : 's'}` : ''}`,
+          meta: metaParts.join(' · '),
           visible: layer.visible,
           toggleable: true,
           actionable: true,
+          kind: isRaster ? ('raster' as const) : ('vector' as const),
+          opacity: layer.mapOpacity ?? 1,
+          onOpacityChange: (v: number) => {
+            setCustomLayers(prev => prev.map(l => (l.id === layer.id ? { ...l, mapOpacity: v } : l)));
+          },
+          onZoomTo: () => zoomToCustomLayerExtent(layer.id),
+          onExport: () => exportCustomLayerData(layer.id),
+          onRemove: () => void executeCustomLayerAction('remove', layer.id),
           sourceLayerId: layer.id,
           supportsAoiEdit: isUploadAoiLayer,
           supportsRename: true,
@@ -14248,7 +15686,7 @@ export default function SatelliteIntelligence() {
             setCustomLayers(prev => prev.filter(l => l.id !== SI_TS_WEATHER_STORM_LAYER_ID));
           },
         })),
-      // Hydro Watershed results ΓÇö each completed step is published to the Layers
+      // Hydro Watershed results - each completed step is published to the Layers
       // panel automatically with show/hide + export + delete (no AOI background).
       ...HYDRO_STEP_ORDER.filter(stepId => hydro.steps[stepId]?.status === 'done' && !!hydro.steps[stepId]?.result).map(
         stepId => {
@@ -14301,6 +15739,8 @@ export default function SatelliteIntelligence() {
       stacMapThumbLabel,
       toggleCustomLayerVisibility,
       zoomToCustomLayerExtent,
+      exportCustomLayerData,
+      executeCustomLayerAction,
       wellSuitability.setOpacity,
     ],
   );
@@ -14315,7 +15755,7 @@ export default function SatelliteIntelligence() {
     [addedLayerEntries],
   );
 
-  /** Analysis result layers (AOI + Hydro Watershed steps) ΓÇö shown in the Main tab. */
+  /** Analysis result layers (AOI + Hydro Watershed steps) - shown in the Main tab. */
   const isAnalysisLayerId = useCallback(
     (id: string) =>
       id === 'drawn-aoi' ||
@@ -14341,7 +15781,7 @@ export default function SatelliteIntelligence() {
   useEffect(() => {
     orderedAnalysisLayerEntryIdsRef.current = orderedAnalysisLayerEntries.map(e => e.id);
   }, [orderedAnalysisLayerEntries]);
-  /** Base map / index / preview overlays ΓÇö shown in the Options tab. */
+  /** Base map / index / preview overlays - shown in the Options tab. */
   const baseOverlayEntries = useMemo(
     () => systemLayerEntries.filter(layer => !isAnalysisLayerId(layer.id)),
     [systemLayerEntries, isAnalysisLayerId],
@@ -14471,9 +15911,17 @@ export default function SatelliteIntelligence() {
               ) : null}
               <MapToolboxLayerRow
                 label={layer.label}
+                meta={'meta' in layer ? layer.meta : undefined}
                 visible={layer.visible}
                 toggleable={layer.toggleable}
                 onToggle={layer.onToggle}
+                kind={'kind' in layer ? layer.kind : undefined}
+                opacity={'opacity' in layer ? layer.opacity : undefined}
+                onOpacityChange={'onOpacityChange' in layer ? layer.onOpacityChange : undefined}
+                onZoomTo={'onZoomTo' in layer ? layer.onZoomTo : undefined}
+                onExport={'onExport' in layer ? layer.onExport : undefined}
+                onRemove={'onRemove' in layer ? layer.onRemove : undefined}
+                showTypeIcon={!canReorder}
                 headerActions={
                   'actionable' in layer && layer.actionable && 'sourceLayerId' in layer && layer.sourceLayerId ? (
                     <div className="si-env-layer-actions si-env-layer-actions--menu-only">
@@ -14522,6 +15970,8 @@ export default function SatelliteIntelligence() {
                               return (
                                 <>
                                   {mi('Zoom to layer', 'fa-solid fa-magnifying-glass-location', () => zoomToCustomLayerExtent(lid))}
+                                  {mi('Layer metadata', 'fa-solid fa-circle-info', () => void executeCustomLayerAction('metadata', lid))}
+                                  {mi('Export layer', 'fa-solid fa-file-export', () => void executeCustomLayerAction('export', lid))}
                                   <div className="si-env-layer-options-menu__sep" role="separator" />
                                   {mi('Attribute table', 'fa-solid fa-table-cells', () => void executeCustomLayerAction('table', lid))}
                                   {mi('Symbology', 'fa-solid fa-sliders', () => void executeCustomLayerAction('symbology', lid))}
@@ -14536,7 +15986,7 @@ export default function SatelliteIntelligence() {
                                       hint: isRaster ? 'Pop-up configuration applies to vector layers.' : undefined,
                                     },
                                   )}
-                                  {mi('Layer opacityΓÇª', 'fa-solid fa-droplet', () => promptCustomLayerMapOpacity(lid))}
+                                  {mi('Layer opacity...', 'fa-solid fa-droplet', () => promptCustomLayerMapOpacity(lid))}
                                   <div className="si-env-layer-options-menu__sep" role="separator" />
                                   {mi('Bring forward (draw order)', 'fa-solid fa-arrow-up', () => moveCustomLayerInStack(lid, 1), {
                                     disabled: ix < 0 || ix >= customLayers.length - 1,
@@ -14582,7 +16032,7 @@ export default function SatelliteIntelligence() {
                                     ? mi('Refresh layer data', 'fa-solid fa-rotate-right', () => void executeCustomLayerAction('sync', lid))
                                     : null}
                                   {mi(
-                                    L.labelFieldName ? `Labeling: ${L.labelFieldName}` : 'LabelingΓÇª',
+                                    L.labelFieldName ? `Labeling: ${L.labelFieldName}` : 'Labeling...',
                                     'fa-solid fa-tag',
                                     () => promptCustomLayerLabeling(lid),
                                     {
@@ -14593,7 +16043,7 @@ export default function SatelliteIntelligence() {
                                     },
                                   )}
                                   {mi(
-                                    L.definitionQueryText ? `Definition query: ${L.definitionQueryText}` : 'Definition queryΓÇª',
+                                    L.definitionQueryText ? `Definition query: ${L.definitionQueryText}` : 'Definition query...',
                                     'fa-solid fa-filter',
                                     () => promptCustomLayerDefinitionQuery(lid),
                                     {
@@ -14676,7 +16126,7 @@ export default function SatelliteIntelligence() {
                   onChange={e => setLayerPopupCfgPickId(e.target.value || null)}
                   aria-label="Select layer for popup configuration"
                 >
-                  <option value="">Select a layerΓÇª</option>
+                  <option value="">Select a layer...</option>
                   {vectorLayers.map(l => (
                     <option key={l.id} value={l.id}>
                       {l.name}
@@ -14693,7 +16143,7 @@ export default function SatelliteIntelligence() {
                 }}
               >
                 <i className="fa-solid fa-gear" aria-hidden />
-                <span>Open configurationΓÇª</span>
+                <span>Open configuration...</span>
               </button>
             </>
           ) : null}
@@ -14913,7 +16363,7 @@ export default function SatelliteIntelligence() {
     ],
   );
 
-  /** Sentinel Hub WMS ΓÇö AOI clip when geometry exists; hidden when sketch cleared. */
+  /** Sentinel Hub WMS - AOI clip when geometry exists; hidden when sketch cleared. */
   const cropClassificationWmsClipSource = useMemo(() => {
     if (!cropClassificationSettings.active) return null;
     return cropClassAoiClipCollection ?? cropClassAoiGeometry ?? null;
@@ -14923,94 +16373,49 @@ export default function SatelliteIntelligence() {
     cropClassAoiGeometry,
   ]);
 
-  const effectiveSentinelHubWmsTileClipSource = useMemo(() => {
+  const drawnAoiWmsClipSource = useMemo(() => {
     if (cropClassificationWmsClipSource) return cropClassificationWmsClipSource;
-    return sentinelHubWmsTileClipSource;
-  }, [cropClassificationWmsClipSource, sentinelHubWmsTileClipSource]);
+    if (drawnAoiClipCollection?.features?.length) return drawnAoiClipCollection;
+    if (freezeViewportPipeline && isWmsOverlayVisible && agroStructuresLayerAoiMask) {
+      return agroStructuresLayerAoiMask;
+    }
+    return null;
+  }, [
+    cropClassificationWmsClipSource,
+    drawnAoiClipCollection,
+    freezeViewportPipeline,
+    isWmsOverlayVisible,
+    agroStructuresLayerAoiMask,
+  ]);
+
+  const layerAoiWmsClipSource = useMemo(() => {
+    if (cropClassificationWmsClipSource) return cropClassificationWmsClipSource;
+    if (aoiMaskBuilderSettings.enabled && aoiLayerModeActiveMask) return aoiLayerModeActiveMask;
+    return null;
+  }, [
+    cropClassificationWmsClipSource,
+    aoiMaskBuilderSettings.enabled,
+    aoiLayerModeActiveMask,
+  ]);
 
   const effectiveWmsCloudCoverage = useMemo(() => {
     if (isCropClassificationLayerId(activeWmsLayer)) return cropClassificationSettings.cloudCoverMax;
     return cloudCoverage;
   }, [activeWmsLayer, cropClassificationSettings.cloudCoverMax, cloudCoverage]);
 
-  const sentinelHubWmsDisplayChunks = useMemo(() => {
-    return buildSentinelHubWmsDisplayChunks(effectiveSentinelHubWmsTileClipSource, activeWmsLayer, {
-      indexVisibilityMin: WMS_AOI_INDEX_VISIBILITY_MIN,
-      sceneDate: sentinelFetchDate,
-      viewportBBox: null,
-      maxTileLayers: SI_WMS_MAX_TILE_LAYERS,
-    });
-  }, [effectiveSentinelHubWmsTileClipSource, activeWmsLayer, sentinelFetchDate]);
-  const sentinelHubWmsAoiClip = sentinelHubWmsDisplayChunks[0] ?? {
-    geometryWkt3857: null,
-    evalscriptB64: null,
-  };
-
-  const wmsLayerCatalog = useMemo(() => getSentinelHubWmsLayerCatalog(wmsLayers), [wmsLayers])
-
-  const wmsGetMapLayerName = useMemo(
-    () => resolveSentinelHubWmsGetMapLayerName(activeWmsLayer, wmsLayerCatalog),
-    [activeWmsLayer, wmsLayerCatalog],
-  );
-
-  const wmsTileUrls = useMemo(() => {
-    const deltaPreviousDate = isAgroDeltaCompositeLayerId(activeWmsLayer)
-      ? resolveSentinelHubWmsDeltaPreviousDate(sentinelFetchDate, {
-          autoPreviousSceneDate: autoLiveScenes.previousSceneDate,
-          catalogSceneIsos: sentinelSceneCatalog?.sceneIsos ?? [],
-          timeSeriesStart,
-        })
-      : null
-    const { timeStart, timeEnd } = isCropClassificationLayerId(activeWmsLayer)
-      ? resolveCropClassificationTimeWindow(
-          cropClassificationSettings.seasonStart,
-          cropClassificationSettings.seasonEnd,
-          sentinelFetchDate,
-        )
-      : resolveSentinelHubWmsTimeWindow(
-          activeWmsLayer,
-          sentinelFetchDate,
-          deltaPreviousDate,
-        )
-    return sentinelHubWmsDisplayChunks.map(chunk =>
-      buildSentinelHubWmsGetMapUrlParts({
-        baseUrl: wmsBaseUrl,
-        layer: wmsGetMapLayerName,
-        timeStart,
-        timeEnd,
-        cloudCoverage: effectiveWmsCloudCoverage,
-        geometryWkt3857: chunk.geometryWkt3857 ?? undefined,
-        evalscriptB64: chunk.evalscriptB64,
-        tilePixels: SENTINEL_HUB_WMS_TILE_PIXELS,
-      }),
-    );
-  }, [
-    wmsGetMapLayerName,
-    sentinelFetchDate,
-    autoLiveScenes.previousSceneDate,
-    sentinelSceneCatalog?.sceneIsos,
-    timeSeriesStart,
-    activeWmsLayer,
-    cropClassificationSettings.seasonStart,
-    cropClassificationSettings.seasonEnd,
-    effectiveWmsCloudCoverage,
-    wmsBaseUrl,
-    sentinelHubWmsDisplayChunks,
-  ]);
-
   const wmsTimeWindowKey = useMemo(() => {
-    if (!isAgroDeltaCompositeLayerId(activeWmsLayer)) return sentinelFetchDate
+    if (!isAgroDeltaCompositeLayerId(activeWmsLayer)) return sentinelFetchDate;
     const prev = resolveSentinelHubWmsDeltaPreviousDate(sentinelFetchDate, {
       autoPreviousSceneDate: autoLiveScenes.previousSceneDate,
       catalogSceneIsos: sentinelSceneCatalog?.sceneIsos ?? [],
       timeSeriesStart,
-    })
+    });
     const { timeStart, timeEnd } = resolveSentinelHubWmsTimeWindow(
       activeWmsLayer,
       sentinelFetchDate,
       prev,
-    )
-    return `${timeStart}/${timeEnd}`
+    );
+    return `${timeStart}/${timeEnd}`;
   }, [
     activeWmsLayer,
     sentinelFetchDate,
@@ -15019,115 +16424,388 @@ export default function SatelliteIntelligence() {
     timeSeriesStart,
   ]);
 
-  /**
-   * Limits Sentinel WMS tile requests to the AOI bounding box (extract-by-mask style for tiles).
-   * Basemap layers are unaffected; only the raster overlay source uses these bounds.
-   */
-  const wmsRasterAoiBoundsLngLat = useMemo((): [number, number, number, number] | null => {
-    const clipGeo = getDrawnGeometry(sentinelHubWmsTileClipSource);
-    if (!clipGeo) return null;
-    const raw =
-      getGeoJsonBounds({
-        type: 'Feature',
-        geometry: clipGeo,
-        properties: {},
-      } as any) ?? getGeoJsonBounds(sentinelHubWmsTileClipSource as any);
-    if (!raw) return null;
-    let [w, s, e, n] = raw;
-    if (![w, s, e, n].every(Number.isFinite)) return null;
-    const eps = 1e-4;
-    if (e <= w) {
-      const c = (w + e) / 2;
-      w = c - eps;
-      e = c + eps;
-    }
-    if (n <= s) {
-      const c = (s + n) / 2;
-      s = c - eps;
-      n = c + eps;
-    }
-    const padX = Math.max((e - w) * 0.02, 1e-6);
-    const padY = Math.max((n - s) * 0.02, 1e-6);
-    return [w - padX, s - padY, e + padX, n + padY];
-  }, [sentinelHubWmsTileClipSource]);
-
-  /** AOI bounds for Sentinel WMS ΓÇö keep tiles georeferenced to the mask, not the moving viewport. */
-  const wmsRasterTileBoundsLngLat = wmsRasterAoiBoundsLngLat;
-
-  const resolveSentinelWmsChunkBounds = useCallback(
-    (chunk: (typeof sentinelHubWmsDisplayChunks)[number] | undefined) =>
-      chunk?.aoiBoundsLngLat ?? wmsRasterTileBoundsLngLat ?? wmsRasterAoiBoundsLngLat ?? undefined,
-    [wmsRasterTileBoundsLngLat, wmsRasterAoiBoundsLngLat],
-  );
-
-  const sentinelWmsTileSessionKey = useMemo(() => {
-    if (aoiMaskBuilderSettings.enabled) return aoiMaskBuilderMaskKey ?? 'mask-builder';
-    if (drawnAoiClipKey) return drawnAoiClipKey;
-    return agroStructuresLayerAoiKey ?? (normalizedDrawnAoiGeometry ? 'drawn-aoi' : 'full-canvas');
-  }, [
-    aoiMaskBuilderSettings.enabled,
-    aoiMaskBuilderMaskKey,
-    drawnAoiClipKey,
-    agroStructuresLayerAoiKey,
-    normalizedDrawnAoiGeometry,
-  ]);
-
-  const wmsRasterSourceRefreshKey = useMemo(
-    () =>
-      [
-        activeWmsLayer ?? '',
-        wmsTimeWindowKey,
-        sentinelWmsTileSessionKey,
-        sentinelHubWmsDisplayChunks.length,
-      ].join(':'),
+  const siSentinelWmsStackCommonInput = useMemo(
+    () => ({
+      activeWmsLayer,
+      sentinelFetchDate,
+      wmsTimeWindowKey,
+      effectiveWmsCloudCoverage,
+      autoPreviousSceneDate: autoLiveScenes.previousSceneDate,
+      catalogSceneIsos: sentinelSceneCatalog?.sceneIsos ?? [],
+      timeSeriesStart,
+      cropSeasonStart: cropClassificationSettings.seasonStart,
+      cropSeasonEnd: cropClassificationSettings.seasonEnd,
+      indexVisibilityMin: WMS_AOI_INDEX_VISIBILITY_MIN,
+      maxTileLayers: SI_WMS_MAX_TILE_LAYERS,
+    }),
     [
       activeWmsLayer,
+      sentinelFetchDate,
       wmsTimeWindowKey,
-      sentinelWmsTileSessionKey,
-      sentinelHubWmsDisplayChunks.length,
+      effectiveWmsCloudCoverage,
+      autoLiveScenes.previousSceneDate,
+      sentinelSceneCatalog?.sceneIsos,
+      timeSeriesStart,
+      cropClassificationSettings.seasonStart,
+      cropClassificationSettings.seasonEnd,
     ],
   );
 
-  /** Full-canvas Layer Live works without AOI; clipped mode needs geometry + bounds on every chunk. */
-  const sentinelWmsRenderReady = useMemo(
+  const drawAoiWmsChunksCacheKey = useMemo(
     () =>
-      isSentinelHubWmsRenderReady(activeWmsLayer, sentinelHubWmsDisplayChunks, {
-        aoiBoundsLngLat: wmsRasterTileBoundsLngLat ?? wmsRasterAoiBoundsLngLat,
-      }),
-    [activeWmsLayer, sentinelHubWmsDisplayChunks, wmsRasterTileBoundsLngLat, wmsRasterAoiBoundsLngLat],
+      siAoiLayerModeChunksCacheKey(
+        drawnAoiClipKey ?? agroStructuresLayerAoiKey ?? 'no-draw-aoi',
+        activeWmsLayer ?? '',
+        sentinelFetchDate,
+        {
+          indexVisibilityMin: WMS_AOI_INDEX_VISIBILITY_MIN,
+          maxTileLayers: SI_WMS_MAX_TILE_LAYERS,
+        },
+      ),
+    [drawnAoiClipKey, agroStructuresLayerAoiKey, activeWmsLayer, sentinelFetchDate],
   );
+
+  const layerAoiWmsStableMaskSig = useMemo(() => {
+    if (!aoiMaskBuilderWarmMask?.features?.length && !aoiLayerModeActiveMask?.features?.length) {
+      return 'no-layer-aoi';
+    }
+    if (aoiMaskBuilderSettings.enabled && aoiLayerModeActiveMask?.features?.length) {
+      return siAoiLayerModeClipMaskCacheKey(
+        aoiLayerModeActiveMask,
+        aoiMaskBuilderSettings,
+        aoiMaskBuilderSelectedKeys,
+      );
+    }
+    if (aoiMaskBuilderSettings.enabled) {
+      return siAoiLayerModeMaskCacheKey(
+        aoiMaskBuilderSourceLayer,
+        aoiMaskBuilderSettings,
+        aoiMaskBuilderSelectedKeys,
+      );
+    }
+    return aoiLayerModeSettingsPinKey;
+  }, [
+    aoiMaskBuilderWarmMask,
+    aoiLayerModeActiveMask,
+    aoiMaskBuilderSettings.enabled,
+    aoiMaskBuilderSettings,
+    aoiMaskBuilderSourceLayer,
+    aoiMaskBuilderSelectedKeys,
+    aoiLayerModeSettingsPinKey,
+  ]);
+
+  const layerAoiWmsChunksCacheKey = useMemo(
+    () =>
+      aoiMaskBuilderSettings.enabled
+        ? siAoiLayerModeChunksCacheKey(layerAoiWmsStableMaskSig, activeWmsLayer ?? '', sentinelFetchDate, {
+            indexVisibilityMin: WMS_AOI_INDEX_VISIBILITY_MIN,
+            maxTileLayers: SI_WMS_MAX_TILE_LAYERS,
+          })
+        : siAoiLayerModeWarmChunksCacheKey(
+            layerAoiWmsStableMaskSig,
+            activeWmsLayer ?? '',
+            sentinelFetchDate,
+            {
+              indexVisibilityMin: WMS_AOI_INDEX_VISIBILITY_MIN,
+              maxTileLayers: SI_WMS_MAX_TILE_LAYERS,
+            },
+          ),
+    [layerAoiWmsStableMaskSig, aoiMaskBuilderSettings.enabled, activeWmsLayer, sentinelFetchDate],
+  );
+
+  const drawAoiWmsStack = useMemo(
+    () =>
+      buildSiSentinelAoiWmsStackState(SI_SENTINEL_DRAW_WMS_ID_PREFIX, {
+        ...siSentinelWmsStackCommonInput,
+        clipSource: drawnAoiWmsClipSource,
+        maskCacheKey: drawAoiWmsChunksCacheKey,
+        sessionKey: drawnAoiClipKey ?? agroStructuresLayerAoiKey ?? 'draw-aoi',
+      }),
+    [
+      siSentinelWmsStackCommonInput,
+      drawnAoiWmsClipSource,
+      drawAoiWmsChunksCacheKey,
+      drawnAoiClipKey,
+      agroStructuresLayerAoiKey,
+    ],
+  );
+
+  const layerAoiWarmClipForStack =
+    aoiMaskBuilderSettings.enabled ? null : aoiMaskBuilderWarmMask;
+
+  const layerAoiWmsStack = useMemo(
+    () =>
+      buildSiSentinelAoiWmsStackState(SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX, {
+        ...siSentinelWmsStackCommonInput,
+        clipSource:
+          aoiMaskBuilderSettings.enabled
+            ? layerAoiWmsClipSource
+            : layerAoiWarmClipForStack?.features?.length
+              ? layerAoiWarmClipForStack
+              : null,
+        maskCacheKey: layerAoiWmsChunksCacheKey,
+        sessionKey: layerAoiWmsStableMaskSig,
+      }),
+    [
+      siSentinelWmsStackCommonInput,
+      aoiMaskBuilderSettings.enabled,
+      layerAoiWmsClipSource,
+      layerAoiWarmClipForStack,
+      layerAoiWmsChunksCacheKey,
+      layerAoiWmsStableMaskSig,
+    ],
+  );
+
+  layerAoiWmsStackRef.current = layerAoiWmsStack;
+
+  type SiSentinelWmsStackRuntime = {
+    stack: typeof drawAoiWmsStack;
+    visible: boolean;
+    opacity: number;
+    useVisibilityToggle: boolean;
+  };
+
+  const layerAoiWmsWarm =
+    Boolean(aoiMaskBuilderSettings.sourceLayerId) && Boolean(aoiMaskBuilderWarmMask?.features?.length);
+
+  const sentinelWmsStacks = useMemo((): SiSentinelWmsStackRuntime[] => {
+    const stacks: SiSentinelWmsStackRuntime[] = [];
+    if (drawAoiWmsStack.displayChunks.length > 0) {
+      stacks.push({
+        stack: drawAoiWmsStack,
+        visible: sentinelDrawWmsOnMap,
+        opacity: 1,
+        useVisibilityToggle: false,
+      });
+    }
+    if (layerAoiWmsStack.displayChunks.length > 0) {
+      stacks.push({
+        stack: layerAoiWmsStack,
+        visible: sentinelLayerAoiWmsOnMap,
+        opacity: aoiMaskDisplayOpacity,
+        useVisibilityToggle: true,
+      });
+    }
+    return stacks;
+  }, [
+    drawAoiWmsStack,
+    layerAoiWmsStack,
+    sentinelDrawWmsOnMap,
+    sentinelLayerAoiWmsOnMap,
+    aoiMaskDisplayOpacity,
+  ]);
+
+  const sentinelLayerAoiWmsMounted =
+    layerAoiWmsStack.renderReady &&
+    !!sentinelFetchDate &&
+    (sentinelLayerAoiWmsOnMap || layerAoiWmsWarm || sentinelWmsSourcesHeld);
+  const sentinelDrawWmsMounted =
+    drawAoiWmsStack.renderReady &&
+    !!sentinelFetchDate &&
+    (sentinelDrawWmsOnMap || Boolean(drawnAoiClipCollection?.features?.length) || sentinelWmsSourcesHeld);
+
+  const sentinelWmsRenderReady = sentinelWmsStacks.some(entry => entry.stack.renderReady);
+  const sentinelWmsSourcesMounted = sentinelDrawWmsMounted || sentinelLayerAoiWmsMounted;
+  const wmsRasterSourceRefreshKey = sentinelWmsStacks
+    .map(entry => entry.stack.sourceRefreshKey)
+    .filter(Boolean)
+    .join('||');
+
+  useEffect(() => {
+    sentinelWmsAppliedTileUrlsRef.current.clear();
+    sentinelWmsAppliedBoundsRef.current.clear();
+  }, [drawAoiWmsChunksCacheKey]);
+
+  useEffect(() => {
+    layerAoiWmsPingPongCacheKeyRef.current = layerAoiWmsChunksCacheKey;
+    layerAoiPingPongSyncKeyRef.current = '';
+  }, [layerAoiWmsChunksCacheKey]);
+
+  useEffect(() => {
+    const drawWarm = Boolean(drawnAoiClipCollection?.features?.length);
+    if (sentinelWmsRenderReady && (sentinelWmsOnMap || layerAoiWmsWarm || drawWarm)) {
+      setSentinelWmsSourcesHeld(true);
+    }
+  }, [
+    sentinelWmsOnMap,
+    sentinelWmsRenderReady,
+    layerAoiWmsWarm,
+    drawnAoiClipCollection,
+  ]);
+
+  useEffect(() => {
+    if (layerAoiWmsWarm || drawnAoiClipCollection?.features?.length) return;
+    setSentinelWmsSourcesHeld(false);
+    sentinelWmsAppliedTileUrlsRef.current.clear();
+    sentinelWmsAppliedBoundsRef.current.clear();
+    const map = mapRef.current?.getMap?.() ?? mapRef.current;
+    if (map?.isStyleLoaded?.()) {
+      teardownSiSentinelAoiWmsPingPongStack(
+        map,
+        SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX,
+        layerAoiWmsPingPongRef.current,
+      );
+    }
+  }, [layerAoiWmsWarm, drawnAoiClipCollection]);
+
+  useEffect(() => {
+    const nextSuppress = sentinelLayerAoiWmsOnMap || sentinelDrawWmsOnMap;
+    if (suppressPrimaryAoiFillMountedRef.current === nextSuppress) return;
+    suppressPrimaryAoiFillMountedRef.current = nextSuppress;
+    suppressPrimaryAoiFillRef.current = nextSuppress;
+    const map = mapRef.current?.getMap?.() ?? mapRef.current;
+    if (!map || !isMapStyleReady) return;
+
+    const applyFillSuppress = (layerId: string, layerRecord: CustomLayer | undefined) => {
+      const sid = siSafeMapboxLayerId(layerId);
+      const fillId = `${sid}-fill`;
+      if (!map.getLayer(fillId)) return false;
+      const op = layerRecord?.mapOpacity ?? 1;
+      const pfa = layerRecord?.polygonFillAlpha ?? SI_PORTAL_LAYER_VISIBLE_FILL_ALPHA;
+      try {
+        map.setPaintProperty(fillId, 'fill-opacity', nextSuppress ? 0 : pfa * op);
+      } catch {
+        /* ignore map race */
+      }
+      return true;
+    };
+
+    const agroSid = siSafeMapboxLayerId(AGRO_STRUCTURES_PRIMARY_LAYER_ID);
+    const agroFillId = `${agroSid}-fill`;
+    const agroLayer = customLayersRef.current.find(l => String(l.id) === AGRO_STRUCTURES_PRIMARY_LAYER_ID);
+    const useAgSymbology = agroLayer ? siLayerUsesArcgisOnlineSymbology(agroLayer) : false;
+    if (map.getLayer(agroFillId) && !useAgSymbology) {
+      applyFillSuppress(AGRO_STRUCTURES_PRIMARY_LAYER_ID, agroLayer);
+      return;
+    }
+
+    const aoiSourceId = aoiMaskBuilderSettings.sourceLayerId.trim();
+    if (aoiSourceId) {
+      const aoiLayer = customLayersRef.current.find(l => String(l.id) === aoiSourceId);
+      if (applyFillSuppress(aoiSourceId, aoiLayer)) return;
+    }
+
+    if (!map.getLayer(agroFillId) && (!aoiSourceId || !map.getLayer(`${siSafeMapboxLayerId(aoiSourceId)}-fill`))) {
+      siPaintCustomLayersOnMapboxCanvas(
+        map,
+        customLayersForMapPaintRef.current,
+        siImperativeCustomLayerSourceIdsRef.current,
+        {
+          suppressPrimaryAoiFill: nextSuppress,
+          onArcgisIconsLoaded: () => setCustomLayersMapEpoch(epoch => epoch + 1),
+        },
+      );
+    }
+  }, [sentinelLayerAoiWmsOnMap, sentinelDrawWmsOnMap, isMapStyleReady, aoiMaskBuilderSettings.sourceLayerId]);
+
+  /** Toggle Sentinel raster visibility via Mapbox layout/opacity — draw stack only; Layers AOI uses imperative ping-pong. */
+  useLayoutEffect(() => {
+    if (!isMapStyleReady || !sentinelWmsSourcesMounted) return;
+    const map = mapRef.current?.getMap?.() ?? mapRef.current;
+    if (!map?.isStyleLoaded?.()) return;
+    for (const { stack, visible, opacity, useVisibilityToggle } of sentinelWmsStacks) {
+      if (useVisibilityToggle) continue;
+      for (let i = 0; i < stack.displayChunks.length; i++) {
+        const layerId = siSentinelAoiWmsLayerId(stack.idPrefix, i);
+        const chunk = stack.displayChunks[i];
+        if (!map.getLayer(layerId)) continue;
+        const rasterOpacity = (visible ? opacity : 0) * (chunk?.evalscriptB64 ? 1 : 0.96);
+        try {
+          map.setPaintProperty(layerId, 'raster-opacity', rasterOpacity);
+          map.setPaintProperty(layerId, 'raster-fade-duration', 0);
+        } catch {
+          /* ignore source race */
+        }
+      }
+    }
+  }, [isMapStyleReady, sentinelWmsSourcesMounted, sentinelWmsStacks]);
+
+  /**
+   * Layers AOI — imperative ping-pong raster stack on Mapbox canvas (no React <Source>).
+   * Previous frame stays visible until the next tile set finishes loading.
+   */
+  useLayoutEffect(() => {
+    if (!isMapStyleReady || !sentinelLayerAoiWmsMounted) return;
+    const map = mapRef.current?.getMap?.() ?? mapRef.current;
+    if (!map?.isStyleLoaded?.()) return;
+    const stack = layerAoiWmsStackRef.current;
+    if (!stack?.displayChunks.length) return;
+
+    const runtime = layerAoiWmsPingPongRef.current;
+    const chunkCount = stack.displayChunks.length;
+    const layerVisible = sentinelLayerAoiWmsOnMap;
+    const layerOpacity = aoiMaskDisplayOpacity;
+    const syncKey = [
+      layerAoiWmsChunksCacheKey,
+      wmsRasterSourceRefreshKey,
+      layerVisible ? 'v' : 'h',
+      String(layerOpacity),
+      String(chunkCount),
+      String(effectiveSentinelWmsMinZoom),
+    ].join('|');
+    const chunkCountChanged = runtime.mountedChunkCount !== chunkCount;
+
+    if (chunkCountChanged || layerAoiPingPongSyncKeyRef.current === '') {
+      ensureSiSentinelAoiWmsPingPongStackOnMap(map, stack, effectiveSentinelWmsMinZoom, runtime);
+    }
+
+    if (!chunkCountChanged && layerAoiPingPongSyncKeyRef.current === syncKey) {
+      return;
+    }
+    layerAoiPingPongSyncKeyRef.current = syncKey;
+
+    if (layerVisible) {
+      revealSiSentinelAoiWmsPingPongStack(map, stack, runtime, {
+        visible: true,
+        opacity: layerOpacity,
+      });
+    } else {
+      hideSiSentinelAoiWmsPingPongStack(map, stack, runtime, layerOpacity);
+    }
+  }, [
+    isMapStyleReady,
+    sentinelLayerAoiWmsMounted,
+    layerAoiWmsChunksCacheKey,
+    wmsRasterSourceRefreshKey,
+    effectiveSentinelWmsMinZoom,
+    sentinelLayerAoiWmsOnMap,
+    aoiMaskDisplayOpacity,
+  ]);
 
   /**
    * react-map-gl <Source> does not apply standalone `bounds` updates (see updateSource in library).
-   * Sync Mapbox RasterTileSource.setBounds after mount so AOI clipping always matches the sketch.
+   * Sync Mapbox RasterTileSource in-place so AOI clipping always matches without remounting.
    */
   useLayoutEffect(() => {
-    if (!isMapStyleReady || !sentinelWmsOnMap) return;
+    if (!isMapStyleReady || !sentinelWmsSourcesMounted) return;
     const map = mapRef.current?.getMap?.() ?? mapRef.current;
     if (!map?.isStyleLoaded?.()) return;
+    const appliedUrls = sentinelWmsAppliedTileUrlsRef.current;
+    const appliedBounds = sentinelWmsAppliedBoundsRef.current;
     const sync = () => {
+      if (siMapContainerRef.current?.classList.contains('si-map-container--interacting')) return;
       try {
-        const urlsKey = wmsTileUrls.join('|');
-        const boundsKey = sentinelHubWmsDisplayChunks
-          .map((chunk, i) => {
-            const b = resolveSentinelWmsChunkBounds(chunk);
-            return b ? b.join(',') : `u:${wmsTileUrls[i] ?? ''}`;
-          })
-          .join('|');
-        const syncKey = `${urlsKey}::${boundsKey}`;
-        if (syncKey === sentinelWmsTilesSyncedRef.current) return;
-        sentinelWmsTilesSyncedRef.current = syncKey;
-        for (let i = 0; i < sentinelHubWmsDisplayChunks.length; i++) {
-          const src = map.getSource(`sentinel-source-${i}`) as {
-            setBounds?: (b: [number, number, number, number] | null) => void;
-            setTiles?: (tiles: string[]) => void;
-          } | null;
-          if (!src) continue;
-          if (typeof src.setTiles === 'function') {
-            src.setTiles([wmsTileUrls[i] ?? '']);
-          }
-          if (typeof src.setBounds === 'function') {
-            src.setBounds(resolveSentinelWmsChunkBounds(sentinelHubWmsDisplayChunks[i]) ?? null);
+        if (typeof map.isMoving === 'function' && map.isMoving()) return;
+      } catch {
+        /* ignore */
+      }
+      try {
+        for (const { stack, useVisibilityToggle } of sentinelWmsStacks) {
+          if (useVisibilityToggle) continue;
+          for (let i = 0; i < stack.displayChunks.length; i++) {
+            const chunkKey = siSentinelAoiWmsChunkKey(stack.idPrefix, i);
+            const src = map.getSource(siSentinelAoiWmsSourceId(stack.idPrefix, i)) as {
+              setBounds?: (b: [number, number, number, number] | null) => void;
+              setTiles?: (tiles: string[]) => void;
+            } | null;
+            if (!src) continue;
+            syncSiSentinelAoiWmsChunkTiles(src, stack.tileUrls[i] ?? '', appliedUrls, chunkKey);
+            syncSiSentinelAoiWmsChunkBounds(
+              src,
+              resolveSiSentinelAoiWmsChunkBounds(stack, stack.displayChunks[i]) ?? null,
+              appliedBounds,
+              chunkKey,
+            );
           }
         }
       } catch {
@@ -15142,13 +16820,9 @@ export default function SatelliteIntelligence() {
     };
   }, [
     isMapStyleReady,
-    sentinelWmsOnMap,
-    wmsRasterTileBoundsLngLat,
-    wmsRasterAoiBoundsLngLat,
+    sentinelWmsSourcesMounted,
     wmsRasterSourceRefreshKey,
-    wmsTileUrls,
-    sentinelHubWmsDisplayChunks,
-    resolveSentinelWmsChunkBounds,
+    sentinelWmsStacks,
     activeWmsLayer,
     wmsDate,
     sentinelFetchDate,
@@ -15181,24 +16855,39 @@ export default function SatelliteIntelligence() {
       const url = String(e?.error?.url || e?.url || '');
       const sourceId = String(e?.sourceId || '');
       return (
-        sourceId.startsWith('sentinel-source-') ||
+        isSiSentinelAoiWmsMapSourceId(sourceId) ||
+        isSiSentinelAoiWmsPingPongMapId(sourceId) ||
         url.includes('services.sentinel-hub.com/ogc/wms') ||
         url.includes('sh.dataspace.copernicus.eu/ogc/wms')
       );
     };
 
     const reloadSentinelSources = () => {
-      for (let i = 0; i < sentinelHubWmsDisplayChunks.length; i++) {
-        const src = map.getSource?.(`sentinel-source-${i}`) as
-          | { setTiles?: (tiles: string[]) => void }
-          | null
-          | undefined;
-        const url = wmsTileUrls[i];
-        if (src && typeof src.setTiles === 'function' && url) {
-          try {
-            src.setTiles([url]);
-          } catch {
-            /* ignore source race during style rebuild */
+      if (siMapContainerRef.current?.classList.contains('si-map-container--interacting')) return;
+      try {
+        if (typeof map.isMoving === 'function' && map.isMoving()) return;
+      } catch {
+        /* ignore */
+      }
+      for (const { stack, useVisibilityToggle } of sentinelWmsStacks) {
+        if (useVisibilityToggle) {
+          reloadSiSentinelAoiWmsPingPongStackTiles(map, stack, layerAoiWmsPingPongRef.current, {
+            force: true,
+          });
+          continue;
+        }
+        for (let i = 0; i < stack.displayChunks.length; i++) {
+          const src = map.getSource?.(siSentinelAoiWmsSourceId(stack.idPrefix, i)) as
+            | { setTiles?: (tiles: string[]) => void }
+            | null
+            | undefined;
+          const url = stack.tileUrls[i];
+          if (src && typeof src.setTiles === 'function' && url) {
+            try {
+              src.setTiles([url]);
+            } catch {
+              /* ignore source race during style rebuild */
+            }
           }
         }
       }
@@ -15206,16 +16895,22 @@ export default function SatelliteIntelligence() {
 
     const handleTileError = (e: any) => {
       if (!isSentinelTileError(e)) return;
+      if (siMapContainerRef.current?.classList.contains('si-map-container--interacting')) return;
+      try {
+        if (typeof map.isMoving === 'function' && map.isMoving()) return;
+      } catch {
+        /* ignore */
+      }
       const state = sentinelTileRetryRef.current;
       if (state.timer != null || state.attempts >= MAX_TILE_RETRIES) {
         if (state.attempts >= MAX_TILE_RETRIES) {
-          setStacStatus('Satellite imagery is temporarily unavailable ΓÇö basemap stays active.');
+          setStacStatus('Satellite imagery is temporarily unavailable - basemap stays active.');
         }
         return;
       }
       const delay = siNextBackoffDelayMs(state.attempts, { baseMs: 800, maxMs: 6000 });
       state.attempts += 1;
-      setStacStatus(`Reloading satellite imagery (attempt ${state.attempts}/${MAX_TILE_RETRIES})ΓÇª`);
+      setStacStatus(`Reloading satellite imagery (attempt ${state.attempts}/${MAX_TILE_RETRIES})...`);
       state.timer = window.setTimeout(() => {
         sentinelTileRetryRef.current.timer = null;
         reloadSentinelSources();
@@ -15240,13 +16935,7 @@ export default function SatelliteIntelligence() {
         /* ignore */
       }
     };
-  }, [
-    isMapStyleReady,
-    sentinelWmsOnMap,
-    wmsRasterSourceRefreshKey,
-    wmsTileUrls,
-    sentinelHubWmsDisplayChunks,
-  ]);
+  }, [isMapStyleReady, sentinelWmsOnMap, wmsRasterSourceRefreshKey, sentinelWmsStacks]);
 
   /** Keep Agro_Structures boundaries above Sentinel; keep drawn AOI under imagery layers. */
   useLayoutEffect(() => {
@@ -15273,12 +16962,14 @@ export default function SatelliteIntelligence() {
       }
     };
     const sync = () => {
+      if (siMapContainerRef.current?.classList.contains('si-map-container--interacting')) return;
       try {
         const styleLayers = map.getStyle()?.layers ?? [];
         const sentinelIds = styleLayers
           .map(l => l.id)
-          .filter((id): id is string => !!id && id.startsWith('sentinel-layer-'));
+          .filter((id): id is string => !!id && isSiSentinelAoiWmsMapLayerId(id));
         const firstSentinel = sentinelIds[0] ?? null;
+        const freezeLayerAoiRasterOrder = aoiLayerModeWmsActiveRef.current;
 
         // Drawn AOI stays UNDER imagery / analysis layers (fill + outline).
         for (const aoiId of [
@@ -15293,18 +16984,31 @@ export default function SatelliteIntelligence() {
 
         // Then raise Sentinel above any residual AOI order, but below field boundaries.
         for (const sid of sentinelIds) {
+          if (
+            freezeLayerAoiRasterOrder &&
+            sid.startsWith(`${SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX}-layer-`)
+          ) {
+            continue;
+          }
           if (!map.getLayer(sid)) continue;
           if (map.getLayer(agroLineId)) map.moveLayer(sid, agroLineId);
           else if (map.getLayer(agroFillId)) map.moveLayer(sid, agroFillId);
           else map.moveLayer(sid);
         }
         if (sentinelWmsOnMap && map.getLayer(agroFillId)) {
-          map.setPaintProperty?.(agroFillId, 'fill-opacity', 0);
+          const layer = customLayersRef.current.find(l => String(l.id) === AGRO_STRUCTURES_PRIMARY_LAYER_ID);
+          const useAgSymbology = layer ? siLayerUsesArcgisOnlineSymbology(layer) : false;
+          if (!useAgSymbology) {
+            map.setPaintProperty?.(agroFillId, 'fill-opacity', 0);
+          }
         } else if (map.getLayer(agroFillId)) {
           const layer = customLayersRef.current.find(l => String(l.id) === AGRO_STRUCTURES_PRIMARY_LAYER_ID);
-          const op = layer?.mapOpacity ?? 1;
-          const pfa = layer?.polygonFillAlpha ?? SI_PORTAL_LAYER_VISIBLE_FILL_ALPHA;
-          map.setPaintProperty?.(agroFillId, 'fill-opacity', pfa * op);
+          const useAgSymbology = layer ? siLayerUsesArcgisOnlineSymbology(layer) : false;
+          if (!useAgSymbology) {
+            const op = layer?.mapOpacity ?? 1;
+            const pfa = layer?.polygonFillAlpha ?? SI_PORTAL_LAYER_VISIBLE_FILL_ALPHA;
+            map.setPaintProperty?.(agroFillId, 'fill-opacity', pfa * op);
+          }
         }
       } catch {
         /* ignore map/source race during style rebuild */
@@ -15330,14 +17034,13 @@ export default function SatelliteIntelligence() {
       }
     };
     sync();
-    map.once('idle', sync);
   }, [
     isMapStyleReady,
     sentinelWmsOnMap,
     normalizedDrawnAoiGeometry,
     activeAoiMaskKey,
     customLayersMapEpoch,
-    sentinelHubWmsDisplayChunks.length,
+    sentinelWmsStacks.reduce((sum, entry) => sum + entry.stack.displayChunks.length, 0),
     activeWmsLayer,
     draftDrawGeoJson,
     drawnGeometry,
@@ -15464,7 +17167,7 @@ export default function SatelliteIntelligence() {
                       : `${(circleRefineHud.radiusM / 1000).toFixed(2)} km`}
                   </span>
                   <span className="si-draw-live-hud-sep" aria-hidden>
-                    ┬╖
+                   | 
                   </span>
                   <span>
                     D{' '}
@@ -15473,7 +17176,7 @@ export default function SatelliteIntelligence() {
                       : `${(circleRefineHud.diameterM / 1000).toFixed(2)} km`}
                   </span>
                   <span className="si-draw-live-hud-sep" aria-hidden>
-                    ┬╖
+                   | 
                   </span>
                   <span>
                     A{' '}
@@ -15519,7 +17222,7 @@ export default function SatelliteIntelligence() {
             initialViewState={initialMapViewStateRef.current}
             onMove={evt => {
               viewStateLiveRef.current = evt.viewState;
-              if (!shouldSkipLiveViewportWorkOnMove(freezeViewportPipeline)) {
+              if (!shouldSkipLiveViewportWorkOnMove(freezeViewportPipeline, layersAoiViewportFrozen)) {
                 captureLiveViewportExtent();
                 applyLiveViewportExtentThrottled();
               }
@@ -15700,7 +17403,7 @@ export default function SatelliteIntelligence() {
                     <button
                       type="button"
                       className="si-geo-ai-pin-open"
-                      title={`Show details ΓÇö ${geoAiPendingInspectCard.title}`}
+                      title={`Show details - ${geoAiPendingInspectCard.title}`}
                       aria-label={`Show details for ${geoAiPendingInspectCard.title}`}
                       onPointerDown={e => e.stopPropagation()}
                       onClick={e => {
@@ -15876,7 +17579,7 @@ export default function SatelliteIntelligence() {
                       className={
                         'si-map-search-pin' + (geoAiPendingInspectCard ? ' si-map-search-pin--clickable' : '')
                       }
-                      title={geoAiPendingInspectCard ? `Show details ΓÇö ${searchPin.label}` : searchPin.label}
+                      title={geoAiPendingInspectCard ? `Show details - ${searchPin.label}` : searchPin.label}
                       role={geoAiPendingInspectCard ? 'button' : undefined}
                       aria-label={geoAiPendingInspectCard ? `Show details for ${searchPin.label}` : undefined}
                       onPointerDown={geoAiPendingInspectCard ? e => e.stopPropagation() : undefined}
@@ -15950,9 +17653,9 @@ export default function SatelliteIntelligence() {
                           20,
                           ['interpolate', ['linear'], ['get', 'crownDiameterM'], 1, 7, 12, 22],
                         ],
-                        'circle-color': ['get', 'color'],
+                        'circle-color': ['coalesce', ['get', 'color'], '#16a34a'],
                         'circle-opacity': 0.22,
-                        'circle-stroke-color': ['get', 'color'],
+                        'circle-stroke-color': ['coalesce', ['get', 'color'], '#16a34a'],
                         'circle-stroke-width': 1.5,
                         'circle-stroke-opacity': 0.9,
                       }}
@@ -15963,7 +17666,7 @@ export default function SatelliteIntelligence() {
                       paint={{
                         'circle-radius': ['interpolate', ['linear'], ['zoom'], 14, 1.6, 18, 3.2, 20, 4.5],
                         'circle-color': '#052e16',
-                        'circle-stroke-color': ['get', 'color'],
+                        'circle-stroke-color': ['coalesce', ['get', 'color'], '#16a34a'],
                         'circle-stroke-width': 1.4,
                       }}
                     />
@@ -16092,7 +17795,7 @@ export default function SatelliteIntelligence() {
                           <Layer
                             id={`hydro-${stepId}-fill`}
                             type="fill"
-                            paint={{ 'fill-color': ['get', 'fillColor'], 'fill-opacity': 0.55 * userOpacity }}
+                            paint={sanitizeMapboxPaint({ 'fill-color': ['coalesce', ['get', 'fillColor'], '#94a3b8'], 'fill-opacity': 0.55 * userOpacity })}
                           />
                           <Layer
                             id={`hydro-${stepId}-line`}
@@ -16102,7 +17805,7 @@ export default function SatelliteIntelligence() {
                         </Source>
                       );
                     })}
-                {/* Well Site Recommendation (Hydro-AI) ΓÇö suitability heatmap (points render via the managed custom layer). */}
+                {/* Well Site Recommendation (Hydro-AI) - suitability heatmap (points render via the managed custom layer). */}
                 {wellSite.result && wellSite.heatVisible ? (
                   <Source
                     id="wellsite-heat-source"
@@ -16288,28 +17991,35 @@ export default function SatelliteIntelligence() {
               </Source>
             )}
 
-            {isMapStyleReady && sentinelWmsOnMap && sentinelWmsRenderReady && sentinelWmsZoomOk && !!sentinelFetchDate
-              ? sentinelHubWmsDisplayChunks.map((chunk, chunkIdx) => (
-                  <Source
-                    key={`sentinel-${chunkIdx}`}
-                    id={`sentinel-source-${chunkIdx}`}
-                    type="raster"
-                    tiles={[wmsTileUrls[chunkIdx] ?? '']}
-                    tileSize={SENTINEL_HUB_WMS_TILE_PIXELS}
-                    minzoom={sentinelWmsMinZoom}
-                    bounds={resolveSentinelWmsChunkBounds(chunk)}
-                  >
-                    <Layer
-                      id={`sentinel-layer-${chunkIdx}`}
-                      type="raster"
-                      paint={{
-                        'raster-opacity': (chunk.evalscriptB64 ? 1 : 0.96) * aoiMaskDisplayOpacity,
-                        'raster-fade-duration': 0,
-                        'raster-resampling': 'linear',
-                      }}
-                    />
-                  </Source>
-                ))
+            {isMapStyleReady && sentinelWmsSourcesMounted
+              ? sentinelWmsStacks
+                  .filter(entry => !entry.useVisibilityToggle)
+                  .flatMap(({ stack, visible, opacity }) =>
+                  stack.displayChunks.map((chunk, chunkIdx) => {
+                    const layerOpacity = opacity * (chunk.evalscriptB64 ? 1 : 0.96);
+                    return (
+                      <Source
+                        key={`${stack.idPrefix}-${chunkIdx}`}
+                        id={siSentinelAoiWmsSourceId(stack.idPrefix, chunkIdx)}
+                        type="raster"
+                        tiles={[stack.tileUrls[chunkIdx] ?? '']}
+                        tileSize={SENTINEL_HUB_WMS_TILE_PIXELS}
+                        minzoom={effectiveSentinelWmsMinZoom}
+                        bounds={resolveSiSentinelAoiWmsChunkBounds(stack, chunk)}
+                      >
+                        <Layer
+                          id={siSentinelAoiWmsLayerId(stack.idPrefix, chunkIdx)}
+                          type="raster"
+                          paint={{
+                            'raster-opacity': visible ? layerOpacity : 0,
+                            'raster-fade-duration': 0,
+                            'raster-resampling': 'linear',
+                          }}
+                        />
+                      </Source>
+                    );
+                  }),
+                )
               : null}
 
             {isMapStyleReady && cropAlertSettings.enabled && cropAlertResultsOnMap.length > 0 ? (
@@ -16323,11 +18033,12 @@ export default function SatelliteIntelligence() {
             ) : null}
 
             {isMapStyleReady && stressZonesPopupLngLat && stressZones.result ? (
-              <Marker
+              <SiMapDockAwareMarker
                 longitude={stressZonesPopupLngLat.lng}
                 latitude={stressZonesPopupLngLat.lat}
                 anchor="bottom"
-                style={{ zIndex: 900 }}
+                className="si-stress-zones-popup-marker"
+                popupWidth={280}
               >
                 <div onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
                   <SiStressZonesMapPopup
@@ -16336,7 +18047,7 @@ export default function SatelliteIntelligence() {
                     onClose={closeStressZonesPopup}
                   />
                 </div>
-              </Marker>
+              </SiMapDockAwareMarker>
             ) : null}
 
             {isMapStyleReady && stacMapThumb && isStacThumbVisible && (
@@ -16435,7 +18146,14 @@ export default function SatelliteIntelligence() {
                 const c = getGeoJsonCentroid(row.feature);
                 if (!Array.isArray(c) || c.length < 2) return null;
                 return (
-                  <Marker key={`si-multi-aoi-popup-${pid}`} longitude={c[0]} latitude={c[1]} anchor="bottom">
+                  <SiMapDockAwareMarker
+                    key={`si-multi-aoi-popup-${pid}`}
+                    longitude={c[0]}
+                    latitude={c[1]}
+                    anchor="bottom"
+                    className="si-multi-aoi-popup-marker"
+                    popupWidth={260}
+                  >
                     <div className="si-multi-aoi-popup" onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
                       <div className="si-multi-aoi-popup__head">
                         <strong>{row.name}</strong>
@@ -16453,14 +18171,14 @@ export default function SatelliteIntelligence() {
                       </div>
                       <div className="si-multi-aoi-popup__row">
                         <span>Mean</span>
-                        <em>{row.analysis ? row.analysis.mean.toFixed(3) : 'ΓÇö'}</em>
+                        <em>{row.analysis ? row.analysis.mean.toFixed(3) : '-'}</em>
                       </div>
                       <div className="si-multi-aoi-popup__row">
                         <span>Range</span>
-                        <em>{row.analysis ? `${row.analysis.min.toFixed(3)} .. ${row.analysis.max.toFixed(3)}` : 'ΓÇö'}</em>
+                        <em>{row.analysis ? `${row.analysis.min.toFixed(3)} .. ${row.analysis.max.toFixed(3)}` : '-'}</em>
                       </div>
                     </div>
-                  </Marker>
+                  </SiMapDockAwareMarker>
                 );
               })}
 
@@ -16468,13 +18186,14 @@ export default function SatelliteIntelligence() {
             (geoAiPopupMode === 'single' || geoAiPopupMode === 'multiple') &&
             geoAiInspectPopups.length > 0 &&
             geoAiInspectPopups.map((pop, popIdx) => (
-              <Marker
+              <SiMapDockAwareMarker
                 key={pop.id}
                 className="si-geo-ai-inspect-marker"
                 longitude={pop.lng}
                 latitude={pop.lat}
                 anchor="bottom"
                 offset={[((popIdx * 47) % 160) - 80, 6 - (popIdx % 7) * 11]}
+                popupWidth={360}
               >
                 <SiFeatureInspectPopup
                   pop={pop}
@@ -16524,7 +18243,7 @@ export default function SatelliteIntelligence() {
                       : undefined
                   }
                 />
-              </Marker>
+              </SiMapDockAwareMarker>
             ))}
 
             {isMapStyleReady && isWeatherIntelOpen && weatherLocation ? (
@@ -16575,10 +18294,102 @@ export default function SatelliteIntelligence() {
               setImageryDateAutoFollow(false);
               applySelectedDate(dateFromLocalIso(iso));
             }}
+            onHighlightFieldKeysChange={fieldKeys => {
+              const key = fieldKeys[0] ?? null;
+              if (key) setSelectedCropAlertFieldKey(key);
+            }}
             mapboxToken={mapboxToken}
             onStormMapOverlayChange={setTsWeatherStormOverlay}
             stormOverlayDismissEpoch={tsWeatherStormDismissEpoch}
           />
+
+          {activeLayerActionDialog?.mode === 'symbology' && activeDialogLayer ? (
+            <GisFloatingWorkspacePanel
+              open
+              onClose={cancelSiSymbologyDialog}
+              containerRef={siMapContainerRef}
+              storageKey={siSymbologyFloatLs}
+              panelId="si-symbology-studio"
+              title={activeDialogLayer.name}
+              subtitle="Styles"
+              searchValue={siSymbologySearch}
+              onSearchChange={setSiSymbologySearch}
+              layerIcon={<i className="fa-solid fa-layer-group" aria-hidden />}
+              defaultWidth={380}
+              defaultHeight={720}
+              footer={
+                <>
+                  <button
+                    type="button"
+                    className="si-sym-footer-btn si-sym-footer-btn--ghost"
+                    onClick={() => resetSiSymbologyStudio()}
+                    disabled={symbologyDraft.useArcGisOnline}
+                  >
+                    Reset
+                  </button>
+                  <button type="button" className="si-sym-footer-btn si-sym-footer-btn--ghost" onClick={() => cancelSiSymbologyDialog()}>
+                    Cancel
+                  </button>
+                  <button type="button" className="si-sym-footer-btn si-sym-footer-btn--primary" onClick={() => void applySymbologyDraft()}>
+                    Apply
+                  </button>
+                </>
+              }
+            >
+              <SiSymbologyStudioPanel
+                layer={activeDialogLayer}
+                symbologyDraft={symbologyDraft}
+                appearance={siSymbologyAppearance}
+                canUseArcGisOnline={canUseArcGisOnline}
+                symbologyCtx={siSymbologyCtx}
+                searchQuery={siSymbologySearch}
+                onDraftChange={updateSymbologyDraft}
+                onAppearanceChange={updateSiSymbologyAppearance}
+                onReset={resetSiSymbologyStudio}
+                onCopyStyle={() => writeSiStyleClipboard(persistedSiAppearance(siSymbologyAppearance), siStyleClipboardLs)}
+                onPasteStyle={() => {
+                  const clip = readSiStyleClipboard(siStyleClipboardLs);
+                  if (!clip) return;
+                  updateSiSymbologyAppearance({
+                    ...clip,
+                    previewCornerRadius: siSymbologyAppearance.previewCornerRadius,
+                  });
+                }}
+                onApplyToAllLayers={() => {
+                  const snap = persistedSiAppearance(siSymbologyAppearance);
+                  setCustomLayers(prev =>
+                    prev.map(l =>
+                      l.renderMode !== 'raster' && l.geojson && l.visible
+                        ? {
+                            ...l,
+                            color: snap.color,
+                            fillColor: snap.fillColor,
+                            weight: snap.weight,
+                            mapOpacity: snap.opacity,
+                            strokeStyle: snap.strokeStyle as CustomLayer['strokeStyle'],
+                            polygonFillAlpha: snap.polygonFillAlpha,
+                            pointRadius: snap.pointRadius,
+                            fillStyle: snap.fillStyle as CustomLayer['fillStyle'],
+                            blendMode: snap.blendMode as CustomLayer['blendMode'],
+                          }
+                        : l,
+                    ),
+                  );
+                }}
+                onSyncDrawColors={() =>
+                  setDrawStyle(d => ({
+                    ...d,
+                    fillColor: siSymbologyAppearance.fillColor,
+                    strokeColor: siSymbologyAppearance.color,
+                    strokeWidth: Math.max(1, Math.round(siSymbologyAppearance.weight)),
+                    fillOpacity: siSymbologyAppearance.polygonFillAlpha,
+                    pointRadius: Math.round(siSymbologyAppearance.pointRadius),
+                  }))
+                }
+                onArcgisToggleOn={onArcgisSymbologyToggleOn}
+              />
+            </GisFloatingWorkspacePanel>
+          ) : null}
 
           <SiGoToXyBar
             open={goToXyOpen}
@@ -16906,7 +18717,7 @@ export default function SatelliteIntelligence() {
                                     </div>
                                     <div className="si-geo-explorer-bubble si-geo-explorer-bubble--typing">
                                       <i className="fa-solid fa-spinner fa-spin" aria-hidden />{' '}
-                                      {geoExplorerAwaitKind === 'edit' ? 'UpdatingΓÇª' : 'ThinkingΓÇª'}
+                                      {geoExplorerAwaitKind === 'edit' ? 'Updating...' : 'Thinking...'}
                                     </div>
                                   </div>
                                 ) : null}
@@ -17048,7 +18859,7 @@ export default function SatelliteIntelligence() {
                                       <i className="fa-solid fa-robot" />
                                     </div>
                                     <div className="si-geo-explorer-bubble si-geo-explorer-bubble--typing">
-                                      <i className="fa-solid fa-spinner fa-spin" aria-hidden /> ThinkingΓÇª
+                                      <i className="fa-solid fa-spinner fa-spin" aria-hidden /> Thinking...
                                     </div>
                                   </div>
                                 ) : null}
@@ -17091,8 +18902,8 @@ export default function SatelliteIntelligence() {
                                 showAttach={false}
                                 placeholder={
                                   geoAiModelTab === 'claude'
-                                    ? 'e.g. List layer names and fields from the attached GIS / Develop dataΓÇª'
-                                    : 'e.g. Summarize saved layers and Develop Dashboard fields (same context as Claude)ΓÇª'
+                                    ? 'e.g. List layer names and fields from the attached GIS / Develop data...'
+                                    : 'e.g. Summarize saved layers and Develop Dashboard fields (same context as Claude)...'
                                 }
                                 textareaAriaLabel={
                                   geoAiModelTab === 'claude' ? 'Geo AI Claude message' : 'Geo AI DeepSeek message'
@@ -17200,7 +19011,7 @@ export default function SatelliteIntelligence() {
                                       <i className="fa-solid fa-robot" />
                                     </div>
                                     <div className="si-geo-explorer-bubble si-geo-explorer-bubble--typing">
-                                      <i className="fa-solid fa-spinner fa-spin" aria-hidden /> ThinkingΓÇª
+                                      <i className="fa-solid fa-spinner fa-spin" aria-hidden /> Thinking...
                                     </div>
                                   </div>
                                 ) : null}
@@ -17225,7 +19036,7 @@ export default function SatelliteIntelligence() {
                                 busy={geoOllamaBusy}
                                 pendingImage={null}
                                 showAttach={false}
-                                placeholder="e.g. Summarize saved layers (runs locally via Ollama ΓÇö same GIS + Develop context)ΓÇª"
+                                placeholder="e.g. Summarize saved layers (runs locally via Ollama - same GIS + Develop context)..."
                                 textareaAriaLabel="Geo AI Ollama message"
                                 availableLayers={geoAiSuggestContext.layers}
                                 availableFields={geoAiSuggestContext.fields}
@@ -17236,7 +19047,7 @@ export default function SatelliteIntelligence() {
                             </>
                           ) : null}
                           {geoAiPopupMode === 'docked' && geoAiInspectPopups.length > 0 ? (
-                            <div className="si-geo-ai-inspect-dock-panel" role="region" aria-label="Identify ΓÇö docked">
+                            <div className="si-geo-ai-inspect-dock-panel" role="region" aria-label="Identify - docked">
                               {geoAiInspectPopups.map((pop, popIdx) => (
                                 <SiFeatureInspectPopup
                                   key={pop.id}
@@ -17339,7 +19150,7 @@ export default function SatelliteIntelligence() {
               if (isAddLayerModalOpen) closeAddLayerModal();
               else openAddLayerModal({ tab: 'giscontent', wizard: 'home' });
             }}
-            mapToolboxAddGisPanelOpen={isAddLayerModalOpen}
+            mapToolboxAddGisPanelOpen={isAddLayerModalOpen || isAddArcGisLayerPanelOpen}
             mapToolboxBrowseLayersPanel={mapToolboxBrowseLayersPanel}
             mapToolboxLayerLiveLegend={mapToolboxLayerLiveLegend}
             imageryTimeSeriesOpen={imageryTimeSeriesOpen}
@@ -17594,7 +19405,7 @@ export default function SatelliteIntelligence() {
                   className={`si-weather-button ${
                     weatherPickOnMap || (isWeatherIntelOpen && weatherLocation) ? 'active' : ''
                   }`}
-                  title="Open-Meteo ┬╖ Weather Intelligence"
+                  title="Open-Meteo | Weather Intelligence"
                   onClick={() => {
                     const engaged = weatherPickOnMap || isWeatherIntelOpen;
                     if (engaged) {
@@ -17700,7 +19511,8 @@ export default function SatelliteIntelligence() {
                 ref={fileInputRef}
                 type="file"
                 className="add-layer-input"
-                accept=".kml,.kmz,.zip,.geojson,.json,.csv,.tif,.tiff,.ifc,.gpx,.img,.vrt,.jp2,.ecw,.png,.jpg,.jpeg,.webp,.gif,.bmp"
+                accept=".kml,.kmz,.zip,.geojson,.json,.csv,.tif,.tiff,.ifc,.gpx,.img,.vrt,.jp2,.ecw,.png,.jpg,.jpeg,.webp,.gif,.bmp,.pgw,.jgw,.jpgw,.tfw,.wld,.prj,.aux.xml"
+                multiple
                 onChange={handleLayerFileChange}
               />
               <SatelliteMapProcessingOptionsPortal portalTarget={mapToolboxEmbedHost}>
@@ -17811,51 +19623,17 @@ export default function SatelliteIntelligence() {
                     {expandedEnvSection === 'crop-classification' && (
                       <div className="si-env-section-card si-rs-panel--glass">
                         <SiPrithviCropToolPanel
-                          aoiGeometry={
-                            (cropClassAoiGeometry?.geometry ?? drawnGeometry?.geometry ?? null) as
-                              | GeoJSON.Polygon
-                              | GeoJSON.MultiPolygon
-                              | null
-                          }
+                          aoiGeometry={drawnGeometry?.geometry ?? null}
                           hasSelfInference={cropAiSelfInference}
-                          dataProvider={cropAiDataProvider}
-                          onDataProviderChange={handleCropAiDataProviderChange}
-                          dataset={cropAiDataset}
-                          onDatasetChange={setCropAiDataset}
-                          analysisMode={cropAiAnalysisMode}
-                          onAnalysisModeChange={setCropAiAnalysisMode}
-                          unsupervisedClassCount={cropAiUnsupervisedClassCount}
-                          onUnsupervisedClassCountChange={setCropAiUnsupervisedClassCount}
-                          trainingSamples={cropAiTrainingSamples}
-                          onTrainingSamplesChange={setCropAiTrainingSamples}
-                          samplesValid={cropAiSamplesValidation.valid}
                           season={cropAiSeason}
                           onSeasonChange={setCropAiSeason}
                           job={cropAiJob}
                           isRunning={cropAiRunning}
-                          isFetchingSentinelScenes={isFetchingSentinelScenes}
                           onPickAoi={handleCropAiPickAoi}
                           onRunAoi={handleCropAiRunAoi}
+                          onRunChip={handleCropAiRunChip}
                           onCancel={handleCropAiCancel}
                           onAddToMap={() => void addCropAiPredictionLayer(cropAiJob)}
-                          onAddConfidenceToMap={() => void addCropAiConfidenceLayer(cropAiJob)}
-                          imagePlacementBounds={(() => {
-                            try {
-                              const mapForBounds = mapRef.current?.getMap
-                                ? mapRef.current.getMap()
-                                : mapRef.current;
-                              const b = mapForBounds?.getBounds?.();
-                              if (!b) return undefined;
-                              return {
-                                west: b.getWest(),
-                                south: b.getSouth(),
-                                east: b.getEast(),
-                                north: b.getNorth(),
-                              };
-                            } catch {
-                              return undefined;
-                            }
-                          })()}
                         />
                       </div>
                     )}
@@ -17879,9 +19657,9 @@ export default function SatelliteIntelligence() {
                         isFetchingSentinelScenes={isFetchingSentinelScenes}
                         imageryDateMeta={
                           imageryDateAutoFollow
-                            ? `Auto ┬╖ requested ${cropAlertRequestedDate} ┬╖ scene ${autoLiveScenes.currentSceneDate}${
-                                autoLiveScenes.previousSceneDate ? ` ┬╖ prev ${autoLiveScenes.previousSceneDate}` : ''
-                              }${isFetchingSentinelScenes ? ' ┬╖ updatingΓÇª' : ''}`
+                            ? `Auto | requested ${cropAlertRequestedDate} | scene ${autoLiveScenes.currentSceneDate}${
+                                autoLiveScenes.previousSceneDate ? ` | prev ${autoLiveScenes.previousSceneDate}` : ''
+                              }${isFetchingSentinelScenes ? ' | updating...' : ''}`
                             : sentinelFetchDate !== wmsDate
                               ? `Nearest scene ${sentinelFetchDate}${sentinelFetchDate !== wmsDate ? ` (req. ${wmsDate})` : ''}`
                               : null
@@ -17897,20 +19675,24 @@ export default function SatelliteIntelligence() {
                         }}
                         isLoadingLayers={isLoadingLayers}
                         showOnMap={isWmsOverlayVisible}
-                        onShowOnMapChange={setIsWmsOverlayVisible}
-                        showOnMapLabel={`Show ${wmsLayerSelectValue || 'layer'} on map`}
+                        onShowOnMapChange={handleIndexShowOnMapChange}
+                        showOnMapLabel={`Show ${wmsLayerSelectValue || 'layer'} on map (Edit AOI)`}
+                        showOnMapHint={
+                          hasDrawnAoiClip
+                            ? 'Clips the index to your drawn AOI (Edit tool).'
+                            : 'Draw an AOI with the Edit tool, then enable Show on map.'
+                        }
                         wmsZoomWarning={
-                          isWmsOverlayVisible && !sentinelWmsZoomOk
-                            ? `Zoom ${sentinelWmsMinZoom}+ for Sentinel-2 (max 200 m/px).`
+                          sentinelWmsOnMap && !sentinelWmsZoomOk
+                            ? `Zoom ${effectiveSentinelWmsMinZoom}+ for Sentinel-2 (max 200 m/px).`
                             : null
                         }
-                        onAddDataSource={openAoiDataSourceUploader}
-                        aoiMaskBuilderSettings={aoiMaskBuilderSettings}
-                        onAoiMaskBuilderChange={handleAoiMaskBuilderSettingsChange}
-                        customLayers={customLayers}
                         sentinelLayerOptions={remoteSensingLayerOptions}
-                        maskFeatureCount={aoiMaskBuilderFeatureCount}
-                        selectedFeatureCount={aoiMaskBuilderSelectedKeys.size}
+                        aoiLayerModeSettings={aoiMaskBuilderSettings}
+                        onAoiLayerModeChange={handleAoiLayerModeChange}
+                        aoiLayerOptions={aoiLayerModeOptions}
+                        aoiLayerMaskFeatureCount={aoiMaskBuilderFeatureCount}
+                        aoiLayerSelectedFeatureCount={aoiMaskBuilderSelectedKeys.size}
                         timeSeriesStart={timeSeriesStart}
                         timeSeriesEnd={timeSeriesEnd}
                         onTimeSeriesStartChange={v => {
@@ -17943,55 +19725,22 @@ export default function SatelliteIntelligence() {
                       />
                     )}
                     {expandedEnvSection === 'ai-detection-gis' && (
-                      <div className="si-env-section-card si-field-analysis">
-                        <div className="si-field-analysis-header">
-                          <h2 className="si-field-analysis-title">AI Detection in GIS</h2>
-                          <button
-                            type="button"
-                            className="si-field-analysis-close"
-                            onClick={() => setIsLayerDropdownOpen(false)}
-                            aria-label="Close panel"
-                          >
-                            <i className="fa-solid fa-xmark" aria-hidden />
-                          </button>
-                        </div>
-                        <input
-                          ref={netfloraUploadInputRef}
-                          type="file"
-                          accept=".geojson,.json"
-                          className="add-layer-input"
-                          onChange={onNetfloraUploadChange}
-                        />
-                        {netfloraStats ? (
-                          <div className="si-field-analysis-section">
-                            <div className="si-field-analysis-kicker">Detection analytics (inside AOI)</div>
-                            <div className="si-netflora-stats-grid">
-                              <div className="si-netflora-stat-card">
-                                <span>Total detections</span>
-                                <strong>{netfloraStats.total}</strong>
-                              </div>
-                              <div className="si-netflora-stat-card">
-                                <span>Average confidence</span>
-                                <strong>{(netfloraStats.avgConfidence * 100).toFixed(1)}%</strong>
-                              </div>
-                            </div>
-                            <div className="si-netflora-class-list">
-                              {netfloraStats.byClass.map(row => (
-                                <div key={row.label} className="si-netflora-class-row">
-                                  <div className="si-netflora-class-meta">
-                                    <strong>{row.label}</strong>
-                                    <span>{row.count} detections</span>
-                                  </div>
-                                  <div className="si-netflora-class-bar">
-                                    <span style={{ width: `${Math.max(8, (row.count / Math.max(1, netfloraStats.total)) * 100)}%` }} />
-                                  </div>
-                                  <em>{(row.avgConfidence * 100).toFixed(1)}%</em>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
+                      <SiAiDetectionGisPanel
+                        onClose={() => setIsLayerDropdownOpen(false)}
+                        layerOptions={netfloraInputLayerOptions}
+                        outputLayerOptions={netfloraOutputLayerOptions}
+                        onOpenLayersPanel={openAiDetectionLayersPanel}
+                        getMapBounds={getAiDlMapBounds}
+                        resolveMapLayer={resolveAiDlMapLayer}
+                        onRasterProcessed={handleAiDlRasterProcessed}
+                        onExportDetectionToMap={handleAiDlDetectionExport}
+                        netfloraStats={netfloraStats}
+                        netfloraUploadInputRef={netfloraUploadInputRef}
+                        onNetfloraUploadChange={onNetfloraUploadChange}
+                        netfloraStatus={netfloraStatus}
+                        onRunNetfloraDetection={runNetfloraDetection}
+                        netfloraBusy={netfloraBusy}
+                      />
                     )}
                     {expandedEnvSection === 'tree-detections' && (
                       <div className="si-env-section-card si-rs-panel--glass">
@@ -18006,7 +19755,7 @@ export default function SatelliteIntelligence() {
                           error={treeDetection.error}
                           notice={
                             treeDetection.usedLocalFallback
-                              ? 'Model service offline ΓÇö used the on-device detector. Start backend/services/tree-detection for higher accuracy.'
+                              ? 'Model service offline - used the on-device detector. Start backend/services/tree-detection for higher accuracy.'
                               : null
                           }
                           result={treeDetection.result}
@@ -18272,7 +20021,7 @@ export default function SatelliteIntelligence() {
                         else setSiAddLayerWizard('source-forms');
                       }}
                     >
-                      <span className="si-add-source-option-icon" aria-hidden>
+                      <span className="si-add-source-option-icon" aria-hidden style={opt.iconStyle}>
                         <i className={opt.icon} />
                       </span>
                       <span className="si-add-source-option-main">
@@ -18290,15 +20039,11 @@ export default function SatelliteIntelligence() {
                   <div className="gis-modal-compact-title" id="si-layer-modal-title">
                     GIS Content
                   </div>
-                  <button type="button" className="ddb-add-source-back" onClick={goSiAddLayerWizardHome}>
-                    <i className="fa-solid fa-arrow-left" aria-hidden /> All options
+                  <button type="button" className="ddb-add-source-back" onClick={goSiAddLayerWizardHome} aria-label="All options">
+                    <i className="fa-solid fa-arrow-left" aria-hidden />
                   </button>
                 </div>
                 <div className="ddb-add-source-gis-list gis-modal-body">
-                  <p className="gis-modal-gis-content-hint">
-                    Hosted feature layers from <strong>GIS Content</strong> are published as Feature Layer services and can be
-                    added to this map.
-                  </p>
                   {gisContentPortalPickRows.length === 0 ? (
                     <div className="gis-modal-gis-content-empty" role="status">
                       <i className="fa-regular fa-folder-open" aria-hidden />
@@ -18328,7 +20073,7 @@ export default function SatelliteIntelligence() {
                                 className={`gis-modal-gis-content-add-btn__icon fa-solid ${busy ? 'fa-spinner fa-spin' : 'fa-plus'}`}
                                 aria-hidden
                               />
-                              <span className="gis-modal-gis-content-add-btn__label">{busy ? 'AddingΓÇª' : 'Add'}</span>
+                              <span className="gis-modal-gis-content-add-btn__label">{busy ? 'Adding...' : 'Add'}</span>
                             </button>
                           </li>
                         );
@@ -18348,8 +20093,8 @@ export default function SatelliteIntelligence() {
                     <div className="gis-modal-compact-title" id="si-layer-modal-title">
                       Add Source Data
                     </div>
-                    <button type="button" className="ddb-add-source-back" onClick={goSiAddLayerWizardHome}>
-                      <i className="fa-solid fa-arrow-left" aria-hidden /> All options
+                    <button type="button" className="ddb-add-source-back" onClick={goSiAddLayerWizardHome} aria-label="All options">
+                      <i className="fa-solid fa-arrow-left" aria-hidden />
                     </button>
                   </div>
                 )}
@@ -18359,8 +20104,8 @@ export default function SatelliteIntelligence() {
                       type="button"
                       role="tab"
                       aria-selected={addLayerTab === 'giscontent'}
-                      aria-label="GIS Content ΓÇö hosted feature layers"
-                      title="GIS Content ΓÇö saved hosted layers"
+                      aria-label="GIS Content - hosted feature layers"
+                      title="GIS Content - saved hosted layers"
                       className={(addLayerTab === 'giscontent' ? 'gis-compact-tab active' : 'gis-compact-tab') + ' gis-compact-tab--icon'}
                       onClick={() => setAddLayerTab('giscontent')}
                     >
@@ -18427,10 +20172,6 @@ export default function SatelliteIntelligence() {
                 <div className="gis-modal-body">
               {addLayerTab === 'giscontent' && siAddLayerWizard === 'tabs' ? (
                 <div role="tabpanel" aria-label="GIS Content">
-                  <p className="gis-modal-gis-content-hint">
-                    Hosted feature layers from <strong>GIS Content</strong> are published as Feature Layer services (REST) and
-                    can be reused on this map, dashboards, and apps.
-                  </p>
                   {gisContentPortalPickRows.length === 0 ? (
                     <div className="gis-modal-gis-content-empty" role="status">
                       <i className="fa-regular fa-folder-open" aria-hidden />
@@ -18460,7 +20201,7 @@ export default function SatelliteIntelligence() {
                                 className={`gis-modal-gis-content-add-btn__icon fa-solid ${busy ? 'fa-spinner fa-spin' : 'fa-plus'}`}
                                 aria-hidden
                               />
-                              <span className="gis-modal-gis-content-add-btn__label">{busy ? 'AddingΓÇª' : 'Add'}</span>
+                              <span className="gis-modal-gis-content-add-btn__label">{busy ? 'Adding...' : 'Add'}</span>
                             </button>
                           </li>
                         );
@@ -18469,71 +20210,169 @@ export default function SatelliteIntelligence() {
                   )}
                 </div>
               ) : addLayerTab === 'arcgis' ? (
-                <div key="arcgis" role="tabpanel" aria-label="ArcGIS Feature Service">
-                  <input
-                    type="url"
-                    className="gis-input"
-                    placeholder="Feature Service URL"
-                    value={addLayerUrl}
-                    onChange={e => setAddLayerUrl(e.target.value)}
-                    autoComplete="off"
-                  />
-                  <input
-                    type="text"
-                    className="gis-input"
-                    placeholder="Token / API Key (optional)"
-                    value={addLayerToken}
-                    onChange={e => setAddLayerToken(e.target.value)}
-                    autoComplete="off"
-                  />
-                  <input
-                    type="text"
-                    className="gis-input"
-                    placeholder="Layer Name (optional)"
-                    value={addLayerName}
-                    onChange={e => setAddLayerName(e.target.value)}
-                    autoComplete="off"
-                  />
-                  <button type="button" className="gis-btn-outline" onClick={importArcgisFeatureLayer} disabled={isConnectingLayer}>
-                    <i className="fa-solid fa-link" aria-hidden /> {isConnectingLayer ? 'Connecting...' : 'Connect & Discover Layers'}
-                  </button>
+                <div key="arcgis" role="tabpanel" aria-label="ArcGIS Feature Service" className="si-add-source-arcgis-tab">
+                  {siArcgisFieldStep === 'menu' ? (
+                    <>
+                      <div className="si-arcgis-field-menu">
+                        <div className="si-get-data-list" role="list" aria-label="ArcGIS connection options">
+                          <button
+                            type="button"
+                            role="listitem"
+                            className="si-get-data-row si-arcgis-field-row"
+                            onClick={() => setSiArcgisFieldStep('url')}
+                          >
+                            <span className="si-get-data-row-icon" aria-hidden>
+                              <i className="fa-solid fa-link" />
+                            </span>
+                            <span className="si-get-data-row-text">
+                              <span className="si-get-data-row-title">Service URL</span>
+                              <span className="si-get-data-row-desc">
+                                {addLayerUrl.trim()
+                                  ? addLayerUrl.trim().length > 34
+                                    ? `${addLayerUrl.trim().slice(0, 34)}...`
+                                    : addLayerUrl.trim()
+                                  : 'FeatureServer or MapServer URL'}
+                              </span>
+                            </span>
+                            <i className="fa-solid fa-chevron-right si-get-data-row-chevron" aria-hidden />
+                          </button>
+                          <button
+                            type="button"
+                            role="listitem"
+                            className="si-get-data-row si-arcgis-field-row"
+                            onClick={() => setSiArcgisFieldStep('token')}
+                          >
+                            <span className="si-get-data-row-icon" aria-hidden>
+                              <i className="fa-solid fa-key" />
+                            </span>
+                            <span className="si-get-data-row-text">
+                              <span className="si-get-data-row-title">Token</span>
+                              <span className="si-get-data-row-desc">
+                                {addLayerToken.trim() ? 'Token set (optional)' : 'Optional API key'}
+                              </span>
+                            </span>
+                            <i className="fa-solid fa-chevron-right si-get-data-row-chevron" aria-hidden />
+                          </button>
+                          <button
+                            type="button"
+                            role="listitem"
+                            className="si-get-data-row si-arcgis-field-row"
+                            onClick={() => setSiArcgisFieldStep('name')}
+                          >
+                            <span className="si-get-data-row-icon" aria-hidden>
+                              <i className="fa-solid fa-tag" />
+                            </span>
+                            <span className="si-get-data-row-text">
+                              <span className="si-get-data-row-title">Layer name</span>
+                              <span className="si-get-data-row-desc">
+                                {addLayerName.trim()
+                                  ? addLayerName.trim().length > 28
+                                    ? `${addLayerName.trim().slice(0, 28)}...`
+                                    : addLayerName.trim()
+                                  : 'Optional display name'}
+                              </span>
+                            </span>
+                            <i className="fa-solid fa-chevron-right si-get-data-row-chevron" aria-hidden />
+                          </button>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="gis-btn-outline"
+                        onClick={importArcgisFeatureLayer}
+                        disabled={isConnectingLayer || !addLayerUrl.trim()}
+                      >
+                        <i className="fa-solid fa-link" aria-hidden /> {isConnectingLayer ? 'Connecting...' : 'Connect'}
+                      </button>
+                    </>
+                  ) : (
+                    <div className="si-arcgis-field-detail">
+                      <button type="button" className="si-get-data-back" onClick={() => setSiArcgisFieldStep('menu')}>
+                        <i className="fa-solid fa-arrow-left" aria-hidden /> ArcGIS options
+                      </button>
+                      <span className="si-arcgis-field-label">
+                        {siArcgisFieldStep === 'url'
+                          ? 'Service URL'
+                          : siArcgisFieldStep === 'token'
+                            ? 'Token (optional)'
+                            : 'Layer name (optional)'}
+                      </span>
+                      {siArcgisFieldStep === 'url' ? (
+                        <input
+                          type="url"
+                          className="gis-input"
+                          placeholder="https://.../FeatureServer/0"
+                          value={addLayerUrl}
+                          onChange={e => setAddLayerUrl(e.target.value)}
+                          autoComplete="off"
+                          autoFocus
+                        />
+                      ) : siArcgisFieldStep === 'token' ? (
+                        <input
+                          type="text"
+                          className="gis-input"
+                          placeholder="Portal or service token"
+                          value={addLayerToken}
+                          onChange={e => setAddLayerToken(e.target.value)}
+                          autoComplete="off"
+                          autoFocus
+                        />
+                      ) : (
+                        <input
+                          type="text"
+                          className="gis-input"
+                          placeholder="Layer display name"
+                          value={addLayerName}
+                          onChange={e => setAddLayerName(e.target.value)}
+                          autoComplete="off"
+                          autoFocus
+                        />
+                      )}
+                      {siArcgisFieldStep === 'url' ? (
+                        <button
+                          type="button"
+                          className="gis-btn-outline"
+                          onClick={importArcgisFeatureLayer}
+                          disabled={isConnectingLayer || !addLayerUrl.trim()}
+                        >
+                          <i className="fa-solid fa-link" aria-hidden /> {isConnectingLayer ? 'Connecting...' : 'Connect'}
+                        </button>
+                      ) : null}
+                    </div>
+                  )}
                   {discoveredArcgisLayers.length > 0 ? (
                     <div className="gis-discover-panel" aria-label="Discovered layers">
-                      <div className="gis-discover-meta">FOUND {discoveredArcgisLayers.length} LAYER/TABLE(S):</div>
-                      <div className="gis-form-field">
-                        <div className="gis-form-label">Select Layer</div>
+                      <div className="gis-discover-meta">
+                        {discoveredArcgisLayers.length} layer{discoveredArcgisLayers.length === 1 ? '' : 's'} found
+                      </div>
+                      <div className="si-arcgis-discover-pick">
                         <div className="gis-select-wrap">
-                        <select
+                          <select
                             className="gis-input gis-select"
-                          value={selectedDiscoveredArcgisUrl}
-                          onChange={e => {
-                            const next = e.target.value;
-                            setSelectedDiscoveredArcgisUrl(next);
-                            const found = discoveredArcgisLayers.find(l => l.url === next);
-                            if (found && !addLayerName.trim()) setAddLayerName(found.name);
-                          }}
+                            value={selectedDiscoveredArcgisUrl}
+                            onChange={e => {
+                              const next = e.target.value;
+                              setSelectedDiscoveredArcgisUrl(next);
+                              const found = discoveredArcgisLayers.find(l => l.url === next);
+                              if (found && !addLayerName.trim()) setAddLayerName(found.name);
+                            }}
                             aria-label="Select discovered layer"
-                        >
-                          {discoveredArcgisLayers.map(l => (
-                            <option key={l.url} value={l.url}>
-                              {l.kind === 'table' ? `${l.name} (Table)` : l.geometryType ? `${l.name} (${l.geometryType})` : l.name}
-                            </option>
-                          ))}
-                        </select>
+                          >
+                            {discoveredArcgisLayers.map(l => (
+                              <option key={l.url} value={l.url}>
+                                {l.kind === 'table' ? `${l.name} (Table)` : l.geometryType ? `${l.name} (${l.geometryType})` : l.name}
+                              </option>
+                            ))}
+                          </select>
                           <i className="fa-solid fa-chevron-down" aria-hidden />
-                      </div>
-                      </div>
-                      <div className="gis-discovered-row">
-                        <span className="gis-discovered-name">
-                          {discoveredArcgisLayers.find(l => l.url === selectedDiscoveredArcgisUrl)?.name || 'Selected layer'}
-                        </span>
+                        </div>
                         <button
                           type="button"
                           className="gis-discovered-add"
                           onClick={addSelectedDiscoveredArcgisLayer}
                           disabled={!selectedDiscoveredArcgisUrl || isAddingDiscoveredArcgisLayer}
                         >
-                          {isAddingDiscoveredArcgisLayer ? 'AddingΓÇª' : 'Add'}
+                          {isAddingDiscoveredArcgisLayer ? '…' : 'Add'}
                         </button>
                       </div>
                     </div>
@@ -18543,15 +20382,6 @@ export default function SatelliteIntelligence() {
                 <div key="database" role="tabpanel" aria-label="Get data">
                   {siGetDataStep === 'menu' ? (
                     <div className="si-get-data-panel">
-                      <div className="si-get-data-hero">
-                        <div className="si-get-data-hero-icon" aria-hidden>
-                          <i className="fa-solid fa-database" />
-                        </div>
-                        <div className="si-get-data-hero-copy">
-                          <h3 className="si-get-data-hero-title">Get data</h3>
-                          <p className="si-get-data-hero-sub">Choose a common source to connect files, web services, or databases.</p>
-                        </div>
-                      </div>
                       <div className="si-get-data-scroll">
                         {siGetDataMenuSections().map(section => (
                           <section key={section.id} className="si-get-data-section" aria-label={section.title}>
@@ -18593,7 +20423,7 @@ export default function SatelliteIntelligence() {
                             setAddLayerStatus('More spatial formats: use Upload, From URL, Raster, or ArcGIS tabs in the bar above.');
                           }}
                         >
-                          MoreΓÇª <span className="si-get-data-more-hint">(all GIS / BIM upload formats)</span>
+                          More... <span className="si-get-data-more-hint">(all GIS / BIM upload formats)</span>
                         </button>
                       </div>
                     </div>
@@ -18602,7 +20432,7 @@ export default function SatelliteIntelligence() {
                       <button type="button" className="si-get-data-back" onClick={() => setSiGetDataStep('menu')}>
                         <i className="fa-solid fa-arrow-left" aria-hidden /> Common data sources
                       </button>
-                      <p className="si-get-data-sql-lead">Database connection ΓÇö profile is stored in-app for future gateway support.</p>
+                      <p className="si-get-data-sql-lead">Database connection - profile is stored in-app for future gateway support.</p>
                       <div className="si-layer-form-grid-2">
                         <label className="si-layer-field">
                           <span>Database Platform</span>
@@ -18704,7 +20534,7 @@ export default function SatelliteIntelligence() {
                   />
                   <button type="button" className="gis-btn-primary-full" onClick={() => void importRemoteUrlLayer()} disabled={isImportingRemoteLayer}>
                     <i className="fa-solid fa-cloud-arrow-down" aria-hidden />{' '}
-                    {isImportingRemoteLayer ? 'ImportingΓÇª' : addLayerTab === 'raster' ? 'Import Raster path / URL' : 'Import from URL'}
+                    {isImportingRemoteLayer ? 'Importing...' : addLayerTab === 'raster' ? 'Import Raster path / URL' : 'Import from URL'}
                   </button>
                 </div>
               ) : (
@@ -18739,45 +20569,42 @@ export default function SatelliteIntelligence() {
                           onDrop={e => {
                             e.preventDefault();
                             setSiUploadDropActive(false);
-                            const file = e.dataTransfer?.files?.[0];
-                            if (!file) return;
-                            setSiUploadStagedFile(file);
-                            setSiUploadPhase('idle');
-                            setSiUploadProgressPct(0);
-                            const mb = file.size / (1024 * 1024);
-                            setAddLayerStatus(
-                              `Ready: ${file.name} (${mb >= 0.01 ? mb.toFixed(2) : '<0.01'} MB). Click ΓÇ£Import to mapΓÇ¥.`,
-                            );
+                            const files = e.dataTransfer?.files;
+                            if (!files?.length) return;
+                            stageSiUploadFiles(Array.from(files));
                           }}
                         >
                           <div className="gis-dropzone-icon" aria-hidden>
                             <i className="fa-solid fa-cloud-arrow-up" />
                           </div>
-                          <div className="gis-dropzone-text">Drop a file here or click to browse</div>
+                          <div className="gis-dropzone-text">Drop a file or click to browse</div>
                           <div className="gis-dropzone-subtext">
-                            SHP (.zip) ┬╖ GeoJSON ┬╖ KML / KMZ ┬╖ CSV (lat/lon) ┬╖ GeoTIFF (.tif / .tiff) ┬╖ Image (PNG / JPG) ┬╖ IFC (.ifc)
+                            SHP · GeoJSON · KML · CSV · GeoTIFF · PNG/JPG · IFC
+                          </div>
+                          <div className="gis-dropzone-subtext si-upload-raster-hints">
+                            Raster + world file (.pgw/.jgw/.jpgw/.tfw) auto-georeferences on the map.
                           </div>
                         </div>
                         <GisUploadCloudSources
                           cloudOnly
                           onFile={file => {
-                            setSiUploadStagedFile(file);
-                            setSiUploadPhase('idle');
-                            setSiUploadProgressPct(0);
-                            const mb = file.size / (1024 * 1024);
-                            setAddLayerStatus(
-                              `Ready: ${file.name} (${mb >= 0.01 ? mb.toFixed(2) : '<0.01'} MB). Click ΓÇ£Import to mapΓÇ¥.`,
-                            );
+                            stageSiUploadFiles([file, ...siUploadCompanionFiles]);
                           }}
                           onStatus={setAddLayerStatus}
                         />
                         {siUploadStagedFile && !siUploadBusy ? (
                           <div className="si-upload-staged-card">
                             <div className="si-upload-staged-main">
-                              <span className="si-upload-staged-name">{siUploadStagedFile.name}</span>
+                              <span className="si-upload-staged-name" title={siUploadStagedFile.name}>
+                                {siUploadStagedFile.name}
+                              </span>
                               <span className="si-upload-staged-meta">
-                                {(siUploadStagedFile.size / (1024 * 1024)).toFixed(2)} MB ┬╖{' '}
+                                {(siUploadStagedFile.size / (1024 * 1024)).toFixed(2)} MB | {' '}
                                 {String(siUploadStagedFile.name.split('.').pop() || '').toUpperCase()}
+                                {siUploadStagedFile.size <= 0 ? ' | Empty file — download locally first' : ''}
+                                {siUploadCompanionFiles.length > 0
+                                  ? ` | +${siUploadCompanionFiles.length} sidecar file(s)`
+                                  : ''}
                               </span>
                             </div>
                             <button
@@ -18785,6 +20612,8 @@ export default function SatelliteIntelligence() {
                               className="si-upload-staged-clear"
                               onClick={() => {
                                 setSiUploadStagedFile(null);
+                                setSiUploadCompanionFiles([]);
+                                siUploadBundleRef.current = [];
                                 setAddLayerStatus('');
                                 setSiUploadPhase('idle');
                               }}
@@ -18806,7 +20635,7 @@ export default function SatelliteIntelligence() {
                               <div className="si-upload-progress__fill" style={{ width: `${siUploadProgressPct}%` }} />
                             </div>
                             <div className="si-upload-progress__label">
-                              {siUploadPhase === 'reading' ? 'Uploading / reading' : 'Processing'} ┬╖ {siUploadProgressPct}%
+                              {siUploadPhase === 'reading' ? 'Uploading / reading' : 'Processing'} | {siUploadProgressPct}%
                             </div>
                           </div>
                         ) : null}
@@ -18818,7 +20647,7 @@ export default function SatelliteIntelligence() {
                           disabled={siUploadBusy}
                         >
                           <i className="fa-solid fa-circle-check" aria-hidden />{' '}
-                          {siUploadBusy ? 'WorkingΓÇª' : siUploadStagedFile ? 'Import to map' : 'Import to map (choose file first)'}
+                          {siUploadBusy ? 'Working…' : 'Import to map'}
                         </button>
                       </>
                     );
@@ -18828,7 +20657,13 @@ export default function SatelliteIntelligence() {
                 </div>
               </>
             ) : null}
-            {addLayerStatus ? <p className="gis-modal-compact-status">{addLayerStatus}</p> : null}
+            {addLayerStatus ? (
+              <p
+                className={`gis-modal-compact-status${siUploadPhase === 'failed' ? ' gis-modal-compact-status--error' : ''}`}
+              >
+                {addLayerStatus}
+              </p>
+            ) : null}
             {siAddLayerWizard !== 'home' ? (
               <div className="gis-modal-footer">
                 <button type="button" className="gis-link-btn" onClick={closeAddLayerModal}>
@@ -18838,7 +20673,13 @@ export default function SatelliteIntelligence() {
             ) : null}
         </SiAddSourceAnchoredPanel>
       ) : null}
-      {activeLayerActionDialog && activeDialogLayer ? (
+      <SiAddArcGisLayerPanel
+        open={isAddArcGisLayerPanelOpen}
+        onClose={() => setIsAddArcGisLayerPanelOpen(false)}
+        onAdd={addArcGisDynamicLayer}
+        defaultToken={getArcgisPortalToken() || undefined}
+      />
+      {activeLayerActionDialog && activeDialogLayer && activeLayerActionDialog.mode !== 'symbology' ? (
         <div
           className={
             'si-layer-action-modal-overlay' +
@@ -18848,24 +20689,17 @@ export default function SatelliteIntelligence() {
           aria-modal="true"
           aria-labelledby="si-layer-action-title"
           onMouseDown={e => {
-            if (e.target === e.currentTarget) {
-              if (activeLayerActionDialog.mode === 'symbology') cancelSiSymbologyDialog();
-              else if (activeLayerActionDialog.mode !== 'table') setActiveLayerActionDialog(null);
+            if (e.target === e.currentTarget && activeLayerActionDialog.mode !== 'table') {
+              setActiveLayerActionDialog(null);
             }
           }}
         >
           <div
-            className={
-              activeLayerActionDialog.mode === 'symbology'
-                ? 'si-layer-action-modal gis-modal gis-modal-styles'
-                : `si-layer-action-modal${activeLayerActionDialog.mode === 'table' ? ' si-layer-action-modal--gis-table' : ''}${
-                    activeLayerActionDialog.mode === 'table' && tableWinMinimized ? ' is-minimized' : ''
-                  }${activeLayerActionDialog.mode === 'table' && tableWinMaximized ? ' is-maximized' : ''}${
-                    activeLayerActionDialog.mode === 'table' && (tableWinOffset.x || tableWinOffset.y)
-                      ? ' is-dragged'
-                      : ''
-                  }`
-            }
+            className={`si-layer-action-modal${activeLayerActionDialog.mode === 'table' ? ' si-layer-action-modal--gis-table' : ''}${
+              activeLayerActionDialog.mode === 'table' && tableWinMinimized ? ' is-minimized' : ''
+            }${activeLayerActionDialog.mode === 'table' && tableWinMaximized ? ' is-maximized' : ''}${
+              activeLayerActionDialog.mode === 'table' && (tableWinOffset.x || tableWinOffset.y) ? ' is-dragged' : ''
+            }`}
             style={
               activeLayerActionDialog.mode === 'table' && !tableWinMinimized && !tableWinMaximized
                 ? { transform: `translate(${tableWinOffset.x}px, ${tableWinOffset.y}px)` }
@@ -18873,26 +20707,7 @@ export default function SatelliteIntelligence() {
             }
             onMouseDown={e => e.stopPropagation()}
           >
-            {activeLayerActionDialog.mode === 'symbology' ? (
-              <div className="gis-modal-header">
-                <div className="gis-modal-header-left">
-                  <div className="gis-modal-icon" aria-hidden="true">
-                    <i className="fa-solid fa-palette" />
-                  </div>
-                  <div className="gis-modal-title" id="si-layer-action-title">
-                    Styles - {activeDialogLayer.name}
-                  </div>
-                </div>
-                <button
-                  className="gis-sidebar-close"
-                  type="button"
-                  onClick={() => cancelSiSymbologyDialog()}
-                  aria-label="Close dialog"
-                >
-                  <i className="fa-solid fa-xmark" aria-hidden="true" />
-                </button>
-              </div>
-            ) : activeLayerActionDialog.mode === 'table' ? (
+            {activeLayerActionDialog.mode === 'table' ? (
               <div
                 className="si-gis-attr-win__titlebar"
                 onPointerDown={onTableWinTitlePointerDown}
@@ -18951,13 +20766,17 @@ export default function SatelliteIntelligence() {
               </div>
             ) : (
               <div className="si-layer-action-modal-header">
-                <h3 id="si-layer-action-title">{`Legend - ${activeDialogLayer.name}`}</h3>
+                <h3 id="si-layer-action-title">
+                  {activeLayerActionDialog.mode === 'metadata'
+                    ? `Metadata — ${activeDialogLayer.name}`
+                    : `Legend — ${activeDialogLayer.name}`}
+                </h3>
                 <button type="button" className="si-layer-action-close" onClick={() => setActiveLayerActionDialog(null)} aria-label="Close layer dialog">
                   <i className="fa-solid fa-xmark" />
                 </button>
               </div>
             )}
-            <div className={activeLayerActionDialog.mode === 'symbology' ? 'gis-modal-body' : 'si-layer-action-modal-body'}>
+            <div className="si-layer-action-modal-body">
               {activeLayerActionDialog.mode === 'table' ? (
                 activeLayerColumns.length ? (
                   <div className="si-gis-attr-win">
@@ -19327,673 +21146,59 @@ export default function SatelliteIntelligence() {
                 ) : (
                   <p className="si-layer-action-empty">No attributes found for this layer.</p>
                 )
-              ) : activeLayerActionDialog.mode === 'symbology' ? (
-                <>
-                  <div className="gis-style-hero">
-                    <div className="gis-style-subtitle">Choose an attribute and visualization style. Preview updates live on the map.</div>
-                    <label
-                      className={`gis-style-check${
-                        !canUseArcGisOnline && !symbologyDraft.useArcGisOnline ? ' gis-style-check--disabled' : ''
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={Boolean(symbologyDraft.useArcGisOnline)}
-                        disabled={!canUseArcGisOnline && !symbologyDraft.useArcGisOnline}
-                        onChange={e => {
-                          const on = e.target.checked;
-                          if (on) {
-                            updateSymbologyDraft({ useArcGisOnline: true });
-                            if (
-                              !activeDialogLayer.arcgisDrawingInfo &&
-                              typeof activeDialogLayer.sourceUrl === 'string' &&
-                              activeDialogLayer.sourceUrl.trim()
-                            ) {
-                              void (async () => {
-                                try {
-                                  const raw = await fetchArcgisLayerDrawingInfo(activeDialogLayer.sourceUrl!, activeDialogLayer.authToken);
-                                  const cleaned = raw ? sanitizeArcgisDrawingInfoForClient(raw) : null;
-                                  if (!cleaned) return;
-                                  setCustomLayers(prev =>
-                                    prev.map(l => (l.id === activeDialogLayer.id ? { ...l, arcgisDrawingInfo: cleaned } : l)),
-                                  );
-                                } catch {
-                                  /* keep toggle usable even if renderer fetch fails */
-                                }
-                              })();
-                            }
-                          } else {
-                            updateSymbologyDraft({ useArcGisOnline: false });
-                          }
-                        }}
-                      />
-                      <span>Use ArcGIS Online symbology</span>
-                    </label>
-                  </div>
-
-                  <div className="gis-style-toolbar" role="toolbar" aria-label="Style actions">
-                    <button
-                      type="button"
-                      className="gis-style-toolbtn"
-                      onClick={() => resetSiSymbologyStudio()}
-                      disabled={symbologyDraft.useArcGisOnline}
-                      title={
-                        symbologyDraft.useArcGisOnline
-                          ? 'Unavailable while ArcGIS renderer is active'
-                          : 'Restore visualization and symbol properties from when this panel opened'
-                      }
-                    >
-                      <i className="fa-solid fa-rotate-left" aria-hidden />
-                      Reset
-                    </button>
-                    <button
-                      type="button"
-                      className="gis-style-toolbtn"
-                      onClick={() => writeSiStyleClipboard(persistedSiAppearance(siSymbologyAppearance), siStyleClipboardLs)}
-                      disabled={symbologyDraft.useArcGisOnline}
-                      title="Copy symbol appearance to local storage"
-                    >
-                      <i className="fa-solid fa-copy" aria-hidden />
-                      Copy style
-                    </button>
-                    <button
-                      type="button"
-                      className="gis-style-toolbtn"
-                      onClick={() => {
-                        const clip = readSiStyleClipboard(siStyleClipboardLs);
-                        if (!clip) return;
-                        updateSiSymbologyAppearance({
-                          ...clip,
-                          previewCornerRadius: siSymbologyAppearance.previewCornerRadius,
-                        });
-                      }}
-                      disabled={symbologyDraft.useArcGisOnline}
-                      title="Paste symbol appearance from clipboard"
-                    >
-                      <i className="fa-solid fa-paste" aria-hidden />
-                      Paste
-                    </button>
-                    <button
-                      type="button"
-                      className="gis-style-toolbtn"
-                      onClick={() => {
-                        const snap = persistedSiAppearance(siSymbologyAppearance);
-                        setCustomLayers(prev =>
-                          prev.map(l =>
-                            l.renderMode !== 'raster' && l.geojson && l.visible
-                              ? {
-                                  ...l,
-                                  color: snap.color,
-                                  fillColor: snap.fillColor,
-                                  weight: snap.weight,
-                                  mapOpacity: snap.opacity,
-                                  strokeStyle: snap.strokeStyle as CustomLayer['strokeStyle'],
-                                  polygonFillAlpha: snap.polygonFillAlpha,
-                                  pointRadius: snap.pointRadius,
-                                  fillStyle: snap.fillStyle as CustomLayer['fillStyle'],
-                                  blendMode: snap.blendMode as CustomLayer['blendMode'],
-                                }
-                              : l,
+              ) : activeLayerActionDialog.mode === 'metadata' ? (
+                <dl className="si-layer-metadata-grid">
+                  {[
+                    ['Format', activeDialogLayer.importMetadata?.format],
+                    ['CRS', activeDialogLayer.importMetadata?.crs],
+                    [
+                      'Geometry',
+                      activeDialogLayer.importMetadata?.geometryType
+                        ? String(activeDialogLayer.importMetadata.geometryType)
+                        : resolveLayerGeometryKind(
+                            activeDialogLayer.geojson,
+                            activeDialogLayer.arcgisLayerDefinition,
                           ),
-                        );
-                      }}
-                      disabled={symbologyDraft.useArcGisOnline}
-                      title="Apply current appearance fields to every visible vector layer"
-                    >
-                      <i className="fa-solid fa-layer-group" aria-hidden />
-                      Apply to all layers
-                    </button>
-                    <button
-                      type="button"
-                      className="gis-style-toolbtn"
-                      onClick={() =>
-                        setDrawStyle(d => ({
-                          ...d,
-                          fillColor: siSymbologyAppearance.fillColor,
-                          strokeColor: siSymbologyAppearance.color,
-                          strokeWidth: Math.max(1, Math.round(siSymbologyAppearance.weight)),
-                          fillOpacity: siSymbologyAppearance.polygonFillAlpha,
-                          pointRadius: Math.round(siSymbologyAppearance.pointRadius),
-                        }))
-                      }
-                      disabled={symbologyDraft.useArcGisOnline}
-                      title="Use current colors for new AOI / draw shapes"
-                    >
-                      <i className="fa-solid fa-pen-ruler" aria-hidden />
-                      Sync draw colors
-                    </button>
-                  </div>
-
-                  {symbologyDraft.useArcGisOnline ? (
-                    <>
-                      <div className="gis-style-info">
-                        ArcGIS renderer preview is enabled. Uncheck &quot;Use ArcGIS Online symbology&quot; to configure custom styles.
+                    ],
+                    [
+                      'Features',
+                      typeof activeDialogLayer.importMetadata?.featureCount === 'number'
+                        ? String(activeDialogLayer.importMetadata.featureCount)
+                        : Array.isArray(activeDialogLayer.geojson?.features)
+                          ? String(activeDialogLayer.geojson.features.length)
+                          : undefined,
+                    ],
+                    [
+                      'Dimensions',
+                      activeDialogLayer.importMetadata?.widthPx && activeDialogLayer.importMetadata?.heightPx
+                        ? `${activeDialogLayer.importMetadata.widthPx}×${activeDialogLayer.importMetadata.heightPx}px`
+                        : undefined,
+                    ],
+                    [
+                      'Bands',
+                      typeof activeDialogLayer.importMetadata?.bands === 'number'
+                        ? String(activeDialogLayer.importMetadata.bands)
+                        : undefined,
+                    ],
+                    ['Source', activeDialogLayer.source],
+                    ['Source URL', activeDialogLayer.sourceUrl],
+                    [
+                      'File size',
+                      typeof activeDialogLayer.importMetadata?.bytes === 'number'
+                        ? `${(activeDialogLayer.importMetadata.bytes / (1024 * 1024)).toFixed(2)} MB`
+                        : undefined,
+                    ],
+                    ['Imported', activeDialogLayer.importMetadata?.importedAt],
+                    ['Session only', activeDialogLayer.ephemeral ? 'Yes' : 'No'],
+                  ]
+                    .filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== '')
+                    .map(([label, value]) => (
+                      <div key={label} className="si-layer-metadata-row">
+                        <dt>{label}</dt>
+                        <dd>{value}</dd>
                       </div>
-                      {(() => {
-                        const renderer =
-                          (activeDialogLayer.arcgisDrawingInfo as any)?.renderer ??
-                          (activeDialogLayer.arcgisLayerDefinition as any)?.drawingInfo?.renderer;
-                        const visLabel = describeArcGisRendererVisualization(renderer);
-                        const styleLabel =
-                          symbologyDraft.style === 'unique'
-                            ? 'Types (unique symbols)'
-                            : symbologyDraft.style === 'color_size'
-                              ? 'Counts and Amounts (color + size)'
-                              : symbologyDraft.style === 'size'
-                                ? 'Counts and Amounts (size)'
-                                : symbologyDraft.style === 'dot_density'
-                                  ? 'Dot density'
-                                  : symbologyDraft.style === 'threshold_markers'
-                                    ? 'Single symbol + threshold markers'
-                                    : 'Counts and Amounts (color)';
-                        return (
-                          <div className="gis-style-card" aria-label="ArcGIS visualization">
-                            <div className="gis-style-grid">
-                              <div className="gis-style-field">
-                                <div className="gis-style-label">Visualization style</div>
-                                <div className="gis-style-readonly" title={visLabel}>
-                                  {renderer ? visLabel : 'Loading or unavailable ΓÇö sync the layer if symbols look wrong.'}
-                                </div>
-                              </div>
-                              <div className="gis-style-field">
-                                <div className="gis-style-label">Linked custom style (when unchecked)</div>
-                                <div className="gis-style-readonly">
-                                  {styleLabel}
-                                  {symbologyDraft.field ? ` ┬╖ ${symbologyDraft.field}` : ''}
-                                </div>
-                              </div>
-                            </div>
-                            {renderer?.type === 'heatmap' ? (
-                              <div className="gis-style-info" style={{ marginTop: 10 }}>
-                                Heatmap renderers are not reproduced on this Mapbox map; use custom styles or a heatmap-capable client for this
-                                visualization.
-                              </div>
-                            ) : null}
-                          </div>
-                        );
-                      })()}
-                    </>
-                  ) : (
-                    (() => {
-                      const allFields = getGeoJsonFields(activeDialogLayer.geojson);
-                      const numericFields = getNumericFields(activeDialogLayer.geojson);
-                      const ctx = siSymbologyCtx;
-                      const geometryKind = ctx?.geometryKind ?? getLayerGeometryKind(activeDialogLayer.geojson);
-                      const isUnique = symbologyDraft.style === 'unique';
-                      const isSingle = symbologyDraft.style === 'single';
-                      const classes = clampInt(symbologyDraft.classes, 2, 12);
-                      const showColor =
-                        symbologyDraft.style === 'color' ||
-                        symbologyDraft.style === 'color_size' ||
-                        (isUnique && geometryKind !== 'line');
-                      const showSize = symbologyDraft.style === 'size' || symbologyDraft.style === 'color_size';
-                      const showMethod =
-                        symbologyDraft.style !== 'unique' &&
-                        symbologyDraft.style !== 'threshold_markers' &&
-                        symbologyDraft.style !== 'single';
-                      const showClasses = !isSingle;
-                      const arcDef = activeDialogLayer.arcgisLayerDefinition ?? null;
-                      const fieldsByLower = buildArcFieldsByLower(arcDef);
-                      const fieldNm = symbologyDraft.field;
-                      const layerFeatures = Array.isArray((activeDialogLayer.geojson as any)?.features)
-                        ? ((activeDialogLayer.geojson as any).features as any[])
-                        : [];
-                      const uniqueLegendLabel = (val: string) => {
-                        if (!fieldNm) return val;
-                        const rep = layerFeatures.find((f: any) => {
-                          const r = f?.properties?.[fieldNm];
-                          if (r === null || r === undefined || r === '') return false;
-                          return String(r) === val;
-                        });
-                        if (rep && arcDef) {
-                          const raw = rep.properties?.[fieldNm];
-                          return (
-                            getArcDisplayValue(rep, fieldNm, raw, arcDef, fieldsByLower, 'description').display || val
-                          );
-                        }
-                        if (arcDef) return arcLegendLabelForFieldValue(fieldNm, val, arcDef, fieldsByLower);
-                        return val;
-                      };
-                      const legendItems = (() => {
-                        const items: Array<{
-                          label: string;
-                          kind: 'line' | 'point' | 'polygon';
-                          color: string;
-                          width: number;
-                          dash?: string;
-                          fill?: string;
-                        }> = [];
-                        if (!ctx) return items;
-                        const baseStroke = siSymbologyAppearance.color || activeDialogLayer.color || '#22c55e';
-                        const baseWeight = siSymbologyAppearance.weight;
-                        const previewDash = strokeDashSvgFromStyle(siSymbologyAppearance.strokeStyle);
-                        const kind: 'line' | 'point' | 'polygon' =
-                          geometryKind === 'polygon' ? 'polygon' : geometryKind === 'point' ? 'point' : 'line';
-                        if (symbologyDraft.style === 'single') {
-                          const fill = siSymbologyAppearance.fillColor;
-                          items.push({
-                            label: 'Base symbol',
-                            kind,
-                            color: baseStroke,
-                            width: baseWeight,
-                            dash: previewDash || undefined,
-                            fill,
-                          });
-                          return items;
-                        }
-                        if (symbologyDraft.style === 'unique') {
-                          if (kind === 'line') {
-                            const vals = ctx.categories.length ? ctx.categories : Object.keys(ctx.uniqueDashes);
-                            vals.slice(0, 12).forEach(val => {
-                              items.push({
-                                label: uniqueLegendLabel(val),
-                                kind,
-                                color: baseStroke,
-                                width: baseWeight,
-                                dash: ctx.uniqueDashes[val] ?? '',
-                              });
-                            });
-                            if (vals.length === 0) items.push({ label: 'No values', kind, color: baseStroke, width: baseWeight });
-                            return items;
-                          }
-                          const vals = ctx.categories.length ? ctx.categories : Object.keys(ctx.categoryColors);
-                          vals.slice(0, 12).forEach(val => {
-                            const fill = ctx.categoryColors[val] ?? ctx.otherColor;
-                            items.push({
-                              label: uniqueLegendLabel(val),
-                              kind,
-                              color: darkenColor(fill, 0.25),
-                              width: baseWeight,
-                              fill,
-                            });
-                          });
-                          if (vals.length === 0)
-                            items.push({ label: 'No values', kind, color: baseStroke, width: baseWeight, fill: baseStroke });
-                          return items;
-                        }
-                        if (symbologyDraft.style === 'threshold_markers') {
-                          items.push({ label: 'Base', kind, color: baseStroke, width: baseWeight });
-                          items.push({
-                            label: `Marker ΓëÑ ${ctx.threshold.toFixed(2)}`,
-                            kind: 'point',
-                            color: '#ef4444',
-                            width: 4,
-                            fill: '#ef4444',
-                          });
-                          return items;
-                        }
-                        const breaks = ctx.breaks;
-                        for (let i = 0; i < Math.min(classes, breaks.length - 1); i += 1) {
-                          const a = breaks[i];
-                          const b = breaks[i + 1];
-                          const label = `${a.toFixed(2)} ΓÇô ${b.toFixed(2)}`;
-                          const color = showColor ? ctx.colors[i] ?? baseStroke : baseStroke;
-                          const width = showSize ? ctx.widths[i] ?? baseWeight : baseWeight;
-                          const dash = symbologyDraft.style === 'dot_density' ? ctx.dotDashes[i] : undefined;
-                          if (kind === 'polygon') {
-                            const fill = showColor ? color : baseStroke;
-                            items.push({ label, kind, color: darkenColor(fill, 0.25), width, dash, fill });
-                          } else if (kind === 'point') {
-                            const fill = showColor ? color : baseStroke;
-                            items.push({ label, kind, color: darkenColor(fill, 0.25), width, dash, fill });
-                          } else {
-                            items.push({ label, kind, color, width, dash });
-                          }
-                        }
-                        return items;
-                      })();
-
-                      return (
-                        <>
-                          <div className="gis-style-card">
-                            <div className="gis-style-grid">
-                              <div className="gis-style-field">
-                                <div className="gis-style-label">Style</div>
-                                <div className="gis-style-selectwrap">
-                                  <select
-                                    className="gis-style-select"
-                                    value={symbologyDraft.style}
-                                    onChange={e => updateSymbologyDraft({ style: e.target.value as SymbologyStyle })}
-                                  >
-                                    <option value="single">Location (single symbol)</option>
-                                    <option value="unique">Types (unique symbols)</option>
-                                    <option value="color">Counts and Amounts (color)</option>
-                                    <option value="size">Counts and Amounts (size)</option>
-                                    <option value="color_size">Counts and Amounts (color + size)</option>
-                                    <option value="dot_density">Dot density</option>
-                                    <option value="threshold_markers">Single symbol + threshold markers</option>
-                                  </select>
-                                  <i className="fa-solid fa-chevron-down" aria-hidden="true" />
-                                </div>
-                              </div>
-
-                              {!isSingle ? (
-                              <div className="gis-style-field">
-                                <div className="gis-style-label">{isUnique ? 'Attribute (categorical)' : 'Attribute (numeric)'}</div>
-                                <div className="gis-style-selectwrap">
-                                  <select
-                                    className="gis-style-select"
-                                    value={symbologyDraft.field}
-                                    onChange={e => updateSymbologyDraft({ field: e.target.value })}
-                                  >
-                                    {isUnique ? (
-                                      allFields.length ? null : (
-                                        <option value="">No fields</option>
-                                      )
-                                    ) : numericFields.length ? null : (
-                                      <option value="">No numeric fields</option>
-                                    )}
-                                    {(isUnique ? allFields : numericFields).map(f => (
-                                      <option key={f} value={f}>
-                                        {f}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  <i className="fa-solid fa-chevron-down" aria-hidden="true" />
-                                </div>
-                              </div>
-                              ) : null}
-
-                              {showColor ? (
-                                <div className="gis-style-field">
-                                  <div className="gis-style-label">Color ramp</div>
-                                  <div className="gis-style-selectwrap">
-                                    <select
-                                      className="gis-style-select"
-                                      value={symbologyDraft.colorRamp}
-                                      onChange={e => updateSymbologyDraft({ colorRamp: e.target.value as SymbologyColorRamp })}
-                                    >
-                                      <option value="viridis">Viridis</option>
-                                      <option value="blues">Blues</option>
-                                      <option value="greens">Greens</option>
-                                      <option value="plasma">Plasma</option>
-                                      <option value="magma">Magma</option>
-                                      <option value="turbo">Turbo</option>
-                                    </select>
-                                    <i className="fa-solid fa-chevron-down" aria-hidden="true" />
-                                  </div>
-                                </div>
-                              ) : null}
-
-                              {showClasses ? (
-                                <div className="gis-style-field">
-                                  <div className="gis-style-label">{isUnique ? 'Max categories' : 'Classes'}</div>
-                                  <div className="gis-style-selectwrap">
-                                    <select
-                                      className="gis-style-select"
-                                      value={String(classes)}
-                                      onChange={e => updateSymbologyDraft({ classes: parseInt(e.target.value, 10) })}
-                                    >
-                                      {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
-                                        <option key={n} value={String(n)}>
-                                          {n}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    <i className="fa-solid fa-chevron-down" aria-hidden="true" />
-                                  </div>
-                                </div>
-                              ) : null}
-
-                              {showMethod ? (
-                                <div className="gis-style-field">
-                                  <div className="gis-style-label">Method</div>
-                                  <div className="gis-style-selectwrap">
-                                    <select
-                                      className="gis-style-select"
-                                      value={symbologyDraft.method}
-                                      onChange={e => updateSymbologyDraft({ method: e.target.value as SymbologyClassMethod })}
-                                    >
-                                      <option value="jenks">Natural breaks</option>
-                                      <option value="quantile">Quantile</option>
-                                      <option value="equal_interval">Equal interval</option>
-                                    </select>
-                                    <i className="fa-solid fa-chevron-down" aria-hidden="true" />
-                                  </div>
-                                </div>
-                              ) : null}
-
-                              {symbologyDraft.style === 'threshold_markers' ? (
-                                <div className="gis-style-field">
-                                  <div className="gis-style-label">Threshold</div>
-                                  <input
-                                    className="gis-style-input"
-                                    type="number"
-                                    value={Number.isFinite(symbologyDraft.threshold) ? String(symbologyDraft.threshold) : ''}
-                                    onChange={e =>
-                                      updateSymbologyDraft({
-                                        threshold: e.target.value === '' ? Number.NaN : Number(e.target.value),
-                                      })
-                                    }
-                                    placeholder="Threshold"
-                                  />
-                                </div>
-                              ) : null}
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            className="gis-style-acc-trigger"
-                            onClick={() =>
-                              setSiStudioSections(s => {
-                                const n = { ...s, appearance: !s.appearance };
-                                saveSiStudioSectionPrefs(n, siStyleStudioPrefsLs);
-                                return n;
-                              })
-                            }
-                          >
-                            <i className={`fa-solid fa-chevron-${siStudioSections.appearance ? 'down' : 'right'}`} aria-hidden />
-                            <span>Symbol appearance (live map)</span>
-                          </button>
-                          {siStudioSections.appearance ? (
-                            <div className="gis-style-card" aria-label="Symbol appearance">
-                              <div className="gis-style-grid">
-                                <div className="gis-style-field">
-                                  <div className="gis-style-label">Outline color</div>
-                                  <input
-                                    className="gis-style-input"
-                                    type="color"
-                                    value={siSymbologyAppearance.color.startsWith('#') ? siSymbologyAppearance.color : '#15803d'}
-                                    onChange={e => updateSiSymbologyAppearance({ color: e.target.value })}
-                                    aria-label="Outline color"
-                                  />
-                                </div>
-                                <div className="gis-style-field">
-                                  <div className="gis-style-label">Fill color</div>
-                                  <input
-                                    className="gis-style-input"
-                                    type="color"
-                                    value={siSymbologyAppearance.fillColor.startsWith('#') ? siSymbologyAppearance.fillColor : '#22c55e'}
-                                    onChange={e => updateSiSymbologyAppearance({ fillColor: e.target.value })}
-                                    aria-label="Fill color"
-                                  />
-                                </div>
-                                <div className="gis-style-field">
-                                  <div className="gis-style-label">Stroke style</div>
-                                  <div className="gis-style-selectwrap">
-                                    <select
-                                      className="gis-style-select"
-                                      value={siSymbologyAppearance.strokeStyle}
-                                      onChange={e =>
-                                        updateSiSymbologyAppearance({ strokeStyle: e.target.value as SiSymbologyAppearance['strokeStyle'] })
-                                      }
-                                    >
-                                      <option value="solid">Solid</option>
-                                      <option value="dashed">Dashed</option>
-                                      <option value="dotted">Dotted</option>
-                                      <option value="dashdot">Dash / dot</option>
-                                    </select>
-                                    <i className="fa-solid fa-chevron-down" aria-hidden />
-                                  </div>
-                                </div>
-                                <div className="gis-style-field">
-                                  <div className="gis-style-label">Fill style</div>
-                                  <div className="gis-style-selectwrap">
-                                    <select
-                                      className="gis-style-select"
-                                      value={siSymbologyAppearance.fillStyle}
-                                      onChange={e =>
-                                        updateSiSymbologyAppearance({ fillStyle: e.target.value as SiSymbologyAppearance['fillStyle'] })
-                                      }
-                                    >
-                                      <option value="solid">Solid</option>
-                                      <option value="pattern">Pattern</option>
-                                      <option value="hatch">Hatch</option>
-                                      <option value="gradient">Gradient</option>
-                                    </select>
-                                    <i className="fa-solid fa-chevron-down" aria-hidden />
-                                  </div>
-                                </div>
-                                <div className="gis-style-field">
-                                  <div className="gis-style-label">Blend mode (stored)</div>
-                                  <div className="gis-style-selectwrap">
-                                    <select
-                                      className="gis-style-select"
-                                      value={siSymbologyAppearance.blendMode}
-                                      onChange={e =>
-                                        updateSiSymbologyAppearance({ blendMode: e.target.value as SiSymbologyAppearance['blendMode'] })
-                                      }
-                                    >
-                                      <option value="normal">Normal</option>
-                                      <option value="multiply">Multiply</option>
-                                      <option value="screen">Screen</option>
-                                      <option value="overlay">Overlay</option>
-                                      <option value="darken">Darken</option>
-                                      <option value="lighten">Lighten</option>
-                                    </select>
-                                    <i className="fa-solid fa-chevron-down" aria-hidden />
-                                  </div>
-                                  <div className="gis-style-hint">Vector blend is stored for export; Mapbox GL paints use opacity.</div>
-                                </div>
-                              </div>
-                              <div className="gis-style-slider-stack">
-                                <div className="gis-style-label">Layer opacity ({Math.round(siSymbologyAppearance.opacity * 100)}%)</div>
-                                <input
-                                  type="range"
-                                  min={5}
-                                  max={100}
-                                  value={Math.round(siSymbologyAppearance.opacity * 100)}
-                                  onChange={e => updateSiSymbologyAppearance({ opacity: Number(e.target.value) / 100 })}
-                                />
-                                <div className="gis-style-label">Polygon fill strength ({Math.round(siSymbologyAppearance.polygonFillAlpha * 100)}%)</div>
-                                <input
-                                  type="range"
-                                  min={0}
-                                  max={100}
-                                  value={Math.round(siSymbologyAppearance.polygonFillAlpha * 100)}
-                                  onChange={e => updateSiSymbologyAppearance({ polygonFillAlpha: Number(e.target.value) / 100 })}
-                                />
-                                <div className="gis-style-label">Outline width ({siSymbologyAppearance.weight.toFixed(1)} px)</div>
-                                <input
-                                  type="range"
-                                  min={5}
-                                  max={160}
-                                  value={Math.round(siSymbologyAppearance.weight * 10)}
-                                  onChange={e => updateSiSymbologyAppearance({ weight: Number(e.target.value) / 10 })}
-                                />
-                                <div className="gis-style-label">Point size ({siSymbologyAppearance.pointRadius}px)</div>
-                                <input
-                                  type="range"
-                                  min={3}
-                                  max={24}
-                                  value={siSymbologyAppearance.pointRadius}
-                                  onChange={e => updateSiSymbologyAppearance({ pointRadius: Number(e.target.value) })}
-                                />
-                                <div className="gis-style-label">Legend corner radius ({siSymbologyAppearance.previewCornerRadius}px)</div>
-                                <input
-                                  type="range"
-                                  min={0}
-                                  max={24}
-                                  value={siSymbologyAppearance.previewCornerRadius}
-                                  onChange={e => updateSiSymbologyAppearance({ previewCornerRadius: Number(e.target.value) })}
-                                />
-                              </div>
-                            </div>
-                          ) : null}
-
-                          <button
-                            type="button"
-                            className="gis-style-acc-trigger"
-                            onClick={() =>
-                              setSiStudioSections(s => {
-                                const n = { ...s, templates: !s.templates };
-                                saveSiStudioSectionPrefs(n, siStyleStudioPrefsLs);
-                                return n;
-                              })
-                            }
-                          >
-                            <i className={`fa-solid fa-chevron-${siStudioSections.templates ? 'down' : 'right'}`} aria-hidden />
-                            <span>Style templates</span>
-                          </button>
-                          {siStudioSections.templates ? (
-                            <div className="gis-style-card" aria-label="Presets">
-                              <div className="gis-style-preset-row" role="list">
-                                {SI_STYLE_PRESET_CHIPS.map(p => (
-                                  <button
-                                    key={p.id}
-                                    type="button"
-                                    className="gis-style-preset-chip"
-                                    role="listitem"
-                                    onClick={() => updateSiSymbologyAppearance({ ...p.patch })}
-                                  >
-                                    {p.label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          ) : null}
-
-                          <div className="gis-style-card gis-style-card-legend">
-                            <div className="gis-style-legend">
-                              {legendItems.map((it, idx) => (
-                                <div key={idx} className="gis-style-legend-row">
-                                  <svg width="62" height="14" viewBox="0 0 62 14" aria-hidden="true">
-                                    {it.kind === 'line' ? (
-                                      <line
-                                        x1="4"
-                                        y1="7"
-                                        x2="58"
-                                        y2="7"
-                                        stroke={it.color}
-                                        strokeWidth={it.width}
-                                        strokeLinecap="round"
-                                        strokeDasharray={it.dash || undefined}
-                                      />
-                                    ) : it.kind === 'polygon' ? (
-                                      <rect
-                                        x="18"
-                                        y="2"
-                                        width="26"
-                                        height="10"
-                                        rx={Math.min(8, siSymbologyAppearance.previewCornerRadius)}
-                                        fill={it.fill || it.color}
-                                        stroke={it.color}
-                                        strokeWidth="2"
-                                      />
-                                    ) : (
-                                      <circle cx="31" cy="7" r="5" fill={it.fill || it.color} stroke={it.color} strokeWidth="2" />
-                                    )}
-                                  </svg>
-                                  <div className="gis-style-legend-text">{it.label}</div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </>
-                      );
-                    })()
-                  )}
-
-                  <div className="gis-style-footer">
-                    <button className="gis-btn" type="button" onClick={() => cancelSiSymbologyDialog()}>
-                      Cancel
-                    </button>
-                    <button className="gis-btn gis-btn-primary" type="button" onClick={() => void applySymbologyDraft()}>
-                      Save Style
-                    </button>
-                  </div>
-                </>
+                    ))}
+                </dl>
               ) : (
                 <div className="si-layer-action-legend">
                   <div className="si-layer-action-legend-row">
@@ -20065,7 +21270,7 @@ export default function SatelliteIntelligence() {
                     onChange={e => setStacModalDraft(d => ({ ...d, customCatalogBaseUrl: e.target.value }))}
                     placeholder="https://example.com/stac/v1"
                   />
-                  <small className="si-stac-field-hint">Provide API root (ΓÇª/v1) or a full ΓÇª/search URL.</small>
+                  <small className="si-stac-field-hint">Provide API root (.../v1) or a full .../search URL.</small>
                 </label>
               ) : null}
 
@@ -20095,7 +21300,7 @@ export default function SatelliteIntelligence() {
                         autoComplete="off"
                         value={stacModalDraft.bearerToken}
                         onChange={e => setStacModalDraft(d => ({ ...d, bearerToken: e.target.value }))}
-                        placeholder="Session only ΓÇö not saved to disk"
+                        placeholder="Session only - not saved to disk"
                       />
                     </label>
                   ) : null}
@@ -20217,11 +21422,11 @@ export default function SatelliteIntelligence() {
                   onClick={openAcsPicker}
                   aria-expanded={isAcsPickerOpen}
                 >
-                  <span className="si-stac-cloud-summary-chevron" aria-hidden>Γû╕</span>
+                  <span className="si-stac-cloud-summary-chevron" aria-hidden>{'>'}</span>
                   <span className="si-stac-cloud-summary-label">Cloud Storage Connections (Optional)</span>
                   <span
                     className="si-stac-info-icon"
-                    title="┘à┘ä┘ü╪º╪¬ .acs ┘à┘å https://github.com/Esri/arcgis-for-mpc ΓÇö ┘ä┘ä┘à╪▒╪¼╪╣┘è╪⌐╪¢ ArcGIS Pro ┘è╪│╪¬┘ç┘ä┘â┘ç╪º ┘à╪¡┘ä┘è╪º┘ï"
+                    title=".acs files from https://github.com/Esri/arcgis-for-mpc - for reference; ArcGIS Pro consumes them locally"
                     onPointerDown={e => e.stopPropagation()}
                   >
                     <i className="fa-solid fa-circle-info" aria-hidden />
@@ -20230,7 +21435,7 @@ export default function SatelliteIntelligence() {
                 <div className="si-stac-details-inner si-stac-cloud-summary-body">
                   {stacModalDraft.cloudStorageEntries.length === 0 ? (
                     <p className="si-stac-cloud-hint">
-                      ╪º┘å┘é╪▒ <strong>Cloud Storage Connections</strong> ┘ä┘ü╪¬╪¡ ┘å╪º┘ü╪░╪⌐ ╪º╪«╪¬┘è╪º╪▒ ╪º┘ä┘à┘ä┘ü╪º╪¬ ╪ú┘ê ╪º┘ä┘à╪│╪º╪▒╪º╪¬.
+                      Click <strong>Cloud Storage Connections</strong> to open the file or path picker.
                     </p>
                   ) : (
                     <ul className="si-stac-cloud-list si-stac-cloud-list--compact">
@@ -20299,15 +21504,15 @@ export default function SatelliteIntelligence() {
               <div className="si-acs-picker-header">
                 <div>
                   <h2 id="si-acs-picker-title">Add Cloud Storage Connection File</h2>
-                  <p className="si-acs-picker-subtitle">╪Ñ╪╢╪º┘ü╪⌐ ┘à┘ä┘ü╪º╪¬ (.acs) ╪ú┘ê ┘à╪│╪º╪▒╪º╪¬ ΓÇö ╪º┘ä┘à╪¬╪╡┘ü╪¡ ┘è╪╣╪▒╪╢ ╪ú╪│┘à╪º╪í ╪º┘ä┘à┘ä┘ü╪º╪¬ ╪º┘ä┘à╪«╪¬╪º╪▒╪⌐╪¢ ╪º┘ä╪╡┘è╪║╪⌐ ╪º┘ä┘â╪º┘à┘ä╪⌐ ╪¬┘Å┘ä╪╡┘Ä┘é ┘è╪»┘ê┘è╪º┘ï</p>
+                  <p className="si-acs-picker-subtitle">Add files (.acs) or paths - the browser lists selected file names; full validation runs locally.</p>
                 </div>
                 <button type="button" className="si-stac-modal-close" aria-label="Close" onClick={cancelAcsPicker}>
                   <i className="fa-solid fa-xmark" />
                 </button>
               </div>
               <div className="si-acs-picker-breadcrumb-row">
-                <span className="si-acs-breadcrumb" title="┘à╪½╪º┘ä ┘ç┘è┘â┘ä ┘à╪¼┘ä╪»╪º╪¬ MPC">
-                  Downloads <span className="si-acs-bc-sep">ΓÇ║</span> arcgis-for-mpc-main <span className="si-acs-bc-sep">ΓÇ║</span> AMPC_Resources <span className="si-acs-bc-sep">ΓÇ║</span> ACS_Files
+                <span className="si-acs-breadcrumb" title="Example MPC folder layout">
+                  Downloads <span className="si-acs-bc-sep">/</span> arcgis-for-mpc-main <span className="si-acs-bc-sep">/</span> AMPC_Resources <span className="si-acs-bc-sep">/</span> ACS_Files
                 </span>
                 <input
                   type="search"
@@ -20325,7 +21530,7 @@ export default function SatelliteIntelligence() {
                 </div>
                 <ul className="si-acs-file-list">
                   {acsPickerStaging.length === 0 ? (
-                    <li className="si-acs-file-list-empty">No files selected ΓÇö use Browse to choose .acs files</li>
+                    <li className="si-acs-file-list-empty">No files selected - use Browse to choose .acs files</li>
                   ) : (
                     acsPickerStaging
                       .filter(
@@ -20362,7 +21567,7 @@ export default function SatelliteIntelligence() {
                     value={acsPickerManualPath}
                     onChange={e => setAcsPickerManualPath(e.target.value)}
                     rows={3}
-                    placeholder="C:\Users\ΓÇª\esrims_pc_sentinel-2-l2a.acs"
+                    placeholder="C:\Users\...\esrims_pc_sentinel-2-l2a.acs"
                   />
                 </label>
                 <div className="si-acs-picker-bottom-bar">
@@ -20373,7 +21578,7 @@ export default function SatelliteIntelligence() {
                     </select>
                   </label>
                   <button type="button" className="si-acs-browse-btn" onClick={() => acsFileInputRef.current?.click()}>
-                    <i className="fa-solid fa-folder-open" aria-hidden /> BrowseΓÇª
+                    <i className="fa-solid fa-folder-open" aria-hidden /> Browse...
                   </button>
                   <div className="si-acs-picker-okcancel">
                     <button type="button" className="si-stac-modal-cancel" onClick={cancelAcsPicker}>

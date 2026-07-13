@@ -48,9 +48,20 @@ export function shouldFreezeViewportDataPipeline(isIsolated: boolean): boolean {
   return isIsolated
 }
 
+/** Layers AOI WMS active — pin mask + tile URLs; ignore viewport bbox churn on pan/zoom. */
+export function shouldFreezeLayerAoiViewportPipeline(
+  layersAoiWmsActive: boolean,
+  freezeViewportPipeline: boolean,
+): boolean {
+  return freezeViewportPipeline || layersAoiWmsActive
+}
+
 /** Skip per-frame viewport reads during pan/zoom when AOI/raster data is frozen. */
-export function shouldSkipLiveViewportWorkOnMove(freezeViewportPipeline: boolean): boolean {
-  return freezeViewportPipeline
+export function shouldSkipLiveViewportWorkOnMove(
+  freezeViewportPipeline: boolean,
+  layersAoiWmsActive = false,
+): boolean {
+  return shouldFreezeLayerAoiViewportPipeline(layersAoiWmsActive, freezeViewportPipeline)
 }
 
 export function bboxRefKey(bbox: LngLatBBox | null | undefined): string {

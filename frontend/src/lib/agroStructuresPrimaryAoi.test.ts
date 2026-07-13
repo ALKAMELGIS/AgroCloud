@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   AGRO_STRUCTURES_FS21_URL,
+  agroStructuresFullLayerSqlWhere,
   agroStructuresHitPropertiesMatch,
   agroStructuresSentinelMaskSqlWhere,
   buildAgroStructuresBboxQueryUrl,
@@ -12,11 +13,14 @@ import {
   findAgroStructuresFeatureInLayer,
   isAgroStructuresLayer,
   isAgroStructuresLayerUrl,
+  isAgroStructuresServiceUrl,
   normalizeArcgisLayerUrl,
+  resolveAgroStructuresLayerUrl,
   resolveAgroStructuresCountryCode,
   resolveAgroStructuresCountryDisplayName,
   resolveAgroStructuresCountryLabel,
   resolveAgroStructuresFieldDisplayName,
+  normalizeAgroStructuresFeatureForSymbology,
 } from './agroStructuresPrimaryAoi'
 
 describe('agroStructuresPrimaryAoi', () => {
@@ -30,6 +34,14 @@ describe('agroStructuresPrimaryAoi', () => {
     expect(normalizeArcgisLayerUrl('arcgis:' + AGRO_STRUCTURES_FS21_URL)).toBe(
       normalizeArcgisLayerUrl(AGRO_STRUCTURES_FS21_URL),
     )
+  })
+
+  it('maps legacy Agro_Structures layer ids to FeatureServer/21', () => {
+    const legacy =
+      'https://services1.arcgis.com/jz3ndhbYV5K9NwI8/arcgis/rest/services/Agro_Structures/FeatureServer/27'
+    expect(isAgroStructuresServiceUrl(legacy)).toBe(true)
+    expect(resolveAgroStructuresLayerUrl(legacy)).toBe(AGRO_STRUCTURES_FS21_URL)
+    expect(isAgroStructuresLayerUrl(legacy)).toBe(true)
   })
 
   it('converts polygon features to primary AOI', () => {
@@ -182,6 +194,22 @@ describe('agroStructuresPrimaryAoi', () => {
     expect(url).toContain('geometryType=esriGeometryEnvelope')
     expect(url).toContain('spatialRel=esriSpatialRelIntersects')
     expect(url).toContain(AGRO_STRUCTURES_FS21_URL)
+  })
+
+  it('exposes full-layer SQL for map display (all Structure_Type subtypes)', () => {
+    expect(agroStructuresFullLayerSqlWhere()).toBe('1=1')
+  })
+
+  it('normalizes Structure_Type labels to numeric codes for symbology', () => {
+    const raw = {
+      type: 'Feature',
+      properties: { Structure_Type: 'Greenhouse', OBJECTID: 1 },
+      geometry: { type: 'Polygon', coordinates: [] },
+    }
+    const out = normalizeAgroStructuresFeatureForSymbology(raw) as {
+      properties?: { Structure_Type?: number }
+    }
+    expect(out.properties?.Structure_Type).toBe(1000)
   })
 
   it('totals polygon counts per Structure_Type from full GeoJSON', () => {

@@ -1,0 +1,264 @@
+/* Enterprise GIS floating workspace panel — dark glass theme */
+
+.gis-float-panel {
+  position: absolute;
+  z-index: 15200;
+  pointer-events: auto;
+  font-family: Inter, 'Segoe UI', system-ui, sans-serif;
+  font-size: 11px;
+  color: #e2e8f0;
+  animation: gis-float-panel-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.gis-float-panel--dragging,
+.gis-float-panel--resizing {
+  animation: none;
+  user-select: none;
+}
+
+.gis-float-panel--dock-left,
+.gis-float-panel--dock-right {
+  border-radius: 0;
+}
+
+@keyframes gis-float-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.gis-float-panel__chrome {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(12, 12, 14, 0.88);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  overflow: hidden;
+}
+
+.gis-float-panel--dock-left .gis-float-panel__chrome,
+.gis-float-panel--dock-right .gis-float-panel__chrome {
+  border-radius: 0;
+  height: 100%;
+}
+
+.gis-float-panel--minimized .gis-float-panel__chrome {
+  height: auto;
+}
+
+.gis-float-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 8px 0 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0));
+  cursor: grab;
+  flex-shrink: 0;
+  touch-action: none;
+}
+
+.gis-float-panel--dragging .gis-float-panel__header {
+  cursor: grabbing;
+}
+
+.gis-float-panel__grip {
+  flex-shrink: 0;
+  color: rgba(148, 163, 184, 0.65);
+  display: inline-flex;
+}
+
+.gis-float-panel__layer-icon {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(96, 165, 250, 0.25);
+  color: #93c5fd;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+
+.gis-float-panel__titles {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.gis-float-panel__layer-name {
+  font-size: 13px;
+  font-weight: 650;
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.gis-float-panel__subtitle {
+  font-size: 10px;
+  color: #94a3b8;
+  line-height: 1.2;
+}
+
+.gis-float-panel__search {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 0 1 140px;
+  padding: 0 8px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.35);
+  color: #94a3b8;
+}
+
+.gis-float-panel__search input {
+  border: none;
+  background: transparent;
+  color: #e2e8f0;
+  font-size: 11px;
+  width: 100%;
+  min-width: 0;
+  outline: none;
+}
+
+@media (min-width: 480px) {
+  .gis-float-panel__search {
+    display: inline-flex;
+  }
+}
+
+.gis-float-panel__winbtns {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.gis-float-panel__winbtn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 180ms ease, border-color 180ms ease, color 180ms ease;
+}
+
+.gis-float-panel__winbtn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #f1f5f9;
+}
+
+.gis-float-panel__winbtn--close:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(248, 113, 113, 0.35);
+  color: #fca5a5;
+}
+
+.gis-float-panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.gis-float-panel__footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* Resize handles */
+.gis-float-panel__resize {
+  position: absolute;
+  z-index: 2;
+}
+
+.gis-float-panel__resize--n {
+  top: 0;
+  left: 8px;
+  right: 8px;
+  height: 4px;
+  cursor: n-resize;
+}
+.gis-float-panel__resize--s {
+  bottom: 0;
+  left: 8px;
+  right: 8px;
+  height: 4px;
+  cursor: s-resize;
+}
+.gis-float-panel__resize--e {
+  right: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 4px;
+  cursor: e-resize;
+}
+.gis-float-panel__resize--w {
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 4px;
+  cursor: w-resize;
+}
+.gis-float-panel__resize--ne {
+  top: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  cursor: ne-resize;
+}
+.gis-float-panel__resize--nw {
+  top: 0;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  cursor: nw-resize;
+}
+.gis-float-panel__resize--se {
+  bottom: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  cursor: se-resize;
+}
+.gis-float-panel__resize--sw {
+  bottom: 0;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  cursor: sw-resize;
+}

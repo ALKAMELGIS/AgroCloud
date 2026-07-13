@@ -183,6 +183,26 @@ export function listSiAoiMaskBuilderLayerOptions(
     .sort((a, b) => a.label.localeCompare(b.label))
 }
 
+/** Vector custom layers usable as Sentinel clip AOI (includes viewport-streaming layers before tiles load). */
+export function listSiAoiLayerModeOptions(
+  layers: SiAoiMaskBuilderLayerLike[],
+): SiAoiMaskBuilderLayerOption[] {
+  return layers
+    .filter(l => {
+      if (l.renderMode === 'raster') return false
+      if (!l.id) return false
+      const n = Array.isArray(l.geojson?.features) ? l.geojson!.features!.length : 0
+      if (n > 0) return true
+      return Boolean((l as { viewportStreaming?: boolean }).viewportStreaming)
+    })
+    .map(l => ({
+      id: String(l.id),
+      label: String(l.name || l.id),
+      featureCount: Array.isArray(l.geojson?.features) ? l.geojson!.features!.length : 0,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+}
+
 export function listSiAoiMaskBuilderFieldOptions(layer: SiAoiMaskBuilderLayerLike | null | undefined): string[] {
   if (!layer) return []
   const names = new Set<string>()

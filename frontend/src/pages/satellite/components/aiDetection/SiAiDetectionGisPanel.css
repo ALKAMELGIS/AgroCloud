@@ -1,0 +1,732 @@
+.si-ai-dl-gp {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  color: #cbd5e1;
+  font-size: 11px;
+}
+
+.si-ai-dl-gp__tool-title {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: -0.01em;
+}
+
+.si-ai-dl-gp__tool-hint {
+  margin: 0 0 8px;
+  font-size: 10px;
+  line-height: 1.35;
+  color: #94a3b8;
+}
+
+.si-ai-dl-gp__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.si-ai-dl-gp__label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.si-ai-dl-gp__req {
+  color: #fb923c;
+  font-weight: 800;
+}
+
+.si-ai-dl-gp__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.si-ai-dl-gp__input,
+.si-ai-dl-gp__select {
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.55);
+  color: #e2e8f0;
+  font: inherit;
+  font-size: 10.5px;
+}
+
+.si-ai-dl-gp__input:focus,
+.si-ai-dl-gp__select:focus {
+  outline: none;
+  border-color: rgba(56, 189, 248, 0.45);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.2);
+}
+
+.si-ai-dl-gp__browse {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.65);
+  color: #fbbf24;
+  cursor: pointer;
+}
+
+.si-ai-dl-gp__browse:hover {
+  border-color: rgba(251, 191, 36, 0.55);
+  color: #fde68a;
+}
+
+.si-ai-dl-gp__section {
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  padding-top: 8px;
+}
+
+.si-ai-dl-gp__section-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  border: none;
+  background: transparent;
+  color: #e2e8f0;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+
+.si-ai-dl-gp__section-toggle i {
+  width: 12px;
+  font-size: 9px;
+  color: #94a3b8;
+}
+
+.si-ai-dl-gp__section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 0 2px;
+}
+
+.si-ai-dl-gp__meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 8px 0;
+  font-size: 10px;
+}
+
+.si-ai-dl-gp__meta dt {
+  margin: 0;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.si-ai-dl-gp__meta dd {
+  margin: 0;
+  color: #e2e8f0;
+}
+
+.si-ai-dl-gp__class-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.si-ai-dl-gp__class-pill {
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  background: rgba(14, 116, 144, 0.15);
+  color: #bae6fd;
+  font-size: 9.5px;
+}
+
+.si-ai-dl-gp__arg-head,
+.si-ai-dl-gp__arg-row {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr auto;
+  gap: 4px;
+  align-items: center;
+}
+
+.si-ai-dl-gp__arg-head {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  margin-bottom: 2px;
+}
+
+.si-ai-dl-gp__arg-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.si-ai-dl-gp__mini-btn {
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.5);
+  color: #cbd5e1;
+  font-size: 9.5px;
+  cursor: pointer;
+}
+
+.si-ai-dl-gp__mini-btn:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.si-ai-dl-gp__mini-btn--danger:hover {
+  border-color: rgba(248, 113, 113, 0.45);
+  color: #fecaca;
+}
+
+.si-ai-dl-gp__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: #cbd5e1;
+  cursor: pointer;
+}
+
+.si-ai-dl-gp__check input {
+  accent-color: #38bdf8;
+}
+
+.si-ai-dl-gp__slider-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.si-ai-dl-gp__slider-row input[type='range'] {
+  width: 100%;
+}
+
+.si-ai-dl-gp__progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
+}
+
+.si-ai-dl-gp__progress-label {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.si-ai-dl-gp__progress-track {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(15, 23, 42, 0.7);
+  overflow: hidden;
+}
+
+.si-ai-dl-gp__progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0ea5e9, #22c55e);
+  transition: width 0.25s ease;
+}
+
+.si-ai-dl-gp__metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.si-ai-dl-gp__metric {
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.si-ai-dl-gp__metric span {
+  display: block;
+  font-size: 9px;
+  color: #64748b;
+}
+
+.si-ai-dl-gp__metric strong {
+  font-size: 11px;
+  color: #f8fafc;
+}
+
+.si-ai-dl-gp__runbar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.si-ai-dl-gp__run-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.si-ai-dl-gp__run-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: rgba(14, 116, 144, 0.25);
+  color: #e0f2fe;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.si-ai-dl-gp__run-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.si-ai-dl-gp__run-btn:not(:disabled):hover {
+  border-color: rgba(56, 189, 248, 0.6);
+  background: rgba(14, 116, 144, 0.4);
+}
+
+.si-ai-dl-gp__run-btn--ghost {
+  border-color: rgba(148, 163, 184, 0.28);
+  background: transparent;
+  color: #94a3b8;
+}
+
+.si-ai-dl-gp__status {
+  margin: 0;
+  font-size: 10px;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+
+.si-ai-dl-gp__status.is-error {
+  color: #fca5a5;
+}
+
+.si-ai-dl-gp__status.is-done {
+  color: #86efac;
+}
+
+.si-ai-dl-gp__library {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.si-ai-dl-gp__library-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.28);
+}
+
+.si-ai-dl-gp__library-row strong {
+  display: block;
+  font-size: 10px;
+  color: #f1f5f9;
+}
+
+.si-ai-dl-gp__library-row span {
+  font-size: 9px;
+  color: #64748b;
+}
+
+.si-ai-det-gis {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: min(78vh, 760px);
+}
+
+.si-ai-det-gis .si-field-analysis-header {
+  flex-shrink: 0;
+}
+
+.si-ai-dl-gp__row--browse-duo {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.si-ai-dl-gp__row--browse-input {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.si-ai-dl-gp__input--picker {
+  cursor: pointer;
+}
+
+.si-ai-dl-gp__input--picker:disabled {
+  cursor: not-allowed;
+}
+
+.si-ai-dl-gp__layer-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.si-ai-dl-gp__layer-pick-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #e2e8f0;
+  font-size: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.si-ai-dl-gp__layer-pick-btn:hover {
+  background: rgba(56, 189, 248, 0.12);
+}
+
+.si-ai-dl-gp__layer-pick-footer {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.si-ai-dl-gp__browse--layers {
+  color: #7dd3fc;
+}
+
+.si-ai-dl-gp__label-tag {
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.35);
+  font-size: 8.5px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.si-ai-dl-gp__field--raster {
+  gap: 6px;
+}
+
+.si-ai-dl-gp__hint-block--tight {
+  margin: 0;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.si-ai-dl-gp__raster-support-list,
+.si-ai-dl-gp__raster-auto-list {
+  margin: 0;
+  padding: 0 0 0 2px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.si-ai-dl-gp__raster-support-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 9.5px;
+  line-height: 1.3;
+  color: #cbd5e1;
+}
+
+.si-ai-dl-gp__raster-support-list i {
+  margin-top: 2px;
+  font-size: 8px;
+  color: #4ade80;
+}
+
+.si-ai-dl-gp__raster-auto-list li {
+  position: relative;
+  padding-left: 10px;
+  font-size: 9.5px;
+  line-height: 1.35;
+  color: #94a3b8;
+}
+
+.si-ai-dl-gp__raster-auto-list li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  color: #38bdf8;
+}
+
+.si-ai-dl-gp__source-type-btn span {
+  display: block;
+  font-weight: 600;
+}
+
+.si-ai-dl-gp__source-type-btn em {
+  display: block;
+  margin-top: 2px;
+  font-size: 8.5px;
+  font-style: normal;
+  color: #64748b;
+}
+
+.si-ai-dl-gp__pick-title {
+  margin: 0 0 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+
+.si-ai-dl-gp__source-types {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.si-ai-dl-gp__source-type-btn {
+  padding: 5px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.35);
+  color: #e2e8f0;
+  font-size: 9.5px;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+}
+
+.si-ai-dl-gp__source-type-btn:hover {
+  border-color: rgba(56, 189, 248, 0.35);
+  background: rgba(14, 116, 144, 0.18);
+}
+
+.si-ai-dl-gp__url-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.si-ai-dl-gp__url-label {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.si-ai-dl-gp__url-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.si-ai-dl-gp__model-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  background: rgba(8, 47, 73, 0.28);
+}
+
+.si-ai-dl-gp__model-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.si-ai-dl-gp__model-status--ok {
+  color: #86efac;
+}
+
+.si-ai-dl-gp__model-status--ready {
+  color: #7dd3fc;
+}
+
+.si-ai-dl-gp__meta--model {
+  padding: 0;
+}
+
+.si-ai-dl-gp__results-table {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.si-ai-dl-gp__results-head,
+.si-ai-dl-gp__results-row {
+  display: grid;
+  grid-template-columns: 1.2fr 0.6fr 0.7fr 0.9fr;
+  gap: 6px;
+  align-items: center;
+  font-size: 9.5px;
+}
+
+.si-ai-dl-gp__results-head {
+  color: #64748b;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.si-ai-dl-gp__results-row {
+  padding: 4px 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  color: #e2e8f0;
+}
+
+.si-ai-dl-gp__run-hint {
+  font-size: 9.5px;
+  color: #64748b;
+}
+
+.si-ai-dl-gp__georef-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 6px;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #334155;
+}
+
+.si-ai-dl-gp__georef-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.si-ai-dl-gp__georef-head strong {
+  font-size: 9.5px;
+  color: #0f172a;
+}
+
+.si-ai-dl-gp__georef-head span {
+  font-size: 8px;
+  color: #64748b;
+  word-break: break-all;
+  line-height: 1.25;
+}
+
+.si-ai-dl-gp__georef-crs {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.si-ai-dl-gp__georef-extent {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.si-ai-dl-gp__georef-extent label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 8px;
+  color: #475569;
+}
+
+.si-ai-dl-gp__browse--layers:hover {
+  border-color: rgba(125, 211, 252, 0.55);
+  color: #e0f2fe;
+}
+
+.si-ai-det-gis__tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.si-ai-det-gis__tab {
+  padding: 7px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.45);
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+}
+
+.si-ai-det-gis__tab.is-active {
+  color: #f8fafc;
+  border-color: rgba(74, 222, 128, 0.45);
+  background: rgba(22, 163, 74, 0.22);
+}
+
+.si-ai-det-gis__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-bottom: 4px;
+}
+
+.si-ai-det-gis__stats {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.si-ai-dl-gp__hint-block {
+  margin: 0;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px dashed #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 8px;
+  line-height: 1.3;
+}
+
+.si-ai-dl-gp__hidden-input {
+  display: none;
+}

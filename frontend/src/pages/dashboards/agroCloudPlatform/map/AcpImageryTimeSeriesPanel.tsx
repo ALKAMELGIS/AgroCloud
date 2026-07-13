@@ -88,11 +88,7 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
   }, [allLayerOptions, chartSeriesLayerIds, acp.config.chartSeries.length])
 
   const [selectedFieldKey, setSelectedFieldKey] = useState('')
-  const [selectedLayerIds, setSelectedLayerIds] = useState<string[]>(() => {
-    const fromSeries = acpDefaultLayerIdsFromChartSeries(acp.config.chartSeries)
-    const first = fromSeries.find(id => id === acp.selectedWmsLayer) ?? fromSeries[0] ?? acp.selectedWmsLayer
-    return first ? [first] : [acp.selectedWmsLayer]
-  })
+  const [selectedLayerIds, setSelectedLayerIds] = useState<string[]>([])
   const [chartType, setChartType] = useState<ImageryChartType>('line')
   const [fromDate, setFromDate] = useState(defaultRange.from)
   const [toDate, setToDate] = useState(defaultRange.to)
@@ -172,8 +168,12 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
       setError('Invalid date range.')
       return
     }
+    if (!selectedLayerIds.length) {
+      setError('Select at least one layer.')
+      return
+    }
 
-    const layerIds = selectedLayerIds.length ? selectedLayerIds : ['NDVI']
+    const layerIds = selectedLayerIds
 
     const startedAt = performance.now()
     setAnalysisElapsedMs(0)
@@ -632,7 +632,7 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
             type="button"
             className="acp-ts__apply"
             onClick={() => void runAnalysis()}
-            disabled={loading || !selectedFieldKey}
+            disabled={loading || !selectedFieldKey || !selectedLayerIds.length}
           >
             {loading ? 'Running…' : 'Apply'}
           </button>
@@ -686,7 +686,7 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
             <div className="acp-ts__placeholder">
               {hasRun && error
                 ? error
-                : 'Set Start Date and End Date, then click Apply — the chart updates automatically when dates change.'}
+                : 'Select at least one layer, set dates, then click Apply — the chart updates when dates change after the first run.'}
             </div>
           )}
         </div>

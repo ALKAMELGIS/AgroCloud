@@ -107,6 +107,22 @@ function resolveAgroStructuresStructureTypeCode(
   return label ? (AGRO_STRUCTURES_STRUCTURE_TYPE_BY_LABEL.get(label.toLowerCase()) ?? null) : null
 }
 
+/** Normalize Structure_Type to numeric subtype code for Mapbox unique-value symbology. */
+export function normalizeAgroStructuresFeatureForSymbology(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object') return raw
+  const feature = raw as { type?: string; properties?: Record<string, unknown> }
+  if (feature.type !== 'Feature' || !feature.properties) return raw
+  const code = resolveAgroStructuresStructureTypeCode(feature.properties)
+  if (code == null) return raw
+  return {
+    ...feature,
+    properties: {
+      ...feature.properties,
+      Structure_Type: code,
+    },
+  }
+}
+
 export function resolveAgroStructuresFeatureAreaHa(
   props: Record<string, unknown>,
   geometry: unknown,
@@ -633,6 +649,11 @@ export function agroStructuresSentinelMaskSqlWhere(): string {
   return `Structure_Type IN (${AGRO_STRUCTURES_SENTINEL_STRUCTURE_TYPE_CODES.join(',')})`
 }
 
+/** Load every Structure_Type subtype for map display (matches ArcGIS Online symbology). */
+export function agroStructuresFullLayerSqlWhere(): string {
+  return '1=1'
+}
+
 const AGRO_STRUCTURES_QUERY_PAGE_SIZE = 2000
 
 export type AgroStructuresLayerLike = {
@@ -654,9 +675,34 @@ export function normalizeArcgisLayerUrl(url: string): string {
 
 const AGRO_STRUCTURES_FS21_NORMALIZED = normalizeArcgisLayerUrl(AGRO_STRUCTURES_FS21_URL)
 
+const AGRO_STRUCTURES_SERVICE_RE = /\/agro_structures\/(?:mapserver|featureserver)(?:\/\d+)?$/
+
+/** Any Agro_Structures MapServer/FeatureServer URL (service root, layer 21, legacy ids, etc.). */
+export function isAgroStructuresServiceUrl(url: string | undefined): boolean {
+  if (!url?.trim()) return false
+  return AGRO_STRUCTURES_SERVICE_RE.test(normalizeArcgisLayerUrl(url))
+}
+
+/**
+ * Canonical layer endpoint for Agro_Structures polygon features (FeatureServer/21).
+ * Legacy or invalid layer ids (e.g. /27) map to the live primary layer.
+ */
+export function resolveAgroStructuresLayerUrl(url: string): string {
+  const trimmed = String(url || '').trim()
+  if (!isAgroStructuresServiceUrl(trimmed)) return trimmed
+  const normalized = normalizeArcgisLayerUrl(trimmed)
+  const match = normalized.match(/\/agro_structures\/(?:mapserver|featureserver)\/(\d+)$/)
+  if (match) {
+    const layerId = Number(match[1])
+    // Crops_Planted table — keep caller's layer id.
+    if (layerId === 32) return trimmed.replace(/[?#].*$/, '').replace(/\/+$/, '')
+  }
+  return AGRO_STRUCTURES_FS21_URL
+}
+
 export function isAgroStructuresLayerUrl(url: string | undefined): boolean {
   if (!url?.trim()) return false
-  return normalizeArcgisLayerUrl(url) === AGRO_STRUCTURES_FS21_NORMALIZED
+  return normalizeArcgisLayerUrl(resolveAgroStructuresLayerUrl(url)) === AGRO_STRUCTURES_FS21_NORMALIZED
 }
 
 export function isAgroStructuresLayer(layer: AgroStructuresLayerLike | null | undefined): boolean {

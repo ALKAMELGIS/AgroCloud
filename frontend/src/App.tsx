@@ -30,7 +30,17 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
   private onErrorEvent?: (e: ErrorEvent) => void
 
   static getDerivedStateFromError(error: unknown) {
+    const message = error instanceof Error ? error.message : String(error ?? '')
+    if (AppErrorBoundary.isBenignRuntimeError(message)) return null
     return { err: { error, kind: 'render' as const } }
+  }
+
+  /** Benign browser noise — must not surface the full-page error screen. */
+  private static isBenignRuntimeError(message: string): boolean {
+    if (!message) return false
+    if (message.includes('Style is not done loading')) return true
+    if (message.includes('ResizeObserver loop')) return true
+    return false
   }
 
   componentDidCatch(error: unknown) {
@@ -66,7 +76,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
     this.onUnhandledRejection = (e) => {
       const reason = (e as any).reason
       const msg = reason instanceof Error ? reason.message : typeof reason === 'string' ? reason : ''
-      if (msg.includes('Style is not done loading')) return
+      if (AppErrorBoundary.isBenignRuntimeError(msg)) return
       if (reason instanceof DOMException && reason.name === 'AbortError') return
       if (reason instanceof Error && reason.name === 'AbortError') return
       if (AppErrorBoundary.recoverFromStaleChunk(reason)) return
@@ -80,7 +90,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
     this.onErrorEvent = (e) => {
       const err = e?.error
       const msg = err instanceof Error ? err.message : typeof err === 'string' ? err : String(e?.message ?? '')
-      if (msg.includes('Style is not done loading')) return
+      if (AppErrorBoundary.isBenignRuntimeError(msg)) return
       if (AppErrorBoundary.recoverFromStaleChunk(err ?? e?.message)) return
       const details = typeof e?.error?.stack === 'string' ? e.error.stack : undefined
       this.setState({ err: { error: e.error ?? e.message, kind: 'window', details } })

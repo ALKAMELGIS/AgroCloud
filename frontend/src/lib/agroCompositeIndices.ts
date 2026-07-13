@@ -27,7 +27,7 @@ export const AGRO_DERIVED_LAYER_DEFS: readonly AgroCompositeIndexDef[] = [
   },
 ]
 
-export const AGRO_CORE_INTERPRETATION_LAYER_IDS = ['NDVI', 'NDMI', 'NDWI', 'SAVI', 'ET', 'NDSI'] as const
+export const AGRO_CORE_INTERPRETATION_LAYER_IDS = ['NDVI', 'NDMI', 'NDWI', 'SAVI', 'ET'] as const
 
 export type AgroCoreInterpretationLayerId = (typeof AGRO_CORE_INTERPRETATION_LAYER_IDS)[number]
 
@@ -38,7 +38,6 @@ export const AGRO_CORE_LAYER_SCIENTIFIC_NAMES: Record<AgroCoreInterpretationLaye
   NDWI: 'Normalized Difference Water Index',
   SAVI: 'Soil-Adjusted Vegetation Index',
   ET: 'Evapotranspiration (moisture-proxy mm/day)',
-  NDSI: 'Normalized Difference Snow Index ((B03−B11)/(B03+B11))',
 }
 
 export function isAgroCoreInterpretationLayerId(layerId: string): boolean {

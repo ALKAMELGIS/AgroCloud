@@ -1,8 +1,9 @@
 import { memo, useEffect, useMemo, useState } from 'react'
-import { Marker, useMap } from 'react-map-gl/mapbox'
+import { useMap } from 'react-map-gl/mapbox'
 import type { CropAlertFieldResult } from '../../../lib/siCropAlertEngine'
 import type { LngLatBBox } from '../../../lib/siMapViewport'
 import { SiCropAlertMapMarker } from './SiCropAlertMapMarker'
+import { SiMapDockAwareMarker } from './SiMapDockAwareMarker'
 import { filterCropAlertMarkersForViewport } from '../../../lib/siCropAlertMapMarkersFilter'
 
 export type SiCropAlertMapMarkerIconSize = 'sm' | 'md' | 'lg'
@@ -71,12 +72,13 @@ export const SiCropAlertMapMarkersLayer = memo(function SiCropAlertMapMarkersLay
       {visibleResults.map(result => {
         const isPopupHost = popupFieldKey === result.fieldKey
         return (
-        <Marker
+        <SiMapDockAwareMarker
           key={`si-crop-alert-beacon-${result.fieldKey}`}
           longitude={result.centroid[0]}
           latitude={result.centroid[1]}
           anchor="center"
-          style={{ zIndex: isPopupHost ? 1000 : selectedFieldKey === result.fieldKey ? 30 : 12 }}
+          className="si-crop-alert-beacon"
+          popupWidth={isPopupHost ? 320 : 0}
         >
           <SiCropAlertMapMarker
             result={result}
@@ -87,7 +89,7 @@ export const SiCropAlertMapMarkersLayer = memo(function SiCropAlertMapMarkersLay
             onSelect={onSelect}
             onClosePopup={onClosePopup}
           />
-        </Marker>
+        </SiMapDockAwareMarker>
         )
       })}
     </>

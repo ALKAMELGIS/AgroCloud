@@ -81,6 +81,20 @@ export function getLayerGeometryKind(data: any): 'point' | 'line' | 'polygon' | 
   return 'other';
 }
 
+/** Prefer live GeoJSON features; fall back to ArcGIS service `geometryType` (viewport-streamed layers). */
+export function resolveLayerGeometryKind(
+  geojson: any,
+  arcgisLayerDefinition?: { geometryType?: string } | null,
+): 'point' | 'line' | 'polygon' | 'other' {
+  const fromFeatures = getLayerGeometryKind(geojson);
+  if (fromFeatures !== 'other') return fromFeatures;
+  const gt = String(arcgisLayerDefinition?.geometryType || '').toLowerCase();
+  if (gt.includes('point') || gt.includes('multipoint')) return 'point';
+  if (gt.includes('polyline') || gt.includes('line')) return 'line';
+  if (gt.includes('polygon')) return 'polygon';
+  return 'other';
+}
+
 export function getGeometryCenter(geom: any): [number, number] | null {
   if (!geom || typeof geom !== 'object') return null;
   const t = geom.type;
@@ -248,11 +262,13 @@ export function describeArcGisRendererVisualization(renderer: any): string {
   return 'No renderer loaded';
 }
 
+import { flattenArcgisUniqueValueInfos, pickRendererPrimaryField } from '../../lib/arcgisDrawingInfoMapbox';
+
 export function inferVisualizationFromArcgisRenderer(renderer: any): Partial<Required<SymbologyConfig>> {
   const type = renderer?.type;
   if (type === 'uniqueValue') {
-    const f1 = typeof renderer?.field1 === 'string' ? renderer.field1 : '';
-    const n = Array.isArray(renderer?.uniqueValueInfos) ? renderer.uniqueValueInfos.length : 0;
+    const f1 = typeof renderer?.field1 === 'string' ? renderer.field1 : pickRendererPrimaryField(renderer);
+    const n = flattenArcgisUniqueValueInfos(renderer).length;
     const classes = clampInt(n > 0 ? Math.min(Math.max(n, 2), 12) : 12, 2, 12);
     return { style: 'unique', field: f1, classes };
   }

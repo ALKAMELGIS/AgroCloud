@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-export type MapToolboxAddGisLayerAction = 'browse' | 'url' | 'file' | 'sketch' | 'media';
+export type MapToolboxAddGisLayerAction = 'browse' | 'arcgis' | 'url' | 'file' | 'sketch' | 'media';
 
 const MENU_ITEMS: Array<{
   id: MapToolboxAddGisLayerAction;
@@ -8,6 +8,7 @@ const MENU_ITEMS: Array<{
   icon: string;
 }> = [
   { id: 'browse', label: 'Browse layers', icon: 'fa-solid fa-magnifying-glass' },
+  { id: 'arcgis', label: 'Add ArcGIS Layer', icon: 'fa-solid fa-layer-group' },
   { id: 'url', label: 'Add layer from URL', icon: 'fa-solid fa-globe' },
   { id: 'file', label: 'Add layer from file', icon: 'fa-solid fa-file' },
   { id: 'sketch', label: 'Create sketch layer', icon: 'fa-solid fa-pencil' },

@@ -25,8 +25,7 @@ describe('agroCompositeIndices', () => {
       { name: 'TRUE_COLOR', title: 'True Color' },
     ])
     expect(groups[0]?.label).toBe('Core Interpretation')
-    expect(groups[0]?.options.map(o => o.id)).toEqual(['NDVI', 'NDMI', 'NDWI', 'SAVI', 'ET', 'NDSI'])
-    expect(groups[0]?.options.find(o => o.id === 'NDSI')?.scientificName).toContain('Snow')
+    expect(groups[0]?.options.map(o => o.id)).toEqual(['NDVI', 'NDMI', 'NDWI', 'SAVI', 'ET'])
     expect(groups.some(g => g.label.includes('Vegetation Health'))).toBe(true)
     expect(groups.some(g => g.label.includes('Delta'))).toBe(true)
     const flat = flattenRemoteSensingLayerSelectGroups(groups)

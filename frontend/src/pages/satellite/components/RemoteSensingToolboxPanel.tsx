@@ -4,10 +4,10 @@ import {
   remoteSensingProviderDef,
   remoteSensingProviderOptions,
 } from '../../../lib/remoteSensingProviders'
-import type { SiAoiMaskBuilderSettings } from '../../../lib/siAoiMaskBuilder'
 import { RemoteSensingLayerSelect } from './RemoteSensingLayerSelect'
 import { SiRsPanelSelect } from './SiRsPanelSelect'
-import { SiAoiMaskBuilderPanel } from './SiAoiMaskBuilderPanel'
+import { SiAoiLayerModePanel } from './SiAoiLayerModePanel'
+import type { SiAoiMaskBuilderLayerOption, SiAoiMaskBuilderSettings } from '../../../lib/siAoiMaskBuilder'
 import type { RemoteSensingDrawingTool } from './RemoteSensingDrawingToolbar'
 
 export const REMOTE_SENSING_PROVIDERS = remoteSensingProviderOptions()
@@ -34,14 +34,16 @@ export type RemoteSensingToolboxPanelProps = {
   showOnMap: boolean
   onShowOnMapChange: (checked: boolean) => void
   showOnMapLabel: string
+  showOnMapDisabled?: boolean
+  showOnMapHint?: string | null
   wmsZoomWarning: string | null
-  onAddDataSource: () => void
-  aoiMaskBuilderSettings: SiAoiMaskBuilderSettings
-  onAoiMaskBuilderChange: (next: SiAoiMaskBuilderSettings) => void
-  customLayers: Parameters<typeof SiAoiMaskBuilderPanel>[0]['customLayers']
-  sentinelLayerOptions: Parameters<typeof SiAoiMaskBuilderPanel>[0]['sentinelLayerOptions']
-  maskFeatureCount: number
-  selectedFeatureCount: number
+  aoiLayerModeSettings: SiAoiMaskBuilderSettings
+  onAoiLayerModeChange: (next: SiAoiMaskBuilderSettings) => void
+  aoiLayerOptions: SiAoiMaskBuilderLayerOption[]
+  aoiLayerMaskFeatureCount: number
+  aoiLayerSelectedFeatureCount: number
+  aoiLayerModeDisabled?: boolean
+  sentinelLayerOptions: Array<{ id: string; label: string }>
   timeSeriesStart: string
   timeSeriesEnd: string
   onTimeSeriesStartChange: (iso: string) => void
@@ -82,14 +84,16 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
     showOnMap,
     onShowOnMapChange,
     showOnMapLabel,
+    showOnMapDisabled = false,
+    showOnMapHint,
     wmsZoomWarning,
-    onAddDataSource,
-    aoiMaskBuilderSettings,
-    onAoiMaskBuilderChange,
-    customLayers,
+    aoiLayerModeSettings,
+    onAoiLayerModeChange,
+    aoiLayerOptions,
+    aoiLayerMaskFeatureCount,
+    aoiLayerSelectedFeatureCount,
+    aoiLayerModeDisabled = false,
     sentinelLayerOptions,
-    maskFeatureCount,
-    selectedFeatureCount,
     timeSeriesStart,
     timeSeriesEnd,
     onTimeSeriesStartChange,
@@ -180,15 +184,23 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
         </label>
 
         {!isLoadingLayers && sentinelLayerOptions.length > 0 ? (
-          <label className="si-rs-panel__show-box">
-            <input
-              type="checkbox"
-              checked={showOnMap}
-              onChange={e => onShowOnMapChange(e.target.checked)}
-              aria-label={showOnMapLabel}
-            />
-            <span>{showOnMapLabel}</span>
-          </label>
+          <>
+            <label className="si-rs-panel__show-box">
+              <input
+                type="checkbox"
+                checked={showOnMap}
+                onChange={e => onShowOnMapChange(e.target.checked)}
+                disabled={showOnMapDisabled}
+                aria-label={showOnMapLabel}
+              />
+              <span>{showOnMapLabel}</span>
+            </label>
+            {showOnMapHint ? (
+              <p className="si-rs-panel__meta si-rs-panel__meta--inline" role="status">
+                {showOnMapHint}
+              </p>
+            ) : null}
+          </>
         ) : null}
         {wmsZoomWarning ? (
           <p className="si-rs-panel__meta si-rs-panel__meta--warn si-rs-panel__meta--inline" role="status">
@@ -196,25 +208,17 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
           </p>
         ) : null}
 
-        <button
-          type="button"
-          className="si-rs-panel__action"
-          onClick={onAddDataSource}
-          title="Add Data Source (AOI): SHP (.zip), KML/KMZ, GeoJSON"
-        >
-          <i className="fa-solid fa-cloud-arrow-up" aria-hidden />
-          <span>Add data source (AOI)</span>
-        </button>
-
-        <SiAoiMaskBuilderPanel
-          settings={aoiMaskBuilderSettings}
-          onChange={onAoiMaskBuilderChange}
-          customLayers={customLayers}
-          sentinelLayerOptions={sentinelLayerOptions}
-          maskFeatureCount={maskFeatureCount}
-          selectedFeatureCount={selectedFeatureCount}
-          flat
-        />
+        <div className="si-rs-panel__stack si-rs-panel__stack--section">
+          <span className="si-rs-panel__label">AOI layer mode</span>
+          <SiAoiLayerModePanel
+            settings={aoiLayerModeSettings}
+            onChange={onAoiLayerModeChange}
+            layerOptions={aoiLayerOptions}
+            maskFeatureCount={aoiLayerMaskFeatureCount}
+            selectedFeatureCount={aoiLayerSelectedFeatureCount}
+            disabled={aoiLayerModeDisabled}
+          />
+        </div>
 
         <div className="si-rs-panel__flat-grid si-rs-panel__flat-grid--2">
           <label className="si-rs-panel__stack">

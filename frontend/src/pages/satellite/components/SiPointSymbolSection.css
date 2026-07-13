@@ -1,0 +1,131 @@
+.si-sym-point-arcgis__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 650;
+  color: #93c5fd;
+  background: rgba(37, 99, 235, 0.16);
+  border: 1px solid rgba(96, 165, 250, 0.28);
+}
+
+.si-sym-point-arcgis__preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  background: linear-gradient(165deg, rgba(14, 14, 18, 0.72), rgba(0, 0, 0, 0.55));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.si-sym-point-arcgis__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.si-sym-point-arcgis__meta strong {
+  font-size: 11px;
+  color: #e2e8f0;
+}
+
+.si-sym-point-img {
+  display: block;
+  object-fit: contain;
+  max-width: 48px;
+  max-height: 48px;
+}
+
+.si-sym-point-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.si-sym-point-cat {
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.28);
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
+}
+
+.si-sym-point-cat:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #e2e8f0;
+}
+
+.si-sym-point-cat--active {
+  border-color: rgba(96, 165, 250, 0.42);
+  background: rgba(37, 99, 235, 0.2);
+  color: #dbeafe;
+}
+
+.si-sym-point-gallery {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+  padding: 2px;
+}
+
+.si-sym-point-gallery--readonly {
+  max-height: 140px;
+}
+
+.si-sym-point-gallery__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 4px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.22);
+  color: #94a3b8;
+  font-size: 8px;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.si-sym-point-gallery__item:hover:not(.si-sym-point-gallery__item--readonly) {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateY(-1px);
+}
+
+.si-sym-point-gallery__item--active {
+  border-color: rgba(96, 165, 250, 0.5);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
+  color: #e2e8f0;
+}
+
+.si-sym-point-gallery__item--readonly {
+  cursor: default;
+}
+
+.si-sym-point-gallery__item span {
+  text-align: center;
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.si-sym-point-arcgis {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

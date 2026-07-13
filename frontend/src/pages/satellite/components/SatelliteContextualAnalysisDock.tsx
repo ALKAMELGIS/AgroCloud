@@ -169,8 +169,8 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     id: 'crop-classification',
     icon: 'fa-solid fa-wheat-awn',
     label: 'Crop AI',
-    title: 'Crop AI Classification',
-    hint: 'Satellite · drone · LiDAR · user raster → multi-mode AI classification.',
+    title: 'Prithvi Crop Classification',
+    hint: 'AOI → Sentinel/HLS → Prithvi inference → classified map.',
   },
   {
     id: 'imagery-time-series',

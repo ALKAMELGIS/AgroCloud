@@ -1,0 +1,404 @@
+/* Symbology studio — compact enterprise GIS controls */
+
+.si-sym-studio {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 0 4px;
+}
+
+.si-sym-section {
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.32));
+  backdrop-filter: blur(10px) saturate(130%);
+  -webkit-backdrop-filter: blur(10px) saturate(130%);
+  overflow: hidden;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.si-sym-section:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.si-sym-section--open {
+  border-color: rgba(96, 165, 250, 0.22);
+  box-shadow: inset 0 1px 0 rgba(96, 165, 250, 0.08);
+}
+
+.si-sym-section__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: none;
+  background: transparent;
+  color: #e2e8f0;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+
+.si-sym-section__icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  color: #93c5fd;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.si-sym-section__title {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 650;
+  color: #f1f5f9;
+}
+
+.si-sym-section__chev {
+  flex-shrink: 0;
+  color: #64748b;
+}
+
+.si-sym-section__body {
+  padding: 8px 10px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.si-sym-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.si-sym-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.si-sym-field__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.si-sym-field__hint {
+  font-size: 10px;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.si-sym-select {
+  position: relative;
+  width: 100%;
+}
+
+.si-sym-select::after {
+  content: '';
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  transform: translateY(-40%);
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid rgba(203, 213, 225, 0.62);
+  pointer-events: none;
+}
+
+.si-sym-select select,
+.si-sym-input {
+  height: 30px;
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: linear-gradient(165deg, rgba(14, 14, 18, 0.84) 0%, rgba(0, 0, 0, 0.66) 100%);
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  color: #f1f5f9;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 0 10px;
+  box-sizing: border-box;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+    0 4px 16px rgba(0, 0, 0, 0.2);
+  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.si-sym-select select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 30px;
+  cursor: pointer;
+  color-scheme: dark;
+}
+
+.si-sym-select select:hover:not(:disabled),
+.si-sym-input:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: linear-gradient(165deg, rgba(20, 20, 26, 0.9) 0%, rgba(4, 4, 8, 0.76) 100%);
+}
+
+.si-sym-select select option {
+  background-color: rgba(8, 8, 12, 0.98);
+  color: #e8edf4;
+}
+
+.si-sym-select select option:checked,
+.si-sym-select select option:hover {
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.42), rgba(10, 10, 14, 0.98));
+  color: #ffffff;
+}
+
+.si-sym-select select:disabled,
+.si-sym-input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.si-sym-select select:focus,
+.si-sym-input:focus {
+  outline: none;
+  border-color: rgba(96, 165, 250, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 0 2px rgba(59, 130, 246, 0.14),
+    0 6px 20px rgba(0, 0, 0, 0.26);
+}
+
+.si-sym-color {
+  width: 100%;
+  height: 28px;
+  padding: 2px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.si-sym-range {
+  width: 100%;
+  accent-color: #3b82f6;
+}
+
+.si-sym-range-val {
+  font-size: 10px;
+  color: #64748b;
+}
+
+.si-sym-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #cbd5e1;
+  cursor: pointer;
+}
+
+.si-sym-check input {
+  width: 14px;
+  height: 14px;
+  accent-color: #3b82f6;
+}
+
+.si-sym-readonly {
+  height: 30px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: linear-gradient(165deg, rgba(14, 14, 18, 0.72), rgba(0, 0, 0, 0.55));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  color: #cbd5e1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.si-sym-muted,
+.si-sym-empty {
+  margin: 0;
+  font-size: 10px;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.si-sym-preview {
+  display: flex;
+  justify-content: center;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.si-sym-ramp-gallery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.si-sym-ramp {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font-family: inherit;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.si-sym-ramp:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.si-sym-ramp--active {
+  border-color: rgba(96, 165, 250, 0.45);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
+}
+
+.si-sym-ramp__bar {
+  display: block;
+  height: 12px;
+  border-radius: 4px;
+}
+
+.si-sym-ramp__name {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.si-sym-histogram {
+  display: flex;
+  gap: 2px;
+  height: 48px;
+  align-items: flex-end;
+  padding: 4px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.si-sym-histogram__bar {
+  min-width: 4px;
+  border-radius: 2px 2px 0 0;
+}
+
+.si-sym-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow: auto;
+}
+
+.si-sym-legend__row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  font-size: 10px;
+  color: #cbd5e1;
+}
+
+.si-sym-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.si-sym-btn {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e2e8f0;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 180ms ease, border-color 180ms ease;
+}
+
+.si-sym-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.si-sym-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.si-sym-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.si-sym-preset {
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.25);
+  color: #cbd5e1;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.si-sym-preset:hover:not(:disabled) {
+  border-color: rgba(96, 165, 250, 0.35);
+  color: #f1f5f9;
+}
+
+/* Footer buttons inside floating panel */
+.gis-float-panel__footer .si-sym-footer-btn {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 180ms ease, border-color 180ms ease;
+}
+
+.gis-float-panel__footer .si-sym-footer-btn--ghost {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+}
+
+.gis-float-panel__footer .si-sym-footer-btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #f1f5f9;
+}
+
+.gis-float-panel__footer .si-sym-footer-btn--primary {
+  background: linear-gradient(180deg, #3b82f6, #2563eb);
+  border-color: rgba(147, 197, 253, 0.35);
+  color: #fff;
+}
+
+.gis-float-panel__footer .si-sym-footer-btn--primary:hover {
+  background: linear-gradient(180deg, #60a5fa, #3b82f6);
+}

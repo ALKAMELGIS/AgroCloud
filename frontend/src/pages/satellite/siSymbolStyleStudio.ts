@@ -9,6 +9,7 @@ import {
   getLayerGeometryKind,
   normalizeSymbologyForLayer,
 } from './symbologyHelpers';
+import { sanitizeMapboxPaint } from '../../lib/mapboxPaintSanitize';
 
 export const SI_MAPBOX_STYLE_CLIPBOARD_LS = 'agri-si-style-clipboard-v1';
 export const SI_MAPBOX_STYLE_STUDIO_PREFS_LS = 'agri-si-style-studio-prefs-v1';
@@ -145,6 +146,23 @@ export function mapboxLineDashFromStrokeStyle(style?: SiStrokeStyle): number[] |
   return undefined
 }
 
+export const SI_STYLE_PRESET_CHIPS: Array<{ id: string; label: string; patch: Partial<SiLayerAppearancePersisted> }> = [
+  { id: 'carto', label: 'Carto outline', patch: { strokeStyle: 'solid', weight: 2.5, polygonFillAlpha: 0.28, fillStyle: 'solid', blendMode: 'normal' } },
+  { id: 'soft', label: 'Soft fill', patch: { polygonFillAlpha: 0.5, weight: 1, opacity: 0.92, fillStyle: 'solid', blendMode: 'normal' } },
+  { id: 'survey', label: 'Survey dashed', patch: { strokeStyle: 'dashed', weight: 2, polygonFillAlpha: 0.22, fillStyle: 'pattern', blendMode: 'normal' } },
+  { id: 'bold', label: 'Bold lines', patch: { weight: 5, strokeStyle: 'solid', polygonFillAlpha: 0.4, pointRadius: 10, blendMode: 'normal' } },
+  { id: 'multiply', label: 'Multiply blend', patch: { blendMode: 'multiply', polygonFillAlpha: 0.45, fillStyle: 'solid' } },
+];
+
+export const SI_COLOR_RAMPS: Array<{ id: string; label: string; colors: string[]; category: 'sequential' | 'diverging' | 'qualitative' }> = [
+  { id: 'viridis', label: 'Viridis', category: 'sequential', colors: ['#440154', '#3b528b', '#21918c', '#5ec962', '#fde725'] },
+  { id: 'blues', label: 'Blues', category: 'sequential', colors: ['#f7fbff', '#6baed6', '#08519c'] },
+  { id: 'greens', label: 'Greens', category: 'sequential', colors: ['#f7fcf5', '#74c476', '#006d2c'] },
+  { id: 'plasma', label: 'Plasma', category: 'sequential', colors: ['#0d0887', '#7e03a8', '#cc4778', '#f89540', '#f0f921'] },
+  { id: 'magma', label: 'Magma', category: 'sequential', colors: ['#000004', '#3b0f70', '#8c2981', '#de4968', '#fe9f6d', '#fcfdbf'] },
+  { id: 'turbo', label: 'Turbo', category: 'diverging', colors: ['#30123b', '#3b4cc0', '#26a6d1', '#3de07e', '#f9e721', '#f20c0c'] },
+];
+
 export function strokeDashSvgFromStyle(style?: SiStrokeStyle): string {
   if (style === 'dashed') return '8 4'
   if (style === 'dotted') return '2 4'
@@ -218,11 +236,20 @@ const SI_MAPBOX_LINE_POLY_FILTER: any = [
 const SI_MAPBOX_LINE_ONLY_FILTER: any = ['in', ['geometry-type'], ['literal', ['LineString', 'MultiLineString']]];
 const SI_MAPBOX_POINT_FILTER: any = ['in', ['geometry-type'], ['literal', ['Point', 'MultiPoint']]];
 
+function finalizeSiVectorStylePack(pack: SiVectorStylePack): SiVectorStylePack {
+  return {
+    ...pack,
+    fillPaint: sanitizeMapboxPaint(pack.fillPaint),
+    linePaint: sanitizeMapboxPaint(pack.linePaint),
+    circlePaint: sanitizeMapboxPaint(pack.circlePaint),
+  };
+}
+
 function matchExprFromCategoryColors(field: string, categoryColors: Record<string, string>, otherColor: string): any {
   const keys = Object.keys(categoryColors)
   const expr: any[] = ['match', ['to-string', ['get', field]]]
   for (const k of keys) {
-    expr.push(k, categoryColors[k])
+    expr.push(k, categoryColors[k] ?? otherColor)
   }
   expr.push(otherColor)
   return expr
@@ -309,16 +336,21 @@ export function buildSiCustomVectorStylePack(opts: {
 
   const style = cfg.style as SymbologyStyle
 
-  const numericFallbackPaint = (): SiVectorStylePack => ({
-    fillFilter: SI_MAPBOX_POLY_FILTER,
-    lineFilter: SI_MAPBOX_LINE_POLY_FILTER,
-    pointFilter: SI_MAPBOX_POINT_FILTER,
-    fillPaint: baseFillPaint,
-    linePaint: baseLinePaint,
-    circlePaint: baseCirclePaint,
-  })
+  const numericFallbackPaint = (): SiVectorStylePack =>
+    finalizeSiVectorStylePack({
+      fillFilter: SI_MAPBOX_POLY_FILTER,
+      lineFilter: SI_MAPBOX_LINE_POLY_FILTER,
+      pointFilter: SI_MAPBOX_POINT_FILTER,
+      fillPaint: baseFillPaint,
+      linePaint: baseLinePaint,
+      circlePaint: baseCirclePaint,
+    })
 
   if (style === 'single' || !opts.symbology) {
+    return numericFallbackPaint()
+  }
+
+  if (opts.symbology?.useArcGisOnline) {
     return numericFallbackPaint()
   }
 
@@ -334,7 +366,7 @@ export function buildSiCustomVectorStylePack(opts: {
           : lineDash
             ? lineDash
             : undefined
-      return {
+      return finalizeSiVectorStylePack({
         fillFilter: SI_MAPBOX_POLY_FILTER,
         lineFilter: SI_MAPBOX_LINE_ONLY_FILTER,
         pointFilter: SI_MAPBOX_POINT_FILTER,
@@ -345,7 +377,7 @@ export function buildSiCustomVectorStylePack(opts: {
           ...(dashExpr ? { 'line-dasharray': dashExpr } : {}),
         },
         circlePaint: baseCirclePaint,
-      }
+      })
     }
     const fillExpr = matchExprFromCategoryColors(field, ctx.categoryColors, ctx.otherColor)
     const strokeByCat: Record<string, string> = {}
@@ -353,7 +385,7 @@ export function buildSiCustomVectorStylePack(opts: {
       strokeByCat[k] = darkenColor(ctx.categoryColors[k] ?? ctx.otherColor, 0.28)
     }
     const strokeExpr = matchExprFromCategoryColors(field, strokeByCat, darkenColor(ctx.otherColor, 0.28))
-    return {
+    return finalizeSiVectorStylePack({
       fillFilter: SI_MAPBOX_POLY_FILTER,
       lineFilter: SI_MAPBOX_LINE_POLY_FILTER,
       pointFilter: SI_MAPBOX_POINT_FILTER,
@@ -372,7 +404,7 @@ export function buildSiCustomVectorStylePack(opts: {
         'circle-stroke-width': Math.max(1, Math.min(4, weight * 0.65)),
         'circle-stroke-color': strokeExpr,
       },
-    }
+    })
   }
 
   if (
@@ -389,23 +421,23 @@ export function buildSiCustomVectorStylePack(opts: {
     const widths = ctx.widths
     const outlineColors = colors.map(c => darkenColor(c ?? baseFill, 0.28))
 
-    const colorStep: any[] = ['step', ['coalesce', ['to-number', ['get', field]], 0], colors[0] ?? baseFill]
+    const colorStep: any[] = ['step', ['to-number', ['get', field], 0], colors[0] ?? baseFill]
     for (let i = 1; i < breaks.length; i += 1) {
       colorStep.push(breaks[i], colors[Math.min(i, colors.length - 1)] ?? colors[0])
     }
 
-    const lineColorStep: any[] = ['step', ['coalesce', ['to-number', ['get', field]], 0], outlineColors[0] ?? baseLine]
+    const lineColorStep: any[] = ['step', ['to-number', ['get', field], 0], outlineColors[0] ?? baseLine]
     for (let i = 1; i < breaks.length; i += 1) {
       lineColorStep.push(breaks[i], outlineColors[Math.min(i, outlineColors.length - 1)] ?? outlineColors[0])
     }
 
-    const widthStep: any[] = ['step', ['coalesce', ['to-number', ['get', field]], 0], widths[0] ?? weight]
+    const widthStep: any[] = ['step', ['to-number', ['get', field], 0], widths[0] ?? weight]
     for (let i = 1; i < breaks.length; i += 1) {
       widthStep.push(breaks[i], widths[Math.min(i, widths.length - 1)] ?? weight)
     }
 
     const radiusAt = (w: number) => Math.max(4, Math.min(18, 3 + w * 2))
-    const radiusStep: any[] = ['step', ['coalesce', ['to-number', ['get', field]], 0], radiusAt(widths[0] ?? weight)]
+    const radiusStep: any[] = ['step', ['to-number', ['get', field], 0], radiusAt(widths[0] ?? weight)]
     for (let i = 1; i < breaks.length; i += 1) {
       radiusStep.push(breaks[i], radiusAt(widths[Math.min(i, widths.length - 1)] ?? weight))
     }
@@ -423,7 +455,7 @@ export function buildSiCustomVectorStylePack(opts: {
       style === 'dot_density' && ctx.dotDashes.length
         ? ([
             'step',
-            ['coalesce', ['to-number', ['get', field]], 0],
+            ['to-number', ['get', field], 0],
             ['literal', stringToDashLiteral(ctx.dotDashes[0])],
             ...flatStepDashPairs(breaks, ctx.dotDashes),
           ] as any)
@@ -434,7 +466,7 @@ export function buildSiCustomVectorStylePack(opts: {
     const circleRad =
       style === 'size' || style === 'color_size' || style === 'dot_density' ? radiusStep : radius
 
-    return {
+    return finalizeSiVectorStylePack({
       fillFilter: SI_MAPBOX_POLY_FILTER,
       lineFilter: SI_MAPBOX_LINE_POLY_FILTER,
       pointFilter: SI_MAPBOX_POINT_FILTER,
@@ -453,7 +485,7 @@ export function buildSiCustomVectorStylePack(opts: {
         'circle-stroke-width': Math.max(1, Math.min(4, weight * 0.65)),
         'circle-stroke-color': lineC,
       },
-    }
+    });
   }
 
   return numericFallbackPaint()

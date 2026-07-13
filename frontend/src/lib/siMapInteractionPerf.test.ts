@@ -5,6 +5,7 @@ import {
   mapMetricsChangedEnough,
   mergeMapMetrics,
   readMapMetricsFromViewState,
+  shouldFreezeLayerAoiViewportPipeline,
   shouldFreezeViewportDataPipeline,
   shouldSkipLiveViewportWorkOnMove,
   viewStateMateriallyChanged,
@@ -19,6 +20,13 @@ describe('siMapInteractionPerf', () => {
   it('skips live viewport work on move when pipeline is frozen', () => {
     expect(shouldSkipLiveViewportWorkOnMove(true)).toBe(true)
     expect(shouldSkipLiveViewportWorkOnMove(false)).toBe(false)
+    expect(shouldSkipLiveViewportWorkOnMove(false, true)).toBe(true)
+  })
+
+  it('freezes viewport when Layers AOI WMS is active', () => {
+    expect(shouldFreezeLayerAoiViewportPipeline(true, false)).toBe(true)
+    expect(shouldFreezeLayerAoiViewportPipeline(false, true)).toBe(true)
+    expect(shouldFreezeLayerAoiViewportPipeline(false, false)).toBe(false)
   })
 
   it('merges map metrics only when zoom or latitude shifts materially', () => {

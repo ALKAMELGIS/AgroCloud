@@ -30,7 +30,6 @@ function isSelected(selectedIds: string[], layerId: string): boolean {
 function toggleLayerId(selectedIds: string[], layerId: string): string[] {
   const want = normalizeId(layerId)
   if (isSelected(selectedIds, want)) {
-    if (selectedIds.length <= 1) return selectedIds
     return selectedIds.filter(id => normalizeId(id) !== want)
   }
   return [...selectedIds, want]
@@ -143,7 +142,6 @@ export function AcpImageryLayerMultiSelect({
                 <div className="acp-ts-layer-select__group-label">{group.label}</div>
                 {group.options.map(opt => {
                   const checked = isSelected(selectedIds, opt.id)
-                  const onlyOne = selectedIds.length <= 1
                   return (
                     <label
                       key={opt.id}
@@ -154,7 +152,6 @@ export function AcpImageryLayerMultiSelect({
                         type="checkbox"
                         className="acp-ts-layer-select__checkbox"
                         checked={checked}
-                        disabled={checked && onlyOne}
                         onChange={() => onSelectedIdsChange(toggleLayerId(selectedIds, opt.id))}
                       />
                       <span className="acp-ts-layer-select__option-text">

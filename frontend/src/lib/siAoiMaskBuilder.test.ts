@@ -3,6 +3,7 @@ import {
   buildSiAoiMaskBuilderGeoJson,
   featureMatchesAoiMaskFilterValues,
   listSiAoiMaskBuilderFieldOptions,
+  listSiAoiLayerModeOptions,
   listSiAoiMaskBuilderUniqueFieldValues,
   resolveSiAoiMaskBuilderClipGeoJson,
 } from './siAoiMaskBuilder'
@@ -143,5 +144,14 @@ describe('siAoiMaskBuilder', () => {
       geojson: { features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [] } }] },
     }
     expect(listSiAoiMaskBuilderFieldOptions(agroLayer)).toContain('Structure_Type')
+  })
+
+  it('includes viewport-streaming layers in AOI layer mode options before tiles load', () => {
+    const opts = listSiAoiLayerModeOptions([
+      { id: 'vec-1', name: 'Fields', geojson: { features: [{ type: 'Feature' }] } },
+      { id: 'stream-1', name: 'Live FS', geojson: { features: [] }, viewportStreaming: true },
+      { id: 'raster-1', name: 'Ortho', renderMode: 'raster', geojson: { features: [] } },
+    ])
+    expect(opts.map(o => o.id)).toEqual(['vec-1', 'stream-1'])
   })
 })

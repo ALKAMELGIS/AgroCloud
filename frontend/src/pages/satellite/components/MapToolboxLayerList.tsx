@@ -325,7 +325,9 @@ export function MapToolboxLayerRow({
           ) : (
             <span className="si-mt-layer__always">Always on</span>
           )}
-          {hasMenu ? (
+          {headerActions ? (
+            <div className="si-mt-layer__header-actions">{headerActions}</div>
+          ) : hasMenu ? (
             <LayerOptionsMenu
               label={label}
               kind={kind}
@@ -338,8 +340,6 @@ export function MapToolboxLayerRow({
               onZoomTo={onZoomTo}
               labelsToggle={labelsToggle}
             />
-          ) : headerActions ? (
-            <div className="si-mt-layer__header-actions">{headerActions}</div>
           ) : (
             <SiCopyTextButton
               text={label}

@@ -16,6 +16,7 @@ import {
 } from 'chart.js'
 import { Bar, Line, Pie, Scatter } from 'react-chartjs-2'
 import { useImageryTimeSeriesStream } from '../hooks/useImageryTimeSeriesStream'
+import { useMultiLayerAoiTrendStream } from '../hooks/useMultiLayerAoiTrendStream'
 import { useImageryIndexInterpretation } from '../hooks/useImageryIndexInterpretation'
 import { SiImageryIndexInterpretationCard, type ImageryInterpretationActionId } from './SiImageryIndexInterpretationCard'
 import type { SiAoiFieldRecord } from '../../../lib/siAoiFields'
@@ -37,6 +38,10 @@ import {
   type ImageryTimeSeriesLayerSeries,
 } from '../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import { AcpImageryLayerMultiSelect } from '../../dashboards/agroCloudPlatform/map/AcpImageryLayerMultiSelect'
+import { SiAoiFieldMultiSelect } from '../../dashboards/agroCloudPlatform/map/SiAoiFieldMultiSelect'
+import { SiAoiFieldSelect } from '../../dashboards/agroCloudPlatform/map/SiAoiFieldSelect'
+import { SiMultiLayerAoiTrendView } from './SiMultiLayerAoiTrendView'
+import type { SiImageryAnalysisMode } from '../../../lib/siMultiLayerAoiTrendAnalysis'
 import {
   buildSiImageryFieldOptions,
   resolveSiImageryField,
@@ -72,6 +77,7 @@ export type SiImageryTimeSeriesPanelProps = {
   onMapDateFromChart: (iso: string) => void
   selectedFieldKey?: string | null
   onSelectedFieldKeyChange?: (fieldKey: string) => void
+  onHighlightFieldKeysChange?: (fieldKeys: string[]) => void
   chartLookbackDays?: number
   mapboxToken?: string
   projectName?: string
@@ -90,6 +96,7 @@ export function SiImageryTimeSeriesPanel({
   onMapDateFromChart,
   selectedFieldKey: selectedFieldKeyProp,
   onSelectedFieldKeyChange,
+  onHighlightFieldKeysChange,
   chartLookbackDays = 90,
   mapboxToken,
   projectName,
@@ -113,6 +120,9 @@ export function SiImageryTimeSeriesPanel({
   const layerGroups = useMemo(() => buildImageryTimeSeriesLayerGroups(), [])
 
   const [selectedFieldKey, setSelectedFieldKey] = useState('')
+  const [selectedFieldKeys, setSelectedFieldKeys] = useState<string[]>([])
+  const [analysisMode, setAnalysisMode] = useState<SiImageryAnalysisMode>('single-layer-trend')
+  const [multiSceneDate, setMultiSceneDate] = useState(referenceDate)
   const [selectedLayerIds, setSelectedLayerIds] = useState<string[]>(() => {
     const id = defaultLayerId.trim()
     return id ? [id] : ['NDVI']
@@ -150,7 +160,32 @@ export function SiImageryTimeSeriesPanel({
     setFromDate(next.from)
     setToDate(next.to)
     setDateError(null)
+    setMultiSceneDate(referenceDate)
   }, [imageryDateAutoFollow, referenceDate, chartLookbackDays])
+
+  const resolvedFields = useMemo(
+    () =>
+      selectedFieldKeys
+        .map(key => resolveSiImageryField(agroStructuresMask, aoiFields, committedAoiGeometry, key))
+        .filter((f): f is NonNullable<typeof f> => f != null),
+    [agroStructuresMask, aoiFields, committedAoiGeometry, selectedFieldKeys],
+  )
+
+  const {
+    results: multiAoiResults,
+    loading: multiAoiLoading,
+    refreshing: multiAoiRefreshing,
+    error: multiAoiError,
+    hasRun: multiAoiHasRun,
+    analysisDurationMs: multiAoiDurationMs,
+    hasChartData: multiAoiHasChartData,
+    run: runMultiAoiAnalysis,
+    invalidateResults: invalidateMultiAoiResults,
+  } = useMultiLayerAoiTrendStream({
+    fields: resolvedFields,
+    layerIds: selectedLayerIds,
+    sceneDate: multiSceneDate,
+  })
 
   const resolvedField = useMemo(
     () =>
@@ -355,11 +390,12 @@ export function SiImageryTimeSeriesPanel({
 
   const handleInvalidate = useCallback(() => {
     invalidateResults()
+    invalidateMultiAoiResults()
     autoRunReadyRef.current = false
     setDateError(null)
     setSelectedChartDate(null)
     setActivePanelTab('chart')
-  }, [invalidateResults])
+  }, [invalidateResults, invalidateMultiAoiResults])
 
   const displayError = dateError || error
 
@@ -377,6 +413,80 @@ export function SiImageryTimeSeriesPanel({
       prev && fieldOptions.some(o => o.fieldKey === prev) ? prev : fieldOptions[0]!.fieldKey,
     )
   }, [fieldOptions, selectedFieldKeyProp])
+
+  useEffect(() => {
+    if (!fieldOptions.length) {
+      setSelectedFieldKeys([])
+      return
+    }
+    setSelectedFieldKeys(prev => {
+      const kept = prev.filter(key => fieldOptions.some(o => o.fieldKey === key))
+      if (kept.length) return kept
+      return fieldOptions.slice(0, Math.min(3, fieldOptions.length)).map(o => o.fieldKey)
+    })
+  }, [fieldOptions])
+
+  const runMultiAoiWrapped = useCallback(async () => {
+    autoRunReadyRef.current = true
+    await runMultiAoiAnalysis()
+  }, [runMultiAoiAnalysis])
+
+  const handleMultiAoiHighlight = useCallback(
+    (fieldKey: string) => {
+      onSelectedFieldKeyChange?.(fieldKey)
+      onHighlightFieldKeysChange?.([fieldKey])
+    },
+    [onSelectedFieldKeyChange, onHighlightFieldKeysChange],
+  )
+
+  useEffect(() => {
+    if (analysisMode !== 'multi-layer-aoi-comparison') return
+    if (!multiAoiHasRun || multiAoiLoading) return
+    if (!selectedFieldKeys.length || !selectedLayerIds.length || !multiSceneDate) return
+    if (!resolvedFields.length) return
+    const id = window.setTimeout(() => void runMultiAoiWrapped(), 650)
+    return () => window.clearTimeout(id)
+  }, [
+    analysisMode,
+    selectedFieldKeys,
+    selectedLayerIds,
+    multiSceneDate,
+    resolvedFields,
+    multiAoiHasRun,
+    multiAoiLoading,
+    runMultiAoiWrapped,
+  ])
+
+  useEffect(() => {
+    if (analysisMode !== 'multi-layer-aoi-comparison') return
+    if (multiAoiHasRun || multiAoiLoading) return
+    if (!selectedFieldKeys.length || !selectedLayerIds.length || !multiSceneDate) return
+    if (!resolvedFields.length) return
+    const id = window.setTimeout(() => void runMultiAoiWrapped(), 500)
+    return () => window.clearTimeout(id)
+  }, [
+    analysisMode,
+    selectedFieldKeys,
+    selectedLayerIds,
+    multiSceneDate,
+    resolvedFields,
+    multiAoiHasRun,
+    multiAoiLoading,
+    runMultiAoiWrapped,
+  ])
+
+  useEffect(() => {
+    if (analysisMode !== 'multi-layer-aoi-comparison') return
+    if (selectedFieldKeys.length && selectedLayerIds.length && multiSceneDate && resolvedFields.length) return
+    invalidateMultiAoiResults()
+  }, [
+    analysisMode,
+    selectedFieldKeys,
+    selectedLayerIds,
+    multiSceneDate,
+    resolvedFields,
+    invalidateMultiAoiResults,
+  ])
 
   useEffect(() => {
     if (!committedAoiGeometry) {
@@ -440,6 +550,7 @@ export function SiImageryTimeSeriesPanel({
   }, [chartReady, chartType])
 
   useEffect(() => {
+    if (analysisMode !== 'single-layer-trend') return
     if (!hasRun || !selectedFieldKey || dateError) return
     if (!fromDate || !toDate || fromDate >= toDate) return
     const prev = prevAutoRunDatesRef.current
@@ -447,14 +558,15 @@ export function SiImageryTimeSeriesPanel({
     setSelectedChartDate(null)
     const id = window.setTimeout(() => void runAnalysisRef.current(), 650)
     return () => window.clearTimeout(id)
-  }, [fromDate, toDate, selectedFieldKey, hasRun, dateError])
+  }, [fromDate, toDate, selectedFieldKey, hasRun, dateError, analysisMode])
 
   useEffect(() => {
+    if (analysisMode !== 'single-layer-trend') return
     if (hasRun || loading) return
     if (!selectedFieldKey || !fromDate || !toDate || fromDate >= toDate || dateError) return
     const id = window.setTimeout(() => void runAnalysisRef.current(), 500)
     return () => window.clearTimeout(id)
-  }, [selectedFieldKey, fromDate, toDate, selectedLayerIds, hasRun, loading, dateError])
+  }, [selectedFieldKey, fromDate, toDate, selectedLayerIds, hasRun, loading, dateError, analysisMode])
 
   useEffect(() => {
     const id = defaultLayerId.trim()
@@ -467,6 +579,7 @@ export function SiImageryTimeSeriesPanel({
   }, [defaultLayerId])
 
   useEffect(() => {
+    if (analysisMode !== 'single-layer-trend') return
     const prev = prevLayerIdsRef.current
     const same =
       prev.length === selectedLayerIds.length &&
@@ -476,14 +589,15 @@ export function SiImageryTimeSeriesPanel({
     if (!selectedFieldKey || !fromDate || !toDate || fromDate >= toDate || dateError) return
     const id = window.setTimeout(() => void runAnalysisRef.current(), 400)
     return () => window.clearTimeout(id)
-  }, [selectedLayerIds, hasRun, loading, selectedFieldKey, fromDate, toDate, dateError])
+  }, [selectedLayerIds, hasRun, loading, selectedFieldKey, fromDate, toDate, dateError, analysisMode])
 
   useEffect(() => {
+    if (analysisMode !== 'single-layer-trend') return
     if (!hasRun || loading || labels.length > 0 || error) return
     if (!selectedFieldKey || !fromDate || !toDate || fromDate >= toDate || dateError) return
     const id = window.setTimeout(() => void runAnalysisRef.current(), 600)
     return () => window.clearTimeout(id)
-  }, [hasRun, loading, labels.length, error, selectedFieldKey, fromDate, toDate, dateError, selectedLayerIds])
+  }, [hasRun, loading, labels.length, error, selectedFieldKey, fromDate, toDate, dateError, selectedLayerIds, analysisMode])
 
   const chartDateClickHandler = useCallback(
     (_event: unknown, elements: Array<{ index: number; datasetIndex?: number }>) => {
@@ -871,29 +985,68 @@ export function SiImageryTimeSeriesPanel({
   return (
     <div className="acp-ts">
         <div className="acp-ts__toolbar">
-          <label className="acp-ts__field acp-ts__field--grow">
-            <span>Field Name</span>
-            <select
+          <div className="acp-ts__field acp-ts__field--analysis-mode">
+            <span>Analysis</span>
+            <div className="acp-ts__aggregate" role="group" aria-label="Analysis mode">
+              <button
+                type="button"
+                className={`acp-ts__aggregate-btn${analysisMode === 'single-layer-trend' ? ' is-on' : ''}`}
+                aria-pressed={analysisMode === 'single-layer-trend'}
+                title="Current Single Layer Trend Analysis"
+                onClick={() => {
+                  if (analysisMode === 'single-layer-trend') return
+                  setAnalysisMode('single-layer-trend')
+                  setActivePanelTab('chart')
+                }}
+              >
+                Single Layer Trend
+              </button>
+              <button
+                type="button"
+                className={`acp-ts__aggregate-btn${analysisMode === 'multi-layer-aoi-comparison' ? ' is-on' : ''}`}
+                aria-pressed={analysisMode === 'multi-layer-aoi-comparison'}
+                title="Multi-Layer Trend Analysis (AOI Comparison)"
+                onClick={() => {
+                  if (analysisMode === 'multi-layer-aoi-comparison') return
+                  setAnalysisMode('multi-layer-aoi-comparison')
+                  setActivePanelTab('chart')
+                  invalidateMultiAoiResults()
+                }}
+              >
+                Multi-Layer AOI Comparison
+              </button>
+            </div>
+          </div>
+
+          {analysisMode === 'single-layer-trend' ? (
+          <div className="acp-ts__field acp-ts__field--grow">
+            <span className="acp-ts__field-label">Field Name</span>
+            <SiAoiFieldSelect
+              options={fieldOptions}
               value={selectedFieldKey}
-              onChange={e => {
+              onChange={key => {
                 handleInvalidate()
-                const key = e.target.value
                 setSelectedFieldKey(key)
                 if (key) onSelectedFieldKeyChange?.(key)
               }}
               disabled={!fieldOptions.length}
-            >
-              {!fieldOptions.length ? (
-                <option value="">No Agro Structures fields</option>
-              ) : (
-                fieldOptions.map(opt => (
-                  <option key={opt.fieldKey} value={opt.fieldKey}>
-                    {opt.displayName}
-                  </option>
-                ))
-              )}
-            </select>
-          </label>
+              emptyLabel="No Agro Structures fields"
+              searchPlaceholder="Search fields…"
+              aria-label="Field name"
+            />
+          </div>
+          ) : (
+          <div className="acp-ts__field acp-ts__field--grow">
+            <span className="acp-ts__field-label">AOI Layers</span>
+            <SiAoiFieldMultiSelect
+              options={fieldOptions}
+              selectedKeys={selectedFieldKeys}
+              onSelectedKeysChange={setSelectedFieldKeys}
+              disabled={!fieldOptions.length}
+              aria-label="AOI layers for comparison"
+            />
+          </div>
+          )}
           <div className="acp-ts__field acp-ts__field--layer acp-ts__field--grow">
             <AcpImageryLayerMultiSelect
               groups={layerGroups}
@@ -905,6 +1058,8 @@ export function SiImageryTimeSeriesPanel({
             />
           </div>
           <div className="acp-ts__date-range">
+            {analysisMode === 'single-layer-trend' ? (
+            <>
             <label className="acp-ts__field acp-ts__field--date">
               <span>Start Date</span>
               <input
@@ -941,7 +1096,22 @@ export function SiImageryTimeSeriesPanel({
                 }}
               />
             </label>
+            </>
+            ) : (
+            <label className="acp-ts__field acp-ts__field--date">
+              <span>Acquisition Date</span>
+              <input
+                type="date"
+                value={multiSceneDate}
+                onChange={e => {
+                  handleInvalidate()
+                  setMultiSceneDate(e.target.value)
+                }}
+              />
+            </label>
+            )}
           </div>
+          {analysisMode === 'single-layer-trend' ? (
           <div className="acp-ts__field acp-ts__field--aggregate">
             <span>Aggregate</span>
             <div className="acp-ts__aggregate" role="group" aria-label="Time aggregation">
@@ -968,6 +1138,8 @@ export function SiImageryTimeSeriesPanel({
               ))}
             </div>
           </div>
+          ) : null}
+          {analysisMode === 'single-layer-trend' ? (
           <label className="acp-ts__field">
             <span>Chart</span>
             <select
@@ -981,13 +1153,34 @@ export function SiImageryTimeSeriesPanel({
               <option value="scatter">Scatter</option>
             </select>
           </label>
+          ) : null}
           <button
             type="button"
             className="acp-ts__apply"
-            onClick={() => void runAnalysisWrapped()}
-            disabled={(loading && !hasChartData) || !selectedFieldKey}
+            onClick={() =>
+              analysisMode === 'multi-layer-aoi-comparison'
+                ? void runMultiAoiWrapped()
+                : void runAnalysisWrapped()
+            }
+            disabled={
+              analysisMode === 'multi-layer-aoi-comparison'
+                ? (multiAoiLoading && !multiAoiHasChartData) ||
+                  !selectedFieldKeys.length ||
+                  !selectedLayerIds.length
+                : (loading && !hasChartData) || !selectedFieldKey
+            }
           >
-            {loading && !hasChartData ? 'Running…' : refreshing ? 'Updating…' : 'Apply'}
+            {analysisMode === 'multi-layer-aoi-comparison'
+              ? multiAoiLoading && !multiAoiHasChartData
+                ? 'Running…'
+                : multiAoiRefreshing
+                  ? 'Updating…'
+                  : 'Apply'
+              : loading && !hasChartData
+                ? 'Running…'
+                : refreshing
+                  ? 'Updating…'
+                  : 'Apply'}
           </button>
         </div>
 
@@ -1010,9 +1203,11 @@ export function SiImageryTimeSeriesPanel({
             className={'acp-ts__tab' + (activePanelTab === 'interpretation' ? ' is-active' : '')}
             aria-selected={activePanelTab === 'interpretation'}
             aria-controls="acp-ts-panel-interpretation"
-            disabled={!interpretationSupported}
+            disabled={analysisMode !== 'single-layer-trend' || !interpretationSupported}
             title={
-              interpretationSupported
+              analysisMode !== 'single-layer-trend'
+                ? 'Interpretation is available in Single Layer Trend mode'
+                : interpretationSupported
                 ? 'Index interpretation for the selected chart date'
                 : 'Interpretation is available for line, area, and bar charts'
             }
@@ -1027,9 +1222,11 @@ export function SiImageryTimeSeriesPanel({
             className={'acp-ts__tab' + (activePanelTab === 'weather' ? ' is-active' : '')}
             aria-selected={activePanelTab === 'weather'}
             aria-controls="acp-ts-panel-weather"
-            disabled={!weatherTabSupported}
+            disabled={analysisMode !== 'single-layer-trend' || !weatherTabSupported}
             title={
-              weatherTabSupported
+              analysisMode !== 'single-layer-trend'
+                ? 'Weather comparison is available in Single Layer Trend mode'
+                : weatherTabSupported
                 ? 'Compare AOI weather with vegetation indices'
                 : 'Run analysis to enable weather comparison'
             }
@@ -1047,6 +1244,21 @@ export function SiImageryTimeSeriesPanel({
             className="acp-ts__panel acp-ts__panel--chart"
             hidden={activePanelTab !== 'chart'}
           >
+        {analysisMode === 'multi-layer-aoi-comparison' ? (
+          <SiMultiLayerAoiTrendView
+            results={multiAoiResults}
+            layerIds={selectedLayerIds}
+            sceneDate={multiSceneDate}
+            loading={multiAoiLoading}
+            refreshing={multiAoiRefreshing}
+            hasRun={multiAoiHasRun}
+            hasChartData={multiAoiHasChartData}
+            error={multiAoiError}
+            analysisDurationMs={multiAoiDurationMs}
+            onHighlightFieldKey={handleMultiAoiHighlight}
+          />
+        ) : (
+        <>
         {chartVisible ? (
           <div className="acp-ts__meta">
             <span>
@@ -1199,6 +1411,8 @@ export function SiImageryTimeSeriesPanel({
         ) : null}
 
         {displayError && hasRun && labels.length ? <p className="acp-ts__error">{displayError}</p> : null}
+        </>
+        )}
 
           </div>
 
@@ -1273,6 +1487,8 @@ export function SiImageryTimeSeriesPanel({
         />
 
         <div className="acp-ts__foot">
+          {analysisMode === 'single-layer-trend' ? (
+          <>
           <label className="acp-ts__toggle">
             <input
               type="checkbox"
@@ -1325,6 +1541,8 @@ export function SiImageryTimeSeriesPanel({
               generatedBy={generatedBy}
             />
           </div>
+          </>
+          ) : null}
         </div>
     </div>
   )
