@@ -122,7 +122,9 @@ export const DEFAULT_RASTER_VIEWPORT_BOUNDS: AiDlRasterBounds = {
 
 export function isRasterDataFile(file: File): boolean {
   const ext = rasterExtension(file.name)
-  return RASTER_DATA_EXTENSIONS.has(ext) || ext === ZIP_EXTENSION
+  // Do not classify bare .zip as raster — shapefile/KMZ/GeoJSON archives are vector.
+  // Raster ZIPs are handled explicitly inside importAoiRasterFiles via pickRasterZipCandidate.
+  return RASTER_DATA_EXTENSIONS.has(ext)
 }
 
 export function isWorldFileOnly(file: File): boolean {
@@ -144,11 +146,13 @@ export function isAiDlRasterGeorefRequest(
   return !('readyForInference' in value)
 }
 
+/** True ZIP archives that may contain GeoTIFF/PNG rasters (not shapefile parts). */
+export function pickRasterZipCandidate(files: File[]): File | null {
+  return files.find(f => rasterExtension(f.name) === ZIP_EXTENSION) ?? null
+}
+
 export function pickRasterUploadFiles(files: File[]): { raster: File; companions: File[] } | null {
-  const raster =
-    files.find(f => RASTER_DATA_EXTENSIONS.has(rasterExtension(f.name))) ??
-    files.find(f => rasterExtension(f.name) === ZIP_EXTENSION) ??
-    null
+  const raster = files.find(f => RASTER_DATA_EXTENSIONS.has(rasterExtension(f.name))) ?? null
   if (!raster) return null
   const companions = files.filter(f => f !== raster)
   return { raster, companions }

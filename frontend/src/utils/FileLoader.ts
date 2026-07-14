@@ -2,8 +2,13 @@ import shp from 'shpjs';
 import JSZip from 'jszip';
 import Papa from 'papaparse';
 import * as toGeoJSON from '@tmcw/togeojson';
+import * as XLSX from 'xlsx';
 
 const MAX_PARSE_BYTES = 480 * 1024 * 1024; // soft cap — browser memory still limits practical size
+
+const LAT_KEYS = ['lat', 'latitude', 'y'] as const;
+const LON_KEYS = ['lon', 'lng', 'longitude', 'x'] as const;
+const WKT_KEYS = ['wkt', 'geometry', 'geom'] as const;
 
 export type RasterMapCoordinates = [
   [number, number],
@@ -187,6 +192,287 @@ function assertXmlHasNoParserErrors(doc: Document, label: string) {
   if (err && err.textContent?.trim()) {
     throw new Error(`${label} is not valid XML.`);
   }
+}
+
+function findRowKey(row: Record<string, unknown>, candidates: readonly string[]): string | undefined {
+  return Object.keys(row).find(k => candidates.includes(k.toLowerCase()));
+}
+
+/** Minimal WKT → GeoJSON for POINT / LINESTRING / POLYGON (2D). */
+function parseSimpleWkt(wktRaw: string): any | null {
+  const wkt = String(wktRaw || '').trim();
+  if (!wkt) return null;
+
+  const parsePair = (s: string): [number, number] | null => {
+    const parts = s.trim().split(/[\s,]+/).filter(Boolean);
+    if (parts.length < 2) return null;
+    const x = parseFloat(parts[0]);
+    const y = parseFloat(parts[1]);
+    if (Number.isNaN(x) || Number.isNaN(y)) return null;
+    return [x, y];
+  };
+
+  const pointM = /^POINT\s*\(\s*([^)]+)\s*\)$/i.exec(wkt);
+  if (pointM) {
+    const xy = parsePair(pointM[1]);
+    return xy ? { type: 'Point', coordinates: xy } : null;
+  }
+
+  const lineM = /^LINESTRING\s*\(\s*(.+)\s*\)$/i.exec(wkt);
+  if (lineM) {
+    const coords = lineM[1]
+      .split(',')
+      .map(parsePair)
+      .filter((c): c is [number, number] => c !== null);
+    return coords.length >= 2 ? { type: 'LineString', coordinates: coords } : null;
+  }
+
+  const polyM = /^POLYGON\s*\(\s*\(\s*(.+)\s*\)\s*\)$/i.exec(wkt);
+  if (polyM) {
+    const ring = polyM[1]
+      .split(',')
+      .map(parsePair)
+      .filter((c): c is [number, number] => c !== null);
+    if (ring.length < 3) return null;
+    const first = ring[0];
+    const last = ring[ring.length - 1];
+    if (first[0] !== last[0] || first[1] !== last[1]) ring.push([...first] as [number, number]);
+    return { type: 'Polygon', coordinates: [ring] };
+  }
+
+  return null;
+}
+
+/** Convert tabular rows to GeoJSON points (lat/lon) or WKT geometries, else a plain table. */
+function rowsToGeoOrTable(rows: any[], filename: string): ParsedData {
+  if (!rows.length) return { type: 'table', data: [], filename };
+
+  const sample = rows[0] as Record<string, unknown>;
+  const keys = Object.keys(sample).map(k => k.toLowerCase());
+  const hasLat = keys.some(k => (LAT_KEYS as readonly string[]).includes(k));
+  const hasLon = keys.some(k => (LON_KEYS as readonly string[]).includes(k));
+  const wktKey = findRowKey(sample, WKT_KEYS);
+
+  if (wktKey) {
+    const features = rows
+      .map((row: any) => {
+        const geom = parseSimpleWkt(String(row[wktKey] ?? ''));
+        if (!geom) return null;
+        return { type: 'Feature', geometry: geom, properties: row };
+      })
+      .filter(Boolean);
+    if (features.length) {
+      return { type: 'geojson', data: { type: 'FeatureCollection', features }, filename };
+    }
+  }
+
+  if (hasLat && hasLon) {
+    const latKey = findRowKey(sample, LAT_KEYS);
+    const lonKey = findRowKey(sample, LON_KEYS);
+    if (latKey && lonKey) {
+      const features = rows
+        .map((row: any) => {
+          const lat = parseFloat(row[latKey]);
+          const lon = parseFloat(row[lonKey]);
+          if (Number.isNaN(lat) || Number.isNaN(lon)) return null;
+          return {
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [lon, lat] },
+            properties: row,
+          };
+        })
+        .filter(f => f !== null);
+      if (features.length) {
+        return { type: 'geojson', data: { type: 'FeatureCollection', features }, filename };
+      }
+    }
+  }
+
+  return { type: 'table', data: rows, filename };
+}
+
+/* ── Minimal TopoJSON → GeoJSON (arcs + transform) ─────────────────────── */
+
+function topoPosition(transform: any, x: number, y: number): [number, number] {
+  if (!transform) return [x, y];
+  const scale = transform.scale || [1, 1];
+  const translate = transform.translate || [0, 0];
+  return [x * scale[0] + translate[0], y * scale[1] + translate[1]];
+}
+
+function decodeTopoArc(topology: any, index: number): number[][] {
+  const arcs = topology.arcs;
+  if (!Array.isArray(arcs)) return [];
+  const reverse = index < 0;
+  const i = reverse ? ~index : index;
+  const arc = arcs[i];
+  if (!Array.isArray(arc) || !arc.length) return [];
+
+  const transform = topology.transform;
+  let x = 0;
+  let y = 0;
+  const coords: number[][] = [];
+  for (const p of arc) {
+    if (!Array.isArray(p) || p.length < 2) continue;
+    x += Number(p[0]) || 0;
+    y += Number(p[1]) || 0;
+    coords.push(topoPosition(transform, x, y));
+  }
+  if (reverse) coords.reverse();
+  return coords;
+}
+
+function stitchTopoArcs(topology: any, arcIndexes: number[]): number[][] {
+  const out: number[][] = [];
+  for (let a = 0; a < arcIndexes.length; a++) {
+    const ring = decodeTopoArc(topology, arcIndexes[a]);
+    if (!ring.length) continue;
+    if (out.length && ring.length) {
+      // Drop duplicate shared vertex between consecutive arcs.
+      out.push(...ring.slice(1));
+    } else {
+      out.push(...ring);
+    }
+  }
+  return out;
+}
+
+function topoGeometryToGeoJSON(topology: any, geom: any): any | null {
+  if (!geom || typeof geom !== 'object') return null;
+  const t = geom.type;
+
+  if (t === 'GeometryCollection' && Array.isArray(geom.geometries)) {
+    const geometries = geom.geometries.map((g: any) => topoGeometryToGeoJSON(topology, g)).filter(Boolean);
+    return geometries.length ? { type: 'GeometryCollection', geometries } : null;
+  }
+
+  if (t === 'Point') {
+    const raw = Array.isArray(geom.coordinates) ? geom.coordinates : null;
+    if (!raw || raw.length < 2) return null;
+    return { type: 'Point', coordinates: topoPosition(topology.transform, Number(raw[0]), Number(raw[1])) };
+  }
+  if (t === 'MultiPoint') {
+    const raw = Array.isArray(geom.coordinates) ? geom.coordinates : null;
+    if (!raw) return null;
+    return {
+      type: 'MultiPoint',
+      coordinates: raw.map((p: number[]) => topoPosition(topology.transform, Number(p[0]), Number(p[1]))),
+    };
+  }
+
+  const arcs = geom.arcs;
+  if (t === 'LineString' && Array.isArray(arcs)) {
+    return { type: 'LineString', coordinates: stitchTopoArcs(topology, arcs) };
+  }
+  if (t === 'MultiLineString' && Array.isArray(arcs)) {
+    return {
+      type: 'MultiLineString',
+      coordinates: arcs.map((line: number[]) => stitchTopoArcs(topology, line)),
+    };
+  }
+  if (t === 'Polygon' && Array.isArray(arcs)) {
+    return {
+      type: 'Polygon',
+      coordinates: arcs.map((ring: number[]) => stitchTopoArcs(topology, ring)),
+    };
+  }
+  if (t === 'MultiPolygon' && Array.isArray(arcs)) {
+    return {
+      type: 'MultiPolygon',
+      coordinates: arcs.map((poly: number[][]) => poly.map((ring: number[]) => stitchTopoArcs(topology, ring))),
+    };
+  }
+
+  // Already-decoded GeoJSON geometry embedded in the topology object.
+  if (geom.coordinates && typeof t === 'string') {
+    return { type: t, coordinates: geom.coordinates };
+  }
+
+  return null;
+}
+
+/** Convert a TopoJSON Topology into a GeoJSON FeatureCollection. */
+export function topologyToGeoJSON(topology: any): { type: 'FeatureCollection'; features: any[] } {
+  if (!topology || topology.type !== 'Topology' || !topology.objects) {
+    throw new Error('Not a TopoJSON Topology (expected type "Topology" with objects).');
+  }
+  const features: any[] = [];
+
+  for (const [name, obj] of Object.entries(topology.objects as Record<string, any>)) {
+    if (!obj || typeof obj !== 'object') continue;
+
+    if (obj.type === 'GeometryCollection' && Array.isArray(obj.geometries)) {
+      for (const g of obj.geometries) {
+        const geometry = topoGeometryToGeoJSON(topology, g);
+        if (!geometry) continue;
+        features.push({
+          type: 'Feature',
+          properties: { ...(g.properties || {}), __topoObject: name, ...(g.id != null ? { id: g.id } : {}) },
+          geometry,
+          ...(g.id != null ? { id: g.id } : {}),
+        });
+      }
+      continue;
+    }
+
+    // Single geometry object (or Feature-like).
+    if (obj.type === 'Feature' && obj.geometry) {
+      const geometry = topoGeometryToGeoJSON(topology, obj.geometry);
+      if (geometry) {
+        features.push({
+          type: 'Feature',
+          properties: { ...(obj.properties || {}), __topoObject: name },
+          geometry,
+        });
+      }
+      continue;
+    }
+
+    const geometry = topoGeometryToGeoJSON(topology, obj);
+    if (geometry) {
+      if (geometry.type === 'GeometryCollection' && Array.isArray(geometry.geometries)) {
+        for (const g of geometry.geometries) {
+          features.push({
+            type: 'Feature',
+            properties: { ...(obj.properties || {}), __topoObject: name },
+            geometry: g,
+          });
+        }
+      } else {
+        features.push({
+          type: 'Feature',
+          properties: { ...(obj.properties || {}), __topoObject: name, ...(obj.id != null ? { id: obj.id } : {}) },
+          geometry,
+          ...(obj.id != null ? { id: obj.id } : {}),
+        });
+      }
+    }
+  }
+
+  return { type: 'FeatureCollection', features };
+}
+
+function parseJsonLikeToParsedData(json: any, filename: string): ParsedData {
+  if (json && json.type === 'Topology' && json.objects) {
+    const fc = topologyToGeoJSON(json);
+    const normalized = normalizeGeoJsonEnvelope(fc);
+    if (!normalized.features.length) throw new Error('TopoJSON contains no drawable features.');
+    return { type: 'geojson', data: normalized, filename, crsHint: 'TopoJSON' };
+  }
+  const normalized = normalizeGeoJsonEnvelope(json);
+  if (!normalized.features.length) throw new Error('GeoJSON contains no drawable features.');
+  return { type: 'geojson', data: normalized, filename };
+}
+
+async function parseExcelFile(file: File, opts?: ParseOptions): Promise<ParsedData> {
+  const ab = await readAsArrayBuffer(file, opts);
+  await yieldToBrowser();
+  const wb = XLSX.read(ab, { type: 'array', cellDates: true });
+  const sheetName = wb.SheetNames[0];
+  if (!sheetName) return { type: 'table', data: [], filename: file.name };
+  const sheet = wb.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null, raw: false });
+  return rowsToGeoOrTable(rows, file.name);
 }
 
 function looksLikeGeographicBbox(w: number, s: number, e: number, n: number): boolean {
@@ -490,18 +776,20 @@ export const parseFile = async (file: File, opts?: ParseOptions): Promise<Parsed
     assertXmlHasNoParserErrors(dom, 'GPX');
     const geojson = (toGeoJSON as any).gpx(dom);
     return { type: 'geojson', data: normalizeGeoJsonEnvelope(geojson), filename };
-  } else if (extension === 'json' || extension === 'geojson') {
+  } else if (extension === 'json' || extension === 'geojson' || extension === 'topojson') {
     const text = await readAsText(file, opts);
     const trimmed = text.replace(/^\uFEFF/, '');
     let json: any;
     try {
       json = JSON.parse(trimmed);
-    } catch (err) {
-      throw new Error('Invalid JSON — file is not valid GeoJSON.');
+    } catch {
+      throw new Error(
+        extension === 'topojson'
+          ? 'Invalid JSON — file is not valid TopoJSON.'
+          : 'Invalid JSON — file is not valid GeoJSON.',
+      );
     }
-    const normalized = normalizeGeoJsonEnvelope(json);
-    if (!normalized.features.length) throw new Error('GeoJSON contains no drawable features.');
-    return { type: 'geojson', data: normalized, filename };
+    return parseJsonLikeToParsedData(json, filename);
   } else if (extension === 'csv') {
     return new Promise((resolve, reject) => {
       Papa.parse(file, {
@@ -509,53 +797,13 @@ export const parseFile = async (file: File, opts?: ParseOptions): Promise<Parsed
         dynamicTyping: true,
         skipEmptyLines: true,
         complete: results => {
-          const rows = results.data as any[];
-          if (rows.length === 0) {
-            resolve({ type: 'table', data: [], filename });
-            return;
-          }
-
-          const keys = Object.keys(rows[0]).map(k => k.toLowerCase());
-          const hasLat = keys.some(k => k === 'lat' || k === 'latitude' || k === 'y');
-          const hasLon = keys.some(k => k === 'lon' || k === 'lng' || k === 'longitude' || k === 'x');
-
-          if (hasLat && hasLon) {
-            const latKey = Object.keys(rows[0]).find(k => ['lat', 'latitude', 'y'].includes(k.toLowerCase()));
-            const lonKey = Object.keys(rows[0]).find(k => ['lon', 'lng', 'longitude', 'x'].includes(k.toLowerCase()));
-
-            if (latKey && lonKey) {
-              const features = rows
-                .map((row: any) => {
-                  const lat = parseFloat(row[latKey]);
-                  const lon = parseFloat(row[lonKey]);
-                  if (Number.isNaN(lat) || Number.isNaN(lon)) return null;
-                  return {
-                    type: 'Feature',
-                    geometry: {
-                      type: 'Point',
-                      coordinates: [lon, lat],
-                    },
-                    properties: row,
-                  };
-                })
-                .filter(f => f !== null);
-
-              resolve({
-                type: 'geojson',
-                data: { type: 'FeatureCollection', features },
-                filename,
-              });
-              return;
-            }
-          }
-
-          resolve({ type: 'table', data: rows, filename });
+          resolve(rowsToGeoOrTable(results.data as any[], filename));
         },
         error: (err: any) => reject(err),
       });
     });
   } else if (extension === 'xlsx' || extension === 'xls') {
-    throw new Error('Excel upload is not supported here. Please convert to CSV.');
+    return parseExcelFile(file, opts);
   } else if (extension === 'shp') {
     throw new Error('Please compress your Shapefile (.shp, .shx, .dbf, …) into a single .zip before uploading.');
   } else if (extension === 'tif' || extension === 'tiff') {
@@ -658,3 +906,28 @@ export async function parseRemoteUrlAsFile(url: string, opts?: ParseOptions): Pr
 
   return new File([blob], filename, { type: blob.type || res.headers.get('content-type') || undefined });
 }
+
+/** Honest vector formats accepted by the map upload UI / parseFile. */
+export const VECTOR_UPLOAD_EXTENSIONS = [
+  'geojson',
+  'json',
+  'topojson',
+  'zip',
+  'kml',
+  'kmz',
+  'gpx',
+  'csv',
+  'xlsx',
+  'xls',
+  'shp',
+] as const;
+
+export const RASTER_UPLOAD_EXTENSIONS = ['tif', 'tiff', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] as const;
+
+export const BIM_UPLOAD_EXTENSIONS = ['ifc'] as const;
+
+export const VECTOR_ACCEPT =
+  '.geojson,.json,.topojson,.zip,.kml,.kmz,.gpx,.csv,.xlsx,.xls,.shp,.dbf,.shx,.prj,.cpg';
+
+export const RASTER_ACCEPT = '.tif,.tiff,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tfw,.pgw,.jgw,.wld,.prj,.aux.xml';
+

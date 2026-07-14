@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { OpenMeteoHourlyPoint } from '../../../../lib/openMeteoWeather'
 import {
   aggregateDailyFromHourly,
+  buildClimatePeriodExportRows,
   buildWeatherClimateReportPayload,
 } from './weatherClimateAnalysisEngine'
 
@@ -54,10 +55,26 @@ describe('weatherClimateAnalysisEngine', () => {
       loadedStart: '2023-01-01',
       loadedEnd: '2023-12-31',
       hourlyRecords: points,
+      timeAggregation: 'month',
     })
     expect(payload.dailyRecords.length).toBeGreaterThan(0)
+    expect(payload.timeAggregation).toBe('month')
     expect(payload.climateRisks).toHaveLength(3)
     expect(payload.forecastRows.some(r => r.year === 2050)).toBe(true)
     expect(payload.executiveSummary.mainFindings.length).toBeGreaterThan(0)
+  })
+
+  it('builds Historical Dataset rows for hour and week aggregation', () => {
+    const points = [
+      hourlyPoint('2024-01-01T12:00', 20, 1),
+      hourlyPoint('2024-01-02T12:00', 22, 2),
+      hourlyPoint('2024-01-08T12:00', 18, 3),
+    ]
+    const daily = aggregateDailyFromHourly(points)
+    const hourly = buildClimatePeriodExportRows(points, daily, 'hour')
+    expect(hourly).toHaveLength(3)
+    const weeks = buildClimatePeriodExportRows(points, daily, 'week')
+    expect(weeks.length).toBeGreaterThan(0)
+    expect(weeks[0].rainfallMm).toBeGreaterThan(0)
   })
 })

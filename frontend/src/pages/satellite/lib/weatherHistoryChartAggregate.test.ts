@@ -56,4 +56,27 @@ describe('weatherHistoryChartAggregate', () => {
     expect(series.values.length).toBeGreaterThan(0)
     expect(series.displayLabels.length).toBe(series.values.length)
   })
+
+  it('keeps one point per hour for Hourly aggregation', () => {
+    const points = [
+      hourly('2024-01-01T08:00', 18),
+      hourly('2024-01-01T09:00', 20),
+      hourly('2024-01-01T10:00', 22),
+    ]
+    const series = buildWeatherHistoryChartSeries(points, 'temp', 'hour')
+    expect(series.labels).toEqual(['2024-01-01T08:00', '2024-01-01T09:00', '2024-01-01T10:00'])
+    expect(series.displayLabels).toEqual(['01-01 08:00', '01-01 09:00', '01-01 10:00'])
+    expect(series.values).toEqual([18, 20, 22])
+  })
+
+  it('sums rainfall within duplicate hour samples', () => {
+    const points = [
+      hourly('2024-01-01T08:00', 0, 1.5),
+      hourly('2024-01-01T08:00', 0, 0.5),
+      hourly('2024-01-01T09:00', 0, 2),
+    ]
+    const series = buildWeatherHistoryChartSeries(points, 'rain', 'hour')
+    expect(series.labels).toEqual(['2024-01-01T08:00', '2024-01-01T09:00'])
+    expect(series.values).toEqual([2, 2])
+  })
 })

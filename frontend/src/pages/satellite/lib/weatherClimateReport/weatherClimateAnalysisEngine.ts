@@ -1,6 +1,12 @@
 import type { OpenMeteoHourlyPoint } from '../../../../lib/openMeteoWeather'
+import {
+  formatImageryTimePeriodLabel,
+  imageryTimePeriodKey,
+  type ImageryTimeAggregation,
+} from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import type {
   AnnualClimateRow,
+  ClimateExportAggregation,
   ClimateExtremeEvent,
   ClimateForecastRow,
   ClimateRiskLevel,
@@ -9,6 +15,34 @@ import type {
   WeatherClimateReportPayload,
   WeatherDailyRecord,
 } from './weatherClimateReportTypes'
+
+export type ClimatePeriodExportRow = {
+  period: string
+  periodLabel: string
+  tempMaxC: number | null
+  tempMinC: number | null
+  tempAvgC: number | null
+  rainfallMm: number | null
+  humidityPct: number | null
+  windSpeedKmh: number | null
+  solarRadiationWm2: number | null
+  et0Mm: number | null
+  pressureHpa: number | null
+  windDirectionDeg?: number | null
+  weatherCode?: number | null
+}
+
+const AGGREGATION_LABELS: Record<ClimateExportAggregation, string> = {
+  hour: 'Hourly',
+  day: 'Daily',
+  week: 'Weekly',
+  month: 'Monthly',
+  year: 'Yearly',
+}
+
+export function climateAggregationLabel(aggregation: ClimateExportAggregation): string {
+  return AGGREGATION_LABELS[aggregation] ?? aggregation
+}
 
 const MONTH_LABELS = [
   'January',
@@ -112,6 +146,101 @@ export function aggregateDailyFromHourly(points: OpenMeteoHourlyPoint[]): Weathe
         pressureHpa: mean(press),
       }
     })
+}
+
+function mergeDailyBucket(rows: WeatherDailyRecord[]): Omit<WeatherDailyRecord, 'date'> {
+  const maxTemps = finite(rows.map(r => r.tempMaxC))
+  const minTemps = finite(rows.map(r => r.tempMinC))
+  const avgTemps = finite(rows.map(r => r.tempAvgC))
+  const rains = finite(rows.map(r => r.rainfallMm))
+  const humid = finite(rows.map(r => r.humidityPct))
+  const wind = finite(rows.map(r => r.windSpeedKmh))
+  const solar = finite(rows.map(r => r.solarRadiationWm2))
+  const et0 = finite(rows.map(r => r.et0Mm))
+  const press = finite(rows.map(r => r.pressureHpa))
+  return {
+    tempMaxC: maxTemps.length ? Math.max(...maxTemps) : null,
+    tempMinC: minTemps.length ? Math.min(...minTemps) : null,
+    tempAvgC: mean(avgTemps),
+    rainfallMm: rains.length ? sum(rains) : null,
+    humidityPct: mean(humid),
+    windSpeedKmh: mean(wind),
+    solarRadiationWm2: mean(solar),
+    et0Mm: et0.length ? sum(et0) : null,
+    pressureHpa: mean(press),
+  }
+}
+
+/** Re-bucket daily climate rows into week / month / year periods for Excel export. */
+export function aggregateDailyRecordsByPeriod(
+  daily: WeatherDailyRecord[],
+  aggregation: Exclude<ClimateExportAggregation, 'hour' | 'day'>,
+): ClimatePeriodExportRow[] {
+  const buckets = new Map<string, WeatherDailyRecord[]>()
+  const order: string[] = []
+  daily.forEach(row => {
+    const key = imageryTimePeriodKey(row.date, aggregation as ImageryTimeAggregation)
+    if (!key) return
+    if (!buckets.has(key)) {
+      buckets.set(key, [])
+      order.push(key)
+    }
+    buckets.get(key)!.push(row)
+  })
+  return order.map(key => {
+    const merged = mergeDailyBucket(buckets.get(key) ?? [])
+    return {
+      period: key,
+      periodLabel: formatImageryTimePeriodLabel(key, aggregation as ImageryTimeAggregation),
+      ...merged,
+    }
+  })
+}
+
+/** Rows for the Historical Dataset sheet, matching the chart Aggregate selection. */
+export function buildClimatePeriodExportRows(
+  hourly: OpenMeteoHourlyPoint[],
+  daily: WeatherDailyRecord[],
+  aggregation: ClimateExportAggregation,
+): ClimatePeriodExportRow[] {
+  if (aggregation === 'hour') {
+    return hourly.map(h => {
+      const key = h.time.length >= 16 ? h.time.slice(0, 16) : h.time
+      const label =
+        key.length >= 16 ? `${key.slice(5, 10)} ${key.slice(11, 16)}` : key
+      return {
+        period: key,
+        periodLabel: label,
+        tempMaxC: h.temperatureC,
+        tempMinC: h.temperatureC,
+        tempAvgC: h.temperatureC,
+        rainfallMm: h.precipitationMm,
+        humidityPct: h.humidityPct,
+        windSpeedKmh: h.windSpeedKmh,
+        solarRadiationWm2: h.shortwaveRadiationWm2,
+        et0Mm: h.et0Mm,
+        pressureHpa: h.pressureHpa,
+        windDirectionDeg: h.windDirectionDeg,
+        weatherCode: h.weatherCode,
+      }
+    })
+  }
+  if (aggregation === 'day') {
+    return daily.map(d => ({
+      period: d.date,
+      periodLabel: d.date,
+      tempMaxC: d.tempMaxC,
+      tempMinC: d.tempMinC,
+      tempAvgC: d.tempAvgC,
+      rainfallMm: d.rainfallMm,
+      humidityPct: d.humidityPct,
+      windSpeedKmh: d.windSpeedKmh,
+      solarRadiationWm2: d.solarRadiationWm2,
+      et0Mm: d.et0Mm,
+      pressureHpa: d.pressureHpa,
+    }))
+  }
+  return aggregateDailyRecordsByPeriod(daily, aggregation)
 }
 
 function classifyClimate(daily: WeatherDailyRecord[]): string {
@@ -420,11 +549,14 @@ export type BuildWeatherClimatePayloadInput = {
   loadedStart: string
   loadedEnd: string
   hourlyRecords: OpenMeteoHourlyPoint[]
+  /** Defaults to day when omitted (backward compatible). */
+  timeAggregation?: ClimateExportAggregation
 }
 
 export function buildWeatherClimateReportPayload(
   input: BuildWeatherClimatePayloadInput,
 ): WeatherClimateReportPayload {
+  const timeAggregation: ClimateExportAggregation = input.timeAggregation ?? 'day'
   const daily = aggregateDailyFromHourly(input.hourlyRecords)
   const annual = buildAnnualSeries(daily)
   const baseTemp = mean(finite(annual.map(a => a.avgTempC)))
@@ -531,6 +663,7 @@ export function buildWeatherClimateReportPayload(
       environmentalRiskSummary: climateRisks.map(r => `${r.riskType}: ${r.level}`).join(' · '),
       forecastHorizon: '2026 – 2050 Climate Projection (trend-based)',
     },
+    timeAggregation,
     hourlyRecords: input.hourlyRecords,
     dailyRecords: daily,
     temperatureStats: {

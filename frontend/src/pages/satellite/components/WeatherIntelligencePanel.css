@@ -1147,8 +1147,8 @@
 }
 
 .si-wx-history__aggregate-btn {
-  min-width: 34px;
-  padding: 0 7px;
+  min-width: 30px;
+  padding: 0 6px;
   border: none;
   border-radius: 3px;
   background: transparent;
@@ -1158,6 +1158,7 @@
   letter-spacing: 0.02em;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
 }
 
 .si-wx-history__aggregate-btn:hover:not(.is-on) {

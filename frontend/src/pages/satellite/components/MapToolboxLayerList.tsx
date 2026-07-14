@@ -21,6 +21,20 @@ export type MapToolboxLayerListItem = {
   onRemove?: () => void
   /** Optional zoom-to-extent action. */
   onZoomTo?: () => void
+  /** Optional attribute table. */
+  onOpenTable?: () => void
+  /** Optional symbology studio. */
+  onSymbology?: () => void
+  /** Optional metadata / properties. */
+  onProperties?: () => void
+  /** Optional duplicate layer. */
+  onDuplicate?: () => void
+  /** Optional rename. */
+  onRename?: () => void
+  /** Optional AI analysis hook. */
+  onAiAnalysis?: () => void
+  /** Optional report generation. */
+  onGenerateReport?: () => void
   /** Optional on-map label toggle (e.g. contour elevation labels). */
   labelsToggle?: { visible: boolean; onToggle: () => void; labelOn?: string; labelOff?: string }
   /** Legacy inline action buttons (kept for base-overlay rows). */
@@ -46,6 +60,13 @@ function LayerOptionsMenu({
   onExport,
   onRemove,
   onZoomTo,
+  onOpenTable,
+  onSymbology,
+  onProperties,
+  onDuplicate,
+  onRename,
+  onAiAnalysis,
+  onGenerateReport,
   labelsToggle,
 }: {
   label: string
@@ -57,6 +78,13 @@ function LayerOptionsMenu({
   onExport?: () => void
   onRemove?: () => void
   onZoomTo?: () => void
+  onOpenTable?: () => void
+  onSymbology?: () => void
+  onProperties?: () => void
+  onDuplicate?: () => void
+  onRename?: () => void
+  onAiAnalysis?: () => void
+  onGenerateReport?: () => void
   labelsToggle?: { visible: boolean; onToggle: () => void; labelOn?: string; labelOff?: string }
 }) {
   const [open, setOpen] = useState(false)
@@ -107,7 +135,7 @@ function LayerOptionsMenu({
   }, [open, place])
 
   const hasOpacity = typeof opacity === 'number' && !!onOpacityChange
-  const hasMenu = !!(onRemove || onExport || onZoomTo || labelsToggle || hasOpacity)
+  const hasMenu = !!(onRemove || onExport || onZoomTo || onOpenTable || onSymbology || onProperties || onDuplicate || onRename || onAiAnalysis || onGenerateReport || labelsToggle || hasOpacity)
 
   return (
     <>
@@ -153,6 +181,111 @@ function LayerOptionsMenu({
                 >
                   <i className="fa-solid fa-magnifying-glass-location" aria-hidden />
                   <span>Zoom to layer</span>
+                </button>
+              ) : null}
+
+              {onOpenTable ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="si-mt-layer-menu__item"
+                  onClick={() => {
+                    onOpenTable()
+                    setOpen(false)
+                  }}
+                >
+                  <i className="fa-solid fa-table" aria-hidden />
+                  <span>Open attribute table</span>
+                </button>
+              ) : null}
+
+              {onSymbology ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="si-mt-layer-menu__item"
+                  onClick={() => {
+                    onSymbology()
+                    setOpen(false)
+                  }}
+                >
+                  <i className="fa-solid fa-palette" aria-hidden />
+                  <span>Symbology</span>
+                </button>
+              ) : null}
+
+              {onProperties ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="si-mt-layer-menu__item"
+                  onClick={() => {
+                    onProperties()
+                    setOpen(false)
+                  }}
+                >
+                  <i className="fa-solid fa-sliders" aria-hidden />
+                  <span>Properties / metadata</span>
+                </button>
+              ) : null}
+
+              {onDuplicate ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="si-mt-layer-menu__item"
+                  onClick={() => {
+                    onDuplicate()
+                    setOpen(false)
+                  }}
+                >
+                  <i className="fa-regular fa-copy" aria-hidden />
+                  <span>Duplicate</span>
+                </button>
+              ) : null}
+
+              {onRename ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="si-mt-layer-menu__item"
+                  onClick={() => {
+                    onRename()
+                    setOpen(false)
+                  }}
+                >
+                  <i className="fa-solid fa-i-cursor" aria-hidden />
+                  <span>Rename</span>
+                </button>
+              ) : null}
+
+              {onAiAnalysis ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="si-mt-layer-menu__item"
+                  onClick={() => {
+                    onAiAnalysis()
+                    setOpen(false)
+                  }}
+                >
+                  <i className="fa-solid fa-brain" aria-hidden />
+                  <span>AI Analysis</span>
+                </button>
+              ) : null}
+
+              {onGenerateReport ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="si-mt-layer-menu__item"
+                  onClick={() => {
+                    onGenerateReport()
+                    setOpen(false)
+                  }}
+                >
+                  <i className="fa-solid fa-file-lines" aria-hidden />
+                  <span>Generate report</span>
                 </button>
               ) : null}
 
@@ -257,6 +390,13 @@ export function MapToolboxLayerRow({
   onExport,
   onRemove,
   onZoomTo,
+  onOpenTable,
+  onSymbology,
+  onProperties,
+  onDuplicate,
+  onRename,
+  onAiAnalysis,
+  onGenerateReport,
   labelsToggle,
   actions,
   headerActions,
@@ -267,6 +407,13 @@ export function MapToolboxLayerRow({
     onRemove ||
     onExport ||
     onZoomTo ||
+    onOpenTable ||
+    onSymbology ||
+    onProperties ||
+    onDuplicate ||
+    onRename ||
+    onAiAnalysis ||
+    onGenerateReport ||
     labelsToggle ||
     (typeof opacity === 'number' && onOpacityChange)
   )
@@ -338,6 +485,13 @@ export function MapToolboxLayerRow({
               onExport={onExport}
               onRemove={onRemove}
               onZoomTo={onZoomTo}
+              onOpenTable={onOpenTable}
+              onSymbology={onSymbology}
+              onProperties={onProperties}
+              onDuplicate={onDuplicate}
+              onRename={onRename}
+              onAiAnalysis={onAiAnalysis}
+              onGenerateReport={onGenerateReport}
               labelsToggle={labelsToggle}
             />
           ) : (
@@ -392,6 +546,13 @@ export function MapToolboxLayerList({
       onExport={layer.onExport}
       onRemove={layer.onRemove}
       onZoomTo={layer.onZoomTo}
+      onOpenTable={layer.onOpenTable}
+      onSymbology={layer.onSymbology}
+      onProperties={layer.onProperties}
+      onDuplicate={layer.onDuplicate}
+      onRename={layer.onRename}
+      onAiAnalysis={layer.onAiAnalysis}
+      onGenerateReport={layer.onGenerateReport}
       labelsToggle={layer.labelsToggle}
       actions={layer.actions}
       headerActions={layer.headerActions}

@@ -1,18 +1,57 @@
 import ExcelJS from 'exceljs'
 import type { WeatherClimateReportPayload } from './weatherClimateReportTypes'
-import { renderWeatherClimateCharts, type WeatherClimateChartSet } from './weatherClimateExcelChartRenderer'
+import { buildMeteoDataReportModel, type MeteoDataReportModel } from './meteoDataReportModel'
+import { climateAggregationLabel } from './weatherClimateAnalysisEngine'
+import {
+  injectNativeMeteoCharts,
+  type MeteoNativeChartSpec,
+} from './meteoNativeExcelCharts'
 
 const BRAND_DARK = 'FF064E3B'
-const BRAND = 'FF047857'
 const HEADER_FILL = 'FF065F46'
 const SECTION_FILL = 'FFE2F5EE'
 const ALT_ROW = 'FFF8FAFC'
 const INK = 'FF0F172A'
-const MUTED = 'FF64748B'
 
-function fmtNum(n: number | null | undefined, digits = 2): string | number {
-  if (n == null || !Number.isFinite(n)) return '—'
+type TableRange = {
+  headerRow: number
+  firstDataRow: number
+  lastDataRow: number
+  /** Number of year columns for year-matrix tables (B..) */
+  yearCols?: number
+}
+
+type DataLayout = {
+  normals: TableRange
+  yearMatrices: TableRange[]
+  annual: TableRange | null
+  risk: TableRange | null
+  cumulative: TableRange | null
+  cumulativeByYear: TableRange | null
+}
+
+function fmtNum(n: number | null | undefined, digits = 1): string | number {
+  if (n == null || !Number.isFinite(n)) return null as unknown as number
   return Number(n.toFixed(digits))
+}
+
+function colLetter(col1Based: number): string {
+  let n = col1Based
+  let s = ''
+  while (n > 0) {
+    const rem = (n - 1) % 26
+    s = String.fromCharCode(65 + rem) + s
+    n = Math.floor((n - 1) / 26)
+  }
+  return s
+}
+
+function dataRef(col: number, row: number): string {
+  return `Data!$${colLetter(col)}$${row}`
+}
+
+function dataRange(col: number, r1: number, r2: number): string {
+  return `Data!$${colLetter(col)}$${r1}:$${colLetter(col)}$${r2}`
 }
 
 function styleTitle(cell: ExcelJS.Cell): void {
@@ -36,7 +75,7 @@ function styleTableHeader(row: ExcelJS.Row): void {
       right: { style: 'thin', color: { argb: BRAND_DARK } },
     }
   })
-  row.height = 20
+  row.height = 22
 }
 
 function styleDataRow(row: ExcelJS.Row, alt: boolean): void {
@@ -48,461 +87,460 @@ function styleDataRow(row: ExcelJS.Row, alt: boolean): void {
       left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
       right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
     }
-    cell.alignment = { vertical: 'top', wrapText: true }
   })
-}
-
-function formatPeriod(start: string, end: string): string {
-  try {
-    const s = new Date(`${start}T12:00:00`)
-    const e = new Date(`${end}T12:00:00`)
-    const fmt = (d: Date) =>
-      d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-    return `${fmt(s)} – ${fmt(e)}`
-  } catch {
-    return `${start} – ${end}`
-  }
 }
 
 function autoWidth(ws: ExcelJS.Worksheet, maxCol: number): void {
   for (let c = 1; c <= maxCol; c++) {
-    let max = 12
+    let max = 10
     ws.eachRow(row => {
       const v = row.getCell(c).value
       const len = v == null ? 0 : String(v).length
-      if (len > max) max = Math.min(len + 2, 48)
+      if (len > max) max = Math.min(len + 2, 36)
     })
     ws.getColumn(c).width = max
   }
 }
 
-function buildExecutiveSummarySheet(wb: ExcelJS.Workbook, p: WeatherClimateReportPayload): void {
-  const ws = wb.addWorksheet('Executive Summary', {
-    views: [{ state: 'frozen', ySplit: 3 }],
-  })
-  ws.mergeCells('A1:D1')
-  ws.getCell('A1').value = 'Weather Historical Climate Analysis Report'
+function writeDataSheet(wb: ExcelJS.Workbook, model: MeteoDataReportModel): DataLayout {
+  const ws = wb.addWorksheet('Data', { views: [{ state: 'frozen', ySplit: 4 }] })
+
+  ws.getCell('A1').value = model.title
   styleTitle(ws.getCell('A1'))
+  ws.mergeCells('A1:L1')
 
-  const rows: Array<[string, string]> = [
-    ['AOI Name', p.aoiName],
-    ['AOI Location', p.aoiLocation],
-    ['Coordinates', `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`],
-    ['Analysis Period', formatPeriod(p.analysisStart, p.analysisEnd)],
-    ['Historical Coverage', `${p.historicalCoverageYears.toFixed(1)}+ years`],
-    ['Forecast', p.executiveSummary.forecastHorizon],
-    ['Data Sources', p.dataSource],
-    ['Climate Classification', p.climateClassification],
-    ['Timezone', p.timezone],
-    ['Main Climate Findings', p.executiveSummary.mainFindings.join('\n')],
-    ['Environmental Risk Summary', p.executiveSummary.environmentalRiskSummary],
-  ]
+  ws.getCell('A2').value = model.locationLine
+  ws.getCell('A2').font = { size: 11, color: { argb: INK } }
+  ws.mergeCells('A2:L2')
 
-  let r = 3
-  rows.forEach(([label, value]) => {
-    ws.getCell(r, 1).value = label
-    styleSection(ws.getCell(r, 1))
-    ws.mergeCells(r, 2, r, 4)
-    ws.getCell(r, 2).value = value
-    ws.getCell(r, 2).alignment = { wrapText: true, vertical: 'top' }
-    r += 1
-  })
-  autoWidth(ws, 4)
-}
+  ws.getCell('A3').value = model.sourceLine
+  ws.getCell('A3').font = { size: 9, italic: true, color: { argb: 'FF64748B' } }
+  ws.mergeCells('A3:L3')
 
-function buildHistoricalDataSheet(wb: ExcelJS.Workbook, p: WeatherClimateReportPayload): void {
-  const ws = wb.addWorksheet('Historical Dataset', {
-    views: [{ state: 'frozen', ySplit: 2 }],
-  })
-  ws.getCell(1, 1).value = 'Daily Historical Weather (complete temporal record)'
-  styleTitle(ws.getCell(1, 1))
-  ws.mergeCells(1, 1, 1, 10)
+  // --- Primary climate series (same column order as GeoSyntra) ---
+  ws.addRow([])
+  const normalsTitleRow = ws.addRow([model.normalsTitle])
+  styleSection(normalsTitleRow.getCell(1))
+  ws.mergeCells(normalsTitleRow.number, 1, normalsTitleRow.number, 12)
 
-  const headers = [
-    'Date',
-    'Maximum Temperature (°C)',
-    'Minimum Temperature (°C)',
-    'Average Temperature (°C)',
-    'Rainfall (mm)',
-    'Humidity (%)',
-    'Wind Speed (km/h)',
-    'Solar Radiation (W/m²)',
-    'ET0 (mm)',
-    'Pressure (hPa)',
-  ]
-  const hr = ws.addRow(headers)
-  styleTableHeader(hr)
-  hr.autoFilter = { from: { row: 2, column: 1 }, to: { row: 2, column: 10 } }
+  const periodHeader = model.aggregation === 'month' ? 'Month' : 'Period'
+  const normalsHeader = ws.addRow([
+    periodHeader,
+    'Tmax C',
+    'Tmin C',
+    'Tavg C',
+    'Rainfall mm',
+    'ET0 mm',
+    'Water Deficit m3/ha',
+    'Sunshine h/day',
+    'Daylight h/day',
+    'Wind Max km/h',
+    'Max Gust km/h',
+    'RH %',
+  ])
+  styleTableHeader(normalsHeader)
+  const normalsHeaderRow = normalsHeader.number
 
-  p.dailyRecords.forEach((d, i) => {
+  model.normals.forEach((r, i) => {
     const row = ws.addRow([
-      d.date,
-      fmtNum(d.tempMaxC, 1),
-      fmtNum(d.tempMinC, 1),
-      fmtNum(d.tempAvgC, 2),
-      fmtNum(d.rainfallMm, 2),
-      fmtNum(d.humidityPct, 1),
-      fmtNum(d.windSpeedKmh, 1),
-      fmtNum(d.solarRadiationWm2, 1),
-      fmtNum(d.et0Mm, 2),
-      fmtNum(d.pressureHpa, 1),
-    ])
-    styleDataRow(row, i % 2 === 1)
-    row.getCell(1).numFmt = 'yyyy-mm-dd'
-  })
-
-  const hourlyStart = p.dailyRecords.length + 4
-  ws.getCell(hourlyStart, 1).value = 'Hourly Raw Records (complete, unfiltered)'
-  styleSection(ws.getCell(hourlyStart, 1))
-  ws.mergeCells(hourlyStart, 1, hourlyStart, 10)
-
-  const hHeaders = [
-    'DateTime',
-    'Temperature (°C)',
-    'Rainfall (mm)',
-    'Humidity (%)',
-    'Wind Speed (km/h)',
-    'Wind Direction (°)',
-    'Solar Radiation (W/m²)',
-    'ET0 (mm)',
-    'Pressure (hPa)',
-    'Weather Code',
-  ]
-  const hhr = ws.addRow(hHeaders)
-  styleTableHeader(hhr)
-
-  p.hourlyRecords.forEach((h, i) => {
-    const row = ws.addRow([
-      h.time,
-      fmtNum(h.temperatureC, 2),
-      fmtNum(h.precipitationMm, 2),
-      fmtNum(h.humidityPct, 1),
-      fmtNum(h.windSpeedKmh, 1),
-      h.windDirectionDeg ?? '—',
-      fmtNum(h.shortwaveRadiationWm2, 1),
-      fmtNum(h.et0Mm, 2),
-      fmtNum(h.pressureHpa, 1),
-      h.weatherCode ?? '—',
+      r.periodLabel,
+      fmtNum(r.tmaxC, 1),
+      fmtNum(r.tminC, 1),
+      fmtNum(r.tavgC, 1),
+      fmtNum(r.rainfallMm, model.aggregation === 'hour' ? 2 : 1),
+      fmtNum(r.et0Mm, model.aggregation === 'hour' ? 2 : 1),
+      fmtNum(r.waterDeficitM3Ha, 0),
+      fmtNum(r.sunshineHPerDay, 1),
+      fmtNum(r.daylightHPerDay, 1),
+      fmtNum(r.windMaxKmh, 1),
+      fmtNum(r.maxGustKmh, 1),
+      fmtNum(r.rhPct, 0),
     ])
     styleDataRow(row, i % 2 === 1)
   })
-  autoWidth(ws, 10)
-}
+  const normalsFirst = normalsHeaderRow + 1
+  const normalsLast = normalsHeaderRow + Math.max(model.normals.length, 1)
 
-function buildStatisticalAnalysisSheet(wb: ExcelJS.Workbook, p: WeatherClimateReportPayload): void {
-  const ws = wb.addWorksheet('Statistical Analysis')
-  ws.getCell(1, 1).value = 'Climate Statistical Analysis'
-  styleTitle(ws.getCell(1, 1))
+  const yearMatrices: TableRange[] = []
+  model.yearMatrices.forEach(matrix => {
+    ws.addRow([])
+    const titleRow = ws.addRow([matrix.title])
+    styleSection(titleRow.getCell(1))
+    ws.mergeCells(titleRow.number, 1, titleRow.number, Math.max(2, matrix.years.length + 1))
 
-  let r = 3
-  ws.getCell(r, 1).value = 'Temperature Analysis'
-  styleSection(ws.getCell(r, 1))
-  r += 1
-  const tempRows: Array<[string, string | number]> = [
-    ['Mean temperature (°C)', fmtNum(p.temperatureStats.meanC as number, 2)],
-    ['Maximum temperature (°C)', fmtNum(p.temperatureStats.maxC as number, 1)],
-    ['Minimum temperature (°C)', fmtNum(p.temperatureStats.minC as number, 1)],
-    ['Seasonal temperature variation (°C)', fmtNum(p.temperatureStats.seasonalVariationC as number, 2)],
-    ['Annual temperature trend (°C/decade)', fmtNum(p.temperatureStats.annualTrendCPerDecade as number, 3)],
-  ]
-  tempRows.forEach(([k, v]) => {
-    ws.getCell(r, 1).value = k
-    ws.getCell(r, 2).value = v
-    r += 1
+    const hr = ws.addRow(['Month', ...matrix.years.map(String)])
+    styleTableHeader(hr)
+    matrix.rows.forEach((row, i) => {
+      const excelRow = ws.addRow([row.monthLabel, ...row.values.map(v => fmtNum(v, 1))])
+      styleDataRow(excelRow, i % 2 === 1)
+    })
+    yearMatrices.push({
+      headerRow: hr.number,
+      firstDataRow: hr.number + 1,
+      lastDataRow: hr.number + matrix.rows.length,
+      yearCols: matrix.years.length,
+    })
   })
 
-  r += 1
-  ws.getCell(r, 1).value = 'Rainfall Analysis'
-  styleSection(ws.getCell(r, 1))
-  r += 1
-  const rainRows: Array<[string, string | number]> = [
-    ['Total precipitation (mm)', fmtNum(p.rainfallStats.annualPrecipMm as number, 1)],
-    ['Wet season', p.rainfallStats.wetSeason ?? '—'],
-    ['Dry season', p.rainfallStats.drySeason ?? '—'],
-    ['Rainfall variability (%)', fmtNum(p.rainfallStats.variabilityPct as number, 1)],
-    ['Annual rainfall trend (%)', fmtNum(p.rainfallStats.annualTrendPct as number, 1)],
-  ]
-  rainRows.forEach(([k, v]) => {
-    ws.getCell(r, 1).value = k
-    ws.getCell(r, 2).value = v
-    r += 1
-  })
-
-  r += 2
-  ws.getCell(r, 1).value = 'Extreme Climate Events'
-  styleSection(ws.getCell(r, 1))
-  r += 1
-  const eh = ws.addRow(['Type', 'Start', 'End', 'Duration (days)', 'Description'])
-  styleTableHeader(eh)
-  p.extremeEvents.forEach((e, i) => {
-    const row = ws.addRow([e.type, e.startDate, e.endDate, e.durationDays, e.description])
-    styleDataRow(row, i % 2 === 1)
-  })
-  autoWidth(ws, 5)
-}
-
-function buildTrendAnalysisSheet(
-  wb: ExcelJS.Workbook,
-  p: WeatherClimateReportPayload,
-  charts: WeatherClimateChartSet,
-): void {
-  const ws = wb.addWorksheet('Trend Analysis')
-  ws.getCell(1, 1).value = 'Climate Trend Analysis'
-  styleTitle(ws.getCell(1, 1))
-
-  const rows: Array<[string, string]> = [
-    ['Temperature trend', p.temperatureTrend.narrative],
-    ['Temperature increase (°C/decade)', String(p.temperatureTrend.slopePerDecadeC ?? '—')],
-    ['Temperature regression R²', String(p.temperatureTrend.regressionR2 ?? '—')],
-    ['Rainfall trend', p.rainfallTrend.narrative],
-    ['Annual rainfall change (%)', String(p.rainfallTrend.annualChangePct ?? '—')],
-    ['Rainfall regression R²', String(p.rainfallTrend.regressionR2 ?? '—')],
-  ]
-  let r = 3
-  rows.forEach(([k, v]) => {
-    ws.getCell(r, 1).value = k
-    ws.getCell(r, 2).value = v
-    ws.getCell(r, 2).alignment = { wrapText: true }
-    r += 1
-  })
-
-  const ah = ws.addRow(['Year', 'Mean Temp (°C)', 'Total Rain (mm)', 'Temp Anomaly (°C)', 'Rain Anomaly (%)'])
-  styleTableHeader(ah)
-  p.annualSeries.forEach((a, i) => {
-    const row = ws.addRow([
-      a.year,
-      fmtNum(a.avgTempC, 2),
-      fmtNum(a.totalRainfallMm, 1),
-      fmtNum(a.tempAnomalyC, 2),
-      fmtNum(a.rainfallAnomalyPct, 1),
-    ])
-    styleDataRow(row, i % 2 === 1)
-  })
-
-  let chartRow = r + p.annualSeries.length + 3
-  const addChart = (base64: string | undefined, title: string) => {
-    if (!base64) return
-    ws.getCell(chartRow, 1).value = title
-    styleSection(ws.getCell(chartRow, 1))
-    const imgId = wb.addImage({ base64, extension: 'png' })
-    ws.addImage(imgId, { tl: { col: 0, row: chartRow }, ext: { width: 640, height: 280 } })
-    chartRow += 18
-  }
-  addChart(charts.temperatureTrend, 'Temperature Historical Trend')
-  addChart(charts.rainfallTrend, 'Rainfall Historical Trend')
-  addChart(charts.climateAnomaly, 'Climate Anomaly')
-  autoWidth(ws, 5)
-}
-
-function buildRiskSheet(wb: ExcelJS.Workbook, p: WeatherClimateReportPayload): void {
-  const ws = wb.addWorksheet('Risk Assessment')
-  ws.getCell(1, 1).value = 'Climate Risk Assessment'
-  styleTitle(ws.getCell(1, 1))
-  const h = ws.addRow(['Risk Type', 'Level', 'Description'])
-  styleTableHeader(h)
-  p.climateRisks.forEach((r, i) => {
-    const row = ws.addRow([r.riskType, r.level, r.description])
-    styleDataRow(row, i % 2 === 1)
-    const levelCell = row.getCell(2)
-    if (r.level === 'Extreme' || r.level === 'High') {
-      levelCell.font = { bold: true, color: { argb: 'FF991B1B' } }
-      levelCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFECACA' } }
+  let annual: TableRange | null = null
+  if (model.annualSummary.length) {
+    ws.addRow([])
+    const t = ws.addRow(['Annual Summary'])
+    styleSection(t.getCell(1))
+    ws.mergeCells(t.number, 1, t.number, 4)
+    const hr = ws.addRow(['Year', 'Rainfall mm', 'ET0 mm', 'Water deficit mm'])
+    styleTableHeader(hr)
+    model.annualSummary.forEach((r, i) => {
+      const row = ws.addRow([
+        r.year,
+        fmtNum(r.rainfallMm, 1),
+        fmtNum(r.et0Mm, 2),
+        fmtNum(r.waterDeficitMm, 1),
+      ])
+      styleDataRow(row, i % 2 === 1)
+    })
+    annual = {
+      headerRow: hr.number,
+      firstDataRow: hr.number + 1,
+      lastDataRow: hr.number + model.annualSummary.length,
     }
-  })
-  autoWidth(ws, 3)
-}
+  }
 
-function buildSeasonalCalendarSheet(
-  wb: ExcelJS.Workbook,
-  p: WeatherClimateReportPayload,
-  charts: WeatherClimateChartSet,
-): void {
-  const ws = wb.addWorksheet('Seasonal Calendar', {
-    views: [{ state: 'frozen', ySplit: 2 }],
-  })
-  ws.getCell(1, 1).value = 'Seasonal Climate Calendar'
-  styleTitle(ws.getCell(1, 1))
-  const h = ws.addRow([
-    'Month',
-    'Average Temperature (°C)',
-    'Rainfall (mm)',
-    'Humidity (%)',
-    'Climate Risk',
-    'Season',
-  ])
-  styleTableHeader(h)
-  h.autoFilter = { from: { row: 2, column: 1 }, to: { row: 2, column: 6 } }
-  p.monthlyCalendar.forEach((m, i) => {
-    const row = ws.addRow([
-      m.monthLabel,
-      fmtNum(m.avgTempC, 2),
-      fmtNum(m.rainfallMm, 1),
-      fmtNum(m.humidityPct, 1),
-      m.climateRisk,
-      m.seasonLabel,
+  let risk: TableRange | null = null
+  if (model.riskRows.length) {
+    ws.addRow([])
+    const t = ws.addRow(['Threshold and Risk-Day Counts'])
+    styleSection(t.getCell(1))
+    ws.mergeCells(t.number, 1, t.number, 10)
+    const hr = ws.addRow([
+      model.aggregation === 'month' || model.aggregation === 'year' ? 'Month' : 'Period',
+      'Heat days Tmax>35C',
+      'Extreme heat days Tmax>40C',
+      'Cool nights Tmin<15C',
+      'Cold nights Tmin<10C',
+      'High gust days >50 km/h',
+      'Extreme gust days >60 km/h',
+      'RH>80% hours',
+      'RH<30% hours',
+      'Irrigation demand m3/ha',
     ])
-    styleDataRow(row, i % 2 === 1)
-  })
-  if (charts.monthlyDistribution) {
-    const imgId = wb.addImage({ base64: charts.monthlyDistribution, extension: 'png' })
-    ws.addImage(imgId, { tl: { col: 0, row: 16 }, ext: { width: 640, height: 280 } })
+    styleTableHeader(hr)
+    model.riskRows.forEach((r, i) => {
+      const row = ws.addRow([
+        r.periodLabel,
+        r.heatDays35,
+        r.heatDays40,
+        r.coolNights15,
+        r.coldNights10,
+        r.highGustDays50,
+        r.extremeGustDays60,
+        r.rhHighHours,
+        r.rhLowHours,
+        fmtNum(r.irrigationDemandM3Ha, 0),
+      ])
+      styleDataRow(row, i % 2 === 1)
+    })
+    risk = {
+      headerRow: hr.number,
+      firstDataRow: hr.number + 1,
+      lastDataRow: hr.number + model.riskRows.length,
+    }
   }
-  autoWidth(ws, 6)
+
+  let cumulative: TableRange | null = null
+  if (model.cumulativeDeficit.length) {
+    ws.addRow([])
+    const t = ws.addRow(['Cumulative Water Deficit'])
+    styleSection(t.getCell(1))
+    ws.mergeCells(t.number, 1, t.number, 2)
+    const hr = ws.addRow(['Month', 'Cumulative deficit'])
+    styleTableHeader(hr)
+    model.cumulativeDeficit.forEach((r, i) => {
+      const row = ws.addRow([r.periodLabel, fmtNum(r.cumulativeMm, 1)])
+      styleDataRow(row, i % 2 === 1)
+    })
+    cumulative = {
+      headerRow: hr.number,
+      firstDataRow: hr.number + 1,
+      lastDataRow: hr.number + model.cumulativeDeficit.length,
+    }
+  }
+
+  let cumulativeByYear: TableRange | null = null
+  if (model.cumulativeByYear?.years.length) {
+    const matrix = model.cumulativeByYear
+    ws.addRow([])
+    const titleRow = ws.addRow([matrix.title])
+    styleSection(titleRow.getCell(1))
+    ws.mergeCells(titleRow.number, 1, titleRow.number, Math.max(2, matrix.years.length + 1))
+    const hr = ws.addRow(['Month', ...matrix.years.map(String)])
+    styleTableHeader(hr)
+    matrix.rows.forEach((row, i) => {
+      const excelRow = ws.addRow([row.monthLabel, ...row.values.map(v => fmtNum(v, 1))])
+      styleDataRow(excelRow, i % 2 === 1)
+    })
+    cumulativeByYear = {
+      headerRow: hr.number,
+      firstDataRow: hr.number + 1,
+      lastDataRow: hr.number + matrix.rows.length,
+      yearCols: matrix.years.length,
+    }
+  }
+
+  autoWidth(ws, 12)
+
+  return {
+    normals: {
+      headerRow: normalsHeaderRow,
+      firstDataRow: normalsFirst,
+      lastDataRow: normalsLast,
+    },
+    yearMatrices,
+    annual,
+    risk,
+    cumulative,
+    cumulativeByYear,
+  }
 }
 
-function buildForecastSheet(
-  wb: ExcelJS.Workbook,
-  p: WeatherClimateReportPayload,
-  charts: WeatherClimateChartSet,
-): void {
-  const ws = wb.addWorksheet('Forecast 2026-2050', {
-    views: [{ state: 'frozen', ySplit: 2 }],
-  })
-  ws.getCell(1, 1).value = 'Climate Forecast Model (2026 – 2050)'
-  styleTitle(ws.getCell(1, 1))
-  ws.getCell(2, 1).value =
-    'Trend-based linear regression projection from historical annual climate series. Confidence reflects regression fit and record length.'
-  ws.getCell(2, 1).font = { italic: true, size: 9, color: { argb: MUTED } }
-  ws.mergeCells(2, 1, 2, 6)
+function buildChartSpecs(
+  model: MeteoDataReportModel,
+  layout: DataLayout,
+): { specs: MeteoNativeChartSpec[]; sectionRows: Array<{ row: number; label: string }> } {
+  const agg = model.aggregationLabel
+  const n = layout.normals
+  const cats = dataRange(1, n.firstDataRow, n.lastDataRow)
+  const specs: MeteoNativeChartSpec[] = []
+  const sectionRows: Array<{ row: number; label: string }> = []
+  let anchor = 0
 
-  const h = ws.addRow([
-    'Year',
-    'Predicted Temperature (°C)',
-    'Temperature Change (°C)',
-    'Predicted Rainfall (mm)',
-    'Rainfall Change (%)',
-    'Confidence',
+  const push = (
+    sectionLabel: string,
+    title: string,
+    kind: 'line' | 'bar',
+    series: MeteoNativeChartSpec['series'],
+    opts?: { varyColors?: boolean; legendPos?: 'b' | 'r' | 't' | 'l' },
+  ) => {
+    sectionRows.push({ row: anchor + 1, label: sectionLabel })
+    specs.push({
+      title,
+      kind,
+      series,
+      anchorRow: anchor,
+      sectionLabel,
+      varyColors: opts?.varyColors ?? true,
+      legendPos: opts?.legendPos,
+    })
+    anchor += 18
+  }
+
+  // Chart order mirrors GeoSyntra Charts sheet (varyColors matches reference styling).
+  push('Temperature', `Temperature (${agg})`, 'line', [
+    { nameRef: dataRef(2, n.headerRow), valuesRef: dataRange(2, n.firstDataRow, n.lastDataRow), catsRef: cats },
+    { nameRef: dataRef(3, n.headerRow), valuesRef: dataRange(3, n.firstDataRow, n.lastDataRow), catsRef: cats },
+    { nameRef: dataRef(4, n.headerRow), valuesRef: dataRange(4, n.firstDataRow, n.lastDataRow), catsRef: cats },
   ])
-  styleTableHeader(h)
-  h.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 6 } }
-  p.forecastRows.forEach((f, i) => {
-    const row = ws.addRow([
-      f.year,
-      fmtNum(f.predictedTempC, 2),
-      fmtNum(f.tempChangeC, 2),
-      fmtNum(f.predictedRainfallMm, 1),
-      fmtNum(f.rainfallChangePct, 1),
-      f.confidence,
-    ])
-    styleDataRow(row, i % 2 === 1)
+  push('Rainfall', `Rainfall (${agg})`, 'bar', [
+    { nameRef: dataRef(5, n.headerRow), valuesRef: dataRange(5, n.firstDataRow, n.lastDataRow), catsRef: cats },
+  ])
+  push('Rainfall vs ET0', `Rainfall vs ET0 (${agg})`, 'line', [
+    { nameRef: dataRef(5, n.headerRow), valuesRef: dataRange(5, n.firstDataRow, n.lastDataRow), catsRef: cats },
+    { nameRef: dataRef(6, n.headerRow), valuesRef: dataRange(6, n.firstDataRow, n.lastDataRow), catsRef: cats },
+  ])
+  push('Water Deficit', `Water Deficit (${agg})`, 'bar', [
+    { nameRef: dataRef(7, n.headerRow), valuesRef: dataRange(7, n.firstDataRow, n.lastDataRow), catsRef: cats },
+  ])
+  push('Sunshine and Daylight', `Sunshine and Daylight (${agg})`, 'line', [
+    { nameRef: dataRef(8, n.headerRow), valuesRef: dataRange(8, n.firstDataRow, n.lastDataRow), catsRef: cats },
+    { nameRef: dataRef(9, n.headerRow), valuesRef: dataRange(9, n.firstDataRow, n.lastDataRow), catsRef: cats },
+  ])
+  push('Wind Speed and Gust', `Wind Speed and Gust (${agg})`, 'line', [
+    { nameRef: dataRef(10, n.headerRow), valuesRef: dataRange(10, n.firstDataRow, n.lastDataRow), catsRef: cats },
+    { nameRef: dataRef(11, n.headerRow), valuesRef: dataRange(11, n.firstDataRow, n.lastDataRow), catsRef: cats },
+  ])
+  push('Relative Humidity', `Relative Humidity (${agg})`, 'line', [
+    { nameRef: dataRef(12, n.headerRow), valuesRef: dataRange(12, n.firstDataRow, n.lastDataRow), catsRef: cats },
+  ])
+  push('Climate Diagram', `Climate Diagram: Rainfall and Mean Temperature (${agg})`, 'bar', [
+    { nameRef: dataRef(5, n.headerRow), valuesRef: dataRange(5, n.firstDataRow, n.lastDataRow), catsRef: cats },
+    { nameRef: dataRef(4, n.headerRow), valuesRef: dataRange(4, n.firstDataRow, n.lastDataRow), catsRef: cats },
+  ])
+
+  // Colored single-metric monthly bars (attachment style: each period a distinct color).
+  push('Min Temp (Celsius)', `Min Temp (Celsius) (${agg})`, 'bar', [
+    { nameRef: dataRef(3, n.headerRow), valuesRef: dataRange(3, n.firstDataRow, n.lastDataRow), catsRef: cats },
+  ], { legendPos: 'r' })
+  push('Avg Temp (Celsius)', `Avg Temp (Celsius) (${agg})`, 'bar', [
+    { nameRef: dataRef(4, n.headerRow), valuesRef: dataRange(4, n.firstDataRow, n.lastDataRow), catsRef: cats },
+  ], { legendPos: 'r' })
+
+  const matrixTitles = [
+    'Monthly Tmax by Year',
+    'Monthly Tmin by Year',
+    'Monthly Rainfall by Year',
+    'Monthly ET0 by Year',
+    'Monthly Water Deficit by Year',
+    'Monthly RH by Year',
+  ]
+  layout.yearMatrices.forEach((m, idx) => {
+    const yearCount = m.yearCols ?? 0
+    if (yearCount < 1) return
+    const matrixCats = dataRange(1, m.firstDataRow, m.lastDataRow)
+    const series = Array.from({ length: yearCount }, (_, yi) => ({
+      nameRef: dataRef(2 + yi, m.headerRow),
+      valuesRef: dataRange(2 + yi, m.firstDataRow, m.lastDataRow),
+      catsRef: matrixCats,
+    }))
+    const kind = idx === 2 ? 'bar' : 'line'
+    push(matrixTitles[idx] ?? `Year matrix ${idx + 1}`, matrixTitles[idx] ?? `Year matrix ${idx + 1}`, kind, series, {
+      // Multi-series year comparison: keep series colors distinct, not point colors.
+      varyColors: false,
+      legendPos: 'r',
+    })
   })
 
-  let chartRow = p.forecastRows.length + 6
-  if (charts.temperatureForecast) {
-    const imgId = wb.addImage({ base64: charts.temperatureForecast, extension: 'png' })
-    ws.addImage(imgId, { tl: { col: 0, row: chartRow }, ext: { width: 640, height: 280 } })
-    chartRow += 18
+  if (layout.annual) {
+    const a = layout.annual
+    const catsA = dataRange(1, a.firstDataRow, a.lastDataRow)
+    push('Annual Rainfall Comparison', 'Annual Rainfall Comparison', 'bar', [
+      { nameRef: dataRef(2, a.headerRow), valuesRef: dataRange(2, a.firstDataRow, a.lastDataRow), catsRef: catsA },
+    ], { legendPos: 'r' })
+    push('Annual Rainfall vs ET0 vs Deficit', 'Annual Rainfall vs ET0 vs Deficit', 'bar', [
+      { nameRef: dataRef(2, a.headerRow), valuesRef: dataRange(2, a.firstDataRow, a.lastDataRow), catsRef: catsA },
+      { nameRef: dataRef(3, a.headerRow), valuesRef: dataRange(3, a.firstDataRow, a.lastDataRow), catsRef: catsA },
+      { nameRef: dataRef(4, a.headerRow), valuesRef: dataRange(4, a.firstDataRow, a.lastDataRow), catsRef: catsA },
+    ], { varyColors: false, legendPos: 'r' })
   }
-  if (charts.rainfallForecast) {
-    const imgId = wb.addImage({ base64: charts.rainfallForecast, extension: 'png' })
-    ws.addImage(imgId, { tl: { col: 0, row: chartRow }, ext: { width: 640, height: 280 } })
+
+  if (layout.risk) {
+    const r = layout.risk
+    const catsR = dataRange(1, r.firstDataRow, r.lastDataRow)
+    push('Heat Stress Days', 'Heat Stress Days', 'bar', [
+      { nameRef: dataRef(2, r.headerRow), valuesRef: dataRange(2, r.firstDataRow, r.lastDataRow), catsRef: catsR },
+      { nameRef: dataRef(3, r.headerRow), valuesRef: dataRange(3, r.firstDataRow, r.lastDataRow), catsRef: catsR },
+    ], { varyColors: false, legendPos: 'r' })
+    push('Cool-Night / Cold-Risk Days', 'Cool-Night / Cold-Risk Days', 'bar', [
+      { nameRef: dataRef(4, r.headerRow), valuesRef: dataRange(4, r.firstDataRow, r.lastDataRow), catsRef: catsR },
+      { nameRef: dataRef(5, r.headerRow), valuesRef: dataRange(5, r.firstDataRow, r.lastDataRow), catsRef: catsR },
+    ], { varyColors: false, legendPos: 'r' })
+    push('High Wind Gust Risk Days', 'High Wind Gust Risk Days', 'bar', [
+      { nameRef: dataRef(6, r.headerRow), valuesRef: dataRange(6, r.firstDataRow, r.lastDataRow), catsRef: catsR },
+      { nameRef: dataRef(7, r.headerRow), valuesRef: dataRange(7, r.firstDataRow, r.lastDataRow), catsRef: catsR },
+    ], { varyColors: false, legendPos: 'r' })
+    push('High RH Disease-Risk Hours', 'High RH Disease-Risk Hours', 'bar', [
+      { nameRef: dataRef(8, r.headerRow), valuesRef: dataRange(8, r.firstDataRow, r.lastDataRow), catsRef: catsR },
+    ], { legendPos: 'r' })
+    push('Low RH Dry-Air Stress Hours', 'Low RH Dry-Air Stress Hours', 'bar', [
+      { nameRef: dataRef(9, r.headerRow), valuesRef: dataRange(9, r.firstDataRow, r.lastDataRow), catsRef: catsR },
+    ], { legendPos: 'r' })
+    push('Monthly Irrigation Demand from Climate Deficit', 'Monthly Irrigation Demand from Climate Deficit', 'bar', [
+      { nameRef: dataRef(10, r.headerRow), valuesRef: dataRange(10, r.firstDataRow, r.lastDataRow), catsRef: catsR },
+    ], { legendPos: 'r' })
   }
-  autoWidth(ws, 6)
+
+  // GeoSyntra chart23: single cumulative series with varyColors → multi-color segments.
+  if (layout.cumulative) {
+    const c = layout.cumulative
+    push(
+      'Cumulative Annual',
+      'Cumulative Annual',
+      'line',
+      [
+        {
+          nameRef: dataRef(2, c.headerRow),
+          valuesRef: dataRange(2, c.firstDataRow, c.lastDataRow),
+          catsRef: dataRange(1, c.firstDataRow, c.lastDataRow),
+        },
+      ],
+      { varyColors: true, legendPos: 'r' },
+    )
+  }
+
+  // Multi-year cumulative lines (attachment: year-colored difference comparison).
+  if (layout.cumulativeByYear && (layout.cumulativeByYear.yearCols ?? 0) > 0) {
+    const m = layout.cumulativeByYear
+    const yearCount = m.yearCols ?? 0
+    const matrixCats = dataRange(1, m.firstDataRow, m.lastDataRow)
+    const series = Array.from({ length: yearCount }, (_, yi) => ({
+      nameRef: dataRef(2 + yi, m.headerRow),
+      valuesRef: dataRange(2 + yi, m.firstDataRow, m.lastDataRow),
+      catsRef: matrixCats,
+    }))
+    push('Cumulative Annual by Year', 'Cumulative Annual by Year', 'line', series, {
+      varyColors: false,
+      legendPos: 'r',
+    })
+  }
+
+  return { specs, sectionRows }
 }
 
-function buildImpactSheet(wb: ExcelJS.Workbook, p: WeatherClimateReportPayload): void {
-  const ws = wb.addWorksheet('Climate Change Impact')
-  ws.getCell(1, 1).value = 'Climate Change Impact Assessment (2050)'
-  styleTitle(ws.getCell(1, 1))
-  const rows: Array<[string, string | number]> = [
-    ['Expected Climate Change Impact', p.impactAssessment.overallImpact],
-    ['Temperature increase to 2050 (°C)', fmtNum(p.impactAssessment.temperatureIncreaseC, 2)],
-    ['Rainfall change to 2050 (%)', fmtNum(p.impactAssessment.rainfallChangePct, 1)],
-    ['Drought probability (%)', fmtNum(p.impactAssessment.droughtProbabilityPct, 0)],
-    ['Water stress level', p.impactAssessment.waterStressLevel],
-    ['Agricultural impact', p.impactAssessment.agriculturalImpact],
-  ]
-  let r = 3
-  rows.forEach(([k, v]) => {
-    ws.getCell(r, 1).value = k
-    styleSection(ws.getCell(r, 1))
-    ws.mergeCells(r, 2, r, 4)
-    ws.getCell(r, 2).value = v
-    ws.getCell(r, 2).alignment = { wrapText: true }
-    r += 1
-  })
-  r += 1
-  ws.getCell(r, 1).value = 'Key impacts'
-  styleSection(ws.getCell(r, 1))
-  r += 1
-  p.impactAssessment.bullets.forEach(b => {
-    ws.getCell(r, 1).value = `• ${b}`
-    ws.mergeCells(r, 1, r, 4)
-    r += 1
-  })
-  autoWidth(ws, 4)
-}
-
-function buildMetadataSheet(wb: ExcelJS.Workbook, p: WeatherClimateReportPayload): void {
-  const ws = wb.addWorksheet('Metadata')
-  ws.getCell(1, 1).value = 'Metadata & Data Sources'
-  styleTitle(ws.getCell(1, 1))
-  const rows: Array<[string, string]> = [
-    ['Weather API', 'Open-Meteo (https://open-meteo.com)'],
-    ['Dataset provider', 'ERA5 Reanalysis (Copernicus / ECMWF)'],
-    ['Extraction date', new Date(p.extractionDate).toLocaleString()],
-    ['AOI coordinates', `${p.lat}, ${p.lng}`],
-    ['Elevation (m)', p.elevationM != null ? String(p.elevationM) : '—'],
-    ['Loaded data window', `${p.loadedStart} – ${p.loadedEnd}`],
-    ['Analysis window', `${p.analysisStart} – ${p.analysisEnd}`],
-    ['Timezone', p.timezone],
-    ['Hourly records', String(p.hourlyRecords.length)],
-    ['Daily records', String(p.dailyRecords.length)],
-    [
-      'Methodology',
-      'Daily aggregation from hourly ERA5 archive; linear regression trends; percentile-based extreme event detection; trend extrapolation forecast to 2050.',
-    ],
-  ]
-  let r = 3
-  rows.forEach(([k, v]) => {
-    ws.getCell(r, 1).value = k
-    styleSection(ws.getCell(r, 1))
-    ws.mergeCells(r, 2, r, 4)
-    ws.getCell(r, 2).value = v
-    ws.getCell(r, 2).alignment = { wrapText: true }
-    r += 1
-  })
-  autoWidth(ws, 4)
+function writeChartsSheet(
+  wb: ExcelJS.Workbook,
+  _model: MeteoDataReportModel,
+  sectionRows: Array<{ row: number; label: string }>,
+): void {
+  const ws = wb.addWorksheet('Charts')
+  ws.getColumn(1).width = 42
+  for (const { row, label } of sectionRows) {
+    const cell = ws.getCell(row, 1)
+    cell.value = label
+    styleSection(cell)
+  }
+  const last = sectionRows.length ? sectionRows[sectionRows.length - 1].row + 20 : 20
+  if (ws.rowCount < last) {
+    ws.getCell(last, 1).value = ''
+  }
 }
 
 export async function buildWeatherClimateReportWorkbook(
   payload: WeatherClimateReportPayload,
-): Promise<ExcelJS.Workbook> {
-  const wb = new ExcelJS.Workbook()
+): Promise<ExcelJS.Workbook & { __meteoChartSpecs?: MeteoNativeChartSpec[] }> {
+  const wb = new ExcelJS.Workbook() as ExcelJS.Workbook & { __meteoChartSpecs?: MeteoNativeChartSpec[] }
   wb.creator = 'AgroCloud Weather Intelligence'
   wb.created = new Date()
+  wb.title = `Meteo Data Report — ${payload.aoiName}`
 
-  const charts = renderWeatherClimateCharts(payload)
+  const model = buildMeteoDataReportModel({
+    aoiName: payload.aoiName,
+    aoiLocation: payload.aoiLocation,
+    lat: payload.lat,
+    lng: payload.lng,
+    analysisStart: payload.analysisStart,
+    analysisEnd: payload.analysisEnd,
+    hourlyRecords: payload.hourlyRecords,
+    timeAggregation: payload.timeAggregation ?? 'day',
+  })
 
-  buildExecutiveSummarySheet(wb, payload)
-  buildHistoricalDataSheet(wb, payload)
-  buildStatisticalAnalysisSheet(wb, payload)
-  buildTrendAnalysisSheet(wb, payload, charts)
-  buildRiskSheet(wb, payload)
-  buildSeasonalCalendarSheet(wb, payload, charts)
-  buildForecastSheet(wb, payload, charts)
-  buildImpactSheet(wb, payload)
-  buildMetadataSheet(wb, payload)
-
+  const layout = writeDataSheet(wb, model)
+  const { specs, sectionRows } = buildChartSpecs(model, layout)
+  writeChartsSheet(wb, model, sectionRows)
+  wb.__meteoChartSpecs = specs
   return wb
 }
 
-export function weatherClimateReportFilename(aoiName: string): string {
+export function weatherClimateReportFilename(aoiName: string, aggregation?: string): string {
   const slug = aoiName.replace(/[^\w.-]+/g, '_').replace(/_+/g, '_').slice(0, 40) || 'AOI'
-  const year = new Date().getFullYear()
-  return `${slug}_Weather_Climate_Analysis_Report_${year}.xlsx`
+  const date = new Date().toISOString().slice(0, 10)
+  const agg = aggregation ? `_${aggregation}` : ''
+  return `${slug}-MeteoDataReport${agg}-${date}.xlsx`
 }
 
 export async function generateWeatherClimateReportExcel(payload: WeatherClimateReportPayload): Promise<void> {
   const wb = await buildWeatherClimateReportWorkbook(payload)
-  const buffer = await wb.xlsx.writeBuffer()
-  const blob = new Blob([buffer], {
+  const specs = wb.__meteoChartSpecs ?? []
+  const raw = await wb.xlsx.writeBuffer()
+  const withCharts = await injectNativeMeteoCharts(raw as ArrayBuffer, specs)
+  const blob = new Blob([withCharts], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = weatherClimateReportFilename(payload.aoiName)
+  a.download = weatherClimateReportFilename(
+    payload.aoiName,
+    climateAggregationLabel(payload.timeAggregation ?? 'day'),
+  )
   a.click()
   URL.revokeObjectURL(url)
 }

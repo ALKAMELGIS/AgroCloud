@@ -126,6 +126,7 @@ export const AcpMapToolbar = forwardRef<AcpMapToolbarHandle, AcpMapToolbarProps>
       ) : null}
       <button
         type="button"
+        id="acp-map-rail-add-gis-btn"
         className={`acp-map-rail__btn${activePanel === 'adddata' ? ' is-on' : ''}`}
         title="Add GIS Layer Data"
         aria-label="Add GIS Layer Data"

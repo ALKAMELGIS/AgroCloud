@@ -468,6 +468,7 @@ import {
   isRasterDataFile,
   isWorldFileOnly,
   pickRasterUploadFiles,
+  pickRasterZipCandidate,
   processRasterFiles,
   rasterNeedsWorldSidecar,
   validateRasterImageFile,
@@ -488,6 +489,7 @@ import {
 import { downloadBlobUrlFile, downloadGeoJsonFile } from '../../lib/siLayerExport';
 import type { AiDlMapLayerRasterRef } from './components/aiDetection/SiAiDlDetectObjectsPanel';
 import { useTreeDetection } from './components/useTreeDetection';
+import { SiImportedCustomLayersOverlay } from './components/SiImportedCustomLayersOverlay';
 import { FloodMonitoringPanel, type FloodLayerKind } from './components/FloodMonitoringPanel';
 import { useFloodMonitoring } from './components/useFloodMonitoring';
 import { downloadTreeShapefile } from '../../lib/treeDetection/shapefileExport';
@@ -511,9 +513,9 @@ import type { HydroStepId } from '../../lib/hydroWatershed/hydroEngine';
 import { generateHydroWatershedReportDocx } from '../../lib/hydroWatershed/generateHydroReportDocx';
 import { generateSarFloodIntelligenceReport } from '../../lib/sarFloodReport/generateSarFloodReportDocx';
 import { GisPortalBrowseLayersPanel } from './components/GisPortalBrowseLayersPanel';
-import { GisUploadCloudSources } from '../../components/GisUploadCloudSources';
 import type { MapToolboxAddGisLayerAction } from './components/MapToolboxAddGisLayerFlyout';
-import { SiAddSourceAnchoredPanel } from './components/SiAddSourceAnchoredPanel';
+import { GisDataManager } from './gisDataManager';
+import type { GisDataManagerCategory } from './gisDataManager';
 import { SiAddArcGisLayerPanel } from './components/SiAddArcGisLayerPanel';
 import { type GisContentRow, gisContentPortalDisplayTypeLabel } from '../master/gisContentPortalData';
 import {
@@ -2117,10 +2119,11 @@ type SiMapboxCanvasLike = {
   addLayer(spec: object, beforeId?: string): void;
   removeLayer(id: string): void;
   removeSource(id: string): void;
+  moveLayer?(id: string, beforeId?: string): void;
   setPaintProperty?(layerId: string, name: string, value: unknown): void;
   setLayoutProperty?(layerId: string, name: string, value: unknown): void;
   setFilter?(layerId: string, filter: unknown): void;
-  getStyle(): { layers?: Array<{ id: string }> };
+  getStyle(): { layers?: Array<{ id: string; type?: string }> };
   triggerRepaint?(): void;
   hasImage?(id: string): boolean;
   loadImage?(url: string, callback: (error?: Error, image?: HTMLImageElement | ImageBitmap) => void): void;
@@ -2467,16 +2470,105 @@ function SiLayerOptionsMenuPortal({
 function siMapboxInsertBeforeId(map: SiMapboxCanvasLike): string | undefined {
   try {
     const layers = map.getStyle()?.layers;
-    if (!Array.isArray(layers)) return undefined;
+    if (!Array.isArray(layers) || !layers.length) return undefined;
+    // Pure SI raster scaffold has no label/symbol layers — returning undefined appends overlays on top.
+    const hasOnlyBasemapRasters = layers.every(
+      (l: { id?: string; type?: string }) =>
+        !l?.id ||
+        l.type === 'background' ||
+        l.id.startsWith(SI_BASE_LAYER_PREFIX) ||
+        l.id.startsWith(SI_BASE_SOURCE_PREFIX) ||
+        l.id === 'topo-base-layer' ||
+        l.id === 'sat3d-base-layer' ||
+        l.id === 'google-earth-sat-layer' ||
+        l.id.startsWith('topo-fallback-layer-') ||
+        // ignore already-mounted custom overlays when measuring style shape
+        SI_MAPBOX_CUSTOM_LAYER_SUFFIXES.some(sfx => l.id!.endsWith(sfx)) ||
+        l.id.includes('-vt-') ||
+        l.id.includes('-arcgis-'),
+    );
+    if (hasOnlyBasemapRasters) return undefined;
+
     for (let i = layers.length - 1; i >= 0; i -= 1) {
       const id = layers[i]?.id;
       if (!id) continue;
+      // Never use our own overlay ids as insert anchors.
+      if (SI_MAPBOX_CUSTOM_LAYER_SUFFIXES.some(sfx => id.endsWith(sfx))) continue;
+      if (id.includes('-vt-') || id.includes('-arcgis-')) continue;
       if (id.includes('label') || id.includes('symbol') || id.startsWith('place-')) return id;
     }
   } catch {
     /* ignore */
   }
   return undefined;
+}
+
+/** Keep GIS overlays above basemap rasters after style diffs re-order the stack. */
+function siRaiseCustomLayersAboveBasemap(map: SiMapboxCanvasLike, trackedSourceIds: Iterable<string>) {
+  if (typeof map.moveLayer !== 'function') return;
+  const move = (id: string) => {
+    try {
+      if (map.getLayer(id)) map.moveLayer?.(id);
+    } catch {
+      /* ignore */
+    }
+  };
+  for (const sourceId of trackedSourceIds) {
+    for (const suffix of SI_MAPBOX_CUSTOM_LAYER_SUFFIXES) {
+      move(`${sourceId}${suffix}`);
+    }
+    try {
+      const style = map.getStyle();
+      const vtOrExtra = (style.layers ?? [])
+        .map(l => l.id)
+        .filter(
+          id =>
+            id.startsWith(`${sourceId}-vt-`) ||
+            id.startsWith(`${sourceId}-arcgis-`) ||
+            id === `${sourceId}-arcgis-raster`,
+        );
+      for (const id of vtOrExtra) move(id);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/** True when any tracked custom overlay sits under a basemap raster layer. */
+function siCustomLayersBuriedUnderBasemap(map: SiMapboxCanvasLike, trackedSourceIds: Iterable<string>): boolean {
+  try {
+    const layers = map.getStyle()?.layers ?? [];
+    let lastBasemapIdx = -1;
+    let firstCustomIdx = -1;
+    for (let i = 0; i < layers.length; i += 1) {
+      const id = layers[i]?.id;
+      if (!id) continue;
+      if (
+        id.startsWith(SI_BASE_LAYER_PREFIX) ||
+        id === 'topo-base-layer' ||
+        id === 'sat3d-base-layer' ||
+        id === 'google-earth-sat-layer'
+      ) {
+        lastBasemapIdx = i;
+        continue;
+      }
+      for (const sourceId of trackedSourceIds) {
+        if (
+          id === `${sourceId}-fill` ||
+          id === `${sourceId}-line` ||
+          id === `${sourceId}-circle` ||
+          id === `${sourceId}-arcgis-raster` ||
+          id.startsWith(`${sourceId}-vt-`)
+        ) {
+          if (firstCustomIdx < 0) firstCustomIdx = i;
+          break;
+        }
+      }
+    }
+    return lastBasemapIdx >= 0 && firstCustomIdx >= 0 && firstCustomIdx < lastBasemapIdx;
+  } catch {
+    return false;
+  }
 }
 
 function siApplyMapboxPaintProps(
@@ -2881,6 +2973,9 @@ function siPaintCustomLayersOnMapboxCanvas(
   trackedSourceIds.clear();
   nextSourceIds.forEach(id => trackedSourceIds.add(id));
 
+  // Guarantee overlays sit above basemap rasters (style diffs can bury them).
+  siRaiseCustomLayersAboveBasemap(map, trackedSourceIds);
+
   try {
     map.triggerRepaint?.();
   } catch {
@@ -3077,22 +3172,28 @@ function siLayerMapboxStylePack(layer: CustomLayer): {
   const useAg = wantsAg && Boolean(resolvedDi);
   const geomKind = resolveLayerGeometryKind(layer.geojson, layer.arcgisLayerDefinition);
   if (wantsAg && !resolvedDi) {
+    // Until ArcGIS drawingInfo arrives, keep features visible with portal-style defaults
+    // (fill-opacity 0 made Agro/KML-style ArcGIS layers look "missing" on the canvas).
+    const portal = siDefaultPortalVectorLayerFields();
     return {
       fillFilter: SI_MAPBOX_POLY_FILTER,
       lineFilter: SI_MAPBOX_LINE_POLY_FILTER,
       pointFilter: SI_MAPBOX_POINT_FILTER,
-      fillPaint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': 0 },
+      fillPaint: {
+        'fill-color': layer.fillColor || portal.fillColor || '#22c55e',
+        'fill-opacity': typeof layer.polygonFillAlpha === 'number' ? layer.polygonFillAlpha : 0.35,
+      },
       linePaint: {
-        'line-color': SI_ARCGIS_MAPBOX_NEUTRAL_LINE,
-        'line-width': 1.25,
-        'line-opacity': 0.35,
+        'line-color': layer.color || portal.color || '#16a34a',
+        'line-width': typeof layer.weight === 'number' ? layer.weight : 2,
+        'line-opacity': 0.95,
       },
       circlePaint: {
-        'circle-radius': 4,
-        'circle-color': SI_ARCGIS_MAPBOX_NEUTRAL_LINE,
-        'circle-stroke-width': 1,
-        'circle-stroke-color': SI_ARCGIS_MAPBOX_NEUTRAL_STROKE,
-        'circle-opacity': 0.35,
+        'circle-radius': typeof layer.pointRadius === 'number' ? layer.pointRadius : 6,
+        'circle-color': layer.fillColor || layer.color || '#22c55e',
+        'circle-stroke-width': 1.5,
+        'circle-stroke-color': '#0f172a',
+        'circle-opacity': 0.95,
       },
     };
   }
@@ -4194,6 +4295,7 @@ export default function SatelliteIntelligence() {
   /** Home = pick source; gis-list = full-screen GIS Content step; source-forms = legacy wizard; tabs = GIS Map Add GIS Layer modal. */
   const [siAddLayerWizard, setSiAddLayerWizard] = useState<'home' | 'gis-list' | 'source-forms' | 'tabs'>('home');
   const [addLayerTab, setAddLayerTab] = useState<AddLayerTab>('giscontent');
+  const [gisDmInitialCategory, setGisDmInitialCategory] = useState<GisDataManagerCategory>('vector');
   const [addLayerUrl, setAddLayerUrl] = useState('');
   const [addLayerRemoteUrl, setAddLayerRemoteUrl] = useState('');
   const [addLayerToken, setAddLayerToken] = useState(() => (typeof window !== 'undefined' ? getArcgisPortalToken() : ''));
@@ -6073,7 +6175,12 @@ export default function SatelliteIntelligence() {
         files: files.map(f => ({ name: f.name, size: f.size, type: f.type })),
       });
 
-      const picked = pickRasterUploadFiles(files);
+      const picked =
+        pickRasterUploadFiles(files) ??
+        (() => {
+          const zip = pickRasterZipCandidate(files);
+          return zip ? { raster: zip, companions: files.filter(f => f !== zip) } : null;
+        })();
       if (!picked) {
         throw new Error('No raster image selected. Choose GeoTIFF, PNG, or JPG/JPEG.');
       }
@@ -6141,6 +6248,7 @@ export default function SatelliteIntelligence() {
       setSiUploadPhase('failed');
       setSiUploadProgressPct(0);
       setAddLayerStatus(error instanceof Error ? error.message : 'Failed to import raster.');
+      throw error instanceof Error ? error : new Error('Failed to import raster.');
     }
   };
 
@@ -6191,7 +6299,7 @@ export default function SatelliteIntelligence() {
     }
   };
 
-  const importAoiDataSourceFile = async (file: File) => {
+  const importAoiDataSourceFile = async (file: File, layerNameOverride?: string) => {
     if (isRasterDataFile(file)) {
       const bundle =
         siUploadBundleRef.current.length > 0
@@ -6206,7 +6314,7 @@ export default function SatelliteIntelligence() {
     setSiUploadProgressPct(2);
     setAddLayerStatus('Reading file...');
     try {
-      // Plain images (PNG/JPG/...) carry no CRS â€” give the parser the current map
+      // Plain images (PNG/JPG/...) carry no CRS — give the parser the current map
       // bounds so the overlay drops onto whatever the user is looking at.
       let imagePlacementBounds: { west: number; south: number; east: number; north: number } | undefined;
       try {
@@ -6237,7 +6345,7 @@ export default function SatelliteIntelligence() {
 
       const id = `custom-${Date.now()}-${file.name.replace(/\s+/g, '_')}`;
       const baseName = file.name.replace(/\.[^.]+$/, '');
-      const layerName = addLayerName.trim() || baseName || file.name;
+      const layerName = (layerNameOverride ?? addLayerName).trim() || baseName || file.name;
 
       if (parsed.type === 'raster') {
         throw new Error(
@@ -6290,9 +6398,13 @@ export default function SatelliteIntelligence() {
                 ? 'CSV'
                 : ext === 'geojson' || ext === 'json'
                   ? 'GeoJSON'
-                  : parsed.crsHint
-                    ? `Vector (${parsed.crsHint})`
-                    : 'Vector';
+                  : ext === 'topojson'
+                    ? 'TopoJSON'
+                    : ext === 'xlsx' || ext === 'xls'
+                      ? 'Excel'
+                      : parsed.crsHint
+                        ? `Vector (${parsed.crsHint})`
+                        : 'Vector';
 
       registerImportedCustomLayer(
         createSiVectorImportLayer({
@@ -6349,6 +6461,7 @@ export default function SatelliteIntelligence() {
       setSiUploadPhase('failed');
       setSiUploadProgressPct(0);
       setAddLayerStatus(error instanceof Error ? error.message : 'Failed to import file layer.');
+      throw error instanceof Error ? error : new Error('Failed to import file layer.');
     }
   };
 
@@ -6528,6 +6641,7 @@ export default function SatelliteIntelligence() {
     tab?: AddLayerTab;
     wizard?: 'home' | 'gis-list' | 'source-forms' | 'tabs';
     statusHint?: string;
+    category?: GisDataManagerCategory;
   }) => {
     setAddLayerStatus(opts?.statusHint ?? '');
     setSiGetDataStep('menu');
@@ -6537,6 +6651,21 @@ export default function SatelliteIntelligence() {
     setSiUploadDropActive(false);
     setSiAddLayerWizard(opts?.wizard ?? 'home');
     setAddLayerTab(opts?.tab ?? 'giscontent');
+    const tab = opts?.tab ?? 'giscontent';
+    const categoryFromTab: GisDataManagerCategory =
+      opts?.category ??
+      (tab === 'raster'
+        ? 'raster'
+        : tab === 'database'
+          ? 'database'
+          : tab === 'arcgis'
+            ? 'web'
+            : tab === 'giscontent'
+              ? 'giscontent'
+              : tab === 'url'
+                ? 'vector'
+                : 'vector');
+    setGisDmInitialCategory(categoryFromTab);
     setDiscoveredArcgisLayers([]);
     setSelectedDiscoveredArcgisUrl('');
     setAddLayerRemoteUrl('');
@@ -6815,6 +6944,214 @@ export default function SatelliteIntelligence() {
       setSiAddLayerWizard('home');
     },
     [addGisPortalRowToMap],
+  );
+
+  const handleGisDmImportFiles = useCallback(
+    async (files: File[], opts?: { layerName?: string; forceRaster?: boolean }) => {
+      if (opts?.layerName) setAddLayerName(opts.layerName);
+      siUploadBundleRef.current = files;
+      const primary = files[0];
+      if (!primary) throw new Error('No file selected');
+
+      // Route only real image/GeoTIFF rasters (or explicit Raster category) through the
+      // raster pipeline. Shapefile ZIPs and other vector archives must use parseFile.
+      const hasImageRaster = files.some(f =>
+        /\.(tif|tiff|png|jpe?g|webp|gif|bmp)$/i.test(f.name),
+      );
+      if (opts?.forceRaster || hasImageRaster) {
+        await importAoiRasterFiles(files);
+        return;
+      }
+
+      setSiUploadStagedFile(primary);
+      setSiUploadCompanionFiles(files.slice(1));
+      await importAoiDataSourceFile(primary, opts?.layerName);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- upload helpers close over live map/state
+    [],
+  );
+
+  const handleGisDmImportRemoteUrl = useCallback(
+    async (url: string, opts?: { layerName?: string; asRaster?: boolean }) => {
+      setAddLayerRemoteUrl(url);
+      if (opts?.layerName) setAddLayerName(opts.layerName);
+      if (opts?.asRaster) setAddLayerTab('raster');
+      setIsImportingRemoteLayer(true);
+      setAddLayerStatus('Downloading and parsing remote layer...');
+      try {
+        const file = await parseRemoteUrlAsFile(url);
+        const parsed = await parseFile(file);
+        if (parsed.type === 'table') {
+          throw new Error('Remote file is a table CSV without latitude/longitude columns.');
+        }
+        if (parsed.type === 'bim') {
+          throw new Error('IFC must be uploaded from disk — remote IFC import is not enabled here.');
+        }
+        const id = `remote-${Date.now()}`;
+        const baseName = (opts?.layerName || addLayerName).trim() || parsed.filename || 'Remote Layer';
+        if (parsed.type === 'raster') {
+          const outline = siRasterExtentFootprint(parsed.coordinates);
+          registerImportedCustomLayer(
+            createSiRasterImportLayer({
+              id,
+              name: baseName,
+              geojson: outline,
+              source: 'api',
+              sourceUrl: url,
+              format: 'GeoTIFF',
+              crs: parsed.crsHint,
+              raster: { url: parsed.previewObjectUrl, coordinates: parsed.coordinates },
+              ephemeral: true,
+            }),
+          );
+          focusGeoJsonOnMap(outline);
+        } else {
+          registerImportedCustomLayer(
+            createSiVectorImportLayer({
+              id,
+              name: baseName,
+              geojson: parsed.data,
+              source: 'api',
+              sourceUrl: url,
+              format: 'Remote vector',
+              crs: parsed.crsHint,
+            }),
+          );
+          focusGeoJsonOnMap(parsed.data);
+        }
+        setAddLayerStatus(`Imported remote layer: ${baseName}`);
+        setIsAddLayerModalOpen(false);
+      } finally {
+        setIsImportingRemoteLayer(false);
+      }
+    },
+    [addLayerName, focusGeoJsonOnMap, registerImportedCustomLayer],
+  );
+
+  const handleGisDmDiscoverArcGis = useCallback(
+    async (url: string, token?: string) => {
+      setAddLayerUrl(url);
+      if (token) setAddLayerToken(token);
+      setIsConnectingLayer(true);
+      setAddLayerStatus('Connecting to ArcGIS service...');
+      try {
+        const { layers, selected } = await connectArcGisFeatureServiceUrl(url, token || addLayerToken, {
+          resolveUrl: resolveAgroStructuresLayerUrl,
+        });
+        setDiscoveredArcgisLayers(layers);
+        setSelectedDiscoveredArcgisUrl(selected.url);
+        if (!addLayerName.trim()) setAddLayerName(selected.name);
+        setAddLayerStatus(
+          layers.length === 1
+            ? 'Found 1 layer/table. Select one and click Add.'
+            : `Found ${layers.length} layer/table(s). Select one and click Add.`,
+        );
+        return {
+          layers: layers.map(l => ({ url: l.url, name: l.name, kind: l.kind, geometryType: l.geometryType })),
+          selectedUrl: selected.url,
+        };
+      } finally {
+        setIsConnectingLayer(false);
+      }
+    },
+    [addLayerToken, addLayerName],
+  );
+
+  const handleGisDmConnectArcGis = useCallback(
+    async (url: string, token?: string, layerName?: string) => {
+      if (layerName) setAddLayerName(layerName);
+      await handleGisDmDiscoverArcGis(url, token);
+    },
+    [handleGisDmDiscoverArcGis],
+  );
+
+  const handleGisDmAddDiscoveredArcGis = async () => {
+    await addSelectedDiscoveredArcgisLayer();
+  };
+
+  const handleGisDmSaveDbProfile = useCallback(
+    async (profile: {
+      platform: string;
+      host: string;
+      database: string;
+      username: string;
+      password: string;
+      ssl: boolean;
+      name: string;
+    }) => {
+      setDbInstance(profile.host);
+      setDbName(profile.database);
+      setDbUsername(profile.username);
+      setDbPassword(profile.password);
+      setDbConnectionFileName(profile.name);
+      setAddLayerStatus(`Database connection profile saved: ${profile.name}`);
+      return { ok: true, message: 'Connection profile saved locally.' };
+    },
+    [],
+  );
+
+  const handleGisDmImportWfs = useCallback(
+    async (baseUrl: string, typeName: string, token?: string) => {
+      const { fetchWfsGeoJson } = await import('../../lib/gisConnections/ogcWfsClient');
+      const fc = await fetchWfsGeoJson(baseUrl, typeName, token);
+      const blob = new Blob([JSON.stringify(fc)], { type: 'application/geo+json' });
+      const file = new File([blob], `${typeName || 'wfs'}.geojson`, { type: 'application/geo+json' });
+      await importAoiDataSourceFile(file);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  const handleGisDmImportOgcTile = useCallback(
+    async (kind: 'wms' | 'wmts' | 'xyz', url: string, layerName?: string) => {
+      const id = `ogc-${Date.now()}`;
+      const name = layerName || `${kind.toUpperCase()} layer`;
+      const { normalizeXyzTemplate } = await import('../../lib/gisIngest/cogPmtiles');
+      let tileUrl = url.trim();
+      if (kind === 'xyz' || kind === 'wmts') {
+        tileUrl = normalizeXyzTemplate(tileUrl);
+      } else if (kind === 'wms' && !tileUrl.includes('{bbox')) {
+        // Mapbox raster sources need a tile template. Keep WMS GetMap URL as a single-tile
+        // template by appending bbox placeholder when possible.
+        const joiner = tileUrl.includes('?') ? '&' : '?';
+        if (!/[?&]bbox=/i.test(tileUrl)) {
+          tileUrl = `${tileUrl}${joiner}bbox={bbox-epsg-3857}&width=256&height=256&crs=EPSG:3857&format=image/png&transparent=true`;
+        }
+      }
+      if (!tileUrl.includes('{z}') && !tileUrl.includes('{bbox')) {
+        throw new Error(
+          `${kind.toUpperCase()} URL must be a tile template (…/{z}/{x}/{y}…) or include a bbox placeholder.`,
+        );
+      }
+      registerImportedCustomLayer(
+        createSiRasterImportLayer({
+          id,
+          name,
+          geojson: { type: 'FeatureCollection', features: [] },
+          source: 'api',
+          sourceUrl: url,
+          format: kind.toUpperCase(),
+          crs: 'EPSG:3857',
+          raster: {
+            url: '',
+            coordinates: [
+              [-180, 85],
+              [180, 85],
+              [180, -85],
+              [-180, -85],
+            ],
+          },
+          arcgisRasterTiles: {
+            tiles: [tileUrl],
+            tileSize: 256,
+          },
+          ephemeral: true,
+        }),
+      );
+      setAddLayerStatus(`Registered ${kind.toUpperCase()} tiles on map: ${name}`);
+      setIsAddLayerModalOpen(false);
+    },
+    [registerImportedCustomLayer],
   );
 
   const importRemoteUrlLayer = async () => {
@@ -14891,6 +15228,24 @@ export default function SatelliteIntelligence() {
     () => (activeBasemapRasterSpecs.length ? siBuildStableRasterStyle(activeBasemapRasterSpecs) : rawBasemapStyle),
     [activeBasemapRasterSpecs, rawBasemapStyle],
   );
+  /**
+   * Pin the MapGL `mapStyle` prop whenever the basemap scaffold structure is unchanged.
+   * Passing a new style object every render causes react-map-gl to diff away imperative
+   * custom overlays — leaving the Layers TOC green while the canvas shows basemap only.
+   */
+  const [glMapStyle, setGlMapStyle] = useState(effectiveMapStyle);
+  const glMapStyleStructureKeyRef = useRef('');
+  useEffect(() => {
+    const specs = activeBasemapRasterSpecs;
+    const structureKey = specs.length
+      ? `raster:${specs.length}`
+      : `full:${activeBasemapId}:${Array.isArray((effectiveMapStyle as { layers?: { id?: string }[] })?.layers) ? (effectiveMapStyle as { layers: { id?: string }[] }).layers.map(l => l.id).join(',') : 'x'}`;
+    if (structureKey === glMapStyleStructureKeyRef.current && specs.length > 0) {
+      return;
+    }
+    glMapStyleStructureKeyRef.current = structureKey;
+    setGlMapStyle(effectiveMapStyle);
+  }, [effectiveMapStyle, activeBasemapRasterSpecs, activeBasemapId]);
   const mapboxAccessTokenForMap = getMapboxGlRendererToken();
 
   const siBasemapSwapRef = useRef(activeBasemapId);
@@ -14936,6 +15291,15 @@ export default function SatelliteIntelligence() {
         // Keep terrain in sync without moving the camera.
         try {
           syncAgroCloudTerrain3d(map, activeBasemapId, viewStateLiveRef.current.pitch);
+        } catch {
+          /* ignore */
+        }
+        // Soft tile swap must not leave overlays under the basemap or wiped.
+        try {
+          if (siImperativeCustomLayerSourceIdsRef.current.size > 0) {
+            siRaiseCustomLayersAboveBasemap(map, siImperativeCustomLayerSourceIdsRef.current);
+          }
+          setCustomLayersMapEpoch(epoch => epoch + 1);
         } catch {
           /* ignore */
         }
@@ -15088,16 +15452,41 @@ export default function SatelliteIntelligence() {
     })();
   }, [gisContentPortal.version]);
 
-  /** Paint Added layers directly on the Mapbox canvas (survives basemap style swaps). */
+  /**
+   * GeoJSON / image / ArcGIS raster-tile layers render via React <Source>/<Layer>
+   * (SiImportedCustomLayersOverlay) so style diffs cannot wipe them.
+   * Only ArcGIS vector-tile stacks still need imperative addSource/addLayer.
+   */
   useEffect(() => {
     const map = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
     if (!map || !isMapStyleReady) return;
 
-    const syncVisibleLayersToCanvas = () => {
+    const raiseDeclarativeOverlayIds = () => {
+      const ids = customLayersForMapPaintRef.current
+        .filter(layer => layer.visible !== false)
+        .map(layer => siSafeMapboxLayerId(layer.id));
+      siRaiseCustomLayersAboveBasemap(map, ids);
+    };
+
+    const syncVectorTileStacks = () => {
+      // Never track React-owned geojson/raster sources so paint orphan-cleanup cannot remove them.
+      const tracked = siImperativeCustomLayerSourceIdsRef.current;
+      for (const id of [...tracked]) {
+        const isVt = customLayersForMapPaintRef.current.some(
+          layer =>
+            siSafeMapboxLayerId(layer.id) === id &&
+            (layer.arcgisVectorTiles?.tiles?.length ?? 0) > 0,
+        );
+        if (!isVt) tracked.delete(id);
+      }
+      const vtLayers = customLayersForMapPaintRef.current.filter(
+        layer => (layer.arcgisVectorTiles?.tiles?.length ?? 0) > 0,
+      );
+      if (!vtLayers.length) return;
       siPaintCustomLayersOnMapboxCanvas(
         map,
-        customLayersForMapPaintRef.current,
-        siImperativeCustomLayerSourceIdsRef.current,
+        vtLayers,
+        tracked,
         {
           suppressPrimaryAoiFill: suppressPrimaryAoiFillRef.current,
           onArcgisIconsLoaded: () => setCustomLayersMapEpoch(epoch => epoch + 1),
@@ -15105,27 +15494,42 @@ export default function SatelliteIntelligence() {
       );
     };
 
-    syncVisibleLayersToCanvas();
+    syncVectorTileStacks();
+    raiseDeclarativeOverlayIds();
     const raf1 = window.requestAnimationFrame(() => {
-      syncVisibleLayersToCanvas();
-      window.requestAnimationFrame(syncVisibleLayersToCanvas);
+      raiseDeclarativeOverlayIds();
+      syncVectorTileStacks();
     });
-    const onStyleLoad = () => {
-      siImperativeCustomLayerSourceIdsRef.current.clear();
-      window.requestAnimationFrame(syncVisibleLayersToCanvas);
-    };
-    map.on('style.load', onStyleLoad);
-    return () => {
-      window.cancelAnimationFrame(raf1);
+    const onIdle = () => {
       try {
-        map.off('style.load', onStyleLoad);
+        raiseDeclarativeOverlayIds();
+        if (siCustomLayersBuriedUnderBasemap(map, siImperativeCustomLayerSourceIdsRef.current)) {
+          siRaiseCustomLayersAboveBasemap(map, siImperativeCustomLayerSourceIdsRef.current);
+        }
       } catch {
         /* ignore */
       }
-      for (const staleId of siImperativeCustomLayerSourceIdsRef.current) {
-        siRemoveMapboxCustomLayerStack(map, staleId);
+    };
+    map.on('idle', onIdle);
+    return () => {
+      window.cancelAnimationFrame(raf1);
+      try {
+        map.off('idle', onIdle);
+      } catch {
+        /* ignore */
       }
-      siImperativeCustomLayerSourceIdsRef.current.clear();
+      // Do not tear down React-owned sources; only vector-tile stacks are tracked here.
+      for (const staleId of [...siImperativeCustomLayerSourceIdsRef.current]) {
+        const stillVt = customLayersForMapPaintRef.current.some(
+          layer =>
+            siSafeMapboxLayerId(layer.id) === staleId &&
+            (layer.arcgisVectorTiles?.tiles?.length ?? 0) > 0,
+        );
+        if (!stillVt) {
+          siRemoveMapboxCustomLayerStack(map, staleId);
+          siImperativeCustomLayerSourceIdsRef.current.delete(staleId);
+        }
+      }
     };
   }, [customLayersForMapPaint, isMapStyleReady, customLayersMapEpoch]);
 
@@ -16795,18 +17199,7 @@ export default function SatelliteIntelligence() {
       const aoiLayer = customLayersRef.current.find(l => String(l.id) === aoiSourceId);
       if (applyFillSuppress(aoiSourceId, aoiLayer)) return;
     }
-
-    if (!map.getLayer(agroFillId) && (!aoiSourceId || !map.getLayer(`${siSafeMapboxLayerId(aoiSourceId)}-fill`))) {
-      siPaintCustomLayersOnMapboxCanvas(
-        map,
-        customLayersForMapPaintRef.current,
-        siImperativeCustomLayerSourceIdsRef.current,
-        {
-          suppressPrimaryAoiFill: nextSuppress,
-          onArcgisIconsLoaded: () => setCustomLayersMapEpoch(epoch => epoch + 1),
-        },
-      );
-    }
+    // Fill layers are owned by SiImportedCustomLayersOverlay — no imperative paint fallback.
   }, [sentinelLayerAoiWmsOnMap, sentinelDrawWmsOnMap, isMapStyleReady, aoiMaskBuilderSettings.sourceLayerId]);
 
   /** Toggle Sentinel raster visibility via Mapbox layout/opacity — draw stack only; Layers AOI uses imperative ping-pong. */
@@ -17320,7 +17713,7 @@ export default function SatelliteIntelligence() {
               height: '100%',
               cursor: siMapCursor,
             }}
-            mapStyle={effectiveMapStyle}
+            mapStyle={glMapStyle}
             mapboxAccessToken={mapboxAccessTokenForMap}
             attributionControl={false}
             {...AGRO_CLOUD_MAPBOX_NAVIGATION_PROPS}
@@ -17371,6 +17764,20 @@ export default function SatelliteIntelligence() {
               const map = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
               try {
                 applyAgroCloudMapboxBranding(map?.getContainer?.() ?? mapRef.current?.getContainer?.());
+              } catch {
+                /* ignore */
+              }
+              // Keep GIS overlays above basemap after style diffs (React remounts Sources).
+              try {
+                if (!map || typeof map.getSource !== 'function') return;
+                if (typeof map.isStyleLoaded === 'function' && !map.isStyleLoaded()) return;
+                const ids = customLayersForMapPaintRef.current
+                  .filter(layer => layer.visible !== false)
+                  .map(layer => siSafeMapboxLayerId(layer.id));
+                siRaiseCustomLayersAboveBasemap(map, ids);
+                if (siCustomLayersBuriedUnderBasemap(map, siImperativeCustomLayerSourceIdsRef.current)) {
+                  siRaiseCustomLayersAboveBasemap(map, siImperativeCustomLayerSourceIdsRef.current);
+                }
               } catch {
                 /* ignore */
               }
@@ -17632,12 +18039,12 @@ export default function SatelliteIntelligence() {
                   </Marker>
                 )}
 
-                {drawnGeometry && (
+                {drawnGeometry && aoiLayerVisible ? (
                   <Source id="drawn-index-geometry-source" type="geojson" data={drawnGeometry as any}>
                     <Layer
                       id="drawn-index-geometry-fill"
                       type="fill"
-                      filter={['==', ['geometry-type'], 'Polygon']}
+                      filter={['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]]}
                       paint={{
                         'fill-color': hasActiveLayerSourceAoi ? '#f59e0b' : drawStyle.fillColor,
                         // Keep a light fill so the sketch remains visible over basemap / imagery.
@@ -17648,7 +18055,22 @@ export default function SatelliteIntelligence() {
                       }}
                     />
                   </Source>
-                )}
+                ) : null}
+                {isMapStyleReady ? (
+                  <SiImportedCustomLayersOverlay
+                    layers={customLayersForMapPaint as any}
+                    suppressFillOpacityLayerIds={
+                      sentinelLayerAoiWmsOnMap || sentinelDrawWmsOnMap
+                        ? [
+                            AGRO_STRUCTURES_PRIMARY_LAYER_ID,
+                            ...(aoiMaskBuilderSettings.sourceLayerId.trim()
+                              ? [aoiMaskBuilderSettings.sourceLayerId.trim()]
+                              : []),
+                          ]
+                        : undefined
+                    }
+                  />
+                ) : null}
                 {cropClassAoiGeometry ? (
                   <Source id="si-crop-class-aoi-source" type="geojson" data={cropClassAoiGeometry as any}>
                     <Layer
@@ -18108,12 +18530,16 @@ export default function SatelliteIntelligence() {
                 <Layer
                   id="drawn-index-geometry-line"
                   type="line"
-                  filter={['in', ['geometry-type'], ['literal', ['LineString', 'Polygon']]]}
+                  filter={[
+                    'in',
+                    ['geometry-type'],
+                    ['literal', ['LineString', 'MultiLineString', 'Polygon', 'MultiPolygon']],
+                  ]}
                   paint={{
                     'line-color': hasActiveLayerSourceAoi ? '#fbbf24' : drawStyle.strokeColor,
                     'line-width': [
                       'case',
-                      ['==', ['geometry-type'], 'LineString'],
+                      ['in', ['geometry-type'], ['literal', ['LineString', 'MultiLineString']]],
                       Math.max(2, drawStyle.strokeWidth + 1),
                       drawStyle.strokeWidth,
                     ],
@@ -18124,7 +18550,7 @@ export default function SatelliteIntelligence() {
                 <Layer
                   id="drawn-index-geometry-point"
                   type="circle"
-                  filter={['==', ['geometry-type'], 'Point']}
+                  filter={['in', ['geometry-type'], ['literal', ['Point', 'MultiPoint']]]}
                   paint={{
                     'circle-radius': drawStyle.pointRadius,
                     'circle-color': drawStyle.fillColor,
@@ -19182,7 +19608,7 @@ export default function SatelliteIntelligence() {
             onMapToolboxAddGisLayerAction={handleMapToolboxAddGisLayerAction}
             onMapToolboxAddGisLayerPrimaryClick={() => {
               if (isAddLayerModalOpen) closeAddLayerModal();
-              else openAddLayerModal({ tab: 'giscontent', wizard: 'home' });
+              else openAddLayerModal({ tab: 'upload', wizard: 'home', category: 'vector' });
             }}
             mapToolboxAddGisPanelOpen={isAddLayerModalOpen || isAddArcGisLayerPanelOpen}
             mapToolboxBrowseLayersPanel={mapToolboxBrowseLayersPanel}
@@ -19967,751 +20393,34 @@ export default function SatelliteIntelligence() {
           })()
         : null}
       {isAddLayerModalOpen ? (
-        <SiAddSourceAnchoredPanel
+        <GisDataManager
           open={isAddLayerModalOpen}
           onClose={closeAddLayerModal}
-          wide={siAddLayerWizard !== 'home'}
-          ariaLabelledBy="si-layer-modal-title"
-          panelClassName={`si-add-source-modal si-add-source-modal--anchored ddb-add-source-modal si-add-source-modal--compact${
-            siAddLayerWizard === 'home' ? ' ddb-add-source-modal--home' : ''
-          }${siAddLayerWizard === 'tabs' ? ' si-add-source-modal--tabs' : ''}`}
-        >
-            {siAddLayerWizard === 'home' ? (
-              <>
-                <div className="si-add-source-anchored__head">
-                  <h2 className="si-add-source-anchored__title" id="si-layer-modal-title">
-                    Add source
-                  </h2>
-                  <button
-                    type="button"
-                    className="si-add-source-anchored__close"
-                    onClick={closeAddLayerModal}
-                    aria-label="Close"
-                  >
-                    <i className="fa-solid fa-xmark" aria-hidden />
-                  </button>
-                </div>
-                <p className="si-add-source-anchored__lead">Choose a data source for this map.</p>
-                <div className="si-add-source-options" role="radiogroup" aria-label="Layer source type">
-                  {[
-                    {
-                      id: 'giscontent',
-                      tab: 'giscontent' as AddLayerTab,
-                      title: 'GIS Content',
-                      sub: 'Saved layers in this browser.',
-                      icon: 'fa-solid fa-layer-group',
-                      iconStyle: { background: '#ede9fe', color: '#7c3aed' },
-                    },
-                    {
-                      id: 'arcgis',
-                      tab: 'arcgis' as AddLayerTab,
-                      title: 'ArcGIS URL',
-                      sub: 'Feature service layer URL.',
-                      icon: 'fa-solid fa-link',
-                      iconStyle: { background: '#e0e7ff', color: '#4f46e5' },
-                    },
-                    {
-                      id: 'upload',
-                      tab: 'upload' as AddLayerTab,
-                      title: 'Upload file',
-                      sub: 'GeoJSON, SHP, KML, GeoTIFF…',
-                      icon: 'fa-solid fa-file-arrow-up',
-                      iconStyle: { background: '#d1fae5', color: '#059669' },
-                    },
-                    {
-                      id: 'ifc',
-                      tab: 'upload' as AddLayerTab,
-                      title: 'IFC / BIM',
-                      sub: 'IFC 2×3 or IFC4 model.',
-                      icon: 'fa-solid fa-building',
-                      iconStyle: { background: '#ffedd5', color: '#ea580c' },
-                    },
-                    {
-                      id: 'url',
-                      tab: 'url' as AddLayerTab,
-                      title: 'From URL',
-                      sub: 'Remote GeoJSON, KML, ZIP.',
-                      icon: 'fa-solid fa-globe',
-                      iconStyle: { background: '#e0f2fe', color: '#0284c7' },
-                    },
-                    {
-                      id: 'raster',
-                      tab: 'raster' as AddLayerTab,
-                      title: 'Raster URL',
-                      sub: 'GeoTIFF or image tiles.',
-                      icon: 'fa-regular fa-image',
-                      iconStyle: { background: '#fce7f3', color: '#db2777' },
-                    },
-                    {
-                      id: 'database',
-                      tab: 'database' as AddLayerTab,
-                      title: 'Get Data',
-                      sub: 'Excel, CSV, SQL, OData.',
-                      icon: 'fa-solid fa-database',
-                      iconStyle: { background: '#ede9fe', color: '#7c3aed' },
-                    },
-                  ].map(opt => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      className="si-add-source-option"
-                      onClick={() => {
-                        setAddLayerTab(opt.tab);
-                        if (opt.tab === 'giscontent') setSiAddLayerWizard('gis-list');
-                        else setSiAddLayerWizard('source-forms');
-                      }}
-                    >
-                      <span className="si-add-source-option-icon" aria-hidden style={opt.iconStyle}>
-                        <i className={opt.icon} />
-                      </span>
-                      <span className="si-add-source-option-main">
-                        <strong>{opt.title}</strong>
-                        <small>{opt.sub}</small>
-                      </span>
-                      <i className="fa-solid fa-chevron-right si-add-source-option-chevron" aria-hidden />
-                    </button>
-                  ))}
-                </div>
-              </>
-            ) : siAddLayerWizard === 'gis-list' ? (
-              <>
-                <div className="ddb-add-source-modal__head">
-                  <div className="gis-modal-compact-title" id="si-layer-modal-title">
-                    GIS Content
-                  </div>
-                  <button type="button" className="ddb-add-source-back" onClick={goSiAddLayerWizardHome} aria-label="All options">
-                    <i className="fa-solid fa-arrow-left" aria-hidden />
-                  </button>
-                </div>
-                <div className="ddb-add-source-gis-list gis-modal-body">
-                  {gisContentPortalPickRows.length === 0 ? (
-                    <div className="gis-modal-gis-content-empty" role="status">
-                      <i className="fa-regular fa-folder-open" aria-hidden />
-                      <p>No hosted feature layers in GIS Content yet. Publish a layer from GIS Content or GIS Map.</p>
-                    </div>
-                  ) : (
-                    <ul className="gis-modal-gis-content-list" aria-label="GIS Content layers">
-                      {gisContentPortalPickRows.map(row => {
-                        const busy = addingPortalRowId === row.id;
-                        const typeLabel = gisContentPortalDisplayTypeLabel(row, getGisContentItemDetails(row.id));
-                        return (
-                          <li key={row.id} className="gis-modal-gis-content-row">
-                            <div className="gis-modal-gis-content-meta">
-                              <span className="gis-modal-gis-content-name">{row.title}</span>
-                              <span className="gis-modal-gis-content-badges">
-                                <span className="gis-modal-gis-content-badge">{typeLabel}</span>
-                                <span className="gis-modal-gis-content-badge gis-modal-gis-content-badge--muted">Hosted</span>
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              className="gis-modal-gis-content-add-btn"
-                              disabled={busy}
-                              onClick={() => addGisPortalRowFromAddLayerModal(row)}
-                            >
-                              <i
-                                className={`gis-modal-gis-content-add-btn__icon fa-solid ${busy ? 'fa-spinner fa-spin' : 'fa-plus'}`}
-                                aria-hidden
-                              />
-                              <span className="gis-modal-gis-content-add-btn__label">{busy ? 'Adding...' : 'Add'}</span>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </div>
-              </>
-            ) : siAddLayerWizard === 'tabs' || siAddLayerWizard === 'source-forms' ? (
-              <>
-                {siAddLayerWizard === 'tabs' ? (
-                  <div className="gis-modal-compact-title" id="si-layer-modal-title">
-                    Add GIS Layer
-                  </div>
-                ) : (
-                  <div className="ddb-add-source-modal__head">
-                    <div className="gis-modal-compact-title" id="si-layer-modal-title">
-                      Add Source Data
-                    </div>
-                    <button type="button" className="ddb-add-source-back" onClick={goSiAddLayerWizardHome} aria-label="All options">
-                      <i className="fa-solid fa-arrow-left" aria-hidden />
-                    </button>
-                  </div>
-                )}
-                <div className="gis-modal-compact-tabs" role="tablist" aria-label="Add GIS layer source">
-                  {siAddLayerWizard === 'tabs' ? (
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={addLayerTab === 'giscontent'}
-                      aria-label="GIS Content - hosted feature layers"
-                      title="GIS Content - saved hosted layers"
-                      className={(addLayerTab === 'giscontent' ? 'gis-compact-tab active' : 'gis-compact-tab') + ' gis-compact-tab--icon'}
-                      onClick={() => setAddLayerTab('giscontent')}
-                    >
-                      <i className="fa-solid fa-layer-group" aria-hidden />
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={addLayerTab === 'arcgis'}
-                    className={(addLayerTab === 'arcgis' ? 'gis-compact-tab active' : 'gis-compact-tab') + ' gis-compact-tab--icon'}
-                    title="ArcGIS Feature Service"
-                    aria-label="ArcGIS Feature Service"
-                    onClick={() => setAddLayerTab('arcgis')}
-                  >
-                    <i className={siAddLayerWizard === 'tabs' ? 'fa-solid fa-cloud' : 'fa-solid fa-link'} aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={addLayerTab === 'database'}
-                    className={(addLayerTab === 'database' ? 'gis-compact-tab active' : 'gis-compact-tab') + ' gis-compact-tab--icon'}
-                    title="Database connection"
-                    aria-label="Database connection"
-                    onClick={() => setAddLayerTab('database')}
-                  >
-                    <i className="fa-solid fa-database" aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={addLayerTab === 'upload'}
-                    className={(addLayerTab === 'upload' ? 'gis-compact-tab active' : 'gis-compact-tab') + ' gis-compact-tab--icon'}
-                    title="Upload file"
-                    aria-label="Upload file"
-                    onClick={() => setAddLayerTab('upload')}
-                  >
-                    <i className="fa-solid fa-file-arrow-up" aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={addLayerTab === 'url'}
-                    className={(addLayerTab === 'url' ? 'gis-compact-tab active' : 'gis-compact-tab') + ' gis-compact-tab--icon'}
-                    title="From URL"
-                    aria-label="URL or web data"
-                    onClick={() => setAddLayerTab('url')}
-                  >
-                    <i className="fa-solid fa-globe" aria-hidden />
-                  </button>
-                  {siAddLayerWizard === 'source-forms' ? (
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={addLayerTab === 'raster'}
-                      className={(addLayerTab === 'raster' ? 'gis-compact-tab active' : 'gis-compact-tab') + ' gis-compact-tab--icon'}
-                      title="Raster path / URL"
-                      onClick={() => setAddLayerTab('raster')}
-                    >
-                      <i className="fa-regular fa-image" aria-hidden />
-                    </button>
-                  ) : null}
-                </div>
-                <div className="gis-modal-body">
-              {addLayerTab === 'giscontent' && siAddLayerWizard === 'tabs' ? (
-                <div role="tabpanel" aria-label="GIS Content">
-                  {gisContentPortalPickRows.length === 0 ? (
-                    <div className="gis-modal-gis-content-empty" role="status">
-                      <i className="fa-regular fa-folder-open" aria-hidden />
-                      <p>No hosted feature layers in GIS Content yet. Upload data or publish a feature layer in GIS Content.</p>
-                    </div>
-                  ) : (
-                    <ul className="gis-modal-gis-content-list" aria-label="GIS Content layers">
-                      {gisContentPortalPickRows.map(row => {
-                        const busy = addingPortalRowId === row.id;
-                        const typeLabel = gisContentPortalDisplayTypeLabel(row, getGisContentItemDetails(row.id));
-                        return (
-                          <li key={row.id} className="gis-modal-gis-content-row">
-                            <div className="gis-modal-gis-content-meta">
-                              <span className="gis-modal-gis-content-name">{row.title}</span>
-                              <span className="gis-modal-gis-content-badges">
-                                <span className="gis-modal-gis-content-badge">{typeLabel}</span>
-                                <span className="gis-modal-gis-content-badge gis-modal-gis-content-badge--muted">Hosted</span>
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              className="gis-modal-gis-content-add-btn"
-                              disabled={busy}
-                              onClick={() => addGisPortalRowFromAddLayerModal(row)}
-                            >
-                              <i
-                                className={`gis-modal-gis-content-add-btn__icon fa-solid ${busy ? 'fa-spinner fa-spin' : 'fa-plus'}`}
-                                aria-hidden
-                              />
-                              <span className="gis-modal-gis-content-add-btn__label">{busy ? 'Adding...' : 'Add'}</span>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </div>
-              ) : addLayerTab === 'arcgis' ? (
-                <div key="arcgis" role="tabpanel" aria-label="ArcGIS Feature Service" className="si-add-source-arcgis-tab">
-                  {siArcgisFieldStep === 'menu' ? (
-                    <>
-                      <div className="si-arcgis-field-menu">
-                        <div className="si-get-data-list" role="list" aria-label="ArcGIS connection options">
-                          <button
-                            type="button"
-                            role="listitem"
-                            className="si-get-data-row si-arcgis-field-row"
-                            onClick={() => setSiArcgisFieldStep('url')}
-                          >
-                            <span className="si-get-data-row-icon" aria-hidden>
-                              <i className="fa-solid fa-link" />
-                            </span>
-                            <span className="si-get-data-row-text">
-                              <span className="si-get-data-row-title">Service URL</span>
-                              <span className="si-get-data-row-desc">
-                                {addLayerUrl.trim()
-                                  ? addLayerUrl.trim().length > 34
-                                    ? `${addLayerUrl.trim().slice(0, 34)}...`
-                                    : addLayerUrl.trim()
-                                  : 'FeatureServer or MapServer URL'}
-                              </span>
-                            </span>
-                            <i className="fa-solid fa-chevron-right si-get-data-row-chevron" aria-hidden />
-                          </button>
-                          <button
-                            type="button"
-                            role="listitem"
-                            className="si-get-data-row si-arcgis-field-row"
-                            onClick={() => setSiArcgisFieldStep('token')}
-                          >
-                            <span className="si-get-data-row-icon" aria-hidden>
-                              <i className="fa-solid fa-key" />
-                            </span>
-                            <span className="si-get-data-row-text">
-                              <span className="si-get-data-row-title">Token</span>
-                              <span className="si-get-data-row-desc">
-                                {addLayerToken.trim() ? 'Token set (optional)' : 'Optional API key'}
-                              </span>
-                            </span>
-                            <i className="fa-solid fa-chevron-right si-get-data-row-chevron" aria-hidden />
-                          </button>
-                          <button
-                            type="button"
-                            role="listitem"
-                            className="si-get-data-row si-arcgis-field-row"
-                            onClick={() => setSiArcgisFieldStep('name')}
-                          >
-                            <span className="si-get-data-row-icon" aria-hidden>
-                              <i className="fa-solid fa-tag" />
-                            </span>
-                            <span className="si-get-data-row-text">
-                              <span className="si-get-data-row-title">Layer name</span>
-                              <span className="si-get-data-row-desc">
-                                {addLayerName.trim()
-                                  ? addLayerName.trim().length > 28
-                                    ? `${addLayerName.trim().slice(0, 28)}...`
-                                    : addLayerName.trim()
-                                  : 'Optional display name'}
-                              </span>
-                            </span>
-                            <i className="fa-solid fa-chevron-right si-get-data-row-chevron" aria-hidden />
-                          </button>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        className="gis-btn-outline"
-                        onClick={importArcgisFeatureLayer}
-                        disabled={isConnectingLayer || !addLayerUrl.trim()}
-                      >
-                        <i className="fa-solid fa-link" aria-hidden /> {isConnectingLayer ? 'Connecting...' : 'Connect'}
-                      </button>
-                    </>
-                  ) : (
-                    <div className="si-arcgis-field-detail">
-                      <button type="button" className="si-get-data-back" onClick={() => setSiArcgisFieldStep('menu')}>
-                        <i className="fa-solid fa-arrow-left" aria-hidden /> ArcGIS options
-                      </button>
-                      <span className="si-arcgis-field-label">
-                        {siArcgisFieldStep === 'url'
-                          ? 'Service URL'
-                          : siArcgisFieldStep === 'token'
-                            ? 'Token (optional)'
-                            : 'Layer name (optional)'}
-                      </span>
-                      {siArcgisFieldStep === 'url' ? (
-                        <input
-                          type="url"
-                          className="gis-input"
-                          placeholder="https://.../FeatureServer/0"
-                          value={addLayerUrl}
-                          onChange={e => setAddLayerUrl(e.target.value)}
-                          autoComplete="off"
-                          autoFocus
-                        />
-                      ) : siArcgisFieldStep === 'token' ? (
-                        <input
-                          type="text"
-                          className="gis-input"
-                          placeholder="Portal or service token"
-                          value={addLayerToken}
-                          onChange={e => setAddLayerToken(e.target.value)}
-                          autoComplete="off"
-                          autoFocus
-                        />
-                      ) : (
-                        <input
-                          type="text"
-                          className="gis-input"
-                          placeholder="Layer display name"
-                          value={addLayerName}
-                          onChange={e => setAddLayerName(e.target.value)}
-                          autoComplete="off"
-                          autoFocus
-                        />
-                      )}
-                      {siArcgisFieldStep === 'url' ? (
-                        <button
-                          type="button"
-                          className="gis-btn-outline"
-                          onClick={importArcgisFeatureLayer}
-                          disabled={isConnectingLayer || !addLayerUrl.trim()}
-                        >
-                          <i className="fa-solid fa-link" aria-hidden /> {isConnectingLayer ? 'Connecting...' : 'Connect'}
-                        </button>
-                      ) : null}
-                    </div>
-                  )}
-                  {discoveredArcgisLayers.length > 0 ? (
-                    <div className="gis-discover-panel" aria-label="Discovered layers">
-                      <div className="gis-discover-meta">
-                        {discoveredArcgisLayers.length} layer{discoveredArcgisLayers.length === 1 ? '' : 's'} found
-                      </div>
-                      <div className="si-arcgis-discover-pick">
-                        <div className="gis-select-wrap">
-                          <select
-                            className="gis-input gis-select"
-                            value={selectedDiscoveredArcgisUrl}
-                            onChange={e => {
-                              const next = e.target.value;
-                              setSelectedDiscoveredArcgisUrl(next);
-                              const found = discoveredArcgisLayers.find(l => l.url === next);
-                              if (found && !addLayerName.trim()) setAddLayerName(found.name);
-                            }}
-                            aria-label="Select discovered layer"
-                          >
-                            {discoveredArcgisLayers.map(l => (
-                              <option key={l.url} value={l.url}>
-                                {l.kind === 'table' ? `${l.name} (Table)` : l.geometryType ? `${l.name} (${l.geometryType})` : l.name}
-                              </option>
-                            ))}
-                          </select>
-                          <i className="fa-solid fa-chevron-down" aria-hidden />
-                        </div>
-                        <button
-                          type="button"
-                          className="gis-discovered-add"
-                          onClick={addSelectedDiscoveredArcgisLayer}
-                          disabled={!selectedDiscoveredArcgisUrl || isAddingDiscoveredArcgisLayer}
-                        >
-                          {isAddingDiscoveredArcgisLayer ? '…' : 'Add'}
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              ) : addLayerTab === 'database' ? (
-                <div key="database" role="tabpanel" aria-label="Get data">
-                  {siGetDataStep === 'menu' ? (
-                    <div className="si-get-data-panel">
-                      <div className="si-get-data-scroll">
-                        {siGetDataMenuSections().map(section => (
-                          <section key={section.id} className="si-get-data-section" aria-label={section.title}>
-                            <h4 className="si-get-data-section-label">{section.title}</h4>
-                            <div className="si-get-data-list" role="list">
-                              {section.sources.map(row => (
-                                <button
-                                  key={row.id}
-                                  type="button"
-                                  role="listitem"
-                                  className="si-get-data-row"
-                                  onClick={() => applySiGetDataPick(row)}
-                                >
-                                  <span
-                                    className={`si-get-data-row-icon${row.id === 'excel' ? ' si-get-data-row-icon--excel' : ''}${
-                                      row.id === 'csv' ? ' si-get-data-row-icon--csv' : ''
-                                    }`}
-                                    aria-hidden
-                                  >
-                                    <i className={row.iconClass} />
-                                  </span>
-                                  <span className="si-get-data-row-text">
-                                    <span className="si-get-data-row-title">{row.title}</span>
-                                    <span className="si-get-data-row-desc">{row.description}</span>
-                                  </span>
-                                  <i className="fa-solid fa-chevron-right si-get-data-row-chevron" aria-hidden />
-                                </button>
-                              ))}
-                            </div>
-                          </section>
-                        ))}
-                      </div>
-                      <div className="si-get-data-footer">
-                        <button
-                          type="button"
-                          className="si-get-data-more-btn"
-                          onClick={() => {
-                            setAddLayerTab('upload');
-                            setAddLayerStatus('More spatial formats: use Upload, From URL, Raster, or ArcGIS tabs in the bar above.');
-                          }}
-                        >
-                          More... <span className="si-get-data-more-hint">(all GIS / BIM upload formats)</span>
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <button type="button" className="si-get-data-back" onClick={() => setSiGetDataStep('menu')}>
-                        <i className="fa-solid fa-arrow-left" aria-hidden /> Common data sources
-                      </button>
-                      <p className="si-get-data-sql-lead">Database connection - profile is stored in-app for future gateway support.</p>
-                      <div className="si-layer-form-grid-2">
-                        <label className="si-layer-field">
-                          <span>Database Platform</span>
-                          <select
-                            className="gis-input"
-                            value={dbPlatform}
-                            onChange={e => setDbPlatform(e.target.value as (typeof DATABASE_PLATFORM_OPTIONS)[number])}
-                          >
-                            {DATABASE_PLATFORM_OPTIONS.map(platform => (
-                              <option key={platform} value={platform}>
-                                {platform}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="si-layer-field">
-                          <span>Instance / Host</span>
-                          <input
-                            type="text"
-                            className="gis-input"
-                            placeholder="server\\instance or host:port"
-                            value={dbInstance}
-                            onChange={e => setDbInstance(e.target.value)}
-                          />
-                        </label>
-                      </div>
-                      <label className="si-layer-field">
-                        <span>Authentication Type</span>
-                        <select className="gis-input" value={dbAuthType} onChange={e => setDbAuthType(e.target.value as 'database' | 'operating-system')}>
-                          <option value="database">Database authentication</option>
-                          <option value="operating-system">Operating system authentication</option>
-                        </select>
-                      </label>
-                      {dbAuthType === 'database' ? (
-                        <div className="si-layer-form-grid-2">
-                          <label className="si-layer-field">
-                            <span>User Name</span>
-                            <input type="text" className="gis-input" placeholder="db_user" value={dbUsername} onChange={e => setDbUsername(e.target.value)} />
-                          </label>
-                          <label className="si-layer-field">
-                            <span>Password</span>
-                            <input type="password" className="gis-input" placeholder="ΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇó" value={dbPassword} onChange={e => setDbPassword(e.target.value)} />
-                          </label>
-                        </div>
-                      ) : null}
-                      <label className="si-layer-inline-check">
-                        <input type="checkbox" checked={dbSaveCredentials} onChange={e => setDbSaveCredentials(e.target.checked)} />
-                        <span>Save User/Password</span>
-                      </label>
-                      <div className="si-layer-form-grid-2">
-                        <label className="si-layer-field">
-                          <span>Database</span>
-                          <input type="text" className="gis-input" placeholder="optional" value={dbName} onChange={e => setDbName(e.target.value)} />
-                        </label>
-                        <label className="si-layer-field">
-                          <span>Connection File Name</span>
-                          <input
-                            type="text"
-                            className="gis-input"
-                            placeholder="optional"
-                            value={dbConnectionFileName}
-                            onChange={e => setDbConnectionFileName(e.target.value)}
-                          />
-                        </label>
-                      </div>
-                      <details className="si-layer-advanced">
-                        <summary>Additional Properties</summary>
-                        <small>
-                          This profile is prepared in-app for future backend connector support. Validate required fields and save.
-                        </small>
-                      </details>
-                      <button type="button" className="gis-btn-primary-full" onClick={handleDatabaseConnection}>
-                        <i className="fa-solid fa-plug" aria-hidden /> Validate & Save Connection
-                      </button>
-                    </>
-                  )}
-                </div>
-              ) : addLayerTab === 'url' || addLayerTab === 'raster' ? (
-                <div key="url" role="tabpanel" aria-label="Remote URL">
-                  <input
-                    type="url"
-                    className="gis-input"
-                    placeholder={
-                      addLayerTab === 'raster'
-                        ? 'Raster path / URL (GeoTIFF, Image Service, tile endpoint)'
-                        : 'https://.../layer.geojson or .zip'
-                    }
-                    value={addLayerRemoteUrl}
-                    onChange={e => setAddLayerRemoteUrl(e.target.value)}
-                    autoComplete="off"
-                  />
-                  <input
-                    type="text"
-                    className="gis-input"
-                    placeholder="Layer Name (optional)"
-                    value={addLayerName}
-                    onChange={e => setAddLayerName(e.target.value)}
-                    autoComplete="off"
-                  />
-                  <button type="button" className="gis-btn-primary-full" onClick={() => void importRemoteUrlLayer()} disabled={isImportingRemoteLayer}>
-                    <i className="fa-solid fa-cloud-arrow-down" aria-hidden />{' '}
-                    {isImportingRemoteLayer ? 'Importing...' : addLayerTab === 'raster' ? 'Import Raster path / URL' : 'Import from URL'}
-                  </button>
-                </div>
-              ) : (
-                <div key="upload" role="tabpanel" aria-label="Upload file">
-                  {(() => {
-                    const siUploadBusy = siUploadPhase === 'reading' || siUploadPhase === 'processing';
-                    return (
-                      <>
-                        <div
-                          className={`gis-dropzone${siUploadDropActive ? ' drag-over' : ''}`}
-                          role="button"
-                          tabIndex={0}
-                          aria-label="Drop a file here or click to browse"
-                          onKeyDown={e => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              openSiUploadFilePicker();
-                            }
-                          }}
-                          onClick={() => openSiUploadFilePicker()}
-                          onDragEnter={e => {
-                            e.preventDefault();
-                            setSiUploadDropActive(true);
-                          }}
-                          onDragLeave={e => {
-                            e.preventDefault();
-                            if (e.currentTarget === e.target) setSiUploadDropActive(false);
-                          }}
-                          onDragOver={e => {
-                            e.preventDefault();
-                          }}
-                          onDrop={e => {
-                            e.preventDefault();
-                            setSiUploadDropActive(false);
-                            const files = e.dataTransfer?.files;
-                            if (!files?.length) return;
-                            stageSiUploadFiles(Array.from(files));
-                          }}
-                        >
-                          <div className="gis-dropzone-icon" aria-hidden>
-                            <i className="fa-solid fa-cloud-arrow-up" />
-                          </div>
-                          <div className="gis-dropzone-text">Drop a file or click to browse</div>
-                          <div className="gis-dropzone-subtext">
-                            SHP · GeoJSON · KML · CSV · GeoTIFF · PNG/JPG · IFC
-                          </div>
-                          <div className="gis-dropzone-subtext si-upload-raster-hints">
-                            Raster + world file (.pgw/.jgw/.jpgw/.tfw) auto-georeferences on the map.
-                          </div>
-                        </div>
-                        <GisUploadCloudSources
-                          cloudOnly
-                          onFile={file => {
-                            stageSiUploadFiles([file, ...siUploadCompanionFiles]);
-                          }}
-                          onStatus={setAddLayerStatus}
-                        />
-                        {siUploadStagedFile && !siUploadBusy ? (
-                          <div className="si-upload-staged-card">
-                            <div className="si-upload-staged-main">
-                              <span className="si-upload-staged-name" title={siUploadStagedFile.name}>
-                                {siUploadStagedFile.name}
-                              </span>
-                              <span className="si-upload-staged-meta">
-                                {(siUploadStagedFile.size / (1024 * 1024)).toFixed(2)} MB | {' '}
-                                {String(siUploadStagedFile.name.split('.').pop() || '').toUpperCase()}
-                                {siUploadStagedFile.size <= 0 ? ' | Empty file — download locally first' : ''}
-                                {siUploadCompanionFiles.length > 0
-                                  ? ` | +${siUploadCompanionFiles.length} sidecar file(s)`
-                                  : ''}
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              className="si-upload-staged-clear"
-                              onClick={() => {
-                                setSiUploadStagedFile(null);
-                                setSiUploadCompanionFiles([]);
-                                siUploadBundleRef.current = [];
-                                setAddLayerStatus('');
-                                setSiUploadPhase('idle');
-                              }}
-                            >
-                              Clear
-                            </button>
-                          </div>
-                        ) : null}
-                        {siUploadBusy ? (
-                          <div
-                            className="si-upload-progress"
-                            role="progressbar"
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                            aria-valuenow={siUploadProgressPct}
-                            aria-label="Import progress"
-                          >
-                            <div className="si-upload-progress__track">
-                              <div className="si-upload-progress__fill" style={{ width: `${siUploadProgressPct}%` }} />
-                            </div>
-                            <div className="si-upload-progress__label">
-                              {siUploadPhase === 'reading' ? 'Uploading / reading' : 'Processing'} | {siUploadProgressPct}%
-                            </div>
-                          </div>
-                        ) : null}
-                        <input type="text" className="gis-input" placeholder="Layer Name (optional)" value={addLayerName} onChange={e => setAddLayerName(e.target.value)} />
-                        <button
-                          type="button"
-                          className="gis-btn-primary-full"
-                          onClick={() => commitSiLayerUpload()}
-                          disabled={siUploadBusy}
-                        >
-                          <i className="fa-solid fa-circle-check" aria-hidden />{' '}
-                          {siUploadBusy ? 'Working…' : 'Import to map'}
-                        </button>
-                      </>
-                    );
-                  })()}
-                </div>
-              )}
-                </div>
-              </>
-            ) : null}
-            {addLayerStatus ? (
-              <p
-                className={`gis-modal-compact-status${siUploadPhase === 'failed' ? ' gis-modal-compact-status--error' : ''}`}
-              >
-                {addLayerStatus}
-              </p>
-            ) : null}
-            {siAddLayerWizard !== 'home' ? (
-              <div className="gis-modal-footer">
-                <button type="button" className="gis-link-btn" onClick={closeAddLayerModal}>
-                  Cancel
-                </button>
-              </div>
-            ) : null}
-        </SiAddSourceAnchoredPanel>
+          initialCategory={gisDmInitialCategory}
+          portalItems={gisContentPortalPickRows.map(row => ({
+            id: row.id,
+            title: row.title,
+            typeLabel: gisContentPortalDisplayTypeLabel(row, getGisContentItemDetails(row.id)),
+            row,
+          }))}
+          addingPortalRowId={addingPortalRowId}
+          statusExternal={addLayerStatus}
+          discoveredArcGisLayers={discoveredArcgisLayers}
+          selectedDiscoveredArcGisUrl={selectedDiscoveredArcgisUrl}
+          onSelectDiscoveredArcGisUrl={setSelectedDiscoveredArcgisUrl}
+          isConnecting={isConnectingLayer}
+          isAddingDiscovered={isAddingDiscoveredArcgisLayer}
+          isImportingRemote={isImportingRemoteLayer}
+          onAddPortalRow={addGisPortalRowFromAddLayerModal}
+          onImportFiles={handleGisDmImportFiles}
+          onImportRemoteUrl={handleGisDmImportRemoteUrl}
+          onConnectArcGis={handleGisDmConnectArcGis}
+          onDiscoverArcGis={handleGisDmDiscoverArcGis}
+          onAddDiscoveredArcGis={handleGisDmAddDiscoveredArcGis}
+          onSaveDbProfile={handleGisDmSaveDbProfile}
+          onImportWfs={handleGisDmImportWfs}
+          onImportOgcTile={handleGisDmImportOgcTile}
+        />
       ) : null}
       <SiAddArcGisLayerPanel
         open={isAddArcGisLayerPanelOpen}

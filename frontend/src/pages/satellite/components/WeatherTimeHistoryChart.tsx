@@ -19,7 +19,6 @@ import {
   type WeatherHistoryMetric,
 } from '../../../lib/openMeteoWeather';
 import {
-  buildWeatherDailySeries,
   buildWeatherHistoryChartSeries,
   type WeatherTimeAggregation,
 } from '../lib/weatherHistoryChartAggregate';
@@ -44,7 +43,7 @@ type WeatherTimeHistoryChartProps = {
   minDate?: string;
   maxDate?: string;
   onRangeChange: (start: string, end: string) => void;
-  onExport?: () => void;
+  onExport?: (aggregation: WeatherTimeAggregation) => void;
   exportLoading?: boolean;
   exportProgressLabel?: string;
 };
@@ -99,6 +98,7 @@ const MORE_CHART_VISUALS = CHART_VISUALS.filter(v => !v.primary);
 const TIME_AXIS_CHARTS = new Set<ChartVisual>(['line', 'bar', 'area', 'scatter', 'heatmap', 'treemap']);
 const CARTESIAN_CHART_JS = new Set<ChartVisual>(['line', 'bar', 'area']);
 const WEATHER_AGGREGATE_OPTIONS: Array<{ value: WeatherTimeAggregation; label: string }> = [
+  { value: 'hour', label: 'Hourly' },
   { value: 'day', label: 'Day' },
   { value: 'week', label: 'Week' },
   { value: 'month', label: 'Month' },
@@ -525,14 +525,15 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
 
   const values = useMemo(() => chartSeries.values, [chartSeries.values]);
   const finite = useMemo(() => finiteValues(values), [values]);
-  const dailyBuckets = useMemo(() => {
-    const daily = buildWeatherDailySeries(points, metric);
-    return daily.map(d => ({
-      date: d.date,
-      label: d.date.slice(5),
-      value: d.value,
-    }));
-  }, [points, metric]);
+  const seriesBuckets = useMemo(
+    (): DailyBucket[] =>
+      chartSeries.labels.map((date, i) => ({
+        date,
+        label: chartSeries.displayLabels[i] ?? date,
+        value: Number(chartSeries.values[i] ?? 0),
+      })),
+    [chartSeries],
+  );
 
   const xAxisLabels = useMemo(() => {
     if (CARTESIAN_CHART_JS.has(chartVisual)) return [];
@@ -620,9 +621,9 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
 
     const pieCx = padL + innerW / 2;
     const pieCy = padT + innerH / 2;
-    const pieSlices = buildPieSlices(dailyBuckets, minV, maxV, pieCx, pieCy, Math.min(innerW, innerH) * 0.42, 0);
+    const pieSlices = buildPieSlices(seriesBuckets, minV, maxV, pieCx, pieCy, Math.min(innerW, innerH) * 0.42, 0);
     const donutSlices = buildPieSlices(
-      dailyBuckets,
+      seriesBuckets,
       minV,
       maxV,
       pieCx,
@@ -632,7 +633,7 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
     );
 
     const heatCells = buildHeatCells(finite, padL, padT, innerW, innerH);
-    const treemapCells = buildTreemapCells(dailyBuckets, padL, padT, innerW, innerH);
+    const treemapCells = buildTreemapCells(seriesBuckets, padL, padT, innerW, innerH);
 
     const sorted = [...finite].sort((a, b) => a - b);
     const radarCx = pieCx;
@@ -698,7 +699,7 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
       radarGrid,
       boxPlot,
     };
-  }, [finite, values, dailyBuckets, stats.min, stats.max]);
+  }, [finite, values, seriesBuckets, stats.min, stats.max]);
 
   const unit = metricUnit(metric);
   const fmt = (v: number | null) =>
@@ -809,7 +810,7 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
     { id: 'n', label: 'Points', value: String(stats.n), kind: 'samples' as const },
   ];
 
-  const insightBuckets = useMemo(() => dailyBuckets.slice(-8), [dailyBuckets]);
+  const insightBuckets = useMemo(() => seriesBuckets.slice(-8), [seriesBuckets]);
 
   const miniBar = useMemo(() => {
     const W = 220;
@@ -936,7 +937,7 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
           </div>
           <span className="si-wx-history__chart-meta">
             {chartSeries.values.length.toLocaleString()} points · {metricLabel(metric)} ·{' '}
-            {timeAggregation}
+            {timeAggregation === 'hour' ? 'hourly' : timeAggregation}
           </span>
         </div>
 
@@ -1323,8 +1324,21 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
           <button
             type="button"
             className={`si-wx-history__export${exportLoading ? ' si-wx-history__export--busy' : ''}`}
-            title={exportProgressLabel || 'Export Climate Report (XLSX)'}
-            onClick={onExport}
+            title={
+              exportProgressLabel ||
+              `Export Meteo Data Report (XLSX) · ${
+                timeAggregation === 'hour'
+                  ? 'Hourly'
+                  : timeAggregation === 'day'
+                    ? 'Day'
+                    : timeAggregation === 'week'
+                      ? 'Week'
+                      : timeAggregation === 'month'
+                        ? 'Month'
+                        : 'Year'
+              }`
+            }
+            onClick={() => onExport(timeAggregation)}
             disabled={exportLoading}
             aria-busy={exportLoading}
           >

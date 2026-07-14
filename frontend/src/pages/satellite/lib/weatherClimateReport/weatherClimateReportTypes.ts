@@ -1,6 +1,10 @@
 import type { OpenMeteoHourlyPoint } from '../../../../lib/openMeteoWeather'
+import type { WeatherTimeAggregation } from '../weatherHistoryChartAggregate'
 
 export type ClimateRiskLevel = 'Low' | 'Moderate' | 'High' | 'Extreme'
+
+/** Matches the chart Aggregate control (Hourly / Day / Week / Month / Year). */
+export type ClimateExportAggregation = WeatherTimeAggregation
 
 export type WeatherDailyRecord = {
   date: string
@@ -76,6 +80,8 @@ export type WeatherClimateReportPayload = {
     environmentalRiskSummary: string
     forecastHorizon: string
   }
+  /** Chart Aggregate selection that drives the Historical Dataset sheet. */
+  timeAggregation: ClimateExportAggregation
   hourlyRecords: OpenMeteoHourlyPoint[]
   dailyRecords: WeatherDailyRecord[]
   temperatureStats: Record<string, number | string | null>

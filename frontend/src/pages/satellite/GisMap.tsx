@@ -51,6 +51,7 @@ import {
   parseFile,
   parseRemoteUrlAsFile,
 } from '../../utils/FileLoader'
+import { GisDataManager } from './gisDataManager';
 import { useGeminiApiKey } from '../../hooks/useGeminiApiKey'
 import {
   lastMapQueryCoordsFromMessages,
@@ -9552,616 +9553,89 @@ export default function GisMap() {
       ) : null}
 
       {isAddOpen ? (
-        <div
-          className={`gis-modal-overlay gis-map-source-picker${addView === 'form' ? ' gis-map-source-picker--form' : ''}`}
-          role="presentation"
-          onClick={closeAddLayerModal}
-        >
-          <div
-            className={`gis-modal gis-modal-compact si-add-source-modal ddb-add-source-modal${addView === 'home' ? ' ddb-add-source-modal--home' : ''}`}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="gis-add-layer-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {addView === 'home' ? (
-              <>
-                <div className="gis-modal-compact-hero">
-                  <h2 className="gis-modal-compact-hero-title" id="gis-add-layer-title">
-                    Add Source Data
-                  </h2>
-                  <p className="gis-modal-compact-hero-lead">Choose a source to add layers to this map.</p>
-                </div>
-                <div className="si-add-source-options" role="radiogroup" aria-label="Layer source type">
-                  {([
-                    {
-                      id: 'giscontent' as AddLayerTab,
-                      title: 'Select from GIS Content',
-                      sub: 'Layers saved in GIS Content (this browser).',
-                      icon: 'fa-solid fa-layer-group',
-                      iconStyle: {
-                        background: 'linear-gradient(155deg, rgba(168, 85, 247, 0.28) 0%, rgba(15, 23, 42, 0.75) 100%)',
-                        borderColor: 'rgba(192, 132, 252, 0.45)',
-                        color: '#d8b4fe',
-                      },
-                    },
-                    {
-                      id: 'arcgis' as AddLayerTab,
-                      title: 'ArcGIS Server layer URL',
-                      sub: 'Connect to a feature service and pick a layer.',
-                      icon: 'fa-solid fa-link',
-                      iconStyle: {
-                        background: 'linear-gradient(155deg, rgba(99, 102, 241, 0.28) 0%, rgba(15, 23, 42, 0.75) 100%)',
-                        borderColor: 'rgba(129, 140, 248, 0.5)',
-                        color: '#a5b4fc',
-                      },
-                    },
-                    {
-                      id: 'upload' as AddLayerTab,
-                      title: 'Upload a file',
-                      sub: 'GeoJSON, KML, KMZ, Shapefile, CSV, and more.',
-                      icon: 'fa-solid fa-file-arrow-up',
-                      iconStyle: {
-                        background: 'linear-gradient(155deg, rgba(34, 197, 94, 0.26) 0%, rgba(15, 23, 42, 0.75) 100%)',
-                        borderColor: 'rgba(74, 222, 128, 0.5)',
-                        color: '#86efac',
-                      },
-                    },
-                    {
-                      id: 'url' as AddLayerTab,
-                      title: 'From URL',
-                      sub: 'Remote GeoJSON, ZIP, KML, or raster/image service.',
-                      icon: 'fa-solid fa-globe',
-                      iconStyle: {
-                        background: 'linear-gradient(155deg, rgba(14, 165, 233, 0.26) 0%, rgba(15, 23, 42, 0.75) 100%)',
-                        borderColor: 'rgba(56, 189, 248, 0.5)',
-                        color: '#7dd3fc',
-                      },
-                    },
-                    {
-                      id: 'database' as AddLayerTab,
-                      title: 'Get Data',
-                      sub: 'Excel, CSV, SQL, Web, OData sources.',
-                      icon: 'fa-solid fa-database',
-                      iconStyle: {
-                        background: 'linear-gradient(155deg, rgba(139, 92, 246, 0.28) 0%, rgba(15, 23, 42, 0.75) 100%)',
-                        borderColor: 'rgba(167, 139, 250, 0.5)',
-                        color: '#c4b5fd',
-                      },
-                    },
-                  ]).map(opt => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      className="si-add-source-option"
-                      onClick={() => {
-                        setTab(opt.id)
-                        setDiscoverError(null)
-                        setAddView('form')
-                      }}
-                    >
-                      <span className="si-add-source-option-radio" aria-hidden />
-                      <span className="si-add-source-option-icon" aria-hidden style={opt.iconStyle}>
-                        <i className={opt.icon} />
-                      </span>
-                      <span className="si-add-source-option-main">
-                        <strong>{opt.title}</strong>
-                        <small>{opt.sub}</small>
-                      </span>
-                      <i className="fa-solid fa-chevron-right si-add-source-option-chevron" aria-hidden />
-                    </button>
-                  ))}
-                </div>
-                <div className="gis-modal-footer">
-                  <button className="gis-link-btn" type="button" onClick={closeAddLayerModal}>
-                    Cancel
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-            <div className="ddb-add-source-modal__head">
-              <div className="gis-modal-compact-title" id="gis-add-layer-title">
-                Add GIS Layer
-              </div>
-              <button type="button" className="ddb-add-source-back" onClick={() => setAddView('home')}>
-                <i className="fa-solid fa-arrow-left" aria-hidden /> All sources
-              </button>
-            </div>
-
-            <div className="gis-modal-compact-tabs" role="tablist" aria-label="Add GIS layer source">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'giscontent'}
-                aria-label="GIS Content — hosted feature layers"
-                title="GIS Content — hosted feature layers"
-                className={(tab === 'giscontent' ? 'gis-compact-tab active' : 'gis-compact-tab') + ' gis-compact-tab--icon'}
-                onClick={() => setTab('giscontent')}
-              >
-                <i className="fa-solid fa-layer-group" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'arcgis'}
-                aria-label="ArcGIS Feature Service"
-                title="ArcGIS Feature Service"
-                className={(tab === 'arcgis' ? 'gis-compact-tab active' : 'gis-compact-tab') + ' gis-compact-tab--icon'}
-                onClick={() => setTab('arcgis')}
-              >
-                <i className="fa-solid fa-cloud" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'database'}
-                aria-label="Database connection"
-                title="Database connection"
-                className={(tab === 'database' ? 'gis-compact-tab active' : 'gis-compact-tab') + ' gis-compact-tab--icon'}
-                onClick={() => setTab('database')}
-              >
-                <i className="fa-solid fa-database" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'upload'}
-                aria-label="Upload file"
-                title="Upload file"
-                className={(tab === 'upload' ? 'gis-compact-tab active' : 'gis-compact-tab') + ' gis-compact-tab--icon'}
-                onClick={() => setTab('upload')}
-              >
-                <i className="fa-solid fa-file-arrow-up" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'url'}
-                aria-label="URL or web data"
-                title="Link to a web URL (GeoJSON, KML, CSV, ArcGIS REST export, documents)"
-                className={(tab === 'url' ? 'gis-compact-tab active' : 'gis-compact-tab') + ' gis-compact-tab--icon'}
-                onClick={() => setTab('url')}
-              >
-                <i className="fa-solid fa-globe" aria-hidden="true" />
-              </button>
-            </div>
-
-            <div className="gis-modal-body">
-              {tab === 'giscontent' ? (
-                <div role="tabpanel" aria-label="GIS Content">
-                  <p className="gis-modal-gis-content-hint">
-                    Hosted feature layers from <strong>GIS Content</strong> are published as Feature Layer services (REST)
-                    and can be reused in web maps, dashboards, and apps.
-                  </p>
-                  {gisContentPortalPickRows.length === 0 ? (
-                    <div className="gis-modal-gis-content-empty" role="status">
-                      <i className="fa-regular fa-folder-open" aria-hidden="true" />
-                      <p>No hosted feature layers yet. Upload data or create a feature layer in GIS Content.</p>
-                    </div>
-                  ) : (
-                    <ul className="gis-modal-gis-content-list" aria-label="Hosted feature layers">
-                      {gisContentPortalPickRows.map(row => {
-                        const busy = addingPortalRowId === row.id
-                        const typeLabel = gisContentPortalDisplayTypeLabel(row, getGisContentItemDetails(row.id))
-                        return (
-                          <li key={row.id} className="gis-modal-gis-content-row">
-                            <div className="gis-modal-gis-content-meta">
-                              <span className="gis-modal-gis-content-name">{row.title}</span>
-                              <span className="gis-modal-gis-content-badges">
-                                <span className="gis-modal-gis-content-badge">{typeLabel}</span>
-                                <span className="gis-modal-gis-content-badge gis-modal-gis-content-badge--muted">Hosted</span>
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              className="gis-modal-gis-content-add-btn"
-                              disabled={busy}
-                              onClick={() => addGisPortalRowToMap(row)}
-                            >
-                              <i
-                                className={`gis-modal-gis-content-add-btn__icon fa-solid ${busy ? 'fa-spinner fa-spin' : 'fa-plus'}`}
-                                aria-hidden
-                              />
-                              <span className="gis-modal-gis-content-add-btn__label">{busy ? 'Adding…' : 'Add'}</span>
-                            </button>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  )}
-                  {discoverError ? (
-                    <div className="gis-inline-error" role="alert">
-                      <i className="fa-solid fa-triangle-exclamation" aria-hidden="true" />
-                      <span>{discoverError}</span>
-                    </div>
-                  ) : null}
-                </div>
-              ) : tab === 'arcgis' ? (
-                <div role="tabpanel" aria-label="ArcGIS Feature Service">
-                  <input
-                    id="gis-arcgis-url"
-                    className="gis-input"
-                    type="text"
-                    value={serviceUrl}
-                    onChange={(e) => setServiceUrl(e.target.value)}
-                    placeholder="Feature Service URL"
-                    autoComplete="off"
-                    inputMode="url"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        discoverArcGisLayers()
-                      }
-                    }}
-                  />
-
-                  <input
-                    id="gis-arcgis-token"
-                    className="gis-input"
-                    type="text"
-                    value={token}
-                    onChange={(e) => setToken(e.target.value)}
-                    placeholder="Token / API Key (optional)"
-                    autoComplete="off"
-                  />
-
-                  <button
-                    className="gis-btn-outline"
-                    type="button"
-                    onClick={discoverArcGisLayers}
-                    disabled={isDiscovering || serviceUrl.trim() === ''}
-                  >
-                    <i className="fa-solid fa-link" aria-hidden="true" />
-                    {isDiscovering ? 'Connecting…' : 'Connect & Discover Layers'}
-                  </button>
-
-                  {discoverError ? (
-                    <div className="gis-inline-error" role="alert">
-                      <i className="fa-solid fa-triangle-exclamation" aria-hidden="true" />
-                      <span>{discoverError}</span>
-                    </div>
-                  ) : null}
-
-                  {discoveredLayers.length > 0 ? (
-                    <div className="gis-discover-panel" aria-label="Discovered layers panel">
-                      <div className="gis-discover-meta">FOUND {discoveredLayers.length} LAYER/TABLE(S):</div>
-
-                      <div className="gis-form-field">
-                        <div className="gis-form-label">Select Layer</div>
-                        <div className="gis-select-wrap">
-                          <select
-                            className="gis-input gis-select"
-                            value={selectedDiscoveredUrl}
-                            onChange={(e) => {
-                              const next = e.target.value
-                              setSelectedDiscoveredUrl(next)
-                              const found = discoveredLayers.find(d => d.url === next)
-                              if (found) setLayerName(found.name)
-                            }}
-                            aria-label="Select discovered layer"
-                          >
-                            {discoveredLayers.map((l) => (
-                              <option key={l.url} value={l.url}>
-                                {l.kind === 'table' ? `${l.name} (Table)` : l.geometryType ? `${l.name} (${l.geometryType})` : l.name}
-                              </option>
-                            ))}
-                          </select>
-                          <i className="fa-solid fa-chevron-down" aria-hidden="true" />
-                        </div>
-                      </div>
-
-                      <div className="gis-discovered-row" aria-label="Selected discovered layer">
-                        <div className="gis-discovered-name" title={layerName}>
-                          {layerName}
-                        </div>
-                        <button
-                          className="gis-discovered-add"
-                          type="button"
-                          onClick={() => {
-                            const found = discoveredLayers.find(d => d.url === selectedDiscoveredUrl)
-                            if (found) addArcGisLayerAsGeoJson(found)
-                          }}
-                          disabled={!selectedDiscoveredUrl || addingLayerKey === `arcgis:${selectedDiscoveredUrl}`}
-                        >
-                          {addingLayerKey === `arcgis:${selectedDiscoveredUrl}` ? 'Adding…' : 'Add'}
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              ) : tab === 'database' ? (
-                <div role="tabpanel" aria-label="Database Connection" className="gis-db-panel">
-                  <div className="gis-db-grid-2">
-                    <label className="gis-db-field">
-                      <span>Database Platform</span>
-                      <select className="gis-input" value={dbPlatform} onChange={(e) => setDbPlatform(e.target.value as (typeof DB_PLATFORM_OPTIONS)[number])}>
-                        {DB_PLATFORM_OPTIONS.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="gis-db-field">
-                      <span>Instance / Host</span>
-                      <input
-                        className="gis-input"
-                        type="text"
-                        value={dbInstance}
-                        onChange={(e) => setDbInstance(e.target.value)}
-                        placeholder="server\\instance or host:port"
-                        autoComplete="off"
-                      />
-                    </label>
-                  </div>
-
-                  <label className="gis-db-field">
-                    <span>Authentication Type</span>
-                    <select className="gis-input" value={dbAuthType} onChange={(e) => setDbAuthType(e.target.value as DatabaseAuthType)}>
-                      <option value="database">Database authentication</option>
-                      <option value="operating-system">Operating system authentication</option>
-                    </select>
-                  </label>
-
-                  {dbAuthType === 'database' ? (
-                    <div className="gis-db-grid-2">
-                      <label className="gis-db-field">
-                        <span>User Name</span>
-                        <input
-                          className="gis-input"
-                          type="text"
-                          value={dbUser}
-                          onChange={(e) => setDbUser(e.target.value)}
-                          placeholder="db_user"
-                          autoComplete="off"
-                        />
-                      </label>
-                      <label className="gis-db-field">
-                        <span>Password</span>
-                        <input
-                          className="gis-input"
-                          type="password"
-                          value={dbPassword}
-                          onChange={(e) => setDbPassword(e.target.value)}
-                          placeholder="••••••••"
-                          autoComplete="off"
-                        />
-                      </label>
-                    </div>
-                  ) : null}
-
-                  <label className="gis-db-inline-check">
-                    <input type="checkbox" checked={dbSaveCredentials} onChange={(e) => setDbSaveCredentials(e.target.checked)} />
-                    <span>Save User/Password</span>
-                  </label>
-
-                  <div className="gis-db-grid-2">
-                    <label className="gis-db-field">
-                      <span>Database</span>
-                      <input className="gis-input" type="text" value={dbDatabase} onChange={(e) => setDbDatabase(e.target.value)} placeholder="optional" />
-                    </label>
-                    <label className="gis-db-field">
-                      <span>Connection File Name</span>
-                      <input className="gis-input" type="text" value={dbConnectionFileName} onChange={(e) => setDbConnectionFileName(e.target.value)} placeholder="optional" />
-                    </label>
-                  </div>
-
-                  <details className="gis-db-advanced">
-                    <summary>Additional Properties</summary>
-                    <div className="gis-db-advanced-grid">
-                      <div className="gis-db-grid-2">
-                        <label className="gis-db-field">
-                          <span>Geodatabase Version</span>
-                          <input className="gis-input" type="text" value={dbVersion} onChange={(e) => setDbVersion(e.target.value)} placeholder="sde.DEFAULT" />
-                        </label>
-                        <label className="gis-db-field">
-                          <span>Role</span>
-                          <input className="gis-input" type="text" value={dbRole} onChange={(e) => setDbRole(e.target.value)} placeholder="optional" />
-                        </label>
-                      </div>
-                      <label className="gis-db-field">
-                        <span>Authentication Database</span>
-                        <input className="gis-input" type="text" value={dbAuthDatabase} onChange={(e) => setDbAuthDatabase(e.target.value)} placeholder="optional" />
-                      </label>
-                      <div className="gis-db-kv-list">
-                        {dbAdditionalProperties.map((row) => (
-                          <div key={row.id} className="gis-db-kv-row">
-                            <input
-                              className="gis-input"
-                              type="text"
-                              value={row.key}
-                              onChange={(e) => updateDbPropertyRow(row.id, { key: e.target.value })}
-                              placeholder="Property name"
-                            />
-                            <input
-                              className="gis-input"
-                              type="text"
-                              value={row.value}
-                              onChange={(e) => updateDbPropertyRow(row.id, { value: e.target.value })}
-                              placeholder="Value"
-                            />
-                            <button type="button" className="gis-db-kv-remove" onClick={() => removeDbPropertyRow(row.id)} aria-label="Remove property row">
-                              <i className="fa-solid fa-xmark" aria-hidden="true" />
-                            </button>
-                          </div>
-                        ))}
-                        <button type="button" className="gis-btn-outline" onClick={addDbPropertyRow}>
-                          <i className="fa-solid fa-plus" aria-hidden="true" />
-                          Add Property
-                        </button>
-                      </div>
-                    </div>
-                  </details>
-
-                  <button className="gis-btn-primary-full" type="button" onClick={saveDatabaseConnectionProfile} disabled={dbSaving}>
-                    <i className="fa-solid fa-plug" aria-hidden="true" />
-                    {dbSaving ? 'Saving…' : 'Validate & Save Connection'}
-                  </button>
-
-                  {dbConnectionStatus ? (
-                    <div className="gis-db-status" role="status">
-                      {dbConnectionStatus}
-                    </div>
-                  ) : null}
-                </div>
-              ) : tab === 'upload' ? (
-                <div role="tabpanel" aria-label="Upload file">
-                  <div
-                    className={isDragOver ? 'gis-dropzone drag-over' : 'gis-dropzone'}
-                    role="button"
-                    tabIndex={0}
-                    aria-label="Drop a file here or click to browse"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        fileInputRef.current?.click()
-                      }
-                    }}
-                    onClick={() => fileInputRef.current?.click()}
-                    onDragOver={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                    }}
-                    onDragEnter={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      const types = Array.from(e.dataTransfer?.types ?? [])
-                      if (!types.includes('Files')) return
-                      dragDepthRef.current += 1
-                      setIsDragOver(true)
-                    }}
-                    onDragLeave={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      const types = Array.from(e.dataTransfer?.types ?? [])
-                      if (!types.includes('Files')) return
-                      dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
-                      if (dragDepthRef.current === 0) setIsDragOver(false)
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      dragDepthRef.current = 0
-                      setIsDragOver(false)
-                      const file = e.dataTransfer?.files?.[0] ?? null
-                      setUploadFromFile(file)
-                    }}
-                  >
-                    <div className="gis-dropzone-icon" aria-hidden="true">
-                      <i className="fa-solid fa-upload" />
-                    </div>
-                    <div className="gis-dropzone-text">Drop a file here or click to browse</div>
-                    <div className="gis-dropzone-subtext">
-                      Supports: GeoJSON, KML, KMZ, Shapefile (.zip), Raster Dataset (.tif/.tiff/.img/.vrt), Raster Layer, Mosaic Layer,
-                      Image Service, Map Server/Layer, Internet Tiled Layer, Folder.
-                    </div>
-                  </div>
-
-                  <GisUploadCloudSources
-                    cloudOnly
-                    onFile={setUploadFromFile}
-                    onStatus={msg => setDiscoverError(msg || null)}
-                  />
-
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".kml,.kmz,.zip,.geojson,.json,.csv,.tif,.tiff,.img,.vrt,.jp2,.ecw"
-                    style={{ display: 'none' }}
-                    onChange={(e) => setUploadFromFile(e.target.files?.[0] ?? null)}
-                  />
-
-                  <input
-                    id="gis-layer-name"
-                    className="gis-input"
-                    type="text"
-                    value={layerName}
-                    onChange={(e) => setLayerName(e.target.value)}
-                    placeholder="Layer Name (optional)"
-                    autoComplete="off"
-                  />
-
-                  {discoverError ? (
-                    <div className="gis-inline-error" role="alert">
-                      <i className="fa-solid fa-triangle-exclamation" aria-hidden="true" />
-                      <span>{discoverError}</span>
-                    </div>
-                  ) : null}
-
-                  <button
-                    className="gis-btn-primary-full"
-                    type="button"
-                    onClick={addUploadLayerAsGeoJson}
-                    disabled={!uploadFile || addingLayerKey === `upload:${uploadFile.name}`}
-                  >
-                    <i className="fa-solid fa-upload" aria-hidden="true" />
-                    {addingLayerKey === `upload:${uploadFile?.name ?? ''}` ? 'Uploading…' : 'Upload & Import'}
-                  </button>
-                </div>
-              ) : tab === 'url' ? (
-                <div role="tabpanel" aria-label="URL or web data">
-                  <input
-                    id="gis-remote-data-url"
-                    className="gis-input"
-                    type="url"
-                    value={remoteDataUrl}
-                    onChange={(e) => setRemoteDataUrl(e.target.value)}
-                    placeholder="https://… (GeoJSON, KML, KMZ, CSV, or other supported format)"
-                    autoComplete="off"
-                    inputMode="url"
-                    aria-label="Data file or service URL"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        void addUrlLayerAsGeoJson()
-                      }
-                    }}
-                  />
-
-                  <p className="gis-dropzone-subtext" style={{ margin: 0 }}>
-                    ArcGIS ImageServer URLs, REST query URLs, hosted GeoJSON/KML/CSV, and other web-accessible GIS files (CORS must allow your browser).
-                  </p>
-
-                  <input
-                    className="gis-input"
-                    type="text"
-                    value={layerName}
-                    onChange={(e) => setLayerName(e.target.value)}
-                    placeholder="Layer Name (optional)"
-                    autoComplete="off"
-                    aria-label="Layer Name (optional)"
-                  />
-
-                  {discoverError ? (
-                    <div className="gis-inline-error" role="alert">
-                      <i className="fa-solid fa-triangle-exclamation" aria-hidden="true" />
-                      <span>{discoverError}</span>
-                    </div>
-                  ) : null}
-
-                  <button
-                    className="gis-btn-primary-full"
-                    type="button"
-                    onClick={() => void addUrlLayerAsGeoJson()}
-                    disabled={remoteDataUrl.trim() === '' || addingLayerKey === `url:${remoteDataUrl.trim()}`}
-                  >
-                    <i className="fa-solid fa-link" aria-hidden="true" />
-                    {addingLayerKey === `url:${remoteDataUrl.trim()}` ? 'Importing…' : 'Import from URL'}
-                  </button>
-                </div>
-              ) : null}
-            </div>
-
-            <div className="gis-modal-footer">
-              <button className="gis-link-btn" type="button" onClick={closeAddLayerModal}>
-                Cancel
-              </button>
-            </div>
-              </>
-            )}
-          </div>
-        </div>
+        <GisDataManager
+          open={isAddOpen}
+          onClose={closeAddLayerModal}
+          initialCategory="vector"
+          portalItems={[]}
+          statusExternal={discoverError || undefined}
+          onAddPortalRow={() => {}}
+          onImportFiles={async (files, opts) => {
+            const file = files[0]
+            if (!file) throw new Error('No file selected')
+            if (opts?.layerName) setLayerName(opts.layerName)
+            setUploadFile(file)
+            const parsed = await parseFile(file)
+            if (parsed.type !== 'geojson') throw new Error('File must contain GIS features (GeoJSON/KML/KMZ/Shapefile zip).')
+            let geojson: any = parsed.data
+            if (Array.isArray(geojson)) geojson = geojson[0]
+            const normalized = normalizeGeoJsonEnvelope(mergeShpLikeToFeatureCollection(geojson))
+            if (!normalized.features.length) throw new Error('No drawable features found in file.')
+            const name = (opts?.layerName || layerName).trim() || file.name.replace(/\.[^.]+$/, '').trim() || 'Layer'
+            const hostedRow = publishVectorGeoJsonAsHostedFeatureLayer({
+              title: name,
+              geojson: normalized as GisHostedFeatureLayerGeoJson,
+              sourceMethod: 'upload',
+              sourceFileName: file.name,
+            })
+            const portalUrl = gisContentPortalLayerUrl(hostedRow.id)
+            const newLayer: LayerData = {
+              id: `hosted:${hostedRow.id}`,
+              name: hostedRow.title,
+              type: 'geojson',
+              source: 'gis-portal',
+              visible: true,
+              opacity: 1,
+              data: normalized,
+              url: portalUrl,
+              ...siDefaultNewVectorLayerFields(),
+            }
+            setLayers(prev => [...prev, newLayer])
+            setSelectionNotice(`Published "${hostedRow.title}" as hosted feature layer in GIS Content.`)
+            closeAddLayerModal()
+          }}
+          onImportRemoteUrl={async (url, opts) => {
+            if (opts?.layerName) setLayerName(opts.layerName)
+            setRemoteDataUrl(url)
+            const file = await parseRemoteUrlAsFile(url)
+            if (opts?.layerName) setLayerName(opts.layerName)
+            setUploadFile(file)
+            const parsed = await parseFile(file)
+            if (parsed.type !== 'geojson') throw new Error('Remote file must contain GIS features.')
+            let geojson: any = parsed.data
+            if (Array.isArray(geojson)) geojson = geojson[0]
+            const normalized = normalizeGeoJsonEnvelope(mergeShpLikeToFeatureCollection(geojson))
+            if (!normalized.features.length) throw new Error('No drawable features found.')
+            const name = (opts?.layerName || layerName).trim() || parsed.filename || 'Remote Layer'
+            const hostedRow = publishVectorGeoJsonAsHostedFeatureLayer({
+              title: name,
+              geojson: normalized as GisHostedFeatureLayerGeoJson,
+              sourceMethod: 'upload',
+              sourceFileName: parsed.filename,
+            })
+            setLayers(prev => [
+              ...prev,
+              {
+                id: `hosted:${hostedRow.id}`,
+                name: hostedRow.title,
+                type: 'geojson',
+                source: 'gis-portal',
+                visible: true,
+                opacity: 1,
+                data: normalized,
+                url: gisContentPortalLayerUrl(hostedRow.id),
+                ...siDefaultNewVectorLayerFields(),
+              },
+            ])
+            closeAddLayerModal()
+          }}
+          onConnectArcGis={async (url, token, name) => {
+            setServiceUrl(url)
+            if (token) setToken(token)
+            if (name) setLayerName(name)
+            setDiscoverError('Paste confirmed. Use ArcGIS Connect from Satellite Intelligence Data Manager for full discovery, or save the URL for this session.')
+          }}
+        />
       ) : null}
 
       <SelectMapFromGisContentModal

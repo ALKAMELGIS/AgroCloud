@@ -21,8 +21,12 @@ import {
   type WeatherHistoryMetric,
 } from '../../../lib/openMeteoWeather';
 import { WeatherTimeHistoryChart } from './WeatherTimeHistoryChart';
-import { buildWeatherClimateReportPayload } from '../lib/weatherClimateReport/weatherClimateAnalysisEngine';
+import {
+  buildWeatherClimateReportPayload,
+  climateAggregationLabel,
+} from '../lib/weatherClimateReport/weatherClimateAnalysisEngine';
 import { generateWeatherClimateReportExcel } from '../lib/weatherClimateReport/generateWeatherClimateReportExcel';
+import type { WeatherTimeAggregation } from '../lib/weatherHistoryChartAggregate';
 
 export type WeatherLocation = {
   lat: number;
@@ -582,10 +586,10 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
 
   const closeHistory = () => setPanelView('forecast');
 
-  const exportClimateReport = async () => {
+  const exportClimateReport = async (timeAggregation: WeatherTimeAggregation = 'day') => {
     if (!filteredHistory?.points.length || climateExportBusy) return;
     setClimateExportBusy(true);
-    setClimateExportProgress('Preparing climate data…');
+    setClimateExportProgress(`Preparing ${climateAggregationLabel(timeAggregation).toLowerCase()} climate data…`);
     setError(null);
     try {
       const start = historyDateStart || filteredHistory.startDate;
@@ -595,7 +599,7 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
       if (!history.points.length) {
         throw new Error('No weather records available for the selected period.');
       }
-      setClimateExportProgress('Analyzing climate trends…');
+      setClimateExportProgress(`Analyzing climate trends (${climateAggregationLabel(timeAggregation)})…`);
       const payload = buildWeatherClimateReportPayload({
         aoiName: aoiName?.trim() || location.label,
         aoiLocation: location.label,
@@ -608,6 +612,7 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
         loadedStart: historyData?.startDate ?? history.startDate,
         loadedEnd: historyData?.endDate ?? history.endDate,
         hourlyRecords: history.points,
+        timeAggregation,
       });
       setClimateExportProgress('Generating Excel report…');
       await generateWeatherClimateReportExcel(payload);
@@ -783,9 +788,9 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
                       void loadHistoryRange(location.lat, location.lng, start, end);
                     }
                   }}
-                  onExport={() => void exportClimateReport()}
+                  onExport={aggregation => void exportClimateReport(aggregation)}
                   exportLoading={climateExportBusy}
-                  exportProgressLabel={climateExportProgress || 'Export Climate Report (XLSX)'}
+                  exportProgressLabel={climateExportProgress || 'Export Meteo Data Report (XLSX)'}
                 />
               ) : (
                 <p className="si-wx-history__loading">
