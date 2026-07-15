@@ -34,6 +34,8 @@ ChartJS.register(
   Legend,
 );
 
+export type WeatherExportFormat = 'xlsx' | 'docx';
+
 type WeatherTimeHistoryChartProps = {
   points: OpenMeteoHourlyPoint[];
   metric: WeatherHistoryMetric;
@@ -43,7 +45,7 @@ type WeatherTimeHistoryChartProps = {
   minDate?: string;
   maxDate?: string;
   onRangeChange: (start: string, end: string) => void;
-  onExport?: (aggregation: WeatherTimeAggregation) => void;
+  onExport?: (aggregation: WeatherTimeAggregation, format: WeatherExportFormat) => void;
   exportLoading?: boolean;
   exportProgressLabel?: string;
 };
@@ -1321,12 +1323,37 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
           />
         </label>
         {onExport ? (
-          <button
-            type="button"
-            className={`si-wx-history__export${exportLoading ? ' si-wx-history__export--busy' : ''}`}
-            title={
-              exportProgressLabel ||
-              `Export Meteo Data Report (XLSX) · ${
+          <div className="si-wx-history__export-group" data-drag-exclude>
+            <button
+              type="button"
+              className={`si-wx-history__export${exportLoading ? ' si-wx-history__export--busy' : ''}`}
+              title={
+                exportProgressLabel ||
+                `Export Weather-Hourly + Analysis workbook (XLSX) · ${
+                  timeAggregation === 'hour'
+                    ? 'Hourly'
+                    : timeAggregation === 'day'
+                      ? 'Day'
+                      : timeAggregation === 'week'
+                        ? 'Week'
+                        : timeAggregation === 'month'
+                          ? 'Month'
+                          : 'Year'
+                }`
+              }
+              onClick={() => onExport(timeAggregation, 'xlsx')}
+              disabled={exportLoading}
+              aria-busy={exportLoading}
+            >
+              <i
+                className={`fa-solid ${exportLoading ? 'fa-spinner fa-spin' : 'fa-file-excel'}`}
+                aria-hidden
+              />
+            </button>
+            <button
+              type="button"
+              className={`si-wx-history__export si-wx-history__export--docx${exportLoading ? ' si-wx-history__export--busy' : ''}`}
+              title={`Export Weather Intelligence Report (DOCX) · ${
                 timeAggregation === 'hour'
                   ? 'Hourly'
                   : timeAggregation === 'day'
@@ -1336,17 +1363,17 @@ export const WeatherTimeHistoryChart: React.FC<WeatherTimeHistoryChartProps> = (
                       : timeAggregation === 'month'
                         ? 'Month'
                         : 'Year'
-              }`
-            }
-            onClick={() => onExport(timeAggregation)}
-            disabled={exportLoading}
-            aria-busy={exportLoading}
-          >
-            <i
-              className={`fa-solid ${exportLoading ? 'fa-spinner fa-spin' : 'fa-file-excel'}`}
-              aria-hidden
-            />
-          </button>
+              }`}
+              onClick={() => onExport(timeAggregation, 'docx')}
+              disabled={exportLoading}
+              aria-busy={exportLoading}
+            >
+              <i
+                className={`fa-solid ${exportLoading ? 'fa-spinner fa-spin' : 'fa-file-word'}`}
+                aria-hidden
+              />
+            </button>
+          </div>
         ) : null}
       </div>
     </div>

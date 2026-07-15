@@ -8,17 +8,43 @@ import {
   type LngLatBbox,
 } from '../../pages/satellite/lib/timeSeriesReport/timeSeriesMapSnapshot'
 
-/** Fixed frame for every hydro report map — keeps basemap scale + circle AOIs equal. */
+/** Full-width report frame — map uses entire width; legend sits in a dedicated strip below. */
 const SNAPSHOT_WIDTH = 820
-const SNAPSHOT_HEIGHT = 560
-const MARGIN = 32
-const TITLE_H = 36
-const FOOTER_H = 18
-const LEGEND_STRIP_H = 112
-const MAP_X = MARGIN
-const MAP_Y = TITLE_H + 8
-export const HYDRO_REPORT_MAP_W = SNAPSHOT_WIDTH - MARGIN * 2
-export const HYDRO_REPORT_MAP_H = SNAPSHOT_HEIGHT - TITLE_H - FOOTER_H - LEGEND_STRIP_H - 16
+const MAP_ELEMENTS_LEGEND: HydroLegend = {
+  title: 'Map elements',
+  kind: 'classes',
+  swatches: [
+    { color: '#fbbf24', label: 'AOI boundary' },
+    { color: '#334155', label: 'Esri World Imagery (basemap)' },
+    { color: '#0f172a', label: 'North arrow' },
+    { color: '#ffffff', label: 'Scale bar' },
+  ],
+}
+
+export type HydroSnapshotLayout = {
+  canvasW: number
+  canvasH: number
+  mapX: number
+  mapY: number
+  mapW: number
+  mapH: number
+  legendX: number
+  legendY: number
+  legendW: number
+  legendH: number
+}
+
+const DEFAULT_LAYOUT = resolveHydroSnapshotLayout({
+  title: 'Elevation',
+  kind: 'gradient',
+  swatches: [{ color: '#1a9850', label: '' }, { color: '#d73027', label: '' }],
+  minLabel: '0 m',
+  maxLabel: '100 m',
+})
+
+/** Geographic extent aspect — shared across all hydro report maps. */
+export const HYDRO_REPORT_MAP_W = DEFAULT_LAYOUT.mapW
+export const HYDRO_REPORT_MAP_H = DEFAULT_LAYOUT.mapH
 
 export type HydroRasterCoordinates = [
   [number, number],
@@ -33,24 +59,68 @@ function parseCssColor(color: string): string {
   return c
 }
 
-function legendRowCount(legend: HydroLegend): number {
-  if (legend.kind === 'gradient') return 1
-  const labeled = legend.swatches.filter(s => (s.label || '').trim())
-  return labeled.length || Math.min(legend.swatches.length, 1)
+function legendSections(layerLegend?: HydroLegend): HydroLegend[] {
+  const sections: HydroLegend[] = []
+  if (layerLegend) sections.push(layerLegend)
+  sections.push(MAP_ELEMENTS_LEGEND)
+  return sections
 }
 
-function measureLegendBox(legend: HydroLegend): { width: number; height: number } {
-  const pad = 8
-  const titleH = 16
-  const rowH = 14
+function classRowCount(legend: HydroLegend): number {
+  const labeled = legend.swatches.filter(s => (s.label || '').trim())
+  return labeled.length || legend.swatches.length
+}
+
+function measureLegendSection(legend: HydroLegend, sectionW: number): { width: number; height: number } {
+  const pad = 10
+  const titleH = 18
+  const rowH = 15
+  const noteH = legend.note ? 14 : 0
+
   if (legend.kind === 'gradient') {
-    return { width: 220, height: titleH + pad + 12 + 14 + pad + (legend.note ? 12 : 4) }
+    const barH = 14
+    const tickH = 14
+    return {
+      width: sectionW,
+      height: titleH + pad + barH + tickH + noteH + pad,
+    }
   }
-  const rows = Math.min(legendRowCount(legend), 8)
-  const noteH = legend.note ? 12 : 0
-  const longestLabel = legend.swatches.reduce((max, s) => Math.max(max, (s.label || '').length), 0)
-  const width = Math.min(280, Math.max(170, longestLabel * 5.1 + 42))
-  return { width, height: titleH + pad + rows * rowH + pad + noteH }
+
+  const rows = classRowCount(legend)
+  const cols = rows > 6 ? 2 : 1
+  const rowsPerCol = Math.ceil(rows / cols)
+  const longest = legend.swatches.reduce((max, s) => Math.max(max, (s.label || '').length), 0)
+  const colW = cols === 2 ? sectionW / 2 - 4 : sectionW
+  const width = cols === 2 ? sectionW : Math.min(sectionW, Math.max(150, longest * 5.5 + 36))
+  return {
+    width,
+    height: titleH + pad + rowsPerCol * rowH + noteH + pad,
+  }
+}
+
+export function resolveHydroSnapshotLayout(layerLegend?: HydroLegend): HydroSnapshotLayout {
+  const sections = legendSections(layerLegend)
+  const gap = 8
+  const sectionW = Math.floor((SNAPSHOT_WIDTH - gap * (sections.length - 1)) / sections.length)
+  const sectionHeights = sections.map(s => measureLegendSection(s, sectionW).height)
+  const legendH = Math.max(...sectionHeights, 72)
+  const legendStripGap = 6
+  const mapW = SNAPSHOT_WIDTH
+  const mapH = Math.max(360, Math.round(SNAPSHOT_WIDTH * 0.62))
+  const canvasH = mapH + legendStripGap + legendH
+
+  return {
+    canvasW: SNAPSHOT_WIDTH,
+    canvasH,
+    mapX: 0,
+    mapY: 0,
+    mapW,
+    mapH,
+    legendX: 0,
+    legendY: mapH + legendStripGap,
+    legendW: SNAPSHOT_WIDTH,
+    legendH,
+  }
 }
 
 function loadImage(dataUrl: string): Promise<HTMLImageElement> {
@@ -141,7 +211,9 @@ function drawAoiOutline(
 ): void {
   ctx.save()
   ctx.strokeStyle = '#fbbf24'
-  ctx.lineWidth = 2.25
+  ctx.lineWidth = 2.5
+  ctx.shadowColor = 'rgba(0,0,0,0.35)'
+  ctx.shadowBlur = 2
   const type = geometry.type
   if (type === 'Polygon') {
     ;(geometry.coordinates as [number, number][][]).forEach(ring => drawRing(ctx, ring, bbox, x, y, w, h))
@@ -155,21 +227,24 @@ function drawAoiOutline(
 
 function drawNorthArrow(ctx: CanvasRenderingContext2D, x: number, y: number): void {
   ctx.save()
-  ctx.fillStyle = 'rgba(15,23,42,0.82)'
-  ctx.strokeStyle = '#fff'
+  ctx.fillStyle = 'rgba(255,255,255,0.9)'
+  ctx.strokeStyle = '#0f172a'
   ctx.lineWidth = 1.2
   ctx.beginPath()
-  ctx.moveTo(x, y - 18)
-  ctx.lineTo(x - 8, y + 6)
-  ctx.lineTo(x, y + 2)
-  ctx.lineTo(x + 8, y + 6)
-  ctx.closePath()
+  ctx.roundRect(x - 4, y - 4, 34, 38, 4)
   ctx.fill()
   ctx.stroke()
-  ctx.fillStyle = '#fff'
-  ctx.font = 'bold 11px system-ui,sans-serif'
+  ctx.fillStyle = '#0f172a'
+  ctx.beginPath()
+  ctx.moveTo(x + 13, y + 4)
+  ctx.lineTo(x + 5, y + 24)
+  ctx.lineTo(x + 13, y + 20)
+  ctx.lineTo(x + 21, y + 24)
+  ctx.closePath()
+  ctx.fill()
+  ctx.font = 'bold 10px system-ui,sans-serif'
   ctx.textAlign = 'center'
-  ctx.fillText('N', x, y + 20)
+  ctx.fillText('N', x + 13, y + 32)
   ctx.restore()
 }
 
@@ -183,133 +258,178 @@ function drawScaleBar(ctx: CanvasRenderingContext2D, bbox: LngLatBbox, mapX: num
   const metersPerDegLng = 111320 * Math.cos((lat * Math.PI) / 180)
   const spanM = Math.max((bbox.maxLng - bbox.minLng) * metersPerDegLng, 1)
   const candidates = [50, 100, 250, 500, 1000, 2000, 5000, 10000, 20000, 50000]
-  const targetPx = mapW * 0.2
+  const targetPx = mapW * 0.18
   let best = candidates[0]!
   for (const c of candidates) {
     const px = (c / spanM) * mapW
     if (px <= targetPx) best = c
     else break
   }
-  const barPx = Math.max(40, (best / spanM) * mapW)
-  const x = mapX + mapW - barPx - 18
-  const y = mapY + mapH - 12
+  const barPx = Math.max(48, (best / spanM) * mapW)
+  const boxW = barPx + 20
+  const boxH = 28
+  const x = mapX + mapW - boxW - 10
+  const y = mapY + mapH - boxH - 10
   ctx.save()
   ctx.fillStyle = 'rgba(255,255,255,0.92)'
   ctx.strokeStyle = '#0f172a'
-  ctx.lineWidth = 1.5
-  ctx.fillRect(x - 6, y - 22, barPx + 12, 30)
-  ctx.strokeRect(x - 6, y - 22, barPx + 12, 30)
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.roundRect(x, y, boxW, boxH, 4)
+  ctx.fill()
+  ctx.stroke()
+  const barX = x + 10
+  const barY = y + 16
   ctx.fillStyle = '#0f172a'
-  ctx.fillRect(x, y - 8, barPx, 6)
+  ctx.fillRect(barX, barY, barPx, 5)
   ctx.font = '10px system-ui,sans-serif'
   ctx.textAlign = 'center'
-  ctx.fillText(formatScaleDistance(best), x + barPx / 2, y - 12)
+  ctx.fillText(formatScaleDistance(best), barX + barPx / 2, y + 12)
   ctx.restore()
 }
 
-function drawTitleBar(ctx: CanvasRenderingContext2D, title: string, subtitle: string | undefined, width: number): void {
-  ctx.save()
-  ctx.fillStyle = 'rgba(6, 78, 59, 0.88)'
-  ctx.fillRect(0, 0, width, TITLE_H)
-  ctx.fillStyle = '#fff'
-  ctx.font = 'bold 14px system-ui,sans-serif'
-  ctx.textAlign = 'left'
-  ctx.fillText(title, 12, 22)
-  if (subtitle) {
-    ctx.font = '10px system-ui,sans-serif'
-    ctx.fillStyle = 'rgba(255,255,255,0.85)'
-    ctx.fillText(subtitle, 12, 34)
-  }
-  ctx.restore()
-}
-
-function drawMapNeatline(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
-  ctx.save()
-  ctx.strokeStyle = '#1e293b'
-  ctx.lineWidth = 1.5
-  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1)
-  ctx.restore()
-}
-
-/** Legend in the reserved strip below the map — bottom-left, never overlaps map content. */
-function drawLegendBottomLeft(
+function drawGradientLegendSection(
   ctx: CanvasRenderingContext2D,
   legend: HydroLegend,
-  mapX: number,
-  mapBottom: number,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
 ): void {
-  const pad = 8
-  const titleH = 16
-  const rowH = 14
-  const { width: boxW, height: boxH } = measureLegendBox(legend)
-  const maxH = LEGEND_STRIP_H - 8
-  const h = Math.min(boxH, maxH)
-  const x = mapX
-  const y = mapBottom + 6
-
+  const pad = 10
+  const titleH = 18
   ctx.save()
-  ctx.fillStyle = 'rgba(255,255,255,0.98)'
+  ctx.fillStyle = 'rgba(255,255,255,0.97)'
   ctx.strokeStyle = '#94a3b8'
   ctx.lineWidth = 1
-  ctx.fillRect(x, y, boxW, h)
-  ctx.strokeRect(x + 0.5, y + 0.5, boxW - 1, h - 1)
+  ctx.fillRect(x, y, w, h)
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1)
 
-  ctx.fillStyle = '#064e3b'
+  ctx.fillStyle = '#0f172a'
   ctx.font = 'bold 11px system-ui,sans-serif'
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
   ctx.fillText(legend.title, x + pad, y + 14)
 
-  if (legend.kind === 'gradient') {
-    const gx = x + pad
-    const gy = y + titleH + 4
-    const gw = boxW - pad * 2
-    const gh = 12
-    const stops = Math.max(legend.swatches.length, 2)
-    for (let i = 0; i < stops; i += 1) {
-      ctx.fillStyle = parseCssColor(legend.swatches[i]?.color ?? '#888')
-      ctx.fillRect(gx + (gw * i) / stops, gy, gw / stops + 1, gh)
-    }
-    ctx.strokeStyle = '#cbd5e1'
-    ctx.strokeRect(gx, gy, gw, gh)
+  const gx = x + pad
+  const gy = y + titleH + 2
+  const gw = w - pad * 2
+  const gh = 14
+  const stops = Math.max(legend.swatches.length, 2)
+  for (let i = 0; i < stops; i += 1) {
+    ctx.fillStyle = parseCssColor(legend.swatches[i]?.color ?? '#888')
+    ctx.fillRect(gx + (gw * i) / stops, gy, gw / stops + 1, gh)
+  }
+  ctx.strokeStyle = '#64748b'
+  ctx.lineWidth = 0.75
+  ctx.strokeRect(gx, gy, gw, gh)
+
+  ctx.fillStyle = '#334155'
+  ctx.font = '9px system-ui,sans-serif'
+  if (legend.minLabel) ctx.fillText(legend.minLabel, gx, gy + gh + 12)
+  if (legend.maxLabel) {
+    ctx.textAlign = 'right'
+    ctx.fillText(legend.maxLabel, gx + gw, gy + gh + 12)
+  }
+
+  if (stops >= 3) {
+    ctx.textAlign = 'center'
     ctx.fillStyle = '#475569'
-    ctx.font = '9px system-ui,sans-serif'
-    if (legend.minLabel) ctx.fillText(legend.minLabel, gx, gy + gh + 12)
-    if (legend.maxLabel) {
-      ctx.textAlign = 'right'
-      ctx.fillText(legend.maxLabel, gx + gw, gy + gh + 12)
-    }
-    if (legend.note) {
-      ctx.textAlign = 'left'
-      ctx.font = '8px system-ui,sans-serif'
-      ctx.fillStyle = '#64748b'
-      ctx.fillText(legend.note, gx, gy + gh + 22)
-    }
-  } else {
-    const labeled = legend.swatches.filter(s => (s.label || '').trim())
-    const rows = labeled.length ? labeled : legend.swatches
-    let cy = y + titleH + pad
-    const maxRows = Math.max(1, Math.floor((h - titleH - pad - (legend.note ? 12 : 0)) / rowH))
-    for (const sw of rows.slice(0, maxRows)) {
-      const swatchTop = cy + 1
-      ctx.fillStyle = parseCssColor(sw.color)
-      ctx.fillRect(x + pad, swatchTop, 12, 10)
-      ctx.strokeStyle = '#94a3b8'
-      ctx.lineWidth = 0.75
-      ctx.strokeRect(x + pad + 0.5, swatchTop + 0.5, 11, 9)
-      ctx.fillStyle = '#334155'
-      ctx.font = '10px system-ui,sans-serif'
-      ctx.textAlign = 'left'
-      ctx.fillText((sw.label || '').trim() || 'Class', x + pad + 18, cy + 10)
-      cy += rowH
-    }
-    if (legend.note && cy + 10 < y + h) {
-      ctx.fillStyle = '#64748b'
-      ctx.font = '8px system-ui,sans-serif'
-      ctx.fillText(legend.note, x + pad, cy + 2)
-    }
+    ctx.font = '8px system-ui,sans-serif'
+    const midIdx = Math.floor(stops / 2)
+    ctx.fillText('Medium', gx + (gw * midIdx) / stops + gw / stops / 2, gy + gh + 12)
+  }
+
+  if (legend.note) {
+    ctx.textAlign = 'left'
+    ctx.fillStyle = '#64748b'
+    ctx.font = '8px system-ui,sans-serif'
+    ctx.fillText(legend.note, gx, y + h - 6)
   }
   ctx.restore()
+}
+
+function drawClassLegendSection(
+  ctx: CanvasRenderingContext2D,
+  legend: HydroLegend,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): void {
+  const pad = 10
+  const titleH = 18
+  const rowH = 15
+  const labeled = legend.swatches.filter(s => (s.label || '').trim())
+  const rows = labeled.length ? labeled : legend.swatches
+  const cols = rows.length > 6 ? 2 : 1
+  const rowsPerCol = Math.ceil(rows.length / cols)
+  const colW = cols === 2 ? (w - pad * 2) / 2 : w - pad * 2
+
+  ctx.save()
+  ctx.fillStyle = 'rgba(255,255,255,0.97)'
+  ctx.strokeStyle = '#94a3b8'
+  ctx.lineWidth = 1
+  ctx.fillRect(x, y, w, h)
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1)
+
+  ctx.fillStyle = '#0f172a'
+  ctx.font = 'bold 11px system-ui,sans-serif'
+  ctx.textAlign = 'left'
+  ctx.fillText(legend.title, x + pad, y + 14)
+
+  rows.forEach((sw, idx) => {
+    const col = cols === 2 ? idx % 2 : 0
+    const row = cols === 2 ? Math.floor(idx / 2) : idx
+    const cx = x + pad + col * (colW + 4)
+    const cy = y + titleH + pad + row * rowH
+    ctx.fillStyle = parseCssColor(sw.color)
+    ctx.fillRect(cx, cy, 12, 10)
+    ctx.strokeStyle = '#94a3b8'
+    ctx.lineWidth = 0.75
+    ctx.strokeRect(cx + 0.5, cy + 0.5, 11, 9)
+    ctx.fillStyle = '#334155'
+    ctx.font = '10px system-ui,sans-serif'
+    ctx.fillText((sw.label || '').trim() || 'Class', cx + 16, cy + 9)
+  })
+
+  if (legend.note) {
+    ctx.fillStyle = '#64748b'
+    ctx.font = '8px system-ui,sans-serif'
+    ctx.fillText(legend.note, x + pad, y + h - 6)
+  }
+  ctx.restore()
+}
+
+function drawLegendSection(
+  ctx: CanvasRenderingContext2D,
+  legend: HydroLegend,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): void {
+  if (legend.kind === 'gradient') {
+    drawGradientLegendSection(ctx, legend, x, y, w, h)
+    return
+  }
+  drawClassLegendSection(ctx, legend, x, y, w, h)
+}
+
+/** Dedicated legend strip below the map — never overlaps map content. */
+function drawLegendStrip(
+  ctx: CanvasRenderingContext2D,
+  layerLegend: HydroLegend | undefined,
+  layout: HydroSnapshotLayout,
+): void {
+  const sections = legendSections(layerLegend)
+  const gap = 8
+  const sectionW = Math.floor((layout.legendW - gap * (sections.length - 1)) / sections.length)
+  let x = layout.legendX
+  sections.forEach(section => {
+    drawLegendSection(ctx, section, x, layout.legendY, sectionW, layout.legendH)
+    x += sectionW + gap
+  })
 }
 
 function projectCoord(
@@ -470,18 +590,6 @@ function drawVectorLayer(
   drawStreamLayer(ctx, result, bbox, x, y, w, h)
 }
 
-function drawCoordFooter(ctx: CanvasRenderingContext2D, bbox: LngLatBbox, width: number, height: number): void {
-  ctx.save()
-  ctx.fillStyle = 'rgba(15,23,42,0.75)'
-  ctx.fillRect(0, height - 18, width, 18)
-  ctx.fillStyle = '#e2e8f0'
-  ctx.font = '9px monospace'
-  ctx.textAlign = 'left'
-  const label = `W ${bbox.minLng.toFixed(5)}°  E ${bbox.maxLng.toFixed(5)}°  S ${bbox.minLat.toFixed(5)}°  N ${bbox.maxLat.toFixed(5)}°  ·  EPSG:4326`
-  ctx.fillText(label, 8, height - 6)
-  ctx.restore()
-}
-
 function drawGeoreferencedRaster(
   ctx: CanvasRenderingContext2D,
   img: HTMLImageElement,
@@ -515,36 +623,25 @@ export async function compositeHydroMapSnapshot(options: {
   vectorResult?: HydroStepResult | null
   legend?: HydroLegend
 }): Promise<string | null> {
-  const mapX = MAP_X
-  const mapY = MAP_Y
-  const mapW = HYDRO_REPORT_MAP_W
-  const mapH = HYDRO_REPORT_MAP_H
+  const layout = resolveHydroSnapshotLayout(options.legend)
+  const { mapX, mapY, mapW, mapH, canvasW, canvasH } = layout
 
   const canvas = document.createElement('canvas')
-  canvas.width = SNAPSHOT_WIDTH
-  canvas.height = SNAPSHOT_HEIGHT
+  canvas.width = canvasW
+  canvas.height = canvasH
   const ctx = canvas.getContext('2d')
   if (!ctx) return null
-
-  ctx.fillStyle = '#f8fafc'
-  ctx.fillRect(0, 0, SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT)
-  drawTitleBar(ctx, options.title, options.subtitle, SNAPSHOT_WIDTH)
-
-  ctx.save()
-  ctx.beginPath()
-  ctx.rect(mapX, mapY, mapW, mapH)
-  ctx.clip()
 
   if (options.basemapDataUrl) {
     try {
       const basemap = await loadImage(options.basemapDataUrl)
       ctx.drawImage(basemap, mapX, mapY, mapW, mapH)
     } catch {
-      ctx.fillStyle = '#94a3b8'
+      ctx.fillStyle = '#64748b'
       ctx.fillRect(mapX, mapY, mapW, mapH)
     }
   } else {
-    ctx.fillStyle = '#94a3b8'
+    ctx.fillStyle = '#64748b'
     ctx.fillRect(mapX, mapY, mapW, mapH)
   }
 
@@ -578,15 +675,9 @@ export async function compositeHydroMapSnapshot(options: {
   }
 
   drawAoiOutline(ctx, options.geometry, options.extent, mapX, mapY, mapW, mapH)
-  ctx.restore()
-
-  drawMapNeatline(ctx, mapX, mapY, mapW, mapH)
-  drawNorthArrow(ctx, mapX + 22, mapY + 28)
+  drawNorthArrow(ctx, mapX + 12, mapY + 12)
   drawScaleBar(ctx, options.extent, mapX, mapY, mapW, mapH)
-  if (options.legend) {
-    drawLegendBottomLeft(ctx, options.legend, mapX, mapY + mapH)
-  }
-  drawCoordFooter(ctx, options.extent, SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT)
+  drawLegendStrip(ctx, options.legend, layout)
 
   return dataUrlToPngBase64(canvas.toDataURL('image/png'))
 }

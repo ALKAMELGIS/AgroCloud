@@ -22,7 +22,7 @@ function hourly(time: string, temp: number, rain = 0): OpenMeteoHourlyPoint {
 }
 
 describe('native meteo excel charts', () => {
-  it('injects editable OOXML charts into a 2-sheet workbook', async () => {
+  it('exports the reference-style Weather-Hourly + Analysis workbook', async () => {
     const points: OpenMeteoHourlyPoint[] = []
     for (let m = 1; m <= 12; m++) {
       for (let d = 1; d <= 2; d++) {
@@ -49,33 +49,51 @@ describe('native meteo excel charts', () => {
       timeAggregation: 'month',
     })
     const wb = await buildWeatherClimateReportWorkbook(payload)
-    expect(wb.worksheets.map(w => w.name)).toEqual(['Data', 'Charts'])
+    const names = wb.worksheets.map(w => w.name)
+    expect(names).toEqual(['Weather-Hourly', 'Analysis'])
+    expect(wb.getWorksheet('Weather-Hourly')?.getCell('A6').value).toBe('YEAR')
+    expect(wb.getWorksheet('Analysis')?.getCell('A1').value).toContain('Weather Data Analysis')
+    expect(wb.__meteoChartSpecs ?? []).toHaveLength(4)
+  })
+
+  it('injects editable OOXML charts when specs are provided', async () => {
+    const points: OpenMeteoHourlyPoint[] = []
+    for (let m = 1; m <= 12; m++) {
+      for (let d = 1; d <= 2; d++) {
+        points.push(
+          hourly(
+            `2024-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}T12:00`,
+            20 + m,
+            m === 3 ? 5 : 0,
+          ),
+        )
+      }
+    }
+    const payload = buildWeatherClimateReportPayload({
+      aoiName: 'Test AOI',
+      aoiLocation: 'Burao',
+      lat: 9.3867,
+      lng: 45.4264,
+      timezone: 'UTC',
+      analysisStart: '2024-01-01',
+      analysisEnd: '2024-12-31',
+      loadedStart: '2024-01-01',
+      loadedEnd: '2024-12-31',
+      hourlyRecords: points,
+      timeAggregation: 'month',
+    })
+    const wb = await buildWeatherClimateReportWorkbook(payload)
     const specs = wb.__meteoChartSpecs ?? []
-    expect(specs.length).toBeGreaterThanOrEqual(8)
-    expect(specs[0].title).toContain('Temperature')
-    const cumulative = specs.find(s => s.title === 'Cumulative Annual')
-    expect(cumulative).toBeTruthy()
-    expect(cumulative!.varyColors).toBe(true)
-    expect(cumulative!.kind).toBe('line')
-    const byYear = specs.find(s => s.title === 'Cumulative Annual by Year')
-    expect(byYear).toBeTruthy()
-    expect(byYear!.series.length).toBeGreaterThanOrEqual(1)
+    expect(specs[0]?.title).toContain('Temperature')
 
     const raw = await wb.xlsx.writeBuffer()
-    const out = await injectNativeMeteoCharts(raw as ArrayBuffer, specs)
+    const out = await injectNativeMeteoCharts(raw as ArrayBuffer, specs, 'Analysis')
     const zip = await JSZip.loadAsync(out)
     expect(zip.file('xl/charts/chart1.xml')).toBeTruthy()
     expect(zip.file('xl/drawings/drawing1.xml')).toBeTruthy()
     const chart1 = await zip.file('xl/charts/chart1.xml')!.async('string')
-    expect(chart1).toContain('Data!$')
+    expect(chart1).toContain("'Analysis'!")
     expect(chart1).toContain('<c:chart')
-    expect(chart1).toContain('varyColors val="1"')
-
-    const cumIdx = specs.findIndex(s => s.title === 'Cumulative Annual')
-    const cumXml = await zip.file(`xl/charts/chart${cumIdx + 1}.xml`)!.async('string')
-    expect(cumXml).toContain('Cumulative Annual')
-    expect(cumXml).toContain('varyColors val="1"')
-    expect(cumXml).toContain('<c:marker>')
 
     const sheetXmlFiles = Object.keys(zip.files).filter(n => /^xl\/worksheets\/sheet\d+\.xml$/.test(n))
     let hasDrawing = false

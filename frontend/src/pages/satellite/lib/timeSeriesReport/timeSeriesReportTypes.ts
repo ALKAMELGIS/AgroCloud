@@ -102,4 +102,11 @@ export type TimeSeriesReportConfig = {
   includeInterpretation: boolean
 }
 
-export type TimeSeriesExportKind = 'pdf' | 'docx' | 'excel' | 'csv' | 'png' | 'geojson'
+export type TimeSeriesExportKind =
+  | 'pdf'
+  | 'docx'
+  | 'excel'
+  | 'weather-excel'
+  | 'csv'
+  | 'png'
+  | 'geojson'

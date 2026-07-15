@@ -33,6 +33,11 @@ const EXPORT_OPTIONS: Array<{ kind: TimeSeriesExportKind; label: string; icon: s
   { kind: 'pdf', label: 'Executive PDF', icon: 'fa-file-pdf', primary: true },
   { kind: 'docx', label: 'Intelligence Report (Word)', icon: 'fa-file-word' },
   { kind: 'excel', label: 'Analytics Report (Excel)', icon: 'fa-file-excel' },
+  {
+    kind: 'weather-excel',
+    label: 'Weather ↔ Indices Analysis (Excel)',
+    icon: 'fa-cloud-sun-rain',
+  },
   { kind: 'csv', label: 'Summary Table (CSV)', icon: 'fa-table' },
   { kind: 'png', label: 'Figure (PNG)', icon: 'fa-image' },
   { kind: 'geojson', label: 'AOI (GeoJSON)', icon: 'fa-map' },

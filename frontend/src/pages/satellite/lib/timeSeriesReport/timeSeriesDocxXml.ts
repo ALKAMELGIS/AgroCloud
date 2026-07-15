@@ -147,6 +147,10 @@ export function docxBulletList(items: string[]): string {
     .join('')
 }
 
+export function docxPageBreak(): string {
+  return `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`
+}
+
 export function wrapDocumentBody(inner: string): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="${W_NS}" xmlns:r="${R_NS}" xmlns:wp="${WP_NS}" xmlns:a="${A_NS}" xmlns:pic="${PIC_NS}" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="w14">

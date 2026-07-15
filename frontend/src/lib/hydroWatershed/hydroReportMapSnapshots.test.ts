@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   fitLngLatBboxToMapAspect,
   mapLngLatToMercatorBox,
-  resolveTimeSeriesSnapshotLayout,
   type LngLatBbox,
 } from '../../pages/satellite/lib/timeSeriesReport/timeSeriesMapSnapshot'
-import { HYDRO_REPORT_MAP_H, HYDRO_REPORT_MAP_W } from './hydroReportMapSnapshots'
+import {
+  HYDRO_REPORT_MAP_H,
+  HYDRO_REPORT_MAP_W,
+  resolveHydroSnapshotLayout,
+} from './hydroReportMapSnapshots'
 
 describe('mapLngLatToMercatorBox', () => {
   const bbox: LngLatBbox = {
@@ -85,11 +88,24 @@ describe('fitLngLatBboxToMapAspect', () => {
   })
 })
 
-describe('resolveTimeSeriesSnapshotLayout', () => {
-  it('places legend strip below the map frame (no overlap)', () => {
-    const layout = resolveTimeSeriesSnapshotLayout(520, 390)
+describe('resolveHydroSnapshotLayout', () => {
+  it('uses full canvas width for basemap and places legend strip below (no overlap)', () => {
+    const layout = resolveHydroSnapshotLayout({
+      title: 'Flow accumulation',
+      kind: 'gradient',
+      swatches: [
+        { color: '#f0f9ff', label: '' },
+        { color: '#08306b', label: '' },
+      ],
+      minLabel: '1',
+      maxLabel: '999',
+      note: 'contributing cells (log)',
+    })
+    expect(layout.mapX).toBe(0)
+    expect(layout.mapW).toBe(layout.canvasW)
     expect(layout.legendY).toBeGreaterThan(layout.mapY + layout.mapH)
-    expect(layout.legendX).toBe(layout.mapX)
+    expect(layout.legendX).toBe(0)
+    expect(layout.legendW).toBe(layout.canvasW)
     expect(layout.mapW / layout.mapH).toBeGreaterThan(1)
   })
 })

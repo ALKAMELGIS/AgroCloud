@@ -26,7 +26,9 @@ import {
   climateAggregationLabel,
 } from '../lib/weatherClimateReport/weatherClimateAnalysisEngine';
 import { generateWeatherClimateReportExcel } from '../lib/weatherClimateReport/generateWeatherClimateReportExcel';
+import { generateWeatherClimateReportDocx } from '../lib/weatherClimateReport/generateWeatherClimateReportDocx';
 import type { WeatherTimeAggregation } from '../lib/weatherHistoryChartAggregate';
+import type { WeatherExportFormat } from './WeatherTimeHistoryChart';
 
 export type WeatherLocation = {
   lat: number;
@@ -586,7 +588,10 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
 
   const closeHistory = () => setPanelView('forecast');
 
-  const exportClimateReport = async (timeAggregation: WeatherTimeAggregation = 'day') => {
+  const exportClimateReport = async (
+    timeAggregation: WeatherTimeAggregation = 'day',
+    format: WeatherExportFormat = 'xlsx',
+  ) => {
     if (!filteredHistory?.points.length || climateExportBusy) return;
     setClimateExportBusy(true);
     setClimateExportProgress(`Preparing ${climateAggregationLabel(timeAggregation).toLowerCase()} climate data…`);
@@ -614,8 +619,13 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
         hourlyRecords: history.points,
         timeAggregation,
       });
-      setClimateExportProgress('Generating Excel report…');
-      await generateWeatherClimateReportExcel(payload);
+      if (format === 'docx') {
+        setClimateExportProgress('Generating Weather Intelligence Report (DOCX)…');
+        await generateWeatherClimateReportDocx(payload);
+      } else {
+        setClimateExportProgress('Generating Weather Intelligence Report (XLSX)…');
+        await generateWeatherClimateReportExcel(payload);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Climate report export failed');
     } finally {
@@ -788,9 +798,9 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
                       void loadHistoryRange(location.lat, location.lng, start, end);
                     }
                   }}
-                  onExport={aggregation => void exportClimateReport(aggregation)}
+                  onExport={(aggregation, format) => void exportClimateReport(aggregation, format)}
                   exportLoading={climateExportBusy}
-                  exportProgressLabel={climateExportProgress || 'Export Meteo Data Report (XLSX)'}
+                  exportProgressLabel={climateExportProgress || undefined}
                 />
               ) : (
                 <p className="si-wx-history__loading">

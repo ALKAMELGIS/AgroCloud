@@ -17,17 +17,16 @@ export type MeteoChartSeriesRef = {
 
 export type MeteoNativeChartSpec = {
   title: string
-  kind: 'line' | 'bar'
+  kind: 'line' | 'bar' | 'scatter' | 'area' | 'combo'
   series: MeteoChartSeriesRef[]
+  /** For combo: line series indices (rest are bars) */
+  lineSeriesIndexes?: number[]
   /** Anchor row on Charts sheet (0-based) */
   anchorRow: number
+  /** Anchor column on Charts sheet (0-based). Defaults to column A. */
+  anchorCol?: number
   sectionLabel: string
-  /**
-   * GeoSyntra style: color each point/bar differently so monthly/annual
-   * differences are visible (Critical for Cumulative Annual).
-   */
   varyColors?: boolean
-  /** Legend position — Cumulative Annual uses right like the reference. */
   legendPos?: 'b' | 'r' | 't' | 'l'
 }
 
@@ -49,45 +48,130 @@ function seriesTxXml(ser: MeteoChartSeriesRef): string {
 function buildChartXml(spec: MeteoNativeChartSpec, chartIndex: number): string {
   const axCat = 10 + chartIndex * 2
   const axVal = 100 + chartIndex * 2
-  // Match GeoSyntra: varyColors=1 colors each bar/point so differences stand out.
+  const axVal2 = 200 + chartIndex * 2
   const vary = spec.varyColors !== false ? '1' : '0'
   const legendPos = spec.legendPos ?? (spec.series.length === 1 && vary === '1' ? 'r' : 'b')
-  const serXml = spec.series
-    .map((ser, i) => {
-      const marker =
-        spec.kind === 'line'
-          ? `<c:marker><c:symbol val="circle"/><c:size val="7"/></c:marker>`
-          : ''
-      return `<c:ser>
+  const kind = spec.kind === 'area' ? 'line' : spec.kind === 'combo' ? 'combo' : spec.kind
+
+  const serParts = spec.series.map((ser, i) => {
+    const marker =
+      kind === 'scatter' || kind === 'line' || (kind === 'combo' && spec.lineSeriesIndexes?.includes(i))
+        ? `<c:marker><c:symbol val="circle"/><c:size val="5"/></c:marker>`
+        : ''
+    const fill =
+      spec.kind === 'area' && i === 0
+        ? `<c:spPr><a:solidFill><a:srgbClr val="F97316"/></a:solidFill></c:spPr>`
+        : ''
+    return { ser, i, marker, fill }
+  })
+
+  const buildSer = (ser: MeteoChartSeriesRef, i: number, marker: string, fill: string) =>
+    `<c:ser>
   <c:idx val="${i}"/>
   <c:order val="${i}"/>
   ${seriesTxXml(ser)}
   ${marker}
+  ${fill}
   <c:cat><c:strRef><c:f>${escXml(ser.catsRef)}</c:f></c:strRef></c:cat>
   <c:val><c:numRef><c:f>${escXml(ser.valuesRef)}</c:f></c:numRef></c:val>
-  ${spec.kind === 'line' ? '<c:smooth val="0"/>' : ''}
+  ${kind === 'line' || (kind === 'combo' && spec.lineSeriesIndexes?.includes(i)) ? '<c:smooth val="0"/>' : ''}
 </c:ser>`
-    })
-    .join('')
 
-  const plot =
-    spec.kind === 'bar'
-      ? `<c:barChart>
+  let plot = ''
+  if (kind === 'scatter') {
+    plot = `<c:scatterChart>
+  <c:scatterStyle val="lineMarker"/>
+  <c:varyColors val="0"/>
+  ${serParts.map(p => buildSer(p.ser, p.i, p.marker, p.fill)).join('')}
+  <c:axId val="${axCat}"/>
+  <c:axId val="${axVal}"/>
+</c:scatterChart>`
+  } else if (kind === 'combo') {
+    const lineIdx = new Set(spec.lineSeriesIndexes ?? [spec.series.length - 1])
+    const barSers = serParts.filter(p => !lineIdx.has(p.i))
+    const lineSers = serParts.filter(p => lineIdx.has(p.i))
+    plot = `<c:barChart>
   <c:barDir val="col"/>
   <c:grouping val="clustered"/>
   <c:varyColors val="${vary}"/>
-  ${serXml}
+  ${barSers.map(p => buildSer(p.ser, p.i, '', '')).join('')}
+  <c:axId val="${axCat}"/>
+  <c:axId val="${axVal}"/>
+</c:barChart>
+<c:lineChart>
+  <c:grouping val="standard"/>
+  <c:varyColors val="0"/>
+  ${lineSers.map(p => buildSer(p.ser, p.i, p.marker, '')).join('')}
+  <c:marker val="1"/>
+  <c:axId val="${axCat}"/>
+  <c:axId val="${axVal2}"/>
+</c:lineChart>`
+  } else if (kind === 'bar') {
+    plot = `<c:barChart>
+  <c:barDir val="col"/>
+  <c:grouping val="clustered"/>
+  <c:varyColors val="${vary}"/>
+  ${serParts.map(p => buildSer(p.ser, p.i, '', '')).join('')}
   <c:axId val="${axCat}"/>
   <c:axId val="${axVal}"/>
 </c:barChart>`
-      : `<c:lineChart>
+  } else {
+    plot = `<c:lineChart>
   <c:grouping val="standard"/>
   <c:varyColors val="${vary}"/>
-  ${serXml}
+  ${serParts.map(p => buildSer(p.ser, p.i, p.marker, p.fill)).join('')}
   <c:marker val="1"/>
   <c:axId val="${axCat}"/>
   <c:axId val="${axVal}"/>
 </c:lineChart>`
+  }
+
+  const valAxes =
+    kind === 'combo'
+      ? `<c:valAx>
+        <c:axId val="${axVal}"/>
+        <c:scaling><c:orientation val="minMax"/></c:scaling>
+        <c:delete val="0"/>
+        <c:axPos val="l"/>
+        <c:majorGridlines/>
+        <c:numFmt formatCode="General" sourceLinked="1"/>
+        <c:crossAx val="${axCat}"/>
+        <c:crosses val="autoZero"/>
+      </c:valAx>
+      <c:valAx>
+        <c:axId val="${axVal2}"/>
+        <c:scaling><c:orientation val="minMax"/></c:scaling>
+        <c:delete val="0"/>
+        <c:axPos val="r"/>
+        <c:numFmt formatCode="General" sourceLinked="1"/>
+        <c:crossAx val="${axCat}"/>
+        <c:crosses val="max"/>
+      </c:valAx>`
+      : `<c:valAx>
+        <c:axId val="${axVal}"/>
+        <c:scaling><c:orientation val="minMax"/></c:scaling>
+        <c:delete val="0"/>
+        <c:axPos val="l"/>
+        <c:majorGridlines/>
+        <c:numFmt formatCode="General" sourceLinked="1"/>
+        <c:majorTickMark val="out"/>
+        <c:minorTickMark val="none"/>
+        <c:tickLblPos val="nextTo"/>
+        <c:crossAx val="${axCat}"/>
+        <c:crosses val="autoZero"/>
+        <c:crossBetween val="between"/>
+      </c:valAx>`
+
+  const scatterAx =
+    kind === 'scatter'
+      ? `<c:valAx>
+        <c:axId val="${axVal}"/>
+        <c:scaling><c:orientation val="minMax"/></c:scaling>
+        <c:axPos val="l"/>
+        <c:crossAx val="${axCat}"/>
+        <c:crosses val="autoZero"/>
+      </c:valAx>`
+      : valAxes
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
@@ -114,24 +198,8 @@ function buildChartXml(spec: MeteoNativeChartSpec, chartIndex: number): string {
         <c:crossAx val="${axVal}"/>
         <c:crosses val="autoZero"/>
         <c:auto val="1"/>
-        <c:lblAlgn val="ctr"/>
-        <c:lblOffset val="100"/>
-        <c:noMultiLvlLbl val="1"/>
       </c:catAx>
-      <c:valAx>
-        <c:axId val="${axVal}"/>
-        <c:scaling><c:orientation val="minMax"/></c:scaling>
-        <c:delete val="0"/>
-        <c:axPos val="l"/>
-        <c:majorGridlines/>
-        <c:numFmt formatCode="General" sourceLinked="1"/>
-        <c:majorTickMark val="out"/>
-        <c:minorTickMark val="none"/>
-        <c:tickLblPos val="nextTo"/>
-        <c:crossAx val="${axCat}"/>
-        <c:crosses val="autoZero"/>
-        <c:crossBetween val="between"/>
-      </c:valAx>
+      ${scatterAx}
     </c:plotArea>
     <c:legend>
       <c:legendPos val="${legendPos}"/>
@@ -149,7 +217,7 @@ function buildDrawingXml(specs: MeteoNativeChartSpec[]): string {
       const id = i + 2
       const rid = i + 1
       return `<xdr:oneCellAnchor>
-  <xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${spec.anchorRow + 1}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+  <xdr:from><xdr:col>${spec.anchorCol ?? 0}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${spec.anchorRow + 1}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
   <xdr:ext cx="9144000" cy="3429000"/>
   <xdr:graphicFrame macro="">
     <xdr:nvGraphicFramePr>
@@ -183,14 +251,17 @@ function buildDrawingRels(count: number): string {
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels}</Relationships>`
 }
 
-async function findChartsSheetPath(zip: JSZip): Promise<{ sheetPath: string; relsPath: string } | null> {
+async function findChartsSheetPath(
+  zip: JSZip,
+  sheetName = 'Charts',
+): Promise<{ sheetPath: string; relsPath: string } | null> {
   const wbXml = await zip.file('xl/workbook.xml')?.async('string')
   if (!wbXml) return null
   const relsXml = await zip.file('xl/_rels/workbook.xml.rels')?.async('string')
   if (!relsXml) return null
 
   const sheetMatches = [...wbXml.matchAll(/<sheet[^>]*name="([^"]+)"[^>]*r:id="([^"]+)"/g)]
-  const chartsSheet = sheetMatches.find(m => m[1] === 'Charts')
+  const chartsSheet = sheetMatches.find(m => m[1] === sheetName)
   if (!chartsSheet) return null
   const rid = chartsSheet[2]
   const target = relsXml.match(new RegExp(`Id="${rid}"[^>]*Target="([^"]+)"`))?.[1]
@@ -262,15 +333,16 @@ function updateContentTypes(ct: string, chartCount: number): string {
 export async function injectNativeMeteoCharts(
   xlsxBuffer: ArrayBuffer | Uint8Array | Buffer,
   specs: MeteoNativeChartSpec[],
+  chartsSheetName = 'Charts',
 ): Promise<Uint8Array> {
   if (!specs.length) {
     return xlsxBuffer instanceof Uint8Array ? xlsxBuffer : new Uint8Array(xlsxBuffer as ArrayBuffer)
   }
 
   const zip = await JSZip.loadAsync(xlsxBuffer)
-  const located = await findChartsSheetPath(zip)
+  const located = await findChartsSheetPath(zip, chartsSheetName)
   if (!located) {
-    throw new Error('Charts sheet not found in workbook package')
+    throw new Error(`Charts sheet "${chartsSheetName}" not found in workbook package`)
   }
 
   for (let i = 0; i < specs.length; i++) {

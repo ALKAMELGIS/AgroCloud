@@ -1874,6 +1874,13 @@
   color: rgba(255, 255, 255, 0.45);
 }
 
+.si-wx-history__export-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 .si-wx-history__export {
   width: 28px;
   height: 26px;
@@ -1890,6 +1897,11 @@
   justify-content: center;
   font-size: 10px;
   flex-shrink: 0;
+}
+
+.si-wx-history__export--docx {
+  color: #93c5fd;
+  border-color: rgba(96, 165, 250, 0.4);
 }
 
 .si-wx-history__export--busy {
