@@ -108,10 +108,14 @@ function extractStatisticsProxyErrorMessage(json: unknown, text: string, status:
   const trimmed = text.trim()
   if (trimmed && trimmed !== '{}') return trimmed.slice(0, 240)
   if (status === 404) {
-    return 'Sentinel Hub statistics API route not found — start the AgroCloud backend (npm run dev).'
+    return isStaticDeploymentWithoutBackend() || isBackendKnownUnavailable()
+      ? 'Sentinel statistics API is not available on this static host — using browser WMS when possible.'
+      : 'Sentinel Hub statistics API route not found — start the AgroCloud backend (npm run dev).'
   }
   if (status === 502 || status === 503) {
-    return 'AgroCloud backend unavailable — run npm run dev from the repo root (API port 3011).'
+    return isStaticDeploymentWithoutBackend() || isBackendKnownUnavailable()
+      ? 'Backend API unavailable on this deployment.'
+      : 'AgroCloud backend unavailable — run npm run dev from the repo root (API port 3011).'
   }
   if (status === 504) {
     return 'Statistics request timed out — try a shorter date range or fewer fields.'

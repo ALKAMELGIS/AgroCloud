@@ -5,10 +5,12 @@ import {
   fetchSentinelHubStatisticsProxyStatus,
   hasValidIndexDaily,
   imageryStatisticsFetchNeedsSnowNdsi,
+  isSentinelHubStatisticsConfigured,
   mergeDailyIndexSeries,
   resolveImageryStatisticsFetchMode,
   type SentinelHubDailyIndexMeans,
 } from './sentinelHubStatisticsApi'
+import { isBackendKnownUnavailable, isStaticDeploymentWithoutBackend } from './apiOrigin'
 import {
   buildNdsiSnowTimeSeriesDebugReport,
   logNdsiSnowTimeSeriesDebug,
@@ -131,6 +133,27 @@ function buildProgressMessage(chunksDone: number, chunksTotal: number, observati
 
 const chunkInflight = new Map<string, Promise<SentinelHubDailyIndexMeans[]>>()
 
+function imageryTsEmptyResultError(chunksTotal: number, lastChunkError: string | null): Error {
+  if (lastChunkError?.trim()) {
+    return new Error(lastChunkError.trim())
+  }
+  if (isStaticDeploymentWithoutBackend() || isBackendKnownUnavailable()) {
+    return new Error(
+      'Could not load Sentinel statistics for this AOI/date range. Try a shorter date range, or redraw the field and retry.',
+    )
+  }
+  if (!isSentinelHubStatisticsConfigured()) {
+    return new Error(
+      'Sentinel statistics are not configured. Add a Sentinel Hub access token in System Settings, or run the AgroCloud backend locally.',
+    )
+  }
+  return new Error(
+    chunksTotal > 1
+      ? 'Could not load Sentinel statistics — try a shorter date range or check Sentinel coverage for this AOI.'
+      : 'Could not load Sentinel statistics — try a shorter date range or check Sentinel coverage for this AOI.',
+  )
+}
+
 async function fetchChunkDaily(
   geometry: GeoJSON.Geometry,
   chunk: ImageryDateChunk,
@@ -138,7 +161,8 @@ async function fetchChunkDaily(
   rangeTo: string,
   cloudFilter: number,
   layerIds: string[],
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  onChunkError: (message: string) => void,
 ): Promise<SentinelHubDailyIndexMeans[]> {
   const statsMode = resolveImageryStatisticsFetchMode(layerIds)
   const geomHash = geometryHashForImageryCache(geometry)
@@ -185,6 +209,8 @@ async function fetchChunkDaily(
       return filtered
     } catch (err) {
       if (signal?.aborted) return []
+      const message = err instanceof Error ? err.message : String(err)
+      onChunkError(message)
       console.warn('[imagery-ts] chunk fetch failed', chunk, err)
       return []
     }
@@ -273,18 +299,23 @@ export async function fetchImageryTimeSeriesProgressive(
 
     const [cached, proxyStatus] = await Promise.all([cachedPromise, statusPromise])
     let merged = cached?.daily ?? []
+    let lastChunkError: string | null = null
 
-    if (proxyStatus && !proxyStatus.configured) {
+    // On static production there is no Node proxy — skip the "not configured on server" hard-fail
+    // and use browser WMS zonal (via postSentinelStatisticsRequest client fallback).
+    const staticNoBackend = isStaticDeploymentWithoutBackend() || isBackendKnownUnavailable()
+    if (proxyStatus && !proxyStatus.configured && !staticNoBackend) {
       throw new Error(
         proxyStatus.hint ||
           'Sentinel Hub statistics are not configured on the server — set SENTINEL_HUB_WMS_INSTANCE_ID or CDSE OAuth credentials.',
       )
     }
-    const chunkDays =
-      proxyStatus?.mode === 'wms-zonal' ? IMAGERY_TS_WMS_CHUNK_DAYS : IMAGERY_TS_CHUNK_DAYS
+    const useWmsSizedChunks =
+      proxyStatus?.mode === 'wms-zonal' || staticNoBackend || !proxyStatus
+    const chunkDays = useWmsSizedChunks ? IMAGERY_TS_WMS_CHUNK_DAYS : IMAGERY_TS_CHUNK_DAYS
     const fetchConcurrency =
       options.concurrency ??
-      (proxyStatus?.mode === 'wms-zonal' ? IMAGERY_TS_WMS_FETCH_CONCURRENCY : IMAGERY_TS_FETCH_CONCURRENCY)
+      (useWmsSizedChunks ? IMAGERY_TS_WMS_FETCH_CONCURRENCY : IMAGERY_TS_FETCH_CONCURRENCY)
     const chunks = planImageryDateChunks(fromIso, toIso, chunkDays)
     const chunksTotal = chunks.length
 
@@ -361,6 +392,9 @@ export async function fetchImageryTimeSeriesProgressive(
           cloudFilter,
           layerIds,
           options.signal,
+          message => {
+            lastChunkError = message
+          },
         )
         await reportMerge(rows, false, !!cached?.daily?.length)
         return rows
@@ -383,9 +417,7 @@ export async function fetchImageryTimeSeriesProgressive(
     await mergeChain
 
     if (!merged.length && chunksTotal > 0 && !options.signal?.aborted) {
-      throw new Error(
-        'Could not load Sentinel statistics — ensure the AgroCloud backend is running (npm run dev) and try a shorter date range.',
-      )
+      throw imageryTsEmptyResultError(chunksTotal, lastChunkError)
     }
 
     if (imageryStatisticsFetchNeedsSnowNdsi(layerIds) && merged.length) {
