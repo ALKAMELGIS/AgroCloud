@@ -14,7 +14,6 @@ import {
 } from './sentinelHubStatisticsApi'
 import { isBackendKnownUnavailable, isStaticDeploymentWithoutBackend } from './apiOrigin'
 import {
-  isSentinelHubWmsClientStatisticsAvailable,
   postSentinelStatisticsViaWmsClient,
 } from './sentinelHubWmsStatisticsClient'
 import { addDaysToIso } from './siSentinelImageryDate'
@@ -203,13 +202,6 @@ async function fetchChunkDailyViaBrowserWms(
   return daily.filter(row => row.date >= rangeFrom && row.date <= rangeTo)
 }
 
-function shouldPreferBrowserWmsStatistics(): boolean {
-  return (
-    (isStaticDeploymentWithoutBackend() || isBackendKnownUnavailable()) &&
-    isSentinelHubWmsClientStatisticsAvailable()
-  )
-}
-
 async function fetchChunkDaily(
   geometry: GeoJSON.Geometry,
   chunk: ImageryDateChunk,
@@ -240,9 +232,9 @@ async function fetchChunkDaily(
       return cachedChunk.filter(row => row.date >= rangeFrom && row.date <= rangeTo)
     }
     try {
-      // Static production (eliteagrocloud.com): call browser WMS directly so this module
-      // owns the dependency (avoids Vite parking WMS client only in Layer Live's chunk).
-      if (shouldPreferBrowserWmsStatistics()) {
+      // Production: always attempt browser WMS first (no Node /api on GitHub Pages).
+      // Do not gate on helpers that Rollup can constant-fold away when env vars are set.
+      if (!import.meta.env.DEV) {
         let daily = await fetchChunkDailyViaBrowserWms(
           geometry,
           chunk,
@@ -262,8 +254,11 @@ async function fetchChunkDaily(
           )
           daily = mergeDailyIndexSeries(daily, relaxed)
         }
-        if (daily.length) void writeImageryTsChunkCache(chunkCacheKey, daily)
-        return daily
+        if (daily.length) {
+          void writeImageryTsChunkCache(chunkCacheKey, daily)
+          return daily
+        }
+        // Empty WMS result — fall through to proxy/direct when a real backend exists.
       }
 
       let daily = await fetchSentinelFieldIndexTimeSeriesForRange({

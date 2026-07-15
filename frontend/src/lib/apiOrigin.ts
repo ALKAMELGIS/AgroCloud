@@ -22,11 +22,29 @@ export function configuredApiOrigin(): string {
   const configured = typeof raw === 'string' ? raw.trim() : ''
   if (!configured) return ''
   try {
-    return new URL(configured, sameOrigin() || 'http://localhost').origin
+    const origin = new URL(configured, sameOrigin() || 'http://localhost').origin
+    /**
+     * GitHub Pages / eliteagrocloud.com sometimes set VITE_AGRI_API_SECRETS_URL to the same
+     * static origin. That is not a Node backend — treat as unset so `/api/*` clients use
+     * browser fallbacks instead of POSTing into the SPA (404/405 + false "backend running" UX).
+     */
+    if (typeof window !== 'undefined' && origin === sameOrigin() && isKnownStaticHostname(window.location.hostname)) {
+      return ''
+    }
+    return origin
   } catch {
     /* malformed override — caller falls back to same-origin */
     return ''
   }
+}
+
+function isKnownStaticHostname(host: string): boolean {
+  return (
+    /\.github\.io$/i.test(host) ||
+    /\.pages\.dev$/i.test(host) ||
+    /\.netlify\.app$/i.test(host) ||
+    /(^|\.)eliteagrocloud\.com$/i.test(host)
+  )
 }
 
 /**
@@ -45,22 +63,19 @@ export function apiUrl(path: string): string {
 
 /**
  * True when the app is served from a static host that has no co-located backend
- * (no Vite dev proxy, no full-stack Node server) and no configured backend override.
+ * (no Vite dev proxy, no full-stack Node server) and no *external* backend override.
  * In that case relative `/api/*` calls would hit the static host and fail (404/405),
  * so callers should skip the request and surface a clear "configure backend" message.
  */
 export function isStaticDeploymentWithoutBackend(): boolean {
   if (import.meta.env.DEV) return false
-  if (configuredApiOrigin()) return false
   if (typeof window === 'undefined') return false
-  const host = window.location.hostname
-  // Known static hosts that never serve the Node API (including GitHub Pages custom domains).
-  return (
-    /\.github\.io$/i.test(host) ||
-    /\.pages\.dev$/i.test(host) ||
-    /\.netlify\.app$/i.test(host) ||
-    /(^|\.)eliteagrocloud\.com$/i.test(host)
-  )
+  if (!isKnownStaticHostname(window.location.hostname)) {
+    // Unknown host with an external backend override → not a static-only deploy.
+    return false
+  }
+  // Known static host: only "has backend" when override points at a different origin.
+  return !configuredApiOrigin()
 }
 
 /**

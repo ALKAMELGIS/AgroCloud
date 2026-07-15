@@ -269,6 +269,10 @@ function isSentinelHubStatisticsDirectConfigured(): boolean {
  */
 function mayUseSentinelHubStatisticsProxy(): boolean {
   if (import.meta.env.DEV) return true
+  if (typeof window !== 'undefined' && /(^|\.)eliteagrocloud\.com$/i.test(window.location.hostname)) {
+    // Static GitHub Pages custom domain — never treat same-origin /api as a live Node proxy.
+    return Boolean(configuredApiOrigin())
+  }
   if (configuredApiOrigin()) return true
   if (isBackendKnownUnavailable()) return false
   return true
