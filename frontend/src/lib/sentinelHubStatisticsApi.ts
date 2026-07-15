@@ -9,17 +9,30 @@ import {
   SENTINEL_HUB_PUBLIC_WMS_ACCESS_TOKEN,
 } from './sentinelHubAccessToken'
 import {
+  configuredApiOrigin,
+  ensureBackendAvailable,
+  isBackendKnownUnavailable,
+  apiUrl,
+} from './apiOrigin'
+import {
   buildNdviHistogramCalculations,
   CROP_ALERT_NDVI_HISTOGRAM_EVALSCRIPT,
   type NdviHistogramBin,
 } from './siCropAlertDominantNdvi'
 import { addDaysToIso, localIsoDate, subtractDaysFromIso } from './siSentinelImageryDate'
 import { applyAnalyticalResolutionToZonalMean } from './siAnalyticalResolutionEngine'
+import {
+  isSentinelHubWmsClientStatisticsAvailable,
+  postSentinelStatisticsViaWmsClient,
+} from './sentinelHubWmsStatisticsClient'
 
 export const SENTINEL_HUB_STATISTICS_URL = 'https://services.sentinel-hub.com/api/v1/statistics'
 export const SENTINEL_HUB_OAUTH_URL = 'https://services.sentinel-hub.com/oauth/token'
-export const SENTINEL_HUB_STATISTICS_PROXY_URL = '/api/sentinel-hub/statistics'
-export const SENTINEL_HUB_STATISTICS_STATUS_URL = '/api/sentinel-hub/statistics/status'
+export const SENTINEL_HUB_STATISTICS_PROXY_PATH = '/api/sentinel-hub/statistics'
+export const SENTINEL_HUB_STATISTICS_STATUS_PATH = '/api/sentinel-hub/statistics/status'
+/** @deprecated Prefer path constants + apiUrl(); kept for tests/callers that import the old names. */
+export const SENTINEL_HUB_STATISTICS_PROXY_URL = SENTINEL_HUB_STATISTICS_PROXY_PATH
+export const SENTINEL_HUB_STATISTICS_STATUS_URL = SENTINEL_HUB_STATISTICS_STATUS_PATH
 
 export type SentinelHubStatisticsProxyStatus = {
   configured: boolean
@@ -64,14 +77,17 @@ export async function fetchSentinelHubStatisticsProxyStatus(options?: {
   ) {
     return statsProxyStatusCache.status
   }
-  if (!mayUseSentinelHubStatisticsProxy()) return null
+  if (!(await mayUseSentinelHubStatisticsProxyAsync())) return null
   try {
-    const res = await fetch(SENTINEL_HUB_STATISTICS_STATUS_URL, {
+    const res = await fetch(apiUrl(SENTINEL_HUB_STATISTICS_STATUS_PATH), {
       headers: { Accept: 'application/json' },
       signal: options?.signal,
     })
     if (!res.ok) return null
+    const contentType = res.headers.get('content-type') ?? ''
+    if (contentType && !/\bjson\b/i.test(contentType)) return null
     const json = (await res.json()) as SentinelHubStatisticsProxyStatus
+    if (!json || typeof json !== 'object' || typeof json.configured !== 'boolean') return null
     statsProxyStatusCache = { status: json, at: Date.now() }
     return json
   } catch {
@@ -241,15 +257,32 @@ function isSentinelHubStatisticsDirectConfigured(): boolean {
   return isLikelyJwt(stored)
 }
 
+/**
+ * Sync gate for the Node statistics proxy.
+ * Dev always allows the Vite-proxied backend. Production only allows it when a backend
+ * origin is configured or the same-origin API is not already known to be missing
+ * (custom-domain static hosts like eliteagrocloud.com trip the breaker via /api/health).
+ */
 function mayUseSentinelHubStatisticsProxy(): boolean {
   if (import.meta.env.DEV) return true
-  if (typeof window !== 'undefined' && /github\.io$/i.test(window.location.hostname)) return false
+  if (configuredApiOrigin()) return true
+  if (isBackendKnownUnavailable()) return false
   return true
 }
 
-/** True when Statistical API can authenticate (browser OAuth, private token, or server proxy). */
+async function mayUseSentinelHubStatisticsProxyAsync(): Promise<boolean> {
+  if (!mayUseSentinelHubStatisticsProxy()) return false
+  if (import.meta.env.DEV || configuredApiOrigin()) return true
+  return ensureBackendAvailable()
+}
+
+/** True when Statistical API can authenticate (browser OAuth, private token, server proxy, or client WMS). */
 export function isSentinelHubStatisticsConfigured(): boolean {
-  return isSentinelHubStatisticsDirectConfigured() || mayUseSentinelHubStatisticsProxy()
+  return (
+    isSentinelHubStatisticsDirectConfigured() ||
+    mayUseSentinelHubStatisticsProxy() ||
+    isSentinelHubWmsClientStatisticsAvailable()
+  )
 }
 
 export const CROP_ALERT_MULTI_INDEX_EVALSCRIPT = `//VERSION=3
@@ -784,7 +817,7 @@ async function postSentinelStatisticsViaProxy(
   signal?: AbortSignal,
 ): Promise<StatsApiResponse> {
   throwIfAborted(signal)
-  const res = await fetch(SENTINEL_HUB_STATISTICS_PROXY_URL, {
+  const res = await fetch(apiUrl(SENTINEL_HUB_STATISTICS_PROXY_PATH), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -841,14 +874,16 @@ async function postSentinelStatisticsRequest(
     }
 
     // In local dev, prefer the backend proxy (WMS zonal or server OAuth) over browser-direct calls.
-    if (import.meta.env.DEV && mayUseSentinelHubStatisticsProxy()) {
+    if (import.meta.env.DEV && (await mayUseSentinelHubStatisticsProxyAsync())) {
       try {
         const json = await postSentinelStatisticsViaProxy(body, signal)
         return storeAndReturn(json)
       } catch (proxyErr) {
         if (isAbortError(proxyErr) || signal?.aborted) throw proxyErr
-        if (!isSentinelHubStatisticsDirectConfigured()) throw proxyErr
-        /* fall through to direct Statistical API when configured */
+        if (!isSentinelHubStatisticsDirectConfigured() && !isSentinelHubWmsClientStatisticsAvailable()) {
+          throw proxyErr
+        }
+        /* fall through to direct Statistical API / client WMS when configured */
       }
     }
 
@@ -858,13 +893,24 @@ async function postSentinelStatisticsRequest(
         return storeAndReturn(json)
       } catch (directErr) {
         if (isAbortError(directErr) || signal?.aborted) throw directErr
-        /* fall through to server proxy */
+        /* fall through to server proxy / client WMS */
       }
     }
 
-    if (mayUseSentinelHubStatisticsProxy()) {
-      const json = await postSentinelStatisticsViaProxy(body, signal)
-      return storeAndReturn(json)
+    if (await mayUseSentinelHubStatisticsProxyAsync()) {
+      try {
+        const json = await postSentinelStatisticsViaProxy(body, signal)
+        return storeAndReturn(json)
+      } catch (proxyErr) {
+        if (isAbortError(proxyErr) || signal?.aborted) throw proxyErr
+        /* fall through to browser WMS on static hosts */
+      }
+    }
+
+    // Static production (GitHub Pages / eliteagrocloud.com): no Node `/api` — use browser WMS zonal.
+    if (isSentinelHubWmsClientStatisticsAvailable()) {
+      const json = await postSentinelStatisticsViaWmsClient(body, signal)
+      return storeAndReturn(json as StatsApiResponse)
     }
 
     throw new Error(
@@ -1193,7 +1239,7 @@ async function postSentinelHistogramRequest(
     }
   }
 
-  if (mayUseSentinelHubStatisticsProxy()) {
+  if (await mayUseSentinelHubStatisticsProxyAsync()) {
     const json = await postSentinelStatisticsViaProxy(body, signal)
     return parseSentinelHubNdviHistogramResponse(json)
   }
@@ -1323,7 +1369,7 @@ async function postGenericHistogramRequest(
         /* fall through to proxy */
       }
     }
-    if (mayUseSentinelHubStatisticsProxy()) {
+    if (await mayUseSentinelHubStatisticsProxyAsync()) {
       const json = await postSentinelStatisticsViaProxy(body, signal)
       rows = parseGenericHistogramResponse(json, outputId)
       histogramResultCache.set(cacheKey, {

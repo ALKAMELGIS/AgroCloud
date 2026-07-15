@@ -1365,7 +1365,9 @@ export function SiImageryTimeSeriesPanel({
                   ? `Loading ${layerSummary || 'layer'} analysis…`
                   : hasRun && !labels.length
                     ? `No ${layerSummary || 'layer'} observations in this date range — try widening dates or check Sentinel coverage.`
-                    : 'Select a field and date range — analysis starts automatically.'}
+                    : !fieldOptions.length
+                      ? 'Load or draw a field (Agro Structures / AOI) — analysis starts automatically.'
+                      : 'Select a field and date range — analysis starts automatically.'}
             </div>
           )}
         </div>

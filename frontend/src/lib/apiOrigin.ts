@@ -54,8 +54,13 @@ export function isStaticDeploymentWithoutBackend(): boolean {
   if (configuredApiOrigin()) return false
   if (typeof window === 'undefined') return false
   const host = window.location.hostname
-  // Known static hosts that never serve the Node API.
-  return /\.github\.io$/i.test(host) || /\.pages\.dev$/i.test(host) || /\.netlify\.app$/i.test(host)
+  // Known static hosts that never serve the Node API (including GitHub Pages custom domains).
+  return (
+    /\.github\.io$/i.test(host) ||
+    /\.pages\.dev$/i.test(host) ||
+    /\.netlify\.app$/i.test(host) ||
+    /(^|\.)eliteagrocloud\.com$/i.test(host)
+  )
 }
 
 /**
