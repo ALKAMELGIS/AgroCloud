@@ -7,10 +7,17 @@ import {
   imageryStatisticsFetchNeedsSnowNdsi,
   isSentinelHubStatisticsConfigured,
   mergeDailyIndexSeries,
+  parseSentinelHubStatsResponse,
   resolveImageryStatisticsFetchMode,
+  simplifyGeometryForSentinelStats,
   type SentinelHubDailyIndexMeans,
 } from './sentinelHubStatisticsApi'
 import { isBackendKnownUnavailable, isStaticDeploymentWithoutBackend } from './apiOrigin'
+import {
+  isSentinelHubWmsClientStatisticsAvailable,
+  postSentinelStatisticsViaWmsClient,
+} from './sentinelHubWmsStatisticsClient'
+import { addDaysToIso } from './siSentinelImageryDate'
 import {
   buildNdsiSnowTimeSeriesDebugReport,
   logNdsiSnowTimeSeriesDebug,
@@ -154,6 +161,55 @@ function imageryTsEmptyResultError(chunksTotal: number, lastChunkError: string |
   )
 }
 
+async function fetchChunkDailyViaBrowserWms(
+  geometry: GeoJSON.Geometry,
+  chunk: ImageryDateChunk,
+  rangeFrom: string,
+  rangeTo: string,
+  cloudFilter: number,
+  signal?: AbortSignal,
+): Promise<SentinelHubDailyIndexMeans[]> {
+  const geom = simplifyGeometryForSentinelStats(geometry) ?? geometry
+  const toExclusive = addDaysToIso(chunk.toIso, 1)
+  const body: Record<string, unknown> = {
+    input: {
+      bounds: {
+        geometry: geom,
+        properties: { crs: 'http://www.opengis.net/def/crs/EPSG/0/4326' },
+      },
+      data: [
+        {
+          type: 'sentinel-2-l2a',
+          dataFilter: {
+            mosaickingOrder: 'leastCC',
+            maxCloudCoverage: cloudFilter,
+          },
+        },
+      ],
+    },
+    aggregation: {
+      timeRange: {
+        from: `${chunk.fromIso}T00:00:00Z`,
+        to: `${toExclusive}T00:00:00Z`,
+      },
+      aggregationInterval: { of: 'P1D' },
+      evalscript: '//VERSION=3\nfunction setup(){return{input:["B04"],output:{bands:1}}}\nfunction evaluatePixel(){return[0]}',
+      resx: 10,
+      resy: 10,
+    },
+  }
+  const json = await postSentinelStatisticsViaWmsClient(body, signal)
+  const daily = parseSentinelHubStatsResponse(json as Parameters<typeof parseSentinelHubStatsResponse>[0])
+  return daily.filter(row => row.date >= rangeFrom && row.date <= rangeTo)
+}
+
+function shouldPreferBrowserWmsStatistics(): boolean {
+  return (
+    (isStaticDeploymentWithoutBackend() || isBackendKnownUnavailable()) &&
+    isSentinelHubWmsClientStatisticsAvailable()
+  )
+}
+
 async function fetchChunkDaily(
   geometry: GeoJSON.Geometry,
   chunk: ImageryDateChunk,
@@ -184,6 +240,32 @@ async function fetchChunkDaily(
       return cachedChunk.filter(row => row.date >= rangeFrom && row.date <= rangeTo)
     }
     try {
+      // Static production (eliteagrocloud.com): call browser WMS directly so this module
+      // owns the dependency (avoids Vite parking WMS client only in Layer Live's chunk).
+      if (shouldPreferBrowserWmsStatistics()) {
+        let daily = await fetchChunkDailyViaBrowserWms(
+          geometry,
+          chunk,
+          rangeFrom,
+          rangeTo,
+          cloudFilter,
+          signal,
+        )
+        if (!hasValidIndexDaily(daily) && !signal?.aborted) {
+          const relaxed = await fetchChunkDailyViaBrowserWms(
+            geometry,
+            chunk,
+            rangeFrom,
+            rangeTo,
+            95,
+            signal,
+          )
+          daily = mergeDailyIndexSeries(daily, relaxed)
+        }
+        if (daily.length) void writeImageryTsChunkCache(chunkCacheKey, daily)
+        return daily
+      }
+
       let daily = await fetchSentinelFieldIndexTimeSeriesForRange({
         geometry,
         fromIso: chunk.fromIso,

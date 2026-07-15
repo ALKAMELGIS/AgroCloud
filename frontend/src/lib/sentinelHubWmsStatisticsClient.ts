@@ -449,6 +449,31 @@ export async function postSentinelStatisticsViaWmsClient(
       return { date: sceneDate, ...stats }
     } catch (err) {
       if (signal?.aborted) throw err
+      // Some instances reject GEOMETRY+EVALSCRIPT together — retry bbox-only GetMap.
+      if (geometryWkt3857) {
+        try {
+          let fallbackUrl =
+            `${baseUrl}?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0` +
+            `&LAYERS=${encodeURIComponent(layer)}` +
+            `&CRS=EPSG:3857` +
+            `&BBOX=${minX},${minY},${maxX},${maxY}` +
+            `&WIDTH=${WMS_TILE_PIXELS}&HEIGHT=${WMS_TILE_PIXELS}` +
+            `&FORMAT=image/png&TRANSPARENT=true` +
+            `&TIME=${sceneDate}/${addDaysToIso(sceneDate, 1)}` +
+            `&MAXCC=${cloudCoverage}` +
+            `&SHOWLOGO=false&WARNINGS=false` +
+            `&EVALSCRIPT=${encodeURIComponent(WMS_STATS_EVALSCRIPT_B64)}`
+          fallbackUrl = appendSentinelHubWmsAccessToken(fallbackUrl, accessToken)
+          const pixels = await fetchPngPixels(fallbackUrl, WMS_TILE_PIXELS, WMS_TILE_PIXELS, signal)
+          const stats = decodeZonalMeansFromRgba(pixels)
+          if (stats.sampleCount === 0) return null
+          return { date: sceneDate, ...stats }
+        } catch (fallbackErr) {
+          if (signal?.aborted) throw fallbackErr
+          console.warn('[wms-stats-client] scene failed', sceneDate, fallbackErr)
+          return null
+        }
+      }
       console.warn('[wms-stats-client] scene failed', sceneDate, err)
       return null
     }
