@@ -8,15 +8,41 @@ import { lazy, type ComponentType } from 'react'
  * exist on the server. The dynamic `import()` then rejects with messages like
  * "Failed to fetch dynamically imported module" or "error loading dynamically imported module".
  *
- * When that happens we reload the page exactly once (guarded by sessionStorage) so the browser
- * fetches the fresh `index.html` with the current chunk names. The guard prevents an infinite
- * reload loop when the failure is a genuine network/offline error rather than a stale deploy.
+ * When that happens we purge the service worker + Cache Storage, then reload once with a cache-bust
+ * query so the browser fetches the fresh `index.html` with the current chunk names. The session
+ * guard prevents an infinite reload loop when the failure is a genuine network/offline error.
  */
 
 const RELOAD_GUARD_PREFIX = 'agro_chunk_reload:'
 
 /** Query param appended to bust the CDN/browser cache of `index.html` on recovery. */
 const CACHE_BUST_PARAM = '_cb'
+
+/**
+ * Unregister service workers and delete Cache Storage entries.
+ * Critical on GitHub Pages PWA deploys: Workbox can keep serving deleted chunk hashes.
+ */
+export async function purgeClientCachesAndServiceWorkers(): Promise<void> {
+  if (typeof window === 'undefined') return
+  const jobs: Promise<unknown>[] = []
+  try {
+    if ('serviceWorker' in navigator && typeof navigator.serviceWorker.getRegistrations === 'function') {
+      jobs.push(
+        navigator.serviceWorker.getRegistrations().then(regs => Promise.all(regs.map(r => r.unregister()))),
+      )
+    }
+  } catch {
+    /* noop */
+  }
+  try {
+    if (typeof caches !== 'undefined' && caches.keys) {
+      jobs.push(caches.keys().then(keys => Promise.all(keys.map(key => caches.delete(key)))))
+    }
+  } catch {
+    /* noop */
+  }
+  await Promise.all(jobs).catch(() => {})
+}
 
 /**
  * Reload the page in a way that bypasses the cached `index.html`.
@@ -40,6 +66,17 @@ export function reloadWithCacheBust(): void {
       /* noop */
     }
   }
+}
+
+/**
+ * Full stale-deploy recovery: drop SW/caches, then cache-bust navigate to a fresh shell.
+ * Fire-and-forget — callers should not await (navigation replaces the page).
+ */
+export function hardRecoverFromStaleDeploy(): void {
+  if (typeof window === 'undefined') return
+  void purgeClientCachesAndServiceWorkers().finally(() => {
+    reloadWithCacheBust()
+  })
 }
 
 /** After a successful load, drop the recovery guard + strip the `_cb` param from the address bar. */
@@ -66,7 +103,9 @@ function isDynamicImportError(error: unknown): boolean {
     /Importing a module script failed/i.test(message) ||
     /Unable to preload CSS/i.test(message) ||
     /'text\/html'.*not a valid JavaScript MIME type/i.test(message) ||
-    /expected a JavaScript(?:-or-Wasm)? module/i.test(message)
+    /expected a JavaScript(?:-or-Wasm)? module/i.test(message) ||
+    /Loading chunk [\w-]+ failed/i.test(message) ||
+    /ChunkLoadError/i.test(message)
   )
 }
 
@@ -115,9 +154,8 @@ export function lazyWithRetry<T extends ComponentType<any>>(
     } catch (error) {
       if (isDynamicImportError(error) && !safeSessionGet(guardKey)) {
         safeSessionSet(guardKey, '1')
-        // Cache-busting reload to pull the fresh index.html + current chunk hashes
-        // (a plain reload can re-serve the stale, CDN-cached index.html).
-        reloadWithCacheBust()
+        // Purge PWA caches first — a cache-bust alone often reuses the SW-served old shell.
+        hardRecoverFromStaleDeploy()
         // Return a never-resolving promise so React keeps showing the Suspense fallback
         // (instead of flashing an error) until the reload takes over.
         return new Promise<{ default: T }>(() => {})

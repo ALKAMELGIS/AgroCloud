@@ -9,8 +9,10 @@ import PwaInstallPrompt from './components/PwaInstallPrompt'
 import PwaInstallFab from './components/PwaInstallFab'
 import {
   clearStaleChunkRecoveryState,
+  hardRecoverFromStaleDeploy,
   isDynamicImportError,
   lazyWithRetry,
+  purgeClientCachesAndServiceWorkers,
   reloadWithCacheBust,
 } from './lib/lazyWithRetry'
 const SplashScreen = lazyWithRetry(() => import('./components/SplashScreen'), 'SplashScreen')
@@ -65,9 +67,8 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
     } catch {
       return false
     }
-    // Cache-busting reload so the recovery fetches a FRESH index.html instead of the stale,
-    // CDN-cached document that still references chunk hashes the new deploy deleted.
-    reloadWithCacheBust()
+    // Purge PWA SW/caches then cache-bust — otherwise Workbox keeps serving deleted chunk hashes.
+    hardRecoverFromStaleDeploy()
     return true
   }
 
@@ -132,21 +133,8 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
         if (typeof indexedDB !== 'undefined') indexedDB.deleteDatabase('GisMapStore')
       } catch {
       }
-      try {
-        if (typeof window !== 'undefined' && 'caches' in window) {
-          const keys = await caches.keys()
-          await Promise.all(keys.map((k) => caches.delete(k)))
-        }
-      } catch {
-      }
-      try {
-        if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && typeof navigator.serviceWorker.getRegistrations === 'function') {
-          const regs = await navigator.serviceWorker.getRegistrations()
-          await Promise.all(regs.map((r) => r.unregister()))
-        }
-      } catch {
-      }
-      window.location.reload()
+      await purgeClientCachesAndServiceWorkers()
+      hardRecoverFromStaleDeploy()
     }
 
     return (
@@ -245,7 +233,19 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
           >
             <button
               type="button"
-              onClick={() => reloadWithCacheBust()}
+              onClick={() => {
+                // Chunk 404 after deploy: always purge SW before busting index.html cache.
+                if (isDynamicImportError(this.state.err?.error)) {
+                  try {
+                    sessionStorage.removeItem(AppErrorBoundary.STALE_CHUNK_GUARD)
+                  } catch {
+                    /* noop */
+                  }
+                  hardRecoverFromStaleDeploy()
+                  return
+                }
+                reloadWithCacheBust()
+              }}
               style={{
                 appearance: 'none',
                 cursor: 'pointer',

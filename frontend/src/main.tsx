@@ -25,7 +25,7 @@ import { bootstrapMapboxAccessTokenPersistence } from './lib/mapboxAccessToken'
 import { restoreBrowserApiSecretsFromVaultIntoLocalStorage } from './lib/browserApiSecretsVault'
 import { ensureBrowserApiSecretsHydrated } from './lib/apiSecretsServerPersistence'
 import { installApiFetchGuard } from './lib/apiFetchGuard'
-import { reloadWithCacheBust } from './lib/lazyWithRetry'
+import { hardRecoverFromStaleDeploy, reloadWithCacheBust } from './lib/lazyWithRetry'
 
 // Install the global `/api/*` circuit-breaker before anything else can fire a request. On a static
 // deployment without a co-located backend this short-circuits doomed internal API calls to a
@@ -84,9 +84,8 @@ if (typeof window !== 'undefined') {
     const guardKey = 'agro_preload_error_reload'
     if (safeSessionGetItem(guardKey)) return
     safeSessionSetItem(guardKey, '1')
-    // Cache-busting reload: the stale index.html is CDN-cached (max-age=600), so a plain reload
-    // would re-fetch the same document pointing at deleted chunk hashes.
-    reloadWithCacheBust()
+    // Purge PWA caches then cache-bust — Workbox otherwise keeps serving deleted chunks.
+    hardRecoverFromStaleDeploy()
   })
   window.addEventListener('load', () => {
     safeSessionRemoveItem('agro_preload_error_reload')
