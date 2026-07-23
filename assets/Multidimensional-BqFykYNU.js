@@ -1,1 +1,0 @@
-import{j as i}from"./vendor-charts-DiqJ_ObG.js";import"./vendor-react-1RAKTFQ4.js";function o(){return i.jsxs("div",{style:{padding:24},children:[i.jsx("h1",{children:"Multidimensional Analysis"}),i.jsx("p",{children:"Advanced temporal and volumetric analysis tools coming soon."})]})}export{o as default};
