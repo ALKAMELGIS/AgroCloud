@@ -1,0 +1,35 @@
+# One-command AI SAM Detection service (segment-geospatial / samgeo).
+#
+#   cd backend/services/sam-detection
+#   docker compose up --build
+#
+# Serves interactive SAM segmentation on http://localhost:8090/segment — which is
+# also the AgroCloud backend default for SAM_DETECTION_URL, so once this is up the
+# AI SAM Detection tool works with no further configuration.
+#
+# GPU note: to use an NVIDIA GPU, uncomment the `deploy` block below and use a
+# CUDA-enabled base image in the Dockerfile.
+services:
+  sam-detection:
+    build: .
+    image: ai-sam-detection
+    ports:
+      - "8090:8090"
+    environment:
+      # SAM checkpoint: vit_h (best, ~2.5 GB), vit_l (~1.2 GB), vit_b (~375 MB, fastest).
+      SAM_MODEL_TYPE: "vit_h"
+      SAM_MAX_EDGE: "1024"
+    volumes:
+      # Persist the downloaded SAM checkpoint + torch cache across restarts.
+      - sam-detection-cache:/root/.cache
+    restart: unless-stopped
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+volumes:
+  sam-detection-cache:

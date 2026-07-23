@@ -19,6 +19,8 @@ export type ArcGisServiceType = 'feature' | 'map' | 'vector-tile' | 'image' | 'u
 export type ArcGisRasterTilesConfig = {
   tiles: string[]
   tileSize?: number
+  /** Native (server-cached) max zoom — beyond it Mapbox over-zooms the last real tiles. */
+  maxzoom?: number
 }
 
 export type ArcGisVectorTilesConfig = {

@@ -1,30 +1,34 @@
 import { evaluateImageryLayerDailyValue } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryTimeAggregation } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import { buildImageryIndexInterpretation } from '../../../../lib/imageryIndexInterpretationEngine'
 import { estimateSaviFromNdvi } from '../../../../lib/chasIndex'
 import { fetchLayerClassAreas, layerSupportsClassArea } from '../../../../lib/siLayerClassAreaEngine'
 import { geodesicAreaM2 } from '../../../../lib/siLayerClassAreaEngine'
+import { geometryMetrics } from '../../../../lib/geoAiLiveMapContext'
 import type { SentinelHubDailyIndexMeans } from '../../../../lib/sentinelHubStatisticsApi'
 import type { CropAlertFieldInput } from '../../../../lib/siCropAlertEngine'
 import type { ImageryTimeSeriesLayerSeries } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
-import type { ImageryTimeAggregation } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
-import { fetchSatelliteBasemapSnapshot } from './timeSeriesMapSnapshot'
+import { fetchFieldMapSnapshot } from './timeSeriesMapSnapshot'
 import { buildTimeSeriesMapSnapshotGroups } from './timeSeriesExcelMapSnapshots'
 import { buildCumulativeMapSnapshotGroups } from './timeSeriesCumulativeMaps'
+import {
+  buildIndexChangeDetectionMapGroups,
+  buildLulcFiveYearMapGroups,
+} from './timeSeriesLulcChangeMaps'
 import { buildEstimatedWaterLossTimeline } from './estimatedWaterLossTimeline'
 import { buildVegetationCoverageTimeline } from './vegetationCoverageTimeline'
-import {
-  buildTimeSeriesExecutiveSummary,
-  computeLayerMedian,
-  estimateNdwiFromNdmi,
-  type TimeSeriesExecutiveSummary,
-} from './timeSeriesReportExecutive'
 import { buildTimeSeriesWeatherTimeline } from './timeSeriesWeatherTimeline'
 import { buildTimeSeriesCorrelationBlocks } from './timeSeriesScatterChartRenderer'
 import {
   buildCropPlantingRecommendations,
   resolveSalinityMeanFromStats,
 } from './timeSeriesCropRecommendations'
-import { geometryMetrics } from '../../../../lib/geoAiLiveMapContext'
+import {
+  buildTimeSeriesExecutiveSummary,
+  computeLayerMedian,
+  estimateNdwiFromNdmi,
+  type TimeSeriesExecutiveSummary,
+} from './timeSeriesReportExecutive'
 import type {
   TimeSeriesLayerStatistics,
   TimeSeriesReportPayload,
@@ -87,13 +91,32 @@ function resolveDailyMean(rows: SentinelHubDailyIndexMeans[], layerId: string, d
   return evaluateImageryLayerDailyValue(layerId, row)
 }
 
+function createMapProgress(onProgress?: (completed: number, total: number) => void) {
+  const phases = [0, 0, 0, 0]
+  const phaseTotals = [0, 0, 0, 0]
+  const emit = () => {
+    const done = phases.reduce((a, b) => a + b, 0)
+    const total = Math.max(1, phaseTotals.reduce((a, b) => a + b, 0))
+    onProgress?.(done, total)
+  }
+  return (phase: number) => (completed: number, total: number) => {
+    phases[phase] = completed
+    phaseTotals[phase] = Math.max(total, completed)
+    emit()
+  }
+}
+
 export async function buildTimeSeriesReportPayload(
   input: BuildTimeSeriesReportPayloadInput,
 ): Promise<TimeSeriesReportPayload> {
   const acquisitionDate = input.acquisitionDate.trim().slice(0, 10)
   const geometry = input.field?.geometry ?? null
   const areaHa = geometry ? geodesicAreaM2(geometry) / 10_000 : 0
-  const centroid = geometry ? geometryMetrics(geometry)?.centroid ?? null : null
+  const metrics = geometry ? geometryMetrics(geometry) : null
+  const centroidLng = metrics?.centroid?.[0] ?? null
+  const centroidLat = metrics?.centroid?.[1] ?? null
+  const timeAggregation = input.timeAggregation ?? 'day'
+  const periodAnchorDates = input.periodAnchorDates ?? {}
 
   const statistics = input.layerSeries.map(s =>
     computeLayerStatistics(s.layerId, input.chartLabels, s.values),
@@ -144,7 +167,7 @@ export async function buildTimeSeriesReportPayload(
     saviEstimated = true
   }
 
-  const executiveBase: TimeSeriesExecutiveSummary = buildTimeSeriesExecutiveSummary({
+  const executive: TimeSeriesExecutiveSummary = buildTimeSeriesExecutiveSummary({
     primary: primaryInterpretation,
     ndviMean,
     ndmiMean,
@@ -159,8 +182,10 @@ export async function buildTimeSeriesReportPayload(
 
   const mapImageDataUrl =
     input.includeMap !== false
-      ? await fetchSatelliteBasemapSnapshot(geometry, input.mapboxToken, 520, 390)
+      ? await fetchFieldMapSnapshot(geometry, input.mapboxToken, 520, 360)
       : null
+
+  const onPhase = createMapProgress(input.onMapSnapshotProgress)
 
   const mapSnapshotGroups =
     input.includeMapSnapshots !== false && geometry
@@ -171,12 +196,12 @@ export async function buildTimeSeriesReportPayload(
           displayLabels: input.displayLabels,
           layerSeries: input.layerSeries,
           dailyRows: input.dailyRows,
-          periodAnchorDates: input.periodAnchorDates ?? {},
+          periodAnchorDates,
           areaHa,
           interpretations,
           mapboxToken: input.mapboxToken,
           signal: input.signal,
-          onProgress: input.onMapSnapshotProgress,
+          onProgress: onPhase(0),
         })
       : []
 
@@ -186,16 +211,41 @@ export async function buildTimeSeriesReportPayload(
           geometry,
           layerIds: input.layerIds,
           dailyRows: input.dailyRows,
-          timeAggregation: input.timeAggregation,
+          timeAggregation,
           areaHa,
           mapboxToken: input.mapboxToken,
           signal: input.signal,
-          onProgress: (done, total) => {
-            input.onMapSnapshotProgress?.(
-              mapSnapshotGroups.reduce((n, g) => n + g.snapshots.length, 0) + done,
-              mapSnapshotGroups.reduce((n, g) => n + g.snapshots.length, 0) + total,
-            )
-          },
+          onProgress: onPhase(1),
+        })
+      : []
+
+  const lulcBuild =
+    input.includeMapSnapshots !== false && geometry
+      ? await buildLulcFiveYearMapGroups({
+          geometry,
+          areaHa,
+          mapboxToken: input.mapboxToken,
+          signal: input.signal,
+          onProgress: onPhase(2),
+        })
+      : { groups: [], yearCompositions: [], changeCompositions: [] }
+  const lulcMapSnapshotGroups = lulcBuild.groups
+  const lulcYearCompositions = lulcBuild.yearCompositions
+  const lulcChangeCompositions = lulcBuild.changeCompositions
+
+  const changeDetectionMapSnapshotGroups =
+    input.includeMapSnapshots !== false && geometry
+      ? await buildIndexChangeDetectionMapGroups({
+          geometry,
+          layerIds: input.layerIds,
+          chartLabels: input.chartLabels,
+          displayLabels: input.displayLabels,
+          layerSeries: input.layerSeries,
+          periodAnchorDates,
+          areaHa,
+          mapboxToken: input.mapboxToken,
+          signal: input.signal,
+          onProgress: onPhase(3),
         })
       : []
 
@@ -207,10 +257,11 @@ export async function buildTimeSeriesReportPayload(
         geometry,
         chartLabels: input.chartLabels,
         displayLabels: input.displayLabels,
-        periodAnchorDates: input.periodAnchorDates,
+        periodAnchorDates,
         dailyRows: input.dailyRows,
         ndviSeries,
         enrichWithHistograms: input.includeVegetationCoverageTimeline !== false,
+        signal: input.signal,
       })
     : []
 
@@ -219,46 +270,41 @@ export async function buildTimeSeriesReportPayload(
         geometry,
         chartLabels: input.chartLabels,
         displayLabels: input.displayLabels,
-        periodAnchorDates: input.periodAnchorDates,
+        periodAnchorDates,
         dailyRows: input.dailyRows,
         layerSeries: input.layerSeries,
         vegetationCoverageTimeline,
+        signal: input.signal,
       })
     : []
 
-  const weatherTimeline = geometry
-    ? await buildTimeSeriesWeatherTimeline({
-        geometry,
-        fromDate: input.fromDate,
-        toDate: input.toDate,
-        chartLabels: input.chartLabels,
-        displayLabels: input.displayLabels,
-        timeAggregation: input.timeAggregation ?? 'day',
-        layerSeries: input.layerSeries,
-      })
-    : null
+  const weatherTimeline = await buildTimeSeriesWeatherTimeline({
+    geometry,
+    fromDate: input.fromDate,
+    toDate: input.toDate,
+    chartLabels: input.chartLabels,
+    displayLabels: input.displayLabels,
+    timeAggregation,
+    layerSeries: input.layerSeries,
+  })
 
   const correlationBlocks = buildTimeSeriesCorrelationBlocks({
-    labels: input.displayLabels.length ? input.displayLabels : input.chartLabels,
+    labels: input.chartLabels,
+    displayLabels: input.displayLabels,
     series: input.layerSeries,
     layerIds: input.layerIds,
   })
 
   const cropRec = buildCropPlantingRecommendations({
-    centroidLat: centroid?.[1] ?? null,
-    centroidLng: centroid?.[0] ?? null,
+    centroidLat,
+    centroidLng,
     areaHa,
     weather: weatherTimeline,
     statistics,
     salinityMean: resolveSalinityMeanFromStats(statistics),
-    ndviMean,
-    ndmiMean,
+    ndviMean: ndviStats?.mean ?? ndviMean,
+    ndmiMean: ndmiStats?.mean ?? ndmiMean,
   })
-
-  const executive: TimeSeriesExecutiveSummary = {
-    ...executiveBase,
-    recommendations: [...new Set([...executiveBase.recommendations, ...cropRec.bullets])].slice(0, 12),
-  }
 
   return {
     projectName: input.projectName?.trim() || 'AgroCloud Satellite Intelligence',
@@ -268,8 +314,8 @@ export async function buildTimeSeriesReportPayload(
       fieldName: input.fieldName,
       fieldKey: input.fieldKey,
       areaHa,
-      centroidLng: centroid?.[0] ?? null,
-      centroidLat: centroid?.[1] ?? null,
+      centroidLng,
+      centroidLat,
     },
     period: {
       from: input.fromDate,
@@ -281,6 +327,7 @@ export async function buildTimeSeriesReportPayload(
       labels: input.chartLabels,
       displayLabels: input.displayLabels,
       series: input.layerSeries,
+      periodAnchorDates,
     },
     statistics,
     interpretations,
@@ -290,6 +337,10 @@ export async function buildTimeSeriesReportPayload(
     mapImageDataUrl,
     mapSnapshotGroups,
     cumulativeMapSnapshotGroups,
+    lulcMapSnapshotGroups,
+    lulcYearCompositions,
+    lulcChangeCompositions,
+    changeDetectionMapSnapshotGroups,
     vegetationCoverageTimeline,
     estimatedWaterLossTimeline,
     weatherTimeline,

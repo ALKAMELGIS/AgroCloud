@@ -13,6 +13,7 @@ import {
   TOPOGRAPHIC_3D_BASEMAP_ID,
 } from '../../lib/agroCloudMapTerrain'
 import { getGoogleMapsApiKeyFromEnv } from '../../lib/googleMapsApiKey'
+import { rasterTileMaxNativeZoom } from '../../lib/rasterTileZoom'
 
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services'
 const ATTR_ESRI = 'Tiles © Esri'
@@ -20,7 +21,13 @@ const ATTR_GOOGLE = '© Google'
 const ATTR_OSM = '© OpenStreetMap contributors'
 const ATTR_CARTO = '© OpenStreetMap © CARTO'
 
-export type LeafletTileSpec = { url: string; attribution: string; opacity?: number }
+export type LeafletTileSpec = {
+  url: string
+  attribution: string
+  opacity?: number
+  /** Override native max zoom; defaults to the provider value from {@link rasterTileMaxNativeZoom}. */
+  maxNativeZoom?: number
+}
 
 export type BasemapCatalogEntry = {
   id: string
@@ -57,6 +64,7 @@ function googleSatelliteRasterStyle(apiKey = ''): Record<string, unknown> {
         type: 'raster',
         tiles: googleSatelliteTileUrls(apiKey),
         tileSize: 256,
+        maxzoom: rasterTileMaxNativeZoom('https://mt0.google.com/vt/lyrs=s'),
         attribution: ATTR_GOOGLE,
       },
     },
@@ -95,6 +103,7 @@ export function rasterStyleFromTiles(layers: LeafletTileSpec[]): Record<string, 
       type: 'raster',
       tiles: [tileUrlForMapboxGl(L.url)],
       tileSize: 256,
+      maxzoom: L.maxNativeZoom ?? rasterTileMaxNativeZoom(L.url),
       attribution: L.attribution,
     }
     mapLayers.push({

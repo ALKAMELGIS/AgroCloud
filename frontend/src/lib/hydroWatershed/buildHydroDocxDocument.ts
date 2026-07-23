@@ -140,7 +140,7 @@ export function buildHydroDocxDocumentXml(model: HydroDocxModel): string {
 
   parts.push(
     docxItalicNote(
-      `Generated ${model.generatedStamp} by ${model.projectName}. GeoSyntra Hydro Watershed Workflow — enterprise GIS reporting.`,
+      `Generated ${model.generatedStamp} by ${model.projectName}. AgroCloud Hydro Watershed Workflow — enterprise GIS reporting.`,
     ),
   )
 

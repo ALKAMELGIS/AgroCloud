@@ -174,7 +174,7 @@ export async function buildSarFloodReportWorkbook(
   payload: SarFloodReportPayload,
 ): Promise<ExcelJS.Workbook> {
   const wb = new ExcelJS.Workbook()
-  wb.creator = 'GeoSyntra SAR Flood Intelligence'
+  wb.creator = 'AgroCloud SAR Flood Intelligence'
   wb.created = new Date()
   buildSummarySheet(wb, payload)
   buildStatsSheet(wb, payload)

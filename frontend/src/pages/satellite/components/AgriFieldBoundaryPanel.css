@@ -1,0 +1,244 @@
+.si-afb {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.si-afb__card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.04);
+}
+.si-afb__hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #64748b;
+}
+.si-afb__hint strong {
+  color: #334155;
+  font-weight: 600;
+}
+.si-afb__row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.si-afb__label {
+  font-size: 11px;
+  color: #64748b;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.si-afb__label em {
+  font-style: normal;
+  color: #0ea5e9;
+  font-variant-numeric: tabular-nums;
+}
+.si-afb__select {
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.45);
+  color: #ffffff;
+  color-scheme: dark;
+}
+.si-afb__select option {
+  background: rgba(15, 23, 42, 0.96);
+  color: #ffffff;
+}
+.si-afb__file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.si-afb__upload-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.si-afb__file-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  font-size: 11px;
+  color: #e2e8f0;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 7px;
+  padding: 4px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.si-afb__file-name i {
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+.si-afb__file-clear {
+  flex-shrink: 0;
+  margin-left: 2px;
+  border: 0;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.si-afb__file-clear:hover {
+  color: #fff;
+}
+.si-afb__file-hint {
+  font-size: 11px;
+  color: #94a3b8;
+}
+.si-afb__row input[type='range'] {
+  width: 100%;
+}
+.si-afb__warn {
+  margin: 0;
+  font-size: 11px;
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
+  padding: 8px;
+  border-radius: 8px;
+}
+.si-afb__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.si-afb__actions--export {
+  margin-top: 2px;
+}
+.si-afb__btn {
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.05);
+  color: #334155;
+  cursor: pointer;
+}
+.si-afb__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.si-afb__btn--primary {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(180deg, #22c55e, #16a34a);
+}
+.si-afb__btn--ghost {
+  background: transparent;
+}
+.si-afb__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11px;
+  color: #475569;
+}
+.si-afb__stats strong {
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.si-afb__engine {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803d;
+  font-size: 10px;
+}
+.si-afb__status {
+  font-size: 11px;
+  color: #6b7686;
+  padding: 6px 8px;
+  border-radius: 7px;
+  background: rgba(15, 23, 42, 0.04);
+}
+.si-afb__status.is-error {
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.1);
+}
+.si-afb__status.is-done {
+  color: #15803d;
+  background: rgba(34, 197, 94, 0.1);
+}
+.si-afb__hint-inline {
+  color: #8a94a3;
+}
+.si-afb__status code {
+  font-size: 10px;
+  background: rgba(15, 23, 42, 0.08);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.si-afb__progress {
+  margin-top: 6px;
+}
+.si-afb__progress-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.1);
+  overflow: hidden;
+}
+.si-afb__progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22c55e, #0ea5e9);
+  transition: width 0.35s ease;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__card {
+  background: rgba(255, 255, 255, 0.04);
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__hint,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__label,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__stats,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__status {
+  color: #9fb0c3;
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__hint strong,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__stats strong {
+  color: #e2e8f0;
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__select {
+  background: rgba(0, 0, 0, 0.45);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__select option {
+  background: rgba(15, 23, 42, 0.96);
+  color: #ffffff;
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__btn {
+  color: #dbe4f0;
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__btn--primary {
+  color: #fff;
+  background: linear-gradient(180deg, #22c55e, #15803d);
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__status {
+  background: rgba(255, 255, 255, 0.05);
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__progress-track {
+  background: rgba(255, 255, 255, 0.1);
+}

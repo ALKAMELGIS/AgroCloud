@@ -68,7 +68,10 @@ export function RemoteSensingLayerSelect({
       setQuery('')
       return
     }
-    const t = window.setTimeout(() => searchRef.current?.focus(), 0)
+    // Focus without scroll/animation so the menu does not flash or jump.
+    const t = window.setTimeout(() => {
+      searchRef.current?.focus({ preventScroll: true })
+    }, 0)
     const onPointerDown = (event: MouseEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
     }

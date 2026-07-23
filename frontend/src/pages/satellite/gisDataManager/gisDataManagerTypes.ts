@@ -37,6 +37,37 @@ export type GisDataManagerPortalItem = {
   row: GisContentRow;
 };
 
+export type GisDmRasterDisplaySettings = {
+  opacity: number
+  brightness: number
+  contrast: number
+  saturation: number
+  hue: number
+}
+
+/** Active map raster for GisDataManager → Raster Layer tools (no Load row). */
+export type GisDmRasterLayerInfo = {
+  id: string
+  name: string
+  bands?: number | string | null
+  crs?: string | null
+  width?: number | null
+  height?: number | null
+  isCog?: boolean
+  georeferenced?: boolean
+}
+
+export type GisDmRasterLayerTools = {
+  layer: GisDmRasterLayerInfo | null
+  display: GisDmRasterDisplaySettings
+  busy?: boolean
+  onDisplayChange: (key: keyof GisDmRasterDisplaySettings, value: number) => void
+  onResetDisplay: () => void
+  onRemove: () => void
+  onOpenGeoreference?: () => void
+  onFitToLayer?: () => void
+}
+
 export type GisDataManagerCallbacks = {
   onImportFiles: (files: File[], opts?: { layerName?: string; forceRaster?: boolean }) => Promise<void> | void;
   onImportRemoteUrl: (url: string, opts?: { layerName?: string; asRaster?: boolean }) => Promise<void> | void;
@@ -66,6 +97,8 @@ export type GisDataManagerCallbacks = {
   isConnecting?: boolean;
   isAddingDiscovered?: boolean;
   isImportingRemote?: boolean;
+  /** Raster Layer tools (display / remove) — wired from Raster & Georeferencing. */
+  rasterLayerTools?: GisDmRasterLayerTools | null;
 };
 
 export const GIS_DM_CATEGORIES: {
@@ -79,7 +112,7 @@ export const GIS_DM_CATEGORIES: {
   { id: 'favorites', label: 'Favorites', icon: 'fa-solid fa-star', ready: true },
   { id: 'giscontent', label: 'GIS Content', icon: 'fa-solid fa-layer-group', ready: true },
   { id: 'vector', label: 'Vector', icon: 'fa-solid fa-draw-polygon', ready: true },
-  { id: 'raster', label: 'Raster', icon: 'fa-regular fa-image', ready: true },
+  { id: 'raster', label: 'Raster', icon: 'fa-regular fa-image', ready: true, hint: 'Raster Layer — display, stretch & manage' },
   { id: 'database', label: 'Database', icon: 'fa-solid fa-database', ready: true },
   { id: 'cloud', label: 'Cloud', icon: 'fa-solid fa-cloud', ready: true },
   { id: 'web', label: 'Web Services', icon: 'fa-solid fa-globe', ready: true },

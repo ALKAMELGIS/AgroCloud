@@ -185,8 +185,8 @@ export async function buildHydroReportPayload(input: BuildHydroReportInput): Pro
   })
 
   return {
-    projectName: input.projectName ?? 'GeoSyntra Hydro Intelligence',
-    generatedBy: input.generatedBy ?? 'GeoSyntra',
+    projectName: input.projectName ?? 'AgroCloud Hydro Intelligence',
+    generatedBy: input.generatedBy ?? 'AgroCloud',
     generatedAt: now,
     aoiName: input.aoiName,
     areaHa,

@@ -11,6 +11,7 @@
  */
 
 import { ensureBackendAvailable, resolveApiOrigin } from './apiOrigin'
+import { rasterTileMaxNativeZoom } from './rasterTileZoom'
 
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services'
 const ATTR_ESRI = 'Tiles © Esri'
@@ -129,6 +130,7 @@ export function buildEsriWorldHillshadeSourceSpec(): Record<string, unknown> {
     type: 'raster',
     tiles: [ESRI_WORLD_HILLSHADE_TILE_URL],
     tileSize: 256,
+    maxzoom: rasterTileMaxNativeZoom(ESRI_WORLD_HILLSHADE_TILE_URL),
     attribution: ATTR_ESRI,
   }
 }
@@ -229,6 +231,7 @@ export function build3dTopographicFlatFallbackStyle(): Record<string, unknown> {
       type: 'raster',
       tiles: [L.url.replace(/\{s\}/gi, 'a').replace(/\{r\}/g, '')],
       tileSize: 256,
+      maxzoom: rasterTileMaxNativeZoom(L.url),
       attribution: L.attribution,
     }
     layers.push({
@@ -254,6 +257,7 @@ export function build3dSatelliteFlatFallbackStyle(): Record<string, unknown> {
         type: 'raster',
         tiles: [esriTile('World_Imagery')],
         tileSize: 256,
+        maxzoom: rasterTileMaxNativeZoom(esriTile('World_Imagery')),
         attribution: ATTR_ESRI,
       },
     },
@@ -282,6 +286,7 @@ export function build3dSatelliteMapboxStyle(): Record<string, unknown> {
         type: 'raster',
         tiles: [esriTile('World_Imagery')],
         tileSize: 256,
+        maxzoom: rasterTileMaxNativeZoom(esriTile('World_Imagery')),
         attribution: ATTR_ESRI,
       },
     },
@@ -320,6 +325,7 @@ export function build3dTopographicMapboxStyle(): Record<string, unknown> {
         type: 'raster',
         tiles: [esriTile('World_Topo_Map')],
         tileSize: 256,
+        maxzoom: rasterTileMaxNativeZoom(esriTile('World_Topo_Map')),
         attribution: ATTR_ESRI,
       },
       [AGRO_CLOUD_ESRI_HILLSHADE_SOURCE_ID]: buildEsriWorldHillshadeSourceSpec(),

@@ -26,11 +26,13 @@ describe('siAiDlRasterPipeline', () => {
     expect(worldFileExtensionForRaster('scene.tiff')).toBe('tfw')
   })
 
-  it('detects web mercator CRS from large coordinates', () => {
+  it('detects unambiguous CRS and rejects ambiguous projected grids', () => {
     expect(
       detectCrsFromBounds({ west: 4000000, east: 4500000, south: 3000000, north: 3500000 }),
     ).toBe('EPSG:3857')
     expect(detectCrsFromBounds({ west: 45, east: 46, south: 24, north: 25 })).toBe('EPSG:4326')
+    // Typical UTM-like metres — must not be guessed as 3857
+    expect(detectCrsFromBounds({ west: 500000, east: 501000, south: 4000000, north: 4001000 })).toBeNull()
   })
 
   it('reprojects web mercator bounds to WGS84', () => {

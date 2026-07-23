@@ -1,6 +1,13 @@
 import type { SentinelHubDailyIndexMeans } from '../../../lib/sentinelHubStatisticsApi'
 import { computeChas, chasInputsFromDaily } from '../../../lib/chasIndex'
 import {
+  ADI_HISTORICAL_LOOKBACK_DAYS,
+  computeAdiCurrentIndex,
+  computeAdiZScore,
+  isAdiLayerId,
+} from '../../../lib/adiIndex'
+import { isNcadiLayerId } from '../../../lib/ncadiIndex'
+import {
   buildRemoteSensingLayerSelectGroups,
   flattenRemoteSensingLayerSelectGroups,
   isAgroDeltaCompositeLayerId,
@@ -41,34 +48,57 @@ type CoreVars = {
   ndwi: number
   savi: number
   ci_re: number
-  /** (B11−B8)/(B11+B8) — same as index(B11,B08) in composite evalscripts. */
   ndsi: number
-  /** √(B03·B04) — NaN when band reflectance is unavailable in daily stats. */
   si: number
   ssi: number
+  ndre: number
 }
 
-/** Salinity NDSI from NDMI: index(B11,B08) = −index(B08,B11). */
-export function ndsiSalinityFromNdmi(ndmi: number | null | undefined): number | null {
-  if (ndmi == null || !Number.isFinite(ndmi)) return null
-  return Number((-ndmi).toFixed(4))
+function finiteOrNull(v: number | null | undefined): number | null {
+  return v != null && Number.isFinite(v) ? v : null
 }
 
+function daysBetweenIso(a: string, b: string): number {
+  const ta = Date.parse(`${a.slice(0, 10)}T12:00:00Z`)
+  const tb = Date.parse(`${b.slice(0, 10)}T12:00:00Z`)
+  if (!Number.isFinite(ta) || !Number.isFinite(tb)) return Number.POSITIVE_INFINITY
+  return Math.abs(tb - ta) / 86_400_000
+}
+
+/** Build chart eval vars from daily means — NaN marks unavailable inputs. */
 function coreVarsFromDaily(row: SentinelHubDailyIndexMeans): CoreVars | null {
-  if (row.ndvi == null || !Number.isFinite(row.ndvi)) return null
-  const ndmi = row.ndmi != null && Number.isFinite(row.ndmi) ? row.ndmi : 0
-  const ndsi = ndsiSalinityFromNdmi(row.ndmi) ?? NaN
-  const si = NaN
-  const ssi = Number.isFinite(ndsi) && Number.isFinite(si) ? ndsi + si : NaN
+  const ndvi = finiteOrNull(row.ndvi)
+  const ndmi = finiteOrNull(row.ndmi)
+  const ndwi = finiteOrNull(row.ndwi)
+  const ndsi = finiteOrNull(row.ndsi)
+  const si = finiteOrNull(row.si)
+  const ndre = finiteOrNull(row.ndre)
+  const ssi = finiteOrNull(row.ssi) ?? (ndsi != null && si != null ? ndsi + si : null)
+  const savi = finiteOrNull(row.savi) ?? (ndvi != null ? estimateSaviFromNdvi(ndvi) : null)
+  const ci_re = finiteOrNull(row.ciRe)
+
+  if (
+    ndvi == null &&
+    ndmi == null &&
+    ndwi == null &&
+    ndsi == null &&
+    si == null &&
+    ndre == null &&
+    savi == null
+  ) {
+    return null
+  }
+
   return {
-    ndvi: row.ndvi,
-    ndmi,
-    ndwi: row.ndwi != null && Number.isFinite(row.ndwi) ? row.ndwi : 0,
-    savi: estimateSaviFromNdvi(row.ndvi),
-    ci_re: row.ciRe != null && Number.isFinite(row.ciRe) ? row.ciRe : 0,
-    ndsi,
-    si,
-    ssi,
+    ndvi: ndvi ?? NaN,
+    ndmi: ndmi ?? NaN,
+    ndwi: ndwi ?? NaN,
+    savi: savi ?? NaN,
+    ci_re: ci_re ?? NaN,
+    ndsi: ndsi ?? NaN,
+    si: si ?? NaN,
+    ssi: ssi ?? NaN,
+    ndre: ndre ?? NaN,
   }
 }
 
@@ -83,6 +113,7 @@ function evaluateCompositeExpr(expr: string, vars: CoreVars): number | null {
       'ndsi',
       'si',
       'ssi',
+      'ndre',
       'Math',
       `"use strict"; return (${expr});`,
     )
@@ -95,6 +126,7 @@ function evaluateCompositeExpr(expr: string, vars: CoreVars): number | null {
       vars.ndsi,
       vars.si,
       vars.ssi,
+      vars.ndre,
       Math,
     )
     return typeof value === 'number' && Number.isFinite(value) ? value : null
@@ -106,38 +138,43 @@ function evaluateCompositeExpr(expr: string, vars: CoreVars): number | null {
 function evaluateStaticLayerDailyValue(layerId: string, row: SentinelHubDailyIndexMeans): number | null {
   const id = layerId.trim().toUpperCase()
 
-  if (id === 'NDSI') {
-    return row.ndsi != null && Number.isFinite(row.ndsi) ? Number(row.ndsi.toFixed(4)) : null
-  }
+  // Temporal / change layers are aggregated across dates — not a single-row absolute.
+  if (isAdiLayerId(id) || isNcadiLayerId(id) || isAgroDeltaCompositeLayerId(id)) return null
 
-  if (id === 'SAL_NDSI') {
-    return ndsiSalinityFromNdmi(row.ndmi)
+  // Direct band means (do not require NDVI — e.g. salinity scenes).
+  if (id === 'NDSI') return finiteOrNull(row.ndsi)
+  if (id === 'SI') return finiteOrNull(row.si)
+  if (id === 'SSI') {
+    const direct = finiteOrNull(row.ssi)
+    if (direct != null) return direct
+    const ndsi = finiteOrNull(row.ndsi)
+    const si = finiteOrNull(row.si)
+    return ndsi != null && si != null ? ndsi + si : null
   }
+  if (id === 'NDRE') return finiteOrNull(row.ndre)
 
   const core = coreVarsFromDaily(row)
-  if (!core) return null
 
   switch (id) {
     case 'NDVI':
-      return core.ndvi
+      return finiteOrNull(row.ndvi)
     case 'NDMI':
-      return row.ndmi != null && Number.isFinite(row.ndmi) ? row.ndmi : null
+      return finiteOrNull(row.ndmi)
     case 'NDWI':
-      return row.ndwi != null && Number.isFinite(row.ndwi) ? row.ndwi : null
+      return finiteOrNull(row.ndwi)
     case 'SAVI':
-      return core.savi
+      return core?.savi != null && Number.isFinite(core.savi) ? core.savi : null
     case 'EVI':
-      return row.evi != null && Number.isFinite(row.evi) ? row.evi : null
+      return finiteOrNull(row.evi)
     case 'ET': {
-      const ndmi = row.ndmi != null && Number.isFinite(row.ndmi) ? row.ndmi : null
-      let ndwi = row.ndwi != null && Number.isFinite(row.ndwi) ? row.ndwi : null
+      const ndmi = finiteOrNull(row.ndmi)
+      let ndwi = finiteOrNull(row.ndwi)
       if (ndmi == null) return null
       if (ndwi == null) {
-        // Same estimate as timeSeriesReportExecutive.estimateNdwiFromNdmi
         ndwi = Math.max(-0.2, Math.min(0.45, ndmi * 0.85))
       }
       if (!Number.isFinite(ndwi)) return null
-      const ndvi = row.ndvi != null && Number.isFinite(row.ndvi) ? row.ndvi : null
+      const ndvi = finiteOrNull(row.ndvi)
       return estimateEtMmDayFromMoisture(ndmi, ndwi, {
         sceneDate: row.date,
         ndvi,
@@ -152,7 +189,7 @@ function evaluateStaticLayerDailyValue(layerId: string, row: SentinelHubDailyInd
       break
   }
 
-  if (!isAgroStaticCompositeLayerId(id)) return null
+  if (!core || !isAgroStaticCompositeLayerId(id)) return null
   const expr = resolveAgroCompositeExpr(id)
   if (!expr) return null
   return evaluateCompositeExpr(expr, core)
@@ -161,35 +198,66 @@ function evaluateStaticLayerDailyValue(layerId: string, row: SentinelHubDailyInd
 /** Layer Live daily value for charts (core, composite, or delta-ready static). */
 export function evaluateImageryLayerDailyValue(layerId: string, row: SentinelHubDailyIndexMeans): number | null {
   const id = layerId.trim().toUpperCase()
-  if (isAgroDeltaCompositeLayerId(id)) return null
+  if (isAgroDeltaCompositeLayerId(id) || isAdiLayerId(id) || isNcadiLayerId(id)) return null
   return evaluateStaticLayerDailyValue(id, row)
 }
 
-/** True when cached daily rows include at least one finite value for the layer. */
-export function imageryDailyRowsSupportLayer(
-  rows: SentinelHubDailyIndexMeans[],
-  layerId: string,
-): boolean {
-  if (!rows.length) return false
-  return rows.some(row => {
-    const v = evaluateImageryLayerDailyValue(layerId, row)
-    return v != null && Number.isFinite(v)
+/** True when at least one daily row can produce a finite value for the given layer. */
+function layerHasDailyRowSupport(layerId: string, daily: SentinelHubDailyIndexMeans[]): boolean {
+  const id = layerId.trim().toUpperCase()
+  if (isAdiLayerId(id)) {
+    return daily.some(row => {
+      const ndvi = finiteOrNull(row.ndvi)
+      const ndmi = finiteOrNull(row.ndmi)
+      return ndvi != null && ndmi != null
+    })
+  }
+  if (isNcadiLayerId(id)) {
+    return daily.some(row => finiteOrNull(row.ndvi) != null && finiteOrNull(row.ndmi) != null)
+  }
+  const resolvedId = isAgroDeltaCompositeLayerId(id)
+    ? resolveAgroStaticLayerIdForDelta(id) ?? id
+    : id
+  return daily.some(row => {
+    const value = evaluateStaticLayerDailyValue(resolvedId, row)
+    return value != null && Number.isFinite(value)
   })
 }
 
-/** True when every selected layer can be derived from the cached daily rows. */
+/**
+ * Whether cached daily rows already carry enough data to render EVERY requested layer.
+ * Used to decide if a cached chart can be shown instantly (vs. waiting for a fresh fetch).
+ */
 export function imageryDailyRowsSupportLayers(
-  rows: SentinelHubDailyIndexMeans[],
+  daily: SentinelHubDailyIndexMeans[],
   layerIds: string[],
 ): boolean {
+  if (!daily.length) return false
   const ids = layerIds.length ? layerIds : ['NDVI']
-  return ids.every(id => imageryDailyRowsSupportLayer(rows, id))
+  return ids.every(id => layerHasDailyRowSupport(id, daily))
 }
 
-/** Legacy imagery cache rows stored NDVI/NDMI but not snow NDSI (B03/B11) before the channel was added. */
-export function dailyRowsLackSnowNdsiChannel(rows: SentinelHubDailyIndexMeans[]): boolean {
-  if (!rows.length) return false
-  return !rows.some(row => row.ndsi != null && Number.isFinite(row.ndsi))
+/**
+ * Whether the requested layers require a dedicated re-fetch that the cached rows cannot satisfy.
+ * Salinity (NDSI/SI/SSI) and red-edge (ADI/NDRE) need their band means present on daily rows.
+ */
+export function imageryDailyRowsNeedRefetchForLayers(
+  daily: SentinelHubDailyIndexMeans[],
+  layerIds: string[],
+): boolean {
+  if (!daily.length) return false
+  const ids = layerIds.map(id => id.trim().toUpperCase()).filter(Boolean)
+  const needsNdsi = ids.some(id => id === 'NDSI' || id === 'SSI')
+  const needsSi = ids.some(id => id === 'SI' || id === 'SSI')
+  const needsNdre = ids.some(id => id === 'NDRE')
+  if (needsNdsi && !daily.some(row => row.ndsi != null && Number.isFinite(row.ndsi))) return true
+  if (needsSi && !daily.some(row => row.si != null && Number.isFinite(row.si))) return true
+  if (needsNdre && !daily.some(row => row.ndre != null && Number.isFinite(row.ndre))) return true
+  // ADI prefers NDRE when available; refetch once if missing so the full formula can be used.
+  if (ids.some(isAdiLayerId) && !daily.some(row => row.ndre != null && Number.isFinite(row.ndre))) {
+    return true
+  }
+  return false
 }
 
 export type NdsiZonalChartBands = {
@@ -198,7 +266,7 @@ export type NdsiZonalChartBands = {
   max: Array<number | null>
 }
 
-/** Align snow NDSI zonal min/mean/max to chart label dates (one value per acquisition day). */
+/** Align NDSI zonal min/mean/max to chart label dates (one value per acquisition day). */
 export function buildNdsiZonalChartBands(
   labels: string[],
   dailyRows: SentinelHubDailyIndexMeans[],
@@ -219,19 +287,6 @@ export function buildNdsiZonalChartBands(
   return { mean, min, max }
 }
 
-/** Selected layers need a fresh statistics fetch because cached daily rows lack required bands. */
-export function imageryDailyRowsNeedRefetchForLayers(
-  rows: SentinelHubDailyIndexMeans[],
-  layerIds: string[],
-): boolean {
-  const ids = layerIds.length ? layerIds : ['NDVI']
-  if (!rows.length) return false
-  if (ids.some(id => id.trim().toUpperCase() === 'NDSI') && dailyRowsLackSnowNdsiChannel(rows)) {
-    return true
-  }
-  return false
-}
-
 function meanFieldValueForDate(
   dailyMaps: Map<string, SentinelHubDailyIndexMeans[]>,
   fieldKeys: string[],
@@ -249,6 +304,44 @@ function meanFieldValueForDate(
   return bucket.reduce((a, b) => a + b, 0) / bucket.length
 }
 
+function meanAdiCurrentForDate(
+  dailyMaps: Map<string, SentinelHubDailyIndexMeans[]>,
+  fieldKeys: string[],
+  date: string,
+): number | null {
+  const bucket: number[] = []
+  for (const key of fieldKeys) {
+    const row = dailyMaps.get(key)?.find(d => d.date === date)
+    if (!row) continue
+    const ndvi = finiteOrNull(row.ndvi)
+    const ndmi = finiteOrNull(row.ndmi)
+    if (ndvi == null || ndmi == null) continue
+    // Prefer measured NDRE; fall back to NDVI so ADI still charts when WMS lacks B05.
+    const ndre = finiteOrNull(row.ndre) ?? ndvi
+    bucket.push(computeAdiCurrentIndex(ndvi, ndmi, ndre))
+  }
+  if (!bucket.length) return null
+  return bucket.reduce((a, b) => a + b, 0) / bucket.length
+}
+
+function meanNcadiFusionForDate(
+  dailyMaps: Map<string, SentinelHubDailyIndexMeans[]>,
+  fieldKeys: string[],
+  date: string,
+): number | null {
+  const bucket: number[] = []
+  for (const key of fieldKeys) {
+    const row = dailyMaps.get(key)?.find(d => d.date === date)
+    if (!row) continue
+    const ndvi = finiteOrNull(row.ndvi)
+    const ndmi = finiteOrNull(row.ndmi)
+    if (ndvi == null || ndmi == null) continue
+    bucket.push(0.7 * ndvi + 0.3 * ndmi)
+  }
+  if (!bucket.length) return null
+  return bucket.reduce((a, b) => a + b, 0) / bucket.length
+}
+
 export function aggregateImageryTimeSeries(
   dailyMaps: Map<string, SentinelHubDailyIndexMeans[]>,
   fieldKeys: string[],
@@ -261,6 +354,49 @@ export function aggregateImageryTimeSeries(
   }
   const labels = [...dateSet].sort()
   const values: number[] = []
+
+  if (isAdiLayerId(id)) {
+    const currents = labels.map(date => meanAdiCurrentForDate(dailyMaps, fieldKeys, date))
+    for (let i = 0; i < labels.length; i++) {
+      const current = currents[i]
+      if (current == null || !Number.isFinite(current)) {
+        values.push(NaN)
+        continue
+      }
+      const hist: number[] = []
+      for (let j = 0; j < i; j++) {
+        const v = currents[j]
+        if (v == null || !Number.isFinite(v)) continue
+        if (daysBetweenIso(labels[j]!, labels[i]!) > ADI_HISTORICAL_LOOKBACK_DAYS) continue
+        hist.push(v)
+      }
+      if (hist.length < 1) {
+        values.push(NaN)
+        continue
+      }
+      const mean = hist.reduce((a, b) => a + b, 0) / hist.length
+      const variance =
+        hist.length >= 2 ? hist.reduce((a, b) => a + (b - mean) ** 2, 0) / hist.length : 0
+      const std = Math.sqrt(Math.max(0, variance))
+      const z = computeAdiZScore(current, mean, std)
+      values.push(Number.isFinite(z) ? Number(z.toFixed(4)) : NaN)
+    }
+    return { labels, values }
+  }
+
+  if (isNcadiLayerId(id)) {
+    let prev: number | null = null
+    for (const date of labels) {
+      const current = meanNcadiFusionForDate(dailyMaps, fieldKeys, date)
+      if (current == null || !Number.isFinite(current)) {
+        values.push(NaN)
+        continue
+      }
+      values.push(prev == null ? NaN : Number((current - prev).toFixed(4)))
+      prev = current
+    }
+    return { labels, values }
+  }
 
   if (isAgroDeltaCompositeLayerId(id)) {
     const staticId = resolveAgroStaticLayerIdForDelta(id)
@@ -316,7 +452,13 @@ export function imageryLayerChartColor(index: number): string {
 
 export type ImageryTimeSeriesLayerSeries = {
   layerId: string
-  values: number[]
+  values: Array<number | null>
+  /** Optional display label (e.g. LULC class name). */
+  label?: string
+  /** Optional series color (e.g. LULC legend swatch). */
+  color?: string
+  /** When `ha`, chart values are class areas in hectares (convert to m² in UI). */
+  valueUnit?: 'index' | 'ha'
 }
 
 export type ImageryTimeAggregation = 'day' | 'week' | 'month' | 'year'
@@ -371,7 +513,13 @@ export function aggregateImageryChartByTimePeriod(
     return {
       labels: [...labels],
       displayLabels: [...labels],
-      series: series.map(s => ({ layerId: s.layerId, values: [...s.values] })),
+      series: series.map(s => ({
+        layerId: s.layerId,
+        values: [...s.values],
+        label: s.label,
+        color: s.color,
+        valueUnit: s.valueUnit,
+      })),
       periodAnchorDate: new Map(labels.map(d => [d, d])),
     }
   }
@@ -413,6 +561,9 @@ export function aggregateImageryChartByTimePeriod(
 
   const aggSeries = series.map(entry => ({
     layerId: entry.layerId,
+    label: entry.label,
+    color: entry.color,
+    valueUnit: entry.valueUnit,
     values: order.map(key => {
       const vals = buckets.get(key)!.layerValues.get(entry.layerId) ?? []
       return meanOf(vals) ?? NaN
@@ -427,7 +578,7 @@ export function aggregateImageryChartByTimePeriod(
   }
 }
 
-/** Multi-layer timeline — shared sorted date axis, one value array per layer. */
+/** Multi-layer timeline — shared sorted date axis; each layer uses its own aggregator (static / Δ / ADI / NCADI). */
 export function aggregateImageryTimeSeriesMulti(
   dailyMaps: Map<string, SentinelHubDailyIndexMeans[]>,
   fieldKeys: string[],
@@ -436,18 +587,28 @@ export function aggregateImageryTimeSeriesMulti(
   const ids = [...new Set(layerIds.map(id => id.trim().toUpperCase()).filter(Boolean))]
   if (!ids.length) return { labels: [], series: [] }
 
+  const perLayer = ids.map(layerId => ({
+    layerId,
+    ...aggregateImageryTimeSeries(dailyMaps, fieldKeys, layerId),
+  }))
+
   const dateSet = new Set<string>()
-  for (const key of fieldKeys) {
-    for (const row of dailyMaps.get(key) ?? []) dateSet.add(row.date)
+  for (const entry of perLayer) {
+    for (const date of entry.labels) dateSet.add(date)
   }
   const labels = [...dateSet].sort()
-  const series = ids.map(layerId => ({
-    layerId,
-    values: labels.map(date => {
-      const mean = meanFieldValueForDate(dailyMaps, fieldKeys, date, layerId)
-      return mean == null ? NaN : mean
-    }),
-  }))
+
+  const series = perLayer.map(entry => {
+    const byDate = new Map(entry.labels.map((date, index) => [date, entry.values[index]!]))
+    return {
+      layerId: entry.layerId,
+      values: labels.map(date => {
+        const value = byDate.get(date)
+        return value != null && Number.isFinite(value) ? value : NaN
+      }),
+    }
+  })
+
   return { labels, series }
 }
 
@@ -466,13 +627,25 @@ export function pruneImageryTimeSeriesToObservations(
     if (hasValue) keepIndexes.push(i)
   }
   if (!keepIndexes.length) {
-    return { labels: [], series: series.map(s => ({ layerId: s.layerId, values: [] })) }
+    return {
+      labels: [],
+      series: series.map(s => ({
+        layerId: s.layerId,
+        values: [],
+        label: s.label,
+        color: s.color,
+        valueUnit: s.valueUnit,
+      })),
+    }
   }
   return {
     labels: keepIndexes.map(i => labels[i]!),
     series: series.map(s => ({
       layerId: s.layerId,
       values: keepIndexes.map(i => s.values[i]!),
+      label: s.label,
+      color: s.color,
+      valueUnit: s.valueUnit,
     })),
   }
 }
@@ -495,7 +668,18 @@ export function filterImageryTimeSeriesByDateRange(
   if (!labels.length || !series.length) return { labels: [], series: [] }
   const from = fromIso.trim().slice(0, 10)
   const to = toIso.trim().slice(0, 10)
-  if (!from || !to || from > to) return { labels: [], series: series.map(s => ({ layerId: s.layerId, values: [] })) }
+  if (!from || !to || from > to) {
+    return {
+      labels: [],
+      series: series.map(s => ({
+        layerId: s.layerId,
+        values: [],
+        label: s.label,
+        color: s.color,
+        valueUnit: s.valueUnit,
+      })),
+    }
+  }
 
   const keepIndexes: number[] = []
   for (let i = 0; i < labels.length; i++) {
@@ -503,13 +687,25 @@ export function filterImageryTimeSeriesByDateRange(
     if (day >= from && day <= to) keepIndexes.push(i)
   }
   if (!keepIndexes.length) {
-    return { labels: [], series: series.map(s => ({ layerId: s.layerId, values: [] })) }
+    return {
+      labels: [],
+      series: series.map(s => ({
+        layerId: s.layerId,
+        values: [],
+        label: s.label,
+        color: s.color,
+        valueUnit: s.valueUnit,
+      })),
+    }
   }
   return {
     labels: keepIndexes.map(i => labels[i]!),
     series: series.map(s => ({
       layerId: s.layerId,
       values: keepIndexes.map(i => s.values[i] ?? null),
+      label: s.label,
+      color: s.color,
+      valueUnit: s.valueUnit,
     })),
   }
 }
@@ -522,11 +718,11 @@ export function defaultImageryDateRange(referenceIso: string, lookbackDays = 90)
   return { from, to }
 }
 
-function finiteValues(values: number[]): number[] {
-  return values.filter(v => Number.isFinite(v))
+function finiteValues(values: Array<number | null | undefined>): number[] {
+  return values.filter((v): v is number => v != null && Number.isFinite(v))
 }
 
-function meanOf(values: number[]): number | null {
+function meanOf(values: Array<number | null | undefined>): number | null {
   const finite = finiteValues(values)
   if (!finite.length) return null
   return finite.reduce((sum, v) => sum + v, 0) / finite.length
@@ -564,7 +760,7 @@ export function buildImageryPieChartSlices(
     return bucketImagerySeriesByMonth(labels, series[0]!.values)
   }
   return {
-    labels: series.map(entry => entry.layerId),
+    labels: series.map(entry => entry.label || entry.layerId),
     values: series.map(entry => meanOf(entry.values) ?? 0),
   }
 }

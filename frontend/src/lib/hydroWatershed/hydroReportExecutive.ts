@@ -47,7 +47,7 @@ export function buildHydroExecutiveSummary(input: {
 
   const projectOverview = [
     `This Hydro Watershed & Flood Risk Assessment Report presents a terrain-hydrology analysis of ${input.aoiName} (${input.areaHa.toFixed(2)} ha).`,
-    `The study uses open Terrarium DEM terrain tiles (${input.demResolution}) processed entirely within GeoSyntra's Hydro Watershed Workflow.`,
+    `The study uses open Terrarium DEM terrain tiles (${input.demResolution}) processed entirely within AgroCloud's Hydro Watershed Workflow.`,
     'Outputs include elevation, slope, aspect, flow direction, flow accumulation, stream network extraction, watershed delineation, flood-risk screening, and wetland-potential mapping.',
   ].join(' ')
 

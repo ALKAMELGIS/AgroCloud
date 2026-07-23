@@ -9,7 +9,7 @@ import {
 } from './sentinelHubStatisticsApi'
 
 describe('sentinelHubStatisticsApi', () => {
-  it('parseSentinelHubStatsResponse extracts daily means including snow NDSI', () => {
+  it('parseSentinelHubStatsResponse extracts daily means including salinity NDSI', () => {
     const daily = parseSentinelHubStatsResponse({
       status: 'OK',
       data: [
@@ -23,6 +23,9 @@ describe('sentinelHubStatisticsApi', () => {
                 ndmi: { stats: { mean: 0.31, sampleCount: 120, noDataCount: 4 } },
                 evi: { stats: { mean: 0.44, sampleCount: 120, noDataCount: 4 } },
                 ndsi: { stats: { mean: -0.08, sampleCount: 120, noDataCount: 4 } },
+                si: { stats: { mean: 0.12, sampleCount: 120, noDataCount: 4 } },
+                ssi: { stats: { mean: 0.04, sampleCount: 120, noDataCount: 4 } },
+                ndre: { stats: { mean: 0.22, sampleCount: 120, noDataCount: 4 } },
               },
             },
           },
@@ -33,9 +36,12 @@ describe('sentinelHubStatisticsApi', () => {
     expect(daily[0]?.date).toBe('2026-06-08')
     expect(daily[0]?.ndvi).toBe(0.62)
     expect(daily[0]?.ndsi).toBe(-0.08)
+    expect(daily[0]?.si).toBe(0.12)
+    expect(daily[0]?.ssi).toBe(0.04)
+    expect(daily[0]?.ndre).toBe(0.22)
   })
 
-  it('resolveImageryStatisticsFetchMode uses snow evalscript for NDSI-only', () => {
+  it('resolveImageryStatisticsFetchMode uses NDSI-only evalscript for NDSI-only', () => {
     expect(resolveImageryStatisticsFetchMode(['NDSI'])).toBe('snow-ndsi')
     expect(resolveImageryStatisticsFetchMode(['NDVI'])).toBe('multi')
     expect(resolveImageryStatisticsFetchMode(['NDVI', 'NDSI'])).toBe('multi')

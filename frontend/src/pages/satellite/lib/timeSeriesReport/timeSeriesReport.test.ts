@@ -92,6 +92,10 @@ function samplePayload(): TimeSeriesReportPayload {
     mapImageDataUrl: null,
     mapSnapshotGroups: [],
     cumulativeMapSnapshotGroups: [],
+    lulcMapSnapshotGroups: [],
+    lulcYearCompositions: [],
+    lulcChangeCompositions: [],
+    changeDetectionMapSnapshotGroups: [],
     vegetationCoverageTimeline: [
       {
         date: '2026-07-05',

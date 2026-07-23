@@ -5,5 +5,8 @@ export type {
   GisDataManagerCallbacks,
   GisDataManagerPortalItem,
   GisImportWizardStep,
+  GisDmRasterLayerTools,
+  GisDmRasterLayerInfo,
+  GisDmRasterDisplaySettings,
 } from './gisDataManagerTypes';
 export { GIS_DM_CATEGORIES, WIZARD_STEPS } from './gisDataManagerTypes';

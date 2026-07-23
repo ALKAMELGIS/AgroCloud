@@ -31,6 +31,7 @@ import {
   fetchSentinelIndexClassHistogramForSceneDate,
   type SentinelHubGenericHistogram,
 } from './sentinelHubStatisticsApi'
+import { isLulcClassificationLayerId } from './siLulcClassification'
 
 /** Each pixel of the 10 m Statistical API grid covers 100 m². */
 export const SENTINEL_STATS_PIXEL_AREA_M2 = 100
@@ -126,8 +127,9 @@ export function resolveLayerClassBreakdown(layerId: string): LayerClassBreakdown
   return null
 }
 
-/** True when this layer can report per-class area (single-scene index). */
+/** True when this layer can report per-class area (single-scene index or LULC). */
 export function layerSupportsClassArea(layerId: string): boolean {
+  if (isLulcClassificationLayerId(layerId)) return true
   return resolveLayerClassBreakdown(layerId) != null
 }
 
@@ -225,19 +227,36 @@ export function geodesicAreaM2(input: GeoJSON.Geometry | GeoJSON.Feature | null 
  *   2. area = pixel count × pixel area (`pixelAreaM2`),
  *   3. ha = area ÷ 10,000 · km² = area ÷ 1,000,000.
  * `pixelAreaM2` must match the sampling grid (10 m → 100, 30 m → 900).
+ *
+ * `matchByLowEdge` maps each bin via `floor(lowEdge)` → class index (required for
+ * discrete LULC indices when the API omits empty bins). `foldExtremes` adds
+ * underflow/overflow into the first/last class (index layers); disable for LULC
+ * so underflow is not counted as Water.
  */
 export function computeClassAreaRows(
   histogram: SentinelHubGenericHistogram,
   classCount: number,
   pixelAreaM2: number,
+  options?: { matchByLowEdge?: boolean; foldExtremes?: boolean },
 ): { rows: LayerClassAreaRow[]; analyzedAreaM2: number; sampleCount: number; totalCount: number } {
   const counts = new Array<number>(classCount).fill(0)
   const sorted = [...histogram.bins].sort((a, b) => a.lowEdge - b.lowEdge)
-  for (let i = 0; i < sorted.length && i < classCount; i += 1) {
-    counts[i] = Math.max(0, Number(sorted[i]!.count) || 0)
+  const matchByLowEdge = options?.matchByLowEdge === true
+  const foldExtremes = options?.foldExtremes !== false
+
+  if (matchByLowEdge) {
+    for (const bin of sorted) {
+      const idx = Math.floor(Number(bin.lowEdge))
+      if (!Number.isFinite(idx) || idx < 0 || idx >= classCount) continue
+      counts[idx]! += Math.max(0, Number(bin.count) || 0)
+    }
+  } else {
+    for (let i = 0; i < sorted.length && i < classCount; i += 1) {
+      counts[i] = Math.max(0, Number(sorted[i]!.count) || 0)
+    }
   }
-  // Out-of-range pixels fold into the nearest extreme class.
-  if (classCount > 0) {
+
+  if (foldExtremes && classCount > 0) {
     counts[0]! += Math.max(0, histogram.underflow || 0)
     counts[classCount - 1]! += Math.max(0, histogram.overflow || 0)
   }
@@ -279,6 +298,18 @@ export type FetchLayerClassAreasOptions = {
 export async function fetchLayerClassAreas(
   options: FetchLayerClassAreasOptions,
 ): Promise<LayerClassAreaResult | null> {
+  if (isLulcClassificationLayerId(options.layerId)) {
+    // Dynamic import avoids a circular dependency with siLulcClassAreaLive.
+    const { fetchLulcClassAreas, lulcSceneToLayerClassAreaResult } = await import('./siLulcClassAreaLive')
+    const scene = await fetchLulcClassAreas({
+      geometry: options.geometry,
+      sceneDate: options.sceneDate,
+      resolutionMeters: options.resolutionMeters,
+      signal: options.signal,
+    })
+    return scene ? lulcSceneToLayerClassAreaResult(scene) : null
+  }
+
   const breakdown = resolveLayerClassBreakdown(options.layerId)
   if (!breakdown) return null
 

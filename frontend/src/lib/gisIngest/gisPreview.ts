@@ -138,7 +138,18 @@ export function buildStubPreview(input: {
 export function buildValidationIssues(preview: VectorPreviewInfo): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
 
-  if (preview.featureCount === 0) {
+  // Rasters carry no vector geometry by design, so the "no drawable features" error must
+  // never apply to them — georeferencing is resolved during import. Show an informational
+  // note instead. (Tables/other vector types still flag missing geometry below.)
+  const isRaster = preview.geometryTypes.includes('raster');
+
+  if (isRaster) {
+    issues.push({
+      severity: 'info',
+      code: 'raster_layer',
+      message: 'Raster layer — georeferencing is checked on import; no vector features expected.',
+    });
+  } else if (preview.featureCount === 0) {
     issues.push({
       severity: 'error',
       code: 'missing_features',
@@ -155,8 +166,9 @@ export function buildValidationIssues(preview: VectorPreviewInfo): ValidationIss
   }
 
   if (
-    preview.emptyGeometryCount > 0 ||
-    (preview.featureCount > 0 && (!preview.bbox || preview.geometryTypes.length === 0))
+    !isRaster &&
+    (preview.emptyGeometryCount > 0 ||
+      (preview.featureCount > 0 && (!preview.bbox || preview.geometryTypes.length === 0)))
   ) {
     issues.push({
       severity: 'error',

@@ -122,7 +122,7 @@ function ensurePingPongRasterPair(
       map.addSource(sourceId, {
         type: 'raster',
         tiles: [placeholderUrl],
-        tileSize: SENTINEL_HUB_WMS_TILE_PIXELS,
+        tileSize: stack.tilePixels || SENTINEL_HUB_WMS_TILE_PIXELS,
         minzoom: minZoom,
         ...(bounds ? { bounds } : {}),
       })

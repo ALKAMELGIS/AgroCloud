@@ -311,10 +311,9 @@ export function resolveSourceCrs(worldFile: WorldFileTransform, prjWkt?: string 
   const probe = imageCornersInSourceCrs(worldFile, 100, 100)
   const xs = probe.map(c => c[0])
   const ys = probe.map(c => c[1])
-  const maxAbs = Math.max(...xs.map(Math.abs), ...ys.map(Math.abs))
-  const spanX = Math.max(...xs) - Math.min(...xs)
-  const spanY = Math.max(...ys) - Math.min(...ys)
-  if (maxAbs > 1_000_000 || spanX > 1_000_000 || spanY > 1_000_000) {
+  const maxAbsX = Math.max(...xs.map(Math.abs))
+  const maxAbsY = Math.max(...ys.map(Math.abs))
+  if (maxAbsX > 1_000_000 && maxAbsY > 1_000_000) {
     return 'EPSG:3857'
   }
   if (
@@ -325,7 +324,9 @@ export function resolveSourceCrs(worldFile: WorldFileTransform, prjWkt?: string 
   ) {
     return 'EPSG:4326'
   }
-  return 'EPSG:3857'
+  throw new Error(
+    'World file coordinates are not WGS84 or Web Mercator. Add a matching .prj (EPSG) sidecar so the imagery can be placed accurately.',
+  )
 }
 
 export function reprojectToWgs84(x: number, y: number, sourceCrs: string): [number, number] {

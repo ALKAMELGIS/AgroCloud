@@ -30,13 +30,24 @@ describe('layerLiveLegendCatalog', () => {
     expect(spec?.gradientCss).toContain('linear-gradient')
   })
 
-  it('resolves NDSI snow index with the 10-step blue snow ramp', () => {
+  it('resolves NDSI salinity index with the 10-step soil salinity ramp', () => {
     const spec = resolveLayerLiveLegendSpec('NDSI', 'NDSI')
     expect(spec?.title).toBe('NDSI')
+    expect(spec?.kind).toBe('discrete')
     expect(spec?.classes).toHaveLength(10)
-    expect(spec?.classes?.[0]?.color).toBe('#4a4a4a')
-    expect(spec?.classes?.[9]?.color).toBe('#ffffff')
-    expect(spec?.classes?.[4]?.color).toBe('#29b6f6')
+    expect(spec?.subtitle).toMatch(/salinity/i)
+    expect(spec?.classes?.[0]?.label).toContain('Non-saline')
+    expect(spec?.classes?.[9]?.label).toContain('Extreme salinity')
+    expect(spec?.classes?.[0]?.color).toBe('#1b5e20')
+    expect(spec?.classes?.[9]?.color).toBe('#7f0000')
+  })
+
+  it('resolves LULC live analysis discrete legend', () => {
+    const spec = resolveLayerLiveLegendSpec('LULC', 'LULC')
+    expect(spec?.kind).toBe('discrete')
+    expect(spec?.classes?.some(c => c.label === 'Crops')).toBe(true)
+    expect(spec?.classes?.some(c => c.label === 'Built Area')).toBe(true)
+    expect(spec?.note).toMatch(/3m/)
   })
 
   it('resolves true color and SAR layers', () => {

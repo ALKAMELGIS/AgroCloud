@@ -1,0 +1,1020 @@
+.si-grb {
+  --si-grb-ink: #d4dbe4;
+  --si-grb-muted: #828d9b;
+  --si-grb-line: rgba(255, 255, 255, 0.08);
+  --si-grb-surface: rgba(255, 255, 255, 0.03);
+  --si-grb-accent: #6f8f6a;
+  --si-grb-accent-soft: rgba(111, 143, 106, 0.16);
+  --si-grb-accent-line: rgba(111, 143, 106, 0.36);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--si-grb-ink);
+}
+
+/* Header */
+.si-grb__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--si-grb-line);
+}
+.si-grb__title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 650;
+  color: #e8edf3;
+}
+.si-grb__title > i {
+  color: #cfe0cb;
+}
+.si-grb__icon-btn {
+  border: 1px solid var(--si-grb-line);
+  background: transparent;
+  color: var(--si-grb-muted);
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 10px;
+}
+.si-grb__icon-btn:hover {
+  color: var(--si-grb-ink);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Ribbon groups */
+.si-grb__ribbon {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.si-grb__group {
+  border: 1px solid var(--si-grb-line);
+  border-radius: 9px;
+  background: var(--si-grb-surface);
+  padding: 6px 6px 4px;
+}
+.si-grb__group-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.si-grb__group-label {
+  display: block;
+  margin-top: 4px;
+  text-align: center;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--si-grb-muted);
+}
+
+/* Tool buttons */
+.si-grb__tool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 3px;
+  width: 46px;
+  padding: 5px 2px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--si-grb-ink);
+  font-size: 7.5px;
+  line-height: 1.15;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.si-grb__tool > i {
+  font-size: 14px;
+}
+.si-grb__tool:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--si-grb-line);
+}
+.si-grb__tool--active {
+  background: var(--si-grb-accent-soft);
+  border-color: var(--si-grb-accent);
+  color: #fff;
+}
+.si-grb__tool--danger:hover:not(:disabled) {
+  background: rgba(180, 60, 60, 0.16);
+  border-color: rgba(180, 60, 60, 0.4);
+  color: #f2c2c2;
+}
+.si-grb__tool:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+.si-grb__tool-badge {
+  font-size: 6.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--si-grb-muted);
+}
+
+/* Contextual body */
+.si-grb__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.si-grb__card {
+  border: 1px solid var(--si-grb-line);
+  border-radius: 9px;
+  background: var(--si-grb-surface);
+  padding: 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.si-grb__label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--si-grb-muted);
+}
+.si-grb__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.si-grb__row--between {
+  justify-content: space-between;
+}
+.si-grb__select,
+.si-grb__text {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 12px;
+  color: var(--si-grb-ink);
+  background: rgba(4, 10, 18, 0.4);
+  border: 1px solid var(--si-grb-line);
+  border-radius: 7px;
+  padding: 6px 8px;
+  outline: none;
+}
+
+/* Drop zone */
+.si-grb__drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 16px 10px;
+  border: 1px dashed var(--si-grb-accent-line);
+  border-radius: 9px;
+  background: var(--si-grb-accent-soft);
+  color: var(--si-grb-ink);
+  cursor: pointer;
+  text-align: center;
+}
+.si-grb__drop--over {
+  background: rgba(111, 143, 106, 0.26);
+}
+.si-grb__drop > i {
+  font-size: 18px;
+  color: #cfe0cb;
+}
+.si-grb__drop small {
+  font-size: 8.5px;
+  color: var(--si-grb-muted);
+  line-height: 1.35;
+}
+
+/* Coordinate grids */
+.si-grb__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.si-grb__input {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 8px;
+  font-weight: 600;
+  color: var(--si-grb-muted);
+}
+.si-grb__input > input,
+.si-grb__corner > input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  border: 1px solid var(--si-grb-line);
+  border-radius: 6px;
+  background: rgba(4, 10, 18, 0.45);
+  color: var(--si-grb-ink);
+  font-size: 10px;
+}
+.si-grb__corner {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr;
+  align-items: center;
+  gap: 4px;
+}
+.si-grb__corner-label {
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--si-grb-ink);
+  min-width: 20px;
+}
+
+/* Control point table */
+.si-grb__cpt {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+.si-grb__cpt th,
+.si-grb__cpt td {
+  border: 1px solid var(--si-grb-line);
+  padding: 2px 3px;
+  text-align: center;
+}
+.si-grb__cpt th {
+  color: var(--si-grb-muted);
+  font-weight: 600;
+  font-size: 8.5px;
+}
+.si-grb__cpt input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 0;
+  background: transparent;
+  color: var(--si-grb-ink);
+  font-size: 10px;
+  text-align: center;
+  padding: 2px 1px;
+}
+.si-grb__cpt tr[data-selected='true'] {
+  background: var(--si-grb-accent-soft);
+}
+.si-grb__cpt-row-btn {
+  border: 0;
+  background: transparent;
+  color: var(--si-grb-muted);
+  cursor: pointer;
+  font-size: 9px;
+  padding: 2px;
+}
+.si-grb__cpt-row-btn:hover {
+  color: #f2c2c2;
+}
+
+/* Buttons */
+.si-grb__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 7px;
+  padding: 7px 12px;
+  cursor: pointer;
+  border: 1px solid var(--si-grb-line);
+  background: transparent;
+  color: var(--si-grb-ink);
+}
+.si-grb__btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+}
+.si-grb__btn--primary {
+  background: var(--si-grb-accent);
+  border-color: var(--si-grb-accent);
+  color: #0c1410;
+}
+.si-grb__btn--primary:hover:not(:disabled) {
+  background: #7d9d78;
+}
+.si-grb__btn--full,
+.si-grb__btn--wide {
+  width: 100%;
+}
+.si-grb__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Existing-raster picker (empty state) */
+.si-grb__pick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--si-grb-line);
+}
+.si-grb__pick-or {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+
+/* Smart Auto Georeference */
+.si-grb__smart {
+  gap: 10px;
+}
+.si-grb__seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.si-grb__seg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--si-grb-ink);
+  border: 1px solid var(--si-grb-line);
+  background: transparent;
+}
+.si-grb__seg-btn.is-on {
+  border-color: var(--si-grb-accent);
+  background: rgba(140, 170, 135, 0.16);
+}
+.si-grb__smart-result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.si-grb__conf {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.si-grb__conf-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 700;
+}
+.si-grb__conf-label em {
+  font-style: normal;
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+}
+.si-grb__conf-bar {
+  position: relative;
+  height: 8px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+}
+.si-grb__conf-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 6px;
+  transition: width 0.25s ease;
+}
+.si-grb__conf-fill.is-good {
+  background: #5fb56a;
+}
+.si-grb__conf-fill.is-mid {
+  background: #d6a44a;
+}
+.si-grb__conf-fill.is-low {
+  background: #cf5c52;
+}
+.si-grb__smart-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+}
+
+/* Add Control Points — two-click guide */
+.si-grb__cp-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(140, 170, 135, 0.35);
+  background: rgba(140, 170, 135, 0.1);
+}
+.si-grb__cp-guide.is-to {
+  border-color: rgba(214, 164, 74, 0.45);
+  background: rgba(214, 164, 74, 0.12);
+}
+.si-grb__cp-steps {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.si-grb__cp-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--si-grb-line);
+  opacity: 0.6;
+}
+.si-grb__cp-step.is-on {
+  opacity: 1;
+  border-color: var(--si-grb-accent);
+  background: rgba(140, 170, 135, 0.2);
+}
+.si-grb__cp-step.is-done {
+  opacity: 0.85;
+}
+.si-grb__cp-arrow {
+  font-size: 10px;
+  opacity: 0.5;
+}
+.si-grb__cp-apply {
+  margin-top: 8px;
+}
+
+/* Status / error */
+.si-grb__status,
+.si-grb__error {
+  margin: 0;
+  font-size: 10.5px;
+  padding: 6px 8px;
+  border-radius: 7px;
+}
+.si-grb__status {
+  color: var(--si-grb-ink);
+  background: rgba(4, 10, 18, 0.4);
+  border: 1px solid var(--si-grb-line);
+}
+.si-grb__error {
+  color: #f2c2c2;
+  background: rgba(180, 60, 60, 0.14);
+  border: 1px solid rgba(180, 60, 60, 0.34);
+}
+.si-grb__hint {
+  margin: 0;
+  font-size: 9px;
+  line-height: 1.4;
+  color: var(--si-grb-muted);
+}
+
+/* CRS search */
+.si-grb__crs-results {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--si-grb-line);
+  border-radius: 7px;
+}
+.si-grb__crs-results li button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  text-align: left;
+  padding: 5px 7px;
+  border: 0;
+  border-bottom: 1px solid var(--si-grb-line);
+  background: transparent;
+  color: var(--si-grb-ink);
+  cursor: pointer;
+  font-size: 11px;
+}
+.si-grb__crs-results li button:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.si-grb__crs-meta {
+  font-size: 8.5px;
+  color: var(--si-grb-muted);
+}
+
+/* Transform (move/scale/rotate/flip) */
+.si-grb__xf {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.si-grb__xf-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 26px);
+  grid-template-rows: repeat(3, 26px);
+  gap: 2px;
+}
+.si-grb__xf-btn {
+  border: 1px solid var(--si-grb-line);
+  background: var(--si-grb-surface);
+  color: var(--si-grb-ink);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.si-grb__xf-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+.si-grb__xf-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.si-grb__xf-up {
+  grid-column: 2;
+  grid-row: 1;
+}
+.si-grb__xf-left {
+  grid-column: 1;
+  grid-row: 2;
+}
+.si-grb__xf-mid {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--si-grb-muted);
+  font-size: 11px;
+}
+.si-grb__xf-right {
+  grid-column: 3;
+  grid-row: 2;
+}
+.si-grb__xf-down {
+  grid-column: 2;
+  grid-row: 3;
+}
+.si-grb__xf-col {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+  min-width: 120px;
+}
+.si-grb__xf-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.si-grb__xf-tag {
+  font-size: 10px;
+  color: var(--si-grb-muted);
+  width: 40px;
+}
+.si-grb__xf-row .si-grb__btn {
+  padding: 5px 9px;
+  flex: 1;
+}
+
+/* ── Floating horizontal toolbar (ArcGIS-style, top-centre of the map) ── */
+.si-grb-floatbar {
+  position: fixed;
+  top: 128px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1200;
+  width: min(980px, calc(100vw - 32px));
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 10px 14px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(12, 18, 26, 0.94);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+}
+/* Compact icon bar: width = drag + title + tools only (no empty stretch). */
+.si-grb-floatbar--compact,
+.si-grb-floatbar:has(.si-grb__ribbon--compact) {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  width: fit-content;
+  max-width: calc(100vw - 24px);
+  height: auto;
+  padding: 3px 5px 3px 3px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(14, 18, 26, 0.78), rgba(6, 9, 14, 0.72));
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  overflow: visible;
+}
+.si-grb-floatbar--free {
+  transform: none;
+}
+.si-grb-floatbar.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+  opacity: 0.96;
+}
+.si-grb-floatbar__drag {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 26px;
+  margin-right: 2px;
+  border-radius: 5px;
+  color: rgba(255, 255, 255, 0.45);
+  cursor: grab;
+  touch-action: none;
+}
+.si-grb-floatbar__drag:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.06);
+}
+.si-grb-floatbar.is-dragging .si-grb-floatbar__drag {
+  cursor: grabbing;
+  color: var(--si-grb-accent);
+}
+
+/* Horizontal ribbon layout */
+.si-grb--bar {
+  gap: 10px;
+}
+.si-grb--bar .si-grb__head {
+  padding-bottom: 6px;
+}
+.si-grb--bar .si-grb__ribbon {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: center;
+  gap: 8px;
+}
+.si-grb--bar .si-grb__group {
+  padding: 5px 8px 3px;
+}
+/* Contextual bodies drop BELOW the ribbon, contained fully inside the toolbar. */
+.si-grb--bar .si-grb__body {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  width: 100%;
+}
+.si-grb--bar .si-grb__body > .si-grb__card {
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.si-grb--bar .si-grb__status,
+.si-grb--bar .si-grb__error {
+  flex-basis: 100%;
+}
+
+/* Compact single-row toolbar: ONE cohesive professional transparent-black glass bar
+   with an inline header on the left and small bordered icon-only tools. */
+.si-grb-floatbar--compact .si-grb--bar,
+.si-grb-floatbar:has(.si-grb__ribbon--compact) .si-grb--bar {
+  flex: 0 0 auto;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+}
+/* Header is an inline title (also a drag handle) with a divider before the tools. */
+.si-grb-floatbar--compact .si-grb__head,
+.si-grb-floatbar:has(.si-grb__ribbon--compact) .si-grb__head {
+  align-self: stretch;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin: 0;
+  padding: 0 7px 0 2px;
+  border: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  cursor: grab;
+  touch-action: none;
+  flex: 0 0 auto;
+}
+.si-grb-floatbar.is-dragging .si-grb__head {
+  cursor: grabbing;
+}
+.si-grb-floatbar--compact .si-grb__title,
+.si-grb-floatbar:has(.si-grb__ribbon--compact) .si-grb__title {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.9);
+  text-transform: none;
+}
+.si-grb-floatbar--compact .si-grb__title > i,
+.si-grb-floatbar:has(.si-grb__ribbon--compact) .si-grb__title > i {
+  color: var(--si-grb-accent);
+  opacity: 0.95;
+  font-size: 11px;
+}
+.si-grb-floatbar--compact .si-grb__ribbon--compact,
+.si-grb-floatbar:has(.si-grb__ribbon--compact) .si-grb__ribbon--compact {
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: 100%;
+}
+/* Keep contextual panels below the icon row without stretching bar width. */
+.si-grb-floatbar--compact .si-grb__body,
+.si-grb-floatbar:has(.si-grb__ribbon--compact) .si-grb__body {
+  flex: 1 0 100%;
+  width: max-content;
+  max-width: min(420px, calc(100vw - 48px));
+  min-width: 0;
+}
+.si-grb-floatbar--compact .si-grb__body:empty,
+.si-grb-floatbar:has(.si-grb__ribbon--compact) .si-grb__body:empty {
+  display: none;
+}
+/* Compact head wins over generic bar head padding. */
+.si-grb-floatbar--compact .si-grb--bar .si-grb__head,
+.si-grb-floatbar:has(.si-grb__ribbon--compact) .si-grb--bar .si-grb__head {
+  padding-bottom: 0;
+  margin-bottom: 0;
+  border-bottom: 0;
+}
+/* Slim head + project bar so the floating tool is minimal (single-row focus). */
+.si-grb--bar .si-grb__head {
+  padding-bottom: 5px;
+  margin-bottom: 1px;
+}
+.si-grb--bar .si-grb__head .si-grb__title {
+  font-size: 11px;
+}
+.si-grb--bar .si-grb__head .si-grb__title > i {
+  font-size: 12px;
+}
+.si-grb-floatbar:has(.si-grb__ribbon--compact) .si-grb__card:first-of-type {
+  padding: 4px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.si-grb-floatbar:has(.si-grb__ribbon--compact) .si-grb__card:first-of-type .si-grb__select {
+  height: 26px;
+  font-size: 11px;
+}
+.si-grb--bar .si-grb__ribbon--compact {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0;
+  border-radius: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.si-grb--bar .si-grb__ribbon--compact .si-grb__tool {
+  flex: 0 0 auto;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  gap: 0;
+  line-height: 1;
+  /* Visible icon borders for a compact ArcGIS-style chip row. */
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease, color 0.15s ease;
+}
+.si-grb--bar .si-grb__ribbon--compact .si-grb__tool > span {
+  display: none;
+}
+.si-grb--bar .si-grb__ribbon--compact .si-grb__tool > i {
+  font-size: 12px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+.si-grb--bar .si-grb__ribbon--compact .si-grb__tool-badge {
+  display: none;
+}
+.si-grb--bar .si-grb__ribbon--compact .si-grb__tool:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #fff;
+}
+.si-grb--bar .si-grb__ribbon--compact .si-grb__tool:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+.si-grb--bar .si-grb__ribbon--compact .si-grb__tool--active {
+  background: var(--si-grb-accent-soft);
+  border-color: var(--si-grb-accent-line);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px var(--si-grb-accent-line);
+}
+.si-grb--bar .si-grb__ribbon--compact .si-grb__tool--active > i {
+  color: var(--si-grb-accent);
+}
+.si-grb--bar .si-grb__ribbon--compact .si-grb__tool--danger:hover:not(:disabled) {
+  background: rgba(220, 70, 70, 0.16);
+  border-color: rgba(220, 70, 70, 0.45);
+  color: #ffd7d7;
+}
+.si-grb--bar .si-grb__ribbon--compact .si-grb__divider {
+  margin: 3px 2px;
+  align-self: center;
+  height: 16px;
+}
+.si-grb__divider {
+  flex: 0 0 auto;
+  align-self: stretch;
+  width: 1px;
+  margin: 5px 3px;
+  background: linear-gradient(180deg, transparent, var(--si-grb-line) 20%, var(--si-grb-line) 80%, transparent);
+}
+
+/* In bar mode, contextual action buttons collapse to compact icon buttons
+   (label hidden, shown on hover via tooltip) to match the icon ribbon. */
+.si-grb__row--actions {
+  justify-content: flex-end;
+  gap: 6px;
+}
+.si-grb--bar .si-grb__row--actions .si-grb__btn--iconized {
+  flex: 0 0 auto;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0;
+  gap: 0;
+  border-radius: 9px;
+}
+.si-grb--bar .si-grb__row--actions .si-grb__btn--iconized > span {
+  display: none;
+}
+.si-grb--bar .si-grb__row--actions .si-grb__btn--iconized > i {
+  font-size: 15px;
+}
+
+/* Direct-manipulation hint (Move/Rotate/Scale act on the map canvas) */
+.si-grb__manip-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border-radius: 10px;
+  font-size: 11px;
+  color: var(--si-grb-ink);
+  border: 1px solid var(--si-grb-accent-line);
+  background: var(--si-grb-accent-soft);
+}
+.si-grb__manip-hint > i {
+  font-size: 12px;
+  color: var(--si-grb-accent);
+}
+
+/* ArcGIS-style control-point HUD (shown while picking; interaction is on the map) */
+.si-grb__cp-hud {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--si-grb-line);
+  background: linear-gradient(180deg, rgba(16, 20, 26, 0.72), rgba(10, 13, 18, 0.82));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+.si-grb__cp-hud-stats {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+.si-grb__cp-hud-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  padding: 3px 8px;
+  border-radius: 9px;
+  background: var(--si-grb-surface);
+  border: 1px solid var(--si-grb-line);
+  line-height: 1.05;
+}
+.si-grb__cp-hud-num {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--si-grb-ink);
+  font-variant-numeric: tabular-nums;
+}
+.si-grb__cp-hud-cap {
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--si-grb-muted);
+}
+.si-grb__cp-hud-phase {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--si-grb-muted);
+  white-space: nowrap;
+}
+.si-grb__cp-hud-phase.is-to {
+  color: var(--si-grb-accent);
+}
+.si-grb__cp-hud-phase > i {
+  font-size: 12px;
+}
+.si-grb__cp-hud-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.si-grb__cp-hud-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid var(--si-grb-line);
+  background: var(--si-grb-surface);
+  color: var(--si-grb-ink);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+.si-grb__cp-hud-btn > i {
+  font-size: 13px;
+}
+.si-grb__cp-hud-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.si-grb__cp-hud-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.si-grb__cp-hud-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.si-grb__cp-hud-btn--primary {
+  background: var(--si-grb-accent-soft);
+  border-color: var(--si-grb-accent-line);
+  color: #e8f0e6;
+}
+.si-grb__cp-hud-btn--primary:hover:not(:disabled) {
+  background: rgba(111, 143, 106, 0.28);
+}
+.si-grb__cp-hud-btn--finish {
+  color: var(--si-grb-accent);
+}
+
+/* Slider */
+.si-grb__slider {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  color: var(--si-grb-muted);
+}
+.si-grb__slider input[type='range'] {
+  flex: 1;
+  accent-color: var(--si-grb-accent);
+}

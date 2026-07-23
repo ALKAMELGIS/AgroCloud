@@ -31,6 +31,10 @@ function payload(): TimeSeriesReportPayload {
     mapImageDataUrl: null,
     mapSnapshotGroups: [],
     cumulativeMapSnapshotGroups: [],
+    lulcMapSnapshotGroups: [],
+    lulcYearCompositions: [],
+    lulcChangeCompositions: [],
+    changeDetectionMapSnapshotGroups: [],
     vegetationCoverageTimeline: [],
     estimatedWaterLossTimeline: [],
     weatherTimeline: {

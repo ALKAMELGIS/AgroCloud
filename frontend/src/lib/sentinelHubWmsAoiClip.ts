@@ -6,8 +6,10 @@
 
 import { buildAgroCompositeLayerEvalscript } from './agroCompositeIndexEvalscripts'
 import { buildCropClassificationEvalscript } from './siCropClassificationEvalscript'
+import { buildLulcClassificationEvalscript } from './siLulcClassificationEvalscript'
 import { isAgroCompositeLayerId } from './agroCompositeIndices'
 import { isCropClassificationLayerId } from './siCropClassification'
+import { isLulcClassificationLayerId } from './siLulcClassification'
 import {
   buildSentinelIndexColorRampEvalscript,
   isSentinelIndexColorRampProfile,
@@ -32,7 +34,8 @@ export type WmsAoiEvalProfile =
   | SentinelIndexEvalProfile
   | 'generic_rgb'
   | 'agro_composite'
-  | 'crop_classification';
+  | 'crop_classification'
+  | 'lulc_classification';
 
 export type BuildSentinelHubWmsAoiClipOptions = {
   /** When set (0–1), multiply alpha by (index >= minIndex) for index-style profiles (e.g. NDVI). Ignored for RGB-only profiles. */
@@ -233,7 +236,7 @@ function multiPolygon3857Wkt(rings: [number, number][][]): string {
 export function inferWmsEvalProfile(layerName: string): WmsAoiEvalProfile {
   const u = String(layerName || '').toUpperCase();
   if (isCropClassificationLayerId(u)) return 'crop_classification';
-  if (u === 'NDSI') return 'ndsi';
+  if (isLulcClassificationLayerId(u)) return 'lulc_classification';
   if (isAgroCompositeLayerId(u)) return 'agro_composite';
   if (usesPresetSentinelHubWmsLayer(layerName)) return 'native';
   if (u.includes('GNDVI')) return 'gndvi';
@@ -269,6 +272,9 @@ function buildEvalscriptV3(
   }
   if (profile === 'crop_classification') {
     return buildCropClassificationEvalscript();
+  }
+  if (profile === 'lulc_classification') {
+    return buildLulcClassificationEvalscript();
   }
   if (isSentinelIndexColorRampProfile(profile)) {
     return buildSentinelIndexColorRampEvalscript(profile, indexVisibilityMin, { sceneDate });

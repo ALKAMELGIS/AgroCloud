@@ -129,6 +129,7 @@ import {
   agroStructuresLayerAoiSignature,
   buildAgroStructuresLayerAoiMask,
   countAgroStructuresPolygons,
+  featureToPrimaryAoiFeature,
   fetchAgroStructuresGeoJson,
   findAgroStructuresFeatureInLayer,
   isAgroStructuresLayer,
@@ -137,6 +138,7 @@ import {
   resolveAgroStructuresLayerUrl,
 } from '../../lib/agroStructuresPrimaryAoi';
 import { connectArcGisFeatureServiceUrl } from '../../lib/arcgisServiceDiscover';
+import { rasterTilesSourceMaxNativeZoom } from '../../lib/rasterTileZoom';
 import {
   arcgisDynamicDebug,
   arcGisLayerExtentWgs84,
@@ -254,6 +256,7 @@ import {
   resolveCropClassificationTimeWindow,
   type CropClassificationSettings,
 } from '../../lib/siCropClassification';
+import { exportRemoteSensingIndexGeoTiff } from '../../lib/remoteSensing/rsIndexGeoTiffExport';
 import {
   buildCalibratedFieldsGeoJson,
   calibrateRegionalCrops,
@@ -463,6 +466,11 @@ import {
   type GeoAiMapCommandHandlers,
 } from '../../lib/geoAiCommandExecutor';
 import { TreeDetectionsPanel } from './components/TreeDetectionsPanel';
+import { SamDetectionPanel, type SamPanelTab } from './components/SamDetectionPanel';
+import { useSamDetection, type SamAoiSource } from './components/useSamDetection';
+import { AgriFieldBoundaryPanel } from './components/AgriFieldBoundaryPanel';
+import { useAgriFieldBoundary } from './components/useAgriFieldBoundary';
+import { useSamTrainingSamples } from './components/useSamTrainingSamples';
 import { SiAiDetectionGisPanel } from './components/aiDetection/SiAiDetectionGisPanel';
 import {
   isRasterDataFile,
@@ -492,6 +500,25 @@ import { useTreeDetection } from './components/useTreeDetection';
 import { SiImportedCustomLayersOverlay } from './components/SiImportedCustomLayersOverlay';
 import { FloodMonitoringPanel, type FloodLayerKind } from './components/FloodMonitoringPanel';
 import { useFloodMonitoring } from './components/useFloodMonitoring';
+import { ImageClassificationWizardPanel } from './components/imageClassification/ImageClassificationWizardPanel';
+import {
+  useImageClassificationWizard,
+  type SchemaClass as IcwSchemaClass,
+  type TrainingSample as IcwTrainingSample,
+} from './components/imageClassification/useImageClassificationWizard';
+import { GeoreferenceFloatbar } from './components/rasterGeoreference/GeoreferenceFloatbar';
+import { RasterGeoreferenceRibbon } from './components/rasterGeoreference/RasterGeoreferenceRibbon';
+import {
+  useRasterGeoreferenceTool,
+  type CornerQuad,
+  type RasterDisplaySettings,
+  type RasterImageOverlay,
+} from './components/rasterGeoreference/useRasterGeoreferenceTool';
+import type {
+  ClassifyResult,
+  SegmentationResult,
+} from './lib/imageClassification/imageClassificationClient';
+import { ingestRasterFilesViaServer, type ServerRasterLayerConfig } from '../../lib/raster/siRasterTileService';
 import { downloadTreeShapefile } from '../../lib/treeDetection/shapefileExport';
 import {
   searchPlaces,
@@ -512,6 +539,8 @@ import type { WellSuitabilitySite } from '../../lib/hydroWatershed/wellSuitabili
 import type { HydroStepId } from '../../lib/hydroWatershed/hydroEngine';
 import { generateHydroWatershedReportDocx } from '../../lib/hydroWatershed/generateHydroReportDocx';
 import { generateSarFloodIntelligenceReport } from '../../lib/sarFloodReport/generateSarFloodReportDocx';
+import { generateCropClassificationReportDocx } from '../../lib/cropClassificationReport';
+import { exportCropClassificationGeoTiff } from '../../lib/cropClassificationReport/cropClassificationGeoTiffExport';
 import { GisPortalBrowseLayersPanel } from './components/GisPortalBrowseLayersPanel';
 import type { MapToolboxAddGisLayerAction } from './components/MapToolboxAddGisLayerFlyout';
 import { GisDataManager } from './gisDataManager';
@@ -613,6 +642,8 @@ type SiRasterSpec = {
   tileSize: number;
   attribution?: string;
   opacity: number;
+  /** Native max zoom — beyond this Mapbox over-zooms the last real tiles (no gray placeholders). */
+  maxNativeZoom?: number;
 };
 
 /**
@@ -645,6 +676,7 @@ function siExtractRasterSpecs(style: unknown): SiRasterSpec[] {
       tileSize: typeof src.tileSize === 'number' ? src.tileSize : 256,
       attribution: typeof src.attribution === 'string' ? src.attribution : undefined,
       opacity: typeof op === 'number' ? op : 1,
+      maxNativeZoom: typeof src.maxzoom === 'number' ? src.maxzoom : undefined,
     });
   }
   return specs;
@@ -661,6 +693,7 @@ function siBuildStableRasterStyle(specs: SiRasterSpec[]): any {
       type: 'raster',
       tiles: spec.tiles,
       tileSize: spec.tileSize,
+      ...(typeof spec.maxNativeZoom === 'number' ? { maxzoom: spec.maxNativeZoom } : {}),
       ...(spec.attribution ? { attribution: spec.attribution } : {}),
     };
     layers.push({
@@ -690,10 +723,14 @@ type MapToolboxSectionId =
  | 'crop-classification'
  | 'ai-detection-gis'
  | 'tree-detections'
+ | 'sam-detection'
+ | 'agri-field-boundary'
  | 'hydro-watershed'
  | 'well-site'
  | 'well-suitability'
  | 'flood-monitoring'
+ | 'image-classification'
+ | 'raster-georeference'
  | 'table-geo-ai';
 
 type GeoAiInspectCardState = {
@@ -817,6 +854,10 @@ const STAC_HELP_LINKS = {
 const NETFLORA_DETECTIONS_LAYER_ID = 'ai-detection-netflora-results';
 const TREE_DETECTIONS_SOURCE_ID = 'tree-detections-source';
 const TREE_DETECTIONS_LAYER_ID = 'tree-detections-overlay';
+const SAM_SAVED_SOURCE_ID = 'sam-saved-source';
+const SAM_MASK_SOURCE_ID = 'sam-mask-source';
+const AGRI_FIELD_BOUNDARY_SOURCE_ID = 'agri-field-boundary-source';
+const SAM_POINTS_SOURCE_ID = 'sam-points-source';
 /** Ordered so raster terrain sits below vector hydrography/mesh on the map. */
 const HYDRO_STEP_ORDER: HydroStepId[] = [
   'dem',
@@ -2621,10 +2662,15 @@ function siPaintCustomLayersOnMapboxCanvas(
       if (layer.arcgisRasterTiles?.tiles?.length) {
         const rasterSrcId = sourceId;
         if (!map.getSource(rasterSrcId)) {
+          // Cap at the service's native zoom so Mapbox over-zooms the last real
+          // tiles rather than fetching unavailable levels that cached services
+          // return as gray "Map data not yet available" placeholder tiles.
+          const maxNativeZoom = rasterTilesSourceMaxNativeZoom(layer.arcgisRasterTiles);
           map.addSource(rasterSrcId, {
             type: 'raster',
             tiles: layer.arcgisRasterTiles.tiles,
             tileSize: layer.arcgisRasterTiles.tileSize ?? 256,
+            ...(typeof maxNativeZoom === 'number' ? { maxzoom: maxNativeZoom } : {}),
           });
           arcgisDynamicDebug('source_created', { layerId: layer.id, kind: 'arcgis-raster-tiles' });
         }
@@ -4280,7 +4326,21 @@ export default function SatelliteIntelligence() {
   /** Isolated study AOI for Crop Classification â€” never mixed with Remote Sensing sketch. */
   const [cropClassAoiGeometry, setCropClassAoiGeometry] = useState<any | null>(null);
   const [cropClassDrawingModeActive, setCropClassDrawingModeActive] = useState(false);
-  const [mapDrawOwner, setMapDrawOwner] = useState<'remote-sensing' | 'crop-classification'>('remote-sensing');
+  /** Isolated training-sample sketch for Image Classification — never mixed with the general map drawing. */
+  const [icSampleAoiGeometry, setIcSampleAoiGeometry] = useState<any | null>(null);
+  const [icDrawingModeActive, setIcDrawingModeActive] = useState(false);
+  /** Isolated draft geometry for SAM Training Samples Manager digitizing. */
+  const [samTrainDraftGeometry, setSamTrainDraftGeometry] = useState<any | null>(null);
+  const [samTrainDigitizing, setSamTrainDigitizing] = useState(false);
+  const [samPanelTab, setSamPanelTab] = useState<SamPanelTab>('detect');
+  /** SAM Detect AOI: existing polygon layer or drawn polygon. */
+  const [samAoiSource, setSamAoiSource] = useState<SamAoiSource>('draw');
+  const [samAoiLayerId, setSamAoiLayerId] = useState('');
+  const [samAoiGeometry, setSamAoiGeometry] = useState<any | null>(null);
+  const [samAoiDrawing, setSamAoiDrawing] = useState(false);
+  const [mapDrawOwner, setMapDrawOwner] = useState<
+    'remote-sensing' | 'crop-classification' | 'image-classification' | 'sam-training' | 'sam-aoi'
+  >('remote-sensing');
   const [regionalCropTraining, setRegionalCropTraining] = useState<RegionalCropTrainingState>(
     () => ({ ...DEFAULT_REGIONAL_CROP_TRAINING_STATE }),
   );
@@ -4667,10 +4727,14 @@ export default function SatelliteIntelligence() {
   | 'crop-classification'
   | 'ai-detection-gis'
   | 'tree-detections'
+  | 'sam-detection'
+  | 'agri-field-boundary'
   | 'hydro-watershed'
   | 'well-site'
   | 'well-suitability'
   | 'flood-monitoring'
+  | 'image-classification'
+  | 'raster-georeference'
   | 'table-geo-ai'
   >('source');
 
@@ -4769,6 +4833,68 @@ export default function SatelliteIntelligence() {
       prev ? { ...prev, status: 'error', message: 'Cancelled.', error: 'Cancelled by user.' } : prev,
     );
   }, []);
+
+  const [cropAiExportBusy, setCropAiExportBusy] = useState(false);
+  const [cropAiExportLabel, setCropAiExportLabel] = useState<string | undefined>(undefined);
+  const [cropAiGeoTiffBusy, setCropAiGeoTiffBusy] = useState(false);
+  const [cropAiGeoTiffLabel, setCropAiGeoTiffLabel] = useState<string | undefined>(undefined);
+  const handleCropAiExportReport = useCallback(() => {
+    const geom = drawnGeometry?.geometry;
+    const result = cropAiJob?.status === 'done' ? cropAiJob.result : null;
+    if (!geom || (geom.type !== 'Polygon' && geom.type !== 'MultiPolygon') || !result) return;
+    setCropAiExportBusy(true);
+    setCropAiExportLabel('Preparing report…');
+    void (async () => {
+      try {
+        await generateCropClassificationReportDocx({
+          geometry: geom,
+          aoiName:
+            (drawnGeometry?.properties?.name as string | undefined) ??
+            (drawnGeometry?.properties?.fieldName as string | undefined) ??
+            'Crop Study Area',
+          season: cropAiSeason,
+          result,
+          projectName: 'AgroCloud Crop Classification Intelligence',
+          generatedBy: 'AgroCloud',
+          onProgress: (done, total, label) => {
+            setCropAiExportLabel(`Maps ${done}/${total}: ${label}`);
+          },
+        });
+      } catch (err) {
+        console.error('Crop classification report export failed', err);
+      } finally {
+        setCropAiExportBusy(false);
+        setCropAiExportLabel(undefined);
+      }
+    })();
+  }, [drawnGeometry, cropAiJob, cropAiSeason]);
+
+  const handleCropAiExportGeoTiff = useCallback(() => {
+    const result = cropAiJob?.status === 'done' ? cropAiJob.result : null;
+    if (!result?.prediction?.url || !result.prediction.bounds) return;
+    const geom = drawnGeometry?.geometry;
+    setCropAiGeoTiffBusy(true);
+    setCropAiGeoTiffLabel('Preparing GeoTIFF…');
+    void (async () => {
+      try {
+        await exportCropClassificationGeoTiff({
+          result,
+          aoiName:
+            (drawnGeometry?.properties?.name as string | undefined) ??
+            (drawnGeometry?.properties?.fieldName as string | undefined) ??
+            'Crop Study Area',
+          geometry:
+            geom && (geom.type === 'Polygon' || geom.type === 'MultiPolygon') ? geom : null,
+          onProgress: label => setCropAiGeoTiffLabel(label),
+        });
+      } catch (err) {
+        console.error('Crop classification GeoTIFF export failed', err);
+      } finally {
+        setCropAiGeoTiffBusy(false);
+        setCropAiGeoTiffLabel(undefined);
+      }
+    })();
+  }, [drawnGeometry, cropAiJob]);
 
   const handleCropAiPickAoi = useCallback(() => {
     mapDrawOwnerRef.current = 'remote-sensing';
@@ -5057,14 +5183,39 @@ export default function SatelliteIntelligence() {
   const siTableFeatureKeyCacheRef = useRef<Map<object, string>>(new Map());
   const drawnGeometryRef = useRef<any | null>(null);
   const cropClassAoiGeometryRef = useRef<any | null>(null);
-  const mapDrawOwnerRef = useRef<'remote-sensing' | 'crop-classification'>('remote-sensing');
+  const icSampleAoiGeometryRef = useRef<any | null>(null);
+  const samTrainDraftGeometryRef = useRef<any | null>(null);
+  const samAoiGeometryRef = useRef<any | null>(null);
+  const mapDrawOwnerRef = useRef<
+    'remote-sensing' | 'crop-classification' | 'image-classification' | 'sam-training' | 'sam-aoi'
+  >('remote-sensing');
   const cropClassDrawingModeActiveRef = useRef(false);
+  const icDrawingModeActiveRef = useRef(false);
+  const samTrainDigitizingRef = useRef(false);
+  const samAoiDrawingRef = useRef(false);
   mapDrawOwnerRef.current = mapDrawOwner;
   cropClassDrawingModeActiveRef.current = cropClassDrawingModeActive;
+  icDrawingModeActiveRef.current = icDrawingModeActive;
+  samTrainDigitizingRef.current = samTrainDigitizing;
+  samAoiDrawingRef.current = samAoiDrawing;
   const isSketchDrawingActiveRef = useRef(false);
-  isSketchDrawingActiveRef.current = rsDrawingModeActive || cropClassDrawingModeActive || gisSelectionActive;
+  isSketchDrawingActiveRef.current =
+    rsDrawingModeActive ||
+    cropClassDrawingModeActive ||
+    icDrawingModeActive ||
+    samTrainDigitizing ||
+    samAoiDrawing ||
+    gisSelectionActive;
   const activeDrawGeomRef = () =>
-    mapDrawOwnerRef.current === 'crop-classification' ? cropClassAoiGeometryRef : drawnGeometryRef;
+    mapDrawOwnerRef.current === 'crop-classification'
+      ? cropClassAoiGeometryRef
+      : mapDrawOwnerRef.current === 'image-classification'
+        ? icSampleAoiGeometryRef
+        : mapDrawOwnerRef.current === 'sam-training'
+          ? samTrainDraftGeometryRef
+          : mapDrawOwnerRef.current === 'sam-aoi'
+            ? samAoiGeometryRef
+            : drawnGeometryRef;
   /** Primary Layer Source mask (Agro_Structures / AOI Mask Builder) â€” never mixed with preview sketch. */
   const primaryLayerSourceMaskRef = useRef<GeoJSON.FeatureCollection | GeoJSON.Feature | null>(null);
   const hasActiveLayerSourceAoiRef = useRef(false);
@@ -5093,6 +5244,12 @@ export default function SatelliteIntelligence() {
   const processingPanelIsolationProps = useMapOverlayIsolation(isLayerDropdownOpen, { native: true });
   const mapDrawToolRef = useRef<MapDrawTool>('select');
   mapDrawToolRef.current = mapDrawTool;
+  // Track the active toolbox section + panel-open state so click handlers can tell when
+  // the Georeference tool owns map interaction (control-point capture).
+  const isLayerDropdownOpenRef = useRef(isLayerDropdownOpen);
+  isLayerDropdownOpenRef.current = isLayerDropdownOpen;
+  const expandedEnvSectionRef = useRef(expandedEnvSection);
+  expandedEnvSectionRef.current = expandedEnvSection;
   const rsDrawingModeActiveRef = useRef(false);
   rsDrawingModeActiveRef.current = rsDrawingModeActive;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -5107,6 +5264,8 @@ export default function SatelliteIntelligence() {
   const geoAiOllamaLoadOlderRef = useRef<{ top: number; height: number } | null>(null);
   const netfloraUploadInputRef = useRef<HTMLInputElement | null>(null);
   const skipNextMapClickRef = useRef(false);
+  // Last point clicked on the map (WGS84), used to fill ground control points in the ICW.
+  const lastMapClickRef = useRef<{ lon: number; lat: number } | null>(null);
   /** While drawing a polygon: index of vertex being dragged, or null. */
   const polygonRingSketchDragRef = useRef<number | null>(null);
   const editDragRef = useRef<null | { mode: 'vertex'; ref: VertexRef } | { mode: 'pan'; last: [number, number] }>(null);
@@ -5163,6 +5322,11 @@ export default function SatelliteIntelligence() {
 
   const shouldSuppressGeoAiMapIdentifyPopup = useCallback(() => {
     if (Date.now() < geoAiSuppressPopupsUntilRef.current) return true;
+    // The Georeference tool owns map clicks (control-point capture) — never show
+    // feature-identify popups while it is active, to avoid conflicting popups.
+    if (expandedEnvSectionRef.current === 'raster-georeference' && isLayerDropdownOpenRef.current) {
+      return true;
+    }
     const t = mapDrawToolRef.current;
     if (t === 'box_select' || t === 'lasso' || t === 'freehand') return true;
     if (dragRectCircleRef.current != null) return true;
@@ -6953,13 +7117,25 @@ export default function SatelliteIntelligence() {
       const primary = files[0];
       if (!primary) throw new Error('No file selected');
 
-      // Route only real image/GeoTIFF rasters (or explicit Raster category) through the
-      // raster pipeline. Shapefile ZIPs and other vector archives must use parseFile.
+      // Route real image/GeoTIFF rasters (or the explicit Raster category) through the
+      // dedicated Raster & Georeferencing tool — an independent "Add Raster to Map" flow
+      // (like ArcGIS Pro / QGIS Add Data), NOT the Image Classification wizard. It reuses
+      // the shared server raster pipeline (type-detect + read CRS/GeoTransform/extent +
+      // COG + XYZ tiles): georeferenced rasters render immediately as a TRUE raster tile
+      // layer and zoom to their real bounds; non-georeferenced images open the
+      // Georeferencing panel (request placement) instead of guessing, erroring, or
+      // distorting. Shapefile ZIPs and other vector archives must use parseFile below.
       const hasImageRaster = files.some(f =>
-        /\.(tif|tiff|png|jpe?g|webp|gif|bmp)$/i.test(f.name),
+        /\.(tif|tiff|png|jpe?g|webp|gif|bmp|jp2|j2k)$/i.test(f.name),
       );
       if (opts?.forceRaster || hasImageRaster) {
-        await importAoiRasterFiles(files);
+        // Reveal the Raster & Georeferencing dock (which hosts the Georeferencing panel +
+        // display controls) and close the Data Manager so the map layer / georef workflow
+        // is visible.
+        setExpandedEnvSection('raster-georeference');
+        setIsLayerDropdownOpen(true);
+        closeAddLayerModal();
+        await rasterGeoreference.uploadRaster(files);
         return;
       }
 
@@ -10157,6 +10333,11 @@ export default function SatelliteIntelligence() {
       setCropClassAoiGeometry(geometry);
       return;
     }
+    if (mapDrawOwnerRef.current === 'image-classification') {
+      icSampleAoiGeometryRef.current = geometry;
+      setIcSampleAoiGeometry(geometry);
+      return;
+    }
     drawnGeometryRef.current = geometry;
     setDrawnGeometry(geometry);
     sentinelWmsTilesSyncedRef.current = {};
@@ -10166,6 +10347,11 @@ export default function SatelliteIntelligence() {
     if (mapDrawOwnerRef.current === 'crop-classification') {
       cropClassAoiGeometryRef.current = geometry;
       setCropClassAoiGeometry(geometry);
+      return;
+    }
+    if (mapDrawOwnerRef.current === 'image-classification') {
+      icSampleAoiGeometryRef.current = geometry;
+      setIcSampleAoiGeometry(geometry);
       return;
     }
     drawnGeometryRef.current = geometry;
@@ -10238,6 +10424,10 @@ export default function SatelliteIntelligence() {
   useEffect(() => {
     cropClassAoiGeometryRef.current = cropClassAoiGeometry;
   }, [cropClassAoiGeometry]);
+
+  useEffect(() => {
+    icSampleAoiGeometryRef.current = icSampleAoiGeometry;
+  }, [icSampleAoiGeometry]);
 
   useEffect(() => {
     drawTargetModeRef.current = drawTargetMode;
@@ -11348,6 +11538,50 @@ export default function SatelliteIntelligence() {
   };
 
   const commitUserGeometry = (next: any | null) => {
+    if (mapDrawOwnerRef.current === 'sam-aoi') {
+      const cur = samAoiGeometryRef.current;
+      setGeomUndoStack(u => [...u, cur ? cloneDeep(cur) : null]);
+      setGeomRedoStack([]);
+      samAoiGeometryRef.current = next;
+      setSamAoiGeometry(next);
+      if (next) {
+        setSamAoiDrawing(false);
+        samAoiDrawingRef.current = false;
+        setShowEditHandles(true);
+      }
+      return;
+    }
+    if (mapDrawOwnerRef.current === 'sam-training') {
+      // Isolated SAM training-sample sketch: commit draft, then promote to a labeled sample.
+      const cur = samTrainDraftGeometryRef.current;
+      setGeomUndoStack(u => [...u, cur ? cloneDeep(cur) : null]);
+      setGeomRedoStack([]);
+      samTrainDraftGeometryRef.current = next;
+      setSamTrainDraftGeometry(next);
+      if (next) {
+        const geom =
+          (getDrawnGeometry(next) as GeoJSON.Geometry | null) ||
+          (next.type === 'Feature' ? next.geometry : next.type === 'FeatureCollection' ? next.features?.[0]?.geometry : next);
+        if (geom && typeof geom === 'object' && 'type' in geom) {
+          samTrainingSamplesRef.current?.addSample(geom as GeoJSON.Geometry);
+          // Clear draft so the next shape starts fresh (ArcGIS-style continuous digitizing).
+          samTrainDraftGeometryRef.current = null;
+          setSamTrainDraftGeometry(null);
+          setShowEditHandles(false);
+        }
+      }
+      return;
+    }
+    if (mapDrawOwnerRef.current === 'image-classification') {
+      // Isolated training-sample sketch: commit only to the IC geometry with its own
+      // undo/redo, never touching RS fields / multi-AOI workspace / crop-class study AOI.
+      const cur = icSampleAoiGeometryRef.current;
+      setGeomUndoStack(u => [...u, cur ? cloneDeep(cur) : null]);
+      setGeomRedoStack([]);
+      icSampleAoiGeometryRef.current = next;
+      setIcSampleAoiGeometry(next);
+      return;
+    }
     if (mapDrawOwnerRef.current === 'crop-classification') {
       const cur = cropClassAoiGeometryRef.current;
       setGeomUndoStack(u => [...u, cur ? cloneDeep(cur) : null]);
@@ -11388,12 +11622,10 @@ export default function SatelliteIntelligence() {
     setGeomRedoStack([]);
     if (next) updateDrawnStats(next);
     else {
-      if (mapDrawOwnerRef.current === 'crop-classification') {
-        setCropClassAoiGeometry(null);
-      } else {
-        setDrawnGeometry(null);
-        setDrawnStats(null);
-      }
+      // crop-classification / image-classification owners return early above, so this
+      // path is the remote-sensing owner only.
+      setDrawnGeometry(null);
+      setDrawnStats(null);
     }
   };
 
@@ -11825,6 +12057,36 @@ export default function SatelliteIntelligence() {
     applyMapDrawTool(tool);
   }, []);
 
+  /* ── Image Classification training-sample drawing (isolated owner + event bus) ──
+   * The wizard's sample sketch is fully decoupled from the general map drawing tool
+   * (SatelliteContextualAnalysisDock): it owns 'image-classification' and writes to
+   * icSampleAoiGeometryRef, so turning the Dock drawing tool on/off never affects it. */
+  const handleIcDrawingModeChange = useCallback(
+    (active: boolean) => {
+      if (active) {
+        mapDrawOwnerRef.current = 'image-classification';
+        setMapDrawOwner('image-classification');
+        setRsDrawingModeActive(false);
+        setCropClassDrawingModeActive(false);
+      }
+      setIcDrawingModeActive(active);
+      if (!active) {
+        cancelCurrentDrawing();
+        setMapDragPanEnabled(true);
+      }
+    },
+    [cancelCurrentDrawing],
+  );
+
+  const handleIcDrawingToolChange = useCallback((tool: RemoteSensingDrawingTool) => {
+    mapDrawOwnerRef.current = 'image-classification';
+    setMapDrawOwner('image-classification');
+    setRsDrawingModeActive(false);
+    setCropClassDrawingModeActive(false);
+    setIcDrawingModeActive(true);
+    applyMapDrawTool(tool);
+  }, []);
+
   /* â”€â”€ Unified Measurement tool (Main toolbox): isolated multi-mode measuring â”€â”€ */
   /** Sample terrain elevation (m) at a coordinate when 3D terrain is active. */
   const sampleMeasureElevation = useCallback((lng: number, lat: number): number | null => {
@@ -12077,21 +12339,45 @@ export default function SatelliteIntelligence() {
 
   const clearSatelliteDrawingImmediate = clearRemoteSensingAoiSketchOnly;
 
+  /** Instant wipe of the Image Classification training-sample sketch (draft + geometry). */
+  const clearIcSampleSketchOnly = useCallback(() => {
+    resetActiveSketchDraftState();
+    icSampleAoiGeometryRef.current = null;
+    setIcSampleAoiGeometry(null);
+    setMapDragPanEnabled(!icDrawingModeActiveRef.current);
+  }, [resetActiveSketchDraftState]);
+
   /** Keep drawing owners aligned with the active toolbox panel (isolated layers). */
   useEffect(() => {
     if (expandedEnvSection === 'crop-classification') {
       setRsDrawingModeActive(false);
+      setIcDrawingModeActive(false);
       mapDrawOwnerRef.current = 'crop-classification';
       setMapDrawOwner('crop-classification');
+    } else if (expandedEnvSection === 'image-classification') {
+      // Image Classification owns its own isolated training-sample sketch — never the
+      // shared remote-sensing AOI drawing (decoupled from the contextual analysis dock).
+      setRsDrawingModeActive(false);
+      setCropClassDrawingModeActive(false);
+      mapDrawOwnerRef.current = 'image-classification';
+      setMapDrawOwner('image-classification');
+    } else if (expandedEnvSection === 'sam-detection') {
+      // AI SAM Detection owns Detect-tab clicks for FG/BG prompts. Training Samples
+      // digitizing uses the isolated 'sam-training' draw owner when armed.
+      setRsDrawingModeActive(false);
+      setCropClassDrawingModeActive(false);
+      setIcDrawingModeActive(false);
     } else if (
       expandedEnvSection === 'remote-sensing' ||
       expandedEnvSection === 'tree-detections' ||
+      expandedEnvSection === 'agri-field-boundary' ||
       expandedEnvSection === 'hydro-watershed' ||
       expandedEnvSection === 'well-site' ||
       expandedEnvSection === 'well-suitability' ||
       expandedEnvSection === 'flood-monitoring'
     ) {
       setCropClassDrawingModeActive(false);
+      setIcDrawingModeActive(false);
       mapDrawOwnerRef.current = 'remote-sensing';
       setMapDrawOwner('remote-sensing');
     }
@@ -12421,6 +12707,1154 @@ export default function SatelliteIntelligence() {
       threshold: floodThresholdDb,
     });
   }, [flood, floodPostDate, floodPreDate, floodThresholdDb]);
+
+  // â”€â”€ Image Classification Wizard (Step 1: Configure + raster preview) â”€â”€â”€â”€â”€â”€â”€
+  const IMAGE_CLASSIFICATION_LAYER_ID = 'image-classification-raster';
+  const imageClassificationOverlayUrlRef = useRef<string | null>(null);
+  // Registry of server rasters ingested this session (keyed by rasterId), so tools like
+  // the Image Classification wizard can pick an "Existing Map Raster" without re-uploading.
+  const [serverRasterRegistry, setServerRasterRegistry] = useState<
+    Record<string, ServerRasterLayerConfig>
+  >({});
+  const registerServerRaster = useCallback((config: ServerRasterLayerConfig) => {
+    setServerRasterRegistry(prev =>
+      prev[config.rasterId] === config ? prev : { ...prev, [config.rasterId]: config },
+    );
+  }, []);
+  // Raster layers currently on the map that have a server rasterId — offered as
+  // "Existing Map Raster" inputs for the Image Classification wizard (ArcGIS-style).
+  const imageClassificationExistingRasters = useMemo<ServerRasterLayerConfig[]>(() => {
+    const seen = new Set<string>();
+    const out: ServerRasterLayerConfig[] = [];
+    for (const layer of customLayers) {
+      // rasterServiceId is stored inside importMetadata (with a legacy top-level fallback).
+      const meta = (layer as { importMetadata?: { rasterServiceId?: string } }).importMetadata;
+      const id =
+        meta?.rasterServiceId ?? (layer as { rasterServiceId?: string }).rasterServiceId;
+      if (!id || seen.has(id)) continue;
+      const cfg = serverRasterRegistry[id];
+      if (cfg) {
+        seen.add(id);
+        out.push(cfg);
+      }
+    }
+    return out;
+  }, [customLayers, serverRasterRegistry]);
+  const handleImageClassificationRasterReady = useCallback(
+    (config: ServerRasterLayerConfig, imageOverlay?: RasterImageOverlay | null) => {
+      const b = config.bboxWgs84;
+      // Plain images (PNG/JPEG) render through a Mapbox image source using the ORIGINAL
+      // decoded pixels at four corners — never the multiband tile path (which striped/
+      // duplicated RGB scanlines). Real GeoTIFF/COG/JP2 keep the server XYZ tiles.
+      const coordinates: RasterMapCoordinates = imageOverlay
+        ? imageOverlay.coordinates
+        : [
+            [b.west, b.north],
+            [b.east, b.north],
+            [b.east, b.south],
+            [b.west, b.south],
+          ];
+      const footprint = siRasterExtentFootprint(coordinates);
+      // Replace any previously-loaded wizard raster with the freshly ingested imagery.
+      setCustomLayers(prev => prev.filter(l => l.id !== IMAGE_CLASSIFICATION_LAYER_ID));
+      if (
+        imageClassificationOverlayUrlRef.current &&
+        imageClassificationOverlayUrlRef.current !== imageOverlay?.url
+      ) {
+        try {
+          URL.revokeObjectURL(imageClassificationOverlayUrlRef.current);
+        } catch {
+          /* ignore */
+        }
+        imageClassificationOverlayUrlRef.current = null;
+      }
+      if (imageOverlay) imageClassificationOverlayUrlRef.current = imageOverlay.url;
+      registerServerRaster(config);
+      registerImportedCustomLayer(
+        createSiRasterImportLayer({
+          id: IMAGE_CLASSIFICATION_LAYER_ID,
+          name: config.name,
+          geojson: footprint,
+          source: 'api',
+          sourceUrl: config.wmsUrl,
+          format: imageOverlay ? 'Image' : 'COG',
+          crs: config.crs,
+          widthPx: config.widthPx,
+          heightPx: config.heightPx,
+          bands: config.bands,
+          resolutionMeters: config.resolutionMeters ?? undefined,
+          acquisitionDate: config.acquisitionDate ?? undefined,
+          sensor: config.sensor ?? undefined,
+          rasterServiceId: config.rasterId,
+          wmsUrl: config.wmsUrl,
+          wmtsUrl: config.wmtsUrl,
+          // Image source for plain photos; empty url + tiles for multiband rasters.
+          raster: { url: imageOverlay?.url ?? '', coordinates },
+          ...(imageOverlay
+            ? {}
+            : { arcgisRasterTiles: { tiles: config.tiles, tileSize: config.tileSize } }),
+          ephemeral: true,
+        }),
+      );
+      const mapInstance = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+      if (mapInstance && typeof mapInstance.fitBounds === 'function') {
+        const lngs = coordinates.map(c => c[0]);
+        const lats = coordinates.map(c => c[1]);
+        mapInstance.fitBounds(
+          [
+            [Math.min(...lngs), Math.min(...lats)],
+            [Math.max(...lngs), Math.max(...lats)],
+          ],
+          { padding: 60, duration: 800 },
+        );
+      }
+    },
+    [registerImportedCustomLayer, registerServerRaster],
+  );
+  const IMAGE_CLASSIFICATION_SEGMENTS_LAYER_ID = 'image-classification-segments';
+  const handleImageClassificationSegmentation = useCallback(
+    (result: SegmentationResult | null) => {
+      // Replace any prior segment-boundary overlay.
+      setCustomLayers(prev => prev.filter(l => l.id !== IMAGE_CLASSIFICATION_SEGMENTS_LAYER_ID));
+      if (!result || !result.boundaries?.features?.length) return;
+      registerImportedCustomLayer(
+        createSiVectorImportLayer({
+          id: IMAGE_CLASSIFICATION_SEGMENTS_LAYER_ID,
+          name: `Segments (${result.segment_count})`,
+          geojson: result.boundaries as GeoJSON.FeatureCollection,
+          source: 'api',
+          format: 'GeoJSON',
+          ephemeral: true,
+        }),
+      );
+    },
+    [registerImportedCustomLayer],
+  );
+  const IMAGE_CLASSIFICATION_SAMPLES_LAYER_ID = 'image-classification-samples';
+  const handleImageClassificationSamples = useCallback(
+    (samples: IcwTrainingSample[], schemaClasses: IcwSchemaClass[]) => {
+      setCustomLayers(prev => prev.filter(l => l.id !== IMAGE_CLASSIFICATION_SAMPLES_LAYER_ID));
+      if (!samples.length) return;
+      const nameByClass = new Map(schemaClasses.map(c => [c.id, c.name]));
+      const colorByClass = new Map(schemaClasses.map(c => [c.id, c.color]));
+      const fc: GeoJSON.FeatureCollection = {
+        type: 'FeatureCollection',
+        features: samples.map(s => ({
+          type: 'Feature',
+          properties: {
+            classId: s.classId,
+            className: nameByClass.get(s.classId) ?? 'Class',
+            _fillColor: colorByClass.get(s.classId) ?? '#38a169',
+          },
+          geometry: s.geometry,
+        })),
+      };
+      registerImportedCustomLayer(
+        createSiVectorImportLayer({
+          id: IMAGE_CLASSIFICATION_SAMPLES_LAYER_ID,
+          name: `Training samples (${samples.length})`,
+          geojson: fc,
+          source: 'api',
+          format: 'GeoJSON',
+          ephemeral: true,
+        }),
+      );
+    },
+    [registerImportedCustomLayer],
+  );
+  const IMAGE_CLASSIFICATION_RESULT_LAYER_ID = 'image-classification-result';
+  const handleImageClassificationPreview = useCallback(
+    (result: ClassifyResult | null) => {
+      setCustomLayers(prev => prev.filter(l => l.id !== IMAGE_CLASSIFICATION_RESULT_LAYER_ID));
+      if (!result?.image_base64) return;
+      const [west, south, east, north] = result.bounds;
+      const coordinates: RasterMapCoordinates = [
+        [west, north],
+        [east, north],
+        [east, south],
+        [west, south],
+      ];
+      const outline = footprintGeoJsonFromMapCoordinates(coordinates);
+      registerImportedCustomLayer(
+        createSiRasterImportLayer({
+          id: IMAGE_CLASSIFICATION_RESULT_LAYER_ID,
+          name: `Classification (${result.class_distribution.length} classes)`,
+          geojson: outline,
+          source: 'api',
+          format: 'Classified raster',
+          widthPx: result.width,
+          heightPx: result.height,
+          raster: {
+            url: `data:image/png;base64,${result.image_base64}`,
+            coordinates,
+          },
+          ephemeral: true,
+        }),
+      );
+    },
+    [footprintGeoJsonFromMapCoordinates, registerImportedCustomLayer],
+  );
+  const IMAGE_CLASSIFICATION_CHECKPOINTS_LAYER_ID = 'image-classification-checkpoints';
+  const handleImageClassificationCheckPoints = useCallback(
+    (fc: GeoJSON.FeatureCollection | null) => {
+      setCustomLayers(prev => prev.filter(l => l.id !== IMAGE_CLASSIFICATION_CHECKPOINTS_LAYER_ID));
+      if (!fc?.features?.length) return;
+      registerImportedCustomLayer(
+        createSiVectorImportLayer({
+          id: IMAGE_CLASSIFICATION_CHECKPOINTS_LAYER_ID,
+          name: `Check points (${fc.features.length})`,
+          geojson: fc,
+          source: 'api',
+          format: 'GeoJSON',
+          ephemeral: true,
+        }),
+      );
+    },
+    [registerImportedCustomLayer],
+  );
+  const IMAGE_CLASSIFICATION_GEOREF_LAYER_ID = 'image-classification-georef-preview';
+  const handleImageClassificationGeorefPreview = useCallback(
+    (fc: GeoJSON.FeatureCollection | null) => {
+      setCustomLayers(prev => prev.filter(l => l.id !== IMAGE_CLASSIFICATION_GEOREF_LAYER_ID));
+      if (!fc?.features?.length) return;
+      registerImportedCustomLayer(
+        createSiVectorImportLayer({
+          id: IMAGE_CLASSIFICATION_GEOREF_LAYER_ID,
+          name: 'Georeference footprint',
+          geojson: fc,
+          source: 'api',
+          format: 'GeoJSON',
+          ephemeral: true,
+        }),
+      );
+    },
+    [registerImportedCustomLayer],
+  );
+  const imageClassification = useImageClassificationWizard({
+    ingest: files => ingestRasterFilesViaServer(files),
+    onRasterReady: handleImageClassificationRasterReady,
+    onSegmentationPreview: handleImageClassificationSegmentation,
+    // Reads the ISOLATED image-classification sample sketch (never the shared RS AOI),
+    // so training-sample capture is fully decoupled from the general map drawing tool.
+    getDrawnPolygon: () =>
+      (getDrawnGeometry(icSampleAoiGeometryRef.current) as
+        | GeoJSON.Polygon
+        | GeoJSON.MultiPolygon
+        | null) ?? null,
+    getMapBounds: () => {
+      const mapInstance = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+      const b = mapInstance?.getBounds?.();
+      if (!b) return null;
+      return { west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() };
+    },
+    getLastMapClick: () => lastMapClickRef.current,
+    onGeorefFootprintPreview: handleImageClassificationGeorefPreview,
+    onAfterSampleAdded: () => clearIcSampleSketchOnly(),
+    onSamplesChange: handleImageClassificationSamples,
+    onClassificationPreview: handleImageClassificationPreview,
+    onCheckPointsPreview: handleImageClassificationCheckPoints,
+  });
+
+  // ── Raster & Georeferencing tool (reuses the same server /api/raster pipeline) ──
+  const RASTER_GEOREF_LAYER_ID = 'raster-georef-raster';
+  const RASTER_GEOREF_PREVIEW_LAYER_ID = 'raster-georef-preview';
+  // Mapbox raster layer ids produced by SiImportedCustomLayersOverlay for the two render
+  // strategies: XYZ tiles (multiband GeoTIFF/COG/JP2) vs. image source (plain PNG/JPEG).
+  const RASTER_GEOREF_TILE_LAYER_ID = `${RASTER_GEOREF_LAYER_ID}-arcgis-raster`;
+  const RASTER_GEOREF_IMAGE_LAYER_ID = `${RASTER_GEOREF_LAYER_ID}-raster`;
+  // Object URL of the current image-source overlay, revoked when replaced/cleared.
+  const rasterGeorefOverlayUrlRef = useRef<string | null>(null);
+  // Tracks whether the georeference raster is already on the map, so re-placements
+  // (interactive move/rotate/scale/GCP re-warps) don't re-fit the camera each time.
+  const rasterGeorefPlacedRef = useRef(false);
+  const handleRasterGeorefRasterReady = useCallback(
+    (config: ServerRasterLayerConfig, imageOverlay?: RasterImageOverlay | null) => {
+      const b = config.bboxWgs84;
+      // Plain images (PNG/JPEG) render through a Mapbox image source using the ORIGINAL
+      // decoded pixels at four corners — never the multiband tile path (which striped/
+      // duplicated RGB scanlines). Real GeoTIFF/COG/JP2 keep the server XYZ tiles.
+      const coordinates: RasterMapCoordinates = imageOverlay
+        ? imageOverlay.coordinates
+        : [
+            [b.west, b.north],
+            [b.east, b.north],
+            [b.east, b.south],
+            [b.west, b.south],
+          ];
+      const footprint = siRasterExtentFootprint(coordinates);
+      setCustomLayers(prev => prev.filter(l => l.id !== RASTER_GEOREF_LAYER_ID));
+      if (rasterGeorefOverlayUrlRef.current && rasterGeorefOverlayUrlRef.current !== imageOverlay?.url) {
+        try {
+          URL.revokeObjectURL(rasterGeorefOverlayUrlRef.current);
+        } catch {
+          /* ignore */
+        }
+        rasterGeorefOverlayUrlRef.current = null;
+      }
+      if (imageOverlay) rasterGeorefOverlayUrlRef.current = imageOverlay.url;
+      registerServerRaster(config);
+      registerImportedCustomLayer(
+        createSiRasterImportLayer({
+          id: RASTER_GEOREF_LAYER_ID,
+          name: config.name,
+          geojson: footprint,
+          source: 'api',
+          sourceUrl: config.wmsUrl,
+          format: imageOverlay ? 'Image' : 'COG',
+          crs: config.crs,
+          widthPx: config.widthPx,
+          heightPx: config.heightPx,
+          bands: config.bands,
+          resolutionMeters: config.resolutionMeters ?? undefined,
+          acquisitionDate: config.acquisitionDate ?? undefined,
+          sensor: config.sensor ?? undefined,
+          rasterServiceId: config.rasterId,
+          wmsUrl: config.wmsUrl,
+          wmtsUrl: config.wmtsUrl,
+          // Image source for plain photos; empty url + tiles for multiband rasters.
+          raster: { url: imageOverlay?.url ?? '', coordinates },
+          ...(imageOverlay
+            ? {}
+            : { arcgisRasterTiles: { tiles: config.tiles, tileSize: config.tileSize } }),
+          ephemeral: true,
+        }),
+      );
+      const mapInstance = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+      // Only fit the camera on the FIRST placement — interactive re-placements (drag move/
+      // rotate/scale, GCP re-warps) keep the current view so the map doesn't jump around.
+      if (!rasterGeorefPlacedRef.current && mapInstance && typeof mapInstance.fitBounds === 'function') {
+        const lngs = coordinates.map(c => c[0]);
+        const lats = coordinates.map(c => c[1]);
+        mapInstance.fitBounds(
+          [
+            [Math.min(...lngs), Math.min(...lats)],
+            [Math.max(...lngs), Math.max(...lats)],
+          ],
+          { padding: 60, duration: 800 },
+        );
+      }
+      rasterGeorefPlacedRef.current = true;
+    },
+    [registerImportedCustomLayer, registerServerRaster, RASTER_GEOREF_LAYER_ID],
+  );
+  const handleRasterGeorefCleared = useCallback(() => {
+    rasterGeorefPlacedRef.current = false;
+    setCustomLayers(prev =>
+      prev.filter(l => l.id !== RASTER_GEOREF_LAYER_ID && l.id !== RASTER_GEOREF_PREVIEW_LAYER_ID),
+    );
+    if (rasterGeorefOverlayUrlRef.current) {
+      try {
+        URL.revokeObjectURL(rasterGeorefOverlayUrlRef.current);
+      } catch {
+        /* ignore */
+      }
+      rasterGeorefOverlayUrlRef.current = null;
+    }
+  }, [RASTER_GEOREF_LAYER_ID, RASTER_GEOREF_PREVIEW_LAYER_ID]);
+  const handleRasterGeorefPreview = useCallback(
+    (fc: GeoJSON.FeatureCollection | null) => {
+      setCustomLayers(prev => prev.filter(l => l.id !== RASTER_GEOREF_PREVIEW_LAYER_ID));
+      if (!fc?.features?.length) return;
+      registerImportedCustomLayer(
+        createSiVectorImportLayer({
+          id: RASTER_GEOREF_PREVIEW_LAYER_ID,
+          name: 'Georeference footprint',
+          geojson: fc,
+          source: 'api',
+          format: 'GeoJSON',
+          ephemeral: true,
+        }),
+      );
+    },
+    [registerImportedCustomLayer, RASTER_GEOREF_PREVIEW_LAYER_ID],
+  );
+  // ArcGIS-style live control-point overlay drawn directly on the map canvas
+  // (numbered source/target markers + link lines). Fed by the georeference tool.
+  const [gcpOverlayFc, setGcpOverlayFc] = useState<GeoJSON.FeatureCollection | null>(null);
+  const gcpOverlayFcRef = useRef<GeoJSON.FeatureCollection | null>(null);
+  const handleGcpOverlay = useCallback((fc: GeoJSON.FeatureCollection | null) => {
+    const next = fc && fc.features.length ? fc : null;
+    gcpOverlayFcRef.current = next;
+    setGcpOverlayFc(next);
+  }, []);
+  const handleRasterGeorefDisplay = useCallback(
+    (_rasterId: string, d: RasterDisplaySettings) => {
+      const mapInstance = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+      if (!mapInstance || typeof mapInstance.getLayer !== 'function') return;
+      // Apply to whichever render strategy is live: image source or XYZ tiles.
+      const layerId = mapInstance.getLayer(RASTER_GEOREF_IMAGE_LAYER_ID)
+        ? RASTER_GEOREF_IMAGE_LAYER_ID
+        : mapInstance.getLayer(RASTER_GEOREF_TILE_LAYER_ID)
+          ? RASTER_GEOREF_TILE_LAYER_ID
+          : null;
+      if (!layerId) return;
+      try {
+        mapInstance.setPaintProperty(layerId, 'raster-opacity', d.opacity);
+        mapInstance.setPaintProperty(layerId, 'raster-brightness-max', d.brightness);
+        mapInstance.setPaintProperty(layerId, 'raster-contrast', d.contrast);
+        mapInstance.setPaintProperty(layerId, 'raster-saturation', d.saturation);
+        mapInstance.setPaintProperty(layerId, 'raster-hue-rotate', d.hue);
+      } catch {
+        /* layer may be mid-add — user re-adjusts once it's on the map */
+      }
+    },
+    [RASTER_GEOREF_IMAGE_LAYER_ID, RASTER_GEOREF_TILE_LAYER_ID],
+  );
+  const handleRasterGeorefRotate = useCallback((bearing: number) => {
+    const mapInstance = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+    mapInstance?.easeTo?.({ bearing, duration: 300 });
+  }, []);
+  const handleRasterGeorefResetNorth = useCallback(() => {
+    const mapInstance = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+    mapInstance?.easeTo?.({ bearing: 0, pitch: 0, duration: 300 });
+  }, []);
+  // Displayable RGB image URL for a raster already on the map (used by Smart Auto Georeference).
+  const getRasterPreviewUrl = useCallback(
+    (config: ServerRasterLayerConfig): string | null => {
+      for (const layer of customLayers) {
+        const meta = (layer as { importMetadata?: { rasterServiceId?: string } }).importMetadata;
+        const id =
+          meta?.rasterServiceId ?? (layer as { rasterServiceId?: string }).rasterServiceId;
+        if (id === config.rasterId) {
+          const url = (layer as { raster?: { url?: string } }).raster?.url;
+          if (url) return url;
+        }
+      }
+      return null;
+    },
+    [customLayers],
+  );
+
+  // Capture a basemap-only snapshot covering the raster footprint (raster overlays hidden).
+  // Prefers the Mapbox Static Images API (clean tiles); falls back to the live WebGL canvas.
+  const captureBasemapForGeoref = useCallback(
+    async (
+      corners: {
+        nw: [number, number];
+        ne: [number, number];
+        se: [number, number];
+        sw: [number, number];
+      },
+      opts?: { maxEdge?: number },
+    ): Promise<{ url: string; bounds: { west: number; south: number; east: number; north: number } } | null> => {
+      const lons = [corners.nw[0], corners.ne[0], corners.se[0], corners.sw[0]];
+      const lats = [corners.nw[1], corners.ne[1], corners.se[1], corners.sw[1]];
+      const west = Math.min(...lons);
+      const east = Math.max(...lons);
+      const south = Math.min(...lats);
+      const north = Math.max(...lats);
+      const bounds = { west, south, east, north };
+      const maxEdge = Math.max(256, Math.min(2048, opts?.maxEdge ?? 1024));
+
+      const token = getMapboxAccessToken();
+      if (token && token.startsWith('pk.')) {
+        const midLat = (north + south) / 2;
+        const lonSpan = Math.max(1e-6, east - west);
+        const latSpan = Math.max(1e-6, north - south);
+        const aspect = (lonSpan * Math.cos((midLat * Math.PI) / 180)) / latSpan;
+        let W = maxEdge;
+        let H = Math.round(maxEdge / Math.max(1e-6, aspect));
+        if (aspect < 1) {
+          H = maxEdge;
+          W = Math.round(maxEdge * aspect);
+        }
+        W = Math.max(64, Math.min(2048, W));
+        H = Math.max(64, Math.min(2048, H));
+        const staticUrl =
+          `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/` +
+          `[${west},${south},${east},${north}]/${W}x${H}` +
+          `?access_token=${encodeURIComponent(token)}&attribution=false&logo=false`;
+        try {
+          const res = await fetch(staticUrl);
+          if (res.ok) {
+            const blob = await res.blob();
+            const dataUrl = await new Promise<string>((resolve, reject) => {
+              const fr = new FileReader();
+              fr.onload = () => resolve(String(fr.result));
+              fr.onerror = () => reject(new Error('read failed'));
+              fr.readAsDataURL(blob);
+            });
+            return { url: dataUrl, bounds };
+          }
+        } catch {
+          /* fall through to canvas capture */
+        }
+      }
+
+      const map: any = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+      if (!map || typeof map.project !== 'function') return null;
+      const style = typeof map.getStyle === 'function' ? map.getStyle() : null;
+      const hidden: string[] = [];
+      const styleLayers = (style?.layers ?? []) as Array<{ id: string; source?: string }>;
+      for (const ly of styleLayers) {
+        try {
+          const src = ly.source ? map.getSource(ly.source) : null;
+          if (src && src.type === 'image') {
+            const vis = map.getLayoutProperty?.(ly.id, 'visibility');
+            if (vis !== 'none') {
+              map.setLayoutProperty(ly.id, 'visibility', 'none');
+              hidden.push(ly.id);
+            }
+          }
+        } catch {
+          /* ignore individual layers */
+        }
+      }
+      const restore = () => {
+        for (const id of hidden) {
+          try {
+            map.setLayoutProperty(id, 'visibility', 'visible');
+          } catch {
+            /* ignore */
+          }
+        }
+      };
+      try {
+        const canvasEl = map.getCanvas() as HTMLCanvasElement;
+        const cw = canvasEl.width;
+        const ch = canvasEl.height;
+        const dpr = cw / (canvasEl.clientWidth || cw);
+        const pts = [corners.nw, corners.ne, corners.se, corners.sw].map(c => map.project(c));
+        const xs = pts.map((p: { x: number }) => p.x * dpr);
+        const ys = pts.map((p: { y: number }) => p.y * dpr);
+        const minX = Math.max(0, Math.floor(Math.min(...xs)));
+        const minY = Math.max(0, Math.floor(Math.min(...ys)));
+        const maxX = Math.min(cw, Math.ceil(Math.max(...xs)));
+        const maxY = Math.min(ch, Math.ceil(Math.max(...ys)));
+        const rw = Math.max(1, maxX - minX);
+        const rh = Math.max(1, maxY - minY);
+        const dataUrl = await new Promise<string | null>(resolve => {
+          let done = false;
+          const finish = () => {
+            if (done) return;
+            done = true;
+            try {
+              const out = document.createElement('canvas');
+              out.width = rw;
+              out.height = rh;
+              const ctx = out.getContext('2d');
+              if (!ctx) {
+                resolve(null);
+                return;
+              }
+              ctx.drawImage(canvasEl, minX, minY, rw, rh, 0, 0, rw, rh);
+              resolve(out.toDataURL('image/jpeg', 0.9));
+            } catch {
+              resolve(null);
+            }
+          };
+          map.once('render', finish);
+          map.triggerRepaint?.();
+          setTimeout(finish, 800);
+        });
+        if (!dataUrl) return null;
+        const nw2 = map.unproject([minX / dpr, minY / dpr]);
+        const se2 = map.unproject([maxX / dpr, maxY / dpr]);
+        return {
+          url: dataUrl,
+          bounds: { west: nw2.lng, north: nw2.lat, east: se2.lng, south: se2.lat },
+        };
+      } finally {
+        restore();
+      }
+    },
+    [],
+  );
+
+  const rasterGeoreference = useRasterGeoreferenceTool({
+    ingest: files => ingestRasterFilesViaServer(files),
+    onRasterReady: handleRasterGeorefRasterReady,
+    onRasterCleared: handleRasterGeorefCleared,
+    getRasterPreviewUrl,
+    captureBasemapImage: captureBasemapForGeoref,
+    getGeminiApiKey: () => geminiApiKey,
+    getDrawnPolygon: () =>
+      (getDrawnGeometry(drawnGeometryRef.current) as GeoJSON.Polygon | GeoJSON.MultiPolygon | null) ?? null,
+    getMapBounds: () => {
+      const mapInstance = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+      const b = mapInstance?.getBounds?.();
+      if (!b) return null;
+      return { west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() };
+    },
+    getLastMapClick: () => lastMapClickRef.current,
+    onGeorefFootprintPreview: handleRasterGeorefPreview,
+    onGcpOverlay: handleGcpOverlay,
+    onDisplayChange: handleRasterGeorefDisplay,
+    onRotate: handleRasterGeorefRotate,
+    onResetNorth: handleRasterGeorefResetNorth,
+  });
+
+  // Crosshair (pick tool) cursor while adding control points — the whole interaction
+  // happens on the map canvas, ArcGIS-style.
+  const gcpPicking = rasterGeoreference.gcpPicking;
+  useEffect(() => {
+    const map = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+    const canvas = map?.getCanvas?.();
+    if (!canvas) return;
+    if (!gcpPicking) return;
+    const container = map.getCanvasContainer?.() as HTMLElement | undefined;
+    canvas.style.cursor = 'crosshair';
+    if (container) container.style.cursor = 'crosshair';
+    return () => {
+      canvas.style.cursor = '';
+      if (container) container.style.cursor = '';
+    };
+  }, [gcpPicking]);
+
+  // ── AI SAM Detection (interactive Segment Anything) ───────────────────────
+  const samActive = expandedEnvSection === 'sam-detection';
+  const samAoiLayerOptions = useMemo(
+    () => listSiAoiLayerModeOptions(customLayersForMapPaint),
+    [customLayersForMapPaint],
+  );
+  useEffect(() => {
+    if (!samAoiLayerOptions.length) return;
+    setSamAoiLayerId(prev =>
+      prev && samAoiLayerOptions.some(o => o.id === prev) ? prev : samAoiLayerOptions[0]!.id,
+    );
+  }, [samAoiLayerOptions]);
+
+  const resolveSamAoi = useCallback((): GeoJSON.FeatureCollection | null => {
+    if (samAoiSource === 'layer') {
+      const layer = customLayersRef.current.find(l => String(l.id) === samAoiLayerId);
+      const feats = layer?.geojson?.features;
+      if (!Array.isArray(feats) || !feats.length) return null;
+      const out: GeoJSON.Feature[] = [];
+      for (let i = 0; i < feats.length; i += 1) {
+        const raw = feats[i];
+        const aoi = featureToPrimaryAoiFeature(raw);
+        if (!aoi?.geometry) continue;
+        const key = computeStableGisFeatureKey(raw, i);
+        const props = {
+          ...((aoi.properties as Record<string, unknown>) || {}),
+          aoi_id: key,
+          source_layer_id: samAoiLayerId,
+        };
+        out.push({
+          type: 'Feature',
+          id: key,
+          properties: props,
+          geometry: aoi.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon,
+        });
+      }
+      return out.length ? { type: 'FeatureCollection', features: out } : null;
+    }
+    const drawn = getDrawnGeometry(samAoiGeometryRef.current ?? samAoiGeometry);
+    if (drawn && (drawn.type === 'Polygon' || drawn.type === 'MultiPolygon')) {
+      return {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            id: 'drawn-aoi-1',
+            properties: { aoi_id: 'drawn-aoi-1', source: 'draw' },
+            geometry: drawn as GeoJSON.Polygon | GeoJSON.MultiPolygon,
+          },
+        ],
+      };
+    }
+    return null;
+  }, [samAoiSource, samAoiLayerId, samAoiGeometry]);
+
+  const samAoiReady = useMemo(() => Boolean(resolveSamAoi()?.features?.length), [resolveSamAoi]);
+  const samAoiMapGeojson = useMemo<GeoJSON.FeatureCollection>(() => {
+    return resolveSamAoi() ?? { type: 'FeatureCollection', features: [] };
+  }, [resolveSamAoi]);
+  const samAoiUnitCount = samAoiMapGeojson.features.length;
+
+  const captureSamView = useCallback(
+    async (opts: {
+      bbox: [number, number, number, number];
+      aoi: GeoJSON.Polygon | GeoJSON.MultiPolygon | GeoJSON.FeatureCollection;
+    }) => {
+      const [west, south, east, north] = opts.bbox;
+      const shot = await captureBasemapForGeoref(
+        {
+          nw: [west, north],
+          ne: [east, north],
+          se: [east, south],
+          sw: [west, south],
+        },
+        { maxEdge: 1536 },
+      );
+      if (!shot) return null;
+      return {
+        image: shot.url,
+        bbox: [shot.bounds.west, shot.bounds.south, shot.bounds.east, shot.bounds.north] as [
+          number,
+          number,
+          number,
+          number,
+        ],
+      };
+    },
+    [captureBasemapForGeoref],
+  );
+  const samDetection = useSamDetection({
+    captureView: captureSamView,
+    resolveAoi: resolveSamAoi,
+  });
+
+  const agriFieldBoundaryActive = expandedEnvSection === 'agri-field-boundary';
+  const resolveFieldBoundaryAoi = useCallback((): GeoJSON.Geometry | GeoJSON.FeatureCollection | null => {
+    const drawn = getDrawnGeometry(drawnGeometry);
+    if (drawn) return drawn;
+    return resolveSamAoi();
+  }, [drawnGeometry, resolveSamAoi]);
+  const captureFieldBoundaryView = useCallback(
+    async (opts: {
+      bbox: [number, number, number, number]
+      aoi: GeoJSON.Geometry | GeoJSON.FeatureCollection
+    }) => {
+      const [west, south, east, north] = opts.bbox;
+      const shot = await captureBasemapForGeoref(
+        {
+          nw: [west, north],
+          ne: [east, north],
+          se: [east, south],
+          sw: [west, south],
+        },
+        { maxEdge: 4096 },
+      );
+      if (!shot) return null;
+      return {
+        image: shot.url,
+        bbox: [shot.bounds.west, shot.bounds.south, shot.bounds.east, shot.bounds.north] as [
+          number,
+          number,
+          number,
+          number,
+        ],
+      };
+    },
+    [captureBasemapForGeoref],
+  );
+  const agriFieldBoundary = useAgriFieldBoundary({
+    captureView: captureFieldBoundaryView,
+    resolveAoi: resolveFieldBoundaryAoi,
+  });
+
+  const samTrainingSamples = useSamTrainingSamples();
+  const samTrainingSamplesRef = useRef(samTrainingSamples);
+  samTrainingSamplesRef.current = samTrainingSamples;
+
+  // Refs so the central map-click handler can add SAM points without stale closures.
+  const samActiveRef = useRef(false);
+  const samAddPointRef = useRef(samDetection.addPoint);
+  useEffect(() => {
+    samActiveRef.current = samActive;
+  }, [samActive]);
+  useEffect(() => {
+    samAddPointRef.current = samDetection.addPoint;
+  }, [samDetection.addPoint]);
+  useEffect(() => {
+    samTrainDraftGeometryRef.current = samTrainDraftGeometry;
+  }, [samTrainDraftGeometry]);
+  useEffect(() => {
+    samAoiGeometryRef.current = samAoiGeometry;
+  }, [samAoiGeometry]);
+
+  const stopSamAoiDrawing = useCallback(() => {
+    setSamAoiDrawing(false);
+    samAoiDrawingRef.current = false;
+    cancelCurrentDrawing();
+    setMapDragPanEnabled(true);
+    if (mapDrawOwnerRef.current === 'sam-aoi') {
+      mapDrawOwnerRef.current = 'remote-sensing';
+      setMapDrawOwner('remote-sensing');
+    }
+  }, [cancelCurrentDrawing]);
+
+  const startSamAoiDrawing = useCallback(() => {
+    setSamPanelTab('detect');
+    setSamAoiSource('draw');
+    setRsDrawingModeActive(false);
+    setCropClassDrawingModeActive(false);
+    setIcDrawingModeActive(false);
+    if (samTrainDigitizingRef.current) {
+      setSamTrainDigitizing(false);
+      samTrainDigitizingRef.current = false;
+    }
+    mapDrawOwnerRef.current = 'sam-aoi';
+    setMapDrawOwner('sam-aoi');
+    setSamAoiDrawing(true);
+    samAoiDrawingRef.current = true;
+    applyMapDrawTool('polygon');
+  }, []);
+
+  const clearSamDrawnAoi = useCallback(() => {
+    stopSamAoiDrawing();
+    samAoiGeometryRef.current = null;
+    setSamAoiGeometry(null);
+  }, [stopSamAoiDrawing]);
+
+  // After a drawn AOI commits, stop the sketch tool so FG/BG clicks work again.
+  useEffect(() => {
+    if (!samAoiDrawing && samAoiGeometry && mapDrawOwnerRef.current === 'sam-aoi') {
+      cancelCurrentDrawing();
+      setMapDragPanEnabled(true);
+    }
+  }, [samAoiDrawing, samAoiGeometry, cancelCurrentDrawing]);
+
+  const stopSamTrainingDigitize = useCallback(() => {
+    setSamTrainDigitizing(false);
+    samTrainDigitizingRef.current = false;
+    cancelCurrentDrawing();
+    setMapDragPanEnabled(true);
+    samTrainDraftGeometryRef.current = null;
+    setSamTrainDraftGeometry(null);
+    if (mapDrawOwnerRef.current === 'sam-training') {
+      mapDrawOwnerRef.current = 'remote-sensing';
+      setMapDrawOwner('remote-sensing');
+    }
+  }, [cancelCurrentDrawing]);
+
+  const handleSamTrainDigitizingChange = useCallback(
+    (active: boolean) => {
+      if (!active) {
+        stopSamTrainingDigitize();
+        return;
+      }
+      setSamPanelTab('samples');
+      setRsDrawingModeActive(false);
+      setCropClassDrawingModeActive(false);
+      setIcDrawingModeActive(false);
+      if (samAoiDrawingRef.current) stopSamAoiDrawing();
+      mapDrawOwnerRef.current = 'sam-training';
+      setMapDrawOwner('sam-training');
+      setSamTrainDigitizing(true);
+      samTrainDigitizingRef.current = true;
+      const tool = samTrainingSamplesRef.current.drawTool;
+      const mapTool: MapDrawTool =
+        tool === 'select' ? 'polygon' : (tool as MapDrawTool);
+      applyMapDrawTool(mapTool === 'select' ? 'polygon' : mapTool);
+    },
+    [stopSamTrainingDigitize, stopSamAoiDrawing],
+  );
+
+  // Keep draw tool in sync when the Training Samples Manager tool buttons change.
+  useEffect(() => {
+    if (!samTrainDigitizing) return;
+    const tool = samTrainingSamples.drawTool;
+    if (tool === 'select') {
+      stopSamTrainingDigitize();
+      return;
+    }
+    mapDrawOwnerRef.current = 'sam-training';
+    setMapDrawOwner('sam-training');
+    applyMapDrawTool(tool as MapDrawTool);
+  }, [samTrainingSamples.drawTool, samTrainDigitizing, stopSamTrainingDigitize]);
+
+  // Leaving the SAM tool or switching to Detect stops sample digitizing.
+  useEffect(() => {
+    if (!samActive || samPanelTab !== 'samples') {
+      if (samTrainDigitizing) stopSamTrainingDigitize();
+    }
+  }, [samActive, samPanelTab, samTrainDigitizing, stopSamTrainingDigitize]);
+
+  // Leaving SAM or switching AOI source away from draw stops AOI sketching.
+  useEffect(() => {
+    if (!samActive || samAoiSource !== 'draw') {
+      if (samAoiDrawing) stopSamAoiDrawing();
+    }
+  }, [samActive, samAoiSource, samAoiDrawing, stopSamAoiDrawing]);
+
+  // Crosshair (pick tool) cursor while placing SAM point prompts.
+  useEffect(() => {
+    const map = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+    const canvas = map?.getCanvas?.();
+    if (
+      !canvas ||
+      !samActive ||
+      samTrainDigitizing ||
+      samAoiDrawing ||
+      samPanelTab !== 'detect'
+    )
+      return;
+    const container = map.getCanvasContainer?.() as HTMLElement | undefined;
+    canvas.style.cursor = 'crosshair';
+    if (container) container.style.cursor = 'crosshair';
+    return () => {
+      canvas.style.cursor = '';
+      if (container) container.style.cursor = '';
+    };
+  }, [samActive, samTrainDigitizing, samAoiDrawing, samPanelTab]);
+
+  // ArcGIS-style direct manipulation: drag on the map to Move / Rotate / Scale the raster.
+  // The raster image source is repositioned live during the drag, then committed (server
+  // re-georeference) on release — no panels, all interaction on the map canvas.
+  const manipMode = rasterGeoreference.manipMode;
+  const getManipQuad = rasterGeoreference.getManipQuad;
+  const commitManipQuad = rasterGeoreference.commitManipQuad;
+  useEffect(() => {
+    if (!manipMode) return;
+    const map = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+    if (!map || typeof map.on !== 'function') return;
+    const canvas = map.getCanvas?.() as HTMLCanvasElement | undefined;
+    const cursor = manipMode === 'move' ? 'move' : manipMode === 'rotate' ? 'grab' : 'nwse-resize';
+    if (canvas) canvas.style.cursor = cursor;
+
+    type LL = { lng: number; lat: number };
+    const rasterSourceId = RASTER_GEOREF_LAYER_ID; // image-source id for plain-image rasters
+    const toCoords = (q: CornerQuad): [number, number][] => [q.nw, q.ne, q.se, q.sw];
+    const centroidOf = (q: CornerQuad): [number, number] => [
+      (q.nw[0] + q.ne[0] + q.se[0] + q.sw[0]) / 4,
+      (q.nw[1] + q.ne[1] + q.se[1] + q.sw[1]) / 4,
+    ];
+    const setLive = (q: CornerQuad) => {
+      const src = map.getSource?.(rasterSourceId) as
+        | { setCoordinates?: (c: [number, number][]) => void }
+        | undefined;
+      if (src && typeof src.setCoordinates === 'function') {
+        try {
+          src.setCoordinates(toCoords(q));
+        } catch {
+          /* ignore intermediate frames */
+        }
+      }
+    };
+
+    let dragging = false;
+    let startLL: LL | null = null;
+    let startQuad: CornerQuad | null = null;
+    let liveQuad: CornerQuad | null = null;
+
+    const computeQuad = (cur: LL): CornerQuad | null => {
+      if (!startLL || !startQuad) return null;
+      const c = centroidOf(startQuad);
+      const cosLat = Math.max(Math.cos((c[1] * Math.PI) / 180), 1e-6);
+      if (manipMode === 'move') {
+        const dLon = cur.lng - startLL.lng;
+        const dLat = cur.lat - startLL.lat;
+        const shift = (p: [number, number]): [number, number] => [p[0] + dLon, p[1] + dLat];
+        return { nw: shift(startQuad.nw), ne: shift(startQuad.ne), se: shift(startQuad.se), sw: shift(startQuad.sw) };
+      }
+      if (manipMode === 'scale') {
+        const d0 = Math.hypot((startLL.lng - c[0]) * cosLat, startLL.lat - c[1]);
+        const d1 = Math.hypot((cur.lng - c[0]) * cosLat, cur.lat - c[1]);
+        if (d0 < 1e-9) return startQuad;
+        const f = Math.min(Math.max(d1 / d0, 0.05), 20);
+        const sc = (p: [number, number]): [number, number] => [c[0] + (p[0] - c[0]) * f, c[1] + (p[1] - c[1]) * f];
+        return { nw: sc(startQuad.nw), ne: sc(startQuad.ne), se: sc(startQuad.se), sw: sc(startQuad.sw) };
+      }
+      // rotate
+      const a0 = Math.atan2(startLL.lat - c[1], (startLL.lng - c[0]) * cosLat);
+      const a1 = Math.atan2(cur.lat - c[1], (cur.lng - c[0]) * cosLat);
+      const dth = a1 - a0;
+      const cos = Math.cos(dth);
+      const sin = Math.sin(dth);
+      const rot = (p: [number, number]): [number, number] => {
+        const dx = (p[0] - c[0]) * cosLat;
+        const dy = p[1] - c[1];
+        const rx = dx * cos - dy * sin;
+        const ry = dx * sin + dy * cos;
+        return [c[0] + rx / cosLat, c[1] + ry];
+      };
+      return { nw: rot(startQuad.nw), ne: rot(startQuad.ne), se: rot(startQuad.se), sw: rot(startQuad.sw) };
+    };
+
+    const onMove = (e: { lngLat: LL }) => {
+      if (!dragging) return;
+      const q = computeQuad(e.lngLat);
+      if (q) {
+        liveQuad = q;
+        setLive(q);
+      }
+    };
+    const onUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      map.off('mousemove', onMove);
+      try {
+        map.dragPan?.enable?.();
+      } catch {
+        /* ignore */
+      }
+      if (canvas) canvas.style.cursor = cursor;
+      const q = liveQuad;
+      startLL = null;
+      startQuad = null;
+      liveQuad = null;
+      if (q) void commitManipQuad(q);
+    };
+    const onDown = (e: { lngLat: LL; preventDefault?: () => void }) => {
+      const q0 = getManipQuad();
+      if (!q0) return;
+      dragging = true;
+      startLL = e.lngLat;
+      startQuad = q0;
+      liveQuad = q0;
+      e.preventDefault?.();
+      try {
+        map.dragPan?.disable?.();
+      } catch {
+        /* ignore */
+      }
+      if (canvas) canvas.style.cursor = manipMode === 'rotate' ? 'grabbing' : cursor;
+      map.on('mousemove', onMove);
+      map.once('mouseup', onUp);
+    };
+
+    map.on('mousedown', onDown);
+    return () => {
+      map.off('mousedown', onDown);
+      map.off('mousemove', onMove);
+      try {
+        map.dragPan?.enable?.();
+      } catch {
+        /* ignore */
+      }
+      if (canvas) canvas.style.cursor = '';
+    };
+  }, [manipMode, getManipQuad, commitManipQuad, RASTER_GEOREF_LAYER_ID]);
+
+  // Render the numbered control-point markers + connecting lines directly on the map.
+  useEffect(() => {
+    const map = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+    if (!map || typeof map.getSource !== 'function') return;
+    const srcId = 'si-gcp-overlay';
+    const lineId = `${srcId}-line`;
+    const srcPtId = `${srcId}-src`;
+    const tgtPtId = `${srcId}-tgt`;
+    const labelId = `${srcId}-label`;
+    const data: GeoJSON.FeatureCollection =
+      gcpOverlayFc ?? { type: 'FeatureCollection', features: [] };
+    const render = (): boolean => {
+      if (typeof map.isStyleLoaded === 'function' && !map.isStyleLoaded()) return false;
+      const existing = map.getSource(srcId);
+      if (existing && typeof (existing as any).setData === 'function') {
+        (existing as any).setData(data);
+        return true;
+      }
+      map.addSource(srcId, { type: 'geojson', data });
+      map.addLayer({
+        id: lineId,
+        type: 'line',
+        source: srcId,
+        filter: ['==', ['get', 'role'], 'link'],
+        paint: { 'line-color': '#f4c542', 'line-width': 1.6, 'line-dasharray': [2, 1.4], 'line-opacity': 0.9 },
+      });
+      map.addLayer({
+        id: srcPtId,
+        type: 'circle',
+        source: srcId,
+        filter: ['==', ['get', 'role'], 'source'],
+        paint: { 'circle-radius': 5, 'circle-color': '#f4c542', 'circle-stroke-color': '#1a1200', 'circle-stroke-width': 1.5 },
+      });
+      map.addLayer({
+        id: tgtPtId,
+        type: 'circle',
+        source: srcId,
+        filter: ['==', ['get', 'role'], 'target'],
+        paint: { 'circle-radius': 6, 'circle-color': '#39d98a', 'circle-stroke-color': '#06210f', 'circle-stroke-width': 1.6 },
+      });
+      map.addLayer({
+        id: labelId,
+        type: 'symbol',
+        source: srcId,
+        filter: ['==', ['get', 'role'], 'target'],
+        layout: {
+          'text-field': ['get', 'label'],
+          'text-size': 11,
+          'text-offset': [0, -1.2],
+          'text-allow-overlap': true,
+          'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Regular'],
+        },
+        paint: { 'text-color': '#eafff2', 'text-halo-color': '#07130c', 'text-halo-width': 1.4 },
+      });
+      return true;
+    };
+    if (render()) return;
+    const onData = () => {
+      if (render()) map.off('styledata', onData);
+    };
+    map.on('styledata', onData);
+    return () => {
+      map.off('styledata', onData);
+    };
+  }, [gcpOverlayFc]);
+
+  // ArcGIS "Move Point": drag a control-point target marker on the map to relocate it.
+  // Live preview updates the overlay source directly; the georeference re-warps on release.
+  const updateGeorefGcp = rasterGeoreference.updateGeorefGcp;
+  useEffect(() => {
+    const map = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+    if (!map || typeof map.on !== 'function') return;
+    const srcId = 'si-gcp-overlay';
+    const tgtPtId = `${srcId}-tgt`;
+    let draggingId: string | null = null;
+    let draggingLabel: string | null = null;
+
+    const setCursor = (c: string) => {
+      const canvas = map.getCanvas?.();
+      if (canvas) canvas.style.cursor = c;
+    };
+    const onEnter = () => {
+      if (!draggingId) setCursor('move');
+    };
+    const onLeave = () => {
+      if (!draggingId) setCursor('');
+    };
+    const onDown = (e: any) => {
+      const f = e?.features?.[0];
+      const id = f?.properties?.gcpId;
+      if (!id) return;
+      if (e?.preventDefault) e.preventDefault();
+      draggingId = String(id);
+      draggingLabel = f?.properties?.label ? String(f.properties.label) : null;
+      if (map.dragPan?.disable) map.dragPan.disable();
+      setCursor('grabbing');
+    };
+    const onMove = (e: any) => {
+      if (!draggingId) return;
+      const fc = gcpOverlayFcRef.current;
+      const src = map.getSource(srcId);
+      if (!fc || !src || typeof (src as any).setData !== 'function') return;
+      const lng = e.lngLat.lng;
+      const lat = e.lngLat.lat;
+      const preview: GeoJSON.FeatureCollection = {
+        type: 'FeatureCollection',
+        features: fc.features.map(feat => {
+          const role = (feat.properties as any)?.role;
+          const label = (feat.properties as any)?.label;
+          if (role === 'target' && (feat.properties as any)?.gcpId === draggingId) {
+            return { ...feat, geometry: { type: 'Point', coordinates: [lng, lat] } };
+          }
+          if (role === 'link' && label === draggingLabel && feat.geometry?.type === 'LineString') {
+            const coords = (feat.geometry.coordinates as [number, number][]).slice();
+            if (coords.length >= 2) coords[coords.length - 1] = [lng, lat];
+            return { ...feat, geometry: { type: 'LineString', coordinates: coords } };
+          }
+          return feat;
+        }),
+      };
+      (src as any).setData(preview);
+    };
+    const onUp = (e: any) => {
+      if (!draggingId) return;
+      const id = draggingId;
+      draggingId = null;
+      draggingLabel = null;
+      if (map.dragPan?.enable) map.dragPan.enable();
+      setCursor('');
+      // Commit the new target location once — the hook re-warps the raster.
+      updateGeorefGcp(id, 'lon', e.lngLat.lng.toFixed(6));
+      updateGeorefGcp(id, 'lat', e.lngLat.lat.toFixed(6));
+    };
+
+    map.on('mouseenter', tgtPtId, onEnter);
+    map.on('mouseleave', tgtPtId, onLeave);
+    map.on('mousedown', tgtPtId, onDown);
+    map.on('mousemove', onMove);
+    map.on('mouseup', onUp);
+    return () => {
+      map.off('mouseenter', tgtPtId, onEnter);
+      map.off('mouseleave', tgtPtId, onLeave);
+      map.off('mousedown', tgtPtId, onDown);
+      map.off('mousemove', onMove);
+      map.off('mouseup', onUp);
+    };
+  }, [updateGeorefGcp]);
 
   // Publish flood outputs as separate Layer Manager layers (raster + change + vector).
   const floodPublishedKeyRef = useRef<string | null>(null);
@@ -13189,8 +14623,47 @@ export default function SatelliteIntelligence() {
   );
 
   const handleMapClickDraw = (lng: number, lat: number, clickEv?: MouseEvent | null) => {
+    // Full isolation from Mapbox canvas events: if the DOM click actually landed on a
+    // toolbox panel / rail / floating bar / map control overlaid on the canvas, it must
+    // NEVER drive the map (no AOI, identify, GCP pick, SAM point, draw vertex, etc.).
+    // Mapbox still synthesises a map 'click' for overlay children of the canvas container,
+    // so we detect and swallow those here (React can't stopPropagation the native click at
+    // the overlay root without also killing the panel's own button handlers).
+    const clickTarget = (clickEv?.target ?? null) as HTMLElement | null;
+    if (
+      clickTarget &&
+      typeof clickTarget.closest === 'function' &&
+      clickTarget.closest(
+        '.si-sat-ctx-dock, .si-sat-ctx-panel, .si-sat-ctx-rail, .si-grb-floatbar, .mapboxgl-ctrl, [data-map-overlay-isolate]',
+      )
+    ) {
+      return;
+    }
+    // Always remember the last map click so the georeferencing GCP tool can reuse it.
+    lastMapClickRef.current = { lon: lng, lat };
     if (skipNextMapClickRef.current) {
       skipNextMapClickRef.current = false;
+      return;
+    }
+    // AI SAM Detection: while Detect tab is active, clicks drop foreground/background
+    // point prompts. Training Samples digitizing / AOI draw use the map draw tools instead.
+    if (samActiveRef.current && !samTrainDigitizingRef.current && !samAoiDrawingRef.current) {
+      samAddPointRef.current(lng, lat);
+      return;
+    }
+    // Georeference "Add Control Points": the two-click workflow (source image → reference
+    // map) owns clicks while armed, so no AOI/identify/popup runs.
+    if (
+      expandedEnvSectionRef.current === 'raster-georeference' &&
+      isLayerDropdownOpenRef.current &&
+      rasterGeoreference.gcpPicking
+    ) {
+      rasterGeoreference.handleGcpMapClick(lng, lat);
+      return;
+    }
+    // A direct-manipulation tool (Move/Rotate/Scale) owns the map gesture; swallow the click
+    // so no AOI/identify/popup fires after dragging the raster.
+    if (rasterGeoreference.manipMode) {
       return;
     }
     // Standalone Measure tool consumes clicks in isolation (no AOI / identify).
@@ -14558,6 +16031,51 @@ export default function SatelliteIntelligence() {
     wmsDate,
   ]);
 
+  const [rsGeoTiffBusy, setRsGeoTiffBusy] = useState(false);
+  const [rsGeoTiffLabel, setRsGeoTiffLabel] = useState<string | undefined>(undefined);
+  const handleRsExportGeoTiff = useCallback(() => {
+    const geom = drawnGeometry?.geometry ?? drawnGeometryRef.current?.geometry ?? null;
+    if (!geom || (geom.type !== 'Polygon' && geom.type !== 'MultiPolygon')) {
+      setFieldAnalysisStatus('Draw an AOI polygon, then Export GeoTIFF (GIS).');
+      return;
+    }
+    const layerId = wmsLayerSelectValue || wmsLayer;
+    const sceneDate = imageryDateAutoFollow ? sentinelFetchDate : wmsDate || sentinelFetchDate;
+    setRsGeoTiffBusy(true);
+    setRsGeoTiffLabel('Preparing GeoTIFF…');
+    setFieldAnalysisStatus(null);
+    void (async () => {
+      try {
+        const { filename } = await exportRemoteSensingIndexGeoTiff({
+          layerId,
+          sceneDate,
+          geometry: geom,
+          metersPerPixel: 10,
+          aoiName:
+            (drawnGeometry?.properties?.name as string | undefined) ??
+            (drawnGeometry?.properties?.fieldName as string | undefined) ??
+            'AOI',
+          onProgress: label => setRsGeoTiffLabel(label),
+        });
+        setFieldAnalysisStatus(`GeoTIFF exported: ${filename} — open *_rgb.tif in ArcGIS Pro (Zoom To Layer)`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('Remote sensing GeoTIFF export failed', err);
+        setFieldAnalysisStatus(msg);
+      } finally {
+        setRsGeoTiffBusy(false);
+        setRsGeoTiffLabel(undefined);
+      }
+    })();
+  }, [
+    drawnGeometry,
+    wmsLayerSelectValue,
+    wmsLayer,
+    imageryDateAutoFollow,
+    sentinelFetchDate,
+    wmsDate,
+  ]);
+
   const cropAlertImageryContext = useMemo(
     () =>
       buildCropAlertImageryContext({
@@ -15251,6 +16769,10 @@ export default function SatelliteIntelligence() {
   const siBasemapSwapRef = useRef(activeBasemapId);
   /** How many raster layers the currently-applied basemap style has. */
   const siBasemapLayerCountRef = useRef(activeBasemapRasterSpecs.length);
+  /** Native max-zoom signature of the applied basemap — `setTiles` can't change `maxzoom`, so a change forces a rebuild. */
+  const siBasemapMaxZoomKeyRef = useRef(
+    activeBasemapRasterSpecs.map(s => s.maxNativeZoom ?? -1).join(','),
+  );
 
   /** Swap raster basemap in-place (same as GIS Map) â€” avoids black globe when react-map-gl style prop alone updates. */
   useEffect(() => {
@@ -15264,9 +16786,13 @@ export default function SatelliteIntelligence() {
     // style, the camera (center/zoom/pitch/bearing) and every overlay stay
     // untouched: no setStyle, no jumpTo/fitBounds, no flicker, no zoom motion.
     const specs = activeBasemapRasterSpecs;
+    const nextMaxZoomKey = specs.map(s => s.maxNativeZoom ?? -1).join(',');
     const sameStructure =
       specs.length > 0 &&
       specs.length === siBasemapLayerCountRef.current &&
+      // `setTiles` keeps the old source's maxzoom, so only fast-swap when the
+      // native max-zoom is unchanged — otherwise rebuild so over-zoom caps apply.
+      nextMaxZoomKey === siBasemapMaxZoomKeyRef.current &&
       specs.every((_, i) => {
         try {
           const src = map.getSource?.(`${SI_BASE_SOURCE_PREFIX}${i}`);
@@ -15287,6 +16813,7 @@ export default function SatelliteIntelligence() {
       if (swapped) {
         siBasemapSwapRef.current = activeBasemapId;
         siBasemapLayerCountRef.current = specs.length;
+        siBasemapMaxZoomKeyRef.current = nextMaxZoomKey;
         basemapRasterFallbackRef.current = false;
         // Keep terrain in sync without moving the camera.
         try {
@@ -15310,6 +16837,7 @@ export default function SatelliteIntelligence() {
     // â”€â”€ Fallback path: structural change â†’ rebuild style, preserve camera â”€â”€â”€â”€
     siBasemapSwapRef.current = activeBasemapId;
     siBasemapLayerCountRef.current = specs.length;
+    siBasemapMaxZoomKeyRef.current = nextMaxZoomKey;
     basemapRasterFallbackRef.current = false;
     setIsMapStyleReady(false);
     cancelAgroCloudTerrainSync(map);
@@ -16821,6 +18349,9 @@ export default function SatelliteIntelligence() {
   const cropClassDrawingTool: RemoteSensingDrawingTool | null =
     mapDrawOwner === 'crop-classification' ? rsDrawingTool : null;
 
+  const icSampleDrawTool: RemoteSensingDrawingTool | null =
+    mapDrawOwner === 'image-classification' ? rsDrawingTool : null;
+
   const cropClassHasClearableDrawing = useMemo(
     () =>
       cropClassAoiGeometry != null ||
@@ -18094,6 +19625,29 @@ export default function SatelliteIntelligence() {
                     />
                   </Source>
                 ) : null}
+                {icSampleAoiGeometry ? (
+                  <Source id="si-ic-sample-aoi-source" type="geojson" data={icSampleAoiGeometry as any}>
+                    <Layer
+                      id="si-ic-sample-aoi-fill"
+                      type="fill"
+                      filter={['==', ['geometry-type'], 'Polygon']}
+                      paint={{
+                        'fill-color': '#38bdf8',
+                        'fill-opacity': 0.18 * drawVisualOpacity,
+                      }}
+                    />
+                    <Layer
+                      id="si-ic-sample-aoi-line"
+                      type="line"
+                      filter={['in', ['geometry-type'], ['literal', ['Polygon', 'LineString']]]}
+                      paint={{
+                        'line-color': '#0ea5e9',
+                        'line-width': 2.25,
+                        'line-opacity': 0.95 * drawVisualOpacity,
+                      }}
+                    />
+                  </Source>
+                ) : null}
                 {treeDetectionsActive && treeDetectionOverlayData && treeOverlayVisible ? (
                   <Source id={TREE_DETECTIONS_SOURCE_ID} type="geojson" data={treeDetectionOverlayData as any}>
                     <Layer
@@ -18124,6 +19678,220 @@ export default function SatelliteIntelligence() {
                         'circle-color': '#052e16',
                         'circle-stroke-color': ['coalesce', ['get', 'color'], '#16a34a'],
                         'circle-stroke-width': 1.4,
+                      }}
+                    />
+                  </Source>
+                ) : null}
+                {/* AI SAM Detection overlays: saved objects, the current mask, and
+                    the foreground/background point prompts — all on the map canvas. */}
+                {samActive && samAoiMapGeojson.features.length ? (
+                  <Source id="sam-aoi-source" type="geojson" data={samAoiMapGeojson as any}>
+                    <Layer
+                      id="sam-aoi-fill"
+                      type="fill"
+                      paint={{ 'fill-color': '#38bdf8', 'fill-opacity': 0.08 }}
+                    />
+                    <Layer
+                      id="sam-aoi-line"
+                      type="line"
+                      paint={{
+                        'line-color': '#38bdf8',
+                        'line-width': 2.2,
+                        'line-dasharray': [2, 1.2],
+                      }}
+                    />
+                  </Source>
+                ) : null}
+                {samActive && samTrainingSamples.samplesGeojson.features.length ? (
+                  <Source id="sam-train-samples-source" type="geojson" data={samTrainingSamples.samplesGeojson as any}>
+                    <Layer
+                      id="sam-train-samples-fill"
+                      type="fill"
+                      filter={['any', ['==', ['geometry-type'], 'Polygon'], ['==', ['geometry-type'], 'MultiPolygon']]}
+                      paint={{
+                        'fill-color': ['coalesce', ['get', 'color'], '#38bdf8'],
+                        'fill-opacity': 0.35,
+                      }}
+                    />
+                    <Layer
+                      id="sam-train-samples-line"
+                      type="line"
+                      filter={[
+                        'any',
+                        ['==', ['geometry-type'], 'Polygon'],
+                        ['==', ['geometry-type'], 'MultiPolygon'],
+                        ['==', ['geometry-type'], 'LineString'],
+                        ['==', ['geometry-type'], 'MultiLineString'],
+                      ]}
+                      paint={{
+                        'line-color': ['coalesce', ['get', 'color'], '#0ea5e9'],
+                        'line-width': 2,
+                      }}
+                    />
+                    <Layer
+                      id="sam-train-samples-point"
+                      type="circle"
+                      filter={['any', ['==', ['geometry-type'], 'Point'], ['==', ['geometry-type'], 'MultiPoint']]}
+                      paint={{
+                        'circle-radius': 5.5,
+                        'circle-color': ['coalesce', ['get', 'color'], '#22c55e'],
+                        'circle-stroke-color': '#ffffff',
+                        'circle-stroke-width': 1.4,
+                      }}
+                    />
+                  </Source>
+                ) : null}
+                {samActive && samTrainDraftGeometry ? (
+                  <Source id="sam-train-draft-source" type="geojson" data={samTrainDraftGeometry as any}>
+                    <Layer
+                      id="sam-train-draft-fill"
+                      type="fill"
+                      filter={['any', ['==', ['geometry-type'], 'Polygon'], ['==', ['geometry-type'], 'MultiPolygon']]}
+                      paint={{ 'fill-color': '#fbbf24', 'fill-opacity': 0.2 }}
+                    />
+                    <Layer
+                      id="sam-train-draft-line"
+                      type="line"
+                      filter={[
+                        'any',
+                        ['==', ['geometry-type'], 'Polygon'],
+                        ['==', ['geometry-type'], 'MultiPolygon'],
+                        ['==', ['geometry-type'], 'LineString'],
+                        ['==', ['geometry-type'], 'MultiLineString'],
+                      ]}
+                      paint={{ 'line-color': '#f59e0b', 'line-width': 2, 'line-dasharray': [2, 1] }}
+                    />
+                    <Layer
+                      id="sam-train-draft-point"
+                      type="circle"
+                      filter={['any', ['==', ['geometry-type'], 'Point'], ['==', ['geometry-type'], 'MultiPoint']]}
+                      paint={{
+                        'circle-radius': 6,
+                        'circle-color': '#fbbf24',
+                        'circle-stroke-color': '#ffffff',
+                        'circle-stroke-width': 1.5,
+                      }}
+                    />
+                  </Source>
+                ) : null}
+                {samActive && samDetection.savedGeojson.features.length ? (
+                  <Source id={SAM_SAVED_SOURCE_ID} type="geojson" data={samDetection.savedGeojson as any}>
+                    <Layer
+                      id={`${SAM_SAVED_SOURCE_ID}-fill`}
+                      type="fill"
+                      filter={['==', ['geometry-type'], 'Polygon']}
+                      paint={{ 'fill-color': '#22c55e', 'fill-opacity': 0.28 }}
+                    />
+                    <Layer
+                      id={`${SAM_SAVED_SOURCE_ID}-poly-line`}
+                      type="line"
+                      filter={['==', ['geometry-type'], 'Polygon']}
+                      paint={{ 'line-color': '#15803d', 'line-width': 1.6 }}
+                    />
+                    <Layer
+                      id={`${SAM_SAVED_SOURCE_ID}-line`}
+                      type="line"
+                      filter={['==', ['geometry-type'], 'LineString']}
+                      paint={{ 'line-color': '#f59e0b', 'line-width': 2.4 }}
+                    />
+                    <Layer
+                      id={`${SAM_SAVED_SOURCE_ID}-point`}
+                      type="circle"
+                      filter={['==', ['geometry-type'], 'Point']}
+                      paint={{
+                        'circle-radius': 5,
+                        'circle-color': '#22c55e',
+                        'circle-stroke-color': '#ffffff',
+                        'circle-stroke-width': 1.4,
+                      }}
+                    />
+                  </Source>
+                ) : null}
+                {samActive && samDetection.maskGeojson ? (
+                  <Source id={SAM_MASK_SOURCE_ID} type="geojson" data={samDetection.maskGeojson as any}>
+                    <Layer
+                      id={`${SAM_MASK_SOURCE_ID}-fill`}
+                      type="fill"
+                      filter={['==', ['geometry-type'], 'Polygon']}
+                      paint={{
+                        'fill-color': ['coalesce', ['get', 'fill_color'], '#38bdf8'],
+                        'fill-opacity': samDetection.maskOpacity,
+                      }}
+                    />
+                    <Layer
+                      id={`${SAM_MASK_SOURCE_ID}-poly-line`}
+                      type="line"
+                      filter={['==', ['geometry-type'], 'Polygon']}
+                      paint={{
+                        'line-color': ['coalesce', ['get', 'stroke_color'], '#ffffff'],
+                        'line-width': 1.5,
+                        'line-opacity': 0.95,
+                      }}
+                    />
+                    <Layer
+                      id={`${SAM_MASK_SOURCE_ID}-line`}
+                      type="line"
+                      filter={['==', ['geometry-type'], 'LineString']}
+                      paint={{ 'line-color': '#fbbf24', 'line-width': 2.6 }}
+                    />
+                    <Layer
+                      id={`${SAM_MASK_SOURCE_ID}-point`}
+                      type="circle"
+                      filter={['==', ['geometry-type'], 'Point']}
+                      paint={{
+                        'circle-radius': 4.5,
+                        'circle-color': ['coalesce', ['get', 'fill_color'], '#22c55e'],
+                        'circle-stroke-color': '#ffffff',
+                        'circle-stroke-width': 1.6,
+                        'circle-opacity': 0.95,
+                      }}
+                    />
+                  </Source>
+                ) : null}
+                {samActive && samDetection.pointsGeojson.features.length ? (
+                  <Source id={SAM_POINTS_SOURCE_ID} type="geojson" data={samDetection.pointsGeojson as any}>
+                    <Layer
+                      id={`${SAM_POINTS_SOURCE_ID}-halo`}
+                      type="circle"
+                      paint={{
+                        'circle-radius': 8,
+                        'circle-color': ['match', ['get', 'promptType'], 'fg', '#22c55e', 'bg', '#ef4444', '#888'],
+                        'circle-opacity': 0.25,
+                      }}
+                    />
+                    <Layer
+                      id={`${SAM_POINTS_SOURCE_ID}-dot`}
+                      type="circle"
+                      paint={{
+                        'circle-radius': 4.5,
+                        'circle-color': ['match', ['get', 'promptType'], 'fg', '#22c55e', 'bg', '#ef4444', '#888'],
+                        'circle-stroke-color': '#ffffff',
+                        'circle-stroke-width': 1.5,
+                      }}
+                    />
+                  </Source>
+                ) : null}
+                {agriFieldBoundaryActive && agriFieldBoundary.geojson ? (
+                  <Source
+                    id={AGRI_FIELD_BOUNDARY_SOURCE_ID}
+                    type="geojson"
+                    data={agriFieldBoundary.geojson as any}
+                  >
+                    <Layer
+                      id={`${AGRI_FIELD_BOUNDARY_SOURCE_ID}-fill`}
+                      type="fill"
+                      paint={{
+                        'fill-color': ['coalesce', ['get', 'fill_color'], '#22c55e'],
+                        'fill-opacity': agriFieldBoundary.fillOpacity,
+                      }}
+                    />
+                    <Layer
+                      id={`${AGRI_FIELD_BOUNDARY_SOURCE_ID}-outline`}
+                      type="line"
+                      paint={{
+                        'line-color': ['coalesce', ['get', 'stroke_color'], '#ffffff'],
+                        'line-width': 2.1,
+                        'line-opacity': 0.98,
                       }}
                     />
                   </Source>
@@ -18459,7 +20227,7 @@ export default function SatelliteIntelligence() {
                         id={siSentinelAoiWmsSourceId(stack.idPrefix, chunkIdx)}
                         type="raster"
                         tiles={[stack.tileUrls[chunkIdx] ?? '']}
-                        tileSize={SENTINEL_HUB_WMS_TILE_PIXELS}
+                        tileSize={stack.tilePixels || SENTINEL_HUB_WMS_TILE_PIXELS}
                         minzoom={effectiveSentinelWmsMinZoom}
                         bounds={resolveSiSentinelAoiWmsChunkBounds(stack, chunk)}
                       >
@@ -19976,7 +21744,7 @@ export default function SatelliteIntelligence() {
                 onChange={handleLayerFileChange}
               />
               <SatelliteMapProcessingOptionsPortal portalTarget={mapToolboxEmbedHost}>
-                {isLayerDropdownOpen ? (
+                {isLayerDropdownOpen && expandedEnvSection !== 'raster-georeference' ? (
                   <div
                     className={`si-env-panel si-env-panel--satellite-toolbox si-env-panel--single-surface${
                       mapToolboxEmbedHost ? ' si-env-panel--toolbox-embed' : ' si-env-panel--mapbox-drop'
@@ -20002,6 +21770,10 @@ export default function SatelliteIntelligence() {
                                 ? 'AI Detection in GIS'
                               : expandedEnvSection === 'tree-detections'
                                 ? 'Tree Detections'
+                              : expandedEnvSection === 'sam-detection'
+                                ? 'AI SAM Detection'
+                              : expandedEnvSection === 'agri-field-boundary'
+                                ? 'Agri Field Boundary Detection'
                               : expandedEnvSection === 'hydro-watershed'
                                 ? 'Hydro Watershed Workflow'
                               : expandedEnvSection === 'well-site'
@@ -20010,6 +21782,8 @@ export default function SatelliteIntelligence() {
                                 ? 'Well Suitability (MCDA)'
                               : expandedEnvSection === 'flood-monitoring'
                                 ? 'Flood Monitoring (SAR-Based)'
+                              : expandedEnvSection === 'image-classification'
+                                ? 'Image Classification Wizard'
                                 : expandedEnvSection === 'layers'
                                   ? 'Layers'
                                   : expandedEnvSection === 'source'
@@ -20094,6 +21868,12 @@ export default function SatelliteIntelligence() {
                           onRunChip={handleCropAiRunChip}
                           onCancel={handleCropAiCancel}
                           onAddToMap={() => void addCropAiPredictionLayer(cropAiJob)}
+                          onExportReport={handleCropAiExportReport}
+                          exportReportBusy={cropAiExportBusy}
+                          exportReportLabel={cropAiExportLabel}
+                          onExportGeoTiff={handleCropAiExportGeoTiff}
+                          exportGeoTiffBusy={cropAiGeoTiffBusy}
+                          exportGeoTiffLabel={cropAiGeoTiffLabel}
                         />
                       </div>
                     )}
@@ -20181,6 +21961,10 @@ export default function SatelliteIntelligence() {
                         fieldTimelineActive={fieldTimelineSessionActive}
                         onTimelinePrimaryClick={onFieldAnalysisTimelinePrimaryClick}
                         fieldAnalysisStatus={fieldAnalysisStatus}
+                        onExportGeoTiff={handleRsExportGeoTiff}
+                        exportGeoTiffBusy={rsGeoTiffBusy}
+                        exportGeoTiffLabel={rsGeoTiffLabel}
+                        exportGeoTiffDisabled={!drawnGeometry?.geometry}
                         onClose={() => setIsLayerDropdownOpen(false)}
                       />
                     )}
@@ -20228,6 +22012,122 @@ export default function SatelliteIntelligence() {
                           onExport={handleTreeDetectExport}
                           onExportShapefile={handleTreeDetectExportShapefile}
                           onZoomToLayer={handleTreeZoomToLayer}
+                        />
+                      </div>
+                    )}
+                    {expandedEnvSection === 'sam-detection' && (
+                      <div className="si-env-section-card si-rs-panel--glass">
+                        <SamDetectionPanel
+                          tab={samPanelTab}
+                          onTabChange={t => {
+                            setSamPanelTab(t);
+                            if (t === 'detect' && samTrainDigitizing) stopSamTrainingDigitize();
+                            if (t === 'samples' && samAoiDrawing) stopSamAoiDrawing();
+                          }}
+                          classType={samDetection.classType}
+                          onClassTypeChange={samDetection.setClassType}
+                          featureMode={samDetection.featureMode}
+                          onFeatureModeChange={samDetection.setFeatureMode}
+                          objectTypeId={samDetection.objectTypeId}
+                          onObjectTypeIdChange={samDetection.setObjectTypeId}
+                          customObjectType={samDetection.customObjectType}
+                          onCustomObjectTypeChange={samDetection.setCustomObjectType}
+                          objectTypeOptions={samDetection.objectTypeOptions}
+                          objectTypeReady={samDetection.objectTypeReady}
+                          fgCount={samDetection.fgCount}
+                          bgCount={samDetection.bgCount}
+                          savedCount={samDetection.savedCount}
+                          maskOpacity={samDetection.maskOpacity}
+                          onMaskOpacityChange={samDetection.setMaskOpacity}
+                          minConfidence={samDetection.minConfidence}
+                          onMinConfidenceChange={samDetection.setMinConfidence}
+                          aoiSource={samAoiSource}
+                          onAoiSourceChange={s => {
+                            setSamAoiSource(s);
+                            if (s === 'layer' && samAoiDrawing) stopSamAoiDrawing();
+                          }}
+                          aoiLayerOptions={samAoiLayerOptions}
+                          aoiLayerId={samAoiLayerId}
+                          onAoiLayerIdChange={setSamAoiLayerId}
+                          aoiReady={samAoiReady}
+                          aoiUnitCount={samAoiUnitCount}
+                          aoiDrawing={samAoiDrawing}
+                          onStartDrawAoi={startSamAoiDrawing}
+                          onClearDrawAoi={clearSamDrawnAoi}
+                          phase={samDetection.phase}
+                          progress={samDetection.progress}
+                          busy={samDetection.busy}
+                          error={samDetection.error}
+                          offline={samDetection.offline}
+                          score={samDetection.result?.score ?? null}
+                          featureStats={samDetection.featureStats}
+                          objectCount={samDetection.result?.count ?? 0}
+                          hasResult={!!samDetection.result}
+                          onSegment={samDetection.segment}
+                          onSave={samDetection.save}
+                          onReset={samDetection.reset}
+                          onUndo={samDetection.undoLastPoint}
+                          onExport={samDetection.exportSaved}
+                          train={samTrainingSamples}
+                          trainDigitizing={samTrainDigitizing}
+                          onTrainDigitizingChange={handleSamTrainDigitizingChange}
+                          onAddTrainFromSam={asMask => {
+                            const feats = samDetection.result?.geojson?.features;
+                            if (!feats?.length) return;
+                            samTrainingSamples.addFromSamFeatures(feats, asMask);
+                          }}
+                        />
+                      </div>
+                    )}
+                    {expandedEnvSection === 'agri-field-boundary' && (
+                      <div className="si-env-section-card si-rs-panel--glass">
+                        <AgriFieldBoundaryPanel
+                          hasAoi={Boolean(resolveFieldBoundaryAoi())}
+                          source={agriFieldBoundary.source}
+                          onSourceChange={agriFieldBoundary.setSource}
+                          sourceOptions={agriFieldBoundary.sourceOptions}
+                          uploadedFileName={agriFieldBoundary.uploadedImage?.name ?? null}
+                          onUploadImageFile={file => void agriFieldBoundary.uploadImageFile(file)}
+                          onClearUploadedImage={agriFieldBoundary.clearUploadedImage}
+                          minConfidence={agriFieldBoundary.minConfidence}
+                          onMinConfidenceChange={agriFieldBoundary.setMinConfidence}
+                          minAreaM2={agriFieldBoundary.minAreaM2}
+                          onMinAreaM2Change={agriFieldBoundary.setMinAreaM2}
+                          fillOpacity={agriFieldBoundary.fillOpacity}
+                          onFillOpacityChange={agriFieldBoundary.setFillOpacity}
+                          phase={agriFieldBoundary.phase}
+                          progress={agriFieldBoundary.progress}
+                          busy={agriFieldBoundary.busy}
+                          error={agriFieldBoundary.error}
+                          offline={agriFieldBoundary.offline}
+                          fieldCount={agriFieldBoundary.fieldCount}
+                          totalAreaHa={agriFieldBoundary.totalAreaHa}
+                          engine={agriFieldBoundary.engine}
+                          score={agriFieldBoundary.result?.score ?? null}
+                          hasResult={Boolean(agriFieldBoundary.geojson?.features?.length)}
+                          onRun={agriFieldBoundary.run}
+                          onReset={agriFieldBoundary.reset}
+                          onExportGeojson={agriFieldBoundary.exportGeojson}
+                          onExportShapefile={() => void agriFieldBoundary.exportShapefile()}
+                          onAddToLayers={() => {
+                            const fc = agriFieldBoundary.geojson;
+                            if (!fc?.features?.length) return;
+                            const id = `agri-fields-${Date.now().toString(36)}`;
+                            setCustomLayers(prev => [
+                              ...prev,
+                              {
+                                id,
+                                name: `Field Boundaries (${fc.features.length})`,
+                                geojson: fc,
+                                visible: true,
+                                source: 'upload',
+                                ...siDefaultNewVectorLayerFields(),
+                                importMetadata: { format: 'Feature Layer', crs: 'EPSG:4326' },
+                              },
+                            ]);
+                            setCustomLayersMapEpoch(epoch => epoch + 1);
+                            focusGeoJsonOnMap(fc);
+                          }}
                         />
                       </div>
                     )}
@@ -20346,6 +22246,22 @@ export default function SatelliteIntelligence() {
                         />
                       </div>
                     )}
+                    {expandedEnvSection === 'image-classification' && (
+                      <div className="si-env-section-card si-rs-panel--glass">
+                        <ImageClassificationWizardPanel
+                          wizard={imageClassification}
+                          existingRasters={imageClassificationExistingRasters}
+                          hasDrawnGeometry={!!icSampleAoiGeometry}
+                          sampleDrawTool={icSampleDrawTool}
+                          sampleDrawActive={icDrawingModeActive}
+                          onSampleDrawToolChange={handleIcDrawingToolChange}
+                          onSampleDrawStop={() => handleIcDrawingModeChange(false)}
+                          onClearSampleSketch={clearIcSampleSketchOnly}
+                          onClose={() => setIsLayerDropdownOpen(false)}
+                        />
+                      </div>
+                    )}
+                    {/* Georeference renders as a floating top-centre toolbar, not a side panel. */}
                     {expandedEnvSection === 'source' && (
                       <div className="si-env-section-card">{exploreStacSourcePanelContent}</div>
                     )}
@@ -20368,6 +22284,29 @@ export default function SatelliteIntelligence() {
           </div>
         </div>
       </div>
+      {/* Georeference: compact draggable glass toolbar (drag from grip / title). */}
+      {expandedEnvSection === 'raster-georeference' && isLayerDropdownOpen
+        ? createPortal(
+            <GeoreferenceFloatbar compact>
+              <RasterGeoreferenceRibbon
+                tool={rasterGeoreference}
+                variant="bar"
+                existingRasters={imageClassificationExistingRasters}
+                hasDrawnGeometry={!!drawnGeometry}
+                onFlyTo={(lon, lat, zoom) => {
+                  const m = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+                  m?.flyTo?.({
+                    center: [lon, lat],
+                    zoom: zoom ?? m?.getZoom?.(),
+                    duration: 800,
+                  });
+                }}
+                onClose={() => setIsLayerDropdownOpen(false)}
+              />
+            </GeoreferenceFloatbar>,
+            document.body,
+          )
+        : null}
       {layerPopupCfgOpen
         ? (() => {
             const cfgLayer = layerPopupCfgPickId ? customLayers.find(l => l.id === layerPopupCfgPickId) : null;
@@ -20420,6 +22359,38 @@ export default function SatelliteIntelligence() {
           onSaveDbProfile={handleGisDmSaveDbProfile}
           onImportWfs={handleGisDmImportWfs}
           onImportOgcTile={handleGisDmImportOgcTile}
+          rasterLayerTools={
+            rasterGeoreference.raster
+              ? {
+                  layer: {
+                    id: rasterGeoreference.raster.rasterId,
+                    name: rasterGeoreference.raster.name,
+                    bands: rasterGeoreference.raster.bands,
+                    crs: rasterGeoreference.raster.crs,
+                    width: rasterGeoreference.raster.widthPx,
+                    height: rasterGeoreference.raster.heightPx,
+                    isCog: rasterGeoreference.raster.isCog,
+                    georeferenced: !rasterGeoreference.georefPending,
+                  },
+                  display: rasterGeoreference.display,
+                  busy: rasterGeoreference.busy,
+                  onDisplayChange: rasterGeoreference.setDisplayField,
+                  onResetDisplay: rasterGeoreference.resetDisplay,
+                  onRemove: () => {
+                    rasterGeoreference.clearRaster();
+                  },
+                  onOpenGeoreference: () => {
+                    setExpandedEnvSection('raster-georeference');
+                    setIsLayerDropdownOpen(true);
+                    closeAddLayerModal();
+                  },
+                  onFitToLayer: () => {
+                    const fp = rasterGeoreference.raster?.footprint;
+                    if (fp) focusGeoJsonOnMap(fp);
+                  },
+                }
+              : null
+          }
         />
       ) : null}
       <SiAddArcGisLayerPanel

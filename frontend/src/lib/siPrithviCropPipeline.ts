@@ -7,12 +7,6 @@
  * @see backend/server/cropClassificationProxy.js
  */
 
-import { assertCropPanelProvider, normalizeApiDataProvider } from './cropSupervised/cropDataProvider'
-import type { CropDataProviderId } from './cropSupervised/cropDataProvider'
-import type { CropPipelineProfileId } from './cropSupervised/cropProviderPipelineProfile'
-
-export type { CropDataProviderId } from './cropSupervised/cropDataProvider'
-
 import {
   apiUrl,
   configuredApiOrigin,
@@ -71,38 +65,23 @@ export type CropClassLegendItem = {
   kind?: 'crop' | 'landcover'
 }
 
-export type CropClassificationMode = 'ai-prithvi' | 'supervised-ground-truth'
-
-export const SUPERVISED_PIPELINE_STAGES: Array<{ status: CropClassificationJobStatus; label: string }> = [
-  { status: 'fetching', label: 'Fetch multi-date imagery' },
-  { status: 'preprocessing', label: 'Extract training signatures' },
-  { status: 'inferring', label: 'Train RF + classify AOI' },
-  { status: 'done', label: 'Classification + confidence maps' },
-]
-
-export type SupervisedAccuracySummary = {
-  overallAccuracy: number
-  holdoutFraction: number
-  trainSamples: number
-  testSamples: number
-  confusionMatrix: { labels: string[]; matrix: number[][] }
-  perClass: Array<{ name: string; precision: number; recall: number; f1: number; support: number }>
-}
-
 export type CropClassificationResult = {
-  engine?: 'country' | 'prithvi' | 'supervised'
-  dataProvider?: CropDataProviderId
-  pipelineProfile?: CropPipelineProfileId
+  engine?: 'country' | 'prithvi'
   country?: { code: string; name: string; source: string } | null
   legend?: CropClassLegendItem[] | null
   scenes?: { t1: string | null; t2: string | null; t3: string | null }
   dates?: string[]
   prediction?: { url: string | null; bounds: [number, number, number, number] | null }
-  confidence?: { url: string | null; bounds: [number, number, number, number] | null }
   classStats?: Array<{ id?: string; name: string; pct: number; areaHa?: number }> | null
-  accuracy?: SupervisedAccuracySummary | null
-  signatures?: Array<{ className: string; meanFeatures: number[]; sampleCount: number }> | null
   inferenceAvailable?: boolean
+  /** Ground sampling distance (m/px) of the classified output. */
+  resolutionMeters?: number
+  /** How the target resolution was reached: 'ai' (external SR service) or 'resample'. */
+  superResolution?: 'ai' | 'resample'
+  /** Per-timestep scene cloud cover chosen by the selector. */
+  sceneCloudCover?: Array<{ date: string; cloudCover: number | null; cloudy: boolean }>
+  /** Highest scene cloud cover (%) used in the run. */
+  maxSceneCloud?: number | null
 }
 
 export type CropClassificationJob = {
@@ -119,12 +98,6 @@ export type RunAoiInput = {
   aoi: GeoJSON.Polygon | GeoJSON.MultiPolygon
   season: { start: string; end: string }
   timesteps?: number
-  dataProvider?: CropDataProviderId
-}
-
-export type RunSupervisedAoiInput = RunAoiInput & {
-  samples: import('./cropSupervised/types').CropTrainingSample[]
-  holdoutFraction?: number
 }
 
 /** Backend path for a crop-classification sub-route (resolved via the shared origin helper). */
@@ -137,6 +110,28 @@ function backendUnavailableError(): Error {
   return new Error(
     'Crop classification needs the Node backend. This static deployment has no API — set VITE_AGRI_API_SECRETS_URL to your backend origin.',
   )
+}
+
+/**
+ * Failure while asking the backend to start a job. Carries the HTTP status (when
+ * there was a response) so callers can tell a dead/unreachable backend (network
+ * error or 5xx — e.g. the dev API is off and the Vite proxy returns 500) apart
+ * from a genuine client error (4xx) that should surface to the user.
+ */
+class BackendJobStartError extends Error {
+  status?: number
+  constructor(message: string, status?: number) {
+    super(message)
+    this.name = 'BackendJobStartError'
+    this.status = status
+  }
+}
+
+/** True when a job-start failure means the backend is unreachable (so we can degrade in-browser). */
+function isBackendUnavailableStartError(err: unknown): boolean {
+  if (!(err instanceof BackendJobStartError)) return false
+  // No status → network-level failure; status >= 500 → backend down / proxy error.
+  return err.status == null || err.status >= 500
 }
 
 /**
@@ -176,7 +171,10 @@ async function startJob(body: Record<string, unknown>): Promise<string> {
       body: JSON.stringify(body),
     })
   } catch {
-    throw new Error('Cannot reach the crop-classification backend. Check your connection or backend URL.')
+    // Network-level failure (no status) — callers may degrade to the in-browser engine.
+    throw new BackendJobStartError(
+      'Cannot reach the crop-classification backend. Check your connection or backend URL.',
+    )
   }
   const unreachable = noteApiResponse(res.status)
   const json = await res.json().catch(() => ({}))
@@ -186,7 +184,9 @@ async function startJob(body: Record<string, unknown>): Promise<string> {
     if (unreachable && !configuredApiOrigin()) {
       throw backendUnavailableError()
     }
-    throw new Error(json?.error || `Failed to start job (HTTP ${res.status})`)
+    // Carry the HTTP status so callers can distinguish a dead backend (>=500,
+    // e.g. dev API off → Vite proxy 500) from a real validation error (4xx).
+    throw new BackendJobStartError(json?.error || `Failed to start job (HTTP ${res.status})`, res.status)
   }
   if (!json?.jobId) throw new Error('Backend did not return a jobId')
   return json.jobId as string
@@ -208,23 +208,12 @@ function newLocalJobId(): string {
   return `local-${rnd}`
 }
 
-export async function startAoiJob(input: RunAoiInput): Promise<string> {
-  assertCropPanelProvider(input.dataProvider ?? 'satellite')
-  // Prefer the backend when one is reachable (same-origin Node or a configured
-  // remote origin) — it also unlocks the heavy Prithvi engine. Otherwise fall
-  // back to the deterministic country engine running fully in the browser so the
-  // tool keeps working on a static deployment with no API.
-  const backendReachable = await ensureBackendAvailable()
-  if (backendReachable || configuredApiOrigin()) {
-    return startJob({
-      mode: 'aoi',
-      aoi: input.aoi,
-      season: input.season,
-      timesteps: input.timesteps ?? 3,
-      dataProvider: normalizeApiDataProvider(input.dataProvider ?? 'satellite'),
-    })
-  }
-
+/**
+ * Run AOI classification fully in the browser via the deterministic country
+ * engine. Its progressive snapshots are stored in {@link localJobs} so the
+ * existing `getJob`/`pollJob` polling flow works unchanged.
+ */
+function startLocalAoiJob(input: RunAoiInput): string {
   const jobId = newLocalJobId()
   localJobs.set(jobId, {
     id: jobId,
@@ -255,35 +244,30 @@ export async function startAoiJob(input: RunAoiInput): Promise<string> {
   return jobId
 }
 
-/** Start a supervised (ground-truth) classification job — always runs in-browser. */
-export async function startSupervisedAoiJob(input: RunSupervisedAoiInput): Promise<string> {
-  assertCropPanelProvider(input.dataProvider ?? 'satellite')
-  const jobId = newLocalJobId()
-  localJobs.set(jobId, {
-    id: jobId,
-    mode: 'aoi',
-    status: 'queued',
-    progress: 0,
-    message: 'Starting supervised classification…',
-    result: null,
-    error: null,
-  })
-  void import('./cropSupervised/siCropSupervisedPipeline')
-    .then(({ runSupervisedCropClassification }) =>
-      runSupervisedCropClassification(jobId, input, job => localJobs.set(jobId, job)),
-    )
-    .catch(err => {
-      localJobs.set(jobId, {
-        id: jobId,
+export async function startAoiJob(input: RunAoiInput): Promise<string> {
+  // Prefer the backend when one is reachable (same-origin Node or a configured
+  // remote origin) — it also unlocks the heavy Prithvi engine. Otherwise fall
+  // back to the deterministic country engine running fully in the browser so the
+  // tool keeps working on a static deployment with no API.
+  const backendReachable = await ensureBackendAvailable()
+  if (backendReachable || configuredApiOrigin()) {
+    try {
+      return await startJob({
         mode: 'aoi',
-        status: 'error',
-        progress: 1,
-        message: 'Supervised pipeline failed.',
-        result: null,
-        error: String((err as Error)?.message || err),
+        aoi: input.aoi,
+        season: input.season,
+        timesteps: input.timesteps ?? 3,
       })
-    })
-  return jobId
+    } catch (err) {
+      // Backend unreachable (e.g. the dev API isn't running, so the Vite proxy
+      // returns HTTP 500) or a network error → degrade to the in-browser engine
+      // instead of surfacing a dead-end error. A real 4xx (invalid AOI/season)
+      // still propagates so the user can correct their input.
+      if (!isBackendUnavailableStartError(err)) throw err
+    }
+  }
+
+  return startLocalAoiJob(input)
 }
 
 export function startChipJob(imageUrl: string): Promise<string> {

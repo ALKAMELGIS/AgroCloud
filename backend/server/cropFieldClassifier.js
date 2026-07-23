@@ -13,11 +13,60 @@
  */
 
 import { PNG } from 'pngjs'
-import { NORM_POSITIONS } from './cropCountryDatabase.js'
+import {
+  NORM_POSITIONS,
+  cropSeasonAffinity,
+  phenologyMatchDistance,
+} from './cropCountryDatabase.js'
 
 function hexToRgb(hex) {
   const h = String(hex).replace('#', '')
   return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
+}
+
+/**
+ * Fill label holes (−1) by iterative majority vote from 8-neighbours.
+ * Prevents black cloud cutouts in the Crop Type map after cloudy dates were skipped.
+ */
+function fillUnclassifiedHoles(labels, width, height, passes = 8) {
+  const n = width * height
+  for (let pass = 0; pass < passes; pass += 1) {
+    let changed = 0
+    const next = labels.slice()
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const p = y * width + x
+        if (labels[p] >= 0) continue
+        const counts = new Map()
+        for (let dy = -1; dy <= 1; dy += 1) {
+          for (let dx = -1; dx <= 1; dx += 1) {
+            if (!dx && !dy) continue
+            const nx = x + dx
+            const ny = y + dy
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+            const l = labels[ny * width + nx]
+            if (l < 0) continue
+            counts.set(l, (counts.get(l) || 0) + 1)
+          }
+        }
+        if (!counts.size) continue
+        let bestL = -1
+        let bestC = -1
+        for (const [l, c] of counts) {
+          if (c > bestC) {
+            bestC = c
+            bestL = l
+          }
+        }
+        if (bestL >= 0) {
+          next[p] = bestL
+          changed += 1
+        }
+      }
+    }
+    labels.set(next)
+    if (!changed) break
+  }
 }
 
 /** Linear-resample an NDVI series (sampled at `srcFracs`) onto NORM_POSITIONS. */
@@ -76,17 +125,14 @@ function distanceTransform(mask, width, height) {
 }
 
 /**
- * Detect center-pivot (circular) cropland footprints — robust to TOUCHING pivots.
+ * Detect true center-pivot (circular) cropland footprints.
  *
- * A center-pivot is a filled disk. Its centre is a local maximum of the cropland
- * distance-transform whose value equals the pivot radius. Even when many pivots
- * abut each other (a single merged cropland blob), each pivot still owns a strong
- * DT peak, so we recover them individually and stamp their inscribed disks. This
- * lets us apply the strict agronomic rule that Date Palm / orchards are NEVER
- * classified inside pivot circles. A connected-component circularity test is also
- * unioned in to catch isolated pivots that are smaller than RMIN.
+ * IMPORTANT: Do NOT stamp inscribed disks from distance-transform peaks. That
+ * creates fake purple circles over rectangular fields (DT max sits at the
+ * centre of any thick blob). Only accept connected components whose shape is
+ * genuinely circular.
  *
- * @returns {{ inPivot: Uint8Array, pivotId: Int32Array }} per-pixel mask + per-pivot object id
+ * @returns {{ inPivot: Uint8Array, pivotId: Int32Array }}
  */
 function detectPivotFields(croplandMask, width, height) {
   const n = width * height
@@ -94,56 +140,6 @@ function detectPivotFields(croplandMask, width, height) {
   const pivotId = new Int32Array(n).fill(-1)
   let diskCount = 0
 
-  // ---- Distance-transform peak detection (handles touching pivots) ----
-  const dt = distanceTransform(croplandMask, width, height)
-  const RMIN = Math.max(4, Math.round(0.02 * Math.min(width, height)))
-  const WIN = 2
-  const centers = []
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const p = y * width + x
-      const r = dt[p]
-      if (r < RMIN) continue
-      let isMax = true
-      for (let dy = -WIN; dy <= WIN && isMax; dy += 1) {
-        for (let dx = -WIN; dx <= WIN; dx += 1) {
-          const ny = y + dy
-          const nx = x + dx
-          if (ny < 0 || nx < 0 || ny >= height || nx >= width) continue
-          if (dt[ny * width + nx] > r) { isMax = false; break }
-        }
-      }
-      if (isMax) centers.push([x, y, r])
-    }
-  }
-  // Greedy non-maximum suppression: stamp largest disks first.
-  centers.sort((u, v) => v[2] - u[2])
-  for (let i = 0; i < centers.length; i += 1) {
-    const cx = centers[i][0]
-    const cy = centers[i][1]
-    const r = centers[i][2]
-    if (inPivot[cy * width + cx]) continue
-    const id = diskCount++
-    const rr = r * 1.02 // pivots fill their inscribed circle; nudge to the rim
-    const r2 = rr * rr
-    const x0 = Math.max(0, Math.floor(cx - rr))
-    const x1 = Math.min(width - 1, Math.ceil(cx + rr))
-    const y0 = Math.max(0, Math.floor(cy - rr))
-    const y1 = Math.min(height - 1, Math.ceil(cy + rr))
-    for (let y = y0; y <= y1; y += 1) {
-      for (let x = x0; x <= x1; x += 1) {
-        const ddx = x - cx
-        const ddy = y - cy
-        if (ddx * ddx + ddy * ddy <= r2) {
-          const q = y * width + x
-          inPivot[q] = 1
-          if (pivotId[q] < 0) pivotId[q] = id
-        }
-      }
-    }
-  }
-
-  // ---- Connected-component circularity (catches small isolated pivots) ----
   const seen = new Uint8Array(n)
   const stack = new Int32Array(n)
   const comp = new Int32Array(n)
@@ -157,60 +153,119 @@ function detectPivotFields(croplandMask, width, height) {
     let maxX = -1
     let minY = height
     let maxY = -1
+    let sumX = 0
+    let sumY = 0
     while (top > 0) {
       const p = stack[--top]
       comp[count++] = p
       const x = p % width
       const y = (p - x) / width
+      sumX += x
+      sumY += y
       if (x < minX) minX = x
       if (x > maxX) maxX = x
       if (y < minY) minY = y
       if (y > maxY) maxY = y
-      if (x > 0 && croplandMask[p - 1] && !seen[p - 1]) { seen[p - 1] = 1; stack[top++] = p - 1 }
-      if (x < width - 1 && croplandMask[p + 1] && !seen[p + 1]) { seen[p + 1] = 1; stack[top++] = p + 1 }
-      if (y > 0 && croplandMask[p - width] && !seen[p - width]) { seen[p - width] = 1; stack[top++] = p - width }
-      if (y < height - 1 && croplandMask[p + width] && !seen[p + width]) { seen[p + width] = 1; stack[top++] = p + width }
+      if (x > 0 && croplandMask[p - 1] && !seen[p - 1]) {
+        seen[p - 1] = 1
+        stack[top++] = p - 1
+      }
+      if (x < width - 1 && croplandMask[p + 1] && !seen[p + 1]) {
+        seen[p + 1] = 1
+        stack[top++] = p + 1
+      }
+      if (y > 0 && croplandMask[p - width] && !seen[p - width]) {
+        seen[p - width] = 1
+        stack[top++] = p - width
+      }
+      if (y < height - 1 && croplandMask[p + width] && !seen[p + width]) {
+        seen[p + width] = 1
+        stack[top++] = p + width
+      }
     }
+
     const w = maxX - minX + 1
     const h = maxY - minY + 1
     const d = Math.max(w, h)
+    if (count < 120 || d < 14) continue
+    const aspect = Math.min(w, h) / Math.max(w, h)
+    // Rectangular parcels fail aspect; squares fail fill vs circumscribed disk (~4/π ≈ 1.27).
+    if (aspect < 0.88) continue
     const diskArea = Math.PI * (d / 2) * (d / 2)
     const fill = count / diskArea
-    const aspect = Math.min(w, h) / Math.max(w, h)
-    if (count >= 50 && aspect >= 0.75 && fill >= 0.6 && fill <= 1.15) {
-      const id = diskCount++
-      for (let i = 0; i < count; i += 1) {
-        const q = comp[i]
-        inPivot[q] = 1
-        if (pivotId[q] < 0) pivotId[q] = id
+    if (fill < 0.78 || fill > 1.05) continue
+
+    // Compactness: mean radius ≈ geometric circle radius.
+    const cx = sumX / count
+    const cy = sumY / count
+    let sumR = 0
+    let sumR2 = 0
+    for (let i = 0; i < count; i += 1) {
+      const q = comp[i]
+      const x = q % width
+      const y = (q - x) / width
+      const dx = x - cx
+      const dy = y - cy
+      const r = Math.sqrt(dx * dx + dy * dy)
+      sumR += r
+      sumR2 += r * r
+    }
+    const meanR = sumR / count
+    const rmsR = Math.sqrt(sumR2 / count)
+    const expectedR = Math.sqrt(count / Math.PI)
+    if (meanR < expectedR * 0.82 || meanR > expectedR * 1.12) continue
+    if (rmsR / Math.max(meanR, 1e-3) > 1.18) continue
+
+    // Bounding-box corners should be mostly empty (true disks leave empty corners).
+    const corner = Math.max(2, Math.round(d * 0.12))
+    let cornerCrop = 0
+    let cornerTot = 0
+    const corners = [
+      [minX, minY],
+      [maxX - corner + 1, minY],
+      [minX, maxY - corner + 1],
+      [maxX - corner + 1, maxY - corner + 1],
+    ]
+    for (const [x0, y0] of corners) {
+      for (let y = y0; y < y0 + corner && y <= maxY; y += 1) {
+        for (let x = x0; x < x0 + corner && x <= maxX; x += 1) {
+          if (x < 0 || y < 0 || x >= width || y >= height) continue
+          cornerTot += 1
+          if (croplandMask[y * width + x]) cornerCrop += 1
+        }
       }
+    }
+    if (cornerTot > 0 && cornerCrop / cornerTot > 0.35) continue
+
+    const id = diskCount++
+    for (let i = 0; i < count; i += 1) {
+      const q = comp[i]
+      inPivot[q] = 1
+      pivotId[q] = id
     }
   }
 
-  // Constrain the pivot mask to cropland pixels only.
-  for (let p = 0; p < n; p += 1) {
-    if (inPivot[p] && !croplandMask[p]) {
-      inPivot[p] = 0
-      pivotId[p] = -1
-    }
-  }
   return { inPivot, pivotId }
 }
 
 /**
  * @param {{ ndvi: Float32Array; ndwi: Float32Array; ndmi: Float32Array; valid: Uint8Array; width: number; height: number }[]} grids
  * @param {{ crops: any[]; landcover: any[] }} profile
+ * @param {{ seasonStart?: string; seasonEnd?: string }} [opts]
  * @returns {{ pngDataUrl: string; width: number; height: number; classStats: { id: string; name: string; pct: number }[] }}
  */
-export function classifyCropFields(grids, profile) {
+export function classifyCropFields(grids, profile, opts = {}) {
   if (!grids.length) throw new Error('No imagery grids to classify.')
   const { width, height } = grids[0]
   const n = width * height
   const K = grids.length
   const srcFracs = grids.map((_, i) => (K === 1 ? 0 : i / (K - 1)))
+  const seasonStart = opts.seasonStart || ''
+  const seasonEnd = opts.seasonEnd || ''
 
   const crops = profile.crops
   const landcover = profile.landcover
+  const seasonWeights = crops.map(c => cropSeasonAffinity(c.season, seasonStart, seasonEnd))
   const water = landcover.find(l => l.id === 'water')
   const bare = landcover.find(l => l.id === 'bare')
   const built = landcover.find(l => l.id === 'built')
@@ -280,7 +335,7 @@ export function classifyCropFields(grids, profile) {
       if (v < minNdvi) minNdvi = v
       cnt += 1
     }
-    if (cnt < 2) {
+    if (cnt < 1) {
       labels[p] = -1
       continue
     }
@@ -324,11 +379,9 @@ export function classifyCropFields(grids, profile) {
     sampledAll.set(sampled, p * NORM_POSITIONS.length)
   }
 
-  // ---- Pivot detection on the lenient vegetation footprint (geometric zone) ----
-  // Using vegMask (not just cropland) guarantees the FULL circle is captured even
-  // when a pivot has stressed / fallow internal patches, so Date Palm can never
-  // slip through an undetected part of the disk.
-  const { inPivot, pivotId } = detectPivotFields(vegMask, width, height)
+  // Pivot geometry must match real circular footprints only (no DT disk stamping).
+  // Use croplandMask — vegMask is too lenient and merged blobs into fake circles.
+  const { inPivot, pivotId } = detectPivotFields(croplandMask, width, height)
   const PH = NORM_POSITIONS.length
 
   // ---- Pivot buffer (dilated zone) ----
@@ -391,7 +444,7 @@ export function classifyCropFields(grids, profile) {
   // Edge-aware region growing for non-pivot cropland. Two neighbours join the same
   // field only if their phenology signatures are close (mean |ΔNDVI| over phases),
   // so a road/boundary or a different crop starts a new object.
-  const SEG_EDGE = 0.16 // phenology distance that marks a field boundary
+  const SEG_EDGE = 0.11 // tighter phenology edge → fields follow real parcel boundaries
   const growStack = new Int32Array(n)
   for (let p0 = 0; p0 < n; p0 += 1) {
     if (!croplandMask[p0] || objId[p0] >= 0) continue
@@ -472,13 +525,18 @@ export function classifyCropFields(grids, profile) {
         if (cnt < EVERGREEN_MIN_OBJ) continue
       }
       const proto = cropProtos[c]
-      let dist = 0
-      for (let k = 0; k < proto.length; k += 1) {
-        const diff = objSig[bo + k] / cnt - proto[k]
-        dist += diff * diff
-      }
+      const meanSig = new Array(proto.length)
+      for (let k = 0; k < proto.length; k += 1) meanSig[k] = objSig[bo + k] / cnt
+      // Phenology: MSE + amplitude + peak phase + correlation (season-shape aware).
+      let dist = phenologyMatchDistance(meanSig, proto)
+      // Calendar affinity: cool crops preferred in winter windows, warm in summer, etc.
+      const aff = seasonWeights[c]
+      dist *= 1.15 - 0.55 * aff // aff=1 → ×0.60; aff=0.2 → ×1.04
       if (crops[c].wantsWater) dist += meanNdwi > 0.05 ? -0.08 : 0.08
-      if (isPivotObj && crops[c].pivotForage) dist -= 0.03
+      if (isPivotObj && crops[c].pivotForage) dist -= 0.02
+      // Rectangular / non-pivot fields: heavily penalize multi-cut pivot forage
+      // (Rhodes / Alfalfa) so seasonal cereals/veg win when shapes match.
+      if (!isPivotObj && !objNearPivot[o] && crops[c].pivotForage) dist += 0.12
       // Confirmation-only gate: reject weak/ambiguous Date Palm matches outright so
       // the object falls back to the best-fitting seasonal crop instead.
       if (crops[c].evergreen && dist > EVERGREEN_MAX_DIST) continue
@@ -555,6 +613,7 @@ export function classifyCropFields(grids, profile) {
   }
 
   // Render colored RGBA PNG + class stats.
+  fillUnclassifiedHoles(smoothed, width, height)
   const png = new PNG({ width, height })
   const rgb = classMeta.map(m => hexToRgb(m.color))
   const tally = new Array(classMeta.length).fill(0)

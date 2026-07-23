@@ -18,12 +18,21 @@ import {
   resolveAgroCompositeTenClassRamp,
 } from './agroCompositeLayerRamps'
 import { CHAS_FORMULA_DOC } from './chasIndex'
+import { ADI_FORMULA_DOC, isAdiLayerId } from './adiIndex'
+import { NCADI_FORMULA_DOC, isNcadiLayerId } from './ncadiIndex'
 import { CHAS_ALERT_COLORS, CHAS_ALERT_LEVELS } from './chasAlertMapping'
 import {
   STRESS_ZONE_COLORS,
   STRESS_ZONE_LABELS,
   STRESS_ZONE_TIER_ORDER,
 } from './siStressZonesMapping'
+import {
+  LULC_ANALYTICAL_DISPLAY_GSD_M,
+  LULC_CLASSES,
+  LULC_NATIVE_GSD_M,
+  LULC_SCIENTIFIC_NAME,
+  isLulcClassificationLayerId,
+} from './siLulcClassification'
 import {
   SENTINEL_ET_10_CLASS_BREAKS,
   SENTINEL_ET_10_CLASS_COLORS,
@@ -38,8 +47,6 @@ import {
   SENTINEL_NDMI_10_CLASS_COLORS,
   SENTINEL_NDMI_MOISTURE_RAMP,
   SENTINEL_NDRE_RAMP,
-  SENTINEL_NDSI_10_CLASS_BREAKS,
-  SENTINEL_NDSI_10_CLASS_COLORS,
   SENTINEL_NDSI_RAMP,
   SENTINEL_NDVI_10_CLASS_BREAKS,
   SENTINEL_NDVI_10_CLASS_COLORS,
@@ -194,19 +201,6 @@ const NDMI_CLASS_LABELS = [
   'Saturated',
 ] as const
 
-const NDSI_CLASS_LABELS = [
-  'No snow / bare',
-  'Very unlikely snow',
-  'Unlikely snow',
-  'Low snow signal',
-  'Marginal snow',
-  'Possible snow',
-  'Partial snow',
-  'Moderate snow',
-  'High snow / ice',
-  'Dense snow / ice',
-] as const
-
 function buildRampDiscreteClasses(
   ramp: RampStop,
   count: number,
@@ -312,24 +306,6 @@ function buildNdmiLegend(): LayerLiveLegendSpec {
       SENTINEL_NDMI_10_CLASS_BREAKS,
       SENTINEL_NDMI_10_CLASS_COLORS,
       NDMI_CLASS_LABELS,
-    ),
-  }
-}
-
-function buildNdsiLegend(): LayerLiveLegendSpec {
-  return {
-    id: 'ndsi',
-    title: 'NDSI',
-    subtitle: 'Snow / ice index ((B03−B11)/(B03+B11)) · 10 classes',
-    kind: 'discrete',
-    valueMin: -1,
-    valueMax: 1,
-    scaleLabels: { low: 'No snow', mid: 'Partial snow', high: 'Snow / ice' },
-    gradientCss: rampToGradientCss(SENTINEL_NDSI_RAMP),
-    classes: buildClassesFromBreaks(
-      SENTINEL_NDSI_10_CLASS_BREAKS,
-      SENTINEL_NDSI_10_CLASS_COLORS,
-      NDSI_CLASS_LABELS,
     ),
   }
 }
@@ -504,7 +480,12 @@ const LEGEND_BY_PROFILE: Record<string, () => LayerLiveLegendSpec> = {
       mid: 'Wet soil',
       high: 'Open water',
     }),
-  ndsi: buildNdsiLegend,
+  ndsi: () =>
+    buildIndexRampLegend('ndsi', 'NDSI', 'Snow / ice index', SENTINEL_NDSI_RAMP, 10, {
+      low: 'No snow',
+      mid: 'Partial snow',
+      high: 'Snow / ice',
+    }),
   evi: () =>
     buildIndexRampLegend('evi', 'EVI', 'Enhanced vegetation index', SENTINEL_EVI_RAMP, 10, {
       low: 'Bare / sparse',
@@ -549,6 +530,12 @@ function buildAgroCompositeLegendNote(layerId: string, isDelta: boolean): string
   }
   if (u === 'DCHAS') {
     return 'ΔCHAS = CHAS(t₂) − CHAS(t₁) · trend overlay only · 🔴 Δ ≤ −0.15 · 🟠 Δ ≤ −0.05'
+  }
+  if (isAdiLayerId(u)) {
+    return `ADI = ${ADI_FORMULA_DOC} · Current = 0.5·NDVI + 0.3·NDMI + 0.2·NDRE · 10-class anomaly (extreme negative → extreme positive)`
+  }
+  if (isNcadiLayerId(u)) {
+    return `NCADI = ${NCADI_FORMULA_DOC} · ΔNDVI/ΔNDMI = Current − Previous · 10-class cultivation / abandonment`
   }
   if (isDelta) return 'Δ > 0 → improvement · Δ < 0 → degradation · Δ ≈ 0 → stable'
   return 'Composite from NDVI, NDMI, NDWI, SAVI'
@@ -653,6 +640,23 @@ export function resolveLayerLiveLegendSpec(
   if (isAgroCompositeLayerId(layerId)) {
     const composite = buildAgroCompositeLegend(layerId)
     return composite ? enrichLegendWithAnalyticalResolution(composite) : null
+  }
+
+  if (isLulcClassificationLayerId(layerId)) {
+    return {
+      id: layerId,
+      title: 'LULC',
+      subtitle: LULC_SCIENTIFIC_NAME,
+      kind: 'discrete',
+      classes: LULC_CLASSES.map(c => ({
+        label: c.name,
+        rangeLabel: String(c.id),
+        color: c.color,
+      })),
+      note:
+        `Sentinel-2 ${LULC_NATIVE_GSD_M}m native · ${LULC_ANALYTICAL_DISPLAY_GSD_M}m display (NEAREST) · ` +
+        'Crops + Flooded Vegetation = agricultural classes for AOI assessment.',
+    }
   }
 
   if (isSceneClassification(key)) {

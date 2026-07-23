@@ -8,9 +8,9 @@ import { lazy, type ComponentType } from 'react'
  * exist on the server. The dynamic `import()` then rejects with messages like
  * "Failed to fetch dynamically imported module" or "error loading dynamically imported module".
  *
- * When that happens we purge the service worker + Cache Storage, then reload once with a cache-bust
- * query so the browser fetches the fresh `index.html` with the current chunk names. The session
- * guard prevents an infinite reload loop when the failure is a genuine network/offline error.
+ * When that happens we reload the page exactly once (guarded by sessionStorage) so the browser
+ * fetches the fresh `index.html` with the current chunk names. The guard prevents an infinite
+ * reload loop when the failure is a genuine network/offline error rather than a stale deploy.
  */
 
 const RELOAD_GUARD_PREFIX = 'agro_chunk_reload:'
@@ -19,29 +19,52 @@ const RELOAD_GUARD_PREFIX = 'agro_chunk_reload:'
 const CACHE_BUST_PARAM = '_cb'
 
 /**
- * Unregister service workers and delete Cache Storage entries.
- * Critical on GitHub Pages PWA deploys: Workbox can keep serving deleted chunk hashes.
+ * Unregister every service worker and delete all Cache Storage entries.
+ *
+ * On the PWA build the Workbox service worker serves the precached `index.html` for navigations
+ * (`navigateFallback`). After a deploy that precached document is STALE — it still references the
+ * previous build's hashed chunk names, which no longer exist on the server. A plain reload (even
+ * with a `?_cb=` cache-buster) is intercepted by the service worker and re-served from the same
+ * stale precache, so the dynamic-import 404 loops until the one-shot guard gives up on the error
+ * screen. Purging the service worker + caches forces the next navigation to fetch the fresh
+ * `index.html` (and current chunk hashes) straight from the network.
  */
-export async function purgeClientCachesAndServiceWorkers(): Promise<void> {
+export async function purgeServiceWorkerAndCaches(): Promise<void> {
   if (typeof window === 'undefined') return
   const jobs: Promise<unknown>[] = []
   try {
-    if ('serviceWorker' in navigator && typeof navigator.serviceWorker.getRegistrations === 'function') {
+    if (
+      typeof navigator !== 'undefined' &&
+      'serviceWorker' in navigator &&
+      typeof navigator.serviceWorker.getRegistrations === 'function'
+    ) {
       jobs.push(
-        navigator.serviceWorker.getRegistrations().then(regs => Promise.all(regs.map(r => r.unregister()))),
+        navigator.serviceWorker
+          .getRegistrations()
+          .then((regs) => Promise.all(regs.map((r) => r.unregister().catch(() => false))))
+          .catch(() => []),
       )
     }
   } catch {
-    /* noop */
+    /* serviceWorker access can throw in sandboxed contexts */
   }
   try {
-    if (typeof caches !== 'undefined' && caches.keys) {
-      jobs.push(caches.keys().then(keys => Promise.all(keys.map(key => caches.delete(key)))))
+    if ('caches' in window && typeof caches.keys === 'function') {
+      jobs.push(
+        caches
+          .keys()
+          .then((keys) => Promise.all(keys.map((k) => caches.delete(k).catch(() => false))))
+          .catch(() => []),
+      )
     }
   } catch {
-    /* noop */
+    /* Cache Storage may be unavailable (private mode) */
   }
-  await Promise.all(jobs).catch(() => {})
+  try {
+    await Promise.all(jobs)
+  } catch {
+    /* best-effort purge — reload proceeds regardless */
+  }
 }
 
 /**
@@ -69,14 +92,13 @@ export function reloadWithCacheBust(): void {
 }
 
 /**
- * Full stale-deploy recovery: drop SW/caches, then cache-bust navigate to a fresh shell.
- * Fire-and-forget — callers should not await (navigation replaces the page).
+ * Recover from a stale-deploy chunk failure: purge the service worker + caches, then reload with a
+ * cache-buster. This is the only reliable recovery on the PWA build, where the service worker would
+ * otherwise keep serving the stale precached `index.html` (and its dead chunk references) on reload.
  */
-export function hardRecoverFromStaleDeploy(): void {
-  if (typeof window === 'undefined') return
-  void purgeClientCachesAndServiceWorkers().finally(() => {
-    reloadWithCacheBust()
-  })
+export async function purgeAndReloadForStaleDeploy(): Promise<void> {
+  await purgeServiceWorkerAndCaches()
+  reloadWithCacheBust()
 }
 
 /** After a successful load, drop the recovery guard + strip the `_cb` param from the address bar. */
@@ -103,9 +125,7 @@ function isDynamicImportError(error: unknown): boolean {
     /Importing a module script failed/i.test(message) ||
     /Unable to preload CSS/i.test(message) ||
     /'text\/html'.*not a valid JavaScript MIME type/i.test(message) ||
-    /expected a JavaScript(?:-or-Wasm)? module/i.test(message) ||
-    /Loading chunk [\w-]+ failed/i.test(message) ||
-    /ChunkLoadError/i.test(message)
+    /expected a JavaScript(?:-or-Wasm)? module/i.test(message)
   )
 }
 
@@ -154,8 +174,10 @@ export function lazyWithRetry<T extends ComponentType<any>>(
     } catch (error) {
       if (isDynamicImportError(error) && !safeSessionGet(guardKey)) {
         safeSessionSet(guardKey, '1')
-        // Purge PWA caches first — a cache-bust alone often reuses the SW-served old shell.
-        hardRecoverFromStaleDeploy()
+        // Purge the service worker + caches, then cache-busting reload to pull the fresh
+        // index.html + current chunk hashes. Without the purge, the PWA service worker keeps
+        // serving the stale precached index.html (and its dead chunk references) on reload.
+        void purgeAndReloadForStaleDeploy()
         // Return a never-resolving promise so React keeps showing the Suspense fallback
         // (instead of flashing an error) until the reload takes over.
         return new Promise<{ default: T }>(() => {})

@@ -9,11 +9,17 @@ services:
     environment:
       - NODE_ENV=development
       - DATABASE_URL=postgres://user:password@db:5432/agri_cloud
+      - TITILER_URL=http://titiler:8000
+      - IMAGE_CLASSIFICATION_URL=http://image-classification:8000
     depends_on:
       - db
+      - titiler
+      - image-classification
     volumes:
       - .:/app
       - /app/node_modules
+      - ./backend/uploads/rasters:/app/backend/uploads/rasters
+      - raster_tile_cache:/app/backend/cache/tiles
 
   db:
     image: postgis/postgis:15-3.3
@@ -26,5 +32,33 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  # Dynamic COG tiling (EPSG:3857 XYZ). Express proxies /api/raster/:id/tiles → TiTiler.
+  titiler:
+    image: ghcr.io/developmentseed/titiler:latest
+    ports:
+      - "8001:8000"
+    environment:
+      - CPL_VSIL_CURL_ALLOWED_EXTENSIONS=.tif,.tiff,.vrt,.nc,.hdf,.h5
+      - GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
+      - GDAL_HTTP_MERGE_CONSECUTIVE_RANGES=YES
+      - GDAL_CACHEMAX=512
+    volumes:
+      - ./backend/uploads/rasters:/data:ro
+
+  # Image Classification Wizard ML service (FastAPI). Owns segmentation/train/classify
+  # logic plus JP2/JPEG2000 → GeoTIFF conversion (rasterio/GDAL). Needs read-write on the
+  # uploads volume so it can write the converted cog.tif back next to the source raster.
+  image-classification:
+    build: ./backend/services/image-classification
+    ports:
+      - "8002:8000"
+    environment:
+      - PORT=8000
+    # Bind-mount (not a named volume) so host-run Node and this container share the exact
+    # same raster files — the JP2→GeoTIFF conversion writes cog.tif back here for the tiler.
+    volumes:
+      - ./backend/uploads/rasters:/data
+
 volumes:
   postgres_data:
+  raster_tile_cache:

@@ -126,7 +126,16 @@
   font-family: inherit;
   color-scheme: dark;
   accent-color: #34d399;
+}
+
+.si-rs-panel__field input[type='date'],
+.si-rs-panel__mini-field input[type='date'] {
   transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.si-rs-panel .si-field-analysis-select,
+.si-rs-panel .si-rs-layer-select__trigger {
+  transition: none;
 }
 
 .si-rs-panel__field input[type='date']:focus,
@@ -135,7 +144,7 @@
 .si-rs-panel .si-rs-layer-select__trigger:focus-visible {
   outline: none;
   border-color: rgba(52, 211, 153, 0.35);
-  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.12);
+  box-shadow: none;
 }
 
 .si-rs-panel__mini-field {
@@ -334,6 +343,22 @@
   background: linear-gradient(180deg, rgba(239, 68, 68, 0.22), rgba(127, 29, 29, 0.16));
 }
 
+.si-rs-panel__cta--secondary {
+  border-color: rgba(125, 211, 252, 0.28);
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.14), rgba(14, 116, 144, 0.1));
+  color: #e0f2fe;
+}
+
+.si-rs-panel__cta--secondary:hover:not(:disabled) {
+  border-color: rgba(125, 211, 252, 0.45);
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.22), rgba(14, 116, 144, 0.14));
+}
+
+.si-rs-panel__cta:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .si-rs-panel__status {
   margin: 0;
   font-size: 8px;
@@ -362,36 +387,66 @@
 .si-rs-panel .si-rs-layer-select__menu {
   z-index: 240;
   border-color: rgba(255, 255, 255, 0.1);
-  background: rgba(8, 10, 14, 0.96);
-  backdrop-filter: blur(16px);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+  background: rgba(8, 10, 14, 0.98);
+  /* No backdrop-filter — avoids open/scroll flicker on the dock glass. */
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+  animation: none;
+  transition: none;
+}
+
+.si-rs-panel .si-rs-layer-select__search-wrap {
+  gap: 5px;
+  padding: 3px 5px;
+  background: rgba(8, 10, 14, 0.98);
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+
+.si-rs-panel .si-rs-layer-select__search-icon {
+  font-size: 8px;
+  width: 9px;
+  color: rgba(148, 163, 184, 0.75);
+}
+
+.si-rs-panel .si-rs-layer-select__search {
+  height: 20px;
+  line-height: 20px;
+  font-size: 9.5px;
 }
 
 .si-rs-panel .si-rs-layer-select__group-label {
-  font-size: 8px;
+  font-size: 7.5px;
+  padding: 3px 8px 1px;
 }
 
 .si-rs-panel .si-rs-layer-select__option {
-  padding: 5px 9px;
+  padding: 3px 8px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 1px;
+  gap: 0;
+  min-height: 0;
+  transition: none;
 }
 
 .si-rs-panel .si-rs-layer-select__option .si-rs-layer-select__abbr {
-  font-size: 10px;
+  font-size: 9.5px;
+  line-height: 1.2;
 }
 
 /* Scientific name — small, light, wraps without forcing the menu wider. */
 .si-rs-panel .si-rs-layer-select__science {
   display: block;
-  font-size: 8px;
+  font-size: 7.5px;
   font-weight: 500;
-  line-height: 1.25;
+  line-height: 1.2;
   letter-spacing: 0;
   white-space: normal;
-  opacity: 0.8;
+  opacity: 0.72;
+}
+
+.si-rs-panel .si-rs-layer-select__empty {
+  padding: 6px 8px;
+  font-size: 8.5px;
 }
 
 /* AOI layer mode — flat siblings inside Remote Sensing panel */
@@ -874,7 +929,24 @@
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-rs-layer-select__menu {
   background: rgba(255, 255, 255, 0.98);
   border-color: rgba(148, 163, 184, 0.28);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.1);
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-rs-layer-select__search-wrap {
+  background: rgba(255, 255, 255, 0.98);
+  border-bottom-color: rgba(148, 163, 184, 0.18);
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-rs-layer-select__search-icon {
+  color: rgba(100, 116, 139, 0.85);
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-rs-layer-select__search {
+  color: #0f172a;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-rs-layer-select__search::placeholder {
+  color: rgba(100, 116, 139, 0.75);
 }
 
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-rs-layer-select__abbr,
@@ -988,9 +1060,22 @@
 }
 
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel .si-rs-layer-select__menu {
-  background: linear-gradient(180deg, rgba(17, 22, 34, 0.98) 0%, rgba(6, 9, 15, 0.98) 100%);
-  border-color: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+  background: rgba(8, 10, 14, 0.98);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel .si-rs-layer-select__search-wrap {
+  background: rgba(8, 10, 14, 0.98);
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel .si-rs-layer-select__search {
+  color: #ffffff;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel .si-rs-layer-select__search::placeholder {
+  color: rgba(148, 163, 184, 0.7);
 }
 
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sat-ctx-panel-wrap .si-rs-panel .si-rs-layer-select__option,

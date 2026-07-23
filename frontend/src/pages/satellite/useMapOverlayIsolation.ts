@@ -92,12 +92,16 @@ export function useMapOverlayIsolation(
     for (const type of NATIVE_ISOLATED_EVENTS) {
       node.removeEventListener(type, stopNativeRef.current)
     }
+    node.removeAttribute('data-map-overlay-isolate')
   }, [])
 
   const attach = useCallback((node: HTMLElement) => {
     for (const type of NATIVE_ISOLATED_EVENTS) {
       node.addEventListener(type, stopNativeRef.current)
     }
+    // Mark the root so map-level click handlers can detect and ignore clicks that
+    // actually originated on this overlay (DOM `click` still bubbles to Mapbox).
+    node.setAttribute('data-map-overlay-isolate', '')
   }, [])
 
   const nativeRef = useCallback(

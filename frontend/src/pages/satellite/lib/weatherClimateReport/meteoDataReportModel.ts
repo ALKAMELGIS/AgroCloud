@@ -13,6 +13,11 @@ import { climateAggregationLabel } from './weatherClimateAnalysisEngine'
 
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const
 
+/** Max number of hourly rows to plot on native hourly charts (keeps charts readable). */
+export const METEO_HOURLY_CHART_CAP = 800
+
+export type MeteoDiurnalPoint = { hour: number; meanTempC: number | null }
+
 export type MeteoClimateRow = {
   period: string
   periodLabel: string
@@ -65,6 +70,14 @@ export type MeteoDataReportModel = {
   aggregationLabel: string
   normalsTitle: string
   normals: MeteoClimateRow[]
+  /** Monthly climate normals (Jan–Dec) — always present for the Data Monthly sheet. */
+  monthlyNormals: MeteoClimateRow[]
+  /** One row per calendar day — always present for the Data Daily sheet. */
+  dailySeries: MeteoClimateRow[]
+  /** One row per hour of raw record — always present for the Data Hourly sheet. */
+  hourlySeries: MeteoClimateRow[]
+  /** Mean temperature by hour of day (0–23) for the diurnal profile chart. */
+  diurnalProfile: MeteoDiurnalPoint[]
   yearMatrices: MeteoYearMatrix[]
   annualSummary: MeteoAnnualSummaryRow[]
   riskRows: MeteoRiskRow[]
@@ -374,6 +387,41 @@ function buildHourlyNormals(points: OpenMeteoHourlyPoint[], daily: DailyBundle[]
     })
 }
 
+/** One climate row per calendar day, straight from the daily bundle. */
+function dailyBundleToRow(d: DailyBundle): MeteoClimateRow {
+  return {
+    period: d.date,
+    periodLabel: d.date,
+    tmaxC: round(d.tmaxC, 1),
+    tminC: round(d.tminC, 1),
+    tavgC: round(d.tavgC, 1),
+    rainfallMm: round(d.rainfallMm, 1),
+    et0Mm: round(d.et0Mm, 1),
+    waterDeficitM3Ha: waterDeficitM3Ha(d.et0Mm, d.rainfallMm),
+    sunshineHPerDay: round(d.sunshineH, 1),
+    daylightHPerDay: round(d.daylightH, 1),
+    windMaxKmh: round(d.windMaxKmh, 1),
+    maxGustKmh: round(d.maxGustKmh, 1),
+    rhPct: round(d.rhPct, 0),
+  }
+}
+
+/** Mean temperature per hour of day (0–23) from raw hourly points. */
+function buildDiurnalProfile(points: OpenMeteoHourlyPoint[]): MeteoDiurnalPoint[] {
+  const byHour = new Map<number, number[]>()
+  points.forEach(p => {
+    const hour = Number(p.time.slice(11, 13))
+    if (!Number.isFinite(hour) || p.temperatureC == null || !Number.isFinite(p.temperatureC)) return
+    const arr = byHour.get(hour) ?? []
+    arr.push(p.temperatureC)
+    byHour.set(hour, arr)
+  })
+  return Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    meanTempC: round(mean(byHour.get(hour) ?? []), 1),
+  }))
+}
+
 function buildYearMatrices(daily: DailyBundle[]): MeteoYearMatrix[] {
   const years = [...new Set(daily.map(d => d.year))].sort((a, b) => a - b)
   if (!years.length) return []
@@ -604,6 +652,10 @@ export function buildMeteoDataReportModel(input: BuildMeteoDataReportInput): Met
     aggregationLabel: climateAggregationLabel(aggregation),
     normalsTitle: normalsTitle(aggregation),
     normals,
+    monthlyNormals: buildNormalsFromDaily(daily, 'month'),
+    dailySeries: daily.map(dailyBundleToRow),
+    hourlySeries: buildHourlyNormals(input.hourlyRecords, daily),
+    diurnalProfile: buildDiurnalProfile(input.hourlyRecords),
     yearMatrices: buildYearMatrices(daily),
     annualSummary: buildAnnualSummary(daily),
     riskRows: buildRiskRows(daily, aggregation),

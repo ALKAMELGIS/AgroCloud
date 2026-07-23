@@ -38,27 +38,144 @@ const BASE_LANDCOVER = [
  * growing season window provided by the user.
  */
 const CROP_CATALOG = {
-  // ---- Field crops ----
-  wheat: { name: 'Wheat', nameAr: 'قمح', color: '#e0c341', ndvi: [0.15, 0.45, 0.75, 0.82, 0.5, 0.2] },
-  barley: { name: 'Barley', nameAr: 'شعير', color: '#c9a227', ndvi: [0.15, 0.5, 0.78, 0.72, 0.4, 0.18] },
-  maize: { name: 'Maize / Corn', nameAr: 'ذرة', color: '#f2e600', ndvi: [0.18, 0.35, 0.7, 0.85, 0.6, 0.25] },
-  rice: { name: 'Rice', nameAr: 'أرز', color: '#1f8a4c', ndvi: [0.1, 0.3, 0.65, 0.88, 0.7, 0.3], wantsWater: true },
-  cotton: { name: 'Cotton', nameAr: 'قطن', color: '#e34234', ndvi: [0.15, 0.3, 0.55, 0.8, 0.75, 0.35] },
-  sorghum: { name: 'Sorghum', nameAr: 'ذرة رفيعة', color: '#f5a000', ndvi: [0.18, 0.35, 0.62, 0.8, 0.6, 0.28] },
-  soybean: { name: 'Soybeans', nameAr: 'فول صويا', color: '#2e7d32', ndvi: [0.18, 0.35, 0.65, 0.82, 0.55, 0.25] },
-  potato: { name: 'Potato', nameAr: 'بطاطس', color: '#a0522d', ndvi: [0.2, 0.55, 0.8, 0.7, 0.4, 0.2] },
-  vegetables: { name: 'Vegetables', nameAr: 'خضروات', color: '#9acd5e', ndvi: [0.2, 0.6, 0.7, 0.5, 0.6, 0.45] },
-  // ---- Forage crops (core component, common under pivot irrigation) ----
-  rhodes: { name: 'Rhodes Grass', nameAr: 'حشيشة رودس', color: '#b14bd8', ndvi: [0.5, 0.74, 0.56, 0.76, 0.58, 0.74], pivotForage: true },
-  alfalfa: { name: 'Alfalfa', nameAr: 'برسيم حجازي', color: '#ff5ec8', ndvi: [0.55, 0.8, 0.6, 0.82, 0.62, 0.8], pivotForage: true },
-  forage_sorghum: { name: 'Forage Sorghum', nameAr: 'ذرة رفيعة علفية', color: '#d2691e', ndvi: [0.2, 0.42, 0.72, 0.84, 0.58, 0.3], pivotForage: true },
-  silage_maize: { name: 'Forage Maize / Silage', nameAr: 'ذرة علفية / سيلاج', color: '#ffae00', ndvi: [0.2, 0.42, 0.78, 0.86, 0.45, 0.22], pivotForage: true },
-  forage_barley: { name: 'Forage Barley', nameAr: 'شعير علفي', color: '#aee03a', ndvi: [0.18, 0.55, 0.8, 0.62, 0.35, 0.18], pivotForage: true },
-  forage_millet: { name: 'Forage Millet', nameAr: 'دخن علفي', color: '#62b53f', ndvi: [0.2, 0.48, 0.76, 0.6, 0.3, 0.2], pivotForage: true },
-  pasture: { name: 'Natural Pasture Grass', nameAr: 'مراعٍ طبيعية', color: '#3f9b5a', ndvi: [0.25, 0.42, 0.52, 0.46, 0.36, 0.28] },
-  // ---- Orchards / perennial (NOT grown under center-pivot) ----
-  sugarcane: { name: 'Sugarcane', nameAr: 'قصب سكر', color: '#1f6f3f', ndvi: [0.5, 0.65, 0.78, 0.85, 0.82, 0.7], evergreen: true },
-  datepalm: { name: 'Date Palm / Orchard', nameAr: 'نخيل / بساتين', color: '#7a5a1e', ndvi: [0.58, 0.6, 0.63, 0.64, 0.62, 0.59], evergreen: true },
+  // ---- Field crops (cool / winter–spring cereals in MENA) ----
+  wheat: {
+    name: 'Wheat',
+    nameAr: 'قمح',
+    color: '#e0c341',
+    ndvi: [0.15, 0.45, 0.75, 0.82, 0.5, 0.2],
+    season: 'cool',
+  },
+  barley: {
+    name: 'Barley',
+    nameAr: 'شعير',
+    color: '#c9a227',
+    ndvi: [0.15, 0.5, 0.78, 0.72, 0.4, 0.18],
+    season: 'cool',
+  },
+  maize: {
+    name: 'Maize / Corn',
+    nameAr: 'ذرة',
+    color: '#f2e600',
+    ndvi: [0.18, 0.35, 0.7, 0.85, 0.6, 0.25],
+    season: 'warm',
+  },
+  rice: {
+    name: 'Rice',
+    nameAr: 'أرز',
+    color: '#1f8a4c',
+    ndvi: [0.1, 0.3, 0.65, 0.88, 0.7, 0.3],
+    wantsWater: true,
+    season: 'warm',
+  },
+  cotton: {
+    name: 'Cotton',
+    nameAr: 'قطن',
+    color: '#e34234',
+    ndvi: [0.15, 0.3, 0.55, 0.8, 0.75, 0.35],
+    season: 'warm',
+  },
+  sorghum: {
+    name: 'Sorghum',
+    nameAr: 'ذرة رفيعة',
+    color: '#f5a000',
+    ndvi: [0.18, 0.35, 0.62, 0.8, 0.6, 0.28],
+    season: 'warm',
+  },
+  soybean: {
+    name: 'Soybeans',
+    nameAr: 'فول صويا',
+    color: '#2e7d32',
+    ndvi: [0.18, 0.35, 0.65, 0.82, 0.55, 0.25],
+    season: 'warm',
+  },
+  potato: {
+    name: 'Potato',
+    nameAr: 'بطاطس',
+    color: '#a0522d',
+    ndvi: [0.2, 0.55, 0.8, 0.7, 0.4, 0.2],
+    season: 'cool',
+  },
+  vegetables: {
+    name: 'Vegetables',
+    nameAr: 'خضروات',
+    color: '#9acd5e',
+    ndvi: [0.2, 0.6, 0.7, 0.5, 0.6, 0.45],
+    season: 'mixed',
+  },
+  // ---- Forage (often multi-cut; prefer only when phenology matches) ----
+  rhodes: {
+    name: 'Rhodes Grass',
+    nameAr: 'حشيشة رودس',
+    color: '#b14bd8',
+    ndvi: [0.5, 0.74, 0.56, 0.76, 0.58, 0.74],
+    pivotForage: true,
+    season: 'perennial',
+  },
+  alfalfa: {
+    name: 'Alfalfa',
+    nameAr: 'برسيم حجازي',
+    color: '#ff5ec8',
+    ndvi: [0.55, 0.8, 0.6, 0.82, 0.62, 0.8],
+    pivotForage: true,
+    season: 'perennial',
+  },
+  forage_sorghum: {
+    name: 'Forage Sorghum',
+    nameAr: 'ذرة رفيعة علفية',
+    color: '#d2691e',
+    ndvi: [0.2, 0.42, 0.72, 0.84, 0.58, 0.3],
+    pivotForage: true,
+    season: 'warm',
+  },
+  silage_maize: {
+    name: 'Forage Maize / Silage',
+    nameAr: 'ذرة علفية / سيلاج',
+    color: '#ffae00',
+    ndvi: [0.2, 0.42, 0.78, 0.86, 0.45, 0.22],
+    pivotForage: true,
+    season: 'warm',
+  },
+  forage_barley: {
+    name: 'Forage Barley',
+    nameAr: 'شعير علفي',
+    color: '#aee03a',
+    ndvi: [0.18, 0.55, 0.8, 0.62, 0.35, 0.18],
+    pivotForage: true,
+    season: 'cool',
+  },
+  forage_millet: {
+    name: 'Forage Millet',
+    nameAr: 'دخن علفي',
+    color: '#62b53f',
+    ndvi: [0.2, 0.48, 0.76, 0.6, 0.3, 0.2],
+    pivotForage: true,
+    season: 'warm',
+  },
+  pasture: {
+    name: 'Natural Pasture Grass',
+    nameAr: 'مراعٍ طبيعية',
+    color: '#3f9b5a',
+    ndvi: [0.25, 0.42, 0.52, 0.46, 0.36, 0.28],
+    season: 'mixed',
+  },
+  // ---- Orchards / perennial ----
+  sugarcane: {
+    name: 'Sugarcane',
+    nameAr: 'قصب سكر',
+    color: '#1f6f3f',
+    ndvi: [0.5, 0.65, 0.78, 0.85, 0.82, 0.7],
+    evergreen: true,
+    season: 'perennial',
+  },
+  datepalm: {
+    name: 'Date Palm / Orchard',
+    nameAr: 'نخيل / بساتين',
+    color: '#7a5a1e',
+    ndvi: [0.58, 0.6, 0.63, 0.64, 0.62, 0.59],
+    evergreen: true,
+    season: 'perennial',
+  },
 }
 
 function crop(id) {
@@ -72,28 +189,29 @@ function crop(id) {
     wantsWater: !!c.wantsWater,
     evergreen: !!c.evergreen,
     pivotForage: !!c.pivotForage,
+    season: c.season || 'mixed',
   }
 }
 
 /**
- * ISO-2 country code → common crop set. Extend freely.
- * `default` is used when the country is unknown / unsupported.
+ * ISO-2 country code → common crop set (field crops listed before multi-cut forage
+ * so seasonal cereals are preferred when phenology ties).
  */
 const COUNTRY_CROPS = {
-  SA: ['rhodes', 'alfalfa', 'forage_sorghum', 'silage_maize', 'forage_barley', 'wheat', 'maize', 'potato', 'vegetables', 'datepalm'],
-  EG: ['wheat', 'rice', 'cotton', 'maize', 'silage_maize', 'alfalfa', 'sugarcane', 'potato', 'vegetables'],
-  IQ: ['wheat', 'barley', 'rice', 'alfalfa', 'maize', 'vegetables', 'datepalm'],
-  AE: ['rhodes', 'alfalfa', 'forage_sorghum', 'silage_maize', 'vegetables', 'wheat', 'datepalm'],
-  JO: ['wheat', 'barley', 'alfalfa', 'vegetables', 'potato', 'datepalm'],
-  MA: ['wheat', 'barley', 'alfalfa', 'silage_maize', 'vegetables', 'maize'],
-  DZ: ['wheat', 'barley', 'alfalfa', 'vegetables', 'maize', 'datepalm'],
-  SD: ['sorghum', 'forage_sorghum', 'wheat', 'cotton', 'alfalfa', 'forage_millet', 'vegetables'],
-  KW: ['rhodes', 'alfalfa', 'vegetables', 'forage_sorghum'],
-  OM: ['rhodes', 'alfalfa', 'vegetables', 'datepalm', 'forage_sorghum'],
-  QA: ['rhodes', 'alfalfa', 'vegetables', 'forage_sorghum'],
-  US: ['maize', 'soybean', 'wheat', 'cotton', 'sorghum', 'alfalfa', 'silage_maize'],
+  SA: ['wheat', 'maize', 'potato', 'vegetables', 'silage_maize', 'forage_barley', 'forage_sorghum', 'datepalm', 'alfalfa', 'rhodes'],
+  EG: ['wheat', 'rice', 'cotton', 'maize', 'potato', 'vegetables', 'silage_maize', 'sugarcane', 'alfalfa'],
+  IQ: ['wheat', 'barley', 'rice', 'maize', 'vegetables', 'datepalm', 'alfalfa'],
+  AE: ['vegetables', 'wheat', 'silage_maize', 'forage_sorghum', 'datepalm', 'alfalfa', 'rhodes'],
+  JO: ['wheat', 'barley', 'vegetables', 'potato', 'datepalm', 'alfalfa'],
+  MA: ['wheat', 'barley', 'maize', 'vegetables', 'silage_maize', 'alfalfa'],
+  DZ: ['wheat', 'barley', 'maize', 'vegetables', 'datepalm', 'alfalfa'],
+  SD: ['sorghum', 'wheat', 'cotton', 'forage_millet', 'vegetables', 'forage_sorghum', 'alfalfa'],
+  KW: ['vegetables', 'forage_sorghum', 'alfalfa', 'rhodes'],
+  OM: ['vegetables', 'datepalm', 'forage_sorghum', 'alfalfa', 'rhodes'],
+  QA: ['vegetables', 'forage_sorghum', 'alfalfa', 'rhodes'],
+  US: ['maize', 'soybean', 'wheat', 'cotton', 'sorghum', 'silage_maize', 'alfalfa'],
   IN: ['rice', 'wheat', 'cotton', 'sugarcane', 'sorghum', 'forage_millet', 'vegetables'],
-  default: ['wheat', 'maize', 'alfalfa', 'rhodes', 'silage_maize', 'vegetables', 'potato'],
+  default: ['wheat', 'maize', 'vegetables', 'potato', 'silage_maize', 'alfalfa', 'rhodes'],
 }
 
 const COUNTRY_NAMES = {
@@ -190,6 +308,96 @@ export function cropProfileForCountry(code) {
     ...BASE_LANDCOVER.map(l => ({ id: l.id, name: l.name, nameAr: l.nameAr, color: l.color, kind: 'landcover' })),
   ]
   return { country: COUNTRY_NAMES[code] || code, crops, landcover: BASE_LANDCOVER, classes }
+}
+
+/**
+ * Calendar affinity of a crop class to the analysis season window (0 = poor, 1 = strong).
+ * Cool crops peak Oct–May (MENA); warm crops Mar–Sep; perennial/mixed always usable.
+ * @param {'cool'|'warm'|'mixed'|'perennial'|string} cropSeason
+ * @param {string} seasonStart YYYY-MM-DD
+ * @param {string} seasonEnd YYYY-MM-DD
+ */
+export function cropSeasonAffinity(cropSeason, seasonStart, seasonEnd) {
+  const start = new Date(`${String(seasonStart || '').slice(0, 10)}T00:00:00Z`)
+  const end = new Date(`${String(seasonEnd || '').slice(0, 10)}T00:00:00Z`)
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) {
+    return 1
+  }
+  const kind = cropSeason || 'mixed'
+  if (kind === 'mixed' || kind === 'perennial') return 0.85
+
+  // Sample months covered by the window (cap steps for speed).
+  const months = new Set()
+  const span = end.getTime() - start.getTime()
+  const steps = Math.min(24, Math.max(2, Math.round(span / (14 * 86400000))))
+  for (let i = 0; i <= steps; i += 1) {
+    const t = start.getTime() + (span * i) / steps
+    months.add(new Date(t).getUTCMonth() + 1) // 1–12
+  }
+  const coolMonths = new Set([10, 11, 12, 1, 2, 3, 4, 5])
+  const warmMonths = new Set([3, 4, 5, 6, 7, 8, 9, 10])
+  let hit = 0
+  for (const m of months) {
+    if (kind === 'cool' && coolMonths.has(m)) hit += 1
+    if (kind === 'warm' && warmMonths.has(m)) hit += 1
+  }
+  const ratio = hit / Math.max(months.size, 1)
+  // Soft floor so out-of-season crops remain possible but heavily down-weighted.
+  return Math.max(0.2, Math.min(1, 0.25 + 0.75 * ratio))
+}
+
+/**
+ * Phenology distance: MSE + amplitude + peak-phase + (1 − correlation).
+ * Lower is better.
+ */
+export function phenologyMatchDistance(obs, proto) {
+  const n = Math.min(obs.length, proto.length)
+  if (n < 2) return 99
+  let sumO = 0
+  let sumP = 0
+  let sumOO = 0
+  let sumPP = 0
+  let sumOP = 0
+  let mse = 0
+  let peakO = 0
+  let peakP = 0
+  let maxO = -Infinity
+  let maxP = -Infinity
+  let minO = Infinity
+  let minP = Infinity
+  for (let i = 0; i < n; i += 1) {
+    const o = obs[i]
+    const p = proto[i]
+    const d = o - p
+    mse += d * d
+    sumO += o
+    sumP += p
+    sumOO += o * o
+    sumPP += p * p
+    sumOP += o * p
+    if (o > maxO) {
+      maxO = o
+      peakO = i
+    }
+    if (p > maxP) {
+      maxP = p
+      peakP = i
+    }
+    if (o < minO) minO = o
+    if (p < minP) minP = p
+  }
+  mse /= n
+  const meanO = sumO / n
+  const meanP = sumP / n
+  const varO = Math.max(1e-6, sumOO / n - meanO * meanO)
+  const varP = Math.max(1e-6, sumPP / n - meanP * meanP)
+  const corr = (sumOP / n - meanO * meanP) / Math.sqrt(varO * varP)
+  const ampO = Math.max(0, maxO - minO)
+  const ampP = Math.max(0, maxP - minP)
+  const ampPenalty = Math.abs(ampO - ampP)
+  const peakPenalty = Math.abs(peakO - peakP) / Math.max(1, n - 1)
+  const corrPenalty = 1 - Math.max(-1, Math.min(1, corr))
+  return mse + 0.35 * ampPenalty + 0.25 * peakPenalty + 0.2 * corrPenalty
 }
 
 export { NORM_POSITIONS, BASE_LANDCOVER }

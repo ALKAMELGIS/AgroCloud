@@ -19,8 +19,6 @@ import {
   resolveSentinelHubWmsEvalscriptProxyLayerName,
 } from './sentinelHubWmsLayers'
 import { getSentinelHubWmsBaseUrl } from './sentinelHubWmsInstance'
-import { assertCropPanelProvider } from './cropSupervised/cropDataProvider'
-import { resolveCropPipelineProfile } from './cropSupervised/cropProviderPipelineProfile'
 import type {
   CropClassificationJob,
   CropClassificationJobStatus,
@@ -49,27 +47,28 @@ type CropDef = {
   wantsWater?: boolean
   evergreen?: boolean
   pivotForage?: boolean
+  season?: 'cool' | 'warm' | 'mixed' | 'perennial'
 }
 
 const CROP_CATALOG: Record<string, CropDef> = {
-  wheat: { name: 'Wheat', nameAr: 'قمح', color: '#e0c341', ndvi: [0.15, 0.45, 0.75, 0.82, 0.5, 0.2] },
-  barley: { name: 'Barley', nameAr: 'شعير', color: '#c9a227', ndvi: [0.15, 0.5, 0.78, 0.72, 0.4, 0.18] },
-  maize: { name: 'Maize / Corn', nameAr: 'ذرة', color: '#f2e600', ndvi: [0.18, 0.35, 0.7, 0.85, 0.6, 0.25] },
-  rice: { name: 'Rice', nameAr: 'أرز', color: '#1f8a4c', ndvi: [0.1, 0.3, 0.65, 0.88, 0.7, 0.3], wantsWater: true },
-  cotton: { name: 'Cotton', nameAr: 'قطن', color: '#e34234', ndvi: [0.15, 0.3, 0.55, 0.8, 0.75, 0.35] },
-  sorghum: { name: 'Sorghum', nameAr: 'ذرة رفيعة', color: '#f5a000', ndvi: [0.18, 0.35, 0.62, 0.8, 0.6, 0.28] },
-  soybean: { name: 'Soybeans', nameAr: 'فول صويا', color: '#2e7d32', ndvi: [0.18, 0.35, 0.65, 0.82, 0.55, 0.25] },
-  potato: { name: 'Potato', nameAr: 'بطاطس', color: '#a0522d', ndvi: [0.2, 0.55, 0.8, 0.7, 0.4, 0.2] },
-  vegetables: { name: 'Vegetables', nameAr: 'خضروات', color: '#9acd5e', ndvi: [0.2, 0.6, 0.7, 0.5, 0.6, 0.45] },
-  rhodes: { name: 'Rhodes Grass', nameAr: 'حشيشة رودس', color: '#b14bd8', ndvi: [0.5, 0.74, 0.56, 0.76, 0.58, 0.74], pivotForage: true },
-  alfalfa: { name: 'Alfalfa', nameAr: 'برسيم حجازي', color: '#ff5ec8', ndvi: [0.55, 0.8, 0.6, 0.82, 0.62, 0.8], pivotForage: true },
-  forage_sorghum: { name: 'Forage Sorghum', nameAr: 'ذرة رفيعة علفية', color: '#d2691e', ndvi: [0.2, 0.42, 0.72, 0.84, 0.58, 0.3], pivotForage: true },
-  silage_maize: { name: 'Forage Maize / Silage', nameAr: 'ذرة علفية / سيلاج', color: '#ffae00', ndvi: [0.2, 0.42, 0.78, 0.86, 0.45, 0.22], pivotForage: true },
-  forage_barley: { name: 'Forage Barley', nameAr: 'شعير علفي', color: '#aee03a', ndvi: [0.18, 0.55, 0.8, 0.62, 0.35, 0.18], pivotForage: true },
-  forage_millet: { name: 'Forage Millet', nameAr: 'دخن علفي', color: '#62b53f', ndvi: [0.2, 0.48, 0.76, 0.6, 0.3, 0.2], pivotForage: true },
-  pasture: { name: 'Natural Pasture Grass', nameAr: 'مراعٍ طبيعية', color: '#3f9b5a', ndvi: [0.25, 0.42, 0.52, 0.46, 0.36, 0.28] },
-  sugarcane: { name: 'Sugarcane', nameAr: 'قصب سكر', color: '#1f6f3f', ndvi: [0.5, 0.65, 0.78, 0.85, 0.82, 0.7], evergreen: true },
-  datepalm: { name: 'Date Palm / Orchard', nameAr: 'نخيل / بساتين', color: '#7a5a1e', ndvi: [0.58, 0.6, 0.63, 0.64, 0.62, 0.59], evergreen: true },
+  wheat: { name: 'Wheat', nameAr: 'قمح', color: '#e0c341', ndvi: [0.15, 0.45, 0.75, 0.82, 0.5, 0.2], season: 'cool' },
+  barley: { name: 'Barley', nameAr: 'شعير', color: '#c9a227', ndvi: [0.15, 0.5, 0.78, 0.72, 0.4, 0.18], season: 'cool' },
+  maize: { name: 'Maize / Corn', nameAr: 'ذرة', color: '#f2e600', ndvi: [0.18, 0.35, 0.7, 0.85, 0.6, 0.25], season: 'warm' },
+  rice: { name: 'Rice', nameAr: 'أرز', color: '#1f8a4c', ndvi: [0.1, 0.3, 0.65, 0.88, 0.7, 0.3], wantsWater: true, season: 'warm' },
+  cotton: { name: 'Cotton', nameAr: 'قطن', color: '#e34234', ndvi: [0.15, 0.3, 0.55, 0.8, 0.75, 0.35], season: 'warm' },
+  sorghum: { name: 'Sorghum', nameAr: 'ذرة رفيعة', color: '#f5a000', ndvi: [0.18, 0.35, 0.62, 0.8, 0.6, 0.28], season: 'warm' },
+  soybean: { name: 'Soybeans', nameAr: 'فول صويا', color: '#2e7d32', ndvi: [0.18, 0.35, 0.65, 0.82, 0.55, 0.25], season: 'warm' },
+  potato: { name: 'Potato', nameAr: 'بطاطس', color: '#a0522d', ndvi: [0.2, 0.55, 0.8, 0.7, 0.4, 0.2], season: 'cool' },
+  vegetables: { name: 'Vegetables', nameAr: 'خضروات', color: '#9acd5e', ndvi: [0.2, 0.6, 0.7, 0.5, 0.6, 0.45], season: 'mixed' },
+  rhodes: { name: 'Rhodes Grass', nameAr: 'حشيشة رودس', color: '#b14bd8', ndvi: [0.5, 0.74, 0.56, 0.76, 0.58, 0.74], pivotForage: true, season: 'perennial' },
+  alfalfa: { name: 'Alfalfa', nameAr: 'برسيم حجازي', color: '#ff5ec8', ndvi: [0.55, 0.8, 0.6, 0.82, 0.62, 0.8], pivotForage: true, season: 'perennial' },
+  forage_sorghum: { name: 'Forage Sorghum', nameAr: 'ذرة رفيعة علفية', color: '#d2691e', ndvi: [0.2, 0.42, 0.72, 0.84, 0.58, 0.3], pivotForage: true, season: 'warm' },
+  silage_maize: { name: 'Forage Maize / Silage', nameAr: 'ذرة علفية / سيلاج', color: '#ffae00', ndvi: [0.2, 0.42, 0.78, 0.86, 0.45, 0.22], pivotForage: true, season: 'warm' },
+  forage_barley: { name: 'Forage Barley', nameAr: 'شعير علفي', color: '#aee03a', ndvi: [0.18, 0.55, 0.8, 0.62, 0.35, 0.18], pivotForage: true, season: 'cool' },
+  forage_millet: { name: 'Forage Millet', nameAr: 'دخن علفي', color: '#62b53f', ndvi: [0.2, 0.48, 0.76, 0.6, 0.3, 0.2], pivotForage: true, season: 'warm' },
+  pasture: { name: 'Natural Pasture Grass', nameAr: 'مراعٍ طبيعية', color: '#3f9b5a', ndvi: [0.25, 0.42, 0.52, 0.46, 0.36, 0.28], season: 'mixed' },
+  sugarcane: { name: 'Sugarcane', nameAr: 'قصب سكر', color: '#1f6f3f', ndvi: [0.5, 0.65, 0.78, 0.85, 0.82, 0.7], evergreen: true, season: 'perennial' },
+  datepalm: { name: 'Date Palm / Orchard', nameAr: 'نخيل / بساتين', color: '#7a5a1e', ndvi: [0.58, 0.6, 0.63, 0.64, 0.62, 0.59], evergreen: true, season: 'perennial' },
 }
 
 type ResolvedCrop = {
@@ -81,6 +80,7 @@ type ResolvedCrop = {
   wantsWater: boolean
   evergreen: boolean
   pivotForage: boolean
+  season: 'cool' | 'warm' | 'mixed' | 'perennial'
 }
 
 function crop(id: string): ResolvedCrop {
@@ -94,24 +94,26 @@ function crop(id: string): ResolvedCrop {
     wantsWater: !!c.wantsWater,
     evergreen: !!c.evergreen,
     pivotForage: !!c.pivotForage,
+    season: c.season || 'mixed',
   }
 }
 
+/** Field crops first so seasonal cereals win ties over multi-cut forage. */
 const COUNTRY_CROPS: Record<string, string[]> = {
-  SA: ['rhodes', 'alfalfa', 'forage_sorghum', 'silage_maize', 'forage_barley', 'wheat', 'maize', 'potato', 'vegetables', 'datepalm'],
-  EG: ['wheat', 'rice', 'cotton', 'maize', 'silage_maize', 'alfalfa', 'sugarcane', 'potato', 'vegetables'],
-  IQ: ['wheat', 'barley', 'rice', 'alfalfa', 'maize', 'vegetables', 'datepalm'],
-  AE: ['rhodes', 'alfalfa', 'forage_sorghum', 'silage_maize', 'vegetables', 'wheat', 'datepalm'],
-  JO: ['wheat', 'barley', 'alfalfa', 'vegetables', 'potato', 'datepalm'],
-  MA: ['wheat', 'barley', 'alfalfa', 'silage_maize', 'vegetables', 'maize'],
-  DZ: ['wheat', 'barley', 'alfalfa', 'vegetables', 'maize', 'datepalm'],
-  SD: ['sorghum', 'forage_sorghum', 'wheat', 'cotton', 'alfalfa', 'forage_millet', 'vegetables'],
-  KW: ['rhodes', 'alfalfa', 'vegetables', 'forage_sorghum'],
-  OM: ['rhodes', 'alfalfa', 'vegetables', 'datepalm', 'forage_sorghum'],
-  QA: ['rhodes', 'alfalfa', 'vegetables', 'forage_sorghum'],
-  US: ['maize', 'soybean', 'wheat', 'cotton', 'sorghum', 'alfalfa', 'silage_maize'],
+  SA: ['wheat', 'maize', 'potato', 'vegetables', 'silage_maize', 'forage_barley', 'forage_sorghum', 'datepalm', 'alfalfa', 'rhodes'],
+  EG: ['wheat', 'rice', 'cotton', 'maize', 'potato', 'vegetables', 'silage_maize', 'sugarcane', 'alfalfa'],
+  IQ: ['wheat', 'barley', 'rice', 'maize', 'vegetables', 'datepalm', 'alfalfa'],
+  AE: ['vegetables', 'wheat', 'silage_maize', 'forage_sorghum', 'datepalm', 'alfalfa', 'rhodes'],
+  JO: ['wheat', 'barley', 'vegetables', 'potato', 'datepalm', 'alfalfa'],
+  MA: ['wheat', 'barley', 'maize', 'vegetables', 'silage_maize', 'alfalfa'],
+  DZ: ['wheat', 'barley', 'maize', 'vegetables', 'datepalm', 'alfalfa'],
+  SD: ['sorghum', 'wheat', 'cotton', 'forage_millet', 'vegetables', 'forage_sorghum', 'alfalfa'],
+  KW: ['vegetables', 'forage_sorghum', 'alfalfa', 'rhodes'],
+  OM: ['vegetables', 'datepalm', 'forage_sorghum', 'alfalfa', 'rhodes'],
+  QA: ['vegetables', 'forage_sorghum', 'alfalfa', 'rhodes'],
+  US: ['maize', 'soybean', 'wheat', 'cotton', 'sorghum', 'silage_maize', 'alfalfa'],
   IN: ['rice', 'wheat', 'cotton', 'sugarcane', 'sorghum', 'forage_millet', 'vegetables'],
-  default: ['wheat', 'maize', 'alfalfa', 'rhodes', 'silage_maize', 'vegetables', 'potato'],
+  default: ['wheat', 'maize', 'vegetables', 'potato', 'silage_maize', 'alfalfa', 'rhodes'],
 }
 
 const COUNTRY_NAMES: Record<string, string> = {
@@ -229,6 +231,130 @@ function hexToRgb(hex: string): [number, number, number] {
   return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
 }
 
+/** Calendar affinity of a crop to the analysis season window (0.2–1). */
+function cropSeasonAffinity(
+  cropSeason: ResolvedCrop['season'] | string,
+  seasonStart: string,
+  seasonEnd: string,
+): number {
+  const start = new Date(`${String(seasonStart || '').slice(0, 10)}T00:00:00Z`)
+  const end = new Date(`${String(seasonEnd || '').slice(0, 10)}T00:00:00Z`)
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) {
+    return 1
+  }
+  const kind = cropSeason || 'mixed'
+  if (kind === 'mixed' || kind === 'perennial') return 0.85
+
+  const months = new Set<number>()
+  const span = end.getTime() - start.getTime()
+  const steps = Math.min(24, Math.max(2, Math.round(span / (14 * 86400000))))
+  for (let i = 0; i <= steps; i += 1) {
+    const t = start.getTime() + (span * i) / steps
+    months.add(new Date(t).getUTCMonth() + 1)
+  }
+  const coolMonths = new Set([10, 11, 12, 1, 2, 3, 4, 5])
+  const warmMonths = new Set([3, 4, 5, 6, 7, 8, 9, 10])
+  let hit = 0
+  for (const m of months) {
+    if (kind === 'cool' && coolMonths.has(m)) hit += 1
+    if (kind === 'warm' && warmMonths.has(m)) hit += 1
+  }
+  const ratio = hit / Math.max(months.size, 1)
+  return Math.max(0.2, Math.min(1, 0.25 + 0.75 * ratio))
+}
+
+/** Phenology distance: MSE + amplitude + peak-phase + (1 − correlation). */
+function phenologyMatchDistance(obs: number[], proto: number[]): number {
+  const n = Math.min(obs.length, proto.length)
+  if (n < 2) return 99
+  let sumO = 0
+  let sumP = 0
+  let sumOO = 0
+  let sumPP = 0
+  let sumOP = 0
+  let mse = 0
+  let peakO = 0
+  let peakP = 0
+  let maxO = -Infinity
+  let maxP = -Infinity
+  let minO = Infinity
+  let minP = Infinity
+  for (let i = 0; i < n; i += 1) {
+    const o = obs[i]!
+    const p = proto[i]!
+    const d = o - p
+    mse += d * d
+    sumO += o
+    sumP += p
+    sumOO += o * o
+    sumPP += p * p
+    sumOP += o * p
+    if (o > maxO) {
+      maxO = o
+      peakO = i
+    }
+    if (p > maxP) {
+      maxP = p
+      peakP = i
+    }
+    if (o < minO) minO = o
+    if (p < minP) minP = p
+  }
+  mse /= n
+  const meanO = sumO / n
+  const meanP = sumP / n
+  const varO = Math.max(1e-6, sumOO / n - meanO * meanO)
+  const varP = Math.max(1e-6, sumPP / n - meanP * meanP)
+  const corr = (sumOP / n - meanO * meanP) / Math.sqrt(varO * varP)
+  const ampO = Math.max(0, maxO - minO)
+  const ampP = Math.max(0, maxP - minP)
+  const ampPenalty = Math.abs(ampO - ampP)
+  const peakPenalty = Math.abs(peakO - peakP) / Math.max(1, n - 1)
+  const corrPenalty = 1 - Math.max(-1, Math.min(1, corr))
+  return mse + 0.35 * ampPenalty + 0.25 * peakPenalty + 0.2 * corrPenalty
+}
+
+/** Fill label holes (−1) so Crop Type has no black cloud cutouts. */
+function fillUnclassifiedHoles(labels: Int16Array, width: number, height: number, passes = 8): void {
+  for (let pass = 0; pass < passes; pass += 1) {
+    let changed = 0
+    const next = labels.slice()
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const p = y * width + x
+        if (labels[p]! >= 0) continue
+        const counts = new Map<number, number>()
+        for (let dy = -1; dy <= 1; dy += 1) {
+          for (let dx = -1; dx <= 1; dx += 1) {
+            if (!dx && !dy) continue
+            const nx = x + dx
+            const ny = y + dy
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+            const l = labels[ny * width + nx]!
+            if (l < 0) continue
+            counts.set(l, (counts.get(l) || 0) + 1)
+          }
+        }
+        if (!counts.size) continue
+        let bestL = -1
+        let bestC = -1
+        for (const [l, c] of counts) {
+          if (c > bestC) {
+            bestC = c
+            bestL = l
+          }
+        }
+        if (bestL >= 0) {
+          next[p] = bestL
+          changed += 1
+        }
+      }
+    }
+    labels.set(next)
+    if (!changed) break
+  }
+}
+
 function resampleToPhenophases(values: number[], srcFracs: number[]): number[] {
   const out = new Array(NORM_POSITIONS.length)
   for (let k = 0; k < NORM_POSITIONS.length; k += 1) {
@@ -289,53 +415,8 @@ function detectPivotFields(
   const pivotId = new Int32Array(n).fill(-1)
   let diskCount = 0
 
-  const dt = distanceTransform(croplandMask, width, height)
-  const RMIN = Math.max(4, Math.round(0.02 * Math.min(width, height)))
-  const WIN = 2
-  const centers: Array<[number, number, number]> = []
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const p = y * width + x
-      const r = dt[p]
-      if (r < RMIN) continue
-      let isMax = true
-      for (let dy = -WIN; dy <= WIN && isMax; dy += 1) {
-        for (let dx = -WIN; dx <= WIN; dx += 1) {
-          const ny = y + dy
-          const nx = x + dx
-          if (ny < 0 || nx < 0 || ny >= height || nx >= width) continue
-          if (dt[ny * width + nx] > r) { isMax = false; break }
-        }
-      }
-      if (isMax) centers.push([x, y, r])
-    }
-  }
-  centers.sort((u, v) => v[2] - u[2])
-  for (let i = 0; i < centers.length; i += 1) {
-    const cx = centers[i][0]
-    const cy = centers[i][1]
-    const r = centers[i][2]
-    if (inPivot[cy * width + cx]) continue
-    const id = diskCount++
-    const rr = r * 1.02
-    const r2 = rr * rr
-    const x0 = Math.max(0, Math.floor(cx - rr))
-    const x1 = Math.min(width - 1, Math.ceil(cx + rr))
-    const y0 = Math.max(0, Math.floor(cy - rr))
-    const y1 = Math.min(height - 1, Math.ceil(cy + rr))
-    for (let y = y0; y <= y1; y += 1) {
-      for (let x = x0; x <= x1; x += 1) {
-        const ddx = x - cx
-        const ddy = y - cy
-        if (ddx * ddx + ddy * ddy <= r2) {
-          const q = y * width + x
-          inPivot[q] = 1
-          if (pivotId[q] < 0) pivotId[q] = id
-        }
-      }
-    }
-  }
-
+  // Strict connected-component circularity only.
+  // Do NOT stamp DT-peak disks — that paints fake purple circles on rectangular fields.
   const seen = new Uint8Array(n)
   const stack = new Int32Array(n)
   const comp = new Int32Array(n)
@@ -349,42 +430,95 @@ function detectPivotFields(
     let maxX = -1
     let minY = height
     let maxY = -1
+    let sumX = 0
+    let sumY = 0
     while (top > 0) {
       const p = stack[--top]
       comp[count++] = p
       const x = p % width
       const y = (p - x) / width
+      sumX += x
+      sumY += y
       if (x < minX) minX = x
       if (x > maxX) maxX = x
       if (y < minY) minY = y
       if (y > maxY) maxY = y
-      if (x > 0 && croplandMask[p - 1] && !seen[p - 1]) { seen[p - 1] = 1; stack[top++] = p - 1 }
-      if (x < width - 1 && croplandMask[p + 1] && !seen[p + 1]) { seen[p + 1] = 1; stack[top++] = p + 1 }
-      if (y > 0 && croplandMask[p - width] && !seen[p - width]) { seen[p - width] = 1; stack[top++] = p - width }
-      if (y < height - 1 && croplandMask[p + width] && !seen[p + width]) { seen[p + width] = 1; stack[top++] = p + width }
+      if (x > 0 && croplandMask[p - 1] && !seen[p - 1]) {
+        seen[p - 1] = 1
+        stack[top++] = p - 1
+      }
+      if (x < width - 1 && croplandMask[p + 1] && !seen[p + 1]) {
+        seen[p + 1] = 1
+        stack[top++] = p + 1
+      }
+      if (y > 0 && croplandMask[p - width] && !seen[p - width]) {
+        seen[p - width] = 1
+        stack[top++] = p - width
+      }
+      if (y < height - 1 && croplandMask[p + width] && !seen[p + width]) {
+        seen[p + width] = 1
+        stack[top++] = p + width
+      }
     }
+
     const w = maxX - minX + 1
     const h = maxY - minY + 1
     const d = Math.max(w, h)
+    if (count < 120 || d < 14) continue
+    const aspect = Math.min(w, h) / Math.max(w, h)
+    if (aspect < 0.88) continue
     const diskArea = Math.PI * (d / 2) * (d / 2)
     const fill = count / diskArea
-    const aspect = Math.min(w, h) / Math.max(w, h)
-    if (count >= 50 && aspect >= 0.75 && fill >= 0.6 && fill <= 1.15) {
-      const id = diskCount++
-      for (let i = 0; i < count; i += 1) {
-        const q = comp[i]
-        inPivot[q] = 1
-        if (pivotId[q] < 0) pivotId[q] = id
+    if (fill < 0.78 || fill > 1.05) continue
+
+    const cx = sumX / count
+    const cy = sumY / count
+    let sumR = 0
+    let sumR2 = 0
+    for (let i = 0; i < count; i += 1) {
+      const q = comp[i]!
+      const x = q % width
+      const y = (q - x) / width
+      const dx = x - cx
+      const dy = y - cy
+      const r = Math.sqrt(dx * dx + dy * dy)
+      sumR += r
+      sumR2 += r * r
+    }
+    const meanR = sumR / count
+    const rmsR = Math.sqrt(sumR2 / count)
+    const expectedR = Math.sqrt(count / Math.PI)
+    if (meanR < expectedR * 0.82 || meanR > expectedR * 1.12) continue
+    if (rmsR / Math.max(meanR, 1e-3) > 1.18) continue
+
+    const corner = Math.max(2, Math.round(d * 0.12))
+    let cornerCrop = 0
+    let cornerTot = 0
+    const corners: Array<[number, number]> = [
+      [minX, minY],
+      [maxX - corner + 1, minY],
+      [minX, maxY - corner + 1],
+      [maxX - corner + 1, maxY - corner + 1],
+    ]
+    for (const [x0, y0] of corners) {
+      for (let y = y0; y < y0 + corner && y <= maxY; y += 1) {
+        for (let x = x0; x < x0 + corner && x <= maxX; x += 1) {
+          if (x < 0 || y < 0 || x >= width || y >= height) continue
+          cornerTot += 1
+          if (croplandMask[y * width + x]) cornerCrop += 1
+        }
       }
+    }
+    if (cornerTot > 0 && cornerCrop / cornerTot > 0.35) continue
+
+    const id = diskCount++
+    for (let i = 0; i < count; i += 1) {
+      const q = comp[i]!
+      inPivot[q] = 1
+      pivotId[q] = id
     }
   }
 
-  for (let p = 0; p < n; p += 1) {
-    if (inPivot[p] && !croplandMask[p]) {
-      inPivot[p] = 0
-      pivotId[p] = -1
-    }
-  }
   return { inPivot, pivotId }
 }
 
@@ -397,15 +531,22 @@ type ClassifyResult = {
   fields: { objects: number; pivotObjects: number }
 }
 
-function classifyCropFields(grids: IndexGrid[], profile: CropProfile): ClassifyResult {
+function classifyCropFields(
+  grids: IndexGrid[],
+  profile: CropProfile,
+  opts: { seasonStart?: string; seasonEnd?: string } = {},
+): ClassifyResult {
   if (!grids.length) throw new Error('No imagery grids to classify.')
   const { width, height } = grids[0]
   const n = width * height
   const K = grids.length
   const srcFracs = grids.map((_, i) => (K === 1 ? 0 : i / (K - 1)))
+  const seasonStart = opts.seasonStart || ''
+  const seasonEnd = opts.seasonEnd || ''
 
   const crops = profile.crops
   const landcover = profile.landcover
+  const seasonWeights = crops.map(c => cropSeasonAffinity(c.season, seasonStart, seasonEnd))
   const water = landcover.find(l => l.id === 'water')!
   const bare = landcover.find(l => l.id === 'bare')!
   const built = landcover.find(l => l.id === 'built')!
@@ -467,7 +608,7 @@ function classifyCropFields(grids: IndexGrid[], profile: CropProfile): ClassifyR
       if (v < minNdvi) minNdvi = v
       cnt += 1
     }
-    if (cnt < 2) {
+    if (cnt < 1) {
       labels[p] = -1
       continue
     }
@@ -505,7 +646,7 @@ function classifyCropFields(grids: IndexGrid[], profile: CropProfile): ClassifyR
     sampledAll.set(sampled, p * NORM_POSITIONS.length)
   }
 
-  const { inPivot, pivotId } = detectPivotFields(vegMask, width, height)
+  const { inPivot, pivotId } = detectPivotFields(croplandMask, width, height)
   const PH = NORM_POSITIONS.length
 
   const PIVOT_BUFFER_R = Math.max(2, Math.round(0.012 * Math.min(width, height)))
@@ -552,7 +693,7 @@ function classifyCropFields(grids: IndexGrid[], profile: CropProfile): ClassifyR
     }
   }
 
-  const SEG_EDGE = 0.16
+  const SEG_EDGE = 0.11
   const growStack = new Int32Array(n)
   for (let p0 = 0; p0 < n; p0 += 1) {
     if (!croplandMask[p0] || objId[p0] >= 0) continue
@@ -624,14 +765,15 @@ function classifyCropFields(grids: IndexGrid[], profile: CropProfile): ClassifyR
         if (cnt < EVERGREEN_MIN_OBJ) continue
       }
       const proto = cropProtos[c]
-      let dist = 0
-      for (let k = 0; k < proto.length; k += 1) {
-        const diff = objSig[bo + k] / cnt - proto[k]
-        dist += diff * diff
-      }
-      if (crops[c].wantsWater) dist += meanNdwi > 0.05 ? -0.08 : 0.08
-      if (isPivotObj && crops[c].pivotForage) dist -= 0.03
-      if (crops[c].evergreen && dist > EVERGREEN_MAX_DIST) continue
+      const meanSig: number[] = new Array(proto.length)
+      for (let k = 0; k < proto.length; k += 1) meanSig[k] = objSig[bo + k]! / cnt
+      let dist = phenologyMatchDistance(meanSig, proto)
+      const aff = seasonWeights[c]!
+      dist *= 1.15 - 0.55 * aff
+      if (crops[c]!.wantsWater) dist += meanNdwi > 0.05 ? -0.08 : 0.08
+      if (isPivotObj && crops[c]!.pivotForage) dist -= 0.02
+      if (!isPivotObj && !objNearPivot[o] && crops[c]!.pivotForage) dist += 0.12
+      if (crops[c]!.evergreen && dist > EVERGREEN_MAX_DIST) continue
       if (dist < bestDist) {
         bestDist = dist
         best = c
@@ -695,6 +837,8 @@ function classifyCropFields(grids: IndexGrid[], profile: CropProfile): ClassifyR
     }
   }
 
+  fillUnclassifiedHoles(smoothed, width, height)
+
   const rgb = classMeta.map(m => hexToRgb(m.color))
   const tally = new Array(classMeta.length).fill(0)
   let validPixels = 0
@@ -724,15 +868,25 @@ function classifyCropFields(grids: IndexGrid[], profile: CropProfile): ClassifyR
     .filter(s => s.pct > 0)
     .sort((a, b) => b.pct - a.pct)
 
+  // Pivot share is measured against the FINAL classified cropland (the crop classes only,
+  // indices 0..crops.length-1). Counting pivot pixels as a subset of cropland guarantees the
+  // ratio can never exceed 100% (the old code counted pivots over the broader vegetation mask,
+  // producing impossible values like "154.9%").
+  const cropClassCount = crops.length
   let pivotPixels = 0
   let croplandPixels = 0
   for (let p = 0; p < n; p += 1) {
-    if (croplandMask[p]) croplandPixels += 1
-    if (inPivot[p]) pivotPixels += 1
+    const l = smoothed[p]
+    const isCrop = l >= 0 && l < cropClassCount
+    if (isCrop) {
+      croplandPixels += 1
+      if (inPivot[p]) pivotPixels += 1
+    }
   }
+  const pivotPct = croplandPixels ? (pivotPixels / croplandPixels) * 100 : 0
   const pivots = {
     pixels: pivotPixels,
-    pctOfCropland: croplandPixels ? Number(((pivotPixels / croplandPixels) * 100).toFixed(1)) : 0,
+    pctOfCropland: Number(Math.min(100, Math.max(0, pivotPct)).toFixed(1)),
   }
   const fields = { objects: objCount, pivotObjects: pivotObjMap.size }
 
@@ -798,13 +952,14 @@ function geometryBbox4326(geometry: AoiGeometry): [number, number, number, numbe
 const INDEX_GRID_EVALSCRIPT = `//VERSION=3
 function setup() {
   return {
-    input: [{ bands: ["B03", "B04", "B08", "B11", "SCL", "dataMask"] }],
+    input: [{ bands: ["B03", "B04", "B08", "B11", "SCL", "CLM", "CLP", "dataMask"] }],
     output: { bands: 4, sampleType: "UINT8" }
   };
 }
 function evaluatePixel(s) {
   var scl = s.SCL;
-  var cloud = (scl == 3 || scl == 8 || scl == 9 || scl == 10 || scl == 11);
+  // Hard clouds only — thin cirrus / soft CLP / snow false-positives must not wipe arid AOIs.
+  var cloud = (scl == 0 || scl == 1 || scl == 3 || scl == 8 || scl == 9) || s.CLM == 1;
   if (!s.dataMask || cloud) return [0, 0, 0, 0];
   var dNdvi = s.B08 + s.B04;
   var ndvi = dNdvi > 1e-6 ? (s.B08 - s.B04) / dNdvi : 0;
@@ -893,7 +1048,8 @@ async function fetchIndexGrid(
     const g = data[i + 1]
     const b = data[i + 2]
     const a = data[i + 3]
-    if (a < 128 || (r === 0 && g === 0 && b === 0)) {
+    // Validity is alpha only — RGB zeros are real low-index values, not nodata.
+    if (a < 128) {
       valid[p] = 0
       continue
     }
@@ -905,7 +1061,7 @@ async function fetchIndexGrid(
   return { ndvi, ndwi, ndmi, valid, width: opts.size, height: opts.size }
 }
 
-/** True-color preview (data URL) around a target date for the AOI bbox. */
+/** True-color preview (data URL) around a target clear date — full natural RGB (no cloud cutouts). */
 async function fetchTrueColorPreview(
   bbox3857: [number, number, number, number],
   isoDate: string,
@@ -915,12 +1071,14 @@ async function fetchTrueColorPreview(
 ): Promise<string | null> {
   try {
     const day = new Date(`${isoDate}T00:00:00Z`)
-    const timeStart = new Date(day.getTime() - 20 * 86400000).toISOString().slice(0, 10)
-    const timeEnd = new Date(day.getTime() + 10 * 86400000).toISOString().slice(0, 10)
+    // Narrow window around the accepted clear date — do not mosaic across cloudy neighbours.
+    const timeStart = new Date(day.getTime() - 3 * 86400000).toISOString().slice(0, 10)
+    const timeEnd = new Date(day.getTime() + 3 * 86400000).toISOString().slice(0, 10)
     const [minX, minY, maxX, maxY] = bbox3857
     const evalscript = `//VERSION=3
 function setup() { return { input: ["B02", "B03", "B04", "dataMask"], output: { bands: 4, sampleType: "UINT8" } }; }
 function evaluatePixel(s) {
+  // Full natural RGB — cloudy *dates* are excluded upstream; do not cut pixels to black.
   if (!s.dataMask) return [0, 0, 0, 0];
   function g(v){ return Math.max(0, Math.min(255, Math.round(v * 3.5 * 255))); }
   return [g(s.B04), g(s.B03), g(s.B02), 255];
@@ -930,10 +1088,16 @@ function evaluatePixel(s) {
       `&LAYERS=${encodeURIComponent(layer)}` +
       `&BBOX=${minX},${minY},${maxX},${maxY}&CRS=EPSG:3857` +
       `&FORMAT=image/png&TRANSPARENT=true&WIDTH=${size}&HEIGHT=${size}` +
-      `&TIME=${timeStart}/${timeEnd}&MAXCC=60&SHOWLOGO=false&WARNINGS=false` +
+      `&TIME=${timeStart}/${timeEnd}&MAXCC=40&SHOWLOGO=false&WARNINGS=false` +
       `&EVALSCRIPT=${encodeURIComponent(toBase64(evalscript))}`
     url = appendSentinelHubWmsAccessToken(url)
     const data = await fetchWmsImageData(url, size, size, signal)
+    let opaque = 0
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i]! >= 128) opaque += 1
+    }
+    // Reject empty / failed frames only (not residual cloud cutouts — those are no longer masked).
+    if (opaque / (size * size) < 0.15) return null
     return rgbaToPngDataUrl(data, size, size)
   } catch {
     return null
@@ -996,15 +1160,6 @@ export async function runClientAoiCropClassification(
     if (typeof document === 'undefined' || typeof createImageBitmap === 'undefined') {
       return fail('Client crop classification requires a browser environment.')
     }
-    try {
-      assertCropPanelProvider(input.dataProvider ?? 'satellite')
-    } catch (err) {
-      return fail(String((err as Error)?.message || err))
-    }
-    const pipelineProfile = resolveCropPipelineProfile(
-      input.dataProvider ?? 'satellite',
-      'ai-prithvi',
-    )
     onUpdate(snapshot(jobId, 'fetching', 0.06, 'Detecting country from AOI…'))
     const country = await detectCountryFromAoi(input.aoi)
     const profile = cropProfileForCountry(country.code)
@@ -1017,10 +1172,28 @@ export async function runClientAoiCropClassification(
 
     const layer = resolveEvalProxyLayer()
     const evalscriptB64 = toBase64(INDEX_GRID_EVALSCRIPT)
-    const STEPS = 5
-    const SIZE = 224
+    // More temporal samples => finer NDVI phenology (better season-specific accuracy) and more
+    // chances to see each pixel cloud-free within its window.
+    const STEPS = 6
+    // 3 m target grid: size the request by the AOI span so field / pivot edges stay crisp.
+    const TARGET_MPP = 3
+    const spanMeters = Math.max(maxX - minX, maxY - minY)
+    const SIZE = Math.max(256, Math.min(3072, Math.round(spanMeters / TARGET_MPP)))
+    // Prefer ≥45% AOI clear; fall back to best available ≥15% so the tool keeps working.
+    const MIN_CLEAR_FRACTION = 0.45
+    const CLEAR_FLOOR = 0.15
+    /** Granule-level WMS MAXCC — tile cloud metadata ≠ AOI cloud; keep permissive and rank by AOI clear %. */
+    const MAX_SCENE_CLOUD = 40
     const dates = evenlySpacedDates(input.season, STEPS)
     const grids: IndexGrid[] = []
+    const usedDates: string[] = []
+    let skippedEmpty = 0
+    const validFractionOf = (g: IndexGrid): number => {
+      let ok = 0
+      for (let p = 0; p < g.valid.length; p += 1) ok += g.valid[p]
+      return g.valid.length ? ok / g.valid.length : 0
+    }
+    const candidates: Array<{ date: string; grid: IndexGrid; clear: number }> = []
     for (let i = 0; i < dates.length; i += 1) {
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
       onUpdate(
@@ -1032,31 +1205,80 @@ export async function runClientAoiCropClassification(
         ),
       )
       const day = new Date(`${dates[i]}T00:00:00Z`)
-      const t0 = new Date(day.getTime() - 25 * 86400000).toISOString().slice(0, 10)
-      const t1 = new Date(day.getTime() + 15 * 86400000).toISOString().slice(0, 10)
+      const t0 = new Date(day.getTime() - 6 * 86400000).toISOString().slice(0, 10)
+      const t1 = new Date(day.getTime() + 6 * 86400000).toISOString().slice(0, 10)
       try {
         const grid = await fetchIndexGrid(
-          { bbox3857, timeStart: t0, timeEnd: t1, cloudCoverage: 60, size: SIZE, layer, evalscriptB64 },
+          {
+            bbox3857,
+            timeStart: t0,
+            timeEnd: t1,
+            cloudCoverage: MAX_SCENE_CLOUD,
+            size: SIZE,
+            layer,
+            evalscriptB64,
+          },
           signal,
         )
-        grids.push(grid)
+        const clear = validFractionOf(grid)
+        if (clear < CLEAR_FLOOR) {
+          skippedEmpty += 1
+          continue
+        }
+        candidates.push({ date: dates[i]!, grid, clear })
       } catch (gridErr) {
         if (gridErr instanceof DOMException && gridErr.name === 'AbortError') throw gridErr
         /* skip a failed date — classifier tolerates gaps */
       }
     }
+    candidates.sort((a, b) => b.clear - a.clear || a.date.localeCompare(b.date))
+    const preferred = candidates.filter(c => c.clear >= MIN_CLEAR_FRACTION)
+    const pool = preferred.length >= 2 ? preferred : candidates
+    const picked: typeof candidates = []
+    const minGapMs = 5 * 86400000
+    for (const c of pool) {
+      if (picked.length >= STEPS) break
+      const t = new Date(`${c.date}T00:00:00Z`).getTime()
+      if (picked.some(p => Math.abs(new Date(`${p.date}T00:00:00Z`).getTime() - t) < minGapMs)) {
+        continue
+      }
+      picked.push(c)
+    }
+    for (const c of pool) {
+      if (picked.length >= Math.min(STEPS, 4)) break
+      if (picked.includes(c)) continue
+      picked.push(c)
+    }
+    picked.sort((a, b) => a.date.localeCompare(b.date))
+    for (const p of picked) {
+      grids.push(p.grid)
+      usedDates.push(p.date)
+    }
     if (grids.length < 2) {
-      return fail('Not enough cloud-free Sentinel-2 imagery for this AOI/season to classify. Try a wider season or a clearer area.')
+      const best = candidates[0]?.clear
+      return fail(
+        best != null
+          ? `Not enough usable Sentinel-2 scenes for this AOI/season (best AOI clear ${(best * 100).toFixed(0)}%, need ≥2 dates${skippedEmpty ? `; ${skippedEmpty} empty` : ''}). Try a wider season.`
+          : 'Not enough usable Sentinel-2 imagery for this AOI/season to classify. Try a wider season or a clearer area.',
+      )
     }
 
     onUpdate(snapshot(jobId, 'preprocessing', 0.66, 'Building NDVI phenology signatures…'))
     onUpdate(snapshot(jobId, 'inferring', 0.8, `Classifying crops (${profile.country})…`))
-    const classified = classifyCropFields(grids, profile)
+    const classified = classifyCropFields(grids, profile, {
+      seasonStart: input.season?.start,
+      seasonEnd: input.season?.end,
+    })
 
-    const previewIdx = [0, Math.floor(dates.length / 2), dates.length - 1]
+    // Thumbnails come only from the accepted (clear) scenes — never a rejected cloudy date.
+    const previewDates = [
+      usedDates[0],
+      usedDates[Math.floor(usedDates.length / 2)],
+      usedDates[usedDates.length - 1],
+    ]
     const previews: Array<string | null> = []
-    for (const idx of previewIdx) {
-      previews.push(await fetchTrueColorPreview(bbox3857, dates[idx], 256, layer, signal))
+    for (const d of previewDates) {
+      previews.push(await fetchTrueColorPreview(bbox3857, d, 256, layer, signal))
     }
 
     const done: CropClassificationJob = {
@@ -1064,19 +1286,21 @@ export async function runClientAoiCropClassification(
       mode: 'aoi',
       status: 'done',
       progress: 1,
-      message: `Classification complete — ${profile.country} (${classified.classStats.length} classes${classified.pivots.pixels ? `, ${classified.pivots.pctOfCropland}% pivot-irrigated` : ''}).`,
+      message: `Classification complete — ${profile.country} (${classified.classStats.length} classes${classified.pivots.pixels ? `, ${classified.pivots.pctOfCropland}% pivot-irrigated` : ''}) at ${TARGET_MPP} m.`,
       error: null,
       result: {
         engine: 'country',
-        dataProvider: input.dataProvider ?? 'satellite',
-        pipelineProfile: pipelineProfile.id,
         country: { code: country.code, name: profile.country, source: country.source },
         legend: profile.classes,
         scenes: { t1: previews[0] || null, t2: previews[1] || null, t3: previews[2] || null },
-        dates,
+        dates: usedDates,
+        maxSceneCloud: MAX_SCENE_CLOUD,
+        sceneCloudCover: usedDates.map(date => ({ date, cloudCover: null, cloudy: false })),
         prediction: { url: classified.pngDataUrl, bounds: bbox4326 },
         classStats: classified.classStats,
         inferenceAvailable: true,
+        resolutionMeters: TARGET_MPP,
+        superResolution: 'resample',
       },
     }
     onUpdate(done)

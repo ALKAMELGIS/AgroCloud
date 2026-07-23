@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-07-09T07:10:08.399Z",
+  "updatedAt": "2026-07-21T12:21:47.384Z",
   "users": [
     {
       "id": 1782414394512,
@@ -8,15 +8,15 @@
       "email": "alkamelgis@gmail.com",
       "role": "Admin",
       "status": "Active",
-      "lastLogin": "09/07/2026, 11:10:07 AM",
+      "lastLogin": "21/07/2026, 4:21:46 PM",
       "emailVerified": true,
       "passwordHash": "b03ddf3ca2e714a6548e7495e2a03f5e824eaac9837cd7f159c67b90fb4b7342"
     }
   ],
   "auditLog": [
     {
-      "id": "eaba663d-3553-4880-97b4-b9a0fcc63d80",
-      "at": "2026-07-09T07:10:07.911Z",
+      "id": "cc732ce6-5f25-4e41-adf0-52adc8a2b637",
+      "at": "2026-07-21T12:21:46.389Z",
       "entity": "auth",
       "entityId": "alkamelgis@gmail.com",
       "action": "login_success",
@@ -25,8 +25,8 @@
         "reason": "server_authenticated",
         "mode": "signin",
         "keepSignedIn": true,
-        "deviceName": "Windows · Edge",
-        "atLocal": "09/07/2026, 11:10:07 AM"
+        "deviceName": "Windows · Chrome",
+        "atLocal": "7/21/2026, 4:21:46 PM"
       }
     }
   ]

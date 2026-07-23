@@ -26,10 +26,14 @@ export type SatelliteContextPanelId =
   | 'layer-live-legend'
   | 'ai-detection-gis'
   | 'tree-detections'
+  | 'sam-detection'
+  | 'agri-field-boundary'
   | 'hydro-watershed'
   | 'well-site'
   | 'well-suitability'
   | 'flood-monitoring'
+  | 'image-classification'
+  | 'raster-georeference'
   | 'table-geo-ai'
   | 'spatial'
   | 'aoi'
@@ -83,10 +87,14 @@ export type SatelliteContextualAnalysisDockProps = {
     | 'crop-classification'
     | 'ai-detection-gis'
     | 'tree-detections'
+    | 'sam-detection'
+    | 'agri-field-boundary'
     | 'hydro-watershed'
     | 'well-site'
     | 'well-suitability'
     | 'flood-monitoring'
+    | 'image-classification'
+    | 'raster-georeference'
     | 'table-geo-ai'
     | null;
   /** Called with the embed host element whenever the map panel mounts/updates; null when unmounted. */
@@ -103,10 +111,8 @@ export type SatelliteContextualAnalysisDockProps = {
   onGeoAiFloatingRailToggle?: () => void;
   /** Map toolbox + → Add GIS layer source actions (URL, file, sketch, media). */
   onMapToolboxAddGisLayerAction?: (action: MapToolboxAddGisLayerAction) => void;
-  /** When set, the + button opens the compact Add source panel anchored to the rail. */
+  /** When set, the + button opens the full Add GIS Layer modal (GIS Map parity) instead of the flyout. */
   onMapToolboxAddGisLayerPrimaryClick?: () => void;
-  /** Highlights the + button while the anchored add-source panel is open. */
-  mapToolboxAddGisPanelOpen?: boolean;
   /** Browse layers panel body (GIS Content portal table). */
   mapToolboxBrowseLayersPanel?: ReactNode;
   /** Layer Live NDVI legend (Main toolbox panel). */
@@ -159,13 +165,6 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     hint: 'Real-time NDVI/NDWI/NDMI monitoring for Farm Plots & PIVOT.',
   },
   {
-    id: 'stress-zones',
-    icon: 'fa-solid fa-heart-pulse',
-    label: 'Stress Zones ⭐',
-    title: 'Stress Zones Detection',
-    hint: 'CHAS fusion stress map — healthy, mild, moderate, severe, and bare soil zones.',
-  },
-  {
     id: 'crop-classification',
     icon: 'fa-solid fa-wheat-awn',
     label: 'Crop AI',
@@ -201,6 +200,20 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     hint: 'AOI → auto-detect & classify tree crowns from VHR imagery.',
   },
   {
+    id: 'sam-detection',
+    icon: 'fa-solid fa-wand-magic-sparkles',
+    label: 'AI SAM Detection',
+    title: 'AI SAM Detection',
+    hint: 'Select object type → AOI → Segment: instance masks + centroids for every object (trees, roads, fields).',
+  },
+  {
+    id: 'agri-field-boundary',
+    icon: 'fa-solid fa-crop-simple',
+    label: 'Field Boundaries',
+    title: 'Agri Field Boundary Detection',
+    hint: 'Delineate-Anything / Mask R-CNN / FoW — agricultural field polygons with IDs, area & confidence.',
+  },
+  {
     id: 'hydro-watershed',
     icon: 'fa-solid fa-mountain-sun',
     label: 'Hydro Watershed',
@@ -225,8 +238,22 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     id: 'flood-monitoring',
     icon: 'fa-solid fa-house-flood-water',
     label: 'Flood (SAR)',
-    title: 'Flood Monitoring (SAR) — Intelligence Report',
-    hint: 'AOI → Sentinel-1 SAR change detection → flood extent, boundaries, stats & DOCX/Excel report.',
+    title: 'Flood Monitoring (SAR-Based)',
+    hint: 'AOI → Sentinel-1 SAR change detection → flood extent, boundaries & stats.',
+  },
+  {
+    id: 'image-classification',
+    icon: 'fa-solid fa-shapes',
+    label: 'Classify',
+    title: 'Image Classification Wizard',
+    hint: 'Raster → land-cover classes via supervised/unsupervised, pixel/object-based workflow.',
+  },
+  {
+    id: 'raster-georeference',
+    icon: 'fa-solid fa-map-location-dot',
+    label: 'Georeference',
+    title: 'Georeference Tool',
+    hint: 'ArcGIS-style georeferencing toolbar for raster layers — control points, transform, apply & save.',
   },
   {
     id: 'table-geo-ai',
@@ -298,16 +325,19 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
   'add-gis-layer',
   'remote-sensing',
   'crop-alerts',
-  'stress-zones',
   'crop-classification',
   'imagery-time-series',
   'layer-live-legend',
   'ai-detection-gis',
   'tree-detections',
+  'sam-detection',
+  'agri-field-boundary',
   'hydro-watershed',
   'well-site',
   'well-suitability',
   'flood-monitoring',
+  'image-classification',
+  'raster-georeference',
   'table-geo-ai',
 ]);
 
@@ -315,19 +345,22 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
 const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
   'remote-sensing',
   'crop-alerts',
-  'stress-zones',
   'crop-classification',
   'ai-detection-gis',
   'tree-detections',
+  'sam-detection',
+  'agri-field-boundary',
   'hydro-watershed',
   'well-site',
   'well-suitability',
   'flood-monitoring',
+  'image-classification',
+  'raster-georeference',
 ]);
 
 const RAIL_GROUPS_MAP: SatelliteContextPanelId[][] = [
-  ['layers', 'remote-sensing', 'crop-alerts', 'stress-zones', 'crop-classification', 'imagery-time-series', 'layer-live-legend', 'hydro-watershed'],
-  ['ai-detection-gis', 'tree-detections', 'well-site', 'well-suitability', 'flood-monitoring', 'table-geo-ai'],
+  ['layers', 'remote-sensing', 'crop-alerts', 'crop-classification', 'imagery-time-series', 'layer-live-legend', 'hydro-watershed'],
+  ['ai-detection-gis', 'tree-detections', 'sam-detection', 'agri-field-boundary', 'well-site', 'well-suitability', 'flood-monitoring', 'image-classification', 'raster-georeference', 'table-geo-ai'],
 ];
 
 const RAIL_BY_ID = RAIL.reduce(
@@ -388,7 +421,6 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
     onGeoAiFloatingRailToggle,
     onMapToolboxAddGisLayerAction,
     onMapToolboxAddGisLayerPrimaryClick,
-    mapToolboxAddGisPanelOpen = false,
     mapToolboxBrowseLayersPanel,
     mapToolboxLayerLiveLegend,
     layerLiveLegendOpen = false,
@@ -714,7 +746,11 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
   );
   const isMap = isMapVariant;
   const mapPanelCollapsed = isMap && mapStripHidden;
-  const panelLayoutOpen = panelOpen && !mapPanelCollapsed;
+  // Georeference renders its own floating toolbar over the map (not in the dock), so the
+  // side panel would just be an empty "Georeference" shell — suppress it entirely.
+  const georefFloatingActive =
+    isMap && (activeId === 'raster-georeference' || processingEmbedSection === 'raster-georeference');
+  const panelLayoutOpen = panelOpen && !mapPanelCollapsed && !georefFloatingActive;
   const railWide = isMap ? !mapStripHidden && mapRailLabeled : railLabeled;
 
   const rootClass = [
@@ -764,12 +800,12 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
                 'si-sat-ctx-rail-btn si-sat-ctx-rail-btn--map si-sat-ctx-rail-btn--add-gis' +
                 (isMap && railWide ? ' si-sat-ctx-rail-btn--row si-sat-ctx-rail-btn--map-expanded' : '') +
                 (isMap && !railWide ? ' si-sat-ctx-rail-btn--map-collapsed' : '') +
-                (addGisFlyoutOpen || mapToolboxAddGisPanelOpen || activeId === 'add-gis-layer' ? ' si-sat-ctx-rail-btn--active' : '')
+                (addGisFlyoutOpen || activeId === 'add-gis-layer' ? ' si-sat-ctx-rail-btn--active' : '')
               }
               title="Add GIS Layer"
               aria-label="Add GIS Layer"
               aria-haspopup={onMapToolboxAddGisLayerPrimaryClick ? undefined : 'menu'}
-              aria-expanded={onMapToolboxAddGisLayerPrimaryClick ? !!mapToolboxAddGisPanelOpen : addGisFlyoutOpen}
+              aria-expanded={onMapToolboxAddGisLayerPrimaryClick ? undefined : addGisFlyoutOpen}
               onClick={() => {
                 if (onMapToolboxAddGisLayerPrimaryClick) {
                   setAddGisFlyoutOpen(false);
@@ -1011,7 +1047,7 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
                 : 'Context panel'
           }
         >
-          {panelOpen && activeId ? (
+          {panelOpen && activeId && !georefFloatingActive ? (
             <>
               <header className="si-sat-ctx-panel-header">
                 <div className="si-sat-ctx-panel-header-text">

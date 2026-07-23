@@ -138,8 +138,11 @@ export type SentinelHubSceneZonalStats = {
   evi: SentinelHubIndexZonalStats
   savi?: SentinelHubIndexZonalStats
   ciRe?: SentinelHubIndexZonalStats
-  /** Snow NDSI (B03−B11)/(B03+B11) zonal min/max/mean. */
+  /** Salinity NDSI (B11−B08)/(B11+B08) zonal min/max/mean. */
   ndsi?: SentinelHubIndexZonalStats
+  si?: SentinelHubIndexZonalStats
+  ssi?: SentinelHubIndexZonalStats
+  ndre?: SentinelHubIndexZonalStats
 }
 
 export type SentinelHubDailyIndexMeans = {
@@ -150,8 +153,14 @@ export type SentinelHubDailyIndexMeans = {
   evi: number | null
   savi: number | null
   ciRe: number | null
-  /** Snow / ice NDSI: (B03−B11)/(B03+B11). */
+  /** Salinity NDSI: (B11−B08)/(B11+B08) — matches Layer Live Soil & Salinity. */
   ndsi?: number | null
+  /** Salinity Index √(B03·B04). */
+  si?: number | null
+  /** Soil Salinity Index = NDSI + SI. */
+  ssi?: number | null
+  /** Red-edge NDRE: (B08−B05)/(B08+B05). */
+  ndre?: number | null
   /** Pixel min/max/mean inside AOI from Statistical API (Layer Live). */
   zonal?: Partial<SentinelHubSceneZonalStats>
 }
@@ -302,7 +311,7 @@ function setup() {
     output: [
       {
         id: "indices",
-        bands: ["ndvi", "ndwi", "ndmi", "evi", "savi", "ci_re", "ndsi"],
+        bands: ["ndvi", "ndwi", "ndmi", "evi", "savi", "ci_re", "ndsi", "si", "ssi", "ndre"],
         sampleType: "FLOAT32"
       },
       {
@@ -327,11 +336,15 @@ function evaluatePixel(samples) {
   var saviDen = samples.B08 + samples.B04 + L;
   var savi = saviDen > 1e-6 ? (samples.B08 - samples.B04) / saviDen * (1.0 + L) : NaN;
   var ci_re = samples.B08 > 1e-6 ? samples.B05 / samples.B08 - 1 : NaN;
-  var dNdSnow = samples.B03 + samples.B11;
-  var ndsi = dNdSnow > 1e-6 ? (samples.B03 - samples.B11) / dNdSnow : NaN;
-  var valid = samples.dataMask && !cloud && (dNdvi > 1e-6 || dNdSnow > 1e-6);
+  var dNdsi = samples.B11 + samples.B08;
+  var ndsi = dNdsi > 1e-6 ? (samples.B11 - samples.B08) / dNdsi : NaN;
+  var si = Math.sqrt(Math.max(0, samples.B03 * samples.B04));
+  var ssi = (isFinite(ndsi) ? ndsi : 0) + si;
+  var dNdre = samples.B08 + samples.B05;
+  var ndre = dNdre > 1e-6 ? (samples.B08 - samples.B05) / dNdre : NaN;
+  var valid = samples.dataMask && !cloud && (dNdvi > 1e-6 || dNdsi > 1e-6 || dNdmi > 1e-6);
   return {
-    indices: [ndvi, ndwi, ndmi, evi, savi, ci_re, ndsi],
+    indices: [ndvi, ndwi, ndmi, evi, savi, ci_re, ndsi, si, ssi, ndre],
     dataMask: [valid ? 1 : 0]
   };
 }`
@@ -346,7 +359,7 @@ function setup() {
     output: [
       {
         id: "indices",
-        bands: ["ndvi", "ndwi", "ndmi", "evi", "savi", "ci_re", "ndsi"],
+        bands: ["ndvi", "ndwi", "ndmi", "evi", "savi", "ci_re", "ndsi", "si", "ssi", "ndre"],
         sampleType: "FLOAT32"
       },
       {
@@ -369,20 +382,24 @@ function evaluatePixel(samples) {
   var saviDen = samples.B08 + samples.B04 + L;
   var savi = saviDen > 1e-6 ? (samples.B08 - samples.B04) / saviDen * (1.0 + L) : NaN;
   var ci_re = samples.B08 > 1e-6 ? samples.B05 / samples.B08 - 1 : NaN;
-  var dNdSnow = samples.B03 + samples.B11;
-  var ndsi = dNdSnow > 1e-6 ? (samples.B03 - samples.B11) / dNdSnow : NaN;
-  var valid = samples.dataMask && (dNdvi > 1e-6 || dNdSnow > 1e-6);
+  var dNdsi = samples.B11 + samples.B08;
+  var ndsi = dNdsi > 1e-6 ? (samples.B11 - samples.B08) / dNdsi : NaN;
+  var si = Math.sqrt(Math.max(0, samples.B03 * samples.B04));
+  var ssi = (isFinite(ndsi) ? ndsi : 0) + si;
+  var dNdre = samples.B08 + samples.B05;
+  var ndre = dNdre > 1e-6 ? (samples.B08 - samples.B05) / dNdre : NaN;
+  var valid = samples.dataMask && (dNdvi > 1e-6 || dNdsi > 1e-6 || dNdmi > 1e-6);
   return {
-    indices: [ndvi, ndwi, ndmi, evi, savi, ci_re, ndsi],
+    indices: [ndvi, ndwi, ndmi, evi, savi, ci_re, ndsi, si, ssi, ndre],
     dataMask: [valid ? 1 : 0]
   };
 }`
 
-/** Snow NDSI only — validity from B03+B11 (no NDVI / vegetation requirement). */
+/** Salinity NDSI only — (B11−B08)/(B11+B08); no vegetation requirement. */
 export const SNOW_NDSI_INDEX_EVALSCRIPT = `//VERSION=3
 function setup() {
   return {
-    input: [{ bands: ["B03", "B11", "SCL", "dataMask"] }],
+    input: [{ bands: ["B08", "B11", "SCL", "dataMask"] }],
     output: [
       { id: "indices", bands: ["ndsi"], sampleType: "FLOAT32" },
       { id: "dataMask", bands: 1 }
@@ -393,16 +410,16 @@ function evaluatePixel(samples) {
   var scl = samples.SCL;
   var cloud = (scl == 3 || scl == 8 || scl == 9 || scl == 10 || scl == 11);
   if (!samples.dataMask || cloud) return { indices: [NaN], dataMask: [0] };
-  var d = samples.B03 + samples.B11;
+  var d = samples.B11 + samples.B08;
   if (d <= 1e-6) return { indices: [NaN], dataMask: [0] };
-  return { indices: [(samples.B03 - samples.B11) / d], dataMask: [1] };
+  return { indices: [(samples.B11 - samples.B08) / d], dataMask: [1] };
 }`
 
-/** Relaxed snow NDSI — cloud filter only via maxCloudCoverage. */
+/** Relaxed salinity NDSI — cloud filter only via maxCloudCoverage. */
 export const SNOW_NDSI_RELAXED_INDEX_EVALSCRIPT = `//VERSION=3
 function setup() {
   return {
-    input: [{ bands: ["B03", "B11", "dataMask"] }],
+    input: [{ bands: ["B08", "B11", "dataMask"] }],
     output: [
       { id: "indices", bands: ["ndsi"], sampleType: "FLOAT32" },
       { id: "dataMask", bands: 1 }
@@ -411,9 +428,9 @@ function setup() {
 }
 function evaluatePixel(samples) {
   if (!samples.dataMask) return { indices: [NaN], dataMask: [0] };
-  var d = samples.B03 + samples.B11;
+  var d = samples.B11 + samples.B08;
   if (d <= 1e-6) return { indices: [NaN], dataMask: [0] };
-  return { indices: [(samples.B03 - samples.B11) / d], dataMask: [1] };
+  return { indices: [(samples.B11 - samples.B08) / d], dataMask: [1] };
 }`
 
 /** Raw Sentinel-2 L2A reflectance bands for Layer Live pixel inspect. */
@@ -554,6 +571,9 @@ function buildMultiIndexStatisticsCalculations(): Record<string, unknown> {
         savi: {},
         ci_re: {},
         ndsi: {},
+        si: {},
+        ssi: {},
+        ndre: {},
       },
     },
   }
@@ -679,6 +699,9 @@ export function parseSentinelHubStatsResponse(json: StatsApiResponse): SentinelH
     const saviStats = readBandStats(row, 'savi')
     const ciReStats = readBandStats(row, 'ci_re')
     const ndsiStats = readBandStats(row, 'ndsi')
+    const siStats = readBandStats(row, 'si')
+    const ssiStats = readBandStats(row, 'ssi')
+    const ndreStats = readBandStats(row, 'ndre')
     const zonal: Partial<SentinelHubSceneZonalStats> = {}
     if (ndviStats) zonal.ndvi = ndviStats
     if (ndmiStats) zonal.ndmi = ndmiStats
@@ -687,6 +710,9 @@ export function parseSentinelHubStatsResponse(json: StatsApiResponse): SentinelH
     if (saviStats) zonal.savi = saviStats
     if (ciReStats) zonal.ciRe = ciReStats
     if (ndsiStats) zonal.ndsi = ndsiStats
+    if (siStats) zonal.si = siStats
+    if (ssiStats) zonal.ssi = ssiStats
+    if (ndreStats) zonal.ndre = ndreStats
     out.push({
       date,
       ndvi: ndviStats?.mean ?? null,
@@ -696,6 +722,9 @@ export function parseSentinelHubStatsResponse(json: StatsApiResponse): SentinelH
       savi: saviStats?.mean ?? null,
       ciRe: ciReStats?.mean ?? null,
       ndsi: ndsiStats?.mean ?? null,
+      si: siStats?.mean ?? null,
+      ssi: ssiStats?.mean ?? null,
+      ndre: ndreStats?.mean ?? null,
       zonal: Object.keys(zonal).length ? zonal : undefined,
     })
   }
@@ -741,6 +770,9 @@ export function hasValidIndexDaily(daily: SentinelHubDailyIndexMeans[]): boolean
       d.ndwi != null ||
       d.ndmi != null ||
       d.ndsi != null ||
+      d.si != null ||
+      d.ssi != null ||
+      d.ndre != null ||
       d.evi != null ||
       d.savi != null ||
       d.ciRe != null,
@@ -767,6 +799,9 @@ export function mergeDailyIndexSeries(
         savi: row.savi ?? prev.savi,
         ciRe: row.ciRe ?? prev.ciRe,
         ndsi: row.ndsi ?? prev.ndsi,
+        si: row.si ?? prev.si,
+        ssi: row.ssi ?? prev.ssi,
+        ndre: row.ndre ?? prev.ndre,
         zonal: row.zonal ?? prev.zonal,
       })
     }
@@ -1306,6 +1341,8 @@ function buildGenericIndexHistogramRequestBody(options: {
   binEdges: number[]
   maxCloudCoverage?: number
   resolutionMeters?: number
+  /** ISO-8601 duration for aggregation buckets (default P1D). Use a span ≥ time range for one mosaic. */
+  aggregationIntervalOf?: string
 }): Record<string, unknown> {
   const res = Math.max(10, options.resolutionMeters ?? 10)
   return {
@@ -1326,7 +1363,7 @@ function buildGenericIndexHistogramRequestBody(options: {
     },
     aggregation: {
       timeRange: { from: `${options.fromIso}T00:00:00Z`, to: `${options.toIso}T00:00:00Z` },
-      aggregationInterval: { of: 'P1D' },
+      aggregationInterval: { of: options.aggregationIntervalOf || 'P1D' },
       evalscript: options.evalscript,
       resx: res,
       resy: res,
@@ -1452,6 +1489,10 @@ function pickBestHistogramRow(
  * and returns the nearest acquisition that actually carries pixels. This is essential
  * because Sentinel-2's ~5-day revisit means the exact scene day frequently has no
  * acquisition over the AOI — without the window the class-area legend reads all zeros.
+ *
+ * Set `mosaicAcrossWindow: true` for temporal evalscripts (e.g. LULC): one aggregation
+ * interval spans the whole lookback so `temporal: true` sees the same multi-orbit mosaic
+ * as the Live Analysis map layer (not a single P1D slice).
  */
 export async function fetchSentinelIndexClassHistogramForSceneDate(options: {
   geometry: GeoJSON.Geometry
@@ -1462,6 +1503,7 @@ export async function fetchSentinelIndexClassHistogramForSceneDate(options: {
   maxCloudCoverage?: number
   resolutionMeters?: number
   searchWindowDays?: number
+  mosaicAcrossWindow?: boolean
   signal?: AbortSignal
 }): Promise<SentinelHubGenericHistogram | null> {
   const geom = simplifyGeometryForSentinelStats(options.geometry)
@@ -1471,6 +1513,8 @@ export async function fetchSentinelIndexClassHistogramForSceneDate(options: {
   const windowDays = Math.max(0, Math.round(options.searchWindowDays ?? 0))
   const fromIso = windowDays > 0 ? subtractDaysFromIso(sceneIso, windowDays) : sceneIso
   const toIso = addDaysToIso(sceneIso, 1)
+  const mosaic = options.mosaicAcrossWindow === true && windowDays > 0
+  const aggregationIntervalOf = mosaic ? `P${windowDays + 1}D` : 'P1D'
   const rows = await postGenericHistogramRequest(
     buildGenericIndexHistogramRequestBody({
       geom,
@@ -1481,10 +1525,14 @@ export async function fetchSentinelIndexClassHistogramForSceneDate(options: {
       binEdges: options.binEdges,
       maxCloudCoverage: options.maxCloudCoverage,
       resolutionMeters: options.resolutionMeters,
+      aggregationIntervalOf,
     }),
     options.outputId,
     options.signal,
   )
+  if (mosaic) {
+    return rows.find(r => histogramRowTotal(r) > 0) ?? rows[0] ?? null
+  }
   if (windowDays > 0) return pickBestHistogramRow(rows, sceneIso)
   return rows.find(r => r.date === sceneIso) ?? rows[0] ?? null
 }

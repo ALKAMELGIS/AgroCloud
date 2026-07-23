@@ -56,7 +56,7 @@ export function buildImageryTsCacheKey(params: {
     params.toIso,
     params.cloudFilter,
     params.statsMode ?? 'multi',
-    'v5',
+    'v7',
   ].join('|')
 }
 
@@ -212,7 +212,7 @@ export function buildImageryTsChunkCacheKey(
   cloudFilter: number,
   statsMode = 'multi',
 ): string {
-  return ['chunk', geometryHash, fromIso.trim().slice(0, 10), toIso.trim().slice(0, 10), cloudFilter, statsMode, 'v5'].join('|')
+  return ['chunk', geometryHash, fromIso.trim().slice(0, 10), toIso.trim().slice(0, 10), cloudFilter, statsMode, 'v7'].join('|')
 }
 
 type ImageryTsChunkCacheRecord = {

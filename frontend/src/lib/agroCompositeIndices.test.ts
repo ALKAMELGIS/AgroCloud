@@ -26,6 +26,7 @@ describe('agroCompositeIndices', () => {
     ])
     expect(groups[0]?.label).toBe('Core Interpretation')
     expect(groups[0]?.options.map(o => o.id)).toEqual(['NDVI', 'NDMI', 'NDWI', 'SAVI', 'ET'])
+    expect(groups.some(g => g.id === 'live-analysis-lulc')).toBe(true)
     expect(groups.some(g => g.label.includes('Vegetation Health'))).toBe(true)
     expect(groups.some(g => g.label.includes('Delta'))).toBe(true)
     const flat = flattenRemoteSensingLayerSelectGroups(groups)
@@ -53,7 +54,7 @@ describe('agroCompositeIndices', () => {
     expect(isAgroDeltaCompositeLayerId('DCHAS')).toBe(true)
     expect(resolveAgroCompositeIndexDef('CHAS')?.expr).toBe(AGRO_CHAS_EXPR)
     expect(flattenRemoteSensingLayerSelectGroups(groups).find(o => o.id === 'CHAS')?.scientificName).toBe(
-      'Crop Health Analysis Score',
+      'Crop Health Analysis Score (NDVI·NDWI·NDMI·SAVI fusion)',
     )
   })
 })

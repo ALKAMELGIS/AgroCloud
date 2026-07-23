@@ -63,6 +63,10 @@ export type RemoteSensingToolboxPanelProps = {
   fieldTimelineActive: boolean
   onTimelinePrimaryClick: () => void
   fieldAnalysisStatus: string | null
+  onExportGeoTiff?: () => void
+  exportGeoTiffBusy?: boolean
+  exportGeoTiffLabel?: string | null
+  exportGeoTiffDisabled?: boolean
   onClose: () => void
 }
 
@@ -109,6 +113,10 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
     fieldTimelineActive,
     onTimelinePrimaryClick,
     fieldAnalysisStatus,
+    onExportGeoTiff,
+    exportGeoTiffBusy = false,
+    exportGeoTiffLabel = null,
+    exportGeoTiffDisabled = false,
   } = props
 
   const providerMeta = remoteSensingProviderDef(provider)
@@ -276,6 +284,26 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
           />
           {fieldTimelineActive ? 'Stop timeline' : 'Generate timeline'}
         </button>
+
+        {onExportGeoTiff ? (
+          <button
+            type="button"
+            className="si-rs-panel__cta si-rs-panel__cta--secondary"
+            onClick={onExportGeoTiff}
+            disabled={exportGeoTiffBusy || exportGeoTiffDisabled || fieldTimelineActive}
+            title="Export RGB + Float32 GeoTIFF for ArcGIS Pro / QGIS. Open *_rgb.tif in the map."
+            aria-label="Export index GeoTIFF for GIS"
+          >
+            {exportGeoTiffBusy ? (
+              <i className="fa-solid fa-circle-notch fa-spin" aria-hidden />
+            ) : (
+              <i className="fa-solid fa-globe" aria-hidden />
+            )}
+            {exportGeoTiffBusy
+              ? exportGeoTiffLabel || 'Exporting GeoTIFF…'
+              : 'Export GeoTIFF (GIS)'}
+          </button>
+        ) : null}
 
         {fieldAnalysisStatus ? <p className="si-rs-panel__status">{fieldAnalysisStatus}</p> : null}
       </div>

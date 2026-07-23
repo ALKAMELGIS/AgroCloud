@@ -28,6 +28,8 @@ export type MeteoNativeChartSpec = {
   sectionLabel: string
   varyColors?: boolean
   legendPos?: 'b' | 'r' | 't' | 'l'
+  /** Worksheet the chart is anchored to. Defaults to the injector's chartsSheetName. */
+  targetSheet?: string
 }
 
 function escXml(s: string): string {
@@ -211,17 +213,21 @@ function buildChartXml(spec: MeteoNativeChartSpec, chartIndex: number): string {
 </c:chartSpace>`
 }
 
-function buildDrawingXml(specs: MeteoNativeChartSpec[]): string {
-  const anchors = specs
-    .map((spec, i) => {
-      const id = i + 2
-      const rid = i + 1
+/** One chart placed on a drawing, carrying its global chart file number (1-based). */
+type ChartEntry = { spec: MeteoNativeChartSpec; chartNumber: number }
+
+function buildDrawingXml(entries: ChartEntry[]): string {
+  const anchors = entries
+    .map((entry, localIdx) => {
+      const { spec } = entry
+      const id = localIdx + 2
+      const rid = localIdx + 1
       return `<xdr:oneCellAnchor>
   <xdr:from><xdr:col>${spec.anchorCol ?? 0}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${spec.anchorRow + 1}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
   <xdr:ext cx="9144000" cy="3429000"/>
   <xdr:graphicFrame macro="">
     <xdr:nvGraphicFramePr>
-      <xdr:cNvPr id="${id}" name="Chart ${i + 1}"/>
+      <xdr:cNvPr id="${id}" name="Chart ${entry.chartNumber}"/>
       <xdr:cNvGraphicFramePr/>
     </xdr:nvGraphicFramePr>
     <xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>
@@ -242,11 +248,13 @@ ${anchors}
 </xdr:wsDr>`
 }
 
-function buildDrawingRels(count: number): string {
-  const rels = Array.from({ length: count }, (_, i) => {
-    const n = i + 1
-    return `<Relationship Id="rId${n}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart${n}.xml"/>`
-  }).join('')
+function buildDrawingRels(entries: ChartEntry[]): string {
+  const rels = entries
+    .map((entry, localIdx) => {
+      const rid = localIdx + 1
+      return `<Relationship Id="rId${rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart${entry.chartNumber}.xml"/>`
+    })
+    .join('')
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels}</Relationships>`
 }
@@ -285,34 +293,35 @@ function ensureWorksheetDrawingRel(sheetXml: string, drawingRid: string): string
   return sheetXml
 }
 
-function updateSheetRels(existing: string | null, drawingRid: string): string {
+function updateSheetRels(existing: string | null, drawingRid: string, drawingFile: string): string {
+  const target = `../drawings/${drawingFile}`
   if (!existing) {
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="${drawingRid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>
+  <Relationship Id="${drawingRid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="${target}"/>
 </Relationships>`
   }
   if (existing.includes('/drawing"')) {
-    return existing.replace(
-      /Target="[^"]*drawings\/[^"]*"/,
-      'Target="../drawings/drawing1.xml"',
-    )
+    return existing.replace(/Target="[^"]*drawings\/[^"]*"/, `Target="${target}"`)
   }
   return existing.replace(
     '</Relationships>',
-    `<Relationship Id="${drawingRid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>
+    `<Relationship Id="${drawingRid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="${target}"/>
 </Relationships>`,
   )
 }
 
-function updateContentTypes(ct: string, chartCount: number): string {
+function updateContentTypes(ct: string, chartCount: number, drawingCount: number): string {
   let out = ct
-  if (!out.includes('/drawing+xml"')) {
-    out = out.replace(
-      '</Types>',
-      `<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>
+  for (let i = 1; i <= drawingCount; i++) {
+    const part = `/xl/drawings/drawing${i}.xml`
+    if (!out.includes(`PartName="${part}"`)) {
+      out = out.replace(
+        '</Types>',
+        `<Override PartName="${part}" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>
 </Types>`,
-    )
+      )
+    }
   }
   for (let i = 1; i <= chartCount; i++) {
     const part = `/xl/charts/chart${i}.xml`
@@ -340,28 +349,45 @@ export async function injectNativeMeteoCharts(
   }
 
   const zip = await JSZip.loadAsync(xlsxBuffer)
-  const located = await findChartsSheetPath(zip, chartsSheetName)
-  if (!located) {
-    throw new Error(`Charts sheet "${chartsSheetName}" not found in workbook package`)
-  }
 
+  // All chart parts use a single global numbering (chart1.xml … chartN.xml).
   for (let i = 0; i < specs.length; i++) {
     zip.file(`xl/charts/chart${i + 1}.xml`, buildChartXml(specs[i], i))
   }
-  zip.file('xl/drawings/drawing1.xml', buildDrawingXml(specs))
-  zip.file('xl/drawings/_rels/drawing1.xml.rels', buildDrawingRels(specs.length))
 
-  const drawingRid = 'rIdDrawing1'
-  const sheetXml = await zip.file(located.sheetPath)!.async('string')
-  zip.file(located.sheetPath, ensureWorksheetDrawingRel(sheetXml, drawingRid))
+  // Group specs by the worksheet they anchor to (falling back to the default sheet),
+  // preserving encounter order so each target sheet gets its own drawing.
+  const groups = new Map<string, ChartEntry[]>()
+  specs.forEach((spec, i) => {
+    const sheet = spec.targetSheet || chartsSheetName
+    const arr = groups.get(sheet) ?? []
+    arr.push({ spec, chartNumber: i + 1 })
+    groups.set(sheet, arr)
+  })
 
-  const existingRels = zip.file(located.relsPath)
-    ? await zip.file(located.relsPath)!.async('string')
-    : null
-  zip.file(located.relsPath, updateSheetRels(existingRels, drawingRid))
+  let drawingSeq = 0
+  for (const [sheetName, entries] of groups) {
+    const located = await findChartsSheetPath(zip, sheetName)
+    if (!located) {
+      throw new Error(`Charts sheet "${sheetName}" not found in workbook package`)
+    }
+    drawingSeq += 1
+    const drawingFile = `drawing${drawingSeq}.xml`
+    zip.file(`xl/drawings/${drawingFile}`, buildDrawingXml(entries))
+    zip.file(`xl/drawings/_rels/${drawingFile}.rels`, buildDrawingRels(entries))
+
+    const drawingRid = `rIdDrawing${drawingSeq}`
+    const sheetXml = await zip.file(located.sheetPath)!.async('string')
+    zip.file(located.sheetPath, ensureWorksheetDrawingRel(sheetXml, drawingRid))
+
+    const existingRels = zip.file(located.relsPath)
+      ? await zip.file(located.relsPath)!.async('string')
+      : null
+    zip.file(located.relsPath, updateSheetRels(existingRels, drawingRid, drawingFile))
+  }
 
   const ct = await zip.file('[Content_Types].xml')!.async('string')
-  zip.file('[Content_Types].xml', updateContentTypes(ct, specs.length))
+  zip.file('[Content_Types].xml', updateContentTypes(ct, specs.length, drawingSeq))
 
   const out = await zip.generateAsync({
     type: 'uint8array',

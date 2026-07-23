@@ -37,13 +37,15 @@ function mercatorToLngLat(x: number, y: number): [number, number] {
 
 /**
  * Expand a WGS84 bbox in Web Mercator so its aspect ratio matches the map frame.
- * Prevents circles / equal-scale shapes from becoming ellipses when X and Y are
- * stretched independently into a non-matching canvas.
+ * Padding and aspect expansion are applied in Mercator meters around the AOI
+ * bbox center so the polygon stays visually centered (degree-based padding
+ * shifts the Mercator center and looks like an AOI “offset”).
  */
 export function fitLngLatBboxToMapAspect(
   bbox: LngLatBbox,
   mapW: number,
   mapH: number,
+  padRatio = 0,
 ): LngLatBbox {
   const frameW = Math.max(mapW, 1)
   const frameH = Math.max(mapH, 1)
@@ -54,6 +56,13 @@ export function fitLngLatBboxToMapAspect(
   let halfH = Math.max(myN - myS, 1e-6) / 2
   const cx = (mx0 + mx1) / 2
   const cy = (myS + myN) / 2
+
+  const pad = Math.max(0, padRatio)
+  if (pad > 0) {
+    halfW *= 1 + pad
+    halfH *= 1 + pad
+  }
+
   const currentAspect = (halfW * 2) / (halfH * 2)
   if (currentAspect > targetAspect) {
     halfH = halfW / targetAspect
@@ -82,7 +91,8 @@ export function resolveTimeSeriesSnapshotLayout(
   canvasH: number,
 ): TimeSeriesSnapshotLayout {
   const margin = 8
-  const legendStripH = Math.min(80, Math.max(58, Math.round(canvasH * 0.17)))
+  /** Wider strip so Layer Live class keys (LULC, SCL, etc.) stay readable. */
+  const legendStripH = Math.min(120, Math.max(72, Math.round(canvasH * 0.22)))
   const mapX = margin
   const mapY = margin
   const mapW = Math.max(40, canvasW - margin * 2)
@@ -93,22 +103,23 @@ export function resolveTimeSeriesSnapshotLayout(
     mapW,
     mapH,
     legendX: mapX,
-    legendY: mapY + mapH + 6,
-    legendMaxW: Math.min(240, mapW),
+    legendY: mapY + mapH + 4,
+    legendMaxW: mapW,
     legendStripH,
   }
 }
 
-/** Aspect-matched geographic extent for time-series report map frames (keeps circle AOIs circular). */
+/** Aspect-matched geographic extent for time-series report map frames (AOI centered). */
 export function resolveTimeSeriesSnapshotExtent(
   geometry: GeoJSON.Geometry,
   mapW: number,
   mapH: number,
-  padRatio = 0.1,
+  padRatio = 0.14,
 ): LngLatBbox | null {
-  const raw = bboxFromGeometry(geometry, padRatio)
+  // Unpadded AOI bbox — pad + aspect fit happen in Mercator so the AOI stays centered.
+  const raw = bboxFromGeometry(geometry, 0)
   if (!raw) return null
-  return fitLngLatBboxToMapAspect(raw, mapW, mapH)
+  return fitLngLatBboxToMapAspect(raw, mapW, mapH, padRatio)
 }
 
 export function bbox3857From4326(bbox4326: [number, number, number, number]): [number, number, number, number] {
@@ -460,14 +471,46 @@ function drawSnapshotLegend(
   y: number,
   maxW: number,
 ): void {
-  const colors = extractColorsFromLegend(spec)
-  const compact = colors.length > 10
-  const shown = compact ? colors.filter((_, i) => i % 2 === 0 || i === colors.length - 1) : colors.slice(0, 10)
-  const boxH = compact ? 54 : Math.min(72, 28 + shown.length * 2)
   ctx.save()
-  ctx.fillStyle = 'rgba(255,255,255,0.94)'
+  ctx.fillStyle = 'rgba(255,255,255,0.96)'
   ctx.strokeStyle = 'rgba(15,23,42,0.35)'
   ctx.lineWidth = 1
+
+  const classes = spec.classes?.filter(c => c.color && c.label) ?? []
+  if (classes.length > 0) {
+    const cols = classes.length > 6 ? 3 : 2
+    const rows = Math.ceil(classes.length / cols)
+    const rowH = 14
+    const boxH = Math.min(118, 22 + rows * rowH)
+    ctx.fillRect(x, y, maxW, boxH)
+    ctx.strokeRect(x, y, maxW, boxH)
+    ctx.fillStyle = '#0f172a'
+    ctx.font = 'bold 10px system-ui,sans-serif'
+    ctx.textAlign = 'left'
+    ctx.fillText(spec.title, x + 6, y + 12)
+    const colW = (maxW - 12) / cols
+    classes.forEach((cls, i) => {
+      const col = i % cols
+      const row = Math.floor(i / cols)
+      const cx = x + 6 + col * colW
+      const cy = y + 18 + row * rowH
+      ctx.fillStyle = cls.color
+      ctx.fillRect(cx, cy, 10, 10)
+      ctx.strokeStyle = 'rgba(15,23,42,0.35)'
+      ctx.strokeRect(cx, cy, 10, 10)
+      ctx.fillStyle = '#334155'
+      ctx.font = '8px system-ui,sans-serif'
+      const label = cls.rangeLabel ? `${cls.label} (${cls.rangeLabel})` : cls.label
+      ctx.fillText(label.slice(0, 28), cx + 13, cy + 9)
+    })
+    ctx.restore()
+    return
+  }
+
+  const colors = extractColorsFromLegend(spec)
+  const compact = colors.length > 10
+  const shown = compact ? colors.filter((_, i) => i % 2 === 0 || i === colors.length - 1) : colors.slice(0, 12)
+  const boxH = compact ? 58 : Math.min(78, 30 + shown.length * 2)
   ctx.fillRect(x, y, maxW, boxH)
   ctx.strokeRect(x, y, maxW, boxH)
   ctx.fillStyle = '#0f172a'
@@ -477,7 +520,7 @@ function drawSnapshotLegend(
   if (spec.subtitle) {
     ctx.font = '9px system-ui,sans-serif'
     ctx.fillStyle = '#475569'
-    ctx.fillText(spec.subtitle, x + 8, y + 26)
+    ctx.fillText(spec.subtitle.slice(0, 72), x + 8, y + 26)
   }
   const barY = spec.subtitle ? y + 32 : y + 20
   const barW = maxW - 16

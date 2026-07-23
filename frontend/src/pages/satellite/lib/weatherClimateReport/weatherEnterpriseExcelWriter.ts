@@ -913,7 +913,7 @@ export async function generateEnterpriseWeatherReportExcel(
   const raw = await wb.xlsx.writeBuffer()
   const { injectNativeMeteoCharts } = await import('./meteoNativeExcelCharts')
   const withCharts = await injectNativeMeteoCharts(raw as ArrayBuffer, specs, wb.__chartsSheetName ?? REF_ANALYSIS_SHEET)
-  const blob = new Blob([withCharts], {
+  const blob = new Blob([withCharts as BlobPart], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
   const url = URL.createObjectURL(blob)

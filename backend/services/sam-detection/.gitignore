@@ -1,0 +1,6 @@
+# SAM checkpoints are large (vit_h ≈ 2.5 GB) — never commit them.
+*.pth
+*.pt
+*.onnx
+sam_vit_*.pth
+__pycache__/

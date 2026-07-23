@@ -4130,6 +4130,49 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
   color: var(--lux-accent);
 }
 
+/* =============================================================================
+ * Rail selection polish — smaller cells, perfectly centered icons (no overflow),
+ * and an emerald highlight whose fill/ring/icon share ONE hue (matches the icon).
+ * ========================================================================== */
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--compact {
+  --si-map-rail-cell: 26px;
+  --si-map-rail-icon: 13px;
+}
+/* Icon can never spill outside its cell; keep it dead-centre in every rail state. */
+.si-sat-ctx-dock .si-sat-ctx-rail-btn,
+.si-sat-ctx-dock .si-sat-ctx-rail-btn--map-collapsed {
+  box-sizing: border-box;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.si-sat-ctx-dock--map-toolbox .si-sat-ctx-rail-btn--map-collapsed > i,
+.si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--rail-narrow .si-sat-ctx-rail-btn--map-collapsed > i {
+  width: 1em;
+  height: 1em;
+  margin: 0;
+  line-height: 1;
+  font-size: var(--si-map-rail-icon);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Selected tool: one consistent emerald across fill, ring, and glyph. */
+.si-sat-ctx-dock .si-sat-ctx-rail-btn--active,
+.si-sat-ctx-dock--dark .si-sat-ctx-rail-btn--active,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn--active {
+  background: rgba(52, 211, 153, 0.16);
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.42);
+  color: var(--lux-accent);
+}
+.si-sat-ctx-dock .si-sat-ctx-rail-btn--active > i,
+.si-sat-ctx-dock--dark .si-sat-ctx-rail-btn--active > i,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn--active > i {
+  color: var(--lux-accent);
+}
+
 .si-sat-ctx-rail-label-title {
   font-weight: 600;
   color: var(--si-ctx-text);

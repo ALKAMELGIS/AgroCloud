@@ -39,7 +39,7 @@ export type GisContentRow = {
   created?: string
   sharing: GisContentSharing
   folderId: string
-  /** Item owner (GeoSyntra-style bulk change owner). */
+  /** Item owner (bulk change owner). */
   owner?: string
   /** When true, item cannot be moved to Recycle bin until protection is disabled. */
   deleteProtected?: boolean
@@ -52,7 +52,7 @@ export type GisContentFolder = {
   name: string
   parentId: string | null
   children?: GisContentFolder[]
-  /** GeoSyntra-style folder color (custom folders). */
+  /** Folder color (custom folders). */
   color?: GisContentFolderColor
 }
 
@@ -417,7 +417,7 @@ function appendFavoriteAndLifecycleActions(
   return out
 }
 
-/** GeoSyntra Content row ⋯ menu (View details → Map Viewer → Field Maps → favorites). */
+/** Content row ⋯ menu (View details → Map Viewer → Field Maps → favorites). */
 function standardMapViewerRowMenu(ctx: GisRowMenuContext): GisRowMenuAction[] {
   const items: GisRowMenuAction[] = [
     { id: 'view-details', label: 'View details' },
@@ -484,6 +484,7 @@ export function gisContentPortalDisplayIconType(
 }
 
 /** @deprecated Use isAgroCloudDashboardApp */
+/** @deprecated Use isAgroCloudDashboardApp */
 export const isGeoSyntraDashboardApp = isAgroCloudDashboardApp
 
 export function agroCloudDashboardWorkspacePath(dashboardId: string): string {
@@ -511,7 +512,7 @@ function agroCloudDashboardAppRowMenu(ctx: GisRowMenuContext): GisRowMenuAction[
   return appendFavoriteAndLifecycleActions(items, ctx)
 }
 
-/** Context menu options per item type (GeoSyntra Content–style). */
+/** Context menu options per item type (AgroCloud Content–style). */
 export function getGisContentRowMenuActions(
   row: GisContentRow,
   ctx: GisRowMenuContext = {},

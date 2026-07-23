@@ -3605,48 +3605,72 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
   flex: 0 0 auto;
 }
 
+/* Compact black-glass view tabs — matte white labels, no glow/flash */
 .acp-ts__tabs {
   display: flex;
   align-items: stretch;
-  gap: 4px;
-  margin: 0 0 4px;
-  padding: 0 4px;
+  gap: 2px;
+  margin: 0 0 6px;
+  padding: 2px;
   flex: 0 0 auto;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  height: 22px;
+  box-sizing: border-box;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(18, 18, 20, 0.92) 0%, rgba(4, 4, 6, 0.96) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  animation: none;
+  transition: none;
 }
 
 .acp-ts__tab {
+  flex: 1 1 0;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 24px;
-  padding: 0 10px;
-  margin-bottom: -1px;
-  border: 1px solid transparent;
-  border-bottom: none;
-  border-radius: 5px 5px 0 0;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  height: 100%;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 3px;
   background: transparent;
-  color: rgba(148, 163, 184, 0.95);
+  color: rgba(255, 255, 255, 0.72);
   font-size: 9px;
   font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
+  transition: none;
+}
+
+.acp-ts__tab i {
+  font-size: 8px;
+  line-height: 1;
+  opacity: 0.8;
+  color: inherit;
 }
 
 .acp-ts__tab:hover:not(:disabled) {
-  color: #e2e8f0;
-  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .acp-ts__tab.is-active {
-  color: #6ee7b7;
-  background: rgba(16, 185, 129, 0.1);
-  border-color: rgba(110, 231, 183, 0.28);
-  box-shadow: inset 0 1px 0 rgba(110, 231, 183, 0.12);
+  color: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .acp-ts__tab:disabled {
-  opacity: 0.45;
+  opacity: 0.38;
   cursor: not-allowed;
+}
+
+.acp-ts__tab:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
 }
 
 .acp-ts__panels {
@@ -3705,7 +3729,7 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(148, 163, 184, 0.9);
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .acp-ts__weather-toggles {
@@ -3715,27 +3739,29 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
 }
 
 .acp-ts__weather-toggle {
-  height: 22px;
-  padding: 0 8px;
-  border-radius: 5px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 4px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(226, 232, 240, 0.92);
-  font-size: 9px;
+  background: rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 8.5px;
   font-weight: 600;
   cursor: pointer;
+  transition: none;
 }
 
 .acp-ts__weather-toggle:hover {
-  border-color: rgba(56, 189, 248, 0.35);
-  background: rgba(56, 189, 248, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .acp-ts__weather-toggle.is-on {
-  color: #7dd3fc;
-  border-color: rgba(56, 189, 248, 0.45);
-  background: rgba(56, 189, 248, 0.14);
-  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.12);
+  color: rgba(255, 255, 255, 0.96);
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 .acp-ts__weather-toolbar--storms {
@@ -3748,28 +3774,28 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
 
 .acp-ts__weather-toggle--snow.is-on {
   color: #bae6fd;
-  border-color: rgba(125, 211, 252, 0.5);
-  background: rgba(14, 116, 144, 0.22);
+  border-color: rgba(125, 211, 252, 0.4);
+  background: rgba(14, 116, 144, 0.2);
 }
 
 .acp-ts__weather-toggle--thunder.is-on {
   color: #fde68a;
-  border-color: rgba(251, 191, 36, 0.5);
-  background: rgba(120, 53, 15, 0.28);
+  border-color: rgba(251, 191, 36, 0.4);
+  background: rgba(120, 53, 15, 0.24);
 }
 
 .acp-ts__weather-storm-summary {
   margin: 0;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(15, 23, 42, 0.45);
+  padding: 7px 9px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.4);
 }
 
 .acp-ts__weather-storm-summary-head {
-  margin-bottom: 6px;
+  margin-bottom: 5px;
   font-size: 9px;
-  color: #e2e8f0;
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .acp-ts__weather-storm-stats {
@@ -3790,18 +3816,18 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
   font-size: 8px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: rgba(148, 163, 184, 0.9);
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .acp-ts__weather-storm-stats dd {
   margin: 0;
   font-size: 10px;
   font-weight: 600;
-  color: #f8fafc;
+  color: rgba(255, 255, 255, 0.94);
 }
 
 .acp-ts__weather-legend {
-  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   padding-top: 6px;
 }
 
@@ -3812,7 +3838,7 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(148, 163, 184, 0.95);
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .acp-ts__weather-legend-list {
@@ -3829,7 +3855,7 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
   gap: 6px;
   align-items: center;
   font-size: 9px;
-  color: rgba(226, 232, 240, 0.92);
+  color: rgba(255, 255, 255, 0.86);
 }
 
 .acp-ts__weather-legend-swatch {
@@ -3840,7 +3866,7 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
 }
 
 .acp-ts__weather-legend-range {
-  color: rgba(148, 163, 184, 0.9);
+  color: rgba(255, 255, 255, 0.5);
   font-variant-numeric: tabular-nums;
 }
 
@@ -3865,10 +3891,10 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
 
 .acp-ts__weather-interpret {
   margin: 0;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(56, 189, 248, 0.2);
-  background: rgba(14, 116, 144, 0.12);
+  padding: 7px 9px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.35);
 }
 
 .acp-ts__weather-interpret-head {
@@ -3877,14 +3903,14 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
   gap: 6px;
   margin-bottom: 4px;
   font-size: 9px;
-  color: #7dd3fc;
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .acp-ts__weather-interpret p {
   margin: 0;
   font-size: 10px;
   line-height: 1.45;
-  color: rgba(226, 232, 240, 0.94);
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .acp-ts__weather-notes {
@@ -3892,7 +3918,7 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
   padding-left: 16px;
   font-size: 9px;
   line-height: 1.4;
-  color: rgba(203, 213, 225, 0.9);
+  color: rgba(255, 255, 255, 0.68);
 }
 
 .acp-ts__interpret-tab-hint {
@@ -3900,12 +3926,12 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
   padding: 0 4px;
   font-size: 9px;
   line-height: 1.35;
-  color: rgba(148, 163, 184, 0.95);
+  color: rgba(255, 255, 255, 0.62);
   flex: 0 0 auto;
 }
 
 .acp-ts__interpret-tab-hint strong {
-  color: #f8fafc;
+  color: rgba(255, 255, 255, 0.92);
   font-weight: 600;
 }
 
@@ -3998,64 +4024,6 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
   background: rgba(37, 99, 235, 0.85);
   color: #fff;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-}
-
-.acp-ts__field--analysis-mode {
-  flex: 0 0 auto;
-  min-width: 0;
-}
-
-.acp-ts__field--analysis-mode .acp-ts__aggregate {
-  flex-wrap: nowrap;
-}
-
-.acp-ts__field--multi-aoi-stat {
-  margin: 4px 0 2px;
-}
-
-.acp-ts__chart-wrap--multi-aoi {
-  min-height: 220px;
-}
-
-.acp-ts__multi-aoi-stats-wrap {
-  margin-top: 6px;
-  overflow: auto;
-  max-height: 160px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 6px;
-}
-
-.acp-ts__multi-aoi-stats {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 10px;
-}
-
-.acp-ts__multi-aoi-stats th,
-.acp-ts__multi-aoi-stats td {
-  padding: 4px 6px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-  text-align: right;
-  white-space: nowrap;
-}
-
-.acp-ts__multi-aoi-stats th:first-child,
-.acp-ts__multi-aoi-stats td:first-child {
-  text-align: left;
-  position: sticky;
-  left: 0;
-  background: rgba(15, 23, 42, 0.92);
-}
-
-.acp-ts__foot--multi-aoi {
-  margin-top: 4px;
-}
-
-.acp-ts__field-label {
-  display: block;
-  font-size: 10px;
-  color: rgba(148, 163, 184, 0.95);
-  margin-bottom: 2px;
 }
 
 .acp-ts__field select option,
@@ -4255,15 +4223,6 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
   cursor: pointer;
 }
 
-.acp-ts-layer-select__option--single {
-  width: 100%;
-  border: none;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-}
-
 .acp-ts-layer-select__option:hover,
 .acp-ts-layer-select__option.is-checked {
   background: rgba(56, 189, 248, 0.1);
@@ -4400,189 +4359,104 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
 
 .acp-ts__water-summary {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0 0 4px;
-  padding: 0 2px;
-  background: none;
-  border: none;
-  box-shadow: none;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 0 0 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(56, 189, 248, 0.32);
+  background: linear-gradient(90deg, rgba(12, 74, 110, 0.4), rgba(10, 10, 10, 0.65));
 }
 
 .acp-ts__water-summary--alert {
-  background: none;
-  border: none;
-  box-shadow: none;
+  border-color: rgba(249, 115, 22, 0.55);
+  background: linear-gradient(90deg, rgba(124, 45, 18, 0.45), rgba(10, 10, 10, 0.7));
 }
 
-.acp-ts__water-summary-head {
+.acp-ts__water-summary-main {
   display: flex;
   align-items: center;
-  gap: 5px;
-  min-width: 0;
-  font-size: 8px;
-  line-height: 1.2;
-  color: #d4b896;
+  gap: 6px;
+  font-size: 10px;
+  color: #e0f2fe;
 }
 
-.acp-ts__water-summary-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: auto;
-  height: auto;
-  flex: none;
-  color: #d4b896;
-  background: none;
-  border: none;
-  font-size: 9px;
-}
-
-.acp-ts__water-summary--alert .acp-ts__water-summary-icon {
-  color: #d4b896;
-  background: none;
-  border: none;
-}
-
-.acp-ts__water-summary-label {
-  font-size: 7.5px;
-  font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #d4b896;
-  flex: none;
+.acp-ts__water-summary-main strong {
+  color: #7dd3fc;
+  font-weight: 700;
 }
 
 .acp-ts__water-summary-date {
-  color: #c4a882;
-  font-size: 7px;
-  font-variant-numeric: tabular-nums;
-  flex: none;
+  color: #94a3b8;
+  font-size: 9px;
 }
 
 .acp-ts__water-summary-busy {
-  margin-left: auto;
-  color: #d4b896;
-  font-size: 8px;
-  flex: none;
+  color: #38bdf8;
+  font-size: 10px;
 }
 
 .acp-ts__water-stress {
-  margin-left: auto;
-  font-size: 6.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 0;
-  border: none;
-  background: none;
-  color: #ffffff;
-  flex: none;
-}
-
-.acp-ts__water-stress--low,
-.acp-ts__water-stress--moderate,
-.acp-ts__water-stress--high,
-.acp-ts__water-stress--critical {
-  color: #ffffff;
-  border: none;
-  background: none;
-}
-
-.acp-ts__water-summary-body {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.acp-ts__water-summary-hero {
-  display: flex;
-  flex-direction: row;
-  align-items: baseline;
-  gap: 4px;
-  flex: none;
-  min-width: 0;
-  padding: 0;
-}
-
-.acp-ts__water-summary-hero strong {
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.01em;
-  font-variant-numeric: tabular-nums;
-  color: #ffffff;
-  text-shadow: none;
-}
-
-.acp-ts__water-summary--alert .acp-ts__water-summary-hero strong {
-  color: #ffffff;
-  text-shadow: none;
-}
-
-.acp-ts__water-summary-hero em {
-  font-style: normal;
-  font-size: 6.5px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: #d4b896;
-}
-
-.acp-ts__water-summary-vrule {
-  width: 1px;
-  align-self: stretch;
-  min-height: 14px;
-  background: rgba(212, 184, 150, 0.35);
-  flex: none;
-}
-
-.acp-ts__water-summary-strip {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: baseline;
-  gap: 0;
-  min-width: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
   font-size: 8px;
-  line-height: 1.25;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid transparent;
 }
 
-.acp-ts__water-summary-stat {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 3px;
-  flex: none;
-  min-width: 0;
+.acp-ts__water-stress--low {
+  color: #bae6fd;
+  border-color: rgba(56, 189, 248, 0.4);
+  background: rgba(14, 165, 233, 0.15);
 }
 
-.acp-ts__water-summary-stat em {
+.acp-ts__water-stress--moderate {
+  color: #fde68a;
+  border-color: rgba(234, 179, 8, 0.45);
+  background: rgba(234, 179, 8, 0.15);
+}
+
+.acp-ts__water-stress--high {
+  color: #fdba74;
+  border-color: rgba(249, 115, 22, 0.5);
+  background: rgba(249, 115, 22, 0.18);
+}
+
+.acp-ts__water-stress--critical {
+  color: #fecaca;
+  border-color: rgba(239, 68, 68, 0.55);
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.acp-ts__water-summary-kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.acp-ts__water-summary-kpis div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 3.6rem;
+}
+
+.acp-ts__water-summary-kpis em {
   font-style: normal;
-  font-size: 6.5px;
-  font-weight: 500;
+  font-size: 8px;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: #d4b896;
+  color: #7dd3fc;
 }
 
-.acp-ts__water-summary-stat strong {
+.acp-ts__water-summary-kpis strong {
   font-size: 10px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: #ffffff;
-}
-
-.acp-ts__water-summary-sep {
-  margin: 0 5px;
-  color: rgba(212, 184, 150, 0.45);
-  font-weight: 400;
-  flex: none;
+  font-weight: 650;
+  color: #f8fafc;
 }
 
 .acp-ts__chart-wrap {
@@ -4730,7 +4604,6 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
   margin-top: 6px;
   padding-top: 6px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
-  flex: 0 0 auto;
 }
 
 .acp-ts__toggle {
@@ -4836,8 +4709,81 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
   font-weight: 600;
 }
 
-.acp-ts__chart-hint--warn {
-  color: #b45309;
+.acp-ts__lulc-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 0 4px;
+  max-height: 72px;
+  overflow: auto;
+}
+
+.acp-ts__lulc-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 4px 2px 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.acp-ts__lulc-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: #cbd5e1;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.acp-ts__lulc-legend-item i {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.acp-ts__lulc-legend-item.is-empty {
+  color: #64748b;
+  font-weight: 500;
+  opacity: 0.72;
+}
+
+.acp-ts__lulc-stats-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 10px;
+  color: #94a3b8;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.acp-ts__lulc-stats-chip i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+}
+
+.acp-ts__lulc-stats-chip strong {
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+.acp-ts__lulc-stats-chip em {
+  color: #bae6fd;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.acp-ts__lulc-stats-chip span {
+  color: #64748b;
 }
 
 .acp-ts__skeleton--atomic {

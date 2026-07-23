@@ -20,8 +20,14 @@ import { registerGeocodeRoutes } from './geocodeProxy.js'
 import { registerAcpWeatherRoutes } from './acpWeatherRoutes.js'
 import { registerCropClassificationRoutes } from './cropClassificationProxy.js'
 import { registerTreeDetectionRoutes } from './treeDetectionProxy.js'
+import { registerSamDetectionRoutes } from './samDetectionProxy.js'
+import { registerAgriFieldBoundaryRoutes } from './agriFieldBoundaryProxy.js'
 import { registerFloodMonitoringRoutes } from './floodMonitoringProxy.js'
 import { registerEsriTerrainTileRoutes } from './esriTerrainRgbTiles.js'
+import { registerRasterRoutes } from './raster/rasterUploadRoutes.js'
+import { registerCrsRoutes } from './raster/crsRoutes.js'
+import { warmProjectionManager } from './raster/projectionManager.js'
+import { registerImageClassificationRoutes } from './imageClassificationProxy.js'
 import { registerGisGatewayRoutes } from './gisGatewayRoutes.js'
 import {
   applyStaticCacheHeaders,
@@ -82,6 +88,14 @@ app.use(
 app.use(
   express.json({
     limit: '2mb',
+    // High-res SAM captures are large base64 JSON — skip global parse so the
+    // route-level 48mb parser in samDetectionProxy.js can accept them.
+    type: (req) => {
+      const path = String(req.originalUrl || req.url || '')
+      if (path.startsWith('/api/sam-detection/') || path.startsWith('/api/agri-field-boundary/')) return false
+      const ct = String(req.headers['content-type'] || '')
+      return /application\/json/i.test(ct)
+    },
     verify: (req, _res, buf) => {
       try {
         req.rawBody = buf
@@ -1836,9 +1850,17 @@ registerGeocodeRoutes(app)
 registerAcpWeatherRoutes(app)
 registerCropClassificationRoutes(app, { secretsFilePath: API_SECRETS_FILE, broadcast })
 registerTreeDetectionRoutes(app)
+registerSamDetectionRoutes(app)
+registerAgriFieldBoundaryRoutes(app)
 registerFloodMonitoringRoutes(app, { secretsFilePath: API_SECRETS_FILE, broadcast })
 registerEsriTerrainTileRoutes(app)
+registerRasterRoutes(app)
+registerCrsRoutes(app)
+registerImageClassificationRoutes(app, { secretsFilePath: API_SECRETS_FILE, broadcast })
 registerGisGatewayRoutes(app)
+
+// Load the EPSG/PROJ definition database once at startup (cached; never per-upload).
+warmProjectionManager()
 
 /**
  * Static asset requests (hashed JS/CSS chunks, fonts, images, etc.) must never fall back to

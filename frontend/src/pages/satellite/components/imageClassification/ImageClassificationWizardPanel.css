@@ -1,0 +1,897 @@
+.si-icw {
+  --si-icw-accent: #6f8f6a;
+  --si-icw-accent-soft: rgba(111, 143, 106, 0.16);
+  --si-icw-accent-line: rgba(111, 143, 106, 0.34);
+  --si-icw-ink: #d4dbe4;
+  --si-icw-muted: #828d9b;
+  --si-icw-line: rgba(255, 255, 255, 0.08);
+  --si-icw-surface: rgba(255, 255, 255, 0.028);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--si-icw-ink);
+  font-feature-settings: 'tnum' 1;
+}
+
+/* ── Brand bar ─────────────────────────────────────────────────────────────── */
+.si-icw__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--si-icw-line);
+}
+.si-icw__brand-mark {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  font-size: 11px;
+  color: #cfe0cb;
+  background: var(--si-icw-accent-soft);
+  border: 1px solid var(--si-icw-accent-line);
+}
+.si-icw__brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+.si-icw__brand-title {
+  font-size: 11.5px;
+  font-weight: 650;
+  color: #e8edf3;
+}
+.si-icw__brand-sub {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--si-icw-muted);
+}
+.si-icw__close {
+  border: 1px solid var(--si-icw-line);
+  background: transparent;
+  color: var(--si-icw-muted);
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+.si-icw__close:hover {
+  color: var(--si-icw-ink);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* ── Stepper dots ──────────────────────────────────────────────────────────── */
+.si-icw__stepper {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 2px 2px 6px;
+}
+.si-icw__dot {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: 0;
+  padding: 2px 0;
+  cursor: pointer;
+  min-width: 0;
+}
+.si-icw__dot-mark {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid var(--si-icw-line);
+  background: transparent;
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.si-icw__dot[data-state='active'] .si-icw__dot-mark {
+  background: var(--si-icw-accent);
+  border-color: var(--si-icw-accent);
+  box-shadow: 0 0 0 3px var(--si-icw-accent-soft);
+}
+.si-icw__dot[data-state='done'] .si-icw__dot-mark {
+  background: var(--si-icw-accent-line);
+  border-color: var(--si-icw-accent-line);
+}
+.si-icw__dot-label {
+  font-size: 8px;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  color: var(--si-icw-muted);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.si-icw__dot[data-state='active'] .si-icw__dot-label {
+  color: #e8edf3;
+  font-weight: 600;
+}
+
+.si-icw__step-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.si-icw__step-index {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--si-icw-muted);
+}
+.si-icw__step-name {
+  font-size: 12px;
+  font-weight: 650;
+  color: #e8edf3;
+}
+
+/* ── Card + fields ─────────────────────────────────────────────────────────── */
+.si-icw__card {
+  border: 1px solid var(--si-icw-line);
+  background: var(--si-icw-surface);
+  border-radius: 9px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.si-icw__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.si-icw__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--si-icw-muted);
+}
+.si-icw__select,
+.si-icw__input {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 12px;
+  color: var(--si-icw-ink);
+  background: rgba(4, 10, 18, 0.4);
+  border: 1px solid var(--si-icw-line);
+  border-radius: 7px;
+  padding: 6px 8px;
+  outline: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.si-icw__select:focus,
+.si-icw__input:focus {
+  border-color: var(--si-icw-accent-line);
+  box-shadow: 0 0 0 2px var(--si-icw-accent-soft);
+}
+.si-icw__select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.si-icw__hint {
+  margin: 0;
+  font-size: 9.5px;
+  line-height: 1.35;
+  color: var(--si-icw-muted);
+}
+.si-icw__slider-value {
+  float: right;
+  font-weight: 700;
+  color: #e8edf3;
+}
+.si-icw__range {
+  width: 100%;
+  accent-color: var(--si-icw-accent);
+  cursor: pointer;
+}
+
+/* ── Raster upload ─────────────────────────────────────────────────────────── */
+.si-icw__file-input {
+  display: none;
+}
+.si-icw__file-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  font-size: 12px;
+  font-weight: 600;
+  color: #e8edf3;
+  background: var(--si-icw-accent-soft);
+  border: 1px dashed var(--si-icw-accent-line);
+  border-radius: 8px;
+  padding: 9px 10px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.si-icw__file-btn:hover:not(:disabled) {
+  background: rgba(111, 143, 106, 0.24);
+}
+.si-icw__file-btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+.si-icw__raster-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--si-icw-ink);
+  background: rgba(4, 10, 18, 0.4);
+  border: 1px solid var(--si-icw-line);
+  border-radius: 7px;
+  padding: 5px 8px;
+}
+.si-icw__raster-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.si-icw__raster-clear {
+  border: 0;
+  background: transparent;
+  color: var(--si-icw-muted);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px;
+}
+.si-icw__raster-clear:hover {
+  color: var(--si-icw-ink);
+}
+.si-icw__raster-meta {
+  margin: 0;
+  font-size: 9px;
+  line-height: 1.35;
+  color: var(--si-icw-muted);
+  word-break: break-word;
+}
+
+/* ── Optional block ────────────────────────────────────────────────────────── */
+.si-icw__optional {
+  border-top: 1px solid var(--si-icw-line);
+  padding-top: 8px;
+}
+.si-icw__optional-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  color: var(--si-icw-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+.si-icw__optional-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* ── Georeferencing placement (non-georeferenced images) ───────────────────── */
+.si-icw__georef {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid rgba(221, 161, 94, 0.4);
+  background: rgba(221, 161, 94, 0.09);
+  border-radius: 9px;
+  padding: 10px;
+  margin-top: 2px;
+}
+.si-icw__georef-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: #f0d9b8;
+}
+.si-icw__georef-head > i {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  font-size: 10px;
+}
+.si-icw__georef-head > span {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: justify;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+.si-icw__georef .si-icw__hint {
+  font-size: 9px;
+  line-height: 1.45;
+  text-align: justify;
+  hyphens: auto;
+}
+.si-icw__georef-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.si-icw__georef-actions .si-icw__file-btn {
+  flex: 1;
+}
+.si-icw__georef-sub {
+  font-size: 9px;
+  line-height: 1.45;
+  text-align: justify;
+  hyphens: auto;
+  color: #e7d3b4;
+  margin: 0;
+}
+
+/* mode tabs */
+.si-icw__georef-modes {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+.si-icw__georef-mode {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 2px;
+  border: 1px solid rgba(221, 161, 94, 0.35);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.18);
+  color: #d8c4a4;
+  font-size: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.si-icw__georef-mode > i {
+  font-size: 11px;
+}
+.si-icw__georef-mode:hover:not(:disabled) {
+  border-color: rgba(221, 161, 94, 0.7);
+  color: #f0d9b8;
+}
+.si-icw__georef-mode--active {
+  background: rgba(221, 161, 94, 0.22);
+  border-color: #dda15e;
+  color: #fff2df;
+}
+.si-icw__georef-mode:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* bbox / corners grids */
+.si-icw__georef-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.si-icw__georef-grid--corners {
+  grid-template-columns: 1fr 1fr;
+}
+.si-icw__georef-input {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 8px;
+  font-weight: 600;
+  color: #d8c4a4;
+}
+.si-icw__georef-input > input,
+.si-icw__georef-corner > input,
+.si-icw__georef-gcp > input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  border: 1px solid rgba(221, 161, 94, 0.3);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.28);
+  color: #fdf3e4;
+  font-size: 9px;
+}
+.si-icw__georef-input > input:focus,
+.si-icw__georef-corner > input:focus,
+.si-icw__georef-gcp > input:focus {
+  outline: none;
+  border-color: #dda15e;
+}
+.si-icw__georef-corner {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr;
+  align-items: center;
+  gap: 4px;
+}
+.si-icw__georef-corner-label {
+  font-size: 8px;
+  font-weight: 700;
+  color: #f0d9b8;
+  min-width: 20px;
+}
+
+/* GCP rows */
+.si-icw__georef-gcps {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.si-icw__georef-gcp {
+  display: grid;
+  grid-template-columns: 14px repeat(4, 1fr) auto auto;
+  align-items: center;
+  gap: 3px;
+}
+.si-icw__georef-gcp-idx {
+  font-size: 8px;
+  font-weight: 700;
+  color: #f0d9b8;
+  text-align: center;
+}
+.si-icw__georef-gcp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgba(221, 161, 94, 0.35);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  color: #d8c4a4;
+  cursor: pointer;
+  font-size: 9px;
+}
+.si-icw__georef-gcp-btn:hover:not(:disabled) {
+  border-color: #dda15e;
+  color: #fff2df;
+}
+.si-icw__georef-gcp-btn--del:hover:not(:disabled) {
+  border-color: #e07a5f;
+  color: #ffd9cf;
+}
+.si-icw__georef-add {
+  align-self: flex-start;
+  font-size: 9px;
+}
+
+/* auto-georeferenced confirmation note */
+.si-icw__georef-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  line-height: 1.4;
+  color: #8fd19e;
+  margin: 4px 0 0;
+}
+.si-icw__georef-note > i {
+  font-size: 10px;
+}
+
+/* ── Class schema editor (training samples) ────────────────────────────────── */
+.si-icw__class-add {
+  display: flex;
+  gap: 6px;
+}
+.si-icw__icon-btn {
+  flex: 0 0 auto;
+  width: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--si-icw-accent-line);
+  background: var(--si-icw-accent-soft);
+  color: #e8edf3;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.si-icw__icon-btn:hover {
+  background: rgba(111, 143, 106, 0.24);
+}
+.si-icw__class-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.si-icw__class-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--si-icw-line);
+  border-radius: 7px;
+  background: rgba(4, 10, 18, 0.4);
+  padding: 3px 5px 3px 3px;
+}
+.si-icw__class-row[data-active='true'] {
+  border-color: var(--si-icw-accent-line);
+  box-shadow: 0 0 0 1px var(--si-icw-accent-soft) inset;
+}
+.si-icw__class-pick {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: transparent;
+  border: 0;
+  color: var(--si-icw-ink);
+  cursor: pointer;
+  padding: 3px 4px;
+  font-size: 11.5px;
+}
+.si-icw__class-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  flex: 0 0 auto;
+}
+.si-icw__class-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.si-icw__class-count {
+  font-size: 9.5px;
+  color: var(--si-icw-muted);
+  flex: 0 0 auto;
+}
+.si-icw__clear-samples {
+  align-self: flex-start;
+  padding: 4px 12px;
+}
+
+/* ── Isolated training-sample drawing tools ────────────────────────────────── */
+.si-icw__sample-tools {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+.si-icw__sample-tool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 2px;
+  border: 1px solid var(--si-icw-line);
+  border-radius: 7px;
+  background: rgba(4, 10, 18, 0.4);
+  color: var(--si-icw-ink);
+  font-size: 8.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.si-icw__sample-tool > i {
+  font-size: 12px;
+}
+.si-icw__sample-tool:hover:not(:disabled) {
+  border-color: var(--si-icw-accent-line);
+  color: #e8edf3;
+}
+.si-icw__sample-tool--active {
+  background: var(--si-icw-accent-soft);
+  border-color: var(--si-icw-accent);
+  color: #fff;
+  box-shadow: 0 0 0 2px var(--si-icw-accent-soft);
+}
+.si-icw__sample-tool:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.si-icw__sample-drawbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 5px 8px;
+  border: 1px dashed var(--si-icw-accent-line);
+  border-radius: 7px;
+  background: var(--si-icw-accent-soft);
+}
+.si-icw__sample-drawbar-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9.5px;
+  color: var(--si-icw-ink);
+}
+.si-icw__sample-drawbar .si-icw__btn {
+  padding: 4px 12px;
+  font-size: 11px;
+}
+.si-icw__link-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--si-icw-accent);
+  font-size: 9.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.si-icw__link-btn:hover {
+  color: #e8edf3;
+}
+
+/* ── Train / classify result summary ───────────────────────────────────────── */
+.si-icw__result {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border: 1px solid var(--si-icw-line);
+  border-radius: 8px;
+  background: rgba(4, 10, 18, 0.4);
+  padding: 8px 10px;
+}
+.si-icw__result-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--si-icw-muted);
+}
+.si-icw__result-row strong {
+  color: var(--si-icw-ink);
+}
+
+/* ── Assign / merge clusters ───────────────────────────────────────────────── */
+.si-icw__assign-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+}
+.si-icw__color {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid var(--si-icw-line);
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+}
+.si-icw__assign-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: rgba(4, 10, 18, 0.55);
+  border: 1px solid var(--si-icw-line);
+  border-radius: 6px;
+  color: var(--si-icw-ink);
+  font-size: 12px;
+  padding: 5px 7px;
+}
+
+/* ── Accuracy assessment ───────────────────────────────────────────────────── */
+.si-icw__acc-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.si-icw__acc-controls .si-icw__select {
+  flex: 1 1 auto;
+}
+.si-icw__num {
+  width: 64px;
+  flex: 0 0 auto;
+  background: rgba(4, 10, 18, 0.55);
+  border: 1px solid var(--si-icw-line);
+  border-radius: 7px;
+  color: var(--si-icw-ink);
+  font-size: 12px;
+  padding: 6px 8px;
+}
+.si-icw__cm-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--si-icw-line);
+  border-radius: 8px;
+  background: rgba(4, 10, 18, 0.4);
+  padding: 4px;
+}
+.si-icw__cm {
+  border-collapse: collapse;
+  font-size: 11px;
+  width: 100%;
+}
+.si-icw__cm th,
+.si-icw__cm td {
+  border: 1px solid var(--si-icw-line);
+  padding: 3px 6px;
+  text-align: center;
+  color: var(--si-icw-ink);
+  white-space: nowrap;
+}
+.si-icw__cm thead th {
+  color: var(--si-icw-muted);
+  font-weight: 600;
+}
+.si-icw__cm-corner {
+  font-size: 9.5px;
+  color: var(--si-icw-muted);
+}
+.si-icw__cm tbody th {
+  color: var(--si-icw-muted);
+}
+.si-icw__cm-diag {
+  font-weight: 700;
+}
+.si-icw__cm-swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+/* ── Placeholder for later steps ───────────────────────────────────────────── */
+.si-icw__placeholder {
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  color: var(--si-icw-muted);
+}
+.si-icw__placeholder i {
+  font-size: 18px;
+  color: var(--si-icw-accent);
+}
+.si-icw__placeholder p {
+  margin: 0;
+  font-size: 11px;
+}
+
+/* ── Status / error ────────────────────────────────────────────────────────── */
+.si-icw__status,
+.si-icw__error {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 10.5px;
+  padding: 6px 8px;
+  border-radius: 7px;
+}
+.si-icw__status {
+  color: var(--si-icw-ink);
+  background: rgba(4, 10, 18, 0.4);
+  border: 1px solid var(--si-icw-line);
+}
+.si-icw__error {
+  color: #f2c2c2;
+  background: rgba(180, 60, 60, 0.14);
+  border: 1px solid rgba(180, 60, 60, 0.34);
+}
+
+/* ── Footer ────────────────────────────────────────────────────────────────── */
+.si-icw__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--si-icw-line);
+}
+.si-icw__service {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--si-icw-muted);
+}
+.si-icw__service-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--si-icw-muted);
+}
+.si-icw__service[data-state='online'] .si-icw__service-dot {
+  background: #5fbf7a;
+}
+.si-icw__service[data-state='offline'] .si-icw__service-dot {
+  background: #c96a6a;
+}
+.si-icw__service[data-state='probing'] .si-icw__service-dot {
+  background: #c9b06a;
+}
+.si-icw__nav {
+  display: flex;
+  gap: 6px;
+}
+.si-icw__btn {
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 7px;
+  padding: 6px 16px;
+  cursor: pointer;
+  border: 1px solid var(--si-icw-line);
+  transition: background 0.12s ease, border-color 0.12s ease, opacity 0.12s ease;
+}
+.si-icw__btn--ghost {
+  background: transparent;
+  color: var(--si-icw-ink);
+}
+.si-icw__btn--ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+}
+.si-icw__btn--primary {
+  background: var(--si-icw-accent);
+  border-color: var(--si-icw-accent);
+  color: #0c1410;
+}
+.si-icw__btn--primary:hover:not(:disabled) {
+  background: #7d9d78;
+}
+.si-icw__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Input-raster source toggle (Existing map raster / Browse files) ────────── */
+.si-icw__source {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 7px;
+}
+.si-icw__source-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid var(--si-icw-line);
+  border-radius: 8px;
+  background: var(--si-icw-surface);
+  color: var(--si-icw-ink);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.si-icw__source-opt:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.si-icw__source-opt--active {
+  border-color: var(--si-icw-accent);
+  background: var(--si-icw-accent-soft);
+}
+.si-icw__source-opt input {
+  accent-color: var(--si-icw-accent);
+  margin: 0;
+}
+.si-icw__source-opt > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.si-icw__source-opt input:disabled {
+  cursor: not-allowed;
+}
+.si-icw__source-opt:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

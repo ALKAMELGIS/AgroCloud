@@ -6,6 +6,23 @@
 import type { SentinelHubWmsLayerInfo } from './sentinelHubWmsLayers'
 import { AGRO_CHAS_EXPR } from './chasIndex'
 import { STRESS_ZONES_CHAS_EXPR } from './siStressZonesEngine'
+import {
+  ADI_CURRENT_INDEX_EXPR,
+  ADI_LAYER_ID,
+  ADI_SCIENTIFIC_NAME,
+  isAdiLayerId,
+} from './adiIndex'
+import {
+  NCADI_FUSION_EXPR,
+  NCADI_LAYER_ID,
+  NCADI_SCIENTIFIC_NAME,
+  isNcadiLayerId,
+} from './ncadiIndex'
+import {
+  LULC_CLASSIFICATION_LAYER_ID,
+  LULC_SCIENTIFIC_NAME,
+  isLulcClassificationLayerId,
+} from './siLulcClassification'
 
 /** Derived visualization layers — same fusion input, rule-engine styling only. */
 export const AGRO_DERIVED_LAYER_DEFS: readonly AgroCompositeIndexDef[] = [
@@ -25,6 +42,22 @@ export const AGRO_DERIVED_LAYER_DEFS: readonly AgroCompositeIndexDef[] = [
     deltaLabel: 'Stress Zones',
     expr: STRESS_ZONES_CHAS_EXPR,
   },
+  {
+    id: ADI_LAYER_ID,
+    label: 'ADI',
+    scientificName: ADI_SCIENTIFIC_NAME,
+    deltaId: ADI_LAYER_ID,
+    deltaLabel: 'ADI',
+    expr: ADI_CURRENT_INDEX_EXPR,
+  },
+  {
+    id: NCADI_LAYER_ID,
+    label: 'NCADI',
+    scientificName: NCADI_SCIENTIFIC_NAME,
+    deltaId: NCADI_LAYER_ID,
+    deltaLabel: 'NCADI',
+    expr: NCADI_FUSION_EXPR,
+  },
 ]
 
 export const AGRO_CORE_INTERPRETATION_LAYER_IDS = ['NDVI', 'NDMI', 'NDWI', 'SAVI', 'ET'] as const
@@ -38,11 +71,6 @@ export const AGRO_CORE_LAYER_SCIENTIFIC_NAMES: Record<AgroCoreInterpretationLaye
   NDWI: 'Normalized Difference Water Index',
   SAVI: 'Soil-Adjusted Vegetation Index',
   ET: 'Evapotranspiration (moisture-proxy mm/day)',
-}
-
-export function isAgroCoreInterpretationLayerId(layerId: string): boolean {
-  const u = String(layerId || '').trim().toUpperCase()
-  return (AGRO_CORE_INTERPRETATION_LAYER_IDS as readonly string[]).includes(u)
 }
 
 export type AgroCompositeIndexDef = {
@@ -268,11 +296,11 @@ export const AGRO_COMPOSITE_CATEGORIES: readonly AgroCompositeCategory[] = [
     groupLabel: '🧂 Soil & Salinity Layer',
     indices: [
       {
-        id: 'SAL_NDSI',
-        label: 'Salinity NDSI',
+        id: 'NDSI',
+        label: 'NDSI',
         scientificName: 'Normalized Difference Salinity Index ((B11−B8)/(B11+B8))',
-        deltaId: 'DSAL_NDSI',
-        deltaLabel: 'ΔSalinity NDSI',
+        deltaId: 'DNDSI',
+        deltaLabel: 'ΔNDSI',
         expr: 'ndsi',
       },
       {
@@ -286,7 +314,7 @@ export const AGRO_COMPOSITE_CATEGORIES: readonly AgroCompositeCategory[] = [
       {
         id: 'SSI',
         label: 'SSI',
-        scientificName: 'Soil Salinity Index (Salinity NDSI + SI)',
+        scientificName: 'Soil Salinity Index (NDSI + SI)',
         deltaId: 'DSSI',
         deltaLabel: 'ΔSSI',
         expr: 'ssi',
@@ -424,6 +452,9 @@ export function resolveRemoteSensingLayerScientificName(layerId: string): string
   if (u in AGRO_CORE_LAYER_SCIENTIFIC_NAMES) {
     return AGRO_CORE_LAYER_SCIENTIFIC_NAMES[u as AgroCoreInterpretationLayerId]
   }
+  if (isLulcClassificationLayerId(u)) return LULC_SCIENTIFIC_NAME
+  if (isAdiLayerId(u)) return ADI_SCIENTIFIC_NAME
+  if (isNcadiLayerId(u)) return NCADI_SCIENTIFIC_NAME
   const composite = resolveAgroCompositeIndexDef(u)
   if (composite) {
     if (isAgroDeltaCompositeLayerId(u)) return `Change · ${composite.scientificName}`
@@ -454,6 +485,42 @@ export function buildRemoteSensingLayerSelectGroups(
     })),
   })
 
+  groups.push({
+    id: 'live-analysis-lulc',
+    label: 'Live Analysis · Land Cover',
+    options: [
+      {
+        id: LULC_CLASSIFICATION_LAYER_ID,
+        label: 'LULC',
+        scientificName: LULC_SCIENTIFIC_NAME,
+      },
+    ],
+  })
+
+  groups.push({
+    id: 'live-analysis-anomaly',
+    label: 'Live Analysis · Anomaly',
+    options: [
+      {
+        id: ADI_LAYER_ID,
+        label: 'ADI',
+        scientificName: ADI_SCIENTIFIC_NAME,
+      },
+    ],
+  })
+
+  groups.push({
+    id: 'live-analysis-cultivation',
+    label: 'Live Analysis · Cultivation',
+    options: [
+      {
+        id: NCADI_LAYER_ID,
+        label: 'NCADI',
+        scientificName: NCADI_SCIENTIFIC_NAME,
+      },
+    ],
+  })
+
   for (const cat of AGRO_COMPOSITE_CATEGORIES) {
     groups.push({
       id: cat.id,
@@ -470,7 +537,9 @@ export function buildRemoteSensingLayerSelectGroups(
     groups.push({
       id: 'derived-alert',
       label: '🚨 Derived Alert Layers',
-      options: AGRO_DERIVED_LAYER_DEFS.map(idx => ({
+      options: AGRO_DERIVED_LAYER_DEFS.filter(
+        idx => !isAdiLayerId(idx.id) && !isNcadiLayerId(idx.id),
+      ).map(idx => ({
         id: idx.id,
         label: idx.label,
         scientificName: idx.scientificName,
@@ -493,6 +562,7 @@ export function buildRemoteSensingLayerSelectGroups(
   const assigned = new Set<string>([
     ...AGRO_CORE_INTERPRETATION_LAYER_IDS.map(s => s.toUpperCase()),
     ...ALL_COMPOSITE_IDS,
+    LULC_CLASSIFICATION_LAYER_ID,
   ])
 
   const standard = capabilityLayers

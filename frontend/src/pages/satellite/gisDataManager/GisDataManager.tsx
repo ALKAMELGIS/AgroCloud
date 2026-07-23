@@ -15,6 +15,8 @@ import {
   pushRecent,
   toggleFavorite,
   isFavorite,
+  removeRecent,
+  clearRecent,
 } from '../../../lib/gisConnections/recentFavoritesStore';
 import {
   listWebServices,
@@ -75,10 +77,10 @@ function uid(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-function WorkspaceSection({ title, lead, children }: { title: string; lead?: string; children: ReactNode }) {
+function WorkspaceSection({ title, lead, children }: { title?: string; lead?: string; children: ReactNode }) {
   return (
     <div>
-      <h3 className="gis-dm-section-title">{title}</h3>
+      {title ? <h3 className="gis-dm-section-title">{title}</h3> : null}
       {lead ? <p className="gis-dm-lead">{lead}</p> : null}
       {children}
     </div>
@@ -100,7 +102,6 @@ export function GisDataManager({
   onClose,
   portalItems,
   initialCategory = 'vector',
-  anchorId = 'map-toolbox-add-gis-layer-btn',
   statusExternal,
   onImportFiles,
   onImportRemoteUrl,
@@ -118,6 +119,7 @@ export function GisDataManager({
   isConnecting,
   isAddingDiscovered,
   isImportingRemote,
+  rasterLayerTools = null,
 }: Props) {
   const shellRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -154,9 +156,10 @@ export function GisDataManager({
   const [wfsTypeName, setWfsTypeName] = useState('');
   const [webServices, setWebServices] = useState(() => listWebServices());
   const [recentTick, setRecentTick] = useState(0);
-  const [size, setSize] = useState({ w: 920, h: 620 });
+  const [size, setSize] = useState({ w: 720, h: 500 });
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const resizeRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+  const dragRef = useRef<{ dx: number; dy: number } | null>(null);
 
   const pushToast = useCallback((tone: GisDataManagerToast['tone'], message: string) => {
     const id = uid('toast');
@@ -170,27 +173,32 @@ export function GisDataManager({
     setWizardStep('source');
   }, [open, initialCategory]);
 
+  // Open centred on screen; on window resize just keep it inside the viewport (don't
+  // re-centre, so a user's dragged/resized position is respected).
   useEffect(() => {
     if (!open) return;
-    const place = () => {
-      const anchor = document.getElementById(anchorId);
-      const margin = 12;
-      const w = size.w;
-      const h = size.h;
-      let left = window.innerWidth - w - margin;
-      let top = 96;
-      if (anchor) {
-        const ar = anchor.getBoundingClientRect();
-        left = Math.max(margin, ar.left - w - 10);
-        top = Math.max(margin, Math.min(ar.top, window.innerHeight - h - margin));
-      }
-      if (left + w > window.innerWidth - margin) left = Math.max(margin, window.innerWidth - w - margin);
-      setPos({ top, left });
+    const margin = 12;
+    const w = size.w;
+    const h = size.h;
+    setPos({
+      top: Math.max(margin, Math.round((window.innerHeight - h) / 2)),
+      left: Math.max(margin, Math.round((window.innerWidth - w) / 2)),
+    });
+    const clamp = () => {
+      setPos(p => {
+        if (!p) return p;
+        const maxLeft = Math.max(margin, window.innerWidth - w - margin);
+        const maxTop = Math.max(margin, window.innerHeight - h - margin);
+        return {
+          left: Math.min(Math.max(margin, p.left), maxLeft),
+          top: Math.min(Math.max(margin, p.top), maxTop),
+        };
+      });
     };
-    place();
-    window.addEventListener('resize', place);
-    return () => window.removeEventListener('resize', place);
-  }, [open, anchorId, size.w, size.h]);
+    window.addEventListener('resize', clamp);
+    return () => window.removeEventListener('resize', clamp);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- centre once per open; size read at open time
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -242,7 +250,7 @@ export function GisDataManager({
       setProgressPct(8);
       try {
         const primary = next[0];
-        if (category === 'raster' || /\.(tif|tiff|png|jpe?g|webp|gif|bmp)$/i.test(primary.name)) {
+        if (category === 'raster' || /\.(tif|tiff|geotiff|jp2|j2k|png|jpe?g|webp|gif|bmp)$/i.test(primary.name)) {
           setPreview(
             buildStubPreview({
               filename: primary.name,
@@ -339,6 +347,88 @@ export function GisDataManager({
     await stageIncomingFiles(Array.from(files));
   };
 
+  // ── Raster: standalone ingestion ────────────────────────────────────────────
+  // The Raster module is intentionally isolated from vector/BIM parsing and from
+  // any analysis/processing tooling. It only stages and imports raster layers;
+  // georeferencing, classification, and other analysis run separately on layers
+  // that already live on the map.
+  const stageRasterFiles = useCallback(
+    async (files: File[]) => {
+      if (!files.length) return;
+      setStagedFiles(files);
+      setWizardStep('preview');
+      setPreviewBusy(true);
+      setProgressPct(10);
+      try {
+        const primary = files[0];
+        setProgressPct(55);
+        setPreview(
+          buildStubPreview({
+            filename: primary.name,
+            bytes: primary.size,
+            geometryType: 'raster',
+            crsHint: 'Raster layer — spatial reference read on import',
+          }),
+        );
+        setWizardStep('validation');
+        pushRecent({
+          id: uid('recent'),
+          title: primary.name,
+          category: 'raster',
+          detail: `${(primary.size / 1024).toFixed(1)} KB`,
+          savedAt: new Date().toISOString(),
+        });
+        setRecentTick(t => t + 1);
+      } catch (err) {
+        pushToast('error', err instanceof Error ? err.message : 'Raster preview failed');
+        setWizardStep('source');
+      } finally {
+        setPreviewBusy(false);
+        setProgressPct(0);
+      }
+    },
+    [pushToast],
+  );
+
+  const onRasterDrop = async (e: DragEvent) => {
+    e.preventDefault();
+    setDropActive(false);
+    const files = e.dataTransfer?.files;
+    if (!files?.length) return;
+    await stageRasterFiles(Array.from(files));
+  };
+
+  const runRasterImport = async () => {
+    if (!stagedFiles.length) {
+      pushToast('warn', 'Choose a raster file first');
+      return;
+    }
+    setImportBusy(true);
+    setWizardStep('import');
+    setProgressPct(20);
+    try {
+      const importedName = layerName.trim() || stagedFiles[0].name;
+      await onImportFiles(stagedFiles, {
+        layerName: layerName.trim() || undefined,
+        forceRaster: true,
+      });
+      setProgressPct(100);
+      setWizardStep('ready');
+      pushToast('ok', `Imported ${importedName} — showing on the map`);
+      setStagedFiles([]);
+      setPreview(null);
+      setLayerName('');
+      // Close the Data Manager so the raster (or its georeferencing toolbar) is visible
+      // on the map instead of staying hidden behind this modal's scrim.
+      onClose();
+    } catch (err) {
+      setWizardStep('validation');
+      pushToast('error', err instanceof Error ? err.message : 'Raster import failed');
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
   const runImport = async () => {
     if (!stagedFiles.length) {
       pushToast('warn', 'Choose a file first');
@@ -376,8 +466,8 @@ export function GisDataManager({
       const s = resizeRef.current;
       if (!s) return;
       setSize({
-        w: Math.max(640, Math.min(window.innerWidth - 24, s.w + (ev.clientX - s.x))),
-        h: Math.max(420, Math.min(window.innerHeight - 24, s.h + (ev.clientY - s.y))),
+        w: Math.max(520, Math.min(window.innerWidth - 24, s.w + (ev.clientX - s.x))),
+        h: Math.max(380, Math.min(window.innerHeight - 24, s.h + (ev.clientY - s.y))),
       });
     };
     const onUp = () => {
@@ -389,12 +479,59 @@ export function GisDataManager({
     window.addEventListener('pointerup', onUp);
   };
 
+  // Drag the whole window by its header (ignores clicks on header buttons/inputs).
+  const startDrag = (e: ReactPointerEvent) => {
+    if ((e.target as HTMLElement).closest('button, input, a, select, textarea')) return;
+    const shell = shellRef.current;
+    if (!shell) return;
+    const rect = shell.getBoundingClientRect();
+    dragRef.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+    const onMove = (ev: PointerEvent) => {
+      const d = dragRef.current;
+      if (!d) return;
+      const margin = 8;
+      const w = shell.offsetWidth;
+      const h = shell.offsetHeight;
+      const maxLeft = Math.max(margin, window.innerWidth - w - margin);
+      const maxTop = Math.max(margin, window.innerHeight - h - margin);
+      setPos({
+        left: Math.min(Math.max(margin, ev.clientX - d.dx), maxLeft),
+        top: Math.min(Math.max(margin, ev.clientY - d.dy), maxTop),
+      });
+    };
+    const onUp = () => {
+      dragRef.current = null;
+      document.body.style.userSelect = '';
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    document.body.style.userSelect = 'none';
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+
   if (!open) return null;
 
   const renderWorkspace = () => {
     if (category === 'recent') {
       return (
         <WorkspaceSection title="Recent sources" lead="Recently imported or connected data sources on this browser.">
+          {recentItems.length > 0 ? (
+            <div className="gis-dm-list-actions">
+              <button
+                type="button"
+                className="gis-dm-icon-btn gis-dm-icon-btn--danger"
+                title="Clear all recent sources"
+                onClick={() => {
+                  clearRecent();
+                  setRecentTick(t => t + 1);
+                }}
+              >
+                <i className="fa-solid fa-trash-can" aria-hidden />
+                <span>Clear all</span>
+              </button>
+            </div>
+          ) : null}
           <div className="gis-dm-card-list">
             {recentItems.length === 0 ? <p className="gis-dm-lead">No recent sources yet.</p> : null}
             {recentItems.map(item => (
@@ -417,6 +554,17 @@ export function GisDataManager({
                   }}
                 >
                   <i className={`fa-${isFavorite(item.id) ? 'solid' : 'regular'} fa-star`} aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  className="gis-dm-icon-btn gis-dm-icon-btn--danger"
+                  title="Remove from recent"
+                  onClick={() => {
+                    removeRecent(item.id);
+                    setRecentTick(t => t + 1);
+                  }}
+                >
+                  <i className="fa-solid fa-xmark" aria-hidden />
                 </button>
               </div>
             ))}
@@ -479,18 +627,273 @@ export function GisDataManager({
       );
     }
 
-    if (category === 'vector' || category === 'raster' || category === 'bim') {
-      const labels =
-        category === 'raster' ? [...RASTER_FORMAT_LABEL_LIST] : category === 'bim' ? ['IFC'] : [...VECTOR_FORMAT_LABEL_LIST];
+    if (category === 'raster') {
+      const layer = rasterLayerTools?.layer ?? null
+      const display = rasterLayerTools?.display
+      return (
+        <WorkspaceSection title="Raster Layer" lead="Style and manage the active map raster. Add a layer from the actions below — no separate Load row.">
+          {layer && display && rasterLayerTools ? (
+            <div className="gis-dm-raster-layer">
+              <div className="gis-dm-raster-layer__head">
+                <div className="gis-dm-raster-layer__title">
+                  <i className="fa-regular fa-image" aria-hidden />
+                  <span title={layer.name}>{layer.name}</span>
+                </div>
+                <div className="gis-dm-raster-layer__actions">
+                  {rasterLayerTools.onFitToLayer ? (
+                    <button type="button" className="gis-dm-btn gis-dm-btn--ghost gis-dm-btn--sm" title="Zoom to raster" onClick={rasterLayerTools.onFitToLayer}>
+                      <i className="fa-solid fa-expand" aria-hidden />
+                    </button>
+                  ) : null}
+                  {rasterLayerTools.onOpenGeoreference ? (
+                    <button type="button" className="gis-dm-btn gis-dm-btn--ghost gis-dm-btn--sm" title="Open georeferencing" onClick={rasterLayerTools.onOpenGeoreference}>
+                      <i className="fa-solid fa-map-location-dot" aria-hidden />
+                    </button>
+                  ) : null}
+                  <button type="button" className="gis-dm-btn gis-dm-btn--ghost gis-dm-btn--sm" title="Remove raster" onClick={rasterLayerTools.onRemove}>
+                    <i className="fa-solid fa-trash" aria-hidden />
+                  </button>
+                </div>
+              </div>
+
+              <dl className="gis-dm-kv gis-dm-raster-layer__meta">
+                <dt>Bands</dt>
+                <dd>{layer.bands ?? '—'}</dd>
+                <dt>Size</dt>
+                <dd>
+                  {layer.width && layer.height ? `${layer.width} × ${layer.height}` : '—'}
+                </dd>
+                <dt>CRS</dt>
+                <dd>{layer.crs || '—'}</dd>
+                <dt>Type</dt>
+                <dd>
+                  {layer.isCog ? 'COG' : 'Raster'}
+                  {layer.georeferenced === false ? ' · needs georef' : ''}
+                </dd>
+              </dl>
+
+              <div className="gis-dm-raster-layer__display">
+                <div className="gis-dm-raster-layer__display-head">
+                  <span>Display</span>
+                  <button type="button" className="gis-dm-btn gis-dm-btn--ghost gis-dm-btn--sm" onClick={rasterLayerTools.onResetDisplay}>
+                    Reset
+                  </button>
+                </div>
+                {(
+                  [
+                    ['opacity', 'Opacity', 0, 1, 0.01, v => `${Math.round(v * 100)}%`],
+                    ['brightness', 'Brightness', 0, 1, 0.01, v => `${Math.round(v * 100)}%`],
+                    ['contrast', 'Contrast', -1, 1, 0.01, v => v.toFixed(2)],
+                    ['saturation', 'Saturation', -1, 1, 0.01, v => v.toFixed(2)],
+                    ['hue', 'Hue', 0, 359, 1, v => `${Math.round(v)}°`],
+                  ] as const
+                ).map(([key, label, min, max, step, fmt]) => (
+                  <label key={key} className="gis-dm-raster-slider">
+                    <span>{label}</span>
+                    <input
+                      type="range"
+                      min={min}
+                      max={max}
+                      step={step}
+                      value={display[key]}
+                      disabled={rasterLayerTools.busy}
+                      onChange={e => rasterLayerTools.onDisplayChange(key, Number(e.target.value))}
+                    />
+                    <em>{fmt(display[key])}</em>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="gis-dm-raster-empty" role="status">
+              <i className="fa-regular fa-image" aria-hidden />
+              <p>No raster layer on the map yet.</p>
+              <p className="gis-dm-lead">Add a Raster Layer from file, URL, or cloud — then style it here.</p>
+            </div>
+          )}
+
+          {/* Add Raster Layer actions (menu-style) — intentionally not a GeoLibre “Load” row */}
+          <div className="gis-dm-raster-add">
+            <h4 className="gis-dm-raster-add__title">Add Raster Layer</h4>
+            <div className="gis-dm-raster-menu" role="menu" aria-label="Raster Layer actions">
+              <button
+                type="button"
+                role="menuitem"
+                className="gis-dm-raster-menu__item"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <i className="fa-solid fa-folder-open" aria-hidden /> From file…
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="gis-dm-raster-menu__item"
+                onClick={() => folderInputRef.current?.click()}
+              >
+                <i className="fa-solid fa-folder-tree" aria-hidden /> From folder…
+              </button>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              hidden
+              multiple
+              accept={RASTER_ACCEPT}
+              onChange={e => {
+                const files = e.target.files ? Array.from(e.target.files) : [];
+                e.target.value = '';
+                void stageRasterFiles(files);
+              }}
+            />
+            <input
+              ref={folderInputRef}
+              type="file"
+              hidden
+              // @ts-expect-error webkitdirectory is non-standard but supported
+              webkitdirectory=""
+              multiple
+              onChange={e => {
+                const files = e.target.files ? Array.from(e.target.files) : [];
+                e.target.value = '';
+                void stageRasterFiles(files);
+              }}
+            />
+
+            <div
+              className={`gis-dm-dropzone gis-dm-dropzone--compact${dropActive ? ' is-active' : ''}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => fileInputRef.current?.click()}
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click();
+              }}
+              onDragEnter={e => {
+                e.preventDefault();
+                setDropActive(true);
+              }}
+              onDragLeave={e => {
+                e.preventDefault();
+                if (e.currentTarget === e.target) setDropActive(false);
+              }}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => void onRasterDrop(e)}
+            >
+              <p className="gis-dm-dropzone-title">Drop GeoTIFF / COG / image here</p>
+              <p className="gis-dm-dropzone-sub">{RASTER_FORMAT_LABEL_LIST.slice(0, 4).join(' · ')}</p>
+            </div>
+
+            <div className="gis-dm-field" style={{ marginTop: 10 }}>
+              <span>From URL</span>
+              <div className="gis-dm-url-row">
+                <input
+                  className="gis-dm-input"
+                  type="url"
+                  placeholder="https://…/scene.tif"
+                  value={remoteUrl}
+                  onChange={e => setRemoteUrl(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="gis-dm-btn gis-dm-url-row__go"
+                  disabled={isImportingRemote || !remoteUrl.trim()}
+                  onClick={() => {
+                    void (async () => {
+                      try {
+                        await onImportRemoteUrl(remoteUrl.trim(), {
+                          layerName: layerName.trim() || undefined,
+                          asRaster: true,
+                        });
+                        pushRecent({
+                          id: uid('url'),
+                          title: remoteUrl.trim(),
+                          category: 'url',
+                          savedAt: new Date().toISOString(),
+                        });
+                        setRecentTick(t => t + 1);
+                        pushToast('ok', 'Remote raster imported');
+                      } catch (err) {
+                        pushToast('error', err instanceof Error ? err.message : 'URL import failed');
+                      }
+                    })();
+                  }}
+                >
+                  <i className="fa-solid fa-globe" aria-hidden /> {isImportingRemote ? '…' : 'Add'}
+                </button>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 10 }}>
+              <GisUploadCloudSources
+                cloudOnly
+                onFile={file => void stageRasterFiles([file])}
+                onStatus={msg => pushToast('info', msg)}
+              />
+            </div>
+
+            {stagedFiles.length ? (
+              <div className="gis-dm-card" style={{ marginTop: 10 }}>
+                <i className="fa-solid fa-file-image" aria-hidden />
+                <div className="gis-dm-card-main">
+                  <div className="gis-dm-card-title">{stagedFiles.map(f => f.name).join(', ')}</div>
+                  <div className="gis-dm-card-meta">
+                    {(stagedFiles.reduce((s, f) => s + f.size, 0) / (1024 * 1024)).toFixed(2)} MB
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="gis-dm-btn gis-dm-btn--ghost"
+                  onClick={() => {
+                    setStagedFiles([]);
+                    setPreview(null);
+                    setWizardStep('source');
+                  }}
+                >
+                  Clear
+                </button>
+              </div>
+            ) : null}
+
+            {previewBusy ? (
+              <div className="gis-dm-progress">
+                <div className="gis-dm-progress__track">
+                  <div className="gis-dm-progress__fill" style={{ width: `${progressPct}%` }} />
+                </div>
+                <div className="gis-dm-progress__label">Reading raster… {progressPct}%</div>
+              </div>
+            ) : null}
+
+            {preview ? (
+              <div className="gis-dm-preview-panel">
+                <dl className="gis-dm-kv">
+                  <dt>File</dt>
+                  <dd>{preview.filename}</dd>
+                  <dt>CRS</dt>
+                  <dd>{preview.crsHint || 'Read on add'}</dd>
+                </dl>
+                <button
+                  type="button"
+                  className="gis-dm-btn gis-dm-btn--primary"
+                  disabled={importBusy}
+                  onClick={() => void runRasterImport()}
+                >
+                  <i className="fa-solid fa-plus" aria-hidden /> {importBusy ? 'Adding…' : 'Add Raster Layer'}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </WorkspaceSection>
+      );
+    }
+
+    if (category === 'vector' || category === 'bim') {
+      const labels = category === 'bim' ? ['IFC'] : [...VECTOR_FORMAT_LABEL_LIST];
       return (
         <WorkspaceSection
-          title={category === 'raster' ? 'Raster data' : category === 'bim' ? 'BIM / CAD' : 'Vector data'}
+          title={category === 'bim' ? 'BIM / CAD' : 'Vector data'}
           lead={
-            category === 'raster'
-              ? 'GeoTIFF and images with world files (.tfw/.jgw/.pgw). Multi-file bundles supported.'
-              : category === 'bim'
-                ? 'IFC models are anchored as map footprints for GIS workflows.'
-                : 'Shapefile (ZIP or multi-part), GeoJSON, TopoJSON, KML/KMZ, GPX, CSV, Excel.'
+            category === 'bim'
+              ? 'IFC models are anchored as map footprints for GIS workflows.'
+              : 'Shapefile (ZIP or multi-part), GeoJSON, TopoJSON, KML/KMZ, GPX, CSV, Excel.'
           }
         >
           <div
@@ -553,9 +956,9 @@ export function GisDataManager({
           </div>
 
           {category !== 'bim' ? (
-            <>
-              <label className="gis-dm-field" style={{ marginTop: 14 }}>
-                <span>Import from URL</span>
+            <div className="gis-dm-field" style={{ marginTop: 14 }}>
+              <span>Import from URL</span>
+              <div className="gis-dm-url-row">
                 <input
                   className="gis-dm-input"
                   type="url"
@@ -563,38 +966,37 @@ export function GisDataManager({
                   value={remoteUrl}
                   onChange={e => setRemoteUrl(e.target.value)}
                 />
-              </label>
-              <button
-                type="button"
-                className="gis-dm-btn"
-                disabled={isImportingRemote || !remoteUrl.trim()}
-                onClick={() => {
-                  void (async () => {
-                    try {
-                      await onImportRemoteUrl(remoteUrl.trim(), {
-                        layerName: layerName.trim() || undefined,
-                        asRaster: category === 'raster',
-                      });
-                      pushRecent({
-                        id: uid('url'),
-                        title: remoteUrl.trim(),
-                        category: 'url',
-                        savedAt: new Date().toISOString(),
-                      });
-                      setRecentTick(t => t + 1);
-                      pushToast('ok', 'Remote source imported');
-                    } catch (err) {
-                      pushToast('error', err instanceof Error ? err.message : 'URL import failed');
-                    }
-                  })();
-                }}
-              >
-                <i className="fa-solid fa-globe" aria-hidden /> {isImportingRemote ? 'Importing…' : 'Import URL'}
-              </button>
-            </>
+                <button
+                  type="button"
+                  className="gis-dm-btn gis-dm-url-row__go"
+                  disabled={isImportingRemote || !remoteUrl.trim()}
+                  onClick={() => {
+                    void (async () => {
+                      try {
+                        await onImportRemoteUrl(remoteUrl.trim(), {
+                          layerName: layerName.trim() || undefined,
+                        });
+                        pushRecent({
+                          id: uid('url'),
+                          title: remoteUrl.trim(),
+                          category: 'url',
+                          savedAt: new Date().toISOString(),
+                        });
+                        setRecentTick(t => t + 1);
+                        pushToast('ok', 'Remote source imported');
+                      } catch (err) {
+                        pushToast('error', err instanceof Error ? err.message : 'URL import failed');
+                      }
+                    })();
+                  }}
+                >
+                  <i className="fa-solid fa-globe" aria-hidden /> {isImportingRemote ? 'Importing…' : 'Import URL'}
+                </button>
+              </div>
+            </div>
           ) : null}
 
-          {category === 'vector' || category === 'raster' ? (
+          {category === 'vector' ? (
             <div style={{ marginTop: 12 }}>
               <GisUploadCloudSources
                 cloudOnly
@@ -836,8 +1238,10 @@ export function GisDataManager({
           <GisUploadCloudSources
             cloudOnly
             onFile={file => {
-              setCategory(/\.(tif|tiff|png|jpe?g)$/i.test(file.name) ? 'raster' : 'vector');
-              void stageIncomingFiles([file]);
+              const isRaster = /\.(tif|tiff|geotiff|jp2|j2k|png|jpe?g|webp|gif|bmp)$/i.test(file.name);
+              setCategory(isRaster ? 'raster' : 'vector');
+              if (isRaster) void stageRasterFiles([file]);
+              else void stageIncomingFiles([file]);
             }}
             onStatus={msg => pushToast('info', msg)}
           />
@@ -1123,7 +1527,7 @@ export function GisDataManager({
         }
         onMouseDown={e => e.stopPropagation()}
       >
-        <header className="gis-dm-head">
+        <header className="gis-dm-head" onPointerDown={startDrag}>
           <div className="gis-dm-brand">
             <span className="gis-dm-brand-mark" aria-hidden>
               <i className="fa-solid fa-map" />

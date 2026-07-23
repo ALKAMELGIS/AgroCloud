@@ -99,7 +99,7 @@ export type AgroCloudDashboardGalleryCard = {
 
 export const AGROCLOUD_DASHBOARD_AUTHOR = 'subscriptions@eliteprojects.ae'
 export const AGROCLOUD_DASHBOARD_ORG = 'Elite Agro Projects LLC'
-/** Product name shown in dashboard builder / GIS Content (not GeoSyntra). */
+/** Product name shown in dashboard builder / GIS Content. */
 export const AGROCLOUD_PRODUCT_NAME = 'Elite AgroCloud'
 
 export const AGROCLOUD_DASHBOARD_GALLERY_SEED: AgroCloudDashboardGalleryCard[] = [

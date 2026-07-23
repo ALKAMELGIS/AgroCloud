@@ -9,10 +9,14 @@ export type SmartProcessingSectionId =
   | 'crop-classification'
   | 'ai-detection-gis'
   | 'tree-detections'
+  | 'sam-detection'
+  | 'agri-field-boundary'
   | 'hydro-watershed'
   | 'well-site'
   | 'well-suitability'
   | 'flood-monitoring'
+  | 'image-classification'
+  | 'raster-georeference'
   | 'table-geo-ai';
 
 export type SmartProcessingWorkflowPanelProps = {
@@ -37,6 +41,8 @@ const QUICK_LINKS: Array<{ id: SmartProcessingSectionId; icon: string; label: st
   { id: 'crop-classification', icon: 'fa-solid fa-wheat-awn', label: 'Crop AI' },
   { id: 'ai-detection-gis', icon: 'fa-solid fa-magnifying-glass-location', label: 'AI Detection in GIS' },
   { id: 'tree-detections', icon: 'fa-solid fa-tree', label: 'Tree Detections' },
+  { id: 'sam-detection', icon: 'fa-solid fa-wand-magic-sparkles', label: 'AI SAM Detection' },
+  { id: 'agri-field-boundary', icon: 'fa-solid fa-crop-simple', label: 'Field Boundaries' },
   { id: 'hydro-watershed', icon: 'fa-solid fa-water', label: 'Hydro Watershed' },
   { id: 'table-geo-ai', icon: 'fa-solid fa-comments', label: 'Geo AI' },
 ];

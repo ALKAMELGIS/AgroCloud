@@ -488,130 +488,25 @@ function mapboxImageCoordinatesFromBounds(west: number, south: number, east: num
   ];
 }
 
+/**
+ * GeoTIFF → Mapbox-ready raster via the SI georef pipeline (proj4 corners + PNG preview).
+ * Projected CRS GeoTIFFs are supported; WGS84-only AABB placement is intentionally not used.
+ */
 async function parseGeoTiffToRaster(file: File, opts?: ParseOptions): Promise<ParsedData> {
-  let fromArrayBuffer: (buf: ArrayBuffer) => Promise<any>;
-  try {
-    ({ fromArrayBuffer } = await import('geotiff'));
-  } catch {
-    throw new Error(
-      'GeoTIFF reader is not installed. From the frontend folder run: npm install geotiff — then reload the app.',
-    );
-  }
-
-  const ab = await readAsArrayBuffer(file, opts);
-  await yieldToBrowser();
-  const tiff = await fromArrayBuffer(ab);
-  const image = await tiff.getImage();
-  const bbox = image.getBoundingBox();
-  const [w, s, e1, n] = bbox;
-  if (!looksLikeGeographicBbox(w, s, e1, n)) {
-    throw new Error(
-      'GeoTIFF extent is not in WGS84 lon/lat. Reproject to EPSG:4326 (or use a GeoTIFF with geographic GeoKeys) and upload again.',
-    );
-  }
-  const west = Math.min(w, e1);
-  const east = Math.max(w, e1);
-  const south = Math.min(s, n);
-  const north = Math.max(s, n);
-
-  const iw = image.getWidth();
-  const ih = image.getHeight();
-  const maxDim = 2048;
-  const scale = Math.min(1, maxDim / Math.max(iw, ih, 1));
-  const tw = Math.max(1, Math.floor(iw * scale));
-  const th = Math.max(1, Math.floor(ih * scale));
-
-  const samples = image.getSamplesPerPixel();
-  const rasters = await image.readRasters(
-    samples >= 3 ? { width: tw, height: th, interleave: true } : { width: tw, height: th },
-  );
-  await yieldToBrowser();
-
-  const canvas = document.createElement('canvas');
-  canvas.width = tw;
-  canvas.height = th;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Could not create canvas for GeoTIFF preview.');
-
-  const imgData = ctx.createImageData(tw, th);
-  const out = imgData.data;
-
-  if (samples >= 3 && rasters && (rasters as any).length >= tw * th * 3) {
-    const data = rasters as any as ArrayLike<number>;
-    let mx = 1e-9;
-    const px = tw * th;
-    for (let i = 0; i < px * 3; i++) {
-      const v = Math.abs(Number(data[i]));
-      if (Number.isFinite(v) && v > mx) mx = v;
-    }
-    const scale = mx > 255 ? 255 / mx : 1;
-    let p = 0;
-    for (let i = 0; i < px; i++) {
-      const o = i * 3;
-      out[p++] = Math.min(255, Math.max(0, Math.round(Number(data[o]) * scale)));
-      out[p++] = Math.min(255, Math.max(0, Math.round(Number(data[o + 1]) * scale)));
-      out[p++] = Math.min(255, Math.max(0, Math.round(Number(data[o + 2]) * scale)));
-      out[p++] = 255;
-    }
-  } else {
-    const band0 = Array.isArray(rasters) ? (rasters as any)[0] : rasters;
-    const flat: number[] = band0 && (band0 as any).length ? Array.from(band0 as any) : [];
-    let mn = Number.POSITIVE_INFINITY;
-    let mx = Number.NEGATIVE_INFINITY;
-    for (const v of flat) {
-      if (!Number.isFinite(v)) continue;
-      if (v < mn) mn = v;
-      if (v > mx) mx = v;
-    }
-    if (!Number.isFinite(mn) || !Number.isFinite(mx) || mx <= mn) {
-      mn = 0;
-      mx = 255;
-    }
-    for (let i = 0; i < tw * th; i++) {
-      const v = flat[i];
-      const t = Number.isFinite(v) ? (v - mn) / (mx - mn) : 0;
-      const g = Math.max(0, Math.min(255, Math.round(t * 255)));
-      const o = i * 4;
-      out[o] = g;
-      out[o + 1] = g;
-      out[o + 2] = g;
-      out[o + 3] = 255;
-    }
-  }
-  ctx.putImageData(imgData, 0, 0);
-
-  const previewObjectUrl = await new Promise<string>((resolve, reject) => {
-    canvas.toBlob(
-      blob => {
-        if (!blob) {
-          reject(new Error('GeoTIFF preview encoding failed.'));
-          return;
-        }
-        resolve(URL.createObjectURL(blob));
-      },
-      'image/png',
-      0.92,
-    );
-  });
-
-  let crsHint: string | undefined;
-  try {
-    const fd = image.getFileDirectory?.() as any;
-    const gk = fd?.GeoKeyDirectory;
-    if (gk && typeof gk === 'object') crsHint = `GeoKeys present (${Object.keys(gk).length} entries)`;
-  } catch {
-    /* ignore */
-  }
-
+  opts?.onProgress?.(10);
+  const { processRasterFiles } = await import('../lib/aiDetection/siAiDlRasterPipeline');
+  opts?.onProgress?.(40);
+  const result = await processRasterFiles([file], opts?.imagePlacementBounds);
+  opts?.onProgress?.(100);
   return {
     type: 'raster',
     filename: file.name,
-    previewObjectUrl,
-    coordinates: mapboxImageCoordinatesFromBounds(west, south, east, north),
-    crsHint,
-    widthPx: iw,
-    heightPx: ih,
-    bands: samples,
+    previewObjectUrl: result.previewUrl,
+    coordinates: result.coordinates,
+    crsHint: result.validation.sourceCrs,
+    widthPx: result.validation.widthPx,
+    heightPx: result.validation.heightPx,
+    bands: result.validation.bands,
   };
 }
 
@@ -929,5 +824,5 @@ export const BIM_UPLOAD_EXTENSIONS = ['ifc'] as const;
 export const VECTOR_ACCEPT =
   '.geojson,.json,.topojson,.zip,.kml,.kmz,.gpx,.csv,.xlsx,.xls,.shp,.dbf,.shx,.prj,.cpg';
 
-export const RASTER_ACCEPT = '.tif,.tiff,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tfw,.pgw,.jgw,.wld,.prj,.aux.xml';
+export const RASTER_ACCEPT = '.tif,.tiff,.geotiff,.jp2,.j2k,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tfw,.pgw,.jgw,.jpgw,.wld,.prj,.xml,.aux.xml';
 

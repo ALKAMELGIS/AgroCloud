@@ -20,8 +20,9 @@ export const VECTOR_FORMAT_LABEL_LIST = [
 
 /** Short chip labels for the raster dropzone. */
 export const RASTER_FORMAT_LABEL_LIST = [
-  'GeoTIFF',
-  'PNG/JPG + world file',
+  'GeoTIFF / COG',
+  'JP2',
+  'PNG / JPG (+ world file / DIMAP)',
   'WebP',
   'GIF',
   'BMP',

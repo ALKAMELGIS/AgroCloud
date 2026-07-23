@@ -33,6 +33,8 @@ export type TimeSeriesReportCharts = {
   labels: string[]
   displayLabels: string[]
   series: ImageryTimeSeriesLayerSeries[]
+  /** Period key → representative scene date (YYYY-MM-DD) for weather↔index alignment. */
+  periodAnchorDates?: Record<string, string>
 }
 
 export type TimeSeriesMapSnapshot = {
@@ -55,6 +57,41 @@ export type TimeSeriesMapSnapshotGroup = {
   layerId: string
   title: string
   snapshots: TimeSeriesMapSnapshot[]
+}
+
+/** Per-class LULC composition for one year (Word charts + tables). */
+export type LulcYearClassStat = {
+  key: string
+  name: string
+  color: string
+  pct: number
+  areaHa: number
+}
+
+export type LulcYearComposition = {
+  year: number
+  sceneDate: string
+  totalAreaHa: number
+  classes: LulcYearClassStat[]
+}
+
+/** Consecutive-year LULC change (Δha / Δ percentage points). */
+export type LulcChangeClassStat = {
+  key: string
+  name: string
+  color: string
+  areaHaFrom: number
+  areaHaTo: number
+  pctFrom: number
+  pctTo: number
+  deltaHa: number
+  deltaPctPoints: number
+}
+
+export type LulcChangePairComposition = {
+  yearFrom: number
+  yearTo: number
+  classes: LulcChangeClassStat[]
 }
 
 export type TimeSeriesCorrelationReportBlock = {
@@ -88,6 +125,14 @@ export type TimeSeriesReportPayload = {
   mapSnapshotGroups: TimeSeriesMapSnapshotGroup[]
   /** Peak-of-period composite maps appended after the full period atlas. */
   cumulativeMapSnapshotGroups: TimeSeriesMapSnapshotGroup[]
+  /** LULC five-year atlas + consecutive-year change detection pairs. */
+  lulcMapSnapshotGroups: TimeSeriesMapSnapshotGroup[]
+  /** Yearly LULC class areas (%) and ha for charts/tables under maps. */
+  lulcYearCompositions: LulcYearComposition[]
+  /** Consecutive-year LULC change stats for change-detection sections. */
+  lulcChangeCompositions: LulcChangePairComposition[]
+  /** Per-index start→end change detection map pairs. */
+  changeDetectionMapSnapshotGroups: TimeSeriesMapSnapshotGroup[]
   vegetationCoverageTimeline: VegetationCoveragePoint[]
   estimatedWaterLossTimeline: EstimatedWaterLossPoint[]
   weatherTimeline: TimeSeriesWeatherBlock | null

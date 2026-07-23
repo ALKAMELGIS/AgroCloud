@@ -17,13 +17,16 @@ const wmsProxyLayerCache = new Map()
 const WMS_ZONAL_STATS_EVALSCRIPT = `//VERSION=3
 function setup() {
   return {
-    input: [{ bands: ["B02", "B03", "B04", "B08", "B11", "SCL", "dataMask"] }],
+    input: [{ bands: ["B02", "B03", "B04", "B08", "B11", "SCL", "CLM", "CLP", "dataMask"] }],
     output: { bands: 4, sampleType: "UINT8" }
   };
 }
 function evaluatePixel(s) {
   var scl = s.SCL;
-  var cloud = (scl == 3 || scl == 8 || scl == 9 || scl == 10 || scl == 11);
+  // Hard clouds only (nodata / saturated / shadow / med+high cloud / s2cloudless).
+  // Thin cirrus (10), snow (11), and soft CLP are NOT hard-masked — desert sand and arid
+  // farms were being wiped out and crop classification then had "0 clear scenes".
+  var cloud = (scl == 0 || scl == 1 || scl == 3 || scl == 8 || scl == 9) || s.CLM == 1;
   if (!s.dataMask || cloud) return [0, 0, 0, 0];
   var dNdvi = s.B08 + s.B04;
   var ndvi = dNdvi > 1e-6 ? (s.B08 - s.B04) / dNdvi : 0;
@@ -31,17 +34,48 @@ function evaluatePixel(s) {
   var ndwi = dNdwi > 1e-6 ? (s.B03 - s.B08) / dNdwi : 0;
   var dNdmi = s.B08 + s.B11;
   var ndmi = dNdmi > 1e-6 ? (s.B08 - s.B11) / dNdmi : 0;
-  var dNdSnow = s.B03 + s.B11;
-  var ndsi = dNdSnow > 1e-6 ? (s.B03 - s.B11) / dNdSnow : 0;
   function enc(v) {
     if (isNaN(v)) return 0;
-    var raw = Math.round((v + 1) * 127);
-    return Math.max(1, Math.min(254, raw === 0 ? 1 : raw));
+    return Math.max(0, Math.min(254, Math.round((v + 1) * 127)));
   }
-  return [enc(ndvi), enc(ndwi), enc(ndmi), enc(ndsi)];
+  // Alpha marks validity; RGB may be 0 for real low indices (water) — do not treat as nodata.
+  return [enc(ndvi), enc(ndwi), enc(ndmi), 255];
 }`
 
 const WMS_STATS_EVALSCRIPT_B64 = Buffer.from(WMS_ZONAL_STATS_EVALSCRIPT, 'utf8').toString('base64')
+
+/**
+ * Extended zonal pack: R=salinity NDSI (B11−B08)/(B11+B08), G=NDRE (B08−B05)/(B08+B05),
+ * B=SI √(B03·B04) encoded 0–1 → 0–254, A=valid. Merged with core pack for full chart layers.
+ */
+const WMS_ZONAL_EXT_EVALSCRIPT = `//VERSION=3
+function setup() {
+  return {
+    input: [{ bands: ["B03", "B04", "B05", "B08", "B11", "SCL", "CLM", "CLP", "dataMask"] }],
+    output: { bands: 4, sampleType: "UINT8" }
+  };
+}
+function evaluatePixel(s) {
+  var scl = s.SCL;
+  var cloud = (scl == 0 || scl == 1 || scl == 3 || scl == 8 || scl == 9 || scl == 10) || s.CLM == 1 || s.CLP > 50;
+  if (!s.dataMask || cloud) return [0, 0, 0, 0];
+  var dNdsi = s.B11 + s.B08;
+  var ndsi = dNdsi > 1e-6 ? (s.B11 - s.B08) / dNdsi : 0;
+  var dNdre = s.B08 + s.B05;
+  var ndre = dNdre > 1e-6 ? (s.B08 - s.B05) / dNdre : 0;
+  var si = Math.sqrt(Math.max(0, s.B03 * s.B04));
+  function enc(v) {
+    if (isNaN(v)) return 0;
+    return Math.max(0, Math.min(254, Math.round((v + 1) * 127)));
+  }
+  function enc01(v) {
+    if (isNaN(v)) return 0;
+    return Math.max(0, Math.min(254, Math.round(v * 254)));
+  }
+  return [enc(ndsi), enc(ndre), enc01(si), 255];
+}`
+
+const WMS_STATS_EXT_EVALSCRIPT_B64 = Buffer.from(WMS_ZONAL_EXT_EVALSCRIPT, 'utf8').toString('base64')
 
 /**
  * Per-pixel grid for AOI class-area histograms: R=NDVI, G=NDWI, B=NIR (B08),
@@ -52,13 +86,13 @@ const WMS_STATS_EVALSCRIPT_B64 = Buffer.from(WMS_ZONAL_STATS_EVALSCRIPT, 'utf8')
 const WMS_CLASS_GRID_EVALSCRIPT = `//VERSION=3
 function setup() {
   return {
-    input: [{ bands: ["B03", "B04", "B08", "SCL", "dataMask"] }],
+    input: [{ bands: ["B03", "B04", "B08", "SCL", "CLM", "CLP", "dataMask"] }],
     output: { bands: 4, sampleType: "UINT8" }
   };
 }
 function evaluatePixel(s) {
   var scl = s.SCL;
-  var cloud = (scl == 3 || scl == 8 || scl == 9 || scl == 10 || scl == 11);
+  var cloud = (scl == 0 || scl == 1 || scl == 3 || scl == 8 || scl == 9 || scl == 10) || s.CLM == 1 || s.CLP > 50;
   if (!s.dataMask || cloud) return [0, 0, 0, 0];
   var dNdvi = s.B08 + s.B04;
   var ndvi = dNdvi > 1e-6 ? (s.B08 - s.B04) / dNdvi : 0;
@@ -81,13 +115,13 @@ const WMS_CLASS_GRID_EVALSCRIPT_B64 = Buffer.from(WMS_CLASS_GRID_EVALSCRIPT, 'ut
 const WMS_ET_CLASS_GRID_EVALSCRIPT = `//VERSION=3
 function setup() {
   return {
-    input: [{ bands: ["B03", "B08", "B11", "SCL", "dataMask"] }],
+    input: [{ bands: ["B03", "B08", "B11", "SCL", "CLM", "CLP", "dataMask"] }],
     output: { bands: 4, sampleType: "UINT8" }
   };
 }
 function evaluatePixel(s) {
   var scl = s.SCL;
-  var cloud = (scl == 3 || scl == 8 || scl == 9 || scl == 10 || scl == 11);
+  var cloud = (scl == 0 || scl == 1 || scl == 3 || scl == 8 || scl == 9 || scl == 10) || s.CLM == 1 || s.CLP > 50;
   if (!s.dataMask || cloud) return [0, 0, 0, 0];
   var dNdmi = s.B08 + s.B11;
   var ndmi = dNdmi > 1e-6 ? (s.B08 - s.B11) / dNdmi : 0;
@@ -543,35 +577,57 @@ export function decodeWmsZonalStatsFromPng(buffer) {
   let ndviSum = 0
   let ndwiSum = 0
   let ndmiSum = 0
-  let ndsiSum = 0
-  let ndsiMin = Number.POSITIVE_INFINITY
-  let ndsiMax = Number.NEGATIVE_INFINITY
   let count = 0
   for (let i = 0; i < png.data.length; i += 4) {
     const r = png.data[i]
     const g = png.data[i + 1]
     const b = png.data[i + 2]
     const a = png.data[i + 3]
-    if (r === 0 && g === 0 && b === 0 && a === 0) continue
-    const ndsiVal = a / 127 - 1
+    if (a < 128 || (r === 0 && g === 0 && b === 0)) continue
     ndviSum += r / 127 - 1
     ndwiSum += g / 127 - 1
     ndmiSum += b / 127 - 1
-    ndsiSum += ndsiVal
-    if (ndsiVal < ndsiMin) ndsiMin = ndsiVal
-    if (ndsiVal > ndsiMax) ndsiMax = ndsiVal
     count += 1
   }
   if (count === 0) {
-    return { ndvi: null, ndwi: null, ndmi: null, ndsi: null, ndsiMin: null, ndsiMax: null, sampleCount: 0 }
+    return { ndvi: null, ndwi: null, ndmi: null, sampleCount: 0 }
   }
   return {
     ndvi: Number((ndviSum / count).toFixed(4)),
     ndwi: Number((ndwiSum / count).toFixed(4)),
     ndmi: Number((ndmiSum / count).toFixed(4)),
-    ndsi: Number((ndsiSum / count).toFixed(4)),
-    ndsiMin: Number(ndsiMin.toFixed(4)),
-    ndsiMax: Number(ndsiMax.toFixed(4)),
+    sampleCount: count,
+  }
+}
+
+/** Decode extended pack: R=NDSI, G=NDRE, B=SI(0–1), A=valid. */
+export function decodeWmsZonalExtStatsFromPng(buffer) {
+  const png = PNG.sync.read(buffer)
+  let ndsiSum = 0
+  let ndreSum = 0
+  let siSum = 0
+  let count = 0
+  for (let i = 0; i < png.data.length; i += 4) {
+    const r = png.data[i]
+    const g = png.data[i + 1]
+    const b = png.data[i + 2]
+    const a = png.data[i + 3]
+    if (a < 128) continue
+    ndsiSum += r / 127 - 1
+    ndreSum += g / 127 - 1
+    siSum += b / 254
+    count += 1
+  }
+  if (count === 0) {
+    return { ndsi: null, ndre: null, si: null, ssi: null, sampleCount: 0 }
+  }
+  const ndsi = Number((ndsiSum / count).toFixed(4))
+  const si = Number((siSum / count).toFixed(4))
+  return {
+    ndsi,
+    ndre: Number((ndreSum / count).toFixed(4)),
+    si,
+    ssi: Number((ndsi + si).toFixed(4)),
     sampleCount: count,
   }
 }
@@ -619,6 +675,163 @@ export async function fetchPcSentinelSceneDates(geometry, fromIso, toIso, maxClo
   ]
   dates.sort((a, b) => a.localeCompare(b))
   return dates.slice(0, MAX_SCENE_FETCHES)
+}
+
+/**
+ * Like {@link fetchPcSentinelSceneDates} but returns each acquisition date together with
+ * its scene-level `eo:cloud_cover` (%), so callers can reject cloudy scenes and pick the
+ * clearest date. Deduplicated by day, keeping the least-cloudy scene per day.
+ * @param {GeoJSON.Geometry} geometry
+ * @returns {Promise<Array<{ date: string; cloudCover: number }>>}
+ */
+export async function fetchPcSentinelSceneCloudCover(geometry, fromIso, toIso, maxCloudCoverage) {
+  const body = {
+    collections: ['sentinel-2-l2a'],
+    intersects: geometry,
+    datetime: `${fromIso.slice(0, 10)}T00:00:00Z/${toIso.slice(0, 10)}T23:59:59Z`,
+    limit: 500,
+    sortby: [{ field: 'datetime', direction: 'asc' }],
+  }
+  if (typeof maxCloudCoverage === 'number' && Number.isFinite(maxCloudCoverage)) {
+    body.query = { 'eo:cloud_cover': { lt: maxCloudCoverage } }
+  }
+  const res = await fetch(PC_SENTINEL_STAC_SEARCH_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`Planetary Computer STAC search failed (${res.status}): ${text.slice(0, 180)}`)
+  }
+  const json = await res.json()
+  const features = Array.isArray(json.features) ? json.features : []
+  /** @type {Map<string, number>} */
+  const byDay = new Map()
+  for (const f of features) {
+    const day = stacFeatureCalendarIso(f)
+    if (!day) continue
+    const cc = Number(f?.properties?.['eo:cloud_cover'])
+    const cloud = Number.isFinite(cc) ? cc : 100
+    const prev = byDay.get(day)
+    if (prev == null || cloud < prev) byDay.set(day, cloud)
+  }
+  return [...byDay.entries()]
+    .map(([date, cloudCover]) => ({ date, cloudCover }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
+
+/**
+ * Pick the clearest Sentinel-2 acquisition date for each of `timesteps` evenly-spaced
+ * windows across the season.
+ *
+ * Important: Planetary Computer `eo:cloud_cover` is **granule-level** (~100 km tile), not
+ * AOI-level. A farm can be clear while the tile reports 20–40% cloud elsewhere. Therefore:
+ *   1. Prefer scenes under a soft preferred ceiling (clearest first).
+ *   2. Accept up to `maxCloud` (default 40%) as candidates — never hard-gate at 5%.
+ *   3. If windows still under-fill, fall back to the N clearest, temporally spaced dates
+ *      across the whole season.
+ * AOI-level clarity is enforced later via SCL/CLM clear-fraction on the fetched grid.
+ *
+ * @param {GeoJSON.Geometry} geometry
+ * @param {{ start: string; end: string }} season
+ * @param {number} [timesteps=3]
+ * @param {number} [maxCloud=40]  Granule-level STAC ceiling for candidates (%)
+ * @returns {Promise<Array<{ date: string; cloudCover: number | null; cloudy: boolean }>>}
+ */
+export async function selectClearSceneDates(geometry, season, timesteps, maxCloud = 40) {
+  const start = new Date(`${season.start}T00:00:00Z`).getTime()
+  const end = new Date(`${season.end}T00:00:00Z`).getTime()
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+    throw new Error('Invalid season range')
+  }
+  const steps = Math.max(1, Math.min(6, Number(timesteps) || 3))
+  const ceiling = Math.max(5, Math.min(100, Number(maxCloud) || 40))
+  // Soft preference: take near-clear granules when available; otherwise relax to `ceiling`.
+  const preferred = Math.min(ceiling, 20)
+  const iso = ms => new Date(ms).toISOString().slice(0, 10)
+  const dayMs = d => new Date(`${d}T00:00:00Z`).getTime()
+
+  /** @param {Array<{ date: string; cloudCover: number }>} scenes @param {number} centre */
+  const pickBest = (scenes, centre) => {
+    if (!scenes.length) return null
+    const centreDist = s => Math.abs(dayMs(s.date) - centre)
+    const ranked = [...scenes].sort(
+      (a, b) => a.cloudCover - b.cloudCover || centreDist(a) - centreDist(b),
+    )
+    const soft = ranked.filter(s => s.cloudCover <= preferred)
+    return (soft.length ? soft : ranked)[0] ?? null
+  }
+
+  const out = []
+  const usedDays = new Set()
+  for (let i = 0; i < steps; i += 1) {
+    const wStart = start + ((end - start) * i) / steps
+    const wEnd = start + ((end - start) * (i + 1)) / steps
+    const centre = (wStart + wEnd) / 2
+    let scenes = []
+    try {
+      // No STAC pre-filter — granule cloud is advisory; we rank locally.
+      scenes = await fetchPcSentinelSceneCloudCover(geometry, iso(wStart), iso(wEnd), null)
+    } catch {
+      scenes = []
+    }
+    scenes = scenes.filter(
+      s => !usedDays.has(s.date) && Number.isFinite(s.cloudCover) && s.cloudCover <= ceiling,
+    )
+    const chosen = pickBest(scenes, centre)
+    if (!chosen) continue
+    usedDays.add(chosen.date)
+    out.push({ date: chosen.date, cloudCover: chosen.cloudCover, cloudy: false })
+  }
+
+  // Season-wide fallback: windows can all miss when clouds cluster; still pick best dates.
+  if (out.length < Math.min(2, steps)) {
+    let all = []
+    try {
+      all = await fetchPcSentinelSceneCloudCover(geometry, iso(start), iso(end), null)
+    } catch {
+      all = []
+    }
+    all = all
+      .filter(s => !usedDays.has(s.date) && Number.isFinite(s.cloudCover) && s.cloudCover <= ceiling)
+      .sort((a, b) => a.cloudCover - b.cloudCover || a.date.localeCompare(b.date))
+    // Keep ~even temporal spacing (at least ~7 days apart when season allows).
+    const seasonDays = Math.max(1, (end - start) / 86400000)
+    const minGapDays = Math.max(5, Math.min(14, Math.floor(seasonDays / Math.max(steps, 2))))
+    const minGapMs = minGapDays * 86400000
+    for (const s of all) {
+      if (out.length >= steps) break
+      const t = dayMs(s.date)
+      let near = false
+      for (const u of usedDays) {
+        if (Math.abs(dayMs(u) - t) < minGapMs) {
+          near = true
+          break
+        }
+      }
+      if (near) continue
+      usedDays.add(s.date)
+      out.push({ date: s.date, cloudCover: s.cloudCover, cloudy: false })
+    }
+    // Last resort: fill remaining slots ignoring gap (still clearest first).
+    if (out.length < Math.min(2, steps)) {
+      for (const s of all) {
+        if (out.length >= steps) break
+        if (usedDays.has(s.date)) continue
+        usedDays.add(s.date)
+        out.push({ date: s.date, cloudCover: s.cloudCover, cloudy: false })
+      }
+    }
+  }
+
+  out.sort((a, b) => a.date.localeCompare(b.date))
+  if (!out.length) {
+    throw new Error(
+      `No usable Sentinel-2 scenes (granule cloud ≤ ${ceiling}%) found for this AOI/season. Try a wider season or a clearer period.`,
+    )
+  }
+  return out
 }
 
 async function resolveWmsEvalProxyLayer(baseUrl, accessToken) {
@@ -670,14 +883,47 @@ function buildWmsGetMapUrl(options) {
 }
 
 async function fetchWmsZonalStatsForScene(options) {
-  const url = buildWmsGetMapUrl(options)
-  const res = await fetch(url, { headers: { Accept: 'image/png' } })
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`WMS GetMap failed (${res.status}): ${text.slice(0, 160)}`)
+  const coreUrl = buildWmsGetMapUrl({
+    ...options,
+    evalscriptB64: options.evalscriptB64 ?? WMS_STATS_EVALSCRIPT_B64,
+  })
+  const extUrl = buildWmsGetMapUrl({
+    ...options,
+    evalscriptB64: WMS_STATS_EXT_EVALSCRIPT_B64,
+  })
+  const [coreRes, extRes] = await Promise.all([
+    fetch(coreUrl, { headers: { Accept: 'image/png' } }),
+    fetch(extUrl, { headers: { Accept: 'image/png' } }),
+  ])
+  if (!coreRes.ok) {
+    const text = await coreRes.text()
+    throw new Error(`WMS GetMap failed (${coreRes.status}): ${text.slice(0, 160)}`)
   }
-  const buffer = Buffer.from(await res.arrayBuffer())
-  return decodeWmsZonalStatsFromPng(buffer)
+  const coreBuf = Buffer.from(await coreRes.arrayBuffer())
+  const core = decodeWmsZonalStatsFromPng(coreBuf)
+  let ext = { ndsi: null, ndre: null, si: null, ssi: null, sampleCount: 0 }
+  if (extRes.ok) {
+    try {
+      ext = decodeWmsZonalExtStatsFromPng(Buffer.from(await extRes.arrayBuffer()))
+    } catch {
+      /* keep core-only */
+    }
+  }
+  // Approximate SAVI from NDVI (L=0.5) when bands are not separately averaged.
+  const saviEst =
+    core.ndvi != null && Number.isFinite(core.ndvi)
+      ? Number((((1 + 0.5) * core.ndvi) / (1 + 0.5 * Math.abs(core.ndvi) + 1e-6)).toFixed(4))
+      : null
+  return {
+    ...core,
+    ndsi: ext.ndsi,
+    ndre: ext.ndre,
+    si: ext.si,
+    ssi: ext.ssi,
+    savi: saviEst,
+    evi: null,
+    ciRe: null,
+  }
 }
 
 /**
@@ -697,12 +943,11 @@ export async function fetchSentinelWmsIndicesGrid(options) {
   const bbox3857 = bbox3857FromGeometry(options.geometry)
   if (!bbox3857) throw new Error('Could not derive bbox from AOI geometry.')
 
-  // High spatial resolution: sample at (close to) Sentinel-2 native 10 m/px and
-  // keep the grid aspect ratio aligned with the AOI bbox so fields aren't
-  // distorted. Capped so very large AOIs stay within WMS limits / payload size.
+  // High spatial resolution: sample at requested m/px (crop pipeline targets 3 m).
+  // Cap grid size so very large AOIs stay within WMS limits / payload size.
   const spanX = bbox3857[2] - bbox3857[0]
   const spanY = bbox3857[3] - bbox3857[1]
-  const mpp = Math.max(5, options.metersPerPixel ?? 10)
+  const mpp = Math.max(2, options.metersPerPixel ?? 10)
   const maxSize = options.maxSize ?? 1024
   const minSize = options.minSize ?? 128
   let width
@@ -716,6 +961,7 @@ export async function fetchSentinelWmsIndicesGrid(options) {
   }
   const baseUrl = `https://services.sentinel-hub.com/ogc/wms/${instanceId}`
   const layer = await resolveWmsEvalProxyLayer(baseUrl, accessToken)
+  const geometryWkt3857 = geometryToWmsClipWkt3857(options.geometry)
   const url = buildWmsGetMapUrl({
     baseUrl,
     accessToken,
@@ -725,8 +971,9 @@ export async function fetchSentinelWmsIndicesGrid(options) {
     height,
     timeStart: options.timeStart,
     timeEnd: options.timeEnd,
-    cloudCoverage: options.cloudCoverage ?? 60,
+    cloudCoverage: options.cloudCoverage ?? 40,
     format: 'image/png',
+    geometryWkt3857: geometryWkt3857 || undefined,
   })
   const res = await fetch(url, { headers: { Accept: 'image/png' } })
   if (!res.ok) {
@@ -745,7 +992,8 @@ export async function fetchSentinelWmsIndicesGrid(options) {
     const g = png.data[i + 1]
     const b = png.data[i + 2]
     const a = png.data[i + 3]
-    if (a < 128 || (r === 0 && g === 0 && b === 0)) {
+    // Validity is alpha only. RGB all-zero is a real encoded index triplet (≈ −1), not nodata.
+    if (a < 128) {
       valid[p] = 0
       continue
     }
@@ -805,18 +1053,44 @@ function buildStatisticalApiCompatibleResponse(rows) {
             },
             ndsi: {
               stats: {
-                mean: row.ndsi,
-                min: row.ndsiMin ?? row.ndsi,
-                max: row.ndsiMax ?? row.ndsi,
+                mean: row.ndsi ?? null,
                 sampleCount: row.sampleCount,
                 noDataCount: row.ndsi == null ? row.sampleCount : 0,
               },
             },
+            ndre: {
+              stats: {
+                mean: row.ndre ?? null,
+                sampleCount: row.sampleCount,
+                noDataCount: row.ndre == null ? row.sampleCount : 0,
+              },
+            },
+            si: {
+              stats: {
+                mean: row.si ?? null,
+                sampleCount: row.sampleCount,
+                noDataCount: row.si == null ? row.sampleCount : 0,
+              },
+            },
+            ssi: {
+              stats: {
+                mean: row.ssi ?? null,
+                sampleCount: row.sampleCount,
+                noDataCount: row.ssi == null ? row.sampleCount : 0,
+              },
+            },
+            savi: {
+              stats: {
+                mean: row.savi ?? null,
+                sampleCount: row.sampleCount,
+                noDataCount: row.savi == null ? row.sampleCount : 0,
+              },
+            },
             evi: {
               stats: {
-                mean: null,
+                mean: row.evi ?? null,
                 sampleCount: row.sampleCount,
-                noDataCount: row.sampleCount,
+                noDataCount: row.evi == null ? row.sampleCount : 0,
               },
             },
           },
@@ -890,41 +1164,14 @@ export async function postSentinelStatisticsViaWms(wmsConfig, body) {
         timeStart: sceneDate,
         timeEnd: addDaysToIso(sceneDate, 1),
       })
-      if (stats.sampleCount === 0) {
-        return { skip: { date: sceneDate, reason: 'no valid pixels after cloud mask' } }
-      }
-      if (stats.ndsi == null && stats.ndvi == null) {
-        return { skip: { date: sceneDate, reason: 'decode returned null NDSI and NDVI' } }
-      }
+      if (stats.sampleCount === 0 || (stats.ndvi == null && stats.ndsi == null && stats.ndmi == null)) return null
       return { date: sceneDate, ...stats }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      return { skip: { date: sceneDate, reason: `WMS fetch failed: ${message.slice(0, 120)}` } }
+    } catch {
+      return null
     }
   })
 
-  const skippedScenes = rows
-    .filter(row => row && 'skip' in row && row.skip)
-    .map(row => row.skip)
-  const validRows = rows
-    .filter(row => row && !('skip' in row && row.skip))
-    .sort((a, b) => a.date.localeCompare(b.date))
-
-  const snowNdsiRequest = String(body?.aggregation?.evalscript || '').includes('bands: ["B03", "B11"')
-  if (snowNdsiRequest || process.env.DEBUG_NDSI_TS === '1') {
-    console.log('[NDSI snow time series · WMS]', {
-      fromIso,
-      toIso,
-      cloudCoverage,
-      totalScenes: sceneDates.length,
-      scenesAfterCloudFilter: validRows.length,
-      computedNdsiCount: validRows.filter(row => row.ndsi != null && Number.isFinite(row.ndsi)).length,
-      skippedScenes: skippedScenes.length,
-      skippedSample: skippedScenes.slice(0, 12),
-      chartPoints: validRows.slice(0, 12).map(row => ({ date: row.date, ndsi: row.ndsi })),
-    })
-  }
-
+  const validRows = rows.filter(Boolean).sort((a, b) => a.date.localeCompare(b.date))
   return buildStatisticalApiCompatibleResponse(validRows)
 }
 
@@ -934,12 +1181,17 @@ export function isWmsStatisticsFallbackReady(accessToken, instanceId) {
 
 const WMS_TRUE_COLOR_EVALSCRIPT = `//VERSION=3
 function setup() {
-  return { input: ["B02", "B03", "B04", "dataMask"], output: { bands: 3, sampleType: "UINT8" } };
+  return {
+    input: ["B02", "B03", "B04", "dataMask"],
+    output: { bands: 4, sampleType: "UINT8" }
+  };
 }
 function evaluatePixel(s) {
-  if (!s.dataMask) return [0, 0, 0];
+  // Full natural RGB — do NOT cut cloudy pixels to black.
+  // Cloudy *dates* are excluded upstream via STAC MAXCC / scene selection.
+  if (!s.dataMask) return [0, 0, 0, 0];
   function c(v) { return Math.max(0, Math.min(255, Math.round(2.5 * v * 255))); }
-  return [c(s.B04), c(s.B03), c(s.B02)];
+  return [c(s.B04), c(s.B03), c(s.B02), 255];
 }`
 
 const WMS_TRUE_COLOR_EVALSCRIPT_B64 = Buffer.from(WMS_TRUE_COLOR_EVALSCRIPT, 'utf8').toString('base64')
@@ -978,7 +1230,7 @@ export async function fetchSentinelWmsTrueColorPng(options) {
     height: options.size ?? WMS_TILE_PIXELS,
     timeStart: options.timeStart,
     timeEnd: options.timeEnd,
-    cloudCoverage: options.cloudCoverage ?? 60,
+    cloudCoverage: options.cloudCoverage ?? 40,
     evalscriptB64: WMS_TRUE_COLOR_EVALSCRIPT_B64,
   })
   const res = await fetch(url, { headers: { Accept: 'image/png' } })
@@ -989,15 +1241,23 @@ export async function fetchSentinelWmsTrueColorPng(options) {
   return Buffer.from(await res.arrayBuffer())
 }
 
-/** HLS-equivalent 6 bands (Blue, Green, Red, Narrow NIR, SWIR1, SWIR2) scaled to reflectance×10000. */
+/**
+ * HLS-equivalent 6 bands (Blue, Green, Red, Narrow NIR, SWIR1, SWIR2) scaled to reflectance×10000.
+ * Cloudy pixels are masked to 0 (nodata) so NO cloud/shadow pixel enters Prithvi inference.
+ * Cloud signal = Scene Classification (SCL) cloud/shadow/cirrus/snow classes ∪ s2cloudless
+ * cloud mask (CLM) ∪ cloud probability (CLP) — the Sentinel-2 L2A equivalent of QA60 masking.
+ */
 const WMS_HLS_BANDS_EVALSCRIPT = `//VERSION=3
 function setup() {
   return {
-    input: ["B02", "B03", "B04", "B8A", "B11", "B12", "dataMask"],
+    input: ["B02", "B03", "B04", "B8A", "B11", "B12", "SCL", "CLM", "CLP", "dataMask"],
     output: { bands: 6, sampleType: "UINT16" }
   };
 }
 function evaluatePixel(s) {
+  var scl = s.SCL;
+  var cloud = (scl == 0 || scl == 1 || scl == 3 || scl == 8 || scl == 9 || scl == 10) || s.CLM == 1 || s.CLP > 50;
+  if (!s.dataMask || cloud) return [0, 0, 0, 0, 0, 0];
   function r(v) { return Math.max(0, Math.min(65535, Math.round(v * 10000))); }
   return [r(s.B02), r(s.B03), r(s.B04), r(s.B8A), r(s.B11), r(s.B12)];
 }`
@@ -1037,7 +1297,7 @@ export async function fetchSentinelWmsBandsTiff(options) {
     height: size,
     timeStart: options.timeStart,
     timeEnd: options.timeEnd,
-    cloudCoverage: options.cloudCoverage ?? 60,
+    cloudCoverage: options.cloudCoverage ?? 40,
     format: 'image/tiff',
     evalscriptB64: WMS_HLS_BANDS_EVALSCRIPT_B64,
   })
@@ -1048,3 +1308,4 @@ export async function fetchSentinelWmsBandsTiff(options) {
   }
   return { buffer: Buffer.from(await res.arrayBuffer()), bbox3857, width: size, height: size }
 }
+

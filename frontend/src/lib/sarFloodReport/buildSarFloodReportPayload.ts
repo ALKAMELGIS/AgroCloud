@@ -199,8 +199,8 @@ export async function buildSarFloodReportPayload(
   })
 
   return {
-    projectName: input.projectName ?? 'GeoSyntra SAR Flood Intelligence',
-    generatedBy: input.generatedBy ?? 'GeoSyntra',
+    projectName: input.projectName ?? 'AgroCloud SAR Flood Intelligence',
+    generatedBy: input.generatedBy ?? 'AgroCloud',
     generatedAt: now,
     aoiName: input.aoiName,
     areaHa,

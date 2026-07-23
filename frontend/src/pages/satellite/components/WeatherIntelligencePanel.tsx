@@ -25,7 +25,7 @@ import {
   buildWeatherClimateReportPayload,
   climateAggregationLabel,
 } from '../lib/weatherClimateReport/weatherClimateAnalysisEngine';
-import { generateWeatherClimateReportExcel } from '../lib/weatherClimateReport/generateWeatherClimateReportExcel';
+import { generateMeteoDataReportExcel } from '../lib/weatherClimateReport/meteoDataReportExcelWriter';
 import { generateWeatherClimateReportDocx } from '../lib/weatherClimateReport/generateWeatherClimateReportDocx';
 import type { WeatherTimeAggregation } from '../lib/weatherHistoryChartAggregate';
 import type { WeatherExportFormat } from './WeatherTimeHistoryChart';
@@ -623,8 +623,8 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
         setClimateExportProgress('Generating Weather Intelligence Report (DOCX)…');
         await generateWeatherClimateReportDocx(payload);
       } else {
-        setClimateExportProgress('Generating Weather Intelligence Report (XLSX)…');
-        await generateWeatherClimateReportExcel(payload);
+        setClimateExportProgress('Generating Meteo Data Report (XLSX)…');
+        await generateMeteoDataReportExcel(payload);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Climate report export failed');

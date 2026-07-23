@@ -36,6 +36,10 @@ import {
   buildNdsiSnowTimeSeriesDebugReport,
   logNdsiSnowTimeSeriesDebug,
 } from '../../../lib/ndsiSnowTimeSeriesDebug'
+import {
+  fetchLulcClassAreaTimeSeries,
+  isLulcTimeSeriesSelection,
+} from '../../../lib/siLulcClassAreaLive'
 
 export type ImageryTimeSeriesChartState = {
   labels: string[]
@@ -166,6 +170,7 @@ export function useImageryTimeSeriesStream({
     }
 
     const ids = layerIds.length ? layerIds : ['NDVI']
+    const lulcMode = isLulcTimeSeriesSelection(ids)
     const cacheKey = buildCacheKey()
     const geometryHash = geometryHashForImageryCache(field.geometry)
     const generation = ++runGenerationRef.current
@@ -175,6 +180,7 @@ export function useImageryTimeSeriesStream({
     abortRef.current = ac
 
     const showInstant = (daily: SentinelHubDailyIndexMeans[], fromCache: boolean) => {
+      if (lulcMode) return false
       if (generation !== runGenerationRef.current || ac.signal.aborted) return false
       if (!daily.length) return false
       if (imageryDailyRowsNeedRefetchForLayers(daily, ids)) return false
@@ -273,6 +279,50 @@ export function useImageryTimeSeriesStream({
 
     const startedAt = performance.now()
     try {
+      if (lulcMode) {
+        setProgress({
+          phase: 'fetching',
+          message: 'Computing LULC class share…',
+          chunksDone: 0,
+          chunksTotal: 1,
+          observations: 0,
+          percent: 12,
+          fromCache: false,
+          refreshing: false,
+        })
+        // Fast path: one mosaic scene (end date) — no NDVI spine / multi-date crawl.
+        setDailyRows([])
+        const sceneDate = toDate.slice(0, 10)
+        const rawChart = await fetchLulcClassAreaTimeSeries({
+          geometry: field.geometry,
+          dates: [sceneDate],
+          maxDates: 1,
+          signal: ac.signal,
+          onProgress: p => {
+            if (generation !== runGenerationRef.current || ac.signal.aborted) return
+            setProgress({
+              phase: 'fetching',
+              message: p.message,
+              chunksDone: p.done,
+              chunksTotal: Math.max(1, p.total),
+              observations: p.done,
+              percent: 20 + Math.round((p.done / Math.max(1, p.total)) * 75),
+              fromCache: false,
+              refreshing: false,
+            })
+          },
+        })
+        if (generation !== runGenerationRef.current || ac.signal.aborted) return
+        const pruned = pruneImageryTimeSeriesToObservations(rawChart.labels, rawChart.series)
+        applyChartState({ labels: pruned.labels, layerSeries: pruned.series })
+        if (!pruned.labels.length) {
+          setError(
+            'No LULC class-area observations for this AOI — try another end date or check Sentinel coverage.',
+          )
+        } else {
+          setError(null)
+        }
+      } else {
       const daily = await fetchImageryTimeSeriesProgressive(field, {
         fromIso: fromDate,
         toIso: toDate,
@@ -301,6 +351,7 @@ export function useImageryTimeSeriesStream({
           { chartLabels: chart.labels.length, chartPoints: chart.layerSeries[0]?.values.length ?? 0 },
         )
       }
+      }
     } catch (err) {
       if (!ac.signal.aborted && generation === runGenerationRef.current && !hasInstantChart) {
         setError(err instanceof Error ? err.message : 'Analysis failed')
@@ -318,6 +369,10 @@ export function useImageryTimeSeriesStream({
   useEffect(() => {
     if (!field || !dailyRows.length || loading) return
     const ids = layerIds.length ? layerIds : ['NDVI']
+    if (isLulcTimeSeriesSelection(ids)) {
+      // LULC class-area series are built in run(); do not overwrite with empty index chart.
+      return
+    }
 
     if (imageryDailyRowsNeedRefetchForLayers(dailyRows, ids) && hasRun) {
       const refetchKey = `${field.fieldKey}|${ids.join(',')}`
@@ -325,23 +380,19 @@ export function useImageryTimeSeriesStream({
         ndsiRefetchKeyRef.current = refetchKey
         setError(null)
         void run()
+        return
       }
-      return
+      // Already refetched for these layers — fall through and chart whatever bands we have.
+    } else {
+      ndsiRefetchKeyRef.current = ''
     }
-    ndsiRefetchKeyRef.current = ''
 
     const chart = dailyToChartState(dailyRows, field.fieldKey, ids)
     applyChartState(chart)
     if (!chart.labels.length) {
-      if (imageryDailyRowsSupportLayers(dailyRows, ids)) {
-        setError(
-          `No ${ids.join(', ')} observations in this date range — try widening dates or check Sentinel coverage.`,
-        )
-      } else {
-        setError(
-          `No ${ids.join(', ')} observations in this date range — try widening dates or check Sentinel coverage.`,
-        )
-      }
+      setError(
+        `No data available for ${ids.join(', ')} in this date range — try widening dates or check Sentinel coverage.`,
+      )
     } else if (!refreshing) {
       setError(null)
     }

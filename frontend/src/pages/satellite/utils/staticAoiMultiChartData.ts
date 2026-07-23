@@ -39,7 +39,7 @@ export const STATIC_AOI_CHART_LAYER_OPTIONS: Array<{
   { id: 'NDMI', label: 'NDMI', subtitle: 'Soil / canopy moisture (NIR–SWIR)', range: [-1, 1] },
   { id: 'SAVI', label: 'SAVI', subtitle: 'Soil-adjusted vegetation', range: [-1, 1] },
   { id: 'EVI', label: 'EVI', subtitle: 'Enhanced vegetation', range: [-1, 1] },
-  { id: 'NDSI', label: 'NDSI', subtitle: 'Normalized Difference Snow Index', range: [-1, 1] },
+  { id: 'NDSI', label: 'NDSI', subtitle: 'Snow / bright surfaces', range: [-1, 1] },
   { id: 'ET', label: 'ET', subtitle: 'Evapotranspiration (mm/day)', range: [0, 10] },
   { id: 'LST', label: 'LST', subtitle: 'Land surface temperature (°C)', range: [15, 45] },
 ];

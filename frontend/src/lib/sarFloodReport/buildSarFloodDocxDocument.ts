@@ -131,7 +131,7 @@ export function buildSarFloodDocxDocumentXml(model: SarFloodDocxModel): string {
 
   parts.push(
     docxItalicNote(
-      `Generated ${model.generatedStamp} by ${model.projectName}. GeoSyntra SAR Flood Intelligence — enterprise GIS reporting.`,
+      `Generated ${model.generatedStamp} by ${model.projectName}. AgroCloud SAR Flood Intelligence — enterprise GIS reporting.`,
     ),
   )
 

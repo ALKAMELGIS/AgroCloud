@@ -70,6 +70,18 @@ export function pushRecent(
   return next
 }
 
+/** Remove a single recent source by id. Returns the updated list. */
+export function removeRecent(id: string): RecentSource[] {
+  const next = listRecent().filter(r => r.id !== id)
+  writeList(GIS_RECENT_LS_KEY, next)
+  return next
+}
+
+/** Clear all recent sources. */
+export function clearRecent(): void {
+  writeList(GIS_RECENT_LS_KEY, [])
+}
+
 export function listFavorites(): RecentSource[] {
   return readList(GIS_FAVORITES_LS_KEY)
 }

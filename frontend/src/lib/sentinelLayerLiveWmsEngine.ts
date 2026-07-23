@@ -4,6 +4,9 @@
  */
 
 import { isAgroDeltaCompositeLayerId } from './agroCompositeIndices'
+import { isAdiLayerId } from './adiIndex'
+import { isNcadiLayerId } from './ncadiIndex'
+import { isLulcClassificationLayerId } from './siLulcClassification'
 import {
   buildSentinelHubWmsDisplayChunks,
   getDrawnGeometry,
@@ -16,8 +19,8 @@ import {
   getSentinelHubWmsLayerCatalog,
   resolveSentinelHubWmsDeltaPreviousDate,
   resolveSentinelHubWmsGetMapLayerName,
+  resolveSentinelHubWmsTilePixels,
   resolveSentinelHubWmsTimeWindow,
-  SENTINEL_HUB_WMS_TILE_PIXELS,
 } from './sentinelHubWmsLayers'
 import { geometryBBox } from './geoAiGeoJsonSpatial'
 import type { LngLatBBox } from './siMapViewport'
@@ -189,7 +192,8 @@ export function buildSentinelLayerLiveWmsTileSpecs(options: {
       cloudCoverage,
       geometryWkt3857: chunk.geometryWkt3857 ?? undefined,
       evalscriptB64: chunk.evalscriptB64,
-      tilePixels: SENTINEL_HUB_WMS_TILE_PIXELS,
+      tilePixels: resolveSentinelHubWmsTilePixels(wmsLayerName),
+      categorical: isLulcClassificationLayerId(wmsLayerName) || isAdiLayerId(wmsLayerName) || isNcadiLayerId(wmsLayerName),
     }),
     boundsLngLat: resolveSentinelLayerLiveChunkBoundsLngLat(chunk, options.clipSource, aoiBoundsLngLat),
   }))

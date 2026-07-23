@@ -7,6 +7,8 @@ import { resolveAgroCompositeExpr, resolveAgroCompositeIndexDef, isAgroDeltaComp
 import { resolveAgroCompositeTenClassRamp } from './agroCompositeLayerRamps'
 import { CHAS_ALERT_RGB_01 } from './chasAlertMapping'
 import { buildStressZonesWmsEvalscript } from './siStressZonesEvalscript'
+import { ADI_CURRENT_INDEX_EXPR, isAdiLayerId } from './adiIndex'
+import { NCADI_EXPR, isNcadiLayerId } from './ncadiIndex'
 
 type RampStop = [number, number]
 
@@ -57,11 +59,12 @@ const CORE_AT_FN = `function coreAt(samples) {
   let savi = ((samples.B08 - samples.B04) * 1.5) / (samples.B08 + samples.B04 + 0.5);
   let ndmi = index(samples.B08, samples.B11);
   let ndwi = index(samples.B03, samples.B08);
+  let ndre = index(samples.B08, samples.B05);
   let ci_re = samples.B08 > 1e-6 ? samples.B05 / samples.B08 - 1 : NaN;
   let ndsi = index(samples.B11, samples.B08);
   let si = Math.sqrt(Math.max(0, samples.B03 * samples.B04));
   let ssi = ndsi + si;
-  return { ndvi: ndvi, savi: savi, ndmi: ndmi, ndwi: ndwi, ci_re: ci_re, ndsi: ndsi, si: si, ssi: ssi };
+  return { ndvi: ndvi, savi: savi, ndmi: ndmi, ndwi: ndwi, ndre: ndre, ci_re: ci_re, ndsi: ndsi, si: si, ssi: ssi };
 }`
 
 function alphaBlock(indexVar: string, indexVisibilityMin: number | null, maskVar = 'samples.dataMask'): string {
@@ -251,6 +254,133 @@ function evaluatePixel(samples) {
 }`
 }
 
+/** ADI — multi-orbit z-score anomaly vs historical mean/std of Current_Index. */
+export function buildAgroCompositeAdiEvalscript(indexVisibilityMin: number | null = null): string | null {
+  const ramp = resolveAgroCompositeTenClassRamp('ADI')
+  if (!ramp) return null
+  const { classifyFn, rgbConst } = buildTenClassEvalscriptBlock(ramp)
+  const indexVar = 'adi'
+
+  return `//VERSION=3
+// AgroCloud ADI — Anomaly Detection Index (Current − μ_hist) / σ_hist
+function setup() {
+  return {
+    input: [{
+      bands: ["B03", "B04", "B05", "B08", "B11", "dataMask"],
+      units: "REFLECTANCE"
+    }],
+    mosaicking: Mosaicking.ORBIT,
+    output: { bands: 4, sampleType: "AUTO" }
+  };
+}
+
+${CORE_AT_FN}
+
+${rgbConst}
+
+${classifyFn}
+
+function currentIndex(c) {
+  let ndvi = c.ndvi;
+  let ndmi = c.ndmi;
+  let ndre = c.ndre;
+  return ${ADI_CURRENT_INDEX_EXPR};
+}
+
+function evaluatePixel(samples) {
+  if (!samples || !samples.length) {
+    return [0, 0, 0, 0];
+  }
+  var curSample = samples[samples.length - 1];
+  if (!curSample || !curSample.dataMask) {
+    return [0, 0, 0, 0];
+  }
+  var current = currentIndex(coreAt(curSample));
+  var n = 0;
+  var sum = 0;
+  var sumSq = 0;
+  for (var i = 0; i < samples.length - 1; i++) {
+    var s = samples[i];
+    if (!s || !s.dataMask) continue;
+    var v = currentIndex(coreAt(s));
+    if (!isFinite(v)) continue;
+    sum += v;
+    sumSq += v * v;
+    n++;
+  }
+  var ${indexVar} = 0;
+  if (n >= 2) {
+    var mean = sum / n;
+    var variance = Math.max(0, sumSq / n - mean * mean);
+    var std = Math.sqrt(variance);
+    if (std < 1e-6) std = 1e-6;
+    ${indexVar} = (current - mean) / std;
+  } else if (n === 1) {
+    var mean1 = sum;
+    ${indexVar} = (current - mean1) / 1e-6;
+  } else {
+    ${indexVar} = 0;
+  }
+  if (!isFinite(${indexVar})) ${indexVar} = 0;
+  var cls = classifyVal(${indexVar});
+  var c = CLASS_RGB[cls];
+  ${alphaBlock(indexVar, indexVisibilityMin, 'curSample.dataMask')}
+}`
+}
+
+/** NCADI — two-orbit cultivation/abandonment change: 0.7·ΔNDVI + 0.3·ΔNDMI. */
+export function buildAgroCompositeNcadiEvalscript(indexVisibilityMin: number | null = null): string | null {
+  const ramp = resolveAgroCompositeTenClassRamp('NCADI')
+  if (!ramp) return null
+  const { classifyFn, rgbConst } = buildTenClassEvalscriptBlock(ramp)
+  const indexVar = 'ncadi'
+
+  return `//VERSION=3
+// AgroCloud NCADI — Newly Cultivated / Abandoned Detection Index (0.7·ΔNDVI + 0.3·ΔNDMI)
+function setup() {
+  return {
+    input: [{
+      bands: ["B03", "B04", "B05", "B08", "B11", "dataMask"],
+      units: "REFLECTANCE"
+    }],
+    mosaicking: Mosaicking.ORBIT,
+    output: { bands: 4, sampleType: "AUTO" }
+  };
+}
+
+${CORE_AT_FN}
+
+${rgbConst}
+
+${classifyFn}
+
+function preProcessScenes(collections) {
+  var orbits = collections.scenes.orbits;
+  if (!orbits || orbits.length <= 2) return collections;
+  collections.scenes.orbits = [orbits[0], orbits[orbits.length - 1]];
+  return collections;
+}
+
+function evaluatePixel(samples) {
+  if (!samples || samples.length < 2) {
+    var s = samples && samples.length ? samples[samples.length - 1] : null;
+    var mask = s ? s.dataMask : 0;
+    var cStable = CLASS_RGB[4];
+    return cStable.concat(mask);
+  }
+  var c1 = coreAt(samples[0]);
+  var c2 = coreAt(samples[samples.length - 1]);
+  var dNdvi = c2.ndvi - c1.ndvi;
+  var dNdmi = c2.ndmi - c1.ndmi;
+  var ${indexVar} = ${NCADI_EXPR};
+  if (!isFinite(${indexVar})) ${indexVar} = 0;
+  var mask = samples[samples.length - 1].dataMask * samples[0].dataMask;
+  var cls = classifyVal(${indexVar});
+  var c = CLASS_RGB[cls];
+  ${alphaBlock(indexVar, indexVisibilityMin, 'mask')}
+}`
+}
+
 export function buildAgroCompositeLayerEvalscript(
   layerId: string,
   indexVisibilityMin: number | null = null,
@@ -261,6 +391,12 @@ export function buildAgroCompositeLayerEvalscript(
   }
   if (u === 'STRESS_ZONES') {
     return buildStressZonesWmsEvalscript(indexVisibilityMin)
+  }
+  if (isAdiLayerId(u)) {
+    return buildAgroCompositeAdiEvalscript(indexVisibilityMin)
+  }
+  if (isNcadiLayerId(u)) {
+    return buildAgroCompositeNcadiEvalscript(indexVisibilityMin)
   }
   if (isAgroDeltaCompositeLayerId(u)) {
     return buildAgroCompositeDeltaEvalscript(u, indexVisibilityMin)

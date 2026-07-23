@@ -1,8 +1,20 @@
-import { renderExcelTrendCharts } from './timeSeriesExcelChartRenderer'
-import { renderWeatherTimelineChart } from './timeSeriesWeatherChartRenderer'
-import type { TimeSeriesMapSnapshot, TimeSeriesReportPayload } from './timeSeriesReportTypes'
+import {
+  buildPerLayerNativeChartSpecs,
+  buildWeatherNativeChartSpecs,
+  type DocxNativeChartSpec,
+} from './timeSeriesDocxNativeCharts'
+import type { TimeSeriesReportPayload } from './timeSeriesReportTypes'
 import type { VegetationCoveragePoint } from './vegetationCoverageTimeline'
 import { latestVegetationCoverageSummary } from './vegetationCoverageTimeline'
+import {
+  alignIndexValuesToDates,
+  aggregateTempExtremesByPeriods,
+  buildDailyWeatherRichFromHourly,
+  buildMonthlyWeatherRows,
+  buildYearlyWeatherRows,
+  fmtWeatherCell,
+  sampleDailyRows,
+} from './timeSeriesWeatherAnalytics'
 
 export type DocxImageAsset = {
   rId: string
@@ -15,6 +27,39 @@ export type DocxMapLayerBlock = {
   legend: string
   narrative: string
   snapshots: Array<{ date: string; label: string; rId: string }>
+  /** Native editable Word chart for this index (under the maps). */
+  chartRId: string | null
+  chartTitle: string | null
+}
+
+/** Per-year LULC map + composition table + native pie/bar charts. */
+export type DocxLulcYearBlock = {
+  year: number
+  title: string
+  mapRId: string | null
+  mapCaption: string
+  totalAreaHa: string
+  tableHeaders: string[]
+  tableRows: string[][]
+  pieChartRId: string | null
+  pieChartTitle: string | null
+  barChartRId: string | null
+  barChartTitle: string | null
+}
+
+/** Consecutive-year LULC change: before/after maps + Δ table + bar chart. */
+export type DocxLulcChangeBlock = {
+  title: string
+  yearFrom: number
+  yearTo: number
+  mapBeforeRId: string | null
+  mapAfterRId: string | null
+  mapBeforeCaption: string
+  mapAfterCaption: string
+  tableHeaders: string[]
+  tableRows: string[][]
+  barChartRId: string | null
+  barChartTitle: string | null
 }
 
 export type TimeSeriesDocxModel = {
@@ -43,11 +88,32 @@ export type TimeSeriesDocxModel = {
   dataQualityNotes: string
   recommendations: string[]
   mapLayers: DocxMapLayerBlock[]
+  lulcMapLayers: DocxMapLayerBlock[]
+  /** Rich per-year LULC blocks (map + table + pie + bar). Preferred over raw lulcMapLayers atlas. */
+  lulcYearBlocks: DocxLulcYearBlock[]
+  /** LULC consecutive-year change blocks with Δha table + bar chart. */
+  lulcChangeBlocks: DocxLulcChangeBlock[]
+  /** Cross-year class area (ha) comparison table under the LULC intro. */
+  lulcMultiYearHeaders: string[]
+  lulcMultiYearRows: string[][]
+  lulcMultiYearBarChartRId: string | null
+  lulcMultiYearBarChartTitle: string | null
+  changeDetectionMapLayers: DocxMapLayerBlock[]
+  /** @deprecated PNG charts replaced by native charts on mapLayers */
   chartImages: Array<{ title: string; rId: string }>
+  nativeCharts: DocxNativeChartSpec[]
+  /** Native editable weather charts (Excel-style), not PNG. */
+  weatherChartRIds: Array<{ title: string; rId: string }>
+  /** @deprecated PNG weather chart removed — use weatherChartRIds */
   weatherChartRId: string | null
   weatherSummaryRows: Array<[string, string]>
   weatherTableHeaders: string[]
   weatherTableRows: string[][]
+  /** Monthly totals with rainfall share % (for tables under charts). */
+  weatherMonthlyHeaders: string[]
+  weatherMonthlyRows: string[][]
+  weatherYearlyHeaders: string[]
+  weatherYearlyRows: string[][]
   weatherCorrelationNotes: string[]
   weatherDataSource: string
   correlationBlocks: Array<{
@@ -230,93 +296,212 @@ export async function buildTimeSeriesDocxModel(
   let imageCounter = 0
 
   const labels = payload.charts.displayLabels.length ? payload.charts.displayLabels : payload.charts.labels
-  const chartPairs = await renderExcelTrendCharts(
-    labels,
-    layers.map(s => ({ layerId: s.layerId, values: s.values as Array<number | null> })),
+  const indexCharts = buildPerLayerNativeChartSpecs({
+    labels: payload.charts.labels,
+    displayLabels: labels,
+    series: layers.map(s => ({ layerId: s.layerId, values: s.values as Array<number | null> })),
+  })
+  const chartByLayer = new Map(
+    indexCharts.map(c => [(c.series[0]?.name ?? c.title).toUpperCase(), c]),
   )
-
   const chartImages: Array<{ title: string; rId: string }> = []
-  for (const chart of chartPairs) {
-    const rId = nextRid(1, imageCounter)
-    imageCounter++
-    images.push({
-      rId,
-      fileName: `image${imageCounter}.png`,
-      base64: chart.base64,
-    })
-    chartImages.push({ title: chart.title, rId })
-  }
 
+  const weatherChartRIds: Array<{ title: string; rId: string }> = []
   let weatherChartRId: string | null = null
-  const weatherTableHeaders = ['Period', 'Temp (°C)', 'Humidity (%)', 'Rainfall (mm)', 'Wind (m/s)']
+  const weatherTableHeaders = [
+    'Period',
+    'Temp Max (°C)',
+    'Temp Mean (°C)',
+    'Temp Min (°C)',
+    'Humidity (%)',
+    'Rainfall (mm)',
+    'Wind (m/s)',
+  ]
   const weatherTableRows: string[][] = []
+  const weatherMonthlyHeaders = [
+    'Month',
+    'Temp Max',
+    'Temp Mean',
+    'Temp Min',
+    'Humidity %',
+    'Rainfall mm',
+    'Share %',
+    'Cumulative mm',
+  ]
+  const weatherMonthlyRows: string[][] = []
+  const weatherYearlyHeaders = [
+    'Year',
+    'Temp Max',
+    'Temp Mean',
+    'Temp Min',
+    'Humidity %',
+    'Rainfall mm',
+  ]
+  const weatherYearlyRows: string[][] = []
   const weatherSummaryRows: Array<[string, string]> = []
   const weatherCorrelationNotes: string[] = []
   let weatherDataSource = ''
 
+  let weatherCharts: DocxNativeChartSpec[] = []
   const weather = payload.weatherTimeline
-  if (weather?.points.length) {
+  if (weather?.points.length || weather?.hourlyPoints?.length) {
     weatherDataSource = `${weather.dataSource} · ${weather.lat.toFixed(4)}, ${weather.lng.toFixed(4)} (${weather.timezone})`
-    weatherTableRows.push(
-      ...weather.points.map(p => [
-        p.displayLabel,
-        fmtWeather(p.temperatureC, 1),
-        fmtWeather(p.humidityPct, 0),
-        fmtWeather(p.rainfallMm, 1),
-        fmtWeather(p.windSpeedMs, 2),
+
+    const dailyRich = buildDailyWeatherRichFromHourly(weather.hourlyPoints ?? [])
+    const monthly = buildMonthlyWeatherRows(dailyRich)
+    const yearly = buildYearlyWeatherRows(dailyRich)
+    const dailyForCharts = sampleDailyRows(dailyRich, 90)
+
+    const periodExtremes = aggregateTempExtremesByPeriods(
+      dailyRich,
+      weather.points.map(p => p.periodKey),
+      weather.points.map(p => p.displayLabel),
+      weather.aggregation,
+    )
+
+    if (periodExtremes.length) {
+      weatherTableRows.push(
+        ...periodExtremes.map((p, i) => [
+          p.displayLabel,
+          fmtWeather(p.tempMaxC, 1),
+          fmtWeather(p.tempMeanC, 1),
+          fmtWeather(p.tempMinC, 1),
+          fmtWeather(p.humidityPct, 0),
+          fmtWeather(p.rainfallMm, 1),
+          fmtWeather(weather.points[i]?.windSpeedMs ?? null, 2),
+        ]),
+      )
+    } else {
+      weatherTableRows.push(
+        ...weather.points.map(p => [
+          p.displayLabel,
+          fmtWeather(p.temperatureC, 1),
+          fmtWeather(p.temperatureC, 1),
+          fmtWeather(p.temperatureC, 1),
+          fmtWeather(p.humidityPct, 0),
+          fmtWeather(p.rainfallMm, 1),
+          fmtWeather(p.windSpeedMs, 2),
+        ]),
+      )
+    }
+
+    weatherMonthlyRows.push(
+      ...monthly.map(m => [
+        m.label,
+        fmtWeatherCell(m.tempMaxC, 1),
+        fmtWeatherCell(m.tempMeanC, 1),
+        fmtWeatherCell(m.tempMinC, 1),
+        fmtWeatherCell(m.humidityPct, 0),
+        fmtWeatherCell(m.rainfallMm, 1),
+        fmtWeatherCell(m.rainfallSharePct, 1),
+        fmtWeatherCell(m.cumulativeRainfallMm, 1),
       ]),
     )
+    weatherYearlyRows.push(
+      ...yearly.map(y => [
+        y.label,
+        fmtWeatherCell(y.tempMaxC, 1),
+        fmtWeatherCell(y.tempMeanC, 1),
+        fmtWeatherCell(y.tempMinC, 1),
+        fmtWeatherCell(y.humidityPct, 0),
+        fmtWeatherCell(y.rainfallMm, 1),
+      ]),
+    )
+
+    const peakMonth = monthly.reduce<(typeof monthly)[number] | null>((best, row) => {
+      if (row.rainfallMm == null) return best
+      if (!best || (best.rainfallMm ?? 0) < row.rainfallMm) return row
+      return best
+    }, null)
+
     weatherSummaryRows.push(
       ['Average temperature', fmtWeather(weather.summary.avgTemperatureC, 1, ' °C')],
+      [
+        'Temp range (daily max / min mean)',
+        dailyRich.length
+          ? `${fmtWeather(
+              meanValue(dailyRich.map(d => d.tempMaxC)),
+              1,
+              ' °C',
+            )} / ${fmtWeather(meanValue(dailyRich.map(d => d.tempMinC)), 1, ' °C')}`
+          : '—',
+      ],
       ['Total rainfall', fmtWeather(weather.summary.totalRainfallMm, 1, ' mm')],
+      [
+        'Peak rainfall month',
+        peakMonth
+          ? `${peakMonth.label} (${fmtWeatherCell(peakMonth.rainfallMm, 1)} mm · ${fmtWeatherCell(peakMonth.rainfallSharePct, 1)}%)`
+          : '—',
+      ],
       ['Average humidity', fmtWeather(weather.summary.avgHumidityPct, 0, ' %')],
       ['Average wind speed', fmtWeather(weather.summary.avgWindSpeedMs, 2, ' m/s')],
       ['Aggregation', aggregationLabel(weather.aggregation)],
+      ['Daily / monthly / yearly rows', `${dailyRich.length} / ${monthly.length} / ${yearly.length}`],
     )
     weatherCorrelationNotes.push(...weather.correlationNotes)
 
-    const weatherBase64 = renderWeatherTimelineChart(
-      weather.points,
-      aggregationLabel(weather.aggregation),
-    )
-    if (weatherBase64) {
-      weatherChartRId = nextRid(1, imageCounter)
-      imageCounter++
-      images.push({
-        rId: weatherChartRId,
-        fileName: `image${imageCounter}.png`,
-        base64: weatherBase64,
-      })
-    }
-  }
+    const compareSource =
+      monthly.length >= 2
+        ? {
+            categories: monthly.map(m => m.label),
+            dates: monthly.map(m => `${m.monthKey}-15`),
+            tempMean: monthly.map(m => m.tempMeanC),
+            tempMin: monthly.map(m => m.tempMinC),
+            tempMax: monthly.map(m => m.tempMaxC),
+            rainfall: monthly.map(m => m.rainfallMm),
+            humidity: monthly.map(m => m.humidityPct),
+          }
+        : {
+            categories: periodExtremes.map(p => p.displayLabel),
+            dates: weather.points.map(p => (p.periodKey.match(/^\d{4}-\d{2}/) ? `${p.periodKey.slice(0, 7)}-15` : p.periodKey)),
+            tempMean: periodExtremes.map(p => p.tempMeanC),
+            tempMin: periodExtremes.map(p => p.tempMinC),
+            tempMax: periodExtremes.map(p => p.tempMaxC),
+            rainfall: periodExtremes.map(p => p.rainfallMm),
+            humidity: periodExtremes.map(p => p.humidityPct),
+          }
 
-  const mapLayers: DocxMapLayerBlock[] = []
-  for (const group of payload.mapSnapshotGroups ?? []) {
-    const snapshots: DocxMapLayerBlock['snapshots'] = []
-    for (const snap of group.snapshots) {
-      if (!snap.imageBase64) continue
-      const rId = nextRid(1, imageCounter)
-      imageCounter++
-      images.push({ rId, fileName: `image${imageCounter}.png`, base64: snap.imageBase64 })
-      snapshots.push({
-        date: snap.sceneDate,
-        label: `${snap.layerId.toUpperCase()} ${fmtNum(snap.mean, 4)}`,
-        rId,
+    const alignIdx = (layerId: string) =>
+      alignIndexValuesToDates({
+        dates: compareSource.dates,
+        chartLabels: payload.charts.labels,
+        periodAnchorDates: payload.charts.periodAnchorDates ?? {},
+        layerSeries: layers,
+        layerId,
       })
-    }
-    if (!snapshots.length) continue
-    const legend = group.snapshots[0]?.legendText ?? ''
-    const narrative = group.snapshots[group.snapshots.length - 1]?.notes ?? exec.multiIndexNotes
-    mapLayers.push({
-      title: layerTitle(group.layerId),
-      legend,
-      narrative,
-      snapshots,
+
+    weatherCharts = buildWeatherNativeChartSpecs({
+      points: weather.points,
+      aggregationLabel: aggregationLabel(weather.aggregation),
+      startIndex: indexCharts.length,
+      daily: dailyForCharts,
+      monthly,
+      yearly,
+      indexCompare: compareSource.categories.length
+        ? {
+            categories: compareSource.categories,
+            tempMean: compareSource.tempMean,
+            tempMin: compareSource.tempMin,
+            tempMax: compareSource.tempMax,
+            rainfall: compareSource.rainfall,
+            humidity: compareSource.humidity,
+            ndvi: alignIdx('NDVI'),
+            ndmi: alignIdx('NDMI'),
+            ndwi: alignIdx('NDWI'),
+            savi: alignIdx('SAVI'),
+          }
+        : undefined,
     })
+    for (const c of weatherCharts) {
+      weatherChartRIds.push({ title: c.title, rId: c.rId })
+    }
   }
 
-  const cumulativeMapLayers: DocxMapLayerBlock[] = []
-  for (const group of payload.cumulativeMapSnapshotGroups ?? []) {
+  function pushMapGroup(
+    group: NonNullable<TimeSeriesReportPayload['mapSnapshotGroups']>[number],
+    titleOverride?: string,
+    withChart = false,
+  ): DocxMapLayerBlock | null {
     const snapshots: DocxMapLayerBlock['snapshots'] = []
     for (const snap of group.snapshots) {
       if (!snap.imageBase64) continue
@@ -325,18 +510,262 @@ export async function buildTimeSeriesDocxModel(
       images.push({ rId, fileName: `image${imageCounter}.png`, base64: snap.imageBase64 })
       snapshots.push({
         date: snap.periodLabel || snap.sceneDate,
-        label: `${snap.layerLabel} ${fmtNum(snap.mean, 4)}`,
+        label: `${snap.layerLabel || snap.layerId.toUpperCase()} ${fmtNum(snap.mean, 4)}`,
         rId,
       })
     }
-    if (!snapshots.length) continue
-    cumulativeMapLayers.push({
-      title: group.title,
+    if (!snapshots.length) return null
+    const layerKey = group.layerId.replace(/^CUMULATIVE_|^CHANGE_/, '').toUpperCase()
+    const chart = withChart
+      ? chartByLayer.get(layerKey) ?? chartByLayer.get(group.layerId.toUpperCase())
+      : undefined
+    return {
+      title: titleOverride ?? layerTitle(group.layerId),
       legend: group.snapshots[0]?.legendText ?? '',
-      narrative: group.snapshots[group.snapshots.length - 1]?.notes ?? '',
+      narrative: group.snapshots[group.snapshots.length - 1]?.notes ?? exec.multiIndexNotes,
       snapshots,
+      chartRId: chart?.rId ?? null,
+      chartTitle: chart?.title ?? null,
+    }
+  }
+
+  const mapLayers: DocxMapLayerBlock[] = []
+  for (const group of payload.mapSnapshotGroups ?? []) {
+    const block = pushMapGroup(group, undefined, true)
+    if (block) mapLayers.push(block)
+  }
+
+  const cumulativeMapLayers: DocxMapLayerBlock[] = []
+  for (const group of payload.cumulativeMapSnapshotGroups ?? []) {
+    const block = pushMapGroup(group, group.title, false)
+    if (block) cumulativeMapLayers.push(block)
+  }
+
+  const lulcMapLayers: DocxMapLayerBlock[] = []
+  const hasLulcCompositions = (payload.lulcYearCompositions ?? []).length > 0
+
+  // Build rich LULC year / change blocks with native pie + area bar charts.
+  const lulcCharts: DocxNativeChartSpec[] = []
+  let lulcChartN = indexCharts.length + weatherCharts.length
+  const stripHex = (hex: string) =>
+    hex.replace(/^#/, '').replace(/[^0-9A-Fa-f]/g, '').slice(0, 6) || '94A3B8'
+
+  const atlasGroup = (payload.lulcMapSnapshotGroups ?? []).find(g => g.layerId === 'LULC_YEARLY')
+  const mapRIdByYear = new Map<number, { rId: string; caption: string }>()
+  if (atlasGroup && hasLulcCompositions) {
+    for (const snap of atlasGroup.snapshots) {
+      if (!snap.imageBase64) continue
+      const year = Number(String(snap.periodLabel || snap.sceneDate).slice(0, 4))
+      if (!Number.isFinite(year)) continue
+      const rId = nextRid(1, imageCounter)
+      imageCounter++
+      images.push({ rId, fileName: `image${imageCounter}.png`, base64: snap.imageBase64 })
+      mapRIdByYear.set(year, {
+        rId,
+        caption: `${snap.layerLabel || `LULC ${year}`} · ${snap.sceneDate}`,
+      })
+    }
+  } else {
+    for (const group of payload.lulcMapSnapshotGroups ?? []) {
+      const block = pushMapGroup(group, group.title, false)
+      if (block) lulcMapLayers.push(block)
+    }
+  }
+
+  const lulcYearBlocks: DocxLulcYearBlock[] = []
+  for (const yearComp of payload.lulcYearCompositions ?? []) {
+    const map = mapRIdByYear.get(yearComp.year)
+    const classes = yearComp.classes.filter(c => c.areaHa > 0 || c.pct > 0)
+    let pieChartRId: string | null = null
+    let pieChartTitle: string | null = null
+    let barChartRId: string | null = null
+    let barChartTitle: string | null = null
+    if (classes.length) {
+      lulcChartN += 1
+      const pie: DocxNativeChartSpec = {
+        rId: `rIdChart${lulcChartN}`,
+        fileStem: `chart${lulcChartN}`,
+        title: `LULC ${yearComp.year} — Class Share (%)`,
+        yAxisLabel: 'Share',
+        categories: classes.map(c => c.name),
+        kind: 'pie',
+        sliceColors: classes.map(c => stripHex(c.color)),
+        series: [{ name: 'Share %', values: classes.map(c => c.pct) }],
+      }
+      lulcCharts.push(pie)
+      pieChartRId = pie.rId
+      pieChartTitle = pie.title
+
+      lulcChartN += 1
+      const bar: DocxNativeChartSpec = {
+        rId: `rIdChart${lulcChartN}`,
+        fileStem: `chart${lulcChartN}`,
+        title: `LULC ${yearComp.year} — Area by Class (ha)`,
+        yAxisLabel: 'Area (ha)',
+        yNumFmt: '0.00',
+        categories: classes.map(c => c.name),
+        kind: 'bar',
+        series: classes.map(c => ({
+          name: c.name,
+          values: classes.map(x => (x.key === c.key ? c.areaHa : null)),
+          color: stripHex(c.color),
+          asBar: true,
+        })),
+      }
+      // Clustered multi-series with nulls is noisy for many classes — single series is clearer.
+      bar.series = [
+        {
+          name: 'Area (ha)',
+          values: classes.map(c => c.areaHa),
+          color: '047857',
+          asBar: true,
+        },
+      ]
+      lulcCharts.push(bar)
+      barChartRId = bar.rId
+      barChartTitle = bar.title
+    }
+
+    const tableRows = classes.map(c => [
+      c.name,
+      `${c.pct.toFixed(1)}%`,
+      fmtHa(c.areaHa),
+    ])
+    if (classes.length) {
+      tableRows.push(['Total', '100%', fmtHa(yearComp.totalAreaHa)])
+    }
+
+    lulcYearBlocks.push({
+      year: yearComp.year,
+      title: `LULC ${yearComp.year} — Mid-season Land Cover`,
+      mapRId: map?.rId ?? null,
+      mapCaption: map?.caption ?? `LULC ${yearComp.year}`,
+      totalAreaHa: fmtHa(yearComp.totalAreaHa),
+      tableHeaders: ['LULC Class', 'Share %', 'Area (ha)'],
+      tableRows,
+      pieChartRId,
+      pieChartTitle,
+      barChartRId,
+      barChartTitle,
     })
   }
+
+  // Cross-year area (ha) matrix + clustered bar for clear year-to-year contrast.
+  const yearComps = payload.lulcYearCompositions ?? []
+  const lulcMultiYearHeaders: string[] = ['LULC Class', ...yearComps.map(y => String(y.year)), 'Δ first→last (ha)']
+  const lulcMultiYearRows: string[][] = []
+  let lulcMultiYearBarChartRId: string | null = null
+  let lulcMultiYearBarChartTitle: string | null = null
+  if (yearComps.length >= 1) {
+    const classKeys = new Map<string, { name: string; color: string }>()
+    for (const y of yearComps) {
+      for (const c of y.classes) {
+        if (!classKeys.has(c.key)) classKeys.set(c.key, { name: c.name, color: c.color })
+      }
+    }
+    const yearColors = ['047857', '2563EB', 'D97706', '7C3AED', 'DC2626', '0891B2']
+    const ordered = [...classKeys.entries()].sort((a, b) => {
+      const maxA = Math.max(...yearComps.map(y => y.classes.find(c => c.key === a[0])?.areaHa ?? 0))
+      const maxB = Math.max(...yearComps.map(y => y.classes.find(c => c.key === b[0])?.areaHa ?? 0))
+      return maxB - maxA
+    })
+    for (const [key, meta] of ordered) {
+      const haByYear = yearComps.map(y => y.classes.find(c => c.key === key)?.areaHa ?? 0)
+      const delta = haByYear.length >= 2 ? haByYear[haByYear.length - 1]! - haByYear[0]! : 0
+      lulcMultiYearRows.push([
+        meta.name,
+        ...haByYear.map(h => fmtHa(h)),
+        haByYear.length >= 2 ? `${delta >= 0 ? '+' : ''}${delta.toFixed(2)} ha` : '—',
+      ])
+    }
+    if (ordered.length && yearComps.length) {
+      lulcChartN += 1
+      const multiBar: DocxNativeChartSpec = {
+        rId: `rIdChart${lulcChartN}`,
+        fileStem: `chart${lulcChartN}`,
+        title: 'LULC Multi-Year Area Comparison (ha)',
+        yAxisLabel: 'Area (ha)',
+        yNumFmt: '0.00',
+        categories: ordered.map(([, m]) => m.name),
+        kind: 'bar',
+        series: yearComps.map((y, yi) => ({
+          name: String(y.year),
+          values: ordered.map(([key]) => y.classes.find(c => c.key === key)?.areaHa ?? 0),
+          color: yearColors[yi % yearColors.length]!,
+          asBar: true,
+        })),
+      }
+      lulcCharts.push(multiBar)
+      lulcMultiYearBarChartRId = multiBar.rId
+      lulcMultiYearBarChartTitle = multiBar.title
+    }
+  }
+
+  const lulcChangeBlocks: DocxLulcChangeBlock[] = []
+  for (const change of payload.lulcChangeCompositions ?? []) {
+    const before = mapRIdByYear.get(change.yearFrom)
+    const after = mapRIdByYear.get(change.yearTo)
+    const classes = change.classes
+    let barChartRId: string | null = null
+    let barChartTitle: string | null = null
+    if (classes.length) {
+      lulcChartN += 1
+      const bar: DocxNativeChartSpec = {
+        rId: `rIdChart${lulcChartN}`,
+        fileStem: `chart${lulcChartN}`,
+        title: `LULC Change ${change.yearFrom}→${change.yearTo} — Δ Area (ha)`,
+        yAxisLabel: 'Δ Area (ha)',
+        yNumFmt: '0.00',
+        categories: classes.map(c => c.name),
+        kind: 'bar',
+        series: [
+          {
+            name: 'Δ Area (ha)',
+            values: classes.map(c => c.deltaHa),
+            color: '2563EB',
+            asBar: true,
+          },
+        ],
+      }
+      lulcCharts.push(bar)
+      barChartRId = bar.rId
+      barChartTitle = bar.title
+    }
+    const tableRows = classes.map(c => [
+      c.name,
+      fmtHa(c.areaHaFrom),
+      fmtHa(c.areaHaTo),
+      `${c.deltaHa >= 0 ? '+' : ''}${c.deltaHa.toFixed(2)} ha`,
+      `${c.deltaPctPoints >= 0 ? '+' : ''}${c.deltaPctPoints.toFixed(1)} pp`,
+    ])
+    lulcChangeBlocks.push({
+      title: `LULC Change Detection — ${change.yearFrom} → ${change.yearTo}`,
+      yearFrom: change.yearFrom,
+      yearTo: change.yearTo,
+      mapBeforeRId: before?.rId ?? null,
+      mapAfterRId: after?.rId ?? null,
+      mapBeforeCaption: before?.caption ?? `LULC ${change.yearFrom} (before)`,
+      mapAfterCaption: after?.caption ?? `LULC ${change.yearTo} (after)`,
+      tableHeaders: [
+        'Class',
+        `${change.yearFrom} (ha)`,
+        `${change.yearTo} (ha)`,
+        'Δ Area',
+        'Δ Share',
+      ],
+      tableRows,
+      barChartRId,
+      barChartTitle,
+    })
+  }
+
+  const changeDetectionMapLayers: DocxMapLayerBlock[] = []
+  for (const group of payload.changeDetectionMapSnapshotGroups ?? []) {
+    const block = pushMapGroup(group, group.title, false)
+    if (block) changeDetectionMapLayers.push(block)
+  }
+
+  const nativeCharts = [...indexCharts, ...weatherCharts, ...lulcCharts]
 
   const correlationBlocks: TimeSeriesDocxModel['correlationBlocks'] = []
   for (const block of payload.correlationBlocks ?? []) {
@@ -386,17 +815,31 @@ export async function buildTimeSeriesDocxModel(
     }`,
     recommendations: exec.recommendations,
     mapLayers,
+    lulcMapLayers,
+    lulcYearBlocks,
+    lulcChangeBlocks,
+    lulcMultiYearHeaders,
+    lulcMultiYearRows,
+    lulcMultiYearBarChartRId,
+    lulcMultiYearBarChartTitle,
+    changeDetectionMapLayers,
     cumulativeMapLayers,
     correlationBlocks,
     cropRecommendationBullets: payload.cropRecommendations ?? [],
     chartImages,
+    nativeCharts,
+    weatherChartRIds,
     weatherChartRId,
     weatherSummaryRows,
     weatherTableHeaders,
     weatherTableRows,
+    weatherMonthlyHeaders,
+    weatherMonthlyRows,
+    weatherYearlyHeaders,
+    weatherYearlyRows,
     weatherCorrelationNotes,
     weatherDataSource,
-    footerNote: `Generated ${payload.generatedAt.replace('T', ' ').slice(0, 19)} UTC by ${payload.projectName}. Includes period atlas maps, cumulative peak-of-period composites, R² correlation scatter plots, and crop planting recommendations from AOI climate/moisture/salinity screening.`,
+    footerNote: `Generated ${payload.generatedAt.replace('T', ' ').slice(0, 19)} UTC by ${payload.projectName}. Includes Layer Live legends, editable Office charts, LULC 2021–2025 with class area tables / pie / bar charts, LULC change detection deltas, and crop recommendations.`,
   }
 
   return { model, images }

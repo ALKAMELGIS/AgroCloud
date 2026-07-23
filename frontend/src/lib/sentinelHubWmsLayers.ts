@@ -7,7 +7,14 @@ import {
   isAgroCompositeLayerId,
   isAgroDeltaCompositeLayerId,
 } from './agroCompositeIndices'
+import { ADI_HISTORICAL_LOOKBACK_DAYS, isAdiLayerId } from './adiIndex'
+import { NCADI_LOOKBACK_DAYS, isNcadiLayerId } from './ncadiIndex'
 import { CROP_CLASSIFICATION_WMS_LAYER, isCropClassificationLayerId } from './siCropClassification'
+import {
+  LULC_CLASSIFICATION_WMS_LAYER,
+  LULC_WMS_TILE_PIXELS,
+  isLulcClassificationLayerId,
+} from './siLulcClassification'
 import { resolvePreviousValidSceneDate } from './siAdaptiveTemporalEngine'
 import { subtractDaysFromIso } from './siSentinelImageryDate'
 import { getSentinelHubAccessToken } from './sentinelHubAccessToken'
@@ -24,7 +31,17 @@ export const SENTINEL_HUB_S2_MAX_METERS_PER_PIXEL = 200
 export const SENTINEL_HUB_WMS_RASTER_RESAMPLE_PARAMS =
   '&UPSAMPLING=BILINEAR&DOWNSAMPLING=BILINEAR'
 
+/** Categorical LULC / class maps — nearest keeps crisp class edges at ~3 m display zooms. */
+export const SENTINEL_HUB_WMS_CATEGORICAL_RESAMPLE_PARAMS =
+  '&UPSAMPLING=NEAREST&DOWNSAMPLING=NEAREST'
+
 export const SENTINEL_HUB_WMS_TILE_PIXELS = 512
+
+/** Resolve GetMap / MapLibre tile pixel size for a logical layer. */
+export function resolveSentinelHubWmsTilePixels(layerName: string): number {
+  if (isLulcClassificationLayerId(layerName)) return LULC_WMS_TILE_PIXELS
+  return SENTINEL_HUB_WMS_TILE_PIXELS
+}
 
 /** Default Sentinel Live layer when Remote Sensing opens (title match from GetCapabilities). */
 export const SI_DEFAULT_SENTINEL_WMS_LAYER_TITLE = 'NDVI'
@@ -185,9 +202,14 @@ export function buildSentinelHubWmsGetMapUrlParts(options: {
   geometryWkt3857?: string
   evalscriptB64?: string
   tilePixels?: number
+  /** Prefer NEAREST for categorical LULC / class rasters. */
+  categorical?: boolean
 }): string {
   const safeLayer = encodeURIComponent(options.layer)
   const px = options.tilePixels ?? SENTINEL_HUB_WMS_TILE_PIXELS
+  const resample = options.categorical
+    ? SENTINEL_HUB_WMS_CATEGORICAL_RESAMPLE_PARAMS
+    : SENTINEL_HUB_WMS_RASTER_RESAMPLE_PARAMS
   let url =
     `${options.baseUrl}?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0` +
     `&LAYERS=${safeLayer}` +
@@ -195,7 +217,7 @@ export function buildSentinelHubWmsGetMapUrlParts(options: {
     `&FORMAT=image/png&TRANSPARENT=true&WIDTH=${px}&HEIGHT=${px}` +
     `&TIME=${options.timeStart}/${options.timeEnd}` +
     `&MAXCC=${options.cloudCoverage}` +
-    SENTINEL_HUB_WMS_RASTER_RESAMPLE_PARAMS +
+    resample +
     `&SHOWLOGO=false&WARNINGS=false`
   if (options.geometryWkt3857) {
     url += `&GEOMETRY=${encodeURIComponent(options.geometryWkt3857)}`
@@ -305,6 +327,7 @@ export function usesSentinelHubWmsCustomEvalscript(layerName: string): boolean {
   const upper = String(layerName || '').trim().toUpperCase()
   if (!upper) return false
   if (isCropClassificationLayerId(upper)) return true
+  if (isLulcClassificationLayerId(upper)) return true
   if (isAgroCloudCustomWmsLayer(upper)) return true
   if (CORE_INTERPRETATION_WMS_IDS.has(upper)) return true
   if (isAgroCompositeLayerId(upper) || isAgroDeltaCompositeLayerId(upper)) return true
@@ -356,6 +379,7 @@ export function mergeAgroCloudCustomWmsLayers(
   const extra = [
     ...AGRO_CLOUD_CUSTOM_WMS_LAYERS.filter(l => !names.has(String(l.name || '').trim().toUpperCase())),
     ...(names.has(CROP_CLASSIFICATION_WMS_LAYER.name.toUpperCase()) ? [] : [CROP_CLASSIFICATION_WMS_LAYER]),
+    ...(names.has(LULC_CLASSIFICATION_WMS_LAYER.name.toUpperCase()) ? [] : [LULC_CLASSIFICATION_WMS_LAYER]),
   ]
   if (!extra.length) return layers
   return [...layers, ...extra]
@@ -401,6 +425,30 @@ export function resolveSentinelHubWmsTimeWindow(
   if (!current) return { timeStart: '', timeEnd: '' }
   if (isCropClassificationLayerId(logicalLayerName)) {
     const days = options?.lookbackDays ?? 120
+    return {
+      timeStart: subtractDaysFromIso(current, days),
+      timeEnd: current,
+    }
+  }
+  if (isLulcClassificationLayerId(logicalLayerName)) {
+    const days = options?.lookbackDays ?? 120
+    return {
+      timeStart: subtractDaysFromIso(current, days),
+      timeEnd: current,
+    }
+  }
+  if (isAdiLayerId(logicalLayerName)) {
+    const days = options?.lookbackDays ?? ADI_HISTORICAL_LOOKBACK_DAYS
+    return {
+      timeStart: subtractDaysFromIso(current, days),
+      timeEnd: current,
+    }
+  }
+  if (isNcadiLayerId(logicalLayerName)) {
+    if (previousDate && previousDate.trim() && previousDate.trim() !== current) {
+      return { timeStart: previousDate.trim(), timeEnd: current }
+    }
+    const days = options?.lookbackDays ?? NCADI_LOOKBACK_DAYS
     return {
       timeStart: subtractDaysFromIso(current, days),
       timeEnd: current,

@@ -3,10 +3,13 @@
  */
 
 import { isAgroDeltaCompositeLayerId } from './agroCompositeIndices'
+import { isAdiLayerId } from './adiIndex'
+import { isNcadiLayerId } from './ncadiIndex'
 import {
   isCropClassificationLayerId,
   resolveCropClassificationTimeWindow,
 } from './siCropClassification'
+import { isLulcClassificationLayerId } from './siLulcClassification'
 import { getCachedSentinelHubWmsDisplayChunks } from './siAoiLayerModeClipCache'
 import {
   getDrawnGeometry,
@@ -19,6 +22,7 @@ import {
   getSentinelHubWmsLayerCatalog,
   resolveSentinelHubWmsDeltaPreviousDate,
   resolveSentinelHubWmsGetMapLayerName,
+  resolveSentinelHubWmsTilePixels,
   resolveSentinelHubWmsTimeWindow,
   SENTINEL_HUB_WMS_TILE_PIXELS,
 } from './sentinelHubWmsLayers'
@@ -49,6 +53,7 @@ export type SiSentinelAoiWmsStackState = {
   clipSource: unknown
   displayChunks: SentinelHubWmsAoiClipPart[]
   tileUrls: string[]
+  tilePixels: number
   aoiBoundsLngLat: [number, number, number, number] | null
   renderReady: boolean
   sessionKey: string
@@ -60,6 +65,7 @@ const EMPTY_STACK: SiSentinelAoiWmsStackState = {
   clipSource: null,
   displayChunks: [],
   tileUrls: [],
+  tilePixels: SENTINEL_HUB_WMS_TILE_PIXELS,
   aoiBoundsLngLat: null,
   renderReady: false,
   sessionKey: '',
@@ -149,6 +155,7 @@ export function buildSiSentinelAoiWmsStackState(
       clipSource: input.clipSource,
       displayChunks,
       tileUrls: [],
+      tilePixels: resolveSentinelHubWmsTilePixels(activeWmsLayer),
       aoiBoundsLngLat,
       renderReady: false,
       sessionKey: input.sessionKey,
@@ -169,6 +176,7 @@ export function buildSiSentinelAoiWmsStackState(
     ? resolveCropClassificationTimeWindow(input.cropSeasonStart, input.cropSeasonEnd, sentinelFetchDate)
     : resolveSentinelHubWmsTimeWindow(activeWmsLayer, sentinelFetchDate, deltaPreviousDate)
   const wmsBaseUrl = getSentinelHubWmsBaseUrl()
+  const tilePixels = resolveSentinelHubWmsTilePixels(activeWmsLayer)
   const tileUrls = displayChunks.map(chunk =>
     buildSentinelHubWmsGetMapUrlParts({
       baseUrl: wmsBaseUrl,
@@ -178,7 +186,8 @@ export function buildSiSentinelAoiWmsStackState(
       cloudCoverage: input.effectiveWmsCloudCoverage,
       geometryWkt3857: chunk.geometryWkt3857 ?? undefined,
       evalscriptB64: chunk.evalscriptB64,
-      tilePixels: SENTINEL_HUB_WMS_TILE_PIXELS,
+      tilePixels,
+      categorical: isLulcClassificationLayerId(activeWmsLayer) || isAdiLayerId(activeWmsLayer) || isNcadiLayerId(activeWmsLayer),
     }),
   )
 
@@ -187,6 +196,7 @@ export function buildSiSentinelAoiWmsStackState(
     input.wmsTimeWindowKey,
     input.sessionKey,
     displayChunks.length,
+    tilePixels,
   ].join(':')
 
   return {
@@ -194,6 +204,7 @@ export function buildSiSentinelAoiWmsStackState(
     clipSource: input.clipSource,
     displayChunks,
     tileUrls,
+    tilePixels,
     aoiBoundsLngLat,
     renderReady: true,
     sessionKey: input.sessionKey,

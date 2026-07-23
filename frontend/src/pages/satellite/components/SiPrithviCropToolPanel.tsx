@@ -256,6 +256,12 @@ export type SiPrithviCropToolPanelProps = {
   onRunChip: (imageUrl: string) => void
   onCancel: () => void
   onAddToMap?: () => void
+  onExportReport?: () => void
+  exportReportBusy?: boolean
+  exportReportLabel?: string | null
+  onExportGeoTiff?: () => void
+  exportGeoTiffBusy?: boolean
+  exportGeoTiffLabel?: string | null
 }
 
 function stageState(
@@ -282,6 +288,12 @@ export function SiPrithviCropToolPanel(props: SiPrithviCropToolPanelProps) {
     isRunning,
     onRunAoi,
     onCancel,
+    onExportReport,
+    exportReportBusy = false,
+    exportReportLabel = null,
+    onExportGeoTiff,
+    exportGeoTiffBusy = false,
+    exportGeoTiffLabel = null,
   } = props
 
   const hasAoi = Boolean(aoiGeometry)
@@ -293,15 +305,25 @@ export function SiPrithviCropToolPanel(props: SiPrithviCropToolPanelProps) {
   const classStats = result?.classStats ?? null
   const progressPct = Math.round((job?.progress ?? 0) * 100)
 
-  const sceneTiles = useMemo(
-    () => [
-      { key: 'T1', src: scenes?.t1 ?? null },
-      { key: 'T2', src: scenes?.t2 ?? null },
-      { key: 'T3', src: scenes?.t3 ?? null },
+  const sceneTiles = useMemo(() => {
+    const covers = result?.sceneCloudCover ?? []
+    const maxCloud = typeof result?.maxSceneCloud === 'number' ? result.maxSceneCloud : 5
+    const isClear = (index: number): boolean => {
+      const entry = covers[index]
+      if (!entry) return true
+      if (entry.cloudy) return false
+      if (typeof entry.cloudCover === 'number' && entry.cloudCover > Math.max(5, maxCloud)) return false
+      return true
+    }
+    const clearSrc = (src: string | null | undefined, index: number) =>
+      src && isClear(index) ? src : null
+    return [
+      { key: 'T1', src: clearSrc(scenes?.t1, 0) },
+      { key: 'T2', src: clearSrc(scenes?.t2, Math.floor((covers.length || 3) / 2)) },
+      { key: 'T3', src: clearSrc(scenes?.t3, Math.max(0, (covers.length || 3) - 1)) },
       { key: 'Crop Type', src: prediction?.url ?? null },
-    ],
-    [scenes, prediction],
-  )
+    ]
+  }, [scenes, prediction, result?.sceneCloudCover, result?.maxSceneCloud])
 
   const legendItems = useMemo(() => {
     if (result?.legend && result.legend.length) {
@@ -410,6 +432,21 @@ export function SiPrithviCropToolPanel(props: SiPrithviCropToolPanelProps) {
               <span className="prithvi-tool__country-src"> · {country.source}</span>
             </div>
           ) : null}
+          {result.resolutionMeters || typeof result.maxSceneCloud === 'number' ? (
+            <div className="prithvi-tool__quality">
+              {result.resolutionMeters ? (
+                <span className="prithvi-tool__badge" title={result.superResolution === 'ai' ? 'AI super-resolution' : 'High-resolution resample'}>
+                  <i className="fa-solid fa-expand" aria-hidden /> {result.resolutionMeters} m/px
+                  {result.superResolution === 'ai' ? ' · AI SR' : ''}
+                </span>
+              ) : null}
+              {typeof result.maxSceneCloud === 'number' ? (
+                <span className="prithvi-tool__badge" title="Highest scene cloud cover used">
+                  <i className="fa-solid fa-cloud" aria-hidden /> ≤ {Math.ceil(result.maxSceneCloud)}% cloud
+                </span>
+              ) : null}
+            </div>
+          ) : null}
           <div className="prithvi-tool__grid">
             {sceneTiles.map(tile => (
               <figure key={tile.key} className="prithvi-tool__tile">
@@ -426,6 +463,52 @@ export function SiPrithviCropToolPanel(props: SiPrithviCropToolPanelProps) {
           </div>
           {classStats && classStats.length ? (
             <CropCompositionStats stats={classStats} legendItems={legendItems} aoiAreaHa={aoiAreaHa} />
+          ) : null}
+          {onExportReport || onExportGeoTiff ? (
+            <div className="prithvi-tool__export">
+              {onExportReport ? (
+                <button
+                  type="button"
+                  className="prithvi-tool__btn is-report"
+                  onClick={onExportReport}
+                  disabled={exportReportBusy || exportGeoTiffBusy || !result}
+                  title="Export Crop Classification Intelligence Report (Word DOCX)"
+                >
+                  {exportReportBusy ? (
+                    <i className="fa-solid fa-circle-notch fa-spin" aria-hidden />
+                  ) : (
+                    <i className="fa-solid fa-file-word" aria-hidden />
+                  )}
+                  {exportReportBusy
+                    ? exportReportLabel || 'Exporting…'
+                    : 'Export Intelligence Report (Word)'}
+                </button>
+              ) : null}
+              {onExportGeoTiff ? (
+                <button
+                  type="button"
+                  className="prithvi-tool__btn is-geotiff"
+                  onClick={onExportGeoTiff}
+                  disabled={exportGeoTiffBusy || exportReportBusy || !result?.prediction?.url}
+                  title="Export RGB + class GeoTIFF for ArcGIS Pro / QGIS (WGS84). Open *_rgb.tif in the map."
+                >
+                  {exportGeoTiffBusy ? (
+                    <i className="fa-solid fa-circle-notch fa-spin" aria-hidden />
+                  ) : (
+                    <i className="fa-solid fa-globe" aria-hidden />
+                  )}
+                  {exportGeoTiffBusy
+                    ? exportGeoTiffLabel || 'Exporting GeoTIFF…'
+                    : 'Export GeoTIFF (GIS)'}
+                </button>
+              ) : null}
+              <p className="prithvi-tool__export-hint">
+                Word: Cover · TOC · Summary · Charts · Maps · Recommendations
+                {onExportGeoTiff
+                  ? ' · GeoTIFF: open *_rgb.tif in ArcGIS Pro (Zoom To Layer) · WGS84'
+                  : ''}
+              </p>
+            </div>
           ) : null}
         </div>
       ) : null}

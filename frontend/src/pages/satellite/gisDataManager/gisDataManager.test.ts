@@ -35,6 +35,15 @@ describe('gisPreview', () => {
     const issues = buildValidationIssues(buildStubPreview({ filename: 'x', bytes: 1, geometryType: 'table' }));
     expect(issues.some(i => i.code === 'missing_features')).toBe(true);
   });
+
+  it('never flags missing features for rasters (shows an info note instead)', () => {
+    const issues = buildValidationIssues(
+      buildStubPreview({ filename: 'scene.jpg', bytes: 1, geometryType: 'raster' }),
+    );
+    expect(issues.some(i => i.code === 'missing_features')).toBe(false);
+    expect(issues.some(i => i.code === 'empty_geom')).toBe(false);
+    expect(issues.some(i => i.code === 'raster_layer' && i.severity === 'info')).toBe(true);
+  });
 });
 
 describe('shapefileBundle', () => {

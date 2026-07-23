@@ -161,10 +161,14 @@ export type SatelliteMapAnalysisChromeProps = {
     | 'crop-classification'
     | 'ai-detection-gis'
     | 'tree-detections'
+    | 'sam-detection'
+    | 'agri-field-boundary'
     | 'hydro-watershed'
     | 'well-site'
     | 'well-suitability'
     | 'flood-monitoring'
+    | 'image-classification'
+    | 'raster-georeference'
     | 'table-geo-ai'
     | null;
   onMapToolboxEmbedHost?: (el: HTMLDivElement | null) => void;
@@ -181,7 +185,6 @@ export type SatelliteMapAnalysisChromeProps = {
   ) => void;
   /** Opens the full Add GIS Layer modal from the map toolbox + button (GIS Map parity). */
   onMapToolboxAddGisLayerPrimaryClick?: () => void;
-  mapToolboxAddGisPanelOpen?: boolean;
   mapToolboxBrowseLayersPanel?: ReactNode;
   /** Layer Live NDVI legend panel for Main toolbox. */
   mapToolboxLayerLiveLegend?: ReactNode;
@@ -267,7 +270,6 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
     onGeoAiFloatingRailToggle,
     onMapToolboxAddGisLayerAction,
     onMapToolboxAddGisLayerPrimaryClick,
-    mapToolboxAddGisPanelOpen,
     mapToolboxBrowseLayersPanel,
     mapToolboxLayerLiveLegend,
     layerLiveLegendOpen,
@@ -360,7 +362,6 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
       onGeoAiFloatingRailToggle={onGeoAiFloatingRailToggle}
       onMapToolboxAddGisLayerAction={onMapToolboxAddGisLayerAction}
       onMapToolboxAddGisLayerPrimaryClick={onMapToolboxAddGisLayerPrimaryClick}
-      mapToolboxAddGisPanelOpen={mapToolboxAddGisPanelOpen}
       mapToolboxBrowseLayersPanel={mapToolboxBrowseLayersPanel}
       mapToolboxLayerLiveLegend={mapToolboxLayerLiveLegend}
       layerLiveLegendOpen={layerLiveLegendOpen}

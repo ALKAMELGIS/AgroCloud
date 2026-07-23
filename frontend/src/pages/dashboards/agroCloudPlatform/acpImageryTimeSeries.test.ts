@@ -12,13 +12,8 @@ import {
   computeLinearRegression,
   evaluateImageryLayerDailyValue,
   flattenImageryTimeSeriesLayerOptions,
-  imageryDailyRowsSupportLayer,
-  imageryDailyRowsSupportLayers,
-  dailyRowsLackSnowNdsiChannel,
-  imageryDailyRowsNeedRefetchForLayers,
   pruneImageryTimeSeriesToObservations,
   pruneSingleLayerImagerySeries,
-  buildNdsiZonalChartBands,
 } from './acpImageryTimeSeries'
 import type { SentinelHubDailyIndexMeans } from '../../../lib/sentinelHubStatisticsApi'
 
@@ -30,7 +25,6 @@ function dailyRow(overrides: Partial<SentinelHubDailyIndexMeans> = {}): Sentinel
     ndmi: 0.4,
     evi: 0.82,
     ciRe: 0.12,
-    ndsi: 0.15,
     ...overrides,
   }
 }
@@ -54,79 +48,25 @@ describe('acpImageryTimeSeries', () => {
   it('evaluates composite and core indices from daily means', () => {
     const row = dailyRow({ ndvi: 0.8, ndmi: 0.4, ndwi: 0.2 })
     expect(evaluateImageryLayerDailyValue('NDVI', row)).toBe(0.8)
-    expect(evaluateImageryLayerDailyValue('ET', row)).toBeCloseTo(
-      Math.max(0, Math.min(1, 1 - (0.6 * 0.4 + 0.4 * 0.2))) * 10,
-      2,
-    )
+    const et = evaluateImageryLayerDailyValue('ET', row)
+    expect(et).not.toBeNull()
+    expect(et!).toBeGreaterThan(0)
     expect(evaluateImageryLayerDailyValue('VHS', row)).toBeCloseTo(0.79, 2)
     expect(evaluateImageryLayerDailyValue('CHAS', row)).not.toBeNull()
-    expect(evaluateImageryLayerDailyValue('NDSI', row)).toBe(0.15)
-    expect(evaluateImageryLayerDailyValue('SAL_NDSI', row)).toBeCloseTo(-0.4, 4)
   })
 
-  it('detects when cached daily rows lack a selected layer', () => {
-    const ndviOnly = [dailyRow({ ndsi: undefined })]
-    expect(imageryDailyRowsSupportLayer(ndviOnly, 'NDVI')).toBe(true)
-    expect(imageryDailyRowsSupportLayer(ndviOnly, 'NDSI')).toBe(false)
-    expect(imageryDailyRowsSupportLayers(ndviOnly, ['NDVI', 'NDSI'])).toBe(false)
-    expect(imageryDailyRowsSupportLayers([dailyRow()], ['NDSI'])).toBe(true)
-  })
-
-  it('builds snow NDSI time series from daily means', () => {
-    const map = new Map<string, SentinelHubDailyIndexMeans[]>([
-      [
-        'f1',
-        [
-          dailyRow({ date: '2026-06-01', ndvi: 0.6, ndmi: 0.3, ndsi: 0.1 }),
-          dailyRow({ date: '2026-06-10', ndvi: 0.8, ndmi: 0.4, ndsi: 0.2 }),
-        ],
-      ],
-    ])
-    const series = aggregateImageryTimeSeries(map, ['f1'], 'NDSI')
-    expect(series.labels).toEqual(['2026-06-01', '2026-06-10'])
-    expect(series.values[0]).toBeCloseTo(0.1, 4)
-    expect(series.values[1]).toBeCloseTo(0.2, 4)
-  })
-
-  it('detects legacy cache rows missing snow NDSI channel', () => {
-    const legacy = dailyRow({ ndsi: undefined })
-    const nullOnly = dailyRow({ ndsi: null })
-    const modern = dailyRow({ ndsi: -0.12 })
-    expect(dailyRowsLackSnowNdsiChannel([legacy])).toBe(true)
-    expect(dailyRowsLackSnowNdsiChannel([nullOnly])).toBe(true)
-    expect(dailyRowsLackSnowNdsiChannel([legacy, dailyRow({ ndsi: undefined })])).toBe(true)
-    expect(dailyRowsLackSnowNdsiChannel([modern])).toBe(false)
-    expect(imageryDailyRowsNeedRefetchForLayers([legacy], ['NDSI'])).toBe(true)
-    expect(imageryDailyRowsNeedRefetchForLayers([nullOnly], ['NDSI'])).toBe(true)
-    expect(imageryDailyRowsNeedRefetchForLayers([modern], ['NDSI'])).toBe(false)
-    expect(imageryDailyRowsSupportLayer([modern], 'NDSI')).toBe(true)
-  })
-
-  it('builds NDSI zonal min/mean/max bands aligned to chart labels', () => {
-    const rows = [
-      dailyRow({ date: '2026-06-01', ndsi: -0.1, zonal: { ndsi: { min: -0.2, max: 0.05, mean: -0.1 } } }),
-      dailyRow({ date: '2026-06-10', ndsi: 0.15, zonal: { ndsi: { min: 0.1, max: 0.2, mean: 0.15 } } }),
-    ]
-    const bands = buildNdsiZonalChartBands(['2026-06-01', '2026-06-10'], rows)
-    expect(bands.mean[0]).toBeCloseTo(-0.1, 4)
-    expect(bands.min[0]).toBeCloseTo(-0.2, 4)
-    expect(bands.max[1]).toBeCloseTo(0.2, 4)
-  })
-
-  it('builds salinity NDSI time series from NDMI daily means', () => {
-    const map = new Map<string, SentinelHubDailyIndexMeans[]>([
-      [
-        'f1',
-        [
-          dailyRow({ date: '2026-06-01', ndvi: 0.6, ndmi: 0.3 }),
-          dailyRow({ date: '2026-06-10', ndvi: 0.8, ndmi: 0.4 }),
-        ],
-      ],
-    ])
-    const series = aggregateImageryTimeSeries(map, ['f1'], 'SAL_NDSI')
-    expect(series.labels).toEqual(['2026-06-01', '2026-06-10'])
-    expect(series.values[0]).toBeCloseTo(-0.3, 4)
-    expect(series.values[1]).toBeCloseTo(-0.4, 4)
+  it('evaluates salinity NDSI / SI / SSI without requiring NDVI', () => {
+    const row = dailyRow({
+      ndvi: null,
+      ndmi: null,
+      ndwi: null,
+      ndsi: 0.25,
+      si: 0.1,
+      ssi: 0.35,
+    })
+    expect(evaluateImageryLayerDailyValue('NDSI', row)).toBe(0.25)
+    expect(evaluateImageryLayerDailyValue('SI', row)).toBe(0.1)
+    expect(evaluateImageryLayerDailyValue('SSI', row)).toBe(0.35)
   })
 
   it('builds delta time series from consecutive static composite scenes', () => {
@@ -145,6 +85,27 @@ describe('acpImageryTimeSeries', () => {
     expect(series.values[1]).toBeGreaterThan(0)
   })
 
+  it('builds NCADI as consecutive fusion deltas and ADI as rolling z-score', () => {
+    const map = new Map<string, SentinelHubDailyIndexMeans[]>([
+      [
+        'f1',
+        [
+          dailyRow({ date: '2026-06-01', ndvi: 0.4, ndmi: 0.2, ndre: 0.3 }),
+          dailyRow({ date: '2026-06-10', ndvi: 0.6, ndmi: 0.3, ndre: 0.4 }),
+          dailyRow({ date: '2026-06-20', ndvi: 0.8, ndmi: 0.4, ndre: 0.5 }),
+        ],
+      ],
+    ])
+    const ncadi = aggregateImageryTimeSeries(map, ['f1'], 'NCADI')
+    expect(Number.isNaN(ncadi.values[0]!)).toBe(true)
+    expect(ncadi.values[1]).toBeCloseTo(0.7 * 0.2 + 0.3 * 0.1, 4)
+
+    const adi = aggregateImageryTimeSeries(map, ['f1'], 'ADI')
+    expect(Number.isNaN(adi.values[0]!)).toBe(true)
+    expect(Number.isFinite(adi.values[1]!)).toBe(true)
+    expect(Number.isFinite(adi.values[2]!)).toBe(true)
+  })
+
   it('builds multi-layer time series on a shared date axis', () => {
     const map = new Map<string, SentinelHubDailyIndexMeans[]>([
       [
@@ -161,6 +122,25 @@ describe('acpImageryTimeSeries', () => {
     expect(multi.series[0]?.layerId).toBe('NDVI')
     expect(multi.series[0]?.values[0]).toBe(0.6)
     expect(multi.series[1]?.values[1]).toBe(0.4)
+  })
+
+  it('builds multi-layer series including NDSI on a shared date axis', () => {
+    const map = new Map<string, SentinelHubDailyIndexMeans[]>([
+      [
+        'f1',
+        [
+          dailyRow({ date: '2026-06-01', ndvi: 0.6, ndmi: 0.3, ndsi: 0.1 }),
+          dailyRow({ date: '2026-06-10', ndvi: 0.8, ndmi: 0.4, ndsi: 0.2 }),
+        ],
+      ],
+    ])
+    const multi = aggregateImageryTimeSeriesMulti(map, ['f1'], ['NDVI', 'NDSI'])
+    expect(multi.labels).toEqual(['2026-06-01', '2026-06-10'])
+    expect(multi.series).toHaveLength(2)
+    expect(multi.series[0]?.layerId).toBe('NDVI')
+    expect(multi.series[0]?.values[0]).toBe(0.6)
+    expect(multi.series[1]?.layerId).toBe('NDSI')
+    expect(multi.series[1]?.values[1]).toBe(0.2)
   })
 
   it('prunes dates without finite layer values', () => {

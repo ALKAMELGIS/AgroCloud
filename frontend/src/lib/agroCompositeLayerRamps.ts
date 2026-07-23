@@ -6,6 +6,20 @@
 
 import { isAgroDeltaCompositeLayerId } from './agroCompositeIndices'
 import { AGRO_UNIQUE_LAYER_RAMP_PALETTES, type AgroLayerRampAnchor } from './agroCompositeLayerRampPalettes'
+import {
+  ADI_CLASS_BREAKS,
+  ADI_CLASS_COLORS,
+  ADI_CLASS_LABELS,
+  ADI_CLASS_VALUES,
+  ADI_LAYER_ID,
+} from './adiIndex'
+import {
+  NCADI_CLASS_BREAKS,
+  NCADI_CLASS_COLORS,
+  NCADI_CLASS_LABELS,
+  NCADI_CLASS_VALUES,
+  NCADI_LAYER_ID,
+} from './ncadiIndex'
 
 /** Preserved shared kinds — CHAS scientific raster + alert-derived layers. */
 export type AgroCompositeRampKind = 'scientific' | 'alert' | 'alert_delta' | 'alert_derived' | `unique:${string}`
@@ -90,10 +104,7 @@ const ALERT_DELTA_CLASS_LABELS: readonly string[] = [
   'Strong gain · green',
 ]
 
-const PRESERVED_ALERT_LAYER_CONFIG: Record<
-  string,
-  { kind: AgroCompositeRampKind; valueMin: number; valueMax: number; anchors: Anchor[]; labels: readonly string[]; subtitle: string }
-> = {
+const PRESERVED_ALERT_LAYER_CONFIG: Record<string, AgroCompositeLayerRampConfig> = {
   CHAS: {
     kind: 'scientific',
     valueMin: -0.2,
@@ -118,6 +129,36 @@ const PRESERVED_ALERT_LAYER_CONFIG: Record<
     labels: ALERT_DELTA_CLASS_LABELS,
     subtitle: 'ΔCHAS change detection · sudden crop decline',
   },
+  [ADI_LAYER_ID]: {
+    kind: 'scientific',
+    valueMin: -3,
+    valueMax: 4,
+    anchors: ADI_CLASS_COLORS.map((hex, i) => ({
+      t: i / 9,
+      hex,
+      label: ADI_CLASS_LABELS[i]!,
+    })),
+    labels: ADI_CLASS_LABELS,
+    subtitle: 'ADI 10-class anomaly · (Current − μ_hist) / σ_hist',
+    breaks: ADI_CLASS_BREAKS,
+    classValues: ADI_CLASS_VALUES,
+    classColors: ADI_CLASS_COLORS,
+  },
+  [NCADI_LAYER_ID]: {
+    kind: 'scientific',
+    valueMin: -0.5,
+    valueMax: 0.65,
+    anchors: NCADI_CLASS_COLORS.map((hex, i) => ({
+      t: i / 9,
+      hex,
+      label: NCADI_CLASS_LABELS[i]!,
+    })),
+    labels: NCADI_CLASS_LABELS,
+    subtitle: 'NCADI 10-class · 0.7·ΔNDVI + 0.3·ΔNDMI',
+    breaks: NCADI_CLASS_BREAKS,
+    classValues: NCADI_CLASS_VALUES,
+    classColors: NCADI_CLASS_COLORS,
+  },
 }
 
 export type AgroCompositeLayerRampConfig = {
@@ -127,6 +168,12 @@ export type AgroCompositeLayerRampConfig = {
   anchors: Anchor[]
   labels: readonly string[]
   subtitle: string
+  /** Optional unequal class edges (length 9). When set, overrides equal-interval breaks. */
+  breaks?: readonly number[]
+  /** Optional class midpoints (length 10) paired with `breaks`. */
+  classValues?: readonly number[]
+  /** Optional fixed class colors (length 10 hex ints). */
+  classColors?: readonly number[]
 }
 
 export type AgroCompositeTenClassRamp = {
@@ -176,14 +223,17 @@ function resolveLayerRampDefinition(layerId: string): AgroCompositeLayerRampConf
   const u = String(layerId || '').trim().toUpperCase()
   if (!u) return null
 
-  const preserved = PRESERVED_ALERT_LAYER_CONFIG[u]
+  // Layer ids in the selector use NDSI/DNDSI; palette keys are SAL_NDSI/DSAL_NDSI.
+  const paletteKey = u === 'NDSI' ? 'SAL_NDSI' : u === 'DNDSI' ? 'DSAL_NDSI' : u
+
+  const preserved = PRESERVED_ALERT_LAYER_CONFIG[u] ?? PRESERVED_ALERT_LAYER_CONFIG[paletteKey]
   if (preserved) return preserved
 
-  const palette = AGRO_UNIQUE_LAYER_RAMP_PALETTES[u]
+  const palette = AGRO_UNIQUE_LAYER_RAMP_PALETTES[paletteKey]
   if (!palette) return null
 
   return {
-    kind: `unique:${u}`,
+    kind: `unique:${paletteKey}`,
     valueMin: palette.valueMin,
     valueMax: palette.valueMax,
     anchors: palette.anchors,
@@ -197,24 +247,40 @@ export function buildTenClassRampFromConfig(
   layerId = 'UNKNOWN',
 ): AgroCompositeTenClassRamp {
   const { valueMin, valueMax } = config
-  const span = valueMax - valueMin || 1
-  const breaks: number[] = []
   const classValues: number[] = []
   const classColors: number[] = []
   const classLabels: string[] = []
   const classRgb01: [number, number, number][] = []
 
+  const explicitBreaks =
+    config.breaks && config.breaks.length === 9 ? [...config.breaks] : null
+  const explicitValues =
+    config.classValues && config.classValues.length === 10 ? [...config.classValues] : null
+  const explicitColors =
+    config.classColors && config.classColors.length === 10 ? [...config.classColors] : null
+
+  const breaks: number[] = explicitBreaks ?? []
+  const span = valueMax - valueMin || 1
+
   for (let i = 0; i < 10; i++) {
-    const lo = valueMin + (span * i) / 10
-    const hi = valueMin + (span * (i + 1)) / 10
-    const mid = (lo + hi) / 2
+    const lo = explicitBreaks
+      ? i === 0
+        ? valueMin
+        : explicitBreaks[i - 1]!
+      : valueMin + (span * i) / 10
+    const hi = explicitBreaks
+      ? i === 9
+        ? valueMax
+        : explicitBreaks[i]!
+      : valueMin + (span * (i + 1)) / 10
+    const mid = explicitValues ? explicitValues[i]! : (lo + hi) / 2
     const t = i / 9
-    const color = sampleAnchors(config.anchors, t)
+    const color = explicitColors ? explicitColors[i]! : sampleAnchors(config.anchors, t)
     classValues.push(mid)
     classColors.push(color)
     classRgb01.push(hexToRgb01(color))
     classLabels.push(config.labels[i] ?? `Class ${i + 1}`)
-    if (i < 9) breaks.push(Number(hi.toFixed(2)))
+    if (!explicitBreaks && i < 9) breaks.push(Number(hi.toFixed(2)))
   }
 
   const gradientStops: Array<[number, number]> = classValues.map((v, i) => [v, classColors[i]!])

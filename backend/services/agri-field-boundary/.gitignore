@@ -1,0 +1,6 @@
+weights/
+*.pt
+*.pth
+__pycache__/
+.pytest_cache/
+*.download

@@ -27,9 +27,11 @@ import {
   fetchSentinelWmsTrueColorPng,
   fetchSentinelWmsBandsTiff,
   fetchSentinelWmsIndicesGrid,
+  selectClearSceneDates,
 } from './sentinelHubWmsStatisticsEngine.js'
 import { detectCountryFromAoi, cropProfileForCountry } from './cropCountryDatabase.js'
 import { classifyCropFields } from './cropFieldClassifier.js'
+import { fillBlackHolesInPngDataUrl } from './cropPngHoleFill.js'
 
 const HF_SPACE_ID =
   process.env.CROP_CLASSIFICATION_SPACE ||
@@ -37,6 +39,37 @@ const HF_SPACE_ID =
 /** Optional self-hosted Prithvi inference service (FastAPI + GPU) for true AOI classification. */
 const SELF_INFERENCE_URL = String(process.env.CROP_CLASSIFICATION_SELF_URL || '').trim()
 const HF_TOKEN = String(process.env.HF_TOKEN || process.env.HUGGING_FACE_TOKEN || '').trim()
+
+/**
+ * Max acceptable *granule-level* STAC cloud cover (%) when ranking Sentinel-2 candidates.
+ * This is NOT AOI cloud — tile metadata often reports 15–40% even when the farm is clear.
+ * AOI clarity is enforced via SCL clear-fraction after fetch. Override with CROP_MAX_CLOUD_PCT.
+ */
+const CROP_MAX_CLOUD = Math.max(
+  5,
+  Math.min(100, Number(process.env.CROP_MAX_CLOUD_PCT) || 40),
+)
+/** Preferred AOI clear fraction; below this we still accept best available down to the floor. */
+const CROP_MIN_CLEAR_FRACTION = Math.max(
+  0.2,
+  Math.min(0.95, Number(process.env.CROP_MIN_CLEAR_FRACTION) || 0.45),
+)
+/** Absolute floor — reject only nearly empty / failed frames. */
+const CROP_CLEAR_FLOOR = Math.max(
+  0.08,
+  Math.min(CROP_MIN_CLEAR_FRACTION, Number(process.env.CROP_CLEAR_FLOOR) || 0.15),
+)
+/** Target ground sampling for the classified output (m/px). 3 m sharpens farm / pivot edges. */
+const CROP_TARGET_MPP = Math.max(
+  2,
+  Math.min(10, Number(process.env.CROP_TARGET_MPP) || 3),
+)
+/**
+ * Optional external AI super-resolution service. When set, the {@link applySuperResolution}
+ * seam POSTs imagery to it to enhance native Sentinel sampling → {@link CROP_TARGET_MPP} m
+ * with a real SR model (not resampling). When unset, we fetch a high-resolution resampled grid.
+ */
+const CROP_SUPER_RESOLUTION_URL = String(process.env.CROP_SUPER_RESOLUTION_URL || '').trim()
 
 /** Prithvi prediction palette (USDA CDL-style classes shown in the demo legend). */
 export const CROP_CLASSIFICATION_CLASSES = [
@@ -136,21 +169,54 @@ function resolveTimestepDates(season, timesteps) {
   return out
 }
 
-/** Fetch one true-color RGB preview (data URL) for the AOI around a target date via OGC WMS. */
+/** Fetch one true-color RGB preview (data URL) for the AOI around a target clear date. */
 async function fetchAoiPreview(wmsConfig, geometry, isoDate, size) {
   const day = new Date(`${isoDate}T00:00:00Z`)
-  const timeStart = new Date(day.getTime() - 20 * 86400000).toISOString().slice(0, 10)
-  const timeEnd = new Date(day.getTime() + 10 * 86400000).toISOString().slice(0, 10)
+  // Narrow window around the chosen clear date so mosaicking cannot pull in cloudy neighbours.
+  const timeStart = new Date(day.getTime() - 3 * 86400000).toISOString().slice(0, 10)
+  const timeEnd = new Date(day.getTime() + 3 * 86400000).toISOString().slice(0, 10)
   const buf = await fetchSentinelWmsTrueColorPng({
     accessToken: wmsConfig.accessToken,
     instanceId: wmsConfig.instanceId,
     geometry,
     timeStart,
     timeEnd,
-    cloudCoverage: 60,
+    cloudCoverage: CROP_MAX_CLOUD,
     size,
   })
   return `data:image/png;base64,${buf.toString('base64')}`
+}
+
+/**
+ * AI super-resolution seam. When `CROP_SUPER_RESOLUTION_URL` is configured, POSTs the given
+ * image (base64 PNG data URL) with the source/target GSD and returns the enhanced data URL
+ * from a real SR model. When unset or on failure, returns null so callers fall back to the
+ * high-resolution resampled grid (never a naive upscale of the classified output).
+ * @param {string} dataUrl  base64 PNG data URL to enhance
+ * @param {{ sourceMpp: number; targetMpp: number; bbox?: number[] }} opts
+ * @returns {Promise<{ url: string; engine: 'ai' } | null>}
+ */
+async function applySuperResolution(dataUrl, opts) {
+  if (!CROP_SUPER_RESOLUTION_URL || !dataUrl) return null
+  try {
+    const res = await fetch(CROP_SUPER_RESOLUTION_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        image: dataUrl,
+        sourceMpp: opts.sourceMpp,
+        targetMpp: opts.targetMpp,
+        bbox: opts.bbox || null,
+        scale: Math.max(1, Math.round((opts.sourceMpp || 10) / (opts.targetMpp || 5))),
+      }),
+    })
+    if (!res.ok) return null
+    const json = await res.json().catch(() => null)
+    const url = json && (json.url || json.image || json.dataUrl)
+    return typeof url === 'string' && url.length > 0 ? { url, engine: 'ai' } : null
+  } catch {
+    return null
+  }
 }
 
 function normalizeHfOutputs(out) {
@@ -257,27 +323,64 @@ function evenlySpacedDates(season, count) {
 async function runCountryAwarePipeline(job, input, deps) {
   const { wmsConfig, bbox, broadcast } = deps
 
-  setJob(job, { status: 'fetching', progress: 0.08, message: 'Detecting country from AOI…' }, broadcast)
+  setJob(job, { status: 'fetching', progress: 0.06, message: 'Detecting country from AOI…' }, broadcast)
   const country = await detectCountryFromAoi(input.aoi)
   const profile = cropProfileForCountry(country.code)
 
+  // Pick clearest Sentinel-2 acquisitions (granule STAC ≤ CROP_MAX_CLOUD%; AOI clarity later).
   const STEPS = 5
-  const dates = evenlySpacedDates(input.season, STEPS)
-  const SIZE = 224
-  const grids = []
-  for (let i = 0; i < dates.length; i += 1) {
+  setJob(
+    job,
+    {
+      status: 'fetching',
+      progress: 0.09,
+      message: `Selecting clearest scenes (granule cloud ≤ ${CROP_MAX_CLOUD}%, prefer clearest)…`,
+    },
+    broadcast,
+  )
+  let selected
+  try {
+    selected = await selectClearSceneDates(input.aoi, input.season, STEPS, CROP_MAX_CLOUD)
+  } catch (selErr) {
+    throw new Error(
+      String(selErr?.message || selErr) ||
+        `Not enough usable Sentinel-2 imagery for this AOI/season (granule cloud ≤ ${CROP_MAX_CLOUD}%).`,
+    )
+  }
+  // Never keep a scene marked cloudy (selector already rejects them; belt-and-suspenders).
+  selected = selected.filter(s => !s.cloudy && (s.cloudCover == null || s.cloudCover <= CROP_MAX_CLOUD))
+  if (selected.length < 2) {
+    throw new Error(
+      `Not enough usable Sentinel-2 imagery for this AOI/season to classify (need ≥2 clear dates; granule cloud ≤ ${CROP_MAX_CLOUD}%). Try a wider season.`,
+    )
+  }
+
+  // 3 m grid: sample at CROP_TARGET_MPP so field / pivot edges stay crisp.
+  // Rank by AOI clear fraction; prefer ≥ CROP_MIN_CLEAR_FRACTION but fall back to best ≥ floor
+  // so arid / partially cloudy seasons still classify.
+  const validFractionOf = g => {
+    if (!g?.valid?.length) return 0
+    let ok = 0
+    for (let p = 0; p < g.valid.length; p += 1) ok += g.valid[p] ? 1 : 0
+    return ok / g.valid.length
+  }
+  /** @type {Array<{ grid: any; clear: number; date: string; sel: any }>} */
+  const scored = []
+  for (let i = 0; i < selected.length; i += 1) {
+    const sel = selected[i]
+    const cloudNote = sel.cloudCover == null ? '' : ` · ${sel.cloudCover.toFixed(0)}% tile cloud`
     setJob(
       job,
       {
         status: 'fetching',
-        progress: 0.12 + (0.5 * i) / dates.length,
-        message: `Fetching spectral series ${i + 1}/${dates.length} (${dates[i]}) — ${country.name}…`,
+        progress: 0.12 + (0.5 * i) / selected.length,
+        message: `Fetching scene ${i + 1}/${selected.length} (${sel.date}${cloudNote}) — ${country.name}…`,
       },
       broadcast,
     )
-    const day = new Date(`${dates[i]}T00:00:00Z`)
-    const t0 = new Date(day.getTime() - 25 * 86400000).toISOString().slice(0, 10)
-    const t1 = new Date(day.getTime() + 15 * 86400000).toISOString().slice(0, 10)
+    const day = new Date(`${sel.date}T00:00:00Z`)
+    const t0 = new Date(day.getTime() - 6 * 86400000).toISOString().slice(0, 10)
+    const t1 = new Date(day.getTime() + 6 * 86400000).toISOString().slice(0, 10)
     try {
       const grid = await fetchSentinelWmsIndicesGrid({
         accessToken: wmsConfig.accessToken,
@@ -285,27 +388,79 @@ async function runCountryAwarePipeline(job, input, deps) {
         geometry: input.aoi,
         timeStart: t0,
         timeEnd: t1,
-        cloudCoverage: 60,
-        size: SIZE,
+        cloudCoverage: CROP_MAX_CLOUD,
+        metersPerPixel: CROP_TARGET_MPP,
+        maxSize: 3072,
       })
-      grids.push(grid)
+      const clear = validFractionOf(grid)
+      if (clear < CROP_CLEAR_FLOOR) continue
+      scored.push({ grid, clear, date: sel.date, sel })
     } catch {
       /* skip a failed date — classifier tolerates gaps */
     }
   }
+  scored.sort((a, b) => b.clear - a.clear || a.date.localeCompare(b.date))
+  const preferred = scored.filter(s => s.clear >= CROP_MIN_CLEAR_FRACTION)
+  const pool = preferred.length >= 2 ? preferred : scored
+  // Keep temporal spread when possible.
+  const picked = []
+  const minGapMs = 5 * 86400000
+  for (const s of pool) {
+    if (picked.length >= selected.length) break
+    const t = new Date(`${s.date}T00:00:00Z`).getTime()
+    if (picked.some(p => Math.abs(new Date(`${p.date}T00:00:00Z`).getTime() - t) < minGapMs)) continue
+    picked.push(s)
+  }
+  for (const s of pool) {
+    if (picked.length >= Math.min(selected.length, 4)) break
+    if (picked.includes(s)) continue
+    picked.push(s)
+  }
+  picked.sort((a, b) => a.date.localeCompare(b.date))
+  const grids = picked.map(p => p.grid)
+  const dates = picked.map(p => p.date)
+  selected = picked.map(p => p.sel)
   if (grids.length < 2) {
-    throw new Error('Not enough cloud-free Sentinel-2 imagery for this AOI/season to classify.')
+    const best = scored[0]?.clear
+    throw new Error(
+      best != null
+        ? `Not enough usable Sentinel-2 scenes for this AOI/season (best AOI clear ${(best * 100).toFixed(0)}%, need ≥2 dates). Try a wider season.`
+        : 'Not enough usable Sentinel-2 imagery for this AOI/season to classify. Try a wider season or a clearer period.',
+    )
   }
 
   setJob(job, { status: 'preprocessing', progress: 0.66, message: 'Building NDVI phenology signatures…' }, broadcast)
-
   setJob(job, { status: 'inferring', progress: 0.8, message: `Classifying crops (${profile.country})…` }, broadcast)
-  const classified = classifyCropFields(grids, profile)
+  const classified = classifyCropFields(grids, profile, {
+    seasonStart: input.season?.start,
+    seasonEnd: input.season?.end,
+  })
+  classified.pngDataUrl = fillBlackHolesInPngDataUrl(classified.pngDataUrl)
 
-  // True-color previews for context (first / middle / last date).
+  // AI super-resolution seam: enhance toward CROP_TARGET_MPP when an external SR service
+  // is configured; otherwise keep the high-resolution resampled grid.
+  let predictionUrl = classified.pngDataUrl
+  let superResolution = 'resample'
+  setJob(job, { status: 'inferring', progress: 0.9, message: `Enhancing to ${CROP_TARGET_MPP} m…` }, broadcast)
+  const sr = await applySuperResolution(classified.pngDataUrl, {
+    sourceMpp: 10,
+    targetMpp: CROP_TARGET_MPP,
+    bbox,
+  })
+  if (sr) {
+    predictionUrl = fillBlackHolesInPngDataUrl(sr.url)
+    superResolution = 'ai'
+  }
+
+  // True-color previews for context (first / middle / last clear date only).
   const previewIdx = [0, Math.floor(dates.length / 2), dates.length - 1]
   const previews = []
   for (const idx of previewIdx) {
+    const sel = selected[idx]
+    if (!sel || sel.cloudy || (typeof sel.cloudCover === 'number' && sel.cloudCover > CROP_MAX_CLOUD)) {
+      previews.push(null)
+      continue
+    }
     try {
       previews.push(await fetchAoiPreview(wmsConfig, input.aoi, dates[idx], 256))
     } catch {
@@ -313,19 +468,25 @@ async function runCountryAwarePipeline(job, input, deps) {
     }
   }
 
+  const cloudCovers = selected.map(s => s.cloudCover).filter(c => typeof c === 'number')
+  const maxSceneCloud = cloudCovers.length ? Math.max(...cloudCovers) : null
   setJob(
     job,
     {
       status: 'done',
       progress: 1,
-      message: `Classification complete — ${profile.country} (${classified.classStats.length} classes${classified.pivots?.pixels ? `, ${classified.pivots.pctOfCropland}% pivot-irrigated` : ''}).`,
+      message: `Classification complete — ${profile.country} (${classified.classStats.length} classes${classified.pivots?.pixels ? `, ${classified.pivots.pctOfCropland}% pivot-irrigated` : ''}) at ${CROP_TARGET_MPP} m.`,
       result: {
         engine: 'country',
         country: { code: country.code, name: profile.country, source: country.source },
         legend: profile.classes,
         scenes: { t1: previews[0] || null, t2: previews[1] || null, t3: previews[2] || null },
         dates,
-        prediction: { url: classified.pngDataUrl, bounds: bbox },
+        sceneCloudCover: selected.map(s => ({ date: s.date, cloudCover: s.cloudCover, cloudy: s.cloudy })),
+        maxSceneCloud,
+        resolutionMeters: CROP_TARGET_MPP,
+        superResolution,
+        prediction: { url: predictionUrl, bounds: bbox },
         classStats: classified.classStats,
         pivots: classified.pivots,
         inferenceAvailable: true,
@@ -348,9 +509,16 @@ async function runPipeline(job, input, deps) {
     // AOI mode
     const bbox = polygonBbox(input.aoi)
     const timesteps = Math.max(1, Math.min(3, Number(input.timesteps) || 3))
-    const dates = resolveTimestepDates(input.season, timesteps)
 
-    setJob(job, { status: 'fetching', progress: 0.1, message: `Selecting ${timesteps} scenes…` }, broadcast)
+    setJob(
+      job,
+      {
+        status: 'fetching',
+        progress: 0.08,
+        message: `Selecting clearest scenes (granule cloud ≤ ${CROP_MAX_CLOUD}%)…`,
+      },
+      broadcast,
+    )
     const wmsConfig = resolveSentinelHubWmsConfig(secretsFilePath)
     if (!wmsConfig.instanceId) {
       throw new Error(
@@ -364,26 +532,47 @@ async function runPipeline(job, input, deps) {
       return
     }
 
-    // Fetch 6-band (HLS-equivalent) tiffs per timestep for inference.
+    // Prithvi path: pick clearest scenes (granule STAC ≤ CROP_MAX_CLOUD%).
+    let selectedP
+    try {
+      selectedP = await selectClearSceneDates(input.aoi, input.season, timesteps, CROP_MAX_CLOUD)
+    } catch (selErr) {
+      throw new Error(
+        String(selErr?.message || selErr) ||
+          `Not enough usable Sentinel-2 imagery for this AOI/season (granule cloud ≤ ${CROP_MAX_CLOUD}%).`,
+      )
+    }
+    selectedP = selectedP.filter(s => !s.cloudy && (s.cloudCover == null || s.cloudCover <= CROP_MAX_CLOUD))
+    if (!selectedP.length) {
+      throw new Error(
+        `Not enough usable Sentinel-2 imagery for this AOI/season to classify (granule cloud ≤ ${CROP_MAX_CLOUD}%). Try a wider season.`,
+      )
+    }
+    const dates = selectedP.map(s => s.date)
+
+    // Fetch 6-band (HLS-equivalent) tiffs per timestep for inference (cloud-masked in the evalscript).
     const CHIP_SIZE = 224
     const tiffs = []
     let bbox3857 = null
-    for (let i = 0; i < dates.length; i += 1) {
+    for (let i = 0; i < selectedP.length; i += 1) {
+      const sel = selectedP[i]
+      const cloudNote = sel.cloudCover == null ? '' : ` · ${sel.cloudCover.toFixed(0)}% cloud`
       setJob(
         job,
-        { status: 'fetching', progress: 0.1 + (0.45 * i) / dates.length, message: `Fetching imagery T${i + 1} (${dates[i]})…` },
+        { status: 'fetching', progress: 0.1 + (0.45 * i) / selectedP.length, message: `Fetching clear scene T${i + 1} (${sel.date}${cloudNote})…` },
         broadcast,
       )
-      const day = new Date(`${dates[i]}T00:00:00Z`)
-      const t0 = new Date(day.getTime() - 20 * 86400000).toISOString().slice(0, 10)
-      const t1 = new Date(day.getTime() + 10 * 86400000).toISOString().slice(0, 10)
+      // Narrow ± window centred on the chosen clear date.
+      const day = new Date(`${sel.date}T00:00:00Z`)
+      const t0 = new Date(day.getTime() - 6 * 86400000).toISOString().slice(0, 10)
+      const t1 = new Date(day.getTime() + 6 * 86400000).toISOString().slice(0, 10)
       const out = await fetchSentinelWmsBandsTiff({
         accessToken: wmsConfig.accessToken,
         instanceId: wmsConfig.instanceId,
         geometry: input.aoi,
         timeStart: t0,
         timeEnd: t1,
-        cloudCoverage: 60,
+        cloudCoverage: CROP_MAX_CLOUD,
         size: CHIP_SIZE,
       })
       tiffs.push(out.buffer)
@@ -397,6 +586,7 @@ async function runPipeline(job, input, deps) {
     if (SELF_INFERENCE_URL) {
       setJob(job, { status: 'inferring', progress: 0.8, message: 'Running Prithvi inference…' }, broadcast)
       const inf = await inferViaSelfService({ bbox, dates, aoi: input.aoi })
+      const predUrl = fillBlackHolesInPngDataUrl(inf.predictionUrl || inf.prediction)
       setJob(
         job,
         {
@@ -405,7 +595,7 @@ async function runPipeline(job, input, deps) {
           message: 'Classification complete.',
           result: {
             dates,
-            prediction: { url: inf.predictionUrl || inf.prediction, bounds: inf.bounds || bbox },
+            prediction: { url: predUrl, bounds: inf.bounds || bbox },
             classStats: inf.classStats || null,
           },
         },
@@ -418,6 +608,7 @@ async function runPipeline(job, input, deps) {
     setJob(job, { status: 'inferring', progress: 0.8, message: 'Running Prithvi inference (HF Space)…' }, broadcast)
     try {
       const inf = await inferBufferViaHfSpace(mergedTiff)
+      const predUrl = fillBlackHolesInPngDataUrl(inf.prediction?.url)
       setJob(
         job,
         {
@@ -427,7 +618,7 @@ async function runPipeline(job, input, deps) {
           result: {
             scenes: inf.scenes,
             dates,
-            prediction: { url: inf.prediction.url, bounds: bbox },
+            prediction: { url: predUrl, bounds: bbox },
             classStats: null,
             inferenceAvailable: true,
           },
@@ -435,15 +626,22 @@ async function runPipeline(job, input, deps) {
         broadcast,
       )
     } catch (inferErr) {
-      // Inference failed — still surface the timestep imagery so the AOI isn't a dead end.
+      // Inference failed — still surface clear timestep imagery (never cloudy frames).
       const previews = []
       for (let i = 0; i < dates.length; i += 1) {
+        const sel = selectedP[i]
+        if (!sel || sel.cloudy || (typeof sel.cloudCover === 'number' && sel.cloudCover > CROP_MAX_CLOUD)) {
+          previews.push(null)
+          continue
+        }
         try {
           previews.push(await fetchAoiPreview(wmsConfig, input.aoi, dates[i], 256))
         } catch {
           previews.push(null)
         }
       }
+      const cloudCoversP = selectedP.map(s => s.cloudCover).filter(c => typeof c === 'number')
+      const maxSceneCloudP = cloudCoversP.length ? Math.max(...cloudCoversP) : null
       setJob(
         job,
         {
@@ -453,6 +651,8 @@ async function runPipeline(job, input, deps) {
           result: {
             scenes: { t1: previews[0] || null, t2: previews[1] || null, t3: previews[2] || null },
             dates,
+            sceneCloudCover: selectedP.map(s => ({ date: s.date, cloudCover: s.cloudCover, cloudy: s.cloudy })),
+            maxSceneCloud: maxSceneCloudP,
             prediction: { url: null, bounds: bbox },
             classStats: null,
             inferenceAvailable: false,
@@ -505,17 +705,11 @@ export function registerCropClassificationRoutes(app, { secretsFilePath, broadca
     if (!season?.start || !season?.end) {
       return res.status(400).json({ error: 'season { start, end } (YYYY-MM-DD) is required.' })
     }
-    const dataProvider = String(body.dataProvider || 'satellite')
-    if (dataProvider !== 'satellite' && dataProvider !== 'raster') {
-      return res.status(400).json({
-        error: `Crop Classification in this API supports Satellite or Raster (PNG, GeoTIFF) only. Use the dedicated module for "${dataProvider}".`,
-      })
-    }
     const job = newJob({ mode })
     res.status(202).json({ jobId: job.id })
     void runPipeline(
       job,
-      { mode, aoi, season, timesteps: body.timesteps, engine: body.engine, dataProvider },
+      { mode, aoi, season, timesteps: body.timesteps, engine: body.engine },
       { secretsFilePath, broadcast },
     )
   })

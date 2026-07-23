@@ -31,13 +31,13 @@ const WMS_FETCH_CONCURRENCY = 4
 const WMS_ZONAL_STATS_EVALSCRIPT = `//VERSION=3
 function setup() {
   return {
-    input: [{ bands: ["B02", "B03", "B04", "B08", "B11", "SCL", "dataMask"] }],
+    input: [{ bands: ["B02", "B03", "B04", "B08", "B11", "SCL", "CLM", "CLP", "dataMask"] }],
     output: { bands: 4, sampleType: "UINT8" }
   };
 }
 function evaluatePixel(s) {
   var scl = s.SCL;
-  var cloud = (scl == 3 || scl == 8 || scl == 9 || scl == 10 || scl == 11);
+  var cloud = (scl == 0 || scl == 1 || scl == 3 || scl == 8 || scl == 9 || scl == 10 || scl == 11) || s.CLM == 1 || s.CLP > 25;
   if (!s.dataMask || cloud) return [0, 0, 0, 0];
   var dNdvi = s.B08 + s.B04;
   var ndvi = dNdvi > 1e-6 ? (s.B08 - s.B04) / dNdvi : 0;
@@ -45,14 +45,38 @@ function evaluatePixel(s) {
   var ndwi = dNdwi > 1e-6 ? (s.B03 - s.B08) / dNdwi : 0;
   var dNdmi = s.B08 + s.B11;
   var ndmi = dNdmi > 1e-6 ? (s.B08 - s.B11) / dNdmi : 0;
-  var dNdSnow = s.B03 + s.B11;
-  var ndsi = dNdSnow > 1e-6 ? (s.B03 - s.B11) / dNdSnow : 0;
   function enc(v) {
     if (isNaN(v)) return 0;
-    var raw = Math.round((v + 1) * 127);
-    return Math.max(1, Math.min(254, raw === 0 ? 1 : raw));
+    return Math.max(0, Math.min(254, Math.round((v + 1) * 127)));
   }
-  return [enc(ndvi), enc(ndwi), enc(ndmi), enc(ndsi)];
+  return [enc(ndvi), enc(ndwi), enc(ndmi), 255];
+}`
+
+const WMS_ZONAL_EXT_EVALSCRIPT = `//VERSION=3
+function setup() {
+  return {
+    input: [{ bands: ["B03", "B04", "B05", "B08", "B11", "SCL", "CLM", "CLP", "dataMask"] }],
+    output: { bands: 4, sampleType: "UINT8" }
+  };
+}
+function evaluatePixel(s) {
+  var scl = s.SCL;
+  var cloud = (scl == 0 || scl == 1 || scl == 3 || scl == 8 || scl == 9 || scl == 10 || scl == 11) || s.CLM == 1 || s.CLP > 25;
+  if (!s.dataMask || cloud) return [0, 0, 0, 0];
+  var dNdsi = s.B11 + s.B08;
+  var ndsi = dNdsi > 1e-6 ? (s.B11 - s.B08) / dNdsi : 0;
+  var dNdre = s.B08 + s.B05;
+  var ndre = dNdre > 1e-6 ? (s.B08 - s.B05) / dNdre : 0;
+  var si = Math.sqrt(Math.max(0, s.B03 * s.B04));
+  function enc(v) {
+    if (isNaN(v)) return 0;
+    return Math.max(0, Math.min(254, Math.round((v + 1) * 127)));
+  }
+  function enc01(v) {
+    if (isNaN(v)) return 0;
+    return Math.max(0, Math.min(254, Math.round(v * 254)));
+  }
+  return [enc(ndsi), enc(ndre), enc01(si), 255];
 }`
 
 function evalscriptToBase64(script: string): string {
@@ -66,6 +90,7 @@ function evalscriptToBase64(script: string): string {
 }
 
 const WMS_STATS_EVALSCRIPT_B64 = evalscriptToBase64(WMS_ZONAL_STATS_EVALSCRIPT)
+const WMS_STATS_EXT_EVALSCRIPT_B64 = evalscriptToBase64(WMS_ZONAL_EXT_EVALSCRIPT)
 
 export function isSentinelHubWmsClientStatisticsAvailable(): boolean {
   return Boolean(getSentinelHubWmsInstanceId().trim())
@@ -195,16 +220,48 @@ type ZonalMeans = {
   ndwi: number | null
   ndmi: number | null
   ndsi: number | null
+  ndre: number | null
+  si: number | null
+  ssi: number | null
+  savi: number | null
   ndsiMin: number | null
   ndsiMax: number | null
   sampleCount: number
 }
 
-function decodeZonalMeansFromRgba(data: Uint8ClampedArray): ZonalMeans {
+function decodeCoreZonalMeans(data: Uint8ClampedArray): Pick<ZonalMeans, 'ndvi' | 'ndwi' | 'ndmi' | 'sampleCount'> {
   let ndviSum = 0
   let ndwiSum = 0
   let ndmiSum = 0
+  let count = 0
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i]!
+    const g = data[i + 1]!
+    const b = data[i + 2]!
+    const a = data[i + 3]!
+    if (a < 128 || (r === 0 && g === 0 && b === 0)) continue
+    ndviSum += r / 127 - 1
+    ndwiSum += g / 127 - 1
+    ndmiSum += b / 127 - 1
+    count += 1
+  }
+  if (count === 0) {
+    return { ndvi: null, ndwi: null, ndmi: null, sampleCount: 0 }
+  }
+  return {
+    ndvi: Number((ndviSum / count).toFixed(4)),
+    ndwi: Number((ndwiSum / count).toFixed(4)),
+    ndmi: Number((ndmiSum / count).toFixed(4)),
+    sampleCount: count,
+  }
+}
+
+function decodeExtZonalMeans(
+  data: Uint8ClampedArray,
+): Pick<ZonalMeans, 'ndsi' | 'ndre' | 'si' | 'ssi' | 'ndsiMin' | 'ndsiMax'> {
   let ndsiSum = 0
+  let ndreSum = 0
+  let siSum = 0
   let ndsiMin = Number.POSITIVE_INFINITY
   let ndsiMax = Number.NEGATIVE_INFINITY
   let count = 0
@@ -213,27 +270,27 @@ function decodeZonalMeansFromRgba(data: Uint8ClampedArray): ZonalMeans {
     const g = data[i + 1]!
     const b = data[i + 2]!
     const a = data[i + 3]!
-    if (r === 0 && g === 0 && b === 0 && a === 0) continue
-    const ndsiVal = a / 127 - 1
-    ndviSum += r / 127 - 1
-    ndwiSum += g / 127 - 1
-    ndmiSum += b / 127 - 1
+    if (a < 128) continue
+    const ndsiVal = r / 127 - 1
     ndsiSum += ndsiVal
+    ndreSum += g / 127 - 1
+    siSum += b / 254
     if (ndsiVal < ndsiMin) ndsiMin = ndsiVal
     if (ndsiVal > ndsiMax) ndsiMax = ndsiVal
     count += 1
   }
   if (count === 0) {
-    return { ndvi: null, ndwi: null, ndmi: null, ndsi: null, ndsiMin: null, ndsiMax: null, sampleCount: 0 }
+    return { ndsi: null, ndre: null, si: null, ssi: null, ndsiMin: null, ndsiMax: null }
   }
+  const ndsi = Number((ndsiSum / count).toFixed(4))
+  const si = Number((siSum / count).toFixed(4))
   return {
-    ndvi: Number((ndviSum / count).toFixed(4)),
-    ndwi: Number((ndwiSum / count).toFixed(4)),
-    ndmi: Number((ndmiSum / count).toFixed(4)),
-    ndsi: Number((ndsiSum / count).toFixed(4)),
+    ndsi,
+    ndre: Number((ndreSum / count).toFixed(4)),
+    si,
+    ssi: Number((ndsi + si).toFixed(4)),
     ndsiMin: Number(ndsiMin.toFixed(4)),
     ndsiMax: Number(ndsiMax.toFixed(4)),
-    sampleCount: count,
   }
 }
 
@@ -360,6 +417,34 @@ function buildCompatibleResponse(
                 noDataCount: row.ndsi == null ? row.sampleCount : 0,
               },
             },
+            ndre: {
+              stats: {
+                mean: row.ndre,
+                sampleCount: row.sampleCount,
+                noDataCount: row.ndre == null ? row.sampleCount : 0,
+              },
+            },
+            si: {
+              stats: {
+                mean: row.si,
+                sampleCount: row.sampleCount,
+                noDataCount: row.si == null ? row.sampleCount : 0,
+              },
+            },
+            ssi: {
+              stats: {
+                mean: row.ssi,
+                sampleCount: row.sampleCount,
+                noDataCount: row.ssi == null ? row.sampleCount : 0,
+              },
+            },
+            savi: {
+              stats: {
+                mean: row.savi,
+                sampleCount: row.sampleCount,
+                noDataCount: row.savi == null ? row.sampleCount : 0,
+              },
+            },
             evi: {
               stats: {
                 mean: null,
@@ -422,10 +507,8 @@ export async function postSentinelStatisticsViaWmsClient(
   }
 
   const [minX, minY, maxX, maxY] = bbox3857
-  const rows = await mapPool(sceneDates, WMS_FETCH_CONCURRENCY, async sceneDate => {
-    if (signal?.aborted) {
-      throw new DOMException('The operation was aborted.', 'AbortError')
-    }
+
+  const buildUrl = (sceneDate: string, evalB64: string, includeGeom: boolean) => {
     let url =
       `${baseUrl}?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0` +
       `&LAYERS=${encodeURIComponent(layer)}` +
@@ -436,38 +519,51 @@ export async function postSentinelStatisticsViaWmsClient(
       `&TIME=${sceneDate}/${addDaysToIso(sceneDate, 1)}` +
       `&MAXCC=${cloudCoverage}` +
       `&SHOWLOGO=false&WARNINGS=false` +
-      `&EVALSCRIPT=${encodeURIComponent(WMS_STATS_EVALSCRIPT_B64)}`
-    if (geometryWkt3857) {
+      `&EVALSCRIPT=${encodeURIComponent(evalB64)}`
+    if (includeGeom && geometryWkt3857) {
       url += `&GEOMETRY=${encodeURIComponent(geometryWkt3857)}`
     }
-    url = appendSentinelHubWmsAccessToken(url, accessToken)
+    return appendSentinelHubWmsAccessToken(url, accessToken)
+  }
+
+  const rows = await mapPool(sceneDates, WMS_FETCH_CONCURRENCY, async sceneDate => {
+    if (signal?.aborted) {
+      throw new DOMException('The operation was aborted.', 'AbortError')
+    }
+    const fetchPair = async (includeGeom: boolean) => {
+      const [corePx, extPx] = await Promise.all([
+        fetchPngPixels(buildUrl(sceneDate, WMS_STATS_EVALSCRIPT_B64, includeGeom), WMS_TILE_PIXELS, WMS_TILE_PIXELS, signal),
+        fetchPngPixels(buildUrl(sceneDate, WMS_STATS_EXT_EVALSCRIPT_B64, includeGeom), WMS_TILE_PIXELS, WMS_TILE_PIXELS, signal).catch(
+          () => null,
+        ),
+      ])
+      const core = decodeCoreZonalMeans(corePx)
+      const ext = extPx
+        ? decodeExtZonalMeans(extPx)
+        : { ndsi: null, ndre: null, si: null, ssi: null, ndsiMin: null, ndsiMax: null }
+      const savi =
+        core.ndvi != null && Number.isFinite(core.ndvi)
+          ? Number((((1 + 0.5) * core.ndvi) / (1 + 0.5 * Math.abs(core.ndvi) + 1e-6)).toFixed(4))
+          : null
+      return {
+        date: sceneDate,
+        ...core,
+        ...ext,
+        savi,
+      } satisfies ZonalMeans & { date: string }
+    }
 
     try {
-      const pixels = await fetchPngPixels(url, WMS_TILE_PIXELS, WMS_TILE_PIXELS, signal)
-      const stats = decodeZonalMeansFromRgba(pixels)
-      if (stats.sampleCount === 0) return null
-      return { date: sceneDate, ...stats }
+      const stats = await fetchPair(Boolean(geometryWkt3857))
+      if (stats.sampleCount === 0 && stats.ndsi == null) return null
+      return stats
     } catch (err) {
       if (signal?.aborted) throw err
-      // Some instances reject GEOMETRY+EVALSCRIPT together — retry bbox-only GetMap.
       if (geometryWkt3857) {
         try {
-          let fallbackUrl =
-            `${baseUrl}?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0` +
-            `&LAYERS=${encodeURIComponent(layer)}` +
-            `&CRS=EPSG:3857` +
-            `&BBOX=${minX},${minY},${maxX},${maxY}` +
-            `&WIDTH=${WMS_TILE_PIXELS}&HEIGHT=${WMS_TILE_PIXELS}` +
-            `&FORMAT=image/png&TRANSPARENT=true` +
-            `&TIME=${sceneDate}/${addDaysToIso(sceneDate, 1)}` +
-            `&MAXCC=${cloudCoverage}` +
-            `&SHOWLOGO=false&WARNINGS=false` +
-            `&EVALSCRIPT=${encodeURIComponent(WMS_STATS_EVALSCRIPT_B64)}`
-          fallbackUrl = appendSentinelHubWmsAccessToken(fallbackUrl, accessToken)
-          const pixels = await fetchPngPixels(fallbackUrl, WMS_TILE_PIXELS, WMS_TILE_PIXELS, signal)
-          const stats = decodeZonalMeansFromRgba(pixels)
-          if (stats.sampleCount === 0) return null
-          return { date: sceneDate, ...stats }
+          const stats = await fetchPair(false)
+          if (stats.sampleCount === 0 && stats.ndsi == null) return null
+          return stats
         } catch (fallbackErr) {
           if (signal?.aborted) throw fallbackErr
           console.warn('[wms-stats-client] scene failed', sceneDate, fallbackErr)

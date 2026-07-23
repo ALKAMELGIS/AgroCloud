@@ -94,6 +94,44 @@
 }
 .prithvi-tool__btn.is-danger:hover:not(:disabled) { background: linear-gradient(180deg, #b54b42 0%, #973a32 100%); }
 
+.prithvi-tool__btn.is-report {
+  width: 100%;
+  justify-content: center;
+  color: #f7f1e2;
+  background: linear-gradient(180deg, #1e4d8c 0%, #163a6b 100%);
+  border: 1px solid rgba(184, 150, 86, 0.45);
+  box-shadow: 0 4px 14px rgba(22, 58, 107, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+.prithvi-tool__btn.is-report:hover:not(:disabled) {
+  background: linear-gradient(180deg, #2659a0 0%, #1a4478 100%);
+}
+.prithvi-tool__btn.is-geotiff {
+  width: 100%;
+  justify-content: center;
+  color: #f7f1e2;
+  background: linear-gradient(180deg, #0f766e 0%, #115e59 100%);
+  border: 1px solid rgba(184, 150, 86, 0.45);
+  box-shadow: 0 4px 14px rgba(15, 118, 110, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+.prithvi-tool__btn.is-geotiff:hover:not(:disabled) {
+  background: linear-gradient(180deg, #0d9488 0%, #0f766e 100%);
+}
+.prithvi-tool__export {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(15, 27, 45, 0.1);
+}
+.prithvi-tool__export-hint {
+  margin: 0;
+  font-size: 10px;
+  color: #5a6578;
+  line-height: 1.35;
+  text-align: center;
+}
+
 .prithvi-tool__chip {
   font-size: 10.5px;
   font-weight: 600;
@@ -221,6 +259,31 @@
 }
 .prithvi-tool__country strong { color: #145a32; }
 .prithvi-tool__country-src { color: #6b7686; font-size: 10px; }
+
+.prithvi-tool__quality {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.prithvi-tool__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #0a1422;
+  background: rgba(11, 20, 34, 0.06);
+  border: 1px solid rgba(11, 20, 34, 0.12);
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+.prithvi-tool__badge i { font-size: 10px; opacity: 0.75; }
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .prithvi-tool__badge {
+  color: #dbe4f0;
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.14);
+}
 
 .prithvi-tool__stats {
   background: rgba(15, 27, 45, 0.04);

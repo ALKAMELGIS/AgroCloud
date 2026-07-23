@@ -18,6 +18,14 @@ import { Bar, Line, Pie, Scatter } from 'react-chartjs-2'
 import { useImageryTimeSeriesStream } from '../hooks/useImageryTimeSeriesStream'
 import { useMultiLayerAoiTrendStream } from '../hooks/useMultiLayerAoiTrendStream'
 import { useImageryIndexInterpretation } from '../hooks/useImageryIndexInterpretation'
+import {
+  buildLulcClassCompositionStats,
+  isLulcTimeSeriesSelection,
+  lulcCompositionTotalPixels,
+  type LulcClassCompositionStat,
+} from '../../../lib/siLulcClassAreaLive'
+import { isLulcClassificationLayerId } from '../../../lib/siLulcClassification'
+import { lulcPctLabelsPlugin } from '../../../lib/lulcCompositionChartPlugin'
 import { SiImageryIndexInterpretationCard, type ImageryInterpretationActionId } from './SiImageryIndexInterpretationCard'
 import type { SiAoiFieldRecord } from '../../../lib/siAoiFields'
 import {
@@ -64,6 +72,7 @@ ChartJS.register(
   Legend,
   PieController,
   ScatterController,
+  lulcPctLabelsPlugin,
 )
 
 export type SiImageryTimeSeriesPanelProps = {
@@ -129,6 +138,7 @@ export function SiImageryTimeSeriesPanel({
   })
   const [chartType, setChartType] = useState<ImageryChartType>('line')
   const [timeAggregation, setTimeAggregation] = useState<ImageryTimeAggregation>('day')
+  const [areaUnit, setAreaUnit] = useState<'ha' | 'm2'>('ha')
   const [fromDate, setFromDate] = useState(defaultRange.from)
   const [toDate, setToDate] = useState(defaultRange.to)
   const [splitByYears, setSplitByYears] = useState(false)
@@ -319,6 +329,48 @@ export function SiImageryTimeSeriesPanel({
 
   /** ET chart series comes only from selected layers (same as NDVI/NDMI) — no permanent overlay. */
   const etLayerSelected = selectedLayerIds.some(id => id.trim().toUpperCase() === 'ET')
+  const lulcAreaMode = isLulcTimeSeriesSelection(selectedLayerIds)
+  /** Class-share bar/pie (% of total) — matches LULC statistics reference chart. */
+  const lulcCompositionMode = lulcAreaMode && (chartType === 'bar' || chartType === 'pie')
+  const areaUnitLabel = areaUnit === 'ha' ? 'ha' : 'm²'
+  const areaUnitFactor = areaUnit === 'ha' ? 1 : 10_000
+
+  const displayLayerSeries = useMemo(() => {
+    if (!lulcAreaMode) return layerSeries
+    return layerSeries.map(entry => ({
+      ...entry,
+      values: entry.values.map(v =>
+        v == null || !Number.isFinite(v) ? null : Number(v) * areaUnitFactor,
+      ),
+    }))
+  }, [layerSeries, lulcAreaMode, areaUnitFactor])
+
+  const compositionDateIndex = useMemo(() => {
+    if (!lulcAreaMode || !labels.length) return -1
+    if (selectedChartDate) {
+      const i = labels.indexOf(selectedChartDate)
+      if (i >= 0) return i
+    }
+    return labels.length - 1
+  }, [lulcAreaMode, labels, selectedChartDate])
+
+  const lulcComposition = useMemo((): LulcClassCompositionStat[] => {
+    if (!lulcAreaMode || compositionDateIndex < 0) return []
+    // Use hectare series (not display m² conversion) for pixel-count derivation.
+    return buildLulcClassCompositionStats(layerSeries, compositionDateIndex, {
+      includeAllClasses: true,
+    })
+  }, [lulcAreaMode, layerSeries, compositionDateIndex])
+
+  const lulcCompositionPresent = useMemo(
+    () => lulcComposition.filter(r => r.pixelCount > 0),
+    [lulcComposition],
+  )
+
+  const lulcTotalPixels = useMemo(
+    () => lulcCompositionTotalPixels(lulcComposition),
+    [lulcComposition],
+  )
 
   const latestWaterPoint =
     etLayerSelected && waterLossTimeline.length
@@ -345,9 +397,12 @@ export function SiImageryTimeSeriesPanel({
   const weatherTabSupported = hasRun && chartReady && !!resolvedField?.geometry
 
   const primaryChartValues = useMemo(() => {
-    const series = layerSeries.find(s => s.layerId.toUpperCase() === primaryLayerId.toUpperCase())
-    return series?.values ?? layerSeries[0]?.values ?? []
-  }, [layerSeries, primaryLayerId])
+    if (lulcAreaMode) {
+      return displayLayerSeries[0]?.values ?? []
+    }
+    const series = displayLayerSeries.find(s => s.layerId.toUpperCase() === primaryLayerId.toUpperCase())
+    return series?.values ?? displayLayerSeries[0]?.values ?? []
+  }, [displayLayerSeries, primaryLayerId, lulcAreaMode])
 
   const interpretSceneDate = useMemo(() => {
     const picked = selectedChartDate?.trim()
@@ -512,6 +567,20 @@ export function SiImageryTimeSeriesPanel({
   }, [selectedLayerIds.length, splitByYears])
 
   useEffect(() => {
+    if (!lulcAreaMode) return
+    if (chartType === 'scatter') setChartType('bar')
+  }, [lulcAreaMode, chartType])
+
+  const wasLulcAreaModeRef = useRef(false)
+  useEffect(() => {
+    if (lulcAreaMode && !wasLulcAreaModeRef.current) {
+      setChartType('bar')
+      setAreaUnit('ha')
+    }
+    wasLulcAreaModeRef.current = lulcAreaMode
+  }, [lulcAreaMode])
+
+  useEffect(() => {
     if (timeAggregation !== 'day' && splitByYears) setSplitByYears(false)
   }, [timeAggregation, splitByYears])
 
@@ -617,11 +686,30 @@ export function SiImageryTimeSeriesPanel({
   )
 
   const chartData = useMemo((): ChartData<'line' | 'bar'> => {
-    if (!chartLabels.length || !layerSeries.length) {
+    if (lulcCompositionMode && chartType === 'bar') {
+      if (!lulcComposition.length) return { labels: [], datasets: [] }
+      return {
+        labels: lulcComposition.map(r => r.shortLabel),
+        datasets: [
+          {
+            label: '% of total area',
+            data: lulcComposition.map(r => Number(r.pctOfTotal.toFixed(1))),
+            backgroundColor: lulcComposition.map(r => r.color),
+            borderColor: lulcComposition.map(r => r.color),
+            borderWidth: 0,
+            borderRadius: 2,
+            maxBarThickness: 56,
+          },
+        ],
+      }
+    }
+    if (!chartLabels.length || !displayLayerSeries.length) {
       return { labels: [], datasets: [] }
     }
-    if (splitByYears && layerSeries.length === 1 && timeAggregation === 'day') {
-      const values = layerSeries[0]!.values
+    if (splitByYears && displayLayerSeries.length === 1 && timeAggregation === 'day') {
+      const values = displayLayerSeries[0]!.values.map(v =>
+        v == null || !Number.isFinite(v) ? NaN : Number(v),
+      )
       const splits = splitSeriesByYear(labels, values)
       const colors = yearSplitChartColors()
       return {
@@ -641,20 +729,25 @@ export function SiImageryTimeSeriesPanel({
     return {
       labels: chartLabels,
       datasets: [
-        ...layerSeries.flatMap((entry, index) => {
-          const color = imageryLayerChartColor(index)
+        ...displayLayerSeries.flatMap((entry, index) => {
+          const color = entry.color || imageryLayerChartColor(index)
           const isNdsiLayer = entry.layerId.trim().toUpperCase() === 'NDSI'
+          const seriesLabel = entry.label || (isNdsiLayer ? 'NDSI mean' : entry.layerId)
+          const data = entry.values.map(v => (v == null || !Number.isFinite(v) ? NaN : Number(v)))
           const datasets: Array<Record<string, unknown>> = [
             {
-              label: isNdsiLayer ? 'NDSI mean' : entry.layerId,
-              data: entry.values,
+              label: seriesLabel,
+              data,
               borderColor: color,
-              backgroundColor: chartType === 'area' ? `${color}33` : chartType === 'bar' ? `${color}88` : color,
+              backgroundColor: chartType === 'area' ? `${color}55` : chartType === 'bar' ? `${color}88` : color,
               fill: chartType === 'area',
               tension: 0.25,
-              pointRadius: 2,
+              pointRadius: lulcAreaMode ? 1.5 : 2,
               borderWidth: isNdsiLayer ? 2.25 : 1.5,
               yAxisID: 'y',
+              ...(lulcAreaMode && (chartType === 'area' || chartType === 'bar')
+                ? { stack: 'lulc-area' }
+                : {}),
             },
           ]
           if (isNdsiLayer && ndsiZonalBands && chartType === 'line') {
@@ -689,12 +782,37 @@ export function SiImageryTimeSeriesPanel({
         }),
       ],
     }
-  }, [chartLabels, labels, layerSeries, splitByYears, chartType, timeAggregation, ndsiZonalBands])
+  }, [
+    chartLabels,
+    labels,
+    displayLayerSeries,
+    splitByYears,
+    chartType,
+    timeAggregation,
+    ndsiZonalBands,
+    lulcAreaMode,
+    lulcCompositionMode,
+    lulcComposition,
+  ])
 
   const pieChartData = useMemo((): ChartData<'pie'> => {
-    if (!chartLabels.length || !layerSeries.length) return { labels: [], datasets: [] }
-    if (layerSeries.length === 1 && timeAggregation !== 'day') {
-      const values = layerSeries[0]!.values
+    if (lulcCompositionMode && lulcComposition.length) {
+      return {
+        labels: lulcComposition.map(r => r.shortLabel),
+        datasets: [
+          {
+            label: '% of total area',
+            data: lulcComposition.map(r => Number(r.pctOfTotal.toFixed(1))),
+            backgroundColor: lulcComposition.map(r => `${r.color}cc`),
+            borderColor: '#0a0a0a',
+            borderWidth: 1,
+          },
+        ],
+      }
+    }
+    if (!chartLabels.length || !displayLayerSeries.length) return { labels: [], datasets: [] }
+    if (displayLayerSeries.length === 1 && timeAggregation !== 'day') {
+      const values = displayLayerSeries[0]!.values
       const slices = chartLabels
         .map((label, i) => ({ label, value: values[i] }))
         .filter(row => row.value != null && Number.isFinite(row.value))
@@ -712,13 +830,13 @@ export function SiImageryTimeSeriesPanel({
         ],
       }
     }
-    const slices = buildImageryPieChartSlices(labels, layerSeries)
+    const slices = buildImageryPieChartSlices(labels, displayLayerSeries)
     if (!slices.labels.length) return { labels: [], datasets: [] }
     return {
       labels: slices.labels,
       datasets: [
         {
-          label: layerSeries.length > 1 ? 'Layer mean' : 'Monthly mean',
+          label: displayLayerSeries.length > 1 ? 'Layer mean' : 'Monthly mean',
           data: slices.values,
           backgroundColor: slices.labels.map((_, i) => `${imageryLayerChartColor(i)}cc`),
           borderColor: '#0a0a0a',
@@ -726,7 +844,7 @@ export function SiImageryTimeSeriesPanel({
         },
       ],
     }
-  }, [chartLabels, labels, layerSeries, timeAggregation])
+  }, [chartLabels, labels, displayLayerSeries, timeAggregation, lulcCompositionMode, lulcComposition])
 
   const scatterAxisDates = useMemo(
     () => labels.map(key => resolvePeriodMapDate(key)),
@@ -801,16 +919,18 @@ export function SiImageryTimeSeriesPanel({
       animation: { duration: chartReady ? 280 : 0 },
       layout: {
         padding: {
-          top: 14,
+          top: lulcCompositionMode && chartType === 'bar' ? 22 : 14,
           right: 10,
           bottom: 8,
           left: 6,
         },
       },
-      onClick: chartDateClickHandler,
+      onClick: lulcCompositionMode ? undefined : chartDateClickHandler,
       plugins: {
         legend: {
-          display: splitByYears || layerSeries.length > 1 || hasRun,
+          display: lulcCompositionMode
+            ? false
+            : splitByYears || layerSeries.length > 1 || hasRun,
           position: 'bottom' as const,
           align: 'center' as const,
           fullSize: true,
@@ -823,11 +943,29 @@ export function SiImageryTimeSeriesPanel({
             usePointStyle: false,
           },
         },
+        lulcPctLabels: {
+          enabled: lulcCompositionMode && chartType === 'bar',
+          labels: lulcComposition.map(r => `${Math.round(r.pctOfTotal)}%`),
+        },
         tooltip: {
           bodyFont: { size: 10 },
           titleFont: { size: 10 },
           callbacks: {
-            afterBody: (items: Array<{ parsed: { y: number | null } }>) => {
+            afterBody: (items: Array<{ dataIndex?: number; parsed: { y: number | null } }>) => {
+              if (lulcCompositionMode) {
+                const idx = items[0]?.dataIndex ?? -1
+                const row = idx >= 0 ? lulcComposition[idx] : null
+                if (!row) return []
+                const area =
+                  areaUnit === 'ha'
+                    ? `${row.areaHa.toFixed(2)} ha`
+                    : `${Math.round(row.areaM2).toLocaleString('en-US')} m²`
+                return [
+                  `Pixels: ${row.pixelCount.toLocaleString('en-US')}`,
+                  `Area: ${area}`,
+                  `% of total: ${row.pctOfTotal.toFixed(1)}%`,
+                ]
+              }
               const lines = ['Click point to set map date']
               const ys = items.map(item => item.parsed.y).filter(v => v != null && Number.isFinite(v)) as number[]
               if (ys.length >= 2) {
@@ -836,9 +974,22 @@ export function SiImageryTimeSeriesPanel({
               }
               return lines
             },
-            label(ctx: { dataset: { label?: string }; parsed: { y: number | null } }) {
+            label(ctx: {
+              dataset: { label?: string }
+              parsed: { y: number | null }
+              dataIndex?: number
+            }) {
               const v = ctx.parsed.y
               if (v == null || !Number.isFinite(v)) return `${ctx.dataset.label ?? 'Value'}: —`
+              if (lulcCompositionMode) {
+                const row = lulcComposition[ctx.dataIndex ?? -1]
+                const name = row?.name ?? ctx.dataset.label ?? 'Class'
+                return `${name}: ${v.toFixed(1)}% of total area`
+              }
+              if (lulcAreaMode) {
+                const digits = areaUnit === 'ha' ? 2 : 0
+                return `${ctx.dataset.label ?? 'Class'}: ${v.toFixed(digits)} ${areaUnitLabel}`
+              }
               return `${ctx.dataset.label ?? 'Value'}: ${v.toFixed(4)}`
             },
           },
@@ -846,25 +997,75 @@ export function SiImageryTimeSeriesPanel({
       },
       scales: {
         x: {
+          stacked: !lulcCompositionMode && lulcAreaMode && (chartType === 'area' || chartType === 'bar'),
           ticks: {
             color: '#94a3b8',
-            maxTicksLimit: Math.min(12, Math.max(chartLabels.length, 4)),
-            autoSkip: chartLabels.length > 12,
-            maxRotation: chartLabels.length > 8 ? 40 : 0,
-            minRotation: chartLabels.length > 8 ? 25 : 0,
+            maxTicksLimit: lulcCompositionMode
+              ? Math.max(lulcComposition.length, 4)
+              : Math.min(12, Math.max(chartLabels.length, 4)),
+            autoSkip: !lulcCompositionMode && chartLabels.length > 12,
+            maxRotation: lulcCompositionMode || chartLabels.length > 8 ? 40 : 0,
+            minRotation: lulcCompositionMode || chartLabels.length > 8 ? 25 : 0,
             font: { size: 9 },
             padding: 6,
           },
-          grid: { color: 'rgba(255,255,255,0.06)' },
+          grid: {
+            color: lulcCompositionMode ? 'transparent' : 'rgba(255,255,255,0.06)',
+            drawBorder: true,
+          },
         },
         y: {
-          grace: '8%',
-          ticks: { color: '#94a3b8', font: { size: 9 }, padding: 6 },
-          grid: { color: 'rgba(255,255,255,0.06)' },
+          grace: lulcCompositionMode ? '12%' : '8%',
+          beginAtZero: true,
+          max: lulcCompositionMode && chartType === 'bar' ? 100 : undefined,
+          title: lulcCompositionMode
+            ? {
+                display: true,
+                text: '% of total area',
+                color: 'rgba(255,255,255,0.72)',
+                font: { size: 9, weight: 600 },
+              }
+            : lulcAreaMode
+              ? {
+                  display: true,
+                  text: `Class area (${areaUnitLabel})`,
+                  color: 'rgba(255,255,255,0.72)',
+                  font: { size: 9, weight: 600 },
+                }
+              : undefined,
+          stacked: !lulcCompositionMode && lulcAreaMode && (chartType === 'area' || chartType === 'bar'),
+          ticks: {
+            color: '#94a3b8',
+            font: { size: 9 },
+            padding: 6,
+            callback: (value: string | number) => {
+              const n = typeof value === 'number' ? value : Number(value)
+              if (!Number.isFinite(n)) return value
+              if (lulcCompositionMode) return `${n}%`
+              if (!lulcAreaMode) return value
+              return areaUnit === 'ha' ? n.toFixed(1) : Math.round(n).toLocaleString('en-US')
+            },
+          },
+          grid: {
+            color: lulcCompositionMode ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.06)',
+          },
         },
       },
     }),
-    [chartReady, splitByYears, layerSeries.length, hasRun, chartDateClickHandler, chartLabels.length],
+    [
+      chartReady,
+      splitByYears,
+      layerSeries.length,
+      hasRun,
+      chartDateClickHandler,
+      chartLabels.length,
+      lulcAreaMode,
+      lulcCompositionMode,
+      lulcComposition,
+      areaUnit,
+      areaUnitLabel,
+      chartType,
+    ],
   )
 
   const pieChartOptions = useMemo(
@@ -878,10 +1079,30 @@ export function SiImageryTimeSeriesPanel({
           position: 'right' as const,
           labels: { color: '#cbd5e1', boxWidth: 10, font: { size: 10 } },
         },
-        tooltip: { bodyFont: { size: 10 }, titleFont: { size: 10 } },
+        tooltip: {
+          bodyFont: { size: 10 },
+          titleFont: { size: 10 },
+          callbacks: lulcCompositionMode
+            ? {
+                label(ctx: { dataIndex?: number; parsed?: number | null; label?: string }) {
+                  const row = lulcComposition[ctx.dataIndex ?? -1]
+                  if (!row) return `${ctx.label ?? 'Class'}: —`
+                  const area =
+                    areaUnit === 'ha'
+                      ? `${row.areaHa.toFixed(2)} ha`
+                      : `${Math.round(row.areaM2).toLocaleString('en-US')} m²`
+                  return [
+                    `${row.name}: ${row.pctOfTotal.toFixed(1)}%`,
+                    `Pixels: ${row.pixelCount.toLocaleString('en-US')}`,
+                    `Area: ${area}`,
+                  ]
+                },
+              }
+            : undefined,
+        },
       },
     }),
-    [chartReady, hasChartData],
+    [chartReady, hasChartData, lulcCompositionMode, lulcComposition, areaUnit],
   )
 
   const scatterChartOptions = useMemo(
@@ -1053,6 +1274,18 @@ export function SiImageryTimeSeriesPanel({
               selectedIds={selectedLayerIds}
               onSelectedIdsChange={ids => {
                 setSelectedChartDate(null)
+                const hadLulc = selectedLayerIds.some(id => isLulcClassificationLayerId(id))
+                const hasLulc = ids.some(id => isLulcClassificationLayerId(id))
+                if (hasLulc && !hadLulc) {
+                  // LULC is exclusive — drop index layers so analysis stays fast.
+                  setSelectedLayerIds(['LULC'])
+                  return
+                }
+                if (hasLulc && ids.length > 1) {
+                  // User picked another layer while LULC was on — leave LULC mode.
+                  setSelectedLayerIds(ids.filter(id => !isLulcClassificationLayerId(id)))
+                  return
+                }
                 setSelectedLayerIds(ids)
               }}
             />
@@ -1146,13 +1379,52 @@ export function SiImageryTimeSeriesPanel({
               value={chartType}
               onChange={e => setChartType(e.target.value as ImageryChartType)}
             >
-              <option value="line">Line</option>
-              <option value="area">Area</option>
-              <option value="bar">Bar</option>
-              <option value="pie">Pie</option>
-              <option value="scatter">Scatter</option>
+              {lulcAreaMode ? (
+                <>
+                  <option value="bar">Class share (%)</option>
+                  <option value="pie">Class pie (%)</option>
+                  <option value="area">Area trend (ha)</option>
+                  <option value="line">Line trend (ha)</option>
+                </>
+              ) : (
+                <>
+                  <option value="line">Line</option>
+                  <option value="area">Area</option>
+                  <option value="bar">Bar</option>
+                  <option value="pie">Pie</option>
+                  <option value="scatter">Scatter</option>
+                </>
+              )}
             </select>
           </label>
+          ) : null}
+          {analysisMode === 'single-layer-trend' && lulcAreaMode ? (
+            <div className="acp-ts__field acp-ts__field--aggregate">
+              <span className="acp-ts__field-label">Area unit</span>
+              <div className="acp-ts__aggregate" role="group" aria-label="LULC area output unit">
+                {(
+                  [
+                    ['ha', 'ha'],
+                    ['m2', 'm²'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={`acp-ts__aggregate-btn${areaUnit === value ? ' is-on' : ''}`}
+                    aria-pressed={areaUnit === value}
+                    title={
+                      value === 'ha'
+                        ? 'Class area in hectares (pixel count × 10 m × 10 m ÷ 10 000)'
+                        : 'Class area in square metres (pixel count × 10 m × 10 m)'
+                    }
+                    onClick={() => setAreaUnit(value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
           ) : null}
           <button
             type="button"
@@ -1364,7 +1636,7 @@ export function SiImageryTimeSeriesPanel({
                 : hasRun && (loading || refreshing)
                   ? `Loading ${layerSummary || 'layer'} analysis…`
                   : hasRun && !labels.length
-                    ? `No ${layerSummary || 'layer'} observations in this date range — try widening dates or check Sentinel coverage.`
+                    ? `No data available for ${layerSummary || 'selected layer'} in this date range — try widening dates or check Sentinel coverage.`
                     : !fieldOptions.length
                       ? 'Load or draw a field (Agro Structures / AOI) — analysis starts automatically.'
                       : 'Select a field and date range — analysis starts automatically.'}
@@ -1374,15 +1646,70 @@ export function SiImageryTimeSeriesPanel({
 
         {chartVisible ? (
           <p className="acp-ts__chart-hint">
-            <i className="fa-solid fa-hand-pointer" aria-hidden="true" /> Click any point to set the map
-            analysis date and open <strong>Interpretation</strong> · Map date: <strong>{analysisDate}</strong>
-            {interpretSceneDate ? (
+            {lulcCompositionMode ? (
               <>
-                {' '}
-                · Scene: <strong>{interpretSceneDate}</strong>
+                <i className="fa-solid fa-chart-column" aria-hidden="true" /> LULC class share ·{' '}
+                <strong>{lulcTotalPixels.toLocaleString('en-US')}</strong> pixels · Scene:{' '}
+                <strong>
+                  {compositionDateIndex >= 0 ? labels[compositionDateIndex] : analysisDate}
+                </strong>
+                {' · '}
+                hover a class for pixel count, area ({areaUnitLabel}), and % of total
               </>
-            ) : null}
+            ) : (
+              <>
+                <i className="fa-solid fa-hand-pointer" aria-hidden="true" /> Click any point to set the map
+                analysis date and open <strong>Interpretation</strong> · Map date:{' '}
+                <strong>{analysisDate}</strong>
+                {interpretSceneDate ? (
+                  <>
+                    {' '}
+                    · Scene: <strong>{interpretSceneDate}</strong>
+                  </>
+                ) : null}
+                {lulcAreaMode ? (
+                  <>
+                    {' '}
+                    · Class areas from pixel counts × 10 m × 10 m ({areaUnitLabel})
+                  </>
+                ) : null}
+              </>
+            )}
           </p>
+        ) : null}
+        {chartVisible && lulcCompositionMode && lulcComposition.length ? (
+          <>
+            <div className="acp-ts__lulc-legend" role="list" aria-label="LULC class legend">
+              {lulcComposition.map(row => (
+                <span
+                  key={row.key}
+                  className={`acp-ts__lulc-legend-item${row.pixelCount > 0 ? '' : ' is-empty'}`}
+                  role="listitem"
+                  title={`${row.name}: ${row.pctOfTotal.toFixed(1)}% · ${row.pixelCount.toLocaleString('en-US')} px`}
+                >
+                  <i style={{ background: row.color }} aria-hidden />
+                  {row.shortLabel}
+                </span>
+              ))}
+            </div>
+            {lulcCompositionPresent.length ? (
+              <div className="acp-ts__lulc-stats" aria-label="LULC class statistics">
+                {lulcCompositionPresent.map(row => (
+                  <span key={row.key} className="acp-ts__lulc-stats-chip" title={row.name}>
+                    <i style={{ background: row.color }} aria-hidden />
+                    <strong>{row.shortLabel}</strong>
+                    <em>{Math.round(row.pctOfTotal)}%</em>
+                    <span>{row.pixelCount.toLocaleString('en-US')} px</span>
+                    <span>
+                      {areaUnit === 'ha'
+                        ? `${row.areaHa.toFixed(1)} ha`
+                        : `${Math.round(row.areaM2).toLocaleString('en-US')} m²`}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </>
         ) : null}
 
         {chartType === 'scatter' && scatterCorrelation ? (

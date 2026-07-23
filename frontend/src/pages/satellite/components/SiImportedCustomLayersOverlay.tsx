@@ -5,6 +5,7 @@
  */
 import { Source, Layer } from 'react-map-gl/mapbox';
 import type { SiCustomLayerBase } from '../../../lib/siCustomLayerFactory';
+import { rasterTilesSourceMaxNativeZoom } from '../../../lib/rasterTileZoom';
 
 const POLY_FILTER: any = ['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]];
 const LINE_FILTER: any = [
@@ -113,6 +114,10 @@ export function SiImportedCustomLayersOverlay({ layers, suppressFillOpacityLayer
         const visibility = layer.visible === false ? 'none' : 'visible';
 
         if (layer.arcgisRasterTiles?.tiles?.length) {
+          // Cap the source at the service's native zoom so Mapbox over-zooms the
+          // last real tiles instead of requesting levels the cache doesn't have
+          // (which come back as gray "Map data not yet available" placeholders).
+          const maxNativeZoom = rasterTilesSourceMaxNativeZoom(layer.arcgisRasterTiles);
           return (
             <Source
               key={`rax-${sid}`}
@@ -120,6 +125,7 @@ export function SiImportedCustomLayersOverlay({ layers, suppressFillOpacityLayer
               type="raster"
               tiles={layer.arcgisRasterTiles.tiles}
               tileSize={layer.arcgisRasterTiles.tileSize ?? 256}
+              {...(typeof maxNativeZoom === 'number' ? { maxzoom: maxNativeZoom } : {})}
             >
               <Layer
                 id={`${sid}-arcgis-raster`}
