@@ -10,7 +10,6 @@ import { resolveLayerLiveLegendSpec } from '../../../../lib/layerLiveLegendCatal
 import { fetchLulcClassAreas } from '../../../../lib/siLulcClassAreaLive'
 import {
   compositeAoiMapSnapshotBase64,
-  dataUrlToPngBase64,
   fetchIndexLayerMapSnapshotBase64,
   fetchSatelliteBasemapSnapshot,
   resolveTimeSeriesSnapshotExtent,
@@ -25,8 +24,8 @@ import type {
 } from './timeSeriesReportTypes'
 import type { ImageryTimeSeriesLayerSeries } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 
-const SNAPSHOT_WIDTH = 640
-const SNAPSHOT_HEIGHT = 520
+const SNAPSHOT_WIDTH = 720
+const SNAPSHOT_HEIGHT = 580
 const CONCURRENCY = 2
 const LULC_DATA_SOURCE = 'Sentinel-2 L2A · AgroCloud LULC (IO schema) · yearly mid-season'
 const CHANGE_DATA_SOURCE = 'Sentinel-2 L2A (Sentinel Hub WMS) · index change detection'
@@ -96,18 +95,23 @@ async function fetchCompositedSnapshot(options: {
   } catch {
     indexBase64 = null
   }
+  if (!indexBase64) return null
   try {
-    return await compositeAoiMapSnapshotBase64({
+    const composed = await compositeAoiMapSnapshotBase64({
       geometry: options.geometry,
       basemapDataUrl: options.basemapDataUrl,
       indexBase64,
       layerId: options.layerId,
+      title: `${options.layerId.toUpperCase()} · ${options.sceneDate}`,
+      sceneDate: options.sceneDate,
       widthPx: SNAPSHOT_WIDTH,
       heightPx: SNAPSHOT_HEIGHT,
       extent: options.extent,
     })
+    // Never return basemap-only — analysis raster is required.
+    return composed ?? indexBase64
   } catch {
-    return indexBase64 ?? dataUrlToPngBase64(options.basemapDataUrl)
+    return indexBase64
   }
 }
 
@@ -260,8 +264,8 @@ export async function buildLulcFiveYearMapGroups(input: {
   })
 
   const yearlySnaps = yearly
-    .map(y => y.snap)
-    .filter((s): s is TimeSeriesMapSnapshot => s != null && !!s.imageBase64)
+    .filter(y => y.snap?.imageBase64 && y.composition && y.composition.classes.length > 0)
+    .map(y => y.snap!)
   const yearCompositions = yearly
     .map(y => y.composition)
     .filter((c): c is LulcYearComposition => c != null && c.classes.length > 0)
@@ -270,13 +274,14 @@ export async function buildLulcFiveYearMapGroups(input: {
     .filter((c): c is LulcYearComposition => c != null)
   const changeCompositions = buildChangeCompositions(allYearComps)
 
-  const groups: TimeSeriesMapSnapshotGroup[] = [
-    {
+  const groups: TimeSeriesMapSnapshotGroup[] = []
+  if (yearlySnaps.length) {
+    groups.push({
       layerId: 'LULC_YEARLY',
       title: 'LULC — Five-Year Atlas (2021–2025)',
       snapshots: yearlySnaps,
-    },
-  ]
+    })
+  }
 
   for (let i = 0; i < years.length - 1; i += 1) {
     const y0 = years[i]!
@@ -310,7 +315,30 @@ export async function buildLulcFiveYearMapGroups(input: {
 }
 
 /**
- * For each selected non-LULC index: first vs last acquisition maps labeled as change detection.
+ * Consecutive period pairs for Index Change Detection (T0→T1 for each adjacent pair).
+ * Soft-caps long Day series by evenly sampling pair starts.
+ */
+export function collectIndexChangePairs(
+  valid: Array<{ i: number; date: string; label: string; mean: number }>,
+  options?: { maxPairs?: number },
+): Array<{ from: (typeof valid)[number]; to: (typeof valid)[number] }> {
+  if (valid.length < 2) return []
+  const maxPairs = options?.maxPairs ?? 12
+  const allStarts = Array.from({ length: valid.length - 1 }, (_, i) => i)
+  let starts = allStarts
+  if (allStarts.length > maxPairs) {
+    starts = []
+    for (let k = 0; k < maxPairs; k += 1) {
+      starts.push(Math.round((k * (allStarts.length - 1)) / (maxPairs - 1)))
+    }
+    starts = [...new Set(starts)].sort((a, b) => a - b)
+  }
+  return starts.map(i => ({ from: valid[i]!, to: valid[i + 1]! }))
+}
+
+/**
+ * For each selected non-LULC index: consecutive period change pairs (maps + Δ),
+ * following the panel aggregation (Day/Week/Month/Year periods in chartLabels).
  */
 export async function buildIndexChangeDetectionMapGroups(input: {
   geometry: GeoJSON.Geometry
@@ -336,67 +364,83 @@ export async function buildIndexChangeDetectionMapGroups(input: {
 
   const layers = input.layerIds.filter(id => !isLulcClassificationLayerId(id))
   const groups: TimeSeriesMapSnapshotGroup[] = []
-  let completed = 0
-  const total = layers.length * 2
+  const sceneCache = new Map<string, string | null>()
 
-  for (const layerId of layers) {
-    if (input.signal?.aborted) break
-    const series = input.layerSeries.find(s => s.layerId.toUpperCase() === layerId.toUpperCase())
-    if (!series) continue
-
-    const valid: Array<{ i: number; date: string; label: string; mean: number }> = []
-    for (let i = 0; i < input.chartLabels.length; i += 1) {
-      const v = series.values[i]
-      if (v == null || !Number.isFinite(v)) continue
-      const periodKey = input.chartLabels[i]!
-      const sceneDate = (input.periodAnchorDates[periodKey] ?? periodKey).trim().slice(0, 10)
-      valid.push({
-        i,
-        date: sceneDate,
-        label: input.displayLabels[i] ?? periodKey,
-        mean: v,
-      })
-    }
-    if (valid.length < 2) continue
-
-    const first = valid[0]!
-    const last = valid[valid.length - 1]!
-    const delta = last.mean - first.mean
-    const pair = [first, last]
-
-    const snapshots = await mapPool(pair, CONCURRENCY, async (entry, idx) => {
-      const imageBase64 = await fetchCompositedSnapshot({
-        geometry: input.geometry,
-        layerId,
-        sceneDate: entry.date,
-        basemapDataUrl,
-        extent,
-        signal: input.signal,
-      })
-      completed += 1
-      input.onProgress?.(completed, Math.max(total, 1))
-      return {
-        layerId: layerId.toUpperCase(),
-        layerLabel: `${layerId.toUpperCase()} ${idx === 0 ? 'start' : 'end'}`,
-        sceneDate: entry.date,
-        periodLabel: `${entry.label} (${idx === 0 ? 'T0' : 'T1'})`,
-        imageBase64,
-        dataSource: CHANGE_DATA_SOURCE,
-        mean: entry.mean,
-        min: entry.mean,
-        max: entry.mean,
-        areaHa: input.areaHa,
-        legendText: formatLegendText(layerId),
-        notes: `Index change detection ${first.date} → ${last.date}: Δ${layerId.toUpperCase()} = ${delta >= 0 ? '+' : ''}${delta.toFixed(4)}.`,
-      } satisfies TimeSeriesMapSnapshot
+  const fetchCached = async (layerId: string, sceneDate: string) => {
+    const key = `${layerId.toUpperCase()}|${sceneDate}`
+    if (sceneCache.has(key)) return sceneCache.get(key) ?? null
+    const imageBase64 = await fetchCompositedSnapshot({
+      geometry: input.geometry,
+      layerId,
+      sceneDate,
+      basemapDataUrl,
+      extent,
+      signal: input.signal,
     })
-
-    groups.push({
-      layerId: `CHANGE_${layerId.toUpperCase()}`,
-      title: `Change Detection — ${layerId.toUpperCase()} (${first.date} → ${last.date})`,
-      snapshots: snapshots.filter(s => !!s.imageBase64),
-    })
+    sceneCache.set(key, imageBase64)
+    return imageBase64
   }
 
-  return groups.filter(g => g.snapshots.length > 0)
+  const layerValid = layers.map(layerId => {
+    const series = input.layerSeries.find(s => s.layerId.toUpperCase() === layerId.toUpperCase())
+    const valid: Array<{ i: number; date: string; label: string; mean: number }> = []
+    if (series) {
+      for (let i = 0; i < input.chartLabels.length; i += 1) {
+        const v = series.values[i]
+        if (v == null || !Number.isFinite(v)) continue
+        const periodKey = input.chartLabels[i]!
+        const sceneDate = (input.periodAnchorDates[periodKey] ?? periodKey).trim().slice(0, 10)
+        valid.push({
+          i,
+          date: sceneDate,
+          label: input.displayLabels[i] ?? periodKey,
+          mean: v,
+        })
+      }
+    }
+    return { layerId, pairs: collectIndexChangePairs(valid) }
+  })
+
+  const total = layerValid.reduce((n, l) => n + l.pairs.length * 2, 0)
+  let completed = 0
+
+  for (const { layerId, pairs } of layerValid) {
+    if (input.signal?.aborted) break
+    if (!pairs.length) continue
+
+    for (const { from, to } of pairs) {
+      if (input.signal?.aborted) break
+      const delta = to.mean - from.mean
+      const pairEntries = [from, to]
+      const snapshots = await mapPool(pairEntries, CONCURRENCY, async (entry, idx) => {
+        const imageBase64 = await fetchCached(layerId, entry.date)
+        completed += 1
+        input.onProgress?.(completed, Math.max(total, 1))
+        return {
+          layerId: layerId.toUpperCase(),
+          layerLabel: `${layerId.toUpperCase()} ${idx === 0 ? 'T0' : 'T1'}`,
+          sceneDate: entry.date,
+          periodLabel: `${entry.label} (${idx === 0 ? 'T0' : 'T1'})`,
+          imageBase64,
+          dataSource: CHANGE_DATA_SOURCE,
+          mean: entry.mean,
+          min: entry.mean,
+          max: entry.mean,
+          areaHa: input.areaHa,
+          legendText: formatLegendText(layerId),
+          notes: `Index change detection ${from.label} → ${to.label}: Δ${layerId.toUpperCase()} = ${delta >= 0 ? '+' : ''}${delta.toFixed(4)} (AOI mean).`,
+        } satisfies TimeSeriesMapSnapshot
+      })
+
+      const withImages = snapshots.filter(s => !!s.imageBase64)
+      if (withImages.length < 2) continue
+      groups.push({
+        layerId: `CHANGE_${layerId.toUpperCase()}_${from.i}_${to.i}`,
+        title: `Change Detection — ${layerId.toUpperCase()} (${from.label} → ${to.label})`,
+        snapshots: withImages,
+      })
+    }
+  }
+
+  return groups
 }

@@ -145,7 +145,9 @@ function indexValueHistogramMarker(layerId: string, edges: number[]): string | n
           ? 'savi'
           : u === 'ET'
             ? 'et'
-            : null
+            : u === 'LST'
+              ? 'lst'
+              : null
   if (!index) return null
   return JSON.stringify({ mode: 'value', index, edges, outputId: 'idx' })
 }

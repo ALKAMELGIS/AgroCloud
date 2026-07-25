@@ -1,8 +1,12 @@
 import {
   buildPerLayerNativeChartSpecs,
   buildWeatherNativeChartSpecs,
+  buildVegetationCoverageTimelineChartSpecs,
+  buildVegetationCoverageChartInterpretation,
+  resolveIndexChartColor,
   type DocxNativeChartSpec,
 } from './timeSeriesDocxNativeCharts'
+import { buildCorrelationScatterNativeChartSpec } from './timeSeriesScatterChartRenderer'
 import type { TimeSeriesReportPayload } from './timeSeriesReportTypes'
 import type { VegetationCoveragePoint } from './vegetationCoverageTimeline'
 import { latestVegetationCoverageSummary } from './vegetationCoverageTimeline'
@@ -62,6 +66,21 @@ export type DocxLulcChangeBlock = {
   barChartTitle: string | null
 }
 
+/** Index Change Detection pair: T0/T1 maps + comparison table + native charts. */
+export type DocxIndexChangeBlock = {
+  title: string
+  layerId: string
+  legend: string
+  narrative: string
+  snapshots: Array<{ date: string; label: string; rId: string }>
+  tableHeaders: string[]
+  tableRows: string[][]
+  compareChartRId: string | null
+  compareChartTitle: string | null
+  deltaChartRId: string | null
+  deltaChartTitle: string | null
+}
+
 export type TimeSeriesDocxModel = {
   projectName: string
   generatedBy: string
@@ -85,6 +104,9 @@ export type TimeSeriesDocxModel = {
   flagsLine: string
   vegCoverageRows: string[][]
   vegCoverageNote: string
+  /** Native Office chart(s) under the Vegetation Coverage Timeline table. */
+  vegCoverageChartRIds: Array<{ title: string; rId: string; tall?: boolean }>
+  vegCoverageChartInterpretation: string
   dataQualityNotes: string
   recommendations: string[]
   mapLayers: DocxMapLayerBlock[]
@@ -98,12 +120,15 @@ export type TimeSeriesDocxModel = {
   lulcMultiYearRows: string[][]
   lulcMultiYearBarChartRId: string | null
   lulcMultiYearBarChartTitle: string | null
+  /** @deprecated Prefer indexChangeBlocks (maps + comparison charts). */
   changeDetectionMapLayers: DocxMapLayerBlock[]
+  /** Index change pairs with T0/T1 comparison + Δ charts under maps. */
+  indexChangeBlocks: DocxIndexChangeBlock[]
   /** @deprecated PNG charts replaced by native charts on mapLayers */
   chartImages: Array<{ title: string; rId: string }>
   nativeCharts: DocxNativeChartSpec[]
   /** Native editable weather charts (Excel-style), not PNG. */
-  weatherChartRIds: Array<{ title: string; rId: string }>
+  weatherChartRIds: Array<{ title: string; rId: string; kind?: string; tall?: boolean }>
   /** @deprecated PNG weather chart removed — use weatherChartRIds */
   weatherChartRId: string | null
   weatherSummaryRows: Array<[string, string]>
@@ -118,8 +143,16 @@ export type TimeSeriesDocxModel = {
   weatherDataSource: string
   correlationBlocks: Array<{
     title: string
+    xLayerId: string
+    yLayerId: string
+    /** Native editable Word scatter chart. */
+    chartRId: string | null
+    /** @deprecated PNG fallback */
     rId: string | null
     r2Label: string
+    interpretation: string
+    valueHeaders: string[]
+    valueRows: string[][]
     gisInsight: string
     agroInsight: string
   }>
@@ -306,7 +339,7 @@ export async function buildTimeSeriesDocxModel(
   )
   const chartImages: Array<{ title: string; rId: string }> = []
 
-  const weatherChartRIds: Array<{ title: string; rId: string }> = []
+  const weatherChartRIds: Array<{ title: string; rId: string; kind?: string; tall?: boolean }> = []
   let weatherChartRId: string | null = null
   const weatherTableHeaders = [
     'Period',
@@ -493,7 +526,12 @@ export async function buildTimeSeriesDocxModel(
         : undefined,
     })
     for (const c of weatherCharts) {
-      weatherChartRIds.push({ title: c.title, rId: c.rId })
+      weatherChartRIds.push({
+        title: c.title,
+        rId: c.rId,
+        kind: c.kind,
+        tall: c.kind === 'pie' || c.barDir === 'bar',
+      })
     }
   }
 
@@ -503,14 +541,17 @@ export async function buildTimeSeriesDocxModel(
     withChart = false,
   ): DocxMapLayerBlock | null {
     const snapshots: DocxMapLayerBlock['snapshots'] = []
+    const isLulc = /lulc/i.test(group.layerId)
     for (const snap of group.snapshots) {
       if (!snap.imageBase64) continue
+      // Index atlas cards must carry analyzable mean values (skip empty basemap-only leftovers).
+      if (!isLulc && (snap.mean == null || !Number.isFinite(snap.mean))) continue
       const rId = nextRid(1, imageCounter)
       imageCounter++
       images.push({ rId, fileName: `image${imageCounter}.png`, base64: snap.imageBase64 })
       snapshots.push({
-        date: snap.periodLabel || snap.sceneDate,
-        label: `${snap.layerLabel || snap.layerId.toUpperCase()} ${fmtNum(snap.mean, 4)}`,
+        date: snap.sceneDate || snap.periodLabel || '',
+        label: `${(snap.layerLabel || snap.layerId).replace(/\s+(T0|T1|start|end|cumulative)$/i, '').trim().toUpperCase()} ${fmtNum(snap.mean, 4)}`,
         rId,
       })
     }
@@ -544,9 +585,20 @@ export async function buildTimeSeriesDocxModel(
   const lulcMapLayers: DocxMapLayerBlock[] = []
   const hasLulcCompositions = (payload.lulcYearCompositions ?? []).length > 0
 
+  const vegCoverageCharts = buildVegetationCoverageTimelineChartSpecs({
+    timeline: vegTimeline,
+    startIndex: indexCharts.length + weatherCharts.length,
+  })
+  const vegCoverageChartRIds = vegCoverageCharts.map(c => ({
+    title: c.title,
+    rId: c.rId,
+    tall: c.kind === 'combo' || c.kind === 'line',
+  }))
+  const vegCoverageChartInterpretation = buildVegetationCoverageChartInterpretation(vegTimeline)
+
   // Build rich LULC year / change blocks with native pie + area bar charts.
   const lulcCharts: DocxNativeChartSpec[] = []
-  let lulcChartN = indexCharts.length + weatherCharts.length
+  let lulcChartN = indexCharts.length + weatherCharts.length + vegCoverageCharts.length
   const stripHex = (hex: string) =>
     hex.replace(/^#/, '').replace(/[^0-9A-Fa-f]/g, '').slice(0, 6) || '94A3B8'
 
@@ -760,29 +812,193 @@ export async function buildTimeSeriesDocxModel(
   }
 
   const changeDetectionMapLayers: DocxMapLayerBlock[] = []
+  const indexChangeBlocks: DocxIndexChangeBlock[] = []
+  const indexChangeCharts: DocxNativeChartSpec[] = []
+  let indexChangeChartN = indexCharts.length + weatherCharts.length + vegCoverageCharts.length + lulcCharts.length
+
   for (const group of payload.changeDetectionMapSnapshotGroups ?? []) {
-    const block = pushMapGroup(group, group.title, false)
-    if (block) changeDetectionMapLayers.push(block)
+    const snaps = group.snapshots.filter(s => !!s.imageBase64)
+    if (snaps.length < 2) continue
+    const t0 = snaps[0]!
+    const t1 = snaps[snaps.length - 1]!
+    const mean0 = t0.mean
+    const mean1 = t1.mean
+    const delta =
+      mean0 != null && mean1 != null && Number.isFinite(mean0) && Number.isFinite(mean1)
+        ? mean1 - mean0
+        : null
+    const layerKey = group.layerId.replace(/^CHANGE_/, '').replace(/_\d+_\d+$/, '').toUpperCase()
+
+    const snapRefs: DocxIndexChangeBlock['snapshots'] = []
+    for (const snap of snaps) {
+      const rId = nextRid(1, imageCounter)
+      imageCounter++
+      images.push({ rId, fileName: `image${imageCounter}.png`, base64: snap.imageBase64! })
+      snapRefs.push({
+        date: snap.sceneDate || snap.periodLabel || '',
+        label: `${layerKey} ${fmtNum(snap.mean, 4)}`,
+        rId,
+      })
+    }
+
+    let compareChartRId: string | null = null
+    let compareChartTitle: string | null = null
+    let deltaChartRId: string | null = null
+    let deltaChartTitle: string | null = null
+
+    if (mean0 != null && mean1 != null && Number.isFinite(mean0) && Number.isFinite(mean1)) {
+      indexChangeChartN += 1
+      const cat0 = t0.periodLabel || `${t0.sceneDate} (T0)`
+      const cat1 = t1.periodLabel || `${t1.sceneDate} (T1)`
+      const compare: DocxNativeChartSpec = {
+        rId: `rIdChart${indexChangeChartN}`,
+        fileStem: `chart${indexChangeChartN}`,
+        title: `${layerKey} Change Detection — ${cat0} vs ${cat1}`,
+        yAxisLabel: `${layerKey} mean`,
+        yNumFmt: '0.0000',
+        categories: [cat0, cat1],
+        kind: 'bar',
+        hideLegend: true,
+        series: [
+          {
+            name: `${layerKey} AOI mean`,
+            values: [mean0, mean1],
+            color: resolveIndexChartColor(layerKey),
+            asBar: true,
+          },
+        ],
+      }
+      indexChangeCharts.push(compare)
+      compareChartRId = compare.rId
+      compareChartTitle = compare.title
+
+      if (delta != null) {
+        indexChangeChartN += 1
+        const deltaChart: DocxNativeChartSpec = {
+          rId: `rIdChart${indexChangeChartN}`,
+          fileStem: `chart${indexChangeChartN}`,
+          title: `${layerKey} Δ Change (${cat0} → ${cat1})`,
+          yAxisLabel: `Δ ${layerKey}`,
+          yNumFmt: '0.0000',
+          categories: [`Δ ${layerKey}`],
+          kind: 'bar',
+          hideLegend: true,
+          series: [
+            {
+              name: 'Δ mean',
+              values: [delta],
+              color: delta >= 0 ? '2563EB' : 'DC2626',
+              asBar: true,
+            },
+          ],
+        }
+        indexChangeCharts.push(deltaChart)
+        deltaChartRId = deltaChart.rId
+        deltaChartTitle = deltaChart.title
+      }
+    }
+
+    indexChangeBlocks.push({
+      title: group.title,
+      layerId: layerKey,
+      legend: t0.legendText || t1.legendText || '',
+      narrative: t1.notes || t0.notes || '',
+      snapshots: snapRefs,
+      tableHeaders: ['Period', 'Scene', 'AOI mean', 'Δ vs T0'],
+      tableRows: [
+        [t0.periodLabel || 'T0', t0.sceneDate, fmtNum(mean0, 4), '—'],
+        [
+          t1.periodLabel || 'T1',
+          t1.sceneDate,
+          fmtNum(mean1, 4),
+          delta == null ? '—' : `${delta >= 0 ? '+' : ''}${delta.toFixed(4)}`,
+        ],
+      ],
+      compareChartRId,
+      compareChartTitle,
+      deltaChartRId,
+      deltaChartTitle,
+    })
   }
 
-  const nativeCharts = [...indexCharts, ...weatherCharts, ...lulcCharts]
+  const correlationNativeCharts: DocxNativeChartSpec[] = []
+  let correlationChartN =
+    indexCharts.length + weatherCharts.length + vegCoverageCharts.length + lulcCharts.length + indexChangeCharts.length
 
   const correlationBlocks: TimeSeriesDocxModel['correlationBlocks'] = []
-  for (const block of payload.correlationBlocks ?? []) {
+  const sortedCorr = [...(payload.correlationBlocks ?? [])].sort(
+    (a, b) => a.xLayerId.localeCompare(b.xLayerId) || a.yLayerId.localeCompare(b.yLayerId),
+  )
+  for (const block of sortedCorr) {
+    let chartRId: string | null = null
     let rId: string | null = null
-    if (block.chartBase64) {
+
+    const points =
+      block.points?.length
+        ? block.points
+        : (block.valueRows ?? [])
+            .map(row => ({
+              date: String(row[0] ?? '—'),
+              x: Number(row[1]),
+              y: Number(row[2]),
+            }))
+            .filter(p => Number.isFinite(p.x) && Number.isFinite(p.y))
+    const fitLine =
+      block.fitLine?.length && block.fitLine.length >= 2
+        ? block.fitLine
+        : points.length >= 2
+          ? [
+              { x: Math.min(...points.map(p => p.x)), y: block.intercept + block.slope * Math.min(...points.map(p => p.x)) },
+              { x: Math.max(...points.map(p => p.x)), y: block.intercept + block.slope * Math.max(...points.map(p => p.x)) },
+            ]
+          : []
+
+    if (points.length >= 2) {
+      correlationChartN += 1
+      const spec = buildCorrelationScatterNativeChartSpec(
+        {
+          xLayerId: block.xLayerId,
+          yLayerId: block.yLayerId,
+          r: block.r,
+          r2: block.r2,
+          n: block.n,
+          points,
+          fitLine,
+          relationshipLabel: block.relationshipLabel,
+        },
+        correlationChartN,
+      )
+      correlationNativeCharts.push(spec)
+      chartRId = spec.rId
+    } else if (block.chartBase64) {
       rId = nextRid(1, imageCounter)
       imageCounter++
       images.push({ rId, fileName: `image${imageCounter}.png`, base64: block.chartBase64 })
     }
+
     correlationBlocks.push({
       title: `${block.xLayerId} × ${block.yLayerId} · ${block.relationshipLabel}`,
+      xLayerId: block.xLayerId,
+      yLayerId: block.yLayerId,
+      chartRId,
       rId,
       r2Label: `R²=${block.r2.toFixed(3)} · r=${block.r.toFixed(3)} · n=${block.n} · slope=${block.slope.toFixed(4)}`,
+      interpretation: block.interpretation,
+      valueHeaders: block.valueHeaders?.length ? block.valueHeaders : ['Date', block.xLayerId, block.yLayerId],
+      valueRows: block.valueRows ?? [],
       gisInsight: block.gisInsight,
       agroInsight: block.agroInsight,
     })
   }
+
+  const nativeCharts = [
+    ...indexCharts,
+    ...weatherCharts,
+    ...vegCoverageCharts,
+    ...lulcCharts,
+    ...indexChangeCharts,
+    ...correlationNativeCharts,
+  ]
 
   const model: TimeSeriesDocxModel = {
     projectName: payload.projectName,
@@ -808,6 +1024,8 @@ export async function buildTimeSeriesDocxModel(
     vegCoverageRows,
     vegCoverageNote:
       'Coverage is calculated independently for each acquisition date. NDVI classification: Healthy / Moderate / Stress = Vegetation; Critical = Bare.',
+    vegCoverageChartRIds,
+    vegCoverageChartInterpretation,
     dataQualityNotes: `Analysis uses ${payload.layerIds.join(', ')} indices derived from Sentinel Hub statistics. All index values are derived from source imagery statistics. Week numbers are ISO week labels parsed from the period column; gaps indicate weeks with no available scene or observation.${
       exec.ndwiEstimated || exec.saviEstimated
         ? ' NDWI and/or SAVI values marked with * are estimated from available NDVI/NDMI where raw band reflectance was not exported.'
@@ -823,6 +1041,7 @@ export async function buildTimeSeriesDocxModel(
     lulcMultiYearBarChartRId,
     lulcMultiYearBarChartTitle,
     changeDetectionMapLayers,
+    indexChangeBlocks,
     cumulativeMapLayers,
     correlationBlocks,
     cropRecommendationBullets: payload.cropRecommendations ?? [],

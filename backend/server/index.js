@@ -18,6 +18,7 @@ import { bootstrapApiSecretsFromEnv } from './bootstrapApiSecretsFromEnv.js'
 import { registerSentinelHubStatisticsRoutes } from './sentinelHubStatisticsProxy.js'
 import { registerGeocodeRoutes } from './geocodeProxy.js'
 import { registerAcpWeatherRoutes } from './acpWeatherRoutes.js'
+import { registerChirpsRoutes } from './chirpsRoutes.js'
 import { registerCropClassificationRoutes } from './cropClassificationProxy.js'
 import { registerTreeDetectionRoutes } from './treeDetectionProxy.js'
 import { registerSamDetectionRoutes } from './samDetectionProxy.js'
@@ -1848,6 +1849,7 @@ app.post('/api/esri-dashboards/sources/probe', async (req, res) => {
 registerSentinelHubStatisticsRoutes(app, { secretsFilePath: API_SECRETS_FILE })
 registerGeocodeRoutes(app)
 registerAcpWeatherRoutes(app)
+registerChirpsRoutes(app)
 registerCropClassificationRoutes(app, { secretsFilePath: API_SECRETS_FILE, broadcast })
 registerTreeDetectionRoutes(app)
 registerSamDetectionRoutes(app)

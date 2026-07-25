@@ -148,6 +148,19 @@ const ET_PROFILE: IndexThresholdProfile = {
   ],
 }
 
+/** LST invertHealth: hotter surface ↔ heat stress for crops. */
+const LST_PROFILE: IndexThresholdProfile = {
+  id: 'LST',
+  label: 'LST',
+  invertHealth: true,
+  tiers: [
+    { tier: 'healthy', min: 5, max: 28, label: 'Cool / mild surface', color: '#22c55e' },
+    { tier: 'moderate', min: 28, max: 34, label: 'Warm surface', color: '#eab308' },
+    { tier: 'stress', min: 34, max: 40, label: 'Hot surface', color: '#f97316' },
+    { tier: 'critical', min: 40, max: 55, label: 'Extreme heat', color: '#ef4444' },
+  ],
+}
+
 const NDRE_PROFILE: IndexThresholdProfile = {
   id: 'NDRE',
   label: 'NDRE',
@@ -191,6 +204,7 @@ const PROFILE_BY_ID: Record<string, IndexThresholdProfile> = {
   NDWI: NDWI_PROFILE,
   NDMI: NDMI_PROFILE,
   ET: ET_PROFILE,
+  LST: LST_PROFILE,
   NDRE: NDRE_PROFILE,
   NBR: NBR_PROFILE,
   CI_RE: NDRE_PROFILE,
@@ -385,6 +399,9 @@ function buildSummaryLine(
     return lossDay != null
       ? `Mean ET: ${v} mm/day (${meanBand.label}) · Water loss ${lossDay} m³/day (${lossHaDay} m³/ha/day) · ${sceneDate}.`
       : `Mean ET: ${v} mm/day (${meanBand.label}) · ${lossHaDay} m³/ha/day · ${sceneDate}.`
+  }
+  if (id === 'LST') {
+    return `Mean LST: ${v} °C (${meanBand.label}) on ${sceneDate} — seasonal NDVI/NDMI surface-temperature proxy.`
   }
   if (id === 'SAVI' || id === 'MSAVI') {
     return `Mean ${profile.label}: ${v} — ${meanBand.label.toLowerCase()} with limited soil influence.`

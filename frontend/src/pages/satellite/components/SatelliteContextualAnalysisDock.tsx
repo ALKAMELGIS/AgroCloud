@@ -19,6 +19,7 @@ export type SatelliteContextPanelId =
   | 'layers'
   | 'add-gis-layer'
   | 'remote-sensing'
+  | 'eo-enrichment'
   | 'crop-alerts'
   | 'stress-zones'
   | 'crop-classification'
@@ -82,7 +83,8 @@ export type SatelliteContextualAnalysisDockProps = {
     | 'source'
     | 'layers'
     | 'remote-sensing'
-    | 'crop-alerts'
+    | 'eo-enrichment'
+      | 'crop-alerts'
     | 'stress-zones'
     | 'crop-classification'
     | 'ai-detection-gis'
@@ -156,6 +158,13 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     label: 'Remote sensing',
     title: 'Remote sensing',
     hint: 'Indices, WMS layers, timeline, and AOI tools.',
+  },
+  {
+    id: 'eo-enrichment',
+    icon: 'fa-solid fa-seedling',
+    label: 'EO Enrich',
+    title: 'EO Layer Enrichment',
+    hint: 'Enrich farm polygons with latest Sentinel-2 attributes, then export KMZ/SHP/XLSX or DOCX report.',
   },
   {
     id: 'crop-alerts',
@@ -324,6 +333,7 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
   'layers',
   'add-gis-layer',
   'remote-sensing',
+  'eo-enrichment',
   'crop-alerts',
   'crop-classification',
   'imagery-time-series',
@@ -344,6 +354,7 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
 /** Rail tools that open the floating processing stack instead of the docked panel. */
 const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
   'remote-sensing',
+  'eo-enrichment',
   'crop-alerts',
   'crop-classification',
   'ai-detection-gis',
@@ -359,7 +370,7 @@ const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
 ]);
 
 const RAIL_GROUPS_MAP: SatelliteContextPanelId[][] = [
-  ['layers', 'remote-sensing', 'crop-alerts', 'crop-classification', 'imagery-time-series', 'layer-live-legend', 'hydro-watershed'],
+  ['layers', 'remote-sensing', 'eo-enrichment', 'crop-alerts', 'crop-classification', 'imagery-time-series', 'layer-live-legend', 'hydro-watershed'],
   ['ai-detection-gis', 'tree-detections', 'sam-detection', 'agri-field-boundary', 'well-site', 'well-suitability', 'flood-monitoring', 'image-classification', 'raster-georeference', 'table-geo-ai'],
 ];
 

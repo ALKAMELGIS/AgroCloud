@@ -29,20 +29,39 @@ describe('siSentinelAoiWmsFlickerFree', () => {
     expect(source.setBounds).toHaveBeenCalledTimes(1)
   })
 
-  it('uses layout visibility for show/hide', () => {
-    const calls: Array<[string, string, unknown]> = []
+  it('hides with opacity only so Mapbox keeps warming tiles (Edit AOI pattern)', () => {
+    const layout: Array<[string, string, unknown]> = []
+    const paint: Array<[string, string, unknown]> = []
     const map = {
       getLayer: () => ({}),
       setLayoutProperty: (id: string, prop: string, value: unknown) => {
-        calls.push([id, prop, value])
+        layout.push([id, prop, value])
       },
-      setPaintProperty: () => undefined,
+      setPaintProperty: (id: string, prop: string, value: unknown) => {
+        paint.push([id, prop, value])
+      },
     }
 
     setSiSentinelAoiWmsLayerPresentation(map as any, 'sentinel-layer-aoi-layer-0', true, 0.85, true)
     setSiSentinelAoiWmsLayerPresentation(map as any, 'sentinel-layer-aoi-layer-0', false, 0.85, true)
 
-    expect(calls).toContainEqual(['sentinel-layer-aoi-layer-0', 'visibility', 'visible'])
-    expect(calls).toContainEqual(['sentinel-layer-aoi-layer-0', 'visibility', 'none'])
+    expect(layout.filter(([, prop, val]) => prop === 'visibility' && val === 'visible')).toHaveLength(2)
+    expect(layout.some(([, prop, val]) => prop === 'visibility' && val === 'none')).toBe(false)
+    expect(paint).toContainEqual(['sentinel-layer-aoi-layer-0', 'raster-opacity', 0.85])
+    expect(paint).toContainEqual(['sentinel-layer-aoi-layer-0', 'raster-opacity', 0])
+  })
+
+  it('can unload with visibility none when requested', () => {
+    const layout: Array<[string, string, unknown]> = []
+    const map = {
+      getLayer: () => ({}),
+      setLayoutProperty: (id: string, prop: string, value: unknown) => {
+        layout.push([id, prop, value])
+      },
+      setPaintProperty: () => undefined,
+    }
+
+    setSiSentinelAoiWmsLayerPresentation(map as any, 'layer', false, 1, true, { unloadWhenHidden: true })
+    expect(layout).toContainEqual(['layer', 'visibility', 'none'])
   })
 })

@@ -16,4 +16,11 @@ describe('planImageryDateChunks', () => {
       { fromIso: '2025-07-01', toIso: '2025-07-08' },
     ])
   })
+
+  it('covers a multi-year Start date with older chunks after the preview', () => {
+    const chunks = planImageryDateChunks('2021-01-01', '2026-07-21', 56, IMAGERY_TS_PREVIEW_DAYS)
+    expect(chunks[0]?.toIso).toBe('2026-07-21')
+    expect(chunks[chunks.length - 1]?.fromIso).toBe('2021-01-01')
+    expect(chunks.length).toBeGreaterThan(10)
+  })
 })

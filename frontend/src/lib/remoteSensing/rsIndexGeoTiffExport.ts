@@ -28,10 +28,19 @@ import {
   type SentinelIndexEvalProfile,
 } from '../sentinelHubWmsIndexEvalscripts'
 import { SENTINEL_ET_RAMP } from '../etIndex'
+import { SENTINEL_LST_RAMP } from '../lstIndex'
 import { downloadBlob } from '../hydroWatershed/geoTiffExport'
+import {
+  GIS_FLOAT_NODATA,
+  buildGdalPamAuxXml,
+  computeFloatRasterStats,
+  writeFloat32GisGeoTiff,
+  writeMultiBandFloat32GisGeoTiff,
+  writeRgbGisGeoTiff,
+} from '../gis/gisGeoTiffWriter'
 
 /** ArcGIS-friendly nodata (NaN Float32 often fails to display in Pro). */
-const FLOAT_NODATA = -9999
+const FLOAT_NODATA = GIS_FLOAT_NODATA
 
 export type RsIndexGeoTiffExportInput = {
   layerId: string
@@ -87,6 +96,12 @@ const INDEX_BANDS: Record<SentinelIndexEvalProfile, { bands: string[]; expr: str
     // Moisture demand proxy (mm/day scale left to analyst); export raw moisture score 0–1.
     expr: 'Math.max(0,Math.min(1,1-(0.6*((s.B08-s.B11)/(s.B08+s.B11))+0.4*((s.B03-s.B08)/(s.B03+s.B08)))))',
   },
+  lst: {
+    bands: ['B04', 'B08', 'B11'],
+    // Encode LST °C as −1…1: ((lst−5)/50)*2−1 for the shared Float32 pipeline.
+    expr:
+      '((()=>{var ndvi=(s.B08-s.B04)/(s.B08+s.B04);var ndmi=(s.B08-s.B11)/(s.B08+s.B11);var dry=Math.max(0,Math.min(1,0.5-0.5*Math.max(-1,Math.min(1,ndmi))));var lst=Math.max(5,Math.min(55,38-12*Math.max(-0.2,Math.min(1,ndvi))+8*dry));return Math.max(-1,Math.min(1,((lst-5)/50)*2-1));})())',
+  },
 }
 
 function resolveIndexProfile(layerId: string): SentinelIndexEvalProfile | null {
@@ -108,6 +123,9 @@ function resolveIndexProfile(layerId: string): SentinelIndexEvalProfile | null {
     NDRE: 'ndre',
     ET: 'et',
     EVAPOTRANSPIRATION: 'et',
+    LST: 'lst',
+    LANDSURFACETEMPERATURE: 'lst',
+    LANDSURFACETEMP: 'lst',
   }
   for (const [k, v] of Object.entries(map)) {
     if (key === k || key.includes(k)) return v
@@ -223,6 +241,9 @@ function indexColorHex(profile: SentinelIndexEvalProfile, value: number): number
       return sampleRampHex(value, SENTINEL_NDMI_MOISTURE_RAMP)
     case 'et':
       return sampleRampHex(value, SENTINEL_ET_RAMP as ReadonlyArray<readonly [number, number]>)
+    case 'lst':
+      // Float32 grid already stores °C after fetch decode.
+      return sampleRampHex(value, SENTINEL_LST_RAMP as ReadonlyArray<readonly [number, number]>)
     case 'ndvi':
     case 'evi':
     case 'savi':
@@ -233,25 +254,27 @@ function indexColorHex(profile: SentinelIndexEvalProfile, value: number): number
   }
 }
 
-/** Pack Float32 index → RGB for ArcGIS display. Nodata → black. */
+/** Pack Float32 index → RGBA for ArcGIS display. Nodata → transparent (alpha=0). */
 export function indexGridToRgb(
   values: Float32Array,
   profile: SentinelIndexEvalProfile,
 ): Uint8Array {
-  const out = new Uint8Array(values.length * 3)
+  const out = new Uint8Array(values.length * 4)
   for (let p = 0; p < values.length; p += 1) {
     const v = values[p]!
-    const o = p * 3
+    const o = p * 4
     if (!Number.isFinite(v) || v === FLOAT_NODATA) {
       out[o] = 0
       out[o + 1] = 0
       out[o + 2] = 0
+      out[o + 3] = 0
       continue
     }
     const hex = indexColorHex(profile, v)
     out[o] = (hex >> 16) & 0xff
     out[o + 1] = (hex >> 8) & 0xff
     out[o + 2] = hex & 0xff
+    out[o + 3] = 255
   }
   return out
 }
@@ -321,85 +344,7 @@ function applyAoiNodata(
   }
 }
 
-// ── TIFF helpers (Float32, EPSG:4326) ────────────────────────────────────────
-
-const T_ASCII = 2
-const T_SHORT = 3
-const T_LONG = 4
-const T_DOUBLE = 12
-const TYPE_SIZE: Record<number, number> = { [T_ASCII]: 1, [T_SHORT]: 2, [T_LONG]: 4, [T_DOUBLE]: 8 }
-
-type TiffEntry = { tag: number; type: number; count: number; data: Uint8Array }
-
-function entry(tag: number, type: number, values: number[] | Uint8Array): TiffEntry {
-  const count = type === T_ASCII ? (values as Uint8Array).length : (values as number[]).length
-  const size = count * TYPE_SIZE[type]!
-  const buf = new Uint8Array(size)
-  const dv = new DataView(buf.buffer)
-  if (type === T_ASCII) buf.set(values as Uint8Array)
-  else if (type === T_SHORT) (values as number[]).forEach((v, i) => dv.setUint16(i * 2, v, true))
-  else if (type === T_LONG) (values as number[]).forEach((v, i) => dv.setUint32(i * 4, v, true))
-  else if (type === T_DOUBLE) (values as number[]).forEach((v, i) => dv.setFloat64(i * 8, v, true))
-  return { tag, type, count, data: buf }
-}
-
-function asciiBytes(s: string): Uint8Array {
-  const b = new Uint8Array(s.length + 1)
-  for (let i = 0; i < s.length; i += 1) b[i] = s.charCodeAt(i) & 0xff
-  return b
-}
-
-function lzwCompress(input: Uint8Array): Uint8Array {
-  const out: number[] = []
-  let bitBuffer = 0
-  let bitCount = 0
-  const write = (code: number, width: number) => {
-    bitBuffer = (bitBuffer << width) | code
-    bitCount += width
-    while (bitCount >= 8) {
-      bitCount -= 8
-      out.push((bitBuffer >> bitCount) & 0xff)
-    }
-    bitBuffer &= (1 << bitCount) - 1
-  }
-  const CLEAR = 256
-  const EOI = 257
-  let dict = new Map<number, number>()
-  let nextCode = 258
-  let width = 9
-  const reset = () => {
-    dict = new Map()
-    nextCode = 258
-    width = 9
-  }
-  write(CLEAR, width)
-  if (input.length > 0) {
-    let omega = input[0]!
-    for (let i = 1; i < input.length; i += 1) {
-      const k = input[i]!
-      const key = (omega << 8) | k
-      const existing = dict.get(key)
-      if (existing !== undefined) omega = existing
-      else {
-        write(omega, width)
-        dict.set(key, nextCode)
-        nextCode += 1
-        if (nextCode === 511) width = 10
-        else if (nextCode === 1023) width = 11
-        else if (nextCode === 2047) width = 12
-        if (nextCode === 4094) {
-          write(CLEAR, width)
-          reset()
-        }
-        omega = k
-      }
-    }
-    write(omega, width)
-  }
-  write(EOI, width)
-  if (bitCount > 0) out.push((bitBuffer << (8 - bitCount)) & 0xff)
-  return Uint8Array.from(out)
-}
+// ── TIFF helpers (Float32 / RGBA, EPSG:4326) via shared ArcGIS-safe writer ───
 
 function writeFloat32GeoTiff4326(opts: {
   width: number
@@ -412,49 +357,24 @@ function writeFloat32GeoTiff4326(opts: {
   compress?: boolean
   description?: string
 }): ArrayBuffer {
-  const { width, height, samples } = opts
-  const raw = new Uint8Array(width * height * 4)
-  const rawDv = new DataView(raw.buffer)
-  for (let i = 0; i < samples.length; i += 1) {
-    const v = samples[i]!
-    rawDv.setFloat32(i * 4, Number.isFinite(v) ? v : FLOAT_NODATA, true)
-  }
-  // Uncompressed by default — custom LZW + Float32 often fails to open in ArcGIS Pro.
-  const strip = opts.compress === true ? lzwCompress(raw) : raw
-  const compression = opts.compress === true ? 5 : 1
-  const pixelScaleX = (opts.east - opts.west) / width
-  const pixelScaleY = (opts.north - opts.south) / height
-  const geoKeys = [
-    1, 1, 0, 3,
-    1024, 0, 1, 2, // Geographic
-    1025, 0, 1, 1, // PixelIsArea
-    2048, 0, 1, 4326, // WGS84
-  ]
-  const entries: TiffEntry[] = [
-    entry(256, T_LONG, [width]),
-    entry(257, T_LONG, [height]),
-    entry(258, T_SHORT, [32]),
-    entry(259, T_SHORT, [compression]),
-    entry(262, T_SHORT, [1]),
-    entry(273, T_LONG, [0]),
-    entry(277, T_SHORT, [1]),
-    entry(278, T_LONG, [height]),
-    entry(279, T_LONG, [strip.length]),
-    entry(339, T_SHORT, [3]), // IEEE float
-    entry(33550, T_DOUBLE, [pixelScaleX, pixelScaleY, 0]),
-    entry(33922, T_DOUBLE, [0, 0, 0, opts.west, opts.north, 0]),
-    entry(34735, T_SHORT, geoKeys),
-    entry(42113, T_ASCII, asciiBytes(String(FLOAT_NODATA))),
-  ]
-  if (opts.description) {
-    entries.push(entry(270, T_ASCII, asciiBytes(opts.description.slice(0, 200))))
-    entries.sort((a, b) => a.tag - b.tag)
-  }
-
-  return assembleTiff(entries, strip)
+  void opts.compress
+  return writeFloat32GisGeoTiff({
+    width: opts.width,
+    height: opts.height,
+    samples: opts.samples,
+    pixelScaleX: (opts.east - opts.west) / opts.width,
+    pixelScaleY: (opts.north - opts.south) / opts.height,
+    tiepointX: opts.west,
+    tiepointY: opts.north,
+    epsg: 4326,
+    geographic: true,
+    nodata: FLOAT_NODATA,
+    description: opts.description,
+    embedStats: true,
+  })
 }
 
-/** 3-band RGB GeoTIFF — displays immediately in ArcGIS Pro. */
+/** RGBA GeoTIFF — nodata is transparent so Pro does not show a solid black AOI. */
 function writeRgbGeoTiff4326(opts: {
   width: number
   height: number
@@ -465,78 +385,23 @@ function writeRgbGeoTiff4326(opts: {
   south: number
   compress?: boolean
 }): ArrayBuffer {
-  const { width, height, rgb } = opts
-  if (rgb.length < width * height * 3) {
-    throw new Error('RGB buffer too short for GeoTIFF export.')
-  }
-  const strip = opts.compress === true ? lzwCompress(rgb) : rgb
-  const compression = opts.compress === true ? 5 : 1
-  const pixelScaleX = (opts.east - opts.west) / width
-  const pixelScaleY = (opts.north - opts.south) / height
-  const geoKeys = [1, 1, 0, 3, 1024, 0, 1, 2, 1025, 0, 1, 1, 2048, 0, 1, 4326]
-  const entries: TiffEntry[] = [
-    entry(256, T_LONG, [width]),
-    entry(257, T_LONG, [height]),
-    entry(258, T_SHORT, [8, 8, 8]),
-    entry(259, T_SHORT, [compression]),
-    entry(262, T_SHORT, [2]), // RGB
-    entry(273, T_LONG, [0]),
-    entry(277, T_SHORT, [3]),
-    entry(278, T_LONG, [height]),
-    entry(279, T_LONG, [strip.length]),
-    entry(284, T_SHORT, [1]),
-    entry(339, T_SHORT, [1, 1, 1]),
-    entry(33550, T_DOUBLE, [pixelScaleX, pixelScaleY, 0]),
-    entry(33922, T_DOUBLE, [0, 0, 0, opts.west, opts.north, 0]),
-    entry(34735, T_SHORT, geoKeys),
-  ]
-  return assembleTiff(entries, strip)
+  void opts.compress
+  const spp: 3 | 4 = opts.rgb.length >= opts.width * opts.height * 4 ? 4 : 3
+  return writeRgbGisGeoTiff({
+    width: opts.width,
+    height: opts.height,
+    pixels: opts.rgb,
+    samplesPerPixel: spp,
+    pixelScaleX: (opts.east - opts.west) / opts.width,
+    pixelScaleY: (opts.north - opts.south) / opts.height,
+    tiepointX: opts.west,
+    tiepointY: opts.north,
+    epsg: 4326,
+    geographic: true,
+    description: 'Index colour composite (RGBA)',
+  })
 }
 
-function assembleTiff(entries: TiffEntry[], strip: Uint8Array): ArrayBuffer {
-  entries.sort((a, b) => a.tag - b.tag)
-  const numTags = entries.length
-  const ifdOffset = 8
-  const ifdSize = 2 + numTags * 12 + 4
-  let extraOffset = ifdOffset + ifdSize
-  const externals: Array<{ entry: TiffEntry; offset: number }> = []
-  for (const e of entries) {
-    if (e.data.length > 4) {
-      if (extraOffset % 2 === 1) extraOffset += 1
-      externals.push({ entry: e, offset: extraOffset })
-      extraOffset += e.data.length
-    }
-  }
-  if (extraOffset % 2 === 1) extraOffset += 1
-  const stripOffset = extraOffset
-  const total = stripOffset + strip.length
-  const buffer = new ArrayBuffer(total)
-  const bytes = new Uint8Array(buffer)
-  const dv = new DataView(buffer)
-  dv.setUint16(0, 0x4949, true)
-  dv.setUint16(2, 42, true)
-  dv.setUint32(4, ifdOffset, true)
-  new DataView(entries.find(e => e.tag === 273)!.data.buffer).setUint32(0, stripOffset, true)
-  dv.setUint16(ifdOffset, numTags, true)
-  let p = ifdOffset + 2
-  for (const e of entries) {
-    dv.setUint16(p, e.tag, true)
-    dv.setUint16(p + 2, e.type, true)
-    dv.setUint32(p + 4, e.count, true)
-    if (e.data.length <= 4) bytes.set(e.data, p + 8)
-    else {
-      const ext = externals.find(x => x.entry === e)!
-      dv.setUint32(p + 8, ext.offset, true)
-    }
-    p += 12
-  }
-  dv.setUint32(p, 0, true)
-  for (const ext of externals) bytes.set(ext.entry.data, ext.offset)
-  bytes.set(strip, stripOffset)
-  return buffer
-}
-
-/** Contiguous multi-band Float32 GeoTIFF (spectral stack). */
 function writeMultiBandFloat32GeoTiff4326(opts: {
   width: number
   height: number
@@ -548,52 +413,32 @@ function writeMultiBandFloat32GeoTiff4326(opts: {
   compress?: boolean
   description?: string
 }): ArrayBuffer {
-  const { width, height, bands } = opts
-  const spp = bands.length
-  const n = width * height
-  const raw = new Uint8Array(n * spp * 4)
-  const rawDv = new DataView(raw.buffer)
-  for (let p = 0; p < n; p += 1) {
-    for (let b = 0; b < spp; b += 1) {
-      const v = bands[b]![p]!
-      rawDv.setFloat32((p * spp + b) * 4, Number.isFinite(v) ? v : FLOAT_NODATA, true)
-    }
-  }
-  const strip = opts.compress === true ? lzwCompress(raw) : raw
-  const compression = opts.compress === true ? 5 : 1
-  const pixelScaleX = (opts.east - opts.west) / width
-  const pixelScaleY = (opts.north - opts.south) / height
-  const geoKeys = [1, 1, 0, 3, 1024, 0, 1, 2, 1025, 0, 1, 1, 2048, 0, 1, 4326]
-  const bits = Array.from({ length: spp }, () => 32)
-  const sampleFmt = Array.from({ length: spp }, () => 3)
-  const entries: TiffEntry[] = [
-    entry(256, T_LONG, [width]),
-    entry(257, T_LONG, [height]),
-    entry(258, T_SHORT, bits),
-    entry(259, T_SHORT, [compression]),
-    entry(262, T_SHORT, [1]),
-    entry(273, T_LONG, [0]),
-    entry(277, T_SHORT, [spp]),
-    entry(278, T_LONG, [height]),
-    entry(279, T_LONG, [strip.length]),
-    entry(284, T_SHORT, [1]), // Contig
-    entry(339, T_SHORT, sampleFmt),
-    entry(33550, T_DOUBLE, [pixelScaleX, pixelScaleY, 0]),
-    entry(33922, T_DOUBLE, [0, 0, 0, opts.west, opts.north, 0]),
-    entry(34735, T_SHORT, geoKeys),
-    entry(42113, T_ASCII, asciiBytes(String(FLOAT_NODATA))),
-  ]
-  if (opts.description) {
-    entries.push(entry(270, T_ASCII, asciiBytes(opts.description.slice(0, 200))))
-  }
-  return assembleTiff(entries, strip)
+  void opts.compress
+  return writeMultiBandFloat32GisGeoTiff({
+    width: opts.width,
+    height: opts.height,
+    bands: opts.bands,
+    pixelScaleX: (opts.east - opts.west) / opts.width,
+    pixelScaleY: (opts.north - opts.south) / opts.height,
+    tiepointX: opts.west,
+    tiepointY: opts.north,
+    epsg: 4326,
+    geographic: true,
+    nodata: FLOAT_NODATA,
+    description: opts.description,
+  })
 }
 
 // ── WMS fetch ────────────────────────────────────────────────────────────────
 
+/**
+ * Match Layer Live map evalscripts: mask only missing samples (`dataMask`).
+ * Do NOT apply SCL/CLM cloud holes — those punch transparent gaps that look like
+ * incomplete GeoTIFFs in ArcGIS Pro while the map still looks continuous.
+ */
 function buildIndexFloatEvalscript(profile: SentinelIndexEvalProfile): string {
   const spec = INDEX_BANDS[profile]
-  const inputs = [...spec.bands, 'SCL', 'CLM', 'dataMask']
+  const inputs = [...spec.bands, 'dataMask']
   return `//VERSION=3
 function setup() {
   return {
@@ -602,9 +447,7 @@ function setup() {
   };
 }
 function evaluatePixel(s) {
-  var scl = s.SCL;
-  var cloud = (scl == 0 || scl == 1 || scl == 3 || scl == 8 || scl == 9) || s.CLM == 1;
-  if (!s.dataMask || cloud) return [0, 0, 0, 0];
+  if (!s.dataMask) return [0, 0, 0, 0];
   var v = ${spec.expr};
   if (isNaN(v)) return [0, 0, 0, 0];
   var enc = Math.max(0, Math.min(254, Math.round((v + 1) * 127)));
@@ -614,7 +457,7 @@ function evaluatePixel(s) {
 
 function buildSpectraEvalscript(bands: string[]): string {
   const unique = bands.slice(0, 3)
-  const inputs = [...unique, 'SCL', 'CLM', 'dataMask']
+  const inputs = [...unique, 'dataMask']
   const channels = [
     unique[0] ? `enc(s.${unique[0]})` : '0',
     unique[1] ? `enc(s.${unique[1]})` : '0',
@@ -628,9 +471,7 @@ function setup() {
   };
 }
 function evaluatePixel(s) {
-  var scl = s.SCL;
-  var cloud = (scl == 0 || scl == 1 || scl == 3 || scl == 8 || scl == 9) || s.CLM == 1;
-  if (!s.dataMask || cloud) return [0, 0, 0, 0];
+  if (!s.dataMask) return [0, 0, 0, 0];
   function enc(v) {
     if (isNaN(v)) return 0;
     return Math.max(0, Math.min(254, Math.round(v * 254)));
@@ -650,12 +491,13 @@ async function fetchWmsRgba(
 ): Promise<{ data: Uint8ClampedArray; width: number; height: number }> {
   const layer = resolveSentinelHubWmsEvalscriptProxyLayerName(getSentinelHubWmsLayerCatalog())
   const [minX, minY, maxX, maxY] = bbox3857
+  // MAXCC=100: do not drop the selected scene for cloud % — completeness over strict filtering.
   let url =
     `${getSentinelHubWmsBaseUrl()}?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0` +
     `&LAYERS=${encodeURIComponent(layer)}` +
     `&BBOX=${minX},${minY},${maxX},${maxY}&CRS=EPSG:3857` +
     `&FORMAT=image/png&TRANSPARENT=true&WIDTH=${sizeW}&HEIGHT=${sizeH}` +
-    `&TIME=${timeStart}/${timeEnd}&MAXCC=40&SHOWLOGO=false&WARNINGS=false` +
+    `&TIME=${timeStart}/${timeEnd}&MAXCC=100&SHOWLOGO=false&WARNINGS=false` +
     `&EVALSCRIPT=${encodeURIComponent(toBase64(evalscript))}`
   url = appendSentinelHubWmsAccessToken(url)
   const res = await fetch(url, { headers: { Accept: 'image/png' }, signal })
@@ -692,15 +534,19 @@ async function fetchIndexGrid(
   const spanX = maxX - minX
   const spanY = maxY - minY
   const mpp = Math.max(3, metersPerPixel)
-  const width = Math.max(64, Math.min(2048, Math.round(spanX / mpp)))
-  const height = Math.max(64, Math.min(2048, Math.round(spanY / mpp)))
-  const day = new Date(`${sceneDate}T00:00:00Z`)
-  const t0 = new Date(day.getTime() - 3 * 86400000).toISOString().slice(0, 10)
-  const t1 = new Date(day.getTime() + 3 * 86400000).toISOString().slice(0, 10)
+  // Sentinel Hub GetMap max is 2500² — use full budget for denser AOI coverage.
+  const width = Math.max(64, Math.min(2500, Math.round(spanX / mpp)))
+  const height = Math.max(64, Math.min(2500, Math.round(spanY / mpp)))
+  // Pin export to the selected scene day (same as Layer Live), not a ±3d mosaic that
+  // can leave orbit/cloud holes different from the map.
+  const day = sceneDate.slice(0, 10)
+  const next = new Date(`${day}T00:00:00Z`)
+  next.setUTCDate(next.getUTCDate() + 1)
+  const dayEnd = next.toISOString().slice(0, 10)
   const { data } = await fetchWmsRgba(
     [minX, minY, maxX, maxY],
-    t0,
-    t1,
+    day,
+    dayEnd,
     width,
     height,
     buildIndexFloatEvalscript(profile),
@@ -717,6 +563,10 @@ async function fetchIndexGrid(
       continue
     }
     values[p] = data[i]! / 127 - 1
+    if (profile === 'lst') {
+      // Decode normalized −1…1 → °C for GIS Float32 export.
+      values[p] = ((values[p]! + 1) / 2) * 50 + 5
+    }
     valid[p] = 1
   }
   applyAoiNodata(values, valid, width, height, [w, s, e, n], geometry)
@@ -737,15 +587,16 @@ async function fetchSpectraGrid(
   const spanX = maxX - minX
   const spanY = maxY - minY
   const mpp = Math.max(3, metersPerPixel)
-  const width = Math.max(64, Math.min(2048, Math.round(spanX / mpp)))
-  const height = Math.max(64, Math.min(2048, Math.round(spanY / mpp)))
-  const day = new Date(`${sceneDate}T00:00:00Z`)
-  const t0 = new Date(day.getTime() - 3 * 86400000).toISOString().slice(0, 10)
-  const t1 = new Date(day.getTime() + 3 * 86400000).toISOString().slice(0, 10)
+  const width = Math.max(64, Math.min(2500, Math.round(spanX / mpp)))
+  const height = Math.max(64, Math.min(2500, Math.round(spanY / mpp)))
+  const day = sceneDate.slice(0, 10)
+  const next = new Date(`${day}T00:00:00Z`)
+  next.setUTCDate(next.getUTCDate() + 1)
+  const dayEnd = next.toISOString().slice(0, 10)
   const { data } = await fetchWmsRgba(
     [minX, minY, maxX, maxY],
-    t0,
-    t1,
+    day,
+    dayEnd,
     width,
     height,
     buildSpectraEvalscript(unique),
@@ -835,18 +686,25 @@ export async function exportRemoteSensingIndexGeoTiff(
   )
 
   const floatSamples = sanitizeFloatNodata(indexGrid.values)
-  const rgb = indexGridToRgb(floatSamples, profile)
+  const stats = computeFloatRasterStats(floatSamples, FLOAT_NODATA)
+  if (!stats || stats.validCount < 16) {
+    throw new Error(
+      'GeoTIFF export found almost no valid pixels (empty WMS / no coverage for this scene). Try another imagery date or verify the AOI intersects the Sentinel-2 footprint.',
+    )
+  }
+
+  const rgba = indexGridToRgb(floatSamples, profile)
   const rgbTif = writeRgbGeoTiff4326({
     width: indexGrid.width,
     height: indexGrid.height,
-    rgb,
+    rgb: rgba,
     west: indexGrid.west,
     north: indexGrid.north,
     east: indexGrid.east,
     south: indexGrid.south,
     compress: false,
   })
-  // RGB first — open this in ArcGIS Pro Map.
+  // RGB/RGBA first — open this in ArcGIS Pro Map.
   zip.file(`${stem}_rgb.tif`, rgbTif)
   zip.file(`${stem}_rgb.tfw`, tfw)
   zip.file(`${stem}_rgb.prj`, prj)
@@ -865,10 +723,19 @@ export async function exportRemoteSensingIndexGeoTiff(
   zip.file(`${stem}.tif`, mainTif)
   zip.file(`${stem}.tfw`, tfw)
   zip.file(`${stem}.prj`, prj)
+  zip.file(
+    `${stem}.tif.aux.xml`,
+    buildGdalPamAuxXml({
+      nodata: FLOAT_NODATA,
+      stats,
+      bandName: profile.toUpperCase(),
+    }),
+  )
 
   for (const c of companions) {
     const name = `${c.id.toUpperCase()}_${sceneDate.replace(/-/g, '')}`
     const cSamples = sanitizeFloatNodata(c.grid.values)
+    const cStats = computeFloatRasterStats(cSamples, FLOAT_NODATA)
     const cTfw = buildWorldFile4326(
       c.grid.west,
       c.grid.north,
@@ -893,13 +760,24 @@ export async function exportRemoteSensingIndexGeoTiff(
     )
     zip.file(`${name}.tfw`, cTfw)
     zip.file(`${name}.prj`, prj)
+    if (cStats) {
+      zip.file(
+        `${name}.tif.aux.xml`,
+        buildGdalPamAuxXml({
+          nodata: FLOAT_NODATA,
+          stats: cStats,
+          bandName: c.id.toUpperCase(),
+        }),
+      )
+    }
   }
 
   if (spectra?.bands.length) {
+    const spectraBands = spectra.bands.map(b => sanitizeFloatNodata(b.values))
     const spectraTif = writeMultiBandFloat32GeoTiff4326({
       width: spectra.width,
       height: spectra.height,
-      bands: spectra.bands.map(b => sanitizeFloatNodata(b.values)),
+      bands: spectraBands,
       west: spectra.west,
       north: spectra.north,
       east: spectra.east,
@@ -920,6 +798,17 @@ export async function exportRemoteSensingIndexGeoTiff(
       ),
     )
     zip.file(`${stem}_spectra.prj`, prj)
+    const s0 = computeFloatRasterStats(spectraBands[0]!, FLOAT_NODATA)
+    if (s0) {
+      zip.file(
+        `${stem}_spectra.tif.aux.xml`,
+        buildGdalPamAuxXml({
+          nodata: FLOAT_NODATA,
+          stats: s0,
+          bandName: spectra.bands[0]?.name || 'spectra',
+        }),
+      )
+    }
     zip.file(
       `${stem}_spectra_bands.txt`,
       [
@@ -939,17 +828,17 @@ export async function exportRemoteSensingIndexGeoTiff(
       'AgroCloud Remote Sensing — GIS GeoTIFF export',
       '',
       '=== ArcGIS Pro (IMPORTANT) ===',
-      '1. Unzip this archive.',
+      '1. Unzip this archive (keep .tif next to .tif.aux.xml / .tfw / .prj).',
       `2. Add ${stem}_rgb.tif to the map (Catalog → Add To Current Map).`,
       '3. Right-click layer → Zoom To Layer.',
-      '   → Index colours appear immediately (RGB composite).',
+      '   → Index colours appear immediately (RGBA composite; nodata is transparent).',
       '',
-      `Do NOT rely on only ${stem}.tif for display — Float32 (−1…1) often looks`,
-      'blank/black under ArcGIS default stretch. Use Float32 for analysis:',
-      '   Symbology → Stretch → Min-Max (exclude NoData -9999) + colour ramp.',
+      `Float32 analysis: ${stem}.tif (real ${profile.toUpperCase()} values).`,
+      `  NoData = ${FLOAT_NODATA} (never NaN). Statistics are embedded + .aux.xml sidecar.`,
+      '  Symbology → Stretch → Min-Max (Exclude NoData) + colour ramp if needed.',
       '',
-      `Primary RGB: ${stem}_rgb.tif (WGS84)`,
-      `Primary Float32: ${stem}.tif  (real ${profile.toUpperCase()} values, NoData=${FLOAT_NODATA})`,
+      `Valid pixels in this export: ${stats.validCount}`,
+      `Value range: ${stats.min.toFixed(4)} … ${stats.max.toFixed(4)}`,
       `Scene date: ${sceneDate}`,
       `AOI: ${aoi}`,
       'CRS: EPSG:4326 / WGS84 (.prj + .tfw included)',

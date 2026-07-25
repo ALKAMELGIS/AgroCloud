@@ -9,7 +9,7 @@ import {
   type WellSuitabilityPhase,
   type WellSuitabilityResult,
 } from '../../../lib/hydroWatershed/wellSuitabilityMcdaEngine'
-import { buildAoiGeoTiff, downloadBlob } from '../../../lib/hydroWatershed/geoTiffExport'
+import { buildAoiGeoTiff, downloadBlob, downloadGeoTiffWithAux } from '../../../lib/hydroWatershed/geoTiffExport'
 import {
   exportWellSuitabilityKmz,
   exportWellSuitabilityPdf,
@@ -215,8 +215,13 @@ export function useWellSuitabilityAnalysis({ geometry, enabled, topN: topNProp }
   const exportHeatGeoTiff = useCallback(() => {
     const band = state.result?.raster.band
     if (!band) return false
-    const { blob, filename } = buildAoiGeoTiff(band, maskRef.current)
-    downloadBlob(blob, filename.replace(/\.tif$/i, '-mcda-potential.tif'))
+    const built = buildAoiGeoTiff(band, maskRef.current)
+    const filename = built.filename.replace(/\.tif$/i, '-mcda-potential.tif')
+    downloadGeoTiffWithAux({
+      ...built,
+      filename,
+      auxFilename: `${filename}.aux.xml`,
+    })
     return true
   }, [state.result])
 

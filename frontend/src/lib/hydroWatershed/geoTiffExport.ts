@@ -1,23 +1,20 @@
 /**
- * Self-contained, GIS-grade GeoTIFF (.tif) writer for the analysis-result
- * rasters produced by the Hydro Watershed Workflow tool.
+ * Self-contained, GIS-grade GeoTIFF (.tif) writer for Hydro / Well Site rasters.
  *
- * Design goals (ArcGIS Pro / QGIS compatible, no quality loss):
- *   • Single-band 32-bit IEEE float — the NATIVE computed values are written
- *     verbatim (no rescaling, no 8-bit quantisation, no resampling).
- *   • Fully georeferenced: EPSG:3857 (Web Mercator) — the exact CRS the DEM grid
- *     is sampled in — via ModelPixelScale + ModelTiepoint + GeoKeyDirectory, so
- *     the pixel size and geotransform match the source grid 1:1.
- *   • Clipped to the AOI: the output is cropped to the AOI mask's pixel window
- *     and every pixel outside the AOI polygon is written as NoData (NaN), so the
- *     file bounds match the AOI and it holds no data outside the study area.
- *   • Lossless LZW compression (TIFF tag 259 = 5) to keep files small without
- *     altering a single value.
- *
- * The DEM grid comes from square Web-Mercator terrain tiles, so each pixel is a
- * regular square in EPSG:3857 — a north-up, axis-aligned grid that maps to a
- * GeoTIFF with no resampling whatsoever.
+ * Design goals (ArcGIS Pro / QGIS compatible):
+ *   • Single-band 32-bit IEEE float — native computed values (no 8-bit quantisation).
+ *   • Fully georeferenced EPSG:3857 via ModelPixelScale + ModelTiepoint + GeoKeys.
+ *   • Clipped to the AOI; outside pixels use finite NoData (−9999), never IEEE NaN
+ *     (NaN makes ArcGIS Pro stretch ±3.4e38 and paint the layer solid black).
+ *   • Uncompressed by default + embedded GDAL STATISTICS_* for correct stretch.
  */
+
+import {
+  GIS_FLOAT_NODATA,
+  buildGdalPamAuxXml,
+  computeFloatRasterStats,
+  writeFloat32GisGeoTiff,
+} from '../gis/gisGeoTiffWriter'
 
 /** Circumference of the Web-Mercator world in projected metres. */
 const WORLD_METERS = 2 * Math.PI * 6378137
@@ -34,7 +31,7 @@ export type GeoBand = {
   /** World-pixel coordinate of the grid's top-left corner at `zoom`. */
   originWorldPxX: number
   originWorldPxY: number
-  /** NoData sentinel (defaults to NaN). */
+  /** NoData sentinel (finite; defaults to −9999). */
   nodata: number
   /** Human-readable layer / file name. */
   name: string
@@ -63,211 +60,17 @@ function maskWindow(mask: Uint8Array | null, width: number, height: number): Cli
   return { c0, r0, c1, r1 }
 }
 
-// ── TIFF LZW (tag 259 = 5), MSB-first, 9→12 bit codes with early change ───────
-
-function lzwCompress(input: Uint8Array): Uint8Array {
-  const out: number[] = []
-  let bitBuffer = 0
-  let bitCount = 0
-  const write = (code: number, width: number) => {
-    bitBuffer = (bitBuffer << width) | code
-    bitCount += width
-    while (bitCount >= 8) {
-      bitCount -= 8
-      out.push((bitBuffer >> bitCount) & 0xff)
-    }
-    bitBuffer &= (1 << bitCount) - 1
-  }
-
-  const CLEAR = 256
-  const EOI = 257
-  let dict = new Map<number, number>()
-  let nextCode = 258
-  let width = 9
-  const reset = () => {
-    dict = new Map()
-    nextCode = 258
-    width = 9
-  }
-
-  write(CLEAR, width)
-  if (input.length > 0) {
-    let omega = input[0]!
-    for (let i = 1; i < input.length; i += 1) {
-      const k = input[i]!
-      const key = (omega << 8) | k
-      const existing = dict.get(key)
-      if (existing !== undefined) {
-        omega = existing
-      } else {
-        write(omega, width)
-        dict.set(key, nextCode)
-        nextCode += 1
-        // Early-change width bump (one code before the bit boundary).
-        if (nextCode === 511) width = 10
-        else if (nextCode === 1023) width = 11
-        else if (nextCode === 2047) width = 12
-        if (nextCode === 4094) {
-          write(CLEAR, width)
-          reset()
-        }
-        omega = k
-      }
-    }
-    write(omega, width)
-  }
-  write(EOI, width)
-  if (bitCount > 0) out.push((bitBuffer << (8 - bitCount)) & 0xff)
-  return Uint8Array.from(out)
+export type ExportGeoTiffResult = {
+  blob: Blob
+  filename: string
+  /** Optional PAM sidecar for ArcGIS Pro. */
+  auxXml?: string
+  auxFilename?: string
 }
-
-// ── Minimal TIFF/GeoTIFF assembler ────────────────────────────────────────────
-
-const T_ASCII = 2
-const T_SHORT = 3
-const T_LONG = 4
-const T_DOUBLE = 12
-const TYPE_SIZE: Record<number, number> = { [T_ASCII]: 1, [T_SHORT]: 2, [T_LONG]: 4, [T_DOUBLE]: 8 }
-
-type TiffEntry = { tag: number; type: number; count: number; data: Uint8Array }
-
-function entry(tag: number, type: number, values: number[] | Uint8Array): TiffEntry {
-  const count = type === T_ASCII ? (values as Uint8Array).length : (values as number[]).length
-  const size = count * TYPE_SIZE[type]!
-  const buf = new Uint8Array(size)
-  const dv = new DataView(buf.buffer)
-  if (type === T_ASCII) {
-    buf.set(values as Uint8Array)
-  } else if (type === T_SHORT) {
-    ;(values as number[]).forEach((v, i) => dv.setUint16(i * 2, v, true))
-  } else if (type === T_LONG) {
-    ;(values as number[]).forEach((v, i) => dv.setUint32(i * 4, v, true))
-  } else if (type === T_DOUBLE) {
-    ;(values as number[]).forEach((v, i) => dv.setFloat64(i * 8, v, true))
-  }
-  return { tag, type, count, data: buf }
-}
-
-function asciiBytes(s: string): Uint8Array {
-  const b = new Uint8Array(s.length + 1)
-  for (let i = 0; i < s.length; i += 1) b[i] = s.charCodeAt(i) & 0xff
-  return b // NUL-terminated
-}
-
-type WriteGeoTiffOptions = {
-  width: number
-  height: number
-  /** Row-major Float32 sample values for the cropped window. */
-  samples: Float32Array
-  pixelScale: number // metres / px (square)
-  tiepointX: number // top-left X in EPSG:3857 metres
-  tiepointY: number // top-left Y in EPSG:3857 metres
-  epsg: number
-  nodata: number
-  compress: boolean
-}
-
-/** Assemble a single-band Float32 GeoTIFF as an ArrayBuffer. */
-function writeGeoTiff(opts: WriteGeoTiffOptions): ArrayBuffer {
-  const { width, height, samples } = opts
-
-  // Raw little-endian Float32 strip, then optional LZW.
-  const raw = new Uint8Array(width * height * 4)
-  const rawDv = new DataView(raw.buffer)
-  for (let i = 0; i < samples.length; i += 1) rawDv.setFloat32(i * 4, samples[i]!, true)
-  const strip = opts.compress ? lzwCompress(raw) : raw
-  const compression = opts.compress ? 5 : 1
-
-  const nodataStr =
-    Number.isNaN(opts.nodata) ? 'nan' : Number.isFinite(opts.nodata) ? String(opts.nodata) : 'nan'
-
-  // GeoKeyDirectory: Projected CRS = EPSG code, PixelIsArea.
-  const geoKeys = [
-    1, 1, 0, 3, // version, revision, minor, number-of-keys
-    1024, 0, 1, 1, // GTModelTypeGeoKey = ModelTypeProjected
-    1025, 0, 1, 1, // GTRasterTypeGeoKey = RasterPixelIsArea
-    3072, 0, 1, opts.epsg, // ProjectedCSTypeGeoKey
-  ]
-
-  // Tags MUST be written in ascending tag order.
-  const entries: TiffEntry[] = [
-    entry(256, T_LONG, [width]),
-    entry(257, T_LONG, [height]),
-    entry(258, T_SHORT, [32]), // BitsPerSample
-    entry(259, T_SHORT, [compression]),
-    entry(262, T_SHORT, [1]), // PhotometricInterpretation = BlackIsZero
-    entry(273, T_LONG, [0]), // StripOffsets — patched below
-    entry(277, T_SHORT, [1]), // SamplesPerPixel
-    entry(278, T_LONG, [height]), // RowsPerStrip (single strip)
-    entry(279, T_LONG, [strip.length]), // StripByteCounts
-    entry(339, T_SHORT, [3]), // SampleFormat = IEEE float
-    entry(33550, T_DOUBLE, [opts.pixelScale, opts.pixelScale, 0]), // ModelPixelScale
-    entry(33922, T_DOUBLE, [0, 0, 0, opts.tiepointX, opts.tiepointY, 0]), // ModelTiepoint
-    entry(34735, T_SHORT, geoKeys), // GeoKeyDirectory
-    entry(42113, T_ASCII, asciiBytes(nodataStr)), // GDAL_NODATA
-  ]
-
-  const numTags = entries.length
-  const ifdOffset = 8
-  const ifdSize = 2 + numTags * 12 + 4
-  let extraOffset = ifdOffset + ifdSize
-
-  // Lay out external (>4 byte) tag payloads, word-aligned.
-  const externals: Array<{ entry: TiffEntry; offset: number }> = []
-  for (const e of entries) {
-    if (e.data.length > 4) {
-      if (extraOffset % 2 === 1) extraOffset += 1
-      externals.push({ entry: e, offset: extraOffset })
-      extraOffset += e.data.length
-    }
-  }
-  if (extraOffset % 2 === 1) extraOffset += 1
-  const stripOffset = extraOffset
-  const total = stripOffset + strip.length
-
-  const buffer = new ArrayBuffer(total)
-  const bytes = new Uint8Array(buffer)
-  const dv = new DataView(buffer)
-
-  // Header (little-endian classic TIFF).
-  dv.setUint16(0, 0x4949, true) // "II"
-  dv.setUint16(2, 42, true)
-  dv.setUint32(4, ifdOffset, true)
-
-  // Patch dynamic values.
-  const stripOffsetEntry = entries.find(e => e.tag === 273)!
-  new DataView(stripOffsetEntry.data.buffer).setUint32(0, stripOffset, true)
-
-  // IFD.
-  dv.setUint16(ifdOffset, numTags, true)
-  let p = ifdOffset + 2
-  for (const e of entries) {
-    dv.setUint16(p, e.tag, true)
-    dv.setUint16(p + 2, e.type, true)
-    dv.setUint32(p + 4, e.count, true)
-    if (e.data.length <= 4) {
-      // Inline, left-justified.
-      bytes.set(e.data, p + 8)
-    } else {
-      const ext = externals.find(x => x.entry === e)!
-      dv.setUint32(p + 8, ext.offset, true)
-    }
-    p += 12
-  }
-  dv.setUint32(p, 0, true) // next IFD = none
-
-  // External payloads + strip.
-  for (const ext of externals) bytes.set(ext.entry.data, ext.offset)
-  bytes.set(strip, stripOffset)
-
-  return buffer
-}
-
-export type ExportGeoTiffResult = { blob: Blob; filename: string }
 
 /**
- * Clip a band to its AOI mask and return a georeferenced, LZW-compressed,
- * single-band Float32 GeoTIFF (EPSG:3857) as a downloadable Blob.
+ * Clip a band to its AOI mask and return a georeferenced, single-band Float32
+ * GeoTIFF (EPSG:3857) as a downloadable Blob.
  */
 export function buildAoiGeoTiff(
   band: GeoBand,
@@ -275,12 +78,12 @@ export function buildAoiGeoTiff(
   opts?: { epsg?: number; compress?: boolean },
 ): ExportGeoTiffResult {
   const { width, height, values } = band
-  const nodata = Number.isFinite(band.nodata) ? band.nodata : NaN
+  const nodata =
+    Number.isFinite(band.nodata) && !Number.isNaN(band.nodata) ? band.nodata : GIS_FLOAT_NODATA
   const win = maskWindow(aoiMask, width, height)
   const cw = win.c1 - win.c0 + 1
   const ch = win.r1 - win.r0 + 1
 
-  // Crop to the AOI window; blank everything outside the AOI polygon.
   const out = new Float32Array(cw * ch)
   for (let r = 0; r < ch; r += 1) {
     const srcRow = (win.r0 + r) * width
@@ -288,11 +91,11 @@ export function buildAoiGeoTiff(
     for (let c = 0; c < cw; c += 1) {
       const srcIdx = srcRow + win.c0 + c
       const inside = !aoiMask || aoiMask[srcIdx]
-      out[dstRow + c] = inside ? values[srcIdx]! : nodata
+      const v = values[srcIdx]!
+      out[dstRow + c] = inside && Number.isFinite(v) ? v : nodata
     }
   }
 
-  // EPSG:3857 georeferencing for the cropped window (no resampling).
   const mapSize = TILE_SIZE * 2 ** band.zoom
   const pixelScale = WORLD_METERS / mapSize
   const winOriginPxX = band.originWorldPxX + win.c0
@@ -300,23 +103,38 @@ export function buildAoiGeoTiff(
   const tiepointX = -WORLD_METERS / 2 + winOriginPxX * pixelScale
   const tiepointY = WORLD_METERS / 2 - winOriginPxY * pixelScale
 
-  const arrayBuffer = writeGeoTiff({
+  // `compress` kept for API compatibility — always uncompressed (ArcGIS-safe).
+  void opts?.compress
+
+  const arrayBuffer = writeFloat32GisGeoTiff({
     width: cw,
     height: ch,
     samples: out,
-    pixelScale,
+    pixelScaleX: pixelScale,
+    pixelScaleY: pixelScale,
     tiepointX,
     tiepointY,
     epsg: opts?.epsg ?? 3857,
+    geographic: false,
     nodata,
-    compress: opts?.compress ?? true,
+    description: band.name,
+    embedStats: true,
   })
 
   const safe = band.name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '')
-  return { blob: new Blob([arrayBuffer], { type: 'image/tiff' }), filename: `${safe || 'raster'}.tif` }
+  const filename = `${safe || 'raster'}.tif`
+  const stats = computeFloatRasterStats(out, nodata)
+  const auxXml = buildGdalPamAuxXml({ nodata, stats, bandName: band.name })
+
+  return {
+    blob: new Blob([arrayBuffer], { type: 'image/tiff' }),
+    filename,
+    auxXml,
+    auxFilename: `${filename}.aux.xml`,
+  }
 }
 
 /** Trigger a browser download for a Blob. */
@@ -328,6 +146,13 @@ export function downloadBlob(blob: Blob, filename: string): void {
   document.body.appendChild(a)
   a.click()
   a.remove()
-  // Revoke after the click has been processed.
   window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+/** Download GeoTIFF + optional PAM aux.xml sidecar. */
+export function downloadGeoTiffWithAux(result: ExportGeoTiffResult): void {
+  downloadBlob(result.blob, result.filename)
+  if (result.auxXml && result.auxFilename) {
+    downloadBlob(new Blob([result.auxXml], { type: 'application/xml' }), result.auxFilename)
+  }
 }

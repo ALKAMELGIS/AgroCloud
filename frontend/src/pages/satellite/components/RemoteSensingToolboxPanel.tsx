@@ -67,6 +67,17 @@ export type RemoteSensingToolboxPanelProps = {
   exportGeoTiffBusy?: boolean
   exportGeoTiffLabel?: string | null
   exportGeoTiffDisabled?: boolean
+  /** UCSB CHIRPS precipitation controls (when PRECIP layer selected). */
+  chirpsMode?: boolean
+  chirpsAggregation?: 'daily' | 'monthly' | 'seasonal' | 'annual'
+  onChirpsAggregationChange?: (v: 'daily' | 'monthly' | 'seasonal' | 'annual') => void
+  onChirpsRun?: () => void
+  chirpsBusy?: boolean
+  chirpsStats?: Array<{ label: string; value: string }>
+  chirpsError?: string | null
+  onChirpsExportCsv?: () => void
+  onChirpsExportExcel?: () => void
+  onChirpsExportReport?: () => void
   onClose: () => void
 }
 
@@ -117,6 +128,16 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
     exportGeoTiffBusy = false,
     exportGeoTiffLabel = null,
     exportGeoTiffDisabled = false,
+    chirpsMode = false,
+    chirpsAggregation = 'daily',
+    onChirpsAggregationChange,
+    onChirpsRun,
+    chirpsBusy = false,
+    chirpsStats,
+    chirpsError,
+    onChirpsExportCsv,
+    onChirpsExportExcel,
+    onChirpsExportReport,
   } = props
 
   const providerMeta = remoteSensingProviderDef(provider)
@@ -253,6 +274,74 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
           </label>
         </div>
 
+        {chirpsMode ? (
+          <div className="si-rs-panel__stack si-rs-panel__stack--section">
+            <span className="si-rs-panel__label">CHIRPS rainfall</span>
+            <p className="si-rs-panel__meta si-rs-panel__meta--inline" role="note">
+              UCSB CHIRPS Daily · AOI rainfall (mm) · P · RAI · SPI · RTI · RDI · WAI
+            </p>
+            <label className="si-rs-panel__stack">
+              <span className="si-rs-panel__label">Aggregation</span>
+              <SiRsPanelSelect
+                value={chirpsAggregation}
+                onChange={v => onChirpsAggregationChange?.(v as 'daily' | 'monthly' | 'seasonal' | 'annual')}
+                options={[
+                  { id: 'daily', label: 'Daily' },
+                  { id: 'monthly', label: 'Monthly' },
+                  { id: 'seasonal', label: 'Seasonal' },
+                  { id: 'annual', label: 'Annual' },
+                ]}
+                aria-label="Rainfall aggregation"
+              />
+            </label>
+            <button
+              type="button"
+              className="si-rs-panel__cta"
+              onClick={onChirpsRun}
+              disabled={chirpsBusy || exportGeoTiffDisabled}
+            >
+              {chirpsBusy ? (
+                <i className="fa-solid fa-circle-notch fa-spin" aria-hidden />
+              ) : (
+                <i className="fa-solid fa-cloud-rain" aria-hidden />
+              )}
+              {chirpsBusy ? 'Loading CHIRPS…' : 'Load rainfall map'}
+            </button>
+            {chirpsStats?.length ? (
+              <dl className="si-rs-panel__meta" style={{ display: 'grid', gap: 4, margin: 0 }}>
+                {chirpsStats.map(s => (
+                  <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <dt>{s.label}</dt>
+                    <dd style={{ margin: 0, fontWeight: 600 }}>{s.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : null}
+            {chirpsError ? (
+              <p className="si-rs-panel__meta si-rs-panel__meta--warn" role="alert">
+                {chirpsError}
+              </p>
+            ) : null}
+            <div className="si-rs-panel__flat-grid si-rs-panel__flat-grid--2">
+              {onChirpsExportCsv ? (
+                <button type="button" className="si-rs-panel__cta si-rs-panel__cta--secondary" onClick={onChirpsExportCsv}>
+                  CSV
+                </button>
+              ) : null}
+              {onChirpsExportExcel ? (
+                <button type="button" className="si-rs-panel__cta si-rs-panel__cta--secondary" onClick={onChirpsExportExcel}>
+                  Excel
+                </button>
+              ) : null}
+            </div>
+            {onChirpsExportReport ? (
+              <button type="button" className="si-rs-panel__cta si-rs-panel__cta--secondary" onClick={onChirpsExportReport}>
+                Report (Word)
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
         <label className="si-rs-panel__stack">
           <span className="si-rs-panel__label">Map tools</span>
           <div className="si-rs-panel__toolgrid" role="toolbar" aria-label="Map tools">
@@ -291,7 +380,7 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
             className="si-rs-panel__cta si-rs-panel__cta--secondary"
             onClick={onExportGeoTiff}
             disabled={exportGeoTiffBusy || exportGeoTiffDisabled || fieldTimelineActive}
-            title="Export RGB + Float32 GeoTIFF for ArcGIS Pro / QGIS. Open *_rgb.tif in the map."
+            title="Export RGBA colour + Float32 GeoTIFF (NoData=−9999) for ArcGIS Pro / QGIS. Open *_rgb.tif first."
             aria-label="Export index GeoTIFF for GIS"
           >
             {exportGeoTiffBusy ? (

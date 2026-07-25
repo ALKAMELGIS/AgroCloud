@@ -199,6 +199,7 @@ export async function buildTimeSeriesReportPayload(
           periodAnchorDates,
           areaHa,
           interpretations,
+          timeAggregation,
           mapboxToken: input.mapboxToken,
           signal: input.signal,
           onProgress: onPhase(0),
@@ -293,6 +294,8 @@ export async function buildTimeSeriesReportPayload(
     displayLabels: input.displayLabels,
     series: input.layerSeries,
     layerIds: input.layerIds,
+    // Word uses native ChartML scatter — skip dark/PNG render during export.
+    includePng: false,
   })
 
   const cropRec = buildCropPlantingRecommendations({

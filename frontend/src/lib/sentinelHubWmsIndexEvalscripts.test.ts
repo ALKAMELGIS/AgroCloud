@@ -68,6 +68,8 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
     expect(inferWmsEvalProfile('SAVI')).toBe('savi')
     expect(inferWmsEvalProfile('ET')).toBe('et')
     expect(inferWmsEvalProfile('Evapotranspiration')).toBe('et')
+    expect(inferWmsEvalProfile('LST')).toBe('lst')
+    expect(inferWmsEvalProfile('Land Surface Temperature')).toBe('lst')
     expect(inferWmsEvalProfile('Moisture index')).toBe('ndmi')
     // NDSI is registered as an agro composite (soil/salinity family).
     expect(inferWmsEvalProfile('NDSI')).toBe('agro_composite')

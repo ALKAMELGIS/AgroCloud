@@ -15,18 +15,27 @@ export const DOCX_INK = '444444'
 export const DOCX_TABLE_FONT_SZ = 18
 export const DOCX_BODY_FONT_SZ = 20
 
+/** Default chart size in EMUs (~5.5" × 3.2"). */
 export const CHART_IMAGE_CX = 5029200
-export const CHART_IMAGE_CY = 2514600
-/** Compact 2×2 atlas — fits heading + 4 maps on one page without orphan gaps. */
-export const MAP_IMAGE_CX = 3886200
-export const MAP_IMAGE_CY = 2914650
-export const MAPS_PER_PAGE = 4
-export const MAPS_PER_ROW = 2
+export const CHART_IMAGE_CY = 2926080
+/** Taller chart for horizontal bars / pies with side legend (~5.5" × 4.0"). */
+export const CHART_IMAGE_CY_TALL = 3657600
+/** Dense 3×4 atlas — 12 map cards per page (matches enterprise sample layout). */
+export const MAP_IMAGE_CX = 2057400
+export const MAP_IMAGE_CY = 1543050
+export const MAPS_PER_PAGE = 12
+export const MAPS_PER_ROW = 3
+/** Change Detection T0/T1 pair — two larger side-by-side map cards. */
+export const PAIR_MAP_IMAGE_CX = 3108960
+export const PAIR_MAP_IMAGE_CY = 2331720
+/** Compact centered charts under Change Detection maps (fit title+maps+table+2 charts). */
+export const CHANGE_CHART_IMAGE_CX = 4572000
+export const CHANGE_CHART_IMAGE_CY = 2286000
 
 const C_NS = 'http://schemas.openxmlformats.org/drawingml/2006/chart'
 
-/** Tighter scientific margins (0.7"). */
-export const DOCX_SECT_PR = `<w:sectPr w:rsidR="003D6795"><w:headerReference w:type="default" r:id="rIdHdr"/><w:footerReference w:type="default" r:id="rIdFtr"/><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="860" w:right="860" w:bottom="860" w:left="860" w:header="560" w:footer="560" w:gutter="0"/><w:cols w:space="720"/><w:docGrid w:linePitch="320"/></w:sectPr>`
+/** Tight margins (0.45") so a full 3×4 atlas fills the page without large gaps. */
+export const DOCX_SECT_PR = `<w:sectPr w:rsidR="003D6795"><w:headerReference w:type="default" r:id="rIdHdr"/><w:footerReference w:type="default" r:id="rIdFtr"/><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="648" w:right="648" w:bottom="648" w:left="648" w:header="432" w:footer="432" w:gutter="0"/><w:cols w:space="720"/><w:docGrid w:linePitch="320"/></w:sectPr>`
 
 export function escXml(value: string): string {
   return value
@@ -144,17 +153,18 @@ export function docxCoverPage(input: {
 }
 
 /**
- * Table of Contents page (report page 2) with a Word TOC field.
- * Page numbers populate when Word opens the file (updateFields enabled).
+ * Table of Contents page (report page 2) — main headings only, with page numbers.
+ * Word refreshes page numbers on open (`updateFields` enabled in settings).
  */
 export function docxTableOfContentsPage(entries: string[]): string {
-  const tocInstr = ' TOC \\o "1-2" \\h \\z \\u '
+  // Outline levels 1–1 only (Heading 1). Sub-sections stay out of the TOC.
+  const tocInstr = ' TOC \\o "1-1" \\h \\z \\u '
   const placeholder =
     entries.length > 0
       ? entries
           .map(
-            (title, i) =>
-              `<w:p><w:pPr><w:tabs><w:tab w:val="right" w:leader="dot" w:pos="9360"/></w:tabs><w:spacing w:after="60"/></w:pPr>${run(`${i + 1}.  ${title}`, { color: DOCX_INK, size: 20 })}${run('\t', { size: 20 })}${run('…', { color: DOCX_MUTED, size: 20 })}</w:p>`,
+            title =>
+              `<w:p><w:pPr><w:tabs><w:tab w:val="right" w:leader="dot" w:pos="9360"/></w:tabs><w:spacing w:after="80"/></w:pPr>${run(title, { bold: true, color: DOCX_INK, size: 20 })}${run('\t', { size: 20 })}${run('—', { color: DOCX_MUTED, size: 20 })}</w:p>`,
           )
           .join('')
       : `<w:p>${run('Updating table of contents…', { italic: true, color: DOCX_MUTED, size: 18 })}</w:p>`
@@ -163,7 +173,7 @@ export function docxTableOfContentsPage(entries: string[]): string {
     `<w:p><w:pPr><w:spacing w:after="120"/></w:pPr>${run('Table of Contents', { bold: true, color: DOCX_BRAND, size: 32 })}</w:p>`,
     paragraph(
       run(
-        'Headings and page numbers follow professional report style. Page numbers refresh automatically when this document is opened in Microsoft Word.',
+        'Main section titles only. Page numbers appear automatically when this document is opened in Microsoft Word.',
         { italic: true, color: DOCX_MUTED, size: 17 },
       ),
       160,
@@ -233,28 +243,39 @@ export function docxTable(
 }
 
 export function docxInlineImage(rId: string, cx: number, cy: number): string {
-  return `<w:p><w:pPr><w:spacing w:after="20" w:before="0"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="1" name="Picture"/><wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="${A_NS}" noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic xmlns:a="${A_NS}"><a:graphicData uri="${PIC_NS}"><pic:pic xmlns:pic="${PIC_NS}"><pic:nvPicPr><pic:cNvPr id="0" name="Image"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rId}" xmlns:r="${R_NS}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`
+  return `<w:p><w:pPr><w:spacing w:after="0" w:before="0"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="1" name="Picture"/><wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="${A_NS}" noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic xmlns:a="${A_NS}"><a:graphicData uri="${PIC_NS}"><pic:pic xmlns:pic="${PIC_NS}"><pic:nvPicPr><pic:cNvPr id="0" name="Image"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rId}" xmlns:r="${R_NS}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`
 }
 
+/** Single-line caption under each map card (date · index · value). */
 export function docxImageCaption(lines: string[]): string {
-  const content = lines.map(line => run(line, { color: DOCX_MUTED, size: 15 })).join('')
-  return `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="20" w:before="0"/></w:pPr>${content}</w:p>`
+  const text = lines.map(l => String(l || '').trim()).filter(Boolean).join(' ')
+  return `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="0" w:before="0" w:line="200" w:lineRule="auto"/></w:pPr>${run(text, { color: DOCX_INK, size: 14 })}</w:p>`
 }
 
 function docxMapTableRow(images: Array<{ rId: string; date: string; label: string }>): string {
-  const cellW = Math.floor(10080 / Math.max(images.length, 1))
+  const cellW = Math.floor(10080 / MAPS_PER_ROW)
   const cells = images
     .map(img => {
-      const cellContent = `${docxInlineImage(img.rId, MAP_IMAGE_CX, MAP_IMAGE_CY)}${docxImageCaption([img.date, img.label])}`
-      return `<w:tc><w:tcPr><w:tcW w:w="${cellW}" w:type="dxa"/><w:tcMar><w:top w:w="20" w:type="dxa"/><w:left w:w="20" w:type="dxa"/><w:bottom w:w="20" w:type="dxa"/><w:right w:w="20" w:type="dxa"/></w:tcMar></w:tcPr>${cellContent}</w:tc>`
+      // One caption line like the reference atlas: "2022-03-24 NDVI 0.4085"
+      const caption = [img.date, img.label].filter(Boolean).join(' ')
+      const cellContent = `${docxInlineImage(img.rId, MAP_IMAGE_CX, MAP_IMAGE_CY)}${docxImageCaption([caption])}`
+      return `<w:tc><w:tcPr><w:tcW w:w="${cellW}" w:type="dxa"/><w:vAlign w:val="top"/><w:tcMar><w:top w:w="40" w:type="dxa"/><w:left w:w="40" w:type="dxa"/><w:bottom w:w="40" w:type="dxa"/><w:right w:w="40" w:type="dxa"/></w:tcMar></w:tcPr>${cellContent}</w:tc>`
     })
     .join('')
-  return `<w:tr><w:trPr><w:cantSplit/></w:trPr>${cells}</w:tr>`
+  // Pad incomplete last rows so the 3-column grid stays aligned like the sample page.
+  const pad = MAPS_PER_ROW - images.length
+  const padCells =
+    pad > 0
+      ? Array.from({ length: pad }, () =>
+          `<w:tc><w:tcPr><w:tcW w:w="${cellW}" w:type="dxa"/></w:tcPr><w:p><w:pPr><w:spacing w:after="0"/></w:pPr></w:p></w:tc>`,
+        ).join('')
+      : ''
+  return `<w:tr><w:trPr><w:cantSplit/></w:trPr>${cells}${padCells}</w:tr>`
 }
 
 /**
- * 2×2 grid (4 maps per page). Page breaks only between full map pages —
- * never after a lone section title.
+ * 3×4 grid (12 map cards per page) — uniform atlas layout matching the sample report.
+ * Page breaks only between full atlas pages.
  */
 export function docxMapGrid(images: Array<{ rId: string; date: string; label: string }>): string {
   if (!images.length) return ''
@@ -267,15 +288,42 @@ export function docxMapGrid(images: Array<{ rId: string; date: string; label: st
       rows.push(docxMapTableRow(page.slice(r, r + MAPS_PER_ROW)))
     }
     chunks.push(
-      `<w:tbl><w:tblPr><w:tblW w:w="10080" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblBorders><w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/><w:insideH w:val="none"/><w:insideV w:val="none"/></w:tblBorders></w:tblPr>${rows.join('')}</w:tbl>`,
+      `<w:tbl><w:tblPr><w:tblW w:w="10080" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:tblBorders><w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/><w:insideH w:val="none"/><w:insideV w:val="none"/></w:tblBorders></w:tblPr><w:tblGrid>${Array.from({ length: MAPS_PER_ROW }, () => `<w:gridCol w:w="${Math.floor(10080 / MAPS_PER_ROW)}"/>`).join('')}</w:tblGrid>${rows.join('')}</w:tbl>`,
     )
   }
   return chunks.join('')
 }
 
+/**
+ * Change Detection pair layout: exactly two side-by-side map cards (T0 | T1),
+ * matching the sample page (larger maps, equal columns, no empty third cell).
+ */
+export function docxChangePairMaps(
+  images: Array<{ rId: string; date: string; label: string }>,
+): string {
+  if (!images.length) return ''
+  const pair = images.slice(0, 2)
+  const cols = Math.max(pair.length, 1)
+  const cellW = Math.floor(10080 / cols)
+  const cells = pair
+    .map(img => {
+      const caption = [img.date, img.label].filter(Boolean).join(' ')
+      const cellContent = `${docxInlineImage(img.rId, PAIR_MAP_IMAGE_CX, PAIR_MAP_IMAGE_CY)}${docxImageCaption([caption])}`
+      return `<w:tc><w:tcPr><w:tcW w:w="${cellW}" w:type="dxa"/><w:vAlign w:val="top"/><w:tcMar><w:top w:w="60" w:type="dxa"/><w:left w:w="60" w:type="dxa"/><w:bottom w:w="60" w:type="dxa"/><w:right w:w="60" w:type="dxa"/></w:tcMar></w:tcPr>${cellContent}</w:tc>`
+    })
+    .join('')
+  return `<w:tbl><w:tblPr><w:tblW w:w="10080" w:type="dxa"/><w:tblLayout w:type="fixed"/><w:jc w:val="center"/><w:tblBorders><w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/><w:insideH w:val="none"/><w:insideV w:val="none"/></w:tblBorders></w:tblPr><w:tblGrid>${Array.from({ length: cols }, () => `<w:gridCol w:w="${cellW}"/>`).join('')}</w:tblGrid><w:tr><w:trPr><w:cantSplit/></w:trPr>${cells}</w:tr></w:tbl>`
+}
+
 /** Native Office chart drawing (editable in Word like an Excel chart). */
-export function docxInlineChart(rId: string, cx = CHART_IMAGE_CX, cy = CHART_IMAGE_CY): string {
-  return `<w:p><w:pPr><w:spacing w:after="60"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="1" name="Chart"/><a:graphic xmlns:a="${A_NS}"><a:graphicData uri="${C_NS}"><c:chart xmlns:c="${C_NS}" xmlns:r="${R_NS}" r:id="${rId}"/></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`
+export function docxInlineChart(
+  rId: string,
+  cx = CHART_IMAGE_CX,
+  cy = CHART_IMAGE_CY,
+  opts?: { center?: boolean },
+): string {
+  const jc = opts?.center ? '<w:jc w:val="center"/>' : ''
+  return `<w:p><w:pPr>${jc}<w:spacing w:after="40" w:before="0"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="1" name="Chart"/><a:graphic xmlns:a="${A_NS}"><a:graphicData uri="${C_NS}"><c:chart xmlns:c="${C_NS}" xmlns:r="${R_NS}" r:id="${rId}"/></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`
 }
 
 export function docxBulletList(items: string[]): string {

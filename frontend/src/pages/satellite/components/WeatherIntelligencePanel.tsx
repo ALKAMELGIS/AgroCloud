@@ -91,7 +91,15 @@ function clampGeomToViewport(g: PanelGeom, minW: number, minH: number): PanelGeo
 }
 
 const HISTORY_METRICS: WeatherHistoryMetric[] = ['temp', 'rain', 'humid', 'wind', 'press'];
-const HISTORY_RANGES = [7, 14, 30] as const;
+const HISTORY_RANGE_OPTIONS = [
+  { days: 7, label: '7d', mode: 'forecast' as const },
+  { days: 14, label: '14d', mode: 'forecast' as const },
+  { days: 30, label: '30d', mode: 'forecast' as const },
+  { days: 365, label: '1y', mode: 'archive' as const },
+  { days: 1825, label: '5y', mode: 'archive' as const },
+] as const
+
+type HistoryRangeDays = (typeof HISTORY_RANGE_OPTIONS)[number]['days']
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -349,7 +357,7 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
   const [temporalLoading, setTemporalLoading] = useState(false);
   const [historyData, setHistoryData] = useState<OpenMeteoTimeHistory | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyRangeDays, setHistoryRangeDays] = useState<(typeof HISTORY_RANGES)[number]>(7);
+  const [historyRangeDays, setHistoryRangeDays] = useState<HistoryRangeDays>(7);
   const [historyMetric, setHistoryMetric] = useState<WeatherHistoryMetric>('temp');
   const [historyDateStart, setHistoryDateStart] = useState('');
   const [historyDateEnd, setHistoryDateEnd] = useState('');
@@ -375,10 +383,20 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
     }
   }, []);
 
-  const loadHistory = useCallback(async (lat: number, lng: number, days: (typeof HISTORY_RANGES)[number]) => {
+  const loadHistory = useCallback(async (lat: number, lng: number, days: HistoryRangeDays) => {
     setHistoryLoading(true);
     try {
-      const data = await fetchOpenMeteoTimeHistory(lat, lng, days);
+      const opt = HISTORY_RANGE_OPTIONS.find(o => o.days === days) ?? HISTORY_RANGE_OPTIONS[0]
+      let data: OpenMeteoTimeHistory
+      if (opt.mode === 'archive') {
+        const end = new Date()
+        const start = new Date(end.getTime() - days * 86_400_000)
+        const startIso = start.toISOString().slice(0, 10)
+        const endIso = end.toISOString().slice(0, 10)
+        data = await fetchOpenMeteoHistoryRange(lat, lng, startIso, endIso)
+      } else {
+        data = await fetchOpenMeteoTimeHistory(lat, lng, days as 7 | 14 | 30)
+      }
       setHistoryData(data);
       setHistoryDateStart(data.startDate);
       setHistoryDateEnd(data.endDate);
@@ -732,14 +750,15 @@ export const WeatherIntelligencePanel: React.FC<WeatherIntelligencePanelProps> =
             <>
               <div className="si-wx-history__toolbar">
                 <div className="si-wx-history__ranges">
-                  {HISTORY_RANGES.map(d => (
+                  {HISTORY_RANGE_OPTIONS.map(opt => (
                     <button
-                      key={d}
+                      key={opt.days}
                       type="button"
-                      className={`si-wx-history__range-btn${historyRangeDays === d ? ' active' : ''}`}
-                      onClick={() => setHistoryRangeDays(d)}
+                      className={`si-wx-history__range-btn${historyRangeDays === opt.days ? ' active' : ''}`}
+                      onClick={() => setHistoryRangeDays(opt.days)}
+                      title={opt.mode === 'archive' ? `Archive ERA5 · last ${opt.label}` : `Last ${opt.label}`}
                     >
-                      {d}d
+                      {opt.label}
                     </button>
                   ))}
                 </div>

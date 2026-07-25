@@ -9,7 +9,7 @@
  *   • Slope                  — gradient raster (Horn's method)
  *   • Flow accumulation      — contributing-area raster (D8)
  *   • Stream network         — vector hydrography (D8 + accumulation threshold)
- *   • Watershed delineation  — basin contributing to the grid outlet (D8 routing)
+ *   • Watershed delineation  — primary basins by terminal outlet (D8, colour-coded)
  *   • Computational mesh     — surface-aware triangular mesh ready for modelling
  *
  * Algorithms: Priority-Flood depression filling with an ε-gradient (Barnes et al.,
@@ -20,6 +20,16 @@
 
 import type { DemGrid, LngLatBBox } from './terrainTiles'
 import type { GeoBand } from './geoTiffExport'
+import {
+  buildEsriD8FlowDirectionLegend,
+  ESRI_D8_DIST,
+  ESRI_D8_DX,
+  ESRI_D8_DY,
+  ESRI_D8_MAP_ALPHA,
+  ESRI_D8_NODATA_RGB,
+  esriD8CodeFromDirIndex,
+  esriD8RgbFromCode,
+} from './hydroFlowDirectionStyle'
 
 // ── Result contract ───────────────────────────────────────────────────────────
 
@@ -27,6 +37,7 @@ export type HydroStepId =
   | 'dem'
   | 'hillshade'
   | 'slope'
+  | 'flow-direction'
   | 'flow-accum'
   | 'streams'
   | 'contours'
@@ -312,7 +323,7 @@ function bandOf(dem: DemGrid, values: Float32Array, name: string): GeoBand {
     zoom: dem.zoom,
     originWorldPxX: dem.originWorldPxX,
     originWorldPxY: dem.originWorldPxY,
-    nodata: NaN,
+    nodata: -9999,
     name,
   }
 }
@@ -545,6 +556,67 @@ export function computeFlowAccumulation(ctx: HydroComputeContext): HydroStepResu
   }
 }
 
+/** ESRI D8 flow-direction raster — colour wheel by cardinal direction (report + map). */
+export function computeFlowDirection(ctx: HydroComputeContext): HydroStepResult {
+  const { dem, aoiMask } = ctx
+  const { width: w, height: h } = dem
+  const { filled } = getFlowModel(dem)
+  const codes = new Float32Array(w * h)
+  let assigned = 0
+  let flat = 0
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      const i = y * w + x
+      if (aoiMask && !aoiMask[i]) {
+        codes[i] = 0
+        continue
+      }
+      const zi = filled[i]!
+      let bestK = -1
+      let bestSlope = 0
+      for (let k = 0; k < 8; k += 1) {
+        const nx = x + ESRI_D8_DX[k]!
+        const ny = y + ESRI_D8_DY[k]!
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+        const slope = (zi - filled[ny * w + nx]!) / ESRI_D8_DIST[k]!
+        if (slope > bestSlope) {
+          bestSlope = slope
+          bestK = k
+        }
+      }
+      if (bestK < 0) {
+        codes[i] = 0
+        flat += 1
+      } else {
+        codes[i] = esriD8CodeFromDirIndex(bestK)
+        assigned += 1
+      }
+    }
+  }
+  const dataUrl = rasterToDataUrl(dem, aoiMask, i => {
+    const code = codes[i]!
+    if (!(code > 0)) {
+      const [r, g, b] = ESRI_D8_NODATA_RGB
+      return [r, g, b, Math.round(ESRI_D8_MAP_ALPHA * 0.55)]
+    }
+    const [r, g, b] = esriD8RgbFromCode(code)
+    return [r, g, b, ESRI_D8_MAP_ALPHA]
+  })
+  return {
+    kind: 'raster',
+    dataUrl,
+    coordinates: dem.cornerCoords,
+    opacity: 0.88,
+    band: bandOf(dem, codes, 'Flow direction (ESRI D8)'),
+    legend: buildEsriD8FlowDirectionLegend(),
+    stats: [
+      { label: 'Directed cells', value: assigned.toLocaleString() },
+      { label: 'Flat / sink', value: flat.toLocaleString() },
+      { label: 'Coding', value: 'ESRI D8 (1…128)' },
+    ],
+  }
+}
+
 export function computeStreams(ctx: HydroComputeContext): HydroStepResult {
   const { dem, aoiMask, sensitivity } = ctx
   const { width: w, height: h } = dem
@@ -655,78 +727,18 @@ export function computeStreams(ctx: HydroComputeContext): HydroStepResult {
 }
 
 export function computeWatershed(ctx: HydroComputeContext): HydroStepResult {
-  const { dem, aoiMask } = ctx
-  const { width: w, height: h } = dem
-  const { accum, down } = getFlowModel(dem)
-  const n = w * h
-
-  // Outlet = highest-accumulation cell inside the AOI (the basin's pour point).
-  let pour = -1
-  let pourA = -1
-  for (let i = 0; i < n; i += 1) {
-    if (aoiMask && !aoiMask[i]) continue
-    if (accum[i]! > pourA) {
-      pourA = accum[i]!
-      pour = i
-    }
-  }
-  if (pour < 0) {
-    return {
-      kind: 'raster',
-      dataUrl: rasterToDataUrl(dem, aoiMask, () => [0, 0, 0, 0]),
-      coordinates: dem.cornerCoords,
-      opacity: 0.5,
-      stats: [{ label: 'Outlet', value: 'not found' }],
-    }
-  }
-
-  // member: -1 unknown, 1 drains to outlet, 0 leaves AOI/outlet basin.
-  const member = new Int8Array(n).fill(-1)
-  member[pour] = 1
-  const path: number[] = []
-  for (let s = 0; s < n; s += 1) {
-    let c = s
-    path.length = 0
-    let verdict = -1
-    while (c >= 0 && member[c] === -1) {
-      path.push(c)
-      c = down[c]!
-    }
-    verdict = c >= 0 ? member[c]! : 0
-    for (const p of path) member[p] = verdict as 0 | 1
-  }
-
-  let basinCells = 0
-  for (let i = 0; i < n; i += 1) {
-    if (member[i] === 1 && (!aoiMask || aoiMask[i])) basinCells += 1
-  }
-  const cellArea = dem.metersPerPixel * dem.metersPerPixel
-  const areaKm2 = (basinCells * cellArea) / 1e6
-  const [pourLng, pourLat] = dem.pxToLngLat((pour % w) + 0.5, ((pour / w) | 0) + 0.5)
-
-  const dataUrl = rasterToDataUrl(dem, aoiMask, i => {
-    if (member[i] !== 1) return [0, 0, 0, 0]
-    return [37, 99, 235, 185]
+  // Multi-basin watershed delineation — every primary basin gets a coordinated colour
+  // on the map, in the interactive legend, and in the Hydro report atlas.
+  return buildPrimaryBasinRaster(ctx, {
+    bandName: 'Hydro Watershed basins (id)',
+    legendTitle: 'Watershed delineation',
+    labelPrefix: 'Watershed',
+    noteSuffix: 'primary basins',
+    includeMinorGrey: true,
+    alphaPrimary: 200,
+    alphaMinor: 55,
+    drawBoundaries: true,
   })
-  const basin = new Float32Array(w * h)
-  for (let i = 0; i < basin.length; i += 1) basin[i] = member[i] === 1 ? 1 : 0
-  return {
-    kind: 'raster',
-    dataUrl,
-    coordinates: dem.cornerCoords,
-    opacity: 1,
-    band: bandOf(dem, basin, 'Hydro Watershed (basin mask)'),
-    legend: {
-      title: 'Watershed',
-      kind: 'classes',
-      swatches: [{ color: 'rgba(37, 99, 235, 0.65)', label: 'Basin (drains to outlet)' }],
-      note: `${areaKm2.toFixed(2)} km²`,
-    },
-    stats: [
-      { label: 'Basin area', value: `${areaKm2.toFixed(2)} km²` },
-      { label: 'Outlet', value: `${pourLat.toFixed(4)}, ${pourLng.toFixed(4)}` },
-    ],
-  }
 }
 
 export function computeMesh(ctx: HydroComputeContext): HydroStepResult {
@@ -803,6 +815,15 @@ export function computeMesh(ctx: HydroComputeContext): HydroStepResult {
 
 // ── Contours (marching squares iso-elevation lines) ─────────────────────────────
 
+/** Blue (low) → red (high) contour stroke ramp — shared by map paint + report legend. */
+export const HYDRO_CONTOUR_ELEV_COLORS = [
+  '#1d4ed8', // low
+  '#0ea5e9', // mid-low
+  '#eab308', // mid
+  '#f97316', // mid-high
+  '#b91c1c', // high
+] as const
+
 /** "Nice" contour interval (1/2/5 × 10ⁿ) for an elevation range / target count. */
 function niceInterval(range: number, target = 18): number {
   if (!(range > 0)) return 10
@@ -811,6 +832,96 @@ function niceInterval(range: number, target = 18): number {
   const norm = raw / mag
   const step = norm <= 1.5 ? 1 : norm <= 3 ? 2 : norm <= 7 ? 5 : 10
   return Math.max(1, step * mag)
+}
+
+export function contourElevNormalized(elev: number, minElev: number, maxElev: number): number {
+  const span = maxElev - minElev
+  if (!(span > 0) || !Number.isFinite(elev)) return 0.5
+  return Math.min(1, Math.max(0, (elev - minElev) / span))
+}
+
+/** Continuous stroke colour for a contour elevation (low=blue … high=red). */
+export function contourElevationStrokeColor(
+  elev: number,
+  minElev: number,
+  maxElev: number,
+): string {
+  const t = contourElevNormalized(elev, minElev, maxElev)
+  const stops = HYDRO_CONTOUR_ELEV_COLORS
+  const scaled = t * (stops.length - 1)
+  const i0 = Math.floor(scaled)
+  const i1 = Math.min(stops.length - 1, i0 + 1)
+  if (i0 === i1) return stops[i0]!
+  const f = scaled - i0
+  const parse = (hex: string): [number, number, number] => {
+    const h = hex.replace('#', '')
+    return [
+      Number.parseInt(h.slice(0, 2), 16),
+      Number.parseInt(h.slice(2, 4), 16),
+      Number.parseInt(h.slice(4, 6), 16),
+    ]
+  }
+  const [r0, g0, b0] = parse(stops[i0]!)
+  const [r1, g1, b1] = parse(stops[i1]!)
+  const r = Math.round(r0 + (r1 - r0) * f)
+  const g = Math.round(g0 + (g1 - g0) * f)
+  const b = Math.round(b0 + (b1 - b0) * f)
+  return `#${[r, g, b].map(c => c.toString(16).padStart(2, '0')).join('')}`
+}
+
+/** Equal-interval elevation class edges (metres) for legend + Mapbox stops. */
+export function contourElevationClassEdges(minElev: number, maxElev: number): number[] {
+  const lo = Math.floor(minElev)
+  const hi = Math.ceil(maxElev)
+  const span = Math.max(hi - lo, 1)
+  // 6 edges → 5 elevation Ranges matching HYDRO_CONTOUR_ELEV_COLORS.
+  const edges = [0, 0.2, 0.4, 0.6, 0.8, 1].map(t => Math.round(lo + t * span))
+  for (let i = 1; i < edges.length; i += 1) {
+    if (edges[i]! <= edges[i - 1]!) edges[i] = edges[i - 1]! + 1
+  }
+  edges[0] = lo
+  edges[edges.length - 1] = Math.max(edges[edges.length - 1]!, hi)
+  return edges
+}
+
+/** Professional contour legend: elevation Ranges (High=red … Low=blue) + index/interval. */
+export function buildContourElevationLegend(
+  eMin: number,
+  eMax: number,
+  interval: number,
+): HydroLegend {
+  const edges = contourElevationClassEdges(eMin, eMax)
+  const fmt = (a: number, b: number) => `${a}–${b} m`
+  const indexEvery = Math.max(1, Math.round(interval * 5))
+  return {
+    title: 'Elevation Contours',
+    kind: 'classes',
+    swatches: [
+      { color: HYDRO_CONTOUR_ELEV_COLORS[4]!, label: `High elevation ${fmt(edges[4]!, edges[5]!)}` },
+      { color: HYDRO_CONTOUR_ELEV_COLORS[3]!, label: `Upper mid ${fmt(edges[3]!, edges[4]!)}` },
+      { color: HYDRO_CONTOUR_ELEV_COLORS[2]!, label: `Mid elevation ${fmt(edges[2]!, edges[3]!)}` },
+      { color: HYDRO_CONTOUR_ELEV_COLORS[1]!, label: `Lower mid ${fmt(edges[1]!, edges[2]!)}` },
+      { color: HYDRO_CONTOUR_ELEV_COLORS[0]!, label: `Low elevation ${fmt(edges[0]!, edges[1]!)}` },
+      { color: '#0f172a', label: `Index contour (every ${indexEvery} m)` },
+      { color: '#94a3b8', label: `Contour interval ${interval} m` },
+    ],
+    note: `Elevation range ${Math.round(eMin)}–${Math.round(eMax)} m · warmer/redder = higher ground`,
+  }
+}
+
+/** Mapbox GL interpolate expression stops for elev → colour (low blue → high red). */
+export function contourElevationMapboxColorExpression(
+  minElev: number,
+  maxElev: number,
+): unknown[] {
+  const edges = contourElevationClassEdges(minElev, maxElev)
+  const expr: unknown[] = ['interpolate', ['linear'], ['get', 'elev']]
+  for (let i = 0; i < HYDRO_CONTOUR_ELEV_COLORS.length; i += 1) {
+    // Colour stop at the start of each Range (high end uses last edge).
+    expr.push(edges[i]!, HYDRO_CONTOUR_ELEV_COLORS[i]!)
+  }
+  expr.push(edges[edges.length - 1]!, HYDRO_CONTOUR_ELEV_COLORS[HYDRO_CONTOUR_ELEV_COLORS.length - 1]!)
+  return expr
 }
 
 export function computeContours(ctx: HydroComputeContext): HydroStepResult {
@@ -886,17 +997,7 @@ export function computeContours(ctx: HydroComputeContext): HydroStepResult {
     kind: 'vector',
     render: 'contours',
     data: { type: 'FeatureCollection', features },
-    legend: {
-      title: 'Elevation contours',
-      kind: 'classes',
-      swatches: [
-        { color: '#991b1b', label: 'High elevation' },
-        { color: '#1d4ed8', label: 'Low elevation' },
-        { color: '#64748b', label: `Interval line (${interval} m)` },
-        { color: '#0f172a', label: `Index line (every ${interval * 5} m)` },
-      ],
-      note: `${Math.round(eMin)}–${Math.round(eMax)} m`,
-    },
+    legend: buildContourElevationLegend(eMin, eMax, interval),
     stats: [
       { label: 'Contour interval', value: `${interval} m` },
       { label: 'Levels', value: String(levels.length) },
@@ -906,8 +1007,9 @@ export function computeContours(ctx: HydroComputeContext): HydroStepResult {
   }
 }
 
-// ── Basins (multi-outlet drainage sub-basins) ───────────────────────────────────
+// ── Primary basins / watershed delineation (shared multi-outlet colouring) ─────
 
+/** Coordinated qualitative palette — same colours on map, legend, and report. */
 const BASIN_PALETTE: Array<[number, number, number]> = [
   [31, 119, 180],
   [255, 127, 14],
@@ -923,15 +1025,35 @@ const BASIN_PALETTE: Array<[number, number, number]> = [
   [197, 176, 213],
 ]
 
-export function computeBasins(ctx: HydroComputeContext): HydroStepResult {
+type PrimaryBasinRasterOptions = {
+  bandName: string
+  legendTitle: string
+  labelPrefix: string
+  noteSuffix: string
+  includeMinorGrey: boolean
+  alphaPrimary: number
+  alphaMinor: number
+  /** Darken shared edges between primary basins for clearer separation on the map. */
+  drawBoundaries?: boolean
+  opacity?: number
+}
+
+/**
+ * Delineate the N largest D8 terminal basins inside the AOI and paint each with a
+ * distinct coordinated colour (legend labels include area in km²).
+ */
+function buildPrimaryBasinRaster(
+  ctx: HydroComputeContext,
+  options: PrimaryBasinRasterOptions,
+): HydroStepResult {
   const { dem, aoiMask } = ctx
-  const { width: w, height: h } = dem
+  const w = dem.width
+  const h = dem.height
   const { down } = getFlowModel(dem)
   const n = w * h
   const wanted = Math.max(2, Math.min(12, Math.round(ctx.basinCount ?? 6)))
 
-  // Terminal outlet per cell (follow D8 to a grid-edge exit / sink), with path caching.
-  const terminal = new Int32Array(n).fill(-2) // -2 unknown
+  const terminal = new Int32Array(n).fill(-2)
   const path: number[] = []
   for (let s = 0; s < n; s += 1) {
     let c = s
@@ -940,7 +1062,7 @@ export function computeBasins(ctx: HydroComputeContext): HydroStepResult {
       path.push(c)
       const d = down[c]!
       if (d < 0) {
-        terminal[c] = c // c is its own outlet (drains off-grid)
+        terminal[c] = c
         break
       }
       c = d
@@ -949,7 +1071,6 @@ export function computeBasins(ctx: HydroComputeContext): HydroStepResult {
     for (const p of path) terminal[p] = end
   }
 
-  // Size each basin (in-AOI cells only) and rank the largest.
   const sizes = new Map<number, number>()
   for (let i = 0; i < n; i += 1) {
     if (aoiMask && !aoiMask[i]) continue
@@ -962,51 +1083,101 @@ export function computeBasins(ctx: HydroComputeContext): HydroStepResult {
   const rankByOutlet = new Map<number, number>()
   topOutlets.forEach(([outlet], idx) => rankByOutlet.set(outlet, idx))
 
-  const cellArea = dem.metersPerPixel * dem.metersPerPixel
-  const basinId = new Float32Array(n) // 0 = none/minor
-  const dataUrl = rasterToDataUrl(dem, aoiMask, i => {
-    const t = terminal[i]!
-    const rank = rankByOutlet.get(t)
-    if (rank === undefined) {
+  const basinId = new Float32Array(n)
+  for (let i = 0; i < n; i += 1) {
+    if (aoiMask && !aoiMask[i]) {
       basinId[i] = 0
-      return [120, 120, 120, 70] // minor basins → faint grey
+      continue
     }
-    basinId[i] = rank + 1
+    const rank = rankByOutlet.get(terminal[i]!)
+    basinId[i] = rank === undefined ? 0 : rank + 1
+  }
+
+  const cellArea = dem.metersPerPixel * dem.metersPerPixel
+  const drawBoundaries = !!options.drawBoundaries
+  const dataUrl = rasterToDataUrl(dem, aoiMask, i => {
+    const id = basinId[i]!
+    if (id <= 0) {
+      if (!options.includeMinorGrey) return [0, 0, 0, 0]
+      return [120, 120, 120, options.alphaMinor]
+    }
+    const rank = (id - 1) | 0
     const [r, g, b] = BASIN_PALETTE[rank % BASIN_PALETTE.length]!
-    return [r, g, b, 180]
+    if (drawBoundaries) {
+      const x = i % w
+      const y = (i / w) | 0
+      let edge = false
+      for (let k = 0; k < 4; k += 1) {
+        const nx = x + (k === 0 ? 1 : k === 1 ? -1 : 0)
+        const ny = y + (k === 2 ? 1 : k === 3 ? -1 : 0)
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
+        const nid = basinId[ny * w + nx]!
+        if (nid > 0 && nid !== id) {
+          edge = true
+          break
+        }
+      }
+      if (edge) {
+        return [Math.round(r * 0.28), Math.round(g * 0.28), Math.round(b * 0.28), 235]
+      }
+    }
+    return [r, g, b, options.alphaPrimary]
   })
 
   const largestKm2 = topOutlets.length ? (topOutlets[0]![1] * cellArea) / 1e6 : 0
+  const totalPrimaryKm2 = topOutlets.reduce((s, [, size]) => s + (size * cellArea) / 1e6, 0)
   const swatches: HydroLegendSwatch[] = topOutlets.map(([, size], idx) => ({
     color: rgbCss(BASIN_PALETTE[idx % BASIN_PALETTE.length]!),
-    label: `Basin ${idx + 1} · ${((size * cellArea) / 1e6).toFixed(2)} km²`,
+    label: `${options.labelPrefix} ${idx + 1} · ${((size * cellArea) / 1e6).toFixed(2)} km²`,
   }))
+  if (options.includeMinorGrey && ranked.length > topOutlets.length) {
+    swatches.push({
+      color: 'rgb(120,120,120)',
+      label: `Other / minor basins (${ranked.length - topOutlets.length})`,
+    })
+  }
 
   return {
     kind: 'raster',
     dataUrl,
     coordinates: dem.cornerCoords,
-    opacity: 0.8,
-    band: bandOf(dem, basinId, 'Drainage basins (id)'),
+    opacity: options.opacity ?? 0.92,
+    band: bandOf(dem, basinId, options.bandName),
     legend: {
-      title: 'Drainage basins',
+      title: options.legendTitle,
       kind: 'classes',
       swatches,
-      note: `${topOutlets.length} largest basins`,
+      note: `${topOutlets.length} ${options.noteSuffix} · ${totalPrimaryKm2.toFixed(2)} km² primary`,
     },
     stats: [
       { label: 'Basins (total)', value: sizes.size.toLocaleString() },
-      { label: 'Delineated', value: String(topOutlets.length) },
+      { label: 'Primary basins', value: String(topOutlets.length) },
       { label: 'Largest basin', value: `${largestKm2.toFixed(2)} km²` },
+      { label: 'Primary area', value: `${totalPrimaryKm2.toFixed(2)} km²` },
       { label: 'Resolution', value: `${dem.metersPerPixel.toFixed(0)} m/px` },
     ],
   }
+}
+
+export function computeBasins(ctx: HydroComputeContext): HydroStepResult {
+  return buildPrimaryBasinRaster(ctx, {
+    bandName: 'Drainage basins (id)',
+    legendTitle: 'Drainage basins',
+    labelPrefix: 'Drainage Basin',
+    noteSuffix: 'primary drainage basins',
+    includeMinorGrey: true,
+    alphaPrimary: 200,
+    alphaMinor: 55,
+    drawBoundaries: true,
+    opacity: 0.95,
+  })
 }
 
 export const HYDRO_COMPUTE: Record<HydroStepId, (ctx: HydroComputeContext) => HydroStepResult> = {
   dem: computeDem,
   hillshade: computeHillshade,
   slope: computeSlope,
+  'flow-direction': computeFlowDirection,
   'flow-accum': computeFlowAccumulation,
   streams: computeStreams,
   contours: computeContours,
@@ -1081,15 +1252,15 @@ export function buildAoiMask(
 //   ❌ very steep slopes (penalised)
 // Outputs a RdYlGn suitability heatmap raster + the top-N spaced drilling points.
 
-/** Diverging RdYlGn ramp, low→high suitability. */
+/** High-contrast RdYlGn ramp — vivid on satellite basemaps (low→high suitability). */
 const WELLSITE_RAMP: Array<[number, number, number]> = [
-  [165, 0, 38],
-  [215, 48, 39],
-  [253, 174, 97],
-  [254, 224, 139],
-  [166, 217, 106],
-  [102, 189, 99],
-  [26, 152, 80],
+  [180, 0, 0], // deep red — unsuitable
+  [255, 40, 0], // vivid red
+  [255, 140, 0], // strong orange
+  [255, 220, 0], // bright yellow
+  [140, 220, 20], // lime
+  [0, 200, 60], // vivid green
+  [0, 140, 40], // deep green — best
 ]
 
 /**
@@ -1223,8 +1394,10 @@ export function computeWellSiteSuitability(
   const dataUrl = rasterToDataUrl(dem, aoiMask, i => {
     const v = suit[i]!
     if (!Number.isFinite(v)) return [0, 0, 0, 0]
-    const [r, g, b] = rampColor(WELLSITE_RAMP, v)
-    return [r, g, b, 205]
+    // Mild gamma: mid/high suitability reads greener and clearer on imagery.
+    const t = Math.pow(Math.max(0, Math.min(1, v)), 0.82)
+    const [r, g, b] = rampColor(WELLSITE_RAMP, t)
+    return [r, g, b, 255]
   })
 
   // Top-N points via greedy non-maximum suppression for spatial spread.
@@ -1362,7 +1535,7 @@ export function computeWellSiteSuitability(
       kind: 'raster',
       dataUrl,
       coordinates: dem.cornerCoords,
-      opacity: 0.78,
+      opacity: 0.94,
       band: bandOf(dem, suit, 'Well-site suitability (0..1)'),
       legend: {
         title: 'Well-site suitability',

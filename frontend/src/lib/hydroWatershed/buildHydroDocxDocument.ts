@@ -54,6 +54,7 @@ export function buildHydroDocxDocumentXml(model: HydroDocxModel): string {
       'Terrain Analysis',
       'Hydrological Analysis',
       'Watershed Delineation',
+      'Drainage Basins',
       'Flood Risk Assessment',
       'Wetland Analysis',
       'GIS Data Tables',
@@ -116,7 +117,18 @@ export function buildHydroDocxDocumentXml(model: HydroDocxModel): string {
   parts.push(docxBodyParagraph(model.hydrologicalSummary))
 
   parts.push(docxSectionHeading('Watershed Delineation'))
-  parts.push(docxBodyParagraph('Watershed boundary and outlet pour point derived from D8 flow routing and accumulation analysis.'))
+  parts.push(
+    docxBodyParagraph(
+      'Primary watershed basins are delineated from D8 terminal outlets, ranked by area, and rendered with coordinated colours on the map layer and legend (matching the interactive Hydro Watershed map).',
+    ),
+  )
+
+  parts.push(docxSectionHeading('Drainage Basins'))
+  parts.push(
+    docxBodyParagraph(
+      'The Drainage Basins Map colours every primary drainage basin with a coordinated palette. Basin boundaries are emphasised on the layer; the report legend lists each Drainage Basin with its area (km²).',
+    ),
+  )
 
   parts.push(docxSectionHeading('Flood Risk Assessment'))
   parts.push(docxBodyParagraph(model.floodRiskSummary))

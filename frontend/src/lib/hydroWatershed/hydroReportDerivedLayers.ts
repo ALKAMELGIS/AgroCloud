@@ -1,6 +1,21 @@
 import type { GeoBand } from './geoTiffExport'
 import type { HydroLegend } from './hydroEngine'
 import { worldPxToLngLat } from '../treeDetection/webMercatorTiles'
+import {
+  buildEsriD8FlowDirectionLegend,
+  ESRI_D8_DIST,
+  ESRI_D8_DX,
+  ESRI_D8_DY,
+  ESRI_D8_MAP_ALPHA,
+  esriD8CodeFromDirIndex,
+  esriD8RgbFromDirIndex,
+  ESRI_D8_NODATA_RGB,
+} from './hydroFlowDirectionStyle'
+
+/** Class row with absolute area and share of the AOI. */
+export type HydroAreaClassRow = { label: string; areaHa: number; pct: number }
+
+export type SlopeClassRow = { class: string; range: string; areaHa: number; pct: number }
 
 type DemLike = {
   width: number
@@ -69,17 +84,6 @@ function aspectColor(deg: number): [number, number, number] {
   return ASPECT_COLORS[idx]!
 }
 
-const D8_ARROWS = [
-  [1, 0],
-  [1, 1],
-  [0, 1],
-  [-1, 1],
-  [-1, 0],
-  [-1, -1],
-  [0, -1],
-  [1, -1],
-]
-
 export function buildAspectDerivedLayer(
   elevBand: GeoBand,
   aoiMask: Uint8Array | null,
@@ -130,112 +134,209 @@ export function buildFlowDirectionDerivedLayer(
 ): { dataUrl: string; legend: HydroLegend } {
   const { width: w, height: h, values } = elevBand
   const cs = metersPerPixelFromBand(elevBand)
-  const dirs = new Float32Array(w * h).fill(-1)
-  const dist = [1, Math.SQRT2, 1, Math.SQRT2, 1, Math.SQRT2, 1, Math.SQRT2]
+  /** ESRI D8 codes (1…128) or 0 = flat/sink. */
+  const codes = new Float32Array(w * h).fill(0)
   for (let y = 0; y < h; y += 1) {
     for (let x = 0; x < w; x += 1) {
       const i = y * w + x
       let best = -1
       let bestDrop = 0
       for (let d = 0; d < 8; d += 1) {
-        const nx = x + D8_ARROWS[d]![0]!
-        const ny = y + D8_ARROWS[d]![1]!
+        const nx = x + ESRI_D8_DX[d]!
+        const ny = y + ESRI_D8_DY[d]!
         if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
-        const drop = (values[i]! - values[ny * w + nx]!) / (dist[d]! * cs)
+        const drop = (values[i]! - values[ny * w + nx]!) / (ESRI_D8_DIST[d]! * cs)
         if (drop > bestDrop) {
           bestDrop = drop
           best = d
         }
       }
-      dirs[i] = best
+      codes[i] = best < 0 ? 0 : esriD8CodeFromDirIndex(best)
     }
   }
-  const palette = [
-    [255, 255, 255],
-    [254, 224, 139],
-    [253, 174, 97],
-    [252, 141, 89],
-    [227, 74, 51],
-    [179, 0, 0],
-    [127, 0, 0],
-    [64, 0, 0],
-    [0, 0, 0],
-  ]
-  const band: GeoBand = { ...elevBand, values: dirs, name: 'Flow direction' }
+  const band: GeoBand = { ...elevBand, values: codes, name: 'Flow direction (ESRI D8)' }
   const dataUrl = rasterToDataUrl(band, aoiMask, (_i, v) => {
-    const idx = v < 0 ? 0 : Math.min(8, v + 1)
-    const [r, g, b] = palette[idx]!
-    return [r, g, b, 200]
+    if (!(v > 0)) {
+      const [r, g, b] = ESRI_D8_NODATA_RGB
+      return [r, g, b, Math.round(ESRI_D8_MAP_ALPHA * 0.55)]
+    }
+    // Map code → dir index via known powers of two.
+    const dirIndex = Math.round(Math.log2(v))
+    const [r, g, b] = esriD8RgbFromDirIndex(dirIndex)
+    return [r, g, b, ESRI_D8_MAP_ALPHA]
   })
   return {
     dataUrl,
-    legend: {
-      title: 'Flow direction',
-      kind: 'classes',
-      swatches: [
-        { color: 'rgb(255,255,255)', label: 'Flat / sink' },
-        { color: 'rgb(252,141,89)', label: 'D8 drainage' },
-        { color: 'rgb(0,0,0)', label: 'Steepest descent' },
-      ],
-      note: 'Hydrological movement (D8)',
-    },
+    legend: buildEsriD8FlowDirectionLegend(),
   }
+}
+
+/** High-contrast flood-risk palette — readable on Esri World Imagery. */
+const FLOOD_RISK_COLORS: Array<[number, number, number]> = [
+  [30, 130, 76], // Low — strong green
+  [255, 193, 7], // Moderate — vivid amber (not washed yellow)
+  [255, 87, 34], // High — saturated orange
+  [183, 28, 28], // Critical — deep crimson
+]
+
+const FLOOD_RISK_ALPHA = [155, 195, 220, 240] as const
+
+const FLOOD_RISK_LABELS = ['Low Risk', 'Moderate Risk', 'High Risk', 'Critical Risk'] as const
+
+/** 3×3 majority filter — removes salt-and-pepper noise so risk zones read as clear patches. */
+function majoritySmoothRiskClasses(
+  risk: Float32Array,
+  width: number,
+  height: number,
+  aoiMask: Uint8Array | null,
+): Float32Array {
+  const out = new Float32Array(risk.length)
+  const counts = [0, 0, 0, 0]
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const i = y * width + x
+      if (aoiMask && !aoiMask[i]) {
+        out[i] = -1
+        continue
+      }
+      counts[0] = counts[1] = counts[2] = counts[3] = 0
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const nx = x + dx
+          const ny = y + dy
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+          const ni = ny * width + nx
+          if (aoiMask && !aoiMask[ni]) continue
+          const c = risk[ni]!
+          if (c < 0 || c > 3) continue
+          counts[c | 0]! += 1
+        }
+      }
+      let best = Math.max(0, Math.min(3, Math.round(risk[i]!)))
+      let bestN = -1
+      // Prefer higher risk on ties so corridors stay visible.
+      for (let c = 0; c < 4; c += 1) {
+        const n = counts[c]!
+        if (n > bestN || (n === bestN && c > best)) {
+          bestN = n
+          best = c
+        }
+      }
+      out[i] = best
+    }
+  }
+  return out
+}
+
+/** Grow High/Critical by 1 cell so thin flow corridors remain readable at report scale. */
+function dilateElevatedRisk(
+  risk: Float32Array,
+  width: number,
+  height: number,
+  aoiMask: Uint8Array | null,
+  minClass = 2,
+): Float32Array {
+  const out = risk.slice()
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const i = y * width + x
+      if (aoiMask && !aoiMask[i]) continue
+      const self = risk[i]!
+      if (self >= minClass) continue
+      let elev = self
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
+          if (dx === 0 && dy === 0) continue
+          const nx = x + dx
+          const ny = y + dy
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+          const ni = ny * width + nx
+          if (aoiMask && !aoiMask[ni]) continue
+          elev = Math.max(elev, risk[ni]!)
+        }
+      }
+      if (elev >= minClass) out[i] = elev
+    }
+  }
+  return out
 }
 
 export function buildFloodRiskDerivedLayer(
   slopeBand: GeoBand,
   flowBand: GeoBand,
   aoiMask: Uint8Array | null,
-): { dataUrl: string; legend: HydroLegend; stats: Array<{ label: string; value: string }> } {
+  aoiAreaHa?: number,
+): {
+  dataUrl: string
+  legend: HydroLegend
+  stats: Array<{ label: string; value: string }>
+  classRows: HydroAreaClassRow[]
+} {
   const n = slopeBand.values.length
+  const w = slopeBand.width
+  const h = slopeBand.height
   let maxFlow = 1
   for (let i = 0; i < n; i += 1) {
     if (aoiMask && !aoiMask[i]) continue
     maxFlow = Math.max(maxFlow, flowBand.values[i]!)
   }
-  const risk = new Float32Array(n)
-  const counts = [0, 0, 0, 0]
+
+  const raw = new Float32Array(n)
   for (let i = 0; i < n; i += 1) {
     if (aoiMask && !aoiMask[i]) {
-      risk[i] = -1
+      raw[i] = -1
       continue
     }
     const slope = slopeBand.values[i]!
     const flow = flowBand.values[i]!
     const flowT = Math.log(flow + 1) / Math.log(maxFlow + 1)
+    // Stricter AND-based rules → contiguous zones instead of speckled Low/Moderate noise.
     let cls = 0
-    if (flowT > 0.75 && slope < 8) cls = 3
-    else if (flowT > 0.5 && slope < 12) cls = 2
-    else if (flowT > 0.25 || slope < 5) cls = 1
-    risk[i] = cls
+    if (flowT >= 0.72 && slope < 10) cls = 3
+    else if (flowT >= 0.48 && slope < 14) cls = 2
+    else if (flowT >= 0.28 && slope < 18) cls = 1
+    else if (slope < 3 && flowT >= 0.18) cls = 1
+    raw[i] = cls
+  }
+
+  const smoothed = majoritySmoothRiskClasses(raw, w, h, aoiMask)
+  const risk = dilateElevatedRisk(smoothed, w, h, aoiMask, 2)
+
+  const counts = [0, 0, 0, 0]
+  for (let i = 0; i < n; i += 1) {
+    if (aoiMask && !aoiMask[i]) continue
+    const cls = Math.max(0, Math.min(3, Math.round(risk[i]!)))
     counts[cls]! += 1
   }
-  const colors = [
-    [34, 197, 94],
-    [250, 204, 21],
-    [249, 115, 22],
-    [220, 38, 38],
-  ]
-  const labels = ['Low Risk', 'Moderate Risk', 'High Risk', 'Critical Risk']
+
   const band: GeoBand = { ...slopeBand, values: risk, name: 'Flood risk' }
   const dataUrl = rasterToDataUrl(band, aoiMask, (_i, v) => {
     const cls = Math.max(0, Math.min(3, Math.round(v)))
-    const [r, g, b] = colors[cls]!
-    return [r, g, b, 200]
+    const [r, g, b] = FLOOD_RISK_COLORS[cls]!
+    return [r, g, b, FLOOD_RISK_ALPHA[cls]!]
   })
   const total = counts.reduce((a, b) => a + b, 0) || 1
+  const classRows: HydroAreaClassRow[] = FLOOD_RISK_LABELS.map((label, i) => {
+    const pct = (counts[i]! / total) * 100
+    const areaHa = aoiAreaHa != null && aoiAreaHa > 0 ? (pct / 100) * aoiAreaHa : 0
+    return { label, pct, areaHa }
+  })
   return {
     dataUrl,
     legend: {
       title: 'Flood risk',
       kind: 'classes',
-      swatches: labels.map((label, i) => ({ color: `rgb(${colors[i]!.join(',')})`, label })),
-      note: 'Derived from slope + flow accumulation',
+      swatches: FLOOD_RISK_LABELS.map((label, i) => ({
+        color: `rgb(${FLOOD_RISK_COLORS[i]!.join(',')})`,
+        label,
+      })),
+      note: 'Clear classes from slope + flow accumulation (smoothed)',
     },
-    stats: labels.map((label, i) => ({
-      label,
-      value: `${((counts[i]! / total) * 100).toFixed(1)}%`,
+    stats: classRows.map(r => ({
+      label: r.label,
+      value: `${r.pct.toFixed(1)}%`,
     })),
+    classRows,
   }
 }
 
@@ -243,7 +344,15 @@ export function buildWetlandDerivedLayer(
   slopeBand: GeoBand,
   flowBand: GeoBand,
   aoiMask: Uint8Array | null,
-): { dataUrl: string; legend: HydroLegend; stats: Array<{ label: string; value: string }> } {
+  aoiAreaHa?: number,
+): {
+  dataUrl: string
+  legend: HydroLegend
+  stats: Array<{ label: string; value: string }>
+  classRows: HydroAreaClassRow[]
+  wetlandPct: number
+  wetlandAreaHa: number
+} {
   const n = slopeBand.values.length
   let maxFlow = 1
   for (let i = 0; i < n; i += 1) {
@@ -271,7 +380,15 @@ export function buildWetlandDerivedLayer(
     if (v > 0.5) return [56, 189, 248, 210]
     return [0, 0, 0, 0]
   })
-  const pct = totalCells ? (wetlandCells / totalCells) * 100 : 0
+  const wetlandPct = totalCells ? (wetlandCells / totalCells) * 100 : 0
+  const wetlandAreaHa =
+    aoiAreaHa != null && aoiAreaHa > 0 ? (wetlandPct / 100) * aoiAreaHa : 0
+  const nonPct = Math.max(0, 100 - wetlandPct)
+  const nonAreaHa = aoiAreaHa != null && aoiAreaHa > 0 ? aoiAreaHa - wetlandAreaHa : 0
+  const classRows: HydroAreaClassRow[] = [
+    { label: 'Wetland / saturated zone', pct: wetlandPct, areaHa: wetlandAreaHa },
+    { label: 'Non-wetland', pct: nonPct, areaHa: nonAreaHa },
+  ]
   return {
     dataUrl,
     legend: {
@@ -284,13 +401,15 @@ export function buildWetlandDerivedLayer(
       note: 'Proxy from gentle slope + high accumulation',
     },
     stats: [
-      { label: 'Wetland coverage', value: `${pct.toFixed(1)}%` },
+      { label: 'Wetland coverage', value: `${wetlandPct.toFixed(1)}%` },
+      { label: 'Wetland area', value: `${wetlandAreaHa.toFixed(2)} ha` },
       { label: 'Wetland cells', value: wetlandCells.toLocaleString() },
     ],
+    classRows,
+    wetlandPct,
+    wetlandAreaHa,
   }
 }
-
-export type SlopeClassRow = { class: string; range: string; areaHa: number; pct: number }
 
 export function buildSlopeClassificationTable(
   slopeBand: GeoBand,

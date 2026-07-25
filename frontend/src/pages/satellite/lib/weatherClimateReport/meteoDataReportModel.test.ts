@@ -64,6 +64,16 @@ describe('meteoDataReportModel', () => {
     expect(model.cumulativeDeficit.length).toBeGreaterThan(0)
     expect(model.cumulativeByYear?.years).toContain(2024)
     expect(model.cumulativeByYear?.rows).toHaveLength(12)
+    expect(model.cumulativeByYear?.title).toContain('Water Deficit')
+    expect(model.cumulativeRainfallByYear?.years).toContain(2024)
+    expect(model.cumulativeRainfallByYear?.rows).toHaveLength(12)
+    expect(model.cumulativeRainfallByYear?.title).toContain('Cumulative Rainfall')
+    // June cumulative rain should be >= Jan rain for that year when both months have data
+    const janRain = model.cumulativeRainfallByYear?.rows[0]?.values[0]
+    const junRain = model.cumulativeRainfallByYear?.rows[5]?.values[0]
+    if (janRain != null && junRain != null) {
+      expect(junRain).toBeGreaterThanOrEqual(janRain)
+    }
   })
 
   it('exports hourly series when aggregation is hour', () => {

@@ -21,6 +21,9 @@ type WellSiteRecommendationPanelProps = {
   onExportGeoJson: () => void
   onExportCsv: () => void
   onExportXlsx: () => void
+  onExportReport?: () => void
+  exportReportBusy?: boolean
+  exportReportLabel?: string
   onZoomToPoint: (point: WellSitePoint) => void
 }
 
@@ -43,6 +46,9 @@ export function WellSiteRecommendationPanel({
   onExportGeoJson,
   onExportCsv,
   onExportXlsx,
+  onExportReport,
+  exportReportBusy,
+  exportReportLabel,
   onZoomToPoint,
 }: WellSiteRecommendationPanelProps) {
   const running = status === 'running' || demLoading
@@ -75,6 +81,22 @@ export function WellSiteRecommendationPanel({
           )}
           <span>{running ? 'Analysing…' : 'Run'}</span>
         </button>
+        {onExportReport ? (
+          <button
+            type="button"
+            className="si-hydro__export-report"
+            onClick={onExportReport}
+            disabled={!hasAoi || !hasResult || exportReportBusy || running}
+            title="Export Well Site Recommendation Report (Word) — cover, TOC, summary, tables, charts, maps with basemap & legend"
+          >
+            {exportReportBusy ? (
+              <i className="fa-solid fa-circle-notch fa-spin" aria-hidden />
+            ) : (
+              <i className="fa-solid fa-file-word" aria-hidden />
+            )}
+            <span>{exportReportLabel ?? 'Export Report'}</span>
+          </button>
+        ) : null}
       </div>
 
       {message ? (
@@ -186,6 +208,23 @@ export function WellSiteRecommendationPanel({
               ))}
             </ol>
 
+            <div className="si-wellsite__final-rec" role="note">
+              <div className="si-wellsite__final-rec-title">
+                <i className="fa-solid fa-scale-balanced" aria-hidden /> Final recommendation
+              </div>
+              <p className="si-wellsite__final-rec-text">
+                The system does not claim water is present with 100% certainty. Based on terrain, DEM,
+                slope, aquifer type, and hydrological indicators, these sites have the highest success
+                probability.
+              </p>
+              <p className="si-wellsite__final-rec-pre">Before drilling, prefer:</p>
+              <ul className="si-wellsite__final-rec-list">
+                <li>Electrical Resistivity Survey (ERT)</li>
+                <li>Pump Test</li>
+                <li>Field geological study</li>
+              </ul>
+            </div>
+
             <div className="si-hydro__actions">
               <button
                 type="button"
@@ -214,6 +253,22 @@ export function WellSiteRecommendationPanel({
                 <i className="fa-solid fa-file-excel" aria-hidden />
                 <span className="si-hydro__act-text">Excel</span>
               </button>
+              {onExportReport ? (
+                <button
+                  type="button"
+                  className="si-hydro__act"
+                  onClick={onExportReport}
+                  disabled={exportReportBusy}
+                  title="Export professional Word report — cover, TOC, summary, charts, tables, maps"
+                >
+                  {exportReportBusy ? (
+                    <i className="fa-solid fa-circle-notch fa-spin" aria-hidden />
+                  ) : (
+                    <i className="fa-solid fa-file-word" aria-hidden />
+                  )}
+                  <span className="si-hydro__act-text">DOC</span>
+                </button>
+              ) : null}
             </div>
           </div>
         </>

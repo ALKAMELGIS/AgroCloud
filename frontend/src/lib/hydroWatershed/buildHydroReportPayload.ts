@@ -9,6 +9,7 @@ import {
   buildSlopeClassificationTable,
   buildWetlandDerivedLayer,
   demLikeFromBand,
+  type HydroAreaClassRow,
 } from './hydroReportDerivedLayers'
 import {
   buildHydroExecutiveSummary,
@@ -64,13 +65,22 @@ export async function buildHydroReportPayload(input: BuildHydroReportInput): Pro
 
   let slopeRows: ReturnType<typeof buildSlopeClassificationTable> = []
   if (slopeBand) {
-    const cs = slopeBand.width > 0 ? Math.sqrt(geodesicAreaM2(input.geometry) / (slopeBand.width * slopeBand.height)) : 30
-    slopeRows = buildSlopeClassificationTable(slopeBand, aoiMask, cs * cs)
+    let aoiCells = 0
+    for (let i = 0; i < slopeBand.values.length; i += 1) {
+      if (aoiMask && !aoiMask[i]) continue
+      aoiCells += 1
+    }
+    const cellAreaM2 =
+      aoiCells > 0 ? geodesicAreaM2(input.geometry) / aoiCells : 30 * 30
+    slopeRows = buildSlopeClassificationTable(slopeBand, aoiMask, cellAreaM2)
   }
 
   let floodRiskStats: Array<{ label: string; value: string }> = []
+  let floodRiskRows: HydroAreaClassRow[] = []
   let wetlandStats: Array<{ label: string; value: string }> = []
+  let wetlandRows: HydroAreaClassRow[] = []
   let wetlandPct: number | undefined
+  let wetlandAreaHa: number | undefined
 
   const derivedCache: Record<string, { dataUrl: string; legend?: HydroStepResult['legend']; stats?: Array<{ label: string; value: string }> }> =
     {}
@@ -82,14 +92,16 @@ export async function buildHydroReportPayload(input: BuildHydroReportInput): Pro
     derivedCache['flow-direction'] = { dataUrl: flowDir.dataUrl, legend: flowDir.legend }
   }
   if (slopeBand && flowBand) {
-    const flood = buildFloodRiskDerivedLayer(slopeBand, flowBand, aoiMask)
+    const flood = buildFloodRiskDerivedLayer(slopeBand, flowBand, aoiMask, areaHa)
     derivedCache['flood-risk'] = { dataUrl: flood.dataUrl, legend: flood.legend, stats: flood.stats }
     floodRiskStats = flood.stats
-    const wetland = buildWetlandDerivedLayer(slopeBand, flowBand, aoiMask)
+    floodRiskRows = flood.classRows
+    const wetland = buildWetlandDerivedLayer(slopeBand, flowBand, aoiMask, areaHa)
     derivedCache.wetland = { dataUrl: wetland.dataUrl, legend: wetland.legend, stats: wetland.stats }
     wetlandStats = wetland.stats
-    const pctRow = wetland.stats.find(s => s.label.toLowerCase().includes('coverage'))
-    if (pctRow) wetlandPct = parseFloat(pctRow.value)
+    wetlandRows = wetland.classRows
+    wetlandPct = wetland.wetlandPct
+    wetlandAreaHa = wetland.wetlandAreaHa
   }
 
   const snapshots: HydroReportSnapshot[] = []
@@ -136,6 +148,22 @@ export async function buildHydroReportPayload(input: BuildHydroReportInput): Pro
           vectorResult: result.kind === 'vector' ? result : null,
           legend: result.legend,
         })
+      } else if (spec.derived && derivedCache[spec.derived]) {
+        // Fallback (e.g. Flow Direction) when DEM exists but the live step was not run yet.
+        const derived = derivedCache[spec.derived]!
+        available = true
+        legend = derived.legend
+        stats = derived.stats ?? []
+        imageBase64 = await compositeHydroMapSnapshot({
+          geometry: input.geometry,
+          title: spec.title,
+          subtitle: spec.subtitle,
+          extent: snapshotExtent,
+          basemapDataUrl,
+          layerDataUrl: derived.dataUrl,
+          rasterCoordinates: masterRasterCoords,
+          legend: derived.legend,
+        })
       } else {
         note = 'Run this analysis step in the Hydro Watershed tool to include this map.'
       }
@@ -181,7 +209,9 @@ export async function buildHydroReportPayload(input: BuildHydroReportInput): Pro
     steps: input.steps,
     slopeClasses: slopeRows.map(r => ({ class: r.class, pct: r.pct })),
     floodRiskStats,
+    floodRiskRows,
     wetlandPct,
+    wetlandAreaHa,
   })
 
   return {
@@ -201,13 +231,17 @@ export async function buildHydroReportPayload(input: BuildHydroReportInput): Pro
       steps: input.steps,
       areaHa,
       slopeRows,
+      floodRiskRows,
       floodRiskStats,
+      wetlandRows,
       wetlandStats,
+      wetlandAreaHa,
+      wetlandPct,
     }),
     completedSteps: completedHydroSteps(input.steps),
     recommendations: hydroRecommendations(input.steps),
     dataQualityNotes:
-      'Terrain from Terrarium DEM tiles; hydrology derived client-side via D8 flow routing. Flood-risk and wetland layers are screening proxies from slope + flow accumulation — validate with field data and hydraulic models for engineering design.',
+      'Terrain from Terrarium DEM tiles; hydrology derived client-side via D8 flow routing. Flood-risk and wetland layers are screening proxies from slope + flow accumulation — validate with field data and hydraulic models for engineering design. Area (ha) and % of AOI are computed from class cell counts scaled to the geodesic AOI area.',
   }
 }
 

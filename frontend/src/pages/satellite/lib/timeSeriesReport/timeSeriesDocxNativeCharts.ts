@@ -1,9 +1,9 @@
 /**
  * Native editable Word charts (OOXML ChartML with embedded literal data).
- * Opens in Word as real Office charts — same edit model as charts copied from Excel.
+ * Opens in Word as real Office charts — polished report layout (not a raw Excel paste).
  */
 
-export type DocxNativeChartKind = 'line' | 'bar' | 'combo' | 'pie'
+export type DocxNativeChartKind = 'line' | 'bar' | 'combo' | 'pie' | 'scatter'
 
 export type DocxNativeChartSeries = {
   name: string
@@ -13,6 +13,16 @@ export type DocxNativeChartSeries = {
   asBar?: boolean
   /** Plot on secondary value axis (right). */
   secondaryAxis?: boolean
+}
+
+export type DocxNativeScatterSeries = {
+  name: string
+  points: Array<{ x: number; y: number }>
+  color?: string
+  /** Draw connecting line (linear fit). */
+  showLine?: boolean
+  /** Hide markers (fit line only). */
+  hideMarkers?: boolean
 }
 
 export type DocxNativeChartSpec = {
@@ -29,6 +39,14 @@ export type DocxNativeChartSpec = {
   yNumFmtSecondary?: string
   /** Optional per-slice colours for pie charts (hex without #). */
   sliceColors?: string[]
+  /** Bar direction: `col` (default) or `bar` (horizontal). */
+  barDir?: 'col' | 'bar'
+  /** Hide legend (useful for single-series bars). */
+  hideLegend?: boolean
+  /** Scatter XY series (kind=scatter). */
+  scatterSeries?: DocxNativeScatterSeries[]
+  xAxisLabel?: string
+  xNumFmt?: string
 }
 
 function escXml(s: string): string {
@@ -57,6 +75,54 @@ function strLit(cats: string[]): string {
 }
 
 const SERIES_COLORS = ['047857', '2563EB', 'EA580C', '0D9488', '7C3AED', 'DC2626', 'CA8A04']
+
+/**
+ * Analysis-based palette for native Word charts (ArcGIS-style index semantics).
+ * NDVI/SAVI/EVI = green · NDWI = blue · NDMI = moisture teal · LST/ET = thermal · Risk = amber/red.
+ */
+export function resolveIndexChartColor(layerId: string): string {
+  const u = layerId.trim().toUpperCase()
+  if (
+    u === 'NDVI' ||
+    u === 'SAVI' ||
+    u === 'EVI' ||
+    u === 'GNDVI' ||
+    u === 'NDRE' ||
+    u.includes('VEG')
+  ) {
+    return '047857'
+  }
+  if (u === 'NDWI' || u === 'MNDWI' || u.includes('WATER') || u === 'PRECIP' || u.includes('RAIN')) {
+    return '2563EB'
+  }
+  if (u === 'NDMI' || u.includes('MOIST')) {
+    return '0D9488'
+  }
+  if (u === 'LST' || u === 'LSTI' || u === 'ET' || u.includes('TEMP') || u.includes('THERMAL')) {
+    return 'DC2626'
+  }
+  if (
+    u.includes('STRESS') ||
+    u === 'CHAS' ||
+    u.includes('RISK') ||
+    u.includes('ALERT') ||
+    u === 'ADI' ||
+    u === 'NCADI'
+  ) {
+    return 'CA8A04'
+  }
+  if (u.includes('LULC') || u.includes('CLASS')) return '334155'
+  return SERIES_COLORS[Math.abs(fnvLite(u)) % SERIES_COLORS.length]!
+}
+
+function fnvLite(s: string): number {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
 
 function seriesColor(ser: DocxNativeChartSeries, i: number): string {
   return (ser.color ?? SERIES_COLORS[i % SERIES_COLORS.length]!).replace('#', '').toUpperCase()
@@ -127,12 +193,42 @@ function valAxXml(opts: {
 </c:valAx>`
 }
 
+/** Cap pie/share categories: keep top N by value and bucket the rest as Other. */
+export function aggregateTopShareCategories(
+  rows: Array<{ label: string; value: number }>,
+  maxSlices = 8,
+): { labels: string[]; values: number[] } {
+  const cleaned = rows
+    .filter(r => Number.isFinite(r.value) && r.value > 0)
+    .map(r => ({ label: r.label, value: Number(r.value) }))
+    .sort((a, b) => b.value - a.value)
+  if (cleaned.length <= maxSlices) {
+    return { labels: cleaned.map(r => r.label), values: cleaned.map(r => r.value) }
+  }
+  const top = cleaned.slice(0, maxSlices - 1)
+  const other = cleaned.slice(maxSlices - 1).reduce((sum, r) => sum + r.value, 0)
+  return {
+    labels: [...top.map(r => r.label), 'Other'],
+    values: [...top.map(r => r.value), other],
+  }
+}
+
 /**
- * Build ChartML for a polished Excel-style chart (line / bar / combo / pie + optional dual axis).
+ * Build ChartML for a polished report chart (line / bar / combo / pie / scatter + optional dual axis).
  */
 export function buildDocxChartXml(spec: DocxNativeChartSpec): string {
   const kind: DocxNativeChartKind = spec.kind ?? 'line'
   const cats = strLit(spec.categories)
+  const legendXml = spec.hideLegend
+    ? ''
+    : `<c:legend>
+      <c:legendPos val="${kind === 'pie' ? 'r' : 'b'}"/>
+      <c:overlay val="0"/>
+    </c:legend>`
+
+  if (kind === 'scatter') {
+    return buildDocxScatterChartXml(spec)
+  }
 
   if (kind === 'pie') {
     const ser = spec.series[0]
@@ -153,9 +249,10 @@ export function buildDocxChartXml(spec: DocxNativeChartSpec): string {
     const dPt = values
       .map((_, i) => {
         const color = pieColors[i % pieColors.length]!
-        return `<c:dPt><c:idx val="${i}"/><c:spPr><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></c:spPr></c:dPt>`
+        return `<c:dPt><c:idx val="${i}"/><c:spPr><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:ln w="12000"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:ln></c:spPr></c:dPt>`
       })
       .join('')
+    // Percent-only labels + right legend — avoids Excel-style leader-line spaghetti.
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <c:roundedCorners val="0"/>
@@ -166,7 +263,17 @@ export function buildDocxChartXml(spec: DocxNativeChartSpec): string {
     </c:title>
     <c:autoTitleDeleted val="0"/>
     <c:plotArea>
-      <c:layout/>
+      <c:layout>
+        <c:manualLayout>
+          <c:layoutTarget val="inner"/>
+          <c:xMode val="edge"/>
+          <c:yMode val="edge"/>
+          <c:x val="0.02"/>
+          <c:y val="0.12"/>
+          <c:w val="0.62"/>
+          <c:h val="0.78"/>
+        </c:manualLayout>
+      </c:layout>
       <c:pieChart>
         <c:varyColors val="0"/>
         <c:ser>
@@ -179,20 +286,17 @@ export function buildDocxChartXml(spec: DocxNativeChartSpec): string {
           <c:dLbls>
             <c:showLegendKey val="0"/>
             <c:showVal val="0"/>
-            <c:showCatName val="1"/>
+            <c:showCatName val="0"/>
             <c:showPercent val="1"/>
             <c:showSerName val="0"/>
             <c:showBubbleSize val="0"/>
-            <c:showLeaderLines val="1"/>
+            <c:showLeaderLines val="0"/>
           </c:dLbls>
         </c:ser>
         <c:firstSliceAng val="0"/>
       </c:pieChart>
     </c:plotArea>
-    <c:legend>
-      <c:legendPos val="b"/>
-      <c:overlay val="0"/>
-    </c:legend>
+    ${legendXml}
     <c:plotVisOnly val="1"/>
     <c:dispBlanksAs val="gap"/>
   </c:chart>
@@ -201,6 +305,7 @@ export function buildDocxChartXml(spec: DocxNativeChartSpec): string {
   }
 
   const hasSecondary = spec.series.some(s => s.secondaryAxis)
+  const barDir = spec.barDir ?? 'col'
 
   const plotParts: string[] = []
   let order = 0
@@ -214,7 +319,7 @@ export function buildDocxChartXml(spec: DocxNativeChartSpec): string {
       })
       .join('')
     plotParts.push(`<c:barChart>
-  <c:barDir val="col"/>
+  <c:barDir val="${barDir}"/>
   <c:grouping val="clustered"/>
   <c:varyColors val="0"/>
   <c:gapWidth val="80"/>
@@ -267,13 +372,14 @@ export function buildDocxChartXml(spec: DocxNativeChartSpec): string {
   const useSecondary =
     hasSecondary || (kind === 'combo' && spec.series.some(s => s.secondaryAxis && !s.asBar))
 
+  const catTitle = barDir === 'bar' ? 'Month' : 'Period'
   const axes = `
       <c:catAx>
         <c:axId val="1"/>
         <c:scaling><c:orientation val="minMax"/></c:scaling>
         <c:delete val="0"/>
-        <c:axPos val="b"/>
-        <c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="900" b="1"><a:solidFill><a:srgbClr val="334155"/></a:solidFill></a:rPr><a:t>Period</a:t></a:r></a:p></c:rich></c:tx></c:title>
+        <c:axPos val="${barDir === 'bar' ? 'l' : 'b'}"/>
+        <c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="900" b="1"><a:solidFill><a:srgbClr val="334155"/></a:solidFill></a:rPr><a:t>${escXml(catTitle)}</a:t></a:r></a:p></c:rich></c:tx></c:title>
         <c:majorTickMark val="out"/>
         <c:minorTickMark val="none"/>
         <c:tickLblPos val="nextTo"/>
@@ -286,7 +392,7 @@ export function buildDocxChartXml(spec: DocxNativeChartSpec): string {
       ${valAxXml({
         axId: 2,
         crossAx: 1,
-        pos: 'l',
+        pos: barDir === 'bar' ? 'b' : 'l',
         title: spec.yAxisLabel,
         numFmt: spec.yNumFmt ?? '0.00',
       })}
@@ -319,10 +425,113 @@ export function buildDocxChartXml(spec: DocxNativeChartSpec): string {
       ${plotParts.join('\n')}
       ${axes}
     </c:plotArea>
-    <c:legend>
+    ${legendXml}
+    <c:plotVisOnly val="1"/>
+    <c:dispBlanksAs val="gap"/>
+    <c:showDLblsOverMax val="0"/>
+  </c:chart>
+  <c:spPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:ln w="6350"><a:solidFill><a:srgbClr val="E2E8F0"/></a:solidFill></a:ln></c:spPr>
+</c:chartSpace>`
+}
+
+/** Native editable XY scatter (+ optional linear fit) — white report style. */
+export function buildDocxScatterChartXml(spec: DocxNativeChartSpec): string {
+  const series = spec.scatterSeries ?? []
+  const xLabel = spec.xAxisLabel ?? 'X'
+  const yLabel = spec.yAxisLabel || 'Y'
+  const xFmt = spec.xNumFmt ?? '0.00'
+  const yFmt = spec.yNumFmt ?? '0.00'
+  const legendXml = spec.hideLegend
+    ? ''
+    : `<c:legend>
       <c:legendPos val="b"/>
       <c:overlay val="0"/>
-    </c:legend>
+    </c:legend>`
+
+  const serXml = series
+    .map((ser, idx) => {
+      const xs = ser.points.map(p => p.x)
+      const ys = ser.points.map(p => p.y)
+      const color = (ser.color ?? (idx === 0 ? '166534' : 'DC2626')).replace(/^#/, '')
+      const marker =
+        ser.hideMarkers
+          ? `<c:marker><c:symbol val="none"/></c:marker>`
+          : `<c:marker>
+          <c:symbol val="circle"/>
+          <c:size val="7"/>
+          <c:spPr>
+            <a:solidFill><a:srgbClr val="${color}"/></a:solidFill>
+            <a:ln w="9525"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:ln>
+          </c:spPr>
+        </c:marker>`
+      const line = ser.showLine
+        ? `<c:spPr><a:ln w="19050"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></a:ln></c:spPr>`
+        : `<c:spPr><a:ln w="0"><a:noFill/></a:ln></c:spPr>`
+      return `<c:ser>
+        <c:idx val="${idx}"/>
+        <c:order val="${idx}"/>
+        <c:tx><c:v>${escXml(ser.name)}</c:v></c:tx>
+        ${marker}
+        ${line}
+        <c:xVal>${numLit(xs)}</c:xVal>
+        <c:yVal>${numLit(ys)}</c:yVal>
+        <c:smooth val="0"/>
+      </c:ser>`
+    })
+    .join('')
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <c:date1904 val="0"/>
+  <c:lang val="en-US"/>
+  <c:roundedCorners val="0"/>
+  <c:chart>
+    <c:title>
+      <c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1200" b="1"/></a:pPr><a:r><a:rPr lang="en-US" sz="1200" b="1"><a:solidFill><a:srgbClr val="0F172A"/></a:solidFill></a:rPr><a:t>${escXml(spec.title)}</a:t></a:r></a:p></c:rich></c:tx>
+      <c:overlay val="0"/>
+    </c:title>
+    <c:autoTitleDeleted val="0"/>
+    <c:plotArea>
+      <c:layout/>
+      <c:scatterChart>
+        <c:scatterStyle val="lineMarker"/>
+        <c:varyColors val="0"/>
+        ${serXml}
+        <c:axId val="1"/>
+        <c:axId val="2"/>
+      </c:scatterChart>
+      <c:valAx>
+        <c:axId val="1"/>
+        <c:scaling><c:orientation val="minMax"/></c:scaling>
+        <c:delete val="0"/>
+        <c:axPos val="b"/>
+        <c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="900" b="1"><a:solidFill><a:srgbClr val="334155"/></a:solidFill></a:rPr><a:t>${escXml(xLabel)}</a:t></a:r></a:p></c:rich></c:tx></c:title>
+        <c:majorGridlines><c:spPr><a:ln w="6350"><a:solidFill><a:srgbClr val="E2E8F0"/></a:solidFill></a:ln></c:spPr></c:majorGridlines>
+        <c:numFmt formatCode="${escXml(xFmt)}" sourceLinked="0"/>
+        <c:majorTickMark val="out"/>
+        <c:minorTickMark val="none"/>
+        <c:tickLblPos val="nextTo"/>
+        <c:crossAx val="2"/>
+        <c:crosses val="autoZero"/>
+        <c:crossBetween val="midCat"/>
+      </c:valAx>
+      <c:valAx>
+        <c:axId val="2"/>
+        <c:scaling><c:orientation val="minMax"/></c:scaling>
+        <c:delete val="0"/>
+        <c:axPos val="l"/>
+        <c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="900" b="1"><a:solidFill><a:srgbClr val="334155"/></a:solidFill></a:rPr><a:t>${escXml(yLabel)}</a:t></a:r></a:p></c:rich></c:tx></c:title>
+        <c:majorGridlines><c:spPr><a:ln w="6350"><a:solidFill><a:srgbClr val="E2E8F0"/></a:solidFill></a:ln></c:spPr></c:majorGridlines>
+        <c:numFmt formatCode="${escXml(yFmt)}" sourceLinked="0"/>
+        <c:majorTickMark val="out"/>
+        <c:minorTickMark val="none"/>
+        <c:tickLblPos val="nextTo"/>
+        <c:crossAx val="1"/>
+        <c:crosses val="autoZero"/>
+        <c:crossBetween val="midCat"/>
+      </c:valAx>
+    </c:plotArea>
+    ${legendXml}
     <c:plotVisOnly val="1"/>
     <c:dispBlanksAs val="gap"/>
     <c:showDLblsOverMax val="0"/>
@@ -366,7 +575,7 @@ export function buildPerLayerNativeChartSpecs(input: {
       yNumFmt: '0.0000',
       categories,
       kind: 'line',
-      series: [{ name: id, values: s.values, color: SERIES_COLORS[(n - 1) % SERIES_COLORS.length] }],
+      series: [{ name: id, values: s.values, color: resolveIndexChartColor(id) }],
     })
   }
   return out
@@ -442,7 +651,7 @@ function tempExtremesSeries(rows: Array<{
 }
 
 /**
- * Professional Excel-style weather + climate suite for the Word Intelligence Report.
+ * Professional weather + climate suite for the Word Intelligence Report.
  */
 export function buildWeatherNativeChartSpecs(input: WeatherNativeChartInput): DocxNativeChartSpec[] {
   const counter = { v: input.startIndex ?? 0 }
@@ -496,6 +705,7 @@ export function buildWeatherNativeChartSpecs(input: WeatherNativeChartInput): Do
       yNumFmt: '0.0',
       categories: monthly.map(m => m.label),
       kind: 'bar',
+      hideLegend: true,
       series: [
         {
           name: 'Cumulative Rainfall (mm)',
@@ -511,6 +721,7 @@ export function buildWeatherNativeChartSpecs(input: WeatherNativeChartInput): Do
       yNumFmt: '0.0',
       categories: monthly.map(m => m.label),
       kind: 'bar',
+      hideLegend: true,
       series: [
         {
           name: 'Rainfall (mm)',
@@ -520,19 +731,52 @@ export function buildWeatherNativeChartSpecs(input: WeatherNativeChartInput): Do
         },
       ],
     })
-    const pieCats = monthly.filter(m => (m.rainfallMm ?? 0) > 0)
-    if (pieCats.length >= 2) {
+    // Horizontal bar (top wet months) — readable for multi-year AOIs; avoid overcrowded pies.
+    const shareRows = monthly
+      .filter(m => (m.rainfallMm ?? 0) > 0)
+      .map(m => ({
+        label: m.label,
+        value: Number(m.rainfallSharePct ?? m.rainfallMm ?? 0),
+      }))
+    if (shareRows.length >= 2) {
+      const capped = aggregateTopShareCategories(shareRows, 8)
       push({
-        title: 'Monthly Rainfall Share (%)',
-        yAxisLabel: 'Share',
-        categories: pieCats.map(m => m.label),
-        kind: 'pie',
+        title: 'Top Months — Rainfall Share (%)',
+        yAxisLabel: 'Share of period rainfall (%)',
+        yNumFmt: '0.0',
+        categories: capped.labels,
+        kind: 'bar',
+        barDir: 'bar',
+        hideLegend: true,
         series: [
           {
-            name: 'Rainfall share',
-            values: pieCats.map(m => m.rainfallSharePct ?? m.rainfallMm),
+            name: 'Rainfall share (%)',
+            values: capped.values,
+            color: '0D9488',
+            asBar: true,
           },
         ],
+      })
+    }
+  }
+
+  // Yearly share pie stays readable (few slices) when multi-year rainfall exists.
+  if (yearly.length >= 2) {
+    const yearRain = yearly
+      .map(y => ({ label: y.label, value: Number(y.rainfallMm ?? 0) }))
+      .filter(r => r.value > 0)
+    if (yearRain.length >= 2) {
+      const total = yearRain.reduce((s, r) => s + r.value, 0)
+      const share = aggregateTopShareCategories(
+        yearRain.map(r => ({ label: r.label, value: total > 0 ? (r.value / total) * 100 : 0 })),
+        6,
+      )
+      push({
+        title: 'Annual Rainfall Share (%)',
+        yAxisLabel: 'Share',
+        categories: share.labels,
+        kind: 'pie',
+        series: [{ name: 'Annual share', values: share.values }],
       })
     }
   }
@@ -565,10 +809,10 @@ export function buildWeatherNativeChartSpecs(input: WeatherNativeChartInput): Do
         indexSeries.push({ name, values, color, secondaryAxis: true })
       }
     }
-    addIdx('NDVI', cmp.ndvi, '047857')
-    addIdx('NDMI', cmp.ndmi, '2563EB')
-    addIdx('NDWI', cmp.ndwi, '0D9488')
-    addIdx('SAVI', cmp.savi, 'CA8A04')
+    addIdx('NDVI', cmp.ndvi, resolveIndexChartColor('NDVI'))
+    addIdx('NDMI', cmp.ndmi, resolveIndexChartColor('NDMI'))
+    addIdx('NDWI', cmp.ndwi, resolveIndexChartColor('NDWI'))
+    addIdx('SAVI', cmp.savi, resolveIndexChartColor('SAVI'))
 
     if (cmp.tempMean.some(v => v != null) || cmp.tempMin.some(v => v != null) || cmp.tempMax.some(v => v != null)) {
       push({
@@ -667,3 +911,84 @@ export function buildWeatherNativeChartSpecs(input: WeatherNativeChartInput): Do
   return out
 }
 
+export type VegetationCoverageChartPoint = {
+  date: string
+  periodLabel?: string
+  ndviMean: number | null
+  vegetationCoveragePct: number
+  bareCoveragePct: number
+  classes?: Array<{ tier: string; pct: number }>
+}
+
+/** Short statistical reading for the coverage timeline chart. */
+export function buildVegetationCoverageChartInterpretation(
+  timeline: VegetationCoverageChartPoint[],
+): string {
+  if (timeline.length < 2) {
+    return 'Single-date coverage snapshot — compare additional acquisitions to quantify canopy expansion or decline.'
+  }
+  const first = timeline[0]!
+  const last = timeline[timeline.length - 1]!
+  const delta = last.vegetationCoveragePct - first.vegetationCoveragePct
+  const abs = Math.abs(delta)
+  const direction = delta > 1 ? 'increased' : delta < -1 ? 'decreased' : 'stayed broadly stable'
+  const ndviBit =
+    first.ndviMean != null && last.ndviMean != null
+      ? ` NDVI mean moved from ${first.ndviMean.toFixed(3)} to ${last.ndviMean.toFixed(3)}.`
+      : ''
+  return `Vegetation coverage ${direction} across the period (${first.date} → ${last.date}): ${first.vegetationCoveragePct.toFixed(1)}% → ${last.vegetationCoveragePct.toFixed(1)}% (Δ ${delta >= 0 ? '+' : ''}${delta.toFixed(1)} pp).${ndviBit}${
+    abs >= 5
+      ? ' This shift is material for field planning — verify irrigation, harvest timing, or bare-soil exposure.'
+      : ' Variation is modest; treat as supporting evidence alongside NDVI vigor and moisture indices.'
+  }`
+}
+
+/**
+ * Native Office charts for Vegetation Coverage Timeline — statistical view after the table.
+ */
+export function buildVegetationCoverageTimelineChartSpecs(input: {
+  timeline: VegetationCoverageChartPoint[]
+  startIndex?: number
+}): DocxNativeChartSpec[] {
+  const timeline = input.timeline.filter(p => Number.isFinite(p.vegetationCoveragePct))
+  if (timeline.length < 2) return []
+
+  const counter = { v: input.startIndex ?? 0 }
+  const out: DocxNativeChartSpec[] = []
+  const push = (spec: Omit<DocxNativeChartSpec, 'rId' | 'fileStem'>) => {
+    const id = nextChartId(counter)
+    out.push({ ...spec, rId: `rIdChart${id}`, fileStem: `chart${id}` })
+  }
+
+  const categories = timeline.map(p => p.periodLabel || p.date)
+  push({
+    title: 'Vegetation Coverage Timeline — Statistical Chart',
+    yAxisLabel: 'Coverage (%)',
+    yAxisLabelSecondary: 'NDVI mean',
+    yNumFmt: '0.0',
+    yNumFmtSecondary: '0.000',
+    categories,
+    kind: 'combo',
+    series: [
+      {
+        name: 'Vegetation Coverage (%)',
+        values: timeline.map(p => p.vegetationCoveragePct),
+        color: '047857',
+        asBar: true,
+      },
+      {
+        name: 'Bare / Critical (%)',
+        values: timeline.map(p => p.bareCoveragePct),
+        color: 'B45309',
+      },
+      {
+        name: 'NDVI Mean',
+        values: timeline.map(p => p.ndviMean),
+        color: '2563EB',
+        secondaryAxis: true,
+      },
+    ],
+  })
+
+  return out
+}

@@ -49,6 +49,9 @@ export const CORE_INDICES_BLOCK = `let ndvi = index(samples.B08, samples.B04);
   let savi = ((samples.B08 - samples.B04) * 1.5) / (samples.B08 + samples.B04 + 0.5);
   let ndmi = index(samples.B08, samples.B11);
   let ndwi = index(samples.B03, samples.B08);
+  let ndre = index(samples.B08, samples.B05);
+  let eviDen = samples.B08 + 6.0 * samples.B04 - 7.5 * samples.B02 + 1.0;
+  let evi = eviDen > 1e-6 ? 2.5 * (samples.B08 - samples.B04) / eviDen : NaN;
   let ci_re = samples.B08 > 1e-6 ? samples.B05 / samples.B08 - 1 : NaN;
   let ndsi = index(samples.B11, samples.B08);
   let si = Math.sqrt(Math.max(0, samples.B03 * samples.B04));
@@ -60,11 +63,13 @@ const CORE_AT_FN = `function coreAt(samples) {
   let ndmi = index(samples.B08, samples.B11);
   let ndwi = index(samples.B03, samples.B08);
   let ndre = index(samples.B08, samples.B05);
+  let eviDen = samples.B08 + 6.0 * samples.B04 - 7.5 * samples.B02 + 1.0;
+  let evi = eviDen > 1e-6 ? 2.5 * (samples.B08 - samples.B04) / eviDen : NaN;
   let ci_re = samples.B08 > 1e-6 ? samples.B05 / samples.B08 - 1 : NaN;
   let ndsi = index(samples.B11, samples.B08);
   let si = Math.sqrt(Math.max(0, samples.B03 * samples.B04));
   let ssi = ndsi + si;
-  return { ndvi: ndvi, savi: savi, ndmi: ndmi, ndwi: ndwi, ndre: ndre, ci_re: ci_re, ndsi: ndsi, si: si, ssi: ssi };
+  return { ndvi: ndvi, savi: savi, ndmi: ndmi, ndwi: ndwi, ndre: ndre, evi: evi, ci_re: ci_re, ndsi: ndsi, si: si, ssi: ssi };
 }`
 
 function alphaBlock(indexVar: string, indexVisibilityMin: number | null, maskVar = 'samples.dataMask'): string {
@@ -167,7 +172,7 @@ export function buildAgroCompositeEvalscript(
 // AgroCloud composite — 10-class layer-specific ramp
 function setup() {
   return {
-    input: ["B03", "B04", "B05", "B08", "B8A", "B11", "dataMask"],
+    input: ["B02", "B03", "B04", "B05", "B08", "B8A", "B11", "dataMask"],
     output: { bands: 4 }
   };
 }
@@ -205,7 +210,7 @@ export function buildAgroCompositeDeltaEvalscript(
 function setup() {
   return {
     input: [{
-      bands: ["B03", "B04", "B05", "B08", "B8A", "B11", "dataMask"]
+      bands: ["B02", "B03", "B04", "B05", "B08", "B8A", "B11", "dataMask"]
     }],
     mosaicking: Mosaicking.ORBIT,
     output: { bands: 4, sampleType: "AUTO" }
@@ -230,6 +235,8 @@ function compositeValue(c) {
   let ndmi = c.ndmi;
   let ndwi = c.ndwi;
   let savi = c.savi;
+  let ndre = c.ndre;
+  let evi = c.evi;
   let ci_re = c.ci_re;
   let ndsi = c.ndsi;
   let si = c.si;

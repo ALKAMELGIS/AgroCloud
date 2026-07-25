@@ -11,8 +11,16 @@ import { inferWmsEvalProfile } from './sentinelHubWmsAoiClip'
 import {
   isAgroCompositeLayerId,
   isAgroDeltaCompositeLayerId,
+  isChirpsPrecipLayerId,
   resolveAgroCompositeIndexDef,
 } from './agroCompositeIndices'
+import {
+  CHIRPS_PRECIP_CLASS_BREAKS,
+  CHIRPS_PRECIP_CLASS_COLORS,
+  CHIRPS_PRECIP_CLASS_LABELS,
+  CHIRPS_PRECIP_RAMP,
+  CHIRPS_SCIENTIFIC_NAME,
+} from './chirpsRainfall/chirpsIndices'
 import {
   agroCompositeClassColorCss,
   resolveAgroCompositeTenClassRamp,
@@ -39,6 +47,12 @@ import {
   SENTINEL_ET_10_CLASS_LABELS,
   SENTINEL_ET_RAMP,
 } from './etIndex'
+import {
+  SENTINEL_LST_10_CLASS_BREAKS,
+  SENTINEL_LST_10_CLASS_COLORS,
+  SENTINEL_LST_10_CLASS_LABELS,
+  SENTINEL_LST_RAMP,
+} from './lstIndex'
 import {
   SENTINEL_EVI_RAMP,
   SENTINEL_GNDVI_RAMP,
@@ -99,7 +113,7 @@ export function hexNumberToCss(hex: number): string {
   return `#${(n & 0xffffff).toString(16).padStart(6, '0')}`
 }
 
-function sampleRampColor(value: number, ramp: RampStop[]): string {
+function sampleRampColor(value: number, ramp: readonly RampStop[]): string {
   if (!ramp.length) return '#888888'
   if (value <= ramp[0]![0]) return hexNumberToCss(ramp[0]![1])
   if (value >= ramp[ramp.length - 1]![0]) return hexNumberToCss(ramp[ramp.length - 1]![1])
@@ -123,8 +137,8 @@ function sampleRampColor(value: number, ramp: RampStop[]): string {
   return hexNumberToCss(ramp[ramp.length - 1]![1])
 }
 
-export function rampToGradientCss(ramp: RampStop): string {
-  if (ramp.length < 2) return sampleRampColor(0, ramp)
+export function rampToGradientCss(ramp: readonly RampStop[]): string {
+  if (ramp.length < 2) return sampleRampColor(0, [...ramp])
   const min = ramp[0]![0]
   const max = ramp[ramp.length - 1]![0]
   const span = max - min || 1
@@ -202,7 +216,7 @@ const NDMI_CLASS_LABELS = [
 ] as const
 
 function buildRampDiscreteClasses(
-  ramp: RampStop,
+  ramp: readonly RampStop[],
   count: number,
   labelPrefix: string,
   labels?: readonly string[],
@@ -223,7 +237,7 @@ function buildRampDiscreteClasses(
           : i === count - 1
             ? `≥ ${formatIndexValue(lo)}`
             : `${formatIndexValue(lo)} – ${formatIndexValue(hi)}`,
-      color: sampleRampColor(mid, ramp),
+      color: sampleRampColor(mid, [...ramp]),
     })
   }
   return classes
@@ -327,6 +341,46 @@ function buildEtLegend(): LayerLiveLegendSpec {
     ),
     note:
       'ET = MoistureDemand × Season × Kc × 10 mm/day · Moisture = 1 − (0.6×NDMI + 0.4×NDWI) · Kc from NDVI · Classes = AOI percentiles (deciles) per scene',
+  }
+}
+
+function buildLstLegend(): LayerLiveLegendSpec {
+  return {
+    id: 'lst',
+    title: 'LST',
+    subtitle: 'Land Surface Temperature (°C) — 10-class thermal · Cold → Hot',
+    kind: 'discrete',
+    valueMin: 5,
+    valueMax: 55,
+    scaleLabels: { low: 'Cold', mid: 'Mild', high: 'Hot' },
+    gradientCss: rampToGradientCss(SENTINEL_LST_RAMP),
+    classes: buildClassesFromBreaks(
+      SENTINEL_LST_10_CLASS_BREAKS,
+      SENTINEL_LST_10_CLASS_COLORS,
+      SENTINEL_LST_10_CLASS_LABELS,
+    ),
+    note:
+      'LST proxy (°C) = seasonBase − 12×NDVI + 8×dryness · dryness from NDMI · Sentinel-2 has no thermal band — map is a vegetation/moisture seasonal estimate until Landsat ST is wired',
+  }
+}
+
+function buildChirpsPrecipLegend(): LayerLiveLegendSpec {
+  return {
+    id: 'precip',
+    title: 'Precipitation',
+    subtitle: CHIRPS_SCIENTIFIC_NAME,
+    kind: 'discrete',
+    valueMin: 0,
+    valueMax: 150,
+    scaleLabels: { low: 'Dry', mid: 'Moderate', high: 'Wet' },
+    gradientCss: rampToGradientCss(CHIRPS_PRECIP_RAMP),
+    classes: buildClassesFromBreaks(
+      [...CHIRPS_PRECIP_CLASS_BREAKS],
+      [...CHIRPS_PRECIP_CLASS_COLORS],
+      [...CHIRPS_PRECIP_CLASS_LABELS],
+    ),
+    note:
+      'UCSB CHIRPS v2.0 rainfall (mm) · P = Σ Rainfall · RAI / SPI / RTI / RDI / WAI for the AOI window · open *_rgb.tif for GIS display',
   }
 }
 
@@ -474,6 +528,7 @@ const LEGEND_BY_PROFILE: Record<string, () => LayerLiveLegendSpec> = {
   ndwi: buildNdwiLegend,
   ndmi: buildNdmiLegend,
   et: buildEtLegend,
+  lst: buildLstLegend,
   mndwi: () =>
     buildIndexRampLegend('mndwi', 'MNDWI', 'Modified water index', SENTINEL_MNDWI_RAMP, 10, {
       low: 'Dry land',
@@ -636,6 +691,10 @@ export function resolveLayerLiveLegendSpec(
 ): LayerLiveLegendSpec | null {
   const key = normalizeLayerKey(layerId, layerLabel)
   const title = (layerLabel || layerId || 'Layer').trim() || 'Layer'
+
+  if (isChirpsPrecipLayerId(layerId) || isChirpsPrecipLayerId(key)) {
+    return enrichLegendWithAnalyticalResolution(buildChirpsPrecipLegend())
+  }
 
   if (isAgroCompositeLayerId(layerId)) {
     const composite = buildAgroCompositeLegend(layerId)

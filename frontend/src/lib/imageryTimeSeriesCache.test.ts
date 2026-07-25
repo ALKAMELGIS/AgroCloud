@@ -3,6 +3,8 @@ import {
   buildImageryTsCacheKey,
   buildImageryTsChunkCacheKey,
   findImageryTsOverlappingDaily,
+  isImageryTsCacheComplete,
+  isImageryTsCacheFreshComplete,
   setImageryTsMemoryCache,
   writeImageryTsChunkCache,
 } from './imageryTimeSeriesCache'
@@ -10,8 +12,29 @@ import {
 describe('imageryTimeSeriesCache overlap', () => {
   it('builds chunk cache keys scoped to geometry and range', () => {
     expect(buildImageryTsChunkCacheKey('geom1', '2024-01-01', '2024-03-31', 65)).toBe(
-      'chunk|geom1|2024-01-01|2024-03-31|65|v1',
+      'chunk|geom1|2024-01-01|2024-03-31|65|multi|v7',
     )
+  })
+
+  it('treats preview-only records without complete as incomplete', () => {
+    const record = {
+      cacheKey: 'k',
+      fieldKey: 'f',
+      fromIso: '2021-01-01',
+      toIso: '2026-07-21',
+      cloudFilter: 65,
+      daily: [{ date: '2026-07-10', ndvi: 0.4 }],
+      savedAt: Date.now(),
+      expiresAt: Date.now() + 60_000,
+    }
+    expect(isImageryTsCacheComplete(record)).toBe(false)
+    expect(isImageryTsCacheFreshComplete(record)).toBe(false)
+    expect(
+      isImageryTsCacheFreshComplete({
+        ...record,
+        complete: true,
+      }),
+    ).toBe(true)
   })
 
   it('merges overlapping in-memory range and chunk caches for instant Apply', async () => {
@@ -37,6 +60,7 @@ describe('imageryTimeSeriesCache overlap', () => {
       ],
       savedAt: Date.now(),
       expiresAt: Date.now() + 60_000,
+      complete: true,
     })
 
     await writeImageryTsChunkCache(

@@ -35,6 +35,7 @@ describe('acpImageryTimeSeries', () => {
     const flat = flattenImageryTimeSeriesLayerOptions()
     expect(groups.some(g => g.label.includes('Core Interpretation'))).toBe(true)
     expect(groups.some(g => g.label.includes('Vegetation Health'))).toBe(true)
+    expect(groups.some(g => g.label.includes('Crop Phenology'))).toBe(true)
     expect(groups.some(g => g.label.includes('Delta'))).toBe(true)
     expect(flat.some(o => o.id === 'NDVI')).toBe(true)
     expect(flat.some(o => o.id === 'ET')).toBe(true)
@@ -42,7 +43,65 @@ describe('acpImageryTimeSeries', () => {
     expect(flat.some(o => o.id === 'DVHS')).toBe(true)
     expect(flat.some(o => o.id === 'CHAS')).toBe(true)
     expect(flat.some(o => o.id === 'DCHAS')).toBe(true)
+    expect(flat.some(o => o.id === 'PRI')).toBe(true)
+    expect(flat.some(o => o.id === 'CGI')).toBe(true)
+    expect(flat.some(o => o.id === 'CVI')).toBe(true)
+    expect(flat.some(o => o.id === 'CHS')).toBe(true)
+    expect(flat.some(o => o.id === 'CMI')).toBe(true)
+    expect(flat.some(o => o.id === 'HRI')).toBe(true)
+    expect(flat.some(o => o.id === 'VRI')).toBe(true)
+    expect(flat.some(o => o.id === 'CCI')).toBe(true)
+    expect(flat.some(o => o.id === 'EPD')).toBe(true)
+    expect(flat.some(o => o.id === 'EHD')).toBe(true)
     expect(flat.length).toBeGreaterThan(40)
+  })
+
+  it('evaluates crop phenology composites from daily means', () => {
+    const row = dailyRow({ ndvi: 0.6, ndmi: 0.3, ndwi: 0.2, evi: 0.55, ndre: 0.4, savi: 0.5 })
+    expect(evaluateImageryLayerDailyValue('PRI', row)).toBeCloseTo(
+      0.35 * 0.6 + 0.25 * 0.3 + 0.2 * 0.2 + 0.1 * 0.5 + 0.1 * 0.55,
+      4,
+    )
+    expect(evaluateImageryLayerDailyValue('CGI', row)).toBeCloseTo(
+      0.4 * 0.6 + 0.3 * 0.55 + 0.2 * 0.4 + 0.1 * 0.3,
+      4,
+    )
+    expect(evaluateImageryLayerDailyValue('CVI', row)).toBeCloseTo(0.5 * 0.6 + 0.3 * 0.55 + 0.2 * 0.4, 4)
+    expect(evaluateImageryLayerDailyValue('CHS', row)).toBeCloseTo(
+      0.3 * 0.6 + 0.25 * 0.4 + 0.2 * 0.55 + 0.15 * 0.3 + 0.1 * 0.5,
+      4,
+    )
+    expect(evaluateImageryLayerDailyValue('CMI', row)).toBeCloseTo(0.5 * 0.4 + 0.3 * 0.6 + 0.2 * 0.55, 4)
+    expect(evaluateImageryLayerDailyValue('HRI', row)).toBeCloseTo(
+      0.4 * (1 - 0.6) + 0.25 * (1 - 0.4) + 0.2 * (1 - 0.3) + 0.15 * (1 - 0.5),
+      4,
+    )
+  })
+
+  it('aggregates VRI / CCI / EPD / EHD time series', () => {
+    const map = new Map<string, SentinelHubDailyIndexMeans[]>()
+    map.set('f1', [
+      dailyRow({ date: '2026-03-01', ndvi: 0.2, ndmi: 0.15, ndwi: 0.1, evi: 0.18, ndre: 0.12, savi: 0.18 }),
+      dailyRow({ date: '2026-03-10', ndvi: 0.35, ndmi: 0.22, ndwi: 0.15, evi: 0.3, ndre: 0.2, savi: 0.28 }),
+      dailyRow({ date: '2026-03-20', ndvi: 0.55, ndmi: 0.35, ndwi: 0.25, evi: 0.5, ndre: 0.35, savi: 0.45 }),
+      dailyRow({ date: '2026-04-01', ndvi: 0.7, ndmi: 0.4, ndwi: 0.28, evi: 0.62, ndre: 0.45, savi: 0.55 }),
+      dailyRow({ date: '2026-05-15', ndvi: 0.45, ndmi: 0.2, ndwi: 0.12, evi: 0.4, ndre: 0.5, savi: 0.35 }),
+      dailyRow({ date: '2026-06-01', ndvi: 0.3, ndmi: 0.1, ndwi: 0.08, evi: 0.25, ndre: 0.4, savi: 0.22 }),
+    ])
+    const vri = aggregateImageryTimeSeries(map, ['f1'], 'VRI')
+    expect(vri.values.some(v => Number.isFinite(v))).toBe(true)
+    expect(Math.max(...vri.values.filter(Number.isFinite))).toBeCloseTo(1, 3)
+    expect(Math.min(...vri.values.filter(Number.isFinite))).toBeCloseTo(0, 3)
+
+    const cci = aggregateImageryTimeSeries(map, ['f1'], 'CCI')
+    expect(cci.values.every(v => !Number.isFinite(v) || (v >= 0 && v <= 1))).toBe(true)
+
+    const epd = aggregateImageryTimeSeries(map, ['f1'], 'EPD')
+    expect(epd.values.includes(1)).toBe(true)
+    expect(epd.values[0]).toBe(0)
+
+    const ehd = aggregateImageryTimeSeries(map, ['f1'], 'EHD')
+    expect(ehd.values.includes(1)).toBe(true)
   })
 
   it('evaluates composite and core indices from daily means', () => {
@@ -51,8 +110,27 @@ describe('acpImageryTimeSeries', () => {
     const et = evaluateImageryLayerDailyValue('ET', row)
     expect(et).not.toBeNull()
     expect(et!).toBeGreaterThan(0)
+    const lst = evaluateImageryLayerDailyValue('LST', row)
+    expect(lst).not.toBeNull()
+    expect(lst!).toBeGreaterThan(5)
+    expect(lst!).toBeLessThan(55)
     expect(evaluateImageryLayerDailyValue('VHS', row)).toBeCloseTo(0.79, 2)
     expect(evaluateImageryLayerDailyValue('CHAS', row)).not.toBeNull()
+  })
+
+  it('derives LST from NDVI and NDMI with seasonal scene date', () => {
+    const cool = dailyRow({ date: '2026-01-15', ndvi: 0.55, ndmi: 0.25 })
+    const hot = dailyRow({ date: '2026-07-15', ndvi: 0.25, ndmi: -0.1 })
+    const coolLst = evaluateImageryLayerDailyValue('LST', cool)
+    const hotLst = evaluateImageryLayerDailyValue('LST', hot)
+    expect(coolLst).not.toBeNull()
+    expect(hotLst).not.toBeNull()
+    expect(hotLst!).toBeGreaterThan(coolLst!)
+  })
+
+  it('returns null LST when NDVI or NDMI is missing', () => {
+    expect(evaluateImageryLayerDailyValue('LST', dailyRow({ ndvi: null, ndmi: 0.2 }))).toBeNull()
+    expect(evaluateImageryLayerDailyValue('LST', dailyRow({ ndvi: 0.5, ndmi: null }))).toBeNull()
   })
 
   it('evaluates salinity NDSI / SI / SSI without requiring NDVI', () => {

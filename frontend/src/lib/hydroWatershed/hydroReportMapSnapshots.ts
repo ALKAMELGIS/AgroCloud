@@ -1,4 +1,8 @@
-import type { HydroLegend, HydroStepResult } from './hydroEngine'
+import {
+  contourElevationStrokeColor,
+  type HydroLegend,
+  type HydroStepResult,
+} from './hydroEngine'
 import {
   bboxFromGeometry,
   dataUrlToPngBase64,
@@ -19,6 +23,17 @@ const MAP_ELEMENTS_LEGEND: HydroLegend = {
     { color: '#0f172a', label: 'North arrow' },
     { color: '#ffffff', label: 'Scale bar' },
   ],
+}
+
+function mapElementsLegend(includeWellMarkers: boolean): HydroLegend {
+  if (!includeWellMarkers) return MAP_ELEMENTS_LEGEND
+  return {
+    ...MAP_ELEMENTS_LEGEND,
+    swatches: [
+      ...MAP_ELEMENTS_LEGEND.swatches,
+      { color: '#1e3a8a', label: 'Recommended well (rank #)' },
+    ],
+  }
 }
 
 export type HydroSnapshotLayout = {
@@ -59,10 +74,10 @@ function parseCssColor(color: string): string {
   return c
 }
 
-function legendSections(layerLegend?: HydroLegend): HydroLegend[] {
+function legendSections(layerLegend?: HydroLegend, includeWellMarkers = false): HydroLegend[] {
   const sections: HydroLegend[] = []
   if (layerLegend) sections.push(layerLegend)
-  sections.push(MAP_ELEMENTS_LEGEND)
+  sections.push(mapElementsLegend(includeWellMarkers))
   return sections
 }
 
@@ -98,8 +113,11 @@ function measureLegendSection(legend: HydroLegend, sectionW: number): { width: n
   }
 }
 
-export function resolveHydroSnapshotLayout(layerLegend?: HydroLegend): HydroSnapshotLayout {
-  const sections = legendSections(layerLegend)
+export function resolveHydroSnapshotLayout(
+  layerLegend?: HydroLegend,
+  includeWellMarkers = false,
+): HydroSnapshotLayout {
+  const sections = legendSections(layerLegend, includeWellMarkers)
   const gap = 8
   const sectionW = Math.floor((SNAPSHOT_WIDTH - gap * (sections.length - 1)) / sections.length)
   const sectionHeights = sections.map(s => measureLegendSection(s, sectionW).height)
@@ -421,8 +439,9 @@ function drawLegendStrip(
   ctx: CanvasRenderingContext2D,
   layerLegend: HydroLegend | undefined,
   layout: HydroSnapshotLayout,
+  includeWellMarkers = false,
 ): void {
-  const sections = legendSections(layerLegend)
+  const sections = legendSections(layerLegend, includeWellMarkers)
   const gap = 8
   const sectionW = Math.floor((layout.legendW - gap * (sections.length - 1)) / sections.length)
   let x = layout.legendX
@@ -507,25 +526,11 @@ function drawContourLayer(
   ctx.save()
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
-  for (const f of features) {
-    if (!f.geometry || f.geometry.type !== 'LineString') continue
+
+  const strokeFeature = (f: GeoJSON.Feature, lineWidth: number, stroke: string) => {
+    if (!f.geometry || f.geometry.type !== 'LineString') return
     const coords = f.geometry.coordinates as [number, number][]
-    const elev = Number(f.properties?.elev ?? 0)
-    const isIndex = Number(f.properties?.index ?? 0) === 1
-    const isHigh = elev >= maxElev
-    const isLow = elev <= minElev
-    let stroke = '#64748b'
-    let lineWidth = 0.85
-    if (isIndex) {
-      stroke = '#0f172a'
-      lineWidth = 2.2
-    } else if (isHigh) {
-      stroke = '#991b1b'
-      lineWidth = 1.6
-    } else if (isLow) {
-      stroke = '#1d4ed8'
-      lineWidth = 1.6
-    }
+    if (!coords.length) return
     ctx.strokeStyle = stroke
     ctx.lineWidth = lineWidth
     ctx.beginPath()
@@ -536,6 +541,21 @@ function drawContourLayer(
       ctx.lineTo(px, py)
     }
     ctx.stroke()
+  }
+
+  // Regular contours first (blue→red by elevation), index contours on top (thicker).
+  for (const f of features) {
+    if (Number(f.properties?.index ?? 0) === 1) continue
+    const elev = Number(f.properties?.elev ?? 0)
+    strokeFeature(f, 1.15, contourElevationStrokeColor(elev, minElev, maxElev))
+  }
+  for (const f of features) {
+    if (Number(f.properties?.index ?? 0) !== 1) continue
+    const elev = Number(f.properties?.elev ?? 0)
+    const color = contourElevationStrokeColor(elev, minElev, maxElev)
+    // Dark halo so index lines read clearly on imagery, then coloured core.
+    strokeFeature(f, 3.2, 'rgba(15, 23, 42, 0.55)')
+    strokeFeature(f, 2.0, color)
   }
   ctx.restore()
 }
@@ -590,6 +610,50 @@ function drawVectorLayer(
   drawStreamLayer(ctx, result, bbox, x, y, w, h)
 }
 
+export type HydroReportMapMarker = {
+  lng: number
+  lat: number
+  /** Rank / site number drawn inside the marker. */
+  label: string
+  color?: string
+}
+
+function drawRankedMarkers(
+  ctx: CanvasRenderingContext2D,
+  markers: HydroReportMapMarker[],
+  bbox: LngLatBbox,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): void {
+  if (!markers.length) return
+  ctx.save()
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  for (const m of markers) {
+    const [px, py] = projectCoord([m.lng, m.lat], bbox, x, y, w, h)
+    if (px < x - 8 || px > x + w + 8 || py < y - 8 || py > y + h + 8) continue
+    const fill = m.color || '#1e3a8a'
+    const r = 11
+    ctx.beginPath()
+    ctx.arc(px, py, r + 1.5, 0, Math.PI * 2)
+    ctx.fillStyle = 'rgba(255,255,255,0.95)'
+    ctx.fill()
+    ctx.beginPath()
+    ctx.arc(px, py, r, 0, Math.PI * 2)
+    ctx.fillStyle = fill
+    ctx.fill()
+    ctx.strokeStyle = '#ffffff'
+    ctx.lineWidth = 2
+    ctx.stroke()
+    ctx.fillStyle = '#ffffff'
+    ctx.font = 'bold 11px "Segoe UI", system-ui, sans-serif'
+    ctx.fillText(m.label, px, py + 0.5)
+  }
+  ctx.restore()
+}
+
 function drawGeoreferencedRaster(
   ctx: CanvasRenderingContext2D,
   img: HTMLImageElement,
@@ -621,10 +685,19 @@ export async function compositeHydroMapSnapshot(options: {
   layerDataUrl?: string | null
   rasterCoordinates?: HydroRasterCoordinates | null
   vectorResult?: HydroStepResult | null
+  /** Ranked well / site markers drawn above the AOI outline. */
+  markers?: HydroReportMapMarker[] | null
+  /** Raster overlay opacity (0–1). Default 0.82; use ~0.94 for vivid heatmaps. */
+  layerOpacity?: number
   legend?: HydroLegend
 }): Promise<string | null> {
-  const layout = resolveHydroSnapshotLayout(options.legend)
+  const hasMarkers = Boolean(options.markers?.length)
+  const layout = resolveHydroSnapshotLayout(options.legend, hasMarkers)
   const { mapX, mapY, mapW, mapH, canvasW, canvasH } = layout
+  const layerOpacity =
+    typeof options.layerOpacity === 'number' && Number.isFinite(options.layerOpacity)
+      ? Math.min(1, Math.max(0.15, options.layerOpacity))
+      : 0.82
 
   const canvas = document.createElement('canvas')
   canvas.width = canvasW
@@ -658,10 +731,11 @@ export async function compositeHydroMapSnapshot(options: {
           mapY,
           mapW,
           mapH,
+          layerOpacity,
         )
       } else {
         ctx.save()
-        ctx.globalAlpha = 0.82
+        ctx.globalAlpha = layerOpacity
         ctx.drawImage(layer, mapX, mapY, mapW, mapH)
         ctx.restore()
       }
@@ -675,9 +749,12 @@ export async function compositeHydroMapSnapshot(options: {
   }
 
   drawAoiOutline(ctx, options.geometry, options.extent, mapX, mapY, mapW, mapH)
+  if (options.markers?.length) {
+    drawRankedMarkers(ctx, options.markers, options.extent, mapX, mapY, mapW, mapH)
+  }
   drawNorthArrow(ctx, mapX + 12, mapY + 12)
   drawScaleBar(ctx, options.extent, mapX, mapY, mapW, mapH)
-  drawLegendStrip(ctx, options.legend, layout)
+  drawLegendStrip(ctx, options.legend, layout, hasMarkers)
 
   return dataUrlToPngBase64(canvas.toDataURL('image/png'))
 }

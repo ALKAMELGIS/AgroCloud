@@ -1,10 +1,14 @@
 import {
+  CHANGE_CHART_IMAGE_CX,
+  CHANGE_CHART_IMAGE_CY,
   CHART_IMAGE_CX,
   CHART_IMAGE_CY,
+  CHART_IMAGE_CY_TALL,
   DOCX_BRAND,
   DOCX_TABLE_FONT_SZ,
   docxBodyParagraph,
   docxBulletList,
+  docxChangePairMaps,
   docxCoverPage,
   docxInlineChart,
   docxInlineImage,
@@ -20,6 +24,7 @@ import {
   wrapDocumentBody,
 } from './timeSeriesDocxXml'
 import type {
+  DocxIndexChangeBlock,
   DocxLulcChangeBlock,
   DocxLulcYearBlock,
   DocxMapLayerBlock,
@@ -42,7 +47,7 @@ function escape(s: string): string {
 
 /** Chart sub-title — styled but not in TOC (no Heading style / outline). */
 function chartCaptionHeading(text: string): string {
-  return `<w:p><w:pPr><w:keepNext/><w:spacing w:before="80" w:after="40" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:rPr><w:b/><w:bCs/><w:color w:val="${DOCX_BRAND}"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escape(text)}</w:t></w:r></w:p>`
+  return `<w:p><w:pPr><w:keepNext/><w:spacing w:before="40" w:after="20" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:rPr><w:b/><w:bCs/><w:color w:val="${DOCX_BRAND}"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escape(text)}</w:t></w:r></w:p>`
 }
 
 function renderMapLayerBlock(
@@ -52,20 +57,16 @@ function renderMapLayerBlock(
   const parts: string[] = []
   parts.push(opts.pushHeading(layer.title, 2))
   parts.push(docxMapGrid(layer.snapshots))
+  // Chart immediately under maps — legend/narrative after avoids large blank bands.
+  if (opts.withChart && layer.chartRId) {
+    parts.push(chartCaptionHeading(layer.chartTitle ?? 'Index Trend Chart'))
+    parts.push(docxInlineChart(layer.chartRId))
+  }
   if (layer.legend) {
     parts.push(docxItalicNote(`Legend key: ${layer.legend}`))
   }
   if (layer.narrative) {
     parts.push(docxBodyParagraph(layer.narrative))
-  }
-  if (opts.withChart && layer.chartRId) {
-    parts.push(chartCaptionHeading(layer.chartTitle ?? 'Index Trend Chart'))
-    parts.push(
-      docxItalicNote(
-        'Native editable Office chart (Excel-style). Click the chart in Word to edit series, axes, and formatting.',
-      ),
-    )
-    parts.push(docxInlineChart(layer.chartRId))
   }
   return parts.join('')
 }
@@ -105,8 +106,8 @@ function renderLulcYearBlock(
   }
   if (block.pieChartRId) {
     parts.push(chartCaptionHeading(block.pieChartTitle ?? `LULC ${block.year} Share %`))
-    parts.push(docxItalicNote('Native pie chart — class share (%) of classified AOI area.'))
-    parts.push(docxInlineChart(block.pieChartRId))
+    parts.push(docxItalicNote('Class share (%) of classified AOI area — percent labels with side legend.'))
+    parts.push(docxInlineChart(block.pieChartRId, CHART_IMAGE_CX, CHART_IMAGE_CY_TALL))
   }
   if (block.barChartRId) {
     parts.push(chartCaptionHeading(block.barChartTitle ?? `LULC ${block.year} Area (ha)`))
@@ -159,13 +160,58 @@ function renderLulcChangeBlock(
   return parts.join('')
 }
 
+function renderIndexChangeBlock(
+  block: DocxIndexChangeBlock,
+  pushHeading: (title: string, level: 1 | 2) => string,
+): string {
+  const parts: string[] = []
+  // Sample page: pair title → T0|T1 maps → Index Change Table → compare chart → Δ chart → legend/narrative
+  parts.push(pushHeading(block.title, 2))
+  if (block.snapshots.length) parts.push(docxChangePairMaps(block.snapshots))
+  if (block.tableRows.length) {
+    parts.push(chartCaptionHeading('Index Change Table'))
+    parts.push(
+      docxItalicNote(
+        'T0 / T1 AOI means for this consecutive period pair. Δ = T1 − T0 (positive = increase).',
+      ),
+    )
+    parts.push(docxTable(block.tableHeaders, block.tableRows, [2800, 2200, 2200, 2880]))
+  }
+  if (block.compareChartRId) {
+    parts.push(chartCaptionHeading(block.compareChartTitle ?? 'Index Change Detection'))
+    parts.push(
+      docxItalicNote(
+        'Native comparison chart — AOI mean for T0 versus T1 (follows panel Day/Week/Month/Year periods).',
+      ),
+    )
+    parts.push(
+      docxInlineChart(block.compareChartRId, CHANGE_CHART_IMAGE_CX, CHANGE_CHART_IMAGE_CY, {
+        center: true,
+      }),
+    )
+  }
+  if (block.deltaChartRId) {
+    parts.push(chartCaptionHeading(block.deltaChartTitle ?? 'Δ Index Change'))
+    parts.push(docxItalicNote('Native Δ chart — change in AOI mean between the two periods.'))
+    parts.push(
+      docxInlineChart(block.deltaChartRId, CHANGE_CHART_IMAGE_CX, CHANGE_CHART_IMAGE_CY, {
+        center: true,
+      }),
+    )
+  }
+  if (block.legend) parts.push(docxItalicNote(`Legend key: ${block.legend}`))
+  if (block.narrative) parts.push(docxBodyParagraph(block.narrative))
+  return parts.join('')
+}
+
 /**
  * Page 1: cover · Page 2: Table of Contents with page numbers · then report body.
  */
 export function buildTimeSeriesDocxDocumentXml(model: TimeSeriesDocxModel): string {
   const tocEntries: string[] = []
   const pushHeading = (title: string, level: 1 | 2 = 1, keepNext = true): string => {
-    tocEntries.push(title)
+    // TOC lists main (level-1) section titles only — each with a page number in Word.
+    if (level === 1) tocEntries.push(title)
     return docxSectionHeading(title, keepNext, level)
   }
 
@@ -257,12 +303,22 @@ export function buildTimeSeriesDocxDocumentXml(model: TimeSeriesDocxModel): stri
       body.push(pushHeading('Climate Charts — Temperature · Rainfall · Humidity', 2))
       body.push(
         docxItalicNote(
-          'Native editable Office charts (Excel-style). Temperature Max·Mean·Min at daily, monthly, and yearly scales; cumulative and monthly rainfall; humidity; rainfall share pie; and dual-axis comparisons with NDVI, NDMI, NDWI, and SAVI.',
+          'Clear Office charts: temperature extremes (daily / monthly / yearly), rainfall totals and cumulative bars, top-month rainfall share (horizontal bar), annual rainfall share when multi-year, humidity, and dual-axis comparisons with NDVI, NDMI, NDWI, and SAVI. Full monthly values follow in the table below.',
         ),
       )
       for (const chart of model.weatherChartRIds) {
         body.push(chartCaptionHeading(chart.title))
-        body.push(docxInlineChart(chart.rId))
+        const cy = chart.tall ? CHART_IMAGE_CY_TALL : CHART_IMAGE_CY
+        body.push(docxInlineChart(chart.rId, CHART_IMAGE_CX, cy))
+        if (chart.title.includes('Rainfall Share')) {
+          body.push(
+            docxBodyParagraph(
+              chart.title.includes('Top Months')
+                ? 'Interpretation: Bars show each month’s share of total rainfall in the analysis period (top contributors; remaining months grouped as Other). Use peaks to time planting, irrigation, and flood-risk windows.'
+                : 'Interpretation: Slice size is each year’s share of multi-year rainfall — compare wet vs dry years for seasonal planning.',
+            ),
+          )
+        }
       }
     } else if (model.weatherChartRId) {
       body.push(chartCaptionHeading('Weather Chart'))
@@ -313,13 +369,35 @@ export function buildTimeSeriesDocxDocumentXml(model: TimeSeriesDocxModel): stri
         [1500, 1500, 1900, 1700, 3480],
       ),
     )
+    if (model.vegCoverageChartRIds.length) {
+      body.push(pushHeading('Vegetation Coverage — Chart Timeline', 2))
+      body.push(
+        docxItalicNote(
+          'Statistical timeline of canopy cover versus bare ground, with NDVI mean on a secondary axis. Class-share lines (when available) show how Healthy / Moderate / Stress / Bare fractions evolve.',
+        ),
+      )
+      for (const chart of model.vegCoverageChartRIds) {
+        body.push(chartCaptionHeading(chart.title))
+        body.push(
+          docxInlineChart(
+            chart.rId,
+            CHART_IMAGE_CX,
+            chart.tall ? CHART_IMAGE_CY_TALL : CHART_IMAGE_CY,
+          ),
+        )
+      }
+      if (model.vegCoverageChartInterpretation) {
+        body.push(pushHeading('Interpretation', 2))
+        body.push(docxBodyParagraph(model.vegCoverageChartInterpretation))
+      }
+    }
   }
 
   if (model.mapLayers.length) {
     body.push(pushHeading('Map Snapshots & Index Charts — Selected Layers'))
     body.push(
       docxItalicNote(
-        'Each selected index is presented with AOI maps (4 maps per page, 2×2), Layer Live color keys on every figure, and an editable Office trend chart below that index. Source: Sentinel-2 L2A (Sentinel Hub WMS).',
+        'Enterprise atlas layout: 12 map cards per page in a uniform 3×4 grid. Only dates with successful index analysis rasters and zonal means are included — empty basemap-only cards are omitted. Each card includes title bar, map (AOI + north arrow + scale), Layer Live legend, and a date/index caption. Editable Office trend chart follows each index.',
       ),
     )
     model.mapLayers.forEach((layer, i) => {
@@ -328,7 +406,19 @@ export function buildTimeSeriesDocxDocumentXml(model: TimeSeriesDocxModel): stri
     })
   }
 
-  if (model.changeDetectionMapLayers.length) {
+  if (model.indexChangeBlocks.length) {
+    body.push(docxPageBreak())
+    body.push(pushHeading('Index Change Detection'))
+    body.push(
+      docxItalicNote(
+        'Consecutive period comparisons for each selected index (aligned with panel Time aggregation). Each page shows T0/T1 maps side-by-side, an Index Change Table, then native comparison and Δ charts.',
+      ),
+    )
+    model.indexChangeBlocks.forEach(block => {
+      body.push(docxPageBreak())
+      body.push(renderIndexChangeBlock(block, pushHeading))
+    })
+  } else if (model.changeDetectionMapLayers.length) {
     body.push(docxPageBreak())
     body.push(pushHeading('Index Change Detection'))
     body.push(
@@ -420,25 +510,6 @@ export function buildTimeSeriesDocxDocumentXml(model: TimeSeriesDocxModel): stri
     })
   }
 
-  if (model.correlationBlocks.length) {
-    body.push(docxPageBreak())
-    body.push(pushHeading('Correlation Analysis — Scatter Plots & R²'))
-    body.push(
-      docxItalicNote(
-        'Pairwise relationship among selected layers. R² and Pearson r quantify linear association.',
-      ),
-    )
-    for (const block of model.correlationBlocks) {
-      body.push(pushHeading(block.title, 2))
-      body.push(docxItalicNote(block.r2Label))
-      if (block.rId) {
-        body.push(docxInlineImage(block.rId, CHART_IMAGE_CX, CHART_IMAGE_CY))
-      }
-      body.push(docxBodyParagraph(block.gisInsight))
-      body.push(docxBodyParagraph(block.agroInsight))
-    }
-  }
-
   body.push(pushHeading('Data Quality Notes'))
   body.push(docxBodyParagraph(model.dataQualityNotes))
 
@@ -453,6 +524,52 @@ export function buildTimeSeriesDocxDocumentXml(model: TimeSeriesDocxModel): stri
       ),
     )
     body.push(docxBulletList(model.cropRecommendationBullets))
+  }
+
+  // Annexes at end — charts first, then all paired-value tables.
+  if (model.correlationBlocks.length) {
+    body.push(docxPageBreak())
+    body.push(pushHeading('Annex A — Correlation Analysis'))
+    body.push(
+      docxItalicNote(
+        'Editable Office scatter charts (white report style) for every selected index pair, sorted by layer. Paired observation tables are collected in Annex B.',
+      ),
+    )
+    model.correlationBlocks.forEach((block, i) => {
+      if (i > 0) body.push(docxPageBreak())
+      body.push(pushHeading(block.title, 2))
+      body.push(docxItalicNote(block.r2Label))
+      if (block.chartRId) {
+        body.push(chartCaptionHeading(block.title.replace(/\s·\s.*$/, '') || 'Correlation Scatter'))
+        body.push(docxInlineChart(block.chartRId, CHART_IMAGE_CX, CHART_IMAGE_CY_TALL))
+      } else if (block.rId) {
+        body.push(docxInlineImage(block.rId, CHART_IMAGE_CX, CHART_IMAGE_CY))
+      }
+      body.push(chartCaptionHeading('Interpretation'))
+      body.push(docxBodyParagraph(block.interpretation))
+    })
+
+    const blocksWithTables = model.correlationBlocks.filter(b => b.valueRows.length)
+    if (blocksWithTables.length) {
+      body.push(docxPageBreak())
+      body.push(pushHeading('Annex B — Paired Values Tables'))
+      body.push(
+        docxItalicNote(
+          'Date-aligned paired observations for each Correlation Analysis index pair. Use these tables to audit chart points and regression inputs.',
+        ),
+      )
+      blocksWithTables.forEach((block, i) => {
+        if (i > 0) body.push(docxPageBreak())
+        body.push(pushHeading(`${block.xLayerId} × ${block.yLayerId}`, 2))
+        body.push(docxItalicNote(block.r2Label))
+        body.push(chartCaptionHeading('Paired values'))
+        const widths =
+          block.valueHeaders.length === 3
+            ? [3360, 3360, 3360]
+            : block.valueHeaders.map(() => Math.floor(10080 / Math.max(1, block.valueHeaders.length)))
+        body.push(docxTable(block.valueHeaders, block.valueRows, widths))
+      })
+    }
   }
 
   body.push(docxItalicNote(model.footerNote))

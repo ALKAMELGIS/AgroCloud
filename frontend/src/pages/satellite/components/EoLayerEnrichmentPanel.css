@@ -1,0 +1,144 @@
+.si-eo-enrich-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 12px 14px;
+}
+
+.si-eo-enrich__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.si-eo-enrich__title {
+  font-weight: 700;
+  font-size: 14px;
+  color: inherit;
+}
+
+.si-eo-enrich__mode {
+  display: flex;
+  gap: 6px;
+}
+
+.si-eo-enrich__mode-btn {
+  flex: 1;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.35);
+  color: inherit;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.si-eo-enrich__mode-btn.is-on {
+  background: #047857;
+  border-color: #059669;
+  color: #ecfdf5;
+}
+
+.si-eo-enrich__mode-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.si-eo-enrich__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.si-eo-enrich__field select,
+.si-eo-enrich__field input[type='number'],
+.si-eo-enrich__field input[type='file'] {
+  font-size: 12px;
+}
+
+.si-eo-enrich__file {
+  opacity: 0.85;
+  word-break: break-all;
+}
+
+.si-eo-enrich__progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.si-eo-enrich__bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.25);
+  overflow: hidden;
+}
+
+.si-eo-enrich__bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #047857, #34d399);
+  transition: width 0.2s ease;
+}
+
+.si-eo-enrich__msg {
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+.si-eo-enrich__error {
+  font-size: 12px;
+  color: #f87171;
+}
+
+.si-eo-enrich__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.si-eo-enrich__btn {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.35);
+  color: inherit;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.si-eo-enrich__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.si-eo-enrich__btn--primary {
+  background: #047857;
+  border-color: #059669;
+  color: #ecfdf5;
+}
+
+
+.si-eo-enrich__exports {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.si-eo-enrich__exports-title {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.si-eo-enrich__export-msg {
+  font-size: 11px;
+  color: #6ee7b7;
+}

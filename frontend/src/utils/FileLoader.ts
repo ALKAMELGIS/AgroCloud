@@ -187,6 +187,21 @@ export function normalizeGeoJsonEnvelope(data: unknown): { type: 'FeatureCollect
   return { type: 'FeatureCollection', features: cleaned };
 }
 
+/**
+ * KML/KMZ placemarks often include Point icons alongside polygons/lines.
+ * Drop Point/MultiPoint so only area/line geometries draw on the map.
+ */
+export function stripKmlPointFeatures(fc: {
+  type: 'FeatureCollection';
+  features: any[];
+}): { type: 'FeatureCollection'; features: any[] } {
+  const features = (fc.features ?? []).filter(f => {
+    const t = f?.geometry?.type;
+    return t !== 'Point' && t !== 'MultiPoint';
+  });
+  return { type: 'FeatureCollection', features };
+}
+
 function assertXmlHasNoParserErrors(doc: Document, label: string) {
   const err = doc.getElementsByTagName('parsererror')[0];
   if (err && err.textContent?.trim()) {
@@ -519,7 +534,11 @@ const parseKmz = async (file: File, opts?: ParseOptions): Promise<ParsedData> =>
     const dom = new DOMParser().parseFromString(text, 'text/xml');
     assertXmlHasNoParserErrors(dom, 'KML');
     const geojson = toGeoJSON.kml(dom);
-    return { type: 'geojson', data: normalizeGeoJsonEnvelope(geojson), filename: file.name };
+    return {
+      type: 'geojson',
+      data: stripKmlPointFeatures(normalizeGeoJsonEnvelope(geojson)),
+      filename: file.name,
+    };
   }
   throw new Error('No KML document found inside this ZIP/KMZ archive.');
 };
@@ -664,7 +683,11 @@ export const parseFile = async (file: File, opts?: ParseOptions): Promise<Parsed
     const dom = new DOMParser().parseFromString(text, 'text/xml');
     assertXmlHasNoParserErrors(dom, 'KML');
     const geojson = toGeoJSON.kml(dom);
-    return { type: 'geojson', data: normalizeGeoJsonEnvelope(geojson), filename };
+    return {
+      type: 'geojson',
+      data: stripKmlPointFeatures(normalizeGeoJsonEnvelope(geojson)),
+      filename,
+    };
   } else if (extension === 'gpx') {
     const text = await readAsText(file, opts);
     const dom = new DOMParser().parseFromString(text, 'text/xml');

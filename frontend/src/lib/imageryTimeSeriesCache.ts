@@ -18,6 +18,11 @@ export type ImageryTimeSeriesCacheRecord = {
   daily: SentinelHubDailyIndexMeans[]
   savedAt: number
   expiresAt: number
+  /**
+   * True only after every progressive chunk for this from/to key finished.
+   * Preview-only writes must stay incomplete so multi-year Start dates keep fetching.
+   */
+  complete?: boolean
 }
 
 const memoryCache = new Map<string, ImageryTimeSeriesCacheRecord>()
@@ -176,6 +181,8 @@ export async function writeImageryTsCache(
     toIso: string
     cloudFilter: number
     daily: SentinelHubDailyIndexMeans[]
+    /** Default true — pass false only for intentional partial snapshots (not used for early-return). */
+    complete?: boolean
   },
 ): Promise<void> {
   if (!params.daily.length) return
@@ -189,6 +196,7 @@ export async function writeImageryTsCache(
     daily: params.daily,
     savedAt: now,
     expiresAt: now + IMAGERY_TS_CACHE_TTL_MS,
+    complete: params.complete !== false,
   }
   setImageryTsMemoryCache(record)
   void writeImageryTsIdb(record)
@@ -198,6 +206,17 @@ export async function writeImageryTsCache(
 export function isImageryTsCacheFresh(record: ImageryTimeSeriesCacheRecord | null): boolean {
   if (!record?.daily?.length) return false
   return Date.now() < record.expiresAt
+}
+
+/** Full-range progressive fetch finished — safe to skip network. */
+export function isImageryTsCacheComplete(record: ImageryTimeSeriesCacheRecord | null): boolean {
+  if (!record?.daily?.length) return false
+  // Legacy entries without the flag are incomplete (may be preview-only poison).
+  return record.complete === true
+}
+
+export function isImageryTsCacheFreshComplete(record: ImageryTimeSeriesCacheRecord | null): boolean {
+  return isImageryTsCacheFresh(record) && isImageryTsCacheComplete(record)
 }
 
 export function isImageryTsCacheStaleButUsable(record: ImageryTimeSeriesCacheRecord | null): boolean {

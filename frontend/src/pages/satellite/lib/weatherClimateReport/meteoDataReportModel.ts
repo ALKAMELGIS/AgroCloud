@@ -85,6 +85,8 @@ export type MeteoDataReportModel = {
   cumulativeDeficit: Array<{ periodLabel: string; cumulativeMm: number }>
   /** Month × year cumulative water deficit (mm) for multi-year comparison lines. */
   cumulativeByYear: MeteoYearMatrix | null
+  /** Month × year cumulative rainfall (mm) — year-to-year precipitation comparison. */
+  cumulativeRainfallByYear: MeteoYearMatrix | null
 }
 
 type DailyBundle = {
@@ -584,7 +586,7 @@ function buildCumulativeByYear(daily: DailyBundle[]): MeteoYearMatrix | null {
   const years = [...new Set(daily.map(d => d.year))].sort((a, b) => a - b)
   if (!years.length) return null
   return {
-    title: 'Cumulative Annual by Year',
+    title: 'Cumulative Water Deficit by Year (mm)',
     years,
     rows: MONTH_SHORT.map((monthLabel, idx) => {
       const month = idx + 1
@@ -598,6 +600,32 @@ function buildCumulativeByYear(daily: DailyBundle[]): MeteoYearMatrix | null {
             const rain = sum(days.map(d => d.rainfallMm))
             const et0 = sum(days.map(d => d.et0Mm))
             run += Math.max(0, et0 - rain)
+          }
+          const hasAny = daily.some(d => d.year === year && d.month <= month)
+          return hasAny ? round(run, 1) : null
+        }),
+      }
+    }),
+  }
+}
+
+/** Running cumulative rainfall (mm) by calendar month for each year — year-to-year comparison. */
+function buildCumulativeRainfallByYear(daily: DailyBundle[]): MeteoYearMatrix | null {
+  const years = [...new Set(daily.map(d => d.year))].sort((a, b) => a - b)
+  if (!years.length) return null
+  return {
+    title: 'Cumulative Rainfall by Year (mm)',
+    years,
+    rows: MONTH_SHORT.map((monthLabel, idx) => {
+      const month = idx + 1
+      return {
+        monthLabel,
+        values: years.map(year => {
+          let run = 0
+          for (let m = 1; m <= month; m++) {
+            const days = daily.filter(d => d.year === year && d.month === m)
+            if (!days.length) continue
+            run += sum(days.map(d => d.rainfallMm))
           }
           const hasAny = daily.some(d => d.year === year && d.month <= month)
           return hasAny ? round(run, 1) : null
@@ -663,5 +691,6 @@ export function buildMeteoDataReportModel(input: BuildMeteoDataReportInput): Met
       aggregation === 'month' ? normals : buildNormalsFromDaily(daily, 'month'),
     ),
     cumulativeByYear: buildCumulativeByYear(daily),
+    cumulativeRainfallByYear: buildCumulativeRainfallByYear(daily),
   }
 }

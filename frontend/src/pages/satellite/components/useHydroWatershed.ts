@@ -7,7 +7,7 @@ import {
   type HydroStepId,
   type HydroStepResult,
 } from '../../../lib/hydroWatershed/hydroEngine'
-import { buildAoiGeoTiff, downloadBlob } from '../../../lib/hydroWatershed/geoTiffExport'
+import { buildAoiGeoTiff, downloadGeoTiffWithAux } from '../../../lib/hydroWatershed/geoTiffExport'
 
 export type HydroStepState = {
   status: 'idle' | 'running' | 'done' | 'error'
@@ -58,6 +58,7 @@ export function useHydroWatershed({ geometry, enabled, sensitivity, contourInter
     dem: { ...EMPTY_STEP },
     hillshade: { ...EMPTY_STEP },
     slope: { ...EMPTY_STEP },
+    'flow-direction': { ...EMPTY_STEP },
     'flow-accum': { ...EMPTY_STEP },
     streams: { ...EMPTY_STEP },
     contours: { ...EMPTY_STEP },
@@ -182,13 +183,12 @@ export function useHydroWatershed({ geometry, enabled, sensitivity, contourInter
 
   /**
    * Export a finished raster layer as a georeferenced, AOI-clipped GeoTIFF
-   * (EPSG:3857, native Float32 values, lossless LZW) and trigger a download.
+   * (EPSG:3857, native Float32, NoData=−9999) and trigger a download.
    */
   const exportRaster = useCallback((id: HydroStepId) => {
     const result = steps[id]?.result
     if (!result || result.kind !== 'raster' || !result.band) return false
-    const { blob, filename } = buildAoiGeoTiff(result.band, maskRef.current)
-    downloadBlob(blob, filename)
+    downloadGeoTiffWithAux(buildAoiGeoTiff(result.band, maskRef.current))
     return true
   }, [steps])
 

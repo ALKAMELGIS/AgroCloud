@@ -1,11 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import {
+  aggregateTopShareCategories,
   buildDocxChartXml,
   buildPerLayerNativeChartSpecs,
+  buildVegetationCoverageChartInterpretation,
+  buildVegetationCoverageTimelineChartSpecs,
   buildWeatherNativeChartSpecs,
 } from './timeSeriesDocxNativeCharts'
 import { lulcReportYears, lulcYearSceneDate } from './timeSeriesLulcChangeMaps'
-import { MAPS_PER_PAGE, MAPS_PER_ROW, docxMapGrid } from './timeSeriesDocxXml'
+import {
+  MAPS_PER_PAGE,
+  MAPS_PER_ROW,
+  MAP_IMAGE_CX,
+  MAP_IMAGE_CY,
+  docxMapGrid,
+  docxTableOfContentsPage,
+} from './timeSeriesDocxXml'
 
 describe('timeSeriesDocxNativeCharts', () => {
   it('builds one chart per layer with data', () => {
@@ -59,7 +69,7 @@ describe('timeSeriesDocxNativeCharts', () => {
     expect(comboXml).toContain('Rainfall')
   })
 
-  it('builds Temp Max·Mean·Min day/month/year, cumulative rain, humidity, pie, and index comparisons', () => {
+  it('builds Temp Max·Mean·Min day/month/year, cumulative rain, humidity, share bar, and index comparisons', () => {
     const specs = buildWeatherNativeChartSpecs({
       aggregationLabel: 'Daily',
       startIndex: 0,
@@ -93,6 +103,14 @@ describe('timeSeriesDocxNativeCharts', () => {
       ],
       yearly: [
         {
+          label: '2025',
+          tempMeanC: 19,
+          tempMinC: 12,
+          tempMaxC: 26,
+          humidityPct: 53,
+          rainfallMm: 80,
+        },
+        {
           label: '2026',
           tempMeanC: 19,
           tempMinC: 12,
@@ -120,15 +138,76 @@ describe('timeSeriesDocxNativeCharts', () => {
     expect(titles.some(t => t.includes('Yearly'))).toBe(true)
     expect(titles.some(t => t.includes('Cumulative Rainfall'))).toBe(true)
     expect(titles.some(t => t.includes('Humidity'))).toBe(true)
-    expect(titles.some(t => t.includes('Share'))).toBe(true)
+    expect(titles.some(t => t.includes('Top Months') && t.includes('Share'))).toBe(true)
+    expect(titles.some(t => t.includes('Annual Rainfall Share'))).toBe(true)
     expect(titles.some(t => t.includes('vs NDVI'))).toBe(true)
     expect(titles.some(t => t.includes('Rainfall vs'))).toBe(true)
     expect(titles.some(t => t.includes('Humidity vs'))).toBe(true)
+    const shareBar = specs.find(s => s.title.includes('Top Months'))
+    expect(shareBar?.kind).toBe('bar')
+    expect(shareBar?.barDir).toBe('bar')
+    const shareXml = buildDocxChartXml(shareBar!)
+    expect(shareXml).toContain('<c:barDir val="bar"/>')
+    expect(shareXml).not.toContain('<c:legend>')
     const pie = specs.find(s => s.kind === 'pie')
-    expect(pie).toBeTruthy()
+    expect(pie?.title).toContain('Annual Rainfall Share')
     const pieXml = buildDocxChartXml(pie!)
     expect(pieXml).toContain('<c:pieChart>')
     expect(pieXml).toContain('showPercent')
+    expect(pieXml).toContain('<c:showCatName val="0"/>')
+    expect(pieXml).toContain('<c:legendPos val="r"/>')
+  })
+
+  it('aggregates long rainfall share series into top-N + Other', () => {
+    const rows = Array.from({ length: 20 }, (_, i) => ({
+      label: `M${i + 1}`,
+      value: 20 - i,
+    }))
+    const capped = aggregateTopShareCategories(rows, 8)
+    expect(capped.labels).toHaveLength(8)
+    expect(capped.labels[capped.labels.length - 1]).toBe('Other')
+    expect(capped.values.reduce((a, b) => a + b, 0)).toBe(rows.reduce((a, b) => a + b.value, 0))
+  })
+
+  it('builds vegetation coverage statistical timeline charts', () => {
+    const timeline = [
+      {
+        date: '2025-01-15',
+        ndviMean: 0.32,
+        vegetationCoveragePct: 55,
+        bareCoveragePct: 45,
+        classes: [
+          { tier: 'healthy', pct: 20 },
+          { tier: 'moderate', pct: 25 },
+          { tier: 'stress', pct: 10 },
+          { tier: 'critical', pct: 45 },
+        ],
+      },
+      {
+        date: '2025-06-15',
+        ndviMean: 0.48,
+        vegetationCoveragePct: 72,
+        bareCoveragePct: 28,
+        classes: [
+          { tier: 'healthy', pct: 40 },
+          { tier: 'moderate', pct: 22 },
+          { tier: 'stress', pct: 10 },
+          { tier: 'critical', pct: 28 },
+        ],
+      },
+    ]
+    const specs = buildVegetationCoverageTimelineChartSpecs({ timeline, startIndex: 10 })
+    expect(specs).toHaveLength(1)
+    expect(specs[0]?.title).toContain('Statistical Chart')
+    expect(specs[0]?.kind).toBe('combo')
+    expect(specs[0]?.rId).toBe('rIdChart11')
+    expect(specs.some(s => s.title.includes('Class Share'))).toBe(false)
+    const xml = buildDocxChartXml(specs[0]!)
+    expect(xml).toContain('<c:barChart>')
+    expect(xml).toContain('<c:lineChart>')
+    expect(xml).toContain('Vegetation Coverage')
+    const note = buildVegetationCoverageChartInterpretation(timeline)
+    expect(note).toMatch(/increased|72\.0%/)
   })
 })
 
@@ -140,17 +219,74 @@ describe('lulc five-year helpers', () => {
 })
 
 describe('docxMapGrid layout', () => {
-  it('uses 2 maps per row and page-breaks after 4', () => {
-    expect(MAPS_PER_ROW).toBe(2)
-    expect(MAPS_PER_PAGE).toBe(4)
-    const xml = docxMapGrid([
-      { rId: 'rIdImg1', date: 'd1', label: 'a' },
-      { rId: 'rIdImg2', date: 'd2', label: 'b' },
-      { rId: 'rIdImg3', date: 'd3', label: 'c' },
-      { rId: 'rIdImg4', date: 'd4', label: 'd' },
-      { rId: 'rIdImg5', date: 'd5', label: 'e' },
+  it('uses 3×4 grid (12 maps per page) like the sample atlas', () => {
+    expect(MAPS_PER_ROW).toBe(3)
+    expect(MAPS_PER_PAGE).toBe(12)
+    expect(MAP_IMAGE_CX).toBeLessThanOrEqual(2_100_000)
+    expect(MAP_IMAGE_CY).toBeLessThanOrEqual(1_600_000)
+    const twelve = Array.from({ length: 12 }, (_, i) => ({
+      rId: `rIdImg${i + 1}`,
+      date: `2022-0${(i % 9) + 1}-01`,
+      label: `NDVI 0.4${i}`,
+    }))
+    const xmlPage = docxMapGrid(twelve)
+    expect(xmlPage).not.toContain('w:br w:type="page"')
+    expect((xmlPage.match(/<w:tr>/g) ?? []).length).toBe(4)
+
+    const thirteen = [...twelve, { rId: 'rIdImg13', date: '2023-01-01', label: 'NDVI 0.5' }]
+    const xmlNext = docxMapGrid(thirteen)
+    expect(xmlNext).toContain('w:br w:type="page"')
+    expect((xmlNext.match(/<w:gridCol /g) ?? []).length).toBeGreaterThanOrEqual(3)
+  })
+})
+
+describe('docxChangePairMaps layout', () => {
+  it('uses two equal side-by-side map cards (no empty third column)', async () => {
+    const { docxChangePairMaps, PAIR_MAP_IMAGE_CX, PAIR_MAP_IMAGE_CY } = await import(
+      './timeSeriesDocxXml'
+    )
+    expect(PAIR_MAP_IMAGE_CX).toBeGreaterThan(MAP_IMAGE_CX)
+    expect(PAIR_MAP_IMAGE_CY).toBeGreaterThan(MAP_IMAGE_CY)
+    const xml = docxChangePairMaps([
+      { rId: 'rIdT0', date: '2025-02-21', label: 'NDVI 0.4057' },
+      { rId: 'rIdT1', date: '2025-03-03', label: 'NDVI 0.3882' },
     ])
-    expect(xml).toContain('w:br w:type="page"')
-    expect((xml.match(/<w:tbl>/g) ?? []).length).toBeGreaterThanOrEqual(2)
+    expect((xml.match(/<w:gridCol /g) ?? []).length).toBe(2)
+    expect((xml.match(/<w:tr>/g) ?? []).length).toBe(1)
+    expect(xml).toContain('rIdT0')
+    expect(xml).toContain('rIdT1')
+    expect(xml).toContain('2025-02-21 NDVI 0.4057')
+    expect(xml).not.toContain('w:br w:type="page"')
+  })
+})
+
+describe('docxTableOfContentsPage', () => {
+  it('lists main headings only with Word TOC outline 1-1 and page leader', () => {
+    const xml = docxTableOfContentsPage([
+      'Field Summary',
+      'Executive Summary',
+      'Annex A — Correlation Analysis',
+      'Annex B — Paired Values Tables',
+    ])
+    expect(xml).toContain('TOC \\o "1-1"')
+    expect(xml).not.toContain('TOC \\o "1-2"')
+    expect(xml).toContain('Field Summary')
+    expect(xml).toContain('Executive Summary')
+    expect(xml).toContain('Annex A — Correlation Analysis')
+    expect(xml).toContain('Annex B — Paired Values Tables')
+    expect(xml).toContain('w:tab w:val="right" w:leader="dot"')
+    expect(xml).toContain('Main section titles only')
+  })
+})
+
+describe('resolveIndexChartColor', () => {
+  it('uses analysis-based palette by index family', async () => {
+    const { resolveIndexChartColor } = await import('./timeSeriesDocxNativeCharts')
+    expect(resolveIndexChartColor('NDVI')).toBe('047857')
+    expect(resolveIndexChartColor('SAVI')).toBe('047857')
+    expect(resolveIndexChartColor('NDWI')).toBe('2563EB')
+    expect(resolveIndexChartColor('NDMI')).toBe('0D9488')
+    expect(resolveIndexChartColor('LST')).toBe('DC2626')
+    expect(resolveIndexChartColor('STRESS_ZONES')).toBe('CA8A04')
   })
 })

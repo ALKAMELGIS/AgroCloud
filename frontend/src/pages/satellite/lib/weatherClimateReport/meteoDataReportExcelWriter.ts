@@ -53,6 +53,22 @@ const CLIMATE_COLS = [
   'RH %',
 ] as const
 
+/** Hourly sheet — rainfall column labelled as intensity (mm per hour). */
+const HOURLY_CLIMATE_COLS = [
+  'Period (hour)',
+  'Tmax C',
+  'Tmin C',
+  'Tavg C',
+  'Rainfall mm/h',
+  'ET0 mm',
+  'Water Deficit m3/ha',
+  'Sunshine h/day',
+  'Daylight h/day',
+  'Wind Max km/h',
+  'Max Gust km/h',
+  'RH %',
+] as const
+
 type SheetBounds = { name: string; headerRow: number; firstRow: number; lastRow: number; colCount: number }
 
 type HourlyLayout = SheetBounds & {
@@ -68,6 +84,7 @@ type MonthlyLayout = {
   risk: BlockBounds
   cumulative: BlockBounds
   cumulativeByYear: BlockBounds | null
+  cumulativeRainfallByYear: BlockBounds | null
 }
 
 type WorkbookWithCharts = ExcelJS.Workbook & {
@@ -116,14 +133,15 @@ function writeClimateTable(
   sectionTitle: string,
   rows: MeteoClimateRow[],
   tableName: string,
+  columnLabels: readonly string[] = CLIMATE_COLS,
 ): BlockBounds {
   ws.getCell(startRow, 1).value = sectionTitle
   styleSection(ws.getCell(startRow, 1))
-  ws.mergeCells(startRow, 1, startRow, CLIMATE_COLS.length)
+  ws.mergeCells(startRow, 1, startRow, columnLabels.length)
 
   const headerRow = startRow + 1
   const header = ws.getRow(headerRow)
-  CLIMATE_COLS.forEach((c, i) => {
+  columnLabels.forEach((c, i) => {
     header.getCell(i + 1).value = c
   })
   styleTableHeader(header)
@@ -139,14 +157,14 @@ function writeClimateTable(
   const firstRow = headerRow + 1
   const lastRow = Math.max(headerRow, headerRow + rows.length)
   if (rows.length) {
-    addExcelTable(ws, tableName, headerRow, CLIMATE_COLS.length, rows.length, [...CLIMATE_COLS])
+    addExcelTable(ws, tableName, headerRow, columnLabels.length, rows.length, [...columnLabels])
     for (const col of [2, 3, 4, 5, 6, 8, 9, 10, 11]) {
       applyNumberFormat(ws, col, col === 5 || col === 6 ? '0.0' : '0.0', firstRow, lastRow)
     }
     applyNumberFormat(ws, 7, '0', firstRow, lastRow)
     applyNumberFormat(ws, 12, '0', firstRow, lastRow)
   }
-  return { headerRow, firstRow, lastRow, colCount: CLIMATE_COLS.length }
+  return { headerRow, firstRow, lastRow, colCount: columnLabels.length }
 }
 
 function writeYearMatrix(
@@ -317,11 +335,22 @@ function writeDataMonthly(wb: ExcelJS.Workbook, model: MeteoDataReportModel): Mo
 
   let cumulativeByYear: BlockBounds | null = null
   if (model.cumulativeByYear) {
-    cumulativeByYear = writeYearMatrix(ws, row, model.cumulativeByYear, 'MeteoCumByYear')
+    cumulativeByYear = writeYearMatrix(ws, row, model.cumulativeByYear, 'MeteoCumDeficitByYear')
+    row = cumulativeByYear.lastRow + 3
+  }
+
+  let cumulativeRainfallByYear: BlockBounds | null = null
+  if (model.cumulativeRainfallByYear) {
+    cumulativeRainfallByYear = writeYearMatrix(
+      ws,
+      row,
+      model.cumulativeRainfallByYear,
+      'MeteoCumRainByYear',
+    )
   }
 
   autoWidth(ws, 12)
-  return { normals, matrices, annual, risk, cumulative, cumulativeByYear }
+  return { normals, matrices, annual, risk, cumulative, cumulativeByYear, cumulativeRainfallByYear }
 }
 
 function writeDataDaily(wb: ExcelJS.Workbook, model: MeteoDataReportModel): SheetBounds {
@@ -335,11 +364,57 @@ function writeDataDaily(wb: ExcelJS.Workbook, model: MeteoDataReportModel): Shee
 function writeDataHourly(wb: ExcelJS.Workbook, model: MeteoDataReportModel): HourlyLayout {
   const ws = wb.addWorksheet(METEO_SHEET.dataHourly, { views: [{ state: 'frozen', ySplit: 5 }] })
   writeReportHeader(ws, model)
-  const block = writeClimateTable(ws, 5, 'Hourly Climate Series', model.hourlySeries, 'MeteoHourly')
+  ws.getCell(4, 1).value =
+    'Hourly rainfall is precipitation intensity in millimetres per hour (mm/h). Daily totals = sum of hourly mm/h.'
+  ws.getCell(4, 1).font = { italic: true, size: 9, color: { argb: 'FF64748B' } }
+  ws.mergeCells(4, 1, 4, HOURLY_CLIMATE_COLS.length)
+  const block = writeClimateTable(
+    ws,
+    5,
+    'Hourly Climate Series — Rainfall mm/h',
+    model.hourlySeries,
+    'MeteoHourly',
+    HOURLY_CLIMATE_COLS,
+  )
+
+  // Dedicated rainfall-only table for clear mm/h inspection.
+  let rainOnlyStart = block.lastRow + 3
+  ws.getCell(rainOnlyStart, 1).value = 'Hourly Rainfall Amounts (mm/h)'
+  styleSection(ws.getCell(rainOnlyStart, 1))
+  ws.mergeCells(rainOnlyStart, 1, rainOnlyStart, 3)
+  const rainHeader = rainOnlyStart + 1
+  ws.getRow(rainHeader).getCell(1).value = 'Date / Hour'
+  ws.getRow(rainHeader).getCell(2).value = 'Rainfall mm/h'
+  ws.getRow(rainHeader).getCell(3).value = 'Cumulative day mm'
+  styleTableHeader(ws.getRow(rainHeader))
+  let dayRun = 0
+  let lastDay = ''
+  const rainRows = model.hourlySeries.filter(r => (r.rainfallMm ?? 0) > 0)
+  const rainSource = rainRows.length ? rainRows : model.hourlySeries.slice(0, Math.min(48, model.hourlySeries.length))
+  rainSource.forEach((r, i) => {
+    const day = r.periodLabel.slice(0, 10)
+    if (day !== lastDay) {
+      dayRun = 0
+      lastDay = day
+    }
+    dayRun += r.rainfallMm ?? 0
+    const row = ws.getRow(rainHeader + 1 + i)
+    row.getCell(1).value = r.periodLabel
+    row.getCell(2).value = r.rainfallMm == null ? '' : Number(r.rainfallMm.toFixed(2))
+    row.getCell(3).value = Number(dayRun.toFixed(2))
+    styleDataRow(row, i % 2 === 1)
+  })
+  if (rainSource.length) {
+    addExcelTable(ws, 'MeteoHourlyRain', rainHeader, 3, rainSource.length, [
+      'Date / Hour',
+      'Rainfall mm/h',
+      'Cumulative day mm',
+    ])
+  }
 
   let diurnal: BlockBounds | null = null
   if (model.diurnalProfile.some(d => d.meanTempC != null)) {
-    const startRow = block.lastRow + 3
+    const startRow = rainHeader + rainSource.length + 3
     ws.getCell(startRow, 1).value = 'Diurnal Temperature Profile'
     styleSection(ws.getCell(startRow, 1))
     ws.mergeCells(startRow, 1, startRow, 2)
@@ -362,7 +437,7 @@ function writeDataHourly(wb: ExcelJS.Workbook, model: MeteoDataReportModel): Hou
     addExcelTable(ws, 'MeteoDiurnal', headerRow, 2, model.diurnalProfile.length, ['Hour', 'Mean Temp C'])
   }
 
-  autoWidth(ws, CLIMATE_COLS.length)
+  autoWidth(ws, HOURLY_CLIMATE_COLS.length)
   return { name: METEO_SHEET.dataHourly, ...block, diurnal }
 }
 
@@ -698,6 +773,50 @@ function buildChartSectionDefs(
     })
   }
 
+  if (monthly.cumulativeRainfallByYear && monthly.cumulativeRainfallByYear.lastRow >= monthly.cumulativeRainfallByYear.firstRow) {
+    const block = monthly.cumulativeRainfallByYear
+    const years = Array.from({ length: Math.max(0, block.colCount - 1) }, (_, i) => i)
+    monthlySecs.push({
+      label: 'Cumulative Rainfall by Year (mm)',
+      target: METEO_SHEET.chartMonthly,
+      build: anchorRow => ({
+        title: 'Cumulative Rainfall by Year (mm)',
+        kind: 'line',
+        sectionLabel: 'Cumulative Rainfall by Year — compare annual precipitation totals month-by-month',
+        anchorRow,
+        targetSheet: METEO_SHEET.chartMonthly,
+        legendPos: 'b',
+        series: years.map((_, yi) => ({
+          nameRef: sheetRef(sheetM, yi + 2, block.headerRow),
+          valuesRef: sheetRange(sheetM, yi + 2, block.firstRow, block.lastRow),
+          catsRef: sheetRange(sheetM, 1, block.firstRow, block.lastRow),
+        })),
+      }),
+    })
+  }
+
+  if (monthly.cumulativeByYear && monthly.cumulativeByYear.lastRow >= monthly.cumulativeByYear.firstRow) {
+    const block = monthly.cumulativeByYear
+    const years = Array.from({ length: Math.max(0, block.colCount - 1) }, (_, i) => i)
+    monthlySecs.push({
+      label: 'Cumulative Water Deficit by Year (mm)',
+      target: METEO_SHEET.chartMonthly,
+      build: anchorRow => ({
+        title: 'Cumulative Water Deficit by Year (mm)',
+        kind: 'line',
+        sectionLabel: 'Cumulative Water Deficit by Year',
+        anchorRow,
+        targetSheet: METEO_SHEET.chartMonthly,
+        legendPos: 'b',
+        series: years.map((_, yi) => ({
+          nameRef: sheetRef(sheetM, yi + 2, block.headerRow),
+          valuesRef: sheetRange(sheetM, yi + 2, block.firstRow, block.lastRow),
+          catsRef: sheetRange(sheetM, 1, block.firstRow, block.lastRow),
+        })),
+      }),
+    })
+  }
+
   if (daily.lastRow >= daily.firstRow) {
     const catsD = sheetRange(sheetD, 1, daily.firstRow, daily.lastRow)
     const dailyCharts: Array<{
@@ -792,7 +911,7 @@ function buildChartSectionDefs(
     const catsH = sheetRange(sheetH, 1, hFirst, hLast)
     const hourlyCharts: Array<{ title: string; kind: MeteoNativeChartSpec['kind']; cols: number[] }> = [
       { title: 'Temperature (Hourly)', kind: 'line', cols: [2, 3, 4] },
-      { title: 'Precipitation (Hourly)', kind: 'bar', cols: [5] },
+      { title: 'Precipitation / Rainfall (Hourly mm/h)', kind: 'bar', cols: [5] },
       { title: 'Humidity % (Hourly)', kind: 'line', cols: [12] },
       { title: 'Wind Speed (Hourly)', kind: 'line', cols: [10, 11] },
     ]

@@ -13,6 +13,7 @@ const STEPS: StepMeta[] = [
   { id: 'dem', icon: 'fa-solid fa-mountain', label: 'Elevation' },
   { id: 'hillshade', icon: 'fa-solid fa-mound', label: 'Hillshade' },
   { id: 'slope', icon: 'fa-solid fa-chart-line', label: 'Slope' },
+  { id: 'flow-direction', icon: 'fa-solid fa-compass', label: 'Flow direction' },
   { id: 'flow-accum', icon: 'fa-solid fa-water', label: 'Flow accumulation' },
   { id: 'streams', icon: 'fa-solid fa-timeline', label: 'Stream network' },
   { id: 'contours', icon: 'fa-solid fa-bullseye', label: 'Contours' },
@@ -204,14 +205,14 @@ export function HydroWatershedPanel({
                       </select>
                     </label>
                   ) : null}
-                  {step.id === 'basins' ? (
-                    <label className="si-hydro__opt" title="Number of basins">
+                  {step.id === 'basins' || step.id === 'watershed' ? (
+                    <label className="si-hydro__opt" title="Number of primary basins">
                       <span className="si-hydro__opt-label">Basins</span>
                       <select
                         className="si-hydro__opt-select"
                         value={basinCount}
                         onChange={e => onBasinCountChange(Number(e.target.value))}
-                        aria-label="Number of drainage basins"
+                        aria-label="Number of primary drainage basins"
                       >
                         {BASIN_COUNTS.map(c => (
                           <option key={c} value={c}>

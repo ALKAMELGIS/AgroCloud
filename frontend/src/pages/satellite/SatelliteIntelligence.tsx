@@ -114,11 +114,11 @@ import {
 import {
   createSiSentinelAoiWmsPingPongRuntime,
   ensureSiSentinelAoiWmsPingPongStackOnMap,
-  hideSiSentinelAoiWmsPingPongStack,
   isSiSentinelAoiWmsPingPongMapId,
   reloadSiSentinelAoiWmsPingPongStackTiles,
   resetSiSentinelAoiWmsPingPongRuntime,
   revealSiSentinelAoiWmsPingPongStack,
+  syncSiSentinelAoiWmsPingPongStack,
   teardownSiSentinelAoiWmsPingPongStack,
   type SiSentinelAoiWmsPingPongRuntime,
 } from '../../lib/siSentinelAoiWmsImperative';
@@ -282,8 +282,6 @@ import {
 import {
   getCachedSiAoiLayerModeClipMask,
   siAoiLayerModeChunksCacheKey,
-  siAoiLayerModeClipMaskCacheKey,
-  siAoiLayerModeMaskCacheKey,
   siAoiLayerModeSettingsPinKey,
   siAoiLayerModeWarmChunksCacheKey,
   type SiAoiLayerModeClipMask,
@@ -500,6 +498,7 @@ import { useTreeDetection } from './components/useTreeDetection';
 import { SiImportedCustomLayersOverlay } from './components/SiImportedCustomLayersOverlay';
 import { FloodMonitoringPanel, type FloodLayerKind } from './components/FloodMonitoringPanel';
 import { useFloodMonitoring } from './components/useFloodMonitoring';
+import { EoLayerEnrichmentPanel } from './components/EoLayerEnrichmentPanel';
 import { ImageClassificationWizardPanel } from './components/imageClassification/ImageClassificationWizardPanel';
 import {
   useImageClassificationWizard,
@@ -532,15 +531,22 @@ import { HydroWatershedPanel } from './components/HydroWatershedPanel';
 import { useHydroWatershed } from './components/useHydroWatershed';
 import { WellSiteRecommendationPanel } from './components/WellSiteRecommendationPanel';
 import { useWellSiteRecommendation } from './components/useWellSiteRecommendation';
+import { useChirpsPrecipitation } from './components/useChirpsPrecipitation';
+import { isChirpsPrecipLayerId } from '../../lib/agroCompositeIndices';
+import { unwrapPolygonGeometry } from '../../lib/chirpsRainfall/chirpsRasterMask';
 import { WellSuitabilityPanel } from './components/WellSuitabilityPanel';
 import { useWellSuitabilityAnalysis } from './components/useWellSuitabilityAnalysis';
 import type { WellSitePoint } from '../../lib/hydroWatershed/hydroEngine';
+import {
+  contourElevationMapboxColorExpression,
+  type HydroStepId,
+} from '../../lib/hydroWatershed/hydroEngine';
 import type { WellSuitabilitySite } from '../../lib/hydroWatershed/wellSuitabilityMcdaEngine';
-import type { HydroStepId } from '../../lib/hydroWatershed/hydroEngine';
 import { generateHydroWatershedReportDocx } from '../../lib/hydroWatershed/generateHydroReportDocx';
 import { generateSarFloodIntelligenceReport } from '../../lib/sarFloodReport/generateSarFloodReportDocx';
 import { generateCropClassificationReportDocx } from '../../lib/cropClassificationReport';
 import { exportCropClassificationGeoTiff } from '../../lib/cropClassificationReport/cropClassificationGeoTiffExport';
+import { generateWellSiteReportDocx } from '../../lib/wellSiteReport';
 import { GisPortalBrowseLayersPanel } from './components/GisPortalBrowseLayersPanel';
 import type { MapToolboxAddGisLayerAction } from './components/MapToolboxAddGisLayerFlyout';
 import { GisDataManager } from './gisDataManager';
@@ -718,6 +724,8 @@ type MapToolboxSectionId =
  | 'source'
  | 'layers'
  | 'remote-sensing'
+ | 'eo-enrichment'
+
  | 'crop-alerts'
  | 'stress-zones'
  | 'crop-classification'
@@ -863,6 +871,7 @@ const HYDRO_STEP_ORDER: HydroStepId[] = [
   'dem',
   'hillshade',
   'slope',
+  'flow-direction',
   'flow-accum',
   'watershed',
   'basins',
@@ -872,15 +881,16 @@ const HYDRO_STEP_ORDER: HydroStepId[] = [
 
 /** Human labels for Hydro layers shown in the Layers panel. */
 const HYDRO_STEP_LABELS: Record<HydroStepId, string> = {
-  dem: 'Hydro Â· Elevation',
-  hillshade: 'Hydro Â· Hillshade',
-  slope: 'Hydro Â· Slope',
-  'flow-accum': 'Hydro Â· Flow accumulation',
-  streams: 'Hydro Â· Stream network',
-  contours: 'Hydro Â· Contours',
-  watershed: 'Hydro Â· Watershed',
-  basins: 'Hydro Â· Drainage basins',
-  mesh: 'Hydro Â· Mesh',
+  dem: 'Hydro · Elevation',
+  hillshade: 'Hydro · Hillshade',
+  slope: 'Hydro · Slope',
+  'flow-direction': 'Hydro · Flow direction',
+  'flow-accum': 'Hydro · Flow accumulation',
+  streams: 'Hydro · Stream network',
+  contours: 'Hydro · Contours',
+  watershed: 'Hydro · Watershed',
+  basins: 'Hydro · Drainage basins',
+  mesh: 'Hydro · Mesh',
 };
 
 const DATABASE_PLATFORM_OPTIONS = [
@@ -3736,11 +3746,12 @@ const ENVIRONMENTAL_INDICES: Record<EnvironmentalIndexId, {
   },
   LST: {
     label: 'LST',
-    collection: 'landsat-c2-l2',
-    formula: 'Land Surface Temperature from Collection 2 Level 2 thermal bands',
-    range: [15, 45],
+    collection: 'sentinel-2-l2a',
+    formula: 'LST ≈ seasonBase − 12×NDVI + 8×dryness(NDMI) (°C proxy)',
+    range: [5, 55],
     palette: ['#1d4ed8', '#22c55e', '#fde047', '#ef4444'],
-    description: 'Land Surface Temperature in Celsius from Landsat Collection 2 Level 2.',
+    description:
+      'Land Surface Temperature (°C) — Sentinel-2 NDVI/NDMI seasonal proxy until Landsat thermal ST is wired.',
   },
 };
 
@@ -4722,6 +4733,7 @@ export default function SatelliteIntelligence() {
   | 'source'
   | 'layers'
   | 'remote-sensing'
+  | 'eo-enrichment'
   | 'crop-alerts'
   | 'stress-zones'
   | 'crop-classification'
@@ -12513,6 +12525,7 @@ export default function SatelliteIntelligence() {
   // refreshed on render, so re-running here picks up the latest interval/count).
   const hydroContoursDone = hydro.steps.contours?.status === 'done';
   const hydroBasinsDone = hydro.steps.basins?.status === 'done';
+  const hydroWatershedDone = hydro.steps.watershed?.status === 'done';
   const hydroOptionsReady = useRef(false);
   useEffect(() => {
     if (!hydroOptionsReady.current) {
@@ -12523,7 +12536,9 @@ export default function SatelliteIntelligence() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydroContourInterval]);
   useEffect(() => {
-    if (hydroWatershedActive && hydroBasinsDone) void hydro.runStep('basins');
+    if (!hydroWatershedActive) return;
+    if (hydroBasinsDone) void hydro.runStep('basins');
+    if (hydroWatershedDone) void hydro.runStep('watershed');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydroBasinCount]);
 
@@ -12534,11 +12549,44 @@ export default function SatelliteIntelligence() {
     enabled: wellSiteActive,
     topN: 8,
   });
+
   const handleWellSiteZoomToPoint = useCallback((point: WellSitePoint) => {
     const map = mapRef.current?.getMap?.() ?? mapRef.current;
     if (!map?.flyTo) return;
     map.flyTo({ center: [point.lng, point.lat], zoom: Math.max(map.getZoom?.() ?? 13, 15), duration: 900 });
   }, []);
+
+  const [wellSiteExportBusy, setWellSiteExportBusy] = useState(false);
+  const [wellSiteExportLabel, setWellSiteExportLabel] = useState<string | undefined>(undefined);
+  const handleWellSiteExportReport = useCallback(() => {
+    const geom = drawnGeometry?.geometry;
+    const result = wellSite.result;
+    if (!geom || (geom.type !== 'Polygon' && geom.type !== 'MultiPolygon') || !result) return;
+    setWellSiteExportBusy(true);
+    setWellSiteExportLabel('Preparing report…');
+    void (async () => {
+      try {
+        await generateWellSiteReportDocx({
+          geometry: geom,
+          aoiName:
+            (drawnGeometry?.properties?.name as string | undefined) ??
+            (drawnGeometry?.properties?.fieldName as string | undefined) ??
+            'Well Site Study Area',
+          result,
+          projectName: 'AgroCloud Well Site Recommendation (Hydro-AI)',
+          generatedBy: 'AgroCloud',
+          onProgress: (done, total, label) => {
+            setWellSiteExportLabel(`Maps ${done}/${total}: ${label}`);
+          },
+        });
+      } catch (err) {
+        console.error('Well site report export failed', err);
+      } finally {
+        setWellSiteExportBusy(false);
+        setWellSiteExportLabel(undefined);
+      }
+    })();
+  }, [drawnGeometry, wellSite.result]);
 
   const wellSuitabilityActive = expandedEnvSection === 'well-suitability';
   const wellSuitability = useWellSuitabilityAnalysis({
@@ -15376,7 +15424,6 @@ export default function SatelliteIntelligence() {
     const t = wmsLayer.trim();
     if (t && remoteSensingLayerOptions.some(l => l.id === t)) return t;
     if (defaultWmsLayerName) return defaultWmsLayerName;
-    if (selectedIndex === 'LST') return '';
     return selectedIndex;
   }, [wmsLayer, remoteSensingLayerOptions, selectedIndex, defaultWmsLayerName]);
 
@@ -15449,10 +15496,11 @@ export default function SatelliteIntelligence() {
   const aoiMaskBuilderSourceLayer = useMemo(() => {
     const layer = aoiMaskBuilderBaseLayer;
     if (!layer) return null;
-    if (aoiMaskBuilderSettings.enabled) return layer;
     const hasFullGeo =
       Array.isArray(layer.geojson?.features) && layer.geojson.features.length > 0;
     if (hasFullGeo) return layer;
+    // Keep viewport polygons while Show on map is on — dropping them emptied the
+    // clip mask and forced a long cold WMS rebuild after enable.
     if (layer.viewportStreaming && layer.source === 'arcgis') {
       const viewport = arcgisViewportGeoJsonByLayerIdRef.current.get(layer.id);
       if (viewport?.features?.length) return { ...layer, geojson: viewport };
@@ -15460,7 +15508,6 @@ export default function SatelliteIntelligence() {
     return layer;
   }, [
     aoiMaskBuilderBaseLayer,
-    aoiMaskBuilderSettings.enabled,
     arcgisViewportRevision,
   ]);
   const aoiMaskBuilderSelectedKeys = useMemo(() => {
@@ -15515,15 +15562,17 @@ export default function SatelliteIntelligence() {
 
   useEffect(() => {
     if (!aoiMaskBuilderWarmMask?.features?.length) return;
-    const hasFullGeo =
-      Array.isArray(aoiMaskBuilderBaseLayer?.geojson?.features) &&
-      aoiMaskBuilderBaseLayer!.geojson!.features!.length > 0;
-    if (!hasFullGeo) return;
+    // While Show on map is on, keep the first good clip — ArcGIS viewport refresh
+    // churns geo signatures and forces full WMS rebuilds if we overwrite the pin.
+    if (aoiMaskBuilderSettings.enabled) {
+      const pin = aoiLayerModePinnedClipRef.current;
+      if (pin?.pinKey === aoiLayerModeSettingsPinKey && pin.mask?.features?.length) return;
+    }
     aoiLayerModePinnedClipRef.current = {
       pinKey: aoiLayerModeSettingsPinKey,
       mask: aoiMaskBuilderWarmMask,
     };
-  }, [aoiMaskBuilderWarmMask, aoiMaskBuilderBaseLayer, aoiLayerModeSettingsPinKey]);
+  }, [aoiMaskBuilderWarmMask, aoiLayerModeSettingsPinKey, aoiMaskBuilderSettings.enabled]);
 
   useEffect(() => {
     const pin = aoiLayerModePinnedClipRef.current;
@@ -15904,6 +15953,15 @@ export default function SatelliteIntelligence() {
           };
         }
         setSentinelWmsSourcesHeld(true);
+        // Instant reveal when warm tiles already match — avoid cold ping-pong / idle wait.
+        const map = mapRef.current?.getMap?.() ?? mapRef.current;
+        const stack = layerAoiWmsStackRef.current;
+        if (map?.isStyleLoaded?.() && stack?.displayChunks?.length) {
+          revealSiSentinelAoiWmsPingPongStack(map, stack, layerAoiWmsPingPongRef.current, {
+            visible: true,
+            opacity: siAoiMaskBuilderDisplayOpacityMultiplier(normalized.displayMode),
+          });
+        }
       }
     },
     [siScope, aoiMaskBuilderMask, aoiMaskBuilderWarmMask, aoiMaskBuilderSelectedKeys, aoiMaskBuilderBaseLayer],
@@ -15933,6 +15991,9 @@ export default function SatelliteIntelligence() {
     if (!aoiMaskBuilderSettings.enabled) return;
     const layer = customLayers.find(l => String(l.id) === aoiMaskBuilderSettings.sourceLayerId);
     if (!layer?.viewportStreaming) return;
+    // Skip refetch when pin already has clip geometry — refetch overwrites warm tiles and delays Show on map.
+    const pin = aoiLayerModePinnedClipRef.current;
+    if (pin?.mask?.features?.length) return;
     void fetchArcGisViewportLayersForExtent();
   }, [
     aoiMaskBuilderSettings.enabled,
@@ -16031,6 +16092,33 @@ export default function SatelliteIntelligence() {
     wmsDate,
   ]);
 
+  const chirpsPrecipActive = isChirpsPrecipLayerId(wmsLayer);
+  const chirpsAoiGeometry = useMemo(
+    () =>
+      unwrapPolygonGeometry(drawnAoiClipCollection) ??
+      unwrapPolygonGeometry(drawnGeometry) ??
+      null,
+    [drawnAoiClipCollection, drawnGeometry],
+  );
+  const chirpsPrecip = useChirpsPrecipitation({
+    geometry: chirpsAoiGeometry,
+    // Keep rainfall on the map whenever PRECIP is selected + Show on map — even if RS panel closes.
+    enabled: chirpsPrecipActive && isWmsOverlayVisible,
+    sceneDate: imageryDateAutoFollow ? sentinelFetchDate : wmsDate || sentinelFetchDate,
+    seriesStart: timeSeriesStart,
+    seriesEnd: timeSeriesEnd,
+    aoiName:
+      (drawnGeometry?.properties?.name as string | undefined) ??
+      (drawnGeometry?.properties?.fieldName as string | undefined) ??
+      'AOI',
+  });
+
+  // Selecting PRECIP auto-enables Show on map so the rainfall overlay appears inside the AOI.
+  useEffect(() => {
+    if (!chirpsPrecipActive) return;
+    if (!isWmsOverlayVisible) setIsWmsOverlayVisible(true);
+  }, [chirpsPrecipActive]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [rsGeoTiffBusy, setRsGeoTiffBusy] = useState(false);
   const [rsGeoTiffLabel, setRsGeoTiffLabel] = useState<string | undefined>(undefined);
   const handleRsExportGeoTiff = useCallback(() => {
@@ -16040,6 +16128,30 @@ export default function SatelliteIntelligence() {
       return;
     }
     const layerId = wmsLayerSelectValue || wmsLayer;
+    if (isChirpsPrecipLayerId(layerId)) {
+      if (!chirpsPrecip.raster) {
+        setFieldAnalysisStatus('Load CHIRPS rainfall first (Load rainfall map).');
+        return;
+      }
+      setRsGeoTiffBusy(true);
+      setRsGeoTiffLabel('Exporting CHIRPS GeoTIFF…');
+      void (async () => {
+        try {
+          const ok = await chirpsPrecip.exportGeoTiff();
+          if (ok) {
+            setFieldAnalysisStatus(
+              'CHIRPS GeoTIFF exported — open *_rgb.tif in ArcGIS Pro (Zoom To Layer). Unit: mm, NoData=−9999.',
+            );
+          }
+        } catch (err) {
+          setFieldAnalysisStatus(err instanceof Error ? err.message : String(err));
+        } finally {
+          setRsGeoTiffBusy(false);
+          setRsGeoTiffLabel(undefined);
+        }
+      })();
+      return;
+    }
     const sceneDate = imageryDateAutoFollow ? sentinelFetchDate : wmsDate || sentinelFetchDate;
     setRsGeoTiffBusy(true);
     setRsGeoTiffLabel('Preparing GeoTIFF…');
@@ -16057,7 +16169,7 @@ export default function SatelliteIntelligence() {
             'AOI',
           onProgress: label => setRsGeoTiffLabel(label),
         });
-        setFieldAnalysisStatus(`GeoTIFF exported: ${filename} — open *_rgb.tif in ArcGIS Pro (Zoom To Layer)`);
+        setFieldAnalysisStatus(`GeoTIFF exported: ${filename} — open *_rgb.tif in ArcGIS Pro (Zoom To Layer). Float32 uses NoData=−9999.`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error('Remote sensing GeoTIFF export failed', err);
@@ -16074,6 +16186,7 @@ export default function SatelliteIntelligence() {
     imageryDateAutoFollow,
     sentinelFetchDate,
     wmsDate,
+    chirpsPrecip,
   ]);
 
   const cropAlertImageryContext = useMemo(
@@ -18472,7 +18585,8 @@ export default function SatelliteIntelligence() {
 
   const siSentinelWmsStackCommonInput = useMemo(
     () => ({
-      activeWmsLayer,
+      // PRECIP uses UCSB CHIRPS overlay — do not request Sentinel-2 WMS for it.
+      activeWmsLayer: isChirpsPrecipLayerId(activeWmsLayer) ? '' : activeWmsLayer,
       sentinelFetchDate,
       wmsTimeWindowKey,
       effectiveWmsCloudCoverage,
@@ -18511,52 +18625,24 @@ export default function SatelliteIntelligence() {
     [drawnAoiClipKey, agroStructuresLayerAoiKey, activeWmsLayer, sentinelFetchDate],
   );
 
-  const layerAoiWmsStableMaskSig = useMemo(() => {
-    if (!aoiMaskBuilderWarmMask?.features?.length && !aoiLayerModeActiveMask?.features?.length) {
-      return 'no-layer-aoi';
-    }
-    if (aoiMaskBuilderSettings.enabled && aoiLayerModeActiveMask?.features?.length) {
-      return siAoiLayerModeClipMaskCacheKey(
-        aoiLayerModeActiveMask,
-        aoiMaskBuilderSettings,
-        aoiMaskBuilderSelectedKeys,
-      );
-    }
-    if (aoiMaskBuilderSettings.enabled) {
-      return siAoiLayerModeMaskCacheKey(
-        aoiMaskBuilderSourceLayer,
-        aoiMaskBuilderSettings,
-        aoiMaskBuilderSelectedKeys,
-      );
-    }
-    return aoiLayerModeSettingsPinKey;
-  }, [
-    aoiMaskBuilderWarmMask,
-    aoiLayerModeActiveMask,
-    aoiMaskBuilderSettings.enabled,
-    aoiMaskBuilderSettings,
-    aoiMaskBuilderSourceLayer,
-    aoiMaskBuilderSelectedKeys,
-    aoiLayerModeSettingsPinKey,
-  ]);
+  /**
+   * Settings pin only — do NOT geo-sign. ArcGIS viewport refresh changes feature bbox/ids
+   * and previously forced WKT/evalscript rebuild + Mapbox idle waits on every pan/enable.
+   */
+  const layerAoiWmsStableMaskSig = aoiLayerModeSettingsPinKey || 'no-layer-aoi';
 
   const layerAoiWmsChunksCacheKey = useMemo(
     () =>
-      aoiMaskBuilderSettings.enabled
-        ? siAoiLayerModeChunksCacheKey(layerAoiWmsStableMaskSig, activeWmsLayer ?? '', sentinelFetchDate, {
-            indexVisibilityMin: WMS_AOI_INDEX_VISIBILITY_MIN,
-            maxTileLayers: SI_WMS_MAX_TILE_LAYERS,
-          })
-        : siAoiLayerModeWarmChunksCacheKey(
-            layerAoiWmsStableMaskSig,
-            activeWmsLayer ?? '',
-            sentinelFetchDate,
-            {
-              indexVisibilityMin: WMS_AOI_INDEX_VISIBILITY_MIN,
-              maxTileLayers: SI_WMS_MAX_TILE_LAYERS,
-            },
-          ),
-    [layerAoiWmsStableMaskSig, aoiMaskBuilderSettings.enabled, activeWmsLayer, sentinelFetchDate],
+      siAoiLayerModeWarmChunksCacheKey(
+        layerAoiWmsStableMaskSig,
+        activeWmsLayer ?? '',
+        sentinelFetchDate,
+        {
+          indexVisibilityMin: WMS_AOI_INDEX_VISIBILITY_MIN,
+          maxTileLayers: SI_WMS_MAX_TILE_LAYERS,
+        },
+      ),
+    [layerAoiWmsStableMaskSig, activeWmsLayer, sentinelFetchDate],
   );
 
   const drawAoiWmsStack = useMemo(
@@ -18576,27 +18662,26 @@ export default function SatelliteIntelligence() {
     ],
   );
 
-  const layerAoiWarmClipForStack =
-    aoiMaskBuilderSettings.enabled ? null : aoiMaskBuilderWarmMask;
+  const layerAoiWmsStackClipSource = useMemo(() => {
+    if (layerAoiWmsClipSource && (layerAoiWmsClipSource as { features?: unknown[] }).features?.length) {
+      return layerAoiWmsClipSource;
+    }
+    if (aoiMaskBuilderWarmMask?.features?.length) return aoiMaskBuilderWarmMask;
+    if (aoiMaskBuilderMask?.features?.length) return aoiMaskBuilderMask;
+    return null;
+  }, [layerAoiWmsClipSource, aoiMaskBuilderWarmMask, aoiMaskBuilderMask]);
 
   const layerAoiWmsStack = useMemo(
     () =>
       buildSiSentinelAoiWmsStackState(SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX, {
         ...siSentinelWmsStackCommonInput,
-        clipSource:
-          aoiMaskBuilderSettings.enabled
-            ? layerAoiWmsClipSource
-            : layerAoiWarmClipForStack?.features?.length
-              ? layerAoiWarmClipForStack
-              : null,
+        clipSource: layerAoiWmsStackClipSource,
         maskCacheKey: layerAoiWmsChunksCacheKey,
         sessionKey: layerAoiWmsStableMaskSig,
       }),
     [
       siSentinelWmsStackCommonInput,
-      aoiMaskBuilderSettings.enabled,
-      layerAoiWmsClipSource,
-      layerAoiWarmClipForStack,
+      layerAoiWmsStackClipSource,
       layerAoiWmsChunksCacheKey,
       layerAoiWmsStableMaskSig,
     ],
@@ -18792,14 +18877,12 @@ export default function SatelliteIntelligence() {
     }
     layerAoiPingPongSyncKeyRef.current = syncKey;
 
-    if (layerVisible) {
-      revealSiSentinelAoiWmsPingPongStack(map, stack, runtime, {
-        visible: true,
-        opacity: layerOpacity,
-      });
-    } else {
-      hideSiSentinelAoiWmsPingPongStack(map, stack, runtime, layerOpacity);
-    }
+    // Always sync tile URLs while warm (hidden) so Show on map is visibility-only.
+    // hide-only previously left activeUrl empty → cold idle wait on every enable.
+    syncSiSentinelAoiWmsPingPongStack(map, stack, runtime, {
+      visible: layerVisible,
+      opacity: layerOpacity,
+    });
     syncAnalysisMapLayerOrder();
   }, [
     isMapStyleReady,
@@ -19922,6 +20005,11 @@ export default function SatelliteIntelligence() {
                         );
                       }
                       if (res.render === 'contours') {
+                        const elevVals = (res.data.features ?? [])
+                          .map(f => Number(f.properties?.elev))
+                          .filter(Number.isFinite) as number[]
+                        const elevMin = elevVals.length ? Math.min(...elevVals) : 0
+                        const elevMax = elevVals.length ? Math.max(...elevVals) : 100
                         return (
                           <Source key={`hydro-${stepId}`} id={`hydro-${stepId}-source`} type="geojson" data={res.data as any}>
                             <Layer
@@ -19929,9 +20017,9 @@ export default function SatelliteIntelligence() {
                               type="line"
                               layout={{ 'line-cap': 'round', 'line-join': 'round' }}
                               paint={{
-                                'line-color': '#92400e',
-                                'line-opacity': 0.85 * userOpacity,
-                                'line-width': ['case', ['==', ['get', 'index'], 1], 1.8, 0.7] as any,
+                                'line-color': contourElevationMapboxColorExpression(elevMin, elevMax) as any,
+                                'line-opacity': 0.92 * userOpacity,
+                                'line-width': ['case', ['==', ['get', 'index'], 1], 2.4, 1.15] as any,
                               }}
                             />
                             <Layer
@@ -19947,9 +20035,9 @@ export default function SatelliteIntelligence() {
                                 'symbol-spacing': 220,
                               }}
                               paint={{
-                                'text-color': '#7c2d12',
-                                'text-halo-color': 'rgba(255,255,255,0.9)',
-                                'text-halo-width': 1.3,
+                                'text-color': '#7f1d1d',
+                                'text-halo-color': 'rgba(255,255,255,0.92)',
+                                'text-halo-width': 1.4,
                                 'text-opacity': userOpacity,
                               }}
                             />
@@ -20041,7 +20129,30 @@ export default function SatelliteIntelligence() {
                       id="wellsite-heat-raster"
                       type="raster"
                       paint={{
-                        'raster-opacity': (wellSite.result.raster.opacity ?? 0.78) * wellSite.opacity,
+                        'raster-opacity': Math.min(
+                          1,
+                          Math.max(0.88, wellSite.result.raster.opacity ?? 0.94) * wellSite.opacity,
+                        ),
+                        'raster-fade-duration': 0,
+                        'raster-contrast': 0.18,
+                        'raster-saturation': 0.35,
+                      }}
+                    />
+                  </Source>
+                ) : null}
+                {chirpsPrecip.raster && chirpsPrecip.heatVisible && chirpsPrecipActive && isWmsOverlayVisible ? (
+                  <Source
+                    key={`chirps-${chirpsPrecip.raster.date}-${chirpsPrecip.raster.width}x${chirpsPrecip.raster.height}-${chirpsPrecip.raster.stats?.validCount ?? 0}`}
+                    id="chirps-precip-source"
+                    type="image"
+                    url={chirpsPrecip.raster.previewDataUrl}
+                    coordinates={chirpsPrecip.raster.coordinates as any}
+                  >
+                    <Layer
+                      id="chirps-precip-raster"
+                      type="raster"
+                      paint={{
+                        'raster-opacity': chirpsPrecip.opacity,
                         'raster-fade-duration': 0,
                       }}
                     />
@@ -21760,6 +21871,8 @@ export default function SatelliteIntelligence() {
                         <div className="si-env-title">
                           {expandedEnvSection === 'remote-sensing'
                               ? 'Remote sensing'
+                              : expandedEnvSection === 'eo-enrichment'
+                                ? 'EO Layer Enrichment'
                               : expandedEnvSection === 'crop-alerts'
                                 ? 'Agro Sentinel Alert Engine'
                               : expandedEnvSection === 'stress-zones'
@@ -21800,6 +21913,81 @@ export default function SatelliteIntelligence() {
                       </button>
                     </div>
                   </div>
+                    {expandedEnvSection === 'eo-enrichment' && (
+                      <EoLayerEnrichmentPanel
+                        onClose={() => setIsLayerDropdownOpen(false)}
+                        activeAoi={
+                          drawnAoiClipCollection?.features?.length
+                            ? drawnAoiClipCollection
+                            : null
+                        }
+                        mapLayers={customLayers
+                          .filter(l => l.renderMode !== 'raster' && l.geojson)
+                          .map(l => ({
+                            id: l.id,
+                            name: l.name,
+                            geojson: l.geojson,
+                          }))}
+                        onApplyEnrichedLayer={({
+                          geojson,
+                          name,
+                          sourceLayerId,
+                          popupConfig,
+                          fieldOrder,
+                          openAttributeTable,
+                        }) => {
+                          const normalizedPopup = normalizeSiLayerPopupConfig(popupConfig)
+                          let layerId = sourceLayerId || ''
+                          if (sourceLayerId && customLayers.some(l => l.id === sourceLayerId)) {
+                            setCustomLayers(prev =>
+                              prev.map(l =>
+                                l.id === sourceLayerId
+                                  ? {
+                                      ...l,
+                                      geojson,
+                                      popupConfig: normalizedPopup,
+                                      importMetadata: {
+                                        ...(l.importMetadata || {}),
+                                        featureCount: Array.isArray(geojson.features)
+                                          ? geojson.features.length
+                                          : l.importMetadata?.featureCount,
+                                        format: l.importMetadata?.format || 'GeoJSON',
+                                      },
+                                    }
+                                  : l,
+                              ),
+                            )
+                            setCustomLayersMapEpoch(epoch => epoch + 1)
+                          } else {
+                            layerId = `eo-enrich-${Date.now()}`
+                            registerImportedCustomLayer({
+                              ...createSiVectorImportLayer({
+                                id: layerId,
+                                name,
+                                geojson,
+                                source: 'upload',
+                                format: 'GeoJSON',
+                              }),
+                              popupConfig: normalizedPopup,
+                            })
+                          }
+                          if (fieldOrder.length && layerId) {
+                            setSiTableFieldOrderByLayerId(prev => ({
+                              ...prev,
+                              [layerId]: fieldOrder,
+                            }))
+                          }
+                          focusGeoJsonOnMap(geojson as any)
+                          if (openAttributeTable !== false && layerId) {
+                            setActiveLayerActionDialog({ mode: 'table', layerId })
+                            setTableWinMinimized(false)
+                          }
+                          setStacStatus(
+                            `EO enrichment applied to "${name}" — attributes & popups updated.`,
+                          )
+                        }}
+                      />
+                    )}
                     {expandedEnvSection === 'crop-alerts' && (
                       <div className="si-env-section-card si-field-analysis si-crop-alert-panel si-rs-panel--glass">
                         <SiCropAlertCenterPanel
@@ -21908,6 +22096,10 @@ export default function SatelliteIntelligence() {
                         layerValue={wmsLayerSelectValue}
                         onLayerChange={layerId => {
                           setWmsLayer(layerId);
+                          if (isChirpsPrecipLayerId(layerId)) {
+                            setIsWmsOverlayVisible(true);
+                            setSentinelWmsSourcesHeld(true);
+                          }
                           const ids = Object.keys(ENVIRONMENTAL_INDICES) as EnvironmentalIndexId[];
                           if (ids.includes(layerId as EnvironmentalIndexId)) {
                             setSelectedIndex(layerId as EnvironmentalIndexId);
@@ -21965,6 +22157,16 @@ export default function SatelliteIntelligence() {
                         exportGeoTiffBusy={rsGeoTiffBusy}
                         exportGeoTiffLabel={rsGeoTiffLabel}
                         exportGeoTiffDisabled={!drawnGeometry?.geometry}
+                        chirpsMode={chirpsPrecipActive}
+                        chirpsAggregation={chirpsPrecip.aggregation}
+                        onChirpsAggregationChange={chirpsPrecip.setAggregation}
+                        onChirpsRun={() => void chirpsPrecip.run()}
+                        chirpsBusy={chirpsPrecip.status === 'loading'}
+                        chirpsStats={chirpsPrecip.stats}
+                        chirpsError={chirpsPrecip.error}
+                        onChirpsExportCsv={() => chirpsPrecip.exportCsv()}
+                        onChirpsExportExcel={() => chirpsPrecip.exportExcel()}
+                        onChirpsExportReport={() => chirpsPrecip.exportReport()}
                         onClose={() => setIsLayerDropdownOpen(false)}
                       />
                     )}
@@ -22176,6 +22378,9 @@ export default function SatelliteIntelligence() {
                           onExportGeoJson={wellSite.exportPointsGeoJson}
                           onExportCsv={wellSite.exportPointsCsv}
                           onExportXlsx={wellSite.exportXlsx}
+                          onExportReport={handleWellSiteExportReport}
+                          exportReportBusy={wellSiteExportBusy}
+                          exportReportLabel={wellSiteExportLabel}
                           onZoomToPoint={handleWellSiteZoomToPoint}
                         />
                       </div>

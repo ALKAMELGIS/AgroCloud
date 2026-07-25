@@ -45,6 +45,7 @@ import {
   type ImageryTimeAggregation,
   type ImageryTimeSeriesLayerSeries,
 } from '../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import { buildCorrelationInterpretation } from '../lib/timeSeriesReport/timeSeriesScatterChartRenderer'
 import { AcpImageryLayerMultiSelect } from '../../dashboards/agroCloudPlatform/map/AcpImageryLayerMultiSelect'
 import { SiAoiFieldMultiSelect } from '../../dashboards/agroCloudPlatform/map/SiAoiFieldMultiSelect'
 import { SiAoiFieldSelect } from '../../dashboards/agroCloudPlatform/map/SiAoiFieldSelect'
@@ -156,12 +157,18 @@ export function SiImageryTimeSeriesPanel({
   const runAnalysisRef = useRef<() => Promise<void>>(() => Promise.resolve())
   const autoRunReadyRef = useRef(false)
   const prevAutoRunDatesRef = useRef({ from: '', to: '' })
+  const emptyChartRetryRef = useRef(0)
   const prevLayerIdsRef = useRef<string[]>(selectedLayerIds)
   const prevDrawnAoiKeyRef = useRef('')
   const datesManuallyEditedRef = useRef(false)
+  const prevImageryDateAutoFollowRef = useRef(imageryDateAutoFollow)
 
   useEffect(() => {
-    if (imageryDateAutoFollow) datesManuallyEditedRef.current = false
+    // Only clear manual Start/End when auto-follow is turned ON — not while it stays true.
+    if (imageryDateAutoFollow && !prevImageryDateAutoFollowRef.current) {
+      datesManuallyEditedRef.current = false
+    }
+    prevImageryDateAutoFollowRef.current = imageryDateAutoFollow
   }, [imageryDateAutoFollow])
 
   useEffect(() => {
@@ -608,6 +615,29 @@ export function SiImageryTimeSeriesPanel({
 
   runAnalysisRef.current = runAnalysisWrapped
 
+  /** Date edits must immediately drive a new fetch for the selected window. */
+  const applyDateChange = useCallback(
+    (nextFrom: string, nextTo: string) => {
+      datesManuallyEditedRef.current = true
+      setSelectedChartDate(null)
+      setFromDate(nextFrom)
+      setToDate(nextTo)
+      if (nextFrom && nextTo && nextFrom >= nextTo) {
+        setDateError('Start Date must be before End Date.')
+        return
+      }
+      setDateError(null)
+      // Force the auto-run effect to treat this as a new window.
+      prevAutoRunDatesRef.current = { from: '', to: '' }
+      emptyChartRetryRef.current = 0
+      // Drop stale series so the canvas does not keep showing the old window.
+      if (analysisMode === 'single-layer-trend') {
+        invalidateResults()
+      }
+    },
+    [analysisMode, invalidateResults],
+  )
+
   useEffect(() => {
     const el = chartWrapRef.current
     if (!el) return
@@ -620,12 +650,12 @@ export function SiImageryTimeSeriesPanel({
 
   useEffect(() => {
     if (analysisMode !== 'single-layer-trend') return
-    if (!hasRun || !selectedFieldKey || dateError) return
+    if (!selectedFieldKey || dateError) return
     if (!fromDate || !toDate || fromDate >= toDate) return
     const prev = prevAutoRunDatesRef.current
-    if (prev.from === fromDate && prev.to === toDate) return
-    setSelectedChartDate(null)
-    const id = window.setTimeout(() => void runAnalysisRef.current(), 650)
+    if (prev.from === fromDate && prev.to === toDate && hasRun) return
+    // Re-run whenever the toolbar range changes (including first run after edit).
+    const id = window.setTimeout(() => void runAnalysisRef.current(), 280)
     return () => window.clearTimeout(id)
   }, [fromDate, toDate, selectedFieldKey, hasRun, dateError, analysisMode])
 
@@ -633,7 +663,7 @@ export function SiImageryTimeSeriesPanel({
     if (analysisMode !== 'single-layer-trend') return
     if (hasRun || loading) return
     if (!selectedFieldKey || !fromDate || !toDate || fromDate >= toDate || dateError) return
-    const id = window.setTimeout(() => void runAnalysisRef.current(), 500)
+    const id = window.setTimeout(() => void runAnalysisRef.current(), 280)
     return () => window.clearTimeout(id)
   }, [selectedFieldKey, fromDate, toDate, selectedLayerIds, hasRun, loading, dateError, analysisMode])
 
@@ -662,9 +692,16 @@ export function SiImageryTimeSeriesPanel({
 
   useEffect(() => {
     if (analysisMode !== 'single-layer-trend') return
-    if (!hasRun || loading || labels.length > 0 || error) return
+    if (labels.length > 0) {
+      emptyChartRetryRef.current = 0
+      return
+    }
+    // Retry empty/error runs a few times — abort races used to leave a permanent "No NDVI" state.
+    if (!hasRun || loading) return
     if (!selectedFieldKey || !fromDate || !toDate || fromDate >= toDate || dateError) return
-    const id = window.setTimeout(() => void runAnalysisRef.current(), 600)
+    if (emptyChartRetryRef.current >= 2) return
+    emptyChartRetryRef.current += 1
+    const id = window.setTimeout(() => void runAnalysisRef.current(), 700)
     return () => window.clearTimeout(id)
   }, [hasRun, loading, labels.length, error, selectedFieldKey, fromDate, toDate, dateError, selectedLayerIds, analysisMode])
 
@@ -868,29 +905,31 @@ export function SiImageryTimeSeriesPanel({
     if (!scatterAxisDates.length || !layerSeries.length) return { labels: [], datasets: [] }
 
     if (scatterCorrelation && scatterCorrelation.points.length >= 2) {
-      const pointColor = imageryLayerChartColor(0)
       return {
         datasets: [
           {
             type: 'scatter' as const,
-            label: `${scatterCorrelation.xLayerId} vs ${scatterCorrelation.yLayerId}`,
+            label: 'Paired scenes',
             data: scatterCorrelation.points.map(point => ({ x: point.x, y: point.y })),
-            borderColor: pointColor,
-            backgroundColor: `${pointColor}cc`,
-            pointRadius: 4,
-            pointHoverRadius: 6,
+            borderColor: '#ecfeff',
+            backgroundColor: 'rgba(45, 212, 191, 0.85)',
+            borderWidth: 1.5,
+            pointRadius: 5,
+            pointHoverRadius: 7,
           },
           {
             type: 'line' as const,
-            label: `Regression · R²=${scatterCorrelation.regression.r2.toFixed(3)}`,
+            label: `Linear fit · R²=${scatterCorrelation.regression.r2.toFixed(3)}`,
             data: scatterCorrelation.regressionLine,
-            borderColor: '#f97316',
-            backgroundColor: '#f97316',
+            borderColor: '#fbbf24',
+            backgroundColor: 'transparent',
             borderWidth: 2,
             borderDash: [6, 4],
             pointRadius: 0,
             pointHoverRadius: 0,
             fill: false,
+            tension: 0,
+            showLine: true,
           },
         ],
       }
@@ -990,7 +1029,11 @@ export function SiImageryTimeSeriesPanel({
                 const digits = areaUnit === 'ha' ? 2 : 0
                 return `${ctx.dataset.label ?? 'Class'}: ${v.toFixed(digits)} ${areaUnitLabel}`
               }
-              return `${ctx.dataset.label ?? 'Value'}: ${v.toFixed(4)}`
+              const label = String(ctx.dataset.label ?? 'Value')
+              const upper = label.toUpperCase()
+              if (upper.includes('LST')) return `${label}: ${v.toFixed(2)} °C`
+              if (upper === 'ET' || upper.startsWith('ET ')) return `${label}: ${v.toFixed(2)} mm/day`
+              return `${label}: ${v.toFixed(4)}`
             },
           },
         },
@@ -1032,7 +1075,20 @@ export function SiImageryTimeSeriesPanel({
                   color: 'rgba(255,255,255,0.72)',
                   font: { size: 9, weight: 600 },
                 }
-              : undefined,
+              : layerSeries.some(s => s.layerId.trim().toUpperCase() === 'LST') &&
+                  layerSeries.every(s => {
+                    const u = s.layerId.trim().toUpperCase()
+                    return u === 'LST' || u === 'ET'
+                  })
+                ? {
+                    display: true,
+                    text: layerSeries.every(s => s.layerId.trim().toUpperCase() === 'LST')
+                      ? 'LST (°C)'
+                      : 'LST (°C) / ET (mm/day)',
+                    color: 'rgba(255,255,255,0.72)',
+                    font: { size: 9, weight: 600 },
+                  }
+                : undefined,
           stacked: !lulcCompositionMode && lulcAreaMode && (chartType === 'area' || chartType === 'bar'),
           ticks: {
             color: '#94a3b8',
@@ -1300,14 +1356,7 @@ export function SiImageryTimeSeriesPanel({
                 value={fromDate}
                 max={toDate || undefined}
                 onChange={e => {
-                  const next = e.target.value
-                  datesManuallyEditedRef.current = true
-                  setFromDate(next)
-                  if (next && toDate && next >= toDate) {
-                    setDateError('Start Date must be before End Date.')
-                  } else {
-                    setDateError(null)
-                  }
+                  applyDateChange(e.target.value, toDate)
                 }}
               />
             </label>
@@ -1318,14 +1367,7 @@ export function SiImageryTimeSeriesPanel({
                 value={toDate}
                 min={fromDate || undefined}
                 onChange={e => {
-                  const next = e.target.value
-                  datesManuallyEditedRef.current = true
-                  setToDate(next)
-                  if (fromDate && next && fromDate >= next) {
-                    setDateError('End Date must be after Start Date.')
-                  } else {
-                    setDateError(null)
-                  }
+                  applyDateChange(fromDate, e.target.value)
                 }}
               />
             </label>
@@ -1716,7 +1758,11 @@ export function SiImageryTimeSeriesPanel({
           <div className="acp-ts__scatter-insight">
             <div className="acp-ts__scatter-head">
               <span className="acp-ts__scatter-r2">
+                r = <strong>{scatterCorrelation.regression.r.toFixed(3)}</strong>
+                {' · '}
                 R² = <strong>{scatterCorrelation.regression.r2.toFixed(3)}</strong>
+                {' · '}
+                n = <strong>{scatterCorrelation.regression.n}</strong>
               </span>
               <span
                 className={[
@@ -1732,8 +1778,31 @@ export function SiImageryTimeSeriesPanel({
                 {scatterCorrelation.relationship.label}
               </span>
             </div>
-            <p className="acp-ts__scatter-gis">{scatterCorrelation.gisInsight}</p>
-            <p className="acp-ts__scatter-agro">{scatterCorrelation.agroInsight}</p>
+            {scatterCorrelation.points.length ? (
+              <div className="acp-ts__scatter-table-wrap">
+                <table className="acp-ts__scatter-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>{scatterCorrelation.xLayerId}</th>
+                      <th>{scatterCorrelation.yLayerId}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {scatterCorrelation.points.map(p => (
+                      <tr key={`${p.date}-${p.x}-${p.y}`}>
+                        <td>{p.date || '—'}</td>
+                        <td>{p.x.toFixed(4)}</td>
+                        <td>{p.y.toFixed(4)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+            <p className="acp-ts__scatter-interpret">
+              <strong>Interpretation:</strong> {buildCorrelationInterpretation(scatterCorrelation)}
+            </p>
           </div>
         ) : chartType === 'scatter' && hasRun && labels.length && layerSeries.length < 2 ? (
           <p className="acp-ts__scatter-hint">Select two layers to run correlation scatter with regression and R².</p>

@@ -1,12 +1,17 @@
 import ExcelJS from 'exceljs'
-import { evaluateImageryLayerDailyValue } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
-import type { ImageryTimeSeriesLayerSeries } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import {
+  evaluateImageryLayerDailyValue,
+  imageryTimePeriodKey,
+} from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import type {
+  ImageryTimeAggregation,
+  ImageryTimeSeriesLayerSeries,
+} from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import type { ImageryIndexInterpretation } from '../../../../lib/imageryIndexInterpretationEngine'
 import { resolveLayerLiveLegendSpec } from '../../../../lib/layerLiveLegendCatalog'
 import type { SentinelHubDailyIndexMeans } from '../../../../lib/sentinelHubStatisticsApi'
 import {
   compositeAoiMapSnapshotBase64,
-  dataUrlToPngBase64,
   fetchIndexLayerMapSnapshotBase64,
   fetchSatelliteBasemapSnapshot,
   resolveTimeSeriesSnapshotExtent,
@@ -19,10 +24,11 @@ const SECTION_FILL = 'FFE2F5EE'
 const INK = 'FF0F172A'
 const MUTED = 'FF64748B'
 const DATA_SOURCE = 'Sentinel-2 L2A (Sentinel Hub WMS)'
-const MAX_SNAPSHOTS_PER_LAYER = 12
-const SNAPSHOT_WIDTH = 640
-const SNAPSHOT_HEIGHT = 520
-const CONCURRENCY = 2
+/** Soft ceiling only for extreme Day ranges — never sample Week/Month/Year. */
+const SOFT_MAX_DAY_SNAPSHOTS = 120
+const SNAPSHOT_WIDTH = 720
+const SNAPSHOT_HEIGHT = 580
+const CONCURRENCY = 3
 
 function fmtNum(n: number | null | undefined, digits = 4): string {
   if (n == null || !Number.isFinite(n)) return '—'
@@ -34,11 +40,155 @@ function fmtHa(ha: number): string {
   return ha >= 100 ? `${ha.toFixed(1)} ha` : `${ha.toFixed(2)} ha`
 }
 
-function layerSnapshotTitle(layerId: string): string {
+function layerSnapshotTitle(layerId: string, aggregation: ImageryTimeAggregation = 'day'): string {
   const u = layerId.trim().toUpperCase()
-  if (u === 'STRESS_ZONES') return 'Stress Zones Snapshots'
-  if (u === 'CHAS') return 'CHAS Snapshots'
-  return `${u} Snapshots`
+  const base =
+    u === 'STRESS_ZONES' ? 'Stress Zones' : u === 'CHAS' ? 'CHAS' : u
+  if (aggregation === 'week') return `${base} Weekly Average Maps`
+  if (aggregation === 'month') return `${base} Monthly Average Maps`
+  if (aggregation === 'year') return `${base} Yearly Average Maps`
+  return `${base} Daily Maps`
+}
+
+export type MapSnapshotPeriodEntry = {
+  periodIndex: number
+  sceneDate: string
+  periodLabel: string
+  periodMean: number | null
+  kind: 'period' | 'series-average'
+}
+
+/**
+ * Pick a scene whose daily mean is closest to the period mean — better visual
+ * for Week/Month/Year “average” maps than always using the last observation.
+ */
+export function pickRepresentativeSceneDate(input: {
+  layerId: string
+  periodKey: string
+  periodMean: number | null
+  timeAggregation: ImageryTimeAggregation
+  dailyRows: SentinelHubDailyIndexMeans[]
+  fallbackAnchor: string
+}): string {
+  const fallback = input.fallbackAnchor.trim().slice(0, 10)
+  if (input.timeAggregation === 'day') return fallback || input.periodKey.slice(0, 10)
+
+  const candidates: Array<{ date: string; mean: number }> = []
+  for (const row of input.dailyRows) {
+    const date = row.date?.slice(0, 10)
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue
+    if (imageryTimePeriodKey(date, input.timeAggregation) !== input.periodKey) continue
+    const mean = evaluateImageryLayerDailyValue(input.layerId, row)
+    if (mean == null || !Number.isFinite(mean)) continue
+    candidates.push({ date, mean })
+  }
+  if (!candidates.length) return fallback || input.periodKey.slice(0, 10)
+  if (input.periodMean == null || !Number.isFinite(input.periodMean)) {
+    return candidates[Math.floor((candidates.length - 1) / 2)]!.date
+  }
+  return candidates.reduce((best, cur) =>
+    Math.abs(cur.mean - input.periodMean!) < Math.abs(best.mean - input.periodMean!) ? cur : best,
+  ).date
+}
+
+/**
+ * Include every finite chart period for the selected aggregation.
+ * Day used to be evenly sampled to 12 — that dropped most daily maps from Word.
+ * Year also prepends one series-average overview map per layer.
+ */
+export function selectMapSnapshotEntries(input: {
+  layerId: string
+  chartLabels: string[]
+  displayLabels: string[]
+  values: Array<number | null | undefined>
+  periodAnchorDates: Record<string, string>
+  dailyRows: SentinelHubDailyIndexMeans[]
+  timeAggregation: ImageryTimeAggregation
+}): MapSnapshotPeriodEntry[] {
+  const aggregation = input.timeAggregation
+  const periodEntries: MapSnapshotPeriodEntry[] = []
+
+  for (let i = 0; i < input.chartLabels.length; i += 1) {
+    const v = input.values[i]
+    if (v == null || !Number.isFinite(v)) continue
+    const periodKey = input.chartLabels[i]!
+    const fallbackAnchor = (input.periodAnchorDates[periodKey] ?? periodKey).trim().slice(0, 10)
+    const sceneDate = pickRepresentativeSceneDate({
+      layerId: input.layerId,
+      periodKey,
+      periodMean: v,
+      timeAggregation: aggregation,
+      dailyRows: input.dailyRows,
+      fallbackAnchor,
+    })
+    const periodLabel = input.displayLabels[i] ?? periodKey
+    periodEntries.push({
+      periodIndex: i,
+      sceneDate,
+      periodLabel,
+      periodMean: v,
+      kind: 'period',
+    })
+  }
+
+  if (!periodEntries.length) return []
+
+  // Soft sample only for very long Day exports (keeps Word usable).
+  let selected = periodEntries
+  if (aggregation === 'day' && periodEntries.length > SOFT_MAX_DAY_SNAPSHOTS) {
+    const out: MapSnapshotPeriodEntry[] = []
+    for (let i = 0; i < SOFT_MAX_DAY_SNAPSHOTS; i += 1) {
+      out.push(
+        periodEntries[
+          Math.round((i * (periodEntries.length - 1)) / (SOFT_MAX_DAY_SNAPSHOTS - 1))
+        ]!,
+      )
+    }
+    selected = [...new Map(out.map(e => [e.periodIndex, e])).values()].sort(
+      (a, b) => a.periodIndex - b.periodIndex,
+    )
+  }
+
+  if (aggregation !== 'year') return selected
+
+  // Year: one overview “series average” map, then every yearly average map.
+  const finite = selected.map(e => e.periodMean).filter((n): n is number => n != null && Number.isFinite(n))
+  const seriesMean =
+    finite.length > 0 ? finite.reduce((a, b) => a + b, 0) / finite.length : null
+  const yearKeys = selected.map(e => input.chartLabels[e.periodIndex]!).filter(Boolean)
+  const fromYear = yearKeys[0] ?? ''
+  const toYear = yearKeys[yearKeys.length - 1] ?? fromYear
+
+  let bestOverview = selected[Math.floor((selected.length - 1) / 2)]!.sceneDate
+  if (seriesMean != null && input.dailyRows.length) {
+    let bestAbs = Number.POSITIVE_INFINITY
+    for (const row of input.dailyRows) {
+      const date = row.date?.slice(0, 10)
+      if (!date) continue
+      const mean = evaluateImageryLayerDailyValue(input.layerId, row)
+      if (mean == null || !Number.isFinite(mean)) continue
+      const abs = Math.abs(mean - seriesMean)
+      if (abs < bestAbs) {
+        bestAbs = abs
+        bestOverview = date
+      }
+    }
+  }
+  const rangeLabel =
+    fromYear && toYear && fromYear !== toYear
+      ? `Series average (${fromYear}–${toYear})`
+      : `Series average${fromYear ? ` (${fromYear})` : ''}`
+
+  return [
+    {
+      periodIndex: -1,
+      sceneDate: bestOverview,
+      periodLabel: rangeLabel,
+      periodMean: seriesMean,
+      kind: 'series-average',
+    },
+    ...selected,
+  ]
 }
 
 function formatLegendText(layerId: string): string {
@@ -91,24 +241,17 @@ function buildSnapshotNotes(
   layerId: string,
   mean: number | null,
   interpretations: ImageryIndexInterpretation[],
+  kind: MapSnapshotPeriodEntry['kind'] = 'period',
 ): string {
+  if (kind === 'series-average') {
+    return `${layerId} series-average overview — representative scene closest to the multi-year mean (${fmtNum(mean, 4)}). Year-by-year average maps follow.`
+  }
   const interp = interpretations.find(i => i.layerId.toUpperCase() === layerId.trim().toUpperCase())
   if (interp) {
     return [interp.summaryLine, interp.coverageLine, interp.actionsLine].filter(Boolean).join(' ')
   }
   if (mean == null) return 'No index statistics for this acquisition date.'
   return `${layerId} AOI mean ${fmtNum(mean, 4)} for this scene — compare with prior periods in the time series chart.`
-}
-
-function pickSnapshotIndices(count: number): number[] {
-  if (count <= MAX_SNAPSHOTS_PER_LAYER) {
-    return Array.from({ length: count }, (_, i) => i)
-  }
-  const out: number[] = []
-  for (let i = 0; i < MAX_SNAPSHOTS_PER_LAYER; i += 1) {
-    out.push(Math.round((i * (count - 1)) / (MAX_SNAPSHOTS_PER_LAYER - 1)))
-  }
-  return [...new Set(out)].sort((a, b) => a - b)
 }
 
 async function mapPool<T, R>(
@@ -139,6 +282,8 @@ export type BuildTimeSeriesMapSnapshotGroupsInput = {
   periodAnchorDates: Record<string, string>
   areaHa: number
   interpretations: ImageryIndexInterpretation[]
+  /** Panel Day/Week/Month/Year — drives which periods become maps. */
+  timeAggregation?: ImageryTimeAggregation
   mapboxToken?: string
   signal?: AbortSignal
   onProgress?: (completed: number, total: number) => void
@@ -148,6 +293,7 @@ export async function buildTimeSeriesMapSnapshotGroups(
   input: BuildTimeSeriesMapSnapshotGroupsInput,
 ): Promise<TimeSeriesMapSnapshotGroup[]> {
   const groups: TimeSeriesMapSnapshotGroup[] = []
+  const timeAggregation = input.timeAggregation ?? 'day'
   const layout = resolveTimeSeriesSnapshotLayout(SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT)
   const extent = resolveTimeSeriesSnapshotExtent(input.geometry, layout.mapW, layout.mapH)
   const basemapDataUrl = await fetchSatelliteBasemapSnapshot(
@@ -157,36 +303,27 @@ export async function buildTimeSeriesMapSnapshotGroups(
     SNAPSHOT_HEIGHT,
     input.signal,
   )
-  const basemapBase64 = dataUrlToPngBase64(basemapDataUrl)
 
   const jobs: Array<{
     layerId: string
-    entries: Array<{ periodIndex: number; sceneDate: string; periodLabel: string; periodMean: number | null }>
+    entries: MapSnapshotPeriodEntry[]
   }> = []
 
   for (const layerId of input.layerIds) {
     const series = input.layerSeries.find(s => s.layerId.toUpperCase() === layerId.toUpperCase())
     if (!series) continue
 
-    const periodIndices: Array<{
-      periodIndex: number
-      sceneDate: string
-      periodLabel: string
-      periodMean: number | null
-    }> = []
-    for (let i = 0; i < input.chartLabels.length; i += 1) {
-      const v = series.values[i]
-      if (v == null || !Number.isFinite(v)) continue
-      const periodKey = input.chartLabels[i]!
-      const sceneDate = (input.periodAnchorDates[periodKey] ?? periodKey).trim().slice(0, 10)
-      const periodLabel = input.displayLabels[i] ?? periodKey
-      periodIndices.push({ periodIndex: i, sceneDate, periodLabel, periodMean: v })
-    }
-    if (!periodIndices.length) continue
-    jobs.push({
+    const entries = selectMapSnapshotEntries({
       layerId,
-      entries: pickSnapshotIndices(periodIndices.length).map(i => periodIndices[i]!),
+      chartLabels: input.chartLabels,
+      displayLabels: input.displayLabels,
+      values: series.values,
+      periodAnchorDates: input.periodAnchorDates,
+      dailyRows: input.dailyRows,
+      timeAggregation,
     })
+    if (!entries.length) continue
+    jobs.push({ layerId, entries })
   }
 
   const total = jobs.reduce((n, j) => n + j.entries.length, 0)
@@ -194,14 +331,14 @@ export async function buildTimeSeriesMapSnapshotGroups(
 
   for (const job of jobs) {
     if (input.signal?.aborted) break
-    const snapshots = await mapPool(job.entries, CONCURRENCY, async entry => {
+    const rawSnapshots = await mapPool(job.entries, CONCURRENCY, async entry => {
       if (input.signal?.aborted) {
         return {
           layerId: job.layerId.toUpperCase(),
           layerLabel: job.layerId.toUpperCase(),
           sceneDate: entry.sceneDate,
           periodLabel: entry.periodLabel,
-          imageBase64: basemapBase64,
+          imageBase64: null,
           dataSource: DATA_SOURCE,
           mean: entry.periodMean,
           min: entry.periodMean,
@@ -213,6 +350,26 @@ export async function buildTimeSeriesMapSnapshotGroups(
       }
 
       const stats = resolveSceneStats(job.layerId, entry.sceneDate, entry.periodMean, input.dailyRows)
+      // Skip dates with no analyzable index statistics — never emit basemap-only cards.
+      if (stats.mean == null || !Number.isFinite(stats.mean)) {
+        completed += 1
+        input.onProgress?.(completed, Math.max(total, 1))
+        return {
+          layerId: job.layerId.toUpperCase(),
+          layerLabel: job.layerId.toUpperCase(),
+          sceneDate: entry.sceneDate,
+          periodLabel: entry.periodLabel,
+          imageBase64: null,
+          dataSource: DATA_SOURCE,
+          mean: null,
+          min: null,
+          max: null,
+          areaHa: input.areaHa,
+          legendText: formatLegendText(job.layerId),
+          notes: 'Skipped — no index statistics for this acquisition date.',
+        } satisfies TimeSeriesMapSnapshot
+      }
+
       let indexBase64: string | null = null
       try {
         indexBase64 = await fetchIndexLayerMapSnapshotBase64({
@@ -228,6 +385,26 @@ export async function buildTimeSeriesMapSnapshotGroups(
         indexBase64 = null
       }
 
+      // Require a successful index analysis raster — do not fall back to basemap alone.
+      if (!indexBase64) {
+        completed += 1
+        input.onProgress?.(completed, Math.max(total, 1))
+        return {
+          layerId: job.layerId.toUpperCase(),
+          layerLabel: job.layerId.toUpperCase(),
+          sceneDate: entry.sceneDate,
+          periodLabel: entry.periodLabel,
+          imageBase64: null,
+          dataSource: DATA_SOURCE,
+          mean: stats.mean,
+          min: stats.min,
+          max: stats.max,
+          areaHa: input.areaHa,
+          legendText: formatLegendText(job.layerId),
+          notes: 'Skipped — index analysis raster unavailable for this date.',
+        } satisfies TimeSeriesMapSnapshot
+      }
+
       let imageBase64: string | null = null
       try {
         imageBase64 = await compositeAoiMapSnapshotBase64({
@@ -235,12 +412,14 @@ export async function buildTimeSeriesMapSnapshotGroups(
           basemapDataUrl,
           indexBase64,
           layerId: job.layerId,
+          title: `${job.layerId.toUpperCase()} · ${entry.periodLabel}`,
+          sceneDate: entry.sceneDate,
           widthPx: SNAPSHOT_WIDTH,
           heightPx: SNAPSHOT_HEIGHT,
           extent,
         })
       } catch {
-        imageBase64 = indexBase64 ?? basemapBase64
+        imageBase64 = indexBase64
       }
 
       completed += 1
@@ -258,13 +437,18 @@ export async function buildTimeSeriesMapSnapshotGroups(
         max: stats.max,
         areaHa: input.areaHa,
         legendText: formatLegendText(job.layerId),
-        notes: buildSnapshotNotes(job.layerId, stats.mean, input.interpretations),
+        notes: buildSnapshotNotes(job.layerId, stats.mean, input.interpretations, entry.kind),
       } satisfies TimeSeriesMapSnapshot
     })
 
+    const snapshots = rawSnapshots.filter(
+      s => !!s.imageBase64 && s.mean != null && Number.isFinite(s.mean),
+    )
+    if (!snapshots.length) continue
+
     groups.push({
       layerId: job.layerId.toUpperCase(),
-      title: layerSnapshotTitle(job.layerId),
+      title: layerSnapshotTitle(job.layerId, timeAggregation),
       snapshots,
     })
   }
@@ -294,7 +478,7 @@ export function buildMapSnapshotsSheet(wb: ExcelJS.Workbook, groups: TimeSeriesM
   ws.mergeCells('A1:G1')
 
   ws.getCell('A2').value =
-    'AOI index maps organized by analysis layer and acquisition date (aligned with the Imagery Time Series panel).'
+    'AOI index maps follow the panel Time aggregation (Day / Week / Month / Year) for each selected layer.'
   ws.getCell('A2').font = { size: 9, color: { argb: MUTED } }
   ws.mergeCells('A2:G2')
 

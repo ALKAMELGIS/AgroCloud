@@ -25,7 +25,7 @@ main.content > .si-page {
   --si-accent-ring: rgba(52, 211, 153, 0.35);
   --si-panel-border: rgba(148, 163, 184, 0.26);
   --si-panel-glow: rgba(34, 197, 94, 0.1);
-  /* Geo AI — unified violet slate (popups, selection, tables, query, toolbars inside page) */
+  /* Geo AI â€” unified violet slate (popups, selection, tables, query, toolbars inside page) */
   --si-geo-deep: #1a0b2e;
   --si-geo-accent: #b3a1ff;
   --si-geo-accent-2: #a5b4fc;
@@ -50,7 +50,7 @@ main.content > .si-page {
   background: #020617;
 }
 
-/* Layers: legacy “Add data” chip must never render (stale bundles / cached HTML). */
+/* Layers: legacy â€œAdd dataâ€ chip must never render (stale bundles / cached HTML). */
 .si-page .si-env-added-layers-add {
   display: none !important;
   visibility: hidden !important;
@@ -1077,7 +1077,7 @@ main.content > .si-page {
   -webkit-backdrop-filter: blur(16px) saturate(1.15);
 }
 
-/* ── Satellite Intelligence: Add Source Data — EO / command-center shell (overrides develop-dashboard light theme) ── */
+/* â”€â”€ Satellite Intelligence: Add Source Data â€” EO / command-center shell (overrides develop-dashboard light theme) â”€â”€ */
 .si-add-layer-gis-overlay:not(.gis-map-add-layer-overlay) .si-add-source-modal.gis-modal.gis-modal-compact {
   max-width: 520px;
   width: min(520px, calc(100vw - 24px));
@@ -1971,7 +1971,7 @@ main.content > .si-page {
   pointer-events: auto;
 }
 
-/* Compact map control column — smaller circular buttons (search, imagery,
+/* Compact map control column â€” smaller circular buttons (search, imagery,
    basemap, weather/temperature, 3D, legend). Scoped to the left floating
    column so the same classes used elsewhere keep their default size. */
 .si-map-floating-controls__left {
@@ -2029,7 +2029,7 @@ main.content > .si-page {
   z-index: 50;
 }
 
-/* Layer Live index imagery toggle — basemap-style circular button on the map. */
+/* Layer Live index imagery toggle â€” basemap-style circular button on the map. */
 .si-layer-live-toggle {
   position: relative;
   z-index: 5;
@@ -2040,7 +2040,7 @@ main.content > .si-page {
   box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.55), 0 0 22px rgba(22, 163, 74, 0.45);
 }
 
-/* Weather control is the lower layer in this cluster — the basemap gallery
+/* Weather control is the lower layer in this cluster â€” the basemap gallery
    popover must always render in front of the weather icon when open. */
 .si-map-floating-controls__left .si-weather-toggle {
   position: relative;
@@ -2083,8 +2083,8 @@ main.content > .si-page {
   z-index: 5;
 }
 /* While the elevation/terrain popover is open, lift its whole stacking context
-   above the sibling icons (Key legend, weather, …) so the panel overlays them
-   instead of being covered — without shifting any icon. */
+   above the sibling icons (Key legend, weather, â€¦) so the panel overlays them
+   instead of being covered â€” without shifting any icon. */
 .si-map-floating-controls__left .si-view3d-toggle.is-open {
   z-index: 60;
 }
@@ -2149,7 +2149,7 @@ main.content > .si-page {
   color: #f9fafb;
 }
 
-/* ── Legend tool toggle (sole control point for the map legend) ───────────── */
+/* â”€â”€ Legend tool toggle (sole control point for the map legend) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .si-map-floating-controls__left .si-legend-toggle {
   position: relative;
   z-index: 6;
@@ -2163,7 +2163,7 @@ main.content > .si-page {
   color: #f9fafb;
 }
 
-/* ── Terrain 3D control (Elevation & Contour) ─────────────────────────────── */
+/* â”€â”€ Terrain 3D control (Elevation & Contour) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .si-map-floating-controls__left .si-terrain3d-toggle {
   position: relative;
   z-index: 6;
@@ -2368,7 +2368,7 @@ main.content > .si-page {
 
 .si-basemap-widget {
   /* Popover: floats out of normal flow so opening the gallery never pushes
-     the weather button (or any sibling) — zero layout shift. */
+     the weather button (or any sibling) â€” zero layout shift. */
   position: absolute;
   top: calc(100% + 8px);
   left: 0;
@@ -2553,7 +2553,7 @@ main.content > .si-page {
   position: relative;
 }
 
-/* —— Processing Options: Mapbox-style ctrl on map (centered strip + expand/collapse) —— */
+/* â€”â€” Processing Options: Mapbox-style ctrl on map (centered strip + expand/collapse) â€”â€” */
 .si-env-rail--mapbox-float {
   position: absolute;
   inset-inline-start: 50%;
@@ -2694,7 +2694,7 @@ html[data-theme='light'] .si-proc-mb-toggle {
   border-inline-start-color: rgba(148, 163, 184, 0.45);
 }
 
-/* Panel fallback when toolbox dock is closed — keep on trailing edge near rail, not over Layer Live legend */
+/* Panel fallback when toolbox dock is closed â€” keep on trailing edge near rail, not over Layer Live legend */
 .si-env-panel.si-env-panel--mapbox-drop {
   position: fixed;
   inset-inline-end: max(72px, env(safe-area-inset-right, 0px) + 58px);
@@ -2707,7 +2707,7 @@ html[data-theme='light'] .si-proc-mb-toggle {
   width: min(360px, calc(100vw - 96px));
 }
 
-/* Portal target: dock map-toolbox host — one continuous surface (no nested env panel card) */
+/* Portal target: dock map-toolbox host â€” one continuous surface (no nested env panel card) */
 .si-sat-ctx-map-toolbox-host > .si-env-panel.si-env-panel--satellite-toolbox.si-env-panel--single-surface {
   position: relative !important;
   inset: auto !important;
@@ -2922,7 +2922,7 @@ html[data-theme='light'] .si-env-toolbox-breadcrumb {
   color: #64748b;
 }
 
-/* Light theme — layer picker + field controls inside map toolbox (matches si-sat-ctx-dock--light) */
+/* Light theme â€” layer picker + field controls inside map toolbox (matches si-sat-ctx-dock--light) */
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-field-analysis-select,
 html[data-theme='light'] .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-field-analysis-field input[type='date'] {
   background: rgba(255, 255, 255, 0.92) !important;
@@ -3125,7 +3125,7 @@ html[data-theme='light'] .si-env-side-row--selected {
   width: clamp(340px, 34vw, 440px);
 }
 
-/* Explore STAC: drop nested “card” chrome on the STAC shell + scroll body only; tools stay as-is. */
+/* Explore STAC: drop nested â€œcardâ€ chrome on the STAC shell + scroll body only; tools stay as-is. */
 .si-env-panel.si-env-panel--explore-stac .si-explore-stac.si-explore-stac--embedded {
   background: transparent !important;
   border: none !important;
@@ -3474,7 +3474,7 @@ html[data-theme='light'] .si-env-side-row--selected {
   text-align: left;
 }
 
-/* Floating popover variant — rendered to document.body so it never clips inside the
+/* Floating popover variant â€” rendered to document.body so it never clips inside the
    compact panel; sits above the dock with a luxe glassy translucent-black sheet and
    animates in like a pro GIS layer-tree menu. Compact so every option fits with no scroll. */
 .si-env-layer-options-menu--floating {
@@ -3664,14 +3664,14 @@ html[data-theme='light'] .si-env-layer-options-menu__item > i {
   box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.28);
 }
 
-/* Modern layer row: a single ⋯ options menu in the header next to the toggle
+/* Modern layer row: a single â‹¯ options menu in the header next to the toggle
    (replaces the legacy inline icon-button row). */
 .si-mt-layer__header-actions {
   display: inline-flex;
   align-items: center;
 }
 
-/* Let the header ⋯ dropdown escape the compact card (which clips with
+/* Let the header â‹¯ dropdown escape the compact card (which clips with
    overflow:hidden) so the full options menu is visible. */
 .si-env-user-layer-row > .si-mt-layer {
   overflow: visible;
@@ -3750,39 +3750,67 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
 }
 
 .si-layer-action-modal--gis-table {
-  width: min(1180px, 98vw);
-  max-width: min(1180px, 98vw);
-  max-height: min(34vh, 320px);
+  --ago-bg: #ffffff;
+  --ago-surface: #f3f3f3;
+  --ago-border: #d4d4d4;
+  --ago-text: #323232;
+  --ago-muted: #6e6e6e;
+  --ago-accent: #0079c1;
+  --ago-row-h: 28px;
+  --ago-btn: 28px;
+  --ago-icon: 16px;
+  --ago-font: 12px;
+  width: min(680px, calc(100vw - 32px));
+  height: min(420px, calc(100vh - 80px));
+  max-width: min(680px, calc(100vw - 32px));
+  max-height: min(420px, calc(100vh - 80px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid var(--ago-border);
+  background: var(--ago-bg);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
+  color: var(--ago-text);
+  font-size: var(--ago-font);
 }
 
-/* ArcGIS-Online-style bottom dock: the attribute table snaps to the bottom of
-   the screen as a responsive, ~half-height panel so the map stays visible and
-   interactive above it. Scoped via :has so other action modals stay centered. */
-.si-layer-action-modal-overlay:has(.si-layer-action-modal--gis-table) {
-  align-items: flex-end;
-  justify-content: stretch;
-  padding: 0;
-  background: transparent;
-  pointer-events: none;
-}
-.si-layer-action-modal-overlay:has(.si-layer-action-modal--gis-table) .si-layer-action-modal--gis-table {
+/* Centered floating attribute table (ArcGIS Online style). */
+.si-layer-action-modal-overlay--gis-attr {
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.28);
   pointer-events: auto;
-  width: 100%;
-  max-width: 100%;
-  height: min(34vh, 320px);
-  max-height: min(34vh, 320px);
-  border-radius: 14px 14px 0 0;
-  border-bottom: none;
-  box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.55);
 }
-@media (max-width: 720px) {
-  .si-layer-action-modal-overlay:has(.si-layer-action-modal--gis-table) .si-layer-action-modal--gis-table {
-    height: min(40vh, 300px);
-    max-height: min(40vh, 300px);
-  }
+
+.si-layer-action-modal-overlay--gis-attr .si-layer-action-modal--gis-table {
+  pointer-events: auto;
+}
+
+.si-layer-action-modal--gis-table.is-maximized {
+  width: min(1040px, calc(100vw - 24px));
+  height: min(680px, calc(100vh - 48px));
+  max-width: min(1040px, calc(100vw - 24px));
+  max-height: min(680px, calc(100vh - 48px));
+}
+
+.si-layer-action-modal--gis-table.is-minimized {
+  width: min(360px, calc(100vw - 24px));
+  height: auto;
+  max-height: none;
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%) !important;
+}
+
+.si-layer-action-modal--gis-table.is-minimized .si-layer-action-modal-body {
+  display: none;
+}
+
+.si-layer-action-modal--gis-table.is-dragged {
+  transition: none;
 }
 
 .si-layer-action-modal--gis-table .si-layer-action-modal-body {
@@ -3791,12 +3819,442 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  padding: 0;
 }
 
-.si-layer-action-modal--gis-table .si-layer-action-table-layout {
+/* Title bar */
+.si-gis-attr-win__titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 8px 0 10px;
+  border-bottom: 1px solid var(--ago-border);
+  background: linear-gradient(180deg, #fafafa, var(--ago-surface));
+  cursor: grab;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.si-gis-attr-win__titlebar:active {
+  cursor: grabbing;
+}
+
+.si-gis-attr-win__mark {
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.si-gis-attr-win__title-wrap {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.si-gis-attr-win__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--ago-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.si-gis-attr-win__subtitle {
+  display: block;
+  font-size: 11px;
+  color: var(--ago-muted);
+  line-height: 1.1;
+}
+
+.si-gis-attr-win__records {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--ago-muted);
+  white-space: nowrap;
+}
+
+.si-gis-attr-win__winbtns {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.si-gis-attr-win__winbtn {
+  width: var(--ago-btn);
+  height: var(--ago-btn);
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ago-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.si-gis-attr-win__winbtn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--ago-text);
+}
+
+.si-gis-attr-win__winbtn--close:hover {
+  background: #e81123;
+  color: #fff;
+}
+
+/* Inner layout */
+.si-gis-attr-win {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.si-gis-attr-win__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--ago-border);
+  background: var(--ago-bg);
+  flex-shrink: 0;
+}
+
+.si-gis-attr-win__tool {
+  width: var(--ago-btn);
+  height: var(--ago-btn);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ago-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: var(--ago-icon);
+}
+
+.si-gis-attr-win__tool:hover:not(:disabled) {
+  background: var(--ago-surface);
+  border-color: var(--ago-border);
+  color: var(--ago-accent);
+}
+
+.si-gis-attr-win__tool:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.si-gis-attr-win__toolsep {
+  width: 1px;
+  height: 18px;
+  margin: 0 3px;
+  background: var(--ago-border);
+  flex-shrink: 0;
+}
+
+.si-gis-attr-win__searchbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--ago-border);
+  background: #fafafa;
+  flex-shrink: 0;
+}
+
+.si-gis-attr-win__search {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--ago-border);
+  border-radius: 4px;
+  background: #fff;
+}
+
+.si-gis-attr-win__search i {
+  font-size: 12px;
+  color: var(--ago-muted);
+}
+
+.si-gis-attr-win__search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: var(--ago-font);
+  color: var(--ago-text);
+}
+
+.si-gis-attr-win__searchmode {
+  height: 28px;
+  border: 1px solid var(--ago-border);
+  border-radius: 4px;
+  background: #fff;
+  font-size: var(--ago-font);
+  color: var(--ago-text);
+  padding: 0 6px;
+}
+
+.si-gis-attr-win__filterbtn {
+  width: var(--ago-btn);
+  height: var(--ago-btn);
+  border: 1px solid var(--ago-border);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--ago-muted);
+  cursor: pointer;
+}
+
+.si-gis-attr-win__filterbtn.is-on,
+.si-gis-attr-win__filterbtn:hover {
+  border-color: var(--ago-accent);
+  color: var(--ago-accent);
+  background: rgba(0, 121, 193, 0.06);
+}
+
+.si-gis-attr-win__filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--ago-border);
+  background: #fafafa;
+  flex-shrink: 0;
+}
+
+.si-gis-attr-win__filters label {
+  display: grid;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--ago-muted);
+}
+
+.si-gis-attr-win__filters select,
+.si-gis-attr-win__filters input {
+  height: 28px;
+  border: 1px solid var(--ago-border);
+  border-radius: 4px;
+  background: #fff;
+  font-size: var(--ago-font);
+  color: var(--ago-text);
+  padding: 0 6px;
+}
+
+.si-gis-attr-win__filterclear {
+  align-self: end;
+  height: 28px;
+  border: 1px solid var(--ago-border);
+  border-radius: 4px;
+  background: #fff;
+  font-size: var(--ago-font);
+  color: var(--ago-text);
+  cursor: pointer;
+}
+
+.si-gis-attr-win__filterclear:hover {
+  border-color: var(--ago-accent);
+  color: var(--ago-accent);
+}
+
+.si-gis-attr-win__status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--ago-border);
+  background: var(--ago-surface);
+  font-size: 11px;
+  color: var(--ago-muted);
+  flex-shrink: 0;
+}
+
+.si-gis-attr-win__grid {
   flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
+
+.si-layer-action-modal--gis-table .si-layer-action-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  border: none;
+  border-radius: 0;
+  background: #fff;
+}
+
+.si-layer-action-modal--gis-table .si-layer-action-table,
+.si-layer-action-modal--gis-table .gis-layer-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: var(--ago-font);
+}
+
+.si-layer-action-modal--gis-table .si-layer-action-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.si-layer-action-modal--gis-table .si-layer-action-table th,
+.si-layer-action-modal--gis-table .gis-layer-table thead th {
+  position: relative;
+  height: var(--ago-row-h);
+  padding: 0 8px;
+  border-bottom: 1px solid var(--ago-border);
+  border-right: 1px solid #ebebeb;
+  background: var(--ago-surface);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ago-text);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.si-layer-action-modal--gis-table .si-layer-action-table td,
+.si-layer-action-modal--gis-table .gis-layer-table tbody td {
+  height: var(--ago-row-h);
+  padding: 0 8px;
+  border-bottom: 1px solid #ebebeb;
+  border-right: 1px solid #f0f0f0;
+  color: var(--ago-text);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.si-layer-action-modal--gis-table .gis-layer-table tbody tr:hover td {
+  background: #f5f9fc;
+}
+
+.si-layer-action-modal--gis-table .gis-layer-table tbody tr.gis-row-selected td {
+  background: #e6f4fb;
+}
+
+.si-gis-attr-col-resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.si-gis-attr-col-resize:hover {
+  background: rgba(0, 121, 193, 0.25);
+}
+
+.si-layer-action-modal--gis-table .gis-table-column-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 6px);
+}
+
+.si-layer-action-modal--gis-table .gis-table-column-label > i.fa-grip-vertical {
+  font-size: 10px;
+  color: var(--ago-muted);
+  opacity: 0.7;
+}
+
+.si-layer-action-modal--gis-table .gis-table-column-actions button,
+.si-layer-action-modal--gis-table .gis-table-rowbtn {
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ago-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.si-layer-action-modal--gis-table .gis-table-column-actions button:hover:not(:disabled),
+.si-layer-action-modal--gis-table .gis-table-rowbtn:hover {
+  background: rgba(0, 121, 193, 0.1);
+  color: var(--ago-accent);
+}
+
+.si-layer-action-modal--gis-table .gis-layer-table-select {
+  width: 32px;
+  text-align: center;
+}
+
+.si-layer-action-modal--gis-table input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--ago-accent);
+}
+
+.si-layer-action-modal--gis-table .gis-domain-cell {
+  font-size: var(--ago-font);
+}
+
+.si-layer-action-modal--gis-table mark {
+  background: #fff3b0;
+  color: inherit;
+  padding: 0 1px;
+}
+
+.si-layer-action-modal--gis-table .si-layer-action-empty {
+  padding: 16px;
+  font-size: var(--ago-font);
+  color: var(--ago-muted);
+}
+
+.si-layer-action-modal--gis-table .gis-fieldvis-trigger {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--ago-border);
+  border-radius: 3px;
+  background: #fff;
+  color: var(--ago-muted);
+}
+
+.si-layer-action-modal--gis-table .gis-fieldvis-trigger:hover,
+.si-layer-action-modal--gis-table .gis-fieldvis-trigger--open {
+  border-color: var(--ago-accent);
+  color: var(--ago-accent);
+  background: rgba(0, 121, 193, 0.06);
+}
+
+.si-layer-action-modal--gis-table .gis-table-column-dragging {
+  background: rgba(0, 121, 193, 0.12);
+}
+
+@media (max-width: 720px) {
+  .si-layer-action-modal--gis-table {
+    width: calc(100vw - 16px);
+    height: min(72vh, 520px);
+    max-height: min(72vh, 520px);
+  }
+
+  .si-gis-attr-win__filters {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .si-gis-attr-win__records {
+    display: none;
+  }
+}
+
 
 .si-layer-action-modal-table-title {
   width: 34px;
@@ -3880,7 +4338,7 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
   align-items: stretch;
 }
 
-/* Match first grid track to .gis-table-dock-sidebar.collapsed (52px) — avoids empty gutter when tools are collapsed */
+/* Match first grid track to .gis-table-dock-sidebar.collapsed (52px) â€” avoids empty gutter when tools are collapsed */
 .si-layer-action-table-layout--gis.si-layer-action-table-layout--tools-collapsed {
   grid-template-columns: 52px minmax(0, 1fr);
   gap: 6px;
@@ -3971,11 +4429,11 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
   color: #334155;
 }
 
-/* ───────────────────────────────────────────────────────────────────────────
-   Table Browser — luxurious black glassmorphism theme.
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   Table Browser â€” luxurious black glassmorphism theme.
    Scoped to .si-layer-action-modal--gis-table so other table usages stay light.
    Black glassy surfaces, white text, subtle frosted depth.
-   ─────────────────────────────────────────────────────────────────────────── */
+   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .si-layer-action-modal.si-layer-action-modal--gis-table {
   --lx-text: #f5f7fa;
   --lx-muted: #aab2bf;
@@ -4104,7 +4562,7 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
 .si-layer-action-modal--gis-table .gis-table-dock-meta {
   color: var(--lx-text);
 }
-/* "Showing N of N feature(s)" bar — dark luxe glass to match the modal. */
+/* "Showing N of N feature(s)" bar â€” dark luxe glass to match the modal. */
 .si-layer-action-modal--gis-table .gis-layer-table-meta,
 .si-layer-action-modal--gis-table .gis-layer-table-meta--table-only {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01));
@@ -4127,7 +4585,7 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
 }
 .si-layer-action-modal--gis-table .si-layer-action-table th,
 .si-layer-action-modal--gis-table .gis-layer-table thead th {
-  /* Opaque dark — header is position:sticky, so rows must not bleed through. */
+  /* Opaque dark â€” header is position:sticky, so rows must not bleed through. */
   background: linear-gradient(180deg, #20232e, #15171f);
   color: var(--lx-text);
   border-bottom: 1px solid var(--lx-border);
@@ -4193,7 +4651,7 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
   color: #fca5a5;
 }
 
-/* ── Compact & harmonious sizing ─────────────────────────────────────────── */
+/* â”€â”€ Compact & harmonious sizing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .si-layer-action-modal--gis-table .si-layer-action-modal-header {
   padding: 9px 12px;
 }
@@ -4219,7 +4677,7 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
 .si-layer-action-modal--gis-table .si-layer-action-table-layout {
   gap: 7px;
 }
-/* Two stacked info bars → slim, even strips with matching rhythm. */
+/* Two stacked info bars â†’ slim, even strips with matching rhythm. */
 .si-layer-action-modal--gis-table .gis-table-dock-header,
 .si-layer-action-modal--gis-table .si-table-modal-subheader {
   padding: 5px 10px;
@@ -4623,7 +5081,7 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
   color: #e5e7eb;
 }
 
-/* Map toolbox (embed): one primary chrome row — kicker + tool title + close */
+/* Map toolbox (embed): one primary chrome row â€” kicker + tool title + close */
 .si-env-panel-header--toolbox-primary {
   gap: 8px;
 }
@@ -5169,7 +5627,7 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
   }
 }
 
-/* Click target shown when a Geo AI answer has staged an inspect card — the user
+/* Click target shown when a Geo AI answer has staged an inspect card â€” the user
    clicks the pin to open the (small) popup; nothing pops up automatically. */
 .si-map-search-pin--clickable {
   cursor: pointer;
@@ -5622,7 +6080,7 @@ input:checked + .slider:before {
   background: #020617;
 }
 
-/* Web mapping tools (Environmental Index → Tools tab) */
+/* Web mapping tools (Environmental Index â†’ Tools tab) */
 .si-map-container--drawing .mapboxgl-canvas {
   touch-action: none;
 }
@@ -5883,7 +6341,7 @@ input:checked + .slider:before {
   opacity: 0.88;
 }
 
-/* Geo AI — attribute card (anchored on map via Marker at pin coordinates) */
+/* Geo AI â€” attribute card (anchored on map via Marker at pin coordinates) */
 .si-geo-ai-inspect-marker {
   z-index: 12;
 }
@@ -6865,7 +7323,7 @@ input:checked + .slider:before {
   background: rgba(34, 197, 94, 0.32);
 }
 
-/* Cloud storage (.acs) picker — second dialog over STAC modal */
+/* Cloud storage (.acs) picker â€” second dialog over STAC modal */
 .si-sr-only {
   position: absolute;
   width: 1px;
@@ -7965,7 +8423,7 @@ input.si-explore-date-input-linked[type='date'] {
   font-family: inherit;
 }
 
-/* Side panel: full-width stacked bounds — no clipped west/east labels */
+/* Side panel: full-width stacked bounds â€” no clipped west/east labels */
 .si-env-panel .si-explore-bbox-diamond {
   margin-top: 16px;
   padding: 14px 12px 16px;
@@ -8684,7 +9142,7 @@ input.si-explore-date-input-linked[type='date'] {
   color: #f8fafc;
 }
 
-/* Remote sensing layer picker — layer id only (NDVI, VHS, …) */
+/* Remote sensing layer picker â€” layer id only (NDVI, VHS, â€¦) */
 .si-rs-layer-select {
   position: relative;
   width: 100%;
@@ -9380,7 +9838,7 @@ input.si-explore-date-input-linked[type='date'] {
   border: 1px solid rgba(167, 139, 250, 0.28);
 }
 
-/* Layout variants: must follow the general rule — an earlier bug set min-height:0 on all cards and overwrote these, collapsing .si-geo-explorer-messages */
+/* Layout variants: must follow the general rule â€” an earlier bug set min-height:0 on all cards and overwrote these, collapsing .si-geo-explorer-messages */
 .si-geo-explorer-root--dual .si-geo-explorer {
   flex: 1 1 40%;
   min-height: 200px;
@@ -10695,7 +11153,7 @@ input.si-explore-date-input-linked[type='date'] {
   }
 }
 
-/* Geo AI composer — classic dark panel + rounded FA icon controls */
+/* Geo AI composer â€” classic dark panel + rounded FA icon controls */
 .si-geo-explorer-composer-surface {
   margin-top: 6px;
   flex-shrink: 0;
@@ -11000,7 +11458,7 @@ input.si-explore-date-input-linked[type='date'] {
   color: #94a3b8;
 }
 
-/* —— Responsive map chrome (mobile / narrow): prevent overlap & horizontal spill —— */
+/* â€”â€” Responsive map chrome (mobile / narrow): prevent overlap & horizontal spill â€”â€” */
 @media (max-width: 639px) {
   .si-top-left {
     min-width: 0;
@@ -11041,7 +11499,7 @@ input.si-explore-date-input-linked[type='date'] {
 }
 
 /* =============================================================================
-   Flat workspace — Satellite toolbox body (scroll region under panel header)
+   Flat workspace â€” Satellite toolbox body (scroll region under panel header)
    One scroll surface: spacing + soft tints instead of stacked cards/panels.
    ============================================================================= */
 
@@ -11062,7 +11520,7 @@ input.si-explore-date-input-linked[type='date'] {
   flex-direction: column;
 }
 
-/* Strip outer “card” chrome (comes after .si-geo-explorer-root .si-geo-explorer in cascade) */
+/* Strip outer â€œcardâ€ chrome (comes after .si-geo-explorer-root .si-geo-explorer in cascade) */
 .si-env-panel.si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-env-section-card {
   position: relative;
   border: none;
@@ -11308,8 +11766,8 @@ html[data-theme='light'] .si-sat-ctx-panel-body .si-map-toolbox-layers-card .si-
 }
 
 /* =============================================================================
-   Explore STAC — flat surface inside workspace panel-body
-   One canvas: no nested “card” chrome; spacing + hairlines only.
+   Explore STAC â€” flat surface inside workspace panel-body
+   One canvas: no nested â€œcardâ€ chrome; spacing + hairlines only.
    ============================================================================= */
 
 .si-env-panel.si-env-panel--satellite-toolbox.si-env-panel--single-surface > .si-explore-stac.si-explore-stac--embedded {
@@ -11657,7 +12115,7 @@ html[data-theme='light'] .si-env-panel.si-env-panel--satellite-toolbox.si-env-pa
   padding: 8px 10px 12px;
 }
 
-/* No inner “card” chrome: STAC root blends into the toolbox surface */
+/* No inner â€œcardâ€ chrome: STAC root blends into the toolbox surface */
 .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-explore-stac.si-explore-stac--embedded {
   background: transparent !important;
   border: none !important;
@@ -11665,7 +12123,7 @@ html[data-theme='light'] .si-env-panel.si-env-panel--satellite-toolbox.si-env-pa
   border-radius: 0 !important;
 }
 
-/* Explore STAC parameters: one column — section titles are static labels, bodies always visible */
+/* Explore STAC parameters: one column â€” section titles are static labels, bodies always visible */
 .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-explore-accordions {
   display: flex;
   flex-direction: column;
@@ -11723,7 +12181,7 @@ html[data-theme='light'] .si-env-panel.si-env-panel--satellite-toolbox.si-env-pa
   padding: 10px 12px;
 }
 
-/* Title already in panel header — hide duplicate Explore STAC h2 inside body */
+/* Title already in panel header â€” hide duplicate Explore STAC h2 inside body */
 .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-explore-stac--in-header .si-explore-stac-header h2,
 .si-env-panel.si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-explore-stac--in-header .si-explore-stac-header h2 {
   display: none !important;
@@ -11985,7 +12443,7 @@ html[data-theme='light'] .si-env-panel.si-env-panel--satellite-toolbox.si-env-pa
   color: #047857 !important;
 }
 
-/* Globe cockpit — centered 2D world view; minimal chrome until user zooms to a region */
+/* Globe cockpit â€” centered 2D world view; minimal chrome until user zooms to a region */
 .si-map-container--globe-cockpit::before {
   content: '';
   position: absolute;
@@ -12036,7 +12494,7 @@ html[data-theme='light'] .si-env-panel.si-env-panel--satellite-toolbox.si-env-pa
 }
 
 /* ============================================================
-   "Add Source Data" — luxurious modern picker (image-2 parity)
+   "Add Source Data" â€” luxurious modern picker (image-2 parity)
    A clean light card with pastel icon tiles, descriptions, a
    chevron affordance and a Cancel footer. Overrides the dark
    base styling for the home (source-picker) step only.
@@ -12085,7 +12543,7 @@ html[data-theme='light'] .si-env-panel.si-env-panel--satellite-toolbox.si-env-pa
   line-height: 1.45 !important;
 }
 
-/* Option list — full-bleed rows with separators on a soft gradient */
+/* Option list â€” full-bleed rows with separators on a soft gradient */
 .si-add-layer-gis-overlay .si-add-source-modal--lux.ddb-add-source-modal--home .si-add-source-options {
   display: block !important;
   gap: 0 !important;
@@ -12209,7 +12667,7 @@ html[data-theme='light'] .si-env-panel.si-env-panel--satellite-toolbox.si-env-pa
 }
 
 /* =============================================================================
- * Add Source Data — UNIFIED LIGHT THEME for the inner pages
+ * Add Source Data â€” UNIFIED LIGHT THEME for the inner pages
  * Every sub-page (source forms, tabs, "Get data") shares the exact same
  * luxurious light surface as the home picker: white card, slate type, emerald
  * accents. Overrides the legacy dark styling of the inner views.
@@ -12388,7 +12846,7 @@ html[data-theme='light'] .si-env-panel.si-env-panel--satellite-toolbox.si-env-pa
   color: #475569 !important;
 }
 
-/* Shared footer (inner pages) — single Cancel, white pill like home */
+/* Shared footer (inner pages) â€” single Cancel, white pill like home */
 .si-add-layer-gis-overlay .si-add-source-modal--lux .gis-modal-footer {
   padding: 14px 22px !important;
   background: #f8fafc !important;
@@ -12481,7 +12939,7 @@ html[data-theme='light'] .si-env-panel.si-env-panel--satellite-toolbox.si-env-pa
   color: #64748b !important;
 }
 
-/* Inner page icon tiles → unified green (match the lux home picker) */
+/* Inner page icon tiles â†’ unified green (match the lux home picker) */
 .si-add-layer-gis-overlay .si-add-source-modal--lux .gis-compact-tab.active,
 .si-add-layer-gis-overlay .si-add-source-modal--lux .gis-compact-tab.active i {
   background: rgba(16, 185, 129, 0.14) !important;

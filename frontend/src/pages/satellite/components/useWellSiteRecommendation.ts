@@ -6,7 +6,7 @@ import {
   type HydroComputeContext,
   type WellSiteResult,
 } from '../../../lib/hydroWatershed/hydroEngine'
-import { buildAoiGeoTiff, downloadBlob } from '../../../lib/hydroWatershed/geoTiffExport'
+import { buildAoiGeoTiff, downloadBlob, downloadGeoTiffWithAux } from '../../../lib/hydroWatershed/geoTiffExport'
 import { exportWellSiteWorkbook } from './wellSiteWorkbook'
 
 export type WellSiteState = {
@@ -27,7 +27,7 @@ const INITIAL: WellSiteState = {
   error: null,
   heatVisible: true,
   pointsVisible: true,
-  opacity: 0.78,
+  opacity: 0.95,
 }
 
 type Params = {
@@ -127,7 +127,7 @@ export function useWellSiteRecommendation({ geometry, enabled, topN }: Params) {
         error: null,
         heatVisible: true,
         pointsVisible: true,
-        opacity: prev.opacity || result.raster.opacity || 0.78,
+        opacity: prev.opacity >= 0.9 ? prev.opacity : Math.max(prev.opacity || 0, result.raster.opacity || 0.95),
       }))
     } catch (err) {
       setState(prev => ({
@@ -158,8 +158,7 @@ export function useWellSiteRecommendation({ geometry, enabled, topN }: Params) {
   const exportHeatGeoTiff = useCallback(() => {
     const band = state.result?.raster.band
     if (!band) return false
-    const { blob, filename } = buildAoiGeoTiff(band, maskRef.current)
-    downloadBlob(blob, filename)
+    downloadGeoTiffWithAux(buildAoiGeoTiff(band, maskRef.current))
     return true
   }, [state.result])
 

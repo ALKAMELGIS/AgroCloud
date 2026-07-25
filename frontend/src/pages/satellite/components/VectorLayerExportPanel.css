@@ -1,0 +1,103 @@
+.si-vector-export-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 12px 14px;
+}
+
+.si-vector-export__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.si-vector-export__title {
+  font-weight: 700;
+  font-size: 14px;
+  color: inherit;
+}
+
+.si-vector-export__mode {
+  display: flex;
+  gap: 6px;
+}
+
+.si-vector-export__mode-btn {
+  flex: 1;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.35);
+  color: inherit;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.si-vector-export__mode-btn.is-on {
+  background: #0f766e;
+  border-color: #14b8a6;
+  color: #ecfdf5;
+}
+
+.si-vector-export__mode-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.si-vector-export__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.si-vector-export__field select,
+.si-vector-export__field input[type='file'] {
+  font-size: 12px;
+}
+
+.si-vector-export__file {
+  opacity: 0.85;
+  word-break: break-all;
+}
+
+.si-vector-export__msg {
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+.si-vector-export__error {
+  font-size: 12px;
+  color: #f87171;
+}
+
+.si-vector-export__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.si-vector-export__btn {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.35);
+  color: inherit;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.si-vector-export__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.si-vector-export__btn--primary {
+  background: #0f766e;
+  border-color: #14b8a6;
+  color: #ecfdf5;
+}

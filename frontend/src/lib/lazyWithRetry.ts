@@ -153,6 +153,25 @@ function safeSessionRemove(key: string): void {
   }
 }
 
+/** Clear one-shot stale-chunk guards so Reload can recover after a fixed HMR/dev failure. */
+export function clearChunkReloadGuards(): void {
+  if (typeof window === 'undefined') return
+  try {
+    const keys: string[] = []
+    for (let i = 0; i < sessionStorage.length; i += 1) {
+      const k = sessionStorage.key(i)
+      if (k) keys.push(k)
+    }
+    for (const k of keys) {
+      if (k.startsWith(RELOAD_GUARD_PREFIX) || k === 'agro_boundary_chunk_reload') {
+        safeSessionRemove(k)
+      }
+    }
+  } catch {
+    /* noop */
+  }
+}
+
 /**
  * Drop-in replacement for `React.lazy` that recovers from stale-deploy chunk load failures.
  *
@@ -166,23 +185,39 @@ export function lazyWithRetry<T extends ComponentType<any>>(
   const guardKey = `${RELOAD_GUARD_PREFIX}${chunkKey}`
 
   return lazy(async () => {
-    try {
+    const load = async () => {
       const mod = await factory()
-      // Success — clear the guard so a future stale deploy can trigger a fresh reload.
       safeSessionRemove(guardKey)
       return mod
-    } catch (error) {
-      if (isDynamicImportError(error) && !safeSessionGet(guardKey)) {
+    }
+
+    try {
+      return await load()
+    } catch (firstError) {
+      if (!isDynamicImportError(firstError)) throw firstError
+
+      // Vite HMR often invalidates module URLs while editing — retry once before treating as stale deploy.
+      let lastError: unknown = firstError
+      try {
+        await new Promise<void>(resolve => {
+          setTimeout(resolve, import.meta.env.DEV ? 200 : 50)
+        })
+        return await load()
+      } catch (retryError) {
+        lastError = retryError
+      }
+
+      // In DEV, allow another recovery cycle (guards trap users after mid-edit import failures).
+      if (import.meta.env.DEV) {
+        clearChunkReloadGuards()
+      }
+
+      if (isDynamicImportError(lastError) && !safeSessionGet(guardKey)) {
         safeSessionSet(guardKey, '1')
-        // Purge the service worker + caches, then cache-busting reload to pull the fresh
-        // index.html + current chunk hashes. Without the purge, the PWA service worker keeps
-        // serving the stale precached index.html (and its dead chunk references) on reload.
         void purgeAndReloadForStaleDeploy()
-        // Return a never-resolving promise so React keeps showing the Suspense fallback
-        // (instead of flashing an error) until the reload takes over.
         return new Promise<{ default: T }>(() => {})
       }
-      throw error
+      throw lastError
     }
   })
 }

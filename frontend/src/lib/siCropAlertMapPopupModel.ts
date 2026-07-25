@@ -21,6 +21,7 @@ import {
 } from './siCropAlertDchasBeacon'
 import { classifyNdviLandZone } from './siCropAlertNdviZones'
 import { computeSiAoiFieldMetrics } from './siAoiFields'
+import { estimateLstCelsius } from './lstIndex'
 import type { SentinelHubDailyIndexMeans } from './sentinelHubStatisticsApi'
 
 export type IndexTrendDirection = 'up' | 'down' | 'flat'
@@ -293,9 +294,9 @@ export function resolveCropAlertIndexSceneValues(
   )
 }
 
-/** Rough LST proxy (°C) from NDVI — field-level until Sentinel LST stats are wired. */
+/** Rough LST proxy (°C) from NDVI — field-level until Landsat thermal ST is wired. */
 export function estimateLstMinMaxMean(ndvi: number, sceneNdvi: number[] = []): IndexMinMaxMean {
-  const estimate = (v: number) => 38 - v * 12
+  const estimate = (v: number) => estimateLstCelsius(v, 0, { seasonFactor: 0.85 })
   const values = sceneNdvi.length ? sceneNdvi.map(estimate) : [estimate(ndvi)]
   const nums = values.map(v => Number(v.toFixed(1)))
   return {

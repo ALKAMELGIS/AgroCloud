@@ -8,7 +8,6 @@ import {
 import { resolveLayerLiveLegendSpec } from '../../../../lib/layerLiveLegendCatalog'
 import {
   compositeAoiMapSnapshotBase64,
-  dataUrlToPngBase64,
   fetchIndexLayerMapSnapshotBase64,
   fetchSatelliteBasemapSnapshot,
   resolveTimeSeriesSnapshotExtent,
@@ -16,8 +15,8 @@ import {
 } from './timeSeriesMapSnapshot'
 import type { TimeSeriesMapSnapshot, TimeSeriesMapSnapshotGroup } from './timeSeriesReportTypes'
 
-const SNAPSHOT_WIDTH = 520
-const SNAPSHOT_HEIGHT = 390
+const SNAPSHOT_WIDTH = 720
+const SNAPSHOT_HEIGHT = 580
 const DATA_SOURCE = 'Sentinel-2 L2A (Sentinel Hub WMS) · cumulative period composite'
 const CONCURRENCY = 2
 
@@ -136,7 +135,6 @@ export async function buildCumulativeMapSnapshotGroups(input: {
     SNAPSHOT_HEIGHT,
     input.signal,
   )
-  const basemapBase64 = dataUrlToPngBase64(basemapDataUrl)
 
   const groups: TimeSeriesMapSnapshotGroup[] = []
   const jobs = input.layerIds.map(layerId => ({
@@ -159,7 +157,7 @@ export async function buildCumulativeMapSnapshotGroups(input: {
           layerLabel: `${job.layerId.toUpperCase()} cumulative`,
           sceneDate: pick.sceneDate,
           periodLabel: pick.periodLabel,
-          imageBase64: basemapBase64,
+          imageBase64: null,
           dataSource: DATA_SOURCE,
           mean: pick.mean,
           min: pick.mean,
@@ -167,6 +165,25 @@ export async function buildCumulativeMapSnapshotGroups(input: {
           areaHa: input.areaHa,
           legendText: formatLegendText(job.layerId),
           notes: 'Export cancelled.',
+        } satisfies TimeSeriesMapSnapshot
+      }
+
+      if (pick.mean == null || !Number.isFinite(pick.mean)) {
+        completed += 1
+        input.onProgress?.(completed, Math.max(total, 1))
+        return {
+          layerId: job.layerId.toUpperCase(),
+          layerLabel: `${job.layerId.toUpperCase()} cumulative`,
+          sceneDate: pick.sceneDate,
+          periodLabel: pick.periodLabel,
+          imageBase64: null,
+          dataSource: DATA_SOURCE,
+          mean: null,
+          min: null,
+          max: null,
+          areaHa: input.areaHa,
+          legendText: formatLegendText(job.layerId),
+          notes: 'Skipped — no index statistics for this cumulative period.',
         } satisfies TimeSeriesMapSnapshot
       }
 
@@ -185,6 +202,25 @@ export async function buildCumulativeMapSnapshotGroups(input: {
         indexBase64 = null
       }
 
+      if (!indexBase64) {
+        completed += 1
+        input.onProgress?.(completed, Math.max(total, 1))
+        return {
+          layerId: job.layerId.toUpperCase(),
+          layerLabel: `${job.layerId.toUpperCase()} cumulative`,
+          sceneDate: pick.sceneDate,
+          periodLabel: pick.periodLabel,
+          imageBase64: null,
+          dataSource: DATA_SOURCE,
+          mean: pick.mean,
+          min: pick.mean,
+          max: pick.mean,
+          areaHa: input.areaHa,
+          legendText: formatLegendText(job.layerId),
+          notes: 'Skipped — index analysis raster unavailable for this cumulative period.',
+        } satisfies TimeSeriesMapSnapshot
+      }
+
       let imageBase64: string | null = null
       try {
         imageBase64 = await compositeAoiMapSnapshotBase64({
@@ -192,12 +228,14 @@ export async function buildCumulativeMapSnapshotGroups(input: {
           basemapDataUrl,
           indexBase64,
           layerId: job.layerId,
+          title: `${job.layerId.toUpperCase()} · ${pick.periodLabel}`,
+          sceneDate: pick.sceneDate,
           widthPx: SNAPSHOT_WIDTH,
           heightPx: SNAPSHOT_HEIGHT,
           extent,
         })
       } catch {
-        imageBase64 = indexBase64 ?? basemapBase64
+        imageBase64 = indexBase64
       }
 
       completed += 1
@@ -215,14 +253,19 @@ export async function buildCumulativeMapSnapshotGroups(input: {
         max: pick.mean,
         areaHa: input.areaHa,
         legendText: formatLegendText(job.layerId),
-        notes: `Cumulative ${mode} composite for ${pick.periodLabel}: peak ${job.layerId.toUpperCase()} scene on ${pick.sceneDate} (mean ${pick.mean != null ? pick.mean.toFixed(4) : '—'}).`,
+        notes: `Cumulative ${mode} composite for ${pick.periodLabel}: peak ${job.layerId.toUpperCase()} scene on ${pick.sceneDate} (mean ${pick.mean.toFixed(4)}).`,
       } satisfies TimeSeriesMapSnapshot
     })
+
+    const kept = snapshots.filter(
+      s => !!s.imageBase64 && s.mean != null && Number.isFinite(s.mean),
+    )
+    if (!kept.length) continue
 
     groups.push({
       layerId: `CUMULATIVE_${job.layerId.toUpperCase()}`,
       title: `Cumulative ${job.layerId.toUpperCase()} — by ${mode}`,
-      snapshots,
+      snapshots: kept,
     })
   }
 

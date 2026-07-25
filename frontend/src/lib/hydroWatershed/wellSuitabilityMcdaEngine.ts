@@ -151,7 +151,7 @@ function bandOf(dem: DemGrid, values: Float32Array, name: string): GeoBand {
     zoom: dem.zoom,
     originWorldPxX: dem.originWorldPxX,
     originWorldPxY: dem.originWorldPxY,
-    nodata: NaN,
+    nodata: -9999,
     name,
   }
 }

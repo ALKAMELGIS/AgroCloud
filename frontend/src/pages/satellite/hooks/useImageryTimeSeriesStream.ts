@@ -13,7 +13,7 @@ import {
   findImageryTsOverlappingDaily,
   geometryHashForImageryCache,
   getImageryTsMemoryCache,
-  isImageryTsCacheFresh,
+  isImageryTsCacheFreshComplete,
   isImageryTsCacheStaleButUsable,
   readImageryTsCache,
   readImageryTsChunkCache,
@@ -40,6 +40,12 @@ import {
   fetchLulcClassAreaTimeSeries,
   isLulcTimeSeriesSelection,
 } from '../../../lib/siLulcClassAreaLive'
+import {
+  fetchChirpsPrecipForImageryChart,
+  mergeOpticalAndChirpsChart,
+  partitionImageryTimeSeriesLayerIds,
+} from '../../../lib/chirpsRainfall/chirpsImageryTimeSeries'
+import { isChirpsPrecipLayerId } from '../../../lib/agroCompositeIndices'
 
 export type ImageryTimeSeriesChartState = {
   labels: string[]
@@ -170,8 +176,16 @@ export function useImageryTimeSeriesStream({
     }
 
     const ids = layerIds.length ? layerIds : ['NDVI']
+    const { precipLayerIds, opticalLayerIds } = partitionImageryTimeSeriesLayerIds(ids)
+    const hasPrecip = precipLayerIds.length > 0
+    const precipOnly = hasPrecip && opticalLayerIds.length === 0
+    const chartLayerIds = precipOnly
+      ? precipLayerIds
+      : hasPrecip
+        ? [...opticalLayerIds, ...precipLayerIds]
+        : ids
     const lulcMode = isLulcTimeSeriesSelection(ids)
-    const cacheKey = buildCacheKey()
+    const cacheKey = precipOnly ? '' : buildCacheKey()
     const geometryHash = geometryHashForImageryCache(field.geometry)
     const generation = ++runGenerationRef.current
 
@@ -179,13 +193,52 @@ export function useImageryTimeSeriesStream({
     const ac = new AbortController()
     abortRef.current = ac
 
+    const paintFromDailyAndChirps = (
+      daily: SentinelHubDailyIndexMeans[],
+      chirpsPoints: Awaited<ReturnType<typeof fetchChirpsPrecipForImageryChart>> | null,
+    ): boolean => {
+      if (opticalLayerIds.length && daily.length) {
+        const optical = dailyToChartState(daily, field.fieldKey, opticalLayerIds)
+        if (!hasPrecip) {
+          if (!optical.labels.length) return false
+          applyChartState(optical)
+          return true
+        }
+        const merged = mergeOpticalAndChirpsChart({
+          layerIds: chartLayerIds,
+          opticalLabels: optical.labels,
+          opticalSeries: optical.layerSeries,
+          chirpsPoints,
+        })
+        if (!merged.labels.length) return false
+        applyChartState(merged)
+        return true
+      }
+      if (hasPrecip && chirpsPoints) {
+        const merged = mergeOpticalAndChirpsChart({
+          layerIds: chartLayerIds,
+          opticalLabels: [],
+          opticalSeries: [],
+          chirpsPoints,
+        })
+        if (!merged.labels.length) return false
+        applyChartState(merged)
+        return true
+      }
+      return false
+    }
+
     const showInstant = (daily: SentinelHubDailyIndexMeans[], fromCache: boolean) => {
-      if (lulcMode) return false
+      if (lulcMode || hasPrecip) return false
       if (generation !== runGenerationRef.current || ac.signal.aborted) return false
       if (!daily.length) return false
-      if (imageryDailyRowsNeedRefetchForLayers(daily, ids)) return false
-      if (!imageryDailyRowsSupportLayers(daily, ids)) return false
-      const chart = dailyToChartState(daily, field.fieldKey, ids)
+      if (imageryDailyRowsNeedRefetchForLayers(daily, opticalLayerIds.length ? opticalLayerIds : ids)) {
+        return false
+      }
+      if (!imageryDailyRowsSupportLayers(daily, opticalLayerIds.length ? opticalLayerIds : ids)) {
+        return false
+      }
+      const chart = dailyToChartState(daily, field.fieldKey, opticalLayerIds.length ? opticalLayerIds : ids)
       if (!chart.labels.length) return false
       setDailyRows(daily)
       applyChartState(chart)
@@ -196,7 +249,8 @@ export function useImageryTimeSeriesStream({
     }
 
     const memCached = cacheKey ? getImageryTsMemoryCache(cacheKey) : null
-    if (memCached?.daily?.length && isImageryTsCacheFresh(memCached)) {
+    let hasInstantChart = false
+    if (memCached?.daily?.length && isImageryTsCacheFreshComplete(memCached)) {
       if (showInstant(memCached.daily, false)) {
         setProgress({
           phase: 'complete',
@@ -211,24 +265,31 @@ export function useImageryTimeSeriesStream({
         setAnalysisDurationMs(0)
         return
       }
+    } else if (memCached?.daily?.length && isImageryTsCacheStaleButUsable(memCached)) {
+      // Incomplete/preview cache: paint instantly but keep fetching older Start→End chunks.
+      hasInstantChart = showInstant(memCached.daily, true)
     }
 
-    let instantDaily = findImageryTsOverlappingDaily({
-      fieldKey: field.fieldKey,
-      geometryHash,
-      fromIso: fromDate,
-      toIso: toDate,
-      cloudFilter: CLOUD_FILTER,
-      statsMode: resolveImageryStatisticsFetchMode(ids),
-    })
-    let hasInstantChart = showInstant(instantDaily, true)
-
+    let instantDaily = precipOnly
+      ? []
+      : findImageryTsOverlappingDaily({
+          fieldKey: field.fieldKey,
+          geometryHash,
+          fromIso: fromDate,
+          toIso: toDate,
+          cloudFilter: CLOUD_FILTER,
+          statsMode: resolveImageryStatisticsFetchMode(opticalLayerIds.length ? opticalLayerIds : ids),
+        })
     if (!hasInstantChart) {
+      hasInstantChart = showInstant(instantDaily, true)
+    }
+
+    if (!hasInstantChart && !precipOnly) {
       instantDaily = await hydrateDailyFromChunkCaches(
         geometryHash,
         fromDate,
         toDate,
-        resolveImageryStatisticsFetchMode(ids),
+        resolveImageryStatisticsFetchMode(opticalLayerIds.length ? opticalLayerIds : ids),
       )
       hasInstantChart = showInstant(instantDaily, true)
     }
@@ -236,8 +297,8 @@ export function useImageryTimeSeriesStream({
     if (!hasInstantChart && cacheKey) {
       const stored = await readImageryTsCache(cacheKey)
       if (stored?.daily?.length && isImageryTsCacheStaleButUsable(stored)) {
-        hasInstantChart = showInstant(stored.daily, !isImageryTsCacheFresh(stored))
-        if (hasInstantChart && isImageryTsCacheFresh(stored)) {
+        hasInstantChart = showInstant(stored.daily, true)
+        if (hasInstantChart && isImageryTsCacheFreshComplete(stored)) {
           setProgress({
             phase: 'complete',
             message: 'Loaded from cache',
@@ -268,7 +329,13 @@ export function useImageryTimeSeriesStream({
 
     setProgress({
       phase: 'fetching',
-      message: hasInstantChart ? 'Updating imagery…' : 'Loading imagery…',
+      message: precipOnly
+        ? 'Loading CHIRPS rainfall…'
+        : hasInstantChart
+          ? 'Updating imagery…'
+          : hasPrecip
+            ? 'Loading imagery + rainfall…'
+            : 'Loading imagery…',
       chunksDone: 0,
       chunksTotal: 0,
       observations: instantDaily.length,
@@ -323,37 +390,85 @@ export function useImageryTimeSeriesStream({
           setError(null)
         }
       } else {
-      const daily = await fetchImageryTimeSeriesProgressive(field, {
-        fromIso: fromDate,
-        toIso: toDate,
-        layerIds: ids,
-        signal: ac.signal,
-        onProgress: ({ progress: prog }) => {
-          if (generation !== runGenerationRef.current || ac.signal.aborted) return
-          setProgress(prog)
-        },
-      })
-      if (generation !== runGenerationRef.current || ac.signal.aborted) return
-      setDailyRows(daily)
-      const chart = dailyToChartState(daily, field.fieldKey, ids)
-      applyChartState(chart)
-      if (!chart.labels.length) {
-        setError(
-          `No ${ids.join(', ')} observations in this date range — try widening dates or check Sentinel coverage.`,
-        )
-      } else {
-        setError(null)
-      }
-      if (imageryStatisticsFetchNeedsSnowNdsi(ids)) {
-        logNdsiSnowTimeSeriesDebug(
-          'stream run complete',
-          buildNdsiSnowTimeSeriesDebugReport(daily, ids, fromDate, toDate, resolveImageryStatisticsFetchMode(ids)),
-          { chartLabels: chart.labels.length, chartPoints: chart.layerSeries[0]?.values.length ?? 0 },
-        )
-      }
+        const chirpsPromise = hasPrecip
+          ? fetchChirpsPrecipForImageryChart({
+              geometry: field.geometry,
+              start: fromDate,
+              end: toDate,
+              signal: ac.signal,
+            })
+          : Promise.resolve(null)
+
+        let daily: SentinelHubDailyIndexMeans[] = []
+        if (opticalLayerIds.length) {
+          const fetchIds = opticalLayerIds
+          daily = await fetchImageryTimeSeriesProgressive(field, {
+            fromIso: fromDate,
+            toIso: toDate,
+            layerIds: fetchIds,
+            signal: ac.signal,
+            onProgress: ({ daily: progressiveDaily, progress: prog }) => {
+              if (generation !== runGenerationRef.current || ac.signal.aborted) return
+              setProgress({
+                ...prog,
+                message: hasPrecip ? `${prog.message || 'Loading imagery…'} (+ rainfall)` : prog.message,
+              })
+              if (
+                !hasPrecip &&
+                progressiveDaily?.length &&
+                !imageryDailyRowsNeedRefetchForLayers(progressiveDaily, fetchIds) &&
+                imageryDailyRowsSupportLayers(progressiveDaily, fetchIds)
+              ) {
+                const chart = dailyToChartState(progressiveDaily, field.fieldKey, fetchIds)
+                if (chart.labels.length) {
+                  setDailyRows(progressiveDaily)
+                  applyChartState(chart)
+                  setLoading(false)
+                  setRefreshing(prog.phase === 'fetching' || !!prog.refreshing)
+                  setError(null)
+                }
+              }
+            },
+          })
+        }
+
+        const chirpsPoints = await chirpsPromise
+        if (generation !== runGenerationRef.current || ac.signal.aborted) return
+        setDailyRows(daily)
+        const painted = paintFromDailyAndChirps(daily, chirpsPoints)
+        if (!painted) {
+          setError(
+            precipOnly
+              ? 'No CHIRPS rainfall observations in this date range — try widening dates.'
+              : `No ${ids.join(', ')} observations in this date range — try widening dates or check Sentinel / CHIRPS coverage.`,
+          )
+        } else {
+          setError(null)
+        }
+        if (imageryStatisticsFetchNeedsSnowNdsi(opticalLayerIds.length ? opticalLayerIds : ids)) {
+          const debugIds = opticalLayerIds.length ? opticalLayerIds : ids
+          logNdsiSnowTimeSeriesDebug(
+            'stream run complete',
+            buildNdsiSnowTimeSeriesDebugReport(
+              daily,
+              debugIds,
+              fromDate,
+              toDate,
+              resolveImageryStatisticsFetchMode(debugIds),
+            ),
+            { chartLabels: daily.length, chartPoints: daily.length },
+          )
+        }
       }
     } catch (err) {
-      if (!ac.signal.aborted && generation === runGenerationRef.current && !hasInstantChart) {
+      if (ac.signal.aborted || generation !== runGenerationRef.current) return
+      if (
+        (typeof DOMException !== 'undefined' && err instanceof DOMException && err.name === 'AbortError') ||
+        (err instanceof Error && err.name === 'AbortError')
+      ) {
+        return
+      }
+      if (!hasInstantChart) {
         setError(err instanceof Error ? err.message : 'Analysis failed')
       }
     } finally {
@@ -367,12 +482,26 @@ export function useImageryTimeSeriesStream({
 
   /** Re-aggregate the chart when layers change — instant switch (e.g. NDVI → NDSI) without clearing daily rows. */
   useEffect(() => {
-    if (!field || !dailyRows.length || loading) return
+    if (!field || loading) return
     const ids = layerIds.length ? layerIds : ['NDVI']
     if (isLulcTimeSeriesSelection(ids)) {
       // LULC class-area series are built in run(); do not overwrite with empty index chart.
       return
     }
+
+    // PRECIP needs CHIRPS API — cannot rechart from Sentinel Hub daily rows alone.
+    if (ids.some(id => isChirpsPrecipLayerId(id))) {
+      if (!hasRun) return
+      const refetchKey = `${field.fieldKey}|${fromDate}|${toDate}|${ids.join(',')}`
+      if (ndsiRefetchKeyRef.current !== refetchKey) {
+        ndsiRefetchKeyRef.current = refetchKey
+        setError(null)
+        void run()
+      }
+      return
+    }
+
+    if (!dailyRows.length) return
 
     if (imageryDailyRowsNeedRefetchForLayers(dailyRows, ids) && hasRun) {
       const refetchKey = `${field.fieldKey}|${ids.join(',')}`
@@ -396,7 +525,7 @@ export function useImageryTimeSeriesStream({
     } else if (!refreshing) {
       setError(null)
     }
-  }, [layerIds, field, dailyRows, loading, refreshing, applyChartState, hasRun, run])
+  }, [layerIds, field, dailyRows, loading, refreshing, applyChartState, hasRun, run, fromDate, toDate])
 
   const invalidateResults = useCallback(() => {
     abort()

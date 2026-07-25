@@ -60,7 +60,7 @@ export const AGRO_DERIVED_LAYER_DEFS: readonly AgroCompositeIndexDef[] = [
   },
 ]
 
-export const AGRO_CORE_INTERPRETATION_LAYER_IDS = ['NDVI', 'NDMI', 'NDWI', 'SAVI', 'ET'] as const
+export const AGRO_CORE_INTERPRETATION_LAYER_IDS = ['NDVI', 'NDMI', 'NDWI', 'SAVI', 'ET', 'LST'] as const
 
 export type AgroCoreInterpretationLayerId = (typeof AGRO_CORE_INTERPRETATION_LAYER_IDS)[number]
 
@@ -71,6 +71,20 @@ export const AGRO_CORE_LAYER_SCIENTIFIC_NAMES: Record<AgroCoreInterpretationLaye
   NDWI: 'Normalized Difference Water Index',
   SAVI: 'Soil-Adjusted Vegetation Index',
   ET: 'Evapotranspiration (moisture-proxy mm/day)',
+  LST: 'Land Surface Temperature (°C, NDVI·NDMI seasonal proxy)',
+}
+
+/** Climate / precipitation — UCSB CHIRPS (not a Sentinel-2 optical layer). */
+export const CHIRPS_PRECIP_LAYER_ID = 'PRECIP'
+export const CHIRPS_PRECIP_SCIENTIFIC_NAME =
+  'UCSB CHIRPS Daily Rainfall — Precipitation / Rainfall Analysis (mm)'
+
+export function isChirpsPrecipLayerId(id: string | null | undefined): boolean {
+  const u = String(id || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+  return u === 'PRECIP' || u === 'CHIRPS' || u === 'RAINFALL' || u === 'PRECIPITATION'
 }
 
 export type AgroCompositeIndexDef = {
@@ -124,10 +138,10 @@ export const AGRO_COMPOSITE_CATEGORIES: readonly AgroCompositeCategory[] = [
       {
         id: 'CVI',
         label: 'CVI',
-        scientificName: 'Composite Vegetation Index',
+        scientificName: 'Crop Vigor Index (0.50·NDVI + 0.30·EVI + 0.20·NDRE)',
         deltaId: 'DCVI',
         deltaLabel: 'ΔCVI',
-        expr: '(ndvi + ndmi + savi) / 3',
+        expr: '0.50 * ndvi + 0.30 * evi + 0.20 * ndre',
       },
       {
         id: 'CSI',
@@ -276,10 +290,10 @@ export const AGRO_COMPOSITE_CATEGORIES: readonly AgroCompositeCategory[] = [
       {
         id: 'CHS',
         label: 'CHS',
-        scientificName: 'Composite Health Score',
+        scientificName: 'Crop Health Score (0.30·NDVI + 0.25·NDRE + 0.20·EVI + 0.15·NDMI + 0.10·SAVI)',
         deltaId: 'DCHS',
         deltaLabel: 'ΔCHS',
-        expr: '(ndvi + ndmi + ndwi + savi) / 4',
+        expr: '0.30 * ndvi + 0.25 * ndre + 0.20 * evi + 0.15 * ndmi + 0.10 * savi',
       },
       {
         id: 'CPS',
@@ -288,6 +302,80 @@ export const AGRO_COMPOSITE_CATEGORIES: readonly AgroCompositeCategory[] = [
         deltaId: 'DCPS',
         deltaLabel: 'ΔCPS',
         expr: '(1 - ndvi) + (1 - ndmi)',
+      },
+    ],
+  },
+  {
+    id: 'crop-phenology',
+    groupLabel: '📅 Crop Phenology & Calendar',
+    indices: [
+      {
+        id: 'PRI',
+        label: 'PRI',
+        scientificName: 'Planting Readiness Index (0.35·NDVI + 0.25·NDMI + 0.20·NDWI + 0.10·SAVI + 0.10·EVI)',
+        deltaId: 'DPRI',
+        deltaLabel: 'ΔPRI',
+        expr: '0.35 * ndvi + 0.25 * ndmi + 0.20 * ndwi + 0.10 * savi + 0.10 * evi',
+      },
+      {
+        id: 'CGI',
+        label: 'CGI',
+        scientificName: 'Crop Growth Index (0.40·NDVI + 0.30·EVI + 0.20·NDRE + 0.10·NDMI)',
+        deltaId: 'DCGI',
+        deltaLabel: 'ΔCGI',
+        expr: '0.40 * ndvi + 0.30 * evi + 0.20 * ndre + 0.10 * ndmi',
+      },
+      {
+        id: 'CMI',
+        label: 'CMI',
+        scientificName: 'Crop Maturity Index (0.50·NDRE + 0.30·NDVI + 0.20·EVI)',
+        deltaId: 'DCMI',
+        deltaLabel: 'ΔCMI',
+        expr: '0.50 * ndre + 0.30 * ndvi + 0.20 * evi',
+      },
+      {
+        id: 'HRI',
+        label: 'HRI',
+        scientificName: 'Harvest Readiness Index (0.40·(1−NDVI) + 0.25·(1−NDRE) + 0.20·(1−NDMI) + 0.15·(1−SAVI))',
+        deltaId: 'DHRI',
+        deltaLabel: 'ΔHRI',
+        expr: '0.40 * (1 - ndvi) + 0.25 * (1 - ndre) + 0.20 * (1 - ndmi) + 0.15 * (1 - savi)',
+      },
+      {
+        id: 'VRI',
+        label: 'VRI',
+        scientificName: 'Vegetation Recovery Index ((NDVI − MinNDVI) / (MaxNDVI − MinNDVI))',
+        deltaId: 'DVRI',
+        deltaLabel: 'ΔVRI',
+        // Map proxy — true VRI is temporal (chart). Scene map uses scaled NDVI.
+        expr: '(ndvi + 1) / 2',
+      },
+      {
+        id: 'CCI',
+        label: 'CCI',
+        scientificName: 'Crop Calendar Confidence Index (NDVI/NDRE/EVI stability · observation density)',
+        deltaId: 'DCCI',
+        deltaLabel: 'ΔCCI',
+        // Map proxy — true CCI is temporal (chart).
+        expr: '0.40 * ndvi + 0.30 * ndre + 0.20 * evi + 0.10 * savi',
+      },
+      {
+        id: 'EPD',
+        label: 'EPD',
+        scientificName: 'Estimated Planting Date (first PRI≥0.45 with rising NDVI)',
+        deltaId: 'DEPD',
+        deltaLabel: 'ΔEPD',
+        // Map shows planting-readiness surface (PRI); chart marks event date.
+        expr: '0.35 * ndvi + 0.25 * ndmi + 0.20 * ndwi + 0.10 * savi + 0.10 * evi',
+      },
+      {
+        id: 'EHD',
+        label: 'EHD',
+        scientificName: 'Estimated Harvest Date (first HRI≥0.70 with falling NDVI)',
+        deltaId: 'DEHD',
+        deltaLabel: 'ΔEHD',
+        // Map shows harvest-readiness surface (HRI); chart marks event date.
+        expr: '0.40 * (1 - ndvi) + 0.25 * (1 - ndre) + 0.20 * (1 - ndmi) + 0.15 * (1 - savi)',
       },
     ],
   },
@@ -421,6 +509,7 @@ export function buildAgroCloudCustomWmsLayerEntries(): SentinelHubWmsLayerInfo[]
   const out: SentinelHubWmsLayerInfo[] = [
     { name: 'SAVI', title: 'SAVI' },
     { name: 'ET', title: 'Evapotranspiration' },
+    { name: 'LST', title: 'Land Surface Temperature' },
   ]
   const seen = new Set(out.map(l => l.name.toUpperCase()))
   for (const id of ALL_COMPOSITE_IDS) {
@@ -455,6 +544,7 @@ export function resolveRemoteSensingLayerScientificName(layerId: string): string
   if (isLulcClassificationLayerId(u)) return LULC_SCIENTIFIC_NAME
   if (isAdiLayerId(u)) return ADI_SCIENTIFIC_NAME
   if (isNcadiLayerId(u)) return NCADI_SCIENTIFIC_NAME
+  if (isChirpsPrecipLayerId(u)) return CHIRPS_PRECIP_SCIENTIFIC_NAME
   const composite = resolveAgroCompositeIndexDef(u)
   if (composite) {
     if (isAgroDeltaCompositeLayerId(u)) return `Change · ${composite.scientificName}`
@@ -483,6 +573,18 @@ export function buildRemoteSensingLayerSelectGroups(
       label: id,
       scientificName: AGRO_CORE_LAYER_SCIENTIFIC_NAMES[id],
     })),
+  })
+
+  groups.push({
+    id: 'climate-precipitation',
+    label: 'Climate · Precipitation',
+    options: [
+      {
+        id: CHIRPS_PRECIP_LAYER_ID,
+        label: 'Precipitation / Rainfall Analysis',
+        scientificName: CHIRPS_PRECIP_SCIENTIFIC_NAME,
+      },
+    ],
   })
 
   groups.push({
@@ -563,6 +665,7 @@ export function buildRemoteSensingLayerSelectGroups(
     ...AGRO_CORE_INTERPRETATION_LAYER_IDS.map(s => s.toUpperCase()),
     ...ALL_COMPOSITE_IDS,
     LULC_CLASSIFICATION_LAYER_ID,
+    CHIRPS_PRECIP_LAYER_ID,
   ])
 
   const standard = capabilityLayers

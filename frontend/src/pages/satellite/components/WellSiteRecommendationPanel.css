@@ -47,11 +47,13 @@
   flex: 1;
   min-width: 0;
   display: flex;
-  height: 9px;
-  border-radius: 5px;
+  height: 12px;
+  border-radius: 6px;
   overflow: hidden;
-  border: 1px solid var(--hy-border);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 0 0 1px rgba(0, 0, 0, 0.25);
 }
 .si-wellsite__legend-bar span {
   flex: 1;
@@ -210,4 +212,52 @@
 }
 .si-wellsite__item .si-hydro__act i {
   font-size: 9.5px;
+}
+
+/* Final recommendation — professional caveat under ranked sites */
+.si-wellsite__final-rec {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+}
+.si-wellsite__final-rec-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #e2e8f0;
+}
+.si-wellsite__final-rec-title i {
+  font-size: 10px;
+  color: #94a3b8;
+}
+.si-wellsite__final-rec-text,
+.si-wellsite__final-rec-pre {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.45;
+  color: var(--hy-muted, #94a3b8);
+}
+.si-wellsite__final-rec-pre {
+  font-weight: 600;
+  color: #cbd5e1;
+}
+.si-wellsite__final-rec-list {
+  margin: 0;
+  padding: 0 0 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: #cbd5e1;
+}
+.si-wellsite__final-rec-list li::marker {
+  color: #64748b;
 }

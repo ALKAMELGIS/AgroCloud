@@ -4590,6 +4590,60 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
   color: #e2e8f0;
 }
 
+.acp-ts__scatter-interpret {
+  margin: 8px 0 0;
+  font-size: 10px;
+  line-height: 1.5;
+  color: #e2e8f0;
+}
+
+.acp-ts__scatter-interpret strong {
+  color: #99f6e4;
+  font-weight: 700;
+}
+
+.acp-ts__scatter-table-wrap {
+  margin-top: 8px;
+  max-height: 160px;
+  overflow: auto;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(2, 6, 23, 0.55);
+}
+
+.acp-ts__scatter-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.acp-ts__scatter-table th,
+.acp-ts__scatter-table td {
+  padding: 4px 8px;
+  text-align: left;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.acp-ts__scatter-table th {
+  position: sticky;
+  top: 0;
+  background: #0f172a;
+  color: #94a3b8;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 8px;
+}
+
+.acp-ts__scatter-table td {
+  color: #e2e8f0;
+}
+
+.acp-ts__scatter-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
 .acp-ts__scatter-hint {
   margin: 6px 0 0;
   font-size: 9px;

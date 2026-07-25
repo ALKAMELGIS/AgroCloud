@@ -7,6 +7,14 @@ import {
   SENTINEL_ET_10_CLASS_VALUES,
   SENTINEL_ET_RAMP,
 } from './etIndex'
+import {
+  buildLstWmsIndexSetup,
+  lstClassCenterValues,
+  SENTINEL_LST_10_CLASS_BREAKS,
+  SENTINEL_LST_10_CLASS_VALUES,
+  SENTINEL_LST_RAMP,
+  LST_WMS_INDEX_SETUP,
+} from './lstIndex'
 
 /**
  * Sentinel Hub Evalscript v3 — ColorRampVisualizer palettes for Live WMS index layers.
@@ -24,6 +32,7 @@ export type SentinelIndexEvalProfile =
   | 'ndsi'
   | 'ndre'
   | 'et'
+  | 'lst'
 
 type RampStop = [number, number]
 
@@ -349,6 +358,12 @@ const INDEX_EVAL_SPECS: Record<SentinelIndexEvalProfile, IndexEvalSpec> = {
     indexExpr: ET_WMS_INDEX_SETUP,
     ramp: SENTINEL_ET_RAMP,
   },
+  lst: {
+    inputs: ['B04', 'B08', 'B11', 'dataMask'],
+    indexVar: 'lst',
+    indexExpr: LST_WMS_INDEX_SETUP,
+    ramp: SENTINEL_LST_RAMP,
+  },
 }
 
 function hexColorLiteral(hex: number): string {
@@ -567,6 +582,95 @@ function evaluatePixel(samples) {
 }`
 }
 
+/** LST — seasonal NDVI/NDMI land-surface temperature proxy (°C); 10-class thermal ramp. */
+export function buildSentinelLstTenClassEvalscript(
+  indexVisibilityMin: number | null = null,
+  options?: {
+    sceneDate?: string | null
+    classBreaks?: readonly number[] | null
+    classCenters?: readonly number[] | null
+  },
+): string {
+  const season = etSeasonFactor(options?.sceneDate)
+  const setupLst = buildLstWmsIndexSetup(season)
+
+  let breaks = SENTINEL_LST_10_CLASS_BREAKS
+  let centers = SENTINEL_LST_10_CLASS_VALUES
+  const raw = options?.classBreaks
+  if (raw && raw.length >= 9) {
+    const interior =
+      raw.length === 11
+        ? raw.slice(1, -1)
+        : raw.length === 9
+          ? raw
+          : raw.slice(1, 10)
+    if (interior.length === 9) {
+      breaks = interior as typeof SENTINEL_LST_10_CLASS_BREAKS
+      const edges =
+        raw.length === 11
+          ? raw
+          : [5, ...interior, Math.max(55, interior[interior.length - 1]! + 1)]
+      centers = (options?.classCenters?.length === 10
+        ? options.classCenters
+        : lstClassCenterValues(edges)) as typeof SENTINEL_LST_10_CLASS_VALUES
+    }
+  }
+
+  const thr =
+    indexVisibilityMin != null && Number.isFinite(indexVisibilityMin)
+      ? Math.max(5, Math.min(55, indexVisibilityMin))
+      : null
+
+  const alphaBlock =
+    thr == null
+      ? 'return imgVals.concat(samples.dataMask);'
+      : `var a = samples.dataMask * (lst >= ${thr} ? 1.0 : 0.0);
+  return imgVals.concat(a);`
+
+  const coloredRamp: RampStop[] = centers.map((v, i) => [
+    v,
+    SENTINEL_LST_RAMP[Math.min(i, SENTINEL_LST_RAMP.length - 1)]![1],
+  ])
+
+  return `//VERSION=3
+// LST — seasonal NDVI/NDMI land-surface temperature proxy (°C), 10 classes
+function setup() {
+  return {
+    input: ["B04", "B08", "B11", "dataMask"],
+    output: { bands: 4 }
+  };
+}
+
+const lstRamp = [
+   ${formatRampForEvalscript(coloredRamp)}
+];
+
+const viz = new ColorRampVisualizer(lstRamp);
+
+const BREAKS = [${formatNumberList(breaks)}];
+const CLASS_VAL = [${formatNumberList(centers)}];
+
+function lstClass(val) {
+  if (val < BREAKS[0]) return 0;
+  if (val < BREAKS[1]) return 1;
+  if (val < BREAKS[2]) return 2;
+  if (val < BREAKS[3]) return 3;
+  if (val < BREAKS[4]) return 4;
+  if (val < BREAKS[5]) return 5;
+  if (val < BREAKS[6]) return 6;
+  if (val < BREAKS[7]) return 7;
+  if (val < BREAKS[8]) return 8;
+  return 9;
+}
+
+function evaluatePixel(samples) {
+  ${setupLst}
+  let cls = lstClass(lst);
+  let imgVals = viz.process(CLASS_VAL[cls]);
+  ${alphaBlock}
+}`
+}
+
 /**
  * NDVI Live WMS — lightweight ColorRampVisualizer on B08/B04 with dataMask alpha.
  *
@@ -629,6 +733,11 @@ export function buildSentinelIndexColorRampEvalscript(
       sceneDate: options?.sceneDate,
     })
   }
+  if (profile === 'lst') {
+    return buildSentinelLstTenClassEvalscript(indexVisibilityMin, {
+      sceneDate: options?.sceneDate,
+    })
+  }
 
   const spec = INDEX_EVAL_SPECS[profile]
   const thr =
@@ -676,3 +785,11 @@ export {
   SENTINEL_ET_10_CLASS_VALUES,
   SENTINEL_ET_RAMP,
 } from './etIndex'
+
+export {
+  SENTINEL_LST_10_CLASS_BREAKS,
+  SENTINEL_LST_10_CLASS_COLORS,
+  SENTINEL_LST_10_CLASS_LABELS,
+  SENTINEL_LST_10_CLASS_VALUES,
+  SENTINEL_LST_RAMP,
+} from './lstIndex'

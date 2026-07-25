@@ -135,7 +135,9 @@ function ensurePingPongRasterPair(
           id: layerId,
           type: 'raster',
           source: sourceId,
-          layout: { visibility: 'none' },
+          // Stay layout-visible at opacity 0 so warm prefetch can load tiles
+          // (visibility:none prevents Mapbox from requesting WMS tiles).
+          layout: { visibility: 'visible' },
           paint: {
             'raster-opacity': 0,
             'raster-fade-duration': 0,
@@ -230,31 +232,38 @@ function waitForSourceReady(
     return () => undefined
   }
 
-  const handler = (ev: { sourceId?: string; isSourceLoaded?: boolean }) => {
-    if (ev.sourceId !== sourceId) return
-    if (!map.isSourceLoaded(sourceId)) return
+  let settled = false
+  const finish = () => {
+    if (settled) return
+    settled = true
     cleanup()
     onReady()
   }
 
-  const onIdle = () => {
+  const handler = (ev: { sourceId?: string; isSourceLoaded?: boolean }) => {
+    if (ev.sourceId !== sourceId) return
     if (!map.isSourceLoaded(sourceId)) return
-    cleanup()
-    onReady()
+    finish()
   }
+
+  // Prefer sourcedata; never wait for map `idle` (ArcGIS / other layers can delay idle for seconds).
+  // Short timeout so index swaps still reveal if sourcedata stalls.
+  const timeoutId =
+    typeof window !== 'undefined'
+      ? window.setTimeout(finish, 750)
+      : (0 as unknown as ReturnType<typeof setTimeout>)
 
   const cleanup = () => {
     try {
       map.off('sourcedata', handler)
-      map.off('idle', onIdle)
     } catch {
       /* ignore */
     }
+    if (typeof window !== 'undefined') window.clearTimeout(timeoutId)
   }
 
   try {
     map.on('sourcedata', handler)
-    map.on('idle', onIdle)
   } catch {
     cleanup()
     onReady()
@@ -313,13 +322,9 @@ function syncChunkTilesPingPong(
     const sourceId = siSentinelAoiWmsPingPongSourceId(stack.idPrefix, chunkIdx, activeSlot)
     const src = readRasterSource(map, sourceId)
     syncSiSentinelAoiWmsChunkTiles(src, url, runtime.appliedUrls, slotUrlKey(chunkKey, activeSlot))
-    const reveal = () => commitActiveSlot(map, stack, chunkIdx, runtime, activeSlot, url, presentation)
-    const cleanup = waitForSourceReady(map, sourceId, reveal)
-    runtime.chunks.set(chunkKey, {
-      activeSlot,
-      activeUrl: url,
-      waitCleanup: cleanup,
-    })
+    // First paint: show immediately while tiles stream in. Waiting for
+    // sourcedata/idle here left Show on map blank for seconds on cold loads.
+    commitActiveSlot(map, stack, chunkIdx, runtime, activeSlot, url, presentation)
     return
   }
 

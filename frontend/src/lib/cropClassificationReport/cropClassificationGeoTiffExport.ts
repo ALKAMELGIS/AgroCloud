@@ -15,6 +15,7 @@ import JSZip from 'jszip'
 import type { CropClassLegendItem, CropClassificationResult } from '../siPrithviCropPipeline'
 import { PRITHVI_CROP_CLASSES } from '../siPrithviCropPipeline'
 import { downloadBlob } from '../hydroWatershed/geoTiffExport'
+import { writeRgbGisGeoTiff } from '../gis/gisGeoTiffWriter'
 
 export type CropGeoTiffClass = {
   value: number
@@ -434,38 +435,19 @@ export function writeRgbGeoTiff4326(opts: {
   south: number
   compress?: boolean
 }): ArrayBuffer {
-  const { width, height, rgb } = opts
-  if (rgb.length < width * height * 3) {
-    throw new Error('RGB buffer too short for GeoTIFF export.')
-  }
-  const stripRaw = rgb
-  const strip = opts.compress === true ? lzwCompress(stripRaw) : stripRaw
-  const compression = opts.compress === true ? 5 : 1
-  const pixelScaleX = (opts.east - opts.west) / width
-  const pixelScaleY = (opts.north - opts.south) / height
-  const geoKeys = [
-    1, 1, 0, 3,
-    1024, 0, 1, 2,
-    1025, 0, 1, 1,
-    2048, 0, 1, 4326,
-  ]
-  const entries: TiffEntry[] = [
-    entry(256, T_LONG, [width]),
-    entry(257, T_LONG, [height]),
-    entry(258, T_SHORT, [8, 8, 8]),
-    entry(259, T_SHORT, [compression]),
-    entry(262, T_SHORT, [2]), // RGB
-    entry(273, T_LONG, [0]),
-    entry(277, T_SHORT, [3]),
-    entry(278, T_LONG, [height]),
-    entry(279, T_LONG, [strip.length]),
-    entry(284, T_SHORT, [1]), // PlanarConfiguration = chunky
-    entry(339, T_SHORT, [1, 1, 1]), // SampleFormat unsigned
-    entry(33550, T_DOUBLE, [pixelScaleX, pixelScaleY, 0]),
-    entry(33922, T_DOUBLE, [0, 0, 0, opts.west, opts.north, 0]),
-    entry(34735, T_SHORT, geoKeys),
-  ]
-  return assembleTiff(entries, strip)
+  void opts.compress
+  return writeRgbGisGeoTiff({
+    width: opts.width,
+    height: opts.height,
+    pixels: opts.rgb,
+    samplesPerPixel: 3,
+    pixelScaleX: (opts.east - opts.west) / opts.width,
+    pixelScaleY: (opts.north - opts.south) / opts.height,
+    tiepointX: opts.west,
+    tiepointY: opts.north,
+    epsg: 4326,
+    geographic: true,
+  })
 }
 
 function assembleTiff(entries: TiffEntry[], strip: Uint8Array): ArrayBuffer {

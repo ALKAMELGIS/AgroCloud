@@ -105,6 +105,13 @@ export type TimeSeriesCorrelationReportBlock = {
   relationshipLabel: string
   gisInsight: string
   agroInsight: string
+  interpretation: string
+  valueHeaders: string[]
+  valueRows: string[][]
+  /** Paired XY points for native Word scatter charts. */
+  points?: Array<{ date: string; x: number; y: number }>
+  /** Linear fit endpoints for native Word scatter. */
+  fitLine?: Array<{ x: number; y: number }>
   chartBase64: string | null
 }
 

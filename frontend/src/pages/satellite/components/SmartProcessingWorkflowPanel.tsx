@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 export type SmartProcessingSectionId =
   | 'layers'
   | 'remote-sensing'
+  | 'eo-enrichment'
   | 'crop-alerts'
   | 'stress-zones'
   | 'crop-classification'
@@ -36,6 +37,7 @@ type CatKey = 'quick' | 'selection' | 'spatial' | 'ai' | 'geom' | 'edit';
 const QUICK_LINKS: Array<{ id: SmartProcessingSectionId; icon: string; label: string }> = [
   { id: 'layers', icon: 'fa-solid fa-layer-group', label: 'Layers' },
   { id: 'remote-sensing', icon: 'fa-solid fa-satellite-dish', label: 'Remote sensing' },
+  { id: 'eo-enrichment', icon: 'fa-solid fa-seedling', label: 'EO Enrich' },
   { id: 'crop-alerts', icon: 'fa-solid fa-wheat-awn-circle-exclamation', label: 'Crop alerts' },
   { id: 'stress-zones', icon: 'fa-solid fa-heart-pulse', label: 'Stress Zones ⭐' },
   { id: 'crop-classification', icon: 'fa-solid fa-wheat-awn', label: 'Crop AI' },
@@ -92,6 +94,13 @@ const WORKFLOW_ROWS: Array<{
         label: 'Spatial & zonal',
         hint: 'Remote sensing templates, timeline, and AOI tools.',
         target: 'remote-sensing',
+      },
+      {
+        id: 'eo-enrichment',
+        icon: 'fa-solid fa-seedling',
+        label: 'EO Layer Enrichment',
+        hint: 'Enrich farm polygons with Sentinel-2 attributes; export KMZ/SHP/XLSX or DOCX report.',
+        target: 'eo-enrichment',
       },
       {
         id: 'crop-alerts',

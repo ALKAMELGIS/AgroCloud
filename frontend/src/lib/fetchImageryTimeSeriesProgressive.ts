@@ -16,7 +16,6 @@ import { isBackendKnownUnavailable, isStaticDeploymentWithoutBackend } from './a
 import {
   postSentinelStatisticsViaWmsClient,
 } from './sentinelHubWmsStatisticsClient'
-import { addDaysToIso } from './siSentinelImageryDate'
 import {
   buildNdsiSnowTimeSeriesDebugReport,
   logNdsiSnowTimeSeriesDebug,
@@ -25,7 +24,7 @@ import {
   buildImageryTsCacheKey,
   buildImageryTsChunkCacheKey,
   geometryHashForImageryCache,
-  isImageryTsCacheFresh,
+  isImageryTsCacheFreshComplete,
   isImageryTsCacheStaleButUsable,
   readImageryTsCache,
   readImageryTsChunkCache,
@@ -65,6 +64,10 @@ function addDaysToIso(iso: string, days: number): string {
   const d = new Date(`${iso.trim().slice(0, 10)}T12:00:00Z`)
   d.setUTCDate(d.getUTCDate() + days)
   return d.toISOString().slice(0, 10)
+}
+
+function abortError(): DOMException {
+  return new DOMException('The operation was aborted.', 'AbortError')
 }
 
 function daysBetweenInclusive(fromIso: string, toIso: string): number {
@@ -334,7 +337,9 @@ export async function fetchImageryTimeSeriesProgressive(
   })
 
   const existingRun = runInflight.get(cacheKey)
-  if (existingRun) return existingRun
+  // Prefetch (no signal) may reuse an in-flight UI fetch. UI fetches with AbortSignal must not
+  // reuse a sibling promise — an aborted run would resolve empty and poison Apply/re-run.
+  if (existingRun && !options.signal) return existingRun
 
   const runPromise = (async () => {
     const emit = (daily: SentinelHubDailyIndexMeans[], progress: ImageryTimeSeriesProgress) => {
@@ -352,7 +357,7 @@ export async function fetchImageryTimeSeriesProgressive(
         fromCache: false,
         refreshing: false,
       })
-      return []
+      throw abortError()
     }
 
     emit([], {
@@ -397,18 +402,21 @@ export async function fetchImageryTimeSeriesProgressive(
     const chunksTotal = chunks.length
 
     if (cached?.daily?.length && isImageryTsCacheStaleButUsable(cached)) {
-      const fresh = isImageryTsCacheFresh(cached)
+      const freshComplete = isImageryTsCacheFreshComplete(cached)
       emit(merged, {
-        phase: fresh ? 'complete' : 'fetching',
-        message: fresh ? 'Loaded from cache' : 'Showing cached observations…',
-        chunksDone: fresh ? chunksTotal : 0,
+        phase: freshComplete ? 'complete' : 'fetching',
+        message: freshComplete
+          ? 'Loaded from cache'
+          : 'Showing cached observations — loading full Start→End range…',
+        chunksDone: freshComplete ? chunksTotal : 0,
         chunksTotal,
         observations: countImageryObservations(merged),
-        percent: fresh ? 100 : 0,
+        percent: freshComplete ? 100 : 0,
         fromCache: true,
-        refreshing: !fresh,
+        refreshing: !freshComplete,
       })
-      if (fresh) return merged
+      // Never short-circuit on preview-only / incomplete writes for a multi-year key.
+      if (freshComplete) return merged
     }
 
     if (!merged.length) {
@@ -447,13 +455,8 @@ export async function fetchImageryTimeSeriesProgressive(
           fromCache: false,
           refreshing,
         })
-        void writeImageryTsCache(cacheKey, {
-          fieldKey: field.fieldKey,
-          fromIso,
-          toIso,
-          cloudFilter,
-          daily: merged,
-        })
+        // Do NOT persist mid-flight merges under the full from/to key — that poisoned
+        // Start=2021 runs by marking a 14-day preview as a fresh complete cache hit.
       })
       return mergeChain
     }
@@ -477,24 +480,37 @@ export async function fetchImageryTimeSeriesProgressive(
         return rows
       })
       await mergeChain
-      if (!options.signal?.aborted) {
-        emit(merged, {
-          phase: 'complete',
-          message: `Complete · ${countImageryObservations(merged)} observations`,
-          chunksDone: chunksTotal,
-          chunksTotal,
-          observations: countImageryObservations(merged),
-          percent: 100,
-          fromCache: false,
-          refreshing: false,
-        })
-      }
+      if (options.signal?.aborted) throw abortError()
+      emit(merged, {
+        phase: 'complete',
+        message: `Complete · ${countImageryObservations(merged)} observations`,
+        chunksDone: chunksTotal,
+        chunksTotal,
+        observations: countImageryObservations(merged),
+        percent: 100,
+        fromCache: false,
+        refreshing: false,
+      })
     }
 
     await mergeChain
 
-    if (!merged.length && chunksTotal > 0 && !options.signal?.aborted) {
+    if (options.signal?.aborted) throw abortError()
+
+    if (!merged.length && chunksTotal > 0) {
       throw imageryTsEmptyResultError(chunksTotal, lastChunkError)
+    }
+
+    // Persist only after the full Start→End crawl finishes.
+    if (merged.length && !options.signal?.aborted) {
+      void writeImageryTsCache(cacheKey, {
+        fieldKey: field.fieldKey,
+        fromIso,
+        toIso,
+        cloudFilter,
+        daily: merged,
+        complete: true,
+      })
     }
 
     if (imageryStatisticsFetchNeedsSnowNdsi(layerIds) && merged.length) {
@@ -507,20 +523,6 @@ export async function fetchImageryTimeSeriesProgressive(
           observations: countImageryObservations(merged),
         },
       )
-    }
-
-    if (options.signal?.aborted) {
-      emit(merged, {
-        phase: 'aborted',
-        message: 'Cancelled',
-        chunksDone,
-        chunksTotal,
-        observations: countImageryObservations(merged),
-        percent: chunksTotal > 0 ? Math.round((chunksDone / chunksTotal) * 100) : 0,
-        fromCache: false,
-        refreshing: false,
-      })
-      return merged
     }
 
     if (!merged.length) {
@@ -543,7 +545,9 @@ export async function fetchImageryTimeSeriesProgressive(
   try {
     return await runPromise
   } finally {
-    runInflight.delete(cacheKey)
+    if (runInflight.get(cacheKey) === runPromise) {
+      runInflight.delete(cacheKey)
+    }
   }
 }
 

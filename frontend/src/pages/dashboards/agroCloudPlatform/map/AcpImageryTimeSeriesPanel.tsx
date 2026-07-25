@@ -16,6 +16,11 @@ import {
 } from 'chart.js'
 import { Bar, Line, Pie, Scatter } from 'react-chartjs-2'
 import { fetchCropAlertSentinelHistoryExtension, buildDailySeriesFromEngineScenes } from '../../../../lib/siCropAlertSentinelLive'
+import {
+  fetchChirpsPrecipForImageryChart,
+  mergeOpticalAndChirpsChart,
+  partitionImageryTimeSeriesLayerIds,
+} from '../../../../lib/chirpsRainfall/chirpsImageryTimeSeries'
 import { acpDefaultLayerIdsFromChartSeries } from '../acpSettingsBundle'
 import { useAcpPlatform } from '../acpPlatformContext'
 import {
@@ -36,6 +41,7 @@ import {
   type ImageryCorrelationScatterAnalysis,
   type ImageryTimeSeriesLayerSeries,
 } from '../acpImageryTimeSeries'
+import { buildCorrelationInterpretation } from '../../../satellite/lib/timeSeriesReport/timeSeriesScatterChartRenderer'
 import {
   buildAgroStructureFieldOptions,
   resolveAgroStructureFieldByKey,
@@ -174,43 +180,88 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
     }
 
     const layerIds = selectedLayerIds
+    const { precipLayerIds, opticalLayerIds } = partitionImageryTimeSeriesLayerIds(layerIds)
 
     const startedAt = performance.now()
     setAnalysisElapsedMs(0)
     setLoading(true)
     try {
-      let historyMap = await fetchCropAlertSentinelHistoryExtension([field], {
-        fromIso: fromDate,
-        toIso: toDate,
-        concurrency: 4,
-      })
+      let opticalLabels: string[] = []
+      let opticalSeries: ImageryTimeSeriesLayerSeries[] = []
 
-      if (!historyMap.get(field.fieldKey)?.length) {
-        const engineHit = acp.allResults.find(r => r.fieldKey === field.fieldKey)
-        if (engineHit) {
-          const fallbackDaily = buildDailySeriesFromEngineScenes(engineHit, fromDate, toDate)
-          if (fallbackDaily.length) {
-            historyMap = new Map(historyMap)
-            historyMap.set(field.fieldKey, fallbackDaily)
+      if (opticalLayerIds.length) {
+        let historyMap = await fetchCropAlertSentinelHistoryExtension([field], {
+          fromIso: fromDate,
+          toIso: toDate,
+          concurrency: 4,
+        })
+
+        if (!historyMap.get(field.fieldKey)?.length) {
+          const engineHit = acp.allResults.find(r => r.fieldKey === field.fieldKey)
+          if (engineHit) {
+            const fallbackDaily = buildDailySeriesFromEngineScenes(engineHit, fromDate, toDate)
+            if (fallbackDaily.length) {
+              historyMap = new Map(historyMap)
+              historyMap.set(field.fieldKey, fallbackDaily)
+            }
           }
+        }
+
+        if (opticalLayerIds.length === 1) {
+          const raw = aggregateImageryTimeSeries(historyMap, [field.fieldKey], opticalLayerIds[0]!)
+          const single = pruneSingleLayerImagerySeries(raw.labels, raw.values)
+          opticalLabels = single.labels
+          opticalSeries = [{ layerId: opticalLayerIds[0]!, values: single.values }]
+        } else {
+          const raw = aggregateImageryTimeSeriesMulti(historyMap, [field.fieldKey], opticalLayerIds)
+          const multi = pruneImageryTimeSeriesToObservations(raw.labels, raw.series)
+          opticalLabels = multi.labels
+          opticalSeries = multi.series
         }
       }
 
-      if (layerIds.length === 1) {
-        const raw = aggregateImageryTimeSeries(historyMap, [field.fieldKey], layerIds[0]!)
-        const single = pruneSingleLayerImagerySeries(raw.labels, raw.values)
-        setLabels(single.labels)
-        setLayerSeries([{ layerId: layerIds[0]!, values: single.values }])
-        if (!single.labels.length) {
+      let chirpsPoints = null as Awaited<ReturnType<typeof fetchChirpsPrecipForImageryChart>> | null
+      if (precipLayerIds.length) {
+        chirpsPoints = await fetchChirpsPrecipForImageryChart({
+          geometry: field.geometry,
+          start: fromDate,
+          end: toDate,
+        })
+      }
+
+      if (precipLayerIds.length) {
+        const merged = mergeOpticalAndChirpsChart({
+          layerIds,
+          opticalLabels,
+          opticalSeries,
+          chirpsPoints,
+        })
+        setLabels(merged.labels)
+        setLayerSeries(merged.series)
+        if (!merged.labels.length) {
+          setError(
+            precipLayerIds.length && !opticalLayerIds.length
+              ? 'No CHIRPS rainfall observations in this date range — try widening dates.'
+              : 'No observations in this date range — try widening dates or check Sentinel / CHIRPS coverage.',
+          )
+        } else {
+          setError(null)
+        }
+      } else if (layerIds.length === 1) {
+        setLabels(opticalLabels)
+        setLayerSeries(opticalSeries)
+        if (!opticalLabels.length) {
           setError('No observations in this date range — try widening dates or check Sentinel coverage.')
+        } else {
+          setError(null)
         }
       } else {
-        const raw = aggregateImageryTimeSeriesMulti(historyMap, [field.fieldKey], layerIds)
-        const multi = pruneImageryTimeSeriesToObservations(raw.labels, raw.series)
-        setLabels(multi.labels)
-        setLayerSeries(multi.series)
-        if (!multi.labels.length) {
+        setLabels(opticalLabels)
+        setLayerSeries(opticalSeries)
+        if (!opticalLabels.length) {
           setError('No observations in this date range — try widening dates or check Sentinel coverage.')
+        } else {
+          setError(null)
         }
       }
     } catch (err) {
@@ -336,29 +387,31 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
     if (!labels.length || !layerSeries.length) return { labels: [], datasets: [] }
 
     if (scatterCorrelation && scatterCorrelation.points.length >= 2) {
-      const pointColor = imageryLayerChartColor(0)
       return {
         datasets: [
           {
             type: 'scatter' as const,
-            label: `${scatterCorrelation.xLayerId} vs ${scatterCorrelation.yLayerId}`,
+            label: 'Paired scenes',
             data: scatterCorrelation.points.map(point => ({ x: point.x, y: point.y })),
-            borderColor: pointColor,
-            backgroundColor: `${pointColor}cc`,
-            pointRadius: 4,
-            pointHoverRadius: 6,
+            borderColor: '#ecfeff',
+            backgroundColor: 'rgba(45, 212, 191, 0.85)',
+            borderWidth: 1.5,
+            pointRadius: 5,
+            pointHoverRadius: 7,
           },
           {
             type: 'line' as const,
-            label: `Regression · R²=${scatterCorrelation.regression.r2.toFixed(3)}`,
+            label: `Linear fit · R²=${scatterCorrelation.regression.r2.toFixed(3)}`,
             data: scatterCorrelation.regressionLine,
-            borderColor: '#f97316',
-            backgroundColor: '#f97316',
+            borderColor: '#fbbf24',
+            backgroundColor: 'transparent',
             borderWidth: 2,
             borderDash: [6, 4],
             pointRadius: 0,
             pointHoverRadius: 0,
             fill: false,
+            tension: 0,
+            showLine: true,
           },
         ],
       }
@@ -702,7 +755,11 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
           <div className="acp-ts__scatter-insight">
             <div className="acp-ts__scatter-head">
               <span className="acp-ts__scatter-r2">
+                r = <strong>{scatterCorrelation.regression.r.toFixed(3)}</strong>
+                {' · '}
                 R² = <strong>{scatterCorrelation.regression.r2.toFixed(3)}</strong>
+                {' · '}
+                n = <strong>{scatterCorrelation.regression.n}</strong>
               </span>
               <span
                 className={[
@@ -718,8 +775,31 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
                 {scatterCorrelation.relationship.label}
               </span>
             </div>
-            <p className="acp-ts__scatter-gis">{scatterCorrelation.gisInsight}</p>
-            <p className="acp-ts__scatter-agro">{scatterCorrelation.agroInsight}</p>
+            {scatterCorrelation.points.length ? (
+              <div className="acp-ts__scatter-table-wrap">
+                <table className="acp-ts__scatter-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>{scatterCorrelation.xLayerId}</th>
+                      <th>{scatterCorrelation.yLayerId}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {scatterCorrelation.points.map(p => (
+                      <tr key={`${p.date}-${p.x}-${p.y}`}>
+                        <td>{p.date || '—'}</td>
+                        <td>{p.x.toFixed(4)}</td>
+                        <td>{p.y.toFixed(4)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+            <p className="acp-ts__scatter-interpret">
+              <strong>Interpretation:</strong> {buildCorrelationInterpretation(scatterCorrelation)}
+            </p>
           </div>
         ) : chartType === 'scatter' && hasRun && labels.length && layerSeries.length < 2 ? (
           <p className="acp-ts__scatter-hint">Select two layers to run correlation scatter with regression and R².</p>

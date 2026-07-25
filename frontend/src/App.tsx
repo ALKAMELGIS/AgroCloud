@@ -8,6 +8,7 @@ import PersistentAgroCloudEmbed from './components/PersistentAgroCloudEmbed'
 import PwaInstallPrompt from './components/PwaInstallPrompt'
 import PwaInstallFab from './components/PwaInstallFab'
 import {
+  clearChunkReloadGuards,
   clearStaleChunkRecoveryState,
   isDynamicImportError,
   lazyWithRetry,
@@ -247,6 +248,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
             <button
               type="button"
               onClick={() => {
+                clearChunkReloadGuards()
                 void purgeAndReloadForStaleDeploy()
               }}
               style={{

@@ -66,18 +66,25 @@ export function syncSiSentinelAoiWmsChunkBounds(
   appliedBounds.set(chunkKey, key)
 }
 
-/** Show/hide via layout visibility; opacity stays at the target when visible. */
+/**
+ * Show/hide via raster-opacity only (layout stays `visible`).
+ * Matching Edit AOI React layers: Mapbox keeps fetching tiles at opacity 0,
+ * so warm prefetch makes Show on map (Layers AOI) near-instant.
+ * Use `unloadWhenHidden` only when tearing down / freeing GPU for unused stacks.
+ */
 export function setSiSentinelAoiWmsLayerPresentation(
   map: MapboxMap,
   layerId: string,
   visible: boolean,
   opacity: number,
   evalscriptChunk: boolean,
+  options?: { unloadWhenHidden?: boolean },
 ): void {
   if (!map.getLayer(layerId)) return
   const targetOpacity = visible ? opacity * (evalscriptChunk ? 1 : 0.96) : 0
+  const layoutVisible = visible || !options?.unloadWhenHidden
   try {
-    map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none')
+    map.setLayoutProperty(layerId, 'visibility', layoutVisible ? 'visible' : 'none')
     map.setPaintProperty(layerId, 'raster-opacity', targetOpacity)
     map.setPaintProperty(layerId, 'raster-fade-duration', 0)
     map.setPaintProperty(layerId, 'raster-resampling', 'linear')

@@ -12,11 +12,13 @@ import {
   flattenRemoteSensingLayerSelectGroups,
   isAgroDeltaCompositeLayerId,
   isAgroStaticCompositeLayerId,
+  isChirpsPrecipLayerId,
   resolveAgroCompositeExpr,
   resolveAgroStaticLayerIdForDelta,
   type RemoteSensingLayerSelectGroup,
 } from '../../../lib/agroCompositeIndices'
 import { estimateEtMmDayFromMoisture } from '../../../lib/etIndex'
+import { estimateLstCelsius } from '../../../lib/lstIndex'
 import { estimateSaviFromNdvi } from '../../../lib/siCropAlertDchasBeacon'
 
 export type ImageryChartType = 'line' | 'area' | 'bar' | 'pie' | 'scatter'
@@ -52,6 +54,7 @@ type CoreVars = {
   si: number
   ssi: number
   ndre: number
+  evi: number
 }
 
 function finiteOrNull(v: number | null | undefined): number | null {
@@ -73,6 +76,7 @@ function coreVarsFromDaily(row: SentinelHubDailyIndexMeans): CoreVars | null {
   const ndsi = finiteOrNull(row.ndsi)
   const si = finiteOrNull(row.si)
   const ndre = finiteOrNull(row.ndre)
+  const evi = finiteOrNull(row.evi)
   const ssi = finiteOrNull(row.ssi) ?? (ndsi != null && si != null ? ndsi + si : null)
   const savi = finiteOrNull(row.savi) ?? (ndvi != null ? estimateSaviFromNdvi(ndvi) : null)
   const ci_re = finiteOrNull(row.ciRe)
@@ -84,6 +88,7 @@ function coreVarsFromDaily(row: SentinelHubDailyIndexMeans): CoreVars | null {
     ndsi == null &&
     si == null &&
     ndre == null &&
+    evi == null &&
     savi == null
   ) {
     return null
@@ -99,6 +104,7 @@ function coreVarsFromDaily(row: SentinelHubDailyIndexMeans): CoreVars | null {
     si: si ?? NaN,
     ssi: ssi ?? NaN,
     ndre: ndre ?? NaN,
+    evi: evi ?? NaN,
   }
 }
 
@@ -114,6 +120,7 @@ function evaluateCompositeExpr(expr: string, vars: CoreVars): number | null {
       'si',
       'ssi',
       'ndre',
+      'evi',
       'Math',
       `"use strict"; return (${expr});`,
     )
@@ -127,6 +134,7 @@ function evaluateCompositeExpr(expr: string, vars: CoreVars): number | null {
       vars.si,
       vars.ssi,
       vars.ndre,
+      vars.evi,
       Math,
     )
     return typeof value === 'number' && Number.isFinite(value) ? value : null
@@ -140,6 +148,9 @@ function evaluateStaticLayerDailyValue(layerId: string, row: SentinelHubDailyInd
 
   // Temporal / change layers are aggregated across dates — not a single-row absolute.
   if (isAdiLayerId(id) || isNcadiLayerId(id) || isAgroDeltaCompositeLayerId(id)) return null
+
+  // CHIRPS precipitation is not a Sentinel Hub statistic — loaded via /api/chirps in RS toolbox.
+  if (id === 'PRECIP' || id === 'CHIRPS' || id === 'RAINFALL' || id === 'PRECIPITATION') return null
 
   // Direct band means (do not require NDVI — e.g. salinity scenes).
   if (id === 'NDSI') return finiteOrNull(row.ndsi)
@@ -179,6 +190,13 @@ function evaluateStaticLayerDailyValue(layerId: string, row: SentinelHubDailyInd
         sceneDate: row.date,
         ndvi,
       })
+    }
+    case 'LST': {
+      // Sentinel-2 has no thermal band — same NDVI·NDMI seasonal °C proxy as Layer Live WMS.
+      const ndvi = finiteOrNull(row.ndvi)
+      const ndmi = finiteOrNull(row.ndmi)
+      if (ndvi == null || ndmi == null) return null
+      return estimateLstCelsius(ndvi, ndmi, { sceneDate: row.date })
     }
     case 'CHAS':
     case 'CHAS_ALERT': {
@@ -249,10 +267,42 @@ export function imageryDailyRowsNeedRefetchForLayers(
   const ids = layerIds.map(id => id.trim().toUpperCase()).filter(Boolean)
   const needsNdsi = ids.some(id => id === 'NDSI' || id === 'SSI')
   const needsSi = ids.some(id => id === 'SI' || id === 'SSI')
-  const needsNdre = ids.some(id => id === 'NDRE')
+  const needsNdre = ids.some(
+    id =>
+      id === 'NDRE' ||
+      id === 'CGI' ||
+      id === 'CVI' ||
+      id === 'CHS' ||
+      id === 'CMI' ||
+      id === 'HRI' ||
+      id === 'CCI' ||
+      id === 'EHD' ||
+      id === 'DCGI' ||
+      id === 'DCVI' ||
+      id === 'DCHS' ||
+      id === 'DCMI' ||
+      id === 'DHRI',
+  )
+  const needsEvi = ids.some(
+    id =>
+      id === 'EVI' ||
+      id === 'PRI' ||
+      id === 'CGI' ||
+      id === 'CVI' ||
+      id === 'CHS' ||
+      id === 'CMI' ||
+      id === 'CCI' ||
+      id === 'EPD' ||
+      id === 'DPRI' ||
+      id === 'DCGI' ||
+      id === 'DCVI' ||
+      id === 'DCHS' ||
+      id === 'DCMI',
+  )
   if (needsNdsi && !daily.some(row => row.ndsi != null && Number.isFinite(row.ndsi))) return true
   if (needsSi && !daily.some(row => row.si != null && Number.isFinite(row.si))) return true
   if (needsNdre && !daily.some(row => row.ndre != null && Number.isFinite(row.ndre))) return true
+  if (needsEvi && !daily.some(row => row.evi != null && Number.isFinite(row.evi))) return true
   // ADI prefers NDRE when available; refetch once if missing so the full formula can be used.
   if (ids.some(isAdiLayerId) && !daily.some(row => row.ndre != null && Number.isFinite(row.ndre))) {
     return true
@@ -342,6 +392,118 @@ function meanNcadiFusionForDate(
   return bucket.reduce((a, b) => a + b, 0) / bucket.length
 }
 
+function seriesStability(vals: number[]): number {
+  if (vals.length < 2) return vals.length === 1 ? 1 : 0
+  const mean = vals.reduce((a, b) => a + b, 0) / vals.length
+  if (Math.abs(mean) < 1e-6) return 0
+  const variance = vals.reduce((a, b) => a + (b - mean) ** 2, 0) / vals.length
+  const std = Math.sqrt(Math.max(0, variance))
+  return Math.max(0, Math.min(1, 1 - std / Math.abs(mean)))
+}
+
+/** VRI = (NDVI − MinNDVI) / (MaxNDVI − MinNDVI) over the full series. */
+function aggregateVegetationRecoveryIndex(
+  dailyMaps: Map<string, SentinelHubDailyIndexMeans[]>,
+  fieldKeys: string[],
+  labels: string[],
+): { labels: string[]; values: number[] } {
+  const ndvi = labels.map(date => meanFieldValueForDate(dailyMaps, fieldKeys, date, 'NDVI'))
+  const finite = ndvi.filter((v): v is number => v != null && Number.isFinite(v))
+  if (finite.length < 2) {
+    return { labels, values: labels.map(() => NaN) }
+  }
+  const min = Math.min(...finite)
+  const max = Math.max(...finite)
+  const span = max - min
+  if (span < 1e-6) {
+    return { labels, values: labels.map((_, i) => (ndvi[i] != null ? 0.5 : NaN)) }
+  }
+  return {
+    labels,
+    values: ndvi.map(v => (v == null || !Number.isFinite(v) ? NaN : Number(((v - min) / span).toFixed(4)))),
+  }
+}
+
+/** CCI from rolling stability of NDVI/NDRE/EVI + observation density. */
+function aggregateCropCalendarConfidence(
+  dailyMaps: Map<string, SentinelHubDailyIndexMeans[]>,
+  fieldKeys: string[],
+  labels: string[],
+): { labels: string[]; values: number[] } {
+  const LOOKBACK = 8
+  const ndvi = labels.map(date => meanFieldValueForDate(dailyMaps, fieldKeys, date, 'NDVI'))
+  const ndre = labels.map(date => meanFieldValueForDate(dailyMaps, fieldKeys, date, 'NDRE'))
+  const evi = labels.map(date => meanFieldValueForDate(dailyMaps, fieldKeys, date, 'EVI'))
+  const values: number[] = []
+  for (let i = 0; i < labels.length; i++) {
+    const from = Math.max(0, i - LOOKBACK + 1)
+    const windowNdvi = ndvi.slice(from, i + 1).filter((v): v is number => v != null && Number.isFinite(v))
+    const windowNdre = ndre.slice(from, i + 1).filter((v): v is number => v != null && Number.isFinite(v))
+    const windowEvi = evi.slice(from, i + 1).filter((v): v is number => v != null && Number.isFinite(v))
+    if (!windowNdvi.length && !windowNdre.length && !windowEvi.length) {
+      values.push(NaN)
+      continue
+    }
+    const ndviStab = seriesStability(windowNdvi)
+    const ndreStab = seriesStability(windowNdre.length ? windowNdre : windowNdvi)
+    const eviStab = seriesStability(windowEvi.length ? windowEvi : windowNdvi)
+    const obsDensity = Math.max(0, Math.min(1, windowNdvi.length / LOOKBACK))
+    const cci = 0.4 * ndviStab + 0.3 * ndreStab + 0.2 * eviStab + 0.1 * obsDensity
+    values.push(Number(cci.toFixed(4)))
+  }
+  return { labels, values }
+}
+
+/** Step series: 0 before first planting signal, 1 from signal date onward. */
+function aggregateEstimatedPlantingDate(
+  dailyMaps: Map<string, SentinelHubDailyIndexMeans[]>,
+  fieldKeys: string[],
+  labels: string[],
+): { labels: string[]; values: number[] } {
+  const pri = labels.map(date => meanFieldValueForDate(dailyMaps, fieldKeys, date, 'PRI'))
+  const ndvi = labels.map(date => meanFieldValueForDate(dailyMaps, fieldKeys, date, 'NDVI'))
+  let triggered = false
+  const values: number[] = []
+  for (let i = 0; i < labels.length; i++) {
+    const p = pri[i]
+    const n = ndvi[i]
+    const prev = i > 0 ? ndvi[i - 1] : null
+    const trendUp = n != null && prev != null && n > prev
+    if (!triggered && p != null && p >= 0.45 && trendUp) triggered = true
+    if (p == null && n == null) {
+      values.push(NaN)
+      continue
+    }
+    values.push(triggered ? 1 : 0)
+  }
+  return { labels, values }
+}
+
+/** Step series: 0 before first harvest signal, 1 from signal date onward. */
+function aggregateEstimatedHarvestDate(
+  dailyMaps: Map<string, SentinelHubDailyIndexMeans[]>,
+  fieldKeys: string[],
+  labels: string[],
+): { labels: string[]; values: number[] } {
+  const hri = labels.map(date => meanFieldValueForDate(dailyMaps, fieldKeys, date, 'HRI'))
+  const ndvi = labels.map(date => meanFieldValueForDate(dailyMaps, fieldKeys, date, 'NDVI'))
+  let triggered = false
+  const values: number[] = []
+  for (let i = 0; i < labels.length; i++) {
+    const h = hri[i]
+    const n = ndvi[i]
+    const prev = i > 0 ? ndvi[i - 1] : null
+    const trendDown = n != null && prev != null && n < prev
+    if (!triggered && h != null && h >= 0.7 && trendDown) triggered = true
+    if (h == null && n == null) {
+      values.push(NaN)
+      continue
+    }
+    values.push(triggered ? 1 : 0)
+  }
+  return { labels, values }
+}
+
 export function aggregateImageryTimeSeries(
   dailyMaps: Map<string, SentinelHubDailyIndexMeans[]>,
   fieldKeys: string[],
@@ -412,6 +574,19 @@ export function aggregateImageryTimeSeries(
       prev = current
     }
     return { labels, values }
+  }
+
+  if (id === 'VRI') {
+    return aggregateVegetationRecoveryIndex(dailyMaps, fieldKeys, labels)
+  }
+  if (id === 'CCI') {
+    return aggregateCropCalendarConfidence(dailyMaps, fieldKeys, labels)
+  }
+  if (id === 'EPD') {
+    return aggregateEstimatedPlantingDate(dailyMaps, fieldKeys, labels)
+  }
+  if (id === 'EHD') {
+    return aggregateEstimatedHarvestDate(dailyMaps, fieldKeys, labels)
   }
 
   for (const date of labels) {
@@ -566,6 +741,11 @@ export function aggregateImageryChartByTimePeriod(
     valueUnit: entry.valueUnit,
     values: order.map(key => {
       const vals = buckets.get(key)!.layerValues.get(entry.layerId) ?? []
+      // Rainfall is additive (mm) — sum within week/month/year; indices stay as means.
+      if (isChirpsPrecipLayerId(entry.layerId)) {
+        if (!vals.length) return NaN
+        return vals.reduce((a, b) => a + b, 0)
+      }
       return meanOf(vals) ?? NaN
     }),
   }))
@@ -940,6 +1120,12 @@ function buildLayerPairAgroInsight(
         'Surface water / canopy water signal tracks vegetation density — healthy transpiration balance supports productivity.',
       negative:
         'Higher NDVI with lower NDWI suggests moisture deficit under active canopy — prioritize targeted irrigation or scouting.',
+    },
+    'NDVI|LST': {
+      negative:
+        'Canopy cooling: greener vegetation coincides with lower land-surface temperature — expected when cover shades and transpires.',
+      positive:
+        'Vegetation and surface heat rise together — may indicate sparse cover, senescent canopy, or soil-dominated pixels.',
     },
     'NDVI|CHAS': {
       positive:

@@ -74,8 +74,11 @@ export function fitLngLatBboxToMapAspect(
   return { minLng, minLat, maxLng, maxLat }
 }
 
-/** Fixed layout: map frame on top, legend strip below (no overlap). */
+/** Fixed layout: title · map frame · legend strip (ArcGIS-style map card). */
 export type TimeSeriesSnapshotLayout = {
+  titleX: number
+  titleY: number
+  titleH: number
   mapX: number
   mapY: number
   mapW: number
@@ -90,20 +93,24 @@ export function resolveTimeSeriesSnapshotLayout(
   canvasW: number,
   canvasH: number,
 ): TimeSeriesSnapshotLayout {
-  const margin = 8
+  const margin = 6
+  const titleH = Math.min(28, Math.max(22, Math.round(canvasH * 0.055)))
   /** Wider strip so Layer Live class keys (LULC, SCL, etc.) stay readable. */
-  const legendStripH = Math.min(120, Math.max(72, Math.round(canvasH * 0.22)))
+  const legendStripH = Math.min(100, Math.max(64, Math.round(canvasH * 0.18)))
   const mapX = margin
-  const mapY = margin
+  const mapY = margin + titleH + 2
   const mapW = Math.max(40, canvasW - margin * 2)
-  const mapH = Math.max(40, canvasH - margin * 2 - legendStripH - 4)
+  const mapH = Math.max(40, canvasH - margin * 2 - titleH - legendStripH - 6)
   return {
+    titleX: mapX,
+    titleY: margin,
+    titleH,
     mapX,
     mapY,
     mapW,
     mapH,
     legendX: mapX,
-    legendY: mapY + mapH + 4,
+    legendY: mapY + mapH + 3,
     legendMaxW: mapW,
     legendStripH,
   }
@@ -547,7 +554,104 @@ function drawSnapshotLegend(
   ctx.restore()
 }
 
-/** Composite Esri satellite basemap + index raster + AOI outline + legend into PNG base64 (no prefix). */
+function drawNorthArrow(ctx: CanvasRenderingContext2D, x: number, y: number, size = 28): void {
+  ctx.save()
+  ctx.translate(x, y)
+  // Disc
+  ctx.beginPath()
+  ctx.arc(0, 0, size / 2 + 2, 0, Math.PI * 2)
+  ctx.fillStyle = 'rgba(255,255,255,0.92)'
+  ctx.fill()
+  ctx.strokeStyle = '#0f172a'
+  ctx.lineWidth = 1
+  ctx.stroke()
+  // N pointer
+  ctx.beginPath()
+  ctx.moveTo(0, -size / 2 + 2)
+  ctx.lineTo(size * 0.22, size * 0.18)
+  ctx.lineTo(0, size * 0.08)
+  ctx.lineTo(-size * 0.22, size * 0.18)
+  ctx.closePath()
+  ctx.fillStyle = '#0f172a'
+  ctx.fill()
+  ctx.fillStyle = '#0f172a'
+  ctx.font = `bold ${Math.max(8, Math.round(size * 0.32))}px system-ui,sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'top'
+  ctx.fillText('N', 0, size * 0.22)
+  ctx.restore()
+}
+
+/** Approximate ground scale bar from longitude span at mid-latitude. */
+function drawScaleBar(
+  ctx: CanvasRenderingContext2D,
+  extent: LngLatBbox,
+  mapX: number,
+  mapY: number,
+  mapW: number,
+  mapH: number,
+): void {
+  const midLat = (extent.minLat + extent.maxLat) / 2
+  const metersPerDegLng = 111_320 * Math.cos((midLat * Math.PI) / 180)
+  const mapWidthM = Math.max(1, (extent.maxLng - extent.minLng) * metersPerDegLng)
+  const targetPx = Math.min(110, Math.max(56, mapW * 0.28))
+  const rawM = (targetPx / mapW) * mapWidthM
+  const niceSteps = [50, 100, 200, 250, 500, 1000, 2000, 5000, 10000, 20000, 50000]
+  let barM = niceSteps[0]!
+  for (const s of niceSteps) {
+    if (s <= rawM * 1.35) barM = s
+  }
+  const barPx = Math.max(24, (barM / mapWidthM) * mapW)
+  const label = barM >= 1000 ? `${(barM / 1000).toFixed(barM % 1000 === 0 ? 0 : 1)} km` : `${Math.round(barM)} m`
+  const x = mapX + 10
+  const y = mapY + mapH - 18
+  ctx.save()
+  ctx.fillStyle = 'rgba(255,255,255,0.9)'
+  ctx.fillRect(x - 4, y - 12, barPx + 8, 20)
+  ctx.strokeStyle = '#0f172a'
+  ctx.lineWidth = 1
+  ctx.strokeRect(x - 4, y - 12, barPx + 8, 20)
+  ctx.beginPath()
+  ctx.moveTo(x, y)
+  ctx.lineTo(x + barPx, y)
+  ctx.moveTo(x, y - 4)
+  ctx.lineTo(x, y + 4)
+  ctx.moveTo(x + barPx, y - 4)
+  ctx.lineTo(x + barPx, y + 4)
+  ctx.stroke()
+  ctx.fillStyle = '#0f172a'
+  ctx.font = 'bold 9px system-ui,sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'bottom'
+  ctx.fillText(label, x + barPx / 2, y - 2)
+  ctx.restore()
+}
+
+function drawMapTitleBar(
+  ctx: CanvasRenderingContext2D,
+  layout: TimeSeriesSnapshotLayout,
+  title: string,
+  dateLabel: string,
+): void {
+  const { titleX, titleY, titleH, mapW } = layout
+  ctx.save()
+  ctx.fillStyle = '#0f172a'
+  ctx.fillRect(titleX, titleY, mapW, titleH)
+  ctx.fillStyle = '#f8fafc'
+  ctx.font = `bold ${Math.max(10, Math.round(titleH * 0.48))}px system-ui,sans-serif`
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  // Match sample atlas header: "NDVI: 2022-03-24"
+  const left = dateLabel ? `${title.replace(/\s*·.*$/, '').trim()}: ${dateLabel}` : title
+  ctx.fillText(left.slice(0, 64), titleX + 8, titleY + titleH / 2)
+  ctx.font = `${Math.max(8, Math.round(titleH * 0.36))}px system-ui,sans-serif`
+  ctx.textAlign = 'right'
+  ctx.fillStyle = '#cbd5e1'
+  ctx.fillText('AgroCloud · Sentinel-2', titleX + mapW - 8, titleY + titleH / 2)
+  ctx.restore()
+}
+
+/** Composite Esri satellite basemap + index raster + AOI + legend + north/scale into PNG base64. */
 export async function compositeAoiMapSnapshotBase64(options: {
   geometry: GeoJSON.Geometry
   basemapDataUrl?: string | null
@@ -558,9 +662,13 @@ export async function compositeAoiMapSnapshotBase64(options: {
   heightPx?: number
   /** Aspect-matched extent; computed automatically when omitted. */
   extent?: LngLatBbox | null
+  /** Map title (index / analysis name). */
+  title?: string
+  /** Acquisition / period date shown in the title bar. */
+  sceneDate?: string
 }): Promise<string | null> {
-  const width = options.widthPx ?? 520
-  const height = options.heightPx ?? 390
+  const width = options.widthPx ?? 640
+  const height = options.heightPx ?? 520
   const layout = resolveTimeSeriesSnapshotLayout(width, height)
   const extent =
     options.extent ??
@@ -568,6 +676,9 @@ export async function compositeAoiMapSnapshotBase64(options: {
   if (!extent) return null
 
   const { mapX, mapY, mapW, mapH, legendX, legendY, legendMaxW } = layout
+  const layerLabel = (options.layerId ?? 'Index').trim().toUpperCase() || 'Index'
+  const title = (options.title ?? layerLabel).trim() || layerLabel
+  const dateLabel = (options.sceneDate ?? '').trim().slice(0, 10)
 
   const canvas = document.createElement('canvas')
   canvas.width = width
@@ -575,8 +686,10 @@ export async function compositeAoiMapSnapshotBase64(options: {
   const ctx = canvas.getContext('2d')
   if (!ctx) return null
 
-  ctx.fillStyle = '#f8fafc'
+  ctx.fillStyle = '#f1f5f9'
   ctx.fillRect(0, 0, width, height)
+
+  drawMapTitleBar(ctx, layout, title, dateLabel)
 
   ctx.save()
   ctx.beginPath()
@@ -610,9 +723,12 @@ export async function compositeAoiMapSnapshotBase64(options: {
   drawAoiOutline(ctx, options.geometry, extent, mapX, mapY, mapW, mapH)
   ctx.restore()
 
-  ctx.strokeStyle = '#1e293b'
-  ctx.lineWidth = 1.25
+  ctx.strokeStyle = '#0f172a'
+  ctx.lineWidth = 1.5
   ctx.strokeRect(mapX + 0.5, mapY + 0.5, mapW - 1, mapH - 1)
+
+  drawNorthArrow(ctx, mapX + mapW - 22, mapY + 22, 26)
+  drawScaleBar(ctx, extent, mapX, mapY, mapW, mapH)
 
   const legend =
     options.legendSpec ??

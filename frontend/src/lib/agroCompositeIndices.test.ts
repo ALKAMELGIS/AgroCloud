@@ -25,7 +25,7 @@ describe('agroCompositeIndices', () => {
       { name: 'TRUE_COLOR', title: 'True Color' },
     ])
     expect(groups[0]?.label).toBe('Core Interpretation')
-    expect(groups[0]?.options.map(o => o.id)).toEqual(['NDVI', 'NDMI', 'NDWI', 'SAVI', 'ET'])
+    expect(groups[0]?.options.map(o => o.id)).toEqual(['NDVI', 'NDMI', 'NDWI', 'SAVI', 'ET', 'LST'])
     expect(groups.some(g => g.id === 'live-analysis-lulc')).toBe(true)
     expect(groups.some(g => g.label.includes('Vegetation Health'))).toBe(true)
     expect(groups.some(g => g.label.includes('Delta'))).toBe(true)

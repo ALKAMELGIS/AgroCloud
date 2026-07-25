@@ -249,6 +249,9 @@ export function inferWmsEvalProfile(layerName: string): WmsAoiEvalProfile {
   if (u.includes('EVI') && !u.includes('NEVI')) return 'evi';
   if (u.includes('NDMI') || (u.includes('MOISTURE') && !u.includes('EVAPO'))) return 'ndmi';
   if (u === 'ET' || u.includes('EVAPOTRANSPIRATION') || u.includes('EVAPO')) return 'et';
+  if (u === 'LST' || u.includes('LAND_SURFACE_TEMP') || (u.includes('SURFACE') && u.includes('TEMP'))) {
+    return 'lst'
+  }
   if (u.includes('NDWI') || u.includes('WATER')) return 'ndwi';
   if (u.includes('FALSE') || u.includes('SWIR') || u.includes('COLOR_INFRARED')) return 'false_color';
   if (u.includes('TRUE') || u.includes('NATURAL') || u.includes('RGB')) return 'true_color';
