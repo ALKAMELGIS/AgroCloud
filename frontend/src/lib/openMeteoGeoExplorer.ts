@@ -186,3 +186,87 @@ export async function buildOpenMeteoContextBlock(lat: number, lng: number, userT
 
   return clip(lines.join('\n'))
 }
+
+/**
+ * ~1-month outlook for Neighborhood Agent: Open-Meteo daily (up to 16 days)
+ * plus weekly aggregates — parseable by weather viz / charts.
+ */
+export async function buildOpenMeteoMonthOutlookFacts(lat: number, lng: number): Promise<string> {
+  const lines: string[] = []
+  lines.push('### MONTH OUTLOOK (Open-Meteo daily · next ~16 days + weekly aggregates)')
+  lines.push(`Point: latitude ${lat.toFixed(5)}, longitude ${lng.toFixed(5)}`)
+  try {
+    const fcUrl = new URL('https://api.open-meteo.com/v1/forecast')
+    fcUrl.searchParams.set('latitude', String(lat))
+    fcUrl.searchParams.set('longitude', String(lng))
+    fcUrl.searchParams.set('timezone', 'auto')
+    fcUrl.searchParams.set('daily', 'temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode')
+    fcUrl.searchParams.set('forecast_days', '16')
+    const res = await fetch(fcUrl.toString())
+    if (!res.ok) {
+      lines.push(`Month outlook request failed (HTTP ${res.status}).`)
+      return lines.join('\n')
+    }
+    const data = (await res.json()) as {
+      daily?: {
+        time?: string[]
+        temperature_2m_max?: number[]
+        temperature_2m_min?: number[]
+        precipitation_sum?: number[]
+        weathercode?: number[]
+      }
+    }
+    const daily = data.daily
+    if (!daily?.time?.length) {
+      lines.push('No daily outlook rows returned.')
+      return lines.join('\n')
+    }
+    lines.push('Daily outlook:')
+    const n = Math.min(16, daily.time.length)
+    const weekBuckets: Array<{ label: string; tmax: number[]; tmin: number[]; pr: number[] }> = []
+    for (let i = 0; i < n; i++) {
+      const day = daily.time[i]!
+      const mx = daily.temperature_2m_max?.[i]
+      const mn = daily.temperature_2m_min?.[i]
+      const pr = daily.precipitation_sum?.[i]
+      const wc = daily.weathercode?.[i]
+      const sky = typeof wc === 'number' ? wmoCodeToSky(wc) : 'n/a'
+      lines.push(
+        `  - ${day}: max ${typeof mx === 'number' ? `${mx.toFixed(1)}°C` : 'n/a'}, min ${typeof mn === 'number' ? `${mn.toFixed(1)}°C` : 'n/a'}, precip ${typeof pr === 'number' ? `${pr.toFixed(1)} mm` : 'n/a'}, sky ${sky}`,
+      )
+      const weekIdx = Math.floor(i / 4)
+      if (!weekBuckets[weekIdx]) {
+        weekBuckets[weekIdx] = { label: `W${weekIdx + 1}`, tmax: [], tmin: [], pr: [] }
+      }
+      if (typeof mx === 'number') weekBuckets[weekIdx]!.tmax.push(mx)
+      if (typeof mn === 'number') weekBuckets[weekIdx]!.tmin.push(mn)
+      if (typeof pr === 'number') weekBuckets[weekIdx]!.pr.push(pr)
+    }
+    lines.push('Weekly aggregates (month window):')
+    for (const w of weekBuckets) {
+      const avgMax = w.tmax.length ? w.tmax.reduce((a, b) => a + b, 0) / w.tmax.length : NaN
+      const avgMin = w.tmin.length ? w.tmin.reduce((a, b) => a + b, 0) / w.tmin.length : NaN
+      const precip = w.pr.reduce((a, b) => a + b, 0)
+      lines.push(
+        `  - ${w.label}: avg max ${Number.isFinite(avgMax) ? `${avgMax.toFixed(1)}°C` : 'n/a'}, avg min ${Number.isFinite(avgMin) ? `${avgMin.toFixed(1)}°C` : 'n/a'}, precip ${precip.toFixed(1)} mm`,
+      )
+    }
+  } catch (e) {
+    lines.push(`Month outlook fetch error: ${e instanceof Error ? e.message : String(e)}`)
+  }
+  return lines.join('\n')
+}
+
+function wmoCodeToSky(code: number): string {
+  const c = Math.round(code)
+  if (c === 0 || c === 1) return 'clear'
+  if (c === 2) return 'partly cloudy'
+  if (c === 3) return 'overcast'
+  if (c === 45 || c === 48) return 'fog'
+  if (c >= 51 && c <= 57) return 'drizzle'
+  if (c >= 61 && c <= 67) return 'rain'
+  if (c >= 71 && c <= 77) return 'snow'
+  if (c >= 80 && c <= 82) return 'rain showers'
+  if (c >= 95) return 'thunderstorm'
+  return `code ${c}`
+}

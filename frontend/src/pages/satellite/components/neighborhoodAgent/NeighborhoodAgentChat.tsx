@@ -532,7 +532,41 @@ export function NeighborhoodAgentChat({
   const title = !isEmpty && sessionTitle?.trim() ? sessionTitle.trim() : 'New AI chat';
 
   const followUps = useMemo(() => {
-    if (isEmpty) return []
+    if (isEmpty) {
+      return [
+        {
+          id: 'gis-buffer',
+          label: 'Buffer 500 m',
+          prompt: 'Create a 500 m buffer around the current AOI or selected layer.',
+          primary: true,
+        },
+        {
+          id: 'gis-intersect',
+          label: 'Intersect layers',
+          prompt: 'Intersect Roads with Farm Boundaries (or the two most relevant loaded polygon layers).',
+        },
+        {
+          id: 'gis-clip',
+          label: 'Clip by AOI',
+          prompt: 'Clip the primary loaded vector layer using the current AOI.',
+        },
+        {
+          id: 'gis-dissolve',
+          label: 'Dissolve',
+          prompt: 'Dissolve polygons by Crop Type (or the main category field) on the active farm layer.',
+        },
+        {
+          id: 'gis-ndvi',
+          label: 'NDVI panel',
+          prompt: 'Show NDVI on the map for the AOI.',
+        },
+        {
+          id: 'gis-export',
+          label: 'Export GeoJSON',
+          prompt: 'Export the current AOI or primary vector layer as GeoJSON.',
+        },
+      ]
+    }
     const lastModel = [...messages].reverse().find(m => m.role === 'model' || m.role === 'assistant')
     const lastUser = [...messages].reverse().find(m => m.role === 'user')
     if (!lastModel && !lastUser) return []
@@ -659,7 +693,8 @@ export function NeighborhoodAgentChat({
               </div>
 
               {followUps.length > 0 ? (
-                <div className="nac-follow-ups" role="group" aria-label="Suggested next analyses">
+                <div className="nac-follow-ups" role="group" aria-label={isEmpty ? 'Spatial analysis tools' : 'Suggested next analyses'}>
+                  {isEmpty ? <div className="nac-gis-tools-label">Spatial Analysis</div> : null}
                   {followUps.map(chip => (
                     <button
                       key={chip.id}

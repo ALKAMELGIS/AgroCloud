@@ -16,6 +16,7 @@ import {
 import { GEO_EXPLORER_SESSION_AND_WEATHER } from './geoExplorerGemini'
 import {
   buildOpenMeteoContextBlock,
+  buildOpenMeteoMonthOutlookFacts,
   buildSessionAnchorBlock,
   geoExplorerUserMessageImpliesWeather,
   type SessionAnchorPopup,
@@ -198,13 +199,21 @@ export async function buildGeoAiLeanWeatherFactsForAgent(input: {
     `Weather location resolution: **${weatherResolved.source}**`,
   ].join('\n')
 
+  const monthOutlookPromise = buildOpenMeteoMonthOutlookFacts(fLat, fLng)
+
   if (owm) {
-    const block = await buildOpenWeatherContextBlock(owm, fLat, fLng, input.userText || 'weather here', {
-      ambientWindowOnly: ambientWeather,
-    })
-    return `${header}\n\n${block}`.trim()
+    const [block, month] = await Promise.all([
+      buildOpenWeatherContextBlock(owm, fLat, fLng, input.userText || 'weather here', {
+        ambientWindowOnly: ambientWeather,
+      }),
+      monthOutlookPromise,
+    ])
+    return `${header}\n\n${block}\n\n${month}`.trim()
   }
 
-  const om = await buildOpenMeteoContextBlock(fLat, fLng, input.userText || 'weather here')
-  return `${header}\n\n${om}`.trim()
+  const [om, month] = await Promise.all([
+    buildOpenMeteoContextBlock(fLat, fLng, input.userText || 'weather here'),
+    monthOutlookPromise,
+  ])
+  return `${header}\n\n${om}\n\n${month}`.trim()
 }

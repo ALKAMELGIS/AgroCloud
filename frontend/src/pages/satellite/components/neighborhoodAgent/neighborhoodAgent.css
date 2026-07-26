@@ -391,6 +391,16 @@
   order: 2;
 }
 
+.nac-gis-tools-label {
+  flex: 0 0 100%;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin: 0 0 2px;
+}
+
 .nac-follow-up-chip {
   margin: 0;
   padding: 0;
@@ -1103,7 +1113,149 @@
 }
 
 .nac-weather-card {
-  padding: 0;
+  padding: 10px 10px 8px;
+  border-radius: 12px;
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgba(45, 212, 191, 0.12), transparent 55%),
+    radial-gradient(100% 70% at 100% 0%, rgba(56, 189, 248, 0.1), transparent 50%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(15, 23, 42, 0.45));
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.nac-weather-card--clear {
+  border-color: rgba(251, 191, 36, 0.28);
+}
+
+.nac-weather-card--rain,
+.nac-weather-card--storm {
+  border-color: rgba(56, 189, 248, 0.28);
+}
+
+.nac-weather-card--clouds {
+  border-color: rgba(148, 163, 184, 0.28);
+}
+
+.nac-weather-hero {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 10px;
+}
+
+.nac-weather-hero-icon {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(45, 212, 191, 0.14);
+  color: #2dd4bf;
+  font-size: 20px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.nac-weather-hero-icon--clear {
+  background: rgba(251, 191, 36, 0.18);
+  color: #fbbf24;
+}
+
+.nac-weather-hero-icon--clouds {
+  background: rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+}
+
+.nac-weather-hero-icon--rain,
+.nac-weather-hero-icon--storm {
+  background: rgba(56, 189, 248, 0.18);
+  color: #38bdf8;
+}
+
+.nac-weather-hero-icon--snow {
+  background: rgba(226, 232, 240, 0.18);
+  color: #e2e8f0;
+}
+
+.nac-weather-hero-icon--fog {
+  background: rgba(100, 116, 139, 0.22);
+  color: #94a3b8;
+}
+
+.nac-weather-hero-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.nac-weather-hero-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f8fafc;
+  line-height: 1.35;
+}
+
+.nac-weather-hero-place {
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.nac-weather-climate-line {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #cbd5e1;
+}
+
+.nac-weather-metric-chips {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
+.nac-weather-chip {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 9px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.62));
+  border: 1px solid rgba(45, 212, 191, 0.2);
+  min-width: 0;
+}
+
+.nac-weather-chip i {
+  color: #2dd4bf;
+  font-size: 12px;
+  text-align: center;
+}
+
+.nac-weather-chip-label {
+  font-size: 10.5px;
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nac-weather-chip-value {
+  font-size: 12px;
+  font-weight: 700;
+  color: #f8fafc;
+  font-variant-numeric: tabular-nums;
+}
+
+.nac-weather-charts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.nac-weather-charts--grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
 }
 
 .nac-weather-card-line {
@@ -1156,18 +1308,139 @@
   font-variant-numeric: tabular-nums;
 }
 
-.nac-weather-charts {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0 0 10px;
-}
-
 .nac-weather-metrics-line {
   margin: 0 0 6px;
   font-size: 11.5px;
   line-height: 1.45;
   color: #cbd5e1;
+}
+
+.nac-msg-table .nac-weather-card + .nac-compact-table,
+.nac-weather-card .nac-compact-table {
+  margin-top: 8px;
+}
+
+/* —— Remote sensing / NDVI analysis (flat — no nested cards) —— */
+.nac-rs-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 0 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.nac-rs-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+}
+
+.nac-rs-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #ecfdf5;
+}
+
+.nac-rs-title-meta {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.nac-rs-lead {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: #cbd5e1;
+}
+
+.nac-rs-meta-line {
+  margin: 0;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+
+.nac-rs-charts {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+@media (min-width: 420px) {
+  .nac-rs-charts {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+
+.nac-stats-chart--rs {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.nac-stats-chart--rs .nac-stats-chart-caption {
+  color: #94a3b8;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.6rem;
+  margin-bottom: 4px;
+}
+
+.nac-stats-chart--rs .nac-stats-chart-canvas {
+  height: 148px;
+}
+
+.nac-stats-chart--rs.nac-stats-chart--pie .nac-stats-chart-canvas--pie {
+  height: 148px;
+}
+
+.nac-rs-legend {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nac-rs-legend-item {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.68rem;
+  line-height: 1.25;
+}
+
+.nac-rs-legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.nac-rs-legend-name {
+  color: #e2e8f0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nac-rs-legend-vals {
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .nac-compact-table-wrap {

@@ -24,6 +24,7 @@ export const NAC_BAR_GRADIENT_STOPS: ReadonlyArray<{ from: string; to: string }>
 ]
 
 const MAX_AUTO_CHART_ROWS = 6
+const MAX_FORCED_CHART_ROWS = 12
 
 function cellStr(v: string | number | null | undefined): string {
   if (v === null || v === undefined) return ''
@@ -83,16 +84,18 @@ export function shouldAutoChartNeighborhoodAgentTable(table: GeoExplorerDataTabl
   return true
 }
 
-/** Build label/value series for Chart.js (max 12 bars). */
+/** Build label/value series for Chart.js. */
 export function buildNeighborhoodAgentChartSeries(
   table: GeoExplorerDataTablePayload,
+  opts?: { maxRows?: number },
 ): NeighborhoodAgentChartSeries | null {
   const pick = pickNeighborhoodAgentNumericColumn(table)
   if (!pick) return null
+  const limit = Math.min(Math.max(opts?.maxRows ?? MAX_AUTO_CHART_ROWS, 2), MAX_FORCED_CHART_ROWS)
 
   const labels: string[] = []
   const values: number[] = []
-  for (const row of table.rows.slice(0, MAX_AUTO_CHART_ROWS)) {
+  for (const row of table.rows.slice(0, limit)) {
     const n = asFiniteNumber(row.values[pick.valueKey])
     if (n == null) continue
     const lb = cellStr(row.values[pick.labelKey]).trim().slice(0, 36) || '—'

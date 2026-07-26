@@ -48,11 +48,12 @@ const CATALOG: CatalogEntry[] = [
     en: {
       label: 'Deeper AOI analysis',
       prompt:
-        'Analyze this AOI in more depth using live map layers, remote sensing, building density, and weather.',
+        'Analyze this AOI in more depth using the drawn AOI remote-sensing classes (NDVI / active index), AOI metrics, and weather — not loaded GIS layers from the Layers panel.',
     },
     ar: {
       label: 'تحليل أعمق للمنطقة',
-      prompt: 'حلّل منطقة الاهتمام بعمق باستخدام الطبقات الحية والاستشعار عن بعد وكثافة المباني والطقس.',
+      prompt:
+        'حلّل منطقة الاهتمام المرسومة بعمق باستخدام فئات الاستشعار عن بعد (NDVI / المؤشر النشط) ومقاييس الـ AOI والطقس — وليس طبقات GIS من لوحة Layers.',
     },
   },
   {
@@ -116,6 +117,30 @@ const CATALOG: CatalogEntry[] = [
     },
   },
   {
+    id: 'fu-buffer',
+    packId: 'spatial-buffer',
+    en: {
+      label: 'Buffer 500 m',
+      prompt: 'Create a 500 m buffer around the current AOI or selected farms layer.',
+    },
+    ar: {
+      label: 'حاجز 500 م',
+      prompt: 'أنشئ حاجزاً بمسافة 500 متر حول منطقة الاهتمام أو طبقة المزارع المحددة.',
+    },
+  },
+  {
+    id: 'fu-clip',
+    packId: 'spatial-clip',
+    en: {
+      label: 'Clip by AOI',
+      prompt: 'Clip the primary loaded vector layer using the current AOI.',
+    },
+    ar: {
+      label: 'قص بالمنطقة',
+      prompt: 'اقتص الطبقة المتجهة الرئيسية باستخدام منطقة الاهتمام الحالية.',
+    },
+  },
+  {
     id: 'fu-thematic',
     en: {
       label: 'Thematic map by field',
@@ -128,13 +153,16 @@ const CATALOG: CatalogEntry[] = [
   },
   {
     id: 'fu-compare',
+    packId: 'vegetation',
     en: {
-      label: 'Compare key groups',
-      prompt: 'Compare the main categories from your last breakdown in a short table and highlight the dominant share.',
+      label: 'Compare AOI classes',
+      prompt:
+        'Compare the main NDVI / AOI index classes from the last remote-sensing breakdown in a short table and highlight the dominant share.',
     },
     ar: {
-      label: 'قارن المجموعات الرئيسية',
-      prompt: 'قارن الفئات الرئيسية من آخر تفصيل في جدول مختصر وسلّط الضوء على الحصة الأكبر.',
+      label: 'قارن فئات المنطقة',
+      prompt:
+        'قارن الفئات الرئيسية لمؤشر NDVI / تحليل منطقة الاهتمام من آخر تفصيل استشعار عن بعد في جدول مختصر وسلّط الضوء على الحصة الأكبر.',
     },
   },
   {
@@ -179,6 +207,8 @@ function relevanceScore(userText: string, entry: CatalogEntry): number {
   if (/\b(population|%|share|سكان|نسبة|حصة)\b/i.test(q) && entry.id === 'fu-compare') score += 8
   if (/\b(aoi|analyze|تحليل|منطقة)\b/i.test(q) && entry.id === 'fu-aoi') score += 5
   if (/\b(neighborhood|محيط)\b/i.test(q) && entry.id === 'fu-neighborhood') score += 5
+  if (/\b(buffer|حاجز)\b/i.test(q) && entry.id === 'fu-buffer') score += 10
+  if (/\b(clip|قص)\b/i.test(q) && entry.id === 'fu-clip') score += 10
   return score
 }
 
@@ -213,7 +243,8 @@ export function buildNeighborhoodAgentFollowUps(
   const addPackFollowUps = (ids: string[]) => {
     for (let i = 0; i < ids.length; i++) {
       const entry = byId(ids[i]!)
-      if (entry.packId && excludePack.has(entry.packId)) continue
+      // Allow “compare AOI classes” even right after a vegetation pack turn.
+      if (entry.packId && excludePack.has(entry.packId) && entry.id !== 'fu-compare') continue
       if (ranked.some(r => r.chip.id === entry.id)) continue
       const chip = pickLocale(ar, entry)
       // Base priority: earlier in the pack list wins; user-question relevance boosts further.
@@ -223,7 +254,7 @@ export function buildNeighborhoodAgentFollowUps(
   }
 
   if (packId === 'vegetation') {
-    addPackFollowUps(['fu-weather', 'fu-neighborhood', 'fu-flood', 'fu-aoi'])
+    addPackFollowUps(['fu-compare', 'fu-weather', 'fu-neighborhood', 'fu-aoi'])
   } else if (packId === 'neighborhood') {
     addPackFollowUps(['fu-veg', 'fu-buildings', 'fu-weather', 'fu-thematic'])
   } else if (packId === 'weather') {
@@ -236,12 +267,21 @@ export function buildNeighborhoodAgentFollowUps(
     addPackFollowUps(['fu-veg', 'fu-buildings', 'fu-weather', 'fu-thematic'])
   } else if (packId === 'layer-summary') {
     addPackFollowUps(['fu-thematic', 'fu-aoi', 'fu-neighborhood', 'fu-veg'])
+  } else if (packId === 'spatial-buffer' || packId === 'spatial-intersect' || packId === 'spatial-clip') {
+    addPackFollowUps(['fu-clip', 'fu-buffer', 'fu-layers', 'fu-aoi'])
   } else if (toolNames.has('search_place') || toolNames.has('fly_to') || /\bflew to\b|تم الانتقال/i.test(assistant)) {
     addPackFollowUps(['fu-map-focus', 'fu-weather', 'fu-neighborhood', 'fu-aoi'])
+  } else if (
+    /\b(ndvi|ndwi|ndmi|active analysis|per-class|early watch|vegetation)\b/i.test(blob) ||
+    toolNames.has('read_rs_analysis') ||
+    toolNames.has('run_rs_index')
+  ) {
+    addPackFollowUps(['fu-compare', 'fu-veg', 'fu-weather', 'fu-aoi'])
   } else if (
     args.hasTableOrChartCue ||
     /\b(population|share|٪|%|nationalit|حصة|سكان|نسبة)/i.test(blob)
   ) {
+    // Generic chart/table cue without RS → still prefer AOI class compare over layer dump
     addPackFollowUps(['fu-compare', 'fu-thematic', 'fu-map-focus', 'fu-aoi'])
   } else if (/\b(ndvi|vegetation|نبات)/i.test(blob)) {
     addPackFollowUps(['fu-veg', 'fu-weather', 'fu-aoi'])

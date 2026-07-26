@@ -329,6 +329,10 @@ import { runGeoAiLayerAttributeQuery } from '../../lib/geoAiLayerAttributeQuery'
 import { resolveGeoAiPinFromUserTextAndReply } from '../../lib/geoAiResolveMapCoords';
 import { buildGeoAiFullWeatherSessionAppend, buildGeoAiLeanWeatherFactsForAgent } from '../../lib/geoAiWeatherContext';
 import {
+  geoExplorerTargetZoomForPinSource,
+  runGeoExplorerGeminiTurn,
+} from '../../lib/runGeoExplorerGeminiTurn';
+import {
   installSiGlobeWebglContextRecovery,
   siBrowserReportsMicrosoftEdge,
   siMapErrorSuggestsGlobeOrWebglFailure,
@@ -459,9 +463,12 @@ import {
 } from '../../lib/geoAiBasemapQuery';
 import {
   executeGeoAiMapCommands,
+  normalizeGeoAiToolboxPanelId,
   parseGeoAiMapCommands,
+  parseGeoAiRsIndexId,
   type GeoAiMapCommandHandlers,
 } from '../../lib/geoAiCommandExecutor';
+import { runGeoAiGisTool } from '../../lib/geoAiGisToolRunner';
 import {
   runGeoAiAgentTurn,
   type GeoAiAgentChatTurn,
@@ -5059,6 +5066,9 @@ export default function SatelliteIntelligence() {
   const geoAiPendingChipIdRef = useRef<string | undefined>(undefined);
   const geoAiLiveMapStateObjRef = useRef<GeoAiLiveMapState | null>(null);
   const geoAiMapCommandHandlersRef = useRef<GeoAiMapCommandHandlers>({});
+  const addGeoAiGisResultLayerRef = useRef<
+    (input: { name: string; geojson: GeoJSON.FeatureCollection; fit?: boolean }) => string
+  >(() => 'GIS result layer host is not ready.');
   const tryNeighborhoodAgentPlaceFlyRef = useRef<
     ((userText: string) => Promise<GeoExplorerMessage | null>) | null
   >(null);
@@ -5585,6 +5595,7 @@ export default function SatelliteIntelligence() {
         vectorLayers: opts.vectorLayers,
         mapHandlers: geoAiMapCommandHandlersRef.current,
         weatherFetcher,
+        addGeoJsonResultLayer: input => addGeoAiGisResultLayerRef.current(input),
         chipId,
         analystPackId: packId,
       });
@@ -6415,6 +6426,30 @@ export default function SatelliteIntelligence() {
       );
     }
   };
+
+  const addGeoAiGisResultLayer = useCallback(
+    (input: { name: string; geojson: GeoJSON.FeatureCollection; fit?: boolean }) => {
+      const featureCount = Array.isArray(input.geojson?.features) ? input.geojson.features.length : 0;
+      const layer = createSiVectorImportLayer({
+        name: input.name,
+        geojson: input.geojson,
+        source: 'api',
+        format: 'GeoJSON',
+        ephemeral: true,
+      });
+      registerImportedCustomLayer({
+        ...layer,
+        color: '#2dd4bf',
+        fillColor: '#14b8a6',
+        polygonFillAlpha: 0.28,
+        weight: 2,
+      } as CustomLayer);
+      if (input.fit !== false) focusGeoJsonOnMap(input.geojson);
+      return `Layer added: ${input.name} (${featureCount} feature${featureCount === 1 ? '' : 's'}).`;
+    },
+    [focusGeoJsonOnMap, registerImportedCustomLayer],
+  );
+  addGeoAiGisResultLayerRef.current = addGeoAiGisResultLayer;
 
   const handleAiDlDetectionExport = useCallback(
     (geojson: GeoJSON.FeatureCollection, name: string) => {
@@ -11026,8 +11061,13 @@ export default function SatelliteIntelligence() {
         ? parseNeighborhoodAgentPlaceIntent(trimmed)
         : null;
 
+    // Analyst packs (NDVI, buffer, …) must not be short-circuited as place search.
+    const pendingChip = geoAiPendingChipIdRef.current;
+    const analystPackHint = classifyGeoAiAnalystIntent(trimmed, pendingChip);
+    const resolvedPlaceIntent = analystPackHint ? null : placeIntent;
+
     const apiKey = geminiApiKey.trim();
-    if (!placeIntent && !apiKey) {
+    if (!resolvedPlaceIntent && !apiKey) {
       setGeoExplorerChatError(
         'Add a Gemini API key: System Settings â†’ API Tokens â†’ Gemini API (saved in this browser), or set VITE_GEMINI_API_KEY at build time. Never commit keys to Git.'
       );
@@ -11081,7 +11121,7 @@ export default function SatelliteIntelligence() {
       const historyWithUser = [...prev, userMsg];
       queueMicrotask(async () => {
         try {
-          if (placeIntent) {
+          if (resolvedPlaceIntent) {
             const placeMsg = await tryNeighborhoodAgentPlaceFlyRef.current?.(trimmed);
             if (placeMsg) {
               setGeoExplorerMessages(h => [...h, placeMsg]);
@@ -11387,6 +11427,7 @@ export default function SatelliteIntelligence() {
     downloadTextFile(
       'selected-features.geojson',
       JSON.stringify({ type: 'FeatureCollection', features }, null, 2),
+      'application/geo+json',
     );
   }, [customLayers, gisSelectionHits]);
 
@@ -12023,6 +12064,64 @@ export default function SatelliteIntelligence() {
     ],
   );
 
+  /**
+   * Edit a prior user question: drop that message and everything after it, then re-ask
+   * with the new text so the answer refreshes (Enter / Save & ask in NAC).
+   */
+  const saveEditedNeighborhoodAgentQuestion = useCallback(
+    (messageId: string, nextText: string) => {
+      const trimmed = nextText.trim();
+      if (!trimmed) return;
+
+      if (geoAiModelTab === 'gemini') {
+        saveEditedGeoExplorerGeminiQuestion(messageId, trimmed);
+        return;
+      }
+
+      if (geoAiModelTab === 'claude') {
+        if (geoAiInFlightRef.current) return;
+        const prev = geoAiChatMessagesRef.current;
+        const i = prev.findIndex(m => m.id === messageId);
+        if (i < 0) return;
+        const truncated = prev.slice(0, i);
+        geoAiChatMessagesRef.current = truncated;
+        setGeoAiChatMessages(truncated);
+        setGeoAiChatError('');
+        queueMicrotask(() => sendGeoAiChat(trimmed));
+        return;
+      }
+
+      if (geoAiModelTab === 'deepseek') {
+        if (geoDeepseekInFlightRef.current) return;
+        const prev = geoDeepseekChatMessagesRef.current;
+        const i = prev.findIndex(m => m.id === messageId);
+        if (i < 0) return;
+        const truncated = prev.slice(0, i);
+        geoDeepseekChatMessagesRef.current = truncated;
+        setGeoDeepseekChatMessages(truncated);
+        setGeoDeepseekChatError('');
+        queueMicrotask(() => sendGeoDeepseekChat(trimmed));
+        return;
+      }
+
+      if (geoOllamaInFlightRef.current) return;
+      const prev = geoOllamaChatMessagesRef.current;
+      const i = prev.findIndex(m => m.id === messageId);
+      if (i < 0) return;
+      const truncated = prev.slice(0, i);
+      geoOllamaChatMessagesRef.current = truncated;
+      setGeoOllamaChatMessages(truncated);
+      setGeoOllamaChatError('');
+      queueMicrotask(() => sendGeoOllamaChat(trimmed));
+    },
+    [
+      geoAiModelTab,
+      saveEditedGeoExplorerGeminiQuestion,
+      sendGeoAiChat,
+      sendGeoDeepseekChat,
+      sendGeoOllamaChat,
+    ],
+  );
 
   const onGeoExplorerAttachChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -18044,6 +18143,23 @@ export default function SatelliteIntelligence() {
       activeAnalysis,
       selectedFeature,
       basemapFeatures: geoAiBasemapFeatures,
+      toolbox: {
+        openSection: isLayerDropdownOpen ? expandedEnvSection : null,
+        imageryTimeSeriesOpen,
+        drawingActive: Boolean(rsDrawingModeActive),
+        hasAoi: Boolean(drawnGeometry),
+        availableTools: [
+          'remote-sensing (NDVI/NDWI/NDMI)',
+          'imagery-time-series',
+          'flood-monitoring (SAR)',
+          'well-site',
+          'hydro-watershed',
+          'aoi-edit',
+          'layers',
+          'tree-detections',
+          'agri-field-boundary',
+        ],
+      },
     };
     geoAiLiveMapStateObjRef.current = state;
     return buildGeoAiLiveMapStateBlock(state);
@@ -18063,6 +18179,10 @@ export default function SatelliteIntelligence() {
     geoAiClassAreas.error,
     geoAiInspectCard,
     geoAiBasemapFeatures,
+    isLayerDropdownOpen,
+    expandedEnvSection,
+    imageryTimeSeriesOpen,
+    rsDrawingModeActive,
   ]);
   const geoAiLiveMapStateBlockRef = useRef(geoAiLiveMapStateBlock);
   geoAiLiveMapStateBlockRef.current = geoAiLiveMapStateBlock;
@@ -18226,6 +18346,99 @@ export default function SatelliteIntelligence() {
           }
           return `Nearby on the basemap:\n${summarizeBasemapFeatures(features, 8)}`;
         },
+        openToolboxPanel: panelRaw => {
+          const indexHint = parseGeoAiRsIndexId(panelRaw)
+          if (indexHint) {
+            // "open ndvi" / panel alias → show index on map automatically
+            return (geoAiMapCommandHandlersRef.current.runRsIndex?.(indexHint) as string) || `Showing ${indexHint}…`
+          }
+          const panel = normalizeGeoAiToolboxPanelId(panelRaw) || panelRaw.trim().toLowerCase();
+          if (panel === 'imagery-time-series') {
+            setImageryTimeSeriesOpen(true);
+            return 'Opened Imagery Time Series — multi-layer timeline charts for the AOI.';
+          }
+          if (panel === 'aoi-edit') {
+            if (measureModeRef.current) clearMeasure();
+            if (gisSelectionActive) setGisSelectionActive(false);
+            handleRsDrawingModeChange(true);
+            applyMapDrawTool('polygon');
+            return 'Activated AOI drawing — draw a polygon on the map, then ask again for NDVI / flood / well analysis.';
+          }
+          const dockPanels = new Set([
+            'remote-sensing',
+            'eo-enrichment',
+            'flood-monitoring',
+            'well-site',
+            'well-suitability',
+            'hydro-watershed',
+            'layers',
+            'tree-detections',
+            'agri-field-boundary',
+            'crop-alerts',
+            'stress-zones',
+            'crop-classification',
+            'image-classification',
+            'sam-detection',
+            'ai-detection-gis',
+            'raster-georeference',
+            'source',
+          ]);
+          if (!dockPanels.has(panel)) {
+            return `Unknown toolbox panel "${panelRaw}". Try remote-sensing, imagery-time-series, flood-monitoring, well-site, or aoi-edit.`;
+          }
+          setExpandedEnvSection(panel as MapToolboxSectionId);
+          setIsLayerDropdownOpen(true);
+          const labels: Record<string, string> = {
+            'remote-sensing': 'Remote sensing (NDVI / NDWI / NDMI and WMS indices)',
+            'flood-monitoring': 'Flood Monitoring (SAR)',
+            'well-site': 'Well Site Recommendation (Hydro-AI)',
+            'hydro-watershed': 'Hydro watershed',
+            layers: 'Layers',
+            'tree-detections': 'Tree detections',
+            'agri-field-boundary': 'Agri field boundary',
+            'crop-alerts': 'Crop alerts',
+            'stress-zones': 'Stress zones',
+            'eo-enrichment': 'EO enrichment',
+          };
+          return `Opened ${labels[panel] || panel} — continue the analysis on the AOI from that panel.`;
+        },
+        runRsIndex: indexRaw => {
+          const index = parseGeoAiRsIndexId(indexRaw) || 'NDVI';
+          const hasDraw = !!drawnGeometryRef.current;
+          const hasLayerAoi = !!hasActiveLayerSourceAoiRef.current;
+          if (!hasDraw && !hasLayerAoi) {
+            if (measureModeRef.current) clearMeasure();
+            if (gisSelectionActive) setGisSelectionActive(false);
+            handleRsDrawingModeChange(true);
+            applyMapDrawTool('polygon');
+            // Keep the Remote Sensing toolbox closed — chat drives the map overlay only.
+            return `No AOI yet — draw a polygon on the map, then ask again to show ${index}.`;
+          }
+          setWmsLayer(index);
+          if (Object.prototype.hasOwnProperty.call(ENVIRONMENTAL_INDICES, index)) {
+            setSelectedIndex(index as EnvironmentalIndexId);
+          }
+          setIsWmsOverlayVisible(true);
+          setSentinelWmsSourcesHeld(true);
+          // Do not open the Satellite toolbox / Remote Sensing panel from chat.
+          void runRsAnalysisFromAssistant({
+            forcedIndex: index,
+            skipTimelineAndCharts: true,
+            keepCurrentSection: true,
+          });
+          return `Showing ${index} on the map for the current AOI (Remote Sensing overlay on).`;
+        },
+        gisOp: (tool, args) => {
+          void (async () => {
+            const r = await runGeoAiGisTool(tool, args, {
+              vectorLayers: satelliteCustomLayersToGeoAiLayers(customLayers),
+              liveMapState: geoAiLiveMapStateObjRef.current,
+              addGeoJsonResultLayer: input => addGeoAiGisResultLayerRef.current(input),
+            });
+            if (!r.ok) setGeoExplorerChatError(r.content);
+          })();
+          return `Running GIS ${tool}…`;
+        },
       };
       geoAiMapCommandHandlersRef.current = handlers;
       const commands = parseGeoAiMapCommands(reply);
@@ -18242,6 +18455,10 @@ export default function SatelliteIntelligence() {
       getMapProximity,
       handleSelectSearchResult,
       stageGeoAiInspectCard,
+      gisSelectionActive,
+      clearMeasure,
+      handleRsDrawingModeChange,
+      applyMapDrawTool,
     ],
   );
   const runGeoAiMapCommandsRef = useRef(runGeoAiMapCommandsFromReply);
@@ -21592,9 +21809,7 @@ export default function SatelliteIntelligence() {
             mapFocusFeatureKey={geoAiTableMapFocusKey}
             onTableQuerySelectApplied={onGeoAiQuerySelectApplied}
             onFocusMap={focusNeighborhoodAgentMap}
-            onSaveEditedUserMessage={
-              geoAiModelTab === 'gemini' ? saveEditedGeoExplorerGeminiQuestion : undefined
-            }
+            onSaveEditedUserMessage={saveEditedNeighborhoodAgentQuestion}
             onUseEditedInComposer={text => {
               if (geoAiModelTab === 'gemini') setGeoExplorerDraft(text);
               else if (geoAiModelTab === 'claude') setGeoAiDraft(text);

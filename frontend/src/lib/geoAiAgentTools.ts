@@ -9,6 +9,7 @@
 
 import {
   executeGeoAiMapCommands,
+  parseGeoAiRsIndexId,
   type GeoAiMapCommand,
   type GeoAiMapCommandHandlers,
   type GeoAiMapCommandResult,
@@ -21,6 +22,11 @@ import { runGeoAiStatsCommand, type GeoAiStatsResult } from './geoAiStatsEngine'
 import { runGeoAiLayerAttributeQuery } from './geoAiLayerAttributeQuery'
 import type { GeoAiMapLayer } from './geoExplorerLayerContext'
 import type { GeoExplorerDataTablePayload } from './geoExplorerGemini'
+import {
+  GEO_AI_GIS_TOOL_NAMES,
+  runGeoAiGisTool,
+  type GeoAiGisToolHost,
+} from './geoAiGisToolRunner'
 
 export const GEO_AI_AGENT_TOOL_NAMES = [
   'fly_to',
@@ -36,6 +42,9 @@ export const GEO_AI_AGENT_TOOL_NAMES = [
   'read_live_map_state',
   'read_rs_analysis',
   'get_weather_context',
+  'open_toolbox_panel',
+  'run_rs_index',
+  ...GEO_AI_GIS_TOOL_NAMES,
 ] as const
 
 export type GeoAiAgentToolName = (typeof GEO_AI_AGENT_TOOL_NAMES)[number]
@@ -62,6 +71,8 @@ export type GeoAiAgentToolHost = {
   vectorLayers: GeoAiMapLayer[]
   /** When set, `get_weather_context` can pull live OpenWeather / Open-Meteo blocks. */
   weatherFetcher?: GeoAiAgentWeatherFetcher
+  /** Add a geoprocessing result GeoJSON layer to the map. */
+  addGeoJsonResultLayer?: GeoAiGisToolHost['addGeoJsonResultLayer']
 }
 
 type JsonSchema = Record<string, unknown>
@@ -217,6 +228,204 @@ const TOOL_DEFS: ToolDef[] = [
         },
       },
       required: ['query'],
+    },
+  },
+  {
+    name: 'open_toolbox_panel',
+    description:
+      'Open a Satellite map-toolbox analysis panel. For NDVI/NDWI/NDMI/SAVI/EVI prefer run_rs_index (shows the index on the map automatically). Panels: remote-sensing, imagery-time-series, flood-monitoring, well-site, hydro-watershed, aoi-edit, layers, tree-detections, agri-field-boundary, crop-alerts, stress-zones.',
+    parameters: {
+      type: 'object',
+      properties: {
+        panel: {
+          type: 'string',
+          description:
+            'Panel id or alias: remote-sensing | imagery-time-series | flood-monitoring | well-site | hydro-watershed | aoi-edit | layers | ndvi | time-series | flood | draw | tree-detections | agri-field-boundary',
+        },
+      },
+      required: ['panel'],
+    },
+  },
+  {
+    name: 'run_rs_index',
+    description:
+      'Show a Sentinel remote-sensing index on the map for the current AOI (same as checking “Show NDVI on map”). Use for NDVI, NDWI, NDMI, SAVI, EVI, etc. Opens Remote Sensing and paints the WMS overlay automatically — do not only open the panel.',
+    parameters: {
+      type: 'object',
+      properties: {
+        index: {
+          type: 'string',
+          description: 'Index id: NDVI | NDWI | NDMI | SAVI | EVI | GNDVI | NBR | NDRE | BSI | MNDWI | LST',
+        },
+      },
+      required: ['index'],
+    },
+  },
+  {
+    name: 'gis_buffer',
+    description:
+      'Create a buffer polygon layer around a loaded vector layer or the current AOI (e.g. farms by 500 m, wells by 1 km). Adds a new result layer to the map.',
+    parameters: {
+      type: 'object',
+      properties: {
+        layer: { type: 'string', description: 'Input layer name, or "AOI" / "this"' },
+        distance: { type: 'number', description: 'Buffer distance' },
+        unit: { type: 'string', description: 'meters | kilometers | miles | feet' },
+        rings: { type: 'array', items: { type: 'number' }, description: 'Optional multi-ring distances' },
+        output: { type: 'string', description: 'Output layer name' },
+      },
+      required: ['distance'],
+    },
+  },
+  {
+    name: 'gis_intersect',
+    description: 'Intersect two polygon/line layers and add the overlap as a new map layer.',
+    parameters: {
+      type: 'object',
+      properties: {
+        layerA: { type: 'string' },
+        layerB: { type: 'string' },
+        output: { type: 'string' },
+      },
+      required: ['layerA', 'layerB'],
+    },
+  },
+  {
+    name: 'gis_clip',
+    description: 'Clip a vector layer by AOI or another polygon layer; adds a new result layer.',
+    parameters: {
+      type: 'object',
+      properties: {
+        layer: { type: 'string', description: 'Target layer to clip' },
+        clipLayer: { type: 'string', description: 'Clip mask (default AOI)' },
+        output: { type: 'string' },
+      },
+      required: ['layer'],
+    },
+  },
+  {
+    name: 'gis_erase',
+    description: 'Erase (difference) target features using an eraser/mask layer; adds a new result layer.',
+    parameters: {
+      type: 'object',
+      properties: {
+        layer: { type: 'string' },
+        eraser: { type: 'string' },
+        output: { type: 'string' },
+      },
+      required: ['layer', 'eraser'],
+    },
+  },
+  {
+    name: 'gis_union',
+    description: 'Union / dissolve all polygons in a layer into one geometry; adds a new result layer.',
+    parameters: {
+      type: 'object',
+      properties: {
+        layer: { type: 'string' },
+        output: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'gis_merge',
+    description: 'Merge selected / layer polygons into one feature; adds a new result layer.',
+    parameters: {
+      type: 'object',
+      properties: {
+        layer: { type: 'string' },
+        output: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'gis_dissolve',
+    description: 'Dissolve polygons by an attribute field (e.g. Crop Type); adds a new result layer.',
+    parameters: {
+      type: 'object',
+      properties: {
+        layer: { type: 'string' },
+        field: { type: 'string', description: 'Attribute field to dissolve by' },
+        output: { type: 'string' },
+      },
+      required: ['field'],
+    },
+  },
+  {
+    name: 'gis_convex_hull',
+    description: 'Build a convex hull around a layer; adds a new result layer.',
+    parameters: {
+      type: 'object',
+      properties: {
+        layer: { type: 'string' },
+        output: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'gis_voronoi',
+    description: 'Generate Voronoi / Thiessen polygons from point features (e.g. wells); adds a new result layer.',
+    parameters: {
+      type: 'object',
+      properties: {
+        layer: { type: 'string' },
+        output: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'gis_area',
+    description: 'Calculate area (ha / m²) for every feature in a layer or AOI; returns a compact table (no new layer required).',
+    parameters: {
+      type: 'object',
+      properties: {
+        layer: { type: 'string' },
+        idField: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'gis_select_by_location',
+    description:
+      'Select features of a target layer that intersect / are within / within_distance of a mask layer (e.g. fields within 2 km of a river). Adds a new result layer.',
+    parameters: {
+      type: 'object',
+      properties: {
+        layer: { type: 'string', description: 'Target features' },
+        mask: { type: 'string', description: 'Mask / near layer' },
+        distance: { type: 'number' },
+        unit: { type: 'string' },
+        relationship: { type: 'string', description: 'intersects | within | within_distance' },
+        output: { type: 'string' },
+      },
+      required: ['layer', 'mask'],
+    },
+  },
+  {
+    name: 'gis_select_by_attribute',
+    description: 'Select features where an attribute matches a value; adds a new result layer.',
+    parameters: {
+      type: 'object',
+      properties: {
+        layer: { type: 'string' },
+        field: { type: 'string' },
+        value: {},
+        operator: { type: 'string', description: '= | != | contains | > | <' },
+        output: { type: 'string' },
+      },
+      required: ['layer', 'field'],
+    },
+  },
+  {
+    name: 'export_layer',
+    description: 'Export a loaded vector layer (or AOI) as GeoJSON, Shapefile, KMZ, or Excel.',
+    parameters: {
+      type: 'object',
+      properties: {
+        layer: { type: 'string' },
+        format: { type: 'string', description: 'geojson | shapefile | kmz | excel' },
+      },
+      required: ['layer', 'format'],
     },
   },
 ]
@@ -478,6 +687,45 @@ export async function executeGeoAiAgentTool(
         }
         return { name: tool, ok: true, content: trimmed }
       }
+      case 'open_toolbox_panel': {
+        const panel = str(a.panel ?? a.tool ?? a.section ?? a.id)
+        if (!panel) return { name: tool, ok: false, content: 'open_toolbox_panel requires a panel id.' }
+        // NDVI / NDWI / … aliases → show index on map, not just open the dock.
+        const indexHint = parseGeoAiRsIndexId(panel) || parseGeoAiRsIndexId(str(a.index))
+        if (indexHint) {
+          return runMapOp(host, { op: 'runRsIndex', index: indexHint })
+        }
+        return runMapOp(host, { op: 'openToolboxPanel', panel })
+      }
+      case 'run_rs_index': {
+        const index = parseGeoAiRsIndexId(str(a.index ?? a.layer ?? a.name)) || 'NDVI'
+        return runMapOp(host, { op: 'runRsIndex', index })
+      }
+      case 'gis_buffer':
+      case 'gis_intersect':
+      case 'gis_clip':
+      case 'gis_erase':
+      case 'gis_union':
+      case 'gis_merge':
+      case 'gis_dissolve':
+      case 'gis_convex_hull':
+      case 'gis_voronoi':
+      case 'gis_area':
+      case 'gis_select_by_location':
+      case 'gis_select_by_attribute':
+      case 'export_layer': {
+        const gis = await runGeoAiGisTool(tool, a, {
+          vectorLayers: host.vectorLayers ?? [],
+          liveMapState: host.liveMapState,
+          addGeoJsonResultLayer: host.addGeoJsonResultLayer,
+        })
+        return {
+          name: tool,
+          ok: gis.ok,
+          content: gis.content,
+          ...(gis.table ? { table: gis.table } : {}),
+        }
+      }
       default:
         return { name: tool, ok: false, content: `Unknown tool: ${tool}` }
     }
@@ -509,7 +757,7 @@ export function collectMapActionSummaries(results: GeoAiAgentToolResult[]): stri
       for (const mr of r.mapResults) {
         if (mr.message) out.push(mr.message)
       }
-    } else if (r.ok && (r.name === 'fly_to' || r.name.startsWith('zoom') || r.name.startsWith('set_') || r.name === 'switch_basemap' || r.name === 'search_place' || r.name === 'identify_basemap')) {
+    } else if (r.ok && (r.name === 'fly_to' || r.name.startsWith('zoom') || r.name.startsWith('set_') || r.name === 'switch_basemap' || r.name === 'search_place' || r.name === 'identify_basemap' || r.name.startsWith('gis_') || r.name === 'export_layer' || r.name === 'open_toolbox_panel' || r.name === 'run_rs_index')) {
       out.push(r.content)
     }
   }

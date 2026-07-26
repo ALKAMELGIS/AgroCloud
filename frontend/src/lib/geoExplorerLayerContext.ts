@@ -985,8 +985,8 @@ export function isGisDataScopedQuestion(userText: string, layers: GeoAiMapLayer[
   if (hasVectorData && vizVerb && textContainsLikelyFeatureOrAssetId(t)) return true
 
   const KW =
-    /\b(layers?|layer|field|fields|attribute|attributes|properties|features?|feature|polygon|polygons|parcel|parcels|plot|plots|geojson|shapefile|kml|kmz|how\s+many|how\s+much|count\b|counts|average|mean|median|min|max|sum|total|distribution|statistics|stats|percentage|proportion|tabular|records?|rows?|population|pop\b|inhabitants)\b/i
-  const AR = /طبقة|طبقات|حقول|حقل|سمات|خصائص|مضلع|عناصر|عدد|إحصاء|تحليل|إحصائي|البيانات\s+في|على\s+الخريطة|في\s+الخريطة|سكان|مساحة/i
+    /\b(layers?|layer|field|fields|attribute|attributes|properties|features?|feature|polygon|polygons|parcel|parcels|plot|plots|geojson|shapefile|kml|kmz|how\s+many|how\s+much|count\b|counts|average|mean|median|min|max|sum|total|distribution|statistics|stats|percentage|proportion|tabular|records?|rows?)\b/i
+  const AR = /طبقة|طبقات|حقول|حقل|سمات|خصائص|مضلع|عناصر|عدد|إحصاء|تحليل|إحصائي|البيانات\s+في|على\s+الخريطة|في\s+الخريطة|مساحة/i
   if (KW.test(t) || AR.test(t)) return true
   const hint = extractGeoExplorerLayerHint(t, layers)
   if (!hint) return false
@@ -1006,12 +1006,19 @@ export function allowsGeocodeWhenNoStrongLayerHit(userText: string, layers: GeoA
   const s = userText.toLowerCase()
   if (/\b(weather|forecast|temperature|humidity|precipitation|rain|snow|wind(\s+speed)?)\b/.test(s)) return true
   if (/\b(directions?|navigate|routing|route\s+to|route\s+from|drive\s+to|walking\s+to)\b/.test(s)) return true
-  // Population / attributes on loaded GIS layers must NOT fall back to world geocode.
+  // Population / attributes on loaded GIS layers must NOT fall back to world geocode —
+  // but general “population in Dubai 2020” style asks SHOULD allow AI/web geocode context.
   const hasVector = layers.some(l => {
     const n = (l.geojson?.features?.length ?? 0) + (l.data?.features?.length ?? 0)
     return n > 0
   })
-  if (hasVector && /\b(population|pop\b|attribute|field|on\s+it|this\s+layer|layer)\b/.test(s)) return false
+  if (
+    hasVector &&
+    /\b(on\s+it|this\s+layer|loaded\s+layer|attribute|field|feature\s+code)\b/.test(s) &&
+    /\b(population|pop\b|attribute|field)\b/.test(s)
+  ) {
+    return false
+  }
   if (/\b(capital of|time\s*zone|timezone|utc\s*offset)\b/.test(s)) return true
   if (/^(where\s+is|where's|what\s+country|what\s+city)\b/i.test(s) && !extractGeoExplorerLayerHint(userText, layers))
     return true

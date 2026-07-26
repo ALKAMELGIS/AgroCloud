@@ -114,16 +114,28 @@ Current (Dubai): clear sky — temp 34.7°C, feels 41.7°C, humidity 59%, pressu
 Next intervals (3 h steps, first rows):
   - 2026-07-26 12:00:00: few clouds, temp 34.6°C, feels 41.5°C, precip prob 10%
   - 2026-07-26 15:00:00: broken clouds, temp 33.1°C, feels 39.2°C, precip prob 20%
-  - 2026-07-26 18:00:00: light rain, temp 32.2°C, feels 37.8°C, precip prob 40%`
+  - 2026-07-26 18:00:00: light rain, temp 32.2°C, feels 37.8°C, precip prob 40%
+
+### MONTH OUTLOOK
+Daily outlook:
+  - 2026-07-27: max 38.0°C, min 28.0°C, precip 0.0 mm, sky clear
+  - 2026-07-28: max 37.2°C, min 27.5°C, precip 1.2 mm, sky rain
+Weekly aggregates (month window):
+  - W1: avg max 37.5°C, avg min 27.8°C, precip 1.2 mm
+  - W2: avg max 36.1°C, avg min 26.9°C, precip 4.0 mm`
 
     const lift = liftWeatherNarrativeFromText(facts)
     expect(lift.location).toMatch(/Dubai/)
+    expect(lift.climateLine).toMatch(/Dubai|hot|clear/i)
     expect(lift.currentTable?.rows.length).toBeGreaterThanOrEqual(4)
     expect(lift.forecastTable?.rows.length).toBe(3)
+    expect(lift.monthOutlookTable?.rows.length).toBe(2)
+    expect(lift.weekOutlookTable?.rows.length).toBe(2)
 
     const reply = buildFastWeatherUserReplyFromFacts(facts)
     expect(reply).toMatch(/### Now/)
     expect(reply).toMatch(/### Forecast/)
+    expect(reply).toMatch(/### Month outlook/)
     expect(reply).toMatch(/34\.7/)
     expect(reply).not.toMatch(/OPENWEATHER FACTS/i)
   })

@@ -69,6 +69,17 @@ export type GeoAiSelectedFeatureState = {
   attributes?: Array<{ label: string; value: string }>
 }
 
+/** Satellite map toolbox status so the agent can guide AOI / RS / hydro workflows. */
+export type GeoAiToolboxState = {
+  /** Currently expanded dock section id, if any. */
+  openSection?: string | null
+  imageryTimeSeriesOpen?: boolean
+  drawingActive?: boolean
+  hasAoi?: boolean
+  /** Compact hints for available analysis tools. */
+  availableTools?: string[]
+}
+
 export type GeoAiLiveMapState = {
   camera?: GeoAiCameraState | null
   basemapLabel?: string | null
@@ -78,6 +89,7 @@ export type GeoAiLiveMapState = {
   selectedFeature?: GeoAiSelectedFeatureState | null
   /** Named places / POIs read live from the basemap near the current view. */
   basemapFeatures?: GeoAiBasemapFeature[]
+  toolbox?: GeoAiToolboxState | null
 }
 
 const EARTH_RADIUS_M = 6378137
@@ -253,6 +265,19 @@ export function buildGeoAiLiveMapStateBlock(state: GeoAiLiveMapState | null | un
     )
   } else {
     lines.push('- AOI: none drawn (no analysis boundary yet)')
+  }
+
+  const tb = state.toolbox
+  if (tb) {
+    const bits: string[] = []
+    bits.push(tb.hasAoi ? 'AOI drawn' : 'no AOI')
+    if (tb.drawingActive) bits.push('drawing active')
+    if (tb.imageryTimeSeriesOpen) bits.push('Imagery Time Series open')
+    if (tb.openSection?.trim()) bits.push(`dock=${tb.openSection.trim()}`)
+    lines.push(`- Toolbox: ${bits.join(' · ')}`)
+    if (tb.availableTools?.length) {
+      lines.push(`  Available analysis tools: ${tb.availableTools.slice(0, 12).join(', ')}`)
+    }
   }
 
   const a = state.activeAnalysis

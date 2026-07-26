@@ -17,6 +17,12 @@ const THEMATIC_MAP_INTENT_RE =
   /\b(thematic|themtic|choropleth|symbology|classify|create|generate|build|style|heatmap|legend)\b/i
 
 /**
+ * Remote-sensing / AOI toolbox / GIS analysis — never geocode (“Show NDVI on the map…”).
+ */
+const MAP_ANALYSIS_INTENT_RE =
+  /\b(ndvi|ndwi|ndmi|savi|evi|gndvi|nbr|ndre|bsi|mndwi|lst|ndsi|\baoi\b|remote\s*sensing|vegetation|sentinel|wms|flood|inundat|watershed|well[\s-]?site|hydro|crop\s+alert|stress\s+zone|tree\s+detect|field\s+boundar|buffer|intersect|clip|dissolve|voronoi|geoprocess|run\s+(?:the\s+)?(?:index|analysis)|show\s+(?:the\s+)?(?:index|overlay))\b/i
+
+/**
  * Stats / attribute / demographic questions — never geocode the whole sentence as a place.
  * Includes common typos (Popualtions → populati…).
  */
@@ -25,6 +31,82 @@ const LAYER_DATA_INTENT_RE =
 
 const QUESTION_LIKE_RE =
   /\b(number\s+of|how\s+many|how\s+much|what\s+is|what'?s|tell\s+me|give\s+me|count|total|average|sum)\b/i
+
+/** True when the message asks for RS / toolbox / AOI analysis, not fly-to-place. */
+export function isNeighborhoodAgentMapAnalysisIntent(userMessage: string): boolean {
+  const raw = userMessage.trim()
+  if (!raw) return false
+  if (MAP_ANALYSIS_INTENT_RE.test(raw)) return true
+  if (/(مؤشر|نباتي|استشعار|تحليل|منطقة\s+الاهتمام|فيضان|مستجمع)/.test(raw)) return true
+  return false
+}
+
+/**
+ * User explicitly wants an answer from loaded map/layer data
+ * (not a general web / AI knowledge question).
+ */
+export function isExplicitLoadedLayerAsk(userMessage: string): boolean {
+  const t = userMessage.trim()
+  if (!t) return false
+  if (
+    /\b(this\s+layer|on\s+(this\s+)?layer|loaded\s+layers?|on\s+it|from\s+(the\s+)?(?:loaded\s+)?layers?|using\s+(the\s+)?layers?|attribute\s+table|feature\s+code|gis\s+layer|in\s+the\s+layer|layer\s+field|طبقة|على\s+الطبقة|من\s+الطبقة|في\s+الطبقة)\b/i.test(
+      t,
+    )
+  ) {
+    return true
+  }
+  if (
+    /\b(how\s+many|how\s+much|number\s+of|sum|total|average|count|group\s*by|filter)\b/i.test(t) &&
+    /\b(on\s+it|this\s+layer|layers?|attribute|field|feature|records?|parcels?|polygons?)\b/i.test(t)
+  ) {
+    return true
+  }
+  if (/\b(attribute|attributes|field\s+value|properties)\b/i.test(t) && /\b(layer|feature|on\s+it)\b/i.test(t)) {
+    return true
+  }
+  // Farm / parcel style codes with an attribute ask
+  if (/\b[A-Z]{1,5}-?\d{2,8}\b/.test(t) && /\b(attribute|population|what|show|field|code)\b/i.test(t)) {
+    return true
+  }
+  return false
+}
+
+/**
+ * Demographic / population asks that should be answered by AI or open web sources
+ * unless the user explicitly scoped the question to a loaded layer.
+ */
+export function prefersAiOrWebDataAnswer(userMessage: string): boolean {
+  const t = userMessage.trim()
+  if (!t) return false
+  if (isExplicitLoadedLayerAsk(t)) return false
+
+  const isPop = /\b(pop\w*|سكان|inhabitants|عدد\s*السكان)\b/i.test(t)
+  if (!isPop) {
+    // “number of … in Dubai” without layer cues still → AI/web
+    if (
+      /\b(number\s+of|how\s+many)\b/i.test(t) &&
+      /\b(in|of|for)\s+[A-Za-z\u0600-\u06FF]/i.test(t) &&
+      !/\b(layer|feature|field|attribute|on\s+it|parcel|polygon)\b/i.test(t)
+    ) {
+      return true
+    }
+    return false
+  }
+
+  // Census year → world knowledge (e.g. "population in dubai 2020")
+  if (/\b(19|20)\d{2}\b/.test(t)) return true
+  if (/\b(world|country|city|emirate|nation|census|wikipedia|uae|emirates)\b/i.test(t)) return true
+  // "population in/of <place>" without layer cues
+  if (/\bpop\w*\s+(in|of|for)\b/i.test(t) || /\b(سكان)\s+(في|ل|ب)\b/.test(t)) return true
+  if (
+    isPop &&
+    /\b(in|of|for)\s+[A-Za-z\u0600-\u06FF][\w'.-]{1,40}\b/i.test(t) &&
+    !/\b(layer|feature|field|attribute|on\s+it|parcel|polygon)\b/i.test(t)
+  ) {
+    return true
+  }
+  return false
+}
 
 /** True when the message is a data/stats question, not “fly to place”. */
 export function isNeighborhoodAgentDataQuestion(userMessage: string): boolean {
@@ -44,8 +126,9 @@ export function parseNeighborhoodAgentPlaceIntent(userMessage: string): Neighbor
   const raw = userMessage.trim()
   if (!raw || raw.length > 200) return null
 
-  // Thematic / analysis / demographic requests must not geocode (before navigate + bare-name).
+  // Thematic / RS / AOI / demographic requests must not geocode (before navigate + bare-name).
   if (THEMATIC_MAP_INTENT_RE.test(raw)) return null
+  if (isNeighborhoodAgentMapAnalysisIntent(raw)) return null
   if (isNeighborhoodAgentDataQuestion(raw)) return null
 
   if (PLACE_INTENT_RE.test(raw)) {
@@ -55,8 +138,8 @@ export function parseNeighborhoodAgentPlaceIntent(userMessage: string): Neighbor
       .replace(/\s+(?:on\s+(?:the\s+)?map|in\s+(?:the\s+)?map|على\s+الخريطة|في\s+الخريطة)\s*$/i, '')
       .replace(/[?.!]+$/g, '')
       .trim()
-    // Still reject if the remainder is a stats question
-    if (isNeighborhoodAgentDataQuestion(query)) return null
+    // Still reject if the remainder is analysis / stats (e.g. “Show NDVI…”)
+    if (isNeighborhoodAgentMapAnalysisIntent(query) || isNeighborhoodAgentDataQuestion(query)) return null
     if (query.length >= 2) return { query }
     return null
   }
@@ -143,6 +226,15 @@ export function sanitizeNeighborhoodAgentReplyText(raw: string): string {
     return 'I can help with map context in AgroCloud — ask about your AOI, layers, or surroundings.'
   }
 
+  // Never truncate weather markdown — the UI lifts it into charts/tables.
+  if (
+    /\|\s*Metric\s*\|\s*Value\s*\|/i.test(text) ||
+    /###\s*(Now|Forecast|Month outlook)\b/i.test(text) ||
+    (/temperature|humidity|openweather|°\s*C/i.test(text) && /\|\s*When\s*\|/i.test(text))
+  ) {
+    return text
+  }
+
   const maxChars = 1200
   if (text.length > maxChars) {
     return `${text.slice(0, maxChars).trimEnd()}…`
@@ -172,31 +264,37 @@ Nationality share
 - Do NOT dump long bullet lists of the same numbers when a table fits. Still never invent unsupported precision; cite the source briefly in prose.
 
 ### WEATHER / NUMERIC ANSWERS — VISUAL FIRST (mandatory)
-- Do **not** write long narrative weather essays. Keep prose ≤2 short sentences (place + one highlight).
-- ALWAYS emit compact markdown pipe tables; the app adds weather icons + pie / bar / timeline charts beside the tables:
-  1) **Now** metrics table: Metric | Value (Temp °C, Feels °C, Humidity %, Pressure hPa, Wind m/s).
-  2) **Forecast** table when forecast points exist: When | Sky | Temp °C | Feels °C (≤6 rows).
-- Example:
-Vračar · Clear sky
-Now
-| Metric | Value |
-| --- | ---: |
-| Temp °C | 27.7 |
-| Feels °C | 28.0 |
-| Humidity % | 48 |
-| Pressure hPa | 1011 |
-| Wind m/s | 3.13 |
-Forecast °C
-| When | Sky | Temp °C |
-| --- | --- | ---: |
-| 07-26 12:00 | Few clouds | 29.4 |
-| 07-26 15:00 | Scattered clouds | 31.8 |
+- Lead with **one** climate interpretation sentence (current conditions at the place). No long weather essays.
+- ALWAYS emit compact markdown pipe tables; the app renders icons + colored pie / bar / line charts + tables:
+  1) **Now** metrics: Metric | Value (Temp °C, Feels °C, Humidity %, Pressure hPa, Wind m/s).
+  2) **Forecast** (short): When | Sky | Temp °C | Feels °C (≤8 rows).
+  3) **Month outlook** when daily rows exist: Day | Sky | Max °C | Min °C (up to ~16 days) + optional Weekly outlook.
+- Example lead: "Dubai: hot clear sky conditions dominate the current climate picture with high humidity."
 - Never mention OPENWEATHER FACTS / Evidence / tool names in user-facing prose. No Summary/Evidence headings.
 - Same visual-first rule for any numeric analysis (counts, areas, indices): short lead + table (chart follows).
 
-### LOADED LAYERS — PROFESSIONAL DATA ANSWERS (mandatory when layers exist)
-- Treat every loaded GIS / vector layer as authoritative tabular geography. Answer attribute questions (population, area, name, codes, counts, filters) from layer data / tools — NEVER invent values and NEVER geocode a world city as a substitute.
-- Prefer tools: \`query_layer_attributes\` / \`run_vector_stats\` / live map state. On a feature hit: fly_to or highlight the feature, then short prose (≤2 sentences) + a compact Field|Value markdown table of key attributes.
+### LOADED LAYERS — WHEN (AND ONLY WHEN) THE USER ASKS FOR LAYER DATA
+- Default: answer general knowledge / demographic / “population of city + year” questions from AI or open web sources. Cite short **References**. Do **not** invent GIS layer counts as a substitute.
+- Use loaded GIS / vector layers **only** when the user explicitly asks about the map layer (e.g. “on this layer”, “on it”, “from the layer”, attribute/field on a feature code, or names a loaded layer). Then tools \`query_layer_attributes\` / \`run_vector_stats\` are authoritative — never invent values.
+- On a feature hit: fly_to or highlight, then short prose (≤2 sentences) + a compact Field|Value markdown table.
 - For "how many / sum / average / population on the layer": aggregate with run_vector_stats and sync map selection when filters match.
-- If the user says "on it" / "this layer", use the focused or only visible vector layer.
-- Map interaction is required whenever a concrete feature or filtered set is answered: highlight / zoom / Focus map — not prose alone.`
+- Map interaction is required whenever a concrete feature or filtered set is answered: highlight / zoom / Focus map — not prose alone.
+
+### SATELLITE TOOLBOX — AOI ANALYSIS (Neighborhood Agent)
+- After the user draws an AOI (or when LIVE MAP STATE shows AOI metrics), you can help them analyze the area with map-toolbox tools — do not invent Sentinel/SAR/hydro numbers that are not in LIVE MAP STATE.
+- Vegetation / NDVI / NDWI / NDMI / SAVI / EVI: call \`run_rs_index\` (or MAP_ACTION \`runRsIndex\`) so the index paints on the map automatically — same as “Show NDVI on map”. Do **not** only open the Remote Sensing panel.
+- Other panels with MAP_ACTION \`openToolboxPanel\` / tool \`open_toolbox_panel\`:
+  - Multi-date charts / timeline → \`imagery-time-series\`
+  - Flood / SAR inundation → \`flood-monitoring\`
+  - Well / drilling sites → \`well-site\`
+  - Watershed / basin → \`hydro-watershed\`
+  - Draw or edit AOI → \`aoi-edit\`
+- If Active analysis already has per-class areas, answer as a GIS analyst from those measured numbers (short prose + table).
+- If no AOI yet and analysis is requested: open \`aoi-edit\` and tell the user to draw the polygon, then re-ask.
+
+### SPATIAL ANALYSIS / GEOPROCESSING (Neighborhood Agent)
+- Prefer native tools: \`gis_buffer\`, \`gis_intersect\`, \`gis_clip\`, \`gis_erase\`, \`gis_union\`, \`gis_merge\`, \`gis_dissolve\`, \`gis_convex_hull\`, \`gis_voronoi\`, \`gis_area\`, \`gis_select_by_location\`, \`gis_select_by_attribute\`, \`export_layer\`.
+- Examples: "Buffer farms by 500 m", "Intersect roads with farms", "Clip with AOI", "Dissolve by Crop Type", "Voronoi from wells", "Export as shapefile".
+- "This" / current AOI → omit layer or pass \`AOI\`. Always create a **new** result layer; confirm "Layer added: …".
+- Chain tools when asked (buffer → intersect → area → export).
+- Vegetation indices: \`run_rs_index\`. Flood / trees / crop classification UI: \`open_toolbox_panel\` (flood-monitoring, tree-detections, agri-field-boundary).`

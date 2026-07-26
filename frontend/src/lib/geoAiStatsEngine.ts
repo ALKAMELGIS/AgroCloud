@@ -4,6 +4,7 @@ import { extractGeoExplorerLayerHint, geoAiFeatureCentroid, normalizeLayerName }
 import { computeStableGisFeatureKey } from './gisFeatureStableKey'
 import { featureIntersectsMask, featureWithinMask } from './geoAiGeoJsonSpatial'
 import { evalWhereExpr, extractWhereFromQuery, hasSqlWhereIntent } from './geoAiSqlWhere'
+import { isAoiRsBreakdownFollowUpQuestion, isDrawnAoiAnalysisQuestion } from './neighborhoodAgentRsViz'
 
 type GeoFeature = { id?: unknown; properties?: Record<string, unknown>; geometry?: { type?: string; coordinates?: unknown } }
 
@@ -445,6 +446,11 @@ function queryFeaturesTable(
 export function runGeoAiStatsCommand(query: string, layers: GeoAiMapLayer[]): GeoAiStatsResult | null {
   const q = query.trim()
   if (!q) return null
+
+  // AOI RS class compare follow-ups → vegetation / read_rs_analysis, not layer dumps.
+  if (isAoiRsBreakdownFollowUpQuestion(q)) return null
+  // Drawn-AOI deeper analysis → analyze-aoi pack, not Layers panel vector dumps.
+  if (isDrawnAoiAnalysisQuestion(q)) return null
 
   // World place search ("show me Dubai", "اعرض دبي على الخريطة"). These must fly
   // the map to the geocoded place — NOT be answered with a layer-stats table.

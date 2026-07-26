@@ -24,6 +24,7 @@ import type { LayerData, SymbologyClassMethod, SymbologyColorRamp, SymbologyConf
 import { FieldVisibilityControl } from './components/FieldVisibilityControl'
 import { GeoExplorerGeminiInputRow } from './components/GeoExplorerGeminiInputRow'
 import { MapPopup } from './components/MapPopup'
+import { SiCopyTextButton } from './components/SiCopyTextButton'
 import { DrawToolsController } from './components/DrawTools'
 import { BasemapGallery, BasemapLayer, type BasemapType } from './components/BasemapGallery'
 import {
@@ -848,7 +849,7 @@ export default function GisMap() {
   const [layerName, setLayerName] = useState('')
   const [dbPlatform, setDbPlatform] = useState<(typeof DB_PLATFORM_OPTIONS)[number]>('SQL Server')
   const [dbInstance, setDbInstance] = useState('')
-  const [dbAuthType, setDbAuthType] = useState<DatabaseAuthType>('database')
+  const [dbAuthType, setDbAuthType] = useState<'database' | 'operatingSystem'>('database')
   const [dbUser, setDbUser] = useState('')
   const [dbPassword, setDbPassword] = useState('')
   const [dbSaveCredentials, setDbSaveCredentials] = useState(true)
@@ -4590,6 +4591,7 @@ export default function GisMap() {
         )
       }
       geojson = normalizedUrl
+      const stem = file.name.replace(/\.[^.]+$/, '').trim()
       const name = layerName.trim() || stem || 'Layer'
       const hostedRow = publishVectorGeoJsonAsHostedFeatureLayer({
         title: name,

@@ -8,6 +8,15 @@ import type { GeoAiAgentToolResult } from '../../../../lib/geoAiAgentTools'
 import type { GeoAiAgentTurnResult } from '../../../../lib/geoAiAgentTurn'
 import type { GeoExplorerMessage, GeoExplorerPart } from '../../../../lib/geoExplorerGemini'
 import { sanitizeNeighborhoodAgentReplyText } from '../../../../lib/neighborhoodAgentPlaceIntent'
+import {
+  formatRsLiftAsMarkdown,
+  liftRsAnalysisFromText,
+} from '../../../../lib/neighborhoodAgentRsViz'
+import {
+  formatWeatherLiftAsMarkdown,
+  liftWeatherFromMarkdownReply,
+  liftWeatherNarrativeFromText,
+} from '../../../../lib/neighborhoodAgentWeatherViz'
 
 export type NeighborhoodAgentToolChip = {
   /** Tool registry name (e.g. run_vector_stats). */
@@ -40,6 +49,8 @@ const TOOL_LABELS: Record<string, string> = {
   read_live_map_state: 'Live map',
   read_rs_analysis: 'RS analysis',
   get_weather_context: 'Weather',
+  open_toolbox_panel: 'Toolbox',
+  run_rs_index: 'Show RS index',
 }
 
 function previewFromContent(content: string, max = 160): string {
@@ -101,6 +112,46 @@ export function geoAiPackResultToExplorerMessage(
   turn: GeoAiAgentTurnResult,
   id: string,
 ): GeoExplorerMessage {
+  // Keep weather markdown intact so the transcript can lift icons/charts/tables.
+  // Aggressive sanitize (char cap / HTML strip) was collapsing replies into raw text blobs.
+  const weatherLift =
+    liftWeatherFromMarkdownReply(turn.replyText) ||
+    (() => {
+      const w = liftWeatherNarrativeFromText(turn.replyText)
+      return w.currentTable || w.forecastTable || w.monthOutlookTable ? w : null
+    })()
+
+  if (weatherLift) {
+    const parts: GeoExplorerPart[] = [
+      {
+        type: 'text',
+        // Persist structured markdown the UI re-lifts into NeighborhoodAgentWeatherCard.
+        text: formatWeatherLiftAsMarkdown(weatherLift),
+      },
+    ]
+    if (weatherLift.currentTable) {
+      parts.push({ type: 'dataTable', table: { ...weatherLift.currentTable, title: 'Now' } })
+    }
+    if (weatherLift.forecastTable) {
+      parts.push({ type: 'dataTable', table: { ...weatherLift.forecastTable, title: 'Forecast' } })
+    }
+    if (weatherLift.monthOutlookTable) {
+      parts.push({ type: 'dataTable', table: weatherLift.monthOutlookTable })
+    }
+    if (weatherLift.weekOutlookTable) {
+      parts.push({ type: 'dataTable', table: weatherLift.weekOutlookTable })
+    }
+    return { id, role: 'model', parts }
+  }
+
+  const rsLift = liftRsAnalysisFromText(turn.replyText)
+  if (rsLift) {
+    const parts: GeoExplorerPart[] = [{ type: 'text', text: formatRsLiftAsMarkdown(rsLift) }]
+    if (rsLift.shareTable) parts.push({ type: 'dataTable', table: rsLift.shareTable })
+    if (rsLift.areaTable) parts.push({ type: 'dataTable', table: rsLift.areaTable })
+    return { id, role: 'model', parts }
+  }
+
   const text = sanitizeNeighborhoodAgentReplyText(turn.replyText)
   const parts: GeoExplorerPart[] = [{ type: 'text', text }]
   if (turn.table) parts.push({ type: 'dataTable', table: turn.table })

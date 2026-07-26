@@ -229,8 +229,9 @@ describe('geoAiAgentTurn', () => {
 
   it('auto-runs an analyst pack for vegetation chip / intent with evidence reply', async () => {
     const zoomToAoi = vi.fn(() => 'Zoomed to the AOI.')
+    const runRsIndex = vi.fn((index: string) => `Showing ${index} on the map for the current AOI.`)
     const complete = vi.fn().mockResolvedValue({
-      text: 'Vegetation is moderately healthy from NDVI classes.',
+      text: 'should not be used',
       toolCalls: [],
     })
     const adapter: GeoAiAgentModelAdapter = {
@@ -248,17 +249,19 @@ describe('geoAiAgentTurn', () => {
       chipId: 'vegetation',
       liveMapState: liveState,
       vectorLayers: [buildingsLayer],
-      mapHandlers: { ...mockHost().mapHandlers, zoomToAoi },
+      mapHandlers: { ...mockHost().mapHandlers, zoomToAoi, runRsIndex },
     })
 
     expect(result.usedAnalystPack).toBe('vegetation')
+    expect(result.toolResults.some(r => r.name === 'run_rs_index' && r.ok)).toBe(true)
     expect(result.toolResults.some(r => r.name === 'read_rs_analysis')).toBe(true)
     expect(result.toolResults.some(r => r.name === 'read_live_map_state')).toBe(true)
     expect(zoomToAoi).toHaveBeenCalled()
-    expect(result.replyText).toMatch(/Vegetation|NDVI|healthy|References/i)
+    expect(runRsIndex).toHaveBeenCalledWith('NDVI')
+    expect(result.replyText).toMatch(/Showing NDVI|NDVI|Healthy|References/i)
     expect(result.replyText).not.toMatch(/LIVE MAP STATE|read_live_map_state/i)
-    expect(complete).toHaveBeenCalledTimes(1)
-    expect(complete.mock.calls[0]?.[0]?.toolsEnabled).toBe(false)
+    // Pack tools already produce the answer — skip LLM synthesis for speed.
+    expect(complete).not.toHaveBeenCalled()
   })
 
   it('auto-runs density pack for count-buildings chip against loaded layers', async () => {

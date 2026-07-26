@@ -12,7 +12,12 @@ import {
   type LayerQueryMatch,
 } from './geoExplorerLayerContext'
 import { runGeoAiStatsCommand, type GeoAiMapFirstSelection, type GeoAiStatsResult } from './geoAiStatsEngine'
-import { isNeighborhoodAgentDataQuestion } from './neighborhoodAgentPlaceIntent'
+import {
+  isExplicitLoadedLayerAsk,
+  isNeighborhoodAgentDataQuestion,
+  prefersAiOrWebDataAnswer,
+} from './neighborhoodAgentPlaceIntent'
+import { isAoiRsBreakdownFollowUpQuestion, isDrawnAoiAnalysisQuestion } from './neighborhoodAgentRsViz'
 
 export type GeoAiLayerAttributeQueryResult = {
   handled: boolean
@@ -29,19 +34,29 @@ const ATTR_QUESTION_RE =
   /\b(what\s+is|what'?s|how\s+many|how\s+much|number\s+of|count\s+of|tell\s+me|show\s+me|get|give|list|describe|attribute|attributes|field|fields|properties|populati\w*|pop\b|area|مساحة|سكان|عدد|كم|ما\s+هي|ما\s+هو|اعرض|أظهر)\b/i
 
 const LAYER_CUE_RE =
-  /\b(layer|layers|feature|features|polygon|parcel|record|on\s+it|this\s+layer|loaded|gis|in\s+\w+|طبقة|طبقات|عنصر|مضلع|سجل)\b/i
+  /\b(layer|layers|feature|features|polygon|parcel|record|on\s+it|this\s+layer|loaded|gis|طبقة|طبقات|عنصر|مضلع|سجل)\b/i
 
-/** True when the user is asking about loaded layer data (not pure place navigation / weather). */
+/** True when the user is asking about loaded layer data (not pure place navigation / weather / web knowledge). */
 export function isLayerAttributeQuestion(userText: string, layers: GeoAiMapLayer[]): boolean {
   const t = userText.trim()
   if (!t || !layers.length) return false
+
+  // AOI / NDVI class follow-ups are remote-sensing, not vector-layer Q&A.
+  if (isAoiRsBreakdownFollowUpQuestion(t)) return false
+  if (isDrawnAoiAnalysisQuestion(t)) return false
 
   if (/\b(weather|forecast|temperature|humidity|ndvi|ndwi)\b/i.test(t) && !LAYER_CUE_RE.test(t)) {
     return false
   }
 
-  if (isGisDataScopedQuestion(t, layers)) return true
-  if (ATTR_QUESTION_RE.test(t)) return true
+  // General “population in Dubai 2020” → AI / web, not layer stats.
+  if (prefersAiOrWebDataAnswer(t) && !isExplicitLoadedLayerAsk(t)) {
+    return false
+  }
+
+  if (isExplicitLoadedLayerAsk(t)) return true
+  if (isGisDataScopedQuestion(t, layers) && LAYER_CUE_RE.test(t)) return true
+  if (ATTR_QUESTION_RE.test(t) && LAYER_CUE_RE.test(t)) return true
   return false
 }
 
@@ -135,15 +150,25 @@ export function runGeoAiLayerAttributeQuery(
   const q = userText.trim()
   if (!q) return null
 
+  // Last RS/AOI breakdown compare → vegetation pack, never layer dump.
+  if (isAoiRsBreakdownFollowUpQuestion(q)) return null
+  // Deeper AOI analysis → analyze-aoi pack (drawn AOI + RS), never layer dump.
+  if (isDrawnAoiAnalysisQuestion(q)) return null
+
+  // World-knowledge demographics → leave to Gemini / open sources (unless user scoped to a layer).
+  if (prefersAiOrWebDataAnswer(q) && !isExplicitLoadedLayerAsk(q)) {
+    return null
+  }
+
   if (!layers.length) {
-    if (isNeighborhoodAgentDataQuestion(q) || ATTR_QUESTION_RE.test(q)) {
+    if (isExplicitLoadedLayerAsk(q) || (isNeighborhoodAgentDataQuestion(q) && LAYER_CUE_RE.test(q))) {
       return { handled: true, reply: formatNoLayerMatchReply(q) }
     }
     return null
   }
 
   if (!isLayerAttributeQuestion(q, layers)) {
-    // Still allow strong feature-code lookups (MH105) via stats / match
+    // Still allow strong feature-code / named-feature lookups via stats / match
     if (!findLngLatFromLayerQuery(q, layers)) return null
   }
 
@@ -182,7 +207,7 @@ export function runGeoAiLayerAttributeQuery(
 
   const match = findLngLatFromLayerQuery(q, layers)
   if (!match?.properties) {
-    if (isLayerAttributeQuestion(q, layers) || /\b(populati\w*|number\s+of|how\s+many)\b/i.test(q)) {
+    if (isLayerAttributeQuestion(q, layers) || isExplicitLoadedLayerAsk(q)) {
       return {
         handled: true,
         reply: formatNoLayerMatchReply(q),

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   formatNeighborhoodAgentFlyReply,
   formatNeighborhoodAgentPlaceNotFound,
+  isExplicitLoadedLayerAsk,
   parseNeighborhoodAgentPlaceIntent,
+  prefersAiOrWebDataAnswer,
   sanitizeNeighborhoodAgentReplyText,
 } from './neighborhoodAgentPlaceIntent'
 
@@ -30,6 +32,8 @@ describe('parseNeighborhoodAgentPlaceIntent', () => {
 
   it('rejects analysis / non-navigate messages', () => {
     expect(parseNeighborhoodAgentPlaceIntent('analyze NDVI for my AOI')).toBeNull()
+    expect(parseNeighborhoodAgentPlaceIntent('Show NDVI on the map for the AOI.')).toBeNull()
+    expect(parseNeighborhoodAgentPlaceIntent('Open remote sensing so I can run NDVI on the AOI.')).toBeNull()
     expect(parseNeighborhoodAgentPlaceIntent('how many buildings are there')).toBeNull()
     expect(parseNeighborhoodAgentPlaceIntent('weather summary for neighborhood')).toBeNull()
     expect(parseNeighborhoodAgentPlaceIntent('Number of Popualtions in Dubai')).toBeNull()
@@ -45,6 +49,20 @@ describe('parseNeighborhoodAgentPlaceIntent', () => {
     expect(parseNeighborhoodAgentPlaceIntent('style Fields by yield')).toBeNull()
     expect(parseNeighborhoodAgentPlaceIntent('choropleth of NDVI')).toBeNull()
     expect(parseNeighborhoodAgentPlaceIntent('show me a heatmap')).toBeNull()
+  })
+})
+
+describe('prefersAiOrWebDataAnswer / isExplicitLoadedLayerAsk', () => {
+  it('routes city+year population to AI/web', () => {
+    expect(prefersAiOrWebDataAnswer('population in dubai 2020')).toBe(true)
+    expect(prefersAiOrWebDataAnswer('Number of Popualtions in Dubai')).toBe(true)
+    expect(isExplicitLoadedLayerAsk('population in dubai 2020')).toBe(false)
+  })
+
+  it('keeps explicit layer population asks on the map', () => {
+    expect(isExplicitLoadedLayerAsk('How many population on it')).toBe(true)
+    expect(prefersAiOrWebDataAnswer('How many population on it')).toBe(false)
+    expect(isExplicitLoadedLayerAsk('sum population on this layer')).toBe(true)
   })
 })
 

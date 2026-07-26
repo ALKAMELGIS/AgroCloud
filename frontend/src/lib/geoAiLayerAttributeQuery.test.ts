@@ -49,9 +49,13 @@ const DISTRICTS: GeoAiMapLayer = {
 }
 
 describe('geoAiLayerAttributeQuery', () => {
-  it('detects layer attribute questions', () => {
+  it('detects explicit layer attribute questions only', () => {
     expect(isLayerAttributeQuestion('How many population on it', [DISTRICTS])).toBe(true)
-    expect(isLayerAttributeQuestion('what is the population of Central', [DISTRICTS])).toBe(true)
+    expect(isLayerAttributeQuestion('what is the population of Central on this layer', [DISTRICTS])).toBe(
+      true,
+    )
+    expect(isLayerAttributeQuestion('population in dubai 2020', [DISTRICTS])).toBe(false)
+    expect(isLayerAttributeQuestion('what is the population of Central', [DISTRICTS])).toBe(false)
     expect(isLayerAttributeQuestion('weather here', [DISTRICTS])).toBe(false)
   })
 
@@ -65,12 +69,23 @@ describe('geoAiLayerAttributeQuery', () => {
     expect(hit?.reply).toMatch(/200000|120000|SUM/i)
   })
 
-  it('returns a short professional reply when no layer matches a population ask', () => {
-    const hit = runGeoAiLayerAttributeQuery('Number of Popualtions in Dubai', [])
-    expect(hit?.handled).toBe(true)
-    expect(hit?.reply).toMatch(/No matching figures/i)
-    expect(hit?.reply).toMatch(/Dubai/i)
-    expect(hit?.reply).toMatch(/References/i)
-    expect(hit?.reply).not.toMatch(/Could not find/i)
+  it('leaves world-knowledge population asks for AI / web (no layer hijack)', () => {
+    expect(runGeoAiLayerAttributeQuery('population in dubai 2020', [DISTRICTS])).toBeNull()
+    expect(runGeoAiLayerAttributeQuery('Number of Popualtions in Dubai', [])).toBeNull()
+    expect(runGeoAiLayerAttributeQuery('Number of Popualtions in Dubai', [DISTRICTS])).toBeNull()
+  })
+
+  it('does not hijack AOI / NDVI class compare follow-ups onto vector layers', () => {
+    const q =
+      'Compare the main categories from your last breakdown in a short table and highlight the dominant share.'
+    expect(isLayerAttributeQuestion(q, [DISTRICTS])).toBe(false)
+    expect(runGeoAiLayerAttributeQuery(q, [DISTRICTS])).toBeNull()
+  })
+
+  it('does not hijack Deeper AOI analysis onto Layers panel vectors', () => {
+    const q =
+      'Analyze this AOI in more depth using the drawn AOI remote-sensing classes (NDVI / active index), AOI metrics, and weather — not loaded GIS layers from the Layers panel.'
+    expect(isLayerAttributeQuestion(q, [DISTRICTS])).toBe(false)
+    expect(runGeoAiLayerAttributeQuery(q, [DISTRICTS])).toBeNull()
   })
 })

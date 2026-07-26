@@ -51,6 +51,7 @@ import {
   type GeoAiAnalystPackId,
 } from './geoAiAnalystPacks'
 import type { GeoAiStatsResult } from './geoAiStatsEngine'
+import { formatRsLiftAsMarkdown, liftRsAnalysisFromText } from './neighborhoodAgentRsViz'
 import { buildFastWeatherUserReplyFromFacts } from './neighborhoodAgentWeatherViz'
 
 export type GeoAiAgentProvider = 'gemini' | 'claude' | 'deepseek' | 'ollama'
@@ -106,7 +107,9 @@ export type GeoAiAgentTurnParams = {
   vectorLayers: GeoAiMapLayer[]
   mapHandlers: GeoAiMapCommandHandlers
   weatherFetcher?: GeoAiAgentWeatherFetcher
-  /** Cap native tool rounds (default 2 = call tools once, then final answer). */
+  /** Add geoprocessing result layers to the Satellite map. */
+  addGeoJsonResultLayer?: GeoAiAgentToolHost['addGeoJsonResultLayer']
+  /** Cap native tool rounds (default 3 for GIS chains). */
   maxToolRounds?: number
   /**
    * When MAP_ACTION lines appear (Ollama / text fallback), execute them via mapHandlers.
@@ -146,25 +149,28 @@ export type GeoAiAgentTurnResult = {
 }
 
 const NATIVE_TOOL_SYSTEM_ADDENDUM = `### GIS AGENT TOOLS
-You have executable GIS tools for map control, vector statistics, live RS/legend readout, and weather.
-- Prefer calling tools for facts (counts, class areas, weather numbers, map actions) instead of inventing them.
-- After tool results arrive, write a **short user-facing answer** (≤3 short sentences, plus a compact table when numbers split into groups).
-- Do **not** paste tool names, LIVE MAP STATE, OPENWEATHER FACTS, or raw tool dumps into the reply.
-- End with a compact **References** list (1–4 citation-style lines: source name + optional URL). Example:
-  - OpenWeatherMap — current conditions
-  - AgroCloud loaded layer “Districts” — attribute table
-- Do not invent MAP_ACTION lines when native tools are available; call the tools instead.`
+You have executable GIS tools for map control, vector geoprocessing, statistics, live RS/legend readout, and weather.
+- Prefer calling tools for facts (counts, class areas, weather numbers, map actions, buffers/intersects) instead of inventing them.
+- Spatial analysis tools create NEW result layers on the map: gis_buffer, gis_intersect, gis_clip, gis_erase, gis_union, gis_merge, gis_dissolve, gis_convex_hull, gis_voronoi, gis_select_by_location, gis_select_by_attribute. Use gis_area for area tables. Use export_layer for GeoJSON/Shapefile/KMZ/Excel.
+- Resolve layers from LIVE MAP STATE names; "this" / AOI means the drawn AOI or selected layer.
+- You may chain tools in one turn (e.g. buffer → intersect → gis_area).
+- Vegetation / NDVI / NDWI / NDMI: call run_rs_index (shows the index on the map automatically). Flood / trees / crop: open_toolbox_panel (flood-monitoring, tree-detections, agri-field-boundary) when a full engine UI is required.
+- After tool results arrive, write a **short user-facing answer** (≤3 short sentences). Confirm "Layer added: …" when a GIS result layer was created.
+- Do **not** paste tool names, LIVE MAP STATE, OPENWEATHER FACTS, or raw GeoJSON into the reply.
+- End with a compact **References** list (1–4 citation-style lines).`
 
 const MAP_ACTION_FALLBACK_ADDENDUM = `### MAP_ACTION / MAP_QUERY (text protocol — no native tools)
 When you need to control the map, emit one or more single-line commands BEFORE any GEO_AI_JSON trace:
 MAP_ACTION:{"op":"flyTo","lng":55.27,"lat":25.20,"zoom":12}
 MAP_ACTION:{"op":"zoomToAoi"}
 MAP_ACTION:{"op":"setLayerVisibility","layer":"NDVI","visible":false}
-MAP_ACTION:{"op":"setLayerOpacity","layer":"Parcels","opacity":0.5}
-MAP_ACTION:{"op":"switchBasemap","basemap":"satellite"}
 MAP_ACTION:{"op":"searchPlace","query":"Dubai"}
-MAP_ACTION:{"op":"identifyBasemap"}
-MAP_ACTION:{"op":"zoomToLayer","layer":"Parcels"}
+MAP_ACTION:{"op":"gisBuffer","layer":"Farms","distance":500,"unit":"meters","output":"Farm_Buffer_500m"}
+MAP_ACTION:{"op":"gisIntersect","layerA":"Roads","layerB":"Farms"}
+MAP_ACTION:{"op":"gisClip","layer":"NDVI_polys","clipLayer":"AOI"}
+MAP_ACTION:{"op":"gisOp","tool":"dissolve","layer":"Fields","field":"Crop"}
+MAP_ACTION:{"op":"runRsIndex","index":"NDVI"}
+MAP_ACTION:{"op":"openToolboxPanel","panel":"flood-monitoring"}
 For a single justified pin use: MAP_QUERY:<longitude>,<latitude>
 Still answer the user in short prose. Add **References** (citation lines), never dump Evidence / tool transcripts.`
 
@@ -258,6 +264,12 @@ export function compactGeoAiAgentReferences(toolResults: GeoAiAgentToolResult[])
       case 'fly_to':
       case 'identify_basemap':
         push('Mapbox geocoding / basemap place data')
+        break
+      case 'open_toolbox_panel':
+        push('AgroCloud Satellite map toolbox — analysis panels')
+        break
+      case 'run_rs_index':
+        push('AgroCloud Sentinel WMS — index overlay on AOI')
         break
       default:
         break
@@ -372,6 +384,37 @@ export function tryBuildFastAnalystPackReply(
     const stats = packResults.filter(r => r.name === 'run_vector_stats' && r.ok && r.content.trim())
     if (!stats.length) return null
     return stats.map(r => r.content.trim()).join('\n\n')
+  }
+  if (packId === 'spatial-buffer' || packId === 'spatial-intersect' || packId === 'spatial-clip') {
+    const gis = packResults.find(r => r.name.startsWith('gis_') && r.ok && r.content.trim())
+    if (gis?.content?.trim()) return gis.content.trim()
+    return null
+  }
+  if (packId === 'vegetation') {
+    const legend = packResults.find(r => r.name === 'read_rs_analysis' && r.ok)
+    const rs = packResults.find(r => (r.name === 'run_rs_index' || r.name === 'runRsIndex') && r.ok)
+    const blob = [rs?.content, legend?.content].filter(Boolean).join('\n\n')
+    if (!blob.trim()) return null
+    const lift = liftRsAnalysisFromText(blob)
+    if (lift) return formatRsLiftAsMarkdown(lift)
+    return blob.trim()
+  }
+  if (packId === 'analyze-aoi') {
+    const legend = packResults.find(r => r.name === 'read_rs_analysis' && r.ok)
+    const weather = packResults.find(r => r.name === 'get_weather_context' && r.ok)
+    const live = packResults.find(r => r.name === 'read_live_map_state' && r.ok)
+    const parts: string[] = []
+    if (legend?.content?.trim()) {
+      const lift = liftRsAnalysisFromText(legend.content)
+      parts.push(lift ? formatRsLiftAsMarkdown(lift) : legend.content.trim())
+    }
+    if (weather?.content?.trim()) {
+      const wx = buildFastWeatherUserReplyFromFacts(weather.content)
+      if (wx) parts.push(wx)
+    } else if (live?.content?.trim() && !parts.length) {
+      parts.push(live.content.trim())
+    }
+    return parts.length ? parts.join('\n\n') : null
   }
   return null
 }
@@ -791,11 +834,12 @@ export async function runGeoAiAgentTurn(params: GeoAiAgentTurnParams): Promise<G
     liveMapState: params.liveMapState,
     vectorLayers: params.vectorLayers ?? [],
     weatherFetcher: params.weatherFetcher,
+    addGeoJsonResultLayer: params.addGeoJsonResultLayer,
   }
 
   const useNative = adapter.supportsNativeTools
   const system = buildSystemForProvider(params.systemInstruction, params.liveMapState, useNative)
-  const maxRounds = Math.max(1, Math.min(params.maxToolRounds ?? 2, 4))
+  const maxRounds = Math.max(1, Math.min(params.maxToolRounds ?? 3, 5))
 
   const allToolResults: GeoAiAgentToolResult[] = []
   let usedNativeTools = false

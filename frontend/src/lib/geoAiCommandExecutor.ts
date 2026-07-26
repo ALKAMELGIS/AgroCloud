@@ -6,9 +6,8 @@
  * typed command list, strips them from the user-facing bubble text, and dispatches
  * them through a host-provided handler set (implemented in SatelliteIntelligence).
  *
- * Commands are intentionally limited to safe, reversible map operations
- * (camera + layer visibility/opacity + basemap). Destructive actions (delete /
- * rename / export) are deliberately excluded from this first cut.
+ * Commands cover camera + layer visibility/opacity + basemap + GIS geoprocessing
+ * (gisOp → buffer/intersect/clip/…) and toolbox openers.
  */
 
 export type GeoAiMapCommand =
@@ -22,6 +21,60 @@ export type GeoAiMapCommand =
   | { op: 'searchPlace'; query: string }
   /** Identify basemap places/POIs near a point (or current focus when omitted). */
   | { op: 'identifyBasemap'; lng?: number; lat?: number }
+  /** Open a Satellite map-toolbox analysis panel (RS / Time Series / Flood / Well Site / AOI edit). */
+  | { op: 'openToolboxPanel'; panel: string }
+  /** Show a remote-sensing index (NDVI/…) on the map for the current AOI. */
+  | { op: 'runRsIndex'; index: string }
+  /** Run a GIS geoprocessing op (buffer, intersect, clip, …) via host handler. */
+  | { op: 'gisOp'; tool: string; args: Record<string, unknown> }
+
+export type GeoAiToolboxPanelId =
+  | 'remote-sensing'
+  | 'imagery-time-series'
+  | 'flood-monitoring'
+  | 'well-site'
+  | 'hydro-watershed'
+  | 'aoi-edit'
+  | 'layers'
+  | 'eo-enrichment'
+  | 'tree-detections'
+  | 'agri-field-boundary'
+  | 'crop-alerts'
+  | 'stress-zones'
+
+/** Normalize free-text panel names from the model into dock section ids. */
+export function normalizeGeoAiToolboxPanelId(raw: string): GeoAiToolboxPanelId | null {
+  const t = raw.trim().toLowerCase().replace(/[_/]+/g, '-').replace(/\s+/g, '-')
+  if (!t) return null
+  if (/^(remote-sensing|remote|rs|indices?|ndvi|ndwi|ndmi|savi|evi|wms|layer-live)$/.test(t)) {
+    return 'remote-sensing'
+  }
+  if (/^(imagery-time-series|time-series|timeseries|timeline|ts)$/.test(t)) return 'imagery-time-series'
+  if (/^(flood-monitoring|flood|sar-flood|sar)$/.test(t)) return 'flood-monitoring'
+  if (/^(well-site|well|hydro-ai|drilling)$/.test(t)) return 'well-site'
+  if (/^(hydro-watershed|hydro|watershed|basin)$/.test(t)) return 'hydro-watershed'
+  if (/^(aoi-edit|aoi|draw|drawing|edit|polygon)$/.test(t)) return 'aoi-edit'
+  if (/^(layers?|layer-manager)$/.test(t)) return 'layers'
+  if (/^(eo-enrichment|eo|enrichment)$/.test(t)) return 'eo-enrichment'
+  if (/^(tree-detections|trees?)$/.test(t)) return 'tree-detections'
+  if (/^(agri-field-boundary|field-boundary|fields?)$/.test(t)) return 'agri-field-boundary'
+  if (/^(crop-alerts?|alerts?)$/.test(t)) return 'crop-alerts'
+  if (/^(stress-zones?|stress)$/.test(t)) return 'stress-zones'
+  return null
+}
+
+/** Extract RS index id from free text (ndvi, ndwi, …). Defaults null if none. */
+export function parseGeoAiRsIndexId(raw: string | null | undefined): string | null {
+  const t = String(raw || '').trim().toUpperCase()
+  if (!t) return null
+  const m = t.match(/\b(NDVI|NDMI|NDWI|SAVI|EVI|GNDVI|NBR|NDRE|BSI|MNDWI|LST|NDSI|ET)\b/i)
+  if (m) return m[1]!.toUpperCase()
+  const compact = t.replace(/[\s_-]+/g, '')
+  if (/^(NDVI|NDMI|NDWI|SAVI|EVI|GNDVI|NBR|NDRE|BSI|MNDWI|LST|NDSI|ET)$/.test(compact)) {
+    return compact
+  }
+  return null
+}
 
 export type GeoAiMapCommandResult = {
   command: GeoAiMapCommand
@@ -115,6 +168,70 @@ function coerceCommand(raw: unknown): GeoAiMapCommand | null {
         ...(Number.isFinite(lat) ? { lat } : {}),
       }
     }
+    case 'openToolboxPanel':
+    case 'openPanel':
+    case 'openTool':
+    case 'openToolbox': {
+      const panel = String(o.panel ?? o.tool ?? o.section ?? o.id ?? '').trim()
+      const normalized = normalizeGeoAiToolboxPanelId(panel)
+      // If user/model asked for NDVI (etc.), emit runRsIndex instead of only opening the panel.
+      const indexHint = parseGeoAiRsIndexId(panel) || parseGeoAiRsIndexId(String(o.index ?? ''))
+      if (indexHint) {
+        return { op: 'runRsIndex', index: indexHint }
+      }
+      return normalized ? { op: 'openToolboxPanel', panel: normalized } : null
+    }
+    case 'runRsIndex':
+    case 'showRsIndex':
+    case 'showNdvi':
+    case 'runNdvi': {
+      const index =
+        parseGeoAiRsIndexId(String(o.index ?? o.layer ?? o.name ?? o.panel ?? '')) ||
+        (op === 'showNdvi' || op === 'runNdvi' ? 'NDVI' : null) ||
+        'NDVI'
+      return { op: 'runRsIndex', index }
+    }
+    case 'gisOp':
+    case 'gis':
+    case 'gisBuffer':
+    case 'gisIntersect':
+    case 'gisClip':
+    case 'gisErase':
+    case 'gisUnion':
+    case 'gisMerge':
+    case 'gisDissolve':
+    case 'gisConvexHull':
+    case 'gisVoronoi':
+    case 'gisArea':
+    case 'gisSelectByLocation':
+    case 'gisSelectByAttribute':
+    case 'exportLayer': {
+      const aliasToTool: Record<string, string> = {
+        gisBuffer: 'buffer',
+        gisIntersect: 'intersect',
+        gisClip: 'clip',
+        gisErase: 'erase',
+        gisUnion: 'union',
+        gisMerge: 'merge',
+        gisDissolve: 'dissolve',
+        gisConvexHull: 'convex_hull',
+        gisVoronoi: 'voronoi',
+        gisArea: 'area',
+        gisSelectByLocation: 'select_by_location',
+        gisSelectByAttribute: 'select_by_attribute',
+        exportLayer: 'export_layer',
+      }
+      const tool =
+        op === 'gisOp' || op === 'gis'
+          ? String(o.tool ?? o.name ?? o.op ?? '').trim().replace(/^gis_?/i, '')
+          : aliasToTool[op] || ''
+      if (!tool) return null
+      const args: Record<string, unknown> = { ...o }
+      delete args.op
+      delete args.action
+      delete args.tool
+      return { op: 'gisOp', tool, args }
+    }
     default:
       return null
   }
@@ -166,6 +283,11 @@ export type GeoAiMapCommandHandlers = {
   switchBasemap?: (basemap: string) => string | void
   searchPlace?: (query: string) => string | void
   identifyBasemap?: (lng?: number, lat?: number) => string | void
+  openToolboxPanel?: (panel: string) => string | void
+  /** Show NDVI/NDWI/… WMS on the map for the current AOI. */
+  runRsIndex?: (index: string) => string | void
+  /** Sync or async GIS geoprocess; may return a Promise (executor awaits). */
+  gisOp?: (tool: string, args: Record<string, unknown>) => string | void | Promise<string | void>
 }
 
 /** Execute parsed commands against host handlers; returns a per-command result log. */
@@ -176,7 +298,7 @@ export function executeGeoAiMapCommands(
   const results: GeoAiMapCommandResult[] = []
   for (const command of commands) {
     try {
-      let message: string | void
+      let message: string | void | Promise<string | void>
       switch (command.op) {
         case 'flyTo':
           message = handlers.flyTo?.(command)
@@ -202,14 +324,32 @@ export function executeGeoAiMapCommands(
         case 'identifyBasemap':
           message = handlers.identifyBasemap?.(command.lng, command.lat)
           break
+        case 'openToolboxPanel':
+          message = handlers.openToolboxPanel?.(command.panel)
+          break
+        case 'runRsIndex':
+          message = handlers.runRsIndex?.(command.index)
+          break
+        case 'gisOp':
+          message = handlers.gisOp?.(command.tool, command.args)
+          break
         default:
           break
       }
-      results.push({
-        command,
-        ok: typeof message === 'string',
-        message: typeof message === 'string' ? message : 'No handler available for this action.',
-      })
+      // Sync path only — async gisOp should be awaited by the agent tool runner.
+      if (message && typeof (message as Promise<unknown>).then === 'function') {
+        results.push({
+          command,
+          ok: true,
+          message: 'GIS operation started.',
+        })
+      } else {
+        results.push({
+          command,
+          ok: typeof message === 'string',
+          message: typeof message === 'string' ? message : 'No handler available for this action.',
+        })
+      }
     } catch (err) {
       results.push({
         command,

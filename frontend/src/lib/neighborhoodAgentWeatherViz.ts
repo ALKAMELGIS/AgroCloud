@@ -2,6 +2,7 @@
  * Lift narrative weather replies into compact tables the NAC UI can chart.
  */
 
+import { splitTextIntoMarkdownSegments } from './geoAiMarkdownTable'
 import type { GeoExplorerDataTablePayload } from './geoExplorerGemini'
 
 export type NeighborhoodAgentWeatherCondition =
@@ -18,8 +19,13 @@ export type NeighborhoodAgentWeatherLift = {
   location?: string
   condition?: NeighborhoodAgentWeatherCondition
   conditionLabel?: string
+  /** One-line climate interpretation for the current conditions. */
+  climateLine?: string
   currentTable?: GeoExplorerDataTablePayload | null
   forecastTable?: GeoExplorerDataTablePayload | null
+  /** Daily / weekly month outlook for charts + table. */
+  monthOutlookTable?: GeoExplorerDataTablePayload | null
+  weekOutlookTable?: GeoExplorerDataTablePayload | null
 }
 
 function stripMd(s: string): string {
@@ -54,6 +60,94 @@ export function weatherConditionIcon(c: NeighborhoodAgentWeatherCondition): stri
     default:
       return 'fa-solid fa-cloud-sun'
   }
+}
+
+/** Short professional climate reading for the current conditions. */
+export function buildClimateInterpretationLine(input: {
+  condition?: NeighborhoodAgentWeatherCondition
+  conditionLabel?: string
+  location?: string
+  tempC?: number | null
+  humidity?: number | null
+  windMs?: number | null
+}): string {
+  const place = (input.location || 'This location').replace(/\(coordinates:.*\)/i, '').trim()
+  const sky = (input.conditionLabel || input.condition || 'mixed skies').toLowerCase()
+  const t = input.tempC
+  const h = input.humidity
+  const w = input.windMs
+  const heat =
+    t != null && t >= 38
+      ? 'extreme heat'
+      : t != null && t >= 33
+        ? 'hot'
+        : t != null && t >= 26
+          ? 'warm'
+          : t != null && t >= 18
+            ? 'mild'
+            : t != null && t >= 10
+              ? 'cool'
+              : t != null
+                ? 'cold'
+                : null
+  const humidNote = h != null && h >= 70 ? ' with high humidity' : h != null && h <= 25 ? ' with dry air' : ''
+  const windNote = w != null && w >= 8 ? '; breezy winds' : ''
+  if (heat) {
+    return `${place}: ${heat} ${sky} conditions dominate the current climate picture${humidNote}${windNote}.`
+  }
+  return `${place}: ${sky} conditions set the current climate picture${humidNote}${windNote}.`
+}
+
+function parseDailyOutlookLines(lines: string[]): Array<{
+  lineIdx: number
+  when: string
+  max: number
+  min: number
+  precip: number
+  sky: string
+}> {
+  const hits: Array<{ lineIdx: number; when: string; max: number; min: number; precip: number; sky: string }> = []
+  for (let i = 0; i < lines.length; i++) {
+    const raw = stripMd(lines[i]!)
+    const m = raw.match(
+      /^(?:[-*•]\s*)?(\d{4}-\d{2}-\d{2})\s*:\s*max\s+(-?\d+(?:\.\d+)?)°?C,\s*min\s+(-?\d+(?:\.\d+)?)°?C,\s*precip\s+(-?\d+(?:\.\d+)?)\s*mm(?:,\s*sky\s+(.+))?$/i,
+    )
+    if (!m) continue
+    hits.push({
+      lineIdx: i,
+      when: m[1]!,
+      max: Number(m[2]),
+      min: Number(m[3]),
+      precip: Number(m[4]),
+      sky: (m[5] || 'n/a').trim(),
+    })
+  }
+  return hits
+}
+
+function parseWeeklyOutlookLines(lines: string[]): Array<{
+  lineIdx: number
+  when: string
+  max: number
+  min: number
+  precip: number
+}> {
+  const hits: Array<{ lineIdx: number; when: string; max: number; min: number; precip: number }> = []
+  for (let i = 0; i < lines.length; i++) {
+    const raw = stripMd(lines[i]!)
+    const m = raw.match(
+      /^(?:[-*•]\s*)?(W\d+)\s*:\s*avg max\s+(-?\d+(?:\.\d+)?)°?C,\s*avg min\s+(-?\d+(?:\.\d+)?)°?C,\s*precip\s+(-?\d+(?:\.\d+)?)\s*mm$/i,
+    )
+    if (!m) continue
+    hits.push({
+      lineIdx: i,
+      when: m[1]!,
+      max: Number(m[2]),
+      min: Number(m[3]),
+      precip: Number(m[4]),
+    })
+  }
+  return hits
 }
 
 /** Drop meta / Evidence / OPENWEATHER boilerplate from user-facing prose. */
@@ -169,8 +263,16 @@ export function liftWeatherNarrativeFromText(text: string): NeighborhoodAgentWea
   const cleaned = stripNeighborhoodAgentWeatherBoilerplate(text)
   if (!cleaned.trim()) return { text: cleaned }
 
+  // Prefer structured markdown (fast pack / model tables) over prose parsing.
+  const fromMd = liftWeatherFromMarkdownReply(cleaned)
+  if (fromMd?.currentTable || fromMd?.forecastTable || fromMd?.monthOutlookTable) {
+    return fromMd
+  }
+
   const looksWeather =
-    /temperature|feels\s+like|humidity|hPa|m\/s|short forecast|openweather|°\s*C|طقس|حرارة/i.test(cleaned)
+    /temperature|feels\s+like|humidity|hPa|m\/s|short forecast|openweather|month outlook|daily outlook|°\s*C|طقس|حرارة|avg max|precip/i.test(
+      cleaned,
+    )
   if (!looksWeather) return { text: cleaned }
 
   const lines = cleaned.split(/\r?\n/)
@@ -196,7 +298,7 @@ export function liftWeatherNarrativeFromText(text: string): NeighborhoodAgentWea
     if (drop.has(i)) continue
     const para = stripMd(lines[i]!)
     if (para.length < 40) continue
-    if (!/temperature|humidity|feels\s+like/i.test(para)) continue
+    if (!/temp|humidity|feels/i.test(para)) continue
     const parsed = parseCurrentMetrics(para)
     if (!parsed) continue
     conditionLabel = parsed.conditionLabel
@@ -271,28 +373,107 @@ export function liftWeatherNarrativeFromText(text: string): NeighborhoodAgentWea
     }
   }
 
-  if (!currentTable && !forecastTable) return { text: cleaned }
+  const dailyHits = parseDailyOutlookLines(lines)
+  let monthOutlookTable: GeoExplorerDataTablePayload | null = null
+  if (dailyHits.length >= 2) {
+    for (const h of dailyHits) drop.add(h.lineIdx)
+    monthOutlookTable = {
+      kind: 'statistics',
+      title: 'Month outlook (°C)',
+      columns: [
+        { key: 'when', label: 'Day', align: 'left' },
+        { key: 'sky', label: 'Sky', align: 'left' },
+        { key: 'temp', label: 'Max °C', align: 'right' },
+        { key: 'min', label: 'Min °C', align: 'right' },
+        { key: 'precip', label: 'Rain mm', align: 'right', defaultVisible: false },
+      ],
+      rows: dailyHits.slice(0, 16).map(h => ({
+        values: {
+          when: h.when.slice(5),
+          sky: h.sky,
+          temp: h.max,
+          min: h.min,
+          precip: h.precip,
+        },
+      })),
+    }
+    if (!conditionLabel && dailyHits[0]?.sky) {
+      conditionLabel = dailyHits[0].sky
+      condition = classifyWeatherCondition(dailyHits[0].sky)
+    }
+  }
 
-  const kept = lines
-    .filter((_, i) => !drop.has(i))
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
+  const weekHits = parseWeeklyOutlookLines(lines)
+  let weekOutlookTable: GeoExplorerDataTablePayload | null = null
+  if (weekHits.length >= 2) {
+    for (const h of weekHits) drop.add(h.lineIdx)
+    weekOutlookTable = {
+      kind: 'statistics',
+      title: 'Weekly outlook',
+      columns: [
+        { key: 'when', label: 'Week', align: 'left' },
+        { key: 'temp', label: 'Avg max °C', align: 'right' },
+        { key: 'min', label: 'Avg min °C', align: 'right' },
+        { key: 'precip', label: 'Rain mm', align: 'right' },
+      ],
+      rows: weekHits.map(h => ({
+        values: { when: h.when, temp: h.max, min: h.min, precip: h.precip },
+      })),
+    }
+  }
 
-  const leadParts: string[] = []
-  if (location) leadParts.push(location)
-  if (conditionLabel) leadParts.push(conditionLabel)
-  const lead = leadParts.length
-    ? leadParts.join(' · ')
-    : kept.split(/\n/).filter(Boolean).slice(0, 1).join(' ')
+  if (!currentTable && !forecastTable && !monthOutlookTable) return { text: cleaned }
+
+  const tempC = (() => {
+    if (!currentTable) return null
+    for (const row of currentTable.rows) {
+      if (/^temp/i.test(String(row.values.metric ?? ''))) {
+        const n = Number(String(row.values.value ?? '').replace(/[^\d.+-]/g, ''))
+        return Number.isFinite(n) ? n : null
+      }
+    }
+    return null
+  })()
+  const humidity = (() => {
+    if (!currentTable) return null
+    for (const row of currentTable.rows) {
+      if (/humidity/i.test(String(row.values.metric ?? ''))) {
+        const n = Number(String(row.values.value ?? '').replace(/[^\d.+-]/g, ''))
+        return Number.isFinite(n) ? n : null
+      }
+    }
+    return null
+  })()
+  const windMs = (() => {
+    if (!currentTable) return null
+    for (const row of currentTable.rows) {
+      if (/wind/i.test(String(row.values.metric ?? ''))) {
+        const n = Number(String(row.values.value ?? '').replace(/[^\d.+-]/g, ''))
+        return Number.isFinite(n) ? n : null
+      }
+    }
+    return null
+  })()
+
+  const climateLine = buildClimateInterpretationLine({
+    condition,
+    conditionLabel,
+    location,
+    tempC,
+    humidity,
+    windMs,
+  })
 
   return {
-    text: lead.slice(0, 160),
+    text: climateLine.slice(0, 200),
     location,
     condition,
     conditionLabel,
+    climateLine,
     currentTable,
     forecastTable,
+    monthOutlookTable,
+    weekOutlookTable,
   }
 }
 
@@ -429,6 +610,120 @@ export function isWeatherForecastTable(table: GeoExplorerDataTablePayload): bool
   return /when|time/.test(labels) && /temp/.test(labels) && (/sky|cond/.test(labels) || /feels/.test(labels))
 }
 
+export function isWeatherMonthOutlookTable(table: GeoExplorerDataTablePayload): boolean {
+  const title = (table.title || '').toLowerCase()
+  const labels = table.columns.map(c => `${c.key} ${c.label}`).join(' ').toLowerCase()
+  if (/month|outlook|daily/.test(title) && !/week/.test(title)) return true
+  return /day|when/.test(labels) && /max|temp/.test(labels) && /min/.test(labels) && /sky|precip|rain/.test(labels)
+}
+
+export function isWeatherWeekOutlookTable(table: GeoExplorerDataTablePayload): boolean {
+  const title = (table.title || '').toLowerCase()
+  const labels = table.columns.map(c => `${c.key} ${c.label}`).join(' ').toLowerCase()
+  if (/weekly|week outlook/.test(title)) return true
+  return /week/.test(labels) && /max|temp/.test(labels) && /min/.test(labels)
+}
+
+/** True when reply looks like the fast weather markdown (Now / Forecast pipe tables). */
+export function looksLikeWeatherMarkdownReply(text: string): boolean {
+  const t = text || ''
+  return (
+    /\|\s*Metric\s*\|\s*Value\s*\|/i.test(t) ||
+    (/\|\s*When\s*\|/i.test(t) && /\|\s*Sky\s*\|/i.test(t)) ||
+    /###\s*(Now|Forecast|Month outlook|Weekly outlook)\b/i.test(t)
+  )
+}
+
+/**
+ * Repair common cases where pipe tables lost newlines (single-line markdown dump).
+ */
+export function normalizeWeatherMarkdownNewlines(text: string): string {
+  let t = (text || '').replace(/\\n/g, '\n')
+  if (t.includes('\n') && /\n\s*\|/.test(t)) return t
+  if (!looksLikeWeatherMarkdownReply(t)) return t
+  // Insert breaks before table rows / section headers when everything is one line.
+  t = t
+    .replace(/\s*(###\s*(?:Now|Forecast|Month outlook|Weekly outlook))\b/gi, '\n\n$1\n')
+    .replace(/\s*\|\s*(?=Metric\s*\|)/gi, '\n| ')
+    .replace(/\s*\|\s*(?=When\s*\|)/gi, '\n| ')
+    .replace(/\s*\|\s*(?=Day\s*\|)/gi, '\n| ')
+    .replace(/\s*\|\s*(?=Week\s*\|)/gi, '\n| ')
+    .replace(/\s*\|\s*(?=---)/g, '\n| ')
+    .replace(/\s*\|\s*(?=\d{4}-\d{2}-\d{2})/g, '\n| ')
+    .replace(/\s*\|\s*(?=Temp\s*\|)/gi, '\n| ')
+    .replace(/\s*\|\s*(?=Feels\s*\|)/gi, '\n| ')
+    .replace(/\s*\|\s*(?=Humidity\s*\|)/gi, '\n| ')
+    .replace(/\s*\|\s*(?=Pressure\s*\|)/gi, '\n| ')
+    .replace(/\s*\|\s*(?=Wind\s*\|)/gi, '\n| ')
+    .replace(/\s*\|\s*(?=W\d\s*\|)/gi, '\n| ')
+    .replace(/\n{3,}/g, '\n\n')
+  return t.trim()
+}
+
+/**
+ * Lift weather from markdown Now/Forecast/Month pipe tables (fast pack reply format).
+ */
+export function liftWeatherFromMarkdownReply(text: string): NeighborhoodAgentWeatherLift | null {
+  const normalized = normalizeWeatherMarkdownNewlines(text)
+  if (!looksLikeWeatherMarkdownReply(normalized)) return null
+
+  const segs = splitTextIntoMarkdownSegments(normalized)
+  let current: GeoExplorerDataTablePayload | null = null
+  let forecast: GeoExplorerDataTablePayload | null = null
+  let month: GeoExplorerDataTablePayload | null = null
+  let week: GeoExplorerDataTablePayload | null = null
+  const textBits: string[] = []
+
+  for (let i = 0; i < segs.length; i++) {
+    const seg = segs[i]!
+    if (seg.type === 'text') {
+      const cleaned = seg.text
+        .replace(/^#+\s*(Now|Forecast|Month outlook|Weekly outlook)\s*$/gim, '')
+        .replace(/^#+\s*/gm, '')
+        .trim()
+      if (cleaned) textBits.push(cleaned)
+      // Infer titles from heading just before a table
+      const heading = seg.text.match(/###\s*(Now|Forecast|Month outlook|Weekly outlook)\b/i)?.[1]
+      const next = segs[i + 1]
+      if (heading && next?.type === 'table') {
+        const title =
+          /now/i.test(heading) ? 'Now' : /forecast/i.test(heading) ? 'Forecast' : /month/i.test(heading) ? 'Month outlook' : 'Weekly outlook'
+        next.table = { ...next.table, title }
+      }
+      continue
+    }
+    const table = seg.table
+    if (!current && isWeatherNowTable(table)) {
+      current = { ...table, title: table.title && table.title !== 'Summary table' ? table.title : 'Now' }
+      continue
+    }
+    if (!forecast && isWeatherForecastTable(table)) {
+      forecast = { ...table, title: table.title && table.title !== 'Summary table' ? table.title : 'Forecast' }
+      continue
+    }
+    if (!month && isWeatherMonthOutlookTable(table)) {
+      month = { ...table, title: table.title && table.title !== 'Summary table' ? table.title : 'Month outlook' }
+      continue
+    }
+    if (!week && isWeatherWeekOutlookTable(table)) {
+      week = { ...table, title: table.title && table.title !== 'Summary table' ? table.title : 'Weekly outlook' }
+    }
+  }
+
+  if (!current && !forecast && !month) return null
+
+  const lead = textBits.join(' ').replace(/\s+/g, ' ').trim().slice(0, 220)
+  const lift = weatherLiftFromTables(current, forecast, lead)
+  if (!lift) return null
+  return {
+    ...lift,
+    monthOutlookTable: month ?? lift.monthOutlookTable ?? null,
+    weekOutlookTable: week ?? lift.weekOutlookTable ?? null,
+    climateLine: lift.climateLine || lead || undefined,
+    text: (lift.climateLine || lead || lift.text).slice(0, 220),
+  }
+}
+
 function parseMetricValue(v: string | number | null | undefined): number | null {
   if (typeof v === 'number') return Number.isFinite(v) ? v : null
   if (v == null) return null
@@ -464,10 +759,33 @@ export function weatherLiftFromTables(
     .replace(/\bSummary\b/gi, '')
     .replace(/\bMap actions\b[\s\S]*$/i, '')
     .trim()
-  return {
-    text: cleanedLead.slice(0, 160),
+
+  let tempC: number | null = null
+  let humidity: number | null = null
+  let windMs: number | null = null
+  if (current) {
+    for (const row of current.rows) {
+      const metric = String(row.values.metric ?? '')
+      const n = parseMetricValue(row.values.value as string | number | null | undefined)
+      if (n == null) continue
+      if (/^temp/i.test(metric)) tempC = n
+      else if (/humidity/i.test(metric)) humidity = n
+      else if (/wind/i.test(metric)) windMs = n
+    }
+  }
+  const climateLine = buildClimateInterpretationLine({
     condition,
     conditionLabel,
+    tempC,
+    humidity,
+    windMs,
+  })
+
+  return {
+    text: (cleanedLead || climateLine).slice(0, 200),
+    condition,
+    conditionLabel,
+    climateLine,
     currentTable: current ?? null,
     forecastTable: forecast ?? null,
   }
@@ -494,10 +812,10 @@ export function formatMetricDisplay(label: string, value: string | number | null
   return String(value)
 }
 
-/** Markdown tables the NAC UI already charts from (Now + Forecast). */
+/** Markdown tables the NAC UI already charts from (Now + Forecast + month). */
 export function formatWeatherLiftAsMarkdown(lift: NeighborhoodAgentWeatherLift): string {
   const parts: string[] = []
-  const lead = (lift.text || '').trim()
+  const lead = (lift.climateLine || lift.text || '').trim()
   if (lead) parts.push(lead)
 
   if (lift.currentTable?.rows.length) {
@@ -516,7 +834,7 @@ export function formatWeatherLiftAsMarkdown(lift: NeighborhoodAgentWeatherLift):
     parts.push('### Forecast')
     parts.push('| When | Sky | Temp °C | Feels °C |')
     parts.push('| --- | --- | ---: | ---: |')
-    const rows = lift.forecastTable.rows.slice(0, 6)
+    const rows = lift.forecastTable.rows.slice(0, 8)
     for (const row of rows) {
       const when = String(row.values.when ?? '').trim() || '—'
       const sky = String(row.values.sky ?? '').trim() || '—'
@@ -536,6 +854,37 @@ export function formatWeatherLiftAsMarkdown(lift: NeighborhoodAgentWeatherLift):
     }
   }
 
+  if (lift.monthOutlookTable?.rows.length) {
+    parts.push('### Month outlook')
+    parts.push('| Day | Sky | Max °C | Min °C |')
+    parts.push('| --- | --- | ---: | ---: |')
+    for (const row of lift.monthOutlookTable.rows.slice(0, 16)) {
+      const when = String(row.values.when ?? '').trim() || '—'
+      const sky = String(row.values.sky ?? '').trim() || '—'
+      const max = row.values.temp
+      const min = row.values.min
+      const mx = typeof max === 'number' ? max.toFixed(1) : String(max ?? '—')
+      const mn = typeof min === 'number' ? min.toFixed(1) : String(min ?? '—')
+      parts.push(`| ${when} | ${sky} | ${mx} | ${mn} |`)
+    }
+  }
+
+  if (lift.weekOutlookTable?.rows.length) {
+    parts.push('### Weekly outlook')
+    parts.push('| Week | Avg max °C | Avg min °C | Rain mm |')
+    parts.push('| --- | ---: | ---: | ---: |')
+    for (const row of lift.weekOutlookTable.rows) {
+      const when = String(row.values.when ?? '').trim() || '—'
+      const max = row.values.temp
+      const min = row.values.min
+      const pr = row.values.precip
+      const mx = typeof max === 'number' ? max.toFixed(1) : String(max ?? '—')
+      const mn = typeof min === 'number' ? min.toFixed(1) : String(min ?? '—')
+      const p = typeof pr === 'number' ? pr.toFixed(1) : String(pr ?? '—')
+      parts.push(`| ${when} | ${mx} | ${mn} | ${p} |`)
+    }
+  }
+
   return parts.join('\n\n').trim()
 }
 
@@ -545,7 +894,7 @@ export function formatWeatherLiftAsMarkdown(lift: NeighborhoodAgentWeatherLift):
  */
 export function buildFastWeatherUserReplyFromFacts(facts: string): string | null {
   const lift = liftWeatherNarrativeFromText(facts)
-  if (!lift.currentTable && !lift.forecastTable) return null
+  if (!lift.currentTable && !lift.forecastTable && !lift.monthOutlookTable) return null
   const body = formatWeatherLiftAsMarkdown(lift)
   return body.trim() ? body : null
 }

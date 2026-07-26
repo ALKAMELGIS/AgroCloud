@@ -19,7 +19,8 @@ describe('buildNeighborhoodAgentFollowUps', () => {
     })
     expect(chips.length).toBe(2)
     expect(chips.some(c => c.id === 'fu-veg')).toBe(false)
-    expect(chips.some(c => /weather|flood|neighborhood|AOI/i.test(c.label))).toBe(true)
+    expect(chips.some(c => c.id === 'fu-compare')).toBe(true)
+    expect(chips.some(c => /compare|weather|neighborhood|AOI|فئات|طقس|محيط/i.test(c.label))).toBe(true)
   })
 
   it('uses Arabic labels when the user wrote Arabic', () => {

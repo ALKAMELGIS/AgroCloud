@@ -8,8 +8,15 @@ import {
   shouldAutoChartNeighborhoodAgentTable,
 } from '../../../../lib/neighborhoodAgentStatsViz'
 import {
+  liftRsAnalysisFromText,
+  type NeighborhoodAgentRsLift,
+} from '../../../../lib/neighborhoodAgentRsViz'
+import {
   isWeatherForecastTable,
+  isWeatherMonthOutlookTable,
   isWeatherNowTable,
+  isWeatherWeekOutlookTable,
+  liftWeatherFromMarkdownReply,
   liftWeatherNarrativeFromText,
   weatherLiftFromTables,
   type NeighborhoodAgentWeatherLift,
@@ -17,6 +24,7 @@ import {
 import { type GeoExplorerMapAction } from '../GeoExplorerDynamicTable'
 import {
   NeighborhoodAgentCompactTable,
+  NeighborhoodAgentRsCard,
   NeighborhoodAgentStatsChart,
   NeighborhoodAgentWeatherCard,
 } from './NeighborhoodAgentStatsChart'
@@ -45,6 +53,7 @@ export type NeighborhoodAgentTranscriptProps = {
 type AssistantSegment =
   | GeoMarkdownSegment
   | { type: 'weather'; weather: NeighborhoodAgentWeatherLift }
+  | { type: 'rs'; analysis: NeighborhoodAgentRsLift }
 
 /** Prefer a short trailing heading as the chart/table title when markdown had no title. */
 function withInferredTableTitles(segments: AssistantSegment[]): AssistantSegment[] {
@@ -81,13 +90,21 @@ function withInferredTableTitles(segments: AssistantSegment[]): AssistantSegment
 }
 
 function pushTextOrLift(out: AssistantSegment[], rawText: string) {
-  const weather = liftWeatherNarrativeFromText(rawText)
-  if (weather.currentTable || weather.forecastTable) {
-    if (weather.text.trim()) {
-      const t = sanitizeNeighborhoodAgentReplyText(weather.text)
-      if (t.trim()) out.push({ type: 'text', text: t })
-    }
+  const weather =
+    liftWeatherFromMarkdownReply(rawText) ||
+    (() => {
+      const w = liftWeatherNarrativeFromText(rawText)
+      return w.currentTable || w.forecastTable || w.monthOutlookTable ? w : null
+    })()
+  if (weather?.currentTable || weather?.forecastTable || weather?.monthOutlookTable) {
+    // Visual weather card only — never dump raw markdown tables as plain text.
     out.push({ type: 'weather', weather })
+    return
+  }
+
+  const rs = liftRsAnalysisFromText(rawText)
+  if (rs) {
+    out.push({ type: 'rs', analysis: rs })
     return
   }
 
@@ -114,20 +131,38 @@ function coalesceWeatherSegments(segments: AssistantSegment[]): AssistantSegment
     if (used.has(i)) continue
     const seg = segments[i]!
 
-    if (seg.type === 'table' && (isWeatherNowTable(seg.table) || isWeatherForecastTable(seg.table))) {
+    if (seg.type === 'weather') {
+      out.push(seg)
+      continue
+    }
+
+    if (
+      seg.type === 'table' &&
+      (isWeatherNowTable(seg.table) ||
+        isWeatherForecastTable(seg.table) ||
+        isWeatherMonthOutlookTable(seg.table) ||
+        isWeatherWeekOutlookTable(seg.table))
+    ) {
       let current = isWeatherNowTable(seg.table) ? seg.table : null
       let forecast = isWeatherForecastTable(seg.table) ? seg.table : null
+      let month = isWeatherMonthOutlookTable(seg.table) ? seg.table : null
+      let week = isWeatherWeekOutlookTable(seg.table) ? seg.table : null
       used.add(i)
 
-      for (let j = i + 1; j < segments.length && j <= i + 5; j++) {
+      for (let j = i + 1; j < segments.length && j <= i + 10; j++) {
         if (used.has(j)) continue
         const s = segments[j]!
         if (s.type === 'text') {
           const t = s.text.replace(/^#+\s*/gm, '').trim()
           if (
-            /^(weather|now|forecast|summary|map actions)\b/i.test(t) ||
+            /^(weather|now|forecast|month|weekly|summary|map actions)\b/i.test(t) ||
             (t.length < 90 && /^(temp|feels|humidity|wind)\b/i.test(t))
           ) {
+            used.add(j)
+            continue
+          }
+          // Climate one-liner — absorb into weather lead
+          if (t.length <= 220 && /climate|conditions|°|temp|sky|clear|cloud|rain|hot|warm|mild|cool/i.test(t)) {
             used.add(j)
             continue
           }
@@ -141,6 +176,16 @@ function coalesceWeatherSegments(segments: AssistantSegment[]): AssistantSegment
           }
           if (!forecast && isWeatherForecastTable(s.table)) {
             forecast = s.table
+            used.add(j)
+            continue
+          }
+          if (!month && isWeatherMonthOutlookTable(s.table)) {
+            month = s.table
+            used.add(j)
+            continue
+          }
+          if (!week && isWeatherWeekOutlookTable(s.table)) {
+            week = s.table
             used.add(j)
             continue
           }
@@ -158,7 +203,7 @@ function coalesceWeatherSegments(segments: AssistantSegment[]): AssistantSegment
           .trim()
         if (!cleaned || /^(summary|weather)\s*$/i.test(cleaned)) {
           out.pop()
-        } else if (cleaned.length <= 180) {
+        } else if (cleaned.length <= 220) {
           lead = cleaned
           out.pop()
         }
@@ -166,13 +211,25 @@ function coalesceWeatherSegments(segments: AssistantSegment[]): AssistantSegment
 
       const weather = weatherLiftFromTables(current, forecast, lead)
       if (weather) {
-        if (weather.text.trim()) out.push({ type: 'text', text: weather.text })
-        out.push({ type: 'weather', weather })
+        out.push({
+          type: 'weather',
+          weather: {
+            ...weather,
+            monthOutlookTable: month ?? weather.monthOutlookTable ?? null,
+            weekOutlookTable: week ?? weather.weekOutlookTable ?? null,
+          },
+        })
         continue
       }
     }
 
     if (seg.type === 'text') {
+      // Whole-blob weather markdown (tables not split) → card
+      const wx = liftWeatherFromMarkdownReply(seg.text)
+      if (wx?.currentTable || wx?.forecastTable || wx?.monthOutlookTable) {
+        out.push({ type: 'weather', weather: wx })
+        continue
+      }
       const t = seg.text
         .replace(/^#+\s*Map actions\s*$/gim, '')
         .replace(/^#+\s*Summary\s*$/gim, '')
@@ -189,6 +246,37 @@ function coalesceWeatherSegments(segments: AssistantSegment[]): AssistantSegment
 }
 
 function assistantSegments(parts: GeoExplorerPart[]): AssistantSegment[] {
+  // Fast path: entire assistant message is a weather markdown reply.
+  const textBlob = parts
+    .filter((p): p is Extract<GeoExplorerPart, { type: 'text' }> => p.type === 'text')
+    .map(p => p.text)
+    .join('\n\n')
+  const whole = liftWeatherFromMarkdownReply(textBlob) || liftWeatherNarrativeFromText(textBlob)
+  if (whole.currentTable || whole.forecastTable || whole.monthOutlookTable) {
+    // Keep any non-weather dataTable parts after the card
+    const out: AssistantSegment[] = [{ type: 'weather', weather: whole }]
+    for (const p of parts) {
+      if (p.type === 'dataTable') {
+        const t = p.table
+        if (
+          isWeatherNowTable(t) ||
+          isWeatherForecastTable(t) ||
+          isWeatherMonthOutlookTable(t) ||
+          isWeatherWeekOutlookTable(t)
+        ) {
+          continue
+        }
+        out.push({ type: 'table', table: t })
+      }
+    }
+    return out
+  }
+
+  const rsWhole = liftRsAnalysisFromText(textBlob)
+  if (rsWhole) {
+    return [{ type: 'rs', analysis: rsWhole }]
+  }
+
   const out: AssistantSegment[] = []
   for (const p of parts) {
     if (p.type === 'text') {
@@ -422,9 +510,19 @@ export function NeighborhoodAgentTranscript({
                           location={seg.weather.location}
                           condition={seg.weather.condition}
                           conditionLabel={seg.weather.conditionLabel}
+                          climateLine={seg.weather.climateLine}
                           currentTable={seg.weather.currentTable}
                           forecastTable={seg.weather.forecastTable}
+                          monthOutlookTable={seg.weather.monthOutlookTable}
+                          weekOutlookTable={seg.weather.weekOutlookTable}
                         />
+                      </div>
+                    )
+                  }
+                  if (seg.type === 'rs') {
+                    return (
+                      <div key={`${msg.id}-rs-${i}`} className="nac-msg-table">
+                        <NeighborhoodAgentRsCard analysis={seg.analysis} />
                       </div>
                     )
                   }
