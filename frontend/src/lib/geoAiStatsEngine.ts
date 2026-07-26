@@ -211,6 +211,29 @@ function findField(query: string, fields: string[]): string | null {
     const f = fields.find(x => x.toLowerCase() === explicit.toLowerCase())
     if (f) return f
   }
+
+  const ALIASES: Array<{ re: RegExp; prefer: string[] }> = [
+    {
+      re: /\b(population|pop\b|inhabitants|سكان|عدد\s*السكان)\b/i,
+      prefer: ['population', 'pop', 'pop_tot', 'pop_total', 'total_pop', 'inhabitants', 'pop2020', 'pop2010'],
+    },
+    {
+      re: /\b(area|hectares?|\bha\b|مساحة)\b/i,
+      prefer: ['area', 'area_ha', 'shape_area', 'hectares', 'sqkm', 'sq_km', 'acre'],
+    },
+    {
+      re: /\b(name|label|title|اسم)\b/i,
+      prefer: ['name', 'label', 'title', 'nam', 'nome'],
+    },
+  ]
+  for (const a of ALIASES) {
+    if (!a.re.test(query)) continue
+    for (const pref of a.prefer) {
+      const hit = fields.find(f => f.toLowerCase() === pref || f.toLowerCase().includes(pref))
+      if (hit) return hit
+    }
+  }
+
   const q = query.toLowerCase()
   let best: string | null = null
   for (const f of fields) {
@@ -457,8 +480,8 @@ export function runGeoAiStatsCommand(query: string, layers: GeoAiMapLayer[]): Ge
   const hasSqlWhereClause = Boolean(sqlWhereEarly && hasSqlWhereIntent(q))
   const hasStatIntent =
     /\b(sum|total|average|mean|min|max|count|group\s*by|statistics|stat\b|summary|tabular|table|spreadsheet|calculate field|select|selection|query)\b/i.test(q) ||
-    /\b(show\s+me|find|display|list|records|features|locate|highlight)\b/i.test(q) ||
-    /(?:مجموع|اجمالي|متوسط|أكبر|اكبر|أصغر|اصغر|عدد|إحصاء|احصاء|تحليل|تحديد|استعلام|جدول|ملخص|اعرض|أظهر|اظهر|ابحث|عرض|group by|calculate field)/i.test(q) ||
+    /\b(show\s+me|find|display|list|records|features|locate|highlight|how\s+many|how\s+much|what\s+is|what'?s|population|pop\b)\b/i.test(q) ||
+    /(?:مجموع|اجمالي|متوسط|أكبر|اكبر|أصغر|اصغر|عدد|إحصاء|احصاء|تحليل|تحديد|استعلام|جدول|ملخص|اعرض|أظهر|اظهر|ابحث|عرض|group by|calculate field|سكان|كم)\b/i.test(q) ||
     shortCodeLookup ||
     spatialSpecEarly != null ||
     hasSqlWhereClause
@@ -592,11 +615,16 @@ export function runGeoAiStatsCommand(query: string, layers: GeoAiMapLayer[]): Ge
   }
 
   const op =
-    /\b(sum|total|مجموع|اجمالي)\b/i.test(q) ? 'sum' :
-    /\b(average|mean|متوسط)\b/i.test(q) ? 'avg' :
-    /\b(min|minimum|أصغر|اصغر|ادنى)\b/i.test(q) ? 'min' :
-    /\b(max|maximum|أكبر|اكبر|اعلى)\b/i.test(q) ? 'max' :
-    'count'
+    /\b(sum|total|مجموع|اجمالي)\b/i.test(q) ||
+    (/\b(how\s+many|how\s+much)\b/i.test(q) && /\b(population|pop|area|سكان|مساحة)\b/i.test(q))
+      ? 'sum'
+      : /\b(average|mean|متوسط)\b/i.test(q)
+        ? 'avg'
+        : /\b(min|minimum|أصغر|اصغر|ادنى)\b/i.test(q)
+          ? 'min'
+          : /\b(max|maximum|أكبر|اكبر|اعلى)\b/i.test(q)
+            ? 'max'
+            : 'count'
 
   const field = findField(q, effectiveScope.fields)
 

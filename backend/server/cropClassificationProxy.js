@@ -28,6 +28,8 @@ import {
   fetchSentinelWmsBandsTiff,
   fetchSentinelWmsIndicesGrid,
   selectClearSceneDates,
+  fetchPcSentinelSceneCloudCover,
+  estimateAoiBboxFillRatio,
 } from './sentinelHubWmsStatisticsEngine.js'
 import { detectCountryFromAoi, cropProfileForCountry } from './cropCountryDatabase.js'
 import { classifyCropFields } from './cropFieldClassifier.js'
@@ -54,10 +56,10 @@ const CROP_MIN_CLEAR_FRACTION = Math.max(
   0.2,
   Math.min(0.95, Number(process.env.CROP_MIN_CLEAR_FRACTION) || 0.45),
 )
-/** Absolute floor — reject only nearly empty / failed frames. */
+/** Absolute floor — reject only nearly empty / failed frames (AOI-normalized). */
 const CROP_CLEAR_FLOOR = Math.max(
-  0.08,
-  Math.min(CROP_MIN_CLEAR_FRACTION, Number(process.env.CROP_CLEAR_FLOOR) || 0.15),
+  0.05,
+  Math.min(CROP_MIN_CLEAR_FRACTION, Number(process.env.CROP_CLEAR_FLOOR) || 0.08),
 )
 /** Target ground sampling for the classified output (m/px). 3 m sharpens farm / pivot edges. */
 const CROP_TARGET_MPP = Math.max(
@@ -356,31 +358,45 @@ async function runCountryAwarePipeline(job, input, deps) {
   }
 
   // 3 m grid: sample at CROP_TARGET_MPP so field / pivot edges stay crisp.
-  // Rank by AOI clear fraction; prefer ≥ CROP_MIN_CLEAR_FRACTION but fall back to best ≥ floor
-  // so arid / partially cloudy seasons still classify.
-  const validFractionOf = g => {
+  // Rank by AOI-normalized clear fraction (WMS GEOMETRY clip makes outside-AOI
+  // transparent — never divide by full bbox pixel count). Prefer ≥ MIN_CLEAR but
+  // fall back to best ≥ floor so arid / partially cloudy seasons still classify.
+  const aoiFill = estimateAoiBboxFillRatio(input.aoi)
+  const clearFractionOf = (g, clipped) => {
     if (!g?.valid?.length) return 0
     let ok = 0
     for (let p = 0; p < g.valid.length; p += 1) ok += g.valid[p] ? 1 : 0
-    return ok / g.valid.length
+    const denom = clipped
+      ? Math.max(1, Math.round(g.valid.length * aoiFill))
+      : g.valid.length
+    return Math.min(1, ok / denom)
   }
+
   /** @type {Array<{ grid: any; clear: number; date: string; sel: any }>} */
   const scored = []
-  for (let i = 0; i < selected.length; i += 1) {
-    const sel = selected[i]
+  const usedFetchDates = new Set()
+  let lastFetchErr = null
+  let skippedEmpty = 0
+
+  const fetchScoreDate = async (sel, opts = {}) => {
+    const date = sel.date
+    if (usedFetchDates.has(date)) return
+    usedFetchDates.add(date)
     const cloudNote = sel.cloudCover == null ? '' : ` · ${sel.cloudCover.toFixed(0)}% tile cloud`
+    const clip = opts.clipToGeometry !== false
     setJob(
       job,
       {
         status: 'fetching',
-        progress: 0.12 + (0.5 * i) / selected.length,
-        message: `Fetching scene ${i + 1}/${selected.length} (${sel.date}${cloudNote}) — ${country.name}…`,
+        progress: 0.12 + Math.min(0.5, 0.08 * usedFetchDates.size),
+        message: `Fetching scene ${usedFetchDates.size} (${date}${cloudNote}) — ${country.name}…`,
       },
       broadcast,
     )
-    const day = new Date(`${sel.date}T00:00:00Z`)
-    const t0 = new Date(day.getTime() - 6 * 86400000).toISOString().slice(0, 10)
-    const t1 = new Date(day.getTime() + 6 * 86400000).toISOString().slice(0, 10)
+    const day = new Date(`${date}T00:00:00Z`)
+    const padDays = opts.padDays ?? 6
+    const t0 = new Date(day.getTime() - padDays * 86400000).toISOString().slice(0, 10)
+    const t1 = new Date(day.getTime() + padDays * 86400000).toISOString().slice(0, 10)
     try {
       const grid = await fetchSentinelWmsIndicesGrid({
         accessToken: wmsConfig.accessToken,
@@ -388,17 +404,92 @@ async function runCountryAwarePipeline(job, input, deps) {
         geometry: input.aoi,
         timeStart: t0,
         timeEnd: t1,
-        cloudCoverage: CROP_MAX_CLOUD,
+        cloudCoverage: opts.cloudCoverage ?? CROP_MAX_CLOUD,
         metersPerPixel: CROP_TARGET_MPP,
-        maxSize: 3072,
+        maxSize: 2500,
+        clipToGeometry: clip,
       })
-      const clear = validFractionOf(grid)
-      if (clear < CROP_CLEAR_FLOOR) continue
-      scored.push({ grid, clear, date: sel.date, sel })
-    } catch {
+      const clear = clearFractionOf(grid, clip)
+      const floor = opts.clearFloor ?? CROP_CLEAR_FLOOR
+      if (clear < floor) {
+        skippedEmpty += 1
+        return
+      }
+      scored.push({ grid, clear, date, sel: { ...sel, cloudy: false } })
+    } catch (err) {
+      lastFetchErr = err
       /* skip a failed date — classifier tolerates gaps */
     }
   }
+
+  for (const sel of selected) {
+    await fetchScoreDate(sel)
+  }
+
+  // Expand candidate pool from season-wide STAC if we still lack ≥2 clear grids.
+  if (scored.length < 2 && input.season?.start && input.season?.end) {
+    setJob(
+      job,
+      {
+        status: 'fetching',
+        progress: 0.45,
+        message: 'Expanding search for clearer Sentinel-2 dates…',
+      },
+      broadcast,
+    )
+    let extras = []
+    try {
+      extras = await fetchPcSentinelSceneCloudCover(
+        input.aoi,
+        input.season.start,
+        input.season.end,
+        null,
+      )
+    } catch {
+      extras = []
+    }
+    const ceiling = Math.max(CROP_MAX_CLOUD, 70)
+    extras = extras
+      .filter(s => Number.isFinite(s.cloudCover) && s.cloudCover <= ceiling)
+      .sort((a, b) => a.cloudCover - b.cloudCover || a.date.localeCompare(b.date))
+    for (const s of extras) {
+      if (scored.length >= 4) break
+      await fetchScoreDate(
+        { date: s.date, cloudCover: s.cloudCover, cloudy: false },
+        { padDays: 8, cloudCoverage: ceiling },
+      )
+    }
+  }
+
+  // Last resort: bbox-only fetch (no GEOMETRY clip) with a lower clear floor.
+  if (scored.length < 2) {
+    setJob(
+      job,
+      {
+        status: 'fetching',
+        progress: 0.55,
+        message: 'Retrying imagery without AOI clip…',
+      },
+      broadcast,
+    )
+    const retryDates = [
+      ...selected.map(s => s.date),
+      ...evenlySpacedDates(input.season, 6),
+    ]
+    const seen = new Set()
+    for (const date of retryDates) {
+      if (scored.length >= 2) break
+      if (seen.has(date)) continue
+      seen.add(date)
+      // Allow re-fetch of previously empty clipped dates without the clip.
+      usedFetchDates.delete(date)
+      await fetchScoreDate(
+        { date, cloudCover: null, cloudy: false },
+        { clipToGeometry: false, clearFloor: 0.05, padDays: 10, cloudCoverage: 80 },
+      )
+    }
+  }
+
   scored.sort((a, b) => b.clear - a.clear || a.date.localeCompare(b.date))
   const preferred = scored.filter(s => s.clear >= CROP_MIN_CLEAR_FRACTION)
   const pool = preferred.length >= 2 ? preferred : scored
@@ -406,13 +497,13 @@ async function runCountryAwarePipeline(job, input, deps) {
   const picked = []
   const minGapMs = 5 * 86400000
   for (const s of pool) {
-    if (picked.length >= selected.length) break
+    if (picked.length >= Math.max(selected.length, 4)) break
     const t = new Date(`${s.date}T00:00:00Z`).getTime()
     if (picked.some(p => Math.abs(new Date(`${p.date}T00:00:00Z`).getTime() - t) < minGapMs)) continue
     picked.push(s)
   }
   for (const s of pool) {
-    if (picked.length >= Math.min(selected.length, 4)) break
+    if (picked.length >= Math.min(Math.max(pool.length, 2), 4)) break
     if (picked.includes(s)) continue
     picked.push(s)
   }
@@ -422,9 +513,14 @@ async function runCountryAwarePipeline(job, input, deps) {
   selected = picked.map(p => p.sel)
   if (grids.length < 2) {
     const best = scored[0]?.clear
+    if (best == null && lastFetchErr) {
+      throw new Error(
+        `Could not fetch Sentinel-2 imagery for this AOI/season: ${String(lastFetchErr?.message || lastFetchErr).slice(0, 180)}`,
+      )
+    }
     throw new Error(
       best != null
-        ? `Not enough usable Sentinel-2 scenes for this AOI/season (best AOI clear ${(best * 100).toFixed(0)}%, need ≥2 dates). Try a wider season.`
+        ? `Not enough usable Sentinel-2 scenes for this AOI/season (best AOI clear ${(best * 100).toFixed(0)}%, need ≥2 dates${skippedEmpty ? `; ${skippedEmpty} empty` : ''}). Try a wider season.`
         : 'Not enough usable Sentinel-2 imagery for this AOI/season to classify. Try a wider season or a clearer period.',
     )
   }

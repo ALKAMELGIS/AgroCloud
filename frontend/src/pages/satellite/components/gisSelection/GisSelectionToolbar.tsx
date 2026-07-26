@@ -6,8 +6,11 @@ export type GisSelectionToolbarProps = {
   active: boolean
   tool: GisSelectionTool
   setMode: GisSelectionSetMode
+  selectedCount?: number
+  resultsOpen?: boolean
   onToolChange: (tool: GisSelectionTool) => void
   onSetModeChange: (mode: GisSelectionSetMode) => void
+  onOpenResults: () => void
   onOpenAttributes: () => void
   onOpenLocation: () => void
   onClear: () => void
@@ -35,8 +38,11 @@ export function GisSelectionToolbar({
   active,
   tool,
   setMode,
+  selectedCount = 0,
+  resultsOpen = false,
   onToolChange,
   onSetModeChange,
+  onOpenResults,
   onOpenAttributes,
   onOpenLocation,
   onClear,
@@ -88,6 +94,22 @@ export function GisSelectionToolbar({
       </div>
 
       <span className="gis-sel-toolbar__sep" aria-hidden />
+
+      <button
+        type="button"
+        className={`gis-sel-toolbar__btn gis-sel-toolbar__results${resultsOpen ? ' is-on' : ''}`}
+        title="Selection results"
+        aria-label="Selection results"
+        aria-pressed={resultsOpen}
+        onClick={onOpenResults}
+      >
+        <i className="fa-solid fa-list-check" aria-hidden />
+        {selectedCount > 0 ? (
+          <span className="gis-sel-toolbar__badge" aria-hidden>
+            {selectedCount > 99 ? '99+' : selectedCount}
+          </span>
+        ) : null}
+      </button>
 
       <button type="button" className="gis-sel-toolbar__query" title="Show selected feature attributes" onClick={onOpenAttributes}>
         <i className="fa-solid fa-table-columns" aria-hidden />

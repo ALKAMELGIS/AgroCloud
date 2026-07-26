@@ -18,6 +18,7 @@ import {
   type GeoAiLiveMapState,
 } from './geoAiLiveMapContext'
 import { runGeoAiStatsCommand, type GeoAiStatsResult } from './geoAiStatsEngine'
+import { runGeoAiLayerAttributeQuery } from './geoAiLayerAttributeQuery'
 import type { GeoAiMapLayer } from './geoExplorerLayerContext'
 import type { GeoExplorerDataTablePayload } from './geoExplorerGemini'
 
@@ -31,6 +32,7 @@ export const GEO_AI_AGENT_TOOL_NAMES = [
   'search_place',
   'identify_basemap',
   'run_vector_stats',
+  'query_layer_attributes',
   'read_live_map_state',
   'read_rs_analysis',
   'get_weather_context',
@@ -170,6 +172,21 @@ const TOOL_DEFS: ToolDef[] = [
         query: {
           type: 'string',
           description: 'Natural-language stats / selection query, e.g. "count buildings" or "sum Area_ha where Crop = Wheat"',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'query_layer_attributes',
+    description:
+      'Look up a feature or aggregate attributes on loaded vector layers (population, area, codes, Field|Value). Returns authoritative values and map focus — never invent or geocode.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'User question about layer data, e.g. "how many population on it" or "attributes of MH105"',
         },
       },
       required: ['query'],
@@ -395,6 +412,41 @@ export async function executeGeoAiAgentTool(
           content: stats.reply,
           ...(stats.table ? { table: stats.table } : {}),
           ...(stats.mapFirstSync ? { mapFirstSync: stats.mapFirstSync } : {}),
+        }
+      }
+      case 'query_layer_attributes': {
+        const query = str(a.query ?? a.q ?? a.text)
+        if (!query) return { name: tool, ok: false, content: 'query_layer_attributes requires a query string.' }
+        const hit = runGeoAiLayerAttributeQuery(query, host.vectorLayers ?? [])
+        if (!hit?.handled) {
+          return {
+            name: tool,
+            ok: false,
+            content: 'No matching layer attribute result. Check loaded layers or name a field / feature code.',
+          }
+        }
+        const mapResults =
+          hit.focus != null
+            ? executeGeoAiMapCommands(
+                [
+                  {
+                    op: 'flyTo',
+                    lng: hit.focus.lng,
+                    lat: hit.focus.lat,
+                    zoom: 14,
+                    ...(hit.focus.label ? { label: hit.focus.label } : {}),
+                  },
+                ],
+                host.mapHandlers,
+              )
+            : undefined
+        return {
+          name: tool,
+          ok: true,
+          content: hit.reply,
+          ...(hit.table ? { table: hit.table } : {}),
+          ...(hit.mapFirstSync ? { mapFirstSync: hit.mapFirstSync } : {}),
+          ...(mapResults ? { mapResults } : {}),
         }
       }
       case 'read_live_map_state': {

@@ -45,7 +45,7 @@ const QUICK_LINKS: Array<{ id: SmartProcessingSectionId; icon: string; label: st
   { id: 'sam-detection', icon: 'fa-solid fa-wand-magic-sparkles', label: 'AI SAM Detection' },
   { id: 'agri-field-boundary', icon: 'fa-solid fa-crop-simple', label: 'Field Boundaries' },
   { id: 'hydro-watershed', icon: 'fa-solid fa-water', label: 'Hydro Watershed' },
-  { id: 'table-geo-ai', icon: 'fa-solid fa-sparkles', label: 'AI Agent' },
+  { id: 'table-geo-ai', icon: 'fa-solid fa-comments', label: 'AI Agent' },
 ];
 
 const WORKFLOW_ROWS: Array<{

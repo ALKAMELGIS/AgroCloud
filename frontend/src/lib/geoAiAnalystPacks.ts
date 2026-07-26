@@ -1,19 +1,21 @@
 /**
  * Analyst packs — intent classifier + multi-tool composers for Geo AI Agent chips.
  *
- * When a quick-action chip (or matching free-text) hits AOI / vegetation / density /
- * flood-heat / weather intents, the turn runner auto-executes a small tool pack
- * against live map state and loaded layers before the model writes Summary /
- * Evidence / Map actions.
+ * When a quick-action chip (or matching free-text) hits AOI / neighborhood /
+ * vegetation / density / flood-heat / weather intents, the turn runner auto-executes
+ * a small tool pack against live map state and loaded layers before the model
+ * writes Summary / Evidence / Map actions.
  */
 
 export const GEO_AI_ANALYST_PACK_IDS = [
   'analyze-aoi',
   'count-buildings',
+  'neighborhood',
   'vegetation',
   'flood-slope',
   'weather',
   'layer-summary',
+  'layer-attribute',
 ] as const
 
 export type GeoAiAnalystPackId = (typeof GEO_AI_ANALYST_PACK_IDS)[number]
@@ -26,10 +28,12 @@ export type GeoAiAnalystPackToolCall = {
 const CHIP_ID_TO_PACK: Record<string, GeoAiAnalystPackId> = {
   'analyze-aoi': 'analyze-aoi',
   'count-buildings': 'count-buildings',
+  neighborhood: 'neighborhood',
   vegetation: 'vegetation',
   'flood-slope': 'flood-slope',
   weather: 'weather',
   'layer-summary': 'layer-summary',
+  'layer-attribute': 'layer-attribute',
   identify: 'analyze-aoi',
 }
 
@@ -57,6 +61,17 @@ export function classifyGeoAiAnalystIntent(
     return 'count-buildings'
   }
 
+  // Neighborhood / surroundings — before vegetation so combined prompts keep this pack
+  if (
+    /\b(neighborhood|surroundings|area\s+character)\b/i.test(q) ||
+    /\bwhat'?s\s+around\b/i.test(q) ||
+    /\bwhat\s+is\s+around\b/i.test(q) ||
+    /\bbuildings?\b[\s\S]{0,80}\broads?\b[\s\S]{0,80}\bvegetation\b/i.test(q) ||
+    /\bvegetation\b[\s\S]{0,80}\bbuildings?\b[\s\S]{0,80}\broads?\b/i.test(q)
+  ) {
+    return 'neighborhood'
+  }
+
   // Vegetation / NDVI health
   if (
     /\b(vegetation|ndvi|ndmi|savi|evi|crop\s+health|plant\s+health|greenness)\b/i.test(q) ||
@@ -72,6 +87,19 @@ export function classifyGeoAiAnalystIntent(
     )
   ) {
     return 'flood-slope'
+  }
+
+  // Layer attribute / population / field value — before weather so "pop" isn't skipped
+  if (
+    /\b(population|pop\b|attribute|attributes|field\s+value|on\s+(this\s+)?layer|how\s+many|how\s+much|feature\s+code)\b/i.test(
+      q,
+    ) ||
+    /\b(سكان|مساحة|سمات|حقل|طبقة)\b/.test(q)
+  ) {
+    // Keep weather pack when clearly weather-only
+    if (!/\b(weather|forecast|temperature|humidity|rainfall)\b/i.test(q)) {
+      return 'layer-attribute'
+    }
   }
 
   // Weather near AOI
@@ -125,6 +153,15 @@ export function buildGeoAiAnalystPackToolCalls(
         { name: 'run_vector_stats', args: { query: 'count buildings' } },
         { name: 'run_vector_stats', args: { query: 'count roads' } },
       ]
+    case 'neighborhood':
+      return [
+        { name: 'zoom_to_aoi', args: {} },
+        { name: 'read_live_map_state', args: {} },
+        { name: 'run_vector_stats', args: { query: 'count buildings' } },
+        { name: 'run_vector_stats', args: { query: 'count roads' } },
+        { name: 'read_rs_analysis', args: {} },
+        { name: 'get_weather_context', args: { query: weatherQuery } },
+      ]
     case 'vegetation':
       return [
         { name: 'zoom_to_aoi', args: {} },
@@ -139,14 +176,18 @@ export function buildGeoAiAnalystPackToolCalls(
         { name: 'get_weather_context', args: { query: weatherQuery } },
       ]
     case 'weather':
-      return [
-        { name: 'read_live_map_state', args: {} },
-        { name: 'get_weather_context', args: { query: weatherQuery } },
-      ]
+      // Weather is authoritative from get_weather_context — skip extra map-state tool for latency.
+      return [{ name: 'get_weather_context', args: { query: weatherQuery } }]
     case 'layer-summary':
       return [
         { name: 'read_live_map_state', args: {} },
         { name: 'read_rs_analysis', args: {} },
+      ]
+    case 'layer-attribute':
+      return [
+        { name: 'read_live_map_state', args: {} },
+        { name: 'query_layer_attributes', args: { query: userMessage.trim() || 'layer attributes' } },
+        { name: 'run_vector_stats', args: { query: userMessage.trim() || 'layer stats' } },
       ]
     default:
       return []
@@ -159,6 +200,8 @@ export function geoAiAnalystPackLabel(packId: GeoAiAnalystPackId): string {
       return 'AOI multi-tool analysis'
     case 'count-buildings':
       return 'Building / road density'
+    case 'neighborhood':
+      return 'Neighborhood surroundings'
     case 'vegetation':
       return 'Vegetation / RS health'
     case 'flood-slope':
@@ -167,6 +210,8 @@ export function geoAiAnalystPackLabel(packId: GeoAiAnalystPackId): string {
       return 'Weather near map focus'
     case 'layer-summary':
       return 'Layer roster summary'
+    case 'layer-attribute':
+      return 'Layer attribute lookup'
     default:
       return packId
   }

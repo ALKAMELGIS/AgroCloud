@@ -101,7 +101,8 @@ function formatYmdUtc(y: number, m0: number, d: number): string {
 const WEATHER_ANSWER_RULES = `### WEATHER_ANSWER_RULES (mandatory)
 - Use **only** the numbers and timestamps in OPENWEATHER FACTS above for this coordinate pair. Do not invent values, cities, or dates.
 - If you see **NO_DATA_FOR_REQUESTED_DAY** or failed HTTP / subscription messages for the user’s requested day, say clearly that data could not be obtained: Arabic users → **لم أتحصل على بيانات**; English → **I could not obtain data for that request.** Do **not** substitute “current” weather or a different calendar day as if it answered the question.
-- Never describe weather for coordinates other than the "Point:" line above. Do not move the user to another place in prose.`
+- Never describe weather for coordinates other than the "Point:" line above. Do not move the user to another place in prose.
+- **Reply shape (visual-first):** ≤2 short sentences, then markdown pipe tables — never a long narrative. Include a **Now** table (Metric | Value for Temp °C, Feels °C, Humidity %, Pressure hPa, Wind m/s) and a **Forecast** table (When | Sky | Temp °C | Feels °C, ≤6 rows) when forecast rows exist. The UI renders icons + pie/bar/timeline charts from these tables — keep both tables whenever data exists. Do not mention OPENWEATHER FACTS / Evidence / tool names in user-facing text.`
 
 type ForecastItem = {
   dt?: number
@@ -145,14 +146,29 @@ export async function buildOpenWeatherContextBlock(
   let forecastList: ForecastItem[] = []
   let forecastOk = false
 
-  const base = new URL('https://api.openweathermap.org/data/2.5/weather')
-  base.searchParams.set('lat', String(lat))
-  base.searchParams.set('lon', String(lng))
-  base.searchParams.set('units', 'metric')
-  base.searchParams.set('appid', key)
+  const weatherUrl = new URL('https://api.openweathermap.org/data/2.5/weather')
+  weatherUrl.searchParams.set('lat', String(lat))
+  weatherUrl.searchParams.set('lon', String(lng))
+  weatherUrl.searchParams.set('units', 'metric')
+  weatherUrl.searchParams.set('appid', key)
+
+  const forecastUrl = new URL('https://api.openweathermap.org/data/2.5/forecast')
+  forecastUrl.searchParams.set('lat', String(lat))
+  forecastUrl.searchParams.set('lon', String(lng))
+  forecastUrl.searchParams.set('units', 'metric')
+  forecastUrl.searchParams.set('cnt', '40')
+  forecastUrl.searchParams.set('appid', key)
+
+  const [currentSettled, forecastSettled] = await Promise.allSettled([
+    fetch(weatherUrl.toString()),
+    fetch(forecastUrl.toString()),
+  ])
 
   try {
-    const res = await fetch(base.toString())
+    if (currentSettled.status === 'rejected') {
+      throw currentSettled.reason
+    }
+    const res = currentSettled.value
     if (!res.ok) {
       const errText = await res.text().catch(() => '')
       lines.push(`Current weather request failed (HTTP ${res.status}). ${errText.slice(0, 200)}`)
@@ -183,13 +199,10 @@ export async function buildOpenWeatherContextBlock(
   }
 
   try {
-    const fc = new URL('https://api.openweathermap.org/data/2.5/forecast')
-    fc.searchParams.set('lat', String(lat))
-    fc.searchParams.set('lon', String(lng))
-    fc.searchParams.set('units', 'metric')
-    fc.searchParams.set('cnt', '40')
-    fc.searchParams.set('appid', key)
-    const res = await fetch(fc.toString())
+    if (forecastSettled.status === 'rejected') {
+      throw forecastSettled.reason
+    }
+    const res = forecastSettled.value
     if (!res.ok) {
       lines.push(`Forecast request failed (HTTP ${res.status}).`)
     } else {

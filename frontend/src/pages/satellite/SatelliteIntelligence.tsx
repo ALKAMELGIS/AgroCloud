@@ -325,8 +325,9 @@ import {
 } from '../../lib/geoAiLinkedSelection';
 import { SI_GEO_AI_MAP_SELECTION_PAINT } from './siGeoAiMapSelectionPaint';
 import { runGeoAiStatsCommand, type GeoAiMapFirstSelection } from '../../lib/geoAiStatsEngine';
+import { runGeoAiLayerAttributeQuery } from '../../lib/geoAiLayerAttributeQuery';
 import { resolveGeoAiPinFromUserTextAndReply } from '../../lib/geoAiResolveMapCoords';
-import { buildGeoAiFullWeatherSessionAppend } from '../../lib/geoAiWeatherContext';
+import { buildGeoAiFullWeatherSessionAppend, buildGeoAiLeanWeatherFactsForAgent } from '../../lib/geoAiWeatherContext';
 import {
   installSiGlobeWebglContextRecovery,
   siBrowserReportsMicrosoftEdge,
@@ -436,8 +437,6 @@ import {
 } from './siSymbolStyleStudio';
 import { AgroCloudMark } from '../../components/AgroCloudMark';
 import { FieldVisibilityControl } from './components/FieldVisibilityControl';
-import { GeoExplorerGeminiInputRow } from './components/GeoExplorerGeminiInputRow';
-import { GeoExplorerGeminiMessageParts } from './components/GeoExplorerGeminiMessageParts';
 import { SiCopyTextButton } from './components/SiCopyTextButton';
 import type { AoiStaticMultiLayerLineChartDataset } from './components/AoiStaticMultiLayerLineChart';
 import { SatelliteMapAnalysisChrome, type MapToolboxNavigateHandler } from './components/SatelliteMapAnalysisChrome';
@@ -532,6 +531,18 @@ import {
   detectQueryLanguage,
   type MapSearchResult,
 } from '../../lib/mapSearchGeocode';
+import {
+  formatNeighborhoodAgentFlyReply,
+  formatNeighborhoodAgentPlaceNotFound,
+  NEIGHBORHOOD_AGENT_MAP_REPLY_ADDENDUM,
+  parseNeighborhoodAgentPlaceIntent,
+} from '../../lib/neighborhoodAgentPlaceIntent';
+import {
+  base64ToUtf8,
+  geoAiAttachIsTextish,
+  readGeoAiAttachFile,
+  validateGeoAiAttachFile,
+} from '../../lib/geoAiAttachFile';
 import type { TreeImageryProviderId } from '../../lib/treeDetection/webMercatorTiles';
 import type { TreeAnalysisMode } from '../../lib/treeDetection/treeDetectionEngine';
 import { HydroWatershedPanel } from './components/HydroWatershedPanel';
@@ -575,14 +586,10 @@ import {
   resolveHostedFeatureLayerExternalUrl,
 } from '../../lib/gisHostedFeatureLayerPortal';
 import { listGisContentPortalSavedLayers, parseGisContentPortalLayerUrl, gisContentPortalLayerUrl } from '../../lib/gisContentPortalTableUtils';
-import { SatelliteGeoAiFloatingWidget } from './components/SatelliteGeoAiFloatingWidget';
-import {
-  GeoAiAgentPanel,
-  type GeoAiAgentHistoryEntry,
-} from './components/geoAiAgent/GeoAiAgentPanel';
+import { NeighborhoodAgentChat } from './components/neighborhoodAgent/NeighborhoodAgentChat';
+import { geoAiPackResultToExplorerMessage } from './components/neighborhoodAgent/neighborhoodAgentEvidence';
 import {
   GEO_AI_AGENT_PREFS_LS_KEY,
-  fabIconFaClass,
   readGeoAiAgentPrefs,
   writeGeoAiAgentPrefs,
   type GeoAiAgentPrefs,
@@ -5044,7 +5051,6 @@ export default function SatelliteIntelligence() {
   const [geoAiFloatingOpen, setGeoAiFloatingOpen] = useState(false);
   const [layerLiveLegendOpen, setLayerLiveLegendOpen] = useState(false);
   const [geoAiFloatingExpanded, setGeoAiFloatingExpanded] = useState(false);
-  const [geoAiAgentHistory, setGeoAiAgentHistory] = useState<GeoAiAgentHistoryEntry[]>([]);
   const geoAiAgentPrefsLs = siScope.scopedStorageKey(GEO_AI_AGENT_PREFS_LS_KEY);
   const [geoAiAgentPrefs, setGeoAiAgentPrefs] = useState<GeoAiAgentPrefs>(() =>
     readGeoAiAgentPrefs(geoAiAgentPrefsLs),
@@ -5053,6 +5059,9 @@ export default function SatelliteIntelligence() {
   const geoAiPendingChipIdRef = useRef<string | undefined>(undefined);
   const geoAiLiveMapStateObjRef = useRef<GeoAiLiveMapState | null>(null);
   const geoAiMapCommandHandlersRef = useRef<GeoAiMapCommandHandlers>({});
+  const tryNeighborhoodAgentPlaceFlyRef = useRef<
+    ((userText: string) => Promise<GeoExplorerMessage | null>) | null
+  >(null);
 
   const onGeoAiFloatingRailToggle = useCallback(() => {
     setGeoAiFloatingOpen(prev => {
@@ -5101,6 +5110,7 @@ export default function SatelliteIntelligence() {
   const [geoExplorerPendingImage, setGeoExplorerPendingImage] = useState<{
     mime: string;
     base64: string;
+    name?: string;
   } | null>(null);
   const [geoExplorerBusy, setGeoExplorerBusy] = useState(false);
   /** Distinguishes full send vs in-place question edit so the UI shows "Updating..." instead of "Thinking...". */
@@ -5546,10 +5556,11 @@ export default function SatelliteIntelligence() {
       const dataCtx = await buildGeoAiDataContext(undefined, {
         satelliteLayers: satelliteCustomLayersToGeoAiLayers(customLayers),
       });
-      const system = `${GEO_AI_CHAT_SYSTEM_BASE}\n\n---\n## Geo AI Copilot mission\n${GEO_AI_COPILOT_RULES}\n\n---\nDATA CONTEXT (authoritative for this session turn):\n${dataCtx}`;
+      const nacMapAddendum = geoAiFloatingOpen ? `\n\n${NEIGHBORHOOD_AGENT_MAP_REPLY_ADDENDUM}` : '';
+      const system = `${GEO_AI_CHAT_SYSTEM_BASE}\n\n---\n## Geo AI Copilot mission\n${GEO_AI_COPILOT_RULES}${nacMapAddendum}\n\n---\nDATA CONTEXT (authoritative for this session turn):\n${dataCtx}`;
 
       const weatherFetcher = async (query: string) =>
-        buildGeoAiFullWeatherSessionAppend({
+        buildGeoAiLeanWeatherFactsForAgent({
           userText: query,
           pinLngLat: geoAiPinLngLat,
           lastMapQueryCoords: null,
@@ -5558,7 +5569,6 @@ export default function SatelliteIntelligence() {
           combinedLayers: opts.vectorLayers,
           mapboxAccessToken: mapboxToken || undefined,
           openWeatherApiKey,
-          mapPopup: null,
         });
 
       return runGeoAiAgentTurn({
@@ -5583,6 +5593,7 @@ export default function SatelliteIntelligence() {
       customLayers,
       geoAiPinLngLat,
       geoAiInspectCard,
+      geoAiFloatingOpen,
       mapboxToken,
       openWeatherApiKey,
       ollamaConfig.baseUrl,
@@ -5623,6 +5634,61 @@ export default function SatelliteIntelligence() {
                 .arcgisLayerDefinition,
             })),
           ];
+
+          // Layer attribute / population Q&A before place-fly geocode.
+          const layerAttr = runGeoAiLayerAttributeQuery(trimmed, mergedLayersForStats);
+          if (layerAttr?.handled) {
+            const mid =
+              typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `geo-la-${Date.now()}`;
+            const parts: GeoExplorerPart[] = [{ type: 'text', text: layerAttr.reply }];
+            if (layerAttr.table) parts.push({ type: 'dataTable', table: layerAttr.table });
+            const modelMsg: GeoExplorerMessage = {
+              id: mid,
+              role: 'model',
+              parts,
+              ...(layerAttr.focus
+                ? { mapFocus: { lng: layerAttr.focus.lng, lat: layerAttr.focus.lat, label: layerAttr.focus.label } }
+                : {}),
+            };
+            setGeoExplorerMessages(h => [...h, modelMsg]);
+            if (layerAttr.mapFirstSync?.selections?.length) {
+              queueMicrotask(() => applySatelliteGeoAiMapFirstSync(layerAttr.mapFirstSync!.selections));
+            }
+            if (layerAttr.focus) {
+              setGeoAiPinLngLat([layerAttr.focus.lng, layerAttr.focus.lat]);
+              setViewState(vs => ({
+                ...vs,
+                longitude: layerAttr.focus!.lng,
+                latitude: layerAttr.focus!.lat,
+                zoom: Math.max(14, typeof vs.zoom === 'number' ? vs.zoom : 2),
+              }));
+              if (layerAttr.layerHit?.properties) {
+                const lyrCfg = customLayers.find(l => l.name === layerAttr.layerHit!.layerName);
+                const built = buildGeoAiInspectCardContent({
+                  properties: layerAttr.layerHit.properties,
+                  arcgisLayerDefinition: layerAttr.layerHit.arcgisLayerDefinition,
+                  popupConfig: lyrCfg?.popupConfig,
+                  queryContext: trimmed,
+                  inspectCoords: { lng: layerAttr.focus.lng, lat: layerAttr.focus.lat },
+                });
+                stageGeoAiInspectCard({
+                  title: layerAttr.focus.label || layerAttr.layerHit.layerName || 'Feature',
+                  rows: built.rows,
+                  inspect: built.inspect,
+                  lng: layerAttr.focus.lng,
+                  lat: layerAttr.focus.lat,
+                  ...pickGeoAiHumanPlaceFields(layerAttr.layerHit.properties),
+                });
+              }
+            }
+            return;
+          }
+
+          const placeMsg = await tryNeighborhoodAgentPlaceFlyRef.current?.(trimmed);
+          if (placeMsg) {
+            setGeoExplorerMessages(h => [...h, placeMsg]);
+            return;
+          }
           const packChipId = geoAiPendingChipIdRef.current;
           geoAiPendingChipIdRef.current = undefined;
           const packHistory: GeoAiAgentChatTurn[] = historyWithUser.slice(0, -1).map(m => ({
@@ -5643,15 +5709,14 @@ export default function SatelliteIntelligence() {
           if (packResult) {
             const mid =
               typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `geo-pack-${Date.now()}`;
-            const parts: GeoExplorerPart[] = [{ type: 'text', text: packResult.replyText }];
-            if (packResult.table) parts.push({ type: 'dataTable', table: packResult.table });
-            setGeoExplorerMessages(h => [...h, { id: mid, role: 'model', parts }]);
+            setGeoExplorerMessages(h => [...h, geoAiPackResultToExplorerMessage(packResult, mid)]);
             if (packResult.mapFirstSync?.selections?.length) {
               queueMicrotask(() => applySatelliteGeoAiMapFirstSync(packResult.mapFirstSync!.selections));
             }
             if (packResult.mapQueryLngLat) {
               setGeoAiPinLngLat(packResult.mapQueryLngLat);
             }
+            runGeoAiMapCommandsRef.current?.(packResult.replyText);
             return;
           }
           const localStats = runGeoAiStatsCommand(trimmed, mergedLayersForStats);
@@ -5695,7 +5760,13 @@ export default function SatelliteIntelligence() {
           addedLayersHeading: '### Satellite â€” Added layers (this map â€” si-env / vector layers)',
           attachGisSavedLayers: true,
           extraSystemAppend:
-            [geoAiLiveMapStateBlockRef.current, developAppend].filter(Boolean).join('\n\n') || undefined,
+            [
+              geoAiFloatingOpen ? NEIGHBORHOOD_AGENT_MAP_REPLY_ADDENDUM : '',
+              geoAiLiveMapStateBlockRef.current,
+              developAppend,
+            ]
+              .filter(Boolean)
+              .join('\n\n') || undefined,
           questionEditInPlace,
         });
         setGeoExplorerMessages(h => [...h, result.modelMsg]);
@@ -5764,9 +5835,11 @@ export default function SatelliteIntelligence() {
       openWeatherApiKey,
       geoAiPinLngLat,
       geoAiInspectCard,
+      geoAiFloatingOpen,
       is3DView,
       stageGeoAiInspectCard,
       runSatelliteGeoAiAnalystPackIfMatched,
+      customLayers,
     ],
   );
 
@@ -9455,6 +9528,90 @@ export default function SatelliteIntelligence() {
     [],
   );
 
+  /** Neighborhood Agent: geocode + fly AgroCloud map; never HTML embeds. */
+  const tryNeighborhoodAgentPlaceFly = useCallback(
+    async (userText: string): Promise<GeoExplorerMessage | null> => {
+      if (!geoAiFloatingOpen) return null;
+      const intent = parseNeighborhoodAgentPlaceIntent(userText);
+      if (!intent) return null;
+      const mid =
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `nac-fly-${Date.now()}`;
+      const docEl = typeof document !== 'undefined' ? document.documentElement : null;
+      const uiLang: 'ar' | 'en' =
+        docEl?.lang?.toLowerCase().startsWith('ar') || docEl?.dir === 'rtl' ? 'ar' : 'en';
+      const lang: 'ar' | 'en' = detectQueryLanguage(intent.query) === 'ar' ? 'ar' : uiLang;
+      try {
+        const results = await searchPlaces(intent.query, {
+          mapboxToken,
+          proximity: getMapProximity(),
+          language: lang,
+          limit: 5,
+          autocomplete: false,
+        });
+        const top = results[0];
+        if (!top) {
+          return {
+            id: mid,
+            role: 'model',
+            parts: [{ type: 'text', text: formatNeighborhoodAgentPlaceNotFound(intent.query, lang) }],
+          };
+        }
+        handleSelectSearchResult(top);
+        setGeoAiPinLngLat([top.lng, top.lat]);
+        stageGeoAiInspectCard({
+          title: top.label,
+          rows: [
+            ...(top.subtitle ? [{ label: 'Location', value: top.subtitle }] : []),
+            ...(top.kind ? [{ label: 'Type', value: top.kind }] : []),
+            { label: 'Longitude', value: top.lng.toFixed(6) },
+            { label: 'Latitude', value: top.lat.toFixed(6) },
+          ],
+          lng: top.lng,
+          lat: top.lat,
+        });
+        return {
+          id: mid,
+          role: 'model',
+          parts: [
+            {
+              type: 'text',
+              text: formatNeighborhoodAgentFlyReply(
+                { label: top.label, subtitle: top.subtitle, lng: top.lng, lat: top.lat },
+                lang,
+              ),
+            },
+          ],
+          mapFocus: { lng: top.lng, lat: top.lat, label: top.label },
+        };
+      } catch {
+        return {
+          id: mid,
+          role: 'model',
+          parts: [{ type: 'text', text: formatNeighborhoodAgentPlaceNotFound(intent.query, lang) }],
+        };
+      }
+    },
+    [geoAiFloatingOpen, mapboxToken, getMapProximity, handleSelectSearchResult, stageGeoAiInspectCard],
+  );
+  tryNeighborhoodAgentPlaceFlyRef.current = tryNeighborhoodAgentPlaceFly;
+
+  const focusNeighborhoodAgentMap = useCallback(
+    (focus: { lng: number; lat: number; label?: string }) => {
+      handleSelectSearchResult({
+        id: `focus-${focus.lng},${focus.lat}`,
+        label: focus.label || 'Location',
+        subtitle: '',
+        lng: focus.lng,
+        lat: focus.lat,
+        score: 1,
+      });
+      setGeoAiPinLngLat([focus.lng, focus.lat]);
+    },
+    [handleSelectSearchResult],
+  );
+
   const performSearch = useCallback(async () => {
     const results = await runPlaceSearch(searchQuery, { autocomplete: false });
     if (results.length) handleSelectSearchResult(results[0]);
@@ -10724,7 +10881,7 @@ export default function SatelliteIntelligence() {
     geoOllamaChatMessages.length,
   ]);
 
-  const archiveGeoAiAgentChatTitle = useCallback((): string | null => {
+  const geoAiAgentSessionTitle = useMemo((): string | null => {
     const msgs =
       geoAiModelTab === 'gemini'
         ? geoExplorerMessages
@@ -10751,14 +10908,8 @@ export default function SatelliteIntelligence() {
   ]);
 
   const handleGeoAiAgentNewChat = useCallback(() => {
-    const title = archiveGeoAiAgentChatTitle();
-    if (title) {
-      setGeoAiAgentHistory(prev =>
-        [{ id: `geo-ai-hist-${Date.now()}`, title, at: Date.now() }, ...prev].slice(0, 40),
-      );
-    }
     clearCurrentGeoAiPanel();
-  }, [archiveGeoAiAgentChatTitle, clearCurrentGeoAiPanel]);
+  }, [clearCurrentGeoAiPanel]);
 
   const applySatelliteGeoAiMapUi = useCallback(
     async (userText: string, reply: string) => {
@@ -10869,8 +11020,14 @@ export default function SatelliteIntelligence() {
     if (geoExplorerInFlightRef.current) return;
     if (!trimmed && !geoExplorerPendingImage) return;
     if (trimmed) geoAiLastUserMapQueryRef.current = trimmed;
+
+    const placeIntent =
+      geoAiFloatingOpen && trimmed && !geoExplorerPendingImage
+        ? parseNeighborhoodAgentPlaceIntent(trimmed)
+        : null;
+
     const apiKey = geminiApiKey.trim();
-    if (!apiKey) {
+    if (!placeIntent && !apiKey) {
       setGeoExplorerChatError(
         'Add a Gemini API key: System Settings â†’ API Tokens â†’ Gemini API (saved in this browser), or set VITE_GEMINI_API_KEY at build time. Never commit keys to Git.'
       );
@@ -10880,11 +11037,28 @@ export default function SatelliteIntelligence() {
     const userParts: GeoExplorerPart[] = [];
     if (trimmed) userParts.push({ type: 'text', text: trimmed });
     if (geoExplorerPendingImage) {
-      userParts.push({
-        type: 'image',
-        mime: geoExplorerPendingImage.mime,
-        base64: geoExplorerPendingImage.base64,
-      });
+      const att = geoExplorerPendingImage;
+      if (geoAiAttachIsTextish(att.mime, att.name)) {
+        try {
+          const body = base64ToUtf8(att.base64);
+          userParts.push({
+            type: 'text',
+            text: `[Attached file: ${att.name || 'file'}]\n${body.slice(0, 120_000)}`,
+          });
+        } catch {
+          userParts.push({
+            type: 'image',
+            mime: att.mime,
+            base64: att.base64,
+          });
+        }
+      } else {
+        userParts.push({
+          type: 'image',
+          mime: att.mime,
+          base64: att.base64,
+        });
+      }
     }
     if (userParts.length === 0) return;
 
@@ -10905,21 +11079,41 @@ export default function SatelliteIntelligence() {
 
     setGeoExplorerMessages(prev => {
       const historyWithUser = [...prev, userMsg];
-      queueMicrotask(() =>
-        void runSatelliteGeoExplorerGeminiPipeline({
-          historyWithUser,
-          userTextForMapFallback,
-          coordsSourceMessages: prev,
-          skipLocalStatsBecausePendingImage: composerHadPendingImage,
-          questionEditInPlace: false,
-        }),
-      );
+      queueMicrotask(async () => {
+        try {
+          if (placeIntent) {
+            const placeMsg = await tryNeighborhoodAgentPlaceFlyRef.current?.(trimmed);
+            if (placeMsg) {
+              setGeoExplorerMessages(h => [...h, placeMsg]);
+              return;
+            }
+          }
+          if (!apiKey) {
+            setGeoExplorerChatError(
+              'Add a Gemini API key: System Settings â†’ API Tokens â†’ Gemini API (saved in this browser), or set VITE_GEMINI_API_KEY at build time. Never commit keys to Git.',
+            );
+            return;
+          }
+          await runSatelliteGeoExplorerGeminiPipeline({
+            historyWithUser,
+            userTextForMapFallback,
+            coordsSourceMessages: prev,
+            skipLocalStatsBecausePendingImage: composerHadPendingImage,
+            questionEditInPlace: false,
+          });
+        } finally {
+          geoExplorerInFlightRef.current = false;
+          setGeoExplorerBusy(false);
+          setGeoExplorerAwaitKind('send');
+        }
+      });
       return historyWithUser;
     });
   }, [
     geminiApiKey,
     geoExplorerDraft,
     geoExplorerPendingImage,
+    geoAiFloatingOpen,
     runSatelliteGeoExplorerGeminiPipeline,
   ]);
 
@@ -11235,8 +11429,9 @@ export default function SatelliteIntelligence() {
     const trimmed = (voiceOverrideText ?? geoAiDraft).trim();
     if (geoAiInFlightRef.current || !trimmed) return;
     geoAiLastUserMapQueryRef.current = trimmed;
+    const placeIntent = geoAiFloatingOpen ? parseNeighborhoodAgentPlaceIntent(trimmed) : null;
     const apiKey = claudeApiKey.trim();
-    if (!apiKey) {
+    if (!placeIntent && !apiKey) {
       setGeoAiChatError(
         'Add a Claude API key: System Settings â†’ API Tokens â†’ Claude API (Anthropic), or set VITE_CLAUDE_API_KEY at build time. Never commit keys to Git.',
       );
@@ -11271,6 +11466,48 @@ export default function SatelliteIntelligence() {
                 .arcgisLayerDefinition,
             })),
           ];
+          const layerAttr = runGeoAiLayerAttributeQuery(trimmed, mergedLayersForStats);
+          if (layerAttr?.handled) {
+            const mid =
+              typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `gaic-la-${Date.now()}`;
+            const parts: GeoExplorerPart[] = [{ type: 'text', text: layerAttr.reply }];
+            if (layerAttr.table) parts.push({ type: 'dataTable', table: layerAttr.table });
+            setGeoAiChatMessages(h => [
+              ...h,
+              {
+                id: mid,
+                role: 'model',
+                parts,
+                ...(layerAttr.focus
+                  ? { mapFocus: { lng: layerAttr.focus.lng, lat: layerAttr.focus.lat, label: layerAttr.focus.label } }
+                  : {}),
+              },
+            ]);
+            if (layerAttr.mapFirstSync?.selections?.length) {
+              queueMicrotask(() => applySatelliteGeoAiMapFirstSync(layerAttr.mapFirstSync!.selections));
+            }
+            if (layerAttr.focus) {
+              setGeoAiPinLngLat([layerAttr.focus.lng, layerAttr.focus.lat]);
+              setViewState(vs => ({
+                ...vs,
+                longitude: layerAttr.focus!.lng,
+                latitude: layerAttr.focus!.lat,
+                zoom: Math.max(14, typeof vs.zoom === 'number' ? vs.zoom : 2),
+              }));
+            }
+            return;
+          }
+          const placeMsg = await tryNeighborhoodAgentPlaceFlyRef.current?.(trimmed);
+          if (placeMsg) {
+            setGeoAiChatMessages(h => [...h, placeMsg]);
+            return;
+          }
+          if (!apiKey) {
+            setGeoAiChatError(
+              'Add a Claude API key: System Settings â†’ API Tokens â†’ Claude API (Anthropic), or set VITE_CLAUDE_API_KEY at build time. Never commit keys to Git.',
+            );
+            return;
+          }
           const packChipId = geoAiPendingChipIdRef.current;
           geoAiPendingChipIdRef.current = undefined;
           const packHistory: GeoAiAgentChatTurn[] = historyWithUser.slice(0, -1).map(m => ({
@@ -11290,15 +11527,14 @@ export default function SatelliteIntelligence() {
           });
           if (packResult) {
             const aid = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `gaic-pack-${Date.now()}`;
-            const parts: GeoExplorerPart[] = [{ type: 'text', text: packResult.replyText }];
-            if (packResult.table) parts.push({ type: 'dataTable', table: packResult.table });
-            setGeoAiChatMessages(h => [...h, { id: aid, role: 'model', parts }]);
+            setGeoAiChatMessages(h => [...h, geoAiPackResultToExplorerMessage(packResult, aid)]);
             if (packResult.mapFirstSync?.selections?.length) {
               queueMicrotask(() => applySatelliteGeoAiMapFirstSync(packResult.mapFirstSync!.selections));
             }
             if (packResult.mapQueryLngLat) {
               setGeoAiPinLngLat(packResult.mapQueryLngLat);
             }
+            runGeoAiMapCommandsRef.current?.(packResult.replyText);
             return;
           }
           const localStats = runGeoAiStatsCommand(trimmed, mergedLayersForStats);
@@ -11342,7 +11578,8 @@ export default function SatelliteIntelligence() {
           const liveMapBlock = geoAiLiveMapStateBlockRef.current
             ? `\n\n---\n${geoAiLiveMapStateBlockRef.current}`
             : '';
-          const system = `${GEO_AI_CHAT_SYSTEM_BASE}\n\n---\n## Geo AI Copilot mission\n${GEO_AI_COPILOT_RULES}${weatherAppend}${liveMapBlock}\n\n---\nDATA CONTEXT (authoritative for this session turn):\n${dataCtx}`;
+          const nacMapAddendum = geoAiFloatingOpen ? `\n\n${NEIGHBORHOOD_AGENT_MAP_REPLY_ADDENDUM}` : '';
+          const system = `${GEO_AI_CHAT_SYSTEM_BASE}\n\n---\n## Geo AI Copilot mission\n${GEO_AI_COPILOT_RULES}${nacMapAddendum}${weatherAppend}${liveMapBlock}\n\n---\nDATA CONTEXT (authoritative for this session turn):\n${dataCtx}`;
           const turns: GeoAiChatTurn[] = prior.map(m => ({
             role: m.role === 'user' ? 'user' : 'assistant',
             text: m.parts
@@ -11373,6 +11610,7 @@ export default function SatelliteIntelligence() {
   }, [
     claudeApiKey,
     geoAiDraft,
+    geoAiFloatingOpen,
     applySatelliteGeoAiMapUi,
     applySatelliteGeoAiMapFirstSync,
     customLayers,
@@ -11387,8 +11625,9 @@ export default function SatelliteIntelligence() {
     const trimmed = (voiceOverrideText ?? geoDeepseekDraft).trim();
     if (geoDeepseekInFlightRef.current || !trimmed) return;
     geoAiLastUserMapQueryRef.current = trimmed;
+    const placeIntent = geoAiFloatingOpen ? parseNeighborhoodAgentPlaceIntent(trimmed) : null;
     const apiKey = deepseekApiKey.trim();
-    if (!apiKey) {
+    if (!placeIntent && !apiKey) {
       setGeoDeepseekChatError(
         'Add a DeepSeek API key: System Settings â†’ API Tokens â†’ DeepSeek, or set VITE_DEEPSEEK_API_KEY at build time. Never commit keys to Git.',
       );
@@ -11410,6 +11649,17 @@ export default function SatelliteIntelligence() {
     setGeoDeepseekChatMessages(prev => [...prev, userMsg]);
     queueMicrotask(async () => {
         try {
+          const placeMsg = await tryNeighborhoodAgentPlaceFlyRef.current?.(trimmed);
+          if (placeMsg) {
+            setGeoDeepseekChatMessages(h => [...h, placeMsg]);
+            return;
+          }
+          if (!apiKey) {
+            setGeoDeepseekChatError(
+              'Add a DeepSeek API key: System Settings â†’ API Tokens â†’ DeepSeek, or set VITE_DEEPSEEK_API_KEY at build time. Never commit keys to Git.',
+            );
+            return;
+          }
           const savedLayersForStats = await loadGisMapSavedLayers();
           const mergedLayersForStats: GeoAiMapLayer[] = [
             ...satelliteCustomLayersToGeoAiLayers(customLayers),
@@ -11442,15 +11692,14 @@ export default function SatelliteIntelligence() {
           });
           if (packResult) {
             const aid = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `gds-pack-${Date.now()}`;
-            const parts: GeoExplorerPart[] = [{ type: 'text', text: packResult.replyText }];
-            if (packResult.table) parts.push({ type: 'dataTable', table: packResult.table });
-            setGeoDeepseekChatMessages(h => [...h, { id: aid, role: 'model', parts }]);
+            setGeoDeepseekChatMessages(h => [...h, geoAiPackResultToExplorerMessage(packResult, aid)]);
             if (packResult.mapFirstSync?.selections?.length) {
               queueMicrotask(() => applySatelliteGeoAiMapFirstSync(packResult.mapFirstSync!.selections));
             }
             if (packResult.mapQueryLngLat) {
               setGeoAiPinLngLat(packResult.mapQueryLngLat);
             }
+            runGeoAiMapCommandsRef.current?.(packResult.replyText);
             return;
           }
           const localStats = runGeoAiStatsCommand(trimmed, mergedLayersForStats);
@@ -11495,7 +11744,8 @@ export default function SatelliteIntelligence() {
           const liveMapBlockDs = geoAiLiveMapStateBlockRef.current
             ? `\n\n---\n${geoAiLiveMapStateBlockRef.current}`
             : '';
-          const system = `${GEO_AI_CHAT_SYSTEM_BASE}\n\n---\n## Geo AI Copilot mission\n${GEO_AI_COPILOT_RULES}${weatherAppendDs}${liveMapBlockDs}\n\n---\nDATA CONTEXT (authoritative for this session turn):\n${dataCtx}`;
+          const nacMapAddendumDs = geoAiFloatingOpen ? `\n\n${NEIGHBORHOOD_AGENT_MAP_REPLY_ADDENDUM}` : '';
+          const system = `${GEO_AI_CHAT_SYSTEM_BASE}\n\n---\n## Geo AI Copilot mission\n${GEO_AI_COPILOT_RULES}${nacMapAddendumDs}${weatherAppendDs}${liveMapBlockDs}\n\n---\nDATA CONTEXT (authoritative for this session turn):\n${dataCtx}`;
           const turns: GeoAiChatTurn[] = prior.map(m => ({
             role: m.role === 'user' ? 'user' : 'assistant',
             text: m.parts
@@ -11526,6 +11776,7 @@ export default function SatelliteIntelligence() {
   }, [
     deepseekApiKey,
     geoDeepseekDraft,
+    geoAiFloatingOpen,
     applySatelliteGeoAiMapUi,
     applySatelliteGeoAiMapFirstSync,
     customLayers,
@@ -11540,9 +11791,10 @@ export default function SatelliteIntelligence() {
     const trimmed = (voiceOverrideText ?? geoOllamaDraft).trim();
     if (geoOllamaInFlightRef.current || !trimmed) return;
     geoAiLastUserMapQueryRef.current = trimmed;
+    const placeIntent = geoAiFloatingOpen ? parseNeighborhoodAgentPlaceIntent(trimmed) : null;
     const baseUrl = ollamaConfig.baseUrl.trim();
     const model = ollamaConfig.model.trim();
-    if (!baseUrl) {
+    if (!placeIntent && !baseUrl) {
       setGeoOllamaChatError(
         'Set the Ollama server URL: System Settings â†’ API Tokens â†’ Ollama (default http://localhost:11434), or VITE_OLLAMA_BASE_URL. Run "ollama serve" and pull a model first.',
       );
@@ -11565,6 +11817,17 @@ export default function SatelliteIntelligence() {
     setGeoOllamaChatMessages(prev => [...prev, userMsg]);
     queueMicrotask(async () => {
         try {
+          const placeMsg = await tryNeighborhoodAgentPlaceFlyRef.current?.(trimmed);
+          if (placeMsg) {
+            setGeoOllamaChatMessages(h => [...h, placeMsg]);
+            return;
+          }
+          if (!baseUrl) {
+            setGeoOllamaChatError(
+              'Set the Ollama server URL: System Settings â†’ API Tokens â†’ Ollama (default http://localhost:11434), or VITE_OLLAMA_BASE_URL. Run "ollama serve" and pull a model first.',
+            );
+            return;
+          }
           const savedLayersForStats = await loadGisMapSavedLayers();
           const mergedLayersForStats: GeoAiMapLayer[] = [
             ...satelliteCustomLayersToGeoAiLayers(customLayers),
@@ -11596,15 +11859,14 @@ export default function SatelliteIntelligence() {
           });
           if (packResult) {
             const aid = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `goll-pack-${Date.now()}`;
-            const parts: GeoExplorerPart[] = [{ type: 'text', text: packResult.replyText }];
-            if (packResult.table) parts.push({ type: 'dataTable', table: packResult.table });
-            setGeoOllamaChatMessages(h => [...h, { id: aid, role: 'model', parts }]);
+            setGeoOllamaChatMessages(h => [...h, geoAiPackResultToExplorerMessage(packResult, aid)]);
             if (packResult.mapFirstSync?.selections?.length) {
               queueMicrotask(() => applySatelliteGeoAiMapFirstSync(packResult.mapFirstSync!.selections));
             }
             if (packResult.mapQueryLngLat) {
               setGeoAiPinLngLat(packResult.mapQueryLngLat);
             }
+            runGeoAiMapCommandsRef.current?.(packResult.replyText);
             return;
           }
           const localStats = runGeoAiStatsCommand(trimmed, mergedLayersForStats);
@@ -11649,7 +11911,8 @@ export default function SatelliteIntelligence() {
           const liveMapBlockOll = geoAiLiveMapStateBlockRef.current
             ? `\n\n---\n${geoAiLiveMapStateBlockRef.current}`
             : '';
-          const system = `${GEO_AI_CHAT_SYSTEM_BASE}\n\n---\n## Geo AI Copilot mission\n${GEO_AI_COPILOT_RULES}${weatherAppendOll}${liveMapBlockOll}\n\n---\nDATA CONTEXT (authoritative for this session turn):\n${dataCtx}`;
+          const nacMapAddendumOll = geoAiFloatingOpen ? `\n\n${NEIGHBORHOOD_AGENT_MAP_REPLY_ADDENDUM}` : '';
+          const system = `${GEO_AI_CHAT_SYSTEM_BASE}\n\n---\n## Geo AI Copilot mission\n${GEO_AI_COPILOT_RULES}${nacMapAddendumOll}${weatherAppendOll}${liveMapBlockOll}\n\n---\nDATA CONTEXT (authoritative for this session turn):\n${dataCtx}`;
           const turns: GeoAiChatTurn[] = prior.map(m => ({
             role: m.role === 'user' ? 'user' : 'assistant',
             text: m.parts
@@ -11719,6 +11982,7 @@ export default function SatelliteIntelligence() {
   }, [
     ollamaConfig,
     geoOllamaDraft,
+    geoAiFloatingOpen,
     applySatelliteGeoAiMapUi,
     applySatelliteGeoAiMapFirstSync,
     customLayers,
@@ -11760,36 +12024,21 @@ export default function SatelliteIntelligence() {
   );
 
 
-  const handleGeoAiAgentHistorySelect = useCallback(
-    (entry: GeoAiAgentHistoryEntry) => {
-      const prompt = entry.title.trim();
-      if (!prompt) return;
-      if (geoAiModelTab === 'gemini') setGeoExplorerDraft(prompt);
-      else if (geoAiModelTab === 'claude') setGeoAiDraft(prompt);
-      else if (geoAiModelTab === 'deepseek') setGeoDeepseekDraft(prompt);
-      else setGeoOllamaDraft(prompt);
-    },
-    [geoAiModelTab],
-  );
-
   const onGeoExplorerAttachChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      setGeoExplorerChatError('Please attach an image file (PNG, JPEG, WebP, ...).');
+    const validated = validateGeoAiAttachFile(file);
+    if (!validated.ok) {
+      setGeoExplorerChatError(validated.error);
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      const i = dataUrl.indexOf(',');
-      const base64 = i >= 0 ? dataUrl.slice(i + 1) : dataUrl;
-      setGeoExplorerPendingImage({ mime: file.type || 'image/jpeg', base64 });
-      setGeoExplorerChatError('');
-    };
-    reader.onerror = () => setGeoExplorerChatError('Could not read the image file.');
-    reader.readAsDataURL(file);
+    void readGeoAiAttachFile(file, validated.mime)
+      .then(att => {
+        setGeoExplorerPendingImage(att);
+        setGeoExplorerChatError('');
+      })
+      .catch(() => setGeoExplorerChatError('Could not read the file.'));
   }, []);
 
   const setMapDragPanEnabled = (enabled: boolean) => {
@@ -21205,7 +21454,7 @@ export default function SatelliteIntelligence() {
             pivotBars={satellitePivotBars}
           />
 
-          <SatelliteGeoAiFloatingWidget
+          <NeighborhoodAgentChat
             open={geoAiFloatingOpen}
             expanded={geoAiFloatingExpanded}
             onToggleExpanded={() => setGeoAiFloatingExpanded(v => !v)}
@@ -21213,432 +21462,202 @@ export default function SatelliteIntelligence() {
               setGeoAiFloatingOpen(false);
               setGeoAiFloatingExpanded(true);
             }}
-            agentChrome
-            fabIconClass={fabIconFaClass(geoAiAgentPrefs.fabOpenIcon)}
+            onMinimize={() => setGeoAiFloatingExpanded(false)}
+            isEmpty={geoAiAgentIsEmpty}
+            onNewChat={handleGeoAiAgentNewChat}
+            onQuickAction={handleGeoAiAgentQuickAction}
+            sessionTitle={geoAiAgentSessionTitle}
+            draft={
+              geoExplorerPendingImage || geoAiModelTab === 'gemini'
+                ? geoExplorerDraft
+                : geoAiModelTab === 'claude'
+                  ? geoAiDraft
+                  : geoAiModelTab === 'deepseek'
+                    ? geoDeepseekDraft
+                    : geoOllamaDraft
+            }
+            onDraftChange={v => {
+              if (geoExplorerPendingImage || geoAiModelTab === 'gemini') setGeoExplorerDraft(v);
+              else if (geoAiModelTab === 'claude') setGeoAiDraft(v);
+              else if (geoAiModelTab === 'deepseek') setGeoDeepseekDraft(v);
+              else setGeoOllamaDraft(v);
+            }}
+            onSend={(voiceOverrideText?: string) => {
+              if (geoExplorerPendingImage || geoAiModelTab === 'gemini') {
+                sendGeoExplorerChat(voiceOverrideText);
+              } else if (geoAiModelTab === 'claude') sendGeoAiChat(voiceOverrideText);
+              else if (geoAiModelTab === 'deepseek') sendGeoDeepseekChat(voiceOverrideText);
+              else sendGeoOllamaChat(voiceOverrideText);
+            }}
+            busy={
+              geoAiModelTab === 'gemini'
+                ? geoExplorerBusy
+                : geoAiModelTab === 'claude'
+                  ? geoAiBusy
+                  : geoAiModelTab === 'deepseek'
+                    ? geoDeepseekBusy
+                    : geoOllamaBusy
+            }
+            showAttach
+            enableVoice
+            pendingImage={geoExplorerPendingImage}
+            fileInputRef={geoExplorerFileInputRef}
+            onAttachChange={e => {
+              if (geoAiModelTab !== 'gemini') {
+                const carry =
+                  geoAiModelTab === 'claude'
+                    ? geoAiDraft
+                    : geoAiModelTab === 'deepseek'
+                      ? geoDeepseekDraft
+                      : geoOllamaDraft;
+                if (carry.trim() && !geoExplorerDraft.trim()) setGeoExplorerDraft(carry);
+                setGeoAiModelTab('gemini');
+              }
+              onGeoExplorerAttachChange(e);
+            }}
+            onClearPendingImage={() => setGeoExplorerPendingImage(null)}
+            messages={
+              geoAiModelTab === 'gemini'
+                ? visibleGeoExplorerMessages
+                : geoAiModelTab === 'claude'
+                  ? visibleGeoAiClaudeMessages
+                  : geoAiModelTab === 'deepseek'
+                    ? visibleGeoAiDeepseekMessages
+                    : visibleGeoAiOllamaMessages
+            }
+            busyLabel={
+              geoAiModelTab === 'gemini' && geoExplorerAwaitKind === 'edit' ? 'Updating…' : 'Thinking…'
+            }
+            chatError={
+              geoAiModelTab === 'gemini'
+                ? geoExplorerChatError
+                : geoAiModelTab === 'claude'
+                  ? geoAiChatError
+                  : geoAiModelTab === 'deepseek'
+                    ? geoDeepseekChatError
+                    : geoOllamaChatError
+            }
+            messagesRef={
+              geoAiModelTab === 'gemini'
+                ? geoExplorerMessagesRef
+                : geoAiModelTab === 'claude'
+                  ? geoAiClaudeMessagesRef
+                  : geoAiModelTab === 'deepseek'
+                    ? geoAiDeepseekMessagesRef
+                    : geoAiOllamaMessagesRef
+            }
+            onMessagesScroll={() => {
+              const el =
+                geoAiModelTab === 'gemini'
+                  ? geoExplorerMessagesRef.current
+                  : geoAiModelTab === 'claude'
+                    ? geoAiClaudeMessagesRef.current
+                    : geoAiModelTab === 'deepseek'
+                      ? geoAiDeepseekMessagesRef.current
+                      : geoAiOllamaMessagesRef.current;
+              const hasOlder =
+                geoAiModelTab === 'gemini'
+                  ? geoExplorerHasOlderMessages
+                  : geoAiModelTab === 'claude'
+                    ? geoAiClaudeHasOlderMessages
+                    : geoAiModelTab === 'deepseek'
+                      ? geoAiDeepseekHasOlderMessages
+                      : geoAiOllamaHasOlderMessages;
+              if (!el || !hasOlder) return;
+              if (el.scrollTop <= 24) {
+                if (geoAiModelTab === 'gemini') loadOlderGeoExplorerMessages();
+                else if (geoAiModelTab === 'claude') loadOlderGeoAiClaudeMessages();
+                else if (geoAiModelTab === 'deepseek') loadOlderGeoAiDeepseekMessages();
+                else loadOlderGeoAiOllamaMessages();
+              }
+            }}
+            hasOlderMessages={
+              geoAiModelTab === 'gemini'
+                ? geoExplorerHasOlderMessages
+                : geoAiModelTab === 'claude'
+                  ? geoAiClaudeHasOlderMessages
+                  : geoAiModelTab === 'deepseek'
+                    ? geoAiDeepseekHasOlderMessages
+                    : geoAiOllamaHasOlderMessages
+            }
+            onLoadOlder={() => {
+              if (geoAiModelTab === 'gemini') loadOlderGeoExplorerMessages();
+              else if (geoAiModelTab === 'claude') loadOlderGeoAiClaudeMessages();
+              else if (geoAiModelTab === 'deepseek') loadOlderGeoAiDeepseekMessages();
+              else loadOlderGeoAiOllamaMessages();
+            }}
+            onTableMapAction={onSiGeoAiTableMapAction}
+            onTableBatchZoom={onGeoAiTableBatchZoom}
+            onTableSelectionLinksChange={onGeoAiTableSelectionSync}
+            mapFocusFeatureKey={geoAiTableMapFocusKey}
+            onTableQuerySelectApplied={onGeoAiQuerySelectApplied}
+            onFocusMap={focusNeighborhoodAgentMap}
+            onSaveEditedUserMessage={
+              geoAiModelTab === 'gemini' ? saveEditedGeoExplorerGeminiQuestion : undefined
+            }
+            onUseEditedInComposer={text => {
+              if (geoAiModelTab === 'gemini') setGeoExplorerDraft(text);
+              else if (geoAiModelTab === 'claude') setGeoAiDraft(text);
+              else if (geoAiModelTab === 'deepseek') setGeoDeepseekDraft(text);
+              else setGeoOllamaDraft(text);
+            }}
           >
-            <GeoAiAgentPanel
-              isEmpty={geoAiAgentIsEmpty}
-              onNewChat={handleGeoAiAgentNewChat}
-              onQuickAction={handleGeoAiAgentQuickAction}
-              historyEntries={geoAiAgentHistory}
-              onSelectHistoryEntry={handleGeoAiAgentHistorySelect}
-              onMinimize={() => setGeoAiFloatingExpanded(false)}
-              onRequestClose={() => {
-                setGeoAiFloatingOpen(false);
-                setGeoAiFloatingExpanded(true);
-              }}
-              prefs={geoAiAgentPrefs}
-              onPrefsChange={handleGeoAiAgentPrefsChange}
-            >
-                      <div className="si-geo-explorer-root si-geo-explorer-root--unified">
-                        <div className="si-env-section-card si-geo-explorer si-geo-explorer--agent-body">
-                          {geoAiModelTab === 'gemini' ? (
-                            <>
-                              <div
-                                className="si-geo-explorer-messages"
-                                ref={geoExplorerMessagesRef}
-                                onScroll={() => {
-                                  const el = geoExplorerMessagesRef.current;
-                                  if (!el || !geoExplorerHasOlderMessages) return;
-                                  if (el.scrollTop <= 24) loadOlderGeoExplorerMessages();
-                                }}
-                              >
-                                {geoExplorerHasOlderMessages ? (
-                                  <button
-                                    type="button"
-                                    className="si-geo-explorer-load-more"
-                                    onClick={loadOlderGeoExplorerMessages}
-                                    aria-label="Load older messages"
-                                  >
-                                    Load earlier messages
-                                  </button>
-                                ) : null}
-                                {visibleGeoExplorerMessages.map(msg => (
-                                  <div
-                                    key={msg.id}
-                                    className={`si-geo-explorer-row si-geo-explorer-row--${msg.role}`}
-                                  >
-                                    {msg.role === 'model' ? (
-                                      <div className="si-geo-explorer-avatar" aria-hidden>
-                                        <i className="fa-solid fa-wand-magic-sparkles" />
-                                      </div>
-                                    ) : null}
-                                    <div className="si-geo-explorer-bubble">
-                                      <GeoExplorerGeminiMessageParts
-                                        msg={msg}
-                                        cssPrefix="si-geo-explorer"
-                                        onTableMapAction={onSiGeoAiTableMapAction}
-                                        onTableBatchZoom={onGeoAiTableBatchZoom}
-                                        onSaveEditedUserMessage={saveEditedGeoExplorerGeminiQuestion}
-                                        onSendEditedToComposer={setGeoExplorerDraft}
-                                        suggestLayers={geoAiSuggestContext.layers}
-                                        suggestFields={geoAiSuggestContext.fields}
-                                        suggestNumericFields={geoAiSuggestContext.numericFields}
-                                        onTableSelectionLinksChange={onGeoAiTableSelectionSync}
-                                        mapFocusFeatureKey={geoAiTableMapFocusKey}
-                                        onTableQuerySelectApplied={onGeoAiQuerySelectApplied}
-                                      />
-                                    </div>
-                                  </div>
-                                ))}
-                                {geoExplorerBusy ? (
-                                  <div className="si-geo-explorer-row si-geo-explorer-row--model">
-                                    <div className="si-geo-explorer-avatar" aria-hidden>
-                                      <i className="fa-solid fa-wand-magic-sparkles" />
-                                    </div>
-                                    <div className="si-geo-explorer-bubble si-geo-explorer-bubble--typing">
-                                      <i className="fa-solid fa-spinner fa-spin" aria-hidden />{' '}
-                                      {geoExplorerAwaitKind === 'edit' ? 'Updating...' : 'Thinking...'}
-                                    </div>
-                                  </div>
-                                ) : null}
-                              </div>
-                                {geoExplorerChatError ? (
-                                <div className="si-geo-explorer-error-row">
-                                  <p className="si-geo-explorer-error">{geoExplorerChatError}</p>
-                                  <SiCopyTextButton
-                                    text={geoExplorerChatError}
-                                    className="si-geo-explorer-error-copy-btn"
-                                    title="Copy error message"
-                                    ariaLabel="Copy error text"
-                                    variant="compact"
-                                  />
-                                </div>
-                              ) : null}
-                              {geoExplorerPendingImage ? (
-                                <p className="si-geo-explorer-pending-img">
-                                  <i className="fa-solid fa-image" aria-hidden /> Image ready to send
-                                  <button
-                                    type="button"
-                                    className="si-geo-explorer-linkish"
-                                    onClick={() => setGeoExplorerPendingImage(null)}
-                                  >
-                                    Remove
-                                  </button>
-                                </p>
-                              ) : null}
-                              <GeoExplorerGeminiInputRow
-                                cssPrefix="si-geo-explorer"
-                                draft={geoExplorerDraft}
-                                onDraftChange={setGeoExplorerDraft}
-                                onSend={sendGeoExplorerChat}
-                                busy={geoExplorerBusy}
-                                pendingImage={geoExplorerPendingImage}
-                                fileInputRef={geoExplorerFileInputRef}
-                                onAttachChange={onGeoExplorerAttachChange}
-                                placeholder="Ask anything…"
-                                textareaAriaLabel="AI Agent Gemini message"
-                                availableLayers={geoAiSuggestContext.layers}
-                                availableFields={geoAiSuggestContext.fields}
-                                availableNumericFields={geoAiSuggestContext.numericFields}
-                                availableGeometryOps={geoAiSuggestContext.geometryOps}
-                                smartSuggestionsEnabled={geoAiSmartSuggestionsEnabled}
-                              />
-                            </>
-                          ) : null}
-
-                          {geoAiModelTab === 'claude' || geoAiModelTab === 'deepseek' ? (
-                            <>
-                              <div
-                                className="si-geo-explorer-messages"
-                                ref={geoAiModelTab === 'claude' ? geoAiClaudeMessagesRef : geoAiDeepseekMessagesRef}
-                                onScroll={() => {
-                                  const isClaude = geoAiModelTab === 'claude';
-                                  const el = isClaude ? geoAiClaudeMessagesRef.current : geoAiDeepseekMessagesRef.current;
-                                  const hasOlder = isClaude ? geoAiClaudeHasOlderMessages : geoAiDeepseekHasOlderMessages;
-                                  if (!el || !hasOlder) return;
-                                  if (el.scrollTop <= 24) {
-                                    if (isClaude) loadOlderGeoAiClaudeMessages();
-                                    else loadOlderGeoAiDeepseekMessages();
-                                  }
-                                }}
-                              >
-                                {(geoAiModelTab === 'claude' ? geoAiClaudeHasOlderMessages : geoAiDeepseekHasOlderMessages) ? (
-                                  <button
-                                    type="button"
-                                    className="si-geo-explorer-load-more"
-                                    onClick={() => {
-                                      if (geoAiModelTab === 'claude') loadOlderGeoAiClaudeMessages();
-                                      else loadOlderGeoAiDeepseekMessages();
-                                    }}
-                                    aria-label="Load older messages"
-                                  >
-                                    Load earlier messages
-                                  </button>
-                                ) : null}
-                                {(geoAiModelTab === 'claude' ? visibleGeoAiClaudeMessages : visibleGeoAiDeepseekMessages).map(msg => (
-                                  <div
-                                    key={msg.id}
-                                    className={`si-geo-explorer-row si-geo-explorer-row--${
-                                      msg.role === 'user' ? 'user' : 'model'
-                                    }`}
-                                  >
-                                    {msg.role === 'model' ? (
-                                      <div className="si-geo-explorer-avatar" aria-hidden>
-                                        <i className="fa-solid fa-robot" />
-                                      </div>
-                                    ) : null}
-                                    <div className="si-geo-explorer-bubble">
-                                      <GeoExplorerGeminiMessageParts
-                                        msg={msg}
-                                        cssPrefix="si-geo-explorer"
-                                        onTableMapAction={onSiGeoAiTableMapAction}
-                                        onTableBatchZoom={onGeoAiTableBatchZoom}
-                                        onUpdateUserMessage={(messageId, nextText) => {
-                                          const setter =
-                                            geoAiModelTab === 'claude' ? setGeoAiChatMessages : setGeoDeepseekChatMessages;
-                                          setter(prev =>
-                                            prev.map(m =>
-                                              m.id === messageId && m.role === 'user'
-                                                ? replaceUserMessageText(m, nextText)
-                                                : m,
-                                            ),
-                                          );
-                                        }}
-                                        onSendEditedToComposer={
-                                          geoAiModelTab === 'claude' ? setGeoAiDraft : setGeoDeepseekDraft
-                                        }
-                                        suggestLayers={geoAiSuggestContext.layers}
-                                        suggestFields={geoAiSuggestContext.fields}
-                                        suggestNumericFields={geoAiSuggestContext.numericFields}
-                                        onTableSelectionLinksChange={onGeoAiTableSelectionSync}
-                                        mapFocusFeatureKey={geoAiTableMapFocusKey}
-                                        onTableQuerySelectApplied={onGeoAiQuerySelectApplied}
-                                      />
-                                    </div>
-                                  </div>
-                                ))}
-                                {(geoAiModelTab === 'claude' ? geoAiBusy : geoDeepseekBusy) ? (
-                                  <div className="si-geo-explorer-row si-geo-explorer-row--model">
-                                    <div className="si-geo-explorer-avatar" aria-hidden>
-                                      <i className="fa-solid fa-robot" />
-                                    </div>
-                                    <div className="si-geo-explorer-bubble si-geo-explorer-bubble--typing">
-                                      <i className="fa-solid fa-spinner fa-spin" aria-hidden /> Thinking...
-                                    </div>
-                                  </div>
-                                ) : null}
-                              </div>
-                              {geoAiModelTab === 'claude' && geoAiChatError ? (
-                                <div className="si-geo-explorer-error-row">
-                                  <p className="si-geo-explorer-error">{geoAiChatError}</p>
-                                  <SiCopyTextButton
-                                    text={geoAiChatError}
-                                    className="si-geo-explorer-error-copy-btn"
-                                    title="Copy error message"
-                                    ariaLabel="Copy error text"
-                                    variant="compact"
-                                  />
-                                </div>
-                              ) : null}
-                              {geoAiModelTab === 'deepseek' && geoDeepseekChatError ? (
-                                <div className="si-geo-explorer-error-row">
-                                  <p className="si-geo-explorer-error">{geoDeepseekChatError}</p>
-                                  <SiCopyTextButton
-                                    text={geoDeepseekChatError}
-                                    className="si-geo-explorer-error-copy-btn"
-                                    title="Copy error message"
-                                    ariaLabel="Copy error text"
-                                    variant="compact"
-                                  />
-                                </div>
-                              ) : null}
-                              <GeoExplorerGeminiInputRow
-                                cssPrefix="si-geo-explorer"
-                                draft={geoAiModelTab === 'claude' ? geoAiDraft : geoDeepseekDraft}
-                                onDraftChange={v =>
-                                  geoAiModelTab === 'claude' ? setGeoAiDraft(v) : setGeoDeepseekDraft(v)
-                                }
-                                onSend={t =>
-                                  geoAiModelTab === 'claude' ? sendGeoAiChat(t) : sendGeoDeepseekChat(t)
-                                }
-                                busy={geoAiModelTab === 'claude' ? geoAiBusy : geoDeepseekBusy}
-                                pendingImage={null}
-                                showAttach={false}
-                                placeholder="Ask anything…"
-                                textareaAriaLabel={
-                                  geoAiModelTab === 'claude' ? 'AI Agent Claude message' : 'AI Agent DeepSeek message'
-                                }
-                                availableLayers={geoAiSuggestContext.layers}
-                                availableFields={geoAiSuggestContext.fields}
-                                availableNumericFields={geoAiSuggestContext.numericFields}
-                                availableGeometryOps={geoAiSuggestContext.geometryOps}
-                                smartSuggestionsEnabled={geoAiSmartSuggestionsEnabled}
-                              />
-                              <p className="si-geo-explorer-footnote">
-                                {geoAiModelTab === 'claude' ? (
-                                  <>
-                                    Powered by Anthropic Claude. Set <code>VITE_CLAUDE_API_KEY</code> or System Settings ΓåÆ API
-                                    Tokens ΓåÆ Claude API. Context is rebuilt each send from GIS Content + Develop Dashboard Data.
-                                  </>
-                                ) : (
-                                  <>
-                                    Powered by DeepSeek. Set <code>VITE_DEEPSEEK_API_KEY</code> or System Settings ΓåÆ API Tokens
-                                    ΓåÆ DeepSeek. Same GIS + Develop context as Claude; rebuilt each send.
-                                  </>
-                                )}
-                              </p>
-                            </>
-                          ) : null}
-                          {geoAiModelTab === 'ollama' ? (
-                            <>
-                              <div
-                                className="si-geo-explorer-messages"
-                                ref={geoAiOllamaMessagesRef}
-                                onScroll={() => {
-                                  const el = geoAiOllamaMessagesRef.current;
-                                  if (!el || !geoAiOllamaHasOlderMessages) return;
-                                  if (el.scrollTop <= 24) loadOlderGeoAiOllamaMessages();
-                                }}
-                              >
-                                {geoAiOllamaHasOlderMessages ? (
-                                  <button
-                                    type="button"
-                                    className="si-geo-explorer-load-more"
-                                    onClick={loadOlderGeoAiOllamaMessages}
-                                    aria-label="Load older messages"
-                                  >
-                                    Load earlier messages
-                                  </button>
-                                ) : null}
-                                {visibleGeoAiOllamaMessages.map(msg => (
-                                  <div
-                                    key={msg.id}
-                                    className={`si-geo-explorer-row si-geo-explorer-row--${
-                                      msg.role === 'user' ? 'user' : 'model'
-                                    }`}
-                                  >
-                                    {msg.role === 'model' ? (
-                                      <div className="si-geo-explorer-avatar" aria-hidden>
-                                        <i className="fa-solid fa-robot" />
-                                      </div>
-                                    ) : null}
-                                    <div className="si-geo-explorer-bubble">
-                                      <GeoExplorerGeminiMessageParts
-                                        msg={msg}
-                                        cssPrefix="si-geo-explorer"
-                                        onTableMapAction={onSiGeoAiTableMapAction}
-                                        onTableBatchZoom={onGeoAiTableBatchZoom}
-                                        onUpdateUserMessage={(messageId, nextText) => {
-                                          setGeoOllamaChatMessages(prev =>
-                                            prev.map(m =>
-                                              m.id === messageId && m.role === 'user'
-                                                ? replaceUserMessageText(m, nextText)
-                                                : m,
-                                            ),
-                                          );
-                                        }}
-                                        onSendEditedToComposer={setGeoOllamaDraft}
-                                        suggestLayers={geoAiSuggestContext.layers}
-                                        suggestFields={geoAiSuggestContext.fields}
-                                        suggestNumericFields={geoAiSuggestContext.numericFields}
-                                        onTableSelectionLinksChange={onGeoAiTableSelectionSync}
-                                        mapFocusFeatureKey={geoAiTableMapFocusKey}
-                                        onTableQuerySelectApplied={onGeoAiQuerySelectApplied}
-                                      />
-                                    </div>
-                                  </div>
-                                ))}
-                                {geoOllamaBusy ? (
-                                  <div className="si-geo-explorer-row si-geo-explorer-row--model">
-                                    <div className="si-geo-explorer-avatar" aria-hidden>
-                                      <i className="fa-solid fa-robot" />
-                                    </div>
-                                    <div className="si-geo-explorer-bubble si-geo-explorer-bubble--typing">
-                                      <i className="fa-solid fa-spinner fa-spin" aria-hidden /> Thinking...
-                                    </div>
-                                  </div>
-                                ) : null}
-                              </div>
-                              {geoOllamaChatError ? (
-                                <div className="si-geo-explorer-error-row">
-                                  <p className="si-geo-explorer-error">{geoOllamaChatError}</p>
-                                  <SiCopyTextButton
-                                    text={geoOllamaChatError}
-                                    className="si-geo-explorer-error-copy-btn"
-                                    title="Copy error message"
-                                    ariaLabel="Copy error text"
-                                    variant="compact"
-                                  />
-                                </div>
-                              ) : null}
-                              <GeoExplorerGeminiInputRow
-                                cssPrefix="si-geo-explorer"
-                                draft={geoOllamaDraft}
-                                onDraftChange={setGeoOllamaDraft}
-                                onSend={t => sendGeoOllamaChat(t)}
-                                busy={geoOllamaBusy}
-                                pendingImage={null}
-                                showAttach={false}
-                                placeholder="Ask anything…"
-                                textareaAriaLabel="AI Agent Ollama message"
-                                availableLayers={geoAiSuggestContext.layers}
-                                availableFields={geoAiSuggestContext.fields}
-                                availableNumericFields={geoAiSuggestContext.numericFields}
-                                availableGeometryOps={geoAiSuggestContext.geometryOps}
-                                smartSuggestionsEnabled={geoAiSmartSuggestionsEnabled}
-                              />
-                            </>
-                          ) : null}
-                          {geoAiPopupMode === 'docked' && geoAiInspectPopups.length > 0 ? (
-                            <div className="si-geo-ai-inspect-dock-panel" role="region" aria-label="Identify - docked">
-                              {geoAiInspectPopups.map((pop, popIdx) => (
-                                <SiFeatureInspectPopup
-                                  key={pop.id}
-                                  pop={pop}
-                                  className="si-feature-identify-card--docked"
-                                  featureIndex={popIdx}
-                                  featureTotal={geoAiInspectPopups.length}
-                                  onToggleCollapse={() =>
-                                    setGeoAiInspectPopups(prev =>
-                                      prev.map(p => (p.id === pop.id ? { ...p, collapsed: !p.collapsed } : p)),
-                                    )
-                                  }
-                                  onClose={() => setGeoAiInspectPopups(prev => prev.filter(p => p.id !== pop.id))}
-                                  onZoomTo={() =>
-                                    setViewState(v => ({
-                                      ...v,
-                                      longitude: pop.lng,
-                                      latitude: pop.lat,
-                                      zoom: Math.max(typeof v.zoom === 'number' ? v.zoom : 2, 14),
-                                    }))
-                                  }
-                                  onPrevFeature={
-                                    popIdx > 0
-                                      ? () => {
-                                          const prevPop = geoAiInspectPopups[popIdx - 1];
-                                          if (!prevPop) return;
-                                          setViewState(v => ({
-                                            ...v,
-                                            longitude: prevPop.lng,
-                                            latitude: prevPop.lat,
-                                            zoom: Math.max(typeof v.zoom === 'number' ? v.zoom : 2, 14),
-                                          }));
-                                        }
-                                      : undefined
-                                  }
-                                  onNextFeature={
-                                    popIdx < geoAiInspectPopups.length - 1
-                                      ? () => {
-                                          const nextPop = geoAiInspectPopups[popIdx + 1];
-                                          if (!nextPop) return;
-                                          setViewState(v => ({
-                                            ...v,
-                                            longitude: nextPop.lng,
-                                            latitude: nextPop.lat,
-                                            zoom: Math.max(typeof v.zoom === 'number' ? v.zoom : 2, 14),
-                                          }));
-                                        }
-                                      : undefined
-                                  }
-                                />
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-            </GeoAiAgentPanel>
-          </SatelliteGeoAiFloatingWidget>
+            {geoAiPopupMode === 'docked' && geoAiInspectPopups.length > 0 ? (
+              <div className="si-geo-ai-inspect-dock-panel" role="region" aria-label="Identify - docked">
+                {geoAiInspectPopups.map((pop, popIdx) => (
+                  <SiFeatureInspectPopup
+                    key={pop.id}
+                    pop={pop}
+                    className="si-feature-identify-card--docked"
+                    featureIndex={popIdx}
+                    featureTotal={geoAiInspectPopups.length}
+                    onToggleCollapse={() =>
+                      setGeoAiInspectPopups(prev =>
+                        prev.map(p => (p.id === pop.id ? { ...p, collapsed: !p.collapsed } : p)),
+                      )
+                    }
+                    onClose={() => setGeoAiInspectPopups(prev => prev.filter(p => p.id !== pop.id))}
+                    onZoomTo={() =>
+                      setViewState(v => ({
+                        ...v,
+                        longitude: pop.lng,
+                        latitude: pop.lat,
+                        zoom: Math.max(typeof v.zoom === 'number' ? v.zoom : 2, 14),
+                      }))
+                    }
+                    onPrevFeature={
+                      popIdx > 0
+                        ? () => {
+                            const prevPop = geoAiInspectPopups[popIdx - 1];
+                            if (!prevPop) return;
+                            setViewState(v => ({
+                              ...v,
+                              longitude: prevPop.lng,
+                              latitude: prevPop.lat,
+                              zoom: Math.max(typeof v.zoom === 'number' ? v.zoom : 2, 14),
+                            }));
+                          }
+                        : undefined
+                    }
+                    onNextFeature={
+                      popIdx < geoAiInspectPopups.length - 1
+                        ? () => {
+                            const nextPop = geoAiInspectPopups[popIdx + 1];
+                            if (!nextPop) return;
+                            setViewState(v => ({
+                              ...v,
+                              longitude: nextPop.lng,
+                              latitude: nextPop.lat,
+                              zoom: Math.max(typeof v.zoom === 'number' ? v.zoom : 2, 14),
+                            }));
+                          }
+                        : undefined
+                    }
+                  />
+                ))}
+              </div>
+            ) : null}
+          </NeighborhoodAgentChat>
 
           <SatelliteMapAnalysisChrome
             weeklyChips={satelliteTimelineChips}

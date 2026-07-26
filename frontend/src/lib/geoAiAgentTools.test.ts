@@ -135,17 +135,29 @@ describe('geoAiAgentTools registry', () => {
 })
 
 describe('geoAiAgentTurn', () => {
-  it('formats Summary / Evidence / Map actions when model prose is unstructured', () => {
+  it('formats short prose + References (never dumps tool transcripts)', () => {
     const reply = formatGeoAiAgentEvidenceReply({
       modelText: 'Looks healthy overall.',
-      toolResults: [{ name: 'read_rs_analysis', ok: true, content: 'NDVI · Healthy 40%' }],
+      toolResults: [
+        {
+          name: 'read_rs_analysis',
+          ok: true,
+          content: '### LIVE MAP STATE\nTreat these as facts; never ask...\nNDVI · Healthy 40%',
+        },
+        {
+          name: 'get_weather_context',
+          ok: true,
+          content: '### OPENWEATHER FACTS\nTemp 34',
+        },
+      ],
       mapActionLines: ['Zoomed to the AOI.'],
     })
-    expect(reply).toMatch(/\*\*Summary\*\*/)
-    expect(reply).toMatch(/\*\*Evidence\*\*/)
-    expect(reply).toMatch(/read_rs_analysis/)
-    expect(reply).toMatch(/\*\*Map actions\*\*/)
-    expect(reply).toMatch(/Zoomed to the AOI/)
+    expect(reply).toMatch(/Looks healthy overall/)
+    expect(reply).toMatch(/\*\*References\*\*/)
+    expect(reply).toMatch(/OpenWeatherMap|remote-sensing/i)
+    expect(reply).not.toMatch(/\*\*Evidence\*\*/)
+    expect(reply).not.toMatch(/read_live_map_state|LIVE MAP STATE|Treat these as facts/i)
+    expect(reply).not.toMatch(/\*\*Map actions\*\*/)
   })
 
   it('runs a native tool loop then returns an evidence-formatted reply', async () => {
@@ -211,7 +223,8 @@ describe('geoAiAgentTurn', () => {
     expect(result.usedMapActionFallback).toBe(true)
     expect(flyTo).toHaveBeenCalled()
     expect(result.mapCommandResults[0]?.ok).toBe(true)
-    expect(result.replyText).toMatch(/Summary|Dubai|Map actions/i)
+    expect(result.replyText).toMatch(/Dubai/i)
+    expect(result.replyText).not.toMatch(/LIVE MAP STATE|read_live_map_state/i)
   })
 
   it('auto-runs an analyst pack for vegetation chip / intent with evidence reply', async () => {
@@ -242,7 +255,8 @@ describe('geoAiAgentTurn', () => {
     expect(result.toolResults.some(r => r.name === 'read_rs_analysis')).toBe(true)
     expect(result.toolResults.some(r => r.name === 'read_live_map_state')).toBe(true)
     expect(zoomToAoi).toHaveBeenCalled()
-    expect(result.replyText).toMatch(/Summary|Evidence|NDVI|Vegetation/i)
+    expect(result.replyText).toMatch(/Vegetation|NDVI|healthy|References/i)
+    expect(result.replyText).not.toMatch(/LIVE MAP STATE|read_live_map_state/i)
     expect(complete).toHaveBeenCalledTimes(1)
     expect(complete.mock.calls[0]?.[0]?.toolsEnabled).toBe(false)
   })
@@ -272,6 +286,45 @@ describe('geoAiAgentTurn', () => {
 
     expect(result.usedAnalystPack).toBe('count-buildings')
     expect(result.toolResults.some(r => r.name === 'run_vector_stats' && r.ok)).toBe(true)
-    expect(result.replyText).toMatch(/Summary|Evidence|building|2/i)
+    expect(result.replyText).toMatch(/building|2|References/i)
+    expect(result.replyText).not.toMatch(/\*\*Evidence\*\*|LIVE MAP STATE/i)
+    // Stats tools already produce the answer — skip LLM synthesis for speed.
+    expect(complete).not.toHaveBeenCalled()
+  })
+
+  it('returns weather pack reply from facts without calling the LLM', async () => {
+    const complete = vi.fn().mockResolvedValue({
+      text: 'should not be used',
+      toolCalls: [],
+    })
+    const adapter: GeoAiAgentModelAdapter = {
+      provider: 'gemini',
+      supportsNativeTools: true,
+      complete,
+    }
+    const weatherFacts = `Location: Dubai (coordinates: latitude 25.20480, longitude 55.27080)
+Current (Dubai): clear sky — temp 34.7°C, feels 41.7°C, humidity 59%, pressure 998 hPa, wind 5.07 m/s @ 180°.
+Next intervals (3 h steps, first rows):
+  - 2026-07-26 12:00:00: few clouds, temp 34.6°C, feels 41.5°C, precip prob 10%
+  - 2026-07-26 15:00:00: broken clouds, temp 33.1°C, feels 39.2°C, precip prob 20%`
+
+    const result = await runGeoAiAgentTurn({
+      provider: 'gemini',
+      adapter,
+      systemInstruction: 'You are a GIS agent.',
+      history: [],
+      userMessage: 'Give the current weather and short forecast for the map focus / AOI.',
+      chipId: 'weather',
+      liveMapState: liveState,
+      vectorLayers: [],
+      mapHandlers: mockHost().mapHandlers,
+      weatherFetcher: async () => weatherFacts,
+    })
+
+    expect(result.usedAnalystPack).toBe('weather')
+    expect(complete).not.toHaveBeenCalled()
+    expect(result.replyText).toMatch(/### Now|Temp|34\.7/i)
+    expect(result.replyText).toMatch(/References|OpenWeather/i)
+    expect(result.replyText).not.toMatch(/OPENWEATHER FACTS|LIVE MAP STATE/i)
   })
 })

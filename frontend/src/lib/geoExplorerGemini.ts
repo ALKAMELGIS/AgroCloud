@@ -157,10 +157,27 @@ export type GeoExplorerPart =
   | { type: 'image'; mime: string; base64: string }
   | { type: 'dataTable'; table: GeoExplorerDataTablePayload };
 
+/** Compact pack / tool evidence for Neighborhood Agent Chat (optional on model turns). */
+export type GeoExplorerAgentEvidence = {
+  packId?: string | null;
+  packLabel?: string | null;
+  thoughtTitle: string;
+  tools: Array<{
+    name: string;
+    label: string;
+    ok: boolean;
+    preview: string;
+  }>;
+};
+
 export type GeoExplorerMessage = {
   id: string;
   role: 'user' | 'model';
   parts: GeoExplorerPart[];
+  /** Present when an analyst pack (or native tools) produced Viewed / Thought chips. */
+  agentEvidence?: GeoExplorerAgentEvidence;
+  /** Optional map pin for Neighborhood Agent “Focus map” chip. */
+  mapFocus?: { lng: number; lat: number; label?: string };
 };
 
 /** Replace user text parts; preserves image / non-text parts. Empty text drops text parts only. */

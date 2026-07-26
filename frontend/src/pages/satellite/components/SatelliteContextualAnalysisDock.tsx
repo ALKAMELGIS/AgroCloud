@@ -107,9 +107,9 @@ export type SatelliteContextualAnalysisDockProps = {
   mapToolboxLayersMain?: ReactNode;
   /** Map toolbox Layers → Options tab: advanced tools (e.g. popup configuration). */
   mapToolboxLayersOptionsExtra?: ReactNode;
-  /** AI Agent floating widget visibility — keeps rail highlight without opening the processing stack. */
+  /** AI Agent Chat floating widget visibility — keeps rail highlight without opening the processing stack. */
   geoAiFloatingOpen?: boolean;
-  /** Toggle AI Agent floating widget from the map toolbox rail (same button as highlight). */
+  /** Toggle AI Agent Chat floating widget from the map toolbox rail (same button as highlight). */
   onGeoAiFloatingRailToggle?: () => void;
   /** Map toolbox + → Add GIS layer source actions (URL, file, sketch, media). */
   onMapToolboxAddGisLayerAction?: (action: MapToolboxAddGisLayerAction) => void;
@@ -182,7 +182,7 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
   },
   {
     id: 'layer-live-legend',
-    icon: 'fa-solid fa-swatchbook',
+    icon: 'fa-solid fa-bars-staggered',
     label: 'Legend',
     title: 'Layer Live legend',
     hint: 'Color keys for every Sentinel Live layer (indices, composites, SAR, SCL).',
@@ -259,10 +259,10 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
   },
   {
     id: 'table-geo-ai',
-    icon: 'fa-solid fa-sparkles',
-    label: 'AI Agent',
-    title: 'AI Agent',
-    hint: 'Map-linked AI Agent — chat, GIS tools, and Agent Builder.',
+    icon: 'fa-solid fa-comments',
+    label: 'AI Agent Chat',
+    title: 'AI Agent Chat',
+    hint: 'Neighborhood geospatial agent — ask about AOI, layers, buildings, roads, and RS overlays.',
   },
   {
     id: 'spatial',
@@ -321,7 +321,7 @@ const RAIL_GROUPS: SatelliteContextPanelId[][] = [
   ['raster', 'feature'],
 ];
 
-/** In-map toolbox: Main (layers + STAC + RS) and Options (AI GIS + AI Agent). */
+/** In-map toolbox: Main (layers + STAC + RS) and Options (AI GIS tools). AI Agent Chat is a primary rail action. */
 const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
   'layers',
   'add-gis-layer',
@@ -362,7 +362,7 @@ const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
 
 const RAIL_GROUPS_MAP: SatelliteContextPanelId[][] = [
   ['layers', 'remote-sensing', 'eo-enrichment', 'crop-classification', 'imagery-time-series', 'layer-live-legend', 'hydro-watershed'],
-  ['ai-detection-gis', 'tree-detections', 'sam-detection', 'agri-field-boundary', 'well-site', 'well-suitability', 'flood-monitoring', 'image-classification', 'raster-georeference', 'table-geo-ai'],
+  ['ai-detection-gis', 'tree-detections', 'sam-detection', 'agri-field-boundary', 'well-site', 'well-suitability', 'flood-monitoring', 'image-classification', 'raster-georeference'],
 ];
 
 const RAIL_BY_ID = RAIL.reduce(
@@ -920,6 +920,29 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
               <span className="si-sat-ctx-rail-label">
                 <span className="si-sat-ctx-rail-label-title">Go To XY</span>
                 <span className="si-sat-ctx-rail-label-desc">Center map on coordinates</span>
+              </span>
+            ) : null}
+          </button>
+        ) : null}
+        {isMap && !mapStripHidden && onGeoAiFloatingRailToggle ? (
+          <button
+            id="map-toolbox-ai-agent-chat-btn"
+            type="button"
+            className={
+              'si-sat-ctx-rail-btn si-sat-ctx-rail-btn--map si-sat-ctx-rail-btn--ai-agent-chat' +
+              (railWide ? ' si-sat-ctx-rail-btn--row si-sat-ctx-rail-btn--map-expanded' : ' si-sat-ctx-rail-btn--map-collapsed') +
+              (geoAiFloatingOpen ? ' si-sat-ctx-rail-btn--active' : '')
+            }
+            title="AI Agent Chat — neighborhood geospatial agent"
+            aria-label="AI Agent Chat"
+            aria-pressed={geoAiFloatingOpen}
+            onClick={() => onGeoAiFloatingRailToggle()}
+          >
+            <i className="fa-solid fa-comments" aria-hidden />
+            {railWide ? (
+              <span className="si-sat-ctx-rail-label">
+                <span className="si-sat-ctx-rail-label-title">AI Agent Chat</span>
+                <span className="si-sat-ctx-rail-label-desc">Ask about AOI, layers &amp; surroundings</span>
               </span>
             ) : null}
           </button>

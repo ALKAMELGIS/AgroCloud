@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useGisSelection } from '../../gisSelection/GisSelectionContext'
 import { computeSelectionStats } from '../../../../lib/gisSelection/selectionStats'
 import type { GisSelectableLayer } from '../../../../lib/gisSelection/types'
@@ -30,13 +30,17 @@ export function GisSelectionWorkbench() {
   const [attributesOpen, setAttributesOpen] = useState(false)
   const [queryAttributesOpen, setQueryAttributesOpen] = useState(false)
   const [queryLocationOpen, setQueryLocationOpen] = useState(false)
-  const [resultsOpen, setResultsOpen] = useState(true)
+  const [resultsOpen, setResultsOpen] = useState(false)
   const [referenceLayerId, setReferenceLayerId] = useState('')
 
   useEffect(() => {
     if (!active || selectableLayerIds.size) return
     setSelectableLayerIds(new Set(layers.map(l => String(l.id))))
   }, [active, layers, selectableLayerIds.size, setSelectableLayerIds])
+
+  useEffect(() => {
+    if (!active) setResultsOpen(false)
+  }, [active])
 
   const stats = useMemo(() => computeSelectionStats(hits, layers), [hits, layers])
 
@@ -63,7 +67,8 @@ export function GisSelectionWorkbench() {
       if (e.ctrlKey && e.shiftKey) setSetMode('subset')
       else if (e.ctrlKey) setSetMode('remove')
       if (e.key === 'Escape') {
-        if (attributesOpen) setAttributesOpen(false)
+        if (resultsOpen) setResultsOpen(false)
+        else if (attributesOpen) setAttributesOpen(false)
         else if (queryAttributesOpen) setQueryAttributesOpen(false)
         else if (queryLocationOpen) setQueryLocationOpen(false)
         else setActive(false)
@@ -71,7 +76,7 @@ export function GisSelectionWorkbench() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [active, attributesOpen, queryAttributesOpen, queryLocationOpen, setActive, setSetMode])
+  }, [active, attributesOpen, queryAttributesOpen, queryLocationOpen, resultsOpen, setActive, setSetMode])
 
   if (!active) return null
 
@@ -81,12 +86,16 @@ export function GisSelectionWorkbench() {
         active={active}
         tool={tool}
         setMode={setMode}
+        selectedCount={stats.featureCount}
+        resultsOpen={resultsOpen}
         onToolChange={setTool}
         onSetModeChange={setSetMode}
+        onOpenResults={() => setResultsOpen(v => !v)}
         onOpenAttributes={() => {
           setAttributesOpen(true)
           setQueryAttributesOpen(false)
           setQueryLocationOpen(false)
+          setResultsOpen(false)
         }}
         onOpenLocation={() => {
           zoomToSelection()
@@ -111,10 +120,12 @@ export function GisSelectionWorkbench() {
         onSelectByAttributes={() => {
           setQueryAttributesOpen(true)
           setQueryLocationOpen(false)
+          setResultsOpen(false)
         }}
         onSelectByLocation={() => {
           setQueryLocationOpen(true)
           setQueryAttributesOpen(false)
+          setResultsOpen(false)
         }}
         onClose={() => setResultsOpen(false)}
       />

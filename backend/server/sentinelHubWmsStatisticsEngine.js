@@ -572,6 +572,44 @@ export function bbox3857FromGeometry(geometry) {
   return [minX - padX, minY - padY, maxX + padX, maxY + padY]
 }
 
+/** Shoelace area in Web Mercator (m²) for a closed ring of [lng,lat] pairs. */
+function ringArea3857(ring) {
+  if (!Array.isArray(ring) || ring.length < 3) return 0
+  let sum = 0
+  for (let i = 0; i < ring.length - 1; i += 1) {
+    const [lng0, lat0] = ring[i]
+    const [lng1, lat1] = ring[i + 1]
+    if (![lng0, lat0, lng1, lat1].every(Number.isFinite)) continue
+    const [x0, y0] = lngLatToWebMercator(lng0, lat0)
+    const [x1, y1] = lngLatToWebMercator(lng1, lat1)
+    sum += x0 * y1 - x1 * y0
+  }
+  return Math.abs(sum) / 2
+}
+
+/**
+ * Approximate AOI area / padded bbox area in EPSG:3857.
+ * WMS GEOMETRY clipping makes outside-AOI pixels transparent, so clear-fraction
+ * must be normalized by this fill ratio (not by full image pixel count).
+ * @param {GeoJSON.Geometry | null | undefined} geometry
+ * @returns {number} clamped to [0.05, 1]
+ */
+export function estimateAoiBboxFillRatio(geometry) {
+  const bbox = bbox3857FromGeometry(geometry)
+  if (!bbox) return 1
+  const bboxArea = Math.max(1, (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]))
+  let polyArea = 0
+  if (geometry?.type === 'Polygon') {
+    polyArea = ringArea3857(geometry.coordinates?.[0])
+  } else if (geometry?.type === 'MultiPolygon') {
+    for (const poly of geometry.coordinates || []) {
+      polyArea += ringArea3857(poly?.[0])
+    }
+  }
+  if (!(polyArea > 0)) return 1
+  return Math.max(0.05, Math.min(1, polyArea / bboxArea))
+}
+
 export function decodeWmsZonalStatsFromPng(buffer) {
   const png = PNG.sync.read(buffer)
   let ndviSum = 0
@@ -786,6 +824,9 @@ export async function selectClearSceneDates(geometry, season, timesteps, maxClou
   }
 
   // Season-wide fallback: windows can all miss when clouds cluster; still pick best dates.
+  // If the soft ceiling still under-fills, relax up to min(100, ceiling+30) so humid
+  // seasons can still yield ≥2 candidate dates (AOI clarity is gated after WMS fetch).
+  const seasonCeilings = [...new Set([ceiling, Math.min(100, ceiling + 30), 90])]
   if (out.length < Math.min(2, steps)) {
     let all = []
     try {
@@ -793,42 +834,50 @@ export async function selectClearSceneDates(geometry, season, timesteps, maxClou
     } catch {
       all = []
     }
-    all = all
-      .filter(s => !usedDays.has(s.date) && Number.isFinite(s.cloudCover) && s.cloudCover <= ceiling)
-      .sort((a, b) => a.cloudCover - b.cloudCover || a.date.localeCompare(b.date))
-    // Keep ~even temporal spacing (at least ~7 days apart when season allows).
-    const seasonDays = Math.max(1, (end - start) / 86400000)
-    const minGapDays = Math.max(5, Math.min(14, Math.floor(seasonDays / Math.max(steps, 2))))
-    const minGapMs = minGapDays * 86400000
-    for (const s of all) {
-      if (out.length >= steps) break
-      const t = dayMs(s.date)
-      let near = false
-      for (const u of usedDays) {
-        if (Math.abs(dayMs(u) - t) < minGapMs) {
-          near = true
-          break
-        }
-      }
-      if (near) continue
-      usedDays.add(s.date)
-      out.push({ date: s.date, cloudCover: s.cloudCover, cloudy: false })
-    }
-    // Last resort: fill remaining slots ignoring gap (still clearest first).
-    if (out.length < Math.min(2, steps)) {
-      for (const s of all) {
+    for (const seasonCeiling of seasonCeilings) {
+      const ranked = all
+        .filter(
+          s =>
+            !usedDays.has(s.date) &&
+            Number.isFinite(s.cloudCover) &&
+            s.cloudCover <= seasonCeiling,
+        )
+        .sort((a, b) => a.cloudCover - b.cloudCover || a.date.localeCompare(b.date))
+      // Keep ~even temporal spacing (at least ~7 days apart when season allows).
+      const seasonDays = Math.max(1, (end - start) / 86400000)
+      const minGapDays = Math.max(5, Math.min(14, Math.floor(seasonDays / Math.max(steps, 2))))
+      const minGapMs = minGapDays * 86400000
+      for (const s of ranked) {
         if (out.length >= steps) break
-        if (usedDays.has(s.date)) continue
+        const t = dayMs(s.date)
+        let near = false
+        for (const u of usedDays) {
+          if (Math.abs(dayMs(u) - t) < minGapMs) {
+            near = true
+            break
+          }
+        }
+        if (near) continue
         usedDays.add(s.date)
         out.push({ date: s.date, cloudCover: s.cloudCover, cloudy: false })
       }
+      // Last resort for this ceiling: fill remaining slots ignoring gap.
+      if (out.length < Math.min(2, steps)) {
+        for (const s of ranked) {
+          if (out.length >= steps) break
+          if (usedDays.has(s.date)) continue
+          usedDays.add(s.date)
+          out.push({ date: s.date, cloudCover: s.cloudCover, cloudy: false })
+        }
+      }
+      if (out.length >= Math.min(2, steps)) break
     }
   }
 
   out.sort((a, b) => a.date.localeCompare(b.date))
   if (!out.length) {
     throw new Error(
-      `No usable Sentinel-2 scenes (granule cloud ≤ ${ceiling}%) found for this AOI/season. Try a wider season or a clearer period.`,
+      `No usable Sentinel-2 scenes (granule cloud ≤ ${Math.min(100, ceiling + 30)}%) found for this AOI/season. Try a wider season or a clearer period.`,
     )
   }
   return out
@@ -944,43 +993,79 @@ export async function fetchSentinelWmsIndicesGrid(options) {
   if (!bbox3857) throw new Error('Could not derive bbox from AOI geometry.')
 
   // High spatial resolution: sample at requested m/px (crop pipeline targets 3 m).
-  // Cap grid size so very large AOIs stay within WMS limits / payload size.
+  // Cap grid size so very large AOIs stay within Sentinel Hub WMS limits (≤2500).
   const spanX = bbox3857[2] - bbox3857[0]
   const spanY = bbox3857[3] - bbox3857[1]
   const mpp = Math.max(2, options.metersPerPixel ?? 10)
-  const maxSize = options.maxSize ?? 1024
+  const maxSize = Math.min(2500, Math.max(64, options.maxSize ?? 1024))
   const minSize = options.minSize ?? 128
   let width
   let height
   if (options.size) {
-    width = options.size
-    height = options.size
+    width = Math.min(maxSize, Math.max(minSize, options.size))
+    height = width
   } else {
     width = Math.max(minSize, Math.min(maxSize, Math.round(spanX / mpp)))
     height = Math.max(minSize, Math.min(maxSize, Math.round(spanY / mpp)))
   }
   const baseUrl = `https://services.sentinel-hub.com/ogc/wms/${instanceId}`
   const layer = await resolveWmsEvalProxyLayer(baseUrl, accessToken)
-  const geometryWkt3857 = geometryToWmsClipWkt3857(options.geometry)
-  const url = buildWmsGetMapUrl({
-    baseUrl,
-    accessToken,
-    layer,
-    bbox3857,
-    width,
-    height,
-    timeStart: options.timeStart,
-    timeEnd: options.timeEnd,
-    cloudCoverage: options.cloudCoverage ?? 40,
-    format: 'image/png',
-    geometryWkt3857: geometryWkt3857 || undefined,
-  })
-  const res = await fetch(url, { headers: { Accept: 'image/png' } })
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`WMS indices GetMap failed (${res.status}): ${text.slice(0, 160)}`)
+  // Clip by default so outside-AOI stays transparent; callers that score clear %
+  // must normalize by {@link estimateAoiBboxFillRatio}. Set clipToGeometry:false
+  // for a bbox-only fallback when clipped fetches return empty frames.
+  const clip = options.clipToGeometry !== false
+
+  const attempt = async (w, h, useClip) => {
+    const geometryWkt3857 = useClip ? geometryToWmsClipWkt3857(options.geometry) : null
+    const url = buildWmsGetMapUrl({
+      baseUrl,
+      accessToken,
+      layer,
+      bbox3857,
+      width: w,
+      height: h,
+      timeStart: options.timeStart,
+      timeEnd: options.timeEnd,
+      cloudCoverage: options.cloudCoverage ?? 40,
+      format: 'image/png',
+      geometryWkt3857: geometryWkt3857 || undefined,
+    })
+    const res = await fetch(url, { headers: { Accept: 'image/png' } })
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      const err = new Error(`WMS indices GetMap failed (${res.status}): ${text.slice(0, 220)}`)
+      err.status = res.status
+      throw err
+    }
+    return Buffer.from(await res.arrayBuffer())
   }
-  const png = PNG.sync.read(Buffer.from(await res.arrayBuffer()))
+
+  let pngBuf
+  try {
+    pngBuf = await attempt(width, height, clip)
+  } catch (err) {
+    // Sentinel Hub returns 400 for oversized / invalid GEOMETRY requests — retry safely.
+    if (err?.status === 400 && (width > 2048 || height > 2048 || clip)) {
+      const rw = Math.min(2048, width)
+      const rh = Math.min(2048, height)
+      try {
+        pngBuf = await attempt(rw, rh, false)
+        width = rw
+        height = rh
+      } catch (err2) {
+        if (err2?.status === 400) {
+          pngBuf = await attempt(Math.min(1024, rw), Math.min(1024, rh), false)
+          width = Math.min(1024, rw)
+          height = Math.min(1024, rh)
+        } else {
+          throw err2
+        }
+      }
+    } else {
+      throw err
+    }
+  }
+  const png = PNG.sync.read(pngBuf)
   const n = png.width * png.height
   const ndvi = new Float32Array(n)
   const ndwi = new Float32Array(n)

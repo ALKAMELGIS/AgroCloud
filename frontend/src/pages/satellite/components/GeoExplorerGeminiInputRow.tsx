@@ -1,6 +1,7 @@
 import type { ChangeEvent, KeyboardEvent, MouseEvent as ReactMouseEvent, RefObject } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useGeoAiSpeechRecognition } from '../../../hooks/useGeoAiSpeechRecognition'
+import { GEO_AI_ATTACH_ACCEPT } from '../../../lib/geoAiAttachFile'
 import type { GeoExplorerCssPrefix } from './GeoExplorerGeminiChatBody'
 
 export type GeoExplorerGeminiInputRowProps = {
@@ -753,7 +754,7 @@ export function GeoExplorerGeminiInputRow(props: GeoExplorerGeminiInputRowProps)
                 ref={fileInputRef}
                 type="file"
                 className={pfx(cssPrefix, 'file-input')}
-                accept="image/*"
+                accept={GEO_AI_ATTACH_ACCEPT}
                 onChange={onAttachChange}
                 aria-hidden
                 tabIndex={-1}
@@ -763,8 +764,8 @@ export function GeoExplorerGeminiInputRow(props: GeoExplorerGeminiInputRowProps)
                 className={pfx(cssPrefix, 'composer-icon-btn')}
                 onClick={() => fileInputRef.current?.click()}
                 disabled={busy}
-                aria-label="Attach image"
-                title="Attach image"
+                aria-label="Attach file"
+                title="Attach file (images, PDF, text, Office…)"
               >
                 <i className="fa-solid fa-paperclip" aria-hidden />
               </button>

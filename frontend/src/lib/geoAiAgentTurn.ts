@@ -5,7 +5,7 @@
  * 2. Prefer native tools (Gemini functionDeclarations / Claude tool_use / DeepSeek tools)
  * 3. Fall back to MAP_ACTION / MAP_QUERY text protocol for Ollama (and any adapter without tools)
  * 4. Execute tools → append results → optional second model step
- * 5. Surface a user-visible answer with Summary / Evidence / Map actions
+ * 5. Surface a short user-facing answer with optional References (no tool dumps)
  */
 
 import {
@@ -51,6 +51,7 @@ import {
   type GeoAiAnalystPackId,
 } from './geoAiAnalystPacks'
 import type { GeoAiStatsResult } from './geoAiStatsEngine'
+import { buildFastWeatherUserReplyFromFacts } from './neighborhoodAgentWeatherViz'
 
 export type GeoAiAgentProvider = 'gemini' | 'claude' | 'deepseek' | 'ollama'
 
@@ -127,7 +128,7 @@ export type GeoAiAgentTurnParams = {
 }
 
 export type GeoAiAgentTurnResult = {
-  /** Display text with Summary / Evidence / Map actions sections when tools ran. */
+  /** Display text — short prose + optional References (no tool dumps). */
   replyText: string
   /** Raw final model prose (before evidence packaging). */
   rawModelText: string
@@ -147,11 +148,11 @@ export type GeoAiAgentTurnResult = {
 const NATIVE_TOOL_SYSTEM_ADDENDUM = `### GIS AGENT TOOLS
 You have executable GIS tools for map control, vector statistics, live RS/legend readout, and weather.
 - Prefer calling tools for facts (counts, class areas, weather numbers, map actions) instead of inventing them.
-- After tool results arrive, write a concise analyst answer for the user.
-- Structure the final user-facing answer with these headings when tools were used:
-  **Summary** — 1–3 sentences
-  **Evidence** — bullets citing tool outputs (layer names, areas, counts, dates)
-  **Map actions** — what changed on the map (or "None")
+- After tool results arrive, write a **short user-facing answer** (≤3 short sentences, plus a compact table when numbers split into groups).
+- Do **not** paste tool names, LIVE MAP STATE, OPENWEATHER FACTS, or raw tool dumps into the reply.
+- End with a compact **References** list (1–4 citation-style lines: source name + optional URL). Example:
+  - OpenWeatherMap — current conditions
+  - AgroCloud loaded layer “Districts” — attribute table
 - Do not invent MAP_ACTION lines when native tools are available; call the tools instead.`
 
 const MAP_ACTION_FALLBACK_ADDENDUM = `### MAP_ACTION / MAP_QUERY (text protocol — no native tools)
@@ -165,13 +166,13 @@ MAP_ACTION:{"op":"searchPlace","query":"Dubai"}
 MAP_ACTION:{"op":"identifyBasemap"}
 MAP_ACTION:{"op":"zoomToLayer","layer":"Parcels"}
 For a single justified pin use: MAP_QUERY:<longitude>,<latitude>
-Still answer the user in prose. Prefer **Summary** / **Evidence** / **Map actions** structure.`
+Still answer the user in short prose. Add **References** (citation lines), never dump Evidence / tool transcripts.`
 
 const FINAL_ANSWER_NUDGE =
-  'Using ONLY the tool results above plus the live map context, write the final user-facing answer with **Summary**, **Evidence**, and **Map actions** headings. Do not call more tools unless critically missing.'
+  'Using ONLY the tool results above plus the live map context, write a short user-facing answer (no Evidence dumps, no tool names, no LIVE MAP STATE paste). End with **References** as 1–4 citation-style lines (source name ± URL). Do not call more tools unless critically missing.'
 
 const ANALYST_PACK_SYNTHESIS_NUDGE =
-  'An analyst pack already executed GIS tools against the live map / loaded layers. Using ONLY those authoritative tool results (and live map context), write the final user-facing answer with **Summary**, **Evidence**, and **Map actions** headings. Do not invent counts, class areas, or weather numbers. Do not call more tools.'
+  'An analyst pack already executed GIS tools against the live map / loaded layers. Using ONLY those authoritative tool results, write a short user-facing answer. Never paste tool transcripts / LIVE MAP STATE / OPENWEATHER FACTS. End with **References** (citation-style lines). Do not invent counts, class areas, or weather numbers. Do not call more tools.'
 
 function newId(prefix: string): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return `${prefix}-${crypto.randomUUID()}`
@@ -212,50 +213,92 @@ function stripProtocolNoise(text: string): string {
   return stripGeoAiMapActionLines(stripGeoAiCopilotJsonLine(stripMapQueryLine(text))).trim()
 }
 
+/** Drop internal Evidence / tool-dump sections from model prose. */
+export function stripInternalToolEvidenceDump(text: string): string {
+  let t = text
+  // Remove Evidence / Map actions heading blocks that dump tools
+  t = t.replace(
+    /(?:^|\n)(?:#{1,3}\s*)?(?:\*\*)?(?:Evidence|Map actions|Tools? used)(?:\*\*)?\s*:?[^\n]*\n(?:[-*•].*(?:\n|$))+/gim,
+    '\n',
+  )
+  t = t.replace(/(?:^|\n)[-*•]\s*`?(?:read_live_map_state|get_weather_context|read_rs_analysis|run_vector_stats|query_layer_attributes|fly_to|search_place)`?\s*:?[\s\S]*?(?=\n[-*•]|\n#{1,3}\s|\n\*\*|$)/gi, '\n')
+  t = t.replace(/###\s*LIVE MAP STATE[\s\S]*?(?=\n###\s|\n\*\*|$)/gi, '\n')
+  t = t.replace(/###\s*OPENWEATHER FACTS[\s\S]*?(?=\n###\s|\n\*\*|$)/gi, '\n')
+  t = t.replace(/###\s*SESSION MAP ANCHOR[\s\S]*?(?=\n###\s|\n\*\*|$)/gi, '\n')
+  t = t.replace(/\bTreat these as facts;[^\n]*/gi, '')
+  t = t.replace(/\n{3,}/g, '\n\n').trim()
+  return t
+}
+
+/** Compact citation-style references from tools (never raw transcripts). */
+export function compactGeoAiAgentReferences(toolResults: GeoAiAgentToolResult[]): string[] {
+  const refs: string[] = []
+  const push = (line: string) => {
+    const t = line.trim()
+    if (!t) return
+    if (!refs.some(r => r.toLowerCase() === t.toLowerCase())) refs.push(t)
+  }
+  for (const r of toolResults) {
+    if (!r.ok) continue
+    switch (r.name) {
+      case 'read_live_map_state':
+        push('AgroCloud live map — camera, layers, AOI snapshot')
+        break
+      case 'get_weather_context':
+        push('OpenWeatherMap / Open-Meteo — https://openweathermap.org')
+        break
+      case 'read_rs_analysis':
+        push('AgroCloud remote-sensing analysis — active index & class areas')
+        break
+      case 'run_vector_stats':
+      case 'query_layer_attributes':
+        push('AgroCloud loaded GIS layers — in-map attribute table')
+        break
+      case 'search_place':
+      case 'fly_to':
+      case 'identify_basemap':
+        push('Mapbox geocoding / basemap place data')
+        break
+      default:
+        break
+    }
+  }
+  return refs.slice(0, 5)
+}
+
 /**
- * Package model prose + tool evidence into Summary / Evidence / Map actions
- * when the model did not already use those headings.
+ * User-facing reply: short prose + optional References.
+ * Never dumps LIVE MAP STATE / tool transcripts as Evidence.
  */
 export function formatGeoAiAgentEvidenceReply(input: {
   modelText: string
   toolResults: GeoAiAgentToolResult[]
   mapActionLines: string[]
 }): string {
-  const cleaned = stripProtocolNoise(input.modelText)
-  const hasStructured =
-    /\*\*Summary\*\*/i.test(cleaned) ||
-    /^#{1,3}\s*Summary\b/im.test(cleaned) ||
-    /\bSummary\s*[:—-]/im.test(cleaned)
+  let cleaned = stripInternalToolEvidenceDump(stripProtocolNoise(input.modelText))
+  // Drop leftover Summary/Evidence theatre headings but keep body text under Summary
+  cleaned = cleaned
+    .replace(/^(?:#{1,3}\s*)?(?:\*\*)?Summary(?:\*\*)?\s*:?\s*/im, '')
+    .replace(/(?:^|\n)(?:#{1,3}\s*)?(?:\*\*)?Map actions(?:\*\*)?\s*:?\s*\n(?:[-*•].*(?:\n|$))*/gim, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 
-  if (hasStructured && cleaned) return cleaned
-
-  const evidenceBullets: string[] = []
-  for (const r of input.toolResults) {
-    if (!r.ok) continue
-    if (r.name === 'run_vector_stats' || r.name === 'read_rs_analysis' || r.name === 'read_live_map_state' || r.name === 'get_weather_context') {
-      const preview = r.content.split(/\r?\n/).filter(Boolean).slice(0, 6).join(' · ')
-      evidenceBullets.push(`- **${r.name}:** ${preview.slice(0, 420)}`)
-    }
+  const refs = compactGeoAiAgentReferences(input.toolResults)
+  // Keep model References section if already present and clean
+  const hasRefs = /\*\*References\*\*|^#{1,3}\s*References\b/im.test(cleaned)
+  if (cleaned && !/read_live_map_state|LIVE MAP STATE|OPENWEATHER FACTS/i.test(cleaned)) {
+    if (hasRefs || !refs.length) return cleaned
+    return `${cleaned}\n\n**References**\n${refs.map(r => `- ${r}`).join('\n')}`
   }
-  const mapLines = input.mapActionLines.filter(Boolean)
+
   const summary =
     cleaned ||
-    (evidenceBullets.length
-      ? 'Completed GIS tool checks against the live map / loaded layers.'
+    (refs.length
+      ? 'Answer prepared from live map / layer data.'
       : 'No additional model prose was returned.')
 
-  const parts = [`**Summary**\n${summary}`]
-  parts.push(
-    evidenceBullets.length
-      ? `**Evidence**\n${evidenceBullets.join('\n')}`
-      : '**Evidence**\n- (No structured tool evidence this turn.)',
-  )
-  parts.push(
-    mapLines.length
-      ? `**Map actions**\n${mapLines.map(l => `- ${l}`).join('\n')}`
-      : '**Map actions**\n- None',
-  )
-  return parts.join('\n\n')
+  if (!refs.length) return summary
+  return `${summary}\n\n**References**\n${refs.map(r => `- ${r}`).join('\n')}`
 }
 
 function pickTableAndSync(results: GeoAiAgentToolResult[]): {
@@ -278,12 +321,59 @@ async function runToolCalls(
   calls: GeoAiAgentToolCall[],
   host: GeoAiAgentToolHost,
 ): Promise<GeoAiAgentToolResult[]> {
+  if (!calls.length) return []
+  // zoom_to_aoi first (mutates view); remaining tools in parallel for latency.
+  const zoomCall = calls.find(c => c.name === 'zoom_to_aoi')
+  const rest = calls.filter(c => c.name !== 'zoom_to_aoi')
   const out: GeoAiAgentToolResult[] = []
-  for (const call of calls) {
-    const result = await executeGeoAiAgentTool(call.name, call.args, host)
-    out.push({ ...result, name: call.name })
+  if (zoomCall) {
+    const zoomResult = await executeGeoAiAgentTool(zoomCall.name, zoomCall.args, host)
+    out.push({ ...zoomResult, name: zoomCall.name })
+  }
+  if (rest.length) {
+    const restResults = await Promise.all(
+      rest.map(async call => {
+        const result = await executeGeoAiAgentTool(call.name, call.args, host)
+        return { ...result, name: call.name }
+      }),
+    )
+    // Preserve original call order (excluding zoom which already ran first).
+    const byNameQueue = new Map<string, GeoAiAgentToolResult[]>()
+    for (const r of restResults) {
+      const q = byNameQueue.get(r.name) || []
+      q.push(r)
+      byNameQueue.set(r.name, q)
+    }
+    for (const call of rest) {
+      const q = byNameQueue.get(call.name)
+      const next = q?.shift()
+      if (next) out.push(next)
+    }
   }
   return out
+}
+
+/** Local reply for packs whose tools already produced the answer (skip slow LLM). */
+export function tryBuildFastAnalystPackReply(
+  packId: GeoAiAnalystPackId,
+  packResults: GeoAiAgentToolResult[],
+): string | null {
+  if (packId === 'weather') {
+    const weather = packResults.find(r => r.name === 'get_weather_context' && r.ok)
+    if (!weather?.content?.trim()) return null
+    return buildFastWeatherUserReplyFromFacts(weather.content)
+  }
+  if (packId === 'layer-attribute') {
+    const hit = packResults.find(r => r.name === 'query_layer_attributes' && r.ok)
+    if (hit?.content?.trim()) return hit.content.trim()
+    return null
+  }
+  if (packId === 'count-buildings') {
+    const stats = packResults.filter(r => r.name === 'run_vector_stats' && r.ok && r.content.trim())
+    if (!stats.length) return null
+    return stats.map(r => r.content.trim()).join('\n\n')
+  }
+  return null
 }
 
 /* -------------------------------------------------------------------------- */
@@ -745,30 +835,35 @@ export async function runGeoAiAgentTurn(params: GeoAiAgentTurnParams): Promise<G
         if (r.mapResults?.length) mapCommandResults.push(...r.mapResults)
       }
 
-      const packBlock = [
-        `### PRE-EXECUTED ANALYST PACK: ${geoAiAnalystPackLabel(packId)} (${packId})`,
-        'These tool results are authoritative — cite them in Evidence; do not invent numbers.',
-        formatToolResultsForModel(packResults),
-        ANALYST_PACK_SYNTHESIS_NUDGE,
-      ].join('\n\n')
+      const fastReply = tryBuildFastAnalystPackReply(packId, packResults)
+      if (fastReply) {
+        rawModelText = fastReply
+      } else {
+        const packBlock = [
+          `### PRE-EXECUTED ANALYST PACK: ${geoAiAnalystPackLabel(packId)} (${packId})`,
+          'These tool results are authoritative — cite them briefly in References; do not invent numbers or paste tool transcripts.',
+          formatToolResultsForModel(packResults),
+          ANALYST_PACK_SYNTHESIS_NUDGE,
+        ].join('\n\n')
 
-      const systemWithPack = `${system}\n\n${packBlock}`
-      const step = await adapter.complete({
-        system: systemWithPack,
-        turns: params.history,
-        userMessage: params.userMessage,
-        toolsEnabled: false,
-        priorToolRound: useNative
-          ? {
-              assistantText: `Running analyst pack: ${geoAiAnalystPackLabel(packId)}.`,
-              toolCalls: packCalls,
-              toolResults: packResults,
-            }
-          : undefined,
-      })
-      rawModelText = step.text || ''
-      const mq = parseMapQueryLngLat(step.text)
-      if (mq) mapQueryLngLat = mq
+        const systemWithPack = `${system}\n\n${packBlock}`
+        const step = await adapter.complete({
+          system: systemWithPack,
+          turns: params.history,
+          userMessage: params.userMessage,
+          toolsEnabled: false,
+          priorToolRound: useNative
+            ? {
+                assistantText: `Running analyst pack: ${geoAiAnalystPackLabel(packId)}.`,
+                toolCalls: packCalls,
+                toolResults: packResults,
+              }
+            : undefined,
+        })
+        rawModelText = step.text || ''
+        const mq = parseMapQueryLngLat(step.text)
+        if (mq) mapQueryLngLat = mq
+      }
     }
   }
 

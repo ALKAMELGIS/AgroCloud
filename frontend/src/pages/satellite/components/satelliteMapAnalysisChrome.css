@@ -1545,6 +1545,10 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
   min-height: 0;
   flex: 0 0 auto;
   align-self: stretch;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 
 .si-sat-ctx-dock--map .si-sat-ctx-panel {
@@ -2540,6 +2544,12 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
 .si-sat-ctx-rail-btn--go-to-xy.is-active,
 .si-sat-ctx-rail-btn--go-to-xy.si-sat-ctx-rail-btn--active {
   color: #38bdf8;
+}
+
+.si-sat-ctx-rail-btn--ai-agent-chat.si-sat-ctx-rail-btn--active {
+  color: #5eead4;
+  border-color: rgba(45, 212, 191, 0.45);
+  background: rgba(45, 212, 191, 0.14);
 }
 
 .si-sat-ctx-dock[dir='rtl'] .si-sat-ctx-rail-btn--map-collapsed .si-sat-ctx-rail-label {

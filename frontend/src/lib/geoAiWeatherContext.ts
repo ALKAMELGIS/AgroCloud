@@ -157,3 +157,54 @@ export async function buildGeoAiWeatherSystemAppend(input: {
 
   return out
 }
+
+/**
+ * Lean weather facts for Neighborhood Agent tools — OpenWeather (or Open-Meteo) only,
+ * no Open-Meteo cross-check, no session/assistant appendices (faster pack replies).
+ */
+export async function buildGeoAiLeanWeatherFactsForAgent(input: {
+  userText: string
+  pinLngLat: [number, number] | null
+  lastMapQueryCoords: [number, number] | null
+  inspectAnchorLngLat?: [number, number] | null
+  combinedLayers: GeoAiMapLayer[]
+  mapboxAccessToken?: string
+  openWeatherApiKey: string
+}): Promise<string> {
+  const weatherResolved = await resolveGeoAiWeatherFactsCoords({
+    userText: input.userText || 'weather here',
+    pinLngLat: input.pinLngLat,
+    lastMapQueryCoords: input.lastMapQueryCoords,
+    inspectAnchorLngLat: input.inspectAnchorLngLat ?? null,
+    combinedLayers: input.combinedLayers,
+    mapboxAccessToken: input.mapboxAccessToken,
+  })
+  if (!weatherResolved) {
+    return 'No weather coordinates available for the current map focus / query.'
+  }
+
+  const [fLng, fLat] = [weatherResolved.lng, weatherResolved.lat]
+  const owm = input.openWeatherApiKey.trim()
+  const pinCoords =
+    input.pinLngLat ?? input.lastMapQueryCoords ?? (input.inspectAnchorLngLat ?? null) ?? null
+  const ambientWeather =
+    Boolean(pinCoords) &&
+    !userRequestsExplicitCalendarDayForWeather(input.userText) &&
+    Math.abs(fLng - pinCoords![0]) < 0.03 &&
+    Math.abs(fLat - pinCoords![1]) < 0.03
+
+  const header = [
+    `Location: ${weatherResolved.placeLabel || 'map focus'} (coordinates: latitude ${fLat.toFixed(5)}, longitude ${fLng.toFixed(5)})`,
+    `Weather location resolution: **${weatherResolved.source}**`,
+  ].join('\n')
+
+  if (owm) {
+    const block = await buildOpenWeatherContextBlock(owm, fLat, fLng, input.userText || 'weather here', {
+      ambientWindowOnly: ambientWeather,
+    })
+    return `${header}\n\n${block}`.trim()
+  }
+
+  const om = await buildOpenMeteoContextBlock(fLat, fLng, input.userText || 'weather here')
+  return `${header}\n\n${om}`.trim()
+}

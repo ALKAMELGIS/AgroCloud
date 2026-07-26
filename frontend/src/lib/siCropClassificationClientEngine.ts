@@ -995,7 +995,11 @@ async function fetchWmsImageData(
   const res = await fetch(url, { headers: { Accept: 'image/png' }, signal })
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    throw new Error(`Sentinel Hub WMS GetMap failed (${res.status}): ${text.slice(0, 160)}`)
+    const err = new Error(`Sentinel Hub WMS GetMap failed (${res.status}): ${text.slice(0, 160)}`) as Error & {
+      status?: number
+    }
+    err.status = res.status
+    throw err
   }
   const blob = await res.blob()
   const bitmap = await createImageBitmap(blob)
@@ -1025,40 +1029,56 @@ async function fetchIndexGrid(
 ): Promise<IndexGrid> {
   const [minX, minY, maxX, maxY] = opts.bbox3857
   const base = getSentinelHubWmsBaseUrl()
-  let url =
-    `${base}?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0` +
-    `&LAYERS=${encodeURIComponent(opts.layer)}` +
-    `&BBOX=${minX},${minY},${maxX},${maxY}&CRS=EPSG:3857` +
-    `&FORMAT=image/png&TRANSPARENT=true&WIDTH=${opts.size}&HEIGHT=${opts.size}` +
-    `&TIME=${opts.timeStart}/${opts.timeEnd}` +
-    `&MAXCC=${opts.cloudCoverage}` +
-    `&SHOWLOGO=false&WARNINGS=false` +
-    `&EVALSCRIPT=${encodeURIComponent(opts.evalscriptB64)}`
-  url = appendSentinelHubWmsAccessToken(url)
-
-  const data = await fetchWmsImageData(url, opts.size, opts.size, signal)
-  const n = opts.size * opts.size
-  const ndvi = new Float32Array(n)
-  const ndwi = new Float32Array(n)
-  const ndmi = new Float32Array(n)
-  const valid = new Uint8Array(n)
-  for (let p = 0; p < n; p += 1) {
-    const i = p * 4
-    const r = data[i]
-    const g = data[i + 1]
-    const b = data[i + 2]
-    const a = data[i + 3]
-    // Validity is alpha only — RGB zeros are real low-index values, not nodata.
-    if (a < 128) {
-      valid[p] = 0
-      continue
+  const decode = (data: Uint8ClampedArray, size: number): IndexGrid => {
+    const n = size * size
+    const ndvi = new Float32Array(n)
+    const ndwi = new Float32Array(n)
+    const ndmi = new Float32Array(n)
+    const valid = new Uint8Array(n)
+    for (let p = 0; p < n; p += 1) {
+      const i = p * 4
+      const r = data[i]
+      const g = data[i + 1]
+      const b = data[i + 2]
+      const a = data[i + 3]
+      // Validity is alpha only — RGB zeros are real low-index values, not nodata.
+      if (a < 128) {
+        valid[p] = 0
+        continue
+      }
+      ndvi[p] = r / 127 - 1
+      ndwi[p] = g / 127 - 1
+      ndmi[p] = b / 127 - 1
+      valid[p] = 1
     }
-    ndvi[p] = r / 127 - 1
-    ndwi[p] = g / 127 - 1
-    ndmi[p] = b / 127 - 1
-    valid[p] = 1
+    return { ndvi, ndwi, ndmi, valid, width: size, height: size }
   }
-  return { ndvi, ndwi, ndmi, valid, width: opts.size, height: opts.size }
+  const buildUrl = (size: number) => {
+    let url =
+      `${base}?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0` +
+      `&LAYERS=${encodeURIComponent(opts.layer)}` +
+      `&BBOX=${minX},${minY},${maxX},${maxY}&CRS=EPSG:3857` +
+      `&FORMAT=image/png&TRANSPARENT=true&WIDTH=${size}&HEIGHT=${size}` +
+      `&TIME=${opts.timeStart}/${opts.timeEnd}` +
+      `&MAXCC=${opts.cloudCoverage}` +
+      `&SHOWLOGO=false&WARNINGS=false` +
+      `&EVALSCRIPT=${encodeURIComponent(opts.evalscriptB64)}`
+    return appendSentinelHubWmsAccessToken(url)
+  }
+
+  const size0 = Math.min(2500, Math.max(64, opts.size))
+  try {
+    const data = await fetchWmsImageData(buildUrl(size0), size0, size0, signal)
+    return decode(data, size0)
+  } catch (err) {
+    const status = (err as { status?: number })?.status
+    if (status === 400 && size0 > 1024) {
+      const size1 = Math.min(1024, size0)
+      const data = await fetchWmsImageData(buildUrl(size1), size1, size1, signal)
+      return decode(data, size1)
+    }
+    throw err
+  }
 }
 
 /** True-color preview (data URL) around a target clear date — full natural RGB (no cloud cutouts). */
@@ -1174,46 +1194,54 @@ export async function runClientAoiCropClassification(
     const evalscriptB64 = toBase64(INDEX_GRID_EVALSCRIPT)
     // More temporal samples => finer NDVI phenology (better season-specific accuracy) and more
     // chances to see each pixel cloud-free within its window.
-    const STEPS = 6
+    const STEPS = 8
     // 3 m target grid: size the request by the AOI span so field / pivot edges stay crisp.
     const TARGET_MPP = 3
     const spanMeters = Math.max(maxX - minX, maxY - minY)
-    const SIZE = Math.max(256, Math.min(3072, Math.round(spanMeters / TARGET_MPP)))
-    // Prefer ≥45% AOI clear; fall back to best available ≥15% so the tool keeps working.
+    const SIZE = Math.max(256, Math.min(2500, Math.round(spanMeters / TARGET_MPP)))
+    // Prefer ≥45% AOI clear; fall back to best available ≥8% so the tool keeps working.
     const MIN_CLEAR_FRACTION = 0.45
-    const CLEAR_FLOOR = 0.15
+    const CLEAR_FLOOR = 0.08
     /** Granule-level WMS MAXCC — tile cloud metadata ≠ AOI cloud; keep permissive and rank by AOI clear %. */
     const MAX_SCENE_CLOUD = 40
     const dates = evenlySpacedDates(input.season, STEPS)
     const grids: IndexGrid[] = []
     const usedDates: string[] = []
     let skippedEmpty = 0
+    let lastFetchErr: unknown = null
     const validFractionOf = (g: IndexGrid): number => {
       let ok = 0
       for (let p = 0; p < g.valid.length; p += 1) ok += g.valid[p]
       return g.valid.length ? ok / g.valid.length : 0
     }
     const candidates: Array<{ date: string; grid: IndexGrid; clear: number }> = []
-    for (let i = 0; i < dates.length; i += 1) {
+    const tried = new Set<string>()
+    const tryFetchDate = async (
+      date: string,
+      opts: { cloudCoverage?: number; padDays?: number; clearFloor?: number } = {},
+    ) => {
+      if (tried.has(date)) return
+      tried.add(date)
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
       onUpdate(
         snapshot(
           jobId,
           'fetching',
-          0.1 + (0.5 * i) / dates.length,
-          `Fetching spectral series ${i + 1}/${dates.length} (${dates[i]}) — ${country.name}…`,
+          0.1 + Math.min(0.5, 0.06 * tried.size),
+          `Fetching spectral series ${tried.size} (${date}) — ${country.name}…`,
         ),
       )
-      const day = new Date(`${dates[i]}T00:00:00Z`)
-      const t0 = new Date(day.getTime() - 6 * 86400000).toISOString().slice(0, 10)
-      const t1 = new Date(day.getTime() + 6 * 86400000).toISOString().slice(0, 10)
+      const day = new Date(`${date}T00:00:00Z`)
+      const pad = opts.padDays ?? 6
+      const t0 = new Date(day.getTime() - pad * 86400000).toISOString().slice(0, 10)
+      const t1 = new Date(day.getTime() + pad * 86400000).toISOString().slice(0, 10)
       try {
         const grid = await fetchIndexGrid(
           {
             bbox3857,
             timeStart: t0,
             timeEnd: t1,
-            cloudCoverage: MAX_SCENE_CLOUD,
+            cloudCoverage: opts.cloudCoverage ?? MAX_SCENE_CLOUD,
             size: SIZE,
             layer,
             evalscriptB64,
@@ -1221,16 +1249,37 @@ export async function runClientAoiCropClassification(
           signal,
         )
         const clear = validFractionOf(grid)
-        if (clear < CLEAR_FLOOR) {
+        if (clear < (opts.clearFloor ?? CLEAR_FLOOR)) {
           skippedEmpty += 1
-          continue
+          return
         }
-        candidates.push({ date: dates[i]!, grid, clear })
+        candidates.push({ date, grid, clear })
       } catch (gridErr) {
         if (gridErr instanceof DOMException && gridErr.name === 'AbortError') throw gridErr
+        lastFetchErr = gridErr
         /* skip a failed date — classifier tolerates gaps */
       }
     }
+
+    for (const d of dates) {
+      await tryFetchDate(d!)
+    }
+
+    // Wider windows + higher MAXCC when the first pass under-fills.
+    if (candidates.length < 2) {
+      onUpdate(
+        snapshot(jobId, 'fetching', 0.55, 'Retrying with wider date windows…'),
+      )
+      const alreadyOk = new Set(candidates.map(c => c.date))
+      const retryDates = evenlySpacedDates(input.season, 10)
+      for (const d of retryDates) {
+        if (candidates.length >= 4) break
+        if (!d || alreadyOk.has(d)) continue
+        tried.delete(d) // allow re-fetch of previously empty dates with looser params
+        await tryFetchDate(d, { cloudCoverage: 80, padDays: 12, clearFloor: 0.05 })
+      }
+    }
+
     candidates.sort((a, b) => b.clear - a.clear || a.date.localeCompare(b.date))
     const preferred = candidates.filter(c => c.clear >= MIN_CLEAR_FRACTION)
     const pool = preferred.length >= 2 ? preferred : candidates
@@ -1256,10 +1305,15 @@ export async function runClientAoiCropClassification(
     }
     if (grids.length < 2) {
       const best = candidates[0]?.clear
+      if (best == null && lastFetchErr) {
+        return fail(
+          `Could not fetch Sentinel-2 imagery for this AOI/season: ${String((lastFetchErr as Error)?.message || lastFetchErr).slice(0, 180)}`,
+        )
+      }
       return fail(
         best != null
           ? `Not enough usable Sentinel-2 scenes for this AOI/season (best AOI clear ${(best * 100).toFixed(0)}%, need ≥2 dates${skippedEmpty ? `; ${skippedEmpty} empty` : ''}). Try a wider season.`
-          : 'Not enough usable Sentinel-2 imagery for this AOI/season to classify. Try a wider season or a clearer area.',
+          : 'Not enough usable Sentinel-2 imagery for this AOI/season to classify. Try a wider season or a clearer period.',
       )
     }
 
