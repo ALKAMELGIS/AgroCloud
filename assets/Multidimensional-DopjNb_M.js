@@ -1,0 +1,1 @@
+import{j as i}from"./vendor-charts-D6N5B1lb.js";import"./vendor-react-CSwq0y0b.js";function o(){return i.jsxs("div",{style:{padding:24},children:[i.jsx("h1",{children:"Multidimensional Analysis"}),i.jsx("p",{children:"Advanced temporal and volumetric analysis tools coming soon."})]})}export{o as default};
