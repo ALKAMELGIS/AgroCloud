@@ -463,6 +463,13 @@ import {
   parseGeoAiMapCommands,
   type GeoAiMapCommandHandlers,
 } from '../../lib/geoAiCommandExecutor';
+import {
+  runGeoAiAgentTurn,
+  type GeoAiAgentChatTurn,
+  type GeoAiAgentProvider,
+  type GeoAiAgentTurnResult,
+} from '../../lib/geoAiAgentTurn';
+import { classifyGeoAiAnalystIntent } from '../../lib/geoAiAnalystPacks';
 import { TreeDetectionsPanel } from './components/TreeDetectionsPanel';
 import { SamDetectionPanel, type SamPanelTab } from './components/SamDetectionPanel';
 import { useSamDetection, type SamAoiSource } from './components/useSamDetection';
@@ -569,6 +576,17 @@ import {
 } from '../../lib/gisHostedFeatureLayerPortal';
 import { listGisContentPortalSavedLayers, parseGisContentPortalLayerUrl, gisContentPortalLayerUrl } from '../../lib/gisContentPortalTableUtils';
 import { SatelliteGeoAiFloatingWidget } from './components/SatelliteGeoAiFloatingWidget';
+import {
+  GeoAiAgentPanel,
+  type GeoAiAgentHistoryEntry,
+} from './components/geoAiAgent/GeoAiAgentPanel';
+import {
+  GEO_AI_AGENT_PREFS_LS_KEY,
+  fabIconFaClass,
+  readGeoAiAgentPrefs,
+  writeGeoAiAgentPrefs,
+  type GeoAiAgentPrefs,
+} from './components/geoAiAgent/geoAiAgentPrefs';
 import { SatelliteAoiStaticChartsMapOverlay } from './components/SatelliteAoiStaticChartsMapOverlay';
 import { SatelliteMapProcessingOptionsPortal } from './components/SatelliteMapProcessingOptionsPortal';
 import { WeatherIntelligencePanel, type WeatherLocation } from './components/WeatherIntelligencePanel';
@@ -4050,13 +4068,6 @@ const REMOTE_SENSING_HIDDEN_LAYER_IDS = new Set([
 const DEFAULT_MPC_CATALOG_URL = 'https://planetarycomputer.microsoft.com/catalog';
 const DEFAULT_MPC_ACS_ZIP_PATH = 'C:\\Users\\mohamed.abass.WUSOOM\\Downloads\\ACS_Files.zip';
 
-/** Static welcome shown above the Gemini Geo AI thread (also used for clipboard copy). */
-const SI_GEO_AI_WELCOME_GEMINI_TEXT =
-  "Hello! I'm Agro Cloud - GeoAI - Describe a place, upload an image, or ask for directions.\nWhen a location is clear, the map will fly there.";
-
-/** Static welcome for Claude / DeepSeek data assistant tab. */
-const SI_GEO_AI_WELCOME_DATA_ASSISTANT_TEXT =
-  "Hello! I'm Agro Cloud - GeoAI - Describe a place, upload an image, or ask for directions.";
 
 export default function SatelliteIntelligence() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -4752,8 +4763,9 @@ export default function SatelliteIntelligence() {
 
   // --- Prithvi crop classification tool (Toolbox) ---
   const [cropAiSeason, setCropAiSeason] = useState<{ start: string; end: string }>(() => {
-    const end = new Date();
-    const start = new Date(end.getTime() - 150 * 86400000);
+    // End a few days before "today" so L2A products have time to land in the catalog.
+    const end = new Date(Date.now() - 3 * 86400000);
+    const start = new Date(end.getTime() - 180 * 86400000);
     return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
   });
   const [cropAiJob, setCropAiJob] = useState<CropClassificationJob | null>(null);
@@ -5032,6 +5044,15 @@ export default function SatelliteIntelligence() {
   const [geoAiFloatingOpen, setGeoAiFloatingOpen] = useState(false);
   const [layerLiveLegendOpen, setLayerLiveLegendOpen] = useState(false);
   const [geoAiFloatingExpanded, setGeoAiFloatingExpanded] = useState(false);
+  const [geoAiAgentHistory, setGeoAiAgentHistory] = useState<GeoAiAgentHistoryEntry[]>([]);
+  const geoAiAgentPrefsLs = siScope.scopedStorageKey(GEO_AI_AGENT_PREFS_LS_KEY);
+  const [geoAiAgentPrefs, setGeoAiAgentPrefs] = useState<GeoAiAgentPrefs>(() =>
+    readGeoAiAgentPrefs(geoAiAgentPrefsLs),
+  );
+  /** Chip id from Agent quick-action → analyst pack classifier. */
+  const geoAiPendingChipIdRef = useRef<string | undefined>(undefined);
+  const geoAiLiveMapStateObjRef = useRef<GeoAiLiveMapState | null>(null);
+  const geoAiMapCommandHandlersRef = useRef<GeoAiMapCommandHandlers>({});
 
   const onGeoAiFloatingRailToggle = useCallback(() => {
     setGeoAiFloatingOpen(prev => {
@@ -5119,7 +5140,22 @@ export default function SatelliteIntelligence() {
   const geoAiSuppressPopupsUntilRef = useRef(0);
   const geoExplorerFileInputRef = useRef<HTMLInputElement | null>(null);
   const geoExplorerInFlightRef = useRef(false);
-  const [geoAiModelTab, setGeoAiModelTab] = useState<'gemini' | 'claude' | 'deepseek' | 'ollama'>('ollama');
+  const [geoAiModelTab, setGeoAiModelTab] = useState<'gemini' | 'claude' | 'deepseek' | 'ollama'>(
+    () => readGeoAiAgentPrefs(siScope.scopedStorageKey(GEO_AI_AGENT_PREFS_LS_KEY)).defaultModelTab,
+  );
+  const geoAiAgentPrefsRef = useRef(geoAiAgentPrefs);
+  geoAiAgentPrefsRef.current = geoAiAgentPrefs;
+
+  const handleGeoAiAgentPrefsChange = useCallback(
+    (next: GeoAiAgentPrefs) => {
+      if (geoAiAgentPrefsRef.current.defaultModelTab !== next.defaultModelTab) {
+        setGeoAiModelTab(next.defaultModelTab);
+      }
+      setGeoAiAgentPrefs(next);
+      writeGeoAiAgentPrefs(next, geoAiAgentPrefsLs);
+    },
+    [geoAiAgentPrefsLs],
+  );
 
   // Preload the local model when the AgroCloud AI Chat (Ollama) tab opens so the
   // first answer returns quickly instead of paying the cold model-load cost.
@@ -5489,6 +5525,71 @@ export default function SatelliteIntelligence() {
     setGeoAiOllamaVisibleCount(prev => Math.min(geoOllamaChatMessages.length, prev + GEO_AI_CHAT_PAGE_SIZE));
   }, [geoAiOllamaHasOlderMessages, geoOllamaChatMessages.length]);
 
+  /**
+   * When a quick-action chip / free-text matches an analyst pack (AOI, vegetation,
+   * density, flood-heat, …), auto-run the multi-tool pack via `runGeoAiAgentTurn`
+   * and return an evidence-formatted reply. Returns null when no pack matched.
+   */
+  const runSatelliteGeoAiAnalystPackIfMatched = useCallback(
+    async (opts: {
+      provider: GeoAiAgentProvider;
+      userMessage: string;
+      history: GeoAiAgentChatTurn[];
+      vectorLayers: GeoAiMapLayer[];
+      apiKey?: string;
+      chipId?: string | null;
+    }): Promise<GeoAiAgentTurnResult | null> => {
+      const chipId = opts.chipId ?? geoAiPendingChipIdRef.current ?? null;
+      const packId = classifyGeoAiAnalystIntent(opts.userMessage, chipId);
+      if (!packId) return null;
+
+      const dataCtx = await buildGeoAiDataContext(undefined, {
+        satelliteLayers: satelliteCustomLayersToGeoAiLayers(customLayers),
+      });
+      const system = `${GEO_AI_CHAT_SYSTEM_BASE}\n\n---\n## Geo AI Copilot mission\n${GEO_AI_COPILOT_RULES}\n\n---\nDATA CONTEXT (authoritative for this session turn):\n${dataCtx}`;
+
+      const weatherFetcher = async (query: string) =>
+        buildGeoAiFullWeatherSessionAppend({
+          userText: query,
+          pinLngLat: geoAiPinLngLat,
+          lastMapQueryCoords: null,
+          inspectAnchorLngLat:
+            geoAiInspectCard != null ? ([geoAiInspectCard.lng, geoAiInspectCard.lat] as [number, number]) : null,
+          combinedLayers: opts.vectorLayers,
+          mapboxAccessToken: mapboxToken || undefined,
+          openWeatherApiKey,
+          mapPopup: null,
+        });
+
+      return runGeoAiAgentTurn({
+        provider: opts.provider,
+        apiKey: opts.apiKey,
+        ollama:
+          opts.provider === 'ollama'
+            ? { baseUrl: ollamaConfig.baseUrl, model: ollamaConfig.model }
+            : undefined,
+        systemInstruction: system,
+        history: opts.history,
+        userMessage: opts.userMessage,
+        liveMapState: geoAiLiveMapStateObjRef.current,
+        vectorLayers: opts.vectorLayers,
+        mapHandlers: geoAiMapCommandHandlersRef.current,
+        weatherFetcher,
+        chipId,
+        analystPackId: packId,
+      });
+    },
+    [
+      customLayers,
+      geoAiPinLngLat,
+      geoAiInspectCard,
+      mapboxToken,
+      openWeatherApiKey,
+      ollamaConfig.baseUrl,
+      ollamaConfig.model,
+    ],
+  );
+
   const runSatelliteGeoExplorerGeminiPipeline = useCallback(
     async (args: {
       historyWithUser: GeoExplorerMessage[];
@@ -5522,6 +5623,37 @@ export default function SatelliteIntelligence() {
                 .arcgisLayerDefinition,
             })),
           ];
+          const packChipId = geoAiPendingChipIdRef.current;
+          geoAiPendingChipIdRef.current = undefined;
+          const packHistory: GeoAiAgentChatTurn[] = historyWithUser.slice(0, -1).map(m => ({
+            role: m.role === 'user' ? 'user' : 'assistant',
+            text: m.parts
+              .filter((p): p is Extract<GeoExplorerPart, { type: 'text' }> => p.type === 'text')
+              .map(p => p.text)
+              .join('\n'),
+          }));
+          const packResult = await runSatelliteGeoAiAnalystPackIfMatched({
+            provider: 'gemini',
+            userMessage: trimmed,
+            history: packHistory,
+            vectorLayers: mergedLayersForStats,
+            apiKey,
+            chipId: packChipId,
+          });
+          if (packResult) {
+            const mid =
+              typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `geo-pack-${Date.now()}`;
+            const parts: GeoExplorerPart[] = [{ type: 'text', text: packResult.replyText }];
+            if (packResult.table) parts.push({ type: 'dataTable', table: packResult.table });
+            setGeoExplorerMessages(h => [...h, { id: mid, role: 'model', parts }]);
+            if (packResult.mapFirstSync?.selections?.length) {
+              queueMicrotask(() => applySatelliteGeoAiMapFirstSync(packResult.mapFirstSync!.selections));
+            }
+            if (packResult.mapQueryLngLat) {
+              setGeoAiPinLngLat(packResult.mapQueryLngLat);
+            }
+            return;
+          }
           const localStats = runGeoAiStatsCommand(trimmed, mergedLayersForStats);
           if (localStats?.handled) {
             const mid =
@@ -5634,6 +5766,7 @@ export default function SatelliteIntelligence() {
       geoAiInspectCard,
       is3DView,
       stageGeoAiInspectCard,
+      runSatelliteGeoAiAnalystPackIfMatched,
     ],
   );
 
@@ -10578,6 +10711,55 @@ export default function SatelliteIntelligence() {
     else clearGeoOllamaChat();
   }, [geoAiModelTab, clearGeoExplorerChat, clearGeoAiChat, clearGeoDeepseekChat, clearGeoOllamaChat]);
 
+  const geoAiAgentIsEmpty = useMemo(() => {
+    if (geoAiModelTab === 'gemini') return geoExplorerMessages.length === 0;
+    if (geoAiModelTab === 'claude') return geoAiChatMessages.length === 0;
+    if (geoAiModelTab === 'deepseek') return geoDeepseekChatMessages.length === 0;
+    return geoOllamaChatMessages.length === 0;
+  }, [
+    geoAiModelTab,
+    geoExplorerMessages.length,
+    geoAiChatMessages.length,
+    geoDeepseekChatMessages.length,
+    geoOllamaChatMessages.length,
+  ]);
+
+  const archiveGeoAiAgentChatTitle = useCallback((): string | null => {
+    const msgs =
+      geoAiModelTab === 'gemini'
+        ? geoExplorerMessages
+        : geoAiModelTab === 'claude'
+          ? geoAiChatMessages
+          : geoAiModelTab === 'deepseek'
+            ? geoDeepseekChatMessages
+            : geoOllamaChatMessages;
+    const firstUser = msgs.find(m => m.role === 'user');
+    if (!firstUser) return null;
+    const text = firstUser.parts
+      .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+      .map(p => p.text)
+      .join(' ')
+      .trim();
+    if (!text) return 'Chat';
+    return text.length > 72 ? `${text.slice(0, 69)}…` : text;
+  }, [
+    geoAiModelTab,
+    geoExplorerMessages,
+    geoAiChatMessages,
+    geoDeepseekChatMessages,
+    geoOllamaChatMessages,
+  ]);
+
+  const handleGeoAiAgentNewChat = useCallback(() => {
+    const title = archiveGeoAiAgentChatTitle();
+    if (title) {
+      setGeoAiAgentHistory(prev =>
+        [{ id: `geo-ai-hist-${Date.now()}`, title, at: Date.now() }, ...prev].slice(0, 40),
+      );
+    }
+    clearCurrentGeoAiPanel();
+  }, [archiveGeoAiAgentChatTitle, clearCurrentGeoAiPanel]);
+
   const applySatelliteGeoAiMapUi = useCallback(
     async (userText: string, reply: string) => {
       const primary = satelliteCustomLayersToGeoAiLayers(customLayers);
@@ -11089,6 +11271,36 @@ export default function SatelliteIntelligence() {
                 .arcgisLayerDefinition,
             })),
           ];
+          const packChipId = geoAiPendingChipIdRef.current;
+          geoAiPendingChipIdRef.current = undefined;
+          const packHistory: GeoAiAgentChatTurn[] = historyWithUser.slice(0, -1).map(m => ({
+            role: m.role === 'user' ? 'user' : 'assistant',
+            text: m.parts
+              .filter((p): p is Extract<GeoExplorerPart, { type: 'text' }> => p.type === 'text')
+              .map(p => p.text)
+              .join('\n'),
+          }));
+          const packResult = await runSatelliteGeoAiAnalystPackIfMatched({
+            provider: 'claude',
+            userMessage: trimmed,
+            history: packHistory,
+            vectorLayers: mergedLayersForStats,
+            apiKey,
+            chipId: packChipId,
+          });
+          if (packResult) {
+            const aid = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `gaic-pack-${Date.now()}`;
+            const parts: GeoExplorerPart[] = [{ type: 'text', text: packResult.replyText }];
+            if (packResult.table) parts.push({ type: 'dataTable', table: packResult.table });
+            setGeoAiChatMessages(h => [...h, { id: aid, role: 'model', parts }]);
+            if (packResult.mapFirstSync?.selections?.length) {
+              queueMicrotask(() => applySatelliteGeoAiMapFirstSync(packResult.mapFirstSync!.selections));
+            }
+            if (packResult.mapQueryLngLat) {
+              setGeoAiPinLngLat(packResult.mapQueryLngLat);
+            }
+            return;
+          }
           const localStats = runGeoAiStatsCommand(trimmed, mergedLayersForStats);
           if (localStats?.handled) {
             const aid = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `gaic-s-${Date.now()}`;
@@ -11168,6 +11380,7 @@ export default function SatelliteIntelligence() {
     openWeatherApiKey,
     geoAiPinLngLat,
     geoAiInspectCard,
+    runSatelliteGeoAiAnalystPackIfMatched,
   ]);
 
   const sendGeoDeepseekChat = useCallback((voiceOverrideText?: string) => {
@@ -11210,6 +11423,36 @@ export default function SatelliteIntelligence() {
                 .arcgisLayerDefinition,
             })),
           ];
+          const packChipId = geoAiPendingChipIdRef.current;
+          geoAiPendingChipIdRef.current = undefined;
+          const packHistory: GeoAiAgentChatTurn[] = historyWithUser.slice(0, -1).map(m => ({
+            role: m.role === 'user' ? 'user' : 'assistant',
+            text: m.parts
+              .filter((p): p is Extract<GeoExplorerPart, { type: 'text' }> => p.type === 'text')
+              .map(p => p.text)
+              .join('\n'),
+          }));
+          const packResult = await runSatelliteGeoAiAnalystPackIfMatched({
+            provider: 'deepseek',
+            userMessage: trimmed,
+            history: packHistory,
+            vectorLayers: mergedLayersForStats,
+            apiKey,
+            chipId: packChipId,
+          });
+          if (packResult) {
+            const aid = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `gds-pack-${Date.now()}`;
+            const parts: GeoExplorerPart[] = [{ type: 'text', text: packResult.replyText }];
+            if (packResult.table) parts.push({ type: 'dataTable', table: packResult.table });
+            setGeoDeepseekChatMessages(h => [...h, { id: aid, role: 'model', parts }]);
+            if (packResult.mapFirstSync?.selections?.length) {
+              queueMicrotask(() => applySatelliteGeoAiMapFirstSync(packResult.mapFirstSync!.selections));
+            }
+            if (packResult.mapQueryLngLat) {
+              setGeoAiPinLngLat(packResult.mapQueryLngLat);
+            }
+            return;
+          }
           const localStats = runGeoAiStatsCommand(trimmed, mergedLayersForStats);
           if (localStats?.handled) {
             const aid = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `gds-s-${Date.now()}`;
@@ -11290,6 +11533,7 @@ export default function SatelliteIntelligence() {
     openWeatherApiKey,
     geoAiPinLngLat,
     geoAiInspectCard,
+    runSatelliteGeoAiAnalystPackIfMatched,
   ]);
 
   const sendGeoOllamaChat = useCallback((voiceOverrideText?: string) => {
@@ -11334,6 +11578,35 @@ export default function SatelliteIntelligence() {
                 .arcgisLayerDefinition,
             })),
           ];
+          const packChipId = geoAiPendingChipIdRef.current;
+          geoAiPendingChipIdRef.current = undefined;
+          const packHistory: GeoAiAgentChatTurn[] = historyWithUser.slice(0, -1).map(m => ({
+            role: m.role === 'user' ? 'user' : 'assistant',
+            text: m.parts
+              .filter((p): p is Extract<GeoExplorerPart, { type: 'text' }> => p.type === 'text')
+              .map(p => p.text)
+              .join('\n'),
+          }));
+          const packResult = await runSatelliteGeoAiAnalystPackIfMatched({
+            provider: 'ollama',
+            userMessage: trimmed,
+            history: packHistory,
+            vectorLayers: mergedLayersForStats,
+            chipId: packChipId,
+          });
+          if (packResult) {
+            const aid = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `goll-pack-${Date.now()}`;
+            const parts: GeoExplorerPart[] = [{ type: 'text', text: packResult.replyText }];
+            if (packResult.table) parts.push({ type: 'dataTable', table: packResult.table });
+            setGeoOllamaChatMessages(h => [...h, { id: aid, role: 'model', parts }]);
+            if (packResult.mapFirstSync?.selections?.length) {
+              queueMicrotask(() => applySatelliteGeoAiMapFirstSync(packResult.mapFirstSync!.selections));
+            }
+            if (packResult.mapQueryLngLat) {
+              setGeoAiPinLngLat(packResult.mapQueryLngLat);
+            }
+            return;
+          }
           const localStats = runGeoAiStatsCommand(trimmed, mergedLayersForStats);
           if (localStats?.handled) {
             const aid = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `goll-s-${Date.now()}`;
@@ -11455,7 +11728,49 @@ export default function SatelliteIntelligence() {
     geoAiInspectCard,
     deepseekApiKey,
     geminiApiKey,
+    runSatelliteGeoAiAnalystPackIfMatched,
   ]);
+
+  const handleGeoAiAgentQuickAction = useCallback(
+    (prompt: string, chipId?: string) => {
+      const trimmed = prompt.trim();
+      if (!trimmed) return;
+      geoAiPendingChipIdRef.current = chipId;
+      if (geoAiModelTab === 'gemini') {
+        setGeoExplorerDraft(trimmed);
+        sendGeoExplorerChat(trimmed);
+      } else if (geoAiModelTab === 'claude') {
+        setGeoAiDraft(trimmed);
+        sendGeoAiChat(trimmed);
+      } else if (geoAiModelTab === 'deepseek') {
+        setGeoDeepseekDraft(trimmed);
+        sendGeoDeepseekChat(trimmed);
+      } else {
+        setGeoOllamaDraft(trimmed);
+        sendGeoOllamaChat(trimmed);
+      }
+    },
+    [
+      geoAiModelTab,
+      sendGeoExplorerChat,
+      sendGeoAiChat,
+      sendGeoDeepseekChat,
+      sendGeoOllamaChat,
+    ],
+  );
+
+
+  const handleGeoAiAgentHistorySelect = useCallback(
+    (entry: GeoAiAgentHistoryEntry) => {
+      const prompt = entry.title.trim();
+      if (!prompt) return;
+      if (geoAiModelTab === 'gemini') setGeoExplorerDraft(prompt);
+      else if (geoAiModelTab === 'claude') setGeoAiDraft(prompt);
+      else if (geoAiModelTab === 'deepseek') setGeoDeepseekDraft(prompt);
+      else setGeoOllamaDraft(prompt);
+    },
+    [geoAiModelTab],
+  );
 
   const onGeoExplorerAttachChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -17481,6 +17796,7 @@ export default function SatelliteIntelligence() {
       selectedFeature,
       basemapFeatures: geoAiBasemapFeatures,
     };
+    geoAiLiveMapStateObjRef.current = state;
     return buildGeoAiLiveMapStateBlock(state);
   }, [
     viewState,
@@ -17506,8 +17822,6 @@ export default function SatelliteIntelligence() {
   // zoom-to-AOI/layer, basemap switch, fly-to) against the live map.
   const runGeoAiMapCommandsFromReply = useCallback(
     (reply: string) => {
-      const commands = parseGeoAiMapCommands(reply);
-      if (!commands.length) return;
       const map = mapRef.current?.getMap?.() ?? mapRef.current;
       const fitToBounds = (bounds: [number, number, number, number] | null) => {
         if (!bounds || !map || typeof map.fitBounds !== 'function') return false;
@@ -17664,6 +17978,9 @@ export default function SatelliteIntelligence() {
           return `Nearby on the basemap:\n${summarizeBasemapFeatures(features, 8)}`;
         },
       };
+      geoAiMapCommandHandlersRef.current = handlers;
+      const commands = parseGeoAiMapCommands(reply);
+      if (!commands.length) return;
       executeGeoAiMapCommands(commands, handlers);
     },
     [
@@ -17680,6 +17997,10 @@ export default function SatelliteIntelligence() {
   );
   const runGeoAiMapCommandsRef = useRef(runGeoAiMapCommandsFromReply);
   runGeoAiMapCommandsRef.current = runGeoAiMapCommandsFromReply;
+  // Refresh map handlers for analyst packs even when no MAP_ACTION text was emitted.
+  useEffect(() => {
+    runGeoAiMapCommandsFromReply('');
+  }, [runGeoAiMapCommandsFromReply]);
 
   const addedLayerEntries = useMemo(
     () => [
@@ -20892,97 +21213,25 @@ export default function SatelliteIntelligence() {
               setGeoAiFloatingOpen(false);
               setGeoAiFloatingExpanded(true);
             }}
+            agentChrome
+            fabIconClass={fabIconFaClass(geoAiAgentPrefs.fabOpenIcon)}
           >
+            <GeoAiAgentPanel
+              isEmpty={geoAiAgentIsEmpty}
+              onNewChat={handleGeoAiAgentNewChat}
+              onQuickAction={handleGeoAiAgentQuickAction}
+              historyEntries={geoAiAgentHistory}
+              onSelectHistoryEntry={handleGeoAiAgentHistorySelect}
+              onMinimize={() => setGeoAiFloatingExpanded(false)}
+              onRequestClose={() => {
+                setGeoAiFloatingOpen(false);
+                setGeoAiFloatingExpanded(true);
+              }}
+              prefs={geoAiAgentPrefs}
+              onPrefsChange={handleGeoAiAgentPrefsChange}
+            >
                       <div className="si-geo-explorer-root si-geo-explorer-root--unified">
-                        <div className="si-env-section-card si-geo-explorer">
-                          <div className="si-geo-explorer-header">
-                            <h2 className="si-geo-explorer-title">Geo AI Exploration</h2>
-                            <div className="si-geo-explorer-header-actions">
-                              <button
-                                type="button"
-                                className="si-geo-explorer-icon-btn"
-                                onClick={() => setGeoAiSmartSuggestionsEnabled(v => !v)}
-                                aria-label={geoAiSmartSuggestionsEnabled ? 'Disable smart suggestions' : 'Enable smart suggestions'}
-                                title={geoAiSmartSuggestionsEnabled ? 'Smart Suggestions: on' : 'Smart Suggestions: off'}
-                              >
-                                <i className="fa-solid fa-wand-magic-sparkles" aria-hidden />
-                              </button>
-                              <button
-                                type="button"
-                                className="si-geo-explorer-icon-btn"
-                                onClick={clearCurrentGeoAiPanel}
-                                aria-label="Clear chat"
-                                title="Clear chat"
-                              >
-                                <i className="fa-solid fa-trash" aria-hidden />
-                              </button>
-                              <label className="si-geo-ai-popup-mode-label si-geo-ai-exploration-toggle" title="Off: row highlight & map identify do not pan/zoom (use table zoom icon to fly).">
-                                <span className="si-geo-ai-popup-mode-label-text">Explore</span>
-                                <button
-                                  type="button"
-                                  className={`si-geo-ai-exploration-btn${geoAiExplorationMode ? ' si-geo-ai-exploration-btn--on' : ''}`}
-                                  aria-pressed={geoAiExplorationMode}
-                                  onClick={() => setGeoAiExplorationMode(v => !v)}
-                                >
-                                  {geoAiExplorationMode ? 'On' : 'Off'}
-                                </button>
-                              </label>
-                              <label className="si-geo-ai-popup-mode-label">
-                                <span className="si-geo-ai-popup-mode-label-text">Popup</span>
-                                <select
-                                  className="si-geo-ai-popup-mode-select"
-                                  value={geoAiPopupMode}
-                                  onChange={e => setGeoAiPopupMode(e.target.value as GeoAiPopupMode)}
-                                  title="How feature identify windows appear (linked with map / table)"
-                                  aria-label="Geo AI popup mode"
-                                >
-                                  <option value="single">Single</option>
-                                  <option value="multiple">Multiple</option>
-                                  <option value="docked">Docked panel</option>
-                                  <option value="side">Side inspector</option>
-                                </select>
-                              </label>
-                            </div>
-                          </div>
-                          <div className="si-geo-ai-model-tabs" role="tablist" aria-label="AI model">
-                            <button
-                              type="button"
-                              role="tab"
-                              aria-selected={geoAiModelTab === 'claude'}
-                              className={`si-geo-ai-model-tab${geoAiModelTab === 'claude' ? ' si-geo-ai-model-tab--active' : ''}`}
-                              onClick={() => setGeoAiModelTab('claude')}
-                            >
-                              Claude
-                            </button>
-                            <button
-                              type="button"
-                              role="tab"
-                              aria-selected={geoAiModelTab === 'deepseek'}
-                              className={`si-geo-ai-model-tab${geoAiModelTab === 'deepseek' ? ' si-geo-ai-model-tab--active' : ''}`}
-                              onClick={() => setGeoAiModelTab('deepseek')}
-                            >
-                              DeepSeek
-                            </button>
-                            <button
-                              type="button"
-                              role="tab"
-                              aria-selected={geoAiModelTab === 'gemini'}
-                              className={`si-geo-ai-model-tab${geoAiModelTab === 'gemini' ? ' si-geo-ai-model-tab--active' : ''}`}
-                              onClick={() => setGeoAiModelTab('gemini')}
-                            >
-                              Gemini
-                            </button>
-                            <button
-                              type="button"
-                              role="tab"
-                              aria-selected={geoAiModelTab === 'ollama'}
-                              className={`si-geo-ai-model-tab${geoAiModelTab === 'ollama' ? ' si-geo-ai-model-tab--active' : ''}`}
-                              onClick={() => setGeoAiModelTab('ollama')}
-                            >
-                              AgroCloud AI Chat
-                            </button>
-                          </div>
-
+                        <div className="si-env-section-card si-geo-explorer si-geo-explorer--agent-body">
                           {geoAiModelTab === 'gemini' ? (
                             <>
                               <div
@@ -21004,23 +21253,6 @@ export default function SatelliteIntelligence() {
                                     Load earlier messages
                                   </button>
                                 ) : null}
-                                <div className="si-geo-explorer-row si-geo-explorer-row--model">
-                                  <div className="si-geo-explorer-avatar" aria-hidden>
-                                    <i className="fa-solid fa-globe" />
-                                  </div>
-                                  <div className="si-geo-explorer-bubble">
-                                    <div className="si-geo-explorer-bubble-with-copy">
-                                      <p className="si-geo-explorer-bubble-text">{SI_GEO_AI_WELCOME_GEMINI_TEXT}</p>
-                                      <SiCopyTextButton
-                                        text={SI_GEO_AI_WELCOME_GEMINI_TEXT}
-                                        className="si-geo-explorer-bubble-copy-btn"
-                                        title="Copy intro"
-                                        ariaLabel="Copy welcome text"
-                                        variant="compact"
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
                                 {visibleGeoExplorerMessages.map(msg => (
                                   <div
                                     key={msg.id}
@@ -21094,7 +21326,8 @@ export default function SatelliteIntelligence() {
                                 pendingImage={geoExplorerPendingImage}
                                 fileInputRef={geoExplorerFileInputRef}
                                 onAttachChange={onGeoExplorerAttachChange}
-                                textareaAriaLabel="Geo AI Gemini message"
+                                placeholder="Ask anything…"
+                                textareaAriaLabel="AI Agent Gemini message"
                                 availableLayers={geoAiSuggestContext.layers}
                                 availableFields={geoAiSuggestContext.fields}
                                 availableNumericFields={geoAiSuggestContext.numericFields}
@@ -21133,23 +21366,6 @@ export default function SatelliteIntelligence() {
                                     Load earlier messages
                                   </button>
                                 ) : null}
-                                <div className="si-geo-explorer-row si-geo-explorer-row--model">
-                                  <div className="si-geo-explorer-avatar" aria-hidden>
-                                    <i className="fa-solid fa-database" />
-                                  </div>
-                                  <div className="si-geo-explorer-bubble">
-                                    <div className="si-geo-explorer-bubble-with-copy">
-                                      <p className="si-geo-explorer-bubble-text">{SI_GEO_AI_WELCOME_DATA_ASSISTANT_TEXT}</p>
-                                      <SiCopyTextButton
-                                        text={SI_GEO_AI_WELCOME_DATA_ASSISTANT_TEXT}
-                                        className="si-geo-explorer-bubble-copy-btn"
-                                        title="Copy intro"
-                                        ariaLabel="Copy welcome text"
-                                        variant="compact"
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
                                 {(geoAiModelTab === 'claude' ? visibleGeoAiClaudeMessages : visibleGeoAiDeepseekMessages).map(msg => (
                                   <div
                                     key={msg.id}
@@ -21239,13 +21455,9 @@ export default function SatelliteIntelligence() {
                                 busy={geoAiModelTab === 'claude' ? geoAiBusy : geoDeepseekBusy}
                                 pendingImage={null}
                                 showAttach={false}
-                                placeholder={
-                                  geoAiModelTab === 'claude'
-                                    ? 'e.g. List layer names and fields from the attached GIS / Develop data...'
-                                    : 'e.g. Summarize saved layers and Develop Dashboard fields (same context as Claude)...'
-                                }
+                                placeholder="Ask anything…"
                                 textareaAriaLabel={
-                                  geoAiModelTab === 'claude' ? 'Geo AI Claude message' : 'Geo AI DeepSeek message'
+                                  geoAiModelTab === 'claude' ? 'AI Agent Claude message' : 'AI Agent DeepSeek message'
                                 }
                                 availableLayers={geoAiSuggestContext.layers}
                                 availableFields={geoAiSuggestContext.fields}
@@ -21289,23 +21501,6 @@ export default function SatelliteIntelligence() {
                                     Load earlier messages
                                   </button>
                                 ) : null}
-                                <div className="si-geo-explorer-row si-geo-explorer-row--model">
-                                  <div className="si-geo-explorer-avatar" aria-hidden>
-                                    <i className="fa-solid fa-database" />
-                                  </div>
-                                  <div className="si-geo-explorer-bubble">
-                                    <div className="si-geo-explorer-bubble-with-copy">
-                                      <p className="si-geo-explorer-bubble-text">{SI_GEO_AI_WELCOME_DATA_ASSISTANT_TEXT}</p>
-                                      <SiCopyTextButton
-                                        text={SI_GEO_AI_WELCOME_DATA_ASSISTANT_TEXT}
-                                        className="si-geo-explorer-bubble-copy-btn"
-                                        title="Copy intro"
-                                        ariaLabel="Copy welcome text"
-                                        variant="compact"
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
                                 {visibleGeoAiOllamaMessages.map(msg => (
                                   <div
                                     key={msg.id}
@@ -21375,8 +21570,8 @@ export default function SatelliteIntelligence() {
                                 busy={geoOllamaBusy}
                                 pendingImage={null}
                                 showAttach={false}
-                                placeholder="e.g. Summarize saved layers (runs locally via Ollama - same GIS + Develop context)..."
-                                textareaAriaLabel="Geo AI Ollama message"
+                                placeholder="Ask anything…"
+                                textareaAriaLabel="AI Agent Ollama message"
                                 availableLayers={geoAiSuggestContext.layers}
                                 availableFields={geoAiSuggestContext.fields}
                                 availableNumericFields={geoAiSuggestContext.numericFields}
@@ -21442,6 +21637,7 @@ export default function SatelliteIntelligence() {
                           ) : null}
                         </div>
                       </div>
+            </GeoAiAgentPanel>
           </SatelliteGeoAiFloatingWidget>
 
           <SatelliteMapAnalysisChrome

@@ -178,7 +178,7 @@ export type SatelliteMapAnalysisChromeProps = {
   mapToolboxLayersMain?: ReactNode;
   /** Layers tool → Options tab: e.g. per-layer popup configuration (optional). */
   mapToolboxLayersOptionsExtra?: ReactNode;
-  /** Geo AI opens as a floating map widget (not inside the processing panel). */
+  /** AI Agent opens as a floating map widget (not inside the processing panel). */
   geoAiFloatingOpen?: boolean;
   onGeoAiFloatingRailToggle?: () => void;
   onMapToolboxAddGisLayerAction?: (

@@ -99,6 +99,10 @@ export type SatelliteGeoAiFloatingWidgetProps = {
   onToggleExpanded: () => void;
   onRequestClose: () => void;
   children: React.ReactNode;
+  /** Pic-2 AI Agent chrome: gradient border, hide legacy title bar (drag via agent header). */
+  agentChrome?: boolean;
+  /** Font Awesome class for the minimized FAB (Agent Builder Style prefs). */
+  fabIconClass?: string;
 };
 
 export function SatelliteGeoAiFloatingWidget({
@@ -107,6 +111,8 @@ export function SatelliteGeoAiFloatingWidget({
   onToggleExpanded,
   onRequestClose,
   children,
+  agentChrome = true,
+  fabIconClass = 'fa-solid fa-sparkles',
 }: SatelliteGeoAiFloatingWidgetProps) {
   const { scopedStorageKey } = useSiInstanceScope();
   const posStorageKey = scopedStorageKey(STORAGE_KEY);
@@ -148,9 +154,9 @@ export function SatelliteGeoAiFloatingWidget({
   const [resizing, setResizing] = useState(false);
 
   useEffect(() => {
-    const stored = readStoredPos();
+    const stored = readStoredPos(posStorageKey);
     if (stored) setOffset(stored);
-  }, []);
+  }, [posStorageKey]);
 
   const clampOffsetToViewport = useCallback(
     (next: StoredPos, size: StoredSize = panelSize) => {
@@ -204,6 +210,8 @@ export function SatelliteGeoAiFloatingWidget({
       if (e.button !== 0) return;
       const target = e.target as HTMLElement | null;
       if (target?.closest('button') || target?.closest('.si-geo-ai-float-resize-handle')) return;
+      // Agent chrome: only drag from the AI Agent header strip (not the chat body).
+      if (agentChrome && !target?.closest('[data-geo-ai-agent-drag-handle]')) return;
       e.preventDefault();
       dragRef.current = {
         pointerId: e.pointerId,
@@ -217,7 +225,7 @@ export function SatelliteGeoAiFloatingWidget({
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
       setDragging(true);
     },
-    [offset.x, offset.y],
+    [agentChrome, offset.x, offset.y],
   );
 
   const onPointerMove = useCallback(
@@ -458,7 +466,7 @@ export function SatelliteGeoAiFloatingWidget({
         .join(' ')}
       style={transformStyle}
       role="region"
-      aria-label="Geo AI Exploration"
+      aria-label="AI Agent"
     >
       <div className="si-geo-ai-float-inner">
         {expanded ? (
@@ -466,45 +474,49 @@ export function SatelliteGeoAiFloatingWidget({
             className={[
               'si-geo-ai-float-panel',
               'si-geo-ai-float-panel--sized',
+              agentChrome ? 'si-geo-ai-float-panel--agent-chrome' : '',
               dragging ? 'si-geo-ai-float-panel--dragging' : '',
               resizing ? 'si-geo-ai-float-panel--resizing' : '',
             ]
               .filter(Boolean)
               .join(' ')}
             style={panelStyle}
+            onPointerDown={agentChrome ? onPointerDownHeader : undefined}
           >
-            <div className="si-geo-ai-float-head" onPointerDown={onPointerDownHeader}>
-              <div className="si-geo-ai-float-head-text">
-                <div className="si-geo-ai-float-title">Geo AI Exploration</div>
-                <div className="si-geo-ai-float-sub">Map-linked AI</div>
+            {!agentChrome ? (
+              <div className="si-geo-ai-float-head" onPointerDown={onPointerDownHeader}>
+                <div className="si-geo-ai-float-head-text">
+                  <div className="si-geo-ai-float-title">AI Agent</div>
+                  <div className="si-geo-ai-float-sub">Map-linked AI</div>
+                </div>
+                <div className="si-geo-ai-float-actions">
+                  <button
+                    type="button"
+                    className="si-geo-ai-float-icon-btn"
+                    title="Minimize"
+                    aria-label="Minimize AI Agent"
+                    onClick={ev => {
+                      ev.stopPropagation();
+                      onToggleExpanded();
+                    }}
+                  >
+                    <i className="fa-solid fa-chevron-down" aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    className="si-geo-ai-float-icon-btn"
+                    title="Close"
+                    aria-label="Close AI Agent"
+                    onClick={ev => {
+                      ev.stopPropagation();
+                      onRequestClose();
+                    }}
+                  >
+                    <i className="fa-solid fa-xmark" aria-hidden />
+                  </button>
+                </div>
               </div>
-              <div className="si-geo-ai-float-actions">
-                <button
-                  type="button"
-                  className="si-geo-ai-float-icon-btn"
-                  title="Minimize"
-                  aria-label="Minimize Geo AI"
-                  onClick={ev => {
-                    ev.stopPropagation();
-                    onToggleExpanded();
-                  }}
-                >
-                  <i className="fa-solid fa-chevron-down" aria-hidden />
-                </button>
-                <button
-                  type="button"
-                  className="si-geo-ai-float-icon-btn"
-                  title="Close"
-                  aria-label="Close Geo AI"
-                  onClick={ev => {
-                    ev.stopPropagation();
-                    onRequestClose();
-                  }}
-                >
-                  <i className="fa-solid fa-xmark" aria-hidden />
-                </button>
-              </div>
-            </div>
+            ) : null}
             <div className="si-geo-ai-float-body">{children}</div>
             {resizeHandles.map(h => (
               <button
@@ -520,16 +532,18 @@ export function SatelliteGeoAiFloatingWidget({
         ) : (
           <button
             type="button"
-            className="si-geo-ai-float-fab"
-            title="Geo AI Exploration — map-linked intelligence"
+            className={['si-geo-ai-float-fab', agentChrome ? 'si-geo-ai-float-fab--agent' : '']
+              .filter(Boolean)
+              .join(' ')}
+            title="AI Agent — map-linked intelligence"
             aria-expanded={expanded}
-            aria-label="Geo AI Exploration"
+            aria-label="AI Agent"
             onPointerDown={onPointerDownFab}
           >
-            <span className="si-geo-ai-float-fab-label">Geo AI Exploration</span>
+            <span className="si-geo-ai-float-fab-label">AI Agent</span>
             <span className="si-geo-ai-float-fab-mark" aria-hidden>
-              <i className="fa-solid fa-comments si-geo-ai-float-fab-mark-back" />
-              <i className="fa-solid fa-comments si-geo-ai-float-fab-mark-front" />
+              <i className={`${fabIconClass} si-geo-ai-float-fab-mark-back`} />
+              <i className={`${fabIconClass} si-geo-ai-float-fab-mark-front`} />
             </span>
           </button>
         )}

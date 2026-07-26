@@ -98,7 +98,7 @@ export type SatelliteContextualAnalysisDockProps = {
     | 'image-classification'
     | 'raster-georeference'
     | 'table-geo-ai'
-    | null;
+      | null;
   /** Called with the embed host element whenever the map panel mounts/updates; null when unmounted. */
   onMapToolboxEmbedHost?: (el: HTMLDivElement | null) => void;
   /** Close the floating processing dropdown (e.g. when the toolbox panel closes). */
@@ -107,9 +107,9 @@ export type SatelliteContextualAnalysisDockProps = {
   mapToolboxLayersMain?: ReactNode;
   /** Map toolbox Layers → Options tab: advanced tools (e.g. popup configuration). */
   mapToolboxLayersOptionsExtra?: ReactNode;
-  /** Geo AI floating widget visibility — keeps rail highlight without opening the processing stack. */
+  /** AI Agent floating widget visibility — keeps rail highlight without opening the processing stack. */
   geoAiFloatingOpen?: boolean;
-  /** Toggle Geo AI floating widget from the map toolbox rail (same button as highlight). */
+  /** Toggle AI Agent floating widget from the map toolbox rail (same button as highlight). */
   onGeoAiFloatingRailToggle?: () => void;
   /** Map toolbox + → Add GIS layer source actions (URL, file, sketch, media). */
   onMapToolboxAddGisLayerAction?: (action: MapToolboxAddGisLayerAction) => void;
@@ -165,13 +165,6 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     label: 'EO Enrich',
     title: 'EO Layer Enrichment',
     hint: 'Enrich farm polygons with latest Sentinel-2 attributes, then export KMZ/SHP/XLSX or DOCX report.',
-  },
-  {
-    id: 'crop-alerts',
-    icon: 'fa-solid fa-wheat-awn-circle-exclamation',
-    label: 'Crop alerts',
-    title: 'Agro Sentinel Alert Engine',
-    hint: 'Real-time NDVI/NDWI/NDMI monitoring for Farm Plots & PIVOT.',
   },
   {
     id: 'crop-classification',
@@ -266,10 +259,10 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
   },
   {
     id: 'table-geo-ai',
-    icon: 'fa-solid fa-comments',
-    label: 'Geo AI',
-    title: 'Geo AI',
-    hint: 'Copilot, attributes, and SQL-style prompts.',
+    icon: 'fa-solid fa-sparkles',
+    label: 'AI Agent',
+    title: 'AI Agent',
+    hint: 'Map-linked AI Agent — chat, GIS tools, and Agent Builder.',
   },
   {
     id: 'spatial',
@@ -328,13 +321,12 @@ const RAIL_GROUPS: SatelliteContextPanelId[][] = [
   ['raster', 'feature'],
 ];
 
-/** In-map toolbox: Main (layers + STAC + RS) and Options (AI GIS + Geo AI). */
+/** In-map toolbox: Main (layers + STAC + RS) and Options (AI GIS + AI Agent). */
 const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
   'layers',
   'add-gis-layer',
   'remote-sensing',
   'eo-enrichment',
-  'crop-alerts',
   'crop-classification',
   'imagery-time-series',
   'layer-live-legend',
@@ -355,7 +347,6 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
 const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
   'remote-sensing',
   'eo-enrichment',
-  'crop-alerts',
   'crop-classification',
   'ai-detection-gis',
   'tree-detections',
@@ -370,7 +361,7 @@ const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
 ]);
 
 const RAIL_GROUPS_MAP: SatelliteContextPanelId[][] = [
-  ['layers', 'remote-sensing', 'eo-enrichment', 'crop-alerts', 'crop-classification', 'imagery-time-series', 'layer-live-legend', 'hydro-watershed'],
+  ['layers', 'remote-sensing', 'eo-enrichment', 'crop-classification', 'imagery-time-series', 'layer-live-legend', 'hydro-watershed'],
   ['ai-detection-gis', 'tree-detections', 'sam-detection', 'agri-field-boundary', 'well-site', 'well-suitability', 'flood-monitoring', 'image-classification', 'raster-georeference', 'table-geo-ai'],
 ];
 
@@ -1278,9 +1269,9 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
                     {activeId === 'weather' && (
                       <div className="si-sat-ctx-prose">
                         <p>
-                          <strong>Weather data</strong> is attached to Geo AI context when API keys are configured (OpenWeather).
+                          <strong>Weather data</strong> is attached to AI Agent context when API keys are configured (OpenWeather).
                         </p>
-                        <p className="si-sat-ctx-muted">Use Geo AI prompts for forecasts near the map pin or AOI centroid.</p>
+                        <p className="si-sat-ctx-muted">Use AI Agent prompts for forecasts near the map pin or AOI centroid.</p>
                       </div>
                     )}
                     {activeId === 'raster' && (
@@ -1294,7 +1285,7 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
                     {activeId === 'feature' && (
                       <div className="si-sat-ctx-prose">
                         <p>
-                          <strong>Feature information</strong> appears when you identify a vector feature or use Geo AI table map
+                          <strong>Feature information</strong> appears when you identify a vector feature or use AI Agent table map
                           links.
                         </p>
                         <p className="si-sat-ctx-muted">Select a feature on the map or open the attribute table from Layers.</p>

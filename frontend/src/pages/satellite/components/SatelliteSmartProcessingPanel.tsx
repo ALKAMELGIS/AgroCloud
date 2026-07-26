@@ -126,7 +126,7 @@ export function SatelliteSmartProcessingPanel(props: SatelliteSmartProcessingPan
                 <i className="fa-solid fa-wand-magic-sparkles" aria-hidden />
                 <span>
                   <strong>AI processing</strong>
-                  <small>Geo AI reasoning on map context</small>
+                  <small>AI Agent reasoning on map context</small>
                 </span>
               </button>
             </li>
@@ -174,9 +174,9 @@ export function SatelliteSmartProcessingPanel(props: SatelliteSmartProcessingPan
             </li>
             <li>
               <button type="button" className="si-sat-smart-proc__btn" onClick={() => onOpenEnvSection('table-geo-ai')}>
-                <i className="fa-solid fa-comments" aria-hidden />
+                <i className="fa-solid fa-sparkles" aria-hidden />
                 <span>
-                  <strong>Geo AI</strong>
+                  <strong>AI Agent</strong>
                   <small>Chat, map links, popups</small>
                 </span>
               </button>

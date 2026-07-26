@@ -448,7 +448,8 @@
   gap: 10px;
 }
 
-.si-geo-ai-float-body .si-geo-explorer-header {
+/* Legacy float chrome hid the explorer header; agent chrome keeps explore/popup controls */
+.si-geo-ai-float-panel:not(.si-geo-ai-float-panel--agent-chrome) .si-geo-ai-float-body .si-geo-explorer-header {
   display: none !important;
 }
 

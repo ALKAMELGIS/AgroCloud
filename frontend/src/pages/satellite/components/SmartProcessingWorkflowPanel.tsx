@@ -38,7 +38,6 @@ const QUICK_LINKS: Array<{ id: SmartProcessingSectionId; icon: string; label: st
   { id: 'layers', icon: 'fa-solid fa-layer-group', label: 'Layers' },
   { id: 'remote-sensing', icon: 'fa-solid fa-satellite-dish', label: 'Remote sensing' },
   { id: 'eo-enrichment', icon: 'fa-solid fa-seedling', label: 'EO Enrich' },
-  { id: 'crop-alerts', icon: 'fa-solid fa-wheat-awn-circle-exclamation', label: 'Crop alerts' },
   { id: 'stress-zones', icon: 'fa-solid fa-heart-pulse', label: 'Stress Zones ⭐' },
   { id: 'crop-classification', icon: 'fa-solid fa-wheat-awn', label: 'Crop AI' },
   { id: 'ai-detection-gis', icon: 'fa-solid fa-magnifying-glass-location', label: 'AI Detection in GIS' },
@@ -46,7 +45,7 @@ const QUICK_LINKS: Array<{ id: SmartProcessingSectionId; icon: string; label: st
   { id: 'sam-detection', icon: 'fa-solid fa-wand-magic-sparkles', label: 'AI SAM Detection' },
   { id: 'agri-field-boundary', icon: 'fa-solid fa-crop-simple', label: 'Field Boundaries' },
   { id: 'hydro-watershed', icon: 'fa-solid fa-water', label: 'Hydro Watershed' },
-  { id: 'table-geo-ai', icon: 'fa-solid fa-comments', label: 'Geo AI' },
+  { id: 'table-geo-ai', icon: 'fa-solid fa-sparkles', label: 'AI Agent' },
 ];
 
 const WORKFLOW_ROWS: Array<{
@@ -103,13 +102,6 @@ const WORKFLOW_ROWS: Array<{
         target: 'eo-enrichment',
       },
       {
-        id: 'crop-alerts',
-        icon: 'fa-solid fa-wheat-awn-circle-exclamation',
-        label: 'Agro Sentinel alerts',
-        hint: 'Real-time crop health, water stress, and harvest signals from Sentinel Live.',
-        target: 'crop-alerts',
-      },
-      {
         id: 'stress-zones',
         icon: 'fa-solid fa-heart-pulse',
         label: 'Stress Zones Detection',
@@ -154,8 +146,8 @@ const WORKFLOW_ROWS: Array<{
       {
         id: 'ai',
         icon: 'fa-solid fa-robot',
-        label: 'Geo AI & copilot',
-        hint: 'Natural language and semi-structured geospatial requests.',
+        label: 'AI Agent & copilot',
+        hint: 'Natural language and map-linked geospatial requests.',
         target: 'table-geo-ai',
       },
       {
