@@ -257,7 +257,7 @@ export {
   type UnifiedFieldPresentation,
 } from './siCropAlertNdviZones'
 
-export {
+import {
   DCHAS_DELTA_CRITICAL,
   DCHAS_DELTA_STRESS,
   DCHAS_ORB_BLINK_MS,
@@ -276,6 +276,26 @@ export {
   type DchasOrbPresentation,
   type DchasRiskTier,
 } from './siCropAlertDchasBeacon'
+
+export {
+  DCHAS_DELTA_CRITICAL,
+  DCHAS_DELTA_STRESS,
+  DCHAS_ORB_BLINK_MS,
+  DCHAS_ORB_RING_COUNT,
+  DCHAS_RISK_COLORS,
+  DCHAS_RISK_ICONS,
+  DCHAS_RISK_LABELS,
+  classifyDchasRiskTier,
+  computeChas,
+  computeChasFromDaily,
+  chasInputsFromSnapshot,
+  chasInputsFromDaily,
+  computeDeltaChas,
+  resolveDchasMetrics,
+  resolveDchasOrbPresentation,
+  type DchasOrbPresentation,
+  type DchasRiskTier,
+}
 
 /** Font Awesome icon per alert status for map beacons. */
 export const CROP_ALERT_STATUS_ICONS: Record<CropAlertStatus, string> = {

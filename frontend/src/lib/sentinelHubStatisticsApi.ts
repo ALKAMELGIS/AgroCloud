@@ -12,6 +12,7 @@ import {
   configuredApiOrigin,
   ensureBackendAvailable,
   isBackendKnownUnavailable,
+  isStaticDeploymentWithoutBackend,
   apiUrl,
 } from './apiOrigin'
 import {
