@@ -12,8 +12,11 @@ import {
   type ChartOptions,
 } from 'chart.js'
 import { Line } from 'react-chartjs-2'
-import { imageryLayerChartColor } from '../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
-import type { ImageryTimeAggregation } from '../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import {
+  formatImageryTimeSeriesYTick,
+  imageryLayerChartColor,
+  type ImageryTimeAggregation,
+} from '../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import type { PlotLayerTimeSeriesResult } from '../../../lib/siPlotLayerTimeSeries'
 import {
   exportChartPng,
@@ -176,7 +179,10 @@ export function SiPlotLayerTimeSeriesView({
             color: '#64748b',
             font: { size: 11 },
           },
-          ticks: { font: { size: 9 } },
+          ticks: {
+            font: { size: 9 },
+            callback: (value: string | number) => formatImageryTimeSeriesYTick(value),
+          },
           grid: { color: 'rgba(148,163,184,0.25)' },
         },
       },

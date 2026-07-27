@@ -14,6 +14,7 @@ import {
   flattenImageryTimeSeriesLayerOptions,
   pruneImageryTimeSeriesToObservations,
   pruneSingleLayerImagerySeries,
+  formatImageryTimeSeriesYTick,
 } from './acpImageryTimeSeries'
 import type { SentinelHubDailyIndexMeans } from '../../../lib/sentinelHubStatisticsApi'
 
@@ -307,5 +308,15 @@ describe('acpImageryTimeSeries', () => {
     expect(regression).not.toBeNull()
     expect(regression!.r).toBeLessThan(0)
     expect(classifyScatterRelationship(regression!).direction).toBe('negative')
+  })
+
+  it('formats y-axis ticks without float artifacts', () => {
+    expect(formatImageryTimeSeriesYTick(0.15000000000000002)).toBe('0.15')
+    expect(formatImageryTimeSeriesYTick(0.09999999999999998)).toBe('0.1')
+    expect(formatImageryTimeSeriesYTick(0.04999999999999999)).toBe('0.05')
+    expect(formatImageryTimeSeriesYTick(-0.05000000000000002)).toBe('-0.05')
+    expect(formatImageryTimeSeriesYTick(-0.10000000000000002)).toBe('-0.1')
+    expect(formatImageryTimeSeriesYTick(0)).toBe('0')
+    expect(formatImageryTimeSeriesYTick(0.25)).toBe('0.25')
   })
 })

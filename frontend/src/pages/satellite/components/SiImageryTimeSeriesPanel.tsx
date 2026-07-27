@@ -42,6 +42,7 @@ import {
   aggregateImageryChartByTimePeriod,
   filterImageryTimeSeriesByDateRange,
   buildNdsiZonalChartBands,
+  formatImageryTimeSeriesYTick,
   type ImageryChartType,
   type ImageryCorrelationScatterAnalysis,
   type ImageryTimeAggregation,
@@ -1320,10 +1321,14 @@ export function SiImageryTimeSeriesPanel({
             padding: 6,
             callback: (value: string | number) => {
               const n = typeof value === 'number' ? value : Number(value)
-              if (!Number.isFinite(n)) return value
-              if (lulcCompositionMode) return `${n}%`
-              if (!lulcAreaMode) return value
-              return areaUnit === 'ha' ? n.toFixed(1) : Math.round(n).toLocaleString('en-US')
+              if (!Number.isFinite(n)) return String(value ?? '')
+              if (lulcCompositionMode) return `${formatImageryTimeSeriesYTick(n)}%`
+              if (lulcAreaMode) {
+                return areaUnit === 'ha'
+                  ? formatImageryTimeSeriesYTick(n)
+                  : Math.round(n).toLocaleString('en-US')
+              }
+              return formatImageryTimeSeriesYTick(n)
             },
           },
           grid: {

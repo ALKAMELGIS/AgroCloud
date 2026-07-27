@@ -23,6 +23,27 @@ import { estimateSaviFromNdvi } from '../../../lib/siCropAlertDchasBeacon'
 
 export type ImageryChartType = 'line' | 'area' | 'bar' | 'pie' | 'scatter'
 
+/**
+ * Format Chart.js linear y-tick labels without float artifacts
+ * (e.g. 0.15000000000000002 → "0.15").
+ */
+export function formatImageryTimeSeriesYTick(value: string | number): string {
+  const n = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(n)) return String(value ?? '')
+  if (Object.is(n, -0)) return '0'
+  const abs = Math.abs(n)
+  if (abs === 0) return '0'
+  if (abs >= 1000) return Math.round(n).toLocaleString('en-US')
+  if (abs >= 100) return String(Math.round(n))
+  if (abs >= 10) {
+    const t = Math.round(n * 10) / 10
+    return Number.isInteger(t) ? String(t) : t.toFixed(1)
+  }
+  // Index-scale values (−1…1, small deltas): trim float noise, keep up to 3 decimals.
+  const rounded = Math.round(n * 1000) / 1000
+  return String(Number(rounded.toFixed(3)))
+}
+
 /** Layer Live index catalog — same groups as Satellite Intelligence Remote Sensing. */
 export function buildImageryTimeSeriesLayerGroups(): RemoteSensingLayerSelectGroup[] {
   return buildRemoteSensingLayerSelectGroups([])

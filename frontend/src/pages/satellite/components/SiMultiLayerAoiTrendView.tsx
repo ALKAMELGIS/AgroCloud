@@ -12,7 +12,7 @@ import {
   type ChartOptions,
 } from 'chart.js'
 import { Line } from 'react-chartjs-2'
-import { imageryLayerChartColor } from '../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import { formatImageryTimeSeriesYTick, imageryLayerChartColor } from '../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import type { MultiAoiTimelineResult } from '../../../lib/siMultiAoiTimeline'
 import { multiAoiTimelineToLayerSeries } from '../../../lib/siMultiAoiTimeline'
 import {
@@ -161,7 +161,10 @@ export function SiMultiLayerAoiTrendView({
             color: '#94a3b8',
             font: { size: 11 },
           },
-          ticks: { color: '#cbd5e1' },
+          ticks: {
+            color: '#cbd5e1',
+            callback: (value: string | number) => formatImageryTimeSeriesYTick(value),
+          },
           grid: { color: 'rgba(148,163,184,0.12)' },
         },
       },
