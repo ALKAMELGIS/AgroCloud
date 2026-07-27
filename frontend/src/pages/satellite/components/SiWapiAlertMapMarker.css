@@ -1,0 +1,96 @@
+/* ISS alert pins — compact field markers */
+
+.si-iss-alert-pin {
+  --iss-alert-color: #43a047;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  transform: translateY(-6px);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+  pointer-events: auto;
+}
+
+.si-iss-alert-pin__pulse {
+  position: absolute;
+  top: 1px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--iss-alert-color) 70%, #fff 30%);
+  opacity: 0.4;
+  animation: si-iss-alert-pulse 2.4s ease-out infinite;
+  pointer-events: none;
+}
+
+.si-iss-alert-pin--critical .si-iss-alert-pin__pulse,
+.si-iss-alert-pin--severe .si-iss-alert-pin__pulse {
+  animation-duration: 1.4s;
+}
+
+.si-iss-alert-pin--safe .si-iss-alert-pin__pulse,
+.si-iss-alert-pin--watch .si-iss-alert-pin__pulse,
+.si-iss-alert-pin--overwatering .si-iss-alert-pin__pulse {
+  animation: none;
+  opacity: 0;
+}
+
+.si-iss-alert-pin__orb {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--iss-alert-color) 50%, #fff 50%);
+  background: color-mix(in srgb, var(--iss-alert-color) 82%, #0f172a 18%);
+  color: #fff;
+  font-size: 9px;
+  line-height: 1;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.35);
+}
+
+.si-iss-alert-pin.is-selected .si-iss-alert-pin__orb {
+  transform: scale(1.08);
+  box-shadow:
+    0 0 0 1px rgba(15, 23, 42, 0.4),
+    0 0 8px color-mix(in srgb, var(--iss-alert-color) 55%, transparent);
+}
+
+.si-iss-alert-pin__stem {
+  width: 1.5px;
+  height: 7px;
+  margin-top: -1px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--iss-alert-color) 65%, #0f172a 35%);
+}
+
+.si-iss-alert-pin__label {
+  display: none;
+}
+
+.si-map-container--interacting .si-iss-alert-pin__pulse {
+  animation-play-state: paused;
+}
+
+@keyframes si-iss-alert-pulse {
+  0% {
+    transform: scale(0.75);
+    opacity: 0.5;
+  }
+  70% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+}

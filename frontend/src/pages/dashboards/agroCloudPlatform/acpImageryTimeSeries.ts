@@ -675,6 +675,92 @@ export function formatImageryTimePeriodLabel(key: string, aggregation: ImageryTi
   return key.replace('-W', ' W')
 }
 
+/**
+ * Complete calendar of period keys from from→to (inclusive) for a shared multi-series x-axis.
+ * Week/month/year use every bucket in range; day returns each calendar day.
+ */
+export function enumerateImageryTimePeriods(
+  fromIso: string,
+  toIso: string,
+  aggregation: ImageryTimeAggregation,
+): string[] {
+  const from = fromIso.trim().slice(0, 10)
+  const to = toIso.trim().slice(0, 10)
+  if (!from || !to || from > to) return []
+
+  if (aggregation === 'year') {
+    const out: string[] = []
+    for (let y = Number(from.slice(0, 4)); y <= Number(to.slice(0, 4)); y += 1) {
+      out.push(String(y))
+    }
+    return out
+  }
+
+  if (aggregation === 'month') {
+    const out: string[] = []
+    let y = Number(from.slice(0, 4))
+    let m = Number(from.slice(5, 7))
+    const endY = Number(to.slice(0, 4))
+    const endM = Number(to.slice(5, 7))
+    while (y < endY || (y === endY && m <= endM)) {
+      out.push(`${y}-${String(m).padStart(2, '0')}`)
+      m += 1
+      if (m > 12) {
+        m = 1
+        y += 1
+      }
+    }
+    return out
+  }
+
+  if (aggregation === 'week') {
+    const seen = new Set<string>()
+    const out: string[] = []
+    let cur = from
+    while (cur <= to) {
+      const key = imageryTimePeriodKey(cur, 'week')
+      if (key && !seen.has(key)) {
+        seen.add(key)
+        out.push(key)
+      }
+      const next = new Date(`${cur}T12:00:00Z`)
+      next.setUTCDate(next.getUTCDate() + 1)
+      cur = next.toISOString().slice(0, 10)
+    }
+    return out
+  }
+
+  // day
+  const out: string[] = []
+  let cur = from
+  while (cur <= to) {
+    out.push(cur)
+    const next = new Date(`${cur}T12:00:00Z`)
+    next.setUTCDate(next.getUTCDate() + 1)
+    cur = next.toISOString().slice(0, 10)
+  }
+  return out
+}
+
+/**
+ * Shared x-axis labels for multi-plot charts.
+ * Week/month/year → full calendar spine. Day → observed dates only (still shared across plots).
+ */
+export function buildAlignedImageryPeriodLabels(options: {
+  fromDate: string
+  toDate: string
+  aggregation: ImageryTimeAggregation
+  observedPeriodKeys?: Iterable<string>
+}): string[] {
+  const full = enumerateImageryTimePeriods(options.fromDate, options.toDate, options.aggregation)
+  if (options.aggregation !== 'day') return full
+  const observed = new Set(
+    [...(options.observedPeriodKeys ?? [])].map(k => k.trim().slice(0, 10)).filter(Boolean),
+  )
+  if (!observed.size) return full
+  return full.filter(d => observed.has(d))
+}
+
 /** Client-side re-bucketing of daily chart series into week / month / year means. */
 export function aggregateImageryChartByTimePeriod(
   labels: string[],

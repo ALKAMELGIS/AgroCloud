@@ -9,6 +9,7 @@ import {
 } from './agroCompositeIndices'
 import { ADI_HISTORICAL_LOOKBACK_DAYS, isAdiLayerId } from './adiIndex'
 import { NCADI_LOOKBACK_DAYS, isNcadiLayerId } from './ncadiIndex'
+import { WAPI_LOOKBACK_DAYS, isWapiLayerId } from './wapiIndex'
 import { CROP_CLASSIFICATION_WMS_LAYER, isCropClassificationLayerId } from './siCropClassification'
 import {
   LULC_CLASSIFICATION_WMS_LAYER,
@@ -450,6 +451,16 @@ export function resolveSentinelHubWmsTimeWindow(
       return { timeStart: previousDate.trim(), timeEnd: current }
     }
     const days = options?.lookbackDays ?? NCADI_LOOKBACK_DAYS
+    return {
+      timeStart: subtractDaysFromIso(current, days),
+      timeEnd: current,
+    }
+  }
+  if (isWapiLayerId(logicalLayerName)) {
+    if (previousDate && previousDate.trim() && previousDate.trim() !== current) {
+      return { timeStart: previousDate.trim(), timeEnd: current }
+    }
+    const days = options?.lookbackDays ?? WAPI_LOOKBACK_DAYS
     return {
       timeStart: subtractDaysFromIso(current, days),
       timeEnd: current,

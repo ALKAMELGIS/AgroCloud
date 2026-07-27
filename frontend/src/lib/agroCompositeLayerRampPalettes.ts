@@ -341,6 +341,31 @@ export const AGRO_UNIQUE_LAYER_RAMP_PALETTES: Record<string, AgroLayerRampPalett
     ],
     subtitle: 'Over-irrigation · green = balanced · navy = excess water',
   },
+  WDSI: {
+    valueMin: -0.5,
+    valueMax: 0.65,
+    anchors: anchors(
+      [0, '#4e342e', 'Severe drought'],
+      [0.25, '#bf360c', 'High drought'],
+      [0.5, '#ffb300', 'Moderate drought'],
+      [0.75, '#81c784', 'Near normal'],
+      [1, '#0277bd', 'Wet / no drought'],
+    ),
+    classLabels: [
+      'Extreme drought situation',
+      'Severe drought',
+      'High drought',
+      'Elevated drought',
+      'Moderate drought',
+      'Mild drought / watch',
+      'Near normal',
+      'Adequate moisture',
+      'Wet conditions',
+      'No drought / surplus water',
+    ],
+    subtitle:
+      'WDSI · 0.40·NDMI + 0.35·NDWI + 0.15·NDVI + 0.10·SAVI · brown = drought · blue = wet',
+  },
 
   // 🚜 Irrigation & Field Management
   IEI: {
@@ -434,6 +459,57 @@ export const AGRO_UNIQUE_LAYER_RAMP_PALETTES: Record<string, AgroLayerRampPalett
       'Peak production',
     ],
     subtitle: 'Crop production · straw = weak · deep green = high output',
+  },
+  ISS: {
+    valueMin: -0.5,
+    valueMax: 0.65,
+    anchors: anchors(
+      [0, '#b71c1c', 'Severe irrigation stress'],
+      [0.28, '#ef6c00', 'High stress'],
+      [0.52, '#fdd835', 'Moderate / watch'],
+      [0.76, '#26a69a', 'Adequate moisture'],
+      [1, '#006064', 'Well supplied'],
+    ),
+    classLabels: [
+      'Critical irrigation stress',
+      'Severe stress',
+      'High stress',
+      'Elevated stress',
+      'Moderate stress',
+      'Watch / borderline',
+      'Adequately supplied',
+      'Good moisture',
+      'Well irrigated',
+      'Optimal water status',
+    ],
+    subtitle:
+      'ISS · 0.40·NDMI + 0.30·NDWI + 0.20·NDVI + 0.10·SAVI · red = stress · teal = well watered',
+  },
+  WAPI: {
+    valueMin: 0,
+    valueMax: 1,
+    anchors: anchors(
+      [0, '#5c6bc0', 'Class 1 · Normal'],
+      [0.22, '#26a69a', 'Class 3 · Low Stress'],
+      [0.44, '#fdd835', 'Class 5 · Moderate'],
+      [0.66, '#ef6c00', 'Class 7 · High Stress'],
+      [0.88, '#e91e63', 'Class 9 · Critical'],
+      [1, '#ad1457', 'Class 10 · Extreme Critical'],
+    ),
+    classLabels: [
+      'Class 1 · Normal · 0.00–0.09',
+      'Class 2 · Healthy · 0.10–0.19',
+      'Class 3 · Low Stress · 0.20–0.29',
+      'Class 4 · Low Moderate · 0.30–0.39',
+      'Class 5 · Moderate · 0.40–0.49',
+      'Class 6 · Moderate High · 0.50–0.59',
+      'Class 7 · High Stress · 0.60–0.69',
+      'Class 8 · Very High Stress · 0.70–0.79',
+      'Class 9 · Critical · 0.80–0.89',
+      'Class 10 · Extreme Critical · 0.90–1.00',
+    ],
+    subtitle:
+      'WAPI 10-class · 0.40·WDSI + 0.20·ΔWDSI + 0.20·(1−NDMI) + 0.10·ETstress + 0.10 · blue = Normal · magenta = Extreme Critical',
   },
 
   // 🌾 Growth & Stability
@@ -867,10 +943,13 @@ export const AGRO_UNIQUE_LAYER_RAMP_PALETTES: Record<string, AgroLayerRampPalett
   DVMI: deltaPalette('VMI', '#004d40', '#b2dfdb', '#80cbc4', 'ΔVMI · canopy moisture loss · teal recovery'),
   DSMI: deltaPalette('SMI', '#5d4037', '#d7ccc8', '#006064', 'ΔSMI · soil drying · cyan rewetting'),
   DOIR: deltaPalette('OIR', '#0d47a1', '#fff59d', '#33691e', 'ΔOIR · excess water rise · green normalization'),
+  DWDSI: deltaPalette('WDSI', '#4e342e', '#fff3e0', '#0277bd', 'ΔWDSI · drought worsening · wetting recovery'),
   DIEI: deltaPalette('IEI', '#c62828', '#e3f2fd', '#1565c0', 'ΔIEI · efficiency drop · blue improvement'),
   DUII: deltaPalette('UII', '#f57f17', '#f0f4c3', '#1b5e20', 'ΔUII · deficit increase · irrigation recovery'),
   DFPR: deltaPalette('FPR', '#d84315', '#fff9c4', '#2e7d32', 'ΔFPR · performance drop · yield recovery'),
   DCPI: deltaPalette('CPI', '#fff8e1', '#c5e1a5', '#1b5e20', 'ΔCPI · production decline · output gain'),
+  DISS: deltaPalette('ISS', '#b71c1c', '#fff8e1', '#006064', 'ΔISS · irrigation stress rise · moisture recovery'),
+  DWAPI: deltaPalette('WAPI', '#1565c0', '#fffde7', '#c62828', 'ΔWAPI · priority easing · priority surge'),
   DGPI: deltaPalette('GPI', '#e65100', '#fff3e0', '#33691e', 'ΔGPI · growth slowdown · acceleration'),
   DCSI2: deltaPalette('CSI2', '#37474f', '#cfd8dc', '#33691e', 'ΔCSI2 · canopy destabilization · restabilization'),
   DCRI: deltaPalette('CRI', '#311b92', '#c5cae9', '#2e7d32', 'ΔCRI · resilience loss · recovery'),

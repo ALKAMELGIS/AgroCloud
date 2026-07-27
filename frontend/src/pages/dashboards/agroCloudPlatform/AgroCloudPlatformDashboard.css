@@ -1584,6 +1584,45 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
   margin-bottom: 6px;
 }
 
+.acp-irrigation__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 6px 6px;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.acp-irrigation__tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #475569;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.acp-irrigation__tool.is-on {
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.06);
+}
+
+.acp-irrigation__level-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
 .acp-live-alerts {
   flex: 1;
   min-height: 0;
@@ -4063,6 +4102,16 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
   min-width: 120px;
 }
 
+.acp-ts__field--plot-label {
+  flex: 0 1 140px;
+  min-width: 110px;
+  max-width: 180px;
+}
+
+.acp-ts__field--plot-label select {
+  width: 100%;
+}
+
 .acp-ts__field--grow select {
   max-width: 100%;
 }
@@ -4194,6 +4243,42 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
   border-color: rgba(56, 189, 248, 0.55);
 }
 
+.acp-ts-layer-select__bulk {
+  position: sticky;
+  top: 34px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: #0b1220;
+}
+
+.acp-ts-layer-select__bulk .acp-ts-layer-select__option--bulk {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  background: transparent;
+}
+
+.acp-ts-layer-select__clear {
+  flex: 0 0 auto;
+  height: 22px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(148, 163, 184, 0.95);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.acp-ts-layer-select__clear:hover {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .acp-ts-layer-select__hint,
 .acp-ts-layer-select__empty {
   margin: 0;
@@ -4219,13 +4304,45 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
+  margin: 0;
   padding: 5px 10px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
-.acp-ts-layer-select__option:hover,
+button.acp-ts-layer-select__option,
+.acp-ts-layer-select__option--single {
+  /* Kill Windows/Chrome default grey button chrome on listbox options. */
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.acp-ts-layer-select__option:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
 .acp-ts-layer-select__option.is-checked {
-  background: rgba(56, 189, 248, 0.1);
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.acp-ts-layer-select__option:focus,
+.acp-ts-layer-select__option:focus-visible {
+  outline: none;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.acp-ts-layer-select__option.is-checked:focus,
+.acp-ts-layer-select__option.is-checked:focus-visible {
+  background: rgba(56, 189, 248, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
 }
 
 .acp-ts-layer-select__checkbox {
@@ -4502,6 +4619,12 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
   margin: 4px 0 0;
   font-size: 9px;
   color: #f87171;
+}
+
+.acp-ts__warn {
+  margin: 4px 0 0;
+  font-size: 9px;
+  color: #fbbf24;
 }
 
 .acp-ts__scatter-insight {

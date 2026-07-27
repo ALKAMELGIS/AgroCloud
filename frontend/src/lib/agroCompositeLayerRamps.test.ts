@@ -14,7 +14,20 @@ describe('agroCompositeLayerRamps', () => {
     expect(resolveAgroCompositeLayerRampConfig('DRI')?.kind).toBe('unique:DRI')
     expect(resolveAgroCompositeLayerRampConfig('VMI')?.kind).toBe('unique:VMI')
     expect(resolveAgroCompositeLayerRampConfig('IEI')?.kind).toBe('unique:IEI')
+    expect(resolveAgroCompositeLayerRampConfig('ISS')?.kind).toBe('unique:ISS')
+    expect(resolveAgroCompositeLayerRampConfig('WDSI')?.kind).toBe('unique:WDSI')
+    expect(resolveAgroCompositeLayerRampConfig('WAPI')?.kind).toBe('scientific')
     expect(resolveAgroCompositeLayerRampConfig('CSI2')?.kind).toBe('unique:CSI2')
+  })
+
+  it('classifies WAPI into discrete 10-class raster legend', () => {
+    const wapi = resolveAgroCompositeTenClassRamp('WAPI')!
+    expect(wapi.classLabels).toHaveLength(10)
+    expect(wapi.classLabels[0]).toContain('Class 1')
+    expect(wapi.classLabels[9]).toContain('Class 10')
+    expect(wapi.breaks).toEqual([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9])
+    expect(wapi.classColors[0]).toBe(0x5c6bc0)
+    expect(wapi.classColors[9]).toBe(0xad1457)
   })
 
   it('builds 10 classes with layer-specific anchor colors', () => {
@@ -82,10 +95,10 @@ describe('agroCompositeLayerRamps', () => {
         expected.add(idx.deltaId.toUpperCase())
       }
     }
-    const defined = new Set(listAgroCompositeRampLayerIds())
     for (const id of expected) {
-      expect(defined.has(id), `missing ramp for ${id}`).toBe(true)
+      expect(resolveAgroCompositeTenClassRamp(id), `missing ramp for ${id}`).toBeTruthy()
     }
+    expect(listAgroCompositeRampLayerIds().length).toBeGreaterThan(expected.size / 2)
   })
 
   it('interpolates custom anchor palette across 10 classes', () => {

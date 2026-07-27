@@ -23,6 +23,7 @@ import {
   LULC_SCIENTIFIC_NAME,
   isLulcClassificationLayerId,
 } from './siLulcClassification'
+import { WAPI_STATIC_EXPR } from './wapiIndex'
 
 /** Derived visualization layers — same fusion input, rule-engine styling only. */
 export const AGRO_DERIVED_LAYER_DEFS: readonly AgroCompositeIndexDef[] = [
@@ -197,6 +198,15 @@ export const AGRO_COMPOSITE_CATEGORIES: readonly AgroCompositeCategory[] = [
         deltaLabel: 'ΔOIR',
         expr: 'ndwi - ndvi',
       },
+      {
+        id: 'WDSI',
+        label: 'WDSI',
+        scientificName:
+          'Water Drought Situation Index (0.40·NDMI + 0.35·NDWI + 0.15·NDVI + 0.10·SAVI)',
+        deltaId: 'DWDSI',
+        deltaLabel: 'ΔWDSI',
+        expr: '0.40 * ndmi + 0.35 * ndwi + 0.15 * ndvi + 0.10 * savi',
+      },
     ],
   },
   {
@@ -234,6 +244,24 @@ export const AGRO_COMPOSITE_CATEGORIES: readonly AgroCompositeCategory[] = [
         deltaId: 'DCPI',
         deltaLabel: 'ΔCPI',
         expr: '0.4 * ndvi + 0.3 * ndmi + 0.2 * savi + 0.1 * ndwi',
+      },
+      {
+        id: 'ISS',
+        label: 'ISS',
+        scientificName:
+          'Irrigation Stress Score (0.40·NDMI + 0.30·NDWI + 0.20·NDVI + 0.10·SAVI)',
+        deltaId: 'DISS',
+        deltaLabel: 'ΔISS',
+        expr: '0.40 * ndmi + 0.30 * ndwi + 0.20 * ndvi + 0.10 * savi',
+      },
+      {
+        id: 'WAPI',
+        label: 'WAPI',
+        scientificName:
+          'Water Allocation Priority Index (0.40·WDSI + 0.20·ΔWDSI + 0.20·(1−NDMI) + 0.10·ETstress + 0.10) · 10-class',
+        deltaId: 'DWAPI',
+        deltaLabel: 'ΔWAPI',
+        expr: WAPI_STATIC_EXPR,
       },
     ],
   },

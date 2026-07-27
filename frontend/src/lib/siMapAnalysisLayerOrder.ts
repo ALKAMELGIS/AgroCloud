@@ -78,6 +78,10 @@ function raiseToTop(map: MapboxMap, layerId: string): void {
 export type SyncSiMapAnalysisLayerOrderInput = {
   agroFillId?: string
   agroLineId?: string
+  /** Extra polygon fills to tuck under the Sentinel raster (e.g. Layers AOI source). */
+  extraFillIdsUnderRaster?: string[]
+  /** Extra outlines to keep above the Sentinel raster. */
+  extraOutlineIdsAboveRaster?: string[]
   freezeLayerAoiRasterOrder?: boolean
   suppressAgroFillWhenWms?: boolean
   restoreAgroFillOpacity?: number
@@ -105,7 +109,7 @@ export function syncSiMapAnalysisLayerOrder(
     .map(l => l.id)
     .filter((id): id is string => !!id && isSiAnalysisRasterMapLayerId(id))
 
-  // 1) Park analysis rasters under vector outlines (agro / drawn AOI lines).
+  // 1) Park analysis rasters under vector outlines (agro / drawn AOI / Layers AOI lines).
   for (const rasterId of rasterIds) {
     if (input.freezeLayerAoiRasterOrder && rasterId.includes(`${SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX}-layer-`)) {
       continue
@@ -126,6 +130,9 @@ export function syncSiMapAnalysisLayerOrder(
   // 2) Tuck polygon fills under the rasters so NDVI / indices paint on top of AOI fill.
   for (const aoiId of DRAWN_AOI_FILL_UNDER_RASTER_IDS) {
     placeUnder(map, aoiId, firstRaster ?? rasterBeforeId)
+  }
+  for (const fillId of input.extraFillIdsUnderRaster ?? []) {
+    placeUnder(map, fillId, firstRaster ?? rasterBeforeId)
   }
 
   if (agroFillId && map.getLayer(agroFillId) && !input.useAgSymbology) {
@@ -150,6 +157,9 @@ export function syncSiMapAnalysisLayerOrder(
 
   // 3) Drawn AOI outline / vertices always above the index raster.
   for (const outlineId of DRAWN_AOI_OUTLINE_ABOVE_RASTER_IDS) {
+    raiseToTop(map, outlineId)
+  }
+  for (const outlineId of input.extraOutlineIdsAboveRaster ?? []) {
     raiseToTop(map, outlineId)
   }
 

@@ -20,7 +20,22 @@ export function normalizeDrawnAoiClipCollection(
   }
 }
 
+/** Cheap stable fingerprint of AOI rings so WMS clip cache invalidates on redraw. */
+function fingerprintCoords(coords: unknown, depth = 0): string {
+  if (!Array.isArray(coords) || depth > 4) return ''
+  if (coords.length >= 2 && typeof coords[0] === 'number' && typeof coords[1] === 'number') {
+    return `${Number(coords[0]).toFixed(5)},${Number(coords[1]).toFixed(5)}`
+  }
+  const first = fingerprintCoords(coords[0], depth + 1)
+  const last = coords.length > 1 ? fingerprintCoords(coords[coords.length - 1], depth + 1) : ''
+  return `${coords.length}:${first}:${last}`
+}
+
 export function drawnAoiClipSignature(fc: GeoJSON.FeatureCollection | null | undefined): string {
   if (!fc?.features?.length) return ''
-  return `drawn:${fc.features.length}:${JSON.stringify(fc.features[0]?.geometry?.type ?? '')}`
+  const geom = fc.features[0]?.geometry as GeoJSON.Geometry | undefined
+  const type = geom?.type ?? ''
+  const coords =
+    geom && 'coordinates' in geom ? fingerprintCoords((geom as GeoJSON.Polygon).coordinates) : ''
+  return `drawn:${fc.features.length}:${type}:${coords}`
 }

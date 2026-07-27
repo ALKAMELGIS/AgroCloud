@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildSiImageryFieldOptions,
+  listSiImageryPlotLabelAttributes,
+  resolveSiImageryField,
   SI_IMAGERY_COMMITTED_AOI_KEY,
   SI_IMAGERY_DRAWN_AOI_LABEL,
+  SI_IMAGERY_VECTOR_LAYER_KEY_PREFIX,
 } from './siImageryTimeSeriesFields'
 
 const drawnAoi: GeoJSON.Polygon = {
@@ -40,6 +43,48 @@ const agroMask: GeoJSON.FeatureCollection = {
   ],
 }
 
+const potatoPlotsLayer = {
+  id: 'potato-plots-upload',
+  name: 'Potato_Plots',
+  geojson: {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        properties: { name: 'Plot A' },
+        geometry: {
+          type: 'Polygon',
+          coordinates: [
+            [
+              [55.1, 24.1],
+              [55.11, 24.1],
+              [55.11, 24.11],
+              [55.1, 24.11],
+              [55.1, 24.1],
+            ],
+          ],
+        },
+      },
+      {
+        type: 'Feature',
+        properties: { name: 'Plot B' },
+        geometry: {
+          type: 'Polygon',
+          coordinates: [
+            [
+              [55.12, 24.1],
+              [55.13, 24.1],
+              [55.13, 24.11],
+              [55.12, 24.11],
+              [55.12, 24.1],
+            ],
+          ],
+        },
+      },
+    ],
+  },
+}
+
 describe('siImageryTimeSeriesFields', () => {
   it('appends Drawn AOI alongside sketch field options', () => {
     const options = buildSiImageryFieldOptions(
@@ -71,6 +116,55 @@ describe('siImageryTimeSeriesFields', () => {
         objectId: 'aoi',
       },
     ])
+  })
+
+  it('includes Layers-panel vector uploads like Potato_Plots in AOI Layers options', () => {
+    const options = buildSiImageryFieldOptions(null, [], null, [potatoPlotsLayer])
+    expect(options.length).toBe(2)
+    expect(options.every(o => o.fieldKey.startsWith(SI_IMAGERY_VECTOR_LAYER_KEY_PREFIX))).toBe(true)
+    expect(options.some(o => o.displayName.includes('Plot A'))).toBe(true)
+    expect(options.some(o => o.displayName.includes('Plot B'))).toBe(true)
+
+    const key = options.find(o => o.displayName.includes('Plot A'))!.fieldKey
+    const resolved = resolveSiImageryField(null, [], null, key, [potatoPlotsLayer])
+    expect(resolved?.farmName).toBe('Plot A')
+    expect(resolved?.geometry?.type).toBe('Polygon')
+  })
+
+  it('merges custom vector layers alongside Agro Structures fields', () => {
+    const options = buildSiImageryFieldOptions(agroMask, [], null, [potatoPlotsLayer])
+    expect(options.some(o => o.displayName.includes('Plot B'))).toBe(true)
+  })
+
+  it('labels plots from a chosen layer attribute (Name / OBJECTID)', () => {
+    const withIds = {
+      ...potatoPlotsLayer,
+      geojson: {
+        type: 'FeatureCollection' as const,
+        features: [
+          {
+            type: 'Feature' as const,
+            properties: { name: 'Plot A', OBJECTID: 101 },
+            geometry: potatoPlotsLayer.geojson.features[0]!.geometry,
+          },
+          {
+            type: 'Feature' as const,
+            properties: { name: 'Plot B', OBJECTID: 102 },
+            geometry: potatoPlotsLayer.geojson.features[1]!.geometry,
+          },
+        ],
+      },
+    }
+    const byObjectId = buildSiImageryFieldOptions(null, [], null, [withIds], 'OBJECTID')
+    expect(byObjectId.some(o => o.displayName.includes('101'))).toBe(true)
+    expect(byObjectId.some(o => o.displayName.includes('102'))).toBe(true)
+
+    const key = byObjectId.find(o => o.displayName.includes('101'))!.fieldKey
+    const resolved = resolveSiImageryField(null, [], null, key, [withIds], 'OBJECTID')
+    expect(resolved?.farmName).toBe('101')
+
+    const attrs = listSiImageryPlotLabelAttributes([withIds])
+    expect(attrs.some(a => a.name === 'OBJECTID' || a.name === 'name')).toBe(true)
   })
 
   it('does not duplicate Drawn AOI when already present', () => {

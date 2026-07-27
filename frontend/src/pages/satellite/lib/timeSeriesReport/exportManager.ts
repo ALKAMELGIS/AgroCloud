@@ -7,14 +7,28 @@ import {
 import { generateTimeSeriesWeatherReportExcel } from './generateTimeSeriesWeatherReportExcel'
 import { generateTimeSeriesReportDocx } from './generateTimeSeriesReportDocx'
 import { exportChartPng } from './timeSeriesReportExports'
+import { buildPlotTimeSeriesAnalyticsFromPlots } from './fetchPlotTimeSeriesAnalytics'
+import { generatePlotTimeSeriesAnalyticsExcel } from './generatePlotTimeSeriesAnalyticsExcel'
+import { generateAoiPlotRawTimeSeriesExcel } from './generateAoiPlotRawTimeSeriesExcel'
+import { generateAoiRawDataByLayerExcel } from './generateAoiRawDataByLayerExcel'
 import type { ImageryChartType } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import type { TimeSeriesExportKind, TimeSeriesReportConfig } from './timeSeriesReportTypes'
 import type { ImageryTimeSeriesLayerSeries } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import type { CropAlertFieldInput } from '../../../../lib/siCropAlertEngine'
+import type { PlotTimeSeriesAnalyticsOptions } from './plotTimeSeriesAnalyticsTypes'
 
 export type TimeSeriesExportContext = BuildTimeSeriesReportPayloadInput & {
   chartRef?: { current: { toBase64Image: (type?: string, quality?: number) => string; update?: (mode?: 'none') => void } | null } | null
   chartType?: ImageryChartType
   config?: Partial<TimeSeriesReportConfig>
+  /** All plots in the active AOI layer — used by Plot Time Series Analytics export. */
+  plots?: CropAlertFieldInput[]
+  farmName?: string
+  aoiName?: string
+  /** Layer attribute used for plot / sheet names in multi-plot Excel exports. */
+  plotNameField?: string
+  plotAnalyticsOptions?: Partial<PlotTimeSeriesAnalyticsOptions>
+  onPlotAnalyticsProgress?: (done: number, total: number) => void
 }
 
 export type TimeSeriesExportOptions = {
@@ -83,7 +97,7 @@ export async function runTimeSeriesExport(
         includeMapSnapshots: false,
         enrichVegetationCoverage: false,
       })
-      exportTimeSeriesCsvReport(payload)
+      await exportTimeSeriesCsvReport(payload)
       break
     }
     case 'excel': {
@@ -101,6 +115,96 @@ export async function runTimeSeriesExport(
         enrichVegetationCoverage: false,
       })
       await generateTimeSeriesWeatherReportExcel(payload)
+      break
+    }
+    case 'plot-priority-excel': {
+      const plots =
+        ctx.plots?.filter(p => p.geometry) ??
+        (ctx.field?.geometry
+          ? [
+              {
+                ...ctx.field,
+                fieldKey: ctx.fieldKey || ctx.field.fieldKey,
+                farmName: ctx.fieldName || ctx.field.farmName,
+              },
+            ]
+          : [])
+      if (!plots.length) {
+        throw new Error('Select at least one plot AOI with geometry before exporting the Priority Report.')
+      }
+      const layerId = ctx.layerIds[0]?.trim() || 'NDVI'
+      const model = await buildPlotTimeSeriesAnalyticsFromPlots(
+        {
+          plots,
+          layerId,
+          fromDate: ctx.fromDate,
+          toDate: ctx.toDate,
+          timeAggregation: ctx.timeAggregation ?? 'day',
+          farmName: ctx.farmName || ctx.fieldName,
+          aoiName: ctx.aoiName || `${plots.length} plots`,
+          signal: options?.signal,
+          onProgress: ctx.onPlotAnalyticsProgress,
+        },
+        ctx.plotAnalyticsOptions,
+      )
+      await generatePlotTimeSeriesAnalyticsExcel(model, ctx.plotAnalyticsOptions)
+      break
+    }
+    case 'aoi-raw-excel': {
+      const plots =
+        ctx.plots?.filter(p => p.geometry) ??
+        (ctx.field?.geometry
+          ? [
+              {
+                ...ctx.field,
+                fieldKey: ctx.fieldKey || ctx.field.fieldKey,
+                farmName: ctx.fieldName || ctx.field.farmName,
+              },
+            ]
+          : [])
+      if (!plots.length) {
+        throw new Error('Select at least one AOI plot with geometry before exporting raw time series.')
+      }
+      await generateAoiPlotRawTimeSeriesExcel({
+        plots,
+        layerIds: ctx.layerIds,
+        fromDate: ctx.fromDate,
+        toDate: ctx.toDate,
+        farmName: ctx.farmName || ctx.fieldName,
+        aoiName: ctx.aoiName || `${plots.length} plots`,
+        plotNameField: ctx.plotNameField,
+        signal: options?.signal,
+        onProgress: ctx.onPlotAnalyticsProgress,
+      })
+      break
+    }
+    case 'aoi-raw-by-layer-excel': {
+      const plots =
+        ctx.plots?.filter(p => p.geometry) ??
+        (ctx.field?.geometry
+          ? [
+              {
+                ...ctx.field,
+                fieldKey: ctx.fieldKey || ctx.field.fieldKey,
+                farmName: ctx.fieldName || ctx.field.farmName,
+              },
+            ]
+          : [])
+      if (!plots.length) {
+        throw new Error('Select at least one AOI plot with geometry before exporting AOI raw data by layer.')
+      }
+      await generateAoiRawDataByLayerExcel({
+        plots,
+        layerIds: ctx.layerIds,
+        fromDate: ctx.fromDate,
+        toDate: ctx.toDate,
+        farmName: ctx.farmName || ctx.fieldName,
+        aoiName: ctx.aoiName || `${plots.length} plots`,
+        plotNameField: ctx.plotNameField,
+        dataSource: 'Sentinel-2 (Sentinel Hub zonal statistics)',
+        signal: options?.signal,
+        onProgress: ctx.onPlotAnalyticsProgress,
+      })
       break
     }
     case 'docx': {

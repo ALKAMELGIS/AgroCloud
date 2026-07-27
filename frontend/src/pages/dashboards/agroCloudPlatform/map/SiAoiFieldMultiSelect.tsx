@@ -43,6 +43,11 @@ export function SiAoiFieldMultiSelect({
     return options.filter(opt => opt.displayName.toLowerCase().includes(q) || opt.fieldKey.toLowerCase().includes(q))
   }, [options, query])
 
+  const filteredKeys = useMemo(() => filteredOptions.map(o => o.fieldKey), [filteredOptions])
+  const allFilteredSelected =
+    filteredKeys.length > 0 && filteredKeys.every(key => selectedKeys.includes(key))
+  const someFilteredSelected = filteredKeys.some(key => selectedKeys.includes(key))
+
   useEffect(() => {
     if (!open) {
       setQuery('')
@@ -63,6 +68,21 @@ export function SiAoiFieldMultiSelect({
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [open])
+
+  const selectAllFiltered = () => {
+    if (!filteredKeys.length) return
+    if (allFilteredSelected) {
+      const drop = new Set(filteredKeys)
+      onSelectedKeysChange(selectedKeys.filter(key => !drop.has(key)))
+      return
+    }
+    const merged = new Set([...selectedKeys, ...filteredKeys])
+    onSelectedKeysChange(options.map(o => o.fieldKey).filter(key => merged.has(key)))
+  }
+
+  const clearAll = () => {
+    onSelectedKeysChange([])
+  }
 
   if (!options.length) {
     return (
@@ -106,26 +126,60 @@ export function SiAoiFieldMultiSelect({
               aria-label="Search AOI layers"
             />
           </div>
-          {filteredOptions.map(opt => {
-            const on = selectedKeys.includes(opt.fieldKey)
-            return (
-              <label
-                key={opt.fieldKey}
-                className={'acp-ts-layer-select__option' + (on ? ' is-checked' : '')}
-                title={opt.displayName}
-              >
-                <input
-                  type="checkbox"
-                  className="acp-ts-layer-select__checkbox"
-                  checked={on}
-                  onChange={() => onSelectedKeysChange(toggleKey(selectedKeys, opt.fieldKey))}
-                />
-                <span className="acp-ts-layer-select__option-text">
-                  <span className="acp-ts-layer-select__option-abbr">{opt.displayName}</span>
+          <div className="acp-ts-layer-select__bulk">
+            <label
+              className={
+                'acp-ts-layer-select__option acp-ts-layer-select__option--bulk' +
+                (allFilteredSelected ? ' is-checked' : '')
+              }
+            >
+              <input
+                type="checkbox"
+                className="acp-ts-layer-select__checkbox"
+                checked={allFilteredSelected}
+                ref={el => {
+                  if (el) el.indeterminate = !allFilteredSelected && someFilteredSelected
+                }}
+                onChange={selectAllFiltered}
+                aria-label={allFilteredSelected ? 'Deselect all' : 'Select all'}
+              />
+              <span className="acp-ts-layer-select__option-text">
+                <span className="acp-ts-layer-select__option-abbr">
+                  {allFilteredSelected ? 'Deselect all' : 'Select all'}
+                  {query.trim() ? ` (${filteredKeys.length})` : ''}
                 </span>
-              </label>
-            )
-          })}
+              </span>
+            </label>
+            {selectedKeys.length ? (
+              <button type="button" className="acp-ts-layer-select__clear" onClick={clearAll}>
+                Clear
+              </button>
+            ) : null}
+          </div>
+          {filteredOptions.length ? (
+            filteredOptions.map(opt => {
+              const on = selectedKeys.includes(opt.fieldKey)
+              return (
+                <label
+                  key={opt.fieldKey}
+                  className={'acp-ts-layer-select__option' + (on ? ' is-checked' : '')}
+                  title={opt.displayName}
+                >
+                  <input
+                    type="checkbox"
+                    className="acp-ts-layer-select__checkbox"
+                    checked={on}
+                    onChange={() => onSelectedKeysChange(toggleKey(selectedKeys, opt.fieldKey))}
+                  />
+                  <span className="acp-ts-layer-select__option-text">
+                    <span className="acp-ts-layer-select__option-abbr">{opt.displayName}</span>
+                  </span>
+                </label>
+              )
+            })
+          ) : (
+            <div className="acp-ts-layer-select__empty">No matching plots</div>
+          )}
         </div>
       ) : null}
     </div>

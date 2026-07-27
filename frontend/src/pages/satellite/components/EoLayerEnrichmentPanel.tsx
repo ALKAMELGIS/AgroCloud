@@ -10,6 +10,8 @@ import {
 import { generateEoEnrichmentReportDocx } from '../../../lib/eoEnrichmentReport/generateEoEnrichmentReportDocx'
 import { exportVectorLayer } from '../../../lib/vectorLayerExport'
 import type { SiLayerPopupConfig } from '../../../lib/siLayerPopupConfig'
+import type { FieldImagerySource } from '../../../lib/agriFieldBoundary/fieldBoundaryClient'
+import type { FieldBoundaryPhase } from './useAgriFieldBoundary'
 import './EoLayerEnrichmentPanel.css'
 
 export type EoEnrichMapLayerOption = {
@@ -28,6 +30,29 @@ export type EoEnrichApplyPayload = {
   openAttributeTable?: boolean
 }
 
+export type EoWorkflowMode = 'attributes' | 'segmentations'
+
+export type EoSegmentationsProps = {
+  hasAoi: boolean
+  source: FieldImagerySource
+  onSourceChange: (s: FieldImagerySource) => void
+  sourceOptions: Array<{ id: FieldImagerySource; label: string }>
+  minConfidence: number
+  onMinConfidenceChange: (v: number) => void
+  minAreaM2: number
+  onMinAreaM2Change: (v: number) => void
+  phase: FieldBoundaryPhase
+  progress: number
+  busy: boolean
+  error: string | null
+  fieldCount: number
+  totalAreaHa: number
+  hasResult: boolean
+  onRun: () => void
+  onAddToLayers: () => void
+  onDownloadShp: () => void | Promise<void>
+}
+
 type EoLayerEnrichmentPanelProps = {
   onClose: () => void
   /** Vector layers currently on the map (Layers list). */
@@ -39,6 +64,8 @@ type EoLayerEnrichmentPanelProps = {
    * Called automatically after a successful Run.
    */
   onApplyEnrichedLayer?: (payload: EoEnrichApplyPayload) => void
+  /** Field-boundary detection controls for Segmentations workflow. */
+  segmentations?: EoSegmentationsProps
 }
 
 function asFc(input: unknown): FeatureCollection {
@@ -58,11 +85,20 @@ function polygonCount(fc: FeatureCollection): number {
 
 type SourceMode = 'aoi' | 'map' | 'file'
 
+const SEG_PHASE_LABEL: Record<FieldBoundaryPhase, string> = {
+  idle: 'Ready',
+  capturing: 'Capturing imagery…',
+  detecting: 'Detecting fields…',
+  done: 'Fields ready',
+  error: 'Detection failed',
+}
+
 export function EoLayerEnrichmentPanel({
   onClose,
   mapLayers = [],
   activeAoi = null,
   onApplyEnrichedLayer,
+  segmentations,
 }: EoLayerEnrichmentPanelProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -85,6 +121,7 @@ export function EoLayerEnrichmentPanel({
       ? 'map'
       : 'file'
 
+  const [workflowMode, setWorkflowMode] = useState<EoWorkflowMode>('attributes')
   const [sourceMode, setSourceMode] = useState<SourceMode>(defaultMode)
   const [selectedLayerId, setSelectedLayerId] = useState(vectorMapLayers[0]?.id ?? '')
   const [file, setFile] = useState<File | null>(null)
@@ -93,7 +130,7 @@ export function EoLayerEnrichmentPanel({
   const [progress, setProgress] = useState(0)
   const [message, setMessage] = useState(
     aoiPolyCount
-      ? `Edit AOI ready · ${aoiPolyCount} polygon(s) — Run fills attributes from latest Sentinel-2.`
+      ? ''
       : vectorMapLayers.length
         ? 'Select a layer from the list, or upload a vector file.'
         : 'Select a KMZ / KML / SHP / GeoJSON / GPKG farm layer.',
@@ -112,7 +149,7 @@ export function EoLayerEnrichmentPanel({
   useEffect(() => {
     if (aoiPolyCount > 0 && sourceMode !== 'aoi' && !busy && !result) {
       setSourceMode('aoi')
-      setMessage(`Edit AOI ready · ${aoiPolyCount} polygon(s) — Run fills attributes from latest Sentinel-2.`)
+      setMessage('')
     }
   }, [aoiPolyCount]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -146,7 +183,6 @@ export function EoLayerEnrichmentPanel({
     },
     [onApplyEnrichedLayer],
   )
-
 
   const onDownloadLayer = useCallback(
     async (format: 'geojson' | 'csv' | 'kmz' | 'shp' | 'xlsx') => {
@@ -262,6 +298,9 @@ export function EoLayerEnrichmentPanel({
     setBusy(false)
   }
 
+  const segBusy = Boolean(segmentations?.busy)
+  const segCanRun = Boolean(segmentations?.hasAoi && !segBusy)
+
   return (
     <div className="si-env-section-card si-field-analysis si-eo-enrich-panel si-rs-panel--glass">
       <div className="si-eo-enrich__head">
@@ -273,217 +312,348 @@ export function EoLayerEnrichmentPanel({
         </button>
       </div>
 
-      <div className="si-eo-enrich__mode" role="group" aria-label="Source">
+      <div className="si-eo-enrich__workflow" role="group" aria-label="Workflow">
         <button
           type="button"
-          className={`si-eo-enrich__mode-btn${sourceMode === 'aoi' ? ' is-on' : ''}`}
-          disabled={!aoiPolyCount || busy}
-          onClick={() => {
-            setSourceMode('aoi')
-            setError(null)
-            setResult(null)
-            setMessage(
-              aoiPolyCount
-                ? `Edit AOI · ${aoiPolyCount} polygon(s) — fills only existing fields from latest S2.`
-                : 'No Edit AOI on the map.',
-            )
-          }}
+          className={`si-eo-enrich__mode-btn${workflowMode === 'attributes' ? ' is-on' : ''}`}
+          disabled={busy || segBusy}
+          onClick={() => setWorkflowMode('attributes')}
         >
-          Edit AOI
+          Attributes
         </button>
         <button
           type="button"
-          className={`si-eo-enrich__mode-btn${sourceMode === 'map' ? ' is-on' : ''}`}
-          disabled={!vectorMapLayers.length || busy}
-          onClick={() => {
-            setSourceMode('map')
-            setError(null)
-            setResult(null)
-            setMessage(
-              vectorMapLayers.length
-                ? 'Select a polygon layer from Layers.'
-                : 'No polygon layers on the map.',
-            )
-          }}
+          className={`si-eo-enrich__mode-btn${workflowMode === 'segmentations' ? ' is-on' : ''}`}
+          disabled={busy || segBusy || !segmentations}
+          onClick={() => setWorkflowMode('segmentations')}
         >
-          List (Layers)
-        </button>
-        <button
-          type="button"
-          className={`si-eo-enrich__mode-btn${sourceMode === 'file' ? ' is-on' : ''}`}
-          disabled={busy}
-          onClick={() => {
-            setSourceMode('file')
-            setError(null)
-            setResult(null)
-            setMessage('Upload a KMZ / KML / SHP / GeoJSON / GPKG file.')
-          }}
-        >
-          Upload file
+          Segmentations
         </button>
       </div>
 
-      {sourceMode === 'aoi' ? (
-        <div className="si-eo-enrich__field">
-          <span>Active AOI</span>
-          <div className="si-eo-enrich__file">
-            {aoiPolyCount
-              ? `${aoiPolyCount} polygon(s) · fills only existing attributes (Crop Type, planting/harvest dates, indices…)`
-              : 'Draw or select an Edit AOI on the map first.'}
+      {workflowMode === 'segmentations' && segmentations ? (
+        <>
+          <label className="si-eo-enrich__field">
+            <span>Source</span>
+            <select
+              value={segmentations.source}
+              disabled={segBusy}
+              onChange={e => segmentations.onSourceChange(e.target.value as FieldImagerySource)}
+            >
+              {segmentations.sourceOptions.map(o => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="si-eo-enrich__field">
+            <span>
+              Confidence <em>{Math.round(segmentations.minConfidence * 100)}%</em>
+            </span>
+            <input
+              type="range"
+              min={0.2}
+              max={0.9}
+              step={0.05}
+              value={segmentations.minConfidence}
+              disabled={segBusy}
+              onChange={e => segmentations.onMinConfidenceChange(Number(e.target.value))}
+            />
+          </label>
+
+          <label className="si-eo-enrich__field">
+            <span>
+              Min area <em>{segmentations.minAreaM2} m²</em>
+            </span>
+            <input
+              type="range"
+              min={50}
+              max={5000}
+              step={50}
+              value={segmentations.minAreaM2}
+              disabled={segBusy}
+              onChange={e => segmentations.onMinAreaM2Change(Number(e.target.value))}
+            />
+          </label>
+
+          {!segmentations.hasAoi ? (
+            <div className="si-eo-enrich__file">Draw an AOI on the map first.</div>
+          ) : null}
+
+          <div className="si-eo-enrich__progress" aria-live="polite">
+            <div className="si-eo-enrich__bar">
+              <div
+                className="si-eo-enrich__bar-fill"
+                style={{
+                  width: `${Math.min(100, Math.max(0, segmentations.progress))}%`,
+                }}
+              />
+            </div>
+            <div className="si-eo-enrich__msg">
+              {segmentations.phase === 'error'
+                ? segmentations.error || SEG_PHASE_LABEL.error
+                : SEG_PHASE_LABEL[segmentations.phase]}
+              {segBusy && segmentations.phase === 'detecting'
+                ? ` · ${Math.round(segmentations.progress)}%`
+                : ''}
+            </div>
           </div>
-        </div>
-      ) : sourceMode === 'map' ? (
-        <label className="si-eo-enrich__field">
-          <span>Layer</span>
-          <select
-            value={selectedLayerId}
-            disabled={busy || !vectorMapLayers.length}
-            onChange={e => {
-              setSelectedLayerId(e.target.value)
-              setResult(null)
-              setError(null)
-              const hit = vectorMapLayers.find(l => l.id === e.target.value)
-              const n = hit ? polygonCount(asFc(hit.geojson)) : 0
-              setMessage(n ? `${n} polygon(s) selected.` : 'Select a layer.')
-            }}
-          >
-            {!vectorMapLayers.length ? <option value="">No polygon layers</option> : null}
-            {vectorMapLayers.map(l => (
-              <option key={l.id} value={l.id}>
-                {l.name} ({polygonCount(asFc(l.geojson))} polygons)
-              </option>
-            ))}
-          </select>
-        </label>
+
+          {segmentations.error && segmentations.phase === 'error' ? (
+            <div className="si-eo-enrich__error">{segmentations.error}</div>
+          ) : null}
+
+          <div className="si-eo-enrich__actions">
+            <button
+              type="button"
+              className="si-eo-enrich__btn si-eo-enrich__btn--primary"
+              onClick={segmentations.onRun}
+              disabled={!segCanRun}
+            >
+              <i className="fa-solid fa-crop-simple" aria-hidden />{' '}
+              {segBusy ? 'Detecting…' : 'Run'}
+            </button>
+          </div>
+
+          {segmentations.hasResult ? (
+            <div className="si-eo-enrich__exports">
+              <div className="si-eo-enrich__exports-title">
+                {segmentations.fieldCount} fields · {segmentations.totalAreaHa.toFixed(2)} ha
+              </div>
+              <div className="si-eo-enrich__actions">
+                <button
+                  type="button"
+                  className="si-eo-enrich__btn si-eo-enrich__btn--primary"
+                  onClick={segmentations.onAddToLayers}
+                >
+                  <i className="fa-solid fa-layer-group" aria-hidden /> Add to Layers (SHP)
+                </button>
+                <button
+                  type="button"
+                  className="si-eo-enrich__btn"
+                  onClick={() => void segmentations.onDownloadShp()}
+                >
+                  <i className="fa-solid fa-file-zipper" aria-hidden /> Download SHP
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </>
       ) : (
-        <label className="si-eo-enrich__field">
-          <span>Vector layer</span>
-          <input
-            ref={inputRef}
-            type="file"
-            accept=".kmz,.kml,.shp,.zip,.geojson,.json,.gpkg"
-            disabled={busy}
-            onChange={e => {
-              setFile(e.target.files?.[0] ?? null)
-              setResult(null)
-              setError(null)
-            }}
-          />
-          {file ? <span className="si-eo-enrich__file">{file.name}</span> : null}
-        </label>
-      )}
-
-      <label className="si-eo-enrich__field">
-        <span>Max cloud cover %</span>
-        <input
-          type="number"
-          min={0}
-          max={100}
-          value={maxCloud}
-          disabled={busy}
-          onChange={e => setMaxCloud(Number(e.target.value) || 20)}
-        />
-      </label>
-
-      <div className="si-eo-enrich__progress" aria-live="polite">
-        <div className="si-eo-enrich__bar">
-          <div className="si-eo-enrich__bar-fill" style={{ width: `${Math.min(100, Math.max(0, progress))}%` }} />
-        </div>
-        <div className="si-eo-enrich__msg">{message}</div>
-      </div>
-
-      {error ? <div className="si-eo-enrich__error">{error}</div> : null}
-
-      <div className="si-eo-enrich__actions">
-        {!busy ? (
-          <button
-            type="button"
-            className="si-eo-enrich__btn si-eo-enrich__btn--primary"
-            onClick={() => void onRun()}
-            disabled={!canRun}
-          >
-            <i className="fa-solid fa-satellite" aria-hidden /> Run enrichment
-          </button>
-        ) : (
-          <button type="button" className="si-eo-enrich__btn" onClick={onCancel}>
-            Cancel
-          </button>
-        )}
-      </div>
-
-      {result ? (
-        <div className="si-eo-enrich__exports">
-          <div className="si-eo-enrich__exports-title">Export updated layer (KMZ · SHP · XLSX)</div>
-          <div className="si-eo-enrich__actions">
+        <>
+          <div className="si-eo-enrich__mode" role="group" aria-label="Source">
             <button
               type="button"
-              className="si-eo-enrich__btn si-eo-enrich__btn--primary"
-              disabled={exportBusy}
-              onClick={() => void onDownloadLayer('geojson')}
+              className={`si-eo-enrich__mode-btn${sourceMode === 'aoi' ? ' is-on' : ''}`}
+              disabled={!aoiPolyCount || busy}
+              onClick={() => {
+                setSourceMode('aoi')
+                setError(null)
+                setResult(null)
+                setMessage('')
+              }}
             >
-              <i className="fa-solid fa-download" aria-hidden /> GeoJSON
+              Edit AOI
             </button>
             <button
               type="button"
-              className="si-eo-enrich__btn"
-              disabled={exportBusy}
-              onClick={() => void onDownloadLayer('csv')}
+              className={`si-eo-enrich__mode-btn${sourceMode === 'map' ? ' is-on' : ''}`}
+              disabled={!vectorMapLayers.length || busy}
+              onClick={() => {
+                setSourceMode('map')
+                setError(null)
+                setResult(null)
+                setMessage(
+                  vectorMapLayers.length
+                    ? 'Select a polygon layer from Layers.'
+                    : 'No polygon layers on the map.',
+                )
+              }}
             >
-              <i className="fa-solid fa-file-csv" aria-hidden /> CSV
+              List (Layers)
             </button>
             <button
               type="button"
-              className="si-eo-enrich__btn"
-              disabled={exportBusy}
-              onClick={() => void onDownloadLayer('kmz')}
+              className={`si-eo-enrich__mode-btn${sourceMode === 'file' ? ' is-on' : ''}`}
+              disabled={busy}
+              onClick={() => {
+                setSourceMode('file')
+                setError(null)
+                setResult(null)
+                setMessage('Upload a KMZ / KML / SHP / GeoJSON / GPKG file.')
+              }}
             >
-              <i className="fa-solid fa-globe" aria-hidden /> KMZ
-            </button>
-            <button
-              type="button"
-              className="si-eo-enrich__btn"
-              disabled={exportBusy}
-              onClick={() => void onDownloadLayer('shp')}
-            >
-              <i className="fa-solid fa-draw-polygon" aria-hidden /> SHP
-            </button>
-            <button
-              type="button"
-              className="si-eo-enrich__btn"
-              disabled={exportBusy}
-              onClick={() => void onDownloadLayer('xlsx')}
-            >
-              <i className="fa-solid fa-file-excel" aria-hidden /> Excel
+              Upload file
             </button>
           </div>
 
-          <div className="si-eo-enrich__exports-title">Professional report</div>
+          {sourceMode === 'aoi' ? (
+            <div className="si-eo-enrich__field">
+              <span>Active AOI</span>
+              <div className="si-eo-enrich__file">
+                {aoiPolyCount
+                  ? `${aoiPolyCount} polygon(s)`
+                  : 'Draw or select an Edit AOI on the map first.'}
+              </div>
+            </div>
+          ) : sourceMode === 'map' ? (
+            <label className="si-eo-enrich__field">
+              <span>Layer</span>
+              <select
+                value={selectedLayerId}
+                disabled={busy || !vectorMapLayers.length}
+                onChange={e => {
+                  setSelectedLayerId(e.target.value)
+                  setResult(null)
+                  setError(null)
+                  const hit = vectorMapLayers.find(l => l.id === e.target.value)
+                  const n = hit ? polygonCount(asFc(hit.geojson)) : 0
+                  setMessage(n ? `${n} polygon(s) selected.` : 'Select a layer.')
+                }}
+              >
+                {!vectorMapLayers.length ? <option value="">No polygon layers</option> : null}
+                {vectorMapLayers.map(l => (
+                  <option key={l.id} value={l.id}>
+                    {l.name} ({polygonCount(asFc(l.geojson))} polygons)
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <label className="si-eo-enrich__field">
+              <span>Vector layer</span>
+              <input
+                ref={inputRef}
+                type="file"
+                accept=".kmz,.kml,.shp,.zip,.geojson,.json,.gpkg"
+                disabled={busy}
+                onChange={e => {
+                  setFile(e.target.files?.[0] ?? null)
+                  setResult(null)
+                  setError(null)
+                }}
+              />
+              {file ? <span className="si-eo-enrich__file">{file.name}</span> : null}
+            </label>
+          )}
+
+          <label className="si-eo-enrich__field">
+            <span>Max cloud cover %</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={maxCloud}
+              disabled={busy}
+              onChange={e => setMaxCloud(Number(e.target.value) || 20)}
+            />
+          </label>
+
+          <div className="si-eo-enrich__progress" aria-live="polite">
+            <div className="si-eo-enrich__bar">
+              <div
+                className="si-eo-enrich__bar-fill"
+                style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+              />
+            </div>
+            {message ? <div className="si-eo-enrich__msg">{message}</div> : null}
+          </div>
+
+          {error ? <div className="si-eo-enrich__error">{error}</div> : null}
+
           <div className="si-eo-enrich__actions">
-            <button
-              type="button"
-              className="si-eo-enrich__btn si-eo-enrich__btn--primary"
-              disabled={exportBusy}
-              onClick={() => void onExportDocx()}
-            >
-              <i className="fa-solid fa-file-word" aria-hidden /> Export to DOCX
-            </button>
-            {onApplyEnrichedLayer ? (
+            {!busy ? (
               <button
                 type="button"
-                className="si-eo-enrich__btn"
-                disabled={exportBusy}
-                onClick={() => applyResult(result)}
+                className="si-eo-enrich__btn si-eo-enrich__btn--primary"
+                onClick={() => void onRun()}
+                disabled={!canRun}
               >
-                <i className="fa-solid fa-table-cells" aria-hidden /> Open attributes
+                <i className="fa-solid fa-satellite" aria-hidden /> Run enrichment
               </button>
-            ) : null}
+            ) : (
+              <button type="button" className="si-eo-enrich__btn" onClick={onCancel}>
+                Cancel
+              </button>
+            )}
           </div>
-          {exportMsg ? <div className="si-eo-enrich__export-msg">{exportMsg}</div> : null}
-        </div>
-      ) : null}
+
+          {result ? (
+            <div className="si-eo-enrich__exports">
+              <div className="si-eo-enrich__exports-title">Export updated layer (KMZ · SHP · XLSX)</div>
+              <div className="si-eo-enrich__actions">
+                <button
+                  type="button"
+                  className="si-eo-enrich__btn si-eo-enrich__btn--primary"
+                  disabled={exportBusy}
+                  onClick={() => void onDownloadLayer('geojson')}
+                >
+                  <i className="fa-solid fa-download" aria-hidden /> GeoJSON
+                </button>
+                <button
+                  type="button"
+                  className="si-eo-enrich__btn"
+                  disabled={exportBusy}
+                  onClick={() => void onDownloadLayer('csv')}
+                >
+                  <i className="fa-solid fa-file-csv" aria-hidden /> CSV
+                </button>
+                <button
+                  type="button"
+                  className="si-eo-enrich__btn"
+                  disabled={exportBusy}
+                  onClick={() => void onDownloadLayer('kmz')}
+                >
+                  <i className="fa-solid fa-globe" aria-hidden /> KMZ
+                </button>
+                <button
+                  type="button"
+                  className="si-eo-enrich__btn"
+                  disabled={exportBusy}
+                  onClick={() => void onDownloadLayer('shp')}
+                >
+                  <i className="fa-solid fa-draw-polygon" aria-hidden /> SHP
+                </button>
+                <button
+                  type="button"
+                  className="si-eo-enrich__btn"
+                  disabled={exportBusy}
+                  onClick={() => void onDownloadLayer('xlsx')}
+                >
+                  <i className="fa-solid fa-file-excel" aria-hidden /> Excel
+                </button>
+              </div>
+
+              <div className="si-eo-enrich__exports-title">Professional report</div>
+              <div className="si-eo-enrich__actions">
+                <button
+                  type="button"
+                  className="si-eo-enrich__btn si-eo-enrich__btn--primary"
+                  disabled={exportBusy}
+                  onClick={() => void onExportDocx()}
+                >
+                  <i className="fa-solid fa-file-word" aria-hidden /> Export to DOCX
+                </button>
+                {onApplyEnrichedLayer ? (
+                  <button
+                    type="button"
+                    className="si-eo-enrich__btn"
+                    disabled={exportBusy}
+                    onClick={() => applyResult(result)}
+                  >
+                    <i className="fa-solid fa-table-cells" aria-hidden /> Open attributes
+                  </button>
+                ) : null}
+              </div>
+              {exportMsg ? <div className="si-eo-enrich__export-msg">{exportMsg}</div> : null}
+            </div>
+          ) : null}
+        </>
+      )}
     </div>
   )
 }
-
 
 export default EoLayerEnrichmentPanel

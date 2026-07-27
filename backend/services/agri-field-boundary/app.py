@@ -456,7 +456,7 @@ def _mask_to_polygon_features(
                 # Approximate geodesic area via local meters (deg² → m²)
                 area_m2 = abs(p.area) * m_lon * m_lat
                 # Soft floor so textured basemap parcels are not wiped out
-                if area_m2 < max(10.0, min_area_m2 * 0.25):
+                if area_m2 < max(8.0, min_area_m2 * 0.15):
                     continue
                 peri_m = float(p.length) * ((m_lon + m_lat) / 2.0)
                 field_id = f"FLD-{i + 1:04d}-{j + 1}{k}"
@@ -588,8 +588,8 @@ def _execute_detect(req: DetectRequest, progress: ProgressCb | None = None) -> d
                 flush=True,
             )
             aoi_mask = None
-        else:
-            rgb[~aoi_mask] = 0
+        # Do NOT zero pixels outside the AOI before inference — black circles
+        # destroy context and hurt YOLO recall near the AOI edge. Clip after.
 
     if progress:
         progress(0.1, "scanning")
@@ -597,7 +597,8 @@ def _execute_detect(req: DetectRequest, progress: ProgressCb | None = None) -> d
     engine_used = "none"
     components: list[tuple[np.ndarray, float]] = []
     sam_features: list[dict] = []
-    conf = max(0.2, req.min_confidence * 0.85)
+    # Bias toward recall; UI confidence still gates weak masks later.
+    conf = max(0.15, min(0.55, req.min_confidence * 0.75))
 
     # 2) Mask R-CNN when trained weights are present
     if _engine.available:
@@ -607,16 +608,22 @@ def _execute_detect(req: DetectRequest, progress: ProgressCb | None = None) -> d
         if components:
             engine_used = _engine.name
 
-    # 3) Delineate-Anything (default ML for RGB basemap / drone)
-    if not components and _da_engine.available:
+    # 3) Delineate-Anything — always run when available; merge via NMS so we
+    # don't stop after a sparse Mask R-CNN hit (or miss small parcels).
+    if _da_engine.available:
         if progress:
             progress(0.25, "delineate-anything")
-        components = _da_engine.predict(rgb, conf)
-        if components:
-            engine_used = _da_engine.name
+        da_components = _da_engine.predict(rgb, conf)
+        if da_components:
+            if components:
+                components = _nms_mask_components(components + da_components, iou_thresh=0.4)
+                engine_used = f"delineate+{engine_used}" if engine_used != "none" else _da_engine.name
+            else:
+                components = da_components
+                engine_used = _da_engine.name
 
-    # 4) SAM AMG enrichment / fallback
-    if len(components) < 3:
+    # 4) SAM AMG enrichment / fallback when still sparse
+    if len(components) < 5:
         if progress:
             progress(0.45, "sam")
         sam_hit = _try_sam_amg(rgb, req.bbox, req.aoi, req.min_confidence)

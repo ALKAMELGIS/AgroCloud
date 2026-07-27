@@ -21,6 +21,7 @@ export type SatelliteContextPanelId =
   | 'remote-sensing'
   | 'eo-enrichment'
   | 'crop-alerts'
+  | 'wapi-alerts'
   | 'stress-zones'
   | 'crop-classification'
   | 'imagery-time-series'
@@ -85,6 +86,7 @@ export type SatelliteContextualAnalysisDockProps = {
     | 'remote-sensing'
     | 'eo-enrichment'
       | 'crop-alerts'
+    | 'wapi-alerts'
     | 'stress-zones'
     | 'crop-classification'
     | 'ai-detection-gis'
@@ -165,6 +167,13 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     label: 'EO Enrich',
     title: 'EO Layer Enrichment',
     hint: 'Enrich farm polygons with latest Sentinel-2 attributes, then export KMZ/SHP/XLSX or DOCX report.',
+  },
+  {
+    id: 'wapi-alerts',
+    icon: 'fa-solid fa-faucet-drip',
+    label: 'ISS Alert',
+    title: 'ISS Irrigation Alert',
+    hint: 'ISS-only irrigation alerts (Critical→Overwatering) with mm guidance, harvest rank, and Excel export.',
   },
   {
     id: 'crop-classification',
@@ -327,6 +336,7 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
   'add-gis-layer',
   'remote-sensing',
   'eo-enrichment',
+  'wapi-alerts',
   'crop-classification',
   'imagery-time-series',
   'layer-live-legend',
@@ -347,6 +357,7 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
 const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
   'remote-sensing',
   'eo-enrichment',
+  'wapi-alerts',
   'crop-classification',
   'ai-detection-gis',
   'tree-detections',
@@ -361,7 +372,7 @@ const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
 ]);
 
 const RAIL_GROUPS_MAP: SatelliteContextPanelId[][] = [
-  ['layers', 'remote-sensing', 'eo-enrichment', 'crop-classification', 'imagery-time-series', 'layer-live-legend', 'hydro-watershed'],
+  ['layers', 'remote-sensing', 'eo-enrichment', 'wapi-alerts', 'crop-classification', 'imagery-time-series', 'layer-live-legend', 'hydro-watershed'],
   ['ai-detection-gis', 'tree-detections', 'sam-detection', 'agri-field-boundary', 'well-site', 'well-suitability', 'flood-monitoring', 'image-classification', 'raster-georeference'],
 ];
 

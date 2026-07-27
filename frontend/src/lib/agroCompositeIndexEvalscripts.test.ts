@@ -67,9 +67,40 @@ describe('agroCompositeIndexEvalscripts', () => {
     expect(script).toContain('function evaluatePixel(samples)')
   })
 
+  it('builds ISS irrigation stress score evalscript', () => {
+    const script = buildAgroCompositeLayerEvalscript('ISS')
+    expect(script).toContain('0.40 * ndmi + 0.30 * ndwi + 0.20 * ndvi + 0.10 * savi')
+    expect(script).toContain('CLASS_RGB')
+    expect(script).toContain('classifyVal')
+    expect(script).not.toContain('Mosaicking.ORBIT')
+  })
+
+  it('builds WDSI water drought situation evalscript', () => {
+    const script = buildAgroCompositeLayerEvalscript('WDSI')
+    expect(script).toContain('0.40 * ndmi + 0.35 * ndwi + 0.15 * ndvi + 0.10 * savi')
+    expect(script).toContain('CLASS_RGB')
+    expect(script).toContain('classifyVal')
+    expect(script).not.toContain('Mosaicking.ORBIT')
+  })
+
+  it('builds WAPI water allocation priority with ORBIT ΔWDSI', () => {
+    const script = buildAgroCompositeLayerEvalscript('WAPI')
+    expect(script).toContain('Mosaicking.ORBIT')
+    expect(script).toContain('0.40 * wdsi2 + 0.20 * dWdsi')
+    expect(script).toContain('0.20 * (1 - c2.ndmi)')
+    expect(script).toContain('CLASS_RGB')
+    expect(script).toContain('classifyVal')
+  })
+
   it('infers agro_composite profile for composite ids', () => {
     expect(inferWmsEvalProfile('CPI')).toBe('agro_composite')
     expect(inferWmsEvalProfile('DCPI')).toBe('agro_composite')
+    expect(inferWmsEvalProfile('ISS')).toBe('agro_composite')
+    expect(inferWmsEvalProfile('DISS')).toBe('agro_composite')
+    expect(inferWmsEvalProfile('WDSI')).toBe('agro_composite')
+    expect(inferWmsEvalProfile('DWDSI')).toBe('agro_composite')
+    expect(inferWmsEvalProfile('WAPI')).toBe('agro_composite')
+    expect(inferWmsEvalProfile('DWAPI')).toBe('agro_composite')
     expect(inferWmsEvalProfile('CHAS_ALERT')).toBe('agro_composite')
     expect(inferWmsEvalProfile('NDVI')).toBe('ndvi')
   })

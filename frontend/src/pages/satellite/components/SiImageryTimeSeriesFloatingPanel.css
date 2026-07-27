@@ -158,6 +158,23 @@
   min-height: 260px;
 }
 
+.si-its-float .acp-ts__chart-wrap--tall {
+  min-height: 320px;
+}
+
+.si-its-float .acp-ts__multi-plot {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 6px;
+}
+
+.si-its-float .acp-ts__multi-plot-exports {
+  display: inline-flex;
+  gap: 4px;
+}
+
 .si-its-float.si-its-float--sized .acp-ts {
   flex: 1 1 auto;
   min-height: 0;

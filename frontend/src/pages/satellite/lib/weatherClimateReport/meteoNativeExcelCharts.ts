@@ -13,6 +13,8 @@ export type MeteoChartSeriesRef = {
   valuesRef: string
   /** Categories range shared across series, e.g. Data!$A$7:$A$18 */
   catsRef: string
+  /** Numeric X values for true scatter charts (overrides catsRef for X). */
+  xValuesRef?: string
 }
 
 export type MeteoNativeChartSpec = {
@@ -30,6 +32,10 @@ export type MeteoNativeChartSpec = {
   legendPos?: 'b' | 'r' | 't' | 'l'
   /** Worksheet the chart is anchored to. Defaults to the injector's chartsSheetName. */
   targetSheet?: string
+  /** Bar direction: col = vertical columns, bar = horizontal bars. */
+  barDir?: 'col' | 'bar'
+  /** Bar grouping. */
+  grouping?: 'clustered' | 'stacked' | 'percentStacked'
 }
 
 function escXml(s: string): string {
@@ -53,38 +59,46 @@ function buildChartXml(spec: MeteoNativeChartSpec, chartIndex: number): string {
   const axVal2 = 200 + chartIndex * 2
   const vary = spec.varyColors !== false ? '1' : '0'
   const legendPos = spec.legendPos ?? (spec.series.length === 1 && vary === '1' ? 'r' : 'b')
-  const kind = spec.kind === 'area' ? 'line' : spec.kind === 'combo' ? 'combo' : spec.kind
+  const kind = spec.kind
+  const barDir = spec.barDir ?? 'col'
+  const grouping = spec.grouping ?? 'clustered'
 
   const serParts = spec.series.map((ser, i) => {
     const marker =
       kind === 'scatter' || kind === 'line' || (kind === 'combo' && spec.lineSeriesIndexes?.includes(i))
         ? `<c:marker><c:symbol val="circle"/><c:size val="5"/></c:marker>`
         : ''
-    const fill =
-      spec.kind === 'area' && i === 0
-        ? `<c:spPr><a:solidFill><a:srgbClr val="F97316"/></a:solidFill></c:spPr>`
-        : ''
-    return { ser, i, marker, fill }
+    return { ser, i, marker }
   })
 
-  const buildSer = (ser: MeteoChartSeriesRef, i: number, marker: string, fill: string) =>
-    `<c:ser>
+  const buildSer = (ser: MeteoChartSeriesRef, i: number, marker: string) => {
+    if (kind === 'scatter' && ser.xValuesRef) {
+      return `<c:ser>
   <c:idx val="${i}"/>
   <c:order val="${i}"/>
   ${seriesTxXml(ser)}
   ${marker}
-  ${fill}
+  <c:xVal><c:numRef><c:f>${escXml(ser.xValuesRef)}</c:f></c:numRef></c:xVal>
+  <c:yVal><c:numRef><c:f>${escXml(ser.valuesRef)}</c:f></c:numRef></c:yVal>
+</c:ser>`
+    }
+    return `<c:ser>
+  <c:idx val="${i}"/>
+  <c:order val="${i}"/>
+  ${seriesTxXml(ser)}
+  ${marker}
   <c:cat><c:strRef><c:f>${escXml(ser.catsRef)}</c:f></c:strRef></c:cat>
   <c:val><c:numRef><c:f>${escXml(ser.valuesRef)}</c:f></c:numRef></c:val>
-  ${kind === 'line' || (kind === 'combo' && spec.lineSeriesIndexes?.includes(i)) ? '<c:smooth val="0"/>' : ''}
+  ${kind === 'line' || kind === 'area' || (kind === 'combo' && spec.lineSeriesIndexes?.includes(i)) ? '<c:smooth val="0"/>' : ''}
 </c:ser>`
+  }
 
   let plot = ''
   if (kind === 'scatter') {
     plot = `<c:scatterChart>
-  <c:scatterStyle val="lineMarker"/>
+  <c:scatterStyle val="marker"/>
   <c:varyColors val="0"/>
-  ${serParts.map(p => buildSer(p.ser, p.i, p.marker, p.fill)).join('')}
+  ${serParts.map(p => buildSer(p.ser, p.i, p.marker)).join('')}
   <c:axId val="${axCat}"/>
   <c:axId val="${axVal}"/>
 </c:scatterChart>`
@@ -96,32 +110,40 @@ function buildChartXml(spec: MeteoNativeChartSpec, chartIndex: number): string {
   <c:barDir val="col"/>
   <c:grouping val="clustered"/>
   <c:varyColors val="${vary}"/>
-  ${barSers.map(p => buildSer(p.ser, p.i, '', '')).join('')}
+  ${barSers.map(p => buildSer(p.ser, p.i, '')).join('')}
   <c:axId val="${axCat}"/>
   <c:axId val="${axVal}"/>
 </c:barChart>
 <c:lineChart>
   <c:grouping val="standard"/>
   <c:varyColors val="0"/>
-  ${lineSers.map(p => buildSer(p.ser, p.i, p.marker, '')).join('')}
+  ${lineSers.map(p => buildSer(p.ser, p.i, p.marker)).join('')}
   <c:marker val="1"/>
   <c:axId val="${axCat}"/>
   <c:axId val="${axVal2}"/>
 </c:lineChart>`
   } else if (kind === 'bar') {
     plot = `<c:barChart>
-  <c:barDir val="col"/>
-  <c:grouping val="clustered"/>
+  <c:barDir val="${barDir}"/>
+  <c:grouping val="${grouping}"/>
   <c:varyColors val="${vary}"/>
-  ${serParts.map(p => buildSer(p.ser, p.i, '', '')).join('')}
+  ${serParts.map(p => buildSer(p.ser, p.i, '')).join('')}
   <c:axId val="${axCat}"/>
   <c:axId val="${axVal}"/>
 </c:barChart>`
+  } else if (kind === 'area') {
+    plot = `<c:areaChart>
+  <c:grouping val="standard"/>
+  <c:varyColors val="${vary}"/>
+  ${serParts.map(p => buildSer(p.ser, p.i, '')).join('')}
+  <c:axId val="${axCat}"/>
+  <c:axId val="${axVal}"/>
+</c:areaChart>`
   } else {
     plot = `<c:lineChart>
   <c:grouping val="standard"/>
   <c:varyColors val="${vary}"/>
-  ${serParts.map(p => buildSer(p.ser, p.i, p.marker, p.fill)).join('')}
+  ${serParts.map(p => buildSer(p.ser, p.i, p.marker)).join('')}
   <c:marker val="1"/>
   <c:axId val="${axCat}"/>
   <c:axId val="${axVal}"/>
@@ -164,16 +186,39 @@ function buildChartXml(spec: MeteoNativeChartSpec, chartIndex: number): string {
         <c:crossBetween val="between"/>
       </c:valAx>`
 
-  const scatterAx =
+  const catOrValAx =
     kind === 'scatter'
       ? `<c:valAx>
+        <c:axId val="${axCat}"/>
+        <c:scaling><c:orientation val="minMax"/></c:scaling>
+        <c:delete val="0"/>
+        <c:axPos val="b"/>
+        <c:majorGridlines/>
+        <c:numFmt formatCode="General" sourceLinked="1"/>
+        <c:crossAx val="${axVal}"/>
+        <c:crosses val="autoZero"/>
+      </c:valAx>
+      <c:valAx>
         <c:axId val="${axVal}"/>
         <c:scaling><c:orientation val="minMax"/></c:scaling>
         <c:axPos val="l"/>
+        <c:majorGridlines/>
         <c:crossAx val="${axCat}"/>
         <c:crosses val="autoZero"/>
       </c:valAx>`
-      : valAxes
+      : `<c:catAx>
+        <c:axId val="${axCat}"/>
+        <c:scaling><c:orientation val="minMax"/></c:scaling>
+        <c:delete val="0"/>
+        <c:axPos val="${barDir === 'bar' ? 'l' : 'b'}"/>
+        <c:majorTickMark val="out"/>
+        <c:minorTickMark val="none"/>
+        <c:tickLblPos val="nextTo"/>
+        <c:crossAx val="${axVal}"/>
+        <c:crosses val="autoZero"/>
+        <c:auto val="1"/>
+      </c:catAx>
+      ${valAxes}`
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
@@ -189,19 +234,7 @@ function buildChartXml(spec: MeteoNativeChartSpec, chartIndex: number): string {
     <c:plotArea>
       <c:layout/>
       ${plot}
-      <c:catAx>
-        <c:axId val="${axCat}"/>
-        <c:scaling><c:orientation val="minMax"/></c:scaling>
-        <c:delete val="0"/>
-        <c:axPos val="b"/>
-        <c:majorTickMark val="out"/>
-        <c:minorTickMark val="none"/>
-        <c:tickLblPos val="nextTo"/>
-        <c:crossAx val="${axVal}"/>
-        <c:crosses val="autoZero"/>
-        <c:auto val="1"/>
-      </c:catAx>
-      ${scatterAx}
+      ${catOrValAx}
     </c:plotArea>
     <c:legend>
       <c:legendPos val="${legendPos}"/>

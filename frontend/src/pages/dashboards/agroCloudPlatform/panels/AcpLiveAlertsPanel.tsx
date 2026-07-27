@@ -2,6 +2,14 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { DchasRiskTier } from '../../../../lib/siCropAlertDchasBeacon'
 import { DCHAS_HEALTHY_COLOR, DCHAS_ISOLATED_COLOR, resolveAcpFieldHvdColor } from '../../../../lib/siCropAlertDchasBeacon'
 import { resolveFarmerFieldAction, resolveFarmerFieldActionTone } from '../../../../lib/farmerAlertAction'
+import {
+  decideIrrigationAlert,
+  IRRIGATION_ALERT_LEVEL_COLORS,
+  IRRIGATION_ALERT_LEVEL_LABELS,
+  IRRIGATION_ALERT_LEVEL_ORDER,
+  type IrrigationAlertDecision,
+  type IrrigationAlertLevel,
+} from '../../../../lib/irrigationDroughtAlert'
 import type { AcpFieldTableRow } from '../acpMapSpatial'
 import { resolveAcpDecisionSupportLabel, resolveAcpDecisionSupportTone, resolveAcpFieldSceneComparisonDates } from '../acpDecisionSupport'
 import { buildAcpIndicatorIndexCards } from '../acpIndicatorIndexModel'
@@ -16,6 +24,7 @@ type Props = {
   viewportScopeActive?: boolean
 }
 
+type MainTab = 'alerts' | 'irrigation' | 'indicators'
 type SubFilter = 'warning' | 'stable' | 'watch' | 'healthy' | null
 
 const FILTER_CYCLE: SubFilter[] = [null, 'warning', 'watch', 'stable', 'healthy']
@@ -40,6 +49,23 @@ const ALERT_RANK: Record<string, number> = {
   watch: 3,
   stable: 4,
   healthy: 5,
+}
+
+const IRRIGATION_TOOL_CHIPS: Array<{ id: IrrigationAlertLevel | 'all'; label: string }> = [
+  { id: 'all', label: 'All' },
+  ...IRRIGATION_ALERT_LEVEL_ORDER.map(id => ({
+    id,
+    label: IRRIGATION_ALERT_LEVEL_LABELS[id],
+  })),
+]
+
+type IrrigationRow = {
+  fieldKey: string
+  displayName: string
+  country: string
+  areaHa: number
+  imageDate: string | null
+  decision: IrrigationAlertDecision
 }
 
 function formatShortDate(iso: string | null | undefined): string {
@@ -172,6 +198,63 @@ function LiveAlertRow({ row, selected, onSelect }: AlertRowProps) {
   )
 }
 
+function IrrigationAlertRow({
+  row,
+  selected,
+  onSelect,
+}: {
+  row: IrrigationRow
+  selected: boolean
+  onSelect: (fieldKey: string) => void
+}) {
+  const d = row.decision
+  return (
+    <li>
+      <button
+        type="button"
+        className={`acp-live-alerts__card${selected ? ' is-selected' : ''}`}
+        onClick={() => onSelect(row.fieldKey)}
+      >
+        <div className="acp-live-alerts__card-top">
+          <span
+            className="acp-live-alerts__row-icon acp-irrigation__level-dot"
+            style={{ background: d.color }}
+            title={d.label}
+            aria-label={d.label}
+          />
+          <strong className="acp-live-alerts__name">{row.displayName}</strong>
+        </div>
+        <div className="acp-live-alerts__cols" aria-hidden>
+          <span className="acp-live-alerts__col">
+            <em>ISS</em>
+            {d.iss.toFixed(2)}
+          </span>
+          <span className="acp-live-alerts__col">
+            <em>Alert</em>
+            <span style={{ color: d.color, fontWeight: 700 }}>{d.label}</span>
+          </span>
+          <span className="acp-live-alerts__col">
+            <em>Area</em>
+            {row.areaHa > 0 ? row.areaHa.toFixed(1) : '—'}
+          </span>
+          <span className="acp-live-alerts__col acp-live-alerts__col--country">
+            <em>Country</em>
+            {row.country}
+          </span>
+        </div>
+        <p className="acp-live-alerts__action" style={{ color: d.color }} title={d.message}>
+          <em>Action</em> {d.action}
+          {d.escalated ? ' · escalated' : ''}
+        </p>
+        <small className="acp-live-alerts__meta">
+          {d.status} · scene · {formatShortDate(row.imageDate)}
+          {d.deltaIss != null ? ` · ΔISS ${d.deltaIss >= 0 ? '+' : ''}${d.deltaIss.toFixed(2)}` : ''}
+        </small>
+      </button>
+    </li>
+  )
+}
+
 function LiveAlertsBoard({
   alerts,
   selectedFieldKey,
@@ -259,8 +342,9 @@ export function AcpLiveAlertsPanel({
   viewportScopeActive = false,
 }: Props) {
   const acp = useAcpPlatform()
-  const [tab, setTab] = useState<'alerts' | 'indicators'>('alerts')
+  const [tab, setTab] = useState<MainTab>('alerts')
   const [subFilter, setSubFilter] = useState<SubFilter>(null)
+  const [irrigationFilter, setIrrigationFilter] = useState<IrrigationAlertLevel | 'all'>('all')
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
 
@@ -287,6 +371,49 @@ export function AcpLiveAlertsPanel({
       .filter(r => !q || r.displayName.toLowerCase().includes(q) || r.country.toLowerCase().includes(q))
   }, [rows, subFilter, query])
 
+  const irrigationRows = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    const scored: IrrigationRow[] = []
+    for (const row of rows) {
+      const cur = row.result?.current
+      if (!cur) continue
+      const decision = decideIrrigationAlert({
+        zoneName: row.displayName,
+        current: {
+          ndvi: cur.ndvi,
+          ndmi: cur.ndmi,
+          ndwi: cur.ndwi,
+        },
+        previous: row.result?.previous7
+          ? {
+              ndvi: row.result.previous7.ndvi,
+              ndmi: row.result.previous7.ndmi,
+              ndwi: row.result.previous7.ndwi,
+            }
+          : null,
+      })
+      scored.push({
+        fieldKey: row.fieldKey,
+        displayName: row.displayName,
+        country: row.country,
+        areaHa: row.areaHa,
+        imageDate: row.imageDate,
+        decision,
+      })
+    }
+    return scored
+      .filter(r => irrigationFilter === 'all' || r.decision.alertLevel === irrigationFilter)
+      .filter(
+        r =>
+          !q ||
+          r.displayName.toLowerCase().includes(q) ||
+          r.country.toLowerCase().includes(q) ||
+          r.decision.label.toLowerCase().includes(q) ||
+          r.decision.action.toLowerCase().includes(q),
+      )
+      .sort((a, b) => a.decision.priorityRank - b.decision.priorityRank || a.decision.iss - b.decision.iss)
+  }, [rows, irrigationFilter, query])
+
   const selectField = (fieldKey: string) => {
     acp.bindMapFieldSelection(fieldKey)
   }
@@ -311,6 +438,16 @@ export function AcpLiveAlertsPanel({
           onClick={() => setTab('alerts')}
         >
           Live Alerts
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className={tab === 'irrigation' ? 'is-on' : ''}
+          aria-selected={tab === 'irrigation'}
+          title="ISS irrigation alerts — Critical → Overwatering with mm guidance"
+          onClick={() => setTab('irrigation')}
+        >
+          Irrigation
         </button>
       </div>
 
@@ -376,6 +513,96 @@ export function AcpLiveAlertsPanel({
             />
           ) : (
             <p className="acp-empty acp-empty--inline">No active alerts in scope.</p>
+          )}
+        </>
+      ) : tab === 'irrigation' ? (
+        <>
+          <div className="acp-live-alerts__bar">
+            <span className="acp-live-alerts__bar-title">
+              Irrigation Alerts
+              <span className="acp-live-alerts__bar-scope"> · ISS · 10 m</span>
+            </span>
+            <div className="acp-live-alerts__bar-tools">
+              <button
+                type="button"
+                className={`acp-live-alerts__bar-btn${searchOpen ? ' is-on' : ''}`}
+                title="Search"
+                onClick={() => setSearchOpen(v => !v)}
+              >
+                <i className="fa-solid fa-magnifying-glass" aria-hidden />
+              </button>
+              <span className="acp-live-alerts__live">
+                <i className="acp-live-alerts__live-dot" aria-hidden /> Live
+              </span>
+            </div>
+          </div>
+
+          <div className="acp-irrigation__tools" role="toolbar" aria-label="Irrigation alert tools">
+            {IRRIGATION_TOOL_CHIPS.map(chip => {
+              const color =
+                chip.id === 'all' ? undefined : IRRIGATION_ALERT_LEVEL_COLORS[chip.id as IrrigationAlertLevel]
+              const on = irrigationFilter === chip.id
+              return (
+                <button
+                  key={chip.id}
+                  type="button"
+                  className={`acp-irrigation__tool${on ? ' is-on' : ''}`}
+                  title={
+                    chip.id === 'all'
+                      ? 'Show all irrigation alert levels'
+                      : `${chip.label} — ${chip.id === 'critical' ? 'Irrigate NOW' : IRRIGATION_ALERT_LEVEL_LABELS[chip.id as IrrigationAlertLevel]}`
+                  }
+                  aria-pressed={on}
+                  style={
+                    color
+                      ? {
+                          borderColor: on ? color : `${color}66`,
+                          background: on ? `${color}33` : 'transparent',
+                          color: color,
+                        }
+                      : undefined
+                  }
+                  onClick={() => setIrrigationFilter(chip.id)}
+                >
+                  {chip.id !== 'all' ? (
+                    <i className="fa-solid fa-circle" style={{ fontSize: 7, color }} aria-hidden />
+                  ) : (
+                    <i className="fa-solid fa-faucet-drip" aria-hidden />
+                  )}
+                  {chip.label}
+                </button>
+              )
+            })}
+          </div>
+
+          {searchOpen ? (
+            <input
+              type="search"
+              className="acp-live-alerts__search-inline"
+              placeholder="Filter irrigation zones…"
+              aria-label="Filter irrigation zones"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+            />
+          ) : null}
+
+          {irrigationRows.length ? (
+            <div className="acp-live-alerts__board">
+              <ul className="acp-live-alerts__list">
+                {irrigationRows.map(row => (
+                  <IrrigationAlertRow
+                    key={row.fieldKey}
+                    row={row}
+                    selected={acp.selectedFieldKey === row.fieldKey}
+                    onSelect={selectField}
+                  />
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="acp-empty acp-empty--inline">
+              No irrigation alerts in scope — waiting for Layer Live NDVI/NDMI/NDWI…
+            </p>
           )}
         </>
       ) : (

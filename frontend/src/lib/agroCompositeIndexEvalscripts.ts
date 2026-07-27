@@ -9,6 +9,7 @@ import { CHAS_ALERT_RGB_01 } from './chasAlertMapping'
 import { buildStressZonesWmsEvalscript } from './siStressZonesEvalscript'
 import { ADI_CURRENT_INDEX_EXPR, isAdiLayerId } from './adiIndex'
 import { NCADI_EXPR, isNcadiLayerId } from './ncadiIndex'
+import { isWapiLayerId, WAPI_ET_STRESS_EXPR, WAPI_WDSI_EXPR } from './wapiIndex'
 
 type RampStop = [number, number]
 
@@ -388,6 +389,77 @@ function evaluatePixel(samples) {
 }`
 }
 
+/** WAPI — hybrid ORBIT index with ΔWDSI between newest and oldest scene. */
+export function buildAgroCompositeWapiEvalscript(indexVisibilityMin: number | null = null): string | null {
+  const ramp = resolveAgroCompositeTenClassRamp('WAPI')
+  if (!ramp) return null
+  const { classifyFn, rgbConst } = buildTenClassEvalscriptBlock(ramp)
+  const indexVar = 'wapi'
+
+  return `//VERSION=3
+// AgroCloud WAPI — 0.40·WDSI + 0.20·ΔWDSI + 0.20·(1−NDMI) + 0.10·ETstress + 0.10
+function setup() {
+  return {
+    input: [{
+      bands: ["B02", "B03", "B04", "B05", "B08", "B8A", "B11", "dataMask"]
+    }],
+    mosaicking: Mosaicking.ORBIT,
+    output: { bands: 4, sampleType: "AUTO" }
+  };
+}
+
+${CORE_AT_FN}
+
+${rgbConst}
+
+${classifyFn}
+
+function preProcessScenes(collections) {
+  var orbits = collections.scenes.orbits;
+  if (!orbits || orbits.length <= 2) return collections;
+  collections.scenes.orbits = [orbits[0], orbits[orbits.length - 1]];
+  return collections;
+}
+
+function wdsiOf(c) {
+  let ndvi = c.ndvi;
+  let ndmi = c.ndmi;
+  let ndwi = c.ndwi;
+  let savi = c.savi;
+  return ${WAPI_WDSI_EXPR};
+}
+
+function etStressOf(c) {
+  let ndmi = c.ndmi;
+  let ndwi = c.ndwi;
+  return ${WAPI_ET_STRESS_EXPR};
+}
+
+function evaluatePixel(samples) {
+  if (!samples || !samples.length) {
+    return [0, 0, 0, 0];
+  }
+  var cur = samples[samples.length - 1];
+  if (!cur || !cur.dataMask) {
+    return [0, 0, 0, 0];
+  }
+  var c2 = coreAt(cur);
+  var wdsi2 = wdsiOf(c2);
+  var dWdsi = 0;
+  var mask = cur.dataMask;
+  if (samples.length >= 2) {
+    var c1 = coreAt(samples[0]);
+    dWdsi = wdsi2 - wdsiOf(c1);
+    mask = cur.dataMask * samples[0].dataMask;
+  }
+  var ${indexVar} = 0.40 * wdsi2 + 0.20 * dWdsi + 0.20 * (1 - c2.ndmi) + 0.10 * etStressOf(c2) + 0.10;
+  if (!isFinite(${indexVar})) ${indexVar} = 0;
+  var cls = classifyVal(${indexVar});
+  var c = CLASS_RGB[cls];
+  ${alphaBlock(indexVar, indexVisibilityMin, 'mask')}
+}`
+}
+
 export function buildAgroCompositeLayerEvalscript(
   layerId: string,
   indexVisibilityMin: number | null = null,
@@ -404,6 +476,9 @@ export function buildAgroCompositeLayerEvalscript(
   }
   if (isNcadiLayerId(u)) {
     return buildAgroCompositeNcadiEvalscript(indexVisibilityMin)
+  }
+  if (isWapiLayerId(u)) {
+    return buildAgroCompositeWapiEvalscript(indexVisibilityMin)
   }
   if (isAgroDeltaCompositeLayerId(u)) {
     return buildAgroCompositeDeltaEvalscript(u, indexVisibilityMin)

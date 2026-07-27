@@ -80,6 +80,8 @@ import {
   flattenRemoteSensingLayerSelectGroups,
   isAgroDeltaCompositeLayerId,
 } from '../../lib/agroCompositeIndices';
+import { isWapiLayerId } from '../../lib/wapiIndex';
+import { isNcadiLayerId } from '../../lib/ncadiIndex';
 import {
   getBootstrapSentinelWmsLayers,
   getSentinelHubWmsLayerCatalog,
@@ -200,11 +202,16 @@ import { satelliteCustomLayersToGeoAiLayers } from '../../lib/geoAiMapLayerSourc
 import { MapToolboxLayerList, MapToolboxLayerRow } from './components/MapToolboxLayerList';
 import './components/MapToolboxLayerList.css';
 import { SiCropAlertCenterPanel } from './components/SiCropAlertCenterPanel';
+import { SiWapiAlertPanel } from './components/SiWapiAlertPanel';
 import { SiStressZonesPanel } from './components/SiStressZonesPanel';
 import { SiStressZonesMapPopup } from './components/SiStressZonesMapPopup';
 import { useStressZonesAnalysis } from './components/useStressZonesAnalysis';
 import type { StressZoneAreaRow } from '../../lib/siStressZonesLive';
 import { SiCropAlertMapMarkersLayer } from './components/SiCropAlertMapMarkersLayer';
+import {
+  SiWapiAlertMapOverlay,
+  SI_WAPI_ALERT_FILL_LAYER_ID,
+} from './components/SiWapiAlertMapOverlay';
 import { SiCropAlertMapLegend } from './components/SiCropAlertMapLegend';
 import { useSiInstanceScope } from './siInstanceScope';
 import { useMapOverlayIsolation } from './useMapOverlayIsolation';
@@ -212,6 +219,24 @@ import {
   SI_CROP_ALERT_ENGINE_LS_KEY,
   SI_CROP_ALERT_RESULTS_LS_KEY,
 } from '../../lib/siCropAlertEngine';
+import {
+  SI_WAPI_ALERT_ENGINE_LS_KEY,
+  SI_WAPI_ALERT_RESULTS_LS_KEY,
+  extractWapiAlertFieldsFromMask,
+  isWapiAlertResultsCacheFresh,
+  loadWapiAlertEngineSettings,
+  loadWapiAlertResultsCache,
+  persistWapiAlertEngineSettings,
+  persistWapiAlertResultsCache,
+  clearWapiAlertResultsCache,
+  resolveWapiFetchLookbackDays,
+  runWapiAlertEngine,
+  compareWdsiAlertPriority,
+  wapiFieldToCropAlertInput,
+  type WapiAlertEngineSettings,
+  type WapiAlertFieldResult,
+  type WapiAlertLiveSnapshot,
+} from '../../lib/siWapiAlertEngine';
 import { SI_AOI_MASK_BUILDER_LS_KEY } from '../../lib/siAoiMaskBuilder';
 import {
   CROP_ALERT_STATUS_COLORS,
@@ -236,6 +261,7 @@ import {
   type CropAlertImageryContext,
 } from '../../lib/siCropAlertImageryValidation';
 import './components/SiCropAlertCenterPanel.css';
+import './components/SiWapiAlertPanel.css';
 import { SiPrithviCropToolPanel } from './components/SiPrithviCropToolPanel';
 import { SiImageryTimeSeriesFloatingPanel } from './components/SiImageryTimeSeriesFloatingPanel';
 import type { SiTsWeatherStormMapOverlay } from './lib/imageryStormAnalysis';
@@ -324,6 +350,12 @@ import {
   stableFeatureLinkKey,
 } from '../../lib/geoAiLinkedSelection';
 import { SI_GEO_AI_MAP_SELECTION_PAINT } from './siGeoAiMapSelectionPaint';
+import {
+  SI_IMAGERY_FIELD_FLASH_HALF_MS,
+  SI_IMAGERY_FIELD_FLASH_PAINT,
+  SI_IMAGERY_FIELD_FLASH_PULSES,
+} from './siImageryFieldFlashPaint';
+import { resolveSiImageryField } from './utils/siImageryTimeSeriesFields';
 import { runGeoAiStatsCommand, type GeoAiMapFirstSelection } from '../../lib/geoAiStatsEngine';
 import { runGeoAiLayerAttributeQuery } from '../../lib/geoAiLayerAttributeQuery';
 import { resolveGeoAiPinFromUserTextAndReply } from '../../lib/geoAiResolveMapCoords';
@@ -759,6 +791,7 @@ type MapToolboxSectionId =
  | 'eo-enrichment'
 
  | 'crop-alerts'
+ | 'wapi-alerts'
  | 'stress-zones'
  | 'crop-classification'
  | 'ai-detection-gis'
@@ -2684,10 +2717,23 @@ function siPaintCustomLayersOnMapboxCanvas(
   map: SiMapboxCanvasLike,
   layers: CustomLayer[],
   trackedSourceIds: Set<string>,
-  options?: { suppressPrimaryAoiFill?: boolean; onArcgisIconsLoaded?: () => void },
+  options?: {
+    suppressPrimaryAoiFill?: boolean
+    /** Extra layer ids whose polygon fill must be invisible under live Sentinel WMS. */
+    suppressFillLayerIds?: ReadonlySet<string> | string[]
+    onArcgisIconsLoaded?: () => void
+  },
 ) {
   const nextSourceIds = new Set<string>();
   const beforeId = siMapboxInsertBeforeId(map);
+  const suppressFillIds = new Set<string>(
+    options?.suppressFillLayerIds instanceof Set
+      ? [...options.suppressFillLayerIds]
+      : options?.suppressFillLayerIds ?? [],
+  );
+  if (options?.suppressPrimaryAoiFill) {
+    suppressFillIds.add(AGRO_STRUCTURES_PRIMARY_LAYER_ID);
+  }
 
   for (const layer of layers) {
     // Layers with no geometry yet (e.g. an empty shell awaiting features) are skipped,
@@ -2838,11 +2884,7 @@ function siPaintCustomLayersOnMapboxCanvas(
       const st = siLayerMapboxStylePack(layer);
       let fillPaint = sanitizeMapboxPaint(siScalePaintOpacityByFactor(st.fillPaint as Record<string, unknown>, op));
       const useAgSymbology = siLayerUsesArcgisOnlineSymbology(layer);
-      if (
-        options?.suppressPrimaryAoiFill &&
-        String(layer.id) === AGRO_STRUCTURES_PRIMARY_LAYER_ID &&
-        !useAgSymbology
-      ) {
+      if (suppressFillIds.has(String(layer.id)) && !useAgSymbology) {
         fillPaint = { ...fillPaint, 'fill-opacity': 0 };
       }
       const linePaint = sanitizeMapboxPaint(
@@ -4339,6 +4381,27 @@ export default function SatelliteIntelligence() {
   const [cropAlertLiveFieldCount, setCropAlertLiveFieldCount] = useState(0);
   const cropAlertAbortRef = useRef<AbortController | null>(null);
   const [selectedCropAlertFieldKey, setSelectedCropAlertFieldKey] = useState<string | null>(null);
+  const [wapiAlertSettings, setWapiAlertSettings] = useState<WapiAlertEngineSettings>(() =>
+    loadWapiAlertEngineSettings({
+      engineKey: siScope.scopedStorageKey(SI_WAPI_ALERT_ENGINE_LS_KEY),
+    }),
+  );
+  const [wapiAlertResults, setWapiAlertResults] = useState<WapiAlertFieldResult[]>([]);
+  const [wapiAlertRunning, setWapiAlertRunning] = useState(false);
+  const [wapiAlertLastRunAt, setWapiAlertLastRunAt] = useState<number | null>(null);
+  const [wapiAlertProgress, setWapiAlertProgress] = useState<CropAlertSentinelFetchProgress | null>(null);
+  const [wapiAlertLiveFieldCount, setWapiAlertLiveFieldCount] = useState(0);
+  const wapiAlertAbortRef = useRef<AbortController | null>(null);
+  const [selectedWapiAlertFieldKey, setSelectedWapiAlertFieldKey] = useState<string | null>(null);
+  const [wapiAlertMapPopupFieldKey, setWapiAlertMapPopupFieldKey] = useState<string | null>(null);
+  const wapiAlertEnabledRef = useRef(wapiAlertSettings.enabled);
+  wapiAlertEnabledRef.current = wapiAlertSettings.enabled;
+  const [imageryFieldFlashGeojson, setImageryFieldFlashGeojson] = useState<GeoJSON.FeatureCollection | null>(
+    null,
+  );
+  const [imageryFieldFlashBright, setImageryFieldFlashBright] = useState(true);
+  const imageryFieldFlashTimerRef = useRef<number | null>(null);
+  const imageryFieldFlashEpochRef = useRef(0);
   const [cropAlertMapPopupFieldKey, setCropAlertMapPopupFieldKey] = useState<string | null>(null);
   const [stressZonesPopupZone, setStressZonesPopupZone] = useState<StressZoneAreaRow | null>(null);
   const [stressZonesPopupLngLat, setStressZonesPopupLngLat] = useState<{ lng: number; lat: number } | null>(
@@ -4651,6 +4714,7 @@ export default function SatelliteIntelligence() {
   const layerAoiWmsStackRef = useRef<ReturnType<typeof buildSiSentinelAoiWmsStackState> | null>(null);
   const suppressPrimaryAoiFillMountedRef = useRef(false);
   const suppressPrimaryAoiFillRef = useRef(false);
+  const aoiMaskBuilderSourceLayerIdRef = useRef(aoiMaskBuilderSettings.sourceLayerId);
   const [sentinelWmsSourcesHeld, setSentinelWmsSourcesHeld] = useState(false);
   const aoiLayerModePinnedClipRef = useRef<{ pinKey: string; mask: SiAoiLayerModeClipMask } | null>(null);
   const aoiLayerModeWmsActiveRef = useRef(false);
@@ -4665,8 +4729,13 @@ export default function SatelliteIntelligence() {
     () => siScope.scopedStorageKey(SI_CROP_ALERT_RESULTS_LS_KEY),
     [siScope.scopedStorageKey],
   );
+  const wapiAlertResultsStorageKey = useMemo(
+    () => siScope.scopedStorageKey(SI_WAPI_ALERT_RESULTS_LS_KEY),
+    [siScope.scopedStorageKey],
+  );
   const [liveViewportDisplayBBox, setLiveViewportDisplayBBox] = useState<LngLatBBox | null>(null);
   const cropAlertResultsByKeyRef = useRef(new Map<string, CropAlertFieldResult>());
+  const wapiAlertResultsByKeyRef = useRef(new Map<string, WapiAlertFieldResult>());
 
   const customLayersForMapPaint = useMemo(() => {
     if (effectiveViewportFrozen) {
@@ -4760,6 +4829,7 @@ export default function SatelliteIntelligence() {
   | 'remote-sensing'
   | 'eo-enrichment'
   | 'crop-alerts'
+  | 'wapi-alerts'
   | 'stress-zones'
   | 'crop-classification'
   | 'ai-detection-gis'
@@ -13855,7 +13925,7 @@ export default function SatelliteIntelligence() {
       const south = Math.min(...lats);
       const north = Math.max(...lats);
       const bounds = { west, south, east, north };
-      const maxEdge = Math.max(256, Math.min(2048, opts?.maxEdge ?? 1024));
+      const maxEdge = Math.max(256, Math.min(4096, opts?.maxEdge ?? 1024));
 
       const token = getMapboxAccessToken();
       if (token && token.startsWith('pk.')) {
@@ -13869,8 +13939,9 @@ export default function SatelliteIntelligence() {
           H = maxEdge;
           W = Math.round(maxEdge * aspect);
         }
-        W = Math.max(64, Math.min(2048, W));
-        H = Math.max(64, Math.min(2048, H));
+        // Mapbox Static API caps at 1280 on free/standard tokens; keep a hard ceiling.
+        W = Math.max(64, Math.min(1280, W));
+        H = Math.max(64, Math.min(1280, H));
         const staticUrl =
           `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/` +
           `[${west},${south},${east},${north}]/${W}x${H}` +
@@ -13896,16 +13967,33 @@ export default function SatelliteIntelligence() {
       if (!map || typeof map.project !== 'function') return null;
       const style = typeof map.getStyle === 'function' ? map.getStyle() : null;
       const hidden: string[] = [];
-      const styleLayers = (style?.layers ?? []) as Array<{ id: string; source?: string }>;
+      const styleLayers = (style?.layers ?? []) as Array<{
+        id: string;
+        type?: string;
+        source?: string;
+      }>;
       for (const ly of styleLayers) {
         try {
           const src = ly.source ? map.getSource(ly.source) : null;
-          if (src && src.type === 'image') {
-            const vis = map.getLayoutProperty?.(ly.id, 'visibility');
-            if (vis !== 'none') {
-              map.setLayoutProperty(ly.id, 'visibility', 'none');
-              hidden.push(ly.id);
-            }
+          const srcType = src?.type as string | undefined;
+          const layerType = String(ly.type || '');
+          // Hide custom rasters, WMS/raster tiles, fills, and detections so capture is basemap-only.
+          const hide =
+            srcType === 'image' ||
+            srcType === 'raster' ||
+            srcType === 'geojson' ||
+            layerType === 'raster' ||
+            layerType === 'fill' ||
+            layerType === 'fill-extrusion' ||
+            layerType === 'line' ||
+            layerType === 'circle' ||
+            layerType === 'heatmap' ||
+            /^(agri-field|sam-|si-|custom-|drawn|aoi|crop-alert|stress)/i.test(ly.id);
+          if (!hide) continue;
+          const vis = map.getLayoutProperty?.(ly.id, 'visibility');
+          if (vis !== 'none') {
+            map.setLayoutProperty(ly.id, 'visibility', 'none');
+            hidden.push(ly.id);
           }
         } catch {
           /* ignore individual layers */
@@ -15391,6 +15479,31 @@ export default function SatelliteIntelligence() {
       setStressZonesPopupZone(null);
       return;
     }
+    if (wapiAlertEnabledRef.current) {
+      try {
+        const map = getMapInstance() as {
+          project?: (lngLat: [number, number]) => { x: number; y: number };
+          queryRenderedFeatures?: (
+            geometry: [number, number],
+            opts?: { layers?: string[] },
+          ) => Array<{ properties?: Record<string, unknown> }>;
+          getLayer?: (id: string) => unknown;
+        } | null;
+        if (map?.project && map.queryRenderedFeatures && map.getLayer?.(SI_WAPI_ALERT_FILL_LAYER_ID)) {
+          const pt = map.project([lng, lat]);
+          const hits = map.queryRenderedFeatures([pt.x, pt.y], {
+            layers: [SI_WAPI_ALERT_FILL_LAYER_ID],
+          });
+          const key = hits?.[0]?.properties?.fieldKey;
+          if (typeof key === 'string' && key.trim()) {
+            handleWapiAlertFieldSelect(key);
+            return;
+          }
+        }
+      } catch {
+        /* ignore query errors */
+      }
+    }
     if (
       gisSelectionActiveRef.current &&
       gisSelectionToolRef.current === 'select' &&
@@ -16314,6 +16427,7 @@ export default function SatelliteIntelligence() {
 
   useEffect(() => {
     aoiLayerModeWmsActiveRef.current = aoiMaskBuilderSettings.enabled;
+    aoiMaskBuilderSourceLayerIdRef.current = aoiMaskBuilderSettings.sourceLayerId;
     const layerAoiWarmNow =
       Boolean(aoiMaskBuilderSettings.sourceLayerId) && Boolean(aoiMaskBuilderWarmMask?.features?.length);
     if (!aoiMaskBuilderSettings.enabled && !layerAoiWarmNow) {
@@ -16454,18 +16568,28 @@ export default function SatelliteIntelligence() {
     const agroSid = siSafeMapboxLayerId(AGRO_STRUCTURES_PRIMARY_LAYER_ID);
     const agroFillId = `${agroSid}-fill`;
     const agroLineId = `${agroSid}-line`;
+    const aoiSourceId = aoiMaskBuilderSettings.sourceLayerId.trim();
+    const aoiSid = aoiSourceId ? siSafeMapboxLayerId(aoiSourceId) : '';
+    const aoiFillId = aoiSid ? `${aoiSid}-fill` : '';
+    const aoiLineId = aoiSid ? `${aoiSid}-line` : '';
+    // Prefer the Layers AOI outline as the raster insert anchor when Agro Structures is absent.
+    const outlineAnchorId =
+      (aoiLineId && map.getLayer(aoiLineId) ? aoiLineId : undefined) ||
+      (map.getLayer(agroLineId) ? agroLineId : undefined);
     const layer = customLayersRef.current.find(l => String(l.id) === AGRO_STRUCTURES_PRIMARY_LAYER_ID);
     const useAgSymbology = layer ? siLayerUsesArcgisOnlineSymbology(layer) : false;
     const restoreOp = (layer?.mapOpacity ?? 1) * (layer?.polygonFillAlpha ?? SI_PORTAL_LAYER_VISIBLE_FILL_ALPHA);
     syncSiMapAnalysisLayerOrder(map, {
       agroFillId,
-      agroLineId,
+      agroLineId: outlineAnchorId ?? agroLineId,
+      extraFillIdsUnderRaster: aoiFillId && aoiFillId !== agroFillId ? [aoiFillId] : undefined,
+      extraOutlineIdsAboveRaster: aoiLineId && aoiLineId !== agroLineId ? [aoiLineId] : undefined,
       freezeLayerAoiRasterOrder: aoiLayerModeWmsActiveRef.current,
       suppressAgroFillWhenWms: sentinelWmsOnMap,
       restoreAgroFillOpacity: restoreOp,
       useAgSymbology,
     });
-  }, [sentinelWmsOnMap]);
+  }, [sentinelWmsOnMap, aoiMaskBuilderSettings.sourceLayerId]);
 
   /**
    * Drawing an AOI refreshes the clipped tiles but does NOT auto-show the layer â€”
@@ -16633,48 +16757,9 @@ export default function SatelliteIntelligence() {
   const handleIndexShowOnMapChange = useCallback(
     (checked: boolean) => {
       setIsWmsOverlayVisible(checked);
-      if (!checked) return;
-      setSentinelWmsSourcesHeld(true);
-      setPinnedSentinelWmsMinZoom(prev => (prev == null ? sentinelWmsMinZoom : prev));
-      // Ensure Mapbox will request Sentinel tiles (source minzoom) and the AOI is in view.
-      const map = mapRef.current?.getMap?.() ?? mapRef.current;
-      if (!map) return;
-      const minZ = pinnedSentinelWmsMinZoom ?? sentinelWmsMinZoom;
-      const ensureMinZoom = () => {
-        try {
-          const z = typeof map.getZoom === 'function' ? map.getZoom() : null;
-          if (typeof z === 'number' && z < minZ && typeof map.easeTo === 'function') {
-            map.easeTo({ zoom: minZ, duration: 400 });
-          }
-        } catch {
-          /* ignore camera race */
-        }
-      };
-      const geom = drawnGeometryRef.current ?? drawnAoiClipCollection;
-      const bounds = geom ? getGeoJsonBounds(geom) : null;
-      if (bounds && typeof map.fitBounds === 'function') {
-        const [minX, minY, maxX, maxY] = bounds;
-        try {
-          map.fitBounds(
-            [
-              [minX, minY],
-              [maxX, maxY],
-            ],
-            {
-              padding: 72,
-              duration: 650,
-              maxZoom: Math.max(16, minZ + 4),
-            },
-          );
-          map.once?.('moveend', ensureMinZoom);
-        } catch {
-          ensureMinZoom();
-        }
-        return;
-      }
-      ensureMinZoom();
+      if (checked) setSentinelWmsSourcesHeld(true);
     },
-    [sentinelWmsMinZoom, pinnedSentinelWmsMinZoom, drawnAoiClipCollection],
+    [],
   );
 
   useEffect(() => {
@@ -16711,6 +16796,13 @@ export default function SatelliteIntelligence() {
     });
   }, [siScope]);
 
+  const handleWapiAlertSettingsChange = useCallback((next: WapiAlertEngineSettings) => {
+    setWapiAlertSettings(next);
+    persistWapiAlertEngineSettings(next, {
+      engineKey: siScope.scopedStorageKey(SI_WAPI_ALERT_ENGINE_LS_KEY),
+    });
+  }, [siScope]);
+
   const cropAlertAoiMask = useMemo(() => {
     if (cropAlertSettings.aoiMode === 'builder') {
       return aoiMaskBuilderMask ?? agroStructuresLayerAoiMask;
@@ -16721,6 +16813,29 @@ export default function SatelliteIntelligence() {
   const cropAlertFields = useMemo(
     () => extractCropAlertFieldsFromMask(cropAlertAoiMask),
     [cropAlertAoiMask],
+  );
+
+  const wapiAlertAoiMask = useMemo(
+    () => aoiLayerModeActiveMask ?? aoiMaskBuilderMask,
+    [aoiLayerModeActiveMask, aoiMaskBuilderMask],
+  );
+
+  const wapiAlertFields = useMemo(
+    () => extractWapiAlertFieldsFromMask(wapiAlertAoiMask),
+    [wapiAlertAoiMask],
+  );
+
+  const wapiAlertAoiLabel = useMemo(() => {
+    const layer = aoiMaskBuilderSourceLayer;
+    if (layer?.name) return String(layer.name);
+    if (aoiMaskBuilderSettings.sourceLayerId) return String(aoiMaskBuilderSettings.sourceLayerId);
+    return 'Active AOI layer';
+  }, [aoiMaskBuilderSourceLayer, aoiMaskBuilderSettings.sourceLayerId]);
+
+  const wapiAlertMaskKey = useMemo(
+    () =>
+      `${aoiMaskBuilderSettings.sourceLayerId || 'none'}|${wapiAlertFields.length}|${aoiMaskBuilderMaskKey || ''}`,
+    [aoiMaskBuilderSettings.sourceLayerId, wapiAlertFields.length, aoiMaskBuilderMaskKey],
   );
 
   const cropAlertResultsOnMap = useMemo(() => {
@@ -17081,6 +17196,117 @@ export default function SatelliteIntelligence() {
     siScope,
   ]);
 
+  const runWapiAlertAnalysis = useCallback(() => {
+    if (!wapiAlertSettings.enabled) return;
+    if (!wapiAlertFields.length) return;
+    wapiAlertAbortRef.current?.abort();
+    const ac = new AbortController();
+    wapiAlertAbortRef.current = ac;
+    setWapiAlertRunning(true);
+    setWapiAlertProgress({ done: 0, total: wapiAlertFields.length, live: 0, sampled: 0, failed: 0 });
+
+    const cropFields = wapiAlertFields.map(wapiFieldToCropAlertInput);
+    const lookbackDays = resolveWapiFetchLookbackDays(wapiAlertSettings.lookbackDays);
+    const referenceDate = sentinelFetchDate;
+
+    void (async () => {
+      const imageryCtx = buildCropAlertImageryContext({
+        userRequestedDate: referenceDate,
+        fetchDate: referenceDate,
+        latestSceneIso: sentinelSceneCatalog?.latestSceneIso ?? null,
+        autoFollowImagery: imageryDateAutoFollow,
+      });
+
+      try {
+        const catalogScenes = sentinelSceneCatalog?.sceneIsos ?? [];
+        const seriesMap = await fetchCropAlertSentinelLiveBatch(cropFields, referenceDate, {
+          concurrency: 8,
+          catalogSceneIsos: catalogScenes,
+          lookbackDays,
+          signal: ac.signal,
+          onProgress: setWapiAlertProgress,
+          cacheScope: siScope.scope,
+        });
+
+        const liveSnapshots = new Map<string, WapiAlertLiveSnapshot>();
+        let liveCount = 0;
+        for (const field of cropFields) {
+          const series = seriesMap.get(field.fieldKey);
+          if (!series) continue;
+          const snaps = buildSnapshotsFromSentinelSeries(field, referenceDate, series, imageryCtx, {
+            catalogSceneIsos: catalogScenes,
+            preferLatestAvailable: imageryDateAutoFollow,
+            maxScenes: 4,
+          });
+          if (snaps.source === 'live' && snaps.imagery.liveVerified) liveCount += 1;
+          liveSnapshots.set(field.fieldKey, {
+            current: snaps.current,
+            previous: snaps.previous7,
+            seasonalPeakNdvi: snaps.seasonalPeakNdvi,
+            sceneDate: snaps.imagery?.imageDate ?? snaps.ndviSeries?.currentDate ?? referenceDate,
+            ndviChangePct2: snaps.ndviSeries?.ndviChangePct2 ?? null,
+          });
+        }
+
+        if (ac.signal.aborted) return;
+
+        const results = runWapiAlertEngine(wapiAlertFields, referenceDate, liveSnapshots);
+        for (const r of results) wapiAlertResultsByKeyRef.current.set(r.fieldKey, r);
+        setWapiAlertResults([...wapiAlertResultsByKeyRef.current.values()].sort(compareWdsiAlertPriority));
+        setWapiAlertLiveFieldCount(liveCount);
+        setWapiAlertLastRunAt(Date.now());
+        persistWapiAlertResultsCache(
+          {
+            referenceDate,
+            aoiMaskKey: wapiAlertMaskKey,
+            results,
+            lastRunAt: Date.now(),
+            liveFieldCount: liveCount,
+          },
+          { resultsKey: wapiAlertResultsStorageKey },
+        );
+      } catch {
+        if (!ac.signal.aborted && wapiAlertFields.length) {
+          const fallbackResults = runWapiAlertEngine(wapiAlertFields, referenceDate);
+          for (const r of fallbackResults) wapiAlertResultsByKeyRef.current.set(r.fieldKey, r);
+          setWapiAlertResults([...wapiAlertResultsByKeyRef.current.values()]);
+          setWapiAlertLastRunAt(Date.now());
+          setStacStatus('ISS alerts: using field model — configure Sentinel OAuth for live scores.');
+        }
+      } finally {
+        if (!ac.signal.aborted) {
+          setWapiAlertRunning(false);
+          setWapiAlertProgress(null);
+        }
+      }
+    })();
+  }, [
+    wapiAlertFields,
+    wapiAlertSettings.enabled,
+    wapiAlertSettings.lookbackDays,
+    wapiAlertMaskKey,
+    wapiAlertResultsStorageKey,
+    sentinelFetchDate,
+    imageryDateAutoFollow,
+    sentinelSceneCatalog?.sceneIsos,
+    sentinelSceneCatalog?.latestSceneIso,
+    siScope,
+  ]);
+
+  const clearWapiAlertAnalysis = useCallback(() => {
+    wapiAlertAbortRef.current?.abort();
+    wapiAlertAbortRef.current = null;
+    wapiAlertResultsByKeyRef.current.clear();
+    setWapiAlertResults([]);
+    setWapiAlertRunning(false);
+    setWapiAlertProgress(null);
+    setWapiAlertLastRunAt(null);
+    setWapiAlertLiveFieldCount(0);
+    setSelectedWapiAlertFieldKey(null);
+    setWapiAlertMapPopupFieldKey(null);
+    clearWapiAlertResultsCache({ resultsKey: wapiAlertResultsStorageKey });
+  }, [wapiAlertResultsStorageKey]);
+
   const cropClassificationHasAoi = Boolean(
     getDrawnGeometry(cropClassAoiClipCollection ?? cropClassAoiGeometry),
   );
@@ -17390,6 +17616,56 @@ export default function SatelliteIntelligence() {
   }, [cropAlertSettings.enabled, cropAlertSettings.refreshMinutes, runCropAlertAnalysis]);
 
   useEffect(() => {
+    if (!wapiAlertSettings.enabled) {
+      wapiAlertAbortRef.current?.abort();
+      wapiAlertResultsByKeyRef.current.clear();
+      setWapiAlertResults([]);
+      setWapiAlertLiveFieldCount(0);
+      setSelectedWapiAlertFieldKey(null);
+      setWapiAlertMapPopupFieldKey(null);
+      return;
+    }
+    const cached = loadWapiAlertResultsCache({ resultsKey: wapiAlertResultsStorageKey });
+    if (
+      isWapiAlertResultsCacheFresh(
+        cached,
+        sentinelFetchDate,
+        wapiAlertSettings.refreshHours,
+        wapiAlertMaskKey,
+      )
+    ) {
+      wapiAlertResultsByKeyRef.current = new Map(cached!.results.map(r => [r.fieldKey, r]));
+      setWapiAlertResults(cached!.results);
+      setWapiAlertLastRunAt(cached!.lastRunAt);
+      setWapiAlertLiveFieldCount(cached!.liveFieldCount);
+      return;
+    }
+    if (cached?.results.length && cached.aoiMaskKey === wapiAlertMaskKey) {
+      wapiAlertResultsByKeyRef.current = new Map(cached.results.map(r => [r.fieldKey, r]));
+      setWapiAlertResults(cached.results);
+      setWapiAlertLastRunAt(cached.lastRunAt);
+      setWapiAlertLiveFieldCount(cached.liveFieldCount);
+    }
+    runWapiAlertAnalysis();
+  }, [
+    wapiAlertSettings.enabled,
+    wapiAlertSettings.lookbackDays,
+    wapiAlertSettings.refreshHours,
+    wapiAlertMaskKey,
+    wapiAlertFields.length,
+    sentinelFetchDate,
+    wapiAlertResultsStorageKey,
+    runWapiAlertAnalysis,
+  ]);
+
+  useEffect(() => {
+    if (!wapiAlertSettings.enabled) return;
+    const ms = Math.max(1, wapiAlertSettings.refreshHours) * 3_600_000;
+    const id = window.setInterval(() => runWapiAlertAnalysis(), ms);
+    return () => window.clearInterval(id);
+  }, [wapiAlertSettings.enabled, wapiAlertSettings.refreshHours, runWapiAlertAnalysis]);
+
+  useEffect(() => {
     if (!cropAlertSettings.enabled || !cropAlertSettings.notifyInApp) return;
     const critical = cropAlertResults.filter(
       r => r.liveVerified && (r.severity === 'critical' || r.status === 'critical'),
@@ -17428,8 +17704,180 @@ export default function SatelliteIntelligence() {
     [cropAlertResults],
   );
 
+  const clearImageryFieldFlashTimer = useCallback(() => {
+    if (imageryFieldFlashTimerRef.current != null) {
+      window.clearInterval(imageryFieldFlashTimerRef.current);
+      imageryFieldFlashTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => clearImageryFieldFlashTimer(), [clearImageryFieldFlashTimer]);
+
+  const flashImageryFieldOnMap = useCallback(
+    (fieldKeys: string[], opts?: { fitBounds?: boolean }) => {
+      const key = fieldKeys[0]?.trim() || null;
+      if (!key) {
+        clearImageryFieldFlashTimer();
+        imageryFieldFlashEpochRef.current += 1;
+        setImageryFieldFlashGeojson(null);
+        return;
+      }
+      setSelectedCropAlertFieldKey(key);
+      const field = resolveSiImageryField(
+        agroStructuresLayerAoiMask,
+        aoiFields,
+        drawnGeometry?.geometry ?? null,
+        key,
+        customLayersForMapPaint,
+      );
+      if (!field?.geometry) return;
+
+      const fc: GeoJSON.FeatureCollection = {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            properties: { fieldKey: key, name: field.farmName || key },
+            geometry: field.geometry,
+          },
+        ],
+      };
+      imageryFieldFlashEpochRef.current += 1;
+      const epoch = imageryFieldFlashEpochRef.current;
+      setImageryFieldFlashGeojson(fc);
+      setImageryFieldFlashBright(true);
+
+      if (opts?.fitBounds !== false) {
+        const bounds = getGeoJsonBounds(fc as any);
+        const map = mapRef.current?.getMap?.() ?? mapRef.current;
+        if (bounds && map && typeof map.fitBounds === 'function') {
+          map.fitBounds(
+            [
+              [bounds[0], bounds[1]],
+              [bounds[2], bounds[3]],
+            ],
+            { padding: 72, maxZoom: 17, duration: 700 },
+          );
+        } else if (field.centroid?.length >= 2) {
+          setViewState(v => ({
+            ...v,
+            longitude: field.centroid[0],
+            latitude: field.centroid[1],
+            zoom: Math.max(typeof v.zoom === 'number' ? v.zoom : 2, 15),
+          }));
+        }
+      }
+
+      clearImageryFieldFlashTimer();
+      let ticks = 0;
+      const totalTicks = SI_IMAGERY_FIELD_FLASH_PULSES * 2;
+      imageryFieldFlashTimerRef.current = window.setInterval(() => {
+        if (imageryFieldFlashEpochRef.current !== epoch) {
+          clearImageryFieldFlashTimer();
+          return;
+        }
+        ticks += 1;
+        setImageryFieldFlashBright(ticks % 2 === 0);
+        if (ticks >= totalTicks) {
+          clearImageryFieldFlashTimer();
+          setImageryFieldFlashBright(true);
+          window.setTimeout(() => {
+            if (imageryFieldFlashEpochRef.current === epoch) {
+              setImageryFieldFlashGeojson(null);
+            }
+          }, 900);
+        }
+      }, SI_IMAGERY_FIELD_FLASH_HALF_MS);
+    },
+    [
+      agroStructuresLayerAoiMask,
+      aoiFields,
+      drawnGeometry,
+      customLayersForMapPaint,
+      clearImageryFieldFlashTimer,
+    ],
+  );
+
   const handleCropAlertPopupClose = useCallback(() => {
     setCropAlertMapPopupFieldKey(null);
+  }, []);
+
+  const handleWapiAlertFieldSelect = useCallback(
+    (fieldKey: string | null) => {
+      setSelectedWapiAlertFieldKey(fieldKey);
+      setWapiAlertMapPopupFieldKey(fieldKey);
+      if (!fieldKey) return;
+      const row = wapiAlertResults.find(r => r.fieldKey === fieldKey);
+      if (!row) return;
+
+      if (row.geometry) {
+        const fc: GeoJSON.FeatureCollection = {
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              properties: { fieldKey, name: row.fieldName },
+              geometry: row.geometry,
+            },
+          ],
+        };
+        clearImageryFieldFlashTimer();
+        imageryFieldFlashEpochRef.current += 1;
+        const epoch = imageryFieldFlashEpochRef.current;
+        setImageryFieldFlashGeojson(fc);
+        setImageryFieldFlashBright(true);
+        const bounds = getGeoJsonBounds(fc as any);
+        const map = mapRef.current?.getMap?.() ?? mapRef.current;
+        if (bounds && map && typeof map.fitBounds === 'function') {
+          map.fitBounds(
+            [
+              [bounds[0], bounds[1]],
+              [bounds[2], bounds[3]],
+            ],
+            { padding: 72, maxZoom: 17, duration: 700 },
+          );
+        } else {
+          setViewState(v => ({
+            ...v,
+            longitude: row.centroid[0],
+            latitude: row.centroid[1],
+            zoom: Math.max(typeof v.zoom === 'number' ? v.zoom : 2, 14),
+          }));
+        }
+        let ticks = 0;
+        const totalTicks = SI_IMAGERY_FIELD_FLASH_PULSES * 2;
+        imageryFieldFlashTimerRef.current = window.setInterval(() => {
+          if (imageryFieldFlashEpochRef.current !== epoch) {
+            clearImageryFieldFlashTimer();
+            return;
+          }
+          ticks += 1;
+          setImageryFieldFlashBright(ticks % 2 === 0);
+          if (ticks >= totalTicks) {
+            clearImageryFieldFlashTimer();
+            setImageryFieldFlashBright(true);
+            window.setTimeout(() => {
+              if (imageryFieldFlashEpochRef.current === epoch) {
+                setImageryFieldFlashGeojson(null);
+              }
+            }, 900);
+          }
+        }, SI_IMAGERY_FIELD_FLASH_HALF_MS);
+        return;
+      }
+
+      setViewState(v => ({
+        ...v,
+        longitude: row.centroid[0],
+        latitude: row.centroid[1],
+        zoom: Math.max(typeof v.zoom === 'number' ? v.zoom : 2, 14),
+      }));
+    },
+    [wapiAlertResults, clearImageryFieldFlashTimer],
+  );
+
+  const handleWapiAlertPopupClose = useCallback(() => {
+    setWapiAlertMapPopupFieldKey(null);
   }, []);
 
   const resetSentinelImageryDateAuto = useCallback(() => {
@@ -17809,6 +18257,10 @@ export default function SatelliteIntelligence() {
         .filter(layer => layer.visible !== false)
         .map(layer => siSafeMapboxLayerId(layer.id));
       siRaiseCustomLayersAboveBasemap(map, ids);
+      // After raising GIS overlays above the basemap, re-assert Sentinel above AOI fills.
+      if (aoiLayerModeWmsActiveRef.current || suppressPrimaryAoiFillRef.current) {
+        syncAnalysisMapLayerOrder();
+      }
     };
 
     const syncVectorTileStacks = () => {
@@ -17832,6 +18284,14 @@ export default function SatelliteIntelligence() {
         tracked,
         {
           suppressPrimaryAoiFill: suppressPrimaryAoiFillRef.current,
+          suppressFillLayerIds: suppressPrimaryAoiFillRef.current
+            ? [
+                AGRO_STRUCTURES_PRIMARY_LAYER_ID,
+                ...(aoiMaskBuilderSourceLayerIdRef.current.trim()
+                  ? [aoiMaskBuilderSourceLayerIdRef.current.trim()]
+                  : []),
+              ]
+            : undefined,
           onArcgisIconsLoaded: () => setCustomLayersMapEpoch(epoch => epoch + 1),
         },
       );
@@ -17874,7 +18334,7 @@ export default function SatelliteIntelligence() {
         }
       }
     };
-  }, [customLayersForMapPaint, isMapStyleReady, customLayersMapEpoch]);
+  }, [customLayersForMapPaint, isMapStyleReady, customLayersMapEpoch, syncAnalysisMapLayerOrder]);
 
   /**
    * Map-load watchdog with bounded automatic retry (exponential backoff).
@@ -18414,6 +18874,7 @@ export default function SatelliteIntelligence() {
             'tree-detections',
             'agri-field-boundary',
             'crop-alerts',
+            'wapi-alerts',
             'stress-zones',
             'crop-classification',
             'image-classification',
@@ -18436,6 +18897,7 @@ export default function SatelliteIntelligence() {
             'tree-detections': 'Tree detections',
             'agri-field-boundary': 'Agri field boundary',
             'crop-alerts': 'Crop alerts',
+            'wapi-alerts': 'ISS Irrigation Alert',
             'stress-zones': 'Stress zones',
             'eo-enrichment': 'EO enrichment',
           };
@@ -19389,7 +19851,11 @@ export default function SatelliteIntelligence() {
   }, [activeWmsLayer, cropClassificationSettings.cloudCoverMax, cloudCoverage]);
 
   const wmsTimeWindowKey = useMemo(() => {
-    if (!isAgroDeltaCompositeLayerId(activeWmsLayer)) return sentinelFetchDate;
+    const needsSpan =
+      isAgroDeltaCompositeLayerId(activeWmsLayer) ||
+      isWapiLayerId(activeWmsLayer) ||
+      isNcadiLayerId(activeWmsLayer)
+    if (!needsSpan) return sentinelFetchDate;
     const prev = resolveSentinelHubWmsDeltaPreviousDate(sentinelFetchDate, {
       autoPreviousSceneDate: autoLiveScenes.previousSceneDate,
       catalogSceneIsos: sentinelSceneCatalog?.sceneIsos ?? [],
@@ -19607,8 +20073,6 @@ export default function SatelliteIntelligence() {
 
   useEffect(() => {
     const nextSuppress = sentinelLayerAoiWmsOnMap || sentinelDrawWmsOnMap;
-    if (suppressPrimaryAoiFillMountedRef.current === nextSuppress) return;
-    suppressPrimaryAoiFillMountedRef.current = nextSuppress;
     suppressPrimaryAoiFillRef.current = nextSuppress;
     const map = mapRef.current?.getMap?.() ?? mapRef.current;
     if (!map || !isMapStyleReady) return;
@@ -19627,22 +20091,29 @@ export default function SatelliteIntelligence() {
       return true;
     };
 
-    const agroSid = siSafeMapboxLayerId(AGRO_STRUCTURES_PRIMARY_LAYER_ID);
-    const agroFillId = `${agroSid}-fill`;
+    // Always suppress BOTH Agro Structures and the selected Layers AOI source fill.
+    // Previous early-return after Agro left custom AOI fills opaque over Sentinel WMS.
     const agroLayer = customLayersRef.current.find(l => String(l.id) === AGRO_STRUCTURES_PRIMARY_LAYER_ID);
     const useAgSymbology = agroLayer ? siLayerUsesArcgisOnlineSymbology(agroLayer) : false;
-    if (map.getLayer(agroFillId) && !useAgSymbology) {
+    if (!useAgSymbology) {
       applyFillSuppress(AGRO_STRUCTURES_PRIMARY_LAYER_ID, agroLayer);
-      return;
     }
 
     const aoiSourceId = aoiMaskBuilderSettings.sourceLayerId.trim();
-    if (aoiSourceId) {
+    if (aoiSourceId && aoiSourceId !== AGRO_STRUCTURES_PRIMARY_LAYER_ID) {
       const aoiLayer = customLayersRef.current.find(l => String(l.id) === aoiSourceId);
-      if (applyFillSuppress(aoiSourceId, aoiLayer)) return;
+      applyFillSuppress(aoiSourceId, aoiLayer);
     }
-    // Fill layers are owned by SiImportedCustomLayersOverlay — no imperative paint fallback.
-  }, [sentinelLayerAoiWmsOnMap, sentinelDrawWmsOnMap, isMapStyleReady, aoiMaskBuilderSettings.sourceLayerId]);
+
+    suppressPrimaryAoiFillMountedRef.current = nextSuppress;
+    syncAnalysisMapLayerOrder();
+  }, [
+    sentinelLayerAoiWmsOnMap,
+    sentinelDrawWmsOnMap,
+    isMapStyleReady,
+    aoiMaskBuilderSettings.sourceLayerId,
+    syncAnalysisMapLayerOrder,
+  ]);
 
   /** Toggle Sentinel raster visibility via Mapbox layout/opacity — draw stack only; Layers AOI uses imperative ping-pong. */
   useLayoutEffect(() => {
@@ -19693,8 +20164,15 @@ export default function SatelliteIntelligence() {
 
     if (chunkCountChanged || layerAoiPingPongSyncKeyRef.current === '') {
       const agroSid = siSafeMapboxLayerId(AGRO_STRUCTURES_PRIMARY_LAYER_ID);
+      const aoiSourceId = aoiMaskBuilderSettings.sourceLayerId.trim();
+      const aoiSid = aoiSourceId ? siSafeMapboxLayerId(aoiSourceId) : '';
+      const aoiLineId = aoiSid ? `${aoiSid}-line` : '';
+      const agroLineId = `${agroSid}-line`;
+      const beforeLayerId =
+        (aoiLineId && map.getLayer(aoiLineId) ? aoiLineId : undefined) ||
+        (map.getLayer(agroLineId) ? agroLineId : undefined);
       ensureSiSentinelAoiWmsPingPongStackOnMap(map, stack, effectiveSentinelWmsMinZoom, runtime, {
-        beforeLayerId: `${agroSid}-line`,
+        beforeLayerId,
       });
     }
 
@@ -19718,6 +20196,7 @@ export default function SatelliteIntelligence() {
     effectiveSentinelWmsMinZoom,
     sentinelLayerAoiWmsOnMap,
     aoiMaskDisplayOpacity,
+    aoiMaskBuilderSettings.sourceLayerId,
     syncAnalysisMapLayerOrder,
   ]);
 
@@ -20487,12 +20966,9 @@ export default function SatelliteIntelligence() {
                       filter={['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]]}
                       paint={{
                         'fill-color': hasActiveLayerSourceAoi ? '#f59e0b' : drawStyle.fillColor,
-                        // When Sentinel index WMS is on, keep fill nearly clear so NDVI paints through.
-                        // Outline layer (drawn-index-geometry-line) still marks the AOI boundary.
+                        // Keep a light fill so the sketch remains visible over basemap / imagery.
                         'fill-opacity':
-                          (sentinelDrawWmsOnMap
-                            ? 0.04
-                            : Math.min(0.35, Math.max(0.12, drawStyle.fillOpacity))) *
+                          Math.min(0.35, Math.max(0.12, drawStyle.fillOpacity)) *
                           drawVisualOpacity *
                           aoiLayerOpacity,
                       }}
@@ -20783,7 +21259,8 @@ export default function SatelliteIntelligence() {
                     />
                   </Source>
                 ) : null}
-                {agriFieldBoundaryActive && agriFieldBoundary.geojson ? (
+                {(agriFieldBoundaryActive || expandedEnvSection === 'eo-enrichment') &&
+                agriFieldBoundary.geojson ? (
                   <Source
                     id={AGRI_FIELD_BOUNDARY_SOURCE_ID}
                     type="geojson"
@@ -21196,6 +21673,17 @@ export default function SatelliteIntelligence() {
               />
             ) : null}
 
+            {isMapStyleReady && wapiAlertSettings.enabled && wapiAlertResults.length > 0 ? (
+              <SiWapiAlertMapOverlay
+                results={wapiAlertResults}
+                selectedFieldKey={selectedWapiAlertFieldKey}
+                popupFieldKey={wapiAlertMapPopupFieldKey}
+                showMapIcons={wapiAlertSettings.showMapIcons}
+                onSelectField={handleWapiAlertFieldSelect}
+                onClosePopup={handleWapiAlertPopupClose}
+              />
+            ) : null}
+
             {isMapStyleReady && stressZonesPopupLngLat && stressZones.result ? (
               <SiMapDockAwareMarker
                 longitude={stressZonesPopupLngLat.lng}
@@ -21302,6 +21790,34 @@ export default function SatelliteIntelligence() {
                     'circle-opacity': SI_GEO_AI_MAP_SELECTION_PAINT.pointOpacity,
                     'circle-stroke-width': SI_GEO_AI_MAP_SELECTION_PAINT.pointStrokeWidth,
                     'circle-stroke-color': SI_GEO_AI_MAP_SELECTION_PAINT.pointStrokeColor,
+                  }}
+                />
+              </Source>
+            ) : null}
+
+            {isMapStyleReady && imageryFieldFlashGeojson?.features?.length ? (
+              <Source id="si-imagery-field-flash" type="geojson" data={imageryFieldFlashGeojson as any}>
+                <Layer
+                  id="si-imagery-field-flash-fill"
+                  type="fill"
+                  filter={['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]]}
+                  paint={{
+                    'fill-color': SI_IMAGERY_FIELD_FLASH_PAINT.fillColor,
+                    'fill-opacity': imageryFieldFlashBright
+                      ? SI_IMAGERY_FIELD_FLASH_PAINT.fillOpacityOn
+                      : SI_IMAGERY_FIELD_FLASH_PAINT.fillOpacityOff,
+                  }}
+                />
+                <Layer
+                  id="si-imagery-field-flash-line"
+                  type="line"
+                  filter={['in', ['geometry-type'], ['literal', ['LineString', 'Polygon', 'MultiPolygon']]]}
+                  paint={{
+                    'line-color': SI_IMAGERY_FIELD_FLASH_PAINT.lineColor,
+                    'line-width': SI_IMAGERY_FIELD_FLASH_PAINT.lineWidth,
+                    'line-opacity': imageryFieldFlashBright
+                      ? SI_IMAGERY_FIELD_FLASH_PAINT.lineOpacityOn
+                      : SI_IMAGERY_FIELD_FLASH_PAINT.lineOpacityOff,
                   }}
                 />
               </Source>
@@ -21454,6 +21970,7 @@ export default function SatelliteIntelligence() {
             containerRef={siMapContainerRef}
             agroStructuresMask={agroStructuresLayerAoiMask}
             aoiFields={aoiFields}
+            vectorLayers={customLayersForMapPaint}
             committedAoiGeometry={drawnGeometry?.geometry ?? null}
             defaultLayerId={wmsLayerSelectValue}
             analysisDate={imageryDateAutoFollow ? sentinelFetchDate : localIsoDate(selectedDate)}
@@ -21462,10 +21979,7 @@ export default function SatelliteIntelligence() {
               setImageryDateAutoFollow(false);
               applySelectedDate(dateFromLocalIso(iso));
             }}
-            onHighlightFieldKeysChange={fieldKeys => {
-              const key = fieldKeys[0] ?? null;
-              if (key) setSelectedCropAlertFieldKey(key);
-            }}
+            onHighlightFieldKeysChange={flashImageryFieldOnMap}
             mapboxToken={mapboxToken}
             onStormMapOverlayChange={setTsWeatherStormOverlay}
             stormOverlayDismissEpoch={tsWeatherStormDismissEpoch}
@@ -22347,6 +22861,8 @@ export default function SatelliteIntelligence() {
                                 ? 'EO Layer Enrichment'
                               : expandedEnvSection === 'crop-alerts'
                                 ? 'Agro Sentinel Alert Engine'
+                              : expandedEnvSection === 'wapi-alerts'
+                                ? 'ISS Irrigation Alert'
                               : expandedEnvSection === 'stress-zones'
                                 ? 'Stress Zones Detection'
                               : expandedEnvSection === 'crop-classification'
@@ -22400,6 +22916,47 @@ export default function SatelliteIntelligence() {
                             name: l.name,
                             geojson: l.geojson,
                           }))}
+                        segmentations={{
+                          hasAoi: Boolean(resolveFieldBoundaryAoi()),
+                          source: agriFieldBoundary.source,
+                          onSourceChange: agriFieldBoundary.setSource,
+                          sourceOptions: agriFieldBoundary.sourceOptions.filter(
+                            o =>
+                              o.id === 'fow' ||
+                              o.id === 'basemap' ||
+                              o.id === 'sentinel2' ||
+                              o.id === 'landsat' ||
+                              o.id === 'planet' ||
+                              o.id === 'airbus',
+                          ),
+                          minConfidence: agriFieldBoundary.minConfidence,
+                          onMinConfidenceChange: agriFieldBoundary.setMinConfidence,
+                          minAreaM2: agriFieldBoundary.minAreaM2,
+                          onMinAreaM2Change: agriFieldBoundary.setMinAreaM2,
+                          phase: agriFieldBoundary.phase,
+                          progress: agriFieldBoundary.progress,
+                          busy: agriFieldBoundary.busy,
+                          error: agriFieldBoundary.error,
+                          fieldCount: agriFieldBoundary.fieldCount,
+                          totalAreaHa: agriFieldBoundary.totalAreaHa,
+                          hasResult: Boolean(agriFieldBoundary.geojson?.features?.length),
+                          onRun: agriFieldBoundary.run,
+                          onAddToLayers: () => {
+                            const fc = agriFieldBoundary.geojson;
+                            if (!fc?.features?.length) return;
+                            registerImportedCustomLayer(
+                              createSiVectorImportLayer({
+                                name: `Field Boundaries (${fc.features.length})`,
+                                geojson: fc,
+                                source: 'api',
+                                format: 'Shapefile',
+                                crs: 'EPSG:4326',
+                              }),
+                            );
+                            focusGeoJsonOnMap(fc);
+                          },
+                          onDownloadShp: () => void agriFieldBoundary.exportShapefile(),
+                        }}
                         onApplyEnrichedLayer={({
                           geojson,
                           name,
@@ -22496,6 +23053,26 @@ export default function SatelliteIntelligence() {
                         />
                       </div>
                     )}
+                    {expandedEnvSection === 'wapi-alerts' && (
+                      <div className="si-env-section-card si-field-analysis si-wapi-alert-panel si-rs-panel--glass">
+                        <SiWapiAlertPanel
+                          settings={wapiAlertSettings}
+                          onChange={handleWapiAlertSettingsChange}
+                          results={wapiAlertResults}
+                          referenceDate={sentinelFetchDate}
+                          aoiLabel={wapiAlertAoiLabel}
+                          fieldCount={wapiAlertFields.length}
+                          isRunning={wapiAlertRunning}
+                          lastRunAt={wapiAlertLastRunAt}
+                          progress={wapiAlertProgress}
+                          liveFieldCount={wapiAlertLiveFieldCount}
+                          selectedFieldKey={selectedWapiAlertFieldKey}
+                          onSelectField={handleWapiAlertFieldSelect}
+                          onRefresh={runWapiAlertAnalysis}
+                          onClear={clearWapiAlertAnalysis}
+                        />
+                      </div>
+                    )}
                     {expandedEnvSection === 'stress-zones' && (
                       <div className="si-env-section-card si-rs-panel--glass">
                         <SiStressZonesPanel
@@ -22587,11 +23164,9 @@ export default function SatelliteIntelligence() {
                             : 'Draw an AOI with the Edit tool, then enable Show on map.'
                         }
                         wmsZoomWarning={
-                          sentinelDrawWmsOnMap && !drawAoiWmsStack.renderReady
-                            ? 'Waiting for Sentinel-2 clip… check imagery date / AOI geometry.'
-                            : sentinelWmsOnMap && !sentinelWmsZoomOk
-                              ? `Zoom ${effectiveSentinelWmsMinZoom}+ for Sentinel-2 (max 200 m/px).`
-                              : null
+                          sentinelWmsOnMap && !sentinelWmsZoomOk
+                            ? `Zoom ${effectiveSentinelWmsMinZoom}+ for Sentinel-2 (max 200 m/px).`
+                            : null
                         }
                         sentinelLayerOptions={remoteSensingLayerOptions}
                         aoiLayerModeSettings={aoiMaskBuilderSettings}
@@ -22788,20 +23363,15 @@ export default function SatelliteIntelligence() {
                           onAddToLayers={() => {
                             const fc = agriFieldBoundary.geojson;
                             if (!fc?.features?.length) return;
-                            const id = `agri-fields-${Date.now().toString(36)}`;
-                            setCustomLayers(prev => [
-                              ...prev,
-                              {
-                                id,
+                            registerImportedCustomLayer(
+                              createSiVectorImportLayer({
                                 name: `Field Boundaries (${fc.features.length})`,
                                 geojson: fc,
-                                visible: true,
-                                source: 'upload',
-                                ...siDefaultNewVectorLayerFields(),
-                                importMetadata: { format: 'Feature Layer', crs: 'EPSG:4326' },
-                              },
-                            ]);
-                            setCustomLayersMapEpoch(epoch => epoch + 1);
+                                source: 'api',
+                                format: 'Shapefile',
+                                crs: 'EPSG:4326',
+                              }),
+                            );
                             focusGeoJsonOnMap(fc);
                           }}
                         />

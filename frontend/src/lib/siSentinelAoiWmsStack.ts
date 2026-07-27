@@ -5,6 +5,7 @@
 import { isAgroDeltaCompositeLayerId } from './agroCompositeIndices'
 import { isAdiLayerId } from './adiIndex'
 import { isNcadiLayerId } from './ncadiIndex'
+import { isWapiLayerId } from './wapiIndex'
 import {
   isCropClassificationLayerId,
   resolveCropClassificationTimeWindow,
@@ -165,13 +166,16 @@ export function buildSiSentinelAoiWmsStackState(
 
   const wmsLayerCatalog = getSentinelHubWmsLayerCatalog()
   const wmsGetMapLayerName = resolveSentinelHubWmsGetMapLayerName(activeWmsLayer, wmsLayerCatalog)
-  const deltaPreviousDate = isAgroDeltaCompositeLayerId(activeWmsLayer)
-    ? resolveSentinelHubWmsDeltaPreviousDate(sentinelFetchDate, {
-        autoPreviousSceneDate: input.autoPreviousSceneDate,
-        catalogSceneIsos: input.catalogSceneIsos,
-        timeSeriesStart: input.timeSeriesStart,
-      })
-    : null
+  const deltaPreviousDate =
+    isAgroDeltaCompositeLayerId(activeWmsLayer) ||
+    isNcadiLayerId(activeWmsLayer) ||
+    isWapiLayerId(activeWmsLayer)
+      ? resolveSentinelHubWmsDeltaPreviousDate(sentinelFetchDate, {
+          autoPreviousSceneDate: input.autoPreviousSceneDate,
+          catalogSceneIsos: input.catalogSceneIsos,
+          timeSeriesStart: input.timeSeriesStart,
+        })
+      : null
   const { timeStart, timeEnd } = isCropClassificationLayerId(activeWmsLayer)
     ? resolveCropClassificationTimeWindow(input.cropSeasonStart, input.cropSeasonEnd, sentinelFetchDate)
     : resolveSentinelHubWmsTimeWindow(activeWmsLayer, sentinelFetchDate, deltaPreviousDate)
@@ -187,7 +191,11 @@ export function buildSiSentinelAoiWmsStackState(
       geometryWkt3857: chunk.geometryWkt3857 ?? undefined,
       evalscriptB64: chunk.evalscriptB64,
       tilePixels,
-      categorical: isLulcClassificationLayerId(activeWmsLayer) || isAdiLayerId(activeWmsLayer) || isNcadiLayerId(activeWmsLayer),
+      categorical:
+        isLulcClassificationLayerId(activeWmsLayer) ||
+        isAdiLayerId(activeWmsLayer) ||
+        isNcadiLayerId(activeWmsLayer) ||
+        isWapiLayerId(activeWmsLayer),
     }),
   )
 

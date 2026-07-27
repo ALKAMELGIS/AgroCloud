@@ -174,8 +174,8 @@ function padBbox(
 }
 
 const SOURCES: Array<{ id: FieldImagerySource; label: string }> = [
-  { id: 'basemap', label: 'Basemap' },
   { id: 'fow', label: 'Fields of the World' },
+  { id: 'basemap', label: 'Basemap' },
   { id: 'sentinel2', label: 'Sentinel-2' },
   { id: 'landsat', label: 'Landsat' },
   { id: 'planet', label: 'Planet' },
@@ -191,10 +191,10 @@ const SOURCES: Array<{ id: FieldImagerySource; label: string }> = [
  * AOI → high-res capture → detect → colorful GeoJSON fields.
  */
 export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBoundaryOptions) {
-  const [source, setSourceState] = useState<FieldImagerySource>('basemap')
+  const [source, setSourceState] = useState<FieldImagerySource>('fow')
   const [uploadedImage, setUploadedImage] = useState<FieldUploadedImage | null>(null)
-  const [minConfidence, setMinConfidence] = useState(0.35)
-  const [minAreaM2, setMinAreaM2] = useState(150)
+  const [minConfidence, setMinConfidence] = useState(0.25)
+  const [minAreaM2, setMinAreaM2] = useState(100)
   const [fillOpacity, setFillOpacity] = useState(0.55)
   const [phase, setPhase] = useState<FieldBoundaryPhase>('idle')
   const [progress, setProgress] = useState(0)

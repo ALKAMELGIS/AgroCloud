@@ -17,6 +17,7 @@ import {
 import { Bar, Line, Pie, Scatter } from 'react-chartjs-2'
 import { useImageryTimeSeriesStream } from '../hooks/useImageryTimeSeriesStream'
 import { useMultiLayerAoiTrendStream } from '../hooks/useMultiLayerAoiTrendStream'
+import { usePlotLayerTimeSeriesStream } from '../hooks/usePlotLayerTimeSeriesStream'
 import { useImageryIndexInterpretation } from '../hooks/useImageryIndexInterpretation'
 import {
   buildLulcClassCompositionStats,
@@ -28,6 +29,7 @@ import { isLulcClassificationLayerId } from '../../../lib/siLulcClassification'
 import { lulcPctLabelsPlugin } from '../../../lib/lulcCompositionChartPlugin'
 import { SiImageryIndexInterpretationCard, type ImageryInterpretationActionId } from './SiImageryIndexInterpretationCard'
 import type { SiAoiFieldRecord } from '../../../lib/siAoiFields'
+import type { SiAoiMaskBuilderLayerLike } from '../../../lib/siAoiMaskBuilder'
 import {
   buildImageryCorrelationScatterAnalysis,
   buildImageryPieChartSlices,
@@ -50,11 +52,14 @@ import { AcpImageryLayerMultiSelect } from '../../dashboards/agroCloudPlatform/m
 import { SiAoiFieldMultiSelect } from '../../dashboards/agroCloudPlatform/map/SiAoiFieldMultiSelect'
 import { SiAoiFieldSelect } from '../../dashboards/agroCloudPlatform/map/SiAoiFieldSelect'
 import { SiMultiLayerAoiTrendView } from './SiMultiLayerAoiTrendView'
+import { SiPlotLayerTimeSeriesView } from './SiPlotLayerTimeSeriesView'
 import type { SiImageryAnalysisMode } from '../../../lib/siMultiLayerAoiTrendAnalysis'
 import {
   buildSiImageryFieldOptions,
+  listSiImageryPlotLabelAttributes,
   resolveSiImageryField,
   SI_IMAGERY_COMMITTED_AOI_KEY,
+  SI_IMAGERY_PLOT_LABEL_AUTO,
 } from '../utils/siImageryTimeSeriesFields'
 import { TimeSeriesExportManager } from './timeSeriesReport/ExportManager'
 import { SiDynamicMapSnapshotsPanel } from './SiDynamicMapSnapshotsPanel'
@@ -79,6 +84,8 @@ ChartJS.register(
 export type SiImageryTimeSeriesPanelProps = {
   agroStructuresMask: GeoJSON.FeatureCollection | null
   aoiFields: SiAoiFieldRecord[]
+  /** KMZ/KML/SHP/GeoJSON layers from the map Layers panel (polygon features → AOI pickers). */
+  vectorLayers?: SiAoiMaskBuilderLayerLike[] | null
   committedAoiGeometry: GeoJSON.Geometry | null
   defaultLayerId: string
   analysisDate: string
@@ -87,7 +94,10 @@ export type SiImageryTimeSeriesPanelProps = {
   onMapDateFromChart: (iso: string) => void
   selectedFieldKey?: string | null
   onSelectedFieldKeyChange?: (fieldKey: string) => void
-  onHighlightFieldKeysChange?: (fieldKeys: string[]) => void
+  onHighlightFieldKeysChange?: (
+    fieldKeys: string[],
+    opts?: { fitBounds?: boolean },
+  ) => void
   chartLookbackDays?: number
   mapboxToken?: string
   projectName?: string
@@ -99,6 +109,7 @@ export type SiImageryTimeSeriesPanelProps = {
 export function SiImageryTimeSeriesPanel({
   agroStructuresMask,
   aoiFields,
+  vectorLayers = null,
   committedAoiGeometry,
   defaultLayerId,
   analysisDate,
@@ -122,9 +133,23 @@ export function SiImageryTimeSeriesPanel({
     [referenceDate, chartLookbackDays],
   )
 
+  const [plotLabelAttribute, setPlotLabelAttribute] = useState(SI_IMAGERY_PLOT_LABEL_AUTO)
+
+  const plotLabelAttributes = useMemo(
+    () => listSiImageryPlotLabelAttributes(vectorLayers),
+    [vectorLayers],
+  )
+
   const fieldOptions = useMemo(
-    () => buildSiImageryFieldOptions(agroStructuresMask, aoiFields, committedAoiGeometry),
-    [agroStructuresMask, aoiFields, committedAoiGeometry],
+    () =>
+      buildSiImageryFieldOptions(
+        agroStructuresMask,
+        aoiFields,
+        committedAoiGeometry,
+        vectorLayers,
+        plotLabelAttribute,
+      ),
+    [agroStructuresMask, aoiFields, committedAoiGeometry, vectorLayers, plotLabelAttribute],
   )
 
   const layerGroups = useMemo(() => buildImageryTimeSeriesLayerGroups(), [])
@@ -164,6 +189,12 @@ export function SiImageryTimeSeriesPanel({
   const prevImageryDateAutoFollowRef = useRef(imageryDateAutoFollow)
 
   useEffect(() => {
+    if (!plotLabelAttribute) return
+    if (plotLabelAttributes.some(a => a.name === plotLabelAttribute)) return
+    setPlotLabelAttribute(SI_IMAGERY_PLOT_LABEL_AUTO)
+  }, [plotLabelAttribute, plotLabelAttributes])
+
+  useEffect(() => {
     // Only clear manual Start/End when auto-follow is turned ON — not while it stays true.
     if (imageryDateAutoFollow && !prevImageryDateAutoFollowRef.current) {
       datesManuallyEditedRef.current = false
@@ -183,33 +214,75 @@ export function SiImageryTimeSeriesPanel({
   const resolvedFields = useMemo(
     () =>
       selectedFieldKeys
-        .map(key => resolveSiImageryField(agroStructuresMask, aoiFields, committedAoiGeometry, key))
+        .map(key =>
+          resolveSiImageryField(
+            agroStructuresMask,
+            aoiFields,
+            committedAoiGeometry,
+            key,
+            vectorLayers,
+            plotLabelAttribute,
+          ),
+        )
         .filter((f): f is NonNullable<typeof f> => f != null),
-    [agroStructuresMask, aoiFields, committedAoiGeometry, selectedFieldKeys],
+    [agroStructuresMask, aoiFields, committedAoiGeometry, selectedFieldKeys, vectorLayers, plotLabelAttribute],
   )
 
   const {
-    results: multiAoiResults,
+    timeline: multiAoiTimeline,
     loading: multiAoiLoading,
     refreshing: multiAoiRefreshing,
     error: multiAoiError,
     hasRun: multiAoiHasRun,
     analysisDurationMs: multiAoiDurationMs,
+    progress: multiAoiProgress,
     hasChartData: multiAoiHasChartData,
     run: runMultiAoiAnalysis,
     invalidateResults: invalidateMultiAoiResults,
   } = useMultiLayerAoiTrendStream({
     fields: resolvedFields,
     layerIds: selectedLayerIds,
+    fromDate,
+    toDate: multiSceneDate || toDate,
+    timeAggregation,
     sceneDate: multiSceneDate,
+  })
+
+  const primaryLayerIdForPlots = selectedLayerIds[0]?.trim() || 'NDVI'
+
+  const {
+    result: plotLayerTsResult,
+    loading: plotLayerTsLoading,
+    refreshing: plotLayerTsRefreshing,
+    error: plotLayerTsError,
+    warning: plotLayerTsWarning,
+    hasRun: plotLayerTsHasRun,
+    analysisDurationMs: plotLayerTsDurationMs,
+    progress: plotLayerTsProgress,
+    hasChartData: plotLayerTsHasChartData,
+    run: runPlotLayerTsAnalysis,
+    invalidateResults: invalidatePlotLayerTsResults,
+  } = usePlotLayerTimeSeriesStream({
+    fields: resolvedFields,
+    layerId: primaryLayerIdForPlots,
+    fromDate,
+    toDate,
+    timeAggregation,
   })
 
   const resolvedField = useMemo(
     () =>
       selectedFieldKey
-        ? resolveSiImageryField(agroStructuresMask, aoiFields, committedAoiGeometry, selectedFieldKey)
+        ? resolveSiImageryField(
+            agroStructuresMask,
+            aoiFields,
+            committedAoiGeometry,
+            selectedFieldKey,
+            vectorLayers,
+            plotLabelAttribute,
+          )
         : null,
-    [agroStructuresMask, aoiFields, committedAoiGeometry, selectedFieldKey],
+    [agroStructuresMask, aoiFields, committedAoiGeometry, selectedFieldKey, vectorLayers, plotLabelAttribute],
   )
 
   const {
@@ -453,11 +526,12 @@ export function SiImageryTimeSeriesPanel({
   const handleInvalidate = useCallback(() => {
     invalidateResults()
     invalidateMultiAoiResults()
+    invalidatePlotLayerTsResults()
     autoRunReadyRef.current = false
     setDateError(null)
     setSelectedChartDate(null)
     setActivePanelTab('chart')
-  }, [invalidateResults, invalidateMultiAoiResults])
+  }, [invalidateResults, invalidateMultiAoiResults, invalidatePlotLayerTsResults])
 
   const displayError = dateError || error
 
@@ -484,27 +558,55 @@ export function SiImageryTimeSeriesPanel({
     setSelectedFieldKeys(prev => {
       const kept = prev.filter(key => fieldOptions.some(o => o.fieldKey === key))
       if (kept.length) return kept
-      return fieldOptions.slice(0, Math.min(3, fieldOptions.length)).map(o => o.fieldKey)
+      // Plot time series benefits from more plots by default.
+      const take = analysisMode === 'plot-layer-time-series' ? Math.min(12, fieldOptions.length) : Math.min(3, fieldOptions.length)
+      return fieldOptions.slice(0, take).map(o => o.fieldKey)
     })
-  }, [fieldOptions])
+  }, [fieldOptions, analysisMode])
 
   const runMultiAoiWrapped = useCallback(async () => {
     autoRunReadyRef.current = true
     await runMultiAoiAnalysis()
   }, [runMultiAoiAnalysis])
 
+  const runPlotLayerTsWrapped = useCallback(async () => {
+    autoRunReadyRef.current = true
+    await runPlotLayerTsAnalysis()
+  }, [runPlotLayerTsAnalysis])
+
   const handleMultiAoiHighlight = useCallback(
     (fieldKey: string) => {
       onSelectedFieldKeyChange?.(fieldKey)
-      onHighlightFieldKeysChange?.([fieldKey])
+      onHighlightFieldKeysChange?.([fieldKey], { fitBounds: true })
     },
     [onSelectedFieldKeyChange, onHighlightFieldKeysChange],
+  )
+
+  const handleFieldSelectHighlight = useCallback(
+    (fieldKey: string) => {
+      handleInvalidate()
+      setSelectedFieldKey(fieldKey)
+      if (fieldKey) {
+        onSelectedFieldKeyChange?.(fieldKey)
+        onHighlightFieldKeysChange?.([fieldKey], { fitBounds: true })
+      }
+    },
+    [handleInvalidate, onSelectedFieldKeyChange, onHighlightFieldKeysChange],
+  )
+
+  const handleFieldPreviewHighlight = useCallback(
+    (fieldKey: string | null) => {
+      if (!fieldKey) return
+      onHighlightFieldKeysChange?.([fieldKey], { fitBounds: false })
+    },
+    [onHighlightFieldKeysChange],
   )
 
   useEffect(() => {
     if (analysisMode !== 'multi-layer-aoi-comparison') return
     if (!multiAoiHasRun || multiAoiLoading) return
-    if (!selectedFieldKeys.length || !selectedLayerIds.length || !multiSceneDate) return
+    if (!selectedFieldKeys.length || !selectedLayerIds.length || !multiSceneDate || !fromDate) return
+    if (fromDate > multiSceneDate) return
     if (!resolvedFields.length) return
     const id = window.setTimeout(() => void runMultiAoiWrapped(), 650)
     return () => window.clearTimeout(id)
@@ -513,6 +615,7 @@ export function SiImageryTimeSeriesPanel({
     selectedFieldKeys,
     selectedLayerIds,
     multiSceneDate,
+    fromDate,
     resolvedFields,
     multiAoiHasRun,
     multiAoiLoading,
@@ -522,7 +625,8 @@ export function SiImageryTimeSeriesPanel({
   useEffect(() => {
     if (analysisMode !== 'multi-layer-aoi-comparison') return
     if (multiAoiHasRun || multiAoiLoading) return
-    if (!selectedFieldKeys.length || !selectedLayerIds.length || !multiSceneDate) return
+    if (!selectedFieldKeys.length || !selectedLayerIds.length || !multiSceneDate || !fromDate) return
+    if (fromDate > multiSceneDate) return
     if (!resolvedFields.length) return
     const id = window.setTimeout(() => void runMultiAoiWrapped(), 500)
     return () => window.clearTimeout(id)
@@ -531,6 +635,7 @@ export function SiImageryTimeSeriesPanel({
     selectedFieldKeys,
     selectedLayerIds,
     multiSceneDate,
+    fromDate,
     resolvedFields,
     multiAoiHasRun,
     multiAoiLoading,
@@ -539,15 +644,77 @@ export function SiImageryTimeSeriesPanel({
 
   useEffect(() => {
     if (analysisMode !== 'multi-layer-aoi-comparison') return
-    if (selectedFieldKeys.length && selectedLayerIds.length && multiSceneDate && resolvedFields.length) return
+    if (
+      selectedFieldKeys.length &&
+      selectedLayerIds.length &&
+      multiSceneDate &&
+      fromDate &&
+      fromDate <= multiSceneDate &&
+      resolvedFields.length
+    )
+      return
     invalidateMultiAoiResults()
   }, [
     analysisMode,
     selectedFieldKeys,
     selectedLayerIds,
     multiSceneDate,
+    fromDate,
     resolvedFields,
     invalidateMultiAoiResults,
+  ])
+
+  useEffect(() => {
+    if (analysisMode !== 'plot-layer-time-series') return
+    if (!plotLayerTsHasRun || plotLayerTsLoading) return
+    if (!selectedFieldKeys.length || !selectedLayerIds.length || !fromDate || !toDate || fromDate > toDate) return
+    if (!resolvedFields.length) return
+    const id = window.setTimeout(() => void runPlotLayerTsWrapped(), 700)
+    return () => window.clearTimeout(id)
+  }, [
+    analysisMode,
+    selectedFieldKeys,
+    selectedLayerIds,
+    fromDate,
+    toDate,
+    resolvedFields,
+    plotLayerTsHasRun,
+    plotLayerTsLoading,
+    runPlotLayerTsWrapped,
+  ])
+
+  useEffect(() => {
+    if (analysisMode !== 'plot-layer-time-series') return
+    if (plotLayerTsHasRun || plotLayerTsLoading) return
+    if (!selectedFieldKeys.length || !selectedLayerIds.length || !fromDate || !toDate || fromDate > toDate) return
+    if (!resolvedFields.length) return
+    const id = window.setTimeout(() => void runPlotLayerTsWrapped(), 550)
+    return () => window.clearTimeout(id)
+  }, [
+    analysisMode,
+    selectedFieldKeys,
+    selectedLayerIds,
+    fromDate,
+    toDate,
+    resolvedFields,
+    plotLayerTsHasRun,
+    plotLayerTsLoading,
+    runPlotLayerTsWrapped,
+  ])
+
+  useEffect(() => {
+    if (analysisMode !== 'plot-layer-time-series') return
+    if (selectedFieldKeys.length && selectedLayerIds.length && fromDate && toDate && fromDate <= toDate && resolvedFields.length)
+      return
+    invalidatePlotLayerTsResults()
+  }, [
+    analysisMode,
+    selectedFieldKeys,
+    selectedLayerIds,
+    fromDate,
+    toDate,
+    resolvedFields,
+    invalidatePlotLayerTsResults,
   ])
 
   useEffect(() => {
@@ -606,6 +773,63 @@ export function SiImageryTimeSeriesPanel({
 
   const selectedFieldLabel =
     fieldOptions.find(o => o.fieldKey === selectedFieldKey)?.displayName ?? '—'
+
+  const exportFieldKeys = useMemo(() => {
+    if (
+      (analysisMode === 'multi-layer-aoi-comparison' || analysisMode === 'plot-layer-time-series') &&
+      selectedFieldKeys.length
+    ) {
+      return selectedFieldKeys
+    }
+    return fieldOptions.map(o => o.fieldKey)
+  }, [analysisMode, selectedFieldKeys, fieldOptions])
+
+  const resolveExportPlotsForLabel = useCallback(
+    (labelAttribute: string) =>
+      exportFieldKeys
+        .map(key =>
+          resolveSiImageryField(
+            agroStructuresMask,
+            aoiFields,
+            committedAoiGeometry,
+            key,
+            vectorLayers,
+            labelAttribute,
+          ),
+        )
+        .filter((f): f is NonNullable<typeof f> => !!f?.geometry),
+    [exportFieldKeys, agroStructuresMask, aoiFields, committedAoiGeometry, vectorLayers],
+  )
+
+  const resolveExportFieldForLabel = useCallback(
+    (labelAttribute: string) =>
+      selectedFieldKey
+        ? resolveSiImageryField(
+            agroStructuresMask,
+            aoiFields,
+            committedAoiGeometry,
+            selectedFieldKey,
+            vectorLayers,
+            labelAttribute,
+          )
+        : null,
+    [selectedFieldKey, agroStructuresMask, aoiFields, committedAoiGeometry, vectorLayers],
+  )
+
+  const exportPlots = useMemo(
+    () => resolveExportPlotsForLabel(plotLabelAttribute),
+    [resolveExportPlotsForLabel, plotLabelAttribute],
+  )
+
+  const exportAoiName = useMemo(() => {
+    if (
+      (analysisMode === 'multi-layer-aoi-comparison' || analysisMode === 'plot-layer-time-series') &&
+      selectedFieldKeys.length
+    ) {
+      return `${selectedFieldKeys.length} selected plots`
+    }
+    return `${exportPlots.length} plots`
+  }, [analysisMode, selectedFieldKeys, exportPlots.length])
 
   const runAnalysisWrapped = useCallback(async () => {
     prevAutoRunDatesRef.current = { from: fromDate, to: toDate }
@@ -1287,10 +1511,31 @@ export function SiImageryTimeSeriesPanel({
                   if (analysisMode === 'multi-layer-aoi-comparison') return
                   setAnalysisMode('multi-layer-aoi-comparison')
                   setActivePanelTab('chart')
+                  setToDate(multiSceneDate || toDate)
+                  if (fromDate && multiSceneDate && fromDate > multiSceneDate) {
+                    const next = defaultImageryDateRange(multiSceneDate, chartLookbackDays)
+                    setFromDate(next.from)
+                  }
                   invalidateMultiAoiResults()
                 }}
               >
                 Multi-Layer AOI Comparison
+              </button>
+              <button
+                type="button"
+                className={`acp-ts__aggregate-btn${analysisMode === 'plot-layer-time-series' ? ' is-on' : ''}`}
+                aria-pressed={analysisMode === 'plot-layer-time-series'}
+                title="Weekly / daily time series — one layer, many plots as lines"
+                onClick={() => {
+                  if (analysisMode === 'plot-layer-time-series') return
+                  setAnalysisMode('plot-layer-time-series')
+                  setActivePanelTab('chart')
+                  setTimeAggregation(prev => (prev === 'day' ? 'week' : prev))
+                  setChartType('line')
+                  invalidatePlotLayerTsResults()
+                }}
+              >
+                Time Series by Plot
               </button>
             </div>
           </div>
@@ -1301,10 +1546,18 @@ export function SiImageryTimeSeriesPanel({
             <SiAoiFieldSelect
               options={fieldOptions}
               value={selectedFieldKey}
-              onChange={key => {
-                handleInvalidate()
-                setSelectedFieldKey(key)
-                if (key) onSelectedFieldKeyChange?.(key)
+              onChange={handleFieldSelectHighlight}
+              onPreviewFieldKey={handleFieldPreviewHighlight}
+              onSelectAll={keys => {
+                if (!keys.length) return
+                setSelectedFieldKeys(keys)
+                setSelectedFieldKey(keys[0]!)
+                if (keys[0]) {
+                  onSelectedFieldKeyChange?.(keys[0])
+                  onHighlightFieldKeysChange?.([keys[0]], { fitBounds: true })
+                }
+                setAnalysisMode('multi-layer-aoi-comparison')
+                invalidateMultiAoiResults()
               }}
               disabled={!fieldOptions.length}
               emptyLabel="No Agro Structures fields"
@@ -1314,16 +1567,50 @@ export function SiImageryTimeSeriesPanel({
           </div>
           ) : (
           <div className="acp-ts__field acp-ts__field--grow">
-            <span className="acp-ts__field-label">AOI Layers</span>
+            <span className="acp-ts__field-label">
+              {analysisMode === 'plot-layer-time-series' ? 'Plots' : 'AOI Layers'}
+            </span>
             <SiAoiFieldMultiSelect
               options={fieldOptions}
               selectedKeys={selectedFieldKeys}
-              onSelectedKeysChange={setSelectedFieldKeys}
+              onSelectedKeysChange={keys => {
+                setSelectedFieldKeys(keys)
+                if (analysisMode === 'plot-layer-time-series') invalidatePlotLayerTsResults()
+                else invalidateMultiAoiResults()
+              }}
               disabled={!fieldOptions.length}
-              aria-label="AOI layers for comparison"
+              aria-label={
+                analysisMode === 'plot-layer-time-series'
+                  ? 'Plots for time series'
+                  : 'AOI layers for comparison'
+              }
             />
           </div>
           )}
+          {plotLabelAttributes.length > 0 ? (
+            <div className="acp-ts__field acp-ts__field--plot-label">
+              <span className="acp-ts__field-label">Label field</span>
+              <select
+                value={plotLabelAttribute}
+                onChange={e => {
+                  const next = e.target.value
+                  setPlotLabelAttribute(next)
+                  if (analysisMode === 'single-layer-trend') handleInvalidate()
+                  else if (analysisMode === 'plot-layer-time-series') invalidatePlotLayerTsResults()
+                  else invalidateMultiAoiResults()
+                }}
+                aria-label="Plot label attribute field"
+                title="Choose which layer attribute to show as the plot name (e.g. Name, OBJECTID)"
+              >
+                <option value={SI_IMAGERY_PLOT_LABEL_AUTO}>Auto (Name / ID)</option>
+                {plotLabelAttributes.map(attr => (
+                  <option key={attr.name} value={attr.name}>
+                    {attr.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           <div className="acp-ts__field acp-ts__field--layer acp-ts__field--grow">
             <AcpImageryLayerMultiSelect
               groups={layerGroups}
@@ -1347,7 +1634,50 @@ export function SiImageryTimeSeriesPanel({
             />
           </div>
           <div className="acp-ts__date-range">
-            {analysisMode === 'single-layer-trend' ? (
+            {analysisMode === 'multi-layer-aoi-comparison' ? (
+            <>
+            <label className="acp-ts__field acp-ts__field--date">
+              <span>Start Date</span>
+              <input
+                type="date"
+                value={fromDate}
+                max={multiSceneDate || undefined}
+                onChange={e => {
+                  const next = e.target.value
+                  datesManuallyEditedRef.current = true
+                  setDateError(null)
+                  setFromDate(next)
+                  if (multiSceneDate && next && next > multiSceneDate) {
+                    setMultiSceneDate(next)
+                    setToDate(next)
+                  } else {
+                    setToDate(multiSceneDate || next)
+                  }
+                  invalidateMultiAoiResults()
+                }}
+              />
+            </label>
+            <label className="acp-ts__field acp-ts__field--date">
+              <span>Acquisition Date</span>
+              <input
+                type="date"
+                value={multiSceneDate}
+                min={fromDate || undefined}
+                onChange={e => {
+                  const next = e.target.value
+                  datesManuallyEditedRef.current = true
+                  handleInvalidate()
+                  setMultiSceneDate(next)
+                  setToDate(next)
+                  if (fromDate && next && fromDate > next) {
+                    setFromDate(next)
+                  }
+                  invalidateMultiAoiResults()
+                }}
+              />
+            </label>
+            </>
+            ) : (
             <>
             <label className="acp-ts__field acp-ts__field--date">
               <span>Start Date</span>
@@ -1357,6 +1687,7 @@ export function SiImageryTimeSeriesPanel({
                 max={toDate || undefined}
                 onChange={e => {
                   applyDateChange(e.target.value, toDate)
+                  if (analysisMode === 'plot-layer-time-series') invalidatePlotLayerTsResults()
                 }}
               />
             </label>
@@ -1368,25 +1699,13 @@ export function SiImageryTimeSeriesPanel({
                 min={fromDate || undefined}
                 onChange={e => {
                   applyDateChange(fromDate, e.target.value)
+                  if (analysisMode === 'plot-layer-time-series') invalidatePlotLayerTsResults()
                 }}
               />
             </label>
             </>
-            ) : (
-            <label className="acp-ts__field acp-ts__field--date">
-              <span>Acquisition Date</span>
-              <input
-                type="date"
-                value={multiSceneDate}
-                onChange={e => {
-                  handleInvalidate()
-                  setMultiSceneDate(e.target.value)
-                }}
-              />
-            </label>
             )}
           </div>
-          {analysisMode === 'single-layer-trend' ? (
           <div className="acp-ts__field acp-ts__field--aggregate">
             <span>Aggregate</span>
             <div className="acp-ts__aggregate" role="group" aria-label="Time aggregation">
@@ -1406,6 +1725,7 @@ export function SiImageryTimeSeriesPanel({
                   onClick={() => {
                     setTimeAggregation(value)
                     setSelectedChartDate(null)
+                    // Cached daily rows re-bucket instantly for plot / multi-AOI timelines.
                   }}
                 >
                   {label}
@@ -1413,7 +1733,6 @@ export function SiImageryTimeSeriesPanel({
               ))}
             </div>
           </div>
-          ) : null}
           {analysisMode === 'single-layer-trend' ? (
           <label className="acp-ts__field">
             <span>Chart</span>
@@ -1471,30 +1790,50 @@ export function SiImageryTimeSeriesPanel({
           <button
             type="button"
             className="acp-ts__apply"
-            onClick={() =>
-              analysisMode === 'multi-layer-aoi-comparison'
-                ? void runMultiAoiWrapped()
-                : void runAnalysisWrapped()
-            }
+            onClick={() => {
+              if (analysisMode === 'multi-layer-aoi-comparison') void runMultiAoiWrapped()
+              else if (analysisMode === 'plot-layer-time-series') void runPlotLayerTsWrapped()
+              else void runAnalysisWrapped()
+            }}
             disabled={
               analysisMode === 'multi-layer-aoi-comparison'
                 ? (multiAoiLoading && !multiAoiHasChartData) ||
                   !selectedFieldKeys.length ||
-                  !selectedLayerIds.length
-                : (loading && !hasChartData) || !selectedFieldKey
+                  !selectedLayerIds.length ||
+                  !fromDate ||
+                  !multiSceneDate ||
+                  fromDate > multiSceneDate
+                : analysisMode === 'plot-layer-time-series'
+                  ? (plotLayerTsLoading && !plotLayerTsHasChartData) ||
+                    !selectedFieldKeys.length ||
+                    !selectedLayerIds.length ||
+                    !fromDate ||
+                    !toDate ||
+                    fromDate > toDate
+                  : (loading && !hasChartData) || !selectedFieldKey
             }
           >
             {analysisMode === 'multi-layer-aoi-comparison'
               ? multiAoiLoading && !multiAoiHasChartData
-                ? 'Running…'
+                ? multiAoiProgress
+                  ? `Plots ${multiAoiProgress.done}/${multiAoiProgress.total}…`
+                  : 'Running…'
                 : multiAoiRefreshing
                   ? 'Updating…'
                   : 'Apply'
-              : loading && !hasChartData
-                ? 'Running…'
-                : refreshing
-                  ? 'Updating…'
-                  : 'Apply'}
+              : analysisMode === 'plot-layer-time-series'
+                ? plotLayerTsLoading && !plotLayerTsHasChartData
+                  ? plotLayerTsProgress
+                    ? `Plots ${plotLayerTsProgress.done}/${plotLayerTsProgress.total}…`
+                    : 'Running…'
+                  : plotLayerTsRefreshing
+                    ? 'Updating…'
+                    : 'Apply'
+                : loading && !hasChartData
+                  ? 'Running…'
+                  : refreshing
+                    ? 'Updating…'
+                    : 'Apply'}
           </button>
         </div>
 
@@ -1560,15 +1899,27 @@ export function SiImageryTimeSeriesPanel({
           >
         {analysisMode === 'multi-layer-aoi-comparison' ? (
           <SiMultiLayerAoiTrendView
-            results={multiAoiResults}
-            layerIds={selectedLayerIds}
-            sceneDate={multiSceneDate}
+            timeline={multiAoiTimeline}
             loading={multiAoiLoading}
             refreshing={multiAoiRefreshing}
             hasRun={multiAoiHasRun}
             hasChartData={multiAoiHasChartData}
             error={multiAoiError}
             analysisDurationMs={multiAoiDurationMs}
+            progress={multiAoiProgress}
+            onHighlightFieldKey={handleMultiAoiHighlight}
+          />
+        ) : analysisMode === 'plot-layer-time-series' ? (
+          <SiPlotLayerTimeSeriesView
+            result={plotLayerTsResult}
+            loading={plotLayerTsLoading}
+            refreshing={plotLayerTsRefreshing}
+            hasRun={plotLayerTsHasRun}
+            hasChartData={plotLayerTsHasChartData}
+            error={plotLayerTsError}
+            warning={plotLayerTsWarning}
+            analysisDurationMs={plotLayerTsDurationMs}
+            progress={plotLayerTsProgress}
             onHighlightFieldKey={handleMultiAoiHighlight}
           />
         ) : (
@@ -1918,7 +2269,7 @@ export function SiImageryTimeSeriesPanel({
               <i className="fa-solid fa-map" aria-hidden="true" /> Map Snapshots
             </button>
             <TimeSeriesExportManager
-              disabled={!labels.length || !hasRun}
+              disabled={(!labels.length || !hasRun) && exportPlots.length < 1}
               field={resolvedField}
               fieldName={selectedFieldLabel}
               fieldKey={selectedFieldKey}
@@ -1937,10 +2288,55 @@ export function SiImageryTimeSeriesPanel({
               timeAggregation={timeAggregation}
               projectName={projectName}
               generatedBy={generatedBy}
+              plots={exportPlots}
+              farmName={resolvedField?.farmName || selectedFieldLabel}
+              aoiName={exportAoiName}
+              labelAttributes={plotLabelAttributes}
+              labelAttribute={plotLabelAttribute}
+              onLabelAttributeChange={setPlotLabelAttribute}
+              resolvePlotsForLabel={resolveExportPlotsForLabel}
+              resolveFieldForLabel={resolveExportFieldForLabel}
             />
           </div>
           </>
-          ) : null}
+          ) : (
+          <div className="acp-ts__exports">
+            <TimeSeriesExportManager
+              disabled={exportPlots.length < 1 || !selectedLayerIds.length}
+              field={resolvedFields[0] ?? null}
+              fieldName={resolvedFields[0]?.farmName || 'Multi AOI'}
+              fieldKey={resolvedFields[0]?.fieldKey || ''}
+              fromDate={fromDate}
+              toDate={
+                analysisMode === 'multi-layer-aoi-comparison' ? multiSceneDate || toDate : toDate
+              }
+              acquisitionDate={
+                analysisMode === 'multi-layer-aoi-comparison'
+                  ? multiSceneDate || referenceDate
+                  : toDate || referenceDate
+              }
+              layerIds={selectedLayerIds}
+              chartLabels={[]}
+              displayLabels={[]}
+              layerSeries={[]}
+              dailyRows={[]}
+              chartRef={chartRef}
+              chartType={chartType}
+              mapboxToken={mapboxToken}
+              timeAggregation={timeAggregation}
+              projectName={projectName}
+              generatedBy={generatedBy}
+              plots={exportPlots}
+              farmName={resolvedFields[0]?.farmName || 'Farm'}
+              aoiName={exportAoiName}
+              labelAttributes={plotLabelAttributes}
+              labelAttribute={plotLabelAttribute}
+              onLabelAttributeChange={setPlotLabelAttribute}
+              resolvePlotsForLabel={resolveExportPlotsForLabel}
+              resolveFieldForLabel={resolveExportFieldForLabel}
+            />
+          </div>
+          )}
         </div>
     </div>
   )

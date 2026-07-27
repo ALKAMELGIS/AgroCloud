@@ -20,6 +20,15 @@ import {
   NCADI_CLASS_VALUES,
   NCADI_LAYER_ID,
 } from './ncadiIndex'
+import {
+  WAPI_CLASS_BREAKS,
+  WAPI_CLASS_COLORS,
+  WAPI_CLASS_LABELS,
+  WAPI_CLASS_VALUES,
+  WAPI_LAYER_ID,
+  WAPI_VALUE_MAX,
+  WAPI_VALUE_MIN,
+} from './wapiIndex'
 
 /** Preserved shared kinds — CHAS scientific raster + alert-derived layers. */
 export type AgroCompositeRampKind = 'scientific' | 'alert' | 'alert_delta' | 'alert_derived' | `unique:${string}`
@@ -158,6 +167,22 @@ const PRESERVED_ALERT_LAYER_CONFIG: Record<string, AgroCompositeLayerRampConfig>
     breaks: NCADI_CLASS_BREAKS,
     classValues: NCADI_CLASS_VALUES,
     classColors: NCADI_CLASS_COLORS,
+  },
+  [WAPI_LAYER_ID]: {
+    kind: 'scientific',
+    valueMin: WAPI_VALUE_MIN,
+    valueMax: WAPI_VALUE_MAX,
+    anchors: WAPI_CLASS_COLORS.map((hex, i) => ({
+      t: i / 9,
+      hex,
+      label: WAPI_CLASS_LABELS[i]!,
+    })),
+    labels: WAPI_CLASS_LABELS,
+    subtitle:
+      'WAPI 10-class · Class 1 Normal (0.00) → Class 10 Extreme Critical (1.00) · blue = low priority · magenta = irrigate first',
+    breaks: WAPI_CLASS_BREAKS,
+    classValues: WAPI_CLASS_VALUES,
+    classColors: WAPI_CLASS_COLORS,
   },
 }
 
@@ -324,7 +349,12 @@ export function agroCompositeRampColorFingerprint(layerId: string): string | nul
 
 /** All composite layer ids with unique ramp definitions (excludes Sentinel core indices). */
 export function listAgroCompositeRampLayerIds(): string[] {
-  return [...Object.keys(AGRO_UNIQUE_LAYER_RAMP_PALETTES), ...Object.keys(PRESERVED_ALERT_LAYER_CONFIG)].sort()
+  return [
+    ...new Set([
+      ...Object.keys(AGRO_UNIQUE_LAYER_RAMP_PALETTES),
+      ...Object.keys(PRESERVED_ALERT_LAYER_CONFIG),
+    ]),
+  ].sort()
 }
 
 /** @deprecated Shared kind anchors removed — kept for type imports only. */

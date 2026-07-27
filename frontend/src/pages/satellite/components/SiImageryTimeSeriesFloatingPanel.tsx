@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import type { SiAoiFieldRecord } from '../../../lib/siAoiFields';
+import type { SiAoiMaskBuilderLayerLike } from '../../../lib/siAoiMaskBuilder';
 import { useSiInstanceScope } from '../siInstanceScope';
 import { useMapOverlayIsolation } from '../useMapOverlayIsolation';
 import { SiImageryTimeSeriesPanel } from './SiImageryTimeSeriesPanel';
@@ -115,6 +116,8 @@ export type SiImageryTimeSeriesFloatingPanelProps = {
   containerRef: RefObject<HTMLElement | null>;
   agroStructuresMask: GeoJSON.FeatureCollection | null;
   aoiFields: SiAoiFieldRecord[];
+  /** Layers-panel vector uploads (SHP/KMZ/GeoJSON) → Time Series AOI Layers picker. */
+  vectorLayers?: SiAoiMaskBuilderLayerLike[] | null;
   committedAoiGeometry: GeoJSON.Geometry | null;
   defaultLayerId: string;
   analysisDate: string;
@@ -122,7 +125,10 @@ export type SiImageryTimeSeriesFloatingPanelProps = {
   onMapDateFromChart: (iso: string) => void;
   selectedFieldKey?: string | null;
   onSelectedFieldKeyChange?: (fieldKey: string) => void;
-  onHighlightFieldKeysChange?: (fieldKeys: string[]) => void;
+  onHighlightFieldKeysChange?: (
+    fieldKeys: string[],
+    opts?: { fitBounds?: boolean },
+  ) => void;
   mapboxToken?: string;
   onStormMapOverlayChange?: (overlay: import('../lib/imageryStormAnalysis').SiTsWeatherStormMapOverlay | null) => void;
   stormOverlayDismissEpoch?: number;
@@ -134,6 +140,7 @@ export function SiImageryTimeSeriesFloatingPanel({
   containerRef,
   agroStructuresMask,
   aoiFields,
+  vectorLayers = null,
   committedAoiGeometry,
   defaultLayerId,
   analysisDate,
@@ -397,6 +404,7 @@ export function SiImageryTimeSeriesFloatingPanel({
           <SiImageryTimeSeriesPanel
             agroStructuresMask={agroStructuresMask}
             aoiFields={aoiFields}
+            vectorLayers={vectorLayers}
             committedAoiGeometry={committedAoiGeometry}
             defaultLayerId={defaultLayerId}
             analysisDate={analysisDate}

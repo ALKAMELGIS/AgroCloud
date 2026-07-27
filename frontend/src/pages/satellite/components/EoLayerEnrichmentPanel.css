@@ -18,9 +18,24 @@
   color: inherit;
 }
 
+.si-eo-enrich__workflow,
 .si-eo-enrich__mode {
   display: flex;
   gap: 6px;
+}
+
+.si-eo-enrich__workflow {
+  margin-bottom: 2px;
+}
+
+.si-eo-enrich__field input[type='range'] {
+  width: 100%;
+}
+
+.si-eo-enrich__field em {
+  font-style: normal;
+  opacity: 0.85;
+  margin-left: 4px;
 }
 
 .si-eo-enrich__mode-btn {

@@ -31,7 +31,7 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
     }
     const source = String(body.source || '').toLowerCase()
     const isFow = source === 'fow' || source === 'fields-of-the-world' || source === 'ftw'
-    if (!isFow && typeof body.image !== 'string') {
+    if (!isFow && (typeof body.image !== 'string' || !String(body.image || '').trim())) {
       return 'Expected JSON { image, bbox } for field boundary detection.'
     }
     return null
@@ -133,9 +133,13 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
         })
         return res.status(status).json(json)
       } catch (error) {
+        const detail = String(error?.message || error)
+        const offline = /ECONNREFUSED|ENOTFOUND|fetch failed|AbortError|timed out|TimeoutError/i.test(detail)
         return res.status(502).json({
-          error: 'Could not reach the field-boundary service.',
-          detail: String(error?.message || error),
+          error: offline
+            ? 'Field-boundary service offline — run backend/services/agri-field-boundary (port 8092).'
+            : 'Could not reach the field-boundary service.',
+          detail,
         })
       }
     },
@@ -158,9 +162,13 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
         })
         return res.status(status).json(json)
       } catch (error) {
+        const detail = String(error?.message || error)
+        const offline = /ECONNREFUSED|ENOTFOUND|fetch failed|AbortError|timed out|TimeoutError/i.test(detail)
         return res.status(502).json({
-          error: 'Could not start field-boundary job.',
-          detail: String(error?.message || error),
+          error: offline
+            ? 'Field-boundary service offline — run backend/services/agri-field-boundary (port 8092).'
+            : 'Could not start field-boundary job.',
+          detail,
         })
       }
     },
@@ -179,9 +187,13 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
       })
       return res.status(status).json(json)
     } catch (error) {
+      const detail = String(error?.message || error)
+      const offline = /ECONNREFUSED|ENOTFOUND|fetch failed|AbortError|timed out|TimeoutError/i.test(detail)
       return res.status(502).json({
-        error: 'Could not poll field-boundary job.',
-        detail: String(error?.message || error),
+        error: offline
+          ? 'Field-boundary service offline — run backend/services/agri-field-boundary (port 8092).'
+          : 'Could not poll field-boundary job.',
+        detail,
       })
     }
   })

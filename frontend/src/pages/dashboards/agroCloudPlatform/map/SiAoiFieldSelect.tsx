@@ -5,6 +5,10 @@ type Props = {
   options: AcpStructureFieldOption[]
   value: string
   onChange: (fieldKey: string) => void
+  /** Fired when the pointer enters/leaves a field option (null on leave / menu close). */
+  onPreviewFieldKey?: (fieldKey: string | null) => void
+  /** Select every (filtered) field — used to jump into multi-AOI analysis. */
+  onSelectAll?: (fieldKeys: string[]) => void
   disabled?: boolean
   emptyLabel?: string
   searchPlaceholder?: string
@@ -26,6 +30,8 @@ export function SiAoiFieldSelect({
   options,
   value,
   onChange,
+  onPreviewFieldKey,
+  onSelectAll,
   disabled = false,
   emptyLabel = 'No AOI fields',
   searchPlaceholder = 'Search fields…',
@@ -45,6 +51,7 @@ export function SiAoiFieldSelect({
   useEffect(() => {
     if (!open) {
       setQuery('')
+      onPreviewFieldKey?.(null)
       return
     }
     const t = window.setTimeout(() => searchRef.current?.focus(), 0)
@@ -61,10 +68,11 @@ export function SiAoiFieldSelect({
       document.removeEventListener('mousedown', onPointerDown)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [open])
+  }, [open, onPreviewFieldKey])
 
   const selectValue = (fieldKey: string) => {
     onChange(fieldKey)
+    onPreviewFieldKey?.(null)
     setOpen(false)
   }
 
@@ -108,6 +116,24 @@ export function SiAoiFieldSelect({
               aria-label="Search fields"
             />
           </div>
+          {onSelectAll && filteredOptions.length > 1 ? (
+            <div className="acp-ts-layer-select__bulk">
+              <button
+                type="button"
+                className="acp-ts-layer-select__option acp-ts-layer-select__option--bulk acp-ts-layer-select__option--single"
+                onClick={() => {
+                  onSelectAll(filteredOptions.map(o => o.fieldKey))
+                  setOpen(false)
+                }}
+              >
+                <span className="acp-ts-layer-select__option-text">
+                  <span className="acp-ts-layer-select__option-abbr">
+                    Select all{query.trim() ? ` (${filteredOptions.length})` : ''}
+                  </span>
+                </span>
+              </button>
+            </div>
+          ) : null}
           {filteredOptions.length ? (
             filteredOptions.map(opt => {
               const selected = value === opt.fieldKey
@@ -120,6 +146,8 @@ export function SiAoiFieldSelect({
                   className={`acp-ts-layer-select__option acp-ts-layer-select__option--single${selected ? ' is-checked' : ''}`}
                   title={opt.displayName}
                   onClick={() => selectValue(opt.fieldKey)}
+                  onMouseEnter={() => onPreviewFieldKey?.(opt.fieldKey)}
+                  onFocus={() => onPreviewFieldKey?.(opt.fieldKey)}
                 >
                   <span className="acp-ts-layer-select__option-text">
                     <span className="acp-ts-layer-select__option-abbr">{opt.displayName}</span>

@@ -21,6 +21,42 @@ describe('siDrawnAoiLiveIndex', () => {
     })
     expect(fc?.type).toBe('FeatureCollection')
     expect(fc?.features).toHaveLength(1)
-    expect(drawnAoiClipSignature(fc)).toContain('drawn:1')
+    expect(drawnAoiClipSignature(fc)).toContain('drawn:1:Polygon:')
+  })
+
+  it('changes clip signature when ring coordinates move', () => {
+    const a = normalizeDrawnAoiClipCollection({
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [55, 24],
+            [55.1, 24],
+            [55.1, 24.1],
+            [55, 24.1],
+            [55, 24],
+          ],
+        ],
+      },
+    })
+    const b = normalizeDrawnAoiClipCollection({
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [56, 24],
+            [56.1, 24],
+            [56.1, 24.1],
+            [56, 24.1],
+            [56, 24],
+          ],
+        ],
+      },
+    })
+    expect(drawnAoiClipSignature(a)).not.toBe(drawnAoiClipSignature(b))
   })
 })

@@ -17,6 +17,8 @@ describe('siMapAnalysisLayerOrder', () => {
       'basemap',
       'agro-fill',
       'agro-line',
+      'custom-aoi-fill',
+      'custom-aoi-line',
       'drawn-index-geometry-fill',
       'sentinel-draw-layer-0',
       'drawn-index-geometry-line',
@@ -46,16 +48,22 @@ describe('siMapAnalysisLayerOrder', () => {
     syncSiMapAnalysisLayerOrder(map as any, {
       agroFillId: 'agro-fill',
       agroLineId: 'agro-line',
+      extraFillIdsUnderRaster: ['custom-aoi-fill'],
+      extraOutlineIdsAboveRaster: ['custom-aoi-line'],
       suppressAgroFillWhenWms: true,
     })
 
     const fillIdx = order.indexOf('drawn-index-geometry-fill')
+    const customFillIdx = order.indexOf('custom-aoi-fill')
     const rasterIdx = order.indexOf('sentinel-draw-layer-0')
     const lineIdx = order.indexOf('drawn-index-geometry-line')
+    const customLineIdx = order.indexOf('custom-aoi-line')
     const agroFillIdx = order.indexOf('agro-fill')
     expect(fillIdx).toBeGreaterThanOrEqual(0)
     expect(rasterIdx).toBeGreaterThan(fillIdx)
+    expect(rasterIdx).toBeGreaterThan(customFillIdx)
     expect(lineIdx).toBeGreaterThan(rasterIdx)
+    expect(customLineIdx).toBeGreaterThan(rasterIdx)
     expect(agroFillIdx).toBeLessThan(rasterIdx)
     expect(map.setPaintProperty).toHaveBeenCalledWith('agro-fill', 'fill-opacity', 0)
   })

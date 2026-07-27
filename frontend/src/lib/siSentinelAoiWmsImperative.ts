@@ -129,23 +129,43 @@ function ensurePingPongRasterPair(
     }
 
     if (!map.getLayer(layerId)) {
-      const beforeId = beforeLayerId ?? resolveSiAnalysisRasterBeforeLayerId(map)
-      map.addLayer(
-        {
-          id: layerId,
-          type: 'raster',
-          source: sourceId,
-          // Stay layout-visible at opacity 0 so warm prefetch can load tiles
-          // (visibility:none prevents Mapbox from requesting WMS tiles).
-          layout: { visibility: 'visible' },
-          paint: {
-            'raster-opacity': 0,
-            'raster-fade-duration': 0,
-            'raster-resampling': 'linear',
+      const preferredBefore =
+        beforeLayerId && map.getLayer(beforeLayerId) ? beforeLayerId : undefined
+      const beforeId = preferredBefore ?? resolveSiAnalysisRasterBeforeLayerId(map)
+      try {
+        map.addLayer(
+          {
+            id: layerId,
+            type: 'raster',
+            source: sourceId,
+            // Stay layout-visible at opacity 0 so warm prefetch can load tiles
+            // (visibility:none prevents Mapbox from requesting WMS tiles).
+            layout: { visibility: 'visible' },
+            paint: {
+              'raster-opacity': 0,
+              'raster-fade-duration': 0,
+              'raster-resampling': 'linear',
+            },
           },
-        },
-        beforeId,
-      )
+          beforeId && map.getLayer(beforeId) ? beforeId : undefined,
+        )
+      } catch {
+        try {
+          map.addLayer({
+            id: layerId,
+            type: 'raster',
+            source: sourceId,
+            layout: { visibility: 'visible' },
+            paint: {
+              'raster-opacity': 0,
+              'raster-fade-duration': 0,
+              'raster-resampling': 'linear',
+            },
+          })
+        } catch {
+          /* style rebuild race */
+        }
+      }
     }
   }
 }

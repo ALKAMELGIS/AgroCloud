@@ -17,7 +17,10 @@ import {
   mergeDailyIndexSeries,
 } from './sentinelHubStatisticsApi'
 
-export type SiImageryAnalysisMode = 'single-layer-trend' | 'multi-layer-aoi-comparison'
+export type SiImageryAnalysisMode =
+  | 'single-layer-trend'
+  | 'multi-layer-aoi-comparison'
+  | 'plot-layer-time-series'
 
 /** Lookback window when resolving a single acquisition date (matches time-series panel). */
 export const MULTI_LAYER_AOI_LOOKBACK_DAYS = 90
@@ -200,13 +203,14 @@ export async function fetchMultiLayerAoiFieldDailyRow(
   field: CropAlertFieldInput,
   targetSceneDate: string,
   layerIds: string[],
-  options?: { signal?: AbortSignal; lookbackDays?: number },
+  options?: { signal?: AbortSignal; lookbackDays?: number; fromIso?: string },
 ): Promise<SentinelHubDailyIndexMeans | null> {
   if (!field.geometry) return null
   const day = targetSceneDate.trim().slice(0, 10)
   if (!day) return null
   const lookback = options?.lookbackDays ?? MULTI_LAYER_AOI_LOOKBACK_DAYS
-  const fromIso = subtractDaysFromIso(day, lookback)
+  let fromIso = options?.fromIso?.trim().slice(0, 10) || subtractDaysFromIso(day, lookback)
+  if (fromIso >= day) fromIso = subtractDaysFromIso(day, lookback)
 
   let rows = await fetchSentinelFieldIndexTimeSeriesForRange({
     geometry: field.geometry,
