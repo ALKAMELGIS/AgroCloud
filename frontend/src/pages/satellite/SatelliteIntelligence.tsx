@@ -16633,9 +16633,48 @@ export default function SatelliteIntelligence() {
   const handleIndexShowOnMapChange = useCallback(
     (checked: boolean) => {
       setIsWmsOverlayVisible(checked);
-      if (checked) setSentinelWmsSourcesHeld(true);
+      if (!checked) return;
+      setSentinelWmsSourcesHeld(true);
+      setPinnedSentinelWmsMinZoom(prev => (prev == null ? sentinelWmsMinZoom : prev));
+      // Ensure Mapbox will request Sentinel tiles (source minzoom) and the AOI is in view.
+      const map = mapRef.current?.getMap?.() ?? mapRef.current;
+      if (!map) return;
+      const minZ = pinnedSentinelWmsMinZoom ?? sentinelWmsMinZoom;
+      const ensureMinZoom = () => {
+        try {
+          const z = typeof map.getZoom === 'function' ? map.getZoom() : null;
+          if (typeof z === 'number' && z < minZ && typeof map.easeTo === 'function') {
+            map.easeTo({ zoom: minZ, duration: 400 });
+          }
+        } catch {
+          /* ignore camera race */
+        }
+      };
+      const geom = drawnGeometryRef.current ?? drawnAoiClipCollection;
+      const bounds = geom ? getGeoJsonBounds(geom) : null;
+      if (bounds && typeof map.fitBounds === 'function') {
+        const [minX, minY, maxX, maxY] = bounds;
+        try {
+          map.fitBounds(
+            [
+              [minX, minY],
+              [maxX, maxY],
+            ],
+            {
+              padding: 72,
+              duration: 650,
+              maxZoom: Math.max(16, minZ + 4),
+            },
+          );
+          map.once?.('moveend', ensureMinZoom);
+        } catch {
+          ensureMinZoom();
+        }
+        return;
+      }
+      ensureMinZoom();
     },
-    [],
+    [sentinelWmsMinZoom, pinnedSentinelWmsMinZoom, drawnAoiClipCollection],
   );
 
   useEffect(() => {
@@ -20448,9 +20487,12 @@ export default function SatelliteIntelligence() {
                       filter={['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]]}
                       paint={{
                         'fill-color': hasActiveLayerSourceAoi ? '#f59e0b' : drawStyle.fillColor,
-                        // Keep a light fill so the sketch remains visible over basemap / imagery.
+                        // When Sentinel index WMS is on, keep fill nearly clear so NDVI paints through.
+                        // Outline layer (drawn-index-geometry-line) still marks the AOI boundary.
                         'fill-opacity':
-                          Math.min(0.35, Math.max(0.12, drawStyle.fillOpacity)) *
+                          (sentinelDrawWmsOnMap
+                            ? 0.04
+                            : Math.min(0.35, Math.max(0.12, drawStyle.fillOpacity))) *
                           drawVisualOpacity *
                           aoiLayerOpacity,
                       }}
@@ -22545,9 +22587,11 @@ export default function SatelliteIntelligence() {
                             : 'Draw an AOI with the Edit tool, then enable Show on map.'
                         }
                         wmsZoomWarning={
-                          sentinelWmsOnMap && !sentinelWmsZoomOk
-                            ? `Zoom ${effectiveSentinelWmsMinZoom}+ for Sentinel-2 (max 200 m/px).`
-                            : null
+                          sentinelDrawWmsOnMap && !drawAoiWmsStack.renderReady
+                            ? 'Waiting for Sentinel-2 clip… check imagery date / AOI geometry.'
+                            : sentinelWmsOnMap && !sentinelWmsZoomOk
+                              ? `Zoom ${effectiveSentinelWmsMinZoom}+ for Sentinel-2 (max 200 m/px).`
+                              : null
                         }
                         sentinelLayerOptions={remoteSensingLayerOptions}
                         aoiLayerModeSettings={aoiMaskBuilderSettings}
