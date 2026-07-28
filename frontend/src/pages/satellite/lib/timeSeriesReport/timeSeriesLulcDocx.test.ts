@@ -178,10 +178,52 @@ describe('LULC Intelligence Report (Word)', () => {
     expect(model.nativeCharts.some(c => c.kind === 'pie')).toBe(true)
     expect(model.nativeCharts.some(c => c.title.includes('Change'))).toBe(true)
 
-    const xml = buildTimeSeriesDocxDocumentXml(model)
-    expect(xml).toContain('LULC — Five-Year Land Cover')
-    expect(xml).toContain('Class Area Table')
-    expect(xml).toContain('Change Detection')
-    expect(xml).toContain('rIdChart')
+    const lulcXml = buildTimeSeriesDocxDocumentXml(model, 'lulc')
+    expect(lulcXml).toContain('LULC — Five-Year Land Cover')
+    expect(lulcXml).toContain('Class Area Table')
+    expect(lulcXml).toContain('Change Detection')
+    expect(lulcXml).toContain('rIdChart')
+    expect(lulcXml).toContain('LULC Land Cover Intelligence Report')
+  })
+
+  it('omits LULC from the main Intelligence Report', async () => {
+    const { model } = await buildTimeSeriesDocxModel(lulcPayload())
+    const intelXml = buildTimeSeriesDocxDocumentXml(model, 'intelligence')
+    expect(intelXml).not.toContain('LULC — Five-Year Land Cover')
+    expect(intelXml).not.toContain('LULC Change Detection — Consecutive Years')
+    expect(intelXml).toContain('Agricultural Satellite Intelligence Report')
+    expect(intelXml).toContain('LULC land-cover analysis is available as a separate Word export')
+  })
+
+  it('keeps index map atlas (3×3) in the Intelligence Report', async () => {
+    const payload = lulcPayload()
+    payload.mapSnapshotGroups = [
+      {
+        layerId: 'NDVI',
+        title: 'NDVI — Period Maps',
+        snapshots: Array.from({ length: 10 }, (_, i) => ({
+          layerId: 'NDVI',
+          layerLabel: 'NDVI',
+          sceneDate: `2024-0${(i % 9) + 1}-01`,
+          periodLabel: `2024-0${(i % 9) + 1}`,
+          imageBase64: `img${i}`,
+          dataSource: 'test',
+          mean: 0.4 + i * 0.01,
+          min: 0.2,
+          max: 0.8,
+          areaHa: 10,
+          legendText: 'NDVI classes',
+          notes: 'Sample narrative',
+        })),
+      },
+    ]
+    const { model } = await buildTimeSeriesDocxModel(payload)
+    expect(model.mapLayers).toHaveLength(1)
+    expect(model.mapLayers[0]!.snapshots).toHaveLength(10)
+    const intelXml = buildTimeSeriesDocxDocumentXml(model, 'intelligence')
+    expect(intelXml).toContain('Map Snapshots &amp; Index Charts')
+    expect(intelXml).toContain('3×3')
+    expect(intelXml).toContain('a:blip')
+    expect(intelXml).toContain('NDVI Trend')
   })
 })

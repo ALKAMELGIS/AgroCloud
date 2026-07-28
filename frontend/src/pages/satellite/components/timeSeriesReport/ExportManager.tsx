@@ -51,6 +51,7 @@ export type TimeSeriesExportManagerProps = {
 const EXPORT_OPTIONS: Array<{ kind: TimeSeriesExportKind; label: string; icon: string; primary?: boolean }> = [
   { kind: 'pdf', label: 'Executive PDF', icon: 'fa-file-pdf', primary: true },
   { kind: 'docx', label: 'Intelligence Report (Word)', icon: 'fa-file-word' },
+  { kind: 'lulc-docx', label: 'LULC Report (Word)', icon: 'fa-layer-group' },
   { kind: 'excel', label: 'Analytics Report (Excel)', icon: 'fa-file-excel' },
   {
     kind: 'weather-excel',
@@ -250,7 +251,11 @@ export function TimeSeriesExportManager({
               title={
                 opt.kind === 'weather-excel'
                   ? `Uses Label field + Start/End dates (${fromDate.slice(0, 10)} → ${toDate.slice(0, 10)})`
-                  : undefined
+                  : opt.kind === 'lulc-docx'
+                    ? 'Five-year LULC atlas (2021–2025) with class area tables, pie/bar charts, and change detection'
+                    : opt.kind === 'docx'
+                      ? 'Index map atlas, charts, weather & recommendations (LULC is a separate export)'
+                      : undefined
               }
               onClick={() => requestExport(opt.kind)}
             >

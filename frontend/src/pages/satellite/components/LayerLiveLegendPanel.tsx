@@ -31,6 +31,8 @@ type LayerLiveLegendPanelProps = {
   /** Optional multi-temporal series window shown in the metadata grid. */
   seriesStart?: string
   seriesEnd?: string
+  /** Overrides the default "Sentinel Hub · 10 m" provider line (follows toolbox selection). */
+  providerLabel?: string
 }
 
 /** Parse "Low → High" style endpoints out of a subtitle ("· Low → High ·"). */
@@ -186,6 +188,7 @@ export function LayerLiveLegendActiveCard({
   sceneDate,
   seriesStart,
   seriesEnd,
+  providerLabel: providerLabelProp,
 }: {
   spec: LayerLiveLegendSpec
   activeLayerId?: string
@@ -194,6 +197,7 @@ export function LayerLiveLegendActiveCard({
   sceneDate?: string
   seriesStart?: string
   seriesEnd?: string
+  providerLabel?: string
 }) {
   const scientificName = activeLayerId ? resolveRemoteSensingLayerScientificName(activeLayerId) : undefined
   const areMeta = resolveAnalyticalResolutionMeta()
@@ -214,7 +218,7 @@ export function LayerLiveLegendActiveCard({
   }, [aoiGeometry])
   const totalHa = areaResult ? areaResult.aoiAreaM2 / 10_000 : instantAoiHa
   const imageryDate = areaResult?.sceneDate || sceneDate || '—'
-  const providerLabel = `Sentinel Hub · ${SENTINEL2_NATIVE_GSD_M} m`
+  const providerLabel = providerLabelProp?.trim() || `Sentinel Hub · ${SENTINEL2_NATIVE_GSD_M} m`
   const seriesLabel = seriesStart && seriesEnd ? `${seriesStart} → ${seriesEnd}` : null
   const classAreaRows = areaResult?.rows
   const displaySpec = useMemo(() => {
@@ -296,7 +300,17 @@ export function LayerLiveLegendActiveCard({
   )
 }
 
-export function LayerLiveLegendPanel({ layerOptions, layerGroups, activeLayerId, activeOnly = false, aoiGeometry, sceneDate, seriesStart, seriesEnd }: LayerLiveLegendPanelProps) {
+export function LayerLiveLegendPanel({
+  layerOptions,
+  layerGroups,
+  activeLayerId,
+  activeOnly = false,
+  aoiGeometry,
+  sceneDate,
+  seriesStart,
+  seriesEnd,
+  providerLabel,
+}: LayerLiveLegendPanelProps) {
   const legendById = useMemo(() => {
     const map = new Map<string, LayerLiveLegendSpec>()
     for (const opt of layerOptions) {
@@ -341,6 +355,7 @@ export function LayerLiveLegendPanel({ layerOptions, layerGroups, activeLayerId,
           sceneDate={sceneDate}
           seriesStart={seriesStart}
           seriesEnd={seriesEnd}
+          providerLabel={providerLabel}
         />
       </div>
     )
@@ -356,6 +371,7 @@ export function LayerLiveLegendPanel({ layerOptions, layerGroups, activeLayerId,
           sceneDate={sceneDate}
           seriesStart={seriesStart}
           seriesEnd={seriesEnd}
+          providerLabel={providerLabel}
         />
       ) : null}
 

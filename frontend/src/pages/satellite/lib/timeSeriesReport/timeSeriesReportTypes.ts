@@ -157,6 +157,7 @@ export type TimeSeriesReportConfig = {
 export type TimeSeriesExportKind =
   | 'pdf'
   | 'docx'
+  | 'lulc-docx'
   | 'excel'
   | 'weather-excel'
   | 'plot-priority-excel'

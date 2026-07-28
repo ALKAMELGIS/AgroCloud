@@ -2,7 +2,7 @@ export type { TimeSeriesExportKind, TimeSeriesReportConfig, TimeSeriesReportPayl
 export { buildTimeSeriesReportPayload } from './buildTimeSeriesReportPayload'
 export { buildTimeSeriesExecutiveSummary } from './timeSeriesReportExecutive'
 export { generateTimeSeriesReportPdf } from './generateTimeSeriesReportPdf'
-export { generateTimeSeriesReportDocx } from './generateTimeSeriesReportDocx'
+export { generateTimeSeriesReportDocx, generateTimeSeriesLulcReportDocx } from './generateTimeSeriesReportDocx'
 export { generateTimeSeriesReportExcel, exportTimeSeriesCsvReport, exportTimeSeriesChartTimelineExcel, buildTimeSeriesReportWorkbook, buildTimeSeriesReportWorkbookSync } from './generateTimeSeriesReportExcel'
 export {
   buildTimeSeriesWeatherWorkbook,

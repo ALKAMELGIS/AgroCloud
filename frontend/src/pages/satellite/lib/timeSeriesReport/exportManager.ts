@@ -5,7 +5,7 @@ import {
   generateTimeSeriesReportExcel,
 } from './generateTimeSeriesReportExcel'
 import { generateTimeSeriesWeatherReportExcel } from './generateTimeSeriesWeatherReportExcel'
-import { generateTimeSeriesReportDocx } from './generateTimeSeriesReportDocx'
+import { generateTimeSeriesReportDocx, generateTimeSeriesLulcReportDocx } from './generateTimeSeriesReportDocx'
 import { exportChartPng } from './timeSeriesReportExports'
 import { buildPlotTimeSeriesAnalyticsFromPlots } from './fetchPlotTimeSeriesAnalytics'
 import { generatePlotTimeSeriesAnalyticsExcel } from './generatePlotTimeSeriesAnalyticsExcel'
@@ -47,6 +47,7 @@ async function buildExportPayload(
   ctx: TimeSeriesExportContext,
   options?: {
     includeMapSnapshots?: boolean
+    includeLulcMapSnapshots?: boolean
     enrichVegetationCoverage?: boolean
     signal?: AbortSignal
     onMapSnapshotProgress?: (completed: number, total: number) => void
@@ -59,6 +60,7 @@ async function buildExportPayload(
     generatedBy: config.generatedBy,
     includeMap: config.includeMap,
     includeMapSnapshots: options?.includeMapSnapshots ?? true,
+    includeLulcMapSnapshots: options?.includeLulcMapSnapshots,
     includeVegetationCoverageTimeline: options?.enrichVegetationCoverage ?? true,
     periodAnchorDates: ctx.periodAnchorDates,
     signal: options?.signal ?? ctx.signal,
@@ -210,10 +212,21 @@ export async function runTimeSeriesExport(
     case 'docx': {
       const payload = await buildExportPayload(ctx, {
         includeMapSnapshots: true,
+        includeLulcMapSnapshots: false,
         enrichVegetationCoverage: true,
         ...snapshotOpts,
       })
       await generateTimeSeriesReportDocx(payload)
+      break
+    }
+    case 'lulc-docx': {
+      const payload = await buildExportPayload(ctx, {
+        includeMapSnapshots: false,
+        includeLulcMapSnapshots: true,
+        enrichVegetationCoverage: false,
+        ...snapshotOpts,
+      })
+      await generateTimeSeriesLulcReportDocx(payload)
       break
     }
     case 'png':

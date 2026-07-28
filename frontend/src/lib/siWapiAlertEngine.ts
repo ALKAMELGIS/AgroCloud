@@ -13,6 +13,7 @@ import {
 } from './wapiIndex'
 import {
   classifyIrrigationAlertLevel,
+  computeIrrigationIss,
   decideIrrigationAlert,
   IRRIGATION_ALERT_ACTIONS,
   IRRIGATION_ALERT_BASE_RANK,
@@ -22,6 +23,8 @@ import {
   type IrrigationAlertLevel,
 } from './irrigationDroughtAlert'
 import type { CropAlertFieldInput, CropAlertIndexSnapshot } from './siCropAlertEngine'
+import { subtractDaysFromIso } from './siSentinelImageryDate'
+import type { SentinelHubDailyIndexMeans } from './sentinelHubStatisticsApi'
 
 export { isWapiLayerId }
 
@@ -48,6 +51,10 @@ export type WapiAlertEngineSettings = {
   enabled: boolean
   /** Rolling lookback for scoring context (weekly default). */
   lookbackDays: number
+  /** Inclusive analysis period start (YYYY-MM-DD). */
+  periodStart: string
+  /** Inclusive analysis period end / reference scene date (YYYY-MM-DD). */
+  periodEnd: string
   /** Auto-refresh interval in hours (weekly default). */
   refreshHours: number
   showLegend: boolean
@@ -79,6 +86,10 @@ export type WapiAlertFieldResult = {
   harvestStage: WapiHarvestStage
   priorityRank: number
   recommendedAction: string
+  /** Inclusive period start used for DataRaw / irrigation comparison. */
+  periodStart: string | null
+  /** Inclusive period end used for DataRaw / irrigation comparison. */
+  periodEnd: string | null
   sceneDate: string | null
   color: string
   centroid: [number, number]
@@ -86,6 +97,17 @@ export type WapiAlertFieldResult = {
   evaluatedAt: string
   escalated?: boolean
   alertMessage?: string
+}
+
+/** Long-form DataRaw row for irrigation schedule comparison (per plot × scene). */
+export type WapiAlertDataRawRow = {
+  plot: string
+  date: string
+  ndvi: number
+  ndmi: number
+  ndwi: number
+  savi: number
+  iss: number
 }
 
 /** Lower priorityRank first; ties break toward drier (lower) ISS. */
@@ -109,16 +131,40 @@ export type WapiAlertLiveSnapshot = {
 
 export type WapiAlertResultsCache = {
   referenceDate: string
+  periodStart?: string
+  periodEnd?: string
   aoiMaskKey: string
   results: WapiAlertFieldResult[]
+  rawRows?: WapiAlertDataRawRow[]
   lastRunAt: number
   liveFieldCount: number
+}
+
+/** Default analysis window (days) when periodStart is derived from periodEnd. */
+export const WAPI_ALERT_DEFAULT_PERIOD_DAYS = 90
+
+function todayIsoLocal(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+export function defaultWapiAlertPeriod(referenceIso?: string | null): {
+  periodStart: string
+  periodEnd: string
+} {
+  const periodEnd = String(referenceIso || todayIsoLocal()).slice(0, 10)
+  const periodStart = subtractDaysFromIso(periodEnd, WAPI_ALERT_DEFAULT_PERIOD_DAYS)
+  return { periodStart, periodEnd }
 }
 
 export const DEFAULT_WAPI_ALERT_ENGINE_SETTINGS: WapiAlertEngineSettings = {
   schemaVersion: WAPI_ALERT_ENGINE_SETTINGS_SCHEMA_VERSION,
   enabled: false,
   lookbackDays: WAPI_ALERT_DEFAULT_LOOKBACK_DAYS,
+  ...defaultWapiAlertPeriod(),
   refreshHours: WAPI_ALERT_DEFAULT_REFRESH_HOURS,
   showLegend: true,
   showMapIcons: true,
@@ -212,6 +258,57 @@ export function waterStressStatusForLevel(level: WapiAlertLevel): string {
 export function resolveWapiFetchLookbackDays(lookbackDays: number): number {
   const n = Math.max(1, Math.floor(Number(lookbackDays) || WAPI_ALERT_DEFAULT_LOOKBACK_DAYS))
   return Math.max(n, WAPI_ALERT_MIN_FETCH_LOOKBACK_DAYS)
+}
+
+/** Fetch window covering the analysis period (+ buffer for ΔISS). */
+export function resolveWapiFetchLookbackForPeriod(periodStart: string, periodEnd: string): number {
+  const start = String(periodStart || '').slice(0, 10)
+  const end = String(periodEnd || '').slice(0, 10)
+  if (!start || !end) return resolveWapiFetchLookbackDays(WAPI_ALERT_DEFAULT_PERIOD_DAYS)
+  const span = Math.max(
+    1,
+    Math.round((Date.parse(`${end}T12:00:00Z`) - Date.parse(`${start}T12:00:00Z`)) / 86_400_000),
+  )
+  return resolveWapiFetchLookbackDays(span + 14)
+}
+
+export function buildWapiAlertDataRawRows(
+  fields: WapiAlertFieldInput[],
+  seriesByFieldKey: Map<string, { daily: SentinelHubDailyIndexMeans[] }>,
+  periodStart: string,
+  periodEnd: string,
+): WapiAlertDataRawRow[] {
+  const start = String(periodStart || '').slice(0, 10)
+  const end = String(periodEnd || '').slice(0, 10)
+  const rows: WapiAlertDataRawRow[] = []
+  for (const field of fields) {
+    const daily = seriesByFieldKey.get(field.fieldKey)?.daily ?? []
+    for (const d of daily) {
+      const date = String(d.date || '').slice(0, 10)
+      if (!date) continue
+      if (start && date < start) continue
+      if (end && date > end) continue
+      const ndvi = d.ndvi
+      const ndmi = d.ndmi
+      const ndwi = d.ndwi
+      if (ndvi == null || ndmi == null || ndwi == null) continue
+      if (![ndvi, ndmi, ndwi].every(Number.isFinite)) continue
+      const savi =
+        d.savi != null && Number.isFinite(d.savi) ? d.savi : estimateSaviFromNdvi(ndvi)
+      const iss = computeIrrigationIss({ ndvi, ndmi, ndwi, savi })
+      rows.push({
+        plot: field.fieldName || field.fieldId || field.fieldKey,
+        date,
+        ndvi: Number(ndvi.toFixed(4)),
+        ndmi: Number(ndmi.toFixed(4)),
+        ndwi: Number(ndwi.toFixed(4)),
+        savi: Number(savi.toFixed(4)),
+        iss: Number(iss.toFixed(4)),
+      })
+    }
+  }
+  rows.sort((a, b) => a.plot.localeCompare(b.plot) || a.date.localeCompare(b.date))
+  return rows
 }
 
 function isPolygonGeometry(g: GeoJSON.Geometry | null | undefined): g is GeoJSON.Polygon | GeoJSON.MultiPolygon {
@@ -371,6 +468,7 @@ export function evaluateWapiAlertField(
   field: WapiAlertFieldInput,
   referenceDate: string,
   live?: WapiAlertLiveSnapshot | null,
+  period?: { periodStart?: string | null; periodEnd?: string | null },
 ): WapiAlertFieldResult {
   const current = live?.current
   const previous = live?.previous ?? null
@@ -402,6 +500,8 @@ export function evaluateWapiAlertField(
   const priorityRank = resolveWapiPriorityRank(alertLevel, harvestStage)
   const color = irrigation.color
   const sceneDate = live?.sceneDate ?? referenceDate
+  const periodEnd = String(period?.periodEnd || referenceDate).slice(0, 10)
+  const periodStart = String(period?.periodStart || periodEnd).slice(0, 10)
 
   return {
     fieldKey: field.fieldKey,
@@ -418,6 +518,8 @@ export function evaluateWapiAlertField(
     harvestStage,
     priorityRank,
     recommendedAction: buildWapiRecommendedAction(alertLevel, harvestStage),
+    periodStart,
+    periodEnd,
     sceneDate,
     color,
     centroid: field.centroid,
@@ -432,10 +534,11 @@ export function runWapiAlertEngine(
   fields: WapiAlertFieldInput[],
   referenceDate: string,
   liveSnapshots?: Map<string, WapiAlertLiveSnapshot>,
+  period?: { periodStart?: string | null; periodEnd?: string | null },
 ): WapiAlertFieldResult[] {
   return fields
-    .map(f => evaluateWapiAlertField(f, referenceDate, liveSnapshots?.get(f.fieldKey)))
-    .sort(compareWdsiAlertPriority)
+    .map(f => evaluateWapiAlertField(f, referenceDate, liveSnapshots?.get(f.fieldKey), period))
+    .sort(compareIssAlertPriority)
 }
 
 export function wapiAlertResultsToGeoJson(results: WapiAlertFieldResult[]): GeoJSON.FeatureCollection {
@@ -484,13 +587,32 @@ export function normalizeWapiAlertEngineSettings(
 ): WapiAlertEngineSettings {
   const base = { ...DEFAULT_WAPI_ALERT_ENGINE_SETTINGS }
   if (!partial || typeof partial !== 'object') return base
+  const defaults = defaultWapiAlertPeriod(partial.periodEnd || base.periodEnd)
+  let periodEnd = String(partial.periodEnd || defaults.periodEnd).slice(0, 10)
+  let periodStart = String(partial.periodStart || defaults.periodStart).slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(periodEnd)) periodEnd = defaults.periodEnd
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(periodStart)) periodStart = defaults.periodStart
+  if (periodStart > periodEnd) {
+    const tmp = periodStart
+    periodStart = periodEnd
+    periodEnd = tmp
+  }
+  const spanDays = Math.max(
+    1,
+    Math.round((Date.parse(`${periodEnd}T12:00:00Z`) - Date.parse(`${periodStart}T12:00:00Z`)) / 86_400_000),
+  )
   return {
     schemaVersion: WAPI_ALERT_ENGINE_SETTINGS_SCHEMA_VERSION,
     enabled: Boolean(partial.enabled),
     lookbackDays: Math.max(
       1,
-      Math.min(90, Math.floor(Number(partial.lookbackDays) || WAPI_ALERT_DEFAULT_LOOKBACK_DAYS)),
+      Math.min(
+        365,
+        Math.floor(Number(partial.lookbackDays) || Math.max(WAPI_ALERT_DEFAULT_LOOKBACK_DAYS, spanDays)),
+      ),
     ),
+    periodStart,
+    periodEnd,
     refreshHours: Math.max(
       1,
       Math.min(720, Math.floor(Number(partial.refreshHours) || WAPI_ALERT_DEFAULT_REFRESH_HOURS)),
@@ -543,8 +665,11 @@ export function loadWapiAlertResultsCache(options?: {
     if (!String(parsed.referenceDate ?? '').trim()) return null
     return {
       referenceDate: String(parsed.referenceDate),
+      periodStart: parsed.periodStart ? String(parsed.periodStart).slice(0, 10) : undefined,
+      periodEnd: parsed.periodEnd ? String(parsed.periodEnd).slice(0, 10) : undefined,
       aoiMaskKey: String(parsed.aoiMaskKey ?? ''),
       results: parsed.results as WapiAlertFieldResult[],
+      rawRows: Array.isArray(parsed.rawRows) ? (parsed.rawRows as WapiAlertDataRawRow[]) : undefined,
       lastRunAt: Number(parsed.lastRunAt) || 0,
       liveFieldCount: Number(parsed.liveFieldCount) || 0,
     }

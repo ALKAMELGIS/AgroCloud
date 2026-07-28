@@ -4,8 +4,11 @@ import { resolveLayerLiveLegendSpec, type LayerLiveLegendSpec } from '../../../.
 import { geodesicAreaM2 } from '../../../../lib/siLayerClassAreaEngine'
 import type { SentinelHubDailyIndexMeans } from '../../../../lib/sentinelHubStatisticsApi'
 import {
-  fetchFieldMapSnapshot,
-  fetchIndexLayerMapSnapshotDataUrl,
+  compositeAoiMapSnapshotBase64,
+  fetchIndexLayerMapSnapshotBase64,
+  fetchSatelliteBasemapSnapshot,
+  resolveTimeSeriesSnapshotExtent,
+  resolveTimeSeriesSnapshotLayout,
 } from './timeSeriesMapSnapshot'
 
 export type DynamicMapSnapshotStats = {
@@ -31,6 +34,8 @@ export type DynamicMapSnapshotCard = {
 }
 
 const DATA_SOURCE = 'Sentinel-2 L2A · Sentinel Hub WMS'
+const SNAPSHOT_WIDTH = 520
+const SNAPSHOT_HEIGHT = 400
 
 function fmtNum(n: number | null | undefined, digits = 4): string {
   if (n == null || !Number.isFinite(n)) return '—'
@@ -50,6 +55,86 @@ function zonalKeyForLayer(layerId: string): 'ndvi' | 'ndmi' | 'ndwi' | 'savi' | 
   if (u === 'SAVI') return 'savi'
   if (u === 'EVI') return 'evi'
   return null
+}
+
+/** Acquisition dates that have a finite mean for this layer. */
+export function collectLayerSnapshotDates(
+  layerId: string,
+  dailyRows: SentinelHubDailyIndexMeans[],
+): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const row of dailyRows) {
+    const d = row.date?.slice(0, 10)
+    if (!d || seen.has(d)) continue
+    if (evaluateImageryLayerDailyValue(layerId, row) == null) continue
+    seen.add(d)
+    out.push(d)
+  }
+  return out.sort()
+}
+
+/**
+ * Prefer the requested date, then nearest dates that actually have layer statistics
+ * (so WMS retries when End Date has stats but no cloud-free scene).
+ */
+export function pickSnapshotSceneDateCandidates(
+  preferred: string,
+  availableDates: string[],
+): string[] {
+  const pref = preferred.trim().slice(0, 10)
+  const uniq = new Set<string>()
+  const out: string[] = []
+  const add = (d: string | undefined) => {
+    const day = d?.trim().slice(0, 10)
+    if (!day || uniq.has(day)) return
+    uniq.add(day)
+    out.push(day)
+  }
+  add(pref)
+  if (!availableDates.length) return out
+
+  const prefTs = Date.parse(pref)
+  let best = availableDates[availableDates.length - 1]!
+  let bestAbs = Number.POSITIVE_INFINITY
+  for (const d of availableDates) {
+    const abs = Math.abs(Date.parse(d) - (Number.isFinite(prefTs) ? prefTs : Date.parse(d)))
+    if (abs < bestAbs) {
+      bestAbs = abs
+      best = d
+    }
+  }
+  add(best)
+  const idx = availableDates.indexOf(best)
+  if (idx > 0) add(availableDates[idx - 1])
+  if (idx >= 0 && idx < availableDates.length - 1) add(availableDates[idx + 1])
+  add(availableDates[availableDates.length - 1])
+  return out
+}
+
+/** Last-resort canvas when composite / WMS / basemap all fail — still shows AOI frame. */
+async function composeMinimalSnapshotBase64(options: {
+  geometry: GeoJSON.Geometry
+  layerId: string
+  sceneDate: string
+  widthPx: number
+  heightPx: number
+  basemapDataUrl?: string | null
+}): Promise<string | null> {
+  try {
+    return await compositeAoiMapSnapshotBase64({
+      geometry: options.geometry,
+      basemapDataUrl: options.basemapDataUrl ?? null,
+      indexBase64: null,
+      layerId: options.layerId,
+      title: options.layerId.toUpperCase(),
+      sceneDate: options.sceneDate,
+      widthPx: options.widthPx,
+      heightPx: options.heightPx,
+    })
+  } catch {
+    return null
+  }
 }
 
 export function resolveDynamicSnapshotStats(
@@ -118,76 +203,162 @@ export async function buildDynamicMapSnapshots(
 
   const geometry = input.geometry
   const areaHa = geometry ? geodesicAreaM2(geometry) / 10_000 : 0
-  const width = input.widthPx ?? 480
-  const height = input.heightPx ?? 320
+  const width = input.widthPx ?? SNAPSHOT_WIDTH
+  const height = input.heightPx ?? SNAPSHOT_HEIGHT
+  const layout = resolveTimeSeriesSnapshotLayout(width, height)
+  const extent = geometry
+    ? resolveTimeSeriesSnapshotExtent(geometry, layout.mapW, layout.mapH)
+    : null
 
-  let basemap: string | null = null
-  if (geometry && input.mapboxToken) {
-    basemap = await fetchFieldMapSnapshot(geometry, input.mapboxToken, width, height)
+  // Esri World Imagery first (no Mapbox token required), then Mapbox if available.
+  // Fetch at map-frame size so the basemap matches the composed card without stretch.
+  let basemapDataUrl: string | null = null
+  if (geometry) {
+    basemapDataUrl = await fetchSatelliteBasemapSnapshot(
+      geometry,
+      input.mapboxToken,
+      layout.mapW,
+      layout.mapH,
+      input.signal,
+    )
   }
 
   return mapPool(layerIds, 3, async layerId => {
+    const layerLabel = layerId.toUpperCase()
+    const emptyCard = (
+      partial: Partial<DynamicMapSnapshotCard> & Pick<DynamicMapSnapshotCard, 'status'>,
+    ): DynamicMapSnapshotCard => ({
+      layerId: layerLabel,
+      layerLabel,
+      sceneDate,
+      fieldName: input.fieldName,
+      areaHa,
+      dataSource: DATA_SOURCE,
+      imageDataUrl: null,
+      basemapFallback: false,
+      stats: { mean: null, min: null, max: null },
+      legend: resolveLayerLiveLegendSpec(layerId),
+      notes: '',
+      ...partial,
+    })
+
     if (input.signal?.aborted) {
-      return {
-        layerId: layerId.toUpperCase(),
-        layerLabel: layerId.toUpperCase(),
-        sceneDate,
-        fieldName: input.fieldName,
-        areaHa,
-        dataSource: DATA_SOURCE,
-        imageDataUrl: null,
-        basemapFallback: false,
-        stats: { mean: null, min: null, max: null },
-        legend: resolveLayerLiveLegendSpec(layerId),
-        notes: 'Cancelled',
-        status: 'empty' as const,
-      }
+      return emptyCard({ notes: 'Cancelled', status: 'empty' })
     }
 
     const stats = resolveDynamicSnapshotStats(
       layerId,
       sceneDate,
       input.dailyRows,
-      input.seriesMeans?.[layerId.toUpperCase()] ?? null,
+      input.seriesMeans?.[layerLabel] ?? null,
     )
     const legend = resolveLayerLiveLegendSpec(layerId)
-    const notes = legend?.note ?? legend?.subtitle ?? `${layerId} AOI symbology for ${sceneDate}`
+    const notes = legend?.note ?? legend?.subtitle ?? `${layerLabel} AOI symbology for ${sceneDate}`
 
     if (!geometry) {
-      return {
-        layerId: layerId.toUpperCase(),
-        layerLabel: layerId.toUpperCase(),
-        sceneDate,
-        fieldName: input.fieldName,
-        areaHa,
-        dataSource: DATA_SOURCE,
-        imageDataUrl: null,
-        basemapFallback: false,
+      return emptyCard({
         stats,
         legend,
         notes: 'Draw or select an AOI to generate map snapshots.',
-        status: 'empty' as const,
-      }
+        status: 'empty',
+      })
     }
 
     try {
-      let imageDataUrl = await fetchIndexLayerMapSnapshotDataUrl({
-        geometry,
-        layerId,
-        sceneDate,
-        widthPx: width,
-        heightPx: height,
-        signal: input.signal,
-      })
-      let basemapFallback = false
-      if (!imageDataUrl && basemap) {
-        imageDataUrl = basemap
-        basemapFallback = true
+      const availableDates = collectLayerSnapshotDates(layerId, input.dailyRows)
+      const dateCandidates = pickSnapshotSceneDateCandidates(sceneDate, availableDates)
+
+      let usedDate = sceneDate
+      let indexBase64: string | null = null
+      for (const candidate of dateCandidates) {
+        if (input.signal?.aborted) break
+        try {
+          indexBase64 = await fetchIndexLayerMapSnapshotBase64({
+            geometry,
+            layerId,
+            sceneDate: candidate,
+            widthPx: width,
+            heightPx: height,
+            extent,
+            signal: input.signal,
+          })
+        } catch {
+          indexBase64 = null
+        }
+        if (indexBase64) {
+          usedDate = candidate
+          break
+        }
       }
+
+      const stats = resolveDynamicSnapshotStats(
+        layerId,
+        usedDate,
+        input.dailyRows,
+        input.seriesMeans?.[layerLabel] ?? null,
+      )
+      const dateNote =
+        usedDate !== sceneDate
+          ? `Nearest scene with imagery: ${usedDate} (requested ${sceneDate}).`
+          : notes
+
+      let composedBase64: string | null = null
+      try {
+        composedBase64 = await compositeAoiMapSnapshotBase64({
+          geometry,
+          basemapDataUrl,
+          indexBase64,
+          layerId,
+          legendSpec: legend,
+          title: layerLabel,
+          sceneDate: usedDate,
+          widthPx: width,
+          heightPx: height,
+          extent,
+        })
+      } catch {
+        composedBase64 = null
+      }
+
+      if (!composedBase64) {
+        composedBase64 =
+          (await composeMinimalSnapshotBase64({
+            geometry,
+            layerId: layerLabel,
+            sceneDate: usedDate,
+            widthPx: width,
+            heightPx: height,
+            basemapDataUrl,
+          })) ?? indexBase64
+      }
+
+      let imageDataUrl: string | null = composedBase64
+        ? `data:image/png;base64,${composedBase64}`
+        : indexBase64
+          ? `data:image/png;base64,${indexBase64}`
+          : basemapDataUrl
+      let basemapFallback = !indexBase64 && !!imageDataUrl
+
+      // Absolute last resort: still paint AOI card so the preview is never blank when AOI exists.
+      if (!imageDataUrl) {
+        const bare = await composeMinimalSnapshotBase64({
+          geometry,
+          layerId: layerLabel,
+          sceneDate: usedDate,
+          widthPx: width,
+          heightPx: height,
+          basemapDataUrl: null,
+        })
+        if (bare) {
+          imageDataUrl = `data:image/png;base64,${bare}`
+          basemapFallback = true
+        }
+      }
+
       return {
-        layerId: layerId.toUpperCase(),
-        layerLabel: layerId.toUpperCase(),
-        sceneDate,
+        layerId: layerLabel,
+        layerLabel,
+        sceneDate: usedDate,
         fieldName: input.fieldName,
         areaHa,
         dataSource: DATA_SOURCE,
@@ -196,41 +367,47 @@ export async function buildDynamicMapSnapshots(
         stats,
         legend,
         notes: basemapFallback
-          ? `${notes} · Index WMS unavailable; showing satellite basemap.`
-          : notes,
+          ? `${dateNote} · Index WMS unavailable; showing satellite / AOI preview.`
+          : dateNote,
         status: imageDataUrl ? ('ok' as const) : ('empty' as const),
         error: imageDataUrl ? undefined : 'No imagery returned for this date.',
       }
     } catch (e) {
       if (input.signal?.aborted) {
-        return {
-          layerId: layerId.toUpperCase(),
-          layerLabel: layerId.toUpperCase(),
-          sceneDate,
-          fieldName: input.fieldName,
-          areaHa,
-          dataSource: DATA_SOURCE,
-          imageDataUrl: basemap,
-          basemapFallback: !!basemap,
+        return emptyCard({
           stats,
           legend,
+          imageDataUrl: basemapDataUrl,
+          basemapFallback: !!basemapDataUrl,
           notes: 'Cancelled',
-          status: (basemap ? 'ok' : 'empty') as 'ok' | 'empty',
-        }
+          status: basemapDataUrl ? 'ok' : 'empty',
+        })
+      }
+      let fallbackUrl = basemapDataUrl
+      if (!fallbackUrl && geometry) {
+        const bare = await composeMinimalSnapshotBase64({
+          geometry,
+          layerId: layerLabel,
+          sceneDate,
+          widthPx: width,
+          heightPx: height,
+          basemapDataUrl: null,
+        })
+        if (bare) fallbackUrl = `data:image/png;base64,${bare}`
       }
       return {
-        layerId: layerId.toUpperCase(),
-        layerLabel: layerId.toUpperCase(),
+        layerId: layerLabel,
+        layerLabel,
         sceneDate,
         fieldName: input.fieldName,
         areaHa,
         dataSource: DATA_SOURCE,
-        imageDataUrl: basemap,
-        basemapFallback: !!basemap,
+        imageDataUrl: fallbackUrl,
+        basemapFallback: !!fallbackUrl,
         stats,
         legend,
         notes,
-        status: (basemap ? 'ok' : 'error') as 'ok' | 'error',
+        status: (fallbackUrl ? 'ok' : 'error') as 'ok' | 'error',
         error: e instanceof Error ? e.message : 'Snapshot failed',
       }
     }

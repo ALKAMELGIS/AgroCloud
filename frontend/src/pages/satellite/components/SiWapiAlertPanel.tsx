@@ -7,6 +7,7 @@ import {
   WAPI_HARVEST_STAGE_LABELS,
   compareIssAlertPriority,
   summarizeWapiAlertCounts,
+  type WapiAlertDataRawRow,
   type WapiAlertEngineSettings,
   type WapiAlertFieldResult,
   type WapiAlertLevel,
@@ -21,6 +22,7 @@ export type SiWapiAlertPanelProps = {
   settings: WapiAlertEngineSettings
   onChange: (next: WapiAlertEngineSettings) => void
   results: WapiAlertFieldResult[]
+  rawRows?: WapiAlertDataRawRow[]
   referenceDate: string
   aoiLabel?: string
   fieldCount: number
@@ -47,6 +49,7 @@ export function SiWapiAlertPanel({
   settings,
   onChange,
   results,
+  rawRows = [],
   referenceDate,
   aoiLabel = 'Active AOI layer',
   fieldCount,
@@ -79,7 +82,10 @@ export function SiWapiAlertPanel({
     try {
       const { blob, filename } = await generateWapiAlertExcel(results, {
         aoiName: aoiLabel,
-        referenceDate,
+        referenceDate: settings.periodEnd || referenceDate,
+        periodStart: settings.periodStart,
+        periodEnd: settings.periodEnd,
+        rawRows,
       })
       downloadWapiAlertExcelBlob(blob, filename)
     } catch (err) {
@@ -126,8 +132,10 @@ export function SiWapiAlertPanel({
 
           <dl className="si-wapi-alert__meta">
             <div className="si-wapi-alert__meta-row">
-              <dt>Scene date</dt>
-              <dd>{referenceDate}</dd>
+              <dt>Period</dt>
+              <dd>
+                {settings.periodStart} → {settings.periodEnd}
+              </dd>
             </div>
             {lastRunAt ? (
               <div className="si-wapi-alert__meta-row">
@@ -143,19 +151,37 @@ export function SiWapiAlertPanel({
                 </dd>
               </div>
             ) : null}
+            {rawRows.length > 0 ? (
+              <div className="si-wapi-alert__meta-row">
+                <dt>DataRaw</dt>
+                <dd>{rawRows.length} scenes</dd>
+              </div>
+            ) : null}
           </dl>
 
-          <label className="si-wapi-alert__field">
-            <span>Lookback (days)</span>
-            <input
-              type="number"
-              min={1}
-              max={90}
-              value={settings.lookbackDays}
-              onChange={e => patch({ lookbackDays: Number(e.target.value) || 7 })}
-              disabled={!settings.enabled}
-            />
-          </label>
+          <div className="si-wapi-alert__date-range" aria-label="Analysis period">
+            <label className="si-wapi-alert__field si-wapi-alert__field--date">
+              <span>Start</span>
+              <input
+                type="date"
+                max={settings.periodEnd}
+                value={settings.periodStart}
+                onChange={e => patch({ periodStart: e.target.value || settings.periodStart })}
+                disabled={!settings.enabled || isRunning}
+              />
+            </label>
+            <label className="si-wapi-alert__field si-wapi-alert__field--date">
+              <span>End</span>
+              <input
+                type="date"
+                min={settings.periodStart}
+                max={referenceDate || undefined}
+                value={settings.periodEnd}
+                onChange={e => patch({ periodEnd: e.target.value || settings.periodEnd })}
+                disabled={!settings.enabled || isRunning}
+              />
+            </label>
+          </div>
 
           {isRunning && progress ? (
             <div className="si-wapi-alert__progress" role="status">
@@ -179,7 +205,7 @@ export function SiWapiAlertPanel({
             disabled={!settings.enabled || isRunning || fieldCount === 0}
           >
             <i className={`fa-solid ${isRunning ? 'fa-spinner fa-spin' : results.length ? 'fa-rotate' : 'fa-play'}`} aria-hidden />
-            {isRunning ? 'Analyzing…' : results.length ? 'Rerun analysis' : 'Run analysis now'}
+            {isRunning ? 'Running…' : 'Run'}
           </button>
 
           <div className="si-wapi-alert__toolbar">

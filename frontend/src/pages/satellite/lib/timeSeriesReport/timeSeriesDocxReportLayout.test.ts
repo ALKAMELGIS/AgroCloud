@@ -133,16 +133,25 @@ describe('timeSeriesDocxNativeCharts', () => {
       },
     })
     const titles = specs.map(s => s.title)
-    expect(titles.some(t => t.includes('Daily'))).toBe(true)
+    expect(titles.some(t => t.includes('Daily'))).toBe(false)
     expect(titles.some(t => t.includes('Monthly') && t.includes('Temperature'))).toBe(true)
     expect(titles.some(t => t.includes('Yearly'))).toBe(true)
-    expect(titles.some(t => t.includes('Cumulative Rainfall'))).toBe(true)
+    expect(titles.some(t => t.includes('Cumulative Rainfall'))).toBe(false)
+    expect(titles.some(t => t.includes('Monthly Rainfall Total'))).toBe(true)
     expect(titles.some(t => t.includes('Humidity'))).toBe(true)
     expect(titles.some(t => t.includes('Top Months') && t.includes('Share'))).toBe(true)
     expect(titles.some(t => t.includes('Annual Rainfall Share'))).toBe(true)
     expect(titles.some(t => t.includes('vs NDVI'))).toBe(true)
     expect(titles.some(t => t.includes('Rainfall vs'))).toBe(true)
     expect(titles.some(t => t.includes('Humidity vs'))).toBe(true)
+    const rainBar = specs.find(s => s.title.includes('Monthly Rainfall Total'))
+    expect(rainBar?.xAxisLabel).toBe('Month')
+    expect(rainBar?.yAxisLabel).toBe('Rainfall (mm)')
+    const rainXml = buildDocxChartXml(rainBar!)
+    expect(rainXml).toContain('<c:overlay val="0"/>')
+    expect(rainXml).toContain('<c:manualLayout>')
+    expect(rainXml).toContain('Rainfall (mm)')
+    expect(rainXml).toContain('Month')
     const shareBar = specs.find(s => s.title.includes('Top Months'))
     expect(shareBar?.kind).toBe('bar')
     expect(shareBar?.barDir).toBe('bar')
@@ -219,22 +228,22 @@ describe('lulc five-year helpers', () => {
 })
 
 describe('docxMapGrid layout', () => {
-  it('uses 3×4 grid (12 maps per page) like the sample atlas', () => {
+  it('uses 3×3 grid (9 maps per page) like the sample atlas', () => {
     expect(MAPS_PER_ROW).toBe(3)
-    expect(MAPS_PER_PAGE).toBe(12)
-    expect(MAP_IMAGE_CX).toBeLessThanOrEqual(2_100_000)
-    expect(MAP_IMAGE_CY).toBeLessThanOrEqual(1_600_000)
-    const twelve = Array.from({ length: 12 }, (_, i) => ({
+    expect(MAPS_PER_PAGE).toBe(9)
+    expect(MAP_IMAGE_CX).toBeGreaterThan(2_000_000)
+    expect(MAP_IMAGE_CY).toBeGreaterThan(1_800_000)
+    const nine = Array.from({ length: 9 }, (_, i) => ({
       rId: `rIdImg${i + 1}`,
       date: `2022-0${(i % 9) + 1}-01`,
       label: `NDVI 0.4${i}`,
     }))
-    const xmlPage = docxMapGrid(twelve)
+    const xmlPage = docxMapGrid(nine)
     expect(xmlPage).not.toContain('w:br w:type="page"')
-    expect((xmlPage.match(/<w:tr>/g) ?? []).length).toBe(4)
+    expect((xmlPage.match(/<w:tr>/g) ?? []).length).toBe(3)
 
-    const thirteen = [...twelve, { rId: 'rIdImg13', date: '2023-01-01', label: 'NDVI 0.5' }]
-    const xmlNext = docxMapGrid(thirteen)
+    const ten = [...nine, { rId: 'rIdImg10', date: '2023-01-01', label: 'NDVI 0.5' }]
+    const xmlNext = docxMapGrid(ten)
     expect(xmlNext).toContain('w:br w:type="page"')
     expect((xmlNext.match(/<w:gridCol /g) ?? []).length).toBeGreaterThanOrEqual(3)
   })

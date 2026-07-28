@@ -171,8 +171,9 @@ export function SiImageryTimeSeriesPanel({
   const [splitByYears, setSplitByYears] = useState(false)
   const [dateError, setDateError] = useState<string | null>(null)
   const [selectedChartDate, setSelectedChartDate] = useState<string | null>(null)
-  const [activePanelTab, setActivePanelTab] = useState<'chart' | 'interpretation' | 'weather'>('chart')
-  const [mapSnapshotsOpen, setMapSnapshotsOpen] = useState(false)
+  const [activePanelTab, setActivePanelTab] = useState<
+    'chart' | 'interpretation' | 'weather' | 'maps'
+  >('chart')
   const [vegTimeline, setVegTimeline] = useState<
     import('../lib/timeSeriesReport/vegetationCoverageTimeline').VegetationCoveragePoint[]
   >([])
@@ -1892,6 +1893,23 @@ export function SiImageryTimeSeriesPanel({
           >
             <i className="fa-solid fa-cloud-sun-rain" aria-hidden="true" /> Weather
           </button>
+          <button
+            type="button"
+            role="tab"
+            id="acp-ts-tab-maps"
+            className={'acp-ts__tab' + (activePanelTab === 'maps' ? ' is-active' : '')}
+            aria-selected={activePanelTab === 'maps'}
+            aria-controls="acp-ts-panel-maps"
+            disabled={!hasRun || !selectedLayerIds.length}
+            title={
+              !hasRun || !selectedLayerIds.length
+                ? 'Run analysis with selected layers to open map snapshots'
+                : 'Dynamic AOI map snapshots for each selected layer'
+            }
+            onClick={() => setActivePanelTab('maps')}
+          >
+            <i className="fa-solid fa-map" aria-hidden="true" /> Maps
+          </button>
         </div>
 
         <div className="acp-ts__panels">
@@ -2226,19 +2244,26 @@ export function SiImageryTimeSeriesPanel({
               stormOverlayDismissEpoch={stormOverlayDismissEpoch}
             />
           </div>
+          <div
+            id="acp-ts-panel-maps"
+            role="tabpanel"
+            aria-labelledby="acp-ts-tab-maps"
+            className="acp-ts__panel acp-ts__panel--maps"
+            hidden={activePanelTab !== 'maps'}
+          >
+            <SiDynamicMapSnapshotsPanel
+              open={activePanelTab === 'maps'}
+              geometry={resolvedField?.geometry ?? committedAoiGeometry}
+              layerIds={selectedLayerIds}
+              sceneDate={interpretSceneDate || referenceDate}
+              fieldName={selectedFieldLabel}
+              dailyRows={filteredDailyRows}
+              layerSeries={layerSeries}
+              mapboxToken={mapboxToken}
+              enabled={hasRun && !!selectedLayerIds.length}
+            />
+          </div>
         </div>
-
-        <SiDynamicMapSnapshotsPanel
-          open={mapSnapshotsOpen}
-          geometry={resolvedField?.geometry ?? committedAoiGeometry}
-          layerIds={selectedLayerIds}
-          sceneDate={interpretSceneDate || referenceDate}
-          fieldName={selectedFieldLabel}
-          dailyRows={filteredDailyRows}
-          layerSeries={layerSeries}
-          mapboxToken={mapboxToken}
-          enabled={hasRun && !!selectedLayerIds.length}
-        />
 
         <div className="acp-ts__foot">
           {analysisMode === 'single-layer-trend' ? (
@@ -2262,17 +2287,6 @@ export function SiImageryTimeSeriesPanel({
             ) : null}
           </label>
           <div className="acp-ts__exports">
-            <button
-              type="button"
-              className={'acp-ts__exports-interpret' + (mapSnapshotsOpen ? ' is-on' : '')}
-              title="Dynamic Map Snapshots for selected layers"
-              aria-label="Dynamic Map Snapshots"
-              aria-pressed={mapSnapshotsOpen}
-              disabled={!hasRun || !selectedLayerIds.length}
-              onClick={() => setMapSnapshotsOpen(open => !open)}
-            >
-              <i className="fa-solid fa-map" aria-hidden="true" /> Map Snapshots
-            </button>
             <TimeSeriesExportManager
               disabled={(!labels.length || !hasRun) && exportPlots.length < 1}
               field={resolvedField}

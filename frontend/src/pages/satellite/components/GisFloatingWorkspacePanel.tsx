@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode, RefObject } from 'react';
 import { useEffect } from 'react';
-import { useGisFloatingPanel } from '../hooks/useGisFloatingPanel';
+import { useGisFloatingPanel, type GisPanelDock } from '../hooks/useGisFloatingPanel';
 import './GisFloatingWorkspacePanel.css';
 
 export type GisFloatingWorkspacePanelProps = {
@@ -16,6 +16,12 @@ export type GisFloatingWorkspacePanelProps = {
   footer?: ReactNode;
   defaultWidth?: number;
   defaultHeight?: number;
+  /** Preferred dock when no saved layout exists (ArcGIS Online–style bottom for symbology). */
+  defaultDock?: GisPanelDock;
+  minWidth?: number;
+  maxWidth?: number;
+  minHeight?: number;
+  maxHeight?: number;
   onBack?: () => void;
   searchValue?: string;
   onSearchChange?: (value: string) => void;
@@ -35,6 +41,11 @@ export function GisFloatingWorkspacePanel({
   footer,
   defaultWidth,
   defaultHeight,
+  defaultDock = 'float',
+  minWidth,
+  maxWidth,
+  minHeight,
+  maxHeight,
   onBack,
   searchValue,
   onSearchChange,
@@ -46,6 +57,11 @@ export function GisFloatingWorkspacePanel({
     containerRef,
     defaultWidth,
     defaultHeight,
+    defaultDock,
+    minWidth,
+    maxWidth,
+    minHeight,
+    maxHeight,
   });
 
   useEffect(() => {
@@ -60,7 +76,9 @@ export function GisFloatingWorkspacePanel({
   if (!open) return null;
 
   const { panel } = fp;
-  const docked = panel.dock === 'left' || panel.dock === 'right';
+  const sideDocked = panel.dock === 'left' || panel.dock === 'right';
+  const bottomDocked = panel.dock === 'bottom';
+  const docked = sideDocked || bottomDocked;
   const style = {
     zIndex: fp.zIndex,
     ...(panel.dock === 'float' && !panel.maximized
@@ -68,10 +86,24 @@ export function GisFloatingWorkspacePanel({
       : {}),
     ...(panel.dock === 'left' ? { left: 0, top: 0, width: panel.w, height: panel.h } : {}),
     ...(panel.dock === 'right' ? { right: 0, top: 0, left: 'auto', width: panel.w, height: panel.h } : {}),
+    ...(panel.dock === 'bottom'
+      ? {
+          left: 0,
+          right: 0,
+          top: 'auto',
+          bottom: 0,
+          width: '100%',
+          height: panel.minimized ? undefined : panel.h,
+        }
+      : {}),
     ...(panel.maximized ? { left: panel.x, top: panel.y, width: panel.w, height: panel.h } : {}),
   } as CSSProperties;
 
-  const resizeHandles = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const;
+  const floatResizeHandles = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const;
+  const resizeHandles = bottomDocked ? (['n'] as const) : sideDocked ? ([] as const) : floatResizeHandles;
+
+  const dockTitle =
+    panel.dock === 'right' ? 'Undock' : panel.dock === 'left' ? 'Undock' : 'Dock right';
 
   return (
     <aside
@@ -101,7 +133,11 @@ export function GisFloatingWorkspacePanel({
           onPointerUp={fp.endDrag}
           onPointerCancel={fp.endDrag}
           onDoubleClick={fp.onHeaderDoubleClick}
-          title="Drag to move · double-click to maximize"
+          title={
+            bottomDocked
+              ? 'Docked to bottom · drag the top edge to resize'
+              : 'Drag to move · double-click to maximize'
+          }
         >
           <span className="gis-float-panel__grip" aria-hidden>
             <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
@@ -145,8 +181,8 @@ export function GisFloatingWorkspacePanel({
               type="button"
               className="gis-float-panel__winbtn"
               onClick={() => fp.toggleDock(panel.dock === 'right' ? 'float' : 'right')}
-              title={panel.dock === 'right' ? 'Undock' : 'Dock right'}
-              aria-label="Dock panel"
+              title={dockTitle}
+              aria-label={dockTitle}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="3" y="4" width="18" height="16" rx="2" />
@@ -196,7 +232,7 @@ export function GisFloatingWorkspacePanel({
           </>
         ) : null}
 
-        {!panel.minimized && !docked
+        {!panel.minimized
           ? resizeHandles.map(dir => (
               <div
                 key={dir}

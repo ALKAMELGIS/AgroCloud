@@ -202,12 +202,16 @@ export function bboxFromGeometry(
   }
 }
 
+/** Prefer fetch; fall back to Image+canvas when CORS blocks fetch but tiles still load. */
 async function fetchUrlAsDataUrl(url: string, signal?: AbortSignal): Promise<string | null> {
   try {
-    const res = await fetch(url, { signal })
+    const res = await fetch(url, { signal, mode: 'cors' })
     if (!res.ok) return null
     const blob = await res.blob()
-    const mime = blob.type || 'image/jpeg'
+    // Sentinel Hub often returns a tiny transparent PNG (no scene) with HTTP 200.
+    if (blob.size > 0 && blob.size < 180) return null
+    const mime = blob.type || 'image/png'
+    if (mime.includes('xml') || mime.includes('html') || mime.includes('json')) return null
     const buf = await blob.arrayBuffer()
     const bytes = new Uint8Array(buf)
     let binary = ''
@@ -217,6 +221,64 @@ async function fetchUrlAsDataUrl(url: string, signal?: AbortSignal): Promise<str
     }
     const b64 = typeof btoa !== 'undefined' ? btoa(binary) : ''
     return b64 ? `data:${mime};base64,${b64}` : null
+  } catch {
+    if (signal?.aborted) return null
+  }
+
+  // Image element path (map tiles often succeed here even when fetch CORS fails).
+  try {
+    const dataUrl = await new Promise<string | null>((resolve, reject) => {
+      if (signal?.aborted) {
+        resolve(null)
+        return
+      }
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      const onAbort = () => {
+        img.src = ''
+        resolve(null)
+      }
+      signal?.addEventListener('abort', onAbort, { once: true })
+      img.onload = () => {
+        signal?.removeEventListener('abort', onAbort)
+        try {
+          const w = Math.max(1, img.naturalWidth || img.width)
+          const h = Math.max(1, img.naturalHeight || img.height)
+          if (w < 2 || h < 2) {
+            resolve(null)
+            return
+          }
+          const canvas = document.createElement('canvas')
+          canvas.width = w
+          canvas.height = h
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            resolve(null)
+            return
+          }
+          ctx.drawImage(img, 0, 0)
+          // Reject near-empty transparent frames.
+          const sample = ctx.getImageData(0, 0, Math.min(w, 64), Math.min(h, 64)).data
+          let opaque = 0
+          for (let i = 3; i < sample.length; i += 4) {
+            if (sample[i]! > 8) opaque += 1
+          }
+          if (opaque < 4) {
+            resolve(null)
+            return
+          }
+          resolve(canvas.toDataURL('image/png'))
+        } catch {
+          resolve(null)
+        }
+      }
+      img.onerror = () => {
+        signal?.removeEventListener('abort', onAbort)
+        reject(new Error('image load failed'))
+      }
+      img.src = url
+    })
+    return dataUrl
   } catch {
     return null
   }
@@ -337,6 +399,7 @@ export async function fetchIndexLayerMapSnapshotBase64(options: {
     getSentinelHubWmsLayerCatalog,
     resolveSentinelHubWmsGetMapLayerName,
     resolveSentinelHubWmsTimeWindow,
+    SENTINEL_HUB_WMS_LAYER_LIVE_LOOKBACK_DAYS,
   } = await import('../../../../lib/sentinelHubWmsLayers')
   const { getSentinelHubWmsBaseUrl } = await import('../../../../lib/sentinelHubWmsInstance')
 
@@ -345,34 +408,42 @@ export async function fetchIndexLayerMapSnapshotBase64(options: {
   if (!layerId || !sceneDate) return null
 
   const drawn = { type: 'Feature' as const, geometry: options.geometry, properties: {} }
-  const clip = buildSentinelHubWmsAoiClip(drawn, layerId)
+  const clip = buildSentinelHubWmsAoiClip(drawn, layerId, { sceneDate })
   const catalog = getSentinelHubWmsLayerCatalog()
   const wmsLayer = resolveSentinelHubWmsGetMapLayerName(layerId, catalog)
   const { timeStart, timeEnd } = resolveSentinelHubWmsTimeWindow(layerId, sceneDate, null, {
-    lookbackDays: 14,
+    lookbackDays: SENTINEL_HUB_WMS_LAYER_LIVE_LOOKBACK_DAYS,
   })
   const bbox3857 = bbox3857From4326(bbox4326)
   const [minX, minY, maxX, maxY] = bbox3857
   const mapW = layout.mapW
   const mapH = layout.mapH
+  const evalscriptB64 = clip.evalscriptB64 ?? undefined
 
-  let url = buildSentinelHubWmsGetMapUrlParts({
-    baseUrl: getSentinelHubWmsBaseUrl(),
-    layer: wmsLayer,
-    timeStart,
-    timeEnd,
-    cloudCoverage: 60,
-    geometryWkt3857: clip.geometryWkt3857 ?? undefined,
-    evalscriptB64: clip.evalscriptB64 ?? undefined,
-    tilePixels: Math.max(mapW, mapH),
-  })
-  // Request pixel size matches map frame aspect so circle AOIs stay circular (no square→rect stretch).
-  url = url
-    .replace(/WIDTH=\d+/i, `WIDTH=${Math.round(mapW)}`)
-    .replace(/HEIGHT=\d+/i, `HEIGHT=${Math.round(mapH)}`)
-  url = url.replace('{bbox-epsg-3857}', `${minX},${minY},${maxX},${maxY}`)
+  const buildUrl = (withGeometry: boolean) => {
+    let url = buildSentinelHubWmsGetMapUrlParts({
+      baseUrl: getSentinelHubWmsBaseUrl(),
+      layer: wmsLayer,
+      timeStart,
+      timeEnd,
+      cloudCoverage: 80,
+      // Keep EVALSCRIPT even when GEOMETRY is dropped — NDVI/ISS need it on the band proxy layer.
+      geometryWkt3857: withGeometry ? clip.geometryWkt3857 ?? undefined : undefined,
+      evalscriptB64,
+      tilePixels: Math.max(mapW, mapH),
+    })
+    // Request pixel size matches map frame aspect so circle AOIs stay circular (no square→rect stretch).
+    url = url
+      .replace(/WIDTH=\d+/i, `WIDTH=${Math.round(mapW)}`)
+      .replace(/HEIGHT=\d+/i, `HEIGHT=${Math.round(mapH)}`)
+    return url.replace('{bbox-epsg-3857}', `${minX},${minY},${maxX},${maxY}`)
+  }
 
-  const dataUrl = await fetchUrlAsDataUrl(url, options.signal)
+  // Prefer AOI-clipped GetMap; retry without GEOMETRY if the clipped request is empty/blocked.
+  let dataUrl = await fetchUrlAsDataUrl(buildUrl(true), options.signal)
+  if (!dataUrl) {
+    dataUrl = await fetchUrlAsDataUrl(buildUrl(false), options.signal)
+  }
   return dataUrlToPngBase64(dataUrl)
 }
 
@@ -737,6 +808,11 @@ export async function compositeAoiMapSnapshotBase64(options: {
     drawSnapshotLegend(ctx, legend, legendX, legendY, legendMaxW)
   }
 
-  const dataUrl = canvas.toDataURL('image/png')
-  return dataUrlToPngBase64(dataUrl)
+  try {
+    const dataUrl = canvas.toDataURL('image/png')
+    return dataUrlToPngBase64(dataUrl)
+  } catch {
+    // Tainted canvas (rare CORS path) — caller falls back to basemap-only / AOI-only compose.
+    return null
+  }
 }

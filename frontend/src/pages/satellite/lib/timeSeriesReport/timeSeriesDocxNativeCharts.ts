@@ -168,25 +168,81 @@ function buildBarSerXml(
 </c:ser>`
 }
 
+/** Axis title — overlay=0 so Word reserves space (avoids title×tick overlap). */
+function axTitleXml(text: string, opts?: { vertical?: boolean; size?: number }): string {
+  const t = text.trim()
+  if (!t) return ''
+  const sz = opts?.size ?? 800
+  // -90° for left/right value axes so the title sits clear of tick numbers.
+  const bodyPr = opts?.vertical
+    ? '<a:bodyPr rot="-5400000" vert="horz" anchor="ctr"/>'
+    : '<a:bodyPr anchor="ctr"/>'
+  return `<c:title>
+  <c:tx><c:rich>${bodyPr}<a:lstStyle/><a:p><a:pPr><a:defRPr sz="${sz}"/></a:pPr><a:r><a:rPr lang="en-US" sz="${sz}" b="1"><a:solidFill><a:srgbClr val="334155"/></a:solidFill></a:rPr><a:t>${escXml(t)}</a:t></a:r></a:p></c:rich></c:tx>
+  <c:overlay val="0"/>
+</c:title>`
+}
+
+/** Tick label text props — compact font to reduce collisions with axis titles. */
+function axTickTxPrXml(opts?: { rotateDeg?: number; size?: number }): string {
+  const sz = opts?.size ?? 700
+  const rot =
+    opts?.rotateDeg != null && Number.isFinite(opts.rotateDeg)
+      ? ` rot="${Math.round(opts.rotateDeg * 60000)}"`
+      : ''
+  return `<c:txPr><a:bodyPr${rot}/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="${sz}"/></a:pPr><a:defRPr sz="${sz}"/></a:p></c:txPr>`
+}
+
+/**
+ * Reserve plot-area margins for axis titles + tick labels (ChartML edge layout 0–1).
+ * Without this, Word often draws "Rainfall (mm)" / "Period" on top of tick values.
+ */
+function plotAreaLayoutXml(opts: {
+  secondary?: boolean
+  legendBottom?: boolean
+  catCount?: number
+}): string {
+  const left = 0.18
+  const right = opts.secondary ? 0.16 : 0.05
+  const top = 0.02
+  const manyCats = (opts.catCount ?? 0) > 8
+  const bottom = (opts.legendBottom ? 0.2 : 0.16) + (manyCats ? 0.06 : 0)
+  const w = Math.max(0.45, 1 - left - right)
+  const h = Math.max(0.45, 1 - top - bottom)
+  return `<c:layout>
+  <c:manualLayout>
+    <c:layoutTarget val="inner"/>
+    <c:xMode val="edge"/>
+    <c:yMode val="edge"/>
+    <c:x val="${left.toFixed(3)}"/>
+    <c:y val="${top.toFixed(3)}"/>
+    <c:w val="${w.toFixed(3)}"/>
+    <c:h val="${h.toFixed(3)}"/>
+  </c:manualLayout>
+</c:layout>`
+}
+
 function valAxXml(opts: {
   axId: number
   crossAx: number
-  pos: 'l' | 'r'
+  pos: 'l' | 'r' | 'b'
   title: string
   numFmt: string
   crosses?: string
 }): string {
+  const verticalTitle = opts.pos === 'l' || opts.pos === 'r'
   return `<c:valAx>
   <c:axId val="${opts.axId}"/>
   <c:scaling><c:orientation val="minMax"/></c:scaling>
   <c:delete val="0"/>
   <c:axPos val="${opts.pos}"/>
-  <c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="900"/></a:pPr><a:r><a:rPr lang="en-US" sz="900" b="1"><a:solidFill><a:srgbClr val="334155"/></a:solidFill></a:rPr><a:t>${escXml(opts.title)}</a:t></a:r></a:p></c:rich></c:tx></c:title>
+  ${axTitleXml(opts.title, { vertical: verticalTitle })}
   ${opts.pos === 'l' ? '<c:majorGridlines><c:spPr><a:ln w="4000"><a:solidFill><a:srgbClr val="CBD5E1"/></a:solidFill></a:ln></c:spPr></c:majorGridlines>' : ''}
   <c:numFmt formatCode="${escXml(opts.numFmt)}" sourceLinked="0"/>
   <c:majorTickMark val="out"/>
   <c:minorTickMark val="none"/>
   <c:tickLblPos val="nextTo"/>
+  ${axTickTxPrXml({ size: 700 })}
   <c:crossAx val="${opts.crossAx}"/>
   <c:crosses val="${opts.crosses ?? 'autoZero'}"/>
   <c:crossBetween val="between"/>
@@ -372,22 +428,27 @@ export function buildDocxChartXml(spec: DocxNativeChartSpec): string {
   const useSecondary =
     hasSecondary || (kind === 'combo' && spec.series.some(s => s.secondaryAxis && !s.asBar))
 
-  const catTitle = barDir === 'bar' ? 'Month' : 'Period'
+  const catTitle =
+    (spec.xAxisLabel && spec.xAxisLabel.trim()) ||
+    (barDir === 'bar' ? 'Category' : 'Period')
+  const catCount = spec.categories.length
+  const rotateCats = barDir !== 'bar' && catCount > 6
   const axes = `
       <c:catAx>
         <c:axId val="1"/>
         <c:scaling><c:orientation val="minMax"/></c:scaling>
         <c:delete val="0"/>
         <c:axPos val="${barDir === 'bar' ? 'l' : 'b'}"/>
-        <c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="900" b="1"><a:solidFill><a:srgbClr val="334155"/></a:solidFill></a:rPr><a:t>${escXml(catTitle)}</a:t></a:r></a:p></c:rich></c:tx></c:title>
+        ${axTitleXml(catTitle, { vertical: barDir === 'bar' })}
         <c:majorTickMark val="out"/>
         <c:minorTickMark val="none"/>
         <c:tickLblPos val="nextTo"/>
+        ${axTickTxPrXml({ size: 700, rotateDeg: rotateCats ? -35 : undefined })}
         <c:crossAx val="2"/>
         <c:crosses val="autoZero"/>
         <c:auto val="1"/>
         <c:lblAlgn val="ctr"/>
-        <c:lblOffset val="100"/>
+        <c:lblOffset val="${rotateCats ? 160 : 140}"/>
       </c:catAx>
       ${valAxXml({
         axId: 2,
@@ -416,12 +477,16 @@ export function buildDocxChartXml(spec: DocxNativeChartSpec): string {
   <c:roundedCorners val="0"/>
   <c:chart>
     <c:title>
-      <c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1200" b="1"/></a:pPr><a:r><a:rPr lang="en-US" sz="1200" b="1"><a:solidFill><a:srgbClr val="0F172A"/></a:solidFill></a:rPr><a:t>${escXml(spec.title)}</a:t></a:r></a:p></c:rich></c:tx>
+      <c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1100" b="1"/></a:pPr><a:r><a:rPr lang="en-US" sz="1100" b="1"><a:solidFill><a:srgbClr val="0F172A"/></a:solidFill></a:rPr><a:t>${escXml(spec.title)}</a:t></a:r></a:p></c:rich></c:tx>
       <c:overlay val="0"/>
     </c:title>
     <c:autoTitleDeleted val="0"/>
     <c:plotArea>
-      <c:layout/>
+      ${plotAreaLayoutXml({
+        secondary: useSecondary,
+        legendBottom: !spec.hideLegend && kind !== 'pie',
+        catCount,
+      })}
       ${plotParts.join('\n')}
       ${axes}
     </c:plotArea>
@@ -487,12 +552,12 @@ export function buildDocxScatterChartXml(spec: DocxNativeChartSpec): string {
   <c:roundedCorners val="0"/>
   <c:chart>
     <c:title>
-      <c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1200" b="1"/></a:pPr><a:r><a:rPr lang="en-US" sz="1200" b="1"><a:solidFill><a:srgbClr val="0F172A"/></a:solidFill></a:rPr><a:t>${escXml(spec.title)}</a:t></a:r></a:p></c:rich></c:tx>
+      <c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1100" b="1"/></a:pPr><a:r><a:rPr lang="en-US" sz="1100" b="1"><a:solidFill><a:srgbClr val="0F172A"/></a:solidFill></a:rPr><a:t>${escXml(spec.title)}</a:t></a:r></a:p></c:rich></c:tx>
       <c:overlay val="0"/>
     </c:title>
     <c:autoTitleDeleted val="0"/>
     <c:plotArea>
-      <c:layout/>
+      ${plotAreaLayoutXml({ legendBottom: !spec.hideLegend })}
       <c:scatterChart>
         <c:scatterStyle val="lineMarker"/>
         <c:varyColors val="0"/>
@@ -505,12 +570,13 @@ export function buildDocxScatterChartXml(spec: DocxNativeChartSpec): string {
         <c:scaling><c:orientation val="minMax"/></c:scaling>
         <c:delete val="0"/>
         <c:axPos val="b"/>
-        <c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="900" b="1"><a:solidFill><a:srgbClr val="334155"/></a:solidFill></a:rPr><a:t>${escXml(xLabel)}</a:t></a:r></a:p></c:rich></c:tx></c:title>
+        ${axTitleXml(xLabel)}
         <c:majorGridlines><c:spPr><a:ln w="6350"><a:solidFill><a:srgbClr val="E2E8F0"/></a:solidFill></a:ln></c:spPr></c:majorGridlines>
         <c:numFmt formatCode="${escXml(xFmt)}" sourceLinked="0"/>
         <c:majorTickMark val="out"/>
         <c:minorTickMark val="none"/>
         <c:tickLblPos val="nextTo"/>
+        ${axTickTxPrXml({ size: 700 })}
         <c:crossAx val="2"/>
         <c:crosses val="autoZero"/>
         <c:crossBetween val="midCat"/>
@@ -520,12 +586,13 @@ export function buildDocxScatterChartXml(spec: DocxNativeChartSpec): string {
         <c:scaling><c:orientation val="minMax"/></c:scaling>
         <c:delete val="0"/>
         <c:axPos val="l"/>
-        <c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="900" b="1"><a:solidFill><a:srgbClr val="334155"/></a:solidFill></a:rPr><a:t>${escXml(yLabel)}</a:t></a:r></a:p></c:rich></c:tx></c:title>
+        ${axTitleXml(yLabel, { vertical: true })}
         <c:majorGridlines><c:spPr><a:ln w="6350"><a:solidFill><a:srgbClr val="E2E8F0"/></a:solidFill></a:ln></c:spPr></c:majorGridlines>
         <c:numFmt formatCode="${escXml(yFmt)}" sourceLinked="0"/>
         <c:majorTickMark val="out"/>
         <c:minorTickMark val="none"/>
         <c:tickLblPos val="nextTo"/>
+        ${axTickTxPrXml({ size: 700 })}
         <c:crossAx val="1"/>
         <c:crosses val="autoZero"/>
         <c:crossBetween val="midCat"/>
@@ -571,7 +638,8 @@ export function buildPerLayerNativeChartSpecs(input: {
       rId: `rIdChart${n}`,
       fileStem: `chart${n}`,
       title: `${id} Trend`,
-      yAxisLabel: id,
+      yAxisLabel: `${id} mean`,
+      xAxisLabel: 'Period',
       yNumFmt: '0.0000',
       categories,
       kind: 'line',
@@ -652,23 +720,31 @@ function tempExtremesSeries(rows: Array<{
 
 /**
  * Professional weather + climate suite for the Word Intelligence Report.
+ * Prefers monthly aggregates over daily when both exist (fewer pages, clearer axes).
  */
 export function buildWeatherNativeChartSpecs(input: WeatherNativeChartInput): DocxNativeChartSpec[] {
   const counter = { v: input.startIndex ?? 0 }
   const out: DocxNativeChartSpec[] = []
   const push = (spec: Omit<DocxNativeChartSpec, 'rId' | 'fileStem'>) => {
     const id = nextChartId(counter)
-    out.push({ ...spec, rId: `rIdChart${id}`, fileStem: `chart${id}` })
+    out.push({
+      xAxisLabel: 'Period',
+      ...spec,
+      rId: `rIdChart${id}`,
+      fileStem: `chart${id}`,
+    })
   }
 
   const daily = input.daily ?? []
   const monthly = input.monthly ?? []
   const yearly = input.yearly ?? []
+  const useDailyTemp = daily.length > 0 && monthly.length === 0
 
-  if (daily.length) {
+  if (useDailyTemp) {
     push({
       title: 'Temperature Max · Mean · Min — Daily',
       yAxisLabel: 'Temperature (°C)',
+      xAxisLabel: 'Date',
       yNumFmt: '0.0',
       categories: daily.map(d => d.date),
       kind: 'line',
@@ -680,6 +756,7 @@ export function buildWeatherNativeChartSpecs(input: WeatherNativeChartInput): Do
     push({
       title: 'Temperature Max · Mean · Min — Monthly',
       yAxisLabel: 'Temperature (°C)',
+      xAxisLabel: 'Month',
       yNumFmt: '0.0',
       categories: monthly.map(m => m.label),
       kind: 'line',
@@ -691,6 +768,7 @@ export function buildWeatherNativeChartSpecs(input: WeatherNativeChartInput): Do
     push({
       title: 'Temperature Max · Mean · Min — Yearly',
       yAxisLabel: 'Temperature (°C)',
+      xAxisLabel: 'Year',
       yNumFmt: '0.0',
       categories: yearly.map(y => y.label),
       kind: 'line',
@@ -700,24 +778,9 @@ export function buildWeatherNativeChartSpecs(input: WeatherNativeChartInput): Do
 
   if (monthly.length) {
     push({
-      title: 'Cumulative Rainfall — Monthly',
-      yAxisLabel: 'Cumulative rainfall (mm)',
-      yNumFmt: '0.0',
-      categories: monthly.map(m => m.label),
-      kind: 'bar',
-      hideLegend: true,
-      series: [
-        {
-          name: 'Cumulative Rainfall (mm)',
-          values: monthly.map(m => m.cumulativeRainfallMm),
-          color: '2563EB',
-          asBar: true,
-        },
-      ],
-    })
-    push({
       title: 'Monthly Rainfall Total',
       yAxisLabel: 'Rainfall (mm)',
+      xAxisLabel: 'Month',
       yNumFmt: '0.0',
       categories: monthly.map(m => m.label),
       kind: 'bar',
@@ -742,7 +805,8 @@ export function buildWeatherNativeChartSpecs(input: WeatherNativeChartInput): Do
       const capped = aggregateTopShareCategories(shareRows, 8)
       push({
         title: 'Top Months — Rainfall Share (%)',
-        yAxisLabel: 'Share of period rainfall (%)',
+        yAxisLabel: 'Share (%)',
+        xAxisLabel: 'Month',
         yNumFmt: '0.0',
         categories: capped.labels,
         kind: 'bar',
@@ -781,23 +845,25 @@ export function buildWeatherNativeChartSpecs(input: WeatherNativeChartInput): Do
     }
   }
 
-  if (daily.length) {
-    push({
-      title: 'Humidity — Daily Mean',
-      yAxisLabel: 'Humidity (%)',
-      yNumFmt: '0',
-      categories: daily.map(d => d.date),
-      kind: 'line',
-      series: [{ name: 'Humidity (%)', values: daily.map(d => d.humidityPct), color: '0D9488' }],
-    })
-  } else if (monthly.length) {
+  if (monthly.length) {
     push({
       title: 'Humidity — Monthly Mean',
       yAxisLabel: 'Humidity (%)',
+      xAxisLabel: 'Month',
       yNumFmt: '0',
       categories: monthly.map(m => m.label),
       kind: 'line',
       series: [{ name: 'Humidity (%)', values: monthly.map(m => m.humidityPct), color: '0D9488' }],
+    })
+  } else if (daily.length) {
+    push({
+      title: 'Humidity — Daily Mean',
+      yAxisLabel: 'Humidity (%)',
+      xAxisLabel: 'Date',
+      yNumFmt: '0',
+      categories: daily.map(d => d.date),
+      kind: 'line',
+      series: [{ name: 'Humidity (%)', values: daily.map(d => d.humidityPct), color: '0D9488' }],
     })
   }
 
@@ -819,6 +885,7 @@ export function buildWeatherNativeChartSpecs(input: WeatherNativeChartInput): Do
         title: 'Temperature Max·Mean·Min vs NDVI · NDMI · NDWI · SAVI',
         yAxisLabel: 'Temperature (°C)',
         yAxisLabelSecondary: 'Index value',
+        xAxisLabel: 'Period',
         yNumFmt: '0.0',
         yNumFmtSecondary: '0.000',
         categories: cmp.categories,
@@ -837,6 +904,7 @@ export function buildWeatherNativeChartSpecs(input: WeatherNativeChartInput): Do
         title: 'Rainfall vs NDVI · NDMI · NDWI · SAVI',
         yAxisLabel: 'Rainfall (mm)',
         yAxisLabelSecondary: 'Index value',
+        xAxisLabel: 'Period',
         yNumFmt: '0.0',
         yNumFmtSecondary: '0.000',
         categories: cmp.categories,
@@ -853,6 +921,7 @@ export function buildWeatherNativeChartSpecs(input: WeatherNativeChartInput): Do
         title: 'Humidity vs NDVI · NDMI · NDWI · SAVI',
         yAxisLabel: 'Humidity (%)',
         yAxisLabelSecondary: 'Index value',
+        xAxisLabel: 'Period',
         yNumFmt: '0',
         yNumFmtSecondary: '0.000',
         categories: cmp.categories,
@@ -874,6 +943,7 @@ export function buildWeatherNativeChartSpecs(input: WeatherNativeChartInput): Do
       title: `Temperature & Humidity — ${agg}`,
       yAxisLabel: 'Temperature (°C)',
       yAxisLabelSecondary: 'Humidity (%)',
+      xAxisLabel: 'Period',
       yNumFmt: '0.0',
       yNumFmtSecondary: '0',
       categories,
@@ -892,6 +962,7 @@ export function buildWeatherNativeChartSpecs(input: WeatherNativeChartInput): Do
       title: `Rainfall & Wind — ${agg}`,
       yAxisLabel: 'Rainfall (mm)',
       yAxisLabelSecondary: 'Wind (m/s)',
+      xAxisLabel: 'Period',
       yNumFmt: '0.0',
       yNumFmtSecondary: '0.00',
       categories,
@@ -965,6 +1036,7 @@ export function buildVegetationCoverageTimelineChartSpecs(input: {
     title: 'Vegetation Coverage Timeline — Statistical Chart',
     yAxisLabel: 'Coverage (%)',
     yAxisLabelSecondary: 'NDVI mean',
+    xAxisLabel: 'Period',
     yNumFmt: '0.0',
     yNumFmtSecondary: '0.000',
     categories,

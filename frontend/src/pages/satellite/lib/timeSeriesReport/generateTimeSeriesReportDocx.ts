@@ -94,7 +94,14 @@ function ensureContentTypes(xml: string, chartStems: string[]): string {
   return out
 }
 
-export async function generateTimeSeriesReportDocx(payload: TimeSeriesReportPayload): Promise<void> {
+async function packAndDownloadTimeSeriesDocx(
+  payload: TimeSeriesReportPayload,
+  opts: {
+    mode: 'intelligence' | 'lulc'
+    documentTitle: string
+    downloadName: string
+  },
+): Promise<void> {
   const templateResponse = await fetch(templateUrl)
   if (!templateResponse.ok) throw new Error('Failed to load Word report template')
   const templateBuffer = await templateResponse.arrayBuffer()
@@ -102,7 +109,9 @@ export async function generateTimeSeriesReportDocx(payload: TimeSeriesReportPayl
   const { model, images } = await buildTimeSeriesDocxModel(payload)
   const zip = await JSZip.loadAsync(templateBuffer)
 
-  const documentXml = patchDocumentXmlHeaderFooterRefs(buildTimeSeriesDocxDocumentXml(model))
+  const documentXml = patchDocumentXmlHeaderFooterRefs(
+    buildTimeSeriesDocxDocumentXml(model, opts.mode),
+  )
   zip.file('word/document.xml', documentXml)
   zip.file(
     'word/_rels/document.xml.rels',
@@ -163,7 +172,7 @@ export async function generateTimeSeriesReportDocx(payload: TimeSeriesReportPayl
   if (coreFile) {
     let coreXml = await coreFile.async('string')
     coreXml = coreXml.replace(/<dc:creator>.*?<\/dc:creator>/, `<dc:creator>${model.generatedBy}</dc:creator>`)
-    coreXml = coreXml.replace(/<dc:title>.*?<\/dc:title>/, `<dc:title>Agricultural Satellite Intelligence Report</dc:title>`)
+    coreXml = coreXml.replace(/<dc:title>.*?<\/dc:title>/, `<dc:title>${opts.documentTitle}</dc:title>`)
     zip.file('docProps/core.xml', coreXml)
   }
 
@@ -177,7 +186,26 @@ export async function generateTimeSeriesReportDocx(payload: TimeSeriesReportPayl
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = 'Agricultural_Satellite_Intelligence_Report.docx'
+  a.download = opts.downloadName
   a.click()
   URL.revokeObjectURL(url)
+}
+
+export async function generateTimeSeriesReportDocx(payload: TimeSeriesReportPayload): Promise<void> {
+  await packAndDownloadTimeSeriesDocx(payload, {
+    mode: 'intelligence',
+    documentTitle: 'Agricultural Satellite Intelligence Report',
+    downloadName: 'Agricultural_Satellite_Intelligence_Report.docx',
+  })
+}
+
+/** Standalone LULC Word report (five-year atlas + change detection). */
+export async function generateTimeSeriesLulcReportDocx(
+  payload: TimeSeriesReportPayload,
+): Promise<void> {
+  await packAndDownloadTimeSeriesDocx(payload, {
+    mode: 'lulc',
+    documentTitle: 'LULC Land Cover Intelligence Report',
+    downloadName: 'LULC_Land_Cover_Intelligence_Report.docx',
+  })
 }

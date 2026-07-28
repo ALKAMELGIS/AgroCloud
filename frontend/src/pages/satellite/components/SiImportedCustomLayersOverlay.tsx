@@ -4,8 +4,18 @@
  * React Source/Layer children are re-applied with the style and stay visible.
  */
 import { Source, Layer } from 'react-map-gl/mapbox';
-import type { SiCustomLayerBase } from '../../../lib/siCustomLayerFactory';
+import {
+  detectImportedGeometryKind,
+  type SiCustomLayerBase,
+  type SiLayerGeometryKind,
+} from '../../../lib/siCustomLayerFactory';
 import { rasterTilesSourceMaxNativeZoom } from '../../../lib/rasterTileZoom';
+import {
+  DEFAULT_SI_LAYER_LABEL_STYLE,
+  normalizeSiLayerLabelStyle,
+  resolveSiLabelMapboxFontStack,
+  type SiLayerLabelStyle,
+} from '../../../lib/siLayerLabelStyle';
 
 const POLY_FILTER: any = ['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]];
 const LINE_FILTER: any = [
@@ -30,7 +40,28 @@ type OverlayLayer = SiCustomLayerBase & {
   pointRadius?: number;
   mapOpacity?: number;
   definitionQueryText?: string;
+  definitionFilter?: unknown[] | null;
+  labelFieldName?: string | null;
+  labelStyle?: Partial<SiLayerLabelStyle> | null;
 };
+
+/**
+ * Point/circle markers only for true point layers.
+ * Polygon / line / mixed imports often carry stray Point / MultiPoint (centroids,
+ * label points, vertices) that were painting as blue/black dots on the map —
+ * hide those unless the layer is primarily points.
+ */
+export function shouldPaintImportedLayerCircles(
+  kind: SiLayerGeometryKind | undefined | null,
+): boolean {
+  return kind === 'point';
+}
+
+function resolveOverlayGeometryKind(layer: OverlayLayer): SiLayerGeometryKind {
+  const meta = layer.importMetadata?.geometryType;
+  if (meta && meta !== 'unknown') return meta;
+  return detectImportedGeometryKind(layer.geojson, layer.arcgisLayerDefinition, layer.renderMode);
+}
 
 function paintPack(layer: OverlayLayer) {
   const op = typeof layer.mapOpacity === 'number' ? layer.mapOpacity : 1;
@@ -112,6 +143,8 @@ export function SiImportedCustomLayersOverlay({ layers, suppressFillOpacityLayer
           paint.fill = { ...paint.fill, 'fill-opacity': 0 };
         }
         const visibility = layer.visible === false ? 'none' : 'visible';
+        const geometryKind = resolveOverlayGeometryKind(layer);
+        const paintCircles = shouldPaintImportedLayerCircles(geometryKind);
 
         if (layer.arcgisRasterTiles?.tiles?.length) {
           // Cap the source at the service's native zoom so Mapbox over-zooms the
@@ -180,13 +213,66 @@ export function SiImportedCustomLayersOverlay({ layers, suppressFillOpacityLayer
               layout={{ visibility }}
               paint={paint.line as any}
             />
-            <Layer
-              id={`${sid}-circle`}
-              type="circle"
-              filter={POINT_FILTER}
-              layout={{ visibility }}
-              paint={paint.circle as any}
-            />
+            {paintCircles ? (
+              <Layer
+                id={`${sid}-circle`}
+                type="circle"
+                filter={POINT_FILTER}
+                layout={{ visibility }}
+                paint={paint.circle as any}
+              />
+            ) : null}
+            {(() => {
+              const labelField =
+                typeof layer.labelFieldName === 'string' && layer.labelFieldName.trim()
+                  ? layer.labelFieldName.trim()
+                  : '';
+              if (!labelField) return null;
+              const style = normalizeSiLayerLabelStyle({
+                ...DEFAULT_SI_LAYER_LABEL_STYLE,
+                ...(layer.labelStyle ?? {}),
+                fieldName: labelField,
+              });
+              const op = typeof layer.mapOpacity === 'number' ? layer.mapOpacity : 1;
+              const defFilter = Array.isArray(layer.definitionFilter) ? layer.definitionFilter : null;
+              const hasText = [
+                'all',
+                ['has', labelField],
+                ['!=', ['to-string', ['get', labelField]], ''],
+                ['!=', ['to-string', ['get', labelField]], 'null'],
+              ];
+              const labelFilter = defFilter ? (['all', defFilter, hasText] as any) : (hasText as any);
+              return (
+                <Layer
+                  id={`${sid}-label`}
+                  type="symbol"
+                  minzoom={style.minZoom}
+                  maxzoom={style.maxZoom}
+                  filter={labelFilter}
+                  layout={{
+                    visibility,
+                    'text-field': ['to-string', ['get', labelField]],
+                    'text-size': style.fontSize,
+                    'text-font': resolveSiLabelMapboxFontStack(style),
+                    'text-anchor': 'center',
+                    'text-justify': 'center',
+                    'text-allow-overlap': true,
+                    'text-ignore-placement': true,
+                    'text-optional': false,
+                    'text-padding': 1,
+                    'text-max-width': 10,
+                    'symbol-placement': 'point',
+                    'symbol-z-order': 'viewport-y',
+                  }}
+                  paint={{
+                    'text-color': style.textColor,
+                    'text-halo-color': style.haloColor,
+                    'text-halo-width': style.haloWidth,
+                    'text-opacity': op,
+                  }}
+                />
+              );
+            })()}
           </Source>
         );
       })}

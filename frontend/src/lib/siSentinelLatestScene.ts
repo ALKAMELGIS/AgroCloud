@@ -61,7 +61,13 @@ export function bboxFromGeoJsonLike(aoi: unknown): [number, number, number, numb
 
 export function buildStacSearchBodyForAoi(
   aoi: unknown,
-  options?: { cloudCoverMax?: number; limit?: number; lookbackDays?: number },
+  options?: {
+    cloudCoverMax?: number
+    limit?: number
+    lookbackDays?: number
+    /** Planetary Computer STAC collection ids (default: sentinel-2-l2a). */
+    collections?: string[]
+  },
 ): Record<string, unknown> | null {
   const geom = getDrawnGeometry(aoi as Parameters<typeof getDrawnGeometry>[0])
   const bbox = bboxFromGeoJsonLike(aoi)
@@ -70,9 +76,11 @@ export function buildStacSearchBodyForAoi(
   const lookback = options?.lookbackDays ?? SI_SENTINEL_SCENE_CATALOG_LOOKBACK_DAYS
   const end = localIsoDate()
   const start = subtractDaysFromIso(end, lookback)
+  const collections =
+    options?.collections?.map(c => c.trim()).filter(Boolean) ?? ['sentinel-2-l2a']
 
   const body: Record<string, unknown> = {
-    collections: ['sentinel-2-l2a'],
+    collections: collections.length ? collections : ['sentinel-2-l2a'],
     datetime: `${start}T00:00:00Z/${end}T23:59:59Z`,
     limit: Math.min(500, Math.max(1, options?.limit ?? 250)),
     sortby: [{ field: 'datetime', direction: 'desc' }],
@@ -107,9 +115,18 @@ export function parseSentinelSceneCatalogFromStacFeatures(
 
 export async function fetchSentinelSceneCatalogForAoi(
   aoi: unknown,
-  options?: { cloudCoverMax?: number; signal?: AbortSignal },
+  options?: {
+    cloudCoverMax?: number
+    signal?: AbortSignal
+    collections?: string[]
+    lookbackDays?: number
+  },
 ): Promise<SentinelSceneCatalog> {
-  const body = buildStacSearchBodyForAoi(aoi, { cloudCoverMax: options?.cloudCoverMax })
+  const body = buildStacSearchBodyForAoi(aoi, {
+    cloudCoverMax: options?.cloudCoverMax,
+    collections: options?.collections,
+    lookbackDays: options?.lookbackDays,
+  })
   if (!body) {
     return { latestSceneIso: null, sceneIsos: [], fetchedAt: Date.now() }
   }

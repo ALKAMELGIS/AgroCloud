@@ -78,6 +78,11 @@ export type BuildTimeSeriesReportPayloadInput = {
   mapboxToken?: string
   includeMap?: boolean
   includeMapSnapshots?: boolean
+  /**
+   * When set, overrides whether LULC five-year atlas / change maps are built.
+   * Defaults to the same as `includeMapSnapshots` (true unless snapshots are disabled).
+   */
+  includeLulcMapSnapshots?: boolean
   includeVegetationCoverageTimeline?: boolean
   periodAnchorDates?: Record<string, string>
   timeAggregation?: ImageryTimeAggregation
@@ -187,8 +192,11 @@ export async function buildTimeSeriesReportPayload(
 
   const onPhase = createMapProgress(input.onMapSnapshotProgress)
 
+  const wantIndexMaps = input.includeMapSnapshots !== false
+  const wantLulcMaps = input.includeLulcMapSnapshots ?? wantIndexMaps
+
   const mapSnapshotGroups =
-    input.includeMapSnapshots !== false && geometry
+    wantIndexMaps && geometry
       ? await buildTimeSeriesMapSnapshotGroups({
           geometry,
           layerIds: input.layerIds,
@@ -207,7 +215,7 @@ export async function buildTimeSeriesReportPayload(
       : []
 
   const cumulativeMapSnapshotGroups =
-    input.includeMapSnapshots !== false && geometry
+    wantIndexMaps && geometry
       ? await buildCumulativeMapSnapshotGroups({
           geometry,
           layerIds: input.layerIds,
@@ -221,7 +229,7 @@ export async function buildTimeSeriesReportPayload(
       : []
 
   const lulcBuild =
-    input.includeMapSnapshots !== false && geometry
+    wantLulcMaps && geometry
       ? await buildLulcFiveYearMapGroups({
           geometry,
           areaHa,
@@ -235,7 +243,7 @@ export async function buildTimeSeriesReportPayload(
   const lulcChangeCompositions = lulcBuild.changeCompositions
 
   const changeDetectionMapSnapshotGroups =
-    input.includeMapSnapshots !== false && geometry
+    wantIndexMaps && geometry
       ? await buildIndexChangeDetectionMapGroups({
           geometry,
           layerIds: input.layerIds,

@@ -60,6 +60,14 @@ export function SiDynamicMapSnapshotsPanel({
   }, [layerSeries])
 
   const layerKey = layerIds.map(id => id.trim().toUpperCase()).filter(Boolean).join('|')
+  const geometryKey = useMemo(() => {
+    if (!geometry) return 'none'
+    try {
+      return JSON.stringify(geometry).slice(0, 240)
+    } catch {
+      return 'geom'
+    }
+  }, [geometry])
 
   const refresh = useCallback(async () => {
     if (!open || !enabled) return
@@ -69,7 +77,7 @@ export function SiDynamicMapSnapshotsPanel({
       return
     }
 
-    const requestKey = `${layerKey}::${date}::${fieldName}`
+    const requestKey = `${layerKey}::${date}::${fieldName}::${geometryKey}`
     requestKeyRef.current = requestKey
     abortRef.current?.abort()
     const ac = new AbortController()
@@ -101,6 +109,7 @@ export function SiDynamicMapSnapshotsPanel({
     open,
     enabled,
     geometry,
+    geometryKey,
     layerKey,
     sceneDate,
     fieldName,
@@ -155,8 +164,8 @@ export function SiDynamicMapSnapshotsPanel({
             <i className="fa-solid fa-layer-group" aria-hidden="true" />
             Dynamic Map Snapshots
           </h3>
-          <p className="si-dyn-snap__sub">
-            Independent AOI previews for each selected layer · {sceneDate || '—'} · no map reload
+          <p className="si-dyn-snap__sub" title={`Independent AOI previews · ${sceneDate || '—'} · Esri + WMS`}>
+            {sceneDate || '—'} · Esri + WMS
           </p>
         </div>
         <div className="si-dyn-snap__actions">

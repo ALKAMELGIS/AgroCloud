@@ -15,15 +15,15 @@ export const DOCX_INK = '444444'
 export const DOCX_TABLE_FONT_SZ = 18
 export const DOCX_BODY_FONT_SZ = 20
 
-/** Default chart size in EMUs (~5.5" × 3.2"). */
+/** Default chart size in EMUs (~5.5" × 3.5") — taller to clear axis titles without overlap. */
 export const CHART_IMAGE_CX = 5029200
-export const CHART_IMAGE_CY = 2926080
+export const CHART_IMAGE_CY = 3200400
 /** Taller chart for horizontal bars / pies with side legend (~5.5" × 4.0"). */
 export const CHART_IMAGE_CY_TALL = 3657600
-/** Dense 3×4 atlas — 12 map cards per page (matches enterprise sample layout). */
-export const MAP_IMAGE_CX = 2057400
-export const MAP_IMAGE_CY = 1543050
-export const MAPS_PER_PAGE = 12
+/** Classic atlas — 9 map cards per page in a 3×3 grid (Imagery Time Series sample). */
+export const MAP_IMAGE_CX = 2743200
+export const MAP_IMAGE_CY = 2057400
+export const MAPS_PER_PAGE = 9
 export const MAPS_PER_ROW = 3
 /** Change Detection T0/T1 pair — two larger side-by-side map cards. */
 export const PAIR_MAP_IMAGE_CX = 3108960
@@ -34,7 +34,7 @@ export const CHANGE_CHART_IMAGE_CY = 2286000
 
 const C_NS = 'http://schemas.openxmlformats.org/drawingml/2006/chart'
 
-/** Tight margins (0.45") so a full 3×4 atlas fills the page without large gaps. */
+/** Margins sized so a full 3×3 atlas fills the page without large gaps. */
 export const DOCX_SECT_PR = `<w:sectPr w:rsidR="003D6795"><w:headerReference w:type="default" r:id="rIdHdr"/><w:footerReference w:type="default" r:id="rIdFtr"/><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="648" w:right="648" w:bottom="648" w:left="648" w:header="432" w:footer="432" w:gutter="0"/><w:cols w:space="720"/><w:docGrid w:linePitch="320"/></w:sectPr>`
 
 export function escXml(value: string): string {
@@ -116,6 +116,12 @@ export function docxCoverPage(input: {
   generatedStamp: string
   satelliteSource: string
   obsCount: number
+  /** Override main cover title (default: Agricultural Satellite Intelligence Report). */
+  reportTitle?: string
+  /** Override cover subtitle (default: Imagery Time Series Analysis). */
+  reportSubtitle?: string
+  /** Optional extra meta row label/value (e.g. LULC years). */
+  extraMeta?: { label: string; value: string }
 }): string {
   const spacer = (after: number) =>
     `<w:p><w:pPr><w:spacing w:before="0" w:after="${after}"/></w:pPr></w:p>`
@@ -123,6 +129,8 @@ export function docxCoverPage(input: {
     `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="80"/></w:pPr>${run(text, opts)}</w:p>`
   const metaRow = (label: string, value: string) =>
     `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="40"/></w:pPr>${run(label + '  ', { bold: true, color: DOCX_BRAND, size: 20 })}${run(value, { color: DOCX_INK, size: 20 })}</w:p>`
+  const title = input.reportTitle ?? 'Agricultural Satellite Intelligence Report'
+  const subtitle = input.reportSubtitle ?? 'Imagery Time Series Analysis'
 
   return [
     spacer(1200),
@@ -130,14 +138,15 @@ export function docxCoverPage(input: {
     centerRun('SATELLITE INTELLIGENCE', { bold: true, color: DOCX_BRAND_SOFT, size: 22 }),
     spacer(200),
     `<w:p><w:pPr><w:jc w:val="center"/><w:pBdr><w:bottom w:val="single" w:sz="18" w:space="1" w:color="${DOCX_BRAND}"/></w:pBdr><w:spacing w:after="200"/></w:pPr>${run(' ', { size: 2 })}</w:p>`,
-    centerRun('Agricultural Satellite Intelligence Report', { bold: true, color: DOCX_INK, size: 36 }),
-    centerRun('Imagery Time Series Analysis', { italic: true, color: DOCX_MUTED, size: 24 }),
+    centerRun(title, { bold: true, color: DOCX_INK, size: 36 }),
+    centerRun(subtitle, { italic: true, color: DOCX_MUTED, size: 24 }),
     spacer(400),
     metaRow('Project', input.projectName),
     metaRow('AOI / Field', `${input.fieldName}  ·  ${input.areaHa}`),
     metaRow('Monitoring period', input.periodLabel),
     metaRow('Observations', String(input.obsCount)),
     metaRow('Indices', input.layerIdsLabel || '—'),
+    ...(input.extraMeta ? [metaRow(input.extraMeta.label, input.extraMeta.value)] : []),
     metaRow('Satellite source', input.satelliteSource),
     spacer(600),
     centerRun(`Prepared by ${input.generatedBy}`, { color: DOCX_MUTED, size: 18 }),
@@ -274,7 +283,7 @@ function docxMapTableRow(images: Array<{ rId: string; date: string; label: strin
 }
 
 /**
- * 3×4 grid (12 map cards per page) — uniform atlas layout matching the sample report.
+ * 3×3 grid (9 map cards per page) — classic Imagery Time Series atlas layout.
  * Page breaks only between full atlas pages.
  */
 export function docxMapGrid(images: Array<{ rId: string; date: string; label: string }>): string {

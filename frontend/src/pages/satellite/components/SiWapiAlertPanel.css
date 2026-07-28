@@ -178,6 +178,24 @@
   color: rgba(203, 213, 225, 0.9);
 }
 
+.si-wapi-alert__date-range {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.si-wapi-alert__field--date {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+}
+
+.si-wapi-alert__field--date input[type='date'] {
+  width: 100%;
+  max-width: none;
+  text-align: left;
+}
+
 .si-wapi-alert__field span {
   font-size: 8px;
   font-weight: 600;

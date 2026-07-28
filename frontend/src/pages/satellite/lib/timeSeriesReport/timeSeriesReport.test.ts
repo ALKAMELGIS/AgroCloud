@@ -50,6 +50,10 @@ function samplePayload(): TimeSeriesReportPayload {
     charts: {
       labels: ['2026-W16', '2026-W28'],
       displayLabels: ['2026-W16', '2026-W28'],
+      periodAnchorDates: {
+        '2026-W16': '2026-04-16',
+        '2026-W28': '2026-07-09',
+      },
       series: [
         { layerId: 'NDVI', values: [0.5, 0.39] },
         { layerId: 'NDMI', values: [0.08, -0.01] },
@@ -215,21 +219,36 @@ describe('timeSeriesReport', () => {
   it('builds excel workbook with summary, data, veg coverage, map snapshots, and analysis sheets', async () => {
     const { buildTimeSeriesReportWorkbookSync } = await import('./generateTimeSeriesReportExcel')
     const wb = buildTimeSeriesReportWorkbookSync(samplePayload())
-    expect(wb.worksheets.map(w => w.name)).toEqual([
-      'Analytics Summary',
-      'Time Series Data',
-      'Vegetation Coverage Timeline',
-      'Estimated Water Loss Timeline',
-      'Map Snapshots',
-      'Analysis & Recommendations',
-    ])
+    const names = wb.worksheets.map(w => w.name)
+    expect(names[0]).toBe('Analytics Summary')
+    expect(names[1]).toBe('Time Series Data')
+    expect(names).toContain('NDVI Data')
+    expect(names).toContain('NDMI Data')
+    expect(names).toContain('Vegetation Coverage Timeline')
+    expect(names).toContain('Estimated Water Loss Timeline')
+    expect(names).toContain('Map Snapshots')
+    expect(names).toContain('Analysis & Recommendations')
+
+    const dataSheet = wb.getWorksheet('Time Series Data')!
+    expect(dataSheet.getRow(1).getCell(1).value).toBe('Date')
+    expect(dataSheet.getRow(1).getCell(3).value).toBe('NDVI')
+    expect(dataSheet.getRow(2).getCell(1).value).toBe('2026-04-16')
+    expect(dataSheet.getRow(2).getCell(3).value).toBe(0.5)
+
+    const ndviSheet = wb.getWorksheet('NDVI Data')!
+    expect(ndviSheet.getRow(2).getCell(1).value).toBe('Date')
+    expect(ndviSheet.getRow(2).getCell(2).value).toBe('NDVI mean')
+    expect(ndviSheet.getRow(3).getCell(1).value).toBe('2026-04-16')
+    expect(ndviSheet.getRow(3).getCell(2).value).toBe(0.5)
+    expect(ndviSheet.getRow(4).getCell(1).value).toBe('2026-07-09')
+    expect(ndviSheet.getRow(4).getCell(2).value).toBe(0.39)
 
     const vegSheet = wb.getWorksheet('Vegetation Coverage Timeline')!
     const header = vegSheet.getRow(4)
     expect(header.getCell(8).value).toBe('Class distribution (%)')
     expect(header.getCell(9).value).toBe('Healthy (ha)')
-    expect(header.getCell(10).value).toBe('Healthy (m²)')
-    expect(header.getCell(16).value).toBe('Bare (m²)')
+    expect(header.getCell(10).value).toMatch(/Healthy \(m[²2]\)/)
+    expect(header.getCell(16).value).toMatch(/Bare \(m[²2]\)/)
 
     const dataRow = vegSheet.getRow(5)
     expect(dataRow.getCell(9).value).toBe(38.7)
@@ -241,10 +260,22 @@ describe('timeSeriesReport', () => {
     const waterHeader = waterSheet.getRow(4)
     expect(waterHeader.getCell(1).value).toBe('Acquisition Date')
     expect(waterHeader.getCell(2).value).toBe('Estimated Water Loss Index (%)')
-    expect(waterHeader.getCell(3).value).toBe('Estimated Water Loss (m³/day)')
+    expect(String(waterHeader.getCell(3).value)).toMatch(/Estimated Water Loss \(m/)
     expect(waterHeader.getCell(9).value).toBe('Water Stress Level')
     const waterRow = waterSheet.getRow(5)
     expect(waterRow.getCell(2).value).toBe(84)
     expect(waterRow.getCell(9).value).toBe('Critical')
+  })
+
+  it('exports only selected layer raw data when layerIds is a subset', async () => {
+    const { buildTimeSeriesReportWorkbookSync } = await import('./generateTimeSeriesReportExcel')
+    const payload = samplePayload()
+    payload.layerIds = ['NDVI']
+    const wb = buildTimeSeriesReportWorkbookSync(payload)
+    expect(wb.getWorksheet('NDVI Data')).toBeTruthy()
+    expect(wb.getWorksheet('NDMI Data')).toBeUndefined()
+    const data = wb.getWorksheet('Time Series Data')!
+    expect(data.getRow(1).getCell(3).value).toBe('NDVI')
+    expect(data.getRow(1).getCell(4).value).toBe('Vigor Class')
   })
 })

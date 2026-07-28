@@ -47,6 +47,10 @@ export type SiSentinelAoiWmsStackBuildInput = {
   cropSeasonEnd: string
   indexVisibilityMin: number | null
   maxTileLayers: number
+  /** Override WMS host/instance (provider-driven). Defaults to commercial Sentinel Hub. */
+  wmsBaseUrl?: string
+  /** Included in sourceRefreshKey so provider/collection switches remount MapGL tiles. */
+  providerKey?: string
 }
 
 export type SiSentinelAoiWmsStackState = {
@@ -179,7 +183,7 @@ export function buildSiSentinelAoiWmsStackState(
   const { timeStart, timeEnd } = isCropClassificationLayerId(activeWmsLayer)
     ? resolveCropClassificationTimeWindow(input.cropSeasonStart, input.cropSeasonEnd, sentinelFetchDate)
     : resolveSentinelHubWmsTimeWindow(activeWmsLayer, sentinelFetchDate, deltaPreviousDate)
-  const wmsBaseUrl = getSentinelHubWmsBaseUrl()
+  const wmsBaseUrl = input.wmsBaseUrl?.trim() || getSentinelHubWmsBaseUrl()
   const tilePixels = resolveSentinelHubWmsTilePixels(activeWmsLayer)
   const tileUrls = displayChunks.map(chunk =>
     buildSentinelHubWmsGetMapUrlParts({
@@ -205,6 +209,8 @@ export function buildSiSentinelAoiWmsStackState(
     input.sessionKey,
     displayChunks.length,
     tilePixels,
+    wmsBaseUrl,
+    input.providerKey ?? '',
   ].join(':')
 
   return {

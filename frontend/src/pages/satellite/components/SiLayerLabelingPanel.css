@@ -1,0 +1,273 @@
+/* Compact floating label settings — left side by default; drag header to move. */
+
+.si-layer-labelcfg-float {
+  position: absolute;
+  left: 12px;
+  top: 56px;
+  z-index: 14110;
+  width: min(280px, calc(100% - 24px));
+  max-height: min(560px, 72vh);
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(12, 12, 14, 0.94);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #e2e8f0;
+  font-family: inherit;
+  overflow: hidden;
+  animation: si-layer-labelcfg-in 160ms ease-out;
+}
+
+.si-layer-labelcfg-float.is-dragging {
+  animation: none;
+  user-select: none;
+  cursor: grabbing;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+
+@keyframes si-layer-labelcfg-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.si-layer-labelcfg-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 8px 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+  cursor: grab;
+  touch-action: none;
+}
+
+.si-layer-labelcfg-float.is-dragging .si-layer-labelcfg-head {
+  cursor: grabbing;
+}
+
+.si-layer-labelcfg-grip {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: rgba(148, 163, 184, 0.7);
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: -1px;
+  user-select: none;
+}
+
+.si-layer-labelcfg-titles {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.si-layer-labelcfg-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.si-layer-labelcfg-sub {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 650;
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.si-layer-labelcfg-x {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.si-layer-labelcfg-x:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #f1f5f9;
+}
+
+.si-layer-labelcfg-body {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+  min-height: 0;
+}
+
+.si-layer-labelcfg-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.si-layer-labelcfg-row--3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.si-layer-labelcfg-font-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 168px;
+  overflow: auto;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(2, 6, 23, 0.55);
+}
+
+.si-layer-labelcfg-font-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1px;
+  width: 100%;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #e2e8f0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.si-layer-labelcfg-font-item:hover {
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.si-layer-labelcfg-font-item.is-selected {
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(14, 165, 233, 0.14);
+}
+
+.si-layer-labelcfg-font-item-name {
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  font-family: inherit;
+}
+
+.si-layer-labelcfg-font-item.is-selected .si-layer-labelcfg-font-item-name {
+  color: #7dd3fc;
+}
+
+.si-layer-labelcfg-font-item-sample {
+  line-height: 1.25;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.si-layer-labelcfg-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.si-layer-labelcfg-field select,
+.si-layer-labelcfg-field input[type='color'] {
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.85);
+  color: #f1f5f9;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 0 8px;
+}
+
+.si-layer-labelcfg-field--color input[type='color'] {
+  padding: 2px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.si-layer-labelcfg-hint {
+  font-size: 10px;
+  font-weight: 500;
+  font-style: italic;
+  color: #64748b;
+  text-transform: none;
+}
+
+.si-layer-labelcfg-preview {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px dashed rgba(148, 163, 184, 0.28);
+  background: rgba(2, 6, 23, 0.55);
+  text-align: center;
+  line-height: 1.3;
+  font-size: 12px;
+}
+
+.si-layer-labelcfg-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.22);
+  flex-shrink: 0;
+}
+
+.si-layer-labelcfg-btn {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 7px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(30, 41, 59, 0.85);
+  color: #e2e8f0;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.si-layer-labelcfg-btn:hover {
+  background: rgba(51, 65, 85, 0.95);
+}
+
+.si-layer-labelcfg-btn--primary {
+  border-color: rgba(56, 189, 248, 0.45);
+  background: linear-gradient(180deg, #0ea5e9, #0284c7);
+  color: #f8fafc;
+}
+
+.si-layer-labelcfg-btn--primary:hover {
+  filter: brightness(1.08);
+}

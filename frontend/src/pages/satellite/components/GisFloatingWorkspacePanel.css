@@ -21,6 +21,16 @@
   border-radius: 0;
 }
 
+.gis-float-panel--dock-bottom {
+  border-radius: 0;
+  /* Keep the map interactive above; panel only covers the bottom strip. */
+  pointer-events: none;
+}
+
+.gis-float-panel--dock-bottom .gis-float-panel__chrome {
+  pointer-events: auto;
+}
+
 @keyframes gis-float-panel-in {
   from {
     opacity: 0;
@@ -51,6 +61,34 @@
 .gis-float-panel--dock-right .gis-float-panel__chrome {
   border-radius: 0;
   height: 100%;
+}
+
+.gis-float-panel--dock-bottom .gis-float-panel__chrome {
+  border-radius: 12px 12px 0 0;
+  height: 100%;
+  border-bottom: none;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+}
+
+/* Multi-column symbology studio when docked like ArcGIS Online Change Style */
+.gis-float-panel--dock-bottom .si-sym-studio {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px;
+  align-content: start;
+  height: 100%;
+}
+
+.gis-float-panel--dock-bottom .gis-float-panel__body {
+  padding: 10px 12px;
+}
+
+.gis-float-panel--dock-bottom .gis-float-panel__resize--n {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: ns-resize;
 }
 
 .gis-float-panel--minimized .gis-float-panel__chrome {

@@ -13,6 +13,8 @@ interface ImportMetaEnv {
   readonly VITE_OPENROUTESERVICE?: string
   readonly VITE_SENTINEL_HUB_ACCESS_TOKEN?: string
   readonly VITE_SENTINEL_HUB_WMS_INSTANCE_ID?: string
+  /** Copernicus Data Space (CDSE) Sentinel Hub Configuration Utility instance id. */
+  readonly VITE_CDSE_WMS_INSTANCE_ID?: string
   readonly VITE_GOOGLE_MAPS_SERVER_API_KEY?: string
   readonly VITE_GOOGLE_MAPS_API_KEY?: string
   readonly VITE_ARCGIS_PORTAL_TOKEN?: string

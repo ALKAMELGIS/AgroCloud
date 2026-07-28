@@ -1,0 +1,131 @@
+/* Compact floating layer legend — no modal overlay; map stays interactive. */
+
+.si-layer-legend-float {
+  position: absolute;
+  left: 12px;
+  bottom: 14px;
+  z-index: 14100;
+  width: min(240px, calc(100% - 24px));
+  max-height: min(280px, 42vh);
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(12, 12, 14, 0.92);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #e2e8f0;
+  font-family: inherit;
+  overflow: hidden;
+  animation: si-layer-legend-in 160ms ease-out;
+}
+
+@keyframes si-layer-legend-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.si-layer-legend-float__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 8px 6px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.si-layer-legend-float__titles {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.si-layer-legend-float__title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.si-layer-legend-float__sub {
+  font-size: 12px;
+  font-weight: 650;
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.si-layer-legend-float__close {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.si-layer-legend-float__close:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #f1f5f9;
+}
+
+.si-layer-legend-float__list {
+  list-style: none;
+  margin: 0;
+  padding: 6px 8px 8px;
+  overflow: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.si-layer-legend-float__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 18px;
+}
+
+.si-layer-legend-float__swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.si-layer-legend-float__label {
+  font-size: 11px;
+  font-weight: 500;
+  color: #e2e8f0;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.si-layer-legend-float__more {
+  margin: 0;
+  padding: 0 10px 8px;
+  font-size: 10px;
+  color: #64748b;
+  flex-shrink: 0;
+}

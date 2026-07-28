@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 
-export type GisPanelDock = 'float' | 'left' | 'right';
+export type GisPanelDock = 'float' | 'left' | 'right' | 'bottom';
 
 export type GisPanelPersistedState = {
   x: number;
@@ -21,6 +21,11 @@ export function nextGisPanelZIndex(): number {
   return globalPanelZ;
 }
 
+function normalizeDock(raw: unknown, fallback: GisPanelDock): GisPanelDock {
+  if (raw === 'left' || raw === 'right' || raw === 'bottom' || raw === 'float') return raw;
+  return fallback;
+}
+
 function readState(key: string, defaults: GisPanelPersistedState): GisPanelPersistedState {
   try {
     const raw = localStorage.getItem(key);
@@ -31,7 +36,7 @@ function readState(key: string, defaults: GisPanelPersistedState): GisPanelPersi
       y: typeof j.y === 'number' ? j.y : defaults.y,
       w: typeof j.w === 'number' ? j.w : defaults.w,
       h: typeof j.h === 'number' ? j.h : defaults.h,
-      dock: j.dock === 'left' || j.dock === 'right' ? j.dock : 'float',
+      dock: normalizeDock(j.dock, defaults.dock),
       minimized: Boolean(j.minimized),
       maximized: Boolean(j.maximized),
     };
@@ -139,6 +144,24 @@ export function useGisFloatingPanel({
     if (!open || !rootRef.current || !containerRef.current) return;
     const box = containerRef.current.getBoundingClientRect();
     const r = rootRef.current.getBoundingClientRect();
+
+    // ArcGIS-style bottom dock: full width, anchored to the map bottom.
+    if (panel.dock === 'bottom') {
+      const h = Math.max(minHeight, Math.min(maxHeight, panel.h || defaultHeight, Math.floor(box.height * 0.72)));
+      const next = {
+        ...panel,
+        x: 0,
+        y: Math.max(0, box.height - h),
+        w: box.width,
+        h,
+        maximized: false,
+      };
+      if (next.x !== panel.x || next.y !== panel.y || next.w !== panel.w || next.h !== panel.h) {
+        persist(next);
+      }
+      return;
+    }
+
     if (panel.x === 0 && panel.y === 0 && panel.dock === 'float') {
       const defaultX = Math.max(8, box.width - panel.w - 12);
       const defaultY = Math.max(8, 56);
@@ -147,13 +170,14 @@ export function useGisFloatingPanel({
       return;
     }
     setPanel(p => {
+      if (p.dock === 'bottom') return p;
       const next = clampToContainer(p.x, p.y, r.width, r.height);
       if (next.x === p.x && next.y === p.y) return p;
       const merged = { ...p, ...next };
       writeState(storageKey, merged);
       return merged;
     });
-  }, [open, containerRef, clampToContainer, storageKey]);
+  }, [open, containerRef, clampToContainer, storageKey, minHeight, maxHeight, defaultHeight]);
 
   const onDragPointerDown = useCallback(
     (e: React.PointerEvent<HTMLElement>) => {
@@ -213,10 +237,12 @@ export function useGisFloatingPanel({
   const onResizePointerDown = useCallback(
     (dir: ResizeDir) => (e: React.PointerEvent<HTMLElement>) => {
       if (e.button !== 0 || panel.minimized || panel.maximized) return;
+      // Bottom dock: only the top edge resizes height. Side docks: width only via e/w.
+      if (panel.dock === 'bottom' && dir !== 'n') return;
+      if ((panel.dock === 'left' || panel.dock === 'right') && !dir.includes('e') && !dir.includes('w')) return;
       const root = rootRef.current;
       if (!root) return;
       bringToFront();
-      const r = root.getBoundingClientRect();
       resizeRef.current = {
         dir,
         startX: e.clientX,
@@ -240,6 +266,23 @@ export function useGisFloatingPanel({
       const { dir, startX, startY, startW, startH, startPosX, startPosY } = resizeRef.current;
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
+      const box = containerRef.current?.getBoundingClientRect();
+
+      // Bottom dock: drag top edge to change height; keep full width along the bottom.
+      if (panel.dock === 'bottom' && box) {
+        const nextH = clampSize(box.width, startH - dy).h;
+        const maxH = Math.min(maxHeight, Math.floor(box.height * 0.72));
+        const h = Math.max(minHeight, Math.min(maxH, nextH));
+        setPanel(p => ({
+          ...p,
+          w: box.width,
+          h,
+          x: 0,
+          y: Math.max(0, box.height - h),
+        }));
+        return;
+      }
+
       let w = startW;
       let h = startH;
       let x = startPosX;
@@ -255,7 +298,6 @@ export function useGisFloatingPanel({
         y = startPosY + dy;
       }
       const sized = clampSize(w, h);
-      const box = containerRef.current?.getBoundingClientRect();
       if (box) {
         if (dir.includes('w')) x = startPosX + (startW - sized.w);
         if (dir.includes('n')) y = startPosY + (startH - sized.h);
@@ -265,7 +307,7 @@ export function useGisFloatingPanel({
       }
       setPanel(p => ({ ...p, w: sized.w, h: sized.h, x, y }));
     },
-    [clampSize, clampToContainer, containerRef],
+    [clampSize, clampToContainer, containerRef, panel.dock, minHeight, maxHeight],
   );
 
   const endResize = useCallback(
@@ -323,7 +365,23 @@ export function useGisFloatingPanel({
           dock,
           x: dock === 'left' ? 0 : Math.max(0, box.width - panel.w),
           y: 0,
+          w: Math.min(panel.w, Math.max(minWidth, Math.floor(box.width * 0.42))),
           h: box.height,
+          minimized: false,
+          maximized: false,
+        });
+      } else if (dock === 'bottom') {
+        const h = Math.max(
+          minHeight,
+          Math.min(maxHeight, panel.h || defaultHeight, Math.floor(box.height * 0.42)),
+        );
+        persist({
+          ...panel,
+          dock: 'bottom',
+          x: 0,
+          y: Math.max(0, box.height - h),
+          w: box.width,
+          h,
           minimized: false,
           maximized: false,
         });
@@ -331,7 +389,7 @@ export function useGisFloatingPanel({
         persist({ ...panel, dock: 'float', maximized: false });
       }
     },
-    [panel, persist, containerRef],
+    [panel, persist, containerRef, minWidth, minHeight, maxHeight, defaultHeight],
   );
 
   const onHeaderDoubleClick = useCallback(() => {
@@ -345,6 +403,12 @@ export function useGisFloatingPanel({
       setPanel(p => {
         if (p.dock === 'left') return { ...p, x: 0, y: 0, h: box.height };
         if (p.dock === 'right') return { ...p, x: Math.max(0, box.width - p.w), y: 0, h: box.height };
+        if (p.dock === 'bottom') {
+          const h = Math.max(minHeight, Math.min(maxHeight, p.h, Math.floor(box.height * 0.72)));
+          const merged = { ...p, x: 0, y: Math.max(0, box.height - h), w: box.width, h };
+          writeState(storageKey, merged);
+          return merged;
+        }
         const r = rootRef.current!.getBoundingClientRect();
         const next = clampToContainer(p.x, p.y, r.width, r.height);
         const merged = { ...p, ...next };
@@ -354,7 +418,7 @@ export function useGisFloatingPanel({
     };
     window.addEventListener('resize', onWinResize);
     return () => window.removeEventListener('resize', onWinResize);
-  }, [clampToContainer, containerRef, storageKey]);
+  }, [clampToContainer, containerRef, storageKey, minHeight, maxHeight]);
 
   return {
     rootRef,

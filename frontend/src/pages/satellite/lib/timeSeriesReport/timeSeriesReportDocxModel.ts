@@ -1058,7 +1058,7 @@ export async function buildTimeSeriesDocxModel(
     weatherYearlyRows,
     weatherCorrelationNotes,
     weatherDataSource,
-    footerNote: `Generated ${payload.generatedAt.replace('T', ' ').slice(0, 19)} UTC by ${payload.projectName}. Includes Layer Live legends, editable Office charts, LULC 2021–2025 with class area tables / pie / bar charts, LULC change detection deltas, and crop recommendations.`,
+    footerNote: `Generated ${payload.generatedAt.replace('T', ' ').slice(0, 19)} UTC by ${payload.projectName}. Includes Layer Live legends, editable Office charts, map atlases, and crop recommendations.`,
   }
 
   return { model, images }

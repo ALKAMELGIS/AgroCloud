@@ -18,8 +18,6 @@ export function SiAoiLayerModePanel({
   settings,
   onChange,
   layerOptions,
-  maskFeatureCount,
-  selectedFeatureCount,
   disabled = false,
 }: SiAoiLayerModePanelProps) {
   const patch = (partial: Partial<SiAoiMaskBuilderSettings>) => onChange({ ...settings, ...partial })
@@ -84,29 +82,6 @@ export function SiAoiLayerModePanel({
         />
         <span>Show on map (Layers AOI)</span>
       </label>
-
-      {settings.enabled ? (
-        <p className="si-rs-panel__meta si-rs-panel__meta--inline" role="status">
-          {maskMode === 'selected-features' ? (
-            <>
-              Selection <strong>{selectedFeatureCount}</strong> · Clip{' '}
-              <strong>{maskFeatureCount}</strong> polygon{maskFeatureCount === 1 ? '' : 's'}
-            </>
-          ) : maskFeatureCount > 0 ? (
-            <>
-              Clipping index to <strong>{maskFeatureCount}</strong> polygon
-              {maskFeatureCount === 1 ? '' : 's'}
-            </>
-          ) : (
-            <>Pan/zoom the map to load AOI polygons, or pick another layer.</>
-          )}
-        </p>
-      ) : (
-        <p className="si-rs-panel__meta si-rs-panel__meta--inline" role="status">
-          Add a vector layer from <strong>Layers</strong>, pick it above, then enable Show on map to clip the
-          selected index to that layer&apos;s polygons.
-        </p>
-      )}
     </div>
   )
 }

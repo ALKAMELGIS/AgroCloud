@@ -206,8 +206,15 @@ function renderIndexChangeBlock(
 
 /**
  * Page 1: cover · Page 2: Table of Contents with page numbers · then report body.
+ * @param mode `intelligence` keeps index map atlas (T-23 style) and omits LULC.
+ *             `lulc` builds a standalone LULC Word report with the same LULC blocks.
  */
-export function buildTimeSeriesDocxDocumentXml(model: TimeSeriesDocxModel): string {
+export function buildTimeSeriesDocxDocumentXml(
+  model: TimeSeriesDocxModel,
+  mode: 'intelligence' | 'lulc' = 'intelligence',
+): string {
+  if (mode === 'lulc') return buildTimeSeriesLulcDocxDocumentXml(model)
+
   const tocEntries: string[] = []
   const pushHeading = (title: string, level: 1 | 2 = 1, keepNext = true): string => {
     // TOC lists main (level-1) section titles only — each with a page number in Word.
@@ -250,7 +257,7 @@ export function buildTimeSeriesDocxDocumentXml(model: TimeSeriesDocxModel): stri
     ]),
   )
 
-  body.push(pushHeading('Field Summary'))
+  body.push(pushHeading('Field Summary & Executive Overview'))
   body.push(
     keyValueTable([
       ['AOI / Field Name', model.fieldName],
@@ -263,17 +270,11 @@ export function buildTimeSeriesDocxDocumentXml(model: TimeSeriesDocxModel): stri
       ['Data Completeness', model.dataCompleteness],
     ]),
   )
-
-  body.push(pushHeading('Executive Summary'))
   body.push(docxBodyParagraph(model.executiveSummary))
 
-  body.push(pushHeading('Vegetation Vigor (NDVI / SAVI)'))
+  body.push(pushHeading('Vegetation & Moisture Status'))
   body.push(docxBodyParagraph(model.vigorSection))
-
-  body.push(pushHeading('Moisture Status (NDMI / NDWI)'))
   body.push(docxBodyParagraph(model.moistureSection))
-
-  body.push(pushHeading('Vegetation Health Summary'))
   body.push(docxBodyParagraph(model.healthSummary))
 
   body.push(pushHeading('Period Statistics'))
@@ -296,18 +297,16 @@ export function buildTimeSeriesDocxDocumentXml(model: TimeSeriesDocxModel): stri
       ),
     )
     if (model.weatherSummaryRows.length) {
-      body.push(pushHeading('Weather Summary Statistics', 2))
       body.push(keyValueTable(model.weatherSummaryRows))
     }
     if (model.weatherChartRIds.length) {
-      body.push(pushHeading('Climate Charts — Temperature · Rainfall · Humidity', 2))
       body.push(
         docxItalicNote(
-          'Clear Office charts: temperature extremes (daily / monthly / yearly), rainfall totals and cumulative bars, top-month rainfall share (horizontal bar), annual rainfall share when multi-year, humidity, and dual-axis comparisons with NDVI, NDMI, NDWI, and SAVI. Full monthly values follow in the table below.',
+          'Editable Office charts with axis titles. Temperature, rainfall, humidity, and dual-axis index comparisons.',
         ),
       )
       for (const chart of model.weatherChartRIds) {
-        body.push(chartCaptionHeading(chart.title))
+        // Chart title is already inside ChartML — skip duplicate Word caption to save space.
         const cy = chart.tall ? CHART_IMAGE_CY_TALL : CHART_IMAGE_CY
         body.push(docxInlineChart(chart.rId, CHART_IMAGE_CX, cy))
         if (chart.title.includes('Rainfall Share')) {
@@ -321,16 +320,10 @@ export function buildTimeSeriesDocxDocumentXml(model: TimeSeriesDocxModel): stri
         }
       }
     } else if (model.weatherChartRId) {
-      body.push(chartCaptionHeading('Weather Chart'))
       body.push(docxInlineImage(model.weatherChartRId, CHART_IMAGE_CX, CHART_IMAGE_CY))
     }
     if (model.weatherMonthlyRows.length) {
-      body.push(pushHeading('Monthly Weather Totals & Rainfall Share', 2))
-      body.push(
-        docxItalicNote(
-          'Monthly aggregates from ERA5 hourly archive: temperature extremes, humidity mean, rainfall totals with share of period rainfall (%), and cumulative rainfall.',
-        ),
-      )
+      body.push(pushHeading('Monthly Weather Totals', 2))
       body.push(
         docxTable(model.weatherMonthlyHeaders, model.weatherMonthlyRows, [
           1400, 1100, 1100, 1100, 1200, 1300, 1100, 1400,
@@ -345,7 +338,8 @@ export function buildTimeSeriesDocxDocumentXml(model: TimeSeriesDocxModel): stri
         ]),
       )
     }
-    if (model.weatherTableRows.length) {
+    // Prefer monthly / yearly aggregates — omit dense period table to cut page count.
+    if (model.weatherTableRows.length && !model.weatherMonthlyRows.length) {
       body.push(pushHeading('Weather Data by Analysis Period', 2))
       body.push(
         docxTable(model.weatherTableHeaders, model.weatherTableRows, [
@@ -354,7 +348,6 @@ export function buildTimeSeriesDocxDocumentXml(model: TimeSeriesDocxModel): stri
       )
     }
     if (model.weatherCorrelationNotes.length) {
-      body.push(pushHeading('Weather ↔ Vegetation Correlation Notes', 2))
       body.push(docxBulletList(model.weatherCorrelationNotes))
     }
   }
@@ -373,7 +366,7 @@ export function buildTimeSeriesDocxDocumentXml(model: TimeSeriesDocxModel): stri
       body.push(pushHeading('Vegetation Coverage — Chart Timeline', 2))
       body.push(
         docxItalicNote(
-          'Statistical timeline of canopy cover versus bare ground, with NDVI mean on a secondary axis. Class-share lines (when available) show how Healthy / Moderate / Stress / Bare fractions evolve.',
+          'Canopy cover versus bare ground, with NDVI mean on a secondary axis. Class-share lines show Healthy / Moderate / Stress / Bare fractions when available.',
         ),
       )
       for (const chart of model.vegCoverageChartRIds) {
@@ -397,10 +390,11 @@ export function buildTimeSeriesDocxDocumentXml(model: TimeSeriesDocxModel): stri
     body.push(pushHeading('Map Snapshots & Index Charts — Selected Layers'))
     body.push(
       docxItalicNote(
-        'Enterprise atlas layout: 12 map cards per page in a uniform 3×4 grid. Only dates with successful index analysis rasters and zonal means are included — empty basemap-only cards are omitted. Each card includes title bar, map (AOI + north arrow + scale), Layer Live legend, and a date/index caption. Editable Office trend chart follows each index.',
+        'Atlas layout: up to 9 map cards per page (3×3). Only dates with successful index rasters and zonal means are included. Each card shows AOI, north arrow, scale, Layer Live legend, and date/index caption. An editable Office trend chart follows each index.',
       ),
     )
     model.mapLayers.forEach((layer, i) => {
+      // Each index starts on a new page — maps grid, then trend chart (sample layout).
       if (i > 0) body.push(docxPageBreak())
       body.push(renderMapLayerBlock(layer, { withChart: true, pushHeading }))
     })
@@ -411,11 +405,11 @@ export function buildTimeSeriesDocxDocumentXml(model: TimeSeriesDocxModel): stri
     body.push(pushHeading('Index Change Detection'))
     body.push(
       docxItalicNote(
-        'Consecutive period comparisons for each selected index (aligned with panel Time aggregation). Each page shows T0/T1 maps side-by-side, an Index Change Table, then native comparison and Δ charts.',
+        'Consecutive period comparisons for each selected index. Each block shows T0/T1 maps side-by-side, an Index Change Table, then native comparison and Δ charts.',
       ),
     )
-    model.indexChangeBlocks.forEach(block => {
-      body.push(docxPageBreak())
+    model.indexChangeBlocks.forEach((block, i) => {
+      if (i > 0) body.push(docxPageBreak())
       body.push(renderIndexChangeBlock(block, pushHeading))
     })
   } else if (model.changeDetectionMapLayers.length) {
@@ -432,12 +426,163 @@ export function buildTimeSeriesDocxDocumentXml(model: TimeSeriesDocxModel): stri
     })
   }
 
-  if (model.lulcYearBlocks.length || model.lulcChangeBlocks.length || model.lulcMapLayers.length) {
+  // LULC is exported via the separate "LULC Report (Word)" menu item — omitted here.
+
+  if (model.cumulativeMapLayers.length) {
     body.push(docxPageBreak())
+    body.push(pushHeading('Cumulative Maps — Peak of Period Composites'))
+    body.push(
+      docxItalicNote(
+        'One composite per year/month/week (day mode uses year buckets). Scene = peak index observation in each period.',
+      ),
+    )
+    model.cumulativeMapLayers.forEach((layer, i) => {
+      if (i > 0) body.push(docxPageBreak())
+      body.push(renderMapLayerBlock(layer, { pushHeading }))
+    })
+  }
+
+  body.push(pushHeading('Data Quality & Recommendations'))
+  body.push(docxBodyParagraph(model.dataQualityNotes))
+  body.push(docxBulletList(model.recommendations))
+
+  if (model.cropRecommendationBullets.length) {
+    body.push(pushHeading('Crop Planting Recommendations', 2))
+    body.push(
+      docxItalicNote(
+        'Screening from AOI location, vigor/moisture, weather (ERA5), and optional salinity. Validate with soil lab tests and local agronomy before planting.',
+      ),
+    )
+    body.push(docxBulletList(model.cropRecommendationBullets))
+  }
+
+  // Annexes at end — charts first, then all paired-value tables.
+  if (model.correlationBlocks.length) {
+    body.push(docxPageBreak())
+    body.push(pushHeading('Annex A — Correlation Analysis'))
+    body.push(
+      docxItalicNote(
+        'Editable Office scatter charts (white report style) for every selected index pair, sorted by layer. Paired observation tables are collected in Annex B.',
+      ),
+    )
+    model.correlationBlocks.forEach((block, i) => {
+      if (i > 0 && i % 2 === 0) body.push(docxPageBreak())
+      body.push(pushHeading(block.title, 2))
+      body.push(docxItalicNote(block.r2Label))
+      if (block.chartRId) {
+        body.push(docxInlineChart(block.chartRId, CHART_IMAGE_CX, CHART_IMAGE_CY_TALL))
+      } else if (block.rId) {
+        body.push(docxInlineImage(block.rId, CHART_IMAGE_CX, CHART_IMAGE_CY))
+      }
+      body.push(docxBodyParagraph(block.interpretation))
+    })
+
+    const blocksWithTables = model.correlationBlocks.filter(b => b.valueRows.length)
+    if (blocksWithTables.length) {
+      body.push(docxPageBreak())
+      body.push(pushHeading('Annex B — Paired Values Tables'))
+      body.push(
+        docxItalicNote(
+          'Date-aligned paired observations for each Correlation Analysis index pair. Use these tables to audit chart points and regression inputs.',
+        ),
+      )
+      blocksWithTables.forEach((block, i) => {
+        if (i > 0 && i % 3 === 0) body.push(docxPageBreak())
+        body.push(pushHeading(`${block.xLayerId} × ${block.yLayerId}`, 2))
+        body.push(docxItalicNote(block.r2Label))
+        const widths =
+          block.valueHeaders.length === 3
+            ? [3360, 3360, 3360]
+            : block.valueHeaders.map(() => Math.floor(10080 / Math.max(1, block.valueHeaders.length)))
+        body.push(docxTable(block.valueHeaders, block.valueRows, widths))
+      })
+    }
+  }
+
+  const compactFooter = model.footerNote.replace(
+    /\s*Includes Layer Live legends.*?crop recommendations\./i,
+    ' Includes Layer Live legends, editable Office charts, map atlases, and crop recommendations. LULC land-cover analysis is available as a separate Word export.',
+  )
+  body.push(docxItalicNote(compactFooter))
+
+  // Page 2: TOC (entries collected while building body)
+  parts.push(docxTableOfContentsPage(tocEntries))
+  parts.push(...body)
+
+  return wrapDocumentBody(parts.join(''))
+}
+
+/** Standalone LULC report — same year / change blocks as the former Intelligence Report section. */
+export function buildTimeSeriesLulcDocxDocumentXml(model: TimeSeriesDocxModel): string {
+  const tocEntries: string[] = []
+  const pushHeading = (title: string, level: 1 | 2 = 1, keepNext = true): string => {
+    if (level === 1) tocEntries.push(title)
+    return docxSectionHeading(title, keepNext, level)
+  }
+
+  const parts: string[] = []
+  parts.push(
+    docxCoverPage({
+      projectName: model.projectName,
+      fieldName: model.fieldName,
+      areaHa: model.areaHa,
+      periodLabel: model.periodLabel,
+      layerIdsLabel: model.layerIdsLabel,
+      generatedBy: model.generatedBy,
+      generatedStamp: model.generatedStamp,
+      satelliteSource: model.satelliteSource,
+      obsCount: model.obsCount,
+      reportTitle: 'LULC Land Cover Intelligence Report',
+      reportSubtitle: 'Five-Year Atlas & Change Detection (2021–2025)',
+      extraMeta: { label: 'Product', value: 'Sentinel-2 L2A · AgroCloud LULC (IO schema)' },
+    }),
+  )
+
+  const body: string[] = []
+  body.push(docxTitle('LULC LAND COVER INTELLIGENCE'))
+  body.push(docxSubtitle('Five-Year Mid-Season Atlas & Consecutive-Year Change'))
+  body.push(
+    docxMetaLine([
+      { text: 'Source: ' },
+      { text: model.projectName },
+      { text: `  ·  Period ${model.periodLabel}` },
+      { text: `  ·  AOI ${model.fieldName}` },
+    ]),
+  )
+  body.push(
+    docxMetaLine([{ text: `${model.areaHa}  ·  ${model.satelliteSource}` }]),
+  )
+
+  body.push(pushHeading('Field Summary'))
+  body.push(
+    keyValueTable([
+      ['AOI / Field Name', model.fieldName],
+      ['Total Field Area', model.areaHa],
+      ['Analysis Period', `${model.periodLabel} (${model.obsCount} observations)`],
+      ['Satellite Source', model.satelliteSource],
+      ['Latest Acquisition', model.latestAcquisition],
+      ['Vegetation Indices (context)', model.layerIdsLabel],
+      ['Data Completeness', model.dataCompleteness],
+    ]),
+  )
+
+  const hasLulc =
+    model.lulcYearBlocks.length > 0 ||
+    model.lulcChangeBlocks.length > 0 ||
+    model.lulcMapLayers.length > 0
+
+  if (!hasLulc) {
+    body.push(pushHeading('LULC — Five-Year Land Cover & Change Detection (2021–2025)'))
+    body.push(
+      docxBodyParagraph(
+        'No LULC map snapshots or class-area compositions were available for this AOI. Check Sentinel coverage for mid-season July scenes (2021–2025) and retry the export.',
+      ),
+    )
+  } else {
     body.push(pushHeading('LULC — Five-Year Land Cover & Change Detection (2021–2025)'))
     body.push(
       docxItalicNote(
-        'Yearly mid-season LULC maps (July) for 2021–2025 with real class area (ha), share (%), native pie and bar charts under each map, plus consecutive-year change detection. Class keys match Layer Live LULC.',
+        'Yearly mid-season LULC maps (July) for 2021–2025 with class area (ha), share (%), native pie and bar charts under each map, plus consecutive-year change detection. Class keys match Layer Live LULC.',
       ),
     )
 
@@ -487,7 +632,6 @@ export function buildTimeSeriesDocxDocumentXml(model: TimeSeriesDocxModel): stri
       body.push(renderLulcChangeBlock(block, pushHeading))
     })
 
-    // Fallback atlas when compositions were unavailable.
     if (!model.lulcYearBlocks.length && model.lulcMapLayers.length) {
       model.lulcMapLayers.forEach((layer, i) => {
         if (i > 0) body.push(docxPageBreak())
@@ -496,87 +640,14 @@ export function buildTimeSeriesDocxDocumentXml(model: TimeSeriesDocxModel): stri
     }
   }
 
-  if (model.cumulativeMapLayers.length) {
-    body.push(docxPageBreak())
-    body.push(pushHeading('Cumulative Maps — Peak of Period Composites'))
-    body.push(
-      docxItalicNote(
-        'One composite per year/month/week (day mode uses year buckets). Scene = peak index observation in each period.',
-      ),
-    )
-    model.cumulativeMapLayers.forEach((layer, i) => {
-      if (i > 0) body.push(docxPageBreak())
-      body.push(renderMapLayerBlock(layer, { pushHeading }))
-    })
-  }
-
   body.push(pushHeading('Data Quality Notes'))
-  body.push(docxBodyParagraph(model.dataQualityNotes))
+  body.push(
+    docxBodyParagraph(
+      `LULC class areas are derived from Sentinel-2 L2A mid-season composites (July) using the AgroCloud Impact Observatory schema. Maps include Layer Live legends. Validate transitions with local land-use knowledge before operational decisions. Generated ${model.generatedStamp} by ${model.projectName}.`,
+    ),
+  )
 
-  body.push(pushHeading('Recommendations'))
-  body.push(docxBulletList(model.recommendations))
-
-  if (model.cropRecommendationBullets.length) {
-    body.push(pushHeading('Crop Planting Recommendations'))
-    body.push(
-      docxItalicNote(
-        'Screening from AOI location, vigor/moisture, weather (ERA5), and optional salinity. Validate with soil lab tests and local agronomy before planting.',
-      ),
-    )
-    body.push(docxBulletList(model.cropRecommendationBullets))
-  }
-
-  // Annexes at end — charts first, then all paired-value tables.
-  if (model.correlationBlocks.length) {
-    body.push(docxPageBreak())
-    body.push(pushHeading('Annex A — Correlation Analysis'))
-    body.push(
-      docxItalicNote(
-        'Editable Office scatter charts (white report style) for every selected index pair, sorted by layer. Paired observation tables are collected in Annex B.',
-      ),
-    )
-    model.correlationBlocks.forEach((block, i) => {
-      if (i > 0) body.push(docxPageBreak())
-      body.push(pushHeading(block.title, 2))
-      body.push(docxItalicNote(block.r2Label))
-      if (block.chartRId) {
-        body.push(chartCaptionHeading(block.title.replace(/\s·\s.*$/, '') || 'Correlation Scatter'))
-        body.push(docxInlineChart(block.chartRId, CHART_IMAGE_CX, CHART_IMAGE_CY_TALL))
-      } else if (block.rId) {
-        body.push(docxInlineImage(block.rId, CHART_IMAGE_CX, CHART_IMAGE_CY))
-      }
-      body.push(chartCaptionHeading('Interpretation'))
-      body.push(docxBodyParagraph(block.interpretation))
-    })
-
-    const blocksWithTables = model.correlationBlocks.filter(b => b.valueRows.length)
-    if (blocksWithTables.length) {
-      body.push(docxPageBreak())
-      body.push(pushHeading('Annex B — Paired Values Tables'))
-      body.push(
-        docxItalicNote(
-          'Date-aligned paired observations for each Correlation Analysis index pair. Use these tables to audit chart points and regression inputs.',
-        ),
-      )
-      blocksWithTables.forEach((block, i) => {
-        if (i > 0) body.push(docxPageBreak())
-        body.push(pushHeading(`${block.xLayerId} × ${block.yLayerId}`, 2))
-        body.push(docxItalicNote(block.r2Label))
-        body.push(chartCaptionHeading('Paired values'))
-        const widths =
-          block.valueHeaders.length === 3
-            ? [3360, 3360, 3360]
-            : block.valueHeaders.map(() => Math.floor(10080 / Math.max(1, block.valueHeaders.length)))
-        body.push(docxTable(block.valueHeaders, block.valueRows, widths))
-      })
-    }
-  }
-
-  body.push(docxItalicNote(model.footerNote))
-
-  // Page 2: TOC (entries collected while building body)
   parts.push(docxTableOfContentsPage(tocEntries))
   parts.push(...body)
-
   return wrapDocumentBody(parts.join(''))
 }

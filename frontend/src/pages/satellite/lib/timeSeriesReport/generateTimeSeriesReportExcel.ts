@@ -92,12 +92,6 @@ function linearSlope(values: Array<number | null>): number | null {
   return (n * sumXY - sumX * sumY) / denom
 }
 
-function parseIsoWeek(period: string): number | null {
-  const m = period.match(/(\d{4})-W(\d{1,2})/i)
-  if (!m) return null
-  return Number(m[2])
-}
-
 function vigorClassFromNdvi(v: number | null): string {
   if (v == null || !Number.isFinite(v)) return 'â€”'
   const profile = resolveIndexThresholdProfile('NDVI')
@@ -216,6 +210,52 @@ function lastFourWeekTrend(values: Array<number | null>): string {
   if (slope > 0.01) return 'Increasing'
   if (slope < -0.01) return 'Decreasing'
   return 'Stable'
+}
+
+/**
+ * Same period dates the on-screen / Word trend chart uses (anchor → display → key).
+ */
+function chartTimelineDates(payload: TimeSeriesReportPayload): string[] {
+  const { labels, displayLabels, periodAnchorDates } = payload.charts
+  return labels.map((key, i) => {
+    const anchor = periodAnchorDates?.[key]
+    if (anchor && /^\d{4}-\d{2}-\d{2}/.test(anchor)) return anchor.slice(0, 10)
+    const disp = displayLabels[i]?.trim()
+    if (disp && /^\d{4}-\d{2}-\d{2}/.test(disp)) return disp.slice(0, 10)
+    return disp || key
+  })
+}
+
+/** Selected layers that have at least one finite chart value (matches UI multi-select). */
+function resolveSelectedChartSeries(payload: TimeSeriesReportPayload): LayerRow[] {
+  const selected = new Set(
+    (payload.layerIds.length ? payload.layerIds : payload.charts.series.map(s => s.layerId)).map(id =>
+      id.trim().toUpperCase(),
+    ),
+  )
+  return payload.charts.series
+    .filter(s => selected.has(s.layerId.trim().toUpperCase()))
+    .filter(s => s.values.some(v => v != null && Number.isFinite(v)))
+    .map(s => ({
+      layerId: s.layerId.trim().toUpperCase(),
+      values: s.values.map(v => (v != null && Number.isFinite(v) ? Number(v) : null)),
+    }))
+}
+
+function safeSheetName(name: string, used: Set<string>): string {
+  let base = String(name || 'Sheet')
+    .replace(/[\\/?*[\]:]/g, '_')
+    .slice(0, 31)
+  if (!base) base = 'Sheet'
+  let out = base
+  let n = 2
+  while (used.has(out.toLowerCase())) {
+    const suffix = `_${n}`
+    out = `${base.slice(0, Math.max(1, 31 - suffix.length))}${suffix}`
+    n += 1
+  }
+  used.add(out.toLowerCase())
+  return out
 }
 
 function buildDashboardSheet(wb: ExcelJS.Workbook, payload: TimeSeriesReportPayload): void {
@@ -456,36 +496,91 @@ function buildDashboardSheet(wb: ExcelJS.Workbook, payload: TimeSeriesReportPayl
 
 function buildDataSheet(wb: ExcelJS.Workbook, payload: TimeSeriesReportPayload): void {
   const ws = wb.addWorksheet('Time Series Data')
-  const layers = payload.charts.series
-  const headers = ['Period', 'Week #', ...layers.map(s => s.layerId.toUpperCase()), 'Vigor Class']
-  ws.columns = headers.map((h, i) => ({ width: i === 0 ? 14 : i === 1 ? 8 : 12 }))
+  const layers = resolveSelectedChartSeries(payload)
+  const dates = chartTimelineDates(payload)
+  const ndviSeries = layers.find(s => s.layerId === 'NDVI')
+  const headers = ['Date', 'Period key', ...layers.map(s => s.layerId), ...(ndviSeries ? ['Vigor Class'] : [])]
+  ws.columns = headers.map((h, i) => ({ width: i === 0 ? 14 : i === 1 ? 14 : 12 }))
 
   const headerRow = ws.getRow(1)
   headerRow.values = headers
   styleTableHeader(headerRow)
 
-  payload.charts.labels.forEach((period, rowIndex) => {
-    const ndviSeries = layers.find(s => s.layerId.toUpperCase() === 'NDVI')
+  const n = Math.max(dates.length, payload.charts.labels.length)
+  for (let rowIndex = 0; rowIndex < n; rowIndex++) {
+    const periodKey = payload.charts.labels[rowIndex] ?? ''
+    const date = dates[rowIndex] ?? periodKey
     const ndviVal = ndviSeries?.values[rowIndex] ?? null
-    const values = [
-      period,
-      parseIsoWeek(period) ?? '',
+    const values: Array<string | number | null> = [
+      date,
+      periodKey && periodKey !== date ? periodKey : '',
       ...layers.map(s => {
         const v = s.values[rowIndex]
-        return v != null && Number.isFinite(v) ? fmtNum(v, 4) : ''
+        return v != null && Number.isFinite(v) ? Number(Number(v).toFixed(4)) : null
       }),
-      vigorClassFromNdvi(ndviVal),
     ]
+    if (ndviSeries) values.push(vigorClassFromNdvi(ndviVal))
     const r = ws.getRow(rowIndex + 2)
     r.values = values
     styleDataRow(r, rowIndex % 2 === 1)
-  })
+    for (let c = 3; c <= 2 + layers.length; c++) {
+      if (typeof r.getCell(c).value === 'number') r.getCell(c).numFmt = '0.0000'
+    }
+  }
 
-  const noteRow = payload.charts.labels.length + 4
+  const noteRow = n + 4
   ws.getCell(noteRow, 1).value =
-    'Note: Week numbers are ISO week labels parsed from the period column; gaps indicate weeks with no available scene/observation.'
+    'Raw AOI mean values for each selected index, aligned with the on-screen Imagery Time Series chart (same dates and means). Empty cells = no observation for that period.'
   ws.getCell(noteRow, 1).font = { italic: true, size: 9, color: { argb: MUTED } }
-  ws.mergeCells(noteRow, 1, noteRow, headers.length)
+  ws.mergeCells(noteRow, 1, noteRow, Math.max(headers.length, 1))
+}
+
+/**
+ * One worksheet per selected index with Date + mean — identical series to the UI / Word trend chart.
+ */
+function buildPerLayerChartDataSheets(wb: ExcelJS.Workbook, payload: TimeSeriesReportPayload): void {
+  const layers = resolveSelectedChartSeries(payload)
+  const dates = chartTimelineDates(payload)
+  if (!layers.length || !dates.length) return
+
+  const plotId =
+    String(payload.location.fieldName || payload.location.fieldKey || 'AOI')
+      .replace(/^AOI\s*:\s*/i, '')
+      .replace(/^[^:]{1,40}:\s*/, '')
+      .trim() || 'AOI'
+  const used = new Set(wb.worksheets.map(w => w.name.toLowerCase()))
+
+  for (const series of layers) {
+    const sheetName = safeSheetName(`${series.layerId} Data`, used)
+    const ws = wb.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 2 }] })
+    ws.getCell('A1').value = `${plotId} · ${series.layerId} chart raw data`
+    ws.getCell('A1').font = { bold: true, size: 11, color: { argb: BRAND_DARK } }
+    ws.mergeCells('A1:B1')
+
+    const h = ws.getRow(2)
+    h.values = ['Date', `${series.layerId} mean`]
+    styleTableHeader(h)
+
+    dates.forEach((date, i) => {
+      const v = series.values[i]
+      const row = ws.getRow(3 + i)
+      row.values = [
+        date,
+        v != null && Number.isFinite(v) ? Number(Number(v).toFixed(4)) : null,
+      ]
+      styleDataRow(row, i % 2 === 1)
+      if (typeof row.getCell(2).value === 'number') row.getCell(2).numFmt = '0.0000'
+    })
+
+    ws.getColumn(1).width = 14
+    ws.getColumn(2).width = 14
+
+    const noteRow = 3 + dates.length + 1
+    ws.getCell(noteRow, 1).value =
+      `Matches the ${series.layerId} Trend chart in Satellite Intelligence (one row per chart period).`
+    ws.getCell(noteRow, 1).font = { italic: true, size: 8, color: { argb: MUTED } }
+    ws.mergeCells(noteRow, 1, noteRow, 2)
+  }
 }
 
 function buildAnalysisSheet(wb: ExcelJS.Workbook, payload: TimeSeriesReportPayload): void {
@@ -566,21 +661,18 @@ async function buildChartsSheet(wb: ExcelJS.Workbook, payload: TimeSeriesReportP
   ]
 
   const periodLabel = `${payload.period.from} to ${payload.period.to}`
-  const labels = payload.charts.displayLabels.length ? payload.charts.displayLabels : payload.charts.labels
-  const series = payload.charts.series.map(s => ({
-    layerId: s.layerId,
-    values: s.values as Array<number | null>,
-  }))
+  const labels = chartTimelineDates(payload)
+  const series = resolveSelectedChartSeries(payload)
 
   ws.getCell('A1').value = 'IMAGERY TIME SERIES'
   ws.getCell('A1').font = { bold: true, size: 12, color: { argb: BRAND_DARK } }
   ws.mergeCells('A1:J1')
 
-  ws.getCell('A2').value = 'Imagery Timeline â€” Vegetation & Moisture Trend'
+  ws.getCell('A2').value = 'Imagery Timeline — Vegetation & Moisture Trend'
   ws.getCell('A2').font = { bold: true, size: 11, color: { argb: BRAND_DARK } }
   ws.mergeCells('A2:J2')
 
-  ws.getCell('A3').value = `${payload.location.fieldName} Â· ${periodLabel}`
+  ws.getCell('A3').value = `${payload.location.fieldName} · ${periodLabel}`
   ws.getCell('A3').font = { size: 9, color: { argb: MUTED } }
   ws.mergeCells('A3:J3')
 
@@ -626,7 +718,7 @@ async function buildChartsSheet(wb: ExcelJS.Workbook, payload: TimeSeriesReportP
 
   const noteRow = anchorRow + 1
   ws.getCell(noteRow, 1).value =
-    `Charts generated from AgroCloud Imagery Time Series (${payload.layerIds.join(', ')}). Solid lines = primary index; dashed lines = companion index. Period labels match the Data sheet.`
+    `Charts use the same dates and selected-layer means as the Time Series Data / per-index Data sheets (${series.map(s => s.layerId).join(', ') || 'none'}).`
   ws.getCell(noteRow, 1).font = { italic: true, size: 9, color: { argb: MUTED } }
   ws.mergeCells(noteRow, 1, noteRow, 10)
 }
@@ -823,6 +915,7 @@ export async function buildTimeSeriesReportWorkbook(payload: TimeSeriesReportPay
 
   buildDashboardSheet(wb, payload)
   buildDataSheet(wb, payload)
+  buildPerLayerChartDataSheets(wb, payload)
   buildVegetationCoverageTimelineSheet(wb, payload.vegetationCoverageTimeline ?? [], payload)
   buildEstimatedWaterLossTimelineSheet(wb, payload.estimatedWaterLossTimeline ?? [], payload)
   buildMapSnapshotsSheet(wb, payload.mapSnapshotGroups)
@@ -838,6 +931,7 @@ export function buildTimeSeriesReportWorkbookSync(payload: TimeSeriesReportPaylo
   wb.created = new Date()
   buildDashboardSheet(wb, payload)
   buildDataSheet(wb, payload)
+  buildPerLayerChartDataSheets(wb, payload)
   buildVegetationCoverageTimelineSheet(wb, payload.vegetationCoverageTimeline ?? [], payload)
   buildEstimatedWaterLossTimelineSheet(wb, payload.estimatedWaterLossTimeline ?? [], payload)
   buildMapSnapshotsSheet(wb, payload.mapSnapshotGroups)
@@ -860,33 +954,6 @@ export async function generateTimeSeriesReportExcel(payload: TimeSeriesReportPay
   URL.revokeObjectURL(url)
 }
 
-function chartTimelineDates(payload: TimeSeriesReportPayload): string[] {
-  const { labels, displayLabels, periodAnchorDates } = payload.charts
-  return labels.map((key, i) => {
-    const anchor = periodAnchorDates?.[key]
-    if (anchor && /^\d{4}-\d{2}-\d{2}/.test(anchor)) return anchor.slice(0, 10)
-    const disp = displayLabels[i]?.trim()
-    if (disp && /^\d{4}-\d{2}-\d{2}/.test(disp)) return disp.slice(0, 10)
-    return disp || key
-  })
-}
-
-function safeSheetName(name: string, used: Set<string>): string {
-  let base = String(name || 'Sheet')
-    .replace(/[\\/?*[\]:]/g, '_')
-    .slice(0, 31)
-  if (!base) base = 'Sheet'
-  let out = base
-  let n = 2
-  while (used.has(out.toLowerCase())) {
-    const suffix = `_${n}`
-    out = `${base.slice(0, Math.max(1, 31 - suffix.length))}${suffix}`
-    n += 1
-  }
-  used.add(out.toLowerCase())
-  return out
-}
-
 /**
  * Excel workbook with chart-timeline data from the Word Intelligence Report.
  * One sheet per index only (Date + NDVI, Date + NDMI, …) — no combined multi-index table.
@@ -897,9 +964,7 @@ export async function exportTimeSeriesChartTimelineExcel(
   const { injectNativeMeteoCharts } = await import('../weatherClimateReport/meteoNativeExcelCharts')
   type ChartSpec = import('../weatherClimateReport/meteoNativeExcelCharts').MeteoNativeChartSpec
 
-  const layers = payload.charts.series.filter(s =>
-    s.values.some(v => v != null && Number.isFinite(v)),
-  )
+  const layers = resolveSelectedChartSeries(payload)
   const dates = chartTimelineDates(payload)
   const plotId =
     String(payload.location.fieldName || payload.location.fieldKey || 'AOI')
@@ -914,12 +979,12 @@ export async function exportTimeSeriesChartTimelineExcel(
 
   const used = new Set<string>()
   const chartSpecs: ChartSpec[] = []
-  const layerIds = layers.map(s => s.layerId.toUpperCase())
+  const layerIds = layers.map(s => s.layerId)
   let firstTrendSheet = ''
 
   // One sheet per index: Date | NDVI  (or NDMI / NDWI / SAVI …)
   for (const series of layers) {
-    const id = series.layerId.toUpperCase()
+    const id = series.layerId
     const sheetName = safeSheetName(id, used)
     if (!firstTrendSheet) firstTrendSheet = sheetName
     const ws = wb.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 2 }] })
