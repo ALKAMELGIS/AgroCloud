@@ -194,6 +194,8 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
             value={isLoadingLayers ? '' : layerValue}
             onChange={onLayerChange}
             loading={isLoadingLayers}
+            loadingLabel="Loading layers…"
+            emptyLabel="No layers for this satellite — check credentials or pick another provider."
             disabled={isLoadingLayers}
             aria-label="Layer"
           />

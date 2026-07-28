@@ -343,6 +343,12 @@ import {
   resolveEoStacCollectionsForProvider,
   resolveRemoteSensingMapBackend,
 } from '../../lib/remoteSensingProviders';
+import {
+  providerUsesStaticLayerCatalog,
+  resolveRemoteSensingProviderSession,
+  snapshotRemoteSensingProviderSession,
+  type RemoteSensingProviderSession,
+} from '../../lib/remoteSensingProviderSession';
 import { pickGeoAiHumanPlaceFields, type GeoAiMapLayer } from '../../lib/geoExplorerLayerContext';
 import { buildGeoAiInspectCardContent, type SiPopupInspectPayload } from '../../lib/siLayerPopupInspect';
 import { normalizeSiLayerPopupConfig, type SiLayerPopupConfig } from '../../lib/siLayerPopupConfig';
@@ -4264,24 +4270,63 @@ export default function SatelliteIntelligence() {
 
   const [wmsLayer, setWmsLayer] = useState(SI_DEFAULT_LIVE_WMS_LAYER);
 
+  /** Isolated Remote Sensing session per satellite provider (layer + date + series). */
+  const rsProviderSessionsRef = useRef<Map<string, RemoteSensingProviderSession>>(new Map());
+  const rsSessionLiveRef = useRef({
+    provider: remoteSensingProvider,
+    collection: remoteSensingCollection,
+    layerId: wmsLayer,
+    imageryIso: '',
+    imageryDateAutoFollow: true,
+    timeSeriesStart: '',
+    timeSeriesEnd: '',
+  });
+
   const handleRemoteSensingProviderChange = useCallback((id: string) => {
+    if (id === remoteSensingProvider) return;
+
+    const live = rsSessionLiveRef.current;
+    rsProviderSessionsRef.current.set(
+      remoteSensingProvider,
+      snapshotRemoteSensingProviderSession({
+        collection: live.collection,
+        layerId: live.layerId,
+        imageryIso: live.imageryIso || localIsoDate(),
+        imageryDateAutoFollow: live.imageryDateAutoFollow,
+        timeSeriesStart: live.timeSeriesStart,
+        timeSeriesEnd: live.timeSeriesEnd,
+      }),
+    );
+
+    const defaults = {
+      imageryIso: localIsoDate(),
+      timeSeriesStart: live.timeSeriesStart || getDefaultSentinelTimeSeriesRange().start,
+      timeSeriesEnd: live.timeSeriesEnd || getDefaultSentinelTimeSeriesRange().end,
+    };
+    const next = resolveRemoteSensingProviderSession(rsProviderSessionsRef.current, id, defaults);
+
     setRemoteSensingProvider(id);
-    const cols = remoteSensingCollectionsForProvider(id);
-    const next =
-      cols.find(c => c.id === remoteSensingCollection)?.id ?? defaultCollectionForProvider(id);
-    setRemoteSensingCollection(next);
-    // Remount WMS + refresh scene calendar for the new satellite/collection.
-    setSentinelWmsRev(r => r + 1);
+    setRemoteSensingCollection(next.collection);
+    setWmsLayer(next.layerId);
+    setSelectedDate(dateFromLocalIso(next.imageryIso));
+    setImageryDateAutoFollow(next.imageryDateAutoFollow);
+    setTimeSeriesStart(next.timeSeriesStart);
+    setTimeSeriesEnd(next.timeSeriesEnd);
     setSentinelSceneCatalog(null);
-    setImageryDateAutoFollow(true);
-  }, [remoteSensingCollection]);
+
+    // Only remount Sentinel WMS capabilities when the live map backend needs them.
+    if (!providerUsesStaticLayerCatalog(id, next.collection)) {
+      setSentinelWmsRev(r => r + 1);
+    }
+  }, [remoteSensingProvider]);
 
   const handleRemoteSensingCollectionChange = useCallback((id: string) => {
     setRemoteSensingCollection(id);
-    setSentinelWmsRev(r => r + 1);
     setSentinelSceneCatalog(null);
-    setImageryDateAutoFollow(true);
-  }, []);
+    if (!providerUsesStaticLayerCatalog(remoteSensingProvider, id)) {
+      setSentinelWmsRev(r => r + 1);
+    }
+  }, [remoteSensingProvider]);
 
   useEffect(() => {
     const cols = remoteSensingCollectionsForProvider(remoteSensingProvider);
@@ -4337,6 +4382,35 @@ export default function SatelliteIntelligence() {
   const [fieldAnalysisStatus, setFieldAnalysisStatus] = useState('');
   const [wmsLayers, setWmsLayers] = useState<WmsLayerInfo[]>(() => getBootstrapSentinelWmsLayers());
   const [isLoadingLayers, setIsLoadingLayers] = useState(false);
+
+  // Keep a live snapshot so provider switches can save/restore without stale closures.
+  useEffect(() => {
+    rsSessionLiveRef.current = {
+      provider: remoteSensingProvider,
+      collection: remoteSensingCollection,
+      layerId: wmsLayer,
+      imageryIso: localIsoDate(selectedDate),
+      imageryDateAutoFollow,
+      timeSeriesStart,
+      timeSeriesEnd,
+    };
+    rsProviderSessionsRef.current.set(
+      remoteSensingProvider,
+      snapshotRemoteSensingProviderSession(rsSessionLiveRef.current),
+    );
+  }, [
+    remoteSensingProvider,
+    remoteSensingCollection,
+    wmsLayer,
+    selectedDate,
+    imageryDateAutoFollow,
+    timeSeriesStart,
+    timeSeriesEnd,
+  ]);
+
+  const rsLayerCatalogLoading =
+    isLoadingLayers && !providerUsesStaticLayerCatalog(remoteSensingProvider, remoteSensingCollection);
+
   const [isLayerDropdownOpen, setIsLayerDropdownOpen] = useState(false);
   const [mapToolboxEmbedHost, setMapToolboxEmbedHost] = useState<HTMLDivElement | null>(null);
   const [basemapId, setBasemapId] = useState(() => pickDefaultBasemapId(DEFAULT_BASEMAP_ID));
@@ -16233,29 +16307,42 @@ export default function SatelliteIntelligence() {
   }, [timeSeriesStart, timeSeriesEnd]);
 
   useEffect(() => {
+    const ac = new AbortController();
+    let cancelled = false;
+    const timeoutId = window.setTimeout(() => ac.abort(), 18_000);
     const loadLayers = async () => {
       setIsLoadingLayers(true);
       try {
         const response = await fetch(
           appendSentinelHubWmsAccessToken(`${wmsBaseUrl}?SERVICE=WMS&REQUEST=GetCapabilities`),
+          { signal: ac.signal },
         );
+        if (cancelled) return;
         if (response.ok) {
           const text = await response.text();
+          if (cancelled) return;
           const parser = new DOMParser();
           const xml = parser.parseFromString(text, 'application/xml');
           const parsed = mergeAgroCloudCustomWmsLayers(parseSentinelHubWmsCapabilities(xml));
           if (parsed.length > 0) {
             setWmsLayers(getSentinelHubWmsLayerCatalog(parsed));
-            return;
           }
         }
       } catch (error) {
-        console.error('Failed to load WMS layers', error);
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          console.error('Failed to load WMS layers', error);
+        }
       } finally {
-        setIsLoadingLayers(false);
+        if (!cancelled) setIsLoadingLayers(false);
       }
     };
-    loadLayers();
+    void loadLayers();
+    return () => {
+      cancelled = true;
+      ac.abort();
+      window.clearTimeout(timeoutId);
+      setIsLoadingLayers(false);
+    };
   }, [wmsBaseUrl, sentinelWmsRev]);
 
   const remoteSensingLayerSelectGroups = useMemo(
@@ -16282,6 +16369,13 @@ export default function SatelliteIntelligence() {
     setWmsLayer(prev => {
       if (prev && remoteSensingLayerOptions.some(l => l.id === prev || l.id.toUpperCase() === prev.toUpperCase())) {
         return prev
+      }
+      const saved = rsProviderSessionsRef.current.get(remoteSensingProvider)?.layerId
+      if (
+        saved &&
+        remoteSensingLayerOptions.some(l => l.id === saved || l.id.toUpperCase() === saved.toUpperCase())
+      ) {
+        return saved
       }
       return (
         pickDefaultLayerForProviderProfile(
@@ -23348,7 +23442,7 @@ export default function SatelliteIntelligence() {
                             setSelectedIndex(layerId as EnvironmentalIndexId);
                           }
                         }}
-                        isLoadingLayers={isLoadingLayers}
+                        isLoadingLayers={rsLayerCatalogLoading}
                         showOnMap={isWmsOverlayVisible}
                         onShowOnMapChange={handleIndexShowOnMapChange}
                         showOnMapLabel={`Show ${wmsLayerSelectValue || 'layer'} on map (Edit AOI)`}
