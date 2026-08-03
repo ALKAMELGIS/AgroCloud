@@ -105,7 +105,7 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="shortcut icon" href="/agrocloud-app-icon.svg" />
     <title>Elite AgroCloud</title>
-    <script type="module" crossorigin src="/assets/index-DhIhSLe6.js"></script>
+    <script type="module" crossorigin src="/assets/index-D6qq0Dmj.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/vendor-react-CSwq0y0b.js">
     <link rel="modulepreload" crossorigin href="/assets/vendor-charts-D6N5B1lb.js">
     <link rel="stylesheet" crossorigin href="/assets/index-BcymVFBG.css">
@@ -118,9 +118,121 @@
       (function () {
         if (window.location.protocol === 'file:') {
           window.location.replace('http://localhost:5174/AgroCloud/');
+          return
         }
-      })();
+        // Local Vite: nuke leftover production SW/caches BEFORE modules load.
+        // A controlling SW often leaves a permanent white page + stuck green progress bar.
+        var h = String(location.hostname || '')
+        var isLocal =
+          h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0' || h === '::1'
+        if (!isLocal || !('serviceWorker' in navigator)) return
+        var PARAM = 'agroDevPurge'
+        var u
+        try {
+          u = new URL(location.href)
+        } catch (_) {
+          return
+        }
+        if (u.searchParams.get(PARAM) === '1') {
+          u.searchParams.delete(PARAM)
+          try {
+            history.replaceState(null, '', u.pathname + u.search + u.hash)
+          } catch (_) {}
+          return
+        }
+        var hadController = !!navigator.serviceWorker.controller
+        var jobs = []
+        try {
+          if (navigator.serviceWorker.getRegistrations) {
+            jobs.push(
+              navigator.serviceWorker.getRegistrations().then(function (regs) {
+                return Promise.all(
+                  regs.map(function (r) {
+                    return r.unregister()
+                  }),
+                ).then(function () {
+                  return regs.length > 0
+                })
+              }),
+            )
+          }
+        } catch (_) {}
+        try {
+          if (typeof caches !== 'undefined' && caches.keys) {
+            jobs.push(
+              caches.keys().then(function (keys) {
+                return Promise.all(
+                  keys.map(function (k) {
+                    return caches.delete(k)
+                  }),
+                )
+              }),
+            )
+          }
+        } catch (_) {}
+        if (!jobs.length) return
+        Promise.all(jobs)
+          .then(function (results) {
+            var hadRegs = !!results[0]
+            if (!(hadController || hadRegs)) return
+            u.searchParams.set(PARAM, '1')
+            location.replace(u.toString())
+          })
+          .catch(function () {})
+      })()
     </script>
-    <div id="root"></div>
+    <div id="root">
+      <div
+        id="agro-boot"
+        style="min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;font-family:Segoe UI,Tahoma,sans-serif;background:#020617;color:#e2e8f0;padding:24px;text-align:center"
+      >
+        <div style="font-size:18px;font-weight:700;letter-spacing:0.04em">AgroCloud</div>
+        <div style="font-size:13px;opacity:0.75">Loading…</div>
+      </div>
+    </div>
+    <script>
+      ;(function () {
+        var boot = document.getElementById('agro-boot')
+        if (!boot) return
+        var done = false
+        var markDone = function () {
+          done = true
+        }
+        // React replaces #root contents on mount; observe until boot node is gone.
+        try {
+          var root = document.getElementById('root')
+          if (root && typeof MutationObserver !== 'undefined') {
+            var obs = new MutationObserver(function () {
+              if (!document.getElementById('agro-boot')) {
+                markDone()
+                obs.disconnect()
+              }
+            })
+            obs.observe(root, { childList: true, subtree: true })
+          }
+        } catch (_) {}
+        window.addEventListener(
+          'error',
+          function (e) {
+            if (done || !boot || !boot.isConnected) return
+            var msg = (e && (e.message || (e.error && e.error.message))) || 'Script error'
+            boot.innerHTML =
+              '<div style="font-size:16px;font-weight:700;margin-bottom:8px">Failed to start</div>' +
+              '<div style="font-size:12px;opacity:0.85;max-width:420px;word-break:break-word;margin-bottom:14px"></div>' +
+              '<a href="?agroDevPurge=1" style="color:#34d399;font-weight:700">Force reset &amp; reload</a>'
+            boot.children[1].textContent = String(msg)
+          },
+          true,
+        )
+        window.setTimeout(function () {
+          if (done || !boot || !boot.isConnected) return
+          if (!document.getElementById('agro-boot')) return
+          boot.innerHTML =
+            '<div style="font-size:16px;font-weight:700;margin-bottom:8px">Still loading…</div>' +
+            '<div style="font-size:12px;opacity:0.8;max-width:420px;margin-bottom:14px">If this stays blank, clear site data or force reset.</div>' +
+            '<a href="?agroDevPurge=1#/login" style="color:#34d399;font-weight:700">Force reset &amp; open login</a>'
+        }, 10000)
+      })()
+    </script>
   </body>
   </html>
