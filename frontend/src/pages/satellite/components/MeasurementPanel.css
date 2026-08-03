@@ -1,31 +1,36 @@
-/* Unified Measurement panel — flat, enterprise-GIS (ArcGIS Pro-like).
-   No gradients/glow; solid theme accent; subtle hover/pressed feedback. */
+/* Compact ArcGIS Pro–style Measurement floating tool.
+   Portaled to document.body + position:fixed — free drag anywhere on screen. */
 
 .si-measure-panel {
-  --mz-accent: #2563eb;
-  --mz-accent-deep: #1e40af;
-  --mz-text: #e6edf6;
-  --mz-muted: #93a4b8;
-  --mz-surface: rgba(15, 23, 42, 0.6);
-  --mz-border: rgba(148, 163, 184, 0.18);
+  --mz-accent: #0079c1;
+  --mz-accent-deep: #005e95;
+  --mz-text: #f1f5f9;
+  --mz-muted: #94a3b8;
+  --mz-surface: rgba(15, 23, 42, 0.72);
+  --mz-border: rgba(148, 163, 184, 0.22);
+  pointer-events: auto;
+  position: fixed;
+  z-index: 240;
   box-sizing: border-box;
-  width: 300px;
   max-width: calc(100vw - 16px);
-  max-height: calc(100vh - 24px);
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  padding: 11px;
-  border-radius: 12px;
+  gap: 6px;
+  padding: 6px 7px 7px;
+  border-radius: 6px;
   border: 1px solid var(--mz-border);
-  background: rgba(9, 14, 24, 0.94);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(18px) saturate(1.25);
-  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+  background: rgba(17, 24, 39, 0.94);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   color: var(--mz-text);
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: 11px;
+  line-height: 1.3;
+  user-select: none;
+  touch-action: none;
+}
+.si-measure-panel--dragging {
+  opacity: 0.96;
+  cursor: grabbing;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
 }
 .si-measure-panel *,
 .si-measure-panel *::before,
@@ -33,109 +38,102 @@
   box-sizing: border-box;
 }
 
-/* ── Header ─────────────────────────────────────────────────────────────── */
+/* ── Title bar (drag handle) ─────────────────────────────────────────────── */
 .si-measure-panel__head {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 5px;
+  min-height: 24px;
+  cursor: grab;
+  padding: 0 1px;
+}
+.si-measure-panel--dragging .si-measure-panel__head {
+  cursor: grabbing;
+}
+.si-measure-panel__grip {
+  flex: none;
+  width: 12px;
+  color: #64748b;
+  font-size: 10px;
+  display: grid;
+  place-items: center;
 }
 .si-measure-panel__brand-icon {
   flex: none;
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
   display: grid;
   place-items: center;
-  background: rgba(37, 99, 235, 0.16);
-  border: 1px solid var(--mz-border);
-  color: #93c5fd;
-  font-size: 14px;
-}
-.si-measure-panel__brand {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
+  background: rgba(0, 121, 193, 0.22);
+  border: 1px solid rgba(0, 121, 193, 0.35);
+  color: #7dd3fc;
+  font-size: 10px;
 }
 .si-measure-panel__title {
-  font-size: 13.5px;
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.01em;
   line-height: 1.2;
 }
-.si-measure-panel__subtitle {
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--mz-muted);
-  letter-spacing: 0.02em;
-}
 .si-measure-panel__close {
   flex: none;
   border: none;
-  background: rgba(148, 163, 184, 0.12);
+  background: transparent;
+  color: #94a3b8;
+  width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+}
+.si-measure-panel__close:hover {
+  background: rgba(148, 163, 184, 0.18);
+  color: #e2e8f0;
+}
+
+/* ── Icon toolbar — equal 6×2 grid ───────────────────────────────────────── */
+.si-measure-panel__toolbar {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 3px;
+  padding: 4px;
+  border-radius: 4px;
+  border: 1px solid var(--mz-border);
+  background: rgba(2, 6, 23, 0.45);
+}
+.si-measure-tool {
+  aspect-ratio: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
   color: #cbd5e1;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
   cursor: pointer;
   display: grid;
   place-items: center;
   font-size: 12px;
-  transition: background 0.15s ease;
-}
-.si-measure-panel__close:hover {
-  background: rgba(148, 163, 184, 0.24);
-}
-
-/* ── Tool groups ────────────────────────────────────────────────────────── */
-.si-measure-panel__tools {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.si-measure-panel__group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.si-measure-panel__group-label {
-  font-size: 9.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--mz-muted);
-}
-.si-measure-panel__grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 5px;
-}
-.si-measure-tool {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 8px 4px;
-  min-height: 50px;
-  border: 1px solid var(--mz-border);
-  border-radius: 8px;
-  background: var(--mz-surface);
-  color: #cbd5e1;
-  cursor: pointer;
-  font-size: 9.5px;
-  font-weight: 600;
-  text-align: center;
-  line-height: 1.1;
-  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  line-height: 1;
+  transition: background 0.1s ease, border-color 0.1s ease, color 0.1s ease;
 }
 .si-measure-tool i {
-  font-size: 14px;
+  width: 1em;
+  height: 1em;
+  display: grid;
+  place-items: center;
+  font-size: inherit;
 }
 .si-measure-tool:hover:not(:disabled) {
-  background: rgba(37, 99, 235, 0.14);
-  border-color: rgba(59, 130, 246, 0.5);
-  color: #e0ecff;
+  background: rgba(0, 121, 193, 0.18);
+  border-color: rgba(0, 121, 193, 0.4);
+  color: #e0f2fe;
 }
 .si-measure-tool.is-on {
   background: var(--mz-accent);
@@ -143,7 +141,7 @@
   color: #fff;
 }
 .si-measure-tool:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
@@ -151,13 +149,13 @@
 .si-measure-panel__units {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 7px;
+  gap: 5px;
 }
 .si-measure-panel__unit {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  font-size: 9.5px;
+  gap: 2px;
+  font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -166,113 +164,110 @@
 .si-measure-panel__unit select {
   appearance: none;
   width: 100%;
-  padding: 6px 8px;
-  border-radius: 7px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 3px;
   border: 1px solid var(--mz-border);
   background: var(--mz-surface);
   color: var(--mz-text);
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
   cursor: pointer;
 }
 .si-measure-panel__unit select:focus-visible {
-  outline: 2px solid #93c5fd;
+  outline: 2px solid #7dd3fc;
   outline-offset: 1px;
 }
 
 /* ── Result ─────────────────────────────────────────────────────────────── */
 .si-measure-panel__result {
   border: 1px solid var(--mz-border);
-  border-radius: 9px;
-  background: rgba(15, 23, 42, 0.45);
-  padding: 9px;
-  min-height: 44px;
+  border-radius: 4px;
+  background: rgba(2, 6, 23, 0.4);
+  padding: 6px 7px;
+  min-height: 36px;
 }
 .si-measure-panel__placeholder,
 .si-measure-panel__hint {
   margin: 0;
-  font-size: 10.5px;
+  font-size: 10px;
   color: var(--mz-muted);
 }
 .si-measure-panel__readouts {
-  margin: 0 0 6px;
+  margin: 0 0 4px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 .si-measure-panel__readout {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 }
 .si-measure-panel__readout dt {
   margin: 0;
   color: var(--mz-muted);
-  font-size: 10.5px;
+  font-size: 10px;
 }
 .si-measure-panel__readout dd {
   margin: 0;
   font-weight: 600;
-  font-size: 11.5px;
-  color: #f1f5f9;
+  font-size: 11px;
+  color: #f8fafc;
   text-align: right;
 }
 .si-measure-panel__readout.is-primary dd {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
-  color: #93c5fd;
+  color: #7dd3fc;
 }
 
-/* ── Actions ────────────────────────────────────────────────────────────── */
+/* ── Compact action icons ───────────────────────────────────────────────── */
 .si-measure-panel__actions {
   display: flex;
-  gap: 6px;
-}
-.si-measure-panel__btn {
-  flex: 1;
-  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 5px;
-  height: 30px;
-  padding: 0 8px;
+  gap: 3px;
+}
+.si-measure-panel__actions-gap {
+  flex: 1;
+  min-width: 4px;
+}
+.si-measure-panel__icon-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
   border: 1px solid var(--mz-border);
-  border-radius: 7px;
+  border-radius: 3px;
   background: rgba(148, 163, 184, 0.1);
   color: #cbd5e1;
   cursor: pointer;
+  display: grid;
+  place-items: center;
   font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
-.si-measure-panel__btn:hover:not(:disabled) {
-  background: rgba(37, 99, 235, 0.16);
-  border-color: rgba(59, 130, 246, 0.45);
-  color: #e0ecff;
+.si-measure-panel__icon-btn:hover:not(:disabled) {
+  background: rgba(0, 121, 193, 0.2);
+  border-color: rgba(0, 121, 193, 0.45);
+  color: #e0f2fe;
 }
-.si-measure-panel__btn:active:not(:disabled) {
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
-}
-.si-measure-panel__btn:disabled {
-  opacity: 0.45;
+.si-measure-panel__icon-btn:disabled {
+  opacity: 0.4;
   cursor: not-allowed;
 }
-.si-measure-panel__btn--primary {
+.si-measure-panel__icon-btn--primary {
   background: var(--mz-accent);
   border-color: var(--mz-accent-deep);
   color: #fff;
 }
-.si-measure-panel__btn--primary:hover:not(:disabled) {
-  background: #1d4ed8;
-  border-color: var(--mz-accent-deep);
+.si-measure-panel__icon-btn--primary:hover:not(:disabled) {
+  background: #00619b;
   color: #fff;
 }
-.si-measure-panel__btn--danger:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.18);
+.si-measure-panel__icon-btn--danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.2);
   border-color: rgba(248, 113, 113, 0.45);
   color: #fecaca;
 }
@@ -282,38 +277,19 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding-top: 2px;
-  font-size: 10px;
+  gap: 6px;
+  font-size: 9.5px;
   color: var(--mz-muted);
-}
-.si-measure-panel__foot i {
-  margin-right: 4px;
 }
 .si-measure-panel__foot-note {
   color: #fbbf24;
 }
 
-/* Floating anchor over the map canvas (top-right, clear of the left rail). */
-.si-measure-panel-anchor {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 7;
-}
-@media (max-width: 600px) {
-  .si-measure-panel-anchor {
-    top: 8px;
-    right: 8px;
-    left: 8px;
-  }
-}
-
 /* On-map measurement labels (rendered via react-map-gl Marker). */
 .si-measure-map-label {
   padding: 2px 6px;
-  border-radius: 6px;
-  background: rgba(9, 14, 24, 0.86);
+  border-radius: 4px;
+  background: rgba(9, 14, 24, 0.88);
   border: 1px solid rgba(148, 163, 184, 0.35);
   color: #fde68a;
   font-size: 11px;
@@ -322,13 +298,4 @@
   pointer-events: none;
   transform: translateY(-2px);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-}
-
-@media (max-width: 600px) {
-  .si-measure-panel {
-    width: calc(100vw - 16px);
-  }
-  .si-measure-panel__grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
 }

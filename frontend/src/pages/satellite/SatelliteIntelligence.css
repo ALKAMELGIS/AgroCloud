@@ -5650,38 +5650,47 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .si-map-search-inner {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 12px;
-  border-radius: 999px;
-  background:
-    radial-gradient(circle at top left, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.92)),
-    radial-gradient(circle at right, rgba(59, 130, 246, 0.35), transparent 65%);
-  border: 1px solid rgba(148, 163, 184, 0.75);
-  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.95);
+  height: 32px;
+  padding: 0 8px 0 10px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
 .si-map-search-icon {
-  color: #e5e7eb;
+  color: #94a3b8;
   font-size: 11px;
+  flex: none;
 }
 
 .si-map-search-input {
   border: none;
   outline: none;
   background: transparent;
-  color: #f9fafb;
-  font-size: 11px;
-  width: 190px;
+  color: #f1f5f9;
+  font-size: 12px;
+  width: 148px;
+  height: 28px;
+  padding: 0;
+  box-shadow: none;
+}
+
+.si-map-search-input:focus,
+.si-map-search-input:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .si-map-search-input::placeholder {
-  color: rgba(156, 163, 175, 0.9);
+  color: rgba(148, 163, 184, 0.85);
 }
 
 .si-map-search-toggle {
@@ -5689,56 +5698,59 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
   outline: none;
   width: 32px;
   height: 32px;
-  border-radius: 999px;
-  background: radial-gradient(circle at top left, #020617, #020617);
-  border: 1px solid rgba(148, 163, 184, 0.7);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.95);
-  color: #e5e7eb;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  color: #e2e8f0;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   font-size: 11px;
-  transition: all 0.2s;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .si-map-search-toggle:hover {
-  background: radial-gradient(circle at top left, #111827, #020617);
-  box-shadow: 0 0 0 1px rgba(191, 219, 254, 0.9), 0 0 18px rgba(59, 130, 246, 1);
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(148, 163, 184, 0.65);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
 .si-map-search-button {
   border: none;
   outline: none;
-  width: 26px;
-  height: 26px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #111827, #020617);
-  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.9), 0 0 16px rgba(59, 130, 246, 0.9);
-  color: #e5e7eb;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(51, 65, 85, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: none;
+  color: #e2e8f0;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 11px;
-  transition: all 0.2s;
+  font-size: 10px;
+  flex: none;
+  transition: background 0.15s ease;
 }
 
 .si-map-search-button:hover {
-  background: linear-gradient(135deg, #1f2937, #020617);
-  box-shadow: 0 0 0 1px rgba(191, 219, 254, 0.9), 0 0 22px rgba(59, 130, 246, 1);
+  background: rgba(71, 85, 105, 0.9);
+  box-shadow: none;
 }
 
 .si-map-search-results {
   flex: 1 1 100%;
-  margin-top: 8px;
-  padding: 6px;
-  border-radius: 12px;
+  margin-top: 4px;
+  padding: 4px;
+  border-radius: 8px;
   background: rgba(15, 23, 42, 0.96);
-  border: 1px solid rgba(31, 41, 55, 0.95);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.95);
-  max-height: 260px;
-  width: 260px;
+  border: 1px solid rgba(71, 85, 105, 0.8);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+  max-height: 220px;
+  width: 200px;
   overflow-y: auto;
 }
 

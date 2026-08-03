@@ -5653,8 +5653,6 @@ export default function SatelliteIntelligence() {
   measurePointsRef.current = measurePoints;
   const measureRedoRef = useRef<MeasurePoint[]>([]);
   measureRedoRef.current = measureRedoStack;
-  // Keep the Measurement panel's clicks/wheel from leaking to the map underneath.
-  const measureHudIsolationProps = useMapOverlayIsolation(measurePanelOpen || measureMode != null, { native: true });
   // Fully isolate the floating processing stack (Remote Sensing, Crop Alerts,
   // Crop AI, AI Detection, Tree, Hydro) from the map â€” pan/zoom/rotate/wheel and
   // every pointer/touch gesture stay inside the panel, in all tools and modes.
@@ -21721,7 +21719,6 @@ export default function SatelliteIntelligence() {
             </div>
           ) : null}
           {measurePanelOpen ? (
-            <div {...measureHudIsolationProps} className="si-measure-panel-anchor" dir="ltr">
               <MeasurementPanel
                 activeMode={measureMode}
                 onSelectMode={handleMeasureModeSelect}
@@ -21741,7 +21738,6 @@ export default function SatelliteIntelligence() {
                 onClearAll={clearMeasureAll}
                 onClose={clearMeasure}
               />
-            </div>
           ) : null}
           <MapGL
             key="si-map-globe"
