@@ -36,9 +36,8 @@ export type GeoAiToolboxPanelId =
   | 'hydro-watershed'
   | 'aoi-edit'
   | 'layers'
-  | 'eo-enrichment'
   | 'tree-detections'
-  | 'agri-field-boundary'
+  | 'segformer-detection'
   | 'crop-alerts'
   | 'stress-zones'
 
@@ -55,9 +54,8 @@ export function normalizeGeoAiToolboxPanelId(raw: string): GeoAiToolboxPanelId |
   if (/^(hydro-watershed|hydro|watershed|basin)$/.test(t)) return 'hydro-watershed'
   if (/^(aoi-edit|aoi|draw|drawing|edit|polygon)$/.test(t)) return 'aoi-edit'
   if (/^(layers?|layer-manager)$/.test(t)) return 'layers'
-  if (/^(eo-enrichment|eo|enrichment)$/.test(t)) return 'eo-enrichment'
   if (/^(tree-detections|trees?)$/.test(t)) return 'tree-detections'
-  if (/^(agri-field-boundary|field-boundary|fields?)$/.test(t)) return 'agri-field-boundary'
+  if (/^(segformer-detection|segformer|ade20k|semantic-seg(mentation)?)$/.test(t)) return 'segformer-detection'
   if (/^(crop-alerts?|alerts?)$/.test(t)) return 'crop-alerts'
   if (/^(stress-zones?|stress)$/.test(t)) return 'stress-zones'
   return null

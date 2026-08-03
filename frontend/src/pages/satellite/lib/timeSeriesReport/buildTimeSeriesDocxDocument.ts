@@ -206,7 +206,7 @@ function renderIndexChangeBlock(
 
 /**
  * Page 1: cover · Page 2: Table of Contents with page numbers · then report body.
- * @param mode `intelligence` keeps index map atlas (T-23 style) and omits LULC.
+ * @param mode `intelligence` builds the index atlas report (maps, change, weather, annexes; no LULC).
  *             `lulc` builds a standalone LULC Word report with the same LULC blocks.
  */
 export function buildTimeSeriesDocxDocumentXml(
@@ -257,7 +257,7 @@ export function buildTimeSeriesDocxDocumentXml(
     ]),
   )
 
-  body.push(pushHeading('Field Summary & Executive Overview'))
+  body.push(pushHeading('Field Summary'))
   body.push(
     keyValueTable([
       ['AOI / Field Name', model.fieldName],
@@ -266,16 +266,28 @@ export function buildTimeSeriesDocxDocumentXml(
       ['Satellite Source', model.satelliteSource],
       ['Latest Acquisition', model.latestAcquisition],
       ['Vegetation Indices', model.layerIdsLabel],
-      ['Vegetation Health Summary', model.vigorSummary],
       ['Data Completeness', model.dataCompleteness],
     ]),
   )
+
+  body.push(pushHeading('Executive Summary'))
   body.push(docxBodyParagraph(model.executiveSummary))
 
-  body.push(pushHeading('Vegetation & Moisture Status'))
+  body.push(pushHeading('Vegetation Vigor (NDVI / SAVI)'))
   body.push(docxBodyParagraph(model.vigorSection))
+
+  body.push(pushHeading('Moisture Status (NDMI / NDWI)'))
   body.push(docxBodyParagraph(model.moistureSection))
+
+  body.push(pushHeading('Vegetation Health Summary'))
   body.push(docxBodyParagraph(model.healthSummary))
+  if (model.vigorSummary) {
+    body.push(
+      keyValueTable([
+        ['Vegetation Health Summary', model.vigorSummary],
+      ]),
+    )
+  }
 
   body.push(pushHeading('Period Statistics'))
   body.push(
@@ -297,12 +309,14 @@ export function buildTimeSeriesDocxDocumentXml(
       ),
     )
     if (model.weatherSummaryRows.length) {
+      body.push(pushHeading('Weather Summary Statistics', 2))
       body.push(keyValueTable(model.weatherSummaryRows))
     }
     if (model.weatherChartRIds.length) {
+      body.push(pushHeading('Climate Charts — Temperature · Rainfall · Humidity', 2))
       body.push(
         docxItalicNote(
-          'Editable Office charts with axis titles. Temperature, rainfall, humidity, and dual-axis index comparisons.',
+          'Clear Office charts: temperature extremes (daily / monthly / yearly), rainfall totals and cumulative bars, top-month rainfall share (horizontal bar), annual rainfall share when multi-year, humidity, and dual-axis comparisons with NDVI, NDMI when available.',
         ),
       )
       for (const chart of model.weatherChartRIds) {
@@ -323,7 +337,12 @@ export function buildTimeSeriesDocxDocumentXml(
       body.push(docxInlineImage(model.weatherChartRId, CHART_IMAGE_CX, CHART_IMAGE_CY))
     }
     if (model.weatherMonthlyRows.length) {
-      body.push(pushHeading('Monthly Weather Totals', 2))
+      body.push(pushHeading('Monthly Weather Totals & Rainfall Share', 2))
+      body.push(
+        docxItalicNote(
+          'Monthly aggregates from ERA5 hourly archive: temperature extremes, humidity mean, rainfall totals with share of period rainfall (%), and cumulative rainfall.',
+        ),
+      )
       body.push(
         docxTable(model.weatherMonthlyHeaders, model.weatherMonthlyRows, [
           1400, 1100, 1100, 1100, 1200, 1300, 1100, 1400,
@@ -338,8 +357,7 @@ export function buildTimeSeriesDocxDocumentXml(
         ]),
       )
     }
-    // Prefer monthly / yearly aggregates — omit dense period table to cut page count.
-    if (model.weatherTableRows.length && !model.weatherMonthlyRows.length) {
+    if (model.weatherTableRows.length) {
       body.push(pushHeading('Weather Data by Analysis Period', 2))
       body.push(
         docxTable(model.weatherTableHeaders, model.weatherTableRows, [
@@ -348,6 +366,7 @@ export function buildTimeSeriesDocxDocumentXml(
       )
     }
     if (model.weatherCorrelationNotes.length) {
+      body.push(pushHeading('Weather ↔ Vegetation Correlation Notes', 2))
       body.push(docxBulletList(model.weatherCorrelationNotes))
     }
   }
@@ -390,11 +409,11 @@ export function buildTimeSeriesDocxDocumentXml(
     body.push(pushHeading('Map Snapshots & Index Charts — Selected Layers'))
     body.push(
       docxItalicNote(
-        'Atlas layout: up to 9 map cards per page (3×3). Only dates with successful index rasters and zonal means are included. Each card shows AOI, north arrow, scale, Layer Live legend, and date/index caption. An editable Office trend chart follows each index.',
+        'Enterprise atlas layout: 12 map cards per page in a uniform 3×4 grid. Each card includes title bar, map (AOI + north arrow + scale), Layer Live legend, and a date/index/mean caption. When the index raster is unavailable, an AOI basemap card with the period mean is still included. Editable Office trend chart follows each index.',
       ),
     )
     model.mapLayers.forEach((layer, i) => {
-      // Each index starts on a new page — maps grid, then trend chart (sample layout).
+      // Each index starts on a new page — maps grid, then trend chart (T-23 layout).
       if (i > 0) body.push(docxPageBreak())
       body.push(renderMapLayerBlock(layer, { withChart: true, pushHeading }))
     })
@@ -405,7 +424,7 @@ export function buildTimeSeriesDocxDocumentXml(
     body.push(pushHeading('Index Change Detection'))
     body.push(
       docxItalicNote(
-        'Consecutive period comparisons for each selected index. Each block shows T0/T1 maps side-by-side, an Index Change Table, then native comparison and Δ charts.',
+        'Consecutive period comparisons for each selected index (aligned with panel Time aggregation). Each page shows T0/T1 maps side-by-side, an Index Change Table, then native comparison and Δ charts.',
       ),
     )
     model.indexChangeBlocks.forEach((block, i) => {
@@ -442,12 +461,14 @@ export function buildTimeSeriesDocxDocumentXml(
     })
   }
 
-  body.push(pushHeading('Data Quality & Recommendations'))
+  body.push(pushHeading('Data Quality Notes'))
   body.push(docxBodyParagraph(model.dataQualityNotes))
+
+  body.push(pushHeading('Recommendations'))
   body.push(docxBulletList(model.recommendations))
 
   if (model.cropRecommendationBullets.length) {
-    body.push(pushHeading('Crop Planting Recommendations', 2))
+    body.push(pushHeading('Crop Planting Recommendations'))
     body.push(
       docxItalicNote(
         'Screening from AOI location, vigor/moisture, weather (ERA5), and optional salinity. Validate with soil lab tests and local agronomy before planting.',
@@ -512,7 +533,90 @@ export function buildTimeSeriesDocxDocumentXml(
   return wrapDocumentBody(parts.join(''))
 }
 
-/** Standalone LULC report — same year / change blocks as the former Intelligence Report section. */
+function appendLulcReportSections(
+  body: string[],
+  model: TimeSeriesDocxModel,
+  pushHeading: (title: string, level?: 1 | 2, keepNext?: boolean) => string,
+  opts?: { leadingPageBreak?: boolean },
+): void {
+  const hasLulc =
+    model.lulcYearBlocks.length > 0 ||
+    model.lulcChangeBlocks.length > 0 ||
+    model.lulcMapLayers.length > 0
+
+  if (opts?.leadingPageBreak !== false) body.push(docxPageBreak())
+  body.push(pushHeading('LULC — Five-Year Land Cover & Change Detection (2021–2025)'))
+
+  if (!hasLulc) {
+    body.push(
+      docxBodyParagraph(
+        'No LULC map snapshots or class-area compositions were available for this AOI. Check Sentinel coverage for mid-season July scenes (2021–2025) and retry the export.',
+      ),
+    )
+    return
+  }
+
+  body.push(
+    docxItalicNote(
+      'Yearly mid-season LULC maps (July) for 2021–2025 with class area (ha), share (%), native pie and bar charts under each map, plus consecutive-year change detection. Class keys match Layer Live LULC.',
+    ),
+  )
+
+  if (model.lulcMultiYearRows.length) {
+    body.push(pushHeading('Multi-Year Class Area Comparison', 2))
+    body.push(
+      docxItalicNote(
+        'Area (ha) by LULC class across years. Δ first→last highlights net change from the earliest to the latest mapped year.',
+      ),
+    )
+    const colCount = Math.max(model.lulcMultiYearHeaders.length, 1)
+    const firstW = 2200
+    const restW = Math.floor(7880 / Math.max(colCount - 1, 1))
+    body.push(
+      docxTable(
+        model.lulcMultiYearHeaders,
+        model.lulcMultiYearRows,
+        [firstW, ...Array.from({ length: colCount - 1 }, () => restW)],
+      ),
+    )
+    if (model.lulcMultiYearBarChartRId) {
+      body.push(chartCaptionHeading(model.lulcMultiYearBarChartTitle ?? 'Multi-Year Area (ha)'))
+      body.push(
+        docxItalicNote(
+          'Native editable clustered bar chart — area (ha) by class for each year. Click in Word to edit series.',
+        ),
+      )
+      body.push(docxInlineChart(model.lulcMultiYearBarChartRId))
+    }
+  }
+
+  model.lulcYearBlocks.forEach((block, i) => {
+    if (i > 0 || model.lulcMultiYearRows.length) body.push(docxPageBreak())
+    body.push(renderLulcYearBlock(block, pushHeading))
+  })
+
+  model.lulcChangeBlocks.forEach((block, i) => {
+    body.push(docxPageBreak())
+    if (i === 0) {
+      body.push(pushHeading('LULC Change Detection — Consecutive Years'))
+      body.push(
+        docxItalicNote(
+          'Before/after mid-season maps with Δ area (ha) and Δ share (percentage points) per class. Bar chart shows gains (+) and losses (−).',
+        ),
+      )
+    }
+    body.push(renderLulcChangeBlock(block, pushHeading))
+  })
+
+  if (!model.lulcYearBlocks.length && model.lulcMapLayers.length) {
+    model.lulcMapLayers.forEach((layer, i) => {
+      if (i > 0) body.push(docxPageBreak())
+      body.push(renderMapLayerBlock(layer, { pushHeading }))
+    })
+  }
+}
+
+/** Standalone LULC report — same year / change blocks as the Intelligence Report section. */
 export function buildTimeSeriesLulcDocxDocumentXml(model: TimeSeriesDocxModel): string {
   const tocEntries: string[] = []
   const pushHeading = (title: string, level: 1 | 2 = 1, keepNext = true): string => {
@@ -566,79 +670,7 @@ export function buildTimeSeriesLulcDocxDocumentXml(model: TimeSeriesDocxModel): 
     ]),
   )
 
-  const hasLulc =
-    model.lulcYearBlocks.length > 0 ||
-    model.lulcChangeBlocks.length > 0 ||
-    model.lulcMapLayers.length > 0
-
-  if (!hasLulc) {
-    body.push(pushHeading('LULC — Five-Year Land Cover & Change Detection (2021–2025)'))
-    body.push(
-      docxBodyParagraph(
-        'No LULC map snapshots or class-area compositions were available for this AOI. Check Sentinel coverage for mid-season July scenes (2021–2025) and retry the export.',
-      ),
-    )
-  } else {
-    body.push(pushHeading('LULC — Five-Year Land Cover & Change Detection (2021–2025)'))
-    body.push(
-      docxItalicNote(
-        'Yearly mid-season LULC maps (July) for 2021–2025 with class area (ha), share (%), native pie and bar charts under each map, plus consecutive-year change detection. Class keys match Layer Live LULC.',
-      ),
-    )
-
-    if (model.lulcMultiYearRows.length) {
-      body.push(pushHeading('Multi-Year Class Area Comparison', 2))
-      body.push(
-        docxItalicNote(
-          'Area (ha) by LULC class across years. Δ first→last highlights net change from the earliest to the latest mapped year.',
-        ),
-      )
-      const colCount = Math.max(model.lulcMultiYearHeaders.length, 1)
-      const firstW = 2200
-      const restW = Math.floor(7880 / Math.max(colCount - 1, 1))
-      body.push(
-        docxTable(
-          model.lulcMultiYearHeaders,
-          model.lulcMultiYearRows,
-          [firstW, ...Array.from({ length: colCount - 1 }, () => restW)],
-        ),
-      )
-      if (model.lulcMultiYearBarChartRId) {
-        body.push(chartCaptionHeading(model.lulcMultiYearBarChartTitle ?? 'Multi-Year Area (ha)'))
-        body.push(
-          docxItalicNote(
-            'Native editable clustered bar chart — area (ha) by class for each year. Click in Word to edit series.',
-          ),
-        )
-        body.push(docxInlineChart(model.lulcMultiYearBarChartRId))
-      }
-    }
-
-    model.lulcYearBlocks.forEach((block, i) => {
-      if (i > 0 || model.lulcMultiYearRows.length) body.push(docxPageBreak())
-      body.push(renderLulcYearBlock(block, pushHeading))
-    })
-
-    model.lulcChangeBlocks.forEach((block, i) => {
-      body.push(docxPageBreak())
-      if (i === 0) {
-        body.push(pushHeading('LULC Change Detection — Consecutive Years'))
-        body.push(
-          docxItalicNote(
-            'Before/after mid-season maps with Δ area (ha) and Δ share (percentage points) per class. Bar chart shows gains (+) and losses (−).',
-          ),
-        )
-      }
-      body.push(renderLulcChangeBlock(block, pushHeading))
-    })
-
-    if (!model.lulcYearBlocks.length && model.lulcMapLayers.length) {
-      model.lulcMapLayers.forEach((layer, i) => {
-        if (i > 0) body.push(docxPageBreak())
-        body.push(renderMapLayerBlock(layer, { pushHeading }))
-      })
-    }
-  }
+  appendLulcReportSections(body, model, pushHeading, { leadingPageBreak: false })
 
   body.push(pushHeading('Data Quality Notes'))
   body.push(

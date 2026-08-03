@@ -39,6 +39,7 @@ console.log('  Geosyntra (separate repo) uses 5173 / 3001 / 3002 — do not mix 
 console.log('')
 console.log('  Tips:')
 console.log('  • Run "npm run dev" (frontend + backend), not dev:client alone.')
+console.log('  • If /api routes look stale, run "npm run dev:server:clean" to reclaim :3011.')
 console.log('  • Use the trailing slash: …/AgroCloud/')
 console.log('  • Allow Node.js through Windows Firewall if a device cannot connect.')
 console.log('==========================================')

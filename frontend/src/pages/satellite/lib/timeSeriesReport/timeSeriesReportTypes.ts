@@ -1,6 +1,7 @@
 import type { ImageryIndexInterpretation } from '../../../../lib/imageryIndexInterpretationEngine'
 import type { ImageryTimeSeriesLayerSeries } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import type { EstimatedWaterLossPoint } from './estimatedWaterLossTimeline'
+import type { EstimatedYieldPoint } from './estimatedYieldTimeline'
 import type { TimeSeriesExecutiveSummary } from './timeSeriesReportExecutive'
 import type { VegetationCoveragePoint } from './vegetationCoverageTimeline'
 import type { TimeSeriesWeatherBlock } from './timeSeriesWeatherTimeline'
@@ -142,6 +143,7 @@ export type TimeSeriesReportPayload = {
   changeDetectionMapSnapshotGroups: TimeSeriesMapSnapshotGroup[]
   vegetationCoverageTimeline: VegetationCoveragePoint[]
   estimatedWaterLossTimeline: EstimatedWaterLossPoint[]
+  estimatedYieldTimeline: EstimatedYieldPoint[]
   weatherTimeline: TimeSeriesWeatherBlock | null
   correlationBlocks: TimeSeriesCorrelationReportBlock[]
   cropRecommendations: string[]
@@ -159,6 +161,8 @@ export type TimeSeriesExportKind =
   | 'docx'
   | 'lulc-docx'
   | 'excel'
+  | 'batch-excel'
+  | 'batch-field-summary'
   | 'weather-excel'
   | 'plot-priority-excel'
   | 'aoi-raw-excel'

@@ -49,6 +49,27 @@ describe('resolveTimeSeriesSnapshotExtent centering', () => {
     expect(frameAspect).toBeCloseTo(mapW / mapH, 5)
   })
 
+  it('accepts ArcGIS Z/M positions so Layers AOI map atlas is not skipped', () => {
+    const geometry: GeoJSON.Polygon = {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [20.1, 45.2, 0],
+          [20.12, 45.2, 0],
+          [20.12, 45.22, 0],
+          [20.1, 45.22, 0],
+          [20.1, 45.2, 0],
+        ],
+      ],
+    }
+    const extent = resolveTimeSeriesSnapshotExtent(geometry, 624, 400)
+    expect(extent).toBeTruthy()
+    expect(extent!.minLng).toBeLessThan(20.1)
+    expect(extent!.maxLng).toBeGreaterThan(20.12)
+    expect(extent!.minLat).toBeLessThan(45.2)
+    expect(extent!.maxLat).toBeGreaterThan(45.22)
+  })
+
   it('fitLngLatBboxToMapAspect with padRatio expands around Mercator center', () => {
     const bbox = { minLng: 10, minLat: 50, maxLng: 10.1, maxLat: 50.05 }
     const fitted = fitLngLatBboxToMapAspect(bbox, 800, 400, 0.2)

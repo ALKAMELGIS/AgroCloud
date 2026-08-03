@@ -1,0 +1,13 @@
+#   cd backend/services/temporal-transformer && docker compose up --build
+# Serves http://localhost:8097 — TEMPORAL_TRANSFORMER_URL default.
+services:
+  temporal-transformer:
+    build: .
+    image: ai-temporal-transformer
+    ports:
+      - "8097:8097"
+    environment:
+      # Optional: Prithvi self-host predict URL (same contract as crop classification).
+      TEMPORAL_PRITHVI_URL: ""
+      TEMPORAL_DEFAULT_CROP: "Unknown"
+    restart: unless-stopped

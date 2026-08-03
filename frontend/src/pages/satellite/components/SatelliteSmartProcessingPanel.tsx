@@ -3,7 +3,6 @@ import { useMemo, useState } from 'react';
 export type SatelliteProcessingEnvSection =
   | 'layers'
   | 'remote-sensing'
-  | 'ai-detection-gis'
   | 'table-geo-ai';
 
 export type SatelliteSmartProcessingPanelProps = {
@@ -178,15 +177,6 @@ export function SatelliteSmartProcessingPanel(props: SatelliteSmartProcessingPan
                 <span>
                   <strong>AI Agent</strong>
                   <small>Chat, map links, popups</small>
-                </span>
-              </button>
-            </li>
-            <li>
-              <button type="button" className="si-sat-smart-proc__btn" onClick={() => onOpenEnvSection('ai-detection-gis')}>
-                <i className="fa-solid fa-magnifying-glass-location" aria-hidden />
-                <span>
-                  <strong>AI detection in GIS</strong>
-                  <small>Vision-assisted map tasks</small>
                 </span>
               </button>
             </li>

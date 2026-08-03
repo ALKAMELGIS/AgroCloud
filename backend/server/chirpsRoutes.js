@@ -108,6 +108,65 @@ async function openChirpsTiff(kind, key) {
   return { image, url }
 }
 
+function shiftIsoDays(iso, deltaDays) {
+  const d = new Date(`${String(iso).slice(0, 10)}T12:00:00Z`)
+  if (Number.isNaN(d.getTime())) return null
+  d.setUTCDate(d.getUTCDate() + deltaDays)
+  return d.toISOString().slice(0, 10)
+}
+
+function shiftYmMonths(ym, deltaMonths) {
+  const m = String(ym).match(/^(\d{4})-(\d{2})$/)
+  if (!m) return null
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1 + deltaMonths, 1))
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
+/**
+ * CHIRPS daily products lag ~several days; missing “today” is common.
+ * Try the requested key, then a lag-aware jump, then walk backward.
+ */
+async function openChirpsTiffNearest(kind, key, maxLookback = 45) {
+  let lastErr = null
+  const tried = new Set()
+  const attempt = async cursor => {
+    if (!cursor || tried.has(cursor)) return null
+    tried.add(cursor)
+    try {
+      const opened = await openChirpsTiff(kind, cursor)
+      return { ...opened, resolvedKey: cursor, requestedKey: key, lookbackSteps: tried.size - 1 }
+    } catch (err) {
+      lastErr = err
+      return null
+    }
+  }
+
+  if (kind === 'monthly') {
+    let cursor = key
+    for (let i = 0; i < Math.min(12, maxLookback); i += 1) {
+      const hit = await attempt(cursor)
+      if (hit) return hit
+      cursor = shiftYmMonths(cursor, -1)
+      if (!cursor) break
+    }
+    throw lastErr || new Error(`No CHIRPS monthly product near ${key}`)
+  }
+
+  // Daily: requested → −5d → −15d, then day-by-day from −5d.
+  for (const jump of [0, -5, -15]) {
+    const hit = await attempt(shiftIsoDays(key, jump) || key)
+    if (hit) return hit
+  }
+  let cursor = shiftIsoDays(key, -5) || key
+  while (tried.size < maxLookback) {
+    cursor = shiftIsoDays(cursor, -1)
+    const hit = await attempt(cursor)
+    if (hit) return hit
+    if (!cursor) break
+  }
+  throw lastErr || new Error(`No CHIRPS daily product near ${key}`)
+}
+
 /**
  * Read AOI window from a CHIRPS GeoTIFF (EPSG:4326, PixelIsArea).
  * Returns row-major Float32 mm values + georef.
@@ -199,23 +258,22 @@ function meanOfGrid(grid) {
 
 /** Professional precip ramp → RGBA data URL for MapLibre image source. */
 function gridToRgbaDataUrl(grid) {
-  const { width, height, values, nodata, stats } = grid
-  // Dynamic stretch from valid stats (mm)
-  const lo = stats?.min != null ? stats.min : 0
-  const hi = stats?.max != null && stats.max > lo ? stats.max : lo + 1
-  const stops = [
-    [0, [255, 255, 255]],
-    [0.15, [200, 230, 255]],
-    [0.35, [100, 180, 255]],
-    [0.55, [30, 120, 220]],
-    [0.75, [20, 80, 180]],
-    [1, [10, 40, 120]],
+  const { width, height, values, nodata } = grid
+  // Absolute mm ramp (dry tan → wet blue) so 0 mm AOI cells stay visible on the map.
+  const mmStops = [
+    [0, [196, 164, 132]],
+    [2, [245, 240, 230]],
+    [5, [200, 224, 244]],
+    [15, [107, 174, 214]],
+    [30, [33, 113, 181]],
+    [60, [8, 48, 107]],
+    [100, [4, 30, 66]],
   ]
-  function colorAt(t) {
-    const x = Math.max(0, Math.min(1, t))
-    for (let i = 0; i < stops.length - 1; i += 1) {
-      const [a, ca] = stops[i]
-      const [b, cb] = stops[i + 1]
+  function colorAtMm(mm) {
+    const x = Math.max(0, Number(mm) || 0)
+    for (let i = 0; i < mmStops.length - 1; i += 1) {
+      const [a, ca] = mmStops[i]
+      const [b, cb] = mmStops[i + 1]
       if (x >= a && x <= b) {
         const u = (x - a) / (b - a || 1)
         return [
@@ -225,7 +283,8 @@ function gridToRgbaDataUrl(grid) {
         ]
       }
     }
-    return stops[stops.length - 1][1]
+    if (x > mmStops[mmStops.length - 1][0]) return mmStops[mmStops.length - 1][1]
+    return mmStops[0][1]
   }
 
   // Use pngjs if available; else raw PPM-like — backend has pngjs.
@@ -241,12 +300,11 @@ function gridToRgbaDataUrl(grid) {
         png.data[o + 3] = 0
         continue
       }
-      const t = (v - lo) / (hi - lo)
-      const [r, g, b] = colorAt(t)
+      const [r, g, b] = colorAtMm(v)
       png.data[o] = r
       png.data[o + 1] = g
       png.data[o + 2] = b
-      png.data[o + 3] = 210
+      png.data[o + 3] = 220
     }
     const buf = PNG.sync.write(png)
     return `data:image/png;base64,${buf.toString('base64')}`
@@ -284,7 +342,9 @@ export function registerChirpsRoutes(app) {
         key = date.slice(0, 7)
       }
 
-      const { image, url } = await openChirpsTiff(kind, key)
+      const opened = await openChirpsTiffNearest(kind, key)
+      const { image, url, resolvedKey, requestedKey, lookbackSteps } = opened
+      const resolvedDate = kind === 'monthly' ? `${resolvedKey}-01` : resolvedKey
       const grid = await readAoiGrid(image, bbox)
       const previewDataUrl = await gridToRgbaDataUrl(grid)
 
@@ -292,7 +352,9 @@ export function registerChirpsRoutes(app) {
         source: 'UCSB CHIRPS v2.0',
         product: kind === 'monthly' ? 'CHIRPS monthly' : 'CHIRPS daily',
         url,
-        date,
+        date: resolvedDate,
+        requestedDate: kind === 'monthly' ? `${requestedKey}-01` : requestedKey,
+        lookbackSteps: lookbackSteps || 0,
         aggregation,
         unit: 'mm',
         nodata: CHIRPS_NODATA,
@@ -328,12 +390,15 @@ export function registerChirpsRoutes(app) {
       }
 
       const points = []
+      let seriesStart = start
+      let seriesEnd = end
       if (aggregation === 'daily') {
-        const days = daysInclusive(start, end)
+        let days = daysInclusive(start, end)
         if (days.length > MAX_DAILY_SERIES) {
-          return res.status(400).json({
-            error: `Daily CHIRPS series limited to ${MAX_DAILY_SERIES} days (requested ${days.length}). Use monthly aggregation or a shorter range.`,
-          })
+          // Prefer latest window so analytics stay near the scene / end date.
+          days = days.slice(-MAX_DAILY_SERIES)
+          seriesStart = days[0]
+          seriesEnd = days[days.length - 1]
         }
         for (const day of days) {
           try {
@@ -345,11 +410,11 @@ export function registerChirpsRoutes(app) {
           }
         }
       } else {
-        const months = monthsInclusive(start, end)
+        let months = monthsInclusive(start, end)
         if (months.length > MAX_MONTHLY_SERIES) {
-          return res.status(400).json({
-            error: `Monthly CHIRPS series limited to ${MAX_MONTHLY_SERIES} months.`,
-          })
+          months = months.slice(-MAX_MONTHLY_SERIES)
+          seriesStart = `${months[0]}-01`
+          seriesEnd = `${months[months.length - 1]}-01`
         }
         for (const ym of months) {
           try {
@@ -374,8 +439,10 @@ export function registerChirpsRoutes(app) {
         source: 'UCSB CHIRPS v2.0',
         unit: 'mm',
         aggregation,
-        start,
-        end,
+        start: seriesStart,
+        end: seriesEnd,
+        requestedStart: start,
+        requestedEnd: end,
         points,
         summary: {
           totalMm: valid.length ? sum : null,

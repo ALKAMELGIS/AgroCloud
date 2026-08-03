@@ -14,7 +14,7 @@ shapely>=2.0.0
 fastapi>=0.110.0
 uvicorn[standard]>=0.29.0
 python-multipart>=0.0.9
-# Optional: OpenGeoAI Mask R-CNN helpers (pip install geoai-py)
-# geoai-py>=0.5.0
+# Optional: Mask R-CNN helpers. Prefer dedicated service backend/services/geoai-inference (:8098).
+# geoai-py>=0.40.0
 # Optional GeoPackage export
 # fiona>=1.9.0

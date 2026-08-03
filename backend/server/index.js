@@ -22,6 +22,10 @@ import { registerChirpsRoutes } from './chirpsRoutes.js'
 import { registerCropClassificationRoutes } from './cropClassificationProxy.js'
 import { registerTreeDetectionRoutes } from './treeDetectionProxy.js'
 import { registerSamDetectionRoutes } from './samDetectionProxy.js'
+import { registerSegFormerDetectionRoutes } from './segformerDetectionProxy.js'
+import { registerSam2RefinementRoutes } from './sam2RefinementProxy.js'
+import { registerTemporalTransformerRoutes } from './temporalTransformerProxy.js'
+import { registerGeoaiInferenceRoutes } from './geoaiInferenceProxy.js'
 import { registerAgriFieldBoundaryRoutes } from './agriFieldBoundaryProxy.js'
 import { registerFloodMonitoringRoutes } from './floodMonitoringProxy.js'
 import { registerEsriTerrainTileRoutes } from './esriTerrainRgbTiles.js'
@@ -89,11 +93,18 @@ app.use(
 app.use(
   express.json({
     limit: '2mb',
-    // High-res SAM captures are large base64 JSON — skip global parse so the
-    // route-level 48mb parser in samDetectionProxy.js can accept them.
+    // High-res SAM / field-boundary / SegFormer captures are large base64 JSON —
+    // skip global parse so the route-level 48mb parsers can accept them.
     type: (req) => {
       const path = String(req.originalUrl || req.url || '')
-      if (path.startsWith('/api/sam-detection/') || path.startsWith('/api/agri-field-boundary/')) return false
+      if (
+        path.startsWith('/api/sam-detection/') ||
+        path.startsWith('/api/sam2-refinement/') ||
+        path.startsWith('/api/temporal-transformer/') ||
+        path.startsWith('/api/agri-field-boundary/') ||
+        path.startsWith('/api/segformer-detection/')
+      )
+        return false
       const ct = String(req.headers['content-type'] || '')
       return /application\/json/i.test(ct)
     },
@@ -1853,6 +1864,10 @@ registerChirpsRoutes(app)
 registerCropClassificationRoutes(app, { secretsFilePath: API_SECRETS_FILE, broadcast })
 registerTreeDetectionRoutes(app)
 registerSamDetectionRoutes(app)
+registerSegFormerDetectionRoutes(app)
+registerSam2RefinementRoutes(app)
+registerTemporalTransformerRoutes(app)
+registerGeoaiInferenceRoutes(app)
 registerAgriFieldBoundaryRoutes(app)
 registerFloodMonitoringRoutes(app, { secretsFilePath: API_SECRETS_FILE, broadcast })
 registerEsriTerrainTileRoutes(app)
@@ -1863,6 +1878,33 @@ registerGisGatewayRoutes(app)
 
 // Load the EPSG/PROJ definition database once at startup (cached; never per-upload).
 warmProjectionManager()
+
+function hasRoute(method, routePath) {
+  const stack = app?._router?.stack
+  if (!Array.isArray(stack)) return false
+  const expectedMethod = String(method || '').toLowerCase()
+  for (const layer of stack) {
+    if (!layer?.route?.path || !layer?.route?.methods) continue
+    if (layer.route.path !== routePath) continue
+    if (layer.route.methods[expectedMethod]) return true
+  }
+  return false
+}
+
+function assertCriticalRoutesRegistered() {
+  const required = [
+    ['get', '/api/segformer-detection/config'],
+    ['get', '/api/segformer-detection/health'],
+    ['post', '/api/segformer-detection/detect'],
+  ]
+  const missing = required.filter(([method, routePath]) => !hasRoute(method, routePath))
+  if (missing.length === 0) return
+  const printable = missing.map(([method, routePath]) => `${method.toUpperCase()} ${routePath}`).join(', ')
+  throw new Error(`Critical backend routes missing at startup: ${printable}`)
+}
+
+assertCriticalRoutesRegistered()
+console.log('[startup] ✓ All critical routes verified (segformer-detection: config, health, detect)')
 
 /**
  * Static asset requests (hashed JS/CSS chunks, fonts, images, etc.) must never fall back to
@@ -1894,6 +1936,9 @@ app.use(errorHandler)
 
 const server = app.listen(API_PORT, LISTEN_HOST, () => {
   console.log(`API listening on http://${LISTEN_HOST === '0.0.0.0' ? 'localhost' : LISTEN_HOST}:${API_PORT} (bind ${LISTEN_HOST})`)
+  console.log(
+    `[runtime] cwd=${process.cwd()} entry=${fileURLToPath(import.meta.url)} apiPort=${API_PORT} wsPort=${WS_PORT}`,
+  )
 })
 
 /** Shared-hosting (Hostinger): only one port — attach WS to the HTTP server instead of WS_PORT. */

@@ -88,6 +88,11 @@ import {
   filterRemoteSensingLayerSelectGroupsForProvider,
   pickDefaultLayerForProviderProfile,
 } from '../../lib/remoteSensingLayerProfiles';
+import {
+  getCollectionIndexDefs,
+  isCollectionCatalogIndexId,
+  resolveCollectionIndexDef,
+} from '../../lib/collectionIndexCatalog';
 import { isWapiLayerId } from '../../lib/wapiIndex';
 import { isNcadiLayerId } from '../../lib/ncadiIndex';
 import {
@@ -105,6 +110,7 @@ import {
 } from '../../lib/sentinelHubWmsLayers';
 import { getDrawnGeometry } from '../../lib/sentinelHubWmsAoiClip';
 import { drawnAoiClipSignature, normalizeDrawnAoiClipCollection } from './siDrawnAoiLiveIndex';
+import { resolveSiActiveAoi } from '../../lib/siAoiManager';
 import {
   buildSiSentinelAoiWmsStackState,
   isSiSentinelAoiWmsMapLayerId,
@@ -179,7 +185,7 @@ import {
 import {
   mergeMapMetrics,
   readMapMetricsFromViewState,
-  shouldFreezeLayerAoiViewportPipeline,
+  shouldFreezeLayersAoiAfterClipPin,
   shouldFreezeViewportDataPipeline,
   shouldSkipLiveViewportWorkOnMove,
   SI_MAP_METRICS_COMMIT_MS,
@@ -339,6 +345,7 @@ import {
 import {
   defaultCollectionForProvider,
   remoteSensingCollectionsForProvider,
+  remoteSensingProviderDef,
   remoteSensingProviderMapStatus,
   resolveEoStacCollectionsForProvider,
   resolveRemoteSensingMapBackend,
@@ -528,12 +535,23 @@ import {
 } from '../../lib/geoAiAgentTurn';
 import { classifyGeoAiAnalystIntent } from '../../lib/geoAiAnalystPacks';
 import { TreeDetectionsPanel } from './components/TreeDetectionsPanel';
-import { SamDetectionPanel, type SamPanelTab } from './components/SamDetectionPanel';
+import { type SamPanelTab } from './components/SamDetectionPanel';
 import { useSamDetection, type SamAoiSource } from './components/useSamDetection';
-import { AgriFieldBoundaryPanel } from './components/AgriFieldBoundaryPanel';
 import { useAgriFieldBoundary } from './components/useAgriFieldBoundary';
 import { useSamTrainingSamples } from './components/useSamTrainingSamples';
-import { SiAiDetectionGisPanel } from './components/aiDetection/SiAiDetectionGisPanel';
+import { SegFormerDetectionPanel } from './components/segformerDetection/SegFormerDetectionPanel';
+import { useSegFormerDetection } from './components/segformerDetection/useSegFormerDetection';
+import {
+  fetchSegFormerSentinel2MultiDateStack,
+  fetchSegFormerSentinel2TrueColor,
+  SEGFORMER_FIELD_S2_CAPTURE_MAX_EDGE,
+  SEGFORMER_S2_CAPTURE_MAX_EDGE,
+} from '../../lib/segformerDetection/segformerS2Capture';
+import {
+  buildSegFormerFieldFeatureClassName,
+  buildSegFormerPredictionLayerName,
+  getSegFormerPredictionLayerStyleForClass,
+} from '../../lib/segformerDetection/segformerFeatureNormalize';
 import {
   isRasterDataFile,
   isWorldFileOnly,
@@ -563,8 +581,6 @@ import { useTreeDetection } from './components/useTreeDetection';
 import { SiImportedCustomLayersOverlay, shouldPaintImportedLayerCircles } from './components/SiImportedCustomLayersOverlay';
 import { FloodMonitoringPanel, type FloodLayerKind } from './components/FloodMonitoringPanel';
 import { useFloodMonitoring } from './components/useFloodMonitoring';
-import { EoLayerEnrichmentPanel } from './components/EoLayerEnrichmentPanel';
-import { ImageClassificationWizardPanel } from './components/imageClassification/ImageClassificationWizardPanel';
 import {
   useImageClassificationWizard,
   type SchemaClass as IcwSchemaClass,
@@ -609,6 +625,8 @@ import { useHydroWatershed } from './components/useHydroWatershed';
 import { WellSiteRecommendationPanel } from './components/WellSiteRecommendationPanel';
 import { useWellSiteRecommendation } from './components/useWellSiteRecommendation';
 import { useChirpsPrecipitation } from './components/useChirpsPrecipitation';
+import { useCollectionDemOverlay } from './components/useCollectionDemOverlay';
+import { isDemCollectionIndexId } from '../../lib/collectionDemOverlay';
 import { isChirpsPrecipLayerId } from '../../lib/agroCompositeIndices';
 import { unwrapPolygonGeometry } from '../../lib/chirpsRainfall/chirpsRasterMask';
 import { WellSuitabilityPanel } from './components/WellSuitabilityPanel';
@@ -834,6 +852,7 @@ type MapToolboxSectionId =
  | 'crop-classification'
  | 'ai-detection-gis'
  | 'tree-detections'
+ | 'segformer-detection'
  | 'sam-detection'
  | 'agri-field-boundary'
  | 'hydro-watershed'
@@ -968,6 +987,11 @@ const TREE_DETECTIONS_LAYER_ID = 'tree-detections-overlay';
 const SAM_SAVED_SOURCE_ID = 'sam-saved-source';
 const SAM_MASK_SOURCE_ID = 'sam-mask-source';
 const AGRI_FIELD_BOUNDARY_SOURCE_ID = 'agri-field-boundary-source';
+const SEGFORMER_DETECTION_SOURCE_ID = 'segformer-detection-source';
+const SEGFORMER_DETECTION_FILL_ID = `${SEGFORMER_DETECTION_SOURCE_ID}-fill`;
+const SEGFORMER_DETECTION_OUTLINE_ID = `${SEGFORMER_DETECTION_SOURCE_ID}-outline`;
+const SEGFORMER_MASK_SOURCE_ID = 'segformer-detection-mask-source';
+const SEGFORMER_MASK_LAYER_ID = 'segformer-detection-mask-raster';
 const SAM_POINTS_SOURCE_ID = 'sam-points-source';
 /** Ordered so raster terrain sits below vector hydrography/mesh on the map. */
 const HYDRO_STEP_ORDER: HydroStepId[] = [
@@ -2700,6 +2724,15 @@ function siRaiseCustomLayersAboveBasemap(map: SiMapboxCanvasLike, trackedSourceI
       /* ignore */
     }
   }
+  // Keep AOI sketch chrome and committed border above overlays.
+  // Committed fill stays lower so imagery / analysis rasters remain readable.
+  for (const id of [
+    'si-draw-draft-fill', 'si-draw-draft-line', 'si-draw-draft-close-hint',
+    'si-draw-draft-vertex', 'si-draw-draft-pt',
+    'drawn-index-geometry-line', 'drawn-index-geometry-point',
+  ]) {
+    move(id);
+  }
 }
 
 /** True when any tracked custom overlay sits under a basemap raster layer. */
@@ -2935,8 +2968,7 @@ function siPaintCustomLayersOnMapboxCanvas(
 
       const st = siLayerMapboxStylePack(layer);
       let fillPaint = sanitizeMapboxPaint(siScalePaintOpacityByFactor(st.fillPaint as Record<string, unknown>, op));
-      const useAgSymbology = siLayerUsesArcgisOnlineSymbology(layer);
-      if (suppressFillIds.has(String(layer.id)) && !useAgSymbology) {
+      if (suppressFillIds.has(String(layer.id))) {
         fillPaint = { ...fillPaint, 'fill-opacity': 0 };
       }
       const linePaint = sanitizeMapboxPaint(
@@ -4323,6 +4355,29 @@ export default function SatelliteIntelligence() {
   const handleRemoteSensingCollectionChange = useCallback((id: string) => {
     setRemoteSensingCollection(id);
     setSentinelSceneCatalog(null);
+    // Dedicated Collection catalogues do not need live WMS caps. Avoid referencing
+    // `wmsLayers` here (declared later) — that caused a TDZ crash on page load.
+    const dedicated = getCollectionIndexDefs(id);
+    if (dedicated.length) {
+      const nextLayer = dedicated[0]!.id;
+      setWmsLayer(nextLayer);
+      const def = resolveCollectionIndexDef(nextLayer);
+      setFieldAnalysisStatus(
+        def
+          ? `${def.label} selected · 10-class legend ready · ${def.scientificName}`
+          : 'Collection index selected · 10-class legend ready',
+      );
+      setIsWmsOverlayVisible(true);
+      setSentinelWmsSourcesHeld(true);
+    } else {
+      const nextLayer =
+        pickDefaultLayerForProviderProfile(
+          [{ id: 'NDVI' }, { id: '1_TRUE_COLOR' }, { id: 'TRUE_COLOR' }, { id: 'VNIR' }],
+          remoteSensingProvider,
+          id,
+        ) || 'NDVI';
+      setWmsLayer(nextLayer);
+    }
     if (!providerUsesStaticLayerCatalog(remoteSensingProvider, id)) {
       setSentinelWmsRev(r => r + 1);
     }
@@ -4561,9 +4616,19 @@ export default function SatelliteIntelligence() {
   const [exploreSelectedResultKeys, setExploreSelectedResultKeys] = useState<string[]>([]);
   const [showStacFootprintsOnMap, setShowStacFootprintsOnMap] = useState(false);
   const [isWmsOverlayVisible, setIsWmsOverlayVisible] = useState(false);
-  const [aoiMaskBuilderSettings, setAoiMaskBuilderSettings] = useState<SiAoiMaskBuilderSettings>(() =>
-    loadSiAoiMaskBuilderSettings({ storageKey: siScope.scopedStorageKey(SI_AOI_MASK_BUILDER_LS_KEY) }),
-  );
+  const [aoiMaskBuilderSettings, setAoiMaskBuilderSettings] = useState<SiAoiMaskBuilderSettings>(() => {
+    const loaded = loadSiAoiMaskBuilderSettings({
+      storageKey: siScope.scopedStorageKey(SI_AOI_MASK_BUILDER_LS_KEY),
+    });
+    // Layers AOI panel only supports entire-layer / selected-features — coerce legacy
+    // filtered-features so warm WMS prefetch matches Show on map.
+    return {
+      ...loaded,
+      maskMode: loaded.maskMode === 'selected-features' ? 'selected-features' : 'entire-layer',
+      displayMode: 'transparent-outside',
+      liveUpdate: true,
+    };
+  });
   const [cropAlertSettings, setCropAlertSettings] = useState<CropAlertEngineSettings>(() =>
     loadCropAlertEngineSettingsForSatellitePage({
       engineKey: siScope.scopedStorageKey(SI_CROP_ALERT_ENGINE_LS_KEY),
@@ -4856,6 +4921,10 @@ export default function SatelliteIntelligence() {
   const [rectCirclePreview, setRectCirclePreview] = useState<
     null | { kind: 'rectangle' | 'circle' | 'box_select'; a: [number, number]; b: [number, number] }
   >(null);
+  const rectCirclePreviewRef = useRef<
+    null | { kind: 'rectangle' | 'circle' | 'box_select'; a: [number, number]; b: [number, number] }
+  >(null);
+  rectCirclePreviewRef.current = rectCirclePreview;
   const [geomUndoStack, setGeomUndoStack] = useState<(any | null)[]>([]);
   const [geomRedoStack, setGeomRedoStack] = useState<(any | null)[]>([]);
   const [polylineStart, setPolylineStart] = useState<[number, number] | null>(null);
@@ -4908,20 +4977,21 @@ export default function SatelliteIntelligence() {
   const layerAoiWmsPingPongRef = useRef<SiSentinelAoiWmsPingPongRuntime>(createSiSentinelAoiWmsPingPongRuntime());
   const layerAoiWmsPingPongCacheKeyRef = useRef('');
   const layerAoiPingPongSyncKeyRef = useRef('');
+  /** Last Layers clip pin/key that wiped ping-pong applied state — ignore Show-on-map enable alone. */
+  const layerAoiPingPongInvalidateKeyRef = useRef('');
   const layerAoiWmsStackRef = useRef<ReturnType<typeof buildSiSentinelAoiWmsStackState> | null>(null);
   const suppressPrimaryAoiFillMountedRef = useRef(false);
   const suppressPrimaryAoiFillRef = useRef(false);
   const aoiMaskBuilderSourceLayerIdRef = useRef(aoiMaskBuilderSettings.sourceLayerId);
   const [sentinelWmsSourcesHeld, setSentinelWmsSourcesHeld] = useState(false);
   const aoiLayerModePinnedClipRef = useRef<{ pinKey: string; mask: SiAoiLayerModeClipMask } | null>(null);
+  /** Bumped when the Layers AOI pin changes so activeMask re-renders (refs alone do not). */
+  const [aoiLayerModePinRevision, setAoiLayerModePinRevision] = useState(0);
   const aoiLayerModeWmsActiveRef = useRef(false);
   const [pinnedSentinelWmsMinZoom, setPinnedSentinelWmsMinZoom] = useState<number | null>(null);
   const freezeViewportPipeline = shouldFreezeViewportDataPipeline(siScope.isIsolated);
-  const layersAoiViewportFrozen = aoiMaskBuilderSettings.enabled;
-  const effectiveViewportFrozen = shouldFreezeLayerAoiViewportPipeline(
-    layersAoiViewportFrozen,
-    freezeViewportPipeline,
-  );
+  // layersAoiViewportFrozen is derived after the Layers clip pin resolves — enabling
+  // Show on map alone must not freeze viewport seed/fetch.
   const cropAlertResultsStorageKey = useMemo(
     () => siScope.scopedStorageKey(SI_CROP_ALERT_RESULTS_LS_KEY),
     [siScope.scopedStorageKey],
@@ -4935,12 +5005,9 @@ export default function SatelliteIntelligence() {
   const wapiAlertResultsByKeyRef = useRef(new Map<string, WapiAlertFieldResult>());
 
   const customLayersForMapPaint = useMemo(() => {
-    if (effectiveViewportFrozen) {
-      return customLayers.map(layer => {
-        const geojson = siNormalizeLayerGeojsonForSymbology(layer);
-        return geojson !== layer.geojson ? { ...layer, geojson } : layer;
-      });
-    }
+    // Keep ArcGIS viewport snapshots while Layers AOI freezes live updates.
+    // The previous freeze branch dropped viewport geojson and fell back to often-empty
+    // layer.geojson — outlines vanished and Layers AOI WMS had nothing to clip.
     return customLayers.map(layer => {
       let next = layer;
       if (layer.viewportStreaming && layer.source === 'arcgis') {
@@ -4952,7 +5019,7 @@ export default function SatelliteIntelligence() {
       const geojson = siNormalizeLayerGeojsonForSymbology(next);
       return geojson !== next.geojson ? { ...next, geojson } : next;
     });
-  }, [customLayers, arcgisViewportRevision, effectiveViewportFrozen]);
+  }, [customLayers, arcgisViewportRevision, aoiMaskBuilderSettings.enabled, aoiLayerModePinRevision]);
   const customLayersForMapPaintRef = useRef(customLayersForMapPaint);
   customLayersForMapPaintRef.current = customLayersForMapPaint;
 
@@ -5031,6 +5098,7 @@ export default function SatelliteIntelligence() {
   | 'crop-classification'
   | 'ai-detection-gis'
   | 'tree-detections'
+  | 'segformer-detection'
   | 'sam-detection'
   | 'agri-field-boundary'
   | 'hydro-watershed'
@@ -5202,10 +5270,10 @@ export default function SatelliteIntelligence() {
   }, [drawnGeometry, cropAiJob]);
 
   const handleCropAiPickAoi = useCallback(() => {
+    // Analysis tools must not arm drawing — user draws via Edit / Draw AOI only.
     mapDrawOwnerRef.current = 'remote-sensing';
     setMapDrawOwner('remote-sensing');
-    setRsDrawingModeActive(true);
-    applyMapDrawTool('polygon');
+    setFieldAnalysisStatus('Use Edit (or Draw AOI) on the map toolbar to set the Active AOI, then run again.');
   }, []);
 
   const CROP_AI_PREDICTION_LAYER_ID = 'crop-ai-prediction';
@@ -5356,9 +5424,23 @@ export default function SatelliteIntelligence() {
     setExpandedEnvSection('table-geo-ai');
   }, [geoAiFloatingOpen]);
 
+  const RETIRED_TOOLBOX_SECTIONS = new Set<string>([
+    'eo-enrichment',
+    'ai-detection-gis',
+    'sam-detection',
+    'agri-field-boundary',
+    'image-classification',
+  ]);
   const onProcessingWorkflowNavigateMapToolbox: MapToolboxNavigateHandler = useCallback(
     (id, meta) => {
       const sid = id as MapToolboxSectionId;
+      if (RETIRED_TOOLBOX_SECTIONS.has(sid)) return;
+      // Only Edit activates drawing — opening any toolbox panel turns drawing mode off.
+      // Full sketch teardown for analysis panels runs in the expandedEnvSection effect.
+      if (rsDrawingModeActiveRef.current) {
+        setRsDrawingModeActive(false);
+        setMapDragPanEnabled(true);
+      }
       if (sid === 'table-geo-ai') {
         setGeoAiFloatingOpen(true);
         setGeoAiFloatingExpanded(true);
@@ -8315,8 +8397,10 @@ export default function SatelliteIntelligence() {
     return displayBbox;
   }, []);
 
-  const syncArcGisViewportLayersGeoJson = useCallback((displayBbox: LngLatBBox) => {
-    if (aoiLayerModeWmsActiveRef.current) return;
+  const syncArcGisViewportLayersGeoJson = useCallback((displayBbox: LngLatBBox, options?: { force?: boolean }) => {
+    // After Layers clip pin succeeds, skip live pan/zoom refreshes — but still allow a forced
+    // seed while the pin is empty so Show on map can pick up polygons.
+    if (aoiLayerModeWmsActiveRef.current && !options?.force) return;
     const clipBbox = expandLngLatBBox(displayBbox, SI_VIEWPORT_PREFETCH_RATIO);
     const streamingLayers = customLayersRef.current.filter(
       l => l.viewportStreaming && l.source === 'arcgis' && l.sourceUrl,
@@ -8341,19 +8425,20 @@ export default function SatelliteIntelligence() {
 
   const commitLiveViewportExtent = useCallback(
     (displayBbox: LngLatBBox) => {
-      if (effectiveViewportFrozen || aoiLayerModeWmsActiveRef.current) return;
+      // Freeze only after Layers clip pin succeeds (ref), or isolated embed.
+      if (freezeViewportPipeline || aoiLayerModeWmsActiveRef.current) return;
       setLiveViewportDisplayBBox(displayBbox);
       syncArcGisViewportLayersGeoJson(displayBbox);
     },
-    [effectiveViewportFrozen, syncArcGisViewportLayersGeoJson],
+    [freezeViewportPipeline, syncArcGisViewportLayersGeoJson],
   );
 
   const applyLiveViewportExtent = useCallback(() => {
     const displayBbox = captureLiveViewportExtent();
     if (!displayBbox) return;
-    if (effectiveViewportFrozen || aoiLayerModeWmsActiveRef.current) return;
+    if (freezeViewportPipeline || aoiLayerModeWmsActiveRef.current) return;
     commitLiveViewportExtent(displayBbox);
-  }, [captureLiveViewportExtent, commitLiveViewportExtent, effectiveViewportFrozen]);
+  }, [captureLiveViewportExtent, commitLiveViewportExtent, freezeViewportPipeline]);
 
   const fetchArcGisViewportLayersForExtent = useCallback(async () => {
     if (freezeViewportPipeline) return;
@@ -8373,7 +8458,9 @@ export default function SatelliteIntelligence() {
       return !cache.isPrefetchCovered(prefetchBbox);
     });
     if (!pendingLayers.length) {
-      syncArcGisViewportLayersGeoJson(displayBbox);
+      syncArcGisViewportLayersGeoJson(displayBbox, {
+        force: aoiLayerModeWmsActiveRef.current,
+      });
       return;
     }
 
@@ -8412,7 +8499,9 @@ export default function SatelliteIntelligence() {
         }),
       );
       if (ac.signal.aborted) return;
-      syncArcGisViewportLayersGeoJson(displayBbox);
+      syncArcGisViewportLayersGeoJson(displayBbox, {
+        force: aoiLayerModeWmsActiveRef.current,
+      });
       const statusParts = pendingLayers.map(layer => {
         const cache = arcgisViewportCacheByLayerIdRef.current.get(layer.id);
         const visible = cache?.featureCollectionInBBox(
@@ -8440,7 +8529,7 @@ export default function SatelliteIntelligence() {
   }, [fetchArcGisViewportLayersForExtent, freezeViewportPipeline]);
 
   const scheduleLiveViewportExtentCommit = useCallback(() => {
-    if (effectiveViewportFrozen || aoiLayerModeWmsActiveRef.current) return;
+    if (freezeViewportPipeline || aoiLayerModeWmsActiveRef.current) return;
     if (liveViewportBboxCommitTimerRef.current != null) {
       window.clearTimeout(liveViewportBboxCommitTimerRef.current);
     }
@@ -8451,10 +8540,10 @@ export default function SatelliteIntelligence() {
       commitLiveViewportExtent(displayBbox);
       scheduleArcGisViewportFetch();
     }, SI_VIEWPORT_DEBOUNCE_MS);
-  }, [commitLiveViewportExtent, effectiveViewportFrozen, scheduleArcGisViewportFetch]);
+  }, [commitLiveViewportExtent, freezeViewportPipeline, scheduleArcGisViewportFetch]);
 
   const applyLiveViewportExtentThrottled = useCallback(() => {
-    if (effectiveViewportFrozen || aoiLayerModeWmsActiveRef.current) return;
+    if (freezeViewportPipeline || aoiLayerModeWmsActiveRef.current) return;
     captureLiveViewportExtent();
     if (liveViewportMoveThrottleRef.current != null) {
       return;
@@ -8463,11 +8552,11 @@ export default function SatelliteIntelligence() {
       liveViewportMoveThrottleRef.current = null;
     }, SI_VIEWPORT_MOVE_THROTTLE_MS);
     scheduleArcGisViewportFetch();
-  }, [captureLiveViewportExtent, effectiveViewportFrozen, scheduleArcGisViewportFetch]);
+  }, [captureLiveViewportExtent, freezeViewportPipeline, scheduleArcGisViewportFetch]);
 
   const syncLiveViewport = useCallback(
     (immediate = false) => {
-      if (effectiveViewportFrozen || aoiLayerModeWmsActiveRef.current) return;
+      if (freezeViewportPipeline || aoiLayerModeWmsActiveRef.current) return;
       const displayBbox = captureLiveViewportExtent();
       if (!displayBbox) return;
       commitLiveViewportExtent(displayBbox);
@@ -8482,7 +8571,7 @@ export default function SatelliteIntelligence() {
       captureLiveViewportExtent,
       commitLiveViewportExtent,
       fetchArcGisViewportLayersForExtent,
-      effectiveViewportFrozen,
+      freezeViewportPipeline,
       scheduleArcGisViewportFetch,
     ],
   );
@@ -10655,15 +10744,13 @@ export default function SatelliteIntelligence() {
     const previewSketch = drawnGeometryRef.current;
     const hasLayerSource = hasActiveLayerSourceAoiRef.current;
     if (!previewSketch && !hasLayerSource) {
-      setFieldAnalysisStatus('Draw AOI first, then press Run Analysis.');
-      openRemoteSensingDrawing('polygon');
+      setFieldAnalysisStatus('Draw AOI first with the Edit tool, then press Run Analysis.');
       return;
     }
     if (hasLayerSource && !previewSketch) {
       setFieldAnalysisStatus(
-        'Layer Source is active. Draw a preview zone to analyze a sub-area, or use Crop Alerts / Sentinel Live for the full mask.',
+        'Layer Source is active. Use Edit to draw a preview zone, or use Crop Alerts / Sentinel Live for the full mask.',
       );
-      openRemoteSensingDrawing('polygon');
       return;
     }
 
@@ -12539,13 +12626,15 @@ export default function SatelliteIntelligence() {
     if (next && drawTargetModeRef.current === 'aoi') {
       setAoiFields([]);
       setSelectedFieldId(null);
+      // Single system Active AOI only — do not mirror into Multi-AOI (avoids duplicate polygons).
       if (hasActiveLayerSourceAoiRef.current) {
         setFieldAnalysisStatus(
-          'Preview zone saved â€” charts and spot analysis use this area only; Layer Source mask is unchanged.',
+          'Preview zone saved — charts and spot analysis use this area only; Layer Source mask is unchanged.',
         );
-      } else {
-        registerMultiAoiWorkspace(next, `Drawn AOI ${multiAoiItems.length + 1}`, 'drawn', { setActiveFirst: true });
       }
+      // Replace any previously drawn Multi-AOI copies so the map shows one Active AOI.
+      setMultiAoiItems(prev => prev.filter(item => item.source !== 'drawn'));
+      setActiveMultiAoiId(null);
     }
     const cur = activeDrawGeomRef().current;
     setGeomUndoStack(u => [...u, cur ? cloneDeep(cur) : null]);
@@ -12590,13 +12679,16 @@ export default function SatelliteIntelligence() {
   const finalizeRectOrCircleDrag = (clientX: number, clientY: number) => {
     const map = getMapInstance();
     const spec = dragRectCircleRef.current;
+    const livePreview = rectCirclePreviewRef.current;
     dragRectCircleRef.current = null;
     setRectCirclePreview(null);
     if (!map || !spec) {
       setMapDragPanEnabled(true);
       return;
     }
-    const end = clientPointToLngLat(map, clientX, clientY);
+    const endFromPreview =
+      livePreview && livePreview.kind === spec.kind ? (livePreview.b as [number, number]) : null;
+    const end = endFromPreview ?? clientPointToLngLat(map, clientX, clientY);
     if (!end) {
       setMapDragPanEnabled(true);
       return;
@@ -12619,7 +12711,7 @@ export default function SatelliteIntelligence() {
         return;
       }
       commitUserGeometry(feature);
-      setMapDrawTool('select');
+      finishSketchExitDrawingMode();
       skipNextMapClickRef.current = true;
       return;
     }
@@ -12638,7 +12730,7 @@ export default function SatelliteIntelligence() {
       return;
     }
     commitUserGeometry(feature);
-    setMapDrawTool('select');
+    finishSketchExitDrawingMode();
     skipNextMapClickRef.current = true;
   };
 
@@ -12679,6 +12771,7 @@ export default function SatelliteIntelligence() {
 
   const commitUserGeometryRef = useRef(commitUserGeometry);
   commitUserGeometryRef.current = commitUserGeometry;
+  const finishSketchExitDrawingModeRef = useRef<() => void>(() => {});
 
   const polygonRingRef = useRef(polygonRing);
   polygonRingRef.current = polygonRing;
@@ -12730,7 +12823,7 @@ export default function SatelliteIntelligence() {
       setPolygonRing([]);
       setPolygonClosingSnap(false);
       setDrawAssistHint('');
-      setMapDrawTool('select');
+      finishSketchExitDrawingModeRef.current();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -12761,9 +12854,7 @@ export default function SatelliteIntelligence() {
       commitUserGeometryRef.current(feature);
       setCircleRefineDraft(null);
       setDrawAssistHint('');
-      setMapDrawTool('select');
-      setShowEditHandles(false);
-      setMapDragPanEnabled(true);
+      finishSketchExitDrawingModeRef.current();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -12792,6 +12883,30 @@ export default function SatelliteIntelligence() {
       tool === 'polyline';
     setMapDragPanEnabled(!lockPan);
   };
+
+  /**
+   * After committing a sketch: save Active AOI and exit drawing mode.
+   * Drawing only restarts when the user explicitly clicks Edit / Draw AOI / New AOI.
+   * Training-sample owners keep continuous digitizing (isolated from system AOI).
+   */
+  const finishSketchExitDrawingMode = () => {
+    const owner = mapDrawOwnerRef.current;
+    if (owner === 'sam-training' || owner === 'image-classification') {
+      const tool = mapDrawToolRef.current;
+      if (isRsSketchDrawTool(tool)) {
+        applyMapDrawTool(tool);
+        return;
+      }
+    }
+    applyMapDrawTool('select');
+    setShowEditHandles(false);
+    setMapDragPanEnabled(true);
+    // Exit system AOI sketch — analysis tools must not keep drawing armed.
+    if (rsDrawingModeActiveRef.current) setRsDrawingModeActive(false);
+    if (cropClassDrawingModeActiveRef.current) setCropClassDrawingModeActive(false);
+    if (icDrawingModeActiveRef.current) setIcDrawingModeActive(false);
+  };
+  finishSketchExitDrawingModeRef.current = finishSketchExitDrawingMode;
 
   const createSketchLayerOnMap = useCallback(() => {
     const id = `sketch-${Date.now()}`;
@@ -12933,6 +13048,8 @@ export default function SatelliteIntelligence() {
     mapDrawOwnerRef.current = 'remote-sensing';
     setMapDrawOwner('remote-sensing');
     setCropClassDrawingModeActive(false);
+    // Remote Sensing drawing should always author the primary AOI, not field sub-polygons.
+    setDrawTargetMode('aoi');
     setExpandedEnvSection('remote-sensing');
     setIsLayerDropdownOpen(true);
     setRsDrawingModeActive(true);
@@ -12945,6 +13062,10 @@ export default function SatelliteIntelligence() {
         mapDrawOwnerRef.current = 'remote-sensing';
         setMapDrawOwner('remote-sensing');
         setCropClassDrawingModeActive(false);
+        // Ensure AOI updates match the shape being drawn from the Edit tool.
+        setDrawTargetMode('aoi');
+        // Deactivate any open toolbox panel to avoid two tools being active at once.
+        setIsLayerDropdownOpen(false);
       }
       setRsDrawingModeActive(active);
       if (!active) {
@@ -12959,6 +13080,7 @@ export default function SatelliteIntelligence() {
     mapDrawOwnerRef.current = 'remote-sensing';
     setMapDrawOwner('remote-sensing');
     setCropClassDrawingModeActive(false);
+    setDrawTargetMode('aoi');
     setRsDrawingModeActive(true);
     applyMapDrawTool(tool);
   }, []);
@@ -13279,39 +13401,39 @@ export default function SatelliteIntelligence() {
 
   /** Keep drawing owners aligned with the active toolbox panel (isolated layers). */
   useEffect(() => {
-    if (expandedEnvSection === 'crop-classification') {
-      setRsDrawingModeActive(false);
-      setIcDrawingModeActive(false);
-      mapDrawOwnerRef.current = 'crop-classification';
-      setMapDrawOwner('crop-classification');
-    } else if (expandedEnvSection === 'image-classification') {
-      // Image Classification owns its own isolated training-sample sketch — never the
-      // shared remote-sensing AOI drawing (decoupled from the contextual analysis dock).
-      setRsDrawingModeActive(false);
-      setCropClassDrawingModeActive(false);
-      mapDrawOwnerRef.current = 'image-classification';
-      setMapDrawOwner('image-classification');
-    } else if (expandedEnvSection === 'sam-detection') {
-      // AI SAM Detection owns Detect-tab clicks for FG/BG prompts. Training Samples
-      // digitizing uses the isolated 'sam-training' draw owner when armed.
-      setRsDrawingModeActive(false);
-      setCropClassDrawingModeActive(false);
-      setIcDrawingModeActive(false);
-    } else if (
-      expandedEnvSection === 'remote-sensing' ||
+    // Analysis panels consume the committed AOI only — never auto-arm a second draw tool.
+    const analysisOnly =
+      expandedEnvSection === 'segformer-detection' ||
       expandedEnvSection === 'tree-detections' ||
-      expandedEnvSection === 'agri-field-boundary' ||
       expandedEnvSection === 'hydro-watershed' ||
       expandedEnvSection === 'well-site' ||
       expandedEnvSection === 'well-suitability' ||
-      expandedEnvSection === 'flood-monitoring'
-    ) {
+      expandedEnvSection === 'flood-monitoring';
+
+    if (expandedEnvSection === 'crop-classification') {
+      setRsDrawingModeActive(false);
+      setIcDrawingModeActive(false);
+      cancelCurrentDrawing();
+      applyMapDrawTool('select');
+      setMapDragPanEnabled(true);
+      mapDrawOwnerRef.current = 'crop-classification';
+      setMapDrawOwner('crop-classification');
+    } else if (analysisOnly) {
+      setRsDrawingModeActive(false);
+      setCropClassDrawingModeActive(false);
+      setIcDrawingModeActive(false);
+      cancelCurrentDrawing();
+      applyMapDrawTool('select');
+      setMapDragPanEnabled(true);
+      mapDrawOwnerRef.current = 'remote-sensing';
+      setMapDrawOwner('remote-sensing');
+    } else if (expandedEnvSection === 'remote-sensing') {
       setCropClassDrawingModeActive(false);
       setIcDrawingModeActive(false);
       mapDrawOwnerRef.current = 'remote-sensing';
       setMapDrawOwner('remote-sensing');
     }
-  }, [expandedEnvSection]);
+  }, [expandedEnvSection, cancelCurrentDrawing]);
 
   // â”€â”€ Tree Detections (VHRTrees-style crown detection) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const treeDetectionsActive = expandedEnvSection === 'tree-detections';
@@ -14285,8 +14407,8 @@ export default function SatelliteIntelligence() {
     };
   }, [gcpPicking]);
 
-  // ── AI SAM Detection (interactive Segment Anything) ───────────────────────
-  const samActive = expandedEnvSection === 'sam-detection';
+  // ── AI SAM Detection (retired — kept dormant for overlay cleanup) ─────────
+  const samActive = false;
   const samAoiLayerOptions = useMemo(
     () => listSiAoiLayerModeOptions(customLayersForMapPaint),
     [customLayersForMapPaint],
@@ -14379,7 +14501,195 @@ export default function SatelliteIntelligence() {
     resolveAoi: resolveSamAoi,
   });
 
-  const agriFieldBoundaryActive = expandedEnvSection === 'agri-field-boundary';
+  // SegFormer should use the main drawn AOI from Edit tools first; fallback to SAM AOI.
+  const resolveSegFormerAoi = useCallback((): GeoJSON.Polygon | GeoJSON.MultiPolygon | GeoJSON.FeatureCollection | null => {
+    const drawn = getDrawnGeometry(drawnGeometryRef.current ?? drawnGeometry);
+    if (drawn && (drawn.type === 'Polygon' || drawn.type === 'MultiPolygon')) {
+      return drawn as GeoJSON.Polygon | GeoJSON.MultiPolygon;
+    }
+    const sam = resolveSamAoi();
+    if (sam?.features?.length) return sam;
+    return null;
+  }, [drawnGeometry, resolveSamAoi]);
+  const segFormerAoiReady = useMemo(() => Boolean(resolveSegFormerAoi()), [resolveSegFormerAoi]);
+
+  /** Live RS session values for SegFormer S2 capture (filled once sentinelFetchDate exists). */
+  const segFormerCaptureCtxRef = useRef({
+    sceneDate: localIsoDate(selectedDate),
+    wmsBaseUrl,
+    cloudCoverage,
+    layers: wmsLayers as Array<{ name: string; title: string }>,
+    providerLabel: remoteSensingProviderDef(remoteSensingProvider).label,
+  });
+
+  const captureSegFormerView = useCallback(
+    async (opts: {
+      bbox: [number, number, number, number];
+      aoi: GeoJSON.Polygon | GeoJSON.MultiPolygon | GeoJSON.FeatureCollection;
+      maxEdge?: number;
+    }) => {
+      const [west, south, east, north] = opts.bbox;
+      const ctx = segFormerCaptureCtxRef.current;
+      const sceneDate =
+        String(ctx.sceneDate || '').trim().slice(0, 10) ||
+        localIsoDate(selectedDate) ||
+        localIsoDate();
+      const providerLabel = ctx.providerLabel || remoteSensingProviderDef(remoteSensingProvider).label;
+      const maxEdge = opts.maxEdge ?? SEGFORMER_S2_CAPTURE_MAX_EDGE;
+
+      try {
+        const s2 = await fetchSegFormerSentinel2TrueColor({
+          bbox4326: [west, south, east, north],
+          sceneDate,
+          maxEdge,
+          cloudCoverage: ctx.cloudCoverage,
+          wmsBaseUrl: ctx.wmsBaseUrl || wmsBaseUrl,
+          availableLayers: ctx.layers?.length ? ctx.layers : wmsLayers,
+        });
+        if (s2) {
+          return {
+            image: s2.image,
+            bbox: s2.bbox,
+            imageSource: 'sentinel-2' as const,
+            captureNote: `Scene ${s2.sceneDate} · ${s2.layer}`,
+            sceneDate: s2.sceneDate || sceneDate,
+            provider: providerLabel,
+          };
+        }
+      } catch (err) {
+        if ((err as Error)?.name === 'AbortError') throw err;
+        /* fall through to Mapbox */
+      }
+
+      const shot = await captureBasemapForGeoref(
+        {
+          nw: [west, north],
+          ne: [east, north],
+          se: [east, south],
+          sw: [west, south],
+        },
+        { maxEdge },
+      );
+      if (!shot) return null;
+      return {
+        image: shot.url,
+        bbox: [shot.bounds.west, shot.bounds.south, shot.bounds.east, shot.bounds.north] as [
+          number,
+          number,
+          number,
+          number,
+        ],
+        imageSource: 'basemap' as const,
+        captureNote:
+          'Sentinel-2 True Color GetMap unavailable — using Mapbox satellite basemap instead.',
+        sceneDate,
+        provider: 'Mapbox basemap',
+      };
+    },
+    [captureBasemapForGeoref, selectedDate, wmsBaseUrl, wmsLayers, remoteSensingProvider],
+  );
+
+  const captureSegFormerMultiDateStack = useCallback(
+    async (opts: {
+      bbox: [number, number, number, number];
+      aoi: GeoJSON.Polygon | GeoJSON.MultiPolygon | GeoJSON.FeatureCollection;
+      primarySceneDate: string;
+    }) => {
+      const ctx = segFormerCaptureCtxRef.current;
+      const stack = await fetchSegFormerSentinel2MultiDateStack({
+        bbox4326: opts.bbox,
+        primarySceneDate: opts.primarySceneDate,
+        primaryMaxEdge: SEGFORMER_FIELD_S2_CAPTURE_MAX_EDGE,
+        cloudCoverage: ctx.cloudCoverage,
+        wmsBaseUrl: ctx.wmsBaseUrl || wmsBaseUrl,
+        availableLayers: ctx.layers?.length ? ctx.layers : wmsLayers,
+      });
+      if (!stack) return null;
+      return {
+        dates: stack.dates,
+        primary: {
+          image: stack.primary.image,
+          bbox: stack.primary.bbox,
+          imageSource: 'sentinel-2' as const,
+          sceneDate: stack.primary.sceneDate,
+          captureNote: `Field pipeline · ${stack.dates.length} S2 dates · ${stack.primary.layer}`,
+        },
+      };
+    },
+    [wmsBaseUrl, wmsLayers],
+  );
+
+  const SEGFORMER_UPLOADED_RASTER_LAYER_ID = 'segformer-uploaded-raster';
+  const handleSegFormerUploadedRasterReady = useCallback(
+    (config: ServerRasterLayerConfig) => {
+      registerServerRaster(config);
+      const b = config.bboxWgs84;
+      const coordinates: RasterMapCoordinates = [
+        [b.west, b.north],
+        [b.east, b.north],
+        [b.east, b.south],
+        [b.west, b.south],
+      ];
+      const footprint = siRasterExtentFootprint(coordinates);
+      setCustomLayers(prev => prev.filter(l => l.id !== SEGFORMER_UPLOADED_RASTER_LAYER_ID));
+      registerImportedCustomLayer(
+        createSiRasterImportLayer({
+          id: SEGFORMER_UPLOADED_RASTER_LAYER_ID,
+          name: `SegFormer · ${config.name}`,
+          geojson: footprint,
+          source: 'api',
+          sourceUrl: config.wmsUrl,
+          format: 'COG',
+          crs: config.crs,
+          widthPx: config.widthPx,
+          heightPx: config.heightPx,
+          bands: config.bands,
+          resolutionMeters: config.resolutionMeters ?? undefined,
+          acquisitionDate: config.acquisitionDate ?? undefined,
+          sensor: config.sensor ?? undefined,
+          rasterServiceId: config.rasterId,
+          wmsUrl: config.wmsUrl,
+          wmtsUrl: config.wmtsUrl,
+          raster: { url: '', coordinates },
+          arcgisRasterTiles: { tiles: config.tiles, tileSize: config.tileSize },
+          ephemeral: true,
+        }),
+      );
+      const mapInstance = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+      if (mapInstance && typeof mapInstance.fitBounds === 'function') {
+        mapInstance.fitBounds(
+          [
+            [b.west, b.south],
+            [b.east, b.north],
+          ],
+          { padding: 60, duration: 800 },
+        );
+      }
+    },
+    [registerImportedCustomLayer, registerServerRaster],
+  );
+
+  const segFormerDetection = useSegFormerDetection({
+    captureView: captureSegFormerView,
+    resolveAoi: resolveSegFormerAoi,
+    existingMapRasters: imageClassificationExistingRasters,
+    onUploadedRasterReady: handleSegFormerUploadedRasterReady,
+    defaultProvider: remoteSensingProviderDef(remoteSensingProvider).label,
+    captureMultiDateStack: captureSegFormerMultiDateStack,
+  });
+
+  /** Georeferenced SegFormer mask_png ("AI Detection Result") when Detect returns a mask. */
+  const segFormerMaskOverlay = useMemo(() => {
+    const mask = segFormerDetection.maskPng?.trim();
+    const bbox = segFormerDetection.resultBbox;
+    if (!mask || !bbox) return null;
+    const [w, s, e, n] = bbox;
+    if (![w, s, e, n].every(Number.isFinite) || e <= w || n <= s) return null;
+    const url = mask.startsWith('data:') ? mask : `data:image/png;base64,${mask}`;
+    return { url, coordinates: bboxToRgCoordinates(bbox) };
+  }, [segFormerDetection.maskPng, segFormerDetection.resultBbox]);
+
+  const agriFieldBoundaryActive = false;
   const resolveFieldBoundaryAoi = useCallback((): GeoJSON.Geometry | GeoJSON.FeatureCollection | null => {
     const drawn = getDrawnGeometry(drawnGeometry);
     if (drawn) return drawn;
@@ -15493,6 +15803,9 @@ export default function SatelliteIntelligence() {
         'si-multi-aoi-point',
       );
     }
+    if (segFormerDetection.overlayVisible && segFormerDetection.geojson?.features?.length) {
+      ids.push(SEGFORMER_DETECTION_FILL_ID, SEGFORMER_DETECTION_OUTLINE_ID);
+    }
     return ids;
   }, [
     isMapStyleReady,
@@ -15502,6 +15815,8 @@ export default function SatelliteIntelligence() {
     drawnGeometry,
     aoiFields.length,
     multiAoiItems.length,
+    segFormerDetection.overlayVisible,
+    segFormerDetection.geojson,
   ]);
 
   const satelliteQueryableLayerIdsRef = useRef(satelliteQueryableLayerIds);
@@ -15618,7 +15933,7 @@ export default function SatelliteIntelligence() {
       clickTarget &&
       typeof clickTarget.closest === 'function' &&
       clickTarget.closest(
-        '.si-sat-ctx-dock, .si-sat-ctx-panel, .si-sat-ctx-rail, .si-grb-floatbar, .mapboxgl-ctrl, [data-map-overlay-isolate]',
+        '.si-sat-ctx-dock, .si-sat-ctx-panel, .si-sat-ctx-rail, .si-grb-floatbar, .si-map-draw-widget, .mapboxgl-ctrl, [data-map-overlay-isolate]',
       )
     ) {
       return;
@@ -15967,7 +16282,7 @@ export default function SatelliteIntelligence() {
           setPolygonRing([]);
           setPolygonClosingSnap(false);
           setDrawAssistHint('');
-          setMapDrawTool('select');
+          finishSketchExitDrawingMode();
           return;
         }
       }
@@ -16013,14 +16328,14 @@ export default function SatelliteIntelligence() {
       commitUserGeometry(feature);
       setPolylineStart(null);
       setPointerLngLat(null);
-      setMapDrawTool('select');
+      finishSketchExitDrawingMode();
       return;
     }
 
     if (mapDrawTool === 'point') {
       if (!isSketchDrawingActiveRef.current) return;
       commitUserGeometry(createPointFeature(lng, lat));
-      setMapDrawTool('select');
+      finishSketchExitDrawingMode();
     }
   };
 
@@ -16045,7 +16360,7 @@ export default function SatelliteIntelligence() {
     setPolygonRing([]);
     setPolygonClosingSnap(false);
     setDrawAssistHint('');
-    setMapDrawTool('select');
+    finishSketchExitDrawingMode();
   };
 
   const draftDrawGeoJson = useMemo(() => {
@@ -16158,6 +16473,16 @@ export default function SatelliteIntelligence() {
     if (!features.length) return null;
     return { type: 'FeatureCollection', features };
   }, [mapDrawTool, polygonRing, polylineStart, pointerLngLat, rectCirclePreview, polygonClosingSnap, circleRefineDraft, gisSelectionActive, gisLassoPreviewRing]);
+
+  // Hide the committed AOI while a new draft shape is being actively drawn so the
+  // old geometry doesn't visually conflict with the live preview (e.g. yellow circle
+  // appearing behind the new cyan circle drag).
+  const isActivelyDrawingNewShape = Boolean(
+    rectCirclePreview ||
+    circleRefineDraft ||
+    (mapDrawTool === 'polygon' && polygonRing.length > 0) ||
+    (mapDrawTool === 'polyline' && polylineStart),
+  );
 
   const editHandlesGeoJson = useMemo(() => {
     if (mapDrawTool !== 'select' || !showEditHandles) return null;
@@ -16383,7 +16708,6 @@ export default function SatelliteIntelligence() {
           remoteSensingProvider,
           remoteSensingCollection,
         ) ||
-        pickDefaultSentinelWmsLayer(wmsLayers) ||
         remoteSensingLayerOptions[0]!.id
       )
     })
@@ -16411,21 +16735,35 @@ export default function SatelliteIntelligence() {
     [wmsLayers],
   );
 
-  const defaultWmsLayerName = useMemo(
-    () => pickDefaultSentinelWmsLayer(wmsLayers) || 'NDVI',
-    [wmsLayers],
-  );
+  const defaultWmsLayerName = useMemo(() => {
+    const fromProfile = pickDefaultLayerForProviderProfile(
+      remoteSensingLayerOptions,
+      remoteSensingProvider,
+      remoteSensingCollection,
+    );
+    if (fromProfile) return fromProfile;
+    if (remoteSensingLayerOptions[0]?.id) return remoteSensingLayerOptions[0].id;
+    return pickDefaultSentinelWmsLayer(wmsLayers) || 'NDVI';
+  }, [remoteSensingLayerOptions, remoteSensingProvider, remoteSensingCollection, wmsLayers]);
 
   const activeWmsLayer = useMemo(() => {
     const t = wmsLayer.trim();
-    if (t && remoteSensingLayerOptions.some(l => l.id === t)) return t;
-    if (defaultWmsLayerName) return defaultWmsLayerName;
-    return selectedIndex;
+    if (t && remoteSensingLayerOptions.some(l => l.id === t || l.id.toUpperCase() === t.toUpperCase())) {
+      return (
+        remoteSensingLayerOptions.find(l => l.id === t || l.id.toUpperCase() === t.toUpperCase())?.id ?? t
+      );
+    }
+    return defaultWmsLayerName || selectedIndex;
   }, [wmsLayer, remoteSensingLayerOptions, selectedIndex, defaultWmsLayerName]);
 
   const wmsLayerSelectValue = useMemo(() => {
     const t = wmsLayer.trim();
-    if (t && remoteSensingLayerOptions.some(l => l.id === t)) return t;
+    if (t && remoteSensingLayerOptions.some(l => l.id === t || l.id.toUpperCase() === t.toUpperCase())) {
+      return (
+        remoteSensingLayerOptions.find(l => l.id === t || l.id.toUpperCase() === t.toUpperCase())?.id ?? t
+      );
+    }
+    // Never fall back to a Sentinel-2 WMS name (e.g. NDVI) when the Collection has its own catalogue.
     return defaultWmsLayerName;
   }, [wmsLayer, remoteSensingLayerOptions, defaultWmsLayerName]);
 
@@ -16449,20 +16787,30 @@ export default function SatelliteIntelligence() {
   }, [customLayers, arcgisViewportRevision]);
   const agroStructuresLayerAoiMask = useMemo(() => {
     if (!agroStructuresLayer) return null;
-    if (aoiMaskBuilderSettings.enabled) {
-      return buildAgroStructuresLayerAoiMask(agroStructuresLayer?.geojson ?? null);
-    }
-    if (freezeViewportPipeline && agroStructuresLayer?.geojson) {
-      return buildAgroStructuresLayerAoiMask(agroStructuresLayer.geojson);
-    }
-    if (
+    const fullGeo =
+      Array.isArray(agroStructuresLayer.geojson?.features) && agroStructuresLayer.geojson.features.length > 0
+        ? agroStructuresLayer.geojson
+        : null;
+    const viewportGeo =
       Array.isArray(agroStructuresViewportGeoJson?.features) &&
       agroStructuresViewportGeoJson.features.length > 0
-    ) {
-      return buildAgroStructuresLayerAoiMask(agroStructuresViewportGeoJson);
+        ? agroStructuresViewportGeoJson
+        : null;
+    // Prefer full layer, else live viewport — never drop viewport when Layers AOI is on
+    // (empty layer.geojson previously wiped field pickers + Word map atlas geometry).
+    const bestGeo = fullGeo ?? viewportGeo;
+    if (!bestGeo) return null;
+    if (aoiMaskBuilderSettings.enabled) {
+      return buildAgroStructuresLayerAoiMask(bestGeo);
     }
-    if (isWmsOverlayVisible && activeWmsLayer && agroStructuresLayer?.geojson) {
-      return buildAgroStructuresLayerAoiMask(agroStructuresLayer.geojson);
+    if (freezeViewportPipeline && fullGeo) {
+      return buildAgroStructuresLayerAoiMask(fullGeo);
+    }
+    if (viewportGeo) {
+      return buildAgroStructuresLayerAoiMask(viewportGeo);
+    }
+    if (isWmsOverlayVisible && activeWmsLayer && fullGeo) {
+      return buildAgroStructuresLayerAoiMask(fullGeo);
     }
     return null;
   }, [
@@ -16495,6 +16843,14 @@ export default function SatelliteIntelligence() {
     const hasFullGeo =
       Array.isArray(layer.geojson?.features) && layer.geojson.features.length > 0;
     if (hasFullGeo) return layer;
+    // Prefer paint-path geojson (viewport snapshot) so clip matches visible outlines.
+    const paintLayer = customLayersForMapPaint.find(l => String(l.id) === String(layer.id));
+    if (
+      Array.isArray(paintLayer?.geojson?.features) &&
+      paintLayer!.geojson!.features!.length > 0
+    ) {
+      return { ...layer, geojson: paintLayer!.geojson };
+    }
     // Keep viewport polygons while Show on map is on — dropping them emptied the
     // clip mask and forced a long cold WMS rebuild after enable.
     if (layer.viewportStreaming && layer.source === 'arcgis') {
@@ -16504,6 +16860,7 @@ export default function SatelliteIntelligence() {
     return layer;
   }, [
     aoiMaskBuilderBaseLayer,
+    customLayersForMapPaint,
     arcgisViewportRevision,
   ]);
   const aoiMaskBuilderSelectedKeys = useMemo(() => {
@@ -16568,12 +16925,14 @@ export default function SatelliteIntelligence() {
       pinKey: aoiLayerModeSettingsPinKey,
       mask: aoiMaskBuilderWarmMask,
     };
+    setAoiLayerModePinRevision(v => v + 1);
   }, [aoiMaskBuilderWarmMask, aoiLayerModeSettingsPinKey, aoiMaskBuilderSettings.enabled]);
 
   useEffect(() => {
     const pin = aoiLayerModePinnedClipRef.current;
     if (!pin || pin.pinKey === aoiLayerModeSettingsPinKey) return;
     aoiLayerModePinnedClipRef.current = null;
+    setAoiLayerModePinRevision(v => v + 1);
   }, [aoiLayerModeSettingsPinKey]);
 
   const aoiLayerModeActiveMask = useMemo(() => {
@@ -16586,12 +16945,25 @@ export default function SatelliteIntelligence() {
       aoiLayerModePinnedClipRef.current = { pinKey: aoiLayerModeSettingsPinKey, mask: aoiMaskBuilderMask };
       return aoiMaskBuilderMask;
     }
+    if (aoiMaskBuilderWarmMask?.features?.length) {
+      aoiLayerModePinnedClipRef.current = { pinKey: aoiLayerModeSettingsPinKey, mask: aoiMaskBuilderWarmMask };
+      return aoiMaskBuilderWarmMask;
+    }
     return pin?.pinKey === aoiLayerModeSettingsPinKey ? pin.mask : null;
   }, [
     aoiMaskBuilderSettings.enabled,
     aoiMaskBuilderMask,
+    aoiMaskBuilderWarmMask,
     aoiLayerModeSettingsPinKey,
+    aoiLayerModePinRevision,
   ]);
+  // Freeze ArcGIS viewport sync only after Layers has a successful clip pin — empty pin
+  // must keep seeding via syncArcGisViewportLayersGeoJson({ force: true }) / live fetch.
+  const layersAoiViewportFrozen = shouldFreezeLayersAoiAfterClipPin(
+    aoiMaskBuilderSettings.enabled,
+    Boolean(aoiLayerModeActiveMask?.features?.length),
+  );
+  aoiLayerModeWmsActiveRef.current = layersAoiViewportFrozen;
   const aoiMaskBuilderMaskKey = useMemo(
     () =>
       siAoiMaskBuilderSignature(
@@ -16642,11 +17014,32 @@ export default function SatelliteIntelligence() {
     [drawnAoiClipCollection],
   );
   const hasDrawnAoiClip = Boolean(drawnAoiClipCollection?.features?.length);
+
+  /** Unified AOI priority: Drawn sketch > Layers mask (when enabled) > Agro fallback. */
+  const activeAoi = useMemo(
+    () =>
+      resolveSiActiveAoi({
+        drawnClip: drawnAoiClipCollection,
+        layersEnabled: aoiMaskBuilderSettings.enabled,
+        layersMask: aoiLayerModeActiveMask ?? aoiMaskBuilderWarmMask ?? aoiMaskBuilderMask,
+        layersPinKey: aoiLayerModeSettingsPinKey,
+        agroMask: agroStructuresLayerAoiMask,
+      }),
+    [
+      drawnAoiClipCollection,
+      aoiMaskBuilderSettings.enabled,
+      aoiLayerModeActiveMask,
+      aoiMaskBuilderWarmMask,
+      aoiMaskBuilderMask,
+      aoiLayerModeSettingsPinKey,
+      agroStructuresLayerAoiMask,
+    ],
+  );
+
   const sentinelDrawIndexActive = isWmsOverlayVisible;
   const sentinelLayerAoiIndexActive = aoiMaskBuilderSettings.enabled;
 
   useEffect(() => {
-    aoiLayerModeWmsActiveRef.current = aoiMaskBuilderSettings.enabled;
     aoiMaskBuilderSourceLayerIdRef.current = aoiMaskBuilderSettings.sourceLayerId;
     const layerAoiWarmNow =
       Boolean(aoiMaskBuilderSettings.sourceLayerId) && Boolean(aoiMaskBuilderWarmMask?.features?.length);
@@ -16698,7 +17091,7 @@ export default function SatelliteIntelligence() {
    */
   const sentinelHubWmsTileClipSource = useMemo(() => {
     if (aoiMaskBuilderSettings.enabled) {
-      return aoiLayerModeActiveMask ?? null;
+      return aoiLayerModeActiveMask ?? aoiMaskBuilderWarmMask ?? aoiMaskBuilderMask ?? null;
     }
     if (drawnAoiClipCollection?.features?.length) {
       return drawnAoiClipCollection;
@@ -16710,6 +17103,8 @@ export default function SatelliteIntelligence() {
   }, [
     aoiMaskBuilderSettings.enabled,
     aoiLayerModeActiveMask,
+    aoiMaskBuilderWarmMask,
+    aoiMaskBuilderMask,
     drawnAoiClipCollection,
     freezeViewportPipeline,
     agroStructuresLayerAoiMask,
@@ -16773,8 +17168,19 @@ export default function SatelliteIntelligence() {
     agroStructuresLayerAoiMask,
   ]);
   const hasLayerRasterClipAoi = useMemo(
-    () => aoiMaskBuilderSettings.enabled && Boolean(aoiLayerModeActiveMask?.features?.length),
-    [aoiMaskBuilderSettings.enabled, aoiLayerModeActiveMask],
+    () =>
+      aoiMaskBuilderSettings.enabled &&
+      Boolean(
+        aoiLayerModeActiveMask?.features?.length ||
+          aoiMaskBuilderWarmMask?.features?.length ||
+          aoiMaskBuilderMask?.features?.length,
+      ),
+    [
+      aoiMaskBuilderSettings.enabled,
+      aoiLayerModeActiveMask,
+      aoiMaskBuilderWarmMask,
+      aoiMaskBuilderMask,
+    ],
   );
   const sentinelDrawWmsOnMap = sentinelDrawIndexActive && hasDrawRasterClipAoi;
   const sentinelLayerAoiWmsOnMap = sentinelLayerAoiIndexActive && hasLayerRasterClipAoi;
@@ -16819,6 +17225,20 @@ export default function SatelliteIntelligence() {
     if (!drawnAoiClipCollection?.features?.length) return;
     sentinelWmsTilesSyncedRef.current = {};
   }, [drawnAoiClipCollection, drawnAoiClipKey]);
+
+  /**
+   * Invalidate ping-pong applied URLs only when Layers clip pin / geometry key changes.
+   * Show-on-map enable alone must not wipe warm tile state (soft reveal path).
+   */
+  useEffect(() => {
+    if (activeAoi.source !== 'layers' || !activeAoi.geometry) return;
+    if (layerAoiPingPongInvalidateKeyRef.current === activeAoi.key) return;
+    layerAoiPingPongInvalidateKeyRef.current = activeAoi.key;
+    layerAoiPingPongSyncKeyRef.current = '';
+    const pingPong = layerAoiWmsPingPongRef.current;
+    pingPong.appliedUrls.clear();
+    pingPong.appliedBounds.clear();
+  }, [activeAoi.key, activeAoi.source, activeAoi.geometry]);
 
   useEffect(() => {
     if (!drawnAoiClipCollection?.features?.length) return;
@@ -16936,11 +17356,28 @@ export default function SatelliteIntelligence() {
         displayMode: 'transparent-outside',
         liveUpdate: true,
       };
+      // Seed viewport geojson from cache before freezing live updates, so clip + paint
+      // have polygons on the same tick as Show on map.
+      if (normalized.enabled) {
+        const displayBbox =
+          liveViewportDisplayBBoxRef.current ?? captureLiveViewportExtent();
+        if (displayBbox) {
+          syncArcGisViewportLayersGeoJson(displayBbox, { force: true });
+        }
+      }
       setAoiMaskBuilderSettings(normalized);
       persistSiAoiMaskBuilderSettings(normalized, {
         storageKey: siScope.scopedStorageKey(SI_AOI_MASK_BUILDER_LS_KEY),
       });
       if (normalized.enabled) {
+        // Ensure the selected RS layer (e.g. NDVI) is the active WMS layer immediately.
+        const selected =
+          String(wmsLayerSelectValue || wmsLayer || defaultWmsLayerName || '').trim() ||
+          pickDefaultSentinelWmsLayer(wmsLayers) ||
+          'NDVI';
+        if (selected) {
+          setWmsLayer(prev => (prev === selected ? prev : selected));
+        }
         let pinMask = aoiMaskBuilderWarmMask ?? aoiMaskBuilderMask;
         if (!pinMask?.features?.length && aoiMaskBuilderBaseLayer?.viewportStreaming) {
           const cache = arcgisViewportCacheByLayerIdRef.current.get(aoiMaskBuilderBaseLayer.id);
@@ -16953,25 +17390,78 @@ export default function SatelliteIntelligence() {
             );
           }
         }
+        if (!pinMask?.features?.length) {
+          const viewport = aoiMaskBuilderBaseLayer
+            ? arcgisViewportGeoJsonByLayerIdRef.current.get(aoiMaskBuilderBaseLayer.id)
+            : null;
+          if (viewport?.features?.length && aoiMaskBuilderBaseLayer) {
+            pinMask = getCachedSiAoiLayerModeClipMask(
+              { ...aoiMaskBuilderBaseLayer, geojson: viewport },
+              normalized,
+              aoiMaskBuilderSelectedKeys,
+            );
+          }
+        }
         if (pinMask?.features?.length) {
           aoiLayerModePinnedClipRef.current = {
             pinKey: siAoiLayerModeSettingsPinKey(normalized, aoiMaskBuilderSelectedKeys, aoiMaskBuilderBaseLayer),
             mask: pinMask,
           };
         }
+        // Soft enable: keep warm WMS chunk cache + ping-pong URLs; reveal opacity when ready.
+        // (Empty-chunk cache hits are rejected in getCachedSentinelHubWmsDisplayChunks.)
+        setAoiLayerModePinRevision(v => v + 1);
+        // Hold sources so mount gate matches Draw’s “geometry exists → load tiles”.
         setSentinelWmsSourcesHeld(true);
-        // Instant reveal when warm tiles already match — avoid cold ping-pong / idle wait.
+        const opacity = siAoiMaskBuilderDisplayOpacityMultiplier(normalized.displayMode);
         const map = mapRef.current?.getMap?.() ?? mapRef.current;
         const stack = layerAoiWmsStackRef.current;
         if (map?.isStyleLoaded?.() && stack?.displayChunks?.length) {
-          revealSiSentinelAoiWmsPingPongStack(map, stack, layerAoiWmsPingPongRef.current, {
+          // Allow layer-order pass on enable so rasters sit under AOI outlines.
+          aoiLayerModeWmsActiveRef.current = false;
+          const agroSid = siSafeMapboxLayerId(AGRO_STRUCTURES_PRIMARY_LAYER_ID);
+          const aoiSourceId = String(normalized.sourceLayerId || '').trim();
+          const aoiSid = aoiSourceId ? siSafeMapboxLayerId(aoiSourceId) : '';
+          const aoiLineId = aoiSid ? `${aoiSid}-line` : '';
+          const agroLineId = `${agroSid}-line`;
+          const beforeLayerId =
+            (aoiLineId && map.getLayer(aoiLineId) ? aoiLineId : undefined) ||
+            (map.getLayer(agroLineId) ? agroLineId : undefined);
+          const runtime = layerAoiWmsPingPongRef.current;
+          ensureSiSentinelAoiWmsPingPongStackOnMap(
+            map,
+            stack,
+            effectiveSentinelWmsMinZoom,
+            runtime,
+            { beforeLayerId },
+          );
+          // Warm stack → visibility/opacity only; cold first paint falls back to sync.
+          revealSiSentinelAoiWmsPingPongStack(map, stack, runtime, {
             visible: true,
-            opacity: siAoiMaskBuilderDisplayOpacityMultiplier(normalized.displayMode),
+            opacity,
           });
+          syncAnalysisMapLayerOrder();
+          if (aoiLayerModePinnedClipRef.current?.mask?.features?.length) {
+            aoiLayerModeWmsActiveRef.current = true;
+          }
         }
       }
     },
-    [siScope, aoiMaskBuilderMask, aoiMaskBuilderWarmMask, aoiMaskBuilderSelectedKeys, aoiMaskBuilderBaseLayer],
+    [
+      siScope,
+      aoiMaskBuilderMask,
+      aoiMaskBuilderWarmMask,
+      aoiMaskBuilderSelectedKeys,
+      aoiMaskBuilderBaseLayer,
+      captureLiveViewportExtent,
+      syncArcGisViewportLayersGeoJson,
+      syncAnalysisMapLayerOrder,
+      effectiveSentinelWmsMinZoom,
+      wmsLayer,
+      wmsLayerSelectValue,
+      defaultWmsLayerName,
+      wmsLayers,
+    ],
   );
 
   const handleIndexShowOnMapChange = useCallback(
@@ -16998,15 +17488,28 @@ export default function SatelliteIntelligence() {
     if (!aoiMaskBuilderSettings.enabled) return;
     const layer = customLayers.find(l => String(l.id) === aoiMaskBuilderSettings.sourceLayerId);
     if (!layer?.viewportStreaming) return;
-    // Skip refetch when pin already has clip geometry — refetch overwrites warm tiles and delays Show on map.
+    // Keep seeding viewport geojson until the first successful Layers clip pin.
+    // Freezing too early left cold enable with an empty warm stack and no raster.
     const pin = aoiLayerModePinnedClipRef.current;
     if (pin?.mask?.features?.length) return;
-    void fetchArcGisViewportLayersForExtent();
+    void (async () => {
+      await fetchArcGisViewportLayersForExtent();
+      // Pin may have landed while the fetch ran — stop if so.
+      if (aoiLayerModePinnedClipRef.current?.mask?.features?.length) return;
+      const displayBbox = liveViewportDisplayBBoxRef.current ?? captureLiveViewportExtent();
+      if (displayBbox) {
+        syncArcGisViewportLayersGeoJson(displayBbox, { force: true });
+      }
+    })();
   }, [
     aoiMaskBuilderSettings.enabled,
     aoiMaskBuilderSettings.sourceLayerId,
+    aoiLayerModeActiveMask,
+    aoiLayerModePinRevision,
     customLayers,
     fetchArcGisViewportLayersForExtent,
+    captureLiveViewportExtent,
+    syncArcGisViewportLayersGeoJson,
   ]);
 
   const handleCropAlertSettingsChange = useCallback((next: CropAlertEngineSettings) => {
@@ -17141,18 +17644,68 @@ export default function SatelliteIntelligence() {
     wmsDate,
   ]);
 
-  const chirpsPrecipActive = isChirpsPrecipLayerId(wmsLayer);
-  const chirpsAoiGeometry = useMemo(
+  // Keep SegFormer S2 capture aligned with the live Remote Sensing scene / WMS session.
+  segFormerCaptureCtxRef.current = {
+    sceneDate: sentinelFetchDate,
+    wmsBaseUrl,
+    cloudCoverage,
+    layers: wmsLayers,
+    providerLabel: remoteSensingProviderDef(remoteSensingProvider).label,
+  };
+
+  const segFormerRsSession = useMemo(() => {
+    const providerDef = remoteSensingProviderDef(remoteSensingProvider);
+    const collectionDef =
+      remoteSensingCollectionsForProvider(remoteSensingProvider).find(
+        c => c.id === remoteSensingCollection,
+      ) ?? null;
+    const opticalS2 = /sentinel-2/i.test(remoteSensingCollection);
+    return {
+      providerId: remoteSensingProvider,
+      providerLabel: providerDef.label,
+      collectionId: remoteSensingCollection,
+      collectionLabel: collectionDef?.label || remoteSensingCollection,
+      layerId: activeWmsLayer || wmsLayer || '—',
+      sceneDate: sentinelFetchDate || localIsoDate(selectedDate),
+      cloudCoverage,
+      resolutionLabel: opticalS2 ? '~10 m' : null,
+      aoiReady: segFormerAoiReady,
+    };
+  }, [
+    remoteSensingProvider,
+    remoteSensingCollection,
+    activeWmsLayer,
+    wmsLayer,
+    sentinelFetchDate,
+    selectedDate,
+    cloudCoverage,
+    segFormerAoiReady,
+  ]);
+
+  const chirpsPrecipActive = isChirpsPrecipLayerId(wmsLayerSelectValue || wmsLayer);
+  const collectionIndexAoiGeometry = useMemo(
     () =>
+      unwrapPolygonGeometry(effectiveSentinelAoiSource) ??
       unwrapPolygonGeometry(drawnAoiClipCollection) ??
       unwrapPolygonGeometry(drawnGeometry) ??
+      unwrapPolygonGeometry(primaryLayerSourceMask) ??
+      unwrapPolygonGeometry(aoiLayerModeActiveMask) ??
+      unwrapPolygonGeometry(agroStructuresLayerAoiMask) ??
       null,
-    [drawnAoiClipCollection, drawnGeometry],
+    [
+      effectiveSentinelAoiSource,
+      drawnAoiClipCollection,
+      drawnGeometry,
+      primaryLayerSourceMask,
+      aoiLayerModeActiveMask,
+      agroStructuresLayerAoiMask,
+    ],
   );
+  const chirpsAoiGeometry = collectionIndexAoiGeometry;
   const chirpsPrecip = useChirpsPrecipitation({
     geometry: chirpsAoiGeometry,
-    // Keep rainfall on the map whenever PRECIP is selected + Show on map — even if RS panel closes.
-    enabled: chirpsPrecipActive && isWmsOverlayVisible,
+    // Load as soon as PRECIP is selected; map visibility is gated separately.
+    enabled: chirpsPrecipActive,
     sceneDate: imageryDateAutoFollow ? sentinelFetchDate : wmsDate || sentinelFetchDate,
     seriesStart: timeSeriesStart,
     seriesEnd: timeSeriesEnd,
@@ -17166,7 +17719,326 @@ export default function SatelliteIntelligence() {
   useEffect(() => {
     if (!chirpsPrecipActive) return;
     if (!isWmsOverlayVisible) setIsWmsOverlayVisible(true);
+    setSentinelWmsSourcesHeld(true);
   }, [chirpsPrecipActive]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Surface CHIRPS load status on the RS panel and keep heat visible after success.
+  useEffect(() => {
+    if (!chirpsPrecipActive) return;
+    if (chirpsPrecip.status === 'loading') {
+      setFieldAnalysisStatus('Loading CHIRPS rainfall for AOI…');
+      return;
+    }
+    if (chirpsPrecip.status === 'error' && chirpsPrecip.error) {
+      setFieldAnalysisStatus(chirpsPrecip.error);
+      return;
+    }
+    if (chirpsPrecip.status === 'done' && chirpsPrecip.raster) {
+      const meanPart =
+        chirpsPrecip.raster.stats?.mean != null
+          ? ` · mean ${chirpsPrecip.raster.stats.mean.toFixed(1)} mm`
+          : '';
+      const note = chirpsPrecip.error ? ` · ${chirpsPrecip.error}` : '';
+      setFieldAnalysisStatus(`CHIRPS rainfall on map (${chirpsPrecip.raster.date}${meanPart})${note}`);
+    }
+  }, [
+    chirpsPrecipActive,
+    chirpsPrecip.status,
+    chirpsPrecip.error,
+    chirpsPrecip.raster,
+  ]);
+
+  // Keep CHIRPS rainfall raster above custom GIS / AOI fills.
+  useEffect(() => {
+    if (!chirpsPrecipActive || !isWmsOverlayVisible || !chirpsPrecip.raster) return;
+    const map = mapRef.current?.getMap?.() ?? mapRef.current;
+    if (!map || typeof map.moveLayer !== 'function') return;
+    const id = 'chirps-precip-raster';
+    if (!map.getLayer?.(id)) return;
+    try {
+      map.moveLayer(id);
+    } catch {
+      /* style may be swapping */
+    }
+  }, [
+    chirpsPrecipActive,
+    isWmsOverlayVisible,
+    chirpsPrecip.raster,
+    customLayersMapEpoch,
+    customLayersCanvasSig,
+  ]);
+
+  const demIndexLayerId = wmsLayerSelectValue || wmsLayer;
+  const demCollectionActive = isDemCollectionIndexId(demIndexLayerId);
+  const demCollectionOverlay = useCollectionDemOverlay({
+    geometry: collectionIndexAoiGeometry,
+    indexId: demIndexLayerId,
+    enabled: demCollectionActive,
+  });
+
+  // Selecting DEM catalogue index auto-enables Show on map (same as CHIRPS).
+  useEffect(() => {
+    if (!demCollectionActive) return;
+    if (!isWmsOverlayVisible) setIsWmsOverlayVisible(true);
+    setSentinelWmsSourcesHeld(true);
+  }, [demCollectionActive]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!demCollectionActive) return;
+    if (!collectionIndexAoiGeometry) {
+      setFieldAnalysisStatus('Draw an AOI (Edit) or select Layers AOI, then Slope will render on the map.');
+      return;
+    }
+    if (demCollectionOverlay.status === 'loading') {
+      setFieldAnalysisStatus(`Loading ${demCollectionOverlay.indexId || 'DEM'} for AOI…`);
+      return;
+    }
+    if (demCollectionOverlay.status === 'error' && demCollectionOverlay.error) {
+      setFieldAnalysisStatus(demCollectionOverlay.error);
+      return;
+    }
+    if (demCollectionOverlay.status === 'done' && demCollectionOverlay.overlay) {
+      const o = demCollectionOverlay.overlay;
+      const meanPart =
+        o.mean != null
+          ? ` · mean ${o.mean.toFixed(1)}${o.unit ? ` ${o.unit}` : ''}`
+          : '';
+      setFieldAnalysisStatus(`${o.label} on map (AOI DEM)${meanPart}`);
+    }
+  }, [
+    demCollectionActive,
+    collectionIndexAoiGeometry,
+    demCollectionOverlay.status,
+    demCollectionOverlay.error,
+    demCollectionOverlay.overlay,
+    demCollectionOverlay.indexId,
+  ]);
+
+  // Keep DEM index raster above custom GIS layers (AOI polygons) so colours stay visible.
+  useEffect(() => {
+    if (!demCollectionActive || !isWmsOverlayVisible || !demCollectionOverlay.overlay) return;
+    const map = mapRef.current?.getMap?.() ?? mapRef.current;
+    if (!map || typeof map.moveLayer !== 'function') return;
+    const id = 'collection-dem-index-raster';
+    if (!map.getLayer?.(id)) return;
+    try {
+      map.moveLayer(id);
+    } catch {
+      /* style may be swapping */
+    }
+  }, [
+    demCollectionActive,
+    isWmsOverlayVisible,
+    demCollectionOverlay.overlay,
+    customLayersMapEpoch,
+    customLayersCanvasSig,
+  ]);
+
+  // Keep SegFormer detection polygons / mask above AOI fills (same raise-to-top pattern as DEM/CHIRPS).
+  useEffect(() => {
+    if (!segFormerDetection.overlayVisible) return;
+    const hasPolygons = Boolean(segFormerDetection.geojson?.features?.length);
+    const hasMask = Boolean(segFormerMaskOverlay);
+    if (!hasPolygons && !hasMask) return;
+    const map = mapRef.current?.getMap?.() ?? mapRef.current;
+    if (!map || typeof map.moveLayer !== 'function') return;
+    const raise = () => {
+      // Mask under polygons so vector outlines stay readable.
+      for (const id of [
+        ...(hasMask ? [SEGFORMER_MASK_LAYER_ID] : []),
+        ...(hasPolygons ? [SEGFORMER_DETECTION_FILL_ID, SEGFORMER_DETECTION_OUTLINE_ID] : []),
+      ]) {
+        if (!map.getLayer?.(id)) continue;
+        try {
+          map.moveLayer(id);
+        } catch {
+          /* style may be swapping */
+        }
+      }
+    };
+    raise();
+    // React-Map-GL may commit the Source/Layer one frame after geojson/mask lands.
+    const raf = window.requestAnimationFrame(raise);
+    return () => window.cancelAnimationFrame(raf);
+  }, [
+    segFormerDetection.overlayVisible,
+    segFormerDetection.geojson,
+    segFormerMaskOverlay,
+    customLayersMapEpoch,
+    customLayersCanvasSig,
+  ]);
+
+  // When detections land, force overlay on and fit the map so results are visible on canvas.
+  const segFormerFocusSigRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (segFormerDetection.phase !== 'done' && segFormerDetection.phase !== 'publishReady') {
+      if (
+        segFormerDetection.phase === 'idle' ||
+        segFormerDetection.phase === 'capturing' ||
+        segFormerDetection.phase === 'resolveInput'
+      ) {
+        segFormerFocusSigRef.current = null;
+      }
+      return;
+    }
+    const gj = segFormerDetection.geojson;
+    const hasPolygons = Boolean(gj?.features?.length);
+    const hasMask = Boolean(segFormerMaskOverlay);
+    if (!hasPolygons && !hasMask) return;
+    const sig = `${gj?.features?.length ?? 0}:${segFormerDetection.result?.classId ?? ''}:${segFormerDetection.result?.count ?? ''}:${hasMask ? 'm' : '-'}`;
+    if (segFormerFocusSigRef.current === sig) return;
+    segFormerFocusSigRef.current = sig;
+    if (!segFormerDetection.overlayVisible) {
+      segFormerDetection.setOverlayVisible(true);
+    }
+    if (hasPolygons && gj) {
+      focusGeoJsonOnMap(gj);
+      return;
+    }
+    const bbox = segFormerDetection.resultBbox;
+    if (!bbox) return;
+    const mapInstance = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+    if (mapInstance && typeof mapInstance.fitBounds === 'function') {
+      mapInstance.fitBounds(
+        [
+          [bbox[0], bbox[1]],
+          [bbox[2], bbox[3]],
+        ],
+        { padding: 80, duration: 800 },
+      );
+    }
+  }, [
+    segFormerDetection.phase,
+    segFormerDetection.geojson,
+    segFormerDetection.overlayVisible,
+    segFormerDetection.result?.classId,
+    segFormerDetection.result?.count,
+    segFormerDetection.resultBbox,
+    segFormerDetection.setOverlayVisible,
+    segFormerMaskOverlay,
+  ]);
+
+  // Auto-publish SegFormer Prediction Layer into GIS Layer Manager on successful Detect.
+  const segFormerPublishSigRef = useRef<string | null>(null);
+  const publishSegFormerPredictionLayer = useCallback(
+    (opts?: { focus?: boolean; statusPrefix?: string }) => {
+      const geojson = segFormerDetection.geojson;
+      if (!geojson?.features?.length) return null;
+      const classId = segFormerDetection.result?.classId ?? segFormerDetection.classId;
+      const className = segFormerDetection.result?.className || 'detections';
+      const hasCrop = geojson.features.some(f => {
+        const p = (f.properties || {}) as Record<string, unknown>;
+        return Boolean(String(p.Crop_Type || p.cropType || '').trim());
+      });
+      const name = segFormerDetection.fieldPipeline
+        ? buildSegFormerFieldFeatureClassName({ className, withCropType: hasCrop })
+        : buildSegFormerPredictionLayerName(className);
+      const style = getSegFormerPredictionLayerStyleForClass(classId);
+      const layer = createSiVectorImportLayer({
+        name,
+        geojson,
+        source: 'api',
+        format: 'GeoJSON',
+        ephemeral: false,
+      });
+      registerImportedCustomLayer({
+        ...layer,
+        color: style.color,
+        fillColor: style.fillColor,
+        polygonFillAlpha: style.polygonFillAlpha,
+        weight: style.weight,
+      } as CustomLayer);
+      if (opts?.focus !== false) focusGeoJsonOnMap(geojson);
+      const prefix = opts?.statusPrefix ?? 'Published';
+      setFieldAnalysisStatus(
+        `${prefix} “${name}” (${geojson.features.length} object${
+          geojson.features.length === 1 ? '' : 's'
+        }).`,
+      );
+      return name;
+    },
+    [
+      segFormerDetection.geojson,
+      segFormerDetection.result?.classId,
+      segFormerDetection.result?.className,
+      segFormerDetection.classId,
+      segFormerDetection.fieldPipeline,
+      registerImportedCustomLayer,
+      focusGeoJsonOnMap,
+    ],
+  );
+  useEffect(() => {
+    const phase = segFormerDetection.phase;
+    if (phase !== 'done' && phase !== 'publishReady') {
+      if (phase === 'idle' || phase === 'capturing' || phase === 'resolveInput') {
+        segFormerPublishSigRef.current = null;
+      }
+      return;
+    }
+    const gj = segFormerDetection.geojson;
+    if (!gj?.features?.length) return;
+    const sig = `${gj.features.length}:${segFormerDetection.result?.classId ?? ''}:${segFormerDetection.result?.count ?? ''}`;
+    if (segFormerPublishSigRef.current === sig) return;
+    segFormerPublishSigRef.current = sig;
+    publishSegFormerPredictionLayer({ focus: false, statusPrefix: 'Auto-published' });
+  }, [
+    segFormerDetection.phase,
+    segFormerDetection.geojson,
+    segFormerDetection.result?.classId,
+    segFormerDetection.result?.count,
+    publishSegFormerPredictionLayer,
+  ]);
+
+  // Keep AOI sketch chrome + committed border on top of basemap/analysis rasters.
+  // Committed fill intentionally stays lower so imagery remains readable.
+  useEffect(() => {
+    const map = mapRef.current?.getMap?.() ?? mapRef.current;
+    if (!map || typeof map.moveLayer !== 'function') return;
+    const raise = () => {
+      const ids = [
+        // Live sketch preview (fill/outline/vertices while drawing)
+        'si-draw-draft-fill',
+        'si-draw-draft-line',
+        'si-draw-draft-close-hint',
+        'si-draw-draft-vertex',
+        'si-draw-draft-pt',
+        // Committed AOI border/point only (fill stays under analysis layers)
+        'drawn-index-geometry-line',
+        'drawn-index-geometry-point',
+      ];
+      for (const id of ids) {
+        if (!map.getLayer?.(id)) continue;
+        try {
+          map.moveLayer(id);
+        } catch {
+          /* style/layer timing swap */
+        }
+      }
+    };
+    raise();
+    // Ensure raise after react-map-gl mounts layer nodes on next frames.
+    const raf1 = window.requestAnimationFrame(raise);
+    const raf2 = window.requestAnimationFrame(() => window.requestAnimationFrame(raise));
+    // Also re-raise once the map settles after any async layer additions (e.g. WMS tiles loaded).
+    const onIdle = () => raise();
+    try { map.on('idle', onIdle); } catch { /* older GL versions may not support idle */ }
+    return () => {
+      window.cancelAnimationFrame(raf1);
+      window.cancelAnimationFrame(raf2);
+      try { map.off('idle', onIdle); } catch { /* ignore */ }
+    };
+  }, [
+    draftDrawGeoJson,
+    drawnGeometry,
+    mapDrawTool,
+    customLayersMapEpoch,
+    customLayersCanvasSig,
+    chirpsPrecip.raster,
+    demCollectionOverlay.overlay,
+    segFormerDetection.geojson,
+    isWmsOverlayVisible,
+    aoiLayerVisible,
+  ]);
 
   const [rsGeoTiffBusy, setRsGeoTiffBusy] = useState(false);
   const [rsGeoTiffLabel, setRsGeoTiffLabel] = useState<string | undefined>(undefined);
@@ -18163,6 +19035,7 @@ export default function SatelliteIntelligence() {
       signal: controller.signal,
       collections: stac.collections,
       lookbackDays: stac.lookbackDays,
+      cloudCoverMax: cloudCoverage,
     })
       .then(catalog => {
         if (!cancelled) setSentinelSceneCatalog(catalog);
@@ -18179,6 +19052,7 @@ export default function SatelliteIntelligence() {
     sentinelImageryAoiKey,
     remoteSensingProvider,
     remoteSensingCollection,
+    cloudCoverage,
   ]);
 
   /** Auto mode: start from today, resolve latest valid catalog scene. */
@@ -18923,7 +19797,7 @@ export default function SatelliteIntelligence() {
           'aoi-edit',
           'layers',
           'tree-detections',
-          'agri-field-boundary',
+          'segformer-detection',
         ],
       },
     };
@@ -19124,29 +19998,22 @@ export default function SatelliteIntelligence() {
             return 'Opened Imagery Time Series — multi-layer timeline charts for the AOI.';
           }
           if (panel === 'aoi-edit') {
-            if (measureModeRef.current) clearMeasure();
-            if (gisSelectionActive) setGisSelectionActive(false);
-            handleRsDrawingModeChange(true);
-            applyMapDrawTool('polygon');
-            return 'Activated AOI drawing — draw a polygon on the map, then ask again for NDVI / flood / well analysis.';
+            // Drawing is activated only from the Map toolbox Edit button (no auto-arm).
+            return 'Use the Edit button in the Map toolbox to draw an AOI, then ask again for NDVI / flood / well analysis.';
           }
           const dockPanels = new Set([
             'remote-sensing',
-            'eo-enrichment',
             'flood-monitoring',
             'well-site',
             'well-suitability',
             'hydro-watershed',
             'layers',
             'tree-detections',
-            'agri-field-boundary',
+            'segformer-detection',
             'crop-alerts',
             'wapi-alerts',
             'stress-zones',
             'crop-classification',
-            'image-classification',
-            'sam-detection',
-            'ai-detection-gis',
             'raster-georeference',
             'source',
           ]);
@@ -19162,11 +20029,10 @@ export default function SatelliteIntelligence() {
             'hydro-watershed': 'Hydro watershed',
             layers: 'Layers',
             'tree-detections': 'Tree detections',
-            'agri-field-boundary': 'Agri field boundary',
+            'segformer-detection': 'GeoAI Analysis Toolbox',
             'crop-alerts': 'Crop alerts',
             'wapi-alerts': 'ISS Irrigation Alert',
             'stress-zones': 'Stress zones',
-            'eo-enrichment': 'EO enrichment',
           };
           return `Opened ${labels[panel] || panel} — continue the analysis on the AOI from that panel.`;
         },
@@ -19175,12 +20041,8 @@ export default function SatelliteIntelligence() {
           const hasDraw = !!drawnGeometryRef.current;
           const hasLayerAoi = !!hasActiveLayerSourceAoiRef.current;
           if (!hasDraw && !hasLayerAoi) {
-            if (measureModeRef.current) clearMeasure();
-            if (gisSelectionActive) setGisSelectionActive(false);
-            handleRsDrawingModeChange(true);
-            applyMapDrawTool('polygon');
-            // Keep the Remote Sensing toolbox closed — chat drives the map overlay only.
-            return `No AOI yet — draw a polygon on the map, then ask again to show ${index}.`;
+            // Drawing is activated only from the Map toolbox Edit button (no auto-arm).
+            return `No AOI yet — click Edit in the Map toolbox, draw a polygon, then ask again to show ${index}.`;
           }
           setWmsLayer(index);
           if (Object.prototype.hasOwnProperty.call(ENVIRONMENTAL_INDICES, index)) {
@@ -19223,10 +20085,6 @@ export default function SatelliteIntelligence() {
       getMapProximity,
       handleSelectSearchResult,
       stageGeoAiInspectCard,
-      gisSelectionActive,
-      clearMeasure,
-      handleRsDrawingModeChange,
-      applyMapDrawTool,
     ],
   );
   const runGeoAiMapCommandsRef = useRef(runGeoAiMapCommandsFromReply);
@@ -20115,13 +20973,20 @@ export default function SatelliteIntelligence() {
   ]);
 
   const layerAoiWmsClipSource = useMemo(() => {
-    if (cropClassificationWmsClipSource) return cropClassificationWmsClipSource;
-    if (aoiMaskBuilderSettings.enabled && aoiLayerModeActiveMask) return aoiLayerModeActiveMask;
-    return null;
+    // Layers Show-on-map must keep its own full-layer clip — never borrow crop-class AOI.
+    if (!aoiMaskBuilderSettings.enabled) return null;
+    return (
+      aoiLayerModeActiveMask ??
+      aoiMaskBuilderWarmMask ??
+      aoiMaskBuilderMask ??
+      (activeAoi.source === 'layers' ? activeAoi.geometry : null)
+    );
   }, [
-    cropClassificationWmsClipSource,
     aoiMaskBuilderSettings.enabled,
     aoiLayerModeActiveMask,
+    aoiMaskBuilderWarmMask,
+    aoiMaskBuilderMask,
+    activeAoi,
   ]);
 
   const effectiveWmsCloudCoverage = useMemo(() => {
@@ -20156,8 +21021,11 @@ export default function SatelliteIntelligence() {
 
   const siSentinelWmsStackCommonInput = useMemo(
     () => ({
-      // PRECIP uses UCSB CHIRPS overlay — do not request Sentinel-2 WMS for it.
-      activeWmsLayer: isChirpsPrecipLayerId(activeWmsLayer) ? '' : activeWmsLayer,
+      // PRECIP / collection-specific indices are not Sentinel Hub WMS layer names.
+      activeWmsLayer:
+        isChirpsPrecipLayerId(activeWmsLayer) || isCollectionCatalogIndexId(activeWmsLayer)
+          ? ''
+          : activeWmsLayer,
       sentinelFetchDate,
       wmsTimeWindowKey,
       effectiveWmsCloudCoverage,
@@ -20203,15 +21071,22 @@ export default function SatelliteIntelligence() {
   );
 
   /**
-   * Settings pin only — do NOT geo-sign. ArcGIS viewport refresh changes feature bbox/ids
-   * and previously forced WKT/evalscript rebuild + Mapbox idle waits on every pan/enable.
+   * Settings pin + feature count — avoid geo-signing pan churn, but invalidate when
+   * the clip goes from empty → N features after viewport seed / pin.
    */
   const layerAoiWmsStableMaskSig = aoiLayerModeSettingsPinKey || 'no-layer-aoi';
+  const layerAoiClipFeatureCount =
+    layerAoiWmsClipSource &&
+    Array.isArray((layerAoiWmsClipSource as { features?: unknown[] }).features)
+      ? (layerAoiWmsClipSource as { features: unknown[] }).features.length
+      : aoiMaskBuilderWarmMask?.features?.length ??
+        aoiMaskBuilderMask?.features?.length ??
+        0;
 
   const layerAoiWmsChunksCacheKey = useMemo(
     () =>
       siAoiLayerModeWarmChunksCacheKey(
-        layerAoiWmsStableMaskSig,
+        `${layerAoiWmsStableMaskSig}|n:${layerAoiClipFeatureCount}`,
         activeWmsLayer ?? '',
         sentinelFetchDate,
         {
@@ -20219,7 +21094,7 @@ export default function SatelliteIntelligence() {
           maxTileLayers: SI_WMS_MAX_TILE_LAYERS,
         },
       ),
-    [layerAoiWmsStableMaskSig, activeWmsLayer, sentinelFetchDate],
+    [layerAoiWmsStableMaskSig, layerAoiClipFeatureCount, activeWmsLayer, sentinelFetchDate],
   );
 
   const drawAoiWmsStack = useMemo(
@@ -20248,21 +21123,28 @@ export default function SatelliteIntelligence() {
     return null;
   }, [layerAoiWmsClipSource, aoiMaskBuilderWarmMask, aoiMaskBuilderMask]);
 
-  const layerAoiWmsStack = useMemo(
-    () =>
-      buildSiSentinelAoiWmsStackState(SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX, {
-        ...siSentinelWmsStackCommonInput,
-        clipSource: layerAoiWmsStackClipSource,
-        maskCacheKey: layerAoiWmsChunksCacheKey,
-        sessionKey: layerAoiWmsStableMaskSig,
-      }),
-    [
-      siSentinelWmsStackCommonInput,
-      layerAoiWmsStackClipSource,
-      layerAoiWmsChunksCacheKey,
-      layerAoiWmsStableMaskSig,
-    ],
-  );
+  const layerAoiWmsStack = useMemo(() => {
+    // PRECIP / collection catalog ids are not Sentinel Hub WMS layer names — keep NDVI
+    // for the Layers AOI raster stack so Show on map still paints an index.
+    const stackLayer =
+      isChirpsPrecipLayerId(activeWmsLayer) || isCollectionCatalogIndexId(activeWmsLayer)
+        ? pickDefaultSentinelWmsLayer(wmsLayers) || 'NDVI'
+        : activeWmsLayer;
+    return buildSiSentinelAoiWmsStackState(SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX, {
+      ...siSentinelWmsStackCommonInput,
+      activeWmsLayer: stackLayer,
+      clipSource: layerAoiWmsStackClipSource,
+      maskCacheKey: layerAoiWmsChunksCacheKey,
+      sessionKey: layerAoiWmsStableMaskSig,
+    });
+  }, [
+    siSentinelWmsStackCommonInput,
+    activeWmsLayer,
+    wmsLayers,
+    layerAoiWmsStackClipSource,
+    layerAoiWmsChunksCacheKey,
+    layerAoiWmsStableMaskSig,
+  ]);
 
   layerAoiWmsStackRef.current = layerAoiWmsStack;
 
@@ -20324,9 +21206,9 @@ export default function SatelliteIntelligence() {
     sentinelWmsAppliedBoundsRef.current.clear();
   }, [drawAoiWmsChunksCacheKey]);
 
+  // Layout syncKey already includes this cache key; do not force remount via empty syncKey.
   useEffect(() => {
     layerAoiWmsPingPongCacheKeyRef.current = layerAoiWmsChunksCacheKey;
-    layerAoiPingPongSyncKeyRef.current = '';
   }, [layerAoiWmsChunksCacheKey]);
 
   useEffect(() => {
@@ -20342,7 +21224,9 @@ export default function SatelliteIntelligence() {
   ]);
 
   useEffect(() => {
-    if (layerAoiWmsWarm || drawnAoiClipCollection?.features?.length) return;
+    if (layerAoiWmsWarm || drawnAoiClipCollection?.features?.length || aoiMaskBuilderSettings.enabled) {
+      return;
+    }
     setSentinelWmsSourcesHeld(false);
     sentinelWmsAppliedTileUrlsRef.current.clear();
     sentinelWmsAppliedBoundsRef.current.clear();
@@ -20354,7 +21238,7 @@ export default function SatelliteIntelligence() {
         layerAoiWmsPingPongRef.current,
       );
     }
-  }, [layerAoiWmsWarm, drawnAoiClipCollection]);
+  }, [layerAoiWmsWarm, drawnAoiClipCollection, aoiMaskBuilderSettings.enabled]);
 
   useEffect(() => {
     const nextSuppress = sentinelLayerAoiWmsOnMap || sentinelDrawWmsOnMap;
@@ -20365,24 +21249,38 @@ export default function SatelliteIntelligence() {
     const applyFillSuppress = (layerId: string, layerRecord: CustomLayer | undefined) => {
       const sid = siSafeMapboxLayerId(layerId);
       const fillId = `${sid}-fill`;
-      if (!map.getLayer(fillId)) return false;
       const op = layerRecord?.mapOpacity ?? 1;
       const pfa = layerRecord?.polygonFillAlpha ?? SI_PORTAL_LAYER_VISIBLE_FILL_ALPHA;
-      try {
-        map.setPaintProperty(fillId, 'fill-opacity', nextSuppress ? 0 : pfa * op);
-      } catch {
-        /* ignore map race */
+      const restore = pfa * op;
+      const styleLayers =
+        typeof map.getStyle === 'function' ? (map.getStyle()?.layers ?? []) : [];
+      let touched = false;
+      for (const styleLayer of styleLayers) {
+        const id = styleLayer?.id;
+        if (!id) continue;
+        // Cover GeoJSON fill + ArcGIS vector-tile fills that can hide the NDVI raster.
+        if (
+          id !== fillId &&
+          !id.startsWith(`${sid}-vt-fill`) &&
+          !id.startsWith(`${sid}-fill-`)
+        ) {
+          continue;
+        }
+        if (!map.getLayer(id)) continue;
+        try {
+          map.setPaintProperty(id, 'fill-opacity', nextSuppress ? 0 : restore);
+          touched = true;
+        } catch {
+          /* ignore map race */
+        }
       }
-      return true;
+      return touched;
     };
 
-    // Always suppress BOTH Agro Structures and the selected Layers AOI source fill.
-    // Previous early-return after Agro left custom AOI fills opaque over Sentinel WMS.
+    // Always suppress BOTH Agro Structures and the selected Layers AOI source fill
+    // (including ArcGIS Online symbology fills) so Sentinel index rasters stay visible.
     const agroLayer = customLayersRef.current.find(l => String(l.id) === AGRO_STRUCTURES_PRIMARY_LAYER_ID);
-    const useAgSymbology = agroLayer ? siLayerUsesArcgisOnlineSymbology(agroLayer) : false;
-    if (!useAgSymbology) {
-      applyFillSuppress(AGRO_STRUCTURES_PRIMARY_LAYER_ID, agroLayer);
-    }
+    applyFillSuppress(AGRO_STRUCTURES_PRIMARY_LAYER_ID, agroLayer);
 
     const aoiSourceId = aoiMaskBuilderSettings.sourceLayerId.trim();
     if (aoiSourceId && aoiSourceId !== AGRO_STRUCTURES_PRIMARY_LAYER_ID) {
@@ -21068,8 +21966,9 @@ export default function SatelliteIntelligence() {
                       type="fill"
                       filter={['==', ['geometry-type'], 'Polygon']}
                       paint={{
-                        'fill-color': drawStyle.fillColor,
-                        'fill-opacity': Math.min(0.45, drawStyle.fillOpacity + 0.12) * drawVisualOpacity,
+                        // Keep draft AOI clearly visible even if saved drawStyle is too transparent.
+                        'fill-color': '#facc15',
+                        'fill-opacity': 0.22 * drawVisualOpacity,
                       }}
                     />
                     <Layer
@@ -21081,8 +21980,8 @@ export default function SatelliteIntelligence() {
                         ['!=', ['get', 'draftRole'], 'closeHint'],
                       ]}
                       paint={{
-                        'line-color': drawStyle.strokeColor,
-                        'line-width': drawStyle.strokeWidth,
+                        'line-color': '#facc15',
+                        'line-width': Math.max(2, drawStyle.strokeWidth),
                         'line-dasharray': [2, 2],
                         'line-opacity': 0.9 * drawVisualOpacity,
                       }}
@@ -21093,7 +21992,7 @@ export default function SatelliteIntelligence() {
                       filter={['==', ['get', 'draftRole'], 'closeHint']}
                       paint={{
                         'line-color': '#4ade80',
-                        'line-width': Math.max(2, drawStyle.strokeWidth),
+                        'line-width': Math.max(2, drawStyle.strokeWidth + 0.5),
                         'line-dasharray': [1, 2],
                         'line-opacity': 0.95 * drawVisualOpacity,
                       }}
@@ -21251,11 +22150,14 @@ export default function SatelliteIntelligence() {
                       filter={['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]]}
                       paint={{
                         'fill-color': hasActiveLayerSourceAoi ? '#f59e0b' : drawStyle.fillColor,
-                        // Keep a light fill so the sketch remains visible over basemap / imagery.
-                        'fill-opacity':
-                          Math.min(0.35, Math.max(0.12, drawStyle.fillOpacity)) *
-                          drawVisualOpacity *
-                          aoiLayerOpacity,
+                        // Light tint under imagery/analysis — border stays on top separately.
+                        // Suppress to 0 while a new shape is being drawn so the old AOI doesn't
+                        // appear as a phantom second shape behind the live draft preview.
+                        'fill-opacity': isActivelyDrawingNewShape
+                          ? 0
+                          : Math.min(0.14, Math.max(0.05, drawStyle.fillOpacity * 0.45)) *
+                            drawVisualOpacity *
+                            aoiLayerOpacity,
                       }}
                     />
                   </Source>
@@ -21544,7 +22446,7 @@ export default function SatelliteIntelligence() {
                     />
                   </Source>
                 ) : null}
-                {(agriFieldBoundaryActive || expandedEnvSection === 'eo-enrichment') &&
+                {agriFieldBoundaryActive &&
                 agriFieldBoundary.geojson ? (
                   <Source
                     id={AGRI_FIELD_BOUNDARY_SOURCE_ID}
@@ -21731,24 +22633,6 @@ export default function SatelliteIntelligence() {
                     />
                   </Source>
                 ) : null}
-                {chirpsPrecip.raster && chirpsPrecip.heatVisible && chirpsPrecipActive && isWmsOverlayVisible ? (
-                  <Source
-                    key={`chirps-${chirpsPrecip.raster.date}-${chirpsPrecip.raster.width}x${chirpsPrecip.raster.height}-${chirpsPrecip.raster.stats?.validCount ?? 0}`}
-                    id="chirps-precip-source"
-                    type="image"
-                    url={chirpsPrecip.raster.previewDataUrl}
-                    coordinates={chirpsPrecip.raster.coordinates as any}
-                  >
-                    <Layer
-                      id="chirps-precip-raster"
-                      type="raster"
-                      paint={{
-                        'raster-opacity': chirpsPrecip.opacity,
-                        'raster-fade-duration': 0,
-                      }}
-                    />
-                  </Source>
-                ) : null}
                 {aoiFieldsMapGeoJson ? (
                   <Source id="si-aoi-fields-source" type="geojson" data={aoiFieldsMapGeoJson as any}>
                     <Layer
@@ -21799,6 +22683,57 @@ export default function SatelliteIntelligence() {
                         'line-color': ['coalesce', ['get', 'aoiColor'], SI_DEFAULT_VECTOR_OUTLINE_COLOR] as any,
                         'line-width': ['case', ['==', ['get', 'isActive'], 1], SI_DEFAULT_VECTOR_LINE_WEIGHT + 0.5, SI_DEFAULT_VECTOR_LINE_WEIGHT] as any,
                         'line-opacity': 1,
+                      }}
+                    />
+                  </Source>
+                ) : null}
+                {/* SegFormer AI Detection Result: mask (georeferenced) + polygons above AOI fills. */}
+                {segFormerDetection.overlayVisible && segFormerMaskOverlay ? (
+                  <Source
+                    key={`sf-mask-${segFormerDetection.result?.classId ?? 0}-${segFormerDetection.result?.count ?? 0}`}
+                    id={SEGFORMER_MASK_SOURCE_ID}
+                    type="image"
+                    url={segFormerMaskOverlay.url}
+                    coordinates={segFormerMaskOverlay.coordinates as any}
+                  >
+                    <Layer
+                      id={SEGFORMER_MASK_LAYER_ID}
+                      type="raster"
+                      paint={{
+                        'raster-opacity': Math.min(0.92, Math.max(0.15, segFormerDetection.fillOpacity + 0.15)),
+                        'raster-fade-duration': 0,
+                      }}
+                    />
+                  </Source>
+                ) : null}
+                {segFormerDetection.overlayVisible &&
+                segFormerDetection.geojson?.features?.length ? (
+                  <Source
+                    id={SEGFORMER_DETECTION_SOURCE_ID}
+                    type="geojson"
+                    data={segFormerDetection.geojson as any}
+                  >
+                    <Layer
+                      id={SEGFORMER_DETECTION_FILL_ID}
+                      type="fill"
+                      paint={{
+                        'fill-color':
+                          getSegFormerPredictionLayerStyleForClass(
+                            segFormerDetection.result?.classId ?? segFormerDetection.classId,
+                          ).fillColor,
+                        'fill-opacity': segFormerDetection.fillOpacity,
+                      }}
+                    />
+                    <Layer
+                      id={SEGFORMER_DETECTION_OUTLINE_ID}
+                      type="line"
+                      paint={{
+                        'line-color':
+                          getSegFormerPredictionLayerStyleForClass(
+                            segFormerDetection.result?.classId ?? segFormerDetection.classId,
+                          ).color,
+                        'line-width': 1.8,
+                        'line-opacity': 0.95,
                       }}
                     />
                   </Source>
@@ -22024,7 +22959,7 @@ export default function SatelliteIntelligence() {
                       Math.max(2, drawStyle.strokeWidth + 1),
                       drawStyle.strokeWidth,
                     ],
-                    'line-opacity': drawVisualOpacity * aoiLayerOpacity,
+                    'line-opacity': isActivelyDrawingNewShape ? 0 : drawVisualOpacity * aoiLayerOpacity,
                     ...(hasActiveLayerSourceAoi ? { 'line-dasharray': [2, 2] as [number, number] } : {}),
                   }}
                 />
@@ -22035,10 +22970,52 @@ export default function SatelliteIntelligence() {
                   paint={{
                     'circle-radius': drawStyle.pointRadius,
                     'circle-color': drawStyle.fillColor,
-                    'circle-opacity': Math.min(1, drawStyle.fillOpacity + 0.55) * drawVisualOpacity * aoiLayerOpacity,
+                    'circle-opacity': isActivelyDrawingNewShape ? 0 : Math.min(1, drawStyle.fillOpacity + 0.55) * drawVisualOpacity * aoiLayerOpacity,
                     'circle-stroke-color': drawStyle.strokeColor,
                     'circle-stroke-width': Math.max(1, drawStyle.strokeWidth / 2),
-                    'circle-stroke-opacity': drawVisualOpacity * aoiLayerOpacity,
+                    'circle-stroke-opacity': isActivelyDrawingNewShape ? 0 : drawVisualOpacity * aoiLayerOpacity,
+                  }}
+                />
+              </Source>
+            ) : null}
+
+            {isMapStyleReady &&
+            chirpsPrecip.raster &&
+            chirpsPrecip.heatVisible &&
+            chirpsPrecipActive &&
+            isWmsOverlayVisible ? (
+              <Source
+                key={`chirps-${chirpsPrecip.raster.date}-${chirpsPrecip.raster.width}x${chirpsPrecip.raster.height}-${chirpsPrecip.raster.stats?.validCount ?? 0}`}
+                id="chirps-precip-source"
+                type="image"
+                url={chirpsPrecip.raster.previewDataUrl}
+                coordinates={chirpsPrecip.raster.coordinates as any}
+              >
+                <Layer
+                  id="chirps-precip-raster"
+                  type="raster"
+                  paint={{
+                    'raster-opacity': chirpsPrecip.opacity,
+                    'raster-fade-duration': 0,
+                  }}
+                />
+              </Source>
+            ) : null}
+
+            {isMapStyleReady && demCollectionOverlay.overlay && demCollectionActive && isWmsOverlayVisible ? (
+              <Source
+                key={`dem-idx-${demCollectionOverlay.overlay.indexId}-${demCollectionOverlay.overlay.mean ?? 0}-${demCollectionOverlay.overlay.min ?? 0}`}
+                id="collection-dem-index-source"
+                type="image"
+                url={demCollectionOverlay.overlay.dataUrl}
+                coordinates={demCollectionOverlay.overlay.coordinates as any}
+              >
+                <Layer
+                  id="collection-dem-index-raster"
+                  type="raster"
+                  paint={{
+                    'raster-opacity': demCollectionOverlay.overlay.opacity,
+                    'raster-fade-duration': 0,
                   }}
                 />
               </Source>
@@ -22253,7 +23230,16 @@ export default function SatelliteIntelligence() {
             open={imageryTimeSeriesOpen}
             onClose={() => setImageryTimeSeriesOpen(false)}
             containerRef={siMapContainerRef}
-            agroStructuresMask={agroStructuresLayerAoiMask}
+            agroStructuresMask={
+              // When Layers AOI is on, prefer the pinned clip (has feature props + geometry)
+              // so field pickers / Word atlas keep T-100… style AOIs even if Agro geojson is empty.
+              aoiMaskBuilderSettings.enabled &&
+              aoiLayerModeActiveMask &&
+              Array.isArray((aoiLayerModeActiveMask as { features?: unknown[] }).features) &&
+              (aoiLayerModeActiveMask as { features: unknown[] }).features.length > 0
+                ? (aoiLayerModeActiveMask as GeoJSON.FeatureCollection)
+                : agroStructuresLayerAoiMask
+            }
             aoiFields={aoiFields}
             vectorLayers={customLayersForMapPaint}
             committedAoiGeometry={drawnGeometry?.geometry ?? null}
@@ -22749,7 +23735,16 @@ export default function SatelliteIntelligence() {
             mapLoaded={isMapLoaded}
             onProcessingWorkflowNavigate={onProcessingWorkflowNavigateMapToolbox}
             processingDropdownOpen={isLayerDropdownOpen}
-            processingEmbedSection={isLayerDropdownOpen ? expandedEnvSection : null}
+            processingEmbedSection={
+              isLayerDropdownOpen &&
+              expandedEnvSection !== 'eo-enrichment' &&
+              expandedEnvSection !== 'ai-detection-gis' &&
+              expandedEnvSection !== 'sam-detection' &&
+              expandedEnvSection !== 'agri-field-boundary' &&
+              expandedEnvSection !== 'image-classification'
+                ? expandedEnvSection
+                : null
+            }
             onMapToolboxEmbedHost={setMapToolboxEmbedHost}
             onToolboxPanelClose={() => setIsLayerDropdownOpen(false)}
             mapToolboxLayersMain={layersEnvMainTools}
@@ -22790,6 +23785,8 @@ export default function SatelliteIntelligence() {
               }
               if (rsDrawingModeActiveRef.current) handleRsDrawingModeChange(false);
               if (measureModeRef.current) clearMeasure();
+              // Close any open toolbox panel to avoid two tools active at once.
+              setIsLayerDropdownOpen(false);
               setGisSelectionActive(true);
               setGisSelectionTool('select');
               applyMapDrawTool('select');
@@ -23143,8 +24140,6 @@ export default function SatelliteIntelligence() {
                         <div className="si-env-title">
                           {expandedEnvSection === 'remote-sensing'
                               ? 'Remote sensing'
-                              : expandedEnvSection === 'eo-enrichment'
-                                ? 'EO Layer Enrichment'
                               : expandedEnvSection === 'crop-alerts'
                                 ? 'Agro Sentinel Alert Engine'
                               : expandedEnvSection === 'wapi-alerts'
@@ -23153,14 +24148,10 @@ export default function SatelliteIntelligence() {
                                 ? 'Stress Zones Detection'
                               : expandedEnvSection === 'crop-classification'
                                 ? 'Prithvi Crop Classification'
-                              : expandedEnvSection === 'ai-detection-gis'
-                                ? 'AI Detection in GIS'
                               : expandedEnvSection === 'tree-detections'
                                 ? 'Tree Detections'
-                              : expandedEnvSection === 'sam-detection'
-                                ? 'AI SAM Detection'
-                              : expandedEnvSection === 'agri-field-boundary'
-                                ? 'Agri Field Boundary Detection'
+                              : expandedEnvSection === 'segformer-detection'
+                                ? 'GeoAI Analysis Toolbox'
                               : expandedEnvSection === 'hydro-watershed'
                                 ? 'Hydro Watershed Workflow'
                               : expandedEnvSection === 'well-site'
@@ -23169,8 +24160,6 @@ export default function SatelliteIntelligence() {
                                 ? 'Well Suitability (MCDA)'
                               : expandedEnvSection === 'flood-monitoring'
                                 ? 'Flood Monitoring (SAR-Based)'
-                              : expandedEnvSection === 'image-classification'
-                                ? 'Image Classification Wizard'
                                 : expandedEnvSection === 'layers'
                                   ? 'Layers'
                                   : expandedEnvSection === 'source'
@@ -23187,122 +24176,6 @@ export default function SatelliteIntelligence() {
                       </button>
                     </div>
                   </div>
-                    {expandedEnvSection === 'eo-enrichment' && (
-                      <EoLayerEnrichmentPanel
-                        onClose={() => setIsLayerDropdownOpen(false)}
-                        activeAoi={
-                          drawnAoiClipCollection?.features?.length
-                            ? drawnAoiClipCollection
-                            : null
-                        }
-                        mapLayers={customLayers
-                          .filter(l => l.renderMode !== 'raster' && l.geojson)
-                          .map(l => ({
-                            id: l.id,
-                            name: l.name,
-                            geojson: l.geojson,
-                          }))}
-                        segmentations={{
-                          hasAoi: Boolean(resolveFieldBoundaryAoi()),
-                          source: agriFieldBoundary.source,
-                          onSourceChange: agriFieldBoundary.setSource,
-                          sourceOptions: agriFieldBoundary.sourceOptions.filter(
-                            o =>
-                              o.id === 'fow' ||
-                              o.id === 'basemap' ||
-                              o.id === 'sentinel2' ||
-                              o.id === 'landsat' ||
-                              o.id === 'planet' ||
-                              o.id === 'airbus',
-                          ),
-                          minConfidence: agriFieldBoundary.minConfidence,
-                          onMinConfidenceChange: agriFieldBoundary.setMinConfidence,
-                          minAreaM2: agriFieldBoundary.minAreaM2,
-                          onMinAreaM2Change: agriFieldBoundary.setMinAreaM2,
-                          phase: agriFieldBoundary.phase,
-                          progress: agriFieldBoundary.progress,
-                          busy: agriFieldBoundary.busy,
-                          error: agriFieldBoundary.error,
-                          fieldCount: agriFieldBoundary.fieldCount,
-                          totalAreaHa: agriFieldBoundary.totalAreaHa,
-                          hasResult: Boolean(agriFieldBoundary.geojson?.features?.length),
-                          onRun: agriFieldBoundary.run,
-                          onAddToLayers: () => {
-                            const fc = agriFieldBoundary.geojson;
-                            if (!fc?.features?.length) return;
-                            registerImportedCustomLayer(
-                              createSiVectorImportLayer({
-                                name: `Field Boundaries (${fc.features.length})`,
-                                geojson: fc,
-                                source: 'api',
-                                format: 'Shapefile',
-                                crs: 'EPSG:4326',
-                              }),
-                            );
-                            focusGeoJsonOnMap(fc);
-                          },
-                          onDownloadShp: () => void agriFieldBoundary.exportShapefile(),
-                        }}
-                        onApplyEnrichedLayer={({
-                          geojson,
-                          name,
-                          sourceLayerId,
-                          popupConfig,
-                          fieldOrder,
-                          openAttributeTable,
-                        }) => {
-                          const normalizedPopup = normalizeSiLayerPopupConfig(popupConfig)
-                          let layerId = sourceLayerId || ''
-                          if (sourceLayerId && customLayers.some(l => l.id === sourceLayerId)) {
-                            setCustomLayers(prev =>
-                              prev.map(l =>
-                                l.id === sourceLayerId
-                                  ? {
-                                      ...l,
-                                      geojson,
-                                      popupConfig: normalizedPopup,
-                                      importMetadata: {
-                                        ...(l.importMetadata || {}),
-                                        featureCount: Array.isArray(geojson.features)
-                                          ? geojson.features.length
-                                          : l.importMetadata?.featureCount,
-                                        format: l.importMetadata?.format || 'GeoJSON',
-                                      },
-                                    }
-                                  : l,
-                              ),
-                            )
-                            setCustomLayersMapEpoch(epoch => epoch + 1)
-                          } else {
-                            layerId = `eo-enrich-${Date.now()}`
-                            registerImportedCustomLayer({
-                              ...createSiVectorImportLayer({
-                                id: layerId,
-                                name,
-                                geojson,
-                                source: 'upload',
-                                format: 'GeoJSON',
-                              }),
-                              popupConfig: normalizedPopup,
-                            })
-                          }
-                          if (fieldOrder.length && layerId) {
-                            setSiTableFieldOrderByLayerId(prev => ({
-                              ...prev,
-                              [layerId]: fieldOrder,
-                            }))
-                          }
-                          focusGeoJsonOnMap(geojson as any)
-                          if (openAttributeTable !== false && layerId) {
-                            setActiveLayerActionDialog({ mode: 'table', layerId })
-                            setTableWinMinimized(false)
-                          }
-                          setStacStatus(
-                            `EO enrichment applied to "${name}" — attributes & popups updated.`,
-                          )
-                        }}
-                      />
-                    )}
                     {expandedEnvSection === 'crop-alerts' && (
                       <div className="si-env-section-card si-field-analysis si-crop-alert-panel si-rs-panel--glass">
                         <SiCropAlertCenterPanel
@@ -23420,6 +24293,8 @@ export default function SatelliteIntelligence() {
                         onResetImageryDateAuto={resetSentinelImageryDateAuto}
                         imageryDateAutoFollow={imageryDateAutoFollow}
                         isFetchingSentinelScenes={isFetchingSentinelScenes}
+                        cloudCoverage={cloudCoverage}
+                        onCloudCoverageChange={setCloudCoverage}
                         imageryDateMeta={
                           imageryDateAutoFollow
                             ? `Auto · ${resolveEoStacCollectionsForProvider(remoteSensingProvider, remoteSensingCollection).label} | requested ${cropAlertRequestedDate} | scene ${autoLiveScenes.currentSceneDate}${
@@ -23433,9 +24308,17 @@ export default function SatelliteIntelligence() {
                         layerValue={wmsLayerSelectValue}
                         onLayerChange={layerId => {
                           setWmsLayer(layerId);
-                          if (isChirpsPrecipLayerId(layerId)) {
+                          if (isChirpsPrecipLayerId(layerId) || isDemCollectionIndexId(layerId) || isCollectionCatalogIndexId(layerId)) {
                             setIsWmsOverlayVisible(true);
                             setSentinelWmsSourcesHeld(true);
+                          }
+                          if (isCollectionCatalogIndexId(layerId)) {
+                            const def = resolveCollectionIndexDef(layerId);
+                            setFieldAnalysisStatus(
+                              def
+                                ? `${def.label} selected · 10-class legend ready · ${def.scientificName}`
+                                : 'Collection index selected · 10-class legend ready',
+                            );
                           }
                           const ids = Object.keys(ENVIRONMENTAL_INDICES) as EnvironmentalIndexId[];
                           if (ids.includes(layerId as EnvironmentalIndexId)) {
@@ -23485,8 +24368,6 @@ export default function SatelliteIntelligence() {
                         onMeasureTool={() => applyMapDrawTool('polyline')}
                         hasClearableDrawing={satelliteHasClearableDrawing}
                         onClearDrawing={clearSatelliteDrawingImmediate}
-                        onOpenLayerLegend={() => setLayerLiveLegendOpen(o => !o)}
-                        layerLegendOpen={layerLiveLegendOpen}
                         fieldTimelineActive={fieldTimelineSessionActive}
                         onTimelinePrimaryClick={onFieldAnalysisTimelinePrimaryClick}
                         fieldAnalysisStatus={fieldAnalysisStatus}
@@ -23505,24 +24386,6 @@ export default function SatelliteIntelligence() {
                         onChirpsExportExcel={() => chirpsPrecip.exportExcel()}
                         onChirpsExportReport={() => chirpsPrecip.exportReport()}
                         onClose={() => setIsLayerDropdownOpen(false)}
-                      />
-                    )}
-                    {expandedEnvSection === 'ai-detection-gis' && (
-                      <SiAiDetectionGisPanel
-                        onClose={() => setIsLayerDropdownOpen(false)}
-                        layerOptions={netfloraInputLayerOptions}
-                        outputLayerOptions={netfloraOutputLayerOptions}
-                        onOpenLayersPanel={openAiDetectionLayersPanel}
-                        getMapBounds={getAiDlMapBounds}
-                        resolveMapLayer={resolveAiDlMapLayer}
-                        onRasterProcessed={handleAiDlRasterProcessed}
-                        onExportDetectionToMap={handleAiDlDetectionExport}
-                        netfloraStats={netfloraStats}
-                        netfloraUploadInputRef={netfloraUploadInputRef}
-                        onNetfloraUploadChange={onNetfloraUploadChange}
-                        netfloraStatus={netfloraStatus}
-                        onRunNetfloraDetection={runNetfloraDetection}
-                        netfloraBusy={netfloraBusy}
                       />
                     )}
                     {expandedEnvSection === 'tree-detections' && (
@@ -23554,116 +24417,95 @@ export default function SatelliteIntelligence() {
                         />
                       </div>
                     )}
-                    {expandedEnvSection === 'sam-detection' && (
-                      <div className="si-env-section-card si-rs-panel--glass">
-                        <SamDetectionPanel
-                          tab={samPanelTab}
-                          onTabChange={t => {
-                            setSamPanelTab(t);
-                            if (t === 'detect' && samTrainDigitizing) stopSamTrainingDigitize();
-                            if (t === 'samples' && samAoiDrawing) stopSamAoiDrawing();
-                          }}
-                          classType={samDetection.classType}
-                          onClassTypeChange={samDetection.setClassType}
-                          featureMode={samDetection.featureMode}
-                          onFeatureModeChange={samDetection.setFeatureMode}
-                          objectTypeId={samDetection.objectTypeId}
-                          onObjectTypeIdChange={samDetection.setObjectTypeId}
-                          customObjectType={samDetection.customObjectType}
-                          onCustomObjectTypeChange={samDetection.setCustomObjectType}
-                          objectTypeOptions={samDetection.objectTypeOptions}
-                          objectTypeReady={samDetection.objectTypeReady}
-                          fgCount={samDetection.fgCount}
-                          bgCount={samDetection.bgCount}
-                          savedCount={samDetection.savedCount}
-                          maskOpacity={samDetection.maskOpacity}
-                          onMaskOpacityChange={samDetection.setMaskOpacity}
-                          minConfidence={samDetection.minConfidence}
-                          onMinConfidenceChange={samDetection.setMinConfidence}
-                          aoiSource={samAoiSource}
-                          onAoiSourceChange={s => {
-                            setSamAoiSource(s);
-                            if (s === 'layer' && samAoiDrawing) stopSamAoiDrawing();
-                          }}
-                          aoiLayerOptions={samAoiLayerOptions}
-                          aoiLayerId={samAoiLayerId}
-                          onAoiLayerIdChange={setSamAoiLayerId}
-                          aoiReady={samAoiReady}
-                          aoiUnitCount={samAoiUnitCount}
-                          aoiDrawing={samAoiDrawing}
-                          onStartDrawAoi={startSamAoiDrawing}
-                          onClearDrawAoi={clearSamDrawnAoi}
-                          phase={samDetection.phase}
-                          progress={samDetection.progress}
-                          busy={samDetection.busy}
-                          error={samDetection.error}
-                          offline={samDetection.offline}
-                          score={samDetection.result?.score ?? null}
-                          featureStats={samDetection.featureStats}
-                          objectCount={samDetection.result?.count ?? 0}
-                          hasResult={!!samDetection.result}
-                          onSegment={samDetection.segment}
-                          onSave={samDetection.save}
-                          onReset={samDetection.reset}
-                          onUndo={samDetection.undoLastPoint}
-                          onExport={samDetection.exportSaved}
-                          train={samTrainingSamples}
-                          trainDigitizing={samTrainDigitizing}
-                          onTrainDigitizingChange={handleSamTrainDigitizingChange}
-                          onAddTrainFromSam={asMask => {
-                            const feats = samDetection.result?.geojson?.features;
-                            if (!feats?.length) return;
-                            samTrainingSamples.addFromSamFeatures(feats, asMask);
-                          }}
-                        />
-                      </div>
-                    )}
-                    {expandedEnvSection === 'agri-field-boundary' && (
-                      <div className="si-env-section-card si-rs-panel--glass">
-                        <AgriFieldBoundaryPanel
-                          hasAoi={Boolean(resolveFieldBoundaryAoi())}
-                          source={agriFieldBoundary.source}
-                          onSourceChange={agriFieldBoundary.setSource}
-                          sourceOptions={agriFieldBoundary.sourceOptions}
-                          uploadedFileName={agriFieldBoundary.uploadedImage?.name ?? null}
-                          onUploadImageFile={file => void agriFieldBoundary.uploadImageFile(file)}
-                          onClearUploadedImage={agriFieldBoundary.clearUploadedImage}
-                          minConfidence={agriFieldBoundary.minConfidence}
-                          onMinConfidenceChange={agriFieldBoundary.setMinConfidence}
-                          minAreaM2={agriFieldBoundary.minAreaM2}
-                          onMinAreaM2Change={agriFieldBoundary.setMinAreaM2}
-                          fillOpacity={agriFieldBoundary.fillOpacity}
-                          onFillOpacityChange={agriFieldBoundary.setFillOpacity}
-                          phase={agriFieldBoundary.phase}
-                          progress={agriFieldBoundary.progress}
-                          busy={agriFieldBoundary.busy}
-                          error={agriFieldBoundary.error}
-                          offline={agriFieldBoundary.offline}
-                          fieldCount={agriFieldBoundary.fieldCount}
-                          totalAreaHa={agriFieldBoundary.totalAreaHa}
-                          engine={agriFieldBoundary.engine}
-                          score={agriFieldBoundary.result?.score ?? null}
-                          hasResult={Boolean(agriFieldBoundary.geojson?.features?.length)}
-                          onRun={agriFieldBoundary.run}
-                          onReset={agriFieldBoundary.reset}
-                          onExportGeojson={agriFieldBoundary.exportGeojson}
-                          onExportShapefile={() => void agriFieldBoundary.exportShapefile()}
-                          onAddToLayers={() => {
-                            const fc = agriFieldBoundary.geojson;
-                            if (!fc?.features?.length) return;
-                            registerImportedCustomLayer(
-                              createSiVectorImportLayer({
-                                name: `Field Boundaries (${fc.features.length})`,
-                                geojson: fc,
-                                source: 'api',
-                                format: 'Shapefile',
-                                crs: 'EPSG:4326',
-                              }),
+                    {expandedEnvSection === 'segformer-detection' && (
+                      <SegFormerDetectionPanel
+                        hasAoi={segFormerAoiReady}
+                        rsSession={segFormerRsSession}
+                        inputMode={segFormerDetection.inputMode}
+                        onInputModeChange={segFormerDetection.setInputMode}
+                        availableRasters={segFormerDetection.availableRasters}
+                        selectedRasterId={segFormerDetection.selectedRasterId}
+                        onSelectRasterId={segFormerDetection.setSelectedRasterId}
+                        onAddRasterFiles={files => void segFormerDetection.addRasterFiles(files)}
+                        rasterListBusy={segFormerDetection.rasterListBusy}
+                        rasterUploadBusy={segFormerDetection.rasterUploadBusy}
+                        onRefreshRasters={() => void segFormerDetection.refreshRasters()}
+                        bandMode={segFormerDetection.bandMode}
+                        onBandModeChange={segFormerDetection.setBandMode}
+                        customRgb={segFormerDetection.customRgb}
+                        onCustomRgbChannelChange={segFormerDetection.setCustomRgbChannel}
+                        rgbLabel={segFormerDetection.rgbLabel}
+                        modelTypeId={segFormerDetection.modelTypeId}
+                        onModelTypeChange={segFormerDetection.setModelTypeId}
+                        categories={segFormerDetection.categories}
+                        categoryId={segFormerDetection.categoryId}
+                        onCategoryChange={segFormerDetection.setCategoryId}
+                        classes={segFormerDetection.categoryClasses}
+                        classId={segFormerDetection.classId}
+                        onClassChange={segFormerDetection.setClassId}
+                        classMapped={segFormerDetection.classMapped}
+                        unsupportedTooltip={segFormerDetection.unsupportedTooltip}
+                        minConfidence={segFormerDetection.minConfidence}
+                        onMinConfidenceChange={segFormerDetection.setMinConfidence}
+                        tileSize={segFormerDetection.tileSize}
+                        onTileSizeChange={segFormerDetection.setTileSize}
+                        overlap={segFormerDetection.overlap}
+                        onOverlapChange={segFormerDetection.setOverlap}
+                        fillOpacity={segFormerDetection.fillOpacity}
+                        onFillOpacityChange={segFormerDetection.setFillOpacity}
+                        overlayVisible={segFormerDetection.overlayVisible}
+                        onOverlayVisibleChange={segFormerDetection.setOverlayVisible}
+                        phase={segFormerDetection.phase}
+                        busy={segFormerDetection.busy}
+                        error={segFormerDetection.error}
+                        offline={segFormerDetection.offline}
+                        routeMissing={segFormerDetection.routeMissing}
+                        fieldPipeline={segFormerDetection.fieldPipeline}
+                        boundaryRefine={segFormerDetection.boundaryRefine}
+                        onBoundaryRefineChange={segFormerDetection.setBoundaryRefine}
+                        imageSource={segFormerDetection.imageSource}
+                        captureNote={segFormerDetection.captureNote}
+                        objectCount={segFormerDetection.objectCount}
+                        totalAreaHa={segFormerDetection.totalAreaHa}
+                        rows={segFormerDetection.rows}
+                        hasResult={segFormerDetection.hasDrawableResult}
+                        hasMask={Boolean(segFormerDetection.maskPng)}
+                        onDetect={classId => void segFormerDetection.detect(classId)}
+                        onReset={segFormerDetection.reset}
+                        onShowOnMap={() => {
+                          segFormerDetection.showOnMap();
+                          if (segFormerDetection.geojson?.features?.length) {
+                            focusGeoJsonOnMap(segFormerDetection.geojson);
+                            return;
+                          }
+                          const bbox = segFormerDetection.resultBbox;
+                          if (!bbox) return;
+                          const mapInstance = mapRef.current?.getMap
+                            ? mapRef.current.getMap()
+                            : mapRef.current;
+                          if (mapInstance && typeof mapInstance.fitBounds === 'function') {
+                            mapInstance.fitBounds(
+                              [
+                                [bbox[0], bbox[1]],
+                                [bbox[2], bbox[3]],
+                              ],
+                              { padding: 80, duration: 800 },
                             );
-                            focusGeoJsonOnMap(fc);
-                          }}
-                        />
-                      </div>
+                          }
+                        }}
+                        onExportGeojson={segFormerDetection.exportGeojson}
+                        onExportShapefile={() => void segFormerDetection.exportShapefile()}
+                        onDownloadMask={() => {
+                          if (segFormerDetection.resultBbox) {
+                            void segFormerDetection.exportMaskGeoref();
+                          } else {
+                            segFormerDetection.exportMaskPng();
+                          }
+                        }}
+                        onAddToLayers={() => {
+                          publishSegFormerPredictionLayer({ focus: true, statusPrefix: 'Added' });
+                        }}
+                      />
                     )}
                     {expandedEnvSection === 'hydro-watershed' && (
                       <div className="si-env-section-card si-rs-panel--glass">
@@ -23779,21 +24621,6 @@ export default function SatelliteIntelligence() {
                           onExportReport={handleFloodExportReport}
                           exportReportBusy={floodExportBusy}
                           exportReportLabel={floodExportLabel}
-                          onClose={() => setIsLayerDropdownOpen(false)}
-                        />
-                      </div>
-                    )}
-                    {expandedEnvSection === 'image-classification' && (
-                      <div className="si-env-section-card si-rs-panel--glass">
-                        <ImageClassificationWizardPanel
-                          wizard={imageClassification}
-                          existingRasters={imageClassificationExistingRasters}
-                          hasDrawnGeometry={!!icSampleAoiGeometry}
-                          sampleDrawTool={icSampleDrawTool}
-                          sampleDrawActive={icDrawingModeActive}
-                          onSampleDrawToolChange={handleIcDrawingToolChange}
-                          onSampleDrawStop={() => handleIcDrawingModeChange(false)}
-                          onClearSampleSketch={clearIcSampleSketchOnly}
                           onClose={() => setIsLayerDropdownOpen(false)}
                         />
                       </div>

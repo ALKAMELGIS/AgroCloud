@@ -147,6 +147,7 @@ function samplePayload(): TimeSeriesReportPayload {
         trend: 'Stable',
       },
     ],
+    estimatedYieldTimeline: [],
     weatherTimeline: null,
     correlationBlocks: [],
     cropRecommendations: [],
@@ -226,6 +227,7 @@ describe('timeSeriesReport', () => {
     expect(names).toContain('NDMI Data')
     expect(names).toContain('Vegetation Coverage Timeline')
     expect(names).toContain('Estimated Water Loss Timeline')
+    expect(names).toContain('Estimated Yield (t-ha)')
     expect(names).toContain('Map Snapshots')
     expect(names).toContain('Analysis & Recommendations')
 
@@ -236,8 +238,8 @@ describe('timeSeriesReport', () => {
     expect(dataSheet.getRow(2).getCell(3).value).toBe(0.5)
 
     const ndviSheet = wb.getWorksheet('NDVI Data')!
-    expect(ndviSheet.getRow(2).getCell(1).value).toBe('Date')
-    expect(ndviSheet.getRow(2).getCell(2).value).toBe('NDVI mean')
+    expect(ndviSheet.getRow(2).getCell(1).value).toBe('Period')
+    expect(ndviSheet.getRow(2).getCell(2).value).toBe('NDVI')
     expect(ndviSheet.getRow(3).getCell(1).value).toBe('2026-04-16')
     expect(ndviSheet.getRow(3).getCell(2).value).toBe(0.5)
     expect(ndviSheet.getRow(4).getCell(1).value).toBe('2026-07-09')
@@ -265,6 +267,10 @@ describe('timeSeriesReport', () => {
     const waterRow = waterSheet.getRow(5)
     expect(waterRow.getCell(2).value).toBe(84)
     expect(waterRow.getCell(9).value).toBe('Critical')
+
+    const yieldSheet = wb.getWorksheet('Estimated Yield (t-ha)')!
+    expect(String(yieldSheet.getCell('A1').value)).toContain('Estimated Yield')
+    expect(String(yieldSheet.getCell('A2').value)).toContain('0.5xNDVI')
   })
 
   it('exports only selected layer raw data when layerIds is a subset', async () => {

@@ -228,22 +228,22 @@ describe('lulc five-year helpers', () => {
 })
 
 describe('docxMapGrid layout', () => {
-  it('uses 3×3 grid (9 maps per page) like the sample atlas', () => {
+  it('uses 3×4 grid (12 maps per page) like the T-23 atlas', () => {
     expect(MAPS_PER_ROW).toBe(3)
-    expect(MAPS_PER_PAGE).toBe(9)
-    expect(MAP_IMAGE_CX).toBeGreaterThan(2_000_000)
-    expect(MAP_IMAGE_CY).toBeGreaterThan(1_800_000)
-    const nine = Array.from({ length: 9 }, (_, i) => ({
+    expect(MAPS_PER_PAGE).toBe(12)
+    expect(MAP_IMAGE_CX).toBe(2057400)
+    expect(MAP_IMAGE_CY).toBe(1543050)
+    const twelve = Array.from({ length: 12 }, (_, i) => ({
       rId: `rIdImg${i + 1}`,
       date: `2022-0${(i % 9) + 1}-01`,
       label: `NDVI 0.4${i}`,
     }))
-    const xmlPage = docxMapGrid(nine)
+    const xmlPage = docxMapGrid(twelve)
     expect(xmlPage).not.toContain('w:br w:type="page"')
-    expect((xmlPage.match(/<w:tr>/g) ?? []).length).toBe(3)
+    expect((xmlPage.match(/<w:tr>/g) ?? []).length).toBe(4)
 
-    const ten = [...nine, { rId: 'rIdImg10', date: '2023-01-01', label: 'NDVI 0.5' }]
-    const xmlNext = docxMapGrid(ten)
+    const thirteen = [...twelve, { rId: 'rIdImg13', date: '2023-01-01', label: 'NDVI 0.5' }]
+    const xmlNext = docxMapGrid(thirteen)
     expect(xmlNext).toContain('w:br w:type="page"')
     expect((xmlNext.match(/<w:gridCol /g) ?? []).length).toBeGreaterThanOrEqual(3)
   })

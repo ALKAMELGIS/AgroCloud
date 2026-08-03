@@ -47,6 +47,18 @@ export const REMOTE_SENSING_PROVIDER_CATALOG: RemoteSensingProviderDef[] = [
     collections: [
       { id: 'sentinel-2-l2a', label: 'Sentinel-2 L2A' },
       { id: 'sentinel-2-l1c', label: 'Sentinel-2 L1C' },
+      { id: 'sentinel-1-grd', label: 'Sentinel-1 GRD' },
+      { id: 'sentinel-3', label: 'SENTINEL-3' },
+      { id: 'sentinel-5p', label: 'SENTINEL-5P' },
+      { id: 'sentinel-6', label: 'SENTINEL-6' },
+      { id: 'ccm-optical', label: 'CCM Optical' },
+      { id: 'ccm-sar', label: 'CCM SAR' },
+      { id: 'copernicus-dem', label: 'Copernicus DEM' },
+      { id: 'sentinel-mosaics', label: 'Sentinel Mosaics' },
+      { id: 'clms-biogeophysical', label: 'CLMS Bio-geophysical Parameters' },
+      { id: 'clms-lulc-priority', label: 'CLMS Land Cover and Land Use in Priority Areas' },
+      { id: 'clms-lulc-mapping', label: 'CLMS Land Cover and Land Use Mapping' },
+      { id: 'complementary-data', label: 'Complementary Data' },
     ],
   },
   {
@@ -131,7 +143,18 @@ export const REMOTE_SENSING_PROVIDER_CATALOG: RemoteSensingProviderDef[] = [
     collections: [
       { id: 'sentinel-1-grd', label: 'Sentinel-1 GRD' },
       { id: 'sentinel-2-l2a', label: 'Sentinel-2 L2A' },
-      { id: 'sentinel-3-olci', label: 'Sentinel-3 OLCI' },
+      { id: 'sentinel-2-l1c', label: 'Sentinel-2 L1C' },
+      { id: 'sentinel-3', label: 'SENTINEL-3' },
+      { id: 'sentinel-5p', label: 'SENTINEL-5P' },
+      { id: 'sentinel-6', label: 'SENTINEL-6' },
+      { id: 'ccm-optical', label: 'CCM Optical' },
+      { id: 'ccm-sar', label: 'CCM SAR' },
+      { id: 'copernicus-dem', label: 'Copernicus DEM' },
+      { id: 'sentinel-mosaics', label: 'Sentinel Mosaics' },
+      { id: 'clms-biogeophysical', label: 'CLMS Bio-geophysical Parameters' },
+      { id: 'clms-lulc-priority', label: 'CLMS Land Cover and Land Use in Priority Areas' },
+      { id: 'clms-lulc-mapping', label: 'CLMS Land Cover and Land Use Mapping' },
+      { id: 'complementary-data', label: 'Complementary Data' },
     ],
     hint: 'Copernicus Sentinel via CDSE (sh.dataspace.copernicus.eu). Falls back to Sentinel Hub open data if CDSE WMS instance is not set.',
   },
@@ -241,15 +264,40 @@ export function resolveEoStacCollectionsForProvider(
   const def = remoteSensingProviderDef(providerId)
   const col = (collectionId || def.collections[0]?.id || '').toLowerCase()
 
-  if (/sentinel-1|grd|sar|umbra|alos|palsar|space42-sar/.test(col) || def.id === 'umbra' || def.id === 'jaea') {
+  if (/sentinel-1|grd|sar|umbra|alos|palsar|space42-sar|ccm-sar/.test(col) || def.id === 'umbra' || def.id === 'jaea') {
     return { collections: ['sentinel-1-grd'], lookbackDays: 90, label: 'Sentinel-1 GRD' }
   }
-  if (/sentinel-3|olci/.test(col)) {
+  if (/sentinel-5p|s5p/.test(col)) {
+    return {
+      collections: ['sentinel-5p-l2-netcdf'],
+      lookbackDays: 90,
+      label: 'SENTINEL-5P',
+    }
+  }
+  if (/sentinel-3|olci|slstr/.test(col)) {
     return {
       collections: ['sentinel-3-olci-lfr-l2-netcdf'],
       lookbackDays: 120,
-      label: 'Sentinel-3 OLCI',
+      label: 'SENTINEL-3',
     }
+  }
+  if (/copernicus-dem/.test(col)) {
+    return {
+      collections: ['cop-dem-glo-30'],
+      lookbackDays: 3650,
+      label: 'Copernicus DEM',
+    }
+  }
+  if (/sentinel-mosaic|mosaic/.test(col)) {
+    return {
+      collections: ['sentinel-2-l2a'],
+      lookbackDays: 365,
+      label: 'Sentinel Mosaics',
+    }
+  }
+  if (/ccm-optical|clms|complementary|sentinel-6/.test(col)) {
+    // Catalog entry available in the toolbox; scene calendar uses S2 until vendor STAC is wired.
+    return { collections: ['sentinel-2-l2a'], lookbackDays: 120, label: def.collections.find(c => c.id === col)?.label || 'Sentinel-2 L2A' }
   }
   if (/landsat|hls/.test(col) || def.id === 'nasa-landsat') {
     return { collections: ['landsat-c2-l2'], lookbackDays: 365, label: 'Landsat C2 L2' }

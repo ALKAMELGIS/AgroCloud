@@ -1,0 +1,24 @@
+# opengeos/geoai inference service
+#
+#   cd backend/services/geoai-inference
+#   docker compose up --build
+#
+# Serves http://localhost:8098 — AgroCloud default for GEOAI_INFERENCE_URL.
+services:
+  geoai-inference:
+    build: .
+    image: ai-geoai-inference
+    ports:
+      - "8098:8098"
+    environment:
+      GEOAI_MIN_CONFIDENCE: "0.5"
+      GEOAI_OVERLAP: "0.25"
+      GEOAI_CHIP_SIZE: "512"
+      GEOAI_MAX_EDGE: "2048"
+      GEOAI_EAGER_LOAD: "0"
+    volumes:
+      - geoai-inference-cache:/root/.cache
+    restart: unless-stopped
+
+volumes:
+  geoai-inference-cache:

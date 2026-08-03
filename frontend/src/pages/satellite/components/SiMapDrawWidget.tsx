@@ -41,7 +41,7 @@ export function SiMapDrawWidget({
   onPan,
   onTogglePanLock,
 }: SiMapDrawWidgetProps) {
-  const isolationProps = useMapOverlayIsolation(active)
+  const isolationProps = useMapOverlayIsolation(active, { native: true })
 
   if (!active) return null
 

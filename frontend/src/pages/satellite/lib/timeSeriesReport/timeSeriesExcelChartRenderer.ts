@@ -91,7 +91,7 @@ export function renderTrendChartPair(
           callbacks: {
             label: ctx => {
               const v = ctx.parsed.y
-              return `${ctx.dataset.label}: ${v == null || !Number.isFinite(v) ? '—' : v.toFixed(4)}`
+              return `${ctx.dataset.label}: ${v == null || !Number.isFinite(v) ? '-' : v.toFixed(4)}`
             },
           },
         },

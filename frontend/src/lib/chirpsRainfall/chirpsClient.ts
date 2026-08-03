@@ -5,6 +5,8 @@ export type ChirpsRasterResponse = {
   source: string
   product: string
   date: string
+  requestedDate?: string
+  lookbackSteps?: number
   aggregation: string
   unit: string
   nodata: number

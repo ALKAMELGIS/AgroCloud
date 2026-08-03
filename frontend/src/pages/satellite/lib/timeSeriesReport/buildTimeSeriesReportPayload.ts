@@ -16,6 +16,7 @@ import {
   buildLulcFiveYearMapGroups,
 } from './timeSeriesLulcChangeMaps'
 import { buildEstimatedWaterLossTimeline } from './estimatedWaterLossTimeline'
+import { buildEstimatedYieldTimeline } from './estimatedYieldTimeline'
 import { buildVegetationCoverageTimeline } from './vegetationCoverageTimeline'
 import { buildTimeSeriesWeatherTimeline } from './timeSeriesWeatherTimeline'
 import { buildTimeSeriesCorrelationBlocks } from './timeSeriesScatterChartRenderer'
@@ -86,8 +87,64 @@ export type BuildTimeSeriesReportPayloadInput = {
   includeVegetationCoverageTimeline?: boolean
   periodAnchorDates?: Record<string, string>
   timeAggregation?: ImageryTimeAggregation
+  /**
+   * Aggregation for Map Snapshots (defaults to `timeAggregation`).
+   * Word / Excel Intelligence exports force `'day'` for the classic daily atlas.
+   */
+  mapSnapshotAggregation?: ImageryTimeAggregation
+  /** When false, skip cumulative peak-of-period maps (Excel Map Snapshots only needs index atlas). */
+  includeCumulativeMapSnapshots?: boolean
+  /** When false, skip index change-detection map pairs. */
+  includeChangeDetectionMapSnapshots?: boolean
+  /** Soft cap for Day atlas cards per layer (even sampling). */
+  mapSnapshotMaxPerLayer?: number
   signal?: AbortSignal
   onMapSnapshotProgress?: (completed: number, total: number) => void
+}
+
+/** Build a day-level chart axis from raw daily rows for selected layers. */
+export function buildDayChartFromDailyRows(
+  layerIds: string[],
+  dailyRows: SentinelHubDailyIndexMeans[],
+  fromDate?: string,
+  toDate?: string,
+): {
+  labels: string[]
+  displayLabels: string[]
+  series: ImageryTimeSeriesLayerSeries[]
+  periodAnchorDates: Record<string, string>
+} {
+  const from = (fromDate ?? '').trim().slice(0, 10)
+  const to = (toDate ?? '').trim().slice(0, 10)
+  const ids = [...new Set(layerIds.map(id => id.trim().toUpperCase()).filter(Boolean))]
+  const dateSet = new Set<string>()
+  for (const row of dailyRows) {
+    const d = row.date?.trim().slice(0, 10)
+    if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) continue
+    if (from && d < from) continue
+    if (to && d > to) continue
+    const hasValue = ids.some(id => {
+      const v = evaluateImageryLayerDailyValue(id, row)
+      return v != null && Number.isFinite(v)
+    })
+    if (hasValue) dateSet.add(d)
+  }
+  const labels = [...dateSet].sort()
+  const series: ImageryTimeSeriesLayerSeries[] = ids.map(layerId => ({
+    layerId,
+    values: labels.map(date => {
+      const row = dailyRows.find(r => r.date?.slice(0, 10) === date)
+      if (!row) return null
+      const v = evaluateImageryLayerDailyValue(layerId, row)
+      return v != null && Number.isFinite(v) ? v : null
+    }),
+  }))
+  return {
+    labels,
+    displayLabels: [...labels],
+    series,
+    periodAnchorDates: Object.fromEntries(labels.map(d => [d, d])),
+  }
 }
 
 function resolveDailyMean(rows: SentinelHubDailyIndexMeans[], layerId: string, date: string): number | null {
@@ -121,6 +178,7 @@ export async function buildTimeSeriesReportPayload(
   const centroidLng = metrics?.centroid?.[0] ?? null
   const centroidLat = metrics?.centroid?.[1] ?? null
   const timeAggregation = input.timeAggregation ?? 'day'
+  const mapSnapshotAggregation = input.mapSnapshotAggregation ?? timeAggregation
   const periodAnchorDates = input.periodAnchorDates ?? {}
 
   const statistics = input.layerSeries.map(s =>
@@ -195,27 +253,103 @@ export async function buildTimeSeriesReportPayload(
   const wantIndexMaps = input.includeMapSnapshots !== false
   const wantLulcMaps = input.includeLulcMapSnapshots ?? wantIndexMaps
 
-  const mapSnapshotGroups =
-    wantIndexMaps && geometry
+  // When the panel is already Day, keep its chart axis (proven finite means).
+  // Rebuild from dailyRows only when forcing Day over Week/Month/Year aggregation.
+  const wantDayMaps = mapSnapshotAggregation === 'day'
+  const dayChartForMaps =
+    wantDayMaps && timeAggregation !== 'day' && input.dailyRows.length
+      ? buildDayChartFromDailyRows(input.layerIds, input.dailyRows, input.fromDate, input.toDate)
+      : null
+  // Only keep forced Day when the day rebuild actually produced ISO acquisition dates.
+  // Otherwise keep panel aggregation aligned with panel chartLabels (avoids week keys + day WMS).
+  const dayRebuildOk = Boolean(dayChartForMaps?.labels.length)
+  const effectiveMapAggregation: ImageryTimeAggregation = dayRebuildOk ? 'day' : timeAggregation
+  const mapChartLabels = dayRebuildOk ? dayChartForMaps!.labels : input.chartLabels
+  const mapDisplayLabels = dayRebuildOk ? dayChartForMaps!.displayLabels : input.displayLabels
+  const mapLayerSeries = dayRebuildOk ? dayChartForMaps!.series : input.layerSeries
+  const mapPeriodAnchors = dayRebuildOk ? dayChartForMaps!.periodAnchorDates : periodAnchorDates
+
+  const snapshotGeometry = geometry ?? input.field?.geometry ?? null
+  const wantCumulative = input.includeCumulativeMapSnapshots !== false
+  const wantChangeMaps = input.includeChangeDetectionMapSnapshots !== false
+
+  let mapSnapshotGroups =
+    wantIndexMaps && snapshotGeometry
       ? await buildTimeSeriesMapSnapshotGroups({
-          geometry,
+          geometry: snapshotGeometry,
           layerIds: input.layerIds,
-          chartLabels: input.chartLabels,
-          displayLabels: input.displayLabels,
-          layerSeries: input.layerSeries,
+          chartLabels: mapChartLabels,
+          displayLabels: mapDisplayLabels,
+          layerSeries: mapLayerSeries,
           dailyRows: input.dailyRows,
-          periodAnchorDates,
+          periodAnchorDates: mapPeriodAnchors,
           areaHa,
           interpretations,
-          timeAggregation,
+          timeAggregation: effectiveMapAggregation,
+          maxDaySnapshots: input.mapSnapshotMaxPerLayer,
+          allowBasemapFallback: true,
           mapboxToken: input.mapboxToken,
           signal: input.signal,
           onProgress: onPhase(0),
         })
       : []
 
+  // If forced-day rebuild produced no cards, retry with the panel chart axis (Week/Month/Day as shown).
+  if (
+    wantIndexMaps &&
+    snapshotGeometry &&
+    !mapSnapshotGroups.length &&
+    (dayRebuildOk || mapChartLabels !== input.chartLabels)
+  ) {
+    mapSnapshotGroups = await buildTimeSeriesMapSnapshotGroups({
+      geometry: snapshotGeometry,
+      layerIds: input.layerIds,
+      chartLabels: input.chartLabels,
+      displayLabels: input.displayLabels,
+      layerSeries: input.layerSeries,
+      dailyRows: input.dailyRows,
+      periodAnchorDates: periodAnchorDates,
+      areaHa,
+      interpretations,
+      timeAggregation,
+      maxDaySnapshots: input.mapSnapshotMaxPerLayer,
+      allowBasemapFallback: true,
+      mapboxToken: input.mapboxToken,
+      signal: input.signal,
+      onProgress: onPhase(0),
+    })
+  }
+
+  // Fill any selected layers that still have no atlas section (e.g. ISS when series matching failed).
+  if (wantIndexMaps && snapshotGeometry && input.layerIds.length) {
+    const have = new Set(mapSnapshotGroups.map(g => g.layerId.trim().toUpperCase()))
+    const missing = input.layerIds
+      .map(id => id.trim().toUpperCase())
+      .filter(id => id && !have.has(id))
+    if (missing.length) {
+      const extra = await buildTimeSeriesMapSnapshotGroups({
+        geometry: snapshotGeometry,
+        layerIds: missing,
+        chartLabels: input.chartLabels,
+        displayLabels: input.displayLabels,
+        layerSeries: input.layerSeries,
+        dailyRows: input.dailyRows,
+        periodAnchorDates: periodAnchorDates,
+        areaHa,
+        interpretations,
+        timeAggregation: effectiveMapAggregation,
+        maxDaySnapshots: input.mapSnapshotMaxPerLayer ?? 12,
+        allowBasemapFallback: true,
+        mapboxToken: input.mapboxToken,
+        signal: input.signal,
+        onProgress: onPhase(0),
+      })
+      if (extra.length) mapSnapshotGroups = [...mapSnapshotGroups, ...extra]
+    }
+  }
+
   const cumulativeMapSnapshotGroups =
-    wantIndexMaps && geometry
+    wantIndexMaps && wantCumulative && geometry
       ? await buildCumulativeMapSnapshotGroups({
           geometry,
           layerIds: input.layerIds,
@@ -243,14 +377,14 @@ export async function buildTimeSeriesReportPayload(
   const lulcChangeCompositions = lulcBuild.changeCompositions
 
   const changeDetectionMapSnapshotGroups =
-    wantIndexMaps && geometry
+    wantIndexMaps && wantChangeMaps && snapshotGeometry
       ? await buildIndexChangeDetectionMapGroups({
-          geometry,
+          geometry: snapshotGeometry,
           layerIds: input.layerIds,
-          chartLabels: input.chartLabels,
-          displayLabels: input.displayLabels,
-          layerSeries: input.layerSeries,
-          periodAnchorDates,
+          chartLabels: mapChartLabels,
+          displayLabels: mapDisplayLabels,
+          layerSeries: mapLayerSeries,
+          periodAnchorDates: mapPeriodAnchors,
           areaHa,
           mapboxToken: input.mapboxToken,
           signal: input.signal,
@@ -283,6 +417,19 @@ export async function buildTimeSeriesReportPayload(
         dailyRows: input.dailyRows,
         layerSeries: input.layerSeries,
         vegetationCoverageTimeline,
+        signal: input.signal,
+      })
+    : []
+
+  const estimatedYieldTimeline = geometry
+    ? buildEstimatedYieldTimeline({
+        geometry,
+        chartLabels: input.chartLabels,
+        displayLabels: input.displayLabels,
+        periodAnchorDates,
+        dailyRows: input.dailyRows,
+        layerSeries: input.layerSeries,
+        primaryInterpretation,
         signal: input.signal,
       })
     : []
@@ -354,6 +501,7 @@ export async function buildTimeSeriesReportPayload(
     changeDetectionMapSnapshotGroups,
     vegetationCoverageTimeline,
     estimatedWaterLossTimeline,
+    estimatedYieldTimeline,
     weatherTimeline,
     correlationBlocks,
     cropRecommendations: cropRec.bullets,

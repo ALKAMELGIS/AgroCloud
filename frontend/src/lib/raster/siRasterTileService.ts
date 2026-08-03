@@ -199,6 +199,20 @@ export async function fetchRasterRecord(id: string, signal?: AbortSignal): Promi
   return (await res.json()) as AgroCloudRasterRecord
 }
 
+/** List rasters known to the server (`GET /api/raster`). */
+export async function listRasters(signal?: AbortSignal): Promise<AgroCloudRasterRecord[]> {
+  const res = await fetch(apiUrl('/api/raster'), { signal })
+  if (!res.ok) throw new Error(`List rasters failed (${res.status})`)
+  const body = (await res.json()) as { rasters?: AgroCloudRasterRecord[] }
+  return Array.isArray(body?.rasters) ? body.rasters : []
+}
+
+/** Ready rasters only — suitable for SegFormer / classification input pickers. */
+export async function listReadyRasters(signal?: AbortSignal): Promise<AgroCloudRasterRecord[]> {
+  const all = await listRasters(signal)
+  return all.filter(r => r.status === 'ready' && r.bboxWgs84)
+}
+
 export async function pollRasterUntilReady(
   id: string,
   opts?: { signal?: AbortSignal; onStatus?: (r: AgroCloudRasterRecord) => void },

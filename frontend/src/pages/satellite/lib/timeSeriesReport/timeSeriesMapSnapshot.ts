@@ -161,12 +161,14 @@ export function mapLngLatToMercatorBox(
 
 function walkCoords(node: unknown, out: [number, number][]): void {
   if (!node) return
+  // GeoJSON positions may be [lng, lat] or [lng, lat, z] / [lng, lat, z, m].
+  // Rejecting Z previously emptied the bbox for ArcGIS Layers AOI polygons while
+  // area still calculated — Word atlas then skipped every map card.
   if (
     Array.isArray(node) &&
     node.length >= 2 &&
     typeof node[0] === 'number' &&
-    typeof node[1] === 'number' &&
-    (node.length === 2 || typeof node[2] !== 'number')
+    typeof node[1] === 'number'
   ) {
     out.push([node[0], node[1]])
     return
@@ -174,13 +176,37 @@ function walkCoords(node: unknown, out: [number, number][]): void {
   if (Array.isArray(node)) node.forEach(c => walkCoords(c, out))
 }
 
+function collectGeometryCoordinateNodes(geometry: GeoJSON.Geometry | GeoJSON.Feature | GeoJSON.FeatureCollection): unknown[] {
+  if ((geometry as GeoJSON.Feature).type === 'Feature') {
+    const g = (geometry as GeoJSON.Feature).geometry
+    return g ? collectGeometryCoordinateNodes(g) : []
+  }
+  if ((geometry as GeoJSON.FeatureCollection).type === 'FeatureCollection') {
+    const nodes: unknown[] = []
+    for (const f of (geometry as GeoJSON.FeatureCollection).features ?? []) {
+      if (f?.geometry) nodes.push(...collectGeometryCoordinateNodes(f.geometry))
+    }
+    return nodes
+  }
+  if (geometry.type === 'GeometryCollection') {
+    const nodes: unknown[] = []
+    for (const part of geometry.geometries ?? []) {
+      nodes.push(...collectGeometryCoordinateNodes(part))
+    }
+    return nodes
+  }
+  return [(geometry as { coordinates?: unknown }).coordinates]
+}
+
 export function bboxFromGeometry(
-  geometry: GeoJSON.Geometry | null | undefined,
+  geometry: GeoJSON.Geometry | GeoJSON.Feature | GeoJSON.FeatureCollection | null | undefined,
   padRatio = 0.08,
 ): LngLatBbox | null {
   if (!geometry) return null
   const pts: [number, number][] = []
-  walkCoords((geometry as { coordinates?: unknown }).coordinates, pts)
+  for (const node of collectGeometryCoordinateNodes(geometry)) {
+    walkCoords(node, pts)
+  }
   if (!pts.length) return null
   let minLng = Infinity
   let minLat = Infinity
@@ -405,7 +431,8 @@ export async function fetchIndexLayerMapSnapshotBase64(options: {
 
   const layerId = options.layerId.trim().toUpperCase()
   const sceneDate = options.sceneDate.trim().slice(0, 10)
-  if (!layerId || !sceneDate) return null
+  // Sentinel Hub WMS TIME must be YYYY-MM-DD (reject week keys like 2026-W14).
+  if (!layerId || !/^\d{4}-\d{2}-\d{2}$/.test(sceneDate)) return null
 
   const drawn = { type: 'Feature' as const, geometry: options.geometry, properties: {} }
   const clip = buildSentinelHubWmsAoiClip(drawn, layerId, { sceneDate })
@@ -479,6 +506,8 @@ export function mapLngLatToBox(
 function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()
+    // Avoid tainted-canvas failures when a http(s) basemap URL slips through.
+    if (/^https?:\/\//i.test(dataUrl)) img.crossOrigin = 'anonymous'
     img.onload = () => resolve(img)
     img.onerror = () => reject(new Error('image load failed'))
     img.src = dataUrl
@@ -812,7 +841,28 @@ export async function compositeAoiMapSnapshotBase64(options: {
     const dataUrl = canvas.toDataURL('image/png')
     return dataUrlToPngBase64(dataUrl)
   } catch {
-    // Tainted canvas (rare CORS path) — caller falls back to basemap-only / AOI-only compose.
-    return null
+    // Tainted canvas — retry without basemap/index so AOI outline cards still export.
+    try {
+      const safe = document.createElement('canvas')
+      safe.width = width
+      safe.height = height
+      const sctx = safe.getContext('2d')
+      if (!sctx) return null
+      sctx.fillStyle = '#f1f5f9'
+      sctx.fillRect(0, 0, width, height)
+      drawMapTitleBar(sctx, layout, title, dateLabel)
+      sctx.fillStyle = '#475569'
+      sctx.fillRect(mapX, mapY, mapW, mapH)
+      drawAoiOutline(sctx, options.geometry, extent, mapX, mapY, mapW, mapH)
+      sctx.strokeStyle = '#0f172a'
+      sctx.lineWidth = 1.5
+      sctx.strokeRect(mapX + 0.5, mapY + 0.5, mapW - 1, mapH - 1)
+      drawNorthArrow(sctx, mapX + mapW - 22, mapY + 22, 26)
+      drawScaleBar(sctx, extent, mapX, mapY, mapW, mapH)
+      if (legend) drawSnapshotLegend(sctx, legend, legendX, legendY, legendMaxW)
+      return dataUrlToPngBase64(safe.toDataURL('image/png'))
+    } catch {
+      return null
+    }
   }
 }

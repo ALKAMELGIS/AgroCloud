@@ -1,11 +1,17 @@
 /**
  * Filter Remote Sensing Layer dropdown options by satellite provider / collection.
  * Optical multispectral collections get agro indices; SAR / VHR get matching subsets.
+ * Dedicated catalogues (DEM, S3/S5P/S6, CLMS, …) replace the shared S2 list entirely.
  * ASTER L1T uses Planetary Computer band formulas (see asterL1tIndices).
  */
 
 import type { RemoteSensingLayerSelectGroup } from './agroCompositeIndices'
 import { buildAsterL1tLayerSelectGroups } from './asterL1tIndices'
+import {
+  buildCollectionIndexSelectGroups,
+  collectionHasDedicatedIndexCatalog,
+  getCollectionIndexDefs,
+} from './collectionIndexCatalog'
 import { remoteSensingProviderDef } from './remoteSensingProviders'
 
 /** Capability profile implied by the selected provider collection. */
@@ -16,16 +22,17 @@ export type RemoteSensingLayerProfile =
   | 'vhr-optical'
   | 'sar'
   | 'aster-optical'
+  | 'collection-catalog'
 
 const SAR_COLLECTION_RE =
-  /(^|[-_])(sar|grd|palsar|umbra|sentinel-1|alos-2|alos-4|space42-sar)($|[-_])/i
+  /(^|[-_])(sar|grd|palsar|umbra|sentinel-1|alos-2|alos-4|space42-sar|ccm-sar)($|[-_])/i
 
 const VHR_COLLECTION_RE =
   /(pleiades|worldview|planetscope|skysat|blacksky|newsat|markiv|khalifa|dubai|oneatlas|space42-optical)/i
 
 const LANDSAT_COLLECTION_RE = /(landsat|hls)/i
 
-const S3_COLLECTION_RE = /(sentinel-3|olci)/i
+const S3_COLLECTION_RE = /(^|[-_])(sentinel-3|olci|slstr)($|[-_])/i
 
 const S2_COLLECTION_RE = /(sentinel-2|l2a|l1c)/i
 
@@ -65,6 +72,7 @@ export function resolveRemoteSensingLayerProfile(
   const def = remoteSensingProviderDef(providerId)
   const col = (collectionId || def.collections[0]?.id || '').trim()
 
+  if (collectionHasDedicatedIndexCatalog(col)) return 'collection-catalog'
   if (ASTER_COLLECTION_RE.test(col) || def.id === 'aster') return 'aster-optical'
   if (SAR_COLLECTION_RE.test(col) || def.id === 'umbra' || def.id === 'jaea') return 'sar'
   if (S3_COLLECTION_RE.test(col)) return 's3-optical'
@@ -94,7 +102,7 @@ function filterCoreOptions(
 ): RemoteSensingLayerSelectGroup['options'] {
   return options.filter(opt => {
     const id = opt.id.toUpperCase()
-    if (profile === 'sar') return false
+    if (profile === 'sar' || profile === 'collection-catalog') return false
     if (profile === 'vhr-optical') return OPTICAL_CORE.has(id)
     if (profile === 's3-optical') return S3_CORE.has(id)
     return OPTICAL_CORE.has(id) || THERMAL_CORE.has(id)
@@ -106,6 +114,7 @@ function filterPresetOptions(
   profile: RemoteSensingLayerProfile,
 ): RemoteSensingLayerSelectGroup['options'] {
   return options.filter(opt => {
+    if (profile === 'collection-catalog') return false
     if (profile === 'sar') return isSarPresetLayer(opt.id, opt.label) || isVisualPresetLayer(opt.id, opt.label)
     if (profile === 'vhr-optical') return isVisualPresetLayer(opt.id, opt.label)
     if (profile === 's3-optical') {
@@ -132,6 +141,9 @@ export function filterRemoteSensingLayerSelectGroupsForProvider(
   providerId: string,
   collectionId?: string,
 ): RemoteSensingLayerSelectGroup[] {
+  const dedicated = buildCollectionIndexSelectGroups(collectionId)
+  if (dedicated?.length) return dedicated
+
   const profile = resolveRemoteSensingLayerProfile(providerId, collectionId)
 
   if (profile === 'aster-optical') {
@@ -151,7 +163,7 @@ export function filterRemoteSensingLayerSelectGroupsForProvider(
     }
 
     if (group.id === 'climate-precipitation') {
-      // CHIRPS is independent of the EO satellite — keep for all profiles.
+      // CHIRPS stays available for S2 / Landsat / SAR / VHR — not for dedicated catalogues.
       out.push(group)
       continue
     }
@@ -173,7 +185,6 @@ export function filterRemoteSensingLayerSelectGroupsForProvider(
       continue
     }
 
-    // Agro composite + delta category groups (ids from AGRO_*_CATEGORIES)
     if (isFullOptical(profile)) {
       out.push(group)
     }
@@ -182,7 +193,7 @@ export function filterRemoteSensingLayerSelectGroupsForProvider(
   return out.filter(g => g.options.length > 0)
 }
 
-/** Prefer NDVI for optical, TRUE_COLOR for VHR/SAR when available. */
+/** Prefer NDVI for optical, TRUE_COLOR for VHR/SAR, first catalogue index for dedicated collections. */
 export function pickDefaultLayerForProviderProfile(
   options: Array<{ id: string }>,
   providerId: string,
@@ -193,6 +204,14 @@ export function pickDefaultLayerForProviderProfile(
   const ids = options.map(o => o.id)
   const upper = new Map(ids.map(id => [id.toUpperCase(), id]))
 
+  if (profile === 'collection-catalog') {
+    const defs = getCollectionIndexDefs(collectionId)
+    for (const def of defs) {
+      const hit = upper.get(def.id.toUpperCase())
+      if (hit) return hit
+    }
+    return ids[0]!
+  }
   if (profile === 'sar' || profile === 'vhr-optical') {
     for (const key of ['1_TRUE_COLOR', 'TRUE_COLOR', '2_FALSE_COLOR', 'FALSE_COLOR', 'NDVI']) {
       const hit = upper.get(key)

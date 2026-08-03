@@ -490,7 +490,7 @@
 
 [dir='rtl'] .gis-sel-query-panel,
 [dir='rtl'] .gis-sel-layers,
-[dir='rtl'] .gis-sel-attr-table {
+[dir='rtl'] .gis-sel-attr-table:not(.gis-sel-attr-table--free) {
   right: auto;
   left: 12px;
 }
@@ -500,26 +500,72 @@
   top: 108px;
   right: 12px;
   z-index: 12050;
-  width: min(560px, calc(100vw - 24px));
-  max-height: min(420px, calc(100vh - 140px));
+  width: min(300px, calc(100vw - 24px));
+  max-height: min(260px, calc(100vh - 140px));
   display: flex;
   flex-direction: column;
-  border-radius: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: rgba(15, 23, 42, 0.96);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
-  color: #e2e8f0;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(165deg, rgba(12, 12, 14, 0.97) 0%, rgba(0, 0, 0, 0.94) 55%, rgba(18, 18, 22, 0.96) 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 18px 48px rgba(0, 0, 0, 0.65),
+    0 4px 16px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  color: #f1f5f9;
+  overflow: hidden;
+}
+
+.gis-sel-attr-table--free {
+  right: auto;
+}
+
+.gis-sel-attr-table.is-dragging {
+  cursor: grabbing;
+  user-select: none;
 }
 
 .gis-sel-attr-table__head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
-  font-size: 11px;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 10px;
   font-weight: 600;
+  letter-spacing: 0.02em;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.gis-sel-attr-table__drag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: rgba(148, 163, 184, 0.9);
+  cursor: grab;
+  flex-shrink: 0;
+}
+
+.gis-sel-attr-table__drag:hover {
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.gis-sel-attr-table.is-dragging .gis-sel-attr-table__drag {
+  cursor: grabbing;
+}
+
+.gis-sel-attr-table__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(248, 250, 252, 0.95);
 }
 
 .gis-sel-attr-table__close {
@@ -527,34 +573,45 @@
   background: transparent;
   color: #94a3b8;
   cursor: pointer;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.gis-sel-attr-table__close:hover {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .gis-sel-attr-table__body {
-  padding: 8px;
+  padding: 6px 8px 8px;
   overflow: hidden;
+  min-height: 0;
 }
 
 .gis-sel-attr-table__empty {
   margin: 0;
-  font-size: 10px;
-  color: #94a3b8;
+  font-size: 9.5px;
+  line-height: 1.45;
+  color: rgba(148, 163, 184, 0.88);
 }
 
 .gis-sel-attr-table__scroll {
   overflow: auto;
-  max-height: 340px;
+  max-height: 200px;
 }
 
 .gis-sel-attr-table table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 10px;
+  font-size: 9px;
 }
 
 .gis-sel-attr-table th,
 .gis-sel-attr-table td {
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  padding: 4px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 3px 5px;
   text-align: left;
   vertical-align: top;
 }
@@ -562,13 +619,14 @@
 .gis-sel-attr-table th {
   position: sticky;
   top: 0;
-  background: #1e293b;
-  color: #cbd5e1;
+  background: rgba(0, 0, 0, 0.85);
+  color: rgba(203, 213, 225, 0.95);
+  font-weight: 600;
 }
 
 .gis-sel-attr-table td {
-  color: #e2e8f0;
-  max-width: 140px;
+  color: rgba(226, 232, 240, 0.92);
+  max-width: 96px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

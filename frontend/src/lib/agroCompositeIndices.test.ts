@@ -51,6 +51,40 @@ describe('agroCompositeIndices', () => {
     expect(flat.some(o => o.id === 'DWAPI')).toBe(true)
   })
 
+  it('publishes Gold Exploration Indices as separate layers', () => {
+    const groups = buildRemoteSensingLayerSelectGroups([])
+    const gold = groups.find(g => g.id === 'gold-exploration')
+    expect(gold?.label).toContain('Gold Exploration')
+    expect(gold?.options.map(o => o.id)).toEqual([
+      'IOI',
+      'CLAY_MI',
+      'FMI',
+      'NDAI',
+      'BSI',
+      'REAI',
+      'GEI',
+      'GCI',
+      'EGCI',
+    ])
+    expect(resolveAgroCompositeIndexDef('IOI')?.expr).toBe('ioi')
+    expect(resolveAgroCompositeIndexDef('CLAY_MI')?.scientificName).toContain('Clay Mineral Index')
+    expect(resolveAgroCompositeIndexDef('GEI')?.expr).toBe('gei')
+    expect(resolveAgroCompositeIndexDef('GCI')?.expr).toBe('gci')
+    expect(resolveAgroCompositeIndexDef('GCI')?.scientificName).toContain('0.30(IOI)')
+    expect(resolveAgroCompositeIndexDef('EGCI')?.expr).toBe('egci')
+    expect(resolveAgroCompositeIndexDef('EGCI')?.scientificName).toContain('0.30(IOIN)')
+    expect(isAgroCompositeLayerId('BSI')).toBe(true)
+    expect(isAgroCompositeLayerId('GCI')).toBe(true)
+    expect(isAgroCompositeLayerId('EGCI')).toBe(true)
+    // Gold exploration publishes scene composites only (no Change / Δ layers).
+    expect(isAgroDeltaCompositeLayerId('DGCI')).toBe(false)
+    expect(isAgroDeltaCompositeLayerId('DEGCI')).toBe(false)
+    expect(isAgroDeltaCompositeLayerId('DGEI')).toBe(false)
+    expect(resolveAgroStaticLayerIdForDelta('DGCI')).toBe(null)
+    expect(groups.some(g => g.id === 'gold-exploration-delta')).toBe(false)
+    expect(flattenRemoteSensingLayerSelectGroups(groups).some(o => o.id === 'DGCI')).toBe(false)
+  })
+
   it('resolves VHS, ISS, WDSI, and WAPI formula metadata', () => {
     expect(isAgroCompositeLayerId('VHS')).toBe(true)
     expect(isAgroCompositeLayerId('CVHI')).toBe(true)

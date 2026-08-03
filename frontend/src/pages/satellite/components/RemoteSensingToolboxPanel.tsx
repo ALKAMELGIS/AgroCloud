@@ -8,6 +8,7 @@ import { SiRsPanelSelect } from './SiRsPanelSelect'
 import { SiAoiLayerModePanel } from './SiAoiLayerModePanel'
 import type { SiAoiMaskBuilderLayerOption, SiAoiMaskBuilderSettings } from '../../../lib/siAoiMaskBuilder'
 import type { RemoteSensingDrawingTool } from './RemoteSensingDrawingToolbar'
+import { useEffect, useState } from 'react'
 
 export const REMOTE_SENSING_PROVIDERS = remoteSensingProviderOptions()
 
@@ -28,6 +29,9 @@ export type RemoteSensingToolboxPanelProps = {
   imageryDateAutoFollow: boolean
   isFetchingSentinelScenes: boolean
   imageryDateMeta: string | null
+  /** Max cloud cover % for scene catalog / WMS (0–100). */
+  cloudCoverage: number
+  onCloudCoverageChange: (pct: number) => void
   layerGroups: RemoteSensingLayerSelectGroup[]
   layerValue: string
   onLayerChange: (layerId: string) => void
@@ -59,8 +63,6 @@ export type RemoteSensingToolboxPanelProps = {
   onMeasureTool: () => void
   hasClearableDrawing: boolean
   onClearDrawing: () => void
-  onOpenLayerLegend: () => void
-  layerLegendOpen: boolean
   fieldTimelineActive: boolean
   onTimelinePrimaryClick: () => void
   fieldAnalysisStatus: string | null
@@ -93,6 +95,8 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
     onResetImageryDateAuto,
     imageryDateAutoFollow,
     isFetchingSentinelScenes,
+    cloudCoverage,
+    onCloudCoverageChange,
     layerGroups,
     layerValue,
     onLayerChange,
@@ -113,8 +117,6 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
     timeSeriesEnd,
     onTimeSeriesStartChange,
     onTimeSeriesEndChange,
-    onOpenLayerLegend,
-    layerLegendOpen,
     fieldTimelineActive,
     onTimelinePrimaryClick,
     fieldAnalysisStatus,
@@ -135,6 +137,15 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
   } = props
 
   const collectionOptions = remoteSensingCollectionsForProvider(provider)
+  const cloudSafe = Math.max(0, Math.min(100, Math.round(Number(cloudCoverage) || 0)))
+  const [cloudDraft, setCloudDraft] = useState(cloudSafe)
+  useEffect(() => {
+    setCloudDraft(cloudSafe)
+  }, [cloudSafe])
+
+  const commitCloud = () => {
+    if (cloudDraft !== cloudSafe) onCloudCoverageChange(cloudDraft)
+  }
 
   return (
     <div className="si-env-section-card si-field-analysis si-rs-panel si-rs-panel--glass si-rs-panel--toolbox-v2 si-rs-panel--flat">
@@ -158,6 +169,29 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
               aria-label="Sensor or collection"
             />
           </label>
+        </div>
+
+        <div className="si-rs-panel__stack si-rs-panel__stack--cloud">
+          <div className="si-rs-panel__cloud-row">
+            <span className="si-rs-panel__cloud-label">Cloud</span>
+            <input
+              type="range"
+              className="si-rs-panel__cloud-slider"
+              min={0}
+              max={100}
+              step={1}
+              value={cloudDraft}
+              aria-label="Maximum cloud coverage percent"
+              onChange={e => setCloudDraft(Math.max(0, Math.min(100, Math.round(Number(e.target.value)))))}
+              onPointerUp={commitCloud}
+              onKeyUp={commitCloud}
+              onBlur={commitCloud}
+            />
+            <span className="si-rs-panel__cloud-value" title="Max cloud coverage">
+              <i className="fa-solid fa-cloud" aria-hidden />
+              <strong>{cloudDraft}%</strong>
+            </span>
+          </div>
         </div>
 
         <label className="si-rs-panel__stack">
@@ -324,21 +358,6 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
             ) : null}
           </div>
         ) : null}
-
-        <label className="si-rs-panel__stack">
-          <div className="si-rs-panel__toolgrid" role="toolbar" aria-label="Map tools">
-            <button
-              type="button"
-              className={`si-rs-panel__tool${layerLegendOpen ? ' is-on' : ''}`}
-              title={layerLegendOpen ? 'Hide layer legend' : 'Show layer legend'}
-              aria-label={layerLegendOpen ? 'Hide layer legend' : 'Show layer legend'}
-              aria-pressed={layerLegendOpen}
-              onClick={onOpenLayerLegend}
-            >
-              <i className="fa-solid fa-palette" aria-hidden />
-            </button>
-          </div>
-        </label>
 
         <button
           type="button"

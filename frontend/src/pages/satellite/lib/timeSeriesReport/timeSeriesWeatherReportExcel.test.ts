@@ -37,6 +37,7 @@ function payload(): TimeSeriesReportPayload {
     changeDetectionMapSnapshotGroups: [],
     vegetationCoverageTimeline: [],
     estimatedWaterLossTimeline: [],
+    estimatedYieldTimeline: [],
     weatherTimeline: {
       timezone: 'UTC',
       lat: 9.4,

@@ -143,6 +143,7 @@ describe('correlation annex charts', () => {
       changeDetectionMapSnapshotGroups: [],
       vegetationCoverageTimeline: [],
       estimatedWaterLossTimeline: [],
+    estimatedYieldTimeline: [],
       weatherTimeline: null,
       correlationBlocks: [
         {

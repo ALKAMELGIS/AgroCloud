@@ -56,7 +56,22 @@ export const CORE_INDICES_BLOCK = `let ndvi = index(samples.B08, samples.B04);
   let ci_re = samples.B08 > 1e-6 ? samples.B05 / samples.B08 - 1 : NaN;
   let ndsi = index(samples.B11, samples.B08);
   let si = Math.sqrt(Math.max(0, samples.B03 * samples.B04));
-  let ssi = ndsi + si;`
+  let ssi = ndsi + si;
+  let ioi = samples.B02 > 1e-6 ? samples.B04 / samples.B02 : NaN;
+  let clay_mi = samples.B12 > 1e-6 ? samples.B11 / samples.B12 : NaN;
+  let fmi = samples.B08 > 1e-6 ? samples.B11 / samples.B08 : NaN;
+  let ndai = index(samples.B11, samples.B12);
+  let bsiDen = samples.B11 + samples.B04 + samples.B08 + samples.B02;
+  let bsi = bsiDen > 1e-6 ? ((samples.B11 + samples.B04) - (samples.B08 + samples.B02)) / bsiDen : NaN;
+  let reai = samples.B05 > 1e-6 ? samples.B06 / samples.B05 : NaN;
+  let gei = 0.35 * ioi + 0.30 * clay_mi + 0.20 * fmi + 0.15 * bsi;
+  let gci = 0.30 * ioi + 0.25 * clay_mi + 0.20 * fmi + 0.15 * ndai + 0.10 * bsi;
+  let ioin = Math.max(0, Math.min(1, (ioi - 0.5) / 2.0));
+  let cmin = Math.max(0, Math.min(1, (clay_mi - 0.7) / 0.8));
+  let fmin = Math.max(0, Math.min(1, (fmi - 0.4) / 1.6));
+  let ndain = Math.max(0, Math.min(1, (ndai + 0.3) / 0.8));
+  let bsin = Math.max(0, Math.min(1, (bsi + 0.5) / 1.0));
+  let egci = 0.30 * ioin + 0.25 * cmin + 0.20 * fmin + 0.15 * ndain + 0.10 * bsin;`
 
 const CORE_AT_FN = `function coreAt(samples) {
   let ndvi = index(samples.B08, samples.B04);
@@ -70,7 +85,26 @@ const CORE_AT_FN = `function coreAt(samples) {
   let ndsi = index(samples.B11, samples.B08);
   let si = Math.sqrt(Math.max(0, samples.B03 * samples.B04));
   let ssi = ndsi + si;
-  return { ndvi: ndvi, savi: savi, ndmi: ndmi, ndwi: ndwi, ndre: ndre, evi: evi, ci_re: ci_re, ndsi: ndsi, si: si, ssi: ssi };
+  let ioi = samples.B02 > 1e-6 ? samples.B04 / samples.B02 : NaN;
+  let clay_mi = samples.B12 > 1e-6 ? samples.B11 / samples.B12 : NaN;
+  let fmi = samples.B08 > 1e-6 ? samples.B11 / samples.B08 : NaN;
+  let ndai = index(samples.B11, samples.B12);
+  let bsiDen = samples.B11 + samples.B04 + samples.B08 + samples.B02;
+  let bsi = bsiDen > 1e-6 ? ((samples.B11 + samples.B04) - (samples.B08 + samples.B02)) / bsiDen : NaN;
+  let reai = samples.B05 > 1e-6 ? samples.B06 / samples.B05 : NaN;
+  let gei = 0.35 * ioi + 0.30 * clay_mi + 0.20 * fmi + 0.15 * bsi;
+  let gci = 0.30 * ioi + 0.25 * clay_mi + 0.20 * fmi + 0.15 * ndai + 0.10 * bsi;
+  let ioin = Math.max(0, Math.min(1, (ioi - 0.5) / 2.0));
+  let cmin = Math.max(0, Math.min(1, (clay_mi - 0.7) / 0.8));
+  let fmin = Math.max(0, Math.min(1, (fmi - 0.4) / 1.6));
+  let ndain = Math.max(0, Math.min(1, (ndai + 0.3) / 0.8));
+  let bsin = Math.max(0, Math.min(1, (bsi + 0.5) / 1.0));
+  let egci = 0.30 * ioin + 0.25 * cmin + 0.20 * fmin + 0.15 * ndain + 0.10 * bsin;
+  return {
+    ndvi: ndvi, savi: savi, ndmi: ndmi, ndwi: ndwi, ndre: ndre, evi: evi, ci_re: ci_re,
+    ndsi: ndsi, si: si, ssi: ssi,
+    ioi: ioi, clay_mi: clay_mi, fmi: fmi, ndai: ndai, bsi: bsi, reai: reai, gei: gei, gci: gci, egci: egci
+  };
 }`
 
 function alphaBlock(indexVar: string, indexVisibilityMin: number | null, maskVar = 'samples.dataMask'): string {
@@ -134,7 +168,7 @@ export function buildChasAlertEvalscript(indexVisibilityMin: number | null = nul
 // CHAS Alert — derived 4-level overlay from CHAS 10-class raster logic
 function setup() {
   return {
-    input: ["B03", "B04", "B05", "B08", "B8A", "B11", "dataMask"],
+    input: ["B02", "B03", "B04", "B05", "B06", "B08", "B8A", "B11", "B12", "dataMask"],
     output: { bands: 4 }
   };
 }
@@ -173,7 +207,7 @@ export function buildAgroCompositeEvalscript(
 // AgroCloud composite — 10-class layer-specific ramp
 function setup() {
   return {
-    input: ["B02", "B03", "B04", "B05", "B08", "B8A", "B11", "dataMask"],
+    input: ["B02", "B03", "B04", "B05", "B06", "B08", "B8A", "B11", "B12", "dataMask"],
     output: { bands: 4 }
   };
 }
@@ -211,7 +245,7 @@ export function buildAgroCompositeDeltaEvalscript(
 function setup() {
   return {
     input: [{
-      bands: ["B02", "B03", "B04", "B05", "B08", "B8A", "B11", "dataMask"]
+      bands: ["B02", "B03", "B04", "B05", "B06", "B08", "B8A", "B11", "B12", "dataMask"]
     }],
     mosaicking: Mosaicking.ORBIT,
     output: { bands: 4, sampleType: "AUTO" }
@@ -242,6 +276,15 @@ function compositeValue(c) {
   let ndsi = c.ndsi;
   let si = c.si;
   let ssi = c.ssi;
+  let ioi = c.ioi;
+  let clay_mi = c.clay_mi;
+  let fmi = c.fmi;
+  let ndai = c.ndai;
+  let bsi = c.bsi;
+  let reai = c.reai;
+  let gei = c.gei;
+  let gci = c.gci;
+  let egci = c.egci;
   return ${expr};
 }
 
@@ -274,7 +317,7 @@ export function buildAgroCompositeAdiEvalscript(indexVisibilityMin: number | nul
 function setup() {
   return {
     input: [{
-      bands: ["B03", "B04", "B05", "B08", "B11", "dataMask"],
+      bands: ["B02", "B03", "B04", "B05", "B06", "B08", "B11", "B12", "dataMask"],
       units: "REFLECTANCE"
     }],
     mosaicking: Mosaicking.ORBIT,
@@ -348,7 +391,7 @@ export function buildAgroCompositeNcadiEvalscript(indexVisibilityMin: number | n
 function setup() {
   return {
     input: [{
-      bands: ["B03", "B04", "B05", "B08", "B11", "dataMask"],
+      bands: ["B02", "B03", "B04", "B05", "B06", "B08", "B11", "B12", "dataMask"],
       units: "REFLECTANCE"
     }],
     mosaicking: Mosaicking.ORBIT,
@@ -401,7 +444,7 @@ export function buildAgroCompositeWapiEvalscript(indexVisibilityMin: number | nu
 function setup() {
   return {
     input: [{
-      bands: ["B02", "B03", "B04", "B05", "B08", "B8A", "B11", "dataMask"]
+      bands: ["B02", "B03", "B04", "B05", "B06", "B08", "B8A", "B11", "B12", "dataMask"]
     }],
     mosaicking: Mosaicking.ORBIT,
     output: { bands: 4, sampleType: "AUTO" }

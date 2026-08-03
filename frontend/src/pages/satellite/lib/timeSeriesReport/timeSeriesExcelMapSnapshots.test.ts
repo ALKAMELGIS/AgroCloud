@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import ExcelJS from 'exceljs'
+import { evaluateImageryLayerDailyValue } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import {
   buildMapSnapshotsSheet,
   pickRepresentativeSceneDate,
@@ -9,7 +10,9 @@ import type { TimeSeriesMapSnapshotGroup } from './timeSeriesReportTypes'
 import type { SentinelHubDailyIndexMeans } from '../../../../lib/sentinelHubStatisticsApi'
 
 describe('timeSeriesExcelMapSnapshots', () => {
-  it('adds grouped map snapshot sheet with layer sections', () => {
+  it('adds grouped map snapshot sheet with 3×3 atlas layout', () => {
+    const tinyPng =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
     const wb = new ExcelJS.Workbook()
     const groups: TimeSeriesMapSnapshotGroup[] = [
       {
@@ -21,7 +24,7 @@ describe('timeSeriesExcelMapSnapshots', () => {
             layerLabel: 'NDVI',
             sceneDate: '2026-01-01',
             periodLabel: '2026-01-01',
-            imageBase64: null,
+            imageBase64: tinyPng,
             dataSource: 'Sentinel-2 L2A (Sentinel Hub WMS)',
             mean: 0.52,
             min: 0.31,
@@ -38,8 +41,16 @@ describe('timeSeriesExcelMapSnapshots', () => {
     expect(ws).toBeTruthy()
     expect(ws!.getCell('A1').value).toContain('Map Snapshots')
     expect(ws!.getCell('A4').value).toBe('NDVI Daily Maps')
-    expect(ws!.getCell('B6').value).toBe('NDVI')
-    expect(ws!.getCell('D6').value).toBe('2026-01-01')
+    // Caption under first atlas card (row 22 with 18-row card stride).
+    expect(String(ws!.getCell('A22').value ?? '')).toContain('2026-01-01')
+    expect(String(ws!.getCell('A22').value ?? '')).toContain('NDVI')
+    expect(String(ws!.getCell('A22').value ?? '')).toContain('0.5200')
+    // ExcelJS model keeps images on the workbook; API varies by version.
+    const images =
+      typeof (wb as { getImages?: () => unknown[] }).getImages === 'function'
+        ? (wb as { getImages: () => unknown[] }).getImages()
+        : ((wb as { model?: { media?: unknown[] } }).model?.media ?? [])
+    expect(images.length).toBeGreaterThanOrEqual(1)
   })
 
   it('includes every finite day period (no 12-cap)', () => {
@@ -139,5 +150,34 @@ describe('timeSeriesExcelMapSnapshots', () => {
       fallbackAnchor: '2026-04-28',
     })
     expect(scene).toBe('2026-04-15')
+  })
+
+  it('builds ISS map entries from daily core indices (NDMI/NDWI/NDVI/SAVI)', () => {
+    const labels = ['2026-04-01', '2026-04-06', '2026-04-11']
+    const dailyRows = labels.map(date => ({
+      date,
+      ndvi: 0.7,
+      ndmi: 0.35,
+      ndwi: -0.2,
+      savi: 0.5,
+      evi: null,
+      ciRe: null,
+    })) as SentinelHubDailyIndexMeans[]
+    const values = labels.map(date => {
+      const row = dailyRows.find(r => r.date === date)!
+      return evaluateImageryLayerDailyValue('ISS', row)
+    })
+    expect(values.every(v => v != null && Number.isFinite(v))).toBe(true)
+    const entries = selectMapSnapshotEntries({
+      layerId: 'ISS',
+      chartLabels: labels,
+      displayLabels: labels,
+      values,
+      periodAnchorDates: Object.fromEntries(labels.map(d => [d, d])),
+      dailyRows,
+      timeAggregation: 'day',
+    })
+    expect(entries).toHaveLength(3)
+    expect(entries[0]?.sceneDate).toBe('2026-04-01')
   })
 })

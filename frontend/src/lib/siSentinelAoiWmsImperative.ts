@@ -242,6 +242,9 @@ function commitActiveSlot(
   runtime.chunks.set(chunkKey, { activeSlot: nextActive, activeUrl: url, waitCleanup: null })
 }
 
+/** Safety net if `sourcedata` is missed after the inactive source actually loaded. */
+const SI_SENTINEL_AOI_WMS_SOURCE_READY_SAFETY_MS = 8_000
+
 function waitForSourceReady(
   map: MapboxMap,
   sourceId: string,
@@ -253,8 +256,10 @@ function waitForSourceReady(
   }
 
   let settled = false
-  const finish = () => {
+  const finishIfLoaded = () => {
     if (settled) return
+    // Never swap to an unloaded inactive slot — premature commit blanks the active frame.
+    if (!map.isSourceLoaded(sourceId)) return
     settled = true
     cleanup()
     onReady()
@@ -262,15 +267,15 @@ function waitForSourceReady(
 
   const handler = (ev: { sourceId?: string; isSourceLoaded?: boolean }) => {
     if (ev.sourceId !== sourceId) return
-    if (!map.isSourceLoaded(sourceId)) return
-    finish()
+    finishIfLoaded()
   }
 
   // Prefer sourcedata; never wait for map `idle` (ArcGIS / other layers can delay idle for seconds).
-  // Short timeout so index swaps still reveal if sourcedata stalls.
+  // Longer safety timeout only commits when the source is actually loaded (missed-event recovery).
+  // Timeout alone must not commit while still unloaded.
   const timeoutId =
     typeof window !== 'undefined'
-      ? window.setTimeout(finish, 750)
+      ? window.setTimeout(finishIfLoaded, SI_SENTINEL_AOI_WMS_SOURCE_READY_SAFETY_MS)
       : (0 as unknown as ReturnType<typeof setTimeout>)
 
   const cleanup = () => {
@@ -286,7 +291,8 @@ function waitForSourceReady(
     map.on('sourcedata', handler)
   } catch {
     cleanup()
-    onReady()
+    // Map listener failed — only commit if already loaded; otherwise leave active slot presented.
+    if (map.isSourceLoaded(sourceId)) onReady()
     return () => undefined
   }
 

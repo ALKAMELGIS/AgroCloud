@@ -15,6 +15,11 @@ import {
   resolveAgroCompositeIndexDef,
 } from './agroCompositeIndices'
 import {
+  buildIndex10ClassLegendClasses,
+  isCollectionCatalogIndexId,
+  resolveCollectionIndexDef,
+} from './collectionIndexCatalog'
+import {
   CHIRPS_PRECIP_CLASS_BREAKS,
   CHIRPS_PRECIP_CLASS_COLORS,
   CHIRPS_PRECIP_CLASS_LABELS,
@@ -694,6 +699,19 @@ export function resolveLayerLiveLegendSpec(
 
   if (isChirpsPrecipLayerId(layerId) || isChirpsPrecipLayerId(key)) {
     return enrichLegendWithAnalyticalResolution(buildChirpsPrecipLegend())
+  }
+
+  if (isCollectionCatalogIndexId(layerId) || isCollectionCatalogIndexId(key)) {
+    const def = resolveCollectionIndexDef(layerId) || resolveCollectionIndexDef(key)
+    return enrichLegendWithAnalyticalResolution({
+      id: layerId,
+      title: def?.label || title,
+      subtitle: def?.scientificName || 'Collection index · 10-class visualization',
+      kind: 'discrete',
+      classes: buildIndex10ClassLegendClasses(),
+      note:
+        'Pipeline: Satellite → Calculate Index → Raster → Normalize (0–1 / 0–100) → 10 classes → colour ramp → GIS layer (GeoTIFF / tiles / WMS).',
+    })
   }
 
   if (isAgroCompositeLayerId(layerId)) {

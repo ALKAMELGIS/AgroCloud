@@ -6,6 +6,7 @@ import {
   mergeMapMetrics,
   readMapMetricsFromViewState,
   shouldFreezeLayerAoiViewportPipeline,
+  shouldFreezeLayersAoiAfterClipPin,
   shouldFreezeViewportDataPipeline,
   shouldSkipLiveViewportWorkOnMove,
   viewStateMateriallyChanged,
@@ -27,6 +28,13 @@ describe('siMapInteractionPerf', () => {
     expect(shouldFreezeLayerAoiViewportPipeline(true, false)).toBe(true)
     expect(shouldFreezeLayerAoiViewportPipeline(false, true)).toBe(true)
     expect(shouldFreezeLayerAoiViewportPipeline(false, false)).toBe(false)
+  })
+
+  it('freezes Layers AOI viewport only after a successful clip pin', () => {
+    expect(shouldFreezeLayersAoiAfterClipPin(true, false)).toBe(false)
+    expect(shouldFreezeLayersAoiAfterClipPin(true, true)).toBe(true)
+    expect(shouldFreezeLayersAoiAfterClipPin(false, true)).toBe(false)
+    expect(shouldFreezeLayersAoiAfterClipPin(false, false)).toBe(false)
   })
 
   it('merges map metrics only when zoom or latitude shifts materially', () => {

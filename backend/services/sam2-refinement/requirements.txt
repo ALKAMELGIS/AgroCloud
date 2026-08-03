@@ -1,0 +1,15 @@
+# Core SAM2 stack. Install torch from the CPU wheel index if you have no GPU:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+torch>=2.0.0
+torchvision>=0.15.0
+transformers>=4.45.0
+huggingface_hub>=0.23.0
+opencv-python-headless>=4.8.0
+numpy>=1.24.0
+pillow>=10.0.0
+shapely>=2.0.0
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9
+# Optional official SAM2 package (preferred when install succeeds):
+# sam2 @ git+https://github.com/facebookresearch/sam2.git

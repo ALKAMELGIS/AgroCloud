@@ -167,6 +167,50 @@ describe('siImageryTimeSeriesFields', () => {
     expect(attrs.some(a => a.name === 'OBJECTID' || a.name === 'name')).toBe(true)
   })
 
+  it('recovers Agro Structures fields from paint/viewport layer when mask is empty (Layers AOI)', () => {
+    const agroLayer = {
+      id: 'agro-structures-fs21',
+      name: 'Agro_Structures',
+      sourceUrl:
+        'https://services1.arcgis.com/jz3ndhbYV5K9NwI8/arcgis/rest/services/Agro_Structures/FeatureServer/21',
+      geojson: {
+        type: 'FeatureCollection' as const,
+        features: [
+          {
+            type: 'Feature' as const,
+            properties: {
+              Structure_Type: 1006,
+              Farm_Name: 'T-100',
+              Farm_Code: 'SC0175',
+              OBJECTID: 175,
+            },
+            geometry: {
+              type: 'Polygon' as const,
+              coordinates: [
+                [
+                  [54.2, 24.2],
+                  [54.21, 24.2],
+                  [54.21, 24.21],
+                  [54.2, 24.21],
+                  [54.2, 24.2],
+                ],
+              ],
+            },
+          },
+        ],
+      },
+    }
+    const options = buildSiImageryFieldOptions(null, [], null, [agroLayer])
+    expect(options.length).toBeGreaterThan(0)
+    expect(options.some(o => /T-100/i.test(o.displayName) || /SC0175/i.test(o.displayName))).toBe(
+      true,
+    )
+    const key = options[0]!.fieldKey
+    const resolved = resolveSiImageryField(null, [], null, key, [agroLayer])
+    expect(resolved?.geometry?.type).toBe('Polygon')
+    expect(resolved?.farmName || resolved?.farmCode).toBeTruthy()
+  })
+
   it('does not duplicate Drawn AOI when already present', () => {
     const options = buildSiImageryFieldOptions(null, [], drawnAoi)
     const again = buildSiImageryFieldOptions(null, [], drawnAoi)

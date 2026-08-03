@@ -11,7 +11,21 @@ import { buildPlotTimeSeriesAnalyticsFromPlots } from './fetchPlotTimeSeriesAnal
 import { generatePlotTimeSeriesAnalyticsExcel } from './generatePlotTimeSeriesAnalyticsExcel'
 import { generateAoiPlotRawTimeSeriesExcel } from './generateAoiPlotRawTimeSeriesExcel'
 import { generateAoiRawDataByLayerExcel } from './generateAoiRawDataByLayerExcel'
-import type { ImageryChartType } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import {
+  batchExportAnalyticsReportsExcel,
+  type BatchAnalyticsExportProgress,
+  type BatchAnalyticsExportResult,
+} from './batchExportAnalyticsReportsExcel'
+import {
+  batchExportFieldSummaries,
+  type BatchFieldSummaryProgress,
+  type BatchFieldSummaryResult,
+  type FieldSummaryExportMode,
+} from './batchExportFieldSummaries'
+import type {
+  ImageryChartType,
+  ImageryTimeAggregation,
+} from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import type { TimeSeriesExportKind, TimeSeriesReportConfig } from './timeSeriesReportTypes'
 import type { ImageryTimeSeriesLayerSeries } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import type { CropAlertFieldInput } from '../../../../lib/siCropAlertEngine'
@@ -29,6 +43,12 @@ export type TimeSeriesExportContext = BuildTimeSeriesReportPayloadInput & {
   plotNameField?: string
   plotAnalyticsOptions?: Partial<PlotTimeSeriesAnalyticsOptions>
   onPlotAnalyticsProgress?: (done: number, total: number) => void
+  /** Field-level progress for batch Analytics Report Excel exports. */
+  onBatchAnalyticsProgress?: (progress: BatchAnalyticsExportProgress) => void
+  /** Field-level progress for batch Field Summary PDF exports. */
+  onBatchFieldSummaryProgress?: (progress: BatchFieldSummaryProgress) => void
+  /** individual = one PDF per field; combined = executive cover + pages. */
+  fieldSummaryMode?: FieldSummaryExportMode
 }
 
 export type TimeSeriesExportOptions = {
@@ -48,21 +68,41 @@ async function buildExportPayload(
   options?: {
     includeMapSnapshots?: boolean
     includeLulcMapSnapshots?: boolean
+    includeCumulativeMapSnapshots?: boolean
+    includeChangeDetectionMapSnapshots?: boolean
     enrichVegetationCoverage?: boolean
+    mapSnapshotAggregation?: ImageryTimeAggregation
+    mapSnapshotMaxPerLayer?: number
     signal?: AbortSignal
     onMapSnapshotProgress?: (completed: number, total: number) => void
   },
 ) {
   const config = { ...DEFAULT_CONFIG, ...ctx.config }
+  // Prefer any AOI geometry available (field or first plot) so Map Snapshots never skip the build.
+  const plotWithGeom = ctx.plots?.find(p => p.geometry) ?? null
+  const field =
+    ctx.field?.geometry
+      ? ctx.field
+      : ctx.field && plotWithGeom?.geometry
+        ? { ...ctx.field, geometry: plotWithGeom.geometry }
+        : plotWithGeom?.geometry
+          ? plotWithGeom
+          : ctx.field
+
   return buildTimeSeriesReportPayload({
     ...ctx,
+    field,
     projectName: config.projectName,
     generatedBy: config.generatedBy,
     includeMap: config.includeMap,
     includeMapSnapshots: options?.includeMapSnapshots ?? true,
     includeLulcMapSnapshots: options?.includeLulcMapSnapshots,
+    includeCumulativeMapSnapshots: options?.includeCumulativeMapSnapshots,
+    includeChangeDetectionMapSnapshots: options?.includeChangeDetectionMapSnapshots,
     includeVegetationCoverageTimeline: options?.enrichVegetationCoverage ?? true,
     periodAnchorDates: ctx.periodAnchorDates,
+    mapSnapshotAggregation: options?.mapSnapshotAggregation,
+    mapSnapshotMaxPerLayer: options?.mapSnapshotMaxPerLayer,
     signal: options?.signal ?? ctx.signal,
     onMapSnapshotProgress: options?.onMapSnapshotProgress ?? ctx.onMapSnapshotProgress,
   })
@@ -85,7 +125,7 @@ export async function runTimeSeriesExport(
   layerSeries: ImageryTimeSeriesLayerSeries[],
   chartLabels: string[],
   options?: TimeSeriesExportOptions,
-): Promise<void> {
+): Promise<BatchAnalyticsExportResult | BatchFieldSummaryResult | void> {
   const snapshotOpts = {
     signal: options?.signal,
     onMapSnapshotProgress: options?.onMapSnapshotProgress,
@@ -102,14 +142,96 @@ export async function runTimeSeriesExport(
       await exportTimeSeriesCsvReport(payload)
       break
     }
-    case 'excel': {
+    case 'docx': {
+      // Intelligence Report: index atlas + change + cumulative (LULC is a separate Word export).
       const payload = await buildExportPayload(ctx, {
         includeMapSnapshots: true,
+        includeLulcMapSnapshots: false,
         enrichVegetationCoverage: true,
+        mapSnapshotAggregation: 'day',
+        // Cap per layer so WMS/composite stays reliable (same ceiling as Excel atlas).
+        mapSnapshotMaxPerLayer: 36,
+        ...snapshotOpts,
+      })
+      await generateTimeSeriesReportDocx(payload)
+      break
+    }
+    case 'excel': {
+      // Analytics Excel: index Map Snapshots atlas only (skip LULC/change/cumulative WMS load).
+      // Cap per layer so multi-layer exports (NDVI+ISS+…) stay reliable and complete.
+      const layerCount = Math.max(1, ctx.layerIds?.filter(Boolean).length ?? 1)
+      const mapSnapshotMaxPerLayer = Math.min(36, Math.max(12, Math.floor(48 / layerCount)))
+      const payload = await buildExportPayload(ctx, {
+        includeMapSnapshots: true,
+        includeLulcMapSnapshots: false,
+        includeCumulativeMapSnapshots: false,
+        includeChangeDetectionMapSnapshots: false,
+        enrichVegetationCoverage: true,
+        mapSnapshotAggregation: 'day',
+        mapSnapshotMaxPerLayer,
         ...snapshotOpts,
       })
       await generateTimeSeriesReportExcel(payload)
       break
+    }
+    case 'batch-excel': {
+      const config = { ...DEFAULT_CONFIG, ...ctx.config }
+      const plots =
+        ctx.plots?.filter(p => p.geometry) ??
+        (ctx.field?.geometry
+          ? [
+              {
+                ...ctx.field,
+                fieldKey: ctx.fieldKey || ctx.field.fieldKey,
+                farmName: ctx.fieldName || ctx.field.farmName,
+              },
+            ]
+          : [])
+      if (!plots.length) {
+        throw new Error('Select at least one field with geometry before batch-exporting Analytics Reports.')
+      }
+      return batchExportAnalyticsReportsExcel({
+        plots,
+        layerIds: ctx.layerIds,
+        fromDate: ctx.fromDate,
+        toDate: ctx.toDate,
+        timeAggregation: ctx.timeAggregation ?? 'day',
+        mapboxToken: ctx.mapboxToken,
+        projectName: config.projectName,
+        generatedBy: config.generatedBy,
+        signal: options?.signal,
+        onProgress: ctx.onBatchAnalyticsProgress,
+      })
+    }
+    case 'batch-field-summary': {
+      const config = { ...DEFAULT_CONFIG, ...ctx.config }
+      const plots =
+        ctx.plots?.filter(p => p.geometry) ??
+        (ctx.field?.geometry
+          ? [
+              {
+                ...ctx.field,
+                fieldKey: ctx.fieldKey || ctx.field.fieldKey,
+                farmName: ctx.fieldName || ctx.field.farmName,
+              },
+            ]
+          : [])
+      if (!plots.length) {
+        throw new Error('Select at least one field with geometry before batch-exporting Field Summaries.')
+      }
+      return batchExportFieldSummaries({
+        plots,
+        layerIds: ctx.layerIds,
+        fromDate: ctx.fromDate,
+        toDate: ctx.toDate,
+        timeAggregation: ctx.timeAggregation ?? 'day',
+        projectName: config.projectName,
+        signal: options?.signal,
+        onProgress: progress => {
+          ctx.onBatchFieldSummaryProgress?.(progress)
+          ctx.onBatchAnalyticsProgress?.(progress)
+        },
+      })
     }
     case 'weather-excel': {
       const payload = await buildExportPayload(ctx, {
@@ -207,16 +329,6 @@ export async function runTimeSeriesExport(
         signal: options?.signal,
         onProgress: ctx.onPlotAnalyticsProgress,
       })
-      break
-    }
-    case 'docx': {
-      const payload = await buildExportPayload(ctx, {
-        includeMapSnapshots: true,
-        includeLulcMapSnapshots: false,
-        enrichVegetationCoverage: true,
-        ...snapshotOpts,
-      })
-      await generateTimeSeriesReportDocx(payload)
       break
     }
     case 'lulc-docx': {

@@ -194,10 +194,16 @@ export function getCachedSentinelHubWmsDisplayChunks(
   cacheKey: string,
 ): SentinelHubWmsAoiClipPart[] {
   const hit = chunksCache.get(cacheKey)
-  if (hit) return hit
+  // Never reuse an empty hit — cold enable often caches [] before the clip pin
+  // has features; the settings-only key would then permanently skip WMS tiles.
+  if (hit && hit.length > 0) return hit
   const chunks = buildSentinelHubWmsDisplayChunks(clipSource, layerName, options)
-  chunksCache.set(cacheKey, chunks)
-  trimCache(chunksCache, CHUNKS_CACHE_MAX)
+  if (chunks.length > 0) {
+    chunksCache.set(cacheKey, chunks)
+    trimCache(chunksCache, CHUNKS_CACHE_MAX)
+  } else {
+    chunksCache.delete(cacheKey)
+  }
   return chunks
 }
 

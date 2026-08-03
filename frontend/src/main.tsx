@@ -113,8 +113,23 @@ if (pwaEnabled) {
     registerServiceWorker()
   }
 } else if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  /**
+   * Dev / non-PWA: drop any leftover production SW + Cache Storage so a stale precached shell
+   * cannot blank the Vite page. Reload at most once so the fresh document is not still controlled.
+   *
+   * Guards MUST survive sessionStorage failures (private mode / quota / blocked storage) — otherwise
+   * `reload()` loops forever and the user only sees a white page with a stuck progress bar.
+   */
   const resetKey = 'sw_reset_v2'
-  const canReload = typeof window !== 'undefined' && typeof sessionStorage !== 'undefined' && !safeSessionGetItem(resetKey)
+  const swResetParam = 'agroSwReset'
+  let urlAlreadyReset = false
+  try {
+    urlAlreadyReset = new URL(window.location.href).searchParams.get(swResetParam) === '1'
+  } catch {
+    urlAlreadyReset = false
+  }
+  const sessionAlreadyReset = safeSessionGetItem(resetKey) === '1'
+  const alreadyReset = urlAlreadyReset || sessionAlreadyReset
   const hadController = Boolean(navigator.serviceWorker.controller)
 
   const unregisterPromise =
@@ -138,16 +153,33 @@ if (pwaEnabled) {
       : Promise.resolve(false)
 
   Promise.all([unregisterPromise, clearCachePromise]).then(([hadRegs]) => {
-    if (canReload && (hadRegs || hadController)) {
+    if (!alreadyReset && (hadRegs || hadController)) {
       safeSessionSetItem(resetKey, '1')
       const hash = typeof window.location.hash === 'string' ? window.location.hash : ''
       const onLoginRoute = /^#\/login(\?|$|\/)/i.test(hash)
       if (!onLoginRoute) {
-        window.location.reload()
+        try {
+          const next = new URL(window.location.href)
+          next.searchParams.set(swResetParam, '1')
+          window.location.replace(next.toString())
+        } catch {
+          // Storage + URL both unusable — unregister only; do not reload (avoids infinite white screen).
+        }
       }
       return
     }
-    if (typeof sessionStorage !== 'undefined') safeSessionRemoveItem(resetKey)
+    if (urlAlreadyReset) {
+      try {
+        const clean = new URL(window.location.href)
+        if (clean.searchParams.has(swResetParam)) {
+          clean.searchParams.delete(swResetParam)
+          window.history.replaceState(null, '', clean.toString())
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    safeSessionRemoveItem(resetKey)
   })
 }
 

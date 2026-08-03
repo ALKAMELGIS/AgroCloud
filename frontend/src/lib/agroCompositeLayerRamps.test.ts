@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AGRO_COMPOSITE_CATEGORIES } from './agroCompositeIndices'
+import { AGRO_COMPOSITE_CATEGORIES, AGRO_DELTA_CATEGORIES } from './agroCompositeIndices'
 import {
   agroCompositeRampColorFingerprint,
   buildTenClassRampFromConfig,
@@ -43,6 +43,40 @@ describe('agroCompositeLayerRamps', () => {
     expect(smi.classColors[0]).toBe(0x5d4037)
     expect(smi.classColors[9]).toBe(0x006064)
     expect(smi.classColors.join(',')).not.toBe(vhs.classColors.join(','))
+
+    const gci = resolveAgroCompositeTenClassRamp('GCI')!
+    expect(gci.classLabels).toEqual([
+      'No Gold Indication',
+      'Very Weak Indication',
+      'Weak Indication',
+      'Low Potential',
+      'Moderate-Low Potential',
+      'Moderate Potential',
+      'High Alteration Zone',
+      'High Gold Potential',
+      'Very High Gold Potential',
+      'Extreme Gold Target',
+    ])
+    expect(gci.classColors[0]).toBe(0x1a237e)
+    expect(gci.classColors[9]).toBe(0xb71c1c)
+
+    const egci = resolveAgroCompositeTenClassRamp('EGCI')!
+    expect(egci.classLabels).toEqual([
+      'Background',
+      'Very Low',
+      'Low Au Indication',
+      'Weak Mineralization',
+      'Moderate-Low Mineralization',
+      'Moderate Mineralization',
+      'Strong Alteration / Possible Au Zone',
+      'High Mineralized Zone',
+      'High Au Concentration Target',
+      'Very High Au Concentration Target',
+    ])
+    expect(egci.valueMin).toBe(0)
+    expect(egci.valueMax).toBe(1)
+    expect(egci.classColors[0]).toBe(0xfff8e1)
+    expect(egci.classColors[9]).toBe(0x4a148c)
   })
 
   it('uses per-layer delta palettes', () => {
@@ -92,7 +126,11 @@ describe('agroCompositeLayerRamps', () => {
     for (const cat of AGRO_COMPOSITE_CATEGORIES) {
       for (const idx of cat.indices) {
         expected.add(idx.id.toUpperCase())
-        expected.add(idx.deltaId.toUpperCase())
+      }
+    }
+    for (const cat of AGRO_DELTA_CATEGORIES) {
+      for (const idx of cat.indices) {
+        expected.add(idx.id.toUpperCase())
       }
     }
     for (const id of expected) {

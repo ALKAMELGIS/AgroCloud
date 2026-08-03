@@ -1,0 +1,11 @@
+# HuggingFace / torch caches and local model dumps — never commit.
+__pycache__/
+*.pyc
+.venv/
+venv/
+checkpoints/
+*.pt
+*.pth
+*.bin
+*.safetensors
+.cache/

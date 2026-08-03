@@ -144,6 +144,7 @@ function indexChangePayload(): TimeSeriesReportPayload {
     ],
     vegetationCoverageTimeline: [],
     estimatedWaterLossTimeline: [],
+    estimatedYieldTimeline: [],
     weatherTimeline: null,
     correlationBlocks: [],
     cropRecommendations: [],

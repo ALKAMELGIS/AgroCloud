@@ -106,4 +106,61 @@ describe('native meteo excel charts', () => {
     const ct = await zip.file('[Content_Types].xml')!.async('string')
     expect(ct).toContain('drawingml.chart+xml')
   })
+
+  it('does not overwrite existing Map Snapshot image drawings when injecting charts', async () => {
+    const ExcelJS = (await import('exceljs')).default
+    const wb = new ExcelJS.Workbook()
+    const mapWs = wb.addWorksheet('Map Snapshots')
+    mapWs.getCell('A1').value = 'Maps'
+    const tinyPng =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+    const imageId = wb.addImage({ base64: tinyPng, extension: 'png' })
+    mapWs.addImage(imageId, { tl: { col: 0, row: 1 }, ext: { width: 80, height: 60 } })
+
+    const chartsWs = wb.addWorksheet('Charts')
+    chartsWs.getCell('A1').value = 'Period'
+    chartsWs.getCell('B1').value = 'NDVI'
+    chartsWs.getCell('A2').value = '2026-01-01'
+    chartsWs.getCell('B2').value = 0.4
+    chartsWs.getCell('A3').value = '2026-01-02'
+    chartsWs.getCell('B3').value = 0.5
+
+    const raw = await wb.xlsx.writeBuffer()
+    const before = await JSZip.loadAsync(raw as ArrayBuffer)
+    const preexisting = Object.keys(before.files).filter(n => /^xl\/drawings\/drawing\d+\.xml$/.test(n))
+    expect(preexisting.length).toBeGreaterThanOrEqual(1)
+    const mapDrawingBefore = await before.file(preexisting[0]!)!.async('string')
+
+    const out = await injectNativeMeteoCharts(
+      raw as ArrayBuffer,
+      [
+        {
+          title: 'NDVI Trend',
+          kind: 'line',
+          series: [
+            {
+              name: 'NDVI',
+              valuesRef: 'Charts!$B$2:$B$3',
+              catsRef: 'Charts!$A$2:$A$3',
+            },
+          ],
+          anchorRow: 4,
+          sectionLabel: 'NDVI',
+          targetSheet: 'Charts',
+          smooth: true,
+        },
+      ],
+      'Charts',
+    )
+    const zip = await JSZip.loadAsync(out)
+    const mapDrawingAfter = await zip.file(preexisting[0]!)!.async('string')
+    expect(mapDrawingAfter).toBe(mapDrawingBefore)
+    expect(mapDrawingAfter).not.toContain('chart')
+
+    const allDrawings = Object.keys(zip.files).filter(n => /^xl\/drawings\/drawing\d+\.xml$/.test(n))
+    expect(allDrawings.length).toBeGreaterThan(preexisting.length)
+    const chartDrawing = allDrawings.find(n => n !== preexisting[0])!
+    const chartXml = await zip.file(chartDrawing)!.async('string')
+    expect(chartXml).toContain('chart')
+  })
 })

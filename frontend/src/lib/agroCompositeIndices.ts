@@ -24,6 +24,7 @@ import {
   isLulcClassificationLayerId,
 } from './siLulcClassification'
 import { WAPI_STATIC_EXPR } from './wapiIndex'
+import { resolveCollectionIndexDef } from './collectionIndexCatalog'
 
 /** Derived visualization layers — same fusion input, rule-engine styling only. */
 export const AGRO_DERIVED_LAYER_DEFS: readonly AgroCompositeIndexDef[] = [
@@ -438,6 +439,88 @@ export const AGRO_COMPOSITE_CATEGORIES: readonly AgroCompositeCategory[] = [
     ],
   },
   {
+    id: 'gold-exploration',
+    groupLabel: '🪙 Gold Exploration Indices',
+    indices: [
+      {
+        id: 'IOI',
+        label: 'IOI',
+        scientificName: 'Iron Oxide Index · B04 / B02',
+        deltaId: 'DIOI',
+        deltaLabel: 'ΔIOI',
+        expr: 'ioi',
+      },
+      {
+        // Distinct from phenology Crop Maturity Index id `CMI`.
+        id: 'CLAY_MI',
+        label: 'CMI',
+        scientificName: 'Clay Mineral Index (CMI) · B11 / B12',
+        deltaId: 'DCLAY_MI',
+        deltaLabel: 'ΔCMI',
+        expr: 'clay_mi',
+      },
+      {
+        id: 'FMI',
+        label: 'FMI',
+        scientificName: 'Ferrous Mineral Index · B11 / B08',
+        deltaId: 'DFMI',
+        deltaLabel: 'ΔFMI',
+        expr: 'fmi',
+      },
+      {
+        id: 'NDAI',
+        label: 'NDAI',
+        scientificName: 'Normalized Difference Alteration Index · (B11 − B12) / (B11 + B12)',
+        deltaId: 'DNDAI',
+        deltaLabel: 'ΔNDAI',
+        expr: 'ndai',
+      },
+      {
+        id: 'BSI',
+        label: 'BSI',
+        scientificName: 'Bare Soil Index · ((B11 + B04) − (B08 + B02)) / ((B11 + B04) + (B08 + B02))',
+        deltaId: 'DBSI',
+        deltaLabel: 'ΔBSI',
+        expr: 'bsi',
+      },
+      {
+        id: 'REAI',
+        label: 'REAI',
+        scientificName: 'Red Edge Alteration Index · B06 / B05',
+        deltaId: 'DREAI',
+        deltaLabel: 'ΔREAI',
+        expr: 'reai',
+      },
+      {
+        id: 'GEI',
+        label: 'GEI',
+        scientificName:
+          'Composite Gold Exploration Index · 0.35(IOI) + 0.30(CMI) + 0.20(FMI) + 0.15(BSI)',
+        deltaId: 'DGEI',
+        deltaLabel: 'ΔGEI',
+        expr: 'gei',
+      },
+      {
+        id: 'GCI',
+        label: 'GCI',
+        scientificName:
+          'Gold Composite Index · 0.30(IOI) + 0.25(CMI) + 0.20(FMI) + 0.15(NDAI) + 0.10(BSI)',
+        deltaId: 'DGCI',
+        deltaLabel: 'ΔGCI',
+        expr: 'gci',
+      },
+      {
+        id: 'EGCI',
+        label: 'EGCI',
+        scientificName:
+          'Estimated Gold Concentration Index · 0.30(IOIN) + 0.25(CMIN) + 0.20(FMIN) + 0.15(NDAIN) + 0.10(BSIN)',
+        deltaId: 'DEGCI',
+        deltaLabel: 'ΔEGCI',
+        expr: 'egci',
+      },
+    ],
+  },
+  {
     id: 'crop',
     groupLabel: '🌾 Crop',
     indices: [
@@ -460,12 +543,18 @@ const STATIC_BY_ID = new Map<string, AgroCompositeIndexDef>()
 const DELTA_BY_ID = new Map<string, AgroCompositeIndexDef>()
 const ALL_COMPOSITE_IDS = new Set<string>()
 
+/** Gold exploration indices are scene composites only — no Change / Δ layers in the Layer select. */
+const COMPOSITE_CATEGORIES_WITHOUT_DELTA = new Set(['gold-exploration'])
+
 for (const cat of AGRO_COMPOSITE_CATEGORIES) {
+  const publishDelta = !COMPOSITE_CATEGORIES_WITHOUT_DELTA.has(cat.id)
   for (const idx of cat.indices) {
     STATIC_BY_ID.set(idx.id.toUpperCase(), idx)
-    DELTA_BY_ID.set(idx.deltaId.toUpperCase(), idx)
     ALL_COMPOSITE_IDS.add(idx.id.toUpperCase())
-    ALL_COMPOSITE_IDS.add(idx.deltaId.toUpperCase())
+    if (publishDelta) {
+      DELTA_BY_ID.set(idx.deltaId.toUpperCase(), idx)
+      ALL_COMPOSITE_IDS.add(idx.deltaId.toUpperCase())
+    }
   }
 }
 
@@ -474,7 +563,9 @@ for (const derived of AGRO_DERIVED_LAYER_DEFS) {
   ALL_COMPOSITE_IDS.add(derived.id.toUpperCase())
 }
 
-export const AGRO_DELTA_CATEGORIES: readonly AgroCompositeCategory[] = AGRO_COMPOSITE_CATEGORIES.map(cat => ({
+export const AGRO_DELTA_CATEGORIES: readonly AgroCompositeCategory[] = AGRO_COMPOSITE_CATEGORIES.filter(
+  cat => !COMPOSITE_CATEGORIES_WITHOUT_DELTA.has(cat.id),
+).map(cat => ({
   id: `${cat.id}-delta`,
   groupLabel: `${cat.groupLabel} (Delta)`,
   indices: cat.indices.map(idx => ({
@@ -513,7 +604,9 @@ export function resolveAgroCompositeIndexDef(layerId: string): AgroCompositeInde
 /** Static layer id paired with a delta layer (e.g. DVHS → VHS). */
 export function resolveAgroStaticLayerIdForDelta(deltaLayerId: string): string | null {
   const u = String(deltaLayerId || '').trim().toUpperCase()
+  if (!DELTA_BY_ID.has(u)) return null
   for (const cat of AGRO_COMPOSITE_CATEGORIES) {
+    if (COMPOSITE_CATEGORIES_WITHOUT_DELTA.has(cat.id)) continue
     for (const idx of cat.indices) {
       if (idx.deltaId.toUpperCase() === u) return idx.id
     }
@@ -569,6 +662,8 @@ export function resolveRemoteSensingLayerScientificName(layerId: string): string
   if (u in AGRO_CORE_LAYER_SCIENTIFIC_NAMES) {
     return AGRO_CORE_LAYER_SCIENTIFIC_NAMES[u as AgroCoreInterpretationLayerId]
   }
+  const collectionIdx = resolveCollectionIndexDef(u)
+  if (collectionIdx) return collectionIdx.scientificName
   if (isLulcClassificationLayerId(u)) return LULC_SCIENTIFIC_NAME
   if (isAdiLayerId(u)) return ADI_SCIENTIFIC_NAME
   if (isNcadiLayerId(u)) return NCADI_SCIENTIFIC_NAME

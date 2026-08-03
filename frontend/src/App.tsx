@@ -44,8 +44,18 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
     return false
   }
 
+  /**
+   * React internal: "Should have a queue…" — almost always a hooks-order mismatch after Vite HMR
+   * swapped a hook module while a large parent fiber (e.g. SatelliteIntelligence) stayed mounted.
+   * A full document reload remounts hooks cleanly; showing the dead-end screen does not help.
+   */
+  private static isHooksMismatchError(message: string): boolean {
+    return /Should have a queue/i.test(message || '')
+  }
+
   componentDidCatch(error: unknown) {
     if (AppErrorBoundary.recoverFromStaleChunk(error)) return
+    if (AppErrorBoundary.recoverFromHooksMismatch(error)) return
     try {
       const message = error instanceof Error ? error.message : String(error)
       console.error('[AppErrorBoundary]', message, error)
@@ -53,8 +63,18 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
     }
   }
 
+  componentDidUpdate() {
+    const err = this.state.err?.error
+    if (!err) return
+    const message = err instanceof Error ? err.message : String(err ?? '')
+    if (AppErrorBoundary.isHooksMismatchError(message)) {
+      AppErrorBoundary.recoverFromHooksMismatch(err)
+    }
+  }
+
   /** Stale-deploy chunk failures should self-heal with a one-time reload, not a dead-end screen. */
   private static readonly STALE_CHUNK_GUARD = 'agro_boundary_chunk_reload'
+  private static readonly HOOKS_MISMATCH_GUARD = 'agro_hooks_mismatch_reload'
 
   private static recoverFromStaleChunk(error: unknown): boolean {
     if (typeof window === 'undefined') return false
@@ -73,6 +93,34 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
     return true
   }
 
+  private static recoverFromHooksMismatch(error: unknown): boolean {
+    if (typeof window === 'undefined') return false
+    const message = error instanceof Error ? error.message : String(error ?? '')
+    if (!AppErrorBoundary.isHooksMismatchError(message)) return false
+    const guardKey = AppErrorBoundary.HOOKS_MISMATCH_GUARD
+    try {
+      if (sessionStorage.getItem(guardKey)) return false
+      sessionStorage.setItem(guardKey, '1')
+    } catch {
+      // Still attempt reload — better than a stuck error wall.
+    }
+    try {
+      console.warn(
+        '[AppErrorBoundary] Hooks mismatch (often Vite HMR). Reloading once to remount cleanly.',
+        error,
+      )
+    } catch {
+    }
+    try {
+      const next = new URL(window.location.href)
+      next.searchParams.set('_hmr', String(Date.now()))
+      window.location.replace(next.toString())
+    } catch {
+      window.location.reload()
+    }
+    return true
+  }
+
   componentDidMount() {
     if (typeof window === 'undefined') return
     this.onUnhandledRejection = (e) => {
@@ -82,6 +130,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
       if (reason instanceof DOMException && reason.name === 'AbortError') return
       if (reason instanceof Error && reason.name === 'AbortError') return
       if (AppErrorBoundary.recoverFromStaleChunk(reason)) return
+      if (AppErrorBoundary.recoverFromHooksMismatch(reason)) return
       const details = reason instanceof Error ? reason.stack : undefined
       this.setState({ err: { error: reason ?? e, kind: 'window', details } })
       try {
@@ -94,6 +143,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
       const msg = err instanceof Error ? err.message : typeof err === 'string' ? err : String(e?.message ?? '')
       if (AppErrorBoundary.isBenignRuntimeError(msg)) return
       if (AppErrorBoundary.recoverFromStaleChunk(err ?? e?.message)) return
+      if (AppErrorBoundary.recoverFromHooksMismatch(err ?? e?.message)) return
       const details = typeof e?.error?.stack === 'string' ? e.error.stack : undefined
       this.setState({ err: { error: e.error ?? e.message, kind: 'window', details } })
       try {
@@ -340,10 +390,19 @@ function AppShell() {
     setMobileNavOpen(false)
   }, [location.pathname])
 
-  // The app rendered successfully — drop the one-shot stale-chunk reload guard and strip the
-  // `_cb` cache-bust param so a FUTURE deploy can self-heal again (and the URL stays clean).
+  // The app rendered successfully — drop the one-shot reload guards and strip
+  // cache-bust / HMR recovery params so a FUTURE failure can self-heal again.
   useEffect(() => {
-    clearStaleChunkRecoveryState(['agro_boundary_chunk_reload'])
+    clearStaleChunkRecoveryState(['agro_boundary_chunk_reload', 'agro_hooks_mismatch_reload'])
+    try {
+      const url = new URL(window.location.href)
+      if (url.searchParams.has('_hmr')) {
+        url.searchParams.delete('_hmr')
+        window.history.replaceState(window.history.state, '', url.toString())
+      }
+    } catch {
+      /* noop */
+    }
   }, [])
 
   const isOnLogin = location.pathname === '/login'

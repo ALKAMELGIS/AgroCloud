@@ -13,8 +13,10 @@ const defaults = {
 }
 
 describe('remoteSensingProviderSession', () => {
-  it('treats ASTER as a static layer catalog (no WMS loading gate)', () => {
+  it('treats ASTER and dedicated Collection catalogues as static layer catalogs', () => {
     expect(providerUsesStaticLayerCatalog('aster', 'aster-l1t')).toBe(true)
+    expect(providerUsesStaticLayerCatalog('sentinel-hub', 'copernicus-dem')).toBe(true)
+    expect(providerUsesStaticLayerCatalog('sentinel-hub', 'sentinel-5p')).toBe(true)
     expect(providerUsesStaticLayerCatalog('sentinel-hub', 'sentinel-2-l2a')).toBe(false)
   })
 

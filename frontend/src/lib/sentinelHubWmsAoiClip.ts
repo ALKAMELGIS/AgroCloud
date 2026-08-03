@@ -380,14 +380,26 @@ export type WmsAoiWktChunkGroup = {
 export function extractOuterRingsWgs84(drawn: unknown): [number, number][][] {
   const geom = getDrawnGeometry(drawn);
   if (!geom) return [];
+  const toLngLatRing = (ring: unknown): [number, number][] | null => {
+    if (!Array.isArray(ring) || ring.length < 3) return null;
+    const out: [number, number][] = [];
+    for (const pt of ring) {
+      if (!Array.isArray(pt) || pt.length < 2) continue;
+      const lng = Number(pt[0]);
+      const lat = Number(pt[1]);
+      if (!Number.isFinite(lng) || !Number.isFinite(lat)) continue;
+      out.push([lng, lat]);
+    }
+    return out.length >= 3 ? out : null;
+  };
   const rawOuterRings: [number, number][][] = [];
   if (geom.type === 'Polygon') {
-    const outer = geom.coordinates[0] as [number, number][];
-    if (outer?.length >= 3) rawOuterRings.push(outer);
+    const outer = toLngLatRing(geom.coordinates[0]);
+    if (outer) rawOuterRings.push(outer);
   } else {
     for (const poly of geom.coordinates) {
-      const outer = poly[0] as [number, number][];
-      if (outer?.length >= 3) rawOuterRings.push(outer);
+      const outer = toLngLatRing(poly?.[0]);
+      if (outer) rawOuterRings.push(outer);
     }
   }
   return rawOuterRings;

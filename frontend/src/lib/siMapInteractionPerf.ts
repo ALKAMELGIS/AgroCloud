@@ -48,6 +48,17 @@ export function shouldFreezeViewportDataPipeline(isIsolated: boolean): boolean {
   return isIsolated
 }
 
+/**
+ * Layers AOI freezes live viewport sync only after a successful clip pin exists.
+ * Enabling Show on map alone must not freeze — empty pin needs viewport seed/fetch.
+ */
+export function shouldFreezeLayersAoiAfterClipPin(
+  layersAoiEnabled: boolean,
+  hasSuccessfulClipPin: boolean,
+): boolean {
+  return layersAoiEnabled && hasSuccessfulClipPin
+}
+
 /** Layers AOI WMS active — pin mask + tile URLs; ignore viewport bbox churn on pan/zoom. */
 export function shouldFreezeLayerAoiViewportPipeline(
   layersAoiWmsActive: boolean,

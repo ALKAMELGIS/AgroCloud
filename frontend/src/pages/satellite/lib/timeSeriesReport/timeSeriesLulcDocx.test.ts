@@ -157,6 +157,7 @@ function lulcPayload(): TimeSeriesReportPayload {
     changeDetectionMapSnapshotGroups: [],
     vegetationCoverageTimeline: [],
     estimatedWaterLossTimeline: [],
+    estimatedYieldTimeline: [],
     weatherTimeline: null,
     correlationBlocks: [],
     cropRecommendations: [],
@@ -192,16 +193,18 @@ describe('LULC Intelligence Report (Word)', () => {
     expect(intelXml).not.toContain('LULC — Five-Year Land Cover')
     expect(intelXml).not.toContain('LULC Change Detection — Consecutive Years')
     expect(intelXml).toContain('Agricultural Satellite Intelligence Report')
+    expect(intelXml).toContain('Data Quality Notes')
+    expect(intelXml).toContain('Recommendations')
     expect(intelXml).toContain('LULC land-cover analysis is available as a separate Word export')
   })
 
-  it('keeps index map atlas (3×3) in the Intelligence Report', async () => {
+  it('keeps index map atlas (3×4) in the Intelligence Report', async () => {
     const payload = lulcPayload()
     payload.mapSnapshotGroups = [
       {
         layerId: 'NDVI',
         title: 'NDVI — Period Maps',
-        snapshots: Array.from({ length: 10 }, (_, i) => ({
+        snapshots: Array.from({ length: 13 }, (_, i) => ({
           layerId: 'NDVI',
           layerLabel: 'NDVI',
           sceneDate: `2024-0${(i % 9) + 1}-01`,
@@ -219,10 +222,12 @@ describe('LULC Intelligence Report (Word)', () => {
     ]
     const { model } = await buildTimeSeriesDocxModel(payload)
     expect(model.mapLayers).toHaveLength(1)
-    expect(model.mapLayers[0]!.snapshots).toHaveLength(10)
+    expect(model.mapLayers[0]!.snapshots).toHaveLength(13)
+    expect(model.mapLayers[0]!.title).toContain('NDVI')
+    expect(model.mapLayers[0]!.title).toContain('All Acquisition Dates')
     const intelXml = buildTimeSeriesDocxDocumentXml(model, 'intelligence')
     expect(intelXml).toContain('Map Snapshots &amp; Index Charts')
-    expect(intelXml).toContain('3×3')
+    expect(intelXml).toContain('3×4')
     expect(intelXml).toContain('a:blip')
     expect(intelXml).toContain('NDVI Trend')
   })

@@ -776,45 +776,63 @@ export function SiImageryTimeSeriesPanel({
   const selectedFieldLabel =
     fieldOptions.find(o => o.fieldKey === selectedFieldKey)?.displayName ?? '—'
 
-  const exportFieldKeys = useMemo(() => {
-    if (
-      (analysisMode === 'multi-layer-aoi-comparison' || analysisMode === 'plot-layer-time-series') &&
-      selectedFieldKeys.length
-    ) {
-      return selectedFieldKeys
-    }
-    return fieldOptions.map(o => o.fieldKey)
-  }, [analysisMode, selectedFieldKeys, fieldOptions])
-
+  /**
+   * Full Field Selector list (all options with geometry), named via Plot Label.
+   * Batch Analytics Excel and other multi-plot exports use this — not only the
+   * currently selected chart field / multi-select subset.
+   */
   const resolveExportPlotsForLabel = useCallback(
-    (labelAttribute: string) =>
-      exportFieldKeys
-        .map(key =>
-          resolveSiImageryField(
+    (labelAttribute: string) => {
+      const labeledOptions = buildSiImageryFieldOptions(
+        agroStructuresMask,
+        aoiFields,
+        committedAoiGeometry,
+        vectorLayers,
+        labelAttribute,
+      )
+      return labeledOptions
+        .map(opt => {
+          const resolved = resolveSiImageryField(
             agroStructuresMask,
             aoiFields,
             committedAoiGeometry,
-            key,
-            vectorLayers,
-            labelAttribute,
-          ),
-        )
-        .filter((f): f is NonNullable<typeof f> => !!f?.geometry),
-    [exportFieldKeys, agroStructuresMask, aoiFields, committedAoiGeometry, vectorLayers],
-  )
-
-  const resolveExportFieldForLabel = useCallback(
-    (labelAttribute: string) =>
-      selectedFieldKey
-        ? resolveSiImageryField(
-            agroStructuresMask,
-            aoiFields,
-            committedAoiGeometry,
-            selectedFieldKey,
+            opt.fieldKey,
             vectorLayers,
             labelAttribute,
           )
-        : null,
+          if (!resolved?.geometry) return null
+          const displayName = opt.displayName?.trim()
+          return displayName ? { ...resolved, farmName: displayName } : resolved
+        })
+        .filter((f): f is NonNullable<typeof f> => !!f)
+    },
+    [agroStructuresMask, aoiFields, committedAoiGeometry, vectorLayers],
+  )
+
+  const resolveExportFieldForLabel = useCallback(
+    (labelAttribute: string) => {
+      const labeled =
+        selectedFieldKey
+          ? resolveSiImageryField(
+              agroStructuresMask,
+              aoiFields,
+              committedAoiGeometry,
+              selectedFieldKey,
+              vectorLayers,
+              labelAttribute,
+            )
+          : null
+      if (!labeled) return null
+      const labeledOptions = buildSiImageryFieldOptions(
+        agroStructuresMask,
+        aoiFields,
+        committedAoiGeometry,
+        vectorLayers,
+        labelAttribute,
+      )
+      const displayName = labeledOptions.find(o => o.fieldKey === selectedFieldKey)?.displayName?.trim()
+      return displayName ? { ...labeled, farmName: displayName } : labeled
+    },
     [selectedFieldKey, agroStructuresMask, aoiFields, committedAoiGeometry, vectorLayers],
   )
 
@@ -823,15 +841,7 @@ export function SiImageryTimeSeriesPanel({
     [resolveExportPlotsForLabel, plotLabelAttribute],
   )
 
-  const exportAoiName = useMemo(() => {
-    if (
-      (analysisMode === 'multi-layer-aoi-comparison' || analysisMode === 'plot-layer-time-series') &&
-      selectedFieldKeys.length
-    ) {
-      return `${selectedFieldKeys.length} selected plots`
-    }
-    return `${exportPlots.length} plots`
-  }, [analysisMode, selectedFieldKeys, exportPlots.length])
+  const exportAoiName = useMemo(() => `${exportPlots.length} plots`, [exportPlots.length])
 
   const runAnalysisWrapped = useCallback(async () => {
     prevAutoRunDatesRef.current = { from: fromDate, to: toDate }
@@ -2200,7 +2210,7 @@ export function SiImageryTimeSeriesPanel({
                 <p className="acp-ts__interpret-tab-hint">
                   {interpretSceneDate ? (
                     <>
-                      Scene <strong>{interpretSceneDate}</strong> · {primaryLayerId.toUpperCase()} · click chart
+                      Scene <strong>{interpretSceneDate}</strong> - {primaryLayerId.toUpperCase()} - click chart
                       points on the Chart tab to change date
                     </>
                   ) : (
@@ -2211,6 +2221,7 @@ export function SiImageryTimeSeriesPanel({
                   interpretation={interpretation}
                   loadingAreas={loadingAreas}
                   onAction={handleInterpretationAction}
+                  dailyRows={filteredDailyRows}
                 />
               </>
             ) : (
@@ -2289,7 +2300,25 @@ export function SiImageryTimeSeriesPanel({
           <div className="acp-ts__exports">
             <TimeSeriesExportManager
               disabled={(!labels.length || !hasRun) && exportPlots.length < 1}
-              field={resolvedField}
+              field={
+                (() => {
+                  if (resolvedField?.geometry) return resolvedField
+                  if (resolvedField && committedAoiGeometry) {
+                    return { ...resolvedField, geometry: committedAoiGeometry }
+                  }
+                  // Layers AOI / viewport race: keep Word atlas geometry from export plots.
+                  const plotGeom =
+                    exportPlots.find(p => p.fieldKey === selectedFieldKey && p.geometry) ??
+                    exportPlots.find(p => p.geometry) ??
+                    null
+                  if (plotGeom?.geometry) {
+                    return resolvedField
+                      ? { ...resolvedField, geometry: plotGeom.geometry }
+                      : plotGeom
+                  }
+                  return resolvedField
+                })()
+              }
               fieldName={selectedFieldLabel}
               fieldKey={selectedFieldKey}
               fromDate={fromDate}
@@ -2308,7 +2337,11 @@ export function SiImageryTimeSeriesPanel({
               projectName={projectName}
               generatedBy={generatedBy}
               plots={exportPlots}
-              farmName={resolvedField?.farmName || selectedFieldLabel}
+              farmName={
+                selectedFieldLabel !== '—'
+                  ? selectedFieldLabel
+                  : resolvedField?.farmName || selectedFieldLabel
+              }
               aoiName={exportAoiName}
               labelAttributes={plotLabelAttributes}
               labelAttribute={plotLabelAttribute}
@@ -2323,7 +2356,11 @@ export function SiImageryTimeSeriesPanel({
             <TimeSeriesExportManager
               disabled={exportPlots.length < 1 || !selectedLayerIds.length}
               field={resolvedFields[0] ?? null}
-              fieldName={resolvedFields[0]?.farmName || 'Multi AOI'}
+              fieldName={
+                exportPlots.find(p => p.fieldKey === resolvedFields[0]?.fieldKey)?.farmName ||
+                resolvedFields[0]?.farmName ||
+                'Multi AOI'
+              }
               fieldKey={resolvedFields[0]?.fieldKey || ''}
               fromDate={fromDate}
               toDate={
@@ -2346,7 +2383,11 @@ export function SiImageryTimeSeriesPanel({
               projectName={projectName}
               generatedBy={generatedBy}
               plots={exportPlots}
-              farmName={resolvedFields[0]?.farmName || 'Farm'}
+              farmName={
+                exportPlots.find(p => p.fieldKey === resolvedFields[0]?.fieldKey)?.farmName ||
+                resolvedFields[0]?.farmName ||
+                'Farm'
+              }
               aoiName={exportAoiName}
               labelAttributes={plotLabelAttributes}
               labelAttribute={plotLabelAttribute}

@@ -228,22 +228,49 @@ function writePolygonShp(features: GeoJSON.Feature[]): { shp: Uint8Array; shx: U
   return { shp, shx }
 }
 
+export type PolygonShapefileDownloadOptions = {
+  /** Basename for .shp/.shx/.dbf/.prj members inside the ZIP (default agri_fields). */
+  layerBaseName?: string
+  /** Append CLASS_NM / CLASS_ID DBF columns from feature properties. */
+  includeClassFields?: boolean
+  /** Append DATE / PROVIDER DBF columns (SegFormer / EO detection exports). */
+  includeMetaFields?: boolean
+}
+
 /** Download a zipped polygon shapefile for field boundary features. */
 export async function downloadFieldBoundaryShapefile(
   fc: GeoJSON.FeatureCollection,
   filename = 'agri-field-boundaries.zip',
+  options?: PolygonShapefileDownloadOptions,
 ): Promise<void> {
   const features = (fc.features || []).filter(
     f => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon'),
   )
   if (!features.length) throw new Error('No polygon fields to export.')
 
+  const includeClass = Boolean(options?.includeClassFields)
+  const includeMeta = Boolean(options?.includeMetaFields)
+  const layerBaseName =
+    (options?.layerBaseName || 'agri_fields').replace(/[^\w.-]+/g, '_').slice(0, 32) || 'agri_fields'
+
   const fields: DbfField[] = [
     { name: 'FIELD_ID', type: 'C', length: 32 },
+    ...(includeClass
+      ? ([
+          { name: 'CLASS_NM', type: 'C', length: 48 },
+          { name: 'CLASS_ID', type: 'N', length: 8, decimals: 0 },
+        ] as DbfField[])
+      : []),
     { name: 'CONF', type: 'N', length: 8, decimals: 4 },
     { name: 'AREA_M2', type: 'N', length: 14, decimals: 2 },
     { name: 'AREA_HA', type: 'N', length: 12, decimals: 4 },
     { name: 'PERIM_M', type: 'N', length: 12, decimals: 2 },
+    ...(includeMeta
+      ? ([
+          { name: 'DATE', type: 'C', length: 32 },
+          { name: 'PROVIDER', type: 'C', length: 48 },
+        ] as DbfField[])
+      : []),
   ]
   // One DBF row per shapefile polygon record (MultiPolygon expands).
   const dbfRows: Array<(string | number)[]> = []
@@ -251,11 +278,23 @@ export async function downloadFieldBoundaryShapefile(
   for (const f of features) {
     const props = (f.properties || {}) as Record<string, unknown>
     const row: (string | number)[] = [
-      String(props.field_id || f.id || ''),
-      Number(props.confidence ?? props.confidence_score ?? 0),
-      Number(props.area_m2 ?? 0),
-      Number(props.area_ha ?? 0),
-      Number(props.perimeter_m ?? 0),
+      String(props.field_id || props.Feature_ID || f.id || ''),
+      ...(includeClass
+        ? [
+            String(props.class_name || props.Class_Name || props.className || ''),
+            Number(props.class_id ?? props.classId) || 0,
+          ]
+        : []),
+      Number(props.confidence ?? props.Confidence ?? props.confidence_score ?? 0),
+      Number(props.area_m2 ?? props.Area_m2 ?? 0),
+      Number(props.area_ha ?? props.Area_Hectare ?? 0),
+      Number(props.perimeter_m ?? props.Perimeter ?? 0),
+      ...(includeMeta
+        ? [
+            String(props.date || props.Date || '').slice(0, 32),
+            String(props.provider || props.Provider || '').slice(0, 48),
+          ]
+        : []),
     ]
     if (f.geometry?.type === 'MultiPolygon') {
       for (const coords of f.geometry.coordinates) {
@@ -275,10 +314,10 @@ export async function downloadFieldBoundaryShapefile(
   const { shp, shx } = writePolygonShp(expanded)
   const dbf = buildDbf(fields, dbfRows)
   const zip = new JSZip()
-  zip.file('agri_fields.shp', shp)
-  zip.file('agri_fields.shx', shx)
-  zip.file('agri_fields.dbf', dbf)
-  zip.file('agri_fields.prj', WGS84_PRJ)
+  zip.file(`${layerBaseName}.shp`, shp)
+  zip.file(`${layerBaseName}.shx`, shx)
+  zip.file(`${layerBaseName}.dbf`, dbf)
+  zip.file(`${layerBaseName}.prj`, WGS84_PRJ)
   const blob = await zip.generateAsync({ type: 'blob' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

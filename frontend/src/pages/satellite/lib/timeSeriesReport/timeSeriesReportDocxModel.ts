@@ -572,6 +572,7 @@ export async function buildTimeSeriesDocxModel(
 
   const mapLayers: DocxMapLayerBlock[] = []
   for (const group of payload.mapSnapshotGroups ?? []) {
+    // T-23 titles: "NDVI — Vegetation Vigor — All Acquisition Dates" (layerTitle).
     const block = pushMapGroup(group, undefined, true)
     if (block) mapLayers.push(block)
   }

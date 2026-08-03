@@ -21,6 +21,10 @@ import { maskChirpsRasterToPolygon } from '../../../lib/chirpsRainfall/chirpsRas
 
 export { CHIRPS_LAYER_ID }
 
+/** Keep in sync with backend MAX_DAILY_SERIES / MAX_MONTHLY_SERIES. */
+const MAX_DAILY_SERIES_DAYS = 120
+const MAX_MONTHLY_SERIES_MONTHS = 60
+
 type Params = {
   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon | null
   enabled: boolean
@@ -30,6 +34,62 @@ type Params = {
   aoiName?: string
   ndmi?: number | null
   ndwi?: number | null
+}
+
+function addUtcDays(iso: string, delta: number): string {
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + delta)
+  return d.toISOString().slice(0, 10)
+}
+
+function daysBetweenInclusive(start: string, end: string): number {
+  const a = Date.parse(`${start.slice(0, 10)}T00:00:00Z`)
+  const b = Date.parse(`${end.slice(0, 10)}T00:00:00Z`)
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) return 0
+  return Math.floor((b - a) / 86400000) + 1
+}
+
+function monthsBetweenApprox(start: string, end: string): number {
+  const [ys, ms] = start.slice(0, 7).split('-').map(Number)
+  const [ye, me] = end.slice(0, 7).split('-').map(Number)
+  if (![ys, ms, ye, me].every(Number.isFinite)) return 0
+  return (ye! - ys!) * 12 + (me! - ms!) + 1
+}
+
+/** Clamp analytics window so timeseries never trips the backend 400 limit. */
+export function clampChirpsSeriesWindow(input: {
+  start: string
+  end: string
+  aggregation: ChirpsAggregation
+}): { start: string; end: string; clamped: boolean; note: string | null } {
+  let start = input.start.slice(0, 10)
+  let end = input.end.slice(0, 10)
+  if (start > end) [start, end] = [end, start]
+
+  if (input.aggregation === 'daily') {
+    const n = daysBetweenInclusive(start, end)
+    if (n > MAX_DAILY_SERIES_DAYS) {
+      return {
+        start: addUtcDays(end, -(MAX_DAILY_SERIES_DAYS - 1)),
+        end,
+        clamped: true,
+        note: `Daily series clamped to last ${MAX_DAILY_SERIES_DAYS} days (was ${n}).`,
+      }
+    }
+  } else {
+    const n = monthsBetweenApprox(start, end)
+    if (n > MAX_MONTHLY_SERIES_MONTHS) {
+      const d = new Date(`${end}T00:00:00Z`)
+      d.setUTCMonth(d.getUTCMonth() - (MAX_MONTHLY_SERIES_MONTHS - 1))
+      return {
+        start: d.toISOString().slice(0, 10),
+        end,
+        clamped: true,
+        note: `Monthly series clamped to last ${MAX_MONTHLY_SERIES_MONTHS} months (was ${n}).`,
+      }
+    }
+  }
+  return { start, end, clamped: false, note: null }
 }
 
 export function useChirpsPrecipitation({
@@ -48,7 +108,7 @@ export function useChirpsPrecipitation({
   const [raster, setRaster] = useState<ChirpsRasterResponse | null>(null)
   const [timeseries, setTimeseries] = useState<ChirpsTimeseriesResponse | null>(null)
   const [heatVisible, setHeatVisible] = useState(true)
-  const [opacity, setOpacity] = useState(0.85)
+  const [opacity, setOpacity] = useState(0.88)
   const abortRef = useRef<AbortController | null>(null)
 
   const hasAoi = !!(geometry && (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon'))
@@ -62,6 +122,7 @@ export function useChirpsPrecipitation({
     if (!geometry || !hasAoi) {
       setError('Draw an AOI polygon first')
       setStatus('error')
+      setRaster(null)
       return
     }
     const date = String(sceneDate || '').slice(0, 10)
@@ -75,48 +136,75 @@ export function useChirpsPrecipitation({
     abortRef.current = ac
     setStatus('loading')
     setError(null)
-    try {
-      const end = (seriesEnd || date).slice(0, 10)
-      let start = (seriesStart || date).slice(0, 10)
-      // Default lookback for analytics when start≈end
-      if (start === end) {
-        const d = new Date(`${end}T00:00:00Z`)
-        if (aggregation === 'daily') d.setUTCDate(d.getUTCDate() - 29)
-        else if (aggregation === 'monthly') d.setUTCMonth(d.getUTCMonth() - 11)
-        else if (aggregation === 'seasonal') d.setUTCMonth(d.getUTCMonth() - 2)
-        else d.setUTCFullYear(d.getUTCFullYear() - 4)
-        start = d.toISOString().slice(0, 10)
-      }
 
-      const [rRaw, ts] = await Promise.all([
-        fetchChirpsRaster({
-          geometry,
-          date,
-          aggregation,
-          signal: ac.signal,
-        }),
-        fetchChirpsTimeseries({
-          geometry,
-          start,
-          end,
-          aggregation,
-          signal: ac.signal,
-        }),
-      ])
-      if (ac.signal.aborted) return
-      // Clip preview to the drawn AOI polygon (API returns bbox window).
-      const r = maskChirpsRasterToPolygon(rRaw, geometry)
-      setRaster(r)
-      setTimeseries(ts)
-      setHeatVisible(true)
-      setStatus('done')
+    let end = (seriesEnd || date).slice(0, 10)
+    let start = (seriesStart || date).slice(0, 10)
+    // Default lookback for analytics when start≈end
+    if (start === end) {
+      const d = new Date(`${end}T00:00:00Z`)
+      if (aggregation === 'daily') d.setUTCDate(d.getUTCDate() - 29)
+      else if (aggregation === 'monthly') d.setUTCMonth(d.getUTCMonth() - 11)
+      else if (aggregation === 'seasonal') d.setUTCMonth(d.getUTCMonth() - 2)
+      else d.setUTCFullYear(d.getUTCFullYear() - 4)
+      start = d.toISOString().slice(0, 10)
+    }
+    const window = clampChirpsSeriesWindow({ start, end, aggregation })
+    start = window.start
+    end = window.end
+
+    // Map raster must succeed independently of timeseries analytics.
+    let rRaw: ChirpsRasterResponse | null = null
+    let rasterErr: string | null = null
+    try {
+      rRaw = await fetchChirpsRaster({
+        geometry,
+        date,
+        aggregation,
+        signal: ac.signal,
+      })
     } catch (e) {
       if (ac.signal.aborted) return
-      setRaster(null)
-      setTimeseries(null)
-      setStatus('error')
-      setError(e instanceof Error ? e.message : 'CHIRPS load failed')
+      rasterErr = e instanceof Error ? e.message : 'CHIRPS raster load failed'
     }
+
+    if (ac.signal.aborted) return
+
+    if (rRaw) {
+      const r = maskChirpsRasterToPolygon(rRaw, geometry)
+      setRaster(r)
+      setHeatVisible(true)
+    } else {
+      setRaster(null)
+    }
+
+    let ts: ChirpsTimeseriesResponse | null = null
+    let tsErr: string | null = null
+    try {
+      ts = await fetchChirpsTimeseries({
+        geometry,
+        start,
+        end,
+        aggregation,
+        signal: ac.signal,
+      })
+    } catch (e) {
+      if (ac.signal.aborted) return
+      tsErr = e instanceof Error ? e.message : 'CHIRPS timeseries load failed'
+    }
+
+    if (ac.signal.aborted) return
+
+    setTimeseries(ts)
+
+    if (rRaw) {
+      setStatus('done')
+      const notes = [window.note, tsErr ? `Analytics: ${tsErr}` : null].filter(Boolean)
+      setError(notes.length ? notes.join(' ') : null)
+      return
+    }
+
+    setStatus('error')
+    setError(rasterErr || tsErr || 'CHIRPS load failed')
   }, [geometry, hasAoi, sceneDate, seriesStart, seriesEnd, aggregation])
 
   useEffect(() => {
@@ -124,7 +212,6 @@ export function useChirpsPrecipitation({
       abortRef.current?.abort()
       return
     }
-    // Auto-load when PRECIP layer is active and AOI+date ready
     if (hasAoi && sceneDate) void run()
     return () => abortRef.current?.abort()
   }, [enabled, hasAoi, sceneDate, aggregation, geometry]) // eslint-disable-line react-hooks/exhaustive-deps

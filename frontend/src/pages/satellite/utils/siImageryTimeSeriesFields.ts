@@ -163,6 +163,27 @@ function isEligiblePlotVectorLayer(layer: SiAoiMaskBuilderLayerLike | null | und
   return features.some(f => isPolygonGeometry((f as GeoJSON.Feature | undefined)?.geometry ?? null))
 }
 
+/** Prefer explicit Agro mask; else recover polygons from paint/viewport Agro layer. */
+function resolveEffectiveAgroStructuresMask(
+  agroStructuresMask: GeoJSON.FeatureCollection | null | undefined,
+  vectorLayers?: SiAoiMaskBuilderLayerLike[] | null,
+): GeoJSON.FeatureCollection | null {
+  if (Array.isArray(agroStructuresMask?.features) && agroStructuresMask!.features!.length > 0) {
+    return agroStructuresMask!
+  }
+  if (!vectorLayers?.length) return null
+  for (const layer of vectorLayers) {
+    if (!layer?.id) continue
+    const isAgro =
+      String(layer.id) === AGRO_STRUCTURES_PRIMARY_LAYER_ID || isAgroStructuresLayer(layer as any)
+    if (!isAgro) continue
+    const features = Array.isArray(layer.geojson?.features) ? layer.geojson!.features! : []
+    if (!features.length) continue
+    return { type: 'FeatureCollection', features: features as GeoJSON.Feature[] }
+  }
+  return null
+}
+
 /** Attribute fields available on plot AOI layers (Name, OBJECTID, …). */
 export function listSiImageryPlotLabelAttributes(
   vectorLayers: SiAoiMaskBuilderLayerLike[] | null | undefined,
@@ -246,7 +267,8 @@ export function buildSiImageryFieldOptions(
   vectorLayers?: SiAoiMaskBuilderLayerLike[] | null,
   labelAttribute?: string | null,
 ): AcpStructureFieldOption[] {
-  const base = buildBaseStructureFieldOptions(agroStructuresMask, aoiFields)
+  const effectiveAgroMask = resolveEffectiveAgroStructuresMask(agroStructuresMask, vectorLayers)
+  const base = buildBaseStructureFieldOptions(effectiveAgroMask, aoiFields)
   const fromLayers = buildVectorLayerFieldOptions(vectorLayers, labelAttribute)
   const seen = new Set(base.map(o => o.fieldKey))
   const merged = [...base]
@@ -333,7 +355,8 @@ export function resolveSiImageryField(
   vectorLayers?: SiAoiMaskBuilderLayerLike[] | null,
   labelAttribute?: string | null,
 ): CropAlertFieldInput | null {
-  const agro = resolveAgroStructureFieldByKey(agroStructuresMask, fieldKey)
+  const effectiveAgroMask = resolveEffectiveAgroStructuresMask(agroStructuresMask, vectorLayers)
+  const agro = resolveAgroStructureFieldByKey(effectiveAgroMask, fieldKey)
   if (agro) return agro
   if (fieldKey === SI_IMAGERY_COMMITTED_AOI_KEY && committedAoiGeometry) {
     return {

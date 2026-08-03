@@ -1,0 +1,32 @@
+# One-command SAM2 boundary refinement service.
+#
+#   cd backend/services/sam2-refinement
+#   docker compose up --build
+#
+# Serves http://localhost:8096 — AgroCloud default for SAM2_REFINEMENT_URL.
+#
+# GPU: uncomment deploy block. CPU fallback is supported but slow for hiera-large;
+# use SAM2_MODEL_ID=facebook/sam2-hiera-base-plus on light hosts.
+services:
+  sam2-refinement:
+    build: .
+    image: ai-sam2-refinement
+    ports:
+      - "8096:8096"
+    environment:
+      SAM2_MODEL_ID: "facebook/sam2-hiera-large"
+      SAM2_MAX_EDGE: "1536"
+      SAM2_MIN_CONFIDENCE: "0.35"
+    volumes:
+      - sam2-refinement-cache:/root/.cache
+    restart: unless-stopped
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+volumes:
+  sam2-refinement-cache:

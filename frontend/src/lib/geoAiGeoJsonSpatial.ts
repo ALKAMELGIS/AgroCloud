@@ -86,11 +86,11 @@ export function geometryBBox(geometry: { type?: string; coordinates?: unknown } 
   let maxLat = -Infinity
   const walk = (node: unknown): void => {
     if (Array.isArray(node)) {
+      // GeoJSON positions may include Z/M — use lng/lat only (ArcGIS Layers AOI).
       if (
         node.length >= 2 &&
         typeof node[0] === 'number' &&
-        typeof node[1] === 'number' &&
-        (node.length === 2 || typeof node[2] !== 'number')
+        typeof node[1] === 'number'
       ) {
         const x = node[0] as number
         const y = node[1] as number
@@ -99,12 +99,10 @@ export function geometryBBox(geometry: { type?: string; coordinates?: unknown } 
           maxLng = Math.max(maxLng, x)
           minLat = Math.min(minLat, y)
           maxLat = Math.max(maxLat, y)
-        } else {
-          for (const ch of node) walk(ch)
         }
-      } else {
-        for (const ch of node) walk(ch)
+        return
       }
+      for (const ch of node) walk(ch)
     }
   }
   walk(geometry.coordinates)

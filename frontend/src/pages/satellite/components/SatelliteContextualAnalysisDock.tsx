@@ -19,22 +19,18 @@ export type SatelliteContextPanelId =
   | 'layers'
   | 'add-gis-layer'
   | 'remote-sensing'
-  | 'eo-enrichment'
   | 'crop-alerts'
   | 'wapi-alerts'
   | 'stress-zones'
   | 'crop-classification'
   | 'imagery-time-series'
   | 'layer-live-legend'
-  | 'ai-detection-gis'
   | 'tree-detections'
-  | 'sam-detection'
-  | 'agri-field-boundary'
+  | 'segformer-detection'
   | 'hydro-watershed'
   | 'well-site'
   | 'well-suitability'
   | 'flood-monitoring'
-  | 'image-classification'
   | 'raster-georeference'
   | 'table-geo-ai'
   | 'spatial'
@@ -84,23 +80,19 @@ export type SatelliteContextualAnalysisDockProps = {
     | 'source'
     | 'layers'
     | 'remote-sensing'
-    | 'eo-enrichment'
-      | 'crop-alerts'
+    | 'crop-alerts'
     | 'wapi-alerts'
     | 'stress-zones'
     | 'crop-classification'
-    | 'ai-detection-gis'
     | 'tree-detections'
-    | 'sam-detection'
-    | 'agri-field-boundary'
+    | 'segformer-detection'
     | 'hydro-watershed'
     | 'well-site'
     | 'well-suitability'
     | 'flood-monitoring'
-    | 'image-classification'
     | 'raster-georeference'
     | 'table-geo-ai'
-      | null;
+    | null;
   /** Called with the embed host element whenever the map panel mounts/updates; null when unmounted. */
   onMapToolboxEmbedHost?: (el: HTMLDivElement | null) => void;
   /** Close the floating processing dropdown (e.g. when the toolbox panel closes). */
@@ -162,13 +154,6 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     hint: 'Indices, WMS layers, timeline, and AOI tools.',
   },
   {
-    id: 'eo-enrichment',
-    icon: 'fa-solid fa-seedling',
-    label: 'EO Enrich',
-    title: 'EO Layer Enrichment',
-    hint: 'Enrich farm polygons with latest Sentinel-2 attributes, then export KMZ/SHP/XLSX or DOCX report.',
-  },
-  {
     id: 'wapi-alerts',
     icon: 'fa-solid fa-faucet-drip',
     label: 'ISS Alert',
@@ -197,32 +182,11 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     hint: 'Color keys for every Sentinel Live layer (indices, composites, SAR, SCL).',
   },
   {
-    id: 'ai-detection-gis',
-    icon: 'fa-solid fa-magnifying-glass-location',
-    label: 'AI Detection in GIS',
-    title: 'AI Detection in GIS',
-    hint: 'Map-aware detection and inspect workflows.',
-  },
-  {
     id: 'tree-detections',
     icon: 'fa-solid fa-tree',
     label: 'Tree Detections',
     title: 'Tree Detections',
     hint: 'AOI → auto-detect & classify tree crowns from VHR imagery.',
-  },
-  {
-    id: 'sam-detection',
-    icon: 'fa-solid fa-wand-magic-sparkles',
-    label: 'AI SAM Detection',
-    title: 'AI SAM Detection',
-    hint: 'Select object type → AOI → Segment: instance masks + centroids for every object (trees, roads, fields).',
-  },
-  {
-    id: 'agri-field-boundary',
-    icon: 'fa-solid fa-crop-simple',
-    label: 'Field Boundaries',
-    title: 'Agri Field Boundary Detection',
-    hint: 'Delineate-Anything / Mask R-CNN / FoW — agricultural field polygons with IDs, area & confidence.',
   },
   {
     id: 'hydro-watershed',
@@ -251,13 +215,6 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     label: 'Flood (SAR)',
     title: 'Flood Monitoring (SAR-Based)',
     hint: 'AOI → Sentinel-1 SAR change detection → flood extent, boundaries & stats.',
-  },
-  {
-    id: 'image-classification',
-    icon: 'fa-solid fa-shapes',
-    label: 'Classify',
-    title: 'Image Classification Wizard',
-    hint: 'Raster → land-cover classes via supervised/unsupervised, pixel/object-based workflow.',
   },
   {
     id: 'raster-georeference',
@@ -335,20 +292,15 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
   'layers',
   'add-gis-layer',
   'remote-sensing',
-  'eo-enrichment',
   'wapi-alerts',
   'crop-classification',
   'imagery-time-series',
   'layer-live-legend',
-  'ai-detection-gis',
   'tree-detections',
-  'sam-detection',
-  'agri-field-boundary',
   'hydro-watershed',
   'well-site',
   'well-suitability',
   'flood-monitoring',
-  'image-classification',
   'raster-georeference',
   'table-geo-ai',
 ]);
@@ -356,24 +308,19 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
 /** Rail tools that open the floating processing stack instead of the docked panel. */
 const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
   'remote-sensing',
-  'eo-enrichment',
   'wapi-alerts',
   'crop-classification',
-  'ai-detection-gis',
   'tree-detections',
-  'sam-detection',
-  'agri-field-boundary',
   'hydro-watershed',
   'well-site',
   'well-suitability',
   'flood-monitoring',
-  'image-classification',
   'raster-georeference',
 ]);
 
 const RAIL_GROUPS_MAP: SatelliteContextPanelId[][] = [
-  ['layers', 'remote-sensing', 'eo-enrichment', 'wapi-alerts', 'crop-classification', 'imagery-time-series', 'layer-live-legend', 'hydro-watershed'],
-  ['ai-detection-gis', 'tree-detections', 'sam-detection', 'agri-field-boundary', 'well-site', 'well-suitability', 'flood-monitoring', 'image-classification', 'raster-georeference'],
+  ['layers', 'remote-sensing', 'wapi-alerts', 'crop-classification', 'imagery-time-series', 'layer-live-legend', 'hydro-watershed'],
+  ['tree-detections', 'well-site', 'well-suitability', 'flood-monitoring', 'raster-georeference'],
 ];
 
 const RAIL_BY_ID = RAIL.reduce(

@@ -1,0 +1,347 @@
+/* Imagery scene calendar — cloud filter + month grid with square scene highlights.
+   Fits the existing Remote Sensing toolbox (dark glass); light dock gets the reference look. */
+
+.si-img-cal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.si-img-cal .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.si-img-cal__cloud {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.si-img-cal__cloud-label {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(226, 232, 240, 0.92);
+  letter-spacing: 0.01em;
+}
+
+.si-img-cal__cloud-slider {
+  flex: 1 1 96px;
+  min-width: 72px;
+  height: 4px;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    #2b2585 0%,
+    #2b2585 var(--si-cloud-pct, 30%),
+    rgba(148, 163, 184, 0.35) var(--si-cloud-pct, 30%),
+    rgba(148, 163, 184, 0.35) 100%
+  );
+  outline: none;
+  cursor: pointer;
+}
+
+.si-img-cal__cloud-slider::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #2b2585;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.si-img-cal__cloud-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #2b2585;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.si-img-cal__cloud-slider:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.si-img-cal__cloud-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: rgba(203, 213, 225, 0.95);
+}
+
+.si-img-cal__cloud-value i {
+  color: rgba(148, 163, 184, 0.95);
+  font-size: 11px;
+}
+
+.si-img-cal__cloud-value strong {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.si-img-cal__reset {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(226, 232, 240, 0.9);
+  cursor: pointer;
+}
+
+.si-img-cal__reset:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.si-img-cal__reset:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.si-img-cal__cal {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 8px 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.si-img-cal__nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.si-img-cal__nav-btn {
+  width: 26px;
+  height: 26px;
+  display: inline-grid;
+  place-items: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(226, 232, 240, 0.9);
+  cursor: pointer;
+}
+
+.si-img-cal__nav-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.si-img-cal__nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.si-img-cal__nav-selects {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.si-img-cal__select-wrap {
+  margin: 0;
+}
+
+.si-img-cal__select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.55);
+  border-radius: 0;
+  background: transparent
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%94a3b8' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E")
+    no-repeat right 0 center;
+  padding: 2px 14px 3px 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: #a5b4fc;
+  cursor: pointer;
+}
+
+.si-img-cal__select:focus {
+  outline: none;
+  border-bottom-color: #6366f1;
+}
+
+.si-img-cal__select option {
+  color: #0f172a;
+  background: #fff;
+}
+
+.si-img-cal__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.si-img-cal__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+
+.si-img-cal__day {
+  aspect-ratio: 1;
+  min-height: 28px;
+  display: inline-grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: rgba(241, 245, 249, 0.92);
+  font-size: 12px;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.si-img-cal__day:hover:not(:disabled):not(.si-img-cal__day--selected) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.si-img-cal__day--muted {
+  color: rgba(148, 163, 184, 0.45);
+  cursor: default;
+}
+
+/* Square highlight for days that have imagery */
+.si-img-cal__day--scene:not(.si-img-cal__day--selected) {
+  background: rgba(148, 163, 184, 0.16);
+  border-color: #2b2585;
+  box-shadow: inset 0 0 0 1px rgba(43, 37, 133, 0.45);
+  color: rgba(241, 245, 249, 0.98);
+  font-weight: 650;
+}
+
+.si-img-cal__day--today:not(.si-img-cal__day--selected) {
+  color: #a5b4fc;
+  font-weight: 750;
+}
+
+.si-img-cal__day--selected {
+  background: #2b2585;
+  border-color: #2b2585;
+  color: #fff;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.si-img-cal__day:disabled {
+  cursor: default;
+}
+
+.si-img-cal__legend {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 2px;
+  font-size: 11px;
+  color: rgba(148, 163, 184, 0.92);
+}
+
+.si-img-cal__legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+}
+
+.si-img-cal__legend-swatch--scene {
+  background: rgba(148, 163, 184, 0.2);
+  border: 1px solid #2b2585;
+  box-shadow: inset 0 0 0 1px rgba(43, 37, 133, 0.35);
+}
+
+/* Light dock / light theme — closer to the reference screenshot */
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-img-cal__cloud-label {
+  color: #1e1b4b;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-img-cal__cloud-value {
+  color: #475569;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-img-cal__cloud-value i {
+  color: #94a3b8;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-img-cal__reset {
+  border-color: rgba(15, 23, 42, 0.12);
+  background: #f8fafc;
+  color: #334155;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-img-cal__cal {
+  border-color: rgba(15, 23, 42, 0.1);
+  background: #fff;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-img-cal__nav-btn {
+  color: #1e1b4b;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-img-cal__select {
+  color: #1e1b4b;
+  border-bottom-color: #cbd5e1;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%231e1b4b' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-img-cal__weekdays {
+  color: #94a3b8;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-img-cal__day {
+  color: #0f172a;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-img-cal__day--muted {
+  color: #cbd5e1;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-img-cal__day--scene:not(.si-img-cal__day--selected) {
+  background: #f1f5f9;
+  border-color: #2b2585;
+  color: #0f172a;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-img-cal__day--today:not(.si-img-cal__day--selected) {
+  color: #2b2585;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-img-cal__legend {
+  color: #64748b;
+}

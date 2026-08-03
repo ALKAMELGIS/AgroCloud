@@ -45,7 +45,18 @@ export function RemoteSensingLayerSelect({
   const [query, setQuery] = useState('')
 
   const selected = useMemo(() => findSelectedOption(groups, value), [groups, value])
-  const selectedLabel = selected?.label ?? value
+  const firstOption = groups[0]?.options[0] ?? null
+  const selectedLabel = selected?.label ?? firstOption?.label ?? value
+
+  // If the parent still holds a stale layer id (e.g. NDVI after switching Collection),
+  // coerce to the first option of the current catalogue.
+  useEffect(() => {
+    if (!groups.length || !firstOption) return
+    if (findSelectedOption(groups, value)) return
+    onChange(firstOption.id)
+    // intentionally omit onChange — parent often passes an inline function
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups, value, firstOption?.id])
 
   const filteredGroups = useMemo(() => {
     const q = query.trim().toLowerCase()

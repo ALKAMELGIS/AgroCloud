@@ -235,8 +235,9 @@ export async function buildCumulativeMapSnapshotGroups(input: {
           extent,
         })
       } catch {
-        imageBase64 = indexBase64
+        imageBase64 = null
       }
+      imageBase64 = imageBase64 ?? indexBase64
 
       completed += 1
       input.onProgress?.(completed, Math.max(total, 1))

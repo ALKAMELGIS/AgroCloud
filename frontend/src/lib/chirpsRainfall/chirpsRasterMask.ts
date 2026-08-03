@@ -34,16 +34,18 @@ function pointInPolygon(lng: number, lat: number, geom: GeoJSON.Polygon | GeoJSO
   return false
 }
 
-function colorAt(t: number): [number, number, number] {
+function colorAt(mm: number): [number, number, number] {
+  // Absolute mm ramp — matches CHIRPS_PRECIP_RAMP (tan dry → blue wet).
   const stops: Array<[number, [number, number, number]]> = [
-    [0, [255, 255, 255]],
-    [0.15, [200, 230, 255]],
-    [0.35, [100, 180, 255]],
-    [0.55, [30, 120, 220]],
-    [0.75, [20, 80, 180]],
-    [1, [10, 40, 120]],
+    [0, [196, 164, 132]],
+    [2, [245, 240, 230]],
+    [5, [200, 224, 244]],
+    [15, [107, 174, 214]],
+    [30, [33, 113, 181]],
+    [60, [8, 48, 107]],
+    [100, [4, 30, 66]],
   ]
-  const x = Math.max(0, Math.min(1, t))
+  const x = Math.max(0, Number(mm) || 0)
   for (let i = 0; i < stops.length - 1; i += 1) {
     const [a, ca] = stops[i]!
     const [b, cb] = stops[i + 1]!
@@ -56,7 +58,8 @@ function colorAt(t: number): [number, number, number] {
       ]
     }
   }
-  return stops[stops.length - 1]![1]
+  if (x > stops[stops.length - 1]![0]) return stops[stops.length - 1]![1]
+  return stops[0]![1]
 }
 
 function rebuildPreviewDataUrl(
@@ -64,8 +67,6 @@ function rebuildPreviewDataUrl(
   height: number,
   values: number[],
   nodata: number,
-  lo: number,
-  hi: number,
 ): string {
   const canvas = document.createElement('canvas')
   canvas.width = width
@@ -73,7 +74,6 @@ function rebuildPreviewDataUrl(
   const ctx = canvas.getContext('2d')
   if (!ctx) return ''
   const img = ctx.createImageData(width, height)
-  const span = hi > lo ? hi - lo : 1
   for (let i = 0; i < values.length; i += 1) {
     const v = values[i]!
     const o = i * 4
@@ -84,11 +84,11 @@ function rebuildPreviewDataUrl(
       img.data[o + 3] = 0
       continue
     }
-    const [r, g, b] = colorAt((v - lo) / span)
+    const [r, g, b] = colorAt(v)
     img.data[o] = r
     img.data[o + 1] = g
     img.data[o + 2] = b
-    img.data[o + 3] = 210
+    img.data[o + 3] = 220
   }
   ctx.putImageData(img, 0, 0)
   return canvas.toDataURL('image/png')
@@ -128,9 +128,7 @@ export function maskChirpsRasterToPolygon(
   const stats = n
     ? { min, max, mean: sum / n, validCount: n }
     : { min: null, max: null, mean: null, validCount: 0 }
-  const lo = stats.min != null ? stats.min : 0
-  const hi = stats.max != null && stats.max > lo ? stats.max : lo + 1
-  const previewDataUrl = rebuildPreviewDataUrl(width, height, masked, CHIRPS_NODATA, lo, hi)
+  const previewDataUrl = rebuildPreviewDataUrl(width, height, masked, CHIRPS_NODATA)
   return {
     ...raster,
     values: masked,

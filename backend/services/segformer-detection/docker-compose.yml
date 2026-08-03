@@ -1,0 +1,38 @@
+# One-command SegFormer ADE20K GIS detection service (default B5).
+#
+#   cd backend/services/segformer-detection
+#   docker compose up --build
+#
+# Serves http://localhost:8095 — which is also the AgroCloud backend default for
+# SEGFORMER_DETECTION_URL, so once this is up the SegFormer Detection tool works
+# with no further configuration.
+#
+# CPU/light hosts: set SEGFORMER_MODEL_ID to nvidia/segformer-b0-finetuned-ade-512-512.
+#
+# GPU note: to use an NVIDIA GPU, uncomment the `deploy` block below and use a
+# CUDA-enabled base image in the Dockerfile. B5 + SAM2 field pipeline expects GPU RAM.
+services:
+  segformer-detection:
+    build: .
+    image: ai-segformer-detection
+    ports:
+      - "8095:8095"
+    environment:
+      SEGFORMER_MODEL_ID: "nvidia/segformer-b5-finetuned-ade-640-640"
+      SEGFORMER_MAX_EDGE: "1024"
+      SEGFORMER_MIN_CONFIDENCE: "0.45"
+      SEGFORMER_FIELD_MIN_COMPONENT_PX: "96"
+    volumes:
+      # Persist the downloaded HuggingFace / torch cache across restarts.
+      - segformer-detection-cache:/root/.cache
+    restart: unless-stopped
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+volumes:
+  segformer-detection-cache:

@@ -20,10 +20,10 @@ export const CHART_IMAGE_CX = 5029200
 export const CHART_IMAGE_CY = 3200400
 /** Taller chart for horizontal bars / pies with side legend (~5.5" × 4.0"). */
 export const CHART_IMAGE_CY_TALL = 3657600
-/** Classic atlas — 9 map cards per page in a 3×3 grid (Imagery Time Series sample). */
-export const MAP_IMAGE_CX = 2743200
-export const MAP_IMAGE_CY = 2057400
-export const MAPS_PER_PAGE = 9
+/** Enterprise atlas — 12 map cards per page in a 3×4 grid (T-23 Intelligence Report). */
+export const MAP_IMAGE_CX = 2057400
+export const MAP_IMAGE_CY = 1543050
+export const MAPS_PER_PAGE = 12
 export const MAPS_PER_ROW = 3
 /** Change Detection T0/T1 pair — two larger side-by-side map cards. */
 export const PAIR_MAP_IMAGE_CX = 3108960
@@ -34,7 +34,7 @@ export const CHANGE_CHART_IMAGE_CY = 2286000
 
 const C_NS = 'http://schemas.openxmlformats.org/drawingml/2006/chart'
 
-/** Margins sized so a full 3×3 atlas fills the page without large gaps. */
+/** Margins sized so a full 3×4 atlas fills the page without large gaps. */
 export const DOCX_SECT_PR = `<w:sectPr w:rsidR="003D6795"><w:headerReference w:type="default" r:id="rIdHdr"/><w:footerReference w:type="default" r:id="rIdFtr"/><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="648" w:right="648" w:bottom="648" w:left="648" w:header="432" w:footer="432" w:gutter="0"/><w:cols w:space="720"/><w:docGrid w:linePitch="320"/></w:sectPr>`
 
 export function escXml(value: string): string {
@@ -283,7 +283,7 @@ function docxMapTableRow(images: Array<{ rId: string; date: string; label: strin
 }
 
 /**
- * 3×3 grid (9 map cards per page) — classic Imagery Time Series atlas layout.
+ * 3×4 grid (12 map cards per page) — T-23 Enterprise Intelligence Report atlas.
  * Page breaks only between full atlas pages.
  */
 export function docxMapGrid(images: Array<{ rId: string; date: string; label: string }>): string {

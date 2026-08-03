@@ -4,20 +4,16 @@ import { useMemo, useState } from 'react';
 export type SmartProcessingSectionId =
   | 'layers'
   | 'remote-sensing'
-  | 'eo-enrichment'
   | 'crop-alerts'
   | 'wapi-alerts'
   | 'stress-zones'
   | 'crop-classification'
-  | 'ai-detection-gis'
   | 'tree-detections'
-  | 'sam-detection'
-  | 'agri-field-boundary'
+  | 'segformer-detection'
   | 'hydro-watershed'
   | 'well-site'
   | 'well-suitability'
   | 'flood-monitoring'
-  | 'image-classification'
   | 'raster-georeference'
   | 'table-geo-ai';
 
@@ -38,14 +34,10 @@ type CatKey = 'quick' | 'selection' | 'spatial' | 'ai' | 'geom' | 'edit';
 const QUICK_LINKS: Array<{ id: SmartProcessingSectionId; icon: string; label: string }> = [
   { id: 'layers', icon: 'fa-solid fa-layer-group', label: 'Layers' },
   { id: 'remote-sensing', icon: 'fa-solid fa-satellite-dish', label: 'Remote sensing' },
-  { id: 'eo-enrichment', icon: 'fa-solid fa-seedling', label: 'EO Enrich' },
   { id: 'wapi-alerts', icon: 'fa-solid fa-faucet-drip', label: 'ISS Alert' },
   { id: 'stress-zones', icon: 'fa-solid fa-heart-pulse', label: 'Stress Zones ⭐' },
   { id: 'crop-classification', icon: 'fa-solid fa-wheat-awn', label: 'Crop AI' },
-  { id: 'ai-detection-gis', icon: 'fa-solid fa-magnifying-glass-location', label: 'AI Detection in GIS' },
   { id: 'tree-detections', icon: 'fa-solid fa-tree', label: 'Tree Detections' },
-  { id: 'sam-detection', icon: 'fa-solid fa-wand-magic-sparkles', label: 'AI SAM Detection' },
-  { id: 'agri-field-boundary', icon: 'fa-solid fa-crop-simple', label: 'Field Boundaries' },
   { id: 'hydro-watershed', icon: 'fa-solid fa-water', label: 'Hydro Watershed' },
   { id: 'table-geo-ai', icon: 'fa-solid fa-comments', label: 'AI Agent' },
 ];
@@ -72,8 +64,8 @@ const WORKFLOW_ROWS: Array<{
         id: 'sel-loc',
         icon: 'fa-solid fa-location-crosshairs',
         label: 'Select by location',
-        hint: 'Spatial picks, inspect, and GIS detection context.',
-        target: 'ai-detection-gis',
+        hint: 'Spatial picks, inspect, and AOI-linked selection.',
+        target: 'table-geo-ai',
       },
       {
         id: 'sql',
@@ -95,13 +87,6 @@ const WORKFLOW_ROWS: Array<{
         label: 'Spatial & zonal',
         hint: 'Remote sensing templates, timeline, and AOI tools.',
         target: 'remote-sensing',
-      },
-      {
-        id: 'eo-enrichment',
-        icon: 'fa-solid fa-seedling',
-        label: 'EO Layer Enrichment',
-        hint: 'Enrich farm polygons with Sentinel-2 attributes; export KMZ/SHP/XLSX or DOCX report.',
-        target: 'eo-enrichment',
       },
       {
         id: 'stress-zones',

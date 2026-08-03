@@ -19,7 +19,7 @@ export type MeteoChartSeriesRef = {
 
 export type MeteoNativeChartSpec = {
   title: string
-  kind: 'line' | 'bar' | 'scatter' | 'area' | 'combo'
+  kind: 'line' | 'bar' | 'scatter' | 'area' | 'combo' | 'pie' | 'doughnut'
   series: MeteoChartSeriesRef[]
   /** For combo: line series indices (rest are bars) */
   lineSeriesIndexes?: number[]
@@ -36,6 +36,10 @@ export type MeteoNativeChartSpec = {
   barDir?: 'col' | 'bar'
   /** Bar grouping. */
   grouping?: 'clustered' | 'stacked' | 'percentStacked'
+  /** Smooth line curves (line / combo line series). */
+  smooth?: boolean
+  /** Doughnut hole size 1–90 (default 50). */
+  holeSize?: number
 }
 
 function escXml(s: string): string {
@@ -89,7 +93,7 @@ function buildChartXml(spec: MeteoNativeChartSpec, chartIndex: number): string {
   ${marker}
   <c:cat><c:strRef><c:f>${escXml(ser.catsRef)}</c:f></c:strRef></c:cat>
   <c:val><c:numRef><c:f>${escXml(ser.valuesRef)}</c:f></c:numRef></c:val>
-  ${kind === 'line' || kind === 'area' || (kind === 'combo' && spec.lineSeriesIndexes?.includes(i)) ? '<c:smooth val="0"/>' : ''}
+  ${kind === 'line' || kind === 'area' || (kind === 'combo' && spec.lineSeriesIndexes?.includes(i)) ? `<c:smooth val="${spec.smooth ? '1' : '0'}"/>` : ''}
 </c:ser>`
   }
 
@@ -122,6 +126,17 @@ function buildChartXml(spec: MeteoNativeChartSpec, chartIndex: number): string {
   <c:axId val="${axCat}"/>
   <c:axId val="${axVal2}"/>
 </c:lineChart>`
+  } else if (kind === 'pie' || kind === 'doughnut') {
+    const hole =
+      kind === 'doughnut'
+        ? `<c:holeSize val="${Math.max(1, Math.min(90, spec.holeSize ?? 50))}"/>`
+        : ''
+    plot = `<c:${kind}Chart>
+  <c:varyColors val="1"/>
+  ${serParts.map(p => buildSer(p.ser, p.i, '')).join('')}
+  <c:firstSliceAng val="0"/>
+  ${hole}
+</c:${kind}Chart>`
   } else if (kind === 'bar') {
     plot = `<c:barChart>
   <c:barDir val="${barDir}"/>
@@ -187,7 +202,9 @@ function buildChartXml(spec: MeteoNativeChartSpec, chartIndex: number): string {
       </c:valAx>`
 
   const catOrValAx =
-    kind === 'scatter'
+    kind === 'pie' || kind === 'doughnut'
+      ? ''
+      : kind === 'scatter'
       ? `<c:valAx>
         <c:axId val="${axCat}"/>
         <c:scaling><c:orientation val="minMax"/></c:scaling>
@@ -314,12 +331,9 @@ async function findChartsSheetPath(
 }
 
 function ensureWorksheetDrawingRel(sheetXml: string, drawingRid: string): string {
-  if (sheetXml.includes('drawing')) {
-    return sheetXml.replace(
-      /<drawing[^/]*\/>/,
-      `<drawing r:id="${drawingRid}"/>`,
-    )
-  }
+  // Keep existing drawing refs (Map Snapshots image atlases). Chart injection must
+  // only attach drawings to sheets that do not already have one.
+  if (/<drawing\b/.test(sheetXml)) return sheetXml
   if (sheetXml.includes('</worksheet>')) {
     return sheetXml.replace('</worksheet>', `<drawing r:id="${drawingRid}"/></worksheet>`)
   }
@@ -334,8 +348,12 @@ function updateSheetRels(existing: string | null, drawingRid: string, drawingFil
   <Relationship Id="${drawingRid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="${target}"/>
 </Relationships>`
   }
-  if (existing.includes('/drawing"')) {
-    return existing.replace(/Target="[^"]*drawings\/[^"]*"/, `Target="${target}"`)
+  // Never rewrite an existing drawing Target — that stole Map Snapshots image drawings.
+  if (existing.includes(`Id="${drawingRid}"`)) {
+    return existing.replace(
+      new RegExp(`(<Relationship[^>]*Id="${drawingRid}"[^>]*Target=")[^"]*(")`),
+      `$1${target}$2`,
+    )
   }
   return existing.replace(
     '</Relationships>',
@@ -344,10 +362,10 @@ function updateSheetRels(existing: string | null, drawingRid: string, drawingFil
   )
 }
 
-function updateContentTypes(ct: string, chartCount: number, drawingCount: number): string {
+function updateContentTypes(ct: string, chartCount: number, drawingFiles: string[]): string {
   let out = ct
-  for (let i = 1; i <= drawingCount; i++) {
-    const part = `/xl/drawings/drawing${i}.xml`
+  for (const drawingFile of drawingFiles) {
+    const part = `/xl/drawings/${drawingFile}`
     if (!out.includes(`PartName="${part}"`)) {
       out = out.replace(
         '</Types>',
@@ -367,6 +385,13 @@ function updateContentTypes(ct: string, chartCount: number, drawingCount: number
     }
   }
   return out
+}
+
+/** Next drawingN.xml that does not overwrite ExcelJS image drawings (e.g. Map Snapshots). */
+function allocateDrawingFile(zip: JSZip): string {
+  let n = 1
+  while (zip.file(`xl/drawings/drawing${n}.xml`)) n += 1
+  return `drawing${n}.xml`
 }
 
 /**
@@ -398,6 +423,7 @@ export async function injectNativeMeteoCharts(
     groups.set(sheet, arr)
   })
 
+  const allocatedDrawings: string[] = []
   let drawingSeq = 0
   for (const [sheetName, entries] of groups) {
     const located = await findChartsSheetPath(zip, sheetName)
@@ -405,7 +431,9 @@ export async function injectNativeMeteoCharts(
       throw new Error(`Charts sheet "${sheetName}" not found in workbook package`)
     }
     drawingSeq += 1
-    const drawingFile = `drawing${drawingSeq}.xml`
+    // Never clobber ExcelJS image drawings (Map Snapshots uses drawing1.xml, …).
+    const drawingFile = allocateDrawingFile(zip)
+    allocatedDrawings.push(drawingFile)
     zip.file(`xl/drawings/${drawingFile}`, buildDrawingXml(entries))
     zip.file(`xl/drawings/_rels/${drawingFile}.rels`, buildDrawingRels(entries))
 
@@ -420,7 +448,7 @@ export async function injectNativeMeteoCharts(
   }
 
   const ct = await zip.file('[Content_Types].xml')!.async('string')
-  zip.file('[Content_Types].xml', updateContentTypes(ct, specs.length, drawingSeq))
+  zip.file('[Content_Types].xml', updateContentTypes(ct, specs.length, allocatedDrawings))
 
   const out = await zip.generateAsync({
     type: 'uint8array',

@@ -2,8 +2,63 @@ export type { TimeSeriesExportKind, TimeSeriesReportConfig, TimeSeriesReportPayl
 export { buildTimeSeriesReportPayload } from './buildTimeSeriesReportPayload'
 export { buildTimeSeriesExecutiveSummary } from './timeSeriesReportExecutive'
 export { generateTimeSeriesReportPdf } from './generateTimeSeriesReportPdf'
+export {
+  sanitizeFieldSummaryPdfFilename,
+  drawFieldSummaryPage,
+  drawFieldSummaryCoverPage,
+  generateFieldSummaryPdf,
+  generateCombinedFieldSummariesPdf,
+  saveFieldSummaryPdf,
+  saveCombinedFieldSummariesPdf,
+} from './generateFieldSummaryPdf'
+export {
+  generateFieldSummaryExcel,
+  buildFieldSummaryWorkbook,
+  sanitizeFieldSummaryExcelFilename,
+  writeFieldSummaryAnalysisSheet,
+  classifyVhsHealthBand,
+  FIELD_SUMMARY_YIELD_FORMULAS,
+} from './generateFieldSummaryExcel'
 export { generateTimeSeriesReportDocx, generateTimeSeriesLulcReportDocx } from './generateTimeSeriesReportDocx'
-export { generateTimeSeriesReportExcel, exportTimeSeriesCsvReport, exportTimeSeriesChartTimelineExcel, buildTimeSeriesReportWorkbook, buildTimeSeriesReportWorkbookSync } from './generateTimeSeriesReportExcel'
+export {
+  generateTimeSeriesReportExcel,
+  sanitizeTimeSeriesReportExcelFilename,
+  exportTimeSeriesCsvReport,
+  exportTimeSeriesChartTimelineExcel,
+  buildTimeSeriesReportWorkbook,
+  buildTimeSeriesReportWorkbookSync,
+} from './generateTimeSeriesReportExcel'
+export type { GenerateTimeSeriesReportExcelOptions } from './generateTimeSeriesReportExcel'
+export {
+  batchExportAnalyticsReportsExcel,
+  resolveBatchPlotDisplayName,
+} from './batchExportAnalyticsReportsExcel'
+export type {
+  BatchAnalyticsExportProgress,
+  BatchAnalyticsExportResult,
+  BatchExportAnalyticsReportsExcelInput,
+} from './batchExportAnalyticsReportsExcel'
+export { batchExportFieldSummaries, mergeFieldSummaryLayerIds } from './batchExportFieldSummaries'
+export type {
+  BatchFieldSummaryProgress,
+  BatchFieldSummaryResult,
+  BatchExportFieldSummariesInput,
+  FieldSummaryExportMode,
+} from './batchExportFieldSummaries'
+export {
+  buildFieldSummaryModel,
+  aggregateFieldSummaryPortfolio,
+  computeVegetationHealthScore,
+  resolveFieldHarvestWindow,
+  mapWaterStressToIrrigationStatus,
+} from './buildFieldSummaryModel'
+export type {
+  FieldSummaryModel,
+  FieldSummaryPortfolioStats,
+  FieldHarvestWindowLabel,
+  FieldIrrigationStatusLabel,
+  BuildFieldSummaryModelInput,
+} from './buildFieldSummaryModel'
 export {
   buildTimeSeriesWeatherWorkbook,
   generateTimeSeriesWeatherReportExcel,

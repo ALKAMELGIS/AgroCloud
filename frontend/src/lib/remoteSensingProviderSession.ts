@@ -8,6 +8,7 @@ import {
   remoteSensingCollectionsForProvider,
 } from './remoteSensingProviders'
 import { resolveRemoteSensingLayerProfile } from './remoteSensingLayerProfiles'
+import { getCollectionIndexDefs } from './collectionIndexCatalog'
 import { SI_DEFAULT_LIVE_WMS_LAYER } from './sentinelHubWmsLayers'
 
 export type RemoteSensingProviderSession = {
@@ -19,12 +20,22 @@ export type RemoteSensingProviderSession = {
   timeSeriesEnd: string
 }
 
-/** Providers with static Layer catalogs (no Sentinel Hub GetCapabilities needed). */
+/** Providers / collections with static Layer catalogs (no Sentinel Hub GetCapabilities needed). */
 export function providerUsesStaticLayerCatalog(
   providerId: string,
   collectionId?: string,
 ): boolean {
-  return resolveRemoteSensingLayerProfile(providerId, collectionId) === 'aster-optical'
+  const profile = resolveRemoteSensingLayerProfile(providerId, collectionId)
+  return profile === 'aster-optical' || profile === 'collection-catalog'
+}
+
+function defaultLayerIdForProviderCollection(providerId: string, collection: string): string {
+  const profile = resolveRemoteSensingLayerProfile(providerId, collection)
+  if (profile === 'aster-optical') return 'VNIR'
+  if (profile === 'collection-catalog') {
+    return getCollectionIndexDefs(collection)[0]?.id || SI_DEFAULT_LIVE_WMS_LAYER
+  }
+  return SI_DEFAULT_LIVE_WMS_LAYER
 }
 
 export function createDefaultRemoteSensingProviderSession(
@@ -36,12 +47,9 @@ export function createDefaultRemoteSensingProviderSession(
   },
 ): RemoteSensingProviderSession {
   const collection = defaultCollectionForProvider(providerId)
-  const layerId = providerUsesStaticLayerCatalog(providerId, collection)
-    ? 'VNIR'
-    : SI_DEFAULT_LIVE_WMS_LAYER
   return {
     collection,
-    layerId,
+    layerId: defaultLayerIdForProviderCollection(providerId, collection),
     imageryIso: defaults.imageryIso,
     imageryDateAutoFollow: true,
     timeSeriesStart: defaults.timeSeriesStart,

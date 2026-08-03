@@ -17,11 +17,39 @@ describe('remoteSensingLayerProfiles', () => {
   it('maps ESA collections to optical vs SAR vs OLCI profiles', () => {
     expect(resolveRemoteSensingLayerProfile('esa-sentinel', 'sentinel-2-l2a')).toBe('s2-optical')
     expect(resolveRemoteSensingLayerProfile('esa-sentinel', 'sentinel-1-grd')).toBe('sar')
-    expect(resolveRemoteSensingLayerProfile('esa-sentinel', 'sentinel-3-olci')).toBe('s3-optical')
+    expect(resolveRemoteSensingLayerProfile('esa-sentinel', 'sentinel-3')).toBe('collection-catalog')
     expect(resolveRemoteSensingLayerProfile('sentinel-hub', 'sentinel-2-l2a')).toBe('s2-optical')
+    expect(resolveRemoteSensingLayerProfile('sentinel-hub', 'copernicus-dem')).toBe('collection-catalog')
     expect(resolveRemoteSensingLayerProfile('maxar', 'worldview-3')).toBe('vhr-optical')
     expect(resolveRemoteSensingLayerProfile('nasa-landsat', 'landsat-8-9')).toBe('landsat-optical')
     expect(resolveRemoteSensingLayerProfile('aster', 'aster-l1t')).toBe('aster-optical')
+  })
+
+  it('shows only DEM indices for Copernicus DEM (no NDVI agro list)', () => {
+    const all = buildRemoteSensingLayerSelectGroups(CAP_LAYERS)
+    const filtered = filterRemoteSensingLayerSelectGroupsForProvider(all, 'sentinel-hub', 'copernicus-dem')
+    const flat = flattenRemoteSensingLayerSelectGroups(filtered)
+    expect(flat.some(o => o.id === 'DEM_SLOPE')).toBe(true)
+    expect(flat.some(o => o.id === 'DEM_TWI')).toBe(true)
+    expect(flat.some(o => o.id === 'NDVI')).toBe(false)
+    expect(flat.some(o => o.id === 'LULC')).toBe(false)
+    expect(flat.some(o => o.id === 'PRECIP')).toBe(false)
+    expect(pickDefaultLayerForProviderProfile(flat, 'sentinel-hub', 'copernicus-dem')).toBe('DEM_SLOPE')
+  })
+
+  it('shows only S5P atmospheric indices for SENTINEL-5P', () => {
+    const all = buildRemoteSensingLayerSelectGroups(CAP_LAYERS)
+    const filtered = filterRemoteSensingLayerSelectGroupsForProvider(all, 'sentinel-hub', 'sentinel-5p')
+    const flat = flattenRemoteSensingLayerSelectGroups(filtered)
+    expect(flat.map(o => o.id)).toEqual([
+      'S5P_NO2',
+      'S5P_SO2',
+      'S5P_CO',
+      'S5P_O3',
+      'S5P_CH4',
+      'S5P_AI',
+      'S5P_AQI',
+    ])
   })
 
   it('replaces Layer dropdown with ASTER L1T environmental indices', () => {

@@ -11,6 +11,10 @@ import type { ImageryIndexInterpretation } from '../../../../lib/imageryIndexInt
 import { resolveLayerLiveLegendSpec } from '../../../../lib/layerLiveLegendCatalog'
 import type { SentinelHubDailyIndexMeans } from '../../../../lib/sentinelHubStatisticsApi'
 import {
+  collectLayerSnapshotDates,
+  pickSnapshotSceneDateCandidates,
+} from './dynamicMapSnapshots'
+import {
   compositeAoiMapSnapshotBase64,
   fetchIndexLayerMapSnapshotBase64,
   fetchSatelliteBasemapSnapshot,
@@ -24,20 +28,16 @@ const SECTION_FILL = 'FFE2F5EE'
 const INK = 'FF0F172A'
 const MUTED = 'FF64748B'
 const DATA_SOURCE = 'Sentinel-2 L2A (Sentinel Hub WMS)'
-/** Soft ceiling only for extreme Day ranges — never sample Week/Month/Year. */
+/** Soft ceiling for Day atlas - keep long ranges exportable while matching T-23 “all dates”. */
 const SOFT_MAX_DAY_SNAPSHOTS = 120
 const SNAPSHOT_WIDTH = 720
-const SNAPSHOT_HEIGHT = 580
+/** Taller canvas so map frame stays near-square with title bar + Layer Live legend (T-23 cards). */
+const SNAPSHOT_HEIGHT = 620
 const CONCURRENCY = 3
 
 function fmtNum(n: number | null | undefined, digits = 4): string {
-  if (n == null || !Number.isFinite(n)) return '—'
+  if (n == null || !Number.isFinite(n)) return '-'
   return n.toFixed(digits)
-}
-
-function fmtHa(ha: number): string {
-  if (!Number.isFinite(ha) || ha <= 0) return '—'
-  return ha >= 100 ? `${ha.toFixed(1)} ha` : `${ha.toFixed(2)} ha`
 }
 
 function layerSnapshotTitle(layerId: string, aggregation: ImageryTimeAggregation = 'day'): string {
@@ -58,9 +58,12 @@ export type MapSnapshotPeriodEntry = {
   kind: 'period' | 'series-average'
 }
 
+const ISO_DAY_RE = /^\d{4}-\d{2}-\d{2}$/
+
 /**
- * Pick a scene whose daily mean is closest to the period mean — better visual
+ * Pick a scene whose daily mean is closest to the period mean - better visual
  * for Week/Month/Year “average” maps than always using the last observation.
+ * Always returns an ISO YYYY-MM-DD when possible (required for Sentinel Hub WMS TIME).
  */
 export function pickRepresentativeSceneDate(input: {
   layerId: string
@@ -71,29 +74,50 @@ export function pickRepresentativeSceneDate(input: {
   fallbackAnchor: string
 }): string {
   const fallback = input.fallbackAnchor.trim().slice(0, 10)
-  if (input.timeAggregation === 'day') return fallback || input.periodKey.slice(0, 10)
+  const periodKey = input.periodKey.trim()
+
+  if (input.timeAggregation === 'day') {
+    if (ISO_DAY_RE.test(fallback)) return fallback
+    const keyDay = periodKey.slice(0, 10)
+    if (ISO_DAY_RE.test(keyDay)) return keyDay
+  }
+
+  // Resolve which bucket type to search when periodKey is not an ISO day.
+  let searchAgg: ImageryTimeAggregation = input.timeAggregation
+  if (!ISO_DAY_RE.test(periodKey.slice(0, 10))) {
+    if (periodKey.includes('-W')) searchAgg = 'week'
+    else if (/^\d{4}-\d{2}$/.test(periodKey)) searchAgg = 'month'
+    else if (/^\d{4}$/.test(periodKey)) searchAgg = 'year'
+  }
 
   const candidates: Array<{ date: string; mean: number }> = []
   for (const row of input.dailyRows) {
     const date = row.date?.slice(0, 10)
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue
-    if (imageryTimePeriodKey(date, input.timeAggregation) !== input.periodKey) continue
+    if (!date || !ISO_DAY_RE.test(date)) continue
+    if (imageryTimePeriodKey(date, searchAgg) !== periodKey) continue
     const mean = evaluateImageryLayerDailyValue(input.layerId, row)
     if (mean == null || !Number.isFinite(mean)) continue
     candidates.push({ date, mean })
   }
-  if (!candidates.length) return fallback || input.periodKey.slice(0, 10)
-  if (input.periodMean == null || !Number.isFinite(input.periodMean)) {
-    return candidates[Math.floor((candidates.length - 1) / 2)]!.date
+  if (candidates.length) {
+    if (input.periodMean == null || !Number.isFinite(input.periodMean)) {
+      return candidates[Math.floor((candidates.length - 1) / 2)]!.date
+    }
+    return candidates.reduce((best, cur) =>
+      Math.abs(cur.mean - input.periodMean!) < Math.abs(best.mean - input.periodMean!) ? cur : best,
+    ).date
   }
-  return candidates.reduce((best, cur) =>
-    Math.abs(cur.mean - input.periodMean!) < Math.abs(best.mean - input.periodMean!) ? cur : best,
-  ).date
+  if (ISO_DAY_RE.test(fallback)) return fallback
+  for (const row of input.dailyRows) {
+    const date = row.date?.slice(0, 10)
+    if (date && ISO_DAY_RE.test(date)) return date
+  }
+  return ''
 }
 
 /**
  * Include every finite chart period for the selected aggregation.
- * Day used to be evenly sampled to 12 — that dropped most daily maps from Word.
+ * Day is evenly sampled above {@link SOFT_MAX_DAY_SNAPSHOTS} so long ranges stay exportable.
  * Year also prepends one series-average overview map per layer.
  */
 export function selectMapSnapshotEntries(input: {
@@ -104,6 +128,8 @@ export function selectMapSnapshotEntries(input: {
   periodAnchorDates: Record<string, string>
   dailyRows: SentinelHubDailyIndexMeans[]
   timeAggregation: ImageryTimeAggregation
+  /** Override soft Day sample ceiling (default {@link SOFT_MAX_DAY_SNAPSHOTS}). */
+  maxDaySnapshots?: number
 }): MapSnapshotPeriodEntry[] {
   const aggregation = input.timeAggregation
   const periodEntries: MapSnapshotPeriodEntry[] = []
@@ -121,6 +147,8 @@ export function selectMapSnapshotEntries(input: {
       dailyRows: input.dailyRows,
       fallbackAnchor,
     })
+    // Sentinel Hub WMS TIME requires YYYY-MM-DD - skip week/month keys that failed resolution.
+    if (!sceneDate || !ISO_DAY_RE.test(sceneDate)) continue
     const periodLabel = input.displayLabels[i] ?? periodKey
     periodEntries.push({
       periodIndex: i,
@@ -133,14 +161,15 @@ export function selectMapSnapshotEntries(input: {
 
   if (!periodEntries.length) return []
 
-  // Soft sample only for very long Day exports (keeps Word usable).
+  // Soft sample only for very long Day exports (keeps Word/Excel usable).
+  const softMax = Math.max(1, input.maxDaySnapshots ?? SOFT_MAX_DAY_SNAPSHOTS)
   let selected = periodEntries
-  if (aggregation === 'day' && periodEntries.length > SOFT_MAX_DAY_SNAPSHOTS) {
+  if (aggregation === 'day' && periodEntries.length > softMax) {
     const out: MapSnapshotPeriodEntry[] = []
-    for (let i = 0; i < SOFT_MAX_DAY_SNAPSHOTS; i += 1) {
+    for (let i = 0; i < softMax; i += 1) {
       out.push(
         periodEntries[
-          Math.round((i * (periodEntries.length - 1)) / (SOFT_MAX_DAY_SNAPSHOTS - 1))
+          Math.round((i * (periodEntries.length - 1)) / (softMax - 1))
         ]!,
       )
     }
@@ -176,7 +205,7 @@ export function selectMapSnapshotEntries(input: {
   }
   const rangeLabel =
     fromYear && toYear && fromYear !== toYear
-      ? `Series average (${fromYear}–${toYear})`
+      ? `Series average (${fromYear}-${toYear})`
       : `Series average${fromYear ? ` (${fromYear})` : ''}`
 
   return [
@@ -201,7 +230,7 @@ function formatLegendText(layerId: string): string {
         const range = c.rangeLabel ? ` (${c.rangeLabel})` : ''
         return `${c.label}${range}`
       })
-      .join(' · ')
+      .join(' - ')
   }
   return spec.subtitle || spec.title || layerId
 }
@@ -222,18 +251,22 @@ function resolveSceneStats(
   periodMean: number | null,
   dailyRows: SentinelHubDailyIndexMeans[],
 ): { mean: number | null; min: number | null; max: number | null } {
+  const fallback = periodMean != null && Number.isFinite(periodMean) ? periodMean : null
+  const finiteOr = (v: number | null | undefined): number | null =>
+    v != null && Number.isFinite(v) ? v : fallback
+
   const row = dailyRows.find(d => d.date?.slice(0, 10) === sceneDate.slice(0, 10))
   const zKey = zonalKeyForLayer(layerId)
   const zonal = zKey && row?.zonal?.[zKey]
   if (zonal) {
     return {
-      mean: zonal.mean ?? periodMean,
-      min: zonal.min ?? periodMean,
-      max: zonal.max ?? periodMean,
+      mean: finiteOr(zonal.mean),
+      min: finiteOr(zonal.min),
+      max: finiteOr(zonal.max),
     }
   }
   const dailyMean = row ? evaluateImageryLayerDailyValue(layerId, row) : null
-  const mean = dailyMean ?? periodMean
+  const mean = finiteOr(dailyMean)
   return { mean, min: mean, max: mean }
 }
 
@@ -244,14 +277,14 @@ function buildSnapshotNotes(
   kind: MapSnapshotPeriodEntry['kind'] = 'period',
 ): string {
   if (kind === 'series-average') {
-    return `${layerId} series-average overview — representative scene closest to the multi-year mean (${fmtNum(mean, 4)}). Year-by-year average maps follow.`
+    return `${layerId} series-average overview - representative scene closest to the multi-year mean (${fmtNum(mean, 4)}). Year-by-year average maps follow.`
   }
   const interp = interpretations.find(i => i.layerId.toUpperCase() === layerId.trim().toUpperCase())
   if (interp) {
     return [interp.summaryLine, interp.coverageLine, interp.actionsLine].filter(Boolean).join(' ')
   }
   if (mean == null) return 'No index statistics for this acquisition date.'
-  return `${layerId} AOI mean ${fmtNum(mean, 4)} for this scene — compare with prior periods in the time series chart.`
+  return `${layerId} AOI mean ${fmtNum(mean, 4)} for this scene - compare with prior periods in the time series chart.`
 }
 
 async function mapPool<T, R>(
@@ -282,8 +315,15 @@ export type BuildTimeSeriesMapSnapshotGroupsInput = {
   periodAnchorDates: Record<string, string>
   areaHa: number
   interpretations: ImageryIndexInterpretation[]
-  /** Panel Day/Week/Month/Year — drives which periods become maps. */
+  /** Panel Day/Week/Month/Year - drives which periods become maps. */
   timeAggregation?: ImageryTimeAggregation
+  /** Soft Day sample ceiling (even spacing). */
+  maxDaySnapshots?: number
+  /**
+   * When true (Excel/Word), if WMS index raster fails after date retries, still emit a
+   * basemap + AOI + legend card with the period mean so Map Snapshots is not empty.
+   */
+  allowBasemapFallback?: boolean
   mapboxToken?: string
   signal?: AbortSignal
   onProgress?: (completed: number, total: number) => void
@@ -294,8 +334,12 @@ export async function buildTimeSeriesMapSnapshotGroups(
 ): Promise<TimeSeriesMapSnapshotGroup[]> {
   const groups: TimeSeriesMapSnapshotGroup[] = []
   const timeAggregation = input.timeAggregation ?? 'day'
+  const allowBasemapFallback = input.allowBasemapFallback !== false
   const layout = resolveTimeSeriesSnapshotLayout(SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT)
   const extent = resolveTimeSeriesSnapshotExtent(input.geometry, layout.mapW, layout.mapH)
+  // Without a geographic frame every GetMap / composite fails - exit early (caller may retry).
+  if (!extent) return []
+
   const basemapDataUrl = await fetchSatelliteBasemapSnapshot(
     input.geometry,
     input.mapboxToken,
@@ -310,20 +354,42 @@ export async function buildTimeSeriesMapSnapshotGroups(
   }> = []
 
   for (const layerId of input.layerIds) {
-    const series = input.layerSeries.find(s => s.layerId.toUpperCase() === layerId.toUpperCase())
-    if (!series) continue
+    const idKey = layerId.trim().toUpperCase()
+    if (!idKey) continue
+    const series =
+      input.layerSeries.find(s => s.layerId.trim().toUpperCase() === idKey) ?? null
+
+    // Prefer chart series; synthesize from dailyRows when a selected layer (e.g. ISS)
+    // is on the chart axis but missing from layerSeries matching.
+    let values: Array<number | null | undefined> = series?.values ?? []
+    if (!series || !values.some(v => v != null && Number.isFinite(v))) {
+      values = input.chartLabels.map(periodKey => {
+        const fallbackAnchor = (input.periodAnchorDates[periodKey] ?? periodKey).trim().slice(0, 10)
+        const day = ISO_DAY_RE.test(fallbackAnchor)
+          ? fallbackAnchor
+          : ISO_DAY_RE.test(periodKey.slice(0, 10))
+            ? periodKey.slice(0, 10)
+            : ''
+        if (!day) return null
+        const row = input.dailyRows.find(r => r.date?.slice(0, 10) === day)
+        if (!row) return null
+        const v = evaluateImageryLayerDailyValue(idKey, row)
+        return v != null && Number.isFinite(v) ? v : null
+      })
+    }
 
     const entries = selectMapSnapshotEntries({
-      layerId,
+      layerId: idKey,
       chartLabels: input.chartLabels,
       displayLabels: input.displayLabels,
-      values: series.values,
+      values,
       periodAnchorDates: input.periodAnchorDates,
       dailyRows: input.dailyRows,
       timeAggregation,
+      maxDaySnapshots: input.maxDaySnapshots,
     })
     if (!entries.length) continue
-    jobs.push({ layerId, entries })
+    jobs.push({ layerId: idKey, entries })
   }
 
   const total = jobs.reduce((n, j) => n + j.entries.length, 0)
@@ -349,15 +415,44 @@ export async function buildTimeSeriesMapSnapshotGroups(
         } satisfies TimeSeriesMapSnapshot
       }
 
-      const stats = resolveSceneStats(job.layerId, entry.sceneDate, entry.periodMean, input.dailyRows)
-      // Skip dates with no analyzable index statistics — never emit basemap-only cards.
+      const availableDates = collectLayerSnapshotDates(job.layerId, input.dailyRows)
+      const dateCandidates = pickSnapshotSceneDateCandidates(entry.sceneDate, availableDates).filter(d =>
+        ISO_DAY_RE.test(d),
+      )
+
+      let usedDate = entry.sceneDate
+      let indexBase64: string | null = null
+      for (const candidate of dateCandidates.length ? dateCandidates : [entry.sceneDate]) {
+        if (input.signal?.aborted) break
+        if (!ISO_DAY_RE.test(candidate)) continue
+        try {
+          indexBase64 = await fetchIndexLayerMapSnapshotBase64({
+            geometry: input.geometry,
+            layerId: job.layerId,
+            sceneDate: candidate,
+            widthPx: SNAPSHOT_WIDTH,
+            heightPx: SNAPSHOT_HEIGHT,
+            extent,
+            signal: input.signal,
+          })
+        } catch {
+          indexBase64 = null
+        }
+        if (indexBase64) {
+          usedDate = candidate
+          break
+        }
+      }
+
+      const stats = resolveSceneStats(job.layerId, usedDate, entry.periodMean, input.dailyRows)
+      // Skip dates with no analyzable index statistics - never emit basemap-only cards without a mean.
       if (stats.mean == null || !Number.isFinite(stats.mean)) {
         completed += 1
         input.onProgress?.(completed, Math.max(total, 1))
         return {
           layerId: job.layerId.toUpperCase(),
           layerLabel: job.layerId.toUpperCase(),
-          sceneDate: entry.sceneDate,
+          sceneDate: usedDate,
           periodLabel: entry.periodLabel,
           imageBase64: null,
           dataSource: DATA_SOURCE,
@@ -366,42 +461,7 @@ export async function buildTimeSeriesMapSnapshotGroups(
           max: null,
           areaHa: input.areaHa,
           legendText: formatLegendText(job.layerId),
-          notes: 'Skipped — no index statistics for this acquisition date.',
-        } satisfies TimeSeriesMapSnapshot
-      }
-
-      let indexBase64: string | null = null
-      try {
-        indexBase64 = await fetchIndexLayerMapSnapshotBase64({
-          geometry: input.geometry,
-          layerId: job.layerId,
-          sceneDate: entry.sceneDate,
-          widthPx: SNAPSHOT_WIDTH,
-          heightPx: SNAPSHOT_HEIGHT,
-          extent,
-          signal: input.signal,
-        })
-      } catch {
-        indexBase64 = null
-      }
-
-      // Require a successful index analysis raster — do not fall back to basemap alone.
-      if (!indexBase64) {
-        completed += 1
-        input.onProgress?.(completed, Math.max(total, 1))
-        return {
-          layerId: job.layerId.toUpperCase(),
-          layerLabel: job.layerId.toUpperCase(),
-          sceneDate: entry.sceneDate,
-          periodLabel: entry.periodLabel,
-          imageBase64: null,
-          dataSource: DATA_SOURCE,
-          mean: stats.mean,
-          min: stats.min,
-          max: stats.max,
-          areaHa: input.areaHa,
-          legendText: formatLegendText(job.layerId),
-          notes: 'Skipped — index analysis raster unavailable for this date.',
+          notes: 'Skipped - no index statistics for this acquisition date.',
         } satisfies TimeSeriesMapSnapshot
       }
 
@@ -412,14 +472,73 @@ export async function buildTimeSeriesMapSnapshotGroups(
           basemapDataUrl,
           indexBase64,
           layerId: job.layerId,
-          title: `${job.layerId.toUpperCase()} · ${entry.periodLabel}`,
-          sceneDate: entry.sceneDate,
+          legendSpec: resolveLayerLiveLegendSpec(job.layerId),
+          title: job.layerId.toUpperCase(),
+          sceneDate: usedDate,
           widthPx: SNAPSHOT_WIDTH,
           heightPx: SNAPSHOT_HEIGHT,
           extent,
         })
       } catch {
-        imageBase64 = indexBase64
+        imageBase64 = null
+      }
+      // Prefer composite; keep raw index raster; last resort basemap+AOI so Excel/Word atlas is not empty.
+      imageBase64 = imageBase64 ?? indexBase64
+      if (!imageBase64 && allowBasemapFallback) {
+        try {
+          imageBase64 = await compositeAoiMapSnapshotBase64({
+            geometry: input.geometry,
+            basemapDataUrl,
+            indexBase64: null,
+            layerId: job.layerId,
+            legendSpec: resolveLayerLiveLegendSpec(job.layerId),
+            title: job.layerId.toUpperCase(),
+            sceneDate: usedDate,
+            widthPx: SNAPSHOT_WIDTH,
+            heightPx: SNAPSHOT_HEIGHT,
+            extent,
+          })
+        } catch {
+          imageBase64 = null
+        }
+      }
+      // Absolute last resort: gray frame + AOI outline (no basemap/index) so Word still embeds maps.
+      if (!imageBase64 && allowBasemapFallback) {
+        try {
+          imageBase64 = await compositeAoiMapSnapshotBase64({
+            geometry: input.geometry,
+            basemapDataUrl: null,
+            indexBase64: null,
+            layerId: job.layerId,
+            legendSpec: resolveLayerLiveLegendSpec(job.layerId),
+            title: job.layerId.toUpperCase(),
+            sceneDate: usedDate,
+            widthPx: SNAPSHOT_WIDTH,
+            heightPx: SNAPSHOT_HEIGHT,
+            extent,
+          })
+        } catch {
+          imageBase64 = null
+        }
+      }
+
+      if (!imageBase64) {
+        completed += 1
+        input.onProgress?.(completed, Math.max(total, 1))
+        return {
+          layerId: job.layerId.toUpperCase(),
+          layerLabel: job.layerId.toUpperCase(),
+          sceneDate: usedDate,
+          periodLabel: entry.periodLabel,
+          imageBase64: null,
+          dataSource: DATA_SOURCE,
+          mean: stats.mean,
+          min: stats.min,
+          max: stats.max,
+          areaHa: input.areaHa,
+          legendText: formatLegendText(job.layerId),
+          notes: 'Skipped - map image unavailable for this date.',
+        } satisfies TimeSeriesMapSnapshot
       }
 
       completed += 1
@@ -428,7 +547,7 @@ export async function buildTimeSeriesMapSnapshotGroups(
       return {
         layerId: job.layerId.toUpperCase(),
         layerLabel: job.layerId.toUpperCase(),
-        sceneDate: entry.sceneDate,
+        sceneDate: usedDate,
         periodLabel: entry.periodLabel,
         imageBase64,
         dataSource: DATA_SOURCE,
@@ -437,7 +556,9 @@ export async function buildTimeSeriesMapSnapshotGroups(
         max: stats.max,
         areaHa: input.areaHa,
         legendText: formatLegendText(job.layerId),
-        notes: buildSnapshotNotes(job.layerId, stats.mean, input.interpretations, entry.kind),
+        notes: indexBase64
+          ? buildSnapshotNotes(job.layerId, stats.mean, input.interpretations, entry.kind)
+          : `${buildSnapshotNotes(job.layerId, stats.mean, input.interpretations, entry.kind)} Index raster unavailable - AOI basemap shown.`,
       } satisfies TimeSeriesMapSnapshot
     })
 
@@ -463,104 +584,117 @@ function styleSection(cell: ExcelJS.Cell): void {
 
 export function buildMapSnapshotsSheet(wb: ExcelJS.Workbook, groups: TimeSeriesMapSnapshotGroup[]): void {
   const ws = wb.addWorksheet('Map Snapshots', { views: [{ showGridLines: false }] })
-  ws.columns = [
-    { width: 16 },
-    { width: 18 },
-    { width: 14 },
-    { width: 14 },
-    { width: 14 },
-    { width: 14 },
-    { width: 36 },
-  ]
+  // Three equal atlas columns - wide enough for square-ish professional map cards.
+  const COLS = 3
+  const COL_WIDTH = 38
+  ws.columns = Array.from({ length: COLS }, () => ({ width: COL_WIDTH }))
 
-  ws.getCell('A1').value = 'Map Snapshots — Visual Time-Series Report'
+  ws.getCell('A1').value = 'Map Snapshots - Visual Time-Series Report'
   ws.getCell('A1').font = { bold: true, size: 14, color: { argb: INK } }
-  ws.mergeCells('A1:G1')
+  ws.mergeCells(1, 1, 1, COLS)
 
   ws.getCell('A2').value =
-    'AOI index maps follow the panel Time aggregation (Day / Week / Month / Year) for each selected layer.'
+    'Atlas layout: up to 12 map cards per page (3x4). Each card keeps native aspect (title - map - legend). One section per selected layer.'
   ws.getCell('A2').font = { size: 9, color: { argb: MUTED } }
-  ws.mergeCells('A2:G2')
+  ws.mergeCells(2, 1, 2, COLS)
 
   let row = 4
 
   if (!groups.length) {
-    ws.getCell(row, 1).value = 'No map snapshots available — draw an AOI and run time series analysis first.'
+    ws.getCell(row, 1).value =
+      'No map snapshots available - no AOI geometry, empty time-series values, or all WMS map fetches failed. Select an AOI, run Time Series (Day recommended) with the desired layers (e.g. NDVI, ISS), then export again.'
     ws.getCell(row, 1).font = { italic: true, size: 10, color: { argb: MUTED } }
-    ws.mergeCells(row, 1, row, 7)
+    ws.mergeCells(row, 1, row, COLS)
     return
   }
 
-  const imageWidth = 360
-  const imageHeight = 240
-  const rowStride = 16
+  // Absolute pixel size preserves the composite PNG aspect (title + square map + legend).
+  // Do NOT use twoCellAnchor br - Excel stretches into the cell box and produces thin strips.
+  const imageWidth = 300
+  const imageHeight = Math.round((imageWidth * SNAPSHOT_HEIGHT) / SNAPSHOT_WIDTH)
+  /** Rows for image + caption under each card. */
+  const cardRowStride = 18
+  const pageRowStride = cardRowStride * 4 + 1
+  /** Approximate rows covered by the image (points ≈ px * 0.75). */
+  const imageRowSpan = 15
 
   for (const group of groups) {
     ws.getCell(row, 1).value = group.title
     styleSection(ws.getCell(row, 1))
-    ws.mergeCells(row, 1, row, 7)
+    ws.mergeCells(row, 1, row, COLS)
     row += 2
 
-    for (const snap of group.snapshots) {
-      ws.getCell(row, 1).value = 'Analysis / Index'
-      ws.getCell(row, 2).value = snap.layerLabel
-      ws.getCell(row, 3).value = 'Scene date'
-      ws.getCell(row, 4).value = snap.sceneDate
-      ws.getCell(row, 5).value = 'Period'
-      ws.getCell(row, 6).value = snap.periodLabel
-      ws.getRow(row).font = { size: 9, bold: true }
-      row++
+    const snaps = group.snapshots.filter(s => !!s.imageBase64)
+    if (!snaps.length) {
+      ws.getCell(row, 1).value = 'No index map images for this layer in the selected period.'
+      ws.getCell(row, 1).font = { italic: true, size: 9, color: { argb: MUTED } }
+      ws.mergeCells(row, 1, row, COLS)
+      row += 2
+      continue
+    }
 
-      ws.getCell(row, 1).value = 'Mean'
-      ws.getCell(row, 2).value = fmtNum(snap.mean, 4)
-      ws.getCell(row, 3).value = 'Min'
-      ws.getCell(row, 4).value = fmtNum(snap.min, 4)
-      ws.getCell(row, 5).value = 'Max'
-      ws.getCell(row, 6).value = fmtNum(snap.max, 4)
-      ws.getCell(row, 7).value = `AOI ${fmtHa(snap.areaHa)}`
-      ws.getRow(row).font = { size: 9 }
-      row++
+    for (let pageStart = 0; pageStart < snaps.length; pageStart += 12) {
+      const page = snaps.slice(pageStart, pageStart + 12)
+      const pageTop = row
 
-      ws.getCell(row, 1).value = 'Data source'
-      ws.getCell(row, 2).value = snap.dataSource
-      ws.mergeCells(row, 2, row, 7)
-      ws.getRow(row).font = { size: 9 }
-      row++
+      for (let i = 0; i < page.length; i += 1) {
+        const snap = page[i]!
+        const col = i % COLS
+        const gridRow = Math.floor(i / COLS)
+        const imgRow = pageTop + gridRow * cardRowStride
+        const captionRow = imgRow + cardRowStride - 2
 
-      ws.getCell(row, 1).value = 'Legend'
-      ws.getCell(row, 2).value = snap.legendText
-      ws.mergeCells(row, 2, row, 7)
-      ws.getRow(row).font = { size: 8, color: { argb: MUTED } }
-      ws.getRow(row).alignment = { wrapText: true }
-      row++
-
-      ws.getCell(row, 1).value = 'Analysis notes'
-      ws.getCell(row, 2).value = snap.notes
-      ws.mergeCells(row, 2, row, 7)
-      ws.getRow(row).font = { size: 9 }
-      ws.getRow(row).alignment = { wrapText: true }
-      row++
-
-      if (snap.imageBase64) {
-        try {
-          const imageId = wb.addImage({ base64: snap.imageBase64, extension: 'png' })
-          ws.addImage(imageId, {
-            tl: { col: 0.15, row: row - 0.1 },
-            ext: { width: imageWidth, height: imageHeight },
-          })
-          row += rowStride
-        } catch {
-          ws.getCell(row, 1).value = '(Map image unavailable for this date)'
-          ws.mergeCells(row, 1, row, 7)
-          row += 2
+        for (let r = imgRow; r < imgRow + imageRowSpan; r += 1) {
+          ws.getRow(r).height = 15
         }
-      } else {
-        ws.getCell(row, 1).value = '(Map image unavailable for this date)'
-        ws.mergeCells(row, 1, row, 7)
-        row += 2
+        ws.getRow(captionRow).height = 32
+
+        try {
+          const imageId = wb.addImage({ base64: snap.imageBase64!, extension: 'png' })
+          ws.addImage(imageId, {
+            tl: { col: col + 0.12, row: imgRow - 1 },
+            ext: { width: imageWidth, height: imageHeight },
+            editAs: 'oneCell',
+          })
+        } catch {
+          ws.getCell(imgRow, col + 1).value = '(Map unavailable)'
+          ws.getCell(imgRow, col + 1).font = { italic: true, size: 8, color: { argb: MUTED } }
+        }
+
+        const caption = [
+          snap.sceneDate || snap.periodLabel,
+          (snap.layerLabel || snap.layerId).toUpperCase(),
+          fmtNum(snap.mean, 4),
+        ]
+          .filter(Boolean)
+          .join(' ')
+        const capCell = ws.getCell(captionRow, col + 1)
+        capCell.value = caption
+        capCell.font = { size: 8, bold: true, color: { argb: INK } }
+        capCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
       }
 
+      row = pageTop + Math.ceil(page.length / COLS) * cardRowStride + 1
+      if (pageStart + 12 < snaps.length) {
+        row = Math.max(row, pageTop + pageRowStride)
+      }
+    }
+
+    const last = snaps[snaps.length - 1]!
+    if (last.legendText) {
+      ws.getCell(row, 1).value = `Legend key: ${last.legendText}`
+      ws.getCell(row, 1).font = { italic: true, size: 8, color: { argb: MUTED } }
+      ws.getCell(row, 1).alignment = { wrapText: true }
+      ws.mergeCells(row, 1, row, COLS)
       row += 1
+    }
+    if (last.notes) {
+      ws.getCell(row, 1).value = last.notes
+      ws.getCell(row, 1).font = { size: 9, color: { argb: INK } }
+      ws.getCell(row, 1).alignment = { wrapText: true }
+      ws.mergeCells(row, 1, row, COLS)
+      ws.getRow(row).height = Math.min(60, 14 + Math.ceil(last.notes.length / 90) * 12)
+      row += 2
     }
 
     row += 1
