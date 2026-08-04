@@ -90,7 +90,12 @@ describe('buildFieldSummaryWorkbook', () => {
         overallPortfolioStatus: 'Healthy',
       },
     })
-    expect(wb.worksheets.map(w => w.name)).toEqual(['Field Summaries', 'Formulas', 'Analysis'])
+    expect(wb.worksheets.map(w => w.name)).toEqual([
+      'Field Summaries',
+      'Formulas',
+      'Production Estimation',
+      'Analysis',
+    ])
     expect(wb.worksheets[0]!.name).toBe('Field Summaries')
     expect(wb.worksheets[0]!.getRow(5).getCell(1).value).toBe('Field Name')
     expect(wb.worksheets[0]!.getRow(5).getCell(10).value).toBe('Estimated Yield (t/ha)')
@@ -101,6 +106,18 @@ describe('buildFieldSummaryWorkbook', () => {
     expect(wb.worksheets[0]!.getRow(7).getCell(1).value).toBe('T-101')
     expect(String(wb.worksheets[0]!.getCell('A3').value)).toContain('YieldFactor')
     expect(String(wb.worksheets[1]!.getCell('A5').value)).toContain('YieldFactor')
+
+    const prod = wb.getWorksheet('Production Estimation')!
+    expect(prod.getCell('A1').value).toBe('Production Estimation Sheet')
+    expect(prod.getRow(5).getCell(1).value).toBe('Field ID')
+    expect(prod.getRow(5).getCell(5).value).toBe(
+      'Planned Crop Coverage (NDVI Vegetated Area) (ha)',
+    )
+    expect(prod.getRow(5).getCell(11).value).toBe('Estimated Harvest Production (Ton)')
+    expect(prod.getRow(6).getCell(1).value).toBe('1')
+    expect(prod.getRow(8).getCell(1).value).toBe('TOTAL')
+    expect(String(prod.getCell('A10').value)).toContain('Calculation Method')
+
     expect(wb.getWorksheet('Analysis')!.getCell('A1').value).toContain('Executive Dashboard')
     expect(chartSpecs.length).toBeGreaterThanOrEqual(6)
     expect(chartSpecs.some(s => s.title.includes('Production'))).toBe(true)

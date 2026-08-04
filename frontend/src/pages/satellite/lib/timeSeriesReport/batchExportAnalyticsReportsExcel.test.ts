@@ -5,6 +5,12 @@ import {
   batchExportAnalyticsReportsExcel,
   resolveBatchPlotDisplayName,
 } from './batchExportAnalyticsReportsExcel'
+import {
+  BATCH_EXPORT_CANCELLED,
+  BATCH_EXPORT_FOLDER_REQUIRED,
+  isBatchDirectoryPickerSupported,
+  pickBatchExportDirectory,
+} from './batchExportDirectory'
 import { sanitizeTimeSeriesReportExcelFilename } from './generateTimeSeriesReportExcel'
 
 const poly: GeoJSON.Polygon = {
@@ -35,6 +41,7 @@ function makePlot(partial: Partial<CropAlertFieldInput> & { fieldKey: string }):
 }
 
 const stubPayload = { location: { fieldName: 'x', fieldKey: 'x' } } as TimeSeriesReportPayload
+const stubDir = {} as FileSystemDirectoryHandle
 
 describe('sanitizeTimeSeriesReportExcelFilename', () => {
   it('keeps spaces and hyphens for plot labels like T-100 SC0175', () => {
@@ -51,8 +58,53 @@ describe('resolveBatchPlotDisplayName', () => {
   })
 })
 
+describe('batchExportDirectory', () => {
+  it('reports support from showDirectoryPicker presence', () => {
+    const w = window as Window & { showDirectoryPicker?: unknown }
+    const prev = w.showDirectoryPicker
+    try {
+      w.showDirectoryPicker = vi.fn()
+      expect(isBatchDirectoryPickerSupported()).toBe(true)
+      delete w.showDirectoryPicker
+      expect(isBatchDirectoryPickerSupported()).toBe(false)
+    } finally {
+      if (prev) w.showDirectoryPicker = prev
+      else delete w.showDirectoryPicker
+    }
+  })
+
+  it('throws Folder selection is required when picker API is missing', async () => {
+    const w = window as Window & { showDirectoryPicker?: unknown }
+    const prev = w.showDirectoryPicker
+    try {
+      delete w.showDirectoryPicker
+      await expect(pickBatchExportDirectory()).rejects.toThrow(BATCH_EXPORT_FOLDER_REQUIRED)
+    } finally {
+      if (prev) w.showDirectoryPicker = prev
+      else delete w.showDirectoryPicker
+    }
+  })
+
+  it('maps user cancel of the picker to Batch export cancelled', async () => {
+    const w = window as Window & { showDirectoryPicker?: unknown }
+    const prev = w.showDirectoryPicker
+    try {
+      w.showDirectoryPicker = vi.fn(async () => {
+        throw new DOMException('The user aborted a request.', 'AbortError')
+      })
+      await expect(pickBatchExportDirectory()).rejects.toMatchObject({
+        name: 'AbortError',
+        message: BATCH_EXPORT_CANCELLED,
+      })
+    } finally {
+      if (prev) w.showDirectoryPicker = prev
+      else delete w.showDirectoryPicker
+    }
+  })
+})
+
 describe('batchExportAnalyticsReportsExcel', () => {
-  it('skips plots without geometry; continues after a per-field failure; downloads once per success', async () => {
+  it('picks a folder once, writes N blobs, and never triggers anchor downloads', async () => {
     const withGeomA = makePlot({ fieldKey: 'a', farmName: 'T-100 SC0175', geometry: poly })
     const noGeom = makePlot({ fieldKey: 'skip', farmName: 'NoGeom' })
     const withGeomB = makePlot({ fieldKey: 'b', farmName: 'T-101', geometry: poly })
@@ -63,8 +115,10 @@ describe('batchExportAnalyticsReportsExcel', () => {
       return [{ date: '2024-06-01', ndvi: 0.55 }]
     })
     const buildPayload = vi.fn(async () => stubPayload)
-    const generateExcel = vi.fn(async () => undefined)
-    const sleep = vi.fn(async () => undefined)
+    const pickDirectory = vi.fn(async () => stubDir)
+    const writeBlob = vi.fn(async () => undefined)
+    const buildBlob = vi.fn(async () => new Blob(['xlsx'], { type: 'application/octet-stream' }))
+    const createElement = vi.spyOn(document, 'createElement')
     const onProgress = vi.fn()
 
     const result = await batchExportAnalyticsReportsExcel(
@@ -73,28 +127,32 @@ describe('batchExportAnalyticsReportsExcel', () => {
         layerIds: ['NDVI'],
         fromDate: '2024-06-01',
         toDate: '2024-06-30',
-        downloadGapMs: 0,
         onProgress,
       },
-      { fetchDaily, buildPayload, generateExcel, sleep },
+      { fetchDaily, buildPayload, pickDirectory, writeBlob, buildBlob },
     )
 
+    expect(pickDirectory).toHaveBeenCalledTimes(1)
     expect(fetchDaily).toHaveBeenCalledTimes(3)
     expect(fetchDaily.mock.calls.map(c => c[0].fieldKey)).toEqual(['a', 'fail', 'b'])
-    expect(generateExcel).toHaveBeenCalledTimes(2)
-    expect(generateExcel.mock.calls.map(c => c[1]?.filename)).toEqual([
-      'T-100 SC0175.xlsx',
-      'T-101.xlsx',
+    expect(buildBlob).toHaveBeenCalledTimes(2)
+    expect(writeBlob).toHaveBeenCalledTimes(2)
+    expect(writeBlob.mock.calls.map(c => [c[0], c[1]])).toEqual([
+      [stubDir, 'T-100 SC0175.xlsx'],
+      [stubDir, 'T-101.xlsx'],
     ])
+    expect(createElement).not.toHaveBeenCalledWith('a')
     expect(result.succeeded).toBe(2)
     expect(result.failed).toBe(1)
     expect(result.aborted).toBe(false)
     expect(result.errors).toHaveLength(1)
     expect(result.errors[0]?.fieldKey).toBe('fail')
     expect(onProgress).toHaveBeenCalled()
+
+    createElement.mockRestore()
   })
 
-  it('stops the batch when aborted mid-run', async () => {
+  it('stops the batch when aborted mid-run with no further writes', async () => {
     const controller = new AbortController()
     const plots = [
       makePlot({ fieldKey: 'a', farmName: 'A', geometry: poly }),
@@ -104,7 +162,8 @@ describe('batchExportAnalyticsReportsExcel', () => {
       controller.abort()
       return [{ date: '2024-06-01', ndvi: 0.4 }]
     })
-    const generateExcel = vi.fn(async () => undefined)
+    const writeBlob = vi.fn(async () => undefined)
+    const buildBlob = vi.fn(async () => new Blob(['xlsx']))
 
     const result = await batchExportAnalyticsReportsExcel(
       {
@@ -113,18 +172,76 @@ describe('batchExportAnalyticsReportsExcel', () => {
         fromDate: '2024-06-01',
         toDate: '2024-06-30',
         signal: controller.signal,
-        downloadGapMs: 0,
       },
       {
         fetchDaily,
         buildPayload: async () => stubPayload,
-        generateExcel,
-        sleep: async () => undefined,
+        pickDirectory: async () => stubDir,
+        writeBlob,
+        buildBlob,
       },
     )
 
     expect(result.aborted).toBe(true)
-    expect(generateExcel).toHaveBeenCalledTimes(0)
+    expect(writeBlob).toHaveBeenCalledTimes(0)
     expect(result.succeeded + result.failed).toBeLessThanOrEqual(1)
+  })
+
+  it('propagates picker cancel before any field work or writes', async () => {
+    const fetchDaily = vi.fn(async () => [{ date: '2024-06-01', ndvi: 0.4 }])
+    const writeBlob = vi.fn(async () => undefined)
+    const buildBlob = vi.fn(async () => new Blob(['xlsx']))
+
+    await expect(
+      batchExportAnalyticsReportsExcel(
+        {
+          plots: [makePlot({ fieldKey: 'a', farmName: 'A', geometry: poly })],
+          layerIds: ['NDVI'],
+          fromDate: '2024-06-01',
+          toDate: '2024-06-30',
+        },
+        {
+          fetchDaily,
+          buildPayload: async () => stubPayload,
+          pickDirectory: async () => {
+            throw new DOMException(BATCH_EXPORT_CANCELLED, 'AbortError')
+          },
+          writeBlob,
+          buildBlob,
+        },
+      ),
+    ).rejects.toMatchObject({ name: 'AbortError', message: BATCH_EXPORT_CANCELLED })
+
+    expect(fetchDaily).not.toHaveBeenCalled()
+    expect(writeBlob).not.toHaveBeenCalled()
+    expect(buildBlob).not.toHaveBeenCalled()
+  })
+
+  it('fails before the loop when the directory picker API is unsupported', async () => {
+    const fetchDaily = vi.fn(async () => [{ date: '2024-06-01', ndvi: 0.4 }])
+    const writeBlob = vi.fn(async () => undefined)
+
+    await expect(
+      batchExportAnalyticsReportsExcel(
+        {
+          plots: [makePlot({ fieldKey: 'a', farmName: 'A', geometry: poly })],
+          layerIds: ['NDVI'],
+          fromDate: '2024-06-01',
+          toDate: '2024-06-30',
+        },
+        {
+          fetchDaily,
+          buildPayload: async () => stubPayload,
+          pickDirectory: async () => {
+            throw new Error(BATCH_EXPORT_FOLDER_REQUIRED)
+          },
+          writeBlob,
+          buildBlob: async () => new Blob(['xlsx']),
+        },
+      ),
+    ).rejects.toThrow(BATCH_EXPORT_FOLDER_REQUIRED)
+
+    expect(fetchDaily).not.toHaveBeenCalled()
+    expect(writeBlob).not.toHaveBeenCalled()
   })
 })

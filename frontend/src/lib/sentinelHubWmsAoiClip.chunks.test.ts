@@ -108,6 +108,144 @@ describe('packOuterRingsIntoWktChunks', () => {
     expect(chunks[0]?.evalscriptB64).toBeTruthy()
   })
 
+  it('paints every polygon for 216-field Layers AOI as separate single-ring clips', () => {
+    const rings: [number, number][][] = []
+    for (let i = 0; i < 216; i++) {
+      const lng = 47 + (i % 18) * 0.03
+      const lat = 24 + Math.floor(i / 18) * 0.03
+      const scale = 0.004 + (i % 7) * 0.0008
+      const pts: [number, number][] = []
+      for (let a = 0; a < 24; a++) {
+        const rad = (a / 24) * Math.PI * 2
+        pts.push([lng + Math.cos(rad) * scale, lat + Math.sin(rad) * scale])
+      }
+      pts.push(pts[0]!)
+      rings.push(pts)
+    }
+    const fc = {
+      type: 'FeatureCollection',
+      features: rings.map((ring, i) => ({
+        type: 'Feature',
+        geometry: { type: 'Polygon', coordinates: [ring] },
+        properties: { id: i },
+      })),
+    }
+    const chunks = buildSentinelHubWmsDisplayChunks(fc, 'NDVI', {
+      maxTileLayers: 256,
+      preferSingleRingChunks: true,
+    })
+    expect(chunks.length).toBe(216)
+    expect(chunks.every(part => !!part.geometryWkt3857)).toBe(true)
+    for (const part of chunks) {
+      expect(part.geometryWkt3857!.length).toBeLessThan(6000)
+    }
+  })
+
+  it('packs 216-field Layers AOI into a zoom-stable bounded source count covering every ring', () => {
+    const rings: [number, number][][] = []
+    for (let i = 0; i < 216; i++) {
+      const lng = 47 + (i % 18) * 0.03
+      const lat = 24 + Math.floor(i / 18) * 0.03
+      const scale = 0.004 + (i % 7) * 0.0008
+      const pts: [number, number][] = []
+      for (let a = 0; a < 24; a++) {
+        const rad = (a / 24) * Math.PI * 2
+        pts.push([lng + Math.cos(rad) * scale, lat + Math.sin(rad) * scale])
+      }
+      pts.push(pts[0]!)
+      rings.push(pts)
+    }
+    const fc = {
+      type: 'FeatureCollection',
+      features: rings.map((ring, i) => ({
+        type: 'Feature',
+        geometry: { type: 'Polygon', coordinates: [ring] },
+        properties: { id: i },
+      })),
+    }
+    const a = buildSentinelHubWmsDisplayChunks(fc, 'NDVI', {
+      maxTileLayers: 24,
+      preferSingleRingChunks: false,
+    })
+    const b = buildSentinelHubWmsDisplayChunks(fc, 'NDVI', {
+      maxTileLayers: 24,
+      preferSingleRingChunks: false,
+    })
+    expect(a.length).toBeGreaterThan(0)
+    expect(a.length).toBeLessThanOrEqual(24)
+    expect(a.every(part => !!part.geometryWkt3857)).toBe(true)
+    // Deterministic GEOMETRY set — identical cache hit on second build (zoom/pan must not rebuild).
+    expect(a.map(p => p.geometryWkt3857)).toEqual(b.map(p => p.geometryWkt3857))
+    for (const part of a) {
+      expect(part.geometryWkt3857!.length).toBeLessThan(8000)
+    }
+  })
+
+  it('keeps full viewport coverage for large AOI without dropping rings', () => {
+    const rings: [number, number][][] = []
+    for (let i = 0; i < 80; i++) {
+      const lng = 40 + (i % 10) * 0.05
+      const lat = 20 + Math.floor(i / 10) * 0.05
+      const pts: [number, number][] = []
+      for (let a = 0; a < 48; a++) {
+        const rad = (a / 48) * Math.PI * 2
+        pts.push([lng + Math.cos(rad) * 0.02, lat + Math.sin(rad) * 0.02])
+      }
+      pts.push(pts[0]!)
+      rings.push(pts)
+    }
+    const fc = {
+      type: 'FeatureCollection',
+      features: rings.map((ring, i) => ({
+        type: 'Feature',
+        geometry: { type: 'Polygon', coordinates: [ring] },
+        properties: { id: i },
+      })),
+    }
+    const chunks = buildSentinelHubWmsDisplayChunks(fc, 'NDVI', {
+      maxTileLayers: 256,
+      preferSingleRingChunks: true,
+      viewportBBox: [39.5, 19.5, 41, 21],
+    })
+    expect(chunks.length).toBeGreaterThan(0)
+    // All rings intersecting the viewport must be present (no largest-N drop).
+    expect(chunks.length).toBe(
+      buildSentinelHubWmsDisplayChunks(fc, 'NDVI', {
+        maxTileLayers: 256,
+        preferSingleRingChunks: true,
+        viewportBBox: [39.5, 19.5, 41, 21],
+      }).length,
+    )
+    expect(chunks.every(part => !!part.geometryWkt3857)).toBe(true)
+  })
+
+  it('packs without dropping when tile budget is tight and preferSingle is off', () => {
+    const rings: [number, number][][] = []
+    for (let i = 0; i < 80; i++) {
+      const lng = 40 + (i % 10) * 0.05
+      const lat = 20 + Math.floor(i / 10) * 0.05
+      const pts: [number, number][] = []
+      for (let a = 0; a < 48; a++) {
+        const rad = (a / 48) * Math.PI * 2
+        pts.push([lng + Math.cos(rad) * 0.02, lat + Math.sin(rad) * 0.02])
+      }
+      pts.push(pts[0]!)
+      rings.push(pts)
+    }
+    const fc = {
+      type: 'FeatureCollection',
+      features: rings.map((ring, i) => ({
+        type: 'Feature',
+        geometry: { type: 'Polygon', coordinates: [ring] },
+        properties: { id: i },
+      })),
+    }
+    const chunks = buildSentinelHubWmsDisplayChunks(fc, 'NDVI', { maxTileLayers: 8 })
+    expect(chunks.length).toBeGreaterThan(0)
+    expect(chunks.length).toBeLessThanOrEqual(8)
+    expect(chunks.every(part => !!part.geometryWkt3857)).toBe(true)
+  })
+
   it('assigns per-chunk bounds for clipped NDVI parts', () => {
     const ring: [number, number][] = [
       [55.1, 25.1],

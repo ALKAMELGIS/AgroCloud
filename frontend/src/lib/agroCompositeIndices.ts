@@ -62,7 +62,15 @@ export const AGRO_DERIVED_LAYER_DEFS: readonly AgroCompositeIndexDef[] = [
   },
 ]
 
-export const AGRO_CORE_INTERPRETATION_LAYER_IDS = ['NDVI', 'NDMI', 'NDWI', 'SAVI', 'ET', 'LST'] as const
+export const AGRO_CORE_INTERPRETATION_LAYER_IDS = [
+  'NDVI',
+  'NDMI',
+  'NDWI',
+  'SAVI',
+  'ET',
+  'LST',
+  'DATAMASK',
+] as const
 
 export type AgroCoreInterpretationLayerId = (typeof AGRO_CORE_INTERPRETATION_LAYER_IDS)[number]
 
@@ -74,6 +82,7 @@ export const AGRO_CORE_LAYER_SCIENTIFIC_NAMES: Record<AgroCoreInterpretationLaye
   SAVI: 'Soil-Adjusted Vegetation Index',
   ET: 'Evapotranspiration (moisture-proxy mm/day)',
   LST: 'Land Surface Temperature (°C, NDVI·NDMI seasonal proxy)',
+  DATAMASK: 'Sentinel Hub dataMask — valid sample presence (1 = data, 0 = no data)',
 }
 
 /** Climate / precipitation — UCSB CHIRPS (not a Sentinel-2 optical layer). */
@@ -631,12 +640,14 @@ export function buildAgroCloudCustomWmsLayerEntries(): SentinelHubWmsLayerInfo[]
     { name: 'SAVI', title: 'SAVI' },
     { name: 'ET', title: 'Evapotranspiration' },
     { name: 'LST', title: 'Land Surface Temperature' },
+    { name: 'DATAMASK', title: 'DataMask' },
   ]
   const seen = new Set(out.map(l => l.name.toUpperCase()))
-  for (const id of ALL_COMPOSITE_IDS) {
+  for (const id of ALL_COMPOSITE_IDS ?? []) {
     if (seen.has(id)) continue
     seen.add(id)
-    const def = STATIC_BY_ID.get(id) ?? DELTA_BY_ID.get(id)!
+    const def = STATIC_BY_ID.get(id) ?? DELTA_BY_ID.get(id)
+    if (!def) continue
     const label = DELTA_BY_ID.has(id) ? def.deltaLabel : def.label
     out.push({ name: id, title: label })
   }

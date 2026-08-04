@@ -20,6 +20,17 @@ import { resolvePreviousValidSceneDate } from './siAdaptiveTemporalEngine'
 import { subtractDaysFromIso } from './siSentinelImageryDate'
 import { getSentinelHubAccessToken } from './sentinelHubAccessToken'
 
+/** Keep local — avoid circular import with agroCompositeIndices ↔ dataMaskLayer. */
+const DATAMASK_LAYER_ID = 'DATAMASK'
+
+function isDataMaskLayerId(layerName: string): boolean {
+  const u = String(layerName || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+  return u === 'DATAMASK' || u === 'DATAMASKBAND' || u === 'DATA_MASK'
+}
+
 export type SentinelHubWmsLayerInfo = {
   name: string
   title: string
@@ -231,10 +242,10 @@ export function buildSentinelHubWmsGetMapUrlParts(options: {
 
 /** Custom AgroCloud index layers (evalscript applied via GEOMETRY clip). */
 export const AGRO_CLOUD_CUSTOM_WMS_LAYERS: readonly SentinelHubWmsLayerInfo[] =
-  buildAgroCloudCustomWmsLayerEntries()
+  buildAgroCloudCustomWmsLayerEntries() ?? []
 
 const AGRO_CLOUD_CUSTOM_WMS_LAYER_IDS = new Set(
-  AGRO_CLOUD_CUSTOM_WMS_LAYERS.map(l => String(l.name || '').trim().toUpperCase()),
+  (AGRO_CLOUD_CUSTOM_WMS_LAYERS ?? []).map(l => String(l.name || '').trim().toUpperCase()),
 )
 
 /** Layers injected client-side — not native Sentinel Hub WMS layer ids. */
@@ -322,11 +333,12 @@ export function usesSentinelHubWmsClientEvalscript(
 }
 
 /** Core interpretation layers always rendered via client EVALSCRIPT on a band proxy. */
-const CORE_INTERPRETATION_WMS_IDS = new Set(['NDVI', 'NDMI', 'NDWI', 'SAVI', 'ET', 'LST'])
+const CORE_INTERPRETATION_WMS_IDS = new Set(['NDVI', 'NDMI', 'NDWI', 'SAVI', 'ET', 'LST', 'DATAMASK'])
 
 export function usesSentinelHubWmsCustomEvalscript(layerName: string): boolean {
   const upper = String(layerName || '').trim().toUpperCase()
   if (!upper) return false
+  if (isDataMaskLayerId(upper)) return true
   if (isCropClassificationLayerId(upper)) return true
   if (isLulcClassificationLayerId(upper)) return true
   if (isAgroCloudCustomWmsLayer(upper)) return true
@@ -351,6 +363,7 @@ export function getBootstrapSentinelWmsLayers(): SentinelHubWmsLayerInfo[] {
     { name: 'SAVI', title: 'Soil-Adjusted Vegetation Index' },
     { name: 'ET', title: 'Evapotranspiration' },
     { name: 'LST', title: 'Land Surface Temperature' },
+    { name: DATAMASK_LAYER_ID, title: 'DataMask' },
   ])
 }
 
@@ -398,6 +411,11 @@ export function resolveSentinelHubWmsGetMapLayerName(
   const want = String(logicalLayerName || '').trim()
   if (!want) return want
   const upper = want.toUpperCase()
+
+  // DATAMASK must use a band-rich TRUE_COLOR proxy — never an index preset.
+  if (isDataMaskLayerId(upper)) {
+    return resolveSentinelHubWmsEvalscriptProxyLayerName(availableLayers)
+  }
 
   const nativeLayer = resolveSentinelHubWmsNativeIndexLayerName(want, availableLayers)
   if (nativeLayer) return nativeLayer

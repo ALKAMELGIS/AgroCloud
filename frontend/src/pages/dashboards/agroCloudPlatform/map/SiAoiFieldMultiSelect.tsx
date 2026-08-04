@@ -6,6 +6,7 @@ type Props = {
   selectedKeys: string[]
   onSelectedKeysChange: (keys: string[]) => void
   disabled?: boolean
+  emptyLabel?: string
   'aria-label'?: string
 }
 
@@ -19,6 +20,7 @@ export function SiAoiFieldMultiSelect({
   selectedKeys,
   onSelectedKeysChange,
   disabled = false,
+  emptyLabel = 'No AOI layers',
   'aria-label': ariaLabel = 'AOI layers',
 }: Props) {
   const listboxId = useId()
@@ -88,7 +90,7 @@ export function SiAoiFieldMultiSelect({
     return (
       <div className="acp-ts-layer-select acp-ts-layer-select--disabled">
         <button type="button" className="acp-ts-layer-select__trigger" disabled>
-          No AOI layers
+          {emptyLabel}
         </button>
       </div>
     )

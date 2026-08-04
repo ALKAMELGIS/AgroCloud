@@ -50,6 +50,9 @@ export type FieldSummaryModel = {
   waterStatus: WaterStressLevel | '—'
   /** Latest-scene NDVI used in yield factor (0.5·NDVI + 0.3·NDMI + 0.2·NDRE). */
   ndvi: number | null
+  /** Optional zonal NDVI min/max for Production Estimation vegetated-area span. */
+  ndviMin?: number | null
+  ndviMax?: number | null
   ndmi: number | null
   ndre: number | null
   /** YieldFactor = 0.5·NDVI + 0.3·NDMI + 0.2·NDRE */
@@ -295,6 +298,13 @@ export function buildFieldSummaryModel(input: BuildFieldSummaryModelInput): Fiel
   if (ndviLatest == null && latestYield) ndviLatest = latestYield.ndvi
   if (ndmiLatest == null && latestYield) ndmiLatest = latestYield.ndmi
 
+  const ndviResolved = latestYield?.ndvi ?? ndviLatest
+  const zonalNdvi = latest?.row.zonal?.ndvi
+  const ndviMin =
+    zonalNdvi?.min != null && Number.isFinite(zonalNdvi.min) ? zonalNdvi.min : null
+  const ndviMax =
+    zonalNdvi?.max != null && Number.isFinite(zonalNdvi.max) ? zonalNdvi.max : null
+
   return {
     fieldName: resolveBatchPlotDisplayName(plot),
     plotId: plotIdFromPlot(plot),
@@ -303,7 +313,9 @@ export function buildFieldSummaryModel(input: BuildFieldSummaryModelInput): Fiel
     vegetationHealthScore,
     moistureScore,
     waterStatus,
-    ndvi: latestYield?.ndvi ?? ndviLatest,
+    ndvi: ndviResolved,
+    ndviMin,
+    ndviMax,
     ndmi: latestYield?.ndmi ?? ndmiLatest,
     ndre: latestYield?.ndre ?? null,
     yieldFactor: latestYield?.yieldFactor ?? null,

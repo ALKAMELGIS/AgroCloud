@@ -255,7 +255,7 @@ export function buildCollectionIndexSelectGroups(
   const key = normalizeCollectionId(collectionId)
   const entry = BY_COLLECTION[key]
   if (!entry) return null
-  const options: RemoteSensingLayerSelectOption[] = entry.indices.map(i => ({
+  const options: RemoteSensingLayerSelectOption[] = (entry.indices ?? []).map(i => ({
     id: i.id,
     label: i.label,
     scientificName: i.scientificName,

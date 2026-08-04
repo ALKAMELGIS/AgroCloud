@@ -166,14 +166,22 @@ export function siAoiLayerModeChunksCacheKey(
   maskCacheKey: string,
   layerName: string,
   sceneDate: string | null | undefined,
-  options?: Pick<BuildSentinelHubWmsAoiClipOptions, 'indexVisibilityMin' | 'maxTileLayers'>,
+  options?: Pick<
+    BuildSentinelHubWmsAoiClipOptions,
+    'indexVisibilityMin' | 'maxTileLayers' | 'viewportBBox' | 'preferSingleRingChunks'
+  >,
 ): string {
+  const vp = options?.viewportBBox
+  const vpKey =
+    Array.isArray(vp) && vp.length === 4 ? vp.map(v => Number(v).toFixed(3)).join(',') : 'full'
   return [
     maskCacheKey,
     `layer:${layerName}`,
     `scene:${sceneDate ?? ''}`,
     `vmin:${options?.indexVisibilityMin ?? ''}`,
     `cap:${options?.maxTileLayers ?? ''}`,
+    `vp:${vpKey}`,
+    `single:${options?.preferSingleRingChunks ? 1 : 0}`,
   ].join('|')
 }
 
@@ -182,7 +190,10 @@ export function siAoiLayerModeWarmChunksCacheKey(
   settingsPinKey: string,
   layerName: string,
   sceneDate: string | null | undefined,
-  options?: Pick<BuildSentinelHubWmsAoiClipOptions, 'indexVisibilityMin' | 'maxTileLayers'>,
+  options?: Pick<
+    BuildSentinelHubWmsAoiClipOptions,
+    'indexVisibilityMin' | 'maxTileLayers' | 'viewportBBox' | 'preferSingleRingChunks'
+  >,
 ): string {
   return siAoiLayerModeChunksCacheKey(settingsPinKey, layerName, sceneDate, options)
 }

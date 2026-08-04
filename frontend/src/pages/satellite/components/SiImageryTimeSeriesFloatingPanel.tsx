@@ -116,7 +116,7 @@ export type SiImageryTimeSeriesFloatingPanelProps = {
   containerRef: RefObject<HTMLElement | null>;
   agroStructuresMask: GeoJSON.FeatureCollection | null;
   aoiFields: SiAoiFieldRecord[];
-  /** Layers-panel vector uploads (SHP/KMZ/GeoJSON) → Time Series AOI Layers picker. */
+  /** KMZ/KML/SHP/GeoJSON layers from the map Layers panel (polygon features → AOI pickers). */
   vectorLayers?: SiAoiMaskBuilderLayerLike[] | null;
   committedAoiGeometry: GeoJSON.Geometry | null;
   defaultLayerId: string;
@@ -125,10 +125,7 @@ export type SiImageryTimeSeriesFloatingPanelProps = {
   onMapDateFromChart: (iso: string) => void;
   selectedFieldKey?: string | null;
   onSelectedFieldKeyChange?: (fieldKey: string) => void;
-  onHighlightFieldKeysChange?: (
-    fieldKeys: string[],
-    opts?: { fitBounds?: boolean },
-  ) => void;
+  onHighlightFieldKeysChange?: (fieldKeys: string[]) => void;
   mapboxToken?: string;
   onStormMapOverlayChange?: (overlay: import('../lib/imageryStormAnalysis').SiTsWeatherStormMapOverlay | null) => void;
   stormOverlayDismissEpoch?: number;

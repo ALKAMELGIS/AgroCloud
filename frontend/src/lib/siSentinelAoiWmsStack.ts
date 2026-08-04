@@ -47,6 +47,10 @@ export type SiSentinelAoiWmsStackBuildInput = {
   cropSeasonEnd: string
   indexVisibilityMin: number | null
   maxTileLayers: number
+  /** When set, only pack AOI rings that intersect this WGS84 bbox (keeps WMS URLs lean). */
+  viewportBBox?: [number, number, number, number] | null
+  /** One GEOMETRY per ring (best for large Layers AOI masks). */
+  preferSingleRingChunks?: boolean
   /** Override WMS host/instance (provider-driven). Defaults to commercial Sentinel Hub. */
   wmsBaseUrl?: string
   /** Included in sourceRefreshKey so provider/collection switches remount MapGL tiles. */
@@ -146,8 +150,9 @@ export function buildSiSentinelAoiWmsStackState(
     {
       indexVisibilityMin: input.indexVisibilityMin,
       sceneDate: sentinelFetchDate,
-      viewportBBox: null,
+      viewportBBox: input.viewportBBox ?? null,
       maxTileLayers: input.maxTileLayers,
+      preferSingleRingChunks: input.preferSingleRingChunks ?? false,
     },
     input.maskCacheKey,
   )
@@ -202,6 +207,17 @@ export function buildSiSentinelAoiWmsStackState(
         isWapiLayerId(activeWmsLayer),
     }),
   )
+
+  if (typeof console !== 'undefined' && /datamask/i.test(activeWmsLayer)) {
+    console.info('[DataMask] Paint pipeline', {
+      layerId: activeWmsLayer,
+      chunkCount: displayChunks.length,
+      hasEvalscript: displayChunks.every(c => !!c.evalscriptB64),
+      proxyLayer: wmsGetMapLayerName,
+      renderReady,
+      tileUrlCount: tileUrls.length,
+    })
+  }
 
   const sourceRefreshKey = [
     activeWmsLayer,

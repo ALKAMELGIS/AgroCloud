@@ -16,7 +16,8 @@ function findSelectedOption(groups: RemoteSensingLayerSelectGroup[], value: stri
   const u = value.trim().toUpperCase()
   if (!u) return null
   for (const group of groups) {
-    for (const opt of group.options) {
+    const opts = Array.isArray(group?.options) ? group.options : []
+    for (const opt of opts) {
       if (opt.id.toUpperCase() === u) return opt
     }
   }
@@ -28,7 +29,7 @@ function layerOptionTitle(opt: { label: string; scientificName?: string }): stri
 }
 
 export function RemoteSensingLayerSelect({
-  groups,
+  groups = [],
   value,
   onChange,
   disabled = false,
@@ -44,27 +45,31 @@ export function RemoteSensingLayerSelect({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
 
-  const selected = useMemo(() => findSelectedOption(groups, value), [groups, value])
-  const firstOption = groups[0]?.options[0] ?? null
+  const safeGroups = Array.isArray(groups) ? groups : []
+  const selected = useMemo(() => findSelectedOption(safeGroups, value), [safeGroups, value])
+  const firstOption = safeGroups[0]?.options?.[0] ?? null
   const selectedLabel = selected?.label ?? firstOption?.label ?? value
 
   // If the parent still holds a stale layer id (e.g. NDVI after switching Collection),
   // coerce to the first option of the current catalogue.
   useEffect(() => {
-    if (!groups.length || !firstOption) return
-    if (findSelectedOption(groups, value)) return
+    if (!safeGroups.length || !firstOption) return
+    if (findSelectedOption(safeGroups, value)) return
     onChange(firstOption.id)
     // intentionally omit onChange — parent often passes an inline function
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groups, value, firstOption?.id])
+  }, [safeGroups, value, firstOption?.id])
 
   const filteredGroups = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return groups
-    return groups
+    if (!q) return safeGroups
+    return safeGroups
       .map(group => {
-        const groupMatch = group.label.toLowerCase().includes(q)
-        const options = group.options.filter(opt => {
+        const opts = Array.isArray(group?.options) ? group.options : []
+        const groupMatch = String(group?.label || '')
+          .toLowerCase()
+          .includes(q)
+        const options = opts.filter(opt => {
           if (groupMatch) return true
           const hay = [opt.label, opt.id, opt.scientificName ?? ''].join(' ').toLowerCase()
           return hay.includes(q)
@@ -72,7 +77,7 @@ export function RemoteSensingLayerSelect({
         return options.length ? { ...group, options } : null
       })
       .filter((g): g is RemoteSensingLayerSelectGroup => g != null)
-  }, [groups, query])
+  }, [safeGroups, query])
 
   useEffect(() => {
     if (!open) {
@@ -108,7 +113,7 @@ export function RemoteSensingLayerSelect({
     )
   }
 
-  if (!groups.length) {
+  if (!safeGroups.length) {
     return (
       <div className="si-rs-layer-select si-rs-layer-select--disabled">
         <button type="button" className="si-rs-layer-select__trigger si-field-analysis-select" disabled>

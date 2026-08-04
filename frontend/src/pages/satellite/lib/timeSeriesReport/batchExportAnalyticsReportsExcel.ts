@@ -3,18 +3,21 @@ import type { SentinelHubDailyIndexMeans } from '../../../../lib/sentinelHubStat
 import type { ImageryTimeAggregation } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import { cleanAoiPlotDisplayId, looksLikeLayerFileId } from './aoiExcelExportShared'
 import {
+  BATCH_EXPORT_CANCELLED,
+  pickBatchExportDirectory,
+  writeBlobToDirectory,
+} from './batchExportDirectory'
+import {
   buildDayChartFromDailyRows,
   buildTimeSeriesReportPayload,
   type BuildTimeSeriesReportPayloadInput,
 } from './buildTimeSeriesReportPayload'
 import { fetchPlotFieldDailyWithRetry } from './fetchPlotTimeSeriesAnalytics'
 import {
-  generateTimeSeriesReportExcel,
+  buildTimeSeriesReportExcelBlob,
   sanitizeTimeSeriesReportExcelFilename,
 } from './generateTimeSeriesReportExcel'
 import type { TimeSeriesReportPayload } from './timeSeriesReportTypes'
-
-const DEFAULT_DOWNLOAD_GAP_MS = 450
 
 export type BatchAnalyticsExportProgress = {
   done: number
@@ -47,8 +50,6 @@ export type BatchExportAnalyticsReportsExcelInput = {
   projectName?: string
   generatedBy?: string
   signal?: AbortSignal
-  /** Pause between browser downloads so multi-file saves are not blocked. */
-  downloadGapMs?: number
   onProgress?: (progress: BatchAnalyticsExportProgress) => void
   onMapSnapshotProgress?: (completed: number, total: number) => void
 }
@@ -57,26 +58,24 @@ export type BatchExportAnalyticsReportsExcelInput = {
 export type BatchExportAnalyticsReportsExcelDeps = {
   fetchDaily?: typeof fetchPlotFieldDailyWithRetry
   buildPayload?: (input: BuildTimeSeriesReportPayloadInput) => Promise<TimeSeriesReportPayload>
-  generateExcel?: (
-    payload: TimeSeriesReportPayload,
-    options?: { filename?: string },
+  pickDirectory?: (signal?: AbortSignal) => Promise<FileSystemDirectoryHandle>
+  writeBlob?: (
+    dir: FileSystemDirectoryHandle,
+    filename: string,
+    blob: Blob,
   ) => Promise<void>
-  sleep?: (ms: number) => Promise<void>
+  buildBlob?: (payload: TimeSeriesReportPayload) => Promise<Blob>
 }
 
 function isAbort(err: unknown, signal?: AbortSignal): boolean {
   if (signal?.aborted) return true
   if (err instanceof DOMException && err.name === 'AbortError') return true
+  if (err instanceof Error && err.message === BATCH_EXPORT_CANCELLED) return true
   return err instanceof Error && /abort/i.test(err.message)
 }
 
 function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-}
-
-function defaultSleep(ms: number): Promise<void> {
-  if (ms <= 0) return Promise.resolve()
-  return new Promise(resolve => setTimeout(resolve, ms))
 }
 
 /** Resolve Plot Label display name (farmName after Field Selector labeling). */
@@ -107,8 +106,9 @@ function mapSnapshotMaxPerLayer(layerIds: string[]): number {
 }
 
 /**
- * Sequentially fetch each field's daily series and download a full Analytics Report Excel
- * workbook (same worksheets/charts as single `excel` export), named from Plot Label.
+ * Sequentially fetch each field's daily series and write a full Analytics Report Excel
+ * workbook into one user-picked folder (same worksheets/charts as single `excel` export),
+ * named from Plot Label.
  */
 export async function batchExportAnalyticsReportsExcel(
   input: BatchExportAnalyticsReportsExcelInput,
@@ -116,8 +116,9 @@ export async function batchExportAnalyticsReportsExcel(
 ): Promise<BatchAnalyticsExportResult> {
   const fetchDaily = deps.fetchDaily ?? fetchPlotFieldDailyWithRetry
   const buildPayload = deps.buildPayload ?? buildTimeSeriesReportPayload
-  const generateExcel = deps.generateExcel ?? generateTimeSeriesReportExcel
-  const sleep = deps.sleep ?? defaultSleep
+  const pickDirectory = deps.pickDirectory ?? pickBatchExportDirectory
+  const writeBlob = deps.writeBlob ?? writeBlobToDirectory
+  const buildBlob = deps.buildBlob ?? buildTimeSeriesReportExcelBlob
 
   const plots = input.plots.filter(p => p.geometry)
   if (!plots.length) {
@@ -129,7 +130,6 @@ export async function batchExportAnalyticsReportsExcel(
   const fromDate = input.fromDate.trim().slice(0, 10)
   const toDate = input.toDate.trim().slice(0, 10)
   const timeAggregation = input.timeAggregation ?? 'day'
-  const downloadGapMs = input.downloadGapMs ?? DEFAULT_DOWNLOAD_GAP_MS
   const startedAt = Date.now()
   const total = plots.length
   const usedNames = new Set<string>()
@@ -140,6 +140,16 @@ export async function batchExportAnalyticsReportsExcel(
 
   const emit = (done: number, currentName: string) => {
     input.onProgress?.({ done, total, currentName, failed, startedAt })
+  }
+
+  let directory: FileSystemDirectoryHandle
+  try {
+    directory = await pickDirectory(input.signal)
+  } catch (err) {
+    if (isAbort(err, input.signal)) {
+      throw err instanceof Error ? err : new DOMException(BATCH_EXPORT_CANCELLED, 'AbortError')
+    }
+    throw err
   }
 
   for (let i = 0; i < plots.length; i++) {
@@ -193,7 +203,8 @@ export async function batchExportAnalyticsReportsExcel(
       throwIfAborted(input.signal)
 
       const filename = uniqueExcelFilename(displayName, usedNames)
-      await generateExcel(payload, { filename })
+      const blob = await buildBlob(payload)
+      await writeBlob(directory, filename, blob)
       succeeded += 1
     } catch (err) {
       if (isAbort(err, input.signal)) {
@@ -210,8 +221,9 @@ export async function batchExportAnalyticsReportsExcel(
 
     emit(i + 1, displayName)
 
+    // Yield so progress UI can paint between fields (no download gap needed).
     if (i < plots.length - 1 && !input.signal?.aborted) {
-      await sleep(downloadGapMs)
+      await Promise.resolve()
     }
   }
 

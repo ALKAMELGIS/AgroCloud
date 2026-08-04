@@ -7,6 +7,8 @@ export type SiAoiLayerModePanelProps = {
   maskFeatureCount: number
   selectedFeatureCount: number
   disabled?: boolean
+  /** When set, index tiles cannot load at the current map zoom. */
+  zoomWarning?: string | null
 }
 
 const BOUNDARY_MODES: Array<{ id: SiAoiMaskMode; label: string }> = [
@@ -17,14 +19,18 @@ const BOUNDARY_MODES: Array<{ id: SiAoiMaskMode; label: string }> = [
 export function SiAoiLayerModePanel({
   settings,
   onChange,
-  layerOptions,
+  layerOptions = [],
+  maskFeatureCount,
+  selectedFeatureCount,
   disabled = false,
+  zoomWarning = null,
 }: SiAoiLayerModePanelProps) {
   const patch = (partial: Partial<SiAoiMaskBuilderSettings>) => onChange({ ...settings, ...partial })
 
   const maskMode =
     settings.maskMode === 'selected-features' ? 'selected-features' : 'entire-layer'
-  const controlsDisabled = disabled || !layerOptions.length
+  const options = Array.isArray(layerOptions) ? layerOptions : []
+  const controlsDisabled = disabled || !options.length
 
   return (
     <div className="si-aoi-layer-mode si-aoi-layer-mode--flat">
@@ -37,10 +43,10 @@ export function SiAoiLayerModePanel({
           disabled={controlsDisabled}
           aria-label="AOI layer for Sentinel clip"
         >
-          {layerOptions.length === 0 ? (
+          {options.length === 0 ? (
             <option value="">Add a vector layer from Layers</option>
           ) : (
-            layerOptions.map(l => (
+            options.map(l => (
               <option key={l.id} value={l.id}>
                 {l.label}
                 {l.featureCount > 0 ? ` (${l.featureCount})` : ' (loading…)'}
@@ -82,6 +88,44 @@ export function SiAoiLayerModePanel({
         />
         <span>Show on map (Layers AOI)</span>
       </label>
+
+      {disabled ? (
+        <p className="si-rs-panel__meta si-rs-panel__meta--inline" role="status">
+          Disable <strong>Show index on map (Edit AOI)</strong> above to clip using a <strong>Layers</strong>{' '}
+          vector layer.
+        </p>
+      ) : settings.enabled ? (
+        <p className="si-rs-panel__meta si-rs-panel__meta--inline" role="status">
+          {maskMode === 'selected-features' ? (
+            <>
+              Selection <strong>{selectedFeatureCount}</strong> · Clip{' '}
+              <strong>{maskFeatureCount}</strong> polygon{maskFeatureCount === 1 ? '' : 's'}
+            </>
+          ) : maskFeatureCount > 0 ? (
+            <>
+              Clipping index to <strong>{maskFeatureCount}</strong> polygon
+              {maskFeatureCount === 1 ? '' : 's'}
+            </>
+          ) : (
+            <>Pan/zoom the map to load AOI polygons, or pick another layer.</>
+          )}
+        </p>
+      ) : options.length === 0 ? (
+        <p className="si-rs-panel__meta si-rs-panel__meta--inline" role="status">
+          Add a vector layer from <strong>Layers</strong>, pick it above, then enable Show on map to clip the
+          selected index to that layer&apos;s polygons.
+        </p>
+      ) : (
+        <p className="si-rs-panel__meta si-rs-panel__meta--inline" role="status">
+          Enable <strong>Show on map (Layers AOI)</strong> to paint the selected index inside this layer&apos;s
+          polygons.
+        </p>
+      )}
+      {settings.enabled && zoomWarning ? (
+        <p className="si-rs-panel__meta si-rs-panel__meta--warn si-rs-panel__meta--inline" role="status">
+          {zoomWarning}
+        </p>
+      ) : null}
     </div>
   )
 }

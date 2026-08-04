@@ -20,6 +20,7 @@ import {
 import { estimateEtMmDayFromMoisture } from '../../../lib/etIndex'
 import { estimateLstCelsius } from '../../../lib/lstIndex'
 import { estimateSaviFromNdvi } from '../../../lib/siCropAlertDchasBeacon'
+import { isDataMaskLayerId } from '../../../lib/dataMaskLayer'
 
 export type ImageryChartType = 'line' | 'area' | 'bar' | 'pie' | 'scatter'
 
@@ -175,6 +176,15 @@ function evaluateStaticLayerDailyValue(layerId: string, row: SentinelHubDailyInd
 
   // Direct band means (do not require NDVI — e.g. salinity scenes).
   if (id === 'NDSI') return finiteOrNull(row.ndsi)
+  if (isDataMaskLayerId(id)) {
+    // Sample validity fraction proxy: 1 when Statistical API returned a clear-scene index, else 0.
+    const hasSample =
+      finiteOrNull(row.ndvi) != null ||
+      finiteOrNull(row.ndmi) != null ||
+      finiteOrNull(row.ndwi) != null ||
+      finiteOrNull(row.evi) != null
+    return hasSample ? 1 : 0
+  }
   if (id === 'SI') return finiteOrNull(row.si)
   if (id === 'SSI') {
     const direct = finiteOrNull(row.ssi)

@@ -35,7 +35,8 @@ export const DEFAULT_SI_AOI_MASK_BUILDER_SETTINGS: SiAoiMaskBuilderSettings = {
   filterField: 'Structure_Type',
   filterValues: ['1006', '1007'],
   sentinelLayerId: '',
-  maskMode: 'filtered-features',
+  /** UI Boundary "All features"; legacy `filtered-features` is coerced on normalize. */
+  maskMode: 'entire-layer',
   displayMode: 'transparent-outside',
   liveUpdate: true,
 }
@@ -140,12 +141,10 @@ export function persistSiAoiMaskBuilderSettings(
 export function normalizeSiAoiMaskBuilderSettings(
   partial: Partial<SiAoiMaskBuilderSettings>,
 ): SiAoiMaskBuilderSettings {
-  const maskMode =
-    partial.maskMode === 'selected-features' ||
-    partial.maskMode === 'filtered-features' ||
-    partial.maskMode === 'entire-layer'
-      ? partial.maskMode
-      : DEFAULT_SI_AOI_MASK_BUILDER_SETTINGS.maskMode
+  // Boundary UI only exposes All features / Selected — coerce legacy filtered-features
+  // so Agro Structure_Type defaults cannot empty-clip a plain AOI layer.
+  const maskMode: SiAoiMaskMode =
+    partial.maskMode === 'selected-features' ? 'selected-features' : 'entire-layer'
   const displayMode =
     partial.displayMode === 'clip-outside' ||
     partial.displayMode === 'transparent-outside' ||

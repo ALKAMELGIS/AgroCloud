@@ -121,6 +121,13 @@ describe('siAoiLayerModeClipCache', () => {
     expect(warmA).not.toBe(
       siAoiLayerModeWarmChunksCacheKey(geoChurnKey, 'NDVI', '2024-06-01', { maxTileLayers: 8 }),
     )
+    expect(warmA).toContain('vp:full')
+    expect(
+      siAoiLayerModeWarmChunksCacheKey(pin, 'NDVI', '2024-06-01', {
+        maxTileLayers: 8,
+        viewportBBox: [47, 25, 47.2, 25.2],
+      }),
+    ).toContain('vp:47.000')
     expect(siAoiLayerGeoJsonCacheSig(viewportLayer)).not.toBe(siAoiLayerGeoJsonCacheSig(layer))
   })
 
@@ -137,5 +144,30 @@ describe('siAoiLayerModeClipCache', () => {
     const fromEmpty = siAoiLayerModeMaskCacheKey(emptyLayer, settings, new Set())
     expect(fromMask).not.toBe(fromEmpty)
     expect(fromMask).toContain('geo:')
+  })
+
+  it('builds entire-layer clip from populated viewport-like geojson', () => {
+    const emptyMask = getCachedSiAoiLayerModeClipMask(
+      { id: 'aoi-stream', geojson: { features: [] } },
+      {
+        sourceLayerId: 'aoi-stream',
+        maskMode: 'entire-layer',
+        filterField: '',
+        filterValues: [],
+      },
+      new Set(),
+    )
+    expect(emptyMask).toBeNull()
+    const mask = getCachedSiAoiLayerModeClipMask(
+      { id: 'aoi-stream', geojson: layer.geojson },
+      {
+        sourceLayerId: 'aoi-stream',
+        maskMode: 'entire-layer',
+        filterField: 'Structure_Type',
+        filterValues: ['1006', '1007'],
+      },
+      new Set(),
+    )
+    expect(mask?.features?.length).toBe(1)
   })
 })

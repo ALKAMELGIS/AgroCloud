@@ -22,6 +22,7 @@ export {
 export { generateTimeSeriesReportDocx, generateTimeSeriesLulcReportDocx } from './generateTimeSeriesReportDocx'
 export {
   generateTimeSeriesReportExcel,
+  buildTimeSeriesReportExcelBlob,
   sanitizeTimeSeriesReportExcelFilename,
   exportTimeSeriesCsvReport,
   exportTimeSeriesChartTimelineExcel,
@@ -29,6 +30,13 @@ export {
   buildTimeSeriesReportWorkbookSync,
 } from './generateTimeSeriesReportExcel'
 export type { GenerateTimeSeriesReportExcelOptions } from './generateTimeSeriesReportExcel'
+export {
+  isBatchDirectoryPickerSupported,
+  pickBatchExportDirectory,
+  writeBlobToDirectory,
+  BATCH_EXPORT_CANCELLED,
+  BATCH_EXPORT_FOLDER_REQUIRED,
+} from './batchExportDirectory'
 export {
   batchExportAnalyticsReportsExcel,
   resolveBatchPlotDisplayName,
@@ -59,6 +67,19 @@ export type {
   FieldIrrigationStatusLabel,
   BuildFieldSummaryModelInput,
 } from './buildFieldSummaryModel'
+export {
+  buildProductionEstimationRows,
+  buildProductionEstimationRow,
+  classifyNdviStressLevel,
+  estimateNdviVegetatedAreas,
+  estimateHarvestProductionTons,
+  NDVI_VEGETATION_THRESHOLD,
+  PRODUCTION_ESTIMATION_HEADERS,
+} from './productionEstimationSheet'
+export type {
+  ProductionEstimationRow,
+  NdviStressLevel,
+} from './productionEstimationSheet'
 export {
   buildTimeSeriesWeatherWorkbook,
   generateTimeSeriesWeatherReportExcel,

@@ -6,6 +6,13 @@ import type {
   FieldSummaryModel,
   FieldSummaryPortfolioStats,
 } from './buildFieldSummaryModel'
+import {
+  PRODUCTION_ESTIMATION_HEADERS,
+  buildProductionEstimationRows,
+  sumProductionEstimationTotals,
+  NDVI_VEGETATION_THRESHOLD,
+  NDVI_FULL_CANOPY,
+} from './productionEstimationSheet'
 
 const BRAND_DARK = 'FF064E3B'
 const HEADER_FILL = 'FF065F46'
@@ -198,16 +205,47 @@ function writeFormulasSheet(wb: ExcelJS.Workbook): void {
     ['Estimated Yield', '55 × 0.665 = 36.6 t/ha'],
     ['Estimated Total Production', '36.6 × 39.26 ≈ 1,436 tons'],
   ]
-  ws.getRow(13).values = ['Input / Step', 'Value']
-  styleHeaderRow(ws.getRow(13))
-  example.forEach(([label, value], i) => {
-    const row = ws.getRow(14 + i)
-    row.values = [label, value]
+  example.forEach(([k, v], i) => {
+    const row = ws.getRow(13 + i)
+    row.values = [k, v]
+    styleDataRow(row, i % 2 === 1)
+  })
+
+  ws.getCell('A20').value = 'Production Estimation Sheet'
+  ws.getCell('A20').font = { bold: true, size: 10, color: { argb: BRAND_DARK } }
+  const prodRows: Array<[string, string]> = [
+    [
+      'Planned Crop Coverage (ha)',
+      `Area with NDVI ≥ ${NDVI_VEGETATION_THRESHOLD.toFixed(2)} (vegetated / planted)`,
+    ],
+    [
+      'Unplanned Area (ha)',
+      'Total Area from Layer − NDVI Vegetated Area',
+    ],
+    [
+      'Vegetation Coverage (%)',
+      `Soft estimate from AOI-mean NDVI (full canopy ≈ ${NDVI_FULL_CANOPY}); or zonal min/max span above threshold`,
+    ],
+    ['NDVI Stress · Healthy', 'NDVI > 0.60'],
+    ['NDVI Stress · Moderate', '0.40 – 0.60'],
+    ['NDVI Stress · Stressed', '0.20 – 0.40'],
+    ['NDVI Stress · Non-Vegetated', `NDVI < ${NDVI_VEGETATION_THRESHOLD.toFixed(2)}`],
+    ['NDVI Health Factor', 'Healthy 1.00 · Moderate 0.85 · Stressed 0.65 · Non-Vegetated 0'],
+    [
+      'Estimated Harvest Production (Ton)',
+      'NDVI Vegetated Area (ha) × Expected Yield (Ton/ha) × NDVI Health Factor',
+    ],
+  ]
+  ws.getRow(21).values = ['Metric', 'Formula']
+  styleHeaderRow(ws.getRow(21))
+  prodRows.forEach(([metric, formula], i) => {
+    const row = ws.getRow(22 + i)
+    row.values = [metric, formula]
     styleDataRow(row, i % 2 === 1)
   })
 
   ws.getColumn(1).width = 36
-  ws.getColumn(2).width = 56
+  ws.getColumn(2).width = 88
 }
 
 type DistBlock = { firstRow: number; lastRow: number; headerRow: number }
@@ -672,6 +710,131 @@ export function writeFieldSummaryAnalysisSheet(
   return specs
 }
 
+function fmtPct(n: number | null | undefined): string | number {
+  if (n == null || !Number.isFinite(n)) return '—'
+  return `${Number(n.toFixed(1))}%`
+}
+
+function writeProductionEstimationSheet(
+  wb: ExcelJS.Workbook,
+  input: {
+    summaries: FieldSummaryModel[]
+    fromDate: string
+    toDate: string
+    projectName?: string
+  },
+): void {
+  const ws = wb.addWorksheet('Production Estimation', {
+    views: [{ state: 'frozen', ySplit: 5 }],
+  })
+  const colCount = PRODUCTION_ESTIMATION_HEADERS.length
+  const rows = buildProductionEstimationRows(input.summaries)
+  const totals = sumProductionEstimationTotals(rows)
+
+  ws.getCell('A1').value = 'Production Estimation Sheet'
+  styleTitle(ws.getCell('A1'))
+  ws.mergeCells(1, 1, 1, colCount)
+
+  ws.getCell('A2').value =
+    `${input.projectName || 'AgroCloud Satellite Intelligence'} · Period ${input.fromDate} to ${input.toDate} · ${rows.length} field(s)`
+  ws.getCell('A2').font = { size: 9, color: { argb: MUTED } }
+  ws.mergeCells(2, 1, 2, colCount)
+
+  ws.getCell('A3').value =
+    `NDVI vegetation threshold ≥ ${NDVI_VEGETATION_THRESHOLD.toFixed(2)} · ` +
+    'Estimated Harvest Production = Vegetated Area × Expected Yield × NDVI Health Factor (see Calculation Method below)'
+  ws.getCell('A3').font = { size: 8, italic: true, color: { argb: MUTED } }
+  ws.mergeCells(3, 1, 3, colCount)
+
+  const header = ws.getRow(5)
+  header.values = [...PRODUCTION_ESTIMATION_HEADERS]
+  styleHeaderRow(header)
+
+  rows.forEach((r, i) => {
+    const row = ws.getRow(6 + i)
+    row.values = [
+      r.fieldId,
+      r.farmName,
+      r.cropClassification,
+      fmtNum(r.totalAreaHa, r.totalAreaHa != null && r.totalAreaHa >= 100 ? 1 : 2),
+      fmtNum(r.plannedCropCoverageHa, 2),
+      fmtNum(r.unplannedAreaHa, 2),
+      fmtPct(r.vegetationCoveragePct),
+      fmtNum(r.averageNdvi, 3),
+      r.stressLevel,
+      fmtNum(r.expectedYieldTHa, 1),
+      fmtNum(r.estimatedHarvestProductionTons, 1),
+    ]
+    styleDataRow(row, i % 2 === 1)
+    row.height = 26
+  })
+
+  const totalRowIdx = 6 + rows.length
+  const totalRow = ws.getRow(totalRowIdx)
+  totalRow.values = [
+    'TOTAL',
+    '',
+    '',
+    fmtNum(totals.totalAreaHa, 2),
+    fmtNum(totals.plannedCropCoverageHa, 2),
+    fmtNum(totals.unplannedAreaHa, 2),
+    '',
+    '',
+    '',
+    '',
+    fmtNum(totals.estimatedHarvestProductionTons, 1),
+  ]
+  totalRow.font = { bold: true, size: 9, color: { argb: BRAND_DARK } }
+  totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: SECTION_FILL } }
+  totalRow.alignment = { vertical: 'middle', wrapText: true }
+
+  const widths = [12, 18, 14, 14, 18, 16, 14, 12, 18, 14, 16]
+  widths.forEach((w, i) => {
+    ws.getColumn(i + 1).width = w
+  })
+
+  let methodRow = totalRowIdx + 2
+  ws.getCell(methodRow, 1).value = 'Calculation Method'
+  ws.getCell(methodRow, 1).font = { bold: true, size: 11, color: { argb: BRAND_DARK } }
+  ws.mergeCells(methodRow, 1, methodRow, 4)
+
+  const methodBlocks: Array<[string, string]> = [
+    [
+      '1. Total Area from Layer (ha)',
+      'Area of field polygon from GIS layer.',
+    ],
+    [
+      '2. Planned Crop Coverage (ha)',
+      `Area classified as vegetation based on NDVI analysis. NDVI ≥ ${NDVI_VEGETATION_THRESHOLD.toFixed(2)} → Vegetated / Planted Area.`,
+    ],
+    [
+      '3. Unplanned Area (ha)',
+      'Unplanned Area = Total Area from Layer − NDVI Vegetated Area (or area of NDVI non-vegetated pixels within the field boundary).',
+    ],
+    [
+      '4. NDVI Stress Classification',
+      'Healthy Crop: NDVI > 0.60 · Moderate Crop: 0.40–0.60 · Stressed Crop: 0.20–0.40 · Non-Vegetated / Unplanned: NDVI < 0.20',
+    ],
+    [
+      '5. Harvest Production Estimation',
+      'Estimated Harvest Production (Ton) = NDVI Vegetated Area (ha) × Expected Yield (Ton/ha) × NDVI Health Factor',
+    ],
+    [
+      '6. NDVI Health Factor',
+      'Healthy 1.00 · Moderate 0.85 · Stressed 0.65 · Non-Vegetated 0.00',
+    ],
+  ]
+  methodBlocks.forEach(([title, body], i) => {
+    const r = methodRow + 1 + i * 2
+    ws.getCell(r, 1).value = title
+    ws.getCell(r, 1).font = { bold: true, size: 9, color: { argb: INK } }
+    ws.mergeCells(r, 1, r, colCount)
+    ws.getCell(r + 1, 1).value = body
+    ws.getCell(r + 1, 1).font = { size: 8, color: { argb: MUTED } }
+    ws.mergeCells(r + 1, 1, r + 1, colCount)
+  })
+}
+
 export function buildFieldSummaryWorkbook(input: {
   summaries: FieldSummaryModel[]
   portfolio?: FieldSummaryPortfolioStats | null
@@ -734,6 +897,12 @@ export function buildFieldSummaryWorkbook(input: {
   })
 
   writeFormulasSheet(wb)
+  writeProductionEstimationSheet(wb, {
+    summaries: input.summaries,
+    fromDate: input.fromDate,
+    toDate: input.toDate,
+    projectName: input.projectName,
+  })
   const chartSpecs = writeFieldSummaryAnalysisSheet(wb, input.summaries)
   return { wb, chartSpecs }
 }

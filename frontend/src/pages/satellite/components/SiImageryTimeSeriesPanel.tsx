@@ -57,7 +57,9 @@ import { SiPlotLayerTimeSeriesView } from './SiPlotLayerTimeSeriesView'
 import type { SiImageryAnalysisMode } from '../../../lib/siMultiLayerAoiTrendAnalysis'
 import {
   buildSiImageryFieldOptions,
+  buildSiImageryFieldOptionsForSource,
   listSiImageryPlotLabelAttributes,
+  listSiImageryPlotSourceLayers,
   resolveSiImageryField,
   SI_IMAGERY_COMMITTED_AOI_KEY,
   SI_IMAGERY_PLOT_LABEL_AUTO,
@@ -135,23 +137,66 @@ export function SiImageryTimeSeriesPanel({
   )
 
   const [plotLabelAttribute, setPlotLabelAttribute] = useState(SI_IMAGERY_PLOT_LABEL_AUTO)
+  const [selectedPlotSourceId, setSelectedPlotSourceId] = useState('')
 
   const plotLabelAttributes = useMemo(
     () => listSiImageryPlotLabelAttributes(vectorLayers),
     [vectorLayers],
   )
 
-  const fieldOptions = useMemo(
+  const plotSourceLayers = useMemo(
     () =>
-      buildSiImageryFieldOptions(
+      listSiImageryPlotSourceLayers(
         agroStructuresMask,
         aoiFields,
         committedAoiGeometry,
         vectorLayers,
-        plotLabelAttribute,
       ),
-    [agroStructuresMask, aoiFields, committedAoiGeometry, vectorLayers, plotLabelAttribute],
+    [agroStructuresMask, aoiFields, committedAoiGeometry, vectorLayers],
   )
+
+  useEffect(() => {
+    if (!plotSourceLayers.length) {
+      setSelectedPlotSourceId('')
+      return
+    }
+    setSelectedPlotSourceId(prev =>
+      prev && plotSourceLayers.some(s => s.id === prev) ? prev : plotSourceLayers[0]!.id,
+    )
+  }, [plotSourceLayers])
+
+  const selectedPlotSource = useMemo(
+    () => plotSourceLayers.find(s => s.id === selectedPlotSourceId) ?? null,
+    [plotSourceLayers, selectedPlotSourceId],
+  )
+
+  const fieldOptions = useMemo(
+    () =>
+      selectedPlotSourceId
+        ? buildSiImageryFieldOptionsForSource(
+            selectedPlotSourceId,
+            agroStructuresMask,
+            aoiFields,
+            committedAoiGeometry,
+            vectorLayers,
+            plotLabelAttribute,
+          )
+        : [],
+    [
+      selectedPlotSourceId,
+      agroStructuresMask,
+      aoiFields,
+      committedAoiGeometry,
+      vectorLayers,
+      plotLabelAttribute,
+    ],
+  )
+
+  const fieldEmptyLabel = !plotSourceLayers.length
+    ? 'No plot layers on map'
+    : selectedPlotSource && selectedPlotSource.featureCount === 0
+      ? 'Zoom the map to load plots'
+      : 'No fields in this layer'
 
   const layerGroups = useMemo(() => buildImageryTimeSeriesLayerGroups(), [])
 
@@ -1556,6 +1601,32 @@ export function SiImageryTimeSeriesPanel({
             </div>
           </div>
 
+          <div className="acp-ts__field acp-ts__field--plot-source">
+            <span className="acp-ts__field-label">Plot Layer</span>
+            <select
+              value={selectedPlotSourceId}
+              disabled={!plotSourceLayers.length}
+              onChange={e => {
+                const next = e.target.value
+                setSelectedPlotSourceId(next)
+                handleInvalidate()
+              }}
+              aria-label="Plot layer for field selection"
+              title="Choose a map AOI / plot layer, then pick fields inside it"
+            >
+              {!plotSourceLayers.length ? (
+                <option value="">No plot layers on map</option>
+              ) : (
+                plotSourceLayers.map(src => (
+                  <option key={src.id} value={src.id}>
+                    {src.label}
+                    {src.featureCount > 0 ? ` (${src.featureCount})` : ''}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+
           {analysisMode === 'single-layer-trend' ? (
           <div className="acp-ts__field acp-ts__field--grow">
             <span className="acp-ts__field-label">Field Name</span>
@@ -1576,7 +1647,7 @@ export function SiImageryTimeSeriesPanel({
                 invalidateMultiAoiResults()
               }}
               disabled={!fieldOptions.length}
-              emptyLabel="No Agro Structures fields"
+              emptyLabel={fieldEmptyLabel}
               searchPlaceholder="Search fields…"
               aria-label="Field name"
             />
@@ -1584,7 +1655,7 @@ export function SiImageryTimeSeriesPanel({
           ) : (
           <div className="acp-ts__field acp-ts__field--grow">
             <span className="acp-ts__field-label">
-              {analysisMode === 'plot-layer-time-series' ? 'Plots' : 'AOI Layers'}
+              {analysisMode === 'plot-layer-time-series' ? 'Plots' : 'Fields'}
             </span>
             <SiAoiFieldMultiSelect
               options={fieldOptions}
@@ -1595,10 +1666,11 @@ export function SiImageryTimeSeriesPanel({
                 else invalidateMultiAoiResults()
               }}
               disabled={!fieldOptions.length}
+              emptyLabel={fieldEmptyLabel}
               aria-label={
                 analysisMode === 'plot-layer-time-series'
                   ? 'Plots for time series'
-                  : 'AOI layers for comparison'
+                  : 'Fields for AOI comparison'
               }
             />
           </div>

@@ -188,3 +188,82 @@ export function readMapLngLatBBox(map: {
     return null
   }
 }
+
+/**
+ * Ease the camera to an AOI extent while guaranteeing Sentinel WMS minzoom.
+ * Fitting a huge multi-polygon extent alone often leaves zoom below minzoom
+ * (outlines visible, index tiles blocked). cameraForBounds + floor zoom fixes that.
+ */
+export function easeMapCameraToLngLatBBoxWithMinZoom(
+  map: {
+    cameraForBounds?: (
+      bounds: [[number, number], [number, number]],
+      options?: { padding?: number; maxZoom?: number },
+    ) =>
+      | {
+          center?: [number, number] | { lng: number; lat: number }
+          zoom?: number
+          bearing?: number
+          pitch?: number
+        }
+      | null
+      | undefined
+    easeTo?: (options: Record<string, unknown>) => void
+    fitBounds?: (
+      bounds: [[number, number], [number, number]],
+      options?: { padding?: number; duration?: number; maxZoom?: number },
+    ) => void
+    once?: (type: string, listener: () => void) => void
+    getZoom?: () => number
+  },
+  bbox: LngLatBBox,
+  minZoom: number,
+  options?: { padding?: number; duration?: number },
+): void {
+  const padding = options?.padding ?? 72
+  const duration = options?.duration ?? 700
+  const sw: [number, number] = [bbox[0], bbox[1]]
+  const ne: [number, number] = [bbox[2], bbox[3]]
+  const maxZoom = Math.max(minZoom + 2, 15)
+  const floorZoom = minZoom + 0.75
+
+  if (typeof map.cameraForBounds === 'function' && typeof map.easeTo === 'function') {
+    try {
+      const cam = map.cameraForBounds([sw, ne], { padding, maxZoom })
+      if (cam && typeof cam.zoom === 'number') {
+        map.easeTo({
+          center: cam.center,
+          zoom: Math.max(cam.zoom, floorZoom),
+          bearing: cam.bearing,
+          pitch: cam.pitch,
+          duration,
+        })
+        return
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
+  if (typeof map.fitBounds !== 'function') return
+  try {
+    map.fitBounds([sw, ne], { padding, duration, maxZoom })
+    if (
+      typeof map.once === 'function' &&
+      typeof map.getZoom === 'function' &&
+      typeof map.easeTo === 'function'
+    ) {
+      map.once('moveend', () => {
+        try {
+          if ((map.getZoom?.() ?? minZoom) < minZoom) {
+            map.easeTo?.({ zoom: floorZoom, duration: 400 })
+          }
+        } catch {
+          /* camera race */
+        }
+      })
+    }
+  } catch {
+    /* camera race */
+  }
+}

@@ -263,6 +263,7 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
             maskFeatureCount={aoiLayerMaskFeatureCount}
             selectedFeatureCount={aoiLayerSelectedFeatureCount}
             disabled={aoiLayerModeDisabled}
+            zoomWarning={aoiLayerModeSettings.enabled ? wmsZoomWarning : null}
           />
         </div>
 

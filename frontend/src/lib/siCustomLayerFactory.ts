@@ -20,15 +20,8 @@ export type SiLayerImportMetadata = {
   widthPx?: number;
   heightPx?: number;
   bands?: number;
-  resolutionMeters?: number;
-  acquisitionDate?: string;
-  sensor?: string;
-  bboxWgs84?: string;
   sourceUrl?: string;
   importedAt?: string;
-  rasterServiceId?: string;
-  wmsUrl?: string;
-  wmtsUrl?: string;
 };
 
 export type SiCustomLayerBase = {
@@ -108,14 +101,7 @@ export function buildSiLayerImportMetadata(input: {
   widthPx?: number;
   heightPx?: number;
   bands?: number;
-  resolutionMeters?: number;
-  acquisitionDate?: string;
-  sensor?: string;
-  bboxWgs84?: string;
   sourceUrl?: string;
-  rasterServiceId?: string;
-  wmsUrl?: string;
-  wmtsUrl?: string;
 }): SiLayerImportMetadata {
   const featureCount =
     input.featureCount ??
@@ -129,14 +115,7 @@ export function buildSiLayerImportMetadata(input: {
     widthPx: input.widthPx,
     heightPx: input.heightPx,
     bands: input.bands,
-    resolutionMeters: input.resolutionMeters,
-    acquisitionDate: input.acquisitionDate,
-    sensor: input.sensor,
-    bboxWgs84: input.bboxWgs84,
     sourceUrl: input.sourceUrl,
-    rasterServiceId: input.rasterServiceId,
-    wmsUrl: input.wmsUrl,
-    wmtsUrl: input.wmtsUrl,
     importedAt: new Date().toISOString(),
   };
 }
@@ -240,7 +219,7 @@ export function createSiRasterImportLayer(input: {
   id?: string;
   name: string;
   geojson: any;
-  raster?: { url: string; coordinates: RasterMapCoordinates };
+  raster: { url: string; coordinates: RasterMapCoordinates };
   source: 'upload' | 'api' | 'arcgis' | 'stac';
   sourceUrl?: string;
   format?: string;
@@ -249,13 +228,6 @@ export function createSiRasterImportLayer(input: {
   widthPx?: number;
   heightPx?: number;
   bands?: number;
-  resolutionMeters?: number;
-  acquisitionDate?: string;
-  sensor?: string;
-  bboxWgs84?: string;
-  rasterServiceId?: string;
-  wmsUrl?: string;
-  wmtsUrl?: string;
   authToken?: string;
   arcgisServiceType?: ArcGisServiceType;
   arcgisRasterTiles?: ArcGisRasterTilesConfig;
@@ -285,14 +257,7 @@ export function createSiRasterImportLayer(input: {
       widthPx: input.widthPx,
       heightPx: input.heightPx,
       bands: input.bands,
-      resolutionMeters: input.resolutionMeters,
-      acquisitionDate: input.acquisitionDate,
-      sensor: input.sensor,
-      bboxWgs84: input.bboxWgs84,
       sourceUrl: input.sourceUrl,
-      rasterServiceId: input.rasterServiceId,
-      wmsUrl: input.wmsUrl,
-      wmtsUrl: input.wmtsUrl,
     }),
     mapOpacity: 1,
   });
@@ -346,11 +311,5 @@ export function formatSiLayerMetaSummary(meta?: SiLayerImportMetadata): string {
     parts.push(`${meta.featureCount} feature${meta.featureCount === 1 ? '' : 's'}`);
   }
   if (meta.widthPx && meta.heightPx) parts.push(`${meta.widthPx}×${meta.heightPx}px`);
-  if (typeof meta.resolutionMeters === 'number' && Number.isFinite(meta.resolutionMeters)) {
-    parts.push(`~${meta.resolutionMeters.toFixed(2)} m/px`);
-  }
-  if (meta.acquisitionDate) parts.push(meta.acquisitionDate);
-  if (meta.sensor) parts.push(meta.sensor);
-  if (meta.bboxWgs84) parts.push(`BBox ${meta.bboxWgs84}`);
   return parts.join(' · ');
 }

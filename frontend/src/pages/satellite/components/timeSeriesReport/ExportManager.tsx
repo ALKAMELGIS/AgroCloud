@@ -5,6 +5,7 @@ import type { ImageryTimeSeriesLayerSeries } from '../../../dashboards/agroCloud
 import type { CropAlertFieldInput } from '../../../../lib/siCropAlertEngine'
 import type { SentinelHubDailyIndexMeans } from '../../../../lib/sentinelHubStatisticsApi'
 import {
+  isBatchDirectoryPickerSupported,
   runTimeSeriesExport,
   type BatchAnalyticsExportProgress,
   type BatchFieldSummaryProgress,
@@ -307,7 +308,16 @@ export function TimeSeriesExportManager({
           }
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Export failed')
+        const message = e instanceof Error ? e.message : 'Export failed'
+        if (
+          kind === 'batch-excel' &&
+          (/batch export cancelled/i.test(message) ||
+            (e instanceof DOMException && e.name === 'AbortError'))
+        ) {
+          showStatus('Batch export cancelled')
+        } else {
+          setError(message)
+        }
       } finally {
         setBusy(false)
         setMapProgress(null)
@@ -382,8 +392,9 @@ export function TimeSeriesExportManager({
       {open ? (
         <div className="acp-ts-export__menu" role="menu">
           {EXPORT_OPTIONS.map(opt => {
+            const batchFolderOk = isBatchDirectoryPickerSupported()
             const itemDisabled =
-              (opt.kind === 'batch-excel' && !batchExcelEnabled) ||
+              (opt.kind === 'batch-excel' && (!batchExcelEnabled || !batchFolderOk)) ||
               (opt.kind === 'batch-field-summary' && !batchFieldSummaryEnabled)
             return (
               <button
@@ -398,12 +409,14 @@ export function TimeSeriesExportManager({
                 }
                 title={
                   opt.kind === 'batch-excel'
-                    ? batchExcelEnabled
-                      ? `One Analytics Report Excel per field (${plotsWithGeometry} fields with geometry)`
-                      : 'Select at least one field with geometry in Field Selector'
+                    ? !batchFolderOk
+                      ? 'Requires Chrome/Edge for folder export'
+                      : batchExcelEnabled
+                        ? `Pick a folder once; all field Excel files are saved there (${plotsWithGeometry} fields with geometry)`
+                        : 'Select at least one field with geometry in Field Selector'
                     : opt.kind === 'batch-field-summary'
                       ? batchFieldSummaryEnabled
-                        ? `One Excel table sheet for all fields (${plotsWithGeometry} fields with geometry)`
+                        ? `Excel workbook with Field Summaries + Production Estimation (${plotsWithGeometry} fields with geometry)`
                         : 'Select at least one field with geometry in Field Selector'
                     : opt.kind === 'weather-excel'
                       ? `Uses Label field + Start/End dates (${fromDate.slice(0, 10)} -> ${toDate.slice(0, 10)})`

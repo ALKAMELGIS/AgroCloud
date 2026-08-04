@@ -38,9 +38,9 @@ const S2_COLLECTION_RE = /(sentinel-2|l2a|l1c)/i
 
 const ASTER_COLLECTION_RE = /aster/i
 
-const OPTICAL_CORE = new Set(['NDVI', 'NDMI', 'NDWI', 'SAVI'])
+const OPTICAL_CORE = new Set(['NDVI', 'NDMI', 'NDWI', 'SAVI', 'DATAMASK'])
 const THERMAL_CORE = new Set(['ET', 'LST'])
-const S3_CORE = new Set(['NDVI', 'NDWI', 'SAVI'])
+const S3_CORE = new Set(['NDVI', 'NDWI', 'SAVI', 'DATAMASK'])
 
 const FULL_OPTICAL_EXTRA_GROUP_IDS = new Set([
   'live-analysis-lulc',

@@ -1170,10 +1170,10 @@ export function buildTimeSeriesReportWorkbookSync(payload: TimeSeriesReportPaylo
   return wb
 }
 
-export async function generateTimeSeriesReportExcel(
+/** Build the Analytics Report workbook blob (no browser download). */
+export async function buildTimeSeriesReportExcelBlob(
   payload: TimeSeriesReportPayload,
-  options?: GenerateTimeSeriesReportExcelOptions,
-): Promise<void> {
+): Promise<Blob> {
   const { injectNativeMeteoCharts } = await import('../weatherClimateReport/meteoNativeExcelCharts')
   const { wb, chartSpecs } = await buildTimeSeriesReportWorkbook(payload)
 
@@ -1182,9 +1182,16 @@ export async function generateTimeSeriesReportExcel(
     chartSpecs.length > 0
       ? await injectNativeMeteoCharts(raw as ArrayBuffer, chartSpecs, 'Charts')
       : raw
-  const blob = new Blob([withCharts], {
+  return new Blob([withCharts], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
+}
+
+export async function generateTimeSeriesReportExcel(
+  payload: TimeSeriesReportPayload,
+  options?: GenerateTimeSeriesReportExcelOptions,
+): Promise<void> {
+  const blob = await buildTimeSeriesReportExcelBlob(payload)
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

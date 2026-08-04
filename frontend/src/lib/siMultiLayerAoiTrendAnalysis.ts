@@ -17,10 +17,7 @@ import {
   mergeDailyIndexSeries,
 } from './sentinelHubStatisticsApi'
 
-export type SiImageryAnalysisMode =
-  | 'single-layer-trend'
-  | 'multi-layer-aoi-comparison'
-  | 'plot-layer-time-series'
+export type SiImageryAnalysisMode = 'single-layer-trend' | 'multi-layer-aoi-comparison'
 
 /** Lookback window when resolving a single acquisition date (matches time-series panel). */
 export const MULTI_LAYER_AOI_LOOKBACK_DAYS = 90
@@ -43,18 +40,6 @@ export type MultiLayerAoiTrendResult = {
   sceneDate: string
   dailyRow: SentinelHubDailyIndexMeans | null
   indices: MultiLayerAoiIndexStats[]
-}
-
-/** Zonal statistic plotted on the multi-AOI comparison chart. */
-export type MultiLayerAoiChartStat = 'max' | 'mean' | 'min'
-
-export function resolveMultiLayerAoiChartStatValue(
-  stats: MultiLayerAoiIndexStats | undefined,
-  stat: MultiLayerAoiChartStat,
-): number | null {
-  if (!stats) return null
-  const value = stats[stat]
-  return value != null && Number.isFinite(value) ? value : null
 }
 
 const RESULT_CACHE_MAX = 96
@@ -203,14 +188,13 @@ export async function fetchMultiLayerAoiFieldDailyRow(
   field: CropAlertFieldInput,
   targetSceneDate: string,
   layerIds: string[],
-  options?: { signal?: AbortSignal; lookbackDays?: number; fromIso?: string },
+  options?: { signal?: AbortSignal; lookbackDays?: number },
 ): Promise<SentinelHubDailyIndexMeans | null> {
   if (!field.geometry) return null
   const day = targetSceneDate.trim().slice(0, 10)
   if (!day) return null
   const lookback = options?.lookbackDays ?? MULTI_LAYER_AOI_LOOKBACK_DAYS
-  let fromIso = options?.fromIso?.trim().slice(0, 10) || subtractDaysFromIso(day, lookback)
-  if (fromIso >= day) fromIso = subtractDaysFromIso(day, lookback)
+  const fromIso = subtractDaysFromIso(day, lookback)
 
   let rows = await fetchSentinelFieldIndexTimeSeriesForRange({
     geometry: field.geometry,
@@ -257,14 +241,13 @@ export function getCachedMultiLayerAoiTrendResult(
 export function buildMultiLayerAoiTrendChartSeries(
   results: MultiLayerAoiTrendResult[],
   layerIds: string[],
-  stat: MultiLayerAoiChartStat = 'mean',
 ): { aoiLabels: string[]; layerSeries: ImageryTimeSeriesLayerSeries[] } {
   const aoiLabels = results.map(r => r.fieldName)
-  const layerSeries: ImageryTimeSeriesLayerSeries[] = layerIds.map(layerId => {
+  const layerSeries: ImageryTimeSeriesLayerSeries[] = layerIds.map((layerId, layerIdx) => {
     const id = layerId.trim().toUpperCase()
     const values = results.map(result => {
       const stats = result.indices.find(i => i.layerId.trim().toUpperCase() === id)
-      return resolveMultiLayerAoiChartStatValue(stats, stat)
+      return stats?.mean ?? null
     })
     return {
       layerId: id,

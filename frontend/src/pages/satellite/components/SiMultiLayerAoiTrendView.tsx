@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -12,9 +12,15 @@ import {
   type ChartOptions,
 } from 'chart.js'
 import { Line } from 'react-chartjs-2'
-import { formatImageryTimeSeriesYTick, imageryLayerChartColor } from '../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
-import type { MultiAoiTimelineResult } from '../../../lib/siMultiAoiTimeline'
-import { multiAoiTimelineToLayerSeries } from '../../../lib/siMultiAoiTimeline'
+import {
+  formatImageryTimeSeriesYTick,
+  imageryLayerChartColor,
+  type ImageryTimeAggregation,
+} from '../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import {
+  multiAoiTimelineToLayerSeries,
+  type MultiAoiTimelineResult,
+} from '../../../lib/siMultiAoiTimeline'
 import {
   exportChartPng,
   exportTimeSeriesCsv,
@@ -35,11 +41,15 @@ export type SiMultiLayerAoiTrendViewProps = {
   onHighlightFieldKey?: (fieldKey: string) => void
 }
 
-function aggregationLabel(agg: MultiAoiTimelineResult['timeAggregation']): string {
+function aggregationTitle(agg: ImageryTimeAggregation): string {
   if (agg === 'week') return 'Weekly'
   if (agg === 'month') return 'Monthly'
   if (agg === 'year') return 'Yearly'
   return 'Daily'
+}
+
+function rangeLabel(from: string, to: string): string {
+  return `${from} → ${to}`
 }
 
 export function SiMultiLayerAoiTrendView({
@@ -55,38 +65,35 @@ export function SiMultiLayerAoiTrendView({
 }: SiMultiLayerAoiTrendViewProps) {
   const chartRef = useRef<ChartJS<'line'> | null>(null)
 
-  const exportSeries = useMemo(
-    () => (timeline ? multiAoiTimelineToLayerSeries(timeline) : []),
+  const plottedSeries = useMemo(
+    () => (Array.isArray(timeline?.series) ? timeline.series.filter(s => s.values.some(v => v != null)) : []),
     [timeline],
   )
 
   const chartData = useMemo((): ChartData<'line'> => {
-    if (!timeline?.series.length) return { labels: [], datasets: [] }
+    if (!timeline?.series.length || !plottedSeries.length) return { labels: [], datasets: [] }
+    const manyPeriods = timeline.labels.length > 40
+    const isDay = timeline.timeAggregation === 'day'
     return {
       labels: timeline.displayLabels,
-      datasets: timeline.series.map((s, idx) => ({
+      datasets: plottedSeries.map((s, idx) => ({
         label: s.label,
         data: s.values.map(v => (v != null && Number.isFinite(v) ? v : null)),
         borderColor: imageryLayerChartColor(idx),
-        backgroundColor: imageryLayerChartColor(idx) + '33',
+        backgroundColor: imageryLayerChartColor(idx) + '22',
         pointBackgroundColor: imageryLayerChartColor(idx),
         pointBorderColor: '#0f172a',
-        pointRadius: timeline.labels.length > 36 ? 0 : 3,
+        pointRadius: manyPeriods ? (isDay ? 1.5 : 0) : isDay ? 2.5 : 3,
         pointHoverRadius: 5,
         borderWidth: 2,
         tension: 0,
         spanGaps: false,
       })),
     }
-  }, [timeline])
+  }, [timeline, plottedSeries])
 
   const chartOptions = useMemo((): ChartOptions<'line'> => {
-    const title =
-      timeline == null
-        ? 'AOI timeline'
-        : timeline.plotCount === 1
-          ? `${timeline.layerIds.join(', ')} · ${timeline.fromDate} → ${timeline.toDate}`
-          : `${timeline.plotCount} plots · ${timeline.layerIds.join(', ')} · ${timeline.fromDate} → ${timeline.toDate}`
+    const layers = Array.isArray(timeline?.layerIds) ? timeline.layerIds.join(', ') : 'Index'
     return {
       responsive: true,
       maintainAspectRatio: false,
@@ -94,23 +101,29 @@ export function SiMultiLayerAoiTrendView({
       plugins: {
         title: {
           display: true,
-          text: title,
-          color: '#e2e8f0',
-          font: { size: 12, weight: 'bold' },
-          padding: { bottom: 6 },
+          text: timeline
+            ? `${aggregationTitle(timeline.timeAggregation)} Multi-Layer AOI (${rangeLabel(timeline.fromDate, timeline.toDate)})`
+            : 'Multi-Layer AOI Comparison',
+          color: '#0f172a',
+          font: { size: 13, weight: 'bold' },
+          padding: { bottom: 8 },
         },
         legend: {
           display: true,
-          position: 'bottom',
-          labels: { boxWidth: 10, usePointStyle: true, color: '#cbd5e1', font: { size: 10 } },
+          position: plottedSeries.length > 8 ? 'right' : 'top',
+          labels: {
+            boxWidth: 10,
+            usePointStyle: true,
+            font: { size: 10 },
+          },
           onClick: (_e, item, legend) => {
             const chart = legend.chart
             const idx = item.datasetIndex
             if (idx == null) return
             chart.setDatasetVisibility(idx, !chart.isDatasetVisible(idx))
             chart.update()
-            const series = timeline?.series[idx]
-            if (series?.fieldKey) onHighlightFieldKey?.(series.fieldKey)
+            const series = plottedSeries[idx]
+            if (series) onHighlightFieldKey?.(series.fieldKey)
           },
         },
         tooltip: {
@@ -121,10 +134,15 @@ export function SiMultiLayerAoiTrendView({
               return timeline.labels[i] ?? timeline.displayLabels[i] ?? ''
             },
             label: item => {
+              const series = plottedSeries[item.datasetIndex ?? -1]
               const v = item.parsed.y
-              const name = item.dataset.label ?? ''
+              const name = series?.label ?? item.dataset.label ?? ''
               if (v == null || !Number.isFinite(v)) return `${name}: —`
-              return `${name}: ${Number(v).toFixed(3)}`
+              const area =
+                series?.areaHa != null && Number.isFinite(series.areaHa)
+                  ? ` · ${series.areaHa.toFixed(2)} ha`
+                  : ''
+              return `${name}: ${Number(v).toFixed(3)}${area}`
             },
           },
         },
@@ -142,55 +160,46 @@ export function SiMultiLayerAoiTrendView({
                   : timeline?.timeAggregation === 'year'
                     ? 'Year'
                     : 'Date',
-            color: '#94a3b8',
-            font: { size: 11 },
+            color: '#64748b',
+            font: { size: 10 },
           },
-          ticks: {
-            color: '#cbd5e1',
-            maxRotation: 45,
-            autoSkip: true,
-            maxTicksLimit: 14,
-            font: { size: 9 },
-          },
-          grid: { color: 'rgba(148,163,184,0.12)' },
+          ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 16, font: { size: 9 } },
+          grid: { color: 'rgba(148,163,184,0.2)' },
         },
         y: {
           title: {
             display: true,
-            text: 'Index value',
-            color: '#94a3b8',
+            text: layers,
+            color: '#64748b',
             font: { size: 11 },
           },
           ticks: {
-            color: '#cbd5e1',
+            font: { size: 9 },
             callback: (value: string | number) => formatImageryTimeSeriesYTick(value),
           },
-          grid: { color: 'rgba(148,163,184,0.12)' },
+          grid: { color: 'rgba(148,163,184,0.25)' },
         },
       },
+      onClick: (_event, elements) => {
+        const el = elements[0]
+        if (!el) return
+        const series = plottedSeries[el.datasetIndex]
+        if (series?.fieldKey) onHighlightFieldKey?.(series.fieldKey)
+      },
     }
-  }, [timeline, onHighlightFieldKey])
+  }, [timeline, plottedSeries, onHighlightFieldKey])
 
-  const handleExportPng = useCallback(() => {
-    exportChartPng(chartRef.current, exportSeries)
-  }, [exportSeries])
-
-  const handleExportCsv = useCallback(() => {
-    if (!timeline) return
-    exportTimeSeriesCsv(timeline.displayLabels, exportSeries)
-  }, [timeline, exportSeries])
-
-  const handleExportExcel = useCallback(() => {
-    if (!timeline) return
-    exportTimeSeriesExcel(timeline.displayLabels, exportSeries)
-  }, [timeline, exportSeries])
+  const exportSeries = useMemo(
+    () => (timeline ? multiAoiTimelineToLayerSeries(timeline) : []),
+    [timeline],
+  )
 
   if (!hasRun && !loading) {
     return (
       <div className="acp-ts__empty">
         <p>
-          Select plot AOIs from a layer, choose index layers (NDVI, NDMI, …), set <strong>Start Date</strong> →{' '}
-          <strong>Acquisition Date</strong>, then <strong>Apply</strong> for a timeline like Single Layer Trend.
+          Select AOI plots, one or more index layers, Start/End dates, and aggregation — then{' '}
+          <strong>Apply</strong> for a multi-layer AOI comparison over time.
         </p>
       </div>
     )
@@ -200,62 +209,79 @@ export function SiMultiLayerAoiTrendView({
     return (
       <div className="acp-ts__empty">
         <p>
-          <i className="fa-solid fa-spinner fa-spin" aria-hidden /> Building AOI timeline
+          <i className="fa-solid fa-spinner fa-spin" aria-hidden /> Loading multi-AOI comparison
           {progress ? ` (${progress.done}/${progress.total})` : ''}…
         </p>
       </div>
     )
   }
 
-  const chartVisible = hasRun && hasChartData && !!timeline?.labels.length
-
   return (
-    <>
-      {chartVisible && timeline ? (
-        <div className="acp-ts__meta">
-          <span>
-            {timeline.layerIds.join(', ')} · {timeline.fromDate} → {timeline.toDate} ·{' '}
-            {timeline.labels.length} pts · {aggregationLabel(timeline.timeAggregation)}
-            {analysisDurationMs != null
-              ? ` · ${analysisDurationMs < 1000 ? `${analysisDurationMs} ms` : `${(analysisDurationMs / 1000).toFixed(1)} s`}`
-              : ''}
-            {refreshing ? ' · updating…' : ''}
+    <div className="acp-ts__multi-plot">
+      <div className="acp-ts__meta">
+        <span>
+          Multi-Layer AOI Comparison
+          {timeline ? ` · ${(timeline.layerIds ?? []).join(', ')}` : ''}
+          {timeline ? ` · ${timeline.fromDate} → ${timeline.toDate}` : ''}
+          {timeline ? ` · ${aggregationTitle(timeline.timeAggregation)}` : ''}
+          {timeline ? ` · ${timeline.plotCount} AOI${timeline.plotCount === 1 ? '' : 's'}` : ''}
+          {timeline?.labels.length ? ` · ${timeline.labels.length} periods` : ''}
+          {analysisDurationMs != null
+            ? ` · ${analysisDurationMs < 1000 ? `${analysisDurationMs} ms` : `${(analysisDurationMs / 1000).toFixed(1)} s`}`
+            : ''}
+          {refreshing ? ' · updating…' : ''}
+        </span>
+        {hasChartData ? (
+          <span className="acp-ts__multi-plot-exports">
+            <button
+              type="button"
+              className="acp-ts__exports-interpret"
+              disabled={refreshing}
+              onClick={() => exportTimeSeriesCsv(timeline!.displayLabels, exportSeries)}
+            >
+              CSV
+            </button>
+            <button
+              type="button"
+              className="acp-ts__exports-interpret"
+              disabled={refreshing}
+              onClick={() => exportTimeSeriesExcel(timeline!.displayLabels, exportSeries)}
+            >
+              Excel
+            </button>
+            <button
+              type="button"
+              className="acp-ts__exports-interpret"
+              disabled={refreshing}
+              onClick={() => exportChartPng(chartRef.current, exportSeries)}
+            >
+              PNG
+            </button>
           </span>
-          <span>
-            {timeline.plotCount} plot{timeline.plotCount === 1 ? '' : 's'}
-          </span>
-        </div>
-      ) : null}
-
+        ) : null}
+      </div>
       {error ? (
-        <div className="acp-ts__error" role="status">
+        <div className="acp-ts__error" role="alert">
           {error}
         </div>
       ) : null}
-
-      {chartVisible ? (
-        <div className="acp-ts__chart-wrap acp-ts__chart-wrap--multi-aoi">
-          <Line ref={chartRef} data={chartData} options={chartOptions} />
-        </div>
+      {hasChartData ? (
+        <>
+          <div className="acp-ts__chart-wrap acp-ts__chart-wrap--tall acp-ts__chart-wrap--multi-aoi">
+            <Line ref={chartRef} data={chartData} options={chartOptions} />
+          </div>
+          <p className="acp-ts__chart-hint">
+            <i className="fa-solid fa-hand-pointer" aria-hidden="true" /> Click a series or legend item to
+            highlight the AOI on the map
+          </p>
+        </>
       ) : hasRun ? (
-        <div className="acp-ts__empty">
-          <p>No timeline data for the selected plots and date range.</p>
+        <div className="acp-ts__placeholder">
+          {error
+            ? error
+            : 'No observations for the selected range — try a wider Start → End window.'}
         </div>
       ) : null}
-
-      {chartVisible ? (
-        <div className="acp-ts__foot acp-ts__foot--multi-aoi">
-          <button type="button" className="acp-ts__exports-interpret" disabled={refreshing} onClick={handleExportCsv}>
-            CSV
-          </button>
-          <button type="button" className="acp-ts__exports-interpret" disabled={refreshing} onClick={handleExportExcel}>
-            Excel
-          </button>
-          <button type="button" className="acp-ts__exports-interpret" disabled={refreshing} onClick={handleExportPng}>
-            PNG
-          </button>
-        </div>
-      ) : null}
-    </>
+    </div>
   )
 }

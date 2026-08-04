@@ -5,6 +5,7 @@ import {
   listSiAoiMaskBuilderFieldOptions,
   listSiAoiLayerModeOptions,
   listSiAoiMaskBuilderUniqueFieldValues,
+  normalizeSiAoiMaskBuilderSettings,
   resolveSiAoiMaskBuilderClipGeoJson,
 } from './siAoiMaskBuilder'
 
@@ -153,5 +154,84 @@ describe('siAoiMaskBuilder', () => {
       { id: 'raster-1', name: 'Ortho', renderMode: 'raster', geojson: { features: [] } },
     ])
     expect(opts.map(o => o.id)).toEqual(['vec-1', 'stream-1'])
+  })
+
+  it('normalizeSiAoiMaskBuilderSettings coerces filtered-features to entire-layer', () => {
+    const normalized = normalizeSiAoiMaskBuilderSettings({
+      enabled: true,
+      sourceLayerId: 'aoi-layer',
+      maskMode: 'filtered-features',
+      filterField: 'Structure_Type',
+      filterValues: ['1006', '1007'],
+    })
+    expect(normalized.maskMode).toBe('entire-layer')
+    expect(normalizeSiAoiMaskBuilderSettings({ maskMode: 'selected-features' }).maskMode).toBe(
+      'selected-features',
+    )
+    expect(normalizeSiAoiMaskBuilderSettings({}).maskMode).toBe('entire-layer')
+  })
+
+  it('builds entire-layer mask for a non-Agro AOI FeatureCollection', () => {
+    const aoiLayer = {
+      id: 'custom-aoi',
+      name: 'AOI',
+      geojson: {
+        features: [
+          {
+            type: 'Feature',
+            properties: { Plot_ID: 'T-100' },
+            geometry: {
+              type: 'Polygon',
+              coordinates: [
+                [
+                  [46.6, 24.7],
+                  [46.61, 24.7],
+                  [46.61, 24.71],
+                  [46.6, 24.71],
+                  [46.6, 24.7],
+                ],
+              ],
+            },
+          },
+          {
+            type: 'Feature',
+            properties: { Plot_ID: 'T-101' },
+            geometry: {
+              type: 'Polygon',
+              coordinates: [
+                [
+                  [46.62, 24.7],
+                  [46.63, 24.7],
+                  [46.63, 24.71],
+                  [46.62, 24.71],
+                  [46.62, 24.7],
+                ],
+              ],
+            },
+          },
+        ],
+      },
+    }
+    const mask = buildSiAoiMaskBuilderGeoJson(
+      aoiLayer,
+      { filterField: '', filterValues: [], maskMode: 'entire-layer' },
+      new Set(),
+    )
+    expect(mask?.features).toHaveLength(2)
+    const clip = resolveSiAoiMaskBuilderClipGeoJson(
+      aoiLayer,
+      {
+        enabled: true,
+        sourceLayerId: 'custom-aoi',
+        filterField: 'Structure_Type',
+        filterValues: ['1006', '1007'],
+        sentinelLayerId: 'NDVI',
+        maskMode: 'entire-layer',
+        displayMode: 'transparent-outside',
+        liveUpdate: true,
+      },
+      new Set(),
+    )
+    expect(clip?.features?.length).toBe(2)
   })
 })

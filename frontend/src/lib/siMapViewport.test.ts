@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   expandLngLatBBox,
   buildLngLatBBoxRefreshKey,
+  easeMapCameraToLngLatBBoxWithMinZoom,
   filterFeatureCollectionByLngLatBBox,
   filterOuterRingsByLngLatBBox,
   intersectLngLatBboxes,
@@ -117,5 +118,17 @@ describe('siMapViewport', () => {
     expect(buildLngLatBBoxRefreshKey(bbox, 12.5, 'NDVI')).toContain('12.50')
     expect(buildLngLatBBoxRefreshKey(bbox, 12.5, 'NDVI')).toContain('10.0000')
     expect(buildLngLatBBoxRefreshKey(null, 8, 'x')).toBe('8.00:x')
+  })
+
+  it('easeMapCameraToLngLatBBoxWithMinZoom floors zoom when fit stays too low', () => {
+    let easedZoom: number | null = null
+    const map = {
+      cameraForBounds: () => ({ center: [47, 25] as [number, number], zoom: 8.2, bearing: 0, pitch: 0 }),
+      easeTo: (opts: { zoom?: number }) => {
+        easedZoom = opts.zoom ?? null
+      },
+    }
+    easeMapCameraToLngLatBBoxWithMinZoom(map, [46, 24, 48, 26], 12)
+    expect(easedZoom).toBeCloseTo(12.75, 5)
   })
 })

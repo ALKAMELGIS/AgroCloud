@@ -15,6 +15,14 @@ import {
 export const SI_IMAGERY_COMMITTED_AOI_KEY = '__aoi__'
 export const SI_IMAGERY_DRAWN_AOI_LABEL = 'Drawn AOI'
 export const SI_IMAGERY_VECTOR_LAYER_KEY_PREFIX = 'vl:'
+export const SI_IMAGERY_PLOT_SOURCE_AGRO = 'agro'
+export const SI_IMAGERY_PLOT_SOURCE_DRAWN = 'drawn'
+
+export type SiImageryPlotSourceLayer = {
+  id: string
+  label: string
+  featureCount: number
+}
 
 function buildBaseStructureFieldOptions(
   agroStructuresMask: GeoJSON.FeatureCollection | null | undefined,
@@ -154,13 +162,45 @@ function featureObjectIdToken(
   return `Plot_${featureIndex + 1}`
 }
 
-function isEligiblePlotVectorLayer(layer: SiAoiMaskBuilderLayerLike | null | undefined): boolean {
+function isAgroStructuresPlotLayer(layer: SiAoiMaskBuilderLayerLike | null | undefined): boolean {
+  if (!layer?.id) return false
+  return (
+    String(layer.id) === AGRO_STRUCTURES_PRIMARY_LAYER_ID || isAgroStructuresLayer(layer as any)
+  )
+}
+
+function layerPolygonFeatureCount(layer: SiAoiMaskBuilderLayerLike | null | undefined): number {
+  const features = Array.isArray(layer?.geojson?.features) ? layer!.geojson!.features! : []
+  return features.filter(f =>
+    isPolygonGeometry((f as GeoJSON.Feature | undefined)?.geometry ?? null),
+  ).length
+}
+
+/**
+ * Polygon vector layers usable as plot field sources.
+ * Agro_Structures is excluded from the merged “all layers” field list (handled via agro mask),
+ * but can be opted in when the Plot Layer picker targets that Layers-panel layer directly.
+ */
+function isEligiblePlotVectorLayer(
+  layer: SiAoiMaskBuilderLayerLike | null | undefined,
+  opts?: { allowAgro?: boolean },
+): boolean {
   if (!layer?.id || layer.renderMode === 'raster') return false
-  if (String(layer.id) === AGRO_STRUCTURES_PRIMARY_LAYER_ID || isAgroStructuresLayer(layer as any)) {
-    return false
-  }
+  if (!opts?.allowAgro && isAgroStructuresPlotLayer(layer)) return false
+  return layerPolygonFeatureCount(layer) > 0
+}
+
+/**
+ * Layers-panel vector layers for the Plot Layer picker — same idea as Layers AOI options:
+ * polygon layers, plus viewport-streaming layers before features load. Includes Agro_Structures
+ * under its map layer name so the dropdown matches the Layers dock.
+ */
+function isListablePlotVectorLayer(layer: SiAoiMaskBuilderLayerLike | null | undefined): boolean {
+  if (!layer?.id || layer.renderMode === 'raster') return false
+  if (layerPolygonFeatureCount(layer) > 0) return true
   const features = Array.isArray(layer.geojson?.features) ? layer.geojson!.features! : []
-  return features.some(f => isPolygonGeometry((f as GeoJSON.Feature | undefined)?.geometry ?? null))
+  if (features.length > 0) return false
+  return Boolean((layer as { viewportStreaming?: boolean }).viewportStreaming)
 }
 
 /** Prefer explicit Agro mask; else recover polygons from paint/viewport Agro layer. */
@@ -191,7 +231,7 @@ export function listSiImageryPlotLabelAttributes(
   if (!vectorLayers?.length) return []
   const names = new Set<string>()
   for (const layer of vectorLayers) {
-    if (!isEligiblePlotVectorLayer(layer)) continue
+    if (!isEligiblePlotVectorLayer(layer, { allowAgro: true })) continue
     for (const name of listSiAoiMaskBuilderFieldOptions(layer)) {
       if (name) names.add(name)
     }
@@ -228,15 +268,21 @@ function parseVectorLayerFieldKey(
 export function buildVectorLayerFieldOptions(
   vectorLayers: SiAoiMaskBuilderLayerLike[] | null | undefined,
   labelAttribute?: string | null,
+  onlyLayerId?: string | null,
 ): AcpStructureFieldOption[] {
   if (!vectorLayers?.length) return []
+  const restrictTo = String(onlyLayerId ?? '').trim()
   const options: AcpStructureFieldOption[] = []
   for (const layer of vectorLayers) {
-    if (!isEligiblePlotVectorLayer(layer)) continue
+    const allowAgro = Boolean(restrictTo && isAgroStructuresPlotLayer(layer))
+    if (!isEligiblePlotVectorLayer(layer, { allowAgro })) continue
+    if (restrictTo && String(layer.id) !== restrictTo) continue
     const features = Array.isArray(layer.geojson?.features) ? layer.geojson!.features! : []
     if (!features.length) continue
     const layerNameRaw = String(layer.name || layer.id).trim() || String(layer.id)
     const layerName = looksLikeLayerFileId(layerNameRaw) ? 'AOI' : layerNameRaw
+    // When picking one Layers-panel layer, prefer feature names over "Layer: Feature".
+    const singleLayerPick = Boolean(restrictTo)
     let polyIdx = 0
     for (let i = 0; i < features.length; i++) {
       const raw = features[i] as GeoJSON.Feature | undefined
@@ -245,6 +291,7 @@ export function buildVectorLayerFieldOptions(
       const props = (raw.properties ?? {}) as Record<string, unknown>
       const featLabel = featureDisplayName(props, `Plot ${polyIdx}`, labelAttribute)
       const displayName =
+        singleLayerPick ||
         layerName === 'AOI' ||
         featLabel === `Plot ${polyIdx}` ||
         featLabel.toLowerCase() === layerName.toLowerCase()
@@ -258,6 +305,97 @@ export function buildVectorLayerFieldOptions(
     }
   }
   return options.sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }))
+}
+
+function drawnAoiFieldOption(): AcpStructureFieldOption {
+  return {
+    fieldKey: SI_IMAGERY_COMMITTED_AOI_KEY,
+    displayName: SI_IMAGERY_DRAWN_AOI_LABEL,
+    objectId: 'aoi',
+  }
+}
+
+/** Plot/AOI layers available for Time Series source picker (Layers panel + Drawn AOI). */
+export function listSiImageryPlotSourceLayers(
+  agroStructuresMask: GeoJSON.FeatureCollection | null | undefined,
+  aoiFields: SiAoiFieldRecord[],
+  committedAoiGeometry: GeoJSON.Geometry | null | undefined,
+  vectorLayers?: SiAoiMaskBuilderLayerLike[] | null,
+): SiImageryPlotSourceLayer[] {
+  const sources: SiImageryPlotSourceLayer[] = []
+  const vectorSources: SiImageryPlotSourceLayer[] = []
+  const listedIds = new Set<string>()
+  if (vectorLayers?.length) {
+    for (const layer of vectorLayers) {
+      if (!isListablePlotVectorLayer(layer)) continue
+      const id = String(layer.id)
+      listedIds.add(id)
+      vectorSources.push({
+        id,
+        label: String(layer.name || layer.id).trim() || id,
+        featureCount: layerPolygonFeatureCount(layer),
+      })
+    }
+  }
+  vectorSources.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
+  sources.push(...vectorSources)
+
+  // Mask-only Agro path when the Layers panel does not yet expose the agro layer entry.
+  const agroLayerListed = [...listedIds].some(id => {
+    const layer = vectorLayers?.find(l => String(l?.id) === id)
+    return isAgroStructuresPlotLayer(layer)
+  })
+  if (!agroLayerListed) {
+    const effectiveAgroMask = resolveEffectiveAgroStructuresMask(agroStructuresMask, vectorLayers)
+    const agroOptions = buildBaseStructureFieldOptions(effectiveAgroMask, aoiFields)
+    if (agroOptions.length) {
+      sources.unshift({
+        id: SI_IMAGERY_PLOT_SOURCE_AGRO,
+        label: 'Agro Structures',
+        featureCount: agroOptions.length,
+      })
+    }
+  }
+
+  if (committedAoiGeometry) {
+    sources.push({
+      id: SI_IMAGERY_PLOT_SOURCE_DRAWN,
+      label: SI_IMAGERY_DRAWN_AOI_LABEL,
+      featureCount: 1,
+    })
+  }
+  return sources
+}
+
+/** Field/plot options for a single Plot Layer source (`agro`, `drawn`, or vector layer id). */
+export function buildSiImageryFieldOptionsForSource(
+  sourceId: string,
+  agroStructuresMask: GeoJSON.FeatureCollection | null | undefined,
+  aoiFields: SiAoiFieldRecord[],
+  committedAoiGeometry: GeoJSON.Geometry | null | undefined,
+  vectorLayers?: SiAoiMaskBuilderLayerLike[] | null,
+  labelAttribute?: string | null,
+): AcpStructureFieldOption[] {
+  const id = String(sourceId || '').trim()
+  if (!id) return []
+  if (id === SI_IMAGERY_PLOT_SOURCE_AGRO) {
+    const effectiveAgroMask = resolveEffectiveAgroStructuresMask(agroStructuresMask, vectorLayers)
+    return buildBaseStructureFieldOptions(effectiveAgroMask, aoiFields)
+  }
+  if (id === SI_IMAGERY_PLOT_SOURCE_DRAWN) {
+    return committedAoiGeometry ? [drawnAoiFieldOption()] : []
+  }
+
+  const selectedLayer = vectorLayers?.find(l => String(l?.id) === id) ?? null
+  if (isAgroStructuresPlotLayer(selectedLayer)) {
+    const effectiveAgroMask = resolveEffectiveAgroStructuresMask(agroStructuresMask, vectorLayers)
+    const agroFields = buildBaseStructureFieldOptions(effectiveAgroMask, aoiFields)
+    if (agroFields.length) return agroFields
+    // Viewport may only have non–Farm-Plot types — still offer every polygon on the layer.
+    return buildVectorLayerFieldOptions(vectorLayers, labelAttribute, id)
+  }
+
+  return buildVectorLayerFieldOptions(vectorLayers, labelAttribute, id)
 }
 
 export function buildSiImageryFieldOptions(
@@ -279,14 +417,7 @@ export function buildSiImageryFieldOptions(
   }
   if (!committedAoiGeometry) return merged
   if (merged.some(o => o.fieldKey === SI_IMAGERY_COMMITTED_AOI_KEY)) return merged
-  return [
-    ...merged,
-    {
-      fieldKey: SI_IMAGERY_COMMITTED_AOI_KEY,
-      displayName: SI_IMAGERY_DRAWN_AOI_LABEL,
-      objectId: 'aoi',
-    },
-  ]
+  return [...merged, drawnAoiFieldOption()]
 }
 
 function ringCentroid(ring: number[][]): [number, number] {
