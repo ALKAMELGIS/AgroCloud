@@ -31,6 +31,7 @@ export type GeoAiMapCommand =
 export type GeoAiToolboxPanelId =
   | 'remote-sensing'
   | 'imagery-time-series'
+  | 'map-swipe'
   | 'flood-monitoring'
   | 'well-site'
   | 'hydro-watershed'
@@ -49,6 +50,7 @@ export function normalizeGeoAiToolboxPanelId(raw: string): GeoAiToolboxPanelId |
     return 'remote-sensing'
   }
   if (/^(imagery-time-series|time-series|timeseries|timeline|ts)$/.test(t)) return 'imagery-time-series'
+  if (/^(map-swipe|mapswipe|swipe|compare|swipe-compare)$/.test(t)) return 'map-swipe'
   if (/^(flood-monitoring|flood|sar-flood|sar)$/.test(t)) return 'flood-monitoring'
   if (/^(well-site|well|hydro-ai|drilling)$/.test(t)) return 'well-site'
   if (/^(hydro-watershed|hydro|watershed|basin)$/.test(t)) return 'hydro-watershed'

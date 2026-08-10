@@ -25,6 +25,10 @@ import {
 } from './siLulcClassification'
 import { WAPI_STATIC_EXPR } from './wapiIndex'
 import { resolveCollectionIndexDef } from './collectionIndexCatalog'
+import {
+  MANGROVE_INDEX_DEFS,
+  MANGROVE_LAYER_IDS,
+} from './mangroveIndices'
 
 /** Derived visualization layers — same fusion input, rule-engine styling only. */
 export const AGRO_DERIVED_LAYER_DEFS: readonly AgroCompositeIndexDef[] = [
@@ -543,6 +547,18 @@ export const AGRO_COMPOSITE_CATEGORIES: readonly AgroCompositeCategory[] = [
       },
     ],
   },
+  {
+    id: 'mangrove',
+    groupLabel: 'Live Analysis · Mangrove',
+    indices: MANGROVE_INDEX_DEFS.map(d => ({
+      id: d.id,
+      label: d.label,
+      scientificName: d.scientificName,
+      deltaId: d.deltaId,
+      deltaLabel: d.deltaLabel,
+      expr: d.expr,
+    })),
+  },
 ] as const
 
 /** Four-index CHAS fusion (NDVI·NDWI·NDMI·SAVI) — scientific raster + derived alert layers. */
@@ -552,8 +568,8 @@ const STATIC_BY_ID = new Map<string, AgroCompositeIndexDef>()
 const DELTA_BY_ID = new Map<string, AgroCompositeIndexDef>()
 const ALL_COMPOSITE_IDS = new Set<string>()
 
-/** Gold exploration indices are scene composites only — no Change / Δ layers in the Layer select. */
-const COMPOSITE_CATEGORIES_WITHOUT_DELTA = new Set(['gold-exploration'])
+/** Gold exploration + mangrove scene composites — no Change / Δ layers in the Layer select. */
+const COMPOSITE_CATEGORIES_WITHOUT_DELTA = new Set(['gold-exploration', 'mangrove'])
 
 for (const cat of AGRO_COMPOSITE_CATEGORIES) {
   const publishDelta = !COMPOSITE_CATEGORIES_WITHOUT_DELTA.has(cat.id)
@@ -757,7 +773,18 @@ export function buildRemoteSensingLayerSelectGroups(
     ],
   })
 
+  groups.push({
+    id: 'live-analysis-mangrove',
+    label: 'Live Analysis · Mangrove',
+    options: MANGROVE_INDEX_DEFS.map(d => ({
+      id: d.id,
+      label: d.label,
+      scientificName: d.scientificName,
+    })),
+  })
+
   for (const cat of AGRO_COMPOSITE_CATEGORIES) {
+    if (cat.id === 'mangrove') continue
     groups.push({
       id: cat.id,
       label: cat.groupLabel,
@@ -800,6 +827,7 @@ export function buildRemoteSensingLayerSelectGroups(
     ...ALL_COMPOSITE_IDS,
     LULC_CLASSIFICATION_LAYER_ID,
     CHIRPS_PRECIP_LAYER_ID,
+    ...MANGROVE_LAYER_IDS.map(id => id.toUpperCase()),
   ])
 
   const standard = capabilityLayers

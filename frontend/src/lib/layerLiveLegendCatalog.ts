@@ -33,6 +33,7 @@ import {
 import { CHAS_FORMULA_DOC } from './chasIndex'
 import { ADI_FORMULA_DOC, isAdiLayerId } from './adiIndex'
 import { NCADI_FORMULA_DOC, isNcadiLayerId } from './ncadiIndex'
+import { isMangroveLayerId } from './mangroveIndices'
 import { CHAS_ALERT_COLORS, CHAS_ALERT_LEVELS } from './chasAlertMapping'
 import {
   STRESS_ZONE_COLORS,
@@ -596,6 +597,12 @@ function buildAgroCompositeLegendNote(layerId: string, isDelta: boolean): string
   }
   if (isNcadiLayerId(u)) {
     return `NCADI = ${NCADI_FORMULA_DOC} · ΔNDVI/ΔNDMI = Current − Previous · 10-class cultivation / abandonment`
+  }
+  if (isMangroveLayerId(u)) {
+    const def = resolveAgroCompositeIndexDef(u)
+    return def
+      ? `${def.scientificName} · Sentinel-2 band formula · 10-class mangrove discrimination`
+      : 'Mangrove spectral index · Sentinel-2 bands · 10-class'
   }
   if (isDelta) return 'Δ > 0 → improvement · Δ < 0 → degradation · Δ ≈ 0 → stable'
   return 'Composite from NDVI, NDMI, NDWI, SAVI'

@@ -358,24 +358,12 @@ function syncChunkTilesPingPong(
   const inactiveUrlKey = slotUrlKey(chunkKey, inactiveSlot)
   const inactiveSourceId = siSentinelAoiWmsPingPongSourceId(stack.idPrefix, chunkIdx, inactiveSlot)
 
-  if (runtime.appliedUrls.get(inactiveUrlKey) === url && map.isSourceLoaded(inactiveSourceId)) {
-    commitActiveSlot(map, stack, chunkIdx, runtime, inactiveSlot, url, presentation)
-    return
-  }
-
   const inactiveSrc = readRasterSource(map, inactiveSourceId)
   syncSiSentinelAoiWmsChunkTiles(inactiveSrc, url, runtime.appliedUrls, inactiveUrlKey)
 
-  applyChunkPresentation(map, stack, chunkIdx, activeSlot, presentation.visible, presentation.opacity)
-
-  const cleanup = waitForSourceReady(map, inactiveSourceId, () => {
-    commitActiveSlot(map, stack, chunkIdx, runtime, inactiveSlot, url, presentation)
-  })
-  runtime.chunks.set(chunkKey, {
-    activeSlot,
-    activeUrl,
-    waitCleanup: cleanup,
-  })
+  // Index / date swaps: paint the new URL immediately while tiles stream in.
+  // Waiting for sourcedata left the previous frame (or blank) for seconds.
+  commitActiveSlot(map, stack, chunkIdx, runtime, inactiveSlot, url, presentation)
 }
 
 /**

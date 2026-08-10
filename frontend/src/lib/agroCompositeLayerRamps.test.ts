@@ -46,37 +46,37 @@ describe('agroCompositeLayerRamps', () => {
 
     const gci = resolveAgroCompositeTenClassRamp('GCI')!
     expect(gci.classLabels).toEqual([
-      'No Gold Indication',
-      'Very Weak Indication',
-      'Weak Indication',
+      'No Potential',
+      'Very Low Potential',
       'Low Potential',
-      'Moderate-Low Potential',
+      'Weak Potential',
       'Moderate Potential',
-      'High Alteration Zone',
-      'High Gold Potential',
-      'Very High Gold Potential',
-      'Extreme Gold Target',
+      'Moderate-High Potential',
+      'High Potential',
+      'Very High Potential',
+      'Excellent Potential',
+      'Priority Gold Target',
     ])
-    expect(gci.classColors[0]).toBe(0x1a237e)
-    expect(gci.classColors[9]).toBe(0xb71c1c)
+    expect(gci.classColors[0]).toBe(0xffffff)
+    expect(gci.classColors[9]).toBe(0xffd700)
 
     const egci = resolveAgroCompositeTenClassRamp('EGCI')!
     expect(egci.classLabels).toEqual([
-      'Background',
+      'No Potential',
       'Very Low',
-      'Low Au Indication',
-      'Weak Mineralization',
-      'Moderate-Low Mineralization',
-      'Moderate Mineralization',
-      'Strong Alteration / Possible Au Zone',
-      'High Mineralized Zone',
-      'High Au Concentration Target',
-      'Very High Au Concentration Target',
+      'Low',
+      'Weak',
+      'Moderate',
+      'Moderate-High',
+      'High',
+      'Very High',
+      'Excellent',
+      'Priority Target',
     ])
     expect(egci.valueMin).toBe(0)
     expect(egci.valueMax).toBe(1)
-    expect(egci.classColors[0]).toBe(0xfff8e1)
-    expect(egci.classColors[9]).toBe(0x4a148c)
+    expect(egci.classColors[0]).toBe(0x000000)
+    expect(egci.classColors[9]).toBe(0xfff8dc)
   })
 
   it('uses per-layer delta palettes', () => {

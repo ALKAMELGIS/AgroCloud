@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { RemoteSensingLayerSelectGroup } from '../../../lib/agroCompositeIndices'
+import { formatLayerSelectScienceLabel } from '../../../lib/remoteSensingLayerDisplay'
 import {
   LAYER_LIVE_STATS_QUICK_ACCESS_IDS,
   resolveLayerLiveStatsQuickAccessMeta,
@@ -159,13 +160,14 @@ export function LayerLiveStatsLayerDropdown({
                 const checked = isPrimary || isSelected(selectedIds, opt.id)
                 const onlyOne = selectedIds.length <= 1
                 const disableUncheck = checked && onlyOne && !isPrimary
+                const science = formatLayerSelectScienceLabel(opt.scientificName, opt.label)
                 return (
                   <label
                     key={opt.id}
                     className={`si-layer-live-stats-select__option${checked ? ' is-checked' : ''}${isPrimary ? ' is-primary' : ''}`}
                     title={
-                      opt.scientificName
-                        ? `${opt.label} — ${opt.scientificName}${isPrimary ? ' · Primary map layer' : ''}`
+                      science
+                        ? `${opt.label} — ${science}${isPrimary ? ' · Primary map layer' : ''}`
                         : isPrimary
                           ? `${opt.label} · Primary map layer`
                           : opt.label
@@ -180,8 +182,8 @@ export function LayerLiveStatsLayerDropdown({
                     />
                     <span className="si-layer-live-stats-select__option-text">
                       <span className="si-layer-live-stats-select__option-abbr">{opt.label}</span>
-                      {opt.scientificName ? (
-                        <span className="si-layer-live-stats-select__option-science">{opt.scientificName}</span>
+                      {science ? (
+                        <span className="si-layer-live-stats-select__option-science">{science}</span>
                       ) : null}
                     </span>
                     {isPrimary ? (

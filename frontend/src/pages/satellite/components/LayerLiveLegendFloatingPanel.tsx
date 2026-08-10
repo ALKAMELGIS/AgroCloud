@@ -10,6 +10,7 @@ import {
 import { useSiInstanceScope } from '../siInstanceScope'
 import { LayerLiveLegendPanel } from './LayerLiveLegendPanel'
 import type { RemoteSensingLayerSelectGroup } from '../../../lib/agroCompositeIndices'
+import type { SiMapSwipeCompareSides } from './SiMapSwipeControl'
 import './LayerLiveLegendFloatingPanel.css'
 
 const POS_KEY_BASE = 'si-layer-live-float-pos-v2'
@@ -86,6 +87,11 @@ type LayerLiveLegendFloatingPanelProps = {
   /** Optional multi-temporal series window shown in the metadata grid. */
   seriesStart?: string
   seriesEnd?: string
+  /**
+   * When MapSwipe is open, show Before / After legend tabs for each compare side.
+   * Pass null/undefined when swipe is closed.
+   */
+  mapSwipeCompare?: SiMapSwipeCompareSides | null
 }
 
 export function LayerLiveLegendFloatingPanel({
@@ -99,6 +105,7 @@ export function LayerLiveLegendFloatingPanel({
   sceneDate,
   seriesStart,
   seriesEnd,
+  mapSwipeCompare = null,
 }: LayerLiveLegendFloatingPanelProps) {
   const { scopedStorageKey } = useSiInstanceScope()
   const posStorageKey = scopedStorageKey(POS_KEY_BASE)
@@ -112,6 +119,23 @@ export function LayerLiveLegendFloatingPanel({
   const [size, setSize] = useState<SavedSize | null>(() => readSavedSize(sizeStorageKey))
   const [dragging, setDragging] = useState(false)
   const [resizing, setResizing] = useState(false)
+  const [swipeTab, setSwipeTab] = useState<'before' | 'after'>('before')
+
+  const swipeActive = Boolean(mapSwipeCompare?.before?.layerId && mapSwipeCompare?.after?.layerId)
+  const legendLayerId = swipeActive
+    ? swipeTab === 'after'
+      ? mapSwipeCompare!.after.layerId
+      : mapSwipeCompare!.before.layerId
+    : activeLayerId
+  const legendSceneDate = swipeActive
+    ? swipeTab === 'after'
+      ? mapSwipeCompare!.after.sceneDate
+      : mapSwipeCompare!.before.sceneDate
+    : sceneDate
+
+  useEffect(() => {
+    if (!swipeActive) setSwipeTab('before')
+  }, [swipeActive])
 
   const clampToContainer = useCallback(
     (x: number, y: number, elW: number, elH: number) => {
@@ -325,12 +349,49 @@ export function LayerLiveLegendFloatingPanel({
           </button>
         </div>
         <div className="si-layer-live-float__body" style={bodyStyle}>
+          {swipeActive ? (
+            <div className="si-layer-live-float__tabs" role="tablist" aria-label="MapSwipe legend side">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={swipeTab === 'before'}
+                className={swipeTab === 'before' ? 'is-on' : undefined}
+                onClick={() => setSwipeTab('before')}
+              >
+                Before
+                <span className="si-layer-live-float__tab-meta">
+                  {mapSwipeCompare!.before.layerId}
+                  {mapSwipeCompare!.before.sceneDate
+                    ? ` · ${mapSwipeCompare!.before.sceneDate}`
+                    : ''}
+                </span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={swipeTab === 'after'}
+                className={swipeTab === 'after' ? 'is-on' : undefined}
+                onClick={() => setSwipeTab('after')}
+              >
+                After
+                <span className="si-layer-live-float__tab-meta">
+                  {mapSwipeCompare!.after.layerId}
+                  {mapSwipeCompare!.after.sceneDate ? ` · ${mapSwipeCompare!.after.sceneDate}` : ''}
+                </span>
+              </button>
+            </div>
+          ) : null}
           <LayerLiveLegendPanel
+            key={
+              swipeActive
+                ? `swipe-${swipeTab}-${legendLayerId}-${legendSceneDate}`
+                : `live-${activeLayerId}-${sceneDate}`
+            }
             layerOptions={layerOptions}
             layerGroups={layerGroups}
-            activeLayerId={activeLayerId}
+            activeLayerId={legendLayerId}
             aoiGeometry={aoiGeometry}
-            sceneDate={sceneDate}
+            sceneDate={legendSceneDate}
             seriesStart={seriesStart}
             seriesEnd={seriesEnd}
             activeOnly

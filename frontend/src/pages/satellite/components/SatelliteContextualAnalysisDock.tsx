@@ -24,6 +24,7 @@ export type SatelliteContextPanelId =
   | 'stress-zones'
   | 'crop-classification'
   | 'imagery-time-series'
+  | 'map-swipe'
   | 'layer-live-legend'
   | 'tree-detections'
   | 'segformer-detection'
@@ -133,6 +134,9 @@ export type SatelliteContextualAnalysisDockProps = {
   /** Imagery Time Series floating panel open state (map variant). */
   imageryTimeSeriesOpen?: boolean;
   onImageryTimeSeriesOpenChange?: (open: boolean) => void;
+  /** MapSwipe compare overlay open state (map variant). */
+  mapSwipeOpen?: boolean;
+  onMapSwipeOpenChange?: (open: boolean) => void;
   /** Go To XY coordinate bar open state (map variant). */
   goToXyOpen?: boolean;
   onGoToXyOpenChange?: (open: boolean) => void;
@@ -173,6 +177,13 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     label: 'Time Series',
     title: 'Imagery Time Series',
     hint: 'Multi-layer timeline charts synced with map playback.',
+  },
+  {
+    id: 'map-swipe',
+    icon: 'fa-solid fa-left-right',
+    label: 'MapSwipe',
+    title: 'MapSwipe compare',
+    hint: 'Swipe between two dates and/or layers over the AOI (before / after).',
   },
   {
     id: 'layer-live-legend',
@@ -295,6 +306,7 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
   'wapi-alerts',
   'crop-classification',
   'imagery-time-series',
+  'map-swipe',
   'layer-live-legend',
   'tree-detections',
   'hydro-watershed',
@@ -319,7 +331,16 @@ const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
 ]);
 
 const RAIL_GROUPS_MAP: SatelliteContextPanelId[][] = [
-  ['layers', 'remote-sensing', 'wapi-alerts', 'crop-classification', 'imagery-time-series', 'layer-live-legend', 'hydro-watershed'],
+  [
+    'layers',
+    'remote-sensing',
+    'wapi-alerts',
+    'crop-classification',
+    'imagery-time-series',
+    'map-swipe',
+    'layer-live-legend',
+    'hydro-watershed',
+  ],
   ['tree-detections', 'well-site', 'well-suitability', 'flood-monitoring', 'raster-georeference'],
 ];
 
@@ -394,6 +415,8 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
     onMapToolboxToggleSelection,
     imageryTimeSeriesOpen = false,
     onImageryTimeSeriesOpenChange,
+    mapSwipeOpen = false,
+    onMapSwipeOpenChange,
     goToXyOpen = false,
     onGoToXyOpenChange,
   } = props;
@@ -480,6 +503,13 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
       setActiveId(null)
     }
   }, [imageryTimeSeriesOpen, activeId])
+
+  useEffect(() => {
+    if (mapSwipeOpen) return
+    if (activeId === 'map-swipe') {
+      setActiveId(null)
+    }
+  }, [mapSwipeOpen, activeId])
 
   useEffect(() => {
     try {
@@ -598,6 +628,10 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
         onImageryTimeSeriesOpenChange?.(!imageryTimeSeriesOpen);
         return;
       }
+      if (isMapVariant && id === 'map-swipe') {
+        onMapSwipeOpenChange?.(!mapSwipeOpen);
+        return;
+      }
       if (isMapVariant && id === 'go-to-xy') {
         onGoToXyOpenChange?.(!goToXyOpen);
         return;
@@ -634,6 +668,8 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
       onGeoAiFloatingRailToggle,
       imageryTimeSeriesOpen,
       onImageryTimeSeriesOpenChange,
+      mapSwipeOpen,
+      onMapSwipeOpenChange,
       goToXyOpen,
       onGoToXyOpenChange,
       layerLiveLegendOpen,
@@ -921,6 +957,7 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
                 (item.id === 'table-geo-ai' && geoAiFloatingOpen) ||
                 (item.id === 'layer-live-legend' && layerLiveLegendOpen) ||
                 (item.id === 'imagery-time-series' && imageryTimeSeriesOpen) ||
+                (item.id === 'map-swipe' && mapSwipeOpen) ||
                 (activeId === item.id &&
                   (MAP_RAIL_FLOAT_IDS.has(item.id) ? !panelOpen : panelOpen));
               return (

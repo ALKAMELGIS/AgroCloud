@@ -2163,8 +2163,25 @@ main.content > .si-page {
   color: #f9fafb;
 }
 
-/* â”€â”€ Terrain 3D control (Elevation & Contour) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-.si-map-floating-controls__left .si-terrain3d-toggle {
+/* ── MapSwipe toggle (circular stack under legend Key) ─────────────── */
+.si-map-floating-controls__left .si-map-swipe-toggle {
+  position: relative;
+  z-index: 6;
+}
+.si-map-swipe-button {
+  position: relative;
+}
+.si-map-swipe-button.active .si-view3d-button__tag {
+  background: var(--si-accent-strong, #15803d);
+  border-color: transparent;
+  color: #f9fafb;
+}
+.si-map-swipe-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Terrain 3D control (Elevation & Contour) ───────────────────────── */.si-map-floating-controls__left .si-terrain3d-toggle {
   position: relative;
   z-index: 6;
 }

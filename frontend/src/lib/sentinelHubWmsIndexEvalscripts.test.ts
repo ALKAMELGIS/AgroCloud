@@ -34,16 +34,16 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
     expect(sampleSentinelNdviColorMap(0.41)).toBe(0xffffbf)
   })
 
-  it('NDWI evalscript uses 10-class dual color ramp (dry green / wet blue)', () => {
+  it('NDWI evalscript uses 10-class dry warm / wet blue ramp', () => {
     const script = buildSentinelIndexColorRampEvalscript('ndwi')
     expect(script).toContain('ColorRampVisualizer')
     expect(script).toContain('index(samples.B03, samples.B08)')
-    expect(script).toContain('0x008000')
+    expect(script).toContain('0x7f0000')
+    expect(script).toContain('0xffeb3b')
     expect(script).toContain('0x0000cc')
     expect(script).toContain('const BREAKS =')
     expect(script).toContain('function ndwiClass(val)')
-    expect(script).toContain('viz1.process(CLASS_T[cls])')
-    expect(script).toContain('viz2.process(CLASS_T[cls])')
+    expect(script).toContain('viz.process(cls)')
     expect(script).toContain('samples.dataMask')
   })
 
@@ -51,8 +51,10 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
     const script = buildSentinelIndexColorRampEvalscript('ndmi')
     expect(script).toContain('ColorRampVisualizer')
     expect(script).toContain('index(samples.B8A, samples.B11)')
-    expect(script).toContain('0x800000')
-    expect(script).toContain('0x000080')
+    expect(script).toContain('0x7f0000')
+    expect(script).toContain('0xffeb3b')
+    expect(script).toContain('0x81d4fa')
+    expect(script).toContain('0x0d47a1')
     expect(script).toContain('function ndmiClass(val)')
     expect(script).toContain('viz.process(CLASS_VAL[cls])')
     expect(script).toContain('samples.dataMask')

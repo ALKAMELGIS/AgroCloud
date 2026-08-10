@@ -111,7 +111,7 @@ export const SENTINEL_NDVI_RAMP: RampStop[] = SENTINEL_NDVI_10_CLASS_VALUES.map(
   SENTINEL_NDVI_10_CLASS_COLORS[i]!,
 ])
 
-/** NDWI dual-ramp anchors (Sentinel Hub custom script: dry white→green, wet white→blue). */
+/** NDWI color anchors (wet white→blue; dry half uses discrete warm hues). */
 export const SENTINEL_NDWI_RAMP_WHITE = 0xffffff
 export const SENTINEL_NDWI_RAMP_GREEN = 0x008000
 export const SENTINEL_NDWI_RAMP_BLUE = 0x0000cc
@@ -135,18 +135,34 @@ export const SENTINEL_NDWI_10_CLASS_BREAKS: readonly number[] = [
   -0.45, -0.28, -0.14, -0.05, 0, 0.004, 0.02, 0.08, 0.25,
 ]
 
-/** Ramp intensity per class (viz1 for val<0, viz2 for val≥0). */
+/** Ramp intensity for Bare + wet class blends. */
 export const SENTINEL_NDWI_10_CLASS_RAMP_T: readonly number[] = [1.0, 0.8, 0.6, 0.35, 0.08, 0.08, 0.3, 0.5, 0.75, 1.0]
 
-/** Precomputed class colors for legends / UI. */
-export const SENTINEL_NDWI_10_CLASS_COLORS: readonly number[] = SENTINEL_NDWI_10_CLASS_RAMP_T.map(
-  (t, i) =>
+/**
+ * NDWI class colors: dry Very dry→Slightly dry = dark red → red → orange → yellow;
+ * Bare + wet keep prior white→green / white→blue blends.
+ */
+export const SENTINEL_NDWI_10_CLASS_COLORS: readonly number[] = (() => {
+  const blended = SENTINEL_NDWI_10_CLASS_RAMP_T.map((t, i) =>
     blendHexColor(
       SENTINEL_NDWI_RAMP_WHITE,
       i < 5 ? SENTINEL_NDWI_RAMP_GREEN : SENTINEL_NDWI_RAMP_BLUE,
       t,
     ),
-)
+  )
+  return [
+    0x7f0000, // Very dry — dark red
+    0xd32f2f, // Dry — red
+    0xfb8c00, // Moderate dry — orange
+    0xffeb3b, // Slightly dry — yellow
+    blended[4]!, // Bare transition
+    blended[5]!,
+    blended[6]!,
+    blended[7]!,
+    blended[8]!,
+    blended[9]!,
+  ]
+})()
 
 /** NDWI 10-class ramp stops for documentation (mid-class index values). */
 export const SENTINEL_NDWI_RAMP: RampStop[] = [
@@ -176,14 +192,20 @@ export const SENTINEL_MNDWI_RAMP: RampStop[] = [
   [1, 0x0d47a1],
 ]
 
-/** NDMI moisture ramp (dry maroon → red → yellow → cyan → blue → navy). */
+/** NDMI moisture ramp: dry yellow → orange → red → dark red | moist light blue → dark blue. */
 export const SENTINEL_NDMI_MOISTURE_RAMP: RampStop[] = [
-  [-0.8, 0x800000],
-  [-0.24, 0xff0000],
-  [-0.032, 0xffff00],
-  [0.032, 0x00ffff],
-  [0.24, 0x0000ff],
-  [0.8, 0x000080],
+  [-0.8, 0x7f0000],
+  [-0.72, 0x7f0000], // Severe stress — dark red
+  [-0.56, 0xd32f2f], // High stress — red
+  [-0.4, 0xf4511e], // Moderate stress — deep orange
+  [-0.24, 0xfb8c00], // Low stress — orange
+  [-0.08, 0xffeb3b], // Dry canopy — yellow
+  [0.08, 0x81d4fa], // Moist canopy — light blue
+  [0.24, 0x42a5f5], // Good moisture
+  [0.4, 0x1e88e5], // High moisture
+  [0.56, 0x1565c0], // Very wet
+  [0.72, 0x0d47a1], // Saturated — dark blue
+  [0.8, 0x0d47a1],
 ]
 
 /** Nine upper bounds → 10 NDMI classes across −0.8…0.8. */
@@ -392,7 +414,7 @@ export function buildSentinelNdwiTenClassEvalscript(indexVisibilityMin: number |
   return imgVals.concat(a);`
 
   return `//VERSION=3
-// NDWI — 10 classes, dry white→green / wet white→blue
+// NDWI — 10 classes · dry dark-red→yellow · wet white→blue
 function setup() {
   return {
     input: ["B03", "B08", "dataMask"],
@@ -400,19 +422,14 @@ function setup() {
   };
 }
 
-const colorRamp1 = [
-  [0, ${hexColorLiteral(SENTINEL_NDWI_RAMP_WHITE)}],
-  [1, ${hexColorLiteral(SENTINEL_NDWI_RAMP_GREEN)}]
+const classRamp = [
+   ${formatRampForEvalscript(
+     SENTINEL_NDWI_10_CLASS_COLORS.map((hex, i) => [i, hex] as RampStop),
+   )}
 ];
-const colorRamp2 = [
-  [0, ${hexColorLiteral(SENTINEL_NDWI_RAMP_WHITE)}],
-  [1, ${hexColorLiteral(SENTINEL_NDWI_RAMP_BLUE)}]
-];
-const viz1 = new ColorRampVisualizer(colorRamp1);
-const viz2 = new ColorRampVisualizer(colorRamp2);
+const viz = new ColorRampVisualizer(classRamp);
 
 const BREAKS = [${formatNumberList(SENTINEL_NDWI_10_CLASS_BREAKS)}];
-const CLASS_T = [${formatNumberList(SENTINEL_NDWI_10_CLASS_RAMP_T)}];
 
 function ndwiClass(val) {
   if (val < BREAKS[0]) return 0;
@@ -430,12 +447,7 @@ function ndwiClass(val) {
 function evaluatePixel(samples) {
   let val = index(samples.B03, samples.B08);
   let cls = ndwiClass(val);
-  let imgVals;
-  if (val < 0) {
-    imgVals = viz1.process(CLASS_T[cls]);
-  } else {
-    imgVals = viz2.process(CLASS_T[cls]);
-  }
+  let imgVals = viz.process(cls);
   ${alphaBlock}
 }`
 }

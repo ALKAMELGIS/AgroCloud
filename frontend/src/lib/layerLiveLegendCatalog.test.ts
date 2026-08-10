@@ -16,12 +16,27 @@ describe('layerLiveLegendCatalog', () => {
     expect(spec?.title).toBe('NDMI')
     expect(spec?.classes).toHaveLength(10)
     expect(spec?.gradientCss).toContain('linear-gradient')
+    expect(spec?.classes?.[4]?.label).toBe('Dry canopy')
+    expect(spec?.classes?.[5]?.label).toBe('Moist canopy')
+    // Dry half: yellow → orange → red → dark red; moist half: light blue → dark blue
+    expect(spec?.classes?.[4]?.color.toLowerCase()).toBe('#ffeb3b')
+    expect(spec?.classes?.[3]?.color.toLowerCase()).toBe('#fb8c00')
+    expect(spec?.classes?.[0]?.color.toLowerCase()).toBe('#7f0000')
+    expect(spec?.classes?.[5]?.color.toLowerCase()).toBe('#81d4fa')
+    expect(spec?.classes?.[9]?.color.toLowerCase()).toBe('#0d47a1')
   })
 
-  it('resolves NDWI with dual-ramp classes', () => {
+  it('resolves NDWI with 10 soil→water classes', () => {
     const spec = resolveLayerLiveLegendSpec('NDWI', 'NDWI')
     expect(spec?.classes).toHaveLength(10)
-    expect(spec?.classes?.[0]?.color).toMatch(/^#/)
+    expect(spec?.classes?.[0]?.label).toBe('Very dry')
+    expect(spec?.classes?.[3]?.label).toBe('Slightly dry')
+    expect(spec?.classes?.[9]?.label).toBe('Open water')
+    // Dry half: dark red → red → orange → yellow
+    expect(spec?.classes?.[0]?.color.toLowerCase()).toBe('#7f0000')
+    expect(spec?.classes?.[1]?.color.toLowerCase()).toBe('#d32f2f')
+    expect(spec?.classes?.[2]?.color.toLowerCase()).toBe('#fb8c00')
+    expect(spec?.classes?.[3]?.color.toLowerCase()).toBe('#ffeb3b')
   })
 
   it('resolves NDVI with 10 classes', () => {

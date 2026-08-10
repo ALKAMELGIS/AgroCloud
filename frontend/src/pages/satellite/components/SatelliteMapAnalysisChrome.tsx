@@ -205,6 +205,9 @@ export type SatelliteMapAnalysisChromeProps = {
   /** Imagery Time Series floating panel open state (map variant). */
   imageryTimeSeriesOpen?: boolean;
   onImageryTimeSeriesOpenChange?: (open: boolean) => void;
+  /** MapSwipe compare overlay open state (map variant). */
+  mapSwipeOpen?: boolean;
+  onMapSwipeOpenChange?: (open: boolean) => void;
   goToXyOpen?: boolean;
   onGoToXyOpenChange?: (open: boolean) => void;
 };
@@ -281,6 +284,8 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
     onMapToolboxToggleSelection,
     imageryTimeSeriesOpen,
     onImageryTimeSeriesOpenChange,
+    mapSwipeOpen,
+    onMapSwipeOpenChange,
     goToXyOpen,
     onGoToXyOpenChange,
   } = props;
@@ -373,6 +378,8 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
       onMapToolboxToggleSelection={onMapToolboxToggleSelection}
       imageryTimeSeriesOpen={imageryTimeSeriesOpen}
       onImageryTimeSeriesOpenChange={onImageryTimeSeriesOpenChange}
+      mapSwipeOpen={mapSwipeOpen}
+      onMapSwipeOpenChange={onMapSwipeOpenChange}
       goToXyOpen={goToXyOpen}
       onGoToXyOpenChange={onGoToXyOpenChange}
     />

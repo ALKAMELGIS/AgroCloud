@@ -74,6 +74,7 @@ export type GeoAiToolboxState = {
   /** Currently expanded dock section id, if any. */
   openSection?: string | null
   imageryTimeSeriesOpen?: boolean
+  mapSwipeOpen?: boolean
   drawingActive?: boolean
   hasAoi?: boolean
   /** Compact hints for available analysis tools. */
@@ -273,6 +274,7 @@ export function buildGeoAiLiveMapStateBlock(state: GeoAiLiveMapState | null | un
     bits.push(tb.hasAoi ? 'AOI drawn' : 'no AOI')
     if (tb.drawingActive) bits.push('drawing active')
     if (tb.imageryTimeSeriesOpen) bits.push('Imagery Time Series open')
+    if (tb.mapSwipeOpen) bits.push('MapSwipe open')
     if (tb.openSection?.trim()) bits.push(`dock=${tb.openSection.trim()}`)
     lines.push(`- Toolbox: ${bits.join(' · ')}`)
     if (tb.availableTools?.length) {

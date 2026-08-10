@@ -103,7 +103,6 @@ import {
   pickDefaultSentinelWmsLayer,
   resolveSentinelHubWmsDeltaPreviousDate,
   resolveSentinelHubWmsTimeWindow,
-  sentinelHubWmsMinZoomForLatitude,
   SENTINEL_HUB_WMS_TILE_PIXELS,
   SI_DEFAULT_LIVE_WMS_LAYER,
   appendSentinelHubWmsAccessToken,
@@ -173,7 +172,6 @@ import {
 } from '../../lib/arcgisDynamicLayer';
 import {
   approximateLngLatBBoxFromViewState,
-  easeMapCameraToLngLatBBoxWithMinZoom,
   expandLngLatBBox,
   pointInLngLatBBox,
   readMapLngLatBBox,
@@ -281,6 +279,11 @@ import './components/SiCropAlertCenterPanel.css';
 import './components/SiWapiAlertPanel.css';
 import { SiPrithviCropToolPanel } from './components/SiPrithviCropToolPanel';
 import { SiImageryTimeSeriesFloatingPanel } from './components/SiImageryTimeSeriesFloatingPanel';
+import {
+  SiMapSwipeControl,
+  SiMapSwipeRasterLayers,
+  type SiMapSwipeCompareSides,
+} from './components/SiMapSwipeControl';
 import type { SiTsWeatherStormMapOverlay } from './lib/imageryStormAnalysis';
 import { SiGoToXyBar } from './components/SiGoToXyBar';
 import {
@@ -4526,6 +4529,15 @@ export default function SatelliteIntelligence() {
   }, []);
   const [mapStaticChartsOpen, setMapStaticChartsOpen] = useState(false);
   const [imageryTimeSeriesOpen, setImageryTimeSeriesOpen] = useState(false);
+  const [mapSwipeOpen, setMapSwipeOpen] = useState(false);
+  const [mapSwipeBeforeTiles, setMapSwipeBeforeTiles] = useState<string[]>([]);
+  const [mapSwipeCompare, setMapSwipeCompare] = useState<SiMapSwipeCompareSides | null>(null);
+  const onMapSwipeBeforeTilesChange = useCallback((urls: string[]) => {
+    setMapSwipeBeforeTiles(urls);
+  }, []);
+  const onMapSwipeCompareSidesChange = useCallback((sides: SiMapSwipeCompareSides | null) => {
+    setMapSwipeCompare(sides);
+  }, []);
   const [tsWeatherStormOverlay, setTsWeatherStormOverlay] = useState<SiTsWeatherStormMapOverlay | null>(null);
   const [tsWeatherStormDismissEpoch, setTsWeatherStormDismissEpoch] = useState(0);
 
@@ -4632,8 +4644,10 @@ export default function SatelliteIntelligence() {
     });
     // Layers AOI panel only supports entire-layer / selected-features — coerce legacy
     // filtered-features so warm WMS prefetch matches Show on map.
+    // Show on map stays off until the user checks it (do not restore enabled from storage).
     return {
       ...loaded,
+      enabled: false,
       maskMode: loaded.maskMode === 'selected-features' ? 'selected-features' : 'entire-layer',
       displayMode: 'transparent-outside',
       liveUpdate: true,
@@ -5000,7 +5014,6 @@ export default function SatelliteIntelligence() {
   const aoiLayerModeWmsActiveRef = useRef(false);
   /** User unchecked Layers AOI Show on map — skip auto-enable until they pick index/AOI again. */
   const layersAoiUserOptOutRef = useRef(false);
-  const [pinnedSentinelWmsMinZoom, setPinnedSentinelWmsMinZoom] = useState<number | null>(null);
   const freezeViewportPipeline = shouldFreezeViewportDataPipeline(siScope.isIsolated);
   // layersAoiViewportFrozen is derived after the Layers clip pin resolves — enabling
   // Show on map alone must not freeze viewport seed/fetch.
@@ -16686,7 +16699,14 @@ export default function SatelliteIntelligence() {
         buildRemoteSensingLayerSelectGroups(wmsLayers),
         remoteSensingProvider,
         remoteSensingCollection,
-      ),
+      )
+        .map(g => ({
+          ...g,
+          options: (Array.isArray(g.options) ? g.options : []).filter(
+            o => String(o.id).toUpperCase() !== 'DATAMASK',
+          ),
+        }))
+        .filter(g => g.options.length > 0),
     [wmsLayers, remoteSensingProvider, remoteSensingCollection],
   );
 
@@ -16794,14 +16814,6 @@ export default function SatelliteIntelligence() {
   }, [wmsLayer, remoteSensingLayerOptions, defaultWmsLayerName]);
 
   const wmsDate = localIsoDate(selectedDate);
-  const mapLatitude = mapMetrics.latitude;
-  const mapZoom = mapMetrics.zoom;
-  const sentinelWmsMinZoom = useMemo(
-    () => sentinelHubWmsMinZoomForLatitude(mapLatitude),
-    [mapLatitude],
-  );
-  const effectiveSentinelWmsMinZoom = pinnedSentinelWmsMinZoom ?? sentinelWmsMinZoom;
-  const sentinelWmsZoomOk = typeof mapZoom === 'number' && mapZoom >= effectiveSentinelWmsMinZoom;
   const agroStructuresLayer = useMemo(
     () => customLayers.find(l => isAgroStructuresLayer(l) && l.visible !== false) ?? null,
     [customLayers],
@@ -17069,21 +17081,7 @@ export default function SatelliteIntelligence() {
 
   useEffect(() => {
     aoiMaskBuilderSourceLayerIdRef.current = aoiMaskBuilderSettings.sourceLayerId;
-    const layerAoiWarmNow =
-      Boolean(aoiMaskBuilderSettings.sourceLayerId) && Boolean(aoiMaskBuilderWarmMask?.features?.length);
-    if (!aoiMaskBuilderSettings.enabled && !layerAoiWarmNow) {
-      setPinnedSentinelWmsMinZoom(null);
-      return;
-    }
-    if (aoiMaskBuilderSettings.enabled || layerAoiWarmNow) {
-      setPinnedSentinelWmsMinZoom(prev => (prev == null ? sentinelWmsMinZoom : prev));
-    }
-  }, [
-    aoiMaskBuilderSettings.enabled,
-    aoiMaskBuilderSettings.sourceLayerId,
-    aoiMaskBuilderWarmMask,
-    sentinelWmsMinZoom,
-  ]);
+  }, [aoiMaskBuilderSettings.sourceLayerId]);
 
   /** Prefetch Layers AOI WMS sources while warm mask is ready (instant Show on map). */
   useEffect(() => {
@@ -17390,16 +17388,7 @@ export default function SatelliteIntelligence() {
       } else if (normalized.enabled) {
         layersAoiUserOptOutRef.current = false;
       }
-      if (
-        normalized.sourceLayerId &&
-        normalized.sourceLayerId !== aoiMaskBuilderSettings.sourceLayerId
-      ) {
-        // Picking/changing AOI layer means the user wants Layers AOI again.
-        layersAoiUserOptOutRef.current = false;
-        if (!normalized.enabled) {
-          normalized.enabled = true;
-        }
-      }
+      // Changing the AOI layer source never auto-enables Show on map — only the checkbox does.
       // Seed viewport geojson from cache before freezing live updates, so clip + paint
       // have polygons on the same tick as Show on map.
       if (normalized.enabled) {
@@ -17475,7 +17464,7 @@ export default function SatelliteIntelligence() {
           ensureSiSentinelAoiWmsPingPongStackOnMap(
             map,
             stack,
-            effectiveSentinelWmsMinZoom,
+            0,
             runtime,
             { beforeLayerId },
           );
@@ -17487,24 +17476,6 @@ export default function SatelliteIntelligence() {
           syncAnalysisMapLayerOrder();
           if (aoiLayerModePinnedClipRef.current?.mask?.features?.length) {
             aoiLayerModeWmsActiveRef.current = true;
-          }
-        }
-        // Sentinel-2 WMS sources use minzoom — zoomed-out views show outlines but no index fill.
-        // Fitting a large multi-polygon extent alone often stays below minzoom; force a floor.
-        const zoomNow =
-          typeof map?.getZoom === 'function'
-            ? map.getZoom()
-            : typeof mapZoom === 'number'
-              ? mapZoom
-              : null;
-        if (
-          map &&
-          pinMask?.features?.length &&
-          (zoomNow == null || zoomNow < effectiveSentinelWmsMinZoom)
-        ) {
-          const bounds = getGeoJsonBounds(pinMask);
-          if (bounds) {
-            easeMapCameraToLngLatBBoxWithMinZoom(map, bounds, effectiveSentinelWmsMinZoom);
           }
         }
       }
@@ -17520,51 +17491,12 @@ export default function SatelliteIntelligence() {
       captureLiveViewportExtent,
       syncArcGisViewportLayersGeoJson,
       syncAnalysisMapLayerOrder,
-      effectiveSentinelWmsMinZoom,
-      mapZoom,
       wmsLayer,
       wmsLayerSelectValue,
       defaultWmsLayerName,
       wmsLayers,
     ],
   );
-
-  /**
-   * If an AOI layer + index are ready but Layers AOI Show is still off (common after
-   * reload / leaving the toggle unchecked), turn it on so the index paints.
-   * Respects an explicit user uncheck until they change index or AOI layer.
-   */
-  useEffect(() => {
-    if (layersAoiUserOptOutRef.current) return;
-    if (aoiMaskBuilderSettings.enabled) return;
-    if (isWmsOverlayVisible) return;
-    if (!aoiLayerModeOptions.length) return;
-    const sourceLayerId =
-      aoiMaskBuilderSettings.sourceLayerId &&
-      aoiLayerModeOptions.some(o => o.id === aoiMaskBuilderSettings.sourceLayerId)
-        ? aoiMaskBuilderSettings.sourceLayerId
-        : aoiLayerModeOptions[0]!.id;
-    const indexId = String(wmsLayerSelectValue || wmsLayer || defaultWmsLayerName || '').trim();
-    if (!indexId) return;
-    handleAoiLayerModeChange({
-      ...aoiMaskBuilderSettings,
-      enabled: true,
-      sourceLayerId,
-      sentinelLayerId: indexId,
-      maskMode:
-        aoiMaskBuilderSettings.maskMode === 'selected-features'
-          ? 'selected-features'
-          : 'entire-layer',
-    });
-  }, [
-    aoiMaskBuilderSettings,
-    aoiLayerModeOptions,
-    isWmsOverlayVisible,
-    wmsLayerSelectValue,
-    wmsLayer,
-    defaultWmsLayerName,
-    handleAoiLayerModeChange,
-  ]);
 
   const handleIndexShowOnMapChange = useCallback(
     (checked: boolean) => {
@@ -17573,34 +17505,6 @@ export default function SatelliteIntelligence() {
     },
     [],
   );
-
-  /** If Layers AOI is on but zoom is below Sentinel minzoom, zoom to the clip once. */
-  const layersAoiAutoZoomDoneRef = useRef('');
-  useEffect(() => {
-    if (!sentinelLayerAoiWmsOnMap || sentinelWmsZoomOk) return;
-    const mask = aoiLayerModeActiveMask ?? aoiMaskBuilderWarmMask ?? aoiMaskBuilderMask;
-    if (!mask?.features?.length) return;
-    const key = `${aoiMaskBuilderSettings.sourceLayerId}|${mask.features.length}|${effectiveSentinelWmsMinZoom}`;
-    if (layersAoiAutoZoomDoneRef.current === key) return;
-    const map = mapRef.current?.getMap?.() ?? mapRef.current;
-    if (!map) return;
-    const bounds = getGeoJsonBounds(mask);
-    if (!bounds) return;
-    layersAoiAutoZoomDoneRef.current = key;
-    try {
-      easeMapCameraToLngLatBBoxWithMinZoom(map, bounds, effectiveSentinelWmsMinZoom);
-    } catch {
-      layersAoiAutoZoomDoneRef.current = '';
-    }
-  }, [
-    sentinelLayerAoiWmsOnMap,
-    sentinelWmsZoomOk,
-    aoiLayerModeActiveMask,
-    aoiMaskBuilderWarmMask,
-    aoiMaskBuilderMask,
-    aoiMaskBuilderSettings.sourceLayerId,
-    effectiveSentinelWmsMinZoom,
-  ]);
 
   useEffect(() => {
     if (!aoiLayerModeOptions.length) return;
@@ -19916,11 +19820,13 @@ export default function SatelliteIntelligence() {
       toolbox: {
         openSection: isLayerDropdownOpen ? expandedEnvSection : null,
         imageryTimeSeriesOpen,
+        mapSwipeOpen,
         drawingActive: Boolean(rsDrawingModeActive),
         hasAoi: Boolean(drawnGeometry),
         availableTools: [
           'remote-sensing (NDVI/NDWI/NDMI)',
           'imagery-time-series',
+          'map-swipe',
           'flood-monitoring (SAR)',
           'well-site',
           'hydro-watershed',
@@ -19952,6 +19858,7 @@ export default function SatelliteIntelligence() {
     isLayerDropdownOpen,
     expandedEnvSection,
     imageryTimeSeriesOpen,
+    mapSwipeOpen,
     rsDrawingModeActive,
   ]);
   const geoAiLiveMapStateBlockRef = useRef(geoAiLiveMapStateBlock);
@@ -20127,6 +20034,10 @@ export default function SatelliteIntelligence() {
             setImageryTimeSeriesOpen(true);
             return 'Opened Imagery Time Series — multi-layer timeline charts for the AOI.';
           }
+          if (panel === 'map-swipe') {
+            setMapSwipeOpen(true);
+            return 'Opened MapSwipe — compare two dates and/or layers over the AOI.';
+          }
           if (panel === 'aoi-edit') {
             // Drawing is activated only from the Map toolbox Edit button (no auto-arm).
             return 'Use the Edit button in the Map toolbox to draw an AOI, then ask again for NDVI / flood / well analysis.';
@@ -20148,7 +20059,7 @@ export default function SatelliteIntelligence() {
             'source',
           ]);
           if (!dockPanels.has(panel)) {
-            return `Unknown toolbox panel "${panelRaw}". Try remote-sensing, imagery-time-series, flood-monitoring, well-site, or aoi-edit.`;
+            return `Unknown toolbox panel "${panelRaw}". Try remote-sensing, imagery-time-series, map-swipe, flood-monitoring, well-site, or aoi-edit.`;
           }
           setExpandedEnvSection(panel as MapToolboxSectionId);
           setIsLayerDropdownOpen(true);
@@ -21321,7 +21232,7 @@ export default function SatelliteIntelligence() {
     if (drawAoiWmsStack.displayChunks.length > 0) {
       stacks.push({
         stack: drawAoiWmsStack,
-        visible: sentinelDrawWmsOnMap,
+        visible: sentinelDrawWmsOnMap && !mapSwipeOpen,
         opacity: 1,
         useVisibilityToggle: false,
       });
@@ -21329,7 +21240,7 @@ export default function SatelliteIntelligence() {
     if (layerAoiWmsStack.displayChunks.length > 0) {
       stacks.push({
         stack: layerAoiWmsStack,
-        visible: sentinelLayerAoiWmsOnMap,
+        visible: sentinelLayerAoiWmsOnMap && !mapSwipeOpen,
         opacity: aoiMaskDisplayOpacity,
         useVisibilityToggle: true,
       });
@@ -21341,6 +21252,7 @@ export default function SatelliteIntelligence() {
     sentinelDrawWmsOnMap,
     sentinelLayerAoiWmsOnMap,
     aoiMaskDisplayOpacity,
+    mapSwipeOpen,
   ]);
 
   const sentinelLayerAoiWmsMounted =
@@ -21499,7 +21411,7 @@ export default function SatelliteIntelligence() {
 
     const runtime = layerAoiWmsPingPongRef.current;
     const chunkCount = stack.displayChunks.length;
-    const layerVisible = sentinelLayerAoiWmsOnMap;
+    const layerVisible = sentinelLayerAoiWmsOnMap && !mapSwipeOpen;
     const layerOpacity = aoiMaskDisplayOpacity;
     // Intentionally omit live zoom/bbox — only GEOMETRY/date/session may remount tiles.
     const syncKey = [
@@ -21520,7 +21432,7 @@ export default function SatelliteIntelligence() {
       const beforeLayerId =
         (aoiLineId && map.getLayer(aoiLineId) ? aoiLineId : undefined) ||
         (map.getLayer(agroLineId) ? agroLineId : undefined);
-      ensureSiSentinelAoiWmsPingPongStackOnMap(map, stack, effectiveSentinelWmsMinZoom, runtime, {
+      ensureSiSentinelAoiWmsPingPongStackOnMap(map, stack, 0, runtime, {
         beforeLayerId,
       });
     }
@@ -21542,8 +21454,8 @@ export default function SatelliteIntelligence() {
     sentinelLayerAoiWmsMounted,
     layerAoiWmsChunksCacheKey,
     wmsRasterSourceRefreshKey,
-    effectiveSentinelWmsMinZoom,
     sentinelLayerAoiWmsOnMap,
+    mapSwipeOpen,
     aoiMaskDisplayOpacity,
     aoiMaskBuilderSettings.sourceLayerId,
     syncAnalysisMapLayerOrder,
@@ -23029,7 +22941,7 @@ export default function SatelliteIntelligence() {
                         type="raster"
                         tiles={[stack.tileUrls[chunkIdx] ?? '']}
                         tileSize={stack.tilePixels || SENTINEL_HUB_WMS_TILE_PIXELS}
-                        minzoom={effectiveSentinelWmsMinZoom}
+                        minzoom={0}
                         bounds={resolveSiSentinelAoiWmsChunkBounds(stack, chunk)}
                       >
                         <Layer
@@ -23046,6 +22958,10 @@ export default function SatelliteIntelligence() {
                   }),
                 )
               : null}
+
+            {isMapStyleReady && mapSwipeOpen && mapSwipeBeforeTiles.length > 0 ? (
+              <SiMapSwipeRasterLayers idPrefix="si-swipe-before" tileUrls={mapSwipeBeforeTiles} />
+            ) : null}
 
             {isMapStyleReady && cropAlertSettings.enabled && cropAlertResultsOnMap.length > 0 ? (
               <SiCropAlertMapMarkersLayer
@@ -23388,6 +23304,7 @@ export default function SatelliteIntelligence() {
             sceneDate={sentinelFetchDate}
             seriesStart={timeSeriesStart}
             seriesEnd={timeSeriesEnd}
+            mapSwipeCompare={mapSwipeOpen ? mapSwipeCompare : null}
           />
 
           <SiImageryTimeSeriesFloatingPanel
@@ -23418,6 +23335,29 @@ export default function SatelliteIntelligence() {
             mapboxToken={mapboxToken}
             onStormMapOverlayChange={setTsWeatherStormOverlay}
             stormOverlayDismissEpoch={tsWeatherStormDismissEpoch}
+          />
+
+          <SiMapSwipeControl
+            mapboxAccessToken={mapboxAccessTokenForMap}
+            viewState={{
+              longitude: Number(viewState.longitude) || 0,
+              latitude: Number(viewState.latitude) || 0,
+              zoom: Number(viewState.zoom) || 2,
+              bearing: Number(viewState.bearing) || 0,
+              pitch: Number(viewState.pitch) || 0,
+            }}
+            aoiClip={sentinelHubWmsTileClipSource}
+            hasAoi={Boolean(sentinelHubWmsTileClipSource)}
+            activeLayerId={wmsLayerSelectValue}
+            activeSceneDate={imageryDateAutoFollow ? sentinelFetchDate : localIsoDate(selectedDate)}
+            cloudCoverage={cloudCoverage}
+            layerOptions={remoteSensingLayerOptions}
+            open={mapSwipeOpen}
+            onOpenChange={setMapSwipeOpen}
+            showFab={false}
+            onBeforeTilesChange={onMapSwipeBeforeTilesChange}
+            onCompareSidesChange={onMapSwipeCompareSidesChange}
+            aoiGeometry={drawnGeometry}
           />
 
           {activeLayerActionDialog?.mode === 'symbology' && activeDialogLayer ? (
@@ -23925,6 +23865,8 @@ export default function SatelliteIntelligence() {
             mapToolboxLayerLiveLegend={mapToolboxLayerLiveLegend}
             imageryTimeSeriesOpen={imageryTimeSeriesOpen}
             onImageryTimeSeriesOpenChange={setImageryTimeSeriesOpen}
+            mapSwipeOpen={mapSwipeOpen}
+            onMapSwipeOpenChange={setMapSwipeOpen}
             goToXyOpen={goToXyOpen}
             onGoToXyOpenChange={setGoToXyOpen}
             layerLiveLegendOpen={layerLiveLegendOpen}
@@ -24276,6 +24218,38 @@ export default function SatelliteIntelligence() {
                   <span className="si-view3d-button__tag">Key</span>
                 </button>
               </div>
+              <div className="si-map-swipe-toggle">
+                <button
+                  type="button"
+                  className={`si-basemap-button si-map-swipe-button ${mapSwipeOpen ? 'active' : ''}`}
+                  title={
+                    sentinelHubWmsTileClipSource
+                      ? mapSwipeOpen
+                        ? 'Close MapSwipe'
+                        : 'Open MapSwipe'
+                      : 'MapSwipe needs an AOI (draw or enable Layers AOI)'
+                  }
+                  aria-label={
+                    sentinelHubWmsTileClipSource
+                      ? mapSwipeOpen
+                        ? 'Close MapSwipe'
+                        : 'Open MapSwipe'
+                      : 'MapSwipe needs an AOI'
+                  }
+                  aria-pressed={mapSwipeOpen}
+                  disabled={!sentinelHubWmsTileClipSource}
+                  onClick={() => {
+                    if (!sentinelHubWmsTileClipSource) return
+                    setMapSwipeOpen(v => !v)
+                    setIsBasemapOpen(false)
+                    setIsTerrain3dPanelOpen(false)
+                    setIsLegendToolOpen(false)
+                  }}
+                >
+                  <i className="fa-solid fa-left-right" aria-hidden />
+                  <span className="si-view3d-button__tag">Swipe</span>
+                </button>
+              </div>
               </div>
               <div className="si-map-floating-controls__right si-map-floating-controls__right--proc-stack">
             <div className="si-env-rail si-env-rail--proc-anchor">
@@ -24488,48 +24462,18 @@ export default function SatelliteIntelligence() {
                           if (ids.includes(layerId as EnvironmentalIndexId)) {
                             setSelectedIndex(layerId as EnvironmentalIndexId);
                           }
-                          // Prefer Layers AOI clip when a GIS AOI layer is available; else Edit AOI.
-                          const hasAoiLayerOption =
-                            aoiLayerModeOptions.length > 0 &&
-                            (!!aoiMaskBuilderSettings.sourceLayerId ||
-                              !!aoiLayerModeOptions[0]?.id);
-                          if (hasAoiLayerOption) {
-                            const sourceLayerId =
-                              aoiMaskBuilderSettings.sourceLayerId &&
-                              aoiLayerModeOptions.some(o => o.id === aoiMaskBuilderSettings.sourceLayerId)
-                                ? aoiMaskBuilderSettings.sourceLayerId
-                                : aoiLayerModeOptions[0]!.id;
-                            layersAoiUserOptOutRef.current = false;
-                            handleAoiLayerModeChange({
-                              ...aoiMaskBuilderSettings,
-                              enabled: true,
-                              sourceLayerId,
-                              sentinelLayerId: layerId,
-                              maskMode:
-                                aoiMaskBuilderSettings.maskMode === 'selected-features'
-                                  ? 'selected-features'
-                                  : 'entire-layer',
-                            });
-                          } else if (hasDrawnAoiClip) {
+                          // Index change never auto-enables Layers AOI — user toggles Show on map.
+                          if (hasDrawnAoiClip && !aoiMaskBuilderSettings.enabled) {
                             handleIndexShowOnMapChange(true);
-                            setAoiMaskBuilderSettings(prev => {
-                              if (prev.sentinelLayerId === layerId) return prev;
-                              const next = { ...prev, sentinelLayerId: layerId };
-                              persistSiAoiMaskBuilderSettings(next, {
-                                storageKey: siScope.scopedStorageKey(SI_AOI_MASK_BUILDER_LS_KEY),
-                              });
-                              return next;
-                            });
-                          } else {
-                            setAoiMaskBuilderSettings(prev => {
-                              if (prev.sentinelLayerId === layerId) return prev;
-                              const next = { ...prev, sentinelLayerId: layerId };
-                              persistSiAoiMaskBuilderSettings(next, {
-                                storageKey: siScope.scopedStorageKey(SI_AOI_MASK_BUILDER_LS_KEY),
-                              });
-                              return next;
-                            });
                           }
+                          setAoiMaskBuilderSettings(prev => {
+                            if (prev.sentinelLayerId === layerId) return prev;
+                            const next = { ...prev, sentinelLayerId: layerId };
+                            persistSiAoiMaskBuilderSettings(next, {
+                              storageKey: siScope.scopedStorageKey(SI_AOI_MASK_BUILDER_LS_KEY),
+                            });
+                            return next;
+                          });
                         }}
                         isLoadingLayers={rsLayerCatalogLoading}
                         showOnMap={isWmsOverlayVisible}
@@ -24540,11 +24484,7 @@ export default function SatelliteIntelligence() {
                             ? 'Clips the index to your drawn AOI (Edit tool).'
                             : 'Draw an AOI with the Edit tool, then enable Show on map.'
                         }
-                        wmsZoomWarning={
-                          sentinelWmsOnMap && !sentinelWmsZoomOk
-                            ? `Zoom in to ${effectiveSentinelWmsMinZoom}+ — Sentinel-2 index tiles cannot load when zoomed out (max 200 m/px). The map will zoom to the AOI automatically.`
-                            : null
-                        }
+                        wmsZoomWarning={null}
                         sentinelLayerOptions={remoteSensingLayerOptions}
                         aoiLayerModeSettings={aoiMaskBuilderSettings}
                         onAoiLayerModeChange={handleAoiLayerModeChange}

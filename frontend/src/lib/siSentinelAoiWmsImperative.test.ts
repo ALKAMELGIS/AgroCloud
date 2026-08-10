@@ -269,7 +269,7 @@ describe('siSentinelAoiWmsImperative', () => {
     expect(paint).toContainEqual([activeLayer, 'raster-opacity', 0.9])
   })
 
-  it('index URL swap waits on sourcedata only — never map idle', () => {
+  it('index URL swap commits immediately — does not wait on sourcedata or idle', () => {
     const runtime = createSiSentinelAoiWmsPingPongRuntime()
     const stack = {
       idPrefix: SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX,
@@ -284,6 +284,7 @@ describe('siSentinelAoiWmsImperative', () => {
     }
     const sources = new Map<string, { tiles: string[]; setTiles: ReturnType<typeof vi.fn> }>()
     const listeners = new Map<string, Array<(ev?: unknown) => void>>()
+    const paint: Array<[string, string, unknown]> = []
     const map = {
       getSource: (id: string) => sources.get(id) ?? null,
       getLayer: () => ({}),
@@ -306,7 +307,9 @@ describe('siSentinelAoiWmsImperative', () => {
         )
       },
       setLayoutProperty: vi.fn(),
-      setPaintProperty: vi.fn(),
+      setPaintProperty: (id: string, prop: string, value: unknown) => {
+        paint.push([id, prop, value])
+      },
     }
 
     ensureSiSentinelAoiWmsPingPongStackOnMap(map as any, stack as any, 8, runtime)
@@ -319,17 +322,16 @@ describe('siSentinelAoiWmsImperative', () => {
     )
 
     expect(listeners.has('idle')).toBe(false)
-    expect(listeners.has('sourcedata')).toBe(true)
+    expect(listeners.has('sourcedata')).toBe(false)
+    const nextLayer = siSentinelAoiWmsPingPongLayerId(SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX, 0, 1)
+    expect(paint).toContainEqual([nextLayer, 'raster-opacity', 0.9])
   })
 
-  it('date/layer swap: timeout alone must not commit while inactive still unloaded', () => {
-    vi.useFakeTimers()
+  it('date/layer swap: commits new URL on inactive slot immediately', () => {
     const runtime = createSiSentinelAoiWmsPingPongRuntime()
     const stack = makeStack()
     const sources = new Map<string, { tiles: string[]; setTiles: ReturnType<typeof vi.fn> }>()
     const paint: Array<[string, string, unknown]> = []
-    const loaded = new Set<string>()
-    const listeners = new Map<string, Array<(ev?: unknown) => void>>()
     const map = {
       getSource: (id: string) => sources.get(id) ?? null,
       getLayer: () => ({}),
@@ -343,19 +345,9 @@ describe('siSentinelAoiWmsImperative', () => {
         sources.set(id, src)
       },
       addLayer: vi.fn(),
-      isSourceLoaded: (id: string) => loaded.has(id),
-      on: (event: string, handler: (ev?: unknown) => void) => {
-        const list = listeners.get(event) ?? []
-        list.push(handler)
-        listeners.set(event, list)
-      },
-      off: (event: string, handler: (ev?: unknown) => void) => {
-        const list = listeners.get(event) ?? []
-        listeners.set(
-          event,
-          list.filter(h => h !== handler),
-        )
-      },
+      isSourceLoaded: () => false,
+      on: vi.fn(),
+      off: vi.fn(),
       setLayoutProperty: vi.fn(),
       setPaintProperty: (id: string, prop: string, value: unknown) => {
         paint.push([id, prop, value])
@@ -363,13 +355,10 @@ describe('siSentinelAoiWmsImperative', () => {
     }
 
     ensureSiSentinelAoiWmsPingPongStackOnMap(map as any, stack as any, 8, runtime)
-    const activeSource = siSentinelAoiWmsPingPongSourceId(SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX, 0, 0)
     const activeLayer = siSentinelAoiWmsPingPongLayerId(SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX, 0, 0)
-    const inactiveSource = siSentinelAoiWmsPingPongSourceId(SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX, 0, 1)
     const inactiveLayer = siSentinelAoiWmsPingPongLayerId(SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX, 0, 1)
     const chunkKey = `${SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX}:0`
 
-    loaded.add(activeSource)
     syncSiSentinelAoiWmsPingPongStack(map as any, stack as any, runtime, { visible: true, opacity: 0.9 })
     syncSiSentinelAoiWmsPingPongStack(
       map as any,
@@ -377,88 +366,13 @@ describe('siSentinelAoiWmsImperative', () => {
       runtime,
       { visible: true, opacity: 0.9 },
     )
-
-    const opacityBeforeTimeout = paint.filter(
-      ([id, prop]) => id === activeLayer && prop === 'raster-opacity',
-    ).length
-
-    // Past the old 750ms premature commit and the longer safety timeout — still unloaded.
-    vi.advanceTimersByTime(10_000)
-
-    // Active slot stays presented; timeout alone must not commit while still unloaded.
-    const pending = runtime.chunks.get(chunkKey)
-    expect(pending?.activeSlot).toBe(0)
-    expect(pending?.activeUrl).toBe('https://example.test/a')
-    expect(paint).toContainEqual([activeLayer, 'raster-opacity', 0.9])
-    expect(
-      paint.filter(([id, prop, val]) => id === inactiveLayer && prop === 'raster-opacity' && val === 0.9),
-    ).toHaveLength(0)
-    expect(paint.filter(([id, prop]) => id === activeLayer && prop === 'raster-opacity').length).toBe(
-      opacityBeforeTimeout,
-    )
-    expect(listeners.get('sourcedata')?.length ?? 0).toBeGreaterThan(0)
-
-    // Commit only once the inactive source reports loaded.
-    loaded.add(inactiveSource)
-    for (const handler of listeners.get('sourcedata') ?? []) {
-      handler({ sourceId: inactiveSource, isSourceLoaded: true })
-    }
 
     const committed = runtime.chunks.get(chunkKey)
     expect(committed?.activeSlot).toBe(1)
     expect(committed?.activeUrl).toBe('https://example.test/b')
     expect(paint).toContainEqual([inactiveLayer, 'raster-opacity', 0.9])
     expect(paint).toContainEqual([activeLayer, 'raster-opacity', 0])
-  })
-
-  it('date/layer swap: safety timeout commits only after inactive isSourceLoaded (missed sourcedata)', () => {
-    vi.useFakeTimers()
-    const runtime = createSiSentinelAoiWmsPingPongRuntime()
-    const stack = makeStack()
-    const sources = new Map<string, { tiles: string[]; setTiles: ReturnType<typeof vi.fn> }>()
-    const loaded = new Set<string>()
-    const map = {
-      getSource: (id: string) => sources.get(id) ?? null,
-      getLayer: () => ({}),
-      addSource: (id: string, spec: { tiles: string[] }) => {
-        const src = {
-          tiles: [...spec.tiles],
-          setTiles: vi.fn((tiles: string[]) => {
-            src.tiles = [...tiles]
-          }),
-        }
-        sources.set(id, src)
-      },
-      addLayer: vi.fn(),
-      isSourceLoaded: (id: string) => loaded.has(id),
-      on: vi.fn(),
-      off: vi.fn(),
-      setLayoutProperty: vi.fn(),
-      setPaintProperty: vi.fn(),
-    }
-
-    ensureSiSentinelAoiWmsPingPongStackOnMap(map as any, stack as any, 8, runtime)
-    const activeSource = siSentinelAoiWmsPingPongSourceId(SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX, 0, 0)
-    const inactiveSource = siSentinelAoiWmsPingPongSourceId(SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX, 0, 1)
-    const chunkKey = `${SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX}:0`
-
-    loaded.add(activeSource)
-    syncSiSentinelAoiWmsPingPongStack(map as any, stack as any, runtime, { visible: true, opacity: 0.9 })
-    syncSiSentinelAoiWmsPingPongStack(
-      map as any,
-      { ...stack, tileUrls: ['https://example.test/b'] } as any,
-      runtime,
-      { visible: true, opacity: 0.9 },
-    )
-
-    // Source finished loading but sourcedata was missed — safety timeout may recover.
-    loaded.add(inactiveSource)
-    expect(runtime.chunks.get(chunkKey)?.activeSlot).toBe(0)
-
-    vi.advanceTimersByTime(10_000)
-
-    expect(runtime.chunks.get(chunkKey)?.activeSlot).toBe(1)
-    expect(runtime.chunks.get(chunkKey)?.activeUrl).toBe('https://example.test/b')
+    expect(map.on).not.toHaveBeenCalled()
   })
 
   it('hide does not cancel in-flight wait cleanup', () => {

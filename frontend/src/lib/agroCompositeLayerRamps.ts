@@ -264,6 +264,9 @@ function resolveLayerRampDefinition(layerId: string): AgroCompositeLayerRampConf
     anchors: palette.anchors,
     labels: palette.classLabels,
     subtitle: palette.subtitle,
+    ...(palette.classColors && palette.classColors.length === 10
+      ? { classColors: palette.classColors }
+      : {}),
   }
 }
 

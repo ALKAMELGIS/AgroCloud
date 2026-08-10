@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { RemoteSensingLayerSelectGroup } from '../../../lib/agroCompositeIndices'
+import { formatLayerSelectScienceLabel } from '../../../lib/remoteSensingLayerDisplay'
 
 type RemoteSensingLayerSelectProps = {
   groups: RemoteSensingLayerSelectGroup[]
@@ -25,7 +26,8 @@ function findSelectedOption(groups: RemoteSensingLayerSelectGroup[], value: stri
 }
 
 function layerOptionTitle(opt: { label: string; scientificName?: string }): string {
-  return opt.scientificName ? `${opt.label} — ${opt.scientificName}` : opt.label
+  const science = formatLayerSelectScienceLabel(opt.scientificName, opt.label)
+  return science ? `${opt.label} — ${science}` : opt.label
 }
 
 export function RemoteSensingLayerSelect({
@@ -71,7 +73,8 @@ export function RemoteSensingLayerSelect({
           .includes(q)
         const options = opts.filter(opt => {
           if (groupMatch) return true
-          const hay = [opt.label, opt.id, opt.scientificName ?? ''].join(' ').toLowerCase()
+          const science = formatLayerSelectScienceLabel(opt.scientificName, opt.label)
+          const hay = [opt.label, opt.id, science].join(' ').toLowerCase()
           return hay.includes(q)
         })
         return options.length ? { ...group, options } : null
@@ -165,6 +168,7 @@ export function RemoteSensingLayerSelect({
                 <div className="si-rs-layer-select__group-label">{group.label}</div>
                 {group.options.map(opt => {
                   const active = opt.id.toUpperCase() === value.trim().toUpperCase()
+                  const science = formatLayerSelectScienceLabel(opt.scientificName, opt.label)
                   return (
                     <button
                       key={opt.id}
@@ -179,9 +183,7 @@ export function RemoteSensingLayerSelect({
                       }}
                     >
                       <span className="si-rs-layer-select__abbr">{opt.label}</span>
-                      {opt.scientificName ? (
-                        <span className="si-rs-layer-select__science">{opt.scientificName}</span>
-                      ) : null}
+                      {science ? <span className="si-rs-layer-select__science">{science}</span> : null}
                     </button>
                   )
                 })}

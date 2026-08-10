@@ -9,6 +9,8 @@ describe('normalizeGeoAiToolboxPanelId', () => {
   it('maps aliases to dock / float panels', () => {
     expect(normalizeGeoAiToolboxPanelId('NDVI')).toBe('remote-sensing')
     expect(normalizeGeoAiToolboxPanelId('time series')).toBe('imagery-time-series')
+    expect(normalizeGeoAiToolboxPanelId('map swipe')).toBe('map-swipe')
+    expect(normalizeGeoAiToolboxPanelId('compare')).toBe('map-swipe')
     expect(normalizeGeoAiToolboxPanelId('flood')).toBe('flood-monitoring')
     expect(normalizeGeoAiToolboxPanelId('well')).toBe('well-site')
     expect(normalizeGeoAiToolboxPanelId('draw')).toBe('aoi-edit')

@@ -121,6 +121,55 @@
   color: #f8fafc;
 }
 
+.si-layer-live-float__tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 2px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.si-layer-live-float__tabs button {
+  appearance: none;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #cbd5e1;
+  font: 700 11px/1.2 system-ui, sans-serif;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 8px 8px 7px;
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+  justify-items: start;
+  text-align: left;
+}
+
+.si-layer-live-float__tabs button.is-on {
+  background: rgba(76, 175, 80, 0.28);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(165, 214, 167, 0.35);
+}
+
+.si-layer-live-float__tab-meta {
+  font: 500 10px/1.2 system-ui, sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+  color: rgba(226, 232, 240, 0.72);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.si-layer-live-float__tabs button.is-on .si-layer-live-float__tab-meta {
+  color: rgba(240, 253, 244, 0.9);
+}
+
 .si-layer-live-float__body {
   max-height: min(84vh, 700px);
   overflow: auto;
@@ -151,20 +200,73 @@
   color: #e2e8f0;
 }
 
+.si-layer-live-float__body .si-layer-live-legend__note,
+.si-layer-live-float__body .si-layer-live-legend__are-disclaimer {
+  display: none;
+}
+
 .si-layer-live-float__body .si-layer-live-legend__title {
+  font-size: 13px;
   color: #f8fafc;
 }
 
 .si-layer-live-float__body .si-layer-live-legend__subtitle,
 .si-layer-live-float__body .si-layer-live-legend__scientific,
 .si-layer-live-float__body .si-layer-live-legend__scale,
-.si-layer-live-float__body .si-layer-live-legend__class-range,
-.si-layer-live-float__body .si-layer-live-legend__note {
-  color: rgba(148, 163, 184, 0.92);
+.si-layer-live-float__body .si-layer-live-legend__class-range {
+  font-size: 10px;
+  color: rgba(226, 232, 240, 0.82);
 }
 
 .si-layer-live-float__body .si-layer-live-legend__class-label {
   color: #e2e8f0;
+}
+
+.si-layer-live-float__body .si-lll-meta-grid {
+  gap: 4px;
+  padding: 5px 6px;
+}
+
+.si-layer-live-float__body .si-lll-meta dt {
+  font-size: 8px;
+}
+
+.si-layer-live-float__body .si-lll-meta dd {
+  font-size: 10px;
+}
+
+.si-layer-live-float__body .si-lll-scale-end-k {
+  font-size: 8px;
+}
+
+.si-layer-live-float__body .si-lll-scale-end-v {
+  font-size: 10px;
+}
+
+.si-layer-live-float__body .si-lll-row {
+  min-height: 0;
+  padding: 2px 0;
+}
+
+.si-layer-live-float__body .si-lll-row-name,
+.si-layer-live-float__body .si-lll-row-range {
+  font-size: 9.5px;
+}
+
+.si-layer-live-float__body .si-lll-area-u,
+.si-layer-live-float__body .si-lll-area-line b,
+.si-layer-live-float__body .si-lll-area-line.is-m2 b,
+.si-layer-live-float__body .si-lll-area-pct {
+  color: #ffffff;
+}
+
+.si-layer-live-float__body .si-lll-area-line b {
+  font-size: 9.5px;
+}
+
+.si-layer-live-float__body .si-lll-area-line.is-m2 b,
+.si-layer-live-float__body .si-lll-area-pct {
+  font-size: 8.5px;
 }
 
 .si-layer-live-float__body .si-layer-live-legend__badge {

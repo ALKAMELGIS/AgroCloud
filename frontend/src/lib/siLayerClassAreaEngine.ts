@@ -168,7 +168,7 @@ export function buildLayerIndexEvalscript(
   return `//VERSION=3${markerLine}
 function setup() {
   return {
-    input: [{ bands: ["B02", "B03", "B04", "B05", "B06", "B08", "B11", "B12", "SCL", "dataMask"] }],
+    input: [{ bands: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12", "SCL", "dataMask"] }],
     output: [
       { id: "idx", bands: ["idx"], sampleType: "FLOAT32" },
       { id: "dataMask", bands: 1 }

@@ -46,6 +46,7 @@ const FULL_OPTICAL_EXTRA_GROUP_IDS = new Set([
   'live-analysis-lulc',
   'live-analysis-anomaly',
   'live-analysis-cultivation',
+  'live-analysis-mangrove',
   'derived-alert',
 ])
 

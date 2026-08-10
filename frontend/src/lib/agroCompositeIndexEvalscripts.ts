@@ -46,6 +46,8 @@ function formatRgbList(rgb: readonly [number, number, number][]): string {
     .join(',\n   ')
 }
 
+import { MANGROVE_CORE_INDEX_LINES } from './mangroveIndices'
+
 export const CORE_INDICES_BLOCK = `let ndvi = index(samples.B08, samples.B04);
   let savi = ((samples.B08 - samples.B04) * 1.5) / (samples.B08 + samples.B04 + 0.5);
   let ndmi = index(samples.B08, samples.B11);
@@ -71,7 +73,8 @@ export const CORE_INDICES_BLOCK = `let ndvi = index(samples.B08, samples.B04);
   let fmin = Math.max(0, Math.min(1, (fmi - 0.4) / 1.6));
   let ndain = Math.max(0, Math.min(1, (ndai + 0.3) / 0.8));
   let bsin = Math.max(0, Math.min(1, (bsi + 0.5) / 1.0));
-  let egci = 0.30 * ioin + 0.25 * cmin + 0.20 * fmin + 0.15 * ndain + 0.10 * bsin;`
+  let egci = 0.30 * ioin + 0.25 * cmin + 0.20 * fmin + 0.15 * ndain + 0.10 * bsin;
+  ${MANGROVE_CORE_INDEX_LINES}`
 
 const CORE_AT_FN = `function coreAt(samples) {
   let ndvi = index(samples.B08, samples.B04);
@@ -100,10 +103,14 @@ const CORE_AT_FN = `function coreAt(samples) {
   let ndain = Math.max(0, Math.min(1, (ndai + 0.3) / 0.8));
   let bsin = Math.max(0, Math.min(1, (bsi + 0.5) / 1.0));
   let egci = 0.30 * ioin + 0.25 * cmin + 0.20 * fmin + 0.15 * ndain + 0.10 * bsin;
+  ${MANGROVE_CORE_INDEX_LINES}
   return {
     ndvi: ndvi, savi: savi, ndmi: ndmi, ndwi: ndwi, ndre: ndre, evi: evi, ci_re: ci_re,
     ndsi: ndsi, si: si, ssi: ssi,
-    ioi: ioi, clay_mi: clay_mi, fmi: fmi, ndai: ndai, bsi: bsi, reai: reai, gei: gei, gci: gci, egci: egci
+    ioi: ioi, clay_mi: clay_mi, fmi: fmi, ndai: ndai, bsi: bsi, reai: reai, gei: gei, gci: gci, egci: egci,
+    mvi: mvi, remi: remi, mi: mi, mfi: mfi,
+    ndre_b5: ndre_b5, ndre_b6: ndre_b6, ndre_b7: ndre_b7,
+    cire: cire, gci_chl: gci_chl, mtci: mtci, reip: reip
   };
 }`
 
@@ -124,6 +131,7 @@ function buildTenClassEvalscriptBlock(ramp: NonNullable<ReturnType<typeof resolv
   rgbConst: string
 } {
   const classifyFn = `function classifyVal(val) {
+  if (!isFinite(val)) return -1;
   if (val < BREAKS[0]) return 0;
   if (val < BREAKS[1]) return 1;
   if (val < BREAKS[2]) return 2;
@@ -168,7 +176,7 @@ export function buildChasAlertEvalscript(indexVisibilityMin: number | null = nul
 // CHAS Alert — derived 4-level overlay from CHAS 10-class raster logic
 function setup() {
   return {
-    input: ["B02", "B03", "B04", "B05", "B06", "B08", "B8A", "B11", "B12", "dataMask"],
+    input: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12", "dataMask"],
     output: { bands: 4 }
   };
 }
@@ -207,7 +215,7 @@ export function buildAgroCompositeEvalscript(
 // AgroCloud composite — 10-class layer-specific ramp
 function setup() {
   return {
-    input: ["B02", "B03", "B04", "B05", "B06", "B08", "B8A", "B11", "B12", "dataMask"],
+    input: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12", "dataMask"],
     output: { bands: 4 }
   };
 }
@@ -219,7 +227,13 @@ ${classifyFn}
 function evaluatePixel(samples) {
   ${CORE_INDICES_BLOCK}
   let ${indexVar} = ${expr};
+  if (!isFinite(${indexVar})) {
+    return [0, 0, 0, 0];
+  }
   let cls = classifyVal(${indexVar});
+  if (cls < 0) {
+    return [0, 0, 0, 0];
+  }
   let c = CLASS_RGB[cls];
   ${alphaBlock(indexVar, indexVisibilityMin)}
 }`
@@ -245,7 +259,7 @@ export function buildAgroCompositeDeltaEvalscript(
 function setup() {
   return {
     input: [{
-      bands: ["B02", "B03", "B04", "B05", "B06", "B08", "B8A", "B11", "B12", "dataMask"]
+      bands: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12", "dataMask"]
     }],
     mosaicking: Mosaicking.ORBIT,
     output: { bands: 4, sampleType: "AUTO" }
@@ -285,6 +299,17 @@ function compositeValue(c) {
   let gei = c.gei;
   let gci = c.gci;
   let egci = c.egci;
+  let mvi = c.mvi;
+  let remi = c.remi;
+  let mi = c.mi;
+  let mfi = c.mfi;
+  let ndre_b5 = c.ndre_b5;
+  let ndre_b6 = c.ndre_b6;
+  let ndre_b7 = c.ndre_b7;
+  let cire = c.cire;
+  let gci_chl = c.gci_chl;
+  let mtci = c.mtci;
+  let reip = c.reip;
   return ${expr};
 }
 
@@ -299,7 +324,13 @@ function evaluatePixel(samples) {
   var c2 = coreAt(samples[samples.length - 1]);
   var ${indexVar} = compositeValue(c2) - compositeValue(c1);
   var mask = samples[samples.length - 1].dataMask * samples[0].dataMask;
+  if (!isFinite(${indexVar})) {
+    return [0, 0, 0, 0];
+  }
   var cls = classifyVal(${indexVar});
+  if (cls < 0) {
+    return [0, 0, 0, 0];
+  }
   var c = CLASS_RGB[cls];
   ${alphaBlock(indexVar, indexVisibilityMin, 'mask')}
 }`
@@ -444,7 +475,7 @@ export function buildAgroCompositeWapiEvalscript(indexVisibilityMin: number | nu
 function setup() {
   return {
     input: [{
-      bands: ["B02", "B03", "B04", "B05", "B06", "B08", "B8A", "B11", "B12", "dataMask"]
+      bands: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12", "dataMask"]
     }],
     mosaicking: Mosaicking.ORBIT,
     output: { bands: 4, sampleType: "AUTO" }

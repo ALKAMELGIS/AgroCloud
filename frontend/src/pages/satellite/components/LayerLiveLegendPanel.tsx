@@ -46,6 +46,32 @@ function parseScaleEnds(subtitle?: string): { low: string; high: string } {
   return { low: 'Low', high: 'High' }
 }
 
+/**
+ * Strip Sentinel-2 band equations from legend copy (UI only — formulas stay in layer defs).
+ * e.g. "MVI — (B08−B03)/(B11−B03) · mangrove" → "MVI · mangrove"
+ */
+function stripSpectralFormulasFromLegendText(text: string): string {
+  let s = String(text || '')
+  if (!s) return s
+  // (Bxx…) and (Bxx…)/(Byy…) style formulas (unicode minus / slash)
+  s = s.replace(
+    /\([^)]*\bB(?:0?[1-9]|1[012]|8A)\b[^)]*\)(?:\s*[\/÷]\s*\([^)]*\bB(?:0?[1-9]|1[012]|8A)\b[^)]*\))?/gi,
+    '',
+  )
+  // Bare ratios: B8A/B05−1, B08/B03−1
+  s = s.replace(
+    /\bB(?:0?[1-9]|1[012]|8A)\s*[\/÷]\s*B(?:0?[1-9]|1[012]|8A)(?:\s*[−\-–+]\s*\d+(?:\.\d+)?)?/gi,
+    '',
+  )
+  s = s.replace(/\bSentinel-2 band formula\b/gi, '')
+  s = s.replace(/\s*[—–]\s*(?=·|$)/g, '')
+  s = s.replace(/\s*·\s*(?=·|$)/g, '')
+  s = s.replace(/\s{2,}/g, ' ')
+  s = s.replace(/\s+·\s+/g, ' · ')
+  s = s.replace(/^[·—–\s]+|[·—–\s]+$/g, '')
+  return s.trim()
+}
+
 /** Continuous vertical ramp aligned with the class rows (top = first class). */
 function buildVerticalGradient(spec: LayerLiveLegendSpec): string | null {
   if (spec.classes?.length) {
@@ -64,9 +90,12 @@ function formatScaleValue(v: number): string {
 export function LayerLiveLegendBody({
   spec,
   classAreas,
+  hideNote = false,
 }: {
   spec: LayerLiveLegendSpec
   classAreas?: LayerClassAreaRow[]
+  /** Hide footer formula / discrimination notes (float MapSwipe legend). */
+  hideNote?: boolean
 }) {
   if (spec.kind === 'composite' && spec.compositeBands?.length) {
     return (
@@ -77,13 +106,13 @@ export function LayerLiveLegendBody({
             <span>{row.band}</span>
           </div>
         ))}
-        {spec.note ? <p className="si-layer-live-legend__note">{spec.note}</p> : null}
+        {!hideNote && spec.note ? <p className="si-layer-live-legend__note">{spec.note}</p> : null}
       </div>
     )
   }
 
   if (spec.kind === 'note') {
-    return spec.note ? <p className="si-layer-live-legend__note">{spec.note}</p> : null
+    return !hideNote && spec.note ? <p className="si-layer-live-legend__note">{spec.note}</p> : null
   }
 
   const hasScale = spec.valueMin != null && spec.valueMax != null
@@ -108,7 +137,7 @@ export function LayerLiveLegendBody({
             <span>{spec.valueMax}</span>
           </div>
         ) : null}
-        {spec.note ? <p className="si-layer-live-legend__note">{spec.note}</p> : null}
+        {!hideNote && spec.note ? <p className="si-layer-live-legend__note">{spec.note}</p> : null}
       </>
     )
   }
@@ -175,7 +204,7 @@ export function LayerLiveLegendBody({
           })}
         </ul>
       </div>
-      {spec.note ? <p className="si-layer-live-legend__note">{spec.note}</p> : null}
+      {!hideNote && spec.note ? <p className="si-layer-live-legend__note">{spec.note}</p> : null}
     </div>
   )
 }
@@ -200,6 +229,9 @@ export function LayerLiveLegendActiveCard({
   providerLabel?: string
 }) {
   const scientificName = activeLayerId ? resolveRemoteSensingLayerScientificName(activeLayerId) : undefined
+  const scientificNameDisplay = scientificName
+    ? stripSpectralFormulasFromLegendText(scientificName)
+    : undefined
   const areMeta = resolveAnalyticalResolutionMeta()
   const showAre = activeLayerId ? isAnalyticalResolutionLayer(activeLayerId) : false
 
@@ -225,6 +257,9 @@ export function LayerLiveLegendActiveCard({
     if (String(activeLayerId || '').toUpperCase() !== 'ET') return spec
     return applyEtLegendClassEdges(spec, areaResult?.classEdges, areaResult?.classificationMode)
   }, [spec, activeLayerId, areaResult?.classEdges, areaResult?.classificationMode])
+  const subtitleDisplay = displaySpec.subtitle
+    ? stripSpectralFormulasFromLegendText(displaySpec.subtitle)
+    : ''
 
   return (
     <section
@@ -248,7 +283,9 @@ export function LayerLiveLegendActiveCard({
             ) : null}
           </div>
         </div>
-        {scientificName ? <p className="si-layer-live-legend__scientific">{scientificName}</p> : null}
+        {scientificNameDisplay ? (
+          <p className="si-layer-live-legend__scientific">{scientificNameDisplay}</p>
+        ) : null}
 
         <dl className="si-lll-meta-grid">
           <div className="si-lll-meta">
@@ -271,7 +308,7 @@ export function LayerLiveLegendActiveCard({
           </div>
         </dl>
 
-        {displaySpec.subtitle ? <p className="si-layer-live-legend__subtitle">{displaySpec.subtitle}</p> : null}
+        {subtitleDisplay ? <p className="si-layer-live-legend__subtitle">{subtitleDisplay}</p> : null}
         {showAre ? <p className="si-layer-live-legend__are-disclaimer">{areMeta.badgeLong}</p> : null}
         {hasAoi && areaSupported ? (
           <div className="si-layer-live-legend__area-summary" aria-live="polite">
@@ -295,7 +332,11 @@ export function LayerLiveLegendActiveCard({
           </div>
         ) : null}
       </header>
-      <LayerLiveLegendBody spec={displaySpec} classAreas={classAreaRows} />
+      <LayerLiveLegendBody
+        spec={displaySpec}
+        classAreas={classAreaRows}
+        hideNote={variant === 'float'}
+      />
     </section>
   )
 }
