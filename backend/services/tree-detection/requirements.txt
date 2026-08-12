@@ -9,8 +9,13 @@ fastapi>=0.110.0
 uvicorn[standard]>=0.29.0
 pillow>=10.0.0
 python-multipart>=0.0.9
+numpy>=1.24.0
+opencv-python-headless>=4.8.0
 
-# OPTIONAL: YOLO engine. Uncomment + provide a weights file via MODEL_PATH
-# (e.g. best.pt from https://anapgit.scanlab.gr/yolo-trees/ai-tree-detection)
-# to use Ultralytics YOLO instead of DeepForest.
-# ultralytics>=8.2.0
+# OPTIONAL: YOLO-seg (.pt) via Ultralytics — set MODEL_PATH + TREE_DETECTION_ENGINE=yolo_seg
+# Also required for Train-from-Samples fine-tune (/finetune).
+ultralytics>=8.2.0
+
+# OPTIONAL: ONNX Runtime for YOLO-seg .onnx — set MODEL_PATH=*.onnx
+# Prefer onnxruntime-gpu when a CUDA GPU is available.
+onnxruntime>=1.16.0

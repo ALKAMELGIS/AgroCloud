@@ -7,6 +7,8 @@ Inspired by OpenGeoAI field boundary delineation
   POST /detect       sync inference
   POST /detect-job   async job → poll GET /detect-job/{id}
   GET  /health
+  GET  /api/sentinel2/super-resolution/status
+  POST /api/sentinel2/super-resolution
 
 Input (JSON):
   {
@@ -15,9 +17,17 @@ Input (JSON):
     "aoi": <GeoJSON optional>,
     "min_confidence": 0.45,
     "min_area_m2": 200,
-    "source": "sentinel2" | "landsat" | "planet" | "airbus" | "drone" | "geotiff" | "png" | "jpeg",
+    "source": "sentinel2" | "landsat" | "planet" | "airbus" | "drone" | "geotiff" | "png" | "jpeg"
+             | "fow" | "ftw-infer" | "ftw-live",
+    "year": 2024,
+    "start_date": "2024-04-01",
+    "end_date": "2024-09-30",
+    "model": "FTW_PRUE_EFNET_B5",
     "high_res": true
   }
+
+  start_date / end_date (or a single scene_date) pin the Sentinel-2 acquisition
+  window for the FTW engines; omit them to let the crop calendar pick the season.
 
 Response:
   GeoJSON FeatureCollection of field polygons with field_id, confidence,
@@ -29,8 +39,11 @@ from __future__ import annotations
 import base64
 import colorsys
 import io
+import json
 import math
 import os
+import re
+import tempfile
 import threading
 import time
 import uuid
@@ -39,7 +52,7 @@ from typing import Any, Callable
 
 import cv2
 import numpy as np
-from fastapi import BackgroundTasks, FastAPI
+from fastapi import BackgroundTasks, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from PIL import Image
@@ -65,6 +78,37 @@ app.add_middleware(
 )
 
 
+@app.on_event("startup")
+def _startup_sen2sr() -> None:
+    """Load SEN2SRLite once; failure must not crash the host app."""
+    try:
+        from services import super_resolution as sen2sr_svc
+
+        sen2sr_svc.load_model()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[SEN2SR] startup load failed: {type(exc).__name__}: {exc}", flush=True)
+
+
+@app.on_event("startup")
+def _startup_ftw_prefetch() -> None:
+    """Warm the FTW checkpoint in the background so the first detect is not slower."""
+    if os.environ.get("FTW_PREFETCH_MODEL", "1").strip().lower() in ("0", "false", "no"):
+        return
+
+    def _warm() -> None:
+        try:
+            from ftw_live import ftw_live_available, prefetch_model_checkpoint
+
+            if not ftw_live_available():
+                return
+            ok = prefetch_model_checkpoint()
+            print(f"[FTW] checkpoint prefetch: {'ready' if ok else 'skipped'}", flush=True)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[FTW] checkpoint prefetch failed: {type(exc).__name__}: {exc}", flush=True)
+
+    threading.Thread(target=_warm, name="ftw-prefetch", daemon=True).start()
+
+
 class DetectRequest(BaseModel):
     image: str = ""
     bbox: list[float]
@@ -74,15 +118,43 @@ class DetectRequest(BaseModel):
     source: str = "basemap"
     high_res: bool = True
     simplify: float | None = None
+    year: int | None = None
+    model: str | None = None
+    admin_iso: str | None = None
+    # Sentinel-2 acquisition window the user picked (YYYY-MM-DD). When absent the
+    # FTW crop calendar chooses the season for `year`.
+    scene_date: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
 
 
 class FowRequest(BaseModel):
     bbox: list[float]
     aoi: dict | None = None
     min_area_m2: float = Field(default=DEFAULT_MIN_AREA_M2, ge=0.0)
+    admin_iso: str | None = None
 
 
 ProgressCb = Callable[[float, str], None]
+
+
+def _requested_scene_window(req: "DetectRequest") -> tuple[str | None, str | None]:
+    """
+    Sentinel-2 window the client asked for, as (from, to).
+
+    ``scene_date`` alone pins a single day; the FTW engines widen it themselves
+    when no cloud-free pair falls inside.
+    """
+    def clean(value: str | None) -> str | None:
+        text = str(value or "").strip()[:10]
+        return text if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text) else None
+
+    start = clean(req.start_date)
+    end = clean(req.end_date)
+    anchor = clean(req.scene_date)
+    if not start and not end:
+        return anchor, anchor
+    return start or anchor or end, end or anchor or start
 
 
 def _decode_image(data_url: str) -> Image.Image:
@@ -560,13 +632,75 @@ def _execute_detect(req: DetectRequest, progress: ProgressCb | None = None) -> d
             progress(0.2, "fow")
         from fow_aoi import query_fow_fields
 
-        result = query_fow_fields(req.bbox, aoi_geom, req.min_area_m2)
+        result = query_fow_fields(
+            req.bbox,
+            aoi_geom,
+            req.min_area_m2,
+            admin_iso=req.admin_iso,
+        )
         if progress:
             progress(1.0, "done")
         return result
 
+    # 1b) FTW baseline model inference (Sentinel-2 CLI pipeline; no client RGB)
+    if source in ("ftw-infer", "ftw_model", "ftw-baselines"):
+        from ftw_infer import run_ftw_inference
+
+        date_from, date_to = _requested_scene_window(req)
+        return run_ftw_inference(
+            req.bbox,
+            aoi_geom=aoi_geom,
+            min_area_m2=req.min_area_m2,
+            progress=progress,
+            model_name=req.model or "FTW_PRUE_EFNET_B5",
+            year=req.year,
+            date_from=date_from,
+            date_to=date_to,
+        )
+
+    # 1c) FTW live Sentinel-2 model (MPC + odc.stac + ftw_tools; no client RGB)
+    if source in ("ftw-live", "sentinel2-live"):
+        from ftw_live import ftw_live_available, run_ftw_live
+
+        if not ftw_live_available():
+            # Soft fallback so Detect still returns mappable parcels when live deps
+            # are missing (e.g. Python < 3.12 / no ftw-tools).
+            if progress:
+                progress(0.2, "fow_fallback")
+            from fow_aoi import query_fow_fields
+
+            result = query_fow_fields(
+                req.bbox,
+                aoi_geom,
+                req.min_area_m2,
+                admin_iso=req.admin_iso,
+            )
+            result = dict(result)
+            result["engine"] = "fow"
+            result["source"] = "fow"
+            stats = dict(result.get("stats") or {})
+            stats["fallback_from"] = "ftw-live"
+            result["stats"] = stats
+            if progress:
+                progress(1.0, "done")
+            return result
+
+        date_from, date_to = _requested_scene_window(req)
+        return run_ftw_live(
+            req.bbox,
+            year=req.year,
+            model_name=req.model,
+            min_area_m2=req.min_area_m2,
+            progress=progress,
+            aoi_geom=aoi_geom,
+            date_from=date_from,
+            date_to=date_to,
+        )
+
     if not req.image:
-        raise ValueError("image is required unless source is 'fow'.")
+        raise ValueError(
+            "image is required unless source is 'fow', 'ftw-infer', or 'ftw-live'."
+        )
 
     image = _decode_image(req.image)
     orig_w, orig_h = image.size
@@ -786,7 +920,7 @@ def _run_job(job_id: str, req: DetectRequest) -> None:
         result = _execute_detect(req, progress)
         _set_job(job_id, status="done", progress=100.0, stage="done", result=result, error=None)
     except Exception as exc:  # noqa: BLE001
-        _set_job(job_id, status="error", progress=100.0, stage="error", error=str(exc), result=None)
+        _set_job(job_id, status="error", progress=100.0, stage="error", error=_public_error(exc), result=None)
 
 
 @app.get("/health")
@@ -796,17 +930,63 @@ def health() -> dict:
         if _engine.available
         else (_da_engine.name if _da_engine.available else "none")
     )
-    return {
+    try:
+        from ftw_infer import ftw_infer_available
+
+        ftw_infer_ok = bool(ftw_infer_available())
+    except Exception:  # noqa: BLE001
+        ftw_infer_ok = False
+    try:
+        from ftw_live import ftw_live_available
+
+        ftw_live_ok = bool(ftw_live_available())
+    except Exception:  # noqa: BLE001
+        ftw_live_ok = False
+    try:
+        import duckdb  # noqa: F401
+
+        fow_ok = True
+    except Exception:  # noqa: BLE001
+        fow_ok = False
+    sen2sr_ok = False
+    sen2sr_err: str | None = None
+    try:
+        from services import super_resolution as sen2sr_svc
+
+        sen2sr_ok = bool(sen2sr_svc.is_available())
+        sen2sr_err = sen2sr_svc.get_error()
+    except Exception as exc:  # noqa: BLE001
+        sen2sr_ok = False
+        sen2sr_err = f"{type(exc).__name__}: {exc}"
+    out: dict[str, Any] = {
         "status": "ok",
         "engine": primary,
         "mask_rcnn": _engine.available,
         "delineate_anything": bool(getattr(_da_engine, "available", False)),
-        "fow": True,
+        "fow": fow_ok,
+        "ftw_infer": ftw_infer_ok,
+        "ftw_live": ftw_live_ok,
+        "sen2sr": sen2sr_ok,
         "watershed": False,
         "device": _engine.device if _engine.available else getattr(_da_engine, "device", "cpu"),
         "gis": True,
         "optimized": True,
     }
+    if sen2sr_err and not sen2sr_ok:
+        out["sen2sr_error"] = sen2sr_err
+    return out
+
+
+def _public_error(exc: BaseException) -> str:
+    """Keep API errors short and free of huge URLs for UI panels."""
+    import re
+
+    text = " ".join(str(exc).split())
+    text = re.sub(r"https?://\S+", "[url]", text, flags=re.IGNORECASE)
+    text = re.sub(r"s3://\S+", "[s3]", text, flags=re.IGNORECASE)
+    if len(text) > 220:
+        text = text[:219] + "…"
+    return text or "Field boundary request failed."
 
 
 @app.post("/fow-aoi")
@@ -815,11 +995,13 @@ def fow_aoi(req: FowRequest):
         from fow_aoi import query_fow_fields
 
         aoi_geom = _parse_aoi(req.aoi)
-        return query_fow_fields(req.bbox, aoi_geom, req.min_area_m2)
+        return query_fow_fields(
+            req.bbox, aoi_geom, req.min_area_m2, admin_iso=req.admin_iso
+        )
     except ValueError as exc:
-        return JSONResponse(status_code=400, content={"error": str(exc)})
+        return JSONResponse(status_code=400, content={"error": _public_error(exc)})
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
+        return JSONResponse(status_code=500, content={"error": _public_error(exc)})
 
 
 @app.post("/detect")
@@ -827,10 +1009,9 @@ def detect(req: DetectRequest):
     try:
         return _execute_detect(req, None)
     except ValueError as exc:
-        return JSONResponse(status_code=400, content={"error": str(exc)})
+        return JSONResponse(status_code=400, content={"error": _public_error(exc)})
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": str(exc)})
-
+        return JSONResponse(status_code=500, content={"error": _public_error(exc)})
 
 @app.post("/detect-job")
 def detect_job(req: DetectRequest, background_tasks: BackgroundTasks):
@@ -855,3 +1036,185 @@ def get_detect_job(job_id: str):
     if job.get("status") == "done" and job.get("result"):
         out["result"] = job["result"]
     return out
+
+
+# ---------------------------------------------------------------------------
+# SEN2SR Lite — Sentinel-2 neural super-resolution (10 m → 2.5 m)
+# ---------------------------------------------------------------------------
+
+
+def _sen2sr_error_payload(exc: BaseException) -> dict[str, str]:
+    """Return the real exception message (plan: detail / error)."""
+    msg = f"{type(exc).__name__}: {exc}".strip() or "SEN2SR request failed"
+    return {"detail": msg, "error": msg}
+
+
+def _sen2sr_parse_bool(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text in ("1", "true", "yes", "y", "on"):
+        return True
+    if text in ("0", "false", "no", "n", "off", ""):
+        return False
+    return default
+
+
+def _sen2sr_parse_bands(value: Any) -> list[str] | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, (list, tuple)):
+        out = [str(b).strip() for b in value if str(b).strip()]
+        return out or None
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.startswith("["):
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, list):
+                out = [str(b).strip() for b in parsed if str(b).strip()]
+                return out or None
+        except json.JSONDecodeError:
+            pass
+    out = [p.strip() for p in text.split(",") if p.strip()]
+    return out or None
+
+
+def _sen2sr_parse_aoi(value: Any) -> dict | list | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, (dict, list)):
+        return value
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid aoi JSON: {exc}") from exc
+    if not isinstance(parsed, (dict, list)):
+        raise ValueError("aoi must be a GeoJSON object or FeatureCollection")
+    return parsed
+
+
+@app.get("/api/sentinel2/super-resolution/status")
+def sentinel2_super_resolution_status() -> dict[str, Any]:
+    from services import super_resolution as sen2sr_svc
+
+    payload = sen2sr_svc.status_payload()
+    print(
+        f"[SEN2SR] status available={payload.get('available')} "
+        f"device={payload.get('device')} error={payload.get('error')}",
+        flush=True,
+    )
+    return payload
+
+
+@app.post("/api/sentinel2/super-resolution")
+async def sentinel2_super_resolution(request: Request):
+    """
+    Multipart GeoTIFF upload and/or form/JSON ``input_path``.
+
+    Fields: file, input_path, aoi, bands, output_path, display_1m.
+    """
+    from services import super_resolution as sen2sr_svc
+
+    tmp_path: Path | None = None
+    try:
+        content_type = (request.headers.get("content-type") or "").lower()
+        input_path: str | None = None
+        aoi: dict | list | None = None
+        bands: list[str] | None = None
+        output_path: str | None = None
+        display_1m = False
+        upload_name = ""
+
+        if "multipart/form-data" in content_type or "application/x-www-form-urlencoded" in content_type:
+            form = await request.form()
+            upload = form.get("file")
+            raw_path = form.get("input_path")
+            input_path = str(raw_path).strip() if raw_path not in (None, "") else None
+            aoi = _sen2sr_parse_aoi(form.get("aoi"))
+            bands = _sen2sr_parse_bands(form.get("bands"))
+            raw_out = form.get("output_path")
+            output_path = str(raw_out).strip() if raw_out not in (None, "") else None
+            display_1m = _sen2sr_parse_bool(form.get("display_1m"), False)
+
+            if upload is not None and hasattr(upload, "read"):
+                upload_name = getattr(upload, "filename", None) or "upload.tif"
+                suffix = Path(upload_name).suffix or ".tif"
+                fd, tmp_name = tempfile.mkstemp(prefix="sen2sr-upload-", suffix=suffix)
+                os.close(fd)
+                tmp_path = Path(tmp_name)
+                data = await upload.read()
+                if not data:
+                    raise ValueError("Uploaded file is empty")
+                tmp_path.write_bytes(data)
+                input_path = str(tmp_path)
+                print(f"[SEN2SR] received upload name={upload_name} bytes={len(data)}", flush=True)
+        else:
+            try:
+                body = await request.json()
+            except Exception as exc:  # noqa: BLE001
+                raise ValueError(
+                    "Expected multipart/form-data with file and/or JSON body with input_path"
+                ) from exc
+            if not isinstance(body, dict):
+                raise ValueError("JSON body must be an object")
+            raw_path = body.get("input_path")
+            input_path = str(raw_path).strip() if raw_path not in (None, "") else None
+            aoi = _sen2sr_parse_aoi(body.get("aoi"))
+            bands = _sen2sr_parse_bands(body.get("bands"))
+            raw_out = body.get("output_path")
+            output_path = str(raw_out).strip() if raw_out not in (None, "") else None
+            display_1m = _sen2sr_parse_bool(body.get("display_1m"), False)
+
+        if not input_path:
+            raise ValueError("Provide multipart file and/or input_path to a local GeoTIFF")
+
+        print(
+            f"[SEN2SR] request input={Path(input_path).name} "
+            f"bands={bands or 'default'} aoi={'yes' if aoi else 'no'} "
+            f"display_1m={display_1m} output_path={output_path or 'cache'}",
+            flush=True,
+        )
+
+        result = sen2sr_svc.super_resolve(
+            input_path,
+            aoi=aoi,
+            bands=bands,
+            output_path=output_path,
+            display_1m=display_1m,
+        )
+        print(
+            f"[SEN2SR] done cached={result.get('cached')} "
+            f"output={result.get('output_path')} "
+            f"display_1m_path={result.get('display_1m_path')}",
+            flush=True,
+        )
+        return result
+    except FileNotFoundError as exc:
+        print(f"[SEN2SR] error: {exc}", flush=True)
+        return JSONResponse(status_code=404, content=_sen2sr_error_payload(exc))
+    except ValueError as exc:
+        print(f"[SEN2SR] error: {exc}", flush=True)
+        return JSONResponse(status_code=400, content=_sen2sr_error_payload(exc))
+    except RuntimeError as exc:
+        print(f"[SEN2SR] error: {exc}", flush=True)
+        # Model unavailable / inference failures
+        status = 503 if "not available" in str(exc).lower() or "not loaded" in str(exc).lower() else 500
+        return JSONResponse(status_code=status, content=_sen2sr_error_payload(exc))
+    except Exception as exc:  # noqa: BLE001
+        print(f"[SEN2SR] error: {type(exc).__name__}: {exc}", flush=True)
+        return JSONResponse(status_code=500, content=_sen2sr_error_payload(exc))
+    finally:
+        if tmp_path is not None:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except Exception:  # noqa: BLE001
+                pass

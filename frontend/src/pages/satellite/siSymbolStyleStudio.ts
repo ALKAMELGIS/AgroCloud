@@ -245,13 +245,25 @@ function finalizeSiVectorStylePack(pack: SiVectorStylePack): SiVectorStylePack {
   };
 }
 
-function matchExprFromCategoryColors(field: string, categoryColors: Record<string, string>, otherColor: string): any {
-  const keys = Object.keys(categoryColors)
+function matchExprFromCategoryColors(
+  field: string,
+  categoryColors: Record<string, string>,
+  otherColor: string,
+  hidden?: Record<string, boolean>,
+): any {
+  const keys = Object.keys(categoryColors).filter(k => !hidden?.[k])
   const expr: any[] = ['match', ['to-string', ['get', field]]]
   for (const k of keys) {
     expr.push(k, categoryColors[k] ?? otherColor)
   }
   expr.push(otherColor)
+  return expr
+}
+
+function matchExprFillOpacityFromHidden(field: string, hidden: Record<string, boolean>, baseOpacity: number): any | number {
+  const keys = Object.keys(hidden).filter(k => hidden[k])
+  if (!keys.length) return baseOpacity
+  const expr: any[] = ['match', ['to-string', ['get', field]], ...keys.flatMap(k => [k, 0]), baseOpacity]
   return expr
 }
 
@@ -301,16 +313,27 @@ export function buildSiCustomVectorStylePack(opts: {
   const baseFill = appearance.fillColor
   const weight = appearance.weight
   const lineDash = mapboxLineDashFromStrokeStyle(appearance.strokeStyle)
-  const fillOpBase =
-    appearance.polygonFillAlpha * fillOpacityFactorForSiFillStyle(appearance.fillStyle)
-  const radius = appearance.pointRadius
-
   const cfg = normalizeSymbologyForLayer(
     opts.geojson,
     opts.source,
     opts.symbology,
     Boolean(opts.canUseArcGisOnline),
   )
+  const style = cfg.style as SymbologyStyle
+  const dataDrivenColor =
+    style === 'unique' ||
+    style === 'color' ||
+    style === 'color_size' ||
+    style === 'dot_density' ||
+    style === 'threshold_markers'
+  // Outline-only layers (fill alpha 0) stay invisible for graduated/unique fills —
+  // raise a sensible default so Symbology Studio changes are visible on the map.
+  const fillOpBase =
+    (dataDrivenColor && appearance.polygonFillAlpha <= 0.001
+      ? 0.45
+      : appearance.polygonFillAlpha) * fillOpacityFactorForSiFillStyle(appearance.fillStyle)
+  const radius = appearance.pointRadius
+
   const ctx = buildSymbologyContext(opts.geojson, cfg)
   const geometryKind = getLayerGeometryKind(opts.geojson)
   const field = cfg.field || ''
@@ -318,6 +341,7 @@ export function buildSiCustomVectorStylePack(opts: {
   const baseLinePaint: Record<string, unknown> = {
     'line-color': baseLine,
     'line-width': weight,
+    'line-opacity': 1,
     ...(lineDash ? { 'line-dasharray': lineDash } : {}),
   }
 
@@ -333,8 +357,6 @@ export function buildSiCustomVectorStylePack(opts: {
     'circle-stroke-width': Math.max(1, Math.min(4, weight * 0.65)),
     'circle-stroke-color': baseLine,
   }
-
-  const style = cfg.style as SymbologyStyle
 
   const numericFallbackPaint = (): SiVectorStylePack =>
     finalizeSiVectorStylePack({
@@ -379,19 +401,21 @@ export function buildSiCustomVectorStylePack(opts: {
         circlePaint: baseCirclePaint,
       })
     }
-    const fillExpr = matchExprFromCategoryColors(field, ctx.categoryColors, ctx.otherColor)
+    const fillExpr = matchExprFromCategoryColors(field, ctx.categoryColors, ctx.otherColor, ctx.categoryHidden)
     const strokeByCat: Record<string, string> = {}
     for (const k of Object.keys(ctx.categoryColors)) {
+      if (ctx.categoryHidden[k]) continue
       strokeByCat[k] = darkenColor(ctx.categoryColors[k] ?? ctx.otherColor, 0.28)
     }
-    const strokeExpr = matchExprFromCategoryColors(field, strokeByCat, darkenColor(ctx.otherColor, 0.28))
+    const strokeExpr = matchExprFromCategoryColors(field, strokeByCat, darkenColor(ctx.otherColor, 0.28), ctx.categoryHidden)
+    const fillOpacityExpr = matchExprFillOpacityFromHidden(field, ctx.categoryHidden, fillOpBase)
     return finalizeSiVectorStylePack({
       fillFilter: SI_MAPBOX_POLY_FILTER,
       lineFilter: SI_MAPBOX_LINE_POLY_FILTER,
       pointFilter: SI_MAPBOX_POINT_FILTER,
       fillPaint: {
         'fill-color': fillExpr,
-        'fill-opacity': fillOpBase,
+        'fill-opacity': fillOpacityExpr,
       },
       linePaint: {
         'line-color': strokeExpr,
@@ -401,6 +425,7 @@ export function buildSiCustomVectorStylePack(opts: {
       circlePaint: {
         'circle-radius': radius,
         'circle-color': fillExpr,
+        'circle-opacity': fillOpacityExpr,
         'circle-stroke-width': Math.max(1, Math.min(4, weight * 0.65)),
         'circle-stroke-color': strokeExpr,
       },

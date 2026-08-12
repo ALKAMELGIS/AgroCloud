@@ -87,6 +87,27 @@ describe('geoAiAgentTools registry', () => {
     expect(hide.content).toMatch(/off/)
   })
 
+  it('executes detect_field_boundaries via map handler', async () => {
+    const detectFieldBoundaries = vi.fn(
+      (source: string, year?: number) =>
+        `Started field boundary detection (${source}${year != null ? `, year ${year}` : ''}) for the current AOI.`,
+    )
+    const host = mockHost({
+      mapHandlers: { ...mockHost().mapHandlers, detectFieldBoundaries },
+    })
+    const r = await executeGeoAiAgentTool(
+      'detect_field_boundaries',
+      { source: 'ftw-live', year: 2024 },
+      host,
+    )
+    expect(r.ok).toBe(true)
+    expect(r.content).toMatch(/ftw-live/)
+    expect(detectFieldBoundaries).toHaveBeenCalledWith('ftw-live', 2024)
+    expect(collectMapActionSummaries([r])).toEqual([
+      expect.stringMatching(/field boundary detection/i),
+    ])
+  })
+
   it('reads RS analysis and live map state from the snapshot', async () => {
     const host = mockHost()
     const rs = await executeGeoAiAgentTool('read_rs_analysis', {}, host)

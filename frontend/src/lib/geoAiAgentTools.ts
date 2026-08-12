@@ -44,6 +44,7 @@ export const GEO_AI_AGENT_TOOL_NAMES = [
   'get_weather_context',
   'open_toolbox_panel',
   'run_rs_index',
+  'detect_field_boundaries',
   ...GEO_AI_GIS_TOOL_NAMES,
 ] as const
 
@@ -259,6 +260,25 @@ const TOOL_DEFS: ToolDef[] = [
         },
       },
       required: ['index'],
+    },
+  },
+  {
+    name: 'detect_field_boundaries',
+    description:
+      'Detect field boundaries for the current AOI using FTW live Sentinel-2 (or optional source). Starts the Field Boundary detection job for the drawn AOI. Use when the user asks to delineate fields, farm parcels, or FTW / Fields of the World boundaries.',
+    parameters: {
+      type: 'object',
+      properties: {
+        source: {
+          type: 'string',
+          description:
+            'Optional detection source (default ftw-live): ftw-live | ftw-infer | fow | sentinel2 | basemap',
+        },
+        year: {
+          type: 'number',
+          description: 'Optional calendar year for Sentinel-2 scene selection (defaults to current year).',
+        },
+      },
     },
   },
   {
@@ -701,6 +721,15 @@ export async function executeGeoAiAgentTool(
         const index = parseGeoAiRsIndexId(str(a.index ?? a.layer ?? a.name)) || 'NDVI'
         return runMapOp(host, { op: 'runRsIndex', index })
       }
+      case 'detect_field_boundaries': {
+        const source = str(a.source ?? a.engine) || 'ftw-live'
+        const year = num(a.year)
+        return runMapOp(host, {
+          op: 'detectFieldBoundaries',
+          source,
+          ...(year != null && year >= 2000 && year <= 2100 ? { year: Math.round(year) } : {}),
+        })
+      }
       case 'gis_buffer':
       case 'gis_intersect':
       case 'gis_clip':
@@ -757,7 +786,7 @@ export function collectMapActionSummaries(results: GeoAiAgentToolResult[]): stri
       for (const mr of r.mapResults) {
         if (mr.message) out.push(mr.message)
       }
-    } else if (r.ok && (r.name === 'fly_to' || r.name.startsWith('zoom') || r.name.startsWith('set_') || r.name === 'switch_basemap' || r.name === 'search_place' || r.name === 'identify_basemap' || r.name.startsWith('gis_') || r.name === 'export_layer' || r.name === 'open_toolbox_panel' || r.name === 'run_rs_index')) {
+    } else if (r.ok && (r.name === 'fly_to' || r.name.startsWith('zoom') || r.name.startsWith('set_') || r.name === 'switch_basemap' || r.name === 'search_place' || r.name === 'identify_basemap' || r.name.startsWith('gis_') || r.name === 'export_layer' || r.name === 'open_toolbox_panel' || r.name === 'run_rs_index' || r.name === 'detect_field_boundaries')) {
       out.push(r.content)
     }
   }

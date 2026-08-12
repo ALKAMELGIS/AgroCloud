@@ -51,6 +51,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_weather_context: 'Weather',
   open_toolbox_panel: 'Toolbox',
   run_rs_index: 'Show RS index',
+  detect_field_boundaries: 'Field boundaries',
 }
 
 function previewFromContent(content: string, max = 160): string {

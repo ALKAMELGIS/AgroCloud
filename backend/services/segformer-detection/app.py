@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import math
 import os
 import threading
@@ -50,7 +51,7 @@ from typing import Any
 
 import cv2
 import numpy as np
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from PIL import Image
@@ -80,6 +81,14 @@ def _engine_label() -> str:
     mid = MODEL_ID.lower()
     if "b5" in mid or "mit-b5" in mid:
         return "segformer-b5"
+    if "b4" in mid or "mit-b4" in mid:
+        return "segformer-b4"
+    if "b3" in mid or "mit-b3" in mid:
+        return "segformer-b3"
+    if "b2" in mid or "mit-b2" in mid:
+        return "segformer-b2"
+    if "b1" in mid or "mit-b1" in mid:
+        return "segformer-b1"
     if "b0" in mid or "mit-b0" in mid:
         return "segformer-b0"
     return "segformer-ade20k"
@@ -1061,7 +1070,19 @@ def _probe_device() -> str:
 
 @app.get("/health")
 def health() -> dict:
-    return {
+    training_ok = False
+    training_err: str | None = None
+    onnx_ok = False
+    try:
+        from finetune_segformer import training_deps_status
+        from inference_jobs import onnx_available
+
+        training_ok, training_err = training_deps_status()
+        onnx_ok = bool(onnx_available())
+    except Exception as exc:  # noqa: BLE001
+        training_ok = False
+        training_err = f"{type(exc).__name__}: {exc}"
+    out = {
         "status": "ok" if _engine_error is None else "degraded",
         "engine": _engine_label(),
         "model": MODEL_ID,
@@ -1071,7 +1092,12 @@ def health() -> dict:
         "port_default": 8095,
         "allowed_tile_sizes": list(ALLOWED_TILE_SIZES),
         "field_min_component_px": FIELD_MIN_COMPONENT_PX,
+        "training": training_ok,
+        "onnx": onnx_ok,
     }
+    if training_err and not training_ok:
+        out["training_error"] = training_err
+    return out
 
 
 @app.on_event("startup")
@@ -1083,6 +1109,17 @@ def _warm_model() -> None:
             _get_engine()
         except Exception:  # noqa: BLE001
             pass
+        # Prefetch Training AI base encoder so "loading_model" is nearly instant.
+        try:
+            from finetune_segformer import training_deps_status, warm_train_assets
+
+            ok, _err = training_deps_status()
+            if ok:
+                print("[segformer] warming Training AI base encoder…", flush=True)
+                warm_train_assets()
+                print("[segformer] Training AI base encoder ready.", flush=True)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[segformer] Training AI warmup skipped: {exc}", flush=True)
 
     threading.Thread(target=_load, name="segformer-warmup", daemon=True).start()
 
@@ -1098,3 +1135,175 @@ def detect(req: DetectRequest):
     except Exception as exc:  # noqa: BLE001
         print(f"[segformer] detect failed: {exc}", flush=True)
         return JSONResponse(status_code=500, content={"error": str(exc), "detail": str(exc)})
+
+
+# ---------------------------------------------------------------------------
+# Training & AI — interactive SegFormer fine-tune (B0 by default) + inference jobs
+# ---------------------------------------------------------------------------
+
+
+@app.get("/training/models")
+def training_list_models():
+    """List fine-tuned checkpoints available for Infer."""
+    from finetune_segformer import MODEL_DIR
+
+    items: list[dict] = []
+    try:
+        root = MODEL_DIR
+        if root.is_dir():
+            for child in sorted(root.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+                if not child.is_dir() or child.name == "base_cache":
+                    continue
+                meta_path = child / "training_meta.json"
+                meta: dict = {}
+                if meta_path.is_file():
+                    try:
+                        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                    except Exception:  # noqa: BLE001
+                        meta = {}
+                has_weights = (child / "model.safetensors").is_file() or (
+                    child / "pytorch_model.bin"
+                ).is_file()
+                if not has_weights and not meta_path.is_file():
+                    continue
+                history = meta.get("loss_history") if isinstance(meta.get("loss_history"), list) else []
+                items.append(
+                    {
+                        "model_id": meta.get("model_id") or child.name,
+                        "model_name": meta.get("model_name") or "SegFormer",
+                        "model_version": meta.get("model_version") or child.name,
+                        "training_date": meta.get("training_date"),
+                        "epochs": meta.get("epochs"),
+                        "sample_count": meta.get("sample_count"),
+                        "class_count": meta.get("class_count"),
+                        "path": str(child),
+                        "has_loss_history": bool(history),
+                        "loss_history_len": len(history),
+                    }
+                )
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=500, content={"error": str(exc), "detail": str(exc)})
+    return {"models": items, "count": len(items)}
+
+
+@app.get("/training/models/{model_id}")
+def training_get_model(model_id: str):
+    from finetune_segformer import MODEL_DIR
+
+    mid = (model_id or "").strip()
+    if not mid or mid == "base_cache":
+        return JSONResponse(status_code=404, content={"error": "Model not found", "detail": "Model not found"})
+    model_dir = MODEL_DIR / mid
+    if not model_dir.is_dir():
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"Trained model not found: {mid}", "detail": f"Trained model not found: {mid}"},
+        )
+    meta_path = model_dir / "training_meta.json"
+    meta: dict = {}
+    if meta_path.is_file():
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            meta = {}
+    history = meta.get("loss_history") if isinstance(meta.get("loss_history"), list) else []
+    return {
+        "model_id": meta.get("model_id") or mid,
+        "model_name": meta.get("model_name") or "SegFormer",
+        "model_version": meta.get("model_version") or mid,
+        "training_date": meta.get("training_date"),
+        "epochs": meta.get("epochs"),
+        "sample_count": meta.get("sample_count"),
+        "class_count": meta.get("class_count"),
+        "class_names": meta.get("class_names") or [],
+        "learning_rate": meta.get("learning_rate"),
+        "train_loss": meta.get("train_loss"),
+        "val_loss": meta.get("val_loss"),
+        "final_metrics": meta.get("final_metrics") or {},
+        "loss_history": history,
+    }
+
+
+@app.post("/training/start")
+async def training_start(request: Request):
+    from training_jobs import start_training_job
+
+    try:
+        body = await request.json()
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=400, content={"error": str(exc), "detail": str(exc)})
+    if not isinstance(body, dict):
+        return JSONResponse(
+            status_code=400,
+            content={"error": "JSON body required", "detail": "JSON body required"},
+        )
+    try:
+        job_id = start_training_job(body)
+        return {"job_id": job_id}
+    except ValueError as exc:
+        return JSONResponse(status_code=422, content={"error": str(exc), "detail": str(exc)})
+    except RuntimeError as exc:
+        return JSONResponse(status_code=503, content={"error": str(exc), "detail": str(exc)})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=500, content={"error": str(exc), "detail": str(exc)})
+
+
+@app.get("/training/{job_id}")
+def training_status(job_id: str):
+    from training_jobs import get_job
+
+    job = get_job(job_id)
+    if not job:
+        return JSONResponse(
+            status_code=404,
+            content={"error": "Job not found", "detail": "Job not found"},
+        )
+    return job
+
+
+@app.post("/training/{job_id}/cancel")
+def training_cancel(job_id: str):
+    from training_jobs import cancel_training_job
+
+    ok = cancel_training_job(job_id)
+    if not ok:
+        return JSONResponse(
+            status_code=404,
+            content={"error": "Job not found", "detail": "Job not found"},
+        )
+    return {"ok": True, "job_id": job_id}
+
+
+@app.post("/inference/start")
+async def inference_start(request: Request):
+    from inference_jobs import start_inference_job
+
+    try:
+        body = await request.json()
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=400, content={"error": str(exc), "detail": str(exc)})
+    if not isinstance(body, dict):
+        return JSONResponse(
+            status_code=400,
+            content={"error": "JSON body required", "detail": "JSON body required"},
+        )
+    try:
+        job_id = start_inference_job(body)
+        return {"job_id": job_id}
+    except ValueError as exc:
+        return JSONResponse(status_code=422, content={"error": str(exc), "detail": str(exc)})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=500, content={"error": str(exc), "detail": str(exc)})
+
+
+@app.get("/inference/{job_id}")
+def inference_status(job_id: str):
+    from inference_jobs import get_job
+
+    job = get_job(job_id)
+    if not job:
+        return JSONResponse(
+            status_code=404,
+            content={"error": "Job not found", "detail": "Job not found"},
+        )
+    return job

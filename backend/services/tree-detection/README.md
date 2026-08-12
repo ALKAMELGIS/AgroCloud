@@ -2,30 +2,29 @@
 
 Turnkey tree-crown detection endpoint. The AgroCloud frontend tiles the AOI,
 posts each RGB mosaic to the backend proxy (`/api/tree-detection/predict`),
-which forwards it here; this service returns image-pixel boxes that the
-frontend georeferences back to lng/lat.
+which forwards it here. Responses include axis-aligned **boxes** and optional
+instance **mask polygons** (image-pixel rings) that the frontend georeferences.
 
-Two interchangeable engines, auto-selected so it **just works**:
+## Engines
 
-- **DeepForest** (default, zero-config) —
-  [`weecology/DeepForest`](https://github.com/weecology/DeepForest).
-  Pip-installable and **auto-downloads a pretrained tree-crown model** on first
-  run. No manual weights file.
-- **YOLO** (optional) — point `MODEL_PATH` at a YOLO weights file
-  (e.g. `best.pt` from
-  [`yolo-trees/ai-tree-detection`](https://anapgit.scanlab.gr/yolo-trees/ai-tree-detection))
-  and install `ultralytics` to use it instead.
+| Engine | When | Output |
+|--------|------|--------|
+| **DeepForest** (default / recommended) | Zero-config tree crowns | Boxes (+ rectangle rings as `instances`) |
+| **YOLO Segmentation** | Tree-trained `MODEL_PATH=*.pt` only (COCO `yolo11n-seg.pt` is blocked) | Boxes + masks when available |
+| **ONNX Segmentation** | `MODEL_PATH=*.onnx` + onnxruntime | Boxes (+ polygons when decode succeeds) |
 
-## Quickest start (Docker, one command)
+Override with `TREE_DETECTION_ENGINE=deepforest|yolo|yolo_seg|onnx_seg`. Per-request: form/query `engine=`.
+
+Default `TREE_DETECTION_IMG_SIZE=800`, `TREE_DETECTION_CONF=0.25`.
+
+## Quickest start (Docker)
 
 ```bash
 cd backend/services/tree-detection
 docker compose up --build
 ```
 
-This serves `http://localhost:8080/predict` — which is the AgroCloud backend's
-**default** `TREE_DETECTION_URL`. Once it's up, open **Tree Detections**, draw an
-AOI, and **Run detection**. No `.env` change needed for local use.
+Serves `http://localhost:8080/predict` (AgroCloud default `TREE_DETECTION_URL`).
 
 ## Run locally (pip)
 
@@ -35,61 +34,25 @@ pip install -r requirements.txt
 uvicorn app:app --host 0.0.0.0 --port 8080
 ```
 
-The first request (or first build) downloads the pretrained DeepForest model
-(~tens of MB) and caches it.
-
-## Use the optional YOLO engine
+### YOLO-seg (.pt)
 
 ```bash
-pip install -r requirements.txt ultralytics
-# get best.pt from the model repo, then:
-MODEL_PATH=/path/to/best.pt TREE_DETECTION_ENGINE=yolo \
+pip install ultralytics
+MODEL_PATH=/path/to/yolo-seg.pt TREE_DETECTION_ENGINE=yolo_seg \
   uvicorn app:app --host 0.0.0.0 --port 8080
 ```
 
-## Deploy to Railway (hosted)
+### ONNX Runtime
 
-This folder ships a `railway.json` so Railway deploys it with zero extra config:
+```bash
+# CPU:
+pip install onnxruntime
+# or GPU:
+# pip install onnxruntime-gpu
 
-1. **Railway → New → Deploy from GitHub repo**, then in the service
-   **Settings → Source**, set **Root Directory** to
-   `backend/services/tree-detection`. Railway detects the `Dockerfile` and the
-   bundled `railway.json` (Docker builder + `/health` healthcheck).
-2. The container binds to Railway's injected `$PORT` automatically (the
-   `Dockerfile` `CMD` falls back to `8080` locally). No port config needed.
-3. **Memory:** DeepForest pulls in PyTorch (~1.5–2 GB RAM at inference). If you
-   see OOM restarts on large AOIs, raise the service memory in
-   **Settings → Resources**.
-4. Grab the public domain Railway assigns (e.g.
-   `https://tree-detection-production.up.railway.app`) and verify:
-
-   ```bash
-   curl https://<your-railway-domain>/health   # → {"status":"ok","engine":"deepforest"}
-   ```
-5. On the **AgroCloud backend** env, set (note the `/predict` suffix):
-
-   ```ini
-   TREE_DETECTION_URL=https://<your-railway-domain>/predict
-   ```
-
-## Point AgroCloud at it
-
-The backend defaults to `http://127.0.0.1:8080/predict`. To use a remote/hosted
-instance (e.g. in production), set on the AgroCloud **backend** (`.env`):
-
-```ini
-TREE_DETECTION_URL=https://your-host:8080/predict
-# optional tuning:
-# TREE_DETECTION_ENGINE=deepforest   # or yolo
-# TREE_DETECTION_CONF=0.25
-# TREE_DETECTION_IOU=0.45
-# TREE_DETECTION_IMG_SIZE=640
+MODEL_PATH=/path/to/model.onnx TREE_DETECTION_ENGINE=onnx_seg \
+  uvicorn app:app --host 0.0.0.0 --port 8080
 ```
-
-> **Deployed / production note:** this service runs PyTorch and needs a real
-> Python host (VM, container host, or GPU box) — it cannot run on static/shared
-> hosting. Deploy this container next to (or reachable from) your backend and
-> set `TREE_DETECTION_URL` to its public `/predict` URL.
 
 ## Endpoint contract
 
@@ -105,8 +68,43 @@ TREE_DETECTION_URL=https://your-host:8080/predict
 Response `200`:
 
 ```json
-{ "boxes": [ { "x1": 12.0, "y1": 34.0, "x2": 56.0, "y2": 78.0, "confidence": 0.91, "name": "Tree" } ] }
+{
+  "boxes": [
+    { "x1": 12.0, "y1": 34.0, "x2": 56.0, "y2": 78.0, "confidence": 0.91, "name": "Tree" }
+  ],
+  "instances": [
+    {
+      "polygon": [[12,34],[56,34],[56,78],[12,78],[12,34]],
+      "score": 0.91,
+      "label": "Tree",
+      "area_px": 1936
+    }
+  ],
+  "engine": "deepforest",
+  "inference_ms": 420.5
+}
 ```
 
 Coordinates are in the original posted-image pixel space (top-left origin).
-`GET /health` returns `{ "status": "ok", "engine": "deepforest" }`.
+
+`GET /health`:
+
+```json
+{
+  "status": "ok",
+  "engine": "deepforest",
+  "engines_available": ["deepforest", "yolo_seg", "onnx_seg"],
+  "model_path": false
+}
+```
+
+## Point AgroCloud at it
+
+```ini
+TREE_DETECTION_URL=http://127.0.0.1:8080/predict
+```
+
+Frontend **Tree Detections** tool: Imagery / Model / Confidence (default 0.50) /
+Tile size / Overlap → Detect Trees → crown **polygons** on the map, stats,
+Add to Map, GeoJSON / Shapefile. Sentinel-2 imagery mode extracts **vegetation
+zones** only (not individual tree crowns).

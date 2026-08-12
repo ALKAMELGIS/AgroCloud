@@ -58,6 +58,18 @@ services:
     # same raster files — the JP2→GeoTIFF conversion writes cog.tif back here for the tiler.
     volumes:
       - ./backend/uploads/rasters:/data
+    restart: unless-stopped
+
+  # Agri Field Boundary (FoW / FTW infer / FTW live / SEN2SR) — FastAPI on :8092.
+  # Local Windows without Docker: backend/services/agri-field-boundary/start-local.ps1
+  agri-field-boundary:
+    build: ./backend/services/agri-field-boundary
+    ports:
+      - "8092:8092"
+    environment:
+      - PORT=8092
+      - FTW_INFER_ENABLED=1
+    restart: unless-stopped
 
 volumes:
   postgres_data:

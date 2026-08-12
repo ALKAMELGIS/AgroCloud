@@ -1,4 +1,6 @@
 weights/
+models/
+cache/
 *.pt
 *.pth
 __pycache__/

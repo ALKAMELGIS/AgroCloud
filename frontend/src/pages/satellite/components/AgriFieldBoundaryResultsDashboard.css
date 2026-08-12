@@ -1,0 +1,282 @@
+/* Field Results dashboard — matte black / soft white */
+
+.si-afb-dash {
+  --afb-dash-bg: #050505;
+  --afb-dash-panel: #0a0a0a;
+  --afb-dash-border: rgba(255, 255, 255, 0.12);
+  --afb-dash-text: rgba(248, 250, 252, 0.92);
+  --afb-dash-muted: rgba(226, 232, 240, 0.62);
+  --afb-dash-soft: rgba(226, 232, 240, 0.42);
+
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 4px 10px;
+  color: var(--afb-dash-text);
+  background: var(--afb-dash-bg);
+  border-radius: 8px;
+  min-height: 0;
+}
+
+.si-afb-dash--inline {
+  padding: 4px 2px 8px;
+  border: 1px solid var(--afb-dash-border);
+}
+
+.si-afb-dash__kpis {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin-left: 14px;
+  padding-left: 2px;
+}
+
+.si-afb-dash__kpi {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.si-afb-dash__kpi span {
+  font-size: 9px;
+  font-weight: 550;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(248, 250, 252, 0.58);
+  line-height: 1.2;
+}
+
+.si-afb-dash__kpi strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 560px) {
+  .si-afb-dash__kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-left: 8px;
+  }
+}
+
+.si-afb-dash__charts {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+@media (min-width: 720px) {
+  .si-afb-dash:not(.si-afb-dash--inline) .si-afb-dash__charts {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.si-afb-dash__card {
+  border-radius: 6px;
+  border: 1px solid var(--afb-dash-border);
+  background: var(--afb-dash-panel);
+  padding: 8px 9px 9px;
+  animation: si-afb-dash-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  min-width: 0;
+  color: var(--afb-dash-text);
+}
+
+.si-afb-dash__card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.si-afb-dash__card-head h4 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--afb-dash-text);
+}
+
+.si-afb-dash__card-head span {
+  font-size: 10px;
+  color: var(--afb-dash-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.si-afb-dash__empty {
+  margin: 0;
+  padding: 14px 8px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--afb-dash-muted);
+}
+
+.si-afb-dash__empty strong,
+.si-afb-dash__empty code {
+  color: var(--afb-dash-text);
+  font-weight: 600;
+}
+
+.si-afb-dash__card--table .si-epochs {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: #000;
+  color: #fff;
+}
+
+.si-afb-dash__card--table .si-epochs__summary,
+.si-afb-dash__card--table .si-epochs__analysis,
+.si-afb-dash__card--table .si-epochs__scroll,
+.si-afb-dash__card--table .si-epochs__table {
+  background: #000;
+  color: #fff;
+}
+
+.si-afb-dash__card--table .si-epochs__stat span,
+.si-afb-dash__card--table .si-epochs__count {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.si-afb-dash__card--table .si-epochs__stat strong,
+.si-afb-dash__card--table .si-epochs__table thead th,
+.si-afb-dash__card--table .si-epochs__table td,
+.si-afb-dash__card--table .si-epochs__table tbody th[scope='row'] {
+  color: #fff !important;
+}
+
+.si-afb-dash__card--table .si-epochs__table thead th,
+.si-afb-dash__card--table .si-epochs__table td,
+.si-afb-dash__card--table .si-epochs__table th {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  background: #000 !important;
+}
+
+.si-afb-dash__card--table .si-epochs__table thead th {
+  background: #0a0a0a !important;
+}
+
+.si-afb-dash__card--table .si-epochs__table tbody tr.is-alt th,
+.si-afb-dash__card--table .si-epochs__table tbody tr.is-alt td {
+  background: #0a0a0a !important;
+}
+
+.si-afb-dash__card--table .si-epochs__table tbody tr.is-best th,
+.si-afb-dash__card--table .si-epochs__table tbody tr.is-best td {
+  background: #111 !important;
+  color: #fff !important;
+}
+
+/* Validation last — compact footer card */
+.si-afb-dash__card--validate {
+  order: 40;
+  background: #000;
+  border-color: rgba(255, 255, 255, 0.16);
+  padding: 8px;
+}
+
+.si-afb-dash__card--validate .si-afbv--dashboard {
+  gap: 8px;
+}
+
+.si-afb-dash__card--validate .si-afbv__block--validation {
+  padding: 0;
+  border: none;
+  background: transparent;
+  gap: 7px;
+}
+
+.si-afb-dash__card--validate .si-afbv__block-head h4,
+.si-afb-dash__card--validate .si-afbv__block-head span,
+.si-afb-dash__card--validate .si-afbv__lede,
+.si-afb-dash__card--validate .si-afbv__need-ref,
+.si-afb-dash__card--validate .si-afbv__need-ref p,
+.si-afb-dash__card--validate .si-afbv__ref-name {
+  color: var(--afb-dash-muted);
+}
+
+.si-afb-dash__card--validate .si-afbv__block-head h4 {
+  color: var(--afb-dash-text);
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: 0.01em;
+}
+
+.si-afb-dash__card--validate .si-afbv__need-ref {
+  border-color: var(--afb-dash-border);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px 9px;
+}
+
+.si-afb-dash__card--validate .si-afbv__need-ref > i {
+  color: rgba(226, 232, 240, 0.55);
+}
+
+/* Charts: black figure, soft white axes */
+.si-afb-dash .si-afbv__figure-bg {
+  fill: #000;
+}
+.si-afb-dash .si-afbv__spine {
+  stroke: rgba(248, 250, 252, 0.55);
+}
+.si-afb-dash .si-afbv__figure-grid {
+  stroke: rgba(255, 255, 255, 0.1);
+}
+.si-afb-dash .si-afbv__figure-tick,
+.si-afb-dash .si-afbv__figure-axis,
+.si-afb-dash .si-afbv__figure-note,
+.si-afb-dash .si-afbv__figure-legend-text,
+.si-afb-dash .si-afbv__figure-annotation,
+.si-afb-dash .si-cm__tick {
+  fill: rgba(248, 250, 252, 0.78);
+}
+.si-afb-dash .si-afbv__figure-ref {
+  stroke: rgba(248, 250, 252, 0.45);
+}
+.si-afb-dash .si-afbv__figure-legend {
+  fill: #0a0a0a;
+  stroke: rgba(255, 255, 255, 0.28);
+}
+.si-afb-dash .si-afbv__figure-empty {
+  background: #000;
+  border-color: var(--afb-dash-border);
+  color: var(--afb-dash-muted);
+}
+.si-afb-dash .si-afbv__figure-crosshair {
+  stroke: rgba(255, 255, 255, 0.55);
+}
+.si-afb-dash .si-afbv__figure-tip {
+  background: rgba(0, 0, 0, 0.94);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+@keyframes si-afb-dash-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Float panel body matches dashboard */
+#si-afb-results-dashboard .gis-float-panel__body {
+  background: #050505;
+}
+
+#si-afb-results-dashboard .gis-float-panel__titles .gis-float-panel__layer-name {
+  letter-spacing: 0.01em;
+}

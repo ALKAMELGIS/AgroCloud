@@ -3,11 +3,14 @@ import {
   remoteSensingCollectionsForProvider,
   remoteSensingProviderOptions,
 } from '../../../lib/remoteSensingProviders'
+import { isSentinel2L2ACollection } from '../../../lib/agriFieldBoundary/sen2srClient'
 import { RemoteSensingLayerSelect } from './RemoteSensingLayerSelect'
 import { SiRsPanelSelect } from './SiRsPanelSelect'
 import { SiAoiLayerModePanel } from './SiAoiLayerModePanel'
 import type { SiAoiMaskBuilderLayerOption, SiAoiMaskBuilderSettings } from '../../../lib/siAoiMaskBuilder'
 import type { RemoteSensingDrawingTool } from './RemoteSensingDrawingToolbar'
+import { Sen2srProductControls } from './Sen2srProductControls'
+import { useSen2srControls } from './useSen2srControls'
 import { useEffect, useState } from 'react'
 
 export const REMOTE_SENSING_PROVIDERS = remoteSensingProviderOptions()
@@ -82,6 +85,13 @@ export type RemoteSensingToolboxPanelProps = {
   onChirpsExportExcel?: () => void
   onChirpsExportReport?: () => void
   onClose: () => void
+  /** Optional AOI clip for SEN2SR enhance when a local L2A GeoTIFF is uploaded. */
+  resolveSen2srAoi?: () =>
+    | GeoJSON.Polygon
+    | GeoJSON.MultiPolygon
+    | GeoJSON.Feature
+    | GeoJSON.FeatureCollection
+    | null
 }
 
 export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps) {
@@ -134,9 +144,15 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
     onChirpsExportCsv,
     onChirpsExportExcel,
     onChirpsExportReport,
+    resolveSen2srAoi,
   } = props
 
   const collectionOptions = remoteSensingCollectionsForProvider(provider)
+  const showSen2sr = isSentinel2L2ACollection(collection)
+  const sen2sr = useSen2srControls({
+    enabled: showSen2sr,
+    resolveAoi: resolveSen2srAoi,
+  })
   const cloudSafe = Math.max(0, Math.min(100, Math.round(Number(cloudCoverage) || 0)))
   const [cloudDraft, setCloudDraft] = useState(cloudSafe)
   useEffect(() => {
@@ -253,6 +269,28 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
           <p className="si-rs-panel__meta si-rs-panel__meta--warn si-rs-panel__meta--inline" role="status">
             {wmsZoomWarning}
           </p>
+        ) : null}
+
+        {showSen2sr ? (
+          <div className="si-rs-panel__stack si-rs-panel__stack--section">
+            <Sen2srProductControls
+              status={sen2sr.status}
+              productMode={sen2sr.productMode}
+              onProductModeChange={sen2sr.setProductMode}
+              display1m={sen2sr.display1m}
+              onDisplay1mChange={sen2sr.setDisplay1m}
+              showFilePicker
+              geotiffFileName={sen2sr.geotiffFileName}
+              onPickGeotiff={sen2sr.pickGeotiff}
+              onEnhance={() => void sen2sr.enhance()}
+              canEnhance={sen2sr.canEnhance}
+              enhanceBusy={sen2sr.busy}
+              enhanceError={sen2sr.error}
+              enhanceNotice={sen2sr.notice}
+              rawHint="RAW mode keeps the existing WMS / index pipeline at native Sentinel-2 10 m."
+              sen2srHint="SEN2SR needs a local Sentinel-2 L2A GeoTIFF — WMS tiles are not rewritten as native 2.5 m."
+            />
+          </div>
         ) : null}
 
         <div className="si-rs-panel__stack si-rs-panel__stack--section">

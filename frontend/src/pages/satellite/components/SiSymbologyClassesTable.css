@@ -1,0 +1,82 @@
+.si-sym-classes {
+  overflow: auto;
+  max-height: 220px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.si-sym-classes__empty {
+  margin: 0;
+  padding: 10px 8px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.si-sym-classes__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.si-sym-classes__table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f1f5f9;
+  color: #475569;
+  font-weight: 600;
+  text-align: start;
+  padding: 5px 6px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.1);
+  white-space: nowrap;
+}
+
+.si-sym-classes__table tbody td {
+  padding: 4px 6px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  vertical-align: middle;
+}
+
+.si-sym-classes__table tbody tr.is-hidden {
+  opacity: 0.45;
+}
+
+.si-sym-classes__swatch-input {
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+}
+
+.si-sym-classes__label-input {
+  width: 100%;
+  min-width: 72px;
+  padding: 3px 6px;
+  font-size: 11px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 4px;
+}
+
+.si-sym-classes__value {
+  max-width: 88px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+}
+
+.si-sym-classes__range {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.si-sym-classes__count {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  color: #64748b;
+}

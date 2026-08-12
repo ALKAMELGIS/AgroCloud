@@ -9,8 +9,7 @@ import {
   SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX,
 } from './siSentinelAoiWmsStack'
 import { isSiSentinelAoiWmsPingPongMapId } from './siSentinelAoiWmsImperative'
-
-const SI_BASEMAP_LAYER_PREFIX = 'agrocloud-basemap-layer-'
+import { isSiBasemapStyleLayerId, siParkBasemapRastersBelowOverlays } from './siCustomLayerZOrder'
 
 /** Polygon fills that must sit under analysis rasters (so NDVI is visible). */
 const DRAWN_AOI_FILL_UNDER_RASTER_IDS = [
@@ -34,7 +33,7 @@ const DRAW_DRAFT_TOP_IDS = [
 ] as const
 
 export function isSiBasemapMapLayerId(layerId: string): boolean {
-  return layerId.startsWith(SI_BASEMAP_LAYER_PREFIX)
+  return isSiBasemapStyleLayerId(layerId)
 }
 
 export function isSiAnalysisRasterMapLayerId(layerId: string): boolean {
@@ -99,6 +98,9 @@ export function syncSiMapAnalysisLayerOrder(
   map: MapboxMap,
   input: SyncSiMapAnalysisLayerOrderInput = {},
 ): void {
+  // Opaque satellite tiles must stay under GIS overlays; style diffs re-append them on top.
+  siParkBasemapRastersBelowOverlays(map)
+
   const agroFillId = input.agroFillId
   const agroLineId = input.agroLineId
   const rasterBeforeId = resolveSiAnalysisRasterBeforeLayerId(map, agroLineId)

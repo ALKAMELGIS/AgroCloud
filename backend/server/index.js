@@ -23,10 +23,13 @@ import { registerCropClassificationRoutes } from './cropClassificationProxy.js'
 import { registerTreeDetectionRoutes } from './treeDetectionProxy.js'
 import { registerSamDetectionRoutes } from './samDetectionProxy.js'
 import { registerSegFormerDetectionRoutes } from './segformerDetectionProxy.js'
+import { registerTrainingAiRoutes } from './trainingAiProxy.js'
 import { registerSam2RefinementRoutes } from './sam2RefinementProxy.js'
 import { registerTemporalTransformerRoutes } from './temporalTransformerProxy.js'
 import { registerGeoaiInferenceRoutes } from './geoaiInferenceProxy.js'
 import { registerAgriFieldBoundaryRoutes } from './agriFieldBoundaryProxy.js'
+import { startLocalAiServiceSupervisor } from './localAiServiceSupervisor.js'
+import { registerDelineateAnythingRoutes } from './delineateAnythingProxy.js'
 import { registerFloodMonitoringRoutes } from './floodMonitoringProxy.js'
 import { registerEsriTerrainTileRoutes } from './esriTerrainRgbTiles.js'
 import { registerRasterRoutes } from './raster/rasterUploadRoutes.js'
@@ -95,6 +98,7 @@ app.use(
     limit: '2mb',
     // High-res SAM / field-boundary / SegFormer captures are large base64 JSON —
     // skip global parse so the route-level 48mb parsers can accept them.
+    // SEN2SR also skips so multipart GeoTIFF / large JSON can hit express.raw.
     type: (req) => {
       const path = String(req.originalUrl || req.url || '')
       if (
@@ -102,7 +106,11 @@ app.use(
         path.startsWith('/api/sam2-refinement/') ||
         path.startsWith('/api/temporal-transformer/') ||
         path.startsWith('/api/agri-field-boundary/') ||
-        path.startsWith('/api/segformer-detection/')
+        path.startsWith('/api/delineate-anything/') ||
+        path.startsWith('/api/segformer-detection/') ||
+        path.startsWith('/api/training/') ||
+        path.startsWith('/api/inference/') ||
+        path.startsWith('/api/sentinel2/super-resolution')
       )
         return false
       const ct = String(req.headers['content-type'] || '')
@@ -1863,8 +1871,10 @@ registerAcpWeatherRoutes(app)
 registerChirpsRoutes(app)
 registerCropClassificationRoutes(app, { secretsFilePath: API_SECRETS_FILE, broadcast })
 registerTreeDetectionRoutes(app)
+registerDelineateAnythingRoutes(app)
 registerSamDetectionRoutes(app)
 registerSegFormerDetectionRoutes(app)
+registerTrainingAiRoutes(app)
 registerSam2RefinementRoutes(app)
 registerTemporalTransformerRoutes(app)
 registerGeoaiInferenceRoutes(app)
@@ -1939,6 +1949,7 @@ const server = app.listen(API_PORT, LISTEN_HOST, () => {
   console.log(
     `[runtime] cwd=${process.cwd()} entry=${fileURLToPath(import.meta.url)} apiPort=${API_PORT} wsPort=${WS_PORT}`,
   )
+  startLocalAiServiceSupervisor()
 })
 
 /** Shared-hosting (Hostinger): only one port — attach WS to the HTTP server instead of WS_PORT. */

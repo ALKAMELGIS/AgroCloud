@@ -161,6 +161,7 @@ export type SatelliteMapAnalysisChromeProps = {
     | 'stress-zones'
     | 'crop-classification'
     | 'tree-detections'
+    | 'agri-field-boundary'
     | 'segformer-detection'
     | 'hydro-watershed'
     | 'well-site'

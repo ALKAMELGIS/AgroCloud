@@ -167,6 +167,7 @@ export type TimeSeriesExportKind =
   | 'plot-priority-excel'
   | 'aoi-raw-excel'
   | 'aoi-raw-by-layer-excel'
+  | 'agri-object-intel-excel'
   | 'csv'
   | 'png'
   | 'geojson'

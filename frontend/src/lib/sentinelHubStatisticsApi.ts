@@ -144,6 +144,10 @@ export type SentinelHubSceneZonalStats = {
   si?: SentinelHubIndexZonalStats
   ssi?: SentinelHubIndexZonalStats
   ndre?: SentinelHubIndexZonalStats
+  /** Modified SAVI — soil-adjusted vegetation index variant. */
+  msavi?: SentinelHubIndexZonalStats
+  /** Normalized Burn Ratio (B08−B12)/(B08+B12). */
+  nbr?: SentinelHubIndexZonalStats
 }
 
 export type SentinelHubDailyIndexMeans = {
@@ -162,6 +166,10 @@ export type SentinelHubDailyIndexMeans = {
   ssi?: number | null
   /** Red-edge NDRE: (B08−B05)/(B08+B05). */
   ndre?: number | null
+  /** MSAVI: (2·NIR+1−√((2·NIR+1)²−8·(NIR−Red)))/2 */
+  msavi?: number | null
+  /** NBR: (B08−B12)/(B08+B12) */
+  nbr?: number | null
   /** Pixel min/max/mean inside AOI from Statistical API (Layer Live). */
   zonal?: Partial<SentinelHubSceneZonalStats>
 }
@@ -307,12 +315,12 @@ export const CROP_ALERT_MULTI_INDEX_EVALSCRIPT = `//VERSION=3
 function setup() {
   return {
     input: [{
-      bands: ["B02", "B03", "B04", "B05", "B08", "B11", "SCL", "dataMask"]
+      bands: ["B02", "B03", "B04", "B05", "B08", "B11", "B12", "SCL", "dataMask"]
     }],
     output: [
       {
         id: "indices",
-        bands: ["ndvi", "ndwi", "ndmi", "evi", "savi", "ci_re", "ndsi", "si", "ssi", "ndre"],
+        bands: ["ndvi", "ndwi", "ndmi", "evi", "savi", "ci_re", "ndsi", "si", "ssi", "ndre", "msavi", "nbr"],
         sampleType: "FLOAT32"
       },
       {
@@ -343,9 +351,15 @@ function evaluatePixel(samples) {
   var ssi = (isFinite(ndsi) ? ndsi : 0) + si;
   var dNdre = samples.B08 + samples.B05;
   var ndre = dNdre > 1e-6 ? (samples.B08 - samples.B05) / dNdre : NaN;
+  var nir = samples.B08;
+  var red = samples.B04;
+  var msaviInner = Math.max(0, Math.pow(2.0 * nir + 1.0, 2) - 8.0 * (nir - red));
+  var msavi = (2.0 * nir + 1.0 - Math.sqrt(msaviInner)) / 2.0;
+  var dNbr = samples.B08 + samples.B12;
+  var nbr = dNbr > 1e-6 ? (samples.B08 - samples.B12) / dNbr : NaN;
   var valid = samples.dataMask && !cloud && (dNdvi > 1e-6 || dNdsi > 1e-6 || dNdmi > 1e-6);
   return {
-    indices: [ndvi, ndwi, ndmi, evi, savi, ci_re, ndsi, si, ssi, ndre],
+    indices: [ndvi, ndwi, ndmi, evi, savi, ci_re, ndsi, si, ssi, ndre, msavi, nbr],
     dataMask: [valid ? 1 : 0]
   };
 }`
@@ -355,12 +369,12 @@ export const CROP_ALERT_RELAXED_INDEX_EVALSCRIPT = `//VERSION=3
 function setup() {
   return {
     input: [{
-      bands: ["B02", "B03", "B04", "B05", "B08", "B11", "dataMask"]
+      bands: ["B02", "B03", "B04", "B05", "B08", "B11", "B12", "dataMask"]
     }],
     output: [
       {
         id: "indices",
-        bands: ["ndvi", "ndwi", "ndmi", "evi", "savi", "ci_re", "ndsi", "si", "ssi", "ndre"],
+        bands: ["ndvi", "ndwi", "ndmi", "evi", "savi", "ci_re", "ndsi", "si", "ssi", "ndre", "msavi", "nbr"],
         sampleType: "FLOAT32"
       },
       {
@@ -389,9 +403,15 @@ function evaluatePixel(samples) {
   var ssi = (isFinite(ndsi) ? ndsi : 0) + si;
   var dNdre = samples.B08 + samples.B05;
   var ndre = dNdre > 1e-6 ? (samples.B08 - samples.B05) / dNdre : NaN;
+  var nir = samples.B08;
+  var red = samples.B04;
+  var msaviInner = Math.max(0, Math.pow(2.0 * nir + 1.0, 2) - 8.0 * (nir - red));
+  var msavi = (2.0 * nir + 1.0 - Math.sqrt(msaviInner)) / 2.0;
+  var dNbr = samples.B08 + samples.B12;
+  var nbr = dNbr > 1e-6 ? (samples.B08 - samples.B12) / dNbr : NaN;
   var valid = samples.dataMask && (dNdvi > 1e-6 || dNdsi > 1e-6 || dNdmi > 1e-6);
   return {
-    indices: [ndvi, ndwi, ndmi, evi, savi, ci_re, ndsi, si, ssi, ndre],
+    indices: [ndvi, ndwi, ndmi, evi, savi, ci_re, ndsi, si, ssi, ndre, msavi, nbr],
     dataMask: [valid ? 1 : 0]
   };
 }`
@@ -703,6 +723,8 @@ export function parseSentinelHubStatsResponse(json: StatsApiResponse): SentinelH
     const siStats = readBandStats(row, 'si')
     const ssiStats = readBandStats(row, 'ssi')
     const ndreStats = readBandStats(row, 'ndre')
+    const msaviStats = readBandStats(row, 'msavi')
+    const nbrStats = readBandStats(row, 'nbr')
     const zonal: Partial<SentinelHubSceneZonalStats> = {}
     if (ndviStats) zonal.ndvi = ndviStats
     if (ndmiStats) zonal.ndmi = ndmiStats
@@ -714,6 +736,8 @@ export function parseSentinelHubStatsResponse(json: StatsApiResponse): SentinelH
     if (siStats) zonal.si = siStats
     if (ssiStats) zonal.ssi = ssiStats
     if (ndreStats) zonal.ndre = ndreStats
+    if (msaviStats) zonal.msavi = msaviStats
+    if (nbrStats) zonal.nbr = nbrStats
     out.push({
       date,
       ndvi: ndviStats?.mean ?? null,
@@ -726,6 +750,8 @@ export function parseSentinelHubStatsResponse(json: StatsApiResponse): SentinelH
       si: siStats?.mean ?? null,
       ssi: ssiStats?.mean ?? null,
       ndre: ndreStats?.mean ?? null,
+      msavi: msaviStats?.mean ?? null,
+      nbr: nbrStats?.mean ?? null,
       zonal: Object.keys(zonal).length ? zonal : undefined,
     })
   }

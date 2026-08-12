@@ -103,6 +103,148 @@
   right: 10px;
 }
 
+/* Per-side legend FABs + cards (Before = left of split, After = right). */
+.si-map-swipe-overlay__legend-slot {
+  position: absolute;
+  bottom: 92px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(300px, 46vw);
+  min-width: 48px;
+  pointer-events: none;
+  box-sizing: border-box;
+  padding: 0 10px;
+  overflow: hidden;
+}
+
+.si-map-swipe-overlay__legend-slot--before {
+  left: 0;
+  align-items: flex-start;
+}
+
+.si-map-swipe-overlay__legend-slot--after {
+  right: 0;
+  align-items: flex-end;
+}
+
+.si-map-swipe-overlay__legend-fab {
+  appearance: none;
+  pointer-events: auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(16, 22, 26, 0.9);
+  color: #e2e8f0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(8px);
+  flex-shrink: 0;
+}
+
+.si-map-swipe-overlay__legend-fab:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(28, 38, 44, 0.94);
+}
+
+.si-map-swipe-overlay__legend-fab.is-on {
+  background: rgba(46, 125, 50, 0.92);
+  border-color: rgba(165, 214, 167, 0.55);
+  color: #fff;
+}
+
+.si-map-swipe-overlay__legend-fab i {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.si-map-swipe-overlay__legend-card {
+  pointer-events: auto;
+  width: min(280px, calc(100% - 4px));
+  max-height: min(42vh, 320px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(16, 22, 26, 0.94);
+  color: #e8eef0;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+.si-map-swipe-overlay__legend-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.si-map-swipe-overlay__legend-card-head > span {
+  display: grid;
+  gap: 2px;
+  font: 700 11px/1.2 system-ui, sans-serif;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #f1f5f9;
+  min-width: 0;
+}
+
+.si-map-swipe-overlay__legend-card-head em {
+  font: 500 10px/1.25 system-ui, sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+  color: rgba(226, 232, 240, 0.75);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.si-map-swipe-overlay__legend-card-head button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #94a3b8;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.si-map-swipe-overlay__legend-card-head button:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.si-map-swipe-overlay__legend-card-body {
+  padding: 4px 6px 8px;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+
+.si-map-swipe-overlay__legend-card-body .si-layer-live-legend {
+  padding: 4px 4px 6px;
+  color: #cbd5e1;
+}
+
+.si-map-swipe-overlay__legend-card-body .si-layer-live-legend__section--float {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 2px 0 0;
+  color: #e2e8f0;
+}
+
 .si-map-swipe-overlay__handle {
   position: absolute;
   top: 0;

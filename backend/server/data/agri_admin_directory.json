@@ -1,22 +1,22 @@
 {
   "version": 1,
-  "updatedAt": "2026-07-29T09:05:20.280Z",
+  "updatedAt": "2026-08-12T12:23:52.447Z",
   "users": [
     {
-      "id": 1782414394512,
+      "id": 1786536405252,
       "name": "Alkamel GIS",
       "email": "alkamelgis@gmail.com",
       "role": "Admin",
       "status": "Active",
-      "lastLogin": "29/07/2026, 1:05:19 PM",
+      "lastLogin": "12/08/2026, 4:23:51 PM",
       "emailVerified": true,
       "passwordHash": "b03ddf3ca2e714a6548e7495e2a03f5e824eaac9837cd7f159c67b90fb4b7342"
     }
   ],
   "auditLog": [
     {
-      "id": "355ae521-a4f1-4b53-95c5-2401df60d7e8",
-      "at": "2026-07-29T09:05:19.648Z",
+      "id": "624c245e-a9d5-45b7-8a5f-8cd37b9224fc",
+      "at": "2026-08-12T12:23:51.970Z",
       "entity": "auth",
       "entityId": "alkamelgis@gmail.com",
       "action": "login_success",
@@ -26,7 +26,37 @@
         "mode": "signin",
         "keepSignedIn": true,
         "deviceName": "Windows · Chrome",
-        "atLocal": "7/29/2026, 1:05:19 PM"
+        "atLocal": "8/12/2026, 4:23:51 PM"
+      }
+    },
+    {
+      "id": "7d16fa58-2a32-42d9-83f8-b8321678bd23",
+      "at": "2026-08-12T12:23:44.038Z",
+      "entity": "auth",
+      "action": "login_failure",
+      "entityId": "alkamelgs@gmail.com",
+      "actorEmail": "Alkamelgs@gmail.com",
+      "meta": {
+        "reason": "server_login_invalid_credentials",
+        "mode": "signin",
+        "keepSignedIn": true,
+        "deviceName": "Windows · Chrome",
+        "atLocal": "8/12/2026, 4:23:44 PM"
+      }
+    },
+    {
+      "id": "8c994530-2353-4e15-8c65-43e6460437bc",
+      "at": "2026-08-12T12:23:39.707Z",
+      "entity": "auth",
+      "action": "login_failure",
+      "entityId": "alkamelgs@gmail.com",
+      "actorEmail": "Alkamelgs@gmail.com",
+      "meta": {
+        "reason": "server_login_invalid_credentials",
+        "mode": "signin",
+        "keepSignedIn": true,
+        "deviceName": "Windows · Chrome",
+        "atLocal": "8/12/2026, 4:23:39 PM"
       }
     }
   ]

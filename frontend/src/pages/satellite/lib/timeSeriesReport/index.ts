@@ -87,6 +87,29 @@ export {
 export { renderExcelTrendCharts } from './timeSeriesExcelChartRenderer'
 export { generateFullTimeSeriesReport, runTimeSeriesExport } from './exportManager'
 export type { TimeSeriesExportContext } from './exportManager'
+export {
+  mapLayerAttributesToAgriFields,
+  mappedFieldsToRecord,
+  classifyNdviChange,
+  classifyInspectionPriority,
+} from './agriculturalObjectIntelligenceMapper'
+export {
+  AGRI_OBJECT_FIELD_DEFS,
+  AGRI_OBJECT_EXAMPLE_EXPORT_COLUMNS,
+  NOT_AVAILABLE,
+  REQUIRES_ET_DATASET,
+  REQUIRES_CROP_MODEL,
+} from './agriculturalObjectIntelligenceSchema'
+export { buildAgriculturalObjectIntelligenceModel } from './buildAgriculturalObjectIntelligenceModel'
+export type {
+  AgriculturalObjectIntelligenceModel,
+  AgriObjectSourceFeature,
+} from './buildAgriculturalObjectIntelligenceModel'
+export {
+  generateAgriculturalObjectIntelligenceExcel,
+  buildAgriculturalObjectIntelligenceWorkbook,
+  sanitizeAgriculturalObjectIntelFilename,
+} from './generateAgriculturalObjectIntelligenceExcel'
 export { exportChartPng } from './timeSeriesReportExports'
 export {
   buildPlotTimeSeriesAnalyticsModel,

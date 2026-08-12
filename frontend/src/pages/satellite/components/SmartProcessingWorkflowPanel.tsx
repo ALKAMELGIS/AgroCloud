@@ -9,7 +9,9 @@ export type SmartProcessingSectionId =
   | 'stress-zones'
   | 'crop-classification'
   | 'tree-detections'
+  | 'agri-field-boundary'
   | 'segformer-detection'
+  | 'training-ai'
   | 'hydro-watershed'
   | 'well-site'
   | 'well-suitability'
@@ -38,6 +40,8 @@ const QUICK_LINKS: Array<{ id: SmartProcessingSectionId; icon: string; label: st
   { id: 'stress-zones', icon: 'fa-solid fa-heart-pulse', label: 'Stress Zones ⭐' },
   { id: 'crop-classification', icon: 'fa-solid fa-wheat-awn', label: 'Crop AI' },
   { id: 'tree-detections', icon: 'fa-solid fa-tree', label: 'Tree Detections' },
+  { id: 'agri-field-boundary', icon: 'fa-solid fa-crop-simple', label: 'Agricultural Field Delineation' },
+  { id: 'training-ai', icon: 'fa-solid fa-graduation-cap', label: 'Training & AI' },
   { id: 'hydro-watershed', icon: 'fa-solid fa-water', label: 'Hydro Watershed' },
   { id: 'table-geo-ai', icon: 'fa-solid fa-comments', label: 'AI Agent' },
 ];
@@ -150,6 +154,13 @@ const WORKFLOW_ROWS: Array<{
         label: 'Tree Detections (VHRTrees)',
         hint: 'Draw an AOI → auto-detect & classify individual tree crowns from VHR imagery as an interactive overlay.',
         target: 'tree-detections',
+      },
+      {
+        id: 'agri-field-boundary',
+        icon: 'fa-solid fa-crop-simple',
+        label: 'Agricultural Field Delineation',
+        hint: 'AOI → live Sentinel-2 stack + FTW model (or FoW / basemap) → field polygons for export.',
+        target: 'agri-field-boundary',
       },
     ],
   },

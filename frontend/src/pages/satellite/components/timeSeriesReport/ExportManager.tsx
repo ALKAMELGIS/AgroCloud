@@ -11,6 +11,8 @@ import {
   type BatchFieldSummaryProgress,
   type TimeSeriesExportKind,
 } from '../../lib/timeSeriesReport'
+import type { AgriObjectIntelProgress, AgriObjectSourceFeature } from '../../lib/timeSeriesReport/buildAgriculturalObjectIntelligenceModel'
+import { AGRI_OBJECT_INTEL_STAGE_LABELS } from '../../lib/timeSeriesReport/buildAgriculturalObjectIntelligenceModel'
 import { SI_IMAGERY_PLOT_LABEL_AUTO } from '../../utils/siImageryTimeSeriesFields'
 import './ExportManager.css'
 
@@ -52,6 +54,10 @@ export type TimeSeriesExportManagerProps = {
   resolvePlotsForLabel?: (labelAttribute: string) => CropAlertFieldInput[]
   /** Re-resolve the active single field (Weather / PDF) with the chosen label. */
   resolveFieldForLabel?: (labelAttribute: string) => CropAlertFieldInput | null
+  /** Full GeoJSON features (with properties) for Agricultural Object Intelligence. */
+  objectLayerFeatures?: AgriObjectSourceFeature[]
+  objectLayerName?: string
+  objectDailyByFieldKey?: Map<string, import('../../../../lib/sentinelHubStatisticsApi').SentinelHubDailyIndexMeans[]>
 }
 
 type ExportProgressState = {
@@ -60,7 +66,7 @@ type ExportProgressState = {
   currentName?: string
   failed?: number
   startedAt?: number
-  mode?: 'plots' | 'batch'
+  mode?: 'plots' | 'batch' | 'agri-intel'
 }
 
 const EXPORT_OPTIONS: Array<{ kind: TimeSeriesExportKind; label: string; icon: string; primary?: boolean }> = [
@@ -68,6 +74,11 @@ const EXPORT_OPTIONS: Array<{ kind: TimeSeriesExportKind; label: string; icon: s
   { kind: 'docx', label: 'Intelligence Report (Word)', icon: 'fa-file-word' },
   { kind: 'lulc-docx', label: 'LULC Report (Word)', icon: 'fa-layer-group' },
   { kind: 'excel', label: 'Analytics Report (Excel)', icon: 'fa-file-excel' },
+  {
+    kind: 'agri-object-intel-excel',
+    label: 'Agricultural Object Intelligence (Excel)',
+    icon: 'fa-seedling',
+  },
   {
     kind: 'batch-excel',
     label: 'Batch Export - Analytics Reports (Excel)',
@@ -90,6 +101,7 @@ const EXPORT_OPTIONS: Array<{ kind: TimeSeriesExportKind; label: string; icon: s
 const LABEL_DATE_CONFIRM_KINDS = new Set<TimeSeriesExportKind>(['weather-excel'])
 const FIELD_SUMMARY_CONFIRM_KINDS = new Set<TimeSeriesExportKind>(['batch-field-summary'])
 const BATCH_EXPORT_KINDS = new Set<TimeSeriesExportKind>(['batch-excel', 'batch-field-summary'])
+const AGRI_OBJECT_INTEL_KIND: TimeSeriesExportKind = 'agri-object-intel-excel'
 
 function formatEta(ms: number): string {
   const sec = Math.max(0, Math.round(ms / 1000))
@@ -103,7 +115,12 @@ function formatEta(ms: number): string {
 }
 
 function formatBusyLabel(progress: ExportProgressState | null, _tick: number): string {
-  if (!progress || progress.total <= 0) return 'Exporting...'
+  if (!progress || progress.total <= 0) {
+    return progress?.currentName || 'Exporting...'
+  }
+  if (progress.mode === 'agri-intel') {
+    return progress.currentName || 'Generating Agricultural Intelligence Report...'
+  }
   if (progress.mode === 'batch' && progress.currentName) {
     const current = Math.min(progress.total, progress.done < progress.total ? progress.done + 1 : progress.done)
     let label = `Field ${current}/${progress.total} - ${progress.currentName}`
@@ -146,6 +163,9 @@ export function TimeSeriesExportManager({
   onLabelAttributeChange,
   resolvePlotsForLabel,
   resolveFieldForLabel,
+  objectLayerFeatures,
+  objectLayerName,
+  objectDailyByFieldKey,
 }: TimeSeriesExportManagerProps) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -266,6 +286,21 @@ export function TimeSeriesExportManager({
             farmName: fieldForExport?.farmName || farmName || labeledFieldName,
             aoiName,
             plotNameField: chosenLabel || undefined,
+            objectLayerFeatures,
+            objectLayerName,
+            objectDailyByFieldKey,
+            onAgriObjectIntelProgress: (progress: AgriObjectIntelProgress) =>
+              setMapProgress({
+                done: progress.done,
+                total: Math.max(1, progress.total),
+                currentName:
+                  progress.stage === 'completed'
+                    ? 'Download Agricultural Intelligence Report.xlsx'
+                    : progress.stage === 'reading_layer'
+                      ? 'Generating Agricultural Intelligence Report...'
+                      : AGRI_OBJECT_INTEL_STAGE_LABELS[progress.stage] || progress.label,
+                mode: 'agri-intel',
+              }),
             onPlotAnalyticsProgress: (done, total) =>
               setMapProgress({ done, total, mode: 'plots' }),
             onBatchAnalyticsProgress: (progress: BatchAnalyticsExportProgress) =>
@@ -292,10 +327,14 @@ export function TimeSeriesExportManager({
           {
             onMapSnapshotProgress: BATCH_EXPORT_KINDS.has(kind)
               ? undefined
-              : (done, total) => setMapProgress({ done, total, mode: 'plots' }),
+              : kind === AGRI_OBJECT_INTEL_KIND
+                ? undefined
+                : (done, total) => setMapProgress({ done, total, mode: 'plots' }),
           },
         )
-        if (BATCH_EXPORT_KINDS.has(kind) && result && 'succeeded' in result) {
+        if (kind === AGRI_OBJECT_INTEL_KIND) {
+          showStatus('Download Agricultural Intelligence Report.xlsx')
+        } else if (BATCH_EXPORT_KINDS.has(kind) && result && 'succeeded' in result) {
           const abortedNote = result.aborted ? ' (aborted)' : ''
           if (kind === 'batch-field-summary') {
             showStatus(
@@ -349,6 +388,9 @@ export function TimeSeriesExportManager({
       onLabelAttributeChange,
       resolvePlotsForLabel,
       resolveFieldForLabel,
+      objectLayerFeatures,
+      objectLayerName,
+      objectDailyByFieldKey,
       showStatus,
     ],
   )

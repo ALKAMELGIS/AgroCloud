@@ -58,6 +58,7 @@ import type { SiImageryAnalysisMode } from '../../../lib/siMultiLayerAoiTrendAna
 import {
   buildSiImageryFieldOptions,
   buildSiImageryFieldOptionsForSource,
+  collectSiImageryObjectFeatures,
   listSiImageryPlotLabelAttributes,
   listSiImageryPlotSourceLayers,
   resolveSiImageryField,
@@ -884,6 +885,24 @@ export function SiImageryTimeSeriesPanel({
   const exportPlots = useMemo(
     () => resolveExportPlotsForLabel(plotLabelAttribute),
     [resolveExportPlotsForLabel, plotLabelAttribute],
+  )
+
+  const objectLayerFeatures = useMemo(
+    () =>
+      collectSiImageryObjectFeatures(
+        agroStructuresMask,
+        aoiFields,
+        committedAoiGeometry,
+        vectorLayers,
+        exportPlots.map(p => p.fieldKey).filter(Boolean),
+      ),
+    [agroStructuresMask, aoiFields, committedAoiGeometry, vectorLayers, exportPlots],
+  )
+
+  const objectDailyByFieldKey = useMemo(
+    () =>
+      plotLayerTsResult?.dailyByFieldKey ?? multiAoiTimeline?.dailyByFieldKey ?? undefined,
+    [plotLayerTsResult?.dailyByFieldKey, multiAoiTimeline?.dailyByFieldKey],
   )
 
   const exportAoiName = useMemo(() => `${exportPlots.length} plots`, [exportPlots.length])
@@ -2420,6 +2439,9 @@ export function SiImageryTimeSeriesPanel({
               onLabelAttributeChange={setPlotLabelAttribute}
               resolvePlotsForLabel={resolveExportPlotsForLabel}
               resolveFieldForLabel={resolveExportFieldForLabel}
+              objectLayerFeatures={objectLayerFeatures}
+              objectLayerName={selectedPlotSource?.label || exportAoiName}
+              objectDailyByFieldKey={objectDailyByFieldKey}
             />
           </div>
           </>
@@ -2466,6 +2488,9 @@ export function SiImageryTimeSeriesPanel({
               onLabelAttributeChange={setPlotLabelAttribute}
               resolvePlotsForLabel={resolveExportPlotsForLabel}
               resolveFieldForLabel={resolveExportFieldForLabel}
+              objectLayerFeatures={objectLayerFeatures}
+              objectLayerName={selectedPlotSource?.label || exportAoiName}
+              objectDailyByFieldKey={objectDailyByFieldKey}
             />
           </div>
           )}

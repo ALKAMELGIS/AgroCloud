@@ -27,7 +27,9 @@ export type SatelliteContextPanelId =
   | 'map-swipe'
   | 'layer-live-legend'
   | 'tree-detections'
+  | 'agri-field-boundary'
   | 'segformer-detection'
+  | 'training-ai'
   | 'hydro-watershed'
   | 'well-site'
   | 'well-suitability'
@@ -86,7 +88,9 @@ export type SatelliteContextualAnalysisDockProps = {
     | 'stress-zones'
     | 'crop-classification'
     | 'tree-detections'
+    | 'agri-field-boundary'
     | 'segformer-detection'
+    | 'training-ai'
     | 'hydro-watershed'
     | 'well-site'
     | 'well-suitability'
@@ -200,6 +204,20 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     hint: 'AOI → auto-detect & classify tree crowns from VHR imagery.',
   },
   {
+    id: 'agri-field-boundary',
+    icon: 'fa-solid fa-crop-simple',
+    label: 'Agricultural Field Delineation',
+    title: 'Agricultural Field Delineation',
+    hint: 'AOI → live Sentinel-2 + FTW model (or FoW / basemap) → agricultural field polygons.',
+  },
+  {
+    id: 'training-ai',
+    icon: 'fa-solid fa-graduation-cap',
+    label: 'Training & AI',
+    title: 'Training & AI',
+    hint: 'Draw training samples → fine-tune SegFormer-B3 → validate → run inference on Sentinel-2.',
+  },
+  {
     id: 'hydro-watershed',
     icon: 'fa-solid fa-mountain-sun',
     label: 'Hydro Watershed',
@@ -309,6 +327,8 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
   'map-swipe',
   'layer-live-legend',
   'tree-detections',
+  'agri-field-boundary',
+  'training-ai',
   'hydro-watershed',
   'well-site',
   'well-suitability',
@@ -323,6 +343,8 @@ const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
   'wapi-alerts',
   'crop-classification',
   'tree-detections',
+  'agri-field-boundary',
+  'training-ai',
   'hydro-watershed',
   'well-site',
   'well-suitability',
@@ -341,7 +363,15 @@ const RAIL_GROUPS_MAP: SatelliteContextPanelId[][] = [
     'layer-live-legend',
     'hydro-watershed',
   ],
-  ['tree-detections', 'well-site', 'well-suitability', 'flood-monitoring', 'raster-georeference'],
+  [
+    'tree-detections',
+    'agri-field-boundary',
+    'training-ai',
+    'well-site',
+    'well-suitability',
+    'flood-monitoring',
+    'raster-georeference',
+  ],
 ];
 
 const RAIL_BY_ID = RAIL.reduce(

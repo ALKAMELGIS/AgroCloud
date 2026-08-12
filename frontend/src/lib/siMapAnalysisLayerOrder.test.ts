@@ -67,4 +67,39 @@ describe('siMapAnalysisLayerOrder', () => {
     expect(agroFillIdx).toBeLessThan(rasterIdx)
     expect(map.setPaintProperty).toHaveBeenCalledWith('agro-fill', 'fill-opacity', 0)
   })
+
+  it('parks satellite basemap rasters under imported shapefile fill/line', () => {
+    let order = [
+      'background',
+      'custom-aoi-fill',
+      'custom-aoi-line',
+      'agrocloud-basemap-layer-0',
+    ]
+
+    const map = {
+      getStyle: () => ({ layers: order.map(id => ({ id })) }),
+      getLayer: (id: string) => (order.includes(id) ? { id } : undefined),
+      moveLayer: (id: string, beforeId?: string) => {
+        const from = order.indexOf(id)
+        if (from < 0) return
+        order.splice(from, 1)
+        if (!beforeId) {
+          order.push(id)
+          return
+        }
+        const to = order.indexOf(beforeId)
+        if (to < 0) {
+          order.push(id)
+          return
+        }
+        order.splice(to, 0, id)
+      },
+      setPaintProperty: vi.fn(),
+    }
+
+    syncSiMapAnalysisLayerOrder(map as any, {})
+
+    expect(order.indexOf('agrocloud-basemap-layer-0')).toBeLessThan(order.indexOf('custom-aoi-fill'))
+    expect(order.indexOf('custom-aoi-line')).toBeGreaterThan(order.indexOf('agrocloud-basemap-layer-0'))
+  })
 })
