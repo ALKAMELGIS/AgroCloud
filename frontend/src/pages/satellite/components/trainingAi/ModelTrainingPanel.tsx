@@ -3,7 +3,7 @@ import { TrainingModelSelector } from './TrainingModelSelector'
 import { InferenceArgumentsPanel } from './InferenceArgumentsPanel'
 import type { TrainingJobStatus } from '../../../../lib/trainingAi/trainingAiClient'
 import type { AnalysisImageryKind } from '../../../../lib/trainingAi/modelRegistry'
-import { getTrainingModelById, isTrainModelPickerEntry } from '../../../../lib/trainingAi/modelRegistry'
+import { getTrainingModelById } from '../../../../lib/trainingAi/modelRegistry'
 import type { InferenceArguments } from '../../../../lib/trainingAi/inferenceArguments'
 
 export type ModelTrainingPanelProps = {
@@ -56,13 +56,6 @@ export function ModelTrainingPanel(props: ModelTrainingPanelProps) {
         disabled={props.busy}
         trainableOnly
       />
-
-      {model && !model.trainableOnAgroCloud && isTrainModelPickerEntry(model) ? (
-        <p className="si-tai__hint">
-          {model.name} Infer uses the pretrained AgroCloud engine. TRAIN MODEL fine-tunes{' '}
-          <strong>SegFormer-B2</strong> on your samples (epochs → Results dashboard).
-        </p>
-      ) : null}
 
       <div className="si-tai__row">
         <span className="si-tai__label">Model bands</span>

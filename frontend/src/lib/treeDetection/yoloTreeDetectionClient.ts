@@ -1,16 +1,11 @@
 /**
- * YOLO tree-detection client — talks to the backend tree-detection proxy
- * (`/api/tree-detection/*`), which forwards the AOI imagery to a hosted YOLO
- * tree-crown model and returns predicted boxes in image-pixel coordinates.
- *
- * The reference model is the single-class ("tree") YOLOv5 detector from
- * https://anapgit.scanlab.gr/yolo-trees/ai-tree-detection (best.pt / best.onnx).
- * A ready-to-run FastAPI service for it ships in
- * backend/services/tree-detection/. All detection comes from this model — there
- * is no in-browser fallback detector.
+ * Tree Detection client — talks to `/api/tree-detection/*` which forwards AOI
+ * imagery to backend/services/tree-detection (DeepForest / YOLO tree models).
  */
 
 const BASE = '/api/tree-detection'
+
+export type TreeDetectionModelId = 'deepforest' | 'yolo'
 
 export type YoloTreeBox = {
   /** Image-pixel bounds (origin top-left of the posted mosaic). */
@@ -25,19 +20,23 @@ export type YoloTreeBox = {
 
 export type TreeDetectionServiceConfig = {
   configured: boolean
+  online?: boolean
   model: string
+  engine?: string | null
+  enginesAvailable?: string[]
+  modelPathConfigured?: boolean
   imgSize?: number
   iou?: number
 }
 
-/** Whether a YOLO endpoint is configured on the backend. */
+/** Whether a tree-detection endpoint is configured and reachable. */
 export async function fetchTreeDetectionConfig(signal?: AbortSignal): Promise<TreeDetectionServiceConfig> {
   try {
     const res = await fetch(`${BASE}/config`, { signal })
-    if (!res.ok) return { configured: false, model: 'yolo' }
+    if (!res.ok) return { configured: false, model: 'deepforest' }
     return (await res.json()) as TreeDetectionServiceConfig
   } catch {
-    return { configured: false, model: 'yolo' }
+    return { configured: false, model: 'deepforest' }
   }
 }
 
@@ -50,7 +49,7 @@ function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   })
 }
 
-/** Raised when no YOLO endpoint is configured / reachable. */
+/** Raised when the tree model service is offline / misconfigured. */
 export class TreeDetectionServiceError extends Error {
   readonly offline: boolean
   constructor(message: string, offline = false) {
@@ -61,14 +60,16 @@ export class TreeDetectionServiceError extends Error {
 }
 
 export type PredictMosaicOptions = {
-  /** Confidence threshold passed to YOLO (0..1). */
+  /** Confidence threshold (0..1). */
   score?: number
+  /** Preferred engine on the microservice (`deepforest` | `yolo` | …). */
+  engine?: TreeDetectionModelId | string
   signal?: AbortSignal
 }
 
 /**
- * Run the YOLO model on ONE prepared imagery mosaic (a chunk of a tiled AOI
- * scan) and return the predicted tree boxes in that mosaic's pixel space.
+ * Run the Tree Detection Model on one AOI imagery mosaic and return tree boxes
+ * in that mosaic's pixel space.
  */
 export async function predictTreeBoxes(
   canvas: HTMLCanvasElement,
@@ -77,6 +78,7 @@ export async function predictTreeBoxes(
   const blob = await canvasToPngBlob(canvas)
   const params = new URLSearchParams()
   if (options.score != null) params.set('score', String(options.score))
+  if (options.engine) params.set('engine', String(options.engine))
   const qs = params.toString()
   let res: Response
   try {
@@ -89,19 +91,15 @@ export async function predictTreeBoxes(
   } catch (err) {
     if ((err as Error)?.name === 'AbortError') throw err
     throw new TreeDetectionServiceError(
-      'Could not reach the YOLO model service. Check your connection or the model endpoint.',
+      'Could not reach the Tree Detection Model. Start backend/services/tree-detection (DeepForest).',
       true,
     )
   }
   const json = (await res.json().catch(() => ({}))) as { boxes?: YoloTreeBox[]; error?: string }
-  // 503 (unconfigured) and 502/504 (proxy could not reach / timed out talking to
-  // the model service) all mean the hosted model is momentarily unavailable.
-  // Flag these as "offline" so the caller can degrade gracefully to the on-device
-  // fallback detector instead of surfacing a blocking error.
   if (res.status === 503 || res.status === 502 || res.status === 504) {
     throw new TreeDetectionServiceError(
       json?.error ||
-          'Tree-detection model service is offline — run backend/services/tree-detection to enable the hosted model.',
+        'Tree Detection Model is offline — run backend/services/tree-detection/start-local.ps1.',
       true,
     )
   }

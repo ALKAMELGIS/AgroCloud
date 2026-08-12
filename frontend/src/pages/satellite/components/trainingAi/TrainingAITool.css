@@ -47,6 +47,45 @@
   line-height: 1.2;
   color: inherit;
 }
+.si-tai__step-cell {
+  position: relative;
+  min-width: 0;
+}
+.si-tai__step-cell .si-tai__step {
+  width: 100%;
+}
+.si-tai__step-tool {
+  position: absolute;
+  top: 3px;
+  right: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid rgba(125, 211, 252, 0.28);
+  border-radius: 5px;
+  background: rgba(8, 12, 20, 0.55);
+  color: #7dd3fc;
+  font-size: 9px;
+  opacity: 0.85;
+  cursor: pointer;
+  z-index: 2;
+}
+.si-tai__step-tool:hover {
+  opacity: 1;
+  background: rgba(56, 189, 248, 0.22);
+  border-color: rgba(125, 211, 252, 0.55);
+}
+.si-tai__val-toolbar-spacer {
+  flex: 1 1 auto;
+  min-width: 4px;
+}
+.si-tai__val-toolbar .si-tai__icon-btn {
+  flex: 0 0 auto;
+  max-width: 28px;
+}
 .si-tai__step-glow {
   position: absolute;
   left: 18%;

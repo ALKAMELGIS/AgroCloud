@@ -653,7 +653,6 @@ import type {
 } from './lib/imageClassification/imageClassificationClient';
 import { ingestRasterFilesViaServer, type ServerRasterLayerConfig } from '../../lib/raster/siRasterTileService';
 import { downloadTreeShapefile } from '../../lib/treeDetection/shapefileExport';
-import type { TreeAnalysisMode } from '../../lib/treeDetection/treeDetectionEngine';
 import {
   searchPlaces,
   zoomForPlaceKind,
@@ -5327,7 +5326,6 @@ export default function SatelliteIntelligence() {
   const [treeProvider, setTreeProvider] = useState<TreeImageryProviderId>('esri');
   const [treeSensitivity] = useState(0.5);
   const [treeOverlayVisible, setTreeOverlayVisible] = useState(true);
-  const [treeAnalysisMode, setTreeAnalysisMode] = useState<TreeAnalysisMode>('detect');
   const [treeConfidenceMin, setTreeConfidenceMin] = useState(0);
   const [expandedEnvSection, setExpandedEnvSection] = useState<
   | 'source'
@@ -14042,7 +14040,7 @@ export default function SatelliteIntelligence() {
     provider: treeProvider,
     enabled: treeDetectionsActive,
     sensitivity: treeSensitivity,
-    mode: treeAnalysisMode,
+    mode: 'detect',
   });
 
   // Apply the confidence-filter slider: only trees scoring ≥ treeConfidenceMin
@@ -25814,8 +25812,6 @@ export default function SatelliteIntelligence() {
                         <TreeDetectionsPanel
                           provider={treeProvider}
                           onProviderChange={setTreeProvider}
-                          analysisMode={treeAnalysisMode}
-                          onAnalysisModeChange={setTreeAnalysisMode}
                           hasAoi={!!treeAoiGeometry}
                           aoiMode={treeAoiMode}
                           onAoiModeChange={handleTreeAoiModeChange}
@@ -25826,8 +25822,8 @@ export default function SatelliteIntelligence() {
                           busy={treeDetection.busy}
                           error={treeDetection.error}
                           notice={
-                            treeDetection.usedLocalFallback
-                              ? 'Model service offline - used the on-device detector. Start backend/services/tree-detection for higher accuracy.'
+                            treeDetection.lastEngine
+                              ? 'Engine: AgroCloud Tree Extractor (DeepForest ITD)'
                               : null
                           }
                           result={treeDetection.result}
@@ -25937,6 +25933,7 @@ export default function SatelliteIntelligence() {
                         samplesApi={trainingAiSamples}
                         digitizing={trainingAiDigitizing}
                         onDigitizingChange={handleTrainingAiDigitizingChange}
+                        mapContainerRef={siMapContainerRef}
                         captureTrainingView={captureTrainingAiView}
                         captureMapExtent={captureTrainingAiMapExtent}
                         inferAreaLabel={aoiSourceLabel(activeAoi.source)}

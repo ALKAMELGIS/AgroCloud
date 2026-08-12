@@ -152,7 +152,7 @@ export function registerTreeDetectionRoutes(app, { rawBodyLimit = '40mb' } = {})
     res.json({
       configured: Boolean(ENDPOINT) && online,
       online,
-      model: MODEL || engine || 'tree-crown',
+      model: MODEL || engine || 'deepforest',
       engine: engine || null,
       enginesAvailable,
       modelPathConfigured,

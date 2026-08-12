@@ -105,9 +105,9 @@ export type CrownDetectionPass = {
 }
 
 export const TREE_SIZE_CLASS_META: Record<TreeSizeClass, { label: string; color: string }> = {
-  small: { label: 'Small crown (< 3 m)', color: '#a3e635' },
-  medium: { label: 'Medium crown (3–6 m)', color: '#22c55e' },
-  large: { label: 'Large crown (> 6 m)', color: '#15803d' },
+  small: { label: 'Small tree (< 3 m)', color: '#a3e635' },
+  medium: { label: 'Medium tree (3–6 m)', color: '#22c55e' },
+  large: { label: 'Large tree (> 6 m)', color: '#15803d' },
 }
 
 export const TREE_VIGOR_META: Record<TreeVigor, { label: string }> = {

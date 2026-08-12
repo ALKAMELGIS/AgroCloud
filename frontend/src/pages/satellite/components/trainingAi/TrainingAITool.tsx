@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type RefObject } from 'react'
 import {
   cancelTrainingJob,
   fetchInferenceJob,
@@ -37,6 +37,7 @@ import {
 import { TrainingDataPanel } from './TrainingDataPanel'
 import { ModelTrainingPanel } from './ModelTrainingPanel'
 import { ModelValidationPanel } from './ModelValidationPanel'
+import { ValidationQuickDashboard } from './ValidationQuickDashboard'
 import { InferencePanel, isInferenceFileImagery, type InferenceImagerySource, type TrainingOutputType } from './InferencePanel'
 import { InferenceResults } from './InferenceResults'
 import type { useTrainingAISamples } from './useTrainingAISamples'
@@ -57,6 +58,8 @@ export type TrainingAIToolProps = {
   samplesApi: ReturnType<typeof useTrainingAISamples>
   digitizing: boolean
   onDigitizingChange: (active: boolean) => void
+  /** Map host for floating Quick Dashboard portal. */
+  mapContainerRef?: RefObject<HTMLElement | null>
   captureTrainingView: (
     bbox: [number, number, number, number],
     opts?: { imagery?: string },
@@ -98,6 +101,7 @@ export function TrainingAITool({
   samplesApi,
   digitizing,
   onDigitizingChange,
+  mapContainerRef,
   captureTrainingView,
   captureMapExtent,
   inferAreaLabel = 'Current map extent',
@@ -116,6 +120,7 @@ export function TrainingAITool({
   onZoomToLiveSamples,
 }: TrainingAIToolProps) {
   const [step, setStep] = useState<TrainingAIStep>(1)
+  const [validationDashOpen, setValidationDashOpen] = useState(false)
   const [epochs, setEpochs] = useState(10)
   const [batchSize, setBatchSize] = useState(2)
   const [learningRate, setLearningRate] = useState(6e-5)
@@ -651,21 +656,36 @@ export function TrainingAITool({
             s.id < step
           const active = step === s.id
           return (
-            <button
-              key={s.id}
-              type="button"
-              role="tab"
-              className={`si-tai__step${active ? ' is-active' : ''}${done && !active ? ' is-done' : ''}`}
-              aria-selected={active}
-              onClick={() => setStep(s.id)}
-              title={s.hint}
-            >
-              <span className="si-tai__step-index" aria-hidden="true">
-                {String(index + 1).padStart(2, '0')}
-              </span>
-              <span className="si-tai__step-label">{s.title}</span>
-              <span className="si-tai__step-glow" aria-hidden="true" />
-            </button>
+            <div key={s.id} className="si-tai__step-cell">
+              <button
+                type="button"
+                role="tab"
+                className={`si-tai__step${active ? ' is-active' : ''}${done && !active ? ' is-done' : ''}`}
+                aria-selected={active}
+                onClick={() => setStep(s.id)}
+                title={s.hint}
+              >
+                <span className="si-tai__step-index" aria-hidden="true">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <span className="si-tai__step-label">{s.title}</span>
+                <span className="si-tai__step-glow" aria-hidden="true" />
+              </button>
+              {s.id === 3 && mapContainerRef ? (
+                <button
+                  type="button"
+                  className="si-tai__step-tool"
+                  title="Open Validation Quick Dashboard"
+                  aria-label="Open Validation Quick Dashboard"
+                  onClick={() => {
+                    setStep(3)
+                    setValidationDashOpen(true)
+                  }}
+                >
+                  <i className="fa-solid fa-chart-pie" aria-hidden />
+                </button>
+              ) : null}
+            </div>
           )
         })}
       </div>
@@ -726,7 +746,22 @@ export function TrainingAITool({
         />
       ) : null}
 
-      {step === 3 ? <ModelValidationPanel job={trainJob} /> : null}
+      {step === 3 ? (
+        <ModelValidationPanel
+          job={trainJob}
+          onOpenQuickDashboard={
+            mapContainerRef ? () => setValidationDashOpen(true) : undefined
+          }
+        />
+      ) : null}
+      {mapContainerRef ? (
+        <ValidationQuickDashboard
+          open={validationDashOpen}
+          onClose={() => setValidationDashOpen(false)}
+          mapContainerRef={mapContainerRef}
+          job={trainJob}
+        />
+      ) : null}
 
       {step === 4 ? (
         <>

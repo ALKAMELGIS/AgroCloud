@@ -201,7 +201,7 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     icon: 'fa-solid fa-tree',
     label: 'Tree Detections',
     title: 'Tree Detections',
-    hint: 'AOI → auto-detect & classify tree crowns from VHR imagery.',
+    hint: 'AOI → Tree Detection Model extracts individual trees from VHR imagery.',
   },
   {
     id: 'agri-field-boundary',

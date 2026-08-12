@@ -1,0 +1,157 @@
+/* Validation Quick Dashboard — lux translucent black glass */
+
+.gis-float-panel#si-tai-validation-quick-dash {
+  --gis-float-chrome-bg: linear-gradient(180deg, rgba(18, 18, 22, 0.72), rgba(6, 6, 10, 0.82));
+}
+
+.gis-float-panel#si-tai-validation-quick-dash .gis-float-panel__chrome {
+  background: linear-gradient(165deg, rgba(16, 16, 20, 0.55) 0%, rgba(4, 4, 8, 0.72) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  backdrop-filter: blur(22px) saturate(1.35);
+  -webkit-backdrop-filter: blur(22px) saturate(1.35);
+  box-shadow:
+    0 28px 64px rgba(0, 0, 0, 0.55),
+    0 2px 12px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.gis-float-panel#si-tai-validation-quick-dash .gis-float-panel__body {
+  background: transparent;
+}
+
+.si-tai-val-dash {
+  --vd-text: rgba(248, 250, 252, 0.94);
+  --vd-muted: rgba(226, 232, 240, 0.58);
+  --vd-line: rgba(255, 255, 255, 0.1);
+  --vd-glass: linear-gradient(165deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 2px 8px;
+  color: var(--vd-text);
+  min-height: 0;
+}
+
+.si-tai-val-dash__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.si-tai-val-dash__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--vd-line);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.si-tai-val-dash__badge.is-stable {
+  color: #86efac;
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(22, 101, 52, 0.28);
+}
+
+.si-tai-val-dash__badge.is-warning {
+  color: #fde68a;
+  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(120, 53, 15, 0.32);
+}
+
+.si-tai-val-dash__badge.is-failed {
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(127, 29, 29, 0.35);
+}
+
+.si-tai-val-dash__warn {
+  font-size: 10.5px;
+  color: #fbbf24;
+}
+
+.si-tai-val-dash__empty {
+  margin: 12px 4px;
+  font-size: 12px;
+  color: var(--vd-muted);
+  text-align: center;
+}
+
+.si-tai-val-dash__kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 8px;
+}
+
+.si-tai-val-dash__kpis--meta {
+  margin-top: 2px;
+}
+
+.si-tai-val-dash__kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--vd-line);
+  background: var(--vd-glass);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.si-tai-val-dash__kpi > span {
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--vd-muted);
+}
+
+.si-tai-val-dash__kpi > strong {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--vd-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.si-tai-val-dash__card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--vd-line);
+  background: rgba(0, 0, 0, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.si-tai-val-dash__card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.si-tai-val-dash__card-head h4 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  color: var(--vd-text);
+}
+
+.si-tai-val-dash__card-head span {
+  font-size: 10px;
+  color: var(--vd-muted);
+}
+
+.si-tai-val-dash__card--table {
+  overflow: auto;
+  max-height: 220px;
+}
