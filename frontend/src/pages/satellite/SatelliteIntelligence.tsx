@@ -23824,11 +23824,24 @@ export default function SatelliteIntelligence() {
                         );
                       }
                       if (res.render === 'contours') {
-                        const elevVals = (res.data.features ?? [])
-                          .map(f => Number(f.properties?.elev))
-                          .filter(Number.isFinite) as number[]
-                        const elevMin = elevVals.length ? Math.min(...elevVals) : 0
-                        const elevMax = elevVals.length ? Math.max(...elevVals) : 100
+                        // Prefer bounds stored on the result. Never Math.min(...hugeArray) —
+                        // contour layers can have 100k+ segments and spread args overflow the stack.
+                        let elevMin = Number.isFinite(res.elevMin) ? (res.elevMin as number) : NaN
+                        let elevMax = Number.isFinite(res.elevMax) ? (res.elevMax as number) : NaN
+                        if (!Number.isFinite(elevMin) || !Number.isFinite(elevMax)) {
+                          elevMin = Infinity
+                          elevMax = -Infinity
+                          for (const f of res.data.features ?? []) {
+                            const e = Number(f.properties?.elev)
+                            if (!Number.isFinite(e)) continue
+                            if (e < elevMin) elevMin = e
+                            if (e > elevMax) elevMax = e
+                          }
+                          if (!Number.isFinite(elevMin) || !Number.isFinite(elevMax)) {
+                            elevMin = 0
+                            elevMax = 100
+                          }
+                        }
                         return (
                           <Source key={`hydro-${stepId}`} id={`hydro-${stepId}-source`} type="geojson" data={res.data as any}>
                             <Layer

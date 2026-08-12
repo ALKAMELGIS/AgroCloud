@@ -497,14 +497,22 @@ function drawImageToProjectedQuad(
   ctx.restore()
 }
 
-function contourElevBounds(features: GeoJSON.Feature[]): { minElev: number; maxElev: number } {
+function contourElevBounds(result: HydroStepResult): { minElev: number; maxElev: number } {
+  if (
+    result.kind === 'vector' &&
+    Number.isFinite(result.elevMin) &&
+    Number.isFinite(result.elevMax)
+  ) {
+    return { minElev: result.elevMin as number, maxElev: result.elevMax as number }
+  }
+  const features = result.kind === 'vector' ? result.data.features ?? [] : []
   let minElev = Infinity
   let maxElev = -Infinity
   for (const f of features) {
     const elev = Number(f.properties?.elev)
     if (!Number.isFinite(elev)) continue
-    minElev = Math.min(minElev, elev)
-    maxElev = Math.max(maxElev, elev)
+    if (elev < minElev) minElev = elev
+    if (elev > maxElev) maxElev = elev
   }
   if (!Number.isFinite(minElev) || !Number.isFinite(maxElev)) {
     return { minElev: 0, maxElev: 0 }
@@ -522,7 +530,7 @@ function drawContourLayer(
   h: number,
 ): void {
   const features = result.data.features ?? []
-  const { minElev, maxElev } = contourElevBounds(features)
+  const { minElev, maxElev } = contourElevBounds(result)
   ctx.save()
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
