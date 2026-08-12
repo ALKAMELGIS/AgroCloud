@@ -76,7 +76,7 @@ export function LayerAttributePopupBody({
   aoiName,
   spatialAnalysis,
   relatedRecords,
-  maxVisibleRows = 120,
+  maxVisibleRows = 200,
 }: LayerAttributePopupBodyProps) {
   const [q, setQ] = useState('')
   const [tab, setTab] = useState<TabKey>('attributes')
@@ -172,10 +172,27 @@ export function LayerAttributePopupBody({
   let rendered = 0
 
   const arcgisRows = useMemo(() => {
-    let rows = inspect.sections.flatMap(s => s.rows)
+    const fromFlat = (inspect.flatRows ?? []).map(r => ({
+      key: r.label,
+      label: r.label,
+      value: r.value,
+    }))
+    const fromSections = [
+      ...inspect.sections.flatMap(s => s.rows),
+      ...inspect.relationRows,
+      ...inspect.mediaRows,
+    ]
+    // Prefer full flat list so ArcGIS-style popups show every attribute field.
+    const seen = new Set<string>()
+    let rows = (fromFlat.length ? fromFlat : fromSections).filter(r => {
+      const k = `${r.key ?? r.label}`.toLowerCase()
+      if (seen.has(k)) return false
+      seen.add(k)
+      return true
+    })
     if (hideEmpty) rows = filterEmptyRows(rows)
     return rows
-  }, [inspect.sections, hideEmpty])
+  }, [inspect.flatRows, inspect.sections, inspect.relationRows, inspect.mediaRows, hideEmpty])
 
   if (variant === 'arcgis') {
     const visibleRows = showAll ? arcgisRows : arcgisRows.slice(0, maxVisibleRows)
@@ -185,9 +202,11 @@ export function LayerAttributePopupBody({
           <dl className="gis-map-popup-dl">
             {visibleRows.map((r, i) => (
               <div key={`${r.key ?? r.label}-${i}`} className="gis-map-popup-row">
-                <dt className="gis-map-popup-k">{r.label}</dt>
-                <dd className="gis-map-popup-v">
-                  {isMediaValue(r.value) ? <MediaValue value={r.value} /> : r.value}
+                <dt className="gis-map-popup-k" title={r.label}>
+                  {r.label}
+                </dt>
+                <dd className="gis-map-popup-v" title={r.value}>
+                  {isMediaValue(r.value) ? <MediaValue value={r.value} /> : r.value || '—'}
                 </dd>
               </div>
             ))}

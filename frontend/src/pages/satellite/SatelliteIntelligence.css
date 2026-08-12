@@ -3592,6 +3592,31 @@ html[data-theme='light'] .si-env-side-row--selected {
   background: rgba(239, 68, 68, 0.16);
 }
 
+.si-env-layer-options-menu__item--export {
+  width: 100%;
+}
+.si-env-layer-options-menu__item--export .si-env-layer-options-menu__export-chevron,
+.si-env-layer-options-menu__export-chevron {
+  margin-inline-start: auto;
+  font-size: 9px;
+  opacity: 0.7;
+}
+.si-env-layer-options-menu__export-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  padding: 2px 4px 6px 28px;
+}
+.si-env-layer-options-menu__item--export-fmt {
+  padding: 5px 8px;
+  font-size: 10px;
+}
+.si-env-layer-options-menu--floating .si-env-layer-options-menu__item--export-fmt {
+  padding: 5px 7px;
+  border-radius: 7px;
+  font-size: 10px;
+}
+
 html[data-theme='light'] .si-env-layer-options-menu {
   background: linear-gradient(165deg, #ffffff, #f1f5f9);
   border-color: rgba(99, 102, 241, 0.28);

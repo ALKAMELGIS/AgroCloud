@@ -620,8 +620,14 @@ import {
   formatSiLayerMetaSummary,
   type SiCustomLayerBase,
 } from '../../lib/siCustomLayerFactory';
-import { downloadBlobUrlFile, downloadGeoJsonFile } from '../../lib/siLayerExport';
-import { downloadVectorShapefile } from '../../lib/vectorLayerExport';
+import { downloadBlobUrlFile } from '../../lib/siLayerExport';
+import {
+  downloadVectorCsv,
+  downloadVectorGeoJson,
+  downloadVectorKml,
+  downloadVectorShapefile,
+} from '../../lib/vectorLayerExport';
+import type { VectorExportFormat } from '../../lib/vectorLayerExport';
 import type { AiDlMapLayerRasterRef } from './components/aiDetection/SiAiDlDetectObjectsPanel';
 import { useTreeDetection } from './components/useTreeDetection';
 import type { TreeImageryProviderId } from '../../lib/treeDetection/webMercatorTiles';
@@ -2714,6 +2720,79 @@ function siSetMapboxCustomLayerStackVisibility(
  * positioned via the trigger's bounding box so it never gets clipped by the compact
  * panel's overflow and always floats cleanly above the dock.
  */
+type SiLayerMenuExportFormat = Extract<VectorExportFormat, 'shp' | 'kml' | 'geojson' | 'csv'>;
+
+const SI_LAYER_EXPORT_FORMATS: Array<{
+  id: SiLayerMenuExportFormat;
+  label: string;
+  icon: string;
+  hint: string;
+}> = [
+  { id: 'shp', label: 'Shp', icon: 'fa-solid fa-file-zipper', hint: 'Esri Shapefile ZIP (.shp/.shx/.dbf/.prj)' },
+  { id: 'kml', label: 'KML', icon: 'fa-solid fa-globe', hint: 'Google Earth KML (.kml)' },
+  { id: 'geojson', label: 'GeoJSON', icon: 'fa-solid fa-code', hint: 'GeoJSON FeatureCollection (.geojson)' },
+  { id: 'csv', label: 'CSV', icon: 'fa-solid fa-file-csv', hint: 'Attribute table with lon/lat (.csv)' },
+];
+
+function SiLayerExportMenuGroup({
+  disabled,
+  disabledHint,
+  onPick,
+}: {
+  disabled?: boolean;
+  disabledHint?: string;
+  onPick: (format: SiLayerMenuExportFormat) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={'si-env-layer-options-menu__export' + (open ? ' is-open' : '')}>
+      <button
+        type="button"
+        role="menuitem"
+        className={
+          'si-env-layer-options-menu__item si-env-layer-options-menu__item--export' +
+          (disabled ? ' si-env-layer-options-menu__item--disabled' : '')
+        }
+        aria-haspopup="true"
+        aria-expanded={open}
+        disabled={disabled}
+        title={disabled ? disabledHint : 'Export layer as Shp, KML, GeoJSON, or CSV'}
+        onClick={e => {
+          e.stopPropagation();
+          if (!disabled) setOpen(v => !v);
+        }}
+      >
+        <i className="fa-solid fa-file-export" aria-hidden />
+        <span>Export</span>
+        <i
+          className={`fa-solid fa-chevron-${open ? 'up' : 'down'} si-env-layer-options-menu__export-chevron`}
+          aria-hidden
+        />
+      </button>
+      {open && !disabled ? (
+        <div className="si-env-layer-options-menu__export-list" role="group" aria-label="Export format">
+          {SI_LAYER_EXPORT_FORMATS.map(fmt => (
+            <button
+              key={fmt.id}
+              type="button"
+              role="menuitem"
+              className="si-env-layer-options-menu__item si-env-layer-options-menu__item--export-fmt"
+              title={fmt.hint}
+              onClick={e => {
+                e.stopPropagation();
+                onPick(fmt.id);
+              }}
+            >
+              <i className={fmt.icon} aria-hidden />
+              <span>{fmt.label}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function SiLayerOptionsMenuPortal({
   open,
   layerLabel,
@@ -2763,6 +2842,15 @@ function SiLayerOptionsMenuPortal({
   useLayoutEffect(() => {
     if (open) place();
     else setCoords(null);
+  }, [open, place]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const el = popRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => place());
+    ro.observe(el);
+    return () => ro.disconnect();
   }, [open, place]);
 
   useEffect(() => {
@@ -9811,57 +9899,62 @@ export default function SatelliteIntelligence() {
     }
   };
 
-  const exportCustomLayerData = useCallback((layerId: string) => {
-    const layer = customLayers.find(l => l.id === layerId);
-    if (!layer) return;
-    setLayerOptionsMenuLayerId(null);
-    if (layer.bimBlobUrl) {
-      downloadBlobUrlFile(layer.bimBlobUrl, `${layer.name.replace(/[^\w.-]+/g, '_')}.ifc`);
-      setStacStatus(`Downloading IFC file for "${layer.name}".`);
-      return;
-    }
-    if (layer.renderMode === 'raster' || layer.arcgisRasterTiles) {
-      setStacStatus(
-        layer.sourceUrl
-          ? `Raster "${layer.name}" — source: ${layer.sourceUrl}`
-          : `Raster "${layer.name}" is session-only. Re-import the original file to export.`,
-      );
-      return;
-    }
-    const features = Array.isArray(layer.geojson?.features) ? layer.geojson.features : [];
-    if (!features.length) {
-      setStacStatus(`Layer "${layer.name}" has no features to export yet. Pan/zoom to load data.`);
-      return;
-    }
-    downloadGeoJsonFile(layer.geojson, layer.name);
-    setStacStatus(`Exported "${layer.name}" as GeoJSON.`);
-  }, [customLayers]);
+  const exportCustomLayerInFormat = useCallback(
+    async (layerId: string, format: SiLayerMenuExportFormat = 'geojson') => {
+      const layer = customLayers.find(l => l.id === layerId);
+      if (!layer) return;
+      setLayerOptionsMenuLayerId(null);
+      if (layer.bimBlobUrl) {
+        downloadBlobUrlFile(layer.bimBlobUrl, `${layer.name.replace(/[^\w.-]+/g, '_')}.ifc`);
+        setStacStatus(`Downloading IFC file for "${layer.name}".`);
+        return;
+      }
+      if (layer.renderMode === 'raster' || layer.arcgisRasterTiles) {
+        setStacStatus(
+          layer.sourceUrl
+            ? `Raster "${layer.name}" — source: ${layer.sourceUrl}`
+            : `Raster "${layer.name}" is session-only. Re-import the original file to export.`,
+        );
+        return;
+      }
+      const features = Array.isArray(layer.geojson?.features) ? layer.geojson.features : [];
+      if (!features.length) {
+        setStacStatus(`Layer "${layer.name}" has no features to export yet. Pan/zoom to load data.`);
+        return;
+      }
+      const labels: Record<SiLayerMenuExportFormat, string> = {
+        shp: 'Shapefile (.zip)',
+        kml: 'KML',
+        geojson: 'GeoJSON',
+        csv: 'CSV',
+      };
+      try {
+        if (format === 'shp') await downloadVectorShapefile(layer.geojson, layer.name);
+        else if (format === 'kml') downloadVectorKml(layer.geojson, layer.name, layer.name);
+        else if (format === 'csv') downloadVectorCsv(layer.geojson, layer.name);
+        else downloadVectorGeoJson(layer.geojson, layer.name);
+        setStacStatus(`Exported "${layer.name}" as ${labels[format]}.`);
+      } catch (err) {
+        setStacStatus(
+          `${labels[format]} export failed for "${layer.name}": ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    },
+    [customLayers],
+  );
 
-  const exportCustomLayerShapefile = useCallback(async (layerId: string) => {
-    const layer = customLayers.find(l => l.id === layerId);
-    if (!layer) return;
-    setLayerOptionsMenuLayerId(null);
-    if (layer.bimBlobUrl || layer.renderMode === 'raster' || layer.arcgisRasterTiles) {
-      setStacStatus(`Shapefile export is for vector layers. "${layer.name}" is not vector GeoJSON.`);
-      return;
-    }
-    const features = Array.isArray(layer.geojson?.features) ? layer.geojson.features : [];
-    if (!features.length) {
-      setStacStatus(`Layer "${layer.name}" has no features to export yet. Pan/zoom to load data.`);
-      return;
-    }
-    try {
-      await downloadVectorShapefile(layer.geojson, layer.name);
-      setStacStatus(`Exported "${layer.name}" as Shapefile (.zip).`);
-    } catch (err) {
-      setStacStatus(
-        `Shapefile export failed for "${layer.name}": ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-  }, [customLayers]);
+  /** Quick GeoJSON export (layer row / legacy callers). */
+  const exportCustomLayerData = useCallback(
+    (layerId: string) => {
+      void exportCustomLayerInFormat(layerId, 'geojson');
+    },
+    [exportCustomLayerInFormat],
+  );
 
   const executeCustomLayerAction = useCallback(async (
-    action: 'sync' | 'table' | 'symbology' | 'legend' | 'remove' | 'rename' | 'editAoi' | 'metadata' | 'export' | 'export-shp',
+    action: 'sync' | 'table' | 'symbology' | 'legend' | 'remove' | 'rename' | 'editAoi' | 'metadata' | 'export',
     layerId: string,
   ) => {
     setLayerOptionsMenuLayerId(null);
@@ -9912,11 +10005,7 @@ export default function SatelliteIntelligence() {
       return;
     }
     if (action === 'export') {
-      exportCustomLayerData(layerId);
-      return;
-    }
-    if (action === 'export-shp') {
-      await exportCustomLayerShapefile(layerId);
+      void exportCustomLayerInFormat(layerId, 'geojson');
       return;
     }
     if (action === 'metadata') {
@@ -9936,7 +10025,7 @@ export default function SatelliteIntelligence() {
       setLayerLegendPanelLayerId(prev => (prev === layerId ? null : layerId));
       return;
     }
-  }, [customLayers, refreshArcgisLayer, applyUploadedAoiToAnalysis, focusGeoJsonOnMap, exportCustomLayerData, exportCustomLayerShapefile]);
+  }, [customLayers, refreshArcgisLayer, applyUploadedAoiToAnalysis, focusGeoJsonOnMap, exportCustomLayerInFormat]);
 
   const handleLayerActionClick = async (
     event: React.MouseEvent<HTMLButtonElement>,
@@ -13842,8 +13931,114 @@ export default function SatelliteIntelligence() {
 
 // ── Tree Detections (VHRTrees-style crown detection) ───────────────────────
   const treeDetectionsActive = expandedEnvSection === 'tree-detections';
+  const [treeAoiMode, setTreeAoiMode] = useState<FieldBoundaryAoiMode>('draw');
+  const [treeAoiLayerId, setTreeAoiLayerId] = useState('');
+  const treeAoiModeRef = useRef(treeAoiMode);
+  const treeAoiLayerIdRef = useRef(treeAoiLayerId);
+  treeAoiModeRef.current = treeAoiMode;
+  treeAoiLayerIdRef.current = treeAoiLayerId;
+
+  const resolveTreeAoi = useCallback((): GeoJSON.Geometry | GeoJSON.Feature | GeoJSON.FeatureCollection | null => {
+    const mode = treeAoiModeRef.current;
+
+    if (mode === 'viewport') {
+      const map = mapRef.current?.getMap?.() ?? mapRef.current;
+      const b = map?.getBounds?.();
+      if (!b) return null;
+      return bboxToPolygonFeature(
+        b.getWest(),
+        b.getSouth(),
+        b.getEast(),
+        b.getNorth(),
+        'Current map view AOI',
+      );
+    }
+
+    if (mode === 'layers') {
+      const layerId = treeAoiLayerIdRef.current.trim();
+      if (!layerId) return null;
+      const layer = customLayersRef.current.find(l => String(l.id) === layerId);
+      const feats = layer?.geojson?.features;
+      if (!Array.isArray(feats) || !feats.length) return null;
+      const out: GeoJSON.Feature[] = [];
+      for (let i = 0; i < feats.length; i += 1) {
+        const raw = feats[i];
+        const aoi = featureToPrimaryAoiFeature(raw);
+        if (!aoi?.geometry) continue;
+        const key = computeStableGisFeatureKey(raw, i);
+        out.push({
+          type: 'Feature',
+          id: key,
+          properties: {
+            ...((aoi.properties as Record<string, unknown>) || {}),
+            aoi_id: key,
+            source_layer_id: layerId,
+          },
+          geometry: aoi.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon,
+        });
+      }
+      return out.length ? { type: 'FeatureCollection', features: out } : null;
+    }
+
+    if (mode === 'select') {
+      const hits = gisSelectionHits;
+      if (!hits.length) return null;
+      const out: GeoJSON.Feature[] = [];
+      for (const hit of hits) {
+        const layer = customLayersRef.current.find(l => String(l.id) === hit.layerId);
+        const arr = layer?.geojson?.features;
+        if (!Array.isArray(arr)) continue;
+        for (let i = 0; i < arr.length; i += 1) {
+          const raw = arr[i] as GeoJSON.Feature;
+          if (computeStableGisFeatureKey(raw, i) !== hit.featureKey) continue;
+          const aoi = featureToPrimaryAoiFeature(raw);
+          if (!aoi?.geometry) continue;
+          out.push({
+            type: 'Feature',
+            id: hit.featureKey,
+            properties: {
+              ...((aoi.properties as Record<string, unknown>) || {}),
+              aoi_id: hit.featureKey,
+              source_layer_id: hit.layerId,
+              source: 'select',
+            },
+            geometry: aoi.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon,
+          });
+          break;
+        }
+      }
+      return out.length ? { type: 'FeatureCollection', features: out } : null;
+    }
+
+    const drawn = getDrawnGeometry(drawnGeometry);
+    return drawn ?? null;
+  }, [drawnGeometry, gisSelectionHits]);
+
+  const handleTreeAoiModeChange = useCallback((mode: FieldBoundaryAoiMode) => {
+    setTreeAoiMode(mode);
+    if (mode === 'select') {
+      if (rsDrawingModeActiveRef.current) handleRsDrawingModeChange(false);
+      if (measureModeRef.current) clearMeasure();
+      setGisSelectionActive(true);
+      setGisSelectionTool('select');
+      applyMapDrawTool('select');
+      return;
+    }
+    if (mode === 'draw') {
+      if (measureModeRef.current) clearMeasure();
+      if (gisSelectionActiveRef.current) setGisSelectionActive(false);
+      handleRsDrawingModeChange(true);
+      applyMapDrawTool('polygon');
+    }
+  }, []);
+
+  const treeAoiGeometry = useMemo(
+    () => resolveTreeAoi(),
+    [resolveTreeAoi, treeAoiMode, treeAoiLayerId, drawnGeometry, gisSelectionHits, customLayers],
+  );
+
   const treeDetection = useTreeDetection({
-    geometry: drawnGeometry ?? null,
+    geometry: treeAoiGeometry ?? null,
     provider: treeProvider,
     enabled: treeDetectionsActive,
     sensitivity: treeSensitivity,
@@ -18294,6 +18489,10 @@ export default function SatelliteIntelligence() {
       if (prev && aoiLayerModeOptions.some(o => o.id === prev)) return prev;
       return aoiLayerModeOptions[0]!.id;
     });
+    setTreeAoiLayerId(prev => {
+      if (prev && aoiLayerModeOptions.some(o => o.id === prev)) return prev;
+      return aoiLayerModeOptions[0]!.id;
+    });
   }, [aoiLayerModeOptions]);
 
   const handleAoiLayerModeChange = useCallback(
@@ -21578,13 +21777,11 @@ export default function SatelliteIntelligence() {
                                 <>
                                   {mi('Zoom to layer', 'fa-solid fa-magnifying-glass-location', () => zoomToCustomLayerExtent(lid))}
                                   {mi('Layer properties', 'fa-solid fa-circle-info', () => void executeCustomLayerAction('metadata', lid))}
-                                  {mi('Export layer', 'fa-solid fa-file-export', () => void executeCustomLayerAction('export', lid))}
-                                  {mi('Export Shp', 'fa-solid fa-file-zipper', () => void executeCustomLayerAction('export-shp', lid), {
-                                    disabled: isRaster,
-                                    hint: isRaster
-                                      ? 'Shapefile export applies to vector layers (points/polygons).'
-                                      : 'Download as Esri Shapefile ZIP (.shp/.shx/.dbf/.prj)',
-                                  })}
+                                  <SiLayerExportMenuGroup
+                                    disabled={isRaster}
+                                    disabledHint="Export applies to vector layers (points/lines/polygons)."
+                                    onPick={fmt => void exportCustomLayerInFormat(lid, fmt)}
+                                  />
                                   <div className="si-env-layer-options-menu__sep" role="separator" />
                                   {mi('Attribute table', 'fa-solid fa-table-cells', () => void executeCustomLayerAction('table', lid))}
                                   {mi('Symbology', 'fa-solid fa-sliders', () => void executeCustomLayerAction('symbology', lid))}
@@ -21698,6 +21895,7 @@ export default function SatelliteIntelligence() {
       dropTargetLayerId,
       reorderCustomLayers,
       executeCustomLayerAction,
+      exportCustomLayerInFormat,
       handleLayerActionClick,
       layerOptionsMenuLayerId,
       moveCustomLayerInStack,
@@ -23306,33 +23504,15 @@ export default function SatelliteIntelligence() {
                 {treeDetectionsActive && treeDetectionOverlayData && treeOverlayVisible ? (
                   <Source id={TREE_DETECTIONS_SOURCE_ID} type="geojson" data={treeDetectionOverlayData as any}>
                     <Layer
-                      id={`${TREE_DETECTIONS_LAYER_ID}-halo`}
-                      type="circle"
-                      paint={{
-                        'circle-radius': [
-                          'interpolate',
-                          ['linear'],
-                          ['zoom'],
-                          14,
-                          ['interpolate', ['linear'], ['get', 'crownDiameterM'], 1, 3, 12, 9],
-                          20,
-                          ['interpolate', ['linear'], ['get', 'crownDiameterM'], 1, 7, 12, 22],
-                        ],
-                        'circle-color': ['coalesce', ['get', 'color'], '#16a34a'],
-                        'circle-opacity': 0.22,
-                        'circle-stroke-color': ['coalesce', ['get', 'color'], '#16a34a'],
-                        'circle-stroke-width': 1.5,
-                        'circle-stroke-opacity': 0.9,
-                      }}
-                    />
-                    <Layer
                       id={TREE_DETECTIONS_LAYER_ID}
                       type="circle"
                       paint={{
-                        'circle-radius': ['interpolate', ['linear'], ['zoom'], 14, 1.6, 18, 3.2, 20, 4.5],
-                        'circle-color': '#052e16',
-                        'circle-stroke-color': ['coalesce', ['get', 'color'], '#16a34a'],
-                        'circle-stroke-width': 1.4,
+                        'circle-radius': ['interpolate', ['linear'], ['zoom'], 12, 2.2, 16, 3, 20, 4],
+                        'circle-color': '#14532d',
+                        'circle-opacity': 0.95,
+                        'circle-stroke-color': '#0a0a0a',
+                        'circle-stroke-width': 1.25,
+                        'circle-stroke-opacity': 1,
                       }}
                     />
                   </Source>
@@ -24308,7 +24488,7 @@ export default function SatelliteIntelligence() {
                 latitude={pop.lat}
                 anchor="bottom"
                 offset={[((popIdx * 47) % 160) - 80, 6 - (popIdx % 7) * 11]}
-                popupWidth={360}
+                popupWidth={280}
               >
                 <SiFeatureInspectPopup
                   pop={pop}
@@ -25636,7 +25816,12 @@ export default function SatelliteIntelligence() {
                           onProviderChange={setTreeProvider}
                           analysisMode={treeAnalysisMode}
                           onAnalysisModeChange={setTreeAnalysisMode}
-                          hasAoi={!!drawnGeometry}
+                          hasAoi={!!treeAoiGeometry}
+                          aoiMode={treeAoiMode}
+                          onAoiModeChange={handleTreeAoiModeChange}
+                          aoiLayerOptions={aoiLayerModeOptions}
+                          aoiLayerId={treeAoiLayerId}
+                          onAoiLayerIdChange={setTreeAoiLayerId}
                           phase={treeDetection.phase}
                           busy={treeDetection.busy}
                           error={treeDetection.error}

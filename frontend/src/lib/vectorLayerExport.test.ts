@@ -47,6 +47,12 @@ describe('vectorLayerExport', () => {
     expect(() => downloadVectorXlsx(sampleFc, 'test-export.xlsx')).not.toThrow()
   })
 
+  it('exports KML, CSV, and GeoJSON for polygons', async () => {
+    await expect(exportVectorLayer(sampleFc, 'kml', 'test-poly')).resolves.toBeUndefined()
+    await expect(exportVectorLayer(sampleFc, 'csv', 'test-poly')).resolves.toBeUndefined()
+    await expect(exportVectorLayer(sampleFc, 'geojson', 'test-poly')).resolves.toBeUndefined()
+  })
+
   it('exports KMZ and SHP for polygons', async () => {
     await expect(exportVectorLayer(sampleFc, 'kmz', 'test-poly')).resolves.toBeUndefined()
     await expect(exportVectorLayer(sampleFc, 'shp', 'test-poly')).resolves.toBeUndefined()

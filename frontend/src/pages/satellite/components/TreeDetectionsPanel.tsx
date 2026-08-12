@@ -1,6 +1,11 @@
 import { TREE_IMAGERY_PROVIDERS, type TreeImageryProviderId } from '../../../lib/treeDetection/webMercatorTiles'
 import type { TreeAnalysisMode, TreeDetectionResult } from '../../../lib/treeDetection/treeDetectionEngine'
 import type { TreeDetectionPhase } from './useTreeDetection'
+import {
+  FIELD_BOUNDARY_AOI_MODE_OPTIONS,
+  type FieldBoundaryAoiLayerOption,
+  type FieldBoundaryAoiMode,
+} from './AgriFieldBoundaryPanel'
 import './TreeDetectionsPanel.css'
 
 type AnalysisModeOption = {
@@ -13,12 +18,24 @@ const ANALYSIS_MODES: AnalysisModeOption[] = [
   { id: 'detect-classify', title: 'Detection + Species Classification' },
 ]
 
+const AOI_MODE_HINT: Record<FieldBoundaryAoiMode, string> = {
+  draw: 'Draw a polygon on the map (toolbox Draw), or reuse the existing sketch.',
+  layers: 'Pick a vector layer added under Layers.',
+  viewport: 'Uses the current map extent as the study area.',
+  select: 'Use the Select rail tool (rectangle / polygon / lasso) on layer features.',
+}
+
 type TreeDetectionsPanelProps = {
   provider: TreeImageryProviderId
   onProviderChange: (id: TreeImageryProviderId) => void
   analysisMode: TreeAnalysisMode
   onAnalysisModeChange: (mode: TreeAnalysisMode) => void
   hasAoi: boolean
+  aoiMode?: FieldBoundaryAoiMode
+  onAoiModeChange?: (mode: FieldBoundaryAoiMode) => void
+  aoiLayerOptions?: FieldBoundaryAoiLayerOption[]
+  aoiLayerId?: string
+  onAoiLayerIdChange?: (layerId: string) => void
   phase: TreeDetectionPhase
   busy: boolean
   error: string | null
@@ -52,6 +69,11 @@ export function TreeDetectionsPanel({
   analysisMode,
   onAnalysisModeChange,
   hasAoi,
+  aoiMode = 'draw',
+  onAoiModeChange,
+  aoiLayerOptions = [],
+  aoiLayerId = '',
+  onAoiLayerIdChange,
   phase,
   busy,
   error,
@@ -74,7 +96,56 @@ export function TreeDetectionsPanel({
   return (
     <div className="si-tree-detect">
       <section className="si-tree-detect__card">
-        <header className="si-tree-detect__card-label">1 · Analysis mode</header>
+        <header className="si-tree-detect__card-label">1 · Select AOI</header>
+        <label className="si-tree-detect__field">
+          <span>Select AOI</span>
+          <select
+            className="si-tree-detect__select"
+            value={aoiMode}
+            disabled={busy || !onAoiModeChange}
+            aria-label="Select AOI source"
+            title={AOI_MODE_HINT[aoiMode]}
+            onChange={e => onAoiModeChange?.(e.target.value as FieldBoundaryAoiMode)}
+          >
+            {FIELD_BOUNDARY_AOI_MODE_OPTIONS.map(o => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {aoiMode === 'layers' && onAoiLayerIdChange ? (
+          <label className="si-tree-detect__field">
+            <span>AOI layer</span>
+            <select
+              className="si-tree-detect__select"
+              value={aoiLayerId}
+              disabled={busy || aoiLayerOptions.length === 0}
+              aria-label="AOI layer from Layers"
+              onChange={e => onAoiLayerIdChange(e.target.value)}
+            >
+              {aoiLayerOptions.length === 0 ? (
+                <option value="">Add a vector layer from Layers</option>
+              ) : (
+                aoiLayerOptions.map(l => (
+                  <option key={l.id} value={l.id}>
+                    {l.label}
+                    {typeof l.featureCount === 'number' && l.featureCount > 0
+                      ? ` (${l.featureCount})`
+                      : ''}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
+        ) : null}
+        {!hasAoi && onAoiModeChange ? (
+          <p className="si-tree-detect__aoi-hint">{AOI_MODE_HINT[aoiMode]}</p>
+        ) : null}
+      </section>
+
+      <section className="si-tree-detect__card">
+        <header className="si-tree-detect__card-label">2 · Analysis mode</header>
         <div className="si-tree-detect__modes" role="radiogroup" aria-label="Analysis mode">
           {ANALYSIS_MODES.map(m => {
             const selected = analysisMode === m.id
@@ -111,7 +182,7 @@ export function TreeDetectionsPanel({
       </section>
 
       <section className="si-tree-detect__card">
-        <header className="si-tree-detect__card-label">2 · Imagery & model</header>
+        <header className="si-tree-detect__card-label">3 · Imagery & model</header>
         <label className="si-tree-detect__field">
           <span>Basemap provider</span>
           <select

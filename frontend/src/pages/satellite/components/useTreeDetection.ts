@@ -44,7 +44,7 @@ export type UseTreeDetectionState = {
 }
 
 type Params = {
-  geometry: GeoJSON.Geometry | GeoJSON.Feature | null | undefined
+  geometry: GeoJSON.Geometry | GeoJSON.Feature | GeoJSON.FeatureCollection | null | undefined
   provider: TreeImageryProviderId
   enabled: boolean
   sensitivity?: number
@@ -53,14 +53,11 @@ type Params = {
   tuning?: Partial<TreeDetectionTuning>
 }
 
-function stableGeometryKey(geometry: GeoJSON.Geometry | GeoJSON.Feature): string {
+function stableGeometryKey(
+  geometry: GeoJSON.Geometry | GeoJSON.Feature | GeoJSON.FeatureCollection,
+): string {
   try {
-    const geom =
-      (geometry as GeoJSON.Feature).type === 'Feature'
-        ? (geometry as GeoJSON.Feature).geometry
-        : (geometry as GeoJSON.Geometry)
-    if (!geom) return ''
-    return JSON.stringify(geom, (_k, v) => (typeof v === 'number' ? Number(v.toFixed(6)) : v))
+    return JSON.stringify(geometry, (_k, v) => (typeof v === 'number' ? Number(v.toFixed(6)) : v))
   } catch {
     return ''
   }
