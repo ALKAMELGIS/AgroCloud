@@ -76,6 +76,9 @@ export type AgriFieldBoundaryPanelProps = {
   /** ArcGIS Regularize Building Footprint method. */
   regularizeMethod?: FootprintRegularizeMethod
   onRegularizeMethodChange?: (m: FootprintRegularizeMethod) => void
+  /** Merge over-segmented fragments that share a long border. */
+  mergeFragments?: boolean
+  onMergeFragmentsChange?: (v: boolean) => void
   phase: FieldBoundaryPhase
   progress: number
   /** Backend job stage, shown instead of the generic pipeline label. */
@@ -197,6 +200,8 @@ export function AgriFieldBoundaryPanel({
   onRegularizeFootprintsChange,
   regularizeMethod = 'right-angles',
   onRegularizeMethodChange,
+  mergeFragments = true,
+  onMergeFragmentsChange,
   phase,
   progress,
   stage = null,
@@ -671,6 +676,19 @@ export function AgriFieldBoundaryPanel({
               </label>
             ) : null}
           </>
+        ) : null}
+
+        {onMergeFragmentsChange ? (
+          <label className="si-afb__row si-afb__row--check">
+            <span className="si-afb__label">Merge fragments</span>
+            <input
+              type="checkbox"
+              checked={mergeFragments}
+              disabled={busy}
+              onChange={e => onMergeFragmentsChange(e.target.checked)}
+              title="Union over-segmented pieces of the same field that share a long border before Regularize"
+            />
+          </label>
         ) : null}
 
         {onSen2srProductModeChange && onSen2srDisplay1mChange ? (

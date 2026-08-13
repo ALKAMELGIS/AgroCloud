@@ -845,11 +845,28 @@ def run_ftw_live(
         _emit(progress, 0.8, "polygonize")
         from ftw_tools.postprocess.polygonize import polygonize as ftw_polygonize
 
+        try:
+            from field_mask_refine import ftw_polygonize_min_size_m2, refine_ftw_prediction_geotiff
+
+            refined_pred = Path(str(pred_tif)).with_name(Path(str(pred_tif)).stem + "_refined.tif")
+            refine_ftw_prediction_geotiff(
+                str(pred_tif),
+                min_area_m2=float(min_area_m2),
+                out_path=str(refined_pred),
+            )
+            if refined_pred.is_file():
+                pred_tif = refined_pred
+                print(f"[ftw-live] mask refine ok → {refined_pred.name}", flush=True)
+            poly_min = ftw_polygonize_min_size_m2(float(min_area_m2))
+        except Exception as refine_exc:  # noqa: BLE001
+            print(f"[ftw-live] mask refine FAILED (using raw pred): {refine_exc}", flush=True)
+            poly_min = max(500.0, float(min_area_m2))
+
         ftw_polygonize(
             input=str(pred_tif),
             out=str(poly_out),
             simplify=FTW_LIVE_SIMPLIFY,
-            min_size=max(0.0, float(min_area_m2)),
+            min_size=poly_min,
             overwrite=True,
         )
         if not poly_out.is_file():

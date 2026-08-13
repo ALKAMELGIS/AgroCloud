@@ -21,6 +21,12 @@ import {
   refineFieldPolygonsToAoi,
 } from '../../../lib/agriFieldBoundary/fieldResultRefine'
 import {
+  finishMergeOptions,
+  finishMinAreaM2,
+  isFtwFieldEngine,
+  mergeFieldFragments,
+} from '../../../lib/agriFieldBoundary/fieldMerge'
+import {
   defaultAttributeWindow,
   enrichFieldAttributesFromSentinel2,
   FIELD_ATTRIBUTE_LAYER_IDS,
@@ -28,6 +34,7 @@ import {
   hasFieldAttributes,
 } from '../../../lib/agriFieldBoundary/fieldAttributeEnrichment'
 import { FOW_COUNTRY_OPTIONS, isFowCatalogMissing } from '../../../lib/agriFieldBoundary/fowCountryOptions'
+import { FIELD_BOUNDARY_STROKE_COLOR } from '../../../lib/agriFieldBoundary/fieldBoundaryStyle'
 import {
   fetchFowValidationReference,
   shouldFetchFowValidationReference,
@@ -351,8 +358,8 @@ function modelUsesCaptureImagery(model: FieldModelId): boolean {
   return model === 'delineate-fbis' || model === 'map-rgb'
 }
 
-/** Default field outline — black hollow (matches SI vector layer defaults). */
-export const FIELD_BOUNDARY_STROKE = '#000000'
+/** Default field outline — cyan hollow (matches SI gallery Cyan Outline). */
+const FIELD_BOUNDARY_STROKE = FIELD_BOUNDARY_STROKE_COLOR
 
 /** Distinct instance fills + a single red field border. */
 const DA_FILL_PALETTE = [
@@ -435,6 +442,8 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
   /** ArcGIS Regularize Building Footprint method. */
   const [regularizeMethod, setRegularizeMethod] =
     useState<FootprintRegularizeMethod>('right-angles')
+  /** Merge over-segmented fragments that share a long border (before Regularize). */
+  const [mergeFragments, setMergeFragments] = useState(true)
   const [phase, setPhase] = useState<FieldBoundaryPhase>('idle')
   const [progress, setProgress] = useState(0)
   /** Backend job stage (scene_selection / download / run / polygonize …). */
@@ -756,8 +765,19 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     setValidationReferenceNotice(null)
     const finishResult = (out: FieldBoundaryResult): FieldBoundaryResult => {
       rawResultRef.current = out
+      const ftw = isFtwFieldEngine(activeSource) || isFtwFieldEngine(out.engine)
+      const effMinArea = finishMinAreaM2(minAreaM2, ftw)
+      const mergedGeo = mergeFieldFragments(
+        out.geojson,
+        finishMergeOptions(minAreaM2, { ftw, enabled: mergeFragments }),
+      )
+      const preRegularize: FieldBoundaryResult = {
+        ...out,
+        geojson: mergedGeo,
+        count: mergedGeo.features.length,
+      }
       const softenMeters = regularizeMethod === 'right-angles' ? 3.2 : 5.2
-      const optimized = optimizeFieldBoundaryResult(out, {
+      const optimized = optimizeFieldBoundaryResult(preRegularize, {
         regularizeFootprints,
         regularizeMethod,
         softenKept: true,
@@ -767,7 +787,7 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
       })
       // Regularize can inflate footprints — re-clip to AOI and unstack overlays.
       let geojson = refineFieldPolygonsToAoi(optimized.geojson, aoiFc, {
-        minAreaM2: Math.max(0.05, Math.min(minAreaM2, 40)),
+        minAreaM2: effMinArea,
         dropIou: 0.15,
       })
       if (
@@ -1395,6 +1415,7 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     minAreaM2,
     regularizeFootprints,
     regularizeMethod,
+    mergeFragments,
     setSource,
     source,
     uploadedImage,
@@ -1487,20 +1508,31 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     const raw = rawResultRef.current
     if (!raw?.geojson?.features?.length) return
     if (busy || phase === 'detecting' || phase === 'capturing') return
-    const softenMeters = regularizeMethod === 'right-angles' ? 3.2 : 5.2
-    const optimized = optimizeFieldBoundaryResult(raw, {
-      regularizeFootprints,
-      regularizeMethod,
-      softenKept: true,
-      softenMeters,
-      minFillRatio: 0.55,
-      maxAreaInflation: 1.45,
-    })
     const ctx = lastDetectContextRef.current
+    const ftw =
+      isFtwFieldEngine(ctx?.source) || isFtwFieldEngine(raw.engine)
+    const baseMin = ctx?.minAreaM2 ?? 1
+    const effMinArea = finishMinAreaM2(baseMin, ftw)
+    const mergedGeo = mergeFieldFragments(
+      raw.geojson,
+      finishMergeOptions(baseMin, { ftw, enabled: mergeFragments }),
+    )
+    const softenMeters = regularizeMethod === 'right-angles' ? 3.2 : 5.2
+    const optimized = optimizeFieldBoundaryResult(
+      { ...raw, geojson: mergedGeo, count: mergedGeo.features.length },
+      {
+        regularizeFootprints,
+        regularizeMethod,
+        softenKept: true,
+        softenMeters,
+        minFillRatio: 0.55,
+        maxAreaInflation: 1.45,
+      },
+    )
     let geojson = optimized.geojson
     if (ctx?.aoi) {
       geojson = refineFieldPolygonsToAoi(geojson, ctx.aoi, {
-        minAreaM2: Math.max(0.05, Math.min(ctx.minAreaM2 ?? 1, 40)),
+        minAreaM2: effMinArea,
         dropIou: 0.15,
       })
     }
@@ -1515,7 +1547,7 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
       },
     })
     setPhase(geojson.features.length ? 'done' : 'empty')
-  }, [regularizeFootprints, regularizeMethod]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [regularizeFootprints, regularizeMethod, mergeFragments]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * Fill the attribute table from the full Sentinel-2 Layer index set.
@@ -1633,6 +1665,8 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     setRegularizeFootprints,
     regularizeMethod,
     setRegularizeMethod,
+    mergeFragments,
+    setMergeFragments,
     phase,
     progress,
     stage,

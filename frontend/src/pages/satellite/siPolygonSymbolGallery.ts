@@ -71,6 +71,7 @@ export const SI_POLYGON_SYMBOL_GALLERY: SiPolygonSymbolGalleryItem[] = [
     id: 'poly-cyan-outline',
     label: 'Cyan Outline',
     category: 'Outlines',
+    // Matches fieldBoundaryStyle.ts (Agri Field Boundary default).
     fillColor: '#22d3ee',
     strokeColor: '#22d3ee',
     weight: 2,

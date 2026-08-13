@@ -187,11 +187,52 @@ def _predict_geojson(
 
     features: list[dict[str, Any]] = []
     field_id = 0
+    rgb = np.asarray(image.convert("RGB"))
     for result in results:
         masks = getattr(result, "masks", None)
         boxes = getattr(result, "boxes", None)
 
-        # Prefer vector polygons from Ultralytics (xy) — denser / less filter loss.
+        # Prefer raster masks → refine/merge → contours (avoids stair-step xy dumps).
+        if masks is not None and getattr(masks, "data", None) is not None and len(masks) > 0:
+            mask_data = masks.data.cpu().numpy()  # (N, Hm, Wm)
+            components: list[tuple[np.ndarray, float]] = []
+            for i in range(mask_data.shape[0]):
+                m = mask_data[i]
+                if m.shape[0] != height or m.shape[1] != width:
+                    m = cv2.resize(
+                        m.astype(np.float32), (width, height), interpolation=cv2.INTER_LINEAR
+                    )
+                conf_v = float(conf_use)
+                if boxes is not None and i < len(boxes):
+                    try:
+                        conf_v = float(boxes.conf[i].item())
+                    except Exception:  # noqa: BLE001
+                        pass
+                components.append(((m > 0.45), conf_v))
+
+            try:
+                from field_mask_refine import masks_to_cleaned_components
+
+                min_px = max(MIN_AREA_PX, 40)
+                components = masks_to_cleaned_components(
+                    components, rgb=rgb, min_px=min_px, merge=True
+                )
+            except Exception:  # noqa: BLE001
+                pass
+
+            for mask, conf_v in components:
+                u8 = (mask.astype(np.uint8) * 255) if mask.dtype != np.uint8 else mask
+                for ring_px in _mask_to_polygons(u8, SIMPLIFY_EPS):
+                    feats = _feature_from_ring(
+                        ring_px, width, height, bbox, float(conf_v), min_area_m2, field_id + 1
+                    )
+                    if feats:
+                        features.extend(feats)
+                        field_id = len(features)
+            if features:
+                continue
+
+        # Fallback: Ultralytics vector polygons when masks.data missing.
         xy_list = getattr(masks, "xy", None) if masks is not None else None
         if xy_list is not None and len(xy_list) > 0:
             for i, poly in enumerate(xy_list):
@@ -240,25 +281,6 @@ def _predict_geojson(
                 )
                 field_id = len(features)
             continue
-
-        mask_data = masks.data.cpu().numpy()  # (N, Hm, Wm)
-        for i in range(mask_data.shape[0]):
-            m = mask_data[i]
-            if m.shape[0] != height or m.shape[1] != width:
-                m = cv2.resize(m.astype(np.float32), (width, height), interpolation=cv2.INTER_LINEAR)
-            conf_v = float(conf_use)
-            if boxes is not None and i < len(boxes):
-                try:
-                    conf_v = float(boxes.conf[i].item())
-                except Exception:  # noqa: BLE001
-                    pass
-            for ring_px in _mask_to_polygons((m > 0.45).astype(np.uint8) * 255, SIMPLIFY_EPS):
-                feats = _feature_from_ring(
-                    ring_px, width, height, bbox, conf_v, min_area_m2, field_id + 1
-                )
-                if feats:
-                    features.extend(feats)
-                    field_id = len(features)
 
     return {
         "type": "FeatureCollection",

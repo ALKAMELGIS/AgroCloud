@@ -457,6 +457,21 @@ def _polygonize_fallback(
         return None
     geojson_out = out_dir / "polygons.geojson"
     _emit(progress, 0.8, "polygonize")
+    try:
+        from field_mask_refine import ftw_polygonize_min_size_m2, refine_ftw_prediction_geotiff
+
+        refined = out_dir / "inference_output_refined.tif"
+        refine_ftw_prediction_geotiff(
+            str(raster),
+            min_area_m2=float(min_area_m2),
+            out_path=str(refined),
+        )
+        if refined.is_file():
+            raster = refined
+        poly_min = ftw_polygonize_min_size_m2(float(min_area_m2))
+    except Exception as refine_exc:  # noqa: BLE001
+        print(f"[ftw-infer] mask refine FAILED (using raw pred): {refine_exc}", flush=True)
+        poly_min = max(500.0, float(min_area_m2))
     _run_cli(
         [
             "inference",
@@ -466,7 +481,7 @@ def _polygonize_fallback(
             str(geojson_out),
             "--overwrite",
             "--min_size",
-            str(max(0.0, float(min_area_m2))),
+            str(max(0.0, float(poly_min))),
         ],
         progress=progress,
         cwd=str(out_dir),
@@ -618,6 +633,23 @@ def _run_inference_stepwise(
     )
 
     _emit(progress, 0.8, "polygonize")
+    try:
+        from field_mask_refine import ftw_polygonize_min_size_m2, refine_ftw_prediction_geotiff
+
+        refined_pred = out_dir / "inference_output_refined.tif"
+        refine_ftw_prediction_geotiff(
+            str(pred),
+            min_area_m2=float(min_area_m2),
+            out_path=str(refined_pred),
+        )
+        if refined_pred.is_file():
+            pred = refined_pred
+            print(f"[ftw-infer] mask refine ok → {refined_pred.name}", flush=True)
+        poly_min = ftw_polygonize_min_size_m2(float(min_area_m2))
+    except Exception as refine_exc:  # noqa: BLE001
+        print(f"[ftw-infer] mask refine FAILED (using raw pred): {refine_exc}", flush=True)
+        poly_min = max(500.0, float(min_area_m2))
+
     _run_cli(
         [
             "inference",
@@ -627,7 +659,7 @@ def _run_inference_stepwise(
             str(geojson_out),
             "--overwrite",
             "--min_size",
-            str(max(0.0, float(min_area_m2))),
+            str(max(0.0, float(poly_min))),
         ],
         progress=progress,
         cwd=str(out_dir),

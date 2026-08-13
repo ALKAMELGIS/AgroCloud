@@ -249,26 +249,10 @@ def _rasterize_aoi(aoi_geom, bbox, width: int, height: int) -> np.ndarray | None
 
 
 def _clean_binary(mask: np.ndarray, min_px: int = 40) -> np.ndarray:
-    """OpenGeoAI-style instance mask cleanup: open/close, fill holes, drop speckles."""
-    u8 = (mask.astype(np.uint8) * 255)
-    h, w = u8.shape[:2]
-    k3 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-    k5 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-    u8 = cv2.morphologyEx(u8, cv2.MORPH_OPEN, k3, iterations=1)
-    u8 = cv2.morphologyEx(u8, cv2.MORPH_CLOSE, k5, iterations=2)
-    # Fill holes when border is background
-    if u8[0, 0] == 0:
-        flood = u8.copy()
-        ff_mask = np.zeros((h + 2, w + 2), np.uint8)
-        cv2.floodFill(flood, ff_mask, (0, 0), 255)
-        holes = cv2.bitwise_not(flood)
-        u8 = cv2.bitwise_or(u8, holes)
-    n, labels, stats, _ = cv2.connectedComponentsWithStats((u8 > 0).astype(np.uint8), connectivity=8)
-    cleaned = np.zeros_like(u8)
-    for i in range(1, n):
-        if stats[i, cv2.CC_STAT_AREA] >= min_px:
-            cleaned[labels == i] = 255
-    return cleaned > 0
+    """Boundary refine + CC + controlled close before contours (see field_mask_refine)."""
+    from field_mask_refine import refine_binary_mask
+
+    return refine_binary_mask(mask, min_px=min_px, close_ksize=3, close_iterations=1)
 
 
 def _smooth_polygon(poly, simplify: float | None):
@@ -777,6 +761,22 @@ def _execute_detect(req: DetectRequest, progress: ProgressCb | None = None) -> d
             for m, s in components
             if not isinstance(m, str) and int(np.logical_and(m, aoi_mask).sum()) >= 20
         ]
+
+    # Boundary refine + connected-component merge before contour extraction
+    # (at inference resolution so RGB mean cues stay aligned).
+    if components:
+        from field_mask_refine import masks_to_cleaned_components
+
+        min_px = max(40, int(float(req.min_area_m2 or 0) / 4.0))
+        try:
+            components = masks_to_cleaned_components(
+                components,
+                rgb=rgb,
+                min_px=min_px,
+                merge=True,
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"[field-boundary] mask refine skipped: {exc}", flush=True)
 
     if scale < 1.0 and components:
 

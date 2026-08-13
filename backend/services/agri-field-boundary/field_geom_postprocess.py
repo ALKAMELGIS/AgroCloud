@@ -40,8 +40,13 @@ FTW_GEOM_DISC_FILL_MAX = float(os.environ.get("FTW_GEOM_DISC_FILL_MAX", "0.88"))
 FTW_GEOM_DISC_SQUARENESS_MIN = float(os.environ.get("FTW_GEOM_DISC_SQUARENESS_MIN", "0.86"))
 FTW_GEOM_SMOOTH_M = float(os.environ.get("FTW_GEOM_SMOOTH_M", "1.8"))
 FTW_GEOM_SLIVER_COMPACTNESS = float(os.environ.get("FTW_GEOM_SLIVER_COMPACTNESS", "0.045"))
-# Absolute floor for true fields; slivers use compactness+area combo below.
-FTW_GEOM_MIN_FIELD_M2 = float(os.environ.get("FTW_GEOM_MIN_FIELD_M2", "25"))
+# Absolute floor for true fields; raised to kill S2 10 m pinhead squares.
+FTW_GEOM_MIN_FIELD_M2 = float(os.environ.get("FTW_GEOM_MIN_FIELD_M2", "400"))
+# Never OBB-snap noise into neat tiny boxes.
+FTW_GEOM_RECT_MIN_AREA_M2 = float(os.environ.get("FTW_GEOM_RECT_MIN_AREA_M2", "2000"))
+# Merge fragments that nearly touch (metres) before neighbor separation.
+FTW_GEOM_MERGE_GAP_M = float(os.environ.get("FTW_GEOM_MERGE_GAP_M", "15"))
+FTW_GEOM_MERGE_CONTACT_FRAC = float(os.environ.get("FTW_GEOM_MERGE_CONTACT_FRAC", "0.22"))
 
 
 def _deg_per_m(mid_lat: float) -> float:
@@ -225,6 +230,10 @@ def _maybe_rect_snap(geom: Any, mid_lat: float) -> Any:
     """Snap near-rectangular fields to oriented rectangle (farm-like edges)."""
     if _is_round(geom, mid_lat):
         return geom
+    area = _area_m2(geom, mid_lat)
+    # Tiny noisy fragments must not become perfect small squares.
+    if area < FTW_GEOM_RECT_MIN_AREA_M2:
+        return geom
     fill = _fill_ratio_vs_mrr(geom)
     if fill < FTW_GEOM_RECT_FILL_MIN:
         return geom
@@ -238,6 +247,88 @@ def _maybe_rect_snap(geom: Any, mid_lat: float) -> Any:
         return mrr
     except Exception:  # noqa: BLE001
         return geom
+
+
+def _merge_touching_fragments(
+    geoms: list[Any],
+    mid_lat: float,
+    *,
+    gap_m: float | None = None,
+    contact_frac: float | None = None,
+) -> list[Any]:
+    """
+    Union polygons that share a long border or nearly touch (≤ gap_m).
+    Runs before neighbor separation so over-segmented FTW parts fuse first.
+    """
+    from shapely.ops import unary_union
+    from shapely.validation import make_valid
+
+    if len(geoms) < 2:
+        return geoms
+
+    gap = FTW_GEOM_MERGE_GAP_M if gap_m is None else float(gap_m)
+    frac = FTW_GEOM_MERGE_CONTACT_FRAC if contact_frac is None else float(contact_frac)
+    d = max(gap, 0.5) * _deg_per_m(mid_lat)
+
+    items = list(geoms)
+    changed = True
+    guard = 0
+    while changed and guard < 40 and len(items) > 1:
+        changed = False
+        guard += 1
+        n = len(items)
+        merged_pair = False
+        for i in range(n):
+            if merged_pair:
+                break
+            for j in range(i + 1, n):
+                a, b = items[i], items[j]
+                try:
+                    if a.is_empty or b.is_empty:
+                        continue
+                    # Near-touch or intersect.
+                    if not (a.intersects(b) or a.distance(b) <= d):
+                        continue
+                    buf = a.buffer(d)
+                    inter = buf.intersection(b)
+                    if inter is None or inter.is_empty:
+                        continue
+                    deg_per_m = _deg_per_m(mid_lat)
+                    # Intersection area (deg²) / buffer width (deg) → shared length (deg) → metres.
+                    contact_m = float(inter.area) / max(d * deg_per_m, 1e-18)
+                    pa = _peri_m(a, mid_lat)
+                    pb = _peri_m(b, mid_lat)
+                    shorter = min(pa, pb)
+                    if shorter <= 0:
+                        continue
+                    aa = _area_m2(a, mid_lat)
+                    ab = _area_m2(b, mid_lat)
+                    # Two large compact parcels with only a corner kiss → keep split.
+                    if (
+                        aa > 5000
+                        and ab > 5000
+                        and _compactness(aa, pa) > 0.55
+                        and _compactness(ab, pb) > 0.55
+                        and contact_m < 0.18 * shorter
+                        and not a.intersects(b)
+                    ):
+                        continue
+                    if contact_m < frac * shorter and not a.intersects(b):
+                        continue
+                    u = make_valid(unary_union([a, b]))
+                    parts = _as_polygon_list(u)
+                    if not parts:
+                        continue
+                    parts.sort(key=lambda p: p.area, reverse=True)
+                    new_items = [items[k] for k in range(n) if k != i and k != j]
+                    new_items.extend(parts)
+                    items = new_items
+                    changed = True
+                    merged_pair = True
+                    break
+                except Exception:  # noqa: BLE001
+                    continue
+    return items
 
 
 def _separate_neighbours(geoms: list[Any], sep_m: float, mid_lat: float) -> list[Any]:
@@ -279,9 +370,10 @@ def improve_field_geometries(
     rect_snap: bool = True,
 ) -> list[Any]:
     """
-    Run the phase-1 geometry pipeline on Shapely geometries (EPSG:4326).
+    Geometry pipeline on Shapely geometries (EPSG:4326):
 
-    Returns cleaned Polygon geometries (MultiPolygons explode to parts).
+      drop tiny → merge fragments → morph open → smooth → simplify →
+      gated rect-snap → separate neighbors → final clean
     """
     from shapely.validation import make_valid
 
@@ -300,25 +392,33 @@ def improve_field_geometries(
         except Exception:  # noqa: BLE001
             continue
         for p in _as_polygon_list(vg):
+            if _area_m2(p, mid_lat) < min_keep:
+                continue
+            if _is_sliver(p, mid_lat, min_keep):
+                continue
             polys.append(p)
+
+    # Fuse over-segmented fragments before separation / rect-snap.
+    polys = _merge_touching_fragments(polys, mid_lat)
 
     cleaned: list[Any] = []
     for p in polys:
         p = _morph_open(p, open_v, mid_lat)
         for part in _as_polygon_list(p):
-            # Round staircase edges first, then simplify + optional OBB snap.
             part = _smooth_stair_edges(part, smooth_v, mid_lat)
             part = _simplify_m(part, simp, mid_lat)
             if rect_snap:
                 part = _maybe_rect_snap(part, mid_lat)
             for final in _as_polygon_list(part):
+                if _area_m2(final, mid_lat) < min_keep:
+                    continue
                 if _is_sliver(final, mid_lat, min_keep):
                     continue
                 cleaned.append(final)
 
     cleaned = _separate_neighbours(cleaned, sep_v, mid_lat)
 
-    # Final pass after separation (re-validate + light simplify + optional re-snap).
+    # Final pass after separation (re-validate + light simplify + gated re-snap).
     out: list[Any] = []
     for g in cleaned:
         try:

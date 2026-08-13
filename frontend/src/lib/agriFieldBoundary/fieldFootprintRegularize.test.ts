@@ -661,20 +661,40 @@ function countRingVertices(feature: GeoJSON.Feature): number {
 
 /** Axis-aligned rectangle with classic raster stairs on the east edge. */
 function collapseStairFixture(): GeoJSON.Feature<GeoJSON.Polygon> {
-  const ring: number[][] = [
-    localToLonLat(0, 0, 0),
-    localToLonLat(100, 0, 0),
-    localToLonLat(100, 10, 0),
-    localToLonLat(110, 10, 0),
-    localToLonLat(110, 20, 0),
-    localToLonLat(120, 20, 0),
-    localToLonLat(120, 80, 0),
-    localToLonLat(0, 80, 0),
-    localToLonLat(0, 0, 0),
-  ]
+  // Dense 10 m stairs — clearly over the STAIR_EDGE threshold for collapse / DP.
+  const ring: number[][] = [localToLonLat(0, 0, 0)]
+  for (let y = 0; y < 100; y += 10) {
+    ring.push(localToLonLat(100 + (y % 20 === 0 ? 0 : 10), y, 0))
+    ring.push(localToLonLat(100 + (y % 20 === 0 ? 0 : 10), y + 10, 0))
+  }
+  ring.push(localToLonLat(0, 100, 0), localToLonLat(0, 0, 0))
   return {
     type: 'Feature',
     properties: {},
     geometry: { type: 'Polygon', coordinates: [ring] },
   }
 }
+
+describe('all Regularize methods remove stair-step vertices', () => {
+  const methods = [
+    'right-angles',
+    'right-angles-and-diagonals',
+    'any-angles',
+    'circle',
+  ] as const
+
+  for (const method of methods) {
+    it(`${method} reduces stair vertices (never raw kept stairs)`, () => {
+      const stair = collapseStairFixture()
+      const before = countRingVertices(stair)
+      expect(before).toBeGreaterThan(6)
+      const out = regularizePolygonFootprint(stair, { method })
+      const after = countRingVertices(out)
+      expect(after).toBeGreaterThanOrEqual(4)
+      // Circle on a rectangle falls through to stair-free / any-angles — still fewer verts.
+      // Right-angles may rebuild or simplify; never leave method === 'kept' with same ring.
+      expect(after).toBeLessThan(before)
+      expect(out.properties?.footprint_method).not.toBe('kept')
+    })
+  }
+})

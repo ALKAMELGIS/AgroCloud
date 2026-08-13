@@ -77,10 +77,15 @@ export type FieldBoundaryResult = {
   aoiApplied: boolean
 }
 
-/** Default field border — black outline, hollow fill (matches SI vector defaults). */
-export const FIELD_BOUNDARY_STROKE_COLOR = '#000000'
-/** Border thickness in px, flat across zooms so edges read the same everywhere. */
-export const FIELD_BOUNDARY_STROKE_WIDTH = 1.5
+import {
+  FIELD_BOUNDARY_STROKE_COLOR,
+  FIELD_BOUNDARY_STROKE_WIDTH,
+} from './fieldBoundaryStyle'
+
+export {
+  FIELD_BOUNDARY_STROKE_COLOR,
+  FIELD_BOUNDARY_STROKE_WIDTH,
+} from './fieldBoundaryStyle'
 
 function stampFieldStroke(fc: GeoJSON.FeatureCollection): GeoJSON.FeatureCollection {
   return {

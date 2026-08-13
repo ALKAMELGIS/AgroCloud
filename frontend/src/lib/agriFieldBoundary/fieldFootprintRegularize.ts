@@ -948,7 +948,8 @@ function stairThresholdM(areaM2: number, override?: number): number {
 
 /**
  * Regularize a parcel into straight, right-angled cadastral edges.
- * Polygons with holes and non-rectilinear parcels are left to the caller.
+ * Uses the exterior ring only (holes stripped) so L-shapes and holed
+ * raster masks still get a rectilinear rebuild when possible.
  */
 export function rightAngleRegularizePolygon(
   feature: GeoJSON.Feature,
@@ -963,21 +964,19 @@ export function rightAngleRegularizePolygon(
 
     let geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon
     if (g.type === 'Polygon') {
-      if (g.coordinates.length > 1) return null
-      const ring = rightAngleRing(g.coordinates[0] as number[][], minSegmentM)
+      // Strip holes — interior rings block rectilinear rebuild and leave stairs.
+      const outer = g.coordinates[0] as number[][]
+      const ring = rightAngleRing(outer, minSegmentM)
       if (!ring) return null
       geometry = { type: 'Polygon', coordinates: [ring] }
     } else {
       const parts: number[][][][] = []
       let changed = false
       for (const poly of g.coordinates) {
-        if (poly.length > 1) {
-          parts.push(poly as number[][][])
-          continue
-        }
-        const ring = rightAngleRing(poly[0] as number[][], minSegmentM)
+        const outer = poly[0] as number[][]
+        const ring = rightAngleRing(outer, minSegmentM)
         if (!ring) {
-          parts.push(poly as number[][][])
+          parts.push([outer])
           continue
         }
         changed = true
@@ -990,6 +989,8 @@ export function rightAngleRegularizePolygon(
     const next: GeoJSON.Feature = { ...feature, geometry }
     // A pruned ring can fold back on itself — reject rather than emit a bowtie.
     if ((turf.kinks(next as any)?.features?.length || 0) > 0) return null
+    // Reject "rebuilds" that did not simplify the stair ring.
+    if (countVertices(next) >= countVertices(feature)) return null
     return {
       ...next,
       properties: {
@@ -1135,11 +1136,16 @@ export function rightAngleDiagonalRegularizePolygon(
   feature: GeoJSON.Feature,
 ): GeoJSON.Feature | null {
   const g = feature.geometry
-  if (!g || g.type !== 'Polygon' || g.coordinates.length > 1) {
+  if (!g || (g.type !== 'Polygon' && g.type !== 'MultiPolygon')) {
     return rightAngleRegularizePolygon(feature)
   }
   try {
-    const ring = angleSnapRing(g.coordinates[0] as number[][], 45)
+    const outer =
+      g.type === 'Polygon'
+        ? (g.coordinates[0] as number[][])
+        : (g.coordinates[0]?.[0] as number[][] | undefined)
+    if (!outer) return rightAngleRegularizePolygon(feature)
+    const ring = angleSnapRing(outer, 45)
     if (!ring) return rightAngleRegularizePolygon(feature)
     const rebuilt = rebuildPolygonWithRing(feature, ring, 'right-angles-and-diagonals')
     return rebuilt ?? rightAngleRegularizePolygon(feature)
@@ -1158,15 +1164,32 @@ export function anyAngleRegularizePolygon(feature: GeoJSON.Feature): GeoJSON.Fea
   try {
     const areaM2 = Math.abs(turf.area(feature as any))
     if (!(areaM2 > 0)) return null
+    const collapsed = collapseStairStepPolygon(feature)
     const tol = Math.min(
       28,
       Math.max(ANY_ANGLE_TOL_M, Math.sqrt(areaM2) * 0.045),
     )
-    const simplified = stairFreeSimplify(feature, tol)
-    if (countVertices(simplified) >= countVertices(feature)) return null
+    const simplified = stairFreeSimplify(collapsed, tol)
+    const before = countVertices(feature)
+    const after = countVertices(simplified)
+    if (after >= before && simplified === feature) return null
     const nextArea = Math.abs(turf.area(simplified as any))
     const ratio = nextArea / areaM2
-    if (ratio < ANGLE_REBUILD_MIN_AREA_RATIO || ratio > ANGLE_REBUILD_MAX_AREA_RATIO) return null
+    if (ratio < ANGLE_REBUILD_MIN_AREA_RATIO || ratio > ANGLE_REBUILD_MAX_AREA_RATIO) {
+      // Still prefer stair-collapsed geometry over raw pixel rings.
+      if (countVertices(collapsed) < before) {
+        return {
+          ...collapsed,
+          properties: {
+            ...(feature.properties || {}),
+            footprint_regularized: true,
+            footprint_method: 'any-angles',
+            footprint_softened: true,
+          },
+        }
+      }
+      return null
+    }
     if ((turf.kinks(simplified as any)?.features?.length || 0) > 0) return null
     return {
       ...simplified,
@@ -1183,10 +1206,11 @@ export function anyAngleRegularizePolygon(feature: GeoJSON.Feature): GeoJSON.Fea
   }
 }
 
-/** Circle — best fitting circle (same path as centre-pivot detection, forced). */
+/** Circle — best fitting circle for true pivots only. */
 export function circleRegularizePolygon(feature: GeoJSON.Feature): GeoJSON.Feature | null {
   try {
-    const fit = pivotCircleFit(feature) || provenRoundCircleFit(feature) || equalAreaCircleFit(feature)
+    // Strict pivot fit only — never invent a circle from a rectangular field's area.
+    const fit = pivotCircleFit(feature)
     if (!fit) return null
     return pivotCircleFootprint(feature, fit)
   } catch {
@@ -1838,8 +1862,7 @@ export function regularizePolygonFootprint(
 
   // Method rebuild is the ArcGIS path. Skip when the caller asked for soften-only
   // (`cadastralSnap: false` without an explicit method).
-  // Right Angles: rebuild on RAW geometry first — soften rounds corners the
-  // rectilinear rebuild needs, which left many parcels as pixel stairs.
+  // All methods try RAW geometry first — soften rounds corners rebuilds need.
   if (cadastralSnap || opts?.method != null) {
     if (method === 'right-angles') {
       const rectRaw = rightAngleRegularizePolygon(feature, {
@@ -1851,15 +1874,28 @@ export function regularizePolygonFootprint(
         minSegmentMeters: opts?.minSegmentMeters,
       })
       if (rectSoft) return rectSoft
+    } else if (method === 'right-angles-and-diagonals') {
+      const diagRaw = rightAngleDiagonalRegularizePolygon(feature)
+      if (diagRaw) return diagRaw
+      if (softenKept) kept = softenFieldPolygonEdges(kept, softenM)
+      const diagSoft = rightAngleDiagonalRegularizePolygon(kept)
+      if (diagSoft) return diagSoft
+      const rectFallback = rightAngleRegularizePolygon(kept, {
+        minSegmentMeters: opts?.minSegmentMeters,
+      })
+      if (rectFallback) return rectFallback
+    } else if (method === 'any-angles') {
+      const anyRaw = anyAngleRegularizePolygon(feature)
+      if (anyRaw) return anyRaw
+      if (softenKept) kept = softenFieldPolygonEdges(kept, softenM)
+      const anySoft = anyAngleRegularizePolygon(kept)
+      if (anySoft) return anySoft
+    } else if (method === 'circle') {
+      // Forced circle already tried above; non-circular → any-angles then stair-free.
+      const any = anyAngleRegularizePolygon(feature) || anyAngleRegularizePolygon(kept)
+      if (any) return any
     } else {
       if (softenKept) kept = softenFieldPolygonEdges(kept, softenM)
-      if (method === 'right-angles-and-diagonals') {
-        const diag = rightAngleDiagonalRegularizePolygon(kept)
-        if (diag) return diag
-      } else if (method === 'any-angles') {
-        const any = anyAngleRegularizePolygon(kept)
-        if (any) return any
-      }
     }
   } else if (softenKept) {
     kept = softenFieldPolygonEdges(kept, softenM)
@@ -1934,21 +1970,31 @@ export function regularizePolygonFootprint(
 
   if (cadastralSnap && method !== 'any-angles') {
     const snapped = cadastralSnapFieldPolygon(kept)
-    if (snapped.properties?.footprint_cadastral_snap) return snapped
+    if (snapped.properties?.footprint_cadastral_snap) {
+      if (countVertices(snapped) < countVertices(kept)) return snapped
+      kept = snapped
+    }
   }
-  // No rectangle and no circle fits this parcel, so it would otherwise ship the
-  // raw pixel staircase. Collapse the steps without moving the boundary.
-  const straightened = stairFreeSimplify(kept, STAIR_FREE_TOL_M)
-  if (countVertices(straightened) < countVertices(kept)) {
+  // Guaranteed stair-free last resort — prefer collapsing the RAW ring
+  // (soften/Chaikin can round stairs so H/V detection no longer fires).
+  const beforeVerts = countVertices(feature)
+  const fromRaw = stairFreeSimplify(collapseStairStepPolygon(feature), STAIR_FREE_TOL_M)
+  const fromKept = stairFreeSimplify(collapseStairStepPolygon(kept), STAIR_FREE_TOL_M)
+  const best = [fromRaw, fromKept, collapseStairStepPolygon(feature)].reduce((a, b) =>
+    countVertices(b) < countVertices(a) ? b : a,
+  )
+  if (countVertices(best) < beforeVerts) {
     return {
-      ...straightened,
+      ...best,
       properties: {
-        ...(straightened.properties || {}),
+        ...(best.properties || {}),
         footprint_method: 'kept-simplified',
         footprint_stair_collapse_m: STAIR_FREE_TOL_M,
+        footprint_regularized: true,
       },
     }
   }
+  // Already clean (e.g. L-shape without stairs) — keep geometry.
   return kept
 }
 
