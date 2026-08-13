@@ -65,6 +65,7 @@ const CORS_DEFAULT_ORIGINS = [
   'https://elite.geosyntra.org',
   'https://eliteagrocloud.com',
   'https://www.eliteagrocloud.com',
+  'https://api.eliteagrocloud.com',
   'https://alkamelgis.github.io',
   'http://localhost:5174',
   'http://127.0.0.1:5174',

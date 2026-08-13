@@ -6,36 +6,58 @@
  *   - local dev: Vite proxies `/api` → backend, so same-origin works.
  *   - full-stack hosting: the Node server serves the SPA, so same-origin works.
  *   - static hosting (GitHub Pages, Hostinger static, custom domains): there is **no** local `/api`,
- *     so requests must be sent to a separately deployed backend via `VITE_AGRI_API_SECRETS_URL`.
+ *     so requests must be sent to a separately deployed backend via `VITE_AGRI_API_SECRETS_URL`
+ *     (or the built-in eliteagrocloud.com → api.eliteagrocloud.com fallback).
  *
  * Centralising this here means every API client resolves the backend the same way and custom domains
  * (e.g. `eliteagrocloud.com`) keep working instead of POSTing to a static host that returns 405/404.
  */
 
+/** Hostinger Node API for the eliteagrocloud.com GitHub Pages SPA. */
+export const ELITE_AGROCLOUD_API_ORIGIN = 'https://api.eliteagrocloud.com'
+
 function sameOrigin(): string {
   return typeof window !== 'undefined' && window.location?.origin ? window.location.origin : ''
+}
+
+function isEliteAgroCloudHostname(host: string): boolean {
+  return /(^|\.)eliteagrocloud\.com$/i.test(host)
+}
+
+/**
+ * When the SPA runs on eliteagrocloud.com (Pages) with no VITE override, send `/api/*`
+ * to the Hostinger Node host (`api.eliteagrocloud.com`).
+ */
+function productionApiOriginFallback(): string {
+  if (typeof window === 'undefined') return ''
+  const host = window.location.hostname || ''
+  // Never treat the API host itself as needing a fallback (avoid loops).
+  if (/^api\.eliteagrocloud\.com$/i.test(host)) return ''
+  if (isEliteAgroCloudHostname(host)) return ELITE_AGROCLOUD_API_ORIGIN
+  return ''
 }
 
 /** Trimmed value of the configured backend origin override, or '' when unset. */
 export function configuredApiOrigin(): string {
   const raw = import.meta.env.VITE_AGRI_API_SECRETS_URL
   const configured = typeof raw === 'string' ? raw.trim() : ''
-  if (!configured) return ''
-  try {
-    const origin = new URL(configured, sameOrigin() || 'http://localhost').origin
-    /**
-     * GitHub Pages / eliteagrocloud.com sometimes set VITE_AGRI_API_SECRETS_URL to the same
-     * static origin. That is not a Node backend — treat as unset so `/api/*` clients use
-     * browser fallbacks instead of POSTing into the SPA (404/405 + false "backend running" UX).
-     */
-    if (typeof window !== 'undefined' && origin === sameOrigin() && isKnownStaticHostname(window.location.hostname)) {
-      return ''
+  if (configured) {
+    try {
+      const origin = new URL(configured, sameOrigin() || 'http://localhost').origin
+      /**
+       * GitHub Pages / eliteagrocloud.com sometimes set VITE_AGRI_API_SECRETS_URL to the same
+       * static origin. That is not a Node backend — treat as unset so `/api/*` clients use
+       * the Hostinger API fallback instead of POSTing into the SPA (404/405).
+       */
+      if (typeof window !== 'undefined' && origin === sameOrigin() && isKnownStaticHostname(window.location.hostname)) {
+        return productionApiOriginFallback()
+      }
+      return origin
+    } catch {
+      /* malformed override — fall through */
     }
-    return origin
-  } catch {
-    /* malformed override — caller falls back to same-origin */
-    return ''
   }
+  return productionApiOriginFallback()
 }
 
 function isKnownStaticHostname(host: string): boolean {
@@ -43,13 +65,13 @@ function isKnownStaticHostname(host: string): boolean {
     /\.github\.io$/i.test(host) ||
     /\.pages\.dev$/i.test(host) ||
     /\.netlify\.app$/i.test(host) ||
-    /(^|\.)eliteagrocloud\.com$/i.test(host)
+    isEliteAgroCloudHostname(host)
   )
 }
 
 /**
  * Origin that serves the backend `/api/*` routes.
- * Prefers the configured backend override, otherwise same-origin (dev proxy / full-stack host).
+ * Prefers the configured backend override / production fallback, otherwise same-origin.
  */
 export function resolveApiOrigin(): string {
   return configuredApiOrigin() || sameOrigin()
@@ -74,7 +96,7 @@ export function isStaticDeploymentWithoutBackend(): boolean {
     // Unknown host with an external backend override → not a static-only deploy.
     return false
   }
-  // Known static host: only "has backend" when override points at a different origin.
+  // Known static host: only "has backend" when override/fallback points at a different origin.
   return !configuredApiOrigin()
 }
 
