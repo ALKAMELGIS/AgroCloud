@@ -286,12 +286,15 @@ const OFFLINE_HEALTH_PROBE_MS = 3000
 /** Background health poll so a brief Node/AFB restart never leaves a sticky banner. */
 const HEALTH_POLL_MS = 12000
 const OFFLINE_ERROR_SHORT = 'Service offline — start agri-field-boundary on :8092'
+const OFFLINE_ERROR_STATIC = 'Field detection API not available on this site'
 
 function isOfflineFieldBoundaryError(message: string | null | undefined): boolean {
   if (!message) return false
   return (
     message === OFFLINE_ERROR_SHORT ||
+    message === OFFLINE_ERROR_STATIC ||
     /Service offline/i.test(message) ||
+    /Field detection API not available/i.test(message) ||
     /start agri-field-boundary|uvicorn app:app --port 8092/i.test(message)
   )
 }

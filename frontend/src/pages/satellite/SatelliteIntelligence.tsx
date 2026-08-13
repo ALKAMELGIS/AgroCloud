@@ -107,7 +107,10 @@ import {
   SI_DEFAULT_LIVE_WMS_LAYER,
   appendSentinelHubWmsAccessToken,
 } from '../../lib/sentinelHubWmsLayers';
-import { getDrawnGeometry } from '../../lib/sentinelHubWmsAoiClip';
+import {
+  getDrawnGeometry,
+  resolveLayersAoiWmsMaxTileLayers,
+} from '../../lib/sentinelHubWmsAoiClip';
 import { drawnAoiClipSignature, normalizeDrawnAoiClipCollection } from './siDrawnAoiLiveIndex';
 import { resolveSiActiveAoi, type SiActiveAoi } from '../../lib/siAoiManager';
 import {
@@ -4028,12 +4031,6 @@ const WMS_AOI_INDEX_VISIBILITY_MIN: number | null = null;
 
 /** Cap simultaneous Mapbox WMS raster sources (each source fetches tiles independently). */
 const SI_WMS_MAX_TILE_LAYERS = 8;
-/**
- * Layers AOI paint: fixed count of multipolygon WMS sources covering every farm.
- * Stable GEOMETRY across zoom/pan — Mapbox only fetches new BBOX tiles (HTTP cache).
- * Cap kept modest so Show on map finishes in fewer parallel requests (less flicker).
- */
-const SI_LAYER_AOI_WMS_MAX_TILE_LAYERS = 16;
 /** Prefer one source per polygon only while under this count (small AOIs). */
 const LAYER_AOI_WMS_SINGLE_RING_MAX_FEATURES = 16;
 /** Above this feature count, Layers AOI uses packed spatial-bucket WMS chunks. */
@@ -22486,8 +22483,9 @@ export default function SatelliteIntelligence() {
   const layerAoiPreferSingleRings =
     layerAoiClipFeatureCount > 0 &&
     layerAoiClipFeatureCount <= LAYER_AOI_WMS_SINGLE_RING_MAX_FEATURES;
+  /** Scales with feature count (e.g. Agro_Structures ~930) so GEOMETRY URLs stay under proxy limits. */
   const layerAoiWmsMaxTiles = layerAoiLargeMask
-    ? SI_LAYER_AOI_WMS_MAX_TILE_LAYERS
+    ? resolveLayersAoiWmsMaxTileLayers(layerAoiClipFeatureCount)
     : SI_WMS_MAX_TILE_LAYERS;
   // Never viewport-filter Layers paint — filter would rebuild GEOMETRY on pan/zoom.
   // Frozen full-AOI clip + Mapbox BBOX tiling is the cache-friendly path.

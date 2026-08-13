@@ -830,7 +830,9 @@ export function AgriFieldBoundaryPanel({
             phase === 'error' || phase === 'empty'
               ? errorDetail ||
                 (offline
-                  ? 'Start: uvicorn app:app --port 8092 in backend/services/agri-field-boundary'
+                  ? /static|eliteagrocloud|VITE_AGRI_API/i.test(String(errorDetail || error || ''))
+                    ? String(errorDetail || error)
+                    : 'Start: uvicorn app:app --port 8092 in backend/services/agri-field-boundary'
                   : error || undefined)
               : undefined
           }
@@ -839,7 +841,7 @@ export function AgriFieldBoundaryPanel({
             <>
               <i className="fa-solid fa-triangle-exclamation" aria-hidden />{' '}
               {offline
-                ? 'Service offline — start agri-field-boundary on :8092'
+                ? error || 'Service offline — start agri-field-boundary on :8092'
                 : error || phaseLabel}
             </>
           ) : phase === 'empty' ? (
