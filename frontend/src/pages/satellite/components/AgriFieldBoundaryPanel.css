@@ -8,9 +8,11 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 10px;
-  border-radius: 10px;
-  background: rgba(15, 23, 42, 0.04);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  border: none;
 }
 .si-afb__card[hidden] {
   display: none;
@@ -252,8 +254,74 @@
   font-size: 11px;
   color: #94a3b8;
 }
-.si-afb__row input[type='range'] {
+.si-afb__slider {
   width: 100%;
+  height: 14px;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  cursor: pointer;
+  accent-color: #8b86d8;
+}
+.si-afb__slider:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.si-afb__slider::-webkit-slider-runnable-track {
+  height: 2px;
+  border-radius: 999px;
+  background: #8b86d8;
+  border: none;
+}
+.si-afb__slider::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 10px;
+  height: 10px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: #8b86d8;
+  border: none;
+  box-shadow: none;
+  cursor: pointer;
+}
+.si-afb__slider::-moz-range-track {
+  height: 2px;
+  border-radius: 999px;
+  background: #8b86d8;
+  border: none;
+}
+.si-afb__slider::-moz-range-progress {
+  height: 2px;
+  border-radius: 999px;
+  background: #8b86d8;
+  border: none;
+}
+.si-afb__slider::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #8b86d8;
+  border: none;
+  box-shadow: none;
+  cursor: pointer;
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-afb__slider {
+  accent-color: #2b2585;
+  background: transparent;
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-afb__slider::-webkit-slider-runnable-track,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-afb__slider::-moz-range-track,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-afb__slider::-moz-range-progress,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-afb__slider::-webkit-slider-thumb,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-afb__slider::-moz-range-thumb {
+  background: #2b2585;
+  border: none;
+  box-shadow: none;
 }
 .si-afb__row--check {
   flex-direction: row;
@@ -447,7 +515,7 @@
 }
 
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__card {
-  background: rgba(255, 255, 255, 0.04);
+  background: transparent;
 }
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__hint,
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__label,
@@ -523,7 +591,7 @@
 .si-afb__card--results {
   max-height: min(72vh, 640px);
   overflow: auto;
-  padding: 8px;
+  padding: 0;
 }
 
 .si-afb__results-head {

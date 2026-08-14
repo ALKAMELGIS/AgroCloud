@@ -671,6 +671,8 @@ import {
   detectQueryLanguage,
   type MapSearchResult,
 } from '../../lib/mapSearchGeocode';
+import { flyToLikeGoogleEarth, zoomFromLngLatBbox } from '../../lib/googleEarthFlyTo';
+import { mapSearchResultIcon, searchSiMapLayersAndFeatures } from '../../lib/siMapLayerSearch';
 import {
   formatNeighborhoodAgentFlyReply,
   formatNeighborhoodAgentPlaceNotFound,
@@ -802,7 +804,7 @@ const EMPTY_MAP_STYLE: any = {
       id: 'background',
       type: 'background',
       paint: {
-        'background-color': '#020617'
+        'background-color': '#000000'
       }
     }
   ]
@@ -2038,6 +2040,22 @@ interface CustomLayer {
 
 const SI_TABLE_MAX_FEATURES = 10000;
 const SI_LAYER_ACTION_TABLE_ID = 'layer-action-table';
+const DRAWN_AOI_LAYER_ID = 'drawn-aoi';
+
+function drawnGeometryToFeatureCollection(drawnGeometry: any): { type: 'FeatureCollection'; features: any[] } {
+  if (!drawnGeometry) return { type: 'FeatureCollection', features: [] };
+  if (drawnGeometry.type === 'FeatureCollection' && Array.isArray(drawnGeometry.features)) {
+    return drawnGeometry;
+  }
+  if (drawnGeometry.type === 'Feature') {
+    return { type: 'FeatureCollection', features: [drawnGeometry] };
+  }
+  const geometry = drawnGeometry.geometry ?? drawnGeometry;
+  return {
+    type: 'FeatureCollection',
+    features: [{ type: 'Feature', properties: { name: 'Area of Interest' }, geometry }],
+  };
+}
 
 /** Stable id for the Well Site Recommendation output layer in the Layers panel. */
 const WELLSITE_RECOMMENDED_LAYER_ID = 'wellsite-recommended-wells';
@@ -5176,6 +5194,7 @@ export default function SatelliteIntelligence() {
   /** Show/hide the committed AOI boundary as an independent, persistent layer. */
   const [aoiLayerVisible, setAoiLayerVisible] = useState(true);
   const [aoiLayerOpacity, setAoiLayerOpacity] = useState(1);
+  const [aoiLayerLabel, setAoiLayerLabel] = useState('Area of Interest');
   /** User-controlled on/off for the base map raster layer(s). */
   const [basemapVisible, setBasemapVisible] = useState(true);
   /** Unified Measurement tool (Main toolbox) â€” isolated from AOI drawing. */
@@ -5855,6 +5874,7 @@ export default function SatelliteIntelligence() {
   }, []);
   const siTableFeatureKeyCacheRef = useRef<Map<object, string>>(new Map());
   const drawnGeometryRef = useRef<any | null>(null);
+  const clearRemoteSensingAoiSketchOnlyRef = useRef<() => void>(() => {});
   const cropClassAoiGeometryRef = useRef<any | null>(null);
   const icSampleAoiGeometryRef = useRef<any | null>(null);
   const samTrainDraftGeometryRef = useRef<any | null>(null);
@@ -8874,6 +8894,21 @@ export default function SatelliteIntelligence() {
   }, [isMapLoaded, syncLiveViewport, freezeViewportPipeline]);
 
   const activeDialogLayer = useMemo(() => {
+    if (activeLayerActionDialog?.layerId === DRAWN_AOI_LAYER_ID && drawnGeometry) {
+      return {
+        id: DRAWN_AOI_LAYER_ID,
+        name: aoiLayerLabel,
+        geojson: drawnGeometryToFeatureCollection(drawnGeometry),
+        visible: aoiLayerVisible,
+        source: 'upload' as const,
+        renderMode: 'vector' as const,
+        mapOpacity: aoiLayerOpacity,
+        fillColor: drawStyle.fillColor,
+        weight: drawStyle.strokeWidth,
+        polygonFillAlpha: drawStyle.fillOpacity,
+        color: drawStyle.strokeColor,
+      };
+    }
     const base = activeLayerActionDialog
       ? customLayers.find(layer => layer.id === activeLayerActionDialog.layerId) ?? null
       : null;
@@ -8892,7 +8927,7 @@ export default function SatelliteIntelligence() {
       }
     }
     return base;
-  }, [activeLayerActionDialog, customLayers, siTableServiceGeojson]);
+  }, [activeLayerActionDialog, customLayers, siTableServiceGeojson, drawnGeometry, aoiLayerLabel, aoiLayerVisible, aoiLayerOpacity, drawStyle]);
 
   const activeLayerColumns = useMemo(() => {
     if (!activeDialogLayer) return [] as string[];
@@ -9915,6 +9950,32 @@ export default function SatelliteIntelligence() {
 
   const exportCustomLayerInFormat = useCallback(
     async (layerId: string, format: SiLayerMenuExportFormat = 'geojson') => {
+      if (layerId === DRAWN_AOI_LAYER_ID) {
+        if (!drawnGeometry) return;
+        setLayerOptionsMenuLayerId(null);
+        const geojson = drawnGeometryToFeatureCollection(drawnGeometry);
+        const name = aoiLayerLabel;
+        const labels: Record<SiLayerMenuExportFormat, string> = {
+          shp: 'Shapefile (.zip)',
+          kml: 'KML',
+          geojson: 'GeoJSON',
+          csv: 'CSV',
+        };
+        try {
+          if (format === 'shp') await downloadVectorShapefile(geojson, name);
+          else if (format === 'kml') downloadVectorKml(geojson, name, name);
+          else if (format === 'csv') downloadVectorCsv(geojson, name);
+          else downloadVectorGeoJson(geojson, name);
+          setStacStatus(`Exported "${name}" as ${labels[format]}.`);
+        } catch (err) {
+          setStacStatus(
+            `${labels[format]} export failed for "${name}": ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }
+        return;
+      }
       const layer = customLayers.find(l => l.id === layerId);
       if (!layer) return;
       setLayerOptionsMenuLayerId(null);
@@ -9956,7 +10017,7 @@ export default function SatelliteIntelligence() {
         );
       }
     },
-    [customLayers],
+    [customLayers, drawnGeometry, aoiLayerLabel],
   );
 
   /** Quick GeoJSON export (layer row / legacy callers). */
@@ -9972,6 +10033,39 @@ export default function SatelliteIntelligence() {
     layerId: string,
   ) => {
     setLayerOptionsMenuLayerId(null);
+    if (layerId === DRAWN_AOI_LAYER_ID) {
+      if (action === 'remove') {
+        const ok = await appConfirm(
+          `Remove layer "${aoiLayerLabel}" from the map?`,
+          { title: 'Remove layer', danger: true, confirmLabel: 'Remove', cancelLabel: 'Cancel' },
+        );
+        if (!ok) return;
+        clearRemoteSensingAoiSketchOnlyRef.current();
+        setStacStatus(`Removed layer "${aoiLayerLabel}".`);
+        return;
+      }
+      if (action === 'rename') {
+        const nextNameRaw = window.prompt('Rename layer', aoiLayerLabel);
+        if (nextNameRaw === null) return;
+        const nextName = nextNameRaw.trim();
+        if (!nextName) {
+          setStacStatus('Layer name cannot be empty.');
+          return;
+        }
+        setAoiLayerLabel(nextName);
+        setStacStatus(`Layer renamed to "${nextName}".`);
+        return;
+      }
+      if (action === 'export') {
+        void exportCustomLayerInFormat(DRAWN_AOI_LAYER_ID, 'geojson');
+        return;
+      }
+      if (action === 'metadata' || action === 'table' || action === 'symbology' || action === 'legend') {
+        setActiveLayerActionDialog({ mode: action, layerId: DRAWN_AOI_LAYER_ID });
+        return;
+      }
+      return;
+    }
     const layer = customLayers.find(item => item.id === layerId);
     if (!layer) return;
     if (action === 'remove') {
@@ -10039,7 +10133,7 @@ export default function SatelliteIntelligence() {
       setLayerLegendPanelLayerId(prev => (prev === layerId ? null : layerId));
       return;
     }
-  }, [customLayers, refreshArcgisLayer, applyUploadedAoiToAnalysis, focusGeoJsonOnMap, exportCustomLayerInFormat]);
+  }, [customLayers, refreshArcgisLayer, applyUploadedAoiToAnalysis, focusGeoJsonOnMap, exportCustomLayerInFormat, aoiLayerLabel]);
 
   const handleLayerActionClick = async (
     event: React.MouseEvent<HTMLButtonElement>,
@@ -10104,6 +10198,11 @@ export default function SatelliteIntelligence() {
   const zoomToCustomLayerExtent = useCallback(
     (layerId: string) => {
       setLayerOptionsMenuLayerId(null);
+      if (layerId === DRAWN_AOI_LAYER_ID) {
+        if (!drawnGeometry) return;
+        focusGeoJsonOnMap(drawnGeometryToFeatureCollection(drawnGeometry));
+        return;
+      }
       const layer = customLayers.find(l => l.id === layerId);
       if (!layer) return;
       if (layer.renderMode === 'raster' && layer.raster?.coordinates) {
@@ -10163,12 +10262,25 @@ export default function SatelliteIntelligence() {
       }
       focusGeoJsonOnMap(layer.geojson);
     },
-    [customLayers, focusGeoJsonOnMap],
+    [customLayers, focusGeoJsonOnMap, drawnGeometry],
   );
 
   const promptCustomLayerMapOpacity = useCallback(
     (layerId: string) => {
       setLayerOptionsMenuLayerId(null);
+      if (layerId === DRAWN_AOI_LAYER_ID) {
+        const curPct = Math.round((aoiLayerOpacity ?? 1) * 100);
+        const raw = window.prompt('Layer opacity (10–100%)', String(curPct));
+        if (raw === null) return;
+        const n = Number.parseInt(String(raw).trim().replace(/%/g, ''), 10);
+        if (!Number.isFinite(n) || n < 10 || n > 100) {
+          setStacStatus('Opacity must be between 10 and 100.');
+          return;
+        }
+        setAoiLayerOpacity(n / 100);
+        setStacStatus(`Layer opacity set to ${n}%.`);
+        return;
+      }
       const layer = customLayers.find(l => l.id === layerId);
       if (!layer) return;
       const curPct = Math.round((layer.mapOpacity ?? 1) * 100);
@@ -10183,7 +10295,7 @@ export default function SatelliteIntelligence() {
       setCustomLayers(prev => prev.map(l => (l.id === layerId ? { ...l, mapOpacity: f } : l)));
       setStacStatus(`Layer opacity set to ${n}%.`);
     },
-    [customLayers],
+    [customLayers, aoiLayerOpacity],
   );
 
   const openLayerPopupConfiguratorFromRow = useCallback((layerId: string) => {
@@ -10321,23 +10433,34 @@ export default function SatelliteIntelligence() {
       const controller = new AbortController();
       searchAbortRef.current = controller;
       setIsSearching(true);
+      let localHits: MapSearchResult[] = [];
       try {
-        const results = await searchPlaces(q, {
+        localHits = searchSiMapLayersAndFeatures(q, {
+          layers: customLayersRef.current,
+          sketch: drawnGeometryRef.current,
+          aoiFields: aoiFieldsRef.current,
+          limit: 6,
+        });
+        setSearchResults(localHits);
+        setShowSearchResults(localHits.length > 0);
+        const placeLimit = localHits.length ? 4 : 6;
+        const placeHits = await searchPlaces(q, {
           mapboxToken,
           proximity: getMapProximity(),
           language: detectQueryLanguage(q),
-          limit: 6,
+          limit: placeLimit,
           autocomplete: options.autocomplete,
           signal: controller.signal,
         });
-        if (controller.signal.aborted) return [];
+        if (controller.signal.aborted) return localHits;
+        const results = [...localHits, ...placeHits];
         setSearchResults(results);
-        setShowSearchResults(true);
+        setShowSearchResults(results.length > 0);
         setSearchActiveIndex(-1);
         return results;
       } catch (err) {
-        if ((err as Error)?.name === 'AbortError') return [];
-        return [];
+        if ((err as Error)?.name === 'AbortError') return localHits;
+        return localHits;
       } finally {
         if (searchAbortRef.current === controller) setIsSearching(false);
       }
@@ -10353,34 +10476,45 @@ export default function SatelliteIntelligence() {
       // Drop + highlight the pin at the resolved location (Google-Maps style).
       setSearchPin({ lng: result.lng, lat: result.lat, label: result.label });
 
+      const propertyRows = result.properties
+        ? Object.entries(result.properties)
+            .filter(([, value]) => value != null && String(value).trim() !== '')
+            .slice(0, 14)
+            .map(([label, value]) => ({ label, value: String(value) }))
+        : [];
+      stageGeoAiInspectCard({
+        title: result.label,
+        rows: [
+          ...(result.subtitle ? [{ label: 'Location', value: result.subtitle }] : []),
+          ...(result.kind ? [{ label: 'Type', value: String(result.kind) }] : []),
+          ...propertyRows,
+          { label: 'Longitude', value: result.lng.toFixed(6) },
+          { label: 'Latitude', value: result.lat.toFixed(6) },
+        ],
+        lng: result.lng,
+        lat: result.lat,
+      });
+
       const bbox = result.bbox;
       const hasUsableBbox =
         Array.isArray(bbox) &&
         bbox.length === 4 &&
         bbox.every(Number.isFinite) &&
         (bbox[2] - bbox[0] > 1e-4 || bbox[3] - bbox[1] > 1e-4);
+      const zoom = hasUsableBbox ? zoomFromLngLatBbox(bbox!) : zoomForPlaceKind(result.kind);
 
-      if (map && hasUsableBbox && typeof map.fitBounds === 'function') {
-        map.fitBounds(
-          [
-            [bbox![0], bbox![1]],
-            [bbox![2], bbox![3]],
-          ],
-          { padding: 90, duration: 1200, maxZoom: 16, essential: true },
-        );
-      } else if (map && typeof map.flyTo === 'function') {
-        map.flyTo({
-          center: [result.lng, result.lat],
-          zoom: zoomForPlaceKind(result.kind),
-          duration: 1200,
-          essential: true,
-        });
-      } else {
+      const flew = flyToLikeGoogleEarth(map, {
+        lng: result.lng,
+        lat: result.lat,
+        zoom,
+        preferTilt: true,
+      });
+      if (!flew) {
         setViewState(prev => ({
           ...prev,
           longitude: result.lng,
           latitude: result.lat,
-          zoom: zoomForPlaceKind(result.kind),
+          zoom,
         }));
       }
 
@@ -10389,7 +10523,7 @@ export default function SatelliteIntelligence() {
       setShowSearchResults(false);
       setSearchActiveIndex(-1);
     },
-    [],
+    [stageGeoAiInspectCard],
   );
 
   /** Neighborhood Agent: geocode + fly AgroCloud map; never HTML embeds. */
@@ -13887,6 +14021,7 @@ export default function SatelliteIntelligence() {
 
     drawnGeometryRef.current = null;
     setDrawnGeometry(null);
+    setAoiLayerLabel('Area of Interest');
     setAoiFields([]);
     aoiFieldsRef.current = [];
     setSelectedFieldId(null);
@@ -13896,6 +14031,8 @@ export default function SatelliteIntelligence() {
 
     setMapDragPanEnabled(!rsDrawingModeActiveRef.current);
   }, [resetActiveSketchDraftState, purgeDrawnMultiAoiWorkspace, persistClearedDrawWorkspace]);
+
+  clearRemoteSensingAoiSketchOnlyRef.current = clearRemoteSensingAoiSketchOnly;
 
   const clearSatelliteDrawingImmediate = clearRemoteSensingAoiSketchOnly;
 
@@ -21205,14 +21342,13 @@ export default function SatelliteIntelligence() {
       const handlers: GeoAiMapCommandHandlers = {
         flyTo: c => {
           setGeoAiPinLngLat([c.lng, c.lat]);
-          setViewState(vs => ({
-            ...vs,
-            longitude: c.lng,
-            latitude: c.lat,
-            zoom: typeof c.zoom === 'number' ? c.zoom : Math.max(typeof vs.zoom === 'number' ? vs.zoom : 12, 12),
-            pitch: is3DViewRef.current ? Math.max(typeof vs.pitch === 'number' ? vs.pitch : 0, 42) : vs.pitch ?? 0,
-            bearing: typeof vs.bearing === 'number' ? vs.bearing : 0,
-          }));
+          const liveMap = mapRef.current?.getMap?.() ?? mapRef.current;
+          flyToLikeGoogleEarth(liveMap, {
+            lng: c.lng,
+            lat: c.lat,
+            zoom: typeof c.zoom === 'number' ? c.zoom : 12,
+            preferTilt: true,
+          });
           return `Centered on ${c.label || `${c.lat.toFixed(4)}, ${c.lng.toFixed(4)}`}.`;
         },
         zoomToAoi: () => {
@@ -21523,8 +21659,8 @@ export default function SatelliteIntelligence() {
       ...(drawnGeometry
         ? [
             {
-              id: 'drawn-aoi',
-              label: 'Area of Interest',
+              id: DRAWN_AOI_LAYER_ID,
+              label: aoiLayerLabel,
               meta: 'AOI boundary',
               visible: aoiLayerVisible,
               toggleable: true,
@@ -21533,7 +21669,8 @@ export default function SatelliteIntelligence() {
               opacity: aoiLayerOpacity,
               onOpacityChange: (v: number) => setAoiLayerOpacity(v),
               onToggle: () => setAoiLayerVisible(v => !v),
-              onRemove: () => clearRemoteSensingAoiSketchOnly(),
+              onZoomTo: () => zoomToCustomLayerExtent(DRAWN_AOI_LAYER_ID),
+              onRemove: () => void executeCustomLayerAction('remove', DRAWN_AOI_LAYER_ID),
             },
           ]
         : []),
@@ -21683,6 +21820,7 @@ export default function SatelliteIntelligence() {
       activeWmsLayer,
       aoiLayerVisible,
       aoiLayerOpacity,
+      aoiLayerLabel,
       basemapVisible,
       clearRemoteSensingAoiSketchOnly,
       currentBasemapLabel,
@@ -21717,7 +21855,7 @@ export default function SatelliteIntelligence() {
   /** Analysis result layers (AOI + Hydro Watershed steps) - shown in the Main tab. */
   const isAnalysisLayerId = useCallback(
     (id: string) =>
-      id === 'drawn-aoi' ||
+      id === DRAWN_AOI_LAYER_ID ||
       id === `custom-${SI_TS_WEATHER_STORM_LAYER_ID}` ||
       id.startsWith('hydro-') ||
       isWellSuitabilityMcdaLayerId(id),
@@ -21790,7 +21928,137 @@ export default function SatelliteIntelligence() {
             Base map / index / preview overlays live in the Options tab. */}
         {orderedAnalysisLayerEntries.length ? (
           <MapToolboxLayerList
-            layers={orderedAnalysisLayerEntries}
+            layers={orderedAnalysisLayerEntries.map(layer => {
+              if (layer.id !== DRAWN_AOI_LAYER_ID) return layer;
+              const lid = DRAWN_AOI_LAYER_ID;
+              const open = layerOptionsMenuLayerId === lid;
+              const mi = (
+                label: string,
+                icon: string,
+                on: () => void,
+                opts?: { danger?: boolean; disabled?: boolean; hint?: string },
+              ) => (
+                <button
+                  key={label}
+                  type="button"
+                  role="menuitem"
+                  className={
+                    'si-env-layer-options-menu__item' +
+                    (opts?.danger ? ' si-env-layer-options-menu__item--danger' : '') +
+                    (opts?.disabled ? ' si-env-layer-options-menu__item--disabled' : '')
+                  }
+                  disabled={opts?.disabled}
+                  title={opts?.hint}
+                  onClick={e => {
+                    e.stopPropagation();
+                    if (!opts?.disabled) on();
+                  }}
+                >
+                  <i className={icon} aria-hidden />
+                  <span>{label}</span>
+                </button>
+              );
+              return {
+                ...layer,
+                onRemove: undefined,
+                onOpacityChange: undefined,
+                headerActions: (
+                  <div className="si-env-layer-actions si-env-layer-actions--menu-only">
+                    <div className="si-env-layer-actions-more-wrap">
+                      <SiLayerOptionsMenuPortal
+                        open={open}
+                        layerLabel={aoiLayerLabel}
+                        onToggleOpen={() =>
+                          setLayerOptionsMenuLayerId(v => (v === lid ? null : lid))
+                        }
+                      >
+                        {open ? (
+                          <>
+                            {mi('Zoom to layer', 'fa-solid fa-magnifying-glass-location', () =>
+                              zoomToCustomLayerExtent(lid),
+                            )}
+                            {mi('Layer properties', 'fa-solid fa-circle-info', () =>
+                              void executeCustomLayerAction('metadata', lid),
+                            )}
+                            <SiLayerExportMenuGroup
+                              onPick={fmt => void exportCustomLayerInFormat(lid, fmt)}
+                            />
+                            <div className="si-env-layer-options-menu__sep" role="separator" />
+                            {mi('Attribute table', 'fa-solid fa-table-cells', () =>
+                              void executeCustomLayerAction('table', lid),
+                            )}
+                            {mi('Symbology', 'fa-solid fa-sliders', () => {}, {
+                              disabled: true,
+                              hint: 'Restyle the sketch from the Draw tools. Full symbology applies to imported layers.',
+                            })}
+                            {mi('Legend', 'fa-solid fa-key', () => {}, {
+                              disabled: true,
+                              hint: 'Legend applies to imported vector layers.',
+                            })}
+                            <div className="si-env-layer-options-menu__sep" role="separator" />
+                            {mi('Configure pop-ups', 'fa-solid fa-message', () => {}, {
+                              disabled: true,
+                              hint: 'Pop-up configuration applies to imported vector layers.',
+                            })}
+                            {mi('Layer opacity...', 'fa-solid fa-droplet', () =>
+                              promptCustomLayerMapOpacity(lid),
+                            )}
+                            <div className="si-env-layer-options-menu__sep" role="separator" />
+                            {mi('Bring forward (draw order)', 'fa-solid fa-arrow-up', () => {}, {
+                              disabled: true,
+                              hint: 'Draw order applies to imported layers.',
+                            })}
+                            {mi('Send backward (draw order)', 'fa-solid fa-arrow-down', () => {}, {
+                              disabled: true,
+                              hint: 'Draw order applies to imported layers.',
+                            })}
+                            <div className="si-env-layer-options-menu__sep" role="separator" />
+                            {mi('Copy layer name', 'fa-solid fa-copy', () => {
+                              setLayerOptionsMenuLayerId(null);
+                              const t = aoiLayerLabel;
+                              void (async () => {
+                                try {
+                                  await navigator.clipboard.writeText(t);
+                                  setStacStatus(`Copied layer name: ${t}`);
+                                } catch {
+                                  setStacStatus('Could not copy to clipboard.');
+                                }
+                              })();
+                            })}
+                            <div className="si-env-layer-options-menu__sep" role="separator" />
+                            {mi('Rename layer', 'fa-solid fa-pen-to-square', () =>
+                              void executeCustomLayerAction('rename', lid),
+                            )}
+                            {mi(
+                              'Labeling...',
+                              'fa-solid fa-tag',
+                              () => {},
+                              { disabled: true, hint: 'Labeling applies to imported vector layers.' },
+                            )}
+                            {mi(
+                              'Definition query...',
+                              'fa-solid fa-filter',
+                              () => {},
+                              {
+                                disabled: true,
+                                hint: 'Definition queries apply to imported vector layers.',
+                              },
+                            )}
+                            <div className="si-env-layer-options-menu__sep" role="separator" />
+                            {mi(
+                              'Remove from map',
+                              'fa-solid fa-trash-can',
+                              () => void executeCustomLayerAction('remove', lid),
+                              { danger: true },
+                            )}
+                          </>
+                        ) : null}
+                      </SiLayerOptionsMenuPortal>
+                    </div>
+                  </div>
+                ),
+              };
+            })}
             reorderable
             onReorder={reorderAnalysisLayers}
           />
@@ -22061,6 +22329,7 @@ export default function SatelliteIntelligence() {
       exportCustomLayerInFormat,
       handleLayerActionClick,
       layerOptionsMenuLayerId,
+      aoiLayerLabel,
       moveCustomLayerInStack,
       openLayerPopupConfiguratorFromRow,
       pivots,
@@ -25452,7 +25721,7 @@ export default function SatelliteIntelligence() {
                   onFocus={() => {
                     if (searchResults.length > 0) setShowSearchResults(true);
                   }}
-                  placeholder="Search places"
+                  placeholder="Search places, layers, or features"
                   className="si-map-search-input"
                   role="combobox"
                   aria-expanded={showSearchResults && searchResults.length > 0}
@@ -25484,7 +25753,7 @@ export default function SatelliteIntelligence() {
                     onMouseEnter={() => setSearchActiveIndex(idx)}
                     onClick={() => handleSelectSearchResult(result)}
                   >
-                    <i className="fa-solid fa-location-dot si-map-search-result-icon" aria-hidden></i>
+                    <i className={`${mapSearchResultIcon(result.kind)} si-map-search-result-icon`} aria-hidden></i>
                     <span className="si-map-search-result-text">
                       <span className="si-map-search-result-title">{result.label}</span>
                       {result.subtitle && (
@@ -26018,7 +26287,7 @@ export default function SatelliteIntelligence() {
                       </div>
                     )}
                     {expandedEnvSection === 'agri-field-boundary' && (
-                      <div className="si-env-section-card si-rs-panel--glass">
+                      <div className="si-env-section-card si-rs-panel--glass si-rs-panel--toolbox-v2 si-rs-panel--flat">
                         <AgriFieldBoundaryPanel
                           hasAoi={!!resolveFieldBoundaryAoi()}
                           aoiMode={fieldBoundaryAoiMode}

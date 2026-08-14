@@ -3,10 +3,18 @@ import {
   bindSiGlobeCockpitSpin,
   isSiGlobeCockpit2dActive,
   SI_GLOBE_COCKPIT_2D_VIEW,
+  SI_GLOBE_COCKPIT_FOG,
   SI_GLOBE_COCKPIT_MAX_ZOOM,
 } from './siGlobeCockpit'
 
 describe('siGlobeCockpit', () => {
+  it('uses Mapbox globe atmosphere and stars', () => {
+    expect(SI_GLOBE_COCKPIT_FOG['space-color']).toBe('#000000')
+    expect(SI_GLOBE_COCKPIT_FOG['high-color']).toBe('#000000')
+    expect(SI_GLOBE_COCKPIT_FOG['horizon-blend']).toBe(0.16)
+    expect(SI_GLOBE_COCKPIT_FOG['star-intensity']).toBe(0.55)
+  })
+
   it('defaults to centered 2D world view', () => {
     expect(SI_GLOBE_COCKPIT_2D_VIEW.latitude).toBe(0)
     expect(SI_GLOBE_COCKPIT_2D_VIEW.pitch).toBe(0)

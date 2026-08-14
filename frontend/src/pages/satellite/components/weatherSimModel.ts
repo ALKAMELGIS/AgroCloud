@@ -77,7 +77,7 @@ export const WEATHER_SIM_PRESETS: Record<
     label: 'Rain',
     icon: 'fa-solid fa-cloud-showers-heavy',
     tone: 'rain',
-    patch: { rain: 64, snow: 0, storm: 14, thunder: 0, cloud: 86, fog: 0, windSpeed: 28, temperatureC: 12 },
+    patch: { rain: 64, snow: 0, storm: 14, thunder: 0, cloud: 0, fog: 0, windSpeed: 28, temperatureC: 12 },
   },
   snow: {
     label: 'Snow',

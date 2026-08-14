@@ -5867,7 +5867,7 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
   background: transparent;
   color: #f1f5f9;
   font-size: 12px;
-  width: 148px;
+  width: 198px;
   height: 28px;
   padding: 0;
   box-shadow: none;
@@ -5939,8 +5939,8 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
   background: rgba(15, 23, 42, 0.96);
   border: 1px solid rgba(71, 85, 105, 0.8);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
-  max-height: 220px;
-  width: 200px;
+  max-height: 280px;
+  width: min(320px, calc(100vw - 48px));
   overflow-y: auto;
 }
 
@@ -5971,6 +5971,16 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
   color: #60a5fa;
   font-size: 12px;
   flex: 0 0 auto;
+}
+
+.si-map-search-result-icon.fa-layer-group {
+  color: #34d399;
+}
+
+.si-map-search-result-icon.fa-vector-square,
+.si-map-search-result-icon.fa-draw-polygon,
+.si-map-search-result-icon.fa-border-all {
+  color: #fbbf24;
 }
 
 .si-map-search-result-text {
@@ -12874,21 +12884,13 @@ html[data-theme='light'] .si-env-panel.si-env-panel--satellite-toolbox.si-env-pa
   color: #047857 !important;
 }
 
-/* Globe cockpit â€” centered 2D world view; minimal chrome until user zooms to a region */
-.si-map-container--globe-cockpit::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 50% 48%, transparent 42%, rgba(2, 6, 23, 0.22) 78%, rgba(2, 6, 23, 0.55) 100%);
-  opacity: 0.9;
-  transition: opacity 320ms ease;
+/* Globe cockpit — Mapbox fog/stars on mapboxgl-canvas */
+.si-map-container--globe-cockpit {
+  background: #000000;
 }
 
-.si-map-container--globe-cockpit.si-map-container--interacting::before {
-  opacity: 0.35;
+.si-map-container--globe-cockpit::before {
+  content: none;
 }
 
 .si-map-container--globe-cockpit .si-map-analysis-pill,

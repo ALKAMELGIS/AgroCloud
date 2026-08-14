@@ -126,7 +126,7 @@ export type AgriFieldBoundaryPanelProps = {
 }
 
 const PHASE_LABEL: Record<FieldBoundaryPhase, string> = {
-  idle: 'Ready — choose Select AOI, then Detect Fields',
+  idle: '',
   capturing: 'Capturing high-res AOI imagery…',
   detecting: 'High-accuracy field delineation…',
   done: 'Field polygons ready',
@@ -537,6 +537,7 @@ export function AgriFieldBoundaryPanel({
             </span>
             <input
               type="range"
+              className="si-afb__slider"
               min={0.2}
               max={0.9}
               step={0.05}
@@ -591,12 +592,6 @@ export function AgriFieldBoundaryPanel({
           </label>
         ) : null}
 
-        {!hasAoi && onAoiModeChange ? (
-          <p className="si-afb__file-hint" role="status">
-            {AOI_MODE_HINT[aoiMode]}
-          </p>
-        ) : null}
-
         <label className="si-afb__row">
           <span className="si-afb__label">
             Min area
@@ -632,6 +627,7 @@ export function AgriFieldBoundaryPanel({
           </span>
           <input
             type="range"
+            className="si-afb__slider"
             min={0}
             max={0.85}
             step={0.05}
@@ -824,15 +820,14 @@ export function AgriFieldBoundaryPanel({
           </div>
         </div>
 
+        {phase !== 'idle' ? (
         <div
           className={`si-afb__status is-${phase}`}
           title={
             phase === 'error' || phase === 'empty'
               ? errorDetail ||
                 (offline
-                  ? /static|eliteagrocloud|VITE_AGRI_API/i.test(String(errorDetail || error || ''))
-                    ? String(errorDetail || error)
-                    : 'Start: uvicorn app:app --port 8092 in backend/services/agri-field-boundary'
+                  ? 'Start: uvicorn app:app --port 8092 in backend/services/agri-field-boundary'
                   : error || undefined)
               : undefined
           }
@@ -841,7 +836,7 @@ export function AgriFieldBoundaryPanel({
             <>
               <i className="fa-solid fa-triangle-exclamation" aria-hidden />{' '}
               {offline
-                ? error || 'Service offline — start agri-field-boundary on :8092'
+                ? 'Service offline — start agri-field-boundary on :8092'
                 : error || phaseLabel}
             </>
           ) : phase === 'empty' ? (
@@ -868,6 +863,7 @@ export function AgriFieldBoundaryPanel({
             </div>
           ) : null}
         </div>
+        ) : null}
       </section>
       ) : (
       <section
