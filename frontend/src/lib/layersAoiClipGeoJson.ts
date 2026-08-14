@@ -1,9 +1,8 @@
 /**
- * Resolve the best FeatureCollection for Layers AOI clipping — works for any
- * imported / ArcGIS / uploaded vector layer regardless of feature count.
+ * Resolve the FeatureCollection for Layers AOI clipping / Sentinel analysis.
  *
- * Priority: largest available geometry set (session cache → layer.geojson → viewport).
- * Never assume a fixed farm count; each layer may have N = 1 … tens of thousands.
+ * Analysis geometry (full-layer query) always wins. Viewport / Mapbox slices
+ * are never the source of truth for streaming ArcGIS layers.
  */
 
 import type { SiAoiMaskBuilderLayerLike } from './siAoiMaskBuilder'
@@ -13,9 +12,13 @@ export type LayersAoiClipGeoJson = { type: 'FeatureCollection'; features: unknow
 
 export type ResolveLayersAoiClipGeoJsonInput = {
   layer: SiAoiMaskBuilderLayerLike | null | undefined
-  /** Accumulated ArcGIS viewport cache for this layer id (may be larger than current view). */
+  /** Full-layer analysis cache (independent of pan/zoom). */
+  analysisGeoJson?: LayersAoiClipGeoJson | null
+  /** True when the analysis cache finished a complete layer query. */
+  analysisComplete?: boolean
+  /** @deprecated Viewport cache is display-only — ignored for streaming analysis. */
   viewportCache?: SiViewportFeatureCache | null
-  /** Current-viewport snapshot only — last resort while cache/full geo are empty. */
+  /** @deprecated Viewport snapshot is display-only — ignored for streaming analysis. */
   viewportGeoJson?: LayersAoiClipGeoJson | null
 }
 
@@ -40,24 +43,29 @@ export function pickLargestFeatureCollection(
 }
 
 /**
- * Best geometry for indexing / mask build for the given layer.
- * Safe for streaming ArcGIS layers and fully downloaded GeoJSON alike.
+ * Best geometry for Sentinel clip / stats. Streaming layers wait for analysis cache.
  */
 export function resolveLayersAoiClipGeoJson(
   input: ResolveLayersAoiClipGeoJsonInput,
 ): LayersAoiClipGeoJson | null {
   const layer = input.layer
   if (!layer) return null
+  const analysisFc =
+    Array.isArray(input.analysisGeoJson?.features) && input.analysisGeoJson!.features!.length > 0
+      ? input.analysisGeoJson!
+      : null
+  if (analysisFc) return analysisFc
+
+  const streaming =
+    Boolean((layer as { viewportStreaming?: boolean }).viewportStreaming) &&
+    (layer.source === 'arcgis' || Boolean(String((layer as { sourceUrl?: string }).sourceUrl || '').trim()))
+  if (streaming) return null
+
   const layerFc =
     Array.isArray(layer.geojson?.features) && layer.geojson!.features!.length > 0
       ? (layer.geojson as LayersAoiClipGeoJson)
       : null
-  const cacheFc = input.viewportCache?.allFeatureCollection?.() ?? null
-  const viewportFc =
-    Array.isArray(input.viewportGeoJson?.features) && input.viewportGeoJson!.features!.length > 0
-      ? input.viewportGeoJson!
-      : null
-  return pickLargestFeatureCollection(cacheFc, layerFc, viewportFc)
+  return layerFc
 }
 
 /** Expected feature count hint from layer metadata (not a hard cap). */
@@ -73,33 +81,26 @@ export function layersAoiExpectedFeatureCount(
 }
 
 /**
- * True when the current clip is incomplete relative to what we already know
- * about the layer (metadata / local geo / cache). No fixed N assumed.
+ * True when analysis still needs a full-layer service query (not a viewport fetch).
  */
 export function layersAoiClipNeedsHydrate(opts: {
   layer: SiAoiMaskBuilderLayerLike | null | undefined
   pinFeatureCount: number
   cacheFeatureCount: number
+  analysisComplete?: boolean
+  analysisLoadedCount?: number
 }): boolean {
-  const { layer, pinFeatureCount, cacheFeatureCount } = opts
+  const { layer, pinFeatureCount, analysisComplete, analysisLoadedCount } = opts
   if (!layer) return false
-  const localN = Array.isArray(layer.geojson?.features) ? layer.geojson!.features!.length : 0
+  if (analysisComplete && (analysisLoadedCount ?? 0) > 0) return false
   const expected = layersAoiExpectedFeatureCount(layer)
-  const known = Math.max(localN, cacheFeatureCount, expected ?? 0)
-  // Incomplete vs known inventory.
-  if (known > 0 && pinFeatureCount < known) return true
-  // ArcGIS streaming with little/no geometry yet — always hydrate once.
-  if (
-    layer.source === 'arcgis' &&
-    Boolean((layer as { viewportStreaming?: boolean }).viewportStreaming) &&
-    pinFeatureCount === 0
-  ) {
-    return true
-  }
-  // ArcGIS FeatureServer / MapServer layer URL present and pin empty or thinner than cache.
-  if (layer.source === 'arcgis' && String(layer.sourceUrl || '').trim()) {
+  if (expected != null && pinFeatureCount > 0 && pinFeatureCount >= expected) return false
+  const streaming = Boolean((layer as { viewportStreaming?: boolean }).viewportStreaming)
+  const url = String((layer as { sourceUrl?: string }).sourceUrl || '').trim()
+  if (streaming && url) return true
+  if (layer.source === 'arcgis' && url) {
     if (pinFeatureCount === 0) return true
-    if (cacheFeatureCount > pinFeatureCount) return true
+    if (expected != null && pinFeatureCount < expected) return true
   }
   return false
 }

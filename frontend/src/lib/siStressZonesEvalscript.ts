@@ -13,8 +13,8 @@ export function buildStressZonesWmsEvalscript(indexVisibilityMin: number | null 
       : null
   const alphaBlock =
     thr == null
-      ? 'return c.concat(samples.dataMask);'
-      : `var a = samples.dataMask * (ndvi >= ${thr} ? 1.0 : 0.0);
+      ? 'return c.concat(1);'
+      : `var a = (isFinite(ndvi) && ndvi >= ${thr} ? 1.0 : 0.0);
   return c.concat(a);`
 
   return `//VERSION=3

@@ -22,6 +22,8 @@ describe('dataMaskLayer', () => {
     expect(script).toContain('s.dataMask')
     expect(script).toContain('UINT8')
     expect(script).toContain('return [40, 220, 90, 255]')
+    expect(script).toContain('return [180, 40, 40, 255]')
+    expect(script).not.toContain('return [0, 0, 0, 0]')
   })
 
   it('logs capability presence vs Layer Index registration', () => {

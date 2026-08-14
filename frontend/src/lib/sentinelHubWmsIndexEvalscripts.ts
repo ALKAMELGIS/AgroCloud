@@ -388,6 +388,17 @@ const INDEX_EVAL_SPECS: Record<SentinelIndexEvalProfile, IndexEvalSpec> = {
   },
 }
 
+/**
+ * GEOMETRY already clips the WMS raster to each AOI.
+ * Never use dataMask as output alpha — dataMask=0 on small/partial fields
+ * would hide the entire polygon. Index threshold may still hide low values.
+ */
+function wmsGeometryClipAlphaBlock(indexVar: string, thr: number | null): string {
+  if (thr == null) return 'return imgVals.concat(1);'
+  return `var a = (isFinite(${indexVar}) && ${indexVar} >= ${thr} ? 1.0 : 0.0);
+  return imgVals.concat(a);`
+}
+
 function hexColorLiteral(hex: number): string {
   return `0x${(hex >>> 0).toString(16).padStart(6, '0')}`
 }
@@ -407,11 +418,7 @@ export function buildSentinelNdwiTenClassEvalscript(indexVisibilityMin: number |
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
-  const alphaBlock =
-    thr == null
-      ? 'return imgVals.concat(samples.dataMask);'
-      : `var a = samples.dataMask * (val >= ${thr} ? 1.0 : 0.0);
-  return imgVals.concat(a);`
+  const alphaBlock = wmsGeometryClipAlphaBlock('val', thr)
 
   return `//VERSION=3
 // NDWI — 10 classes · dry dark-red→yellow · wet white→blue
@@ -446,6 +453,7 @@ function ndwiClass(val) {
 
 function evaluatePixel(samples) {
   let val = index(samples.B03, samples.B08);
+  if (!isFinite(val)) val = 0;
   let cls = ndwiClass(val);
   let imgVals = viz.process(cls);
   ${alphaBlock}
@@ -459,11 +467,7 @@ export function buildSentinelNdmiTenClassEvalscript(indexVisibilityMin: number |
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
-  const alphaBlock =
-    thr == null
-      ? 'return imgVals.concat(samples.dataMask);'
-      : `var a = samples.dataMask * (val >= ${thr} ? 1.0 : 0.0);
-  return imgVals.concat(a);`
+  const alphaBlock = wmsGeometryClipAlphaBlock('val', thr)
 
   return `//VERSION=3
 // NDMI — 10 classes, moisture ramp (B8A / B11)
@@ -498,6 +502,7 @@ function ndmiClass(val) {
 
 function evaluatePixel(samples) {
   let val = index(samples.B8A, samples.B11);
+  if (!isFinite(val)) val = 0;
   let cls = ndmiClass(val);
   let imgVals = viz.process(CLASS_VAL[cls]);
   ${alphaBlock}
@@ -544,11 +549,7 @@ export function buildSentinelEtTenClassEvalscript(
       ? Math.max(0, Math.min(15, indexVisibilityMin))
       : null
 
-  const alphaBlock =
-    thr == null
-      ? 'return imgVals.concat(samples.dataMask);'
-      : `var a = samples.dataMask * (et >= ${thr} ? 1.0 : 0.0);
-  return imgVals.concat(a);`
+  const alphaBlock = wmsGeometryClipAlphaBlock('et', thr)
 
   const coloredRamp: RampStop[] = centers.map((v, i) => [
     v,
@@ -588,6 +589,7 @@ function etClass(val) {
 
 function evaluatePixel(samples) {
   ${setupEt}
+  if (!isFinite(et)) et = 0;
   let cls = etClass(et);
   let imgVals = viz.process(CLASS_VAL[cls]);
   ${alphaBlock}
@@ -633,11 +635,7 @@ export function buildSentinelLstTenClassEvalscript(
       ? Math.max(5, Math.min(55, indexVisibilityMin))
       : null
 
-  const alphaBlock =
-    thr == null
-      ? 'return imgVals.concat(samples.dataMask);'
-      : `var a = samples.dataMask * (lst >= ${thr} ? 1.0 : 0.0);
-  return imgVals.concat(a);`
+  const alphaBlock = wmsGeometryClipAlphaBlock('lst', thr)
 
   const coloredRamp: RampStop[] = centers.map((v, i) => [
     v,
@@ -677,6 +675,7 @@ function lstClass(val) {
 
 function evaluatePixel(samples) {
   ${setupLst}
+  if (!isFinite(lst)) lst = 0;
   let cls = lstClass(lst);
   let imgVals = viz.process(CLASS_VAL[cls]);
   ${alphaBlock}
@@ -684,12 +683,10 @@ function evaluatePixel(samples) {
 }
 
 /**
- * NDVI Live WMS — lightweight ColorRampVisualizer on B08/B04 with dataMask alpha.
+ * NDVI Live WMS — lightweight ColorRampVisualizer on B08/B04.
  *
- * Intentionally minimal so the visible raster appears FAST and fills the whole AOI
- * (no SCL cloud masking → no transparent holes, only 3 input bands, a short
- * evalscript that keeps the WMS GEOMETRY-clip URL well under the length budget).
- * Per-class pixel-area analysis runs separately, after the layer is shown.
+ * Spatial clip is WMS GEOMETRY (not dataMask alpha). dataMask=0 on small/partial
+ * AOIs must not hide the polygon. No SCL cloud holes.
  */
 export function buildSentinelNdviTenClassEvalscript(indexVisibilityMin: number | null = null): string {
   const thr =
@@ -697,14 +694,10 @@ export function buildSentinelNdviTenClassEvalscript(indexVisibilityMin: number |
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
-  const alphaBlock =
-    thr == null
-      ? 'return imgVals.concat(samples.dataMask);'
-      : `var a = samples.dataMask * (ndvi >= ${thr} ? 1.0 : 0.0);
-  return imgVals.concat(a);`
+  const alphaBlock = wmsGeometryClipAlphaBlock('ndvi', thr)
 
   return `//VERSION=3
-// NDVI — agricultural color ramp on B08/B04, dataMask alpha (fast AOI clip)
+// NDVI — agricultural color ramp on B08/B04; GEOMETRY clips AOI (opaque alpha)
 function setup() {
   return {
     input: ["B04", "B08", "dataMask"],
@@ -720,6 +713,7 @@ const visualizer = new ColorRampVisualizer(ramp);
 
 function evaluatePixel(samples) {
   let ndvi = index(samples.B08, samples.B04);
+  if (!isFinite(ndvi)) ndvi = 0;
   let imgVals = visualizer.process(ndvi);
   ${alphaBlock}
 }`
@@ -757,11 +751,7 @@ export function buildSentinelIndexColorRampEvalscript(
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
-  const alphaBlock =
-    thr == null
-      ? 'return imgVals.concat(samples.dataMask);'
-      : `var a = samples.dataMask * (${spec.indexVar} >= ${thr} ? 1.0 : 0.0);
-  return imgVals.concat(a);`
+  const alphaBlock = wmsGeometryClipAlphaBlock(spec.indexVar, thr)
 
   return `//VERSION=3
 function setup() {
@@ -779,6 +769,7 @@ const visualizer = new ColorRampVisualizer(ramp);
 
 function evaluatePixel(samples) {
   ${spec.indexExpr}
+  if (!isFinite(${spec.indexVar})) ${spec.indexVar} = 0;
   let imgVals = visualizer.process(${spec.indexVar});
   ${alphaBlock}
 }`

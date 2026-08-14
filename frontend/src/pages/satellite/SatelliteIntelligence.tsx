@@ -201,8 +201,18 @@ import {
 import { SiViewportFeatureCache } from '../../lib/siViewportFeatureCache'
 import {
   layersAoiClipNeedsHydrate,
+  pickLargestFeatureCollection,
   resolveLayersAoiClipGeoJson,
 } from '../../lib/layersAoiClipGeoJson';
+import {
+  ensureSiAoiGeometryCache,
+  getSiAoiGeometryRecord,
+  isSiAoiGeometryComplete,
+  layerNeedsFullAoiServiceQuery,
+  peekSiAoiAnalysisGeoJson,
+  subscribeSiAoiGeometryCache,
+  clearSiAoiGeometryCache,
+} from '../../lib/siAoiGeometryCache';
 import {
   GEO_AI_COPILOT_RULES,
   lastMapQueryCoordsFromMessages,
@@ -5249,6 +5259,7 @@ export default function SatelliteIntelligence() {
   const aoiLayerModePinnedClipRef = useRef<{ pinKey: string; mask: SiAoiLayerModeClipMask } | null>(null);
   /** Bumped when the Layers AOI pin changes so activeMask re-renders (refs alone do not). */
   const [aoiLayerModePinRevision, setAoiLayerModePinRevision] = useState(0);
+  const [aoiAnalysisRevision, setAoiAnalysisRevision] = useState(0);
   const aoiLayerModeWmsActiveRef = useRef(false);
   /** User unchecked Layers AOI Show on map — skip auto-enable until they pick index/AOI again. */
   const layersAoiUserOptOutRef = useRef(false);
@@ -5272,30 +5283,25 @@ export default function SatelliteIntelligence() {
     // The previous freeze branch dropped viewport geojson and fell back to often-empty
     // layer.geojson — outlines vanished and Layers AOI WMS had nothing to clip.
     const layers = Array.isArray(customLayers) ? customLayers : []
-    const aoiSourceId = String(aoiMaskBuilderSettings.sourceLayerId || '').trim()
-    const layersAoiOn = Boolean(aoiMaskBuilderSettings.enabled)
     return layers.map(layer => {
       let next = layer;
       if (layer.viewportStreaming && layer.source === 'arcgis') {
         const cache = arcgisViewportCacheByLayerIdRef.current.get(layer.id)
         const viewport = arcgisViewportGeoJsonByLayerIdRef.current.get(layer.id)
-        // Any AOI source layer: prefer the largest available geometry set (full cache /
-        // layer geojson), never a viewport-only slice keyed to a fixed farm count.
-        if (layersAoiOn && aoiSourceId && String(layer.id) === aoiSourceId) {
-          const best = resolveLayersAoiClipGeoJson({
-            layer,
-            viewportCache: cache,
-            viewportGeoJson: viewport,
-          })
-          if (best?.features?.length) next = { ...layer, geojson: best }
-        } else if (viewport?.features?.length) {
-          next = { ...layer, geojson: viewport };
-        }
+        const cacheFc = cache?.allFeatureCollection?.() ?? null
+        const paint = pickLargestFeatureCollection(
+          cacheFc,
+          viewport,
+          Array.isArray(layer.geojson?.features) && layer.geojson.features.length
+            ? layer.geojson
+            : null,
+        )
+        if (paint?.features?.length) next = { ...layer, geojson: paint }
       }
       const geojson = siNormalizeLayerGeojsonForSymbology(next);
       return geojson !== next.geojson ? { ...next, geojson } : next;
     });
-  }, [customLayers, arcgisViewportRevision, aoiMaskBuilderSettings.enabled, aoiMaskBuilderSettings.sourceLayerId, aoiLayerModePinRevision]);
+  }, [customLayers, arcgisViewportRevision]);
   const customLayersForMapPaintRef = useRef(customLayersForMapPaint);
   customLayersForMapPaintRef.current = customLayersForMapPaint;
 
@@ -10079,7 +10085,10 @@ export default function SatelliteIntelligence() {
       if (layer.source === 'arcgis') {
         arcgisViewportCacheByLayerIdRef.current.delete(layerId);
         arcgisViewportGeoJsonByLayerIdRef.current.delete(layerId);
+        clearSiAoiGeometryCache(layerId);
         arcgisDynamicDebug('layer_removed', { layerId, name: layer.name });
+      } else {
+        clearSiAoiGeometryCache(layerId);
       }
       setCustomLayers(prev => prev.filter(item => item.id !== layerId));
       setActiveLayerActionDialog(prev => (prev?.layerId === layerId ? null : prev));
@@ -18108,44 +18117,44 @@ export default function SatelliteIntelligence() {
     [agroStructuresLayerAoiMask],
   );
   /**
-   * Clip mask source layer — same ArcGIS viewport / paint geojson as map outlines.
-   * Prefer full-layer geo when present; otherwise use paint-path or viewport stream.
-   * `aoiLayerModeActiveMask` pins the first non-empty mask (settings pin key) so WMS
-   * clip stays stable across pan/zoom once Layers AOI is on.
+   * Clip mask source layer — analysis geometry cache (full layer query), never the
+   * Mapbox viewport slice. Streaming layers stay empty here until the service query
+   * completes so Sentinel clip does not freeze on 4 visible polygons.
    */
   const aoiMaskBuilderBaseLayer = useMemo(
     () => customLayers.find(l => String(l.id) === aoiMaskBuilderSettings.sourceLayerId) ?? null,
     [customLayers, aoiMaskBuilderSettings.sourceLayerId],
   );
+  const aoiAnalysisRecord = useMemo(
+    () => getSiAoiGeometryRecord(aoiMaskBuilderBaseLayer?.id),
+    [aoiMaskBuilderBaseLayer?.id, aoiAnalysisRevision],
+  );
   const aoiMaskBuilderSourceLayer = useMemo(() => {
     const layer = aoiMaskBuilderBaseLayer;
     if (!layer) return null;
-    const cache =
-      layer.viewportStreaming && layer.source === 'arcgis'
-        ? arcgisViewportCacheByLayerIdRef.current.get(layer.id)
-        : null;
-    const viewport =
-      layer.viewportStreaming && layer.source === 'arcgis'
-        ? arcgisViewportGeoJsonByLayerIdRef.current.get(layer.id)
-        : null;
+    const analysis = peekSiAoiAnalysisGeoJson(layer.id);
     const best = resolveLayersAoiClipGeoJson({
       layer,
-      viewportCache: cache,
-      viewportGeoJson: viewport,
+      analysisGeoJson: analysis,
+      analysisComplete: isSiAoiGeometryComplete(aoiAnalysisRecord),
     });
     if (best?.features?.length) return { ...layer, geojson: best };
-    const paintLayer = customLayersForMapPaint.find(l => String(l.id) === String(layer.id));
-    if (
-      Array.isArray(paintLayer?.geojson?.features) &&
-      paintLayer!.geojson!.features!.length > 0
-    ) {
-      return { ...layer, geojson: paintLayer!.geojson };
+    if (!layerNeedsFullAoiServiceQuery(layer)) {
+      const paintLayer = customLayersForMapPaint.find(l => String(l.id) === String(layer.id));
+      if (
+        Array.isArray(paintLayer?.geojson?.features) &&
+        paintLayer!.geojson!.features!.length > 0
+      ) {
+        return { ...layer, geojson: paintLayer!.geojson };
+      }
+      return layer;
     }
-    return layer;
+    return { ...layer, geojson: { type: 'FeatureCollection', features: [] } };
   }, [
     aoiMaskBuilderBaseLayer,
+    aoiAnalysisRecord,
     customLayersForMapPaint,
-    arcgisViewportRevision,
+    aoiAnalysisRevision,
   ]);
   const aoiMaskBuilderSelectedKeys = useMemo(() => {
     if (activeDialogLayer && String(activeDialogLayer.id) === aoiMaskBuilderSettings.sourceLayerId) {
@@ -18168,21 +18177,14 @@ export default function SatelliteIntelligence() {
     aoiMaskBuilderSourceLayer,
     aoiMaskBuilderSelectedKeys,
   ]);
-  /** Warm mask for any AOI layer — largest available geometry (cache / full geo / viewport). */
+  /** Warm mask from full-layer analysis cache — never the current map viewport. */
   const aoiMaskBuilderWarmMask = useMemo(() => {
     if (!aoiMaskBuilderSettings.sourceLayerId || !aoiMaskBuilderBaseLayer) return null;
-    const cache =
-      aoiMaskBuilderBaseLayer.viewportStreaming && aoiMaskBuilderBaseLayer.source === 'arcgis'
-        ? arcgisViewportCacheByLayerIdRef.current.get(aoiMaskBuilderBaseLayer.id)
-        : null;
-    const viewport =
-      aoiMaskBuilderBaseLayer.viewportStreaming && aoiMaskBuilderBaseLayer.source === 'arcgis'
-        ? arcgisViewportGeoJsonByLayerIdRef.current.get(aoiMaskBuilderBaseLayer.id)
-        : null;
+    const analysis = peekSiAoiAnalysisGeoJson(aoiMaskBuilderBaseLayer.id);
     const best = resolveLayersAoiClipGeoJson({
       layer: aoiMaskBuilderBaseLayer,
-      viewportCache: cache,
-      viewportGeoJson: viewport,
+      analysisGeoJson: analysis,
+      analysisComplete: isSiAoiGeometryComplete(aoiAnalysisRecord),
     });
     if (best?.features?.length) {
       return getCachedSiAoiLayerModeClipMask(
@@ -18197,8 +18199,45 @@ export default function SatelliteIntelligence() {
     aoiMaskBuilderBaseLayer,
     aoiMaskBuilderMask,
     aoiMaskBuilderSelectedKeys,
-    arcgisViewportRevision,
+    aoiAnalysisRecord,
+    aoiAnalysisRevision,
   ]);
+
+  useEffect(() => subscribeSiAoiGeometryCache(() => setAoiAnalysisRevision(v => v + 1)), []);
+
+  /** Full AOI query for Sentinel — starts when the layer is selected, not on pan/zoom. */
+  useEffect(() => {
+    const layer = aoiMaskBuilderBaseLayer;
+    if (!layer?.id) return;
+    let cancelled = false;
+    const controller = new AbortController();
+    void ensureSiAoiGeometryCache(layer, {
+      token: layer.authToken || getArcgisPortalToken() || undefined,
+      signal: controller.signal,
+      resolveUrl: resolveAgroStructuresLayerUrl,
+    }).then(rec => {
+      if (cancelled) return;
+      if (rec.status !== 'complete' || rec.loadedCount <= 0) return;
+      setCustomLayers(prev =>
+        prev.map(l =>
+          String(l.id) === String(layer.id)
+            ? {
+                ...l,
+                importMetadata: {
+                  ...(l.importMetadata || {}),
+                  featureCount: rec.loadedCount,
+                },
+              }
+            : l,
+        ),
+      );
+    });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [aoiMaskBuilderBaseLayer?.id, aoiMaskBuilderBaseLayer?.sourceUrl]);
+
   const aoiLayerModeSettingsPinKey = useMemo(
     () => siAoiLayerModeSettingsPinKey(aoiMaskBuilderSettings, aoiMaskBuilderSelectedKeys, aoiMaskBuilderBaseLayer),
     [
@@ -18210,10 +18249,15 @@ export default function SatelliteIntelligence() {
 
   useEffect(() => {
     if (!aoiMaskBuilderWarmMask?.features?.length) return;
+    if (
+      layerNeedsFullAoiServiceQuery(aoiMaskBuilderBaseLayer) &&
+      !isSiAoiGeometryComplete(aoiAnalysisRecord)
+    ) {
+      return;
+    }
     const pin = aoiLayerModePinnedClipRef.current;
     const nextCount = aoiMaskBuilderWarmMask.features.length;
-    // While Show on map is on, keep the clip stable across pan churn — but UPGRADE when
-    // more polygons arrive (viewport seed → full cache / full-layer hydrate).
+    // Keep clip stable across pan/zoom once the FULL layer query is pinned.
     if (aoiMaskBuilderSettings.enabled && pin?.pinKey === aoiLayerModeSettingsPinKey) {
       const prevCount = pin.mask?.features?.length ?? 0;
       if (prevCount > 0 && nextCount <= prevCount) return;
@@ -18223,7 +18267,13 @@ export default function SatelliteIntelligence() {
       mask: aoiMaskBuilderWarmMask,
     };
     setAoiLayerModePinRevision(v => v + 1);
-  }, [aoiMaskBuilderWarmMask, aoiLayerModeSettingsPinKey, aoiMaskBuilderSettings.enabled]);
+  }, [
+    aoiMaskBuilderWarmMask,
+    aoiLayerModeSettingsPinKey,
+    aoiMaskBuilderSettings.enabled,
+    aoiMaskBuilderBaseLayer,
+    aoiAnalysisRecord,
+  ]);
 
   useEffect(() => {
     const pin = aoiLayerModePinnedClipRef.current;
@@ -18667,8 +18717,13 @@ export default function SatelliteIntelligence() {
   }, [aoiMaskBuilderSettings.enabled, aoiMaskBuilderSourceLayer?.id, aoiMaskBuilderSourceLayer?.sourceUrl]);
 
   const aoiLayerModeOptions = useMemo(
-    () => listSiAoiLayerModeOptions(customLayersForMapPaint),
-    [customLayersForMapPaint],
+    () =>
+      listSiAoiLayerModeOptions(customLayersForMapPaint).map(o => {
+        const rec = getSiAoiGeometryRecord(o.id);
+        const n = rec?.expectedCount ?? rec?.loadedCount ?? 0;
+        return n > o.featureCount ? { ...o, featureCount: n } : o;
+      }),
+    [customLayersForMapPaint, aoiAnalysisRevision],
   );
 
   useEffect(() => {
@@ -18721,39 +18776,25 @@ export default function SatelliteIntelligence() {
         if (selected) {
           setWmsLayer(prev => (prev === selected ? prev : selected));
         }
-        const pickLargerMask = (
-          current: ReturnType<typeof getCachedSiAoiLayerModeClipMask>,
-          candidate: ReturnType<typeof getCachedSiAoiLayerModeClipMask>,
-        ) => {
-          const curN = current?.features?.length ?? 0
-          const nextN = candidate?.features?.length ?? 0
-          return nextN > curN ? candidate : current
-        }
+        const analysisFc = peekSiAoiAnalysisGeoJson(aoiMaskBuilderBaseLayer?.id);
+        const analysisRec = getSiAoiGeometryRecord(aoiMaskBuilderBaseLayer?.id);
+        const bestFc = resolveLayersAoiClipGeoJson({
+          layer: aoiMaskBuilderBaseLayer,
+          analysisGeoJson: analysisFc,
+          analysisComplete: isSiAoiGeometryComplete(analysisRec),
+        });
         let pinMask = aoiMaskBuilderWarmMask ?? aoiMaskBuilderMask;
-        if (aoiMaskBuilderBaseLayer) {
-          const cache = aoiMaskBuilderBaseLayer.viewportStreaming
-            ? arcgisViewportCacheByLayerIdRef.current.get(aoiMaskBuilderBaseLayer.id)
-            : null;
-          const viewport = aoiMaskBuilderBaseLayer.viewportStreaming
-            ? arcgisViewportGeoJsonByLayerIdRef.current.get(aoiMaskBuilderBaseLayer.id)
-            : null;
-          const bestFc = resolveLayersAoiClipGeoJson({
-            layer: aoiMaskBuilderBaseLayer,
-            viewportCache: cache,
-            viewportGeoJson: viewport,
-          });
-          if (bestFc?.features?.length) {
-            pinMask = pickLargerMask(
-              pinMask,
-              getCachedSiAoiLayerModeClipMask(
-                { ...aoiMaskBuilderBaseLayer, geojson: bestFc },
-                normalized,
-                aoiMaskBuilderSelectedKeys,
-              ),
-            );
-          }
+        if (bestFc?.features?.length && aoiMaskBuilderBaseLayer) {
+          pinMask = getCachedSiAoiLayerModeClipMask(
+            { ...aoiMaskBuilderBaseLayer, geojson: bestFc },
+            normalized,
+            aoiMaskBuilderSelectedKeys,
+          );
         }
-        if (pinMask?.features?.length) {
+        const canPinStreaming =
+          !layerNeedsFullAoiServiceQuery(aoiMaskBuilderBaseLayer) ||
+          isSiAoiGeometryComplete(analysisRec);
+        if (canPinStreaming && pinMask?.features?.length) {
           aoiLayerModePinnedClipRef.current = {
             pinKey: siAoiLayerModeSettingsPinKey(normalized, aoiMaskBuilderSelectedKeys, aoiMaskBuilderBaseLayer),
             mask: pinMask,
@@ -18797,87 +18838,11 @@ export default function SatelliteIntelligence() {
           }
         }
 
-        // Hydrate full ArcGIS geometry for the selected AOI layer when the pin is
-        // incomplete vs known inventory — any feature count, not a fixed N.
-        const hydrateLayer = aoiMaskBuilderBaseLayer;
-        if (
-          hydrateLayer?.source === 'arcgis' &&
-          hydrateLayer.sourceUrl &&
-          normalized.maskMode === 'entire-layer'
-        ) {
-          const pinCount = aoiLayerModePinnedClipRef.current?.mask?.features?.length ?? 0;
-          const cacheSize =
-            arcgisViewportCacheByLayerIdRef.current.get(hydrateLayer.id)?.size ?? 0;
-          if (
-            layersAoiClipNeedsHydrate({
-              layer: hydrateLayer,
-              pinFeatureCount: pinCount,
-              cacheFeatureCount: cacheSize,
-            })
-          ) {
-            const layerId = hydrateLayer.id;
-            const sourceUrl = resolveAgroStructuresLayerUrl(String(hydrateLayer.sourceUrl).trim());
-            void (async () => {
-              try {
-                const token = hydrateLayer.authToken || getArcgisPortalToken() || undefined;
-                const fc = await fetchArcGisFeatureLayerGeoJson(sourceUrl, {
-                  token,
-                  timeoutMs: 120_000,
-                });
-                if (!fc?.features?.length) return;
-                // Abort if user turned Layers AOI off or switched source while fetching.
-                if (!aoiMaskBuilderSettings.enabled && !normalized.enabled) return;
-                const currentSource = String(
-                  aoiMaskBuilderSourceLayerIdRef.current || normalized.sourceLayerId || '',
-                ).trim();
-                if (currentSource && currentSource !== String(layerId)) return;
-                const cache =
-                  arcgisViewportCacheByLayerIdRef.current.get(layerId) ??
-                  new SiViewportFeatureCache();
-                arcgisViewportCacheByLayerIdRef.current.set(layerId, cache);
-                cache.merge(fc.features);
-                const allFc = cache.allFeatureCollection();
-                arcgisViewportGeoJsonByLayerIdRef.current.set(layerId, allFc);
-                // Persist full geometry on the layer for this session so any N is reusable.
-                setCustomLayers(prev =>
-                  prev.map(l =>
-                    String(l.id) === String(layerId)
-                      ? {
-                          ...l,
-                          geojson: allFc as CustomLayer['geojson'],
-                          importMetadata: {
-                            ...(l.importMetadata || {}),
-                            featureCount: allFc.features.length,
-                          },
-                        }
-                      : l,
-                  ),
-                );
-                setArcgisViewportRevision(v => v + 1);
-                const fullMask = getCachedSiAoiLayerModeClipMask(
-                  { ...hydrateLayer, geojson: allFc },
-                  normalized,
-                  aoiMaskBuilderSelectedKeys,
-                );
-                const prevN = aoiLayerModePinnedClipRef.current?.mask?.features?.length ?? 0;
-                const nextN = fullMask?.features?.length ?? 0;
-                if (fullMask?.features?.length && nextN > prevN) {
-                  aoiLayerModePinnedClipRef.current = {
-                    pinKey: siAoiLayerModeSettingsPinKey(
-                      normalized,
-                      aoiMaskBuilderSelectedKeys,
-                      hydrateLayer,
-                    ),
-                    mask: fullMask,
-                  };
-                  layerAoiPingPongSyncKeyRef.current = '';
-                  setAoiLayerModePinRevision(v => v + 1);
-                }
-              } catch {
-                /* keep partial pin — viewport/cache still usable */
-              }
-            })();
-          }
+        if (aoiMaskBuilderBaseLayer) {
+          void ensureSiAoiGeometryCache(aoiMaskBuilderBaseLayer, {
+            token: aoiMaskBuilderBaseLayer.authToken || getArcgisPortalToken() || undefined,
+            resolveUrl: resolveAgroStructuresLayerUrl,
+          });
         }
       }
     },
@@ -18924,64 +18889,27 @@ export default function SatelliteIntelligence() {
     if (!aoiMaskBuilderSettings.enabled) return;
     const layer = customLayers.find(l => String(l.id) === aoiMaskBuilderSettings.sourceLayerId);
     if (!layer) return;
-    // Keep seeding / upgrading until the clip covers every known feature for this layer.
-    const pin = aoiLayerModePinnedClipRef.current;
-    const pinCount = pin?.mask?.features?.length ?? 0;
-    const cacheSize = arcgisViewportCacheByLayerIdRef.current.get(layer.id)?.size ?? 0;
+    const rec = getSiAoiGeometryRecord(layer.id);
     if (
       !layersAoiClipNeedsHydrate({
         layer,
-        pinFeatureCount: pinCount,
-        cacheFeatureCount: cacheSize,
-      }) &&
-      pinCount > 0
+        pinFeatureCount: rec?.loadedCount ?? 0,
+        cacheFeatureCount: 0,
+        analysisComplete: isSiAoiGeometryComplete(rec),
+        analysisLoadedCount: rec?.loadedCount ?? 0,
+      })
     ) {
       return;
     }
-    if (!layer.viewportStreaming && !layer.sourceUrl) return;
-    void (async () => {
-      if (layer.viewportStreaming) {
-        await fetchArcGisViewportLayersForExtent();
-        const displayBbox = liveViewportDisplayBBoxRef.current ?? captureLiveViewportExtent();
-        if (displayBbox) {
-          syncArcGisViewportLayersGeoJson(displayBbox, { force: true });
-        }
-      }
-      const cache = arcgisViewportCacheByLayerIdRef.current.get(layer.id);
-      const best = resolveLayersAoiClipGeoJson({
-        layer,
-        viewportCache: cache,
-        viewportGeoJson: arcgisViewportGeoJsonByLayerIdRef.current.get(layer.id),
-      });
-      if (!best?.features?.length) return;
-      const nextMask = getCachedSiAoiLayerModeClipMask(
-        { ...layer, geojson: best },
-        aoiMaskBuilderSettings,
-        aoiMaskBuilderSelectedKeys,
-      );
-      const prevN = aoiLayerModePinnedClipRef.current?.mask?.features?.length ?? 0;
-      const nextN = nextMask?.features?.length ?? 0;
-      if (nextMask?.features?.length && nextN > prevN) {
-        aoiLayerModePinnedClipRef.current = {
-          pinKey: aoiLayerModeSettingsPinKey,
-          mask: nextMask,
-        };
-        layerAoiPingPongSyncKeyRef.current = '';
-        setAoiLayerModePinRevision(v => v + 1);
-      }
-    })();
+    void ensureSiAoiGeometryCache(layer, {
+      token: layer.authToken || getArcgisPortalToken() || undefined,
+      resolveUrl: resolveAgroStructuresLayerUrl,
+    });
   }, [
     aoiMaskBuilderSettings.enabled,
     aoiMaskBuilderSettings.sourceLayerId,
-    aoiLayerModeActiveMask,
-    aoiLayerModePinRevision,
-    aoiLayerModeSettingsPinKey,
-    aoiMaskBuilderSettings,
-    aoiMaskBuilderSelectedKeys,
+    aoiAnalysisRevision,
     customLayers,
-    fetchArcGisViewportLayersForExtent,
-    captureLiveViewportExtent,
-    syncArcGisViewportLayersGeoJson,
   ]);
 
   const handleCropAlertSettingsChange = useCallback((next: CropAlertEngineSettings) => {
@@ -26210,8 +26138,15 @@ export default function SatelliteIntelligence() {
                         aoiLayerModeSettings={aoiMaskBuilderSettings}
                         onAoiLayerModeChange={handleAoiLayerModeChange}
                         aoiLayerOptions={aoiLayerModeOptions}
-                        aoiLayerMaskFeatureCount={aoiMaskBuilderFeatureCount}
+                        aoiLayerMaskFeatureCount={
+                          aoiAnalysisRecord?.status === 'loading'
+                            ? aoiAnalysisRecord.loadedCount
+                            : aoiMaskBuilderFeatureCount
+                        }
                         aoiLayerSelectedFeatureCount={aoiMaskBuilderSelectedKeys.size}
+                        aoiQueryStatus={aoiAnalysisRecord?.status ?? 'idle'}
+                        aoiExpectedCount={aoiAnalysisRecord?.expectedCount ?? null}
+                        aoiQueryError={aoiAnalysisRecord?.error ?? null}
                         timeSeriesStart={timeSeriesStart}
                         timeSeriesEnd={timeSeriesEnd}
                         onTimeSeriesStartChange={v => {

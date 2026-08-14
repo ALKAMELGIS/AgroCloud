@@ -48,6 +48,9 @@ export type RemoteSensingToolboxPanelProps = {
   aoiLayerMaskFeatureCount: number
   aoiLayerSelectedFeatureCount: number
   aoiLayerModeDisabled?: boolean
+  aoiQueryStatus?: 'idle' | 'loading' | 'complete' | 'error'
+  aoiExpectedCount?: number | null
+  aoiQueryError?: string | null
   sentinelLayerOptions: Array<{ id: string; label: string }>
   timeSeriesStart: string
   timeSeriesEnd: string
@@ -111,6 +114,9 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
     aoiLayerMaskFeatureCount,
     aoiLayerSelectedFeatureCount,
     aoiLayerModeDisabled = false,
+    aoiQueryStatus = 'idle',
+    aoiExpectedCount = null,
+    aoiQueryError = null,
     sentinelLayerOptions,
     timeSeriesStart,
     timeSeriesEnd,
@@ -262,6 +268,9 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
             selectedFeatureCount={aoiLayerSelectedFeatureCount}
             disabled={aoiLayerModeDisabled}
             zoomWarning={aoiLayerModeSettings.enabled ? wmsZoomWarning : null}
+            aoiQueryStatus={aoiQueryStatus}
+            aoiExpectedCount={aoiExpectedCount}
+            aoiQueryError={aoiQueryError}
           />
         </div>
 

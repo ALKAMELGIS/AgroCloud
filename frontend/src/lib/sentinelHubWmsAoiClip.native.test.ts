@@ -31,8 +31,9 @@ describe('sentinelHubWmsAoiClip native layers', () => {
     expect(evalscriptB64).toBeTruthy()
     const decoded = atob(evalscriptB64!)
     expect(decoded).toContain('index(samples.B08, samples.B04)')
-    expect(decoded).toContain('samples.dataMask')
-    expect(decoded).toContain('scl == 3')
+    expect(decoded).toContain('imgVals.concat(1)')
+    expect(decoded).not.toContain('concat(samples.dataMask)')
+    expect(decoded).not.toContain('scl == 3')
   })
 
   it('keeps preset Highlight Optimized Natural Color on server evalscript (GEOMETRY only)', () => {

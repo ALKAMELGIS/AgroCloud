@@ -114,15 +114,16 @@ const CORE_AT_FN = `function coreAt(samples) {
   };
 }`
 
-function alphaBlock(indexVar: string, indexVisibilityMin: number | null, maskVar = 'samples.dataMask'): string {
+function alphaBlock(indexVar: string, indexVisibilityMin: number | null, _maskVar = 'samples.dataMask'): string {
   const thr =
     indexVisibilityMin != null && Number.isFinite(indexVisibilityMin)
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
+  // GEOMETRY clips the raster. Never multiply alpha by dataMask (hides small AOIs).
   if (thr == null) {
-    return `return c.concat(${maskVar});`
+    return `return c.concat(1);`
   }
-  return `var a = ${maskVar} * (${indexVar} >= ${thr} ? 1.0 : 0.0);
+  return `var a = (isFinite(${indexVar}) && ${indexVar} >= ${thr} ? 1.0 : 0.0);
   return c.concat(a);`
 }
 
@@ -192,6 +193,7 @@ ${mapAlertFn}
 function evaluatePixel(samples) {
   ${CORE_INDICES_BLOCK}
   let val = ${expr};
+  if (!isFinite(val)) val = 0;
   let cls = classifyVal(val);
   let alertIdx = mapClassToAlert(cls);
   let c = ALERT_RGB[alertIdx];
@@ -227,13 +229,9 @@ ${classifyFn}
 function evaluatePixel(samples) {
   ${CORE_INDICES_BLOCK}
   let ${indexVar} = ${expr};
-  if (!isFinite(${indexVar})) {
-    return [0, 0, 0, 0];
-  }
+  if (!isFinite(${indexVar})) ${indexVar} = 0;
   let cls = classifyVal(${indexVar});
-  if (cls < 0) {
-    return [0, 0, 0, 0];
-  }
+  if (cls < 0) cls = 0;
   let c = CLASS_RGB[cls];
   ${alphaBlock(indexVar, indexVisibilityMin)}
 }`
@@ -316,21 +314,15 @@ function compositeValue(c) {
 function evaluatePixel(samples) {
   if (!samples || samples.length < 2) {
     var s = samples && samples.length ? samples[samples.length - 1] : null;
-    var mask = s ? s.dataMask : 0;
     var c = CLASS_RGB[4];
-    return c.concat(mask);
+    return c.concat(1);
   }
   var c1 = coreAt(samples[0]);
   var c2 = coreAt(samples[samples.length - 1]);
   var ${indexVar} = compositeValue(c2) - compositeValue(c1);
-  var mask = samples[samples.length - 1].dataMask * samples[0].dataMask;
-  if (!isFinite(${indexVar})) {
-    return [0, 0, 0, 0];
-  }
+  if (!isFinite(${indexVar})) ${indexVar} = 0;
   var cls = classifyVal(${indexVar});
-  if (cls < 0) {
-    return [0, 0, 0, 0];
-  }
+  if (cls < 0) cls = 0;
   var c = CLASS_RGB[cls];
   ${alphaBlock(indexVar, indexVisibilityMin, 'mask')}
 }`
@@ -371,11 +363,13 @@ function currentIndex(c) {
 
 function evaluatePixel(samples) {
   if (!samples || !samples.length) {
-    return [0, 0, 0, 0];
+    var cEmpty = CLASS_RGB[4];
+    return cEmpty.concat(1);
   }
   var curSample = samples[samples.length - 1];
-  if (!curSample || !curSample.dataMask) {
-    return [0, 0, 0, 0];
+  if (!curSample) {
+    var cMiss = CLASS_RGB[4];
+    return cMiss.concat(1);
   }
   var current = currentIndex(coreAt(curSample));
   var n = 0;
@@ -445,10 +439,8 @@ function preProcessScenes(collections) {
 
 function evaluatePixel(samples) {
   if (!samples || samples.length < 2) {
-    var s = samples && samples.length ? samples[samples.length - 1] : null;
-    var mask = s ? s.dataMask : 0;
     var cStable = CLASS_RGB[4];
-    return cStable.concat(mask);
+    return cStable.concat(1);
   }
   var c1 = coreAt(samples[0]);
   var c2 = coreAt(samples[samples.length - 1]);
@@ -456,10 +448,9 @@ function evaluatePixel(samples) {
   var dNdmi = c2.ndmi - c1.ndmi;
   var ${indexVar} = ${NCADI_EXPR};
   if (!isFinite(${indexVar})) ${indexVar} = 0;
-  var mask = samples[samples.length - 1].dataMask * samples[0].dataMask;
   var cls = classifyVal(${indexVar});
   var c = CLASS_RGB[cls];
-  ${alphaBlock(indexVar, indexVisibilityMin, 'mask')}
+  ${alphaBlock(indexVar, indexVisibilityMin)}
 }`
 }
 
@@ -511,26 +502,26 @@ function etStressOf(c) {
 
 function evaluatePixel(samples) {
   if (!samples || !samples.length) {
-    return [0, 0, 0, 0];
+    var cEmpty = CLASS_RGB[4];
+    return cEmpty.concat(1);
   }
   var cur = samples[samples.length - 1];
-  if (!cur || !cur.dataMask) {
-    return [0, 0, 0, 0];
+  if (!cur) {
+    var cMiss = CLASS_RGB[4];
+    return cMiss.concat(1);
   }
   var c2 = coreAt(cur);
   var wdsi2 = wdsiOf(c2);
   var dWdsi = 0;
-  var mask = cur.dataMask;
   if (samples.length >= 2) {
     var c1 = coreAt(samples[0]);
     dWdsi = wdsi2 - wdsiOf(c1);
-    mask = cur.dataMask * samples[0].dataMask;
   }
   var ${indexVar} = 0.40 * wdsi2 + 0.20 * dWdsi + 0.20 * (1 - c2.ndmi) + 0.10 * etStressOf(c2) + 0.10;
   if (!isFinite(${indexVar})) ${indexVar} = 0;
   var cls = classifyVal(${indexVar});
   var c = CLASS_RGB[cls];
-  ${alphaBlock(indexVar, indexVisibilityMin, 'mask')}
+  ${alphaBlock(indexVar, indexVisibilityMin)}
 }`
 }
 

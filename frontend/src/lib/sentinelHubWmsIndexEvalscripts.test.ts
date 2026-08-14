@@ -7,20 +7,19 @@ import {
 import { buildSentinelHubWmsAoiClip, inferWmsEvalProfile } from './sentinelHubWmsAoiClip'
 
 describe('sentinelHubWmsIndexEvalscripts', () => {
-  it('NDVI evalscript uses a fast color ramp on B08/B04 with dataMask alpha (no SCL holes)', () => {
+  it('NDVI evalscript uses a fast color ramp on B08/B04 with opaque GEOMETRY clip alpha (no SCL holes)', () => {
     const script = buildSentinelIndexColorRampEvalscript('ndvi')
     expect(script).toContain('index(samples.B08, samples.B04)')
-    expect(script).toContain('samples.dataMask')
+    expect(script).toContain('["B04", "B08", "dataMask"]')
     expect(script).toContain('ColorRampVisualizer')
     expect(script).toContain('visualizer.process(ndvi)')
-    // Fast/complete render: no per-pixel SCL cloud masking and no heavy gradient code.
+    expect(script).toContain('imgVals.concat(1)')
+    expect(script).not.toContain('concat(samples.dataMask)')
     expect(script).not.toContain('SCL')
     expect(script).not.toContain('scl == 3')
     expect(script).not.toContain('function findColor(val)')
     expect(script).not.toContain('function blendRgb')
     expect(script).not.toContain('return [0, 0, 0, 0]')
-    // Only the 3 bands needed for NDVI are requested.
-    expect(script).toContain('["B04", "B08", "dataMask"]')
   })
 
   it('NDVI growth ramp samples smooth light-to-dark greens for legend and raster parity', () => {
@@ -44,7 +43,8 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
     expect(script).toContain('const BREAKS =')
     expect(script).toContain('function ndwiClass(val)')
     expect(script).toContain('viz.process(cls)')
-    expect(script).toContain('samples.dataMask')
+    expect(script).toContain('imgVals.concat(1)')
+    expect(script).not.toContain('concat(samples.dataMask)')
   })
 
   it('NDMI evalscript uses 10-class moisture ramp on B8A/B11', () => {
@@ -57,7 +57,8 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
     expect(script).toContain('0x0d47a1')
     expect(script).toContain('function ndmiClass(val)')
     expect(script).toContain('viz.process(CLASS_VAL[cls])')
-    expect(script).toContain('samples.dataMask')
+    expect(script).toContain('imgVals.concat(1)')
+    expect(script).not.toContain('concat(samples.dataMask)')
   })
 
   it('SAVI evalscript uses soil-adjusted formula on B08/B04', () => {

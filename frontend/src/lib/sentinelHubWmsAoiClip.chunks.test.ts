@@ -124,7 +124,7 @@ describe('packOuterRingsIntoWktChunks', () => {
     }
   })
 
-  it('paints every polygon for 216-field Layers AOI as separate single-ring clips', () => {
+  it('packs large Layers AOI into ≤ hard-max WMS sources (never one source per field)', () => {
     const rings: [number, number][][] = []
     for (let i = 0; i < 216; i++) {
       const lng = 47 + (i % 18) * 0.03
@@ -150,7 +150,9 @@ describe('packOuterRingsIntoWktChunks', () => {
       maxTileLayers: 256,
       preferSingleRingChunks: true,
     })
-    expect(chunks.length).toBe(216)
+    expect(chunks.length).toBeGreaterThan(0)
+    expect(chunks.length).toBeLessThanOrEqual(SI_SENTINEL_AOI_WMS_HARD_MAX_SOURCES)
+    expect(chunks.length).toBeLessThan(rings.length)
     expect(chunks.every(part => !!part.geometryWkt3857)).toBe(true)
     for (const part of chunks) {
       expect(part.geometryWkt3857!.length).toBeLessThan(6000)
@@ -328,5 +330,61 @@ describe('packOuterRingsIntoWktChunks', () => {
     expect(chunks.length).toBe(1)
     expect(chunks[0]?.aoiBoundsLngLat).toEqual(expect.arrayContaining([expect.any(Number)]))
     expect(chunks[0]?.aoiBoundsLngLat?.length).toBe(4)
+  })
+
+  it('keeps a collapsed AOI as a paint-able GEOMETRY instead of dropping it', () => {
+    const fc = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [55.1, 25.1],
+                [55.1, 25.1],
+              ],
+            ],
+          },
+        },
+      ],
+    }
+    const chunks = buildSentinelHubWmsDisplayChunks(fc, 'NDVI')
+    expect(chunks.length).toBeGreaterThan(0)
+    expect(chunks[0]?.geometryWkt3857).toMatch(/^POLYGON\(|^MULTIPOLYGON\(/)
+    const decoded = atob(chunks[0]!.evalscriptB64!)
+    expect(decoded).toContain('imgVals.concat(1)')
+  })
+
+  it('packs thousands of AOIs into the hard WMS source cap', () => {
+    const rings: [number, number][][] = []
+    for (let i = 0; i < 2000; i++) {
+      const lng = 45 + (i % 40) * 0.03
+      const lat = 24 + Math.floor(i / 40) * 0.03
+      rings.push([
+        [lng, lat],
+        [lng + 0.01, lat],
+        [lng + 0.01, lat + 0.01],
+        [lng, lat + 0.01],
+        [lng, lat],
+      ])
+    }
+    const fc = {
+      type: 'FeatureCollection',
+      features: rings.map((ring, i) => ({
+        type: 'Feature',
+        geometry: { type: 'Polygon', coordinates: [ring] },
+        properties: { id: i },
+      })),
+    }
+    const chunks = buildSentinelHubWmsDisplayChunks(fc, 'NDVI', {
+      preferSingleRingChunks: true,
+      maxTileLayers: 10_000,
+    })
+    expect(chunks.length).toBeGreaterThan(0)
+    expect(chunks.length).toBeLessThanOrEqual(SI_SENTINEL_AOI_WMS_HARD_MAX_SOURCES)
+    expect(chunks.every(part => !!part.geometryWkt3857)).toBe(true)
   })
 })

@@ -36,15 +36,41 @@ describe('layersAoiClipGeoJson', () => {
     expect(pickLargestFeatureCollection(null, fc(2))?.features.length).toBe(2)
   })
 
-  it('prefers accumulated cache over viewport slice for any layer size', () => {
+  it('uses analysis geojson over viewport slices for streaming layers', () => {
     const cache = new SiViewportFeatureCache()
-    cache.merge(fc(18).features)
+    cache.merge(fc(4).features)
     const out = resolveLayersAoiClipGeoJson({
-      layer: { id: 'any-layer', name: 'Any', geojson: fc(3), viewportStreaming: true },
+      layer: {
+        id: 'potato',
+        name: 'Potato',
+        source: 'arcgis',
+        geojson: fc(4),
+        viewportStreaming: true,
+      },
+      analysisGeoJson: fc(30),
+      analysisComplete: true,
       viewportCache: cache,
-      viewportGeoJson: fc(3),
+      viewportGeoJson: fc(4),
     })
-    expect(out?.features.length).toBe(18)
+    expect(out?.features.length).toBe(30)
+  })
+
+  it('does not use viewport slice as analysis clip for streaming layers', () => {
+    const cache = new SiViewportFeatureCache()
+    cache.merge(fc(4).features)
+    const out = resolveLayersAoiClipGeoJson({
+      layer: {
+        id: 'potato',
+        name: 'Potato',
+        source: 'arcgis',
+        sourceUrl: 'https://example.com/FeatureServer/0',
+        geojson: fc(4),
+        viewportStreaming: true,
+      },
+      viewportCache: cache,
+      viewportGeoJson: fc(4),
+    })
+    expect(out).toBeNull()
   })
 
   it('uses full local geojson when cache is empty (uploaded shapefile)', () => {
@@ -80,6 +106,26 @@ describe('layersAoiClipGeoJson', () => {
         } as any,
         pinFeatureCount: 12,
         cacheFeatureCount: 12,
+        analysisComplete: true,
+        analysisLoadedCount: 12,
+      }),
+    ).toBe(false)
+  })
+
+  it('does not hydrate after a complete analysis query even if viewport cache is smaller', () => {
+    expect(
+      layersAoiClipNeedsHydrate({
+        layer: {
+          id: 'potato',
+          source: 'arcgis',
+          sourceUrl: 'https://example.com/FeatureServer/0',
+          viewportStreaming: true,
+          importMetadata: { featureCount: 30 },
+        } as any,
+        pinFeatureCount: 30,
+        cacheFeatureCount: 4,
+        analysisComplete: true,
+        analysisLoadedCount: 30,
       }),
     ).toBe(false)
   })
