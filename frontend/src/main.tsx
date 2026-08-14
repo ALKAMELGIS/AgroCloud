@@ -2,7 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import '@fortawesome/fontawesome-free/css/all.min.css'
-import './styles/fonts-local.css'
+import './styles/fonts-core.css'
 import './index.css'
 import './styles/gisModalSystem.css'
 import './geodash-tailwind.css'
@@ -19,6 +19,8 @@ import './styles/modal-responsive.css'
 import './styles/agroCloudMapboxBranding.css'
 import { initClientErrorMonitoring } from './lib/clientErrorMonitoring'
 import { deferAfterFirstPaint } from './lib/deferAfterFirstPaint'
+import { ensureBundledFontsForCssFamily } from './lib/loadBundledFontPreset'
+import { loadSystemSettings } from './services/settingsStorage'
 import { initMobileAppShell } from './lib/initMobileAppShell'
 import { isTouchDevice } from './lib/pwaInstall'
 import { bootstrapMapboxAccessTokenPersistence } from './lib/mapboxAccessToken'
@@ -196,6 +198,8 @@ void ensureBrowserApiSecretsHydrated()
 
 deferAfterFirstPaint(() => {
   initClientErrorMonitoring()
+  const savedFont = loadSystemSettings().headerSettings?.fontFamily
+  if (savedFont) void ensureBundledFontsForCssFamily(savedFont)
 }, 3000)
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(

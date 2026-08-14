@@ -73,6 +73,7 @@ import {
   isAgroStructuresMapOutlineStructureType,
 } from '../../../../lib/agroStructuresPrimaryAoi'
 import { AGRO_CLOUD_MAP_MAX_PITCH } from '../../../../lib/agroCloudMapNavigation'
+import { flyToLikeGoogleEarth } from '../../../../lib/googleEarthFlyTo'
 import {
   ACP_DEFAULT_MAP_CENTER,
   ACP_INITIAL_MAP_ZOOM,
@@ -106,6 +107,16 @@ function layerSourceId(layer: maplibregl.LayerSpecification): string {
 function setMapLayerDisplay(map: MaplibreMap, layerId: string, visible: boolean) {
   if (!map.getLayer(layerId)) return
   map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none')
+}
+
+function escapeAcpPlaceHtml(value: string): string {
+  return value.replace(/[&<>"']/g, ch => {
+    if (ch === '&') return '&amp;'
+    if (ch === '<') return '&lt;'
+    if (ch === '>') return '&gt;'
+    if (ch === '"') return '&quot;'
+    return '&#39;'
+  })
 }
 
 function setAllWmsRasterLayersDisplay(map: MaplibreMap, visible: boolean) {
@@ -573,6 +584,7 @@ export function AcpMapCanvas() {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapShellRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MaplibreMap | null>(null)
+  const placePopupRef = useRef<maplibregl.Popup | null>(null)
   const [mapInstance, setMapInstance] = useState<MaplibreMap | null>(null)
   const [mapInteractEpoch, setMapInteractEpoch] = useState(0)
 
@@ -1049,6 +1061,8 @@ export function AcpMapCanvas() {
       map.off('moveend', debouncedMoveEnd)
       map.off('click', ACP_LAYER_AOI_FILL, onAoiClick)
       map.off('click', onPortalLayerClick)
+      placePopupRef.current?.remove()
+      placePopupRef.current = null
       try {
         map.remove()
       } catch {
@@ -1072,14 +1086,32 @@ export function AcpMapCanvas() {
       const target = resolveAcpMapFocusTargetFromGeoJson(geojson)
       if (target) applyAcpMapFocusTarget(map, target)
     }
-    acp.mapFlyToRef.current = (lng: number, lat: number, zoom?: number) => {
+    acp.mapFlyToRef.current = (lng: number, lat: number, zoom?: number, info?: { label?: string; meta?: string }) => {
       const map = mapRef.current
       if (!map || !Number.isFinite(lng) || !Number.isFinite(lat)) return
-      map.flyTo({
-        center: [lng, lat],
-        zoom: Math.max(map.getZoom(), zoom ?? ACP_FIELD_LOCATE_MIN_ZOOM),
-        duration: 800,
+      flyToLikeGoogleEarth(map, {
+        lng,
+        lat,
+        zoom: zoom ?? ACP_FIELD_LOCATE_MIN_ZOOM,
+        preferTilt: true,
       })
+      const title = (info?.label || '').trim()
+      if (!title) return
+      placePopupRef.current?.remove()
+      const meta = (info?.meta || '').trim()
+      const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, maxWidth: '280px', offset: 18, className: 'acp-place-popup' })
+        .setLngLat([lng, lat])
+        .setHTML(
+          `<div class="acp-place-popup__body">` +
+            `<strong class="acp-place-popup__title">${escapeAcpPlaceHtml(title)}</strong>` +
+            (meta ? `<p class="acp-place-popup__meta">${escapeAcpPlaceHtml(meta)}</p>` : '') +
+            `<dl class="acp-place-popup__coords">` +
+            `<div><dt>Longitude</dt><dd>${lng.toFixed(6)}</dd></div>` +
+            `<div><dt>Latitude</dt><dd>${lat.toFixed(6)}</dd></div>` +
+            `</dl></div>`,
+        )
+        .addTo(map)
+      placePopupRef.current = popup
     }
     return () => {
       acp.mapHomeRef.current = null

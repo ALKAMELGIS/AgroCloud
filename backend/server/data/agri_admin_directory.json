@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-08-12T12:23:52.447Z",
+  "updatedAt": "2026-08-14T04:09:34.230Z",
   "users": [
     {
       "id": 1786536405252,
@@ -8,15 +8,15 @@
       "email": "alkamelgis@gmail.com",
       "role": "Admin",
       "status": "Active",
-      "lastLogin": "12/08/2026, 4:23:51 PM",
+      "lastLogin": "14/08/2026, 8:09:33 AM",
       "emailVerified": true,
       "passwordHash": "b03ddf3ca2e714a6548e7495e2a03f5e824eaac9837cd7f159c67b90fb4b7342"
     }
   ],
   "auditLog": [
     {
-      "id": "624c245e-a9d5-45b7-8a5f-8cd37b9224fc",
-      "at": "2026-08-12T12:23:51.970Z",
+      "id": "4607b037-b9e3-4bf7-a2b4-f8f3af79303b",
+      "at": "2026-08-14T04:09:33.769Z",
       "entity": "auth",
       "entityId": "alkamelgis@gmail.com",
       "action": "login_success",
@@ -26,37 +26,7 @@
         "mode": "signin",
         "keepSignedIn": true,
         "deviceName": "Windows · Chrome",
-        "atLocal": "8/12/2026, 4:23:51 PM"
-      }
-    },
-    {
-      "id": "7d16fa58-2a32-42d9-83f8-b8321678bd23",
-      "at": "2026-08-12T12:23:44.038Z",
-      "entity": "auth",
-      "action": "login_failure",
-      "entityId": "alkamelgs@gmail.com",
-      "actorEmail": "Alkamelgs@gmail.com",
-      "meta": {
-        "reason": "server_login_invalid_credentials",
-        "mode": "signin",
-        "keepSignedIn": true,
-        "deviceName": "Windows · Chrome",
-        "atLocal": "8/12/2026, 4:23:44 PM"
-      }
-    },
-    {
-      "id": "8c994530-2353-4e15-8c65-43e6460437bc",
-      "at": "2026-08-12T12:23:39.707Z",
-      "entity": "auth",
-      "action": "login_failure",
-      "entityId": "alkamelgs@gmail.com",
-      "actorEmail": "Alkamelgs@gmail.com",
-      "meta": {
-        "reason": "server_login_invalid_credentials",
-        "mode": "signin",
-        "keepSignedIn": true,
-        "deviceName": "Windows · Chrome",
-        "atLocal": "8/12/2026, 4:23:39 PM"
+        "atLocal": "8/14/2026, 8:09:33 AM"
       }
     }
   ]

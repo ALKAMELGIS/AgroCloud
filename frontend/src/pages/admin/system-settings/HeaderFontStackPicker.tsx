@@ -12,6 +12,7 @@ import {
   type FontCategoryId,
   type FontPreset,
 } from './headerFontCatalog'
+import { ensureBundledFontPreset, preloadOptionalPickerFonts } from '../../../lib/loadBundledFontPreset'
 
 const CATEGORY_ORDER: FontCategoryId[] = ['design', 'system', 'modern', 'elegant', 'mono', 'arabic']
 
@@ -59,6 +60,11 @@ export function HeaderFontStackPicker({
 
   useEffect(() => {
     if (!open) return
+    void preloadOptionalPickerFonts()
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
     const onDoc = (e: MouseEvent) => {
       const el = wrapRef.current
       if (!el || el.contains(e.target as Node)) return
@@ -92,9 +98,11 @@ export function HeaderFontStackPicker({
 
   const applyPreset = useCallback(
     (p: FontPreset) => {
-      onChange(p.cssFamily)
-      setOpen(false)
-      setQuery('')
+      void ensureBundledFontPreset(p.id).finally(() => {
+        onChange(p.cssFamily)
+        setOpen(false)
+        setQuery('')
+      })
     },
     [onChange],
   )

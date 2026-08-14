@@ -145,12 +145,17 @@ export async function searchAcpPlaces(query: string, limit = 5): Promise<AcpMapS
 
   const token = getMapboxAccessToken()
   const results = await geocodePlaceQuery(q, token)
-  return results.slice(0, limit).map((result, index) => ({
-    kind: 'place' as const,
-    id: `place:${result.lat},${result.lng}:${index}`,
-    label: result.label,
-    meta: 'Place',
-    lat: result.lat,
-    lng: result.lng,
-  }))
+  return results.slice(0, limit).map((result, index) => {
+    const comma = result.label.indexOf(',')
+    const title = comma > 0 ? result.label.slice(0, comma).trim() : result.label
+    const meta = comma > 0 ? result.label.slice(comma + 1).trim() : 'Place'
+    return {
+      kind: 'place' as const,
+      id: `place:${result.lat},${result.lng}:${index}`,
+      label: title || result.label,
+      meta,
+      lat: result.lat,
+      lng: result.lng,
+    }
+  })
 }

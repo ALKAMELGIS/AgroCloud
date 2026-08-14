@@ -122,6 +122,7 @@ import {
   syncAgroCloudTerrain3d,
   warmAgroCloudTerrainDemSource,
 } from '../../lib/agroCloudMapTerrain'
+import { flyToLikeGoogleEarth } from '../../lib/googleEarthFlyTo'
 
 const GIS_AGOL_RAIL_COMPACT_LS_KEY = 'gis-agol-rail-compact-v2'
 const GEO_AI_CHAT_PAGE_SIZE = 40
@@ -1909,8 +1910,8 @@ export default function GisMap() {
       const lat = Number(coordinateMatch[1])
       const lng = Number(coordinateMatch[2])
       if (Number.isFinite(lat) && Number.isFinite(lng)) {
-        if (globe) globe.flyTo({ center: [lng, lat], zoom: Math.max(globe.getZoom(), 10), pitch: 48, duration: 850 })
-        else map?.flyTo([lat, lng], Math.max(map.getZoom(), 13), { duration: 0.6 })
+        if (globe) flyGisMapToLngLat(lng, lat, 12)
+        else map?.flyTo([lat, lng], Math.max(map.getZoom(), 13), { duration: 2.2 })
         setMapSearchStatus('Location found')
         return
       }
@@ -1953,8 +1954,8 @@ export default function GisMap() {
         setMapSearchStatus('No result found')
         return
       }
-      if (globe) globe.flyTo({ center: [lon, lat], zoom: Math.max(globe.getZoom(), 10), pitch: 48, duration: 850 })
-      else map?.flyTo([lat, lon], Math.max(map?.getZoom() ?? 0, 13), { duration: 0.6 })
+      if (globe) flyGisMapToLngLat(lon, lat, 12)
+      else map?.flyTo([lat, lon], Math.max(map?.getZoom() ?? 0, 13), { duration: 2.2 })
       setMapSearchStatus(first?.display_name ? String(first.display_name) : 'Location found')
     } catch {
       setMapSearchStatus('Search is unavailable. Try coordinates like 25.2, 55.3')
@@ -2078,28 +2079,21 @@ export default function GisMap() {
   const flyGisMapToLngLat = useCallback(
     (lng: number, lat: number, zoomOpt?: number) => {
       const floorZ =
-        mapProjectionMode === 'globe' ? Math.max(10, zoomOpt ?? 10) : Math.max(13, zoomOpt ?? 13)
+        mapProjectionMode === 'globe' ? Math.max(10, zoomOpt ?? 12) : Math.max(13, zoomOpt ?? 13)
       if (mapProjectionMode === 'globe') {
         const globe = mapboxGlobeRef.current?.getMap ? mapboxGlobeRef.current.getMap() : mapboxGlobeRef.current
         if (globe) {
-          globe.flyTo({
-            center: [lng, lat],
-            zoom: Math.max(globe.getZoom(), floorZ),
-            pitch: 48,
-            duration: 850,
+          flyToLikeGoogleEarth(globe, {
+            lng,
+            lat,
+            zoom: zoomOpt ?? 12,
+            preferTilt: true,
           })
         }
-        setGlobeViewState(prev => ({
-          ...prev,
-          longitude: lng,
-          latitude: lat,
-          zoom: Math.max(prev.zoom, floorZ),
-          pitch: Math.max(prev.pitch, 42),
-        }))
         return
       }
       const map = mapRef.current
-      if (map) map.flyTo([lat, lng], Math.max(map.getZoom(), floorZ), { duration: 0.6 })
+      if (map) map.flyTo([lat, lng], Math.max(map.getZoom(), floorZ), { duration: 2.2 })
     },
     [mapProjectionMode],
   )

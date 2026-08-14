@@ -1013,6 +1013,56 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
   height: 100%;
 }
 
+.acp-place-popup .maplibregl-popup-content {
+  padding: 10px 12px 12px;
+  border-radius: 10px;
+  background: rgba(8, 18, 12, 0.94);
+  color: #ecfdf3;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+.acp-place-popup .maplibregl-popup-close-button {
+  color: #bbf7d0;
+  font-size: 16px;
+}
+
+.acp-place-popup__title {
+  display: block;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.acp-place-popup__meta {
+  margin: 4px 0 8px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #a7f3d0;
+}
+
+.acp-place-popup__coords {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.acp-place-popup__coords div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.acp-place-popup__coords dt {
+  color: #86efac;
+  font-weight: 500;
+}
+
+.acp-place-popup__coords dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
 .acp-alert-marker-host {
   pointer-events: none;
   z-index: var(--acp-map-marker-z);

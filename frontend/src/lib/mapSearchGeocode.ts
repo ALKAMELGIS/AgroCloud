@@ -25,6 +25,8 @@ export type MapSearchResult = {
   kind?: string
   /** Combined relevance + proximity score in ~[0,1] (higher is better). */
   score: number
+  /** Layer-feature hits may carry attributes shown when the pin is clicked. */
+  properties?: Record<string, unknown>
 }
 
 export type SearchPlacesOptions = {
