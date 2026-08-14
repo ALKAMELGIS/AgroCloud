@@ -62,9 +62,8 @@ const CORS_EXTRA = String(process.env.CORS_ALLOWED_ORIGINS || '')
   .map((s) => s.trim())
   .filter(Boolean)
 const CORS_DEFAULT_ORIGINS = [
-  'https://elite.geosyntra.org',
-  'https://eliteagrocloud.com',
   'https://www.eliteagrocloud.com',
+  'https://eliteagrocloud.com',
   'https://api.eliteagrocloud.com',
   'https://alkamelgis.github.io',
   'http://localhost:5174',

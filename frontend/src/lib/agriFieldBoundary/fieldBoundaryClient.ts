@@ -5,16 +5,12 @@
 
 import * as turf from '@turf/turf'
 import {
-  apiUrl,
-  isBackendUnreachableStatus,
-  isStaticDeploymentWithoutBackend,
-} from '../apiOrigin'
-import {
   regularizeFieldFootprints,
   type FootprintRegularizeMethod,
 } from './fieldFootprintRegularize'
+import { apiUrl } from '../apiOrigin'
 
-const fieldBoundaryApi = (path: string) => apiUrl(`/api/agri-field-boundary${path}`)
+const BASE = () => apiUrl('/api/agri-field-boundary')
 
 export type FieldImagerySource =
   | 'basemap'
@@ -185,13 +181,6 @@ export function formatFieldBoundaryUserError(
   opts?: { offline?: boolean; source?: FieldImagerySource; empty?: boolean },
 ): FieldBoundaryUserError {
   if (opts?.offline) {
-    if (isStaticDeploymentWithoutBackend()) {
-      return {
-        short: 'Field detection API not available on this site',
-        detail:
-          'eliteagrocloud.com is a static deploy. Detect Fields needs the AgroCloud API + agri-field-boundary service — use localhost (npm run dev) or set VITE_AGRI_API_SECRETS_URL to a live backend.',
-      }
-    }
     return {
       short: 'Service offline — start agri-field-boundary on :8092',
       detail: 'Start: uvicorn app:app --port 8092 in backend/services/agri-field-boundary',
@@ -310,13 +299,6 @@ export function formatFieldBoundaryUserError(
   }
 
   if (/offline|ECONNREFUSED|Could not reach/i.test(msg)) {
-    if (isStaticDeploymentWithoutBackend()) {
-      return {
-        short: 'Field detection API not available on this site',
-        detail:
-          'eliteagrocloud.com is a static deploy. Detect Fields needs the AgroCloud API + agri-field-boundary service — use localhost (npm run dev) or set VITE_AGRI_API_SECRETS_URL to a live backend.',
-      }
-    }
     return {
       short: 'Service offline — start agri-field-boundary on :8092',
       detail: detail || msg,
@@ -391,14 +373,8 @@ function bodyOf(req: FieldBoundaryRequest) {
 }
 
 export async function fetchFieldBoundaryHealth(signal?: AbortSignal): Promise<FieldBoundaryHealth> {
-  if (isStaticDeploymentWithoutBackend()) {
-    return { offline: true, status: 'offline' }
-  }
   try {
-    const res = await fetch(fieldBoundaryApi('/health'), { signal })
-    if (isBackendUnreachableStatus(res.status)) {
-      return { offline: true, status: 'offline' }
-    }
+    const res = await fetch(`${BASE()}/health`, { signal })
     const json = (await res.json().catch(() => null)) as FieldBoundaryHealth | null
     // Trust an explicit healthy payload even if a proxy briefly used a non-2xx status.
     // SPA/HTML bodies (wrong base path) must not count as online.
@@ -421,7 +397,7 @@ export async function fetchFowFieldBoundaries(
     const iso = String(req.adminIso || '')
       .trim()
       .toUpperCase()
-    res = await fetch(fieldBoundaryApi('/fow-aoi'), {
+    res = await fetch(`${BASE()}/fow-aoi`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -473,7 +449,7 @@ export async function startFieldBoundaryJob(
 ): Promise<{ jobId: string }> {
   let res: Response
   try {
-    res = await fetch(fieldBoundaryApi('/detect-job'), {
+    res = await fetch(`${BASE()}/detect-job`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(bodyOf(req)),
@@ -502,7 +478,7 @@ export async function fetchFieldBoundaryJob(
 }> {
   let res: Response
   try {
-    res = await fetch(fieldBoundaryApi(`/detect-job/${encodeURIComponent(jobId)}`), { signal })
+    res = await fetch(`${BASE()}/detect-job/${encodeURIComponent(jobId)}`, { signal })
   } catch (err) {
     if ((err as Error)?.name === 'AbortError') throw err
     throw new FieldBoundaryServiceError('Could not poll field-boundary job.', true)
@@ -552,7 +528,7 @@ export async function detectFieldBoundaries(
   onProgress?.(10, 'scanning')
   let res: Response
   try {
-    res = await fetch(fieldBoundaryApi('/detect'), {
+    res = await fetch(`${BASE()}/detect`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(bodyOf(req)),

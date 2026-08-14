@@ -53,8 +53,8 @@ jobs:
           # Empty when unset → token-free build (unchanged behavior). Restrict the token to www.eliteagrocloud.com in Mapbox.
           VITE_MAPBOX_TOKEN: ${{ vars.VITE_MAPBOX_TOKEN }}
           VITE_MAPBOX_ACCESS_TOKEN: ${{ vars.VITE_MAPBOX_TOKEN }}
-          # Hostinger Node API for eliteagrocloud.com Pages SPA (override via repo Variable if needed).
-          VITE_AGRI_API_SECRETS_URL: ${{ vars.VITE_AGRI_API_SECRETS_URL != '' && vars.VITE_AGRI_API_SECRETS_URL || 'https://api.eliteagrocloud.com/api/system/api-secrets' }}
+          # Hostinger Node that serves /api/* (GitHub Pages has no backend).
+          VITE_AGRI_API_SECRETS_URL: ${{ vars.VITE_AGRI_API_SECRETS_URL || 'https://api.eliteagrocloud.com' }}
           VITE_GOOGLE_MAPS_API_KEY: ''
           VITE_GOOGLE_MAPS_SERVER_API_KEY: ''
           VITE_ARCGIS_PORTAL_TOKEN: ''

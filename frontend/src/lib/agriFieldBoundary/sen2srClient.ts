@@ -3,9 +3,9 @@
  * via `/api/sentinel2/super-resolution` (Node proxy → agri-field-boundary :8092).
  */
 
-import { apiUrl, isStaticDeploymentWithoutBackend } from '../apiOrigin'
+import { apiUrl } from '../apiOrigin'
 
-const sen2srApi = (path = '') => apiUrl(`/api/sentinel2/super-resolution${path}`)
+const BASE = () => apiUrl('/api/sentinel2/super-resolution')
 
 export type Sen2srProductMode = 'raw' | 'sen2sr' | 'basemap' | 'drone'
 
@@ -64,15 +64,8 @@ async function readErrorPayload(res: Response): Promise<{ error?: string; detail
 }
 
 export async function fetchSen2srStatus(signal?: AbortSignal): Promise<Sen2srStatus> {
-  if (isStaticDeploymentWithoutBackend()) {
-    return {
-      available: false,
-      model: 'SEN2SRLite',
-      error: 'SEN2SR needs the AgroCloud API backend (not available on this static site).',
-    }
-  }
   try {
-    const res = await fetch(sen2srApi('/status'), { signal })
+    const res = await fetch(`${BASE()}/status`, { signal })
     const json = (await res.json().catch(() => null)) as Sen2srStatus | null
     if (!json || typeof json !== 'object') {
       return {
@@ -95,9 +88,7 @@ export async function fetchSen2srStatus(signal?: AbortSignal): Promise<Sen2srSta
     return {
       available: false,
       model: 'SEN2SRLite',
-      error: isStaticDeploymentWithoutBackend()
-        ? 'SEN2SR needs the AgroCloud API backend (not available on this static site).'
-        : 'Field-boundary service offline (port 8092).',
+      error: 'Field-boundary service offline (port 8092).',
     }
   }
 }
@@ -138,9 +129,9 @@ export async function runSen2srSuperResolution(opts: RunSen2srOptions): Promise<
       if (opts.bands?.length) form.append('bands', opts.bands.join(','))
       if (opts.outputPath) form.append('output_path', String(opts.outputPath))
       form.append('display_1m', opts.display1m ? 'true' : 'false')
-      res = await fetch(sen2srApi(), { method: 'POST', body: form, signal: opts.signal })
+      res = await fetch(BASE(), { method: 'POST', body: form, signal: opts.signal })
     } else {
-      res = await fetch(sen2srApi(), {
+      res = await fetch(BASE(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

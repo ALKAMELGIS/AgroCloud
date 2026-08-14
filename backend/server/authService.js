@@ -318,7 +318,7 @@ export function registerAuthRoutes(app, opts) {
   const appName = String(opts.appName || 'Agro Cloud').trim()
   const canonicalBaseUrl =
     String(opts.canonicalBaseUrl || process.env.VITE_APP_CANONICAL_URL || process.env.APP_ORIGIN || '').trim() ||
-    'https://elite.geosyntra.org'
+    'https://www.eliteagrocloud.com'
   const allowedSignupRoles = parseSelfSignupRoles(opts.selfSignupRoles || process.env.AUTH_SELF_SIGNUP_ROLES)
   const adminNotifyEmail = normalizeEmail(
     opts.adminNotifyEmail || process.env.AUTH_ADMIN_NOTIFY_EMAIL || DEFAULT_ADMIN_NOTIFY_EMAIL,
