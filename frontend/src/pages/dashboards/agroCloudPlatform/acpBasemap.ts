@@ -5,7 +5,7 @@ import {
   tileUrlForMapboxGl,
   type LeafletTileSpec,
 } from '../../satellite/basemapCatalog'
-import { rasterTilesSourceMaxNativeZoom } from '../../lib/rasterTileZoom'
+import { rasterTilesSourceMaxNativeZoom } from '../../../lib/rasterTileZoom'
 
 export type AcpBasemapRasterLayer = {
   sourceId: string
