@@ -32,7 +32,6 @@ describe('sentinelHubWmsAoiClip native layers', () => {
     const decoded = atob(evalscriptB64!)
     expect(decoded).toContain('index(samples.B08, samples.B04)')
     expect(decoded).toContain('samples.dataMask')
-    expect(decoded).toContain('scl == 3')
   })
 
   it('keeps preset Highlight Optimized Natural Color on server evalscript (GEOMETRY only)', () => {
@@ -92,5 +91,13 @@ describe('sentinelHubWmsAoiClip native layers', () => {
         aoiBoundsLngLat: [55.1, 25.1, 55.2, 25.2],
       }),
     ).toBe(true)
+  })
+
+  it('packs identical AOI GEOMETRY for NDVI and NDWI', () => {
+    const ndvi = buildSentinelHubWmsDisplayChunks(drawn, 'NDVI')
+    const ndwi = buildSentinelHubWmsDisplayChunks(drawn, 'NDWI')
+    expect(ndvi.map(part => part.geometryWkt3857)).toEqual(ndwi.map(part => part.geometryWkt3857))
+    expect(ndvi.length).toBeGreaterThan(0)
+    expect(ndvi[0]?.evalscriptB64).not.toBe(ndwi[0]?.evalscriptB64)
   })
 })

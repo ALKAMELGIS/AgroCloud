@@ -14,10 +14,10 @@ export const SI_GLOBE_COCKPIT_MAX_PITCH = 12
 
 export const SI_GLOBE_COCKPIT_FOG = {
   range: [0.4, 9] as [number, number],
-  color: '#050816',
+  color: '#000000',
   'horizon-blend': 0.16,
-  'high-color': '#1d4ed8',
-  'space-color': '#020617',
+  'high-color': '#000000',
+  'space-color': '#000000',
   'star-intensity': 0.55,
 }
 
@@ -39,11 +39,16 @@ export function isSiGlobeCockpit2dActive(
 }
 
 export function applySiGlobeCockpitFog(
-  map: { setFog?: (fog: typeof SI_GLOBE_COCKPIT_FOG) => void } | null | undefined,
+  map: {
+    setFog?: (fog: typeof SI_GLOBE_COCKPIT_FOG) => void
+    getCanvas?: () => HTMLCanvasElement
+  } | null | undefined,
 ): void {
   if (!map?.setFog) return
   try {
     map.setFog(SI_GLOBE_COCKPIT_FOG)
+    const canvas = map.getCanvas?.()
+    if (canvas) canvas.style.removeProperty('background')
   } catch {
     /* ignore */
   }

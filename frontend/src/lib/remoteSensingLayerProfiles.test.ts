@@ -89,7 +89,7 @@ describe('remoteSensingLayerProfiles', () => {
     expect(flat.some(o => o.id === 'ISS')).toBe(false)
     expect(flat.some(o => o.id === 'LULC')).toBe(false)
     expect(flat.some(o => o.id === '1_TRUE_COLOR' || o.id === 'S1_VV')).toBe(true)
-    expect(flat.some(o => o.id === 'PRECIP' || o.id.toUpperCase().includes('PRECIP'))).toBe(true)
+    expect(flat.some(o => o.id === 'PRECIP' || o.id.toUpperCase().includes('PRECIP'))).toBe(false)
   })
 
   it('limits Maxar / VHR to visual + basic optical core', () => {

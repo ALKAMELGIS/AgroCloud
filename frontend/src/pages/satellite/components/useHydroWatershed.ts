@@ -13,7 +13,7 @@ export type HydroStepState = {
   status: 'idle' | 'running' | 'done' | 'error'
   result: HydroStepResult | null
   error: string | null
-  /** Whether the produced layer is shown on the map. */
+  /** Whether the produced layer is shown on the map. Off after Run until the user toggles it. */
   visible: boolean
   /** User-controlled layer opacity (0..1) applied on top of the base symbology. */
   opacity: number
@@ -150,7 +150,7 @@ export function useHydroWatershed({ geometry, enabled, sensitivity, contourInter
         const result = HYDRO_COMPUTE[id](ctx)
         setSteps(prev => ({
           ...prev,
-          [id]: { status: 'done', result, error: null, visible: true, opacity: prev[id]?.opacity ?? 1 },
+          [id]: { status: 'done', result, error: null, visible: false, opacity: prev[id]?.opacity ?? 1 },
         }))
       } catch (err) {
         setSteps(prev => ({

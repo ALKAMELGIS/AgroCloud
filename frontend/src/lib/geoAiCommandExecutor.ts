@@ -25,6 +25,8 @@ export type GeoAiMapCommand =
   | { op: 'openToolboxPanel'; panel: string }
   /** Show a remote-sensing index (NDVI/…) on the map for the current AOI. */
   | { op: 'runRsIndex'; index: string }
+  /** Detect agricultural field boundaries for the current AOI (FTW live / FoW / …). */
+  | { op: 'detectFieldBoundaries'; source?: string; year?: number }
   /** Run a GIS geoprocessing op (buffer, intersect, clip, …) via host handler. */
   | { op: 'gisOp'; tool: string; args: Record<string, unknown> }
 
@@ -191,6 +193,17 @@ function coerceCommand(raw: unknown): GeoAiMapCommand | null {
         'NDVI'
       return { op: 'runRsIndex', index }
     }
+    case 'detectFieldBoundaries':
+    case 'detectFields':
+    case 'fieldBoundaries': {
+      const source = String(o.source ?? o.engine ?? '').trim()
+      const year = Number(o.year)
+      return {
+        op: 'detectFieldBoundaries',
+        ...(source ? { source } : {}),
+        ...(Number.isFinite(year) && year >= 2000 && year <= 2100 ? { year: Math.round(year) } : {}),
+      }
+    }
     case 'gisOp':
     case 'gis':
     case 'gisBuffer':
@@ -286,6 +299,8 @@ export type GeoAiMapCommandHandlers = {
   openToolboxPanel?: (panel: string) => string | void
   /** Show NDVI/NDWI/… WMS on the map for the current AOI. */
   runRsIndex?: (index: string) => string | void
+  /** Start field-boundary detection for the current AOI. */
+  detectFieldBoundaries?: (source: string, year?: number) => string | void
   /** Sync or async GIS geoprocess; may return a Promise (executor awaits). */
   gisOp?: (tool: string, args: Record<string, unknown>) => string | void | Promise<string | void>
 }
@@ -329,6 +344,9 @@ export function executeGeoAiMapCommands(
           break
         case 'runRsIndex':
           message = handlers.runRsIndex?.(command.index)
+          break
+        case 'detectFieldBoundaries':
+          message = handlers.detectFieldBoundaries?.(command.source || 'ftw-live', command.year)
           break
         case 'gisOp':
           message = handlers.gisOp?.(command.tool, command.args)

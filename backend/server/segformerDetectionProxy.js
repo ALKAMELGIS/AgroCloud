@@ -754,8 +754,15 @@ export function registerSegFormerDetectionRoutes(app, { jsonBodyLimit = '48mb' }
     try {
       const upstream = await fetch(HEALTH_URL, { signal: AbortSignal.timeout(5_000) })
       const json = await upstream.json().catch(() => ({}))
-      return res.status(200).json({ ...json, builtin_fallback: true })
+      return res.status(200).json({
+        ...json,
+        builtin_fallback: true,
+        // Preserve training/onnx from Python service when present.
+        training: Boolean(json?.training),
+        onnx: Boolean(json?.onnx),
+      })
     } catch {
+      // Detect works via Node spectral fallback; fine-tune needs :8095.
       return res.status(200).json({
         status: 'ok',
         engine: 'spectral-builtin',
@@ -763,6 +770,10 @@ export function registerSegFormerDetectionRoutes(app, { jsonBodyLimit = '48mb' }
         device: 'cpu',
         model_ready: true,
         builtin_fallback: true,
+        training: false,
+        onnx: false,
+        training_error:
+          'SegFormer service offline on :8095 — start backend/services/segformer-detection for Training & AI.',
       })
     }
   })

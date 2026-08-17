@@ -32,15 +32,30 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
 
   static getDerivedStateFromError(error: unknown) {
     const message = error instanceof Error ? error.message : String(error ?? '')
-    if (AppErrorBoundary.isBenignRuntimeError(message)) return null
+    const stack = error instanceof Error ? error.stack : undefined
+    if (AppErrorBoundary.isBenignRuntimeError(message, stack)) return null
     return { err: { error, kind: 'render' as const } }
   }
 
   /** Benign browser noise — must not surface the full-page error screen. */
-  private static isBenignRuntimeError(message: string): boolean {
+  private static isBenignRuntimeError(message: string, stack?: string): boolean {
     if (!message) return false
     if (message.includes('Style is not done loading')) return true
     if (message.includes('ResizeObserver loop')) return true
+    // Mapbox GL terrain DEM race: `_updateTerrain` reads map state before DEM is ready.
+    // Already absorbed in SatelliteIntelligence map onError; also ignore window.error bubble.
+    if (message.includes("reading 'get'")) {
+      const stackText = stack || ''
+      if (
+        stackText.includes('updateTerrain') ||
+        stackText.includes('_updateTerrain') ||
+        stackText.includes('mapbox-gl') ||
+        stackText.includes('@mapbox') ||
+        /Cannot read properties of undefined \(reading 'get'\)/i.test(message)
+      ) {
+        return true
+      }
+    }
     return false
   }
 
@@ -126,7 +141,8 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
     this.onUnhandledRejection = (e) => {
       const reason = (e as any).reason
       const msg = reason instanceof Error ? reason.message : typeof reason === 'string' ? reason : ''
-      if (AppErrorBoundary.isBenignRuntimeError(msg)) return
+      const stack = reason instanceof Error ? reason.stack : undefined
+      if (AppErrorBoundary.isBenignRuntimeError(msg, stack)) return
       if (reason instanceof DOMException && reason.name === 'AbortError') return
       if (reason instanceof Error && reason.name === 'AbortError') return
       if (AppErrorBoundary.recoverFromStaleChunk(reason)) return
@@ -141,7 +157,11 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
     this.onErrorEvent = (e) => {
       const err = e?.error
       const msg = err instanceof Error ? err.message : typeof err === 'string' ? err : String(e?.message ?? '')
-      if (AppErrorBoundary.isBenignRuntimeError(msg)) return
+      const stack =
+        (err instanceof Error ? err.stack : undefined) ||
+        (typeof e?.error?.stack === 'string' ? e.error.stack : undefined) ||
+        (typeof e?.filename === 'string' ? e.filename : undefined)
+      if (AppErrorBoundary.isBenignRuntimeError(msg, stack)) return
       if (AppErrorBoundary.recoverFromStaleChunk(err ?? e?.message)) return
       if (AppErrorBoundary.recoverFromHooksMismatch(err ?? e?.message)) return
       const details = typeof e?.error?.stack === 'string' ? e.error.stack : undefined

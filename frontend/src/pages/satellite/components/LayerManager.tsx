@@ -14,6 +14,21 @@ export type SymbologyClassMethod = 'jenks' | 'quantile' | 'equal_interval';
 
 export type SymbologyColorRamp = 'viridis' | 'blues' | 'greens' | 'plasma' | 'magma' | 'turbo';
 
+/** Per unique-value class override (ArcGIS Pro Classes tab). */
+export type SymbologyClassOverride = {
+  color?: string;
+  label?: string;
+  visible?: boolean;
+};
+
+/** Per graduated-class override. */
+export type SymbologyBreakOverride = {
+  min: number;
+  max: number;
+  color?: string;
+  label?: string;
+};
+
 export interface SymbologyConfig {
   useArcGisOnline?: boolean;
   style?: SymbologyStyle;
@@ -22,6 +37,10 @@ export interface SymbologyConfig {
   method?: SymbologyClassMethod;
   colorRamp?: SymbologyColorRamp;
   threshold?: number;
+  /** Unique-value class colors / labels / visibility keyed by raw attribute value. */
+  classOverrides?: Record<string, SymbologyClassOverride>;
+  /** Graduated class colors / labels (aligned to computed breaks). */
+  breakOverrides?: SymbologyBreakOverride[];
 }
 
 export interface LayerData {

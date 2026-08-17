@@ -1,0 +1,22 @@
+[Unit]
+Description=AgroCloud agri-field-boundary (FTW / FoW / SEN2SR / Mask R-CNN)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/AgroCloud/backend/services/agri-field-boundary
+Environment=PORT=8092
+Environment=HOST=0.0.0.0
+Environment=FTW_INFER_ENABLED=1
+Environment=FTW_PREFETCH_MODEL=1
+ExecStart=/opt/AgroCloud/backend/services/agri-field-boundary/.venv312/bin/uvicorn app:app --host 0.0.0.0 --port 8092
+Restart=always
+RestartSec=3
+TimeoutStartSec=900
+KillSignal=SIGINT
+
+[Install]
+WantedBy=multi-user.target

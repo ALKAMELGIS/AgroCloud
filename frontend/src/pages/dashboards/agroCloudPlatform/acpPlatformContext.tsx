@@ -129,8 +129,10 @@ export type AcpPlatformContextValue = {
   setMapViewMode3d: (on: boolean) => void
   toggleMapViewMode3d: () => void
   mapFocusGeoJsonRef: MutableRefObject<((geojson: GeoJSON.FeatureCollection) => void) | null>
-  /** Fly map to lng/lat (search, geocode). Optional zoom defaults to field-locate minimum. */
-  mapFlyToRef: MutableRefObject<((lng: number, lat: number, zoom?: number) => void) | null>
+  /** Fly map to lng/lat (search, geocode). Optional zoom; place hits pass label for the popup. */
+  mapFlyToRef: MutableRefObject<
+    ((lng: number, lat: number, zoom?: number, info?: { label?: string; meta?: string }) => void) | null
+  >
   countryFilter: string
   setCountryFilter: (c: string) => void
   /** Bumped when user selects a portfolio country — triggers smooth map fly-to only. */
@@ -317,7 +319,9 @@ export function AcpPlatformProvider({ children }: { children: ReactNode }) {
   const [mapViewMode3d, setMapViewMode3d] = useState(false)
   const toggleMapViewMode3d = useCallback(() => setMapViewMode3d(prev => !prev), [])
   const mapFocusGeoJsonRef = useRef<((geojson: GeoJSON.FeatureCollection) => void) | null>(null)
-  const mapFlyToRef = useRef<((lng: number, lat: number, zoom?: number) => void) | null>(null)
+  const mapFlyToRef = useRef<
+    ((lng: number, lat: number, zoom?: number, info?: { label?: string; meta?: string }) => void) | null
+  >(null)
 
   const setConfig = useCallback((next: AcpPlatformConfig | ((prev: AcpPlatformConfig) => AcpPlatformConfig)) => {
     setConfigState(prev => {

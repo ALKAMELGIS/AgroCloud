@@ -333,7 +333,18 @@ export function usesSentinelHubWmsClientEvalscript(
 }
 
 /** Core interpretation layers always rendered via client EVALSCRIPT on a band proxy. */
-const CORE_INTERPRETATION_WMS_IDS = new Set(['NDVI', 'NDMI', 'NDWI', 'SAVI', 'ET', 'LST', 'DATAMASK'])
+const CORE_INTERPRETATION_WMS_IDS = new Set([
+  'NDVI',
+  'NDMI',
+  'NDWI',
+  'MNDWI',
+  'AWEI',
+  'NBR',
+  'SAVI',
+  'ET',
+  'LST',
+  'DATAMASK',
+])
 
 export function usesSentinelHubWmsCustomEvalscript(layerName: string): boolean {
   const upper = String(layerName || '').trim().toUpperCase()
@@ -360,6 +371,9 @@ export function getBootstrapSentinelWmsLayers(): SentinelHubWmsLayerInfo[] {
     { name: 'NDVI', title: 'NDVI (legacy alias)' },
     { name: 'NDMI', title: 'Normalized Difference Moisture Index' },
     { name: 'NDWI', title: 'Normalized Difference Water Index' },
+    { name: 'MNDWI', title: 'Modified Normalized Difference Water Index' },
+    { name: 'AWEI', title: 'Automated Water Extraction Index' },
+    { name: 'NBR', title: 'Normalized Burn Ratio' },
     { name: 'SAVI', title: 'Soil-Adjusted Vegetation Index' },
     { name: 'ET', title: 'Evapotranspiration' },
     { name: 'LST', title: 'Land Surface Temperature' },

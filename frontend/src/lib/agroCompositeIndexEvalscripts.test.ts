@@ -6,7 +6,9 @@ describe('agroCompositeIndexEvalscripts', () => {
   it('builds static composite evalscript from core bands', () => {
     const script = buildAgroCompositeLayerEvalscript('VHS')
     expect(script).toContain('(ndvi + savi) / 2')
-    expect(script).toContain('B8A')
+    expect(script).toContain('B08')
+    expect(script).toContain('B11')
+    expect(script).not.toContain('B8A')
     expect(script).toContain('CLASS_RGB')
     expect(script).toContain('classifyVal')
   })
@@ -72,6 +74,8 @@ describe('agroCompositeIndexEvalscripts', () => {
     expect(script).toContain('0.40 * ndmi + 0.30 * ndwi + 0.20 * ndvi + 0.10 * savi')
     expect(script).toContain('CLASS_RGB')
     expect(script).toContain('classifyVal')
+    expect(script).toContain('B03')
+    expect(script).not.toContain('B8A')
     expect(script).not.toContain('Mosaicking.ORBIT')
   })
 

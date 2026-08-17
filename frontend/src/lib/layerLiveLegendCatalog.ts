@@ -62,7 +62,9 @@ import {
 import {
   SENTINEL_EVI_RAMP,
   SENTINEL_GNDVI_RAMP,
+  SENTINEL_AWEI_RAMP,
   SENTINEL_MNDWI_RAMP,
+  SENTINEL_NBR_RAMP,
   SENTINEL_NDMI_10_CLASS_BREAKS,
   SENTINEL_NDMI_10_CLASS_COLORS,
   SENTINEL_NDMI_MOISTURE_RAMP,
@@ -540,6 +542,18 @@ const LEGEND_BY_PROFILE: Record<string, () => LayerLiveLegendSpec> = {
       low: 'Dry land',
       mid: 'Wet soil',
       high: 'Open water',
+    }),
+  awei: () =>
+    buildIndexRampLegend('awei', 'AWEI', 'Automated water extraction index', SENTINEL_AWEI_RAMP, 10, {
+      low: 'Dry land / built-up',
+      mid: 'Wet soil',
+      high: 'Open water',
+    }),
+  nbr: () =>
+    buildIndexRampLegend('nbr', 'NBR', 'Normalized burn ratio', SENTINEL_NBR_RAMP, 10, {
+      low: 'Severe burn',
+      mid: 'Moderate severity',
+      high: 'Unburned vegetation',
     }),
   ndsi: () =>
     buildIndexRampLegend('ndsi', 'NDSI', 'Snow / ice index', SENTINEL_NDSI_RAMP, 10, {

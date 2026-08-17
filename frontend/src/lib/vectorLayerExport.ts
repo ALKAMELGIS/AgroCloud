@@ -10,7 +10,7 @@ const WGS84_PRJ =
   'GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],' +
   'PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]'
 
-export type VectorExportFormat = 'kmz' | 'shp' | 'xlsx'
+export type VectorExportFormat = 'kmz' | 'kml' | 'shp' | 'xlsx' | 'geojson' | 'csv'
 
 function safeBaseName(name: string): string {
   const cleaned = name
@@ -122,12 +122,7 @@ function propsDescription(props: Record<string, unknown> | null | undefined): st
     .join('<br/>')
 }
 
-/** Build & download a KMZ (zipped KML) for any geometry types. */
-export async function downloadVectorKmz(
-  input: FeatureCollection | unknown,
-  fileName = 'layer.kmz',
-  documentName = 'AgroCloud Export',
-): Promise<void> {
+function buildKmlDocument(input: FeatureCollection | unknown, documentName: string): string {
   const fc = asFeatureCollection(input)
   if (!fc.features.length) throw new Error('No features to export.')
   const placemarks = fc.features
@@ -144,15 +139,90 @@ export async function downloadVectorKmz(
     })
     .filter(Boolean)
     .join('')
-  if (!placemarks) throw new Error('No drawable geometries for KMZ.')
-  const kml =
+  if (!placemarks) throw new Error('No drawable geometries for KML.')
+  return (
     `<?xml version="1.0" encoding="UTF-8"?>` +
     `<kml xmlns="http://www.opengis.net/kml/2.2"><Document>` +
     `<name>${escapeXml(documentName)}</name>${placemarks}</Document></kml>`
+  )
+}
+
+/** Build & download a plain KML for any geometry types. */
+export function downloadVectorKml(
+  input: FeatureCollection | unknown,
+  fileName = 'layer.kml',
+  documentName = 'AgroCloud Export',
+): void {
+  const kml = buildKmlDocument(input, documentName)
+  downloadBlob(
+    new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' }),
+    fileName.endsWith('.kml') ? fileName : `${safeBaseName(fileName)}.kml`,
+  )
+}
+
+/** Build & download a KMZ (zipped KML) for any geometry types. */
+export async function downloadVectorKmz(
+  input: FeatureCollection | unknown,
+  fileName = 'layer.kmz',
+  documentName = 'AgroCloud Export',
+): Promise<void> {
+  const kml = buildKmlDocument(input, documentName)
   const zip = new JSZip()
   zip.file('doc.kml', kml)
   const blob = await zip.generateAsync({ type: 'blob' })
   downloadBlob(blob, fileName.endsWith('.kmz') ? fileName : `${safeBaseName(fileName)}.kmz`)
+}
+
+function csvEscape(value: unknown): string {
+  const s = String(value ?? '')
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`
+  return s
+}
+
+/** Attribute table CSV (+ lon/lat centroid columns). */
+export function downloadVectorCsv(
+  input: FeatureCollection | unknown,
+  fileName = 'layer.csv',
+): void {
+  const fc = asFeatureCollection(input)
+  if (!fc.features.length) throw new Error('No features to export.')
+
+  const keySet = new Set<string>()
+  for (const f of fc.features) {
+    for (const k of Object.keys(f.properties ?? {})) keySet.add(k)
+  }
+  const keys = [...keySet].slice(0, 80)
+  const header = ['FID', 'geometry', 'lon', 'lat', ...keys].map(csvEscape).join(',')
+  const lines = fc.features.map((f, i) => {
+    const props = (f.properties ?? {}) as Record<string, unknown>
+    const c = featureCentroid(f.geometry)
+    const cells = [
+      i + 1,
+      f.geometry?.type ?? '',
+      c ? Number(c[0].toFixed(6)) : '',
+      c ? Number(c[1].toFixed(6)) : '',
+      ...keys.map(k => props[k] ?? ''),
+    ]
+    return cells.map(csvEscape).join(',')
+  })
+  downloadBlob(
+    new Blob([`\uFEFF${[header, ...lines].join('\n')}`], { type: 'text/csv;charset=utf-8' }),
+    fileName.endsWith('.csv') ? fileName : `${safeBaseName(fileName)}.csv`,
+  )
+}
+
+/** Download GeoJSON FeatureCollection. */
+export function downloadVectorGeoJson(
+  input: FeatureCollection | unknown,
+  fileName = 'layer.geojson',
+): void {
+  const fc = asFeatureCollection(input)
+  if (!fc.features.length) throw new Error('No features to export.')
+  const base = safeBaseName(fileName)
+  downloadBlob(
+    new Blob([JSON.stringify(fc, null, 2)], { type: 'application/geo+json' }),
+    fileName.endsWith('.geojson') || fileName.endsWith('.json') ? fileName : `${base}.geojson`,
+  )
 }
 
 type DbfField =
@@ -600,7 +670,10 @@ export async function exportVectorLayer(
 ): Promise<void> {
   const base = safeBaseName(baseName)
   if (format === 'kmz') await downloadVectorKmz(input, `${base}.kmz`, base)
+  else if (format === 'kml') downloadVectorKml(input, `${base}.kml`, base)
   else if (format === 'shp') await downloadVectorShapefile(input, base)
+  else if (format === 'geojson') downloadVectorGeoJson(input, `${base}.geojson`)
+  else if (format === 'csv') downloadVectorCsv(input, `${base}.csv`)
   else downloadVectorXlsx(input, `${base}.xlsx`, base)
 }
 

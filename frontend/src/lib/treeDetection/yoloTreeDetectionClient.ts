@@ -1,16 +1,13 @@
 /**
- * YOLO tree-detection client — talks to the backend tree-detection proxy
- * (`/api/tree-detection/*`), which forwards the AOI imagery to a hosted YOLO
- * tree-crown model and returns predicted boxes in image-pixel coordinates.
- *
- * The reference model is the single-class ("tree") YOLOv5 detector from
- * https://anapgit.scanlab.gr/yolo-trees/ai-tree-detection (best.pt / best.onnx).
- * A ready-to-run FastAPI service for it ships in
- * backend/services/tree-detection/. All detection comes from this model — there
- * is no in-browser fallback detector.
+ * Tree Detection client — `/api/tree-detection/*` → Ultralytics YOLO Detection
+ * (single class `tree`). GIS layer uses box centres as Points.
  */
 
-const BASE = '/api/tree-detection'
+import { apiUrl } from '../apiOrigin'
+
+const BASE = () => apiUrl('/api/tree-detection')
+
+export type TreeDetectionModelId = 'yolo' | 'deepforest'
 
 export type YoloTreeBox = {
   /** Image-pixel bounds (origin top-left of the posted mosaic). */
@@ -23,17 +20,33 @@ export type YoloTreeBox = {
   label: string
 }
 
+export type YoloTreeInstance = {
+  polygon: Array<[number, number] | number[]>
+  score: number
+  label: string
+  area_px?: number
+}
+
 export type TreeDetectionServiceConfig = {
   configured: boolean
+  online?: boolean
   model: string
+  engine?: string | null
+  enginesAvailable?: string[]
+  modelPathConfigured?: boolean
   imgSize?: number
   iou?: number
 }
 
-/** Whether a YOLO endpoint is configured on the backend. */
+export type TreePredictResult = {
+  boxes: YoloTreeBox[]
+  engine: string | null
+}
+
+/** Whether a tree-detection endpoint is configured and reachable. */
 export async function fetchTreeDetectionConfig(signal?: AbortSignal): Promise<TreeDetectionServiceConfig> {
   try {
-    const res = await fetch(`${BASE}/config`, { signal })
+    const res = await fetch(`${BASE()}/config`, { signal })
     if (!res.ok) return { configured: false, model: 'yolo' }
     return (await res.json()) as TreeDetectionServiceConfig
   } catch {
@@ -50,7 +63,7 @@ function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   })
 }
 
-/** Raised when no YOLO endpoint is configured / reachable. */
+/** Raised when the tree model service is offline / misconfigured. */
 export class TreeDetectionServiceError extends Error {
   readonly offline: boolean
   constructor(message: string, offline = false) {
@@ -61,26 +74,30 @@ export class TreeDetectionServiceError extends Error {
 }
 
 export type PredictMosaicOptions = {
-  /** Confidence threshold passed to YOLO (0..1). */
+  /** Confidence threshold (0..1). */
   score?: number
+  /** Preferred engine (`yolo` detect). */
+  engine?: TreeDetectionModelId | string
+  /** Ground sample distance of the mosaic (m/px) for the Node builtin fallback. */
+  metersPerPixel?: number
   signal?: AbortSignal
 }
 
-/**
- * Run the YOLO model on ONE prepared imagery mosaic (a chunk of a tiled AOI
- * scan) and return the predicted tree boxes in that mosaic's pixel space.
- */
-export async function predictTreeBoxes(
+export async function predictTreeDetection(
   canvas: HTMLCanvasElement,
   options: PredictMosaicOptions = {},
-): Promise<YoloTreeBox[]> {
+): Promise<TreePredictResult> {
   const blob = await canvasToPngBlob(canvas)
   const params = new URLSearchParams()
   if (options.score != null) params.set('score', String(options.score))
+  params.set('engine', String(options.engine || 'yolo'))
+  if (options.metersPerPixel != null && Number.isFinite(options.metersPerPixel)) {
+    params.set('mpp', String(options.metersPerPixel))
+  }
   const qs = params.toString()
   let res: Response
   try {
-    res = await fetch(`${BASE}/predict${qs ? `?${qs}` : ''}`, {
+    res = await fetch(`${BASE()}/predict${qs ? `?${qs}` : ''}`, {
       method: 'POST',
       headers: { 'Content-Type': 'image/png' },
       body: blob,
@@ -89,24 +106,39 @@ export async function predictTreeBoxes(
   } catch (err) {
     if ((err as Error)?.name === 'AbortError') throw err
     throw new TreeDetectionServiceError(
-      'Could not reach the YOLO model service. Check your connection or the model endpoint.',
+      'Could not reach tree detection. Retry — canopy detect runs on the API when YOLO is offline.',
       true,
     )
   }
-  const json = (await res.json().catch(() => ({}))) as { boxes?: YoloTreeBox[]; error?: string }
-  // 503 (unconfigured) and 502/504 (proxy could not reach / timed out talking to
-  // the model service) all mean the hosted model is momentarily unavailable.
-  // Flag these as "offline" so the caller can degrade gracefully to the on-device
-  // fallback detector instead of surfacing a blocking error.
+  const json = (await res.json().catch(() => ({}))) as {
+    boxes?: YoloTreeBox[]
+    engine?: string
+    error?: string
+  }
   if (res.status === 503 || res.status === 502 || res.status === 504) {
     throw new TreeDetectionServiceError(
       json?.error ||
-          'Tree-detection model service is offline — run backend/services/tree-detection to enable the hosted model.',
+        'Tree detection is temporarily unavailable. Retry in a moment.',
       true,
     )
   }
   if (!res.ok) {
     throw new TreeDetectionServiceError(json?.error || `Tree detection failed (HTTP ${res.status}).`)
   }
-  return Array.isArray(json.boxes) ? json.boxes : []
+  return {
+    boxes: Array.isArray(json.boxes) ? json.boxes : [],
+    engine: typeof json.engine === 'string' ? json.engine : 'yolo',
+  }
+}
+
+/**
+ * Run Ultralytics YOLO Detection on one AOI mosaic and return tree boxes
+ * in that mosaic's pixel space.
+ */
+export async function predictTreeBoxes(
+  canvas: HTMLCanvasElement,
+  options: PredictMosaicOptions = {},
+): Promise<YoloTreeBox[]> {
+  const { boxes } = await predictTreeDetection(canvas, options)
+  return boxes
 }

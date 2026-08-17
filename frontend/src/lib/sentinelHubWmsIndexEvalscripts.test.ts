@@ -66,6 +66,20 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
     expect(script).toContain('ColorRampVisualizer')
   })
 
+  it('AWEI evalscript uses multi-band water extraction formula', () => {
+    const script = buildSentinelIndexColorRampEvalscript('awei')
+    expect(script).toContain('4.0 * (samples.B03 - samples.B11)')
+    expect(script).toContain('0.25 * samples.B08 + 2.75 * samples.B12')
+    expect(script).toContain('ColorRampVisualizer')
+    expect(script).toContain('["B03","B08","B11","B12","dataMask"]')
+  })
+
+  it('NBR evalscript uses B08/B12 burn ratio', () => {
+    const script = buildSentinelIndexColorRampEvalscript('nbr')
+    expect(script).toContain('index(samples.B08, samples.B12)')
+    expect(script).toContain('ColorRampVisualizer')
+  })
+
   it('SAVI and NDMI profiles are inferred from layer names', () => {
     expect(inferWmsEvalProfile('SAVI')).toBe('savi')
     expect(inferWmsEvalProfile('ET')).toBe('et')
@@ -76,6 +90,8 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
     // NDSI is registered as an agro composite (soil/salinity family).
     expect(inferWmsEvalProfile('NDSI')).toBe('agro_composite')
     expect(inferWmsEvalProfile('MNDWI')).toBe('mndwi')
+    expect(inferWmsEvalProfile('AWEI')).toBe('awei')
+    expect(inferWmsEvalProfile('NBR')).toBe('nbr')
   })
 
   it('buildSentinelHubWmsAoiClip embeds index ramp evalscript for SAVI layer', () => {

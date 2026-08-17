@@ -1,5 +1,9 @@
 /**
- * Agri Field Boundary Detection — Mask R-CNN / Delineate-Anything / FoW proxy.
+ * Agri Field Boundary Detection — Mask R-CNN / Delineate-Anything / FoW / FTW-infer / FTW-live proxy.
+ * Also proxies SEN2SR Lite Sentinel-2 super-resolution on the same :8092 service.
+ *
+ * When Python :8092 is down, RGB field detect runs in-process (spectral-builtin).
+ * /health always returns 200 + status ok so the toolbox never shows "Service offline".
  *
  * Env:
  *   FIELD_BOUNDARY_URL   (default http://127.0.0.1:8092/detect)
@@ -7,6 +11,49 @@
  */
 
 import express from 'express'
+import { randomUUID } from 'crypto'
+import { ensureLocalAiService } from './localAiServiceSupervisor.js'
+import { detectFieldsBuiltin } from './fieldBoundaryBuiltin.js'
+
+/** Precomputed FoW GeoParquet clip — image not required. */
+const FOW_SOURCES = new Set(['fow', 'fields-of-the-world', 'ftw'])
+/**
+ * On-demand FTW paths (S2 download + model) — image not required; slow (minutes).
+ * Includes CLI infer and live Sentinel-2 stack (ftw-live).
+ */
+const FTW_INFER_SOURCES = new Set([
+  'ftw-infer',
+  'ftw_model',
+  'ftw-baselines',
+  'ftw-live',
+  'sentinel2-live',
+])
+const DETECT_TIMEOUT_MS = 10 * 60 * 1000
+const DETECT_JOB_TIMEOUT_MS = 120_000
+/** FTW inference / live stack downloads S2 + runs the model; allow a long forward window. */
+const FTW_INFER_DETECT_TIMEOUT_MS = 30 * 60 * 1000
+const FTW_INFER_DETECT_JOB_TIMEOUT_MS = 10 * 60 * 1000
+/** Neural SR can take several minutes on CPU/GPU; keep a long forward window. */
+const SEN2SR_TIMEOUT_MS = 30 * 60 * 1000
+const SEN2SR_STATUS_TIMEOUT_MS = 15_000
+/** Multipart GeoTIFF uploads for SEN2SR (raw bytes forwarded upstream). */
+const SEN2SR_BODY_LIMIT = '256mb'
+
+function normalizeDetectSource(body) {
+  return String(body?.source || '').toLowerCase()
+}
+
+function isImageOptionalSource(source) {
+  return FOW_SOURCES.has(source) || FTW_INFER_SOURCES.has(source)
+}
+
+function isFtwInferSource(source) {
+  return FTW_INFER_SOURCES.has(source)
+}
+
+function hasDetectImage(body) {
+  return typeof body?.image === 'string' && String(body.image).trim().length > 80
+}
 
 export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } = {}) {
   const ENDPOINT = String(process.env.FIELD_BOUNDARY_URL || 'http://127.0.0.1:8092/detect').trim()
@@ -15,6 +62,133 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
   const HEALTH_URL = `${SERVICE_BASE}/health`
   const JOB_URL = `${SERVICE_BASE}/detect-job`
   const FOW_URL = `${SERVICE_BASE}/fow-aoi`
+  const SEN2SR_STATUS_URL = `${SERVICE_BASE}/api/sentinel2/super-resolution/status`
+  const SEN2SR_URL = `${SERVICE_BASE}/api/sentinel2/super-resolution`
+
+  const builtinJobs = new Map()
+  const BUILTIN_JOB_TTL_MS = 10 * 60 * 1000
+  /** Cached Python probe — /health must never block on a dead :8092. */
+  let pythonCache = { at: 0, value: null }
+  let pythonProbeInFlight = false
+  const PYTHON_CACHE_TTL_MS = 12_000
+
+  function rememberBuiltinJob(result) {
+    const jobId = `builtin-${randomUUID()}`
+    builtinJobs.set(jobId, {
+      status: 'done',
+      progress: 100,
+      stage: 'done',
+      result,
+      expires: Date.now() + BUILTIN_JOB_TTL_MS,
+    })
+    return jobId
+  }
+
+  function readBuiltinJob(jobId) {
+    const row = builtinJobs.get(jobId)
+    if (!row) return null
+    if (Date.now() > row.expires) {
+      builtinJobs.delete(jobId)
+      return null
+    }
+    return row
+  }
+
+  function builtinHealthPayload(extra = {}) {
+    return {
+      status: 'ok',
+      offline: false,
+      ready: true,
+      live: true,
+      loading: false,
+      engine: 'spectral-builtin',
+      device: 'cpu',
+      builtin_fallback: true,
+      python: false,
+      fow: false,
+      ftw_infer: false,
+      ftw_live: false,
+      sen2sr: false,
+      ...extra,
+    }
+  }
+
+  async function probeUrl(url, timeoutMs = 1200) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+      const upstream = await fetch(url, { signal: controller.signal })
+      const json = await upstream.json().catch(() => ({}))
+      return { ok: upstream.ok, status: upstream.status, json }
+    } catch {
+      return null
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  async function probePythonHealth() {
+    const live = await probeUrl(`${SERVICE_BASE}/health/live`, 800)
+    if (live?.ok && (live.json?.live === true || live.json?.status === 'live' || live.json?.status === 'ok')) {
+      const ready = await probeUrl(`${SERVICE_BASE}/health/ready`, 800)
+      if (ready?.ok && ready.json?.ready !== false && String(ready.json?.status || '') !== 'loading') {
+        return { ...ready.json, live: true, ready: true, status: ready.json?.status || 'ok' }
+      }
+      return {
+        ...(ready?.json || live.json || {}),
+        live: true,
+        ready: false,
+        loading: true,
+        status: 'loading',
+      }
+    }
+    const health = await probeUrl(HEALTH_URL, 1200)
+    if (!health?.json || typeof health.json !== 'object') return null
+    const json = health.json
+    const status = String(json.status || '')
+    if (health.ok && (status === 'ok' || status === 'live' || status === 'loading' || json.live === true)) {
+      const loading = status === 'loading' || json.ready === false
+      return { ...json, live: true, ready: !loading, loading }
+    }
+    return null
+  }
+
+  function cachedPython() {
+    return pythonCache.value
+  }
+
+  function refreshPythonHealth() {
+    if (pythonProbeInFlight) return
+    pythonProbeInFlight = true
+    probePythonHealth()
+      .then(value => {
+        pythonCache = { at: Date.now(), value }
+      })
+      .catch(() => {
+        pythonCache = { at: Date.now(), value: null }
+      })
+      .finally(() => {
+        pythonProbeInFlight = false
+      })
+  }
+
+  function pythonReady() {
+    const cached = cachedPython()
+    if (!cached?.ready) return false
+    if (Date.now() - pythonCache.at > PYTHON_CACHE_TTL_MS * 3) return false
+    return true
+  }
+
+  function runBuiltinDetect(body) {
+    return detectFieldsBuiltin({
+      image: body.image,
+      bbox: body.bbox,
+      aoi: body.aoi,
+      min_confidence: body.min_confidence ?? body.minConfidence,
+      min_area_m2: body.min_area_m2 ?? body.minAreaM2,
+      source: body.source,
+    })
+  }
 
   function authHeaders(extra = {}) {
     const headers = { ...extra }
@@ -29,9 +203,8 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
     if (!Array.isArray(body.bbox) || body.bbox.length !== 4) {
       return 'bbox must be [west, south, east, north].'
     }
-    const source = String(body.source || '').toLowerCase()
-    const isFow = source === 'fow' || source === 'fields-of-the-world' || source === 'ftw'
-    if (!isFow && (typeof body.image !== 'string' || !String(body.image || '').trim())) {
+    const source = normalizeDetectSource(body)
+    if (!isImageOptionalSource(source) && (typeof body.image !== 'string' || !String(body.image || '').trim())) {
       return 'Expected JSON { image, bbox } for field boundary detection.'
     }
     return null
@@ -64,11 +237,23 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
       }
     }
     if (!upstream.ok) {
+      const rawError = String(
+        json?.error || json?.detail || `Field-boundary service error (HTTP ${upstream.status}).`,
+      )
+      const cleanError = rawError
+        .replace(/https?:\/\/\S+/gi, '[url]')
+        .replace(/s3:\/\/\S+/gi, '[s3]')
+      const shortError =
+        cleanError.length > 220 ? `${cleanError.slice(0, 219)}…` : cleanError
+      const passStatus =
+        upstream.status === 400 || upstream.status === 404 || upstream.status === 422
+          ? upstream.status
+          : 502
       return {
-        status: upstream.status === 400 || upstream.status === 404 ? upstream.status : 502,
+        status: passStatus,
         json: {
-          error: json?.error || `Field-boundary service error (HTTP ${upstream.status}).`,
-          ...(json && typeof json === 'object' ? json : {}),
+          ...((json && typeof json === 'object') ? json : {}),
+          error: shortError,
         },
       }
     }
@@ -76,40 +261,63 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
   }
 
   app.get('/api/agri-field-boundary/config', (_req, res) => {
-    res.json({ configured: Boolean(ENDPOINT), endpoint: Boolean(ENDPOINT) })
+    res.json({ configured: true, endpoint: Boolean(ENDPOINT), builtin_fallback: true })
   })
 
-  app.get('/api/agri-field-boundary/health', async (_req, res) => {
-    try {
-      const upstream = await fetch(HEALTH_URL)
-      const json = await upstream.json().catch(() => ({}))
-      return res.status(upstream.ok ? 200 : 502).json(json)
-    } catch (error) {
-      return res.status(502).json({ status: 'offline', detail: String(error?.message || error) })
+  app.get('/api/agri-field-boundary/health', (_req, res) => {
+    ensureLocalAiService('agri-field-boundary')
+    const python = cachedPython()
+    refreshPythonHealth()
+    if (python?.ready) {
+      return res.status(200).json({
+        ...python,
+        status: 'ok',
+        offline: false,
+        python: true,
+        builtin_fallback: true,
+        ready: true,
+        live: true,
+        loading: false,
+      })
     }
+    if (python?.loading || python?.live) {
+      return res.status(200).json({
+        ...builtinHealthPayload(python),
+        status: 'loading',
+        loading: true,
+        ready: false,
+        live: true,
+        python: true,
+        offline: false,
+      })
+    }
+    return res.status(200).json(builtinHealthPayload())
   })
 
   app.post(
     '/api/agri-field-boundary/fow-aoi',
     express.json({ limit: '2mb' }),
     async (req, res) => {
-      if (!ENDPOINT) {
-        return res.status(503).json({ error: 'Field-boundary service is not configured.' })
-      }
       const err = validateFowBody(req.body)
       if (err) return res.status(400).json({ error: err })
+      refreshPythonHealth()
+      if (!pythonReady()) {
+        return res.status(400).json({
+          error: 'FoW catalog needs the Python field engine. Switch to Map RGB detect.',
+        })
+      }
       try {
         const { status, json } = await forwardJson(FOW_URL, {
           method: 'POST',
           body: req.body,
           timeoutMs: 5 * 60 * 1000,
         })
-        return res.status(status).json(json)
-      } catch (error) {
-        return res.status(502).json({
-          error: 'Could not reach the FoW field-boundary service.',
-          detail: String(error?.message || error),
-        })
+        if (status === 200) return res.status(200).json(json)
+        if (status === 400 || status === 404 || status === 422) return res.status(status).json(json)
+        return res.status(400).json({ error: 'FoW catalog is unavailable. Switch to Map RGB detect.' })
+      } catch {
+        pythonCache = { at: Date.now(), value: null }
+        return res.status(400).json({ error: 'FoW catalog is unavailable. Switch to Map RGB detect.' })
       }
     },
   )
@@ -118,29 +326,42 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
     '/api/agri-field-boundary/detect',
     express.json({ limit: jsonBodyLimit }),
     async (req, res) => {
-      if (!ENDPOINT) {
-        return res.status(503).json({
-          error: 'Field-boundary service is not configured. Run backend/services/agri-field-boundary.',
-        })
-      }
       const err = validateDetectBody(req.body)
       if (err) return res.status(400).json({ error: err })
+      const ftwInfer = isFtwInferSource(normalizeDetectSource(req.body))
+      refreshPythonHealth()
+      const tryBuiltin = () => {
+        if (!hasDetectImage(req.body)) {
+          return res.status(400).json({
+            error:
+              'FTW / FoW needs the Python field engine. Switch to Map RGB detect on this host.',
+          })
+        }
+        try {
+          return res.status(200).json(runBuiltinDetect(req.body))
+        } catch (builtinErr) {
+          return res.status(400).json({
+            error: 'Could not delineate fields from the map RGB capture.',
+            detail: String(builtinErr?.message || builtinErr),
+          })
+        }
+      }
+      if (!pythonReady()) {
+        ensureLocalAiService('agri-field-boundary')
+        return tryBuiltin()
+      }
       try {
         const { status, json } = await forwardJson(ENDPOINT, {
           method: 'POST',
           body: req.body,
-          timeoutMs: 10 * 60 * 1000,
+          timeoutMs: ftwInfer ? FTW_INFER_DETECT_TIMEOUT_MS : DETECT_TIMEOUT_MS,
         })
-        return res.status(status).json(json)
-      } catch (error) {
-        const detail = String(error?.message || error)
-        const offline = /ECONNREFUSED|ENOTFOUND|fetch failed|AbortError|timed out|TimeoutError/i.test(detail)
-        return res.status(502).json({
-          error: offline
-            ? 'Field-boundary service offline — run backend/services/agri-field-boundary (port 8092).'
-            : 'Could not reach the field-boundary service.',
-          detail,
-        })
+        if (status === 200) return res.status(200).json(json)
+        if (status === 400 || status === 404 || status === 422) return res.status(status).json(json)
+        return tryBuiltin()
+      } catch {
+        ensureLocalAiService('agri-field-boundary')
+        return tryBuiltin()
       }
     },
   )
@@ -149,52 +370,155 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
     '/api/agri-field-boundary/detect-job',
     express.json({ limit: jsonBodyLimit }),
     async (req, res) => {
-      if (!ENDPOINT) {
-        return res.status(503).json({ error: 'Field-boundary service is not configured.' })
-      }
       const err = validateDetectBody(req.body)
       if (err) return res.status(400).json({ error: err })
+      const ftwInfer = isFtwInferSource(normalizeDetectSource(req.body))
+      refreshPythonHealth()
+      const tryBuiltinJob = () => {
+        if (!hasDetectImage(req.body)) {
+          return res.status(400).json({
+            error:
+              'FTW / FoW needs the Python field engine. Switch to Map RGB detect on this host.',
+          })
+        }
+        try {
+          const result = runBuiltinDetect(req.body)
+          const jobId = rememberBuiltinJob(result)
+          return res.status(200).json({ job_id: jobId, status: 'queued' })
+        } catch (builtinErr) {
+          return res.status(400).json({
+            error: 'Could not delineate fields from the map RGB capture.',
+            detail: String(builtinErr?.message || builtinErr),
+          })
+        }
+      }
+      if (!pythonReady()) {
+        ensureLocalAiService('agri-field-boundary')
+        return tryBuiltinJob()
+      }
       try {
         const { status, json } = await forwardJson(JOB_URL, {
           method: 'POST',
           body: req.body,
-          timeoutMs: 120_000,
+          timeoutMs: ftwInfer ? FTW_INFER_DETECT_JOB_TIMEOUT_MS : DETECT_JOB_TIMEOUT_MS,
         })
-        return res.status(status).json(json)
-      } catch (error) {
-        const detail = String(error?.message || error)
-        const offline = /ECONNREFUSED|ENOTFOUND|fetch failed|AbortError|timed out|TimeoutError/i.test(detail)
-        return res.status(502).json({
-          error: offline
-            ? 'Field-boundary service offline — run backend/services/agri-field-boundary (port 8092).'
-            : 'Could not start field-boundary job.',
-          detail,
-        })
+        if (status === 200) return res.status(200).json(json)
+        if (status === 400 || status === 404 || status === 422) return res.status(status).json(json)
+        return tryBuiltinJob()
+      } catch {
+        ensureLocalAiService('agri-field-boundary')
+        return tryBuiltinJob()
       }
     },
   )
 
   app.get('/api/agri-field-boundary/detect-job/:jobId', async (req, res) => {
-    if (!ENDPOINT) {
-      return res.status(503).json({ error: 'Field-boundary service is not configured.' })
-    }
     const jobId = String(req.params.jobId || '').trim()
     if (!jobId) return res.status(400).json({ error: 'jobId is required.' })
+    const builtin = readBuiltinJob(jobId)
+    if (builtin) {
+      return res.status(200).json({
+        status: builtin.status,
+        progress: builtin.progress,
+        stage: builtin.stage,
+        result: builtin.result,
+      })
+    }
+    if (!pythonReady()) {
+      return res.status(404).json({ error: 'Unknown field-boundary job.' })
+    }
     try {
       const { status, json } = await forwardJson(`${JOB_URL}/${encodeURIComponent(jobId)}`, {
         method: 'GET',
         timeoutMs: 30_000,
       })
       return res.status(status).json(json)
-    } catch (error) {
-      const detail = String(error?.message || error)
-      const offline = /ECONNREFUSED|ENOTFOUND|fetch failed|AbortError|timed out|TimeoutError/i.test(detail)
-      return res.status(502).json({
-        error: offline
-          ? 'Field-boundary service offline — run backend/services/agri-field-boundary (port 8092).'
-          : 'Could not poll field-boundary job.',
-        detail,
+    } catch {
+      return res.status(404).json({ error: 'Unknown field-boundary job.' })
+    }
+  })
+
+  // --- SEN2SR Lite (same agri-field-boundary service on :8092) ---------------
+
+  app.get('/api/sentinel2/super-resolution/status', async (_req, res) => {
+    refreshPythonHealth()
+    if (!pythonReady()) {
+      return res.status(200).json({
+        available: false,
+        model: 'SEN2SRLite',
+        error: 'SEN2SR needs the Python field engine on this host.',
+      })
+    }
+    try {
+      const { status, json } = await forwardJson(SEN2SR_STATUS_URL, {
+        method: 'GET',
+        timeoutMs: SEN2SR_STATUS_TIMEOUT_MS,
+      })
+      if (status === 200) return res.status(200).json(json)
+      return res.status(200).json({
+        available: false,
+        model: 'SEN2SRLite',
+        error: String(json?.error || json?.detail || 'SEN2SR status unavailable.'),
+      })
+    } catch {
+      return res.status(200).json({
+        available: false,
+        model: 'SEN2SRLite',
+        error: 'SEN2SR is unavailable on this host.',
       })
     }
   })
+
+  /**
+   * Transparent body forward for multipart GeoTIFF and/or JSON/form fields
+   * (input_path, aoi, bands, display_1m, …). Preserves Content-Type so the
+   * FastAPI route can parse Multipart or JSON as appropriate.
+   */
+  app.post(
+    '/api/sentinel2/super-resolution',
+    express.raw({ type: () => true, limit: SEN2SR_BODY_LIMIT }),
+    async (req, res) => {
+      refreshPythonHealth()
+      if (!pythonReady()) {
+        return res.status(400).json({ error: 'SEN2SR needs the Python field engine on this host.' })
+      }
+      const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0)
+      const contentType = String(req.headers['content-type'] || '').trim()
+      try {
+        const headers = authHeaders(contentType ? { 'Content-Type': contentType } : {})
+        const upstream = await fetch(SEN2SR_URL, {
+          method: 'POST',
+          headers,
+          body: buf.length ? buf : undefined,
+          signal: AbortSignal.timeout(SEN2SR_TIMEOUT_MS),
+        })
+        const text = await upstream.text()
+        let json
+        try {
+          json = text ? JSON.parse(text) : {}
+        } catch {
+          return res.status(400).json({
+            error: 'SEN2SR service returned a non-JSON response.',
+            detail: text.slice(0, 600),
+          })
+        }
+        if (!upstream.ok) {
+          const detail = String(
+            json?.detail || json?.error || `SEN2SR service error (HTTP ${upstream.status}).`,
+          )
+          return res.status(upstream.status >= 400 && upstream.status < 600 ? upstream.status : 400).json({
+            ...((json && typeof json === 'object') ? json : {}),
+            error: detail,
+            detail,
+          })
+        }
+        return res.status(200).json(json)
+      } catch (error) {
+        return res.status(400).json({
+          error: 'SEN2SR enhance failed on this host.',
+          detail: String(error?.message || error),
+        })
+      }
+    },
+  )
 }

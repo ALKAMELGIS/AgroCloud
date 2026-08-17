@@ -14,3 +14,17 @@ export const SI_GEO_AI_MAP_SELECTION_PAINT = {
   pointStrokeWidth: 1.5,
   pointStrokeColor: 'rgba(237, 233, 254, 0.55)',
 } as const
+
+/** Brighter outline for GIS attribute-table row ↔ map selection. */
+export const SI_TABLE_MAP_SELECTION_PAINT = {
+  fillColor: '#fbbf24',
+  fillOpacity: 0.24,
+  lineColor: '#ffffff',
+  lineWidth: 3.5,
+  lineOpacity: 0.95,
+  pointRadius: 10,
+  pointColor: 'rgba(251, 191, 36, 0.55)',
+  pointOpacity: 0.9,
+  pointStrokeWidth: 2.5,
+  pointStrokeColor: '#ffffff',
+} as const

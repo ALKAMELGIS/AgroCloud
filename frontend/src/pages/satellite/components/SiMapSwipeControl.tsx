@@ -154,8 +154,8 @@ export function SiMapSwipeControl({
   const [mode, setMode] = useState<SiMapSwipeMode>('both')
   const [split, setSplit] = useState(50)
   const [dragging, setDragging] = useState(false)
-  const [legendOpen, setLegendOpen] = useState(false)
-  const [legendTab, setLegendTab] = useState<'before' | 'after'>('before')
+  const [legendBeforeOpen, setLegendBeforeOpen] = useState(false)
+  const [legendAfterOpen, setLegendAfterOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
 
   const sceneIso = String(activeSceneDate || '').trim().slice(0, 10)
@@ -184,8 +184,8 @@ export function SiMapSwipeControl({
 
   useEffect(() => {
     if (!open) {
-      setLegendOpen(false)
-      setLegendTab('before')
+      setLegendBeforeOpen(false)
+      setLegendAfterOpen(false)
     }
   }, [open])
 
@@ -369,10 +369,102 @@ export function SiMapSwipeControl({
             </div>
           </div>
 
+          {/* Per-side color keys — sit on Before (left) / After (right) of the swipe. */}
           <div
-            className={`si-map-swipe-panel${legendOpen ? ' has-legend' : ''}`}
+            className="si-map-swipe-overlay__legend-slot si-map-swipe-overlay__legend-slot--before"
+            style={{ width: `${split}%` }}
             data-map-overlay-isolate=""
           >
+            <button
+              type="button"
+              className={`si-map-swipe-overlay__legend-fab${legendBeforeOpen ? ' is-on' : ''}`}
+              aria-pressed={legendBeforeOpen}
+              aria-label={legendBeforeOpen ? 'Hide Before color key' : 'Show Before color key'}
+              title={legendBeforeOpen ? 'Hide Before legend' : 'Before legend'}
+              onClick={() => setLegendBeforeOpen(v => !v)}
+            >
+              <i className="fa-solid fa-palette" aria-hidden />
+            </button>
+            {legendBeforeOpen ? (
+              <div className="si-map-swipe-overlay__legend-card" role="dialog" aria-label="Before color key">
+                <div className="si-map-swipe-overlay__legend-card-head">
+                  <span>
+                    Before
+                    <em>
+                      {beforeCfg.layerId}
+                      {beforeCfg.sceneDate ? ` · ${beforeCfg.sceneDate}` : ''}
+                    </em>
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Close Before legend"
+                    onClick={() => setLegendBeforeOpen(false)}
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="si-map-swipe-overlay__legend-card-body">
+                  <LayerLiveLegendPanel
+                    key={`swipe-legend-before-${beforeCfg.layerId}-${beforeCfg.sceneDate}`}
+                    layerOptions={layerSelectOptions}
+                    activeLayerId={beforeCfg.layerId}
+                    sceneDate={beforeCfg.sceneDate}
+                    aoiGeometry={aoiGeometry}
+                    activeOnly
+                  />
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div
+            className="si-map-swipe-overlay__legend-slot si-map-swipe-overlay__legend-slot--after"
+            style={{ width: `${100 - split}%` }}
+            data-map-overlay-isolate=""
+          >
+            <button
+              type="button"
+              className={`si-map-swipe-overlay__legend-fab${legendAfterOpen ? ' is-on' : ''}`}
+              aria-pressed={legendAfterOpen}
+              aria-label={legendAfterOpen ? 'Hide After color key' : 'Show After color key'}
+              title={legendAfterOpen ? 'Hide After legend' : 'After legend'}
+              onClick={() => setLegendAfterOpen(v => !v)}
+            >
+              <i className="fa-solid fa-palette" aria-hidden />
+            </button>
+            {legendAfterOpen ? (
+              <div className="si-map-swipe-overlay__legend-card" role="dialog" aria-label="After color key">
+                <div className="si-map-swipe-overlay__legend-card-head">
+                  <span>
+                    After
+                    <em>
+                      {afterCfg.layerId}
+                      {afterCfg.sceneDate ? ` · ${afterCfg.sceneDate}` : ''}
+                    </em>
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Close After legend"
+                    onClick={() => setLegendAfterOpen(false)}
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="si-map-swipe-overlay__legend-card-body">
+                  <LayerLiveLegendPanel
+                    key={`swipe-legend-after-${afterCfg.layerId}-${afterCfg.sceneDate}`}
+                    layerOptions={layerSelectOptions}
+                    activeLayerId={afterCfg.layerId}
+                    sceneDate={afterCfg.sceneDate}
+                    aoiGeometry={aoiGeometry}
+                    activeOnly
+                  />
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="si-map-swipe-panel" data-map-overlay-isolate="">
             <div className="si-map-swipe-panel__row">
               <div className="si-map-swipe-panel__seg" role="group" aria-label="Compare mode">
                 <button
@@ -398,16 +490,6 @@ export function SiMapSwipeControl({
                 </button>
               </div>
               <div className="si-map-swipe-panel__actions">
-                <button
-                  type="button"
-                  className={`si-map-swipe-panel__legend-btn${legendOpen ? ' is-on' : ''}`}
-                  aria-pressed={legendOpen}
-                  aria-label={legendOpen ? 'Hide color key' : 'Show color key'}
-                  title={legendOpen ? 'Hide Legend' : 'Legend'}
-                  onClick={() => setLegendOpen(v => !v)}
-                >
-                  Legend
-                </button>
                 <button
                   type="button"
                   className="si-map-swipe-panel__close"
@@ -466,49 +548,6 @@ export function SiMapSwipeControl({
               <p className="si-map-swipe-panel__hint" role="status">
                 Waiting for WMS tiles… check AOI, date, and layer.
               </p>
-            ) : null}
-
-            {legendOpen ? (
-              <div className="si-map-swipe-panel__legend">
-                <div className="si-map-swipe-panel__legend-tabs" role="tablist" aria-label="MapSwipe legend side">
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={legendTab === 'before'}
-                    className={legendTab === 'before' ? 'is-on' : undefined}
-                    onClick={() => setLegendTab('before')}
-                  >
-                    Before
-                    <span className="si-map-swipe-panel__legend-tab-meta">
-                      {beforeCfg.layerId}
-                      {beforeCfg.sceneDate ? ` · ${beforeCfg.sceneDate}` : ''}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={legendTab === 'after'}
-                    className={legendTab === 'after' ? 'is-on' : undefined}
-                    onClick={() => setLegendTab('after')}
-                  >
-                    After
-                    <span className="si-map-swipe-panel__legend-tab-meta">
-                      {afterCfg.layerId}
-                      {afterCfg.sceneDate ? ` · ${afterCfg.sceneDate}` : ''}
-                    </span>
-                  </button>
-                </div>
-                <div className="si-map-swipe-panel__legend-body">
-                  <LayerLiveLegendPanel
-                    key={`swipe-legend-${legendTab}-${legendTab === 'before' ? beforeCfg.layerId : afterCfg.layerId}-${legendTab === 'before' ? beforeCfg.sceneDate : afterCfg.sceneDate}`}
-                    layerOptions={layerSelectOptions}
-                    activeLayerId={legendTab === 'before' ? beforeCfg.layerId : afterCfg.layerId}
-                    sceneDate={legendTab === 'before' ? beforeCfg.sceneDate : afterCfg.sceneDate}
-                    aoiGeometry={aoiGeometry}
-                    activeOnly
-                  />
-                </div>
-              </div>
             ) : null}
           </div>
         </div>

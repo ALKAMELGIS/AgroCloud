@@ -38,9 +38,9 @@ const S2_COLLECTION_RE = /(sentinel-2|l2a|l1c)/i
 
 const ASTER_COLLECTION_RE = /aster/i
 
-const OPTICAL_CORE = new Set(['NDVI', 'NDMI', 'NDWI', 'SAVI', 'DATAMASK'])
+const OPTICAL_CORE = new Set(['NDVI', 'NDMI', 'NDWI', 'MNDWI', 'AWEI', 'NBR', 'SAVI'])
 const THERMAL_CORE = new Set(['ET', 'LST'])
-const S3_CORE = new Set(['NDVI', 'NDWI', 'SAVI', 'DATAMASK'])
+const S3_CORE = new Set(['NDVI', 'NDWI', 'SAVI'])
 
 const FULL_OPTICAL_EXTRA_GROUP_IDS = new Set([
   'live-analysis-lulc',
@@ -148,10 +148,7 @@ export function filterRemoteSensingLayerSelectGroupsForProvider(
   const profile = resolveRemoteSensingLayerProfile(providerId, collectionId)
 
   if (profile === 'aster-optical') {
-    const out: RemoteSensingLayerSelectGroup[] = [...buildAsterL1tLayerSelectGroups()]
-    const precip = groups.find(g => g.id === 'climate-precipitation')
-    if (precip) out.push(precip)
-    return out.filter(g => g.options.length > 0)
+    return [...buildAsterL1tLayerSelectGroups()].filter(g => g.options.length > 0)
   }
 
   const out: RemoteSensingLayerSelectGroup[] = []
@@ -160,12 +157,6 @@ export function filterRemoteSensingLayerSelectGroupsForProvider(
     if (group.id === 'core') {
       const options = filterCoreOptions(group.options, profile)
       if (options.length) out.push({ ...group, options })
-      continue
-    }
-
-    if (group.id === 'climate-precipitation') {
-      // CHIRPS stays available for S2 / Landsat / SAR / VHR — not for dedicated catalogues.
-      out.push(group)
       continue
     }
 

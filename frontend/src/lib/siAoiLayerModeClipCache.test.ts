@@ -83,6 +83,42 @@ describe('siAoiLayerModeClipCache', () => {
     expect(a.length).toBeGreaterThan(0)
   })
 
+  it('reuses packed AOI GEOMETRY across live index swaps', () => {
+    const mask = getCachedSiAoiLayerModeClipMask(
+      layer,
+      {
+        sourceLayerId: 'fields-1',
+        maskMode: 'entire-layer',
+        filterField: '',
+        filterValues: [],
+      },
+      new Set(),
+    )
+    const maskKey = siAoiLayerModeMaskCacheKey(
+      layer,
+      { sourceLayerId: 'fields-1', maskMode: 'entire-layer', filterField: '', filterValues: [] },
+      new Set(),
+    )
+    const ndvi = getCachedSentinelHubWmsDisplayChunks(
+      mask,
+      'NDVI',
+      { maxTileLayers: 8 },
+      `${maskKey}|layer:NDVI|scene:2024-06-01|vmin:|cap:8`,
+    )
+    const ndwi = getCachedSentinelHubWmsDisplayChunks(
+      mask,
+      'NDWI',
+      { maxTileLayers: 8 },
+      `${maskKey}|layer:NDWI|scene:2024-06-01|vmin:|cap:8`,
+    )
+    expect(ndvi.length).toBe(ndwi.length)
+    expect(ndvi.length).toBeGreaterThan(0)
+    expect(ndvi.map(part => part.geometryWkt3857)).toEqual(ndwi.map(part => part.geometryWkt3857))
+    expect(ndvi[0]?.evalscriptB64).toBeTruthy()
+    expect(ndwi[0]?.evalscriptB64).toBeTruthy()
+    expect(ndvi[0]?.evalscriptB64).not.toBe(ndwi[0]?.evalscriptB64)
+  })
+
   it('warm chunk cache key stays stable when viewport geo signature changes', () => {
     const settings = {
       sourceLayerId: 'fields-1',

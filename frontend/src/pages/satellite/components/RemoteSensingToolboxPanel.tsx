@@ -1,6 +1,7 @@
 import type { RemoteSensingLayerSelectGroup } from '../../../lib/agroCompositeIndices'
 import {
   remoteSensingCollectionsForProvider,
+  remoteSensingProviderDef,
   remoteSensingProviderOptions,
 } from '../../../lib/remoteSensingProviders'
 import { RemoteSensingLayerSelect } from './RemoteSensingLayerSelect'
@@ -63,6 +64,8 @@ export type RemoteSensingToolboxPanelProps = {
   onMeasureTool: () => void
   hasClearableDrawing: boolean
   onClearDrawing: () => void
+  onOpenLayerLegend: () => void
+  layerLegendOpen: boolean
   fieldTimelineActive: boolean
   onTimelinePrimaryClick: () => void
   fieldAnalysisStatus: string | null
@@ -105,6 +108,7 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
     onShowOnMapChange,
     showOnMapLabel,
     showOnMapDisabled = false,
+    showOnMapHint,
     wmsZoomWarning,
     aoiLayerModeSettings,
     onAoiLayerModeChange,
@@ -117,6 +121,8 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
     timeSeriesEnd,
     onTimeSeriesStartChange,
     onTimeSeriesEndChange,
+    onOpenLayerLegend,
+    layerLegendOpen,
     fieldTimelineActive,
     onTimelinePrimaryClick,
     fieldAnalysisStatus,
@@ -136,6 +142,7 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
     onChirpsExportReport,
   } = props
 
+  const providerMeta = remoteSensingProviderDef(provider)
   const collectionOptions = remoteSensingCollectionsForProvider(provider)
   const cloudSafe = Math.max(0, Math.min(100, Math.round(Number(cloudCoverage) || 0)))
   const [cloudDraft, setCloudDraft] = useState(cloudSafe)
@@ -170,6 +177,12 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
             />
           </label>
         </div>
+
+        {!providerMeta.integrated && providerMeta.hint ? (
+          <p className="si-rs-panel__meta si-rs-panel__meta--inline" role="status">
+            <i className="fa-solid fa-circle-info" aria-hidden /> {providerMeta.hint}
+          </p>
+        ) : null}
 
         <div className="si-rs-panel__stack si-rs-panel__stack--cloud">
           <div className="si-rs-panel__cloud-row">
@@ -247,6 +260,11 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
               />
               <span>{showOnMapLabel}</span>
             </label>
+            {showOnMapHint ? (
+              <p className="si-rs-panel__meta si-rs-panel__meta--inline" role="status">
+                {showOnMapHint}
+              </p>
+            ) : null}
           </>
         ) : null}
         {wmsZoomWarning ? (
@@ -256,6 +274,7 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
         ) : null}
 
         <div className="si-rs-panel__stack si-rs-panel__stack--section">
+          <span className="si-rs-panel__label">AOI layer mode</span>
           <SiAoiLayerModePanel
             settings={aoiLayerModeSettings}
             onChange={onAoiLayerModeChange}
@@ -359,6 +378,21 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
             ) : null}
           </div>
         ) : null}
+
+        <label className="si-rs-panel__stack">
+          <span className="si-rs-panel__label">Map tools</span>
+          <div className="si-rs-panel__toolgrid" role="toolbar" aria-label="Map tools">
+            <button
+              type="button"
+              className={`si-rs-panel__tool${layerLegendOpen ? ' is-on' : ''}`}
+              title={layerLegendOpen ? 'Hide layer legend' : 'Show layer legend'}
+              aria-pressed={layerLegendOpen}
+              onClick={onOpenLayerLegend}
+            >
+              <i className="fa-solid fa-palette" aria-hidden />
+            </button>
+          </div>
+        </label>
 
         <button
           type="button"

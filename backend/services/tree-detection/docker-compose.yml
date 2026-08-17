@@ -1,11 +1,10 @@
-# One-command AI Tree Detection service.
+# One-command AI Tree Detection service (Ultralytics YOLO detect).
 #
 #   cd backend/services/tree-detection
 #   docker compose up --build
 #
-# Serves the DeepForest tree-crown detector on http://localhost:8080/predict —
-# which is also the AgroCloud backend default for TREE_DETECTION_URL, so once
-# this is up, the Tree Detections tool works with no further configuration.
+# Serves YOLO Detection (class `tree`) on http://localhost:8080/predict —
+# AgroCloud default TREE_DETECTION_URL. GIS client maps box centres to points.
 services:
   tree-detection:
     build: .
@@ -13,16 +12,15 @@ services:
     ports:
       - "8080:8080"
     environment:
-      # DeepForest is the zero-config default. To use YOLO instead, mount a
-      # weights file and uncomment the two lines below.
-      # MODEL_PATH: /models/best.pt
-      # TREE_DETECTION_ENGINE: yolo
+      TREE_DETECTION_ENGINE: yolo
+      TREE_DETECTION_YOLO_WEIGHTS: yolov8s-worldv2.pt
       TREE_DETECTION_CONF: "0.25"
       TREE_DETECTION_IOU: "0.45"
+      # Optional custom single-class tree weights:
+      # MODEL_PATH: /models/tree.pt
     volumes:
-      # Persist the downloaded model + torch cache across restarts.
       - tree-detection-cache:/root/.cache
-      # - /path/to/best.pt:/models/best.pt:ro
+      # - /path/to/tree.pt:/models/tree.pt:ro
     restart: unless-stopped
 
 volumes:

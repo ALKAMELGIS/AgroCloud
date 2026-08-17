@@ -48,6 +48,17 @@ describe('parseGeoAiMapCommands openToolboxPanel / runRsIndex', () => {
       { op: 'runRsIndex', index: 'NDVI' },
     ])
   })
+
+  it('parses detectFieldBoundaries with optional source and year', () => {
+    expect(
+      parseGeoAiMapCommands(
+        'MAP_ACTION:{"op":"detectFieldBoundaries","source":"ftw-live","year":2024}',
+      ),
+    ).toEqual([{ op: 'detectFieldBoundaries', source: 'ftw-live', year: 2024 }])
+    expect(parseGeoAiMapCommands('MAP_ACTION:{"op":"detectFields"}')).toEqual([
+      { op: 'detectFieldBoundaries' },
+    ])
+  })
 })
 
 describe('parseGeoAiMapCommands gis ops', () => {

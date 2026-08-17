@@ -122,13 +122,22 @@ export function mergeWktChunkGroupsToCap(
     return [{ geometryWkt3857: allWkt, outerRings: allRings }]
   }
 
+  const tryMergeRings = (rings: [number, number][][], verts?: number): WmsAoiWktChunkGroup | null => {
+    let candidate = rings
+    if (verts != null) {
+      candidate = rings.map(r => simplifyOuterRingWgs84(r, verts))
+    }
+    const wkt = multiPolygon3857Wkt(candidate)
+    if (wkt.length > budget) return null
+    return { geometryWkt3857: wkt, outerRings: candidate }
+  }
+
   while (merged.length > cap) {
     let mergedPair = false
     for (let i = 0; i < merged.length - 1; i++) {
       const combinedRings = [...merged[i]!.outerRings, ...merged[i + 1]!.outerRings]
-      const wkt = multiPolygon3857Wkt(combinedRings)
-      if (wkt.length <= budget) {
-        const next: WmsAoiWktChunkGroup = { geometryWkt3857: wkt, outerRings: combinedRings }
+      const next = tryMergeRings(combinedRings)
+      if (next) {
         merged = [...merged.slice(0, i), next, ...merged.slice(i + 2)]
         mergedPair = true
         break
@@ -139,27 +148,40 @@ export function mergeWktChunkGroupsToCap(
     let bestI = 0
     let bestJ = 1
     let bestSize = Infinity
+    let bestNext: WmsAoiWktChunkGroup | null = null
     for (let i = 0; i < merged.length; i++) {
       for (let j = i + 1; j < merged.length; j++) {
         const combinedRings = [...merged[i]!.outerRings, ...merged[j]!.outerRings]
-        const wktLen = multiPolygon3857Wkt(combinedRings).length
-        if (wktLen <= budget && wktLen < bestSize) {
-          bestSize = wktLen
+        const next = tryMergeRings(combinedRings)
+        if (next && next.geometryWkt3857.length < bestSize) {
+          bestSize = next.geometryWkt3857.length
           bestI = i
           bestJ = j
+          bestNext = next
         }
       }
     }
-    if (bestSize < Infinity) {
-      const combinedRings = [...merged[bestI]!.outerRings, ...merged[bestJ]!.outerRings]
-      const next: WmsAoiWktChunkGroup = {
-        geometryWkt3857: multiPolygon3857Wkt(combinedRings),
-        outerRings: combinedRings,
-      }
+    if (bestNext) {
       merged = merged.filter((_, idx) => idx !== bestI && idx !== bestJ)
-      merged.push(next)
+      merged.push(bestNext)
       continue
     }
+
+    // Last resort: simplify before merging so we still stay under URL budget.
+    let simplifiedPair = false
+    for (const verts of [12, 8, 6, 5]) {
+      for (let i = 0; i < merged.length - 1; i++) {
+        const combinedRings = [...merged[i]!.outerRings, ...merged[i + 1]!.outerRings]
+        const next = tryMergeRings(combinedRings, verts)
+        if (next) {
+          merged = [...merged.slice(0, i), next, ...merged.slice(i + 2)]
+          simplifiedPair = true
+          break
+        }
+      }
+      if (simplifiedPair) break
+    }
+    if (simplifiedPair) continue
     break
   }
 
@@ -177,6 +199,8 @@ function capWmsDisplayChunks(
 }
 
 const MAX_WKT_CHARS = 5600;
+/** Raw WKT budget before encodeURIComponent — keeps full GetMap URLs under common proxy limits. */
+const SAFE_WKT_CHARS = 3600;
 const MAX_RING_VERTICES = 96;
 
 /** WGS84 lon/lat → Web Mercator (EPSG:3857), meters. */
@@ -301,6 +325,8 @@ export function inferWmsEvalProfile(layerName: string): WmsAoiEvalProfile {
   if (u.includes('NDRE')) return 'ndre';
   if (u.includes('BSI')) return 'native';
   if (u.includes('MNDWI')) return 'mndwi';
+  if (u.includes('AWEI')) return 'awei';
+  if (u.includes('NBR')) return 'nbr';
   if (u.includes('SAVI')) return 'savi';
   if (u.includes('NDVI')) return 'ndvi';
   if (u.includes('EVI') && !u.includes('NEVI')) return 'evi';
@@ -453,7 +479,7 @@ export function extractOuterRingsWgs84(drawn: unknown): [number, number][][] {
   return rawOuterRings;
 }
 
-function buildEvalscriptB64ForLayer(
+export function buildEvalscriptB64ForLayer(
   layerName: string,
   options?: BuildSentinelHubWmsAoiClipOptions,
 ): string | null {
@@ -484,9 +510,28 @@ function simplifyOuterRingsForWms(rawOuterRings: [number, number][][]): [number,
   return rawOuterRings.map(r => decimateMax(r, Math.max(16, Math.min(32, ringBudget))));
 }
 
-function wktBudgetForEvalscript(evalscriptB64: string | null): number {
-  const evalLen = evalscriptB64?.length ?? 0;
-  return Math.max(1200, MAX_WKT_CHARS - evalLen - 48);
+function wktBudgetForEvalscript(_evalscriptB64: string | null): number {
+  // Pack GEOMETRY once for the AOI session using worst-case evalscript length so
+  // index / date swaps never re-bucket rings (stable chunk count + WKT).
+  const evalLen = 1800
+  return Math.max(1200, Math.min(SAFE_WKT_CHARS, MAX_WKT_CHARS) - evalLen - 48)
+}
+
+/** Absolute ceiling on Mapbox WMS raster sources for one Layers AOI stack. */
+export const SI_SENTINEL_AOI_WMS_HARD_MAX_SOURCES = 64
+
+/**
+ * How many WMS GEOMETRY sources a Layers AOI mask needs for reliable URLs.
+ * Scales with feature count — never assumes a fixed farm count.
+ */
+export function resolveLayersAoiWmsMaxTileLayers(featureCount: number): number {
+  const n = Math.max(0, Math.floor(Number(featureCount) || 0))
+  if (n <= 0) return 16
+  if (n <= 16) return Math.min(SI_SENTINEL_AOI_WMS_HARD_MAX_SOURCES, Math.max(8, n))
+  if (n <= 80) return 24
+  if (n <= 250) return 36
+  if (n <= 600) return 48
+  return SI_SENTINEL_AOI_WMS_HARD_MAX_SOURCES
 }
 
 function wktForSingleRingWithinBudget(ring: [number, number][], budget: number): string {
@@ -564,10 +609,72 @@ function spatialBucketIndexForRing(ring: [number, number][], bucketCount: number
   return h % cap
 }
 
+function ringCentroid(ring: [number, number][]): [number, number] {
+  let cx = 0
+  let cy = 0
+  let n = 0
+  for (const [lng, lat] of ring) {
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) continue
+    cx += lng
+    cy += lat
+    n += 1
+  }
+  if (!n) return [0, 0]
+  return [cx / n, cy / n]
+}
+
+/** Pack one batch into GEOMETRY parts that each fit the URL budget (split spatially if needed). */
+function packBatchWithinWktBudget(
+  batch: [number, number][][],
+  budget: number,
+  depth = 0,
+): WmsAoiWktChunkGroup[] {
+  if (!batch.length) return []
+  if (batch.length === 1) {
+    const ring = batch[0]!
+    return [
+      {
+        geometryWkt3857: wktForSingleRingWithinBudget(ring, budget),
+        outerRings: [ring],
+      },
+    ]
+  }
+
+  let verts = batch.length > 40 ? 12 : batch.length > 16 ? 16 : 24
+  let rings = batch.map(r => simplifyOuterRingWgs84(r, verts))
+  let wkt = multiPolygon3857Wkt(rings)
+  while (wkt.length > budget && verts > 5) {
+    verts = Math.max(5, Math.floor(verts * 0.65))
+    rings = batch.map(r => simplifyOuterRingWgs84(r, verts))
+    wkt = multiPolygon3857Wkt(rings)
+  }
+  if (wkt.length <= budget) {
+    return [{ geometryWkt3857: wkt, outerRings: rings }]
+  }
+
+  // Still over budget — split spatially instead of forcing an oversized multipolygon.
+  if (depth >= 10) {
+    return batch.map(ring => ({
+      geometryWkt3857: wktForSingleRingWithinBudget(simplifyOuterRingWgs84(ring, 8), budget),
+      outerRings: [ring],
+    }))
+  }
+  const sorted = [...batch].sort((a, b) => {
+    const [ax] = ringCentroid(a)
+    const [bx] = ringCentroid(b)
+    return ax - bx
+  })
+  const mid = Math.max(1, Math.floor(sorted.length / 2))
+  return [
+    ...packBatchWithinWktBudget(sorted.slice(0, mid), budget, depth + 1),
+    ...packBatchWithinWktBudget(sorted.slice(mid), budget, depth + 1),
+  ]
+}
+
 /**
  * Pack every ring into ≤ maxGroups multipolygon GEOMETRY parts (spatial buckets).
- * Guarantees full AOI coverage with a stable, zoom-independent source count — Mapbox then
- * only refreshes `{bbox-epsg-3857}` tiles; GEOMETRY/EVALSCRIPT stay cached.
+ * Guarantees full AOI coverage with budget-safe URLs — oversized buckets are split,
+ * never force-merged into broken GetMap requests.
  */
 export function packOuterRingsIntoFixedBucketGroups(
   outerRings: [number, number][][],
@@ -577,6 +684,12 @@ export function packOuterRingsIntoFixedBucketGroups(
   if (!outerRings.length) return []
   const cap = Math.max(1, Math.floor(maxGroups))
   const budget = wktBudgetForEvalscript(evalscriptB64)
+  // Allow headroom up to the feature-scaled suggestion / hard max so budget splits
+  // never force oversized GEOMETRY URLs (blank tiles).
+  const hardCap = Math.min(
+    SI_SENTINEL_AOI_WMS_HARD_MAX_SOURCES,
+    Math.max(cap, resolveLayersAoiWmsMaxTileLayers(outerRings.length)),
+  )
 
   if (outerRings.length <= cap) {
     return outerRings.map(ring => ({
@@ -590,45 +703,35 @@ export function packOuterRingsIntoFixedBucketGroups(
     buckets[spatialBucketIndexForRing(ring, cap)]!.push(ring)
   }
 
-  const groups: WmsAoiWktChunkGroup[] = []
+  let groups: WmsAoiWktChunkGroup[] = []
   for (const batch of buckets) {
     if (!batch.length) continue
-    let verts = batch.length > 40 ? 12 : batch.length > 16 ? 16 : 24
-    let rings = batch.map(r => simplifyOuterRingWgs84(r, verts))
-    let wkt = multiPolygon3857Wkt(rings)
-    while (wkt.length > budget && verts > 5) {
-      verts = Math.max(5, Math.floor(verts * 0.65))
-      rings = batch.map(r => simplifyOuterRingWgs84(r, verts))
-      wkt = multiPolygon3857Wkt(rings)
-    }
-    if (wkt.length > budget) {
-      rings = batch.map(r => decimateMax(ringClosed(r), 5))
-      wkt = multiPolygon3857Wkt(rings)
-    }
-    // Still oversized: emit as several single-ring parts within this spatial group
-    // only when unavoidable (keeps coverage; rare for heavily simplified plots).
-    if (wkt.length > budget) {
-      for (const ring of rings) {
-        groups.push({
-          geometryWkt3857: wktForSingleRingWithinBudget(ring, budget),
-          outerRings: [ring],
-        })
-      }
-      continue
-    }
-    groups.push({ geometryWkt3857: wkt, outerRings: rings })
+    groups.push(...packBatchWithinWktBudget(batch, budget))
   }
 
-  if (groups.length <= cap) return groups
-  return mergeWktChunkGroupsToCap(groups, cap, evalscriptB64)
+  if (groups.length <= hardCap) return groups
+
+  // Too many sources — re-bucket with a higher count toward the hard cap, then merge softly.
+  const rebucket = Math.min(hardCap, Math.max(cap, Math.ceil(outerRings.length / 12)))
+  const buckets2: [number, number][][][] = Array.from({ length: rebucket }, () => [])
+  for (const ring of outerRings) {
+    buckets2[spatialBucketIndexForRing(ring, rebucket)]!.push(ring)
+  }
+  groups = []
+  for (const batch of buckets2) {
+    if (!batch.length) continue
+    groups.push(...packBatchWithinWktBudget(batch, budget))
+  }
+  if (groups.length <= hardCap) return groups
+  return mergeWktChunkGroupsToCap(groups, hardCap, evalscriptB64)
 }
 
 /**
  * Builds one or more GEOMETRY + EVALSCRIPT parts (chunked for large Agro_Structures layers).
  *
  * Zoom/pan must not change GEOMETRY: callers should pass a stable clip + null viewportBBox
- * once Layers AOI is pinned. Large masks use fixed spatial buckets (≤ maxTileLayers) covering
- * every ring so Mapbox reuses the same WMS templates and only fetches new BBOX tiles.
+ * once Layers AOI is pinned. Large masks use budget-aware packing covering every ring so
+ * Mapbox reuses the same WMS templates and only fetches new BBOX tiles.
  */
 export function buildSentinelHubWmsAoiClipChunks(
   drawn: unknown,
@@ -643,33 +746,32 @@ export function buildSentinelHubWmsAoiClipChunks(
   if (!rawOuterRings.length) return [];
 
   const evalscriptB64 = buildEvalscriptB64ForLayer(layerName, options);
-  const maxTiles = options?.maxTileLayers ?? null;
   const rankedRings = sortOuterRingsByApproxAreaDesc(rawOuterRings);
+  const requestedCap =
+    options?.maxTileLayers != null && Number.isFinite(options.maxTileLayers) && options.maxTileLayers > 0
+      ? Math.floor(options.maxTileLayers)
+      : null
 
-  // Small masks / explicit preferSingle: one GEOMETRY per polygon when under the source budget.
+  // One GEOMETRY per polygon when under the caller's source budget (may exceed packed hard cap).
   if (
     options?.preferSingleRingChunks &&
-    (maxTiles == null || maxTiles <= 0 || rankedRings.length <= maxTiles)
+    (requestedCap == null || rankedRings.length <= requestedCap)
   ) {
     return singleRingClipParts(simplifyOuterRingsForWms(rankedRings), evalscriptB64);
   }
 
-  // Large / multi-polygon AOI: fixed spatial buckets → stable source count + full coverage.
-  if (maxTiles != null && Number.isFinite(maxTiles) && maxTiles > 0 && rankedRings.length > maxTiles) {
-    const groups = packOuterRingsIntoFixedBucketGroups(rankedRings, maxTiles, evalscriptB64);
-    return groups.map(group => ({
-      geometryWkt3857: group.geometryWkt3857,
-      evalscriptB64,
-      aoiBoundsLngLat: lngLatBoundsFromOuterRings(group.outerRings),
-    }));
-  }
+  const suggested = resolveLayersAoiWmsMaxTileLayers(rankedRings.length)
+  const maxTiles = Math.min(
+    SI_SENTINEL_AOI_WMS_HARD_MAX_SOURCES,
+    requestedCap != null ? Math.max(requestedCap, suggested) : suggested,
+  )
 
-  // Medium packs: greedy WKT batches, merge if slightly over cap.
+  // Budget-first packing (reliable URLs), then spatial re-bucket if source count is too high.
   let simplified = simplifyOuterRingsForWms(rankedRings);
   let groups = packOuterRingsIntoWktChunkGroups(simplified, evalscriptB64);
   if (!groups.length) return [];
 
-  if (maxTiles != null && Number.isFinite(maxTiles) && maxTiles > 0 && groups.length > maxTiles) {
+  if (groups.length > maxTiles) {
     groups = packOuterRingsIntoFixedBucketGroups(simplified, maxTiles, evalscriptB64);
   }
 

@@ -58,7 +58,7 @@ export function resolveAnalyticalResolutionMeta(): AnalyticalResolutionMeta {
 }
 
 const CORE_INDEX_LAYER_RE =
-  /^(NDVI|NDMI|NDWI|SAVI|EVI|GNDVI|NDRE|NDSI|MNDWI|BSI|CHAS|DCHAS)$/i
+  /^(NDVI|NDMI|NDWI|SAVI|EVI|GNDVI|NDRE|NDSI|MNDWI|AWEI|NBR|BSI|CHAS|DCHAS)$/i
 
 /** Layers that receive ARE (all analytical indices — not RGB presets). */
 export function isAnalyticalResolutionLayer(layerName: string): boolean {

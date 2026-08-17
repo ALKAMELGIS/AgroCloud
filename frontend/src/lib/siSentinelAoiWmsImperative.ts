@@ -46,6 +46,7 @@ export function isSiSentinelAoiWmsPingPongMapId(id: string): boolean {
 type PingPongChunkState = {
   activeSlot: SiSentinelAoiWmsPingPongSlot
   activeUrl: string
+  pendingUrl: string
   waitCleanup: (() => void) | null
 }
 
@@ -239,44 +240,37 @@ function commitActiveSlot(
     applyChunkPresentation(map, stack, chunkIdx, prevActive, false, presentation.opacity)
   }
   applyChunkPresentation(map, stack, chunkIdx, nextActive, presentation.visible, presentation.opacity)
-  runtime.chunks.set(chunkKey, { activeSlot: nextActive, activeUrl: url, waitCleanup: null })
+  runtime.chunks.set(chunkKey, {
+    activeSlot: nextActive,
+    activeUrl: url,
+    pendingUrl: '',
+    waitCleanup: null,
+  })
 }
-
-/** Safety net if `sourcedata` is missed after the inactive source actually loaded. */
-const SI_SENTINEL_AOI_WMS_SOURCE_READY_SAFETY_MS = 8_000
 
 function waitForSourceReady(
   map: MapboxMap,
   sourceId: string,
   onReady: () => void,
 ): () => void {
-  if (map.isSourceLoaded(sourceId)) {
-    onReady()
-    return () => undefined
-  }
-
   let settled = false
-  const finishIfLoaded = () => {
+
+  const finishIfReallyLoaded = (ev?: { sourceDataType?: string }) => {
     if (settled) return
-    // Never swap to an unloaded inactive slot — premature commit blanks the active frame.
+    // metadata / visibility fire while the previous template is still "loaded".
+    // Swapping on those events blanks the live index (appear → disappear).
+    const kind = ev?.sourceDataType
+    if (kind === 'metadata' || kind === 'visibility') return
     if (!map.isSourceLoaded(sourceId)) return
     settled = true
     cleanup()
     onReady()
   }
 
-  const handler = (ev: { sourceId?: string; isSourceLoaded?: boolean }) => {
+  const handler = (ev: { sourceId?: string; isSourceLoaded?: boolean; sourceDataType?: string }) => {
     if (ev.sourceId !== sourceId) return
-    finishIfLoaded()
+    finishIfReallyLoaded(ev)
   }
-
-  // Prefer sourcedata; never wait for map `idle` (ArcGIS / other layers can delay idle for seconds).
-  // Longer safety timeout only commits when the source is actually loaded (missed-event recovery).
-  // Timeout alone must not commit while still unloaded.
-  const timeoutId =
-    typeof window !== 'undefined'
-      ? window.setTimeout(finishIfLoaded, SI_SENTINEL_AOI_WMS_SOURCE_READY_SAFETY_MS)
-      : (0 as unknown as ReturnType<typeof setTimeout>)
 
   const cleanup = () => {
     try {
@@ -284,15 +278,12 @@ function waitForSourceReady(
     } catch {
       /* ignore */
     }
-    if (typeof window !== 'undefined') window.clearTimeout(timeoutId)
   }
 
   try {
     map.on('sourcedata', handler)
   } catch {
     cleanup()
-    // Map listener failed — only commit if already loaded; otherwise leave active slot presented.
-    if (map.isSourceLoaded(sourceId)) onReady()
     return () => undefined
   }
 
@@ -316,6 +307,15 @@ function syncChunkTilesPingPong(
   const activeUrl = state?.activeUrl ?? ''
 
   if (activeUrl === url) {
+    if (state?.pendingUrl || state?.waitCleanup) {
+      state.waitCleanup?.()
+      runtime.chunks.set(chunkKey, {
+        activeSlot,
+        activeUrl,
+        pendingUrl: '',
+        waitCleanup: null,
+      })
+    }
     const bounds = resolveSiSentinelAoiWmsChunkBounds(stack, chunk) ?? null
     for (const slot of [0, 1] as const) {
       const sourceId = siSentinelAoiWmsPingPongSourceId(stack.idPrefix, chunkIdx, slot)
@@ -326,6 +326,12 @@ function syncChunkTilesPingPong(
         slotUrlKey(chunkKey, slot),
       )
     }
+    applyChunkPresentation(map, stack, chunkIdx, activeSlot, presentation.visible, presentation.opacity)
+    applyChunkPresentation(map, stack, chunkIdx, otherSlot(activeSlot), false, presentation.opacity)
+    return
+  }
+
+  if (state?.pendingUrl === url && state.waitCleanup) {
     applyChunkPresentation(map, stack, chunkIdx, activeSlot, presentation.visible, presentation.opacity)
     applyChunkPresentation(map, stack, chunkIdx, otherSlot(activeSlot), false, presentation.opacity)
     return
@@ -361,9 +367,20 @@ function syncChunkTilesPingPong(
   const inactiveSrc = readRasterSource(map, inactiveSourceId)
   syncSiSentinelAoiWmsChunkTiles(inactiveSrc, url, runtime.appliedUrls, inactiveUrlKey)
 
-  // Index / date swaps: paint the new URL immediately while tiles stream in.
-  // Waiting for sourcedata left the previous frame (or blank) for seconds.
-  commitActiveSlot(map, stack, chunkIdx, runtime, inactiveSlot, url, presentation)
+  // Keep the previous index visible until the inactive source has tiles.
+  // Immediate hide→show was a one-frame blank on every live index switch.
+  applyChunkPresentation(map, stack, chunkIdx, activeSlot, presentation.visible, presentation.opacity)
+  applyChunkPresentation(map, stack, chunkIdx, inactiveSlot, false, presentation.opacity)
+
+  const waitCleanup = waitForSourceReady(map, inactiveSourceId, () => {
+    commitActiveSlot(map, stack, chunkIdx, runtime, inactiveSlot, url, presentation)
+  })
+  runtime.chunks.set(chunkKey, {
+    activeSlot,
+    activeUrl,
+    pendingUrl: url,
+    waitCleanup,
+  })
 }
 
 /**
@@ -450,14 +467,16 @@ export function reloadSiSentinelAoiWmsPingPongStackTiles(
   for (let i = 0; i < stack.displayChunks.length; i++) {
     const chunkKey = siSentinelAoiWmsChunkKey(stack.idPrefix, i)
     const state = runtime.chunks.get(chunkKey)
-    const slot = state?.activeSlot ?? 0
+    const activeSlot = state?.activeSlot ?? 0
     const url = String(stack.tileUrls[i] ?? '').trim()
     if (!url) continue
-    const urlKey = slotUrlKey(chunkKey, slot)
+    // Never setTiles on the visible slot — Mapbox drops painted tiles (appear → vanish).
+    const retrySlot = otherSlot(activeSlot)
+    const urlKey = slotUrlKey(chunkKey, retrySlot)
     if (options?.force) {
       runtime.appliedUrls.delete(urlKey)
     }
-    const src = readRasterSource(map, siSentinelAoiWmsPingPongSourceId(stack.idPrefix, i, slot))
+    const src = readRasterSource(map, siSentinelAoiWmsPingPongSourceId(stack.idPrefix, i, retrySlot))
     syncSiSentinelAoiWmsChunkTiles(src, url, runtime.appliedUrls, urlKey)
   }
 }

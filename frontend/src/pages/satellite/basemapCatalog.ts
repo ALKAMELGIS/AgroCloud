@@ -13,7 +13,7 @@ import {
   TOPOGRAPHIC_3D_BASEMAP_ID,
 } from '../../lib/agroCloudMapTerrain'
 import { getGoogleMapsApiKeyFromEnv } from '../../lib/googleMapsApiKey'
-import { rasterTileMaxNativeZoom } from '../../lib/rasterTileZoom'
+import { ensureRasterStyleMaxNativeZoom, rasterTileMaxNativeZoom } from '../../lib/rasterTileZoom'
 
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services'
 const ATTR_ESRI = 'Tiles © Esri'
@@ -112,11 +112,11 @@ export function rasterStyleFromTiles(layers: LeafletTileSpec[]): Record<string, 
       source: sid,
       paint:
         L.opacity != null
-          ? { 'raster-fade-duration': 0, 'raster-opacity': L.opacity }
-          : { 'raster-fade-duration': 0, 'raster-opacity': 1 },
+          ? { 'raster-fade-duration': 0, 'raster-opacity': L.opacity, 'raster-resampling': 'linear' }
+          : { 'raster-fade-duration': 0, 'raster-opacity': 1, 'raster-resampling': 'linear' },
     })
   })
-  return { version: 8 as const, sources, layers: mapLayers }
+  return ensureRasterStyleMaxNativeZoom({ version: 8 as const, sources, layers: mapLayers })
 }
 
 const OSM_RASTER: Record<string, unknown> = rasterStyleFromTiles([
@@ -339,7 +339,7 @@ export function mapboxGlStyleForEntry(entry: BasemapCatalogEntry, _mapboxToken =
     if (entry.leafletLayers?.length) return rasterStyleFromTiles(entry.leafletLayers)
     return ESRI_IMAGERY_STYLE
   }
-  return st
+  return typeof st === 'object' && st ? ensureRasterStyleMaxNativeZoom(st as Record<string, unknown>) : st
 }
 
 function rasterPreviewFromTemplate(template: string): string | null {

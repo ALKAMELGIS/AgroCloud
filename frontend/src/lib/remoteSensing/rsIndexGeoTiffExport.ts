@@ -115,6 +115,8 @@ function resolveIndexProfile(layerId: string): SentinelIndexEvalProfile | null {
     NDVI: 'ndvi',
     NDWI: 'ndwi',
     MNDWI: 'mndwi',
+    AWEI: 'awei',
+    NBR: 'nbr',
     NDMI: 'ndmi',
     EVI: 'evi',
     SAVI: 'savi',

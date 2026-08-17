@@ -90,6 +90,7 @@ const SEG_PHASE_LABEL: Record<FieldBoundaryPhase, string> = {
   capturing: 'Capturing imagery…',
   detecting: 'Detecting fields…',
   done: 'Fields ready',
+  empty: 'No fields found',
   error: 'Detection failed',
 }
 
@@ -394,7 +395,9 @@ export function EoLayerEnrichmentPanel({
             <div className="si-eo-enrich__msg">
               {segmentations.phase === 'error'
                 ? segmentations.error || SEG_PHASE_LABEL.error
-                : SEG_PHASE_LABEL[segmentations.phase]}
+                : segmentations.phase === 'empty'
+                  ? segmentations.error || SEG_PHASE_LABEL.empty
+                  : SEG_PHASE_LABEL[segmentations.phase]}
               {segBusy && segmentations.phase === 'detecting'
                 ? ` · ${Math.round(segmentations.progress)}%`
                 : ''}

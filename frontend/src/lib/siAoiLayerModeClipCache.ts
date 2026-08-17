@@ -11,6 +11,7 @@ import {
 } from './siAoiMaskBuilder'
 import { featureToPrimaryAoiFeature, isAgroStructuresLayer, buildAgroStructuresLayerAoiMask } from './agroStructuresPrimaryAoi'
 import {
+  buildEvalscriptB64ForLayer,
   buildSentinelHubWmsDisplayChunks,
   type BuildSentinelHubWmsAoiClipOptions,
   type SentinelHubWmsAoiClipPart,
@@ -24,6 +25,7 @@ const CHUNKS_CACHE_MAX = 48
 
 const maskCache = new Map<string, SiAoiLayerModeClipMask>()
 const chunksCache = new Map<string, SentinelHubWmsAoiClipPart[]>()
+const geometryChunksCache = new Map<string, Array<Omit<SentinelHubWmsAoiClipPart, 'evalscriptB64'>>>()
 
 function readFeatureProperties(raw: unknown): Record<string, unknown> {
   if (!raw || typeof raw !== 'object') return {}
@@ -198,27 +200,55 @@ export function siAoiLayerModeWarmChunksCacheKey(
   return siAoiLayerModeChunksCacheKey(settingsPinKey, layerName, sceneDate, options)
 }
 
+/** Geometry-only clip key — AOI mask packing, independent of live index / scene. */
+export function siAoiLayerModeGeometryCacheKey(
+  settingsPinKey: string,
+  options?: Pick<BuildSentinelHubWmsAoiClipOptions, 'maxTileLayers' | 'viewportBBox' | 'preferSingleRingChunks'>,
+): string {
+  return siAoiLayerModeChunksCacheKey(settingsPinKey, '__clip-geom__', '', {
+    maxTileLayers: options?.maxTileLayers,
+    viewportBBox: options?.viewportBBox,
+    preferSingleRingChunks: options?.preferSingleRingChunks,
+  })
+}
+
 export function getCachedSentinelHubWmsDisplayChunks(
   clipSource: unknown,
   layerName: string,
   options: BuildSentinelHubWmsAoiClipOptions | undefined,
   cacheKey: string,
 ): SentinelHubWmsAoiClipPart[] {
-  const hit = chunksCache.get(cacheKey)
-  // Never reuse an empty hit — cold enable often caches [] before the clip pin
-  // has features; the settings-only key would then permanently skip WMS tiles.
-  if (hit && hit.length > 0) return hit
-  const chunks = buildSentinelHubWmsDisplayChunks(clipSource, layerName, options)
-  if (chunks.length > 0) {
-    chunksCache.set(cacheKey, chunks)
-    trimCache(chunksCache, CHUNKS_CACHE_MAX)
-  } else {
-    chunksCache.delete(cacheKey)
+  const paintHit = chunksCache.get(cacheKey)
+  if (paintHit && paintHit.length > 0) return paintHit
+
+  const layerIdx = cacheKey.indexOf('|layer:')
+  const maskPin = layerIdx >= 0 ? cacheKey.slice(0, layerIdx) : cacheKey
+  const geomKey = siAoiLayerModeGeometryCacheKey(maskPin, options)
+  let geom = geometryChunksCache.get(geomKey)
+  if (!geom?.length) {
+    const packed = buildSentinelHubWmsDisplayChunks(clipSource, layerName, options)
+    if (!packed.length) {
+      chunksCache.delete(cacheKey)
+      return packed
+    }
+    geom = packed.map(({ geometryWkt3857, aoiBoundsLngLat }) => ({ geometryWkt3857, aoiBoundsLngLat }))
+    geometryChunksCache.set(geomKey, geom)
+    trimCache(geometryChunksCache, CHUNKS_CACHE_MAX)
   }
+
+  const evalscriptB64 = buildEvalscriptB64ForLayer(layerName, options)
+  const chunks = geom.map(part => ({
+    geometryWkt3857: part.geometryWkt3857,
+    aoiBoundsLngLat: part.aoiBoundsLngLat,
+    evalscriptB64,
+  }))
+  chunksCache.set(cacheKey, chunks)
+  trimCache(chunksCache, CHUNKS_CACHE_MAX)
   return chunks
 }
 
 export function clearSiAoiLayerModeClipCaches(): void {
   maskCache.clear()
   chunksCache.clear()
+  geometryChunksCache.clear()
 }

@@ -26,6 +26,8 @@ export type SentinelIndexEvalProfile =
   | 'ndwi'
   | 'mndwi'
   | 'ndmi'
+  | 'awei'
+  | 'nbr'
   | 'evi'
   | 'savi'
   | 'gndvi'
@@ -176,6 +178,32 @@ export const SENTINEL_NDWI_RAMP: RampStop[] = [
   [0.05, SENTINEL_NDWI_10_CLASS_COLORS[7]],
   [0.165, SENTINEL_NDWI_10_CLASS_COLORS[8]],
   [0.625, SENTINEL_NDWI_10_CLASS_COLORS[9]],
+]
+
+/** NBR burn severity: unburned green → moderate → severe burn (red). */
+export const SENTINEL_NBR_RAMP: RampStop[] = [
+  [-0.5, 0x7f0000],
+  [-0.1, 0xd32f2f],
+  [0.1, 0xf4511e],
+  [0.25, 0xffeb3b],
+  [0.4, 0xaed581],
+  [0.55, 0x66bb6a],
+  [0.7, 0x388e3c],
+  [0.85, 0x2e7d32],
+  [1, 0x1b5e20],
+]
+
+/** AWEI: dry land / built-up → open water (blue). */
+export const SENTINEL_AWEI_RAMP: RampStop[] = [
+  [-1, 0x3e2723],
+  [-0.5, 0x795548],
+  [-0.2, 0xbcaaa4],
+  [0, 0xf5f5f5],
+  [0.15, 0xb3e5fc],
+  [0.35, 0x4fc3f7],
+  [0.55, 0x039be5],
+  [0.75, 0x0277bd],
+  [1, 0x0d47a1],
 ]
 
 /** MNDWI (Xu): built-up/soil → water bodies (deep blue). */
@@ -336,6 +364,19 @@ const INDEX_EVAL_SPECS: Record<SentinelIndexEvalProfile, IndexEvalSpec> = {
     indexVar: 'mndwi',
     indexExpr: 'let mndwi = index(samples.B03, samples.B11);',
     ramp: SENTINEL_MNDWI_RAMP,
+  },
+  awei: {
+    inputs: ['B03', 'B08', 'B11', 'B12', 'dataMask'],
+    indexVar: 'awei',
+    indexExpr:
+      'let awei = 4.0 * (samples.B03 - samples.B11) - (0.25 * samples.B08 + 2.75 * samples.B12);',
+    ramp: SENTINEL_AWEI_RAMP,
+  },
+  nbr: {
+    inputs: ['B08', 'B12', 'dataMask'],
+    indexVar: 'nbr',
+    indexExpr: 'let nbr = index(samples.B08, samples.B12);',
+    ramp: SENTINEL_NBR_RAMP,
   },
   ndmi: {
     inputs: ['B8A', 'B11', 'dataMask'],

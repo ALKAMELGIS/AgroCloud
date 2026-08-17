@@ -1,0 +1,189 @@
+.si-sen2sr {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0 2px;
+  border-top: 1px solid rgba(148, 163, 184, 0.22);
+  margin-top: 2px;
+}
+.si-sen2sr__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.si-sen2sr__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #94a3b8;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.25);
+}
+.si-sen2sr__chip.is-available {
+  color: #86efac;
+  border-color: rgba(34, 197, 94, 0.45);
+  background: rgba(22, 101, 52, 0.22);
+}
+.si-sen2sr__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
+}
+.si-sen2sr__row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.si-sen2sr__row--check {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.si-sen2sr__label {
+  font-size: 11px;
+  color: #64748b;
+}
+.si-sen2sr__select {
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.45);
+  color: #ffffff;
+  color-scheme: dark;
+}
+.si-sen2sr__select option {
+  background: rgba(15, 23, 42, 0.96);
+  color: #ffffff;
+}
+.si-sen2sr__hint,
+.si-sen2sr__notice,
+.si-sen2sr__error,
+.si-sen2sr__file-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.si-sen2sr__hint,
+.si-sen2sr__file-hint {
+  color: #94a3b8;
+}
+.si-sen2sr__notice {
+  color: #86efac;
+}
+.si-sen2sr__error {
+  color: #fca5a5;
+}
+.si-sen2sr__upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.si-sen2sr__file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.si-sen2sr__file-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  font-size: 11px;
+  color: #e2e8f0;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 7px;
+  padding: 4px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.si-sen2sr__file-clear {
+  flex-shrink: 0;
+  margin-left: 2px;
+  border: 0;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.si-sen2sr__file-clear:hover {
+  color: #fff;
+}
+.si-sen2sr__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(15, 23, 42, 0.55);
+  color: #e2e8f0;
+  cursor: pointer;
+}
+.si-sen2sr__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.si-sen2sr__btn--primary {
+  background: rgba(14, 165, 233, 0.28);
+  border-color: rgba(56, 189, 248, 0.45);
+  color: #e0f2fe;
+  width: 100%;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-sen2sr {
+  border-top-color: rgba(148, 163, 184, 0.18);
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-sen2sr__label,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-sen2sr__hint,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-sen2sr__file-hint {
+  color: #64748b;
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-sen2sr__select {
+  background: #fff;
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.14);
+  color-scheme: light;
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-sen2sr__select option {
+  background: #fff;
+  color: #0f172a;
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-sen2sr__btn {
+  background: rgba(15, 23, 42, 0.04);
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.14);
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-sen2sr__btn--primary {
+  background: rgba(14, 165, 233, 0.12);
+  border-color: rgba(14, 165, 233, 0.35);
+  color: #0369a1;
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-sen2sr__file-name {
+  color: #0f172a;
+  background: rgba(15, 23, 42, 0.04);
+  border-color: rgba(15, 23, 42, 0.12);
+}

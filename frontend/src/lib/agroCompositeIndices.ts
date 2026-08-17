@@ -70,23 +70,27 @@ export const AGRO_CORE_INTERPRETATION_LAYER_IDS = [
   'NDVI',
   'NDMI',
   'NDWI',
+  'MNDWI',
+  'AWEI',
+  'NBR',
   'SAVI',
   'ET',
   'LST',
-  'DATAMASK',
 ] as const
 
 export type AgroCoreInterpretationLayerId = (typeof AGRO_CORE_INTERPRETATION_LAYER_IDS)[number]
 
 /** Full scientific names for Core Interpretation layers. */
 export const AGRO_CORE_LAYER_SCIENTIFIC_NAMES: Record<AgroCoreInterpretationLayerId, string> = {
-  NDVI: 'Normalized Difference Vegetation Index',
-  NDMI: 'Normalized Difference Moisture Index',
-  NDWI: 'Normalized Difference Water Index',
+  NDVI: 'NDVI = (B8 − B4) / (B8 + B4)',
+  NDMI: 'NDMI = (B8 − B11) / (B8 + B11)',
+  NDWI: 'NDWI = (B3 − B8) / (B3 + B8)',
+  MNDWI: 'MNDWI = (B3 − B11) / (B3 + B11)',
+  AWEI: 'AWEI = 4 × (B3 − B11) − (0.25 × B8 + 2.75 × B12)',
+  NBR: 'NBR = (B8 − B12) / (B8 + B12)',
   SAVI: 'Soil-Adjusted Vegetation Index',
   ET: 'Evapotranspiration (moisture-proxy mm/day)',
   LST: 'Land Surface Temperature (°C, NDVI·NDMI seasonal proxy)',
-  DATAMASK: 'Sentinel Hub dataMask — valid sample presence (1 = data, 0 = no data)',
 }
 
 /** Climate / precipitation — UCSB CHIRPS (not a Sentinel-2 optical layer). */
@@ -726,18 +730,6 @@ export function buildRemoteSensingLayerSelectGroups(
   })
 
   groups.push({
-    id: 'climate-precipitation',
-    label: 'Climate · Precipitation',
-    options: [
-      {
-        id: CHIRPS_PRECIP_LAYER_ID,
-        label: 'Precipitation / Rainfall Analysis',
-        scientificName: CHIRPS_PRECIP_SCIENTIFIC_NAME,
-      },
-    ],
-  })
-
-  groups.push({
     id: 'live-analysis-lulc',
     label: 'Live Analysis · Land Cover',
     options: [
@@ -827,6 +819,7 @@ export function buildRemoteSensingLayerSelectGroups(
     ...ALL_COMPOSITE_IDS,
     LULC_CLASSIFICATION_LAYER_ID,
     CHIRPS_PRECIP_LAYER_ID,
+    'DATAMASK',
     ...MANGROVE_LAYER_IDS.map(id => id.toUpperCase()),
   ])
 

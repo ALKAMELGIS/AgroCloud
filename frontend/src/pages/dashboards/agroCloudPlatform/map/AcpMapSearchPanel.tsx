@@ -108,7 +108,7 @@ export function AcpMapSearchPanel({ onClose }: Props) {
         return
       }
       if (hit.kind === 'place') {
-        acp.mapFlyToRef.current?.(hit.lng, hit.lat)
+        acp.mapFlyToRef.current?.(hit.lng, hit.lat, 12, { label: hit.label, meta: hit.meta })
         onClose()
         return
       }

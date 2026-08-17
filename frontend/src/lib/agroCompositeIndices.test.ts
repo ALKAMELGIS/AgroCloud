@@ -35,10 +35,12 @@ describe('agroCompositeIndices', () => {
       'NDVI',
       'NDMI',
       'NDWI',
+      'MNDWI',
+      'AWEI',
+      'NBR',
       'SAVI',
       'ET',
       'LST',
-      'DATAMASK',
     ])
     expect(groups.some(g => g.id === 'live-analysis-lulc')).toBe(true)
     expect(groups.some(g => g.label.includes('Vegetation Health'))).toBe(true)

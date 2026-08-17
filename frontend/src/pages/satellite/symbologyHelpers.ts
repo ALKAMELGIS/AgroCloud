@@ -3,6 +3,7 @@
  */
 import type {
   SymbologyClassMethod,
+  SymbologyClassOverride,
   SymbologyColorRamp,
   SymbologyConfig,
   SymbologyStyle,
@@ -33,10 +34,26 @@ export function darkenColor(hex: string, amount: number) {
   return rgbToHex(rgb.r * (1 - t), rgb.g * (1 - t), rgb.b * (1 - t));
 }
 
+export const SI_SYMBOLOGY_MAX_UNIQUE = 32;
+export const SI_SYMBOLOGY_MAX_CLASSES = 32;
+const FEATURE_SAMPLE_LIMIT = 500;
+
+/** Treat numeric strings (e.g. NDVI stored as text) as numbers for graduated symbology. */
+export function coerceNumericFieldValue(v: unknown): number | null {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string') {
+    const t = v.trim();
+    if (!t) return null;
+    const n = Number(t);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
 export function getGeoJsonFields(data: any) {
   const features = Array.isArray(data?.features) ? (data.features as any[]) : [];
   const fields = new Set<string>();
-  for (let i = 0; i < Math.min(features.length, 50); i += 1) {
+  for (let i = 0; i < Math.min(features.length, FEATURE_SAMPLE_LIMIT); i += 1) {
     const props = features[i]?.properties;
     if (!props || typeof props !== 'object') continue;
     Object.keys(props).forEach(k => fields.add(k));
@@ -47,13 +64,13 @@ export function getGeoJsonFields(data: any) {
 export function getNumericFields(data: any) {
   const features = Array.isArray(data?.features) ? (data.features as any[]) : [];
   const counts = new Map<string, { numeric: number; total: number }>();
-  for (let i = 0; i < Math.min(features.length, 200); i += 1) {
+  for (let i = 0; i < Math.min(features.length, FEATURE_SAMPLE_LIMIT); i += 1) {
     const props = features[i]?.properties;
     if (!props || typeof props !== 'object') continue;
     Object.entries(props).forEach(([k, v]) => {
       const cur = counts.get(k) ?? { numeric: 0, total: 0 };
       cur.total += 1;
-      if (typeof v === 'number' && Number.isFinite(v)) cur.numeric += 1;
+      if (coerceNumericFieldValue(v) != null) cur.numeric += 1;
       counts.set(k, cur);
     });
   }
@@ -61,6 +78,29 @@ export function getNumericFields(data: any) {
     .filter(([, v]) => v.total > 0 && v.numeric / v.total >= 0.6)
     .map(([k]) => k)
     .sort((a, b) => a.localeCompare(b));
+}
+
+/** Count features per categorical value for the Classes table. */
+export function countFieldValues(data: any, field: string): Map<string, number> {
+  const counts = new Map<string, number>();
+  const features = Array.isArray(data?.features) ? (data.features as any[]) : [];
+  for (let i = 0; i < Math.min(features.length, 5000); i += 1) {
+    const raw = features[i]?.properties?.[field];
+    if (raw === null || raw === undefined || raw === '') continue;
+    const key = String(raw);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/** Pick the first field from preferred names that exists on the layer. */
+export function pickPreferredField(allFields: string[], preferred: string[]): string | null {
+  const lower = new Map(allFields.map(f => [f.toLowerCase(), f]));
+  for (const p of preferred) {
+    const hit = lower.get(p.toLowerCase());
+    if (hit) return hit;
+  }
+  return null;
 }
 
 const getGeometryKind = (geomType: any): 'point' | 'line' | 'polygon' | 'other' => {
@@ -126,7 +166,7 @@ const quantileAt = (sorted: number[], q: number) => {
 const jenksBreaks = (data: number[], nClasses: number) => {
   const sorted = [...data].filter(v => Number.isFinite(v)).sort((a, b) => a - b);
   if (sorted.length === 0) return [0, 0];
-  const k = clampInt(nClasses, 2, 12);
+  const k = clampInt(nClasses, 2, SI_SYMBOLOGY_MAX_CLASSES);
   const n = sorted.length;
   const mat1: number[][] = Array.from({ length: n + 1 }, () => Array(k + 1).fill(0));
   const mat2: number[][] = Array.from({ length: n + 1 }, () => Array(k + 1).fill(0));
@@ -177,7 +217,7 @@ const jenksBreaks = (data: number[], nClasses: number) => {
 export function computeBreaks(values: number[], classes: number, method: SymbologyClassMethod) {
   const cleaned = values.filter(v => Number.isFinite(v));
   if (cleaned.length === 0) return [0, 0];
-  const k = clampInt(classes, 2, 12);
+  const k = clampInt(classes, 2, SI_SYMBOLOGY_MAX_CLASSES);
   const sorted = [...cleaned].sort((a, b) => a - b);
   const min = sorted[0];
   const max = sorted[sorted.length - 1];
@@ -214,7 +254,7 @@ const getRampStops = (ramp: SymbologyColorRamp) => {
 };
 
 export function sampleRamp(ramp: SymbologyColorRamp, n: number) {
-  const count = clampInt(n, 2, 12);
+  const count = clampInt(n, 2, SI_SYMBOLOGY_MAX_CLASSES);
   const stops = getRampStops(ramp).map(c => hexToRgb(c)).filter(Boolean) as Array<{ r: number; g: number; b: number }>;
   if (stops.length < 2) return Array.from({ length: count }, () => '#22c55e');
   const out: string[] = [];
@@ -239,12 +279,53 @@ export type SymbologyContext = {
   widths: number[];
   categories: string[];
   categoryColors: Record<string, string>;
+  categoryLabels: Record<string, string>;
+  categoryCounts: Record<string, number>;
+  categoryHidden: Record<string, boolean>;
   uniqueDashes: Record<string, string>;
   dotDashes: string[];
+  breakLabels: string[];
   otherColor: string;
   threshold: number;
   thresholdPoints?: any;
 };
+
+export type SymbologyLegendRow = { label: string; color: string; hidden?: boolean };
+
+/** Build on-map legend rows from custom (non-ArcGIS) symbology config + context. */
+export function buildCustomSymbologyLegendRows(
+  cfg: SymbologyConfig | undefined,
+  ctx: SymbologyContext | null,
+): SymbologyLegendRow[] {
+  if (!cfg || cfg.useArcGisOnline) return [];
+  if (!ctx) return [];
+  const style = cfg.style;
+  if (style === 'unique' && ctx.categories.length) {
+    return ctx.categories
+      .filter(v => !ctx.categoryHidden[v])
+      .map(v => ({
+        label: ctx.categoryLabels[v] ?? v,
+        color: ctx.categoryColors[v] ?? ctx.otherColor,
+      }));
+  }
+  if (
+    (style === 'color' || style === 'color_size' || style === 'dot_density' || style === 'threshold_markers') &&
+    ctx.breaks.length >= 2
+  ) {
+    const rows: SymbologyLegendRow[] = [];
+    for (let i = 0; i < ctx.colors.length; i += 1) {
+      const lo = ctx.breaks[i];
+      const hi = ctx.breaks[i + 1];
+      if (lo == null || hi == null) continue;
+      rows.push({
+        label: ctx.breakLabels[i] ?? `${lo.toFixed(2)} – ${hi.toFixed(2)}`,
+        color: ctx.colors[i] ?? ctx.otherColor,
+      });
+    }
+    return rows;
+  }
+  return [];
+}
 
 export function describeArcGisRendererVisualization(renderer: any): string {
   const type = renderer?.type;
@@ -269,16 +350,17 @@ export function inferVisualizationFromArcgisRenderer(renderer: any): Partial<Req
   if (type === 'uniqueValue') {
     const f1 = typeof renderer?.field1 === 'string' ? renderer.field1 : pickRendererPrimaryField(renderer);
     const n = flattenArcgisUniqueValueInfos(renderer).length;
-    const classes = clampInt(n > 0 ? Math.min(Math.max(n, 2), 12) : 12, 2, 12);
+    const classes = clampInt(n > 0 ? Math.min(Math.max(n, 2), SI_SYMBOLOGY_MAX_UNIQUE) : 12, 2, SI_SYMBOLOGY_MAX_UNIQUE);
     return { style: 'unique', field: f1, classes };
   }
   if (type === 'classBreaks') {
     const f = typeof renderer?.field === 'string' ? renderer.field : '';
     const n = Array.isArray(renderer?.classBreakInfos) ? renderer.classBreakInfos.length : 0;
-    const classes = clampInt(n > 0 ? Math.min(Math.max(n, 2), 12) : 5, 2, 12);
+    const classes = clampInt(n > 0 ? Math.min(Math.max(n, 2), SI_SYMBOLOGY_MAX_CLASSES) : 5, 2, SI_SYMBOLOGY_MAX_CLASSES);
     return { style: 'color', field: f, classes };
   }
-  return { style: 'color', field: '', classes: 5 };
+  // simple / missing / upload layers — Single symbol (do not force Graduated colors)
+  return { style: 'single', field: '', classes: 5 };
 }
 
 export function normalizeSymbologyForLayer(
@@ -290,14 +372,18 @@ export function normalizeSymbologyForLayer(
   const allFields = getGeoJsonFields(geojson);
   const numericFields = getNumericFields(geojson);
   const baseUseArcGisOnline = source === 'arcgis' || arcgisOnlineSupported;
-  const style = (cfg?.style as SymbologyStyle) || 'color';
+  // New layers paint immediately with Single symbol (black outline / hollow fill).
+  // Graduated / unique require an explicit user choice in Symbology Studio.
+  const style = (cfg?.style as SymbologyStyle) || 'single';
   const cfgField = typeof cfg?.field === 'string' ? cfg.field : '';
   const field =
-    style === 'unique'
-      ? cfgField || allFields[0] || numericFields[0] || ''
-      : numericFields.includes(cfgField)
-        ? cfgField
-        : numericFields[0] || '';
+    style === 'single'
+      ? cfgField
+      : style === 'unique'
+        ? cfgField || allFields[0] || numericFields[0] || ''
+        : numericFields.includes(cfgField)
+          ? cfgField
+          : numericFields[0] || '';
   const next: Required<SymbologyConfig> = {
     useArcGisOnline: baseUseArcGisOnline
       ? typeof cfg?.useArcGisOnline === 'boolean'
@@ -306,10 +392,20 @@ export function normalizeSymbologyForLayer(
       : false,
     style,
     field,
-    classes: clampInt(typeof cfg?.classes === 'number' ? cfg.classes : style === 'unique' ? 12 : 5, 2, 12),
+    classes: clampInt(
+      typeof cfg?.classes === 'number'
+        ? cfg.classes
+        : style === 'unique'
+          ? SI_SYMBOLOGY_MAX_UNIQUE
+          : 5,
+      2,
+      style === 'unique' ? SI_SYMBOLOGY_MAX_UNIQUE : SI_SYMBOLOGY_MAX_CLASSES,
+    ),
     method: (cfg?.method as SymbologyClassMethod) || 'jenks',
     colorRamp: (cfg?.colorRamp as SymbologyColorRamp) || 'viridis',
     threshold: typeof cfg?.threshold === 'number' && Number.isFinite(cfg.threshold) ? cfg.threshold : Number.NaN,
+    classOverrides: cfg?.classOverrides && typeof cfg.classOverrides === 'object' ? { ...cfg.classOverrides } : {},
+    breakOverrides: Array.isArray(cfg?.breakOverrides) ? [...cfg.breakOverrides] : [],
   };
   return next;
 }
@@ -333,32 +429,36 @@ export function buildSymbologyContext(geojson: any, cfg: Required<SymbologyConfi
   const values: number[] = [];
   if (cfg.field && cfg.style !== 'unique') {
     for (let i = 0; i < Math.min(features.length, 5000); i += 1) {
-      const v = features[i]?.properties?.[cfg.field];
-      if (typeof v === 'number' && Number.isFinite(v)) values.push(v);
+      const v = coerceNumericFieldValue(features[i]?.properties?.[cfg.field]);
+      if (v != null) values.push(v);
     }
   }
-  const classes = clampInt(cfg.classes, 2, 12);
+  const classes = clampInt(
+    cfg.classes,
+    2,
+    cfg.style === 'unique' ? SI_SYMBOLOGY_MAX_UNIQUE : SI_SYMBOLOGY_MAX_CLASSES,
+  );
   const breaks = values.length ? computeBreaks(values, classes, cfg.method) : [0, 0];
-  const colors = sampleRamp(cfg.colorRamp, classes);
+  let colors = sampleRamp(cfg.colorRamp, classes);
   const widths = toWidths(classes);
   const otherColor = '#94a3b8';
   const categories: string[] = [];
   const categoryColors: Record<string, string> = {};
+  const categoryLabels: Record<string, string> = {};
+  const categoryCounts: Record<string, number> = {};
+  const categoryHidden: Record<string, boolean> = {};
   const uniqueDashes: Record<string, string> = {};
   if (cfg.style === 'unique' && cfg.field) {
-    const counts = new Map<string, number>();
-    for (let i = 0; i < Math.min(features.length, 5000); i += 1) {
-      const raw = features[i]?.properties?.[cfg.field];
-      if (raw === null || raw === undefined || raw === '') continue;
-      const key = String(raw);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    const maxCats = clampInt(cfg.classes, 2, 12);
+    const counts = countFieldValues(geojson, cfg.field);
+    const maxCats = clampInt(cfg.classes, 2, SI_SYMBOLOGY_MAX_UNIQUE);
     const sortedCats = Array.from(counts.entries())
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .map(([k]) => k)
       .slice(0, maxCats);
     categories.push(...sortedCats);
+    sortedCats.forEach(k => {
+      categoryCounts[k] = counts.get(k) ?? 0;
+    });
     if (geometryKind === 'line') {
       sortedCats.slice(0, dashPatterns.length).forEach((v, idx) => {
         uniqueDashes[v] = dashPatterns[idx] ?? '';
@@ -368,6 +468,25 @@ export function buildSymbologyContext(geojson: any, cfg: Required<SymbologyConfi
       sortedCats.forEach((v, idx) => {
         categoryColors[v] = palette[idx % palette.length] ?? otherColor;
       });
+    }
+    for (const [rawKey, ov] of Object.entries(cfg.classOverrides ?? {})) {
+      if (!ov || typeof ov !== 'object') continue;
+      if (ov.color) categoryColors[rawKey] = ov.color;
+      if (ov.label) categoryLabels[rawKey] = ov.label;
+      if (ov.visible === false) categoryHidden[rawKey] = true;
+    }
+  }
+  if (
+    (cfg.style === 'color' || cfg.style === 'color_size' || cfg.style === 'size' || cfg.style === 'dot_density') &&
+    Array.isArray(cfg.breakOverrides) &&
+    cfg.breakOverrides.length
+  ) {
+    colors = colors.map((c, i) => cfg.breakOverrides?.[i]?.color ?? c);
+  }
+  const breakLabels: string[] = [];
+  if (cfg.breakOverrides?.length) {
+    for (let i = 0; i < classes; i += 1) {
+      breakLabels.push(cfg.breakOverrides[i]?.label ?? '');
     }
   }
   const dots = dotDashes(classes);
@@ -385,8 +504,12 @@ export function buildSymbologyContext(geojson: any, cfg: Required<SymbologyConfi
     widths,
     categories,
     categoryColors,
+    categoryLabels,
+    categoryCounts,
+    categoryHidden,
     uniqueDashes,
     dotDashes: dots,
+    breakLabels,
     otherColor,
     threshold: Number.isFinite(threshold) ? threshold : 0,
   };
@@ -394,8 +517,8 @@ export function buildSymbologyContext(geojson: any, cfg: Required<SymbologyConfi
     const pts: any[] = [];
     for (let i = 0; i < Math.min(features.length, 5000); i += 1) {
       const ft = features[i];
-      const v = ft?.properties?.[cfg.field];
-      if (typeof v !== 'number' || !Number.isFinite(v) || v < ctx.threshold) continue;
+      const v = coerceNumericFieldValue(ft?.properties?.[cfg.field]);
+      if (v == null || v < ctx.threshold) continue;
       const center = getGeometryCenter(ft?.geometry);
       if (!center) continue;
       pts.push({

@@ -11,16 +11,118 @@ import math
 import os
 from typing import Any
 
+FOW_HTTP_BASE = os.environ.get(
+    "FOW_HTTP_BASE",
+    "https://data.source.coop/ftw/global-data/predictions/vectors/alpha",
+).rstrip("/")
+# fiboa / results-by-admin-conf (country partitions). Prefer HTTPS — anonymous S3 listing is unreliable.
 FOW_PARQUET_GLOB = os.environ.get(
     "FOW_PARQUET_GLOB",
-    # Physical S3 prefix (llms.txt); HTTP mirror is https://data.source.coop/ftw/global-data/
-    "s3://us-west-2.opendata.source.coop/tge-labs/ftw-global-data/predictions/vectors/alpha/results/*.parquet",
-).strip()
-FOW_HTTP_PARQUET = os.environ.get(
-    "FOW_HTTP_PARQUET",
-    "https://data.source.coop/ftw/global-data/predictions/vectors/alpha/results/*.parquet",
+    f"{FOW_HTTP_BASE}/results-by-admin-conf/admin:country_code=*/*.parquet",
 ).strip()
 FOW_MAX_FEATURES = int(os.environ.get("FOW_MAX_FEATURES", "5000"))
+FOW_MIN_CONFIDENCE = float(os.environ.get("FOW_MIN_CONFIDENCE", "0"))
+
+
+def _sanitize_exc(exc: BaseException, limit: int = 180) -> str:
+    import re
+
+    text = " ".join(str(exc).split())
+    text = re.sub(r"https?://\S+", "[url]", text, flags=re.IGNORECASE)
+    text = re.sub(r"s3://\S+", "[s3]", text, flags=re.IGNORECASE)
+    if len(text) > limit:
+        return text[: limit - 1] + "…"
+    return text
+
+
+def _fow_globs(admin_iso: str = "") -> list[str]:
+    """Ordered parquet paths — exact country files first (wildcard listing is slow)."""
+    iso = admin_iso.strip().upper()
+    out: list[str] = []
+    names = {
+        "FR": "France",
+        "DE": "Germany",
+        "ES": "Spain",
+        "IT": "Italy",
+        "US": "UnitedStates",
+        "AE": "UnitedArabEmirates",
+        "SA": "SaudiArabia",
+        "EG": "Egypt",
+        "IQ": "Iraq",
+        "SY": "Syria",
+        "JO": "Jordan",
+        "LB": "Lebanon",
+        "TR": "Turkey",
+        "IR": "Iran",
+        "OM": "Oman",
+        "KW": "Kuwait",
+        "QA": "Qatar",
+        "BH": "Bahrain",
+        "YE": "Yemen",
+        "SD": "Sudan",
+        "LY": "Libya",
+        "TN": "Tunisia",
+        "DZ": "Algeria",
+        "MA": "Morocco",
+        "IN": "India",
+        "CN": "China",
+        "BR": "Brazil",
+        "AU": "Australia",
+        "CA": "Canada",
+        "MX": "Mexico",
+        "AR": "Argentina",
+        "UA": "Ukraine",
+        "PL": "Poland",
+        "RO": "Romania",
+        "HU": "Hungary",
+        "GB": "UnitedKingdom",
+        "NL": "Netherlands",
+        "BE": "Belgium",
+        "AT": "Austria",
+        "CH": "Switzerland",
+        "PT": "Portugal",
+        "GR": "Greece",
+        "CZ": "Czechia",
+        "SK": "Slovakia",
+        "BG": "Bulgaria",
+        "RS": "Serbia",
+        "HR": "Croatia",
+        "PK": "Pakistan",
+        "BD": "Bangladesh",
+        "ID": "Indonesia",
+        "TH": "Thailand",
+        "VN": "Vietnam",
+        "PH": "Philippines",
+        "MY": "Malaysia",
+        "NG": "Nigeria",
+        "ET": "Ethiopia",
+        "KE": "Kenya",
+        "ZA": "SouthAfrica",
+        "NZ": "NewZealand",
+        "JP": "Japan",
+        "KR": "SouthKorea",
+    }
+    if iso:
+        if iso in names:
+            out.append(
+                f"{FOW_HTTP_BASE}/results-by-admin-conf/admin:country_code={iso}/{names[iso]}.parquet"
+            )
+        out.append(
+            f"{FOW_HTTP_BASE}/results-by-admin-conf/admin:country_code={iso}/{iso}.parquet"
+        )
+        out.append(
+            f"{FOW_HTTP_BASE}/results-by-admin-conf/admin:country_code={iso}/*.parquet"
+        )
+    elif FOW_PARQUET_GLOB:
+        # Worldwide hive glob is a last resort (slow). Prefer FOW_ADMIN_ISO / admin_iso.
+        out.append(FOW_PARQUET_GLOB)
+    seen: set[str] = set()
+    uniq: list[str] = []
+    for g in out:
+        if g and g not in seen:
+            seen.add(g)
+            uniq.append(g)
+    return uniq
 
 
 def _instance_color(idx: int) -> str:
@@ -38,7 +140,14 @@ def _meters_per_deg(lat: float) -> tuple[float, float]:
     return max(m_lon, 1.0), max(m_lat, 1.0)
 
 
-def _feature_from_geom(geom: Any, idx: int, engine: str, mid_lat: float) -> dict | None:
+def _feature_from_geom(
+    geom: Any,
+    idx: int,
+    engine: str,
+    mid_lat: float,
+    *,
+    simplify_frac: float = 0.0008,
+) -> dict | None:
     from shapely.geometry import mapping
     from shapely.validation import make_valid
 
@@ -58,7 +167,11 @@ def _feature_from_geom(geom: Any, idx: int, engine: str, mid_lat: float) -> dict
     m_lon, m_lat = _meters_per_deg(mid_lat)
     p = max(polys, key=lambda x: x.area)
     try:
-        p = p.buffer(0).simplify(max(p.length * 0.0008, 1e-7), preserve_topology=True)
+        # Fix self-intersections; gentle simplify keeps edges close to the mask.
+        frac = max(0.0, float(simplify_frac))
+        p = p.buffer(0)
+        if frac > 0:
+            p = p.simplify(max(p.length * frac, 1e-8), preserve_topology=True)
         if p.is_empty or p.geom_type != "Polygon":
             p = max(polys, key=lambda x: x.area)
     except Exception:  # noqa: BLE001
@@ -121,7 +234,14 @@ def _clip_features(features: list[dict], aoi_geom) -> list[dict]:
     return out
 
 
-def fetch_fow_via_duckdb(west: float, south: float, east: float, north: float) -> list[Any]:
+def fetch_fow_via_duckdb(
+    west: float,
+    south: float,
+    east: float,
+    north: float,
+    admin_iso: str = "",
+) -> tuple[list[Any], dict[str, Any]]:
+    """Return (geometries, meta). meta may include fow_partition_missing=True."""
     import duckdb
     from shapely import wkb as shapely_wkb
 
@@ -132,12 +252,7 @@ def fetch_fow_via_duckdb(west: float, south: float, east: float, north: float) -
         con.execute("SET s3_region='us-west-2';")
         con.execute("SET s3_access_key_id='';")
         con.execute("SET s3_secret_access_key='';")
-        # Prefer path-style against Source Cooperative open data host when available
-        try:
-            con.execute("SET s3_endpoint='opendata.source.coop';")
-            con.execute("SET s3_url_style='path';")
-        except Exception:  # noqa: BLE001
-            pass
+        con.execute("SET s3_url_style='path';")
     except Exception:  # noqa: BLE001
         pass
     try:
@@ -145,23 +260,23 @@ def fetch_fow_via_duckdb(west: float, south: float, east: float, north: float) -
     except Exception:  # noqa: BLE001
         pass
 
-    # Prefer country-partitioned results when FOW_ADMIN_ISO is set (faster)
-    admin_iso = os.environ.get("FOW_ADMIN_ISO", "").strip().upper()
-    admin_glob = ""
-    if admin_iso:
-        admin_glob = (
-            f"s3://us-west-2.opendata.source.coop/tge-labs/ftw-global-data/"
-            f"predictions/vectors/alpha/results-by-admin/{admin_iso}/*.parquet"
+    iso = (admin_iso or os.environ.get("FOW_ADMIN_ISO", "")).strip().upper()
+    conf_clause = ""
+    if FOW_MIN_CONFIDENCE > 0:
+        conf_clause = (
+            f" AND (confidence IS NULL OR confidence >= {float(FOW_MIN_CONFIDENCE)})"
         )
+
     def _query(glob: str) -> list[Any]:
+        # New fiboa vectors have no `label` column — polygons are already field parcels.
         q = f"""
         SELECT ST_AsWKB(geometry) AS wkb
         FROM read_parquet('{glob}')
-        WHERE coalesce(label, 'field') = 'field'
-          AND struct_extract(bbox, 'xmax') >= {west}
+        WHERE struct_extract(bbox, 'xmax') >= {west}
           AND struct_extract(bbox, 'xmin') <= {east}
           AND struct_extract(bbox, 'ymax') >= {south}
           AND struct_extract(bbox, 'ymin') <= {north}
+          {conf_clause}
         LIMIT {FOW_MAX_FEATURES}
         """
         rows = con.execute(q).fetchall()
@@ -175,21 +290,40 @@ def fetch_fow_via_duckdb(west: float, south: float, east: float, north: float) -
                 continue
         return geoms
 
+    def _is_missing_partition(exc: BaseException) -> bool:
+        """True when Source Cooperative has no parquet for this country/path."""
+        msg = str(exc).lower()
+        return (
+            "404" in msg
+            or "not found" in msg
+            or "no files found" in msg
+            or "http get error" in msg and "404" in msg
+        )
+
     last_err: Exception | None = None
-    globs = [g for g in (admin_glob, FOW_PARQUET_GLOB, FOW_HTTP_PARQUET) if g]
-    for glob in globs:
+    only_missing = True
+    for glob in _fow_globs(iso):
         try:
-            return _query(glob)
+            return _query(glob), {"admin_iso": iso or None}
         except Exception as exc:  # noqa: BLE001
             last_err = exc
+            if not _is_missing_partition(exc):
+                only_missing = False
             continue
-    raise RuntimeError(str(last_err) if last_err else "FoW query failed")
+    # Country / partition missing from FoW alpha → empty AOI, not a 500.
+    if last_err is not None and only_missing:
+        return [], {
+            "fow_partition_missing": True,
+            "admin_iso": iso or None,
+        }
+    raise RuntimeError(_sanitize_exc(last_err) if last_err else "FoW query failed")
 
 
 def query_fow_fields(
     bbox: list[float],
     aoi_geom=None,
     min_area_m2: float = 50.0,
+    admin_iso: str | None = None,
 ) -> dict:
     if len(bbox) != 4:
         raise ValueError("bbox must be [west, south, east, north].")
@@ -201,12 +335,19 @@ def query_fow_fields(
 
     mid_lat = (south + north) / 2.0
     try:
-        geoms = fetch_fow_via_duckdb(west, south, east, north)
+        import duckdb  # noqa: F401
+    except ImportError as exc:
+        raise RuntimeError(
+            "FoW requires duckdb — pip install duckdb in the agri-field-boundary environment."
+        ) from exc
+    try:
+        geoms, fow_meta = fetch_fow_via_duckdb(
+            west, south, east, north, admin_iso=admin_iso or ""
+        )
         engine = "fow"
     except Exception as exc:  # noqa: BLE001
         raise RuntimeError(
-            "Could not load Fields of the World parcels via DuckDB/httpfs. "
-            f"Install duckdb and check network access to data.source.coop. Detail: {exc}"
+            "FoW catalog unreachable (DuckDB/network). " + _sanitize_exc(exc)
         ) from exc
 
     features: list[dict] = []
@@ -229,10 +370,16 @@ def query_fow_fields(
         f["id"] = props["field_id"]
         f["properties"] = props
 
+    stats: dict[str, Any] = {"field": len(features)}
+    if fow_meta.get("fow_partition_missing"):
+        stats["fow_partition_missing"] = True
+        if fow_meta.get("admin_iso"):
+            stats["admin_iso"] = fow_meta["admin_iso"]
+
     return {
         "geojson": {"type": "FeatureCollection", "features": features},
         "count": len(features),
-        "stats": {"field": len(features)},
+        "stats": stats,
         "score": 0.92 if features else 0.0,
         "width": 0,
         "height": 0,

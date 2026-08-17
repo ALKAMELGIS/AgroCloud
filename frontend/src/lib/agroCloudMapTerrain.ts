@@ -11,7 +11,7 @@
  */
 
 import { ensureBackendAvailable, resolveApiOrigin } from './apiOrigin'
-import { rasterTileMaxNativeZoom } from './rasterTileZoom'
+import { ensureRasterStyleMaxNativeZoom, rasterTileMaxNativeZoom } from './rasterTileZoom'
 
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services'
 const ATTR_ESRI = 'Tiles © Esri'
@@ -97,11 +97,13 @@ const HILLSHADE_PAINT = {
 const ESRI_HILLSHADE_OVERLAY_PAINT = {
   'raster-fade-duration': 0,
   'raster-opacity': 0.5,
+  'raster-resampling': 'linear',
 }
 
 const BASEMAP_RASTER_PAINT = {
   'raster-fade-duration': 0,
   'raster-opacity': 1,
+  'raster-resampling': 'linear',
 }
 
 function esriTile(servicePath: string): string {
@@ -241,7 +243,7 @@ export function build3dTopographicFlatFallbackStyle(): Record<string, unknown> {
       paint: L.opacity != null ? { ...BASEMAP_RASTER_PAINT, 'raster-opacity': L.opacity } : BASEMAP_RASTER_PAINT,
     })
   })
-  return { version: 8 as const, name: '3D Topographic (2D fallback)', sources, layers }
+  return ensureRasterStyleMaxNativeZoom({ version: 8 as const, name: '3D Topographic (2D fallback)', sources, layers })
 }
 
 export function build3dSatelliteLeafletLayers(): { url: string; attribution: string; opacity?: number }[] {
@@ -249,7 +251,7 @@ export function build3dSatelliteLeafletLayers(): { url: string; attribution: str
 }
 
 export function build3dSatelliteFlatFallbackStyle(): Record<string, unknown> {
-  return {
+  return ensureRasterStyleMaxNativeZoom({
     version: 8 as const,
     name: 'Satellite 3D (2D fallback)',
     sources: {
@@ -262,7 +264,7 @@ export function build3dSatelliteFlatFallbackStyle(): Record<string, unknown> {
       },
     },
     layers: [{ id: 'sat3d-base-layer', type: 'raster', source: 'sat3d-base', paint: BASEMAP_RASTER_PAINT }],
-  }
+  })
 }
 
 /**
@@ -277,7 +279,7 @@ export function build3dSatelliteFlatFallbackStyle(): Record<string, unknown> {
  * opaque imagery drapes over the relief once the camera tilts.
  */
 export function build3dSatelliteMapboxStyle(): Record<string, unknown> {
-  return {
+  return ensureRasterStyleMaxNativeZoom({
     version: 8 as const,
     name: 'Satellite 3D',
     projection: { name: 'globe' },
@@ -298,7 +300,7 @@ export function build3dSatelliteMapboxStyle(): Record<string, unknown> {
         paint: BASEMAP_RASTER_PAINT,
       },
     ],
-  }
+  })
 }
 
 /**
@@ -316,7 +318,7 @@ export function build3dSatelliteMapboxStyle(): Record<string, unknown> {
  * stack and drape over the terrain mesh automatically once it is enabled.
  */
 export function build3dTopographicMapboxStyle(): Record<string, unknown> {
-  return {
+  return ensureRasterStyleMaxNativeZoom({
     version: 8 as const,
     name: '3D Topographic',
     projection: { name: 'globe' },
@@ -344,7 +346,7 @@ export function build3dTopographicMapboxStyle(): Record<string, unknown> {
         paint: ESRI_HILLSHADE_OVERLAY_PAINT,
       },
     ],
-  }
+  })
 }
 
 type MapboxMapLike = {

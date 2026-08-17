@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import type { SymbologyClassMethod, SymbologyColorRamp, SymbologyStyle } from './components/LayerManager';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import type { SymbologyClassMethod, SymbologyColorRamp, SymbologyStyle } from './LayerManager';
 import type { ArcgisLayerDefLite } from '../../../lib/arcgisAttributeDisplay';
 import {
   arcLegendLabelForFieldValue,
@@ -18,7 +18,10 @@ import {
   getGeoJsonFields,
   getLayerGeometryKind,
   getNumericFields,
+  pickPreferredField,
   resolveLayerGeometryKind,
+  SI_SYMBOLOGY_MAX_CLASSES,
+  SI_SYMBOLOGY_MAX_UNIQUE,
   type SymbologyContext,
 } from '../symbologyHelpers';
 import {
@@ -28,7 +31,10 @@ import {
   type SiSymbologyAppearance,
 } from '../siSymbolStyleStudio';
 import { SiPointSymbolSection } from './SiPointSymbolSection';
+import { SiSymbologyClassesTable } from './SiSymbologyClassesTable';
+import type { SymbologyClassOverride, SymbologyBreakOverride } from './LayerManager';
 import './SiPointSymbolSection.css';
+import './SiSymbologyClassesTable.css';
 import './SiSymbologyStudioPanel.css';
 
 export type SiSymbologyDraft = {
@@ -40,7 +46,41 @@ export type SiSymbologyDraft = {
   colorRamp: SymbologyColorRamp;
   threshold: number;
   arcgisMaxCategories: number;
+  classOverrides?: Record<string, SymbologyClassOverride>;
+  breakOverrides?: SymbologyBreakOverride[];
 };
+
+const FIELD_SYMBOLOGY_PRESETS: Array<{
+  id: string;
+  label: string;
+  style: SymbologyStyle;
+  preferredFields: string[];
+}> = [
+  {
+    id: 'unique-crop',
+    label: 'Unique — crop / class',
+    style: 'unique',
+    preferredFields: ['Crop Type', 'class_name', 'Structure_Type', 'crop_type'],
+  },
+  {
+    id: 'grad-area',
+    label: 'Graduated — area (ha)',
+    style: 'color',
+    preferredFields: ['area_ha', 'Area_ha', 'Estimated Area (ha)', 'area'],
+  },
+  {
+    id: 'grad-ndvi',
+    label: 'Graduated — NDVI',
+    style: 'color',
+    preferredFields: ['NDVI', 'ndvi', 'Crop Health', 'Vegetation Coverage (%)'],
+  },
+  {
+    id: 'unique-structure',
+    label: 'Unique — structure type',
+    style: 'unique',
+    preferredFields: ['Structure_Type', 'structure_type', 'kind'],
+  },
+];
 
 type SymbologyLayer = {
   id: string;
@@ -80,17 +120,13 @@ type SectionDef = {
 
 const SECTIONS: SectionDef[] = [
   { id: 'renderer', title: 'Renderer', icon: <RendererIcon />, keywords: ['style', 'arcgis', 'attribute', 'geometry'] },
+  { id: 'classification', title: 'Classes', icon: <HistogramIcon />, keywords: ['breaks', 'jenks', 'quantile', 'classes', 'unique', 'graduated'] },
   { id: 'symbols', title: 'Symbol', icon: <BrushIcon />, keywords: ['outline', 'fill', 'stroke', 'size', 'point'] },
   { id: 'color', title: 'Color', icon: <PaletteIcon />, keywords: ['ramp', 'palette', 'hex', 'wheel'] },
-  { id: 'classification', title: 'Classification', icon: <HistogramIcon />, keywords: ['breaks', 'jenks', 'quantile', 'classes'] },
-  { id: 'labels', title: 'Labels', icon: <LabelIcon />, keywords: ['font', 'halo', 'placement'] },
   { id: 'transparency', title: 'Transparency', icon: <TransparencyIcon />, keywords: ['opacity', 'alpha'] },
-  { id: 'effects', title: 'Effects', icon: <SparklesIcon />, keywords: ['shadow', 'glow', 'blur'] },
-  { id: 'scale', title: 'Scale range', icon: <LayersIcon />, keywords: ['min', 'max', 'visible'] },
-  { id: 'blend', title: 'Blend mode', icon: <BlendIcon />, keywords: ['multiply', 'screen', 'overlay'] },
-  { id: 'reduction', title: 'Feature reduction', icon: <ClusterIcon />, keywords: ['cluster', 'binning'] },
   { id: 'legend', title: 'Legend preview', icon: <LegendIcon />, keywords: ['legend', 'preview'] },
-  { id: 'advanced', title: 'Advanced', icon: <SettingsIcon />, keywords: ['template', 'copy', 'paste', 'reset'] },
+  { id: 'advanced', title: 'Advanced', icon: <SettingsIcon />, keywords: ['template', 'copy', 'paste', 'reset', 'preset'] },
+  { id: 'more', title: 'More (coming soon)', icon: <SparklesIcon />, keywords: ['labels', 'scale', 'blend', 'cluster'] },
 ];
 
 function SectionCard({
@@ -285,12 +321,26 @@ export function SiSymbologyStudioPanel({
   const allFields = getGeoJsonFields(layer.geojson);
   const numericFields = getNumericFields(layer.geojson);
   const isUnique = symbologyDraft.style === 'unique';
+  const isGraduated = symbologyDraft.style === 'color' || symbologyDraft.style === 'color_size';
   const isSingle = symbologyDraft.style === 'single';
-  const classes = clampInt(symbologyDraft.classes, 2, 12);
+  const maxClasses = isUnique ? SI_SYMBOLOGY_MAX_UNIQUE : SI_SYMBOLOGY_MAX_CLASSES;
+  const classes = clampInt(symbologyDraft.classes, 2, maxClasses);
   const disabled = symbologyDraft.useArcGisOnline;
   const arcDef = layer.arcgisLayerDefinition ?? null;
   const fieldsByLower = buildArcFieldsByLower(arcDef);
   const fieldNm = symbologyDraft.field;
+
+  // Keep Classes + Color open while editing Unique / Graduated so the table is obvious.
+  useEffect(() => {
+    if (symbologyDraft.useArcGisOnline) return;
+    if (!isUnique && !isGraduated) return;
+    setExpanded(prev => ({
+      ...prev,
+      classification: true,
+      color: true,
+      legend: true,
+    }));
+  }, [isUnique, isGraduated, symbologyDraft.useArcGisOnline, symbologyDraft.field]);
 
   const resolvedDrawingInfo = useMemo(() => resolveLayerArcgisDrawingInfo(layer), [layer]);
 
@@ -359,16 +409,19 @@ export function SiSymbologyStudioPanel({
     if (symbologyDraft.style === 'unique') {
       if (kind === 'line') {
         const vals = ctx.categories.length ? ctx.categories : Object.keys(ctx.uniqueDashes);
-        vals.slice(0, 12).forEach(val => {
+        vals.slice(0, maxClasses).forEach(val => {
+          if (symbologyDraft.classOverrides?.[val]?.visible === false) return;
           items.push({ label: uniqueLegendLabel(val), kind, color: baseStroke, width: baseWeight, dash: ctx.uniqueDashes[val] ?? '' });
         });
         if (!vals.length) items.push({ label: 'No values', kind, color: baseStroke, width: baseWeight });
         return items;
       }
       const vals = ctx.categories.length ? ctx.categories : Object.keys(ctx.categoryColors);
-      vals.slice(0, 12).forEach(val => {
-        const fill = ctx.categoryColors[val] ?? ctx.otherColor;
-        items.push({ label: uniqueLegendLabel(val), kind, color: darkenColor(fill, 0.25), width: baseWeight, fill });
+      vals.slice(0, maxClasses).forEach(val => {
+        if (symbologyDraft.classOverrides?.[val]?.visible === false) return;
+        const fill = symbologyDraft.classOverrides?.[val]?.color ?? ctx.categoryColors[val] ?? ctx.otherColor;
+        const label = symbologyDraft.classOverrides?.[val]?.label ?? uniqueLegendLabel(val);
+        items.push({ label, kind, color: darkenColor(fill, 0.25), width: baseWeight, fill });
       });
       if (!vals.length) items.push({ label: 'No values', kind, color: baseStroke, width: baseWeight, fill: baseStroke });
       return items;
@@ -396,7 +449,7 @@ export function SiSymbologyStudioPanel({
       }
     }
     return items;
-  }, [symbologyCtx, arcgisSubtypeLegend, symbologyDraft.useArcGisOnline, appearance, layer, geometryKind, symbologyDraft, classes, isUnique, fieldNm, arcDef, fieldsByLower]);
+  }, [symbologyCtx, arcgisSubtypeLegend, symbologyDraft, appearance, layer, geometryKind, classes, isUnique, fieldNm, arcDef, fieldsByLower, maxClasses]);
 
   const showColor =
     symbologyDraft.style === 'color' ||
@@ -404,7 +457,19 @@ export function SiSymbologyStudioPanel({
     (isUnique && geometryKind !== 'line');
   const showSize = symbologyDraft.style === 'size' || symbologyDraft.style === 'color_size';
   const showMethod = !isSingle && symbologyDraft.style !== 'threshold_markers' && symbologyDraft.style !== 'unique';
-  const showClasses = !isSingle;
+  const showClassesTable = isUnique || isGraduated;
+
+  const applyFieldPreset = (preset: (typeof FIELD_SYMBOLOGY_PRESETS)[number]) => {
+    const fields = preset.style === 'unique' ? allFields : numericFields.length ? numericFields : allFields;
+    const field = pickPreferredField(fields, preset.preferredFields) ?? fields[0] ?? '';
+    onDraftChange({
+      useArcGisOnline: false,
+      style: preset.style,
+      field,
+      classOverrides: {},
+      breakOverrides: [],
+    });
+  };
 
   if (!visibleSections.length) {
     return <p className="si-sym-empty">No settings match your search.</p>;
@@ -519,49 +584,135 @@ export function SiSymbologyStudioPanel({
                     <p className="si-sym-muted">Select a graduated or unique renderer to edit color ramps.</p>
                   )}
                   <div className="si-sym-grid">
+                    <FieldRow label="Outline">
+                      <input
+                        className="si-sym-color"
+                        type="color"
+                        value={
+                          typeof appearance.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(appearance.color)
+                            ? appearance.color
+                            : '#000000'
+                        }
+                        onChange={e => onAppearanceChange({ color: e.target.value })}
+                      />
+                    </FieldRow>
                     <FieldRow label="Outline HEX">
                       <input className="si-sym-input" value={appearance.color} onChange={e => onAppearanceChange({ color: e.target.value })} />
                     </FieldRow>
-                    <FieldRow label="Fill HEX">
-                      <input className="si-sym-input" value={appearance.fillColor} onChange={e => onAppearanceChange({ fillColor: e.target.value })} />
-                    </FieldRow>
+                    {geometryKind === 'polygon' ? (
+                      <>
+                        <FieldRow label="Fill">
+                          <input
+                            className="si-sym-color"
+                            type="color"
+                            value={
+                              typeof appearance.fillColor === 'string' &&
+                              /^#[0-9A-Fa-f]{6}$/.test(appearance.fillColor)
+                                ? appearance.fillColor
+                                : '#000000'
+                            }
+                            onChange={e => onAppearanceChange({ fillColor: e.target.value })}
+                          />
+                        </FieldRow>
+                        <FieldRow label="Fill HEX">
+                          <input
+                            className="si-sym-input"
+                            value={appearance.fillColor}
+                            onChange={e => onAppearanceChange({ fillColor: e.target.value })}
+                          />
+                        </FieldRow>
+                        <FieldRow
+                          label={`Fill transparency (${Math.round((1 - (Number.isFinite(appearance.polygonFillAlpha) ? appearance.polygonFillAlpha : 0)) * 100)}%)`}
+                        >
+                          <input
+                            className="si-sym-range"
+                            type="range"
+                            min={0}
+                            max={100}
+                            value={Math.round(
+                              (1 - (Number.isFinite(appearance.polygonFillAlpha) ? appearance.polygonFillAlpha : 0)) *
+                                100,
+                            )}
+                            onChange={e =>
+                              onAppearanceChange({
+                                polygonFillAlpha: Math.max(0, Math.min(1, 1 - Number(e.target.value) / 100)),
+                              })
+                            }
+                          />
+                        </FieldRow>
+                      </>
+                    ) : (
+                      <FieldRow label="Fill HEX">
+                        <input
+                          className="si-sym-input"
+                          value={appearance.fillColor}
+                          onChange={e => onAppearanceChange({ fillColor: e.target.value })}
+                        />
+                      </FieldRow>
+                    )}
                   </div>
                 </>
               );
             case 'classification':
               if (disabled) return <p className="si-sym-muted">Available when custom symbology is enabled.</p>;
               return (
-                <div className="si-sym-grid">
-                  {showMethod ? (
-                    <FieldRow label="Method">
-                      <SelectInput value={symbologyDraft.method} onChange={v => onDraftChange({ method: v as SymbologyClassMethod })}>
-                        <option value="jenks">Natural breaks (Jenks)</option>
-                        <option value="quantile">Quantile</option>
-                        <option value="equal_interval">Equal interval</option>
-                      </SelectInput>
-                    </FieldRow>
-                  ) : null}
-                  {showClasses ? (
-                    <FieldRow label={isUnique ? 'Max categories' : 'Classes'}>
-                      <SelectInput value={String(classes)} onChange={v => onDraftChange({ classes: parseInt(v, 10) })}>
-                        {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
-                          <option key={n} value={String(n)}>
-                            {n}
-                          </option>
-                        ))}
-                      </SelectInput>
-                    </FieldRow>
-                  ) : null}
-                  {symbologyDraft.style === 'threshold_markers' ? (
-                    <FieldRow label="Threshold">
-                      <input
-                        className="si-sym-input"
-                        type="number"
-                        value={Number.isFinite(symbologyDraft.threshold) ? String(symbologyDraft.threshold) : ''}
-                        onChange={e => onDraftChange({ threshold: e.target.value === '' ? Number.NaN : Number(e.target.value) })}
-                      />
-                    </FieldRow>
-                  ) : null}
+                <>
+                  <div className="si-sym-grid">
+                    {showMethod ? (
+                      <FieldRow label="Method">
+                        <SelectInput value={symbologyDraft.method} onChange={v => onDraftChange({ method: v as SymbologyClassMethod })}>
+                          <option value="jenks">Natural breaks (Jenks)</option>
+                          <option value="quantile">Quantile</option>
+                          <option value="equal_interval">Equal interval</option>
+                        </SelectInput>
+                      </FieldRow>
+                    ) : null}
+                    {!isSingle ? (
+                      <FieldRow label={isUnique ? 'Max categories' : 'Classes'}>
+                        <SelectInput value={String(classes)} onChange={v => onDraftChange({ classes: parseInt(v, 10) })}>
+                          {Array.from({ length: maxClasses - 1 }, (_, i) => i + 2).map(n => (
+                            <option key={n} value={String(n)}>
+                              {n}
+                            </option>
+                          ))}
+                        </SelectInput>
+                      </FieldRow>
+                    ) : null}
+                    {symbologyDraft.style === 'threshold_markers' ? (
+                      <FieldRow label="Threshold">
+                        <input
+                          className="si-sym-input"
+                          type="number"
+                          value={Number.isFinite(symbologyDraft.threshold) ? String(symbologyDraft.threshold) : ''}
+                          onChange={e => onDraftChange({ threshold: e.target.value === '' ? Number.NaN : Number(e.target.value) })}
+                        />
+                      </FieldRow>
+                    ) : null}
+                  </div>
+                  {showClassesTable ? (
+                    <SiSymbologyClassesTable
+                      mode={isUnique ? 'unique' : 'graduated'}
+                      symbologyCtx={symbologyCtx}
+                      classOverrides={symbologyDraft.classOverrides}
+                      breakOverrides={symbologyDraft.breakOverrides}
+                      onClassOverrideChange={(valueKey, patch) =>
+                        onDraftChange({
+                          classOverrides: {
+                            ...(symbologyDraft.classOverrides ?? {}),
+                            [valueKey]: { ...(symbologyDraft.classOverrides?.[valueKey] ?? {}), ...patch },
+                          },
+                        })
+                      }
+                      onBreakOverrideChange={(index, patch) => {
+                        const prev = [...(symbologyDraft.breakOverrides ?? [])];
+                        while (prev.length <= index) prev.push({ min: 0, max: 0 });
+                        prev[index] = { ...prev[index], ...patch };
+                        onDraftChange({ breakOverrides: prev });
+                      }}
+                    />
+                  ) : (
+                    <p className="si-sym-muted">Choose Unique values or Graduated colors to edit per-class symbols.</p>
+                  )}
                   {legendItems.length > 0 ? (
                     <div className="si-sym-histogram">
                       {legendItems.map((it, i) => (
@@ -569,10 +720,21 @@ export function SiSymbologyStudioPanel({
                       ))}
                     </div>
                   ) : null}
-                </div>
+                </>
+              );
+            case 'more':
+              return (
+                <p className="si-sym-muted">
+                  Labels, scale range, blend modes, and feature reduction are planned. Use Labels from the layer
+                  options menu for field labeling today.
+                </p>
               );
             case 'labels':
-              return <p className="si-sym-muted">Label placement and Arcade expressions — configure from layer pop-ups. Full label editor coming soon.</p>;
+            case 'effects':
+            case 'scale':
+            case 'blend':
+            case 'reduction':
+              return null;
             case 'transparency':
               if (disabled) return <p className="si-sym-muted">Available when custom symbology is enabled.</p>;
               return (
@@ -585,36 +747,6 @@ export function SiSymbologyStudioPanel({
                   </FieldRow>
                 </>
               );
-            case 'effects':
-              if (disabled) return <p className="si-sym-muted">Available when custom symbology is enabled.</p>;
-              return (
-                <FieldRow label="Fill style (pattern / hatch)" hint="Stored for export; Mapbox uses opacity-based preview.">
-                  <SelectInput value={appearance.fillStyle} onChange={v => onAppearanceChange({ fillStyle: v as SiSymbologyAppearance['fillStyle'] })}>
-                    <option value="solid">Solid</option>
-                    <option value="pattern">Pattern</option>
-                    <option value="hatch">Hatch</option>
-                    <option value="gradient">Gradient</option>
-                  </SelectInput>
-                </FieldRow>
-              );
-            case 'scale':
-              return <p className="si-sym-muted">Scale-dependent visibility uses layer min/max scale from the service definition when available.</p>;
-            case 'blend':
-              if (disabled) return <p className="si-sym-muted">Available when custom symbology is enabled.</p>;
-              return (
-                <FieldRow label="Blend mode" hint="Stored for export; Mapbox GL uses layer opacity.">
-                  <SelectInput value={appearance.blendMode} onChange={v => onAppearanceChange({ blendMode: v as SiSymbologyAppearance['blendMode'] })}>
-                    <option value="normal">Normal</option>
-                    <option value="multiply">Multiply</option>
-                    <option value="screen">Screen</option>
-                    <option value="overlay">Overlay</option>
-                    <option value="darken">Darken</option>
-                    <option value="lighten">Lighten</option>
-                  </SelectInput>
-                </FieldRow>
-              );
-            case 'reduction':
-              return <p className="si-sym-muted">Clustering and binning apply to hosted feature layers in ArcGIS clients. Use viewport streaming for large datasets here.</p>;
             case 'legend':
               return (
                 <div className="si-sym-legend">
@@ -641,6 +773,20 @@ export function SiSymbologyStudioPanel({
             case 'advanced':
               return (
                 <>
+                  <div className="si-sym-presets" role="list">
+                    {FIELD_SYMBOLOGY_PRESETS.map(p => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className="si-sym-preset"
+                        role="listitem"
+                        onClick={() => applyFieldPreset(p)}
+                        disabled={disabled}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
                   <div className="si-sym-toolbar">
                     <button type="button" className="si-sym-btn" onClick={onReset} disabled={disabled}>
                       Reset

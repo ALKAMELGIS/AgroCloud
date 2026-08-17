@@ -199,6 +199,22 @@ function evaluatePixel(samples) {
 }`
 }
 
+const SLIM_VEG_MOISTURE_BLOCK = `let ndvi = index(samples.B08, samples.B04);
+  let savi = ((samples.B08 - samples.B04) * 1.5) / (samples.B08 + samples.B04 + 0.5);
+  let ndmi = index(samples.B08, samples.B11);
+  let ndwi = index(samples.B03, samples.B08);`
+
+/** ISS / WDSI / CPI only need NDVI+NDMI+NDWI+SAVI — skip the full agro core (keeps WMS URLs paintable). */
+function usesSlimVegMoistureCore(expr: string): boolean {
+  const e = String(expr || '')
+  if (!/\bndvi\b/.test(e) && !/\bsavi\b/.test(e) && !/\bndmi\b/.test(e) && !/\bndwi\b/.test(e)) {
+    return false
+  }
+  return !/\b(ndre|evi|ci_re|ndsi|ioi|clay_mi|fmi|ndai|bsi|reai|gei|gci|egci|mvi|remi|\bmi\b|mfi|ndre_b|cire|mtci|reip|wdsi|etstress)\b/.test(
+    e,
+  )
+}
+
 /** Static composite index evalscript (single scene, 10-class). */
 export function buildAgroCompositeEvalscript(
   layerId: string,
@@ -210,12 +226,17 @@ export function buildAgroCompositeEvalscript(
   if (!ramp) return null
   const indexVar = 'val'
   const { classifyFn, rgbConst } = buildTenClassEvalscriptBlock(ramp)
+  const slim = usesSlimVegMoistureCore(expr)
+  const inputBands = slim
+    ? '["B03", "B04", "B08", "B11", "dataMask"]'
+    : '["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12", "dataMask"]'
+  const indicesBlock = slim ? SLIM_VEG_MOISTURE_BLOCK : CORE_INDICES_BLOCK
 
   return `//VERSION=3
 // AgroCloud composite — 10-class layer-specific ramp
 function setup() {
   return {
-    input: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12", "dataMask"],
+    input: ${inputBands},
     output: { bands: 4 }
   };
 }
@@ -225,7 +246,7 @@ ${rgbConst}
 ${classifyFn}
 
 function evaluatePixel(samples) {
-  ${CORE_INDICES_BLOCK}
+  ${indicesBlock}
   let ${indexVar} = ${expr};
   if (!isFinite(${indexVar})) {
     return [0, 0, 0, 0];
