@@ -26,24 +26,66 @@ const EXCLUDE_DIRS = new Set([
   'test-results',
   'coverage',
   '.vite',
-  // Python tree-detection microservice runs separately (not on Hostinger Node);
-  // never bundle its multi-GB venv / model cache / logs into the deploy archive.
+  // Python microservices run separately (not on Hostinger Node).
   '.venv',
   'lightning_logs',
   'uploads',
+  'dist',
+  '.chirps-cache',
+  'cache',
+])
+
+/** Path prefixes omitted from the Hostinger source archive (no build output / large runtime data). */
+const EXCLUDE_PREFIXES = [
+  'backend/services/',
+  'frontend/dist/',
+  'assets/',
+  'avatars/',
+  'docs/',
+  'AgroCloud-Pages-Upload/',
+  'AgroCloud-GitHub-Ready/',
+  'sentinel-crop-alert/',
+]
+
+/** Root-level GitHub Pages artifacts — not needed for Hostinger Node deploy. */
+const ROOT_EXCLUDE_FILES = new Set([
+  'index.html',
+  '404.html',
+  '.nojekyll',
+  'manifest.webmanifest',
+  'registerSW.js',
+  'sw.js',
+  'vite.svg',
+  'robots.txt',
+  'agrocloud-logo.png',
+  'agrocloud-logo-core.png',
+  'agrocloud-mark-leaves.png',
+  'elite-agro-logo-white.png',
+  'favicon.png',
+  'favicon-16x16.png',
+  'favicon-32x32.png',
+  'apple-touch-icon.png',
+  'apple-touch-icon-152.png',
+  'apple-touch-icon-167.png',
+  'pwa-192x192.png',
+  'pwa-512x512.png',
+  'maskable-512x512.png',
 ])
 
 const EXCLUDE_FILES = new Set(['hostinger-deploy.zip', 'hostinger-deploy.tar.gz', '.env'])
 
 function shouldSkip(rel) {
-  const parts = rel.split(/[/\\]/).filter(Boolean)
+  const norm = rel.replace(/\\/g, '/')
+  const parts = norm.split('/').filter(Boolean)
   if (parts.some(p => EXCLUDE_DIRS.has(p))) return true
+  if (EXCLUDE_PREFIXES.some(prefix => norm.startsWith(prefix))) return true
   const base = parts[parts.length - 1] || ''
+  if (parts.length === 1 && ROOT_EXCLUDE_FILES.has(base)) return true
   if (EXCLUDE_FILES.has(base)) return true
   if (base.endsWith('.log')) return true
-  if (/-ELPLTMEDABASS01(?:\.|$)/.test(base) || rel.includes('-ELPLTMEDABASS01.')) return true
-  if (rel.endsWith('.br') || rel.endsWith('.gz')) return true
-  if (rel.startsWith('frontend/dist/') && (rel.endsWith('.br') || rel.endsWith('.gz'))) return true
+  if (/-ELPLTMEDABASS01(?:\.|$)/.test(base) || norm.includes('-ELPLTMEDABASS01.')) return true
+  if (norm.endsWith('.br') || norm.endsWith('.gz')) return true
+  if (base.startsWith('workbox-') && base.endsWith('.js')) return true
   return false
 }
 
@@ -59,21 +101,8 @@ function collectFiles(dir, base = dir, out = []) {
   return out
 }
 
-console.log('Running production build…')
-const build = spawnSync('npm', ['run', 'build:production'], {
-  cwd: repoRoot,
-  stdio: 'inherit',
-  shell: process.platform === 'win32',
-})
-if (build.status !== 0) {
-  console.error('Production build failed.')
-  process.exit(build.status ?? 1)
-}
-
-if (!fs.existsSync(path.join(repoRoot, 'frontend', 'dist', 'index.html'))) {
-  console.error('Missing frontend/dist/index.html after build.')
-  process.exit(1)
-}
+// Hostinger builds on the server (`npm run build` → scripts/build-hostinger.mjs).
+console.log('Packaging Hostinger source archive (no local build; server builds after upload)…')
 
 if (fs.existsSync(outZip)) fs.unlinkSync(outZip)
 
