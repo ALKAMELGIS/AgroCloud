@@ -49,6 +49,9 @@ export type RemoteSensingToolboxPanelProps = {
   aoiLayerMaskFeatureCount: number
   aoiLayerSelectedFeatureCount: number
   aoiLayerModeDisabled?: boolean
+  aoiQueryStatus?: 'idle' | 'loading' | 'complete' | 'error'
+  aoiExpectedCount?: number | null
+  aoiQueryError?: string | null
   sentinelLayerOptions: Array<{ id: string; label: string }>
   timeSeriesStart: string
   timeSeriesEnd: string
@@ -68,7 +71,6 @@ export type RemoteSensingToolboxPanelProps = {
   layerLegendOpen: boolean
   fieldTimelineActive: boolean
   onTimelinePrimaryClick: () => void
-  fieldAnalysisStatus: string | null
   onExportGeoTiff?: () => void
   exportGeoTiffBusy?: boolean
   exportGeoTiffLabel?: string | null
@@ -116,6 +118,9 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
     aoiLayerMaskFeatureCount,
     aoiLayerSelectedFeatureCount,
     aoiLayerModeDisabled = false,
+    aoiQueryStatus = 'idle',
+    aoiExpectedCount = null,
+    aoiQueryError = null,
     sentinelLayerOptions,
     timeSeriesStart,
     timeSeriesEnd,
@@ -125,7 +130,6 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
     layerLegendOpen,
     fieldTimelineActive,
     onTimelinePrimaryClick,
-    fieldAnalysisStatus,
     onExportGeoTiff,
     exportGeoTiffBusy = false,
     exportGeoTiffLabel = null,
@@ -283,6 +287,9 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
             selectedFeatureCount={aoiLayerSelectedFeatureCount}
             disabled={aoiLayerModeDisabled}
             zoomWarning={aoiLayerModeSettings.enabled ? wmsZoomWarning : null}
+            aoiQueryStatus={aoiQueryStatus}
+            aoiExpectedCount={aoiExpectedCount}
+            aoiQueryError={aoiQueryError}
           />
         </div>
 
@@ -430,8 +437,6 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
               : 'Export GeoTIFF (GIS)'}
           </button>
         ) : null}
-
-        {fieldAnalysisStatus ? <p className="si-rs-panel__status">{fieldAnalysisStatus}</p> : null}
       </div>
     </div>
   )

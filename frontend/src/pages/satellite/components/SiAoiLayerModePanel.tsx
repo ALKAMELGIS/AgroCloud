@@ -9,6 +9,10 @@ export type SiAoiLayerModePanelProps = {
   disabled?: boolean
   /** When set, index tiles cannot load at the current map zoom. */
   zoomWarning?: string | null
+  /** Full-layer analysis query (independent of map pan/zoom). */
+  aoiQueryStatus?: 'idle' | 'loading' | 'complete' | 'error'
+  aoiExpectedCount?: number | null
+  aoiQueryError?: string | null
 }
 
 const BOUNDARY_MODES: Array<{ id: SiAoiMaskMode; label: string }> = [
@@ -24,6 +28,9 @@ export function SiAoiLayerModePanel({
   selectedFeatureCount,
   disabled = false,
   zoomWarning = null,
+  aoiQueryStatus = 'idle',
+  aoiExpectedCount = null,
+  aoiQueryError = null,
 }: SiAoiLayerModePanelProps) {
   const patch = (partial: Partial<SiAoiMaskBuilderSettings>) => onChange({ ...settings, ...partial })
 
@@ -101,13 +108,28 @@ export function SiAoiLayerModePanel({
               Selection <strong>{selectedFeatureCount}</strong> · Clip{' '}
               <strong>{maskFeatureCount}</strong> polygon{maskFeatureCount === 1 ? '' : 's'}
             </>
+          ) : aoiQueryStatus === 'loading' ? (
+            <>
+              Loading AOI polygons
+              {aoiExpectedCount != null && aoiExpectedCount > 0
+                ? ` (${Math.min(maskFeatureCount, aoiExpectedCount)} / ${aoiExpectedCount})`
+                : maskFeatureCount > 0
+                  ? ` (${maskFeatureCount})`
+                  : ''}
+              …
+            </>
+          ) : aoiQueryStatus === 'error' ? (
+            <>{aoiQueryError || 'Could not load layer AOI from the service.'}</>
           ) : maskFeatureCount > 0 ? (
             <>
               Clipping index to <strong>{maskFeatureCount}</strong> polygon
               {maskFeatureCount === 1 ? '' : 's'}
+              {aoiExpectedCount != null && aoiExpectedCount > maskFeatureCount
+                ? ` of ${aoiExpectedCount}`
+                : ''}
             </>
           ) : (
-            <>Pan/zoom the map to load AOI polygons, or pick another layer.</>
+            <>Querying all layer polygons for Sentinel analysis…</>
           )}
         </p>
       ) : options.length === 0 ? (

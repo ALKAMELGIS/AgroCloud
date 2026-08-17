@@ -22,6 +22,12 @@ import {
   type BatchFieldSummaryResult,
   type FieldSummaryExportMode,
 } from './batchExportFieldSummaries'
+import {
+  buildAgriculturalObjectIntelligenceModel,
+  type AgriObjectIntelProgress,
+  type AgriObjectSourceFeature,
+} from './buildAgriculturalObjectIntelligenceModel'
+import { generateAgriculturalObjectIntelligenceExcel } from './generateAgriculturalObjectIntelligenceExcel'
 import type {
   ImageryChartType,
   ImageryTimeAggregation,
@@ -30,6 +36,7 @@ import type { TimeSeriesExportKind, TimeSeriesReportConfig } from './timeSeriesR
 import type { ImageryTimeSeriesLayerSeries } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import type { CropAlertFieldInput } from '../../../../lib/siCropAlertEngine'
 import type { PlotTimeSeriesAnalyticsOptions } from './plotTimeSeriesAnalyticsTypes'
+import type { SentinelHubDailyIndexMeans } from '../../../../lib/sentinelHubStatisticsApi'
 
 export type TimeSeriesExportContext = BuildTimeSeriesReportPayloadInput & {
   chartRef?: { current: { toBase64Image: (type?: string, quality?: number) => string; update?: (mode?: 'none') => void } | null } | null
@@ -49,6 +56,12 @@ export type TimeSeriesExportContext = BuildTimeSeriesReportPayloadInput & {
   onBatchFieldSummaryProgress?: (progress: BatchFieldSummaryProgress) => void
   /** individual = one PDF per field; combined = executive cover + pages. */
   fieldSummaryMode?: FieldSummaryExportMode
+  /** Full GeoJSON features with properties for Agricultural Object Intelligence. */
+  objectLayerFeatures?: AgriObjectSourceFeature[]
+  objectLayerName?: string
+  /** Optional pre-fetched zonal daily series keyed by fieldKey. */
+  objectDailyByFieldKey?: Map<string, SentinelHubDailyIndexMeans[]>
+  onAgriObjectIntelProgress?: (progress: AgriObjectIntelProgress) => void
 }
 
 export type TimeSeriesExportOptions = {
@@ -328,6 +341,59 @@ export async function runTimeSeriesExport(
         dataSource: 'Sentinel-2 (Sentinel Hub zonal statistics)',
         signal: options?.signal,
         onProgress: ctx.onPlotAnalyticsProgress,
+      })
+      break
+    }
+    case 'agri-object-intel-excel': {
+      const plots =
+        ctx.plots?.filter(p => p.geometry) ??
+        (ctx.field?.geometry
+          ? [
+              {
+                ...ctx.field,
+                fieldKey: ctx.fieldKey || ctx.field.fieldKey,
+                farmName: ctx.fieldName || ctx.field.farmName,
+              },
+            ]
+          : [])
+      if (!plots.length) {
+        throw new Error(
+          'Select at least one agricultural/object plot with geometry before exporting the Agricultural Object Intelligence Report.',
+        )
+      }
+      if (!ctx.fromDate || !ctx.toDate || ctx.fromDate > ctx.toDate) {
+        throw new Error('Set a valid Start/End date range before exporting the Agricultural Object Intelligence Report.')
+      }
+      ctx.onAgriObjectIntelProgress?.({
+        stage: 'reading_layer',
+        label: 'Generating Agricultural Intelligence Report...',
+        done: 0,
+        total: plots.length,
+      })
+      const model = await buildAgriculturalObjectIntelligenceModel({
+        plots,
+        features: ctx.objectLayerFeatures,
+        layerName: ctx.objectLayerName || ctx.aoiName || ctx.farmName || 'Selected layer',
+        fromDate: ctx.fromDate,
+        toDate: ctx.toDate,
+        acquisitionDate: ctx.acquisitionDate,
+        layerIds: ctx.layerIds,
+        dailyByFieldKey: ctx.objectDailyByFieldKey,
+        signal: options?.signal,
+        onProgress: ctx.onAgriObjectIntelProgress,
+      })
+      ctx.onAgriObjectIntelProgress?.({
+        stage: 'building_excel',
+        label: 'Building Excel report',
+        done: 1,
+        total: 1,
+      })
+      await generateAgriculturalObjectIntelligenceExcel(model)
+      ctx.onAgriObjectIntelProgress?.({
+        stage: 'completed',
+        label: 'Download Agricultural Intelligence Report.xlsx',
+        done: 1,
+        total: 1,
       })
       break
     }

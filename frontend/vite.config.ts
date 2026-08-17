@@ -224,8 +224,15 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes('node_modules')) return
           if (id.includes('mapbox-gl')) return 'mapbox-gl'
+          if (id.includes('maplibre-gl')) return 'maplibre-gl'
+          if (id.includes('leaflet')) return 'leaflet'
           if (id.includes('@fortawesome')) return 'vendor-icons'
           if (id.includes('chart.js') || id.includes('react-chartjs-2')) return 'vendor-charts'
+          if (id.includes('@turf')) return 'vendor-turf'
+          if (id.includes('exceljs')) return 'vendor-excel'
+          if (id.includes('/xlsx/') || id.includes('\\xlsx\\')) return 'vendor-xlsx'
+          if (id.includes('jspdf')) return 'vendor-pdf'
+          if (id.includes('geotiff')) return 'vendor-geotiff'
           if (id.includes('react-dom') || id.includes('react-router')) return 'vendor-react'
         },
       },

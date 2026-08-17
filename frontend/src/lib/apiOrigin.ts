@@ -12,30 +12,53 @@
  * (e.g. `eliteagrocloud.com`) keep working instead of POSTing to a static host that returns 405/404.
  */
 
+/** Hostinger Node that serves `/api/*` for the GitHub Pages custom domain. */
+export const ELITE_AGROCLOUD_API_ORIGIN = 'https://api.eliteagrocloud.com'
+
 function sameOrigin(): string {
   return typeof window !== 'undefined' && window.location?.origin ? window.location.origin : ''
+}
+
+function hostname(): string {
+  return typeof window !== 'undefined' && window.location?.hostname ? window.location.hostname : ''
+}
+
+/** www / apex are GitHub Pages. `api.` is the Hostinger Express app. */
+function isEliteAgrocloudPagesHost(host: string): boolean {
+  const h = String(host || '').toLowerCase()
+  return h === 'eliteagrocloud.com' || h === 'www.eliteagrocloud.com'
+}
+
+function originFromEnvUrl(raw: string): string {
+  try {
+    return new URL(raw, sameOrigin() || 'http://localhost').origin
+  } catch {
+    return ''
+  }
 }
 
 /** Trimmed value of the configured backend origin override, or '' when unset. */
 export function configuredApiOrigin(): string {
   const raw = import.meta.env.VITE_AGRI_API_SECRETS_URL
   const configured = typeof raw === 'string' ? raw.trim() : ''
-  if (!configured) return ''
-  try {
-    const origin = new URL(configured, sameOrigin() || 'http://localhost').origin
-    /**
-     * GitHub Pages / eliteagrocloud.com sometimes set VITE_AGRI_API_SECRETS_URL to the same
-     * static origin. That is not a Node backend — treat as unset so `/api/*` clients use
-     * browser fallbacks instead of POSTing into the SPA (404/405 + false "backend running" UX).
-     */
-    if (typeof window !== 'undefined' && origin === sameOrigin() && isKnownStaticHostname(window.location.hostname)) {
-      return ''
+  if (configured) {
+    const origin = originFromEnvUrl(configured)
+    if (origin) {
+      /**
+       * GitHub Pages sometimes sets VITE_AGRI_API_SECRETS_URL to the same static origin.
+       * That is not a Node backend — fall through to the Hostinger API host.
+       */
+      const onPages = typeof window !== 'undefined' && origin === sameOrigin() && isKnownStaticHostname(hostname())
+      if (!onPages) {
+        if (typeof window !== 'undefined' && origin === sameOrigin()) return ''
+        return origin
+      }
     }
-    return origin
-  } catch {
-    /* malformed override — caller falls back to same-origin */
-    return ''
   }
+  if (typeof window !== 'undefined' && isEliteAgrocloudPagesHost(hostname())) {
+    return ELITE_AGROCLOUD_API_ORIGIN
+  }
+  return ''
 }
 
 function isKnownStaticHostname(host: string): boolean {
@@ -43,7 +66,7 @@ function isKnownStaticHostname(host: string): boolean {
     /\.github\.io$/i.test(host) ||
     /\.pages\.dev$/i.test(host) ||
     /\.netlify\.app$/i.test(host) ||
-    /(^|\.)eliteagrocloud\.com$/i.test(host)
+    isEliteAgrocloudPagesHost(host)
   )
 }
 

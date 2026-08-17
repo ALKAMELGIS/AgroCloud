@@ -22,7 +22,7 @@ export const FONT_CATEGORY_LABEL: Record<FontCategoryId, string> = {
   arabic: 'Arabic support',
 }
 
-/** Font picker presets — all families below are bundled via `src/styles/fonts-local.css` (no CDN). */
+/** Font picker presets — core fonts in `fonts-core.css`; optional presets load on demand. */
 export const HEADER_FONT_LOCAL_BUNDLE_LOADED = true
 
 export const HEADER_FONT_PRESETS: FontPreset[] = [

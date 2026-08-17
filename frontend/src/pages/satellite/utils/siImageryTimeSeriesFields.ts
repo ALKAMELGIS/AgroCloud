@@ -518,3 +518,102 @@ export function resolveSiImageryField(
     geometry: sketch.geometry,
   }
 }
+
+export type SiImageryObjectSourceFeature = {
+  fieldKey: string
+  feature: GeoJSON.Feature
+}
+
+/**
+ * Full GeoJSON features (with properties) for Agricultural Object Intelligence export.
+ * Preserves layer attributes that CropAlertFieldInput strips.
+ */
+export function collectSiImageryObjectFeatures(
+  agroStructuresMask: GeoJSON.FeatureCollection | null | undefined,
+  aoiFields: SiAoiFieldRecord[],
+  committedAoiGeometry: GeoJSON.Geometry | null | undefined,
+  vectorLayers: SiAoiMaskBuilderLayerLike[] | null | undefined,
+  fieldKeys: string[],
+): SiImageryObjectSourceFeature[] {
+  const keys = fieldKeys.filter(Boolean)
+  if (!keys.length) return []
+  const effectiveAgroMask = resolveEffectiveAgroStructuresMask(agroStructuresMask, vectorLayers)
+  const out: SiImageryObjectSourceFeature[] = []
+
+  for (const fieldKey of keys) {
+    // Vector layer feature
+    const parsed = parseVectorLayerFieldKey(fieldKey)
+    if (parsed && vectorLayers?.length) {
+      const layer = vectorLayers.find(l => String(l?.id) === parsed.layerId)
+      const features = Array.isArray(layer?.geojson?.features) ? layer!.geojson!.features! : []
+      const raw = features[parsed.featureIndex] as GeoJSON.Feature | undefined
+      if (raw?.geometry) {
+        out.push({
+          fieldKey,
+          feature: {
+            type: 'Feature',
+            properties: { ...(raw.properties || {}), __fieldKey: fieldKey },
+            geometry: raw.geometry,
+          },
+        })
+        continue
+      }
+    }
+
+    // Agro structures
+    if (effectiveAgroMask?.features?.length) {
+      const agroField = resolveAgroStructureFieldByKey(effectiveAgroMask, fieldKey)
+      if (agroField?.geometry) {
+        const match = (effectiveAgroMask.features as GeoJSON.Feature[]).find((f, i) => {
+          const props = (f.properties || {}) as Record<string, unknown>
+          const oid = String(props.OBJECTID ?? props.objectid ?? props.FID ?? i)
+          return oid === agroField.objectId || String(props.Name ?? '') === agroField.farmName
+        })
+        out.push({
+          fieldKey,
+          feature: {
+            type: 'Feature',
+            properties: {
+              ...((match?.properties || {}) as Record<string, unknown>),
+              OBJECTID: agroField.objectId,
+              Name: agroField.farmName,
+              Structure_Type: agroField.structureType,
+              Country: agroField.country,
+              __fieldKey: fieldKey,
+            },
+            geometry: agroField.geometry,
+          },
+        })
+        continue
+      }
+    }
+
+    // Drawn AOI
+    if (fieldKey === SI_IMAGERY_COMMITTED_AOI_KEY && committedAoiGeometry) {
+      out.push({
+        fieldKey,
+        feature: {
+          type: 'Feature',
+          properties: { Name: SI_IMAGERY_DRAWN_AOI_LABEL, OBJECTID: 'aoi', __fieldKey: fieldKey },
+          geometry: committedAoiGeometry,
+        },
+      })
+      continue
+    }
+
+    // Sketch fields
+    const sketch = aoiFields.find(f => f.id === fieldKey)
+    if (sketch?.geometry) {
+      out.push({
+        fieldKey,
+        feature: {
+          type: 'Feature',
+          properties: { Name: sketch.name, OBJECTID: sketch.id, __fieldKey: fieldKey },
+          geometry: sketch.geometry,
+        },
+      })
+    }
+  }
+
+  return out
+}

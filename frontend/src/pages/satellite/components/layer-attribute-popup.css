@@ -1,37 +1,43 @@
-/* ArcGIS-style feature identify popup (image 1 reference) */
+/* ArcGIS Online–style feature identify popup (compact, dense attributes) */
 
 .gis-map-popup.gis-map-popup--arcgis {
   position: absolute;
-  --gis-popup-max-h: min(68vh, 480px);
+  --gis-popup-max-h: min(62vh, 420px);
   --arcgis-popup-bg: #ffffff;
-  --arcgis-popup-line: #e0e0e0;
-  --arcgis-popup-text: #333333;
-  --arcgis-popup-muted: #666666;
-  --arcgis-popup-zebra: #f3f3f3;
-  width: min(400px, calc(100vw - 24px));
+  --arcgis-popup-line: #e4e4e4;
+  --arcgis-popup-text: #323232;
+  --arcgis-popup-muted: #6e6e6e;
+  --arcgis-popup-zebra: #f6f6f6;
+  --arcgis-popup-chrome: 92px;
+  width: min(288px, calc(100vw - 20px));
   max-height: var(--gis-popup-max-h);
   background: var(--arcgis-popup-bg);
   border: 1px solid var(--arcgis-popup-line);
   border-radius: 0 !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22), 0 0 1px rgba(0, 0, 0, 0.18);
   color: var(--arcgis-popup-text);
-  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-family: 'Avenir Next', 'Avenir', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .gis-map-popup--arcgis.maximized {
-  --gis-popup-max-h: min(76vh, 560px);
-  width: min(480px, calc(100vw - 24px));
+  --gis-popup-max-h: min(72vh, 520px);
+  --arcgis-popup-chrome: 96px;
+  width: min(360px, calc(100vw - 20px));
 }
 
 .gis-map-popup--arcgis .gis-map-popup-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 6px;
+  padding: 6px 8px 6px 10px;
+  min-height: 30px;
   background: var(--arcgis-popup-bg);
   border-bottom: 1px solid var(--arcgis-popup-line);
+  flex-shrink: 0;
 }
 
 .gis-map-popup--arcgis .gis-map-popup-title {
@@ -39,21 +45,22 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 700;
-  font-size: 16px;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.25;
   color: var(--arcgis-popup-text);
 }
 
 .gis-map-popup--arcgis .gis-map-popup-headactions {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 0;
   flex-shrink: 0;
 }
 
 .gis-map-popup--arcgis .gis-map-popup-headbtn {
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   border: none;
   border-radius: 0 !important;
   background: transparent;
@@ -62,19 +69,20 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 11px;
 }
 
 .gis-map-popup--arcgis .gis-map-popup-headbtn:hover {
   color: var(--arcgis-popup-text);
-  background: rgba(0, 0, 0, 0.04);
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .gis-map-popup--arcgis .gis-map-popup-toolbar {
   display: flex;
   align-items: center;
   gap: 0;
-  padding: 0 4px;
+  padding: 0 2px;
+  min-height: 28px;
   background: var(--arcgis-popup-bg);
   border-bottom: 1px solid var(--arcgis-popup-line);
   flex-shrink: 0;
@@ -83,36 +91,38 @@
 .gis-map-popup--arcgis .gis-map-popup-toolbtn {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 5px;
   border: 0;
   background: transparent;
   color: var(--arcgis-popup-muted);
-  font-size: 13px;
-  font-weight: 400;
-  padding: 9px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 5px 8px;
   cursor: pointer;
   border-radius: 0 !important;
+  line-height: 1.2;
 }
 
 .gis-map-popup--arcgis .gis-map-popup-toolbtn:hover {
   color: var(--arcgis-popup-text);
-  background: rgba(0, 0, 0, 0.04);
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .gis-map-popup--arcgis .gis-map-popup-toolbtn--active {
-  color: var(--arcgis-popup-text);
+  color: #0079c1;
   font-weight: 600;
 }
 
 .gis-map-popup--arcgis .gis-map-popup-toolbtn > i {
-  font-size: 14px;
-  width: 16px;
+  font-size: 11px;
+  width: 12px;
   text-align: center;
 }
 
 .gis-map-popup--arcgis .gis-map-popup-body {
   padding: 0;
-  max-height: calc(var(--gis-popup-max-h) - 128px);
+  flex: 1 1 auto;
+  max-height: calc(var(--gis-popup-max-h) - var(--arcgis-popup-chrome));
   overflow: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -127,7 +137,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 4px 8px;
+  min-height: 28px;
   border-top: 1px solid var(--arcgis-popup-line);
   background: var(--arcgis-popup-bg);
   flex-shrink: 0;
@@ -136,12 +147,12 @@
 .gis-map-popup-footer-nav {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 0;
 }
 
 .gis-map-popup-footer-btn {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border: none;
   border-radius: 0 !important;
   background: transparent;
@@ -150,11 +161,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  font-size: 11px;
 }
 
 .gis-map-popup-footer-btn:hover:not(:disabled) {
   color: var(--arcgis-popup-text);
-  background: rgba(0, 0, 0, 0.04);
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .gis-map-popup-footer-btn:disabled {
@@ -165,19 +177,19 @@
 .gis-map-popup-footer-count {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: 6px;
+  font-size: 11px;
   color: var(--arcgis-popup-muted);
 }
 
 .gis-map-popup-footer-count > i {
-  font-size: 14px;
+  font-size: 11px;
 }
 
-/* Attribute table body */
+/* Attribute table body — dense ArcGIS Online field list */
 .lap-body--arcgis {
   display: block;
-  font-size: 13px;
+  font-size: 11px;
 }
 
 .lap-body--arcgis .gis-map-popup-dl {
@@ -187,9 +199,10 @@
 
 .lap-body--arcgis .gis-map-popup-row {
   display: grid;
-  grid-template-columns: minmax(0, 42%) minmax(0, 1fr);
-  align-items: stretch;
+  grid-template-columns: minmax(0, 40%) minmax(0, 1fr);
+  align-items: start;
   border-bottom: none;
+  min-height: 0;
 }
 
 .lap-body--arcgis .gis-map-popup-row:nth-child(odd) {
@@ -202,50 +215,50 @@
 
 .lap-body--arcgis .gis-map-popup-k {
   margin: 0;
-  padding: 9px 12px;
+  padding: 4px 8px;
   background: transparent;
-  font-weight: 400;
-  font-size: 11px;
+  font-weight: 500;
+  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.02em;
   color: var(--arcgis-popup-muted);
   word-break: break-word;
-  line-height: 1.35;
+  line-height: 1.3;
 }
 
 .lap-body--arcgis .gis-map-popup-v {
   margin: 0;
-  padding: 9px 12px;
+  padding: 4px 8px;
   font-weight: 400;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--arcgis-popup-text);
   border-left: none;
   overflow: visible;
   text-overflow: unset;
   white-space: normal;
   word-break: break-word;
-  line-height: 1.4;
+  line-height: 1.35;
   font-variant-numeric: tabular-nums;
 }
 
 .lap-body--arcgis .lap-empty {
-  margin: 16px 12px;
+  margin: 12px 10px;
   color: var(--arcgis-popup-muted);
-  font-size: 13px;
+  font-size: 11px;
   text-align: center;
 }
 
 .lap-body--arcgis .lap-load-more {
   display: block;
-  width: calc(100% - 24px);
-  margin: 8px 12px 12px;
-  padding: 8px;
+  width: calc(100% - 16px);
+  margin: 6px 8px 8px;
+  padding: 5px;
   border: 1px dashed var(--arcgis-popup-line);
   border-radius: 0 !important;
   background: transparent;
-  color: var(--arcgis-popup-muted);
+  color: #0079c1;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .lap-body--arcgis .lap-load-more:hover {
@@ -254,7 +267,7 @@
 
 .lap-body--arcgis .lap-media--image img {
   max-width: 100%;
-  max-height: 120px;
+  max-height: 88px;
   border: 1px solid var(--arcgis-popup-line);
   border-radius: 0 !important;
   object-fit: cover;
@@ -263,7 +276,7 @@
 .lap-body--arcgis .lap-media--link {
   color: #0079c1;
   text-decoration: none;
-  font-size: 13px;
+  font-size: 11px;
   word-break: break-all;
 }
 
@@ -278,9 +291,9 @@
   content: '';
   position: absolute;
   left: var(--arrow-left, 50%);
-  width: 12px;
-  height: 12px;
-  bottom: -7px;
+  width: 10px;
+  height: 10px;
+  bottom: -6px;
   background: var(--arcgis-popup-bg);
   transform: translateX(-50%) rotate(45deg);
   border-right: 1px solid var(--arcgis-popup-line);
@@ -291,43 +304,49 @@
   content: '';
   position: absolute;
   left: var(--arrow-left, 50%);
-  width: 12px;
-  height: 12px;
-  top: -7px;
+  width: 10px;
+  height: 10px;
+  top: -6px;
   background: var(--arcgis-popup-bg);
   transform: translateX(-50%) rotate(45deg);
   border-left: 1px solid var(--arcgis-popup-line);
   border-top: 1px solid var(--arcgis-popup-line);
 }
 
-/* Geo AI map-anchored identify popup — small-to-medium (opened by clicking the
-   dropped pin, never auto-shown). */
+/* Geo AI map-anchored identify — compact card, taller attribute scroll */
 .si-geo-ai-inspect-marker .gis-map-popup.gis-map-popup--arcgis {
-  width: min(290px, calc(100vw - 24px));
-  --gis-popup-max-h: min(46vh, 320px);
+  width: min(268px, calc(100vw - 16px));
+  --gis-popup-max-h: min(54vh, 380px);
+  --arcgis-popup-chrome: 84px;
 }
 
 .si-geo-ai-inspect-marker .gis-map-popup--arcgis.maximized {
-  width: min(380px, calc(100vw - 24px));
-  --gis-popup-max-h: min(64vh, 460px);
+  width: min(340px, calc(100vw - 16px));
+  --gis-popup-max-h: min(68vh, 480px);
+  --arcgis-popup-chrome: 88px;
 }
 
 .si-geo-ai-inspect-marker .gis-map-popup--arcgis .gis-map-popup-title {
-  font-size: 14px;
-}
-
-.si-geo-ai-inspect-marker .lap-body--arcgis,
-.si-geo-ai-inspect-marker .lap-body--arcgis .gis-map-popup-v {
   font-size: 12px;
 }
 
-.si-geo-ai-inspect-marker .lap-body--arcgis .gis-map-popup-k {
+.si-geo-ai-inspect-marker .gis-map-popup--arcgis .gis-map-popup-toolbar {
+  min-height: 26px;
+}
+
+.si-geo-ai-inspect-marker .gis-map-popup--arcgis .gis-map-popup-toolbtn {
+  padding: 4px 7px;
   font-size: 10px;
 }
 
-.si-geo-ai-inspect-marker .lap-body--arcgis .gis-map-popup-k,
+.si-geo-ai-inspect-marker .lap-body--arcgis .gis-map-popup-k {
+  font-size: 9px;
+  padding: 3px 7px;
+}
+
 .si-geo-ai-inspect-marker .lap-body--arcgis .gis-map-popup-v {
-  padding: 7px 10px;
+  font-size: 10.5px;
+  padding: 3px 7px;
 }
 
 .si-feature-identify-card.gis-map-popup {
@@ -343,7 +362,8 @@
 .si-feature-identify-card--docked {
   width: 100%;
   max-width: none;
-  max-height: min(52vh, 420px);
+  max-height: min(56vh, 460px);
+  --gis-popup-max-h: min(56vh, 460px);
 }
 
 .si-geo-ai-inspect-side-stack .si-feature-identify-card {
@@ -356,13 +376,13 @@
 
 /* Edit form inside ArcGIS popup */
 .gis-map-popup--arcgis .gis-map-popup-form {
-  padding: 12px;
+  padding: 8px;
 }
 
 .gis-map-popup--arcgis .gis-map-popup-fieldlabel {
   font-weight: 600;
   color: var(--arcgis-popup-muted);
-  font-size: 11px;
+  font-size: 10px;
   text-transform: uppercase;
 }
 
@@ -371,20 +391,22 @@
   border: 1px solid var(--arcgis-popup-line);
   background: #fff;
   color: var(--arcgis-popup-text);
+  font-size: 11px;
+  padding: 4px 6px;
 }
 
 @media (max-width: 480px) {
   .gis-map-popup.gis-map-popup--arcgis {
-    width: calc(100vw - 16px);
-    max-height: min(88dvh, calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px));
+    width: calc(100vw - 12px);
+    max-height: min(82dvh, calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 20px));
   }
 
   .gis-map-popup--arcgis .gis-map-popup-header {
-    padding: 12px 14px;
+    padding: 7px 10px;
   }
 
   .gis-map-popup--arcgis .gis-map-popup-title {
-    font-size: 15px;
+    font-size: 13px;
     white-space: normal;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -393,7 +415,7 @@
   }
 
   .gis-map-popup--arcgis .gis-map-popup-body {
-    max-height: calc(var(--gis-popup-max-h) - 140px);
+    max-height: calc(var(--gis-popup-max-h) - var(--arcgis-popup-chrome));
   }
 
   .lap-body--arcgis .gis-map-popup-row {
@@ -402,7 +424,7 @@
 
   .lap-body--arcgis .gis-map-popup-k,
   .lap-body--arcgis .gis-map-popup-v {
-    padding: 10px 12px;
+    padding: 5px 8px;
   }
 
   .lap-body--arcgis .gis-map-popup-v {

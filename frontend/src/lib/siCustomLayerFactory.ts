@@ -129,15 +129,10 @@ export function withSiImportedLayerDefaults(
   layer: SiCustomLayerBase,
   opts?: { portalStyle?: boolean; portalColors?: { color: string; fillColor: string; weight: number; polygonFillAlpha: number } },
 ): SiCustomLayerBase {
-  const vectorDefaults = opts?.portalStyle && opts.portalColors
-    ? {
-        ...siDefaultNewVectorLayerFields(),
-        color: opts.portalColors.color,
-        fillColor: opts.portalColors.fillColor,
-        weight: opts.portalColors.weight,
-        polygonFillAlpha: opts.portalColors.polygonFillAlpha,
-      }
-    : siDefaultNewVectorLayerFields();
+  // All add paths (upload / API / portal / ArcGIS): black outline, hollow fill (alpha 0).
+  // `opts.portalColors` is retained for API compatibility but ignored so imports stay hollow.
+  void opts?.portalStyle
+  const vectorDefaults = siDefaultNewVectorLayerFields()
 
   const isRaster = layer.renderMode === 'raster' || layer.importMetadata?.geometryType === 'raster';
   const enrichedMeta = layer.importMetadata

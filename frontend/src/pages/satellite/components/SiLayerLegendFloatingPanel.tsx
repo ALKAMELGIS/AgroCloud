@@ -5,6 +5,12 @@ import {
   resolveLayerArcgisDrawingInfo,
 } from '../../../lib/arcgisDrawingInfoMapbox'
 import type { ArcgisLayerDefLite } from '../../../lib/arcgisAttributeDisplay'
+import type { SymbologyConfig } from '../components/LayerManager'
+import {
+  buildCustomSymbologyLegendRows,
+  buildSymbologyContext,
+  normalizeSymbologyForLayer,
+} from '../symbologyHelpers'
 import './SiLayerLegendFloatingPanel.css'
 
 export type SiLayerLegendRow = { label: string; color: string }
@@ -15,7 +21,8 @@ export type SiLayerLegendLayer = {
   color?: string
   fillColor?: string
   useArcGisSymbology?: boolean
-  symbology?: { useArcGisOnline?: boolean } | null
+  symbology?: SymbologyConfig | null
+  geojson?: GeoJSON.FeatureCollection | null
   arcgisDrawingInfo?: Record<string, unknown> | null
   arcgisDrawingInfoService?: Record<string, unknown> | null
   arcgisLayerDefinition?: ArcgisLayerDefLite | null
@@ -64,12 +71,23 @@ function resolveLegendDrawingInfo(layer: SiLayerLegendLayer): Record<string, unk
   return null
 }
 
+function buildCustomSymbologyLegendRowsForLayer(layer: SiLayerLegendLayer): SiLayerLegendRow[] {
+  if (layer.symbology?.useArcGisOnline !== false) return []
+  if (!layer.geojson || !layer.symbology) return []
+  const normalized = normalizeSymbologyForLayer(layer.geojson, layer.source, layer.symbology, false)
+  const ctx = buildSymbologyContext(layer.geojson, normalized)
+  return buildCustomSymbologyLegendRows(layer.symbology, ctx)
+}
+
 /** Build color-key rows for a GIS layer legend panel. */
 export function buildSiLayerLegendRows(
   layer: SiLayerLegendLayer,
   extraRows?: SiLayerLegendRow[],
 ): SiLayerLegendRow[] {
   if (extraRows?.length) return extraRows
+
+  const customRows = buildCustomSymbologyLegendRowsForLayer(layer)
+  if (customRows.length) return customRows
 
   const fallbackColor = layer.fillColor || layer.color || '#22c55e'
 

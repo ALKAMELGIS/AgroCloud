@@ -4,6 +4,8 @@
  */
 import JSZip from 'jszip'
 
+import { FIELD_ATTRIBUTE_COLUMNS } from './fieldAttributeEnrichment'
+
 const WGS84_PRJ =
   'GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],' +
   'PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]'
@@ -250,6 +252,14 @@ export async function downloadFieldBoundaryShapefile(
 
   const includeClass = Boolean(options?.includeClassFields)
   const includeMeta = Boolean(options?.includeMetaFields)
+  // Only write attribute columns the enrichment actually filled — an all-empty
+  // DBF column is worse than an absent one for anyone opening the shapefile.
+  const attributeColumns = FIELD_ATTRIBUTE_COLUMNS.filter(col =>
+    features.some(f => {
+      const v = (f.properties as Record<string, unknown> | null)?.[col.prop]
+      return v != null && v !== ''
+    }),
+  )
   const layerBaseName =
     (options?.layerBaseName || 'agri_fields').replace(/[^\w.-]+/g, '_').slice(0, 32) || 'agri_fields'
 
@@ -271,6 +281,12 @@ export async function downloadFieldBoundaryShapefile(
           { name: 'PROVIDER', type: 'C', length: 48 },
         ] as DbfField[])
       : []),
+    ...attributeColumns.map(
+      col =>
+        (col.numeric
+          ? { name: col.dbf, type: 'N', length: 14, decimals: 4 }
+          : { name: col.dbf, type: 'C', length: 120 }) as DbfField,
+    ),
   ]
   // One DBF row per shapefile polygon record (MultiPolygon expands).
   const dbfRows: Array<(string | number)[]> = []
@@ -295,6 +311,11 @@ export async function downloadFieldBoundaryShapefile(
             String(props.provider || props.Provider || '').slice(0, 48),
           ]
         : []),
+      ...attributeColumns.map(col => {
+        const raw = props[col.prop]
+        if (col.numeric) return Number(raw) || 0
+        return String(raw ?? '').slice(0, 120)
+      }),
     ]
     if (f.geometry?.type === 'MultiPolygon') {
       for (const coords of f.geometry.coordinates) {

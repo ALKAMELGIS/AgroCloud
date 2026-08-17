@@ -34,8 +34,8 @@ function setup() {
 }
 function evaluatePixel(s) {
   var m = s.dataMask;
-  if (!m) return [0, 0, 0, 0];
-  // Bright lime inside valid samples — alpha fully opaque for Mapbox raster visibility.
+  // GEOMETRY clips to AOI. Paint both valid and nodata samples so small fields stay visible.
+  if (!m) return [180, 40, 40, 255];
   return [40, 220, 90, 255];
 }`
 }

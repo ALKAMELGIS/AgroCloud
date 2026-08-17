@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   buildSentinelHubWmsDisplayChunks,
   mergeWktChunkGroupsToCap,
+  packOuterRingsIntoFixedBucketGroups,
   packOuterRingsIntoWktChunkGroups,
   packOuterRingsIntoWktChunks,
+  resolveLayersAoiWmsMaxTileLayers,
+  SI_SENTINEL_AOI_WMS_HARD_MAX_SOURCES,
 } from './sentinelHubWmsAoiClip'
 
 describe('mergeWktChunkGroupsToCap', () => {
@@ -32,6 +35,15 @@ describe('mergeWktChunkGroupsToCap', () => {
     expect(merged.length).toBeGreaterThan(0)
     const mergedRingCount = merged.reduce((n, g) => n + g.outerRings.length, 0)
     expect(mergedRingCount).toBe(rings.length)
+  })
+})
+
+describe('resolveLayersAoiWmsMaxTileLayers', () => {
+  it('scales source budget with feature count for large ArcGIS AOIs', () => {
+    expect(resolveLayersAoiWmsMaxTileLayers(12)).toBeGreaterThanOrEqual(8)
+    expect(resolveLayersAoiWmsMaxTileLayers(30)).toBe(24)
+    expect(resolveLayersAoiWmsMaxTileLayers(216)).toBe(36)
+    expect(resolveLayersAoiWmsMaxTileLayers(930)).toBe(SI_SENTINEL_AOI_WMS_HARD_MAX_SOURCES)
   })
 })
 
@@ -101,14 +113,18 @@ describe('packOuterRingsIntoWktChunks', () => {
         properties: { id: i },
       })),
     }
-    const chunks = buildSentinelHubWmsDisplayChunks(fc, 'NDVI', { maxTileLayers: 8 })
+    const cap = resolveLayersAoiWmsMaxTileLayers(rings.length)
+    const chunks = buildSentinelHubWmsDisplayChunks(fc, 'NDVI', { maxTileLayers: cap })
     expect(chunks.length).toBeGreaterThan(0)
-    expect(chunks.length).toBeLessThanOrEqual(8)
+    expect(chunks.length).toBeLessThanOrEqual(cap)
     expect(chunks.every(part => !!part.geometryWkt3857)).toBe(true)
     expect(chunks[0]?.evalscriptB64).toBeTruthy()
+    for (const part of chunks) {
+      expect(part.geometryWkt3857!.length).toBeLessThan(5000)
+    }
   })
 
-  it('paints every polygon for 216-field Layers AOI as separate single-ring clips', () => {
+  it('packs large Layers AOI into ≤ hard-max WMS sources (never one source per field)', () => {
     const rings: [number, number][][] = []
     for (let i = 0; i < 216; i++) {
       const lng = 47 + (i % 18) * 0.03
@@ -134,7 +150,9 @@ describe('packOuterRingsIntoWktChunks', () => {
       maxTileLayers: 256,
       preferSingleRingChunks: true,
     })
-    expect(chunks.length).toBe(216)
+    expect(chunks.length).toBeGreaterThan(0)
+    expect(chunks.length).toBeLessThanOrEqual(SI_SENTINEL_AOI_WMS_HARD_MAX_SOURCES)
+    expect(chunks.length).toBeLessThan(rings.length)
     expect(chunks.every(part => !!part.geometryWkt3857)).toBe(true)
     for (const part of chunks) {
       expect(part.geometryWkt3857!.length).toBeLessThan(6000)
@@ -163,21 +181,22 @@ describe('packOuterRingsIntoWktChunks', () => {
         properties: { id: i },
       })),
     }
+    const cap = resolveLayersAoiWmsMaxTileLayers(rings.length)
     const a = buildSentinelHubWmsDisplayChunks(fc, 'NDVI', {
-      maxTileLayers: 24,
+      maxTileLayers: cap,
       preferSingleRingChunks: false,
     })
     const b = buildSentinelHubWmsDisplayChunks(fc, 'NDVI', {
-      maxTileLayers: 24,
+      maxTileLayers: cap,
       preferSingleRingChunks: false,
     })
     expect(a.length).toBeGreaterThan(0)
-    expect(a.length).toBeLessThanOrEqual(24)
+    expect(a.length).toBeLessThanOrEqual(SI_SENTINEL_AOI_WMS_HARD_MAX_SOURCES)
     expect(a.every(part => !!part.geometryWkt3857)).toBe(true)
     // Deterministic GEOMETRY set — identical cache hit on second build (zoom/pan must not rebuild).
     expect(a.map(p => p.geometryWkt3857)).toEqual(b.map(p => p.geometryWkt3857))
     for (const part of a) {
-      expect(part.geometryWkt3857!.length).toBeLessThan(8000)
+      expect(part.geometryWkt3857!.length).toBeLessThan(5000)
     }
   })
 
@@ -240,10 +259,59 @@ describe('packOuterRingsIntoWktChunks', () => {
         properties: { id: i },
       })),
     }
-    const chunks = buildSentinelHubWmsDisplayChunks(fc, 'NDVI', { maxTileLayers: 8 })
+    const cap = resolveLayersAoiWmsMaxTileLayers(rings.length)
+    const chunks = buildSentinelHubWmsDisplayChunks(fc, 'NDVI', { maxTileLayers: cap })
     expect(chunks.length).toBeGreaterThan(0)
-    expect(chunks.length).toBeLessThanOrEqual(8)
+    expect(chunks.length).toBeLessThanOrEqual(SI_SENTINEL_AOI_WMS_HARD_MAX_SOURCES)
     expect(chunks.every(part => !!part.geometryWkt3857)).toBe(true)
+    for (const part of chunks) {
+      expect(part.geometryWkt3857!.length).toBeLessThan(5000)
+    }
+  })
+
+  it('covers all ~930 Agro_Structures-sized rings with budget-safe GEOMETRY URLs', () => {
+    const rings: [number, number][][] = []
+    for (let i = 0; i < 930; i++) {
+      const lng = 45 + (i % 30) * 0.04
+      const lat = 24 + Math.floor(i / 30) * 0.04
+      const scale = 0.006 + (i % 5) * 0.0005
+      const pts: [number, number][] = []
+      for (let a = 0; a < 20; a++) {
+        const rad = (a / 20) * Math.PI * 2
+        pts.push([lng + Math.cos(rad) * scale, lat + Math.sin(rad) * scale])
+      }
+      pts.push(pts[0]!)
+      rings.push(pts)
+    }
+    const evalscriptB64 = btoa('//VERSION=3\nfunction setup(){return{}}')
+    const cap = resolveLayersAoiWmsMaxTileLayers(rings.length)
+    const groups = packOuterRingsIntoFixedBucketGroups(rings, cap, evalscriptB64)
+    const covered = groups.reduce((n, g) => n + g.outerRings.length, 0)
+    expect(covered).toBe(930)
+    expect(groups.length).toBeGreaterThan(0)
+    expect(groups.length).toBeLessThanOrEqual(SI_SENTINEL_AOI_WMS_HARD_MAX_SOURCES)
+    for (const group of groups) {
+      expect(group.geometryWkt3857.length).toBeLessThanOrEqual(4000)
+    }
+
+    const fc = {
+      type: 'FeatureCollection',
+      features: rings.map((ring, i) => ({
+        type: 'Feature',
+        geometry: { type: 'Polygon', coordinates: [ring] },
+        properties: { id: i },
+      })),
+    }
+    const chunks = buildSentinelHubWmsDisplayChunks(fc, 'NDVI', {
+      maxTileLayers: cap,
+      preferSingleRingChunks: false,
+    })
+    expect(chunks.length).toBeGreaterThan(0)
+    expect(chunks.length).toBeLessThanOrEqual(SI_SENTINEL_AOI_WMS_HARD_MAX_SOURCES)
+    expect(chunks.every(part => !!part.geometryWkt3857)).toBe(true)
+    for (const part of chunks) {
+      expect(part.geometryWkt3857!.length).toBeLessThan(5000)
+    }
   })
 
   it('assigns per-chunk bounds for clipped NDVI parts', () => {
@@ -262,5 +330,61 @@ describe('packOuterRingsIntoWktChunks', () => {
     expect(chunks.length).toBe(1)
     expect(chunks[0]?.aoiBoundsLngLat).toEqual(expect.arrayContaining([expect.any(Number)]))
     expect(chunks[0]?.aoiBoundsLngLat?.length).toBe(4)
+  })
+
+  it('keeps a collapsed AOI as a paint-able GEOMETRY instead of dropping it', () => {
+    const fc = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [55.1, 25.1],
+                [55.1, 25.1],
+              ],
+            ],
+          },
+        },
+      ],
+    }
+    const chunks = buildSentinelHubWmsDisplayChunks(fc, 'NDVI')
+    expect(chunks.length).toBeGreaterThan(0)
+    expect(chunks[0]?.geometryWkt3857).toMatch(/^POLYGON\(|^MULTIPOLYGON\(/)
+    const decoded = atob(chunks[0]!.evalscriptB64!)
+    expect(decoded).toContain('imgVals.concat(1)')
+  })
+
+  it('packs thousands of AOIs into the hard WMS source cap', () => {
+    const rings: [number, number][][] = []
+    for (let i = 0; i < 2000; i++) {
+      const lng = 45 + (i % 40) * 0.03
+      const lat = 24 + Math.floor(i / 40) * 0.03
+      rings.push([
+        [lng, lat],
+        [lng + 0.01, lat],
+        [lng + 0.01, lat + 0.01],
+        [lng, lat + 0.01],
+        [lng, lat],
+      ])
+    }
+    const fc = {
+      type: 'FeatureCollection',
+      features: rings.map((ring, i) => ({
+        type: 'Feature',
+        geometry: { type: 'Polygon', coordinates: [ring] },
+        properties: { id: i },
+      })),
+    }
+    const chunks = buildSentinelHubWmsDisplayChunks(fc, 'NDVI', {
+      preferSingleRingChunks: true,
+      maxTileLayers: 10_000,
+    })
+    expect(chunks.length).toBeGreaterThan(0)
+    expect(chunks.length).toBeLessThanOrEqual(SI_SENTINEL_AOI_WMS_HARD_MAX_SOURCES)
+    expect(chunks.every(part => !!part.geometryWkt3857)).toBe(true)
   })
 })

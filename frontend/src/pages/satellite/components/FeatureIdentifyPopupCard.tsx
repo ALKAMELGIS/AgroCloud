@@ -137,7 +137,13 @@ export function FeatureIdentifyPopupCard({
               </button>
             ) : null}
             {onZoomTo ? (
-              <button className="gis-map-popup-toolbtn" type="button" onClick={onZoomTo}>
+              <button
+                className="gis-map-popup-toolbtn"
+                type="button"
+                onClick={onZoomTo}
+                title="Zoom to feature"
+                aria-label="Zoom to feature"
+              >
                 <i className="fa-solid fa-magnifying-glass" aria-hidden="true" />
                 <span>Zoom to</span>
               </button>

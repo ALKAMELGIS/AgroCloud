@@ -69,6 +69,9 @@ export type HydroVectorResult = {
   maxStrahler?: number
   /** Highest Shreve stream magnitude in the network (streams only). */
   maxShreve?: number
+  /** Contour elevation bounds (m) — avoid Math.min(...features) on huge layers. */
+  elevMin?: number
+  elevMax?: number
   /** Map legend descriptor (colours / classification) for the Legend tool. */
   legend?: HydroLegend
 }
@@ -997,6 +1000,8 @@ export function computeContours(ctx: HydroComputeContext): HydroStepResult {
     kind: 'vector',
     render: 'contours',
     data: { type: 'FeatureCollection', features },
+    elevMin: eMin,
+    elevMax: eMax,
     legend: buildContourElevationLegend(eMin, eMax, interval),
     stats: [
       { label: 'Contour interval', value: `${interval} m` },
@@ -1055,20 +1060,30 @@ function buildPrimaryBasinRaster(
 
   const terminal = new Int32Array(n).fill(-2)
   const path: number[] = []
+  const onPath = new Uint8Array(n)
   for (let s = 0; s < n; s += 1) {
     let c = s
     path.length = 0
     while (c >= 0 && terminal[c] === -2) {
+      // Cycle / self-loop guard (flat DEM noise) — treat as a local terminal.
+      if (onPath[c]) {
+        terminal[c] = c
+        break
+      }
+      onPath[c] = 1
       path.push(c)
       const d = down[c]!
-      if (d < 0) {
+      if (d < 0 || d === c) {
         terminal[c] = c
         break
       }
       c = d
     }
     const end = c >= 0 ? terminal[c]! : path[path.length - 1] ?? -1
-    for (const p of path) terminal[p] = end
+    for (const p of path) {
+      terminal[p] = end
+      onPath[p] = 0
+    }
   }
 
   const sizes = new Map<number, number>()

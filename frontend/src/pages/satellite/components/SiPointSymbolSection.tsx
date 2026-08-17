@@ -6,14 +6,49 @@ import {
   type ArcgisPointSymbolPreview,
 } from '../../../lib/arcgisPointSymbol';
 import { buildArcgisUniqueValueLegendItems } from '../../../lib/arcgisDrawingInfoMapbox';
-import type { SiSymbologyAppearance } from '../siSymbolStyleStudio';
+import type { SiStrokeStyle, SiSymbologyAppearance } from '../siSymbolStyleStudio';
 import { strokeDashSvgFromStyle } from '../siSymbolStyleStudio';
 import {
   SI_POINT_SYMBOL_CATEGORIES,
   SI_POINT_SYMBOL_GALLERY,
   type SiPointSymbolGalleryItem,
-} from '../siPointSymbolGallery';
-import './SiPointSymbolSection.css';
+} from '../siPointSymbolGallery'
+import {
+  SI_POLYGON_SYMBOL_CATEGORIES,
+  SI_POLYGON_SYMBOL_GALLERY,
+  applySiPolygonGalleryItem,
+  type SiPolygonSymbolGalleryItem,
+} from '../siPolygonSymbolGallery'
+import './SiPointSymbolSection.css'
+
+function hexColorOr(value: string | undefined, fallback: string): string {
+  return typeof value === 'string' && /^#[0-9A-Fa-f]{6}$/.test(value.trim()) ? value.trim() : fallback
+}
+
+function clamp01(n: number): number {
+  if (!Number.isFinite(n)) return 0
+  return Math.max(0, Math.min(1, n))
+}
+
+function PolygonGallerySwatch({ item }: { item: SiPolygonSymbolGalleryItem }) {
+  return (
+    <svg className="si-sym-poly-swatch" width="36" height="28" viewBox="0 0 36 28" aria-hidden>
+      <rect x="0.5" y="0.5" width="35" height="27" rx="2" fill="#ffffff" stroke="rgba(15,23,42,0.12)" />
+      <rect
+        x="7"
+        y="6"
+        width="22"
+        height="16"
+        rx="1.5"
+        fill={item.fillColor}
+        fillOpacity={item.polygonFillAlpha}
+        stroke={item.strokeColor}
+        strokeWidth={Math.max(1, Math.min(3.5, item.weight))}
+        strokeDasharray={strokeDashSvgFromStyle(item.strokeStyle) || undefined}
+      />
+    </svg>
+  )
+}
 
 function PointSymbolSvg({
   preview,
@@ -103,6 +138,9 @@ export function SiPointSymbolSection({
 }: SiPointSymbolSectionProps) {
   const [gallerySearch, setGallerySearch] = useState('');
   const [galleryCategory, setGalleryCategory] = useState<string>('All');
+  const [polygonGallerySearch, setPolygonGallerySearch] = useState('');
+  const [polygonGalleryCategory, setPolygonGalleryCategory] = useState<string>('All');
+  const [selectedPolygonSymbolId, setSelectedPolygonSymbolId] = useState<string | undefined>();
 
   const arcgisPreview = useMemo(() => {
     if (!arcgisLocked) return null;
@@ -123,6 +161,15 @@ export function SiPointSymbolSection({
       return item.label.toLowerCase().includes(q) || item.category.toLowerCase().includes(q);
     });
   }, [gallerySearch, galleryCategory]);
+
+  const filteredPolygonGallery = useMemo(() => {
+    const q = polygonGallerySearch.trim().toLowerCase();
+    return SI_POLYGON_SYMBOL_GALLERY.filter(item => {
+      if (polygonGalleryCategory !== 'All' && item.category !== polygonGalleryCategory) return false;
+      if (!q) return true;
+      return item.label.toLowerCase().includes(q) || item.category.toLowerCase().includes(q);
+    });
+  }, [polygonGallerySearch, polygonGalleryCategory]);
 
   const arcgisPolygonLegend = useMemo(() => {
     if (!arcgisLocked || geometryKind !== 'polygon' || !drawingInfo) return [];
@@ -161,6 +208,17 @@ export function SiPointSymbolSection({
         </div>
       );
     }
+    const outline = hexColorOr(appearance.color, '#000000')
+    const fill = hexColorOr(appearance.fillColor, '#000000')
+    const fillAlpha = clamp01(appearance.polygonFillAlpha)
+    const strokeStyle: SiStrokeStyle =
+      appearance.strokeStyle === 'dashed' ||
+      appearance.strokeStyle === 'dotted' ||
+      appearance.strokeStyle === 'dashdot' ||
+      appearance.strokeStyle === 'solid'
+        ? appearance.strokeStyle
+        : 'solid'
+    const isPolygon = geometryKind === 'polygon'
     return (
       <>
         <div className="si-sym-preview" aria-hidden>
@@ -171,9 +229,9 @@ export function SiPointSymbolSection({
                 y1="18"
                 x2="64"
                 y2="18"
-                stroke={appearance.color}
+                stroke={outline}
                 strokeWidth={appearance.weight}
-                strokeDasharray={strokeDashSvgFromStyle(appearance.strokeStyle) || undefined}
+                strokeDasharray={strokeDashSvgFromStyle(strokeStyle) || undefined}
               />
             ) : (
               <rect
@@ -182,14 +240,134 @@ export function SiPointSymbolSection({
                 width="36"
                 height="20"
                 rx={appearance.previewCornerRadius}
-                fill={appearance.fillColor}
-                stroke={appearance.color}
+                fill={fill}
+                fillOpacity={fillAlpha}
+                stroke={outline}
                 strokeWidth={appearance.weight}
+                strokeDasharray={strokeDashSvgFromStyle(strokeStyle) || undefined}
               />
             )}
           </svg>
         </div>
-        <p className="si-sym-muted">Line and polygon symbol controls are in the sections above.</p>
+
+        {isPolygon ? (
+          <div className="si-sym-poly-gallery-block">
+            <div className="si-sym-poly-gallery-head">
+              <span>Symbols found: {filteredPolygonGallery.length}</span>
+              <span className="si-sym-poly-gallery-head__hint">ArcGIS 2D</span>
+            </div>
+            <label className="si-sym-field">
+              <span className="si-sym-field__label">Search symbols</span>
+              <input
+                className="si-sym-input"
+                type="search"
+                placeholder="Filter gallery…"
+                value={polygonGallerySearch}
+                onChange={e => setPolygonGallerySearch(e.target.value)}
+              />
+            </label>
+            <div className="si-sym-point-cats" role="tablist" aria-label="Polygon symbol categories">
+              {SI_POLYGON_SYMBOL_CATEGORIES.map(cat => (
+                <button
+                  key={cat}
+                  type="button"
+                  role="tab"
+                  className={`si-sym-point-cat${polygonGalleryCategory === cat ? ' si-sym-point-cat--active' : ''}`}
+                  onClick={() => setPolygonGalleryCategory(cat)}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+            <div className="si-sym-point-gallery si-sym-poly-gallery" role="list">
+              {filteredPolygonGallery.map(item => (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="listitem"
+                  className={`si-sym-point-gallery__item${
+                    selectedPolygonSymbolId === item.id ? ' si-sym-point-gallery__item--active' : ''
+                  }`}
+                  title={item.label}
+                  onClick={() => {
+                    setSelectedPolygonSymbolId(item.id)
+                    onAppearanceChange(applySiPolygonGalleryItem(item))
+                  }}
+                >
+                  <PolygonGallerySwatch item={item} />
+                  <span>{item.label}</span>
+                </button>
+              ))}
+              {!filteredPolygonGallery.length ? (
+                <p className="si-sym-muted">No symbols match your search.</p>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="si-sym-grid">
+          <label className="si-sym-field">
+            <span className="si-sym-field__label">Outline</span>
+            <input
+              className="si-sym-color"
+              type="color"
+              value={outline}
+              onChange={e => onAppearanceChange({ color: e.target.value })}
+            />
+          </label>
+          <label className="si-sym-field">
+            <span className="si-sym-field__label">Outline width ({appearance.weight.toFixed(1)}px)</span>
+            <input
+              className="si-sym-range"
+              type="range"
+              min={5}
+              max={80}
+              value={Math.round(Math.max(0.5, appearance.weight) * 10)}
+              onChange={e => onAppearanceChange({ weight: Number(e.target.value) / 10 })}
+            />
+          </label>
+          <label className="si-sym-field">
+            <span className="si-sym-field__label">Outline style</span>
+            <select
+              className="si-sym-input"
+              value={strokeStyle}
+              onChange={e => onAppearanceChange({ strokeStyle: e.target.value as SiStrokeStyle })}
+            >
+              <option value="solid">Solid</option>
+              <option value="dashed">Dashed</option>
+              <option value="dotted">Dotted</option>
+              <option value="dashdot">Dash-dot</option>
+            </select>
+          </label>
+          {isPolygon ? (
+            <>
+              <label className="si-sym-field">
+                <span className="si-sym-field__label">Fill</span>
+                <input
+                  className="si-sym-color"
+                  type="color"
+                  value={fill}
+                  onChange={e => onAppearanceChange({ fillColor: e.target.value })}
+                />
+              </label>
+              <label className="si-sym-field">
+                <span className="si-sym-field__label">
+                  Fill transparency ({Math.round((1 - fillAlpha) * 100)}%)
+                </span>
+                <input
+                  className="si-sym-range"
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={Math.round((1 - fillAlpha) * 100)}
+                  onChange={e =>
+                    onAppearanceChange({ polygonFillAlpha: clamp01(1 - Number(e.target.value) / 100) })
+                  }
+                />
+              </label>
+            </>
+          ) : null}
+        </div>
       </>
     );
   }

@@ -192,13 +192,21 @@ export function listSiAoiLayerModeOptions(
       if (!l.id) return false
       const n = Array.isArray(l.geojson?.features) ? l.geojson!.features!.length : 0
       if (n > 0) return true
+      const metaN = Number((l as { importMetadata?: { featureCount?: number } }).importMetadata?.featureCount)
+      if (Number.isFinite(metaN) && metaN > 0) return true
       return Boolean((l as { viewportStreaming?: boolean }).viewportStreaming)
     })
-    .map(l => ({
-      id: String(l.id),
-      label: String(l.name || l.id),
-      featureCount: Array.isArray(l.geojson?.features) ? l.geojson!.features!.length : 0,
-    }))
+    .map(l => {
+      const geoN = Array.isArray(l.geojson?.features) ? l.geojson!.features!.length : 0
+      const metaN = Number((l as { importMetadata?: { featureCount?: number } }).importMetadata?.featureCount)
+      const featureCount =
+        Number.isFinite(metaN) && metaN > geoN ? Math.floor(metaN) : geoN
+      return {
+        id: String(l.id),
+        label: String(l.name || l.id),
+        featureCount,
+      }
+    })
     .sort((a, b) => a.label.localeCompare(b.label))
 }
 

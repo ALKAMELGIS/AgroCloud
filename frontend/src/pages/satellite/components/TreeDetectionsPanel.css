@@ -132,15 +132,43 @@
   background: #ffffff;
 }
 
+.si-tree-detect__model-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.07), rgba(0, 0, 0, 0.28));
+}
+.si-tree-detect__model-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(34, 197, 94, 0.18);
+  border: 1px solid rgba(74, 222, 128, 0.28);
+  color: #86efac;
+  font-size: 13px;
+  flex-shrink: 0;
+}
 .si-tree-detect__mode-body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 .si-tree-detect__mode-title {
   font-size: 11.5px;
   font-weight: 600;
   color: var(--td-text);
+}
+.si-tree-detect__mode-detail {
+  font-size: 9.5px;
+  line-height: 1.3;
+  color: var(--td-muted);
 }
 .si-tree-detect__mode-tag {
   font-size: 9px;
@@ -229,6 +257,14 @@
   padding: 7px 9px;
   font-size: 11px;
   color-scheme: dark;
+}
+
+.si-tree-detect__aoi-hint {
+  margin: 2px 0 0;
+  padding: 0;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--td-muted);
 }
 
 .si-tree-detect__range {

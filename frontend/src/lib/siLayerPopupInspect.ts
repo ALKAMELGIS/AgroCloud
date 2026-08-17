@@ -123,7 +123,7 @@ export function buildGeoAiInspectCardContent(args: {
     arcgisLayerDefinition: args.arcgisLayerDefinition,
   }
   const rows = buildGeoAiLayerPopupAttributeRows(hit, {
-    maxRows: 28,
+    maxRows: 80,
     queryContext: args.queryContext ?? null,
     inspectCoords: args.inspectCoords,
   })

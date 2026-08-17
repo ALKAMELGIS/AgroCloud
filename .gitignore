@@ -97,5 +97,14 @@ backend/services/tree-detection/.venv/
 backend/services/tree-detection/lightning_logs/
 backend/services/tree-detection/*_log.txt
 
+# Python local runtimes (all microservices)
+**/.venv/
+**/.venv*/
+**/__pycache__/
+*.py[cod]
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
 # Local scratch / sampling scripts
 .sample_grd.mjs

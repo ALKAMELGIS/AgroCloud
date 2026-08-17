@@ -40,4 +40,28 @@ describe('buildSiLayerLegendRows', () => {
     expect(rows[0]?.label).toBe('Class A')
     expect(rows[1]?.label).toBe('Class B')
   })
+
+  it('builds legend rows from custom unique-value symbology', () => {
+    const rows = buildSiLayerLegendRows({
+      id: 'fields',
+      name: 'Fields',
+      useArcGisSymbology: false,
+      symbology: {
+        useArcGisOnline: false,
+        style: 'unique',
+        field: 'crop',
+        classes: 8,
+        classOverrides: { Wheat: { color: '#ff0000', label: 'Winter wheat' } },
+      },
+      geojson: {
+        type: 'FeatureCollection',
+        features: [
+          { type: 'Feature', properties: { crop: 'Wheat' }, geometry: { type: 'Point', coordinates: [0, 0] } },
+          { type: 'Feature', properties: { crop: 'Corn' }, geometry: { type: 'Point', coordinates: [1, 1] } },
+        ],
+      },
+    })
+    expect(rows.some(r => r.label === 'Winter wheat' && r.color === '#ff0000')).toBe(true)
+    expect(rows.some(r => r.label === 'Corn')).toBe(true)
+  })
 })

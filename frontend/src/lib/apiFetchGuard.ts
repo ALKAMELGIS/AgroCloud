@@ -13,9 +13,9 @@
  * the session is decided from the latched breaker with no further network traffic.
  *
  * Notes / limitations:
- *   - Only *same-origin* `/api/*` requests are intercepted. When a backend override
- *     (`VITE_AGRI_API_SECRETS_URL`) is configured the breaker stays closed, so those requests
- *     pass straight through to the real API.
+ *   - Same-origin `/api/*` requests are intercepted. When a backend override
+ *     (`VITE_AGRI_API_SECRETS_URL` or the eliteagrocloud Hostinger fallback) is configured,
+ *     those relative calls are rewritten to that origin so GitHub Pages never swallows them.
  *   - `/api/health` is always passed through to the original `fetch` so the liveness probe in
  *     `ensureBackendAvailable()` can run without recursing back into this guard.
  *   - Mapbox GL fetches tiles from a Web Worker, which has its *own* `fetch` and is not affected
@@ -70,14 +70,30 @@ function backendUnavailableResponse(pathname: string): Response {
   )
 }
 
+function rewriteSameOriginApi(
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+  apiOrigin: string,
+): [RequestInfo | URL, RequestInit | undefined] {
+  const url = resolveAbsoluteUrl(input)
+  if (!url || url.origin !== window.location.origin || !url.pathname.startsWith('/api/')) {
+    return [input, init]
+  }
+  const rewritten = `${apiOrigin}${url.pathname}${url.search}${url.hash}`
+  const nextInit: RequestInit = { credentials: 'include', ...init }
+  if (typeof Request !== 'undefined' && input instanceof Request) {
+    return [new Request(rewritten, input), nextInit]
+  }
+  return [rewritten, nextInit]
+}
+
 /**
- * Install the global `/api/*` fetch guard. Idempotent and a no-op outside the browser, in dev
- * (Vite proxies `/api`), or when a backend override is configured (requests hit a real API).
+ * Install the global `/api/*` fetch guard. Idempotent and a no-op outside the browser or in
+ * dev (Vite proxies `/api`).
  */
 export function installApiFetchGuard(): void {
   if (typeof window === 'undefined' || typeof window.fetch !== 'function') return
   if (import.meta.env.DEV) return
-  if (configuredApiOrigin()) return
   if ((window as unknown as Record<string, unknown>)[GUARD_FLAG]) return
   ;(window as unknown as Record<string, unknown>)[GUARD_FLAG] = true
 
@@ -87,6 +103,12 @@ export function installApiFetchGuard(): void {
     input: RequestInfo | URL,
     init?: RequestInit,
   ): Promise<Response> {
+    const apiOrigin = configuredApiOrigin()
+    if (apiOrigin) {
+      const [nextInput, nextInit] = rewriteSameOriginApi(input, init, apiOrigin)
+      return originalFetch(nextInput, nextInit)
+    }
+
     const url = resolveAbsoluteUrl(input)
 
     // Not a guarded internal API call (cross-origin, non-/api, or unparseable) — pass through.
