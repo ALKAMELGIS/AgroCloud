@@ -30,6 +30,7 @@ const EXCLUDE_DIRS = new Set([
   // never bundle its multi-GB venv / model cache / logs into the deploy archive.
   '.venv',
   'lightning_logs',
+  'uploads',
 ])
 
 const EXCLUDE_FILES = new Set(['hostinger-deploy.zip', 'hostinger-deploy.tar.gz', '.env'])
