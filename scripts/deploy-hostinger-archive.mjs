@@ -35,16 +35,20 @@ const EXCLUDE_DIRS = new Set([
   'cache',
 ])
 
-/** Path prefixes omitted from the Hostinger source archive (no build output / large runtime data). */
+/** Path prefixes omitted from the Hostinger deploy archive (large runtime data / unused on Node host). */
 const EXCLUDE_PREFIXES = [
   'backend/services/',
-  'frontend/dist/',
   'assets/',
   'avatars/',
   'docs/',
   'AgroCloud-Pages-Upload/',
   'AgroCloud-GitHub-Ready/',
   'sentinel-crop-alert/',
+  // Frontend source not needed when dist is prebuilt (avoids EACCES Vite build on shared hosting).
+  'frontend/src/',
+  'frontend/public/',
+  'frontend/e2e/',
+  'frontend/scripts/',
 ]
 
 /** Root-level GitHub Pages artifacts — not needed for Hostinger Node deploy. */
@@ -101,8 +105,23 @@ function collectFiles(dir, base = dir, out = []) {
   return out
 }
 
-// Hostinger builds on the server (`npm run build` → scripts/build-hostinger.mjs).
-console.log('Packaging Hostinger source archive (no local build; server builds after upload)…')
+// Hostinger shared hosting cannot run Vite/PostCSS (EACCES scanning src trees).
+// Build locally and ship frontend/dist; build-hostinger.mjs skips Vite when dist exists.
+console.log('Running production build for Hostinger prebuilt dist…')
+const build = spawnSync('npm', ['run', 'build:production'], {
+  cwd: repoRoot,
+  stdio: 'inherit',
+  shell: process.platform === 'win32',
+})
+if (build.status !== 0) {
+  console.error('Production build failed.')
+  process.exit(build.status ?? 1)
+}
+
+if (!fs.existsSync(path.join(repoRoot, 'frontend', 'dist', 'index.html'))) {
+  console.error('Missing frontend/dist/index.html after build.')
+  process.exit(1)
+}
 
 if (fs.existsSync(outZip)) fs.unlinkSync(outZip)
 
