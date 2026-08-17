@@ -41,6 +41,7 @@ function shouldSkip(rel) {
   const base = parts[parts.length - 1] || ''
   if (EXCLUDE_FILES.has(base)) return true
   if (base.endsWith('.log')) return true
+  if (/-ELPLTMEDABASS01(?:\.|$)/.test(base) || rel.includes('-ELPLTMEDABASS01.')) return true
   if (rel.endsWith('.br') || rel.endsWith('.gz')) return true
   if (rel.startsWith('frontend/dist/') && (rel.endsWith('.br') || rel.endsWith('.gz'))) return true
   return false
