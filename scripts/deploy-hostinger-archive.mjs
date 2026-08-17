@@ -30,7 +30,6 @@ const EXCLUDE_DIRS = new Set([
   '.venv',
   'lightning_logs',
   'uploads',
-  'dist',
   '.chirps-cache',
   'cache',
 ])
@@ -38,6 +37,7 @@ const EXCLUDE_DIRS = new Set([
 /** Path prefixes omitted from the Hostinger deploy archive (large runtime data / unused on Node host). */
 const EXCLUDE_PREFIXES = [
   'backend/services/',
+  'backend/dist/',
   'assets/',
   'avatars/',
   'docs/',
