@@ -13,8 +13,8 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
     expect(script).toContain('["B04", "B08", "dataMask"]')
     expect(script).toContain('ColorRampVisualizer')
     expect(script).toContain('visualizer.process(ndvi)')
-    expect(script).toContain('imgVals.concat(1)')
-    expect(script).not.toContain('concat(samples.dataMask)')
+    expect(script).toContain('concat(samples.dataMask)')
+    expect(script).not.toContain('imgVals.concat(1)')
     expect(script).not.toContain('SCL')
     expect(script).not.toContain('scl == 3')
     expect(script).not.toContain('function findColor(val)')
@@ -33,32 +33,33 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
     expect(sampleSentinelNdviColorMap(0.41)).toBe(0xffffbf)
   })
 
-  it('NDWI evalscript uses 10-class dry warm / wet blue ramp', () => {
+  it('NDWI evalscript uses continuous green-white-blue ColorRampVisualizer', () => {
     const script = buildSentinelIndexColorRampEvalscript('ndwi')
     expect(script).toContain('ColorRampVisualizer')
     expect(script).toContain('index(samples.B03, samples.B08)')
-    expect(script).toContain('0x7f0000')
-    expect(script).toContain('0xffeb3b')
+    expect(script).toContain('0x008000')
+    expect(script).toContain('0xffffff')
     expect(script).toContain('0x0000cc')
-    expect(script).toContain('const BREAKS =')
-    expect(script).toContain('function ndwiClass(val)')
-    expect(script).toContain('viz.process(cls)')
-    expect(script).toContain('imgVals.concat(1)')
-    expect(script).not.toContain('concat(samples.dataMask)')
+    expect(script).toContain('visualizer.process(val)')
+    expect(script).toContain('concat(samples.dataMask)')
+    expect(script).not.toContain('ndwiClass')
+    expect(script).not.toContain('imgVals.concat(1)')
   })
 
-  it('NDMI evalscript uses 10-class moisture ramp on B8A/B11', () => {
+  it('NDMI evalscript uses continuous moisture ramp on B8A/B11', () => {
     const script = buildSentinelIndexColorRampEvalscript('ndmi')
     expect(script).toContain('ColorRampVisualizer')
     expect(script).toContain('index(samples.B8A, samples.B11)')
-    expect(script).toContain('0x7f0000')
-    expect(script).toContain('0xffeb3b')
-    expect(script).toContain('0x81d4fa')
-    expect(script).toContain('0x0d47a1')
-    expect(script).toContain('function ndmiClass(val)')
-    expect(script).toContain('viz.process(CLASS_VAL[cls])')
-    expect(script).toContain('imgVals.concat(1)')
-    expect(script).not.toContain('concat(samples.dataMask)')
+    expect(script).toContain('0x800000')
+    expect(script).toContain('0xff0000')
+    expect(script).toContain('0xffff00')
+    expect(script).toContain('0x00ffff')
+    expect(script).toContain('0x0000ff')
+    expect(script).toContain('0x000080')
+    expect(script).toContain('viz.process(val)')
+    expect(script).toContain('concat(samples.dataMask)')
+    expect(script).not.toContain('ndmiClass')
+    expect(script).not.toContain('imgVals.concat(1)')
   })
 
   it('SAVI evalscript uses soil-adjusted formula on B08/B04', () => {
@@ -67,18 +68,39 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
     expect(script).toContain('ColorRampVisualizer')
   })
 
-  it('AWEI evalscript uses multi-band water extraction formula', () => {
+  it('AWEI evalscript uses 10-class flood/water reclass on multi-band formula', () => {
     const script = buildSentinelIndexColorRampEvalscript('awei')
     expect(script).toContain('4.0 * (samples.B03 - samples.B11)')
     expect(script).toContain('0.25 * samples.B08 + 2.75 * samples.B12')
     expect(script).toContain('ColorRampVisualizer')
-    expect(script).toContain('["B03","B08","B11","B12","dataMask"]')
+    expect(script).toContain('["B03", "B08", "B11", "B12", "dataMask"]')
+    expect(script).toContain('0xb3e5fc')
+    expect(script).toContain('0x4fc3f7')
+    expect(script).toContain('0x053061')
+    expect(script).not.toContain('0xa0522d')
+    expect(script).not.toContain('0xa6dba0')
+    expect(script).toContain('function aweiClass(val)')
+    expect(script).toContain('viz.process(cls)')
+    expect(script).toContain('concat(samples.dataMask)')
   })
 
   it('NBR evalscript uses B08/B12 burn ratio', () => {
     const script = buildSentinelIndexColorRampEvalscript('nbr')
     expect(script).toContain('index(samples.B08, samples.B12)')
     expect(script).toContain('ColorRampVisualizer')
+  })
+
+  it('MNDWI evalscript uses 10-class tan/brown dry → water blue reclass', () => {
+    const script = buildSentinelIndexColorRampEvalscript('mndwi')
+    expect(script).toContain('index(samples.B03, samples.B11)')
+    expect(script).toContain('ColorRampVisualizer')
+    expect(script).toContain('0xa0522d')
+    expect(script).toContain('0x053061')
+    expect(script).not.toContain('0xffffbf')
+    expect(script).not.toContain('0x3e2723')
+    expect(script).toContain('function mndwiClass(val)')
+    expect(script).toContain('viz.process(cls)')
+    expect(script).toContain('concat(samples.dataMask)')
   })
 
   it('SAVI and NDMI profiles are inferred from layer names', () => {

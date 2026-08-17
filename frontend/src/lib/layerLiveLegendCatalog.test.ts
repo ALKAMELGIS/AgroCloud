@@ -11,32 +11,66 @@ describe('layerLiveLegendCatalog', () => {
     expect(hexNumberToCss(0x0000cc)).toBe('#0000cc')
   })
 
-  it('resolves NDMI with 10 classes', () => {
+  it('resolves NDMI with 10 named stress→moisture classes aligned to AOI area bins', () => {
     const spec = resolveLayerLiveLegendSpec('NDMI', 'NDMI')
     expect(spec?.title).toBe('NDMI')
     expect(spec?.classes).toHaveLength(10)
     expect(spec?.gradientCss).toContain('linear-gradient')
-    expect(spec?.classes?.[4]?.label).toBe('Dry canopy')
+    expect(spec?.classes?.[0]?.label).toBe('Severe moisture stress')
+    expect(spec?.classes?.[3]?.label).toBe('Low moisture stress')
     expect(spec?.classes?.[5]?.label).toBe('Moist canopy')
-    // Dry half: yellow → orange → red → dark red; moist half: light blue → dark blue
-    expect(spec?.classes?.[4]?.color.toLowerCase()).toBe('#ffeb3b')
-    expect(spec?.classes?.[3]?.color.toLowerCase()).toBe('#fb8c00')
-    expect(spec?.classes?.[0]?.color.toLowerCase()).toBe('#7f0000')
-    expect(spec?.classes?.[5]?.color.toLowerCase()).toBe('#81d4fa')
-    expect(spec?.classes?.[9]?.color.toLowerCase()).toBe('#0d47a1')
+    expect(spec?.classes?.[8]?.label).toBe('Moister canopy')
+    expect(spec?.classes?.[9]?.label).toBe('Saturated moist')
+    expect(spec?.classes?.[0]?.color.toLowerCase()).toBe('#800000')
+    expect(spec?.classes?.[3]?.color.toLowerCase()).toBe('#ffff00')
+    expect(spec?.classes?.[5]?.color.toLowerCase()).toBe('#b3e5fc')
+    expect(spec?.classes?.[8]?.color.toLowerCase()).toBe('#0288d1')
+    expect(spec?.classes?.[9]?.color.toLowerCase()).toBe('#000080')
+    expect(spec?.classes?.[1]?.rangeLabel).toBe('-0.64 – -0.48')
   })
 
-  it('resolves NDWI with 10 soil→water classes', () => {
+  it('resolves DSI with 10 drought severity classes', () => {
+    const spec = resolveLayerLiveLegendSpec('DSI', 'DSI')
+    expect(spec?.title).toBe('DSI')
+    expect(spec?.classes).toHaveLength(10)
+    expect(spec?.classes?.[0]?.label).toBe('DSI 0.00–0.10 — No Drought')
+    expect(spec?.classes?.[9]?.label).toBe('DSI 0.90–1.00 — Extreme Drought')
+    expect(spec?.classes?.[0]?.color.toLowerCase()).toBe('#006837')
+    expect(spec?.classes?.[9]?.color.toLowerCase()).toBe('#7f0000')
+  })
+
+  it('resolves DRA drought area with DSI range classes', () => {
+    const spec = resolveLayerLiveLegendSpec('DRA', 'DRA')
+    expect(spec?.title).toBe('Drought Area')
+    expect(spec?.classes).toHaveLength(10)
+    expect(spec?.classes?.[2]?.label).toBe('DSI 0.20–0.30 — Low')
+    expect(spec?.note).toMatch(/Drought_Threshold/)
+  })
+
+  it('resolves NBR with 10 named burn-severity classes aligned to AOI area bins', () => {
+    const spec = resolveLayerLiveLegendSpec('NBR', 'NBR')
+    expect(spec?.title).toBe('NBR')
+    expect(spec?.classes).toHaveLength(10)
+    expect(spec?.classes?.[0]?.label).toBe('Severe burn')
+    expect(spec?.classes?.[4]?.label).toBe('Low severity burn')
+    expect(spec?.classes?.[5]?.label).toBe('Unburned / regrowth')
+    expect(spec?.classes?.[9]?.label).toBe('Dense unburned vegetation')
+    expect(spec?.classes?.[0]?.rangeLabel).toBe('< -0.35')
+    expect(spec?.classes?.[1]?.rangeLabel).toBe('-0.35 – -0.20')
+    expect(spec?.classes?.[9]?.rangeLabel).toBe('≥ 0.85')
+  })
+
+  it('resolves NDWI with 10 named dry→water classes aligned to AOI area bins', () => {
     const spec = resolveLayerLiveLegendSpec('NDWI', 'NDWI')
     expect(spec?.classes).toHaveLength(10)
-    expect(spec?.classes?.[0]?.label).toBe('Very dry')
-    expect(spec?.classes?.[3]?.label).toBe('Slightly dry')
-    expect(spec?.classes?.[9]?.label).toBe('Open water')
-    // Dry half: dark red → red → orange → yellow
-    expect(spec?.classes?.[0]?.color.toLowerCase()).toBe('#7f0000')
-    expect(spec?.classes?.[1]?.color.toLowerCase()).toBe('#d32f2f')
-    expect(spec?.classes?.[2]?.color.toLowerCase()).toBe('#fb8c00')
-    expect(spec?.classes?.[3]?.color.toLowerCase()).toBe('#ffeb3b')
+    expect(spec?.classes?.[0]?.label).toBe('Extremely dry / non-water')
+    expect(spec?.classes?.[4]?.label).toBe('Moist surface')
+    expect(spec?.classes?.[5]?.label).toBe('Slightly wet surface')
+    expect(spec?.classes?.[9]?.label).toBe('Deep / permanent water')
+    expect(spec?.classes?.[0]?.color.toLowerCase()).toBe('#006400')
+    expect(spec?.classes?.[5]?.color.toLowerCase()).toBe('#b3e5fc')
+    expect(spec?.classes?.[9]?.color.toLowerCase()).toBe('#000080')
+    expect(spec?.classes?.[5]?.rangeLabel).toBe('0.000 – 0.16')
   })
 
   it('resolves NDVI with 10 classes', () => {

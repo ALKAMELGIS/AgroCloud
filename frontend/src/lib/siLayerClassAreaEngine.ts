@@ -25,7 +25,8 @@ import {
 import {
   SENTINEL_NDMI_10_CLASS_BREAKS,
   SENTINEL_NDVI_10_CLASS_BREAKS,
-  SENTINEL_NDWI_10_CLASS_BREAKS,
+  SENTINEL_NDWI_AREA_CLASS_BREAKS,
+  SENTINEL_NBR_10_CLASS_BREAKS,
 } from './sentinelHubWmsIndexEvalscripts'
 import {
   fetchSentinelIndexClassHistogramForSceneDate,
@@ -89,6 +90,7 @@ const CORE_INDEX_EXPR: Record<string, string> = {
   NDVI: 'ndvi',
   NDWI: 'ndwi',
   NDMI: 'ndmi',
+  NBR: 'nbr',
   SAVI: 'savi',
   // Placeholder — ET expression is rebuilt per scene date (season factor).
   ET: buildEtIndexExpr(0.85),
@@ -110,8 +112,9 @@ export function resolveLayerClassBreakdown(layerId: string): LayerClassBreakdown
   if (!expr) return null
 
   if (u === 'NDVI') return { edges: [-1, ...SENTINEL_NDVI_10_CLASS_BREAKS, 1], indexExpr: expr }
-  if (u === 'NDWI') return { edges: [-1, ...SENTINEL_NDWI_10_CLASS_BREAKS, 1], indexExpr: expr }
+  if (u === 'NDWI') return { edges: [-0.8, ...SENTINEL_NDWI_AREA_CLASS_BREAKS, 0.8], indexExpr: expr }
   if (u === 'NDMI') return { edges: [-0.8, ...SENTINEL_NDMI_10_CLASS_BREAKS, 0.8], indexExpr: expr }
+  if (u === 'NBR') return { edges: [-0.5, ...SENTINEL_NBR_10_CLASS_BREAKS, 1], indexExpr: expr }
   if (u === 'ET') {
     // Absolute fallback edges; AOI percentile edges replace these after the fine histogram pass.
     return { edges: [0, ...SENTINEL_ET_10_CLASS_BREAKS, 10], indexExpr: buildEtIndexExpr(0.85) }

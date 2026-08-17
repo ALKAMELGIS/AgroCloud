@@ -29,11 +29,10 @@ export const TRAINING_CLASS_COLORS = [
   '#2563eb', // Water
   '#b45309', // Soil
   '#16a34a', // Vegetation
-  '#22c55e', // Tree (sample — green)
+  '#15803d', // Tree
   '#ca8a04', // Agriculture
   '#64748b', // Urban
   '#9333ea', // Other
-  '#ef4444', // Non-Tree (sample — red)
 ] as const
 
 export const DEFAULT_TRAINING_CLASSES: TrainingClass[] = [
@@ -46,7 +45,6 @@ export const DEFAULT_TRAINING_CLASSES: TrainingClass[] = [
   { class_id: 7, class_name: 'Agriculture', color: TRAINING_CLASS_COLORS[6] },
   { class_id: 8, class_name: 'Urban', color: TRAINING_CLASS_COLORS[7] },
   { class_id: 9, class_name: 'Other', color: TRAINING_CLASS_COLORS[8] },
-  { class_id: 10, class_name: 'Non-Tree', color: TRAINING_CLASS_COLORS[9] },
 ]
 
 let sampleSeq = 0
@@ -101,83 +99,6 @@ export function samplesToFeatureCollection(
       },
     })),
   }
-}
-
-/** True when a training-class label is the Field Boundaries / agricultural field class. */
-export function isFieldBoundarySampleClass(name: string | null | undefined): boolean {
-  const n = String(name || '')
-    .trim()
-    .toLowerCase()
-  if (!n) return false
-  return (
-    n === 'field' ||
-    n === 'fields' ||
-    /\bfield\s*boundar/i.test(n) ||
-    /\bagricultural\s*field/i.test(n)
-  )
-}
-
-function isPolygonGeom(g: GeoJSON.Geometry | null | undefined): g is GeoJSON.Polygon | GeoJSON.MultiPolygon {
-  return g?.type === 'Polygon' || g?.type === 'MultiPolygon'
-}
-
-export type FieldBoundarySampleLike = {
-  sample_id?: string
-  class_id?: number
-  class_name?: string
-  geometry?: GeoJSON.Geometry | null
-  geometry_type?: TrainingGeometryType
-  image_id?: string
-  source?: string
-  created_at?: string
-}
-
-/** Polygon / MultiPolygon samples labeled as Field Boundaries (ignores points and other classes). */
-export function filterFieldBoundaryPolygonSamples(
-  samples: FieldBoundarySampleLike[] | null | undefined,
-): FieldBoundarySampleLike[] {
-  return (samples || []).filter(
-    s => isPolygonGeom(s?.geometry) && isFieldBoundarySampleClass(s?.class_name),
-  )
-}
-
-/**
- * Reference GeoJSON for Validation Detection: Field Boundaries polygons drawn in Training & AI.
- */
-export function fieldBoundarySamplesToFeatureCollection(
-  samples: FieldBoundarySampleLike[] | null | undefined,
-  classes: TrainingClass[] = DEFAULT_TRAINING_CLASSES,
-): GeoJSON.FeatureCollection {
-  const colors = classColorMap(classes)
-  const filtered = filterFieldBoundaryPolygonSamples(samples)
-  return {
-    type: 'FeatureCollection',
-    features: filtered.map((s, i) => {
-      const class_id = s.class_id ?? 1
-      return {
-        type: 'Feature' as const,
-        id: s.sample_id || `tai-field-ref-${i + 1}`,
-        geometry: s.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon,
-        properties: {
-          sample_id: s.sample_id ?? null,
-          class_id,
-          class_name: s.class_name || 'Field Boundaries',
-          geometry_type: 'Polygon',
-          image_id: s.image_id ?? 'training-ai',
-          source: s.source || 'training-ai',
-          created_at: s.created_at ?? null,
-          color: colors.get(class_id) ?? TRAINING_CLASS_COLORS[0],
-          kind: 'training_sample',
-        },
-      }
-    }),
-  }
-}
-
-export function countFieldBoundaryPolygonSamples(
-  samples: FieldBoundarySampleLike[] | null | undefined,
-): number {
-  return filterFieldBoundaryPolygonSamples(samples).length
 }
 
 /** Same-tab signal so Validation Detection can one-click Training & AI samples. */
@@ -520,7 +441,7 @@ export async function readTrainingImportFile(file: File): Promise<{ kind: 'geojs
   if (name.endsWith('.geojson') || name.endsWith('.json') || text.trim().startsWith('{')) {
     return { kind: 'geojson', text }
   }
-  throw new Error('Unsupported text import. Use GeoJSON, CSV, Shapefile ZIP, or Excel (.xlsx).')
+  throw new Error('Unsupported file. Use GeoJSON (.geojson/.json) or CSV (.csv).')
 }
 
 export function parseTrainingImportText(
@@ -536,6 +457,18 @@ export function parseTrainingImportText(
     throw new Error('Invalid JSON in GeoJSON file.')
   }
   return parseTrainingSamplesGeoJson(json, existingClasses)
+}
+
+async function readFileAsArrayBuffer(file: Blob): Promise<ArrayBuffer> {
+  if (typeof (file as File).arrayBuffer === 'function') {
+    return (file as File).arrayBuffer()
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as ArrayBuffer)
+    reader.onerror = () => reject(reader.error || new Error('Failed to read file.'))
+    reader.readAsArrayBuffer(file)
+  })
 }
 
 /** Import training polygons/points from a shapefile ZIP (or .shp package buffer). */
@@ -595,18 +528,6 @@ export async function parseTrainingPointsXlsx(
       source: s.source === 'import-csv' ? 'import-xlsx' : s.source,
     })),
   }
-}
-
-async function readFileAsArrayBuffer(file: Blob): Promise<ArrayBuffer> {
-  if (typeof (file as File).arrayBuffer === 'function') {
-    return (file as File).arrayBuffer()
-  }
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as ArrayBuffer)
-    reader.onerror = () => reject(reader.error || new Error('Failed to read file.'))
-    reader.readAsArrayBuffer(file)
-  })
 }
 
 /** Route any supported Training Samples import file to the right parser. */

@@ -355,7 +355,7 @@ describe('packOuterRingsIntoWktChunks', () => {
     expect(chunks.length).toBeGreaterThan(0)
     expect(chunks[0]?.geometryWkt3857).toMatch(/^POLYGON\(|^MULTIPOLYGON\(/)
     const decoded = atob(chunks[0]!.evalscriptB64!)
-    expect(decoded).toContain('imgVals.concat(1)')
+    expect(decoded).toContain('concat(samples.dataMask)')
   })
 
   it('packs thousands of AOIs into the hard WMS source cap', () => {

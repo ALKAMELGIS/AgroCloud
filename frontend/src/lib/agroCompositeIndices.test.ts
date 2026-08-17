@@ -23,6 +23,10 @@ describe('agroCompositeIndices', () => {
     expect(buildAgroCloudCustomWmsLayerEntries().some(l => l.name === 'DWDSI')).toBe(true)
     expect(buildAgroCloudCustomWmsLayerEntries().some(l => l.name === 'WAPI')).toBe(true)
     expect(buildAgroCloudCustomWmsLayerEntries().some(l => l.name === 'DWAPI')).toBe(true)
+    expect(buildAgroCloudCustomWmsLayerEntries().some(l => l.name === 'DSI')).toBe(true)
+    expect(buildAgroCloudCustomWmsLayerEntries().some(l => l.name === 'DDSI')).toBe(true)
+    expect(buildAgroCloudCustomWmsLayerEntries().some(l => l.name === 'DRA')).toBe(true)
+    expect(buildAgroCloudCustomWmsLayerEntries().some(l => l.name === 'DDRA')).toBe(true)
   })
 
   it('builds categorized select groups with core + composites + presets', () => {
@@ -56,6 +60,12 @@ describe('agroCompositeIndices', () => {
     expect(flat.some(o => o.id === 'WDSI')).toBe(true)
     expect(flat.find(o => o.id === 'WDSI')?.scientificName).toContain('Water Drought Situation Index')
     expect(flat.some(o => o.id === 'DWDSI')).toBe(true)
+    expect(flat.some(o => o.id === 'DSI')).toBe(true)
+    expect(flat.find(o => o.id === 'DSI')?.scientificName).toContain('Drought Severity Index')
+    expect(flat.some(o => o.id === 'DDSI')).toBe(true)
+    expect(flat.some(o => o.id === 'DRA')).toBe(true)
+    expect(flat.find(o => o.id === 'DRA')?.scientificName).toContain('Drought Area')
+    expect(flat.some(o => o.id === 'DDRA')).toBe(true)
     expect(flat.some(o => o.id === 'WAPI')).toBe(true)
     expect(flat.find(o => o.id === 'WAPI')?.scientificName).toContain('Water Allocation Priority Index')
     expect(flat.some(o => o.id === 'DWAPI')).toBe(true)
@@ -95,17 +105,21 @@ describe('agroCompositeIndices', () => {
     expect(flattenRemoteSensingLayerSelectGroups(groups).some(o => o.id === 'DGCI')).toBe(false)
   })
 
-  it('resolves VHS, ISS, WDSI, and WAPI formula metadata', () => {
+  it('resolves VHS, ISS, WDSI, WAPI, and DSI formula metadata', () => {
     expect(isAgroCompositeLayerId('VHS')).toBe(true)
     expect(isAgroCompositeLayerId('CVHI')).toBe(true)
     expect(isAgroCompositeLayerId('ISS')).toBe(true)
     expect(isAgroCompositeLayerId('WDSI')).toBe(true)
     expect(isAgroCompositeLayerId('WAPI')).toBe(true)
+    expect(isAgroCompositeLayerId('DSI')).toBe(true)
+    expect(isAgroCompositeLayerId('DRA')).toBe(true)
     expect(isAgroDeltaCompositeLayerId('DVHS')).toBe(true)
     expect(isAgroDeltaCompositeLayerId('DCVHI')).toBe(true)
     expect(isAgroDeltaCompositeLayerId('DISS')).toBe(true)
     expect(isAgroDeltaCompositeLayerId('DWDSI')).toBe(true)
     expect(isAgroDeltaCompositeLayerId('DWAPI')).toBe(true)
+    expect(isAgroDeltaCompositeLayerId('DDSI')).toBe(true)
+    expect(isAgroDeltaCompositeLayerId('DDRA')).toBe(true)
     expect(resolveAgroCompositeIndexDef('CVHI')?.expr).toBe('(ndvi + ndmi + ndwi + savi) / 4')
     expect(resolveAgroCompositeIndexDef('VHS')?.expr).toBe('(ndvi + savi) / 2')
     expect(resolveAgroCompositeIndexDef('ISS')?.expr).toBe(
@@ -117,12 +131,15 @@ describe('agroCompositeIndices', () => {
     expect(resolveAgroCompositeIndexDef('WAPI')?.expr).toContain('0.40 * (0.40 * ndmi')
     expect(resolveAgroCompositeIndexDef('WAPI')?.expr).toContain('Math.max(0, Math.min(1, 1 - (0.6 * ndmi')
     expect(resolveAgroCompositeIndexDef('WAPI')?.expr).toContain('+ 0.10')
+    expect(resolveAgroCompositeIndexDef('DSI')?.expr).toContain('0.50 * (1 -')
     expect(resolveAgroStaticLayerIdForDelta('DVHS')).toBe('VHS')
     expect(resolveAgroStaticLayerIdForDelta('DCVHI')).toBe('CVHI')
     expect(resolveAgroStaticLayerIdForDelta('DCHAS')).toBe('CHAS')
     expect(resolveAgroStaticLayerIdForDelta('DISS')).toBe('ISS')
     expect(resolveAgroStaticLayerIdForDelta('DWDSI')).toBe('WDSI')
     expect(resolveAgroStaticLayerIdForDelta('DWAPI')).toBe('WAPI')
+    expect(resolveAgroStaticLayerIdForDelta('DDSI')).toBe('DSI')
+    expect(resolveAgroStaticLayerIdForDelta('DDRA')).toBe('DRA')
   })
 
   it('registers CHAS crop alert score in Crop group', () => {

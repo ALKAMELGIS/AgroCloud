@@ -31,6 +31,7 @@ import {
   resolveAgroCompositeTenClassRamp,
 } from './agroCompositeLayerRamps'
 import { CHAS_FORMULA_DOC } from './chasIndex'
+import { DRA_DROUGHT_THRESHOLD } from './dsiIndex'
 import { ADI_FORMULA_DOC, isAdiLayerId } from './adiIndex'
 import { NCADI_FORMULA_DOC, isNcadiLayerId } from './ncadiIndex'
 import { isMangroveLayerId } from './mangroveIndices'
@@ -62,19 +63,29 @@ import {
 import {
   SENTINEL_EVI_RAMP,
   SENTINEL_GNDVI_RAMP,
+  SENTINEL_AWEI_10_CLASS_BREAKS,
+  SENTINEL_AWEI_10_CLASS_COLORS,
+  SENTINEL_AWEI_NEW_FLOOD_WATER_COLOR,
   SENTINEL_AWEI_RAMP,
+  SENTINEL_MNDWI_10_CLASS_BREAKS,
+  SENTINEL_MNDWI_10_CLASS_COLORS,
   SENTINEL_MNDWI_RAMP,
+  SENTINEL_NBR_10_CLASS_BREAKS,
+  SENTINEL_NBR_10_CLASS_COLORS,
+  SENTINEL_NBR_LEGEND_RAMP,
   SENTINEL_NBR_RAMP,
   SENTINEL_NDMI_10_CLASS_BREAKS,
   SENTINEL_NDMI_10_CLASS_COLORS,
+  SENTINEL_NDMI_LEGEND_RAMP,
   SENTINEL_NDMI_MOISTURE_RAMP,
   SENTINEL_NDRE_RAMP,
   SENTINEL_NDSI_RAMP,
   SENTINEL_NDVI_10_CLASS_BREAKS,
   SENTINEL_NDVI_10_CLASS_COLORS,
   SENTINEL_NDVI_AGRICULTURAL_RAMP,
-  SENTINEL_NDWI_10_CLASS_BREAKS,
   SENTINEL_NDWI_10_CLASS_COLORS,
+  SENTINEL_NDWI_AREA_CLASS_BREAKS,
+  SENTINEL_NDWI_LEGEND_RAMP,
   SENTINEL_NDWI_RAMP,
   SENTINEL_SAVI_RAMP,
 } from './sentinelHubWmsIndexEvalscripts'
@@ -197,30 +208,69 @@ const NDVI_CLASS_LABELS = [
   'Very Dense / Vigorous Vegetation',
 ] as const
 
-const NDWI_CLASS_LABELS = [
-  'Very dry',
-  'Dry',
-  'Moderate dry',
-  'Slightly dry',
-  'Bare transition',
-  'Low moisture',
-  'Moist soil',
-  'Wet vegetation',
-  'Shallow water',
-  'Open water',
-] as const
-
 const NDMI_CLASS_LABELS = [
-  'Severe stress',
-  'High stress',
-  'Moderate stress',
-  'Low stress',
+  'Severe moisture stress',
+  'High moisture stress',
+  'Moderate moisture stress',
+  'Low moisture stress',
   'Dry canopy',
   'Moist canopy',
-  'Good moisture',
-  'High moisture',
-  'Very wet',
-  'Saturated',
+  'Moist vegetation',
+  'Moist surface',
+  'Moister canopy',
+  'Saturated moist',
+] as const
+
+const NDWI_CLASS_LABELS = [
+  'Extremely dry / non-water',
+  'Very dry / non-water',
+  'Dry surface',
+  'Bare / low moisture surface',
+  'Moist surface',
+  'Slightly wet surface',
+  'Wet surface',
+  'High water probability',
+  'Open water',
+  'Deep / permanent water',
+] as const
+
+const NBR_CLASS_LABELS = [
+  'Severe burn',
+  'High severity burn',
+  'Moderate-high burn',
+  'Moderate burn',
+  'Low severity burn',
+  'Unburned / regrowth',
+  'Sparse vegetation',
+  'Moderate vegetation',
+  'Healthy vegetation',
+  'Dense unburned vegetation',
+] as const
+
+const MNDWI_CLASS_LABELS = [
+  'Very dry land',
+  'Dry land',
+  'Bare surface',
+  'Non-water',
+  'Possible water',
+  'Water',
+  'Wet water',
+  'Open water',
+  'Deep water',
+  'Very strong water',
+] as const
+
+const AWEI_CLASS_LABELS = [
+  'Non-water',
+  'Dry land',
+  'Bare surface',
+  'Non-water',
+  'Possible water',
+  'Water',
+  'Wet water',
+  'Open water',
+  'Deep water',
+  'Very strong water',
 ] as const
 
 function buildRampDiscreteClasses(
@@ -302,15 +352,59 @@ function buildNdwiLegend(): LayerLiveLegendSpec {
     title: 'NDWI',
     subtitle: 'Surface / canopy water (Green − NIR)',
     kind: 'discrete',
-    valueMin: -1,
-    valueMax: 1,
-    scaleLabels: { low: 'Dry / bare soil', mid: 'Damp transition', high: 'Open water' },
-    gradientCss: rampToGradientCss(SENTINEL_NDWI_RAMP),
+    valueMin: -0.8,
+    valueMax: 0.8,
+    scaleLabels: { low: 'Dry / vegetation', mid: 'Moist transition', high: 'Open water' },
+    gradientCss: rampToGradientCss(SENTINEL_NDWI_LEGEND_RAMP),
     classes: buildClassesFromBreaks(
-      SENTINEL_NDWI_10_CLASS_BREAKS,
+      SENTINEL_NDWI_AREA_CLASS_BREAKS,
       SENTINEL_NDWI_10_CLASS_COLORS,
       NDWI_CLASS_LABELS,
     ),
+  }
+}
+
+function buildMndwiLegend(): LayerLiveLegendSpec {
+  return {
+    id: 'mndwi',
+    title: 'MNDWI',
+    subtitle: 'Modified water index (Green − SWIR1)',
+    kind: 'discrete',
+    valueMin: -0.8,
+    valueMax: 0.8,
+    scaleLabels: { low: 'Dry land (tan/brown)', mid: 'Possible water', high: 'Open water' },
+    gradientCss: rampToGradientCss(SENTINEL_MNDWI_RAMP),
+    classes: buildClassesFromBreaks(
+      SENTINEL_MNDWI_10_CLASS_BREAKS,
+      SENTINEL_MNDWI_10_CLASS_COLORS,
+      MNDWI_CLASS_LABELS,
+    ),
+  }
+}
+
+function buildAweiLegend(): LayerLiveLegendSpec {
+  return {
+    id: 'awei',
+    title: 'AWEI',
+    subtitle: 'Automated water extraction index',
+    kind: 'discrete',
+    valueMin: -2,
+    valueMax: 4,
+    scaleLabels: { low: 'Non-water / dry land (tan/brown)', mid: 'Possible water', high: 'Deep water' },
+    gradientCss: rampToGradientCss(SENTINEL_AWEI_RAMP),
+    classes: [
+      ...buildClassesFromBreaks(
+        SENTINEL_AWEI_10_CLASS_BREAKS,
+        SENTINEL_AWEI_10_CLASS_COLORS,
+        AWEI_CLASS_LABELS,
+      ),
+      {
+        label: 'New flood water',
+        rangeLabel: 'Change detection overlay',
+        color: hexNumberToCss(SENTINEL_AWEI_NEW_FLOOD_WATER_COLOR),
+      },
+    ],
+    note: 'New flood water (dark water blue) marks newly inundated areas in pre/post flood change detection.',
   }
 }
 
@@ -322,12 +416,30 @@ function buildNdmiLegend(): LayerLiveLegendSpec {
     kind: 'discrete',
     valueMin: -0.8,
     valueMax: 0.8,
-    scaleLabels: { low: 'Moisture stress', mid: 'Moist canopy', high: 'Saturated' },
-    gradientCss: rampToGradientCss(SENTINEL_NDMI_MOISTURE_RAMP),
+    scaleLabels: { low: 'Moisture stress', mid: 'Dry / moist transition', high: 'Moist / evaporation' },
+    gradientCss: rampToGradientCss(SENTINEL_NDMI_LEGEND_RAMP),
     classes: buildClassesFromBreaks(
       SENTINEL_NDMI_10_CLASS_BREAKS,
       SENTINEL_NDMI_10_CLASS_COLORS,
       NDMI_CLASS_LABELS,
+    ),
+  }
+}
+
+function buildNbrLegend(): LayerLiveLegendSpec {
+  return {
+    id: 'nbr',
+    title: 'NBR',
+    subtitle: 'Normalized burn ratio (NIR − SWIR2)',
+    kind: 'discrete',
+    valueMin: -0.5,
+    valueMax: 1,
+    scaleLabels: { low: 'Severe burn', mid: 'Moderate severity', high: 'Unburned vegetation' },
+    gradientCss: rampToGradientCss(SENTINEL_NBR_LEGEND_RAMP),
+    classes: buildClassesFromBreaks(
+      SENTINEL_NBR_10_CLASS_BREAKS,
+      SENTINEL_NBR_10_CLASS_COLORS,
+      NBR_CLASS_LABELS,
     ),
   }
 }
@@ -537,24 +649,9 @@ const LEGEND_BY_PROFILE: Record<string, () => LayerLiveLegendSpec> = {
   ndmi: buildNdmiLegend,
   et: buildEtLegend,
   lst: buildLstLegend,
-  mndwi: () =>
-    buildIndexRampLegend('mndwi', 'MNDWI', 'Modified water index', SENTINEL_MNDWI_RAMP, 10, {
-      low: 'Dry land',
-      mid: 'Wet soil',
-      high: 'Open water',
-    }),
-  awei: () =>
-    buildIndexRampLegend('awei', 'AWEI', 'Automated water extraction index', SENTINEL_AWEI_RAMP, 10, {
-      low: 'Dry land / built-up',
-      mid: 'Wet soil',
-      high: 'Open water',
-    }),
-  nbr: () =>
-    buildIndexRampLegend('nbr', 'NBR', 'Normalized burn ratio', SENTINEL_NBR_RAMP, 10, {
-      low: 'Severe burn',
-      mid: 'Moderate severity',
-      high: 'Unburned vegetation',
-    }),
+  mndwi: buildMndwiLegend,
+  awei: buildAweiLegend,
+  nbr: buildNbrLegend,
   ndsi: () =>
     buildIndexRampLegend('ndsi', 'NDSI', 'Snow / ice index', SENTINEL_NDSI_RAMP, 10, {
       low: 'No snow',
@@ -617,6 +714,12 @@ function buildAgroCompositeLegendNote(layerId: string, isDelta: boolean): string
     return def
       ? `${def.scientificName} · Sentinel-2 band formula · 10-class mangrove discrimination`
       : 'Mangrove spectral index · Sentinel-2 bands · 10-class'
+  }
+  if (u === 'DSI') {
+    return 'DSI = 0.50·(1−VCI) + 0.30·(1−SMCI) + 0.20·(1−NDMI_norm) · 10 equal DSI bins · green = no drought · dark red = extreme'
+  }
+  if (u === 'DRA') {
+    return `Drought Area = pixels with DSI ≥ Drought_Threshold (default ${DRA_DROUGHT_THRESHOLD.toFixed(2)} · Mild+) · map shows 10-class DSI severity for area breakdown`
   }
   if (isDelta) return 'Δ > 0 → improvement · Δ < 0 → degradation · Δ ≈ 0 → stable'
   return 'Composite from NDVI, NDMI, NDWI, SAVI'

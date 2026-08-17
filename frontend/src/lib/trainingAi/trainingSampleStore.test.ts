@@ -4,8 +4,10 @@ import {
   countByClass,
   distinctClassCount,
   geometryTypeOf,
+  importTrainingSamplesFromFile,
   parseTrainingPointsCsv,
   parseTrainingSamplesGeoJson,
+  publishLiveTrainingSamples,
   samplesToFeatureCollection,
 } from './trainingSampleStore'
 import { detectOverfitting } from './trainingAiClient'
@@ -82,6 +84,11 @@ describe('trainingSampleStore', () => {
     expect(csv.importedCount).toBe(1)
     expect(csv.samples[0]?.geometry_type).toBe('Point')
     expect(csv.samples[0]?.class_name).toBe('Water')
+  })
+
+  it('exports training sample import helpers used by Training AI hooks', () => {
+    expect(typeof importTrainingSamplesFromFile).toBe('function')
+    expect(typeof publishLiveTrainingSamples).toBe('function')
   })
 })
 

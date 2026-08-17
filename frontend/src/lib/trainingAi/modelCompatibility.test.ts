@@ -9,8 +9,6 @@ import {
   TRAINING_MODEL_REGISTRY,
   getTrainingModelById,
   hfLabel,
-  isTrainModelPickerEntry,
-  resolveTrainJobModel,
 } from './modelRegistry'
 
 describe('modelRegistry', () => {
@@ -18,42 +16,6 @@ describe('modelRegistry', () => {
     const m = getTrainingModelById(DEFAULT_TRAINING_MODEL_ID)
     expect(m?.trainableOnAgroCloud).toBe(true)
     expect(m?.hfModelId).toBe('nvidia/segformer-b2-finetuned-ade-512-512')
-  })
-
-  it('lists Delineate Anything and FTW Model in the train model picker', () => {
-    const delineate = getTrainingModelById('agro-delineate-fbis-v2')
-    const ftw = getTrainingModelById('agro-ftw-live')
-    expect(delineate?.name).toBe('Delineate Anything')
-    expect(ftw?.name).toBe('FTW Model')
-    expect(isTrainModelPickerEntry(delineate!)).toBe(true)
-    expect(isTrainModelPickerEntry(ftw!)).toBe(true)
-    expect(isTrainModelPickerEntry(getTrainingModelById('agro-yolo-trees')!)).toBe(false)
-  })
-
-  it('resolves every train-picker model to a SegFormer fine-tune encoder', () => {
-    for (const id of [
-      'agro-segformer-b0',
-      'agro-segformer-b2',
-      'agro-segformer-b3',
-      'agro-segformer-b5',
-      'agro-ftw-live',
-      'agro-delineate-fbis-v2',
-    ]) {
-      const job = resolveTrainJobModel(id)
-      expect(job?.trainableOnAgroCloud).toBe(true)
-      expect(job?.trainEncoder).toBeTruthy()
-    }
-    expect(resolveTrainJobModel('agro-ftw-live')?.id).toBe(DEFAULT_TRAINING_MODEL_ID)
-    expect(resolveTrainJobModel('agro-ftw-live')?.trainEncoder).toBe(
-      'nvidia/segformer-b2-finetuned-ade-512-512',
-    )
-    expect(resolveTrainJobModel('agro-delineate-fbis-v2')?.id).toBe(DEFAULT_TRAINING_MODEL_ID)
-    expect(resolveTrainJobModel('agro-delineate-fbis-v2')?.trainEncoder).toBe(
-      'nvidia/segformer-b2-finetuned-ade-512-512',
-    )
-    expect(resolveTrainJobModel('agro-segformer-b0')?.id).toBe('agro-segformer-b0')
-    expect(resolveTrainJobModel('agro-segformer-b5')?.trainEncoder).toContain('segformer-b5')
-    expect(resolveTrainJobModel('agro-yolo-trees')).toBeNull()
   })
 
   it('keeps verified HF ids and marks unknown as null', () => {

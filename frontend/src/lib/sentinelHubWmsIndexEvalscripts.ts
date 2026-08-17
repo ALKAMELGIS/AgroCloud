@@ -113,11 +113,6 @@ export const SENTINEL_NDVI_RAMP: RampStop[] = SENTINEL_NDVI_10_CLASS_VALUES.map(
   SENTINEL_NDVI_10_CLASS_COLORS[i]!,
 ])
 
-/** NDWI color anchors (wet white→blue; dry half uses discrete warm hues). */
-export const SENTINEL_NDWI_RAMP_WHITE = 0xffffff
-export const SENTINEL_NDWI_RAMP_GREEN = 0x008000
-export const SENTINEL_NDWI_RAMP_BLUE = 0x0000cc
-
 function blendHexColor(from: number, to: number, t: number): number {
   const clamp = Math.max(0, Math.min(1, t))
   const fr = (from >> 16) & 0xff
@@ -132,52 +127,44 @@ function blendHexColor(from: number, to: number, t: number): number {
   return ((r << 16) | (g << 8) | b) >>> 0
 }
 
-/** Nine upper bounds → 10 NDWI classes (5 dry / 5 wet). */
-export const SENTINEL_NDWI_10_CLASS_BREAKS: readonly number[] = [
-  -0.45, -0.28, -0.14, -0.05, 0, 0.004, 0.02, 0.08, 0.25,
+/** NDWI continuous ramp: dry vegetation (green) → neutral (white) → open water (blue). */
+export const SENTINEL_NDWI_RAMP: RampStop[] = [
+  [-0.8, 0x008000],
+  [0, 0xffffff],
+  [0.8, 0x0000cc],
 ]
 
-/** Ramp intensity for Bare + wet class blends. */
-export const SENTINEL_NDWI_10_CLASS_RAMP_T: readonly number[] = [1.0, 0.8, 0.6, 0.35, 0.08, 0.08, 0.3, 0.5, 0.75, 1.0]
+/** Equal-width AOI class-area bins over the NDWI display range. */
+export const SENTINEL_NDWI_AREA_CLASS_BREAKS: readonly number[] = [
+  -0.64, -0.48, -0.32, -0.16, 0, 0.16, 0.32, 0.48, 0.64,
+]
 
-/**
- * NDWI class colors: dry Very dry→Slightly dry = dark red → red → orange → yellow;
- * Bare + wet keep prior white→green / white→blue blends.
- */
-export const SENTINEL_NDWI_10_CLASS_COLORS: readonly number[] = (() => {
-  const blended = SENTINEL_NDWI_10_CLASS_RAMP_T.map((t, i) =>
-    blendHexColor(
-      SENTINEL_NDWI_RAMP_WHITE,
-      i < 5 ? SENTINEL_NDWI_RAMP_GREEN : SENTINEL_NDWI_RAMP_BLUE,
-      t,
-    ),
-  )
-  return [
-    0x7f0000, // Very dry — dark red
-    0xd32f2f, // Dry — red
-    0xfb8c00, // Moderate dry — orange
-    0xffeb3b, // Slightly dry — yellow
-    blended[4]!, // Bare transition
-    blended[5]!,
-    blended[6]!,
-    blended[7]!,
-    blended[8]!,
-    blended[9]!,
-  ]
-})()
+/** NDWI legend / area colors: dry green → white → water blue gradient. */
+export const SENTINEL_NDWI_10_CLASS_COLORS: readonly number[] = [
+  0x006400, // Extremely dry / non-water
+  0x008000, // Very dry / non-water
+  0x66bb6a, // Dry surface
+  0xc8e6c9, // Bare / low moisture
+  0xffffff, // Moist surface
+  0xb3e5fc, // Slightly wet
+  0x4fc3f7, // Wet surface
+  0x039be5, // High water probability
+  0x0277bd, // Open water
+  0x000080, // Deep / permanent water
+]
 
-/** NDWI 10-class ramp stops for documentation (mid-class index values). */
-export const SENTINEL_NDWI_RAMP: RampStop[] = [
-  [-0.55, SENTINEL_NDWI_10_CLASS_COLORS[0]],
-  [-0.36, SENTINEL_NDWI_10_CLASS_COLORS[1]],
-  [-0.21, SENTINEL_NDWI_10_CLASS_COLORS[2]],
-  [-0.095, SENTINEL_NDWI_10_CLASS_COLORS[3]],
-  [-0.025, SENTINEL_NDWI_10_CLASS_COLORS[4]],
-  [0.002, SENTINEL_NDWI_10_CLASS_COLORS[5]],
-  [0.012, SENTINEL_NDWI_10_CLASS_COLORS[6]],
-  [0.05, SENTINEL_NDWI_10_CLASS_COLORS[7]],
-  [0.165, SENTINEL_NDWI_10_CLASS_COLORS[8]],
-  [0.625, SENTINEL_NDWI_10_CLASS_COLORS[9]],
+/** NDWI 10-class ramp stops for legends / GeoTIFF export (mid-class index values). */
+export const SENTINEL_NDWI_LEGEND_RAMP: RampStop[] = [
+  [-0.72, SENTINEL_NDWI_10_CLASS_COLORS[0]],
+  [-0.56, SENTINEL_NDWI_10_CLASS_COLORS[1]],
+  [-0.4, SENTINEL_NDWI_10_CLASS_COLORS[2]],
+  [-0.24, SENTINEL_NDWI_10_CLASS_COLORS[3]],
+  [-0.08, SENTINEL_NDWI_10_CLASS_COLORS[4]],
+  [0.08, SENTINEL_NDWI_10_CLASS_COLORS[5]],
+  [0.24, SENTINEL_NDWI_10_CLASS_COLORS[6]],
+  [0.4, SENTINEL_NDWI_10_CLASS_COLORS[7]],
+  [0.56, SENTINEL_NDWI_10_CLASS_COLORS[8]],
+  [0.72, SENTINEL_NDWI_10_CLASS_COLORS[9]],
 ]
 
 /** NBR burn severity: unburned green → moderate → severe burn (red). */
@@ -193,55 +180,141 @@ export const SENTINEL_NBR_RAMP: RampStop[] = [
   [1, 0x1b5e20],
 ]
 
-/** AWEI: dry land / built-up → open water (blue). */
+/** Equal-width AOI / legend class bins over the NBR display range (−0.5 … 1.0). */
+export const SENTINEL_NBR_10_CLASS_BREAKS: readonly number[] = [
+  -0.35, -0.2, -0.05, 0.1, 0.25, 0.4, 0.55, 0.7, 0.85,
+]
+
+function sampleSentinelNbrRampColor(nbr: number): number {
+  if (nbr <= SENTINEL_NBR_RAMP[0]![0]) return SENTINEL_NBR_RAMP[0]![1]
+  if (nbr >= SENTINEL_NBR_RAMP[SENTINEL_NBR_RAMP.length - 1]![0]) {
+    return SENTINEL_NBR_RAMP[SENTINEL_NBR_RAMP.length - 1]![1]
+  }
+  for (let i = 0; i < SENTINEL_NBR_RAMP.length - 1; i++) {
+    const [v0, c0] = SENTINEL_NBR_RAMP[i]!
+    const [v1, c1] = SENTINEL_NBR_RAMP[i + 1]!
+    if (nbr >= v0 && nbr <= v1) {
+      const span = v1 - v0
+      const t = span > 0 ? (nbr - v0) / span : 0
+      return blendHexColor(c0, c1, t)
+    }
+  }
+  return SENTINEL_NBR_RAMP[SENTINEL_NBR_RAMP.length - 1]![1]
+}
+
+/** NBR 10-class colors sampled from the burn-severity ramp at class midpoints. */
+export const SENTINEL_NBR_10_CLASS_COLORS: readonly number[] = [
+  sampleSentinelNbrRampColor(-0.425),
+  sampleSentinelNbrRampColor(-0.275),
+  sampleSentinelNbrRampColor(-0.125),
+  sampleSentinelNbrRampColor(0.025),
+  sampleSentinelNbrRampColor(0.175),
+  sampleSentinelNbrRampColor(0.325),
+  sampleSentinelNbrRampColor(0.475),
+  sampleSentinelNbrRampColor(0.625),
+  sampleSentinelNbrRampColor(0.775),
+  sampleSentinelNbrRampColor(0.925),
+]
+
+/** NBR 10-class ramp stops for legends (mid-class index values). */
+export const SENTINEL_NBR_LEGEND_RAMP: RampStop[] = [
+  [-0.425, SENTINEL_NBR_10_CLASS_COLORS[0]!],
+  [-0.275, SENTINEL_NBR_10_CLASS_COLORS[1]!],
+  [-0.125, SENTINEL_NBR_10_CLASS_COLORS[2]!],
+  [0.025, SENTINEL_NBR_10_CLASS_COLORS[3]!],
+  [0.175, SENTINEL_NBR_10_CLASS_COLORS[4]!],
+  [0.325, SENTINEL_NBR_10_CLASS_COLORS[5]!],
+  [0.475, SENTINEL_NBR_10_CLASS_COLORS[6]!],
+  [0.625, SENTINEL_NBR_10_CLASS_COLORS[7]!],
+  [0.775, SENTINEL_NBR_10_CLASS_COLORS[8]!],
+  [0.925, SENTINEL_NBR_10_CLASS_COLORS[9]!],
+]
+
+/** AWEI / flood-water 10-class upper bounds (class 0 = val < breaks[0], … class 9 = val ≥ breaks[8]). */
+export const SENTINEL_AWEI_10_CLASS_BREAKS: readonly number[] = [
+  -2.0, -1.0, -0.5, 0.0, 0.2, 0.5, 1.0, 2.0, 4.0,
+]
+
+/** AWEI 10-class colors: tan/brown (dry) → flood-water blue gradient (wet). */
+export const SENTINEL_AWEI_10_CLASS_COLORS: readonly number[] = [
+  0xe8dcc8, // Non-water — light tan
+  0xd4c4a8, // Dry land — soft brown
+  0xc4a882, // Bare surface — tan
+  0xb8956a, // Non-water — warm brown
+  0xb3e5fc, // Possible water — light flood blue
+  0x4fc3f7, // Water
+  0x29b6f6, // Wet water
+  0x0288d1, // Open water
+  0x1565c0, // Deep water
+  0x053061, // Very strong water
+]
+
+/** Dark water blue for newly detected flood water (change detection overlay). */
+export const SENTINEL_AWEI_NEW_FLOOD_WATER_COLOR = 0x053061
+
+/** AWEI 10-class ramp stops for legends / GeoTIFF export (mid-class index values). */
 export const SENTINEL_AWEI_RAMP: RampStop[] = [
-  [-1, 0x3e2723],
-  [-0.5, 0x795548],
-  [-0.2, 0xbcaaa4],
-  [0, 0xf5f5f5],
-  [0.15, 0xb3e5fc],
-  [0.35, 0x4fc3f7],
-  [0.55, 0x039be5],
-  [0.75, 0x0277bd],
-  [1, 0x0d47a1],
+  [-2.5, SENTINEL_AWEI_10_CLASS_COLORS[0]],
+  [-1.5, SENTINEL_AWEI_10_CLASS_COLORS[1]],
+  [-0.75, SENTINEL_AWEI_10_CLASS_COLORS[2]],
+  [-0.25, SENTINEL_AWEI_10_CLASS_COLORS[3]],
+  [0.1, SENTINEL_AWEI_10_CLASS_COLORS[4]],
+  [0.35, SENTINEL_AWEI_10_CLASS_COLORS[5]],
+  [0.75, SENTINEL_AWEI_10_CLASS_COLORS[6]],
+  [1.5, SENTINEL_AWEI_10_CLASS_COLORS[7]],
+  [3.0, SENTINEL_AWEI_10_CLASS_COLORS[8]],
+  [5.0, SENTINEL_AWEI_10_CLASS_COLORS[9]],
 ]
 
-/** MNDWI (Xu): built-up/soil → water bodies (deep blue). */
+/** MNDWI 10-class upper bounds (class 0 = val < breaks[0], … class 9 = val ≥ breaks[8]). */
+export const SENTINEL_MNDWI_10_CLASS_BREAKS: readonly number[] = [
+  -0.6, -0.45, -0.3, -0.15, 0, 0.1, 0.2, 0.35, 0.5,
+]
+
+/** MNDWI 10-class colors: light tan → medium brown (dry) → water blue (wet). */
+export const SENTINEL_MNDWI_10_CLASS_COLORS: readonly number[] = [
+  0xe8dcc8, // Very dry — light tan
+  0xd4c4a8, // Dry land — soft brown
+  0xc4a882, // Bare surface — tan
+  0xb8956a, // Non-water — warm brown
+  0xa0522d, // Possible water — medium brown (sienna)
+  0xa6dba0, // Water
+  0x41b6c4, // Wet water
+  0x2c7bb6, // Open water
+  0x2166ac, // Deep water
+  0x053061, // Very strong water
+]
+
+/** MNDWI 10-class ramp stops for legends / GeoTIFF export (mid-class index values). */
 export const SENTINEL_MNDWI_RAMP: RampStop[] = [
-  [-0.8, 0x3e2723],
-  [-0.4, 0x795548],
-  [-0.1, 0xbcaaa4],
-  [0, 0xf5f5f5],
-  [0.05, 0xb3e5fc],
-  [0.15, 0x4fc3f7],
-  [0.3, 0x039be5],
-  [0.5, 0x0277bd],
-  [0.7, 0x01579b],
-  [1, 0x0d47a1],
+  [-0.675, SENTINEL_MNDWI_10_CLASS_COLORS[0]],
+  [-0.525, SENTINEL_MNDWI_10_CLASS_COLORS[1]],
+  [-0.375, SENTINEL_MNDWI_10_CLASS_COLORS[2]],
+  [-0.225, SENTINEL_MNDWI_10_CLASS_COLORS[3]],
+  [-0.075, SENTINEL_MNDWI_10_CLASS_COLORS[4]],
+  [0.05, SENTINEL_MNDWI_10_CLASS_COLORS[5]],
+  [0.15, SENTINEL_MNDWI_10_CLASS_COLORS[6]],
+  [0.275, SENTINEL_MNDWI_10_CLASS_COLORS[7]],
+  [0.425, SENTINEL_MNDWI_10_CLASS_COLORS[8]],
+  [0.65, SENTINEL_MNDWI_10_CLASS_COLORS[9]],
 ]
 
-/** NDMI moisture ramp: dry yellow → orange → red → dark red | moist light blue → dark blue. */
+/** NDMI continuous moisture ramp: dark red (dry) → yellow → cyan → dark blue (wet). */
 export const SENTINEL_NDMI_MOISTURE_RAMP: RampStop[] = [
-  [-0.8, 0x7f0000],
-  [-0.72, 0x7f0000], // Severe stress — dark red
-  [-0.56, 0xd32f2f], // High stress — red
-  [-0.4, 0xf4511e], // Moderate stress — deep orange
-  [-0.24, 0xfb8c00], // Low stress — orange
-  [-0.08, 0xffeb3b], // Dry canopy — yellow
-  [0.08, 0x81d4fa], // Moist canopy — light blue
-  [0.24, 0x42a5f5], // Good moisture
-  [0.4, 0x1e88e5], // High moisture
-  [0.56, 0x1565c0], // Very wet
-  [0.72, 0x0d47a1], // Saturated — dark blue
-  [0.8, 0x0d47a1],
+  [-0.8, 0x800000],
+  [-0.24, 0xff0000],
+  [-0.032, 0xffff00],
+  [0.032, 0x00ffff],
+  [0.24, 0x0000ff],
+  [0.8, 0x000080],
 ]
 
-/** Nine upper bounds → 10 NDMI classes across −0.8…0.8. */
+/** Equal-width AOI class-area bins over the NDMI display range. */
 export const SENTINEL_NDMI_10_CLASS_BREAKS: readonly number[] = [
   -0.64, -0.48, -0.32, -0.16, 0, 0.16, 0.32, 0.48, 0.64,
 ]
 
-/** Class representative NDMI for ColorRampVisualizer.process(). */
+/** Class representative NDMI values for legend / area sampling. */
 export const SENTINEL_NDMI_10_CLASS_VALUES: readonly number[] = [
   -0.72, -0.56, -0.4, -0.24, -0.08, 0.08, 0.24, 0.4, 0.56, 0.72,
 ]
@@ -262,15 +335,36 @@ function sampleSentinelMoistureRampColor(ndmi: number, ramp: readonly RampStop[]
   return ramp[ramp.length - 1]![1]
 }
 
-export const SENTINEL_NDMI_10_CLASS_COLORS: readonly number[] = SENTINEL_NDMI_10_CLASS_VALUES.map(v =>
-  sampleSentinelMoistureRampColor(v, SENTINEL_NDMI_MOISTURE_RAMP),
-)
+/** NDMI legend colors: red → yellow (dry stress) → cyan → blue (moist). */
+export const SENTINEL_NDMI_10_CLASS_COLORS: readonly number[] = [
+  0x800000, // Severe moisture stress
+  0xff0000, // High stress
+  0xff6600, // Moderate stress
+  0xffff00, // Low stress
+  0xffff99, // Dry canopy transition
+  0xb3e5fc, // Moist canopy — light evaporation blue
+  0x4fc3f7, // Moist vegetation
+  0x29b6f6, // Moist surface
+  0x0288d1, // Moister canopy
+  0x000080, // Saturated moist
+]
 
-/** NDMI 10-class ramp stops for legends / docs. */
-export const SENTINEL_NDMI_RAMP: RampStop[] = SENTINEL_NDMI_10_CLASS_VALUES.map((v, i) => [
-  v,
-  SENTINEL_NDMI_10_CLASS_COLORS[i]!,
-])
+/** NDMI 10-class ramp stops for legends (mid-class index values). */
+export const SENTINEL_NDMI_LEGEND_RAMP: RampStop[] = [
+  [-0.72, SENTINEL_NDMI_10_CLASS_COLORS[0]],
+  [-0.56, SENTINEL_NDMI_10_CLASS_COLORS[1]],
+  [-0.4, SENTINEL_NDMI_10_CLASS_COLORS[2]],
+  [-0.24, SENTINEL_NDMI_10_CLASS_COLORS[3]],
+  [-0.08, SENTINEL_NDMI_10_CLASS_COLORS[4]],
+  [0.08, SENTINEL_NDMI_10_CLASS_COLORS[5]],
+  [0.24, SENTINEL_NDMI_10_CLASS_COLORS[6]],
+  [0.4, SENTINEL_NDMI_10_CLASS_COLORS[7]],
+  [0.56, SENTINEL_NDMI_10_CLASS_COLORS[8]],
+  [0.72, SENTINEL_NDMI_10_CLASS_COLORS[9]],
+]
+
+/** NDMI ramp stops for WMS metadata. */
+export const SENTINEL_NDMI_RAMP: RampStop[] = SENTINEL_NDMI_MOISTURE_RAMP
 
 /** EVI: sparse → dense vegetation (green ramp, wider dynamic range). */
 export const SENTINEL_EVI_RAMP: RampStop[] = [
@@ -429,17 +523,6 @@ const INDEX_EVAL_SPECS: Record<SentinelIndexEvalProfile, IndexEvalSpec> = {
   },
 }
 
-/**
- * GEOMETRY already clips the WMS raster to each AOI.
- * Never use dataMask as output alpha — dataMask=0 on small/partial fields
- * would hide the entire polygon. Index threshold may still hide low values.
- */
-function wmsGeometryClipAlphaBlock(indexVar: string, thr: number | null): string {
-  if (thr == null) return 'return imgVals.concat(1);'
-  return `var a = (isFinite(${indexVar}) && ${indexVar} >= ${thr} ? 1.0 : 0.0);
-  return imgVals.concat(a);`
-}
-
 function hexColorLiteral(hex: number): string {
   return `0x${(hex >>> 0).toString(16).padStart(6, '0')}`
 }
@@ -452,17 +535,21 @@ function formatNumberList(values: readonly number[]): string {
   return values.map(v => String(v)).join(', ')
 }
 
-/** NDWI: 10-class reclass with dual ColorRampVisualizer (dry green / wet blue). */
+/** NDWI: continuous green → white → blue ColorRampVisualizer on B03/B08. */
 export function buildSentinelNdwiTenClassEvalscript(indexVisibilityMin: number | null = null): string {
   const thr =
     indexVisibilityMin != null && Number.isFinite(indexVisibilityMin)
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
-  const alphaBlock = wmsGeometryClipAlphaBlock('val', thr)
+  const alphaBlock =
+    thr == null
+      ? 'return imgVals.concat(samples.dataMask);'
+      : `var a = samples.dataMask * (val >= ${thr} ? 1.0 : 0.0);
+  return imgVals.concat(a);`
 
   return `//VERSION=3
-// NDWI — 10 classes · dry dark-red→yellow · wet white→blue
+// NDWI — green (dry) → white (neutral) → blue (water)
 function setup() {
   return {
     input: ["B03", "B08", "dataMask"],
@@ -470,16 +557,51 @@ function setup() {
   };
 }
 
+const ramp = [
+   ${formatRampForEvalscript(SENTINEL_NDWI_RAMP)}
+];
+
+const visualizer = new ColorRampVisualizer(ramp);
+
+function evaluatePixel(samples) {
+  let val = index(samples.B03, samples.B08);
+  let imgVals = visualizer.process(val);
+  ${alphaBlock}
+}`
+}
+
+/** AWEI: 10-class flood / water extraction reclass on B03/B08/B11/B12. */
+export function buildSentinelAweiTenClassEvalscript(indexVisibilityMin: number | null = null): string {
+  const thr =
+    indexVisibilityMin != null && Number.isFinite(indexVisibilityMin)
+      ? Math.max(-1, Math.min(1, indexVisibilityMin))
+      : null
+
+  const alphaBlock =
+    thr == null
+      ? 'return imgVals.concat(samples.dataMask);'
+      : `var a = samples.dataMask * (val >= ${thr} ? 1.0 : 0.0);
+  return imgVals.concat(a);`
+
+  return `//VERSION=3
+// AWEI — 10 classes · non-water warm → open / deep water blue
+function setup() {
+  return {
+    input: ["B03", "B08", "B11", "B12", "dataMask"],
+    output: { bands: 4 }
+  };
+}
+
 const classRamp = [
    ${formatRampForEvalscript(
-     SENTINEL_NDWI_10_CLASS_COLORS.map((hex, i) => [i, hex] as RampStop),
+     SENTINEL_AWEI_10_CLASS_COLORS.map((hex, i) => [i, hex] as RampStop),
    )}
 ];
 const viz = new ColorRampVisualizer(classRamp);
 
-const BREAKS = [${formatNumberList(SENTINEL_NDWI_10_CLASS_BREAKS)}];
+const BREAKS = [${formatNumberList(SENTINEL_AWEI_10_CLASS_BREAKS)}];
 
-function ndwiClass(val) {
+function aweiClass(val) {
   if (val < BREAKS[0]) return 0;
   if (val < BREAKS[1]) return 1;
   if (val < BREAKS[2]) return 2;
@@ -493,25 +615,80 @@ function ndwiClass(val) {
 }
 
 function evaluatePixel(samples) {
-  let val = index(samples.B03, samples.B08);
-  if (!isFinite(val)) val = 0;
-  let cls = ndwiClass(val);
+  let val = 4.0 * (samples.B03 - samples.B11) - (0.25 * samples.B08 + 2.75 * samples.B12);
+  let cls = aweiClass(val);
   let imgVals = viz.process(cls);
   ${alphaBlock}
 }`
 }
 
-/** NDMI: 10-class reclass with moisture ColorRampVisualizer (B8A / B11). */
+/** MNDWI: 10-class water reclass — light dry gradient → water blue (B03/B11). */
+export function buildSentinelMndwiTenClassEvalscript(indexVisibilityMin: number | null = null): string {
+  const thr =
+    indexVisibilityMin != null && Number.isFinite(indexVisibilityMin)
+      ? Math.max(-1, Math.min(1, indexVisibilityMin))
+      : null
+
+  const alphaBlock =
+    thr == null
+      ? 'return imgVals.concat(samples.dataMask);'
+      : `var a = samples.dataMask * (val >= ${thr} ? 1.0 : 0.0);
+  return imgVals.concat(a);`
+
+  return `//VERSION=3
+// MNDWI — 10 classes · light dry gradient → open / deep water blue
+function setup() {
+  return {
+    input: ["B03", "B11", "dataMask"],
+    output: { bands: 4 }
+  };
+}
+
+const classRamp = [
+   ${formatRampForEvalscript(
+     SENTINEL_MNDWI_10_CLASS_COLORS.map((hex, i) => [i, hex] as RampStop),
+   )}
+];
+const viz = new ColorRampVisualizer(classRamp);
+
+const BREAKS = [${formatNumberList(SENTINEL_MNDWI_10_CLASS_BREAKS)}];
+
+function mndwiClass(val) {
+  if (val < BREAKS[0]) return 0;
+  if (val < BREAKS[1]) return 1;
+  if (val < BREAKS[2]) return 2;
+  if (val < BREAKS[3]) return 3;
+  if (val < BREAKS[4]) return 4;
+  if (val < BREAKS[5]) return 5;
+  if (val < BREAKS[6]) return 6;
+  if (val < BREAKS[7]) return 7;
+  if (val < BREAKS[8]) return 8;
+  return 9;
+}
+
+function evaluatePixel(samples) {
+  let val = index(samples.B03, samples.B11);
+  let cls = mndwiClass(val);
+  let imgVals = viz.process(cls);
+  ${alphaBlock}
+}`
+}
+
+/** NDMI: continuous moisture ColorRampVisualizer on B8A/B11. */
 export function buildSentinelNdmiTenClassEvalscript(indexVisibilityMin: number | null = null): string {
   const thr =
     indexVisibilityMin != null && Number.isFinite(indexVisibilityMin)
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
-  const alphaBlock = wmsGeometryClipAlphaBlock('val', thr)
+  const alphaBlock =
+    thr == null
+      ? 'return imgVals.concat(samples.dataMask);'
+      : `var a = samples.dataMask * (val >= ${thr} ? 1.0 : 0.0);
+  return imgVals.concat(a);`
 
   return `//VERSION=3
-// NDMI — 10 classes, moisture ramp (B8A / B11)
+// NDMI — continuous moisture ramp (B8A / B11)
 function setup() {
   return {
     input: ["B8A", "B11", "dataMask"],
@@ -525,27 +702,9 @@ const moistureRamps = [
 
 const viz = new ColorRampVisualizer(moistureRamps);
 
-const BREAKS = [${formatNumberList(SENTINEL_NDMI_10_CLASS_BREAKS)}];
-const CLASS_VAL = [${formatNumberList(SENTINEL_NDMI_10_CLASS_VALUES)}];
-
-function ndmiClass(val) {
-  if (val < BREAKS[0]) return 0;
-  if (val < BREAKS[1]) return 1;
-  if (val < BREAKS[2]) return 2;
-  if (val < BREAKS[3]) return 3;
-  if (val < BREAKS[4]) return 4;
-  if (val < BREAKS[5]) return 5;
-  if (val < BREAKS[6]) return 6;
-  if (val < BREAKS[7]) return 7;
-  if (val < BREAKS[8]) return 8;
-  return 9;
-}
-
 function evaluatePixel(samples) {
   let val = index(samples.B8A, samples.B11);
-  if (!isFinite(val)) val = 0;
-  let cls = ndmiClass(val);
-  let imgVals = viz.process(CLASS_VAL[cls]);
+  let imgVals = viz.process(val);
   ${alphaBlock}
 }`
 }
@@ -590,7 +749,11 @@ export function buildSentinelEtTenClassEvalscript(
       ? Math.max(0, Math.min(15, indexVisibilityMin))
       : null
 
-  const alphaBlock = wmsGeometryClipAlphaBlock('et', thr)
+  const alphaBlock =
+    thr == null
+      ? 'return imgVals.concat(samples.dataMask);'
+      : `var a = samples.dataMask * (et >= ${thr} ? 1.0 : 0.0);
+  return imgVals.concat(a);`
 
   const coloredRamp: RampStop[] = centers.map((v, i) => [
     v,
@@ -630,7 +793,6 @@ function etClass(val) {
 
 function evaluatePixel(samples) {
   ${setupEt}
-  if (!isFinite(et)) et = 0;
   let cls = etClass(et);
   let imgVals = viz.process(CLASS_VAL[cls]);
   ${alphaBlock}
@@ -676,7 +838,11 @@ export function buildSentinelLstTenClassEvalscript(
       ? Math.max(5, Math.min(55, indexVisibilityMin))
       : null
 
-  const alphaBlock = wmsGeometryClipAlphaBlock('lst', thr)
+  const alphaBlock =
+    thr == null
+      ? 'return imgVals.concat(samples.dataMask);'
+      : `var a = samples.dataMask * (lst >= ${thr} ? 1.0 : 0.0);
+  return imgVals.concat(a);`
 
   const coloredRamp: RampStop[] = centers.map((v, i) => [
     v,
@@ -716,7 +882,6 @@ function lstClass(val) {
 
 function evaluatePixel(samples) {
   ${setupLst}
-  if (!isFinite(lst)) lst = 0;
   let cls = lstClass(lst);
   let imgVals = viz.process(CLASS_VAL[cls]);
   ${alphaBlock}
@@ -724,10 +889,12 @@ function evaluatePixel(samples) {
 }
 
 /**
- * NDVI Live WMS — lightweight ColorRampVisualizer on B08/B04.
+ * NDVI Live WMS — lightweight ColorRampVisualizer on B08/B04 with dataMask alpha.
  *
- * Spatial clip is WMS GEOMETRY (not dataMask alpha). dataMask=0 on small/partial
- * AOIs must not hide the polygon. No SCL cloud holes.
+ * Intentionally minimal so the visible raster appears FAST and fills the whole AOI
+ * (no SCL cloud masking → no transparent holes, only 3 input bands, a short
+ * evalscript that keeps the WMS GEOMETRY-clip URL well under the length budget).
+ * Per-class pixel-area analysis runs separately, after the layer is shown.
  */
 export function buildSentinelNdviTenClassEvalscript(indexVisibilityMin: number | null = null): string {
   const thr =
@@ -735,10 +902,14 @@ export function buildSentinelNdviTenClassEvalscript(indexVisibilityMin: number |
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
-  const alphaBlock = wmsGeometryClipAlphaBlock('ndvi', thr)
+  const alphaBlock =
+    thr == null
+      ? 'return imgVals.concat(samples.dataMask);'
+      : `var a = samples.dataMask * (ndvi >= ${thr} ? 1.0 : 0.0);
+  return imgVals.concat(a);`
 
   return `//VERSION=3
-// NDVI — agricultural color ramp on B08/B04; GEOMETRY clips AOI (opaque alpha)
+// NDVI — agricultural color ramp on B08/B04, dataMask alpha (fast AOI clip)
 function setup() {
   return {
     input: ["B04", "B08", "dataMask"],
@@ -754,7 +925,6 @@ const visualizer = new ColorRampVisualizer(ramp);
 
 function evaluatePixel(samples) {
   let ndvi = index(samples.B08, samples.B04);
-  if (!isFinite(ndvi)) ndvi = 0;
   let imgVals = visualizer.process(ndvi);
   ${alphaBlock}
 }`
@@ -771,6 +941,12 @@ export function buildSentinelIndexColorRampEvalscript(
   }
   if (profile === 'ndwi') {
     return buildSentinelNdwiTenClassEvalscript(indexVisibilityMin)
+  }
+  if (profile === 'awei') {
+    return buildSentinelAweiTenClassEvalscript(indexVisibilityMin)
+  }
+  if (profile === 'mndwi') {
+    return buildSentinelMndwiTenClassEvalscript(indexVisibilityMin)
   }
   if (profile === 'ndmi') {
     return buildSentinelNdmiTenClassEvalscript(indexVisibilityMin)
@@ -792,7 +968,11 @@ export function buildSentinelIndexColorRampEvalscript(
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
-  const alphaBlock = wmsGeometryClipAlphaBlock(spec.indexVar, thr)
+  const alphaBlock =
+    thr == null
+      ? 'return imgVals.concat(samples.dataMask);'
+      : `var a = samples.dataMask * (${spec.indexVar} >= ${thr} ? 1.0 : 0.0);
+  return imgVals.concat(a);`
 
   return `//VERSION=3
 function setup() {
@@ -810,7 +990,6 @@ const visualizer = new ColorRampVisualizer(ramp);
 
 function evaluatePixel(samples) {
   ${spec.indexExpr}
-  if (!isFinite(${spec.indexVar})) ${spec.indexVar} = 0;
   let imgVals = visualizer.process(${spec.indexVar});
   ${alphaBlock}
 }`

@@ -114,16 +114,15 @@ const CORE_AT_FN = `function coreAt(samples) {
   };
 }`
 
-function alphaBlock(indexVar: string, indexVisibilityMin: number | null, _maskVar = 'samples.dataMask'): string {
+function alphaBlock(indexVar: string, indexVisibilityMin: number | null, maskVar = 'samples.dataMask'): string {
   const thr =
     indexVisibilityMin != null && Number.isFinite(indexVisibilityMin)
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
-  // GEOMETRY clips the raster. Never multiply alpha by dataMask (hides small AOIs).
   if (thr == null) {
-    return `return c.concat(1);`
+    return `return c.concat(${maskVar});`
   }
-  return `var a = (isFinite(${indexVar}) && ${indexVar} >= ${thr} ? 1.0 : 0.0);
+  return `var a = ${maskVar} * (${indexVar} >= ${thr} ? 1.0 : 0.0);
   return c.concat(a);`
 }
 
@@ -193,28 +192,11 @@ ${mapAlertFn}
 function evaluatePixel(samples) {
   ${CORE_INDICES_BLOCK}
   let val = ${expr};
-  if (!isFinite(val)) val = 0;
   let cls = classifyVal(val);
   let alertIdx = mapClassToAlert(cls);
   let c = ALERT_RGB[alertIdx];
   ${alphaBlock('val', indexVisibilityMin)}
 }`
-}
-
-const SLIM_VEG_MOISTURE_BLOCK = `let ndvi = index(samples.B08, samples.B04);
-  let savi = ((samples.B08 - samples.B04) * 1.5) / (samples.B08 + samples.B04 + 0.5);
-  let ndmi = index(samples.B08, samples.B11);
-  let ndwi = index(samples.B03, samples.B08);`
-
-/** ISS / WDSI / CPI only need NDVI+NDMI+NDWI+SAVI — skip the full agro core (keeps WMS URLs paintable). */
-function usesSlimVegMoistureCore(expr: string): boolean {
-  const e = String(expr || '')
-  if (!/\bndvi\b/.test(e) && !/\bsavi\b/.test(e) && !/\bndmi\b/.test(e) && !/\bndwi\b/.test(e)) {
-    return false
-  }
-  return !/\b(ndre|evi|ci_re|ndsi|ioi|clay_mi|fmi|ndai|bsi|reai|gei|gci|egci|mvi|remi|\bmi\b|mfi|ndre_b|cire|mtci|reip|wdsi|etstress)\b/.test(
-    e,
-  )
 }
 
 /** Static composite index evalscript (single scene, 10-class). */
@@ -228,17 +210,12 @@ export function buildAgroCompositeEvalscript(
   if (!ramp) return null
   const indexVar = 'val'
   const { classifyFn, rgbConst } = buildTenClassEvalscriptBlock(ramp)
-  const slim = usesSlimVegMoistureCore(expr)
-  const inputBands = slim
-    ? '["B03", "B04", "B08", "B11", "dataMask"]'
-    : '["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12", "dataMask"]'
-  const indicesBlock = slim ? SLIM_VEG_MOISTURE_BLOCK : CORE_INDICES_BLOCK
 
   return `//VERSION=3
 // AgroCloud composite — 10-class layer-specific ramp
 function setup() {
   return {
-    input: ${inputBands},
+    input: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12", "dataMask"],
     output: { bands: 4 }
   };
 }
@@ -248,11 +225,15 @@ ${rgbConst}
 ${classifyFn}
 
 function evaluatePixel(samples) {
-  ${indicesBlock}
+  ${CORE_INDICES_BLOCK}
   let ${indexVar} = ${expr};
-  if (!isFinite(${indexVar})) ${indexVar} = 0;
+  if (!isFinite(${indexVar})) {
+    return [0, 0, 0, 0];
+  }
   let cls = classifyVal(${indexVar});
-  if (cls < 0) cls = 0;
+  if (cls < 0) {
+    return [0, 0, 0, 0];
+  }
   let c = CLASS_RGB[cls];
   ${alphaBlock(indexVar, indexVisibilityMin)}
 }`
@@ -335,15 +316,21 @@ function compositeValue(c) {
 function evaluatePixel(samples) {
   if (!samples || samples.length < 2) {
     var s = samples && samples.length ? samples[samples.length - 1] : null;
+    var mask = s ? s.dataMask : 0;
     var c = CLASS_RGB[4];
-    return c.concat(1);
+    return c.concat(mask);
   }
   var c1 = coreAt(samples[0]);
   var c2 = coreAt(samples[samples.length - 1]);
   var ${indexVar} = compositeValue(c2) - compositeValue(c1);
-  if (!isFinite(${indexVar})) ${indexVar} = 0;
+  var mask = samples[samples.length - 1].dataMask * samples[0].dataMask;
+  if (!isFinite(${indexVar})) {
+    return [0, 0, 0, 0];
+  }
   var cls = classifyVal(${indexVar});
-  if (cls < 0) cls = 0;
+  if (cls < 0) {
+    return [0, 0, 0, 0];
+  }
   var c = CLASS_RGB[cls];
   ${alphaBlock(indexVar, indexVisibilityMin, 'mask')}
 }`
@@ -384,13 +371,11 @@ function currentIndex(c) {
 
 function evaluatePixel(samples) {
   if (!samples || !samples.length) {
-    var cEmpty = CLASS_RGB[4];
-    return cEmpty.concat(1);
+    return [0, 0, 0, 0];
   }
   var curSample = samples[samples.length - 1];
-  if (!curSample) {
-    var cMiss = CLASS_RGB[4];
-    return cMiss.concat(1);
+  if (!curSample || !curSample.dataMask) {
+    return [0, 0, 0, 0];
   }
   var current = currentIndex(coreAt(curSample));
   var n = 0;
@@ -460,8 +445,10 @@ function preProcessScenes(collections) {
 
 function evaluatePixel(samples) {
   if (!samples || samples.length < 2) {
+    var s = samples && samples.length ? samples[samples.length - 1] : null;
+    var mask = s ? s.dataMask : 0;
     var cStable = CLASS_RGB[4];
-    return cStable.concat(1);
+    return cStable.concat(mask);
   }
   var c1 = coreAt(samples[0]);
   var c2 = coreAt(samples[samples.length - 1]);
@@ -469,9 +456,10 @@ function evaluatePixel(samples) {
   var dNdmi = c2.ndmi - c1.ndmi;
   var ${indexVar} = ${NCADI_EXPR};
   if (!isFinite(${indexVar})) ${indexVar} = 0;
+  var mask = samples[samples.length - 1].dataMask * samples[0].dataMask;
   var cls = classifyVal(${indexVar});
   var c = CLASS_RGB[cls];
-  ${alphaBlock(indexVar, indexVisibilityMin)}
+  ${alphaBlock(indexVar, indexVisibilityMin, 'mask')}
 }`
 }
 
@@ -523,26 +511,26 @@ function etStressOf(c) {
 
 function evaluatePixel(samples) {
   if (!samples || !samples.length) {
-    var cEmpty = CLASS_RGB[4];
-    return cEmpty.concat(1);
+    return [0, 0, 0, 0];
   }
   var cur = samples[samples.length - 1];
-  if (!cur) {
-    var cMiss = CLASS_RGB[4];
-    return cMiss.concat(1);
+  if (!cur || !cur.dataMask) {
+    return [0, 0, 0, 0];
   }
   var c2 = coreAt(cur);
   var wdsi2 = wdsiOf(c2);
   var dWdsi = 0;
+  var mask = cur.dataMask;
   if (samples.length >= 2) {
     var c1 = coreAt(samples[0]);
     dWdsi = wdsi2 - wdsiOf(c1);
+    mask = cur.dataMask * samples[0].dataMask;
   }
   var ${indexVar} = 0.40 * wdsi2 + 0.20 * dWdsi + 0.20 * (1 - c2.ndmi) + 0.10 * etStressOf(c2) + 0.10;
   if (!isFinite(${indexVar})) ${indexVar} = 0;
   var cls = classifyVal(${indexVar});
   var c = CLASS_RGB[cls];
-  ${alphaBlock(indexVar, indexVisibilityMin)}
+  ${alphaBlock(indexVar, indexVisibilityMin, 'mask')}
 }`
 }
 

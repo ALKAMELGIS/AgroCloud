@@ -23,6 +23,7 @@ import {
   LULC_SCIENTIFIC_NAME,
   isLulcClassificationLayerId,
 } from './siLulcClassification'
+import { DSI_STATIC_EXPR, DRA_STATIC_EXPR } from './dsiIndex'
 import { WAPI_STATIC_EXPR } from './wapiIndex'
 import { resolveCollectionIndexDef } from './collectionIndexCatalog'
 import {
@@ -224,6 +225,24 @@ export const AGRO_COMPOSITE_CATEGORIES: readonly AgroCompositeCategory[] = [
         deltaId: 'DWDSI',
         deltaLabel: 'ΔWDSI',
         expr: '0.40 * ndmi + 0.35 * ndwi + 0.15 * ndvi + 0.10 * savi',
+      },
+      {
+        id: 'DSI',
+        label: 'DSI',
+        scientificName:
+          'Drought Severity Index (0.50·(1−VCI) + 0.30·(1−SMCI) + 0.20·(1−NDMI_norm)) · 10-class',
+        deltaId: 'DDSI',
+        deltaLabel: 'ΔDSI',
+        expr: DSI_STATIC_EXPR,
+      },
+      {
+        id: 'DRA',
+        label: 'Drought Area',
+        scientificName:
+          'Drought Area (DSI ≥ Drought_Threshold) · 10-class DSI severity bins',
+        deltaId: 'DDRA',
+        deltaLabel: 'ΔDRA',
+        expr: DRA_STATIC_EXPR,
       },
     ],
   },
@@ -441,7 +460,7 @@ export const AGRO_COMPOSITE_CATEGORIES: readonly AgroCompositeCategory[] = [
         id: 'SI',
         label: 'SI',
         scientificName: 'Salinity Index (√(B3·B4))',
-        deltaId: 'DSI',
+        deltaId: 'DSAL',
         deltaLabel: 'ΔSI',
         expr: 'si',
       },

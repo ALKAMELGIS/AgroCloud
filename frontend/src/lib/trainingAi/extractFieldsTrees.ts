@@ -286,7 +286,7 @@ export function nmsTreeBoxes(boxes: YoloTreeBox[], iouThresh = 0.4): YoloTreeBox
   return kept
 }
 
-/** Tile (+ optional upscale) YOLO detect so coarse map RGB still yields trees. */
+/** Tile (+ optional upscale) YOLO/DeepForest so coarse map RGB still yields crowns. */
 async function predictTreeBoxesEnhanced(
   canvas: HTMLCanvasElement,
   opts: { score: number; metersPerPixel: number; signal?: AbortSignal },
@@ -320,12 +320,7 @@ async function predictTreeBoxesEnhanced(
     const tctx = tile.getContext('2d')
     if (!tctx) return
     tctx.drawImage(work, sx, sy, tw, th, 0, 0, tw, th)
-    const boxes = await predictTreeBoxes(tile, {
-      score: opts.score,
-      metersPerPixel: opts.metersPerPixel,
-      signal: opts.signal,
-      engine: 'yolo',
-    })
+    const boxes = await predictTreeBoxes(tile, { score: opts.score, signal: opts.signal })
     for (const b of boxes) {
       raw.push({
         ...b,
@@ -376,11 +371,7 @@ async function predictTreeBoxesEnhanced(
         const tctx = tile.getContext('2d')
         if (!tctx) return
         tctx.drawImage(work, sx, sy, tw, th, 0, 0, tw, th)
-        const boxes = await predictTreeBoxes(tile, {
-          score: soft,
-          signal: opts.signal,
-          engine: 'yolo',
-        })
+        const boxes = await predictTreeBoxes(tile, { score: soft, signal: opts.signal })
         for (const b of boxes) {
           softRaw.push({
             ...b,

@@ -37,7 +37,7 @@ export const NAC_RS_CLASS_COLORS: ReadonlyArray<string> = [
   '#0e7490', // extra
 ]
 
-const INDEX_RE = /\b(NDVI|NDWI|NDMI|SAVI|EVI|GNDVI|NBR|NDRE|BSI|MNDWI|LST|NDSI|ET|ISS|WDSI|WAPI)\b/i
+const INDEX_RE = /\b(NDVI|NDWI|NDMI|SAVI|EVI|GNDVI|NBR|NDRE|BSI|MNDWI|LST|NDSI|ET|ISS|WDSI|WAPI|DSI|DRA)\b/i
 
 export function colorForRsClass(name: string, index: number): string {
   const n = name.toLowerCase()

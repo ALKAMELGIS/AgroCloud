@@ -76,6 +76,7 @@ export function AgriFieldBoundaryValidatePanel({
   epochHistory = null,
   initialReference = null,
   initialReferenceName = null,
+  referenceNotice = null,
   referenceBusy = false,
   variant = 'dock',
 }: AgriFieldBoundaryValidatePanelProps) {
@@ -532,12 +533,38 @@ export function AgriFieldBoundaryValidatePanel({
       <section className="si-afbv__block si-afbv__block--validation">
         <header className="si-afbv__block-head">
           <h4>Validation Detection</h4>
-          {metrics ? <span>IoU {pct(metrics.iou)}</span> : null}
+          {metrics ? <span>IoU {pct(metrics.iou)}</span> : <span>Needs reference</span>}
         </header>
+        {!isDashboard ? (
+          <>
+            <p className="si-afbv__lede">
+              Compare detections with a reference layer for precision, recall, F1 and IoU.
+            </p>
+            <ul className="si-afbv__metric-list" aria-label="Validation metrics">
+              <li>Precision / Recall / F1</li>
+              <li>Area &amp; boundary IoU</li>
+            </ul>
+          </>
+        ) : (
+          <p className="si-afbv__lede si-afbv__lede--tight">
+            Reference layer → Precision · Recall · F1 · IoU
+          </p>
+        )}
 
-        {referenceBusy ? (
-          <div className="si-afb__status" role="status" aria-label="Loading reference">
-            <i className="fa-solid fa-circle-notch fa-spin" aria-hidden />
+        {referenceBusy || referenceNotice ? (
+          <div
+            className={`si-afb__status${referenceBusy ? '' : referenceNotice && !referenceName ? ' is-error' : ''}`}
+            role="status"
+          >
+            {referenceBusy ? (
+              <>
+                <i className="fa-solid fa-circle-notch fa-spin" aria-hidden /> {referenceNotice || 'Loading FoW reference…'}
+              </>
+            ) : (
+              <>
+                <i className="fa-solid fa-database" aria-hidden /> {referenceNotice}
+              </>
+            )}
           </div>
         ) : null}
 
@@ -566,7 +593,21 @@ export function AgriFieldBoundaryValidatePanel({
           ) : null}
         </div>
 
-        {reference ? metricsBody : null}
+        {referenceError ? <div className="si-afb__status is-error">{referenceError}</div> : null}
+        {computeError ? <div className="si-afb__status is-error">{computeError}</div> : null}
+
+        {!reference ? (
+          <div className="si-afbv__need-ref">
+            <i className="fa-solid fa-chart-column" aria-hidden />
+            <p>
+              {referenceBusy
+                ? 'Loading FoW reference for this AOI…'
+                : 'Upload a reference GeoJSON, or wait for FoW / FTW parcels to load.'}
+            </p>
+          </div>
+        ) : (
+          metricsBody
+        )}
       </section>
     </div>
   )
