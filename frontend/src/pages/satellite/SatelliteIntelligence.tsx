@@ -160,7 +160,7 @@ import {
   resolveAgroStructuresLayerUrl,
 } from '../../lib/agroStructuresPrimaryAoi';
 import { connectArcGisFeatureServiceUrl } from '../../lib/arcgisServiceDiscover';
-import { ensureRasterStyleMaxNativeZoom, rasterTilesSourceMaxNativeZoom } from '../../lib/rasterTileZoom';
+import { buildMapboxRasterSourceSpec, ensureRasterStyleMaxNativeZoom, patchMapRasterSourcesMaxNativeZoom, rasterTileMaxNativeZoom, rasterTilesSourceMaxNativeZoom } from '../../lib/rasterTileZoom';
 import {
   arcgisDynamicDebug,
   arcGisLayerExtentWgs84,
@@ -873,13 +873,12 @@ function siBuildStableRasterStyle(specs: SiRasterSpec[]): any {
   const layers: unknown[] = [];
   specs.forEach((spec, i) => {
     const sid = `${SI_BASE_SOURCE_PREFIX}${i}`;
-    sources[sid] = {
-      type: 'raster',
+    sources[sid] = buildMapboxRasterSourceSpec({
       tiles: spec.tiles,
       tileSize: spec.tileSize,
-      ...(typeof spec.maxNativeZoom === 'number' ? { maxzoom: spec.maxNativeZoom } : {}),
-      ...(spec.attribution ? { attribution: spec.attribution } : {}),
-    };
+      attribution: spec.attribution,
+      maxzoom: spec.maxNativeZoom ?? null,
+    });
     layers.push({
       id: `${SI_BASE_LAYER_PREFIX}${i}`,
       type: 'raster',
@@ -23611,6 +23610,7 @@ export default function SatelliteIntelligence() {
               // Keep GIS overlays above basemap after style diffs (React remounts Sources).
               try {
                 if (!map || typeof map.getSource !== 'function') return;
+                patchMapRasterSourcesMaxNativeZoom(map);
                 raiseOverlaysThenAnalysisOrder();
               } catch {
                 /* ignore */

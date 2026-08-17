@@ -37,6 +37,7 @@ import {
   pickDefaultBasemapId,
   resolveBasemapId,
 } from './basemapCatalog'
+import { ensureRasterStyleMaxNativeZoom } from '../../lib/rasterTileZoom'
 import { useMapboxAccessToken } from '../../hooks/useMapboxAccessToken'
 import { useOpenWeatherMapApiKey } from '../../hooks/useOpenWeatherMapApiKey'
 import { getArcgisPortalToken } from '../../lib/arcgisPortalToken'
@@ -418,7 +419,7 @@ DEFAULT_BASEMAP_ID
 
 const DEFAULT_GIS_CENTER = { latitude: 2, longitude: 20 }
 const GLOBE_CAMERA_PADDING = { top: 0, right: 0, bottom: 136, left: 0 }
-const OSM_GLOBE_STYLE: any = {
+const OSM_GLOBE_STYLE: any = ensureRasterStyleMaxNativeZoom({
   version: 8,
   sources: {
     osm: {
@@ -428,8 +429,15 @@ const OSM_GLOBE_STYLE: any = {
       attribution: '© OpenStreetMap contributors',
     },
   },
-  layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
-}
+  layers: [
+    {
+      id: 'osm',
+      type: 'raster',
+      source: 'osm',
+      paint: { 'raster-fade-duration': 0, 'raster-resampling': 'linear' },
+    },
+  ],
+})
 
 const safeMapboxId = (value: unknown) => String(value ?? 'layer').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80)
 

@@ -5,6 +5,7 @@ import {
   tileUrlForMapboxGl,
   type LeafletTileSpec,
 } from '../../satellite/basemapCatalog'
+import { rasterTilesSourceMaxNativeZoom } from '../../lib/rasterTileZoom'
 
 export type AcpBasemapRasterLayer = {
   sourceId: string
@@ -13,6 +14,8 @@ export type AcpBasemapRasterLayer = {
   tileSize: number
   attribution: string
   opacity: number
+  /** Native tile cap — Mapbox over-zooms above this instead of fetching Esri placeholders. */
+  maxNativeZoom?: number
 }
 
 const ACP_BASEMAP_SOURCE_PREFIX = 'acp-basemap-'
@@ -20,13 +23,18 @@ const ACP_BASEMAP_LAYER_PREFIX = 'acp-basemap-layer-'
 const ACP_BASEMAP_LAYER_CAP = 4
 
 function specFromLeafletLayer(layer: LeafletTileSpec, index: number): AcpBasemapRasterLayer {
+  const tiles = [tileUrlForMapboxGl(layer.url)]
   return {
     sourceId: `${ACP_BASEMAP_SOURCE_PREFIX}${index}`,
     layerId: `${ACP_BASEMAP_LAYER_PREFIX}${index}`,
-    tiles: [tileUrlForMapboxGl(layer.url)],
+    tiles,
     tileSize: 256,
     attribution: layer.attribution,
     opacity: layer.opacity ?? 1,
+    maxNativeZoom: rasterTilesSourceMaxNativeZoom({
+      tiles,
+      maxzoom: layer.maxNativeZoom ?? null,
+    }),
   }
 }
 
