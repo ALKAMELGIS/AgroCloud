@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  computeDroughtAreaFromClassRows,
   computeDsiFromCore,
   computeNdmiNormalized,
   computeSmciFromCore,
@@ -7,7 +8,6 @@ import {
   DSI_CLASS_COLORS,
   DSI_CLASS_LABELS,
   DSI_STATIC_EXPR,
-  isDroughtAffectedPixel,
 } from './dsiIndex'
 
 describe('dsiIndex', () => {
@@ -31,21 +31,30 @@ describe('dsiIndex', () => {
 
   it('exports 10 drought classes with user palette', () => {
     expect(DSI_CLASS_LABELS).toHaveLength(10)
-    expect(DSI_CLASS_LABELS[0]).toBe('DSI 0.00–0.10 — No Drought')
-    expect(DSI_CLASS_LABELS[9]).toBe('DSI 0.90–1.00 — Extreme Drought')
+    expect(DSI_CLASS_LABELS[0]).toBe('No Drought')
+    expect(DSI_CLASS_LABELS[9]).toBe('Extreme Drought')
     expect(DSI_CLASS_COLORS[0]).toBe(0x006837)
     expect(DSI_CLASS_COLORS[9]).toBe(0x7f0000)
-  })
-
-  it('flags drought-affected pixels at the default threshold', () => {
-    expect(isDroughtAffectedPixel(0.29)).toBe(false)
-    expect(isDroughtAffectedPixel(0.3)).toBe(true)
-    expect(isDroughtAffectedPixel(0.75)).toBe(true)
   })
 
   it('embeds drought formula in static expr', () => {
     expect(DSI_STATIC_EXPR).toContain('0.50 * (1 -')
     expect(DSI_STATIC_EXPR).toContain('0.30 * (1 -')
     expect(DSI_STATIC_EXPR).toContain('0.20 * (1 -')
+  })
+
+  it('sums drought area from class rows at the mild threshold', () => {
+    const rows = Array.from({ length: 10 }, (_, classIndex) => ({
+      classIndex,
+      count: 10,
+      areaM2: 1000,
+      areaHa: 0.1,
+      areaKm2: 0.0001,
+      pctOfAoi: 10,
+    }))
+    const summary = computeDroughtAreaFromClassRows(rows, 0.3)
+    expect(summary.threshold).toBe(0.3)
+    expect(summary.areaM2).toBe(7000)
+    expect(summary.pctOfAoi).toBe(70)
   })
 })

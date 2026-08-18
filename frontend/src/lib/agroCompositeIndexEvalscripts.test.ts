@@ -106,13 +106,6 @@ describe('agroCompositeIndexEvalscripts', () => {
     expect(script).toContain('classifyVal')
   })
 
-  it('builds DRA drought area evalscript with DSI formula', () => {
-    const script = buildAgroCompositeLayerEvalscript('DRA')
-    expect(script).toContain('0.50 * (1 -')
-    expect(script).toContain('CLASS_RGB')
-    expect(script).toContain('classifyVal')
-  })
-
   it('infers agro_composite profile for composite ids', () => {
     expect(inferWmsEvalProfile('CPI')).toBe('agro_composite')
     expect(inferWmsEvalProfile('DCPI')).toBe('agro_composite')
@@ -122,8 +115,6 @@ describe('agroCompositeIndexEvalscripts', () => {
     expect(inferWmsEvalProfile('DWDSI')).toBe('agro_composite')
     expect(inferWmsEvalProfile('DSI')).toBe('agro_composite')
     expect(inferWmsEvalProfile('DDSI')).toBe('agro_composite')
-    expect(inferWmsEvalProfile('DRA')).toBe('agro_composite')
-    expect(inferWmsEvalProfile('DDRA')).toBe('agro_composite')
     expect(inferWmsEvalProfile('WAPI')).toBe('agro_composite')
     expect(inferWmsEvalProfile('DWAPI')).toBe('agro_composite')
     expect(inferWmsEvalProfile('CHAS_ALERT')).toBe('agro_composite')

@@ -3,6 +3,16 @@
  */
 
 import {
+  DSI_CLASS_COLORS,
+  DSI_CLASS_LABELS,
+  DSI_CLASS_RANGE_LABELS,
+  DSI_DROUGHT_AREA_THRESHOLD,
+  DSI_LAYER_ID,
+  DSI_SCIENTIFIC_NAME,
+  DSI_VALUE_MAX,
+  DSI_VALUE_MIN,
+} from './dsiIndex'
+import {
   enrichLegendWithAnalyticalResolution,
   isAnalyticalResolutionLayer,
   resolveAnalyticalResolutionMeta,
@@ -31,7 +41,6 @@ import {
   resolveAgroCompositeTenClassRamp,
 } from './agroCompositeLayerRamps'
 import { CHAS_FORMULA_DOC } from './chasIndex'
-import { DRA_DROUGHT_THRESHOLD } from './dsiIndex'
 import { ADI_FORMULA_DOC, isAdiLayerId } from './adiIndex'
 import { NCADI_FORMULA_DOC, isNcadiLayerId } from './ncadiIndex'
 import { isMangroveLayerId } from './mangroveIndices'
@@ -715,11 +724,11 @@ function buildAgroCompositeLegendNote(layerId: string, isDelta: boolean): string
       ? `${def.scientificName} · Sentinel-2 band formula · 10-class mangrove discrimination`
       : 'Mangrove spectral index · Sentinel-2 bands · 10-class'
   }
-  if (u === 'DSI') {
-    return 'DSI = 0.50·(1−VCI) + 0.30·(1−SMCI) + 0.20·(1−NDMI_norm) · 10 equal DSI bins · green = no drought · dark red = extreme'
-  }
-  if (u === 'DRA') {
-    return `Drought Area = pixels with DSI ≥ Drought_Threshold (default ${DRA_DROUGHT_THRESHOLD.toFixed(2)} · Mild+) · map shows 10-class DSI severity for area breakdown`
+  if (u === DSI_LAYER_ID) {
+    return (
+      `Drought Area = DSI ≥ ${DSI_DROUGHT_AREA_THRESHOLD.toFixed(2)} · ` +
+      '0.50·(1−VCI) + 0.30·(1−SMCI) + 0.20·(1−NDMI_norm) · 10-class severity ramp'
+    )
   }
   if (isDelta) return 'Δ > 0 → improvement · Δ < 0 → degradation · Δ ≈ 0 → stable'
   return 'Composite from NDVI, NDMI, NDWI, SAVI'
@@ -787,8 +796,32 @@ function buildCompositeTenClassLegendClasses(
   })
 }
 
+function buildDsiLegend(): LayerLiveLegendSpec {
+  return {
+    id: DSI_LAYER_ID,
+    title: 'DSI',
+    subtitle: DSI_SCIENTIFIC_NAME,
+    kind: 'discrete',
+    valueMin: DSI_VALUE_MIN,
+    valueMax: DSI_VALUE_MAX,
+    scaleLabels: { low: 'No Drought', mid: 'Moderate', high: 'Extreme Drought' },
+    gradientCss: rampToGradientCss(
+      DSI_CLASS_COLORS.map((hex, i) => [DSI_VALUE_MIN + ((DSI_VALUE_MAX - DSI_VALUE_MIN) * i) / 9, hex] as const),
+    ),
+    classes: DSI_CLASS_LABELS.map((label, i) => ({
+      label,
+      rangeLabel: DSI_CLASS_RANGE_LABELS[i] ?? '',
+      color: hexNumberToCss(DSI_CLASS_COLORS[i]!),
+    })),
+    note:
+      `Drought Area = AOI share where DSI ≥ ${DSI_DROUGHT_AREA_THRESHOLD.toFixed(2)} (Mild threshold) · ` +
+      '0.50·(1−VCI) + 0.30·(1−SMCI) + 0.20·(1−NDMI_norm)',
+  }
+}
+
 function buildAgroCompositeLegend(layerId: string): LayerLiveLegendSpec | null {
   const u = String(layerId || '').trim().toUpperCase()
+  if (u === DSI_LAYER_ID) return buildDsiLegend()
   if (u === 'CHAS_ALERT') return buildChasAlertLegend(layerId)
   if (u === 'STRESS_ZONES') return buildStressZonesLegend(layerId)
   const def = resolveAgroCompositeIndexDef(layerId)

@@ -73,7 +73,6 @@ import {
   isAgroStructuresMapOutlineStructureType,
 } from '../../../../lib/agroStructuresPrimaryAoi'
 import { AGRO_CLOUD_MAP_MAX_PITCH } from '../../../../lib/agroCloudMapNavigation'
-import { buildMapboxRasterSourceSpec } from '../../../../lib/rasterTileZoom'
 import { flyToLikeGoogleEarth } from '../../../../lib/googleEarthFlyTo'
 import {
   ACP_DEFAULT_MAP_CENTER,
@@ -206,12 +205,12 @@ function buildInitialBasemapStyle(basemapId: string): maplibregl.StyleSpecificat
   const sources: Record<string, maplibregl.SourceSpecification> = {}
   const styleLayers: maplibregl.LayerSpecification[] = []
   for (const spec of layers) {
-    sources[spec.sourceId] = buildMapboxRasterSourceSpec({
+    sources[spec.sourceId] = {
+      type: 'raster',
       tiles: spec.tiles,
       tileSize: spec.tileSize,
       attribution: spec.attribution,
-      maxzoom: spec.maxNativeZoom ?? null,
-    })
+    }
     styleLayers.push({
       id: spec.layerId,
       type: 'raster',
@@ -219,7 +218,6 @@ function buildInitialBasemapStyle(basemapId: string): maplibregl.StyleSpecificat
       paint: {
         'raster-opacity': spec.opacity,
         'raster-fade-duration': 0,
-        'raster-resampling': 'linear',
       },
     })
   }
@@ -241,11 +239,8 @@ function syncBasemapLayers(map: MaplibreMap, basemapId: string) {
   for (let index = 0; index < specs.length; index++) {
     const spec = specs[index]!
     const existing = map.getSource(spec.sourceId) as RasterSourceMutable | undefined
-    const styleSource = map.getStyle()?.sources?.[spec.sourceId] as { maxzoom?: number } | undefined
-    const maxZoomMismatch =
-      typeof spec.maxNativeZoom === 'number' && styleSource?.maxzoom !== spec.maxNativeZoom
 
-    if (existing && !maxZoomMismatch && safeAcpRasterSetTiles(existing, spec.tiles)) {
+    if (existing && safeAcpRasterSetTiles(existing, spec.tiles)) {
       if (map.getLayer(spec.layerId)) {
         map.setPaintProperty(spec.layerId, 'raster-opacity', spec.opacity)
       } else {
@@ -254,7 +249,7 @@ function syncBasemapLayers(map: MaplibreMap, basemapId: string) {
             id: spec.layerId,
             type: 'raster',
             source: spec.sourceId,
-            paint: { 'raster-opacity': spec.opacity, 'raster-fade-duration': 0, 'raster-resampling': 'linear' },
+            paint: { 'raster-opacity': spec.opacity, 'raster-fade-duration': 0 },
           },
           beforeId,
         )
@@ -265,21 +260,18 @@ function syncBasemapLayers(map: MaplibreMap, basemapId: string) {
     if (map.getLayer(spec.layerId)) map.removeLayer(spec.layerId)
     if (map.getSource(spec.sourceId)) map.removeSource(spec.sourceId)
 
-    map.addSource(
-      spec.sourceId,
-      buildMapboxRasterSourceSpec({
-        tiles: spec.tiles,
-        tileSize: spec.tileSize,
-        attribution: spec.attribution,
-        maxzoom: spec.maxNativeZoom ?? null,
-      }),
-    )
+    map.addSource(spec.sourceId, {
+      type: 'raster',
+      tiles: spec.tiles,
+      tileSize: spec.tileSize,
+      attribution: spec.attribution,
+    })
     map.addLayer(
       {
         id: spec.layerId,
         type: 'raster',
         source: spec.sourceId,
-        paint: { 'raster-opacity': spec.opacity, 'raster-fade-duration': 0, 'raster-resampling': 'linear' },
+        paint: { 'raster-opacity': spec.opacity, 'raster-fade-duration': 0 },
       },
       beforeId,
     )

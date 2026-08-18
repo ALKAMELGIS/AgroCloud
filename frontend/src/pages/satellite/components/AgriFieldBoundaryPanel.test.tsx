@@ -140,4 +140,17 @@ describe('AgriFieldBoundaryPanel Results dashboard trigger', () => {
     expect(screen.getByText(/Loading field model/i)).toBeTruthy()
     cleanupHost()
   })
+
+  it('shows production Map RGB hint when host has no Python FTW', () => {
+    const { cleanupHost } = mountWithHost({
+      mapRgbOnlyHost: true,
+      hasResult: false,
+      phase: 'idle',
+      fieldCount: 0,
+      resultGeojson: null,
+    })
+    fireEvent.click(screen.getByRole('tab', { name: /Detect/i }))
+    expect(screen.getByText(/Map RGB detect runs on the AgroCloud API/i)).toBeTruthy()
+    cleanupHost()
+  })
 })

@@ -26,70 +26,22 @@ const EXCLUDE_DIRS = new Set([
   'test-results',
   'coverage',
   '.vite',
-  // Python microservices run separately (not on Hostinger Node).
+  // Python tree-detection microservice runs separately (not on Hostinger Node);
+  // never bundle its multi-GB venv / model cache / logs into the deploy archive.
   '.venv',
   'lightning_logs',
-  'uploads',
-  '.chirps-cache',
-  'cache',
-])
-
-/** Path prefixes omitted from the Hostinger deploy archive (large runtime data / unused on Node host). */
-const EXCLUDE_PREFIXES = [
-  'backend/services/',
-  'backend/dist/',
-  'assets/',
-  'avatars/',
-  'docs/',
-  'AgroCloud-Pages-Upload/',
-  'AgroCloud-GitHub-Ready/',
-  'sentinel-crop-alert/',
-  // Frontend source not needed when dist is prebuilt (avoids EACCES Vite build on shared hosting).
-  'frontend/src/',
-  'frontend/public/',
-  'frontend/e2e/',
-  'frontend/scripts/',
-]
-
-/** Root-level GitHub Pages artifacts — not needed for Hostinger Node deploy. */
-const ROOT_EXCLUDE_FILES = new Set([
-  'index.html',
-  '404.html',
-  '.nojekyll',
-  'manifest.webmanifest',
-  'registerSW.js',
-  'sw.js',
-  'vite.svg',
-  'robots.txt',
-  'agrocloud-logo.png',
-  'agrocloud-logo-core.png',
-  'agrocloud-mark-leaves.png',
-  'elite-agro-logo-white.png',
-  'favicon.png',
-  'favicon-16x16.png',
-  'favicon-32x32.png',
-  'apple-touch-icon.png',
-  'apple-touch-icon-152.png',
-  'apple-touch-icon-167.png',
-  'pwa-192x192.png',
-  'pwa-512x512.png',
-  'maskable-512x512.png',
 ])
 
 const EXCLUDE_FILES = new Set(['hostinger-deploy.zip', 'hostinger-deploy.tar.gz', '.env'])
 
 function shouldSkip(rel) {
-  const norm = rel.replace(/\\/g, '/')
-  const parts = norm.split('/').filter(Boolean)
+  const parts = rel.split(/[/\\]/).filter(Boolean)
   if (parts.some(p => EXCLUDE_DIRS.has(p))) return true
-  if (EXCLUDE_PREFIXES.some(prefix => norm.startsWith(prefix))) return true
   const base = parts[parts.length - 1] || ''
-  if (parts.length === 1 && ROOT_EXCLUDE_FILES.has(base)) return true
   if (EXCLUDE_FILES.has(base)) return true
   if (base.endsWith('.log')) return true
-  if (/-ELPLTMEDABASS01(?:\.|$)/.test(base) || norm.includes('-ELPLTMEDABASS01.')) return true
-  if (norm.endsWith('.br') || norm.endsWith('.gz')) return true
-  if (base.startsWith('workbox-') && base.endsWith('.js')) return true
+  if (rel.endsWith('.br') || rel.endsWith('.gz')) return true
+  if (rel.startsWith('frontend/dist/') && (rel.endsWith('.br') || rel.endsWith('.gz'))) return true
   return false
 }
 
@@ -105,9 +57,7 @@ function collectFiles(dir, base = dir, out = []) {
   return out
 }
 
-// Hostinger shared hosting cannot run Vite/PostCSS (EACCES scanning src trees).
-// Build locally and ship frontend/dist; build-hostinger.mjs skips Vite when dist exists.
-console.log('Running production build for Hostinger prebuilt dist…')
+console.log('Running production build…')
 const build = spawnSync('npm', ['run', 'build:production'], {
   cwd: repoRoot,
   stdio: 'inherit',

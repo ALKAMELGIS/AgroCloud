@@ -33,18 +33,14 @@ describe('layerLiveLegendCatalog', () => {
     const spec = resolveLayerLiveLegendSpec('DSI', 'DSI')
     expect(spec?.title).toBe('DSI')
     expect(spec?.classes).toHaveLength(10)
-    expect(spec?.classes?.[0]?.label).toBe('DSI 0.00–0.10 — No Drought')
-    expect(spec?.classes?.[9]?.label).toBe('DSI 0.90–1.00 — Extreme Drought')
+    expect(spec?.classes?.[0]?.label).toBe('No Drought')
+    expect(spec?.classes?.[9]?.label).toBe('Extreme Drought')
+    expect(spec?.classes?.[0]?.rangeLabel).toBe('0.00–0.10')
+    expect(spec?.classes?.[3]?.rangeLabel).toBe('0.30–0.40')
+    expect(spec?.classes?.[9]?.rangeLabel).toBe('0.90–1.00')
     expect(spec?.classes?.[0]?.color.toLowerCase()).toBe('#006837')
     expect(spec?.classes?.[9]?.color.toLowerCase()).toBe('#7f0000')
-  })
-
-  it('resolves DRA drought area with DSI range classes', () => {
-    const spec = resolveLayerLiveLegendSpec('DRA', 'DRA')
-    expect(spec?.title).toBe('Drought Area')
-    expect(spec?.classes).toHaveLength(10)
-    expect(spec?.classes?.[2]?.label).toBe('DSI 0.20–0.30 — Low')
-    expect(spec?.note).toMatch(/Drought_Threshold/)
+    expect(spec?.note).toContain('Drought Area')
   })
 
   it('resolves NBR with 10 named burn-severity classes aligned to AOI area bins', () => {

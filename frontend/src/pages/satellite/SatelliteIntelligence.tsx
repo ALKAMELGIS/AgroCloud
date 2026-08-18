@@ -160,7 +160,7 @@ import {
   resolveAgroStructuresLayerUrl,
 } from '../../lib/agroStructuresPrimaryAoi';
 import { connectArcGisFeatureServiceUrl } from '../../lib/arcgisServiceDiscover';
-import { buildMapboxRasterSourceSpec, ensureRasterStyleMaxNativeZoom, patchMapRasterSourcesMaxNativeZoom, rasterTileMaxNativeZoom, rasterTilesSourceMaxNativeZoom } from '../../lib/rasterTileZoom';
+import { ensureRasterStyleMaxNativeZoom, rasterTilesSourceMaxNativeZoom } from '../../lib/rasterTileZoom';
 import {
   arcgisDynamicDebug,
   arcGisLayerExtentWgs84,
@@ -873,12 +873,13 @@ function siBuildStableRasterStyle(specs: SiRasterSpec[]): any {
   const layers: unknown[] = [];
   specs.forEach((spec, i) => {
     const sid = `${SI_BASE_SOURCE_PREFIX}${i}`;
-    sources[sid] = buildMapboxRasterSourceSpec({
+    sources[sid] = {
+      type: 'raster',
       tiles: spec.tiles,
       tileSize: spec.tileSize,
-      attribution: spec.attribution,
-      maxzoom: spec.maxNativeZoom ?? null,
-    });
+      ...(typeof spec.maxNativeZoom === 'number' ? { maxzoom: spec.maxNativeZoom } : {}),
+      ...(spec.attribution ? { attribution: spec.attribution } : {}),
+    };
     layers.push({
       id: `${SI_BASE_LAYER_PREFIX}${i}`,
       type: 'raster',
@@ -15159,7 +15160,12 @@ export default function SatelliteIntelligence() {
           map.triggerRepaint?.();
           setTimeout(finish, preferLiveMap ? 1000 : 800);
         });
-        if (!dataUrl) return null;
+        if (!dataUrl) {
+          if (preferLiveMap) {
+            return captureBasemapForGeoref(corners, { maxEdge, preferLiveMap: false })
+          }
+          return null
+        }
         const nw2 = map.unproject([minX / dpr, minY / dpr]);
         const se2 = map.unproject([maxX / dpr, maxY / dpr]);
         return {
@@ -23610,7 +23616,6 @@ export default function SatelliteIntelligence() {
               // Keep GIS overlays above basemap after style diffs (React remounts Sources).
               try {
                 if (!map || typeof map.getSource !== 'function') return;
-                patchMapRasterSourcesMaxNativeZoom(map);
                 raiseOverlaysThenAnalysisOrder();
               } catch {
                 /* ignore */
@@ -26356,6 +26361,7 @@ export default function SatelliteIntelligence() {
                           error={agriFieldBoundary.error}
                           errorDetail={agriFieldBoundary.errorDetail}
                           notice={agriFieldBoundary.notice}
+                          mapRgbOnlyHost={agriFieldBoundary.mapRgbOnlyHost}
                           offline={agriFieldBoundary.offline}
                           health={agriFieldBoundary.health}
                           fieldCount={agriFieldBoundary.fieldCount}

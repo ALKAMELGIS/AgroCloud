@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-08-17T09:16:30.504Z",
+  "updatedAt": "2026-08-17T11:17:33.293Z",
   "users": [
     {
       "id": 1782414394512,
@@ -8,23 +8,15 @@
       "email": "alkamelgis@gmail.com",
       "role": "Admin",
       "status": "Active",
-      "lastLogin": "17/08/2026, 1:16:30 PM",
+      "lastLogin": "17/08/2026, 3:17:32 PM",
       "emailVerified": true,
-      "passwordHash": "scrypt$16384$8$1$ZHerDUbOQssAxQFNhkjsjA$vyWz5CIFGwjiLcZpO2Rf0LTLvnuuk5e0sGBaRl5p4CySB6yuCkeEOHcpvsYWLQ6oNM9Npdr5-ZhKhsNBcr-Ljg"
+      "passwordHash": "b03ddf3ca2e714a6548e7495e2a03f5e824eaac9837cd7f159c67b90fb4b7342"
     }
   ],
   "auditLog": [
     {
-      "id": "8b18e923-3c1b-4c8d-a24a-8efdee2b3206",
-      "at": "2026-08-17T09:16:30.502Z",
-      "entity": "auth",
-      "action": "login_success",
-      "entityId": "alkamelgis@gmail.com",
-      "actorEmail": "alkamelgis@gmail.com"
-    },
-    {
-      "id": "338f4a97-da6d-40ee-9e0a-2fc9a6379b4f",
-      "at": "2026-08-17T09:13:19.079Z",
+      "id": "e6235d20-f218-465a-a13e-fed670497099",
+      "at": "2026-08-17T11:17:32.677Z",
       "entity": "auth",
       "entityId": "alkamelgis@gmail.com",
       "action": "login_success",
@@ -34,7 +26,7 @@
         "mode": "signin",
         "keepSignedIn": true,
         "deviceName": "Windows · Chrome",
-        "atLocal": "8/17/2026, 1:13:19 PM"
+        "atLocal": "8/17/2026, 3:17:32 PM"
       }
     }
   ]

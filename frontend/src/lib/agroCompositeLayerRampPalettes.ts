@@ -1214,7 +1214,6 @@ export const AGRO_UNIQUE_LAYER_RAMP_PALETTES: Record<string, AgroLayerRampPalett
   DSAL_NDSI: deltaPalette('SAL_NDSI', '#1b5e20', '#fff9c4', '#7f0000', 'ΔSalinity NDSI · salinity easing · salinity build-up'),
   DSAL: deltaPalette('SI', '#00695c', '#e0f2f1', '#6a1b9a', 'ΔSI · brightness/salinity decline · increase'),
   DDSI: deltaPalette('DSI', '#006837', '#fff9c4', '#7f0000', 'ΔDSI · drought easing · severity intensification'),
-  DDRA: deltaPalette('DRA', '#006837', '#fff9c4', '#7f0000', 'ΔDRA · drought-area easing · intensification'),
   DSSI: deltaPalette('SSI', '#0d47a1', '#eceff1', '#3e2723', 'ΔSSI · combined salinity decline · increase'),
   MVI: {
     valueMin: 0,

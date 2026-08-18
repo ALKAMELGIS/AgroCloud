@@ -28,13 +28,6 @@ import {
   DSI_LAYER_ID,
   DSI_VALUE_MAX,
   DSI_VALUE_MIN,
-  DRA_CLASS_BREAKS,
-  DRA_CLASS_COLORS,
-  DRA_CLASS_LABELS,
-  DRA_CLASS_VALUES,
-  DRA_LAYER_ID,
-  DRA_VALUE_MAX,
-  DRA_VALUE_MIN,
 } from './dsiIndex'
 import {
   WAPI_CLASS_BREAKS,
@@ -211,26 +204,10 @@ const PRESERVED_ALERT_LAYER_CONFIG: Record<string, AgroCompositeLayerRampConfig>
     })),
     labels: DSI_CLASS_LABELS,
     subtitle:
-      'DSI 10-class · 0.50·(1−VCI) + 0.30·(1−SMCI) + 0.20·(1−NDMI_norm) · green = no drought · dark red = extreme',
+      'DSI 10-class · Drought Area = DSI ≥ 0.30 · green = no drought · dark red = extreme drought',
     breaks: DSI_CLASS_BREAKS,
     classValues: DSI_CLASS_VALUES,
     classColors: DSI_CLASS_COLORS,
-  },
-  [DRA_LAYER_ID]: {
-    kind: 'scientific',
-    valueMin: DRA_VALUE_MIN,
-    valueMax: DRA_VALUE_MAX,
-    anchors: DRA_CLASS_COLORS.map((hex, i) => ({
-      t: i / 9,
-      hex,
-      label: DRA_CLASS_LABELS[i]!,
-    })),
-    labels: DRA_CLASS_LABELS,
-    subtitle:
-      'Drought Area · DSI ≥ Drought_Threshold (default 0.30 · Mild) · 10-class DSI bins · green = no drought · dark red = extreme',
-    breaks: DRA_CLASS_BREAKS,
-    classValues: DRA_CLASS_VALUES,
-    classColors: DRA_CLASS_COLORS,
   },
 }
 

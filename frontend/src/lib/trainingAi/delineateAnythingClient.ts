@@ -2,7 +2,9 @@
  * Delineate Anything / FBIS field-boundary client (Training AI Infer).
  */
 
-const BASE = '/api/delineate-anything'
+import { apiUrl } from '../apiOrigin'
+
+const BASE = () => apiUrl('/api/delineate-anything')
 
 export type DelineateModelKey = 'large' | 'large_v2' | 'fbis22m' | 'fbis73m' | 'v1' | 'v2' | 'small'
 
@@ -32,7 +34,7 @@ export async function fetchDelineateAnythingConfig(signal?: AbortSignal): Promis
   model?: string
 }> {
   try {
-    const res = await fetch(`${BASE}/config`, { signal })
+    const res = await fetch(`${BASE()}/config`, { signal })
     if (!res.ok) return { configured: false }
     return (await res.json()) as { configured: boolean; online?: boolean; model?: string }
   } catch {
@@ -97,7 +99,7 @@ export async function predictDelineateAnything(
 
   let res: Response
   try {
-    res = await fetch(`${BASE}/predict?${params.toString()}`, {
+    res = await fetch(`${BASE()}/predict?${params.toString()}`, {
       method: 'POST',
       headers: { 'Content-Type': 'image/png' },
       body: blob,

@@ -43,16 +43,16 @@ export const DSI_CLASS_VALUES: readonly number[] = [
 
 /** Class 1 (no drought) → Class 10 (extreme drought). */
 export const DSI_CLASS_LABELS: readonly string[] = [
-  'DSI 0.00–0.10 — No Drought',
-  'DSI 0.10–0.20 — Very Low',
-  'DSI 0.20–0.30 — Low',
-  'DSI 0.30–0.40 — Mild',
-  'DSI 0.40–0.50 — Moderate',
-  'DSI 0.50–0.60 — Moderate-High',
-  'DSI 0.60–0.70 — High',
-  'DSI 0.70–0.80 — Severe',
-  'DSI 0.80–0.90 — Very Severe',
-  'DSI 0.90–1.00 — Extreme Drought',
+  'No Drought',
+  'Very Low',
+  'Low',
+  'Mild',
+  'Moderate',
+  'Moderate-High',
+  'High',
+  'Severe',
+  'Very Severe',
+  'Extreme Drought',
 ]
 
 export const DSI_CLASS_COLORS: readonly number[] = [
@@ -68,40 +68,76 @@ export const DSI_CLASS_COLORS: readonly number[] = [
   0x7f0000,
 ]
 
-/** Default threshold: pixels with DSI ≥ this value count as drought-affected area. */
-export const DRA_DROUGHT_THRESHOLD = 0.3
+/** Legend / report range captions (equal decile bins on [0, 1]). */
+export const DSI_CLASS_RANGE_LABELS: readonly string[] = [
+  '0.00–0.10',
+  '0.10–0.20',
+  '0.20–0.30',
+  '0.30–0.40',
+  '0.40–0.50',
+  '0.50–0.60',
+  '0.60–0.70',
+  '0.70–0.80',
+  '0.80–0.90',
+  '0.90–1.00',
+]
 
-export const DRA_LAYER_ID = 'DRA'
+/**
+ * Default drought-area threshold (Mild class lower bound).
+ * Drought Area = Σ class area where DSI ≥ threshold.
+ */
+export const DSI_DROUGHT_AREA_THRESHOLD = 0.3
 
-export const DRA_SCIENTIFIC_NAME =
-  'Drought Area (DSI ≥ Drought_Threshold) · 10-class DSI severity bins'
+export type DsiDroughtAreaSummary = {
+  threshold: number
+  areaM2: number
+  areaHa: number
+  areaKm2: number
+  pctOfAoi: number
+  sampleCount: number
+}
 
-/** Drought Area uses the same DSI raster classes; labels emphasize area / threshold context. */
-export const DRA_CLASS_LABELS: readonly string[] = DSI_CLASS_LABELS
+export type DsiClassAreaRow = {
+  classIndex: number
+  count: number
+  areaM2: number
+  areaHa: number
+  areaKm2: number
+  pctOfAoi: number
+}
 
-export const DRA_CLASS_COLORS: readonly number[] = DSI_CLASS_COLORS
-export const DRA_CLASS_BREAKS: readonly number[] = DSI_CLASS_BREAKS
-export const DRA_CLASS_VALUES: readonly number[] = DSI_CLASS_VALUES
-export const DRA_VALUE_MIN = DSI_VALUE_MIN
-export const DRA_VALUE_MAX = DSI_VALUE_MAX
-export const DRA_STATIC_EXPR = DSI_STATIC_EXPR
+/** Sum AOI area in DSI classes whose lower edge is ≥ `threshold`. */
+export function computeDroughtAreaFromClassRows(
+  rows: readonly DsiClassAreaRow[],
+  threshold: number = DSI_DROUGHT_AREA_THRESHOLD,
+): DsiDroughtAreaSummary {
+  const t = Number.isFinite(threshold) ? threshold : DSI_DROUGHT_AREA_THRESHOLD
+  const edges = [DSI_VALUE_MIN, ...DSI_CLASS_BREAKS, DSI_VALUE_MAX]
+  let areaM2 = 0
+  let sampleCount = 0
+  let pctOfAoi = 0
+  for (const row of rows) {
+    const lo = edges[row.classIndex]
+    if (lo == null || lo < t) continue
+    areaM2 += row.areaM2
+    sampleCount += row.count
+    pctOfAoi += row.pctOfAoi
+  }
+  return {
+    threshold: t,
+    areaM2,
+    areaHa: areaM2 / 10_000,
+    areaKm2: areaM2 / 1_000_000,
+    pctOfAoi,
+    sampleCount,
+  }
+}
 
 export function isDsiLayerId(layerId: string | null | undefined): boolean {
   return String(layerId || '')
     .trim()
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, '') === 'DSI'
-}
-
-export function isDraLayerId(layerId: string | null | undefined): boolean {
-  return String(layerId || '')
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '') === 'DRA'
-}
-
-export function isDsiFamilyLayerId(layerId: string | null | undefined): boolean {
-  return isDsiLayerId(layerId) || isDraLayerId(layerId)
 }
 
 export type DsiCoreInput = { ndvi: number; ndmi: number; ndwi: number }
@@ -127,12 +163,4 @@ export function computeDsiFromCore(input: DsiCoreInput): number {
   const smci = computeSmciFromCore(input)
   const ndmiN = computeNdmiNormalized(input.ndmi)
   return 0.5 * (1 - vci) + 0.3 * (1 - smci) + 0.2 * (1 - ndmiN)
-}
-
-/** True when pixel DSI meets or exceeds the drought-area threshold. */
-export function isDroughtAffectedPixel(
-  dsi: number,
-  threshold: number = DRA_DROUGHT_THRESHOLD,
-): boolean {
-  return Number.isFinite(dsi) && dsi >= threshold
 }

@@ -171,8 +171,6 @@ export function syncAgroCloudMapboxCamera(
   }
 }
 
-import { patchMapRasterSourcesMaxNativeZoom } from './rasterTileZoom'
-
 /** Snappy pan/zoom: instant tiles, responsive wheel, no tile cross-fade. */
 export function applyAgroCloudMapPerformanceTuning(
   map: AgroCloudMapboxMapScrollLike | null | undefined,
@@ -187,16 +185,11 @@ export function applyAgroCloudMapPerformanceTuning(
   try {
     map.setFadeDuration?.(0)
     map.setMaxParallelImageRequests?.(options?.maxParallelImageRequests ?? 10)
-    map.setPrefetchedZoomDelta?.(options?.prefetchZoomDelta ?? 2)
+    map.setPrefetchedZoomDelta?.(options?.prefetchZoomDelta ?? 1)
     const cacheMb = options?.tileCacheMb ?? 48
     map.setMaxTileCacheSize?.(cacheMb * 1024 * 1024)
   } catch {
     /* ignore — not all Mapbox builds expose cache tuning */
-  }
-  try {
-    patchMapRasterSourcesMaxNativeZoom(map as Parameters<typeof patchMapRasterSourcesMaxNativeZoom>[0])
-  } catch {
-    /* ignore style/source races during load */
   }
 }
 

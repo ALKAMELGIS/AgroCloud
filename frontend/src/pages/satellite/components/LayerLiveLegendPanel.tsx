@@ -13,6 +13,10 @@ import {
   geodesicAreaM2,
   type LayerClassAreaRow,
 } from '../../../lib/siLayerClassAreaEngine'
+import {
+  computeDroughtAreaFromClassRows,
+  DSI_DROUGHT_AREA_THRESHOLD,
+} from '../../../lib/dsiIndex'
 import { useLayerClassAreas } from './useLayerClassAreas'
 import './LayerLiveLegendPanel.css'
 
@@ -253,6 +257,10 @@ export function LayerLiveLegendActiveCard({
   const providerLabel = providerLabelProp?.trim() || `Sentinel Hub · ${SENTINEL2_NATIVE_GSD_M} m`
   const seriesLabel = seriesStart && seriesEnd ? `${seriesStart} → ${seriesEnd}` : null
   const classAreaRows = areaResult?.rows
+  const dsiDroughtArea = useMemo(() => {
+    if (String(activeLayerId || '').toUpperCase() !== 'DSI' || !classAreaRows?.length) return null
+    return computeDroughtAreaFromClassRows(classAreaRows, DSI_DROUGHT_AREA_THRESHOLD)
+  }, [activeLayerId, classAreaRows])
   const displaySpec = useMemo(() => {
     if (String(activeLayerId || '').toUpperCase() !== 'ET') return spec
     return applyEtLegendClassEdges(spec, areaResult?.classEdges, areaResult?.classificationMode)
@@ -326,6 +334,13 @@ export function LayerLiveLegendActiveCard({
                 ) : null}
                 {areaLoading && !classAreaRows?.length ? (
                   <span className="si-layer-live-legend__area-status-sub"> · classifying…</span>
+                ) : null}
+                {dsiDroughtArea ? (
+                  <span className="si-layer-live-legend__area-status-sub">
+                    {' '}
+                    · Drought Area (DSI ≥ {dsiDroughtArea.threshold.toFixed(2)}) {formatAreaHa(dsiDroughtArea.areaHa)} ha
+                    ({dsiDroughtArea.pctOfAoi.toFixed(1)}%)
+                  </span>
                 ) : null}
               </span>
             )}

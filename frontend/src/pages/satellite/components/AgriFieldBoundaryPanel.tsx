@@ -87,6 +87,8 @@ export type AgriFieldBoundaryPanelProps = {
   error: string | null
   errorDetail?: string | null
   notice?: string | null
+  /** Hostinger / GitHub Pages without Python FTW — Map RGB detect only. */
+  mapRgbOnlyHost?: boolean
   offline: boolean
   health?: FieldBoundaryHealth | null
   fieldCount: number
@@ -209,6 +211,8 @@ export function AgriFieldBoundaryPanel({
   busy,
   error,
   errorDetail,
+  notice = null,
+  mapRgbOnlyHost = false,
   offline,
   health = null,
   fieldCount,
@@ -400,6 +404,17 @@ export function AgriFieldBoundaryPanel({
         id="si-afb-pane-detect"
         aria-labelledby="si-afb-tab-detect"
       >
+        {mapRgbOnlyHost ? (
+          <p className="si-afb__hint si-afb__hint--prod" role="status">
+            <i className="fa-solid fa-cloud" aria-hidden /> Map RGB detect runs on the AgroCloud API.
+            FTW live / FoW need a Python VPS — use rectangle AOI on cropland and wait for basemap tiles.
+          </p>
+        ) : null}
+        {notice && phase === 'idle' ? (
+          <p className="si-afb__hint" role="status">
+            {notice}
+          </p>
+        ) : null}
         <label className="si-afb__row">
           <span className="si-afb__label">Model</span>
           <select

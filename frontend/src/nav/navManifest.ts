@@ -14,6 +14,7 @@ export type NavTranslationKey =
   | 'aiAgroChat'
   | 'satelliteImagery'
   | 'satelliteIntelligence'
+  | 'fieldBoundaryAI'
   | 'gisMap'
   | 'operations'
   | 'irrigation'

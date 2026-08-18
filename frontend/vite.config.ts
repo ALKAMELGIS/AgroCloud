@@ -100,7 +100,6 @@ function buildCompressionPlugin(): Plugin {
     },
     async closeBundle() {
       const outDir = isAbsolute(config.build.outDir) ? config.build.outDir : join(config.root, config.build.outDir)
-      if (!existsSync(outDir)) return
       const files = await walk(outDir)
       await Promise.all(
         files

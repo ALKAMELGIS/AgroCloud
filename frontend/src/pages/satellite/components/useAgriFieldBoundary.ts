@@ -40,6 +40,13 @@ import {
   shouldFetchFowValidationReference,
 } from '../../../lib/agriFieldBoundary/fowValidationReference'
 import {
+  isMapRgbOnlyProductionHost,
+  PRODUCTION_MAP_RGB_MIN_AREA_M2,
+  productionMapRgbNotice,
+  shouldSkipFootprintRegularize,
+} from '../../../lib/agriFieldBoundary/fieldBoundaryProductionMode'
+import { summarizeFieldGeometry } from '../../../lib/agriFieldBoundary/fieldValidationMetrics'
+import {
   downloadFieldBoundaryGeoPackage,
   downloadFieldBoundaryShapefile,
 } from '../../../lib/agriFieldBoundary/polygonShapefileExport'
@@ -505,6 +512,13 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     if (h.ftw_live === false) {
       setModelState(prev => (prev === 'ftw-live' ? 'fow' : prev))
     }
+    if (isMapRgbOnlyProductionHost(h) && !sourceChosenRef.current) {
+      setModelState(prev => (prev === 'delineate-fbis' || prev === 'fow' ? 'map-rgb' : prev))
+      setImageryState('basemap')
+      setMinAreaM2(prev => (prev <= 1 ? PRODUCTION_MAP_RGB_MIN_AREA_M2 : prev))
+      setMinConfidence(prev => (prev > 0.25 ? 0.18 : prev))
+      setNotice(prev => prev || productionMapRgbNotice())
+    }
     if (isOfflineFieldBoundaryError(errorRef.current) || isOfflineFieldBoundaryError(errorDetailRef.current)) {
       setError(null)
       setErrorDetail(null)
@@ -562,6 +576,9 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
 
   const modelOptions = useMemo(() => {
     return FIELD_MODELS.map(o => {
+      if (o.id === 'delineate-fbis' && health && isMapRgbOnlyProductionHost(health)) {
+        return { ...o, label: `${o.label} (Map RGB fallback on this host)` }
+      }
       if (o.id === 'ftw-live' && health && health.ftw_live === false) {
         return { ...o, label: `${o.label} (unavailable — using FoW)` }
       }
@@ -774,13 +791,14 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
         count: mergedGeo.features.length,
       }
       const softenMeters = regularizeMethod === 'right-angles' ? 3.2 : 5.2
+      const skipRegularize = shouldSkipFootprintRegularize(out.engine)
       const optimized = optimizeFieldBoundaryResult(preRegularize, {
-        regularizeFootprints,
+        regularizeFootprints: regularizeFootprints && !skipRegularize,
         regularizeMethod,
         softenKept: true,
         softenMeters,
-        minFillRatio: 0.55,
-        maxAreaInflation: 1.45,
+        minFillRatio: skipRegularize ? 0.35 : 0.55,
+        maxAreaInflation: skipRegularize ? 1.85 : 1.45,
       })
       // Regularize can inflate footprints — re-clip to AOI and unstack overlays.
       let geojson = refineFieldPolygonsToAoi(optimized.geojson, aoiFc, {
@@ -793,6 +811,14 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
       ) {
         geojson = styleDelineateFbisGeojson(geojson)
       }
+      const validFeatures = geojson.features.filter(f => {
+        const g = f?.geometry
+        if (!g || (g.type !== 'Polygon' && g.type !== 'MultiPolygon')) return false
+        return (
+          summarizeFieldGeometry({ type: 'FeatureCollection', features: [f] }).totalAreaHa > 0
+        )
+      })
+      geojson = { type: 'FeatureCollection', features: validFeatures }
       return {
         ...optimized,
         geojson,
@@ -1650,8 +1676,11 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     for (const f of geojson.features) {
       sum += Number((f.properties as any)?.area_ha || 0)
     }
-    return sum
+    if (sum > 0) return sum
+    return summarizeFieldGeometry(geojson).totalAreaHa
   }, [geojson])
+
+  const mapRgbOnlyHost = isMapRgbOnlyProductionHost(health)
 
   return {
     source,
@@ -1703,6 +1732,7 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     notice,
     offline,
     health,
+    mapRgbOnlyHost,
     result,
     geojson,
     fieldCount: result?.count ?? 0,

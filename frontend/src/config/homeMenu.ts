@@ -39,6 +39,7 @@ const LEAF_TITLE: Record<string, { en: string; ar: string }> = {
   agroCloudManagement: { en: 'AgroCloud Management', ar: 'إدارة AgroCloud' },
   aiAgroChat: { en: 'AI Agro-Chat', ar: 'محادثة Agro الذكية' },
   satelliteIntelligence: { en: 'Satellite Intelligence', ar: 'التحليل الفضائي الذكي' },
+  fieldBoundaryAI: { en: 'Field Boundary AI', ar: 'حدود الحقول بالذكاء الاصطناعي' },
   gisMap: { en: 'GIS Map', ar: 'خريطة GIS' },
   irrigation: { en: 'Irrigation Scheduling', ar: 'جدولة الري' },
   ecph: { en: 'EC/PH', ar: 'الملوحة والحموضة' },

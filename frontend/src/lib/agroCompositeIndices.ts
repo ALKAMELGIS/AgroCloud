@@ -23,7 +23,7 @@ import {
   LULC_SCIENTIFIC_NAME,
   isLulcClassificationLayerId,
 } from './siLulcClassification'
-import { DSI_STATIC_EXPR, DRA_STATIC_EXPR } from './dsiIndex'
+import { DSI_STATIC_EXPR } from './dsiIndex'
 import { WAPI_STATIC_EXPR } from './wapiIndex'
 import { resolveCollectionIndexDef } from './collectionIndexCatalog'
 import {
@@ -234,15 +234,6 @@ export const AGRO_COMPOSITE_CATEGORIES: readonly AgroCompositeCategory[] = [
         deltaId: 'DDSI',
         deltaLabel: 'ΔDSI',
         expr: DSI_STATIC_EXPR,
-      },
-      {
-        id: 'DRA',
-        label: 'Drought Area',
-        scientificName:
-          'Drought Area (DSI ≥ Drought_Threshold) · 10-class DSI severity bins',
-        deltaId: 'DDRA',
-        deltaLabel: 'ΔDRA',
-        expr: DRA_STATIC_EXPR,
       },
     ],
   },
