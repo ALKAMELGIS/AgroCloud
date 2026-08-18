@@ -418,12 +418,28 @@ export function SiPrithviCropToolPanel(props: SiPrithviCropToolPanelProps) {
           {job.status === 'error' && job.error ? (
             <div className="prithvi-tool__error">{job.error}</div>
           ) : null}
+          {job.status === 'done' && result && !prediction?.url ? (
+            <div className="prithvi-tool__error">
+              Classification finished but no map layer was returned
+              {result.inferenceAvailable === false
+                ? ' — Prithvi inference failed; only preview scenes are available.'
+                : '.'}{' '}
+              Check Sentinel Hub credentials or retry with a smaller AOI.
+            </div>
+          ) : null}
         </div>
       ) : null}
 
       {/* Results */}
       {result ? (
         <div className="prithvi-tool__results">
+          {onAddToMap && prediction?.url ? (
+            <div className="prithvi-tool__row">
+              <button type="button" className="prithvi-tool__btn is-primary" onClick={onAddToMap}>
+                <i className="fa-solid fa-layer-group" aria-hidden /> Show Crop Type on map
+              </button>
+            </div>
+          ) : null}
           {country ? (
             <div className="prithvi-tool__country">
               <i className="fa-solid fa-location-dot" aria-hidden />{' '}

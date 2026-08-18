@@ -623,6 +623,7 @@ import {
 import {
   footprintGeoJsonFromMapCoordinates,
   syncMapboxGeoreferencedImageLayer,
+  ensureMapboxImageSourceUrl,
 } from '../../lib/raster/siRasterMapLayer';
 import {
   createSiBimImportLayer,
@@ -5404,6 +5405,11 @@ export default function SatelliteIntelligence() {
   const cropAiRunning =
     !!cropAiJob && cropAiJob.status !== 'done' && cropAiJob.status !== 'error';
 
+  const cropAiAoiGeometry = useMemo(
+    () => getDrawnGeometry(cropClassAoiGeometry) ?? getDrawnGeometry(drawnGeometry),
+    [cropClassAoiGeometry, drawnGeometry],
+  );
+
   useEffect(() => {
     let alive = true;
     void fetchCropClassificationConfig().then(cfg => {
@@ -5424,7 +5430,7 @@ export default function SatelliteIntelligence() {
   }, []);
 
   const handleCropAiRunAoi = useCallback(() => {
-    const geometry = drawnGeometryRef.current?.geometry ?? drawnGeometry?.geometry;
+    const geometry = cropAiAoiGeometry;
     if (!geometry) return;
     cropAiAoiRef.current = geometry;
     setCropAiJob({
@@ -5449,7 +5455,7 @@ export default function SatelliteIntelligence() {
           error: String(err?.message || err),
         }),
       );
-  }, [cropAiSeason, drawnGeometry, trackCropAiJob]);
+  }, [cropAiSeason, cropAiAoiGeometry, trackCropAiJob]);
 
   const handleCropAiRunChip = useCallback(
     (imageUrl: string) => {
@@ -5628,9 +5634,14 @@ export default function SatelliteIntelligence() {
       ];
       const aoiGeometry = cropAiAoiRef.current ?? drawnGeometryRef.current?.geometry ?? null;
       const proxiedUrl = /^https?:\/\//i.test(url) ? cropPredictionImageUrl(url) : url;
-      const finalUrl = aoiGeometry
+      let finalUrl = aoiGeometry
         ? await clipRasterToAoi(proxiedUrl, boundsTuple, aoiGeometry)
         : proxiedUrl;
+      try {
+        finalUrl = await ensureMapboxImageSourceUrl(finalUrl);
+      } catch {
+        /* keep last URL — Mapbox may still texture http(s)/blob sources */
+      }
       const outline = aoiGeometry
         ? { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: aoiGeometry }] }
         : siRasterExtentFootprint(coordinates);
@@ -5655,6 +5666,21 @@ export default function SatelliteIntelligence() {
           },
         ];
       });
+      const map = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+      if (map && typeof map.fitBounds === 'function') {
+        try {
+          map.fitBounds(
+            [
+              [w, s],
+              [e, n],
+            ],
+            { padding: 72, duration: 700, maxZoom: 16 },
+          );
+        } catch {
+          /* ignore */
+        }
+      }
+      setCustomLayersMapEpoch(epoch => epoch + 1);
     },
     [clipRasterToAoi],
   );
@@ -26138,7 +26164,7 @@ export default function SatelliteIntelligence() {
                     {expandedEnvSection === 'crop-classification' && (
                       <div className="si-env-section-card si-rs-panel--glass">
                         <SiPrithviCropToolPanel
-                          aoiGeometry={drawnGeometry?.geometry ?? null}
+                          aoiGeometry={cropAiAoiGeometry}
                           hasSelfInference={cropAiSelfInference}
                           season={cropAiSeason}
                           onSeasonChange={setCropAiSeason}

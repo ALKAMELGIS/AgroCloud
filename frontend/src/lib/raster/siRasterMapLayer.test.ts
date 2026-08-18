@@ -41,4 +41,10 @@ describe('siRasterMapLayer', () => {
     expect(MAPBOX_IMAGE_MAX_DIMENSION).toBeGreaterThanOrEqual(2048)
     expect(MAPBOX_IMAGE_MAX_DIMENSION).toBeLessThanOrEqual(8192)
   })
+
+  it('passes through http(s) raster URLs unchanged', async () => {
+    const { ensureMapboxImageSourceUrl } = await import('./siRasterMapLayer')
+    const url = 'https://api.eliteagrocloud.com/api/crop-classification/proxy-image?url=x'
+    await expect(ensureMapboxImageSourceUrl(url)).resolves.toBe(url)
+  })
 })

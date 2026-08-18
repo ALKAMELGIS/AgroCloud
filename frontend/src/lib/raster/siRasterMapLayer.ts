@@ -102,6 +102,19 @@ type MapboxCanvas = {
   setLayoutProperty?: (id: string, name: string, value: unknown) => void
 }
 
+/**
+ * Mapbox GL `image` sources reject some long `data:` URLs — convert to `blob:` first.
+ * HTTP(S) and existing blob URLs pass through unchanged.
+ */
+export async function ensureMapboxImageSourceUrl(url: string): Promise<string> {
+  const raw = String(url || '').trim()
+  if (!raw || raw.startsWith('blob:')) return raw
+  if (!raw.startsWith('data:')) return raw
+  const res = await fetch(raw)
+  const blob = await res.blob()
+  return URL.createObjectURL(blob)
+}
+
 /** Create or refresh a Mapbox `image` source + `raster` layer for georeferenced imagery. */
 export function syncMapboxGeoreferencedImageLayer(
   map: MapboxCanvas,
