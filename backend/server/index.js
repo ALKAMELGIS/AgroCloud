@@ -55,6 +55,40 @@ const REPO_ROOT = path.join(SERVER_DIR, '..', '..')
 /** Vite production output (`npm run build` in `frontend/`). Override with AGRI_FRONTEND_DIST. */
 const FRONTEND_DIST = process.env.AGRI_FRONTEND_DIST || path.join(REPO_ROOT, 'frontend', 'dist')
 
+/**
+ * GitHub Pages builds use `/AgroCloud/` as Vite base; Hostinger/Docker builds use `/`.
+ * Detect from the built shell so Express serves hashed chunks at the path index.html expects.
+ */
+function detectSpaAssetBasePath() {
+  try {
+    const html = fs.readFileSync(path.join(FRONTEND_DIST, 'index.html'), 'utf8')
+    const m = html.match(/\ssrc="(\/[^"]+\/assets\/[^"]+\.js)"/)
+    if (m) {
+      const assetPrefix = m[1].slice(0, m[1].indexOf('/assets/'))
+      if (assetPrefix && assetPrefix !== '/') return assetPrefix
+    }
+  } catch {
+    /* dist missing during partial deploy — fall back to root assets */
+  }
+  return ''
+}
+
+const SPA_ASSET_BASE = detectSpaAssetBasePath()
+
+function stripSpaAssetBase(urlPath) {
+  const p = String(urlPath || '')
+  if (SPA_ASSET_BASE && p.startsWith(`${SPA_ASSET_BASE}/`)) {
+    return p.slice(SPA_ASSET_BASE.length) || '/'
+  }
+  return p
+}
+
+const FRONTEND_STATIC_OPTS = {
+  setHeaders(res, filePath) {
+    applyStaticCacheHeaders(res, filePath)
+  },
+}
+
 const app = express()
 
 const CORS_EXTRA = String(process.env.CORS_ALLOWED_ORIGINS || '')
@@ -146,7 +180,7 @@ app.get('*', (req, res, next) => {
   try {
     if (req.method !== 'GET') return next()
     const accept = String(req.headers['accept-encoding'] || '')
-    const urlPath = req.path
+    const urlPath = stripSpaAssetBase(req.path)
     if (!urlPath.startsWith('/assets/') && !urlPath.endsWith('.js') && !urlPath.endsWith('.css')) return next()
     const distPath = FRONTEND_DIST
     const filePath = path.join(distPath, urlPath)
@@ -171,13 +205,16 @@ app.get('*', (req, res, next) => {
   }
 })
 
-app.use(
-  express.static(FRONTEND_DIST, {
-    setHeaders(res, filePath) {
-      applyStaticCacheHeaders(res, filePath)
-    },
-  }),
-)
+if (SPA_ASSET_BASE) {
+  app.use(SPA_ASSET_BASE, express.static(FRONTEND_DIST, FRONTEND_STATIC_OPTS))
+  app.get('/', (_req, res) => {
+    res.redirect(302, `${SPA_ASSET_BASE}/`)
+  })
+  app.get(SPA_ASSET_BASE, (_req, res) => {
+    res.redirect(302, `${SPA_ASSET_BASE}/`)
+  })
+}
+app.use(express.static(FRONTEND_DIST, FRONTEND_STATIC_OPTS))
 
 // Lightweight liveness probe used by the frontend circuit breaker to decide,
 // with a single request, whether a co-located backend exists. Static-only
@@ -1924,8 +1961,9 @@ console.log('[startup] ✓ All critical routes verified (segformer-detection: co
  * client detect the stale-deploy case and recover by reloading to fetch the fresh index.html.
  */
 function looksLikeStaticAsset(urlPath) {
-  if (urlPath.startsWith('/assets/')) return true
-  const ext = path.extname(urlPath).toLowerCase()
+  const normalized = stripSpaAssetBase(urlPath)
+  if (normalized.startsWith('/assets/')) return true
+  const ext = path.extname(normalized).toLowerCase()
   if (!ext || ext === '.html') return false
   return /\.(js|mjs|css|map|wasm|json|webmanifest|png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|eot|txt|xml)$/i.test(
     urlPath,

@@ -8,7 +8,7 @@ import {
   regularizeFieldFootprints,
   type FootprintRegularizeMethod,
 } from './fieldFootprintRegularize'
-import { apiUrl } from '../apiOrigin'
+import { apiUrl, isBackendUnavailablePayload } from '../apiOrigin'
 
 const BASE = () => apiUrl('/api/agri-field-boundary')
 
@@ -189,10 +189,11 @@ export function formatFieldBoundaryUserError(
   raw: string | null | undefined,
   opts?: { offline?: boolean; source?: FieldImagerySource; empty?: boolean },
 ): FieldBoundaryUserError {
-  if (opts?.offline) {
+  if (opts?.offline || isBackendUnavailablePayload(raw)) {
     return {
       short: 'Loading field model… Detect Fields is available on the AgroCloud API.',
-      detail: 'Map RGB detect runs on the Hostinger API while Python weights load. FTW/FoW wait until the VPS service is ready.',
+      detail:
+        'Map RGB detect runs on the AgroCloud API (api.eliteagrocloud.com). FTW/FoW need the Python field engine; retry Detect Fields on map RGB while models load.',
     }
   }
 
@@ -403,7 +404,13 @@ export async function fetchFieldBoundaryHealth(signal?: AbortSignal): Promise<Fi
   }
   try {
     const res = await fetch(`${BASE()}/health`, { signal })
-    const json = (await res.json().catch(() => null)) as FieldBoundaryHealth | null
+    const json = (await res.json().catch(() => null)) as (FieldBoundaryHealth & { error?: string }) | null
+    if (
+      isBackendUnavailablePayload(json?.error) ||
+      (res.status === 503 && isBackendUnavailablePayload(String(json?.error || '')))
+    ) {
+      return builtinOnline
+    }
     if (json && typeof json === 'object') {
       const status = String(json.status || '')
       const loading = Boolean(json.loading) || status === 'loading' || json.ready === false
@@ -461,6 +468,7 @@ export async function fetchFowFieldBoundaries(
 }
 
 function looksLikeOfflineUpstream(raw: string | null | undefined): boolean {
+  if (isBackendUnavailablePayload(raw)) return true
   return /offline|ECONNREFUSED|Could not reach|fetch failed|network/i.test(String(raw || ''))
 }
 

@@ -16,6 +16,8 @@ const CDSE_OAUTH_URL =
   'https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token'
 const CDSE_STATISTICS_URL = 'https://sh.dataspace.copernicus.eu/api/v1/statistics'
 const SENTINEL_HUB_PUBLIC_WMS_ACCESS_TOKEN = 'PUBLIC_DATA_FEATURED_COLLECTIONS'
+/** Same default as frontend `SENTINEL_HUB_WMS_DEFAULT_INSTANCE_ID` (public featured collections). */
+const SENTINEL_HUB_WMS_DEFAULT_INSTANCE_ID = '60de79ca-16a7-4afd-bcbd-0261bf0156fa'
 const WMS_STATS_TIMEOUT_MS = 240_000
 
 /** @type {Map<string, { token: string; expiresAt: number }>} */
@@ -55,7 +57,11 @@ function pickAccessToken(secretsFilePath) {
 
 function pickWmsInstanceId(secretsFilePath) {
   const fromFile = readBuiltinSecret(secretsFilePath, 'sentinelHubWmsInstanceId')
-  return pickEnv('SENTINEL_HUB_WMS_INSTANCE_ID', 'VITE_SENTINEL_HUB_WMS_INSTANCE_ID') || fromFile
+  return (
+    pickEnv('SENTINEL_HUB_WMS_INSTANCE_ID', 'VITE_SENTINEL_HUB_WMS_INSTANCE_ID') ||
+    fromFile ||
+    SENTINEL_HUB_WMS_DEFAULT_INSTANCE_ID
+  )
 }
 
 function pickWmsConfig(secretsFilePath) {

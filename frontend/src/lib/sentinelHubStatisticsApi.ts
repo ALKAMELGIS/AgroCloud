@@ -155,6 +155,8 @@ export type SentinelHubDailyIndexMeans = {
   ndvi: number | null
   ndwi: number | null
   ndmi: number | null
+  /** NDII: (B08−B11)/(B08+B11) when returned as a dedicated Statistical API band. */
+  ndii?: number | null
   evi: number | null
   savi: number | null
   ciRe: number | null

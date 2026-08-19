@@ -41,7 +41,7 @@ import {
   type ImageryCorrelationScatterAnalysis,
   type ImageryTimeSeriesLayerSeries,
 } from '../acpImageryTimeSeries'
-import { buildCorrelationInterpretation } from '../../../satellite/lib/timeSeriesReport/timeSeriesScatterChartRenderer'
+import { SiScatterCorrelationInsight } from '../../../satellite/components/SiScatterCorrelationInsight'
 import {
   buildAgroStructureFieldOptions,
   resolveAgroStructureFieldByKey,
@@ -752,55 +752,7 @@ export function AcpImageryTimeSeriesPanel({ onClose }: Props) {
         ) : null}
 
         {chartType === 'scatter' && scatterCorrelation ? (
-          <div className="acp-ts__scatter-insight">
-            <div className="acp-ts__scatter-head">
-              <span className="acp-ts__scatter-r2">
-                r = <strong>{scatterCorrelation.regression.r.toFixed(3)}</strong>
-                {' · '}
-                R² = <strong>{scatterCorrelation.regression.r2.toFixed(3)}</strong>
-                {' · '}
-                n = <strong>{scatterCorrelation.regression.n}</strong>
-              </span>
-              <span
-                className={[
-                  'acp-ts__scatter-rel',
-                  `acp-ts__scatter-rel--${scatterCorrelation.relationship.strength}`,
-                  scatterCorrelation.relationship.direction !== 'none'
-                    ? `acp-ts__scatter-rel--${scatterCorrelation.relationship.direction}`
-                    : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-              >
-                {scatterCorrelation.relationship.label}
-              </span>
-            </div>
-            {scatterCorrelation.points.length ? (
-              <div className="acp-ts__scatter-table-wrap">
-                <table className="acp-ts__scatter-table">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>{scatterCorrelation.xLayerId}</th>
-                      <th>{scatterCorrelation.yLayerId}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {scatterCorrelation.points.map(p => (
-                      <tr key={`${p.date}-${p.x}-${p.y}`}>
-                        <td>{p.date || '—'}</td>
-                        <td>{p.x.toFixed(4)}</td>
-                        <td>{p.y.toFixed(4)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : null}
-            <p className="acp-ts__scatter-interpret">
-              <strong>Interpretation:</strong> {buildCorrelationInterpretation(scatterCorrelation)}
-            </p>
-          </div>
+          <SiScatterCorrelationInsight analysis={scatterCorrelation} />
         ) : chartType === 'scatter' && hasRun && labels.length && layerSeries.length < 2 ? (
           <p className="acp-ts__scatter-hint">Select two layers to run correlation scatter with regression and R².</p>
         ) : null}

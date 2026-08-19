@@ -288,6 +288,7 @@ export function resolveSentinelHubWmsEvalscriptProxyLayerName(
 const NATIVE_INDEX_LAYER_PATTERNS: Partial<Record<string, RegExp>> = {
   NDVI: /NDVI/i,
   NDMI: /NDMI|MOISTURE/i,
+  NDII: /NDII/i,
   NDWI: /NDWI|WATER/i,
   SAVI: /SAVI/i,
   CHAS: /CHAS/i,
@@ -336,6 +337,7 @@ export function usesSentinelHubWmsClientEvalscript(
 const CORE_INTERPRETATION_WMS_IDS = new Set([
   'NDVI',
   'NDMI',
+  'NDII',
   'NDWI',
   'MNDWI',
   'AWEI',
@@ -370,6 +372,7 @@ export function getBootstrapSentinelWmsLayers(): SentinelHubWmsLayerInfo[] {
     { name: 'TRUE_COLOR', title: 'True Color (legacy alias)' },
     { name: 'NDVI', title: 'NDVI (legacy alias)' },
     { name: 'NDMI', title: 'Normalized Difference Moisture Index' },
+    { name: 'NDII', title: 'Normalized Difference Infrared Index' },
     { name: 'NDWI', title: 'Normalized Difference Water Index' },
     { name: 'MNDWI', title: 'Modified Normalized Difference Water Index' },
     { name: 'AWEI', title: 'Automated Water Extraction Index' },

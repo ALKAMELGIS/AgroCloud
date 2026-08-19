@@ -62,6 +62,17 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
     expect(script).not.toContain('imgVals.concat(1)')
   })
 
+  it('NDII evalscript uses continuous moisture ramp on B08/B11', () => {
+    const script = buildSentinelIndexColorRampEvalscript('ndii')
+    expect(script).toContain('ColorRampVisualizer')
+    expect(script).toContain('index(samples.B08, samples.B11)')
+    expect(script).toContain('["B08", "B11", "dataMask"]')
+    expect(script).toContain('viz.process(val)')
+    expect(script).toContain('concat(samples.dataMask)')
+    expect(script).not.toContain('ndiiClass')
+    expect(script).not.toContain('imgVals.concat(1)')
+  })
+
   it('SAVI evalscript uses soil-adjusted formula on B08/B04', () => {
     const script = buildSentinelIndexColorRampEvalscript('savi')
     expect(script).toContain('1.5) / (samples.B08 + samples.B04 + 0.5)')
@@ -110,6 +121,7 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
     expect(inferWmsEvalProfile('LST')).toBe('lst')
     expect(inferWmsEvalProfile('Land Surface Temperature')).toBe('lst')
     expect(inferWmsEvalProfile('Moisture index')).toBe('ndmi')
+    expect(inferWmsEvalProfile('NDII')).toBe('ndii')
     // NDSI is registered as an agro composite (soil/salinity family).
     expect(inferWmsEvalProfile('NDSI')).toBe('agro_composite')
     expect(inferWmsEvalProfile('MNDWI')).toBe('mndwi')

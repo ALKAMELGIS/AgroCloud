@@ -4701,12 +4701,81 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
   color: #f87171;
 }
 
+.acp-ts__panel--scatter {
+  gap: 0;
+}
+
+.acp-ts__panel--scatter .acp-ts__meta,
+.acp-ts__panel--scatter .acp-ts__chart-hint {
+  flex: 0 0 auto;
+}
+
+.acp-ts__panel--scatter .acp-ts__chart-hint {
+  display: none;
+}
+
+.acp-ts__panel--scatter .acp-ts__chart-wrap {
+  height: 210px;
+  min-height: 180px;
+  flex: 0 0 auto;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+}
+
 .acp-ts__scatter-insight {
-  margin-top: 6px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.72) 0%, rgba(2, 6, 23, 0.92) 100%);
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 140px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: #050505;
+  border-top: 1px solid rgba(212, 184, 150, 0.22);
+  overflow: hidden;
+}
+
+.acp-ts__scatter-stats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 12px;
+  background: #080808;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex: 0 0 auto;
+}
+
+.acp-ts__scatter-stats-metrics {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.acp-ts__scatter-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.acp-ts__scatter-stat em {
+  font-style: normal;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(212, 184, 150, 0.72);
+}
+
+.acp-ts__scatter-stat strong {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f4f6fa;
+  letter-spacing: 0.01em;
 }
 
 .acp-ts__scatter-head {
@@ -4731,15 +4800,97 @@ html[data-theme='dark'] .app-layout .acp-shell .acp-header__title {
 .acp-ts__scatter-rel {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 999px;
+  font-size: 7.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid rgba(212, 184, 150, 0.28);
+  color: #e8e2d4;
+  background: rgba(212, 184, 150, 0.08);
+  flex: 0 0 auto;
+  max-width: 52%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: help;
+}
+
+.acp-ts__scatter-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  background: #050505;
+}
+
+.acp-ts__scatter-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.acp-ts__scatter-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.acp-ts__scatter-table th {
+  padding: 7px 12px;
   font-size: 8px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #e2e8f0;
-  background: rgba(51, 65, 85, 0.55);
+  text-align: left;
+  color: rgba(212, 184, 150, 0.88);
+  background: #0a0a0a;
+  border-bottom: 1px solid rgba(212, 184, 150, 0.28);
+}
+
+.acp-ts__scatter-table th:not(:first-child) {
+  text-align: right;
+}
+
+.acp-ts__scatter-table td {
+  padding: 6px 12px;
+  color: #e8edf4;
+  font-variant-numeric: tabular-nums;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  vertical-align: middle;
+}
+
+.acp-ts__scatter-table td:not(:first-child) {
+  text-align: right;
+  font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace;
+  font-size: 10.5px;
+  color: #f1f5f9;
+}
+
+.acp-ts__scatter-table td:first-child {
+  color: rgba(226, 232, 240, 0.92);
+  font-size: 10.5px;
+}
+
+.acp-ts__scatter-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.acp-ts__scatter-table tbody tr:hover,
+.acp-ts__scatter-table tbody tr.is-clickable:hover,
+.acp-ts__scatter-table tbody tr.is-clickable:focus-visible {
+  background: rgba(212, 184, 150, 0.08);
+  outline: none;
+}
+
+.acp-ts__scatter-table tbody tr.is-clickable {
+  cursor: pointer;
+}
+
+.acp-ts__scatter-table tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .acp-ts__scatter-rel--strong {

@@ -23,10 +23,26 @@ function hostname(): string {
   return typeof window !== 'undefined' && window.location?.hostname ? window.location.hostname : ''
 }
 
+function isLocalLoopbackHost(host: string): boolean {
+  const h = String(host || '').toLowerCase()
+  return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '0.0.0.0'
+}
+
 /** www / apex are GitHub Pages. `api.` is the Hostinger Express app. */
 function isEliteAgrocloudPagesHost(host: string): boolean {
   const h = String(host || '').toLowerCase()
   return h === 'eliteagrocloud.com' || h === 'www.eliteagrocloud.com'
+}
+
+/** Hostinger Node that serves `/api/*` for static SPAs (GitHub Pages, eliteagrocloud.com, mirrors). */
+function defaultRemoteApiOriginForStaticHost(): string {
+  if (typeof window === 'undefined') return ''
+  const host = hostname().toLowerCase()
+  if (host === 'api.eliteagrocloud.com') return ''
+  if (isLocalLoopbackHost(host)) return ''
+  if (isEliteAgrocloudPagesHost(host)) return ELITE_AGROCLOUD_API_ORIGIN
+  if (isKnownStaticHostname(host)) return ELITE_AGROCLOUD_API_ORIGIN
+  return ''
 }
 
 function originFromEnvUrl(raw: string): string {
@@ -39,6 +55,9 @@ function originFromEnvUrl(raw: string): string {
 
 /** Trimmed value of the configured backend origin override, or '' when unset. */
 export function configuredApiOrigin(): string {
+  // Local full-stack / Vite dev always use same-origin `/api` (proxy or co-located Node).
+  if (typeof window !== 'undefined' && isLocalLoopbackHost(hostname())) return ''
+
   const raw = import.meta.env.VITE_AGRI_API_SECRETS_URL
   const configured = typeof raw === 'string' ? raw.trim() : ''
   if (configured) {
@@ -55,10 +74,16 @@ export function configuredApiOrigin(): string {
       }
     }
   }
-  if (typeof window !== 'undefined' && isEliteAgrocloudPagesHost(hostname())) {
-    return ELITE_AGROCLOUD_API_ORIGIN
-  }
+  const remoteFallback = defaultRemoteApiOriginForStaticHost()
+  if (remoteFallback) return remoteFallback
   return ''
+}
+
+/** Synthetic guard / deployment errors that mean "no same-origin backend — use remote API or degrade". */
+export function isBackendUnavailablePayload(raw: string | null | undefined): boolean {
+  return /backend_unavailable|backend is not available|configure VITE_AGRI_API_SECRETS_URL/i.test(
+    String(raw || ''),
+  )
 }
 
 function isKnownStaticHostname(host: string): boolean {
@@ -144,6 +169,20 @@ function readPersistedBreaker(): boolean | null {
 
 let sameOriginBackendReachable: boolean | null = readPersistedBreaker()
 
+/** Drop a stale same-origin breaker when a remote API host is configured (Pages / preview). */
+function clearStaleSameOriginBreakerWhenRemoteApiConfigured(): void {
+  if (import.meta.env.DEV || typeof window === 'undefined') return
+  if (!configuredApiOrigin()) return
+  sameOriginBackendReachable = null
+  try {
+    window.sessionStorage?.removeItem(BREAKER_STORAGE_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+clearStaleSameOriginBreakerWhenRemoteApiConfigured()
+
 function persistBreakerTripped(): void {
   if (typeof window === 'undefined') return
   try {
@@ -167,6 +206,18 @@ export function markBackendUnreachable(): void {
 export function markBackendReachable(): void {
   if (configuredApiOrigin()) return
   sameOriginBackendReachable = true
+}
+
+/** Reset the same-origin circuit breaker (local dev recovery after backend restart). */
+export function clearSameOriginBackendBreaker(): void {
+  sameOriginBackendReachable = null
+  backendProbe = null
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage?.removeItem(BREAKER_STORAGE_KEY)
+  } catch {
+    /* ignore */
+  }
 }
 
 /**

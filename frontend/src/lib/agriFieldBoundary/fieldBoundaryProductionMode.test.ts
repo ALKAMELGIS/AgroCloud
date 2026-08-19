@@ -11,8 +11,8 @@ describe('fieldBoundaryProductionMode', () => {
     expect(isBuiltinFieldEngine('ftw-live')).toBe(false)
   })
 
-  it('skips regularize for builtin engine', () => {
-    expect(shouldSkipFootprintRegularize('spectral-builtin')).toBe(true)
+  it('always regularizes footprints (builtin uses softer thresholds in finishResult)', () => {
+    expect(shouldSkipFootprintRegularize('spectral-builtin')).toBe(false)
     expect(shouldSkipFootprintRegularize('delineate-anything')).toBe(false)
   })
 

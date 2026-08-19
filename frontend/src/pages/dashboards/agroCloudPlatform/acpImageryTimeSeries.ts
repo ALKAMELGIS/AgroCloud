@@ -202,6 +202,9 @@ function evaluateStaticLayerDailyValue(layerId: string, row: SentinelHubDailyInd
       return finiteOrNull(row.ndvi)
     case 'NDMI':
       return finiteOrNull(row.ndmi)
+    case 'NDII':
+      // Statistical API stores (B08−B11)/(B08+B11) on the ndmi band until a dedicated ndii band is added.
+      return finiteOrNull(row.ndii) ?? finiteOrNull(row.ndmi)
     case 'NDWI':
       return finiteOrNull(row.ndwi)
     case 'SAVI':

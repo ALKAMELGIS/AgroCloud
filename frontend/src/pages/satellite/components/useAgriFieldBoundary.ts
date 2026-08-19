@@ -23,6 +23,7 @@ import {
 import {
   finishMergeOptions,
   finishMinAreaM2,
+  isCadastralFieldEngine,
   isFtwFieldEngine,
   mergeFieldFragments,
 } from '../../../lib/agriFieldBoundary/fieldMerge'
@@ -40,10 +41,10 @@ import {
   shouldFetchFowValidationReference,
 } from '../../../lib/agriFieldBoundary/fowValidationReference'
 import {
+  isBuiltinFieldEngine,
   isMapRgbOnlyProductionHost,
   PRODUCTION_MAP_RGB_MIN_AREA_M2,
   productionMapRgbNotice,
-  shouldSkipFootprintRegularize,
 } from '../../../lib/agriFieldBoundary/fieldBoundaryProductionMode'
 import { summarizeFieldGeometry } from '../../../lib/agriFieldBoundary/fieldValidationMetrics'
 import {
@@ -97,10 +98,9 @@ function yearBounds(year: number): { from: string; to: string } {
   return { from, to: toYearEnd > today ? today : toYearEnd }
 }
 
-/** Default FTW window = latest available day only (today). */
+/** Default FTW window = current calendar year (Jan 1 → today) for clear-scene selection. */
 function defaultSceneRange(): { from: string; to: string } {
-  const t = todayIsoDate()
-  return { from: t, to: t }
+  return yearBounds(defaultSceneYear())
 }
 
 function clampSceneDate(iso: string | null | undefined): string {
@@ -298,6 +298,7 @@ function isOfflineFieldBoundaryError(message: string | null | undefined): boolea
   if (!message) return false
   return (
     message === OFFLINE_ERROR_SHORT ||
+    /backend_unavailable|backend is not available/i.test(message) ||
     /Service offline/i.test(message) ||
     /start agri-field-boundary|uvicorn app:app --port 8092/i.test(message)
   )
@@ -316,10 +317,10 @@ export type FieldCaptureImageryId = Exclude<
 >
 
 const FIELD_MODELS: Array<{ id: FieldModelId; label: string }> = [
-  { id: 'delineate-fbis', label: 'Delineate Anything (v2)' },
-  { id: 'ftw-live', label: 'FTW (live Sentinel-2 model)' },
+  { id: 'ftw-live', label: 'FTW (live Sentinel-2 — cadastral grid)' },
   { id: 'ftw-infer', label: 'FTW Inference (S2 model)' },
-  { id: 'fow', label: 'Fields of the World' },
+  { id: 'fow', label: 'Fields of the World (reference parcels)' },
+  { id: 'delineate-fbis', label: 'Delineate Anything (v2)' },
   { id: 'map-rgb', label: 'Map RGB detect (instance)' },
 ]
 
@@ -414,9 +415,8 @@ function styleDelineateFbisGeojson(fc: GeoJSON.FeatureCollection): GeoJSON.Featu
  * AOI → high-res capture → detect → colorful GeoJSON fields.
  */
 export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBoundaryOptions) {
-  // Prefer Delineate Anything (dense adjacent field mosaic). Fall back from FTW only
-  // when that engine is unavailable — do not force FTW over Delineate.
-  const [model, setModelState] = useState<FieldModelId>('delineate-fbis')
+  // FTW live on Sentinel-2 gives cadastral grid polygons (FoW/FTW reference quality).
+  const [model, setModelState] = useState<FieldModelId>('ftw-live')
   const [imagery, setImageryState] = useState<FieldCaptureImageryId>('basemap')
   const source = deriveFieldSource(model, imagery)
   const imageryRef = useRef(imagery)
@@ -508,12 +508,17 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
   const applyHealthResult = useCallback((h: FieldBoundaryHealth) => {
     setHealth(h)
     setOffline(false)
-    // Only demote FTW → FoW when FTW is unavailable; keep Delineate / map-rgb defaults.
+    if (h.ftw_live === true && !sourceChosenRef.current) {
+      setModelState(prev => (prev === 'delineate-fbis' || prev === 'map-rgb' ? 'ftw-live' : prev))
+    }
+    // Demote FTW → FoW when FTW is unavailable.
     if (h.ftw_live === false) {
       setModelState(prev => (prev === 'ftw-live' ? 'fow' : prev))
     }
     if (isMapRgbOnlyProductionHost(h) && !sourceChosenRef.current) {
-      setModelState(prev => (prev === 'delineate-fbis' || prev === 'fow' ? 'map-rgb' : prev))
+      setModelState(prev =>
+        prev === 'ftw-live' || prev === 'delineate-fbis' || prev === 'fow' ? 'map-rgb' : prev,
+      )
       setImageryState('basemap')
       setMinAreaM2(prev => (prev <= 1 ? PRODUCTION_MAP_RGB_MIN_AREA_M2 : prev))
       setMinConfidence(prev => (prev > 0.25 ? 0.18 : prev))
@@ -779,11 +784,17 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     setValidationReferenceNotice(null)
     const finishResult = (out: FieldBoundaryResult): FieldBoundaryResult => {
       rawResultRef.current = out
+      const engineKey = String(out.engine || activeSource || '')
       const ftw = isFtwFieldEngine(activeSource) || isFtwFieldEngine(out.engine)
-      const effMinArea = finishMinAreaM2(minAreaM2, ftw)
+      const cadastral =
+        ftw ||
+        isCadastralFieldEngine(engineKey) ||
+        engineKey.includes('delineate') ||
+        engineKey.includes('fow')
+      const effMinArea = finishMinAreaM2(minAreaM2, ftw || cadastral)
       const mergedGeo = mergeFieldFragments(
         out.geojson,
-        finishMergeOptions(minAreaM2, { ftw, enabled: mergeFragments }),
+        finishMergeOptions(minAreaM2, { ftw: ftw || cadastral, enabled: mergeFragments }),
       )
       const preRegularize: FieldBoundaryResult = {
         ...out,
@@ -791,14 +802,14 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
         count: mergedGeo.features.length,
       }
       const softenMeters = regularizeMethod === 'right-angles' ? 3.2 : 5.2
-      const skipRegularize = shouldSkipFootprintRegularize(out.engine)
+      const builtin = isBuiltinFieldEngine(out.engine)
       const optimized = optimizeFieldBoundaryResult(preRegularize, {
-        regularizeFootprints: regularizeFootprints && !skipRegularize,
+        regularizeFootprints: regularizeFootprints,
         regularizeMethod,
         softenKept: true,
         softenMeters,
-        minFillRatio: skipRegularize ? 0.35 : 0.55,
-        maxAreaInflation: skipRegularize ? 1.85 : 1.45,
+        minFillRatio: builtin ? 0.38 : cadastral ? 0.48 : 0.55,
+        maxAreaInflation: builtin ? 1.9 : cadastral ? 1.52 : 1.45,
       })
       // Regularize can inflate footprints — re-clip to AOI and unstack overlays.
       let geojson = refineFieldPolygonsToAoi(optimized.geojson, aoiFc, {
@@ -1559,15 +1570,21 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     if (!raw?.geojson?.features?.length) return
     if (busy || phase === 'detecting' || phase === 'capturing') return
     const ctx = lastDetectContextRef.current
-    const ftw =
-      isFtwFieldEngine(ctx?.source) || isFtwFieldEngine(raw.engine)
+    const engineKey = String(raw.engine || ctx?.source || '')
+    const ftw = isFtwFieldEngine(ctx?.source) || isFtwFieldEngine(raw.engine)
+    const cadastral =
+      ftw ||
+      isCadastralFieldEngine(engineKey) ||
+      engineKey.includes('delineate') ||
+      engineKey.includes('fow')
     const baseMin = ctx?.minAreaM2 ?? 1
-    const effMinArea = finishMinAreaM2(baseMin, ftw)
+    const effMinArea = finishMinAreaM2(baseMin, ftw || cadastral)
     const mergedGeo = mergeFieldFragments(
       raw.geojson,
-      finishMergeOptions(baseMin, { ftw, enabled: mergeFragments }),
+      finishMergeOptions(baseMin, { ftw: ftw || cadastral, enabled: mergeFragments }),
     )
     const softenMeters = regularizeMethod === 'right-angles' ? 3.2 : 5.2
+    const builtin = isBuiltinFieldEngine(raw.engine)
     const optimized = optimizeFieldBoundaryResult(
       { ...raw, geojson: mergedGeo, count: mergedGeo.features.length },
       {
@@ -1575,8 +1592,8 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
         regularizeMethod,
         softenKept: true,
         softenMeters,
-        minFillRatio: 0.55,
-        maxAreaInflation: 1.45,
+        minFillRatio: builtin ? 0.38 : cadastral ? 0.48 : 0.55,
+        maxAreaInflation: builtin ? 1.9 : cadastral ? 1.52 : 1.45,
       },
     )
     let geojson = optimized.geojson

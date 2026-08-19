@@ -4,6 +4,8 @@ import {
   PRITHVI_CROP_CLASSES,
   type CropClassificationJob,
 } from '../../../lib/siPrithviCropPipeline'
+import type { CropAoiLayerOption, CropAoiMode } from '../../../lib/siCropAoiSource'
+import { SiCropAoiSourceSelect } from './SiCropAoiSourceSelect'
 import './SiPrithviCropToolPanel.css'
 
 type CropStat = { id?: string; name: string; pct: number; areaHa?: number }
@@ -246,12 +248,16 @@ function CropCompositionStats({
 
 export type SiPrithviCropToolPanelProps = {
   aoiGeometry: GeoJSON.Polygon | GeoJSON.MultiPolygon | null
+  aoiMode: CropAoiMode
+  onAoiModeChange: (mode: CropAoiMode) => void
+  aoiLayerOptions?: CropAoiLayerOption[]
+  aoiLayerId?: string
+  onAoiLayerIdChange?: (layerId: string) => void
   hasSelfInference: boolean
   season: { start: string; end: string }
   onSeasonChange: (season: { start: string; end: string }) => void
   job: CropClassificationJob | null
   isRunning: boolean
-  onPickAoi: () => void
   onRunAoi: () => void
   onRunChip: (imageUrl: string) => void
   onCancel: () => void
@@ -282,12 +288,18 @@ function stageState(
 export function SiPrithviCropToolPanel(props: SiPrithviCropToolPanelProps) {
   const {
     aoiGeometry,
+    aoiMode,
+    onAoiModeChange,
+    aoiLayerOptions,
+    aoiLayerId,
+    onAoiLayerIdChange,
     season,
     onSeasonChange,
     job,
     isRunning,
     onRunAoi,
     onCancel,
+    onAddToMap,
     onExportReport,
     exportReportBusy = false,
     exportReportLabel = null,
@@ -353,6 +365,16 @@ export function SiPrithviCropToolPanel(props: SiPrithviCropToolPanelProps) {
       </header>
 
       <div className="prithvi-tool__section">
+        <SiCropAoiSourceSelect
+          aoiMode={aoiMode}
+          onAoiModeChange={onAoiModeChange}
+          aoiLayerOptions={aoiLayerOptions}
+          aoiLayerId={aoiLayerId}
+          onAoiLayerIdChange={onAoiLayerIdChange}
+          hasAoi={hasAoi}
+          disabled={isRunning}
+        />
+
         <div className="prithvi-tool__dates">
           <label>
             <span>Season start</span>
@@ -433,13 +455,6 @@ export function SiPrithviCropToolPanel(props: SiPrithviCropToolPanelProps) {
       {/* Results */}
       {result ? (
         <div className="prithvi-tool__results">
-          {onAddToMap && prediction?.url ? (
-            <div className="prithvi-tool__row">
-              <button type="button" className="prithvi-tool__btn is-primary" onClick={onAddToMap}>
-                <i className="fa-solid fa-layer-group" aria-hidden /> Show Crop Type on map
-              </button>
-            </div>
-          ) : null}
           {country ? (
             <div className="prithvi-tool__country">
               <i className="fa-solid fa-location-dot" aria-hidden />{' '}
@@ -480,8 +495,40 @@ export function SiPrithviCropToolPanel(props: SiPrithviCropToolPanelProps) {
           {classStats && classStats.length ? (
             <CropCompositionStats stats={classStats} legendItems={legendItems} aoiAreaHa={aoiAreaHa} />
           ) : null}
-          {onExportReport || onExportGeoTiff ? (
+          {onExportReport || onExportGeoTiff || onAddToMap ? (
             <div className="prithvi-tool__export">
+              {prediction?.url && (onAddToMap || onExportGeoTiff) ? (
+                <div className="prithvi-tool__export-gis">
+                  {onAddToMap ? (
+                    <button
+                      type="button"
+                      className="prithvi-tool__btn is-layer"
+                      onClick={onAddToMap}
+                      disabled={isRunning}
+                      title="Add classified crop layer to the map canvas"
+                    >
+                      <i className="fa-solid fa-layer-group" aria-hidden />
+                      Add to Layer
+                    </button>
+                  ) : null}
+                  {onExportGeoTiff ? (
+                    <button
+                      type="button"
+                      className="prithvi-tool__btn is-geotiff"
+                      onClick={onExportGeoTiff}
+                      disabled={exportGeoTiffBusy || exportReportBusy || !result}
+                      title="Export RGB + class GeoTIFF for ArcGIS Pro / QGIS (WGS84)"
+                    >
+                      {exportGeoTiffBusy ? (
+                        <i className="fa-solid fa-circle-notch fa-spin" aria-hidden />
+                      ) : (
+                        <i className="fa-solid fa-file-image" aria-hidden />
+                      )}
+                      {exportGeoTiffBusy ? exportGeoTiffLabel || 'Exporting…' : 'Export to TIFF'}
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
               {onExportReport ? (
                 <button
                   type="button"
@@ -500,30 +547,6 @@ export function SiPrithviCropToolPanel(props: SiPrithviCropToolPanelProps) {
                     : 'Export Intelligence Report (Word)'}
                 </button>
               ) : null}
-              {onExportGeoTiff ? (
-                <button
-                  type="button"
-                  className="prithvi-tool__btn is-geotiff"
-                  onClick={onExportGeoTiff}
-                  disabled={exportGeoTiffBusy || exportReportBusy || !result?.prediction?.url}
-                  title="Export RGB + class GeoTIFF for ArcGIS Pro / QGIS (WGS84). Open *_rgb.tif in the map."
-                >
-                  {exportGeoTiffBusy ? (
-                    <i className="fa-solid fa-circle-notch fa-spin" aria-hidden />
-                  ) : (
-                    <i className="fa-solid fa-globe" aria-hidden />
-                  )}
-                  {exportGeoTiffBusy
-                    ? exportGeoTiffLabel || 'Exporting GeoTIFF…'
-                    : 'Export GeoTIFF (GIS)'}
-                </button>
-              ) : null}
-              <p className="prithvi-tool__export-hint">
-                Word: Cover · TOC · Summary · Charts · Maps · Recommendations
-                {onExportGeoTiff
-                  ? ' · GeoTIFF: open *_rgb.tif in ArcGIS Pro (Zoom To Layer) · WGS84'
-                  : ''}
-              </p>
             </div>
           ) : null}
         </div>

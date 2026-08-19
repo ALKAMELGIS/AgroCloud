@@ -95,7 +95,7 @@ export function resolveIndexChartColor(layerId: string): string {
   if (u === 'NDWI' || u === 'MNDWI' || u.includes('WATER') || u === 'PRECIP' || u.includes('RAIN')) {
     return '2563EB'
   }
-  if (u === 'NDMI' || u.includes('MOIST')) {
+  if (u === 'NDMI' || u === 'NDII' || u.includes('MOIST')) {
     return '0D9488'
   }
   if (u === 'LST' || u === 'LSTI' || u === 'ET' || u.includes('TEMP') || u.includes('THERMAL')) {

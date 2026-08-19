@@ -36,6 +36,7 @@ describe('agroCompositeIndices', () => {
     expect(groups[0]?.options.map(o => o.id)).toEqual([
       'NDVI',
       'NDMI',
+      'NDII',
       'NDWI',
       'MNDWI',
       'AWEI',

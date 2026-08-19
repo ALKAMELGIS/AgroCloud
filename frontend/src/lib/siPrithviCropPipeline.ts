@@ -24,6 +24,9 @@ export type CropClassificationConfig = {
   space: string
   selfInference: boolean
   classes: CropClassificationClass[]
+  /** When false, the Node backend cannot fetch AOI imagery (missing Sentinel Hub WMS). */
+  serverAoiReady?: boolean
+  wmsReady?: boolean
 }
 
 /** Prithvi prediction palette (USDA CDL-style classes shown in the demo legend). */
@@ -132,6 +135,23 @@ function isBackendUnavailableStartError(err: unknown): boolean {
   if (!(err instanceof BackendJobStartError)) return false
   // No status → network-level failure; status >= 500 → backend down / proxy error.
   return err.status == null || err.status >= 500
+}
+
+/** True when a server job failed because Sentinel Hub WMS is not configured on the API host. */
+export function isSentinelHubServerConfigError(message: string | null | undefined): boolean {
+  if (!message) return false
+  const m = message.toLowerCase()
+  return (
+    m.includes('sentinel hub wms not configured') ||
+    m.includes('sentinel_hub_wms_instance_id') ||
+    m.includes('sentinel_hub_access_token')
+  )
+}
+
+function isServerAoiWmsReady(config: CropClassificationConfig | null): boolean {
+  if (!config) return true
+  if (config.serverAoiReady === false || config.wmsReady === false) return false
+  return true
 }
 
 /**
@@ -250,7 +270,8 @@ export async function startAoiJob(input: RunAoiInput): Promise<string> {
   // back to the deterministic country engine running fully in the browser so the
   // tool keeps working on a static deployment with no API.
   const backendReachable = await ensureBackendAvailable()
-  if (backendReachable || configuredApiOrigin()) {
+  const config = backendReachable || configuredApiOrigin() ? await fetchCropClassificationConfig() : null
+  if ((backendReachable || configuredApiOrigin()) && isServerAoiWmsReady(config)) {
     try {
       return await startJob({
         mode: 'aoi',
@@ -268,6 +289,56 @@ export async function startAoiJob(input: RunAoiInput): Promise<string> {
   }
 
   return startLocalAoiJob(input)
+}
+
+/**
+ * Run AOI crop classification with automatic in-browser fallback when the API
+ * host lacks Sentinel Hub WMS credentials (common on static + remote-API setups).
+ */
+export async function runAoiCropClassification(
+  input: RunAoiInput,
+  onUpdate: (job: CropClassificationJob) => void,
+  signal?: AbortSignal,
+): Promise<CropClassificationJob> {
+  const backendReachable = await ensureBackendAvailable()
+  const config =
+    backendReachable || configuredApiOrigin() ? await fetchCropClassificationConfig() : null
+
+  if (!isServerAoiWmsReady(config)) {
+    const localId = startLocalAoiJob(input)
+    return pollJob(localId, onUpdate, signal)
+  }
+
+  if (backendReachable || configuredApiOrigin()) {
+    try {
+      const jobId = await startJob({
+        mode: 'aoi',
+        aoi: input.aoi,
+        season: input.season,
+        timesteps: input.timesteps ?? 3,
+      })
+      const job = await pollJob(jobId, onUpdate, signal)
+      if (job.status === 'error' && isSentinelHubServerConfigError(job.error)) {
+        onUpdate({
+          id: 'fallback',
+          mode: 'aoi',
+          status: 'queued',
+          progress: 0,
+          message: 'Server imagery unavailable — running in-browser classification…',
+          result: null,
+          error: null,
+        })
+        const localId = startLocalAoiJob(input)
+        return pollJob(localId, onUpdate, signal)
+      }
+      return job
+    } catch (err) {
+      if (!isBackendUnavailableStartError(err)) throw err
+    }
+  }
+
+  const localId = startLocalAoiJob(input)
+  return pollJob(localId, onUpdate, signal)
 }
 
 export function startChipJob(imageUrl: string): Promise<string> {

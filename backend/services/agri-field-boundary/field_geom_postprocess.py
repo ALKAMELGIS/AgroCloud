@@ -17,13 +17,13 @@ from typing import Any
 
 # Soft defaults — override via env without code changes.
 # Tuned for smoother, farm-aligned parcel edges (less stair-step raster look).
-FTW_GEOM_SIMPLIFY_M = float(os.environ.get("FTW_GEOM_SIMPLIFY_M", "2.5"))
-FTW_GEOM_OPEN_M = float(os.environ.get("FTW_GEOM_OPEN_M", "1.0"))
+FTW_GEOM_SIMPLIFY_M = float(os.environ.get("FTW_GEOM_SIMPLIFY_M", "1.8"))
+FTW_GEOM_OPEN_M = float(os.environ.get("FTW_GEOM_OPEN_M", "0.8"))
 # Keep parcels flush (cadastral mosaic) — large sep left visible gaps between fields.
-FTW_GEOM_SEP_M = float(os.environ.get("FTW_GEOM_SEP_M", "0.35"))
-FTW_GEOM_SEP_EXPAND_FRAC = float(os.environ.get("FTW_GEOM_SEP_EXPAND_FRAC", "0.95"))
-FTW_GEOM_RECT_FILL_MIN = float(os.environ.get("FTW_GEOM_RECT_FILL_MIN", "0.68"))
-FTW_GEOM_RECT_MAX_INFLATION = float(os.environ.get("FTW_GEOM_RECT_MAX_INFLATION", "1.4"))
+FTW_GEOM_SEP_M = float(os.environ.get("FTW_GEOM_SEP_M", "0.25"))
+FTW_GEOM_SEP_EXPAND_FRAC = float(os.environ.get("FTW_GEOM_SEP_EXPAND_FRAC", "0.97"))
+FTW_GEOM_RECT_FILL_MIN = float(os.environ.get("FTW_GEOM_RECT_FILL_MIN", "0.72"))
+FTW_GEOM_RECT_MAX_INFLATION = float(os.environ.get("FTW_GEOM_RECT_MAX_INFLATION", "1.48"))
 # Polsby-Popper is 1.0 for a circle and at most pi/4 ~= 0.785 for any rectangle,
 # so shapes above this guard are centre pivots / round parcels — never rect-snap them.
 FTW_GEOM_ROUND_GUARD = float(os.environ.get("FTW_GEOM_ROUND_GUARD", "0.82"))
@@ -41,12 +41,12 @@ FTW_GEOM_DISC_SQUARENESS_MIN = float(os.environ.get("FTW_GEOM_DISC_SQUARENESS_MI
 FTW_GEOM_SMOOTH_M = float(os.environ.get("FTW_GEOM_SMOOTH_M", "1.8"))
 FTW_GEOM_SLIVER_COMPACTNESS = float(os.environ.get("FTW_GEOM_SLIVER_COMPACTNESS", "0.045"))
 # Absolute floor for true fields; raised to kill S2 10 m pinhead squares.
-FTW_GEOM_MIN_FIELD_M2 = float(os.environ.get("FTW_GEOM_MIN_FIELD_M2", "400"))
+FTW_GEOM_MIN_FIELD_M2 = float(os.environ.get("FTW_GEOM_MIN_FIELD_M2", "350"))
 # Never OBB-snap noise into neat tiny boxes.
-FTW_GEOM_RECT_MIN_AREA_M2 = float(os.environ.get("FTW_GEOM_RECT_MIN_AREA_M2", "2000"))
+FTW_GEOM_RECT_MIN_AREA_M2 = float(os.environ.get("FTW_GEOM_RECT_MIN_AREA_M2", "1500"))
 # Merge fragments that nearly touch (metres) before neighbor separation.
-FTW_GEOM_MERGE_GAP_M = float(os.environ.get("FTW_GEOM_MERGE_GAP_M", "15"))
-FTW_GEOM_MERGE_CONTACT_FRAC = float(os.environ.get("FTW_GEOM_MERGE_CONTACT_FRAC", "0.22"))
+FTW_GEOM_MERGE_GAP_M = float(os.environ.get("FTW_GEOM_MERGE_GAP_M", "12"))
+FTW_GEOM_MERGE_CONTACT_FRAC = float(os.environ.get("FTW_GEOM_MERGE_CONTACT_FRAC", "0.18"))
 
 
 def _deg_per_m(mid_lat: float) -> float:

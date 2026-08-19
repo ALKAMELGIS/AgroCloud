@@ -22,7 +22,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { fromArrayBuffer } from 'geotiff'
 import { encodeChunkyInt16GeoTiff } from './geoTiffEncoder.js'
-import { resolveSentinelHubWmsConfig } from './sentinelHubStatisticsProxy.js'
+import { resolveSentinelHubWmsConfig, describeSentinelHubStatisticsConfig } from './sentinelHubStatisticsProxy.js'
 import {
   fetchSentinelWmsTrueColorPng,
   fetchSentinelWmsBandsTiff,
@@ -772,10 +772,13 @@ async function runPipeline(job, input, deps) {
  */
 export function registerCropClassificationRoutes(app, { secretsFilePath, broadcast } = {}) {
   app.get('/api/crop-classification/config', (_req, res) => {
+    const sh = describeSentinelHubStatisticsConfig(secretsFilePath)
     res.json({
       space: HF_SPACE_ID,
       selfInference: Boolean(SELF_INFERENCE_URL),
       classes: CROP_CLASSIFICATION_CLASSES,
+      serverAoiReady: sh.wmsReady,
+      wmsReady: sh.wmsReady,
     })
   })
 

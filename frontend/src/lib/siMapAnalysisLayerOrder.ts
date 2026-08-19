@@ -36,8 +36,19 @@ export function isSiBasemapMapLayerId(layerId: string): boolean {
   return isSiBasemapStyleLayerId(layerId)
 }
 
+export const SI_CROP_AI_PREDICTION_RASTER_LAYER_ID = 'crop-ai-prediction-raster'
+
+export function isSiCropAiPredictionRasterLayerId(layerId: string): boolean {
+  return layerId === SI_CROP_AI_PREDICTION_RASTER_LAYER_ID
+}
+
 export function isSiAnalysisRasterMapLayerId(layerId: string): boolean {
   return isSiSentinelAoiWmsMapLayerId(layerId) || isSiSentinelAoiWmsPingPongMapId(layerId)
+}
+
+/** Sentinel WMS + Crop AI classification overlays — participate in AOI fill / outline stacking. */
+export function isSiStackedAnalysisRasterMapLayerId(layerId: string): boolean {
+  return isSiAnalysisRasterMapLayerId(layerId) || isSiCropAiPredictionRasterLayerId(layerId)
 }
 
 /** Topmost vector AOI line used as the insert anchor for analysis rasters. */
@@ -109,7 +120,7 @@ export function syncSiMapAnalysisLayerOrder(
     typeof map.getStyle === 'function' ? (map.getStyle()?.layers ?? []) : []
   const rasterIds = styleLayers
     .map(l => l.id)
-    .filter((id): id is string => !!id && isSiAnalysisRasterMapLayerId(id))
+    .filter((id): id is string => !!id && isSiStackedAnalysisRasterMapLayerId(id))
 
   // 1) Park analysis rasters under vector outlines (agro / drawn AOI / Layers AOI lines).
   for (const rasterId of rasterIds) {
@@ -127,7 +138,7 @@ export function syncSiMapAnalysisLayerOrder(
   const firstRaster =
     (typeof map.getStyle === 'function' ? (map.getStyle()?.layers ?? []) : [])
       .map(l => l.id)
-      .find((id): id is string => !!id && isSiAnalysisRasterMapLayerId(id)) ?? null
+      .find((id): id is string => !!id && isSiStackedAnalysisRasterMapLayerId(id)) ?? null
 
   // 2) Tuck polygon fills under the rasters so NDVI / indices paint on top of AOI fill.
   for (const aoiId of DRAWN_AOI_FILL_UNDER_RASTER_IDS) {

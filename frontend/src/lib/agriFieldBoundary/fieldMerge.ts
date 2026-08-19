@@ -28,6 +28,17 @@ export function isFtwFieldEngine(sourceOrEngine?: string | null): boolean {
   return s === 'ftw-live' || s === 'ftw-infer' || s.includes('ftw')
 }
 
+/** FTW, FoW, and similar cadastral catalog engines — grid-aligned post-process. */
+export function isCadastralFieldEngine(sourceOrEngine?: string | null): boolean {
+  const s = String(sourceOrEngine || '').toLowerCase()
+  return (
+    isFtwFieldEngine(s) ||
+    s === 'fow' ||
+    s.includes('fields-of-the-world') ||
+    s.includes('fields_of_the_world')
+  )
+}
+
 /** Effective min-area used by finishResult / re-apply for merge + AOI refine. */
 export function finishMinAreaM2(minAreaM2: number, ftw: boolean): number {
   if (ftw) return Math.max(FTW_FINISH_MIN_AREA_M2, Math.max(0, minAreaM2))

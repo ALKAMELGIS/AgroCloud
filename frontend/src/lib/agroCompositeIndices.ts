@@ -70,6 +70,7 @@ export const AGRO_DERIVED_LAYER_DEFS: readonly AgroCompositeIndexDef[] = [
 export const AGRO_CORE_INTERPRETATION_LAYER_IDS = [
   'NDVI',
   'NDMI',
+  'NDII',
   'NDWI',
   'MNDWI',
   'AWEI',
@@ -85,6 +86,7 @@ export type AgroCoreInterpretationLayerId = (typeof AGRO_CORE_INTERPRETATION_LAY
 export const AGRO_CORE_LAYER_SCIENTIFIC_NAMES: Record<AgroCoreInterpretationLayerId, string> = {
   NDVI: 'NDVI = (B8 − B4) / (B8 + B4)',
   NDMI: 'NDMI = (B8 − B11) / (B8 + B11)',
+  NDII: 'NDII = (NIR − SWIR) / (NIR + SWIR)',
   NDWI: 'NDWI = (B3 − B8) / (B3 + B8)',
   MNDWI: 'MNDWI = (B3 − B11) / (B3 + B11)',
   AWEI: 'AWEI = 4 × (B3 − B11) − (0.25 × B8 + 2.75 × B12)',

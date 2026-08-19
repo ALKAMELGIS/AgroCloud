@@ -140,7 +140,10 @@ import {
   teardownSiSentinelAoiWmsPingPongStack,
   type SiSentinelAoiWmsPingPongRuntime,
 } from '../../lib/siSentinelAoiWmsImperative';
-import { syncSiMapAnalysisLayerOrder } from '../../lib/siMapAnalysisLayerOrder';
+import {
+  SI_CROP_AI_PREDICTION_RASTER_LAYER_ID,
+  syncSiMapAnalysisLayerOrder,
+} from '../../lib/siMapAnalysisLayerOrder';
 import {
   siCustomLayersBuriedUnderBasemap,
   siRaiseCustomLayersAboveBasemap,
@@ -299,7 +302,7 @@ import type { SiTsWeatherStormMapOverlay } from './lib/imageryStormAnalysis';
 import { SiGoToXyBar } from './components/SiGoToXyBar';
 import {
   fetchCropClassificationConfig,
-  startAoiJob,
+  runAoiCropClassification,
   startChipJob,
   pollJob,
   cropPredictionImageUrl,
@@ -336,6 +339,8 @@ import {
   siAoiMaskBuilderStatusLabel,
   type SiAoiMaskBuilderSettings,
 } from '../../lib/siAoiMaskBuilder';
+import { resolveCropAoiGeometry } from '../../lib/siCropAoiResolve';
+import type { CropAoiMode } from '../../lib/siCropAoiSource';
 import {
   getCachedSiAoiLayerModeClipMask,
   siAoiLayerModeChunksCacheKey,
@@ -1552,6 +1557,7 @@ function buildProcessingPreviewSpecsForItem(
     if (id === 'NDVI') return [{ assets: [NIR, RED], expression: `(${NIR}-${RED})/(${NIR}+${RED}+1e-6)`, rescale: '-1,1', colormapName: 'rdylgn' }];
     if (id === 'NDWI') return [{ assets: [GREEN, NIR], expression: `(${GREEN}-${NIR})/(${GREEN}+${NIR}+1e-6)`, rescale: '-1,1', colormapName: 'rdbu' }];
     if (id === 'NDMI') return [{ assets: [NIR, SWIR1], expression: `(${NIR}-${SWIR1})/(${NIR}+${SWIR1}+1e-6)`, rescale: '-1,1', colormapName: 'rdylgn' }];
+    if (id === 'NDII') return [{ assets: [NIR, SWIR1], expression: `(${NIR}-${SWIR1})/(${NIR}+${SWIR1}+1e-6)`, rescale: '-1,1', colormapName: 'rdylgn' }];
     if (id === 'SAVI') return [{ assets: [NIR, RED], expression: `1.5*(${NIR}-${RED})/(${NIR}+${RED}+0.5)`, rescale: '-1,1', colormapName: 'rdylgn' }];
     if (id === 'EVI') return [{ assets: [NIR, RED, BLUE], expression: `2.5*(${NIR}-${RED})/(${NIR}+6*${RED}-7.5*${BLUE}+1)`, rescale: '-1,1', colormapName: 'rdylgn' }];
     if (id === 'GNDVI') return [{ assets: [NIR, GREEN], expression: `(${NIR}-${GREEN})/(${NIR}+${GREEN}+1e-6)`, rescale: '-1,1', colormapName: 'rdylgn' }];
@@ -2064,6 +2070,125 @@ function drawnGeometryToFeatureCollection(drawnGeometry: any): { type: 'FeatureC
 
 /** Stable id for the Well Site Recommendation output layer in the Layers panel. */
 const WELLSITE_RECOMMENDED_LAYER_ID = 'wellsite-recommended-wells';
+const CROP_AI_PREDICTION_LAYER_ID = 'crop-ai-prediction';
+const CROP_AI_PREDICTION_SOURCE_ID = CROP_AI_PREDICTION_LAYER_ID;
+
+type CropAiMapOverlayState = {
+  url: string;
+  coordinates: RasterMapCoordinates;
+  opacity: number;
+  bounds: [number, number, number, number];
+};
+
+function resolveCropAiPredictionBounds(
+  job: CropClassificationJob | null,
+  aoiGeometry: unknown,
+): [number, number, number, number] | null {
+  const raw = job?.result?.prediction?.bounds;
+  if (Array.isArray(raw) && raw.length >= 4) {
+    const [w, s, e, n] = raw;
+    if ([w, s, e, n].every(v => typeof v === 'number' && Number.isFinite(v))) {
+      return [w, s, e, n];
+    }
+  }
+  const geom = getDrawnGeometry(aoiGeometry);
+  if (!geom) return null;
+  return getDrawnFeatureLngLatBounds({ type: 'Feature', properties: {}, geometry: geom });
+}
+
+function cropAiBoundsToCoordinates(bounds: [number, number, number, number]): RasterMapCoordinates {
+  const [w, s, e, n] = bounds;
+  return [
+    [w, n],
+    [e, n],
+    [e, s],
+    [w, s],
+  ];
+}
+
+async function decodeImageUrlToBlobUrl(url: string): Promise<string> {
+  const raw = String(url || '').trim();
+  if (!raw || raw.startsWith('blob:')) return raw;
+
+  try {
+    const viaHelper = await ensureMapboxImageSourceUrl(raw);
+    if (viaHelper.startsWith('blob:')) return viaHelper;
+  } catch {
+    /* fall through */
+  }
+
+  if (raw.startsWith('data:')) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, img.naturalWidth || 1);
+        canvas.height = Math.max(1, img.naturalHeight || 1);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Could not decode Crop AI prediction for the map.'));
+          return;
+        }
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob(
+          blob =>
+            blob
+              ? resolve(URL.createObjectURL(blob))
+              : reject(new Error('Could not encode Crop AI prediction.')),
+          'image/png',
+        );
+      };
+      img.onerror = () => reject(new Error('Could not load Crop AI prediction image.'));
+      img.src = raw;
+    });
+  }
+
+  if (/^https?:\/\//i.test(raw)) {
+    const res = await fetch(raw, { credentials: 'include' });
+    if (!res.ok) throw new Error(`Crop AI image fetch failed (HTTP ${res.status})`);
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  }
+
+  return raw;
+}
+
+async function resolveCropAiMapImageUrl(url: string): Promise<string> {
+  try {
+    return await decodeImageUrlToBlobUrl(url);
+  } catch {
+    return String(url || '').trim();
+  }
+}
+
+/** Imperative Mapbox image layer for Crop AI (stable ids for analysis layer stacking). */
+function syncCropAiPredictionOnMapbox(
+  map: SiMapboxCanvasLike | null | undefined,
+  overlay: CropAiMapOverlayState | null,
+): boolean {
+  if (!map || !overlay?.url || !overlay.coordinates?.length) return false;
+  try {
+    if (typeof map.isStyleLoaded === 'function' && !map.isStyleLoaded()) return false;
+  } catch {
+    /* ignore */
+  }
+  try {
+    syncMapboxGeoreferencedImageLayer(map, CROP_AI_PREDICTION_SOURCE_ID, overlay.url, overlay.coordinates, {
+      visible: true,
+      opacity: overlay.opacity,
+    });
+    siRaiseCustomLayersAboveBasemap(map, [CROP_AI_PREDICTION_SOURCE_ID]);
+    syncSiMapAnalysisLayerOrder(map, {
+      agroLineId: map.getLayer?.('drawn-index-geometry-line')
+        ? 'drawn-index-geometry-line'
+        : undefined,
+    });
+    map.triggerRepaint?.();
+    return Boolean(map.getLayer?.(SI_CROP_AI_PREDICTION_RASTER_LAYER_ID));
+  } catch {
+    return false;
+  }
+}
 const WELL_SUITABILITY_MCDA_LAYER_PREFIX = 'well-suit-mcda-';
 
 function wellSuitabilityMcdaRunLabel(seq: number): string {
@@ -5167,6 +5292,7 @@ export default function SatelliteIntelligence() {
   const [gisSelectionTool, setGisSelectionTool] = useState<GisSelectionTool>('select');
   const [gisSelectionSetMode, setGisSelectionSetMode] = useState<GisSelectionSetMode>('new');
   const [gisSelectionHits, setGisSelectionHits] = useState<GisSelectionHit[]>([]);
+  const gisSelectionHitsRef = useRef<GisSelectionHit[]>([]);
   const [gisSelectionOverlapState, setGisSelectionOverlapState] = useState<MapSelectionOverlapState>(null);
   const gisSelectionOverlapRef = useRef<MapSelectionOverlapState>(null);
   const [gisSelectableLayerIds, setGisSelectableLayerIds] = useState<Set<string>>(() => new Set());
@@ -5179,6 +5305,7 @@ export default function SatelliteIntelligence() {
   gisSelectionActiveRef.current = gisSelectionActive;
   gisSelectionToolRef.current = gisSelectionTool;
   gisSelectionOverlapRef.current = gisSelectionOverlapState;
+  gisSelectionHitsRef.current = gisSelectionHits;
   const [rsDrawingModeActive, setRsDrawingModeActive] = useState(false);
   const [mapPanLocked, setMapPanLocked] = useState(false);
   const [showEditHandles, setShowEditHandles] = useState(false);
@@ -5402,13 +5529,56 @@ export default function SatelliteIntelligence() {
   const [cropAiSelfInference, setCropAiSelfInference] = useState(false);
   const cropAiAbortRef = useRef<AbortController | null>(null);
   const cropAiAoiRef = useRef<any | null>(null);
+  /** Prevents duplicate auto-publish; cleared when a new AOI run starts. */
+  const cropAiPublishedKeyRef = useRef<string | null>(null);
+  const [cropAiMapOverlay, setCropAiMapOverlay] = useState<CropAiMapOverlayState | null>(null);
+  const cropAiMapOverlayRef = useRef<CropAiMapOverlayState | null>(null);
   const cropAiRunning =
     !!cropAiJob && cropAiJob.status !== 'done' && cropAiJob.status !== 'error';
 
-  const cropAiAoiGeometry = useMemo(
-    () => getDrawnGeometry(cropClassAoiGeometry) ?? getDrawnGeometry(drawnGeometry),
-    [cropClassAoiGeometry, drawnGeometry],
-  );
+  const [cropAoiMode, setCropAoiMode] = useState<CropAoiMode>('draw');
+  const [cropAoiLayerId, setCropAoiLayerId] = useState('');
+  const cropAoiModeRef = useRef<CropAoiMode>(cropAoiMode);
+  const cropAoiLayerIdRef = useRef(cropAoiLayerId);
+  cropAoiModeRef.current = cropAoiMode;
+  cropAoiLayerIdRef.current = cropAoiLayerId;
+
+  const getCropAiViewportBounds = useCallback((): [number, number, number, number] | null => {
+    const map = mapRef.current?.getMap?.() ?? mapRef.current;
+    const b = map?.getBounds?.();
+    if (!b) return null;
+    return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+  }, []);
+
+  const resolveCropAiAoiRaw = useCallback(() => {
+    return resolveCropAoiGeometry({
+      mode: cropAoiModeRef.current,
+      layerId: cropAoiLayerIdRef.current,
+      getViewportBounds: getCropAiViewportBounds,
+      customLayers: customLayersRef.current,
+      gisSelectionHits: gisSelectionHitsRef.current,
+      drawnGeometry: drawnGeometryRef.current ?? drawnGeometry,
+    });
+  }, [drawnGeometry, getCropAiViewportBounds]);
+
+  const cropAiAoiGeometry = useMemo(() => {
+    const raw = resolveCropAoiGeometry({
+      mode: cropAoiMode,
+      layerId: cropAoiLayerId,
+      getViewportBounds: getCropAiViewportBounds,
+      customLayers,
+      gisSelectionHits,
+      drawnGeometry,
+    });
+    return getDrawnGeometry(raw);
+  }, [
+    cropAoiMode,
+    cropAoiLayerId,
+    drawnGeometry,
+    gisSelectionHits,
+    customLayers,
+    getCropAiViewportBounds,
+  ]);
 
   useEffect(() => {
     let alive = true;
@@ -5430,9 +5600,18 @@ export default function SatelliteIntelligence() {
   }, []);
 
   const handleCropAiRunAoi = useCallback(() => {
-    const geometry = cropAiAoiGeometry;
+    const geometry = getDrawnGeometry(resolveCropAiAoiRaw());
     if (!geometry) return;
+    cropAiPublishedKeyRef.current = null;
+    if (cropAiMapOverlayRef.current?.url?.startsWith('blob:')) {
+      URL.revokeObjectURL(cropAiMapOverlayRef.current.url);
+    }
+    cropAiMapOverlayRef.current = null;
+    setCropAiMapOverlay(null);
     cropAiAoiRef.current = geometry;
+    cropAiAbortRef.current?.abort();
+    const ctrl = new AbortController();
+    cropAiAbortRef.current = ctrl;
     setCropAiJob({
       id: 'pending',
       mode: 'aoi',
@@ -5442,20 +5621,23 @@ export default function SatelliteIntelligence() {
       result: null,
       error: null,
     });
-    void startAoiJob({ aoi: geometry, season: cropAiSeason, timesteps: 3 })
-      .then(trackCropAiJob)
-      .catch(err =>
-        setCropAiJob({
-          id: 'error',
-          mode: 'aoi',
-          status: 'error',
-          progress: 1,
-          message: 'Failed to start.',
-          result: null,
-          error: String(err?.message || err),
-        }),
-      );
-  }, [cropAiSeason, cropAiAoiGeometry, trackCropAiJob]);
+    void runAoiCropClassification(
+      { aoi: geometry, season: cropAiSeason, timesteps: 3 },
+      job => setCropAiJob(job),
+      ctrl.signal,
+    ).catch(err => {
+      if (ctrl.signal.aborted) return;
+      setCropAiJob({
+        id: 'error',
+        mode: 'aoi',
+        status: 'error',
+        progress: 1,
+        message: 'Failed to start.',
+        result: null,
+        error: String((err as Error)?.message || err),
+      });
+    });
+  }, [cropAiSeason, resolveCropAiAoiRaw]);
 
   const handleCropAiRunChip = useCallback(
     (imageUrl: string) => {
@@ -5555,32 +5737,24 @@ export default function SatelliteIntelligence() {
     })();
   }, [drawnGeometry, cropAiJob]);
 
-  const handleCropAiPickAoi = useCallback(() => {
-    // Analysis tools must not arm drawing — user draws via Edit / Draw AOI only.
-    mapDrawOwnerRef.current = 'remote-sensing';
-    setMapDrawOwner('remote-sensing');
-    setFieldAnalysisStatus('Use Edit (or Draw AOI) on the map toolbar to set the Active AOI, then run again.');
-  }, []);
-
-  const CROP_AI_PREDICTION_LAYER_ID = 'crop-ai-prediction';
-
   const clipRasterToAoi = useCallback(
     async (
       imageUrl: string,
       bounds: [number, number, number, number],
-      geometry: any,
+      geometry: unknown,
     ): Promise<string> => {
+      const geom = getDrawnGeometry(geometry);
       const rings: number[][][] =
-        geometry?.type === 'Polygon'
-          ? geometry.coordinates
-          : geometry?.type === 'MultiPolygon'
-            ? geometry.coordinates.flat()
+        geom?.type === 'Polygon'
+          ? (geom.coordinates as unknown as number[][][])
+          : geom?.type === 'MultiPolygon'
+            ? (geom.coordinates as unknown as number[][][][]).flat()
             : [];
       if (!rings.length) return imageUrl;
       try {
         const img = await new Promise<HTMLImageElement>((resolve, reject) => {
           const im = new Image();
-          im.crossOrigin = 'anonymous';
+          if (/^https?:\/\//i.test(imageUrl)) im.crossOrigin = 'anonymous';
           im.onload = () => resolve(im);
           im.onerror = reject;
           im.src = imageUrl;
@@ -5622,29 +5796,34 @@ export default function SatelliteIntelligence() {
   const addCropAiPredictionLayer = useCallback(
     async (job: CropClassificationJob | null) => {
       const url = job?.result?.prediction?.url;
-      const bounds = job?.result?.prediction?.bounds;
-      if (!url || !Array.isArray(bounds) || bounds.length < 4) return;
-      const boundsTuple = bounds as [number, number, number, number];
+      if (!url) return;
+      const aoiGeometry =
+        getDrawnGeometry(cropAiAoiRef.current) ??
+        getDrawnGeometry(drawnGeometryRef.current) ??
+        getDrawnGeometry(drawnGeometry);
+      const boundsTuple = resolveCropAiPredictionBounds(job, aoiGeometry);
+      if (!boundsTuple) return;
       const [w, s, e, n] = boundsTuple;
-      const coordinates: RasterMapCoordinates = [
-        [w, n],
-        [e, n],
-        [e, s],
-        [w, s],
-      ];
-      const aoiGeometry = cropAiAoiRef.current ?? drawnGeometryRef.current?.geometry ?? null;
+      const coordinates = cropAiBoundsToCoordinates(boundsTuple);
       const proxiedUrl = /^https?:\/\//i.test(url) ? cropPredictionImageUrl(url) : url;
-      let finalUrl = aoiGeometry
-        ? await clipRasterToAoi(proxiedUrl, boundsTuple, aoiGeometry)
-        : proxiedUrl;
-      try {
-        finalUrl = await ensureMapboxImageSourceUrl(finalUrl);
-      } catch {
-        /* keep last URL — Mapbox may still texture http(s)/blob sources */
-      }
+      const finalUrl = await resolveCropAiMapImageUrl(proxiedUrl);
       const outline = aoiGeometry
         ? { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: aoiGeometry }] }
         : siRasterExtentFootprint(coordinates);
+      const overlay: CropAiMapOverlayState = {
+        url: finalUrl,
+        coordinates,
+        opacity: 0.92,
+        bounds: boundsTuple,
+      };
+      if (
+        cropAiMapOverlayRef.current?.url?.startsWith('blob:') &&
+        cropAiMapOverlayRef.current.url !== finalUrl
+      ) {
+        URL.revokeObjectURL(cropAiMapOverlayRef.current.url);
+      }
+      cropAiMapOverlayRef.current = overlay;
+      setCropAiMapOverlay(overlay);
       setCustomLayers(prev => {
         const stale = prev.find(l => l.id === CROP_AI_PREDICTION_LAYER_ID);
         if (stale?.raster?.url?.startsWith('blob:') && stale.raster.url !== finalUrl) {
@@ -5666,7 +5845,12 @@ export default function SatelliteIntelligence() {
           },
         ];
       });
+      setCustomLayersMapEpoch(epoch => epoch + 1);
       const map = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
+      if (map) {
+        siImperativeCustomLayerSourceIdsRef.current.add(CROP_AI_PREDICTION_SOURCE_ID);
+        syncCropAiPredictionOnMapbox(map, overlay);
+      }
       if (map && typeof map.fitBounds === 'function') {
         try {
           map.fitBounds(
@@ -5680,20 +5864,55 @@ export default function SatelliteIntelligence() {
           /* ignore */
         }
       }
-      setCustomLayersMapEpoch(epoch => epoch + 1);
     },
-    [clipRasterToAoi],
+    [drawnGeometry],
   );
 
+  // Re-assert Crop AI raster after style load / basemap swaps (imperative image source).
+  useEffect(() => {
+    if (!cropAiMapOverlay || !isMapStyleReady) return;
+    const map = mapRef.current?.getMap?.() ?? mapRef.current;
+    if (!map) return;
+    siImperativeCustomLayerSourceIdsRef.current.add(CROP_AI_PREDICTION_SOURCE_ID);
+    const sync = () => {
+      syncCropAiPredictionOnMapbox(map, cropAiMapOverlayRef.current);
+    };
+    sync();
+    let raf = 0;
+    let attempts = 0;
+    const tick = () => {
+      sync();
+      attempts += 1;
+      if (attempts < 20) raf = window.requestAnimationFrame(tick);
+    };
+    raf = window.requestAnimationFrame(tick);
+    const onStyle = () => sync();
+    try {
+      map.on?.('idle', onStyle);
+      map.on?.('styledata', onStyle);
+    } catch {
+      /* ignore */
+    }
+    return () => {
+      window.cancelAnimationFrame(raf);
+      try {
+        map.off?.('idle', onStyle);
+        map.off?.('styledata', onStyle);
+      } catch {
+        /* ignore */
+      }
+    };
+  }, [cropAiMapOverlay, isMapStyleReady]);
+
   // Auto-publish the Prithvi prediction to the map as a "Crop Type" layer.
-  const cropAiPublishedKeyRef = useRef<string | null>(null);
   useEffect(() => {
     if (cropAiJob?.status !== 'done') return;
     const url = cropAiJob.result?.prediction?.url;
     if (!url) return;
     if (cropAiPublishedKeyRef.current === cropAiJob.id) return;
-    cropAiPublishedKeyRef.current = cropAiJob.id;
-    void addCropAiPredictionLayer(cropAiJob);
+    void addCropAiPredictionLayer(cropAiJob).then(() => {
+      if (cropAiMapOverlayRef.current) cropAiPublishedKeyRef.current = cropAiJob.id;
+    });
   }, [cropAiJob, addCropAiPredictionLayer]);
 
   const [geoAiFloatingOpen, setGeoAiFloatingOpen] = useState(false);
@@ -5742,6 +5961,7 @@ export default function SatelliteIntelligence() {
       if (RETIRED_TOOLBOX_SECTIONS.has(sid)) return;
       // Only Edit activates drawing — opening any toolbox panel turns drawing mode off.
       // Full sketch teardown for analysis panels runs in the expandedEnvSection effect.
+      setShowEditHandles(false);
       if (rsDrawingModeActiveRef.current) {
         setRsDrawingModeActive(false);
         setMapDragPanEnabled(true);
@@ -5753,6 +5973,7 @@ export default function SatelliteIntelligence() {
         setIsLayerDropdownOpen(false);
         return;
       }
+      setGeoAiFloatingOpen(false);
       if (meta?.fromDockOptions) {
         setExpandedEnvSection(sid);
         setIsLayerDropdownOpen(true);
@@ -14083,22 +14304,16 @@ export default function SatelliteIntelligence() {
       expandedEnvSection === 'hydro-watershed' ||
       expandedEnvSection === 'well-site' ||
       expandedEnvSection === 'well-suitability' ||
-      expandedEnvSection === 'flood-monitoring';
+      expandedEnvSection === 'flood-monitoring' ||
+      expandedEnvSection === 'crop-classification';
 
-    if (expandedEnvSection === 'crop-classification') {
-      setRsDrawingModeActive(false);
-      setIcDrawingModeActive(false);
-      cancelCurrentDrawing();
-      applyMapDrawTool('select');
-      setMapDragPanEnabled(true);
-      mapDrawOwnerRef.current = 'crop-classification';
-      setMapDrawOwner('crop-classification');
-    } else if (analysisOnly) {
+    if (analysisOnly) {
       setRsDrawingModeActive(false);
       setCropClassDrawingModeActive(false);
       setIcDrawingModeActive(false);
       cancelCurrentDrawing();
       applyMapDrawTool('select');
+      setShowEditHandles(false);
       setMapDragPanEnabled(true);
       mapDrawOwnerRef.current = 'remote-sensing';
       setMapDrawOwner('remote-sensing');
@@ -14212,6 +14427,31 @@ export default function SatelliteIntelligence() {
       applyMapDrawTool('polygon');
     }
   }, []);
+
+  /** Crop AI AOI source — isolated state; does not share FTW / Tree modes. */
+  const handleCropAoiModeChange = useCallback((mode: CropAoiMode) => {
+    setCropAoiMode(mode);
+    if (mode === 'select') {
+      if (rsDrawingModeActiveRef.current) handleRsDrawingModeChange(false);
+      if (measureModeRef.current) clearMeasure();
+      setGisSelectionActive(true);
+      setGisSelectionTool('select');
+      applyMapDrawTool('select');
+      setShowEditHandles(false);
+      return;
+    }
+    if (mode === 'draw') {
+      if (measureModeRef.current) clearMeasure();
+      if (gisSelectionActiveRef.current) setGisSelectionActive(false);
+      handleRsDrawingModeChange(true);
+      applyMapDrawTool('polygon');
+      setShowEditHandles(false);
+      return;
+    }
+    if (gisSelectionActiveRef.current) setGisSelectionActive(false);
+    if (rsDrawingModeActiveRef.current) handleRsDrawingModeChange(false);
+    setShowEditHandles(false);
+  }, [handleRsDrawingModeChange, clearMeasure]);
 
   const treeAoiGeometry = useMemo(
     () => resolveTreeAoi(),
@@ -18716,6 +18956,10 @@ export default function SatelliteIntelligence() {
       if (prev && aoiLayerModeOptions.some(o => o.id === prev)) return prev;
       return aoiLayerModeOptions[0]!.id;
     });
+    setCropAoiLayerId(prev => {
+      if (prev && aoiLayerModeOptions.some(o => o.id === prev)) return prev;
+      return aoiLayerModeOptions[0]!.id;
+    });
   }, [aoiLayerModeOptions]);
 
   const handleAoiLayerModeChange = useCallback(
@@ -20923,7 +21167,9 @@ export default function SatelliteIntelligence() {
             siSafeMapboxLayerId(layer.id) === id &&
             (layer.arcgisVectorTiles?.tiles?.length ?? 0) > 0,
         );
-        if (!isVt) tracked.delete(id);
+        const isCropAi =
+          id === CROP_AI_PREDICTION_SOURCE_ID && Boolean(cropAiMapOverlayRef.current?.url);
+        if (!isVt && !isCropAi) tracked.delete(id);
       }
       const vtLayers = customLayersForMapPaintRef.current.filter(
         layer => (layer.arcgisVectorTiles?.tiles?.length ?? 0) > 0,
@@ -20981,7 +21227,9 @@ export default function SatelliteIntelligence() {
             siSafeMapboxLayerId(layer.id) === staleId &&
             (layer.arcgisVectorTiles?.tiles?.length ?? 0) > 0,
         );
-        if (!stillVt) {
+        const stillCropAi =
+          staleId === CROP_AI_PREDICTION_SOURCE_ID && Boolean(cropAiMapOverlayRef.current?.url);
+        if (!stillVt && !stillCropAi) {
           siRemoveMapboxCustomLayerStack(map, staleId);
           siImperativeCustomLayerSourceIdsRef.current.delete(staleId);
         }
@@ -24856,7 +25104,9 @@ export default function SatelliteIntelligence() {
             {isMapStyleReady ? (
               <SiImportedCustomLayersOverlay
                 key={`si-import-overlay-${customLayersMapEpoch}`}
-                layers={customLayersForMapPaint as any}
+                layers={
+                  customLayersForMapPaint.filter(l => l.id !== CROP_AI_PREDICTION_LAYER_ID) as any
+                }
                 suppressFillOpacityLayerIds={
                   sentinelLayerAoiWmsOnMap || sentinelDrawWmsOnMap
                     ? [
@@ -25618,7 +25868,10 @@ export default function SatelliteIntelligence() {
                 : null
             }
             onMapToolboxEmbedHost={setMapToolboxEmbedHost}
-            onToolboxPanelClose={() => setIsLayerDropdownOpen(false)}
+            onToolboxPanelClose={() => {
+              setIsLayerDropdownOpen(false);
+              setMapToolboxEmbedHost(null);
+            }}
             mapToolboxLayersMain={layersEnvMainTools}
             mapToolboxLayersOptionsExtra={layersEnvOptionsExtra}
             geoAiFloatingOpen={geoAiFloatingOpen}
@@ -26165,12 +26418,16 @@ export default function SatelliteIntelligence() {
                       <div className="si-env-section-card si-rs-panel--glass">
                         <SiPrithviCropToolPanel
                           aoiGeometry={cropAiAoiGeometry}
+                          aoiMode={cropAoiMode}
+                          onAoiModeChange={handleCropAoiModeChange}
+                          aoiLayerOptions={aoiLayerModeOptions}
+                          aoiLayerId={cropAoiLayerId}
+                          onAoiLayerIdChange={setCropAoiLayerId}
                           hasSelfInference={cropAiSelfInference}
                           season={cropAiSeason}
                           onSeasonChange={setCropAiSeason}
                           job={cropAiJob}
                           isRunning={cropAiRunning}
-                          onPickAoi={handleCropAiPickAoi}
                           onRunAoi={handleCropAiRunAoi}
                           onRunChip={handleCropAiRunChip}
                           onCancel={handleCropAiCancel}

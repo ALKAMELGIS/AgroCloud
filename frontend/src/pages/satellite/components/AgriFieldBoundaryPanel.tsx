@@ -840,7 +840,9 @@ export function AgriFieldBoundaryPanel({
         {phase !== 'idle' || Boolean(health?.loading) ? (
         <div
           className={`si-afb__status ${
-            phase === 'error' && !offline && !/Service offline|:8092|uvicorn app:app/i.test(String(error || ''))
+            phase === 'error' &&
+              !offline &&
+              !/Service offline|backend_unavailable|:8092|uvicorn app:app/i.test(String(error || ''))
               ? 'is-error'
               : phase === 'empty'
                 ? 'is-empty'
@@ -866,7 +868,7 @@ export function AgriFieldBoundaryPanel({
           ) : phase === 'error' ? (
             <>
               <i className="fa-solid fa-triangle-exclamation" aria-hidden />{' '}
-              {/Service offline|:8092|uvicorn app:app/i.test(String(error || '')) || offline
+              {/Service offline|backend_unavailable|:8092|uvicorn app:app/i.test(String(error || '')) || offline
                 ? 'Loading field model… Detect Fields is available on the AgroCloud API.'
                 : error || phaseLabel}
             </>

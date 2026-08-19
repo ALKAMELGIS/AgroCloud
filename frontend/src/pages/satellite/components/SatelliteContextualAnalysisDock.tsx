@@ -341,6 +341,16 @@ const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
   'raster-georeference',
 ]);
 
+function isMapFloatEmbedSection(
+  section: string | null | undefined,
+): section is SatelliteContextPanelId {
+  return section != null && MAP_RAIL_FLOAT_IDS.has(section as SatelliteContextPanelId);
+}
+
+function isDockedToolboxPanelId(id: SatelliteContextPanelId | null): id is SatelliteContextPanelId {
+  return id != null && !MAP_RAIL_FLOAT_IDS.has(id);
+}
+
 const RAIL_GROUPS_MAP: SatelliteContextPanelId[][] = [
   [
     'layers',
@@ -507,6 +517,7 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
   const lastActiveRef = useRef<SatelliteContextPanelId>('layers');
   /** When minimizing the map toolbox strip, remember label mode so restoring the strip does not reset it. */
   const mapRailLabeledBeforeStripHideRef = useRef<boolean | null>(null);
+  const prevProcessingDropdownOpenRef = useRef(processingDropdownOpen);
 
   useEffect(() => {
     if (layerLiveLegendOpen) return
@@ -599,14 +610,38 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
     }
   }, [isMapVariant, activeId]);
 
+  /** Drop stale float-tool local selection when the parent closes the processing stack. */
   useEffect(() => {
     if (!isMapVariant) return;
-    if (processingDropdownOpen) return;
-    if (activeId && MAP_RAIL_FLOAT_IDS.has(activeId)) {
-      setPanelOpen(false);
-      setActiveId(null);
+    const wasOpen = prevProcessingDropdownOpenRef.current;
+    prevProcessingDropdownOpenRef.current = processingDropdownOpen;
+
+    if (
+      processingDropdownOpen &&
+      processingEmbedSection &&
+      isMapFloatEmbedSection(processingEmbedSection)
+    ) {
+      setMapStripHidden(false);
+      setPanelOpen(true);
+      setActiveId(processingEmbedSection as SatelliteContextPanelId);
+      return;
     }
-  }, [processingDropdownOpen, activeId, isMapVariant]);
+
+    if (!wasOpen || processingDropdownOpen) return;
+    onMapToolboxEmbedHost?.(null);
+    setActiveId(prev => {
+      if (prev && MAP_RAIL_FLOAT_IDS.has(prev)) {
+        setPanelOpen(false);
+        return null;
+      }
+      return prev;
+    });
+  }, [
+    processingDropdownOpen,
+    processingEmbedSection,
+    isMapVariant,
+    onMapToolboxEmbedHost,
+  ]);
 
   const openPanel = useCallback(
     (id: SatelliteContextPanelId) => {
@@ -655,13 +690,16 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
         return;
       }
       if (isMapVariant && MAP_RAIL_FLOAT_IDS.has(id) && onProcessingWorkflowNavigate) {
-        if (panelOpen && activeId === id) {
+        if (processingDropdownOpen && processingEmbedSection === id) {
           setPanelOpen(false);
           setActiveId(null);
           onToolboxPanelClose?.();
           return;
         }
-        openPanel(id);
+        setMapStripHidden(false);
+        setPanelOpen(true);
+        setActiveId(id);
+        lastActiveRef.current = id;
         onProcessingWorkflowNavigate(id as SmartProcessingSectionId, undefined);
         return;
       }
@@ -714,8 +752,18 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
     [onMapToolboxEmbedHost],
   );
 
+  const isMap = isMapVariant;
+  const floatEmbedActive =
+    isMap && processingDropdownOpen && isMapFloatEmbedSection(processingEmbedSection);
+  const displayActiveId: SatelliteContextPanelId | null = floatEmbedActive
+    ? processingEmbedSection
+    : activeId;
+  /** Float tools (Crop AI, RS, …) are driven only by parent props — never local panelOpen. */
+  const dockedPanelOpen = panelOpen && isDockedToolboxPanelId(activeId);
+  const toolboxPanelOpen = floatEmbedActive || dockedPanelOpen;
+
   const activeMeta =
-    activeId === 'add-gis-layer'
+    displayActiveId === 'add-gis-layer'
       ? {
           id: 'add-gis-layer' as const,
           icon: 'fa-solid fa-circle-plus',
@@ -723,8 +771,8 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
           title: 'Browse layers',
           hint: 'Add layers from GIS Content and other sources.',
         }
-      : activeId
-        ? RAIL.find(r => r.id === activeId)
+      : displayActiveId
+        ? RAIL.find(r => r.id === displayActiveId)
         : null;
   /** Section title for map toolbox dock chrome only (portaled panel hides its own header to avoid duplicates). */
   const processingEmbedTitle = useMemo(() => {
@@ -758,13 +806,12 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
       processingDropdownOpen,
     ],
   );
-  const isMap = isMapVariant;
   const mapPanelCollapsed = isMap && mapStripHidden;
   // Georeference renders its own floating toolbar over the map (not in the dock), so the
   // side panel would just be an empty "Georeference" shell — suppress it entirely.
   const georefFloatingActive =
-    isMap && (activeId === 'raster-georeference' || processingEmbedSection === 'raster-georeference');
-  const panelLayoutOpen = panelOpen && !mapPanelCollapsed && !georefFloatingActive;
+    isMap && (displayActiveId === 'raster-georeference' || processingEmbedSection === 'raster-georeference');
+  const panelLayoutOpen = toolboxPanelOpen && !mapPanelCollapsed && !georefFloatingActive;
   const railWide = isMap ? !mapStripHidden && mapRailLabeled : railLabeled;
 
   const rootClass = [
@@ -968,16 +1015,12 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
               const item = RAIL_BY_ID[id];
               if (!item) return null;
               const railPressed =
-                (isMap &&
-                  processingDropdownOpen &&
-                  processingEmbedSection !== null &&
-                  processingEmbedSection === item.id) ||
+                (isMap && processingDropdownOpen && processingEmbedSection === item.id) ||
                 (item.id === 'table-geo-ai' && geoAiFloatingOpen) ||
                 (item.id === 'layer-live-legend' && layerLiveLegendOpen) ||
                 (item.id === 'imagery-time-series' && imageryTimeSeriesOpen) ||
                 (item.id === 'map-swipe' && mapSwipeOpen) ||
-                (activeId === item.id &&
-                  (MAP_RAIL_FLOAT_IDS.has(item.id) ? !panelOpen : panelOpen));
+                (!MAP_RAIL_FLOAT_IDS.has(item.id) && activeId === item.id && panelOpen);
               return (
                 <button
                   key={item.id}
@@ -1074,7 +1117,7 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
         <aside
           className={
             'si-sat-ctx-panel' +
-            (isMap && panelOpen && processingDropdownOpen ? ' si-sat-ctx-panel--processing-embed-mode' : '')
+            (isMap && floatEmbedActive ? ' si-sat-ctx-panel--processing-embed-mode' : '')
           }
           role="complementary"
           aria-label={
@@ -1085,7 +1128,7 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
                 : 'Context panel'
           }
         >
-          {panelOpen && activeId && !georefFloatingActive ? (
+          {toolboxPanelOpen && displayActiveId && !georefFloatingActive ? (
             <>
               <header className="si-sat-ctx-panel-header">
                 <div className="si-sat-ctx-panel-header-text">
@@ -1118,7 +1161,7 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
                 </div>
               </header>
 
-              {isMap && processingDropdownOpen ? (
+              {isMap && floatEmbedActive ? (
                 <div
                   ref={mapToolboxEmbedHostRef}
                   className="si-sat-ctx-map-toolbox-host"

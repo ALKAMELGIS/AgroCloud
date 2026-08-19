@@ -27,12 +27,20 @@ import { bootstrapMapboxAccessTokenPersistence } from './lib/mapboxAccessToken'
 import { restoreBrowserApiSecretsFromVaultIntoLocalStorage } from './lib/browserApiSecretsVault'
 import { ensureBrowserApiSecretsHydrated } from './lib/apiSecretsServerPersistence'
 import { installApiFetchGuard } from './lib/apiFetchGuard'
+import { clearSameOriginBackendBreaker } from './lib/apiOrigin'
 import { reloadWithCacheBust } from './lib/lazyWithRetry'
 
 // Install the global `/api/*` circuit-breaker before anything else can fire a request. On a static
 // deployment without a co-located backend this short-circuits doomed internal API calls to a
 // synthetic 503 instead of flooding the console with 404/405 errors.
 installApiFetchGuard()
+
+if (typeof window !== 'undefined') {
+  const host = window.location.hostname.toLowerCase()
+  if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '0.0.0.0') {
+    clearSameOriginBackendBreaker()
+  }
+}
 
 /**
  * Upgrade plain HTTP to HTTPS on the public site. Web Crypto (`crypto.subtle`) is only available

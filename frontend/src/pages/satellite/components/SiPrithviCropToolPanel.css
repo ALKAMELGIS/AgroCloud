@@ -41,6 +41,25 @@
 
 .prithvi-tool__section { display: flex; flex-direction: column; gap: 10px; }
 
+.prithvi-tool__aoi { display: flex; flex-direction: column; gap: 8px; }
+.prithvi-tool__aoi-row { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: #3a4658; font-weight: 600; }
+.prithvi-tool__aoi-label { font-size: 11px; color: #3a4658; font-weight: 600; }
+.prithvi-tool__aoi-select {
+  background: #ffffff;
+  border: 1px solid rgba(15, 27, 45, 0.22);
+  border-radius: 8px;
+  color: #0a1422;
+  padding: 6px 8px;
+  font-size: 12px;
+  width: 100%;
+}
+.prithvi-tool__aoi-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #5a6678;
+}
+
 .prithvi-tool__row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 .prithvi-tool__dates { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -105,8 +124,35 @@
 .prithvi-tool__btn.is-report:hover:not(:disabled) {
   background: linear-gradient(180deg, #2659a0 0%, #1a4478 100%);
 }
-.prithvi-tool__btn.is-geotiff {
+.prithvi-tool__export {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(15, 27, 45, 0.1);
+}
+.prithvi-tool__export-gis {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.prithvi-tool__export-gis .prithvi-tool__btn {
   width: 100%;
+  justify-content: center;
+  padding: 7px 8px;
+  font-size: 11px;
+}
+.prithvi-tool__btn.is-layer {
+  color: #f7f1e2;
+  background: linear-gradient(180deg, #1f7d5c 0%, #14573f 100%);
+  border: 1px solid rgba(184, 150, 86, 0.55);
+  box-shadow: 0 4px 14px rgba(20, 87, 63, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+.prithvi-tool__btn.is-layer:hover:not(:disabled) {
+  background: linear-gradient(180deg, #248a67 0%, #166349 100%);
+}
+.prithvi-tool__btn.is-geotiff {
   justify-content: center;
   color: #f7f1e2;
   background: linear-gradient(180deg, #0f766e 0%, #115e59 100%);

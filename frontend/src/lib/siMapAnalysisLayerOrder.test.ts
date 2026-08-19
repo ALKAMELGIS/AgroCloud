@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   isSiAnalysisRasterMapLayerId,
+  isSiCropAiPredictionRasterLayerId,
+  isSiStackedAnalysisRasterMapLayerId,
   syncSiMapAnalysisLayerOrder,
 } from './siMapAnalysisLayerOrder'
 
@@ -9,6 +11,50 @@ describe('siMapAnalysisLayerOrder', () => {
     expect(isSiAnalysisRasterMapLayerId('sentinel-layer-aoi-layer-0-s0')).toBe(true)
     expect(isSiAnalysisRasterMapLayerId('sentinel-draw-layer-1')).toBe(true)
     expect(isSiAnalysisRasterMapLayerId('agrocloud-basemap-layer-0')).toBe(false)
+  })
+
+  it('treats Crop AI prediction raster as a stacked analysis layer', () => {
+    expect(isSiCropAiPredictionRasterLayerId('crop-ai-prediction-raster')).toBe(true)
+    expect(isSiStackedAnalysisRasterMapLayerId('crop-ai-prediction-raster')).toBe(true)
+    expect(isSiAnalysisRasterMapLayerId('crop-ai-prediction-raster')).toBe(false)
+  })
+
+  it('keeps drawn AOI fill under Crop AI raster and outline above it', () => {
+    let order = [
+      'basemap',
+      'drawn-index-geometry-fill',
+      'crop-ai-prediction-raster',
+      'drawn-index-geometry-line',
+    ]
+
+    const map = {
+      getStyle: () => ({ layers: order.map(id => ({ id })) }),
+      getLayer: (id: string) => (order.includes(id) ? { id } : undefined),
+      moveLayer: (id: string, beforeId?: string) => {
+        const from = order.indexOf(id)
+        if (from < 0) return
+        order.splice(from, 1)
+        if (!beforeId) {
+          order.push(id)
+          return
+        }
+        const to = order.indexOf(beforeId)
+        if (to < 0) {
+          order.push(id)
+          return
+        }
+        order.splice(to, 0, id)
+      },
+      setPaintProperty: vi.fn(),
+    }
+
+    syncSiMapAnalysisLayerOrder(map as any, {})
+
+    const fillIdx = order.indexOf('drawn-index-geometry-fill')
+    const rasterIdx = order.indexOf('crop-ai-prediction-raster')
+    const lineIdx = order.indexOf('drawn-index-geometry-line')
+    expect(fillIdx).toBeLessThan(rasterIdx)
+    expect(lineIdx).toBeGreaterThan(rasterIdx)
   })
 
   it('keeps drawn AOI fill under Sentinel WMS and outline above it', () => {

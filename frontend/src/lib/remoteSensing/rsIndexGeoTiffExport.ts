@@ -80,6 +80,7 @@ const INDEX_BANDS: Record<SentinelIndexEvalProfile, { bands: string[]; expr: str
   ndwi: { bands: ['B03', 'B08'], expr: '(s.B03-s.B08)/(s.B03+s.B08)' },
   mndwi: { bands: ['B03', 'B11'], expr: '(s.B03-s.B11)/(s.B03+s.B11)' },
   ndmi: { bands: ['B8A', 'B11'], expr: '(s.B8A-s.B11)/(s.B8A+s.B11)' },
+  ndii: { bands: ['B08', 'B11'], expr: '(s.B08-s.B11)/(s.B08+s.B11)' },
   evi: {
     bands: ['B02', 'B04', 'B08'],
     expr: '2.5*((s.B08-s.B04)/(s.B08+6.0*s.B04-7.5*s.B02+1.0))',
@@ -118,6 +119,7 @@ function resolveIndexProfile(layerId: string): SentinelIndexEvalProfile | null {
     AWEI: 'awei',
     NBR: 'nbr',
     NDMI: 'ndmi',
+    NDII: 'ndii',
     EVI: 'evi',
     SAVI: 'savi',
     GNDVI: 'gndvi',
@@ -240,6 +242,7 @@ function indexColorHex(profile: SentinelIndexEvalProfile, value: number): number
     case 'ndsi':
       return sampleRampHex(value, SENTINEL_NDWI_RAMP)
     case 'ndmi':
+    case 'ndii':
       return sampleRampHex(value, SENTINEL_NDMI_MOISTURE_RAMP)
     case 'et':
       return sampleRampHex(value, SENTINEL_ET_RAMP as ReadonlyArray<readonly [number, number]>)

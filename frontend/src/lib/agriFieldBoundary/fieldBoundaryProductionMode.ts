@@ -15,8 +15,9 @@ export function isMapRgbOnlyProductionHost(health: FieldBoundaryHealth | null | 
   return health.python !== true
 }
 
-export function shouldSkipFootprintRegularize(engine: string | null | undefined): boolean {
-  return isBuiltinFieldEngine(engine)
+export function shouldSkipFootprintRegularize(_engine: string | null | undefined): boolean {
+  // Always run footprint regularization — builtin uses softer thresholds in finishResult.
+  return false
 }
 
 export function productionMapRgbNotice(): string {

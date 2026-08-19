@@ -306,6 +306,7 @@ export function inferWmsEvalProfile(layerName: string): WmsAoiEvalProfile {
   if (u.includes('SAVI')) return 'savi';
   if (u.includes('NDVI')) return 'ndvi';
   if (u.includes('EVI') && !u.includes('NEVI')) return 'evi';
+  if (u.includes('NDII')) return 'ndii';
   if (u.includes('NDMI') || (u.includes('MOISTURE') && !u.includes('EVAPO'))) return 'ndmi';
   if (u === 'ET' || u.includes('EVAPOTRANSPIRATION') || u.includes('EVAPO')) return 'et';
   if (u === 'LST' || u.includes('LAND_SURFACE_TEMP') || (u.includes('SURFACE') && u.includes('TEMP'))) {

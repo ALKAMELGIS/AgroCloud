@@ -435,6 +435,24 @@ function buildNdmiLegend(): LayerLiveLegendSpec {
   }
 }
 
+function buildNdiiLegend(): LayerLiveLegendSpec {
+  return {
+    id: 'ndii',
+    title: 'NDII',
+    subtitle: 'Normalized Difference Infrared Index (NIR − SWIR)',
+    kind: 'discrete',
+    valueMin: -0.8,
+    valueMax: 0.8,
+    scaleLabels: { low: 'Moisture stress', mid: 'Dry / moist transition', high: 'Moist / evaporation' },
+    gradientCss: rampToGradientCss(SENTINEL_NDMI_LEGEND_RAMP),
+    classes: buildClassesFromBreaks(
+      SENTINEL_NDMI_10_CLASS_BREAKS,
+      SENTINEL_NDMI_10_CLASS_COLORS,
+      NDMI_CLASS_LABELS,
+    ),
+  }
+}
+
 function buildNbrLegend(): LayerLiveLegendSpec {
   return {
     id: 'nbr',
@@ -656,6 +674,7 @@ const LEGEND_BY_PROFILE: Record<string, () => LayerLiveLegendSpec> = {
   ndvi: buildNdviLegend,
   ndwi: buildNdwiLegend,
   ndmi: buildNdmiLegend,
+  ndii: buildNdiiLegend,
   et: buildEtLegend,
   lst: buildLstLegend,
   mndwi: buildMndwiLegend,

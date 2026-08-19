@@ -26,6 +26,7 @@ export type SentinelIndexEvalProfile =
   | 'ndwi'
   | 'mndwi'
   | 'ndmi'
+  | 'ndii'
   | 'awei'
   | 'nbr'
   | 'evi'
@@ -366,6 +367,9 @@ export const SENTINEL_NDMI_LEGEND_RAMP: RampStop[] = [
 /** NDMI ramp stops for WMS metadata. */
 export const SENTINEL_NDMI_RAMP: RampStop[] = SENTINEL_NDMI_MOISTURE_RAMP
 
+/** NDII uses the same moisture-stress ramp as NDMI (broad NIR B08 vs SWIR B11). */
+export const SENTINEL_NDII_RAMP: RampStop[] = SENTINEL_NDMI_MOISTURE_RAMP
+
 /** EVI: sparse → dense vegetation (green ramp, wider dynamic range). */
 export const SENTINEL_EVI_RAMP: RampStop[] = [
   [-0.2, 0x1a1a1a],
@@ -477,6 +481,12 @@ const INDEX_EVAL_SPECS: Record<SentinelIndexEvalProfile, IndexEvalSpec> = {
     indexVar: 'ndmi',
     indexExpr: 'let ndmi = index(samples.B8A, samples.B11);',
     ramp: SENTINEL_NDMI_RAMP,
+  },
+  ndii: {
+    inputs: ['B08', 'B11', 'dataMask'],
+    indexVar: 'ndii',
+    indexExpr: 'let ndii = index(samples.B08, samples.B11);',
+    ramp: SENTINEL_NDII_RAMP,
   },
   evi: {
     inputs: ['B02', 'B04', 'B08', 'dataMask'],
@@ -670,6 +680,41 @@ function evaluatePixel(samples) {
   let val = index(samples.B03, samples.B11);
   let cls = mndwiClass(val);
   let imgVals = viz.process(cls);
+  ${alphaBlock}
+}`
+}
+
+/** NDII: continuous moisture ColorRampVisualizer on B08/B11 (broad NIR − SWIR). */
+export function buildSentinelNdiiTenClassEvalscript(indexVisibilityMin: number | null = null): string {
+  const thr =
+    indexVisibilityMin != null && Number.isFinite(indexVisibilityMin)
+      ? Math.max(-1, Math.min(1, indexVisibilityMin))
+      : null
+
+  const alphaBlock =
+    thr == null
+      ? 'return imgVals.concat(samples.dataMask);'
+      : `var a = samples.dataMask * (val >= ${thr} ? 1.0 : 0.0);
+  return imgVals.concat(a);`
+
+  return `//VERSION=3
+// NDII — continuous moisture ramp (B08 / B11)
+function setup() {
+  return {
+    input: ["B08", "B11", "dataMask"],
+    output: { bands: 4 }
+  };
+}
+
+const moistureRamps = [
+   ${formatRampForEvalscript(SENTINEL_NDII_RAMP)}
+];
+
+const viz = new ColorRampVisualizer(moistureRamps);
+
+function evaluatePixel(samples) {
+  let val = index(samples.B08, samples.B11);
+  let imgVals = viz.process(val);
   ${alphaBlock}
 }`
 }
@@ -950,6 +995,9 @@ export function buildSentinelIndexColorRampEvalscript(
   }
   if (profile === 'ndmi') {
     return buildSentinelNdmiTenClassEvalscript(indexVisibilityMin)
+  }
+  if (profile === 'ndii') {
+    return buildSentinelNdiiTenClassEvalscript(indexVisibilityMin)
   }
   if (profile === 'et') {
     return buildSentinelEtTenClassEvalscript(indexVisibilityMin, {

@@ -23,6 +23,33 @@
   border: 1px solid var(--afb-dash-border);
 }
 
+.si-afb-dash--inline .si-afb-dash__kpis {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-left: 0;
+  padding-left: 0;
+  gap: 6px;
+}
+
+.si-afb-dash--inline .si-afb-dash__kpi {
+  padding: 7px 8px;
+  min-width: 0;
+}
+
+.si-afb-dash--inline .si-afb-dash__kpi span {
+  font-size: 8px;
+  letter-spacing: 0.03em;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.si-afb-dash--inline .si-afb-dash__kpi strong {
+  font-size: 12px;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  word-break: break-word;
+}
+
 .si-afb-dash__kpis {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -64,10 +91,22 @@
 }
 
 @media (max-width: 560px) {
-  .si-afb-dash__kpis {
+  .si-afb-dash:not(.si-afb-dash--inline) .si-afb-dash__kpis {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     margin-left: 8px;
   }
+}
+
+.si-afb-dash--inline .si-afb-dash__card-head {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.si-afb-dash--inline .si-afb-dash__card-head span {
+  font-size: 9px;
+  line-height: 1.3;
+  white-space: normal;
 }
 
 .si-afb-dash__charts {

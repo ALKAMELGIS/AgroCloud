@@ -105,6 +105,12 @@ describe('acpImageryTimeSeries', () => {
     expect(ehd.values.includes(1)).toBe(true)
   })
 
+  it('evaluates NDII from Statistical API moisture band (B08/B11)', () => {
+    const row = dailyRow({ ndmi: 0.35 })
+    expect(evaluateImageryLayerDailyValue('NDII', row)).toBe(0.35)
+    expect(evaluateImageryLayerDailyValue('NDII', dailyRow({ ndmi: null }))).toBeNull()
+  })
+
   it('evaluates composite and core indices from daily means', () => {
     const row = dailyRow({ ndvi: 0.8, ndmi: 0.4, ndwi: 0.2 })
     expect(evaluateImageryLayerDailyValue('NDVI', row)).toBe(0.8)
