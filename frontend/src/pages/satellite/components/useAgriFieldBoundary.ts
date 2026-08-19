@@ -547,7 +547,16 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
         })
         .catch(err => {
           if ((err as Error)?.name === 'AbortError' || ac.signal.aborted) return
-          applyHealthResult({ offline: false, status: 'ok', builtin_fallback: true, ready: true })
+          applyHealthResult({
+            offline: true,
+            status: 'error',
+            ready: false,
+            live: false,
+            python: false,
+            ftw_live: false,
+            builtin_fallback: true,
+            error: String((err as Error)?.message || err),
+          })
         })
     }
     probe()
@@ -574,7 +583,16 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
         })
         .catch(err => {
           if ((err as Error)?.name === 'AbortError' || ac.signal.aborted) return
-          applyHealthResult({ offline: false, status: 'ok', builtin_fallback: true, ready: true })
+          applyHealthResult({
+            offline: true,
+            status: 'error',
+            ready: false,
+            live: false,
+            python: false,
+            ftw_live: false,
+            builtin_fallback: true,
+            error: String((err as Error)?.message || err),
+          })
         })
     }
     probe()
