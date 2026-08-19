@@ -22,13 +22,22 @@ describe('apiOrigin eliteagrocloud Hostinger fallback', () => {
     expect(isStaticDeploymentWithoutBackend()).toBe(false)
   })
 
-  it('does not loop when already on api.eliteagrocloud.com', () => {
+  it('uses same-origin when already on legacy api.eliteagrocloud.com subdomain', () => {
     vi.stubEnv('VITE_AGRI_API_SECRETS_URL', '')
     vi.stubGlobal('window', {
       location: { hostname: 'api.eliteagrocloud.com', origin: 'https://api.eliteagrocloud.com' },
     })
     expect(configuredApiOrigin()).toBe('')
     expect(resolveApiOrigin()).toBe('https://api.eliteagrocloud.com')
+  })
+
+  it('uses same-origin when Node full-stack serves eliteagrocloud.com', () => {
+    vi.stubEnv('VITE_AGRI_API_SECRETS_URL', '')
+    vi.stubGlobal('window', {
+      location: { hostname: 'eliteagrocloud.com', origin: 'https://eliteagrocloud.com' },
+    })
+    expect(configuredApiOrigin()).toBe(ELITE_AGROCLOUD_API_ORIGIN)
+    expect(resolveApiOrigin()).toBe('https://eliteagrocloud.com')
   })
 
   it('routes github.io Pages to Hostinger api when VITE is unset', () => {

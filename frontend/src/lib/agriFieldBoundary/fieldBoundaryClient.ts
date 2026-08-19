@@ -193,7 +193,7 @@ export function formatFieldBoundaryUserError(
     return {
       short: 'Loading field model… Detect Fields is available on the AgroCloud API.',
       detail:
-        'Map RGB detect runs on the AgroCloud API (api.eliteagrocloud.com). FTW/FoW need the Python field engine; retry Detect Fields on map RGB while models load.',
+        'Map RGB detect runs on the AgroCloud API (eliteagrocloud.com). FTW/FoW need the Python field engine; retry Detect Fields on map RGB while models load.',
     }
   }
 

@@ -6,13 +6,14 @@
  */
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const outZip =
   process.platform === 'win32'
-    ? 'C:\\temp\\hostinger-deploy.zip'
+    ? path.join('C:', 'temp', 'hostinger-deploy.zip')
     : path.join(repoRoot, 'hostinger-deploy.zip')
 
 const EXCLUDE_DIRS = new Set([
@@ -26,9 +27,14 @@ const EXCLUDE_DIRS = new Set([
   'test-results',
   'coverage',
   '.vite',
-  // Python tree-detection microservice runs separately (not on Hostinger Node);
-  // never bundle its multi-GB venv / model cache / logs into the deploy archive.
+  '.hostinger-staging',
+  '.chirps-cache',
+  // Python microservices (VPS-only) — never bundle venvs / caches into Node deploy.
   '.venv',
+  '.venv312',
+  'site-packages',
+  '__pycache__',
+  '.pytest_cache',
   'lightning_logs',
 ])
 
@@ -36,11 +42,16 @@ const EXCLUDE_FILES = new Set(['hostinger-deploy.zip', 'hostinger-deploy.tar.gz'
 
 function shouldSkip(rel) {
   const parts = rel.split(/[/\\]/).filter(Boolean)
-  if (parts.some(p => EXCLUDE_DIRS.has(p))) return true
+  if (parts.some(p => EXCLUDE_DIRS.has(p) || /^\.venv/.test(p))) return true
+  // GitHub Pages root sync (repo root /assets) — not part of the Node API deploy bundle.
+  if (/^assets\//.test(rel) && !rel.startsWith('frontend/')) return true
   const base = parts[parts.length - 1] || ''
   if (EXCLUDE_FILES.has(base)) return true
   if (base.endsWith('.log')) return true
-  if (rel.endsWith('.br') || rel.endsWith('.gz')) return true
+  if (base.endsWith('.tif') || base.endsWith('.tiff') || base.endsWith('.geotiff')) return true
+  if (/^\.(chirps|sentinel|stac|cache)/.test(base)) return true
+  if (rel.startsWith('backend/cache/')) return true
+  if (rel.startsWith('backend/server/.chirps-cache/')) return true
   if (rel.startsWith('frontend/dist/') && (rel.endsWith('.br') || rel.endsWith('.gz'))) return true
   return false
 }
@@ -58,14 +69,20 @@ function collectFiles(dir, base = dir, out = []) {
 }
 
 console.log('Running production build…')
-const build = spawnSync('npm', ['run', 'build:production'], {
-  cwd: repoRoot,
-  stdio: 'inherit',
-  shell: process.platform === 'win32',
-})
-if (build.status !== 0) {
-  console.error('Production build failed.')
-  process.exit(build.status ?? 1)
+const skipBuild = process.env.AGRO_SKIP_PRODUCTION_BUILD === '1'
+const distIndex = path.join(repoRoot, 'frontend', 'dist', 'index.html')
+if (skipBuild && fs.existsSync(distIndex)) {
+  console.log('AGRO_SKIP_PRODUCTION_BUILD=1 — reusing existing frontend/dist.')
+} else {
+  const build = spawnSync('npm', ['run', 'build:production'], {
+    cwd: repoRoot,
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
+  })
+  if (build.status !== 0) {
+    console.error('Production build failed.')
+    process.exit(build.status ?? 1)
+  }
 }
 
 if (!fs.existsSync(path.join(repoRoot, 'frontend', 'dist', 'index.html'))) {
@@ -75,10 +92,10 @@ if (!fs.existsSync(path.join(repoRoot, 'frontend', 'dist', 'index.html'))) {
 
 if (fs.existsSync(outZip)) fs.unlinkSync(outZip)
 
-const staging =
-  process.platform === 'win32'
-    ? 'C:\\temp\\hostinger-staging'
-    : path.join(repoRoot, '.hostinger-staging')
+const staging = path.join(
+  process.platform === 'win32' && fs.existsSync('C:\\temp') ? 'C:\\temp' : os.tmpdir(),
+  `agrocloud-hostinger-staging-${Date.now()}`,
+)
 if (fs.existsSync(staging)) fs.rmSync(staging, { recursive: true, force: true })
 fs.mkdirSync(staging, { recursive: true })
 
@@ -90,10 +107,22 @@ for (const { abs, rel } of files) {
 }
 
 const prodEnvPath = path.join(repoRoot, '.env.production')
+const ftwEnvPath = path.join(repoRoot, 'scripts', 'hostinger-node-ftw.env')
 if (fs.existsSync(prodEnvPath)) {
   const hostingerEnvDest = path.join(staging, 'hostinger-production.env')
   fs.copyFileSync(prodEnvPath, hostingerEnvDest)
   console.log('Included hostinger-production.env for Hostinger runtime.')
+} else if (fs.existsSync(ftwEnvPath)) {
+  const hostingerEnvDest = path.join(staging, 'hostinger-production.env')
+  const baseExample = path.join(repoRoot, '.env.production.example')
+  const merged = [
+    fs.existsSync(baseExample) ? fs.readFileSync(baseExample, 'utf8') : '',
+    fs.readFileSync(ftwEnvPath, 'utf8'),
+  ]
+    .join('\n')
+    .replace(/^FIELD_BOUNDARY_URL=http:\/\/127\.0\.0\.1:8092\/detect\s*$/m, '')
+  fs.writeFileSync(hostingerEnvDest, merged.trim() + '\n')
+  console.log('Included hostinger-production.env from .env.production.example + hostinger-node-ftw.env.')
 }
 
 console.log(`Staging ${files.length} files…`)

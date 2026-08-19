@@ -12,8 +12,10 @@
  * (e.g. `eliteagrocloud.com`) keep working instead of POSTing to a static host that returns 405/404.
  */
 
-/** Hostinger Node that serves `/api/*` for the GitHub Pages custom domain. */
-export const ELITE_AGROCLOUD_API_ORIGIN = 'https://api.eliteagrocloud.com'
+/** Hostinger Node that serves `/api/*` for eliteagrocloud.com (SPA + API same host). */
+export const ELITE_AGROCLOUD_API_ORIGIN = 'https://eliteagrocloud.com'
+/** @deprecated Legacy subdomain — kept for redirects / migration only. */
+export const ELITE_AGROCLOUD_API_ORIGIN_LEGACY = 'https://api.eliteagrocloud.com'
 
 function sameOrigin(): string {
   return typeof window !== 'undefined' && window.location?.origin ? window.location.origin : ''
@@ -28,17 +30,21 @@ function isLocalLoopbackHost(host: string): boolean {
   return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '0.0.0.0'
 }
 
-/** www / apex are GitHub Pages. `api.` is the Hostinger Express app. */
+/** www / apex — GitHub Pages SPA or Hostinger full-stack. */
 function isEliteAgrocloudPagesHost(host: string): boolean {
   const h = String(host || '').toLowerCase()
   return h === 'eliteagrocloud.com' || h === 'www.eliteagrocloud.com'
+}
+
+function isEliteAgrocloudLegacyApiHost(host: string): boolean {
+  return String(host || '').toLowerCase() === 'api.eliteagrocloud.com'
 }
 
 /** Hostinger Node that serves `/api/*` for static SPAs (GitHub Pages, eliteagrocloud.com, mirrors). */
 function defaultRemoteApiOriginForStaticHost(): string {
   if (typeof window === 'undefined') return ''
   const host = hostname().toLowerCase()
-  if (host === 'api.eliteagrocloud.com') return ''
+  if (isEliteAgrocloudLegacyApiHost(host)) return ''
   if (isLocalLoopbackHost(host)) return ''
   if (isEliteAgrocloudPagesHost(host)) return ELITE_AGROCLOUD_API_ORIGIN
   if (isKnownStaticHostname(host)) return ELITE_AGROCLOUD_API_ORIGIN
