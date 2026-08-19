@@ -109,6 +109,7 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
       ftw_infer: false,
       ftw_live: false,
       sen2sr: false,
+      field_boundary_url: SERVICE_BASE,
       ...extra,
     }
   }
@@ -348,6 +349,17 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
       }
       if (!pythonReady()) {
         ensureLocalAiService('agri-field-boundary')
+        if (ftwInfer) {
+          return res.status(503).json({
+            error:
+              'FTW / FoW / live Sentinel-2 detect needs the Python field engine on the VPS. Map RGB detect works via spectral-builtin while the model loads.',
+            engine: 'spectral-builtin',
+            python: false,
+            ftw_live: false,
+            field_boundary_url: SERVICE_BASE,
+            detail: cachedPython()?.status || 'python-unavailable',
+          })
+        }
         return tryBuiltin()
       }
       try {
@@ -394,6 +406,17 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
       }
       if (!pythonReady()) {
         ensureLocalAiService('agri-field-boundary')
+        if (ftwInfer) {
+          return res.status(503).json({
+            error:
+              'FTW / FoW / live Sentinel-2 detect needs the Python field engine on the VPS. Map RGB detect works via spectral-builtin while the model loads.',
+            engine: 'spectral-builtin',
+            python: false,
+            ftw_live: false,
+            field_boundary_url: SERVICE_BASE,
+            detail: cachedPython()?.status || 'python-unavailable',
+          })
+        }
         return tryBuiltinJob()
       }
       try {

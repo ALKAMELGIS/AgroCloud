@@ -134,4 +134,4 @@ GitHub Actions (`.github/workflows/deploy-agri-field-boundary-vps.yml`) redeploy
 | `VPS_SSH_KEY` | Private key for deploy |
 | `VPS_DEPLOY_PATH` | Optional repo path (default `/opt/AgroCloud`) |
 
-The React toolbox calls `/api/agri-field-boundary/*` on `api.eliteagrocloud.com`. When Python is still loading, the UI shows **Loading field model…** and map RGB detect keeps working via the Node builtin fallback.
+The React toolbox calls `/api/agri-field-boundary/*` on `eliteagrocloud.com` (same host as the SPA on Hostinger full-stack). When Python is still loading, the UI shows **Loading field model…** and map RGB detect keeps working via the Node builtin fallback.

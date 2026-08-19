@@ -394,48 +394,66 @@ function bodyOf(req: FieldBoundaryRequest) {
 }
 
 export async function fetchFieldBoundaryHealth(signal?: AbortSignal): Promise<FieldBoundaryHealth> {
-  const builtinOnline: FieldBoundaryHealth = {
-    status: 'ok',
-    offline: false,
-    builtin_fallback: true,
-    ready: true,
-    live: true,
-    loading: false,
-  }
   try {
     const res = await fetch(`${BASE()}/health`, { signal })
     const json = (await res.json().catch(() => null)) as (FieldBoundaryHealth & { error?: string }) | null
-    if (
-      isBackendUnavailablePayload(json?.error) ||
-      (res.status === 503 && isBackendUnavailablePayload(String(json?.error || '')))
-    ) {
-      return builtinOnline
-    }
     if (json && typeof json === 'object') {
       const status = String(json.status || '')
       const loading = Boolean(json.loading) || status === 'loading' || json.ready === false
       const live =
         json.offline === false ||
         json.live === true ||
+        json.python === true ||
         json.builtin_fallback === true ||
         status === 'ok' ||
         status === 'live' ||
         status === 'loading' ||
         status === 'ready'
-      if (live || loading) {
-        return {
-          ...json,
-          offline: false,
-          loading,
-          ready: json.ready !== false && !loading,
-          live: true,
-        }
+      return {
+        ...json,
+        offline: json.offline === true,
+        loading,
+        ready: json.ready !== false && !loading,
+        live: live || loading,
       }
     }
-    return builtinOnline
+    if (!res.ok) {
+      return {
+        status: 'error',
+        offline: true,
+        ready: false,
+        live: false,
+        loading: false,
+        python: false,
+        ftw_live: false,
+        builtin_fallback: true,
+        error: json?.error || `Health check failed (HTTP ${res.status}).`,
+      }
+    }
+    return {
+      status: 'error',
+      offline: true,
+      ready: false,
+      live: false,
+      loading: false,
+      python: false,
+      ftw_live: false,
+      builtin_fallback: true,
+      error: 'Field-boundary health returned an empty response.',
+    }
   } catch (err) {
     if ((err as Error)?.name === 'AbortError') throw err
-    return builtinOnline
+    return {
+      status: 'error',
+      offline: true,
+      ready: false,
+      live: false,
+      loading: false,
+      python: false,
+      ftw_live: false,
+      builtin_fallback: true,
+      error: String((err as Error)?.message || err || 'Could not reach field-boundary health.'),
+    }
   }
 }
 
