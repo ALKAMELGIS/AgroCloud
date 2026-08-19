@@ -2165,6 +2165,7 @@ async function resolveCropAiMapImageUrl(url: string): Promise<string> {
 function syncCropAiPredictionOnMapbox(
   map: SiMapboxCanvasLike | null | undefined,
   overlay: CropAiMapOverlayState | null,
+  opts?: { visible?: boolean; opacity?: number },
 ): boolean {
   if (!map || !overlay?.url || !overlay.coordinates?.length) return false;
   try {
@@ -2174,8 +2175,8 @@ function syncCropAiPredictionOnMapbox(
   }
   try {
     syncMapboxGeoreferencedImageLayer(map, CROP_AI_PREDICTION_SOURCE_ID, overlay.url, overlay.coordinates, {
-      visible: true,
-      opacity: overlay.opacity,
+      visible: opts?.visible !== false,
+      opacity: opts?.opacity ?? overlay.opacity,
     });
     siRaiseCustomLayersAboveBasemap(map, [CROP_AI_PREDICTION_SOURCE_ID]);
     syncSiMapAnalysisLayerOrder(map, {
@@ -5813,7 +5814,7 @@ export default function SatelliteIntelligence() {
       const overlay: CropAiMapOverlayState = {
         url: finalUrl,
         coordinates,
-        opacity: 0.92,
+        opacity: 0.9,
         bounds: boundsTuple,
       };
       if (
@@ -5868,6 +5869,11 @@ export default function SatelliteIntelligence() {
     [drawnGeometry],
   );
 
+  const cropAiLayerState = customLayers.find(l => l.id === CROP_AI_PREDICTION_LAYER_ID);
+  const cropAiLayerVisible = cropAiLayerState?.visible !== false;
+  const cropAiLayerOpacity =
+    typeof cropAiLayerState?.mapOpacity === 'number' ? cropAiLayerState.mapOpacity : 0.9;
+
   // Re-assert Crop AI raster after style load / basemap swaps (imperative image source).
   useEffect(() => {
     if (!cropAiMapOverlay || !isMapStyleReady) return;
@@ -5875,7 +5881,10 @@ export default function SatelliteIntelligence() {
     if (!map) return;
     siImperativeCustomLayerSourceIdsRef.current.add(CROP_AI_PREDICTION_SOURCE_ID);
     const sync = () => {
-      syncCropAiPredictionOnMapbox(map, cropAiMapOverlayRef.current);
+      syncCropAiPredictionOnMapbox(map, cropAiMapOverlayRef.current, {
+        visible: cropAiLayerVisible,
+        opacity: cropAiLayerOpacity,
+      });
     };
     sync();
     let raf = 0;
@@ -5902,7 +5911,7 @@ export default function SatelliteIntelligence() {
         /* ignore */
       }
     };
-  }, [cropAiMapOverlay, isMapStyleReady]);
+  }, [cropAiMapOverlay, isMapStyleReady, cropAiLayerVisible, cropAiLayerOpacity]);
 
   // Auto-publish the Prithvi prediction to the map as a "Crop Type" layer.
   useEffect(() => {
@@ -10325,6 +10334,18 @@ export default function SatelliteIntelligence() {
         { title: 'Remove layer', danger: true, confirmLabel: 'Remove', cancelLabel: 'Cancel' },
       );
       if (!ok) return;
+      if (layerId === CROP_AI_PREDICTION_LAYER_ID) {
+        if (cropAiMapOverlayRef.current?.url?.startsWith('blob:')) {
+          URL.revokeObjectURL(cropAiMapOverlayRef.current.url);
+        }
+        cropAiMapOverlayRef.current = null;
+        setCropAiMapOverlay(null);
+        const map = mapRef.current?.getMap?.() ?? mapRef.current;
+        if (map) {
+          siRemoveMapboxCustomLayerStack(map, CROP_AI_PREDICTION_SOURCE_ID);
+          siImperativeCustomLayerSourceIdsRef.current.delete(CROP_AI_PREDICTION_SOURCE_ID);
+        }
+      }
       if (layer.raster?.url?.startsWith('blob:')) URL.revokeObjectURL(layer.raster.url);
       if (layer.bimBlobUrl?.startsWith('blob:')) URL.revokeObjectURL(layer.bimBlobUrl);
       if (layer.source === 'arcgis') {
@@ -21963,7 +21984,9 @@ export default function SatelliteIntelligence() {
       ...customLayers
         .filter(
           layer =>
-            !isWellSuitabilityMcdaLayerId(layer.id) && layer.id !== SI_TS_WEATHER_STORM_LAYER_ID,
+            !isWellSuitabilityMcdaLayerId(layer.id) &&
+            layer.id !== SI_TS_WEATHER_STORM_LAYER_ID &&
+            layer.id !== CROP_AI_PREDICTION_LAYER_ID,
         )
         .map(layer => {
         const featureCount = Array.isArray(layer.geojson?.features) ? layer.geojson.features.length : 0;
@@ -22101,6 +22124,35 @@ export default function SatelliteIntelligence() {
           };
         },
       ),
+      ...(cropAiLayerState
+        ? [
+            {
+              id: `custom-${CROP_AI_PREDICTION_LAYER_ID}`,
+              label: cropAiLayerState.name,
+              meta: 'Crop AI classification',
+              visible: cropAiLayerState.visible !== false,
+              toggleable: true,
+              actionable: false,
+              kind: 'raster' as const,
+              opacity: cropAiLayerOpacity,
+              onOpacityChange: (v: number) => {
+                setCustomLayers(prev =>
+                  prev.map(l => (l.id === CROP_AI_PREDICTION_LAYER_ID ? { ...l, mapOpacity: v } : l)),
+                );
+              },
+              onToggle: () =>
+                toggleCustomLayerVisibility(
+                  CROP_AI_PREDICTION_LAYER_ID,
+                  cropAiLayerState.visible === false,
+                ),
+              onZoomTo: () => zoomToCustomLayerExtent(CROP_AI_PREDICTION_LAYER_ID),
+              onExport: cropAiJob?.result?.prediction?.url
+                ? () => void handleCropAiExportGeoTiff()
+                : undefined,
+              onRemove: () => void executeCustomLayerAction('remove', CROP_AI_PREDICTION_LAYER_ID),
+            },
+          ]
+        : []),
     ],
     [
       activeWmsLayer,
@@ -22109,9 +22161,13 @@ export default function SatelliteIntelligence() {
       aoiLayerLabel,
       basemapVisible,
       clearRemoteSensingAoiSketchOnly,
+      cropAiJob,
+      cropAiLayerOpacity,
+      cropAiLayerState,
       currentBasemapLabel,
       customLayers,
       drawnGeometry,
+      handleCropAiExportGeoTiff,
       hydro,
       hydroContourLabels,
       isStacThumbVisible,
@@ -22143,6 +22199,7 @@ export default function SatelliteIntelligence() {
     (id: string) =>
       id === DRAWN_AOI_LAYER_ID ||
       id === `custom-${SI_TS_WEATHER_STORM_LAYER_ID}` ||
+      id === `custom-${CROP_AI_PREDICTION_LAYER_ID}` ||
       id.startsWith('hydro-') ||
       isWellSuitabilityMcdaLayerId(id),
     [],
@@ -26431,7 +26488,11 @@ export default function SatelliteIntelligence() {
                           onRunAoi={handleCropAiRunAoi}
                           onRunChip={handleCropAiRunChip}
                           onCancel={handleCropAiCancel}
-                          onAddToMap={() => void addCropAiPredictionLayer(cropAiJob)}
+                          onAddToMap={() => {
+                            void addCropAiPredictionLayer(cropAiJob);
+                            setExpandedEnvSection('layers');
+                            setIsLayerDropdownOpen(true);
+                          }}
                           onExportReport={handleCropAiExportReport}
                           exportReportBusy={cropAiExportBusy}
                           exportReportLabel={cropAiExportLabel}
