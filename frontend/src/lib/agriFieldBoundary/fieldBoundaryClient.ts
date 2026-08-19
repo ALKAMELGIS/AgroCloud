@@ -62,6 +62,16 @@ export type FieldBoundaryHealth = {
   fow?: boolean
   ftw_infer?: boolean
   ftw_live?: boolean
+  /** Live probe from Node → Python VPS (production diagnostics). */
+  upstream_probe?: {
+    url?: string
+    ok?: boolean
+    status?: number
+    ms?: number
+    body?: string
+    error?: string
+  }
+  field_boundary_url?: string
   /** SEN2SRLite neural SR available on the Python service (optional on Hostinger). */
   sen2sr?: boolean
   sen2sr_error?: string

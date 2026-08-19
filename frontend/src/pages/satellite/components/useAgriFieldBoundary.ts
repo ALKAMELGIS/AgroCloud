@@ -514,6 +514,12 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     // Demote FTW → FoW when FTW is unavailable.
     if (h.ftw_live === false) {
       setModelState(prev => (prev === 'ftw-live' ? 'fow' : prev))
+      const probeErr = h.upstream_probe?.error || h.upstream_probe?.body
+      if (probeErr) {
+        setNotice(
+          `Python field engine unreachable (${h.field_boundary_url || 'VPS :8092'}): ${probeErr}. Map RGB detect still works.`,
+        )
+      }
     }
     if (isMapRgbOnlyProductionHost(h) && !sourceChosenRef.current) {
       setModelState(prev =>
