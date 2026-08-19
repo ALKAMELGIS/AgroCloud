@@ -265,10 +265,33 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
     res.json({ configured: true, endpoint: Boolean(ENDPOINT), builtin_fallback: true })
   })
 
-  app.get('/api/agri-field-boundary/health', (_req, res) => {
+  app.get('/api/agri-field-boundary/health', async (_req, res) => {
     ensureLocalAiService('agri-field-boundary')
     const python = cachedPython()
     refreshPythonHealth()
+
+    let upstream_probe = { url: `${SERVICE_BASE}/health/live`, ok: false }
+    try {
+      const t0 = Date.now()
+      const upstream = await fetch(`${SERVICE_BASE}/health/live`, {
+        signal: AbortSignal.timeout(5000),
+      })
+      const body = await upstream.text().catch(() => '')
+      upstream_probe = {
+        url: `${SERVICE_BASE}/health/live`,
+        ok: upstream.ok,
+        status: upstream.status,
+        ms: Date.now() - t0,
+        body: body.slice(0, 240),
+      }
+    } catch (err) {
+      upstream_probe = {
+        url: `${SERVICE_BASE}/health/live`,
+        ok: false,
+        error: String(err?.cause?.code || err?.message || err),
+      }
+    }
+
     if (python?.ready) {
       return res.status(200).json({
         ...python,
@@ -279,6 +302,8 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
         ready: true,
         live: true,
         loading: false,
+        field_boundary_url: SERVICE_BASE,
+        upstream_probe,
       })
     }
     if (python?.loading || python?.live) {
@@ -290,9 +315,10 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
         live: true,
         python: true,
         offline: false,
+        upstream_probe,
       })
     }
-    return res.status(200).json(builtinHealthPayload())
+    return res.status(200).json({ ...builtinHealthPayload(), upstream_probe })
   })
 
   app.post(
