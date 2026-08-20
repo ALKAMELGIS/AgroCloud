@@ -39,7 +39,7 @@ jobs:
             ufw disable 2>/dev/null || true
             iptables -P INPUT ACCEPT 2>/dev/null || true
             apt-get update -qq
-            apt-get install -y -qq git curl openssh-server python3.12 python3.12-venv python3-pip build-essential libgdal-dev gdal-bin
+            apt-get install -y -qq git curl openssh-server python3.12 python3.12-venv python3-pip build-essential libgdal-dev gdal-bin libgl1 libglib2.0-0
             systemctl enable --now ssh
             mkdir -p /etc/ssh/sshd_config.d
             printf '%s\n' 'PermitRootLogin yes' 'PubkeyAuthentication yes' 'Port 22' > /etc/ssh/sshd_config.d/99-agrocloud.conf
@@ -47,8 +47,9 @@ jobs:
             if [ ! -d "$DEPLOY_PATH/.git" ]; then
               git clone --depth 1 https://github.com/ALKAMELGIS/AgroCloud.git "$DEPLOY_PATH"
             fi
+            git -C "$DEPLOY_PATH" fetch origin main
+            git -C "$DEPLOY_PATH" reset --hard origin/main
             cd "$DEPLOY_PATH/backend/services/agri-field-boundary"
-            git -C "$DEPLOY_PATH" pull --ff-only origin main || true
             fuser -k 8092/tcp 2>/dev/null || true
             chmod +x start-vps.sh
             cp agri-field-boundary.service /etc/systemd/system/agri-field-boundary.service
