@@ -54,9 +54,12 @@ jobs:
             systemctl daemon-reload
             systemctl enable agri-field-boundary
             export FTW_INFER_ENABLED=1
+            export AFB_LIVE_TIMEOUT_S=900
+            export AFB_READY_TIMEOUT_S=1800
             AFB_GIT_PULL=0 AFB_USE_SYSTEMD=1 ./start-vps.sh
             ss -tulpn | grep -E ':22|:8092'
             systemctl is-active ssh agri-field-boundary
+            curl -fsS http://127.0.0.1:8092/health/live
 
       - name: Smoke /health/live + /health/ready
         uses: appleboy/ssh-action@v1.2.0
