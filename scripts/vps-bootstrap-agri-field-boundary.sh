@@ -21,7 +21,9 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq git curl python3.12 python3.12-venv python3-pip build-essential libgdal-dev gdal-bin
+apt-get install -y -qq git curl openssh-server python3.12 python3.12-venv python3-pip build-essential libgdal-dev gdal-bin
+systemctl enable --now ssh
+if command -v ufw >/dev/null 2>&1; then ufw disable || true; fi
 
 if [[ ! -d "$REPO/.git" ]]; then
   log "Cloning $GITHUB_REPO → $REPO"
@@ -37,7 +39,7 @@ chmod +x start-vps.sh
 
 if [[ ! -f /etc/systemd/system/agri-field-boundary.service ]]; then
   log "Installing systemd unit"
-  cp agri-field-boundary.service /etc/systemd/system/
+  cp agri-field-boundary.service /etc/systemd/system/agri-field-boundary.service
   systemctl daemon-reload
   systemctl enable agri-field-boundary
 fi
