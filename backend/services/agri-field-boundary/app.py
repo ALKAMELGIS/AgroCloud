@@ -82,13 +82,19 @@ app.add_middleware(
 
 @app.on_event("startup")
 def _startup_sen2sr() -> None:
-    """Load SEN2SRLite once; failure must not crash the host app."""
-    try:
-        from services import super_resolution as sen2sr_svc
+    """Load SEN2SRLite in the background so /health/live stays instant for deploy probes."""
+    if os.environ.get("SEN2SR_SKIP_STARTUP", "").strip().lower() in ("1", "true", "yes"):
+        return
 
-        sen2sr_svc.load_model()
-    except Exception as exc:  # noqa: BLE001
-        print(f"[SEN2SR] startup load failed: {type(exc).__name__}: {exc}", flush=True)
+    def _warm() -> None:
+        try:
+            from services import super_resolution as sen2sr_svc
+
+            sen2sr_svc.load_model()
+        except Exception as exc:  # noqa: BLE001
+            print(f"[SEN2SR] startup load failed: {type(exc).__name__}: {exc}", flush=True)
+
+    threading.Thread(target=_warm, name="sen2sr-prefetch", daemon=True).start()
 
 
 @app.on_event("startup")
