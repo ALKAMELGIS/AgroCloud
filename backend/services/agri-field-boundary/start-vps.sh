@@ -90,7 +90,12 @@ if [[ "$USE_SYSTEMD" == "1" ]]; then
 fi
 
 if [[ "$USE_SYSTEMD" == "1" ]]; then
-  wait_http "http://127.0.0.1:${PORT}/health/live" "$LIVE_TIMEOUT_S" "live" || exit 1
+  wait_http "http://127.0.0.1:${PORT}/health/live" "$LIVE_TIMEOUT_S" "live" || {
+    log "live probe failed — dumping systemd logs"
+    systemctl status "$SERVICE_NAME" --no-pager 2>/dev/null || true
+    journalctl -u "$SERVICE_NAME" -n 80 --no-pager 2>/dev/null || true
+    exit 1
+  }
   wait_http "http://127.0.0.1:${PORT}/health/ready" "$READY_TIMEOUT_S" "ready" || {
     log "ready probe timed out — service may still be loading weights; check journalctl -u $SERVICE_NAME"
     exit 1

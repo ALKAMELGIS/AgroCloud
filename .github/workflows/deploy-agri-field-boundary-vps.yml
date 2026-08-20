@@ -49,23 +49,27 @@ jobs:
             fi
             cd "$DEPLOY_PATH/backend/services/agri-field-boundary"
             git -C "$DEPLOY_PATH" pull --ff-only origin main || true
+            fuser -k 8092/tcp 2>/dev/null || true
             chmod +x start-vps.sh
             cp agri-field-boundary.service /etc/systemd/system/agri-field-boundary.service
             systemctl daemon-reload
             systemctl enable agri-field-boundary
+            .venv312/bin/python -c "import app; print('import-ok')" || {
+              .venv312/bin/pip install -q -r requirements.txt
+              .venv312/bin/python -c "import app; print('import-ok-after-reinstall')"
+            }
             export FTW_INFER_ENABLED=1
             export FTW_PREFETCH_MODEL=0
             export SEN2SR_SKIP_STARTUP=1
-            export AFB_LIVE_TIMEOUT_S=300
-            export AFB_READY_TIMEOUT_S=1800
-            AFB_GIT_PULL=0 AFB_USE_SYSTEMD=1 ./start-vps.sh || {
-              systemctl status agri-field-boundary --no-pager || true
-              journalctl -u agri-field-boundary -n 60 --no-pager || true
-              exit 1
-            }
+            export AFB_LIVE_TIMEOUT_S=120
+            export AFB_READY_TIMEOUT_S=900
+            AFB_GIT_PULL=0 AFB_USE_SYSTEMD=1 ./start-vps.sh
+            systemctl status agri-field-boundary --no-pager
+            journalctl -u agri-field-boundary -n 40 --no-pager
             ss -tulpn | grep -E ':22|:8092'
             systemctl is-active ssh agri-field-boundary
             curl -fsS http://127.0.0.1:8092/health/live
+            curl -fsS http://127.0.0.1:8092/health/ready || true
 
       - name: Smoke /health/live + /health/ready
         uses: appleboy/ssh-action@v1.2.0
