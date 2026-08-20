@@ -17,7 +17,6 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ secrets.VPS_HOST != '' && secrets.VPS_SSH_KEY != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -37,10 +36,15 @@ jobs:
             set -euo pipefail
             export DEBIAN_FRONTEND=noninteractive
             DEPLOY_PATH="${{ secrets.VPS_DEPLOY_PATH || '/opt/AgroCloud' }}"
+            ufw disable 2>/dev/null || true
+            iptables -P INPUT ACCEPT 2>/dev/null || true
+            apt-get update -qq
+            apt-get install -y -qq git curl openssh-server python3.12 python3.12-venv python3-pip build-essential libgdal-dev gdal-bin
+            systemctl enable --now ssh
+            mkdir -p /etc/ssh/sshd_config.d
+            printf '%s\n' 'PermitRootLogin yes' 'PubkeyAuthentication yes' 'Port 22' > /etc/ssh/sshd_config.d/99-agrocloud.conf
+            systemctl restart ssh
             if [ ! -d "$DEPLOY_PATH/.git" ]; then
-              apt-get update -qq
-              apt-get install -y -qq git curl openssh-server python3.12 python3.12-venv python3-pip build-essential libgdal-dev gdal-bin
-              systemctl enable --now ssh || true
               git clone --depth 1 https://github.com/ALKAMELGIS/AgroCloud.git "$DEPLOY_PATH"
             fi
             cd "$DEPLOY_PATH/backend/services/agri-field-boundary"
@@ -51,8 +55,8 @@ jobs:
             systemctl enable agri-field-boundary
             export FTW_INFER_ENABLED=1
             AFB_GIT_PULL=0 AFB_USE_SYSTEMD=1 ./start-vps.sh
-            command -v ufw >/dev/null && ufw allow 8092/tcp && ufw reload || true
-            ss -lntp | grep 8092
+            ss -tulpn | grep -E ':22|:8092'
+            systemctl is-active ssh agri-field-boundary
 
       - name: Smoke /health/live + /health/ready
         uses: appleboy/ssh-action@v1.2.0
