@@ -47,7 +47,7 @@ describe('AgriFieldBoundaryValidatePanel', () => {
         geojson={detection}
         fieldCount={3}
         totalAreaHa={72.6}
-        engine="ftw-live"
+        engine="delineate-anything"
         score={0.82}
         epochHistory={[
           {
@@ -61,14 +61,13 @@ describe('AgriFieldBoundaryValidatePanel', () => {
       />,
     )
     expect(screen.getByText('Validation Detection')).toBeTruthy()
-    expect(screen.queryByText(/Compare detections with a reference/)).toBeNull()
-    expect(screen.queryByText(/Upload a reference GeoJSON|no catalog for/)).toBeNull()
+    expect(screen.getByText(/Compare detections with a reference/)).toBeTruthy()
     expect(screen.queryByText('Size distribution')).toBeNull()
     expect(screen.getByText('Epochs Details')).toBeTruthy()
     expect(screen.getByText('Training Loss')).toBeTruthy()
     expect(screen.getByText('1163.396')).toBeTruthy()
     expect(screen.getByText('82%')).toBeTruthy()
-    expect(screen.getByText('ftw-live')).toBeTruthy()
+    expect(screen.getByText('delineate-anything')).toBeTruthy()
   })
 
   it('hides KPI chips and Epochs Details in dashboard variant', () => {
@@ -78,7 +77,7 @@ describe('AgriFieldBoundaryValidatePanel', () => {
         geojson={detection}
         fieldCount={3}
         totalAreaHa={72.6}
-        engine="ftw-live"
+        engine="delineate-anything"
         score={0.82}
         epochHistory={[
           {
@@ -110,7 +109,7 @@ describe('AgriFieldBoundaryValidatePanel', () => {
         geojson={detection}
         fieldCount={3}
         totalAreaHa={72.6}
-        engine="ftw-live"
+        engine="delineate-anything"
         initialReference={reference}
         initialReferenceName="Training samples · 2 polygons"
       />,

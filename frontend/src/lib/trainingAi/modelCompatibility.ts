@@ -37,7 +37,7 @@ export function evaluateModelCompatibility(
     model.requiredBands.every(b => ['R', 'G', 'B'].includes(b))
 
   if (imagery === 'sentinel2' || imagery === 'landsat') {
-    if (model.recommendedSentinel2 || model.id.startsWith('hf-prithvi') || model.id.startsWith('hf-terramind') || model.id === 'agro-ftw-live') {
+    if (model.recommendedSentinel2 || model.id.startsWith('hf-prithvi') || model.id.startsWith('hf-terramind')) {
       status = 'compatible'
       score = 95
       reasons.push('Native / strong fit for Sentinel-class multispectral EO.')

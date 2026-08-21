@@ -14,8 +14,8 @@
 /* ---- Auto Contrast Text System (Readability Optimization) ----------------- */
 .lux-theme-light {
   --lux-bg: #f6f8f5;
-  --lux-fg: #0f172a;          /* near-black on light surfaces */
-  --lux-fg-soft: rgba(15, 23, 42, 0.66);
+  --lux-fg: #222222;          /* muted black on light surfaces */
+  --lux-fg-soft: #777777;
   --lux-accent: #004a36;      /* brand emerald */
   --lux-accent-soft: rgba(0, 74, 54, 0.12);
   --lux-line: rgba(0, 74, 54, 0.16);
@@ -24,8 +24,8 @@
 html[data-theme='dark'] .lux-theme-light,
 .lux-theme-light.lux-theme-light--on-dark {
   --lux-bg: #0b1220;
-  --lux-fg: #ffffff;          /* white on dark surfaces */
-  --lux-fg-soft: rgba(255, 255, 255, 0.72);
+  --lux-fg: #E6E6E6;          /* muted white on dark surfaces */
+  --lux-fg-soft: #8F8F8F;
   --lux-accent: #34d399;
   --lux-accent-soft: rgba(52, 211, 153, 0.16);
   --lux-line: rgba(255, 255, 255, 0.12);
@@ -44,8 +44,8 @@ html[data-theme='dark'] .lux-theme-light,
  * ========================================================================== */
 header.agri-header.lux-theme-light--header {
   --lux-bg: #f7f9f6;
-  --lux-fg: #0f172a;
-  --lux-fg-soft: rgba(15, 23, 42, 0.62);
+  --lux-fg: #222222;
+  --lux-fg-soft: #777777;
   --lux-accent: #004a36;
   --lux-accent-soft: rgba(0, 74, 54, 0.1);
   --lux-line: rgba(0, 74, 54, 0.18);
@@ -119,8 +119,7 @@ header.agri-header.lux-theme-light--header .header-center__logo--invert:hover .b
   align-items: center;
 }
 
-/* Minimal, modern theme toggle — a single small sun/moon icon that swaps with
-   the active mode, styled to match the system's icon buttons. */
+/* Minimal sun/moon theme toggle — base shell; is-light / is-dark in theme-system.css */
 .nav-theme-toggle {
   appearance: none;
   margin: 0;
@@ -132,9 +131,9 @@ header.agri-header.lux-theme-light--header .header-center__logo--invert:hover .b
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.06);
-  color: #e5e7eb;
+  border: 1px solid var(--theme-border, rgba(34, 34, 34, 0.14));
+  background: var(--theme-surface-muted, rgba(34, 34, 34, 0.06));
+  color: var(--ds-color-text);
   transition:
     background 0.18s ease,
     border-color 0.18s ease,
@@ -142,40 +141,8 @@ header.agri-header.lux-theme-light--header .header-center__logo--invert:hover .b
     transform 0.14s ease;
 }
 
-.nav-theme-toggle__icon {
-  font-size: 15px;
-  line-height: 1;
-}
-
-.nav-theme-toggle:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.26);
-  color: #ffffff;
-}
-
-.nav-theme-toggle:active {
-  transform: scale(0.94);
-}
-
 .nav-theme-toggle:focus-visible {
   outline: none;
-  border-color: rgba(52, 211, 153, 0.7);
-  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.28);
-}
-
-/* Light surface (ivory header) → dark, legible icon button */
-html[data-theme='light'] .nav-theme-toggle,
-.lux-theme-light .nav-theme-toggle {
-  border-color: rgba(0, 74, 54, 0.18);
-  background: rgba(0, 74, 54, 0.06);
-  color: #0f3d2e;
-}
-
-html[data-theme='light'] .nav-theme-toggle:hover,
-.lux-theme-light .nav-theme-toggle:hover {
-  background: rgba(0, 74, 54, 0.12);
-  border-color: rgba(0, 74, 54, 0.3);
-  color: #004a36;
 }
 
 @media (prefers-reduced-motion: reduce) {

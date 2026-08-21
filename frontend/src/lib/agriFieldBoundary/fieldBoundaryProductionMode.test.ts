@@ -8,11 +8,11 @@ import {
 describe('fieldBoundaryProductionMode', () => {
   it('detects builtin spectral engine', () => {
     expect(isBuiltinFieldEngine('spectral-builtin')).toBe(true)
-    expect(isBuiltinFieldEngine('ftw-live')).toBe(false)
+    expect(isBuiltinFieldEngine('delineate-fbis')).toBe(false)
   })
 
-  it('always regularizes footprints (builtin uses softer thresholds in finishResult)', () => {
-    expect(shouldSkipFootprintRegularize('spectral-builtin')).toBe(false)
+  it('skips regularize for builtin engine', () => {
+    expect(shouldSkipFootprintRegularize('spectral-builtin')).toBe(true)
     expect(shouldSkipFootprintRegularize('delineate-anything')).toBe(false)
   })
 
@@ -21,8 +21,6 @@ describe('fieldBoundaryProductionMode', () => {
       isMapRgbOnlyProductionHost({
         status: 'ok',
         python: false,
-        ftw_live: false,
-        ftw_infer: false,
         builtin_fallback: true,
       }),
     ).toBe(true)
@@ -30,7 +28,6 @@ describe('fieldBoundaryProductionMode', () => {
       isMapRgbOnlyProductionHost({
         status: 'ok',
         python: true,
-        ftw_live: true,
       }),
     ).toBe(false)
   })

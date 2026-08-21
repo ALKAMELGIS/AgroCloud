@@ -73,6 +73,7 @@ export type GeoAiSelectedFeatureState = {
 export type GeoAiToolboxState = {
   /** Currently expanded dock section id, if any. */
   openSection?: string | null
+  cropAiPanelOpen?: boolean
   imageryTimeSeriesOpen?: boolean
   mapSwipeOpen?: boolean
   drawingActive?: boolean
@@ -273,6 +274,7 @@ export function buildGeoAiLiveMapStateBlock(state: GeoAiLiveMapState | null | un
     const bits: string[] = []
     bits.push(tb.hasAoi ? 'AOI drawn' : 'no AOI')
     if (tb.drawingActive) bits.push('drawing active')
+    if (tb.cropAiPanelOpen) bits.push('Crop AI open')
     if (tb.imageryTimeSeriesOpen) bits.push('Imagery Time Series open')
     if (tb.mapSwipeOpen) bits.push('MapSwipe open')
     if (tb.openSection?.trim()) bits.push(`dock=${tb.openSection.trim()}`)

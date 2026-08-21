@@ -1,11 +1,10 @@
-# Agri Field Boundary Detection — Mask R-CNN / Delineate-Anything / FoW / FTW infer.
+# Agri Field Boundary Detection — Mask R-CNN / Delineate-Anything / AFD.
 # Install torch/torchvision from the CPU wheel index if you have no GPU:
 #   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 torch>=2.0.0
 torchvision>=0.15.0
 ultralytics>=8.3.0
 matplotlib>=3.7.0
-duckdb>=1.0.0
 opencv-python-headless>=4.8.0
 numpy>=1.24.0
 pillow>=10.0.0
@@ -14,13 +13,12 @@ shapely>=2.0.0
 fastapi>=0.110.0
 uvicorn[standard]>=0.29.0
 python-multipart>=0.0.9
-# FTW baseline model inference (requires git at install time). Gate at runtime with FTW_INFER_ENABLED.
-ftw-tools @ git+https://github.com/fieldsoftheworld/ftw-baselines.git
-# FTW live Sentinel-2 path (MPC STAC + odc stack; used by ftw_live.py).
+# Agricultural Field Delineation — Sentinel-2 L2A STAC stack
 pystac-client>=0.7.0
+stackstac>=0.5.0
 planetary-computer>=1.0.0
-odc-stac>=0.3.9
 xarray>=2023.1.0
+pyproj>=3.0.0
 # Optional: Mask R-CNN helpers. Prefer dedicated service backend/services/geoai-inference (:8098).
 # geoai-py>=0.40.0
 # Optional GeoPackage export

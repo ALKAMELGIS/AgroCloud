@@ -1,5 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLanguage } from '@/lib/i18n';
+import { useSystemSettings } from '@/store/SystemSettingsContext';
+import type { ThemeMode } from '@/types/systemSettings';
 import { useSiInstanceScope } from '../siInstanceScope';
 // Map overlay event isolation — keeps panel clicks/scroll from leaking to the map.
 import { useMapOverlayIsolation } from '../useMapOverlayIsolation';
@@ -15,6 +17,16 @@ import {
   MapToolboxAddGisLayerFlyout,
   type MapToolboxAddGisLayerAction,
 } from './MapToolboxAddGisLayerFlyout';
+
+function resolveThemeIsDark(mode: ThemeMode): boolean {
+  if (mode === 'dark') return true
+  if (mode === 'light' || mode === 'custom') return false
+  if (typeof window !== 'undefined' && window.matchMedia) {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+  }
+  return false
+}
+
 export type SatelliteContextPanelId =
   | 'layers'
   | 'add-gis-layer'
@@ -142,6 +154,9 @@ export type SatelliteContextualAnalysisDockProps = {
   /** Go To XY coordinate bar open state (map variant). */
   goToXyOpen?: boolean;
   onGoToXyOpenChange?: (open: boolean) => void;
+  /** Crop AI isolated floating panel (map variant) — independent from processing stack. */
+  cropAiPanelOpen?: boolean;
+  onCropAiPanelOpenChange?: (open: boolean) => void;
 };
 
 const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; title: string; hint: string }> = [
@@ -204,9 +219,9 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
   {
     id: 'agri-field-boundary',
     icon: 'fa-solid fa-crop-simple',
-    label: 'FTW Fields',
-    title: 'Field Boundary (FTW live)',
-    hint: 'AOI → live Sentinel-2 + FTW model (or FoW / basemap) → agricultural field polygons.',
+    label: 'Field Boundaries',
+    title: 'Field Boundary',
+    hint: 'AOI → AFD / Delineate / basemap detect → agricultural field polygons.',
   },
   {
     id: 'hydro-watershed',
@@ -331,7 +346,6 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
 const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
   'remote-sensing',
   'wapi-alerts',
-  'crop-classification',
   'tree-detections',
   'agri-field-boundary',
   'hydro-watershed',
@@ -447,9 +461,16 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
     onMapSwipeOpenChange,
     goToXyOpen = false,
     onGoToXyOpenChange,
+    cropAiPanelOpen = false,
+    onCropAiPanelOpenChange,
   } = props;
 
   const { scopedStorageKey } = useSiInstanceScope();
+  const { settings: systemSettings, setSettings } = useSystemSettings();
+  const appThemeDark = useMemo(
+    () => resolveThemeIsDark(systemSettings.themeMode),
+    [systemSettings.themeMode],
+  );
   const panelWidthMin = 260;
   const panelWidthDefault = 300;
   const lsSurface = scopedStorageKey('si-sat-ctx-surface');
@@ -468,13 +489,10 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
 
   const [panelOpen, setPanelOpen] = useState(false);
   const [activeId, setActiveId] = useState<SatelliteContextPanelId | null>(null);
-  const [surface, setSurface] = useState<'dark' | 'light'>(() => {
-    try {
-      return localStorage.getItem(lsSurface) === 'light' ? 'light' : 'dark';
-    } catch {
-      return 'dark';
-    }
-  });
+  /** Follows global app theme (nav toggle). */
+  const [surface, setSurface] = useState<'dark' | 'light'>(() =>
+    appThemeDark ? 'dark' : 'light',
+  );
   const [panelWidth] = useState(() => {
     try {
       const n = Number(localStorage.getItem(lsPanelW));
@@ -541,25 +559,37 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
   }, [mapSwipeOpen, activeId])
 
   useEffect(() => {
+    if (cropAiPanelOpen) return
+    if (activeId === 'crop-classification') {
+      setActiveId(null)
+    }
+  }, [cropAiPanelOpen, activeId])
+
+  useEffect(() => {
     try {
       localStorage.setItem(lsSurface, surface);
     } catch {
       /* ignore */
     }
-  }, [surface]);
+  }, [surface, lsSurface]);
 
-  /** Keep map toolbox surface aligned with global app theme (light → white glass). */
+  /** Keep map toolbox surface aligned with global app theme. */
+  useEffect(() => {
+    setSurface(appThemeDark ? 'dark' : 'light');
+  }, [appThemeDark]);
+
   useEffect(() => {
     const syncSurfaceFromAppTheme = () => {
       const theme = document.documentElement.getAttribute('data-theme');
       if (theme === 'light') setSurface('light');
       else if (theme === 'dark') setSurface('dark');
+      else setSurface(appThemeDark ? 'dark' : 'light');
     };
     syncSurfaceFromAppTheme();
     const observer = new MutationObserver(syncSurfaceFromAppTheme);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     return () => observer.disconnect();
-  }, []);
+  }, [appThemeDark]);
 
   useEffect(() => {
     try {
@@ -689,6 +719,10 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
         onGoToXyOpenChange?.(!goToXyOpen);
         return;
       }
+      if (isMapVariant && id === 'crop-classification') {
+        onCropAiPanelOpenChange?.(!cropAiPanelOpen);
+        return;
+      }
       if (isMapVariant && MAP_RAIL_FLOAT_IDS.has(id) && onProcessingWorkflowNavigate) {
         if (processingDropdownOpen && processingEmbedSection === id) {
           setPanelOpen(false);
@@ -728,6 +762,8 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
       onMapSwipeOpenChange,
       goToXyOpen,
       onGoToXyOpenChange,
+      cropAiPanelOpen,
+      onCropAiPanelOpenChange,
       layerLiveLegendOpen,
       onLayerLiveLegendOpenChange,
       openPanel,
@@ -1017,10 +1053,11 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
               const railPressed =
                 (isMap && processingDropdownOpen && processingEmbedSection === item.id) ||
                 (item.id === 'table-geo-ai' && geoAiFloatingOpen) ||
+                (item.id === 'crop-classification' && cropAiPanelOpen) ||
                 (item.id === 'layer-live-legend' && layerLiveLegendOpen) ||
                 (item.id === 'imagery-time-series' && imageryTimeSeriesOpen) ||
                 (item.id === 'map-swipe' && mapSwipeOpen) ||
-                (!MAP_RAIL_FLOAT_IDS.has(item.id) && activeId === item.id && panelOpen);
+                (!MAP_RAIL_FLOAT_IDS.has(item.id) && item.id !== 'crop-classification' && activeId === item.id && panelOpen);
               return (
                 <button
                   key={item.id}
@@ -1149,11 +1186,16 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
                   <button
                     type="button"
                     className="si-sat-ctx-icon-btn"
-                    title={surface === 'dark' ? 'Light surface' : 'Dark surface'}
-                    aria-label="Toggle panel theme"
-                    onClick={() => setSurface(s => (s === 'dark' ? 'light' : 'dark'))}
+                    title={appThemeDark ? 'Switch to light mode' : 'Switch to dark mode'}
+                    aria-label="Toggle app theme"
+                    onClick={() =>
+                      setSettings({
+                        ...systemSettings,
+                        themeMode: appThemeDark ? 'light' : 'dark',
+                      })
+                    }
                   >
-                    <i className={`fa-solid ${surface === 'dark' ? 'fa-sun' : 'fa-moon'}`} aria-hidden />
+                    <i className={`fa-solid ${appThemeDark ? 'fa-sun' : 'fa-moon'}`} aria-hidden />
                   </button>
                   <button type="button" className="si-sat-ctx-icon-btn" title="Close" aria-label="Close panel" onClick={closePanel}>
                     <i className="fa-solid fa-xmark" aria-hidden />

@@ -24,14 +24,15 @@
   --ds-leading-tight: 1.2;
   --ds-leading-normal: 1.5;
 
-  --ds-color-bg: #ffffff;
+  --ds-color-bg: #f6f7f8;
   --ds-color-bg-dashboard: #fafbfc;
-  --ds-color-surface: rgba(255, 255, 255, 0.72);
+  --ds-color-surface: rgba(252, 253, 254, 0.88);
   --ds-color-surface-2: rgba(255, 255, 255, 0.55);
-  --ds-color-text: #0f172a;
-  --ds-color-text-muted: #64748b;
-  --ds-color-border: rgba(15, 23, 42, 0.08);
-  --ds-color-border-strong: rgba(15, 23, 42, 0.14);
+  --ds-color-text: #222222;
+  --ds-color-text-secondary: #555555;
+  --ds-color-text-muted: #777777;
+  --ds-color-border: rgba(34, 34, 34, 0.1);
+  --ds-color-border-strong: rgba(34, 34, 34, 0.16);
 
   --ds-color-primary: #047857;
   --ds-color-primary-hover: #065f46;
@@ -68,12 +69,13 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     color-scheme: dark;
-    --ds-color-bg: rgba(4, 6, 8, 0.72);
-    --ds-color-bg-dashboard: rgba(6, 8, 10, 0.78);
-    --ds-color-surface: rgba(0, 0, 0, 0.38);
+    --ds-color-bg: #141618;
+    --ds-color-bg-dashboard: #1a1d21;
+    --ds-color-surface: rgba(255, 255, 255, 0.05);
     --ds-color-surface-2: rgba(255, 255, 255, 0.08);
-    --ds-color-text: #ffffff;
-    --ds-color-text-muted: rgba(255, 255, 255, 0.72);
+    --ds-color-text: #E6E6E6;
+    --ds-color-text-secondary: #B8B8B8;
+    --ds-color-text-muted: #8F8F8F;
     --ds-color-border: rgba(255, 255, 255, 0.12);
     --ds-color-border-strong: rgba(34, 197, 94, 0.32);
 
@@ -98,12 +100,13 @@
 :root[data-theme="dark"],
 html[data-theme="dark"] {
   color-scheme: dark;
-  --ds-color-bg: rgba(4, 6, 8, 0.72);
-  --ds-color-bg-dashboard: rgba(6, 8, 10, 0.78);
-  --ds-color-surface: rgba(0, 0, 0, 0.38);
+  --ds-color-bg: #141618;
+  --ds-color-bg-dashboard: #1a1d21;
+  --ds-color-surface: rgba(255, 255, 255, 0.05);
   --ds-color-surface-2: rgba(255, 255, 255, 0.08);
-  --ds-color-text: #ffffff;
-  --ds-color-text-muted: rgba(255, 255, 255, 0.72);
+  --ds-color-text: #E6E6E6;
+  --ds-color-text-secondary: #B8B8B8;
+  --ds-color-text-muted: #8F8F8F;
   --ds-color-border: rgba(255, 255, 255, 0.12);
   --ds-color-border-strong: rgba(34, 197, 94, 0.32);
 
@@ -127,14 +130,15 @@ html[data-theme="dark"] {
 :root[data-theme="light"],
 html[data-theme="light"] {
   color-scheme: light;
-  --ds-color-bg: #ffffff;
+  --ds-color-bg: #f6f7f8;
   --ds-color-bg-dashboard: #fafbfc;
-  --ds-color-surface: rgba(255, 255, 255, 0.72);
+  --ds-color-surface: rgba(252, 253, 254, 0.88);
   --ds-color-surface-2: rgba(255, 255, 255, 0.55);
-  --ds-color-text: #0f172a;
-  --ds-color-text-muted: #64748b;
-  --ds-color-border: rgba(15, 23, 42, 0.08);
-  --ds-color-border-strong: rgba(15, 23, 42, 0.14);
+  --ds-color-text: #222222;
+  --ds-color-text-secondary: #555555;
+  --ds-color-text-muted: #777777;
+  --ds-color-border: rgba(34, 34, 34, 0.1);
+  --ds-color-border-strong: rgba(34, 34, 34, 0.16);
 
   --ds-color-primary: #047857;
   --ds-color-primary-hover: #065f46;
@@ -1733,7 +1737,7 @@ aside {
   line-height: 1.15;
   letter-spacing: -0.4px;
   margin: 0;
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 .db-subtitle {
@@ -1781,7 +1785,7 @@ aside {
 .db-inspire-label {
   font-size: 12px;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 .db-links {
@@ -1820,7 +1824,7 @@ aside {
   display: inline-flex;
   gap: 8px;
   align-items: center;
-  color: #0f172a;
+  color: var(--ds-color-text);
   font-weight: 800;
   font-size: 12px;
 }
@@ -1860,7 +1864,7 @@ aside {
 
 .db-topbar-title {
   font-weight: 950;
-  color: #0f172a;
+  color: var(--ds-color-text);
   letter-spacing: -0.2px;
   padding: 0 6px 0 4px;
   user-select: none;
@@ -1876,7 +1880,7 @@ aside {
   align-items: center;
   font-size: 12px;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 .db-pill i { color: rgba(14, 116, 144, 1) }
@@ -1896,7 +1900,7 @@ aside {
 
 .db-topbtn:hover {
   background: rgba(248, 250, 252, 1);
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 .db-viewtoggle {
@@ -1940,7 +1944,7 @@ aside {
 
 .db-sidebtn:hover {
   background: rgba(241, 245, 249, 1);
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 .db-sidebtn[aria-pressed="true"] {
@@ -2031,7 +2035,7 @@ aside {
 .db-empty-title {
   font-size: 18px;
   font-weight: 900;
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 .db-empty-sub {
@@ -2086,7 +2090,7 @@ aside {
   align-items: center;
   gap: 10px;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--ds-color-text);
   cursor: pointer;
   text-align: left;
 }
@@ -2137,7 +2141,7 @@ aside {
 .db-panel-title {
   font-size: 14px;
   font-weight: 900;
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 .db-panel-close {
@@ -2182,7 +2186,7 @@ aside {
 
 .db-view-k {
   font-weight: 900;
-  color: #0f172a;
+  color: var(--ds-color-text);
   font-size: 12px;
 }
 
@@ -2233,7 +2237,7 @@ aside {
 
 .db-panel-hint-title {
   font-weight: 900;
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 .db-panel-hint-sub {
@@ -2996,7 +3000,7 @@ aside {
 }
 
 .gis-sidebar-action-pane__close:hover {
-  color: #0f172a;
+  color: var(--ds-color-text);
   background: #ffffff;
   border-color: rgba(100, 116, 139, 0.55);
 }
@@ -3248,7 +3252,7 @@ aside {
   max-width: none;
   font-size: 12px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--ds-color-text);
   white-space: nowrap;
   overflow: visible;
   text-overflow: clip;
@@ -3278,12 +3282,12 @@ aside {
 }
 
 .gis-sidebar-body--action-pane .gis-layer-visibility-btn.active {
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 .gis-sidebar-body--action-pane .gis-layer-visibility-btn:hover {
   background: rgba(241, 245, 249, 1);
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 .gis-sidebar-body--action-pane .gis-layer-menu-btn {
@@ -3303,7 +3307,7 @@ aside {
 .gis-sidebar-body--action-pane .gis-layer-menu-btn.active {
   background: rgba(241, 245, 249, 1);
   border-color: transparent;
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 .gis-sidebar-body--action-pane .gis-layer-dot {
@@ -3900,7 +3904,7 @@ aside {
 
 .gis-sidebar-rail-toggle--panel:hover {
   background: rgba(16, 185, 129, 0.12);
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 .gis-sidebar-rail-toggle--panel .gis-sidebar-rail-toggle__text {
@@ -4160,7 +4164,7 @@ aside {
 
 .gis-sidebar-foot-item:hover {
   background: rgba(148, 163, 184, 0.14);
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 .gis-sidebar-foot-item:focus-visible {
@@ -4670,7 +4674,7 @@ aside {
   border: 1px solid rgba(15, 23, 42, 0.10);
   border-radius: 13px;
   background: rgba(248, 250, 252, 0.92);
-  color: #0f172a;
+  color: var(--ds-color-text);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -5204,7 +5208,7 @@ aside {
 .gis-map-tool-panel-title {
   font-size: 14px;
   font-weight: 900;
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 .gis-map-tool-close {
@@ -5802,7 +5806,7 @@ button.gis-tool-list-row--action:hover {
   gap: 8px;
   font-size: 12px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 .gis-map-tool-chart-donut-legend__swatch {
@@ -5849,7 +5853,7 @@ button.gis-tool-list-row--action:hover {
   padding: 10px 10px 10px 8px;
   font-weight: 800;
   font-size: 13px;
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 .gis-map-tool-surface .gis-bookmark-list__go:hover {
@@ -5929,7 +5933,7 @@ button.gis-tool-list-row--action:hover {
 .gis-map-tool-surface-app-row__main strong {
   font-size: 13px;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 .gis-map-tool-surface-app-row__main small {
@@ -6137,7 +6141,7 @@ button.gis-tool-list-row--action:hover {
   background: transparent;
   font-size: 13px;
   font-weight: 650;
-  color: #0f172a;
+  color: var(--ds-color-text);
   text-align: left;
   cursor: pointer;
   font-family: inherit;
@@ -6221,7 +6225,7 @@ button.gis-tool-list-row--action:hover {
 .gis-tables-agol-layer-row__main strong {
   font-size: 13px;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--ds-color-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -6799,7 +6803,7 @@ button.gis-tool-list-row--action:hover {
   background: rgba(248, 250, 252, 0.96);
   backdrop-filter: blur(12px);
   font-weight: 900;
-  color: #0f172a;
+  color: var(--ds-color-text);
   box-shadow: inset 0 -1px 0 rgba(15, 23, 42, 0.07);
 }
 
@@ -8216,7 +8220,7 @@ html[data-theme='dark'] .gis-domain-cell--dropdown.missing-description .gis-doma
 .gis-layer-name {
   font-size: 13px;
   font-weight: 850;
-  color: #0f172a;
+  color: var(--ds-color-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -9284,7 +9288,7 @@ html[data-theme='dark'] .agro-cloud-mark.gis-table-browser-mark {
 .gis-modal-close-btn:hover {
   background: rgba(248, 250, 252, 1);
   border-color: rgba(148, 163, 184, 0.45);
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 .gis-modal-close-btn:focus-visible {
@@ -9858,7 +9862,7 @@ path.gis-path-blend--lighten {
   margin: 0;
   font-size: 13px;
   font-weight: 900;
-  color: #0f172a;
+  color: var(--ds-color-text);
   letter-spacing: -0.02em;
   line-height: 1.3;
 }
@@ -10901,7 +10905,7 @@ path.gis-path-blend--lighten {
 .gis-right-sidebar-back {
   background: none;
   border: none;
-  color: var(--ds-color-text-secondary, #64748b);
+  color: var(--ds-color-text-secondary, #555555);
   cursor: pointer;
   padding: 4px;
   display: flex;
@@ -10964,7 +10968,7 @@ path.gis-path-blend--lighten {
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  color: var(--ds-color-text-secondary, #64748b);
+  color: var(--ds-color-text-secondary, #555555);
 }
 
 .gis-edit-section-headerbtn:hover .gis-edit-section-header-icons {
@@ -11018,7 +11022,7 @@ path.gis-path-blend--lighten {
   justify-content: center;
   font-size: 13px;
   line-height: 1;
-  color: var(--ds-color-text-secondary, #64748b);
+  color: var(--ds-color-text-secondary, #555555);
 }
 
 .gis-edit-accordion-panel {
@@ -11082,7 +11086,7 @@ path.gis-path-blend--lighten {
   display: grid;
   gap: 6px;
   font-size: 12px;
-  color: var(--ds-color-text-secondary, #64748b);
+  color: var(--ds-color-text-secondary, #555555);
   font-weight: 700;
 }
 
@@ -11183,7 +11187,7 @@ path.gis-path-blend--lighten {
 
 .gis-edit-field label {
   font-size: 12px;
-  color: var(--ds-color-text-secondary, #64748b);
+  color: var(--ds-color-text-secondary, #555555);
   font-weight: 500;
   text-transform: capitalize;
 }
@@ -11412,7 +11416,7 @@ path.gis-path-blend--lighten {
   font-size: 20px;
   font-weight: 900;
   letter-spacing: -0.03em;
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 .gis-modal-relationship .gis-modal-icon {
@@ -11444,7 +11448,7 @@ path.gis-path-blend--lighten {
 .gis-modal-relationship .gis-label {
   font-size: 13px;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--ds-color-text);
   display: grid;
   gap: 8px;
 }
@@ -11457,7 +11461,7 @@ path.gis-path-blend--lighten {
   background: rgba(255, 255, 255, 0.97);
   font-size: 14px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 .gis-modal-relationship .gis-content-select {
@@ -11488,7 +11492,7 @@ path.gis-path-blend--lighten {
   font-size: 13px;
   font-weight: 850;
   letter-spacing: -0.02em;
-  color: #0f172a;
+  color: var(--ds-color-text);
   margin-bottom: 4px;
 }
 
@@ -11513,7 +11517,7 @@ path.gis-path-blend--lighten {
   border-radius: 999px;
   font-size: 13px;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--ds-color-text);
   border-color: rgba(148, 163, 184, 0.45);
   background: #ffffff;
 }
@@ -13180,7 +13184,7 @@ textarea {
     border-radius: 999px;
     border: 1px solid rgba(148, 163, 184, 0.35);
     background: linear-gradient(165deg, rgba(255, 255, 255, 0.97) 0%, rgba(248, 250, 252, 0.92) 45%, rgba(236, 253, 245, 0.88) 100%);
-    color: #0f172a;
+    color: var(--ds-color-text);
     font: inherit;
     font-size: 13px;
     font-weight: 750;
@@ -13258,7 +13262,7 @@ textarea {
     gap: 6px;
     font-size: 11.5px;
     font-weight: 700;
-    color: #0f172a;
+    color: var(--ds-color-text);
     white-space: nowrap;
   }
 

@@ -6,8 +6,8 @@
 
 import * as turf from '@turf/turf'
 
-/** Soft floor for FTW finish/merge — kills S2 pinhead squares even if UI slider is 1. */
-export const FTW_FINISH_MIN_AREA_M2 = 500
+/** Soft floor when heavyMerge is enabled — kills pinhead squares even if UI slider is low. */
+export const FIELD_HEAVY_MERGE_MIN_AREA_M2 = 500
 
 export type MergeFieldFragmentsOptions = {
   /** Max gap between parcels to treat as "touching" (metres). Default 10. */
@@ -23,39 +23,23 @@ export type MergeFieldFragmentsOptions = {
   enabled?: boolean
 }
 
-export function isFtwFieldEngine(sourceOrEngine?: string | null): boolean {
-  const s = String(sourceOrEngine || '').toLowerCase()
-  return s === 'ftw-live' || s === 'ftw-infer' || s.includes('ftw')
-}
-
-/** FTW, FoW, and similar cadastral catalog engines — grid-aligned post-process. */
-export function isCadastralFieldEngine(sourceOrEngine?: string | null): boolean {
-  const s = String(sourceOrEngine || '').toLowerCase()
-  return (
-    isFtwFieldEngine(s) ||
-    s === 'fow' ||
-    s.includes('fields-of-the-world') ||
-    s.includes('fields_of_the_world')
-  )
-}
-
 /** Effective min-area used by finishResult / re-apply for merge + AOI refine. */
-export function finishMinAreaM2(minAreaM2: number, ftw: boolean): number {
-  if (ftw) return Math.max(FTW_FINISH_MIN_AREA_M2, Math.max(0, minAreaM2))
+export function finishMinAreaM2(minAreaM2: number, heavyMerge: boolean): number {
+  if (heavyMerge) return Math.max(FIELD_HEAVY_MERGE_MIN_AREA_M2, Math.max(0, minAreaM2))
   return Math.max(0.05, Math.min(minAreaM2, 40))
 }
 
-/** Merge options tuned for FTW over-segmentation vs other engines. */
+/** Merge options — heavyMerge tightens gap/contact for heavily over-segmented output. */
 export function finishMergeOptions(
   minAreaM2: number,
-  opts: { ftw: boolean; enabled?: boolean },
+  opts: { heavyMerge: boolean; enabled?: boolean },
 ): MergeFieldFragmentsOptions {
-  const ftw = Boolean(opts.ftw)
+  const heavy = Boolean(opts.heavyMerge)
   return {
     enabled: opts.enabled !== false,
-    gapMeters: ftw ? 14 : 10,
-    contactFrac: ftw ? 0.2 : 0.25,
-    minAreaM2: finishMinAreaM2(minAreaM2, ftw),
+    gapMeters: heavy ? 14 : 10,
+    contactFrac: heavy ? 0.2 : 0.25,
+    minAreaM2: finishMinAreaM2(minAreaM2, heavy),
   }
 }
 
@@ -102,10 +86,8 @@ function sharedBorderMeters(a: GeoJSON.Feature, b: GeoJSON.Feature, gapM: number
     if (!bufA) return 0
     const inter = turf.intersect(turf.featureCollection([bufA as any, b as any]))
     if (!inter) return 0
-    // Approximate contact length from intersection area / gap width.
     const interArea = turf.area(inter as any)
     if (!Number.isFinite(interArea) || interArea <= 0) return 0
-    // Buffer of gapM around A into B ≈ shared_length * gapM (not 2×).
     return interArea / Math.max(gapM, 0.5)
   } catch {
     return 0
@@ -120,7 +102,6 @@ function nearlyTouch(a: GeoJSON.Feature, b: GeoJSON.Feature, gapM: number): bool
       turf.centerOfMass(b as any) as any,
       { units: 'meters' },
     )
-    // Cheap reject: centres farther than combined radii + gap.
     const ra = Math.sqrt(areaM2(a) / Math.PI)
     const rb = Math.sqrt(areaM2(b) / Math.PI)
     if (d > ra + rb + gapM * 3) return false
@@ -146,7 +127,6 @@ function shouldMerge(
 
   const aa = areaM2(a)
   const ab = areaM2(b)
-  // Two already large, compact rectangles with only a short corner contact → keep split.
   const ca = compactness(a)
   const cb = compactness(b)
   if (aa > 5000 && ab > 5000 && ca > 0.55 && cb > 0.55 && contact < 0.22 * shorter) {

@@ -88,7 +88,7 @@ export async function fetchSen2srStatus(signal?: AbortSignal): Promise<Sen2srSta
     return {
       available: false,
       model: 'SEN2SRLite',
-      error: 'SEN2SR engine loading on the AgroCloud API — FTW / map RGB detect still available.',
+      error: 'SEN2SR engine loading on the AgroCloud API — map RGB detect still available.',
     }
   }
 }

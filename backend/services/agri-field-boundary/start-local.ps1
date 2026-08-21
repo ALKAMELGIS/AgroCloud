@@ -4,7 +4,7 @@
 # Usage:
 #   .\start-local.ps1
 # Optional:
-#   $env:PORT = "8092"; $env:FTW_INFER_ENABLED = "1"; .\start-local.ps1
+#   $env:PORT = "8092"; .\start-local.ps1
 # Disable auto-restart:
 #   $env:AFB_NO_RESTART = "1"; .\start-local.ps1
 
@@ -37,8 +37,6 @@ if ($LASTEXITCODE -ne 0) {
   Write-Host "Installing fastapi/uvicorn into $py ..."
   & $py -m pip install "fastapi>=0.110" "uvicorn[standard]>=0.29" "python-multipart>=0.0.9"
 }
-
-if (-not $env:FTW_INFER_ENABLED) { $env:FTW_INFER_ENABLED = '1' }
 
 function Test-PortListening([int]$p) {
   try {

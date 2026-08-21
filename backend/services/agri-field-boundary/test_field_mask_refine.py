@@ -5,9 +5,6 @@ from __future__ import annotations
 import numpy as np
 
 from field_mask_refine import (
-    FTW_MIN_PX,
-    ftw_min_px_from_area,
-    ftw_polygonize_min_size_m2,
     merge_instance_masks,
     refine_binary_mask,
     refine_label_raster,
@@ -73,13 +70,7 @@ def test_refine_label_raster_merges_touching_ids():
     assert len(ids) == 1
 
 
-def test_ftw_min_px_never_below_floor():
-    assert ftw_min_px_from_area(1.0) >= FTW_MIN_PX
-    assert ftw_min_px_from_area(1.0) >= 80
-    assert ftw_polygonize_min_size_m2(1.0) >= 500.0
-
-
-def test_ftw_like_split_field_plus_speckles_merges_to_one():
+def test_split_field_plus_speckles_merges_to_one():
     """One field split into 4 touching IDs + 5 speckles → 1 field, speckles gone."""
     lab = np.zeros((80, 80), dtype=np.int32)
     # 40x40 field as 2x2 quadrants (each 20x20 = 400 px).
@@ -103,7 +94,7 @@ def test_ftw_like_split_field_plus_speckles_merges_to_one():
     assert out[71, 71] == 0
 
 
-def test_ftw_like_road_gap_keeps_two_fields():
+def test_road_gap_keeps_two_fields():
     """Two fields with a 3-px road gap stay separate after label refine."""
     lab = np.zeros((60, 80), dtype=np.int32)
     lab[10:50, 5:30] = 1

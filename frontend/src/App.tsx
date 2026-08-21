@@ -42,6 +42,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
     if (!message) return false
     if (message.includes('Style is not done loading')) return true
     if (message.includes('ResizeObserver loop')) return true
+    if (message.includes('errorCb is not a function')) return true
     // Mapbox GL terrain DEM race: `_updateTerrain` reads map state before DEM is ready.
     // Already absorbed in SatelliteIntelligence map onError; also ignore window.error bubble.
     if (message.includes("reading 'get'")) {

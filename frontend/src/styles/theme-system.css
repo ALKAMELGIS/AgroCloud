@@ -1,0 +1,472 @@
+/**
+ * AgroCloud canonical theme system — semantic text/surface tokens + global typography.
+ * Light: primary #222, secondary #555, muted #777, soft backgrounds.
+ * Dark:  primary #E6E6E6, secondary #B8B8B8, muted #8F8F8F, no harsh #000/#fff text.
+ */
+
+/* ========== Light palette ========== */
+:root,
+html[data-theme='light'],
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --theme-text-primary: #222222;
+  --theme-text-secondary: #555555;
+  --theme-text-muted: #777777;
+  --theme-bg-base: #f6f7f8;
+  --theme-bg-elevated: #fafbfc;
+  --theme-surface: rgba(252, 253, 254, 0.88);
+  --theme-surface-muted: #f1f3f5;
+  --theme-border: rgba(34, 34, 34, 0.1);
+  --theme-border-strong: rgba(34, 34, 34, 0.16);
+
+  --ds-color-text: var(--theme-text-primary);
+  --ds-color-text-secondary: var(--theme-text-secondary);
+  --ds-color-text-muted: var(--theme-text-muted);
+  --ds-color-bg: var(--theme-bg-base);
+  --ds-color-bg-dashboard: var(--theme-bg-elevated);
+  --ds-color-border: var(--theme-border);
+  --ds-color-border-strong: var(--theme-border-strong);
+}
+
+/* ========== Dark palette ========== */
+html[data-theme='dark'],
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --theme-text-primary: #E6E6E6;
+  --theme-text-secondary: #B8B8B8;
+  --theme-text-muted: #8F8F8F;
+  --theme-bg-base: #141618;
+  --theme-bg-elevated: #1a1d21;
+  --theme-surface: rgba(255, 255, 255, 0.05);
+  --theme-surface-muted: rgba(255, 255, 255, 0.08);
+  --theme-border: rgba(230, 230, 230, 0.12);
+  --theme-border-strong: rgba(230, 230, 230, 0.18);
+
+  --ds-color-text: var(--theme-text-primary);
+  --ds-color-text-secondary: var(--theme-text-secondary);
+  --ds-color-text-muted: var(--theme-text-muted);
+  --ds-color-bg: var(--theme-bg-base);
+  --ds-color-bg-dashboard: var(--theme-bg-elevated);
+  --ds-color-border: var(--theme-border);
+  --ds-color-border-strong: var(--theme-border-strong);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+
+    --theme-text-primary: #E6E6E6;
+    --theme-text-secondary: #B8B8B8;
+    --theme-text-muted: #8F8F8F;
+    --theme-bg-base: #141618;
+    --theme-bg-elevated: #1a1d21;
+    --theme-surface: rgba(255, 255, 255, 0.05);
+    --theme-surface-muted: rgba(255, 255, 255, 0.08);
+    --theme-border: rgba(230, 230, 230, 0.12);
+    --theme-border-strong: rgba(230, 230, 230, 0.18);
+
+    --ds-color-text: var(--theme-text-primary);
+    --ds-color-text-secondary: var(--theme-text-secondary);
+    --ds-color-text-muted: var(--theme-text-muted);
+    --ds-color-bg: var(--theme-bg-base);
+    --ds-color-bg-dashboard: var(--theme-bg-elevated);
+    --ds-color-border: var(--theme-border);
+    --ds-color-border-strong: var(--theme-border-strong);
+  }
+}
+
+/* ========== Semantic text utilities ========== */
+.text-primary,
+.ds-text-primary {
+  color: var(--ds-color-text);
+}
+
+.text-secondary,
+.ds-text-secondary {
+  color: var(--ds-color-text-secondary);
+}
+
+.text-muted,
+.ds-muted,
+.ds-text-muted {
+  color: var(--ds-color-text-muted);
+}
+
+/* ========== Global typography (app shell) ========== */
+.app-layout,
+.page,
+.gis-page-padding,
+.content {
+  color: var(--ds-color-text);
+}
+
+.app-layout h1,
+.app-layout h2,
+.app-layout h3,
+.app-layout h4,
+.app-layout h5,
+.app-layout h6,
+.page h1,
+.page h2,
+.page h3,
+.page h4,
+.page h5,
+.page h6,
+.ds-modal-title,
+.page-title,
+.card-title,
+.ec-card-title {
+  color: var(--ds-color-text);
+}
+
+.app-layout p,
+.page p,
+.app-layout li,
+.page li,
+.app-layout td,
+.app-layout th,
+.page td,
+.page th {
+  color: var(--ds-color-text);
+}
+
+label,
+.ds-label,
+legend,
+.field-label {
+  color: var(--ds-color-text);
+}
+
+.app-layout small,
+.page small,
+.caption,
+.help-text,
+.form-hint,
+.field-hint {
+  color: var(--ds-color-text-muted);
+}
+
+.subtitle,
+.card-subtitle,
+.modal-subtitle,
+.section-subtitle,
+.ds-modal-subtitle {
+  color: var(--ds-color-text-secondary);
+}
+
+/* Buttons */
+.ds-btn:not(.ds-btn-primary):not(.ds-btn-danger),
+.ec-btn:not(.ec-btn-primary):not(.ec-btn-danger),
+button.secondary {
+  color: var(--ds-color-text);
+}
+
+.ds-btn:disabled,
+.ec-btn:disabled,
+button:disabled {
+  color: var(--ds-color-text-muted);
+}
+
+/* Navigation */
+.navmenu .item,
+.navmenu .group-header,
+.navmenu .item .label,
+.navmenu .group-header .label,
+.navmenu-sublist-empty {
+  color: var(--ds-color-text);
+}
+
+.navmenu .item.is-muted,
+.navmenu .item .hint {
+  color: var(--ds-color-text-secondary);
+}
+
+/* Forms & inputs */
+input,
+select,
+textarea,
+.ds-input,
+.ds-select,
+.ds-textarea {
+  color: var(--ds-color-text);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--ds-color-text-muted);
+}
+
+/* Dropdowns & menus */
+[role='listbox'],
+[role='menu'],
+.dropdown-menu,
+.ds-dropdown,
+.select-menu {
+  color: var(--ds-color-text);
+}
+
+[role='listbox'] [aria-disabled='true'],
+.dropdown-menu .disabled,
+.select-menu .is-disabled {
+  color: var(--ds-color-text-muted);
+}
+
+/* Tables */
+table thead th {
+  color: var(--ds-color-text);
+}
+
+table tbody td.is-muted,
+table .cell-secondary {
+  color: var(--ds-color-text-secondary);
+}
+
+/* Modals & dialogs */
+[role='dialog'],
+.ds-modal,
+.modal-content {
+  color: var(--ds-color-text);
+}
+
+/* Tooltips */
+[role='tooltip'],
+.tooltip,
+.ds-tooltip {
+  color: var(--ds-color-text);
+}
+
+/* Cards */
+.ds-card,
+.card,
+.ec-card {
+  color: var(--ds-color-text);
+}
+
+/* Notifications & alerts */
+.ds-alert,
+.notification,
+.toast,
+[role='status'],
+[role='alert'] {
+  color: var(--ds-color-text);
+}
+
+.ds-alert .message-secondary,
+.notification .subtitle {
+  color: var(--ds-color-text-secondary);
+}
+
+/* Empty states */
+.empty-state,
+.ds-empty,
+.navmenu-sublist-empty,
+.empty-row {
+  color: var(--ds-color-text-muted);
+}
+
+/* Status messages */
+.status-message,
+.inline-status,
+.badge-caption {
+  color: var(--ds-color-text-secondary);
+}
+
+/* Font Awesome inherits theme text (except branded hubs) */
+.app-layout i[class*='fa-']:not(.app-icon):not(.icon),
+.page i[class*='fa-']:not(.app-icon):not(.icon),
+.nav-theme-toggle__icon {
+  color: currentColor;
+  opacity: 1;
+}
+
+/* ========== Theme toggle — is-light / is-dark ========== */
+.nav-theme-toggle {
+  color: var(--ds-color-text);
+}
+
+.nav-theme-toggle__icon {
+  font-size: 15px;
+  line-height: 1;
+  color: inherit;
+  -webkit-text-fill-color: currentColor;
+}
+
+.nav-theme-toggle.is-light {
+  border-color: rgba(34, 34, 34, 0.14);
+  background: rgba(34, 34, 34, 0.06);
+  color: var(--ds-color-text);
+}
+
+.nav-theme-toggle.is-light:hover {
+  background: rgba(34, 34, 34, 0.11);
+  border-color: rgba(34, 34, 34, 0.22);
+  color: var(--ds-color-text);
+}
+
+.nav-theme-toggle.is-dark {
+  border-color: rgba(230, 230, 230, 0.16);
+  background: rgba(230, 230, 230, 0.08);
+  color: var(--ds-color-text);
+}
+
+.nav-theme-toggle.is-dark:hover {
+  background: rgba(230, 230, 230, 0.14);
+  border-color: rgba(230, 230, 230, 0.24);
+  color: var(--ds-color-text);
+}
+
+.nav-theme-toggle:focus-visible {
+  outline: none;
+  border-color: rgba(4, 120, 87, 0.55);
+  box-shadow: var(--ds-focus-ring);
+}
+
+html[data-theme='dark'] .nav-theme-toggle:focus-visible,
+:root[data-theme='dark'] .nav-theme-toggle:focus-visible {
+  border-color: rgba(34, 197, 94, 0.55);
+}
+
+.nav-theme-toggle:active {
+  transform: scale(0.94);
+}
+
+.nav-theme-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-theme-toggle:active {
+    transform: none;
+  }
+}
+
+/* ========== Professional controls: buttons, selects, dropdowns ========== */
+.app-layout button:not(.ds-btn-primary):not(.ec-btn-primary):not(.ds-btn-danger):not(.ec-btn-danger):not([class*='badge']),
+.app-layout .si-afb__btn,
+.app-layout .si-rs-panel__action,
+.app-layout .si-rs-panel__tool,
+.app-layout .si-rs-panel__icon-btn,
+.app-layout .si-field-analysis-btn {
+  color: var(--ds-color-text);
+}
+
+.app-layout select,
+.app-layout .si-afb__select,
+.app-layout .si-rs-panel__select,
+.app-layout .si-field-analysis-select,
+.app-layout .si-rs-layer-select__trigger {
+  color: var(--ds-color-text);
+  background-color: var(--theme-bg-elevated, var(--ds-color-bg-dashboard));
+  border-color: var(--theme-border, var(--ds-color-border));
+}
+
+.app-layout select option,
+.app-layout select optgroup {
+  color: var(--ds-color-text);
+  background-color: var(--theme-bg-elevated, #fafbfc);
+}
+
+html[data-theme='dark'] .app-layout select option,
+html[data-theme='dark'] .app-layout select optgroup {
+  background-color: #1a1d21;
+  color: #e6e6e6;
+}
+
+.app-layout .navmenu .sublist,
+.app-layout .navmenu-utility-popover.sublist,
+.app-layout [role='menu'],
+.app-layout [role='listbox'],
+.app-layout .dropdown-menu,
+.app-layout .si-rs-layer-select__menu {
+  color: var(--ds-color-text);
+  background: var(--theme-bg-elevated, var(--ds-color-surface));
+  border-color: var(--theme-border, var(--ds-color-border));
+}
+
+.app-layout .navmenu .subitem,
+.app-layout .navmenu-utility-popover .subitem,
+.app-layout [role='menuitem'],
+.app-layout [role='option'],
+.app-layout .si-rs-layer-select__option {
+  color: var(--ds-color-text);
+}
+
+.app-layout .navmenu .subitem:hover,
+.app-layout .navmenu-utility-popover .subitem:hover,
+.app-layout [role='menuitem']:hover,
+.app-layout [role='option']:hover,
+.app-layout .si-rs-layer-select__option:hover {
+  background: var(--theme-surface-muted, rgba(34, 34, 34, 0.06));
+  color: var(--ds-color-text);
+}
+
+html[data-theme='dark'] .app-layout .navmenu .subitem:hover,
+html[data-theme='dark'] .app-layout .navmenu-utility-popover .subitem:hover,
+html[data-theme='dark'] .app-layout [role='menuitem']:hover,
+html[data-theme='dark'] .app-layout [role='option']:hover,
+html[data-theme='dark'] .app-layout .si-rs-layer-select__option:hover {
+  background: rgba(230, 230, 230, 0.08);
+}
+
+/* SI dock inherits matte text tokens from surface mode */
+.si-sat-ctx-dock--light,
+.si-sat-ctx-dock--light .si-rs-panel,
+.si-sat-ctx-dock--light .si-afb,
+.si-sat-ctx-dock--light .si-env-section-card {
+  color: #222222;
+}
+
+.si-sat-ctx-dock--dark,
+.si-sat-ctx-dock--dark .si-rs-panel,
+.si-sat-ctx-dock--dark .si-afb,
+.si-sat-ctx-dock--dark .si-env-section-card {
+  color: #e6e6e6;
+}
+
+.si-sat-ctx-dock--light :where(
+  label,
+  .si-afb__label,
+  .si-rs-panel__label,
+  .si-rs-panel__title,
+  .si-rs-panel__meta,
+  .si-afb__hint,
+  .si-afb__status,
+  button,
+  select,
+  input,
+  textarea
+) {
+  color: #222222;
+}
+
+.si-sat-ctx-dock--dark :where(
+  label,
+  .si-afb__label,
+  .si-rs-panel__label,
+  .si-rs-panel__title,
+  .si-rs-panel__meta,
+  .si-afb__hint,
+  .si-afb__status,
+  button,
+  select,
+  input,
+  textarea
+) {
+  color: #e6e6e6;
+}
+
+.si-sat-ctx-dock--light :where(select, input, textarea, .si-afb__select, .si-rs-panel__select) {
+  background: #ffffff;
+  border-color: rgba(34, 34, 34, 0.14);
+  color: #222222;
+}
+
+.si-sat-ctx-dock--dark :where(select, input, textarea, .si-afb__select, .si-rs-panel__select) {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(230, 230, 230, 0.14);
+  color: #e6e6e6;
+}

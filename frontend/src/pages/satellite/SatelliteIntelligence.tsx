@@ -293,6 +293,7 @@ import './components/SiCropAlertCenterPanel.css';
 import './components/SiWapiAlertPanel.css';
 import { SiPrithviCropToolPanel } from './components/SiPrithviCropToolPanel';
 import { SiImageryTimeSeriesFloatingPanel } from './components/SiImageryTimeSeriesFloatingPanel';
+import { SiCropAiFloatingPanel } from './components/SiCropAiFloatingPanel';
 import {
   SiMapSwipeControl,
   SiMapSwipeRasterLayers,
@@ -2144,7 +2145,7 @@ async function decodeImageUrlToBlobUrl(url: string): Promise<string> {
   }
 
   if (/^https?:\/\//i.test(raw)) {
-    const res = await fetch(raw, { credentials: 'include' });
+    const res = await fetch(raw, { credentials: 'include', mode: 'cors' });
     if (!res.ok) throw new Error(`Crop AI image fetch failed (HTTP ${res.status})`);
     const blob = await res.blob();
     return URL.createObjectURL(blob);
@@ -2154,10 +2155,22 @@ async function decodeImageUrlToBlobUrl(url: string): Promise<string> {
 }
 
 async function resolveCropAiMapImageUrl(url: string): Promise<string> {
+  const raw = String(url || '').trim();
+  if (!raw) return raw;
   try {
-    return await decodeImageUrlToBlobUrl(url);
+    const converted = await decodeImageUrlToBlobUrl(raw);
+    if (converted.startsWith('blob:')) return converted;
+    if (converted.startsWith('data:')) return await ensureMapboxImageSourceUrl(converted);
+    return converted;
   } catch {
-    return String(url || '').trim();
+    if (raw.startsWith('data:')) {
+      try {
+        return await ensureMapboxImageSourceUrl(raw);
+      } catch {
+        return '';
+      }
+    }
+    return '';
   }
 }
 
@@ -4846,6 +4859,7 @@ export default function SatelliteIntelligence() {
   }, []);
   const [mapStaticChartsOpen, setMapStaticChartsOpen] = useState(false);
   const [imageryTimeSeriesOpen, setImageryTimeSeriesOpen] = useState(false);
+  const [cropAiPanelOpen, setCropAiPanelOpen] = useState(false);
   const [mapSwipeOpen, setMapSwipeOpen] = useState(false);
   const [mapSwipeBeforeTiles, setMapSwipeBeforeTiles] = useState<string[]>([]);
   const [mapSwipeCompare, setMapSwipeCompare] = useState<SiMapSwipeCompareSides | null>(null);
@@ -5026,6 +5040,7 @@ export default function SatelliteIntelligence() {
   const cropClassificationRunTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Isolated study AOI for Crop Classification â€” never mixed with Remote Sensing sketch. */
   const [cropClassAoiGeometry, setCropClassAoiGeometry] = useState<any | null>(null);
+  const cropClassAoiGeometryRef = useRef<any | null>(null);
   const [cropClassDrawingModeActive, setCropClassDrawingModeActive] = useState(false);
   /** Isolated training-sample sketch for Image Classification — never mixed with the general map drawing. */
   const [icSampleAoiGeometry, setIcSampleAoiGeometry] = useState<any | null>(null);
@@ -5323,6 +5338,7 @@ export default function SatelliteIntelligence() {
   const [polylineStart, setPolylineStart] = useState<[number, number] | null>(null);
   const [polygonRing, setPolygonRing] = useState<[number, number][]>([]);
   const [drawnGeometry, setDrawnGeometry] = useState<any | null>(null);
+  const drawnGeometryRef = useRef<any | null>(null);
   /** Show/hide the committed AOI boundary as an independent, persistent layer. */
   const [aoiLayerVisible, setAoiLayerVisible] = useState(true);
   const [aoiLayerOpacity, setAoiLayerOpacity] = useState(1);
@@ -5557,9 +5573,13 @@ export default function SatelliteIntelligence() {
       getViewportBounds: getCropAiViewportBounds,
       customLayers: customLayersRef.current,
       gisSelectionHits: gisSelectionHitsRef.current,
-      drawnGeometry: drawnGeometryRef.current ?? drawnGeometry,
+      drawnGeometry:
+        drawnGeometryRef.current ??
+        drawnGeometry ??
+        cropClassAoiGeometryRef.current ??
+        cropClassAoiGeometry,
     });
-  }, [drawnGeometry, getCropAiViewportBounds]);
+  }, [drawnGeometry, cropClassAoiGeometry, getCropAiViewportBounds]);
 
   const cropAiAoiGeometry = useMemo(() => {
     const raw = resolveCropAoiGeometry({
@@ -5568,13 +5588,15 @@ export default function SatelliteIntelligence() {
       getViewportBounds: getCropAiViewportBounds,
       customLayers,
       gisSelectionHits,
-      drawnGeometry,
+      drawnGeometry:
+        drawnGeometry ?? cropClassAoiGeometryRef.current ?? cropClassAoiGeometry,
     });
     return getDrawnGeometry(raw);
   }, [
     cropAoiMode,
     cropAoiLayerId,
     drawnGeometry,
+    cropClassAoiGeometry,
     gisSelectionHits,
     customLayers,
     getCropAiViewportBounds,
@@ -5805,8 +5827,12 @@ export default function SatelliteIntelligence() {
       if (!boundsTuple) return;
       const [w, s, e, n] = boundsTuple;
       const coordinates = cropAiBoundsToCoordinates(boundsTuple);
-      const proxiedUrl = /^https?:\/\//i.test(url) ? cropPredictionImageUrl(url) : url;
+      const proxiedUrl = cropPredictionImageUrl(url, job?.id);
       const finalUrl = await resolveCropAiMapImageUrl(proxiedUrl);
+      if (!finalUrl || finalUrl.startsWith('data:')) {
+        console.warn('[Crop AI] Map layer skipped — prediction image could not be prepared for Mapbox.');
+        return;
+      }
       const outline = aoiGeometry
         ? { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: aoiGeometry }] }
         : siRasterExtentFootprint(coordinates);
@@ -5959,6 +5985,11 @@ export default function SatelliteIntelligence() {
     (id, meta) => {
       const sid = id as MapToolboxSectionId;
       if (RETIRED_TOOLBOX_SECTIONS.has(sid)) return;
+      /* Crop AI is fully isolated — no shared processing stack or drawing teardown. */
+      if (sid === 'crop-classification') {
+        setCropAiPanelOpen(true);
+        return;
+      }
       // Only Edit activates drawing — opening any toolbox panel turns drawing mode off.
       // Full sketch teardown for analysis panels runs in the expandedEnvSection effect.
       setShowEditHandles(false);
@@ -6124,9 +6155,7 @@ export default function SatelliteIntelligence() {
     setStacStatus('Basemap tiles unavailable â€” using Esri World Imagery.');
   }, []);
   const siTableFeatureKeyCacheRef = useRef<Map<object, string>>(new Map());
-  const drawnGeometryRef = useRef<any | null>(null);
   const clearRemoteSensingAoiSketchOnlyRef = useRef<() => void>(() => {});
-  const cropClassAoiGeometryRef = useRef<any | null>(null);
   const icSampleAoiGeometryRef = useRef<any | null>(null);
   const samTrainDraftGeometryRef = useRef<any | null>(null);
   const trainingAiDraftGeometryRef = useRef<any | null>(null);
@@ -13957,8 +13986,14 @@ export default function SatelliteIntelligence() {
         setCropClassDrawingModeActive(false);
         // Ensure AOI updates match the shape being drawn from the Edit tool.
         setDrawTargetMode('aoi');
-        // Deactivate any open toolbox panel to avoid two tools being active at once.
-        setIsLayerDropdownOpen(false);
+        // Toolbox panels with their own Select AOI keep the panel open while drawing.
+        const section = expandedEnvSectionRef.current;
+        const keepToolboxOpen =
+          section === 'agri-field-boundary' ||
+          section === 'tree-detections';
+        if (!keepToolboxOpen) {
+          setIsLayerDropdownOpen(false);
+        }
       }
       setRsDrawingModeActive(active);
       if (!active) {
@@ -14297,15 +14332,13 @@ export default function SatelliteIntelligence() {
 
   /** Keep drawing owners aligned with the active toolbox panel (isolated layers). */
   useEffect(() => {
-    // Analysis panels consume the committed AOI only — never auto-arm a second draw tool.
+    // Analysis panels with their own Select AOI (Crop AI, Tree, FTW) manage map tools locally.
     const analysisOnly =
       expandedEnvSection === 'segformer-detection' ||
-      expandedEnvSection === 'tree-detections' ||
       expandedEnvSection === 'hydro-watershed' ||
       expandedEnvSection === 'well-site' ||
       expandedEnvSection === 'well-suitability' ||
-      expandedEnvSection === 'flood-monitoring' ||
-      expandedEnvSection === 'crop-classification';
+      expandedEnvSection === 'flood-monitoring';
 
     if (analysisOnly) {
       setRsDrawingModeActive(false);
@@ -14432,26 +14465,68 @@ export default function SatelliteIntelligence() {
   const handleCropAoiModeChange = useCallback((mode: CropAoiMode) => {
     setCropAoiMode(mode);
     if (mode === 'select') {
+      if (cropClassDrawingModeActiveRef.current) handleCropClassDrawingModeChange(false);
       if (rsDrawingModeActiveRef.current) handleRsDrawingModeChange(false);
       if (measureModeRef.current) clearMeasure();
       setGisSelectionActive(true);
       setGisSelectionTool('select');
       applyMapDrawTool('select');
       setShowEditHandles(false);
+      setMapDragPanEnabled(true);
       return;
     }
     if (mode === 'draw') {
       if (measureModeRef.current) clearMeasure();
       if (gisSelectionActiveRef.current) setGisSelectionActive(false);
-      handleRsDrawingModeChange(true);
-      applyMapDrawTool('polygon');
+      handleCropClassDrawingToolChange('polygon');
       setShowEditHandles(false);
+      setMapDragPanEnabled(false);
       return;
     }
+    if (cropClassDrawingModeActiveRef.current) handleCropClassDrawingModeChange(false);
     if (gisSelectionActiveRef.current) setGisSelectionActive(false);
     if (rsDrawingModeActiveRef.current) handleRsDrawingModeChange(false);
+    applyMapDrawTool('select');
     setShowEditHandles(false);
-  }, [handleRsDrawingModeChange, clearMeasure]);
+    setMapDragPanEnabled(true);
+  }, [
+    handleRsDrawingModeChange,
+    handleCropClassDrawingModeChange,
+    handleCropClassDrawingToolChange,
+    clearMeasure,
+  ]);
+
+  /** Crop AI — restore draw/select tooling when its isolated panel opens. */
+  useEffect(() => {
+    if (!cropAiPanelOpen) return;
+    setShowEditHandles(false);
+    const mode = cropAoiModeRef.current;
+    if (mode === 'draw') {
+      const hasAoi = Boolean(
+        getDrawnGeometry(
+          drawnGeometryRef.current ??
+            drawnGeometry ??
+            cropClassAoiGeometryRef.current ??
+            cropClassAoiGeometry,
+        ),
+      );
+      if (!hasAoi) {
+        handleCropAoiModeChange('draw');
+      } else if (cropClassDrawingModeActiveRef.current) {
+        handleCropClassDrawingModeChange(false);
+        applyMapDrawTool('select');
+        setMapDragPanEnabled(true);
+      }
+      return;
+    }
+    handleCropAoiModeChange(mode);
+  }, [
+    cropAiPanelOpen,
+    drawnGeometry,
+    cropClassAoiGeometry,
+    handleCropAoiModeChange,
+    handleCropClassDrawingModeChange,
+  ]);
 
   const treeAoiGeometry = useMemo(
     () => resolveTreeAoi(),
@@ -15862,6 +15937,8 @@ export default function SatelliteIntelligence() {
       setGisSelectionActive(true);
       setGisSelectionTool('select');
       applyMapDrawTool('select');
+      setShowEditHandles(false);
+      setMapDragPanEnabled(true);
       return;
     }
     if (mode === 'draw') {
@@ -15869,8 +15946,10 @@ export default function SatelliteIntelligence() {
       if (gisSelectionActiveRef.current) setGisSelectionActive(false);
       handleRsDrawingModeChange(true);
       applyMapDrawTool('polygon');
+      setShowEditHandles(false);
+      setMapDragPanEnabled(false);
     }
-  }, []);
+  }, [handleRsDrawingModeChange, clearMeasure]);
 
   const captureFieldBoundaryView = useCallback(
     async (opts: {
@@ -15910,6 +15989,34 @@ export default function SatelliteIntelligence() {
   agriFieldBoundaryRef.current = agriFieldBoundary;
   const agriFieldTerrainSyncTimerRef = useRef<number | null>(null);
   const agriFieldFocusSigRef = useRef('');
+
+  /** Field Boundary panel — Delineate default, draw AOI without closing panel. */
+  useEffect(() => {
+    if (expandedEnvSection !== 'agri-field-boundary') return;
+    setShowEditHandles(false);
+    agriFieldBoundaryRef.current.setModel('delineate-fbis');
+    agriFieldBoundaryRef.current.setSceneDateAllYear();
+    const mode = fieldBoundaryAoiModeRef.current;
+    if (mode === 'draw') {
+      const hasAoi = Boolean(getDrawnGeometry(resolveFieldBoundaryAoi()));
+      if (!hasAoi) {
+        handleFieldBoundaryAoiModeChange('draw');
+      } else if (rsDrawingModeActiveRef.current) {
+        handleRsDrawingModeChange(false);
+        applyMapDrawTool('select');
+        setMapDragPanEnabled(true);
+      }
+      return;
+    }
+    handleFieldBoundaryAoiModeChange(mode);
+  }, [
+    expandedEnvSection,
+    drawnGeometry,
+    gisSelectionHits,
+    handleFieldBoundaryAoiModeChange,
+    handleRsDrawingModeChange,
+    resolveFieldBoundaryAoi,
+  ]);
 
   useEffect(() => {
     if (agriFieldBoundary.phase !== 'done') {
@@ -21545,6 +21652,7 @@ export default function SatelliteIntelligence() {
       basemapFeatures: geoAiBasemapFeatures,
       toolbox: {
         openSection: isLayerDropdownOpen ? expandedEnvSection : null,
+        cropAiPanelOpen,
         imageryTimeSeriesOpen,
         mapSwipeOpen,
         drawingActive: Boolean(rsDrawingModeActive),
@@ -21583,6 +21691,7 @@ export default function SatelliteIntelligence() {
     geoAiBasemapFeatures,
     isLayerDropdownOpen,
     expandedEnvSection,
+    cropAiPanelOpen,
     imageryTimeSeriesOpen,
     mapSwipeOpen,
     rsDrawingModeActive,
@@ -21763,6 +21872,10 @@ export default function SatelliteIntelligence() {
             setMapSwipeOpen(true);
             return 'Opened MapSwipe — compare two dates and/or layers over the AOI.';
           }
+          if (panel === 'crop-classification') {
+            setCropAiPanelOpen(true);
+            return 'Opened Crop AI (Prithvi) — draw an AOI in the Crop AI panel, then run classification.';
+          }
           if (panel === 'aoi-edit') {
             // Drawing is activated only from the Map toolbox Edit button (no auto-arm).
             return 'Use the Edit button in the Map toolbox to draw an AOI, then ask again for NDVI / flood / well analysis.';
@@ -21781,7 +21894,6 @@ export default function SatelliteIntelligence() {
             'crop-alerts',
             'wapi-alerts',
             'stress-zones',
-            'crop-classification',
             'raster-georeference',
             'source',
           ]);
@@ -21837,14 +21949,22 @@ export default function SatelliteIntelligence() {
               .trim()
               .toLowerCase()
               .replace(/_/g, '-');
-            if (t === 'sentinel2-live' || t === 'ftwlive') return 'ftw-live';
-            if (t === 'ftwinfer') return 'ftw-infer';
-            if (t === 'fields-of-the-world' || t === 'ftw') return 'fow';
+            if (
+              t === 'sentinel2-live' ||
+              t === 'ftwlive' ||
+              t === 'ftw-live' ||
+              t === 'ftwinfer' ||
+              t === 'ftw-infer' ||
+              t === 'ftw' ||
+              t === 'fow' ||
+              t === 'fields-of-the-world'
+            ) {
+              return 'delineate-fbis';
+            }
             const allowed: FieldImagerySource[] = [
               'basemap',
-              'fow',
-              'ftw-infer',
-              'ftw-live',
+              'delineate-fbis',
+              'agricultural-field-delineation',
               'sentinel2',
               'landsat',
               'planet',
@@ -21854,7 +21974,7 @@ export default function SatelliteIntelligence() {
               'png',
               'jpeg',
             ];
-            return (allowed as string[]).includes(t) ? (t as FieldImagerySource) : 'ftw-live';
+            return (allowed as string[]).includes(t) ? (t as FieldImagerySource) : 'delineate-fbis';
           };
           const source = normalizeSource(sourceRaw);
           const yearN =
@@ -22719,6 +22839,8 @@ export default function SatelliteIntelligence() {
       if (
         message.includes('ERR_ABORTED') ||
         status === 0 ||
+        message.includes('errorCb is not a function') ||
+        url.includes('crop-classification/jobs/') ||
         url.includes('api.mapbox.com/v4/mapbox.satellite') ||
         url.includes('services.sentinel-hub.com/ogc/wms')
       ) {
@@ -23859,6 +23981,8 @@ export default function SatelliteIntelligence() {
               if (
                 message.includes('ERR_ABORTED') ||
                 status === 0 ||
+                message.includes('errorCb is not a function') ||
+                url.includes('crop-classification/jobs/') ||
                 url.includes('api.mapbox.com/v4/mapbox.satellite') ||
                 url.includes('services.sentinel-hub.com/ogc/wms')
               ) {
@@ -25356,6 +25480,36 @@ export default function SatelliteIntelligence() {
             stormOverlayDismissEpoch={tsWeatherStormDismissEpoch}
           />
 
+          <SiCropAiFloatingPanel
+            open={cropAiPanelOpen}
+            onClose={() => setCropAiPanelOpen(false)}
+            containerRef={siMapContainerRef}
+          >
+            <SiPrithviCropToolPanel
+              aoiGeometry={cropAiAoiGeometry}
+              aoiMode={cropAoiMode}
+              onAoiModeChange={handleCropAoiModeChange}
+              aoiLayerOptions={aoiLayerModeOptions}
+              aoiLayerId={cropAoiLayerId}
+              onAoiLayerIdChange={setCropAoiLayerId}
+              hasSelfInference={cropAiSelfInference}
+              season={cropAiSeason}
+              onSeasonChange={setCropAiSeason}
+              job={cropAiJob}
+              isRunning={cropAiRunning}
+              onRunAoi={handleCropAiRunAoi}
+              onRunChip={handleCropAiRunChip}
+              onCancel={handleCropAiCancel}
+              onAddToMap={() => void addCropAiPredictionLayer(cropAiJob)}
+              onExportReport={handleCropAiExportReport}
+              exportReportBusy={cropAiExportBusy}
+              exportReportLabel={cropAiExportLabel}
+              onExportGeoTiff={handleCropAiExportGeoTiff}
+              exportGeoTiffBusy={cropAiGeoTiffBusy}
+              exportGeoTiffLabel={cropAiGeoTiffLabel}
+            />
+          </SiCropAiFloatingPanel>
+
           <SiMapSwipeControl
             mapboxAccessToken={mapboxAccessTokenForMap}
             viewState={{
@@ -25863,7 +26017,8 @@ export default function SatelliteIntelligence() {
               expandedEnvSection !== 'eo-enrichment' &&
               expandedEnvSection !== 'ai-detection-gis' &&
               expandedEnvSection !== 'sam-detection' &&
-              expandedEnvSection !== 'image-classification'
+              expandedEnvSection !== 'image-classification' &&
+              expandedEnvSection !== 'crop-classification'
                 ? expandedEnvSection
                 : null
             }
@@ -25890,6 +26045,8 @@ export default function SatelliteIntelligence() {
             onMapSwipeOpenChange={setMapSwipeOpen}
             goToXyOpen={goToXyOpen}
             onGoToXyOpenChange={setGoToXyOpen}
+            cropAiPanelOpen={cropAiPanelOpen}
+            onCropAiPanelOpenChange={setCropAiPanelOpen}
             layerLiveLegendOpen={layerLiveLegendOpen}
             onLayerLiveLegendOpenChange={setLayerLiveLegendOpen}
             mapToolboxDrawingActive={rsDrawingModeActive}
@@ -26305,8 +26462,6 @@ export default function SatelliteIntelligence() {
                                 ? 'ISS Irrigation Alert'
                               : expandedEnvSection === 'stress-zones'
                                 ? 'Stress Zones Detection'
-                              : expandedEnvSection === 'crop-classification'
-                                ? 'Prithvi Crop Classification'
                               : expandedEnvSection === 'tree-detections'
                                 ? 'Tree Detections'
                               : expandedEnvSection === 'agri-field-boundary'
@@ -26411,33 +26566,6 @@ export default function SatelliteIntelligence() {
                           onCompareEnabledChange={stressZones.setCompareEnabled}
                           onRefresh={() => void stressZones.refresh()}
                           onZoneClick={handleStressZoneRowClick}
-                        />
-                      </div>
-                    )}
-                    {expandedEnvSection === 'crop-classification' && (
-                      <div className="si-env-section-card si-rs-panel--glass">
-                        <SiPrithviCropToolPanel
-                          aoiGeometry={cropAiAoiGeometry}
-                          aoiMode={cropAoiMode}
-                          onAoiModeChange={handleCropAoiModeChange}
-                          aoiLayerOptions={aoiLayerModeOptions}
-                          aoiLayerId={cropAoiLayerId}
-                          onAoiLayerIdChange={setCropAoiLayerId}
-                          hasSelfInference={cropAiSelfInference}
-                          season={cropAiSeason}
-                          onSeasonChange={setCropAiSeason}
-                          job={cropAiJob}
-                          isRunning={cropAiRunning}
-                          onRunAoi={handleCropAiRunAoi}
-                          onRunChip={handleCropAiRunChip}
-                          onCancel={handleCropAiCancel}
-                          onAddToMap={() => void addCropAiPredictionLayer(cropAiJob)}
-                          onExportReport={handleCropAiExportReport}
-                          exportReportBusy={cropAiExportBusy}
-                          exportReportLabel={cropAiExportLabel}
-                          onExportGeoTiff={handleCropAiExportGeoTiff}
-                          exportGeoTiffBusy={cropAiGeoTiffBusy}
-                          exportGeoTiffLabel={cropAiGeoTiffLabel}
                         />
                       </div>
                     )}
@@ -26614,9 +26742,6 @@ export default function SatelliteIntelligence() {
                           imageryOptions={agriFieldBoundary.imageryOptions}
                           onSourceChange={agriFieldBoundary.setSource}
                           sourceOptions={agriFieldBoundary.sourceOptions}
-                          countryOptions={agriFieldBoundary.countryOptions}
-                          adminIso={agriFieldBoundary.adminIso}
-                          onAdminIsoChange={agriFieldBoundary.setAdminIso}
                           sceneDateFrom={agriFieldBoundary.sceneDateFrom}
                           sceneDateTo={agriFieldBoundary.sceneDateTo}
                           onSceneDateFromChange={agriFieldBoundary.setSceneDateFrom}
@@ -26643,8 +26768,6 @@ export default function SatelliteIntelligence() {
                           busy={agriFieldBoundary.busy}
                           error={agriFieldBoundary.error}
                           errorDetail={agriFieldBoundary.errorDetail}
-                          notice={agriFieldBoundary.notice}
-                          mapRgbOnlyHost={agriFieldBoundary.mapRgbOnlyHost}
                           offline={agriFieldBoundary.offline}
                           health={agriFieldBoundary.health}
                           fieldCount={agriFieldBoundary.fieldCount}
@@ -26653,20 +26776,10 @@ export default function SatelliteIntelligence() {
                           score={agriFieldBoundary.result?.score ?? null}
                           hasResult={Boolean(agriFieldBoundary.geojson?.features?.length)}
                           resultGeojson={agriFieldBoundary.geojson}
-                          referenceGeojson={
-                            agriFieldBoundary.validationReference ?? fieldBoundaryReferenceGeojson
-                          }
-                          referenceLabel={
-                            agriFieldBoundary.validationReferenceLabel ?? fieldBoundaryReferenceLabel
-                          }
-                          referenceNotice={
-                            agriFieldBoundary.validationReferenceBusy
-                              ? agriFieldBoundary.validationReferenceNotice
-                              : agriFieldBoundary.validationReference || fieldBoundaryReferenceGeojson
-                                ? null
-                                : agriFieldBoundary.validationReferenceNotice
-                          }
-                          referenceBusy={agriFieldBoundary.validationReferenceBusy}
+                          referenceGeojson={fieldBoundaryReferenceGeojson}
+                          referenceLabel={fieldBoundaryReferenceLabel}
+                          referenceNotice={null}
+                          referenceBusy={false}
                           mapContainerRef={siMapContainerRef}
                           onRun={() => void agriFieldBoundary.run()}
                           onReset={agriFieldBoundary.reset}
@@ -26686,6 +26799,7 @@ export default function SatelliteIntelligence() {
                           sen2srBusy={agriFieldBoundary.sen2sr.busy}
                           sen2srError={agriFieldBoundary.sen2sr.error}
                           sen2srNotice={agriFieldBoundary.sen2sr.notice}
+                          trainingSamples={agriFieldBoundary.trainingSamples}
                         />
                       </div>
                     )}

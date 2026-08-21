@@ -28,7 +28,7 @@ function squareAround(
 }
 
 describe('mergeFieldsAndTrees', () => {
-  it('keeps FTW fields and Tree blobs only', () => {
+  it('keeps field parcels and Tree blobs only', () => {
     const fields: GeoJSON.FeatureCollection = {
       type: 'FeatureCollection',
       features: [
@@ -92,7 +92,7 @@ describe('mergeFieldsAndTrees', () => {
     const merged = mergeFieldsAndTrees({
       fields,
       trees,
-      engine: 'ftw-live',
+      engine: 'delineate-fbis',
       fieldCleanup: false,
     })
     expect(merged.stats.fields).toBe(1)
@@ -119,7 +119,7 @@ describe('mergeFieldsAndTrees', () => {
     expect(kept[0]?.properties?.confidence).toBe(0.95)
   })
 
-  it('prefers FTW fields near Field Boundary samples when ≥3 samples exist', () => {
+  it('prefers fields near Field Boundary samples when ≥3 samples exist', () => {
     const nearLon = 55.3
     const nearLat = 24.2
     const farLon = 55.45
@@ -174,7 +174,7 @@ describe('mergeFieldsAndTrees', () => {
         squareAround(55.31, 24.2, 100, { confidence: 0.85, area_m2: 10_000, field_id: 2 }),
       ],
     }
-    const merged = mergeFieldsAndTrees({ fields, engine: 'ftw-live' })
+    const merged = mergeFieldsAndTrees({ fields, engine: 'delineate-fbis' })
     expect(merged.stats.fields).toBe(1)
     expect(merged.geojson.features[0]?.properties?.instance_id).toBe(2)
   })

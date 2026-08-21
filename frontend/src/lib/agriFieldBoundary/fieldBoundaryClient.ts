@@ -14,17 +14,8 @@ const BASE = () => apiUrl('/api/agri-field-boundary')
 
 export type FieldImagerySource =
   | 'basemap'
-  | 'fow'
-  /** On-demand FTW baseline model (Sentinel-2) — no client RGB; slow job. */
-  | 'ftw-infer'
-  /** Live Sentinel-2 stack + FTW model via MPC — no client RGB; slow job. */
-  | 'ftw-live'
-  /**
-   * Delineate Anything (v2) — instance parcels via :8096 on map capture.
-   * Id remains `delineate-fbis` for API compatibility.
-   * Sharp black cadastral-style edges vs stair-step FTW masks.
-   */
   | 'delineate-fbis'
+  | 'agricultural-field-delineation'
   | 'sentinel2'
   | 'landsat'
   | 'planet'
@@ -41,44 +32,38 @@ export type FieldBoundaryRequest = {
   minConfidence?: number
   minAreaM2?: number
   source?: FieldImagerySource
-  /** Calendar year for live / on-demand Sentinel-2 scene selection. */
-  year?: number
-  /** Preferred Sentinel-2 scene date (YYYY-MM-DD); year is derived when omitted. */
-  sceneDate?: string
-  /** Inclusive Sentinel-2 search window start (YYYY-MM-DD). */
-  sceneDateFrom?: string
-  /** Inclusive Sentinel-2 search window end (YYYY-MM-DD). */
-  sceneDateTo?: string
-  /** Optional FTW model checkpoint name (service default if omitted). */
-  model?: string
-  /** ISO 3166-1 alpha-2 country for FoW country partitions (fast path). */
+  /** @deprecated Unused — kept optional for older callers. */
   adminIso?: string
   highRes?: boolean
+  /** Sentinel-2 acquisition day (YYYY-MM-DD) for Agricultural Field Delineation. */
+  sceneDate?: string
+  sceneDateFrom?: string
+  sceneDateTo?: string
+  year?: number
+  model?: string
   signal?: AbortSignal
 }
 
 export type FieldBoundaryHealth = {
   status?: string
+  /** @deprecated Unused — optional for older health payloads. */
   fow?: boolean
-  ftw_infer?: boolean
-  ftw_live?: boolean
-  /** Live probe from Node → Python VPS (production diagnostics). */
-  upstream_probe?: {
-    url?: string
-    ok?: boolean
-    status?: number
-    ms?: number
-    body?: string
+  /** Bundled Esri Mask R-CNN Agricultural Field Delineation (12-band S2). */
+  agricultural_field_delineation?: boolean
+  agricultural_field_delineation_status?: {
+    ready?: boolean
+    device?: string
+    emd_version?: string
+    info?: Record<string, unknown>
     error?: string
   }
-  field_boundary_url?: string
   /** SEN2SRLite neural SR available on the Python service (optional on Hostinger). */
   sen2sr?: boolean
   sen2sr_error?: string
   offline?: boolean
   /** Map RGB / builtin detect is reachable through the AgroCloud API. */
   live?: boolean
-  /** Python FTW/FoW/SEN2SR weights finished loading. */
+  /** Python field engines / SEN2SR weights finished loading. */
   ready?: boolean
   /** Python service still starting — Detect Fields still works via map RGB. */
   loading?: boolean
@@ -138,6 +123,7 @@ export function optimizeFieldBoundaryResult(
     regularizeMethod?: FootprintRegularizeMethod
     minFillRatio?: number
     maxAreaInflation?: number
+    abutNeighborsM?: number
     softenKept?: boolean
     softenMeters?: number
   },
@@ -161,13 +147,13 @@ export function optimizeFieldBoundaryResult(
     if (opts?.regularizeFootprints !== false) {
       cleaned = regularizeFieldFootprints(cleaned, {
         method: opts?.regularizeMethod ?? 'right-angles',
-        minFillRatio: opts?.minFillRatio ?? 0.55,
-        maxAreaInflation: opts?.maxAreaInflation ?? 1.45,
+        minFillRatio: opts?.minFillRatio ?? 0.65,
+        maxAreaInflation: opts?.maxAreaInflation ?? 1.35,
         softenKept: opts?.softenKept !== false,
         softenMeters: opts?.softenMeters ?? (opts?.regularizeMethod === 'right-angles' ? 3.2 : 5.2),
         cadastralSnap: true,
         resolveOverlaps: true,
-        abutNeighborsM: 0.9,
+        abutNeighborsM: opts?.abutNeighborsM ?? 1.15,
       })
     }
     cleaned = stampFieldStroke(cleaned)
@@ -203,7 +189,7 @@ export function formatFieldBoundaryUserError(
     return {
       short: 'Loading field model… Detect Fields is available on the AgroCloud API.',
       detail:
-        'Map RGB detect runs on the AgroCloud API (eliteagrocloud.com). FTW/FoW need the Python field engine; retry Detect Fields on map RGB while models load.',
+        'Map RGB detect runs on the AgroCloud API (api.eliteagrocloud.com). Retry Detect Fields on map RGB while Python field engines load.',
     }
   }
 
@@ -224,19 +210,20 @@ export function formatFieldBoundaryUserError(
   const detail = stripUrls(msg).slice(0, 480)
   const source = opts?.source
 
-  if (opts?.empty || /^No (FoW |FTW |FTW live )?fields/i.test(msg)) {
-    if (source === 'fow') {
-      return {
-        short: 'No FoW fields in this AOI — Country catalog may be missing; FTW/map will be tried',
-        detail: detail || msg,
-      }
+  if (
+    /^Not Found$/i.test(msg) ||
+    /\bdetail["']?\s*:\s*["']?Not Found/i.test(msg) ||
+    /Unknown (field-boundary )?job/i.test(msg)
+  ) {
+    return {
+      short: 'Field API not reached — restart Vite so /api proxies to :3011',
+      detail:
+        detail ||
+        'Dev proxy sent /api to a Python AI port (e.g. :8092). Restart npm run dev with PORT=3011.',
     }
-    if (source === 'ftw-live') {
-      return { short: 'No FTW live fields — try another year or larger AOI', detail: detail || msg }
-    }
-    if (source === 'ftw-infer') {
-      return { short: 'No FTW fields — try another region or larger AOI', detail: detail || msg }
-    }
+  }
+
+  if (opts?.empty || /^No (FoW )?fields/i.test(msg)) {
     if (source === 'delineate-fbis') {
       return {
         short: 'No Delineate Anything fields — lower confidence, zoom to cropland, ensure :8096',
@@ -269,7 +256,7 @@ export function formatFieldBoundaryUserError(
       }
     }
     return {
-      short: 'No fields found — lower confidence, enlarge AOI, or try FoW / FTW',
+      short: 'No fields found — lower confidence, enlarge AOI, or try Delineate / Map RGB',
       detail: detail || msg,
     }
   }
@@ -280,40 +267,14 @@ export function formatFieldBoundaryUserError(
     )
   ) {
     return {
-      short: 'FTW ran out of memory — close apps or set FTW_INFER_NUM_WORKERS=1',
-      detail: detail || msg,
-    }
-  }
-
-  if (/Invalid value for '--model'|Unknown model/i.test(msg)) {
-    return {
-      short: 'FTW model id invalid — use FTW_PRUE_EFNET_B5',
-      detail: detail || msg,
-    }
-  }
-
-  if (/ftw inference (all|run|download|polygonize)\b[^]*?failed \(exit/i.test(msg)) {
-    return {
-      short: 'FTW inference failed — see details',
-      detail: detail || msg,
-    }
-  }
-
-  if (
-    /ftw-live dependenc|install ftw-tools|torchgeo|odc\.stac|pystac|planetary.computer|Python 3\.12/i.test(
-      msg,
-    ) &&
-    !/Invalid value for '--model'|Unknown model/i.test(msg)
-  ) {
-    return {
-      short: 'FTW live needs Python 3.12+ + ftw-tools',
+      short: 'Field model ran out of memory — close other apps and retry with a smaller AOI',
       detail: detail || msg,
     }
   }
 
   if (/duckdb|httpfs|source\.coop|FoW catalog|Fields of the World|FoW parcels|FoW requires/i.test(msg)) {
     return {
-      short: 'FoW catalog unreachable — check DuckDB / network',
+      short: 'Legacy field catalog unreachable — use Delineate Anything or Map RGB detect',
       detail: detail || msg,
     }
   }
@@ -404,95 +365,49 @@ function bodyOf(req: FieldBoundaryRequest) {
 }
 
 export async function fetchFieldBoundaryHealth(signal?: AbortSignal): Promise<FieldBoundaryHealth> {
+  const builtinOnline: FieldBoundaryHealth = {
+    status: 'ok',
+    offline: false,
+    builtin_fallback: true,
+    ready: true,
+    live: true,
+    loading: false,
+  }
   try {
     const res = await fetch(`${BASE()}/health`, { signal })
     const json = (await res.json().catch(() => null)) as (FieldBoundaryHealth & { error?: string }) | null
+    if (
+      isBackendUnavailablePayload(json?.error) ||
+      (res.status === 503 && isBackendUnavailablePayload(String(json?.error || '')))
+    ) {
+      return builtinOnline
+    }
     if (json && typeof json === 'object') {
       const status = String(json.status || '')
       const loading = Boolean(json.loading) || status === 'loading' || json.ready === false
       const live =
         json.offline === false ||
         json.live === true ||
-        json.python === true ||
         json.builtin_fallback === true ||
         status === 'ok' ||
         status === 'live' ||
         status === 'loading' ||
         status === 'ready'
-      return {
-        ...json,
-        offline: json.offline === true,
-        loading,
-        ready: json.ready !== false && !loading,
-        live: live || loading,
+      if (live || loading) {
+        return {
+          ...json,
+          offline: false,
+          loading,
+          ready: json.ready !== false && !loading,
+          live: true,
+        }
       }
     }
-    if (!res.ok) {
-      return {
-        status: 'error',
-        offline: true,
-        ready: false,
-        live: false,
-        loading: false,
-        python: false,
-        ftw_live: false,
-        builtin_fallback: true,
-        error: json?.error || `Health check failed (HTTP ${res.status}).`,
-      }
-    }
-    return {
-      status: 'error',
-      offline: true,
-      ready: false,
-      live: false,
-      loading: false,
-      python: false,
-      ftw_live: false,
-      builtin_fallback: true,
-      error: 'Field-boundary health returned an empty response.',
-    }
+    return builtinOnline
   } catch (err) {
     if ((err as Error)?.name === 'AbortError') throw err
-    return {
-      status: 'error',
-      offline: true,
-      ready: false,
-      live: false,
-      loading: false,
-      python: false,
-      ftw_live: false,
-      builtin_fallback: true,
-      error: String((err as Error)?.message || err || 'Could not reach field-boundary health.'),
-    }
+    return builtinOnline
   }
-}
-
-export async function fetchFowFieldBoundaries(
-  req: Omit<FieldBoundaryRequest, 'image' | 'source'>,
-): Promise<FieldBoundaryResult> {
-  let res: Response
-  try {
-    const iso = String(req.adminIso || '')
-      .trim()
-      .toUpperCase()
-    res = await fetch(`${BASE()}/fow-aoi`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        bbox: req.bbox,
-        aoi: req.aoi ?? null,
-        min_area_m2: req.minAreaM2 ?? 200,
-        ...(iso.length === 2 ? { admin_iso: iso } : {}),
-      }),
-      signal: req.signal,
-    })
-  } catch (err) {
-    if ((err as Error)?.name === 'AbortError') throw err
-    throw new FieldBoundaryServiceError('Could not reach the field-boundary service.', true)
-  }
-  const json = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: string }
-  await throwIfFailed(res, json)
-  return parseResult(json)
 }
 
 function looksLikeOfflineUpstream(raw: string | null | undefined): boolean {

@@ -61,7 +61,7 @@ describe('AgriFieldBoundaryResultsDashboard', () => {
         geojson={geojson}
         fieldCount={1}
         totalAreaHa={1.2}
-        engine="ftw-live"
+        engine="delineate-anything"
       />,
     )
     expect(container.querySelector('#si-afb-results-dashboard')).toBeNull()
@@ -81,7 +81,7 @@ describe('AgriFieldBoundaryResultsDashboard', () => {
         geojson={geojson}
         fieldCount={1}
         totalAreaHa={1.2}
-        engine="ftw-live"
+        engine="delineate-anything"
         score={0.82}
         epochHistory={epochHistory}
       />,
@@ -107,7 +107,7 @@ describe('AgriFieldBoundaryResultsDashboard', () => {
         geojson={geojson}
         fieldCount={1}
         totalAreaHa={1.2}
-        engine="ftw-live"
+        engine="delineate-anything"
         score={0.82}
       />,
     )
@@ -116,7 +116,7 @@ describe('AgriFieldBoundaryResultsDashboard', () => {
     expect(screen.queryByText('Field Results Dashboard')).toBeNull()
   })
 
-  it('explains pretrained FTW engines when there is no epoch history', () => {
+  it('explains pretrained field engines when there is no epoch history', () => {
     const host = document.createElement('div')
     document.body.appendChild(host)
     const mapContainerRef = createRef<HTMLDivElement>()
@@ -129,7 +129,7 @@ describe('AgriFieldBoundaryResultsDashboard', () => {
         geojson={geojson}
         fieldCount={1}
         totalAreaHa={1.2}
-        engine="ftw-infer"
+        engine="delineate-anything"
         score={0.9}
         epochHistory={[]}
       />,

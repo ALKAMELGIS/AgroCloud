@@ -39,7 +39,7 @@ const QUICK_LINKS: Array<{ id: SmartProcessingSectionId; icon: string; label: st
   { id: 'stress-zones', icon: 'fa-solid fa-heart-pulse', label: 'Stress Zones ⭐' },
   { id: 'crop-classification', icon: 'fa-solid fa-wheat-awn', label: 'Crop AI' },
   { id: 'tree-detections', icon: 'fa-solid fa-tree', label: 'Tree Detections' },
-  { id: 'agri-field-boundary', icon: 'fa-solid fa-crop-simple', label: 'FTW Fields' },
+  { id: 'agri-field-boundary', icon: 'fa-solid fa-crop-simple', label: 'Field Boundaries' },
   { id: 'hydro-watershed', icon: 'fa-solid fa-water', label: 'Hydro Watershed' },
   { id: 'table-geo-ai', icon: 'fa-solid fa-comments', label: 'AI Agent' },
 ];
@@ -156,8 +156,8 @@ const WORKFLOW_ROWS: Array<{
       {
         id: 'agri-field-boundary',
         icon: 'fa-solid fa-crop-simple',
-        label: 'Field Boundary (FTW live)',
-        hint: 'AOI → live Sentinel-2 stack + FTW model (or FoW / basemap) → field polygons for export.',
+        label: 'Field Boundary',
+        hint: 'AOI → AFD / Delineate / basemap → field polygons for export.',
         target: 'agri-field-boundary',
       },
     ],

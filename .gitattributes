@@ -1,0 +1,4 @@
+# Agricultural Field Delineation — large model assets (Git LFS)
+*.dlpk filter=lfs diff=lfs merge=lfs -text
+backend/services/agri-field-boundary/models/AgriculturalFieldDelineation/*.pth filter=lfs diff=lfs merge=lfs -text
+backend/services/agri-field-boundary/models/AgriculturalFieldDelineation/*.dlpk filter=lfs diff=lfs merge=lfs -text

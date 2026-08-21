@@ -41,7 +41,7 @@ export type AgriFieldBoundaryValidatePanelProps = {
   /** Auto-apply Training & AI samples or a reference layer when the user has not picked one. */
   initialReference?: GeoJSON.FeatureCollection | null
   initialReferenceName?: string | null
-  /** Status while auto FoW / FTW dataset reference is loading. */
+  /** Status while auto validation reference is loading. */
   referenceNotice?: string | null
   referenceBusy?: boolean
   /**
@@ -558,7 +558,7 @@ export function AgriFieldBoundaryValidatePanel({
           >
             {referenceBusy ? (
               <>
-                <i className="fa-solid fa-circle-notch fa-spin" aria-hidden /> {referenceNotice || 'Loading FoW reference…'}
+                <i className="fa-solid fa-circle-notch fa-spin" aria-hidden /> {referenceNotice || 'Loading validation reference…'}
               </>
             ) : (
               <>
@@ -601,8 +601,8 @@ export function AgriFieldBoundaryValidatePanel({
             <i className="fa-solid fa-chart-column" aria-hidden />
             <p>
               {referenceBusy
-                ? 'Loading FoW reference for this AOI…'
-                : 'Upload a reference GeoJSON, or wait for FoW / FTW parcels to load.'}
+                ? 'Loading validation reference for this AOI…'
+                : 'Upload a reference GeoJSON, or use Training Samples as reference.'}
             </p>
           </div>
         ) : (

@@ -211,6 +211,8 @@ export type SatelliteMapAnalysisChromeProps = {
   onMapSwipeOpenChange?: (open: boolean) => void;
   goToXyOpen?: boolean;
   onGoToXyOpenChange?: (open: boolean) => void;
+  cropAiPanelOpen?: boolean;
+  onCropAiPanelOpenChange?: (open: boolean) => void;
 };
 
 function sparkPath(values: number[], w: number, h: number): string {
@@ -289,6 +291,8 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
     onMapSwipeOpenChange,
     goToXyOpen,
     onGoToXyOpenChange,
+    cropAiPanelOpen,
+    onCropAiPanelOpenChange,
   } = props;
 
   const activeFull =
@@ -383,6 +387,8 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
       onMapSwipeOpenChange={onMapSwipeOpenChange}
       goToXyOpen={goToXyOpen}
       onGoToXyOpenChange={onGoToXyOpenChange}
+      cropAiPanelOpen={cropAiPanelOpen}
+      onCropAiPanelOpenChange={onCropAiPanelOpenChange}
     />
   ) : null;
 

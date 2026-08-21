@@ -14,7 +14,14 @@ const REPO_ROOT = path.join(SERVER_DIR, '..', '..')
 const DEV_PORT_KEYS = new Set(['PORT', 'WS_PORT', 'VITE_DEV_PORT'])
 const PRODUCTION_PORT_KEYS = new Set(['PORT', 'WS_PORT'])
 
-function parseEnvFile(content) {
+/**
+ * @param {string} content
+ * @param {{ override?: boolean }} [opts]
+ *   override=true — apply every key from this file (local `.env` must win over
+ *   `.env.production` on developer machines; Hostinger typically has no `.env`).
+ */
+function parseEnvFile(content, opts = {}) {
+  const override = Boolean(opts.override)
   for (const line of content.split('\n')) {
     const trimmed = line.trim()
     if (!trimmed || trimmed.startsWith('#')) continue
@@ -23,6 +30,7 @@ function parseEnvFile(content) {
     const key = trimmed.slice(0, eq).trim()
     if (!key) continue
     if (
+      !override &&
       !DEV_PORT_KEYS.has(key) &&
       Object.prototype.hasOwnProperty.call(process.env, key) &&
       String(process.env[key] ?? '').trim()
@@ -45,20 +53,31 @@ function parseEnvFile(content) {
 }
 
 function loadEnvFiles() {
-  const candidates = [
+  // Shared / Hostinger files first (fill unset keys only), then local `.env`
+  // with override so FIELD_BOUNDARY_URL / AI_LOCAL_AUTOSTART from production
+  // do not block local Python :8092 during development.
+  const sharedCandidates = [
     path.join(REPO_ROOT, '.env.production'),
     path.join(REPO_ROOT, 'hostinger-production.env'),
     path.join(process.cwd(), '.env.production'),
     path.join(process.cwd(), 'hostinger-production.env'),
-    path.join(REPO_ROOT, '.env'),
-    path.join(process.cwd(), '.env'),
   ]
+  const localCandidates = [path.join(REPO_ROOT, '.env'), path.join(process.cwd(), '.env')]
   const seen = new Set()
-  for (const filePath of candidates) {
+  for (const filePath of sharedCandidates) {
     if (seen.has(filePath) || !fs.existsSync(filePath)) continue
     seen.add(filePath)
     try {
-      parseEnvFile(fs.readFileSync(filePath, 'utf8'))
+      parseEnvFile(fs.readFileSync(filePath, 'utf8'), { override: false })
+    } catch {
+      // ignore unreadable env files
+    }
+  }
+  for (const filePath of localCandidates) {
+    if (seen.has(filePath) || !fs.existsSync(filePath)) continue
+    seen.add(filePath)
+    try {
+      parseEnvFile(fs.readFileSync(filePath, 'utf8'), { override: true })
     } catch {
       // ignore unreadable env files
     }

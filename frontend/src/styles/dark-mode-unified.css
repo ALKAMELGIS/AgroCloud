@@ -3,13 +3,55 @@
  * Loads after index.css.
  */
 
+/* ========== System text tokens (#222 / #555 / #777 light · #E6E6E6 / #B8B8B8 / #8F8F8F dark) ========== */
+html[data-theme='light'],
+:root[data-theme='light'] {
+  --ds-color-text: #222222;
+  --ds-color-text-secondary: #555555;
+  --ds-color-text-muted: #777777;
+}
+
+html[data-theme='dark'],
+:root[data-theme='dark'] {
+  --ds-color-text: #E6E6E6;
+  --ds-color-text-secondary: #B8B8B8;
+  --ds-color-text-muted: #8F8F8F;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --ds-color-text: #E6E6E6;
+    --ds-color-text-secondary: #B8B8B8;
+    --ds-color-text-muted: #8F8F8F;
+  }
+}
+
+/* Navigation + theme toggle follow system text colors */
+html[data-theme='light'] .navmenu .item,
+html[data-theme='light'] .navmenu .group-header,
+html[data-theme='light'] .navmenu .item .label,
+html[data-theme='light'] .navmenu .group-header .label,
+html[data-theme='light'] .nav-theme-toggle,
+html[data-theme='dark'] .navmenu .item,
+html[data-theme='dark'] .navmenu .group-header,
+html[data-theme='dark'] .navmenu .item .label,
+html[data-theme='dark'] .navmenu .group-header .label,
+html[data-theme='dark'] .nav-theme-toggle {
+  color: var(--ds-color-text);
+}
+
+html[data-theme='light'] .nav-theme-toggle:hover,
+html[data-theme='dark'] .nav-theme-toggle:hover {
+  color: var(--ds-color-text);
+}
+
 /* ========== Light: white glass canvas; icons keep classic shape & brand colors ========== */
 html[data-theme='light'] body,
 :root[data-theme='light'] body {
   background:
     radial-gradient(ellipse 110% 65% at 50% -12%, rgba(4, 120, 87, 0.05), transparent 52%),
     radial-gradient(ellipse 70% 45% at 100% 0%, rgba(14, 165, 233, 0.04), transparent 48%),
-    linear-gradient(180deg, #ffffff 0%, #fafbfc 48%, #f8fafc 100%);
+    linear-gradient(180deg, #f6f7f8 0%, #fafbfc 48%, #f3f4f6 100%);
   color: var(--ds-color-text);
 }
 
@@ -76,7 +118,7 @@ html[data-theme='light'] .page h3,
 html[data-theme='light'] .page h4,
 html[data-theme='light'] .ds-modal-title,
 html[data-theme='light'] .page-title {
-  color: #0f172a;
+  color: var(--ds-color-text);
 }
 
 html[data-theme='light'] .ds-card,
@@ -92,8 +134,57 @@ html[data-theme='light'] textarea {
 }
 
 html[data-theme='light'] label,
-html[data-theme='light'] .ds-label {
+html[data-theme='light'] .ds-label,
+html[data-theme='light'] .app-layout p,
+html[data-theme='light'] .app-layout li,
+html[data-theme='light'] .app-layout td,
+html[data-theme='light'] .app-layout th,
+html[data-theme='light'] .page p,
+html[data-theme='light'] .page li {
   color: var(--ds-color-text);
+}
+
+html[data-theme='dark'] .app-layout,
+html[data-theme='dark'] .page,
+html[data-theme='dark'] .gis-page-padding {
+  color: var(--ds-color-text);
+}
+
+html[data-theme='dark'] label,
+html[data-theme='dark'] .ds-label,
+html[data-theme='dark'] .app-layout p,
+html[data-theme='dark'] .app-layout li,
+html[data-theme='dark'] .app-layout td,
+html[data-theme='dark'] .app-layout th,
+html[data-theme='dark'] .page p,
+html[data-theme='dark'] .page li {
+  color: var(--ds-color-text);
+}
+
+html[data-theme='light'] .app-layout small,
+html[data-theme='light'] .page small,
+html[data-theme='light'] .text-muted,
+html[data-theme='light'] .ds-muted,
+html[data-theme='light'] .ds-text-muted {
+  color: var(--ds-color-text-muted);
+}
+
+html[data-theme='light'] .text-secondary,
+html[data-theme='light'] .ds-text-secondary {
+  color: var(--ds-color-text-secondary);
+}
+
+html[data-theme='dark'] .app-layout small,
+html[data-theme='dark'] .page small,
+html[data-theme='dark'] .text-muted,
+html[data-theme='dark'] .ds-muted,
+html[data-theme='dark'] .ds-text-muted {
+  color: var(--ds-color-text-muted);
+}
+
+html[data-theme='dark'] .text-secondary,
+html[data-theme='dark'] .ds-text-secondary {
+  color: var(--ds-color-text-secondary);
 }
 
 /* ========== Dark ========== */
@@ -151,7 +242,7 @@ html[data-theme='dark'] h3,
 html[data-theme='dark'] h4,
 html[data-theme='dark'] .ds-modal-title,
 html[data-theme='dark'] .page-title {
-  color: #ffffff;
+  color: var(--ds-color-text);
 }
 
 html[data-theme='dark'] .home-page .app-icon,
@@ -189,7 +280,7 @@ html[data-theme='dark'] .ecph {
   --light-bg: rgba(255, 255, 255, 0.05);
   --card-bg: var(--ds-color-surface);
   --text-primary: var(--ds-color-text);
-  --text-secondary: var(--ds-color-text-muted);
+  --text-secondary: var(--ds-color-text-secondary);
   --border-color: var(--ds-color-border);
   --success: #4ade80;
   --warning: #fbbf24;
@@ -348,7 +439,7 @@ html[data-theme='dark'] .chat-avatar {
     --light-bg: rgba(255, 255, 255, 0.05);
     --card-bg: var(--ds-color-surface);
     --text-primary: var(--ds-color-text);
-    --text-secondary: var(--ds-color-text-muted);
+    --text-secondary: var(--ds-color-text-secondary);
     --border-color: var(--ds-color-border);
     --success: #4ade80;
     --warning: #fbbf24;

@@ -31,7 +31,7 @@ export function TrainingModelSelector(props: TrainingModelSelectorProps) {
   )
 
   const models = useMemo(() => {
-    // Train step: always expose every picker model (SegFormer + FTW + Delineate)
+    // Train step: always expose every picker model (SegFormer + Delineate)
     // regardless of imagery compatibility — TRAIN resolves to a SegFormer encoder.
     const list = trainableOnly
       ? TRAINING_MODEL_REGISTRY.filter(isTrainModelPickerEntry)
@@ -98,7 +98,7 @@ export function TrainingModelSelector(props: TrainingModelSelectorProps) {
           aria-label="Training model"
           title={
             trainableOnly
-              ? 'SegFormer / FTW / Delineate — TRAIN fine-tunes on the AgroCloud API'
+              ? 'SegFormer / Delineate — TRAIN fine-tunes on the AgroCloud API'
               : 'Full Training AI model registry'
           }
           onChange={e => props.onModelIdChange(e.target.value)}

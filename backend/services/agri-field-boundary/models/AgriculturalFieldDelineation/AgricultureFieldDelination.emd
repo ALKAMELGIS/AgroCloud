@@ -1,0 +1,200 @@
+{
+    "ModelParameters": {
+        "pointrend": false,
+        "backbone": "resnet50",
+        "backend": "pytorch"
+    },
+    "Framework": "arcgis.learn.models._inferencing",
+    "ModelConfiguration": "_maskrcnn_inferencing",
+    "InferenceFunction": "ArcGISInstanceDetector.py",
+    "ModelType": "InstanceDetection",
+    "MaskRCNNkwargs": {},
+    "ExtractBands": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+    ],
+    "SupportsVariableTileSize": true,
+    "Classes": [
+        {
+            "Value": 1,
+            "Name": "field",
+            "Color": [
+                61,
+                224,
+                213
+            ]
+        }
+    ],
+    "ModelFormat": "NCHW",
+    "MinCellSize": {
+        "x": 10,
+        "y": 10,
+        "spatialReference": {
+            "wkid": 102100,
+            "latestWkid": 3857
+        }
+    },
+    "MaxCellSize": {
+        "x": 10,
+        "y": 10,
+        "spatialReference": {
+            "wkid": 102100,
+            "latestWkid": 3857
+        }
+    },
+    "ArcGISLearnVersion": "2.2.0",
+    "ModelFile": "AgricultureFieldDelination.pth",
+    "ImageHeight": 224,
+    "ImageWidth": 224,
+    "ImageSpaceUsed": "MAP_SPACE",
+    "LearningRate": "slice('1.5849e-05', '1.5849e-04', None)",
+    "ModelName": "MaskRCNN",
+    "backend": "pytorch",
+    "average_precision_score": {
+        "field": 0.6429484020658481
+    },
+    "resize_to": 224,
+    "IsMultispectral": true,
+    "Bands": [
+        "B1_Aerosols",
+        "B2_Blue",
+        "B3_Green",
+        "B4_Red",
+        "B5_RedEdge",
+        "B6_RedEdge",
+        "B7_RedEdge",
+        "B8_NearInfraRed",
+        "B8A_NarrowNIR",
+        "B9_WaterVapour",
+        "B11_ShortWaveInfraRed",
+        "B12_ShortWaveInfraRed"
+    ],
+    "ImageryType": "MultiSpectral",
+    "NormalizationStats": {
+        "band_min_values": [
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "band_max_values": [
+            6244.0,
+            15960.0,
+            17944.0,
+            17096.0,
+            14886.0,
+            14698.0,
+            13625.0,
+            16152.0,
+            13195.0,
+            8368.0,
+            14580.0,
+            15165.0
+        ],
+        "band_mean_values": [
+            609.9541015625,
+            760.0094604492188,
+            1073.8519287109375,
+            1191.1563720703125,
+            1603.9072265625,
+            2733.2734375,
+            3240.286865234375,
+            3329.274169921875,
+            3428.518310546875,
+            3448.392333984375,
+            2852.212890625,
+            2138.63720703125
+        ],
+        "band_std_values": [
+            344.6938781738281,
+            462.14752197265625,
+            534.4055786132812,
+            818.2494506835938,
+            753.6737060546875,
+            741.9078979492188,
+            1018.3513793945312,
+            1037.3905029296875,
+            1031.609130859375,
+            993.1984252929688,
+            949.4678955078125,
+            1030.7012939453125
+        ],
+        "scaled_min_values": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+        ],
+        "scaled_max_values": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "scaled_mean_values": [
+            0.09754190593957901,
+            0.047619640827178955,
+            0.05984462425112724,
+            0.06967456638813019,
+            0.10768607258796692,
+            0.18590688705444336,
+            0.23776327073574066,
+            0.20612147450447083,
+            0.25977855920791626,
+            0.41202250123023987,
+            0.19556985795497894,
+            0.14096790552139282
+        ],
+        "scaled_std_values": [
+            0.055122341960668564,
+            0.028956610709428787,
+            0.029781853780150414,
+            0.04786204174160957,
+            0.0506015308201313,
+            0.05046175792813301,
+            0.07472380250692368,
+            0.06422675400972366,
+            0.07816494256258011,
+            0.11866981536149979,
+            0.06510289013385773,
+            0.06793849915266037
+        ]
+    },
+    "DoNormalize": false,
+    "Preprocessing":"SentinelService",
+    "Version": "2024.01.24"
+}

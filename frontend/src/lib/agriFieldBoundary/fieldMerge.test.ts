@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  FTW_FINISH_MIN_AREA_M2,
+  FIELD_HEAVY_MERGE_MIN_AREA_M2,
   finishMergeOptions,
   finishMinAreaM2,
-  isFtwFieldEngine,
   mergeFieldFragments,
 } from './fieldMerge'
 
@@ -70,10 +69,9 @@ describe('mergeFieldFragments', () => {
     expect(out.features.length).toBe(2)
   })
 
-  it('FTW finish floor drops pinhead squares even when UI minArea is 1', () => {
-    expect(isFtwFieldEngine('ftw-live')).toBe(true)
-    expect(finishMinAreaM2(1, true)).toBe(FTW_FINISH_MIN_AREA_M2)
-    const opts = finishMergeOptions(1, { ftw: true })
+  it('heavyMerge finish floor drops pinhead squares even when UI minArea is low', () => {
+    expect(finishMinAreaM2(1, true)).toBe(FIELD_HEAVY_MERGE_MIN_AREA_M2)
+    const opts = finishMergeOptions(1, { heavyMerge: true })
     expect(opts.minAreaM2).toBe(500)
     expect(opts.gapMeters).toBe(14)
     expect(opts.contactFrac).toBe(0.2)
@@ -86,5 +84,11 @@ describe('mergeFieldFragments', () => {
     )
     expect(out.features.length).toBe(1)
     expect(out.features[0]!.geometry.type).toBe('Polygon')
+  })
+
+  it('default finish caps UI minArea at 40 m² maximum', () => {
+    expect(finishMinAreaM2(1, false)).toBe(1)
+    expect(finishMinAreaM2(100, false)).toBe(40)
+    expect(finishMinAreaM2(500, false)).toBe(40)
   })
 })

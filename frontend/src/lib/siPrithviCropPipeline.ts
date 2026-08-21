@@ -155,11 +155,37 @@ function isServerAoiWmsReady(config: CropClassificationConfig | null): boolean {
 }
 
 /**
- * Build a CORS-safe URL for a Hugging Face Space prediction image so it can be
- * used as a Mapbox/MapLibre `image` source (the HF file endpoint omits CORS headers).
+ * Build a CORS-safe URL for a crop-classification prediction image.
+ * - Hugging Face Space URLs → proxied through the backend.
+ * - Backend-hosted PNG assets → absolute API URL on the configured origin.
+ * - data:/blob: URLs pass through unchanged.
  */
-export function cropPredictionImageUrl(remoteUrl: string): string {
-  return cropApiUrl(`/proxy-image?url=${encodeURIComponent(remoteUrl)}`)
+export function cropPredictionImageUrl(remoteUrl: string, jobId?: string): string {
+  const raw = String(remoteUrl || '').trim()
+  if (!raw) return raw
+  if (raw.startsWith('data:') || raw.startsWith('blob:')) return raw
+  if (raw.includes('/api/crop-classification/jobs/') && raw.endsWith('/prediction.png')) {
+    const id =
+      jobId ||
+      raw.match(/\/jobs\/([^/]+)\/prediction\.png/i)?.[1] ||
+      ''
+    if (id) return cropApiUrl(`/jobs/${encodeURIComponent(id)}/prediction.png`)
+  }
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      const host = new URL(raw).hostname
+      if (/(^|\.)hf\.space$/i.test(host) || /(^|\.)huggingface\.co$/i.test(host)) {
+        return cropApiUrl(`/proxy-image?url=${encodeURIComponent(raw)}`)
+      }
+    } catch {
+      /* ignore */
+    }
+    return raw
+  }
+  if (raw.startsWith('/api/crop-classification/')) {
+    return cropApiUrl(raw.replace(/^\/api\/crop-classification/, ''))
+  }
+  return raw
 }
 
 export async function fetchCropClassificationConfig(): Promise<CropClassificationConfig | null> {
@@ -333,7 +359,23 @@ export async function runAoiCropClassification(
       }
       return job
     } catch (err) {
-      if (!isBackendUnavailableStartError(err)) throw err
+      if (!isBackendUnavailableStartError(err)) {
+        const msg = String((err as Error)?.message || err)
+        if (/job not found or expired/i.test(msg)) {
+          onUpdate({
+            id: 'fallback',
+            mode: 'aoi',
+            status: 'queued',
+            progress: 0,
+            message: 'Server job lost — running in-browser classification…',
+            result: null,
+            error: null,
+          })
+          const localId = startLocalAoiJob(input)
+          return pollJob(localId, onUpdate, signal)
+        }
+        throw err
+      }
     }
   }
 
@@ -345,13 +387,17 @@ export function startChipJob(imageUrl: string): Promise<string> {
   return startJob({ mode: 'chip', imageUrl })
 }
 
-export async function getJob(jobId: string): Promise<CropClassificationJob> {
+export async function getJob(jobId: string, attempt = 0): Promise<CropClassificationJob> {
   // Client-side (in-browser) jobs are served from the local registry.
   const local = localJobs.get(jobId)
   if (local) return local
-  const res = await fetch(cropApiUrl(`/jobs/${jobId}`))
+  const res = await fetch(cropApiUrl(`/jobs/${encodeURIComponent(jobId)}`))
   noteApiResponse(res.status)
   const json = await res.json().catch(() => ({}))
+  if (res.status === 404 && attempt < 8) {
+    await new Promise(resolve => setTimeout(resolve, 250 + attempt * 150))
+    return getJob(jobId, attempt + 1)
+  }
   if (!res.ok) throw new Error(json?.error || `Job lookup failed (HTTP ${res.status})`)
   return json as CropClassificationJob
 }

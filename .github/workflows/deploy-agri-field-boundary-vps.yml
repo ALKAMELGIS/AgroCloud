@@ -7,7 +7,6 @@ on:
       - 'backend/services/agri-field-boundary/**'
       - 'backend/server/agriFieldBoundaryProxy.js'
       - 'backend/server/fieldBoundaryBuiltin.js'
-      - 'scripts/vps-*.sh'
       - '.github/workflows/deploy-agri-field-boundary-vps.yml'
   workflow_dispatch:
 
@@ -17,11 +16,14 @@ concurrency:
 
 jobs:
   deploy:
+    if: ${{ secrets.VPS_HOST != '' && secrets.VPS_SSH_KEY != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
@@ -30,47 +32,13 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_SSH_PORT || 22 }}
-          command_timeout: 40m
           script_stop: true
           script: |
             set -euo pipefail
-            export DEBIAN_FRONTEND=noninteractive
             DEPLOY_PATH="${{ secrets.VPS_DEPLOY_PATH || '/opt/AgroCloud' }}"
-            ufw disable 2>/dev/null || true
-            iptables -P INPUT ACCEPT 2>/dev/null || true
-            apt-get update -qq
-            apt-get install -y -qq git curl openssh-server python3.12 python3.12-venv python3-pip build-essential libgdal-dev gdal-bin libgl1 libglib2.0-0
-            systemctl enable --now ssh
-            mkdir -p /etc/ssh/sshd_config.d
-            printf '%s\n' 'PermitRootLogin yes' 'PubkeyAuthentication yes' 'Port 22' > /etc/ssh/sshd_config.d/99-agrocloud.conf
-            systemctl restart ssh
-            if [ ! -d "$DEPLOY_PATH/.git" ]; then
-              git clone --depth 1 https://github.com/ALKAMELGIS/AgroCloud.git "$DEPLOY_PATH"
-            fi
-            git -C "$DEPLOY_PATH" fetch origin main
-            git -C "$DEPLOY_PATH" reset --hard origin/main
             cd "$DEPLOY_PATH/backend/services/agri-field-boundary"
-            fuser -k 8092/tcp 2>/dev/null || true
             chmod +x start-vps.sh
-            cp agri-field-boundary.service /etc/systemd/system/agri-field-boundary.service
-            systemctl daemon-reload
-            systemctl enable agri-field-boundary
-            .venv312/bin/python -c "import app; print('import-ok')" || {
-              .venv312/bin/pip install -q -r requirements.txt
-              .venv312/bin/python -c "import app; print('import-ok-after-reinstall')"
-            }
-            export FTW_INFER_ENABLED=1
-            export FTW_PREFETCH_MODEL=0
-            export SEN2SR_SKIP_STARTUP=1
-            export AFB_LIVE_TIMEOUT_S=120
-            export AFB_READY_TIMEOUT_S=900
-            AFB_GIT_PULL=0 AFB_USE_SYSTEMD=1 ./start-vps.sh
-            systemctl status agri-field-boundary --no-pager
-            journalctl -u agri-field-boundary -n 40 --no-pager
-            ss -tulpn | grep -E ':22|:8092'
-            systemctl is-active ssh agri-field-boundary
-            curl -fsS http://127.0.0.1:8092/health/live
-            curl -fsS http://127.0.0.1:8092/health/ready || true
+            AFB_GIT_PULL=1 AFB_USE_SYSTEMD=1 ./start-vps.sh
 
       - name: Smoke /health/live + /health/ready
         uses: appleboy/ssh-action@v1.2.0
@@ -84,3 +52,7 @@ jobs:
             PORT="${{ secrets.AFB_PORT || '8092' }}"
             curl -fsS "http://127.0.0.1:${PORT}/health/live" | grep -q '"live"'
             curl -fsS "http://127.0.0.1:${PORT}/health/ready" | grep -q '"ready"'
+            # When AFD weights are present, health should report the engine flag.
+            if [[ -f /opt/AgroCloud/backend/services/agri-field-boundary/models/AgriculturalFieldDelineation/AgricultureFieldDelination.pth ]]; then
+              curl -fsS "http://127.0.0.1:${PORT}/health" | grep -q 'agricultural_field_delineation'
+            fi

@@ -28,10 +28,10 @@ const resultGeojson: GeoJSON.FeatureCollection = {
 
 const baseProps = {
   hasAoi: true,
-  source: 'ftw-live' as const,
-  model: 'ftw-live' as const,
+  source: 'delineate-fbis' as const,
+  model: 'delineate-fbis' as const,
   onModelChange: () => {},
-  modelOptions: [{ id: 'ftw-live' as const, label: 'FTW Live' }],
+  modelOptions: [{ id: 'delineate-fbis' as const, label: 'Delineate Anything (v2)' }],
   imagery: 'basemap' as const,
   onImageryChange: () => {},
   imageryOptions: [{ id: 'basemap' as const, label: 'Basemap' }],
@@ -53,7 +53,7 @@ const baseProps = {
   offline: false,
   fieldCount: 12,
   totalAreaHa: 45.5,
-  engine: 'ftw-live',
+  engine: 'delineate-anything',
   hasResult: true,
   resultGeojson,
   onRun: () => {},
@@ -78,6 +78,37 @@ function mountWithHost(props: Partial<typeof baseProps> = {}) {
 }
 
 describe('AgriFieldBoundaryPanel Results dashboard trigger', () => {
+  it('shows Agricultural Field Delineation model info when selected', () => {
+    const { cleanupHost } = mountWithHost({
+      model: 'agricultural-field-delineation',
+      source: 'agricultural-field-delineation',
+      modelOptions: [
+        { id: 'agricultural-field-delineation' as const, label: 'Agricultural Field Delineation' },
+        { id: 'delineate-fbis' as const, label: 'Delineate Anything (v2)' },
+      ],
+      phase: 'idle',
+      hasResult: false,
+      fieldCount: 0,
+      health: {
+        agricultural_field_delineation: true,
+        agricultural_field_delineation_status: {
+          ready: true,
+          info: {
+            architecture: 'MaskRCNN',
+            backbone: 'resnet50',
+            resolution_m: 10,
+            ap_field: 0.6429,
+            bands: ['B01', 'B02', 'B03', 'B04', 'B05', 'B06', 'B07', 'B08', 'B8A', 'B09', 'B11', 'B12'],
+          },
+        },
+      },
+    })
+    expect(screen.getByLabelText('Model information')).toBeTruthy()
+    expect(screen.getByText('12-band Sentinel-2 L2A BOA')).toBeTruthy()
+    expect(screen.getByText('Ready')).toBeTruthy()
+    expect(screen.getByText('0.6429')).toBeTruthy()
+    cleanupHost()
+  })
   it('exposes an icon Results control instead of a Validate text tab', () => {
     const { cleanupHost } = mountWithHost()
     expect(screen.queryByText(/^Validate$/)).toBeNull()
@@ -141,16 +172,36 @@ describe('AgriFieldBoundaryPanel Results dashboard trigger', () => {
     cleanupHost()
   })
 
-  it('shows production Map RGB hint when host has no Python FTW', () => {
-    const { cleanupHost } = mountWithHost({
-      mapRgbOnlyHost: true,
-      hasResult: false,
-      phase: 'idle',
-      fieldCount: 0,
-      resultGeojson: null,
-    })
-    fireEvent.click(screen.getByRole('tab', { name: /Detect/i }))
-    expect(screen.getByText(/Map RGB detect runs on the AgroCloud API/i)).toBeTruthy()
+  it('exposes Training Samples tab when training API is provided', () => {
+    const generateFromPredictions = vi.fn(() => 1)
+    const trainingSamples = {
+      samples: [],
+      selectedId: null,
+      selected: null,
+      counts: { draft: 0, approved: 0, rejected: 0, total: 0 },
+      samplesGeojson: { type: 'FeatureCollection' as const, features: [] },
+      approvedGeojson: { type: 'FeatureCollection' as const, features: [] },
+      notice: null,
+      error: null,
+      clearNotice: () => {},
+      generateFromPredictions,
+      selectSample: () => {},
+      acceptSample: () => {},
+      acceptAllDrafts: () => 0,
+      rejectSample: () => {},
+      unapproveSample: () => {},
+      deleteSample: () => {},
+      setSampleNote: () => {},
+      updateSampleGeometry: () => {},
+      clearAll: () => {},
+      clearByStatus: () => {},
+      saveApproved: () => false,
+    }
+    const { cleanupHost } = mountWithHost({ trainingSamples } as any)
+    fireEvent.click(screen.getByRole('tab', { name: 'Training Samples' }))
+    expect(screen.getByText(/Predicted → Draft → Accept → Save/i)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Generate Samples/i }))
+    expect(generateFromPredictions).toHaveBeenCalled()
     cleanupHost()
   })
 })

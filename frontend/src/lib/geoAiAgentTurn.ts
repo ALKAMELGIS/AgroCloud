@@ -272,7 +272,7 @@ export function compactGeoAiAgentReferences(toolResults: GeoAiAgentToolResult[])
         push('AgroCloud Sentinel WMS — index overlay on AOI')
         break
       case 'detect_field_boundaries':
-        push('AgroCloud FTW field boundary detection — AOI job')
+        push('AgroCloud field boundary detection — AOI job')
         break
       default:
         break

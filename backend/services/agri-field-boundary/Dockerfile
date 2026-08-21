@@ -7,14 +7,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-# CPU torch first so ftw-tools / requirements cannot pull a CUDA torch build.
 RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements.txt
 
-# Service modules (app + FoW / Delineate / FTW infer helpers)
+# Service modules (app + FoW / Delineate / AFD helpers)
 COPY *.py ./
+COPY engines ./engines
+COPY services ./services
+COPY models/AgriculturalFieldDelineation ./models/AgriculturalFieldDelineation
 
 ENV PORT=8092
-ENV FTW_INFER_ENABLED=1
 EXPOSE 8092
 CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT:-8092}"]

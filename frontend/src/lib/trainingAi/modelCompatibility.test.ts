@@ -21,9 +21,9 @@ describe('modelRegistry', () => {
   it('keeps verified HF ids and marks unknown as null', () => {
     const prithvi = getTrainingModelById('hf-prithvi-eo-2-300m')
     expect(prithvi?.hfModelId).toBe('ibm-nasa-geospatial/Prithvi-EO-2.0-300M')
-    const ftw = getTrainingModelById('agro-ftw-live')
-    expect(ftw?.hfModelId).toBeNull()
-    expect(hfLabel(ftw!)).toMatch(/No suitable Hugging Face/)
+    const delineate = getTrainingModelById('agro-delineate-fbis-v2')
+    expect(delineate?.hfModelId).toBeNull()
+    expect(hfLabel(delineate!)).toMatch(/No suitable Hugging Face/)
   })
 
   it('does not invent empty registry', () => {
@@ -64,7 +64,7 @@ describe('modelCompatibility', () => {
 
   it('recommends EO models for Sentinel-2', () => {
     const ids = recommendModelsForImagery('sentinel2', 8).map(m => m.id)
-    expect(ids.some(id => id.includes('prithvi') || id.includes('terramind') || id.includes('ftw'))).toBe(
+    expect(ids.some(id => id.includes('prithvi') || id.includes('terramind') || id.includes('delineate'))).toBe(
       true,
     )
   })

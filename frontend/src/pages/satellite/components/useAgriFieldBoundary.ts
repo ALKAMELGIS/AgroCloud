@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   detectFieldBoundaries,
   fetchFieldBoundaryHealth,
-  fetchFowFieldBoundaries,
   FieldBoundaryServiceError,
   formatFieldBoundaryUserError,
   optimizeFieldBoundaryResult,
@@ -23,8 +22,6 @@ import {
 import {
   finishMergeOptions,
   finishMinAreaM2,
-  isCadastralFieldEngine,
-  isFtwFieldEngine,
   mergeFieldFragments,
 } from '../../../lib/agriFieldBoundary/fieldMerge'
 import {
@@ -34,17 +31,9 @@ import {
   fieldAttributesNeedRefresh,
   hasFieldAttributes,
 } from '../../../lib/agriFieldBoundary/fieldAttributeEnrichment'
-import { FOW_COUNTRY_OPTIONS, isFowCatalogMissing } from '../../../lib/agriFieldBoundary/fowCountryOptions'
 import { FIELD_BOUNDARY_STROKE_COLOR } from '../../../lib/agriFieldBoundary/fieldBoundaryStyle'
 import {
-  fetchFowValidationReference,
-  shouldFetchFowValidationReference,
-} from '../../../lib/agriFieldBoundary/fowValidationReference'
-import {
-  isBuiltinFieldEngine,
-  isMapRgbOnlyProductionHost,
   PRODUCTION_MAP_RGB_MIN_AREA_M2,
-  productionMapRgbNotice,
 } from '../../../lib/agriFieldBoundary/fieldBoundaryProductionMode'
 import { summarizeFieldGeometry } from '../../../lib/agriFieldBoundary/fieldValidationMetrics'
 import {
@@ -53,6 +42,7 @@ import {
 } from '../../../lib/agriFieldBoundary/polygonShapefileExport'
 import { createGeoTiffPngPreviewUrl } from '../../../lib/raster/siRasterMapLayer'
 import { useSen2srControls } from './useSen2srControls'
+import { useFieldBoundaryTrainingSamples } from './useFieldBoundaryTrainingSamples'
 
 export type FieldBoundaryPhase =
   | 'idle'
@@ -73,7 +63,7 @@ export type FieldUploadedImage = {
   bbox?: [number, number, number, number]
 }
 
-/** Latest allowed Sentinel-2 / FTW acquisition date (today, UTC calendar day). */
+/** Latest allowed Sentinel-2 acquisition date (today, UTC calendar day). */
 function todayIsoDate(): string {
   const d = new Date()
   const y = d.getFullYear()
@@ -98,9 +88,10 @@ function yearBounds(year: number): { from: string; to: string } {
   return { from, to: toYearEnd > today ? today : toYearEnd }
 }
 
-/** Default FTW window = current calendar year (Jan 1 → today) for clear-scene selection. */
+/** Default scene window = latest available day only (today). */
 function defaultSceneRange(): { from: string; to: string } {
-  return yearBounds(defaultSceneYear())
+  const t = todayIsoDate()
+  return { from: t, to: t }
 }
 
 function clampSceneDate(iso: string | null | undefined): string {
@@ -120,7 +111,7 @@ function yearFromSceneDate(iso: string): number {
   return Math.min(maxSceneYear(), Math.max(2017, Math.trunc(y)))
 }
 
-/** Keep From ≤ To and within a single FTW crop year (API selects scenes by year). */
+/** Keep From ≤ To and within a single crop year (API selects scenes by year). */
 function normalizeSceneRange(fromIso: string, toIso: string): { from: string; to: string } {
   let from = clampSceneDate(fromIso)
   let to = clampSceneDate(toIso)
@@ -306,21 +297,17 @@ function isOfflineFieldBoundaryError(message: string | null | undefined): boolea
 
 export type FieldModelId =
   | 'delineate-fbis'
-  | 'ftw-live'
-  | 'ftw-infer'
-  | 'fow'
   | 'map-rgb'
+  | 'agricultural-field-delineation'
 
 export type FieldCaptureImageryId = Exclude<
   FieldImagerySource,
-  'delineate-fbis' | 'ftw-live' | 'ftw-infer' | 'fow'
+  'delineate-fbis' | 'agricultural-field-delineation'
 >
 
 const FIELD_MODELS: Array<{ id: FieldModelId; label: string }> = [
-  { id: 'ftw-live', label: 'FTW (live Sentinel-2 — cadastral grid)' },
-  { id: 'ftw-infer', label: 'FTW Inference (S2 model)' },
-  { id: 'fow', label: 'Fields of the World (reference parcels)' },
   { id: 'delineate-fbis', label: 'Delineate Anything (v2)' },
+  { id: 'agricultural-field-delineation', label: 'Agricultural Field Delineation' },
   { id: 'map-rgb', label: 'Map RGB detect (instance)' },
 ]
 
@@ -341,14 +328,28 @@ function deriveFieldSource(model: FieldModelId, imagery: FieldCaptureImageryId):
   return model
 }
 
-function splitFieldSource(source: FieldImagerySource): {
+function splitFieldSource(source: FieldImagerySource | string): {
   model: FieldModelId
   imagery: FieldCaptureImageryId
 } {
-  if (source === 'delineate-fbis' || source === 'ftw-live' || source === 'ftw-infer' || source === 'fow') {
-    return { model: source, imagery: 'basemap' }
+  const raw = String(source || '').toLowerCase()
+  if (raw === 'delineate-fbis' || raw === 'agricultural-field-delineation') {
+    return { model: raw as FieldModelId, imagery: 'basemap' }
   }
-  return { model: 'map-rgb', imagery: source }
+  if (raw === 'afd') {
+    return { model: 'agricultural-field-delineation', imagery: 'basemap' }
+  }
+  // Legacy FoW / FTW deep links → Delineate Anything
+  if (
+    raw === 'fow' ||
+    raw === 'ftw-live' ||
+    raw === 'ftw-infer' ||
+    raw === 'ftw' ||
+    raw === 'fields-of-the-world'
+  ) {
+    return { model: 'delineate-fbis', imagery: 'basemap' }
+  }
+  return { model: 'map-rgb', imagery: source as FieldCaptureImageryId }
 }
 
 /** Map RGB sources: capture live canvas (like a drone photo) then run instance detect. */
@@ -366,41 +367,41 @@ function modelUsesCaptureImagery(model: FieldModelId): boolean {
   return model === 'delineate-fbis' || model === 'map-rgb'
 }
 
-/** Default field outline — cyan hollow (matches SI gallery Cyan Outline). */
+/** Default field outline — cadastral yellow (Training Field Boundaries reference). */
 const FIELD_BOUNDARY_STROKE = FIELD_BOUNDARY_STROKE_COLOR
 
-/** Distinct instance fills + a single red field border. */
-const DA_FILL_PALETTE = [
-  '#22c55e',
-  '#3b82f6',
-  '#a855f7',
-  '#ef4444',
-  '#eab308',
-  '#14b8a6',
-  '#f97316',
-  '#ec4899',
-  '#84cc16',
-  '#06b6d4',
-]
+function meanFeatureConfidence(fc: GeoJSON.FeatureCollection): number {
+  const vals = (fc.features || [])
+    .map(f => {
+      const p = (f.properties || {}) as Record<string, unknown>
+      const c = Number(p.confidence ?? p.score ?? p.conf ?? 0)
+      return Number.isFinite(c) ? c : null
+    })
+    .filter((v): v is number => v != null && v > 0)
+  if (!vals.length) return 0
+  return vals.reduce((a, b) => a + b, 0) / vals.length
+}
 
 function styleDelineateFbisGeojson(fc: GeoJSON.FeatureCollection): GeoJSON.FeatureCollection {
   return {
     type: 'FeatureCollection',
-    features: (fc.features || []).map((f, i) => {
+    features: (fc.features || []).map(f => {
       const props = (f.properties && typeof f.properties === 'object' ? f.properties : {}) as Record<
         string,
         unknown
       >
-      const fill = DA_FILL_PALETTE[i % DA_FILL_PALETTE.length]!
       return {
         ...f,
         properties: {
           ...props,
           class_name: props.class_name || 'Field',
-          fill_color: fill,
-          color: fill,
           stroke_color: FIELD_BOUNDARY_STROKE,
           stroke: FIELD_BOUNDARY_STROKE,
+          stroke_width: 2.5,
+          'stroke-width': 2.5,
+          fill: 'none',
+          fill_opacity: 0,
+          fill_color: 'transparent',
           source: 'delineate-anything',
           output_type: 'fields_fbis',
           engine: 'delineate-anything',
@@ -415,16 +416,17 @@ function styleDelineateFbisGeojson(fc: GeoJSON.FeatureCollection): GeoJSON.Featu
  * AOI → high-res capture → detect → colorful GeoJSON fields.
  */
 export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBoundaryOptions) {
-  // FTW live on Sentinel-2 gives cadastral grid polygons (FoW/FTW reference quality).
-  const [model, setModelState] = useState<FieldModelId>('ftw-live')
+  // Prefer Delineate Anything (dense adjacent field mosaic).
+  const [model, setModelState] = useState<FieldModelId>('delineate-fbis')
   const [imagery, setImageryState] = useState<FieldCaptureImageryId>('basemap')
   const source = deriveFieldSource(model, imagery)
   const imageryRef = useRef(imagery)
   imageryRef.current = imagery
   const [uploadedImage, setUploadedImage] = useState<FieldUploadedImage | null>(null)
   const sen2sr = useSen2srControls({ resolveAoi })
+  const trainingSamples = useFieldBoundaryTrainingSamples()
   const resetSen2sr = sen2sr.reset
-  // FTW crop-calendar rejects harvest dates in the future — never default past last completed year.
+  // Scene calendar rejects harvest dates in the future — never default past today.
   const [sceneDateFrom, setSceneDateFromState] = useState(() => defaultSceneRange().from)
   const [sceneDateTo, setSceneDateToState] = useState(() => defaultSceneRange().to)
   // Prefer a date inside the active range (June 15 when range covers it) for API scene_date.
@@ -438,10 +440,9 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
   const sceneDateToRef = useRef(sceneDateTo)
   sceneDateFromRef.current = sceneDateFrom
   sceneDateToRef.current = sceneDateTo
-  const [adminIso, setAdminIso] = useState('AE')
   const sourceChosenRef = useRef(false)
-  const [minConfidence, setMinConfidence] = useState(0.18)
-  const [minAreaM2, setMinAreaM2] = useState(1)
+  const [minConfidence, setMinConfidence] = useState(0.25)
+  const [minAreaM2, setMinAreaM2] = useState(PRODUCTION_MAP_RGB_MIN_AREA_M2)
   /** Outlines only by default — interior fills hide the crop under the field. */
   const [fillOpacity, setFillOpacity] = useState(0)
   /** Regularize drawn AOI + field footprints into oriented rectangles. */
@@ -462,21 +463,12 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
   const [result, setResult] = useState<FieldBoundaryResult | null>(null)
   /** Pre-regularize detect output — re-apply method without re-running the model. */
   const rawResultRef = useRef<FieldBoundaryResult | null>(null)
-  /** FoW / FTW dataset polygons used as Validation Detection reference. */
-  const [validationReference, setValidationReference] = useState<GeoJSON.FeatureCollection | null>(
-    null,
-  )
-  const [validationReferenceLabel, setValidationReferenceLabel] = useState<string | null>(null)
-  const [validationReferenceNotice, setValidationReferenceNotice] = useState<string | null>(null)
-  const [validationReferenceBusy, setValidationReferenceBusy] = useState(false)
   const lastDetectContextRef = useRef<{
     bbox: [number, number, number, number]
     aoi: GeoJSON.FeatureCollection
     minAreaM2: number
-    adminIso?: string
     source: string
   } | null>(null)
-  const validationAbortRef = useRef<AbortController | null>(null)
   /** Sentinel-2 attribute table fill (runs after Detect, export, add layer). */
   const [attributesBusy, setAttributesBusy] = useState(false)
   const [attributesProgress, setAttributesProgress] = useState<string | null>(null)
@@ -508,28 +500,6 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
   const applyHealthResult = useCallback((h: FieldBoundaryHealth) => {
     setHealth(h)
     setOffline(false)
-    if (h.ftw_live === true && !sourceChosenRef.current) {
-      setModelState(prev => (prev === 'delineate-fbis' || prev === 'map-rgb' ? 'ftw-live' : prev))
-    }
-    // Demote FTW → FoW when FTW is unavailable.
-    if (h.ftw_live === false) {
-      setModelState(prev => (prev === 'ftw-live' ? 'fow' : prev))
-      const probeErr = h.upstream_probe?.error || h.upstream_probe?.body
-      if (probeErr) {
-        setNotice(
-          `Python field engine unreachable (${h.field_boundary_url || 'VPS :8092'}): ${probeErr}. Map RGB detect still works.`,
-        )
-      }
-    }
-    if (isMapRgbOnlyProductionHost(h) && !sourceChosenRef.current) {
-      setModelState(prev =>
-        prev === 'ftw-live' || prev === 'delineate-fbis' || prev === 'fow' ? 'map-rgb' : prev,
-      )
-      setImageryState('basemap')
-      setMinAreaM2(prev => (prev <= 1 ? PRODUCTION_MAP_RGB_MIN_AREA_M2 : prev))
-      setMinConfidence(prev => (prev > 0.25 ? 0.18 : prev))
-      setNotice(prev => prev || productionMapRgbNotice())
-    }
     if (isOfflineFieldBoundaryError(errorRef.current) || isOfflineFieldBoundaryError(errorDetailRef.current)) {
       setError(null)
       setErrorDetail(null)
@@ -547,16 +517,7 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
         })
         .catch(err => {
           if ((err as Error)?.name === 'AbortError' || ac.signal.aborted) return
-          applyHealthResult({
-            offline: true,
-            status: 'error',
-            ready: false,
-            live: false,
-            python: false,
-            ftw_live: false,
-            builtin_fallback: true,
-            error: String((err as Error)?.message || err),
-          })
+          applyHealthResult({ offline: false, status: 'ok', builtin_fallback: true, ready: true })
         })
     }
     probe()
@@ -583,16 +544,7 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
         })
         .catch(err => {
           if ((err as Error)?.name === 'AbortError' || ac.signal.aborted) return
-          applyHealthResult({
-            offline: true,
-            status: 'error',
-            ready: false,
-            live: false,
-            python: false,
-            ftw_live: false,
-            builtin_fallback: true,
-            error: String((err as Error)?.message || err),
-          })
+          applyHealthResult({ offline: false, status: 'ok', builtin_fallback: true, ready: true })
         })
     }
     probe()
@@ -603,20 +555,7 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     }
   }, [needsOfflineRecovery, applyHealthResult])
 
-  const modelOptions = useMemo(() => {
-    return FIELD_MODELS.map(o => {
-      if (o.id === 'delineate-fbis' && health && isMapRgbOnlyProductionHost(health)) {
-        return { ...o, label: `${o.label} (Map RGB fallback on this host)` }
-      }
-      if (o.id === 'ftw-live' && health && health.ftw_live === false) {
-        return { ...o, label: `${o.label} (unavailable — using FoW)` }
-      }
-      if (o.id === 'ftw-infer' && health && health.ftw_infer === false) {
-        return { ...o, label: `${o.label} (unavailable)` }
-      }
-      return o
-    })
-  }, [health])
+  const modelOptions = useMemo(() => FIELD_MODELS.slice(), [])
 
   const imageryOptions = useMemo(() => FIELD_IMAGERY.slice(), [])
 
@@ -644,6 +583,12 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
   const setModel = useCallback((next: FieldModelId) => {
     sourceChosenRef.current = true
     setModelState(next)
+    // AFD masks are already georeferenced field instances — Right Angles / merge
+    // warps pivots and cadastral edges away from ArcGIS Pro quality.
+    if (next === 'agricultural-field-delineation') {
+      setRegularizeFootprints(false)
+      setMergeFragments(false)
+    }
     setError(null)
     setErrorDetail(null)
     if (phase === 'error' || phase === 'empty') setPhase('idle')
@@ -659,7 +604,7 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     })
     setModelState(prev => {
       if (prev === 'delineate-fbis' || prev === 'map-rgb') return prev
-      // FTW/FoW don't use capture imagery — switching imagery implies map-RGB detect.
+      // AFD doesn't use capture imagery — switching imagery implies map-RGB detect.
       return 'map-rgb'
     })
     setError(null)
@@ -715,16 +660,6 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
 
   const year = yearFromSceneDate(sceneDateFrom)
 
-  const setAdminIsoSafe = useCallback((iso: string) => {
-    const next = String(iso || '').trim().toUpperCase()
-    // Empty = All countries (FoW worldwide glob).
-    if (!next) {
-      setAdminIso('')
-      return
-    }
-    setAdminIso(next.slice(0, 2))
-  }, [])
-
   const uploadImageFile = useCallback(async (file: File | null | undefined) => {
     if (!file) return
     try {
@@ -745,7 +680,18 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
   }, [])
 
   const run = useCallback(async (opts?: { source?: FieldImagerySource; year?: number; sceneDate?: string }) => {
-    const activeSource = opts?.source ?? source
+    let activeSource = opts?.source ?? source
+    // Legacy FoW / FTW deep links → Delineate Anything
+    const rawSrc = String(activeSource || '').toLowerCase()
+    if (
+      rawSrc === 'fow' ||
+      rawSrc === 'ftw' ||
+      rawSrc === 'ftw-live' ||
+      rawSrc === 'ftw-infer' ||
+      rawSrc === 'fields-of-the-world'
+    ) {
+      activeSource = 'delineate-fbis'
+    }
     let activeFrom = sceneDateFrom
     let activeTo = sceneDateTo
     if (opts?.sceneDate || opts?.year != null) {
@@ -773,7 +719,7 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
       setPhase('error')
       return
     }
-    if (opts?.source) setSource(opts.source)
+    if (opts?.source) setSource(activeSource)
 
     // Keep the drawn AOI exact for clipping — do not OBB-regularize AOI (that misses fields).
     const aoiFc: GeoJSON.FeatureCollection =
@@ -795,46 +741,39 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
       bbox,
       aoi: aoiFc,
       minAreaM2,
-      adminIso: String(adminIso || '')
-        .trim()
-        .toUpperCase()
-        .length === 2
-        ? String(adminIso).trim().toUpperCase()
-        : undefined,
       source: activeSource,
     }
-    setValidationReference(null)
-    setValidationReferenceLabel(null)
-    setValidationReferenceNotice(null)
     const finishResult = (out: FieldBoundaryResult): FieldBoundaryResult => {
       rawResultRef.current = out
-      const engineKey = String(out.engine || activeSource || '')
-      const ftw = isFtwFieldEngine(activeSource) || isFtwFieldEngine(out.engine)
-      const cadastral =
-        ftw ||
-        isCadastralFieldEngine(engineKey) ||
-        engineKey.includes('delineate') ||
-        engineKey.includes('fow')
-      const effMinArea = finishMinAreaM2(minAreaM2, ftw || cadastral)
-      const mergedGeo = mergeFieldFragments(
-        out.geojson,
-        finishMergeOptions(minAreaM2, { ftw: ftw || cadastral, enabled: mergeFragments }),
-      )
+      const isAfd =
+        activeSource === 'agricultural-field-delineation' ||
+        String(out.engine || '').includes('agricultural-field-delineation')
+      const heavyMerge = false
+      const effMinArea = finishMinAreaM2(minAreaM2, heavyMerge)
+      const mergedGeo =
+        isAfd && !mergeFragments
+          ? out.geojson
+          : mergeFieldFragments(
+              out.geojson,
+              finishMergeOptions(minAreaM2, { heavyMerge, enabled: mergeFragments }),
+            )
       const preRegularize: FieldBoundaryResult = {
         ...out,
         geojson: mergedGeo,
         count: mergedGeo.features.length,
       }
-      const softenMeters = regularizeMethod === 'right-angles' ? 3.2 : 5.2
-      const builtin = isBuiltinFieldEngine(out.engine)
-      const optimized = optimizeFieldBoundaryResult(preRegularize, {
-        regularizeFootprints: regularizeFootprints,
-        regularizeMethod,
-        softenKept: true,
-        softenMeters,
-        minFillRatio: builtin ? 0.38 : cadastral ? 0.48 : 0.55,
-        maxAreaInflation: builtin ? 1.9 : cadastral ? 1.52 : 1.45,
-      })
+      // Keep AFD polygons close to the 10 m mask (no OBB / right-angle warp).
+      const optimized =
+        isAfd && !regularizeFootprints
+          ? preRegularize
+          : optimizeFieldBoundaryResult(preRegularize, {
+              regularizeFootprints: isAfd ? false : regularizeFootprints,
+              regularizeMethod,
+              softenKept: !isAfd,
+              softenMeters: regularizeMethod === 'right-angles' ? 3.2 : 5.2,
+              minFillRatio: 0.55,
+              maxAreaInflation: 1.45,
+            })
       // Regularize can inflate footprints — re-clip to AOI and unstack overlays.
       let geojson = refineFieldPolygonsToAoi(optimized.geojson, aoiFc, {
         minAreaM2: effMinArea,
@@ -846,14 +785,6 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
       ) {
         geojson = styleDelineateFbisGeojson(geojson)
       }
-      const validFeatures = geojson.features.filter(f => {
-        const g = f?.geometry
-        if (!g || (g.type !== 'Polygon' && g.type !== 'MultiPolygon')) return false
-        return (
-          summarizeFieldGeometry({ type: 'FeatureCollection', features: [f] }).totalAreaHa > 0
-        )
-      })
-      geojson = { type: 'FeatureCollection', features: validFeatures }
       return {
         ...optimized,
         geojson,
@@ -884,10 +815,41 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     setStage(null)
     setPhase('capturing')
     try {
-      const iso = String(adminIso || '')
-        .trim()
-        .toUpperCase()
-      const fowAdminIso = iso.length === 2 ? iso : undefined
+      // —— Agricultural Field Delineation: Sentinel-2 L2A 12-band (no map RGB capture) ——
+      if (activeSource === 'agricultural-field-delineation') {
+        setNotice('Searching Sentinel-2 L2A imagery…')
+        setPhase('detecting')
+        setProgress(5)
+        const out = await detectFieldBoundaries(
+          {
+            bbox,
+            aoi: aoiFc,
+            minConfidence,
+            minAreaM2,
+            source: 'agricultural-field-delineation',
+            sceneDate: sceneDateTo || sceneDateFrom || sceneDate,
+            sceneDateFrom,
+            sceneDateTo,
+            highRes: true,
+            signal: controller.signal,
+          },
+          trackJob(5),
+        )
+        if (!out.geojson.features.length) {
+          setError('No fields detected in this AOI with Agricultural Field Delineation.')
+          setErrorDetail(
+            'Try a larger cropland AOI, a clearer Sentinel-2 date, or lower confidence.',
+          )
+          setResult(null)
+          setPhase('empty')
+          return
+        }
+        setNotice(null)
+        setResult(finishResult(out))
+        setProgress(100)
+        setPhase('done')
+        return
+      }
 
       // —— Delineate Anything (v2 + fallbacks): map capture → instance masks → black edges ——
       if (activeSource === 'delineate-fbis') {
@@ -955,33 +917,30 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
         }
 
         try {
-          // Primary pass — user confidence (capped so we do not miss faint parcels).
+          const daMinArea = Math.max(0.05, minAreaM2)
+          const daConf = Math.max(0.22, Math.min(minConfidence, 0.32))
+          // Primary pass — balanced precision/recall on v2.
           setNotice('Delineate Anything (v2) — detecting fields…')
-          let merged = await runDa(Math.min(minConfidence, 0.22), 'v2', Math.max(0.05, Math.min(minAreaM2, 80)))
+          let merged = await runDa(daConf, 'v2', daMinArea)
           setProgress(40)
-          // Soft recall pass — pick up missed orchards / low-contrast parcels, then merge.
-          setNotice('Delineate Anything — recall pass (fill gaps)…')
-          const soft = await runDa(0.1, 'v2', 1)
-          merged = mergeFieldDetections(merged, soft, {
-            minAreaM2: Math.max(0.05, Math.min(minAreaM2, 25)),
-            dropIou: 0.18,
-          })
-          setProgress(55)
-          if (merged.features.length < 3) {
-            setNotice('Delineate Anything — small-model gap fill…')
-            const small = await runDa(0.08, 'small', 1)
-            merged = mergeFieldDetections(merged, small, {
-              minAreaM2: Math.max(0.05, Math.min(minAreaM2, 25)),
-              dropIou: 0.18,
+          // Targeted recall only when the mosaic is sparse — avoids duplicate overlays.
+          if (merged.features.length < 6) {
+            setNotice('Delineate Anything — recall pass (fill gaps)…')
+            const soft = await runDa(Math.max(0.16, daConf - 0.06), 'v2', daMinArea)
+            merged = mergeFieldDetections(merged, soft, {
+              minAreaM2: daMinArea,
+              dropIou: 0.32,
             })
           }
+          setProgress(55)
 
           if (merged.features.length) {
             const styled = styleDelineateFbisGeojson(merged)
+            const meanConf = meanFeatureConfidence(styled)
             const out: FieldBoundaryResult = {
               geojson: styled,
               count: styled.features.length,
-              score: Number(minConfidence),
+              score: meanConf > 0 ? meanConf : Number(minConfidence),
               engine: 'delineate-anything',
               device: 'cpu',
               stats: { field: styled.features.length },
@@ -1137,249 +1096,11 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
         return
       }
 
-      const tryFtwLive = async (noticeMsg: string): Promise<boolean> => {
-        if (health?.ftw_live !== true) return false
-        try {
-          setNotice(noticeMsg)
-          setProgress(2)
-          const liveOut = await detectFieldBoundaries(
-            {
-              bbox,
-              aoi: aoiFc,
-              minAreaM2,
-              source: 'ftw-live',
-              year: activeYear,
-              sceneDate: activeSceneDate,
-              sceneDateFrom: activeFrom,
-              sceneDateTo: activeTo,
-              adminIso: fowAdminIso,
-              signal: controller.signal,
-            },
-            trackJob(0),
-          )
-          if (liveOut.geojson.features.length) {
-            setSource('ftw-live')
-            setResult(finishResult(liveOut))
-            setProgress(100)
-            setPhase('done')
-            return true
-          }
-        } catch (liveErr) {
-          if ((liveErr as Error)?.name === 'AbortError') throw liveErr
-        }
-        setNotice(null)
-        return false
-      }
-
-      const tryFowCatalog = async (opts: {
-        noticeOnFowHit?: string
-        /** When FoW country parquet is missing, skip doomed admin_iso probe. */
-        skipMissingCountry?: boolean
-      }): Promise<boolean> => {
-        if (opts.skipMissingCountry && isFowCatalogMissing(fowAdminIso)) {
-          return false
-        }
-        try {
-          setPhase('detecting')
-          setProgress(5)
-          const out = await fetchFowFieldBoundaries({
-            bbox,
-            aoi: aoiFc,
-            minAreaM2,
-            adminIso: fowAdminIso,
-            signal: controller.signal,
-          })
-          if (out.geojson.features.length) {
-            if (opts.noticeOnFowHit) setNotice(opts.noticeOnFowHit)
-            setSource('fow')
-            setResult(finishResult(out))
-            setProgress(100)
-            setPhase('done')
-            return true
-          }
-        } catch (fowErr) {
-          if ((fowErr as Error)?.name === 'AbortError') throw fowErr
-        }
-        return false
-      }
-
-      /**
-       * Engine order:
-       * - FoW-missing countries (e.g. AE): FTW live → FoW skip → map detect
-       * - otherwise: FoW → FTW live → map detect
-       */
-      const tryCatalogEngines = async (opts: {
-        noticeOnFowHit?: string
-        noticeOnFtw: string
-        noticeOnFowError: string
-        skipFtwLive?: boolean
-        ftwFirst?: boolean
-      }): Promise<boolean> => {
-        const preferFtw =
-          opts.ftwFirst === true || isFowCatalogMissing(fowAdminIso)
-        if (preferFtw) {
-          if (!opts.skipFtwLive) {
-            if (
-              await tryFtwLive(
-                isFowCatalogMissing(fowAdminIso)
-                  ? `FoW has no catalog for ${fowAdminIso} — running FTW live Sentinel-2…`
-                  : opts.noticeOnFtw,
-              )
-            ) {
-              return true
-            }
-          }
-          return await tryFowCatalog({
-            noticeOnFowHit: opts.noticeOnFowHit,
-            skipMissingCountry: true,
-          })
-        }
-        if (await tryFowCatalog({ noticeOnFowHit: opts.noticeOnFowHit })) {
-          return true
-        }
-        if (opts.skipFtwLive) return false
-        return await tryFtwLive(opts.noticeOnFtw)
-      }
-
-      // Live path needs Python 3.12+/ftw-tools — fall back to FoW so map gets polygons.
-      let effectiveSource = activeSource
-      if (
-        (activeSource === 'ftw-live' || activeSource === 'ftw-infer') &&
-        health &&
-        ((activeSource === 'ftw-live' && health.ftw_live === false) ||
-          (activeSource === 'ftw-infer' && health.ftw_infer === false))
-      ) {
-        // Prefer map/basemap path for countries without FoW rather than empty FoW.
-        if (isFowCatalogMissing(adminIso) && health.ftw_live !== true) {
-          effectiveSource = 'basemap'
-          setNotice(
-            `FTW unavailable and FoW has no ${String(adminIso).toUpperCase()} catalog — detecting from map imagery…`,
-          )
-        } else {
-          effectiveSource = 'fow'
-          setSource('fow')
-          setNotice(
-            activeSource === 'ftw-live'
-              ? 'FTW live unavailable on this server — ran Fields of the World instead.'
-              : 'FTW inference unavailable — ran Fields of the World instead.',
-          )
-        }
-      }
-
+      // —— File upload / remaining capture sources: map imagery → detect ——
       let view: FieldCapturedView | null = null
-      if (effectiveSource === 'fow') {
-        if (
-          await tryCatalogEngines({
-            noticeOnFtw: 'No FoW parcels in AOI — ran FTW live Sentinel-2 instead.',
-            noticeOnFowError: 'FoW catalog unavailable — ran FTW live Sentinel-2 instead.',
-            ftwFirst: isFowCatalogMissing(fowAdminIso),
-          })
-        ) {
-          return
-        }
-        // Fall through to map imagery detect instead of sticky empty FoW banner.
-        setNotice(
-          isFowCatalogMissing(fowAdminIso)
-            ? `FoW has no ${fowAdminIso} catalog and FTW found no fields — detecting from map imagery…`
-            : 'No FoW/FTW parcels — detecting from map imagery…',
-        )
-        effectiveSource = 'basemap'
-      }
-
-      // On-demand FTW baseline (S2) — no map capture; async detect-job + poll.
-      if (effectiveSource === 'ftw-infer') {
-        setPhase('detecting')
-        setProgress(2)
-        const out = await detectFieldBoundaries(
-          {
-            bbox,
-            aoi: aoiFc,
-            minAreaM2,
-            source: 'ftw-infer',
-            year: activeYear,
-            sceneDate: activeSceneDate,
-            sceneDateFrom: activeFrom,
-            sceneDateTo: activeTo,
-            adminIso: fowAdminIso,
-            signal: controller.signal,
-          },
-          trackJob(0),
-        )
-        if (!out.geojson.features.length) {
-          if (
-            await tryCatalogEngines({
-              noticeOnFowHit: 'No FTW fields — showing Fields of the World parcels.',
-              noticeOnFtw: 'No FTW fields — ran FTW live Sentinel-2 instead.',
-              noticeOnFowError: 'No FTW fields — FoW unavailable, tried FTW live.',
-            })
-          ) {
-            return
-          }
-          setNotice('No FTW/FoW parcels — detecting from map imagery…')
-          effectiveSource = 'basemap'
-        } else {
-          setResult(finishResult(out))
-          setProgress(100)
-          setPhase('done')
-          return
-        }
-      }
-
-      // Live Sentinel-2 stack + FTW model — no map capture; async detect-job + poll.
-      if (effectiveSource === 'ftw-live') {
-        // Countries without FoW still use FTW first; FoW skip if partition missing.
-        if (isFowCatalogMissing(fowAdminIso)) {
-          setNotice(`FoW has no catalog for ${fowAdminIso} — running FTW live Sentinel-2…`)
-        }
-        setPhase('detecting')
-        setProgress(2)
-        const out = await detectFieldBoundaries(
-          {
-            bbox,
-            aoi: aoiFc,
-            minAreaM2,
-            source: 'ftw-live',
-            year: activeYear,
-            sceneDate: activeSceneDate,
-            sceneDateFrom: activeFrom,
-            sceneDateTo: activeTo,
-            adminIso: fowAdminIso,
-            signal: controller.signal,
-          },
-          trackJob(0),
-        )
-        if (out.stats?.fallback_from === 'ftw-live') {
-          setNotice('FTW live deps missing — showing Fields of the World parcels.')
-        }
-        if (!out.geojson.features.length) {
-          if (
-            await tryCatalogEngines({
-              noticeOnFowHit: 'No FTW live fields — showing Fields of the World parcels.',
-              noticeOnFtw: 'No FTW live fields and no FoW parcels in this AOI.',
-              noticeOnFowError: 'No FTW live fields — FoW catalog unavailable.',
-              skipFtwLive: true,
-            })
-          ) {
-            return
-          }
-          setNotice('No FTW/FoW parcels — detecting from map imagery…')
-          effectiveSource = 'basemap'
-        } else {
-          setResult(finishResult(out))
-          setProgress(100)
-          setPhase('done')
-          return
-        }
-      }
-
-      // Capture map imagery + Delineate-Anything / Mask R-CNN (also final fallback).
-      const captureSource: FieldImagerySource =
-        effectiveSource === 'basemap' ||
-        effectiveSource === 'ftw-live' ||
-        effectiveSource === 'ftw-infer' ||
-        effectiveSource === 'fow'
-          ? 'basemap'
-          : activeSource
+      const captureSource: FieldImagerySource = isMapRgbImagerySource(activeSource)
+        ? activeSource
+        : 'basemap'
 
       if (isFieldFileSource(activeSource) && uploadedImage) {
         view = {
@@ -1430,18 +1151,6 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
       }
 
       if (!out.geojson.features.length) {
-        if (
-          await tryCatalogEngines({
-            noticeOnFowHit: 'No fields in captured imagery — showing Fields of the World parcels.',
-            noticeOnFtw: 'No fields in captured imagery — ran FTW live Sentinel-2 instead.',
-            noticeOnFowError: 'No fields in captured imagery — FoW unavailable, tried FTW live.',
-            // Avoid looping catalog engines we already tried above.
-            skipFtwLive: true,
-            ftwFirst: false,
-          })
-        ) {
-          return
-        }
         const { short, detail } = formatFieldBoundaryUserError(null, {
           source: captureSource,
           empty: true,
@@ -1451,9 +1160,7 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
           detail ||
             (isMapRgbImagerySource(captureSource)
               ? 'Map RGB capture found no parcels — zoom to cropland and lower confidence.'
-              : isFowCatalogMissing(fowAdminIso)
-                ? `FoW has no ${fowAdminIso} country parquet — try Basemap (Esri/Google RGB) or FTW live.`
-                : ''),
+              : ''),
         )
         setResult(null)
         setPhase('empty')
@@ -1477,10 +1184,7 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
       offlineErr = offlineErr || isOfflineFieldBoundaryError(short)
       const emptyLike =
         !offlineErr &&
-        (/^No (FoW |FTW |FTW live )?fields/i.test(rawMsg) ||
-          /^No fields\b/i.test(short) ||
-          /^No FoW fields\b/i.test(short) ||
-          /^No FTW\b/i.test(short))
+        (/^No (FoW )?fields/i.test(rawMsg) || /^No fields\b/i.test(short))
       setError(short)
       setErrorDetail(
         err instanceof FieldBoundaryServiceError ? err.detail || detail : detail,
@@ -1491,10 +1195,8 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
       setBusy(false)
     }
   }, [
-    adminIso,
     applySceneRange,
     captureView,
-    health,
     imagery,
     minConfidence,
     minAreaM2,
@@ -1511,15 +1213,10 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
 
   const reset = useCallback(() => {
     abortRef.current?.abort()
-    validationAbortRef.current?.abort()
     rawResultRef.current = null
     lastDetectContextRef.current = null
     autoAttributesKeyRef.current = null
     setResult(null)
-    setValidationReference(null)
-    setValidationReferenceLabel(null)
-    setValidationReferenceNotice(null)
-    setValidationReferenceBusy(false)
     setUploadedImage(null)
     setError(null)
     setErrorDetail(null)
@@ -1531,62 +1228,6 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     resetSen2sr()
   }, [resetSen2sr])
 
-  // After Detect completes, pull FoW / FTW dataset parcels as Validation reference.
-  useEffect(() => {
-    if (phase !== 'done' || !result?.geojson?.features?.length) return
-    const ctx = lastDetectContextRef.current
-    if (!ctx) return
-
-    const gate = shouldFetchFowValidationReference({
-      engine: result.engine,
-      source: ctx.source,
-      adminIso: ctx.adminIso,
-      hasDetection: true,
-    })
-    if (!gate.ok) {
-      setValidationReference(null)
-      setValidationReferenceLabel(null)
-      setValidationReferenceNotice(gate.notice)
-      setValidationReferenceBusy(false)
-      return
-    }
-
-    validationAbortRef.current?.abort()
-    const ac = new AbortController()
-    validationAbortRef.current = ac
-    setValidationReferenceBusy(true)
-    setValidationReferenceNotice('Loading FoW / FTW dataset reference for Validation Detection…')
-
-    void (async () => {
-      try {
-        const ref = await fetchFowValidationReference({
-          bbox: ctx.bbox,
-          aoi: ctx.aoi,
-          minAreaM2: ctx.minAreaM2,
-          adminIso: ctx.adminIso,
-          signal: ac.signal,
-        })
-        if (ac.signal.aborted) return
-        setValidationReference(ref.geojson)
-        setValidationReferenceLabel(ref.label)
-        setValidationReferenceNotice(ref.notice)
-      } catch (err) {
-        if ((err as Error)?.name === 'AbortError') return
-        setValidationReference(null)
-        setValidationReferenceLabel(null)
-        setValidationReferenceNotice(
-          `FoW reference unavailable — ${err instanceof Error ? err.message : String(err)}`,
-        )
-      } finally {
-        if (!ac.signal.aborted) setValidationReferenceBusy(false)
-      }
-    })()
-
-    return () => {
-      ac.abort()
-    }
-  }, [phase, result?.engine, result?.count, result?.geojson?.features?.length])
-
   // Re-apply Regularize Building Footprint when the method or toggle changes —
   // no need to re-run the model for the stair / overlap fix.
   useEffect(() => {
@@ -1594,32 +1235,34 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     if (!raw?.geojson?.features?.length) return
     if (busy || phase === 'detecting' || phase === 'capturing') return
     const ctx = lastDetectContextRef.current
-    const engineKey = String(raw.engine || ctx?.source || '')
-    const ftw = isFtwFieldEngine(ctx?.source) || isFtwFieldEngine(raw.engine)
-    const cadastral =
-      ftw ||
-      isCadastralFieldEngine(engineKey) ||
-      engineKey.includes('delineate') ||
-      engineKey.includes('fow')
+    const isAfd =
+      String(ctx?.source || '').includes('agricultural-field-delineation') ||
+      String(raw.engine || '').includes('agricultural-field-delineation')
+    const heavyMerge = false
     const baseMin = ctx?.minAreaM2 ?? 1
-    const effMinArea = finishMinAreaM2(baseMin, ftw || cadastral)
-    const mergedGeo = mergeFieldFragments(
-      raw.geojson,
-      finishMergeOptions(baseMin, { ftw: ftw || cadastral, enabled: mergeFragments }),
-    )
+    const effMinArea = finishMinAreaM2(baseMin, heavyMerge)
+    const mergedGeo =
+      isAfd && !mergeFragments
+        ? raw.geojson
+        : mergeFieldFragments(
+            raw.geojson,
+            finishMergeOptions(baseMin, { heavyMerge, enabled: mergeFragments }),
+          )
     const softenMeters = regularizeMethod === 'right-angles' ? 3.2 : 5.2
-    const builtin = isBuiltinFieldEngine(raw.engine)
-    const optimized = optimizeFieldBoundaryResult(
-      { ...raw, geojson: mergedGeo, count: mergedGeo.features.length },
-      {
-        regularizeFootprints,
-        regularizeMethod,
-        softenKept: true,
-        softenMeters,
-        minFillRatio: builtin ? 0.38 : cadastral ? 0.48 : 0.55,
-        maxAreaInflation: builtin ? 1.9 : cadastral ? 1.52 : 1.45,
-      },
-    )
+    const optimized =
+      isAfd && !regularizeFootprints
+        ? { ...raw, geojson: mergedGeo, count: mergedGeo.features.length }
+        : optimizeFieldBoundaryResult(
+            { ...raw, geojson: mergedGeo, count: mergedGeo.features.length },
+            {
+              regularizeFootprints: isAfd ? false : regularizeFootprints,
+              regularizeMethod,
+              softenKept: !isAfd,
+              softenMeters,
+              minFillRatio: 0.55,
+              maxAreaInflation: 1.45,
+            },
+          )
     let geojson = optimized.geojson
     if (ctx?.aoi) {
       geojson = refineFieldPolygonsToAoi(geojson, ctx.aoi, {
@@ -1652,7 +1295,7 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     if (!fc?.features?.length) return null
     if (!opts?.force && hasFieldAttributes(fc) && !fieldAttributesNeedRefresh(fc)) return fc
 
-    // Image date is a single day for FTW Detect — zonal stats need a season window.
+    // Image date may be a single day — zonal stats need a season window.
     const window = defaultAttributeWindow(sceneDateTo || sceneDateFrom || sceneDate)
     setAttributesBusy(true)
     setAttributesProgress('Loading Sentinel-2 Layer index statistics…')
@@ -1721,8 +1364,6 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     return summarizeFieldGeometry(geojson).totalAreaHa
   }, [geojson])
 
-  const mapRgbOnlyHost = isMapRgbOnlyProductionHost(health)
-
   return {
     source,
     setSource,
@@ -1733,9 +1374,6 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     imagery,
     setImagery,
     imageryOptions,
-    countryOptions: FOW_COUNTRY_OPTIONS,
-    adminIso,
-    setAdminIso: setAdminIsoSafe,
     uploadedImage,
     uploadImageFile,
     clearUploadedImage,
@@ -1773,20 +1411,16 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     notice,
     offline,
     health,
-    mapRgbOnlyHost,
     result,
     geojson,
     fieldCount: result?.count ?? 0,
     totalAreaHa,
     engine: result?.engine ?? null,
-    validationReference,
-    validationReferenceLabel,
-    validationReferenceNotice,
-    validationReferenceBusy,
     run,
     reset,
     exportGeojson,
     exportShapefile,
     sen2sr,
+    trainingSamples,
   }
 }

@@ -11,7 +11,7 @@ export type TrainingOutputType =
   | 'fields_trees'
 
 /** Engines shown in the Infer Model dropdown. */
-export type InferenceEngineChoice = 'delineate-fbis' | 'ftw' | 'yolo-trees' | 'segformer'
+export type InferenceEngineChoice = 'delineate-fbis' | 'yolo-trees' | 'segformer'
 
 /** Map / file RGB sources for Infer (aligned with Agri Field Boundary imagery list). */
 export type InferenceImagerySource =
@@ -87,7 +87,7 @@ function snapConfidence(v: number): number {
   return Math.round(clamped * 20) / 20 // 0.05 steps without float noise
 }
 
-function isFtwFieldsMode(mode: TrainingOutputType): boolean {
+function isFieldsMode(mode: TrainingOutputType): boolean {
   return mode === 'fields' || mode === 'fields_trees' || mode === 'segmentation'
 }
 
@@ -103,7 +103,7 @@ export function engineFromOutputType(mode: TrainingOutputType): InferenceEngineC
   if (mode === 'fields_fbis') return 'delineate-fbis'
   if (mode === 'trees' || mode === 'object_detection') return 'yolo-trees'
   if (mode === 'classification') return 'segformer'
-  return 'ftw'
+  return 'delineate-fbis'
 }
 
 export function outputTypeFromEngine(
@@ -115,14 +115,13 @@ export function outputTypeFromEngine(
     return current === 'object_detection' ? 'object_detection' : 'trees'
   }
   if (engine === 'segformer') return 'classification'
-  // FTW — keep Segmentation if user was already on it
   if (current === 'segmentation') return 'segmentation'
-  return 'fields'
+  return 'fields_fbis'
 }
 
 export function InferencePanel(props: InferencePanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const ftw = isFtwFieldsMode(props.outputType)
+  const fieldsMode = isFieldsMode(props.outputType)
   const fbis = isFbisMode(props.outputType)
   const trees = isTreesMode(props.outputType)
   const engine = engineFromOutputType(props.outputType)
@@ -131,8 +130,8 @@ export function InferencePanel(props: InferencePanelProps) {
 
   const runLabel = fbis
     ? 'EXTRACT FIELDS (DELINEATE ANYTHING)'
-    : ftw
-      ? 'EXTRACT FIELDS (FTW)'
+    : fieldsMode
+      ? 'EXTRACT FIELDS'
       : trees
         ? 'DETECT TREES (YOLO)'
         : 'RUN INFERENCE'
@@ -164,7 +163,7 @@ export function InferencePanel(props: InferencePanelProps) {
         <span className="si-tai__label">Model</span>
         <select
           className="si-tai__input si-tai__select"
-          value={engine === 'segformer' && !hasSegFormer ? 'ftw' : engine}
+          value={engine === 'segformer' && !hasSegFormer ? 'delineate-fbis' : engine}
           disabled={props.busy}
           aria-label="Inference model"
           title={
@@ -174,12 +173,11 @@ export function InferencePanel(props: InferencePanelProps) {
                 ? 'YOLO trees'
                 : engine === 'segformer'
                   ? props.modelId || undefined
-                  : 'FTW field boundaries (:8092)'
+                  : 'Field boundary extraction'
           }
           onChange={e => onEngineChange(e.target.value as InferenceEngineChoice)}
         >
           <option value="delineate-fbis">Delineate Anything (v2)</option>
-          <option value="ftw">FTW field boundaries (:8092)</option>
           <option value="yolo-trees">Trees — YOLO</option>
           <option value="segformer" disabled={!hasSegFormer}>
             {segformerLabel}
@@ -268,7 +266,7 @@ export function InferencePanel(props: InferencePanelProps) {
             disabled={props.busy}
             onChange={() => props.onOutputTypeChange('fields')}
           />
-          Fields (FTW)
+          Fields
         </label>
         <label>
           <input

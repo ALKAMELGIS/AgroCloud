@@ -1,8 +1,13 @@
 weights/
-models/
+# Ignore other model trees, but keep Agricultural Field Delineation bundled assets
+models/*
+!models/AgriculturalFieldDelineation/
+!models/AgriculturalFieldDelineation/**
 cache/
 *.pt
 *.pth
+!models/AgriculturalFieldDelineation/*.pth
+!models/AgriculturalFieldDelineation/*.dlpk
 __pycache__/
 .pytest_cache/
 *.download

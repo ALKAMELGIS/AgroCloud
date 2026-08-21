@@ -1,5 +1,5 @@
 /**
- * Merge FTW agricultural field polygons with tree instances
+ * Merge agricultural field polygons with tree instances
  * for Training & AI "Fields + Trees" extraction.
  */
 
@@ -14,7 +14,7 @@ export type MergedExtractStats = {
   engine: string
 }
 
-/** Defaults for post-FTW field cleanup (area / NMS / sample proximity). */
+/** Defaults for post-detect field cleanup (area / NMS / sample proximity). */
 export const FIELD_CLEANUP_DEFAULTS = {
   minAreaM2: 200,
   overlapIou: 0.6,
@@ -161,7 +161,7 @@ function featuresIntersect(
 }
 
 /**
- * When enough Field Boundary samples exist, prefer FTW fields near those labels:
+ * When enough Field Boundary samples exist, prefer fields near those labels:
  * intersect buffered sample union, or large+high-conf fields that hit the sample hull.
  */
 export function filterFieldsNearSamples(
@@ -288,7 +288,7 @@ export function normalizeFtwFieldFeatures(
           area_m2: area > 0 ? Math.round(area * 100) / 100 : p.area_m2,
           color: String(p.fill_color || p.color || '#eab308'),
           output_type: 'fields_trees',
-          source: 'ftw',
+          source: 'fields',
           instance_id: Number(p.field_id) || i + 1,
         },
         geometry: f.geometry,
@@ -341,7 +341,7 @@ export function mergeFieldsAndTrees(opts: {
     trees: treeFeats.length,
     other: 0,
     total: features.length,
-    engine: opts.engine || 'ftw+crowns',
+    engine: opts.engine || 'fields+crowns',
   }
   const primary =
     fieldFeats.length >= treeFeats.length && fieldFeats.length > 0

@@ -20,16 +20,9 @@ Input (JSON):
     "min_confidence": 0.45,
     "min_area_m2": 200,
     "source": "sentinel2" | "landsat" | "planet" | "airbus" | "drone" | "geotiff" | "png" | "jpeg"
-             | "fow" | "ftw-infer" | "ftw-live",
-    "year": 2024,
-    "start_date": "2024-04-01",
-    "end_date": "2024-09-30",
-    "model": "FTW_PRUE_EFNET_B5",
+             | "basemap" | "delineate-fbis" | "agricultural-field-delineation",
     "high_res": true
   }
-
-  start_date / end_date (or a single scene_date) pin the Sentinel-2 acquisition
-  window for the FTW engines; omit them to let the crop calendar pick the season.
 
 Response:
   GeoJSON FeatureCollection of field polygons with field_id, confidence,
@@ -97,26 +90,6 @@ def _startup_sen2sr() -> None:
     threading.Thread(target=_warm, name="sen2sr-prefetch", daemon=True).start()
 
 
-@app.on_event("startup")
-def _startup_ftw_prefetch() -> None:
-    """Warm the FTW checkpoint in the background so the first detect is not slower."""
-    if os.environ.get("FTW_PREFETCH_MODEL", "1").strip().lower() in ("0", "false", "no"):
-        return
-
-    def _warm() -> None:
-        try:
-            from ftw_live import ftw_live_available, prefetch_model_checkpoint
-
-            if not ftw_live_available():
-                return
-            ok = prefetch_model_checkpoint()
-            print(f"[FTW] checkpoint prefetch: {'ready' if ok else 'skipped'}", flush=True)
-        except Exception as exc:  # noqa: BLE001
-            print(f"[FTW] checkpoint prefetch failed: {type(exc).__name__}: {exc}", flush=True)
-
-    threading.Thread(target=_warm, name="ftw-prefetch", daemon=True).start()
-
-
 class DetectRequest(BaseModel):
     image: str = ""
     bbox: list[float]
@@ -126,43 +99,13 @@ class DetectRequest(BaseModel):
     source: str = "basemap"
     high_res: bool = True
     simplify: float | None = None
-    year: int | None = None
-    model: str | None = None
-    admin_iso: str | None = None
-    # Sentinel-2 acquisition window the user picked (YYYY-MM-DD). When absent the
-    # FTW crop calendar chooses the season for `year`.
+    # Optional Sentinel-2 acquisition window (Agricultural Field Delineation)
     scene_date: str | None = None
     start_date: str | None = None
     end_date: str | None = None
 
 
-class FowRequest(BaseModel):
-    bbox: list[float]
-    aoi: dict | None = None
-    min_area_m2: float = Field(default=DEFAULT_MIN_AREA_M2, ge=0.0)
-    admin_iso: str | None = None
-
-
 ProgressCb = Callable[[float, str], None]
-
-
-def _requested_scene_window(req: "DetectRequest") -> tuple[str | None, str | None]:
-    """
-    Sentinel-2 window the client asked for, as (from, to).
-
-    ``scene_date`` alone pins a single day; the FTW engines widen it themselves
-    when no cloud-free pair falls inside.
-    """
-    def clean(value: str | None) -> str | None:
-        text = str(value or "").strip()[:10]
-        return text if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text) else None
-
-    start = clean(req.start_date)
-    end = clean(req.end_date)
-    anchor = clean(req.scene_date)
-    if not start and not end:
-        return anchor, anchor
-    return start or anchor or end, end or anchor or start
 
 
 def _decode_image(data_url: str) -> Image.Image:
@@ -182,6 +125,23 @@ def _pixel_to_lonlat(col: float, row: float, bbox, width: int, height: int) -> t
     lon = west + (col / max(width - 1, 1)) * (east - west)
     lat = north - (row / max(height - 1, 1)) * (north - south)
     return lon, lat
+
+
+def _pixel_to_lonlat_affine(
+    col: float,
+    row: float,
+    transform: tuple[float, float, float, float, float, float],
+    to_wgs84,
+) -> tuple[float, float]:
+    """Map pixel centre through GDAL affine then optional CRS→WGS84."""
+    a, b, c, d, e, f = transform
+    # Pixel centres align better with ArcGIS-style raster polygons.
+    x = a * (col + 0.5) + b * (row + 0.5) + c
+    y = d * (col + 0.5) + e * (row + 0.5) + f
+    if to_wgs84 is None:
+        return float(x), float(y)
+    lon, lat = to_wgs84.transform(x, y)
+    return float(lon), float(lat)
 
 
 def _instance_color(idx: int) -> str:
@@ -473,6 +433,10 @@ def _mask_to_polygon_features(
     bbox,
     min_area_m2: float,
     simplify: float | None,
+    *,
+    transform: tuple[float, float, float, float, float, float] | None = None,
+    epsg: int | None = None,
+    light_simplify: bool = False,
 ) -> tuple[list[dict], dict]:
     from shapely.geometry import mapping, Polygon
     from shapely.validation import make_valid
@@ -483,18 +447,41 @@ def _mask_to_polygon_features(
     features: list[dict] = []
     stats = {"field": 0}
 
+    to_wgs84 = None
+    use_affine = transform is not None and len(transform) == 6
+    if use_affine and epsg and int(epsg) != 4326:
+        try:
+            from pyproj import Transformer
+
+            to_wgs84 = Transformer.from_crs(f"EPSG:{int(epsg)}", "EPSG:4326", always_xy=True)
+        except Exception as exc:  # noqa: BLE001
+            print(
+                f"[field-boundary] affine CRS transform unavailable ({exc}); using bbox stretch",
+                flush=True,
+            )
+            use_affine = False
+    elif use_affine and (not epsg or int(epsg) == 4326):
+        to_wgs84 = None  # affine already in lon/lat
+
+    default_simp = (DEFAULT_SIMPLIFY * 0.2) if light_simplify else DEFAULT_SIMPLIFY
+    approx_mode = cv2.CHAIN_APPROX_NONE if light_simplify else cv2.CHAIN_APPROX_SIMPLE
+
     for i, (mask, conf) in enumerate(components):
         if isinstance(mask, str):
             continue
         h, w = mask.shape[:2]
         u8 = (mask.astype(np.uint8) * 255)
-        contours, _ = cv2.findContours(u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(u8, cv2.RETR_EXTERNAL, approx_mode)
         for j, cnt in enumerate(contours):
             if cnt is None or len(cnt) < 3:
                 continue
             ring = []
             for pt in cnt.reshape(-1, 2):
-                lon, lat = _pixel_to_lonlat(float(pt[0]), float(pt[1]), bbox, w, h)
+                col, row = float(pt[0]), float(pt[1])
+                if use_affine and transform is not None:
+                    lon, lat = _pixel_to_lonlat_affine(col, row, transform, to_wgs84)
+                else:
+                    lon, lat = _pixel_to_lonlat(col, row, bbox, w, h)
                 ring.append([lon, lat])
             if len(ring) < 3:
                 continue
@@ -513,8 +500,14 @@ def _mask_to_polygon_features(
             else:
                 continue
             for k, p in enumerate(polys):
-                simp = simplify if simplify is not None else DEFAULT_SIMPLIFY
-                p = _smooth_polygon(p, simp)
+                simp = simplify if simplify is not None else default_simp
+                if light_simplify and simplify is None:
+                    try:
+                        p = make_valid(p.simplify(max(float(simp), 1e-9), preserve_topology=True))
+                    except Exception:  # noqa: BLE001
+                        p = make_valid(p)
+                else:
+                    p = _smooth_polygon(p, simp)
                 if p.is_empty or p.geom_type != "Polygon":
                     continue
                 # Approximate geodesic area via local meters (deg² → m²)
@@ -609,6 +602,123 @@ def _enrich_sam_geojson(geojson: dict, min_area_m2: float, mid_lat: float) -> tu
     return features, stats
 
 
+def _execute_afd(req: DetectRequest, progress: ProgressCb | None = None) -> dict:
+    """Agricultural Field Delineation: Sentinel-2 L2A 12-band → Mask R-CNN → polygons."""
+    from engines.agricultural_field_delineation import get_afd_engine
+    from sentinel2_l2a_stack import fetch_sentinel2_l2a_stack
+
+    engine = get_afd_engine()
+    if not engine.available:
+        raise RuntimeError(
+            engine.error
+            or "Agricultural Field Delineation model is not loaded. Ensure weights are present under models/AgriculturalFieldDelineation/."
+        )
+
+    aoi_geom = _parse_aoi(req.aoi)
+    stack = fetch_sentinel2_l2a_stack(
+        list(req.bbox),
+        emd=engine.emd,
+        scene_date=req.scene_date,
+        start_date=req.start_date,
+        end_date=req.end_date,
+        progress=progress,
+    )
+    if progress:
+        progress(0.55, "detect")
+
+    conf = max(0.2, float(req.min_confidence))
+    components = engine.predict(stack.data, conf, mask_threshold=0.4, overlap=112)
+    if components:
+        try:
+            from field_mask_refine import masks_to_cleaned_components
+
+            # ~4 px @ 10 m ≈ 400 m² floor; keep merge off so adjacent fields stay separate.
+            min_px = max(16, int(float(req.min_area_m2 or 0) / 100.0))
+            components = masks_to_cleaned_components(
+                components,
+                rgb=None,
+                min_px=min_px,
+                merge=False,
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"[afd] mask refine skipped: {exc}", flush=True)
+
+    if progress:
+        progress(0.85, "vectorizing")
+
+    poly_kwargs = {
+        "transform": stack.transform,
+        "epsg": stack.epsg,
+        "light_simplify": True,
+    }
+    features, stats = _mask_to_polygon_features(
+        components, stack.bbox, req.min_area_m2, req.simplify, **poly_kwargs
+    )
+    if not features and components:
+        features, stats = _mask_to_polygon_features(
+            components, stack.bbox, 10.0, req.simplify, **poly_kwargs
+        )
+
+    if aoi_geom is not None and features:
+        from shapely.geometry import mapping, shape
+        from shapely.ops import unary_union
+        from shapely.validation import make_valid
+
+        clipped = []
+        for f in features:
+            try:
+                g = make_valid(shape(f["geometry"]).intersection(aoi_geom))
+            except Exception:  # noqa: BLE001
+                continue
+            if g.is_empty:
+                continue
+            if g.geom_type == "GeometryCollection":
+                polys = [x for x in g.geoms if x.geom_type in ("Polygon", "MultiPolygon")]
+                if not polys:
+                    continue
+                g = unary_union(polys)
+            if g.geom_type not in ("Polygon", "MultiPolygon"):
+                continue
+            props = dict(f.get("properties") or {})
+            props["detection_engine"] = engine.name
+            props["source_image"] = f"Sentinel-2 L2A ({stack.acquisition_date})"
+            props["scene_id"] = stack.scene_id
+            clipped.append({**f, "geometry": mapping(g), "properties": props})
+        features = clipped
+        stats = {"field": len(features)}
+    else:
+        for f in features:
+            props = dict(f.get("properties") or {})
+            props["detection_engine"] = engine.name
+            props["source_image"] = f"Sentinel-2 L2A ({stack.acquisition_date})"
+            props["scene_id"] = stack.scene_id
+            f["properties"] = props
+
+    mean_score = (
+        float(np.mean([float((f["properties"] or {}).get("confidence") or 0) for f in features]))
+        if features
+        else 0.0
+    )
+    if progress:
+        progress(1.0, "done")
+    return {
+        "geojson": {"type": "FeatureCollection", "features": features},
+        "count": len(features),
+        "stats": stats,
+        "score": mean_score,
+        "width": stack.width,
+        "height": stack.height,
+        "engine": engine.name,
+        "device": engine.device,
+        "source": req.source,
+        "aoi_applied": aoi_geom is not None,
+        "scene_id": stack.scene_id,
+        "acquisition_date": stack.acquisition_date,
+        "cloud_cover": stack.cloud_cover,
+        "imagery_source": stack.source,
+    }
+
+
 def _execute_detect(req: DetectRequest, progress: ProgressCb | None = None) -> dict:
     if progress:
         progress(0.02, "preparing")
@@ -618,80 +728,13 @@ def _execute_detect(req: DetectRequest, progress: ProgressCb | None = None) -> d
     aoi_geom = _parse_aoi(req.aoi)
     source = (req.source or "basemap").strip().lower()
 
-    # 1) Fields of the World — reference-quality vectors (no raster needed)
-    if source in ("fow", "fields-of-the-world", "ftw"):
-        if progress:
-            progress(0.2, "fow")
-        from fow_aoi import query_fow_fields
-
-        result = query_fow_fields(
-            req.bbox,
-            aoi_geom,
-            req.min_area_m2,
-            admin_iso=req.admin_iso,
-        )
-        if progress:
-            progress(1.0, "done")
-        return result
-
-    # 1b) FTW baseline model inference (Sentinel-2 CLI pipeline; no client RGB)
-    if source in ("ftw-infer", "ftw_model", "ftw-baselines"):
-        from ftw_infer import run_ftw_inference
-
-        date_from, date_to = _requested_scene_window(req)
-        return run_ftw_inference(
-            req.bbox,
-            aoi_geom=aoi_geom,
-            min_area_m2=req.min_area_m2,
-            progress=progress,
-            model_name=req.model or "FTW_PRUE_EFNET_B5",
-            year=req.year,
-            date_from=date_from,
-            date_to=date_to,
-        )
-
-    # 1c) FTW live Sentinel-2 model (MPC + odc.stac + ftw_tools; no client RGB)
-    if source in ("ftw-live", "sentinel2-live"):
-        from ftw_live import ftw_live_available, run_ftw_live
-
-        if not ftw_live_available():
-            # Soft fallback so Detect still returns mappable parcels when live deps
-            # are missing (e.g. Python < 3.12 / no ftw-tools).
-            if progress:
-                progress(0.2, "fow_fallback")
-            from fow_aoi import query_fow_fields
-
-            result = query_fow_fields(
-                req.bbox,
-                aoi_geom,
-                req.min_area_m2,
-                admin_iso=req.admin_iso,
-            )
-            result = dict(result)
-            result["engine"] = "fow"
-            result["source"] = "fow"
-            stats = dict(result.get("stats") or {})
-            stats["fallback_from"] = "ftw-live"
-            result["stats"] = stats
-            if progress:
-                progress(1.0, "done")
-            return result
-
-        date_from, date_to = _requested_scene_window(req)
-        return run_ftw_live(
-            req.bbox,
-            year=req.year,
-            model_name=req.model,
-            min_area_m2=req.min_area_m2,
-            progress=progress,
-            aoi_geom=aoi_geom,
-            date_from=date_from,
-            date_to=date_to,
-        )
+    # 0) Agricultural Field Delineation — Sentinel-2 L2A 12-band Mask R-CNN
+    if source in ("agricultural-field-delineation", "afd"):
+        return _execute_afd(req, progress)
 
     if not req.image:
         raise ValueError(
-            "image is required unless source is 'fow', 'ftw-infer', or 'ftw-live'."
+            "image is required unless source is 'agricultural-field-delineation'."
         )
 
     image = _decode_image(req.image)
@@ -942,24 +985,6 @@ def _health_payload() -> dict[str, Any]:
         if _engine.available
         else (_da_engine.name if _da_engine.available else "none")
     )
-    try:
-        from ftw_infer import ftw_infer_available
-
-        ftw_infer_ok = bool(ftw_infer_available())
-    except Exception:  # noqa: BLE001
-        ftw_infer_ok = False
-    try:
-        from ftw_live import ftw_live_available
-
-        ftw_live_ok = bool(ftw_live_available())
-    except Exception:  # noqa: BLE001
-        ftw_live_ok = False
-    try:
-        import duckdb  # noqa: F401
-
-        fow_ok = True
-    except Exception:  # noqa: BLE001
-        fow_ok = False
     sen2sr_ok = False
     sen2sr_err: str | None = None
     try:
@@ -970,15 +995,23 @@ def _health_payload() -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         sen2sr_ok = False
         sen2sr_err = f"{type(exc).__name__}: {exc}"
+
+    afd_payload: dict[str, Any] = {"ready": False}
+    try:
+        from engines.agricultural_field_delineation import get_afd_engine
+
+        afd_payload = get_afd_engine().status_payload()
+    except Exception as exc:  # noqa: BLE001
+        afd_payload = {"ready": False, "error": f"{type(exc).__name__}: {exc}"}
+
     out: dict[str, Any] = {
         "status": "ok",
         "engine": primary,
         "mask_rcnn": _engine.available,
         "delineate_anything": bool(getattr(_da_engine, "available", False)),
-        "fow": fow_ok,
-        "ftw_infer": ftw_infer_ok,
-        "ftw_live": ftw_live_ok,
         "sen2sr": sen2sr_ok,
+        "agricultural_field_delineation": bool(afd_payload.get("ready")),
+        "agricultural_field_delineation_status": afd_payload,
         "watershed": False,
         "device": _engine.device if _engine.available else getattr(_da_engine, "device", "cpu"),
         "gis": True,
@@ -993,10 +1026,8 @@ def _service_ready(payload: dict[str, Any]) -> bool:
     return bool(
         payload.get("mask_rcnn")
         or payload.get("delineate_anything")
-        or payload.get("fow")
-        or payload.get("ftw_infer")
-        or payload.get("ftw_live")
         or payload.get("sen2sr")
+        or payload.get("agricultural_field_delineation")
     )
 
 
@@ -1008,7 +1039,7 @@ def health_live() -> dict[str, Any]:
 
 @app.get("/health/ready")
 def health_ready() -> dict[str, Any]:
-    """Models loaded — Node proxy waits for ready before forwarding FTW/FoW/SEN2SR."""
+    """Models loaded — Node proxy waits for ready before forwarding detect/SEN2SR."""
     payload = _health_payload()
     ready = _service_ready(payload)
     return {
@@ -1029,21 +1060,6 @@ def _public_error(exc: BaseException) -> str:
     if len(text) > 220:
         text = text[:219] + "…"
     return text or "Field boundary request failed."
-
-
-@app.post("/fow-aoi")
-def fow_aoi(req: FowRequest):
-    try:
-        from fow_aoi import query_fow_fields
-
-        aoi_geom = _parse_aoi(req.aoi)
-        return query_fow_fields(
-            req.bbox, aoi_geom, req.min_area_m2, admin_iso=req.admin_iso
-        )
-    except ValueError as exc:
-        return JSONResponse(status_code=400, content={"error": _public_error(exc)})
-    except Exception as exc:  # noqa: BLE001
-        return JSONResponse(status_code=500, content={"error": _public_error(exc)})
 
 
 @app.post("/detect")

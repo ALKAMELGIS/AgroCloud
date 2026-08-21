@@ -69,7 +69,7 @@ export type TrainingModelEntry = {
   trainEncoder?: string
   trainableOnAgroCloud: boolean
   /** Prefer for Infer engines already in-app */
-  inferEngine?: 'segformer' | 'ftw' | 'delineate-fbis' | 'yolo-trees'
+  inferEngine?: 'segformer' | 'delineate-fbis' | 'yolo-trees'
   gpuRequirement: 'cpu' | 'low' | 'medium' | 'high'
   source: 'agrocloud' | 'huggingface'
 }
@@ -324,33 +324,6 @@ export const TRAINING_MODEL_REGISTRY: TrainingModelEntry[] = [
     trainEncoder: 'nvidia/segformer-b2-finetuned-ade-512-512',
     trainableOnAgroCloud: false,
     inferEngine: 'delineate-fbis',
-    gpuRequirement: 'medium',
-    source: 'agrocloud',
-  },
-  {
-    id: 'agro-ftw-live',
-    name: 'FTW Model',
-    modelType: 'Field Boundary Segmentation',
-    task: 'Sentinel-2 agricultural field boundaries',
-    inputDataType: 'Sentinel-2 multispectral',
-    requiredBands: ['B2', 'B3', 'B4', 'B8', 'B11', 'B12'],
-    recommendedResolution: '10 m',
-    hfModelId: null,
-    hfUrl: null,
-    canRunWithoutTraining: true,
-    requiresFineTuning: false,
-    onnxAvailable: false,
-    recommendedAgriculture: true,
-    recommendedFields: true,
-    recommendedTrees: false,
-    recommendedDrone: false,
-    recommendedSentinel2: true,
-    confidenceLimitation:
-      'Pretrained FTW field boundaries on AgroCloud (:8092). TRAIN MODEL fine-tunes SegFormer-B2 on your samples; use Infer for the pretrained FTW engine.',
-    categories: ['field_detection', 'field_segmentation', 'sentinel2', 'multispectral'],
-    trainEncoder: 'nvidia/segformer-b2-finetuned-ade-512-512',
-    trainableOnAgroCloud: false,
-    inferEngine: 'ftw',
     gpuRequirement: 'medium',
     source: 'agrocloud',
   },
@@ -620,12 +593,12 @@ export const DEFAULT_TRAINING_MODEL_ID = 'agro-segformer-b2'
 /** Models shown in Training AI model picker (fine-tune SegFormers + AgroCloud field engines). */
 export function isTrainModelPickerEntry(model: TrainingModelEntry): boolean {
   if (model.trainableOnAgroCloud) return true
-  return model.inferEngine === 'delineate-fbis' || model.inferEngine === 'ftw'
+  return model.inferEngine === 'delineate-fbis'
 }
 
 /**
  * Map any Train-step picker selection to a SegFormer that can actually fine-tune on :8095.
- * FTW / Delineate remain the Infer engines; TRAIN MODEL fine-tunes their declared
+ * Delineate remains an Infer engine; TRAIN MODEL fine-tunes their declared
  * trainEncoder (SegFormer-B2) so Results get real epoch curves for every picker choice.
  */
 export function resolveTrainJobModel(

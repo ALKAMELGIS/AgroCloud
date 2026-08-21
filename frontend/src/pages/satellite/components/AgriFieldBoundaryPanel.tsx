@@ -12,6 +12,8 @@ import {
 import type { Sen2srProductMode, Sen2srStatus } from '../../../lib/agriFieldBoundary/sen2srClient'
 import { Sen2srProductControls } from './Sen2srProductControls'
 import { AgriFieldBoundaryResultsDashboard } from './AgriFieldBoundaryResultsDashboard'
+import { AgriFieldBoundaryTrainingSamplesPane } from './AgriFieldBoundaryTrainingSamplesPane'
+import type { FieldBoundaryTrainingSamplesApi } from './useFieldBoundaryTrainingSamples'
 import './AgriFieldBoundaryPanel.css'
 
 /** How the study AOI is chosen for Detect Fields. */
@@ -19,8 +21,8 @@ export type FieldBoundaryAoiMode = 'draw' | 'layers' | 'viewport' | 'select'
 
 export type FieldBoundaryAoiLayerOption = { id: string; label: string; featureCount?: number }
 
-/** Detect + inline Results dashboard tab. */
-export type FieldBoundaryPanelTab = 'detect' | 'results'
+/** Detect + Results + Training Samples tabs. */
+export type FieldBoundaryPanelTab = 'detect' | 'results' | 'training'
 
 export const FIELD_BOUNDARY_AOI_MODE_OPTIONS: Array<{ id: FieldBoundaryAoiMode; label: string }> = [
   { id: 'draw', label: 'Drawn AOI (map sketch)' },
@@ -49,10 +51,13 @@ export type AgriFieldBoundaryPanelProps = {
   onSourceChange?: (s: FieldImagerySource) => void
   /** @deprecated Prefer modelOptions. */
   sourceOptions?: Array<{ id: FieldImagerySource; label: string }>
+  /** @deprecated Unused — FoW country catalog removed. */
   countryOptions?: Array<{ id: string; label: string }>
+  /** @deprecated Unused — FoW country catalog removed. */
   adminIso?: string
+  /** @deprecated Unused — FoW country catalog removed. */
   onAdminIsoChange?: (iso: string) => void
-  /** Sentinel-2 acquisition day (YYYY-MM-DD) for FTW — From/To are kept identical (latest day). */
+  /** Sentinel-2 acquisition day (YYYY-MM-DD) for AFD — From/To are kept identical (latest day). */
   sceneDateFrom: string
   sceneDateTo: string
   onSceneDateFromChange: (isoDate: string) => void
@@ -86,9 +91,6 @@ export type AgriFieldBoundaryPanelProps = {
   busy: boolean
   error: string | null
   errorDetail?: string | null
-  notice?: string | null
-  /** Hostinger / GitHub Pages without Python FTW — Map RGB detect only. */
-  mapRgbOnlyHost?: boolean
   offline: boolean
   health?: FieldBoundaryHealth | null
   fieldCount: number
@@ -101,7 +103,7 @@ export type AgriFieldBoundaryPanelProps = {
   /** Training & AI polygon samples auto-used as validation reference. */
   referenceGeojson?: GeoJSON.FeatureCollection | null
   referenceLabel?: string | null
-  /** Status while FoW / FTW dataset reference is loading or unavailable. */
+  /** Status while validation reference is loading or unavailable. */
   referenceNotice?: string | null
   referenceBusy?: boolean
   /** Map viewport host for the floating Results Dashboard (`.si-map-container`). */
@@ -113,7 +115,7 @@ export type AgriFieldBoundaryPanelProps = {
   onAddToLayers?: () => void
   /** Progress line while the Sentinel-2 attribute table is being filled. */
   attributesStatus?: string | null
-  /** SEN2SR Lite product mode (separate from FTW / detect engines). */
+  /** SEN2SR Lite product mode (separate from detect engines). */
   sen2srStatus?: Sen2srStatus | null
   sen2srProductMode?: Sen2srProductMode
   onSen2srProductModeChange?: (mode: Sen2srProductMode) => void
@@ -126,6 +128,8 @@ export type AgriFieldBoundaryPanelProps = {
   sen2srBusy?: boolean
   sen2srError?: string | null
   sen2srNotice?: string | null
+  /** Training Samples curation (Predicted → Draft → Approved → Save). */
+  trainingSamples?: FieldBoundaryTrainingSamplesApi | null
 }
 
 const PHASE_LABEL: Record<FieldBoundaryPhase, string> = {
@@ -148,6 +152,8 @@ const STAGE_LABEL: Record<string, string> = {
   normalize: 'Clipping and scoring fields…',
   capture: 'Capturing AOI imagery…',
   detect: 'Detecting fields…',
+  vectorizing: 'Generating field polygons…',
+  done: 'Completed',
 }
 
 /** Lowest Min area the user may type (m²). */
@@ -183,9 +189,6 @@ export function AgriFieldBoundaryPanel({
   imagery,
   onImageryChange,
   imageryOptions,
-  countryOptions = [],
-  adminIso = 'AE',
-  onAdminIsoChange,
   sceneDateFrom,
   sceneDateTo,
   onSceneDateFromChange,
@@ -211,8 +214,6 @@ export function AgriFieldBoundaryPanel({
   busy,
   error,
   errorDetail,
-  notice = null,
-  mapRgbOnlyHost = false,
   offline,
   health = null,
   fieldCount,
@@ -244,6 +245,7 @@ export function AgriFieldBoundaryPanel({
   sen2srBusy = false,
   sen2srError = null,
   sen2srNotice = null,
+  trainingSamples = null,
 }: AgriFieldBoundaryPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const exportRef = useRef<HTMLDivElement>(null)
@@ -251,6 +253,14 @@ export function AgriFieldBoundaryPanel({
   const [minAreaText, setMinAreaText] = useState(() => String(minAreaM2))
   const [activeTab, setActiveTab] = useState<FieldBoundaryPanelTab>('detect')
   const [dashboardOpen, setDashboardOpen] = useState(false)
+
+  const trainingCounts = trainingSamples?.counts
+  const trainingBadge =
+    trainingCounts && trainingCounts.total > 0
+      ? trainingCounts.approved > 0
+        ? trainingCounts.approved
+        : trainingCounts.draft
+      : null
 
   useEffect(() => {
     setMinAreaText(String(minAreaM2))
@@ -292,33 +302,35 @@ export function AgriFieldBoundaryPanel({
 
   const needsUpload = isFieldFileSource(source)
   const showImagery = model === 'delineate-fbis' || model === 'map-rgb'
-  const isFtwInfer = source === 'ftw-infer'
-  const isFtwLive = source === 'ftw-live'
-  const isFow = source === 'fow'
+  const isAfd = source === 'agricultural-field-delineation' || model === 'agricultural-field-delineation'
   const isDelineateFbis = source === 'delineate-fbis'
-  const isFtwOnDemand = isFtwInfer || isFtwLive
-  // Country catalog is FoW-only; FTW live/infer run on any drawn AOI worldwide.
-  const showCountry = isFow && countryOptions.length > 0 && Boolean(onAdminIsoChange)
   const canRun = hasAoi && !busy && (!needsUpload || Boolean(uploadedFileName))
   const pct = Math.max(0, Math.min(100, Math.round(progress)))
   const showProgress = busy && (phase === 'detecting' || phase === 'capturing')
-  const runTitle = isDelineateFbis
-    ? 'Run Delineate Anything on the AOI capture — sharp black instance edges (:8096)'
-    : isFtwLive
-      ? 'Run FTW live Sentinel-2 on your drawn AOI — works worldwide (may take several minutes)'
-      : isFtwInfer
-        ? 'Run FTW Sentinel-2 model inference across the AOI (may take several minutes)'
-        : 'Run field boundary detection across the AOI'
+  const runTitle = isAfd
+    ? 'Run Agricultural Field Delineation on Sentinel-2 L2A (12 bands)'
+    : isDelineateFbis
+      ? 'Run Delineate Anything on the AOI capture — sharp black instance edges (:8096)'
+      : 'Run field boundary detection across the AOI'
   const stageLabel = phase === 'detecting' ? STAGE_LABEL[String(stage || '')] : undefined
   const phaseLabel =
     stageLabel ??
-    (isDelineateFbis && phase === 'detecting'
-      ? 'Delineate Anything (instance parcels)…'
-      : isFtwLive && phase === 'detecting'
-        ? 'FTW live worldwide (scene select → MPC stack → model → polygonize)…'
-        : isFtwInfer && phase === 'detecting'
-          ? 'FTW inference (S2 download → model → polygonize)…'
-          : PHASE_LABEL[phase])
+    (isAfd && phase === 'detecting'
+      ? 'Agricultural Field Delineation (Sentinel-2 L2A)…'
+      : isDelineateFbis && phase === 'detecting'
+        ? 'Delineate Anything (instance parcels)…'
+        : PHASE_LABEL[phase])
+  const afdInfo = health?.agricultural_field_delineation_status?.info as
+    | {
+        architecture?: string
+        backbone?: string
+        bands?: string[]
+        resolution_m?: number
+        ap_field?: number
+        version?: string
+      }
+    | undefined
+  const afdReady = Boolean(health?.agricultural_field_delineation)
 
   useEffect(() => {
     if (!exportOpen) return
@@ -395,6 +407,24 @@ export function AgriFieldBoundaryPanel({
           <i className="fa-solid fa-chart-line" aria-hidden />
           {hasResult ? <span className="si-afb__tab-badge">{fieldCount}</span> : null}
         </button>
+        {trainingSamples ? (
+          <button
+            type="button"
+            role="tab"
+            id="si-afb-tab-training"
+            aria-selected={activeTab === 'training'}
+            aria-controls="si-afb-pane-training"
+            className={`si-afb__tab${activeTab === 'training' ? ' is-active' : ''}${trainingBadge != null ? ' is-ready' : ''}`}
+            title="Training Samples — Generate drafts from predictions, Accept, then Save approved only"
+            aria-label="Training Samples"
+            onClick={() => setActiveTab('training')}
+          >
+            <i className="fa-solid fa-database" aria-hidden /> Samples
+            {trainingBadge != null ? (
+              <span className="si-afb__tab-badge">{trainingBadge}</span>
+            ) : null}
+          </button>
+        ) : null}
       </div>
 
       {activeTab === 'detect' ? (
@@ -404,17 +434,6 @@ export function AgriFieldBoundaryPanel({
         id="si-afb-pane-detect"
         aria-labelledby="si-afb-tab-detect"
       >
-        {mapRgbOnlyHost ? (
-          <p className="si-afb__hint si-afb__hint--prod" role="status">
-            <i className="fa-solid fa-cloud" aria-hidden /> Map RGB detect runs on the AgroCloud API.
-            FTW live / FoW need a Python VPS — use rectangle AOI on cropland and wait for basemap tiles.
-          </p>
-        ) : null}
-        {notice && phase === 'idle' ? (
-          <p className="si-afb__hint" role="status">
-            {notice}
-          </p>
-        ) : null}
         <label className="si-afb__row">
           <span className="si-afb__label">Model</span>
           <select
@@ -430,6 +449,63 @@ export function AgriFieldBoundaryPanel({
             ))}
           </select>
         </label>
+
+        {isAfd ? (
+          <div className="si-afb__model-info" role="region" aria-label="Model information">
+            <div className="si-afb__model-info-row">
+              <span>Architecture</span>
+              <strong>
+                {afdInfo?.architecture || 'MaskRCNN'}
+                {afdInfo?.backbone ? ` (${afdInfo.backbone})` : ''}
+              </strong>
+            </div>
+            <div className="si-afb__model-info-row">
+              <span>Input</span>
+              <strong>12-band Sentinel-2 L2A BOA</strong>
+            </div>
+            <div className="si-afb__model-info-row">
+              <span>Bands</span>
+              <strong>
+                {(afdInfo?.bands || ['B01', 'B02', 'B03', 'B04', 'B05', 'B06', 'B07', 'B08', 'B8A', 'B09', 'B11', 'B12']).join(
+                  ', ',
+                )}
+              </strong>
+            </div>
+            <div className="si-afb__model-info-row">
+              <span>Resolution</span>
+              <strong>{afdInfo?.resolution_m ?? 10} m</strong>
+            </div>
+            <div className="si-afb__model-info-row">
+              <span>Model status</span>
+              <strong>{afdReady ? 'Ready' : health?.loading ? 'Loading…' : 'Unavailable'}</strong>
+            </div>
+            {typeof afdInfo?.ap_field === 'number' ? (
+              <div className="si-afb__model-info-row">
+                <span>AP (field)</span>
+                <strong>{afdInfo.ap_field.toFixed(4)}</strong>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {isAfd ? (
+          <label className="si-afb__row">
+            <span className="si-afb__label">Scene date</span>
+            <input
+              type="date"
+              className="si-afb__select"
+              value={sceneDateTo || sceneDateFrom}
+              max={latestSceneDateIso()}
+              disabled={busy}
+              onChange={e => {
+                const v = e.target.value
+                onSceneDateFromChange(v)
+                onSceneDateToChange(v)
+              }}
+              title="Uses the clearest Sentinel-2 L2A scene near this date (searches ~60 days back — today often has no L2A yet)"
+            />
+          </label>
+        ) : null}
 
         {showImagery ? (
           <label className="si-afb__row">
@@ -447,57 +523,6 @@ export function AgriFieldBoundaryPanel({
               ))}
             </select>
           </label>
-        ) : null}
-
-        {showCountry ? (
-          <label className="si-afb__row">
-            <span className="si-afb__label">Country catalog</span>
-            <select
-              className="si-afb__select"
-              value={adminIso}
-              disabled={busy}
-              onChange={e => onAdminIsoChange?.(e.target.value)}
-              title="FoW country partition (ISO-3166). Pick All countries for a slow worldwide scan — prefer FTW live for any AOI."
-            >
-              {countryOptions.map(o => (
-                <option key={o.id} value={o.id}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-
-        {isFtwOnDemand ? (
-          <div className="si-afb__dates" role="group" aria-label="Sentinel-2 image date">
-            <span
-              className="si-afb__label"
-              title="Latest Sentinel-2 acquisition day used for FTW. Defaults to today."
-            >
-              Image date
-            </span>
-            <div className="si-afb__dates-row">
-              <label className="si-afb__date-field si-afb__date-field--single">
-                <input
-                  className="si-afb__select"
-                  type="date"
-                  min="2017-01-01"
-                  max={latestSceneDateIso()}
-                  value={sceneDateTo || sceneDateFrom || latestSceneDateIso()}
-                  disabled={busy}
-                  title="Latest Sentinel-2 acquisition date"
-                  aria-label="Sentinel-2 image date"
-                  onChange={e => {
-                    const v = String(e.target.value || '').trim().slice(0, 10)
-                    if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return
-                    // Single day only — keep From and To identical (latest scene).
-                    onSceneDateFromChange(v)
-                    onSceneDateToChange(v)
-                  }}
-                />
-              </label>
-            </div>
-          </div>
         ) : null}
 
         <input
@@ -547,23 +572,21 @@ export function AgriFieldBoundaryPanel({
           </div>
         ) : null}
 
-        {!isFtwOnDemand && !isFow ? (
-          <label className="si-afb__row">
-            <span className="si-afb__label">
-              Confidence <em>{Math.round(minConfidence * 100)}%</em>
-            </span>
-            <input
-              type="range"
-              className="si-afb__slider"
-              min={0.2}
-              max={0.9}
-              step={0.05}
-              value={minConfidence}
-              disabled={busy}
-              onChange={e => onMinConfidenceChange(Number(e.target.value))}
-            />
-          </label>
-        ) : null}
+        <label className="si-afb__row">
+          <span className="si-afb__label">
+            Confidence <em>{Math.round(minConfidence * 100)}%</em>
+          </span>
+          <input
+            type="range"
+            className="si-afb__slider"
+            min={0.2}
+            max={0.9}
+            step={0.05}
+            value={minConfidence}
+            disabled={busy}
+            onChange={e => onMinConfidenceChange(Number(e.target.value))}
+          />
+        </label>
 
         <label className="si-afb__row">
           <span className="si-afb__label">Select AOI</span>
@@ -897,6 +920,29 @@ export function AgriFieldBoundaryPanel({
           ) : null}
         </div>
         ) : null}
+      </section>
+      ) : activeTab === 'training' && trainingSamples ? (
+      <section
+        className="si-afb__card si-afb__card--training"
+        role="tabpanel"
+        id="si-afb-pane-training"
+        aria-labelledby="si-afb-tab-training"
+      >
+        <AgriFieldBoundaryTrainingSamplesPane
+          training={trainingSamples}
+          hasPredictions={Boolean(resultGeojson?.features?.length)}
+          predictionCount={resultGeojson?.features?.length ?? 0}
+          sceneId={null}
+          acquisitionDate={null}
+          engine={engine}
+          busy={busy}
+          onGenerate={() => {
+            trainingSamples.generateFromPredictions(resultGeojson, {
+              engine: engine || undefined,
+              acquisitionDate: sceneDateTo || sceneDateFrom || undefined,
+            })
+          }}
+        />
       </section>
       ) : (
       <section

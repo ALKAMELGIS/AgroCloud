@@ -1498,8 +1498,16 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
   --si-ctx-bg: rgba(0, 0, 0, 0.42);
   --si-ctx-bg2: rgba(255, 255, 255, 0.08);
   --si-ctx-border: rgba(255, 255, 255, 0.1);
-  --si-ctx-text: #ffffff;
-  --si-ctx-muted: rgba(255, 255, 255, 0.72);
+  --si-ctx-text: #e6e6e6;
+  --si-ctx-muted: #b8b8b8;
+}
+
+.si-sat-ctx-dock--light {
+  --si-ctx-bg: rgba(255, 255, 255, 0.88);
+  --si-ctx-bg2: rgba(34, 34, 34, 0.06);
+  --si-ctx-border: rgba(34, 34, 34, 0.12);
+  --si-ctx-text: #222222;
+  --si-ctx-muted: #555555;
 }
 
 .si-sat-ctx-dock > * {
@@ -3907,7 +3915,7 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
    ----------------------------------------------------------------------------
    • Deep-black luxury surface in BOTH light and dark modes (the panel never
      turns white). Light mode → clear light-gray / white text; Dark mode →
-     pure white text. The only difference between modes is text shade.
+     Light = white glass + matte black text (#222). Dark = black glass + matte light text (#E6E6E6).
    • One elegant modern typeface across every element (Inter · --ds-font-sans).
    • Soft shadows + subtle glassmorphism; hairline borders; reduced visual noise.
    • Small, clean, uniform icons with a clear typographic hierarchy.
@@ -3950,31 +3958,45 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
   font-family: var(--lux-font);
 }
 
-/* ---- Mode tokens: same black surface, text shade differs ----------------- */
+/* ---- Mode tokens: dark = matte light text on black; light = matte dark text on white glass ---- */
 .si-sat-ctx-dock--dark {
-  --si-ctx-text: #ffffff;                       /* pure white in dark */
-  --si-ctx-muted: rgba(255, 255, 255, 0.6);
+  --si-ctx-text: #e6e6e6;
+  --si-ctx-muted: #b8b8b8;
   --si-ctx-bg2: var(--lux-fill-hover);
   --si-ctx-border: var(--lux-hairline);
   --si-ctx-accent: var(--lux-accent);
 }
 
 .si-sat-ctx-dock--light {
-  --si-ctx-text: #e9edf3;                        /* clear light gray / white */
-  --si-ctx-muted: rgba(233, 237, 243, 0.56);
+  --lux-black-1: #f3f4f6;
+  --lux-black-2: #fafbfc;
+  --lux-rail-1: #f6f7f8;
+  --lux-rail-2: #eef0f2;
+  --lux-hairline: rgba(34, 34, 34, 0.1);
+  --lux-hairline-strong: rgba(34, 34, 34, 0.16);
+  --lux-accent: #059669;
+  --lux-accent-soft: rgba(5, 150, 105, 0.12);
+  --lux-accent-line: rgba(5, 150, 105, 0.28);
+  --lux-fill: rgba(34, 34, 34, 0.04);
+  --lux-fill-hover: rgba(34, 34, 34, 0.08);
+  --lux-soft-shadow:
+    0 18px 40px rgba(15, 23, 42, 0.1),
+    0 2px 10px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  --si-ctx-text: #222222;
+  --si-ctx-muted: #555555;
   --si-ctx-bg2: var(--lux-fill-hover);
   --si-ctx-border: var(--lux-hairline);
   --si-ctx-border-soft: var(--lux-hairline);
   --si-ctx-accent: var(--lux-accent);
-  --si-ctx-light-inset: rgba(255, 255, 255, 0.05);
-  --si-ctx-light-field: var(--lux-fill);
-  --si-ctx-light-field-hover: var(--lux-fill-hover);
+  --si-ctx-light-inset: rgba(255, 255, 255, 0.7);
+  --si-ctx-light-field: #ffffff;
+  --si-ctx-light-field-hover: #f3f4f6;
   --si-ctx-glass-shadow: var(--lux-soft-shadow);
 }
 
-/* ---- Panel surface (identical luxury black in both modes) ---------------- */
-.si-sat-ctx-dock--dark .si-sat-ctx-panel,
-.si-sat-ctx-dock--light .si-sat-ctx-panel {
+/* ---- Panel surface: dark glass vs light glass ---------------------------- */
+.si-sat-ctx-dock--dark .si-sat-ctx-panel {
   background: linear-gradient(168deg, var(--lux-black-2) 0%, var(--lux-black-1) 100%);
   backdrop-filter: blur(18px) saturate(1.1);
   -webkit-backdrop-filter: blur(18px) saturate(1.1);
@@ -3983,9 +4005,17 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
   color: var(--si-ctx-text);
 }
 
+.si-sat-ctx-dock--light .si-sat-ctx-panel {
+  background: linear-gradient(168deg, #ffffff 0%, #f6f7f8 100%);
+  backdrop-filter: blur(18px) saturate(1.08);
+  -webkit-backdrop-filter: blur(18px) saturate(1.08);
+  border-color: var(--lux-hairline);
+  box-shadow: var(--lux-soft-shadow);
+  color: var(--si-ctx-text);
+}
+
 /* ---- Rail surface -------------------------------------------------------- */
-.si-sat-ctx-dock--dark .si-sat-ctx-rail,
-.si-sat-ctx-dock--light .si-sat-ctx-rail {
+.si-sat-ctx-dock--dark .si-sat-ctx-rail {
   background: linear-gradient(180deg, var(--lux-rail-1) 0%, var(--lux-rail-2) 100%);
   border-color: var(--lux-hairline);
   box-shadow:
@@ -3993,9 +4023,15 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
     -10px 0 34px rgba(0, 0, 0, 0.38);
 }
 
+.si-sat-ctx-dock--light .si-sat-ctx-rail {
+  background: linear-gradient(180deg, #fafbfc 0%, #eef0f2 100%);
+  border-color: var(--lux-hairline);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    -8px 0 24px rgba(15, 23, 42, 0.08);
+}
 /* ---- Header & hierarchy — compact, luxe, refined ------------------------- */
-.si-sat-ctx-panel-header,
-.si-sat-ctx-dock--light .si-sat-ctx-panel-header {
+.si-sat-ctx-panel-header {
   align-items: center;
   gap: 10px;
   padding: 9px 11px 8px 13px;
@@ -4009,6 +4045,10 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
       transparent 100%
     )
     1;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-panel-header {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(246, 247, 248, 0.6) 72%);
 }
 
 .si-sat-ctx-panel-header-text {

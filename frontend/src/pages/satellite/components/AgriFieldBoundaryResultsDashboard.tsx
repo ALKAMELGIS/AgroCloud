@@ -47,7 +47,7 @@ export type AgriFieldBoundaryResultsDashboardProps = {
   /** Training & AI polygon samples used as validation reference when available. */
   initialReference?: GeoJSON.FeatureCollection | null
   initialReferenceName?: string | null
-  /** FoW load status shown above Validation Detection. */
+  /** Validation reference load status shown above Validation Detection. */
   referenceNotice?: string | null
   referenceBusy?: boolean
   /** Inline embed in the Field Boundary dock tab (no map portal). */
@@ -59,10 +59,10 @@ function pct(v: number | null | undefined, digits = 0): string {
   return `${(v * 100).toFixed(digits)}%`
 }
 
-/** FTW and Delineate Anything are pretrained inference — they never emit epoch curves. */
+/** Pretrained field engines never emit epoch curves. */
 export function isPretrainedFieldEngine(engine: string | null | undefined): boolean {
-  const e = (engine || '').toLowerCase()
-  return e.includes('ftw') || e.includes('delineate')
+  const e = String(engine || '').toLowerCase()
+  return e.includes('delineate') || e.includes('agricultural-field')
 }
 
 function trainingEmptyCopy(

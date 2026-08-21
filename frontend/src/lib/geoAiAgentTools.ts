@@ -265,14 +265,14 @@ const TOOL_DEFS: ToolDef[] = [
   {
     name: 'detect_field_boundaries',
     description:
-      'Detect field boundaries for the current AOI using FTW live Sentinel-2 (or optional source). Starts the Field Boundary detection job for the drawn AOI. Use when the user asks to delineate fields, farm parcels, or FTW / Fields of the World boundaries.',
+      'Detect field boundaries for the current AOI using AFD / Delineate / basemap detect. Starts the Field Boundary detection job for the drawn AOI. Use when the user asks to delineate fields or farm parcels.',
     parameters: {
       type: 'object',
       properties: {
         source: {
           type: 'string',
           description:
-            'Optional detection source (default ftw-live): ftw-live | ftw-infer | fow | sentinel2 | basemap',
+            'Optional detection source (default delineate-fbis): delineate-fbis | agricultural-field-delineation | sentinel2 | basemap',
         },
         year: {
           type: 'number',
@@ -722,7 +722,17 @@ export async function executeGeoAiAgentTool(
         return runMapOp(host, { op: 'runRsIndex', index })
       }
       case 'detect_field_boundaries': {
-        const source = str(a.source ?? a.engine) || 'ftw-live'
+        let source = str(a.source ?? a.engine) || 'delineate-fbis'
+        const srcNorm = source.toLowerCase().replace(/_/g, '-')
+        if (
+          srcNorm === 'fow' ||
+          srcNorm === 'ftw' ||
+          srcNorm === 'ftw-live' ||
+          srcNorm === 'ftw-infer' ||
+          srcNorm === 'fields-of-the-world'
+        ) {
+          source = 'delineate-fbis'
+        }
         const year = num(a.year)
         return runMapOp(host, {
           op: 'detectFieldBoundaries',

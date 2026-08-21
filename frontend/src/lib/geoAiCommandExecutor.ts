@@ -25,7 +25,7 @@ export type GeoAiMapCommand =
   | { op: 'openToolboxPanel'; panel: string }
   /** Show a remote-sensing index (NDVI/…) on the map for the current AOI. */
   | { op: 'runRsIndex'; index: string }
-  /** Detect agricultural field boundaries for the current AOI (FTW live / FoW / …). */
+  /** Detect agricultural field boundaries for the current AOI (AFD / Delineate / …). */
   | { op: 'detectFieldBoundaries'; source?: string; year?: number }
   /** Run a GIS geoprocessing op (buffer, intersect, clip, …) via host handler. */
   | { op: 'gisOp'; tool: string; args: Record<string, unknown> }
@@ -346,7 +346,7 @@ export function executeGeoAiMapCommands(
           message = handlers.runRsIndex?.(command.index)
           break
         case 'detectFieldBoundaries':
-          message = handlers.detectFieldBoundaries?.(command.source || 'ftw-live', command.year)
+          message = handlers.detectFieldBoundaries?.(command.source || 'delineate-fbis', command.year)
           break
         case 'gisOp':
           message = handlers.gisOp?.(command.tool, command.args)

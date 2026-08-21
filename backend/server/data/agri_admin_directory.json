@@ -1,32 +1,137 @@
 {
   "version": 1,
-  "updatedAt": "2026-08-17T11:17:33.293Z",
+  "updatedAt": "2026-08-20T10:00:21.212Z",
   "users": [
     {
-      "id": 1782414394512,
+      "id": 1787200317186,
       "name": "Alkamel GIS",
       "email": "alkamelgis@gmail.com",
       "role": "Admin",
       "status": "Active",
-      "lastLogin": "17/08/2026, 3:17:32 PM",
+      "lastLogin": "20/08/2026, 2:00:20 PM",
       "emailVerified": true,
       "passwordHash": "b03ddf3ca2e714a6548e7495e2a03f5e824eaac9837cd7f159c67b90fb4b7342"
     }
   ],
   "auditLog": [
     {
-      "id": "e6235d20-f218-465a-a13e-fed670497099",
-      "at": "2026-08-17T11:17:32.677Z",
+      "id": "abfd9e80-4012-4af3-8f81-6cbdda078c85",
+      "at": "2026-08-20T10:00:20.752Z",
       "entity": "auth",
       "entityId": "alkamelgis@gmail.com",
       "action": "login_success",
-      "actorEmail": "Alkamelgis@gmail.com",
+      "actorEmail": "alkamelgis@gmail.com",
       "meta": {
         "reason": "server_authenticated",
         "mode": "signin",
         "keepSignedIn": true,
         "deviceName": "Windows · Chrome",
-        "atLocal": "8/17/2026, 3:17:32 PM"
+        "atLocal": "8/20/2026, 2:00:20 PM"
+      }
+    },
+    {
+      "id": "575ca99f-af96-4459-9e45-b9b618474eb6",
+      "at": "2026-08-20T05:19:40.346Z",
+      "entity": "auth",
+      "action": "login_success",
+      "entityId": "alkamelgis@gmail.com",
+      "actorEmail": "Alkamelgis@gmail.com",
+      "meta": {
+        "reason": "server_authenticated",
+        "mode": "signin",
+        "keepSignedIn": false,
+        "deviceName": "Windows · Chrome",
+        "atLocal": "8/20/2026, 9:19:40 AM"
+      }
+    },
+    {
+      "id": "e4148c87-2b3c-4fcc-8225-0f16aee80c64",
+      "at": "2026-08-20T05:19:17.079Z",
+      "entity": "auth",
+      "action": "login_failure",
+      "entityId": "alkamlgis@gmail.com",
+      "actorEmail": "Alkamlgis@gmail.com",
+      "meta": {
+        "reason": "server_login_invalid_credentials",
+        "mode": "signin",
+        "keepSignedIn": false,
+        "deviceName": "Windows · Chrome",
+        "atLocal": "8/20/2026, 9:19:17 AM"
+      }
+    },
+    {
+      "id": "9f0df333-afde-4a10-8e97-1ce755655e43",
+      "at": "2026-08-20T05:19:15.075Z",
+      "entity": "auth",
+      "action": "login_failure",
+      "entityId": "alkamlgis@gmail.com",
+      "actorEmail": "Alkamlgis@gmail.com",
+      "meta": {
+        "reason": "server_login_invalid_credentials",
+        "mode": "signin",
+        "keepSignedIn": true,
+        "deviceName": "Windows · Chrome",
+        "atLocal": "8/20/2026, 9:19:15 AM"
+      }
+    },
+    {
+      "id": "5a4f0bf7-41b2-4a88-91a8-68c1ce19e710",
+      "at": "2026-08-20T05:19:09.587Z",
+      "entity": "auth",
+      "action": "login_failure",
+      "entityId": "alkamlgis@gmail.com",
+      "actorEmail": "Alkamlgis@gmail.com",
+      "meta": {
+        "reason": "server_login_invalid_credentials",
+        "mode": "signin",
+        "keepSignedIn": true,
+        "deviceName": "Windows · Chrome",
+        "atLocal": "8/20/2026, 9:19:09 AM"
+      }
+    },
+    {
+      "id": "68657c7f-7f2b-4c9a-9f73-389c8ac1f144",
+      "at": "2026-08-20T05:19:05.230Z",
+      "entity": "auth",
+      "action": "login_failure",
+      "entityId": "alkamlgis@gmail.com",
+      "actorEmail": "Alkamlgis@gmail.com",
+      "meta": {
+        "reason": "server_login_invalid_credentials",
+        "mode": "signin",
+        "keepSignedIn": true,
+        "deviceName": "Windows · Chrome",
+        "atLocal": "8/20/2026, 9:19:05 AM"
+      }
+    },
+    {
+      "id": "904ca31a-9ab0-4ea9-9d15-6499de32f8cc",
+      "at": "2026-08-20T05:19:03.628Z",
+      "entity": "auth",
+      "action": "login_failure",
+      "entityId": "alkamlgis@gmail.com",
+      "actorEmail": "Alkamlgis@gmail.com",
+      "meta": {
+        "reason": "server_login_invalid_credentials",
+        "mode": "signin",
+        "keepSignedIn": true,
+        "deviceName": "Windows · Chrome",
+        "atLocal": "8/20/2026, 9:19:03 AM"
+      }
+    },
+    {
+      "id": "ef24a108-c5fc-416d-a13f-0baa5335d8da",
+      "at": "2026-08-20T05:18:59.101Z",
+      "entity": "auth",
+      "action": "login_failure",
+      "entityId": "alkamlgis@gmail.com",
+      "actorEmail": "Alkamlgis@gmail.com",
+      "meta": {
+        "reason": "server_login_invalid_credentials",
+        "mode": "signin",
+        "keepSignedIn": true,
+        "deviceName": "Windows · Chrome",
+        "atLocal": "8/20/2026, 9:18:59 AM"
       }
     }
   ]

@@ -10,29 +10,13 @@ Do not use large closing kernels that fuse neighboring fields across roads.
 
 from __future__ import annotations
 
-import os
 from typing import Iterable, Sequence
 
 import cv2
 import numpy as np
 
-# Soft floor for FTW / Sentinel-2 10 m: ~0.5–1 ha of noise goes away as speckles.
+# Soft floor for Sentinel-2 10 m speckle removal (~0.5–1 ha).
 # 80 px @ 10 m ≈ 8000 m²; never use the old 16-px floor.
-FTW_MIN_FIELD_M2 = float(os.environ.get("FTW_MIN_FIELD_M2", "500"))
-FTW_MIN_PX = int(os.environ.get("FTW_MIN_PX", "80"))
-FTW_MERGE_CONTACT_FRAC = float(os.environ.get("FTW_MERGE_CONTACT_FRAC", "0.28"))
-
-
-def ftw_min_px_from_area(min_area_m2: float, resolution_m: float = 10.0) -> int:
-    """Map requested min area to pixel count at native S2 resolution (hard floor FTW_MIN_PX)."""
-    res = max(1.0, float(resolution_m))
-    from_area = int(max(0.0, float(min_area_m2)) / (res * res))
-    return max(FTW_MIN_PX, from_area)
-
-
-def ftw_polygonize_min_size_m2(min_area_m2: float) -> float:
-    """Polygonize min_size — never pass UI=1 through as a pinhead floor."""
-    return max(float(min_area_m2), FTW_MIN_FIELD_M2)
 
 
 def _as_u8(mask: np.ndarray) -> np.ndarray:
@@ -291,25 +275,6 @@ def refine_prediction_geotiff(
         with rasterio.open(dst, "w", **profile) as sink:
             sink.write(write, 1)
     return dst
-
-
-def refine_ftw_prediction_geotiff(
-    path: str,
-    *,
-    min_area_m2: float = 500.0,
-    resolution_m: float = 10.0,
-    out_path: str | None = None,
-) -> str:
-    """
-    FTW-oriented refine: hard min_px floor, aggressive fragment merge, then drop speckles.
-    """
-    min_px = ftw_min_px_from_area(min_area_m2, resolution_m=resolution_m)
-    return refine_prediction_geotiff(
-        path,
-        min_px=min_px,
-        merge_contact_frac=FTW_MERGE_CONTACT_FRAC,
-        out_path=out_path,
-    )
 
 
 def masks_to_cleaned_components(

@@ -76,17 +76,10 @@ export function applyThemeToDocument(s: Pick<SystemSettingsPersistedV1, 'themeMo
   root.style.removeProperty('--ds-color-primary-soft')
   const isSystemDark = typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)')?.matches
 
-  if (s.themeMode === 'dark' || (s.themeMode === 'system' && isSystemDark)) {
-    root.setAttribute('data-theme', 'dark')
-    return
-  }
-
-  if (s.themeMode === 'system') {
-    root.removeAttribute('data-theme')
-    return
-  }
-
-  root.setAttribute('data-theme', 'light')
+  // Always set an explicit data-theme so CSS + SI dock observers stay in sync.
+  const resolvedDark =
+    s.themeMode === 'dark' || (s.themeMode === 'system' && isSystemDark)
+  root.setAttribute('data-theme', resolvedDark ? 'dark' : 'light')
 
   if (s.themeMode === 'custom') {
     const hex = clampHex(s.customPrimaryHex || '#047857')
@@ -104,6 +97,15 @@ export function SystemSettingsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     applyThemeToDocument(settings)
+  }, [settings.themeMode, settings.customPrimaryHex])
+
+  useEffect(() => {
+    if (settings.themeMode !== 'system') return
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)')
+    if (!mq) return
+    const onChange = () => applyThemeToDocument(settings)
+    mq.addEventListener?.('change', onChange)
+    return () => mq.removeEventListener?.('change', onChange)
   }, [settings.themeMode, settings.customPrimaryHex])
 
   useEffect(() => {

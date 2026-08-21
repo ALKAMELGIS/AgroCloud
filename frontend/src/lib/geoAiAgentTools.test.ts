@@ -97,12 +97,12 @@ describe('geoAiAgentTools registry', () => {
     })
     const r = await executeGeoAiAgentTool(
       'detect_field_boundaries',
-      { source: 'ftw-live', year: 2024 },
+      { source: 'delineate-fbis', year: 2024 },
       host,
     )
     expect(r.ok).toBe(true)
-    expect(r.content).toMatch(/ftw-live/)
-    expect(detectFieldBoundaries).toHaveBeenCalledWith('ftw-live', 2024)
+    expect(r.content).toMatch(/delineate-fbis/)
+    expect(detectFieldBoundaries).toHaveBeenCalledWith('delineate-fbis', 2024)
     expect(collectMapActionSummaries([r])).toEqual([
       expect.stringMatching(/field boundary detection/i),
     ])

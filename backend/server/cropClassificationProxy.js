@@ -34,6 +34,14 @@ import {
 import { detectCountryFromAoi, cropProfileForCountry } from './cropCountryDatabase.js'
 import { classifyCropFields } from './cropFieldClassifier.js'
 import { fillBlackHolesInPngDataUrl } from './cropPngHoleFill.js'
+import {
+  deleteCropJobSnapshot,
+  loadCropJobSnapshot,
+  persistCropJobPredictionPng,
+  persistCropJobSnapshot,
+  pruneCropJobSnapshots,
+  readCropJobPredictionPng,
+} from './cropClassificationJobStore.js'
 
 const HF_SPACE_ID =
   process.env.CROP_CLASSIFICATION_SPACE ||
@@ -98,7 +106,30 @@ const JOB_TTL_MS = 30 * 60 * 1000
 function pruneJobs() {
   const now = Date.now()
   for (const [id, job] of JOBS) {
-    if (now - job.updatedAt > JOB_TTL_MS) JOBS.delete(id)
+    if (now - job.updatedAt > JOB_TTL_MS) {
+      JOBS.delete(id)
+      deleteCropJobSnapshot(id)
+    }
+  }
+  pruneCropJobSnapshots(JOB_TTL_MS)
+}
+
+function resolveJob(jobId) {
+  let job = JOBS.get(jobId)
+  if (job) return job
+  const disk = loadCropJobSnapshot(jobId)
+  if (!disk) return null
+  job = disk
+  JOBS.set(jobId, job)
+  return job
+}
+
+function materializePredictionAsset(job) {
+  const url = job?.result?.prediction?.url
+  if (typeof url !== 'string' || !url.startsWith('data:image/')) return
+  const apiPath = persistCropJobPredictionPng(job.id, url)
+  if (apiPath) {
+    job.result.prediction.url = apiPath
   }
 }
 
@@ -116,11 +147,14 @@ function newJob(input) {
     error: null,
   }
   JOBS.set(id, job)
+  persistCropJobSnapshot(job)
   return job
 }
 
 function setJob(job, patch, broadcast) {
   Object.assign(job, patch, { updatedAt: Date.now() })
+  if (job.status === 'done') materializePredictionAsset(job)
+  persistCropJobSnapshot(job)
   if (typeof broadcast === 'function') {
     broadcast({ topic: 'crop-classification/job', payload: publicJob(job) })
   }
@@ -814,9 +848,33 @@ export function registerCropClassificationRoutes(app, { secretsFilePath, broadca
   })
 
   app.get('/api/crop-classification/jobs/:jobId', (req, res) => {
-    const job = JOBS.get(req.params.jobId)
+    pruneJobs()
+    const job = resolveJob(req.params.jobId)
     if (!job) return res.status(404).json({ error: 'Job not found or expired.' })
     res.json(publicJob(job))
+  })
+
+  app.get('/api/crop-classification/jobs/:jobId/prediction.png', (req, res) => {
+    const jobId = req.params.jobId
+    const job = resolveJob(jobId)
+    if (!job) return res.status(404).json({ error: 'Job not found or expired.' })
+    let buf = readCropJobPredictionPng(jobId)
+    if (!buf) {
+      const inline = job?.result?.prediction?.url
+      if (typeof inline === 'string' && inline.startsWith('data:image/')) {
+        const apiPath = persistCropJobPredictionPng(jobId, inline)
+        if (apiPath) {
+          job.result.prediction.url = apiPath
+          persistCropJobSnapshot(job)
+          buf = readCropJobPredictionPng(jobId)
+        }
+      }
+    }
+    if (!buf?.length) return res.status(404).json({ error: 'Prediction image not available.' })
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Content-Type', 'image/png')
+    res.setHeader('Cache-Control', 'public, max-age=3600')
+    res.send(buf)
   })
 
   // CORS-friendly proxy so the Mapbox/MapLibre image layer can load the HF Space

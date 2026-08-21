@@ -1,5 +1,5 @@
 /**
- * Shared Training AI extract: FTW parcel fields + YOLO/local crown trees.
+ * Shared Training AI extract: field parcels + YOLO/local crown trees.
  * Used by Fields+Trees, Segmentation, and Object Detection modes.
  */
 
@@ -45,7 +45,7 @@ export type RunFieldsTreesExtractArgs = {
   signal?: AbortSignal
   onProgress?: ExtractProgress
   /**
-   * `fields` = FTW parcels only.
+   * `fields` = field parcels only.
    * `trees` = YOLO tree crowns only (requires tree-detection service).
    * `both` = legacy combined extract.
    */
@@ -463,7 +463,7 @@ async function detectCrownBoxes(opts: {
 }
 
 /**
- * Run FTW parcel fields and/or YOLO tree crown extraction for Training AI Infer.
+ * Run field parcel and/or YOLO tree crown extraction for Training AI Infer.
  */
 export async function runFieldsTreesExtract(
   args: RunFieldsTreesExtractArgs,
@@ -474,7 +474,7 @@ export async function runFieldsTreesExtract(
   const requireYolo = args.requireYolo ?? mode === 'trees'
 
   const confidence = Number.isFinite(args.confidence) ? Number(args.confidence) : 0.4
-  const ftwMinConfidence = Math.max(0.35, confidence)
+  const fieldMinConfidence = Math.max(0.35, confidence)
   // Pass user threshold through (was capped at 0.45 which hid many crowns).
   const crownScore = Math.min(0.55, Math.max(0.1, confidence))
 
@@ -484,20 +484,30 @@ export async function runFieldsTreesExtract(
   const detectedCrowns: GeoJSON.Feature[] = []
 
   if (wantFields) {
-    report(args.onProgress, 5, 'FTW parcel fields…')
-    engine = 'ftw-live'
-    const ftwBase = {
+    report(args.onProgress, 5, 'Field parcels…')
+    engine = 'delineate-fbis'
+    const fieldBase = {
       bbox: args.bbox,
       minAreaM2: 250,
-      minConfidence: ftwMinConfidence,
+      minConfidence: fieldMinConfidence,
       ...(args.aoi ? { aoi: args.aoi } : {}),
       signal: args.signal,
     } as const
 
+    if (!args.imageDataUrl) {
+      throw new Error(
+        'Field extraction needs a map capture. Wait for Sentinel-2 / basemap to load, then retry.',
+      )
+    }
     try {
       const raw = await detectFieldBoundaries(
-        { ...ftwBase, source: 'ftw-live' },
-        (p, stage) => report(args.onProgress, 5 + p * 0.55, `FTW · ${stage || 'detecting'}`),
+        {
+          ...fieldBase,
+          source: 'basemap',
+          image: args.imageDataUrl,
+          highRes: true,
+        },
+        (p, stage) => report(args.onProgress, 5 + p * 0.55, `Map RGB · ${stage || 'detecting'}`),
       )
       const opt = optimizeFieldBoundaryResult(raw, {
         regularizeFootprints: true,
@@ -506,28 +516,12 @@ export async function runFieldsTreesExtract(
         softenKept: true,
       })
       fieldsFc = opt.geojson
-      engine = opt.engine || engine
-    } catch (ftwErr) {
-      report(args.onProgress, 20, 'FTW fields (fallback)…')
-      try {
-        const raw = await detectFieldBoundaries(
-          { ...ftwBase, source: 'ftw-infer' },
-          (p, stage) => report(args.onProgress, 20 + p * 0.45, `FTW · ${stage || 'detecting'}`),
-        )
-        const opt = optimizeFieldBoundaryResult(raw, {
-          regularizeFootprints: true,
-          minFillRatio: 0.66,
-          maxAreaInflation: 1.55,
-          softenKept: true,
-        })
-        fieldsFc = opt.geojson
-        engine = opt.engine || 'ftw-infer'
-      } catch {
-        throw new Error(
-          (ftwErr as Error)?.message ||
-            'Field extraction failed. Start agri-field-boundary (:8092) and retry.',
-        )
-      }
+      engine = opt.engine || 'basemap'
+    } catch (fieldErr) {
+      throw new Error(
+        (fieldErr as Error)?.message ||
+          'Field extraction failed. Start agri-field-boundary (:8092) and retry.',
+      )
     }
   }
 
@@ -624,7 +618,7 @@ export type RunDelineateFieldsExtractArgs = {
 
 /**
  * Delineate Anything instance segmentation (FBIS lineage / v2 fallback).
- * Prefer this when FTW stair-step edges don't match drawn training samples.
+ * Prefer this when stair-step edges don't match drawn training samples.
  */
 export async function runDelineateFieldsExtract(
   args: RunDelineateFieldsExtractArgs,
@@ -724,7 +718,7 @@ export type ParcelExtractMode =
   | 'segmentation'
   | 'object_detection'
 
-/** Modes that use FTW / YOLO / Delineate extract (not SegFormer classification). */
+/** Modes that use Map RGB / YOLO / Delineate extract (not SegFormer classification). */
 export function isParcelExtractMode(mode: string): mode is ParcelExtractMode {
   return (
     mode === 'fields' ||
@@ -761,7 +755,7 @@ export function parcelLayerTitle(
     return `AI Fields (Delineate Anything) — ${fields} fields`
   }
   if (mode === 'fields' || mode === 'segmentation') {
-    return `AI Fields (FTW) — ${fields} fields`
+    return `AI Fields — ${fields} fields`
   }
   return `AI Parcel fields+trees — ${fields} fields · ${trees} trees`
 }

@@ -41,9 +41,30 @@ if [[ "$GIT_PULL" == "1" ]]; then
   if [[ -d "$REPO_ROOT/.git" ]]; then
     log "git pull in $REPO_ROOT"
     git -C "$REPO_ROOT" pull --ff-only origin "${AFB_GIT_BRANCH:-main}" || git -C "$REPO_ROOT" pull --ff-only
+    if command -v git-lfs >/dev/null 2>&1 || git -C "$REPO_ROOT" lfs version >/dev/null 2>&1; then
+      log "git lfs pull (Agricultural Field Delineation weights)"
+      git -C "$REPO_ROOT" lfs install --local >/dev/null 2>&1 || true
+      git -C "$REPO_ROOT" lfs pull --include="backend/services/agri-field-boundary/models/AgriculturalFieldDelineation/**" || git -C "$REPO_ROOT" lfs pull
+    else
+      log "warning: git-lfs not installed — AFD .pth/.dlpk may be pointer stubs"
+    fi
   else
     log "skip git pull — no .git at $REPO_ROOT"
   fi
+fi
+
+AFD_DIR="$HERE/models/AgriculturalFieldDelineation"
+AFD_PTH="$AFD_DIR/AgricultureFieldDelination.pth"
+AFD_EMD="$AFD_DIR/AgricultureFieldDelination.emd"
+if [[ -f "$AFD_EMD" ]]; then
+  if [[ ! -f "$AFD_PTH" ]] || [[ "$(wc -c < "$AFD_PTH" 2>/dev/null || echo 0)" -lt 1000000 ]]; then
+    log "ERROR: Agricultural Field Delineation weights missing or Git LFS stub at $AFD_PTH"
+    log "Run: git lfs install && git lfs pull"
+    exit 1
+  fi
+  log "AFD model present ($(wc -c < "$AFD_PTH") bytes)"
+else
+  log "warning: AFD EMD not found at $AFD_EMD — Agricultural Field Delineation will be unavailable"
 fi
 
 if [[ ! -x "$PY" ]]; then
@@ -55,8 +76,6 @@ log "installing dependencies"
 "$PIP" install -q --upgrade pip wheel
 "$PIP" install -q -r requirements.txt
 "$PIP" install -q "fastapi>=0.110" "uvicorn[standard]>=0.29" "python-multipart>=0.0.9"
-
-export FTW_INFER_ENABLED="${FTW_INFER_ENABLED:-1}"
 
 wait_http() {
   local url="$1"
@@ -90,12 +109,7 @@ if [[ "$USE_SYSTEMD" == "1" ]]; then
 fi
 
 if [[ "$USE_SYSTEMD" == "1" ]]; then
-  wait_http "http://127.0.0.1:${PORT}/health/live" "$LIVE_TIMEOUT_S" "live" || {
-    log "live probe failed — dumping systemd logs"
-    systemctl status "$SERVICE_NAME" --no-pager 2>/dev/null || true
-    journalctl -u "$SERVICE_NAME" -n 80 --no-pager 2>/dev/null || true
-    exit 1
-  }
+  wait_http "http://127.0.0.1:${PORT}/health/live" "$LIVE_TIMEOUT_S" "live" || exit 1
   wait_http "http://127.0.0.1:${PORT}/health/ready" "$READY_TIMEOUT_S" "ready" || {
     log "ready probe timed out — service may still be loading weights; check journalctl -u $SERVICE_NAME"
     exit 1

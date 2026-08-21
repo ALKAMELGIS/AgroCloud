@@ -32,7 +32,7 @@ describe('extractFieldsTrees helpers', () => {
   it('parcelLayerTitle includes counts', () => {
     expect(parcelLayerTitle('fields', 12, 0)).toContain('12 fields')
     expect(parcelLayerTitle('trees', 0, 40)).toContain('40 trees')
-    expect(parcelLayerTitle('segmentation', 3, 0)).toMatch(/Fields \(FTW\)/)
+    expect(parcelLayerTitle('segmentation', 3, 0)).toMatch(/AI Fields/)
     expect(parcelLayerTitle('object_detection', 0, 1)).toMatch(/Trees \(YOLO\)/)
   })
 

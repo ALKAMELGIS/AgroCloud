@@ -7,19 +7,13 @@ export function isBuiltinFieldEngine(engine: string | null | undefined): boolean
   return /spectral-builtin|builtin/i.test(String(engine || ''))
 }
 
-/** Python FTW/FoW/Delineate are unavailable — only map RGB + Node builtin remain. */
+/** Python field engines unavailable — only map RGB + Node builtin remain. */
 export function isMapRgbOnlyProductionHost(health: FieldBoundaryHealth | null | undefined): boolean {
   if (!health || health.offline) return false
-  if (health.python === true && health.ftw_live === true) return false
-  if (health.ftw_live === true || health.ftw_infer === true) return false
-  return health.python !== true
+  if (health.python === true) return false
+  return true
 }
 
-export function shouldSkipFootprintRegularize(_engine: string | null | undefined): boolean {
-  // Always run footprint regularization — builtin uses softer thresholds in finishResult.
-  return false
-}
-
-export function productionMapRgbNotice(): string {
-  return 'Production mode: Map RGB detect — draw a rectangle on cropland, wait for Esri/Google tiles, then Detect.'
+export function shouldSkipFootprintRegularize(engine: string | null | undefined): boolean {
+  return isBuiltinFieldEngine(engine)
 }

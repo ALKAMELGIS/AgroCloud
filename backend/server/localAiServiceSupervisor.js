@@ -110,6 +110,12 @@ function spawnService(entry) {
         // `detached` is deliberately off: on Windows it makes powershell.exe exit
         // immediately without ever running the script.
         detached: false,
+        // Node API uses PORT=3011; without an override every start-local.ps1
+        // inherits that and binds uvicorn to the API port (breaking /api/*).
+        env: {
+          ...process.env,
+          PORT: String(svc.port),
+        },
       },
     )
   } catch (error) {

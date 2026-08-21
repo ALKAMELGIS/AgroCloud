@@ -73,7 +73,7 @@ export type TrainingAIToolProps = {
   } | null>
   /** Human-readable AOI source for Infer step (Edit / Layers / map extent). */
   inferAreaLabel?: string
-  /** Active AOI FeatureCollection (draw / layers / agro) â optional FTW clip. */
+  /** Active AOI FeatureCollection (draw / layers / agro) — optional field clip. */
   activeAoi?: GeoJSON.FeatureCollection | null
   onInferenceResult: (result: InferenceResult, layerName: string) => string | null
   inferenceLayerId: string | null
@@ -143,7 +143,7 @@ export function TrainingAITool({
   } | null>(null)
   const handleOutputTypeChange = (next: TrainingOutputType) => {
     setOutputType(next)
-    // Delineate Anything on Sentinel mosaics needs a lower floor than SegFormer/FTW.
+    // Delineate Anything on Sentinel mosaics needs a lower floor than SegFormer.
     if (next === 'fields_fbis') setConfidence(0.25)
     // YOLO trees: lower score finds more crowns on satellite RGB.
     if (next === 'trees' || next === 'object_detection') setConfidence(0.2)
@@ -151,7 +151,7 @@ export function TrainingAITool({
   const handleAnalysisImageryChange = (next: AnalysisImageryKind) => {
     setAnalysisImagery(next)
     const cur = getTrainingModelById(trainModelId)
-    // Keep any Train-picker selection (FTW / Delineate / SegFormer) — TRAIN always
+    // Keep any Train-picker selection (Delineate / SegFormer) — TRAIN always
     // resolves to a SegFormer encoder. Only auto-switch catalog models that cannot train.
     if (cur && isTrainModelPickerEntry(cur)) return
     if (!cur || evaluateModelCompatibility(cur, next).status === 'not_compatible') {
@@ -163,7 +163,6 @@ export function TrainingAITool({
     const m = getTrainingModelById(id)
     if (!m?.inferEngine || m.trainableOnAgroCloud) return
     if (m.inferEngine === 'delineate-fbis') setOutputType('fields_fbis')
-    else if (m.inferEngine === 'ftw') setOutputType('fields')
     else if (m.inferEngine === 'yolo-trees') setOutputType('trees')
   }
   const handleImagerySourceChange = (next: InferenceImagerySource) => {
@@ -281,7 +280,7 @@ export function TrainingAITool({
   const trainDisabledReason = useMemo(() => {
     const selected = getTrainingModelById(trainModelId)
     if (selected && !isTrainModelPickerEntry(selected)) {
-      return 'This model is not available for TRAIN MODEL. Choose SegFormer, FTW Model, or Delineate Anything.'
+      return 'This model is not available for TRAIN MODEL. Choose SegFormer or Delineate Anything.'
     }
     if (!resolveTrainJobModel(trainModelId)) {
       return 'No fine-tune encoder available for this selection.'

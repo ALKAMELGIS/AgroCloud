@@ -1,5 +1,5 @@
 /**
- * Agri Field Boundary Detection — Mask R-CNN / Delineate-Anything / FoW / FTW-infer / FTW-live proxy.
+ * Agri Field Boundary Detection — Mask R-CNN / Delineate-Anything / AFD proxy.
  * Also proxies SEN2SR Lite Sentinel-2 super-resolution on the same :8092 service.
  *
  * When Python :8092 is down, RGB field detect runs in-process (spectral-builtin).
@@ -15,24 +15,10 @@ import { randomUUID } from 'crypto'
 import { ensureLocalAiService } from './localAiServiceSupervisor.js'
 import { detectFieldsBuiltin } from './fieldBoundaryBuiltin.js'
 
-/** Precomputed FoW GeoParquet clip — image not required. */
-const FOW_SOURCES = new Set(['fow', 'fields-of-the-world', 'ftw'])
-/**
- * On-demand FTW paths (S2 download + model) — image not required; slow (minutes).
- * Includes CLI infer and live Sentinel-2 stack (ftw-live).
- */
-const FTW_INFER_SOURCES = new Set([
-  'ftw-infer',
-  'ftw_model',
-  'ftw-baselines',
-  'ftw-live',
-  'sentinel2-live',
-])
+/** Agricultural Field Delineation fetches Sentinel-2 on the Python service — no client image. */
+const AFD_SOURCES = new Set(['agricultural-field-delineation', 'afd'])
 const DETECT_TIMEOUT_MS = 10 * 60 * 1000
 const DETECT_JOB_TIMEOUT_MS = 120_000
-/** FTW inference / live stack downloads S2 + runs the model; allow a long forward window. */
-const FTW_INFER_DETECT_TIMEOUT_MS = 30 * 60 * 1000
-const FTW_INFER_DETECT_JOB_TIMEOUT_MS = 10 * 60 * 1000
 /** Neural SR can take several minutes on CPU/GPU; keep a long forward window. */
 const SEN2SR_TIMEOUT_MS = 30 * 60 * 1000
 const SEN2SR_STATUS_TIMEOUT_MS = 15_000
@@ -40,15 +26,23 @@ const SEN2SR_STATUS_TIMEOUT_MS = 15_000
 const SEN2SR_BODY_LIMIT = '256mb'
 
 function normalizeDetectSource(body) {
-  return String(body?.source || '').toLowerCase()
+  const raw = String(body?.source || body?.model || '').toLowerCase().trim()
+  if (AFD_SOURCES.has(raw) || raw === 'agricultural_field_delineation') {
+    return 'agricultural-field-delineation'
+  }
+  // Legacy FoW/FTW aliases → map RGB path (catalog engine removed).
+  if (raw === 'fow' || raw === 'fields-of-the-world' || raw === 'ftw') {
+    return 'basemap'
+  }
+  return raw
 }
 
 function isImageOptionalSource(source) {
-  return FOW_SOURCES.has(source) || FTW_INFER_SOURCES.has(source)
+  return AFD_SOURCES.has(source)
 }
 
-function isFtwInferSource(source) {
-  return FTW_INFER_SOURCES.has(source)
+function imageOptionalUnavailableMessage(_source) {
+  return 'Agricultural Field Delineation needs the Python field engine (:8092) with bundled model weights.'
 }
 
 function hasDetectImage(body) {
@@ -61,7 +55,6 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
   const SERVICE_BASE = ENDPOINT.replace(/\/detect\/?$/, '')
   const HEALTH_URL = `${SERVICE_BASE}/health`
   const JOB_URL = `${SERVICE_BASE}/detect-job`
-  const FOW_URL = `${SERVICE_BASE}/fow-aoi`
   const SEN2SR_STATUS_URL = `${SERVICE_BASE}/api/sentinel2/super-resolution/status`
   const SEN2SR_URL = `${SERVICE_BASE}/api/sentinel2/super-resolution`
 
@@ -105,11 +98,7 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
       device: 'cpu',
       builtin_fallback: true,
       python: false,
-      fow: false,
-      ftw_infer: false,
-      ftw_live: false,
       sen2sr: false,
-      field_boundary_url: SERVICE_BASE,
       ...extra,
     }
   }
@@ -211,14 +200,6 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
     return null
   }
 
-  function validateFowBody(body) {
-    if (!body || typeof body !== 'object') return 'Expected JSON { bbox }.'
-    if (!Array.isArray(body.bbox) || body.bbox.length !== 4) {
-      return 'bbox must be [west, south, east, north].'
-    }
-    return null
-  }
-
   async function forwardJson(url, { method = 'GET', body, timeoutMs = 60_000 } = {}) {
     const headers = authHeaders(body != null ? { 'Content-Type': 'application/json' } : {})
     const upstream = await fetch(url, {
@@ -265,33 +246,10 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
     res.json({ configured: true, endpoint: Boolean(ENDPOINT), builtin_fallback: true })
   })
 
-  app.get('/api/agri-field-boundary/health', async (_req, res) => {
+  app.get('/api/agri-field-boundary/health', (_req, res) => {
     ensureLocalAiService('agri-field-boundary')
     const python = cachedPython()
     refreshPythonHealth()
-
-    let upstream_probe = { url: `${SERVICE_BASE}/health/live`, ok: false }
-    try {
-      const t0 = Date.now()
-      const upstream = await fetch(`${SERVICE_BASE}/health/live`, {
-        signal: AbortSignal.timeout(5000),
-      })
-      const body = await upstream.text().catch(() => '')
-      upstream_probe = {
-        url: `${SERVICE_BASE}/health/live`,
-        ok: upstream.ok,
-        status: upstream.status,
-        ms: Date.now() - t0,
-        body: body.slice(0, 240),
-      }
-    } catch (err) {
-      upstream_probe = {
-        url: `${SERVICE_BASE}/health/live`,
-        ok: false,
-        error: String(err?.cause?.code || err?.message || err),
-      }
-    }
-
     if (python?.ready) {
       return res.status(200).json({
         ...python,
@@ -302,8 +260,6 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
         ready: true,
         live: true,
         loading: false,
-        field_boundary_url: SERVICE_BASE,
-        upstream_probe,
       })
     }
     if (python?.loading || python?.live) {
@@ -315,39 +271,10 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
         live: true,
         python: true,
         offline: false,
-        upstream_probe,
       })
     }
-    return res.status(200).json({ ...builtinHealthPayload(), upstream_probe })
+    return res.status(200).json(builtinHealthPayload())
   })
-
-  app.post(
-    '/api/agri-field-boundary/fow-aoi',
-    express.json({ limit: '2mb' }),
-    async (req, res) => {
-      const err = validateFowBody(req.body)
-      if (err) return res.status(400).json({ error: err })
-      refreshPythonHealth()
-      if (!pythonReady()) {
-        return res.status(400).json({
-          error: 'FoW catalog needs the Python field engine. Switch to Map RGB detect.',
-        })
-      }
-      try {
-        const { status, json } = await forwardJson(FOW_URL, {
-          method: 'POST',
-          body: req.body,
-          timeoutMs: 5 * 60 * 1000,
-        })
-        if (status === 200) return res.status(200).json(json)
-        if (status === 400 || status === 404 || status === 422) return res.status(status).json(json)
-        return res.status(400).json({ error: 'FoW catalog is unavailable. Switch to Map RGB detect.' })
-      } catch {
-        pythonCache = { at: Date.now(), value: null }
-        return res.status(400).json({ error: 'FoW catalog is unavailable. Switch to Map RGB detect.' })
-      }
-    },
-  )
 
   app.post(
     '/api/agri-field-boundary/detect',
@@ -355,13 +282,11 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
     async (req, res) => {
       const err = validateDetectBody(req.body)
       if (err) return res.status(400).json({ error: err })
-      const ftwInfer = isFtwInferSource(normalizeDetectSource(req.body))
       refreshPythonHealth()
       const tryBuiltin = () => {
         if (!hasDetectImage(req.body)) {
           return res.status(400).json({
-            error:
-              'FTW / FoW needs the Python field engine. Switch to Map RGB detect on this host.',
+            error: imageOptionalUnavailableMessage(normalizeDetectSource(req.body)),
           })
         }
         try {
@@ -373,18 +298,12 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
           })
         }
       }
+      const source = normalizeDetectSource(req.body)
+      const imageOptional = isImageOptionalSource(source)
       if (!pythonReady()) {
         ensureLocalAiService('agri-field-boundary')
-        if (ftwInfer) {
-          return res.status(503).json({
-            error:
-              'FTW / FoW / live Sentinel-2 detect needs the Python field engine on the VPS. Map RGB detect works via spectral-builtin while the model loads.',
-            engine: 'spectral-builtin',
-            python: false,
-            ftw_live: false,
-            field_boundary_url: SERVICE_BASE,
-            detail: cachedPython()?.status || 'python-unavailable',
-          })
+        if (imageOptional) {
+          return res.status(400).json({ error: imageOptionalUnavailableMessage(source) })
         }
         return tryBuiltin()
       }
@@ -392,13 +311,28 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
         const { status, json } = await forwardJson(ENDPOINT, {
           method: 'POST',
           body: req.body,
-          timeoutMs: ftwInfer ? FTW_INFER_DETECT_TIMEOUT_MS : DETECT_TIMEOUT_MS,
+          timeoutMs: DETECT_TIMEOUT_MS,
         })
         if (status === 200) return res.status(200).json(json)
         if (status === 400 || status === 404 || status === 422) return res.status(status).json(json)
+        // AFD cannot use map-RGB builtin — surface the real upstream error.
+        if (imageOptional) {
+          return res.status(status === 502 ? 502 : 400).json({
+            error:
+              String(json?.error || json?.detail || '').trim() ||
+              imageOptionalUnavailableMessage(source),
+            ...(json?.detail && json?.error ? { detail: json.detail } : {}),
+          })
+        }
         return tryBuiltin()
-      } catch {
+      } catch (err) {
         ensureLocalAiService('agri-field-boundary')
+        if (imageOptional) {
+          return res.status(502).json({
+            error: imageOptionalUnavailableMessage(source),
+            detail: String(err?.message || err),
+          })
+        }
         return tryBuiltin()
       }
     },
@@ -410,13 +344,11 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
     async (req, res) => {
       const err = validateDetectBody(req.body)
       if (err) return res.status(400).json({ error: err })
-      const ftwInfer = isFtwInferSource(normalizeDetectSource(req.body))
       refreshPythonHealth()
       const tryBuiltinJob = () => {
         if (!hasDetectImage(req.body)) {
           return res.status(400).json({
-            error:
-              'FTW / FoW needs the Python field engine. Switch to Map RGB detect on this host.',
+            error: imageOptionalUnavailableMessage(normalizeDetectSource(req.body)),
           })
         }
         try {
@@ -430,18 +362,12 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
           })
         }
       }
+      const source = normalizeDetectSource(req.body)
+      const imageOptional = isImageOptionalSource(source)
       if (!pythonReady()) {
         ensureLocalAiService('agri-field-boundary')
-        if (ftwInfer) {
-          return res.status(503).json({
-            error:
-              'FTW / FoW / live Sentinel-2 detect needs the Python field engine on the VPS. Map RGB detect works via spectral-builtin while the model loads.',
-            engine: 'spectral-builtin',
-            python: false,
-            ftw_live: false,
-            field_boundary_url: SERVICE_BASE,
-            detail: cachedPython()?.status || 'python-unavailable',
-          })
+        if (imageOptional) {
+          return res.status(400).json({ error: imageOptionalUnavailableMessage(source) })
         }
         return tryBuiltinJob()
       }
@@ -449,13 +375,27 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
         const { status, json } = await forwardJson(JOB_URL, {
           method: 'POST',
           body: req.body,
-          timeoutMs: ftwInfer ? FTW_INFER_DETECT_JOB_TIMEOUT_MS : DETECT_JOB_TIMEOUT_MS,
+          timeoutMs: DETECT_JOB_TIMEOUT_MS,
         })
         if (status === 200) return res.status(200).json(json)
         if (status === 400 || status === 404 || status === 422) return res.status(status).json(json)
+        if (imageOptional) {
+          return res.status(status === 502 ? 502 : 400).json({
+            error:
+              String(json?.error || json?.detail || '').trim() ||
+              imageOptionalUnavailableMessage(source),
+            ...(json?.detail && json?.error ? { detail: json.detail } : {}),
+          })
+        }
         return tryBuiltinJob()
-      } catch {
+      } catch (err) {
         ensureLocalAiService('agri-field-boundary')
+        if (imageOptional) {
+          return res.status(502).json({
+            error: imageOptionalUnavailableMessage(source),
+            detail: String(err?.message || err),
+          })
+        }
         return tryBuiltinJob()
       }
     },
