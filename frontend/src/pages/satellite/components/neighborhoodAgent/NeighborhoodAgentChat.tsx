@@ -15,6 +15,10 @@ import type { GeoExplorerMapAction } from '../GeoExplorerDynamicTable';
 import type { NeighborhoodAgentEvidencePayload } from './neighborhoodAgentEvidence';
 import { NeighborhoodAgentComposer } from './NeighborhoodAgentComposer';
 import { NeighborhoodAgentTranscript } from './NeighborhoodAgentTranscript';
+import {
+  GeoAiAgentEmptyState,
+} from '../geoAiAgent/GeoAiAgentPanel';
+import type { GeoAiAgentPrefs } from '../geoAiAgent/geoAiAgentPrefs';
 import './neighborhoodAgent.css';
 
 const STORAGE_KEY = 'si-sat-neighborhood-agent-pos-v2';
@@ -120,6 +124,8 @@ export type NeighborhoodAgentChatProps = {
   onMinimize?: () => void;
   isEmpty: boolean;
   onNewChat: () => void;
+  /** Clear current transcript without leaving the panel. Defaults to onNewChat. */
+  onClearChat?: () => void;
   onQuickAction: (prompt: string, chipId?: string) => void;
   /** Session title when a chat is underway; falls back to “New AI chat”. */
   sessionTitle?: string | null;
@@ -153,6 +159,9 @@ export type NeighborhoodAgentChatProps = {
   onSaveEditedUserMessage?: (messageId: string, nextText: string) => void;
   /** Put edited text into the composer without re-running. */
   onUseEditedInComposer?: (text: string) => void;
+  /** GeoAI Agent prefs — enables GeoAiAgentPanel empty state + GIS quick chips. */
+  geoAiAgentPrefs?: GeoAiAgentPrefs;
+  userName?: string;
   /** Optional extras under the transcript (e.g. docked identify). */
   children?: ReactNode;
 };
@@ -165,6 +174,7 @@ export function NeighborhoodAgentChat({
   onMinimize,
   isEmpty,
   onNewChat,
+  onClearChat,
   onQuickAction,
   sessionTitle,
   draft,
@@ -192,6 +202,8 @@ export function NeighborhoodAgentChat({
   onFocusMap,
   onSaveEditedUserMessage,
   onUseEditedInComposer,
+  geoAiAgentPrefs,
+  userName,
   children,
 }: NeighborhoodAgentChatProps) {
   const { scopedStorageKey } = useSiInstanceScope();
@@ -529,43 +541,30 @@ export function NeighborhoodAgentChat({
     [],
   );
 
-  const title = !isEmpty && sessionTitle?.trim() ? sessionTitle.trim() : 'New AI chat';
+  const title = !isEmpty && sessionTitle?.trim() ? sessionTitle.trim() : 'Chat AI Agent';
+  const useGeoAiEmptyShell = Boolean(geoAiAgentPrefs) && isEmpty;
 
   const followUps = useMemo(() => {
+    if (useGeoAiEmptyShell) return [] as NeighborhoodAgentQuickPrompt[];
     if (isEmpty) {
       return [
         {
-          id: 'gis-buffer',
-          label: 'Buffer 500 m',
-          prompt: 'Create a 500 m buffer around the current AOI or selected layer.',
+          id: 'gis-ndvi',
+          label: 'Average NDVI in AOI',
+          prompt: 'What is the average NDVI inside the current AOI?',
           primary: true,
         },
         {
-          id: 'gis-intersect',
-          label: 'Intersect layers',
-          prompt: 'Intersect Roads with Farm Boundaries (or the two most relevant loaded polygon layers).',
+          id: 'gis-stress',
+          label: 'Stressed area %',
+          prompt: 'What percentage of the AOI shows stressed vegetation based on the active index?',
         },
         {
-          id: 'gis-clip',
-          label: 'Clip by AOI',
-          prompt: 'Clip the primary loaded vector layer using the current AOI.',
+          id: 'gis-buffer',
+          label: 'Buffer AOI 500m',
+          prompt: 'Create a 500 m buffer around the current AOI and show it on the map.',
         },
-        {
-          id: 'gis-dissolve',
-          label: 'Dissolve',
-          prompt: 'Dissolve polygons by Crop Type (or the main category field) on the active farm layer.',
-        },
-        {
-          id: 'gis-ndvi',
-          label: 'NDVI panel',
-          prompt: 'Show NDVI on the map for the AOI.',
-        },
-        {
-          id: 'gis-export',
-          label: 'Export GeoJSON',
-          prompt: 'Export the current AOI or primary vector layer as GeoJSON.',
-        },
-      ]
+      ] satisfies NeighborhoodAgentQuickPrompt[];
     }
     const lastModel = [...messages].reverse().find(m => m.role === 'model' || m.role === 'assistant')
     const lastUser = [...messages].reverse().find(m => m.role === 'user')
@@ -591,7 +590,7 @@ export function NeighborhoodAgentChat({
       lastAssistantText: modelText,
       hasTableOrChartCue,
     })
-  }, [isEmpty, messages])
+  }, [isEmpty, messages, useGeoAiEmptyShell])
 
   const handleMinimize = useCallback(() => {
     (onMinimize ?? onToggleExpanded)();
@@ -611,7 +610,7 @@ export function NeighborhoodAgentChat({
         .join(' ')}
       style={transformStyle}
       role="region"
-      aria-label="AI Agent Chat"
+      aria-label="Chat AI Agent"
     >
       <div className="nac-float-inner">
         {expanded ? (
@@ -630,9 +629,24 @@ export function NeighborhoodAgentChat({
               <div className="nac-header-main">
                 <div className="nac-title-row">
                   <h2 className="nac-title">{title}</h2>
+                  {isEmpty ? (
+                    <p className="nac-subtitle">Spatial intelligence · server GIS</p>
+                  ) : null}
                 </div>
               </div>
               <div className="nac-header-actions">
+                {!isEmpty ? (
+                  <button
+                    type="button"
+                    className="nac-icon-btn nac-icon-btn--clear"
+                    title="Clear chat"
+                    aria-label="Clear chat"
+                    disabled={busy}
+                    onClick={() => (onClearChat ?? onNewChat)()}
+                  >
+                    <i className="fa-solid fa-broom" aria-hidden />
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="nac-icon-btn"
@@ -646,7 +660,7 @@ export function NeighborhoodAgentChat({
                   type="button"
                   className="nac-icon-btn"
                   title="Minimize"
-                  aria-label="Minimize AI Agent Chat"
+                  aria-label="Minimize Chat AI Agent"
                   onClick={handleMinimize}
                 >
                   <i className="fa-solid fa-chevron-down" aria-hidden />
@@ -655,7 +669,7 @@ export function NeighborhoodAgentChat({
                   type="button"
                   className="nac-icon-btn"
                   title="Close"
-                  aria-label="Close AI Agent Chat"
+                  aria-label="Close Chat AI Agent"
                   onClick={onRequestClose}
                 >
                   <i className="fa-solid fa-xmark" aria-hidden />
@@ -689,12 +703,32 @@ export function NeighborhoodAgentChat({
                     onUseEditedInComposer={onUseEditedInComposer}
                   />
                 ) : null}
+                {useGeoAiEmptyShell ? (
+                  <GeoAiAgentEmptyState
+                    prefs={geoAiAgentPrefs}
+                    userName={userName}
+                    onQuickAction={onQuickAction}
+                  />
+                ) : null}
                 {children}
               </div>
 
-              {followUps.length > 0 ? (
+              {followUps.length > 0 || !isEmpty ? (
                 <div className="nac-follow-ups" role="group" aria-label={isEmpty ? 'Spatial analysis tools' : 'Suggested next analyses'}>
                   {isEmpty ? <div className="nac-gis-tools-label">Spatial Analysis</div> : null}
+                  {!isEmpty ? (
+                    <button
+                      type="button"
+                      className="nac-follow-up-chip nac-follow-up-chip--clear"
+                      disabled={busy}
+                      title="Clear chat"
+                      aria-label="Clear chat"
+                      onClick={() => (onClearChat ?? onNewChat)()}
+                    >
+                      <i className="fa-solid fa-broom" aria-hidden />
+                      Clear
+                    </button>
+                  ) : null}
                   {followUps.map(chip => (
                     <button
                       key={chip.id}
@@ -743,12 +777,12 @@ export function NeighborhoodAgentChat({
           <button
             type="button"
             className="nac-fab"
-            title="AI Agent Chat — expand"
+            title="Chat AI Agent — expand"
             aria-expanded={expanded}
-            aria-label="AI Agent Chat"
+            aria-label="Chat AI Agent"
             onPointerDown={onPointerDownFab}
           >
-            <span className="nac-fab-label">AI Agent Chat</span>
+            <span className="nac-fab-label">Chat AI Agent</span>
             <i className="fa-solid fa-comments" aria-hidden />
           </button>
         )}

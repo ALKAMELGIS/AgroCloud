@@ -145,6 +145,55 @@ export function estimateEtMmDayFromMoisture(
   return Number((demand * season * kc * ET_REF_MM_DAY).toFixed(3))
 }
 
+/** Crop water demand proxy (mm/day): season × Kc × reference ET — no moisture stress applied. */
+export function estimateEtcPotentialMmDay(options?: EstimateEtOptions): number {
+  const season =
+    options?.seasonFactor != null && Number.isFinite(options.seasonFactor)
+      ? clamp(options.seasonFactor, 0.35, 1.15)
+      : etSeasonFactor(options?.sceneDate)
+  const kc =
+    options?.kc != null && Number.isFinite(options.kc)
+      ? clamp(options.kc, 0.15, 1.35)
+      : etCropCoefficientFromNdvi(options?.ndvi)
+  return Number((season * kc * ET_REF_MM_DAY).toFixed(3))
+}
+
+/**
+ * AET/ETc ratio from canopy moisture indices (typical NDMI range −0.2…0.35).
+ * Floored at 0.5 so dry fields do not default to 100% water-loss index.
+ */
+export function estimateAetRatioFromMoistureIndices(ndmi: number, ndwi: number): number {
+  const moistureScore = computeEtMoistureScore(ndmi, ndwi)
+  const lo = -0.2
+  const hi = 0.35
+  const t = clamp01((moistureScore - lo) / (hi - lo))
+  return Number(clamp(0.5 + 0.5 * t, 0.5, 1.0).toFixed(4))
+}
+
+/** ETa (mm/day) = ETc × AET/ETc ratio from moisture indices. */
+export function estimateAetMmDayFromEtcAndIndices(
+  etcMmDay: number,
+  ndmi: number,
+  ndwi: number,
+): number {
+  if (!Number.isFinite(etcMmDay) || etcMmDay <= 0) return 0
+  return Number((etcMmDay * estimateAetRatioFromMoistureIndices(ndmi, ndwi)).toFixed(3))
+}
+
+/**
+ * Satellite ETa / ETc pair when only NDMI/NDWI are available.
+ * ETc = seasonal Kc potential; ETa = ETc × moisture consumption ratio (not zero on dry soils).
+ */
+export function estimateAetMmDayFromMoistureIndices(
+  ndmi: number,
+  ndwi: number,
+  options?: EstimateEtOptions,
+): { etaMmDay: number; etcMmDay: number } {
+  const etcMmDay = estimateEtcPotentialMmDay(options)
+  const etaMmDay = estimateAetMmDayFromEtcAndIndices(etcMmDay, ndmi, ndwi)
+  return { etaMmDay, etcMmDay }
+}
+
 /** Total Water Loss (m³/day) = ET (mm/day) × AOI (ha) × 10 */
 export function etWaterLossM3Day(etMmDay: number, aoiAreaHa: number): number {
   if (!Number.isFinite(etMmDay) || !Number.isFinite(aoiAreaHa) || aoiAreaHa <= 0) return 0

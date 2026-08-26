@@ -192,3 +192,29 @@
   background: rgba(15, 23, 42, 0.04);
   border-color: rgba(15, 23, 42, 0.12);
 }
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-sen2sr__chip {
+  color: #555555;
+  background: rgba(34, 34, 34, 0.04);
+  border-color: rgba(34, 34, 34, 0.14);
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-sen2sr__chip.is-available {
+  color: #065f46;
+  border-color: rgba(5, 150, 105, 0.35);
+  background: rgba(209, 250, 229, 0.85);
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-sen2sr__chip.is-unavailable {
+  color: #991b1b;
+  border-color: rgba(220, 38, 38, 0.28);
+  background: rgba(254, 226, 226, 0.85);
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-sen2sr__notice {
+  color: #047857;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-sen2sr__error {
+  color: #b91c1c;
+}

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { applyEtLegendClassEdges, buildLayerLiveLegendList, type LayerLiveLegendSpec } from '../../../lib/layerLiveLegendCatalog'
 import { resolveRemoteSensingLayerScientificName, type RemoteSensingLayerSelectGroup } from '../../../lib/agroCompositeIndices'
 import {
@@ -17,7 +17,8 @@ import {
   computeDroughtAreaFromClassRows,
   DSI_DROUGHT_AREA_THRESHOLD,
 } from '../../../lib/dsiIndex'
-import { useLayerClassAreas } from './useLayerClassAreas'
+import { useLayerLegendAnalyzeData } from './useLayerLegendAnalyzeData'
+import { LayerLiveLegendAnalyzePanel } from './LayerLiveLegendAnalyzePanel'
 import './LayerLiveLegendPanel.css'
 
 type LayerOption = { id: string; label?: string }
@@ -213,6 +214,15 @@ export function LayerLiveLegendBody({
   )
 }
 
+function resolveAoiLabelFromGeometry(
+  geometry: GeoJSON.Geometry | GeoJSON.Feature | null | undefined,
+): string | null {
+  if (!geometry || geometry.type !== 'Feature') return null
+  const props = geometry.properties ?? {}
+  const label = String(props.name || props.fieldName || props.fieldId || props.Farm_Name || '').trim()
+  return label || null
+}
+
 export function LayerLiveLegendActiveCard({
   spec,
   activeLayerId,
@@ -222,6 +232,7 @@ export function LayerLiveLegendActiveCard({
   seriesStart,
   seriesEnd,
   providerLabel: providerLabelProp,
+  aoiLabel,
 }: {
   spec: LayerLiveLegendSpec
   activeLayerId?: string
@@ -231,7 +242,11 @@ export function LayerLiveLegendActiveCard({
   seriesStart?: string
   seriesEnd?: string
   providerLabel?: string
+  aoiLabel?: string
 }) {
+  const isFloatVariant = variant === 'float'
+  const [analyzeOpen, setAnalyzeOpen] = useState(false)
+  const showAnalyzePanel = isFloatVariant || analyzeOpen
   const scientificName = activeLayerId ? resolveRemoteSensingLayerScientificName(activeLayerId) : undefined
   const scientificNameDisplay = scientificName
     ? stripSpectralFormulasFromLegendText(scientificName)
@@ -239,13 +254,21 @@ export function LayerLiveLegendActiveCard({
   const areMeta = resolveAnalyticalResolutionMeta()
   const showAre = activeLayerId ? isAnalyticalResolutionLayer(activeLayerId) : false
 
-  const { result: areaResult, loading: areaLoading, error: areaError, supported: areaSupported } =
-    useLayerClassAreas({
-      geometry: aoiGeometry,
-      layerId: activeLayerId,
-      sceneDate,
-      enabled: !!aoiGeometry,
-    })
+  const {
+    analyzeStats,
+    areaResult,
+    areaLoading,
+    areaError,
+    areaSupported,
+    hasData: analyzeHasData,
+    loading: analyzeLoading,
+  } = useLayerLegendAnalyzeData({
+    geometry: aoiGeometry,
+    layerId: activeLayerId,
+    sceneDate,
+    spec,
+    enabled: !!aoiGeometry,
+  })
 
   const hasAoi = !!aoiGeometry
   const instantAoiHa = useMemo(() => {
@@ -269,6 +292,14 @@ export function LayerLiveLegendActiveCard({
     ? stripSpectralFormulasFromLegendText(displaySpec.subtitle)
     : ''
 
+  const resolvedAoiLabel =
+    aoiLabel?.trim() ||
+    resolveAoiLabelFromGeometry(aoiGeometry) ||
+    (hasAoi ? 'AOI' : 'No AOI')
+  const analyzeLocationLabel = hasAoi
+    ? `${resolvedAoiLabel} - ${formatAreaHa(totalHa)} ha`
+    : 'Draw an AOI to analyze territory statistics'
+
   return (
     <section
       className={`si-layer-live-legend__section is-active si-lll-scientific${variant === 'float' ? ' si-layer-live-legend__section--float' : ''}`}
@@ -291,6 +322,37 @@ export function LayerLiveLegendActiveCard({
             ) : null}
           </div>
         </div>
+
+        {!isFloatVariant ? (
+          <div className="si-lll-analyze-row">
+            <button
+              type="button"
+              className={`si-lll-analyze-btn${analyzeOpen ? ' is-open' : ''}`}
+              aria-expanded={analyzeOpen}
+              aria-controls="si-lll-analyze-panel"
+              onClick={() => setAnalyzeOpen(v => !v)}
+              title="Analyze / Statistics for the active layer inside the AOI"
+            >
+              <i className="fa-solid fa-chart-pie" aria-hidden />
+              <span>Analyze / Statistics</span>
+              <i className={`fa-solid fa-chevron-${analyzeOpen ? 'up' : 'down'} si-lll-analyze-btn__chev`} aria-hidden />
+            </button>
+          </div>
+        ) : null}
+
+        {showAnalyzePanel ? (
+          <div id="si-lll-analyze-panel">
+            <LayerLiveLegendAnalyzePanel
+              key={activeLayerId ?? 'none'}
+              stats={analyzeStats}
+              locationLabel={analyzeLocationLabel}
+              loading={analyzeLoading && !analyzeHasData}
+              hasAoi={hasAoi}
+              hasData={analyzeHasData}
+            />
+          </div>
+        ) : null}
+
         {scientificNameDisplay ? (
           <p className="si-layer-live-legend__scientific">{scientificNameDisplay}</p>
         ) : null}
@@ -305,15 +367,11 @@ export function LayerLiveLegendActiveCard({
             <dd>{providerLabel}</dd>
           </div>
           {seriesLabel ? (
-            <div className="si-lll-meta">
+            <div className="si-lll-meta si-lll-meta--span">
               <dt>Series</dt>
               <dd>{seriesLabel}</dd>
             </div>
           ) : null}
-          <div className="si-lll-meta">
-            <dt>End date</dt>
-            <dd>{imageryDate}</dd>
-          </div>
         </dl>
 
         {subtitleDisplay ? <p className="si-layer-live-legend__subtitle">{subtitleDisplay}</p> : null}

@@ -261,9 +261,9 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
   {
     id: 'table-geo-ai',
     icon: 'fa-solid fa-comments',
-    label: 'AI Agent Chat',
-    title: 'AI Agent Chat',
-    hint: 'Neighborhood geospatial agent — ask about AOI, layers, buildings, roads, and RS overlays.',
+    label: 'Chat AI Agent',
+    title: 'Chat AI Agent',
+    hint: 'Spatial intelligence — ask about AOI, layers, and indices.',
   },
   {
     id: 'spatial',
@@ -1028,16 +1028,16 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
               (railWide ? ' si-sat-ctx-rail-btn--row si-sat-ctx-rail-btn--map-expanded' : ' si-sat-ctx-rail-btn--map-collapsed') +
               (geoAiFloatingOpen ? ' si-sat-ctx-rail-btn--active' : '')
             }
-            title="AI Agent Chat — neighborhood geospatial agent"
-            aria-label="AI Agent Chat"
+            title="Chat AI Agent — spatial intelligence"
+            aria-label="Chat AI Agent"
             aria-pressed={geoAiFloatingOpen}
             onClick={() => onGeoAiFloatingRailToggle()}
           >
             <i className="fa-solid fa-comments" aria-hidden />
             {railWide ? (
               <span className="si-sat-ctx-rail-label">
-                <span className="si-sat-ctx-rail-label-title">AI Agent Chat</span>
-                <span className="si-sat-ctx-rail-label-desc">Ask about AOI, layers &amp; surroundings</span>
+                <span className="si-sat-ctx-rail-label-title">Chat AI Agent</span>
+                <span className="si-sat-ctx-rail-label-desc">Spatial intelligence · server GIS</span>
               </span>
             ) : null}
           </button>

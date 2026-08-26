@@ -454,16 +454,17 @@
 }
 
 .si-map-swipe-panel__legend-body .si-lll-meta-grid {
-  gap: 4px;
-  padding: 5px 6px;
+  margin: 1px 0 0;
+  padding: 0;
+  gap: 0;
 }
 
 .si-map-swipe-panel__legend-body .si-lll-meta dt {
-  font-size: 8px;
+  font-size: 6.5px;
 }
 
 .si-map-swipe-panel__legend-body .si-lll-meta dd {
-  font-size: 9.5px;
+  font-size: 8px;
 }
 
 .si-map-swipe-panel__legend-body .si-lll-row {

@@ -16,10 +16,13 @@ import {
 } from './dynamicMapSnapshots'
 import {
   compositeAoiMapSnapshotBase64,
+  ensurePngBase64ForExcel,
   fetchIndexLayerMapSnapshotBase64,
   fetchSatelliteBasemapSnapshot,
+  isPngBase64Payload,
   resolveTimeSeriesSnapshotExtent,
   resolveTimeSeriesSnapshotLayout,
+  stripBase64Payload,
 } from './timeSeriesMapSnapshot'
 import type { TimeSeriesMapSnapshot, TimeSeriesMapSnapshotGroup } from './timeSeriesReportTypes'
 
@@ -33,7 +36,7 @@ const SOFT_MAX_DAY_SNAPSHOTS = 120
 const SNAPSHOT_WIDTH = 720
 /** Taller canvas so map frame stays near-square with title bar + Layer Live legend (T-23 cards). */
 const SNAPSHOT_HEIGHT = 620
-const CONCURRENCY = 3
+const CONCURRENCY = 2
 
 function fmtNum(n: number | null | undefined, digits = 4): string {
   if (n == null || !Number.isFinite(n)) return '-'
@@ -319,6 +322,8 @@ export type BuildTimeSeriesMapSnapshotGroupsInput = {
   timeAggregation?: ImageryTimeAggregation
   /** Soft Day sample ceiling (even spacing). */
   maxDaySnapshots?: number
+  /** Parallel WMS fetches within the atlas (default 2). */
+  snapshotConcurrency?: number
   /**
    * When true (Excel/Word), if WMS index raster fails after date retries, still emit a
    * basemap + AOI + legend card with the period mean so Map Snapshots is not empty.
@@ -394,10 +399,11 @@ export async function buildTimeSeriesMapSnapshotGroups(
 
   const total = jobs.reduce((n, j) => n + j.entries.length, 0)
   let completed = 0
+  const snapshotConcurrency = Math.max(1, input.snapshotConcurrency ?? CONCURRENCY)
 
   for (const job of jobs) {
     if (input.signal?.aborted) break
-    const rawSnapshots = await mapPool(job.entries, CONCURRENCY, async entry => {
+    const rawSnapshots = await mapPool(job.entries, snapshotConcurrency, async entry => {
       if (input.signal?.aborted) {
         return {
           layerId: job.layerId.toUpperCase(),
@@ -482,8 +488,11 @@ export async function buildTimeSeriesMapSnapshotGroups(
       } catch {
         imageBase64 = null
       }
-      // Prefer composite; keep raw index raster; last resort basemap+AOI so Excel/Word atlas is not empty.
-      imageBase64 = imageBase64 ?? indexBase64
+      // Prefer composite; keep raw index raster only when it is a valid PNG for Excel.
+      imageBase64 = imageBase64 ?? (indexBase64 ? await ensurePngBase64ForExcel(indexBase64) : null)
+      if (imageBase64) {
+        imageBase64 = await ensurePngBase64ForExcel(imageBase64)
+      }
       if (!imageBase64 && allowBasemapFallback) {
         try {
           imageBase64 = await compositeAoiMapSnapshotBase64({
@@ -498,6 +507,9 @@ export async function buildTimeSeriesMapSnapshotGroups(
             heightPx: SNAPSHOT_HEIGHT,
             extent,
           })
+          if (imageBase64) {
+            imageBase64 = await ensurePngBase64ForExcel(imageBase64)
+          }
         } catch {
           imageBase64 = null
         }
@@ -517,6 +529,9 @@ export async function buildTimeSeriesMapSnapshotGroups(
             heightPx: SNAPSHOT_HEIGHT,
             extent,
           })
+          if (imageBase64) {
+            imageBase64 = await ensurePngBase64ForExcel(imageBase64)
+          }
         } catch {
           imageBase64 = null
         }
@@ -582,8 +597,13 @@ function styleSection(cell: ExcelJS.Cell): void {
   cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: SECTION_FILL } }
 }
 
-export function buildMapSnapshotsSheet(wb: ExcelJS.Workbook, groups: TimeSeriesMapSnapshotGroup[]): void {
-  const ws = wb.addWorksheet('Map Snapshots', { views: [{ showGridLines: false }] })
+export function buildMapSnapshotsSheet(
+  wb: ExcelJS.Workbook,
+  groups: TimeSeriesMapSnapshotGroup[],
+  options?: { sheetName?: string },
+): void {
+  const sheetName = options?.sheetName?.trim() || 'Map Snapshots'
+  const ws = wb.addWorksheet(sheetName, { views: [{ showGridLines: false }] })
   // Three equal atlas columns - wide enough for square-ish professional map cards.
   const COLS = 3
   const COL_WIDTH = 38
@@ -650,7 +670,13 @@ export function buildMapSnapshotsSheet(wb: ExcelJS.Workbook, groups: TimeSeriesM
         ws.getRow(captionRow).height = 32
 
         try {
-          const imageId = wb.addImage({ base64: snap.imageBase64!, extension: 'png' })
+          const pngBase64 = stripBase64Payload(snap.imageBase64)
+          if (!pngBase64 || !isPngBase64Payload(pngBase64)) {
+            ws.getCell(imgRow, col + 1).value = '(Map unavailable)'
+            ws.getCell(imgRow, col + 1).font = { italic: true, size: 8, color: { argb: MUTED } }
+            continue
+          }
+          const imageId = wb.addImage({ base64: pngBase64, extension: 'png' })
           ws.addImage(imageId, {
             tl: { col: col + 0.12, row: imgRow - 1 },
             ext: { width: imageWidth, height: imageHeight },

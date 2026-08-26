@@ -53,6 +53,40 @@ describe('timeSeriesExcelMapSnapshots', () => {
     expect(images.length).toBeGreaterThanOrEqual(1)
   })
 
+  it('skips invalid raster bytes instead of embedding a broken Excel image', () => {
+    const wb = new ExcelJS.Workbook()
+    const groups: TimeSeriesMapSnapshotGroup[] = [
+      {
+        layerId: 'NDVI',
+        title: 'NDVI Daily Maps',
+        snapshots: [
+          {
+            layerId: 'NDVI',
+            layerLabel: 'NDVI',
+            sceneDate: '2026-01-01',
+            periodLabel: '2026-01-01',
+            imageBase64: 'not-a-valid-image-payload',
+            dataSource: 'Sentinel-2 L2A (Sentinel Hub WMS)',
+            mean: 0.52,
+            min: 0.31,
+            max: 0.68,
+            areaHa: 120.5,
+            legendText: 'Healthy · Moderate · Stress',
+            notes: '',
+          },
+        ],
+      },
+    ]
+    buildMapSnapshotsSheet(wb, groups)
+    const ws = wb.getWorksheet('Map Snapshots')
+    expect(String(ws!.getCell('A6').value ?? '')).toBe('(Map unavailable)')
+    const images =
+      typeof (wb as { getImages?: () => unknown[] }).getImages === 'function'
+        ? (wb as { getImages: () => unknown[] }).getImages()
+        : ((wb as { model?: { media?: unknown[] } }).model?.media ?? [])
+    expect(images.length).toBe(0)
+  })
+
   it('includes every finite day period (no 12-cap)', () => {
     const labels = Array.from({ length: 30 }, (_, i) => {
       const d = String(i + 1).padStart(2, '0')

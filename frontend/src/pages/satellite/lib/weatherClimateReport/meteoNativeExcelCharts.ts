@@ -15,6 +15,8 @@ export type MeteoChartSeriesRef = {
   catsRef: string
   /** Numeric X values for true scatter charts (overrides catsRef for X). */
   xValuesRef?: string
+  /** Optional sRGB hex (without alpha), e.g. 2E7D32 */
+  color?: string
 }
 
 export type MeteoNativeChartSpec = {
@@ -40,6 +42,8 @@ export type MeteoNativeChartSpec = {
   smooth?: boolean
   /** Doughnut hole size 1–90 (default 50). */
   holeSize?: number
+  /** Per-slice sRGB colors for pie/doughnut charts (without alpha prefix). */
+  sliceColors?: string[]
 }
 
 function escXml(s: string): string {
@@ -48,6 +52,25 @@ function escXml(s: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
+}
+
+function seriesSpPr(color?: string, bar = false): string {
+  if (!color) return ''
+  const hex = color.replace(/^FF/i, '').toUpperCase()
+  if (bar) {
+    return `<c:spPr><a:solidFill><a:srgbClr val="${hex}"/></a:solidFill><a:ln w="9360"><a:solidFill><a:srgbClr val="F9F9F9"/></a:solidFill><a:round/></a:ln></c:spPr>`
+  }
+  return `<c:spPr><a:solidFill><a:srgbClr val="${hex}"/></a:solidFill><a:ln w="0"><a:noFill/></a:ln></c:spPr>`
+}
+
+function pieSliceOverrides(colors: string[] | undefined): string {
+  if (!colors?.length) return ''
+  return colors
+    .map(
+      (color, idx) =>
+        `<c:dPt><c:idx val="${idx}"/><c:spPr><a:solidFill><a:srgbClr val="${color.replace(/^FF/i, '').toUpperCase()}"/></a:solidFill><a:ln w="0"><a:noFill/></a:ln></c:spPr></c:dPt>`,
+    )
+    .join('')
 }
 
 function seriesTxXml(ser: MeteoChartSeriesRef): string {
@@ -76,11 +99,16 @@ function buildChartXml(spec: MeteoNativeChartSpec, chartIndex: number): string {
   })
 
   const buildSer = (ser: MeteoChartSeriesRef, i: number, marker: string) => {
+    const isBar = kind === 'bar' || kind === 'combo'
+    const isPie = kind === 'pie' || kind === 'doughnut'
+    const spPr = seriesSpPr(ser.color, isBar)
+    const slicePts = isPie && i === 0 ? pieSliceOverrides(spec.sliceColors) : ''
     if (kind === 'scatter' && ser.xValuesRef) {
       return `<c:ser>
   <c:idx val="${i}"/>
   <c:order val="${i}"/>
   ${seriesTxXml(ser)}
+  ${spPr}
   ${marker}
   <c:xVal><c:numRef><c:f>${escXml(ser.xValuesRef)}</c:f></c:numRef></c:xVal>
   <c:yVal><c:numRef><c:f>${escXml(ser.valuesRef)}</c:f></c:numRef></c:yVal>
@@ -90,6 +118,8 @@ function buildChartXml(spec: MeteoNativeChartSpec, chartIndex: number): string {
   <c:idx val="${i}"/>
   <c:order val="${i}"/>
   ${seriesTxXml(ser)}
+  ${spPr}
+  ${slicePts}
   ${marker}
   <c:cat><c:strRef><c:f>${escXml(ser.catsRef)}</c:f></c:strRef></c:cat>
   <c:val><c:numRef><c:f>${escXml(ser.valuesRef)}</c:f></c:numRef></c:val>
@@ -309,6 +339,15 @@ function buildDrawingRels(entries: ChartEntry[]): string {
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels}</Relationships>`
 }
 
+function decodeXmlAttr(value: string): string {
+  return String(value)
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+}
+
 async function findChartsSheetPath(
   zip: JSZip,
   sheetName = 'Charts',
@@ -319,7 +358,7 @@ async function findChartsSheetPath(
   if (!relsXml) return null
 
   const sheetMatches = [...wbXml.matchAll(/<sheet[^>]*name="([^"]+)"[^>]*r:id="([^"]+)"/g)]
-  const chartsSheet = sheetMatches.find(m => m[1] === sheetName)
+  const chartsSheet = sheetMatches.find(m => decodeXmlAttr(m[1]) === sheetName)
   if (!chartsSheet) return null
   const rid = chartsSheet[2]
   const target = relsXml.match(new RegExp(`Id="${rid}"[^>]*Target="([^"]+)"`))?.[1]

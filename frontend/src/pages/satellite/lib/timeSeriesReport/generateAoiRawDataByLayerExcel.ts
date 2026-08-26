@@ -965,7 +965,7 @@ export async function buildAoiRawDataByLayerWorkbook(
     throw new Error('Set a valid Start → End date range before exporting.')
   }
 
-  const dailyByFieldKey = await fetchPlotTimeSeriesDailyByField(
+  const { dailyByFieldKey } = await fetchPlotTimeSeriesDailyByField(
     plots,
     layerIds,
     fromDate,

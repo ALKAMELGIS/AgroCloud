@@ -168,6 +168,24 @@
   text-overflow: ellipsis;
 }
 
+.nac-subtitle,
+.nac-geo-ai-empty-subtitle {
+  margin: 2px 0 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--nac-muted, rgba(255, 255, 255, 0.62));
+}
+
+.nac-title-row .nac-subtitle {
+  flex: 0 0 100%;
+  white-space: normal;
+}
+
+.nac-geo-ai-empty-subtitle {
+  text-align: center;
+  margin-bottom: 8px;
+}
+
 /* Thought / tools-used evidence row (pack results) */
 .nac-evidence {
   --nac-bg: #14181f;
@@ -371,6 +389,17 @@
   color: var(--nac-text);
 }
 
+.nac-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.nac-icon-btn--clear:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.1);
+  border-color: rgba(248, 113, 113, 0.32);
+  color: #fca5a5;
+}
+
 .nac-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -431,6 +460,24 @@
 .nac-follow-up-chip--primary {
   color: #5eead4;
   font-weight: 600;
+}
+
+.nac-follow-up-chip--clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-inline-end: 2px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.nac-follow-up-chip--clear i {
+  font-size: 9px;
+}
+
+.nac-follow-up-chip--clear:hover:not(:disabled) {
+  color: #fca5a5;
+  text-decoration: none;
 }
 
 .nac-empty {
@@ -1670,4 +1717,47 @@
     width: 26px;
     height: 26px;
   }
+}
+
+/* ── Light theme ─────────────────────────────────────────────────────────── */
+html[data-theme='light'] .nac-float {
+  --nac-bg: #f8fafc;
+  --nac-bg-elevated: #ffffff;
+  --nac-bg-soft: #f1f5f9;
+  --nac-border: rgba(148, 163, 184, 0.35);
+  --nac-border-strong: rgba(100, 116, 139, 0.45);
+  --nac-text: #0f172a;
+  --nac-muted: #64748b;
+  --nac-accent: #0d9488;
+  --nac-accent-strong: #0f766e;
+  --nac-accent-dim: rgba(13, 148, 136, 0.12);
+  --nac-user-bubble: #ccfbf1;
+  --nac-assistant-bubble: #f1f5f9;
+}
+html[data-theme='light'] .nac-float-inner {
+  filter: drop-shadow(0 12px 28px rgba(15, 23, 42, 0.16));
+}
+html[data-theme='light'] .nac-panel {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+html[data-theme='light'] .nac-icon-btn,
+html[data-theme='light'] .nac-follow-up-chip,
+html[data-theme='light'] .nac-quick-prompt {
+  color: #334155;
+}
+html[data-theme='light'] .nac-follow-up-chip--clear {
+  color: #64748b;
+}
+html[data-theme='light'] .nac-follow-up-chip--clear:hover:not(:disabled) {
+  color: #b91c1c;
+}
+html[data-theme='light'] .nac-icon-btn--clear:hover:not(:disabled) {
+  color: #b91c1c;
+}
+html[data-theme='light'] .nac-subtitle,
+html[data-theme='light'] .nac-geo-ai-empty-subtitle {
+  color: #64748b;
+}
+html[data-theme='light'] .nac-fab {
+  color: #0d9488;
 }

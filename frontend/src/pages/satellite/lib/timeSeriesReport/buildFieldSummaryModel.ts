@@ -9,8 +9,7 @@ import type { SentinelHubDailyIndexMeans } from '../../../../lib/sentinelHubStat
 import { geodesicAreaM2 } from '../../../../lib/siLayerClassAreaEngine'
 import { classifyWapiHarvestStage } from '../../../../lib/siWapiAlertEngine'
 import { evaluateImageryLayerDailyValue } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
-import { cleanAoiPlotDisplayId } from './aoiExcelExportShared'
-import { resolveBatchPlotDisplayName } from './batchExportAnalyticsReportsExcel'
+import { cleanAoiPlotDisplayId, resolveBatchPlotDisplayName } from './aoiExcelExportShared'
 import { buildDayChartFromDailyRows } from './buildTimeSeriesReportPayload'
 import {
   buildEstimatedWaterLossTimeline,
@@ -24,6 +23,16 @@ import {
   classifyAoiVegetationStatus,
   type AoiVegetationStatus,
 } from './generateAoiRawDataByLayerExcel'
+import type { SiImageryObjectSourceFeature } from '../../utils/siImageryTimeSeriesFields'
+import {
+  resolveExportCropType,
+  resolveExportFieldId,
+  resolveExportFieldName,
+  resolveExportIrrigationType,
+  resolvePlotLayerAttributesForExport,
+  type PlotLayerAttributes,
+} from './plotLayerAttributes'
+import { estimatePhenologyDates } from './agriculturalObjectIntelligenceMapper'
 import { estimateNdwiFromNdmi } from './timeSeriesReportExecutive'
 
 export type FieldHarvestWindowLabel =
@@ -42,7 +51,13 @@ export type FieldIrrigationStatusLabel =
 export type FieldSummaryModel = {
   fieldName: string
   plotId: string
+  /** GIS Field_ID attribute (e.g. Plot_1). */
+  layerFieldId: string
+  /** Original Field_Name from the GIS layer (e.g. 501a KL-0231). */
+  originalFieldName: string
   cropType: string
+  /** Irrigation attribute from the GIS layer. */
+  layerIrrigationType: string
   areaHa: number | null
   /** Product VHS = (NDVI + SAVI) / 2 on latest scene, 0–1. */
   vegetationHealthScore: number | null
@@ -54,6 +69,9 @@ export type FieldSummaryModel = {
   ndviMin?: number | null
   ndviMax?: number | null
   ndmi: number | null
+  ndwi: number | null
+  /** NDII = (B08−B11)/(B08+B11); equals NDMI when dedicated band unavailable. */
+  ndii: number | null
   ndre: number | null
   /** YieldFactor = 0.5·NDVI + 0.3·NDMI + 0.2·NDRE */
   yieldFactor: number | null
@@ -70,6 +88,14 @@ export type FieldSummaryModel = {
   sceneDate: string | null
   fromDate: string
   toDate: string
+  /** Phenology from NDVI time series (estimated planting date). */
+  phenologyPlantingDate: string | null
+  /** Phenology harvest/end date from NDVI trajectory. */
+  phenologyHarvestDate: string | null
+  /** Days in analysis period (for season volume fallback). */
+  periodDays: number
+  /** Open-Meteo ET0 mm/day at observation date (filled during batch export). */
+  et0MmDay?: number | null
 }
 
 export type FieldSummaryPortfolioStats = {
@@ -90,6 +116,8 @@ export type BuildFieldSummaryModelInput = {
   dailyRows: SentinelHubDailyIndexMeans[]
   fromDate?: string
   toDate?: string
+  layerAttributes?: PlotLayerAttributes | null
+  objectLayerFeatures?: SiImageryObjectSourceFeature[]
 }
 
 const SUMMARY_LAYER_IDS = ['NDVI', 'NDMI', 'NDWI', 'NDRE', 'SAVI'] as const
@@ -305,10 +333,55 @@ export function buildFieldSummaryModel(input: BuildFieldSummaryModelInput): Fiel
   const ndviMax =
     zonalNdvi?.max != null && Number.isFinite(zonalNdvi.max) ? zonalNdvi.max : null
 
+  let ndwiResolved: number | null = null
+  let ndiiResolved: number | null = null
+  if (latest?.row) {
+    ndwiResolved = evaluateImageryLayerDailyValue('NDWI', latest.row)
+    if (ndwiResolved == null && ndmiLatest != null && Number.isFinite(ndmiLatest)) {
+      ndwiResolved = estimateNdwiFromNdmi(ndmiLatest)
+    }
+    const rawNdii = latest.row.ndii
+    ndiiResolved =
+      rawNdii != null && Number.isFinite(rawNdii)
+        ? rawNdii
+        : ndmiLatest != null && Number.isFinite(ndmiLatest)
+          ? ndmiLatest
+          : null
+  }
+
+  const ndviSeries = dailyRows
+    .map(row => ({
+      date: row.date,
+      ndvi: evaluateImageryLayerDailyValue('NDVI', row),
+    }))
+    .filter((p): p is { date: string; ndvi: number } => p.ndvi != null && Number.isFinite(p.ndvi))
+  const phenology = ndviSeries.length >= 2 ? estimatePhenologyDates(ndviSeries) : null
+  const periodDays = (() => {
+    if (!fromDate || !toDate) return dailyRows.length || 0
+    const ms =
+      new Date(`${toDate}T12:00:00Z`).getTime() - new Date(`${fromDate}T12:00:00Z`).getTime()
+    return Number.isFinite(ms) ? Math.max(1, Math.round(ms / 86_400_000) + 1) : dailyRows.length || 0
+  })()
+
+  const layerAttrs = resolvePlotLayerAttributesForExport(
+    plot,
+    input.objectLayerFeatures,
+    input.layerAttributes,
+  )
+  const plotId = plotIdFromPlot(plot)
+  const displayName = resolveBatchPlotDisplayName(plot)
+  const layerFieldId = resolveExportFieldId(layerAttrs, plotId)
+  const originalFieldName = resolveExportFieldName(layerAttrs, displayName, plotId)
+  const cropType = resolveExportCropType(layerAttrs, cropFromPlot(plot))
+  const layerIrrigationType = resolveExportIrrigationType(layerAttrs)
+
   return {
-    fieldName: resolveBatchPlotDisplayName(plot),
-    plotId: plotIdFromPlot(plot),
-    cropType: cropFromPlot(plot),
+    fieldName: displayName,
+    plotId,
+    layerFieldId,
+    originalFieldName,
+    cropType,
+    layerIrrigationType,
     areaHa,
     vegetationHealthScore,
     moistureScore,
@@ -317,6 +390,8 @@ export function buildFieldSummaryModel(input: BuildFieldSummaryModelInput): Fiel
     ndviMin,
     ndviMax,
     ndmi: latestYield?.ndmi ?? ndmiLatest,
+    ndwi: ndwiResolved,
+    ndii: ndiiResolved,
     ndre: latestYield?.ndre ?? null,
     yieldFactor: latestYield?.yieldFactor ?? null,
     maxYieldTHa: latestYield?.maxYieldTHa ?? null,
@@ -329,6 +404,9 @@ export function buildFieldSummaryModel(input: BuildFieldSummaryModelInput): Fiel
     sceneDate,
     fromDate,
     toDate,
+    phenologyPlantingDate: phenology?.planting ?? null,
+    phenologyHarvestDate: phenology?.harvest ?? null,
+    periodDays,
   }
 }
 

@@ -16,9 +16,12 @@ import { registerAdminDirectoryPersistence } from './adminDirectoryPersistence.j
 import { loadProductionEnv, resolveAgriDataPaths } from './loadProductionEnv.js'
 import { bootstrapApiSecretsFromEnv } from './bootstrapApiSecretsFromEnv.js'
 import { registerSentinelHubStatisticsRoutes } from './sentinelHubStatisticsProxy.js'
+import { registerSentinelFieldBatchRoutes } from './sentinelFieldBatchProxy.js'
 import { registerGeocodeRoutes } from './geocodeProxy.js'
 import { registerAcpWeatherRoutes } from './acpWeatherRoutes.js'
 import { registerChirpsRoutes } from './chirpsRoutes.js'
+import { registerWaporAetRoutes } from './waporAetProxy.js'
+import { registerOpenMeteoEt0Routes } from './openMeteoEt0Proxy.js'
 import { registerCropClassificationRoutes } from './cropClassificationProxy.js'
 import { registerTreeDetectionRoutes } from './treeDetectionProxy.js'
 import { registerSamDetectionRoutes } from './samDetectionProxy.js'
@@ -27,6 +30,7 @@ import { registerTrainingAiRoutes } from './trainingAiProxy.js'
 import { registerSam2RefinementRoutes } from './sam2RefinementProxy.js'
 import { registerTemporalTransformerRoutes } from './temporalTransformerProxy.js'
 import { registerGeoaiInferenceRoutes } from './geoaiInferenceProxy.js'
+import { registerGeoaiChatRoutes } from './geoaiChatProxy.js'
 import { registerAgriFieldBoundaryRoutes } from './agriFieldBoundaryProxy.js'
 import { startLocalAiServiceSupervisor } from './localAiServiceSupervisor.js'
 import { registerDelineateAnythingRoutes } from './delineateAnythingProxy.js'
@@ -1903,9 +1907,12 @@ app.post('/api/esri-dashboards/sources/probe', async (req, res) => {
 })
 
 registerSentinelHubStatisticsRoutes(app, { secretsFilePath: API_SECRETS_FILE })
+registerSentinelFieldBatchRoutes(app, { secretsFilePath: API_SECRETS_FILE })
 registerGeocodeRoutes(app)
 registerAcpWeatherRoutes(app)
 registerChirpsRoutes(app)
+registerWaporAetRoutes(app)
+registerOpenMeteoEt0Routes(app)
 registerCropClassificationRoutes(app, { secretsFilePath: API_SECRETS_FILE, broadcast })
 registerTreeDetectionRoutes(app)
 registerDelineateAnythingRoutes(app)
@@ -1915,6 +1922,7 @@ registerTrainingAiRoutes(app)
 registerSam2RefinementRoutes(app)
 registerTemporalTransformerRoutes(app)
 registerGeoaiInferenceRoutes(app)
+registerGeoaiChatRoutes(app)
 registerAgriFieldBoundaryRoutes(app)
 registerFloodMonitoringRoutes(app, { secretsFilePath: API_SECRETS_FILE, broadcast })
 registerEsriTerrainTileRoutes(app)

@@ -207,6 +207,17 @@
   overflow: visible;
 }
 
+.si-its-float .acp-ts__foot {
+  padding-right: 42px;
+  overflow: visible;
+  position: relative;
+  z-index: 2;
+}
+
+.si-its-float .acp-ts__exports {
+  overflow: visible;
+}
+
 .si-its-float__resize {
   position: absolute;
   right: 0;
@@ -221,7 +232,7 @@
   color: rgba(255, 255, 255, 0.55);
   font-size: 12px;
   cursor: nwse-resize;
-  z-index: 20;
+  z-index: 12;
   touch-action: none;
   pointer-events: auto;
 }

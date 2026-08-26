@@ -1,4 +1,9 @@
-import { buildTimeSeriesReportPayload, type BuildTimeSeriesReportPayloadInput } from './buildTimeSeriesReportPayload'
+import {
+  buildAnalyticsChartFromDailyRows,
+  buildTimeSeriesReportPayload,
+  type BuildTimeSeriesReportPayloadInput,
+} from './buildTimeSeriesReportPayload'
+import { dailyRowsInRange } from './plotTimeSeriesDailyRows'
 import { generateTimeSeriesReportPdf } from './generateTimeSeriesReportPdf'
 import {
   exportTimeSeriesCsvReport,
@@ -22,6 +27,7 @@ import {
   type BatchFieldSummaryResult,
   type FieldSummaryExportMode,
 } from './batchExportFieldSummaries'
+import type { FieldSummarySaveTarget } from './batchExportDirectory'
 import {
   buildAgriculturalObjectIntelligenceModel,
   type AgriObjectIntelProgress,
@@ -67,6 +73,12 @@ export type TimeSeriesExportContext = BuildTimeSeriesReportPayloadInput & {
 export type TimeSeriesExportOptions = {
   signal?: AbortSignal
   onMapSnapshotProgress?: (completed: number, total: number) => void
+  /** Pre-picked writable folder for batch Analytics Report Excel export. */
+  batchExportDirectory?: FileSystemDirectoryHandle
+  /** Folder picker already ran in the UI click handler (do not invoke again). */
+  batchFolderPickAttempted?: boolean
+  /** Pre-picked save location for batch Field Summary Excel export. */
+  fieldSummarySaveTarget?: FieldSummarySaveTarget
 }
 
 const DEFAULT_CONFIG: TimeSeriesReportConfig = {
@@ -102,9 +114,54 @@ async function buildExportPayload(
           ? plotWithGeom
           : ctx.field
 
+  const fromDate = String(ctx.fromDate || '').trim().slice(0, 10)
+  const toDate = String(ctx.toDate || '').trim().slice(0, 10)
+  const clippedDailyRows = dailyRowsInRange(ctx.dailyRows ?? [], fromDate, toDate)
+
+  let chartLabels = ctx.chartLabels ?? []
+  let displayLabels = ctx.displayLabels ?? chartLabels
+  let layerSeries = ctx.layerSeries ?? []
+  let periodAnchorDates = ctx.periodAnchorDates ?? {}
+
+  const chartHasObservations = chartLabels.some((_, i) =>
+    layerSeries.some(s => {
+      const v = s.values[i]
+      return v != null && Number.isFinite(v)
+    }),
+  )
+
+  if (
+    (!chartLabels.length || !chartHasObservations) &&
+    clippedDailyRows.length &&
+    ctx.layerIds?.length &&
+    fromDate &&
+    toDate &&
+    fromDate <= toDate
+  ) {
+    const rebuilt = buildAnalyticsChartFromDailyRows(
+      ctx.fieldKey || field?.fieldKey || 'aoi',
+      ctx.layerIds,
+      clippedDailyRows,
+      fromDate,
+      toDate,
+      ctx.timeAggregation ?? 'day',
+    )
+    if (rebuilt.labels.length) {
+      chartLabels = rebuilt.labels
+      displayLabels = rebuilt.displayLabels
+      layerSeries = rebuilt.series
+      periodAnchorDates = rebuilt.periodAnchorDates
+    }
+  }
+
   return buildTimeSeriesReportPayload({
     ...ctx,
     field,
+    chartLabels,
+    displayLabels,
+    layerSeries,
+    dailyRows: clippedDailyRows.length ? clippedDailyRows : ctx.dailyRows ?? [],
+    periodAnchorDates,
     projectName: config.projectName,
     generatedBy: config.generatedBy,
     includeMap: config.includeMap,
@@ -212,8 +269,14 @@ export async function runTimeSeriesExport(
         mapboxToken: ctx.mapboxToken,
         projectName: config.projectName,
         generatedBy: config.generatedBy,
+        exportDirectory: options?.batchExportDirectory,
+        folderPickAttempted: options?.batchFolderPickAttempted,
+        dailyByFieldKey: ctx.objectDailyByFieldKey,
+        plotNameField: ctx.plotNameField,
+        objectLayerFeatures: ctx.objectLayerFeatures,
         signal: options?.signal,
         onProgress: ctx.onBatchAnalyticsProgress,
+        onMapSnapshotProgress: options?.onMapSnapshotProgress,
       })
     }
     case 'batch-field-summary': {
@@ -239,7 +302,12 @@ export async function runTimeSeriesExport(
         toDate: ctx.toDate,
         timeAggregation: ctx.timeAggregation ?? 'day',
         projectName: config.projectName,
+        aoiName: ctx.aoiName,
+        objectLayerFeatures: ctx.objectLayerFeatures,
+        dailyByFieldKey: ctx.objectDailyByFieldKey,
+        plotNameField: ctx.plotNameField,
         signal: options?.signal,
+        saveTarget: options?.fieldSummarySaveTarget,
         onProgress: progress => {
           ctx.onBatchFieldSummaryProgress?.(progress)
           ctx.onBatchAnalyticsProgress?.(progress)

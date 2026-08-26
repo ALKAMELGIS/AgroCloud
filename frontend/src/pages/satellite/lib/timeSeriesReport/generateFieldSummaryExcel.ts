@@ -7,19 +7,43 @@ import type {
   FieldSummaryPortfolioStats,
 } from './buildFieldSummaryModel'
 import {
-  PRODUCTION_ESTIMATION_HEADERS,
+  aggregateExecutiveReportData,
+  buildAreaCoverageChartSpecs,
+  defaultFieldReportFilename,
+  writeAreaCoverageAnalysisSheet,
+  writeExecutiveSummarySheet,
+  AREA_COVERAGE_SHEET,
+} from './fieldSummaryExecutiveExcel'
+import {
+  FR,
+  FR_NUM,
+  applyNdviStressLevelCell,
+  applySectionBanner,
+  applySheetSubtitle,
+  applySheetTitleBanner,
+  applyTableHeader,
+  applyTableNumber,
+  applyTableText,
+  KV_VALUE_END,
+  writeKvOverviewRow,
+  setKvSummaryColumnWidths,
+} from './fieldReportExcelTheme'
+import {
+  PRODUCTION_ESTIMATION_ALL_HEADERS,
   buildProductionEstimationRows,
   sumProductionEstimationTotals,
+  sumWaterLossTotals,
+  sumWaterRequirementTotals,
   NDVI_VEGETATION_THRESHOLD,
   NDVI_FULL_CANOPY,
 } from './productionEstimationSheet'
 
-const BRAND_DARK = 'FF064E3B'
-const HEADER_FILL = 'FF065F46'
-const SECTION_FILL = 'FFE2F5EE'
+const BRAND_DARK = FR.BRAND
+const HEADER_FILL = FR.HEADER
+const SECTION_FILL = FR.SECTION
 const ALT_ROW = 'FFF8FAFC'
-const INK = 'FF0F172A'
-const MUTED = 'FF64748B'
+const INK = FR.INK
+const MUTED = FR.MUTED
 
 const ANALYSIS_SHEET = 'Analysis'
 
@@ -171,12 +195,9 @@ function countBy<T extends string>(items: T[], keys: readonly T[]): Array<[T, nu
 
 function writeFormulasSheet(wb: ExcelJS.Workbook): void {
   const ws = wb.addWorksheet('Formulas')
-  ws.getCell('A1').value = 'AgroCloud Field Summary — Mathematical Model'
-  styleTitle(ws.getCell('A1'))
-  ws.mergeCells('A1:B1')
-
+  applySheetTitleBanner(ws, 1, 'AgroCloud Field Summary — Mathematical Model', 2)
   ws.getCell('A3').value = 'Yield model (preferred over NDVI-only)'
-  ws.getCell('A3').font = { bold: true, size: 10, color: { argb: BRAND_DARK } }
+  ws.getCell('A3').font = { name: 'Arial', bold: true, size: 10, color: { argb: BRAND_DARK } }
 
   const rows: Array<[string, string]> = [
     ['YieldFactor', '0.5×NDVI + 0.3×NDMI + 0.2×NDRE'],
@@ -187,15 +208,16 @@ function writeFormulasSheet(wb: ExcelJS.Workbook): void {
     ['Moisture Score', '0.6×NDMI + 0.4×NDWI'],
   ]
   ws.getRow(4).values = ['Metric', 'Formula']
-  styleHeaderRow(ws.getRow(4))
+  applyTableHeader(ws.getCell(4, 1), 'Metric')
+  applyTableHeader(ws.getCell(4, 2), 'Formula')
   rows.forEach(([metric, formula], i) => {
     const row = ws.getRow(5 + i)
-    row.values = [metric, formula]
-    styleDataRow(row, i % 2 === 1)
+    applyTableText(row.getCell(1), metric)
+    applyTableText(row.getCell(2), formula)
   })
 
   ws.getCell('A12').value = 'Worked example (T-100 SC0175)'
-  ws.getCell('A12').font = { bold: true, size: 10, color: { argb: BRAND_DARK } }
+  ws.getCell('A12').font = { name: 'Arial', bold: true, size: 10, color: { argb: BRAND_DARK } }
 
   const example: Array<[string, string]> = [
     ['Area', '39.26 ha'],
@@ -207,12 +229,12 @@ function writeFormulasSheet(wb: ExcelJS.Workbook): void {
   ]
   example.forEach(([k, v], i) => {
     const row = ws.getRow(13 + i)
-    row.values = [k, v]
-    styleDataRow(row, i % 2 === 1)
+    applyTableText(row.getCell(1), k)
+    applyTableText(row.getCell(2), v)
   })
 
   ws.getCell('A20').value = 'Production Estimation Sheet'
-  ws.getCell('A20').font = { bold: true, size: 10, color: { argb: BRAND_DARK } }
+  ws.getCell('A20').font = { name: 'Arial', bold: true, size: 10, color: { argb: BRAND_DARK } }
   const prodRows: Array<[string, string]> = [
     [
       'Planned Crop Coverage (ha)',
@@ -237,11 +259,12 @@ function writeFormulasSheet(wb: ExcelJS.Workbook): void {
     ],
   ]
   ws.getRow(21).values = ['Metric', 'Formula']
-  styleHeaderRow(ws.getRow(21))
+  applyTableHeader(ws.getCell(21, 1), 'Metric')
+  applyTableHeader(ws.getCell(21, 2), 'Formula')
   prodRows.forEach(([metric, formula], i) => {
     const row = ws.getRow(22 + i)
-    row.values = [metric, formula]
-    styleDataRow(row, i % 2 === 1)
+    applyTableText(row.getCell(1), metric)
+    applyTableText(row.getCell(2), formula)
   })
 
   ws.getColumn(1).width = 36
@@ -281,7 +304,7 @@ export function writeFieldSummaryAnalysisSheet(
   summaries: FieldSummaryModel[],
 ): MeteoNativeChartSpec[] {
   const ws = wb.addWorksheet(ANALYSIS_SHEET, {
-    views: [{ state: 'frozen', ySplit: 2, zoomScale: 80 }],
+    views: [{ showGridLines: true, zoomScale: 80 }],
   })
   ws.getCell('A1').value = 'Field Analysis — Executive Dashboard'
   styleTitle(ws.getCell('A1'))
@@ -715,6 +738,52 @@ function fmtPct(n: number | null | undefined): string | number {
   return `${Number(n.toFixed(1))}%`
 }
 
+function fmtWaterCell(v: number | string | null | undefined, digits = 2): string | number {
+  if (v == null || v === '—') return '—'
+  if (typeof v === 'string') return v
+  if (!Number.isFinite(v)) return '—'
+  return Number(v.toFixed(digits))
+}
+
+function productionRowToExcelValues(r: import('./productionEstimationSheet').ProductionEstimationRow): Array<string | number> {
+  return [
+    r.fieldId,
+    r.farmName,
+    r.cropClassification,
+    r.irrigationType,
+    fmtNum(r.totalAreaHa, r.totalAreaHa != null && r.totalAreaHa >= 100 ? 1 : 2),
+    fmtNum(r.plannedCropCoverageHa, 1),
+    fmtNum(r.unplannedAreaHa, 1),
+    fmtPct(r.vegetationCoveragePct),
+    fmtNum(r.averageNdvi, 3),
+    r.stressLevel,
+    fmtNum(r.expectedYieldTHa, 1),
+    fmtNum(r.estimatedHarvestProductionTons, 1),
+    fmtWaterCell(r.waterLossIndexPct, 1),
+    fmtWaterCell(r.waterLossM3Day, 2),
+    fmtWaterCell(r.waterLossM3HaDay, 2),
+    r.growthStage,
+    fmtWaterCell(r.et0MmDay, 3),
+    fmtWaterCell(r.kc, 3),
+    fmtWaterCell(r.etcMmDay, 3),
+    fmtWaterCell(r.aetMmDay, 3),
+    fmtWaterCell(r.etConsumptionPercent, 1),
+    fmtWaterCell(r.waterStressPercent, 1),
+    fmtWaterCell(r.ndwi, 4),
+    fmtWaterCell(r.ndmi, 4),
+    fmtWaterCell(r.ndii, 4),
+    fmtWaterCell(r.netWaterRequirementMmDay, 3),
+    fmtWaterCell(r.irrigationEfficiency != null ? r.irrigationEfficiency * 100 : null, 1),
+    fmtWaterCell(r.grossIrrigationRequirementMmDay, 3),
+    fmtWaterCell(r.waterRequirementM3Day, 1),
+    fmtWaterCell(r.waterRequirementM3Week, 1),
+    fmtWaterCell(r.waterRequirementM3Month, 1),
+    fmtWaterCell(r.waterRequirementM3Season, 1),
+    r.observationDate ?? 'N/A',
+    r.calculationStatus,
+  ]
+}
+
 function writeProductionEstimationSheet(
   wb: ExcelJS.Workbook,
   input: {
@@ -722,81 +791,138 @@ function writeProductionEstimationSheet(
     fromDate: string
     toDate: string
     projectName?: string
+    et0ByFieldKey?: Map<string, number>
+    aetByFieldKey?: Map<string, number>
+    fieldKeys?: string[]
   },
 ): void {
   const ws = wb.addWorksheet('Production Estimation', {
-    views: [{ state: 'frozen', ySplit: 5 }],
+    views: [{ showGridLines: true }],
   })
-  const colCount = PRODUCTION_ESTIMATION_HEADERS.length
-  const rows = buildProductionEstimationRows(input.summaries)
+  const colCount = PRODUCTION_ESTIMATION_ALL_HEADERS.length
+  const rows = buildProductionEstimationRows(input.summaries, {
+    et0ByFieldKey: input.et0ByFieldKey,
+    aetByFieldKey: input.aetByFieldKey,
+    fieldKeys: input.fieldKeys,
+  })
   const totals = sumProductionEstimationTotals(rows)
+  const waterTotals = sumWaterRequirementTotals(rows)
+  const lossTotals = sumWaterLossTotals(rows)
 
-  ws.getCell('A1').value = 'Production Estimation Sheet'
-  styleTitle(ws.getCell('A1'))
-  ws.mergeCells(1, 1, 1, colCount)
-
-  ws.getCell('A2').value =
-    `${input.projectName || 'AgroCloud Satellite Intelligence'} · Period ${input.fromDate} to ${input.toDate} · ${rows.length} field(s)`
-  ws.getCell('A2').font = { size: 9, color: { argb: MUTED } }
-  ws.mergeCells(2, 1, 2, colCount)
+  applySheetTitleBanner(ws, 1, 'Production Estimation Sheet', colCount)
+  applySheetSubtitle(
+    ws,
+    2,
+    `${input.projectName || 'AgroCloud Satellite Intelligence'} · Period ${input.fromDate} to ${input.toDate} · ${rows.length} field(s)`,
+    colCount,
+  )
 
   ws.getCell('A3').value =
     `NDVI vegetation threshold ≥ ${NDVI_VEGETATION_THRESHOLD.toFixed(2)} · ` +
-    'Estimated Harvest Production = Vegetated Area × Expected Yield × NDVI Health Factor (see Calculation Method below)'
-  ws.getCell('A3').font = { size: 8, italic: true, color: { argb: MUTED } }
-  ws.mergeCells(3, 1, 3, colCount)
+    'ET metrics from satellite: ETa = WaPOR AETI when available, else NDMI/NDWI model · ETc = Kc × ET0 (FAO-56) · ' +
+    'ET Consumption (%) = MAX(0, MIN(100, ETa/ETc×100)) · Water Stress (%) = MAX(0, MIN(100, (1−ETa/ETc)×100))'
+  ws.getCell('A3').font = { name: 'Arial', size: 8, italic: true, color: { argb: MUTED } }
+  ws.mergeCells(3, 1, 3, KV_VALUE_END)
 
-  const header = ws.getRow(5)
-  header.values = [...PRODUCTION_ESTIMATION_HEADERS]
-  styleHeaderRow(header)
+  applySectionBanner(ws, 4, 'Water Requirement — Portfolio Summary', KV_VALUE_END)
+  const waterSummaryRows: Array<[string, string | number, string | undefined]> = [
+    ['Total Fields', waterTotals.totalFields, undefined],
+    ['Total Area (ha)', fmtNum(waterTotals.totalAreaHa, 1), FR_NUM.ONE_DEC],
+    ['Total Daily Water Requirement (m³/day)', fmtNum(waterTotals.totalDailyWaterM3, 1), FR_NUM.ONE_DEC],
+    ['Total Weekly Water Requirement (m³/week)', fmtNum(waterTotals.totalWeeklyWaterM3, 1), FR_NUM.ONE_DEC],
+    ['Total Monthly Water Requirement (m³/month)', fmtNum(waterTotals.totalMonthlyWaterM3, 1), FR_NUM.ONE_DEC],
+    [
+      'Average Water Stress (%)',
+      fmtWaterCell(waterTotals.averageWaterStressPct, 1),
+      waterTotals.averageWaterStressPct != null ? FR_NUM.PCT : undefined,
+    ],
+    [
+      'Average ET Consumption (%)',
+      fmtWaterCell(waterTotals.averageEtConsumptionPct, 1),
+      waterTotals.averageEtConsumptionPct != null ? FR_NUM.PCT : undefined,
+    ],
+  ]
+  waterSummaryRows.forEach(([label, value, numFmt], i) => {
+    writeKvOverviewRow(ws, 5 + i, label, value, numFmt)
+  })
+  setKvSummaryColumnWidths(ws)
+
+  const headerRowNum = 13
+  const header = ws.getRow(headerRowNum)
+  PRODUCTION_ESTIMATION_ALL_HEADERS.forEach((h, i) => {
+    applyTableHeader(header.getCell(i + 1), h)
+  })
 
   rows.forEach((r, i) => {
-    const row = ws.getRow(6 + i)
-    row.values = [
-      r.fieldId,
-      r.farmName,
-      r.cropClassification,
-      fmtNum(r.totalAreaHa, r.totalAreaHa != null && r.totalAreaHa >= 100 ? 1 : 2),
-      fmtNum(r.plannedCropCoverageHa, 2),
-      fmtNum(r.unplannedAreaHa, 2),
-      fmtPct(r.vegetationCoveragePct),
-      fmtNum(r.averageNdvi, 3),
-      r.stressLevel,
-      fmtNum(r.expectedYieldTHa, 1),
-      fmtNum(r.estimatedHarvestProductionTons, 1),
-    ]
-    styleDataRow(row, i % 2 === 1)
+    const row = ws.getRow(headerRowNum + 1 + i)
+    const values = productionRowToExcelValues(r)
+    values.forEach((v, colIdx) => {
+      const cell = row.getCell(colIdx + 1)
+      if (colIdx === 9) {
+        cell.value = r.stressLevel
+        applyNdviStressLevelCell(cell, r.stressLevel)
+        return
+      }
+      if (typeof v === 'number') {
+        applyTableNumber(cell, v, colIdx >= 4 && colIdx <= 6 ? FR_NUM.ONE_DEC : '0.0')
+      } else {
+        applyTableText(cell, v)
+      }
+    })
     row.height = 26
   })
 
-  const totalRowIdx = 6 + rows.length
+  const totalRowIdx = headerRowNum + 1 + rows.length
   const totalRow = ws.getRow(totalRowIdx)
-  totalRow.values = [
-    'TOTAL',
-    '',
-    '',
-    fmtNum(totals.totalAreaHa, 2),
-    fmtNum(totals.plannedCropCoverageHa, 2),
-    fmtNum(totals.unplannedAreaHa, 2),
-    '',
-    '',
-    '',
-    '',
+  applyTableText(totalRow.getCell(1), 'TOTAL')
+  applyTableNumber(totalRow.getCell(5), fmtNum(totals.totalAreaHa, 1), FR_NUM.ONE_DEC)
+  applyTableNumber(totalRow.getCell(6), fmtNum(totals.plannedCropCoverageHa, 1), FR_NUM.ONE_DEC)
+  applyTableNumber(totalRow.getCell(7), fmtNum(totals.unplannedAreaHa, 1), FR_NUM.ONE_DEC)
+  applyTableNumber(
+    totalRow.getCell(12),
     fmtNum(totals.estimatedHarvestProductionTons, 1),
-  ]
-  totalRow.font = { bold: true, size: 9, color: { argb: BRAND_DARK } }
+    FR_NUM.ONE_DEC,
+  )
+  applyTableNumber(
+    totalRow.getCell(13),
+    fmtNum(lossTotals.totalWaterLossIndexPct, 1),
+    FR_NUM.ONE_DEC,
+  )
+  applyTableNumber(
+    totalRow.getCell(14),
+    fmtNum(lossTotals.totalWaterLossM3Day, 2),
+    FR_NUM.ONE_DEC,
+  )
+  applyTableNumber(
+    totalRow.getCell(15),
+    fmtNum(lossTotals.meanWaterLossM3HaDay, 2),
+    FR_NUM.ONE_DEC,
+  )
+  applyTableNumber(
+    totalRow.getCell(29),
+    fmtNum(waterTotals.totalDailyWaterM3, 1),
+    FR_NUM.ONE_DEC,
+  )
+  applyTableNumber(
+    totalRow.getCell(30),
+    fmtNum(waterTotals.totalWeeklyWaterM3, 1),
+    FR_NUM.ONE_DEC,
+  )
+  applyTableNumber(
+    totalRow.getCell(31),
+    fmtNum(waterTotals.totalMonthlyWaterM3, 1),
+    FR_NUM.ONE_DEC,
+  )
+  totalRow.font = { name: 'Arial', bold: true, size: 9, color: { argb: BRAND_DARK } }
   totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: SECTION_FILL } }
-  totalRow.alignment = { vertical: 'middle', wrapText: true }
 
-  const widths = [12, 18, 14, 14, 18, 16, 14, 12, 18, 14, 16]
+  const widths = [12, 20, 14, 14, 14, 18, 16, 14, 12, 18, 14, 16, 14, 14, 14, 14, 12, 8, 12, 12, 14, 14, 10, 10, 10, 16, 14, 16, 14, 14, 14, 14, 14, 14]
   widths.forEach((w, i) => {
     ws.getColumn(i + 1).width = w
   })
 
   let methodRow = totalRowIdx + 2
-  ws.getCell(methodRow, 1).value = 'Calculation Method'
-  ws.getCell(methodRow, 1).font = { bold: true, size: 11, color: { argb: BRAND_DARK } }
-  ws.mergeCells(methodRow, 1, methodRow, 4)
+  applySectionBanner(ws, methodRow, 'Calculation Method', 4)
 
   const methodBlocks: Array<[string, string]> = [
     [
@@ -823,6 +949,22 @@ function writeProductionEstimationSheet(
       '6. NDVI Health Factor',
       'Healthy 1.00 · Moderate 0.85 · Stressed 0.65 · Non-Vegetated 0.00',
     ],
+    [
+      '7. Water Requirement (FAO-56)',
+      'ETc = Kc × ET0 · Kc from crop type + growth stage (FAO-56 tables) · ET0 from Open-Meteo ERA5 · Effective Rainfall = 0 · Net Water Requirement ≈ ETc · Gross = Net / Irrigation Efficiency · m³/day = Gross (mm/day) × Area (ha) × 10',
+    ],
+    [
+      '8. AET / ET Consumption / Water Stress',
+      'ETa = WaPOR AETI when available, else NDMI/NDWI satellite model · ET Consumption (%) = MAX(0, MIN(100, ETa/ETc×100)) · Water Stress (%) = MAX(0, MIN(100, (1−ETa/ETc)×100)) · No Actual Water Applied input',
+    ],
+    [
+      '9. Sentinel-2 Indices',
+      'NDVI = (B08−B04)/(B08+B04) · NDWI = (B03−B08)/(B03+B08) · NDMI = (B08−B11)/(B08+B11) · NDII = (B08−B11)/(B08+B11) same as NDMI when dedicated band unavailable',
+    ],
+    [
+      '10. Estimated Water Loss (satellite)',
+      'Water Loss Index % = (1 − ETa/ETc) × 100. ETc = Kc × ET0 (Open-Meteo). ETa = FAO WaPOR AET when available, else ETc × moisture consumption ratio. Total Loss (m³/ha/day) = max(0, ETc − ETa) × 10. Portfolio Total = (Σ Total Loss m³/day ÷ Σ (ETc × Area × 10)) × 100',
+    ],
   ]
   methodBlocks.forEach(([title, body], i) => {
     const r = methodRow + 1 + i * 2
@@ -841,59 +983,38 @@ export function buildFieldSummaryWorkbook(input: {
   fromDate: string
   toDate: string
   projectName?: string
+  aoiName?: string
+  et0ByFieldKey?: Map<string, number>
+  aetByFieldKey?: Map<string, number>
+  fieldKeys?: string[]
 }): { wb: ExcelJS.Workbook; chartSpecs: MeteoNativeChartSpec[] } {
   const wb = new ExcelJS.Workbook()
   wb.creator = input.projectName || 'AgroCloud'
   wb.created = new Date()
-  wb.title = 'Field Summaries'
+  wb.title = `${input.aoiName?.trim() || 'Field Report'} — Executive Summary`
 
-  const ws = wb.addWorksheet('Field Summaries', {
-    views: [{ state: 'frozen', ySplit: 5 }],
+  const execData = aggregateExecutiveReportData({
+    summaries: input.summaries,
+    fromDate: input.fromDate,
+    toDate: input.toDate,
+    aoiName: input.aoiName,
+    et0ByFieldKey: input.et0ByFieldKey,
+    aetByFieldKey: input.aetByFieldKey,
+    fieldKeys: input.fieldKeys,
   })
 
-  ws.getCell('A1').value = 'Batch Field Summaries'
-  styleTitle(ws.getCell('A1'))
-  ws.mergeCells(1, 1, 1, TABLE_HEADERS.length)
-
-  const period = `${input.fromDate} to ${input.toDate}`
-  ws.getCell('A2').value =
-    `${input.projectName || 'AgroCloud Satellite Intelligence'} · Period ${period} · ${input.summaries.length} field(s)`
-  ws.getCell('A2').font = { size: 9, color: { argb: MUTED } }
-  ws.mergeCells(2, 1, 2, TABLE_HEADERS.length)
-
-  ws.getCell('A3').value =
-    `Yield model: ${FIELD_SUMMARY_YIELD_FORMULAS[0]} → ${FIELD_SUMMARY_YIELD_FORMULAS[1]} → ${FIELD_SUMMARY_YIELD_FORMULAS[2]} (see Formulas sheet)`
-  ws.getCell('A3').font = { size: 8, italic: true, color: { argb: MUTED } }
-  ws.mergeCells(3, 1, 3, TABLE_HEADERS.length)
-
-  if (input.portfolio) {
-    const p = input.portfolio
-    ws.getCell('A4').value =
-      `Portfolio: ${p.fieldCount} fields · ${fmtNum(p.totalAreaHa, 2)} ha · ` +
-      `${fmtNum(p.totalProductionTons, 0)} t · avg yield ${fmtNum(p.avgYieldTHa, 1)} t/ha · ` +
-      `Healthy ${p.healthyCount} / Moderate ${p.moderateCount} / Stressed ${p.stressedCount} · ` +
-      `Status ${p.overallPortfolioStatus}`
-    ws.getCell('A4').font = { size: 8, italic: true, color: { argb: MUTED } }
-    ws.getCell('A4').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: SECTION_FILL } }
-    ws.mergeCells(4, 1, 4, TABLE_HEADERS.length)
-  }
-
-  const header = ws.getRow(5)
-  header.values = [...TABLE_HEADERS]
-  styleHeaderRow(header)
-
-  input.summaries.forEach((summary, i) => {
-    const row = ws.getRow(6 + i)
-    row.values = rowValues(summary)
-    styleDataRow(row, i % 2 === 1)
-    row.height = 28
+  writeExecutiveSummarySheet(wb, {
+    data: execData,
+    fromDate: input.fromDate,
+    toDate: input.toDate,
+    projectName: input.projectName,
   })
 
-  const widths = [
-    18, 10, 12, 10, 8, 8, 8, 11, 12, 14, 16, 12, 11, 12, 16, 14, 12, 36, 12,
-  ]
-  widths.forEach((w, i) => {
-    ws.getColumn(i + 1).width = w
+  const areaLayout = writeAreaCoverageAnalysisSheet(wb, {
+    data: execData,
+    fromDate: input.fromDate,
+    toDate: input.toDate,
+    projectName: input.projectName,
   })
 
   writeFormulasSheet(wb)
@@ -902,9 +1023,30 @@ export function buildFieldSummaryWorkbook(input: {
     fromDate: input.fromDate,
     toDate: input.toDate,
     projectName: input.projectName,
+    et0ByFieldKey: input.et0ByFieldKey,
+    aetByFieldKey: input.aetByFieldKey,
+    fieldKeys: input.fieldKeys,
   })
-  const chartSpecs = writeFieldSummaryAnalysisSheet(wb, input.summaries)
+
+  const chartSpecs = buildAreaCoverageChartSpecs(areaLayout, execData)
   return { wb, chartSpecs }
+}
+
+export type FieldSummaryExcelDelivery = {
+  filename: string
+  deliveryMode: 'file' | 'folder' | 'download'
+  locationLabel?: string
+  usedDownloadFallback?: boolean
+}
+
+async function deliverFieldSummaryBlob(
+  blob: Blob,
+  filename: string,
+  saveTarget?: import('./batchExportDirectory').FieldSummarySaveTarget,
+): Promise<FieldSummaryExcelDelivery> {
+  const { deliverBlobToSaveTarget } = await import('./batchExportDirectory')
+  const safeName = sanitizeFieldSummaryExcelFilename(filename)
+  return deliverBlobToSaveTarget(blob, safeName, saveTarget)
 }
 
 export async function generateFieldSummaryExcel(input: {
@@ -914,23 +1056,22 @@ export async function generateFieldSummaryExcel(input: {
   toDate: string
   projectName?: string
   filename?: string
-}): Promise<void> {
+  aoiName?: string
+  et0ByFieldKey?: Map<string, number>
+  aetByFieldKey?: Map<string, number>
+  fieldKeys?: string[]
+  saveTarget?: import('./batchExportDirectory').FieldSummarySaveTarget
+}): Promise<FieldSummaryExcelDelivery> {
   const { wb, chartSpecs } = buildFieldSummaryWorkbook(input)
   const raw = await wb.xlsx.writeBuffer()
   const { injectNativeMeteoCharts } = await import('../weatherClimateReport/meteoNativeExcelCharts')
   const withCharts =
     chartSpecs.length > 0
-      ? await injectNativeMeteoCharts(raw as ArrayBuffer, chartSpecs, ANALYSIS_SHEET)
+      ? await injectNativeMeteoCharts(raw as ArrayBuffer, chartSpecs, AREA_COVERAGE_SHEET)
       : raw
   const blob = new Blob([withCharts], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = sanitizeFieldSummaryExcelFilename(
-    input.filename || 'Field_Summaries_Table.xlsx',
-  )
-  a.click()
-  URL.revokeObjectURL(url)
+  const filename = input.filename || defaultFieldReportFilename(input.aoiName, input.toDate)
+  return deliverFieldSummaryBlob(blob, filename, input.saveTarget)
 }

@@ -203,7 +203,7 @@ export function SiImageryTimeSeriesPanel({
 
   const [selectedFieldKey, setSelectedFieldKey] = useState('')
   const [selectedFieldKeys, setSelectedFieldKeys] = useState<string[]>([])
-  const [analysisMode, setAnalysisMode] = useState<SiImageryAnalysisMode>('single-layer-trend')
+  const [analysisMode] = useState<SiImageryAnalysisMode>('single-layer-trend')
   const [multiSceneDate, setMultiSceneDate] = useState(referenceDate)
   const [selectedLayerIds, setSelectedLayerIds] = useState<string[]>(() => {
     const id = defaultLayerId.trim()
@@ -905,7 +905,11 @@ export function SiImageryTimeSeriesPanel({
     [plotLayerTsResult?.dailyByFieldKey, multiAoiTimeline?.dailyByFieldKey],
   )
 
-  const exportAoiName = useMemo(() => `${exportPlots.length} plots`, [exportPlots.length])
+  const exportAoiName = useMemo(() => {
+    const layerLabel = selectedPlotSource?.label?.trim()
+    if (layerLabel) return layerLabel
+    return exportPlots.length ? `${exportPlots.length} plots` : 'Batch Field Summaries'
+  }, [selectedPlotSource?.label, exportPlots.length])
 
   const runAnalysisWrapped = useCallback(async () => {
     prevAutoRunDatesRef.current = { from: fromDate, to: toDate }
@@ -1566,60 +1570,6 @@ export function SiImageryTimeSeriesPanel({
   return (
     <div className="acp-ts">
         <div className="acp-ts__toolbar">
-          <div className="acp-ts__field acp-ts__field--analysis-mode">
-            <span>Analysis</span>
-            <div className="acp-ts__aggregate" role="group" aria-label="Analysis mode">
-              <button
-                type="button"
-                className={`acp-ts__aggregate-btn${analysisMode === 'single-layer-trend' ? ' is-on' : ''}`}
-                aria-pressed={analysisMode === 'single-layer-trend'}
-                title="Current Single Layer Trend Analysis"
-                onClick={() => {
-                  if (analysisMode === 'single-layer-trend') return
-                  setAnalysisMode('single-layer-trend')
-                  setActivePanelTab('chart')
-                }}
-              >
-                Single Layer Trend
-              </button>
-              <button
-                type="button"
-                className={`acp-ts__aggregate-btn${analysisMode === 'multi-layer-aoi-comparison' ? ' is-on' : ''}`}
-                aria-pressed={analysisMode === 'multi-layer-aoi-comparison'}
-                title="Multi-Layer Trend Analysis (AOI Comparison)"
-                onClick={() => {
-                  if (analysisMode === 'multi-layer-aoi-comparison') return
-                  setAnalysisMode('multi-layer-aoi-comparison')
-                  setActivePanelTab('chart')
-                  setToDate(multiSceneDate || toDate)
-                  if (fromDate && multiSceneDate && fromDate > multiSceneDate) {
-                    const next = defaultImageryDateRange(multiSceneDate, chartLookbackDays)
-                    setFromDate(next.from)
-                  }
-                  invalidateMultiAoiResults()
-                }}
-              >
-                Multi-Layer AOI Comparison
-              </button>
-              <button
-                type="button"
-                className={`acp-ts__aggregate-btn${analysisMode === 'plot-layer-time-series' ? ' is-on' : ''}`}
-                aria-pressed={analysisMode === 'plot-layer-time-series'}
-                title="Weekly / daily time series — one layer, many plots as lines"
-                onClick={() => {
-                  if (analysisMode === 'plot-layer-time-series') return
-                  setAnalysisMode('plot-layer-time-series')
-                  setActivePanelTab('chart')
-                  setTimeAggregation(prev => (prev === 'day' ? 'week' : prev))
-                  setChartType('line')
-                  invalidatePlotLayerTsResults()
-                }}
-              >
-                Time Series by Plot
-              </button>
-            </div>
-          </div>
-
           <div className="acp-ts__field acp-ts__field--plot-source">
             <span className="acp-ts__field-label">Plot Layer</span>
             <select
@@ -1660,10 +1610,8 @@ export function SiImageryTimeSeriesPanel({
                 setSelectedFieldKey(keys[0]!)
                 if (keys[0]) {
                   onSelectedFieldKeyChange?.(keys[0])
-                  onHighlightFieldKeysChange?.([keys[0]], { fitBounds: true })
+                  onHighlightFieldKeysChange?.(keys, { fitBounds: true })
                 }
-                setAnalysisMode('multi-layer-aoi-comparison')
-                invalidateMultiAoiResults()
               }}
               disabled={!fieldOptions.length}
               emptyLabel={fieldEmptyLabel}

@@ -935,30 +935,32 @@
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel--glass {
   background: linear-gradient(
     165deg,
-    rgba(255, 255, 255, 0.92) 0%,
-    rgba(248, 250, 252, 0.88) 100%
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(248, 250, 252, 0.94) 100%
   ) !important;
-  border-color: rgba(148, 163, 184, 0.28) !important;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.98) !important;
-  color: #0f172a;
-}
-
-:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__header {
-  border-bottom-color: rgba(15, 23, 42, 0.08);
+  border-color: rgba(34, 34, 34, 0.12) !important;
+  box-shadow:
+    0 12px 32px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.98) !important;
+  color: #222222;
 }
 
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__title {
-  color: #0f172a;
+  color: #222222;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__header {
+  border-bottom-color: rgba(34, 34, 34, 0.1);
 }
 
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__label,
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-aoi-mask-builder--flat .si-aoi-mask-builder__head-label,
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel .si-aoi-mask-builder--flat .si-aoi-mask-builder__values > .si-field-analysis-label {
-  color: #475569;
+  color: #555555;
 }
 
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__meta {
-  color: #334155;
+  color: #555555;
 }
 
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-rs-panel__meta--warn,

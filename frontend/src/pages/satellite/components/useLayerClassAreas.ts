@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   fetchLayerClassAreas,
   layerSupportsClassArea,
+  normalizeClassAreaLayerId,
   type LayerClassAreaResult,
 } from '../../../lib/siLayerClassAreaEngine'
 
@@ -21,7 +22,7 @@ type Params = {
   maxCloudCoverage?: number
 }
 
-function stableGeometryKey(geometry: GeoJSON.Geometry | GeoJSON.Feature): string {
+export function stableGeometryKey(geometry: GeoJSON.Geometry | GeoJSON.Feature): string {
   try {
     const geom =
       (geometry as GeoJSON.Feature).type === 'Feature'
@@ -59,7 +60,11 @@ export function useLayerClassAreas({
   enabled = true,
   maxCloudCoverage,
 }: Params): UseLayerClassAreasState {
-  const supported = layerId ? layerSupportsClassArea(layerId) : false
+  const resolvedLayerId = useMemo(
+    () => normalizeClassAreaLayerId(layerId) ?? layerId,
+    [layerId],
+  )
+  const supported = resolvedLayerId ? layerSupportsClassArea(resolvedLayerId) : false
   const geomKey = useMemo(() => (geometry ? stableGeometryKey(geometry) : ''), [geometry])
   const [state, setState] = useState<UseLayerClassAreasState>({
     result: null,
@@ -70,10 +75,10 @@ export function useLayerClassAreas({
   const requestGenRef = useRef(0)
 
   const dateKey = String(sceneDate || '').trim().slice(0, 10)
-  const active = enabled && supported && !!geomKey && !!dateKey && !!layerId
+  const active = enabled && supported && !!geomKey && !!dateKey && !!resolvedLayerId
 
   useEffect(() => {
-    if (!active || !geometry || !layerId) {
+    if (!active || !geometry || !resolvedLayerId) {
       requestGenRef.current += 1
       setState({ result: null, loading: false, error: null, supported })
       return
@@ -81,12 +86,11 @@ export function useLayerClassAreas({
 
     const requestId = ++requestGenRef.current
     const controller = new AbortController()
-    // Keep the previous per-class rows visible while refreshing (no blank legend flash).
-    setState(prev => ({ ...prev, loading: true, error: null, supported: true }))
+    setState({ result: null, loading: true, error: null, supported: true })
 
     fetchLayerClassAreas({
       geometry,
-      layerId,
+      layerId: resolvedLayerId,
       sceneDate: dateKey,
       maxCloudCoverage,
       signal: controller.signal,
@@ -114,9 +118,9 @@ export function useLayerClassAreas({
       }
       controller.abort()
     }
-    // geomKey + dateKey + layerId capture all inputs that change the request.
+    // geomKey + dateKey + resolvedLayerId capture all inputs that change the request.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, geomKey, dateKey, layerId, maxCloudCoverage])
+  }, [active, geomKey, dateKey, resolvedLayerId, maxCloudCoverage])
 
   return state
 }

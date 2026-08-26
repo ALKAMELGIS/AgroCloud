@@ -38,6 +38,77 @@ main.content > .si-page {
   --si-geo-muted: rgba(196, 181, 253, 0.78);
   --si-geo-table-sel-bg: rgba(99, 102, 241, 0.12);
   --si-geo-table-sel-ring: rgba(167, 139, 250, 0.38);
+  /* Map floating dock (search, layers, basemap, weather, 3D, legend) */
+  --si-map-ctrl-bg: radial-gradient(circle at top left, #020617, #020617);
+  --si-map-ctrl-bg-hover: radial-gradient(circle at top left, #111827, #020617);
+  --si-map-ctrl-border: rgba(148, 163, 184, 0.75);
+  --si-map-ctrl-text: #e5e7eb;
+  --si-map-ctrl-shadow: 0 12px 32px rgba(0, 0, 0, 0.95);
+  --si-map-ctrl-tag-bg: #020617;
+  --si-map-ctrl-tag-border: rgba(148, 163, 184, 0.6);
+  --si-map-ctrl-tag-text: #e5e7eb;
+  --si-map-search-bg: rgba(15, 23, 42, 0.92);
+  --si-map-search-bg-hover: rgba(30, 41, 59, 0.95);
+  --si-map-search-border: rgba(148, 163, 184, 0.45);
+  --si-map-search-inner-bg: rgba(15, 23, 42, 0.92);
+  --si-map-search-inner-border: rgba(148, 163, 184, 0.45);
+  --si-map-search-inner-text: #f1f5f9;
+  --si-map-search-inner-muted: #94a3b8;
+  --si-map-search-btn-bg: rgba(51, 65, 85, 0.7);
+  --si-map-search-btn-text: #e2e8f0;
+  --si-map-search-results-bg: rgba(15, 23, 42, 0.96);
+  --si-map-search-results-border: rgba(71, 85, 105, 0.8);
+  --si-map-search-result-text: #e5e7eb;
+  --si-map-search-result-muted: #9ca3af;
+  --si-map-search-result-hover: rgba(37, 99, 235, 0.22);
+  --si-basemap-widget-bg: radial-gradient(circle at top left, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.92));
+  --si-basemap-widget-border: rgba(31, 41, 55, 0.95);
+  --si-basemap-card-bg: rgba(15, 23, 42, 0.95);
+  --si-basemap-card-border: rgba(51, 65, 85, 0.85);
+  --si-basemap-card-label: #e5e7eb;
+  --si-map-opts-bg: rgba(15, 23, 42, 0.78);
+  --si-map-opts-text: #cbd5e1;
+}
+
+html[data-theme='light'] .si-page {
+  background: #f1f5f9;
+  --si-panel-border: rgba(15, 23, 42, 0.1);
+  --si-panel-glow: rgba(4, 120, 87, 0.06);
+  --si-map-ctrl-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(248, 250, 252, 0.9) 100%);
+  --si-map-ctrl-bg-hover: linear-gradient(180deg, #ffffff 0%, rgba(241, 245, 249, 0.96) 100%);
+  --si-map-ctrl-border: rgba(15, 23, 42, 0.14);
+  --si-map-ctrl-text: #334155;
+  --si-map-ctrl-shadow:
+    0 10px 28px rgba(15, 23, 42, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  --si-map-ctrl-tag-bg: rgba(255, 255, 255, 0.98);
+  --si-map-ctrl-tag-border: rgba(15, 23, 42, 0.16);
+  --si-map-ctrl-tag-text: #475569;
+  --si-map-search-bg: rgba(255, 255, 255, 0.96);
+  --si-map-search-bg-hover: rgba(248, 250, 252, 0.98);
+  --si-map-search-border: rgba(15, 23, 42, 0.14);
+  --si-map-search-inner-bg: rgba(255, 255, 255, 0.98);
+  --si-map-search-inner-border: rgba(15, 23, 42, 0.14);
+  --si-map-search-inner-text: #0f172a;
+  --si-map-search-inner-muted: #64748b;
+  --si-map-search-btn-bg: rgba(241, 245, 249, 0.98);
+  --si-map-search-btn-text: #334155;
+  --si-map-search-results-bg: rgba(255, 255, 255, 0.98);
+  --si-map-search-results-border: rgba(15, 23, 42, 0.12);
+  --si-map-search-result-text: #1e293b;
+  --si-map-search-result-muted: #64748b;
+  --si-map-search-result-hover: rgba(37, 99, 235, 0.12);
+  --si-basemap-widget-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 100%);
+  --si-basemap-widget-border: rgba(15, 23, 42, 0.12);
+  --si-basemap-card-bg: rgba(255, 255, 255, 0.98);
+  --si-basemap-card-border: rgba(15, 23, 42, 0.12);
+  --si-basemap-card-label: #334155;
+  --si-map-opts-bg: rgba(255, 255, 255, 0.9);
+  --si-map-opts-text: #475569;
+}
+
+html[data-theme='light'] .si-main-content {
+  background: #f1f5f9;
 }
 
 .si-main-content {
@@ -2054,21 +2125,29 @@ main.content > .si-page {
   width: 32px;
   height: 32px;
   border-radius: 999px;
-  background: radial-gradient(circle at top left, #020617, #020617);
-  border: 1px solid rgba(148, 163, 184, 0.75);
-  color: #e5e7eb;
+  background: var(--si-map-ctrl-bg);
+  border: 1px solid var(--si-map-ctrl-border);
+  color: var(--si-map-ctrl-text);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.95);
+  box-shadow: var(--si-map-ctrl-shadow);
   font-size: 11px;
   transition: all 0.2s;
+  backdrop-filter: blur(14px) saturate(1.08);
+  -webkit-backdrop-filter: blur(14px) saturate(1.08);
 }
 
 .si-basemap-button:hover {
-  background: radial-gradient(circle at top left, #111827, #020617);
+  background: var(--si-map-ctrl-bg-hover);
   box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.9), 0 0 18px rgba(22, 163, 74, 1);
+}
+
+html[data-theme='light'] .si-basemap-button:hover {
+  box-shadow:
+    var(--si-map-ctrl-shadow),
+    0 0 0 1px rgba(4, 120, 87, 0.28);
 }
 
 .si-basemap-button.active {
@@ -2105,18 +2184,23 @@ main.content > .si-page {
   width: 18px;
   align-self: stretch;
   padding: 0;
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  border: 1px solid var(--si-map-ctrl-border);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.78);
-  color: #cbd5e1;
+  background: var(--si-map-opts-bg);
+  color: var(--si-map-opts-text);
   font-size: 9px;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 .si-view3d-opts-btn:hover {
-  color: #f8fafc;
+  color: var(--si-map-ctrl-text);
   border-color: rgba(74, 222, 128, 0.5);
   background: rgba(22, 101, 52, 0.45);
+}
+html[data-theme='light'] .si-view3d-opts-btn:hover {
+  color: #0f172a;
+  border-color: rgba(4, 120, 87, 0.35);
+  background: rgba(4, 120, 87, 0.08);
 }
 .si-view3d-opts-btn.active {
   color: #f8fafc;
@@ -2139,9 +2223,9 @@ main.content > .si-page {
   letter-spacing: 0.02em;
   padding: 2px 3px;
   border-radius: 5px;
-  background: #020617;
-  border: 1px solid rgba(148, 163, 184, 0.6);
-  color: #e5e7eb;
+  background: var(--si-map-ctrl-tag-bg);
+  border: 1px solid var(--si-map-ctrl-tag-border);
+  color: var(--si-map-ctrl-tag-text);
 }
 .si-view3d-button.active .si-view3d-button__tag {
   background: var(--si-accent-strong, #15803d);
@@ -2391,11 +2475,11 @@ main.content > .si-page {
   left: 0;
   /* Always in front of the weather icon / sibling controls when open. */
   z-index: 60;
-  background: radial-gradient(circle at top left, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.92));
+  background: var(--si-basemap-widget-bg);
   border-radius: 14px;
-  border: 1px solid rgba(31, 41, 55, 0.95);
+  border: 1px solid var(--si-basemap-widget-border);
   padding: 8px;
-  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.95);
+  box-shadow: var(--si-map-ctrl-shadow);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -2441,8 +2525,8 @@ main.content > .si-page {
   border-radius: 10px;
   overflow: hidden;
   cursor: pointer;
-  background: rgba(15, 23, 42, 0.95);
-  border: 1px solid rgba(51, 65, 85, 0.85);
+  background: var(--si-basemap-card-bg);
+  border: 1px solid var(--si-basemap-card-border);
   transition: box-shadow 0.15s, border-color 0.15s, transform 0.12s;
   text-align: left;
 }
@@ -2455,6 +2539,18 @@ main.content > .si-page {
 .si-basemap-card.active {
   border-color: rgba(52, 211, 153, 0.95);
   box-shadow: 0 0 0 2px var(--si-accent-ring), 0 0 20px rgba(22, 163, 74, 0.35);
+}
+
+html[data-theme='light'] .si-basemap-card:hover {
+  box-shadow:
+    var(--si-map-ctrl-shadow),
+    0 0 0 1px rgba(4, 120, 87, 0.28);
+}
+
+html[data-theme='light'] .si-basemap-card.active {
+  box-shadow:
+    0 0 0 2px var(--si-accent-ring),
+    0 0 16px rgba(4, 120, 87, 0.22);
 }
 
 .si-basemap-card-thumb {
@@ -2506,12 +2602,12 @@ main.content > .si-page {
   font-size: 10px;
   font-weight: 500;
   line-height: 1.25;
-  color: #e5e7eb;
+  color: var(--si-basemap-card-label);
   text-align: center;
 }
 
 .si-basemap-card.active .si-basemap-card-label {
-  color: #f9fafb;
+  color: var(--si-basemap-card-label);
 }
 
 .basemap-pill {
@@ -5850,13 +5946,13 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
   height: 32px;
   padding: 0 8px 0 10px;
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.92);
-  border: 1px solid rgba(148, 163, 184, 0.45);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  background: var(--si-map-search-inner-bg);
+  border: 1px solid var(--si-map-search-inner-border);
+  box-shadow: var(--si-map-ctrl-shadow);
 }
 
 .si-map-search-icon {
-  color: #94a3b8;
+  color: var(--si-map-search-inner-muted);
   font-size: 11px;
   flex: none;
 }
@@ -5865,7 +5961,7 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
   border: none;
   outline: none;
   background: transparent;
-  color: #f1f5f9;
+  color: var(--si-map-search-inner-text);
   font-size: 12px;
   width: 198px;
   height: 28px;
@@ -5880,7 +5976,7 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
 }
 
 .si-map-search-input::placeholder {
-  color: rgba(148, 163, 184, 0.85);
+  color: var(--si-map-search-inner-muted);
 }
 
 .si-map-search-toggle {
@@ -5889,22 +5985,24 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.92);
-  border: 1px solid rgba(148, 163, 184, 0.45);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  color: #e2e8f0;
+  background: var(--si-map-search-bg);
+  border: 1px solid var(--si-map-search-border);
+  box-shadow: var(--si-map-ctrl-shadow);
+  color: var(--si-map-ctrl-text);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   font-size: 11px;
   transition: background 0.15s ease, border-color 0.15s ease;
+  backdrop-filter: blur(14px) saturate(1.08);
+  -webkit-backdrop-filter: blur(14px) saturate(1.08);
 }
 
 .si-map-search-toggle:hover {
-  background: rgba(30, 41, 59, 0.95);
-  border-color: rgba(148, 163, 184, 0.65);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  background: var(--si-map-search-bg-hover);
+  border-color: var(--si-map-ctrl-border);
+  box-shadow: var(--si-map-ctrl-shadow);
 }
 
 .si-map-search-button {
@@ -5913,10 +6011,10 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
   width: 24px;
   height: 24px;
   border-radius: 6px;
-  background: rgba(51, 65, 85, 0.7);
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: var(--si-map-search-btn-bg);
+  border: 1px solid var(--si-map-search-border);
   box-shadow: none;
-  color: #e2e8f0;
+  color: var(--si-map-search-btn-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5927,7 +6025,7 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
 }
 
 .si-map-search-button:hover {
-  background: rgba(71, 85, 105, 0.9);
+  background: var(--si-map-search-bg-hover);
   box-shadow: none;
 }
 
@@ -5936,9 +6034,9 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
   margin-top: 4px;
   padding: 4px;
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.96);
-  border: 1px solid rgba(71, 85, 105, 0.8);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+  background: var(--si-map-search-results-bg);
+  border: 1px solid var(--si-map-search-results-border);
+  box-shadow: var(--si-map-ctrl-shadow);
   max-height: 280px;
   width: min(320px, calc(100vw - 48px));
   overflow-y: auto;
@@ -5956,14 +6054,14 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
   flex-direction: row;
   align-items: flex-start;
   gap: 9px;
-  color: #e5e7eb;
+  color: var(--si-map-search-result-text);
   font-size: 11px;
   transition: all 0.15s;
 }
 
 .si-map-search-result:hover,
 .si-map-search-result.is-active {
-  background: rgba(37, 99, 235, 0.22);
+  background: var(--si-map-search-result-hover);
 }
 
 .si-map-search-result-icon {
@@ -5999,7 +6097,7 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
 
 .si-map-search-result-subtitle {
   font-size: 10px;
-  color: #9ca3af;
+  color: var(--si-map-search-result-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -12785,10 +12883,11 @@ html[data-theme='light'] .si-env-panel.si-env-panel--satellite-toolbox.si-env-pa
   color: #0f172a;
 }
 
-.si-sat-ctx-dock--light .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-env-panel.si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-env-section-card {
-  background: rgba(255, 255, 255, 0.42) !important;
-  border-color: rgba(255, 255, 255, 0.68);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88);
+.si-sat-ctx-dock--light .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-env-section-card {
+  background: rgba(255, 255, 255, 0.88) !important;
+  border-color: rgba(34, 34, 34, 0.12) !important;
+  color: #222222 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95);
 }
 
 .si-sat-ctx-dock--light .si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-env-panel.si-env-panel--satellite-toolbox.si-env-panel--single-surface .si-env-added-layers {

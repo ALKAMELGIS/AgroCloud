@@ -277,7 +277,7 @@ export async function buildAgriculturalObjectIntelligenceModel(
   emit('loading_sentinel2', 'Loading Sentinel-2 imagery', 0, Math.max(1, usable.length))
   let dailyByFieldKey = reuseDaily
   if (!dailyByFieldKey || ![...dailyByFieldKey.values()].some(rows => rows?.length)) {
-    dailyByFieldKey = await fetchPlotTimeSeriesDailyByField(
+    const fetched = await fetchPlotTimeSeriesDailyByField(
       usable,
       layerIds.length ? layerIds : ['NDVI'],
       fromDate,
@@ -287,6 +287,7 @@ export async function buildAgriculturalObjectIntelligenceModel(
         onProgress: (done, total) => emit('loading_sentinel2', 'Loading Sentinel-2 imagery', done, total),
       },
     )
+    dailyByFieldKey = fetched.dailyByFieldKey
   } else {
     emit('loading_sentinel2', 'Loading Sentinel-2 imagery', usable.length, usable.length)
   }

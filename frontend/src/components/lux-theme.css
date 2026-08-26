@@ -112,41 +112,104 @@ header.agri-header.lux-theme-light--header .header-center__logo--invert:hover .b
 }
 
 /* =============================================================================
- * Interactive Light / Dark toggle (Switch to Light Mode)
+ * Interactive Light / Dark toggle — ghost icon button (btn-text / btn-icon)
  * ========================================================================== */
 .navmenu-utility-theme {
   display: flex;
   align-items: center;
 }
 
-/* Minimal sun/moon theme toggle — base shell; is-light / is-dark in theme-system.css */
-.nav-theme-toggle {
+.navmenu-utility-theme .nav-theme-toggle.navmenu-icon-only {
+  position: relative;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 4px;
+  border-radius: 16px;
+}
+
+.navmenu-utility-theme .nav-theme-toggle .icon {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  color: inherit;
+}
+
+.navmenu-utility-theme .nav-theme-toggle .icon i,
+.nav-theme-toggle__icon {
+  color: inherit;
+  -webkit-text-fill-color: currentColor;
+}
+
+/* Ghost icon button — matches reference btn btn-text btn-icon text-neutral */
+.nav-theme-toggle.btn.btn-text.btn-icon {
   appearance: none;
   margin: 0;
-  padding: 0;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  border: 1px solid var(--theme-border, rgba(34, 34, 34, 0.14));
-  background: var(--theme-surface-muted, rgba(34, 34, 34, 0.06));
-  color: var(--ds-color-text);
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ds-color-text-muted, rgba(119, 119, 119, 0.92));
   transition:
-    background 0.18s ease,
-    border-color 0.18s ease,
-    color 0.18s ease,
-    transform 0.14s ease;
+    color 0.16s ease,
+    background 0.16s ease,
+    transform 0.12s ease;
 }
 
-.nav-theme-toggle:focus-visible {
+.nav-theme-toggle.btn.text-neutral {
+  color: var(--ds-color-text-secondary, #555555);
+}
+
+html[data-theme='dark'] .nav-theme-toggle.btn.text-neutral {
+  color: rgba(230, 230, 230, 0.9);
+}
+
+.nav-theme-toggle.btn.btn-text.btn-icon:hover:not(:disabled) {
+  background: rgba(34, 34, 34, 0.06);
+  color: var(--ds-color-text, #222222);
+}
+
+html[data-theme='dark'] .nav-theme-toggle.btn.btn-text.btn-icon:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(248, 250, 252, 0.96);
+}
+
+.nav-theme-toggle.btn.btn-text.btn-icon:focus-visible {
   outline: none;
+  box-shadow: var(--ds-focus-ring, 0 0 0 2px rgba(4, 120, 87, 0.45));
+}
+
+.nav-theme-toggle.btn.btn-text.btn-icon:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.nav-theme-toggle.btn.btn-text.btn-icon:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.nav-theme-toggle__icon {
+  font-size: 18px;
+  line-height: 1;
+  color: inherit;
+  -webkit-text-fill-color: currentColor;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nav-theme-toggle {
+  .nav-theme-toggle.btn.btn-text.btn-icon {
     transition: none;
+  }
+
+  .nav-theme-toggle.btn.btn-text.btn-icon:active:not(:disabled) {
+    transform: none;
   }
 }

@@ -1,6 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import './navmenu.css'
+import './lux-theme.css'
 import { hasPermission, normalizeRole, readCurrentUser } from '../lib/auth'
 import { useLanguage } from '../lib/i18n'
 import type { MergedGroup } from '../nav/navManifest'
@@ -213,12 +214,12 @@ export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobile
   const { settings: systemSettings, setSettings } = useSystemSettings()
   const themeIsDark = useMemo(() => resolveThemeIsDark(systemSettings.themeMode), [systemSettings.themeMode])
 
-  const toggleThemeMode = () => {
+  const toggleThemeMode = useCallback(() => {
     setSettings({
       ...systemSettings,
       themeMode: themeIsDark ? 'light' : 'dark',
     })
-  }
+  }, [setSettings, systemSettings, themeIsDark])
 
   const toggleLanguage = () => {
     setLanguage(language === 'en' ? 'ar' : 'en')
@@ -641,18 +642,21 @@ export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobile
 
         <li className="navmenu-utility navmenu-utility-theme">
           <button
-            className={`nav-theme-toggle ${themeIsDark ? 'is-dark' : 'is-light'}`}
+            id="nav-theme-toggle"
             type="button"
+            className="nav-theme-toggle btn btn-text btn-icon text-neutral navmenu-icon-only"
             role="switch"
             aria-checked={!themeIsDark}
             aria-label={themeIsDark ? t.switchToLight : t.switchToDark}
             title={themeIsDark ? t.switchToLight : t.switchToDark}
             onClick={toggleThemeMode}
           >
-            <i
-              className={`nav-theme-toggle__icon fa-regular ${themeIsDark ? 'fa-moon' : 'fa-sun'}`}
-              aria-hidden
-            />
+            <span className="icon" aria-hidden="true">
+              <i
+                className={`nav-theme-toggle__icon fa-solid ${themeIsDark ? 'fa-sun' : 'fa-moon'}`}
+                aria-hidden="true"
+              />
+            </span>
           </button>
         </li>
 

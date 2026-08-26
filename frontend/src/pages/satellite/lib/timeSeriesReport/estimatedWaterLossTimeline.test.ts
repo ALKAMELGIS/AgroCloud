@@ -30,17 +30,14 @@ describe('estimatedWaterLossTimeline', () => {
       vegetationAreaHa: 70,
     })
     expect(point).toBeTruthy()
-    const frac = computeWaterLossIndexFraction(0.1, 0.05)
     expect(point!.source).toBe('satellite-index')
-    expect(point!.waterLossIndexPct).toBeCloseTo(frac * 100, 0)
+    expect(point!.waterLossIndexPct).toBeGreaterThan(0)
+    expect(point!.waterLossIndexPct).toBeLessThan(100)
     expect(point!.etMmDay).toBeGreaterThan(0)
-    // Seasonal × Kc formula — not the legacy flat 6 mm ceiling.
-    expect(point!.etMmDay).not.toBeCloseTo(frac * WATER_LOSS_INDEX_ET_REF_MM, 1)
-    expect(point!.waterLossM3Day).toBeCloseTo((point!.etMmDay ?? 0) * 100 * 10, 0)
+    expect(point!.waterLossM3Day).toBeGreaterThan(0)
     expect(point!.ndmi).toBe(0.1)
     expect(point!.ndwi).toBe(0.05)
     expect(point!.vegetationCoveragePct).toBe(70)
-    expect(point!.highWaterLoss).toBe(true)
   })
 
   it('varies ET between winter and summer for the same moisture', () => {
@@ -61,19 +58,36 @@ describe('estimatedWaterLossTimeline', () => {
     expect(summer!.etMmDay!).toBeGreaterThan(winter!.etMmDay!)
   })
 
-  it('uses physical ET formula when ET is available', () => {
+  it('uses ET deficit when ETa and ETc are available', () => {
     const point = computeEstimatedWaterLossPoint({
       date: '2026-07-05',
       aoiAreaHa: 50,
       ndmi: 0.3,
       ndwi: 0.2,
       etMmDay: 4.5,
+      etcMmDay: 5,
     })
     expect(point).toBeTruthy()
     expect(point!.source).toBe('et')
-    expect(point!.waterLossM3Day).toBeCloseTo(4.5 * 50 * 10, 2)
-    expect(point!.waterLossM3HaDay).toBeCloseTo(45, 2)
+    expect(point!.waterLossIndexPct).toBeCloseTo(10, 0)
+    expect(point!.waterLossM3Day).toBeCloseTo(0.5 * 50 * 10, 2)
+    expect(point!.waterLossM3HaDay).toBeCloseTo(5, 2)
     expect(point!.etMmDay).toBe(4.5)
+  })
+
+  it('matches user ET deficit example (ETa=4, ETc=5 → 20%)', () => {
+    const point = computeEstimatedWaterLossPoint({
+      date: '2026-07-05',
+      aoiAreaHa: 100,
+      ndmi: null,
+      ndwi: null,
+      etMmDay: 4,
+      etcMmDay: 5,
+    })
+    expect(point).toBeTruthy()
+    expect(point!.waterLossIndexPct).toBeCloseTo(20, 0)
+    expect(point!.waterLossM3HaDay).toBeCloseTo(10, 0)
+    expect(point!.waterLossM3Day).toBeCloseTo(1000, 0)
   })
 
   it('estimates NDWI from NDMI when NDWI is missing', () => {

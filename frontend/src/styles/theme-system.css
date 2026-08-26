@@ -94,7 +94,8 @@ html[data-theme='dark'],
   color: var(--ds-color-text-muted);
 }
 
-/* ========== Global typography (app shell) ========== */
+/* ========== Global typography (app shell) ==========
+   Skip map glass overlays so light-theme --ds-color-text is not forced onto dark chrome. */
 .app-layout,
 .page,
 .gis-page-padding,
@@ -102,12 +103,12 @@ html[data-theme='dark'],
   color: var(--ds-color-text);
 }
 
-.app-layout h1,
-.app-layout h2,
-.app-layout h3,
-.app-layout h4,
-.app-layout h5,
-.app-layout h6,
+.app-layout
+  :is(h1, h2, h3, h4, h5, h6):not(.gis-sel-toolbar *):not(.si-go-to-xy *):not(.nac-float *):not(
+    .geo-ai-agent-panel *
+  ):not(.si-layer-live-float *):not(.si-measure-panel *):not(.si-grb-floatbar *):not(
+    .si-map-draw-widget *
+  ),
 .page h1,
 .page h2,
 .page h3,
@@ -121,18 +122,22 @@ html[data-theme='dark'],
   color: var(--ds-color-text);
 }
 
-.app-layout p,
+.app-layout
+  :is(p, li, td, th):not(.gis-sel-toolbar *):not(.si-go-to-xy *):not(.nac-float *):not(
+    .geo-ai-agent-panel *
+  ):not(.si-layer-live-float *):not(.si-measure-panel *):not(.si-grb-floatbar *):not(
+    .si-map-draw-widget *
+  ),
 .page p,
-.app-layout li,
 .page li,
-.app-layout td,
-.app-layout th,
 .page td,
 .page th {
   color: var(--ds-color-text);
 }
 
-label,
+label:not(.gis-sel-toolbar *):not(.si-go-to-xy *):not(.nac-float *):not(.geo-ai-agent-panel *):not(
+  .si-layer-live-float *
+):not(.si-measure-panel *):not(.si-grb-floatbar *):not(.si-map-draw-widget *),
 .ds-label,
 legend,
 .field-label {
@@ -281,71 +286,36 @@ table .cell-secondary {
   opacity: 1;
 }
 
-/* ========== Theme toggle — is-light / is-dark ========== */
-.nav-theme-toggle {
-  color: var(--ds-color-text);
+/* ========== Theme toggle — ghost icon button (lux-theme.css) ========== */
+.nav-theme-toggle.btn.btn-text.btn-icon {
+  color: var(--ds-color-text-muted);
 }
 
 .nav-theme-toggle__icon {
-  font-size: 15px;
+  font-size: 18px;
   line-height: 1;
   color: inherit;
   -webkit-text-fill-color: currentColor;
 }
 
-.nav-theme-toggle.is-light {
-  border-color: rgba(34, 34, 34, 0.14);
-  background: rgba(34, 34, 34, 0.06);
-  color: var(--ds-color-text);
-}
-
-.nav-theme-toggle.is-light:hover {
-  background: rgba(34, 34, 34, 0.11);
-  border-color: rgba(34, 34, 34, 0.22);
-  color: var(--ds-color-text);
-}
-
-.nav-theme-toggle.is-dark {
-  border-color: rgba(230, 230, 230, 0.16);
-  background: rgba(230, 230, 230, 0.08);
-  color: var(--ds-color-text);
-}
-
-.nav-theme-toggle.is-dark:hover {
-  background: rgba(230, 230, 230, 0.14);
-  border-color: rgba(230, 230, 230, 0.24);
-  color: var(--ds-color-text);
-}
-
-.nav-theme-toggle:focus-visible {
+.nav-theme-toggle.btn.btn-text.btn-icon:focus-visible {
   outline: none;
-  border-color: rgba(4, 120, 87, 0.55);
-  box-shadow: var(--ds-focus-ring);
 }
 
-html[data-theme='dark'] .nav-theme-toggle:focus-visible,
-:root[data-theme='dark'] .nav-theme-toggle:focus-visible {
-  border-color: rgba(34, 197, 94, 0.55);
-}
-
-.nav-theme-toggle:active {
-  transform: scale(0.94);
-}
-
-.nav-theme-toggle:disabled {
+.nav-theme-toggle.btn.btn-text.btn-icon:disabled {
   opacity: 0.45;
   cursor: not-allowed;
-  transform: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .nav-theme-toggle:active {
-    transform: none;
-  }
-}
-
-/* ========== Professional controls: buttons, selects, dropdowns ========== */
-.app-layout button:not(.ds-btn-primary):not(.ec-btn-primary):not(.ds-btn-danger):not(.ec-btn-danger):not([class*='badge']),
+/* ========== Professional controls: buttons, selects, dropdowns ==========
+   Skip map glass overlays (Select / GoToXY / Chat / Legend / Measure / Georef / Draw)
+   so light-theme --ds-color-text (#222) is not forced onto dark chrome. */
+.app-layout
+  button:not(.ds-btn-primary):not(.ec-btn-primary):not(.ds-btn-danger):not(.ec-btn-danger):not(
+    [class*='badge']
+  ):not(.gis-sel-toolbar *):not(.si-go-to-xy *):not(.nac-float *):not(.geo-ai-agent-panel *):not(
+    .si-layer-live-float *
+  ):not(.si-measure-panel *):not(.si-grb-floatbar *):not(.si-map-draw-widget *),
 .app-layout .si-afb__btn,
 .app-layout .si-rs-panel__action,
 .app-layout .si-rs-panel__tool,
@@ -354,7 +324,10 @@ html[data-theme='dark'] .nav-theme-toggle:focus-visible,
   color: var(--ds-color-text);
 }
 
-.app-layout select,
+.app-layout
+  select:not(.gis-sel-toolbar *):not(.si-go-to-xy *):not(.nac-float *):not(.geo-ai-agent-panel *):not(
+    .si-layer-live-float *
+  ):not(.si-measure-panel *):not(.si-grb-floatbar *):not(.si-map-draw-widget *),
 .app-layout .si-afb__select,
 .app-layout .si-rs-panel__select,
 .app-layout .si-field-analysis-select,
@@ -435,11 +408,50 @@ html[data-theme='dark'] .app-layout .si-rs-layer-select__option:hover {
   .si-rs-panel__meta,
   .si-afb__hint,
   .si-afb__status,
+  .si-crop-alert__label,
+  .si-crop-alert__stat-l,
+  .si-crop-alert__hint,
+  .si-tree-detect__card-label,
+  .si-tree-detect__hint,
+  .si-tree-detect__note,
+  .si-hydro__title,
+  .si-hydro__run-label,
+  .si-hydro__runall,
+  .si-hydro__act,
+  .si-hydro__stat dd,
+  .prithvi-tool__sub,
+  .prithvi-tool__aoi-label,
   button,
   select,
   input,
   textarea
 ) {
+  color: #222222;
+}
+
+.si-sat-ctx-dock--light :where(
+  .si-crop-alert__kicker,
+  .si-crop-alert__meta-row dt,
+  .si-crop-alert__progress,
+  .si-tree-detect__mode-detail,
+  .si-tree-detect__mode-tag,
+  .si-hydro__subtitle,
+  .si-hydro__opt-label,
+  .si-hydro__stat dt,
+  .si-hydro__model-opt,
+  .prithvi-tool__dates label,
+  .prithvi-tool__legend-list li
+) {
+  color: #555555;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn i {
+  color: #555555;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn:hover,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn:hover i {
   color: #222222;
 }
 

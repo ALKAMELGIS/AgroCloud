@@ -217,25 +217,33 @@ describe('timeSeriesReport', () => {
     expect(summary.moistureStatus).toContain('NDMI')
   })
 
-  it('builds excel workbook with summary, data, veg coverage, map snapshots, and analysis sheets', async () => {
+  it('builds excel workbook with Serbia reference sheets (Summary first, no veg coverage)', async () => {
     const { buildTimeSeriesReportWorkbookSync } = await import('./generateTimeSeriesReportExcel')
     const wb = buildTimeSeriesReportWorkbookSync(samplePayload())
     const names = wb.worksheets.map(w => w.name)
-    expect(names[0]).toBe('Analytics Summary')
-    expect(names[1]).toBe('Time Series Data')
+    expect(names[0]).toBe('Summary')
+    expect(names[1]).toBe('Charts')
+    expect(names[2]).toBe('Map Snapshot')
+    expect(names[3]).toBe('Analytics Summary')
+    expect(names[4]).toBe('Time Series Data')
     expect(names).toContain('NDVI Data')
     expect(names).toContain('NDMI Data')
-    expect(names).toContain('Vegetation Coverage Timeline')
+    expect(names).toContain('ET Data')
+    expect(names).not.toContain('Vegetation Coverage Timeline')
+    expect(names).not.toContain('Correlation Data')
     expect(names).toContain('Estimated Water Loss Timeline')
     expect(names).toContain('Estimated Yield (t-ha)')
-    expect(names).toContain('Map Snapshots')
     expect(names).toContain('Analysis & Recommendations')
 
     const dataSheet = wb.getWorksheet('Time Series Data')!
     expect(dataSheet.getRow(1).getCell(1).value).toBe('Date')
-    expect(dataSheet.getRow(1).getCell(3).value).toBe('NDVI')
+    expect(dataSheet.getRow(1).getCell(2).value).toBe('NDVI')
     expect(dataSheet.getRow(2).getCell(1).value).toBe('2026-04-16')
-    expect(dataSheet.getRow(2).getCell(3).value).toBe(0.5)
+    expect(dataSheet.getRow(2).getCell(2).value).toBe(0.5)
+
+    const summary = wb.getWorksheet('Summary')!
+    expect(summary.getCell('A1').value).toContain('AGRICULTURAL SATELLITE INTELLIGENCE')
+    expect(summary.getCell('A5').value).toEqual({ formula: "'Analytics Summary'!A31" })
 
     const ndviSheet = wb.getWorksheet('NDVI Data')!
     expect(ndviSheet.getRow(2).getCell(1).value).toBe('Period')
@@ -245,27 +253,19 @@ describe('timeSeriesReport', () => {
     expect(ndviSheet.getRow(4).getCell(1).value).toBe('2026-07-09')
     expect(ndviSheet.getRow(4).getCell(2).value).toBe(0.39)
 
-    const vegSheet = wb.getWorksheet('Vegetation Coverage Timeline')!
-    const header = vegSheet.getRow(4)
-    expect(header.getCell(8).value).toBe('Class distribution (%)')
-    expect(header.getCell(9).value).toBe('Healthy (ha)')
-    expect(header.getCell(10).value).toMatch(/Healthy \(m[²2]\)/)
-    expect(header.getCell(16).value).toMatch(/Bare \(m[²2]\)/)
-
-    const dataRow = vegSheet.getRow(5)
-    expect(dataRow.getCell(9).value).toBe(38.7)
-    expect(dataRow.getCell(10).value).toBe(387000)
-    expect(dataRow.getCell(15).value).toBe(7.7)
-    expect(dataRow.getCell(16).value).toBe(77000)
-
     const waterSheet = wb.getWorksheet('Estimated Water Loss Timeline')!
     const waterHeader = waterSheet.getRow(4)
     expect(waterHeader.getCell(1).value).toBe('Acquisition Date')
     expect(waterHeader.getCell(2).value).toBe('Estimated Water Loss Index (%)')
     expect(String(waterHeader.getCell(3).value)).toMatch(/Estimated Water Loss \(m/)
     expect(waterHeader.getCell(9).value).toBe('Water Stress Level')
+    expect(waterHeader.getCell(12).value).toBe('Water Loss Index %')
+    expect(waterHeader.getCell(13).value).toBe('Loss (m3/day)')
+    expect(waterHeader.getCell(14).value).toBe('Loss (m3/ha/day)')
     const waterRow = waterSheet.getRow(5)
     expect(waterRow.getCell(2).value).toBe(84)
+    expect(waterRow.getCell(12).value).toBe(84)
+    expect(waterRow.getCell(13).value).toBe(4878.7)
     expect(waterRow.getCell(9).value).toBe('Critical')
 
     const yieldSheet = wb.getWorksheet('Estimated Yield (t-ha)')!
@@ -277,7 +277,7 @@ describe('timeSeriesReport', () => {
     const { buildTimeSeriesReportWorkbookSync } = await import('./generateTimeSeriesReportExcel')
     const payload = samplePayload()
     payload.layerIds = ['NDVI']
-    const wb = buildTimeSeriesReportWorkbookSync(payload)
+    const wb = buildTimeSeriesReportWorkbookSync(payload, 'full')
     expect(wb.getWorksheet('NDVI Data')).toBeTruthy()
     expect(wb.getWorksheet('NDMI Data')).toBeUndefined()
     const data = wb.getWorksheet('Time Series Data')!

@@ -108,8 +108,11 @@ export function pickSnapshotSceneDateCandidates(
   const idx = availableDates.indexOf(best)
   if (idx > 0) add(availableDates[idx - 1])
   if (idx >= 0 && idx < availableDates.length - 1) add(availableDates[idx + 1])
+  if (idx > 1) add(availableDates[idx - 2])
+  if (idx >= 0 && idx < availableDates.length - 2) add(availableDates[idx + 2])
+  add(availableDates[0])
   add(availableDates[availableDates.length - 1])
-  return out
+  return out.slice(0, 8)
 }
 
 /** Last-resort canvas when composite / WMS / basemap all fail — still shows AOI frame. */

@@ -19,6 +19,8 @@ export {
   classifyVhsHealthBand,
   FIELD_SUMMARY_YIELD_FORMULAS,
 } from './generateFieldSummaryExcel'
+export type { FieldSummaryExcelDelivery } from './generateFieldSummaryExcel'
+export { defaultFieldReportFilename } from './fieldSummaryExecutiveExcel'
 export { generateTimeSeriesReportDocx, generateTimeSeriesLulcReportDocx } from './generateTimeSeriesReportDocx'
 export {
   generateTimeSeriesReportExcel,
@@ -32,15 +34,50 @@ export {
 export type { GenerateTimeSeriesReportExcelOptions } from './generateTimeSeriesReportExcel'
 export {
   isBatchDirectoryPickerSupported,
+  isSaveFilePickerSupported,
+  isFieldSummarySavePickerSupported,
+  beginBatchExportDirectoryPick,
+  beginBatchExportDirectoryPickFromGesture,
+  beginBatchFieldSummarySavePick,
   pickBatchExportDirectory,
+  pickBatchExportDirectoryFromGesture,
+  rememberBatchExportDirectory,
+  getRememberedBatchExportDirectory,
+  canWriteToRememberedBatchDirectory,
+  batchExportDirectoryLabel,
+  resolveWritableBatchExportDirectory,
+  persistBatchExportDirectoryToStorage,
+  loadPersistedBatchExportDirectory,
+  ensureBatchDirectoryWritePermission,
+  ensureBatchExportOutputDirectory,
+  formatBatchOutputFolderLabel,
+  verifyBatchExportDirectoryWritable,
+  cleanupBatchExportWriteTestMarkers,
   writeBlobToDirectory,
+  writeBlobToFileHandle,
+  deliverBlobToSaveTarget,
+  downloadBatchExportZipArchive,
+  triggerBrowserBlobDownload,
+  isBatchExportCancelled,
   BATCH_EXPORT_CANCELLED,
   BATCH_EXPORT_FOLDER_REQUIRED,
+  BATCH_EXPORT_PERMISSION_DENIED,
+  BATCH_EXPORT_PICKER_BLOCKED,
+  BATCH_EXPORT_PICKER_BUSY,
 } from './batchExportDirectory'
+export type { BatchFolderPickResult, FieldSummarySaveTarget, BlobSaveDelivery } from './batchExportDirectory'
+export {
+  fetchPlotFieldDailyWithRetry,
+  fetchPlotTimeSeriesDailyByField,
+  resolveBatchDailyByFieldKey,
+  dailyRowsSatisfyLayerIds,
+  BATCH_DAILY_FETCH_CONCURRENCY,
+} from './fetchPlotTimeSeriesAnalytics'
 export {
   batchExportAnalyticsReportsExcel,
-  resolveBatchPlotDisplayName,
+  mergeAnalyticsReportLayerIds,
 } from './batchExportAnalyticsReportsExcel'
+export { resolveBatchPlotDisplayName, resolveBatchPlotExcelFilename, uniqueBatchPlotExcelFilename } from './aoiExcelExportShared'
 export type {
   BatchAnalyticsExportProgress,
   BatchAnalyticsExportResult,

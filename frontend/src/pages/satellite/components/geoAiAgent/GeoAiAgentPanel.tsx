@@ -34,6 +34,8 @@ export type GeoAiAgentPanelProps = {
   /** When true, show greeting + chips instead of the chat transcript area. */
   isEmpty: boolean;
   onNewChat: () => void;
+  /** Clear current transcript; defaults to onNewChat when omitted. */
+  onClearChat?: () => void;
   /** Fired when a quick-action chip is chosen (canned prompt + chip id for analyst packs). */
   onQuickAction: (prompt: string, chipId?: string) => void;
   /** Optional override for greeting name; falls back to auth user first name. */
@@ -59,25 +61,19 @@ function firstNameFrom(full: string | undefined | null): string {
   return first || 'there';
 }
 
-export function GeoAiAgentPanel({
-  isEmpty,
-  onNewChat,
-  onQuickAction,
-  userName: userNameProp,
-  historyEntries = [],
-  onSelectHistoryEntry,
-  onMinimize,
-  onRequestClose,
-  headerExtra,
-  prefs: prefsProp,
-  onPrefsChange,
-  children,
-}: GeoAiAgentPanelProps) {
-  const { user } = useAuth();
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [showMoreChips, setShowMoreChips] = useState(false);
-  const [builderOpen, setBuilderOpen] = useState(false);
+export type GeoAiAgentEmptyStateProps = {
+  prefs?: GeoAiAgentPrefs;
+  userName?: string;
+  onQuickAction: (prompt: string, chipId?: string) => void;
+};
 
+export function GeoAiAgentEmptyState({
+  prefs: prefsProp,
+  userName: userNameProp,
+  onQuickAction,
+}: GeoAiAgentEmptyStateProps) {
+  const { user } = useAuth();
+  const [showMoreChips, setShowMoreChips] = useState(false);
   const prefs = prefsProp ?? DEFAULT_GEO_AI_AGENT_PREFS;
   const displayName = firstNameFrom(userNameProp ?? user?.name);
   const greeting = formatGeoAiAgentGreeting(prefs.greetingText, displayName);
@@ -108,12 +104,62 @@ export function GeoAiAgentPanel({
     [onQuickAction],
   );
 
+  return (
+    <div className="geo-ai-agent-empty nac-geo-ai-empty" role="status">
+      <div className="geo-ai-agent-empty-avatar" aria-hidden>
+        <i className="fa-solid fa-comments" />
+        <i className="fa-solid fa-star geo-ai-agent-empty-avatar-sparkle" />
+      </div>
+      <p className="geo-ai-agent-empty-hello">{greeting}</p>
+      <p className="geo-ai-agent-empty-prompt">{helpPrompt}</p>
+      <p className="nac-geo-ai-empty-subtitle">Spatial intelligence · server GIS</p>
+      <div className="geo-ai-agent-chips" role="group" aria-label="Quick actions">
+        {chips.map(chip => (
+          <button
+            key={chip.id}
+            type="button"
+            className={`geo-ai-agent-chip${chip.more ? ' geo-ai-agent-chip--more' : ''}`}
+            onClick={() => handleChip(chip)}
+          >
+            {chip.more && showMoreChips ? 'Less' : chip.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function GeoAiAgentPanel({
+  isEmpty,
+  onNewChat,
+  onClearChat,
+  onQuickAction,
+  userName: userNameProp,
+  historyEntries = [],
+  onSelectHistoryEntry,
+  onMinimize,
+  onRequestClose,
+  headerExtra,
+  prefs: prefsProp,
+  onPrefsChange,
+  children,
+}: GeoAiAgentPanelProps) {
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [builderOpen, setBuilderOpen] = useState(false);
+
+  const prefs = prefsProp ?? DEFAULT_GEO_AI_AGENT_PREFS;
+
   const handleNewChat = useCallback(() => {
     setHistoryOpen(false);
-    setShowMoreChips(false);
     setBuilderOpen(false);
     onNewChat();
   }, [onNewChat]);
+
+  const handleClearChat = useCallback(() => {
+    setHistoryOpen(false);
+    setBuilderOpen(false);
+    (onClearChat ?? onNewChat)();
+  }, [onClearChat, onNewChat]);
 
   const handlePrefsChange = useCallback(
     (next: GeoAiAgentPrefs) => {
@@ -134,9 +180,9 @@ export function GeoAiAgentPanel({
       <div className="geo-ai-agent-header" data-geo-ai-agent-drag-handle>
         <div className="geo-ai-agent-brand">
           <span className="geo-ai-agent-brand-mark" aria-hidden>
-            <i className="fa-solid fa-sparkles" />
+            <i className="fa-solid fa-comments" />
           </span>
-          <span className="geo-ai-agent-brand-title">AI Agent</span>
+          <span className="geo-ai-agent-brand-title">Chat AI Agent</span>
         </div>
         <div className="geo-ai-agent-header-actions">
           {headerExtra}
@@ -153,6 +199,17 @@ export function GeoAiAgentPanel({
               }}
             >
               <i className="fa-solid fa-sliders" aria-hidden />
+            </button>
+          ) : null}
+          {!isEmpty ? (
+            <button
+              type="button"
+              className="geo-ai-agent-icon-btn geo-ai-agent-icon-btn--clear"
+              title="Clear chat"
+              aria-label="Clear chat"
+              onClick={handleClearChat}
+            >
+              <i className="fa-solid fa-broom" aria-hidden />
             </button>
           ) : null}
           {prefs.showNewChatButton ? (
@@ -263,26 +320,7 @@ export function GeoAiAgentPanel({
         ) : null}
 
         {isEmpty && !historyOpen && !builderOpen ? (
-          <div className="geo-ai-agent-empty" role="status">
-            <div className="geo-ai-agent-empty-avatar" aria-hidden>
-              <i className="fa-solid fa-sparkles" />
-              <i className="fa-solid fa-star geo-ai-agent-empty-avatar-sparkle" />
-            </div>
-            <p className="geo-ai-agent-empty-hello">{greeting}</p>
-            <p className="geo-ai-agent-empty-prompt">{helpPrompt}</p>
-            <div className="geo-ai-agent-chips" role="group" aria-label="Quick actions">
-              {chips.map(chip => (
-                <button
-                  key={chip.id}
-                  type="button"
-                  className={`geo-ai-agent-chip${chip.more ? ' geo-ai-agent-chip--more' : ''}`}
-                  onClick={() => handleChip(chip)}
-                >
-                  {chip.more && showMoreChips ? 'Less' : chip.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          <GeoAiAgentEmptyState prefs={prefs} userName={userNameProp} onQuickAction={onQuickAction} />
         ) : null}
 
         {/* Chat / model tabs / composer — messages hidden via CSS when empty / builder */}

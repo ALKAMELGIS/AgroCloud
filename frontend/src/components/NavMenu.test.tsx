@@ -105,6 +105,23 @@ describe('NavMenu vertical responsive', () => {
     expect(dashboard).toHaveAttribute('aria-expanded', 'false')
   })
 
+  it('toggles theme from ghost icon switch', () => {
+    setViewport(1280)
+    render(
+      <MemoryRouter future={routerFuture}>
+        <SystemSettingsProvider>
+          <NavMenu />
+        </SystemSettingsProvider>
+      </MemoryRouter>,
+    )
+    const themeBtn = screen.getByRole('switch')
+    expect(themeBtn).toHaveClass('btn-text', 'btn-icon', 'text-neutral')
+    const before = document.documentElement.getAttribute('data-theme')
+    fireEvent.click(themeBtn)
+    const after = document.documentElement.getAttribute('data-theme')
+    expect(after).not.toBe(before)
+  })
+
   it('renders AI AgroCloud group with chat link only', () => {
     setViewport(1280)
     render(

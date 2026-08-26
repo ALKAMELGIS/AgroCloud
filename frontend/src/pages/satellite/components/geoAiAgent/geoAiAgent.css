@@ -87,6 +87,12 @@
   color: #e9d5ff;
 }
 
+.geo-ai-agent-icon-btn--clear:hover {
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.35);
+  color: #fca5a5;
+}
+
 .geo-ai-agent-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -149,7 +155,7 @@
   position: relative;
 }
 
-.geo-ai-agent-empty-avatar .fa-sparkles,
+.geo-ai-agent-empty-avatar .fa-wand-magic-sparkles,
 .geo-ai-agent-empty-avatar .fa-star {
   filter: drop-shadow(0 1px 1px rgba(15, 23, 42, 0.35));
 }
@@ -862,4 +868,51 @@
 .geo-ai-agent-builder-embed-actions {
   display: flex;
   gap: 8px;
+}
+
+/* ── Light theme ─────────────────────────────────────────────────────────── */
+html[data-theme='light'] .geo-ai-agent-panel {
+  --geo-ai-agent-bg: rgba(255, 255, 255, 0.98);
+  --geo-ai-agent-surface: rgba(248, 250, 252, 0.96);
+  --geo-ai-agent-border: rgba(148, 163, 184, 0.35);
+  --geo-ai-agent-text: #0f172a;
+  --geo-ai-agent-muted: #64748b;
+  --geo-ai-agent-chip-bg: rgba(241, 245, 249, 0.98);
+}
+html[data-theme='light'] .geo-ai-agent-empty-prompt {
+  color: var(--geo-ai-agent-text);
+}
+html[data-theme='light'] .geo-ai-agent-empty-hello,
+html[data-theme='light'] .nac-geo-ai-empty-subtitle {
+  color: var(--geo-ai-agent-muted);
+}
+html[data-theme='light'] .geo-ai-agent-chip {
+  color: #334155;
+  border-color: rgba(148, 163, 184, 0.4);
+}
+html[data-theme='light'] .geo-ai-agent-chip:hover {
+  color: #0f172a;
+  background: #e2e8f0;
+}
+html[data-theme='light'] .geo-ai-agent-icon-btn {
+  color: #475569;
+}
+html[data-theme='light'] .geo-ai-agent-icon-btn:hover {
+  background: rgba(15, 23, 42, 0.06);
+  border-color: rgba(148, 163, 184, 0.35);
+  color: #0f172a;
+}
+html[data-theme='light'] .geo-ai-agent-icon-btn--clear:hover {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #b91c1c;
+}
+html[data-theme='light'] .geo-ai-agent-brand-title {
+  color: #0f172a;
+}
+html[data-theme='light'] .geo-ai-agent-chip--more {
+  color: #475569;
+}
+html[data-theme='light'] .geo-ai-agent-header {
+  border-bottom-color: rgba(148, 163, 184, 0.28);
 }

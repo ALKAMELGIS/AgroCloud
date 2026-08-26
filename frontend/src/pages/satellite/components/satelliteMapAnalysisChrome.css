@@ -2554,6 +2554,18 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
   color: #38bdf8;
 }
 
+.si-sat-ctx-rail-btn--ai-agent-chat {
+  color: #5eead4;
+}
+
+.si-sat-ctx-rail-btn--ai-agent-chat > i {
+  font-size: 13px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .si-sat-ctx-rail-btn--ai-agent-chat.si-sat-ctx-rail-btn--active {
   color: #5eead4;
   border-color: rgba(45, 212, 191, 0.45);
@@ -2680,8 +2692,7 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
 
 /* =============================================================================
  * Luxury rail icons — crisp, high-contrast, theme-consistent in BOTH modes.
- * Resting icons read clearly (no washed-out faint glyphs), active = emerald,
- * hover deepens to near-black (light) / pure white (dark).
+ * Light = matte dark glyphs on the white-glass rail; dark = matte light on black.
  * ========================================================================== */
 .si-sat-ctx-dock--light .si-sat-ctx-rail-btn,
 .si-sat-ctx-dock--light .si-sat-ctx-rail-btn i,
@@ -2689,12 +2700,12 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
 .si-sat-ctx-dock--light .si-sat-ctx-rail-btn--map-collapsed,
 .si-sat-ctx-dock--light .si-sat-ctx-rail-btn--map-expanded,
 .si-sat-ctx-dock--light .si-sat-ctx-rail-btn--map-expanded > i {
-  color: rgba(255, 255, 255, 0.82); /* matte off-white — readable on the black lux rail */
+  color: #555555;
 }
 
 .si-sat-ctx-dock--light .si-sat-ctx-rail-btn:hover,
 .si-sat-ctx-dock--light .si-sat-ctx-rail-btn:hover i {
-  color: #ffffff;
+  color: #222222;
 }
 
 .si-sat-ctx-dock--dark .si-sat-ctx-rail-btn,
@@ -2724,11 +2735,11 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
 /* Rail text labels (labeled rail) — match icon contrast for readable wordmarks. */
 .si-sat-ctx-dock--light .si-sat-ctx-rail-label,
 .si-sat-ctx-dock--light .si-sat-ctx-rail-label-title {
-  color: rgba(255, 255, 255, 0.9);
+  color: #222222;
 }
 
 .si-sat-ctx-dock--light .si-sat-ctx-rail-label-desc {
-  color: rgba(255, 255, 255, 0.6);
+  color: #555555;
 }
 
 .si-sat-ctx-dock--dark .si-sat-ctx-rail-label,
@@ -4319,16 +4330,26 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
 
 
 /* ---- Primary / AOI buttons: unified emerald ------------------------------ */
-.si-sat-ctx-primary-btn,
-.si-sat-ctx-dock--light .si-sat-ctx-primary-btn {
+.si-sat-ctx-primary-btn {
   background: var(--lux-accent-soft);
   border: 1px solid var(--lux-accent-line);
   color: #d1fae5;
 }
 
+.si-sat-ctx-dock--light .si-sat-ctx-primary-btn {
+  background: var(--lux-accent-soft);
+  border: 1px solid var(--lux-accent-line);
+  color: #065f46;
+}
+
 .si-sat-ctx-primary-btn:hover {
   background: rgba(52, 211, 153, 0.2);
   color: #ffffff;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-primary-btn:hover {
+  background: rgba(5, 150, 105, 0.18);
+  color: #047857;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -4342,4 +4363,121 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
       transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
       box-shadow 0.18s ease;
   }
+}
+
+/* ============================================================================
+   LIGHT DOCK — final parity pass (wins over earlier dark-only chrome)
+   Matte #222 text / #555 muted on white-glass surfaces inside the map toolbox.
+   ========================================================================== */
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn i,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn--map-collapsed,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn--map-expanded,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn--map-expanded > i,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn--row {
+  color: #555555 !important;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn:hover,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn:hover i {
+  color: #222222 !important;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn--active,
+.si-sat-ctx-dock--light .si-sat-ctx-rail-btn--active i {
+  color: var(--lux-accent) !important;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-panel-body-core,
+.si-sat-ctx-dock--light .si-sat-ctx-map-toolbox-host {
+  color: #222222;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-panel-body-core .si-env-section-card,
+.si-sat-ctx-dock--light .si-sat-ctx-map-toolbox-host .si-env-section-card {
+  background: rgba(255, 255, 255, 0.88) !important;
+  border-color: rgba(34, 34, 34, 0.12) !important;
+  color: #222222 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-panel-body-core :is(
+  label,
+  .si-field-analysis-label,
+  .si-env-chart-title,
+  .si-env-index-note,
+  p,
+  span,
+  small,
+  dt,
+  dd,
+  li,
+  h3,
+  h4
+),
+.si-sat-ctx-dock--light .si-sat-ctx-map-toolbox-host :is(
+  label,
+  .si-field-analysis-label,
+  .si-env-chart-title,
+  .si-env-index-note,
+  p,
+  span,
+  small,
+  dt,
+  dd,
+  li,
+  h3,
+  h4
+) {
+  color: #222222;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-panel-body-core :is(
+  .si-field-analysis-hint,
+  .si-env-header-note,
+  .si-rs-panel__meta,
+  .si-afb__hint
+),
+.si-sat-ctx-dock--light .si-sat-ctx-map-toolbox-host :is(
+  .si-field-analysis-hint,
+  .si-env-header-note,
+  .si-rs-panel__meta,
+  .si-afb__hint
+) {
+  color: #555555;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-panel-body-core :is(
+  button:not(.si-sat-ctx-icon-btn):not(.si-sat-ctx-tab),
+  select,
+  input:not([type='checkbox']):not([type='radio']),
+  textarea
+),
+.si-sat-ctx-dock--light .si-sat-ctx-map-toolbox-host :is(
+  button:not(.si-sat-ctx-icon-btn):not(.si-sat-ctx-tab),
+  select,
+  input:not([type='checkbox']):not([type='radio']),
+  textarea
+) {
+  color: #222222;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-panel-body-core :is(select, input, textarea),
+.si-sat-ctx-dock--light .si-sat-ctx-map-toolbox-host :is(select, input, textarea) {
+  background: #ffffff;
+  border-color: rgba(34, 34, 34, 0.14);
+  color-scheme: light;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-analysis-launcher-btn {
+  color: #555555;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-analysis-launcher-btn:hover,
+.si-sat-ctx-dock--light .si-sat-ctx-analysis-launcher-btn--active {
+  color: #222222;
+}
+
+.si-sat-ctx-dock--light .si-sat-ctx-analysis-launcher-btn i {
+  color: inherit;
 }

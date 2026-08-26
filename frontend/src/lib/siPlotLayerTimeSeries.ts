@@ -111,7 +111,7 @@ export async function fetchPlotLayerTimeSeriesResult(input: {
   signal?: AbortSignal
   onProgress?: (done: number, total: number) => void
 }): Promise<PlotLayerTimeSeriesResult> {
-  const dailyByFieldKey = await fetchPlotTimeSeriesDailyByField(
+  const { dailyByFieldKey } = await fetchPlotTimeSeriesDailyByField(
     input.plots,
     input.layerId,
     input.fromDate,

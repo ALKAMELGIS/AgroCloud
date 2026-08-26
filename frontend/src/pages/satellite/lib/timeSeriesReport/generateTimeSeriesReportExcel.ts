@@ -4,6 +4,12 @@ import { DEFAULT_POTATO_MAX_YIELD_T_HA } from '../../../../lib/imageryYieldEstim
 import type { MeteoNativeChartSpec } from '../weatherClimateReport/meteoNativeExcelCharts'
 import { cleanAoiPlotDisplayId } from './aoiExcelExportShared'
 import { buildMapSnapshotsSheet } from './timeSeriesExcelMapSnapshots'
+import {
+  buildSummarySheet,
+  reorderWorksheets,
+  SERBIA_ANALYTICS_LAYER_IDS,
+  SERBIA_ANALYTICS_SHEET_ORDER,
+} from './timeSeriesExcelSummarySheet'
 import type { TimeSeriesReportPayload } from './timeSeriesReportTypes'
 import {
   latestEstimatedWaterLossSummary,
@@ -18,6 +24,8 @@ import {
   latestVegetationCoverageSummary,
   type VegetationCoveragePoint,
 } from './vegetationCoverageTimeline'
+
+type WorkbookLayout = 'serbia-analytics' | 'full'
 
 const DEFAULT_ANALYTICS_REPORT_XLSX = 'Agricultural_Imagery_Timeseries_Report.xlsx'
 
@@ -277,6 +285,24 @@ function resolveSelectedChartSeries(payload: TimeSeriesReportPayload): LayerRow[
     }))
 }
 
+/** Fixed Serbia analytics column order (501a KL-0231 reference). */
+function resolveSerbiaChartSeries(payload: TimeSeriesReportPayload): LayerRow[] {
+  const byId = new Map(
+    payload.charts.series.map(s => [s.layerId.trim().toUpperCase(), s] as const),
+  )
+  return SERBIA_ANALYTICS_LAYER_IDS.map(layerId => {
+    const s = byId.get(layerId)
+    return {
+      layerId,
+      values: (s?.values ?? []).map(v => (v != null && Number.isFinite(v) ? Number(v) : null)),
+    }
+  })
+}
+
+function resolveChartSeriesForLayout(payload: TimeSeriesReportPayload, layout: WorkbookLayout): LayerRow[] {
+  return layout === 'serbia-analytics' ? resolveSerbiaChartSeries(payload) : resolveSelectedChartSeries(payload)
+}
+
 function safeSheetName(name: string, used: Set<string>): string {
   let base = String(name || 'Sheet')
     .replace(/[\\/?*[\]:]/g, '_')
@@ -332,6 +358,7 @@ function buildDashboardSheet(wb: ExcelJS.Workbook, payload: TimeSeriesReportPayl
     ['AOI / Field Name', payload.location.fieldName],
     ['Total Field Area', fmtHa(payload.location.areaHa)],
     ['Analysis Period', periodLabel],
+    ['Time Aggregation', String(payload.period.timeAggregation || 'day')],
     ['Satellite Source', 'Sentinel-2 (Sentinel Hub)'],
     ['Acquisition Date(s)', payload.period.acquisitionDate],
     ['Vegetation Indices', payload.layerIds.join(', ')],
@@ -397,7 +424,7 @@ function buildDashboardSheet(wb: ExcelJS.Workbook, payload: TimeSeriesReportPayl
   ws.mergeCells(row, 1, row, 5)
   row++
   ws.getCell(row, 1).value =
-    'Per-date water loss for irrigation management (see Estimated Water Loss Timeline). Summary below = latest scene. ET path when available; otherwise Moisture Score = 0.6xNDMI + 0.4xNDWI.'
+    'Per-date water loss: Water Loss Index (%) = (1 − ETa/ETc) × 100 · Loss (m³/ha/day) = max(0, ETc − ETa) × 10. ETc = Kc × ET0 (Open-Meteo) when available.'
   ws.getCell(row, 1).font = { italic: true, size: 8, color: { argb: MUTED } }
   ws.mergeCells(row, 1, row, 5)
   row++
@@ -530,13 +557,16 @@ function buildDashboardSheet(wb: ExcelJS.Workbook, payload: TimeSeriesReportPayl
   ws.mergeCells(row, 1, row, 5)
 }
 
-function buildDataSheet(wb: ExcelJS.Workbook, payload: TimeSeriesReportPayload): void {
+function buildDataSheet(wb: ExcelJS.Workbook, payload: TimeSeriesReportPayload, layout: WorkbookLayout = 'full'): void {
   const ws = wb.addWorksheet('Time Series Data')
-  const layers = resolveSelectedChartSeries(payload)
+  const layers = resolveChartSeriesForLayout(payload, layout)
   const dates = chartTimelineDates(payload)
   const ndviSeries = layers.find(s => s.layerId === 'NDVI')
-  const headers = ['Date', 'Period key', ...layers.map(s => s.layerId), ...(ndviSeries ? ['Vigor Class'] : [])]
-  ws.columns = headers.map((h, i) => ({ width: i === 0 ? 14 : i === 1 ? 14 : 12 }))
+  const serbia = layout === 'serbia-analytics'
+  const headers = serbia
+    ? ['Date', ...layers.map(s => s.layerId), ...(ndviSeries ? ['Vigor Class'] : [])]
+    : ['Date', 'Period key', ...layers.map(s => s.layerId), ...(ndviSeries ? ['Vigor Class'] : [])]
+  ws.columns = headers.map((h, i) => ({ width: i === 0 ? 14 : i === 1 && !serbia ? 14 : 12 }))
 
   const headerRow = ws.getRow(1)
   headerRow.values = headers
@@ -547,19 +577,19 @@ function buildDataSheet(wb: ExcelJS.Workbook, payload: TimeSeriesReportPayload):
     const periodKey = payload.charts.labels[rowIndex] ?? ''
     const date = dates[rowIndex] ?? periodKey
     const ndviVal = ndviSeries?.values[rowIndex] ?? null
-    const values: Array<string | number | null> = [
-      date,
-      periodKey && periodKey !== date ? periodKey : '',
-      ...layers.map(s => {
-        const v = s.values[rowIndex]
-        return v != null && Number.isFinite(v) ? Number(Number(v).toFixed(4)) : null
-      }),
-    ]
+    const layerValues = layers.map(s => {
+      const v = s.values[rowIndex]
+      return v != null && Number.isFinite(v) ? Number(Number(v).toFixed(4)) : null
+    })
+    const values: Array<string | number | null> = serbia
+      ? [date, ...layerValues]
+      : [date, periodKey && periodKey !== date ? periodKey : '', ...layerValues]
     if (ndviSeries) values.push(vigorClassFromNdvi(ndviVal))
     const r = ws.getRow(rowIndex + 2)
     r.values = values
     styleDataRow(r, rowIndex % 2 === 1)
-    for (let c = 3; c <= 2 + layers.length; c++) {
+    const firstNumCol = serbia ? 2 : 3
+    for (let c = firstNumCol; c <= firstNumCol + layers.length - 1; c++) {
       if (typeof r.getCell(c).value === 'number') r.getCell(c).numFmt = '0.0000'
     }
   }
@@ -641,18 +671,22 @@ function buildChartsSheetNative(
   wb: ExcelJS.Workbook,
   payload: TimeSeriesReportPayload,
   layerDataSheets: Array<{ layerId: string; sheetName: string; lastDataRow: number }>,
+  layout: WorkbookLayout = 'full',
 ): MeteoNativeChartSpec[] {
   const ws = wb.addWorksheet('Charts', { views: [{ showGridLines: false }] })
   ws.columns = Array.from({ length: 10 }, () => ({ width: 14 }))
 
   const periodLabel = `${payload.period.from} to ${payload.period.to}`
-  const series = resolveSelectedChartSeries(payload)
+  const series = resolveChartSeriesForLayout(payload, layout)
+  const serbia = layout === 'serbia-analytics'
 
   ws.getCell('A1').value = 'IMAGERY TIME SERIES - Native Excel Charts'
   ws.getCell('A1').font = { bold: true, size: 12, color: { argb: BRAND_DARK } }
   ws.mergeCells('A1:J1')
 
-  ws.getCell('A2').value = 'Editable Office charts (not images) - linked to Period / index value columns'
+  ws.getCell('A2').value = serbia
+    ? 'Editable Office charts (not images) - linked to Period / index value columns'
+    : 'Editable Office charts (line · bar · pie · scatter) — linked to data sheets'
   ws.getCell('A2').font = { bold: true, size: 11, color: { argb: BRAND_DARK } }
   ws.mergeCells('A2:J2')
 
@@ -670,7 +704,9 @@ function buildChartsSheetNative(
   ws.getCell('A5').value = 'Chart catalogue'
   ws.getCell('A5').font = { bold: true, size: 10, color: { argb: BRAND_DARK } }
   layerDataSheets.forEach((entry, i) => {
-    ws.getCell(6 + i, 1).value = `${i + 1}. ${entry.layerId} Trend <- '${entry.sheetName}'`
+    ws.getCell(6 + i, 1).value = serbia
+      ? `${i + 1}. ${entry.layerId} Trend <- '${entry.sheetName}'`
+      : `${i + 1}. ${entry.layerId} — Line + Bar + Pie on '${entry.sheetName}'`
     ws.getCell(6 + i, 1).font = { size: 9, color: { argb: MUTED } }
   })
 
@@ -717,15 +753,64 @@ function buildChartsSheetNative(
   return specs
 }
 
+function countLayerValueBands(
+  layerId: string,
+  values: Array<number | null>,
+): Array<[string, number]> {
+  const isNdvi = layerId.trim().toUpperCase() === 'NDVI'
+  if (isNdvi) {
+    const bands = new Map<string, number>([
+      ['Healthy (>0.60)', 0],
+      ['Moderate (0.40–0.60)', 0],
+      ['Stressed (0.20–0.40)', 0],
+      ['Non-Vegetated (<0.20)', 0],
+      ['No observation', 0],
+    ])
+    for (const v of values) {
+      if (v == null || !Number.isFinite(v)) {
+        bands.set('No observation', (bands.get('No observation') ?? 0) + 1)
+        continue
+      }
+      if (v > 0.6) bands.set('Healthy (>0.60)', (bands.get('Healthy (>0.60)') ?? 0) + 1)
+      else if (v >= 0.4) bands.set('Moderate (0.40–0.60)', (bands.get('Moderate (0.40–0.60)') ?? 0) + 1)
+      else if (v >= 0.2) bands.set('Stressed (0.20–0.40)', (bands.get('Stressed (0.20–0.40)') ?? 0) + 1)
+      else bands.set('Non-Vegetated (<0.20)', (bands.get('Non-Vegetated (<0.20)') ?? 0) + 1)
+    }
+    return [...bands.entries()].filter(([, n]) => n > 0)
+  }
+
+  const nums = values.filter((v): v is number => v != null && Number.isFinite(v))
+  if (!nums.length) return [['No observation', values.length]]
+  const lo = Math.min(...nums)
+  const hi = Math.max(...nums)
+  const span = Math.max(hi - lo, 1e-9)
+  const labels = ['Low', 'Medium-Low', 'Medium-High', 'High']
+  const counts = [0, 0, 0, 0]
+  let missing = 0
+  for (const v of values) {
+    if (v == null || !Number.isFinite(v)) {
+      missing += 1
+      continue
+    }
+    const bucket = Math.min(3, Math.floor(((v - lo) / span) * 4))
+    counts[bucket]! += 1
+  }
+  const out = labels.map((label, i): [string, number] => [label, counts[i]!]).filter(([, n]) => n > 0)
+  if (missing > 0) out.push(['No observation', missing])
+  return out
+}
+
 /** Build per-layer data sheets and return metadata needed for native chart refs. */
 function buildPerLayerChartDataSheetsWithMeta(
   wb: ExcelJS.Workbook,
   payload: TimeSeriesReportPayload,
+  layout: WorkbookLayout = 'full',
 ): { specs: MeteoNativeChartSpec[]; sheets: Array<{ layerId: string; sheetName: string; lastDataRow: number }> } {
-  const layers = resolveSelectedChartSeries(payload)
+  const layers = resolveChartSeriesForLayout(payload, layout)
   const dates = chartTimelineDates(payload)
   if (!layers.length || !dates.length) return { specs: [], sheets: [] }
 
+  const serbia = layout === 'serbia-analytics'
   const plotId =
     String(payload.location.fieldName || payload.location.fieldKey || 'AOI')
       .replace(/^AOI\s*:\s*/i, '')
@@ -738,12 +823,12 @@ function buildPerLayerChartDataSheetsWithMeta(
   for (const series of layers) {
     const sheetName = safeSheetName(`${series.layerId} Data`, used)
     const ws = wb.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 2 }] })
-    ws.getCell('A1').value = `${plotId} - ${series.layerId} chart data (native Excel chart below)`
+    ws.getCell('A1').value = `${plotId} - ${series.layerId} chart data (native Excel charts below)`
     ws.getCell('A1').font = { bold: true, size: 11, color: { argb: BRAND_DARK } }
-    ws.mergeCells('A1:B1')
+    ws.mergeCells('A1:E1')
 
     const h = ws.getRow(2)
-    h.values = ['Period', series.layerId]
+    h.values = ['Period', series.layerId, '', 'Band', 'Count']
     styleTableHeader(h)
 
     dates.forEach((date, i) => {
@@ -752,43 +837,176 @@ function buildPerLayerChartDataSheetsWithMeta(
       row.values = [
         date,
         v != null && Number.isFinite(v) ? Number(Number(v).toFixed(4)) : null,
+        '',
+        '',
+        '',
       ]
       styleDataRow(row, i % 2 === 1)
       if (typeof row.getCell(2).value === 'number') row.getCell(2).numFmt = '0.0000'
     })
 
+    const last = 2 + dates.length
+    const bands = countLayerValueBands(series.layerId, series.values)
+    const bandStart = last + 3
+    ws.getCell(bandStart - 1, 4).value = 'Value distribution (pie source)'
+    ws.getCell(bandStart - 1, 4).font = { bold: true, size: 9, color: { argb: BRAND_DARK } }
+    bands.forEach(([label, count], i) => {
+      const row = ws.getRow(bandStart + i)
+      row.values = ['', '', '', label, count]
+      styleDataRow(row, i % 2 === 1)
+    })
+    const bandLast = bandStart + Math.max(0, bands.length - 1)
+
     ws.getColumn(1).width = 14
     ws.getColumn(2).width = 14
+    ws.getColumn(4).width = 22
+    ws.getColumn(5).width = 10
 
-    const last = 2 + dates.length
-    const noteRow = last + 2
-    ws.getCell(noteRow, 1).value =
-      `Editable native Excel line chart for ${series.layerId} (linked to Period / ${series.layerId} columns above).`
+    const noteRow = bandLast + 2
+    ws.getCell(noteRow, 1).value = serbia
+      ? `${series.layerId} chart data — native Excel line charts on the Charts sheet.`
+      : `Native Excel charts for ${series.layerId}: line + bar trends and value-band pie (editable OOXML — not images).`
     ws.getCell(noteRow, 1).font = { italic: true, size: 8, color: { argb: MUTED } }
-    ws.mergeCells(noteRow, 1, noteRow, 2)
+    ws.mergeCells(noteRow, 1, noteRow, 5)
+
+    if (!serbia) {
+      const chartBaseRow = noteRow + 1
+      const q = (col: string, r1: number, r2: number) => `'${sheetName}'!$${col}$${r1}:$${col}$${r2}`
+
+      specs.push({
+        title: `${series.layerId} Trend (Line)`,
+        kind: 'line',
+        sectionLabel: series.layerId,
+        anchorRow: chartBaseRow,
+        anchorCol: 0,
+        legendPos: 'r',
+        varyColors: false,
+        smooth: true,
+        targetSheet: sheetName,
+        series: [
+          {
+            name: series.layerId,
+            valuesRef: q('B', 3, last),
+            catsRef: q('A', 3, last),
+          },
+        ],
+      })
+
+      specs.push({
+        title: `${series.layerId} Trend (Bar)`,
+        kind: 'bar',
+        barDir: 'col',
+        sectionLabel: series.layerId,
+        anchorRow: chartBaseRow,
+        anchorCol: 8,
+        legendPos: 'b',
+        varyColors: false,
+        targetSheet: sheetName,
+        series: [
+          {
+            name: series.layerId,
+            valuesRef: q('B', 3, last),
+            catsRef: q('A', 3, last),
+          },
+        ],
+      })
+
+      if (bands.length) {
+        specs.push({
+          title: `${series.layerId} Value Distribution`,
+          kind: 'pie',
+          sectionLabel: series.layerId,
+          anchorRow: chartBaseRow + 18,
+          anchorCol: 0,
+          legendPos: 'r',
+          varyColors: true,
+          targetSheet: sheetName,
+          series: [
+            {
+              name: 'Periods',
+              valuesRef: q('E', bandStart, bandLast),
+              catsRef: q('D', bandStart, bandLast),
+            },
+          ],
+        })
+      }
+    }
 
     sheets.push({ layerId: series.layerId, sheetName, lastDataRow: last })
-    specs.push({
-      title: `${series.layerId} Trend`,
-      kind: 'line',
-      sectionLabel: series.layerId,
-      anchorRow: noteRow + 1,
-      anchorCol: 0,
-      legendPos: 'r',
-      varyColors: false,
-      smooth: true,
-      targetSheet: sheetName,
-      series: [
-        {
-          name: series.layerId,
-          valuesRef: `'${sheetName}'!$B$3:$B$${last}`,
-          catsRef: `'${sheetName}'!$A$3:$A$${last}`,
-        },
-      ],
-    })
   }
 
   return { specs, sheets }
+}
+
+function buildCorrelationChartSpecs(
+  wb: ExcelJS.Workbook,
+  payload: TimeSeriesReportPayload,
+): MeteoNativeChartSpec[] {
+  const blocks = payload.correlationBlocks ?? []
+  if (!blocks.length) return []
+
+  const used = new Set(wb.worksheets.map(w => w.name.toLowerCase()))
+  const sheetName = safeSheetName('Correlation Data', used)
+  const ws = wb.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 2 }] })
+  ws.getCell('A1').value = 'Index correlation scatter data (native Excel charts on Charts sheet)'
+  ws.getCell('A1').font = { bold: true, size: 11, color: { argb: BRAND_DARK } }
+  ws.mergeCells('A1:E1')
+
+  const specs: MeteoNativeChartSpec[] = []
+  let row = 3
+
+  blocks.forEach((block, blockIdx) => {
+    if (!block.points.length) return
+    const title = `${block.xLayerId} vs ${block.yLayerId}`
+    ws.getCell(row, 1).value = title
+    ws.getCell(row, 1).font = { bold: true, size: 10, color: { argb: BRAND_DARK } }
+    ws.mergeCells(row, 1, row, 5)
+    row += 1
+
+    const headerRow = row
+    ws.getRow(headerRow).values = ['Period', block.xLayerId, block.yLayerId, 'R²', 'N']
+    styleTableHeader(ws.getRow(headerRow))
+    row += 1
+
+    const dataStart = row
+    block.points.forEach((pt, i) => {
+      const r = ws.getRow(dataStart + i)
+      r.values = [pt.date, pt.x, pt.y, i === 0 ? block.r2 : '', i === 0 ? block.n : '']
+      styleDataRow(r, i % 2 === 1)
+      if (typeof r.getCell(2).value === 'number') r.getCell(2).numFmt = '0.0000'
+      if (typeof r.getCell(3).value === 'number') r.getCell(3).numFmt = '0.0000'
+    })
+    const dataEnd = dataStart + block.points.length - 1
+    row = dataEnd + 3
+
+    const q = (col: string, r1: number, r2: number) => `'${sheetName}'!$${col}$${r1}:$${col}$${r2}`
+    specs.push({
+      title: `${title} (Scatter)`,
+      kind: 'scatter',
+      sectionLabel: 'Correlation',
+      anchorRow: dataEnd + 3,
+      anchorCol: 0,
+      legendPos: 'b',
+      varyColors: false,
+      targetSheet: sheetName,
+      series: [
+        {
+          name: title,
+          xValuesRef: q('B', dataStart, dataEnd),
+          valuesRef: q('C', dataStart, dataEnd),
+          catsRef: q('A', dataStart, dataEnd),
+        },
+      ],
+    })
+  })
+
+  ws.getColumn(1).width = 14
+  ws.getColumn(2).width = 12
+  ws.getColumn(3).width = 12
+  ws.getColumn(4).width = 8
+  ws.getColumn(5).width = 6
+
+  return specs
 }
 
 function buildVegetationCoverageTimelineSheet(
@@ -885,11 +1103,12 @@ function buildEstimatedWaterLossTimelineSheet(
   wb: ExcelJS.Workbook,
   timeline: EstimatedWaterLossPoint[],
   payload: TimeSeriesReportPayload,
-): void {
-  const ws = wb.addWorksheet('Estimated Water Loss Timeline', {
+): MeteoNativeChartSpec[] {
+  const sheetName = 'Estimated Water Loss Timeline'
+  const ws = wb.addWorksheet(sheetName, {
     views: [{ showGridLines: true }],
   })
-  const lastCol = 11
+  const lastCol = 14
   ws.columns = [
     { width: 14 },
     { width: 16 },
@@ -902,6 +1121,9 @@ function buildEstimatedWaterLossTimelineSheet(
     { width: 14 },
     { width: 12 },
     { width: 12 },
+    { width: 14 },
+    { width: 14 },
+    { width: 16 },
   ]
 
   ws.getCell('A1').value = 'Estimated Water Loss Timeline - Per Acquisition Date'
@@ -926,6 +1148,9 @@ function buildEstimatedWaterLossTimelineSheet(
     'Water Stress Level',
     'Trend',
     'Source',
+    'Water Loss Index %',
+    'Loss (m3/day)',
+    'Loss (m3/ha/day)',
   ]
   styleTableHeader(header)
 
@@ -934,16 +1159,19 @@ function buildEstimatedWaterLossTimelineSheet(
       'No per-date water loss rows - ensure an AOI is selected and NDMI/NDWI observations (or ET) exist for the analysis period.'
     ws.getCell(5, 1).font = { italic: true, size: 9, color: { argb: MUTED } }
     ws.mergeCells(5, 1, 5, lastCol)
-    return
+    return []
   }
 
   timeline.forEach((p, i) => {
     const r = ws.getRow(5 + i)
+    const indexPct = Number(p.waterLossIndexPct.toFixed(1))
+    const lossM3Day = Number(p.waterLossM3Day.toFixed(1))
+    const lossM3HaDay = Number(p.waterLossM3HaDay.toFixed(2))
     r.values = [
       p.date,
-      Number(p.waterLossIndexPct.toFixed(1)),
-      Number(p.waterLossM3Day.toFixed(1)),
-      Number(p.waterLossM3HaDay.toFixed(2)),
+      indexPct,
+      lossM3Day,
+      lossM3HaDay,
       p.ndmi != null ? fmtNum(p.ndmi, 4) : '-',
       p.ndwi != null ? `${fmtNum(p.ndwi, 4)}${p.ndwiEstimated ? ' (est.)' : ''}` : '-',
       Number(p.vegetationCoveragePct.toFixed(1)),
@@ -951,6 +1179,9 @@ function buildEstimatedWaterLossTimelineSheet(
       p.waterStressLevel,
       p.trend,
       p.source === 'et' ? 'ET' : 'Satellite index',
+      indexPct,
+      lossM3Day,
+      lossM3HaDay,
     ]
     styleDataRow(r, i % 2 === 1)
     if (p.highWaterLoss) {
@@ -967,13 +1198,56 @@ function buildEstimatedWaterLossTimelineSheet(
     }
     r.getCell(2).numFmt = '0.0"%"'
     r.getCell(7).numFmt = '0.0"%"'
+    r.getCell(12).numFmt = '0.0"%"'
+    if (typeof r.getCell(13).value === 'number') r.getCell(13).numFmt = '0.0'
+    if (typeof r.getCell(14).value === 'number') r.getCell(14).numFmt = '0.00'
   })
 
   const noteRow = 5 + timeline.length + 2
   ws.getCell(noteRow, 1).value =
-    'Each row is recalculated independently for that satellite acquisition on the active AOI. When actual ET (mm/day) is available: Water Loss (m3/day) = ET x AOI (ha) x 10. Otherwise Moisture Score = 0.6xNDMI + 0.4xNDWI; Water Loss Index = 1 - Moisture Score; ET proxy = Index x 6 mm/day. High / Critical stress rows are highlighted for irrigation priority.'
+    'Each row uses Water Loss (%) = (1 − ETa/ETc) × 100. ETc = Kc × ET0 (mm/day). ETa = WaPOR/satellite AET when available, else ETc × moisture consumption ratio from NDMI/NDWI. Loss (m³/day) = max(0, ETc − ETa) × Area(ha) × 10.'
   ws.getCell(noteRow, 1).font = { italic: true, size: 8, color: { argb: MUTED } }
   ws.mergeCells(noteRow, 1, noteRow, lastCol)
+
+  const dataStart = 5
+  const dataEnd = dataStart + timeline.length - 1
+  const q = (col: string) => `'${sheetName}'!$${col}$${dataStart}:$${col}$${dataEnd}`
+  const chartAnchorRow = noteRow + 2
+
+  ws.getCell(chartAnchorRow, 1).value = 'Estimated Water Loss Timeline (native Excel chart)'
+  ws.getCell(chartAnchorRow, 1).font = { bold: true, size: 11, color: { argb: BRAND_DARK } }
+  ws.mergeCells(chartAnchorRow, 1, chartAnchorRow, 8)
+
+  return [
+    {
+      title: 'Estimated Water Loss Timeline',
+      kind: 'line',
+      sectionLabel: 'Water Loss',
+      anchorRow: chartAnchorRow + 1,
+      anchorCol: 0,
+      legendPos: 'b',
+      varyColors: true,
+      smooth: true,
+      targetSheet: sheetName,
+      series: [
+        {
+          name: 'Water Loss Index %',
+          valuesRef: q('L'),
+          catsRef: q('A'),
+        },
+        {
+          name: 'Loss (m3/day)',
+          valuesRef: q('M'),
+          catsRef: q('A'),
+        },
+        {
+          name: 'Loss (m3/ha/day)',
+          valuesRef: q('N'),
+          catsRef: q('A'),
+        },
+      ],
+    },
+  ]
 }
 
 function buildEstimatedYieldTimelineSheet(
@@ -1137,36 +1411,92 @@ function buildEstimatedYieldTimelineSheet(
 
 export async function buildTimeSeriesReportWorkbook(
   payload: TimeSeriesReportPayload,
+  layout: WorkbookLayout = 'serbia-analytics',
 ): Promise<{ wb: ExcelJS.Workbook; chartSpecs: MeteoNativeChartSpec[] }> {
   const wb = new ExcelJS.Workbook()
   wb.creator = payload.projectName
   wb.created = new Date()
+  const serbia = layout === 'serbia-analytics'
 
   buildDashboardSheet(wb, payload)
-  buildDataSheet(wb, payload)
-  const { specs: layerSpecs, sheets } = buildPerLayerChartDataSheetsWithMeta(wb, payload)
-  buildVegetationCoverageTimelineSheet(wb, payload.vegetationCoverageTimeline ?? [], payload)
-  buildEstimatedWaterLossTimelineSheet(wb, payload.estimatedWaterLossTimeline ?? [], payload)
+  buildDataSheet(wb, payload, layout)
+  const { specs: layerSheetSpecs, sheets: layerDataSheets } = buildPerLayerChartDataSheetsWithMeta(
+    wb,
+    payload,
+    layout,
+  )
+  const correlationSpecs = serbia ? [] : buildCorrelationChartSpecs(wb, payload)
+  if (!serbia) {
+    buildVegetationCoverageTimelineSheet(wb, payload.vegetationCoverageTimeline ?? [], payload)
+  }
+  const waterLossTimeline = payload.estimatedWaterLossTimeline ?? []
+  const waterLossChartSpecs = buildEstimatedWaterLossTimelineSheet(wb, waterLossTimeline, payload)
   buildEstimatedYieldTimelineSheet(wb, payload.estimatedYieldTimeline ?? [], payload)
-  buildMapSnapshotsSheet(wb, payload.mapSnapshotGroups)
-  const chartsSheetSpecs = buildChartsSheetNative(wb, payload, sheets)
   buildAnalysisSheet(wb, payload)
+  buildMapSnapshotsSheet(wb, payload.mapSnapshotGroups, {
+    sheetName: serbia ? 'Map Snapshot' : 'Map Snapshots',
+  })
 
-  return { wb, chartSpecs: [...layerSpecs, ...chartsSheetSpecs] }
+  const chartsSpecs = buildChartsSheetNative(wb, payload, layerDataSheets, layout)
+  const obs = observationCount(payload)
+  const tsRows = Math.max(
+    obs,
+    payload.charts.labels.filter((_, i) =>
+      payload.charts.series.some(s => {
+        const v = s.values[i]
+        return v != null && Number.isFinite(v)
+      }),
+    ).length,
+  )
+  buildSummarySheet(wb, payload, {
+    observationCount: obs,
+    timeSeriesDataRows: tsRows,
+    waterLossDataRows: Math.max(waterLossTimeline.length, 1),
+  })
+
+  if (serbia) {
+    reorderWorksheets(wb, SERBIA_ANALYTICS_SHEET_ORDER)
+  }
+
+  const chartSpecs = serbia
+    ? chartsSpecs
+    : [...layerSheetSpecs, ...correlationSpecs, ...waterLossChartSpecs]
+
+  return { wb, chartSpecs }
 }
 
-export function buildTimeSeriesReportWorkbookSync(payload: TimeSeriesReportPayload): ExcelJS.Workbook {
+export function buildTimeSeriesReportWorkbookSync(
+  payload: TimeSeriesReportPayload,
+  layout: WorkbookLayout = 'serbia-analytics',
+): ExcelJS.Workbook {
   const wb = new ExcelJS.Workbook()
   wb.creator = payload.projectName
   wb.created = new Date()
+  const serbia = layout === 'serbia-analytics'
+
   buildDashboardSheet(wb, payload)
-  buildDataSheet(wb, payload)
-  buildPerLayerChartDataSheetsWithMeta(wb, payload)
-  buildVegetationCoverageTimelineSheet(wb, payload.vegetationCoverageTimeline ?? [], payload)
+  buildDataSheet(wb, payload, layout)
+  const { sheets: layerDataSheets } = buildPerLayerChartDataSheetsWithMeta(wb, payload, layout)
+  if (!serbia) {
+    buildVegetationCoverageTimelineSheet(wb, payload.vegetationCoverageTimeline ?? [], payload)
+  }
   buildEstimatedWaterLossTimelineSheet(wb, payload.estimatedWaterLossTimeline ?? [], payload)
   buildEstimatedYieldTimelineSheet(wb, payload.estimatedYieldTimeline ?? [], payload)
-  buildMapSnapshotsSheet(wb, payload.mapSnapshotGroups)
   buildAnalysisSheet(wb, payload)
+  buildMapSnapshotsSheet(wb, payload.mapSnapshotGroups, {
+    sheetName: serbia ? 'Map Snapshot' : 'Map Snapshots',
+  })
+  if (serbia) {
+    buildChartsSheetNative(wb, payload, layerDataSheets, layout)
+  }
+  buildSummarySheet(wb, payload, {
+    observationCount: observationCount(payload),
+    timeSeriesDataRows: Math.max(1, payload.charts.labels.length),
+    waterLossDataRows: Math.max((payload.estimatedWaterLossTimeline ?? []).length, 1),
+  })
+  if (serbia) {
+    reorderWorksheets(wb, SERBIA_ANALYTICS_SHEET_ORDER)
+  }
   return wb
 }
 

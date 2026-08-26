@@ -30,6 +30,10 @@ import {
   type SentinelHubDailyIndexMeans,
   type SentinelHubFieldTimeSeries,
 } from './sentinelHubStatisticsApi'
+import {
+  runSentinelFieldBatchJob,
+  SENTINEL_FIELD_BATCH_SERVER_THRESHOLD,
+} from './sentinelFieldBatchApi'
 
 import type { SiInstanceScope } from '../pages/satellite/siInstanceScope'
 
@@ -533,7 +537,61 @@ export async function fetchCropAlertSentinelLiveBatch(
     toFetch.push(field)
   }
 
-  const fetched = await mapPool(toFetch, options?.concurrency ?? 8, async field => {
+  let fetched: SentinelHubFieldTimeSeries[] = []
+
+  if (toFetch.length >= SENTINEL_FIELD_BATCH_SERVER_THRESHOLD) {
+    try {
+      const batchFields = toFetch
+        .filter(f => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon'))
+        .map(f => ({ fieldKey: f.fieldKey, geometry: f.geometry! }))
+
+      if (batchFields.length >= SENTINEL_FIELD_BATCH_SERVER_THRESHOLD) {
+        const batchDaily = await runSentinelFieldBatchJob({
+          fields: batchFields,
+          referenceDate,
+          lookbackDays,
+          signal: options?.signal,
+          onProgress: p => {
+            done = total - toFetch.length + p.done
+            throttledEmit()
+          },
+        })
+
+        for (const field of toFetch) {
+          if (options?.signal?.aborted) break
+          const daily = batchDaily.get(field.fieldKey) ?? []
+          const hasLive = hasValidIndexDaily(daily)
+          const result: SentinelHubFieldTimeSeries = {
+            fieldKey: field.fieldKey,
+            daily,
+            fetchedAt: Date.now(),
+            source: hasLive ? 'live' : 'sample',
+            syntheticFill: !hasLive,
+            error: hasLive ? undefined : 'Batch returned no valid observations',
+          }
+          if (hasLive) {
+            const key = cacheKey(field.fieldKey, referenceDate, lookbackDays)
+            getSeriesCache(cacheScope).set(key, result)
+            writeSeriesToSession(key, result, cacheScope)
+          }
+          map.set(field.fieldKey, result)
+          done += 1
+          if (result.source === 'live' && !result.syntheticFill) live += 1
+          else if (result.error && !hasLive) failed += 1
+          else sampled += 1
+          options?.onFieldSeries?.(field, result)
+          throttledEmit()
+          fetched.push(result)
+        }
+        emit()
+        return map
+      }
+    } catch {
+      /* fall back to per-field fetch below */
+    }
+  }
+
+  fetched = await mapPool(toFetch, options?.concurrency ?? 8, async field => {
     if (options?.signal?.aborted) {
       return { fieldKey: field.fieldKey, daily: [], fetchedAt: Date.now(), source: 'sample' as const, error: 'aborted' }
     }

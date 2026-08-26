@@ -9,6 +9,7 @@ import {
   DEFAULT_IMAGERY_TS_CLOUD_FILTER,
   fetchImageryTimeSeriesProgressive,
 } from '../../../../lib/fetchImageryTimeSeriesProgressive'
+import { evaluateImageryLayerDailyValue } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import {
   buildPlotTimeSeriesAnalyticsModel,
 } from './buildPlotTimeSeriesAnalyticsModel'
@@ -18,10 +19,16 @@ import type {
   PlotTimeSeriesFetchInput,
 } from './plotTimeSeriesAnalyticsTypes'
 import { DEFAULT_PLOT_TS_ANALYTICS_OPTIONS } from './plotTimeSeriesAnalyticsTypes'
+import {
+  dailyRowsInRange,
+  dailyRowsSatisfyExportWindow,
+} from './plotTimeSeriesDailyRows'
 
 const FETCH_CONCURRENCY = 4
+/** Parallel Sentinel Statistical API fetches during batch prefetch. */
+export const BATCH_DAILY_FETCH_CONCURRENCY = 12
 
-async function mapPool<T, R>(
+export async function mapPool<T, R>(
   items: T[],
   concurrency: number,
   fn: (item: T, index: number) => Promise<R>,
@@ -105,6 +112,93 @@ export async function fetchPlotFieldDailyWithRetry(
   }
 }
 
+export function dailyRowsSatisfyLayerIds(
+  rows: SentinelHubDailyIndexMeans[],
+  layerIds: string[],
+): boolean {
+  if (!hasValidIndexDaily(rows)) return false
+  const ids = layerIds.map(id => id.trim().toUpperCase()).filter(Boolean)
+  if (!ids.length) return hasValidIndexDaily(rows)
+  return ids.every(layerId => rows.some(row => evaluateImageryLayerDailyValue(layerId, row) != null))
+}
+
+export type BatchDailyFetchResult = {
+  dailyByFieldKey: Map<string, SentinelHubDailyIndexMeans[]>
+  /** Per-field fetch errors (non-abort). */
+  fetchErrors: Map<string, string>
+}
+
+/**
+ * Reuse panel-fetched daily rows when layers match; parallel-fetch the rest.
+ */
+export async function resolveBatchDailyByFieldKey(
+  plots: CropAlertFieldInput[],
+  layerIds: string[],
+  fromDate: string,
+  toDate: string,
+  options?: {
+    reuseDaily?: Map<string, SentinelHubDailyIndexMeans[]>
+    signal?: AbortSignal
+    onProgress?: (done: number, total: number) => void
+    concurrency?: number
+    fetchDaily?: typeof fetchPlotFieldDailyWithRetry
+  },
+): Promise<BatchDailyFetchResult> {
+  const fetchDaily = options?.fetchDaily ?? fetchPlotFieldDailyWithRetry
+  const ids = layerIds.map(id => id.trim().toUpperCase()).filter(Boolean)
+  const dailyByFieldKey = new Map<string, SentinelHubDailyIndexMeans[]>()
+  const fetchErrors = new Map<string, string>()
+  const toFetch: CropAlertFieldInput[] = []
+  let cachedCount = 0
+
+  for (const plot of plots) {
+    const cached = options?.reuseDaily?.get(plot.fieldKey)
+    if (cached && dailyRowsSatisfyExportWindow(cached, fromDate, toDate, ids)) {
+      dailyByFieldKey.set(plot.fieldKey, dailyRowsInRange(cached, fromDate, toDate))
+      cachedCount += 1
+    } else {
+      toFetch.push(plot)
+    }
+  }
+
+  if (cachedCount > 0) {
+    options?.onProgress?.(cachedCount, plots.length)
+  }
+
+  if (toFetch.length > 0) {
+    const fetched = await fetchPlotTimeSeriesDailyByField(
+      toFetch,
+      ids.length ? ids : ['NDVI'],
+      fromDate,
+      toDate,
+      {
+        signal: options?.signal,
+        concurrency: options?.concurrency ?? BATCH_DAILY_FETCH_CONCURRENCY,
+        fetchDaily,
+        onProgress: (done, total) => {
+          options?.onProgress?.(cachedCount + done, plots.length)
+        },
+      },
+    )
+
+    for (const [fieldKey, rows] of fetched.dailyByFieldKey) {
+      dailyByFieldKey.set(fieldKey, rows)
+    }
+    for (const [fieldKey, message] of fetched.fetchErrors) {
+      fetchErrors.set(fieldKey, message)
+    }
+  } else if (cachedCount > 0) {
+    options?.onProgress?.(plots.length, plots.length)
+  }
+
+  return { dailyByFieldKey, fetchErrors }
+}
+
+export type PlotDailyFetchResult = {
+  dailyByFieldKey: Map<string, SentinelHubDailyIndexMeans[]>
+  fetchErrors: Map<string, string>
+}
+
 export async function fetchPlotTimeSeriesDailyByField(
   plots: CropAlertFieldInput[],
   layerId: string | string[],
@@ -113,29 +207,34 @@ export async function fetchPlotTimeSeriesDailyByField(
   options?: {
     signal?: AbortSignal
     onProgress?: (done: number, total: number) => void
+    concurrency?: number
+    fetchDaily?: typeof fetchPlotFieldDailyWithRetry
   },
-): Promise<Map<string, SentinelHubDailyIndexMeans[]>> {
-  const map = new Map<string, SentinelHubDailyIndexMeans[]>()
+): Promise<PlotDailyFetchResult> {
+  const fetchDaily = options?.fetchDaily ?? fetchPlotFieldDailyWithRetry
+  const dailyByFieldKey = new Map<string, SentinelHubDailyIndexMeans[]>()
+  const fetchErrors = new Map<string, string>()
   let done = 0
   const total = plots.length
   await mapPool(
     plots,
-    FETCH_CONCURRENCY,
+    options?.concurrency ?? FETCH_CONCURRENCY,
     async field => {
-      const rows = await fetchPlotFieldDailyWithRetry(
-        field,
-        layerId,
-        fromDate,
-        toDate,
-        options?.signal,
-      )
-      map.set(field.fieldKey, rows)
-      done += 1
-      options?.onProgress?.(done, total)
+      try {
+        const rows = await fetchDaily(field, layerId, fromDate, toDate, options?.signal)
+        dailyByFieldKey.set(field.fieldKey, dailyRowsInRange(rows, fromDate, toDate))
+      } catch (err) {
+        if (isAbort(err, options?.signal)) throw err
+        fetchErrors.set(field.fieldKey, err instanceof Error ? err.message : String(err))
+        dailyByFieldKey.set(field.fieldKey, [])
+      } finally {
+        done += 1
+        options?.onProgress?.(done, total)
+      }
     },
     options?.signal,
   )
-  return map
+  return { dailyByFieldKey, fetchErrors }
 }
 
 export async function buildPlotTimeSeriesAnalyticsFromPlots(
@@ -154,7 +253,7 @@ export async function buildPlotTimeSeriesAnalyticsFromPlots(
   return buildPlotTimeSeriesAnalyticsModel({
     plots: input.plots,
     layerId,
-    dailyByFieldKey,
+    dailyByFieldKey: dailyByFieldKey.dailyByFieldKey,
     fromDate: input.fromDate,
     toDate: input.toDate,
     timeAggregation: input.timeAggregation,

@@ -4,6 +4,17 @@
  */
 
 import type { FieldSummaryModel } from './buildFieldSummaryModel'
+import type { GrowthStage } from './cropCoefficients'
+import { estimateAetMmDayFromEtcAndIndices } from '../../../../lib/etIndex'
+import { estimateNdwiFromNdmi } from './timeSeriesReportExecutive'
+import {
+  calculateEtConsumptionPercent,
+  calculateFieldWaterRequirement,
+  calculateWaterStressPercent,
+  computeWaterLossFromEtDeficit,
+  type FieldWaterRequirementResult,
+  type WaterRequirementBatchSummary,
+} from './waterRequirementService'
 
 /** NDVI ≥ threshold → vegetated / planted; below → non-vegetated / unplanned. */
 export const NDVI_VEGETATION_THRESHOLD = 0.2
@@ -24,6 +35,7 @@ export type ProductionEstimationRow = {
   fieldId: string
   farmName: string
   cropClassification: string
+  irrigationType: string
   totalAreaHa: number | null
   plannedCropCoverageHa: number | null
   unplannedAreaHa: number | null
@@ -33,12 +45,37 @@ export type ProductionEstimationRow = {
   expectedYieldTHa: number | null
   ndviHealthFactor: number | null
   estimatedHarvestProductionTons: number | null
+  /** Satellite-derived estimated water loss (NDMI/NDWI + ET). */
+  waterLossIndexPct: number | null
+  waterLossM3Day: number | null
+  waterLossM3HaDay: number | null
+  /** Water requirement & ET estimation (FAO-56). */
+  growthStage: GrowthStage | 'Unknown'
+  et0MmDay: number | null
+  kc: number | null
+  etcMmDay: number | null
+  aetMmDay: number | null
+  etConsumptionPercent: number | null
+  waterStressPercent: number | null
+  ndwi: number | null
+  ndmi: number | null
+  ndii: number | null
+  netWaterRequirementMmDay: number | null
+  irrigationEfficiency: number | null
+  grossIrrigationRequirementMmDay: number | null
+  waterRequirementM3Day: number | null
+  waterRequirementM3Week: number | null
+  waterRequirementM3Month: number | null
+  waterRequirementM3Season: number | null
+  observationDate: string | null
+  calculationStatus: string
 }
 
 export const PRODUCTION_ESTIMATION_HEADERS = [
   'Field ID',
   'Farm Name',
   'Crop Classification',
+  'Irrigation Type',
   'Total Area from Layer (ha)',
   'Planned Crop Coverage (NDVI Vegetated Area) (ha)',
   'Unplanned Area (NDVI Non-Vegetated Area) (ha)',
@@ -48,6 +85,50 @@ export const PRODUCTION_ESTIMATION_HEADERS = [
   'Expected Yield (Ton/ha)',
   'Estimated Harvest Production (Ton)',
 ] as const
+
+export const WATER_LOSS_HEADERS = [
+  'Water Loss Index %',
+  'Loss (m3/day)',
+  'Loss (m3/ha/day)',
+] as const
+
+export const WATER_REQUIREMENT_HEADERS = [
+  'Growth Stage',
+  'ET0 (mm/day)',
+  'Kc',
+  'ETc (mm/day)',
+  'AET (mm/day)',
+  'ET Consumption (%)',
+  'Water Stress (%)',
+  'NDWI',
+  'NDMI',
+  'NDII',
+  'Net Water Requirement (mm/day)',
+  'Irrigation Efficiency (%)',
+  'Gross Irrigation Requirement (mm/day)',
+  'Water Requirement (m³/day)',
+  'Water Requirement (m³/week)',
+  'Water Requirement (m³/month)',
+  'Water Requirement (m³/season)',
+  'Observation Date',
+  'Calculation Status',
+] as const
+
+export const PRODUCTION_ESTIMATION_ALL_HEADERS = [
+  ...PRODUCTION_ESTIMATION_HEADERS,
+  ...WATER_LOSS_HEADERS,
+  ...WATER_REQUIREMENT_HEADERS,
+] as const
+
+export type WaterLossPortfolioTotals = {
+  /** Portfolio index: (sum loss m³/day ÷ sum water requirement m³/day) × 100. */
+  totalWaterLossIndexPct: number | null
+  totalWaterLossM3Day: number | null
+  /** Portfolio flux: sum(m³/day) ÷ sum(area ha). */
+  totalWaterLossM3HaDay: number | null
+  /** Simple mean of field m³/ha/day values (TOTAL row "Mean"). */
+  meanWaterLossM3HaDay: number | null
+}
 
 /** NDVI stress bands from the Production Estimation calculation method. */
 export function classifyNdviStressLevel(
@@ -165,9 +246,186 @@ export function estimateHarvestProductionTons(input: {
   return Number((area * yieldTHa * factor).toFixed(2))
 }
 
+export function mapWaterResultToProductionRow(
+  water: FieldWaterRequirementResult,
+): Pick<
+  ProductionEstimationRow,
+  | 'growthStage'
+  | 'et0MmDay'
+  | 'kc'
+  | 'etcMmDay'
+  | 'aetMmDay'
+  | 'etConsumptionPercent'
+  | 'waterStressPercent'
+  | 'ndwi'
+  | 'ndmi'
+  | 'ndii'
+  | 'netWaterRequirementMmDay'
+  | 'irrigationEfficiency'
+  | 'grossIrrigationRequirementMmDay'
+  | 'waterRequirementM3Day'
+  | 'waterRequirementM3Week'
+  | 'waterRequirementM3Month'
+  | 'waterRequirementM3Season'
+  | 'observationDate'
+  | 'calculationStatus'
+> {
+  return {
+    growthStage: water.growthStage,
+    et0MmDay: water.et0MmDay,
+    kc: water.kc,
+    etcMmDay: water.etcMmDay,
+    aetMmDay: water.aetMmDay,
+    etConsumptionPercent: water.etConsumptionPercent,
+    waterStressPercent: water.waterStressPercent,
+    ndwi: water.ndwi,
+    ndmi: water.ndmi,
+    ndii: water.ndii,
+    netWaterRequirementMmDay: water.netWaterRequirementMmDay,
+    irrigationEfficiency: water.irrigationEfficiency,
+    grossIrrigationRequirementMmDay: water.grossIrrigationRequirementMmDay,
+    waterRequirementM3Day: water.waterRequirementM3Day,
+    waterRequirementM3Week: water.waterRequirementM3Week,
+    waterRequirementM3Month: water.waterRequirementM3Month,
+    waterRequirementM3Season: water.waterRequirementM3Season,
+    observationDate: water.observationDate,
+    calculationStatus: water.calculationStatus,
+  }
+}
+
+export function resolveEffectiveAetMmDay(input: {
+  aetMmDay?: number | null
+  etcMmDay?: number | null
+  ndmi?: number | null
+  ndwi?: number | null
+  ndvi?: number | null
+  sceneDate?: string | null
+}): { aetMmDay: number | null; fromSatellite: boolean } {
+  if (input.aetMmDay != null && Number.isFinite(input.aetMmDay) && input.aetMmDay >= 0) {
+    return { aetMmDay: input.aetMmDay, fromSatellite: true }
+  }
+  const etc = input.etcMmDay
+  const ndmi = input.ndmi
+  if (etc != null && etc > 0 && ndmi != null && Number.isFinite(ndmi)) {
+    let ndwi = input.ndwi
+    if (ndwi == null || !Number.isFinite(ndwi)) {
+      ndwi = estimateNdwiFromNdmi(ndmi)
+    }
+    if (ndwi != null && Number.isFinite(ndwi)) {
+      return {
+        aetMmDay: estimateAetMmDayFromEtcAndIndices(etc, ndmi, ndwi),
+        fromSatellite: false,
+      }
+    }
+  }
+  return { aetMmDay: null, fromSatellite: false }
+}
+
+/**
+ * Field water-loss metrics (Batch Summary Excel).
+ * Water Loss (%) = (1 − ETa/ETc) × 100
+ * Loss (m³/ha/day) = max(0, ETc − ETa) × 10
+ */
+function resolveLayerIndicesForWaterLoss(input: {
+  ndmi?: number | null
+  ndwi?: number | null
+}): { ndmi: number; ndwi: number } | null {
+  const ndmi = input.ndmi
+  if (ndmi == null || !Number.isFinite(ndmi)) return null
+  let ndwi = input.ndwi
+  if (ndwi == null || !Number.isFinite(ndwi)) {
+    ndwi = estimateNdwiFromNdmi(ndmi)
+  }
+  if (ndwi == null || !Number.isFinite(ndwi)) return null
+  return { ndmi, ndwi }
+}
+
+export function computeFieldWaterLossMetrics(input: {
+  areaHa: number | null
+  etcMmDay: number | null
+  aetMmDay: number | null
+  ndmi?: number | null
+  ndwi?: number | null
+}): Pick<ProductionEstimationRow, 'waterLossIndexPct' | 'waterLossM3Day' | 'waterLossM3HaDay'> {
+  const areaHa =
+    input.areaHa != null && Number.isFinite(input.areaHa) && input.areaHa > 0 ? input.areaHa : null
+  const etc =
+    input.etcMmDay != null && Number.isFinite(input.etcMmDay) && input.etcMmDay > 0
+      ? input.etcMmDay
+      : null
+
+  let eta =
+    input.aetMmDay != null && Number.isFinite(input.aetMmDay) && input.aetMmDay >= 0
+      ? input.aetMmDay
+      : null
+
+  const indices = resolveLayerIndicesForWaterLoss(input)
+  if (eta == null && etc != null && indices != null) {
+    eta = estimateAetMmDayFromEtcAndIndices(etc, indices.ndmi, indices.ndwi)
+  }
+
+  const loss = computeWaterLossFromEtDeficit({
+    etaMmDay: eta,
+    etcMmDay: etc,
+    areaHa,
+  })
+  return {
+    waterLossIndexPct: loss.waterLossIndexPct,
+    waterLossM3Day: loss.waterLossM3Day,
+    waterLossM3HaDay: loss.waterLossM3HaDay,
+  }
+}
+
+/** ETc crop-water demand volume (m³/day) = ETc (mm/day) × Area (ha) × 10. */
+export function computeEtcVolumeM3Day(etcMmDay: number | null, areaHa: number | null): number | null {
+  if (
+    etcMmDay == null ||
+    areaHa == null ||
+    !Number.isFinite(etcMmDay) ||
+    !Number.isFinite(areaHa) ||
+    etcMmDay <= 0 ||
+    areaHa <= 0
+  ) {
+    return null
+  }
+  return Number((etcMmDay * areaHa * 10).toFixed(2))
+}
+
+export function buildWaterRequirementForSummary(
+  summary: FieldSummaryModel,
+  opts?: { et0MmDay?: number | null; aetMmDay?: number | null; aetSource?: string | null },
+): FieldWaterRequirementResult {
+  return calculateFieldWaterRequirement({
+    fieldId: summary.layerFieldId || summary.plotId || '—',
+    cropType: summary.cropType,
+    areaHa: summary.areaHa,
+    irrigationType: summary.layerIrrigationType,
+    observationDate: summary.sceneDate,
+    ndvi: summary.ndvi,
+    ndwi: summary.ndwi,
+    ndmi: summary.ndmi,
+    ndii: summary.ndii,
+    et0MmDay: opts?.et0MmDay ?? summary.et0MmDay ?? null,
+    aetMmDay: opts?.aetMmDay ?? null,
+    aetSource:
+      opts?.aetMmDay != null
+        ? opts?.aetSource?.trim() || 'FAO WaPOR AETI (satellite ET product)'
+        : undefined,
+    effectiveRainfallMmDay: 0,
+    plantingDate: summary.phenologyPlantingDate,
+    harvestDate: summary.phenologyHarvestDate,
+    periodDays: summary.periodDays,
+  })
+}
 export function buildProductionEstimationRow(
   summary: FieldSummaryModel,
-  opts?: { ndviMin?: number | null; ndviMax?: number | null },
+  opts?: {
+    ndviMin?: number | null
+    ndviMax?: number | null
+    et0MmDay?: number | null
+    aetMmDay?: number | null
+    aetSource?: string | null
+  },
 ): ProductionEstimationRow {
   const areas = estimateNdviVegetatedAreas({
     areaHa: summary.areaHa,
@@ -178,10 +436,33 @@ export function buildProductionEstimationRow(
   const stressLevel = classifyNdviStressLevel(summary.ndvi)
   const healthFactor = ndviHealthFactorForStress(stressLevel)
   const expectedYieldTHa = summary.yieldTHa
+  const water = buildWaterRequirementForSummary(summary, {
+    et0MmDay: opts?.et0MmDay,
+    aetMmDay: opts?.aetMmDay ?? null,
+    aetSource: opts?.aetMmDay != null ? opts?.aetSource : undefined,
+  })
+  const aetForLoss = resolveEffectiveAetMmDay({
+    aetMmDay: opts?.aetMmDay ?? null,
+    etcMmDay: water.etcMmDay,
+    ndmi: summary.ndmi,
+    ndwi: summary.ndwi,
+    ndvi: summary.ndvi,
+    sceneDate: summary.sceneDate || summary.toDate,
+  }).aetMmDay
+  const etConsumptionPercent = calculateEtConsumptionPercent(aetForLoss, water.etcMmDay)
+  const waterStressPercent = calculateWaterStressPercent(aetForLoss, water.etcMmDay)
+  const lossMetrics = computeFieldWaterLossMetrics({
+    areaHa: summary.areaHa,
+    etcMmDay: water.etcMmDay,
+    aetMmDay: aetForLoss,
+    ndmi: summary.ndmi,
+    ndwi: summary.ndwi,
+  })
   return {
-    fieldId: summary.plotId || '—',
-    farmName: summary.fieldName || '—',
+    fieldId: summary.layerFieldId || summary.plotId || '—',
+    farmName: summary.originalFieldName || summary.fieldName || '—',
     cropClassification: summary.cropType || '—',
+    irrigationType: summary.layerIrrigationType || '—',
     totalAreaHa: summary.areaHa,
     plannedCropCoverageHa: areas.vegetatedAreaHa,
     unplannedAreaHa: areas.nonVegetatedAreaHa,
@@ -195,13 +476,105 @@ export function buildProductionEstimationRow(
       expectedYieldTHa,
       ndviHealthFactor: healthFactor,
     }),
+    waterLossIndexPct: lossMetrics.waterLossIndexPct,
+    waterLossM3Day: lossMetrics.waterLossM3Day,
+    waterLossM3HaDay: lossMetrics.waterLossM3HaDay,
+    ...mapWaterResultToProductionRow(water),
+    aetMmDay: aetForLoss,
+    etConsumptionPercent,
+    waterStressPercent,
   }
 }
 
 export function buildProductionEstimationRows(
   summaries: FieldSummaryModel[],
+  opts?: {
+    et0ByFieldKey?: Map<string, number>
+    aetByFieldKey?: Map<string, number>
+    /** Parallel plot.fieldKey for Map lookups (batch export). */
+    fieldKeys?: string[]
+  },
 ): ProductionEstimationRow[] {
-  return summaries.map(s => buildProductionEstimationRow(s))
+  return summaries.map((s, i) => {
+    const key = opts?.fieldKeys?.[i] ?? s.plotId ?? s.layerFieldId
+    return buildProductionEstimationRow(s, {
+      et0MmDay: opts?.et0ByFieldKey?.get(key) ?? s.et0MmDay ?? null,
+      aetMmDay: opts?.aetByFieldKey?.get(key) ?? null,
+      aetSource:
+        opts?.aetByFieldKey?.get(key) != null
+          ? 'FAO WaPOR AETI (satellite ET product)'
+          : undefined,
+    })
+  })
+}
+
+export function sumWaterRequirementTotals(
+  rows: ProductionEstimationRow[],
+): WaterRequirementBatchSummary {
+  const sum = (pick: (r: ProductionEstimationRow) => number | null): number | null => {
+    const vals = rows.map(pick).filter((v): v is number => v != null && Number.isFinite(v))
+    if (!vals.length) return null
+    return Number(vals.reduce((a, b) => a + b, 0).toFixed(1))
+  }
+  const mean = (pick: (r: ProductionEstimationRow) => number | null): number | null => {
+    const vals = rows.map(pick).filter((v): v is number => v != null && Number.isFinite(v))
+    if (!vals.length) return null
+    return Number((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1))
+  }
+
+  const averageEta = mean(r => r.aetMmDay)
+  const averageEtc = mean(r => r.etcMmDay)
+  const portfolioEtConsumption =
+    averageEta != null && averageEtc != null && averageEtc > 0
+      ? calculateEtConsumptionPercent(averageEta, averageEtc)
+      : mean(r => r.etConsumptionPercent)
+  const portfolioWaterStress =
+    averageEta != null && averageEtc != null && averageEtc > 0
+      ? calculateWaterStressPercent(averageEta, averageEtc)
+      : mean(r => r.waterStressPercent)
+
+  return {
+    totalFields: rows.length,
+    totalAreaHa: sum(r => r.totalAreaHa),
+    totalDailyWaterM3: sum(r => r.waterRequirementM3Day),
+    totalWeeklyWaterM3: sum(r => r.waterRequirementM3Week),
+    totalMonthlyWaterM3: sum(r => r.waterRequirementM3Month),
+    averageWaterStressPct: portfolioWaterStress,
+    averageEtConsumptionPct: portfolioEtConsumption,
+  }
+}
+
+export function sumWaterLossTotals(rows: ProductionEstimationRow[]): WaterLossPortfolioTotals {
+  const sum = (pick: (r: ProductionEstimationRow) => number | null): number | null => {
+    const vals = rows.map(pick).filter((v): v is number => v != null && Number.isFinite(v))
+    if (!vals.length) return null
+    return Number(vals.reduce((a, b) => a + b, 0).toFixed(2))
+  }
+  const mean = (pick: (r: ProductionEstimationRow) => number | null): number | null => {
+    const vals = rows.map(pick).filter((v): v is number => v != null && Number.isFinite(v))
+    if (!vals.length) return null
+    return Number((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1))
+  }
+
+  const totalM3Day = sum(r => r.waterLossM3Day)
+  const totalEtcVolumeM3Day = sum(r => computeEtcVolumeM3Day(r.etcMmDay, r.totalAreaHa))
+  const totalArea = sum(r => r.totalAreaHa)
+  const portfolioM3HaDay =
+    totalM3Day != null && totalArea != null && totalArea > 0
+      ? Number((totalM3Day / totalArea).toFixed(2))
+      : null
+
+  const totalWaterLossIndexPct =
+    totalM3Day != null && totalEtcVolumeM3Day != null && totalEtcVolumeM3Day > 0
+      ? Number(((totalM3Day / totalEtcVolumeM3Day) * 100).toFixed(1))
+      : null
+
+  return {
+    totalWaterLossIndexPct,
+    totalWaterLossM3Day: totalM3Day,
+    totalWaterLossM3HaDay: portfolioM3HaDay,
+    meanWaterLossM3HaDay: mean(r => r.waterLossM3HaDay),
+  }
 }
 
 export function sumProductionEstimationTotals(

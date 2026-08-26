@@ -9,7 +9,7 @@
 export const VITE_PORT = Number(process.env.VITE_DEV_PORT || 5174)
 
 /** Ports used by Python AI microservices — never the Express API. */
-const AI_SERVICE_PORTS = new Set([8080, 8090, 8092, 8093, 8095, 8096, 8098])
+const AI_SERVICE_PORTS = new Set([8080, 8090, 8092, 8093, 8095, 8096, 8098, 8099])
 
 function resolveApiPort() {
   const explicit = Number(

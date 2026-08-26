@@ -569,6 +569,7 @@ import {
   type GeoAiMapCommandHandlers,
 } from '../../lib/geoAiCommandExecutor';
 import { runGeoAiGisTool } from '../../lib/geoAiGisToolRunner';
+import { runGeoAiServerTurn } from '../../lib/runGeoAiServerTurn';
 import {
   runGeoAiAgentTurn,
   type GeoAiAgentChatTurn,
@@ -12713,7 +12714,7 @@ export default function SatelliteIntelligence() {
     geoAiLastUserMapQueryRef.current = trimmed;
     const placeIntent = geoAiFloatingOpen ? parseNeighborhoodAgentPlaceIntent(trimmed) : null;
     const apiKey = claudeApiKey.trim();
-    if (!placeIntent && !apiKey) {
+    if (!placeIntent && !apiKey && !geoAiFloatingOpen) {
       setGeoAiChatError(
         'Add a Claude API key: System Settings â†’ API Tokens â†’ Claude API (Anthropic), or set VITE_CLAUDE_API_KEY at build time. Never commit keys to Git.',
       );
@@ -12783,6 +12784,66 @@ export default function SatelliteIntelligence() {
           if (placeMsg) {
             setGeoAiChatMessages(h => [...h, placeMsg]);
             return;
+          }
+          if (geoAiFloatingOpen) {
+            const aoiGeom = drawnGeometryRef.current ?? drawnGeometry;
+            const aoiLabel =
+              (aoiGeom?.properties?.name as string | undefined) ??
+              (aoiGeom?.properties?.fieldName as string | undefined) ??
+              null;
+            const liveState = geoAiLiveMapStateObjRef.current;
+            const serverTurn = await runGeoAiServerTurn(
+              trimmed,
+              {
+                liveMapState: liveState,
+                aoiLabel,
+                activeLayerId: liveState?.activeAnalysis?.label ?? null,
+                activeLayerName: liveState?.activeAnalysis?.label ?? null,
+                sceneDate: liveState?.activeAnalysis?.acquisitionDate ?? null,
+                vectorLayers: mergedLayersForStats,
+              },
+              {
+                addGeoJsonResultLayer: input => addGeoAiGisResultLayerRef.current(input),
+                flyTo: (lng, lat, zoom) => {
+                  setGeoAiPinLngLat([lng, lat]);
+                  setViewState(vs => ({
+                    ...vs,
+                    longitude: lng,
+                    latitude: lat,
+                    zoom: Math.max(zoom ?? 12, typeof vs.zoom === 'number' ? vs.zoom : 2),
+                  }));
+                },
+              },
+            );
+            if (serverTurn.handled) {
+              const aid =
+                typeof crypto !== 'undefined' && 'randomUUID' in crypto
+                  ? crypto.randomUUID()
+                  : `gaic-srv-${Date.now()}`;
+              const parts: GeoExplorerPart[] = [{ type: 'text', text: serverTurn.replyText || '' }];
+              if (serverTurn.table) parts.push({ type: 'dataTable', table: serverTurn.table });
+              setGeoAiChatMessages(h => [
+                ...h,
+                {
+                  id: aid,
+                  role: 'model',
+                  parts,
+                  ...(serverTurn.mapQueryLngLat
+                    ? {
+                        mapFocus: {
+                          lng: serverTurn.mapQueryLngLat[0],
+                          lat: serverTurn.mapQueryLngLat[1],
+                          label: trimmed.slice(0, 80),
+                        },
+                      }
+                    : {}),
+                },
+              ]);
+              if (serverTurn.mapQueryLngLat) {
+                setGeoAiPinLngLat(serverTurn.mapQueryLngLat);
+              }
+              return;
+            }
           }
           if (!apiKey) {
             setGeoAiChatError(
@@ -12901,6 +12962,7 @@ export default function SatelliteIntelligence() {
     geoAiPinLngLat,
     geoAiInspectCard,
     runSatelliteGeoAiAnalystPackIfMatched,
+    drawnGeometry,
   ]);
 
   const sendGeoDeepseekChat = useCallback((voiceOverrideText?: string) => {
@@ -25787,7 +25849,9 @@ export default function SatelliteIntelligence() {
             onMinimize={() => setGeoAiFloatingExpanded(false)}
             isEmpty={geoAiAgentIsEmpty}
             onNewChat={handleGeoAiAgentNewChat}
+            onClearChat={clearCurrentGeoAiPanel}
             onQuickAction={handleGeoAiAgentQuickAction}
+            geoAiAgentPrefs={geoAiAgentPrefs}
             sessionTitle={geoAiAgentSessionTitle}
             draft={
               geoExplorerPendingImage || geoAiModelTab === 'gemini'

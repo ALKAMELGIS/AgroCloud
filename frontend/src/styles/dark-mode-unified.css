@@ -31,13 +31,22 @@ html[data-theme='light'] .navmenu .item,
 html[data-theme='light'] .navmenu .group-header,
 html[data-theme='light'] .navmenu .item .label,
 html[data-theme='light'] .navmenu .group-header .label,
-html[data-theme='light'] .nav-theme-toggle,
 html[data-theme='dark'] .navmenu .item,
 html[data-theme='dark'] .navmenu .group-header,
 html[data-theme='dark'] .navmenu .item .label,
-html[data-theme='dark'] .navmenu .group-header .label,
-html[data-theme='dark'] .nav-theme-toggle {
+html[data-theme='dark'] .navmenu .group-header .label {
   color: var(--ds-color-text);
+}
+
+html[data-theme='light'] .nav-theme-toggle,
+html[data-theme='dark'] .nav-theme-toggle {
+  color: var(--ds-color-text-secondary);
+}
+
+html[data-theme='light'] .nav-theme-toggle .nav-theme-toggle__icon,
+html[data-theme='dark'] .nav-theme-toggle .nav-theme-toggle__icon {
+  color: inherit;
+  opacity: 1;
 }
 
 html[data-theme='light'] .nav-theme-toggle:hover,

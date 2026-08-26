@@ -96,6 +96,16 @@ const CORE_INDEX_EXPR: Record<string, string> = {
   ET: buildEtIndexExpr(0.85),
 }
 
+/** Map delta core indices (DNDMI) and aliases to a histogram-capable layer id. */
+export function normalizeClassAreaLayerId(layerId: string | undefined): string | undefined {
+  const u = String(layerId || '').trim().toUpperCase()
+  if (!u) return undefined
+  if (u.length > 1 && u.startsWith('D') && CORE_INDEX_EXPR[u.slice(1)]) {
+    return u.slice(1)
+  }
+  return u
+}
+
 /** Numeric class edges + index expression for a layer, or null if unsupported. */
 export function resolveLayerClassBreakdown(layerId: string): LayerClassBreakdown | null {
   const u = String(layerId || '').trim().toUpperCase()
@@ -132,8 +142,9 @@ export function resolveLayerClassBreakdown(layerId: string): LayerClassBreakdown
 
 /** True when this layer can report per-class area (single-scene index or LULC). */
 export function layerSupportsClassArea(layerId: string): boolean {
-  if (isLulcClassificationLayerId(layerId)) return true
-  return resolveLayerClassBreakdown(layerId) != null
+  const normalized = normalizeClassAreaLayerId(layerId) ?? layerId
+  if (isLulcClassificationLayerId(normalized)) return true
+  return resolveLayerClassBreakdown(normalized) != null
 }
 
 /** WMS-fallback classification marker for plain index value histograms. */
@@ -315,7 +326,7 @@ export async function fetchLayerClassAreas(
     return scene ? lulcSceneToLayerClassAreaResult(scene) : null
   }
 
-  const breakdown = resolveLayerClassBreakdown(options.layerId)
+  const breakdown = resolveLayerClassBreakdown(normalizeClassAreaLayerId(options.layerId) ?? options.layerId)
   if (!breakdown) return null
 
   const geometry =

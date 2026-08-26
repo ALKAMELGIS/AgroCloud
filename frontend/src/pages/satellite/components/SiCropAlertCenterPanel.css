@@ -509,11 +509,7 @@
 }
 
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-crop-alert-panel.si-rs-panel--glass {
-  color: #0f172a;
-}
-
-:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-crop-alert__header {
-  border-bottom-color: rgba(15, 23, 42, 0.08);
+  color: #222222;
 }
 
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-crop-alert__kicker,
@@ -522,8 +518,9 @@
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-crop-alert__hint,
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-crop-alert__detail-meta,
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-crop-alert__empty,
-:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-crop-alert__progress {
-  color: #475569;
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-crop-alert__progress,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-crop-alert__meta-row dt {
+  color: #555555;
 }
 
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-crop-alert__title,
@@ -535,12 +532,17 @@
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-crop-alert__detail-msg,
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-crop-alert__feed-text strong,
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-crop-alert__feed-text small,
-:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-crop-alert__power {
-  color: #0f172a;
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-crop-alert__power,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-crop-alert__meta-row dd {
+  color: #222222;
 }
 
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-crop-alert__hint strong {
-  color: #0f172a;
+  color: #222222;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-crop-alert__header {
+  border-bottom-color: rgba(34, 34, 34, 0.1);
 }
 
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-crop-alert__imagery-warn {

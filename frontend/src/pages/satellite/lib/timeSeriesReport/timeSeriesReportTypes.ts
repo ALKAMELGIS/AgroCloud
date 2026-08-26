@@ -1,5 +1,8 @@
 import type { ImageryIndexInterpretation } from '../../../../lib/imageryIndexInterpretationEngine'
-import type { ImageryTimeSeriesLayerSeries } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import type {
+  ImageryTimeAggregation,
+  ImageryTimeSeriesLayerSeries,
+} from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import type { EstimatedWaterLossPoint } from './estimatedWaterLossTimeline'
 import type { EstimatedYieldPoint } from './estimatedYieldTimeline'
 import type { TimeSeriesExecutiveSummary } from './timeSeriesReportExecutive'
@@ -28,6 +31,7 @@ export type TimeSeriesReportPeriod = {
   from: string
   to: string
   acquisitionDate: string
+  timeAggregation?: ImageryTimeAggregation
 }
 
 export type TimeSeriesReportCharts = {

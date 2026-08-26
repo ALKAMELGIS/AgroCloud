@@ -112,7 +112,7 @@ export function SatelliteGeoAiFloatingWidget({
   onRequestClose,
   children,
   agentChrome = true,
-  fabIconClass = 'fa-solid fa-sparkles',
+  fabIconClass = 'fa-solid fa-wand-magic-sparkles',
 }: SatelliteGeoAiFloatingWidgetProps) {
   const { scopedStorageKey } = useSiInstanceScope();
   const posStorageKey = scopedStorageKey(STORAGE_KEY);

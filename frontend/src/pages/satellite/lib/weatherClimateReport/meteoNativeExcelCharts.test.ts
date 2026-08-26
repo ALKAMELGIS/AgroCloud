@@ -163,4 +163,43 @@ describe('native meteo excel charts', () => {
     const chartXml = await zip.file(chartDrawing)!.async('string')
     expect(chartXml).toContain('chart')
   })
+
+  it('injects charts into worksheets whose names contain ampersands', async () => {
+    const ExcelJS = (await import('exceljs')).default
+    const sheetName = 'Area & Coverage Analysis'
+    const wb = new ExcelJS.Workbook()
+    const ws = wb.addWorksheet(sheetName)
+    ws.getCell('A13').value = 'Field A'
+    ws.getCell('B13').value = 12
+    ws.getCell('A14').value = 'Field B'
+    ws.getCell('B14').value = 8
+
+    const raw = await wb.xlsx.writeBuffer()
+    const out = await injectNativeMeteoCharts(
+      raw as ArrayBuffer,
+      [
+        {
+          title: 'Planned Crop Coverage by Field',
+          kind: 'bar',
+          barDir: 'col',
+          series: [
+            {
+              name: 'Planned (ha)',
+              catsRef: `'${sheetName}'!$A$13:$A$14`,
+              valuesRef: `'${sheetName}'!$B$13:$B$14`,
+            },
+          ],
+          anchorRow: 4,
+          sectionLabel: 'Per-Field',
+          targetSheet: sheetName,
+        },
+      ],
+      sheetName,
+    )
+
+    const zip = await JSZip.loadAsync(out)
+    expect(zip.file('xl/charts/chart1.xml')).toBeTruthy()
+    const chart1 = await zip.file('xl/charts/chart1.xml')!.async('string')
+    expect(chart1).toContain("'Area &amp; Coverage Analysis'!")
+  })
 })

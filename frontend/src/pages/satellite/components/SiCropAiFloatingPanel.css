@@ -87,3 +87,50 @@
 .si-crop-ai-float__body .prithvi-tool__sub {
   color: rgba(255, 255, 255, 0.58);
 }
+
+/* Light theme — white glass shell + matte dark Prithvi copy */
+html[data-theme='light'] .si-crop-ai-float {
+  border-color: rgba(34, 34, 34, 0.12);
+  background: linear-gradient(168deg, #ffffff 0%, #f6f7f8 100%);
+  box-shadow:
+    0 18px 40px rgba(15, 23, 42, 0.1),
+    0 2px 10px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  color: #222222;
+}
+
+html[data-theme='light'] .si-crop-ai-float__head {
+  border-bottom-color: rgba(34, 34, 34, 0.1);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 247, 248, 0.72) 100%);
+}
+
+html[data-theme='light'] .si-crop-ai-float__kicker {
+  color: #059669;
+}
+
+html[data-theme='light'] .si-crop-ai-float__title {
+  color: #222222;
+}
+
+html[data-theme='light'] .si-crop-ai-float__close {
+  background: rgba(34, 34, 34, 0.05);
+  color: #555555;
+  border: 1px solid rgba(34, 34, 34, 0.1);
+}
+
+html[data-theme='light'] .si-crop-ai-float__close:hover {
+  background: rgba(34, 34, 34, 0.08);
+  color: #222222;
+}
+
+html[data-theme='light'] .si-crop-ai-float__body .prithvi-tool {
+  color: #222222;
+}
+
+html[data-theme='light'] .si-crop-ai-float__body .prithvi-tool__title {
+  color: #222222;
+}
+
+html[data-theme='light'] .si-crop-ai-float__body .prithvi-tool__sub {
+  color: #555555;
+}

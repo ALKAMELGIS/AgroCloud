@@ -92,6 +92,21 @@ export type GeoMarkdownSegment =
   | { type: 'table'; table: GeoExplorerDataTablePayload }
 
 /** Split assistant markdown into text + extracted pipe tables (first table wins per block; supports multiple). */
+/** Render a simple markdown pipe table from column headers and row cells. */
+export function formatGeoAiMarkdownTable(columns: string[], rows: string[][]): string {
+  const cols = columns.filter(Boolean)
+  if (!cols.length || !rows.length) return ''
+  const header = `| ${cols.join(' | ')} |`
+  const sep = `| ${cols.map(() => '---').join(' | ')} |`
+  const body = rows
+    .map(row => {
+      const cells = cols.map((_, i) => String(row[i] ?? '').replace(/\|/g, '\\|'))
+      return `| ${cells.join(' | ')} |`
+    })
+    .join('\n')
+  return `${header}\n${sep}\n${body}`
+}
+
 export function splitTextIntoMarkdownSegments(text: string): GeoMarkdownSegment[] {
   const lines = text.split(/\r?\n/)
   const out: GeoMarkdownSegment[] = []

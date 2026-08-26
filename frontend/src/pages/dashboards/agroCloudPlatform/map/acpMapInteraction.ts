@@ -157,3 +157,33 @@ export function safeAcpRasterSetBounds(
     /* source detached */
   }
 }
+
+/** Hide a WMS chunk layer — keep source/layer mounted (no removeLayer flicker). */
+export function hideAcpWmsChunkLayer(map: MaplibreMap, layerId: string): void {
+  if (!map.getLayer(layerId)) return
+  try {
+    map.setLayoutProperty(layerId, 'visibility', 'none')
+    map.setPaintProperty(layerId, 'raster-opacity', 0)
+  } catch {
+    /* style race */
+  }
+}
+
+/** Drop chunk sources only on analysis revision / map teardown — not on field selection. */
+export function removeAcpWmsChunkLayer(map: MaplibreMap, sourceId: string, layerId: string): void {
+  try {
+    if (map.getLayer(layerId)) map.removeLayer(layerId)
+    if (map.getSource(sourceId)) map.removeSource(sourceId)
+  } catch {
+    /* style race */
+  }
+}
+
+export function nextAcpMapRequestId(ref: { current: number }): number {
+  ref.current += 1
+  return ref.current
+}
+
+export function isAcpMapRequestCurrent(ref: { current: number }, requestId: number): boolean {
+  return ref.current === requestId
+}

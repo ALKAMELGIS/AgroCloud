@@ -1018,3 +1018,40 @@
   flex: 1;
   accent-color: var(--si-grb-accent);
 }
+
+/* ── Light theme (floating georeference bar) ─────────────────────────────── */
+html[data-theme='light'] .si-grb-floatbar {
+  --si-grb-ink: #0f172a;
+  --si-grb-muted: #64748b;
+  --si-grb-line: rgba(148, 163, 184, 0.35);
+  --si-grb-surface: rgba(15, 23, 42, 0.04);
+  --si-grb-accent: #4d7c46;
+  --si-grb-accent-soft: rgba(77, 124, 70, 0.14);
+  --si-grb-accent-line: rgba(77, 124, 70, 0.4);
+  border-color: rgba(148, 163, 184, 0.4);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  color: var(--si-grb-ink);
+}
+html[data-theme='light'] .si-grb-floatbar--compact,
+html[data-theme='light'] .si-grb-floatbar:has(.si-grb__ribbon--compact) {
+  border-color: rgba(148, 163, 184, 0.4);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(248, 250, 252, 0.94));
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+html[data-theme='light'] .si-grb-floatbar .si-grb__title {
+  color: #0f172a;
+}
+html[data-theme='light'] .si-grb-floatbar .si-grb__title > i {
+  color: #4d7c46;
+}
+html[data-theme='light'] .si-grb-floatbar .si-grb__icon-btn:hover,
+html[data-theme='light'] .si-grb-floatbar .si-grb__tool:hover:not(:disabled) {
+  background: rgba(15, 23, 42, 0.06);
+  color: #0f172a;
+}
+html[data-theme='light'] .si-grb-floatbar .si-grb__tool.is-on {
+  background: var(--si-grb-accent-soft);
+  border-color: var(--si-grb-accent);
+  color: #365a32;
+}

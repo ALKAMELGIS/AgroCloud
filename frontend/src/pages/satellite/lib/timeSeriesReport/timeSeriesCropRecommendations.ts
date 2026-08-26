@@ -153,8 +153,8 @@ const CROP_RULES: CropRule[] = [
 ]
 
 export function buildCropPlantingRecommendations(input: CropRecommendationInput): CropRecommendationResult {
-  const avgTemp = input.weather?.summary.avgTemperatureC ?? null
-  const rain = input.weather?.summary.totalRainfallMm ?? null
+  const avgTemp = input.weather?.summary?.avgTemperatureC ?? null
+  const rain = input.weather?.summary?.totalRainfallMm ?? null
   const lat = input.centroidLat
   const absLat = lat != null && Number.isFinite(lat) ? Math.abs(lat) : 25
   const temp = avgTemp ?? 24

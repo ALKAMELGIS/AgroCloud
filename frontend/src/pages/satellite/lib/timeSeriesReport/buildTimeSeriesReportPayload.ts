@@ -1,5 +1,11 @@
 import { evaluateImageryLayerDailyValue } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import type { ImageryTimeAggregation } from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import {
+  aggregateImageryChartByTimePeriod,
+  aggregateImageryTimeSeriesMulti,
+  filterImageryTimeSeriesByDateRange,
+  pruneImageryTimeSeriesToObservations,
+} from '../../../dashboards/agroCloudPlatform/acpImageryTimeSeries'
 import { buildImageryIndexInterpretation } from '../../../../lib/imageryIndexInterpretationEngine'
 import { estimateSaviFromNdvi } from '../../../../lib/chasIndex'
 import { fetchLayerClassAreas, layerSupportsClassArea } from '../../../../lib/siLayerClassAreaEngine'
@@ -16,6 +22,7 @@ import {
   buildLulcFiveYearMapGroups,
 } from './timeSeriesLulcChangeMaps'
 import { buildEstimatedWaterLossTimeline } from './estimatedWaterLossTimeline'
+import { fetchWaterLossEt0ByDateForField, buildWaterLossEtByDateMaps } from './waterLossEtByDate'
 import { buildEstimatedYieldTimeline } from './estimatedYieldTimeline'
 import { buildVegetationCoverageTimeline } from './vegetationCoverageTimeline'
 import { buildTimeSeriesWeatherTimeline } from './timeSeriesWeatherTimeline'
@@ -85,6 +92,16 @@ export type BuildTimeSeriesReportPayloadInput = {
    */
   includeLulcMapSnapshots?: boolean
   includeVegetationCoverageTimeline?: boolean
+  /** When false, skip per-scene NDVI histogram API calls (faster batch). Default true. */
+  enrichVegetationHistograms?: boolean
+  /** When false, skip Open-Meteo weather timeline (faster batch exports). Default true. */
+  includeWeatherTimeline?: boolean
+  /**
+   * Batch Analytics fast path — skips static map PNG, histogram class areas, vegetation histogram
+   * enrichment, weather timeline, and per-scene ET0 Open-Meteo fetches unless overridden.
+   * Set {@link includeMapSnapshots} to true to keep the index Map Snapshots atlas in batch Excel.
+   */
+  batchExportFastPath?: boolean
   periodAnchorDates?: Record<string, string>
   timeAggregation?: ImageryTimeAggregation
   /**
@@ -98,6 +115,8 @@ export type BuildTimeSeriesReportPayloadInput = {
   includeChangeDetectionMapSnapshots?: boolean
   /** Soft cap for Day atlas cards per layer (even sampling). */
   mapSnapshotMaxPerLayer?: number
+  /** Parallel WMS snapshot fetches per layer (default 2). */
+  mapSnapshotConcurrency?: number
   signal?: AbortSignal
   onMapSnapshotProgress?: (completed: number, total: number) => void
 }
@@ -147,6 +166,56 @@ export function buildDayChartFromDailyRows(
   }
 }
 
+/**
+ * Build chart axis for batch/single export from raw daily rows — same pipeline as
+ * SiImageryTimeSeriesPanel (multi-layer daily → date clip → week/month/year aggregate).
+ */
+export function buildAnalyticsChartFromDailyRows(
+  fieldKey: string,
+  layerIds: string[],
+  dailyRows: SentinelHubDailyIndexMeans[],
+  fromDate: string,
+  toDate: string,
+  timeAggregation: ImageryTimeAggregation = 'day',
+): {
+  labels: string[]
+  displayLabels: string[]
+  series: ImageryTimeSeriesLayerSeries[]
+  periodAnchorDates: Record<string, string>
+} {
+  const ids = [...new Set(layerIds.map(id => id.trim().toUpperCase()).filter(Boolean))]
+  if (!ids.length || !dailyRows.length) {
+    return { labels: [], displayLabels: [], series: [], periodAnchorDates: {} }
+  }
+
+  const dailyMaps = new Map<string, SentinelHubDailyIndexMeans[]>()
+  dailyMaps.set(fieldKey, dailyRows)
+  const multi = aggregateImageryTimeSeriesMulti(dailyMaps, [fieldKey], ids)
+  const filtered = filterImageryTimeSeriesByDateRange(
+    multi.labels,
+    multi.series,
+    fromDate,
+    toDate,
+  )
+  const pruned = pruneImageryTimeSeriesToObservations(filtered.labels, filtered.series)
+  const aggregated = aggregateImageryChartByTimePeriod(
+    pruned.labels,
+    pruned.series,
+    timeAggregation,
+  )
+  const periodAnchorDates = Object.fromEntries(aggregated.periodAnchorDate.entries())
+  const series = aggregated.series.map(s => ({
+    ...s,
+    values: s.values.map(v => (v != null && Number.isFinite(v) ? v : null)),
+  }))
+  return {
+    labels: aggregated.labels,
+    displayLabels: aggregated.displayLabels,
+    series,
+    periodAnchorDates,
+  }
+}
+
 function resolveDailyMean(rows: SentinelHubDailyIndexMeans[], layerId: string, date: string): number | null {
   const row = rows.find(r => r.date?.slice(0, 10) === date.slice(0, 10))
   if (!row) return null
@@ -171,6 +240,7 @@ function createMapProgress(onProgress?: (completed: number, total: number) => vo
 export async function buildTimeSeriesReportPayload(
   input: BuildTimeSeriesReportPayloadInput,
 ): Promise<TimeSeriesReportPayload> {
+  const fastBatch = input.batchExportFastPath === true
   const acquisitionDate = input.acquisitionDate.trim().slice(0, 10)
   const geometry = input.field?.geometry ?? null
   const areaHa = geometry ? geodesicAreaM2(geometry) / 10_000 : 0
@@ -190,7 +260,7 @@ export async function buildTimeSeriesReportPayload(
       const series =
         input.layerSeries.find(ls => ls.layerId.toUpperCase() === layerId.toUpperCase())?.values ?? []
       let histogram = null
-      if (geometry && layerSupportsClassArea(layerId)) {
+      if (!fastBatch && geometry && layerSupportsClassArea(layerId)) {
         try {
           histogram = await fetchLayerClassAreas({
             geometry,
@@ -244,14 +314,18 @@ export async function buildTimeSeriesReportPayload(
   })
 
   const mapImageDataUrl =
-    input.includeMap !== false
+    !fastBatch && input.includeMap !== false
       ? await fetchFieldMapSnapshot(geometry, input.mapboxToken, 520, 360)
       : null
 
   const onPhase = createMapProgress(input.onMapSnapshotProgress)
 
-  const wantIndexMaps = input.includeMapSnapshots !== false
-  const wantLulcMaps = input.includeLulcMapSnapshots ?? wantIndexMaps
+  const wantIndexMaps =
+    input.includeMapSnapshots === true ||
+    (!fastBatch && input.includeMapSnapshots !== false)
+  const wantLulcMaps =
+    !fastBatch &&
+    (input.includeLulcMapSnapshots ?? (input.includeMapSnapshots !== false))
 
   // When the panel is already Day, keep its chart axis (proven finite means).
   // Rebuild from dailyRows only when forcing Day over Week/Month/Year aggregation.
@@ -287,6 +361,7 @@ export async function buildTimeSeriesReportPayload(
           interpretations,
           timeAggregation: effectiveMapAggregation,
           maxDaySnapshots: input.mapSnapshotMaxPerLayer,
+          snapshotConcurrency: input.mapSnapshotConcurrency,
           allowBasemapFallback: true,
           mapboxToken: input.mapboxToken,
           signal: input.signal,
@@ -313,6 +388,7 @@ export async function buildTimeSeriesReportPayload(
       interpretations,
       timeAggregation,
       maxDaySnapshots: input.mapSnapshotMaxPerLayer,
+      snapshotConcurrency: input.mapSnapshotConcurrency,
       allowBasemapFallback: true,
       mapboxToken: input.mapboxToken,
       signal: input.signal,
@@ -339,6 +415,7 @@ export async function buildTimeSeriesReportPayload(
         interpretations,
         timeAggregation: effectiveMapAggregation,
         maxDaySnapshots: input.mapSnapshotMaxPerLayer ?? 12,
+        snapshotConcurrency: input.mapSnapshotConcurrency,
         allowBasemapFallback: true,
         mapboxToken: input.mapboxToken,
         signal: input.signal,
@@ -395,30 +472,60 @@ export async function buildTimeSeriesReportPayload(
   const ndviSeries =
     input.layerSeries.find(s => s.layerId.toUpperCase() === 'NDVI') ?? null
 
-  const vegetationCoverageTimeline = geometry
-    ? await buildVegetationCoverageTimeline({
-        geometry,
-        chartLabels: input.chartLabels,
-        displayLabels: input.displayLabels,
-        periodAnchorDates,
-        dailyRows: input.dailyRows,
-        ndviSeries,
-        enrichWithHistograms: input.includeVegetationCoverageTimeline !== false,
-        signal: input.signal,
-      })
-    : []
+  const vegetationCoverageTimeline =
+    !fastBatch && geometry && input.includeVegetationCoverageTimeline !== false
+      ? await buildVegetationCoverageTimeline({
+          geometry,
+          chartLabels: input.chartLabels,
+          displayLabels: input.displayLabels,
+          periodAnchorDates,
+          dailyRows: input.dailyRows,
+          ndviSeries,
+          enrichWithHistograms: input.enrichVegetationHistograms !== false,
+          signal: input.signal,
+        })
+      : []
 
   const estimatedWaterLossTimeline = geometry
-    ? buildEstimatedWaterLossTimeline({
-        geometry,
-        chartLabels: input.chartLabels,
-        displayLabels: input.displayLabels,
-        periodAnchorDates,
-        dailyRows: input.dailyRows,
-        layerSeries: input.layerSeries,
-        vegetationCoverageTimeline,
-        signal: input.signal,
-      })
+    ? await (async () => {
+        const periodMetaByDate = new Map<string, { seriesIndex: number }>()
+        const sceneDates: string[] = []
+        for (let i = 0; i < input.chartLabels.length; i += 1) {
+          const periodKey = input.chartLabels[i]!
+          const sceneDate = (periodAnchorDates?.[periodKey] ?? periodKey).trim().slice(0, 10)
+          if (!sceneDate) continue
+          sceneDates.push(sceneDate)
+          periodMetaByDate.set(sceneDate, { seriesIndex: i })
+        }
+        const et0MmDayByDate = fastBatch
+          ? {}
+          : await fetchWaterLossEt0ByDateForField({
+              field: input.field,
+              fromDate: input.fromDate,
+              toDate: input.toDate,
+              sceneDates,
+              signal: input.signal,
+            })
+        const { etMmDayByDate, etcMmDayByDate } = buildWaterLossEtByDateMaps({
+          sceneDates,
+          dailyRows: input.dailyRows,
+          layerSeries: input.layerSeries,
+          periodMetaByDate,
+          et0MmDayByDate,
+        })
+        return buildEstimatedWaterLossTimeline({
+          geometry,
+          chartLabels: input.chartLabels,
+          displayLabels: input.displayLabels,
+          periodAnchorDates,
+          dailyRows: input.dailyRows,
+          layerSeries: input.layerSeries,
+          vegetationCoverageTimeline,
+          etMmDayByDate,
+          etcMmDayByDate,
+          signal: input.signal,
+        })
+      })()
     : []
 
   const estimatedYieldTimeline = geometry
@@ -434,15 +541,18 @@ export async function buildTimeSeriesReportPayload(
       })
     : []
 
-  const weatherTimeline = await buildTimeSeriesWeatherTimeline({
-    geometry,
-    fromDate: input.fromDate,
-    toDate: input.toDate,
-    chartLabels: input.chartLabels,
-    displayLabels: input.displayLabels,
-    timeAggregation,
-    layerSeries: input.layerSeries,
-  })
+  const weatherTimeline =
+    fastBatch || input.includeWeatherTimeline === false
+      ? null
+      : await buildTimeSeriesWeatherTimeline({
+          geometry,
+          fromDate: input.fromDate,
+          toDate: input.toDate,
+          chartLabels: input.chartLabels,
+          displayLabels: input.displayLabels,
+          timeAggregation,
+          layerSeries: input.layerSeries,
+        })
 
   const correlationBlocks = buildTimeSeriesCorrelationBlocks({
     labels: input.chartLabels,
@@ -479,6 +589,7 @@ export async function buildTimeSeriesReportPayload(
       from: input.fromDate,
       to: input.toDate,
       acquisitionDate,
+      timeAggregation,
     },
     layerIds: input.layerIds,
     charts: {

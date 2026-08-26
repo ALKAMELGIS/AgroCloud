@@ -31,7 +31,8 @@ export const GEO_AI_AGENT_FAB_ICON_OPTIONS: Array<{
   label: string;
   faClass: string;
 }> = [
-  { id: 'sparkles', label: 'Sparkles', faClass: 'fa-solid fa-sparkles' },
+  /** Font Awesome Free has no `fa-sparkles` — use wand-magic-sparkles (same glyph family). */
+  { id: 'sparkles', label: 'Sparkles', faClass: 'fa-solid fa-wand-magic-sparkles' },
   { id: 'robot', label: 'Robot', faClass: 'fa-solid fa-robot' },
   { id: 'comments', label: 'Chat', faClass: 'fa-solid fa-comments' },
   { id: 'wand', label: 'Wand', faClass: 'fa-solid fa-wand-magic-sparkles' },
@@ -40,35 +41,31 @@ export const GEO_AI_AGENT_FAB_ICON_OPTIONS: Array<{
 
 export const DEFAULT_GEO_AI_AGENT_CHIPS: GeoAiAgentChipPref[] = [
   {
-    id: 'analyze-aoi',
-    label: 'Analyze AOI →',
-    prompt:
-      'Analyze this AOI using the current map layers, remote sensing context, building density, and weather.',
+    id: 'avg-ndvi',
+    label: 'Average NDVI in AOI →',
+    prompt: 'What is the average NDVI inside the current AOI?',
   },
   {
-    id: 'count-buildings',
-    label: 'Count buildings →',
-    prompt:
-      'Count buildings and estimate building/road density in the current AOI or visible map extent from loaded vector layers.',
+    id: 'stressed-pct',
+    label: 'Stressed area % →',
+    prompt: 'What percentage of the AOI shows stressed vegetation based on the active index?',
   },
   {
-    id: 'vegetation',
-    label: 'Vegetation health →',
-    prompt:
-      'Summarize vegetation health for the current AOI using NDVI / Layer Live indices if available.',
+    id: 'buffer-aoi',
+    label: 'Buffer AOI 500m →',
+    prompt: 'Create a 500 m buffer around the current AOI and show it on the map.',
   },
   {
-    id: 'flood-slope',
-    label: 'Flood / slope context →',
-    prompt:
-      'Give flood, slope, and heat (LST / weather) context for the current AOI using available layers and map state.',
+    id: 'aoi-area',
+    label: 'AOI area →',
+    prompt: 'Calculate the area of the current AOI in hectares.',
   },
 ];
 
 export const DEFAULT_GEO_AI_AGENT_PREFS: GeoAiAgentPrefs = {
   layoutMode: 'docked',
-  fabOpenIcon: 'sparkles',
-  fabCloseIcon: 'sparkles',
+  fabOpenIcon: 'comments',
+  fabCloseIcon: 'comments',
   showNewChatButton: true,
   showHistoryButton: true,
   greetingText: 'Hello, {name}!',
@@ -78,7 +75,7 @@ export const DEFAULT_GEO_AI_AGENT_PREFS: GeoAiAgentPrefs = {
 };
 
 export function fabIconFaClass(id: GeoAiAgentFabIconId): string {
-  return GEO_AI_AGENT_FAB_ICON_OPTIONS.find(o => o.id === id)?.faClass ?? 'fa-solid fa-sparkles';
+  return GEO_AI_AGENT_FAB_ICON_OPTIONS.find(o => o.id === id)?.faClass ?? 'fa-solid fa-wand-magic-sparkles';
 }
 
 function isModelTab(v: unknown): v is GeoAiAgentModelTab {

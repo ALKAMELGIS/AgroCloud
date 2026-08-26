@@ -8,7 +8,8 @@ import { estimateNdwiFromNdmi } from './timeSeriesReportExecutive'
 import type { TimeSeriesTrendLabel } from './timeSeriesReportTypes'
 import type { VegetationCoveragePoint } from './vegetationCoverageTimeline'
 
-import { estimateEtMmDayFromMoisture } from '../../../../lib/etIndex'
+import { estimateAetMmDayFromMoistureIndices, estimateEtcPotentialMmDay } from '../../../../lib/etIndex'
+import { computeWaterLossFromEtDeficit } from './waterRequirementService'
 
 /**
  * Legacy mid-season ceiling (mm/day) for relative Water Loss Index % only.
@@ -119,8 +120,10 @@ export type ComputeEstimatedWaterLossPointInput = {
   ndwi: number | null
   /** Optional canopy vigor for Kc (crop stage). */
   ndvi?: number | null
-  /** When set and finite, use physical ET formula instead of index×ref. */
+  /** Actual ET (ETa) mm/day when available from satellite or weather stack. */
   etMmDay?: number | null
+  /** Crop water demand (ETc) mm/day — Kc × ET0 or seasonal potential. */
+  etcMmDay?: number | null
   vegetationCoveragePct?: number
   vegetationAreaHa?: number
   ndwiEstimated?: boolean
@@ -128,8 +131,9 @@ export type ComputeEstimatedWaterLossPointInput = {
 
 /**
  * Single-date Estimated Water Loss for the active AOI.
- * ET path: Water Loss (m³/day) = ET (mm/day) × AOI (ha) × 10
- * Index path: Moisture Score → Water Loss Index → ET proxy × area × 10
+ * Water Loss (%) = (1 − ETa/ETc) × 100
+ * Loss (m³/ha/day) = max(0, ETc − ETa) × 10
+ * Loss (m³/day) = Loss (m³/ha/day) × AOI (ha)
  */
 export function computeEstimatedWaterLossPoint(
   input: ComputeEstimatedWaterLossPointInput,
@@ -149,44 +153,54 @@ export function computeEstimatedWaterLossPoint(
   const hasIndices =
     ndmi != null && Number.isFinite(ndmi) && ndwi != null && Number.isFinite(ndwi)
 
-  const etProvided =
+  const etaProvided =
     input.etMmDay != null && Number.isFinite(input.etMmDay) && input.etMmDay >= 0
       ? input.etMmDay
       : null
+  const etcProvided =
+    input.etcMmDay != null && Number.isFinite(input.etcMmDay) && input.etcMmDay > 0
+      ? input.etcMmDay
+      : null
 
   let moistureScore: number | null = null
-  let waterLossIndexPct = 0
-  let etMmDay: number | null = etProvided
-  let source: EstimatedWaterLossSource = 'et'
-
-  if (etProvided != null) {
-    source = 'et'
-    if (hasIndices) {
-      moistureScore = computeMoistureScore(ndmi!, ndwi!)
-      waterLossIndexPct = Number((computeWaterLossIndexFraction(ndmi!, ndwi!) * 100).toFixed(1))
-    } else {
-      // Without indices, derive a relative index from ET vs the ref ceiling.
-      waterLossIndexPct = Number(
-        (clamp01(etProvided / WATER_LOSS_INDEX_ET_REF_MM) * 100).toFixed(1),
-      )
-    }
-  } else if (hasIndices) {
-    source = 'satellite-index'
+  if (hasIndices) {
     moistureScore = computeMoistureScore(ndmi!, ndwi!)
-    const frac = computeWaterLossIndexFraction(ndmi!, ndwi!)
-    waterLossIndexPct = Number((frac * 100).toFixed(1))
-    // Seasonal energy + canopy Kc so summer / peak canopy differ from winter / bare soil.
-    etMmDay = estimateEtMmDayFromMoisture(ndmi!, ndwi!, {
-      sceneDate: input.date,
-      ndvi: input.ndvi,
-    })
+  }
+
+  const etOptions = {
+    sceneDate: input.date,
+    ndvi: input.ndvi,
+  }
+
+  let etaMmDay = etaProvided
+  let etcMmDay = etcProvided
+  let source: EstimatedWaterLossSource = 'satellite-index'
+
+  if (etaMmDay != null) {
+    source = 'et'
+    etcMmDay =
+      etcMmDay ??
+      (hasIndices
+        ? estimateAetMmDayFromMoistureIndices(ndmi!, ndwi!, etOptions).etcMmDay
+        : estimateEtcPotentialMmDay(etOptions))
+  } else if (hasIndices) {
+    const proxy = estimateAetMmDayFromMoistureIndices(ndmi!, ndwi!, etOptions)
+    etaMmDay = proxy.etaMmDay
+    etcMmDay = proxy.etcMmDay
   } else {
     return null
   }
 
-  const etForVolume = etMmDay ?? 0
-  const waterLossM3Day = Number((etForVolume * aoiAreaHa * 10).toFixed(2))
-  const waterLossM3HaDay = Number((etForVolume * 10).toFixed(2))
+  const loss = computeWaterLossFromEtDeficit({
+    etaMmDay,
+    etcMmDay,
+    areaHa: aoiAreaHa,
+  })
+  if (loss.waterLossIndexPct == null || loss.waterLossM3HaDay == null || loss.waterLossM3Day == null) {
+    return null
+  }
+
+  const waterLossIndexPct = loss.waterLossIndexPct
   const waterStressLevel = classifyWaterStressLevel(waterLossIndexPct)
 
   return {
@@ -194,9 +208,9 @@ export function computeEstimatedWaterLossPoint(
     periodLabel: input.periodLabel ?? input.date.slice(0, 10),
     moistureScore: moistureScore != null ? Number(moistureScore.toFixed(4)) : null,
     waterLossIndexPct,
-    etMmDay,
-    waterLossM3Day,
-    waterLossM3HaDay,
+    etMmDay: etaMmDay,
+    waterLossM3Day: loss.waterLossM3Day,
+    waterLossM3HaDay: loss.waterLossM3HaDay,
     ndmi: ndmi != null && Number.isFinite(ndmi) ? Number(ndmi.toFixed(4)) : null,
     ndwi: ndwi != null && Number.isFinite(ndwi) ? Number(ndwi.toFixed(4)) : null,
     ndwiEstimated,
@@ -219,8 +233,10 @@ export type BuildEstimatedWaterLossTimelineInput = {
   layerSeries: ImageryTimeSeriesLayerSeries[]
   /** Optional vegetation coverage timeline for Coverage % / Area columns */
   vegetationCoverageTimeline?: VegetationCoveragePoint[]
-  /** Optional per-date ET (mm/day). Keys = YYYY-MM-DD */
+  /** Optional per-date ETa (AET) mm/day. Keys = YYYY-MM-DD */
   etMmDayByDate?: Record<string, number | null | undefined>
+  /** Optional per-date ETc mm/day. Keys = YYYY-MM-DD */
+  etcMmDayByDate?: Record<string, number | null | undefined>
   signal?: AbortSignal
 }
 
@@ -273,6 +289,7 @@ export function buildEstimatedWaterLossTimeline(
     const ndvi = resolveLayerMean('NDVI', sceneDate, input.dailyRows, ndviSeries, meta.seriesIndex)
     const veg = vegByDate.get(sceneDate)
     const etMmDay = input.etMmDayByDate?.[sceneDate] ?? null
+    const etcMmDay = input.etcMmDayByDate?.[sceneDate] ?? null
 
     const point = computeEstimatedWaterLossPoint({
       date: sceneDate,
@@ -282,6 +299,7 @@ export function buildEstimatedWaterLossTimeline(
       ndwi: ndwiRaw,
       ndvi,
       etMmDay,
+      etcMmDay,
       vegetationCoveragePct: veg?.vegetationCoveragePct,
       vegetationAreaHa: veg?.vegetationAreaHa,
       ndwiEstimated: ndwiRaw == null,

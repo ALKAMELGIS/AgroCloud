@@ -228,27 +228,82 @@ export function bboxFromGeometry(
   }
 }
 
+const WMS_FETCH_RETRIES = 3
+const WMS_FETCH_RETRY_MS = 450
+
+function sleepMs(ms: number, signal?: AbortSignal): Promise<void> {
+  if (!ms || ms <= 0) return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'))
+      return
+    }
+    const timer = window.setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    const onAbort = () => {
+      window.clearTimeout(timer)
+      reject(new DOMException('Aborted', 'AbortError'))
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
 /** Prefer fetch; fall back to Image+canvas when CORS blocks fetch but tiles still load. */
 async function fetchUrlAsDataUrl(url: string, signal?: AbortSignal): Promise<string | null> {
-  try {
-    const res = await fetch(url, { signal, mode: 'cors' })
-    if (!res.ok) return null
-    const blob = await res.blob()
-    // Sentinel Hub often returns a tiny transparent PNG (no scene) with HTTP 200.
-    if (blob.size > 0 && blob.size < 180) return null
-    const mime = blob.type || 'image/png'
-    if (mime.includes('xml') || mime.includes('html') || mime.includes('json')) return null
-    const buf = await blob.arrayBuffer()
-    const bytes = new Uint8Array(buf)
-    let binary = ''
-    const chunk = 8192
-    for (let i = 0; i < bytes.length; i += chunk) {
-      binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
-    }
-    const b64 = typeof btoa !== 'undefined' ? btoa(binary) : ''
-    return b64 ? `data:${mime};base64,${b64}` : null
-  } catch {
+  for (let attempt = 0; attempt < WMS_FETCH_RETRIES; attempt += 1) {
     if (signal?.aborted) return null
+    try {
+      const res = await fetch(url, { signal, mode: 'cors' })
+      if (!res.ok) {
+        if (attempt < WMS_FETCH_RETRIES - 1 && (res.status === 429 || res.status >= 500)) {
+          await sleepMs(WMS_FETCH_RETRY_MS * (attempt + 1), signal)
+          continue
+        }
+        return null
+      }
+      const blob = await res.blob()
+      // Sentinel Hub often returns a tiny transparent PNG (no scene) with HTTP 200.
+      if (blob.size > 0 && blob.size < 180) {
+        if (attempt < WMS_FETCH_RETRIES - 1) {
+          await sleepMs(WMS_FETCH_RETRY_MS, signal)
+          continue
+        }
+        return null
+      }
+      const mime = blob.type || 'image/png'
+      if (mime.includes('xml') || mime.includes('html') || mime.includes('json')) return null
+      const buf = await blob.arrayBuffer()
+      const bytes = new Uint8Array(buf)
+      if (bytes.length >= 3) {
+        const png =
+          bytes[0] === 0x89 &&
+          bytes[1] === 0x50 &&
+          bytes[2] === 0x4e &&
+          bytes[3] === 0x47
+        const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+        if (!png && !jpeg) return null
+      }
+      let binary = ''
+      const chunk = 8192
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+      }
+      const b64 = typeof btoa !== 'undefined' ? btoa(binary) : ''
+      if (!b64 || !isRecognizedImageBase64Payload(b64)) return null
+      return b64 ? `data:${mime};base64,${b64}` : null
+    } catch {
+      if (signal?.aborted) return null
+      if (attempt < WMS_FETCH_RETRIES - 1) {
+        try {
+          await sleepMs(WMS_FETCH_RETRY_MS * (attempt + 1), signal)
+        } catch {
+          return null
+        }
+        continue
+      }
+    }
   }
 
   // Image element path (map tiles often succeed here even when fetch CORS fails).
@@ -387,10 +442,86 @@ export async function fetchFieldMapSnapshot(
   return fetchUrlAsDataUrl(url)
 }
 
+export function stripBase64Payload(input: string | null | undefined): string {
+  if (!input) return ''
+  const raw = input.trim()
+  const idx = raw.indexOf(',')
+  return (idx >= 0 ? raw.slice(idx + 1) : raw).replace(/\s/g, '')
+}
+
+function decodedBase64Prefix(b64: string, byteCount = 8): Uint8Array | null {
+  const payload = stripBase64Payload(b64)
+  if (!payload) return null
+  try {
+    const sliceLen = Math.min(payload.length, Math.ceil((byteCount * 4) / 3) + 4)
+    const bin = atob(payload.slice(0, sliceLen))
+    const out = new Uint8Array(Math.min(bin.length, byteCount))
+    for (let i = 0; i < out.length; i += 1) out[i] = bin.charCodeAt(i)
+    return out
+  } catch {
+    return null
+  }
+}
+
+/** True when decoded bytes look like a PNG (ExcelJS requires PNG when extension is png). */
+export function isPngBase64Payload(b64: string | null | undefined): boolean {
+  const head = decodedBase64Prefix(b64 ?? '', 8)
+  if (!head || head.length < 8) return false
+  return (
+    head[0] === 0x89 &&
+    head[1] === 0x50 &&
+    head[2] === 0x4e &&
+    head[3] === 0x47 &&
+    head[4] === 0x0d &&
+    head[5] === 0x0a &&
+    head[6] === 0x1a &&
+    head[7] === 0x0a
+  )
+}
+
+function isJpegBase64Payload(b64: string | null | undefined): boolean {
+  const head = decodedBase64Prefix(b64 ?? '', 3)
+  if (!head || head.length < 3) return false
+  return head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff
+}
+
+function isRecognizedImageBase64Payload(b64: string | null | undefined): boolean {
+  return isPngBase64Payload(b64) || isJpegBase64Payload(b64)
+}
+
 export function dataUrlToPngBase64(dataUrl: string | null | undefined): string | null {
-  if (!dataUrl) return null
-  const idx = dataUrl.indexOf(',')
-  return idx >= 0 ? dataUrl.slice(idx + 1) : dataUrl
+  const payload = stripBase64Payload(dataUrl ?? '')
+  return payload || null
+}
+
+/** Re-encode JPEG/invalid raster payloads as PNG base64 for Excel/Word embedding. */
+export async function ensurePngBase64ForExcel(
+  base64OrDataUrl: string | null | undefined,
+): Promise<string | null> {
+  const payload = dataUrlToPngBase64(base64OrDataUrl ?? '')
+  if (!payload) return null
+  if (isPngBase64Payload(payload)) return payload
+
+  const src = base64OrDataUrl!.trim().startsWith('data:')
+    ? base64OrDataUrl!.trim()
+    : `data:image/png;base64,${payload}`
+
+  try {
+    const img = await loadImage(src)
+    const w = Math.max(1, img.naturalWidth || img.width)
+    const h = Math.max(1, img.naturalHeight || img.height)
+    if (w < 2 || h < 2) return null
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+    ctx.drawImage(img, 0, 0, w, h)
+    const out = dataUrlToPngBase64(canvas.toDataURL('image/png'))
+    return out && isPngBase64Payload(out) ? out : null
+  } catch {
+    return null
+  }
 }
 
 /** Fetch a single Sentinel Hub WMS index map for AOI + scene date (PNG base64, no prefix). */
@@ -471,7 +602,8 @@ export async function fetchIndexLayerMapSnapshotBase64(options: {
   if (!dataUrl) {
     dataUrl = await fetchUrlAsDataUrl(buildUrl(false), options.signal)
   }
-  return dataUrlToPngBase64(dataUrl)
+  const raw = dataUrlToPngBase64(dataUrl)
+  return ensurePngBase64ForExcel(raw)
 }
 
 /** Same as {@link fetchIndexLayerMapSnapshotBase64} but returns a full data URL for UI previews. */
@@ -839,7 +971,8 @@ export async function compositeAoiMapSnapshotBase64(options: {
 
   try {
     const dataUrl = canvas.toDataURL('image/png')
-    return dataUrlToPngBase64(dataUrl)
+    const payload = dataUrlToPngBase64(dataUrl)
+    return payload && isPngBase64Payload(payload) ? payload : null
   } catch {
     // Tainted canvas — retry without basemap/index so AOI outline cards still export.
     try {
@@ -860,7 +993,8 @@ export async function compositeAoiMapSnapshotBase64(options: {
       drawNorthArrow(sctx, mapX + mapW - 22, mapY + 22, 26)
       drawScaleBar(sctx, extent, mapX, mapY, mapW, mapH)
       if (legend) drawSnapshotLegend(sctx, legend, legendX, legendY, legendMaxW)
-      return dataUrlToPngBase64(safe.toDataURL('image/png'))
+      const safePayload = dataUrlToPngBase64(safe.toDataURL('image/png'))
+      return safePayload && isPngBase64Payload(safePayload) ? safePayload : null
     } catch {
       return null
     }

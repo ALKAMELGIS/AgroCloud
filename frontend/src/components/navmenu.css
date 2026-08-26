@@ -2021,7 +2021,7 @@ html[data-theme="dark"] .navmenu-sublist-title {
   .navmenu .navmenu-utility .group-header.navmenu-icon-only,
   .navmenu .navmenu-utility-last .group-header.navmenu-icon-only,
   .navmenu .navmenu-utility > .group-header,
-  .navmenu .navmenu-utility-theme > .group-header {
+  .navmenu .navmenu-utility-theme > .nav-theme-toggle {
     background: transparent;
     border: none;
     box-shadow: none;
