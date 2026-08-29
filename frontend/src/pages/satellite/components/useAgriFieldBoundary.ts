@@ -43,6 +43,13 @@ import {
 import { createGeoTiffPngPreviewUrl } from '../../../lib/raster/siRasterMapLayer'
 import { useSen2srControls } from './useSen2srControls'
 import { useFieldBoundaryTrainingSamples } from './useFieldBoundaryTrainingSamples'
+import {
+  FTW_GLOBAL_DEFAULT_OPACITY_PCT,
+  FTW_GLOBAL_DEFAULT_THRESHOLD_PCT,
+  FTW_GLOBAL_DEFAULT_YEAR,
+  FTW_GLOBAL_FIELD_MIN_ZOOM,
+  type FtwGlobalYear,
+} from '../../../lib/agriFieldBoundary/ftwGlobalConfig'
 
 export type FieldBoundaryPhase =
   | 'idle'
@@ -296,16 +303,18 @@ function isOfflineFieldBoundaryError(message: string | null | undefined): boolea
 }
 
 export type FieldModelId =
+  | 'ftw'
   | 'delineate-fbis'
   | 'map-rgb'
   | 'agricultural-field-delineation'
 
 export type FieldCaptureImageryId = Exclude<
   FieldImagerySource,
-  'delineate-fbis' | 'agricultural-field-delineation'
+  'delineate-fbis' | 'ftw' | 'agricultural-field-delineation'
 >
 
 const FIELD_MODELS: Array<{ id: FieldModelId; label: string }> = [
+  { id: 'ftw', label: 'Fields of the World (Global v3)' },
   { id: 'delineate-fbis', label: 'Delineate Anything (v2)' },
   { id: 'agricultural-field-delineation', label: 'Agricultural Field Delineation' },
   { id: 'map-rgb', label: 'Map RGB detect (instance)' },
@@ -333,21 +342,19 @@ function splitFieldSource(source: FieldImagerySource | string): {
   imagery: FieldCaptureImageryId
 } {
   const raw = String(source || '').toLowerCase()
-  if (raw === 'delineate-fbis' || raw === 'agricultural-field-delineation') {
+  if (raw === 'delineate-fbis' || raw === 'agricultural-field-delineation' || raw === 'ftw') {
     return { model: raw as FieldModelId, imagery: 'basemap' }
   }
   if (raw === 'afd') {
     return { model: 'agricultural-field-delineation', imagery: 'basemap' }
   }
-  // Legacy FoW / FTW deep links → Delineate Anything
   if (
     raw === 'fow' ||
     raw === 'ftw-live' ||
     raw === 'ftw-infer' ||
-    raw === 'ftw' ||
     raw === 'fields-of-the-world'
   ) {
-    return { model: 'delineate-fbis', imagery: 'basemap' }
+    return { model: 'ftw', imagery: 'basemap' }
   }
   return { model: 'map-rgb', imagery: source as FieldCaptureImageryId }
 }
@@ -426,6 +433,10 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
   const sen2sr = useSen2srControls({ resolveAoi })
   const trainingSamples = useFieldBoundaryTrainingSamples()
   const resetSen2sr = sen2sr.reset
+  const [ftwYear, setFtwYear] = useState<FtwGlobalYear>(FTW_GLOBAL_DEFAULT_YEAR)
+  const [ftwThreshold, setFtwThreshold] = useState(FTW_GLOBAL_DEFAULT_THRESHOLD_PCT)
+  const [ftwGlobalOpacity, setFtwGlobalOpacity] = useState(FTW_GLOBAL_DEFAULT_OPACITY_PCT)
+  const [ftwGlobalVisible, setFtwGlobalVisible] = useState(false)
   // Scene calendar rejects harvest dates in the future — never default past today.
   const [sceneDateFrom, setSceneDateFromState] = useState(() => defaultSceneRange().from)
   const [sceneDateTo, setSceneDateToState] = useState(() => defaultSceneRange().to)
@@ -583,6 +594,13 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
   const setModel = useCallback((next: FieldModelId) => {
     sourceChosenRef.current = true
     setModelState(next)
+    if (next !== 'ftw') {
+      setFtwGlobalVisible(false)
+    } else {
+      setResult(null)
+      rawResultRef.current = null
+      lastDetectContextRef.current = null
+    }
     // AFD masks are already georeferenced field instances — Right Angles / merge
     // warps pivots and cadastral edges away from ArcGIS Pro quality.
     if (next === 'agricultural-field-delineation') {
@@ -681,16 +699,47 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
 
   const run = useCallback(async (opts?: { source?: FieldImagerySource; year?: number; sceneDate?: string }) => {
     let activeSource = opts?.source ?? source
-    // Legacy FoW / FTW deep links → Delineate Anything
     const rawSrc = String(activeSource || '').toLowerCase()
     if (
       rawSrc === 'fow' ||
-      rawSrc === 'ftw' ||
       rawSrc === 'ftw-live' ||
       rawSrc === 'ftw-infer' ||
       rawSrc === 'fields-of-the-world'
     ) {
-      activeSource = 'delineate-fbis'
+      activeSource = 'ftw'
+    }
+
+    if (activeSource === 'ftw') {
+      abortRef.current?.abort()
+      setBusy(true)
+      setError(null)
+      setErrorDetail(null)
+      setOffline(false)
+      setProgress(100)
+      setStage(null)
+      setPhase('detecting')
+      if (opts?.source) setSource('ftw')
+      const activeFtwYear: FtwGlobalYear =
+        opts?.year === 2024 || opts?.year === 2025 ? opts.year : ftwYear
+      if (opts?.year === 2024 || opts?.year === 2025) {
+        setFtwYear(opts.year)
+      }
+      setFtwGlobalVisible(true)
+      setResult({
+        geojson: { type: 'FeatureCollection', features: [] },
+        count: 0,
+        score: ftwThreshold / 100,
+        engine: 'ftw-global-pmtiles',
+        device: 'source-cooperative',
+        stats: { field: 0 },
+        aoiApplied: false,
+      })
+      setNotice(
+        `FTW Global ${activeFtwYear} — zoom to level ${FTW_GLOBAL_FIELD_MIN_ZOOM}+ to see field boundaries.`,
+      )
+      setPhase('done')
+      setBusy(false)
+      return
     }
     let activeFrom = sceneDateFrom
     let activeTo = sceneDateTo
@@ -1209,6 +1258,8 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     sceneDate,
     sceneDateFrom,
     sceneDateTo,
+    ftwThreshold,
+    ftwYear,
   ])
 
   const reset = useCallback(() => {
@@ -1216,6 +1267,7 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     rawResultRef.current = null
     lastDetectContextRef.current = null
     autoAttributesKeyRef.current = null
+    setFtwGlobalVisible(false)
     setResult(null)
     setUploadedImage(null)
     setError(null)
@@ -1422,5 +1474,12 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     exportShapefile,
     sen2sr,
     trainingSamples,
+    ftwYear,
+    setFtwYear,
+    ftwThreshold,
+    setFtwThreshold,
+    ftwGlobalOpacity,
+    setFtwGlobalOpacity,
+    ftwGlobalVisible,
   }
 }

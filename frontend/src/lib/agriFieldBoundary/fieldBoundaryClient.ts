@@ -15,6 +15,7 @@ const BASE = () => apiUrl('/api/agri-field-boundary')
 export type FieldImagerySource =
   | 'basemap'
   | 'delineate-fbis'
+  | 'ftw'
   | 'agricultural-field-delineation'
   | 'sentinel2'
   | 'landsat'

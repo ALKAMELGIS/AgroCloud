@@ -155,3 +155,25 @@ node scripts/sync-pages-dist-to-root.mjs --git-add
 ```
 
 For repository layout and development, see [REPOSITORY.md](REPOSITORY.md).
+
+---
+
+## Fields of the World (Global) + VPS cutover
+
+**FTW Global** (pre-computed 2024/2025 field boundaries) streams PMTiles from Source Cooperative in the browser — **no VPS backend required**. It ships with the normal GitHub Pages deploy.
+
+### GitHub Pages (current)
+
+Push to `main` → [Deploy to GitHub Pages](.github/workflows/deploy-pages.yml) → live at [https://www.eliteagrocloud.com/#/](https://www.eliteagrocloud.com/#/).
+
+In **Field Boundary**, choose **Fields of the World (Global v3)** → **Show Global Fields** → zoom to **11+**.
+
+### VPS unified domain (optional cutover)
+
+When `eliteagrocloud.com` DNS points to the VPS (`2.24.11.216`):
+
+1. Copy [scripts/nginx-eliteagrocloud-vps.conf.example](scripts/nginx-eliteagrocloud-vps.conf.example) to nginx on the VPS.
+2. Run [scripts/deploy-vps-fullstack.sh](scripts/deploy-vps-fullstack.sh) (sets `VITE_ELITE_SAME_ORIGIN_API=true` so `/api/*` stays on the same domain).
+3. Configure GitHub secrets `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` → [deploy-vps-fullstack.yml](.github/workflows/deploy-vps-fullstack.yml) auto-deploys on push.
+
+**Keep MX records** for Hostinger email when changing A records. Test with `/etc/hosts` before DNS cutover.

@@ -34,13 +34,21 @@ function isEliteAgrocloudPagesHost(host: string): boolean {
   return h === 'eliteagrocloud.com' || h === 'www.eliteagrocloud.com'
 }
 
+/** VPS full-stack build: SPA and `/api/*` share eliteagrocloud.com (no api. subdomain). */
+function eliteAgrocloudSameOriginApi(): boolean {
+  return import.meta.env.VITE_ELITE_SAME_ORIGIN_API === 'true'
+}
+
 /** Hostinger Node that serves `/api/*` for static SPAs (GitHub Pages, eliteagrocloud.com, mirrors). */
 function defaultRemoteApiOriginForStaticHost(): string {
   if (typeof window === 'undefined') return ''
   const host = hostname().toLowerCase()
   if (host === 'api.eliteagrocloud.com') return ''
   if (isLocalLoopbackHost(host)) return ''
-  if (isEliteAgrocloudPagesHost(host)) return ELITE_AGROCLOUD_API_ORIGIN
+  if (isEliteAgrocloudPagesHost(host)) {
+    if (eliteAgrocloudSameOriginApi()) return ''
+    return ELITE_AGROCLOUD_API_ORIGIN
+  }
   if (isKnownStaticHostname(host)) return ELITE_AGROCLOUD_API_ORIGIN
   return ''
 }

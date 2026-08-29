@@ -589,6 +589,10 @@ import {
   fieldBoundaryOutlineLayerStyle,
 } from '../../lib/agriFieldBoundary/fieldBoundaryStyle';
 import { polygonFeaturesFromCollection } from '../../lib/agriFieldBoundary/fieldValidationMetrics';
+import {
+  removeFtwGlobalMapLayer,
+  syncFtwGlobalMapLayer,
+} from '../../lib/agriFieldBoundary/ftwGlobalMapLayer';
 import { useSamTrainingSamples } from './components/useSamTrainingSamples';
 import { TrainingAITool } from './components/trainingAi/TrainingAITool';
 import { useTrainingAISamples } from './components/trainingAi/useTrainingAISamples';
@@ -16052,11 +16056,10 @@ export default function SatelliteIntelligence() {
   const agriFieldTerrainSyncTimerRef = useRef<number | null>(null);
   const agriFieldFocusSigRef = useRef('');
 
-  /** Field Boundary panel — Delineate default, draw AOI without closing panel. */
+  /** Field Boundary panel — keep draw AOI mode; do not reset model on every open. */
   useEffect(() => {
     if (expandedEnvSection !== 'agri-field-boundary') return;
     setShowEditHandles(false);
-    agriFieldBoundaryRef.current.setModel('delineate-fbis');
     agriFieldBoundaryRef.current.setSceneDateAllYear();
     const mode = fieldBoundaryAoiModeRef.current;
     if (mode === 'draw') {
@@ -16098,6 +16101,52 @@ export default function SatelliteIntelligence() {
     agriFieldBoundary.result?.engine,
     agriFieldBoundary.result?.score,
     focusGeoJsonOnMap,
+  ]);
+
+  useEffect(() => {
+    if (!isMapLoaded || !isMapStyleReady) return;
+    const map = mapRef.current?.getMap?.() ?? mapRef.current;
+    const afb = agriFieldBoundary;
+    syncFtwGlobalMapLayer(map, {
+      visible: afb.model === 'ftw' && afb.ftwGlobalVisible,
+      year: afb.ftwYear,
+      thresholdPct: afb.ftwThreshold,
+      opacityPct: afb.ftwGlobalOpacity,
+    });
+  }, [
+    isMapLoaded,
+    isMapStyleReady,
+    agriFieldBoundary.model,
+    agriFieldBoundary.ftwGlobalVisible,
+    agriFieldBoundary.ftwYear,
+    agriFieldBoundary.ftwThreshold,
+    agriFieldBoundary.ftwGlobalOpacity,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      const map = mapRef.current?.getMap?.() ?? mapRef.current;
+      removeFtwGlobalMapLayer(map);
+    };
+  }, []);
+
+  useEffect(() => {
+    const afb = agriFieldBoundary;
+    if (afb.model !== 'ftw' || !afb.ftwGlobalVisible || afb.phase !== 'done') return;
+    const aoi = resolveFieldBoundaryAoi();
+    if (!aoi) return;
+    const fc =
+      aoi.type === 'FeatureCollection'
+        ? aoi
+        : { type: 'FeatureCollection' as const, features: [{ type: 'Feature' as const, properties: {}, geometry: aoi }] };
+    focusGeoJsonOnMap(fc);
+  }, [
+    agriFieldBoundary.model,
+    agriFieldBoundary.ftwGlobalVisible,
+    agriFieldBoundary.phase,
+    agriFieldBoundary.ftwYear,
+    focusGeoJsonOnMap,
+    resolveFieldBoundaryAoi,
   ]);
 
   const handleAgriFieldBoundaryAddToLayers = useCallback(async () => {
@@ -22003,9 +22052,6 @@ export default function SatelliteIntelligence() {
           return `Showing ${index} on the map for the current AOI (Remote Sensing overlay on).`;
         },
         detectFieldBoundaries: (sourceRaw, year) => {
-          if (!resolveFieldBoundaryAoi()) {
-            return 'No AOI yet — click Edit in the Map toolbox, draw a polygon, then ask again to detect field boundaries.';
-          }
           const normalizeSource = (raw: string | undefined): FieldImagerySource => {
             const t = String(raw || '')
               .trim()
@@ -22021,10 +22067,11 @@ export default function SatelliteIntelligence() {
               t === 'fow' ||
               t === 'fields-of-the-world'
             ) {
-              return 'delineate-fbis';
+              return 'ftw';
             }
             const allowed: FieldImagerySource[] = [
               'basemap',
+              'ftw',
               'delineate-fbis',
               'agricultural-field-delineation',
               'sentinel2',
@@ -22039,18 +22086,27 @@ export default function SatelliteIntelligence() {
             return (allowed as string[]).includes(t) ? (t as FieldImagerySource) : 'delineate-fbis';
           };
           const source = normalizeSource(sourceRaw);
+          if (source !== 'ftw' && !resolveFieldBoundaryAoi()) {
+            return 'No AOI yet — click Edit in the Map toolbox, draw a polygon, then ask again to detect field boundaries.';
+          }
           const yearN =
             year != null && Number.isFinite(year) && year >= 2000 && year <= 2100
               ? Math.round(year)
               : undefined;
           const api = agriFieldBoundaryRef.current;
-          if (yearN != null) api.setYear(yearN);
-          api.setSource(source);
+          if (source === 'ftw') {
+            api.setModel('ftw');
+          } else {
+            api.setSource(source);
+          }
+          if (yearN === 2024 || yearN === 2025) api.setFtwYear(yearN as 2024 | 2025);
+          else if (yearN != null) api.setYear(yearN);
           setExpandedEnvSection('agri-field-boundary');
           setIsLayerDropdownOpen(true);
           void api.run({ source, ...(yearN != null ? { year: yearN } : {}) });
           const yearLabel = yearN != null ? `, year ${yearN}` : '';
-          return `Started field boundary detection (${source}${yearLabel}) for the current AOI.`;
+          const label = source === 'ftw' ? 'Fields of the World (Global)' : source;
+          return `Started field boundary detection (${label}${yearLabel}). Zoom to level 11+ for FTW global fields.`;
         },
         gisOp: (tool, args) => {
           void (async () => {
@@ -26840,6 +26896,13 @@ export default function SatelliteIntelligence() {
                           score={agriFieldBoundary.result?.score ?? null}
                           hasResult={Boolean(agriFieldBoundary.geojson?.features?.length)}
                           resultGeojson={agriFieldBoundary.geojson}
+                          ftwYear={agriFieldBoundary.ftwYear}
+                          onFtwYearChange={agriFieldBoundary.setFtwYear}
+                          ftwThreshold={agriFieldBoundary.ftwThreshold}
+                          onFtwThresholdChange={agriFieldBoundary.setFtwThreshold}
+                          ftwGlobalOpacity={agriFieldBoundary.ftwGlobalOpacity}
+                          onFtwGlobalOpacityChange={agriFieldBoundary.setFtwGlobalOpacity}
+                          ftwGlobalVisible={agriFieldBoundary.ftwGlobalVisible}
                           referenceGeojson={fieldBoundaryReferenceGeojson}
                           referenceLabel={fieldBoundaryReferenceLabel}
                           referenceNotice={null}

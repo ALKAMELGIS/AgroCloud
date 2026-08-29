@@ -14,6 +14,8 @@ import { Sen2srProductControls } from './Sen2srProductControls'
 import { AgriFieldBoundaryResultsDashboard } from './AgriFieldBoundaryResultsDashboard'
 import { AgriFieldBoundaryTrainingSamplesPane } from './AgriFieldBoundaryTrainingSamplesPane'
 import type { FieldBoundaryTrainingSamplesApi } from './useFieldBoundaryTrainingSamples'
+import type { FtwGlobalYear } from '../../../lib/agriFieldBoundary/ftwGlobalConfig'
+import { ftwGlobalAttribution } from '../../../lib/agriFieldBoundary/ftwGlobalConfig'
 import './AgriFieldBoundaryPanel.css'
 
 /** How the study AOI is chosen for Detect Fields. */
@@ -130,6 +132,14 @@ export type AgriFieldBoundaryPanelProps = {
   sen2srNotice?: string | null
   /** Training Samples curation (Predicted → Draft → Approved → Save). */
   trainingSamples?: FieldBoundaryTrainingSamplesApi | null
+  /** FTW global pre-computed PMTiles (Fields of the World v3). */
+  ftwYear?: FtwGlobalYear
+  onFtwYearChange?: (year: FtwGlobalYear) => void
+  ftwThreshold?: number
+  onFtwThresholdChange?: (pct: number) => void
+  ftwGlobalOpacity?: number
+  onFtwGlobalOpacityChange?: (pct: number) => void
+  ftwGlobalVisible?: boolean
 }
 
 const PHASE_LABEL: Record<FieldBoundaryPhase, string> = {
@@ -246,6 +256,13 @@ export function AgriFieldBoundaryPanel({
   sen2srError = null,
   sen2srNotice = null,
   trainingSamples = null,
+  ftwYear = 2025,
+  onFtwYearChange,
+  ftwThreshold = 70,
+  onFtwThresholdChange,
+  ftwGlobalOpacity = 90,
+  onFtwGlobalOpacityChange,
+  ftwGlobalVisible = false,
 }: AgriFieldBoundaryPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const exportRef = useRef<HTMLDivElement>(null)
@@ -274,8 +291,8 @@ export function AgriFieldBoundaryPanel({
   }, [hasResult])
 
   useEffect(() => {
-    if (phase === 'done' && hasResult) setActiveTab('results')
-  }, [phase, hasResult])
+    if (phase === 'done' && hasResult && !isFtw) setActiveTab('results')
+  }, [phase, hasResult, isFtw])
 
   const openResultsDashboard = () => {
     if (!hasResult) return
@@ -301,13 +318,16 @@ export function AgriFieldBoundaryPanel({
   }
 
   const needsUpload = isFieldFileSource(source)
+  const isFtw = model === 'ftw'
   const showImagery = model === 'delineate-fbis' || model === 'map-rgb'
   const isAfd = source === 'agricultural-field-delineation' || model === 'agricultural-field-delineation'
   const isDelineateFbis = source === 'delineate-fbis'
-  const canRun = hasAoi && !busy && (!needsUpload || Boolean(uploadedFileName))
+  const canRun = isFtw ? !busy : hasAoi && !busy && (!needsUpload || Boolean(uploadedFileName))
   const pct = Math.max(0, Math.min(100, Math.round(progress)))
   const showProgress = busy && (phase === 'detecting' || phase === 'capturing')
-  const runTitle = isAfd
+  const runTitle = isFtw
+    ? 'Show FTW global field boundaries (pre-computed v3 B7, CC-BY)'
+    : isAfd
     ? 'Run Agricultural Field Delineation on Sentinel-2 L2A (12 bands)'
     : isDelineateFbis
       ? 'Run Delineate Anything on the AOI capture — sharp black instance edges (:8096)'
@@ -488,6 +508,74 @@ export function AgriFieldBoundaryPanel({
           </div>
         ) : null}
 
+        {isFtw ? (
+          <>
+            <div className="si-afb__model-info" role="region" aria-label="FTW global model">
+              <div className="si-afb__model-info-row">
+                <span>Source</span>
+                <strong>Source Cooperative (global PMTiles)</strong>
+              </div>
+              <div className="si-afb__model-info-row">
+                <span>Model</span>
+                <strong>FTW v3 CC-BY B7 (PRUE)</strong>
+              </div>
+              <div className="si-afb__model-info-row">
+                <span>Attribution</span>
+                <strong>{ftwGlobalAttribution()}</strong>
+              </div>
+              <div className="si-afb__model-info-row">
+                <span>Visibility</span>
+                <strong>Zoom 11+ (individual fields)</strong>
+              </div>
+            </div>
+
+            <label className="si-afb__row">
+              <span className="si-afb__label">Prediction year</span>
+              <select
+                className="si-afb__select"
+                value={ftwYear}
+                disabled={busy}
+                onChange={e => onFtwYearChange?.(Number(e.target.value) as FtwGlobalYear)}
+              >
+                <option value={2025}>2025</option>
+                <option value={2024}>2024</option>
+              </select>
+            </label>
+
+            <label className="si-afb__row">
+              <span className="si-afb__label">
+                Confidence threshold <em>{Math.round(ftwThreshold)}%</em>
+              </span>
+              <input
+                type="range"
+                className="si-afb__slider"
+                min={0}
+                max={100}
+                step={1}
+                value={ftwThreshold}
+                disabled={busy}
+                onChange={e => onFtwThresholdChange?.(Number(e.target.value))}
+              />
+            </label>
+
+            <label className="si-afb__row">
+              <span className="si-afb__label">
+                Overlay opacity <em>{Math.round(ftwGlobalOpacity)}%</em>
+              </span>
+              <input
+                type="range"
+                className="si-afb__slider"
+                min={10}
+                max={100}
+                step={5}
+                value={ftwGlobalOpacity}
+                disabled={busy}
+                onChange={e => onFtwGlobalOpacityChange?.(Number(e.target.value))}
+              />
+            </label>
+          </>
+        ) : null}
+
         {isAfd ? (
           <label className="si-afb__row">
             <span className="si-afb__label">Scene date</span>
@@ -572,6 +660,7 @@ export function AgriFieldBoundaryPanel({
           </div>
         ) : null}
 
+        {!isFtw ? (
         <label className="si-afb__row">
           <span className="si-afb__label">
             Confidence <em>{Math.round(minConfidence * 100)}%</em>
@@ -587,7 +676,10 @@ export function AgriFieldBoundaryPanel({
             onChange={e => onMinConfidenceChange(Number(e.target.value))}
           />
         </label>
+        ) : null}
 
+        {!isFtw ? (
+        <>
         <label className="si-afb__row">
           <span className="si-afb__label">Select AOI</span>
           <select
@@ -726,6 +818,8 @@ export function AgriFieldBoundaryPanel({
             />
           </label>
         ) : null}
+        </>
+        ) : null}
 
         {onSen2srProductModeChange && onSen2srDisplay1mChange ? (
           <Sen2srProductControls
@@ -768,14 +862,21 @@ export function AgriFieldBoundaryPanel({
             title={runTitle}
           >
             <i className="fa-solid fa-crop-simple" aria-hidden />{' '}
-            {busy ? 'Detecting…' : 'Detect Fields'}
+            {busy ? 'Detecting…' : isFtw ? 'Show Global Fields' : 'Detect Fields'}
           </button>
           <button type="button" className="si-afb__btn si-afb__btn--ghost" disabled={busy} onClick={handleReset}>
             Reset
           </button>
         </div>
 
-        {hasResult ? (
+        {isFtw && ftwGlobalVisible ? (
+          <div className="si-afb__hint" role="status">
+            <i className="fa-solid fa-globe" aria-hidden /> FTW Global {ftwYear} overlay active — zoom to
+            level 11+ to see individual field boundaries.
+          </div>
+        ) : null}
+
+        {hasResult && !isFtw ? (
           <button
             type="button"
             className="si-afb__stats si-afb__stats--open"
