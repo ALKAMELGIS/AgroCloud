@@ -6,7 +6,7 @@ import {
   restoreBrowserApiSecretsFromVaultIntoLocalStorage,
 } from '../lib/browserApiSecretsVault'
 import { DEFAULT_PAGE_LINKS } from '../lib/defaultPageLinks'
-import type { CustomApiTokenSlot, CustomPageRecord, SystemSettingsPersistedV1 } from '../types/systemSettings'
+import type { CustomApiTokenSlot, CustomPageRecord, NavItemOverride, SystemSettingsPersistedV1 } from '../types/systemSettings'
 
 import { SETTINGS_STORAGE_KEY } from './persistedStorageKeys'
 export { SETTINGS_STORAGE_KEY }
@@ -91,6 +91,55 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettingsPersistedV1 = {
   directoryRoleCatalog: [...DIRECTORY_ROLES_CANONICAL],
 }
 
+function optionalTrimmedString(value: unknown, maxLen?: number): string {
+  if (typeof value !== 'string') return ''
+  const trimmed = value.trim()
+  return maxLen ? trimmed.slice(0, maxLen) : trimmed
+}
+
+function sanitizeNavItemOverride(raw: unknown): NavItemOverride {
+  if (!raw || typeof raw !== 'object') return {}
+  const r = raw as Record<string, unknown>
+  const labelEn = optionalTrimmedString(r.labelEn, 120)
+  const labelAr = optionalTrimmedString(r.labelAr, 120)
+  const iconClass = optionalTrimmedString(r.iconClass, 120)
+  return {
+    ...(labelEn ? { labelEn } : {}),
+    ...(labelAr ? { labelAr } : {}),
+    ...(iconClass ? { iconClass } : {}),
+    ...(r.hidden === true ? { hidden: true } : {}),
+  }
+}
+
+function sanitizeNavOverrides(raw: unknown): Record<string, NavItemOverride> {
+  if (!raw || typeof raw !== 'object') return {}
+  const out: Record<string, NavItemOverride> = {}
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const id = String(key ?? '').trim()
+    if (!id) continue
+    const override = sanitizeNavItemOverride(value)
+    if (Object.keys(override).length) out[id] = override
+  }
+  return out
+}
+
+function sanitizeNavGroupOrder(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  return raw.map(entry => String(entry ?? '').trim()).filter(Boolean)
+}
+
+function sanitizeNavItemOrders(raw: unknown): Record<string, string[]> {
+  if (!raw || typeof raw !== 'object') return {}
+  const out: Record<string, string[]> = {}
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const groupId = String(key ?? '').trim()
+    if (!groupId || !Array.isArray(value)) continue
+    const ids = value.map(entry => String(entry ?? '').trim()).filter(Boolean)
+    if (ids.length) out[groupId] = ids
+  }
+  return out
+}
+
 export function loadSystemSettings(): SystemSettingsPersistedV1 {
   if (typeof window === 'undefined') return { ...DEFAULT_SYSTEM_SETTINGS }
   try {
@@ -156,11 +205,9 @@ export function mergeWithDefaults(partial: Partial<SystemSettingsPersistedV1>): 
   return {
     ...DEFAULT_SYSTEM_SETTINGS,
     ...partial,
-    navGroupOrder: Array.isArray(partial.navGroupOrder) ? partial.navGroupOrder : DEFAULT_SYSTEM_SETTINGS.navGroupOrder,
-    navItemOrders:
-      partial.navItemOrders && typeof partial.navItemOrders === 'object' ? { ...partial.navItemOrders } : {},
-    navOverrides:
-      partial.navOverrides && typeof partial.navOverrides === 'object' ? { ...partial.navOverrides } : {},
+    navGroupOrder: sanitizeNavGroupOrder(partial.navGroupOrder),
+    navItemOrders: sanitizeNavItemOrders(partial.navItemOrders),
+    navOverrides: sanitizeNavOverrides(partial.navOverrides),
     customPages: mergeCustomPagesWithDefaults(partial.customPages),
     customApiTokenSlots: Array.isArray(partial.customApiTokenSlots)
       ? (partial.customApiTokenSlots as unknown[])

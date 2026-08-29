@@ -48,6 +48,44 @@ test('agri-field-boundary /config reports configured with builtin fallback', asy
   }
 })
 
+test('ftw-mosaic-vectorize route is registered and accepts mask POST', async () => {
+  const app = express()
+  registerAgriFieldBoundaryRoutes(app)
+  const server = await listen(app)
+  const { port } = server.address()
+  try {
+    const { PNG } = await import('pngjs')
+    const w = 64
+    const h = 64
+    const png = new PNG({ width: w, height: h })
+    for (let i = 0; i < w * h; i++) {
+      const o = i * 4
+      png.data[o] = 255
+      png.data[o + 1] = 255
+      png.data[o + 2] = 255
+      png.data[o + 3] = 255
+    }
+    const mask = `data:image/png;base64,${PNG.sync.write(png).toString('base64')}`
+    const res = await fetch(`http://127.0.0.1:${port}/api/agri-field-boundary/ftw-mosaic-vectorize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mask,
+        bbox: [5.0, 52.0, 5.02, 52.02],
+        min_area_m2: 100,
+      }),
+    })
+    assert.notEqual(res.status, 404, 'route must exist')
+    const json = await res.json()
+    assert.equal(res.status, 200)
+    assert.ok(json.geojson)
+    assert.equal(json.geojson.type, 'FeatureCollection')
+    assert.ok(json.count >= 1, 'white mosaic mask should yield at least one field polygon')
+  } finally {
+    await close(server)
+  }
+})
+
 test('AFD detect without image is not rejected as { image, bbox }', async () => {
   const app = express()
   registerAgriFieldBoundaryRoutes(app)

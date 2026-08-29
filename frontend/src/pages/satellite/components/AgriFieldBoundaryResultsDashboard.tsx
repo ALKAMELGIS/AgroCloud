@@ -1,15 +1,11 @@
 /**
- * Field Results Dashboard — six KPIs, training loss/accuracy charts, Epochs Details.
+ * Optimal Learning Rate Finder — six KPIs, AOI-scoped training charts, Epochs Details.
  * Pop-out (variant="float") is that layout only. Inline Results also includes Validation Detection.
  */
 
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
-import {
-  normalizeEpochHistory,
-  readEpochTrainAccuracy,
-  readEpochValAccuracy,
-} from '../../../lib/trainingAi/analyzeTrainingHistory'
+import { normalizeEpochHistory } from '../../../lib/trainingAi/analyzeTrainingHistory'
 import { summarizeFieldGeometry } from '../../../lib/agriFieldBoundary/fieldValidationMetrics'
 import {
   fetchBestEpochHistory,
@@ -23,16 +19,24 @@ import {
   loadPersistedTrainingModel,
   savePersistedEpochHistory,
 } from '../../../lib/trainingAi/trainingModelPersistence'
+import {
+  AOI_TRAINING_ANALYTICS_CHANGED_EVENT,
+  listAoiTrainingAnalytics,
+  loadAoiTrainingAnalytics,
+  saveAoiTrainingAnalytics,
+} from '../../../lib/agriFieldBoundary/aoiTrainingAnalyticsPersistence'
 import { GisFloatingWorkspacePanel } from './GisFloatingWorkspacePanel'
 import { EpochDetailsTable, type EpochDetailRow } from './EpochDetailsTable'
 import { AgriFieldBoundaryValidatePanel } from './AgriFieldBoundaryValidatePanel'
-import { ValidationLinePlot, type PlotSeries } from './ValidationLinePlot'
+import {
+  AoiTrainingChartsWorkspace,
+  analyticsToChartBundle,
+  estimateAoiDatasetSplit,
+  type AoiChartBundle,
+} from './AoiTrainingChartsGrid'
 import './AgriFieldBoundaryResultsDashboard.css'
 import './AgriFieldBoundaryValidatePanel.css'
-
-/** Pic 1 style: Training = blue, Validation = orange. */
-const TRAIN_COLOR = '#1f77b4'
-const VAL_COLOR = '#ff7f0e'
+import './AoiTrainingChartsGrid.css'
 
 export type AgriFieldBoundaryResultsDashboardProps = {
   open: boolean
@@ -52,6 +56,11 @@ export type AgriFieldBoundaryResultsDashboardProps = {
   referenceBusy?: boolean
   /** Inline embed in the Field Boundary dock tab (no map portal). */
   variant?: 'float' | 'inline'
+  /** Active map AOI — scopes charts and persistence per polygon. */
+  activeAoiKey?: string
+  aoiLabel?: string
+  approvedSamples?: number
+  draftSamples?: number
 }
 
 function pct(v: number | null | undefined, digits = 0): string {
@@ -228,6 +237,10 @@ export function AgriFieldBoundaryResultsDashboard({
   referenceNotice = null,
   referenceBusy = false,
   variant = 'float',
+  activeAoiKey = '',
+  aoiLabel = 'AOI',
+  approvedSamples = 0,
+  draftSamples = 0,
 }: AgriFieldBoundaryResultsDashboardProps) {
   const isInline = variant === 'inline'
   const panelOpen = isInline ? true : open
@@ -235,61 +248,62 @@ export function AgriFieldBoundaryResultsDashboard({
   const summary = useMemo(() => summarizeFieldGeometry(geojson), [geojson])
   const emptyCopy = trainingEmptyCopy(engine, serviceOnline, isInline)
   const fallbackHostRef = useRef<HTMLElement | null>(null)
+  const [viewAoiKey, setViewAoiKey] = useState(activeAoiKey || 'current-aoi')
+  const [analyticsTick, setAnalyticsTick] = useState(0)
 
-  const lossSeries = useMemo<PlotSeries[]>(() => {
-    if (!epochRows.length) return []
-    return [
-      {
-        id: 'train_loss',
-        label: 'Training',
-        color: TRAIN_COLOR,
-        markers: epochRows.length <= 40,
-        points: epochRows.map(r => ({ x: r.epoch, y: r.train_loss })),
-      },
-      {
-        id: 'val_loss',
-        label: 'Validation',
-        color: VAL_COLOR,
-        markers: epochRows.length <= 40,
-        points: epochRows.map(r => ({ x: r.epoch, y: r.val_loss })),
-      },
-    ]
-  }, [epochRows])
+  const resolvedAoiKey = activeAoiKey || 'current-aoi'
+  const datasetSplit = useMemo(
+    () =>
+      estimateAoiDatasetSplit({
+        fieldCount,
+        approvedSamples,
+        draftSamples,
+      }),
+    [fieldCount, approvedSamples, draftSamples],
+  )
 
-  const accuracySeries = useMemo<PlotSeries[]>(() => {
-    const trainPts = epochRows
-      .map(r => {
-        const y = readEpochTrainAccuracy(r)
-        return y == null ? null : { x: r.epoch, y }
-      })
-      .filter((p): p is { x: number; y: number } => p != null)
-    const valPts = epochRows
-      .map(r => {
-        const y = readEpochValAccuracy(r)
-        return y == null ? null : { x: r.epoch, y }
-      })
-      .filter((p): p is { x: number; y: number } => p != null)
-    const series: PlotSeries[] = []
-    if (trainPts.length) {
-      series.push({
-        id: 'train_acc',
-        label: 'Training',
-        color: TRAIN_COLOR,
-        markers: trainPts.length <= 40,
-        points: trainPts,
-      })
+  useEffect(() => {
+    if (!resolvedAoiKey || !epochRows.length) return
+    const prev = loadAoiTrainingAnalytics(resolvedAoiKey)
+    saveAoiTrainingAnalytics({
+      aoiKey: resolvedAoiKey,
+      aoiLabel: aoiLabel || prev?.aoiLabel || 'AOI',
+      epochHistory: epochRows,
+      lrFinder: prev?.lrFinder ?? null,
+      dataset: datasetSplit ?? prev?.dataset ?? null,
+      updatedAt: new Date().toISOString(),
+    })
+  }, [resolvedAoiKey, aoiLabel, epochRows, datasetSplit])
+
+  useEffect(() => {
+    if (!panelOpen) return
+    const bump = () => setAnalyticsTick(n => n + 1)
+    window.addEventListener(AOI_TRAINING_ANALYTICS_CHANGED_EVENT, bump)
+    return () => window.removeEventListener(AOI_TRAINING_ANALYTICS_CHANGED_EVENT, bump)
+  }, [panelOpen])
+
+  useEffect(() => {
+    setViewAoiKey(resolvedAoiKey)
+  }, [resolvedAoiKey])
+
+  const chartBundles = useMemo((): AoiChartBundle[] => {
+    void analyticsTick
+    const byKey = new Map<string, AoiChartBundle>()
+    for (const row of listAoiTrainingAnalytics()) {
+      byKey.set(row.aoiKey, analyticsToChartBundle(row))
     }
-    if (valPts.length) {
-      series.push({
-        id: 'val_acc',
-        label: 'Validation',
-        color: VAL_COLOR,
-        markers: valPts.length <= 40,
-        points: valPts,
-      })
-    }
-    return series
-  }, [epochRows])
+    const prev = byKey.get(resolvedAoiKey)
+    byKey.set(resolvedAoiKey, {
+      aoiKey: resolvedAoiKey,
+      aoiLabel: aoiLabel || prev?.aoiLabel || 'AOI',
+      epochHistory: epochRows,
+      lrFinderLrs: prev?.lrFinderLrs,
+      lrFinderLosses: prev?.lrFinderLosses,
+      optimalLr: prev?.optimalLr ?? null,
+      dataset: datasetSplit ?? prev?.dataset ?? null,
+    })
+    return [...byKey.values()]
+  }, [analyticsTick, resolvedAoiKey, aoiLabel, epochRows, datasetSplit])
 
   // Re-render once the map host mounts so createPortal has a target.
   const [hostTick, setHostTick] = useState(0)
@@ -353,51 +367,28 @@ export function AgriFieldBoundaryResultsDashboard({
       </div>
 
       <div className="si-afb-dash__charts">
-        <section className="si-afb-dash__card" style={{ animationDelay: '80ms' }}>
-          <header className="si-afb-dash__card-head">
-            <h4>Training loss</h4>
-            <span>{epochRows.length ? `${epochRows.length} epochs` : 'No history'}</span>
-          </header>
-          {lossSeries.length ? (
-            <ValidationLinePlot
-              series={lossSeries}
-              xLabel="Epochs"
-              yLabel="Loss"
-              ariaLabel="Training and validation loss per epoch"
-              height={isInline ? 112 : 168}
-              width={isInline ? 248 : 420}
-            />
-          ) : (
-            <p className="si-afb-dash__empty">{emptyCopy}</p>
-          )}
-        </section>
-        <section className="si-afb-dash__card" style={{ animationDelay: '120ms' }}>
-          <header className="si-afb-dash__card-head">
-            <h4>Training accuracy</h4>
-            <span>{accuracySeries.length ? 'Train vs val' : 'No accuracy'}</span>
-          </header>
-          {accuracySeries.length ? (
-            <ValidationLinePlot
-              series={accuracySeries}
-              xLabel="Epochs"
-              yLabel="Accuracy"
-              yDomain={[0, 1]}
-              formatY={v => `${(v * 100).toFixed(0)}%`}
-              ariaLabel="Training and validation accuracy per epoch"
-              height={isInline ? 112 : 168}
-              width={isInline ? 248 : 420}
-            />
-          ) : (
-            <p className="si-afb-dash__empty">
-              {isPretrainedFieldEngine(engine)
-                ? emptyCopy
-                : 'Accuracy appears after TRAIN MODEL reports per-epoch accuracy.'}
-            </p>
-          )}
-        </section>
+        <AoiTrainingChartsWorkspace
+          bundles={chartBundles}
+          activeAoiKey={viewAoiKey || resolvedAoiKey}
+          onActiveAoiChange={setViewAoiKey}
+          inline={isInline}
+          emptyLossCopy={emptyCopy}
+          emptyLrFinderCopy={
+            isPretrainedFieldEngine(engine) ? (
+              <>
+                Run <strong>TRAIN MODEL</strong> in Training &amp; AI, or use LR Finder on FTW AOI
+                training.
+              </>
+            ) : (
+              <>
+                No LR sweep yet — run <strong>TRAIN MODEL</strong> or FTW LR Finder for this AOI.
+              </>
+            )
+          }
+        />
       </div>
 
-      <section className="si-afb-dash__card si-afb-dash__card--table" style={{ animationDelay: '160ms' }}>
+      <section className="si-afb-dash__card si-afb-dash__card--table" style={{ animationDelay: '200ms' }}>
         <EpochDetailsTable rows={epochRows} showEmpty emptyMessage={emptyCopy} />
       </section>
 
@@ -432,8 +423,8 @@ export function AgriFieldBoundaryResultsDashboard({
       containerRef={panelContainerRef}
       storageKey="si.afb.resultsDashboard.v2"
       panelId="si-afb-results-dashboard"
-      title="Field Results Dashboard"
-      subtitle={subtitle || 'Detection & training analysis'}
+      title="Optimal Learning Rate Finder"
+      subtitle={subtitle || 'AOI-scoped training analytics'}
       layerIcon={<i className="fa-solid fa-chart-line" aria-hidden />}
       defaultDock="float"
       defaultWidth={920}

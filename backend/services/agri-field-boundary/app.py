@@ -1071,6 +1071,70 @@ def detect(req: DetectRequest):
     except Exception as exc:  # noqa: BLE001
         return JSONResponse(status_code=500, content={"error": _public_error(exc)})
 
+
+class FtwMosaicVectorizeRequest(BaseModel):
+    """Binary FTW union mosaic (PNG) → GeoJSON via single-pass contour vectorize."""
+
+    mask: str = Field(..., description="PNG data URL or base64 of binary field mask")
+    bbox: list[float] = Field(..., min_length=4, max_length=4)
+    width: int | None = None
+    height: int | None = None
+    min_area_m2: float = Field(default=500.0, ge=0)
+    aoi: dict | None = None
+    preserve_geometry: bool = Field(
+        default=False,
+        description="When true, vectorize the union mosaic without morphological smoothing or Douglas simplification (removes tile seams only).",
+    )
+    reference_geojson: dict | None = Field(
+        default=None,
+        description="Field boundary reference FeatureCollection — output these geometries unchanged when raster mask confirms presence.",
+    )
+
+
+@app.post("/ftw/mosaic-vectorize")
+def ftw_mosaic_vectorize(req: FtwMosaicVectorizeRequest):
+    try:
+        from ftw_mosaic_vectorize import _decode_mask_png, vectorize_ftw_binary_mask
+
+        mask = _decode_mask_png(req.mask)
+        h, w = mask.shape[:2]
+        if (
+            req.width
+            and req.height
+            and (w != int(req.width) or h != int(req.height))
+            and not req.preserve_geometry
+        ):
+            mask = cv2.resize(mask, (int(req.width), int(req.height)), interpolation=cv2.INTER_NEAREST)
+        elif req.width and req.height and (w != int(req.width) or h != int(req.height)):
+            raise ValueError(
+                f"mask dimensions {w}x{h} must match width/height {req.width}x{req.height} when preserve_geometry is set."
+            )
+
+        aoi_geom = _parse_aoi(req.aoi)
+        if aoi_geom is not None:
+            aoi_mask = _rasterize_aoi(aoi_geom, req.bbox, mask.shape[1], mask.shape[0])
+            if aoi_mask is not None:
+                mask = (mask.astype(bool) & aoi_mask).astype(np.uint8)
+
+        result = vectorize_ftw_binary_mask(
+            mask,
+            req.bbox,
+            min_area_m2=float(req.min_area_m2),
+            preserve_geometry=bool(req.preserve_geometry),
+            reference_features=(
+                list((req.reference_geojson or {}).get("features") or [])
+                if req.reference_geojson
+                else None
+            ),
+        )
+        result["aoi_applied"] = aoi_geom is not None
+        return result
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"error": _public_error(exc)})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=500, content={"error": _public_error(exc)})
+
+
 @app.post("/detect-job")
 def detect_job(req: DetectRequest, background_tasks: BackgroundTasks):
     job_id = uuid.uuid4().hex[:16]

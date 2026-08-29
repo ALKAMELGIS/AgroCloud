@@ -1,4 +1,4 @@
-/* Satellite: make `<main>` a column flex so `.si-page` gets a definite block size (Edge + Chrome height %). */
+﻿/* Satellite: make `<main>` a column flex so `.si-page` gets a definite block size (Edge + Chrome height %). */
 main.content:has(> .si-page) {
   display: flex;
   flex-direction: column;
@@ -4839,7 +4839,7 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
    Scoped to .si-layer-action-modal--gis-table so other table usages stay light.
    Black glassy surfaces, white text, subtle frosted depth.
    â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-.si-layer-action-modal.si-layer-action-modal--gis-table {
+html[data-theme='dark'] .si-layer-action-modal.si-layer-action-modal--gis-table {
   --lx-text: #f5f7fa;
   --lx-muted: #aab2bf;
   --lx-border: rgba(255, 255, 255, 0.12);
@@ -4859,7 +4859,7 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
 }
 
 /* Titlebar — luxurious translucent black glass */
-.si-layer-action-modal--gis-table .si-gis-attr-win__titlebar {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-gis-attr-win__titlebar {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 42%, rgba(0, 0, 0, 0) 100%),
@@ -4871,38 +4871,38 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
     0 1px 0 rgba(0, 0, 0, 0.35);
 }
 
-.si-layer-action-modal--gis-table.is-resizing .si-gis-attr-win__titlebar,
-.si-layer-action-modal--gis-table .si-gis-attr-win__titlebar:active {
+html[data-theme='dark'] .si-layer-action-modal--gis-table.is-resizing .si-gis-attr-win__titlebar,
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-gis-attr-win__titlebar:active {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.03) 50%, rgba(0, 0, 0, 0) 100%),
     rgba(4, 5, 10, 0.82);
 }
 
-.si-layer-action-modal--gis-table .si-gis-attr-win__dock-grip {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-gis-attr-win__dock-grip {
   background: rgba(255, 255, 255, 0.28);
   box-shadow: 0 5px 0 rgba(255, 255, 255, 0.1);
 }
 
-.si-layer-action-modal--gis-table .si-gis-attr-win__titlebar:hover .si-gis-attr-win__dock-grip,
-.si-layer-action-modal--gis-table.is-resizing .si-gis-attr-win__dock-grip {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-gis-attr-win__titlebar:hover .si-gis-attr-win__dock-grip,
+html[data-theme='dark'] .si-layer-action-modal--gis-table.is-resizing .si-gis-attr-win__dock-grip {
   background: rgba(52, 211, 153, 0.75);
   box-shadow: 0 5px 0 rgba(52, 211, 153, 0.22);
 }
 
-.si-layer-action-modal--gis-table .si-gis-attr-win__title {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-gis-attr-win__title {
   color: var(--lx-text);
   letter-spacing: 0.01em;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 
-.si-layer-action-modal--gis-table .si-gis-attr-win__counts,
-.si-layer-action-modal--gis-table .si-gis-attr-win__subtitle,
-.si-layer-action-modal--gis-table .si-gis-attr-win__records {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-gis-attr-win__counts,
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-gis-attr-win__subtitle,
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-gis-attr-win__records {
   color: var(--lx-muted);
   font-weight: 500;
 }
 
-.si-layer-action-modal--gis-table .si-gis-attr-win__titlebar .si-gis-attr-win__toolbar {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-gis-attr-win__titlebar .si-gis-attr-win__toolbar {
   padding: 0;
   border: none;
   background: transparent;
@@ -4911,245 +4911,245 @@ html[data-theme='light'] .si-env-layer-actions--menu-only .si-env-layer-action-b
   flex-shrink: 0;
 }
 
-.si-layer-action-modal--gis-table .si-gis-attr-win__winbtns {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-gis-attr-win__winbtns {
   margin-inline-start: 0;
   margin-inline-end: 0;
   flex-shrink: 0;
 }
 
 /* When toolbar is hidden (minimized), still pin window controls to the right */
-.si-layer-action-modal--gis-table .si-gis-attr-win__titlebar > .si-gis-attr-win__winbtns {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-gis-attr-win__titlebar > .si-gis-attr-win__winbtns {
   margin-inline-start: auto;
 }
 
-.si-layer-action-modal--gis-table .si-gis-attr-win__titlebar:has(.si-gis-attr-win__toolbar) > .si-gis-attr-win__winbtns {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-gis-attr-win__titlebar:has(.si-gis-attr-win__toolbar) > .si-gis-attr-win__winbtns {
   margin-inline-start: 0;
 }
 
-.si-layer-action-modal--gis-table .si-gis-attr-win__tool {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-gis-attr-win__tool {
   color: var(--lx-muted);
   border-color: transparent;
   background: transparent;
 }
 
-.si-layer-action-modal--gis-table .si-gis-attr-win__tool:hover:not(:disabled),
-.si-layer-action-modal--gis-table .si-gis-attr-win__tool.is-on {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-gis-attr-win__tool:hover:not(:disabled),
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-gis-attr-win__tool.is-on {
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.14);
   color: #ffffff;
 }
 
-.si-layer-action-modal--gis-table .si-gis-attr-win__winbtn {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-gis-attr-win__winbtn {
   color: var(--lx-muted);
 }
 
-.si-layer-action-modal--gis-table .si-gis-attr-win__winbtn:hover {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-gis-attr-win__winbtn:hover {
   background: rgba(255, 255, 255, 0.1);
   color: #ffffff;
 }
 
-.si-layer-action-modal--gis-table .si-gis-attr-win__winbtn--close:hover {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-gis-attr-win__winbtn--close:hover {
   background: #e81123;
   color: #fff;
 }
 
-.si-layer-action-modal--gis-table .si-layer-action-modal-header {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-layer-action-modal-header {
   border-bottom: 1px solid var(--lx-border);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0));
 }
-.si-layer-action-modal--gis-table .si-layer-action-modal-header h3 {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-layer-action-modal-header h3 {
   color: var(--lx-text);
 }
-.si-layer-action-modal--gis-table .si-layer-action-modal-table-title {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-layer-action-modal-table-title {
   background: linear-gradient(180deg, rgba(52, 211, 153, 0.22), rgba(16, 185, 129, 0.12));
   border: 1px solid rgba(52, 211, 153, 0.35);
   color: #d1fae5;
 }
-.si-layer-action-modal--gis-table .si-layer-action-close {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-layer-action-close {
   background: var(--lx-surface);
   border: 1px solid var(--lx-border);
   color: var(--lx-text);
 }
-.si-layer-action-modal--gis-table .si-layer-action-close:hover {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-layer-action-close:hover {
   background: var(--lx-hover);
   border-color: rgba(255, 255, 255, 0.24);
 }
 
 /* Left tool rail */
-.si-layer-action-modal--gis-table .si-layer-action-table-tools {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-layer-action-table-tools {
   background: transparent;
   border: none;
 }
-.si-layer-action-modal--gis-table .gis-table-toolbtn,
-.si-layer-action-modal--gis-table .si-layer-action-table-tools button {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-toolbtn,
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-layer-action-table-tools button {
   background: var(--lx-surface);
   border: 1px solid var(--lx-border-soft);
   color: var(--lx-text);
 }
-.si-layer-action-modal--gis-table .gis-table-toolbtn:hover:not(:disabled),
-.si-layer-action-modal--gis-table .si-layer-action-table-tools button:hover:not(:disabled) {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-toolbtn:hover:not(:disabled),
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-layer-action-table-tools button:hover:not(:disabled) {
   background: var(--lx-hover);
   border-color: var(--lx-border);
   color: #ffffff;
   box-shadow: none;
 }
-.si-layer-action-modal--gis-table .gis-table-toolbtn i,
-.si-layer-action-modal--gis-table .gis-table-toolbtn .gis-table-tooltext {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-toolbtn i,
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-toolbtn .gis-table-tooltext {
   color: var(--lx-text);
 }
-.si-layer-action-modal--gis-table .gis-table-toolbtn:hover:not(:disabled) i,
-.si-layer-action-modal--gis-table .gis-table-toolbtn:hover:not(:disabled) .gis-table-tooltext {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-toolbtn:hover:not(:disabled) i,
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-toolbtn:hover:not(:disabled) .gis-table-tooltext {
   color: var(--lx-accent);
 }
-.si-layer-action-modal--gis-table .gis-table-toolbtn:disabled {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-toolbtn:disabled {
   opacity: 0.4;
 }
-.si-layer-action-modal--gis-table .gis-table-toolsep {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-toolsep {
   background: var(--lx-border-soft);
   border-color: var(--lx-border-soft);
 }
-.si-layer-action-modal--gis-table .gis-workspace-sidebar__scope-label {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-workspace-sidebar__scope-label {
   color: var(--lx-text);
 }
-.si-layer-action-modal--gis-table .gis-workspace-sidebar__scope-hint {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-workspace-sidebar__scope-hint {
   color: var(--lx-muted);
 }
 
 /* Accordions (search / filter / hub) */
-.si-layer-action-modal--gis-table .gis-workspace-acc {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-workspace-acc {
   border-color: var(--lx-border-soft);
 }
-.si-layer-action-modal--gis-table .gis-workspace-acc__summary {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-workspace-acc__summary {
   color: var(--lx-text);
 }
-.si-layer-action-modal--gis-table .gis-workspace-acc__body,
-.si-layer-action-modal--gis-table .gis-workspace-acc__body p {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-workspace-acc__body,
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-workspace-acc__body p {
   color: var(--lx-muted);
 }
-.si-layer-action-modal--gis-table .gis-table-controls label > span,
-.si-layer-action-modal--gis-table .gis-table-advanced-controls label > span,
-.si-layer-action-modal--gis-table .gis-table-domain-toggle > span {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-controls label > span,
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-advanced-controls label > span,
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-domain-toggle > span {
   color: var(--lx-muted);
 }
-.si-layer-action-modal--gis-table select,
-.si-layer-action-modal--gis-table input[type='text'],
-.si-layer-action-modal--gis-table .gis-table-search input {
+html[data-theme='dark'] .si-layer-action-modal--gis-table select,
+html[data-theme='dark'] .si-layer-action-modal--gis-table input[type='text'],
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-search input {
   background: var(--lx-surface);
   border: 1px solid var(--lx-border);
   color: var(--lx-text);
 }
-.si-layer-action-modal--gis-table select option {
+html[data-theme='dark'] .si-layer-action-modal--gis-table select option {
   background: #14161e;
   color: var(--lx-text);
 }
-.si-layer-action-modal--gis-table input::placeholder {
+html[data-theme='dark'] .si-layer-action-modal--gis-table input::placeholder {
   color: rgba(255, 255, 255, 0.4);
 }
-.si-layer-action-modal--gis-table .gis-table-search i {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-search i {
   color: var(--lx-muted);
 }
-.si-layer-action-modal--gis-table .gis-table-filter-clear {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-filter-clear {
   background: var(--lx-surface);
   border: 1px solid var(--lx-border);
   color: var(--lx-text);
 }
 
 /* Meta line + sub-header */
-.si-layer-action-modal--gis-table .si-table-modal-subheader,
-.si-layer-action-modal--gis-table .gis-table-dock-header {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-table-modal-subheader,
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-dock-header {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01));
   border-bottom: 1px solid var(--lx-border-soft);
 }
-.si-layer-action-modal--gis-table .si-table-modal-meta,
-.si-layer-action-modal--gis-table .gis-table-dock-meta {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-table-modal-meta,
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-dock-meta {
   color: var(--lx-text);
 }
 /* "Showing N of N feature(s)" bar â€” dark luxe glass to match the modal. */
-.si-layer-action-modal--gis-table .gis-layer-table-meta,
-.si-layer-action-modal--gis-table .gis-layer-table-meta--table-only {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-layer-table-meta,
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-layer-table-meta--table-only {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01));
   border-bottom: 1px solid var(--lx-border-soft);
   color: var(--lx-muted);
 }
-.si-layer-action-modal--gis-table .gis-layer-table-metatext {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-layer-table-metatext {
   color: var(--lx-muted);
 }
 
 /* Table surface */
-.si-layer-action-modal--gis-table .si-layer-action-table-wrap {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-layer-action-table-wrap {
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--lx-border-soft);
 }
-.si-layer-action-modal--gis-table .si-layer-action-table,
-.si-layer-action-modal--gis-table .gis-layer-table {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-layer-action-table,
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-layer-table {
   background: transparent;
   color: var(--lx-text);
 }
-.si-layer-action-modal--gis-table .si-layer-action-table th,
-.si-layer-action-modal--gis-table .gis-layer-table thead th {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-layer-action-table th,
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-layer-table thead th {
   /* Opaque dark â€” header is position:sticky, so rows must not bleed through. */
   background: linear-gradient(180deg, #20232e, #15171f);
   color: var(--lx-text);
   border-bottom: 1px solid var(--lx-border);
 }
-.si-layer-action-modal--gis-table .si-layer-action-table td,
-.si-layer-action-modal--gis-table .gis-layer-table tbody td {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-layer-action-table td,
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-layer-table tbody td {
   color: var(--lx-text);
   border-bottom: 1px solid var(--lx-border-soft);
 }
-.si-layer-action-modal--gis-table .gis-layer-table tbody tr:hover td {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-layer-table tbody tr:hover td {
   background: rgba(255, 255, 255, 0.05);
 }
-.si-layer-action-modal--gis-table .gis-layer-table tbody tr.gis-row-selected td {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-layer-table tbody tr.gis-row-selected td {
   background: rgba(52, 211, 153, 0.16);
 }
-.si-layer-action-modal--gis-table .gis-domain-cell {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-domain-cell {
   color: var(--lx-text);
 }
-.si-layer-action-modal--gis-table .gis-table-column-label {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-column-label {
   color: var(--lx-text);
 }
-.si-layer-action-modal--gis-table .gis-table-column-label > i.fa-grip-vertical {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-column-label > i.fa-grip-vertical {
   color: var(--lx-muted);
 }
-.si-layer-action-modal--gis-table .gis-table-column-actions button,
-.si-layer-action-modal--gis-table .gis-table-rowbtn {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-column-actions button,
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-rowbtn {
   background: var(--lx-surface);
   border: 1px solid var(--lx-border-soft);
   color: var(--lx-text);
 }
-.si-layer-action-modal--gis-table .gis-table-column-actions button:hover:not(:disabled),
-.si-layer-action-modal--gis-table .gis-table-rowbtn:hover {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-column-actions button:hover:not(:disabled),
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-rowbtn:hover {
   background: var(--lx-hover);
   color: #ffffff;
 }
-.si-layer-action-modal--gis-table .gis-table-column-dragging {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-table-column-dragging {
   background: rgba(52, 211, 153, 0.18);
 }
-.si-layer-action-modal--gis-table .gis-fieldvis-trigger {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-fieldvis-trigger {
   background: var(--lx-surface);
   border: 1px solid var(--lx-border-soft);
   color: var(--lx-text);
 }
-.si-layer-action-modal--gis-table .gis-fieldvis-trigger:hover,
-.si-layer-action-modal--gis-table .gis-fieldvis-trigger--open {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-fieldvis-trigger:hover,
+html[data-theme='dark'] .si-layer-action-modal--gis-table .gis-fieldvis-trigger--open {
   background: var(--lx-hover);
   border-color: var(--lx-border);
   color: #ffffff;
 }
-.si-layer-action-modal--gis-table input[type='checkbox'] {
+html[data-theme='dark'] .si-layer-action-modal--gis-table input[type='checkbox'] {
   accent-color: var(--lx-accent);
 }
-.si-layer-action-modal--gis-table mark {
+html[data-theme='dark'] .si-layer-action-modal--gis-table mark {
   background: rgba(250, 204, 21, 0.32);
   color: #fffbeb;
 }
 
 /* Empty / loading / error states */
-.si-layer-action-modal--gis-table .si-layer-action-empty {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-layer-action-empty {
   color: var(--lx-muted);
 }
-.si-layer-action-modal--gis-table .si-layer-action-empty--error {
+html[data-theme='dark'] .si-layer-action-modal--gis-table .si-layer-action-empty--error {
   color: #fca5a5;
 }
 

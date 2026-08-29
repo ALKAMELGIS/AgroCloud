@@ -13,6 +13,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import MapGL, { Source, Layer, Marker } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import './SatelliteIntelligence.css';
+import '../../styles/map-overlay-theme.css';
 import './components/RemoteSensingPanel.css';
 import { RemoteSensingToolboxPanel } from './components/RemoteSensingToolboxPanel';
 import type { RemoteSensingDrawingTool } from './components/RemoteSensingDrawingToolbar';
@@ -591,8 +592,10 @@ import {
 import { polygonFeaturesFromCollection } from '../../lib/agriFieldBoundary/fieldValidationMetrics';
 import {
   removeFtwGlobalMapLayer,
+  setFtwGlobalInteractionMode,
   syncFtwGlobalMapLayer,
 } from '../../lib/agriFieldBoundary/ftwGlobalMapLayer';
+import { FTW_GLOBAL_FIELD_MIN_ZOOM } from '../../lib/agriFieldBoundary/ftwGlobalConfig';
 import { useSamTrainingSamples } from './components/useSamTrainingSamples';
 import { TrainingAITool } from './components/trainingAi/TrainingAITool';
 import { useTrainingAISamples } from './components/trainingAi/useTrainingAISamples';
@@ -604,8 +607,10 @@ import {
 } from '../../lib/trainingAi/trainingSamplesLiveLayer';
 import {
   aoiFeatureCollectionBbox,
+  aoiFeatureCollectionSignature,
   aoiSourceLabel,
   clipFeatureCollectionToAoi,
+  geometryToAoiFeatureCollection,
 } from '../../lib/trainingAi/clipResultsToAoi';
 import { SegFormerDetectionPanel } from './components/segformerDetection/SegFormerDetectionPanel';
 import { useSegFormerDetection } from './components/segformerDetection/useSegFormerDetection';
@@ -15961,7 +15966,11 @@ export default function SatelliteIntelligence() {
 
     if (mode === 'select') {
       const hits = gisSelectionHits;
-      if (!hits.length) return null;
+      if (!hits.length) {
+        const drawnFallback = getDrawnGeometry(drawnGeometry);
+        if (drawnFallback) return drawnFallback;
+        return null;
+      }
       const out: GeoJSON.Feature[] = [];
       for (const hit of hits) {
         const layer = customLayersRef.current.find(l => String(l.id) === hit.layerId);
@@ -15995,27 +16004,12 @@ export default function SatelliteIntelligence() {
     return resolveSamAoi();
   }, [drawnGeometry, resolveSamAoi, gisSelectionHits]);
 
-  const handleFieldBoundaryAoiModeChange = useCallback((mode: FieldBoundaryAoiMode) => {
-    setFieldBoundaryAoiMode(mode);
-    if (mode === 'select') {
-      if (rsDrawingModeActiveRef.current) handleRsDrawingModeChange(false);
-      if (measureModeRef.current) clearMeasure();
-      setGisSelectionActive(true);
-      setGisSelectionTool('select');
-      applyMapDrawTool('select');
-      setShowEditHandles(false);
-      setMapDragPanEnabled(true);
-      return;
-    }
-    if (mode === 'draw') {
-      if (measureModeRef.current) clearMeasure();
-      if (gisSelectionActiveRef.current) setGisSelectionActive(false);
-      handleRsDrawingModeChange(true);
-      applyMapDrawTool('polygon');
-      setShowEditHandles(false);
-      setMapDragPanEnabled(false);
-    }
-  }, [handleRsDrawingModeChange, clearMeasure]);
+  const fieldBoundaryAoiClipKey = useMemo(() => {
+    const aoi = resolveFieldBoundaryAoi();
+    if (!aoi) return `${fieldBoundaryAoiMode}:none`;
+    const fc = geometryToAoiFeatureCollection(aoi);
+    return `${fieldBoundaryAoiMode}:${aoiFeatureCollectionSignature(fc)}`;
+  }, [resolveFieldBoundaryAoi, fieldBoundaryAoiMode]);
 
   const captureFieldBoundaryView = useCallback(
     async (opts: {
@@ -16050,17 +16044,66 @@ export default function SatelliteIntelligence() {
   const agriFieldBoundary = useAgriFieldBoundary({
     captureView: captureFieldBoundaryView,
     resolveAoi: resolveFieldBoundaryAoi,
+    aoiClipKey: fieldBoundaryAoiClipKey,
   });
   const agriFieldBoundaryRef = useRef(agriFieldBoundary);
   agriFieldBoundaryRef.current = agriFieldBoundary;
   const agriFieldTerrainSyncTimerRef = useRef<number | null>(null);
   const agriFieldFocusSigRef = useRef('');
 
+  const restoreFtwGlobalMapNavigation = useCallback(() => {
+    if (fieldBoundaryAoiModeRef.current === 'draw') {
+      setFieldBoundaryAoiMode('select');
+    }
+    if (rsDrawingModeActiveRef.current) handleRsDrawingModeChange(false);
+    if (gisSelectionActiveRef.current) setGisSelectionActive(false);
+    cancelCurrentDrawing();
+    applyMapDrawTool('select');
+    setShowEditHandles(false);
+    setMapDragPanEnabled(true);
+    const map = getMapInstance();
+    ensureAgroCloudMapScrollZoom(map);
+    setFtwGlobalInteractionMode(map, false, agriFieldBoundaryRef.current.ftwGlobalOpacity);
+  }, [cancelCurrentDrawing, handleRsDrawingModeChange]);
+
+  const handleFieldBoundaryAoiModeChange = useCallback((mode: FieldBoundaryAoiMode) => {
+    setFieldBoundaryAoiMode(mode);
+    if (agriFieldBoundaryRef.current.model === 'ftw') {
+      restoreFtwGlobalMapNavigation();
+      return;
+    }
+    if (mode === 'select') {
+      if (rsDrawingModeActiveRef.current) handleRsDrawingModeChange(false);
+      if (measureModeRef.current) clearMeasure();
+      setGisSelectionActive(true);
+      setGisSelectionTool('select');
+      applyMapDrawTool('select');
+      setShowEditHandles(false);
+      setMapDragPanEnabled(true);
+      return;
+    }
+    if (mode === 'draw') {
+      if (measureModeRef.current) clearMeasure();
+      if (gisSelectionActiveRef.current) setGisSelectionActive(false);
+      handleRsDrawingModeChange(true);
+      applyMapDrawTool('polygon');
+      setShowEditHandles(false);
+      setMapDragPanEnabled(false);
+    }
+  }, [handleRsDrawingModeChange, clearMeasure, restoreFtwGlobalMapNavigation]);
+
   /** Field Boundary panel — keep draw AOI mode; do not reset model on every open. */
   useEffect(() => {
     if (expandedEnvSection !== 'agri-field-boundary') return;
     setShowEditHandles(false);
     agriFieldBoundaryRef.current.setSceneDateAllYear();
+    if (agriFieldBoundaryRef.current.model === 'ftw') {
+      if (fieldBoundaryAoiModeRef.current === 'draw') {
+        setFieldBoundaryAoiMode('select');
+      }
+      restoreFtwGlobalMapNavigation();
+      return;
+    }
     const mode = fieldBoundaryAoiModeRef.current;
     if (mode === 'draw') {
       const hasAoi = Boolean(getDrawnGeometry(resolveFieldBoundaryAoi()));
@@ -16081,6 +16124,18 @@ export default function SatelliteIntelligence() {
     handleFieldBoundaryAoiModeChange,
     handleRsDrawingModeChange,
     resolveFieldBoundaryAoi,
+    restoreFtwGlobalMapNavigation,
+  ]);
+
+  useEffect(() => {
+    if (agriFieldBoundary.model !== 'ftw') return;
+    if (!agriFieldBoundary.ftwGlobalVisible && agriFieldBoundary.phase !== 'done') return;
+    restoreFtwGlobalMapNavigation();
+  }, [
+    agriFieldBoundary.model,
+    agriFieldBoundary.ftwGlobalVisible,
+    agriFieldBoundary.phase,
+    restoreFtwGlobalMapNavigation,
   ]);
 
   useEffect(() => {
@@ -16107,12 +16162,20 @@ export default function SatelliteIntelligence() {
     if (!isMapLoaded || !isMapStyleReady) return;
     const map = mapRef.current?.getMap?.() ?? mapRef.current;
     const afb = agriFieldBoundary;
+    const aoiRaw = resolveFieldBoundaryAoi();
+    const aoiMask = aoiRaw ? geometryToAoiFeatureCollection(aoiRaw) : null;
     syncFtwGlobalMapLayer(map, {
       visible: afb.model === 'ftw' && afb.ftwGlobalVisible,
       year: afb.ftwYear,
       thresholdPct: afb.ftwThreshold,
       opacityPct: afb.ftwGlobalOpacity,
+      aoiMask,
     });
+    if (afb.model === 'ftw' && afb.ftwGlobalVisible) {
+      ensureAgroCloudMapScrollZoom(map);
+      setMapDragPanEnabled(true);
+      siMapContainerRef.current?.classList.remove('si-map-container--interacting');
+    }
   }, [
     isMapLoaded,
     isMapStyleReady,
@@ -16121,6 +16184,8 @@ export default function SatelliteIntelligence() {
     agriFieldBoundary.ftwYear,
     agriFieldBoundary.ftwThreshold,
     agriFieldBoundary.ftwGlobalOpacity,
+    fieldBoundaryAoiClipKey,
+    resolveFieldBoundaryAoi,
   ]);
 
   useEffect(() => {
@@ -16135,26 +16200,48 @@ export default function SatelliteIntelligence() {
     if (afb.model !== 'ftw' || !afb.ftwGlobalVisible || afb.phase !== 'done') return;
     const aoi = resolveFieldBoundaryAoi();
     if (!aoi) return;
-    const fc =
-      aoi.type === 'FeatureCollection'
-        ? aoi
-        : { type: 'FeatureCollection' as const, features: [{ type: 'Feature' as const, properties: {}, geometry: aoi }] };
-    focusGeoJsonOnMap(fc);
+    const fc = geometryToAoiFeatureCollection(aoi);
+    const bounds = getGeoJsonBounds(fc);
+    if (!bounds) return;
+    const map = mapRef.current?.getMap?.() ?? mapRef.current;
+    if (!map || typeof map.fitBounds !== 'function') return;
+    const [minX, minY, maxX, maxY] = bounds;
+    map.fitBounds(
+      [
+        [minX, minY],
+        [maxX, maxY],
+      ],
+      { padding: 80, duration: 800, maxZoom: 14 },
+    );
+    const ensureFtwZoom = () => {
+      try {
+        const z = typeof map.getZoom === 'function' ? map.getZoom() : FTW_GLOBAL_FIELD_MIN_ZOOM;
+        if (z < FTW_GLOBAL_FIELD_MIN_ZOOM) {
+          map.easeTo?.({ zoom: FTW_GLOBAL_FIELD_MIN_ZOOM, duration: 500 });
+        }
+      } catch {
+        /* ignore */
+      }
+      ensureAgroCloudMapScrollZoom(map);
+    };
+    map.once?.('moveend', ensureFtwZoom);
+    window.setTimeout(ensureFtwZoom, 900);
   }, [
     agriFieldBoundary.model,
     agriFieldBoundary.ftwGlobalVisible,
     agriFieldBoundary.phase,
     agriFieldBoundary.ftwYear,
-    focusGeoJsonOnMap,
     resolveFieldBoundaryAoi,
   ]);
 
   const handleAgriFieldBoundaryAddToLayers = useCallback(async () => {
-    // Fill the Sentinel-2 attribute table first so the layer arrives with data.
-    const fc =
-      (await agriFieldBoundaryRef.current.ensureAttributes()) ??
-      agriFieldBoundaryRef.current.geojson;
-    if (!fc?.features?.length) return;
+    const afb = agriFieldBoundaryRef.current
+    const fc = (await afb.resolveExportGeojson({ persistResult: false })) ?? afb.geojson
+    if (!fc?.features?.length) return
+
+    // Defer heavy map layer registration so export loading UI can paint first.
+    await new Promise<void>(resolve => window.setTimeout(resolve, 0))
+
     registerImportedCustomLayer({
       ...createSiVectorImportLayer({
         id: `agri-field-boundary-${Date.now()}`,
@@ -16164,10 +16251,22 @@ export default function SatelliteIntelligence() {
         format: 'Feature Layer',
         crs: 'EPSG:4326',
       }),
-      ...fieldBoundaryOutlineLayerStyle(),
-    });
-    focusGeoJsonOnMap(fc);
-  }, [focusGeoJsonOnMap, registerImportedCustomLayer]);
+      ...(afb.model === 'ftw'
+        ? {
+            color: '#22c55e',
+            fillColor: '#22c55e',
+            weight: 0,
+            strokeStyle: 'solid' as const,
+            polygonFillAlpha: 0.35,
+            fillStyle: 'solid' as const,
+          }
+        : fieldBoundaryOutlineLayerStyle()),
+    })
+
+    window.requestAnimationFrame(() => {
+      focusGeoJsonOnMap(fc)
+    })
+  }, [focusGeoJsonOnMap, registerImportedCustomLayer])
 
   const samTrainingSamples = useSamTrainingSamples();
   const samTrainingSamplesRef = useRef(samTrainingSamples);
@@ -23895,6 +23994,9 @@ export default function SatelliteIntelligence() {
     [viewState, mapMetrics.zoom, mapMetrics.latitude, is3DView, drawnGeometry, aoiFields.length],
   );
 
+  const ftwGlobalMapActive =
+    agriFieldBoundary.model === 'ftw' && agriFieldBoundary.ftwGlobalVisible;
+
   return (
     <div className="si-page">
       <div className="si-main-content">
@@ -23902,6 +24004,7 @@ export default function SatelliteIntelligence() {
         <div
           ref={siMapContainerRef}
           className={`si-map-container${
+            !ftwGlobalMapActive &&
             ['point', 'polyline', 'polygon', 'rectangle', 'circle', 'box_select'].includes(mapDrawTool)
               ? ' si-map-container--drawing'
               : ''
@@ -24001,6 +24104,9 @@ export default function SatelliteIntelligence() {
               if ((afb.geojson?.features?.length ?? 0) >= AGRI_FIELD_DENSE_FEATURE_THRESHOLD) {
                 setAgriFieldBoundaryInteractionMode(map, true, afb.fillOpacity);
               }
+              if (afb.model === 'ftw' && afb.ftwGlobalVisible) {
+                setFtwGlobalInteractionMode(map, true, afb.ftwGlobalOpacity);
+              }
             }}
             onMoveEnd={evt => {
               siMapContainerRef.current?.classList.remove('si-map-container--interacting');
@@ -24012,6 +24118,11 @@ export default function SatelliteIntelligence() {
               if (denseAfb) {
                 setAgriFieldBoundaryInteractionMode(map, false, afb.fillOpacity);
               }
+              if (afb.model === 'ftw' && afb.ftwGlobalVisible) {
+                setFtwGlobalInteractionMode(map, false, afb.ftwGlobalOpacity);
+              }
+              ensureAgroCloudMapScrollZoom(map);
+              setMapDragPanEnabled(true);
               scheduleMapMetricsCommit(evt.viewState);
               const syncTerrain = () => {
                 syncAgroCloudTerrain3d(map, activeBasemapId, viewStateLiveRef.current.pitch);
@@ -24737,7 +24848,8 @@ export default function SatelliteIntelligence() {
                   </Source>
                 ) : null}
                 {agriFieldBoundaryActive &&
-                agriFieldBoundary.geojson ? (
+                agriFieldBoundary.geojson &&
+                !ftwGlobalMapActive ? (
                   <Source
                     id={AGRI_FIELD_BOUNDARY_SOURCE_ID}
                     type="geojson"
@@ -24758,7 +24870,8 @@ export default function SatelliteIntelligence() {
                         }) as any
                       }
                     />
-                    {/* Cyan outline for every field (matches Layers / Symbology Cyan Outline). */}
+                    {/* FTW: no vector outlines — seamless raster preview hides tile grid lines. */}
+                    {agriFieldBoundary.model !== 'ftw' ? (
                     <Layer
                       id={AGRI_FIELD_BOUNDARY_OUTLINE_ID}
                       type="line"
@@ -24775,6 +24888,7 @@ export default function SatelliteIntelligence() {
                         }) as any
                       }
                     />
+                    ) : null}
                   </Source>
                 ) : null}
                 {/* Hydro analysis layers are persistent: they stay on the map
@@ -25792,6 +25906,7 @@ export default function SatelliteIntelligence() {
           {isWeatherVizOpen ? (
             <WeatherVisualizationPanel
               open
+              containerRef={siMapContainerRef}
               onClose={() => setIsWeatherVizOpen(false)}
               sim={weatherSim}
               onChange={patch => setWeatherSim(prev => ({ ...prev, ...patch }))}
@@ -26855,7 +26970,13 @@ export default function SatelliteIntelligence() {
                           onAoiLayerIdChange={setFieldBoundaryAoiLayerId}
                           source={agriFieldBoundary.source}
                           model={agriFieldBoundary.model}
-                          onModelChange={agriFieldBoundary.setModel}
+                          onModelChange={m => {
+                            agriFieldBoundary.setModel(m);
+                            if (m === 'ftw') {
+                              setFieldBoundaryAoiMode('select');
+                              restoreFtwGlobalMapNavigation();
+                            }
+                          }}
                           modelOptions={agriFieldBoundary.modelOptions}
                           imagery={agriFieldBoundary.imagery}
                           onImageryChange={agriFieldBoundary.setImagery}
@@ -26894,7 +27015,12 @@ export default function SatelliteIntelligence() {
                           totalAreaHa={agriFieldBoundary.totalAreaHa}
                           engine={agriFieldBoundary.engine}
                           score={agriFieldBoundary.result?.score ?? null}
-                          hasResult={Boolean(agriFieldBoundary.geojson?.features?.length)}
+                          hasResult={
+                            agriFieldBoundary.model === 'ftw'
+                              ? agriFieldBoundary.ftwGlobalVisible &&
+                                Boolean(activeAoi.geometry)
+                              : Boolean(agriFieldBoundary.geojson?.features?.length)
+                          }
                           resultGeojson={agriFieldBoundary.geojson}
                           ftwYear={agriFieldBoundary.ftwYear}
                           onFtwYearChange={agriFieldBoundary.setFtwYear}
@@ -26903,16 +27029,29 @@ export default function SatelliteIntelligence() {
                           ftwGlobalOpacity={agriFieldBoundary.ftwGlobalOpacity}
                           onFtwGlobalOpacityChange={agriFieldBoundary.setFtwGlobalOpacity}
                           ftwGlobalVisible={agriFieldBoundary.ftwGlobalVisible}
+                          activeAoi={activeAoi}
+                          aoiLabel={aoiSourceLabel(activeAoi.source) || 'AOI'}
                           referenceGeojson={fieldBoundaryReferenceGeojson}
                           referenceLabel={fieldBoundaryReferenceLabel}
                           referenceNotice={null}
                           referenceBusy={false}
                           mapContainerRef={siMapContainerRef}
-                          onRun={() => void agriFieldBoundary.run()}
+                          onRun={() => {
+                            void agriFieldBoundary.run().finally(() => {
+                              if (
+                                agriFieldBoundaryRef.current.model === 'ftw' &&
+                                agriFieldBoundaryRef.current.ftwGlobalVisible
+                              ) {
+                                restoreFtwGlobalMapNavigation();
+                              }
+                            });
+                          }}
                           onReset={agriFieldBoundary.reset}
                           onExportGeojson={() => void agriFieldBoundary.exportGeojson()}
                           onExportShapefile={() => void agriFieldBoundary.exportShapefile()}
                           onAddToLayers={() => void handleAgriFieldBoundaryAddToLayers()}
+                          exportBusy={agriFieldBoundary.exportBusy}
+                          exportStatus={agriFieldBoundary.exportProgress}
                           attributesStatus={agriFieldBoundary.attributesProgress}
                           sen2srStatus={agriFieldBoundary.sen2sr.status}
                           sen2srProductMode={agriFieldBoundary.sen2sr.productMode}

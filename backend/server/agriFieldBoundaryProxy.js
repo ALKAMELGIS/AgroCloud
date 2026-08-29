@@ -14,6 +14,7 @@ import express from 'express'
 import { randomUUID } from 'crypto'
 import { ensureLocalAiService } from './localAiServiceSupervisor.js'
 import { detectFieldsBuiltin } from './fieldBoundaryBuiltin.js'
+import { vectorizeFtwMosaicBuiltin } from './ftwMaskVectorizeBuiltin.js'
 
 /** Agricultural Field Delineation fetches Sentinel-2 on the Python service — no client image. */
 const AFD_SOURCES = new Set(['agricultural-field-delineation', 'afd'])
@@ -400,6 +401,50 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
       }
     },
   )
+
+  const FTW_MOSAIC_URL = `${SERVICE_BASE}/ftw/mosaic-vectorize`
+
+  app.post('/api/agri-field-boundary/ftw-mosaic-vectorize', express.json({ limit: jsonBodyLimit }), async (req, res) => {
+    const body = req.body
+    if (!body || typeof body !== 'object') {
+      return res.status(400).json({ error: 'Expected JSON body.' })
+    }
+    if (!Array.isArray(body.bbox) || body.bbox.length !== 4) {
+      return res.status(400).json({ error: 'bbox must be [west, south, east, north].' })
+    }
+    if (typeof body.mask !== 'string' || !String(body.mask).trim()) {
+      return res.status(400).json({ error: 'mask PNG data URL is required.' })
+    }
+    refreshPythonHealth()
+    if (pythonReady()) {
+      try {
+        const { status, json } = await forwardJson(FTW_MOSAIC_URL, {
+          method: 'POST',
+          body,
+          timeoutMs: 120_000,
+        })
+        if (status >= 200 && status < 300) {
+          return res.status(200).json({
+            ...json,
+            geojson: json.geojson,
+            aoiApplied: Boolean(json.aoi_applied ?? json.aoiApplied),
+          })
+        }
+        // Python :8092 may be healthy but missing /ftw/mosaic-vectorize — use Node builtin.
+      } catch {
+        /* fall through to builtin */
+      }
+    }
+    try {
+      const result = vectorizeFtwMosaicBuiltin(body)
+      return res.status(200).json({
+        ...result,
+        aoiApplied: Boolean(result.aoi_applied),
+      })
+    } catch (err) {
+      return res.status(400).json({ error: String(err?.message || err) })
+    }
+  })
 
   app.get('/api/agri-field-boundary/detect-job/:jobId', async (req, res) => {
     const jobId = String(req.params.jobId || '').trim()

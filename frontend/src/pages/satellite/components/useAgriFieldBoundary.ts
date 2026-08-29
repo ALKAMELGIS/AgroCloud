@@ -19,6 +19,7 @@ import {
   mergeFieldDetections,
   refineFieldPolygonsToAoi,
 } from '../../../lib/agriFieldBoundary/fieldResultRefine'
+import { geometryToAoiFeatureCollection } from '../../../lib/trainingAi/clipResultsToAoi'
 import {
   finishMergeOptions,
   finishMinAreaM2,
@@ -50,6 +51,7 @@ import {
   FTW_GLOBAL_FIELD_MIN_ZOOM,
   type FtwGlobalYear,
 } from '../../../lib/agriFieldBoundary/ftwGlobalConfig'
+import { buildFtwAoiExportGeojson } from '../../../lib/agriFieldBoundary/ftwAoiExportGeojson'
 
 export type FieldBoundaryPhase =
   | 'idle'
@@ -144,6 +146,8 @@ export type UseAgriFieldBoundaryOptions = {
     aoi: GeoJSON.Geometry | GeoJSON.FeatureCollection
   }) => Promise<FieldCapturedView | null>
   resolveAoi: () => GeoJSON.Geometry | GeoJSON.FeatureCollection | null
+  /** Changes when the study AOI geometry changes — re-clips displayed fields. */
+  aoiClipKey?: string
 }
 
 /** Sources that require a local image upload via the browser file picker. */
@@ -422,7 +426,11 @@ function styleDelineateFbisGeojson(fc: GeoJSON.FeatureCollection): GeoJSON.Featu
  * Mask R-CNN / instance-segmentation field boundary workflow:
  * AOI → high-res capture → detect → colorful GeoJSON fields.
  */
-export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBoundaryOptions) {
+export function useAgriFieldBoundary({
+  captureView,
+  resolveAoi,
+  aoiClipKey = '',
+}: UseAgriFieldBoundaryOptions) {
   // Prefer Delineate Anything (dense adjacent field mosaic).
   const [model, setModelState] = useState<FieldModelId>('delineate-fbis')
   const [imagery, setImageryState] = useState<FieldCaptureImageryId>('basemap')
@@ -480,9 +488,12 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     minAreaM2: number
     source: string
   } | null>(null)
-  /** Sentinel-2 attribute table fill (runs after Detect, export, add layer). */
+  /** Sentinel-2 attribute table fill (runs after Detect). */
   const [attributesBusy, setAttributesBusy] = useState(false)
   const [attributesProgress, setAttributesProgress] = useState<string | null>(null)
+  /** FTW export / Add layer — keeps UI responsive with a loading line only. */
+  const [exportBusy, setExportBusy] = useState(false)
+  const [exportProgress, setExportProgress] = useState<string | null>(null)
   /** Avoid re-queueing the same Detect result for Layer-index enrichment. */
   const autoAttributesKeyRef = useRef<string | null>(null)
   const [health, setHealth] = useState<FieldBoundaryHealth | null>(null)
@@ -715,7 +726,7 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
       setError(null)
       setErrorDetail(null)
       setOffline(false)
-      setProgress(100)
+      setProgress(0)
       setStage(null)
       setPhase('detecting')
       if (opts?.source) setSource('ftw')
@@ -724,6 +735,13 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
       if (opts?.year === 2024 || opts?.year === 2025) {
         setFtwYear(opts.year)
       }
+
+      const progressSteps = [12, 28, 46, 64, 82, 94, 100]
+      for (const step of progressSteps) {
+        await new Promise<void>(resolve => window.setTimeout(resolve, 140))
+        setProgress(step)
+      }
+
       setFtwGlobalVisible(true)
       setResult({
         geojson: { type: 'FeatureCollection', features: [] },
@@ -732,10 +750,10 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
         engine: 'ftw-global-pmtiles',
         device: 'source-cooperative',
         stats: { field: 0 },
-        aoiApplied: false,
+        aoiApplied: Boolean(geometryToAoiFeatureCollection(resolveAoiRef.current()).features.length),
       })
       setNotice(
-        `FTW Global ${activeFtwYear} — zoom to level ${FTW_GLOBAL_FIELD_MIN_ZOOM}+ to see field boundaries.`,
+        `FTW Global ${activeFtwYear} — field boundaries clipped to your AOI (zoom ${FTW_GLOBAL_FIELD_MIN_ZOOM}+).`,
       )
       setPhase('done')
       setBusy(false)
@@ -1316,7 +1334,13 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
             },
           )
     let geojson = optimized.geojson
-    if (ctx?.aoi) {
+    const currentAoi = geometryToAoiFeatureCollection(resolveAoiRef.current())
+    if (currentAoi.features.length) {
+      geojson = refineFieldPolygonsToAoi(geojson, currentAoi, {
+        minAreaM2: effMinArea,
+        dropIou: 0.15,
+      })
+    } else if (ctx?.aoi) {
       geojson = refineFieldPolygonsToAoi(geojson, ctx.aoi, {
         minAreaM2: effMinArea,
         dropIou: 0.15,
@@ -1326,20 +1350,15 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
       ...optimized,
       geojson,
       count: geojson.features.length,
-      aoiApplied: Boolean(ctx?.aoi) || optimized.aoiApplied,
+      aoiApplied: Boolean(currentAoi.features.length || ctx?.aoi) || optimized.aoiApplied,
       stats: {
         ...(optimized.stats || { field: 0 }),
         field: geojson.features.length,
       },
     })
     setPhase(geojson.features.length ? 'done' : 'empty')
-  }, [regularizeFootprints, regularizeMethod, mergeFragments]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [regularizeFootprints, regularizeMethod, mergeFragments, aoiClipKey, busy, phase]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  /**
-   * Fill the attribute table from the full Sentinel-2 Layer index set.
-   * Uses a 90-day window ending on the Image date (not the 1-day Detect window),
-   * so NDVI / NDRE / NDMI and derived columns can answer for every field.
-   */
   const ensureAttributes = useCallback(async (opts?: {
     force?: boolean
   }): Promise<GeoJSON.FeatureCollection | null> => {
@@ -1377,6 +1396,64 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     }
   }, [sceneDate, sceneDateFrom, sceneDateTo])
 
+  /** FTW uses raster mosaic → vectorize (no tile boundaries); other models use Detect result. */
+  const resolveExportGeojson = useCallback(async (options?: {
+    /** When false, skip storing huge GeoJSON in React state (Add layer). */
+    persistResult?: boolean
+  }): Promise<GeoJSON.FeatureCollection | null> => {
+    if (model !== 'ftw') {
+      return ensureAttributes()
+    }
+
+    const aoi = resolveAoiRef.current()
+    if (!aoi) {
+      setNotice('Draw or select an AOI before exporting FTW Global fields.')
+      return null
+    }
+
+    setExportBusy(true)
+    setExportProgress('Export — building continuous raster…')
+    setError(null)
+    setErrorDetail(null)
+    try {
+      const fc = await buildFtwAoiExportGeojson({
+        aoi,
+        year: ftwYear,
+        thresholdPct: ftwThreshold,
+        minAreaM2,
+        signal: abortRef.current?.signal,
+        onProgress: msg => setExportProgress(`Export — ${msg}`),
+      })
+      if (!fc.features?.length) {
+        setNotice('No FTW fields in this AOI at the current confidence threshold.')
+        return null
+      }
+
+      if (options?.persistResult) {
+        setResult({
+          geojson: fc,
+          count: fc.features.length,
+          score: ftwThreshold / 100,
+          engine: `ftw-global-${ftwYear}`,
+          device: 'source-cooperative',
+          stats: { field: fc.features.length },
+          aoiApplied: true,
+        })
+      }
+      setNotice(
+        `FTW Global ${ftwYear} — ${fc.features.length} fields vectorized from raster (no tile edges).`,
+      )
+      return fc
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setNotice(`FTW export failed — ${msg}`)
+      return null
+    } finally {
+      setExportBusy(false)
+      setExportProgress(null)
+    }
+  }, [model, ensureAttributes, ftwYear, ftwThreshold, minAreaM2])
+
   /** After Detect completes, fill every attribute column from Layer index. */
   useEffect(() => {
     if (phase !== 'done') return
@@ -1393,16 +1470,16 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
   }, [phase, result, sceneDate, sceneDateFrom, sceneDateTo, ensureAttributes])
 
   const exportGeojson = useCallback(async () => {
-    const fc = await ensureAttributes()
+    const fc = await resolveExportGeojson()
     if (!fc?.features?.length) return
     downloadFieldBoundaryGeoPackage(fc)
-  }, [ensureAttributes])
+  }, [resolveExportGeojson])
 
   const exportShapefile = useCallback(async () => {
-    const fc = await ensureAttributes()
+    const fc = await resolveExportGeojson()
     if (!fc?.features?.length) return
     await downloadFieldBoundaryShapefile(fc)
-  }, [ensureAttributes])
+  }, [resolveExportGeojson])
 
   const geojson = result?.geojson ?? null
 
@@ -1456,7 +1533,10 @@ export function useAgriFieldBoundary({ captureView, resolveAoi }: UseAgriFieldBo
     stage,
     attributesBusy,
     attributesProgress,
+    exportBusy,
+    exportProgress,
     ensureAttributes,
+    resolveExportGeojson,
     busy,
     error,
     errorDetail,

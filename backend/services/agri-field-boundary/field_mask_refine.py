@@ -15,8 +15,16 @@ from typing import Iterable, Sequence
 import cv2
 import numpy as np
 
-# Soft floor for Sentinel-2 10 m speckle removal (~0.5–1 ha).
-# 80 px @ 10 m ≈ 8000 m²; never use the old 16-px floor.
+# Soft floor for FTW / mosaic vectorize at ~10 m equivalent resolution.
+FTW_MIN_FIELD_M2 = 500.0
+FTW_MIN_PX = 16
+
+
+def ftw_min_px_from_area(min_area_m2: float, resolution_m: float = 10.0) -> int:
+    """Map requested min area to pixel count at mosaic resolution (floor FTW_MIN_PX)."""
+    res = max(1.0, float(resolution_m))
+    from_area = int(max(0.0, float(min_area_m2)) / (res * res))
+    return max(FTW_MIN_PX, from_area)
 
 
 def _as_u8(mask: np.ndarray) -> np.ndarray:

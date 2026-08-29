@@ -17,12 +17,17 @@ export const FTW_CONFIDENCE_MAX = 0.578178
 export const FTW_GLOBAL_SOURCE_ID = 'ftw-global-pmtiles-source'
 export const FTW_GLOBAL_FILL_ID = 'ftw-global-pmtiles-fill'
 export const FTW_GLOBAL_LINE_ID = 'ftw-global-pmtiles-line'
+/** Display-only union raster — hides PMTiles tile seam lines while tiles stay separate in the GeoJSON source. */
+export const FTW_GLOBAL_SEAMLESS_SOURCE_ID = 'ftw-global-pmtiles-seamless-source'
+export const FTW_GLOBAL_SEAMLESS_LAYER_ID = 'ftw-global-pmtiles-seamless-raster'
 
 export type FtwGlobalLayerSettings = {
   visible: boolean
   year: FtwGlobalYear
   thresholdPct: number
   opacityPct: number
+  /** When set, only field polygons intersecting this mask are drawn. */
+  aoiMask?: GeoJSON.FeatureCollection | null
 }
 
 /** Convert UI threshold 0–100 to raw confidence_mean filter (official app). */

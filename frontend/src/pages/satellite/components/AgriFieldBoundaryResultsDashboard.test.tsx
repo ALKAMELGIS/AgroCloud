@@ -86,11 +86,12 @@ describe('AgriFieldBoundaryResultsDashboard', () => {
         epochHistory={epochHistory}
       />,
     )
-    expect(screen.getByText('Field Results Dashboard')).toBeTruthy()
+    expect(screen.getByText('Optimal Learning Rate Finder')).toBeTruthy()
     expect(screen.queryByText('Validation Detection')).toBeNull()
     expect(screen.queryByText('Size distribution')).toBeNull()
-    expect(screen.getByText('Training loss')).toBeTruthy()
-    expect(screen.getByText('Training accuracy')).toBeTruthy()
+    expect(screen.getByText('Training vs Validation Loss')).toBeTruthy()
+    expect(screen.getByText('Optimal Learning Rate')).toBeTruthy()
+    expect(screen.getByText('Dataset Distribution')).toBeTruthy()
     expect(screen.getByText('Epochs Details')).toBeTruthy()
     expect(screen.getByText('0.5500')).toBeTruthy()
     expect(screen.getByText('82%')).toBeTruthy()
@@ -136,8 +137,8 @@ describe('AgriFieldBoundaryResultsDashboard', () => {
     )
     expect(screen.getAllByText(/Pretrained engine/i).length).toBeGreaterThan(0)
     expect(screen.queryByText('Validation Detection')).toBeNull()
-    expect(screen.getByText('Training loss')).toBeTruthy()
-    expect(screen.getByText('Training accuracy')).toBeTruthy()
+    expect(screen.getByText('Training vs Validation Loss')).toBeTruthy()
+    expect(screen.getByText('Optimal Learning Rate')).toBeTruthy()
     expect(screen.getByText('Epochs Details')).toBeTruthy()
     host.remove()
   })
@@ -156,7 +157,7 @@ describe('AgriFieldBoundaryResultsDashboard', () => {
         epochHistory={epochHistory}
       />,
     )
-    expect(screen.getByText('Field Results Dashboard')).toBeTruthy()
+    expect(screen.getByText('Optimal Learning Rate Finder')).toBeTruthy()
     expect(screen.getByText('18%')).toBeTruthy()
     expect(document.body.querySelector('#si-afb-results-dashboard')).toBeTruthy()
   })

@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { useSiInstanceScope } from '../siInstanceScope';
 import {
   DEFAULT_WEATHER_SIM,
@@ -39,11 +40,14 @@ export type WeatherVizSlide = {
 };
 
 const SLIDES_LS = 'agri_si_weather_viz_slides_v1';
-const PANEL_GEOM_LS = 'agri_si_weather_viz_panel_geom_v1';
-const MIN_W = 286;
-const MIN_H = 240;
-const DEFAULT_W = 320;
-const DEFAULT_H = 540;
+/** v3 stores viewport-fixed coordinates (free drag anywhere on screen). */
+const PANEL_GEOM_LS = 'agri_si_weather_viz_panel_geom_v3';
+const MIN_W = 272;
+const MIN_H = 220;
+const DEFAULT_W = 300;
+const DEFAULT_H = 480;
+/** Default slot beside the left map toolbar (viewport px). */
+const DEFAULT_ANCHOR = { x: 58, y: 168 };
 
 type PanelGeom = { x: number; y: number; w: number; h: number };
 
@@ -51,39 +55,40 @@ function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
-function clampGeomToViewport(g: PanelGeom): PanelGeom {
+function clampGeomToViewport(g: PanelGeom, sizeW?: number, sizeH?: number): PanelGeom {
   if (typeof window === 'undefined') return g;
   const margin = 8;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const availW = Math.max(160, vw - margin * 2);
-  const availH = Math.max(160, vh - margin * 2);
-  const w = clamp(g.w, Math.min(MIN_W, availW), availW);
-  const h = clamp(g.h, Math.min(MIN_H, availH), availH);
+  const availH = Math.max(120, vh - margin * 2);
+  const w = clamp(sizeW ?? g.w, Math.min(MIN_W, availW), availW);
+  const h = clamp(sizeH ?? g.h, Math.min(MIN_H, availH), availH);
   const x = clamp(g.x, margin, Math.max(margin, vw - w - margin));
   const y = clamp(g.y, margin, Math.max(margin, vh - h - margin));
   return { x, y, w, h };
 }
 
+function defaultPanelGeom(): PanelGeom {
+  return clampGeomToViewport({ x: DEFAULT_ANCHOR.x, y: DEFAULT_ANCHOR.y, w: DEFAULT_W, h: DEFAULT_H });
+}
+
 function readPanelGeom(storageKey: string): PanelGeom {
   if (typeof window === 'undefined') {
-    return { x: 12, y: 100, w: DEFAULT_W, h: DEFAULT_H };
+    return defaultPanelGeom();
   }
   try {
     const raw = window.localStorage.getItem(storageKey);
     if (raw) {
       const p = JSON.parse(raw) as PanelGeom;
-      if ([p.x, p.y, p.w, p.h].every(Number.isFinite)) return clampGeomToViewport(p);
+      if ([p.x, p.y, p.w, p.h].every(Number.isFinite)) {
+        return clampGeomToViewport(p);
+      }
     }
   } catch {
     /* ignore */
   }
-  return clampGeomToViewport({
-    x: Math.max(8, window.innerWidth - DEFAULT_W - 16),
-    y: 96,
-    w: DEFAULT_W,
-    h: DEFAULT_H,
-  });
+  return defaultPanelGeom();
 }
 
 function readSlides(storageKey: string): WeatherVizSlide[] {
@@ -108,10 +113,30 @@ function readSlides(storageKey: string): WeatherVizSlide[] {
   }
 }
 
-function useVizPanelGeometry(storageKey: string) {
+function useVizPanelGeometry(
+  storageKey: string,
+  shellRef: RefObject<HTMLElement | null>,
+  minimized: boolean,
+) {
   const [geom, setGeom] = useState<PanelGeom>(() => readPanelGeom(storageKey));
   const geomRef = useRef(geom);
   geomRef.current = geom;
+
+  const measureShell = useCallback(() => {
+    const el = shellRef.current;
+    if (!el) return null;
+    return { w: el.offsetWidth, h: el.offsetHeight };
+  }, [shellRef]);
+
+  const clampGeom = useCallback(
+    (g: PanelGeom): PanelGeom => {
+      const measured = measureShell();
+      const w = minimized ? (measured?.w ?? 180) : g.w;
+      const h = minimized ? (measured?.h ?? 36) : g.h;
+      return clampGeomToViewport(g, w, h);
+    },
+    [measureShell, minimized],
+  );
 
   const persist = useCallback(() => {
     try {
@@ -121,15 +146,19 @@ function useVizPanelGeometry(storageKey: string) {
     }
   }, [storageKey]);
 
+  useLayoutEffect(() => {
+    setGeom(prev => clampGeom(prev));
+  }, [clampGeom]);
+
   useEffect(() => {
-    const onResize = () => setGeom(prev => clampGeomToViewport(prev));
+    const onResize = () => setGeom(prev => clampGeom(prev));
     window.addEventListener('resize', onResize);
     window.addEventListener('orientationchange', onResize);
     return () => {
       window.removeEventListener('resize', onResize);
       window.removeEventListener('orientationchange', onResize);
     };
-  }, []);
+  }, [clampGeom]);
 
   const startDrag = useCallback(
     (e: React.PointerEvent<HTMLElement>) => {
@@ -145,13 +174,17 @@ function useVizPanelGeometry(storageKey: string) {
       const startX = e.clientX;
       const startY = e.clientY;
       const origin = { ...geomRef.current };
+      const margin = 8;
       const onMove = (ev: PointerEvent) => {
-        const maxX = Math.max(4, window.innerWidth - origin.w - 4);
-        const maxY = Math.max(4, window.innerHeight - origin.h - 4);
+        const measured = measureShell();
+        const w = minimized ? (measured?.w ?? 180) : origin.w;
+        const h = minimized ? (measured?.h ?? 36) : origin.h;
+        const maxX = Math.max(margin, window.innerWidth - w - margin);
+        const maxY = Math.max(margin, window.innerHeight - h - margin);
         setGeom({
           ...origin,
-          x: clamp(origin.x + ev.clientX - startX, 4, maxX),
-          y: clamp(origin.y + ev.clientY - startY, 4, maxY),
+          x: clamp(origin.x + ev.clientX - startX, margin, maxX),
+          y: clamp(origin.y + ev.clientY - startY, margin, maxY),
         });
       };
       const onDone = (ev: PointerEvent) => {
@@ -169,7 +202,7 @@ function useVizPanelGeometry(storageKey: string) {
       window.addEventListener('pointerup', onDone);
       window.addEventListener('pointercancel', onDone);
     },
-    [persist],
+    [measureShell, minimized, persist],
   );
 
   return { geom, startDrag };
@@ -322,6 +355,8 @@ const WindDial: React.FC<{ value: number; speed: number; onChange: (deg: number)
 export type WeatherVisualizationPanelProps = {
   open: boolean;
   onClose: () => void;
+  /** @deprecated Position is viewport-fixed; kept for API compatibility. */
+  containerRef?: RefObject<HTMLElement | null>;
   sim: WeatherSimState;
   onChange: (patch: Partial<WeatherSimState>) => void;
   onReset: () => void;
@@ -348,8 +383,9 @@ export const WeatherVisualizationPanel: React.FC<WeatherVisualizationPanelProps>
   const { scopedStorageKey } = useSiInstanceScope();
   const slidesLs = scopedStorageKey(SLIDES_LS);
   const panelGeomLs = scopedStorageKey(PANEL_GEOM_LS);
-  const { geom, startDrag } = useVizPanelGeometry(panelGeomLs);
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const [minimized, setMinimized] = useState(false);
+  const { geom, startDrag } = useVizPanelGeometry(panelGeomLs, shellRef, minimized);
   const [slides, setSlides] = useState<WeatherVizSlide[]>(() => readSlides(slidesLs));
 
   const persistSlides = useCallback(
@@ -443,24 +479,52 @@ export const WeatherVisualizationPanel: React.FC<WeatherVisualizationPanelProps>
   const windLimits = WEATHER_SIM_LIMITS.windSpeed;
   const speedLimits = WEATHER_SIM_LIMITS.speed;
 
-  return (
+  const activePreset =
+    WEATHER_SIM_PRESET_ORDER.find(id => weatherSimMatchesPreset(sim, id)) ?? null;
+
+  const panel = (
     <div
-      className="si-wviz-shell"
-      style={{ left: geom.x, top: geom.y, width: geom.w, height: minimized ? undefined : geom.h }}
+      ref={shellRef}
+      className={`si-wviz-shell${minimized ? ' si-wviz-shell--min' : ''}`}
+      data-map-overlay-isolate=""
+      style={
+        minimized
+          ? { left: geom.x, top: geom.y }
+          : { left: geom.x, top: geom.y, width: geom.w, height: geom.h }
+      }
       role="dialog"
       aria-label="Weather visualization"
     >
       <div className={`si-wviz-panel${minimized ? ' si-wviz-panel--min' : ''}`}>
-        <header className="si-wviz-header si-wviz-drag" onPointerDown={startDrag} title="Drag to move">
-          <div className="si-wviz-brand">
-            <span className="si-wviz-brand-icon" aria-hidden>
-              <i className="fa-solid fa-cloud-sun-rain" />
-            </span>
-            <div className="si-wviz-brand-text">
-              <h2 className="si-wviz-title">Weather simulation</h2>
-              <span className="si-wviz-subtitle">{describeWeatherSim(sim)}</span>
+        <header
+          className={`si-wviz-header si-wviz-drag${minimized ? ' si-wviz-header--min' : ''}`}
+          onPointerDown={startDrag}
+          title="Drag to move"
+        >
+          {minimized ? (
+            <>
+              <span className="si-wviz-chip-icon" aria-hidden>
+                <i
+                  className={
+                    activePreset
+                      ? WEATHER_SIM_PRESETS[activePreset].icon
+                      : 'fa-solid fa-cloud-sun-rain'
+                  }
+                />
+              </span>
+              <span className="si-wviz-chip-text">{describeWeatherSim(sim)}</span>
+            </>
+          ) : (
+            <div className="si-wviz-brand">
+              <span className="si-wviz-brand-icon" aria-hidden>
+                <i className="fa-solid fa-cloud-sun-rain" />
+              </span>
+              <div className="si-wviz-brand-text">
+                <h2 className="si-wviz-title">Weather</h2>
+                <span className="si-wviz-subtitle">{describeWeatherSim(sim)}</span>
+              </div>
             </div>
-          </div>
+          )}
           <div className="si-wviz-actions" data-drag-exclude>
             <button
               type="button"
@@ -468,7 +532,7 @@ export const WeatherVisualizationPanel: React.FC<WeatherVisualizationPanelProps>
               title={minimized ? 'Expand' : 'Minimize'}
               onClick={() => setMinimized(m => !m)}
             >
-              <i className={`fa-solid ${minimized ? 'fa-window-maximize' : 'fa-window-minimize'}`} aria-hidden />
+              <i className={`fa-solid ${minimized ? 'fa-up-right-and-down-left-from-center' : 'fa-minus'}`} aria-hidden />
             </button>
             <button type="button" className="si-wviz-icon-btn" title="Close" onClick={onClose}>
               <i className="fa-solid fa-xmark" aria-hidden />
@@ -482,13 +546,12 @@ export const WeatherVisualizationPanel: React.FC<WeatherVisualizationPanelProps>
             <div className="si-wviz-transport">
               <button
                 type="button"
-                className={`si-wviz-play${sim.playing ? ' is-playing' : ''}`}
+                className={`si-wviz-fab${sim.playing ? ' is-playing' : ''}`}
                 onClick={() => onChange({ playing: !sim.playing })}
                 title={sim.playing ? 'Pause simulation' : 'Play simulation'}
                 aria-pressed={sim.playing}
               >
                 <i className={`fa-solid ${sim.playing ? 'fa-pause' : 'fa-play'}`} aria-hidden />
-                <span>{sim.playing ? 'Pause' : 'Play'}</span>
               </button>
               <button
                 type="button"
@@ -496,18 +559,15 @@ export const WeatherVisualizationPanel: React.FC<WeatherVisualizationPanelProps>
                 onClick={onReset}
                 title="Reset to a calm clear sky"
               >
-                <i className="fa-solid fa-rotate-left" aria-hidden />
-                <span>Reset</span>
+                Reset
               </button>
               <div className="si-wviz-speedpill" title="Animation speed">
-                <i className="fa-solid fa-gauge-high" aria-hidden />
                 {sim.speed.toFixed(2)}×
               </div>
             </div>
 
             {/* Presets */}
             <section className="si-wviz-section">
-              <div className="si-wviz-section-label">Weather preset</div>
               <div className="si-wviz-presets">
                 {WEATHER_SIM_PRESET_ORDER.map(id => {
                   const p = WEATHER_SIM_PRESETS[id];
@@ -518,11 +578,11 @@ export const WeatherVisualizationPanel: React.FC<WeatherVisualizationPanelProps>
                       type="button"
                       className={`si-wviz-preset si-wviz-tone--${p.tone}${active ? ' active' : ''}`}
                       title={p.label}
+                      aria-label={p.label}
                       aria-pressed={active}
                       onClick={() => applyPreset(id)}
                     >
                       <i className={p.icon} aria-hidden />
-                      <span className="si-wviz-preset-label">{p.label}</span>
                     </button>
                   );
                 })}
@@ -696,4 +756,6 @@ export const WeatherVisualizationPanel: React.FC<WeatherVisualizationPanelProps>
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(panel, document.body) : panel;
 };

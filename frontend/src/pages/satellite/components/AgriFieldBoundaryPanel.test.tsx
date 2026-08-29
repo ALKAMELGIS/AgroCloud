@@ -112,7 +112,7 @@ describe('AgriFieldBoundaryPanel Results dashboard trigger', () => {
   it('exposes an icon Results control instead of a Validate text tab', () => {
     const { cleanupHost } = mountWithHost()
     expect(screen.queryByText(/^Validate$/)).toBeNull()
-    const btn = screen.getByRole('tab', { name: 'Results dashboard' })
+    const btn = screen.getByRole('tab', { name: 'Optimal Learning Rate Finder' })
     expect(btn.className).toMatch(/si-afb__tab--icon/)
     expect(btn.querySelector('.si-afb__tab-badge')?.textContent).toBe('12')
     cleanupHost()
@@ -120,8 +120,8 @@ describe('AgriFieldBoundaryPanel Results dashboard trigger', () => {
 
   it('shows inline results with charts when the Results tab is selected', () => {
     const { cleanupHost } = mountWithHost()
-    fireEvent.click(screen.getByRole('tab', { name: 'Results dashboard' }))
-    expect(screen.getByText('Field Results')).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: 'Optimal Learning Rate Finder' }))
+    expect(screen.getByText('Optimal Learning Rate Finder')).toBeTruthy()
     expect(screen.queryByText('Size distribution')).toBeNull()
     expect(screen.getAllByText('Validation Detection').length).toBeGreaterThan(0)
     expect(screen.getByText('Epochs Details')).toBeTruthy()
@@ -130,13 +130,13 @@ describe('AgriFieldBoundaryPanel Results dashboard trigger', () => {
 
   it('opens the floating dashboard from Pop out', () => {
     const { cleanupHost } = mountWithHost()
-    fireEvent.click(screen.getByRole('tab', { name: 'Results dashboard' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Open floating dashboard on the map' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Optimal Learning Rate Finder' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open floating Optimal Learning Rate Finder on the map' }))
     const float = document.getElementById('si-afb-results-dashboard')
     expect(float).toBeTruthy()
-    expect(float?.textContent).toContain('Field Results Dashboard')
-    expect(float?.textContent).toContain('Training loss')
-    expect(float?.textContent).toContain('Training accuracy')
+    expect(float?.textContent).toContain('Optimal Learning Rate Finder')
+    expect(float?.textContent).toContain('Training vs Validation Loss')
+    expect(float?.textContent).toContain('Optimal Learning Rate')
     expect(float?.textContent).toContain('Epochs Details')
     expect(float?.textContent).not.toMatch(/Validation Detection/)
     cleanupHost()
@@ -152,13 +152,13 @@ describe('AgriFieldBoundaryPanel Results dashboard trigger', () => {
   it('returns to Detect and closes floating dashboard on Reset', () => {
     const onReset = vi.fn()
     const { cleanupHost } = mountWithHost({ onReset })
-    fireEvent.click(screen.getByRole('tab', { name: 'Results dashboard' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Open floating dashboard on the map' }))
-    expect(screen.getByText('Field Results Dashboard')).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: 'Optimal Learning Rate Finder' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open floating Optimal Learning Rate Finder on the map' }))
+    expect(document.getElementById('si-afb-results-dashboard')).toBeTruthy()
     fireEvent.click(screen.getByRole('tab', { name: /Detect/i }))
     fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
     expect(onReset).toHaveBeenCalled()
-    expect(screen.queryByText('Field Results Dashboard')).toBeNull()
+    expect(document.querySelector('#si-afb-results-dashboard')).toBeNull()
     cleanupHost()
   })
 

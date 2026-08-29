@@ -251,7 +251,8 @@ function metersPerDeg(lat) {
   return { mLon: Math.max(mLon, 1), mLat: Math.max(mLat, 1) }
 }
 
-function componentToPolygon(comp, width, height, bbox) {
+function componentToPolygon(comp, width, height, bbox, opts = {}) {
+  const preserveGeometry = Boolean(opts.preserveGeometry)
   const [west, south, east, north] = bbox
   const hull = convexHull(comp.edgePixels)
   if (hull.length < 3) return null
@@ -260,7 +261,9 @@ function componentToPolygon(comp, width, height, bbox) {
     north - (py / Math.max(height - 1, 1)) * (north - south),
   ])
   const diagDeg = Math.hypot(east - west, north - south)
-  geoRing = simplifyRing(geoRing, diagDeg * 0.002)
+  if (!preserveGeometry) {
+    geoRing = simplifyRing(geoRing, diagDeg * 0.002)
+  }
   if (geoRing.length < 3) return null
   geoRing.push([...geoRing[0]])
   const latMid = (south + north) / 2
@@ -274,6 +277,99 @@ function componentToPolygon(comp, width, height, bbox) {
     perimeter += Math.hypot(mCoords[i + 1][0] - mCoords[i][0], mCoords[i + 1][1] - mCoords[i][1])
   }
   return { ring: geoRing, areaM2: Math.abs(area) / 2, perimeterM: perimeter }
+}
+
+function polygonizeMaskWork({
+  mask,
+  width,
+  height,
+  bbox,
+  aoi,
+  minAreaM2,
+  source,
+  engine,
+  defaultConfidence = 0.55,
+  preserveGeometry = false,
+}) {
+  applyAoiMask(mask, width, height, bbox, aoi)
+  const cleaned = preserveGeometry ? mask : morphDilate(morphErode(mask, width, height), width, height)
+  const minArea = Number(minAreaM2 ?? 1) || 1
+  const pxPerM2 = (() => {
+    const [west, south, east, north] = bbox
+    const { mLon, mLat } = metersPerDeg((south + north) / 2)
+    const areaM2 = Math.abs((east - west) * mLon * (north - south) * mLat)
+    return width * height / Math.max(areaM2, 1)
+  })()
+  const minPixels = Math.max(8, Math.round(minArea * pxPerM2 * 0.35))
+  const components = findComponents(cleaned, width, height, minPixels)
+  const features = []
+  let scoreSum = 0
+  for (const comp of components) {
+    const poly = componentToPolygon(comp, width, height, bbox, { preserveGeometry })
+    if (!poly || poly.areaM2 < minArea) continue
+    const confidence = defaultConfidence
+    scoreSum += confidence
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'Polygon', coordinates: [poly.ring] },
+      properties: {
+        field_id: `FTW-${String(features.length + 1).padStart(4, '0')}`,
+        confidence,
+        confidence_mean: confidence,
+        area_m2: Math.round(poly.areaM2 * 100) / 100,
+        area_ha: Math.round((poly.areaM2 / 10000) * 10000) / 10000,
+        perimeter_m: Math.round(poly.perimeterM * 10) / 10,
+        source: source || 'ftw-raster-mosaic',
+      },
+    })
+  }
+  const count = features.length
+  return {
+    geojson: { type: 'FeatureCollection', features },
+    count,
+    score: count ? Math.round((scoreSum / count) * 10000) / 10000 : 0,
+    engine,
+    device: 'cpu',
+    source: source || 'ftw-raster-mosaic',
+    stats: { field: count },
+    aoi_applied: Boolean(aoi),
+    width,
+    height,
+  }
+}
+
+/** Vectorize a white-on-black binary mask PNG (FTW raster mosaic). */
+export function vectorizeBinaryMaskBuiltin(body, { maxEdge = 2048 } = {}) {
+  const bbox = body?.bbox
+  if (!Array.isArray(bbox) || bbox.length !== 4) {
+    throw new Error('bbox must be [west, south, east, north].')
+  }
+  const decoded = decodeDataUrl(body.mask ?? body.image)
+  const preserve = Boolean(body.preserve_geometry)
+  const work = preserve
+    ? { width: decoded.width, height: decoded.height, data: decoded.data }
+    : downsampleRgba(decoded.data, decoded.width, decoded.height, maxEdge)
+  const { width, height, data } = work
+  const mask = new Uint8Array(width * height)
+  for (let i = 0; i < width * height; i++) {
+    const o = i * 4
+    const lum = Math.max(data[o] ?? 0, data[o + 1] ?? 0, data[o + 2] ?? 0)
+    mask[i] = lum > 127 ? 1 : 0
+  }
+  return polygonizeMaskWork({
+    mask,
+    width,
+    height,
+    bbox,
+    aoi: body.aoi,
+    minAreaM2: body.min_area_m2 ?? body.minAreaM2 ?? 500,
+    source: body.source || 'ftw-raster-mosaic',
+    engine: body.preserve_geometry
+      ? 'ftw-raster-mosaic-seamless-builtin'
+      : body.engine || 'ftw-raster-mosaic-builtin',
+    defaultConfidence: 0.55,
+    preserveGeometry: Boolean(body.preserve_geometry),
+  })
 }
 
 /**

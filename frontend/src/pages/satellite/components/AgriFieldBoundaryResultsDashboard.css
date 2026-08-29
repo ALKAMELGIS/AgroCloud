@@ -1,12 +1,21 @@
-/* Field Results dashboard — matte black / soft white */
+/* Field Results dashboard — follows html[data-theme] matte text tokens */
 
 .si-afb-dash {
-  --afb-dash-bg: #050505;
-  --afb-dash-panel: #0a0a0a;
-  --afb-dash-border: rgba(255, 255, 255, 0.12);
-  --afb-dash-text: rgba(248, 250, 252, 0.92);
-  --afb-dash-muted: rgba(226, 232, 240, 0.62);
-  --afb-dash-soft: rgba(226, 232, 240, 0.42);
+  --afb-dash-bg: var(--theme-bg-elevated, #fafbfc);
+  --afb-dash-panel: #ffffff;
+  --afb-dash-kpi-bg: #ffffff;
+  --afb-dash-border: var(--theme-border, rgba(34, 34, 34, 0.12));
+  --afb-dash-text: var(--theme-text-primary, #222222);
+  --afb-dash-muted: var(--theme-text-secondary, #555555);
+  --afb-dash-soft: var(--theme-text-muted, #777777);
+  --afb-dash-kpi-label: var(--theme-text-secondary, #555555);
+  --afb-dash-kpi-value: var(--theme-text-primary, #222222);
+  --afb-dash-figure-bg: #ffffff;
+  --afb-dash-figure-panel: #f8fafc;
+  --afb-dash-figure-grid: rgba(34, 34, 34, 0.1);
+  --afb-dash-figure-text: var(--theme-text-secondary, #555555);
+  --afb-dash-table-bg: #ffffff;
+  --afb-dash-table-head: #f1f5f9;
 
   display: flex;
   flex-direction: column;
@@ -21,6 +30,29 @@
 .si-afb-dash--inline {
   padding: 4px 2px 8px;
   border: 1px solid var(--afb-dash-border);
+}
+
+.si-afb-dash__headline {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--afb-dash-border);
+}
+
+.si-afb-dash__headline-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--afb-dash-text);
+}
+
+.si-afb-dash__headline-aoi {
+  font-size: 10px;
+  color: var(--afb-dash-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .si-afb-dash--inline .si-afb-dash__kpis {
@@ -66,8 +98,8 @@
   min-width: 0;
   padding: 8px 10px;
   border-radius: 4px;
-  background: #000;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--afb-dash-kpi-bg);
+  border: 1px solid var(--afb-dash-border);
 }
 
 .si-afb-dash__kpi span {
@@ -75,14 +107,14 @@
   font-weight: 550;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: rgba(248, 250, 252, 0.58);
+  color: var(--afb-dash-kpi-label);
   line-height: 1.2;
 }
 
 .si-afb-dash__kpi strong {
   font-size: 13px;
   font-weight: 600;
-  color: #fff;
+  color: var(--afb-dash-kpi-value);
   font-variant-numeric: tabular-nums;
   line-height: 1.15;
   white-space: nowrap;
@@ -169,59 +201,59 @@
 }
 
 .si-afb-dash__card--table .si-epochs {
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--afb-dash-border);
   border-radius: 6px;
-  background: #000;
-  color: #fff;
+  background: var(--afb-dash-table-bg);
+  color: var(--afb-dash-text);
 }
 
 .si-afb-dash__card--table .si-epochs__summary,
 .si-afb-dash__card--table .si-epochs__analysis,
 .si-afb-dash__card--table .si-epochs__scroll,
 .si-afb-dash__card--table .si-epochs__table {
-  background: #000;
-  color: #fff;
+  background: var(--afb-dash-table-bg);
+  color: var(--afb-dash-text);
 }
 
 .si-afb-dash__card--table .si-epochs__stat span,
 .si-afb-dash__card--table .si-epochs__count {
-  color: rgba(255, 255, 255, 0.62);
+  color: var(--afb-dash-muted);
 }
 
 .si-afb-dash__card--table .si-epochs__stat strong,
 .si-afb-dash__card--table .si-epochs__table thead th,
 .si-afb-dash__card--table .si-epochs__table td,
 .si-afb-dash__card--table .si-epochs__table tbody th[scope='row'] {
-  color: #fff !important;
+  color: var(--afb-dash-text) !important;
 }
 
 .si-afb-dash__card--table .si-epochs__table thead th,
 .si-afb-dash__card--table .si-epochs__table td,
 .si-afb-dash__card--table .si-epochs__table th {
-  border-color: rgba(255, 255, 255, 0.12) !important;
-  background: #000 !important;
+  border-color: var(--afb-dash-border) !important;
+  background: var(--afb-dash-table-bg) !important;
 }
 
 .si-afb-dash__card--table .si-epochs__table thead th {
-  background: #0a0a0a !important;
+  background: var(--afb-dash-table-head) !important;
 }
 
 .si-afb-dash__card--table .si-epochs__table tbody tr.is-alt th,
 .si-afb-dash__card--table .si-epochs__table tbody tr.is-alt td {
-  background: #0a0a0a !important;
+  background: var(--afb-dash-figure-panel) !important;
 }
 
 .si-afb-dash__card--table .si-epochs__table tbody tr.is-best th,
 .si-afb-dash__card--table .si-epochs__table tbody tr.is-best td {
-  background: #111 !important;
-  color: #fff !important;
+  background: var(--theme-surface-muted, #f1f5f9) !important;
+  color: var(--afb-dash-text) !important;
 }
 
 /* Validation last — compact footer card */
 .si-afb-dash__card--validate {
   order: 40;
-  background: #000;
-  border-color: rgba(255, 255, 255, 0.16);
+  background: var(--afb-dash-panel);
+  border-color: var(--afb-dash-border);
   padding: 8px;
 }
 
@@ -254,23 +286,23 @@
 
 .si-afb-dash__card--validate .si-afbv__need-ref {
   border-color: var(--afb-dash-border);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--theme-surface-muted, rgba(34, 34, 34, 0.04));
   padding: 8px 9px;
 }
 
 .si-afb-dash__card--validate .si-afbv__need-ref > i {
-  color: rgba(226, 232, 240, 0.55);
+  color: var(--afb-dash-soft);
 }
 
-/* Charts: black figure, soft white axes */
+/* Charts — theme-aware figure surface */
 .si-afb-dash .si-afbv__figure-bg {
-  fill: #000;
+  fill: var(--afb-dash-figure-bg);
 }
 .si-afb-dash .si-afbv__spine {
-  stroke: rgba(248, 250, 252, 0.55);
+  stroke: var(--afb-dash-figure-text);
 }
 .si-afb-dash .si-afbv__figure-grid {
-  stroke: rgba(255, 255, 255, 0.1);
+  stroke: var(--afb-dash-figure-grid);
 }
 .si-afb-dash .si-afbv__figure-tick,
 .si-afb-dash .si-afbv__figure-axis,
@@ -278,26 +310,27 @@
 .si-afb-dash .si-afbv__figure-legend-text,
 .si-afb-dash .si-afbv__figure-annotation,
 .si-afb-dash .si-cm__tick {
-  fill: rgba(248, 250, 252, 0.78);
+  fill: var(--afb-dash-figure-text);
 }
 .si-afb-dash .si-afbv__figure-ref {
-  stroke: rgba(248, 250, 252, 0.45);
+  stroke: var(--afb-dash-soft);
 }
 .si-afb-dash .si-afbv__figure-legend {
-  fill: #0a0a0a;
-  stroke: rgba(255, 255, 255, 0.28);
+  fill: var(--afb-dash-figure-panel);
+  stroke: var(--afb-dash-border);
 }
 .si-afb-dash .si-afbv__figure-empty {
-  background: #000;
+  background: var(--afb-dash-figure-bg);
   border-color: var(--afb-dash-border);
   color: var(--afb-dash-muted);
 }
 .si-afb-dash .si-afbv__figure-crosshair {
-  stroke: rgba(255, 255, 255, 0.55);
+  stroke: var(--afb-dash-soft);
 }
 .si-afb-dash .si-afbv__figure-tip {
-  background: rgba(0, 0, 0, 0.94);
-  border-color: rgba(255, 255, 255, 0.22);
+  background: var(--afb-dash-panel);
+  border-color: var(--afb-dash-border);
+  color: var(--afb-dash-text);
 }
 
 @keyframes si-afb-dash-in {
@@ -311,11 +344,33 @@
   }
 }
 
-/* Float panel body matches dashboard */
 #si-afb-results-dashboard .gis-float-panel__body {
-  background: #050505;
+  background: var(--theme-bg-elevated, #fafbfc);
 }
 
 #si-afb-results-dashboard .gis-float-panel__titles .gis-float-panel__layer-name {
   letter-spacing: 0.01em;
+}
+
+/* ── Dark theme ── */
+html[data-theme='dark'] .si-afb-dash {
+  --afb-dash-bg: #141618;
+  --afb-dash-panel: #1a1d21;
+  --afb-dash-kpi-bg: #0f1114;
+  --afb-dash-border: rgba(230, 230, 230, 0.12);
+  --afb-dash-text: #e6e6e6;
+  --afb-dash-muted: #b8b8b8;
+  --afb-dash-soft: #8f8f8f;
+  --afb-dash-kpi-label: #b8b8b8;
+  --afb-dash-kpi-value: #e6e6e6;
+  --afb-dash-figure-bg: #0a0a0a;
+  --afb-dash-figure-panel: #141618;
+  --afb-dash-figure-grid: rgba(255, 255, 255, 0.1);
+  --afb-dash-figure-text: rgba(230, 230, 230, 0.78);
+  --afb-dash-table-bg: #0a0a0a;
+  --afb-dash-table-head: #141618;
+}
+
+html[data-theme='dark'] #si-afb-results-dashboard .gis-float-panel__body {
+  background: #141618;
 }

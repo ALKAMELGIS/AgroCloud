@@ -1,0 +1,675 @@
+/**
+ * Map floating overlays — follow html[data-theme]: light glass + matte #222,
+ * dark glass + matte #E6E6E6. Applies to swipe, GIS float, legend, chat composer.
+ */
+
+html[data-theme='light'] {
+  --si-overlay-bg: rgba(255, 255, 255, 0.94);
+  --si-overlay-bg-soft: rgba(248, 250, 252, 0.96);
+  --si-overlay-text: #222222;
+  --si-overlay-muted: #555555;
+  --si-overlay-border: rgba(34, 34, 34, 0.12);
+  --si-overlay-border-strong: rgba(34, 34, 34, 0.18);
+  --si-overlay-field-bg: #ffffff;
+  --si-overlay-field-border: rgba(34, 34, 34, 0.16);
+  --si-overlay-fill: rgba(34, 34, 34, 0.05);
+  --si-overlay-fill-hover: rgba(34, 34, 34, 0.08);
+  --si-overlay-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  --si-overlay-accent-bg: rgba(5, 150, 105, 0.14);
+  --si-overlay-accent-text: #047857;
+  --si-overlay-icon: #555555;
+  --si-overlay-icon-hover: #222222;
+}
+
+html[data-theme='dark'] {
+  --si-overlay-bg: rgba(16, 22, 26, 0.92);
+  --si-overlay-bg-soft: rgba(12, 12, 14, 0.88);
+  --si-overlay-text: #e6e6e6;
+  --si-overlay-muted: #b8b8b8;
+  --si-overlay-border: rgba(255, 255, 255, 0.12);
+  --si-overlay-border-strong: rgba(255, 255, 255, 0.18);
+  --si-overlay-field-bg: rgba(0, 0, 0, 0.55);
+  --si-overlay-field-border: rgba(255, 255, 255, 0.18);
+  --si-overlay-fill: rgba(255, 255, 255, 0.06);
+  --si-overlay-fill-hover: rgba(255, 255, 255, 0.1);
+  --si-overlay-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --si-overlay-accent-bg: rgba(76, 175, 80, 0.28);
+  --si-overlay-accent-text: #ffffff;
+  --si-overlay-icon: #b8b8b8;
+  --si-overlay-icon-hover: #e6e6e6;
+}
+
+/* ── Map Swipe ─────────────────────────────────────────────────────────── */
+html[data-theme='light'] .si-map-swipe-panel,
+html[data-theme='light'] .si-map-swipe-overlay__legend-card {
+  background: var(--si-overlay-bg);
+  color: var(--si-overlay-text);
+  border-color: var(--si-overlay-border);
+  box-shadow: var(--si-overlay-shadow);
+}
+
+html[data-theme='light'] .si-map-swipe-fab {
+  background: var(--si-overlay-bg);
+  color: var(--si-overlay-text);
+  border-color: var(--si-overlay-border-strong);
+  box-shadow: var(--si-overlay-shadow);
+}
+
+html[data-theme='light'] .si-map-swipe-fab:hover:not(:disabled) {
+  background: var(--si-overlay-bg-soft);
+  border-color: var(--si-overlay-border-strong);
+}
+
+html[data-theme='light'] .si-map-swipe-overlay__legend-fab {
+  background: var(--si-overlay-bg);
+  color: var(--si-overlay-icon);
+  border-color: var(--si-overlay-border-strong);
+}
+
+html[data-theme='light'] .si-map-swipe-overlay__legend-fab:hover {
+  color: var(--si-overlay-icon-hover);
+  background: var(--si-overlay-bg-soft);
+}
+
+html[data-theme='light'] .si-map-swipe-panel__grid label,
+html[data-theme='light'] .si-map-swipe-overlay__legend-card-head em {
+  color: var(--si-overlay-muted);
+}
+
+html[data-theme='light'] .si-map-swipe-panel__seg,
+html[data-theme='light'] .si-map-swipe-panel__legend-tabs {
+  border-color: var(--si-overlay-border);
+  background: var(--si-overlay-fill);
+}
+
+html[data-theme='light'] .si-map-swipe-panel__seg button,
+html[data-theme='light'] .si-map-swipe-panel__legend-tabs button {
+  color: var(--si-overlay-muted);
+}
+
+html[data-theme='light'] .si-map-swipe-panel__seg button.is-on,
+html[data-theme='light'] .si-map-swipe-panel__legend-tabs button.is-on,
+html[data-theme='light'] .si-map-swipe-panel__legend-btn.is-on {
+  background: var(--si-overlay-accent-bg);
+  color: var(--si-overlay-accent-text);
+}
+
+html[data-theme='light'] .si-map-swipe-fab.is-on,
+html[data-theme='light'] .si-map-swipe-overlay__legend-fab.is-on {
+  background: rgba(5, 150, 105, 0.88);
+  border-color: rgba(5, 150, 105, 0.45);
+  color: #ffffff;
+}
+
+html[data-theme='light'] .si-map-swipe-panel__legend-tab-meta {
+  color: var(--si-overlay-muted);
+}
+
+html[data-theme='light'] .si-map-swipe-panel__legend-tabs button.is-on .si-map-swipe-panel__legend-tab-meta {
+  color: var(--si-overlay-accent-text);
+}
+
+html[data-theme='light'] .si-map-swipe-panel__close,
+html[data-theme='light'] .si-map-swipe-panel__legend-btn {
+  background: var(--si-overlay-fill);
+  color: var(--si-overlay-icon);
+  border-color: var(--si-overlay-border);
+}
+
+html[data-theme='light'] .si-map-swipe-panel__close:hover,
+html[data-theme='light'] .si-map-swipe-panel__legend-btn:hover {
+  color: var(--si-overlay-icon-hover);
+  background: var(--si-overlay-fill-hover);
+}
+
+html[data-theme='light'] .si-map-swipe-panel__grid input,
+html[data-theme='light'] .si-map-swipe-panel__grid select {
+  background: var(--si-overlay-field-bg);
+  color: var(--si-overlay-text);
+  border-color: var(--si-overlay-field-border);
+  color-scheme: light;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+html[data-theme='light'] .si-map-swipe-panel__grid input:hover,
+html[data-theme='light'] .si-map-swipe-panel__grid select:hover {
+  background: #f8fafc;
+  border-color: var(--si-overlay-border-strong);
+}
+
+html[data-theme='light'] .si-map-swipe-panel__grid select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23222222' d='M1.4.6 6 5.2 10.6.6 12 2 6 8 0 2z'/%3E%3C/svg%3E");
+}
+
+html[data-theme='light'] .si-map-swipe-panel__grid select option,
+html[data-theme='light'] .si-map-swipe-panel__grid select optgroup {
+  background-color: #ffffff;
+  color: #222222;
+}
+
+html[data-theme='light'] .si-map-swipe-panel__grid input[type='date']::-webkit-calendar-picker-indicator {
+  filter: none;
+  opacity: 0.75;
+}
+
+html[data-theme='light'] .si-map-swipe-panel__legend,
+html[data-theme='light'] .si-map-swipe-overlay__legend-card-head {
+  border-color: var(--si-overlay-border);
+}
+
+html[data-theme='light'] .si-map-swipe-overlay__legend-card-head > span {
+  color: var(--si-overlay-text);
+}
+
+html[data-theme='light'] .si-map-swipe-overlay__legend-card-head button {
+  color: var(--si-overlay-icon);
+}
+
+html[data-theme='light'] .si-map-swipe-overlay__legend-card-head button:hover {
+  color: var(--si-overlay-icon-hover);
+  background: var(--si-overlay-fill-hover);
+}
+
+html[data-theme='light'] .si-map-swipe-panel__legend-body {
+  background: var(--si-overlay-fill);
+}
+
+html[data-theme='light'] .si-map-swipe-panel__legend-body .si-layer-live-legend,
+html[data-theme='light'] .si-map-swipe-panel__legend-body .si-layer-live-legend__section--float,
+html[data-theme='light'] .si-map-swipe-overlay__legend-card-body .si-layer-live-legend,
+html[data-theme='light'] .si-map-swipe-overlay__legend-card-body .si-layer-live-legend__section--float {
+  color: var(--si-overlay-text);
+}
+
+html[data-theme='light'] .si-map-swipe-panel__legend-body .si-layer-live-legend__title {
+  color: var(--si-overlay-text);
+}
+
+html[data-theme='light'] .si-map-swipe-panel__legend-body .si-layer-live-legend__scientific,
+html[data-theme='light'] .si-map-swipe-panel__legend-body .si-layer-live-legend__subtitle,
+html[data-theme='light'] .si-map-swipe-panel__legend-body .si-lll-row-range,
+html[data-theme='light'] .si-map-swipe-panel__legend-body .si-lll-meta dt {
+  color: var(--si-overlay-muted);
+}
+
+html[data-theme='light'] .si-map-swipe-panel__legend-body .si-lll-row-name,
+html[data-theme='light'] .si-map-swipe-panel__legend-body .si-lll-meta dd,
+html[data-theme='light'] .si-map-swipe-panel__legend-body .si-lll-area-line b,
+html[data-theme='light'] .si-map-swipe-panel__legend-body .si-lll-area-u,
+html[data-theme='light'] .si-map-swipe-panel__legend-body .si-lll-area-pct {
+  color: var(--si-overlay-text);
+}
+
+/* ── GIS floating workspace (AOI table, results, symbology…) ───────────── */
+html[data-theme='light'] .gis-float-panel {
+  color: var(--si-overlay-text);
+}
+
+html[data-theme='light'] .gis-float-panel__chrome {
+  background: var(--si-overlay-bg);
+  border-color: var(--si-overlay-border);
+  box-shadow: var(--si-overlay-shadow);
+}
+
+html[data-theme='light'] .gis-float-panel__header {
+  border-bottom-color: var(--si-overlay-border);
+  background: linear-gradient(180deg, rgba(34, 34, 34, 0.03), transparent);
+}
+
+html[data-theme='light'] .gis-float-panel__layer-name {
+  color: var(--si-overlay-text);
+}
+
+html[data-theme='light'] .gis-float-panel__subtitle,
+html[data-theme='light'] .gis-float-panel__grip {
+  color: var(--si-overlay-muted);
+}
+
+html[data-theme='light'] .gis-float-panel__layer-icon {
+  background: rgba(5, 150, 105, 0.12);
+  border-color: rgba(5, 150, 105, 0.28);
+  color: #047857;
+}
+
+html[data-theme='light'] .gis-float-panel__winbtn {
+  color: var(--si-overlay-icon);
+}
+
+html[data-theme='light'] .gis-float-panel__winbtn:hover {
+  background: var(--si-overlay-fill-hover);
+  border-color: var(--si-overlay-border);
+  color: var(--si-overlay-icon-hover);
+}
+
+html[data-theme='light'] .gis-float-panel__winbtn--close:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.28);
+  color: #b91c1c;
+}
+
+html[data-theme='light'] .gis-float-panel__footer {
+  border-top-color: var(--si-overlay-border);
+  background: var(--si-overlay-fill);
+}
+
+html[data-theme='light'] .gis-float-panel__search {
+  border-color: var(--si-overlay-border);
+  background: var(--si-overlay-field-bg);
+  color: var(--si-overlay-muted);
+}
+
+html[data-theme='light'] .gis-float-panel__search input {
+  color: var(--si-overlay-text);
+}
+
+html[data-theme='light'] .gis-float-panel__body,
+html[data-theme='light'] .gis-float-panel__body table,
+html[data-theme='light'] .gis-float-panel__body th,
+html[data-theme='light'] .gis-float-panel__body td,
+html[data-theme='light'] .gis-float-panel__body label,
+html[data-theme='light'] .gis-float-panel__body button,
+html[data-theme='light'] .gis-float-panel__body input,
+html[data-theme='light'] .gis-float-panel__body select {
+  color: var(--si-overlay-text);
+}
+
+html[data-theme='light'] .gis-float-panel i[class*='fa-'] {
+  color: currentColor;
+}
+
+/* ── Field results / validation float dashboards ───────────────────────── */
+html[data-theme='light'] .si-afb-dash {
+  --afb-dash-bg: #fafbfc;
+  --afb-dash-panel: #ffffff;
+  --afb-dash-border: rgba(34, 34, 34, 0.12);
+  --afb-dash-text: #222222;
+  --afb-dash-muted: #555555;
+  --afb-dash-soft: #777777;
+}
+
+html[data-theme='light'] #si-afb-results-dashboard .gis-float-panel__body {
+  background: var(--afb-dash-bg, #fafbfc);
+}
+
+/* ── Chat composer bar (map float) ─────────────────────────────────────── */
+html[data-theme='light'] .nac-composer-surface {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border-color: rgba(148, 163, 184, 0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 6px 16px rgba(15, 23, 42, 0.08);
+}
+
+html[data-theme='light'] .nac-composer-input::placeholder {
+  color: #777777;
+}
+
+html[data-theme='light'] .nac-composer-icon-btn,
+html[data-theme='light'] .nac-composer-send {
+  color: #555555;
+}
+
+html[data-theme='light'] .nac-composer-icon-btn:hover:not(:disabled),
+html[data-theme='light'] .nac-composer-send:hover:not(:disabled) {
+  color: #222222;
+}
+
+html[data-theme='light'] .nac-composer-send {
+  background: rgba(34, 34, 34, 0.06);
+  border-color: rgba(34, 34, 34, 0.1);
+}
+
+/* ── Geo explorer bubbles when on map (not in dock) ──────────────────────── */
+html[data-theme='light'] .si-map-container .si-geo-explorer-bubble {
+  color: #222222;
+  background: rgba(255, 255, 255, 0.94);
+  border-color: rgba(34, 34, 34, 0.12);
+}
+
+html[data-theme='light'] .si-map-container .si-geo-explorer-row--user .si-geo-explorer-bubble {
+  background: #f1f5f9;
+  border-color: rgba(34, 34, 34, 0.14);
+}
+
+html[data-theme='light'] .si-map-container .si-geo-explorer-input,
+html[data-theme='light'] .si-map-container .si-geo-explorer-footnote {
+  color: #222222;
+}
+
+html[data-theme='light'] .si-map-container .si-geo-explorer-input::placeholder {
+  color: #777777;
+}
+
+/* ── NAC composer text token (outside .nac-float shell) ─────────────────── */
+html[data-theme='light'] .nac-composer {
+  --nac-text: #222222;
+  --nac-muted: #555555;
+}
+
+html[data-theme='light'] .nac-composer-input {
+  color: #222222;
+}
+
+html[data-theme='light'] .nac-composer-icon-btn i,
+html[data-theme='light'] .nac-composer-attach i,
+html[data-theme='light'] .nac-composer-send i {
+  color: currentColor;
+}
+
+/* ── Layer legend float (SiLayerLegendFloatingPanel) ───────────────────── */
+html[data-theme='light'] .si-layer-legend-float {
+  background: var(--si-overlay-bg);
+  border-color: var(--si-overlay-border);
+  box-shadow: var(--si-overlay-shadow);
+  color: var(--si-overlay-text);
+}
+
+html[data-theme='light'] .si-layer-legend-float__head {
+  border-bottom-color: var(--si-overlay-border);
+}
+
+html[data-theme='light'] .si-layer-legend-float__title {
+  color: var(--si-overlay-muted);
+}
+
+html[data-theme='light'] .si-layer-legend-float__sub,
+html[data-theme='light'] .si-layer-legend-float__label {
+  color: var(--si-overlay-text);
+}
+
+html[data-theme='light'] .si-layer-legend-float__close {
+  color: var(--si-overlay-icon);
+}
+
+html[data-theme='light'] .si-layer-legend-float__close:hover {
+  background: var(--si-overlay-fill-hover);
+  color: var(--si-overlay-icon-hover);
+}
+
+html[data-theme='light'] .si-layer-legend-float__more {
+  color: var(--si-overlay-muted);
+}
+
+/* ── Hydro legend tool ─────────────────────────────────────────────────── */
+html[data-theme='light'] .si-hylg {
+  background: var(--si-overlay-bg);
+  border-color: var(--si-overlay-border);
+  box-shadow: var(--si-overlay-shadow);
+  color: var(--si-overlay-text);
+}
+
+html[data-theme='light'] .si-hylg__select {
+  background: var(--si-overlay-field-bg);
+  border-color: var(--si-overlay-field-border);
+  color: var(--si-overlay-text);
+}
+
+html[data-theme='light'] .si-hylg__close {
+  background: var(--si-overlay-fill);
+  border-color: var(--si-overlay-border);
+  color: var(--si-overlay-icon);
+}
+
+html[data-theme='light'] .si-hylg__close:hover {
+  color: var(--si-overlay-icon-hover);
+  background: var(--si-overlay-fill-hover);
+}
+
+html[data-theme='light'] .si-hylg__layer-title,
+html[data-theme='light'] .si-hylg__class-label,
+html[data-theme='light'] .si-hylg__empty {
+  color: var(--si-overlay-text);
+}
+
+html[data-theme='light'] .si-hylg__bar-labels,
+html[data-theme='light'] .si-hylg__note {
+  color: var(--si-overlay-muted);
+}
+
+html[data-theme='light'] #si-afb-results-dashboard.gis-float-panel,
+html[data-theme='light'] #si-afb-results-dashboard .gis-float-panel__chrome,
+html[data-theme='light'] #si-afb-results-dashboard .gis-float-panel__body {
+  background: var(--si-overlay-bg, #ffffff);
+  color: var(--si-overlay-text, #222222);
+  border-color: var(--si-overlay-border, rgba(34, 34, 34, 0.12));
+}
+
+html[data-theme='light'] #si-afb-results-dashboard .gis-float-panel__layer-name,
+html[data-theme='light'] #si-afb-results-dashboard .gis-float-panel__subtitle {
+  color: var(--si-overlay-text, #222222);
+}
+
+html[data-theme='dark'] #si-afb-results-dashboard.gis-float-panel,
+html[data-theme='dark'] #si-afb-results-dashboard .gis-float-panel__chrome,
+html[data-theme='dark'] #si-afb-results-dashboard .gis-float-panel__body {
+  background: var(--si-overlay-bg, rgba(16, 22, 26, 0.92));
+  color: var(--si-overlay-text, #e6e6e6);
+}
+
+html[data-theme='dark'] #si-afb-results-dashboard .gis-float-panel__layer-name,
+html[data-theme='dark'] #si-afb-results-dashboard .gis-float-panel__subtitle {
+  color: var(--si-overlay-text, #e6e6e6);
+}
+
+/* ── GIS attribute table dock (Area of Interest window) ────────────────── */
+html[data-theme='light'] .si-layer-action-modal.si-layer-action-modal--gis-table {
+  --lx-text: #222222;
+  --lx-muted: #555555;
+  --lx-border: rgba(34, 34, 34, 0.14);
+  --lx-border-soft: rgba(34, 34, 34, 0.08);
+  --lx-surface: rgba(34, 34, 34, 0.04);
+  --lx-surface-2: rgba(34, 34, 34, 0.06);
+  --lx-hover: rgba(34, 34, 34, 0.08);
+  --lx-accent: #047857;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border-color: var(--lx-border);
+  box-shadow: 0 -14px 40px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  color: var(--lx-text);
+}
+
+html[data-theme='light'] .si-layer-action-modal--gis-table .si-gis-attr-win__titlebar {
+  border-bottom-color: var(--lx-border);
+  background: linear-gradient(180deg, #fafafa, #f3f3f3);
+  box-shadow: none;
+}
+
+html[data-theme='light'] .si-layer-action-modal--gis-table.is-resizing .si-gis-attr-win__titlebar,
+html[data-theme='light'] .si-layer-action-modal--gis-table .si-gis-attr-win__titlebar:active {
+  background: #ececec;
+}
+
+html[data-theme='light'] .si-layer-action-modal--gis-table .si-gis-attr-win__dock-grip {
+  background: rgba(100, 116, 139, 0.45);
+  box-shadow: 0 5px 0 rgba(100, 116, 139, 0.18);
+}
+
+html[data-theme='light'] .si-layer-action-modal--gis-table .si-gis-attr-win__titlebar:hover .si-gis-attr-win__dock-grip,
+html[data-theme='light'] .si-layer-action-modal--gis-table.is-resizing .si-gis-attr-win__dock-grip {
+  background: rgba(0, 121, 193, 0.7);
+  box-shadow: 0 5px 0 rgba(0, 121, 193, 0.22);
+}
+
+html[data-theme='light'] .si-layer-action-modal--gis-table .si-gis-attr-win__title {
+  color: var(--lx-text);
+  text-shadow: none;
+}
+
+html[data-theme='light'] .si-layer-action-modal--gis-table .si-gis-attr-win__tool,
+html[data-theme='light'] .si-layer-action-modal--gis-table .si-gis-attr-win__winbtn {
+  color: var(--lx-muted);
+}
+
+html[data-theme='light'] .si-layer-action-modal--gis-table .si-gis-attr-win__tool:hover:not(:disabled),
+html[data-theme='light'] .si-layer-action-modal--gis-table .si-gis-attr-win__tool.is-on {
+  background: var(--lx-hover);
+  border-color: var(--lx-border);
+  color: var(--lx-text);
+}
+
+html[data-theme='light'] .si-layer-action-modal--gis-table .si-gis-attr-win__winbtn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--lx-text);
+}
+
+html[data-theme='light'] .si-layer-action-modal--gis-table .si-layer-action-modal-table-title {
+  background: rgba(5, 150, 105, 0.12);
+  border-color: rgba(5, 150, 105, 0.28);
+  color: #047857;
+}
+
+html[data-theme='light'] .si-layer-action-modal--gis-table select option {
+  background: #ffffff;
+  color: #222222;
+}
+
+html[data-theme='light'] .si-layer-action-modal--gis-table input::placeholder {
+  color: #777777;
+}
+
+html[data-theme='light'] .si-layer-action-modal--gis-table .si-table-modal-subheader,
+html[data-theme='light'] .si-layer-action-modal--gis-table .gis-table-dock-header,
+html[data-theme='light'] .si-layer-action-modal--gis-table .gis-layer-table-meta,
+html[data-theme='light'] .si-layer-action-modal--gis-table .gis-layer-table-meta--table-only {
+  background: #fafafa;
+  border-bottom-color: var(--lx-border-soft);
+}
+
+html[data-theme='light'] .si-layer-action-modal--gis-table .si-layer-action-table-wrap {
+  background: #ffffff;
+  border-color: var(--lx-border-soft);
+}
+
+html[data-theme='light'] .si-layer-action-modal--gis-table .si-layer-action-table th,
+html[data-theme='light'] .si-layer-action-modal--gis-table .gis-layer-table thead th {
+  background: #f3f3f3;
+  color: var(--lx-text);
+}
+
+html[data-theme='light'] .si-layer-action-modal--gis-table .si-layer-action-table td,
+html[data-theme='light'] .si-layer-action-modal--gis-table .gis-layer-table tbody td {
+  color: var(--lx-text);
+}
+
+html[data-theme='light'] .si-layer-action-modal--gis-table .gis-layer-table tbody tr:hover td {
+  background: rgba(2, 132, 199, 0.06);
+}
+
+html[data-theme='light'] .si-layer-action-modal--gis-table .gis-layer-table tbody tr.gis-row-selected td {
+  background: rgba(5, 150, 105, 0.12);
+}
+
+html[data-theme='light'] .si-layer-action-modal--gis-table .gis-table-toolbtn:hover:not(:disabled),
+html[data-theme='light'] .si-layer-action-modal--gis-table .si-layer-action-table-tools button:hover:not(:disabled) {
+  color: var(--lx-accent);
+}
+
+html[data-theme='light'] .si-layer-action-modal--gis-table .gis-table-column-actions button:hover:not(:disabled),
+html[data-theme='light'] .si-layer-action-modal--gis-table .gis-table-rowbtn:hover,
+html[data-theme='light'] .si-layer-action-modal--gis-table .gis-fieldvis-trigger:hover,
+html[data-theme='light'] .si-layer-action-modal--gis-table .gis-fieldvis-trigger--open {
+  color: var(--lx-text);
+}
+
+html[data-theme='light'] .si-layer-action-modal--gis-table mark {
+  background: rgba(253, 224, 71, 0.75);
+  color: rgba(113, 63, 18, 1);
+}
+
+html[data-theme='light'] .si-layer-action-modal--gis-table i[class*='fa-'] {
+  color: currentColor;
+}
+
+/* ── Geo AI floating widget + composer ───────────────────────────────────── */
+html[data-theme='light'] .si-geo-ai-float-panel {
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
+  border-color: var(--si-overlay-border);
+  box-shadow: 0 22px 55px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  color: var(--si-overlay-text);
+}
+
+html[data-theme='light'] .si-geo-ai-float-title {
+  color: var(--si-overlay-text);
+}
+
+html[data-theme='light'] .si-geo-ai-float-sub {
+  color: var(--si-overlay-muted);
+}
+
+html[data-theme='light'] .si-geo-ai-float-icon-btn {
+  color: var(--si-overlay-icon);
+}
+
+html[data-theme='light'] .si-geo-ai-float-icon-btn:hover {
+  color: var(--si-overlay-icon-hover);
+  background: var(--si-overlay-fill-hover);
+}
+
+html[data-theme='light'] .si-geo-explorer-composer-surface {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(148, 163, 184, 0.35);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+html[data-theme='light'] .si-geo-explorer-input {
+  background: #ffffff;
+  color: #222222;
+  border-color: rgba(34, 34, 34, 0.16);
+}
+
+html[data-theme='light'] .si-geo-explorer-input::placeholder {
+  color: #777777;
+}
+
+html[data-theme='light'] .si-geo-explorer-input:hover:not(:disabled),
+html[data-theme='light'] .si-geo-explorer-input:focus-visible {
+  background: #ffffff;
+  border-color: rgba(34, 34, 34, 0.22);
+}
+
+html[data-theme='light'] .si-geo-explorer-composer-toolbar-start {
+  background: rgba(34, 34, 34, 0.04);
+  border-color: rgba(34, 34, 34, 0.1);
+}
+
+html[data-theme='light'] .si-geo-explorer-composer-icon-btn {
+  background: rgba(34, 34, 34, 0.06);
+  border-color: rgba(34, 34, 34, 0.12);
+  color: #555555;
+}
+
+html[data-theme='light'] .si-geo-explorer-composer-icon-btn:hover:not(:disabled) {
+  color: #222222;
+  background: rgba(34, 34, 34, 0.1);
+}
+
+html[data-theme='light'] .si-geo-explorer-composer-voice-hint {
+  background: rgba(34, 34, 34, 0.04);
+  border-color: rgba(34, 34, 34, 0.1);
+}
+
+html[data-theme='light'] .si-geo-explorer-composer-voice-hint-text {
+  color: #555555;
+}
+
+html[data-theme='light'] .si-geo-ai-float-body .si-geo-explorer-bubble {
+  color: #222222;
+  background: rgba(255, 255, 255, 0.94);
+  border-color: rgba(34, 34, 34, 0.12);
+}
+
+html[data-theme='light'] .si-geo-ai-float-body .si-geo-explorer-row--user .si-geo-explorer-bubble {
+  background: #f1f5f9;
+}
+
+html[data-theme='light'] .si-geo-ai-float-fab {
+  background: var(--si-overlay-bg);
+  border-color: var(--si-overlay-border);
+  color: var(--si-overlay-icon);
+  box-shadow: var(--si-overlay-shadow);
+}
+
+html[data-theme='light'] .si-geo-ai-float-fab:hover {
+  color: var(--si-overlay-icon-hover);
+  background: var(--si-overlay-bg-soft);
+}
+

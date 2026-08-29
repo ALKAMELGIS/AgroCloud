@@ -308,6 +308,15 @@ export function normalizedNavGroupId(raw: string | undefined): string {
   return NAV_GROUP_IDS.includes(id) ? id : 'data'
 }
 
+function overrideTrimmedString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function overrideIconClass(value: unknown, fallback: string): string {
+  const trimmed = overrideTrimmedString(value)
+  return trimmed || fallback
+}
+
 function sortByIdList<T extends { id: string }>(items: T[], order: string[]): T[] {
   if (!order.length) return items
   const map = new Map(items.map(i => [i.id, i]))
@@ -370,9 +379,9 @@ export function mergeNavigationManifest(
   const resolveLeaf = (leaf: NavLeafDef): MergedLeaf => {
     const o = ov[leaf.id]
     const hidden = o?.hidden === true
-    const iconClass = (o?.iconClass?.trim() ? o.iconClass.trim() : leaf.defaultIcon) ?? leaf.defaultIcon
-    const labelEn = o?.labelEn?.trim() || ''
-    const labelAr = o?.labelAr?.trim() || ''
+    const iconClass = overrideIconClass(o?.iconClass, leaf.defaultIcon)
+    const labelEn = overrideTrimmedString(o?.labelEn)
+    const labelAr = overrideTrimmedString(o?.labelAr)
     return {
       ...leaf,
       iconClass,
@@ -385,10 +394,12 @@ export function mergeNavigationManifest(
   const resolveGroup = (g: NavGroupDef): MergedGroup => {
     const o = ov[g.id]
     const hidden = o?.hidden === true
-    const iconClass = (o?.iconClass?.trim() ? o.iconClass.trim() : g.defaultIcon) ?? g.defaultIcon
-    const labelEn = o?.labelEn?.trim() || ''
-    const labelAr = o?.labelAr?.trim() || ''
-    const order = settings.navItemOrders[g.id] ?? []
+    const iconClass = overrideIconClass(o?.iconClass, g.defaultIcon)
+    const labelEn = overrideTrimmedString(o?.labelEn)
+    const labelAr = overrideTrimmedString(o?.labelAr)
+    const order = Array.isArray(settings.navItemOrders[g.id])
+      ? settings.navItemOrders[g.id].map(id => String(id ?? '').trim()).filter(Boolean)
+      : []
     const customPagePaths = new Set(
       (settings.customPages ?? [])
         .filter(p => p.visible !== false)
@@ -410,16 +421,18 @@ export function mergeNavigationManifest(
     }
   }
 
-  const groupOrder = settings.navGroupOrder?.length ? settings.navGroupOrder : baseGroups.map(g => g.id)
+  const groupOrder = settings.navGroupOrder?.length
+    ? settings.navGroupOrder.map(id => String(id ?? '').trim()).filter(Boolean)
+    : baseGroups.map(g => g.id)
   const merged = sortByIdList(baseGroups.map(resolveGroup), groupOrder).filter(g => g.visible && g.children.length > 0)
 
   const homeOv = ov[NAV_HOME.id]
   const homeResolved: MergedLeaf = {
     ...NAV_HOME,
-    iconClass: homeOv?.iconClass?.trim() || NAV_HOME.defaultIcon,
+    iconClass: overrideIconClass(homeOv?.iconClass, NAV_HOME.defaultIcon),
     visible: homeOv?.hidden !== true,
-    labelEn: homeOv?.labelEn?.trim() || '',
-    labelAr: homeOv?.labelAr?.trim() || '',
+    labelEn: overrideTrimmedString(homeOv?.labelEn),
+    labelAr: overrideTrimmedString(homeOv?.labelAr),
   }
 
   return { home: homeResolved, groups: merged }

@@ -315,7 +315,13 @@ table .cell-secondary {
     [class*='badge']
   ):not(.gis-sel-toolbar *):not(.si-go-to-xy *):not(.nac-float *):not(.geo-ai-agent-panel *):not(
     .si-layer-live-float *
-  ):not(.si-measure-panel *):not(.si-grb-floatbar *):not(.si-map-draw-widget *),
+  ):not(.si-measure-panel *):not(.si-grb-floatbar *):not(.si-map-draw-widget *):not(
+    .si-map-swipe-panel *
+  ):not(.si-map-swipe-overlay *):not(.gis-float-panel *):not(.si-geo-ai-float *):not(
+    .si-layer-legend-float *
+  ):not(.si-layer-action-modal--gis-table *):not(.si-hylg *):not(.nac-composer *):not(
+    .nav-theme-toggle
+  ):not(.navmenu-utility .group-header),
 .app-layout .si-afb__btn,
 .app-layout .si-rs-panel__action,
 .app-layout .si-rs-panel__tool,
@@ -327,7 +333,11 @@ table .cell-secondary {
 .app-layout
   select:not(.gis-sel-toolbar *):not(.si-go-to-xy *):not(.nac-float *):not(.geo-ai-agent-panel *):not(
     .si-layer-live-float *
-  ):not(.si-measure-panel *):not(.si-grb-floatbar *):not(.si-map-draw-widget *),
+  ):not(.si-measure-panel *):not(.si-grb-floatbar *):not(.si-map-draw-widget *):not(
+    .si-map-swipe-panel *
+  ):not(.si-map-swipe-overlay *):not(.gis-float-panel *):not(.si-geo-ai-float *):not(
+    .si-layer-legend-float *
+  ):not(.si-layer-action-modal--gis-table *):not(.si-hylg *),
 .app-layout .si-afb__select,
 .app-layout .si-rs-panel__select,
 .app-layout .si-field-analysis-select,
@@ -481,4 +491,56 @@ html[data-theme='dark'] .app-layout .si-rs-layer-select__option:hover {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(230, 230, 230, 0.14);
   color: #e6e6e6;
+}
+
+/* ========== Nav utility icons (theme toggle, language) — contrast-safe ========== */
+html[data-theme='light'] .navmenu-utility-theme .nav-theme-toggle,
+html[data-theme='light'] .navmenu-utility-lang .group-header {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--ds-color-text-secondary) !important;
+}
+
+html[data-theme='light'] .nav-theme-toggle .icon,
+html[data-theme='light'] .nav-theme-toggle .nav-theme-toggle__icon,
+html[data-theme='light'] .nav-theme-toggle .icon i {
+  color: var(--ds-color-text) !important;
+  -webkit-text-fill-color: var(--ds-color-text) !important;
+  background: transparent !important;
+}
+
+html[data-theme='light'] .nav-theme-toggle:hover,
+html[data-theme='light'] .nav-theme-toggle:hover .icon,
+html[data-theme='light'] .nav-theme-toggle:hover .nav-theme-toggle__icon {
+  color: var(--ds-color-text) !important;
+  background: rgba(34, 34, 34, 0.06) !important;
+}
+
+html[data-theme='dark'] .navmenu-utility-theme .nav-theme-toggle,
+html[data-theme='dark'] .navmenu-utility-lang .group-header {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--ds-color-text-secondary) !important;
+}
+
+html[data-theme='dark'] .nav-theme-toggle .icon,
+html[data-theme='dark'] .nav-theme-toggle .nav-theme-toggle__icon,
+html[data-theme='dark'] .nav-theme-toggle .icon i {
+  color: var(--ds-color-text) !important;
+  -webkit-text-fill-color: var(--ds-color-text) !important;
+  background: transparent !important;
+}
+
+html[data-theme='dark'] .nav-theme-toggle:hover,
+html[data-theme='dark'] .nav-theme-toggle:hover .icon,
+html[data-theme='dark'] .nav-theme-toggle:hover .nav-theme-toggle__icon {
+  color: var(--ds-color-text) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+html[data-theme='dark'] .nav-header-language .icon,
+html[data-theme='dark'] .navmenu-utility-lang .group-header .icon i {
+  color: var(--ds-color-text) !important;
 }

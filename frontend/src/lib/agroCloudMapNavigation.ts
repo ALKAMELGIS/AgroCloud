@@ -92,8 +92,12 @@ export function clampAgroCloudMapPitch(pitch: number): number {
 
 export function setMapboxDragPanEnabled(map: AgroCloudMapboxMapLike | null | undefined, enabled: boolean): void {
   try {
-    if (enabled) map?.dragPan?.enable()
-    else map?.dragPan?.disable()
+    if (enabled) {
+      map?.dragPan?.enable()
+      ensureAgroCloudMapScrollZoom(map as AgroCloudMapboxMapScrollLike)
+    } else {
+      map?.dragPan?.disable()
+    }
   } catch {
     /* ignore */
   }

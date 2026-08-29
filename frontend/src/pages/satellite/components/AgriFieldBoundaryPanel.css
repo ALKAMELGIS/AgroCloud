@@ -384,6 +384,13 @@
   position: relative;
   display: inline-flex;
 }
+.si-afb__export.is-busy .si-afb__export-trigger {
+  pointer-events: none;
+  opacity: 0.92;
+}
+.si-afb__hint--export {
+  color: #0369a1;
+}
 .si-afb__export-trigger.is-open,
 .si-afb__export.is-open .si-afb__export-trigger {
   border-color: rgba(148, 163, 184, 0.45);

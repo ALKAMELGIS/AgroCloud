@@ -32,6 +32,7 @@ import { registerTemporalTransformerRoutes } from './temporalTransformerProxy.js
 import { registerGeoaiInferenceRoutes } from './geoaiInferenceProxy.js'
 import { registerGeoaiChatRoutes } from './geoaiChatProxy.js'
 import { registerAgriFieldBoundaryRoutes } from './agriFieldBoundaryProxy.js'
+import { registerFtwTrainingRoutes } from './ftwTrainingProxy.js'
 import { startLocalAiServiceSupervisor } from './localAiServiceSupervisor.js'
 import { registerDelineateAnythingRoutes } from './delineateAnythingProxy.js'
 import { registerFloodMonitoringRoutes } from './floodMonitoringProxy.js'
@@ -1924,6 +1925,7 @@ registerTemporalTransformerRoutes(app)
 registerGeoaiInferenceRoutes(app)
 registerGeoaiChatRoutes(app)
 registerAgriFieldBoundaryRoutes(app)
+registerFtwTrainingRoutes(app)
 registerFloodMonitoringRoutes(app, { secretsFilePath: API_SECRETS_FILE, broadcast })
 registerEsriTerrainTileRoutes(app)
 registerRasterRoutes(app)
@@ -1951,6 +1953,7 @@ function assertCriticalRoutesRegistered() {
     ['get', '/api/segformer-detection/config'],
     ['get', '/api/segformer-detection/health'],
     ['post', '/api/segformer-detection/detect'],
+    ['post', '/api/agri-field-boundary/ftw-mosaic-vectorize'],
   ]
   const missing = required.filter(([method, routePath]) => !hasRoute(method, routePath))
   if (missing.length === 0) return
@@ -1959,7 +1962,7 @@ function assertCriticalRoutesRegistered() {
 }
 
 assertCriticalRoutesRegistered()
-console.log('[startup] ✓ All critical routes verified (segformer-detection: config, health, detect)')
+console.log('[startup] ✓ All critical routes verified (segformer-detection + ftw-mosaic-vectorize)')
 
 /**
  * Static asset requests (hashed JS/CSS chunks, fonts, images, etc.) must never fall back to

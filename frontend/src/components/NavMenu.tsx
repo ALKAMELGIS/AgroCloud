@@ -228,9 +228,14 @@ export default function NavMenu({ onLogout, mobileNavOpen = false, onCloseMobile
   const languageSwitchHint = language === 'en' ? t.switchToArabic : t.switchToEnglish
   const languageMark = language === 'en' ? 'A' : 'E'
 
+  const navTranslationText = (key: keyof typeof navTranslations.en): string => {
+    const value = t[key]
+    return typeof value === 'string' ? value : ''
+  }
+
   const navLabel = (leaf: { i18nKey: keyof typeof navTranslations.en; labelEn: string; labelAr: string }) => {
-    if (language === 'ar') return leaf.labelAr || t[leaf.i18nKey]
-    return leaf.labelEn || t[leaf.i18nKey]
+    if (language === 'ar') return leaf.labelAr || navTranslationText(leaf.i18nKey)
+    return leaf.labelEn || navTranslationText(leaf.i18nKey)
   }
 
   const renderMergedGroup = (group: MergedGroup) => (

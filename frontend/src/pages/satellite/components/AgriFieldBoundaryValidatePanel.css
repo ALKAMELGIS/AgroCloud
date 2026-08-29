@@ -691,3 +691,43 @@
   border-color: rgba(255, 255, 255, 0.12);
   color: #9fb0c3;
 }
+
+/* Dark theme — chart chrome (keep series stroke/fill colors from ValidationLinePlot). */
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afbv__figure-bg {
+  fill: #141618;
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afbv__spine {
+  stroke: rgba(230, 230, 230, 0.78);
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afbv__figure-grid {
+  stroke: rgba(255, 255, 255, 0.1);
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afbv__figure-tick,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afbv__figure-axis,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afbv__figure-note,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afbv__figure-legend-text,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afbv__figure-annotation,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-cm__tick {
+  fill: rgba(230, 230, 230, 0.78);
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afbv__figure-ref {
+  stroke: rgba(230, 230, 230, 0.55);
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afbv__figure-marker {
+  stroke: #93c5fd;
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afbv__figure-legend {
+  fill: #0f1114;
+  stroke: rgba(230, 230, 230, 0.2);
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afbv__figure-crosshair {
+  stroke: rgba(230, 230, 230, 0.45);
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afbv__figure-tip {
+  background: #1a1d21;
+  border-color: rgba(230, 230, 230, 0.14);
+  color: #e6e6e6;
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afbv__figure-tip__label {
+  color: rgba(230, 230, 230, 0.78);
+}
