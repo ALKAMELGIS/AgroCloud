@@ -15,6 +15,7 @@ import {
   type AgriObjectGapRow,
   type AgriObjectMethodRow,
 } from './agriculturalObjectIntelligenceSchema'
+import { aggregateAoiIndexTimeSeries, type FieldDashIndexTimeSeries } from '../../components/fieldAttributesDashboardTimeSeries'
 import {
   activeStatusFromTemporal,
   agriculturalStatusFromEvidence,
@@ -136,6 +137,8 @@ export type AgriculturalObjectIntelligenceModel = {
   methods: AgriObjectMethodRow[]
   gaps: AgriObjectGapRow[]
   equations: AgriObjectEquationRow[]
+  /** AOI-mean spectral index time series for the attributes dashboard. */
+  dashboardTimeSeries?: FieldDashIndexTimeSeries | null
 }
 
 function numOrNa(v: number | null | undefined, digits = 4): string | number {
@@ -245,6 +248,9 @@ export type BuildAgriculturalObjectIntelligenceInput = {
   layerIds?: string[]
   /** Reuse already-fetched zonal series keyed by fieldKey. */
   dailyByFieldKey?: Map<string, SentinelHubDailyIndexMeans[]>
+  /** Prithvi / country phenology crop typing keyed by fieldKey (field-boundary path). */
+  cropByFieldKey?: Map<string, { cropType: string; confidencePct: number; engine: string }>
+  cropEngineLabel?: string
   signal?: AbortSignal
   onProgress?: (p: AgriObjectIntelProgress) => void
 }
@@ -261,6 +267,8 @@ export async function buildAgriculturalObjectIntelligenceModel(
     acquisitionDate,
     layerIds = ['NDVI'],
     dailyByFieldKey: reuseDaily,
+    cropByFieldKey,
+    cropEngineLabel,
     signal,
     onProgress,
   } = input
@@ -457,23 +465,38 @@ export async function buildAgriculturalObjectIntelligenceModel(
       setIfMissing(row, 'agriculturalStatus', agriStatus, fromLayer.get('agriculturalStatus') === true)
     }
 
-    // Crop type — layer wins; else spectral estimate (clearly labeled)
-    const hadLayerCrop = fromLayer.get('cropType') === true && row.cropType !== NOT_AVAILABLE
+    // Crop type — layer wins; Prithvi/country per parcel when provided; spectral proxy only outside field-boundary path
+    const parcelCrop = cropByFieldKey?.get(plot.fieldKey)
+    const hlsCropAttempted = cropByFieldKey != null
+    const realCropOnly = hlsCropAttempted && (cropByFieldKey?.size ?? 0) > 0
+    let hadLayerCrop = fromLayer.get('cropType') === true && row.cropType !== NOT_AVAILABLE
+    if (row.cropType === NOT_AVAILABLE && parcelCrop?.cropType) {
+      row.cropType = parcelCrop.cropType
+      hadLayerCrop = true
+    }
     if (row.cropType === NOT_AVAILABLE) {
-      const proxyCrop = cropTypeSpectralProxy({ ndvi: win.lateNdvi, ndwi: win.lateNdwi })
-      if (proxyCrop !== NOT_AVAILABLE) {
-        row.cropType = proxyCrop
-      } else {
-        row.cropType = 'Unknown cover (insufficient Sentinel-2 signal)'
+      if (!hlsCropAttempted || !parcelCrop) {
+        if (!realCropOnly) {
+          const proxyCrop = cropTypeSpectralProxy({ ndvi: win.lateNdvi, ndwi: win.lateNdwi })
+          if (proxyCrop !== NOT_AVAILABLE) {
+            row.cropType = proxyCrop
+          } else if (!hlsCropAttempted) {
+            row.cropType = 'Unknown cover (insufficient Sentinel-2 signal)'
+          }
+        }
       }
     }
     if (row.cropTypeConfidencePct === NOT_AVAILABLE || row.cropTypeConfidencePct === '--') {
-      const conf = cropConfidenceFromEvidence({
-        ndvi: win.lateNdvi,
-        observationCount: win.count,
-        fromLayerCrop: hadLayerCrop,
-      })
-      if (conf !== NOT_AVAILABLE) row.cropTypeConfidencePct = conf
+      if (parcelCrop?.cropType && Number.isFinite(parcelCrop.confidencePct)) {
+        row.cropTypeConfidencePct = Math.round(parcelCrop.confidencePct)
+      } else if (!realCropOnly) {
+        const conf = cropConfidenceFromEvidence({
+          ndvi: win.lateNdvi,
+          observationCount: win.count,
+          fromLayerCrop: hadLayerCrop,
+        })
+        if (conf !== NOT_AVAILABLE) row.cropTypeConfidencePct = conf
+      }
     }
     const growthProxy = cropGrowthStageFromNdvi({
       lateNdvi: win.lateNdvi,
@@ -764,7 +787,9 @@ export async function buildAgriculturalObjectIntelligenceModel(
           ? 'Limited (1)'
           : 'No'
     row.satelliteDataUsed = `Sentinel-2 L2A · ${layerIndexLabel} · ${fromDate}→${toDate}`
-    row.aiAnalyticalMethodUsed = 'Layer-index zonal stats + spectral rules + Open-Meteo ET₀×Kc'
+    row.aiAnalyticalMethodUsed = cropEngineLabel
+      ? `Sentinel-2 zonal + ${cropEngineLabel} crop typing + Open-Meteo ET₀×Kc`
+      : 'Layer-index zonal stats + spectral rules + Open-Meteo ET₀×Kc'
 
     row.capabilityStatus = (
       daily.length > 0
@@ -804,9 +829,15 @@ export async function buildAgriculturalObjectIntelligenceModel(
         gaps,
         objectId,
         'Crop Type',
-        'Crop type filled from spectral class — not a named cultivar',
-        'Ground-truth crop labels or trained classifier on the layer',
-        'Join farm crop attributes to raise confidence above spectral estimate',
+        realCropOnly
+          ? 'Prithvi / country phenology did not classify this parcel'
+          : 'Crop type filled from spectral class — not a named cultivar',
+        realCropOnly
+          ? 'Widen season window or verify Sentinel Hub + Prithvi credentials'
+          : 'Ground-truth crop labels or trained classifier on the layer',
+        realCropOnly
+          ? 'Retry with a longer HLS window or join farm crop attributes'
+          : 'Join farm crop attributes to raise confidence above spectral estimate',
       )
     }
     if (weatherEt0TotalMm == null) {
@@ -1013,6 +1044,7 @@ export async function buildAgriculturalObjectIntelligenceModel(
     methods,
     gaps,
     equations,
+    dashboardTimeSeries: aggregateAoiIndexTimeSeries(dailyByFieldKey),
   }
 }
 

@@ -170,7 +170,6 @@ async function buildExportPayload(
     includeCumulativeMapSnapshots: options?.includeCumulativeMapSnapshots,
     includeChangeDetectionMapSnapshots: options?.includeChangeDetectionMapSnapshots,
     includeVegetationCoverageTimeline: options?.enrichVegetationCoverage ?? true,
-    periodAnchorDates: ctx.periodAnchorDates,
     mapSnapshotAggregation: options?.mapSnapshotAggregation,
     mapSnapshotMaxPerLayer: options?.mapSnapshotMaxPerLayer,
     signal: options?.signal ?? ctx.signal,

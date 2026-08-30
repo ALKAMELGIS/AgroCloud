@@ -433,14 +433,27 @@
 .si-mt-layer-menu__item i {
   width: 14px;
   text-align: center;
-  color: #6ee7b7;
+  color: var(--theme-text-primary, #e6e6e6);
 }
 .si-mt-layer-menu__item:hover {
-  background: rgba(110, 231, 183, 0.14);
-  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--theme-text-primary, #e6e6e6);
 }
 .si-mt-layer-menu__item:hover i {
-  color: #a7f3d0;
+  color: var(--theme-text-primary, #e6e6e6);
+}
+
+html[data-theme='light'] .si-mt-layer-menu__item i {
+  color: var(--theme-text-primary, #222222);
+}
+
+html[data-theme='light'] .si-mt-layer-menu__item:hover {
+  background: rgba(34, 34, 34, 0.06);
+  color: var(--theme-text-primary, #222222);
+}
+
+html[data-theme='light'] .si-mt-layer-menu__item:hover i {
+  color: var(--theme-text-primary, #222222);
 }
 .si-mt-layer-menu__item--danger {
   color: #fecaca;

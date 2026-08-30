@@ -8,7 +8,7 @@ import { FTW_CONFIDENCE_MAX, ftwThresholdToRaw } from './ftwGlobalConfig'
 import type { LngLatBbox } from './ftwPmtilesFeatures'
 import { postProcessFtwSeamlessCanvas } from './ftwVisualSeamlessPostProcess'
 
-const DEFAULT_MAX_EDGE = 2048
+const DEFAULT_MAX_EDGE = 1536
 
 type Rgb = [number, number, number]
 

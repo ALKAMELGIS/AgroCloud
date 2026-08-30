@@ -4,7 +4,8 @@
  */
 import JSZip from 'jszip'
 
-import { FIELD_ATTRIBUTE_COLUMNS } from './fieldAttributeEnrichment'
+import { getFieldAttributeColumns } from './fieldAttributeEnrichment'
+import { layerHasObjectAttributeTable } from '../objectAttributes/objectAttributesSchema'
 
 const WGS84_PRJ =
   'GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],' +
@@ -252,71 +253,101 @@ export async function downloadFieldBoundaryShapefile(
 
   const includeClass = Boolean(options?.includeClassFields)
   const includeMeta = Boolean(options?.includeMetaFields)
-  // Only write attribute columns the enrichment actually filled — an all-empty
-  // DBF column is worse than an absent one for anyone opening the shapefile.
-  const attributeColumns = FIELD_ATTRIBUTE_COLUMNS.filter(col =>
-    features.some(f => {
-      const v = (f.properties as Record<string, unknown> | null)?.[col.prop]
-      return v != null && v !== ''
-    }),
-  )
+  const schemaOnly = layerHasObjectAttributeTable(fc)
+  const attributeColumns = getFieldAttributeColumns()
   const layerBaseName =
     (options?.layerBaseName || 'agri_fields').replace(/[^\w.-]+/g, '_').slice(0, 32) || 'agri_fields'
 
-  const fields: DbfField[] = [
-    { name: 'FIELD_ID', type: 'C', length: 32 },
-    ...(includeClass
-      ? ([
-          { name: 'CLASS_NM', type: 'C', length: 48 },
-          { name: 'CLASS_ID', type: 'N', length: 8, decimals: 0 },
-        ] as DbfField[])
-      : []),
-    { name: 'CONF', type: 'N', length: 8, decimals: 4 },
-    { name: 'AREA_M2', type: 'N', length: 14, decimals: 2 },
-    { name: 'AREA_HA', type: 'N', length: 12, decimals: 4 },
-    { name: 'PERIM_M', type: 'N', length: 12, decimals: 2 },
-    ...(includeMeta
-      ? ([
-          { name: 'DATE', type: 'C', length: 32 },
-          { name: 'PROVIDER', type: 'C', length: 48 },
-        ] as DbfField[])
-      : []),
-    ...attributeColumns.map(
-      col =>
-        (col.numeric
-          ? { name: col.dbf, type: 'N', length: 14, decimals: 4 }
-          : { name: col.dbf, type: 'C', length: 120 }) as DbfField,
-    ),
-  ]
+  const schemaDbfFields: DbfField[] = attributeColumns.map(col =>
+    col.type === 'number' || col.numeric
+      ? {
+          name: col.dbf,
+          type: 'N',
+          length: col.name === 'CROP_CONF' || col.name === 'TOTAL_PROD' ? 10 : 14,
+          decimals: col.name === 'NDVI' ? 2 : col.name === 'AREA_HA' ? 1 : 1,
+        }
+      : { name: col.dbf, type: 'C', length: 64 },
+  )
+
+  const fields: DbfField[] = schemaOnly
+    ? schemaDbfFields
+    : [
+        { name: 'FIELD_ID', type: 'C', length: 32 },
+        ...(includeClass
+          ? ([
+              { name: 'CLASS_NM', type: 'C', length: 48 },
+              { name: 'CLASS_ID', type: 'N', length: 8, decimals: 0 },
+            ] as DbfField[])
+          : []),
+        { name: 'CONF', type: 'N', length: 8, decimals: 4 },
+        { name: 'AREA_M2', type: 'N', length: 14, decimals: 2 },
+        { name: 'AREA_HA', type: 'N', length: 12, decimals: 4 },
+        { name: 'PERIM_M', type: 'N', length: 12, decimals: 2 },
+        ...(includeMeta
+          ? ([
+              { name: 'DATE', type: 'C', length: 32 },
+              { name: 'PROVIDER', type: 'C', length: 48 },
+            ] as DbfField[])
+          : []),
+        ...attributeColumns
+          .filter(col =>
+            features.some(f => {
+              const v = (f.properties as Record<string, unknown> | null)?.[col.prop]
+              return v != null && v !== ''
+            }),
+          )
+          .map(
+            col =>
+              (col.numeric || col.type === 'number'
+                ? { name: col.dbf, type: 'N', length: 14, decimals: 4 }
+                : { name: col.dbf, type: 'C', length: 120 }) as DbfField,
+          ),
+      ]
   // One DBF row per shapefile polygon record (MultiPolygon expands).
   const dbfRows: Array<(string | number)[]> = []
   const expanded: GeoJSON.Feature[] = []
   for (const f of features) {
     const props = (f.properties || {}) as Record<string, unknown>
-    const row: (string | number)[] = [
-      String(props.field_id || props.Feature_ID || f.id || ''),
-      ...(includeClass
-        ? [
-            String(props.class_name || props.Class_Name || props.className || ''),
-            Number(props.class_id ?? props.classId) || 0,
-          ]
-        : []),
-      Number(props.confidence ?? props.Confidence ?? props.confidence_score ?? 0),
-      Number(props.area_m2 ?? props.Area_m2 ?? 0),
-      Number(props.area_ha ?? props.Area_Hectare ?? 0),
-      Number(props.perimeter_m ?? props.Perimeter ?? 0),
-      ...(includeMeta
-        ? [
-            String(props.date || props.Date || '').slice(0, 32),
-            String(props.provider || props.Provider || '').slice(0, 48),
-          ]
-        : []),
-      ...attributeColumns.map(col => {
-        const raw = props[col.prop]
-        if (col.numeric) return Number(raw) || 0
-        return String(raw ?? '').slice(0, 120)
-      }),
-    ]
+    const row: (string | number)[] = schemaOnly
+      ? attributeColumns.map(col => {
+          const raw = props[col.prop]
+          if (col.type === 'number' || col.numeric) {
+            const n = Number(raw)
+            return Number.isFinite(n) ? n : col.emptyValue
+          }
+          return String(raw ?? col.emptyValue).slice(0, 64)
+        })
+      : [
+          String(props.field_id || props.Feature_ID || f.id || ''),
+          ...(includeClass
+            ? [
+                String(props.class_name || props.Class_Name || props.className || ''),
+                Number(props.class_id ?? props.classId) || 0,
+              ]
+            : []),
+          Number(props.confidence ?? props.Confidence ?? props.confidence_score ?? 0),
+          Number(props.area_m2 ?? props.Area_m2 ?? 0),
+          Number(props.area_ha ?? props.Area_Hectare ?? 0),
+          Number(props.perimeter_m ?? props.Perimeter ?? 0),
+          ...(includeMeta
+            ? [
+                String(props.date || props.Date || '').slice(0, 32),
+                String(props.provider || props.Provider || '').slice(0, 48),
+              ]
+            : []),
+          ...attributeColumns
+            .filter(col =>
+              features.some(ft => {
+                const v = (ft.properties as Record<string, unknown> | null)?.[col.prop]
+                return v != null && v !== ''
+              }),
+            )
+            .map(col => {
+              const raw = props[col.prop]
+              if (col.numeric || col.type === 'number') return Number(raw) || 0
+              return String(raw ?? '').slice(0, 120)
+            }),
+        ]
     if (f.geometry?.type === 'MultiPolygon') {
       for (const coords of f.geometry.coordinates) {
         expanded.push({

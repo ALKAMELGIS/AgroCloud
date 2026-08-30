@@ -20,6 +20,7 @@ import { randomUUID } from 'crypto'
 import { writeFile, unlink } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { PNG } from 'pngjs'
 import { fromArrayBuffer } from 'geotiff'
 import { encodeChunkyInt16GeoTiff } from './geoTiffEncoder.js'
 import { resolveSentinelHubWmsConfig, describeSentinelHubStatisticsConfig } from './sentinelHubStatisticsProxy.js'
@@ -30,10 +31,16 @@ import {
   selectClearSceneDates,
   fetchPcSentinelSceneCloudCover,
   estimateAoiBboxFillRatio,
+  bbox3857FromGeometry,
 } from './sentinelHubWmsStatisticsEngine.js'
 import { detectCountryFromAoi, cropProfileForCountry } from './cropCountryDatabase.js'
 import { classifyCropFields } from './cropFieldClassifier.js'
 import { fillBlackHolesInPngDataUrl } from './cropPngHoleFill.js'
+import {
+  buildMasterGeometry,
+  zonalLabelMajorityFromGrid,
+  zonalRgbMajorityFromGrid,
+} from './sentinelFieldBatchEngine.js'
 import {
   deleteCropJobSnapshot,
   loadCropJobSnapshot,
@@ -96,6 +103,58 @@ export const CROP_CLASSIFICATION_CLASSES = [
   { id: 11, name: 'Cotton', color: '#e30613' },
   { id: 12, name: 'Sorghum', color: '#f5a000' },
 ]
+
+/** Prithvi / HLS classes that are not assignable to Example.xlsx CROP_TYPE. */
+const HLS_NON_CROP_LABELS = new Set([
+  'natural vegetation',
+  'forest',
+  'wetlands',
+  'developed/barren',
+  'open water',
+  'fallow/idle cropland',
+  'fallow',
+  'idle cropland',
+])
+
+/** Map Prithvi USDA-style labels → Example.xlsx / country catalogue crop names. */
+const HLS_CROP_LABEL_MAP = {
+  corn: 'Maize / Corn',
+  soybeans: 'Soybeans',
+  'winter wheat': 'Wheat',
+  alfalfa: 'Alfalfa',
+  cotton: 'Cotton',
+  sorghum: 'Sorghum',
+}
+
+/**
+ * Normalize an HLS/Prithvi class name for Example.xlsx CROP_TYPE.
+ * Returns null when the pixel class is land-cover, not a named crop.
+ * @param {string | null | undefined} name
+ * @returns {string | null}
+ */
+export function normalizeHlsCropTypeName(name) {
+  if (!name) return null
+  const raw = String(name).trim()
+  const key = raw.toLowerCase()
+  if (HLS_NON_CROP_LABELS.has(key)) return null
+  if (HLS_CROP_LABEL_MAP[key]) return HLS_CROP_LABEL_MAP[key]
+  return raw
+}
+
+/**
+ * Pick WMS chip size for HLS 18-band stack from AOI extent (field-scale zonal stats).
+ * @param {number[]} bbox3857
+ * @returns {number}
+ */
+function hlsChipSizeForBbox(bbox3857) {
+  const [minX, minY, maxX, maxY] = bbox3857 || []
+  if (!Number.isFinite(minX)) return 224
+  const spanM = Math.max(maxX - minX, maxY - minY)
+  // ~8 m/px target so small parcels retain enough interior pixels at T1–T3 × 6 bands.
+  let size = Math.ceil(spanM / 8)
+  size = Math.max(224, Math.min(1024, size))
+  return Math.ceil(size / 32) * 32
+}
 
 /** @typedef {'queued'|'fetching'|'preprocessing'|'inferring'|'done'|'error'} JobStatus */
 
@@ -800,6 +859,239 @@ async function runPipeline(job, input, deps) {
   }
 }
 
+function decodePngBuffer(buf) {
+  const png = PNG.sync.read(buf)
+  return { rgba: png.data, width: png.width, height: png.height }
+}
+
+async function fetchPredictionRgba(predictionUrl) {
+  const raw = String(predictionUrl || '').trim()
+  if (!raw) return null
+  if (raw.startsWith('data:image/')) {
+    const b64 = raw.replace(/^data:image\/\w+;base64,/, '')
+    return decodePngBuffer(Buffer.from(b64, 'base64'))
+  }
+  const res = await fetch(raw)
+  if (!res.ok) return null
+  return decodePngBuffer(Buffer.from(await res.arrayBuffer()))
+}
+
+/** Fetch NDVI grids + classify for an AOI (country phenology engine). */
+async function classifyCountryRasterForAoi(aoi, season, wmsConfig, profile) {
+  let selected = await selectClearSceneDates(aoi, season, 5, CROP_MAX_CLOUD)
+  selected = selected.filter(s => !s.cloudy && (s.cloudCover == null || s.cloudCover <= CROP_MAX_CLOUD))
+  if (selected.length < 2) {
+    throw new Error(
+      `Not enough clear Sentinel-2 scenes for crop typing (need ≥2; cloud ≤ ${CROP_MAX_CLOUD}%).`,
+    )
+  }
+
+  const aoiFill = estimateAoiBboxFillRatio(aoi)
+  const clearFractionOf = (g, clipped) => {
+    if (!g?.valid?.length) return 0
+    let ok = 0
+    for (let p = 0; p < g.valid.length; p += 1) ok += g.valid[p] ? 1 : 0
+    const denom = clipped ? Math.max(1, Math.round(g.valid.length * aoiFill)) : g.valid.length
+    return Math.min(1, ok / denom)
+  }
+
+  /** @type {any[]} */
+  const grids = []
+  /** @type {string[]} */
+  const dates = []
+  for (const sel of selected.slice(0, 4)) {
+    const day = new Date(`${sel.date}T00:00:00Z`)
+    const t0 = new Date(day.getTime() - 6 * 86400000).toISOString().slice(0, 10)
+    const t1 = new Date(day.getTime() + 6 * 86400000).toISOString().slice(0, 10)
+    try {
+      const grid = await fetchSentinelWmsIndicesGrid({
+        accessToken: wmsConfig.accessToken,
+        instanceId: wmsConfig.instanceId,
+        geometry: aoi,
+        timeStart: t0,
+        timeEnd: t1,
+        cloudCoverage: CROP_MAX_CLOUD,
+        metersPerPixel: CROP_TARGET_MPP,
+        maxSize: 2500,
+        clipToGeometry: true,
+      })
+      if (clearFractionOf(grid, true) >= CROP_CLEAR_FLOOR) {
+        grids.push(grid)
+        dates.push(sel.date)
+      }
+    } catch {
+      /* skip */
+    }
+    if (grids.length >= 3) break
+  }
+  if (grids.length < 2) {
+    throw new Error('Could not fetch enough clear Sentinel-2 grids for country crop typing.')
+  }
+
+  const classified = classifyCropFields(grids, profile, {
+    seasonStart: season?.start,
+    seasonEnd: season?.end,
+  })
+  return { ...classified, dates }
+}
+
+/** Prithvi 18-band stack + inference for an AOI; returns RGBA raster when available. */
+async function classifyPrithviRasterForAoi(aoi, season, wmsConfig, bbox) {
+  const timesteps = 3
+  let selectedP = await selectClearSceneDates(aoi, season, timesteps, CROP_MAX_CLOUD)
+  selectedP = selectedP.filter(s => !s.cloudy && (s.cloudCover == null || s.cloudCover <= CROP_MAX_CLOUD))
+  if (!selectedP.length) {
+    throw new Error('No clear Sentinel-2 scenes for Prithvi crop typing.')
+  }
+  const dates = selectedP.map(s => s.date)
+  const CHIP_SIZE = hlsChipSizeForBbox(bbox3857FromGeometry(aoi))
+  const tiffs = []
+  let bbox3857 = null
+  for (const sel of selectedP) {
+    const day = new Date(`${sel.date}T00:00:00Z`)
+    const t0 = new Date(day.getTime() - 6 * 86400000).toISOString().slice(0, 10)
+    const t1 = new Date(day.getTime() + 6 * 86400000).toISOString().slice(0, 10)
+    const out = await fetchSentinelWmsBandsTiff({
+      accessToken: wmsConfig.accessToken,
+      instanceId: wmsConfig.instanceId,
+      geometry: aoi,
+      timeStart: t0,
+      timeEnd: t1,
+      cloudCoverage: CROP_MAX_CLOUD,
+      size: CHIP_SIZE,
+    })
+    tiffs.push(out.buffer)
+    bbox3857 = out.bbox3857
+  }
+  const mergedTiff = await buildEighteenBandTiff(tiffs, bbox3857 || [0, 0, 0, 0], CHIP_SIZE)
+
+  let predictionUrl = null
+  if (SELF_INFERENCE_URL) {
+    const inf = await inferViaSelfService({ bbox, dates, aoi })
+    predictionUrl = fillBlackHolesInPngDataUrl(inf.predictionUrl || inf.prediction)
+  } else {
+    const inf = await inferBufferViaHfSpace(mergedTiff)
+    predictionUrl = fillBlackHolesInPngDataUrl(inf.prediction?.url)
+  }
+  const decoded = await fetchPredictionRgba(predictionUrl)
+  if (!decoded) throw new Error('Prithvi inference returned no usable prediction raster.')
+  return { ...decoded, bbox3857, dates, engine: 'prithvi' }
+}
+
+/**
+ * Classify crop type per detected field polygon (Prithvi 18-band HLS stack, then country phenology).
+ * @param {{ parcels: Array<{ fieldKey: string; geometry: GeoJSON.Geometry }>; season: { start: string; end: string }; secretsFilePath?: string }} input
+ */
+export async function classifyParcelsCropTypes(input) {
+  const parcels = (input.parcels || []).filter(p => p?.fieldKey && p?.geometry)
+  if (!parcels.length) throw new Error('At least one parcel with geometry is required.')
+
+  const master = buildMasterGeometry(parcels)
+  if (!master) throw new Error('Could not build master geometry from parcels.')
+
+  const season = input.season
+  if (!season?.start || !season?.end) {
+    throw new Error('season { start, end } (YYYY-MM-DD) is required.')
+  }
+
+  const wmsConfig = resolveSentinelHubWmsConfig(input.secretsFilePath)
+  if (!wmsConfig.instanceId) {
+    throw new Error(
+      'Sentinel Hub WMS not configured. Set SENTINEL_HUB_WMS_INSTANCE_ID for parcel crop typing.',
+    )
+  }
+
+  const country = await detectCountryFromAoi(master)
+  const profile = cropProfileForCountry(country.code)
+  const bbox = polygonBbox(master)
+
+  /** @type {Map<string, { cropType: string; confidencePct: number; engine: string; sampleCount?: number }>} */
+  const byKey = new Map()
+  let engineUsed = 'none'
+  /** @type {string[]} */
+  let dates = []
+
+  try {
+    const prithvi = await classifyPrithviRasterForAoi(master, season, wmsConfig, bbox)
+    dates = prithvi.dates || []
+    engineUsed = 'hls-prithvi'
+    for (const parcel of parcels) {
+      const hit = zonalRgbMajorityFromGrid(
+        {
+          rgba: prithvi.rgba,
+          width: prithvi.width,
+          height: prithvi.height,
+          bbox3857: prithvi.bbox3857,
+          palette: CROP_CLASSIFICATION_CLASSES,
+        },
+        parcel.geometry,
+      )
+      if (hit?.cropType) {
+        const cropType = normalizeHlsCropTypeName(hit.cropType)
+        if (cropType) {
+          byKey.set(parcel.fieldKey, {
+            cropType,
+            confidencePct: hit.confidencePct,
+            engine: 'hls-prithvi',
+            sampleCount: hit.sampleCount,
+          })
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[crop-classification/parcels] Prithvi path failed:', err?.message || err)
+  }
+
+  const missing = parcels.filter(p => !byKey.has(p.fieldKey))
+  if (missing.length) {
+    try {
+      const countryRaster = await classifyCountryRasterForAoi(master, season, wmsConfig, profile)
+      if (!dates.length) dates = countryRaster.dates || []
+      if (engineUsed === 'hls-prithvi') engineUsed = 'hls-prithvi+country'
+      else engineUsed = 'country'
+      for (const parcel of missing) {
+        const hit = zonalLabelMajorityFromGrid(
+          {
+            labels: countryRaster.labels,
+            width: countryRaster.width,
+            height: countryRaster.height,
+            bbox3857: countryRaster.bbox3857,
+            classMeta: countryRaster.classMeta,
+          },
+          parcel.geometry,
+          { skipLabel: l => l < 0 },
+        )
+        if (hit?.cropType) {
+          byKey.set(parcel.fieldKey, {
+            cropType: hit.cropType,
+            confidencePct: hit.confidencePct,
+            engine: 'country-phenology',
+            sampleCount: hit.sampleCount,
+          })
+        }
+      }
+    } catch (err) {
+      console.warn('[crop-classification/parcels] Country phenology failed:', err?.message || err)
+    }
+  }
+
+  return {
+    engine: engineUsed,
+    country: { code: country.code, name: profile.country, source: country.source },
+    dates,
+    parcels: parcels.map(p => {
+      const hit = byKey.get(p.fieldKey)
+      return {
+        fieldKey: p.fieldKey,
+        cropType: hit?.cropType ?? null,
+        confidencePct: hit?.confidencePct ?? null,
+        engine: hit?.engine ?? null,
+        sampleCount: hit?.sampleCount ?? 0,
+      }
+    }),
+  }
+}
+
 /**
  * @param {import('express').Express} app
  * @param {{ secretsFilePath: string, broadcast?: (obj: any) => void }} options
@@ -845,6 +1137,34 @@ export function registerCropClassificationRoutes(app, { secretsFilePath, broadca
       { mode, aoi, season, timesteps: body.timesteps, engine: body.engine },
       { secretsFilePath, broadcast },
     )
+  })
+
+  app.post('/api/crop-classification/parcels', async (req, res) => {
+    try {
+      const body = req.body || {}
+      const parcels = Array.isArray(body.parcels) ? body.parcels : []
+      const season = body.season
+      if (!season?.start || !season?.end) {
+        return res.status(400).json({ error: 'season { start, end } (YYYY-MM-DD) is required.' })
+      }
+      const normalized = parcels
+        .map(p => ({
+          fieldKey: String(p?.fieldKey || '').trim(),
+          geometry: p?.geometry,
+        }))
+        .filter(p => p.fieldKey && p.geometry)
+      if (!normalized.length) {
+        return res.status(400).json({ error: 'parcels[] with fieldKey and geometry is required.' })
+      }
+      const result = await classifyParcelsCropTypes({
+        parcels: normalized,
+        season,
+        secretsFilePath,
+      })
+      return res.status(200).json(result)
+    } catch (err) {
+      return res.status(502).json({ error: String(err?.message || err) })
+    }
   })
 
   app.get('/api/crop-classification/jobs/:jobId', (req, res) => {

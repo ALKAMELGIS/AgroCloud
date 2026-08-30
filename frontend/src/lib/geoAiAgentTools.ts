@@ -725,13 +725,18 @@ export async function executeGeoAiAgentTool(
         let source = str(a.source ?? a.engine) || 'delineate-fbis'
         const srcNorm = source.toLowerCase().replace(/_/g, '-')
         if (
-          srcNorm === 'fow' ||
-          srcNorm === 'ftw' ||
           srcNorm === 'ftw-live' ||
           srcNorm === 'ftw-infer' ||
+          srcNorm === 'ftw-inference' ||
+          srcNorm === 'ftw-inference-s2'
+        ) {
+          source = 'ftw-inference-s2'
+        } else if (
+          srcNorm === 'fow' ||
+          srcNorm === 'ftw' ||
           srcNorm === 'fields-of-the-world'
         ) {
-          source = 'delineate-fbis'
+          source = 'ftw'
         }
         const year = num(a.year)
         return runMapOp(host, {

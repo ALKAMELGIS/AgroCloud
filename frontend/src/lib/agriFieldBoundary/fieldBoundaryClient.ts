@@ -9,6 +9,7 @@ import {
   type FootprintRegularizeMethod,
 } from './fieldFootprintRegularize'
 import { apiUrl, isBackendUnavailablePayload } from '../apiOrigin'
+import { PRODUCTION_MAP_RGB_MIN_AREA_M2 } from './fieldBoundaryProductionMode'
 
 const BASE = () => apiUrl('/api/agri-field-boundary')
 
@@ -16,6 +17,7 @@ export type FieldImagerySource =
   | 'basemap'
   | 'delineate-fbis'
   | 'ftw'
+  | 'ftw-inference-s2'
   | 'agricultural-field-delineation'
   | 'sentinel2'
   | 'landsat'
@@ -56,6 +58,15 @@ export type FieldBoundaryHealth = {
     device?: string
     emd_version?: string
     info?: Record<string, unknown>
+    error?: string
+  }
+  /** Live FTW PRUE on Sentinel-2 — separate from Global v3 PMTiles. */
+  ftw_inference_s2?: boolean
+  ftw_inference_s2_status?: {
+    ready?: boolean
+    model?: string
+    architecture?: string
+    cli?: string | null
     error?: string
   }
   /** SEN2SRLite neural SR available on the Python service (optional on Hostinger). */
@@ -125,6 +136,8 @@ export function optimizeFieldBoundaryResult(
     minFillRatio?: number
     maxAreaInflation?: number
     abutNeighborsM?: number
+    /** When false, regularize each feature independently (no cross-feature overlap fix). */
+    resolveOverlaps?: boolean
     softenKept?: boolean
     softenMeters?: number
   },
@@ -153,8 +166,9 @@ export function optimizeFieldBoundaryResult(
         softenKept: opts?.softenKept !== false,
         softenMeters: opts?.softenMeters ?? (opts?.regularizeMethod === 'right-angles' ? 3.2 : 5.2),
         cadastralSnap: true,
-        resolveOverlaps: true,
-        abutNeighborsM: opts?.abutNeighborsM ?? 1.15,
+        resolveOverlaps: opts?.resolveOverlaps !== false,
+        abutNeighborsM:
+          opts?.abutNeighborsM ?? (opts?.resolveOverlaps === false ? 0 : 1.15),
       })
     }
     cleaned = stampFieldStroke(cleaned)
@@ -285,9 +299,13 @@ export function formatFieldBoundaryUserError(
   }
 
   if (/crop calendar|harvest date|can't be in the future|cannot be in the future/i.test(msg)) {
+    const ftwHint =
+      opts?.source === 'ftw-inference-s2'
+        ? ' FTW uses the prior crop year automatically — retry Detect Fields.'
+        : ' Pick an earlier scene date (prior calendar year).'
     return {
-      short: 'Scene year too recent — pick a previous calendar year',
-      detail: detail || msg,
+      short: 'Scene year adjusted for FTW crop calendar',
+      detail: (detail || msg) + ftwHint,
     }
   }
 
@@ -347,7 +365,7 @@ function bodyOf(req: FieldBoundaryRequest) {
     bbox: req.bbox,
     aoi: req.aoi ?? null,
     min_confidence: req.minConfidence ?? 0.45,
-    min_area_m2: req.minAreaM2 ?? 200,
+    min_area_m2: req.minAreaM2 ?? PRODUCTION_MAP_RGB_MIN_AREA_M2,
     source,
     high_res: req.highRes !== false,
     ...(req.year != null && Number.isFinite(req.year) ? { year: Math.trunc(req.year) } : {}),

@@ -3613,7 +3613,7 @@ html[data-theme='light'] .si-env-side-row--selected {
   font-size: 10.5px;
 }
 .si-env-layer-options-menu--floating .si-env-layer-options-menu__item > i {
-  color: #6ee7b7;
+  color: var(--theme-text-primary, #e6e6e6);
 }
 .si-env-layer-options-menu--floating .si-env-layer-options-menu__item:hover:not(:disabled) {
   background: rgba(110, 231, 183, 0.14);
@@ -3662,7 +3662,7 @@ html[data-theme='light'] .si-env-side-row--selected {
   width: 14px;
   text-align: center;
   font-size: 10px;
-  color: #a5b4fc;
+  color: var(--theme-text-primary, #e6e6e6);
   flex-shrink: 0;
 }
 
@@ -3724,7 +3724,11 @@ html[data-theme='light'] .si-env-layer-options-menu__item {
 }
 
 html[data-theme='light'] .si-env-layer-options-menu__item > i {
-  color: #4f46e5;
+  color: var(--theme-text-primary, #222222);
+}
+
+html[data-theme='light'] .si-env-layer-options-menu--floating .si-env-layer-options-menu__item > i {
+  color: var(--theme-text-primary, #222222);
 }
 
 .si-env-layer-actions {

@@ -169,6 +169,134 @@ export function zonalIndexStatsFromGrid(grid, geometry) {
   }
 }
 
+function hexToRgb(hex) {
+  const h = String(hex || '').replace('#', '').trim()
+  if (h.length !== 6) return [0, 0, 0]
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
+}
+
+function nearestPaletteIndex(r, g, b, paletteRgb) {
+  let best = 0
+  let bestDist = Infinity
+  for (let i = 0; i < paletteRgb.length; i += 1) {
+    const [pr, pg, pb] = paletteRgb[i]
+    const dist = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2
+    if (dist < bestDist) {
+      bestDist = dist
+      best = i
+    }
+  }
+  return best
+}
+
+function zonalMajorityFromPixelSamples(votes, classMeta) {
+  let bestIdx = -1
+  let bestCount = 0
+  let total = 0
+  for (let i = 0; i < votes.length; i += 1) {
+    const c = votes[i] || 0
+    if (c <= 0) continue
+    total += c
+    if (c > bestCount) {
+      bestCount = c
+      bestIdx = i
+    }
+  }
+  if (bestIdx < 0 || total === 0) return null
+  const meta = classMeta[bestIdx]
+  return {
+    cropType: meta?.name || String(bestIdx),
+    confidencePct: Number(((bestCount / total) * 100).toFixed(1)),
+    sampleCount: total,
+  }
+}
+
+function zonalPixelWindow(grid, geometry) {
+  const fieldBbox = bbox3857FromGeometry(geometry)
+  if (!fieldBbox || !grid?.width || !grid?.height || !grid?.bbox3857) return null
+
+  const { width, height, bbox3857 } = grid
+  const [minX, minY, maxX, maxY] = bbox3857
+  const [fminX, fminY, fmaxX, fmaxY] = fieldBbox
+  const spanX = maxX - minX
+  const spanY = maxY - minY
+  if (!(spanX > 0 && spanY > 0)) return null
+
+  return {
+    width,
+    height,
+    minX,
+    maxY,
+    spanX,
+    spanY,
+    colStart: Math.max(0, Math.floor(((fminX - minX) / spanX) * width)),
+    colEnd: Math.min(width - 1, Math.ceil(((fmaxX - minX) / spanX) * width)),
+    rowStart: Math.max(0, Math.floor(((maxY - fmaxY) / spanY) * height)),
+    rowEnd: Math.min(height - 1, Math.ceil(((maxY - fminY) / spanY) * height)),
+  }
+}
+
+/**
+ * Majority crop class inside a polygon from an RGBA classification raster (Prithvi palette).
+ * @param {{ rgba: Uint8Array; width: number; height: number; bbox3857: number[]; palette: Array<{ name: string; color: string }> }} grid
+ * @param {GeoJSON.Geometry} geometry
+ */
+export function zonalRgbMajorityFromGrid(grid, geometry) {
+  const win = zonalPixelWindow(grid, geometry)
+  if (!win || !grid?.rgba || !Array.isArray(grid.palette) || !grid.palette.length) return null
+
+  const paletteRgb = grid.palette.map(entry => hexToRgb(entry.color))
+  /** @type {number[]} */
+  const votes = new Array(grid.palette.length).fill(0)
+
+  for (let row = win.rowStart; row <= win.rowEnd; row += 1) {
+    for (let col = win.colStart; col <= win.colEnd; col += 1) {
+      const p = row * win.width + col
+      const i = p * 4
+      const a = grid.rgba[i + 3]
+      if (a === 0) continue
+      const x = win.minX + (col + 0.5) * (win.spanX / win.width)
+      const y = win.maxY - (row + 0.5) * (win.spanY / win.height)
+      const [lng, lat] = webMercatorToLngLat(x, y)
+      if (!pointInGeometry(lng, lat, geometry)) continue
+      votes[nearestPaletteIndex(grid.rgba[i], grid.rgba[i + 1], grid.rgba[i + 2], paletteRgb)] += 1
+    }
+  }
+
+  return zonalMajorityFromPixelSamples(votes, grid.palette)
+}
+
+/**
+ * Majority crop class inside a polygon from an Int16 label raster (country phenology engine).
+ * @param {{ labels: Int16Array; width: number; height: number; bbox3857: number[]; classMeta: Array<{ name: string }> }} grid
+ * @param {GeoJSON.Geometry} geometry
+ * @param {{ skipLabel?: (label: number) => boolean }} [options]
+ */
+export function zonalLabelMajorityFromGrid(grid, geometry, options = {}) {
+  const win = zonalPixelWindow(grid, geometry)
+  if (!win || !grid?.labels || !Array.isArray(grid.classMeta) || !grid.classMeta.length) return null
+
+  const skipLabel = typeof options.skipLabel === 'function' ? options.skipLabel : () => false
+  /** @type {number[]} */
+  const votes = new Array(grid.classMeta.length).fill(0)
+
+  for (let row = win.rowStart; row <= win.rowEnd; row += 1) {
+    for (let col = win.colStart; col <= win.colEnd; col += 1) {
+      const p = row * win.width + col
+      const label = grid.labels[p]
+      if (skipLabel(label)) continue
+      if (label < 0 || label >= grid.classMeta.length) continue
+      const x = win.minX + (col + 0.5) * (win.spanX / win.width)
+      const y = win.maxY - (row + 0.5) * (win.spanY / win.height)
+      const [lng, lat] = webMercatorToLngLat(x, y)
+      if (!pointInGeometry(lng, lat, geometry)) continue
+      votes[label] += 1
+    }
+  }
+
+  return zonalMajorityFromPixelSamples(votes, grid.classMeta)
+}
+
 function gridCacheKey(groupKey, sceneDate, cloudCoverage) {
   return `${groupKey}|${sceneDate}|${cloudCoverage}`
 }

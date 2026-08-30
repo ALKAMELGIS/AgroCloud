@@ -397,12 +397,12 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Epochs Details — matte black / white text */
+/* Epochs Details — light theme default; dark matte variant below */
 .si-epochs {
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--theme-border, rgba(34, 34, 34, 0.12));
   border-radius: 6px;
-  background: #000;
-  color: #fff;
+  background: var(--theme-bg-elevated, #ffffff);
+  color: var(--theme-text-primary, #222222);
   overflow: hidden;
 }
 .si-epochs__summary {
@@ -414,16 +414,16 @@
   padding: 6px 8px;
   font-size: 11px;
   font-weight: 600;
-  color: #fff;
-  background: #050505;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--theme-text-primary, #222222);
+  background: var(--theme-surface-muted, #f8fafc);
+  border-bottom: 1px solid var(--theme-border, rgba(34, 34, 34, 0.12));
   user-select: none;
 }
 .si-epochs__count {
   margin-left: auto;
   font-weight: 500;
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--theme-text-secondary, #555555);
 }
 .si-epochs__summary::-webkit-details-marker {
   display: none;
@@ -433,7 +433,7 @@
   display: inline-block;
   margin-right: 6px;
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--theme-text-muted, #777777);
 }
 .si-epochs:not([open]) .si-epochs__summary::before {
   content: '▸';
@@ -443,8 +443,8 @@
   grid-template-columns: 1fr 1fr;
   gap: 6px 8px;
   padding: 8px;
-  background: #000;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--theme-bg-elevated, #ffffff);
+  border-top: 1px solid var(--theme-border, rgba(34, 34, 34, 0.12));
 }
 .si-epochs__stat {
   display: flex;
@@ -454,75 +454,75 @@
 }
 .si-epochs__stat span {
   font-size: 9px;
-  color: rgba(255, 255, 255, 0.62);
+  color: var(--theme-text-muted, #777777);
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
 .si-epochs__stat strong {
   font-size: 10.5px;
   font-weight: 600;
-  color: #fff;
+  color: var(--theme-text-primary, #222222);
   line-height: 1.35;
 }
 .si-epochs__stat--wide {
   grid-column: 1 / -1;
 }
 .si-epochs__analysis.is-improving .si-epochs__stat--trend strong {
-  color: #86efac;
+  color: #15803d;
 }
 .si-epochs__analysis.is-overfitting .si-epochs__stat--trend strong,
 .si-epochs__analysis.is-degrading .si-epochs__stat--trend strong {
-  color: #fcd34d;
+  color: #b45309;
 }
 .si-epochs__scroll {
   max-height: 240px;
   overflow: auto;
-  background: #000;
+  background: var(--theme-bg-elevated, #ffffff);
 }
 .si-epochs__table {
-  color: #fff !important;
-  background: #000 !important;
+  color: var(--theme-text-primary, #222222) !important;
+  background: var(--theme-bg-elevated, #ffffff) !important;
   min-width: 520px;
 }
 .si-epochs__table thead th {
-  background: #0a0a0a !important;
-  color: #fff !important;
+  background: var(--theme-surface-muted, #f1f5f9) !important;
+  color: var(--theme-text-primary, #222222) !important;
   font-weight: 600;
   text-align: start !important;
   white-space: nowrap;
-  border-color: rgba(255, 255, 255, 0.14) !important;
+  border-color: var(--theme-border, rgba(34, 34, 34, 0.12)) !important;
 }
 .si-epochs__table tbody th[scope='row'],
 .si-epochs__table td {
   text-align: start !important;
-  color: #fff !important;
-  background: #000 !important;
-  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: var(--theme-text-primary, #222222) !important;
+  background: var(--theme-bg-elevated, #ffffff) !important;
+  border-color: var(--theme-border, rgba(34, 34, 34, 0.12)) !important;
   white-space: nowrap;
 }
 .si-epochs__table tbody tr.is-alt th[scope='row'],
 .si-epochs__table tbody tr.is-alt td {
-  background: #0a0a0a !important;
+  background: var(--theme-surface-muted, #f8fafc) !important;
 }
 .si-epochs__table tbody tr.is-best th[scope='row'],
 .si-epochs__table tbody tr.is-best td {
-  background: #111 !important;
-  color: #fff !important;
+  background: rgba(5, 150, 105, 0.08) !important;
+  color: var(--theme-text-primary, #222222) !important;
 }
 .si-epochs__best-tag {
   margin-left: 4px;
   font-size: 9px;
   font-weight: 600;
-  color: #86efac;
+  color: #15803d;
   text-transform: uppercase;
 }
 .si-epochs__hint {
-  color: rgba(255, 255, 255, 0.62) !important;
+  color: var(--theme-text-muted, #777777) !important;
 }
 .si-epochs__table tbody tr.is-empty td {
   text-align: center !important;
-  color: rgba(255, 255, 255, 0.65) !important;
-  background: #000 !important;
+  color: var(--theme-text-muted, #777777) !important;
+  background: var(--theme-bg-elevated, #ffffff) !important;
   font-weight: 400;
   white-space: normal;
   padding: 10px 8px;
@@ -536,6 +536,78 @@
   text-align: start !important;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 9.5px;
+}
+
+/* Epochs Details — dark theme matte panel */
+html[data-theme='dark'] .si-epochs {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: #000;
+  color: #fff;
+}
+html[data-theme='dark'] .si-epochs__summary {
+  color: #fff;
+  background: #050505;
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+html[data-theme='dark'] .si-epochs__count {
+  color: rgba(255, 255, 255, 0.65);
+}
+html[data-theme='dark'] .si-epochs__summary::before {
+  color: rgba(255, 255, 255, 0.65);
+}
+html[data-theme='dark'] .si-epochs__analysis {
+  background: #000;
+  border-top-color: rgba(255, 255, 255, 0.12);
+}
+html[data-theme='dark'] .si-epochs__stat span {
+  color: rgba(255, 255, 255, 0.62);
+}
+html[data-theme='dark'] .si-epochs__stat strong {
+  color: #fff;
+}
+html[data-theme='dark'] .si-epochs__analysis.is-improving .si-epochs__stat--trend strong {
+  color: #86efac;
+}
+html[data-theme='dark'] .si-epochs__analysis.is-overfitting .si-epochs__stat--trend strong,
+html[data-theme='dark'] .si-epochs__analysis.is-degrading .si-epochs__stat--trend strong {
+  color: #fcd34d;
+}
+html[data-theme='dark'] .si-epochs__scroll {
+  background: #000;
+}
+html[data-theme='dark'] .si-epochs__table {
+  color: #fff !important;
+  background: #000 !important;
+}
+html[data-theme='dark'] .si-epochs__table thead th {
+  background: #0a0a0a !important;
+  color: #fff !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+}
+html[data-theme='dark'] .si-epochs__table tbody th[scope='row'],
+html[data-theme='dark'] .si-epochs__table td {
+  color: #fff !important;
+  background: #000 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+html[data-theme='dark'] .si-epochs__table tbody tr.is-alt th[scope='row'],
+html[data-theme='dark'] .si-epochs__table tbody tr.is-alt td {
+  background: #0a0a0a !important;
+}
+html[data-theme='dark'] .si-epochs__table tbody tr.is-best th[scope='row'],
+html[data-theme='dark'] .si-epochs__table tbody tr.is-best td {
+  background: #111 !important;
+  color: #fff !important;
+}
+html[data-theme='dark'] .si-epochs__best-tag {
+  color: #86efac;
+}
+html[data-theme='dark'] .si-epochs__hint {
+  color: rgba(255, 255, 255, 0.62) !important;
+}
+html[data-theme='dark'] .si-epochs__table tbody tr.is-empty td {
+  color: rgba(255, 255, 255, 0.65) !important;
+  background: #000 !important;
 }
 
 /* Matrix tables */

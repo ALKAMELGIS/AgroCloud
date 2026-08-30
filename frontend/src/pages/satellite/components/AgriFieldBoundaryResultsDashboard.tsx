@@ -32,6 +32,7 @@ import {
   AoiTrainingChartsWorkspace,
   analyticsToChartBundle,
   estimateAoiDatasetSplit,
+  resolveLrFinderForAoi,
   type AoiChartBundle,
 } from './AoiTrainingChartsGrid'
 import './AgriFieldBoundaryResultsDashboard.css'
@@ -262,18 +263,30 @@ export function AgriFieldBoundaryResultsDashboard({
     [fieldCount, approvedSamples, draftSamples],
   )
 
+  const sampleCount = useMemo(
+    () => Math.max(approvedSamples + draftSamples, datasetSplit?.total ?? 0),
+    [approvedSamples, draftSamples, datasetSplit?.total],
+  )
+
   useEffect(() => {
-    if (!resolvedAoiKey || !epochRows.length) return
+    if (!resolvedAoiKey) return
     const prev = loadAoiTrainingAnalytics(resolvedAoiKey)
+    const lrFinder = resolveLrFinderForAoi({
+      stored: prev?.lrFinder,
+      fieldCount,
+      sampleCount,
+      score,
+    })
+    if (!epochRows.length && !lrFinder && !datasetSplit) return
     saveAoiTrainingAnalytics({
       aoiKey: resolvedAoiKey,
       aoiLabel: aoiLabel || prev?.aoiLabel || 'AOI',
-      epochHistory: epochRows,
-      lrFinder: prev?.lrFinder ?? null,
+      epochHistory: epochRows.length ? epochRows : prev?.epochHistory ?? [],
+      lrFinder: lrFinder ?? prev?.lrFinder ?? null,
       dataset: datasetSplit ?? prev?.dataset ?? null,
       updatedAt: new Date().toISOString(),
     })
-  }, [resolvedAoiKey, aoiLabel, epochRows, datasetSplit])
+  }, [resolvedAoiKey, aoiLabel, epochRows, datasetSplit, fieldCount, sampleCount, score])
 
   useEffect(() => {
     if (!panelOpen) return
@@ -290,20 +303,45 @@ export function AgriFieldBoundaryResultsDashboard({
     void analyticsTick
     const byKey = new Map<string, AoiChartBundle>()
     for (const row of listAoiTrainingAnalytics()) {
-      byKey.set(row.aoiKey, analyticsToChartBundle(row))
+      const bundle = analyticsToChartBundle(row)
+      const lrFinder = resolveLrFinderForAoi({
+        stored: row.lrFinder,
+        fieldCount: row.aoiKey === resolvedAoiKey ? fieldCount : 0,
+        sampleCount: row.dataset?.total ?? 0,
+        score: row.aoiKey === resolvedAoiKey ? score : null,
+      })
+      byKey.set(row.aoiKey, {
+        ...bundle,
+        lrFinderLrs: lrFinder?.lrs ?? bundle.lrFinderLrs,
+        lrFinderLosses: lrFinder?.losses ?? bundle.lrFinderLosses,
+        optimalLr: lrFinder?.optimal_lr ?? bundle.optimalLr ?? null,
+      })
     }
     const prev = byKey.get(resolvedAoiKey)
+    const lrFinder = resolveLrFinderForAoi({
+      stored:
+        prev?.lrFinderLrs?.length && prev?.lrFinderLosses?.length
+          ? {
+              lrs: prev.lrFinderLrs,
+              losses: prev.lrFinderLosses,
+              optimal_lr: prev.optimalLr ?? null,
+            }
+          : loadAoiTrainingAnalytics(resolvedAoiKey)?.lrFinder,
+      fieldCount,
+      sampleCount,
+      score,
+    })
     byKey.set(resolvedAoiKey, {
       aoiKey: resolvedAoiKey,
       aoiLabel: aoiLabel || prev?.aoiLabel || 'AOI',
       epochHistory: epochRows,
-      lrFinderLrs: prev?.lrFinderLrs,
-      lrFinderLosses: prev?.lrFinderLosses,
-      optimalLr: prev?.optimalLr ?? null,
+      lrFinderLrs: lrFinder?.lrs ?? prev?.lrFinderLrs,
+      lrFinderLosses: lrFinder?.losses ?? prev?.lrFinderLosses,
+      optimalLr: lrFinder?.optimal_lr ?? prev?.optimalLr ?? null,
       dataset: datasetSplit ?? prev?.dataset ?? null,
     })
     return [...byKey.values()]
-  }, [analyticsTick, resolvedAoiKey, aoiLabel, epochRows, datasetSplit])
+  }, [analyticsTick, resolvedAoiKey, aoiLabel, epochRows, datasetSplit, fieldCount, sampleCount, score])
 
   // Re-render once the map host mounts so createPortal has a target.
   const [hostTick, setHostTick] = useState(0)

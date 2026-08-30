@@ -117,9 +117,9 @@ const OVERLAP_EPS_M2 = 1.5
 
 /**
  * ArcGIS Regularize Building Footprint methods, applied to field parcels.
- * - right-angles → 90° between adjoining edges (default — clean cadastral fields)
+ * - right-angles → 90° between adjoining edges
  * - right-angles-and-diagonals → 45° and 90°
- * - any-angles → straight edges at any heading
+ * - any-angles → straight edges at any heading (default)
  * - circle → best-fitting circle (centre pivots + forced circle mode)
  */
 export type FootprintRegularizeMethod =
@@ -127,6 +127,8 @@ export type FootprintRegularizeMethod =
   | 'right-angles-and-diagonals'
   | 'any-angles'
   | 'circle'
+
+export const DEFAULT_FOOTPRINT_REGULARIZE_METHOD: FootprintRegularizeMethod = 'any-angles'
 
 export const FOOTPRINT_REGULARIZE_METHODS: Array<{
   id: FootprintRegularizeMethod
@@ -188,7 +190,7 @@ export type RegularizeFootprintOptions = {
    */
   rightAngles?: boolean
   /**
-   * Regularize Building Footprint method. Default `right-angles`.
+   * Regularize Building Footprint method. Default `any-angles`.
    */
   method?: FootprintRegularizeMethod
   /** Override the stair-collapse threshold (metres). Default scales with area. */
@@ -1789,7 +1791,7 @@ function resolveRegularizeMethod(opts?: RegularizeFootprintOptions): FootprintRe
   if (opts?.method) return opts.method
   // Legacy flag: rightAngles === false → any-angles (soften / DP only).
   if (opts?.rightAngles === false) return 'any-angles'
-  return 'right-angles'
+  return DEFAULT_FOOTPRINT_REGULARIZE_METHOD
 }
 
 /**

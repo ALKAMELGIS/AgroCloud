@@ -47,6 +47,8 @@ export type ValidationLinePlotProps = {
   height?: number
   /** SVG logical width (default 260). Use ~420+ in the Results dashboard. */
   width?: number
+  /** Stretch SVG to the card width (float dashboard). */
+  fluid?: boolean
 }
 
 /** Matplotlib tab10 defaults shared by training / validation charts. */
@@ -130,6 +132,7 @@ export function ValidationLinePlot({
   markers = false,
   height = 156,
   width = DEFAULT_W,
+  fluid = false,
 }: ValidationLinePlotProps) {
   const svgRef = useRef<SVGSVGElement | null>(null)
   const [hover, setHover] = useState<HoverTip | null>(null)
@@ -272,7 +275,7 @@ export function ValidationLinePlot({
         viewBox={`0 0 ${W} ${H}`}
         role="img"
         aria-label={ariaLabel}
-        style={{ height, width: '100%', maxWidth: W }}
+        style={fluid ? { height, width: '100%' } : { height, width: '100%', maxWidth: W }}
         onMouseMove={onMove}
         onMouseLeave={() => setHover(null)}
       >

@@ -124,7 +124,7 @@ html[data-theme='light'] .si-map-swipe-panel__legend-btn:hover {
 
 html[data-theme='light'] .si-map-swipe-panel__grid input,
 html[data-theme='light'] .si-map-swipe-panel__grid select {
-  background: var(--si-overlay-field-bg);
+  background-color: var(--si-overlay-field-bg);
   color: var(--si-overlay-text);
   border-color: var(--si-overlay-field-border);
   color-scheme: light;
@@ -133,12 +133,18 @@ html[data-theme='light'] .si-map-swipe-panel__grid select {
 
 html[data-theme='light'] .si-map-swipe-panel__grid input:hover,
 html[data-theme='light'] .si-map-swipe-panel__grid select:hover {
-  background: #f8fafc;
+  background-color: #f8fafc;
   border-color: var(--si-overlay-border-strong);
 }
 
 html[data-theme='light'] .si-map-swipe-panel__grid select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 28px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23222222' d='M1.4.6 6 5.2 10.6.6 12 2 6 8 0 2z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px;
 }
 
 html[data-theme='light'] .si-map-swipe-panel__grid select option,

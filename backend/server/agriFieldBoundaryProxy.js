@@ -18,6 +18,13 @@ import { vectorizeFtwMosaicBuiltin } from './ftwMaskVectorizeBuiltin.js'
 
 /** Agricultural Field Delineation fetches Sentinel-2 on the Python service — no client image. */
 const AFD_SOURCES = new Set(['agricultural-field-delineation', 'afd'])
+/** FTW Inference (S2 Model) — live PRUE on Sentinel-2; separate from Global v3 PMTiles. */
+const FTW_INFERENCE_S2_SOURCES = new Set([
+  'ftw-inference-s2',
+  'ftw-live',
+  'ftw-infer',
+  'ftw-inference',
+])
 const DETECT_TIMEOUT_MS = 10 * 60 * 1000
 const DETECT_JOB_TIMEOUT_MS = 120_000
 /** Neural SR can take several minutes on CPU/GPU; keep a long forward window. */
@@ -27,22 +34,45 @@ const SEN2SR_STATUS_TIMEOUT_MS = 15_000
 const SEN2SR_BODY_LIMIT = '256mb'
 
 function normalizeDetectSource(body) {
-  const raw = String(body?.source || body?.model || '').toLowerCase().trim()
-  if (AFD_SOURCES.has(raw) || raw === 'agricultural_field_delineation') {
-    return 'agricultural-field-delineation'
+  const norm = (raw) =>
+    String(raw || '')
+      .toLowerCase()
+      .trim()
+      .replace(/_/g, '-')
+  const sourceRaw = norm(body?.source)
+  const modelRaw = norm(body?.model)
+
+  const canonical = (raw) => {
+    if (AFD_SOURCES.has(raw) || raw === 'agricultural-field-delineation') {
+      return 'agricultural-field-delineation'
+    }
+    if (FTW_INFERENCE_S2_SOURCES.has(raw)) {
+      return 'ftw-inference-s2'
+    }
+    return null
   }
-  // Legacy FoW/FTW aliases → map RGB path (catalog engine removed).
-  if (raw === 'fow' || raw === 'fields-of-the-world' || raw === 'ftw') {
+
+  // Model id wins — UI may still send basemap as legacy capture source.
+  const fromModel = canonical(modelRaw)
+  if (fromModel) return fromModel
+  const fromSource = canonical(sourceRaw)
+  if (fromSource) return fromSource
+
+  // Legacy FoW / bare "ftw" alias → map RGB path (not Global v3 — that is browser-only).
+  if (sourceRaw === 'fow' || sourceRaw === 'fields-of-the-world' || sourceRaw === 'ftw') {
     return 'basemap'
   }
-  return raw
+  return sourceRaw || modelRaw
 }
 
 function isImageOptionalSource(source) {
-  return AFD_SOURCES.has(source)
+  return AFD_SOURCES.has(source) || FTW_INFERENCE_S2_SOURCES.has(source)
 }
 
-function imageOptionalUnavailableMessage(_source) {
+function imageOptionalUnavailableMessage(source) {
+  if (FTW_INFERENCE_S2_SOURCES.has(source)) {
+    return 'FTW Inference (S2) needs the Python field engine (:8092) with ftw-baselines CLI configured.'
+  }
   return 'Agricultural Field Delineation needs the Python field engine (:8092) with bundled model weights.'
 }
 

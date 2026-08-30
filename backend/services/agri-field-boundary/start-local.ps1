@@ -26,6 +26,16 @@ if (-not $py) {
   Write-Error "No Python venv found. Create one: py -3.12 -m venv .venv312 && .\.venv312\Scripts\pip install -r requirements.txt"
 }
 
+$venvScripts = Split-Path -Parent $py
+$ftwBin = Join-Path $venvScripts 'ftw.exe'
+if (Test-Path $ftwBin) {
+  $env:FTW_INFERENCE_BIN = $ftwBin
+  if (-not $env:FTW_CHECKPOINT_PATH) {
+    $ckpt = Join-Path $here 'models\prue_efnetb7_ccby_checkpoint.ckpt'
+    if (Test-Path $ckpt) { $env:FTW_CHECKPOINT_PATH = $ckpt }
+  }
+}
+
 Write-Host "Agri Field Boundary -> http://127.0.0.1:$port"
 Write-Host "Using: $py"
 if ($autoRestart) {

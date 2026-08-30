@@ -210,6 +210,7 @@ const COUNTRY_CROPS = {
   OM: ['vegetables', 'datepalm', 'forage_sorghum', 'alfalfa', 'rhodes'],
   QA: ['vegetables', 'forage_sorghum', 'alfalfa', 'rhodes'],
   US: ['maize', 'soybean', 'wheat', 'cotton', 'sorghum', 'silage_maize', 'alfalfa'],
+  RS: ['wheat', 'maize', 'barley', 'soybean', 'vegetables', 'silage_maize', 'alfalfa'],
   IN: ['rice', 'wheat', 'cotton', 'sugarcane', 'sorghum', 'forage_millet', 'vegetables'],
   default: ['wheat', 'maize', 'vegetables', 'potato', 'silage_maize', 'alfalfa', 'rhodes'],
 }
@@ -217,6 +218,7 @@ const COUNTRY_CROPS = {
 const COUNTRY_NAMES = {
   SA: 'Saudi Arabia', EG: 'Egypt', IQ: 'Iraq', AE: 'United Arab Emirates', JO: 'Jordan',
   MA: 'Morocco', DZ: 'Algeria', SD: 'Sudan', US: 'United States', IN: 'India',
+  RS: 'Serbia',
   KW: 'Kuwait', OM: 'Oman', QA: 'Qatar',
 }
 
@@ -235,6 +237,7 @@ const COUNTRY_BBOXES = [
   ['OM', [52.0, 16.6, 59.9, 26.4]],
   ['IN', [68.1, 6.7, 97.4, 35.5]],
   ['US', [-125.0, 24.5, -66.9, 49.4]],
+  ['RS', [18.8, 42.2, 23.0, 46.2]],
 ]
 
 /** @param {GeoJSON.Geometry} geometry → [lng, lat] centroid (bbox center). */

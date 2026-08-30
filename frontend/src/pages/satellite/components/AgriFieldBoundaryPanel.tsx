@@ -14,11 +14,14 @@ import { Sen2srProductControls } from './Sen2srProductControls'
 import { AgriFieldBoundaryResultsDashboard } from './AgriFieldBoundaryResultsDashboard'
 import { AgriFieldBoundaryTrainingSamplesPane } from './AgriFieldBoundaryTrainingSamplesPane'
 import { FtwAoiTrainingDashboard } from './FtwAoiTrainingDashboard'
+import { FieldAttributesDashboard } from './FieldAttributesDashboard'
+import { AfbOperationProgressBar } from './AfbOperationProgressBar'
 import { useFtwAoiTraining } from './useFtwAoiTraining'
 import type { FieldBoundaryTrainingSamplesApi } from './useFieldBoundaryTrainingSamples'
 import type { FtwGlobalYear } from '../../../lib/agriFieldBoundary/ftwGlobalConfig'
 import { ftwGlobalAttribution } from '../../../lib/agriFieldBoundary/ftwGlobalConfig'
 import type { SiActiveAoi } from '../../../lib/siAoiManager'
+import { ftwInferenceMaxCropYear } from '../../../lib/agriFieldBoundary/ftwInferenceSceneDate'
 import './AgriFieldBoundaryPanel.css'
 
 /** How the study AOI is chosen for Detect Fields. */
@@ -26,8 +29,8 @@ export type FieldBoundaryAoiMode = 'draw' | 'layers' | 'viewport' | 'select'
 
 export type FieldBoundaryAoiLayerOption = { id: string; label: string; featureCount?: number }
 
-/** Detect + Results + Training Samples tabs. */
-export type FieldBoundaryPanelTab = 'detect' | 'results' | 'training'
+/** Detect + Dashboard + Results + Training Samples tabs. */
+export type FieldBoundaryPanelTab = 'detect' | 'dashboard' | 'results' | 'training'
 
 export const FIELD_BOUNDARY_AOI_MODE_OPTIONS: Array<{ id: FieldBoundaryAoiMode; label: string }> = [
   { id: 'draw', label: 'Drawn AOI (map sketch)' },
@@ -117,12 +120,17 @@ export type AgriFieldBoundaryPanelProps = {
   onReset: () => void
   onExportGeojson: () => void | Promise<void>
   onExportShapefile: () => void | Promise<void>
+  onExportCsv?: () => void | Promise<void>
   onAddToLayers?: () => void | Promise<void>
   /** Progress line while the Sentinel-2 attribute table is being filled. */
   attributesStatus?: string | null
+  attributesBusy?: boolean
+  onRefreshAttributes?: () => void | Promise<void>
   /** FTW export / Add layer — non-blocking loading line. */
   exportBusy?: boolean
   exportStatus?: string | null
+  exportProgressPct?: number
+  attributesProgressPct?: number
   /** SEN2SR Lite product mode (separate from detect engines). */
   sen2srStatus?: Sen2srStatus | null
   sen2srProductMode?: Sen2srProductMode
@@ -187,6 +195,11 @@ function latestSceneDateIso(): string {
   return `${y}-${m}-${day}`
 }
 
+function latestFtwInferenceSceneDateIso(): string {
+  const y = ftwInferenceMaxCropYear()
+  return `${y}-12-31`
+}
+
 const AOI_MODE_HINT: Record<FieldBoundaryAoiMode, string> = {
   draw: 'Draw a polygon on the map (toolbox Draw), or reuse the existing sketch.',
   layers: 'Pick a vector layer added under Layers.',
@@ -225,7 +238,7 @@ export function AgriFieldBoundaryPanel({
   onRegularizeFootprintsChange,
   regularizeMethod = 'right-angles',
   onRegularizeMethodChange,
-  mergeFragments = true,
+  mergeFragments = false,
   onMergeFragmentsChange,
   phase,
   progress,
@@ -250,10 +263,15 @@ export function AgriFieldBoundaryPanel({
   onReset,
   onExportGeojson,
   onExportShapefile,
+  onExportCsv,
   onAddToLayers,
   attributesStatus = null,
+  attributesBusy = false,
+  onRefreshAttributes,
   exportBusy = false,
   exportStatus = null,
+  exportProgressPct = 0,
+  attributesProgressPct = 0,
   sen2srStatus = null,
   sen2srProductMode = 'raw',
   onSen2srProductModeChange,
@@ -283,6 +301,7 @@ export function AgriFieldBoundaryPanel({
   const [minAreaText, setMinAreaText] = useState(() => String(minAreaM2))
   const [activeTab, setActiveTab] = useState<FieldBoundaryPanelTab>('detect')
   const [dashboardOpen, setDashboardOpen] = useState(false)
+  const [modelInfoOpen, setModelInfoOpen] = useState(false)
 
   const trainingCounts = trainingSamples?.counts
   const trainingBadge =
@@ -292,35 +311,51 @@ export function AgriFieldBoundaryPanel({
         : trainingCounts.draft
       : null
 
-  const isFtw = model === 'ftw'
+  const isFtwGlobal = model === 'ftw'
+  const isFtwInferenceS2 = model === 'ftw-inference-s2'
+  const isFtwTraining = isFtwGlobal
 
   const ftwTraining = useFtwAoiTraining({
     activeAoi: activeAoi ?? { geometry: null, key: '', source: null },
     aoiLabel,
     ftwYear,
-    enabled: isFtw,
+    enabled: isFtwTraining,
   })
 
-  const analyticsTabReady = isFtw ? ftwTraining.hasAoi : hasResult
+  const analyticsTabReady = isFtwTraining ? ftwTraining.hasAoi : hasResult
+  const dashboardTabReady = Boolean(resultGeojson?.features?.length)
 
   useEffect(() => {
     setMinAreaText(String(minAreaM2))
   }, [minAreaM2])
 
   useEffect(() => {
-    if (!hasResult) {
-      setDashboardOpen(false)
-      setActiveTab('detect')
-    }
-  }, [hasResult])
+    setModelInfoOpen(false)
+  }, [model])
 
   useEffect(() => {
-    if (phase === 'done' && hasResult && !isFtw) setActiveTab('results')
-  }, [phase, hasResult, isFtw])
+    if (!analyticsTabReady) {
+      setDashboardOpen(false)
+      if (activeTab === 'results') setActiveTab('detect')
+    }
+    if (!dashboardTabReady && activeTab === 'dashboard') setActiveTab('detect')
+  }, [analyticsTabReady, dashboardTabReady, activeTab])
+
+  const openAttributesDashboard = () => {
+    if (!dashboardTabReady) return
+    setActiveTab('dashboard')
+  }
 
   const openResultsDashboard = () => {
-    if (!hasResult) return
+    if (!analyticsTabReady) return
     setActiveTab('results')
+  }
+
+  const handleAddToLayers = () => {
+    if (!onAddToLayers) return
+    void Promise.resolve(onAddToLayers()).finally(() => {
+      setExportOpen(false)
+    })
   }
 
   const handleReset = () => {
@@ -345,13 +380,16 @@ export function AgriFieldBoundaryPanel({
   const showImagery = model === 'delineate-fbis' || model === 'map-rgb'
   const isAfd = source === 'agricultural-field-delineation' || model === 'agricultural-field-delineation'
   const isDelineateFbis = source === 'delineate-fbis'
-  const canRun = isFtw
+  const hasModelInfo = isAfd || isFtwGlobal || isFtwInferenceS2
+  const canRun = isFtwGlobal
     ? hasAoi && !busy
     : hasAoi && !busy && (!needsUpload || Boolean(uploadedFileName))
   const pct = Math.max(0, Math.min(100, Math.round(progress)))
   const showProgress = busy && (phase === 'detecting' || phase === 'capturing')
-  const runTitle = isFtw
+  const runTitle = isFtwGlobal
     ? 'Show FTW global field boundaries (pre-computed v3 B7, CC-BY)'
+    : isFtwInferenceS2
+      ? 'Run AgroDetect S2 (PRUE) on Sentinel-2 L2A — live inference via api.eliteagrocloud.com'
     : isAfd
     ? 'Run Agricultural Field Delineation on Sentinel-2 L2A (12 bands)'
     : isDelineateFbis
@@ -360,8 +398,10 @@ export function AgriFieldBoundaryPanel({
   const stageLabel = phase === 'detecting' ? STAGE_LABEL[String(stage || '')] : undefined
   const phaseLabel =
     stageLabel ??
-    (isFtw && phase === 'detecting'
+    (isFtwGlobal && phase === 'detecting'
       ? 'Run Processing…'
+      : isFtwInferenceS2 && phase === 'detecting'
+        ? 'AgroDetect S2 (Sentinel-2 L2A)…'
       : isAfd && phase === 'detecting'
       ? 'Agricultural Field Delineation (Sentinel-2 L2A)…'
       : isDelineateFbis && phase === 'detecting'
@@ -378,6 +418,8 @@ export function AgriFieldBoundaryPanel({
       }
     | undefined
   const afdReady = Boolean(health?.agricultural_field_delineation)
+  const ftwInferInfo = health?.ftw_inference_s2_status
+  const ftwInferReady = Boolean(health?.ftw_inference_s2)
 
   useEffect(() => {
     if (!exportOpen) return
@@ -430,10 +472,30 @@ export function AgriFieldBoundaryPanel({
           id="si-afb-tab-detect"
           aria-selected={activeTab === 'detect'}
           aria-controls="si-afb-pane-detect"
-          className={`si-afb__tab${activeTab === 'detect' ? ' is-active' : ''}`}
+          className={`si-afb__tab si-afb__tab--icon${activeTab === 'detect' ? ' is-active' : ''}`}
+          title="Detect Fields — model, AOI, and run controls"
+          aria-label="Detect Fields"
           onClick={() => setActiveTab('detect')}
         >
-          <i className="fa-solid fa-crop-simple" aria-hidden /> Detect
+          <i className="fa-solid fa-crop-simple" aria-hidden />
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id="si-afb-tab-dashboard"
+          aria-selected={activeTab === 'dashboard'}
+          aria-controls="si-afb-pane-dashboard"
+          className={`si-afb__tab si-afb__tab--icon${activeTab === 'dashboard' ? ' is-active' : ''}${dashboardTabReady ? ' is-ready' : ''}`}
+          title={
+            dashboardTabReady
+              ? 'Attributes dashboard — static KPIs and charts from Example.xlsx fields'
+              : 'Run Detect Fields to open the attributes dashboard'
+          }
+          aria-label="Attributes dashboard"
+          disabled={!dashboardTabReady}
+          onClick={() => dashboardTabReady && setActiveTab('dashboard')}
+        >
+          <i className="fa-solid fa-chart-pie" aria-hidden />
         </button>
         <button
           type="button"
@@ -445,7 +507,7 @@ export function AgriFieldBoundaryPanel({
           title={
             analyticsTabReady
               ? 'Optimal Learning Rate Finder — AOI-scoped LR Finder, loss, IoU, F1 and dataset charts'
-              : isFtw
+              : isFtwTraining
                 ? 'Draw or select an AOI for FTW training analytics'
                 : 'Run Detect Fields to open Optimal Learning Rate Finder'
           }
@@ -454,7 +516,7 @@ export function AgriFieldBoundaryPanel({
           onClick={() => analyticsTabReady && setActiveTab('results')}
         >
           <i className="fa-solid fa-chart-line" aria-hidden />
-          {isFtw ? (
+          {isFtwTraining ? (
             ftwTraining.session.dataset?.total ? (
               <span className="si-afb__tab-badge">{ftwTraining.session.dataset.total}</span>
             ) : analyticsTabReady ? (
@@ -471,15 +533,26 @@ export function AgriFieldBoundaryPanel({
             id="si-afb-tab-training"
             aria-selected={activeTab === 'training'}
             aria-controls="si-afb-pane-training"
-            className={`si-afb__tab${activeTab === 'training' ? ' is-active' : ''}${trainingBadge != null ? ' is-ready' : ''}`}
+            className={`si-afb__tab si-afb__tab--icon${activeTab === 'training' ? ' is-active' : ''}${trainingBadge != null ? ' is-ready' : ''}`}
             title="Training Samples — Generate drafts from predictions, Accept, then Save approved only"
             aria-label="Training Samples"
             onClick={() => setActiveTab('training')}
           >
-            <i className="fa-solid fa-database" aria-hidden /> Samples
+            <i className="fa-solid fa-database" aria-hidden />
             {trainingBadge != null ? (
               <span className="si-afb__tab-badge">{trainingBadge}</span>
             ) : null}
+          </button>
+        ) : null}
+        {!isFtwTraining && analyticsTabReady ? (
+          <button
+            type="button"
+            className="si-afb__tab-popout"
+            onClick={() => setDashboardOpen(true)}
+            title="Open floating Optimal Learning Rate Finder on the map"
+            aria-label="Open floating Optimal Learning Rate Finder on the map"
+          >
+            <i className="fa-solid fa-up-right-from-square" aria-hidden />
           </button>
         ) : null}
       </div>
@@ -492,7 +565,22 @@ export function AgriFieldBoundaryPanel({
         aria-labelledby="si-afb-tab-detect"
       >
         <label className="si-afb__row">
-          <span className="si-afb__label">Model</span>
+          <span className="si-afb__label">
+            <span>Model</span>
+            {hasModelInfo ? (
+              <button
+                type="button"
+                className={`si-afb__info-btn${modelInfoOpen ? ' is-open' : ''}`}
+                aria-expanded={modelInfoOpen}
+                aria-controls="si-afb-model-info"
+                title="View model information"
+                aria-label="View info"
+                onClick={() => setModelInfoOpen(open => !open)}
+              >
+                <i className="fa-solid fa-circle-info" aria-hidden />
+              </button>
+            ) : null}
+          </span>
           <select
             className="si-afb__select"
             value={model}
@@ -507,8 +595,8 @@ export function AgriFieldBoundaryPanel({
           </select>
         </label>
 
-        {isAfd ? (
-          <div className="si-afb__model-info" role="region" aria-label="Model information">
+        {modelInfoOpen && isAfd ? (
+          <div className="si-afb__model-info" id="si-afb-model-info" role="region" aria-label="Model information">
             <div className="si-afb__model-info-row">
               <span>Architecture</span>
               <strong>
@@ -545,27 +633,29 @@ export function AgriFieldBoundaryPanel({
           </div>
         ) : null}
 
-        {isFtw ? (
-          <>
-            <div className="si-afb__model-info" role="region" aria-label="FTW global model">
-              <div className="si-afb__model-info-row">
-                <span>Source</span>
-                <strong>Source Cooperative (global PMTiles)</strong>
-              </div>
-              <div className="si-afb__model-info-row">
-                <span>Model</span>
-                <strong>FTW v3 CC-BY B7 (PRUE)</strong>
-              </div>
-              <div className="si-afb__model-info-row">
-                <span>Attribution</span>
-                <strong>{ftwGlobalAttribution()}</strong>
-              </div>
-              <div className="si-afb__model-info-row">
-                <span>Visibility</span>
-                <strong>Zoom 11+ (individual fields)</strong>
-              </div>
+        {modelInfoOpen && isFtwGlobal ? (
+          <div className="si-afb__model-info" id="si-afb-model-info" role="region" aria-label="FTW global model">
+            <div className="si-afb__model-info-row">
+              <span>Source</span>
+              <strong>Source Cooperative (global PMTiles)</strong>
             </div>
+            <div className="si-afb__model-info-row">
+              <span>Model</span>
+              <strong>FTW v3 CC-BY B7 (PRUE)</strong>
+            </div>
+            <div className="si-afb__model-info-row">
+              <span>Attribution</span>
+              <strong>{ftwGlobalAttribution()}</strong>
+            </div>
+            <div className="si-afb__model-info-row">
+              <span>Visibility</span>
+              <strong>Zoom 11+ (individual fields)</strong>
+            </div>
+          </div>
+        ) : null}
 
+        {isFtwGlobal ? (
+          <>
             <label className="si-afb__row">
               <span className="si-afb__label">Prediction year</span>
               <select
@@ -613,21 +703,46 @@ export function AgriFieldBoundaryPanel({
           </>
         ) : null}
 
-        {isAfd ? (
+        {modelInfoOpen && isFtwInferenceS2 ? (
+          <div className="si-afb__model-info" id="si-afb-model-info" role="region" aria-label="AgroDetect S2 model">
+            <div className="si-afb__model-info-row">
+              <span>Architecture</span>
+              <strong>{ftwInferInfo?.architecture || 'PRUE (FTW v3)'}</strong>
+            </div>
+            <div className="si-afb__model-info-row">
+              <span>Input</span>
+              <strong>Sentinel-2 L2A (live download)</strong>
+            </div>
+            <div className="si-afb__model-info-row">
+              <span>Model</span>
+              <strong>{ftwInferInfo?.model || 'ftw-inference-s2'}</strong>
+            </div>
+            <div className="si-afb__model-info-row">
+              <span>Model status</span>
+              <strong>{ftwInferReady ? 'Ready' : health?.loading ? 'Loading…' : 'Unavailable'}</strong>
+            </div>
+          </div>
+        ) : null}
+
+        {isAfd || isFtwInferenceS2 ? (
           <label className="si-afb__row">
             <span className="si-afb__label">Scene date</span>
             <input
               type="date"
               className="si-afb__select"
               value={sceneDateTo || sceneDateFrom}
-              max={latestSceneDateIso()}
+              max={isFtwInferenceS2 ? latestFtwInferenceSceneDateIso() : latestSceneDateIso()}
               disabled={busy}
               onChange={e => {
                 const v = e.target.value
                 onSceneDateFromChange(v)
                 onSceneDateToChange(v)
               }}
-              title="Uses the clearest Sentinel-2 L2A scene near this date (searches ~60 days back — today often has no L2A yet)"
+              title={
+                isFtwInferenceS2
+                  ? `FTW crop calendar — use ${ftwInferenceMaxCropYear()} or earlier (prior complete season)`
+                  : 'Uses the clearest Sentinel-2 L2A scene near this date (searches ~60 days back — today often has no L2A yet)'
+              }
             />
           </label>
         ) : null}
@@ -697,7 +812,7 @@ export function AgriFieldBoundaryPanel({
           </div>
         ) : null}
 
-        {!isFtw ? (
+        {!isFtwGlobal ? (
         <label className="si-afb__row">
           <span className="si-afb__label">
             Confidence <em>{Math.round(minConfidence * 100)}%</em>
@@ -715,7 +830,7 @@ export function AgriFieldBoundaryPanel({
         </label>
         ) : null}
 
-        {!isFtw ? (
+        {!isFtwGlobal ? (
         <>
         <label className="si-afb__row">
           <span className="si-afb__label">Select AOI</span>
@@ -899,27 +1014,20 @@ export function AgriFieldBoundaryPanel({
             title={runTitle}
           >
             <i className="fa-solid fa-crop-simple" aria-hidden />{' '}
-            {busy ? 'Detecting…' : isFtw ? (ftwGlobalVisible ? 'Refresh Global Fields' : 'Show Global Fields') : 'Detect Fields'}
+            {busy ? 'Detecting…' : isFtwGlobal ? (ftwGlobalVisible ? 'Refresh Global Fields' : 'Show Global Fields') : 'Detect Fields'}
           </button>
           <button type="button" className="si-afb__btn si-afb__btn--ghost" disabled={busy} onClick={handleReset}>
             Reset
           </button>
         </div>
 
-        {isFtw && ftwGlobalVisible ? (
-          <div className="si-afb__hint" role="status">
-            <i className="fa-solid fa-globe" aria-hidden /> FTW Global {ftwYear} — export uses
-            continuous raster → vectorize (no PMTile edges in SHP/GeoJSON).
-          </div>
-        ) : null}
-
-        {hasResult && !isFtw ? (
+        {dashboardTabReady ? (
           <button
             type="button"
             className="si-afb__stats si-afb__stats--open"
-            aria-label="Open field results dashboard"
-            title="Open Results dashboard"
-            onClick={openResultsDashboard}
+            aria-label="Open layer attributes dashboard"
+            title="Open layer attributes dashboard"
+            onClick={openAttributesDashboard}
           >
             <span>
               <strong>{fieldCount}</strong> fields
@@ -937,15 +1045,19 @@ export function AgriFieldBoundaryPanel({
         ) : null}
 
         {attributesStatus ? (
-          <div className="si-afb__hint" role="status">
-            <i className="fa-solid fa-table-list" aria-hidden /> {attributesStatus}
-          </div>
+          <AfbOperationProgressBar
+            label={attributesStatus}
+            pct={attributesProgressPct}
+            className="si-afb__op-progress--attributes"
+          />
         ) : null}
 
         {exportStatus ? (
-          <div className="si-afb__hint si-afb__hint--export" role="status" aria-live="polite">
-            <i className="fa-solid fa-spinner fa-spin" aria-hidden /> {exportStatus}
-          </div>
+          <AfbOperationProgressBar
+            label={exportStatus}
+            pct={exportProgressPct}
+            className="si-afb__op-progress--export"
+          />
         ) : null}
 
         <div className="si-afb__actions si-afb__actions--export">
@@ -995,15 +1107,26 @@ export function AgriFieldBoundaryPanel({
                 >
                   <i className="fa-solid fa-file-zipper" aria-hidden /> Shapefile
                 </button>
-                {onAddToLayers ? (
+                {onExportCsv ? (
                   <button
                     type="button"
                     className="si-afb__export-item"
                     role="menuitem"
                     disabled={exportBusy}
                     onClick={() => {
-                      void Promise.resolve(onAddToLayers()).finally(() => setExportOpen(false))
+                      void Promise.resolve(onExportCsv()).finally(() => setExportOpen(false))
                     }}
+                  >
+                    <i className="fa-solid fa-file-csv" aria-hidden /> CSV
+                  </button>
+                ) : null}
+                {onAddToLayers ? (
+                  <button
+                    type="button"
+                    className="si-afb__export-item"
+                    role="menuitem"
+                    disabled={exportBusy}
+                    onClick={handleAddToLayers}
                   >
                     <i className="fa-solid fa-layer-group" aria-hidden /> Add layer
                   </button>
@@ -1074,6 +1197,30 @@ export function AgriFieldBoundaryPanel({
         </div>
         ) : null}
       </section>
+      ) : activeTab === 'dashboard' ? (
+      <section
+        className="si-afb__card si-afb__card--dashboard"
+        role="tabpanel"
+        id="si-afb-pane-dashboard"
+        aria-labelledby="si-afb-tab-dashboard"
+      >
+        <FieldAttributesDashboard
+          geojson={resultGeojson}
+          engine={engine}
+          sceneDate={sceneDateTo || sceneDateFrom || null}
+          aoiLabel={aoiLabel || 'AOI'}
+          mapContainerRef={mapContainerRef}
+          attributesBusy={attributesBusy || exportBusy}
+          attributesStatus={exportStatus || attributesStatus}
+          operationProgressPct={
+            exportStatus ? exportProgressPct : attributesStatus ? attributesProgressPct : 0
+          }
+          onRefreshAttributes={
+            onRefreshAttributes ? () => void onRefreshAttributes() : undefined
+          }
+          onAddToLayers={onAddToLayers ? handleAddToLayers : undefined}
+        />
+      </section>
       ) : activeTab === 'training' && trainingSamples ? (
       <section
         className="si-afb__card si-afb__card--training"
@@ -1104,7 +1251,7 @@ export function AgriFieldBoundaryPanel({
         id="si-afb-pane-results"
         aria-labelledby="si-afb-tab-validate"
       >
-        {isFtw ? (
+        {isFtwGlobal ? (
           <FtwAoiTrainingDashboard
             session={ftwTraining.session}
             busy={ftwTraining.busy}
@@ -1119,15 +1266,6 @@ export function AgriFieldBoundaryPanel({
         <>
         <div className="si-afb__results-head">
           <span className="si-afb__results-title">Optimal Learning Rate Finder</span>
-          <button
-            type="button"
-            className="si-afb__btn si-afb__btn--ghost si-afb__btn--compact"
-            onClick={() => setDashboardOpen(true)}
-            title="Open floating Optimal Learning Rate Finder on the map"
-            aria-label="Open floating Optimal Learning Rate Finder on the map"
-          >
-            <i className="fa-solid fa-up-right-from-square" aria-hidden /> Pop out
-          </button>
         </div>
         <AgriFieldBoundaryResultsDashboard
           open

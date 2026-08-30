@@ -6,6 +6,10 @@ import {
   type LayerQueryMatch,
 } from './geoExplorerLayerContext';
 import { defaultSiLayerPopupConfig, normalizeSiLayerPopupConfig, type SiLayerPopupConfig } from './siLayerPopupConfig';
+import {
+  OBJECT_ATTRIBUTES_STAMP,
+  objectAttributeFieldNames,
+} from './objectAttributes/objectAttributesSchema';
 
 export type SiPopupInspectSection = { id: string; title: string; rows: GeoAiPopupAttrRow[] };
 
@@ -85,7 +89,10 @@ export function buildSiPopupInspectPayload(args: {
   const all = buildGeoAiLayerPopupAllAttributeRows(hit, { maxRows: 420, inspectCoords: args.inspectCoords })
   const hidden = new Set(cfg.hiddenFieldKeys.map(String))
   let rows = applyHidden(all, hidden)
-  rows = orderRows(rows, cfg.fieldOrder)
+  const props = args.properties ?? {}
+  const schemaOrder =
+    props[OBJECT_ATTRIBUTES_STAMP] != null ? objectAttributeFieldNames() : cfg.fieldOrder
+  rows = orderRows(rows, schemaOrder)
 
   const relationRows = cfg.showRelated ? rows.filter(r => rowBucket(r) === 'relation') : []
   const mediaRows = cfg.showMedia ? rows.filter(r => rowBucket(r) === 'media') : []

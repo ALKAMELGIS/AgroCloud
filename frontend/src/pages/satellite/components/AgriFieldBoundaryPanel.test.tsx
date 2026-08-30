@@ -42,7 +42,7 @@ const baseProps = {
   onUploadImageFile: () => {},
   minConfidence: 0.35,
   onMinConfidenceChange: () => {},
-  minAreaM2: 200,
+  minAreaM2: 1,
   onMinAreaM2Change: () => {},
   fillOpacity: 0.35,
   onFillOpacityChange: () => {},
@@ -89,6 +89,7 @@ describe('AgriFieldBoundaryPanel Results dashboard trigger', () => {
       phase: 'idle',
       hasResult: false,
       fieldCount: 0,
+      resultGeojson: { type: 'FeatureCollection', features: [] },
       health: {
         agricultural_field_delineation: true,
         agricultural_field_delineation_status: {
@@ -103,6 +104,7 @@ describe('AgriFieldBoundaryPanel Results dashboard trigger', () => {
         },
       },
     })
+    fireEvent.click(screen.getByRole('button', { name: 'View info' }))
     expect(screen.getByLabelText('Model information')).toBeTruthy()
     expect(screen.getByText('12-band Sentinel-2 L2A BOA')).toBeTruthy()
     expect(screen.getByText('Ready')).toBeTruthy()
@@ -142,10 +144,41 @@ describe('AgriFieldBoundaryPanel Results dashboard trigger', () => {
     cleanupHost()
   })
 
-  it('switches to inline results from the post-detect stats strip', () => {
+  it('keeps Detect tab active when field results are ready (dashboard is manual)', () => {
+    const { cleanupHost } = mountWithHost({ phase: 'done' })
+    expect(screen.getByRole('tab', { name: 'Detect Fields' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.queryByText('Attributes dashboard')).toBeNull()
+    cleanupHost()
+  })
+
+  it('switches to dashboard from the post-detect stats strip', () => {
     const { cleanupHost } = mountWithHost({ phase: 'idle' })
-    fireEvent.click(screen.getByRole('button', { name: 'Open field results dashboard' }))
-    expect(screen.getAllByText('Validation Detection').length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole('tab', { name: 'Detect Fields' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open layer attributes dashboard' }))
+    expect(screen.getByText('Attributes dashboard')).toBeTruthy()
+    cleanupHost()
+  })
+
+  it('shows attributes dashboard when the Dashboard tab is selected', () => {
+    const { cleanupHost } = mountWithHost()
+    fireEvent.click(screen.getByRole('tab', { name: 'Attributes dashboard' }))
+    expect(screen.getByText('Attributes dashboard')).toBeTruthy()
+    expect(screen.getByText('Area by field')).toBeTruthy()
+    expect(screen.getByText('Crop type mix')).toBeTruthy()
+    cleanupHost()
+  })
+
+  it('dashboard tab is icon-only with aria label', () => {
+    const { cleanupHost } = mountWithHost()
+    const tab = screen.getByRole('tab', { name: 'Attributes dashboard' })
+    expect(tab.querySelector('.si-afb__tab-badge')).toBeNull()
+    cleanupHost()
+  })
+
+  it('detect tab is icon-only with aria label', () => {
+    const { cleanupHost } = mountWithHost()
+    expect(screen.queryByText(/^Detect$/)).toBeNull()
+    expect(screen.getByRole('tab', { name: 'Detect Fields' })).toBeTruthy()
     cleanupHost()
   })
 
@@ -155,7 +188,7 @@ describe('AgriFieldBoundaryPanel Results dashboard trigger', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Optimal Learning Rate Finder' }))
     fireEvent.click(screen.getByRole('button', { name: 'Open floating Optimal Learning Rate Finder on the map' }))
     expect(document.getElementById('si-afb-results-dashboard')).toBeTruthy()
-    fireEvent.click(screen.getByRole('tab', { name: /Detect/i }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Detect Fields' }))
     fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
     expect(onReset).toHaveBeenCalled()
     expect(document.querySelector('#si-afb-results-dashboard')).toBeNull()
@@ -166,8 +199,12 @@ describe('AgriFieldBoundaryPanel Results dashboard trigger', () => {
     const { cleanupHost } = mountWithHost({
       phase: 'error',
       error: 'Service offline — start agri-field-boundary on :8092',
+      hasResult: false,
+      fieldCount: 0,
+      resultGeojson: { type: 'FeatureCollection', features: [] },
       health: { loading: true, live: true, ready: false, status: 'loading' },
     })
+    fireEvent.click(screen.getByRole('tab', { name: 'Detect Fields' }))
     expect(screen.getByText(/Loading field model/i)).toBeTruthy()
     cleanupHost()
   })
@@ -202,6 +239,31 @@ describe('AgriFieldBoundaryPanel Results dashboard trigger', () => {
     expect(screen.getByText(/Predicted → Draft → Accept → Save/i)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /Generate Samples/i }))
     expect(generateFromPredictions).toHaveBeenCalled()
+    cleanupHost()
+  })
+
+  it('keeps Optimal Learning Rate tab open for FTW Global when AOI exists without detect result', () => {
+    const { cleanupHost } = mountWithHost({
+      hasAoi: true,
+      model: 'ftw',
+      source: 'ftw',
+      modelOptions: [
+        { id: 'ftw' as const, label: 'Fields of the World (Global v3)' },
+      ],
+      phase: 'idle',
+      hasResult: false,
+      fieldCount: 0,
+      activeAoi: {
+        key: 'aoi-1',
+        source: 'draw',
+        geometry: resultGeojson,
+      },
+      aoiLabel: 'Test AOI',
+    })
+    const tab = screen.getByRole('tab', { name: 'Optimal Learning Rate Finder' })
+    expect(tab.hasAttribute('disabled')).toBe(false)
+    fireEvent.click(tab)
+    expect(screen.getByText(/Optimal Learning Rate Finder — Test AOI/)).toBeTruthy()
     cleanupHost()
   })
 })

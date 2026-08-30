@@ -8,6 +8,7 @@ import { listFtwAoiSessions } from '../../../lib/agriFieldBoundary/ftwAoiTrainin
 import {
   AoiTrainingChartsWorkspace,
   ftwSessionToChartBundle,
+  resolveLrFinderForAoi,
   type AoiChartBundle,
 } from './AoiTrainingChartsGrid'
 import './FtwAoiTrainingDashboard.css'
@@ -48,10 +49,24 @@ export function FtwAoiTrainingDashboard({
 
   const chartBundles = useMemo((): AoiChartBundle[] => {
     const byKey = new Map<string, AoiChartBundle>()
-    for (const row of listFtwAoiSessions()) {
-      byKey.set(row.aoiKey, ftwSessionToChartBundle(row))
+    const sessions = listFtwAoiSessions()
+    const all = sessions.some(s => s.aoiKey === session.aoiKey)
+      ? sessions.map(s => (s.aoiKey === session.aoiKey ? session : s))
+      : [...sessions, session]
+    for (const row of all) {
+      const bundle = ftwSessionToChartBundle(row)
+      const lrFinder = resolveLrFinderForAoi({
+        stored: row.lrFinder,
+        sampleCount: row.dataset?.total ?? 0,
+        score: row.iou ?? row.f1 ?? null,
+      })
+      byKey.set(row.aoiKey, {
+        ...bundle,
+        lrFinderLrs: lrFinder?.lrs ?? bundle.lrFinderLrs,
+        lrFinderLosses: lrFinder?.losses ?? bundle.lrFinderLosses,
+        optimalLr: row.optimalLr ?? lrFinder?.optimal_lr ?? bundle.optimalLr ?? null,
+      })
     }
-    byKey.set(session.aoiKey, ftwSessionToChartBundle(session))
     return [...byKey.values()]
   }, [session])
 

@@ -656,5 +656,15 @@ export function classifyCropFields(grids, profile, opts = {}) {
   }
   const fields = { objects: objCount, pivotObjects: pivotObjMap.size }
 
-  return { pngDataUrl, width, height, classStats, pivots, fields }
+  return {
+    pngDataUrl,
+    width,
+    height,
+    classStats,
+    pivots,
+    fields,
+    labels: smoothed,
+    classMeta,
+    bbox3857: grids[0]?.bbox3857 ?? null,
+  }
 }

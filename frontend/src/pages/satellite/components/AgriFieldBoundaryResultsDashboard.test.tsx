@@ -117,6 +117,49 @@ describe('AgriFieldBoundaryResultsDashboard', () => {
     expect(screen.queryByText('Field Results Dashboard')).toBeNull()
   })
 
+  it('shows Optimal Learning Rate chart after field detect without epoch history', () => {
+    render(
+      <AgriFieldBoundaryResultsDashboard
+        open
+        variant="inline"
+        onClose={() => {}}
+        mapContainerRef={{ current: null }}
+        geojson={geojson}
+        fieldCount={70}
+        totalAreaHa={120}
+        engine="ftw-inference-s2"
+        score={0.72}
+        activeAoiKey="aoi-test"
+        aoiLabel="Active AOI"
+      />,
+    )
+    expect(screen.getByText('Optimal Learning Rate')).toBeTruthy()
+    expect(screen.queryByText(/No LR sweep yet/i)).toBeNull()
+    expect(screen.getByText('70 samples')).toBeTruthy()
+  })
+
+  it('shows Optimal Learning Rate chart from training sample counts when fieldCount is zero', () => {
+    render(
+      <AgriFieldBoundaryResultsDashboard
+        open
+        variant="inline"
+        onClose={() => {}}
+        mapContainerRef={{ current: null }}
+        geojson={null}
+        fieldCount={0}
+        totalAreaHa={0}
+        engine="ftw-inference-s2"
+        activeAoiKey="aoi-samples"
+        aoiLabel="Active AOI (Edit)"
+        approvedSamples={63}
+        draftSamples={7}
+      />,
+    )
+    expect(screen.getByText('Optimal Learning Rate')).toBeTruthy()
+    expect(screen.queryByText(/No LR sweep yet/i)).toBeNull()
+    expect(screen.getByText('70 samples')).toBeTruthy()
+  })
+
   it('explains pretrained field engines when there is no epoch history', () => {
     const host = document.createElement('div')
     document.body.appendChild(host)

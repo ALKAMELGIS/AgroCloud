@@ -85,6 +85,11 @@ const formatPopupValue = (raw: any) => {
 const getPopupTitle = (feature: any) => {
   const props = feature?.properties && typeof feature.properties === 'object' ? (feature.properties as Record<string, any>) : {}
   const candidates = [
+    'OBJECT_NAME',
+    'Object_Name',
+    'object_name',
+    'Label',
+    'label',
     'Farm_Name',
     'farm_name',
     'NAME',
@@ -94,6 +99,7 @@ const getPopupTitle = (feature: any) => {
     'Title',
     'Project_Code',
     'ProjectCode',
+    'OBJECT_ID',
     'OBJECTID',
     'ObjectId',
     'objectid',

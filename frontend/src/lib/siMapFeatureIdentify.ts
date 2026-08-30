@@ -2,7 +2,7 @@
  * Mapbox GL feature identify — query rendered features at a map click.
  */
 
-import { computeStableGisFeatureKey } from './gisFeatureStableKey'
+import { computeStableGisFeatureKey, findFeatureIndexByStableKey, gisFeatureIdFromProperties } from './gisFeatureStableKey'
 import { isSiLayerPopupEnabled, type SiLayerPopupConfig } from './siLayerPopupConfig'
 
 export type MapboxRenderedHit = {
@@ -86,7 +86,7 @@ export function filterMapLayerIdsThatExist(
   return candidateIds.filter(id => existing.has(id))
 }
 
-export function queryMapFeaturesAtPoint(
+function queryRenderedHitsAtPoint(
   map: {
     project: (lngLat: [number, number]) => { x: number; y: number }
     queryRenderedFeatures: (
@@ -119,7 +119,97 @@ export function queryMapFeaturesAtPoint(
 
   let hits = runQuery(bbox)
   if (!hits.length) hits = runQuery([pt.x, pt.y])
-  return rankMapIdentifyHits(hits.filter(h => !isMapIdentifyLayerSkippable(String(h?.layer?.id ?? ''))))
+  return hits.filter(h => !isMapIdentifyLayerSkippable(String(h?.layer?.id ?? '')))
+}
+
+/** All rendered hits at a point (may include overlapping polygons from one layer). */
+export function queryAllMapFeaturesAtPoint(
+  map: Parameters<typeof queryRenderedHitsAtPoint>[0],
+  lng: number,
+  lat: number,
+  layerIds: string[],
+  pixelTolerance = 6,
+): MapboxRenderedHit[] {
+  return queryRenderedHitsAtPoint(map, lng, lat, layerIds, pixelTolerance)
+}
+
+export function queryMapFeaturesAtPoint(
+  map: Parameters<typeof queryRenderedHitsAtPoint>[0],
+  lng: number,
+  lat: number,
+  layerIds: string[],
+  pixelTolerance = 6,
+): MapboxRenderedHit[] {
+  return rankMapIdentifyHits(queryRenderedHitsAtPoint(map, lng, lat, layerIds, pixelTolerance))
+}
+
+/** Dedupe overlapping hits that refer to the same feature identity. */
+export function dedupeOverlapHitsByFeature(hits: MapboxRenderedHit[]): MapboxRenderedHit[] {
+  const seen = new Set<string>()
+  const out: MapboxRenderedHit[] = []
+  for (const h of hits) {
+    const rawProps =
+      h.properties && typeof h.properties === 'object' && !Array.isArray(h.properties)
+        ? (h.properties as Record<string, unknown>)
+        : {}
+    const clean = sanitizeIdentifyProperties(rawProps)
+    const idKey = gisFeatureIdFromProperties(clean)?.key ?? JSON.stringify(clean)
+    if (seen.has(idKey)) continue
+    seen.add(idKey)
+    out.push(h)
+  }
+  return out
+}
+
+/** Overlapping features from the same vector source as the primary hit (ArcGIS-style stack). */
+export function overlapHitsForPrimarySource(
+  allHits: MapboxRenderedHit[],
+  primaryHit: MapboxRenderedHit,
+): MapboxRenderedHit[] {
+  const primarySid = mapboxLayerIdToSourceId(String(primaryHit?.layer?.id ?? ''))
+  if (!primarySid) return [primaryHit]
+  const sameSource = allHits.filter(
+    h => mapboxLayerIdToSourceId(String(h?.layer?.id ?? '')) === primarySid,
+  )
+  const deduped = dedupeOverlapHitsByFeature(sameSource)
+  return deduped.length ? deduped : [primaryHit]
+}
+
+const FEATURE_POPUP_TITLE_KEYS = [
+  'OBJECT_NAME',
+  'Object_Name',
+  'object_name',
+  'Label',
+  'label',
+  'LABEL',
+  'NAME',
+  'Name',
+  'name',
+  'Farm_Name',
+  'farm_name',
+  'title',
+  'Title',
+  'OBJECT_ID',
+  'OBJECTID',
+  'ObjectId',
+  'objectid',
+  'Feature_ID',
+  'feature_id',
+] as const
+
+/** Popup header — prefer object / feature label over layer name. */
+export function getFeaturePopupTitle(
+  properties: Record<string, unknown> | null | undefined,
+  layerFallback = '',
+): string {
+  if (!properties || typeof properties !== 'object') return layerFallback
+  for (const k of FEATURE_POPUP_TITLE_KEYS) {
+    const v = properties[k]
+    if (v == null) continue
+    const s = String(v).trim()
+    if (s) return s
+  }
+  return layerFallback
 }
 
 export function sanitizeIdentifyProperties(
@@ -173,6 +263,15 @@ export function resolveFeatureLinkFromMapHit(
   const feats = customLayer.geojson?.features
   if (!Array.isArray(feats)) return null
 
+  const hitIdFromProps = gisFeatureIdFromProperties(clean)
+  if (hitIdFromProps) {
+    const ix = findFeatureIndexByStableKey(feats, hitIdFromProps.key)
+    if (ix >= 0) {
+      const f = feats[ix]
+      return { layerId: String(customLayer.id), featureKey: computeStableGisFeatureKey(f, ix) }
+    }
+  }
+
   const want = JSON.stringify(clean)
   for (let i = 0; i < feats.length; i++) {
     const f = feats[i] as { properties?: Record<string, unknown> }
@@ -192,7 +291,13 @@ export function resolveFeatureLinkFromMapHit(
       if (String(f.id ?? '') === idStr) {
         return { layerId: String(customLayer.id), featureKey: computeStableGisFeatureKey(f, i) }
       }
-      const oid = f.properties?.OBJECTID ?? f.properties?.objectid ?? f.properties?.FID
+      const oid =
+        f.properties?.OBJECT_ID ??
+        f.properties?.OBJECTID ??
+        f.properties?.objectid ??
+        f.properties?.Feature_ID ??
+        f.properties?.object_id ??
+        f.properties?.FID
       if (oid != null && String(oid) === idStr) {
         return { layerId: String(customLayer.id), featureKey: computeStableGisFeatureKey(f, i) }
       }

@@ -42,6 +42,8 @@ import { clipFeatureCollectionToAoi } from '../trainingAi/clipResultsToAoi'
 
 import { buildFtwVisualSeamlessRaster } from './ftwGlobalVisualSeamless'
 import { hideFtwTileBoundariesOnly } from './ftwHideTileBoundaries'
+import { dedupeFtwTileFeatures } from './ftwGlobalTileDedupe'
+import type { FtwGlobalYear } from './ftwGlobalConfig'
 
 
 
@@ -77,11 +79,15 @@ type MapRuntime = {
 
 const mapRuntime = new WeakMap<MapboxMap, MapRuntime>()
 
+const sharedPmtilesByUrl = new Map<string, PMTiles>()
+
 const MAX_TILES_PER_VIEW = 48
 
 const MAX_FEATURES_PER_VIEW = 12_000
 
-const MOVEEND_DEBOUNCE_MS = 420
+const MOVEEND_DEBOUNCE_MS = 140
+
+const INITIAL_LOAD_DEBOUNCE_MS = 0
 
 
 
@@ -219,8 +225,7 @@ function paintOpacities(opacityPct: number): { lineOpacity: number; fillOpacity:
 
 
 
-/** Vector tiles stay in the GeoJSON source; only the seamless raster is shown. */
-
+/** Vector tiles paint immediately; seamless raster replaces them when ready. */
 function hideVectorDisplayLayers(map: MapboxMap): void {
 
   for (const layerId of [FTW_GLOBAL_FILL_ID, FTW_GLOBAL_LINE_ID]) {
@@ -228,6 +233,26 @@ function hideVectorDisplayLayers(map: MapboxMap): void {
     if (!map.getLayer(layerId)) continue
 
     map.setLayoutProperty(layerId, 'visibility', 'none')
+
+  }
+
+}
+
+function showVectorDisplayLayers(map: MapboxMap, settings: FtwGlobalLayerSettings): void {
+
+  if (!settings.visible) {
+
+    hideVectorDisplayLayers(map)
+
+    return
+
+  }
+
+  for (const layerId of [FTW_GLOBAL_FILL_ID, FTW_GLOBAL_LINE_ID]) {
+
+    if (!map.getLayer(layerId)) continue
+
+    map.setLayoutProperty(layerId, 'visibility', 'visible')
 
   }
 
@@ -344,6 +369,21 @@ function updateSeamlessRasterDisplay(
 }
 
 
+
+function getOrCreateSharedPmtiles(url: string): PMTiles {
+  let pm = sharedPmtilesByUrl.get(url)
+  if (!pm) {
+    pm = new PMTiles(url)
+    sharedPmtilesByUrl.set(url, pm)
+    void pm.getHeader().catch(() => {})
+  }
+  return pm
+}
+
+/** Prefetch PMTiles header so the first viewport paint is faster. */
+export function warmFtwGlobalPmtiles(year: FtwGlobalYear): void {
+  getOrCreateSharedPmtiles(getFtwGlobalPmtilesUrl(year))
+}
 
 function getRuntime(map: MapboxMap): MapRuntime {
 
@@ -479,17 +519,11 @@ async function loadViewportTiles(
 
   const url = getFtwGlobalPmtilesUrl(settings.year)
 
-  if (rt.pmtilesUrl !== url) {
+  const pm = getOrCreateSharedPmtiles(url)
 
-    rt.pmtiles = new PMTiles(url)
+  rt.pmtiles = pm
 
-    rt.pmtilesUrl = url
-
-  }
-
-  const pm = rt.pmtiles
-
-  if (!pm) return
+  rt.pmtilesUrl = url
 
 
 
@@ -553,14 +587,31 @@ async function loadViewportTiles(
 
 
 
+  const quickFeatures = dedupeFtwTileFeatures(clipped.features ?? [])
+
+  const quickFc: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: quickFeatures }
+
   const src = map.getSource(FTW_GLOBAL_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined
 
-  src?.setData(clipped)
+  src?.setData(quickFc)
 
-  hideVectorDisplayLayers(map)
+  showVectorDisplayLayers(map, settings)
 
-  const seamHidden = hideFtwTileBoundariesOnly(clipped.features ?? [], z)
-  updateSeamlessRasterDisplay(map, settings, seamHidden, bounds)
+  const boundsSnapshot = bounds
+
+  const settingsSnapshot = settings
+
+  window.requestAnimationFrame(() => {
+
+    if (abort.signal.aborted || seq !== rt.loadSeq || rt.interacting) return
+
+    const seamHidden = hideFtwTileBoundariesOnly(quickFeatures, z)
+
+    updateSeamlessRasterDisplay(map, settingsSnapshot, seamHidden, boundsSnapshot)
+
+    hideVectorDisplayLayers(map)
+
+  })
 
 }
 
@@ -760,7 +811,7 @@ function attachViewportHandlers(map: MapboxMap): void {
 
   rt.moveEndHandler = () => scheduleViewportLoad(map, rt.settings)
 
-  rt.zoomEndHandler = () => scheduleViewportLoad(map, rt.settings, 120)
+  rt.zoomEndHandler = () => scheduleViewportLoad(map, rt.settings, 60)
 
 
 
@@ -912,7 +963,7 @@ export function setFtwGlobalInteractionMode(
 
   if (!interacting && rt.settings.visible) {
 
-    scheduleViewportLoad(map, rt.settings, 160)
+    scheduleViewportLoad(map, rt.settings, 80)
 
   }
 
@@ -940,7 +991,7 @@ export function syncFtwGlobalMapLayer(map: MapboxMap | null | undefined, setting
 
   if (!rt.interacting) {
 
-    scheduleViewportLoad(map, settings)
+    scheduleViewportLoad(map, settings, INITIAL_LOAD_DEBOUNCE_MS)
 
   }
 

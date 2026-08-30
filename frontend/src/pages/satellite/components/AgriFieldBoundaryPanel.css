@@ -20,10 +20,37 @@
 }
 .si-afb__tabs {
   display: flex;
+  align-items: center;
   gap: 4px;
   padding: 3px;
   border-radius: 9px;
   background: rgba(15, 23, 42, 0.05);
+}
+
+.si-afb__tab-popout {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.si-afb__tab-popout:hover {
+  color: #334155;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.si-afb__tab-popout:focus-visible {
+  outline: 2px solid rgba(5, 150, 105, 0.45);
+  outline-offset: 1px;
 }
 .si-afb__tab {
   flex: 1 1 0;
@@ -151,6 +178,32 @@
   font-style: normal;
   color: #0ea5e9;
   font-variant-numeric: tabular-nums;
+}
+.si-afb__info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.si-afb__info-btn i {
+  font-size: 11px;
+}
+.si-afb__info-btn:hover,
+.si-afb__info-btn.is-open {
+  color: #1565c0;
+  background: rgba(25, 118, 210, 0.1);
+}
+.si-afb__info-btn:focus-visible {
+  outline: 2px solid rgba(25, 118, 210, 0.35);
+  outline-offset: 1px;
 }
 .si-afb__inline-num {
   display: inline-flex;
@@ -391,6 +444,48 @@
 .si-afb__hint--export {
   color: #0369a1;
 }
+.si-afb__op-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 2px 0 6px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  border: 1px solid rgba(3, 105, 161, 0.16);
+  background: rgba(3, 105, 161, 0.06);
+}
+.si-afb__op-progress--attributes {
+  border-color: rgba(46, 125, 50, 0.18);
+  background: rgba(46, 125, 50, 0.06);
+}
+.si-afb__op-progress-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+  line-height: 1.35;
+  color: #0369a1;
+}
+.si-afb__op-progress--attributes .si-afb__op-progress-head {
+  color: #2e7d32;
+}
+.si-afb__op-progress-label {
+  flex: 1;
+  min-width: 0;
+}
+.si-afb__op-progress-pct {
+  flex-shrink: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+}
+.si-afb__progress-fill--export {
+  background: linear-gradient(90deg, #0284c7, #38bdf8);
+}
+.si-afb__op-progress--attributes .si-afb__progress-fill--export {
+  background: linear-gradient(90deg, #2e7d32, #66bb6a);
+}
 .si-afb__export-trigger.is-open,
 .si-afb__export.is-open .si-afb__export-trigger {
   border-color: rgba(148, 163, 184, 0.45);
@@ -569,6 +664,14 @@
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__stats strong {
   color: #e2e8f0;
 }
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__info-btn {
+  color: #94a3b8;
+}
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__info-btn:hover,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__info-btn.is-open {
+  color: #64b5f6;
+  background: rgba(100, 181, 246, 0.12);
+}
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__select {
   background: rgba(0, 0, 0, 0.45);
   border-color: rgba(255, 255, 255, 0.14);
@@ -612,6 +715,15 @@
   background: rgba(255, 255, 255, 0.14);
   color: #ffffff;
   box-shadow: none;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__tab-popout {
+  color: #9fb0c3;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__tab-popout:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
 }
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-afb__tab-badge {
   color: #4ade80;

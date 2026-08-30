@@ -86,6 +86,62 @@ test('ftw-mosaic-vectorize route is registered and accepts mask POST', async () 
   }
 })
 
+test('FTW Inference S2 detect without image is not rejected as { image, bbox }', async () => {
+  const app = express()
+  registerAgriFieldBoundaryRoutes(app)
+  const server = await listen(app)
+  const { port } = server.address()
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/agri-field-boundary/detect-job`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bbox: [30.0, 30.0, 30.01, 30.01],
+        source: 'basemap',
+        model: 'ftw-inference-s2',
+      }),
+    })
+    const json = await res.json()
+    assert.notEqual(
+      String(json.error || ''),
+      'Expected JSON { image, bbox } for field boundary detection.',
+    )
+    if (res.status !== 200) {
+      assert.match(String(json.error || ''), /FTW Inference|Python|8092|ftw-baselines/i)
+    }
+  } finally {
+    await close(server)
+  }
+})
+
+test('basemap source + FTW S2 model canonicalizes source before forward', async () => {
+  const app = express()
+  registerAgriFieldBoundaryRoutes(app)
+  const server = await listen(app)
+  const { port } = server.address()
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/agri-field-boundary/detect-job`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bbox: [30.0, 30.0, 30.01, 30.01],
+        source: 'basemap',
+        model: 'ftw-inference-s2',
+      }),
+    })
+    const json = await res.json()
+    assert.notEqual(
+      String(json.error || ''),
+      'Expected JSON { image, bbox } for field boundary detection.',
+    )
+    if (res.status !== 200) {
+      assert.match(String(json.error || ''), /FTW Inference|Python|8092|ftw-baselines/i)
+    }
+  } finally {
+    await close(server)
+  }
+})
+
 test('AFD detect without image is not rejected as { image, bbox }', async () => {
   const app = express()
   registerAgriFieldBoundaryRoutes(app)

@@ -544,7 +544,7 @@
   height: 30px;
   border-radius: 8px;
   border: 1px solid var(--si-overlay-field-border, rgba(255, 255, 255, 0.18));
-  background: var(--si-overlay-field-bg, rgba(0, 0, 0, 0.55));
+  background-color: var(--si-overlay-field-bg, rgba(0, 0, 0, 0.55));
   color: var(--si-overlay-text, #ffffff);
   font: 500 12px/1 system-ui, sans-serif;
   padding: 0 8px;
@@ -557,14 +557,14 @@
 .si-map-swipe-panel__grid input:hover,
 .si-map-swipe-panel__grid select:hover {
   border-color: var(--si-overlay-border-strong, rgba(255, 255, 255, 0.28));
-  background: var(--si-overlay-field-bg, rgba(0, 0, 0, 0.68));
+  background-color: var(--si-overlay-field-bg, rgba(0, 0, 0, 0.68));
 }
 
 .si-map-swipe-panel__grid input:focus,
 .si-map-swipe-panel__grid select:focus {
   outline: none;
   border-color: rgba(165, 214, 167, 0.55);
-  background: rgba(0, 0, 0, 0.72);
+  background-color: rgba(0, 0, 0, 0.72);
   box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
 }
 

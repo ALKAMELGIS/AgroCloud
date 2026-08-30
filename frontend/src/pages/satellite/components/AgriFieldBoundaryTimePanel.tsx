@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { FtwGlobalYear } from '../../../lib/agriFieldBoundary/ftwGlobalConfig'
+import { listFtwGlobalYearOptions } from '../../../lib/agriFieldBoundary/ftwGlobalConfig'
 import './AgriFieldBoundaryTimePanel.css'
 
 const MONTHS = [
@@ -71,7 +72,7 @@ export function AgriFieldBoundaryTimePanel({
   const maxYear = maxSceneDate ? yearFromIso(maxSceneDate) : new Date().getFullYear()
 
   const yearOptions = useMemo(() => {
-    if (variant === 'ftw') return [2025, 2024] as FtwGlobalYear[]
+    if (variant === 'ftw') return listFtwGlobalYearOptions()
     const years: number[] = []
     for (let y = maxYear; y >= 2017; y -= 1) years.push(y)
     return years

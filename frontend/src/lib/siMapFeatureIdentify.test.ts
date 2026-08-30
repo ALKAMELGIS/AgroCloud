@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  dedupeOverlapHitsByFeature,
   filterMapLayerIdsThatExist,
+  getFeaturePopupTitle,
   nextOverlapPickIndex,
+  overlapHitsForPrimarySource,
   rankMapIdentifyHits,
 } from './siMapFeatureIdentify'
 
@@ -29,5 +32,28 @@ describe('siMapFeatureIdentify', () => {
     expect(second).toBe(1)
     const third = nextOverlapPickIndex({ lng: 55.1, lat: 25.1, count: 3, index: 1 }, 55.1, 25.1, 3)
     expect(third).toBe(2)
+  })
+
+  it('dedupeOverlapHitsByFeature keeps one hit per OBJECT_ID', () => {
+    const out = dedupeOverlapHitsByFeature([
+      { layer: { id: 'f-fill' }, properties: { OBJECT_ID: 'OBJ-1', area: 1 } },
+      { layer: { id: 'f-line' }, properties: { OBJECT_ID: 'OBJ-1', area: 1 } },
+      { layer: { id: 'f-fill' }, properties: { OBJECT_ID: 'OBJ-2', area: 2 } },
+    ])
+    expect(out).toHaveLength(2)
+  })
+
+  it('overlapHitsForPrimarySource returns same-source overlaps only', () => {
+    const all = [
+      { layer: { id: 'a-fill' }, properties: { OBJECT_ID: '1' } },
+      { layer: { id: 'a-fill' }, properties: { OBJECT_ID: '2' } },
+      { layer: { id: 'b-fill' }, properties: { OBJECT_ID: '3' } },
+    ]
+    const out = overlapHitsForPrimarySource(all, all[0]!)
+    expect(out.map(h => h.properties?.OBJECT_ID)).toEqual(['1', '2'])
+  })
+
+  it('getFeaturePopupTitle prefers OBJECT_NAME', () => {
+    expect(getFeaturePopupTitle({ OBJECT_NAME: 'Field 12', name: 'x' }, 'Layer')).toBe('Field 12')
   })
 })

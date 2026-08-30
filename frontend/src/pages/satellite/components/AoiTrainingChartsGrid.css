@@ -2,6 +2,8 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 100%;
+  min-width: 0;
 }
 
 .si-aoi-charts__aoi-tabs {
@@ -38,6 +40,8 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 100%;
+  min-width: 0;
 }
 
 .si-aoi-charts__head {
@@ -64,8 +68,9 @@
 
 .si-aoi-charts__grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
   gap: 8px;
+  width: 100%;
 }
 
 /* Sidebar / panel inline mode — stack charts full width (not viewport breakpoints). */
@@ -113,7 +118,13 @@
   background: var(--theme-bg-elevated, #ffffff);
   min-height: 148px;
   min-width: 0;
+  width: 100%;
   color: var(--theme-text-primary, #222222);
+}
+
+.si-aoi-charts__card .si-afbv__figure-wrap {
+  width: 100%;
+  max-width: none;
 }
 
 .si-aoi-charts__card-head {

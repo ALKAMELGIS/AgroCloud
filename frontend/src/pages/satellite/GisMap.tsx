@@ -123,6 +123,7 @@ import {
   warmAgroCloudTerrainDemSource,
 } from '../../lib/agroCloudMapTerrain'
 import { flyToLikeGoogleEarth } from '../../lib/googleEarthFlyTo'
+import { computeStableGisFeatureKey } from '../../lib/gisFeatureStableKey'
 
 const GIS_AGOL_RAIL_COMPACT_LS_KEY = 'gis-agol-rail-compact-v2'
 const GEO_AI_CHAT_PAGE_SIZE = 40
@@ -2344,19 +2345,7 @@ export default function GisMap() {
       scheduled = { kind: 'timeout', id: setTimeout(run, 0) }
     }
 
-    const computeKey = (ft: any, idx: number) => {
-      const direct = ft?.id
-      if (direct !== null && direct !== undefined && direct !== '') return String(direct)
-      const props = ft?.properties
-      if (props && typeof props === 'object') {
-        const candidates = ['OBJECTID', 'ObjectId', 'objectid', 'FID', 'fid', 'Id', 'ID', 'id']
-        for (const k of candidates) {
-          const v = (props as any)[k]
-          if (v !== null && v !== undefined && v !== '') return `${k}:${String(v)}`
-        }
-      }
-      return `idx:${idx}`
-    }
+    const computeKey = (ft: any, idx: number) => computeStableGisFeatureKey(ft, idx)
 
     const run = (deadline?: IdleDeadline) => {
       if (cancelled) return
@@ -2410,17 +2399,7 @@ export default function GisMap() {
       const cached = featureKeyCacheRef.current.get(feature)
       if (cached) return cached
     }
-    const direct = feature?.id
-    if (direct !== null && direct !== undefined && direct !== '') return String(direct)
-    const props = feature?.properties
-    if (props && typeof props === 'object') {
-      const candidates = ['OBJECTID', 'ObjectId', 'objectid', 'FID', 'fid', 'Id', 'ID', 'id']
-      for (const k of candidates) {
-        const v = (props as any)[k]
-        if (v !== null && v !== undefined && v !== '') return `${k}:${String(v)}`
-      }
-    }
-    const key = `idx:${idx}`
+    const key = computeStableGisFeatureKey(feature, idx)
     if (feature && typeof feature === 'object') featureKeyCacheRef.current.set(feature, key)
     return key
   }
@@ -7262,7 +7241,13 @@ export default function GisMap() {
                       if (currentDlg?.mode === 'table' && String(currentDlg.layerId) !== String(layer.id)) {
                         setLayerDialog(null)
                       }
-                      const key = getFeatureKeyFromCache(feature) ?? getFeatureKey(feature, 0)
+                      const layerFeatures = Array.isArray((layer.data as { features?: unknown[] })?.features)
+                        ? ((layer.data as { features: any[] }).features as any[])
+                        : []
+                      const origIdx = layerFeatures.indexOf(feature)
+                      const key =
+                        getFeatureKeyFromCache(feature) ??
+                        getFeatureKey(feature, origIdx >= 0 ? origIdx : 0)
                       if (!key) {
                         setSelectionNotice('لا يمكن تحديد هذا العنصر بسبب عدم توفر مُعرّف مناسب.')
                         return
@@ -7274,7 +7259,14 @@ export default function GisMap() {
                       const lng = typeof llLatLng?.lng === 'number' ? llLatLng.lng : undefined
                       if (typeof lat === 'number' && typeof lng === 'number') {
                         showFeatureSelectionOnMap(String(layer.id), String(key), { zoom: true })
-                        openMapPopup({ layer, feature, latlng: { lat, lng } })
+                        if (
+                          currentDlg?.mode === 'table' &&
+                          String(currentDlg.layerId) === String(layer.id)
+                        ) {
+                          requestAnimationFrame(() => scrollSelectedRowIntoView(String(key)))
+                        } else {
+                          openMapPopup({ layer, feature, latlng: { lat, lng } })
+                        }
                       }
                     })
                   } catch {}
@@ -7811,7 +7803,10 @@ export default function GisMap() {
               return haystack.includes(needle)
             }
             const selectedRows = showSelectedOnly
-              ? allRows.filter((ft, idx) => selectedFeatureKeys.has(getFeatureKey(ft, idx)))
+              ? allRows.filter(ft => {
+                  const origIdx = features.indexOf(ft)
+                  return selectedFeatureKeys.has(getFeatureKey(ft, origIdx >= 0 ? origIdx : 0))
+                })
               : allRows
             const ruleFilteredRows = selectedRows.filter(passesRuleFilter)
             const tableQuery = tableSearchQuery.trim().toLowerCase()
@@ -8274,8 +8269,9 @@ export default function GisMap() {
                           </tr>
                         </thead>
                         <tbody>
-                          {filteredRows.map((ft, idx) => {
-                            const key = getFeatureKey(ft, idx)
+                          {filteredRows.map(ft => {
+                            const origIdx = features.indexOf(ft)
+                            const key = getFeatureKey(ft, origIdx >= 0 ? origIdx : 0)
                             const isSelected = selectedFeatureKeys.has(key)
                             return (
                             <tr
@@ -8286,13 +8282,14 @@ export default function GisMap() {
                                 const t = e.target
                                 if (t instanceof Element && t.closest('input,button,a,select,textarea,label')) return
                                 setSelectedFeatureKeys(new Set([key]))
-                                showFeatureSelectionOnMap(String(dialogLayer.id), key)
+                                showFeatureSelectionOnMap(String(dialogLayer.id), key, { zoom: true })
+                                requestAnimationFrame(() => scrollSelectedRowIntoView(key))
                               }}
                             >
                               <td className="gis-layer-table-select">
                                 <input
                                   type="checkbox"
-                                  aria-label={`Select row ${idx + 1}`}
+                                  aria-label={`Select row ${origIdx >= 0 ? origIdx + 1 : key}`}
                                   checked={isSelected}
                                   onChange={() => onToggleOne(key)}
                                 />

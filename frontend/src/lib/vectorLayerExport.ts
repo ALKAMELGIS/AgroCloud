@@ -5,6 +5,12 @@ import JSZip from 'jszip'
 import * as XLSX from 'xlsx'
 import type { Feature, FeatureCollection, Geometry } from 'geojson'
 import { downloadBlob } from './hydroWatershed/geoTiffExport'
+import {
+  OBJECT_ATTRIBUTES_STAMP,
+  objectAttributeFieldNames,
+  orderedObjectAttributePropertyKeys,
+  layerHasObjectAttributeTable,
+} from './objectAttributes/objectAttributesSchema'
 
 const WGS84_PRJ =
   'GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],' +
@@ -179,7 +185,24 @@ function csvEscape(value: unknown): string {
   return s
 }
 
-/** Attribute table CSV (+ lon/lat centroid columns). */
+function propertyKeysForExport(fc: FeatureCollection): string[] {
+  if (layerHasObjectAttributeTable(fc)) {
+    return objectAttributeFieldNames()
+  }
+  const keySet = new Set<string>()
+  for (const f of fc.features) {
+    for (const k of Object.keys(f.properties ?? {})) keySet.add(k)
+  }
+  const sample = (fc.features[0]?.properties ?? {}) as Record<string, unknown>
+  if (OBJECT_ATTRIBUTES_STAMP in sample) {
+    const ordered = orderedObjectAttributePropertyKeys(sample)
+    const extras = [...keySet].filter(k => !ordered.includes(k))
+    return [...ordered.filter(k => keySet.has(k)), ...extras]
+  }
+  return [...keySet].sort((a, b) => a.localeCompare(b)).slice(0, 80)
+}
+
+/** Attribute table CSV — Example.xlsx columns only when enriched, else legacy layout. */
 export function downloadVectorCsv(
   input: FeatureCollection | unknown,
   fileName = 'layer.csv',
@@ -187,22 +210,23 @@ export function downloadVectorCsv(
   const fc = asFeatureCollection(input)
   if (!fc.features.length) throw new Error('No features to export.')
 
-  const keySet = new Set<string>()
-  for (const f of fc.features) {
-    for (const k of Object.keys(f.properties ?? {})) keySet.add(k)
-  }
-  const keys = [...keySet].slice(0, 80)
-  const header = ['FID', 'geometry', 'lon', 'lat', ...keys].map(csvEscape).join(',')
+  const schemaOnly = layerHasObjectAttributeTable(fc)
+  const keys = propertyKeysForExport(fc)
+  const header = schemaOnly
+    ? keys.map(csvEscape).join(',')
+    : ['FID', 'geometry', 'lon', 'lat', ...keys].map(csvEscape).join(',')
   const lines = fc.features.map((f, i) => {
     const props = (f.properties ?? {}) as Record<string, unknown>
     const c = featureCentroid(f.geometry)
-    const cells = [
-      i + 1,
-      f.geometry?.type ?? '',
-      c ? Number(c[0].toFixed(6)) : '',
-      c ? Number(c[1].toFixed(6)) : '',
-      ...keys.map(k => props[k] ?? ''),
-    ]
+    const cells = schemaOnly
+      ? keys.map(k => props[k] ?? '')
+      : [
+          i + 1,
+          f.geometry?.type ?? '',
+          c ? Number(c[0].toFixed(6)) : '',
+          c ? Number(c[1].toFixed(6)) : '',
+          ...keys.map(k => props[k] ?? ''),
+        ]
     return cells.map(csvEscape).join(',')
   })
   downloadBlob(
@@ -635,11 +659,7 @@ export function downloadVectorXlsx(
   const fc = asFeatureCollection(input)
   if (!fc.features.length) throw new Error('No features to export.')
 
-  const keySet = new Set<string>()
-  for (const f of fc.features) {
-    for (const k of Object.keys(f.properties ?? {})) keySet.add(k)
-  }
-  const keys = [...keySet].slice(0, 80)
+  const keys = propertyKeysForExport(fc)
   const rows = fc.features.map((f, i) => {
     const props = (f.properties ?? {}) as Record<string, unknown>
     const c = featureCentroid(f.geometry)

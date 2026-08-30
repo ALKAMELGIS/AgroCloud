@@ -1,7 +1,7 @@
 import type { FieldBoundaryHealth } from './fieldBoundaryClient'
 
 /** Sensible minimum parcel size on Hostinger / GitHub Pages (builtin spectral detect). */
-export const PRODUCTION_MAP_RGB_MIN_AREA_M2 = 200
+export const PRODUCTION_MAP_RGB_MIN_AREA_M2 = 1
 
 export function isBuiltinFieldEngine(engine: string | null | undefined): boolean {
   return /spectral-builtin|builtin/i.test(String(engine || ''))

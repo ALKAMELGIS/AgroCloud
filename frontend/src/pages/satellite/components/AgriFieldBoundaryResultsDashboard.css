@@ -145,12 +145,13 @@
   display: grid;
   grid-template-columns: 1fr;
   gap: 8px;
+  width: 100%;
+  min-width: 0;
 }
 
-@media (min-width: 720px) {
-  .si-afb-dash:not(.si-afb-dash--inline) .si-afb-dash__charts {
-    grid-template-columns: 1fr 1fr;
-  }
+.si-afb-dash__charts > * {
+  grid-column: 1 / -1;
+  min-width: 0;
 }
 
 .si-afb-dash__card {

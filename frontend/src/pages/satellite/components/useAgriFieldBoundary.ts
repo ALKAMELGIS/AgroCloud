@@ -41,6 +41,12 @@ import {
   downloadFieldBoundaryGeoPackage,
   downloadFieldBoundaryShapefile,
 } from '../../../lib/agriFieldBoundary/polygonShapefileExport'
+import { downloadVectorCsv } from '../../../lib/vectorLayerExport'
+import { enrichObjectAttributes } from '../../../lib/objectAttributes/enrichObjectAttributes'
+import {
+  ftwInferenceEffectiveSceneDate,
+  ftwInferenceSafeSceneRange,
+} from '../../../lib/agriFieldBoundary/ftwInferenceSceneDate'
 import { createGeoTiffPngPreviewUrl } from '../../../lib/raster/siRasterMapLayer'
 import { useSen2srControls } from './useSen2srControls'
 import { useFieldBoundaryTrainingSamples } from './useFieldBoundaryTrainingSamples'
@@ -51,7 +57,12 @@ import {
   FTW_GLOBAL_FIELD_MIN_ZOOM,
   type FtwGlobalYear,
 } from '../../../lib/agriFieldBoundary/ftwGlobalConfig'
+import { warmFtwGlobalPmtiles } from '../../../lib/agriFieldBoundary/ftwGlobalMapLayer'
 import { buildFtwAoiExportGeojson } from '../../../lib/agriFieldBoundary/ftwAoiExportGeojson'
+import {
+  mapAttributesProgressPct,
+  mapExportProgressPct,
+} from './afbOperationProgress'
 
 export type FieldBoundaryPhase =
   | 'idle'
@@ -308,17 +319,19 @@ function isOfflineFieldBoundaryError(message: string | null | undefined): boolea
 
 export type FieldModelId =
   | 'ftw'
+  | 'ftw-inference-s2'
   | 'delineate-fbis'
   | 'map-rgb'
   | 'agricultural-field-delineation'
 
 export type FieldCaptureImageryId = Exclude<
   FieldImagerySource,
-  'delineate-fbis' | 'ftw' | 'agricultural-field-delineation'
+  'delineate-fbis' | 'ftw' | 'ftw-inference-s2' | 'agricultural-field-delineation'
 >
 
 const FIELD_MODELS: Array<{ id: FieldModelId; label: string }> = [
   { id: 'ftw', label: 'Fields of the World (Global v3)' },
+  { id: 'ftw-inference-s2', label: 'AgroDetect S2' },
   { id: 'delineate-fbis', label: 'Delineate Anything (v2)' },
   { id: 'agricultural-field-delineation', label: 'Agricultural Field Delineation' },
   { id: 'map-rgb', label: 'Map RGB detect (instance)' },
@@ -346,18 +359,25 @@ function splitFieldSource(source: FieldImagerySource | string): {
   imagery: FieldCaptureImageryId
 } {
   const raw = String(source || '').toLowerCase()
-  if (raw === 'delineate-fbis' || raw === 'agricultural-field-delineation' || raw === 'ftw') {
+  if (
+    raw === 'delineate-fbis' ||
+    raw === 'agricultural-field-delineation' ||
+    raw === 'ftw' ||
+    raw === 'ftw-inference-s2'
+  ) {
     return { model: raw as FieldModelId, imagery: 'basemap' }
   }
   if (raw === 'afd') {
     return { model: 'agricultural-field-delineation', imagery: 'basemap' }
   }
   if (
-    raw === 'fow' ||
     raw === 'ftw-live' ||
     raw === 'ftw-infer' ||
-    raw === 'fields-of-the-world'
+    raw === 'ftw-inference'
   ) {
+    return { model: 'ftw-inference-s2', imagery: 'basemap' }
+  }
+  if (raw === 'fow' || raw === 'fields-of-the-world') {
     return { model: 'ftw', imagery: 'basemap' }
   }
   return { model: 'map-rgb', imagery: source as FieldCaptureImageryId }
@@ -470,7 +490,7 @@ export function useAgriFieldBoundary({
   const [regularizeMethod, setRegularizeMethod] =
     useState<FootprintRegularizeMethod>('right-angles')
   /** Merge over-segmented fragments that share a long border (before Regularize). */
-  const [mergeFragments, setMergeFragments] = useState(true)
+  const [mergeFragments, setMergeFragments] = useState(false)
   const [phase, setPhase] = useState<FieldBoundaryPhase>('idle')
   const [progress, setProgress] = useState(0)
   /** Backend job stage (scene_selection / download / run / polygonize …). */
@@ -494,8 +514,12 @@ export function useAgriFieldBoundary({
   /** FTW export / Add layer — keeps UI responsive with a loading line only. */
   const [exportBusy, setExportBusy] = useState(false)
   const [exportProgress, setExportProgress] = useState<string | null>(null)
+  const [exportProgressPct, setExportProgressPct] = useState(0)
+  const [attributesProgressPct, setAttributesProgressPct] = useState(0)
   /** Avoid re-queueing the same Detect result for Layer-index enrichment. */
   const autoAttributesKeyRef = useRef<string | null>(null)
+  /** FTW Global — vectorize + enrich once per AOI/threshold snapshot for the dashboard. */
+  const ftwVectorizeKeyRef = useRef<string | null>(null)
   const [health, setHealth] = useState<FieldBoundaryHealth | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -608,6 +632,7 @@ export function useAgriFieldBoundary({
     if (next !== 'ftw') {
       setFtwGlobalVisible(false)
     } else {
+      warmFtwGlobalPmtiles(ftwYear)
       setResult(null)
       rawResultRef.current = null
       lastDetectContextRef.current = null
@@ -618,10 +643,16 @@ export function useAgriFieldBoundary({
       setRegularizeFootprints(false)
       setMergeFragments(false)
     }
+    if (next === 'ftw-inference-s2') {
+      const safe = ftwInferenceSafeSceneRange()
+      const normalized = normalizeSceneRange(safe.from, safe.to)
+      setSceneDateFromState(normalized.from)
+      setSceneDateToState(normalized.to)
+    }
     setError(null)
     setErrorDetail(null)
     if (phase === 'error' || phase === 'empty') setPhase('idle')
-  }, [phase])
+  }, [phase, ftwYear])
 
   const setImagery = useCallback((next: FieldCaptureImageryId) => {
     sourceChosenRef.current = true
@@ -658,18 +689,24 @@ export function useAgriFieldBoundary({
 
   const setSceneDateFrom = useCallback(
     (iso: string) => {
-      const d = clampSceneDate(iso)
+      let d = clampSceneDate(iso)
+      if (model === 'ftw-inference-s2') {
+        d = ftwInferenceEffectiveSceneDate(d)
+      }
       applySceneRange(d, d)
     },
-    [applySceneRange],
+    [applySceneRange, model],
   )
 
   const setSceneDateTo = useCallback(
     (iso: string) => {
-      const d = clampSceneDate(iso)
+      let d = clampSceneDate(iso)
+      if (model === 'ftw-inference-s2') {
+        d = ftwInferenceEffectiveSceneDate(d)
+      }
       applySceneRange(d, d)
     },
-    [applySceneRange],
+    [applySceneRange, model],
   )
 
   /** Kept for API compat — also pins to the latest single day (today). */
@@ -711,13 +748,15 @@ export function useAgriFieldBoundary({
   const run = useCallback(async (opts?: { source?: FieldImagerySource; year?: number; sceneDate?: string }) => {
     let activeSource = opts?.source ?? source
     const rawSrc = String(activeSource || '').toLowerCase()
+    if (rawSrc === 'fow' || rawSrc === 'fields-of-the-world') {
+      activeSource = 'ftw'
+    }
     if (
-      rawSrc === 'fow' ||
       rawSrc === 'ftw-live' ||
       rawSrc === 'ftw-infer' ||
-      rawSrc === 'fields-of-the-world'
+      rawSrc === 'ftw-inference'
     ) {
-      activeSource = 'ftw'
+      activeSource = 'ftw-inference-s2'
     }
 
     if (activeSource === 'ftw') {
@@ -735,14 +774,11 @@ export function useAgriFieldBoundary({
       if (opts?.year === 2024 || opts?.year === 2025) {
         setFtwYear(opts.year)
       }
+      warmFtwGlobalPmtiles(activeFtwYear)
 
-      const progressSteps = [12, 28, 46, 64, 82, 94, 100]
-      for (const step of progressSteps) {
-        await new Promise<void>(resolve => window.setTimeout(resolve, 140))
-        setProgress(step)
-      }
-
+      ftwVectorizeKeyRef.current = null
       setFtwGlobalVisible(true)
+      setProgress(100)
       setResult({
         geojson: { type: 'FeatureCollection', features: [] },
         count: 0,
@@ -840,6 +876,8 @@ export function useAgriFieldBoundary({
               softenMeters: regularizeMethod === 'right-angles' ? 3.2 : 5.2,
               minFillRatio: 0.55,
               maxAreaInflation: 1.45,
+              resolveOverlaps: mergeFragments,
+              abutNeighborsM: mergeFragments ? 1.15 : 0,
             })
       // Regularize can inflate footprints — re-clip to AOI and unstack overlays.
       let geojson = refineFieldPolygonsToAoi(optimized.geojson, aoiFc, {
@@ -882,6 +920,48 @@ export function useAgriFieldBoundary({
     setStage(null)
     setPhase('capturing')
     try {
+      // —— FTW Inference S2: live Sentinel-2 + PRUE (Python :8092) ——
+      if (activeSource === 'ftw-inference-s2') {
+        setNotice('Searching Sentinel-2 L2A imagery for AgroDetect S2…')
+        setPhase('detecting')
+        setProgress(5)
+        const rawScene = sceneDateTo || sceneDateFrom || sceneDate
+        const ftwScene = ftwInferenceEffectiveSceneDate(rawScene)
+        if (ftwScene !== rawScene) {
+          applySceneRange(ftwScene, ftwScene)
+          setNotice(`FTW crop calendar — using ${ftwScene} (prior crop year)`)
+        }
+        const out = await detectFieldBoundaries(
+          {
+            bbox,
+            aoi: aoiFc,
+            minConfidence,
+            minAreaM2,
+            source: 'ftw-inference-s2',
+            sceneDate: ftwScene,
+            sceneDateFrom: ftwScene,
+            sceneDateTo: ftwScene,
+            highRes: true,
+            signal: controller.signal,
+          },
+          trackJob(5),
+        )
+        if (!out.geojson.features.length) {
+          setError('No fields detected in this AOI with AgroDetect S2.')
+          setErrorDetail(
+            'Try a larger cropland AOI, a clearer Sentinel-2 date, or lower confidence. Requires FTW PRUE on api.eliteagrocloud.com.',
+          )
+          setResult(null)
+          setPhase('empty')
+          return
+        }
+        setNotice(null)
+        setResult(finishResult(out))
+        setProgress(100)
+        setPhase('done')
+        return
+      }
+
       // —— Agricultural Field Delineation: Sentinel-2 L2A 12-band (no map RGB capture) ——
       if (activeSource === 'agricultural-field-delineation') {
         setNotice('Searching Sentinel-2 L2A imagery…')
@@ -1285,6 +1365,7 @@ export function useAgriFieldBoundary({
     rawResultRef.current = null
     lastDetectContextRef.current = null
     autoAttributesKeyRef.current = null
+    ftwVectorizeKeyRef.current = null
     setFtwGlobalVisible(false)
     setResult(null)
     setUploadedImage(null)
@@ -1331,6 +1412,8 @@ export function useAgriFieldBoundary({
               softenMeters,
               minFillRatio: 0.55,
               maxAreaInflation: 1.45,
+              resolveOverlaps: mergeFragments,
+              abutNeighborsM: mergeFragments ? 1.15 : 0,
             },
           )
     let geojson = optimized.geojson
@@ -1369,13 +1452,17 @@ export function useAgriFieldBoundary({
     // Image date may be a single day — zonal stats need a season window.
     const window = defaultAttributeWindow(sceneDateTo || sceneDateFrom || sceneDate)
     setAttributesBusy(true)
+    setAttributesProgressPct(8)
     setAttributesProgress('Loading Sentinel-2 Layer index statistics…')
     try {
       const enriched = await enrichFieldAttributesFromSentinel2(fc, {
         ...window,
         layerName: 'Detected field boundaries',
         layerIds: [...FIELD_ATTRIBUTE_LAYER_IDS],
-        onProgress: p => setAttributesProgress(`${p.label} (${p.done}/${p.total})`),
+        onProgress: p => {
+          setAttributesProgress(`${p.label} (${p.done}/${p.total})`)
+          setAttributesProgressPct(mapAttributesProgressPct('', p.done, p.total))
+        },
       })
       setResult(prev => (prev ? { ...prev, geojson: enriched } : prev))
       setNotice(
@@ -1393,6 +1480,7 @@ export function useAgriFieldBoundary({
     } finally {
       setAttributesBusy(false)
       setAttributesProgress(null)
+      setAttributesProgressPct(0)
     }
   }, [sceneDate, sceneDateFrom, sceneDateTo])
 
@@ -1412,6 +1500,7 @@ export function useAgriFieldBoundary({
     }
 
     setExportBusy(true)
+    setExportProgressPct(8)
     setExportProgress('Export — building continuous raster…')
     setError(null)
     setErrorDetail(null)
@@ -1422,15 +1511,21 @@ export function useAgriFieldBoundary({
         thresholdPct: ftwThreshold,
         minAreaM2,
         signal: abortRef.current?.signal,
-        onProgress: msg => setExportProgress(`Export — ${msg}`),
+        onProgress: msg => {
+          const line = `Export — ${msg}`
+          setExportProgress(line)
+          setExportProgressPct(mapExportProgressPct(line))
+        },
       })
       if (!fc.features?.length) {
         setNotice('No FTW fields in this AOI at the current confidence threshold.')
         return null
       }
 
-      if (options?.persistResult) {
-        setResult({
+      setExportProgress('Export — regularizing field footprints…')
+      setExportProgressPct(mapExportProgressPct('Export — regularizing field footprints…'))
+      const regularized = optimizeFieldBoundaryResult(
+        {
           geojson: fc,
           count: fc.features.length,
           score: ftwThreshold / 100,
@@ -1438,12 +1533,53 @@ export function useAgriFieldBoundary({
           device: 'source-cooperative',
           stats: { field: fc.features.length },
           aoiApplied: true,
+        },
+        {
+          regularizeFootprints,
+          regularizeMethod,
+          softenKept: true,
+          softenMeters: regularizeMethod === 'right-angles' ? 3.2 : 5.2,
+          minFillRatio: 0.55,
+          maxAreaInflation: 1.45,
+          resolveOverlaps: mergeFragments,
+          abutNeighborsM: mergeFragments ? 1.15 : 0,
+        },
+      ).geojson
+
+      setExportProgress('Export — Example.xlsx attributes (Sentinel-2 + crop typing)…')
+      setExportProgressPct(mapExportProgressPct('Export — Example.xlsx attributes'))
+      let enriched = regularized
+      try {
+        enriched = await enrichObjectAttributes(regularized, {
+          sceneDate: sceneDateTo || sceneDateFrom || sceneDate,
+          layerName: `FTW Global ${ftwYear}`,
+          onProgress: p => {
+            const line = `Attributes — ${p.label} (${p.done}/${p.total})`
+            setExportProgress(line)
+            setExportProgressPct(mapExportProgressPct(line))
+          },
+        })
+      } catch (err) {
+        setNotice(
+          `Example.xlsx attributes partial — ${err instanceof Error ? err.message : String(err)}`,
+        )
+      }
+
+      if (options?.persistResult) {
+        setResult({
+          geojson: enriched,
+          count: enriched.features.length,
+          score: ftwThreshold / 100,
+          engine: `ftw-global-${ftwYear}`,
+          device: 'source-cooperative',
+          stats: { field: enriched.features.length },
+          aoiApplied: true,
         })
       }
       setNotice(
-        `FTW Global ${ftwYear} — ${fc.features.length} fields vectorized from raster (no tile edges).`,
+        `FTW Global ${ftwYear} — ${enriched.features.length} fields with Example.xlsx attributes.`,
       )
-      return fc
+      return enriched
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       setNotice(`FTW export failed — ${msg}`)
@@ -1451,8 +1587,21 @@ export function useAgriFieldBoundary({
     } finally {
       setExportBusy(false)
       setExportProgress(null)
+      setExportProgressPct(0)
     }
-  }, [model, ensureAttributes, ftwYear, ftwThreshold, minAreaM2])
+  }, [
+    model,
+    ensureAttributes,
+    ftwYear,
+    ftwThreshold,
+    minAreaM2,
+    sceneDate,
+    sceneDateFrom,
+    sceneDateTo,
+    regularizeFootprints,
+    regularizeMethod,
+    mergeFragments,
+  ])
 
   /** After Detect completes, fill every attribute column from Layer index. */
   useEffect(() => {
@@ -1469,6 +1618,31 @@ export function useAgriFieldBoundary({
     void ensureAttributes({ force: fieldAttributesNeedRefresh(fc) })
   }, [phase, result, sceneDate, sceneDateFrom, sceneDateTo, ensureAttributes])
 
+  /** FTW Global overlay — vectorize AOI fields + Example.xlsx attributes for the dashboard. */
+  useEffect(() => {
+    if (model !== 'ftw') return
+    if (!ftwGlobalVisible || phase !== 'done') return
+    if (exportBusy) return
+    if (!resolveAoiRef.current()) return
+    const buildKey = `ftw:${ftwYear}:${ftwThreshold}:${minAreaM2}:${aoiClipKey}:${regularizeFootprints}:${mergeFragments}:${regularizeMethod}`
+    if (ftwVectorizeKeyRef.current === buildKey) return
+    ftwVectorizeKeyRef.current = buildKey
+    void resolveExportGeojson({ persistResult: true })
+  }, [
+    model,
+    ftwGlobalVisible,
+    phase,
+    ftwYear,
+    ftwThreshold,
+    minAreaM2,
+    aoiClipKey,
+    regularizeFootprints,
+    mergeFragments,
+    regularizeMethod,
+    exportBusy,
+    resolveExportGeojson,
+  ])
+
   const exportGeojson = useCallback(async () => {
     const fc = await resolveExportGeojson()
     if (!fc?.features?.length) return
@@ -1479,6 +1653,12 @@ export function useAgriFieldBoundary({
     const fc = await resolveExportGeojson()
     if (!fc?.features?.length) return
     await downloadFieldBoundaryShapefile(fc)
+  }, [resolveExportGeojson])
+
+  const exportCsv = useCallback(async () => {
+    const fc = await resolveExportGeojson()
+    if (!fc?.features?.length) return
+    downloadVectorCsv(fc, 'agri-field-boundaries.csv')
   }, [resolveExportGeojson])
 
   const geojson = result?.geojson ?? null
@@ -1535,6 +1715,8 @@ export function useAgriFieldBoundary({
     attributesProgress,
     exportBusy,
     exportProgress,
+    exportProgressPct,
+    attributesProgressPct,
     ensureAttributes,
     resolveExportGeojson,
     busy,
@@ -1552,6 +1734,7 @@ export function useAgriFieldBoundary({
     reset,
     exportGeojson,
     exportShapefile,
+    exportCsv,
     sen2sr,
     trainingSamples,
     ftwYear,
