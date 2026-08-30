@@ -719,6 +719,146 @@ def _execute_afd(req: DetectRequest, progress: ProgressCb | None = None) -> dict
     }
 
 
+def _infer_scene_year(req: DetectRequest) -> int:
+    for raw in (req.scene_date, req.end_date, req.start_date):
+        if not raw:
+            continue
+        text = str(raw).strip()
+        if len(text) >= 4:
+            try:
+                year = int(text[:4])
+                if 2000 <= year <= 2100:
+                    return year
+            except ValueError:
+                continue
+    return time.gmtime().tm_year
+
+
+def _infer_ftw_inference_year(req: DetectRequest) -> int:
+    """FTW crop calendar rejects harvest/buffer dates in the future — cap to prior crop year."""
+    from datetime import date
+
+    today = date.today()
+    max_safe = max(2017, today.year - 1)
+    requested = _infer_scene_year(req)
+    return max(2017, min(requested, max_safe))
+
+
+def _ftw_crop_calendar_error(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return "crop calendar" in msg or "harvest date" in msg or "in the future" in msg
+
+
+def _execute_ftw_inference_s2(req: DetectRequest, progress: ProgressCb | None = None) -> dict:
+    """FTW Inference (S2) — live Sentinel-2 + PRUE via ftw-baselines CLI."""
+    from engines.ftw_inference_s2 import get_ftw_inference_s2_engine
+    from shapely.geometry import mapping, shape
+    from shapely.validation import make_valid
+
+    engine = get_ftw_inference_s2_engine()
+    if not engine.available:
+        raise RuntimeError(
+            engine.error or "FTW Inference (S2) is not available. Install ftw-baselines on :8092.",
+        )
+
+    aoi_geom = _parse_aoi(req.aoi)
+    year = _infer_ftw_inference_year(req)
+
+    if progress:
+        progress(0.12, "scene_selection")
+        progress(0.28, "download")
+        progress(0.55, "run")
+
+    fc: dict[str, Any] | None = None
+    last_err: Exception | None = None
+    for attempt_year in range(year, max(2016, year - 3), -1):
+        try:
+            fc = engine.infer_geojson(list(req.bbox), year=attempt_year)
+            year = attempt_year
+            break
+        except RuntimeError as exc:
+            last_err = exc
+            if _ftw_crop_calendar_error(exc) and attempt_year > 2017:
+                continue
+            raise
+    if fc is None:
+        raise RuntimeError(
+            str(last_err) if last_err else "FTW Inference (S2) failed without GeoJSON output.",
+        )
+    mid_lat = (float(req.bbox[1]) + float(req.bbox[3])) / 2.0
+    m_lon, m_lat = _meters_per_deg(mid_lat)
+    features: list[dict[str, Any]] = []
+    for i, f in enumerate(fc.get("features") or []):
+        if not isinstance(f, dict):
+            continue
+        props = dict(f.get("properties") or {})
+        conf = float(props.get("confidence") or props.get("score") or props.get("conf") or 0.55)
+        if conf < req.min_confidence:
+            continue
+        try:
+            g = make_valid(shape(f.get("geometry")))
+        except Exception:  # noqa: BLE001
+            continue
+        if g.is_empty or g.geom_type not in ("Polygon", "MultiPolygon"):
+            continue
+        if aoi_geom is not None:
+            try:
+                g = make_valid(g.intersection(aoi_geom))
+            except Exception:  # noqa: BLE001
+                continue
+            if g.is_empty or g.geom_type not in ("Polygon", "MultiPolygon"):
+                continue
+        if g.geom_type == "MultiPolygon":
+            area_m2 = sum(abs(p.area) * m_lon * m_lat for p in g.geoms)
+        else:
+            area_m2 = abs(g.area) * m_lon * m_lat
+        if area_m2 < max(10.0, float(req.min_area_m2)):
+            continue
+        field_id = str(props.get("field_id") or f"FLD-{i + 1:04d}")
+        props.update(
+            {
+                "field_id": field_id,
+                "class": props.get("class") or "agricultural_field",
+                "confidence": round(conf, 4),
+                "confidence_score": round(conf, 4),
+                "area_m2": round(area_m2, 2),
+                "area_ha": round(area_m2 / 10_000.0, 4),
+                "detection_engine": engine.name,
+                "source_image": f"Sentinel-2 L2A ({year})",
+            },
+        )
+        features.append(
+            {
+                "type": "Feature",
+                "id": field_id,
+                "geometry": mapping(g),
+                "properties": props,
+            },
+        )
+
+    if progress:
+        progress(0.9, "normalize")
+        progress(1.0, "done")
+
+    mean_score = (
+        float(np.mean([float((f["properties"] or {}).get("confidence") or 0) for f in features]))
+        if features
+        else 0.0
+    )
+    return {
+        "geojson": {"type": "FeatureCollection", "features": features},
+        "count": len(features),
+        "stats": {"field": len(features)},
+        "score": mean_score,
+        "engine": engine.name,
+        "device": engine.device,
+        "source": req.source,
+        "aoi_applied": aoi_geom is not None,
+        "acquisition_date": req.scene_date or req.end_date or req.start_date,
+        "imagery_source": "sentinel2-l2a",
+    }
+
+
 def _execute_detect(req: DetectRequest, progress: ProgressCb | None = None) -> dict:
     if progress:
         progress(0.02, "preparing")
@@ -728,13 +868,17 @@ def _execute_detect(req: DetectRequest, progress: ProgressCb | None = None) -> d
     aoi_geom = _parse_aoi(req.aoi)
     source = (req.source or "basemap").strip().lower()
 
-    # 0) Agricultural Field Delineation — Sentinel-2 L2A 12-band Mask R-CNN
+    # 0) FTW Inference (S2) — live Sentinel-2 + PRUE (no client image)
+    if source in ("ftw-inference-s2", "ftw-infer", "ftw-live", "ftw-inference"):
+        return _execute_ftw_inference_s2(req, progress)
+
+    # 1) Agricultural Field Delineation — Sentinel-2 L2A 12-band Mask R-CNN
     if source in ("agricultural-field-delineation", "afd"):
         return _execute_afd(req, progress)
 
     if not req.image:
         raise ValueError(
-            "image is required unless source is 'agricultural-field-delineation'."
+            "image is required unless source is 'agricultural-field-delineation' or 'ftw-inference-s2'."
         )
 
     image = _decode_image(req.image)
@@ -1004,6 +1148,14 @@ def _health_payload() -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         afd_payload = {"ready": False, "error": f"{type(exc).__name__}: {exc}"}
 
+    ftw_s2_payload: dict[str, Any] = {"ready": False}
+    try:
+        from engines.ftw_inference_s2 import get_ftw_inference_s2_engine
+
+        ftw_s2_payload = get_ftw_inference_s2_engine().status_payload()
+    except Exception as exc:  # noqa: BLE001
+        ftw_s2_payload = {"ready": False, "error": f"{type(exc).__name__}: {exc}"}
+
     out: dict[str, Any] = {
         "status": "ok",
         "engine": primary,
@@ -1012,6 +1164,8 @@ def _health_payload() -> dict[str, Any]:
         "sen2sr": sen2sr_ok,
         "agricultural_field_delineation": bool(afd_payload.get("ready")),
         "agricultural_field_delineation_status": afd_payload,
+        "ftw_inference_s2": bool(ftw_s2_payload.get("ready")),
+        "ftw_inference_s2_status": ftw_s2_payload,
         "watershed": False,
         "device": _engine.device if _engine.available else getattr(_da_engine, "device", "cpu"),
         "gis": True,
@@ -1028,6 +1182,7 @@ def _service_ready(payload: dict[str, Any]) -> bool:
         or payload.get("delineate_anything")
         or payload.get("sen2sr")
         or payload.get("agricultural_field_delineation")
+        or payload.get("ftw_inference_s2")
     )
 
 

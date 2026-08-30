@@ -58,13 +58,19 @@ AFD_PTH="$AFD_DIR/AgricultureFieldDelination.pth"
 AFD_EMD="$AFD_DIR/AgricultureFieldDelination.emd"
 if [[ -f "$AFD_EMD" ]]; then
   if [[ ! -f "$AFD_PTH" ]] || [[ "$(wc -c < "$AFD_PTH" 2>/dev/null || echo 0)" -lt 1000000 ]]; then
-    log "ERROR: Agricultural Field Delineation weights missing or Git LFS stub at $AFD_PTH"
-    log "Run: git lfs install && git lfs pull"
-    exit 1
+    log "warning: AFD weights missing at $AFD_PTH — Agricultural Field Delineation disabled (FTW Inference S2 still works)"
+  else
+    log "AFD model present ($(wc -c < "$AFD_PTH") bytes)"
   fi
-  log "AFD model present ($(wc -c < "$AFD_PTH") bytes)"
 else
   log "warning: AFD EMD not found at $AFD_EMD — Agricultural Field Delineation will be unavailable"
+fi
+
+FTW_CKPT="$HERE/models/prue_efnetb7_ccby_checkpoint.ckpt"
+if [[ -f "$FTW_CKPT" ]]; then
+  log "FTW checkpoint present ($(wc -c < "$FTW_CKPT") bytes)"
+else
+  log "warning: FTW checkpoint missing at $FTW_CKPT — copy prue_efnetb7_ccby_checkpoint.ckpt for Inference S2"
 fi
 
 if [[ ! -x "$PY" ]]; then
@@ -76,6 +82,12 @@ log "installing dependencies"
 "$PIP" install -q --upgrade pip wheel
 "$PIP" install -q -r requirements.txt
 "$PIP" install -q "fastapi>=0.110" "uvicorn[standard]>=0.29" "python-multipart>=0.0.9"
+if "$PIP" show ftw-baselines >/dev/null 2>&1; then
+  log "ftw-baselines already installed"
+else
+  log "installing ftw-baselines (FTW Inference S2 CLI)"
+  "$PIP" install -q ftw-baselines || log "warning: ftw-baselines pip install failed — check manually"
+fi
 
 wait_http() {
   local url="$1"
