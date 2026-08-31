@@ -11,6 +11,7 @@ import {
 } from './layerGeo'
 import { getGeminiApiKey } from '../geminiApiKey'
 import { getMapboxAccessToken } from '../mapboxAccessToken'
+import { eliteAgroLogoAbsoluteUrl } from '../brandAssets'
 import { fetchRecipeReportInsightsFromGemini } from './recipeReportGemini'
 
 const ACCENT: [number, number, number] = [4, 120, 87]
@@ -18,7 +19,6 @@ const ACCENT_DARK: [number, number, number] = [6, 78, 59]
 const INK: [number, number, number] = [15, 23, 42]
 const MUTED: [number, number, number] = [100, 116, 139]
 const PAGE_MARGIN_MM = 12
-import { eliteAgroLogoAbsoluteUrl } from '../lib/brandAssets'
 
 function fmtNum(n: number): string {
   if (!Number.isFinite(n)) return '—'

@@ -100,6 +100,10 @@ function buildCompressionPlugin(): Plugin {
     },
     async closeBundle() {
       const outDir = isAbsolute(config.build.outDir) ? config.build.outDir : join(config.root, config.build.outDir)
+      if (!existsSync(outDir)) {
+        config.logger.warn(`[agrocloud-compression] skip — outDir missing: ${outDir}`)
+        return
+      }
       const files = await walk(outDir)
       await Promise.all(
         files
