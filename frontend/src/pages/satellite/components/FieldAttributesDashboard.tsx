@@ -352,18 +352,9 @@ function FieldAttributesDashboardBody({
       aria-label="Field attributes dashboard"
     >
       {!embedded ? (
-      <header className="si-field-dash__hero">
-        <div className="si-field-dash__hero-main">
-          <div className="si-field-dash__brand">
-            <span className="si-field-dash__brand-icon" aria-hidden>
-              <i className="fa-solid fa-chart-pie" />
-            </span>
-            <div>
-              <h3 className="si-field-dash__title">Attributes dashboard</h3>
-              <p className="si-field-dash__subtitle">Example.xlsx fields · static KPIs & charts</p>
-            </div>
-          </div>
-          <div className="si-field-dash__actions">
+      <header className="si-field-dash__head">
+        <DashboardMetaRow model={model} aoiLabel={aoiLabel} iconOnly />
+        <div className="si-field-dash__actions">
             {onRefreshAttributes ? (
               <button
                 type="button"
@@ -374,7 +365,6 @@ function FieldAttributesDashboardBody({
                 onClick={onRefreshAttributes}
               >
                 <i className="fa-solid fa-arrows-rotate" aria-hidden />
-                {expanded ? <span>Refresh S2</span> : null}
               </button>
             ) : null}
             {onAddToLayers ? (
@@ -387,7 +377,6 @@ function FieldAttributesDashboardBody({
                 onClick={() => void onAddToLayers()}
               >
                 <i className="fa-solid fa-layer-group" aria-hidden />
-                {expanded ? <span>Add layer</span> : null}
               </button>
             ) : null}
             {showExpand && onExpand ? (
@@ -399,16 +388,12 @@ function FieldAttributesDashboardBody({
                 onClick={onExpand}
               >
                 <i className="fa-solid fa-up-right-and-down-left-from-center" aria-hidden />
-                {expanded ? null : <span className="si-field-dash__sr-only">Expand</span>}
               </button>
             ) : null}
-          </div>
         </div>
-
-        <DashboardMetaRow model={model} aoiLabel={aoiLabel} iconOnly={!expanded} />
       </header>
       ) : (
-        <div className="si-field-dash__toolbar">
+        <div className="si-field-dash__head si-field-dash__head--embedded">
           <DashboardMetaRow model={model} aoiLabel={aoiLabel} iconOnly />
           <div className="si-field-dash__actions">
             {onRefreshAttributes ? (
@@ -421,7 +406,6 @@ function FieldAttributesDashboardBody({
                 onClick={onRefreshAttributes}
               >
                 <i className="fa-solid fa-arrows-rotate" aria-hidden />
-                <span>Refresh S2</span>
               </button>
             ) : null}
             {onAddToLayers ? (
@@ -434,7 +418,6 @@ function FieldAttributesDashboardBody({
                 onClick={() => void onAddToLayers()}
               >
                 <i className="fa-solid fa-layer-group" aria-hidden />
-                <span>Add layer</span>
               </button>
             ) : null}
           </div>

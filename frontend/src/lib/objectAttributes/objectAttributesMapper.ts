@@ -4,6 +4,7 @@
 
 import type { AgriObjectReportRow } from '../../pages/satellite/lib/timeSeriesReport/buildAgriculturalObjectIntelligenceModel'
 import { NOT_AVAILABLE } from '../../pages/satellite/lib/timeSeriesReport/agriculturalObjectIntelligenceSchema'
+import { normalizeHlsCropTypeName } from '../agriFieldBoundary/hlsCropTypeNormalize'
 import type { ObjectAttributeFieldDef, ObjectAttributesSchema } from './objectAttributesSchema'
 import { getObjectAttributesSchemaSync } from './objectAttributesSchema'
 
@@ -146,25 +147,14 @@ function agriStatusExample(row: AgriObjectReportRow): string | null {
 
 function cropTypeExample(row: AgriObjectReportRow, ndvi: number | null): string | null {
   const c = str(row.cropType)
-  if (c && !/unknown|insufficient|not available|unknown cover/i.test(c)) {
-    const normalized = normalizeHlsCropLabel(c)
+  if (c && !/insufficient sentinel|not available|unknown cover/i.test(c)) {
+    const normalized = normalizeHlsCropTypeName(c)
     if (normalized) return normalized
   }
+  const cover = str(row.landCoverType)
+  if (cover && !/not available/i.test(cover)) return cover
   if (ndvi != null && ndvi < 0.2) return 'None'
   return null
-}
-
-function normalizeHlsCropLabel(name: string): string | null {
-  const raw = name.trim()
-  if (!raw) return null
-  const lower = raw.toLowerCase()
-  if (/natural vegetation|forest|wetlands|developed|open water|fallow|idle/i.test(lower)) {
-    return null
-  }
-  if (/^corn$/i.test(raw)) return 'Maize / Corn'
-  if (/^winter wheat$/i.test(raw)) return 'Wheat'
-  if (/^soybeans?$/i.test(raw)) return 'Soybeans'
-  return raw
 }
 
 function cropConfExample(row: AgriObjectReportRow, cropType: string | null): number | null {

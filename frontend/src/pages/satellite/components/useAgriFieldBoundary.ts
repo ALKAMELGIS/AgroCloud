@@ -313,7 +313,8 @@ function isOfflineFieldBoundaryError(message: string | null | undefined): boolea
     message === OFFLINE_ERROR_SHORT ||
     /backend_unavailable|backend is not available/i.test(message) ||
     /Service offline/i.test(message) ||
-    /start agri-field-boundary|uvicorn app:app --port 8092/i.test(message)
+    /start agri-field-boundary|uvicorn app:app --port 8092/i.test(message) ||
+    /Field API unavailable/i.test(message)
   )
 }
 
@@ -523,6 +524,8 @@ export function useAgriFieldBoundary({
   const [health, setHealth] = useState<FieldBoundaryHealth | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  /** Ignore stale detect responses after model switch / abort. */
+  const runEpochRef = useRef(0)
   const resolveAoiRef = useRef(resolveAoi)
   resolveAoiRef.current = resolveAoi
   const errorRef = useRef(error)
@@ -628,6 +631,8 @@ export function useAgriFieldBoundary({
 
   const setModel = useCallback((next: FieldModelId) => {
     sourceChosenRef.current = true
+    runEpochRef.current += 1
+    abortRef.current?.abort()
     setModelState(next)
     if (next !== 'ftw') {
       setFtwGlobalVisible(false)
@@ -760,6 +765,7 @@ export function useAgriFieldBoundary({
     }
 
     if (activeSource === 'ftw') {
+      runEpochRef.current += 1
       abortRef.current?.abort()
       setBusy(true)
       setError(null)
@@ -911,6 +917,7 @@ export function useAgriFieldBoundary({
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
+    const runEpoch = ++runEpochRef.current
     setBusy(true)
     setError(null)
     setErrorDetail(null)
@@ -1319,6 +1326,7 @@ export function useAgriFieldBoundary({
       setPhase('done')
     } catch (err) {
       if ((err as Error)?.name === 'AbortError') return
+      if (runEpoch !== runEpochRef.current) return
       let offlineErr = err instanceof FieldBoundaryServiceError && err.offline
       const rawMsg =
         err instanceof FieldBoundaryServiceError
@@ -1336,7 +1344,7 @@ export function useAgriFieldBoundary({
       setErrorDetail(
         err instanceof FieldBoundaryServiceError ? err.detail || detail : detail,
       )
-      setOffline(false)
+      setOffline(offlineErr)
       setPhase(emptyLike ? 'empty' : 'error')
     } finally {
       setBusy(false)
@@ -1575,6 +1583,9 @@ export function useAgriFieldBoundary({
           stats: { field: enriched.features.length },
           aoiApplied: true,
         })
+        setError(null)
+        setErrorDetail(null)
+        setPhase('done')
       }
       setNotice(
         `FTW Global ${ftwYear} — ${enriched.features.length} fields with Example.xlsx attributes.`,

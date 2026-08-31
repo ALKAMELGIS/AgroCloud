@@ -83,28 +83,72 @@ function formatMetric(value: unknown): string {
   return String(value)
 }
 
+function trendTone(trend: TrainingHistoryAnalysis['trend']): string {
+  if (trend === 'improving') return 'positive'
+  if (trend === 'overfitting' || trend === 'degrading') return 'warning'
+  return 'neutral'
+}
+
 function AnalysisStrip({ analysis }: { analysis: TrainingHistoryAnalysis }) {
+  const tone = trendTone(analysis.trend)
+  const items: Array<{
+    key: string
+    icon: string
+    label: string
+    tone?: 'positive' | 'warning' | 'neutral'
+  }> = [
+    {
+      key: 'best',
+      icon: 'fa-solid fa-trophy',
+      label: `Best epoch — ${analysis.bestEpoch ?? '—'}`,
+      tone: 'positive',
+    },
+    {
+      key: 'loss',
+      icon: 'fa-solid fa-chart-line',
+      label: `Lowest val loss — ${formatLoss(analysis.lowestValLoss)}`,
+    },
+    {
+      key: 'acc',
+      icon: 'fa-solid fa-bullseye',
+      label: `Highest val acc — ${formatPct(analysis.highestValAccuracy)}`,
+      tone: 'positive',
+    },
+    {
+      key: 'trend',
+      icon:
+        tone === 'positive'
+          ? 'fa-solid fa-arrow-trend-up'
+          : tone === 'warning'
+            ? 'fa-solid fa-triangle-exclamation'
+            : 'fa-solid fa-minus',
+      label: `Trend — ${analysis.trendLabel}`,
+      tone: tone === 'positive' ? 'positive' : tone === 'warning' ? 'warning' : 'neutral',
+    },
+    {
+      key: 'gap',
+      icon: 'fa-solid fa-scale-balanced',
+      label: `Final train vs val — ${analysis.gapLabel}`,
+    },
+  ]
+
   return (
-    <div className={`si-epochs__analysis is-${analysis.trend}`} aria-label="Training analysis">
-      <div className="si-epochs__stat">
-        <span>Best epoch</span>
-        <strong>{analysis.bestEpoch ?? '—'}</strong>
-      </div>
-      <div className="si-epochs__stat">
-        <span>Lowest val loss</span>
-        <strong>{formatLoss(analysis.lowestValLoss)}</strong>
-      </div>
-      <div className="si-epochs__stat">
-        <span>Highest val acc</span>
-        <strong>{formatPct(analysis.highestValAccuracy)}</strong>
-      </div>
-      <div className="si-epochs__stat si-epochs__stat--wide si-epochs__stat--trend">
-        <span>Trend</span>
-        <strong>{analysis.trendLabel}</strong>
-      </div>
-      <div className="si-epochs__stat si-epochs__stat--wide">
-        <span>Final train vs val</span>
-        <strong>{analysis.gapLabel}</strong>
+    <div
+      className={`si-epochs__analysis is-${analysis.trend}`}
+      aria-label="Training analysis"
+    >
+      <div className="si-epochs__analysis-icons" role="list" aria-label="Training summary metrics">
+        {items.map(item => (
+          <span
+            key={item.key}
+            role="listitem"
+            className={`si-epochs__analysis-icon${item.tone ? ` is-${item.tone}` : ''}`}
+            title={item.label}
+            aria-label={item.label}
+          >
+            <i className={item.icon} aria-hidden />
+          </span>
+        ))}
       </div>
     </div>
   )

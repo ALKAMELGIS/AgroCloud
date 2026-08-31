@@ -155,14 +155,14 @@ describe('AgriFieldBoundaryPanel Results dashboard trigger', () => {
     const { cleanupHost } = mountWithHost({ phase: 'idle' })
     fireEvent.click(screen.getByRole('tab', { name: 'Detect Fields' }))
     fireEvent.click(screen.getByRole('button', { name: 'Open layer attributes dashboard' }))
-    expect(screen.getByText('Attributes dashboard')).toBeTruthy()
+    expect(screen.getByLabelText('Field attributes dashboard')).toBeTruthy()
     cleanupHost()
   })
 
   it('shows attributes dashboard when the Dashboard tab is selected', () => {
     const { cleanupHost } = mountWithHost()
     fireEvent.click(screen.getByRole('tab', { name: 'Attributes dashboard' }))
-    expect(screen.getByText('Attributes dashboard')).toBeTruthy()
+    expect(screen.getByLabelText('Field attributes dashboard')).toBeTruthy()
     expect(screen.getByText('Area by field')).toBeTruthy()
     expect(screen.getByText('Crop type mix')).toBeTruthy()
     cleanupHost()
@@ -240,6 +240,73 @@ describe('AgriFieldBoundaryPanel Results dashboard trigger', () => {
     fireEvent.click(screen.getByRole('button', { name: /Generate Samples/i }))
     expect(generateFromPredictions).toHaveBeenCalled()
     cleanupHost()
+  })
+
+  it('enables Show Global Fields for FTW Global even without AOI geometry yet', () => {
+    const onRun = vi.fn()
+    const { cleanupHost } = mountWithHost({
+      hasAoi: false,
+      model: 'ftw',
+      source: 'ftw',
+      modelOptions: [{ id: 'ftw' as const, label: 'Fields of the World (Global v3)' }],
+      phase: 'idle',
+      hasResult: false,
+      aoiMode: 'draw',
+      onAoiModeChange: () => {},
+      onRun,
+      ftwYear: 2025,
+      onFtwYearChange: () => {},
+      ftwThreshold: 70,
+      onFtwThresholdChange: () => {},
+      ftwGlobalOpacity: 90,
+      onFtwGlobalOpacityChange: () => {},
+    })
+    const btn = screen.getByRole('button', { name: /Show Global Fields/i })
+    expect(btn.hasAttribute('disabled')).toBe(false)
+    fireEvent.click(btn)
+    expect(onRun).toHaveBeenCalled()
+    cleanupHost()
+  })
+
+  it('places Select AOI directly under Model for Fields of the World and other engines', () => {
+    const onAoiModeChange = vi.fn()
+    const ftw = mountWithHost({
+      hasAoi: false,
+      model: 'ftw',
+      source: 'ftw',
+      modelOptions: [{ id: 'ftw' as const, label: 'Fields of the World (Global v3)' }],
+      phase: 'idle',
+      hasResult: false,
+      aoiMode: 'select',
+      onAoiModeChange,
+      ftwYear: 2025,
+      onFtwYearChange: () => {},
+      ftwThreshold: 70,
+      onFtwThresholdChange: () => {},
+      ftwGlobalOpacity: 90,
+      onFtwGlobalOpacityChange: () => {},
+    })
+    const ftwLabels = [...ftw.container.querySelectorAll('#si-afb-pane-detect > .si-afb__row .si-afb__label')]
+      .map(el => el.textContent?.replace(/\s+/g, ' ').trim() ?? '')
+    expect(ftwLabels[0]).toMatch(/^Model/)
+    expect(ftwLabels[1]).toBe('Select AOI')
+    expect(screen.queryByLabelText('Minimum field area in square meters')).toBeNull()
+    fireEvent.change(screen.getByLabelText('Select AOI source'), { target: { value: 'draw' } })
+    expect(onAoiModeChange).toHaveBeenCalledWith('draw')
+    ftw.cleanupHost()
+
+    const agro = mountWithHost({
+      model: 'ftw-inference-s2',
+      source: 'ftw-inference-s2',
+      modelOptions: [{ id: 'ftw-inference-s2' as const, label: 'AgroDetect S2' }],
+      aoiMode: 'viewport',
+      onAoiModeChange: () => {},
+    })
+    const agroLabels = [...agro.container.querySelectorAll('#si-afb-pane-detect > .si-afb__row .si-afb__label')]
+      .map(el => el.textContent?.replace(/\s+/g, ' ').trim() ?? '')
+    expect(agroLabels[0]).toMatch(/^Model/)
+    expect(agroLabels[1]).toBe('Select AOI')
+    agro.cleanupHost()
   })
 
   it('keeps Optimal Learning Rate tab open for FTW Global when AOI exists without detect result', () => {

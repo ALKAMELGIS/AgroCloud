@@ -273,18 +273,22 @@ export function AgriFieldBoundaryResultsDashboard({
   useEffect(() => {
     if (!resolvedAoiKey) return
     const prev = loadAoiTrainingAnalytics(resolvedAoiKey)
+    const hasRealEpochs = epochRows.length > 0
+    const hasDataset = (datasetSplit?.total ?? 0) > 0
+    const hasStoredLr = Boolean(prev?.lrFinder?.lrs?.length && prev?.lrFinder?.losses?.length)
+    // Do not persist synthetic LR curves alone — they spam the AOI dropdown with empty "Active AOI" rows.
+    if (!hasRealEpochs && !hasDataset && !hasStoredLr) return
     const lrFinder = resolveLrFinderForAoi({
       stored: prev?.lrFinder,
       fieldCount,
       sampleCount,
       score,
     })
-    if (!epochRows.length && !lrFinder && !datasetSplit) return
     saveAoiTrainingAnalytics({
       aoiKey: resolvedAoiKey,
       aoiLabel: aoiLabel || prev?.aoiLabel || 'AOI',
-      epochHistory: epochRows.length ? epochRows : prev?.epochHistory ?? [],
-      lrFinder: lrFinder ?? prev?.lrFinder ?? null,
+      epochHistory: hasRealEpochs ? epochRows : prev?.epochHistory ?? [],
+      lrFinder: hasStoredLr ? prev?.lrFinder ?? null : hasRealEpochs || hasDataset ? lrFinder : null,
       dataset: datasetSplit ?? prev?.dataset ?? null,
       updatedAt: new Date().toISOString(),
     })

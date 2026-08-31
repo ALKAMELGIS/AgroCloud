@@ -316,6 +316,18 @@ export function formatFieldBoundaryUserError(
     }
   }
 
+  if (
+    /Field boundary detection failed \(HTTP 5\d\d\)/i.test(msg) ||
+    /http proxy error|internal server error|bad gateway|gateway timeout/i.test(msg)
+  ) {
+    return {
+      short: 'Field API unavailable — start the AgroCloud backend (npm run dev)',
+      detail:
+        detail ||
+        'The /api proxy could not reach the Node backend (:3011). Run npm run dev (frontend + backend), then retry.',
+    }
+  }
+
   const first = stripUrls(msg).split(/(?<=[.!?])\s+/)[0] || stripUrls(msg)
   const short = (first.length > 110 ? `${first.slice(0, 109)}…` : first) || 'Field boundary detection failed.'
   return { short, detail: detail || short }
@@ -451,7 +463,9 @@ async function throwIfFailed(res: Response, json: { error?: string; detail?: str
   }
   if (!res.ok) {
     const raw = payloadError || `Field boundary detection failed (HTTP ${res.status}).`
-    const offline = looksLikeOfflineUpstream(raw)
+    const offline =
+      looksLikeOfflineUpstream(raw) ||
+      (res.status >= 500 && res.status <= 599 && !payloadError)
     const { short, detail } = formatFieldBoundaryUserError(raw, { offline })
     throw new FieldBoundaryServiceError(short, offline, detail)
   }

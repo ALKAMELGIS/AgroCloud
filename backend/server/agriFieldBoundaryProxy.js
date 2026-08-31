@@ -496,9 +496,15 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
         method: 'GET',
         timeoutMs: 30_000,
       })
+      if (status >= 500) {
+        return res.status(503).json({
+          error: 'Field boundary job poll failed on the Python engine.',
+          detail: String(json?.error || json?.detail || `HTTP ${status}`),
+        })
+      }
       return res.status(status).json(json)
     } catch {
-      return res.status(404).json({ error: 'Unknown field-boundary job.' })
+      return res.status(503).json({ error: 'Could not poll field-boundary job.' })
     }
   })
 

@@ -2,7 +2,7 @@ import './header.css'
 import './lux-theme.css'
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { AgroCloudMark } from './AgroCloudMark'
-import { ELITE_AGRO_LOGO_WHITE_URL, resolveEliteAgroLogoUrl } from '../lib/brandAssets'
+import { ELITE_AGRO_LOGO_WHITE_URL, ELITE_AGROCLOUD_SITE_URL, resolveEliteAgroLogoUrl } from '../lib/brandAssets'
 import { normalizeHeaderLogoText } from '../services/settingsStorage'
 import { useSystemSettings } from '../store/SystemSettingsContext'
 import { useLanguage } from '../lib/i18n'
@@ -146,15 +146,18 @@ export default function HeaderBar({ onToggleMobileNav, mobileNavOpen = false }: 
         ) : null}
       </div>
       <div className={`header-center${hs.showCenterLogo ? '' : ' header-center--hidden'}`}>
-        <span
+        <a
           className={`header-center__logo${!isDarkTheme && centerLogoIsWhite ? ' header-center__logo--invert' : ''}`}
-          role="img"
-          aria-label="Elite Agro Projects"
+          href={ELITE_AGROCLOUD_SITE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={ELITE_AGROCLOUD_SITE_URL}
+          aria-label={`Elite AgroCloud — ${ELITE_AGROCLOUD_SITE_URL}`}
         >
           <img
             className="brand-logo"
             src={logoSrc}
-            alt=""
+            alt="Elite AgroCloud"
             width={300}
             height={48}
             loading="eager"
@@ -165,7 +168,7 @@ export default function HeaderBar({ onToggleMobileNav, mobileNavOpen = false }: 
               if (logoSrc !== ELITE_AGRO_LOGO_WHITE_URL) setLogoSrc(ELITE_AGRO_LOGO_WHITE_URL)
             }}
           />
-        </span>
+        </a>
       </div>
       <div className="header-right"></div>
     </header>

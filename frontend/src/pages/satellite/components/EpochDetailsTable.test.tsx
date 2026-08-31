@@ -43,8 +43,8 @@ describe('EpochDetailsTable', () => {
     expect(screen.getByText('00:00:05')).toBeTruthy()
     expect(screen.getByText('00:01:05')).toBeTruthy()
     expect(screen.getByText(/"average_precision": 0\.469581/)).toBeTruthy()
-    expect(screen.getByText(/Best epoch/i)).toBeTruthy()
-    expect(screen.getByText(/Lowest val loss/i)).toBeTruthy()
+    expect(screen.getByLabelText(/Best epoch/i)).toBeTruthy()
+    expect(screen.getByLabelText(/Lowest val loss/i)).toBeTruthy()
   })
 
   it('keeps the Other Metrics column even without metric snapshots', () => {

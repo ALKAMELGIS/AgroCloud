@@ -45,6 +45,18 @@ export type FieldAttributesDashboardModel = {
 
 const DEDICATED_STRING_FIELDS = new Set(['CROP_TYPE', 'HEALTH_STATUS', 'LAND_COVER'])
 const SKIP_CATEGORY_FIELDS = new Set(['OBJECT_ID', 'OBJECT_NAME', 'OBJECT_TYPE'])
+const CROP_TYPE_ALIASES = [
+  'CROP_TYPE',
+  'crop_type',
+  'cropType',
+  'Crop_Type',
+  'CropType',
+  'crop',
+  'class_name',
+] as const
+const AREA_HA_ALIASES = ['AREA_HA', 'area_ha', 'areaHa', 'Area_ha'] as const
+const LAND_COVER_ALIASES = ['LAND_COVER', 'land_cover', 'landCover', 'Land_Cover'] as const
+const CATEGORY_PLACEHOLDERS = /^(none|—|-|n\/?a|na|null|not available|unknown cover.*)$/i
 
 function schemaField(schema: ObjectAttributesSchema, name: string): ObjectAttributeFieldDef | undefined {
   return schema.fields.find(f => f.name === name)
@@ -74,6 +86,37 @@ function propStr(props: Record<string, unknown>, field?: ObjectAttributeFieldDef
   const v = props[field.name]
   if (isEmptyAttributeValue(v, field.emptyValue)) return ''
   return String(v).trim()
+}
+
+function isBlankCategory(v: unknown): boolean {
+  if (v == null || v === '') return true
+  const s = String(v).trim()
+  return !s || CATEGORY_PLACEHOLDERS.test(s)
+}
+
+function readAliasedString(props: Record<string, unknown>, keys: readonly string[]): string {
+  for (const key of keys) {
+    if (!(key in props)) continue
+    if (isBlankCategory(props[key])) continue
+    return String(props[key]).trim()
+  }
+  return ''
+}
+
+function readAliasedNumber(props: Record<string, unknown>, keys: readonly string[]): number | null {
+  for (const key of keys) {
+    if (!(key in props)) continue
+    const v = props[key]
+    if (typeof v === 'number' && Number.isFinite(v) && v !== 0) return v
+    if (v == null || v === '') continue
+    const n = Number(String(v).replace(/[^\d.+-eE]/g, ''))
+    if (Number.isFinite(n) && n !== 0) return n
+  }
+  return null
+}
+
+function resolveCropTypeLabel(props: Record<string, unknown>): string {
+  return readAliasedString(props, CROP_TYPE_ALIASES) || readAliasedString(props, LAND_COVER_ALIASES)
 }
 
 function bump(map: Map<string, number>, label: string) {
@@ -121,7 +164,6 @@ export function buildFieldAttributesDashboardModel(
   const ndviField = schemaField(schema, 'NDVI')
   const confField = schemaField(schema, 'CROP_CONF')
   const healthField = schemaField(schema, 'HEALTH_STATUS')
-  const cropField = schemaField(schema, 'CROP_TYPE')
   const landField = schemaField(schema, 'LAND_COVER')
   const inspectField = schemaField(schema, 'INSPECT_PRI')
 
@@ -149,7 +191,7 @@ export function buildFieldAttributesDashboardModel(
   features.forEach((f, i) => {
     const props = (f.properties ?? {}) as Record<string, unknown>
     const name = propStr(props, nameField) || `Field ${i + 1}`
-    const area = propNum(props, areaField) ?? 0
+    const area = propNum(props, areaField) ?? readAliasedNumber(props, AREA_HA_ALIASES) ?? 0
     totalAreaHa += area
     areaRows.push({ label: name, value: area })
 
@@ -174,10 +216,10 @@ export function buildFieldAttributesDashboardModel(
       if (/healthy/i.test(health) && !/stress|moderate/i.test(health)) healthy += 1
     }
 
-    const crop = propStr(props, cropField)
+    const crop = resolveCropTypeLabel(props)
     if (crop) bump(cropMap, crop)
 
-    const land = propStr(props, landField)
+    const land = propStr(props, landField) || readAliasedString(props, LAND_COVER_ALIASES)
     if (land) bump(landMap, land)
 
     const inspect = propStr(props, inspectField)

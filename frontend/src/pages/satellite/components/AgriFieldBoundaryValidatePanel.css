@@ -439,40 +439,85 @@
   content: '▸';
 }
 .si-epochs__analysis {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px 8px;
-  padding: 8px;
-  background: var(--theme-bg-elevated, #ffffff);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background:
+    linear-gradient(180deg, rgba(5, 150, 105, 0.04), transparent 70%),
+    var(--theme-bg-elevated, #ffffff);
   border-top: 1px solid var(--theme-border, rgba(34, 34, 34, 0.12));
 }
-.si-epochs__stat {
+
+.si-epochs__analysis-icons {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
-.si-epochs__stat span {
-  font-size: 9px;
-  color: var(--theme-text-muted, #777777);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+
+.si-epochs__analysis-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--theme-border, rgba(34, 34, 34, 0.12));
+  background: var(--theme-surface-muted, #f8fafc);
+  color: var(--theme-text-secondary, #555555);
+  cursor: default;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
-.si-epochs__stat strong {
-  font-size: 10.5px;
-  font-weight: 600;
-  color: var(--theme-text-primary, #222222);
-  line-height: 1.35;
+
+.si-epochs__analysis-icon i {
+  font-size: 13px;
+  line-height: 1;
 }
-.si-epochs__stat--wide {
-  grid-column: 1 / -1;
+
+.si-epochs__analysis-icon:hover,
+.si-epochs__analysis-icon:focus-visible {
+  border-color: rgba(5, 150, 105, 0.35);
+  background: rgba(5, 150, 105, 0.08);
+  color: #047857;
+  outline: none;
 }
-.si-epochs__analysis.is-improving .si-epochs__stat--trend strong {
+
+.si-epochs__analysis-icon.is-positive {
+  border-color: rgba(21, 128, 61, 0.28);
+  background: rgba(5, 150, 105, 0.1);
   color: #15803d;
 }
-.si-epochs__analysis.is-overfitting .si-epochs__stat--trend strong,
-.si-epochs__analysis.is-degrading .si-epochs__stat--trend strong {
+
+.si-epochs__analysis-icon.is-warning {
+  border-color: rgba(180, 83, 9, 0.28);
+  background: rgba(245, 158, 11, 0.12);
   color: #b45309;
+}
+
+.si-epochs__analysis.is-improving .si-epochs__analysis-icon[aria-label^='Trend'] {
+  border-color: rgba(21, 128, 61, 0.28);
+  background: rgba(5, 150, 105, 0.1);
+  color: #15803d;
+}
+
+.si-epochs__analysis.is-overfitting .si-epochs__analysis-icon[aria-label^='Trend'],
+.si-epochs__analysis.is-degrading .si-epochs__analysis-icon[aria-label^='Trend'] {
+  border-color: rgba(180, 83, 9, 0.28);
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+
+/* Legacy hooks (unused after icon strip) */
+.si-epochs__stat,
+.si-epochs__stat--wide,
+.si-epochs__stat--trend,
+.si-epochs__kpi-row,
+.si-epochs__kpi,
+.si-epochs__insight,
+.si-epochs__analysis-head {
+  display: none;
 }
 .si-epochs__scroll {
   max-height: 240px;
@@ -556,20 +601,33 @@ html[data-theme='dark'] .si-epochs__summary::before {
   color: rgba(255, 255, 255, 0.65);
 }
 html[data-theme='dark'] .si-epochs__analysis {
-  background: #000;
+  background:
+    linear-gradient(180deg, rgba(5, 150, 105, 0.08), transparent 70%),
+    #000;
   border-top-color: rgba(255, 255, 255, 0.12);
 }
-html[data-theme='dark'] .si-epochs__stat span {
-  color: rgba(255, 255, 255, 0.62);
+html[data-theme='dark'] .si-epochs__analysis-icon {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.78);
 }
-html[data-theme='dark'] .si-epochs__stat strong {
-  color: #fff;
-}
-html[data-theme='dark'] .si-epochs__analysis.is-improving .si-epochs__stat--trend strong {
+html[data-theme='dark'] .si-epochs__analysis-icon:hover,
+html[data-theme='dark'] .si-epochs__analysis-icon:focus-visible {
+  background: rgba(5, 150, 105, 0.18);
+  border-color: rgba(110, 231, 183, 0.35);
   color: #86efac;
 }
-html[data-theme='dark'] .si-epochs__analysis.is-overfitting .si-epochs__stat--trend strong,
-html[data-theme='dark'] .si-epochs__analysis.is-degrading .si-epochs__stat--trend strong {
+html[data-theme='dark'] .si-epochs__analysis-icon.is-positive,
+html[data-theme='dark'] .si-epochs__analysis.is-improving .si-epochs__analysis-icon[aria-label^='Trend'] {
+  background: rgba(5, 150, 105, 0.18);
+  border-color: rgba(110, 231, 183, 0.35);
+  color: #86efac;
+}
+html[data-theme='dark'] .si-epochs__analysis-icon.is-warning,
+html[data-theme='dark'] .si-epochs__analysis.is-overfitting .si-epochs__analysis-icon[aria-label^='Trend'],
+html[data-theme='dark'] .si-epochs__analysis.is-degrading .si-epochs__analysis-icon[aria-label^='Trend'] {
+  background: rgba(245, 158, 11, 0.16);
+  border-color: rgba(252, 211, 77, 0.35);
   color: #fcd34d;
 }
 html[data-theme='dark'] .si-epochs__scroll {

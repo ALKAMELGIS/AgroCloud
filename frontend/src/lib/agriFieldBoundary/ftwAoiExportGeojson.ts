@@ -8,12 +8,13 @@
  */
 
 import * as turf from '@turf/turf'
-import type { LngLatBbox } from './ftwPmtilesFeatures'
 import {
   buildFtwAoiRasterMosaic,
   sampleFtwMosaicConfidence,
   vectorizeFtwMosaic,
 } from './ftwAoiMosaicVectorize'
+import { hideFtwTileBoundariesOnly } from './ftwHideTileBoundaries'
+import { loadFtwFeaturesForBbox, pickFtwZoomForBbox, type LngLatBbox } from './ftwPmtilesFeatures'
 import { clipFeatureCollectionToAoi } from '../trainingAi/clipResultsToAoi'
 import { yieldToMain } from '../yieldToMain'
 import type { FtwGlobalYear } from './ftwGlobalConfig'
@@ -50,8 +51,53 @@ export type BuildFtwAoiExportGeojsonOptions = {
   onProgress?: (message: string) => void
 }
 
+/** Direct PMTiles → clip when /ftw-mosaic-vectorize is unavailable. */
+async function buildFtwAoiExportGeojsonFromFeatures(
+  options: BuildFtwAoiExportGeojsonOptions,
+): Promise<GeoJSON.FeatureCollection> {
+  const aoiFc = toAoiFeatureCollection(options.aoi)
+  const rawBbox = turf.bbox(aoiFc) as LngLatBbox
+  const bbox = padBbox(rawBbox)
+  const minArea = Math.min(options.minAreaM2 ?? FTW_EXPORT_MAX_MIN_AREA_M2, FTW_EXPORT_MAX_MIN_AREA_M2)
+
+  options.onProgress?.('Loading FTW fields from global PMTiles (browser)…')
+  const loaded = await loadFtwFeaturesForBbox({
+    year: options.year,
+    thresholdPct: options.thresholdPct,
+    bbox,
+    signal: options.signal,
+  })
+  if (!loaded.length) {
+    throw new Error('No FTW fields in this AOI at the current confidence threshold.')
+  }
+
+  await yieldToMain()
+  const deduped = hideFtwTileBoundariesOnly(loaded, pickFtwZoomForBbox(bbox))
+  options.onProgress?.('Clipping FTW fields to AOI…')
+  const clipped = clipFeatureCollectionToAoi(
+    { type: 'FeatureCollection', features: deduped },
+    aoiFc,
+  )
+
+  await yieldToMain()
+  const features = (clipped.features ?? []).filter(f => {
+    try {
+      return turf.area(f as turf.AllGeoJSON) >= minArea
+    } catch {
+      return false
+    }
+  })
+
+  if (!features.length) {
+    throw new Error('No FTW fields in this AOI at the current confidence threshold.')
+  }
+
+  return normalizeFtwExportGeojson({ type: 'FeatureCollection', features }, options.year)
+}
+
 /**
- * Raster-first export: merge PMTiles into one continuous mask, vectorize pixel edges only.
+ * Raster-first export: merge PMTiles into one binary mask, vectorize pixel edges only.
+ * Falls back to direct PMTiles clip when the vectorize API is down.
  */
 export async function buildFtwAoiExportGeojson(
   options: BuildFtwAoiExportGeojsonOptions,
@@ -61,61 +107,73 @@ export async function buildFtwAoiExportGeojson(
   const bbox = padBbox(rawBbox)
   const minArea = Math.min(options.minAreaM2 ?? FTW_EXPORT_MAX_MIN_AREA_M2, FTW_EXPORT_MAX_MIN_AREA_M2)
 
-  options.onProgress?.('Building continuous raster mosaic (no tile grid)…')
-  const { mosaic } = await buildFtwAoiRasterMosaic({
-    year: options.year,
-    thresholdPct: options.thresholdPct,
-    bbox,
-    signal: options.signal,
-  })
+  try {
+    options.onProgress?.('Building continuous raster mosaic (no tile grid)…')
+    const { mosaic } = await buildFtwAoiRasterMosaic({
+      year: options.year,
+      thresholdPct: options.thresholdPct,
+      bbox,
+      signal: options.signal,
+    })
 
-  await yieldToMain()
-  options.onProgress?.('Vectorizing from raster pixel boundaries…')
-  const vectorized = await vectorizeFtwMosaic(mosaic, {
-    aoi: aoiFc,
-    minAreaM2: minArea,
-    signal: options.signal,
-    preserveGeometry: true,
-  })
+    await yieldToMain()
+    options.onProgress?.('Vectorizing from raster pixel boundaries…')
+    const vectorized = await vectorizeFtwMosaic(mosaic, {
+      aoi: aoiFc,
+      minAreaM2: minArea,
+      signal: options.signal,
+      preserveGeometry: true,
+    })
 
-  const rawFc = vectorized.geojson
-  if (!rawFc?.features?.length) {
-    throw new Error('No FTW fields in this AOI at the current confidence threshold.')
-  }
+    const rawFc = vectorized.geojson
+    if (!rawFc?.features?.length) {
+      throw new Error('No FTW fields in this AOI at the current confidence threshold.')
+    }
 
-  await yieldToMain()
-  options.onProgress?.('Clipping to AOI…')
-  const clipped = clipFeatureCollectionToAoi(rawFc, aoiFc)
+    await yieldToMain()
+    options.onProgress?.('Clipping to AOI…')
+    const clipped = clipFeatureCollectionToAoi(rawFc, aoiFc)
 
-  await yieldToMain()
-  options.onProgress?.('Applying minimum area filter…')
-  const features = (clipped.features ?? []).filter(f => {
+    await yieldToMain()
+    options.onProgress?.('Applying minimum area filter…')
+    const features = (clipped.features ?? []).filter(f => {
+      try {
+        return turf.area(f as turf.AllGeoJSON) >= minArea
+      } catch {
+        return false
+      }
+    })
+
+    const withConfidence = features.map(f => {
+      const sampled = sampleFtwMosaicConfidence(mosaic, f)
+      const props = (f.properties ?? {}) as Record<string, unknown>
+      const conf = sampled > 0 ? sampled : Number(props.confidence_mean ?? props.confidence ?? 0)
+      return {
+        ...f,
+        properties: {
+          ...props,
+          confidence_mean: Number.isFinite(conf) ? conf : null,
+          confidence: Number.isFinite(conf) ? conf : null,
+        },
+      }
+    })
+
+    return normalizeFtwExportGeojson(
+      { type: 'FeatureCollection', features: withConfidence },
+      options.year,
+      mosaic,
+    )
+  } catch (primaryErr) {
+    if (options.signal?.aborted) throw primaryErr
+    options.onProgress?.('Vectorize API unavailable — using direct FTW PMTiles clip…')
     try {
-      return turf.area(f as turf.AllGeoJSON) >= minArea
-    } catch {
-      return false
+      return await buildFtwAoiExportGeojsonFromFeatures(options)
+    } catch (fallbackErr) {
+      const primaryMsg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr)
+      const fallbackMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)
+      throw new Error(`${fallbackMsg} (vectorize: ${primaryMsg})`)
     }
-  })
-
-  const withConfidence = features.map(f => {
-    const sampled = sampleFtwMosaicConfidence(mosaic, f)
-    const props = (f.properties ?? {}) as Record<string, unknown>
-    const conf = sampled > 0 ? sampled : Number(props.confidence_mean ?? props.confidence ?? 0)
-    return {
-      ...f,
-      properties: {
-        ...props,
-        confidence_mean: Number.isFinite(conf) ? conf : null,
-        confidence: Number.isFinite(conf) ? conf : null,
-      },
-    }
-  })
-
-  return normalizeFtwExportGeojson(
-    { type: 'FeatureCollection', features: withConfidence },
-    options.year,
-    mosaic,
-  )
+  }
 }
 
 /** Shapefile / GeoJSON export fields — geometry sourced from raster vectorization only. */

@@ -80,4 +80,38 @@ describe('objectAttributesMapper', () => {
     expect(attrs.ANOMALY).toBe('Water Stress')
     expect(attrs.INSPECT_PRI).toBe('High')
   })
+
+  it('keeps spectral crop labels used for Fields of the World fallback', () => {
+    const row = {
+      fieldKey: 'afb-1',
+      objectId: '1',
+      objectName: 'Field A',
+      objectType: 'Field',
+      estimatedAreaHa: 2,
+      agriculturalStatus: 'Agricultural',
+      landCoverType: 'Cropland',
+      cropType: 'Fallow / sparse vegetation',
+      ndvi: 0.22,
+    } as AgriObjectReportRow
+
+    const attrs = mapReportRowToObjectAttributes(row, { index: 0, periodDays: 90 })
+    expect(attrs.CROP_TYPE).toBe('Fallow / sparse vegetation')
+  })
+
+  it('falls back to land cover when HLS crop class is empty', () => {
+    const row = {
+      fieldKey: 'afb-1',
+      objectId: '1',
+      objectName: 'Field A',
+      objectType: 'Field',
+      estimatedAreaHa: 2,
+      agriculturalStatus: 'Agricultural',
+      landCoverType: 'Vegetated Cropland',
+      cropType: 'Not Available',
+      ndvi: 0.48,
+    } as AgriObjectReportRow
+
+    const attrs = mapReportRowToObjectAttributes(row, { index: 0, periodDays: 90 })
+    expect(attrs.CROP_TYPE).toBe('Vegetated Cropland')
+  })
 })

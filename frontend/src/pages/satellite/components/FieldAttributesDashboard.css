@@ -20,6 +20,18 @@
   border: 0;
 }
 
+.si-field-dash__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.si-field-dash__head--embedded {
+  padding-bottom: 2px;
+}
+
 .si-field-dash__hero {
   display: flex;
   flex-direction: column;
@@ -120,14 +132,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  min-width: 26px;
-  height: 26px;
-  padding: 0 7px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border: 1px solid rgba(15, 23, 42, 0.12);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.92);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   color: #334155;
   cursor: pointer;
@@ -688,7 +699,8 @@
 }
 
 /* Centered expand modal — portaled to map container */
-.si-field-dash__toolbar {
+.si-field-dash__toolbar,
+.si-field-dash__head {
   display: flex;
   align-items: center;
   justify-content: space-between;

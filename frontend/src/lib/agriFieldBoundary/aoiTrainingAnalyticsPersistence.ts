@@ -82,7 +82,6 @@ export function listAoiTrainingAnalytics(): AoiTrainingAnalytics[] {
 
 export function isAoiTrainingAnalyticsChartable(row: AoiTrainingAnalytics): boolean {
   if (row.epochHistory?.length) return true
-  if (row.lrFinder?.lrs?.length && row.lrFinder.losses?.length) return true
   if ((row.dataset?.total ?? 0) > 0) return true
   return false
 }

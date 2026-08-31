@@ -208,8 +208,8 @@ export function AoiTrainingChartsGrid({
   emptyLossCopy,
   emptyLrFinderCopy,
 }: AoiTrainingChartsGridProps) {
-  const chartH = inline ? 156 : 168
-  const chartW = inline ? 320 : 420
+  const chartH = inline ? 156 : 172
+  const chartW = inline ? 320 : 300
 
   const lossSeries = useMemo(() => buildLossSeries(epochHistory), [epochHistory])
   const iouSeries = useMemo(
@@ -460,7 +460,7 @@ export function buildAoiChartOptionLabel(bundle: AoiChartBundle, all: AoiChartBu
   return `${bundle.aoiLabel} · ${aoiKeySuffix(bundle.aoiKey)}`
 }
 
-/** Multi-AOI workspace — selector + independent chart grid per AOI. */
+/** Multi-AOI workspace — dropdown selector + independent chart grid per AOI. */
 export function AoiTrainingChartsWorkspace({
   bundles,
   activeAoiKey,
@@ -499,26 +499,23 @@ export function AoiTrainingChartsWorkspace({
 
   return (
     <div className={`si-aoi-charts-workspace${inline ? ' si-aoi-charts-workspace--inline' : ''}`}>
-      {sorted.length > 1 ? (
-        <div className="si-aoi-charts__aoi-picker">
-          <label className="si-aoi-charts__aoi-picker-label" htmlFor={selectId}>
-            AOI
-          </label>
-          <select
-            id={selectId}
-            className="si-aoi-charts__aoi-select"
-            value={active.aoiKey}
-            aria-label="AOI training charts"
-            onChange={e => setSelectedKey(e.target.value)}
-          >
-            {sorted.map(bundle => (
-              <option key={bundle.aoiKey} value={bundle.aoiKey}>
-                {buildAoiChartOptionLabel(bundle, sorted)}
-              </option>
-            ))}
-          </select>
-        </div>
-      ) : null}
+      <label className="si-aoi-charts__aoi-row" htmlFor={selectId}>
+        <span className="si-aoi-charts__aoi-row-label">AOI</span>
+        <select
+          id={selectId}
+          className="si-aoi-charts__aoi-select"
+          value={active.aoiKey}
+          aria-label="Select AOI for training charts"
+          title="Choose which AOI charts to display"
+          onChange={e => setSelectedKey(e.target.value)}
+        >
+          {sorted.map(bundle => (
+            <option key={bundle.aoiKey} value={bundle.aoiKey}>
+              {buildAoiChartOptionLabel(bundle, sorted)}
+            </option>
+          ))}
+        </select>
+      </label>
       <AoiTrainingChartsGrid
         key={active.aoiKey}
         aoiLabel={active.aoiLabel}

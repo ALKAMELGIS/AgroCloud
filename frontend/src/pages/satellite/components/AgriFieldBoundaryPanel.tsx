@@ -381,13 +381,16 @@ export function AgriFieldBoundaryPanel({
   const isAfd = source === 'agricultural-field-delineation' || model === 'agricultural-field-delineation'
   const isDelineateFbis = source === 'delineate-fbis'
   const hasModelInfo = isAfd || isFtwGlobal || isFtwInferenceS2
+  // FTW Global v3: overlay works without a prior AOI; Select AOI scopes clip/export.
   const canRun = isFtwGlobal
-    ? hasAoi && !busy
+    ? !busy
     : hasAoi && !busy && (!needsUpload || Boolean(uploadedFileName))
   const pct = Math.max(0, Math.min(100, Math.round(progress)))
   const showProgress = busy && (phase === 'detecting' || phase === 'capturing')
   const runTitle = isFtwGlobal
-    ? 'Show FTW global field boundaries (pre-computed v3 B7, CC-BY)'
+    ? hasAoi
+      ? 'Show FTW global field boundaries clipped to the selected AOI (pre-computed v3 B7, CC-BY)'
+      : `Show FTW global fields — then ${AOI_MODE_HINT[aoiMode]}`
     : isFtwInferenceS2
       ? 'Run AgroDetect S2 (PRUE) on Sentinel-2 L2A — live inference via api.eliteagrocloud.com'
     : isAfd
@@ -594,6 +597,62 @@ export function AgriFieldBoundaryPanel({
             ))}
           </select>
         </label>
+
+        <label className="si-afb__row">
+          <span className="si-afb__label">Select AOI</span>
+          <select
+            className="si-afb__select"
+            value={aoiMode}
+            disabled={busy || !onAoiModeChange}
+            aria-label="Select AOI source"
+            title={AOI_MODE_HINT[aoiMode]}
+            onChange={e => handleAoiModeChange(e.target.value as FieldBoundaryAoiMode)}
+          >
+            {FIELD_BOUNDARY_AOI_MODE_OPTIONS.map(o => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {!hasAoi ? (
+          <p className="si-afb__hint" role="status">
+            {aoiMode === 'draw'
+              ? 'Draw a polygon on the map, then run Detect (or Show Global Fields).'
+              : aoiMode === 'layers'
+                ? 'Pick an AOI layer below, or run with the current map extent.'
+                : aoiMode === 'select'
+                  ? 'Use the Select tool on layer features, then run Detect.'
+                  : 'Uses the current map extent as AOI.'}
+          </p>
+        ) : null}
+
+        {aoiMode === 'layers' && onAoiLayerIdChange ? (
+          <label className="si-afb__row">
+            <span className="si-afb__label">AOI layer</span>
+            <select
+              className="si-afb__select"
+              value={aoiLayerId}
+              disabled={busy || aoiLayerOptions.length === 0}
+              aria-label="AOI layer from Layers"
+              onChange={e => onAoiLayerIdChange(e.target.value)}
+            >
+              {aoiLayerOptions.length === 0 ? (
+                <option value="">Add a vector layer from Layers</option>
+              ) : (
+                aoiLayerOptions.map(l => (
+                  <option key={l.id} value={l.id}>
+                    {l.label}
+                    {typeof l.featureCount === 'number' && l.featureCount > 0
+                      ? ` (${l.featureCount})`
+                      : ''}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
+        ) : null}
 
         {modelInfoOpen && isAfd ? (
           <div className="si-afb__model-info" id="si-afb-model-info" role="region" aria-label="Model information">
@@ -832,50 +891,6 @@ export function AgriFieldBoundaryPanel({
 
         {!isFtwGlobal ? (
         <>
-        <label className="si-afb__row">
-          <span className="si-afb__label">Select AOI</span>
-          <select
-            className="si-afb__select"
-            value={aoiMode}
-            disabled={busy || !onAoiModeChange}
-            aria-label="Select AOI source"
-            title={AOI_MODE_HINT[aoiMode]}
-            onChange={e => handleAoiModeChange(e.target.value as FieldBoundaryAoiMode)}
-          >
-            {FIELD_BOUNDARY_AOI_MODE_OPTIONS.map(o => (
-              <option key={o.id} value={o.id}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        {aoiMode === 'layers' && onAoiLayerIdChange ? (
-          <label className="si-afb__row">
-            <span className="si-afb__label">AOI layer</span>
-            <select
-              className="si-afb__select"
-              value={aoiLayerId}
-              disabled={busy || aoiLayerOptions.length === 0}
-              aria-label="AOI layer from Layers"
-              onChange={e => onAoiLayerIdChange(e.target.value)}
-            >
-              {aoiLayerOptions.length === 0 ? (
-                <option value="">Add a vector layer from Layers</option>
-              ) : (
-                aoiLayerOptions.map(l => (
-                  <option key={l.id} value={l.id}>
-                    {l.label}
-                    {typeof l.featureCount === 'number' && l.featureCount > 0
-                      ? ` (${l.featureCount})`
-                      : ''}
-                  </option>
-                ))
-              )}
-            </select>
-          </label>
-        ) : null}
-
         <label className="si-afb__row">
           <span className="si-afb__label">
             Min area

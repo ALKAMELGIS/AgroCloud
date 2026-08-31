@@ -1,13 +1,21 @@
 /** Bundled Elite Agro Projects white logo (frontend/public → /AgroCloud/elite-agro-logo-white.png). */
 export const ELITE_AGRO_LOGO_WHITE_URL = `${import.meta.env.BASE_URL}elite-agro-logo-white.png`
 
+/** Public marketing / app home. */
+export const ELITE_AGROCLOUD_SITE_URL = 'https://www.eliteagrocloud.com'
+
 /** Removed from eliteprojects.ae — map to bundled asset so saved settings keep working. */
 export const LEGACY_ELITE_AGRO_LOGO_URL =
   'https://eliteprojects.ae/wp-content/uploads/2022/07/logo-retraced-white-03.png'
 
 export function resolveEliteAgroLogoUrl(url: string | null | undefined): string {
   const trimmed = String(url ?? '').trim()
-  if (!trimmed || trimmed === LEGACY_ELITE_AGRO_LOGO_URL) return ELITE_AGRO_LOGO_WHITE_URL
+  if (!trimmed) return ELITE_AGRO_LOGO_WHITE_URL
+  // Any cached eliteprojects.ae retraced logo (404) → bundled PNG
+  if (/eliteprojects\.ae/i.test(trimmed) && /logo-retraced|logo.*white/i.test(trimmed)) {
+    return ELITE_AGRO_LOGO_WHITE_URL
+  }
+  if (trimmed === LEGACY_ELITE_AGRO_LOGO_URL) return ELITE_AGRO_LOGO_WHITE_URL
   return trimmed
 }
 

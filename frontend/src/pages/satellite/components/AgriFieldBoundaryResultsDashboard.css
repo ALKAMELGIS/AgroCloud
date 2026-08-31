@@ -216,12 +216,22 @@
   color: var(--afb-dash-text);
 }
 
-.si-afb-dash__card--table .si-epochs__stat span,
+.si-afb-dash__card--table .si-epochs__analysis {
+  background:
+    linear-gradient(180deg, rgba(5, 150, 105, 0.05), transparent 70%),
+    var(--afb-dash-table-bg);
+}
+
+.si-afb-dash__card--table .si-epochs__analysis-icon {
+  background: var(--afb-dash-table-bg);
+  border-color: var(--afb-dash-border);
+  color: var(--afb-dash-muted);
+}
+
 .si-afb-dash__card--table .si-epochs__count {
   color: var(--afb-dash-muted);
 }
 
-.si-afb-dash__card--table .si-epochs__stat strong,
 .si-afb-dash__card--table .si-epochs__table thead th,
 .si-afb-dash__card--table .si-epochs__table td,
 .si-afb-dash__card--table .si-epochs__table tbody th[scope='row'] {

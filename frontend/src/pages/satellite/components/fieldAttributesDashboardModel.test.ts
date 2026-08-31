@@ -71,6 +71,34 @@ describe('buildFieldAttributesDashboardModel', () => {
     expect(model!.attributeMixes.some(c => c.fieldName === 'INSPECT_PRI')).toBe(true)
   })
 
+  it('reads crop mix from FTW aliases and LAND_COVER when CROP_TYPE is empty', () => {
+    const fc: GeoJSON.FeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { crop_type: 'Wheat', area_ha: 3.2 },
+          geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]] },
+        },
+        {
+          type: 'Feature',
+          properties: { CROP_TYPE: 'None', LAND_COVER: 'Cropland', AREA_HA: 1.4 },
+          geometry: { type: 'Polygon', coordinates: [[[1, 0], [2, 0], [2, 1], [1, 1], [1, 0]]] },
+        },
+        {
+          type: 'Feature',
+          properties: { CROP_TYPE: 'None', LAND_COVER: 'Cropland', AREA_HA: 0.9 },
+          geometry: { type: 'Polygon', coordinates: [[[0, 1], [1, 1], [1, 2], [0, 2], [0, 1]]] },
+        },
+      ],
+    }
+    const model = buildFieldAttributesDashboardModel(fc)
+    expect(model!.cropMix.find(r => r.label === 'Wheat')?.count).toBe(1)
+    expect(model!.cropMix.find(r => r.label === 'Cropland')?.count).toBe(2)
+    expect(model!.cropTypeCount).toBe(2)
+    expect(model!.totalAreaHa).toBe(5.5)
+  })
+
   it('builds charts for extra Example.xlsx string fields', () => {
     const fc: GeoJSON.FeatureCollection = {
       type: 'FeatureCollection',

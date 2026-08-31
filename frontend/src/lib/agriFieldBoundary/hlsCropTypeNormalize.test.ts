@@ -16,5 +16,11 @@ describe('hlsCropTypeNormalize', () => {
     expect(normalizeHlsCropTypeName('Natural vegetation')).toBeNull()
     expect(normalizeHlsCropTypeName('Open Water')).toBeNull()
     expect(normalizeHlsCropTypeName('Developed/Barren')).toBeNull()
+    expect(normalizeHlsCropTypeName('Fallow/Idle cropland')).toBeNull()
+  })
+
+  it('keeps spectral proxy labels that are not exact HLS non-crop classes', () => {
+    expect(normalizeHlsCropTypeName('Fallow / sparse vegetation')).toBe('Fallow / sparse vegetation')
+    expect(normalizeHlsCropTypeName('Herbaceous cropland')).toBe('Herbaceous cropland')
   })
 })

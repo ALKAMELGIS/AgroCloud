@@ -16411,25 +16411,40 @@ export default function SatelliteIntelligence() {
   const agriFieldFocusSigRef = useRef('');
 
   const restoreFtwGlobalMapNavigation = useCallback(() => {
-    if (fieldBoundaryAoiModeRef.current === 'draw') {
-      setFieldBoundaryAoiMode('select');
+    const map = getMapInstance();
+    setFtwGlobalInteractionMode(map, false, agriFieldBoundaryRef.current.ftwGlobalOpacity);
+    ensureAgroCloudMapScrollZoom(map);
+    const mode = fieldBoundaryAoiModeRef.current;
+    if (mode === 'select') {
+      if (rsDrawingModeActiveRef.current) handleRsDrawingModeChange(false);
+      setGisSelectionActive(true);
+      setGisSelectionTool('select');
+      applyMapDrawTool('select');
+      setShowEditHandles(false);
+      setMapDragPanEnabled(true);
+      return;
+    }
+    if (mode === 'draw') {
+      if (gisSelectionActiveRef.current) setGisSelectionActive(false);
+      handleRsDrawingModeChange(true);
+      applyMapDrawTool('polygon');
+      setShowEditHandles(false);
+      setMapDragPanEnabled(false);
+      return;
     }
     if (rsDrawingModeActiveRef.current) handleRsDrawingModeChange(false);
     if (gisSelectionActiveRef.current) setGisSelectionActive(false);
-    cancelCurrentDrawing();
     applyMapDrawTool('select');
     setShowEditHandles(false);
     setMapDragPanEnabled(true);
-    const map = getMapInstance();
-    ensureAgroCloudMapScrollZoom(map);
-    setFtwGlobalInteractionMode(map, false, agriFieldBoundaryRef.current.ftwGlobalOpacity);
-  }, [cancelCurrentDrawing, handleRsDrawingModeChange]);
+  }, [handleRsDrawingModeChange]);
 
   const handleFieldBoundaryAoiModeChange = useCallback((mode: FieldBoundaryAoiMode) => {
     setFieldBoundaryAoiMode(mode);
     if (agriFieldBoundaryRef.current.model === 'ftw') {
-      restoreFtwGlobalMapNavigation();
-      return;
+      const map = getMapInstance();
+      setFtwGlobalInteractionMode(map, false, agriFieldBoundaryRef.current.ftwGlobalOpacity);
+      ensureAgroCloudMapScrollZoom(map);
     }
     if (mode === 'select') {
       if (rsDrawingModeActiveRef.current) handleRsDrawingModeChange(false);
@@ -16448,8 +16463,15 @@ export default function SatelliteIntelligence() {
       applyMapDrawTool('polygon');
       setShowEditHandles(false);
       setMapDragPanEnabled(false);
+      return;
     }
-  }, [handleRsDrawingModeChange, clearMeasure, restoreFtwGlobalMapNavigation]);
+    if (rsDrawingModeActiveRef.current) handleRsDrawingModeChange(false);
+    if (gisSelectionActiveRef.current) setGisSelectionActive(false);
+    if (measureModeRef.current) clearMeasure();
+    applyMapDrawTool('select');
+    setShowEditHandles(false);
+    setMapDragPanEnabled(true);
+  }, [handleRsDrawingModeChange, clearMeasure]);
 
   /** Field Boundary panel — opening must not auto-activate the Edit/drawing rail. */
   useEffect(() => {
@@ -16457,19 +16479,16 @@ export default function SatelliteIntelligence() {
     setShowEditHandles(false);
     agriFieldBoundaryRef.current.setSceneDateAllYear();
     if (agriFieldBoundaryRef.current.model === 'ftw') {
-      if (fieldBoundaryAoiModeRef.current === 'draw') {
-        setFieldBoundaryAoiMode('select');
-      }
-      restoreFtwGlobalMapNavigation();
-      return;
+      const map = getMapInstance();
+      setFtwGlobalInteractionMode(map, false, agriFieldBoundaryRef.current.ftwGlobalOpacity);
+      ensureAgroCloudMapScrollZoom(map);
     }
-    const mode = fieldBoundaryAoiModeRef.current;
     if (rsDrawingModeActiveRef.current) {
       handleRsDrawingModeChange(false);
       applyMapDrawTool('select');
       setMapDragPanEnabled(true);
     }
-    if (mode === 'select') {
+    if (fieldBoundaryAoiModeRef.current === 'select') {
       if (measureModeRef.current) clearMeasure();
       setGisSelectionActive(true);
       setGisSelectionTool('select');
@@ -16477,7 +16496,7 @@ export default function SatelliteIntelligence() {
       setShowEditHandles(false);
       setMapDragPanEnabled(true);
     }
-  }, [expandedEnvSection, handleRsDrawingModeChange, restoreFtwGlobalMapNavigation]);
+  }, [expandedEnvSection, handleRsDrawingModeChange, clearMeasure]);
 
   useEffect(() => {
     if (agriFieldBoundary.model !== 'ftw') return;
@@ -27297,13 +27316,7 @@ export default function SatelliteIntelligence() {
                           onAoiLayerIdChange={setFieldBoundaryAoiLayerId}
                           source={agriFieldBoundary.source}
                           model={agriFieldBoundary.model}
-                          onModelChange={m => {
-                            agriFieldBoundary.setModel(m);
-                            if (m === 'ftw') {
-                              setFieldBoundaryAoiMode('select');
-                              restoreFtwGlobalMapNavigation();
-                            }
-                          }}
+                          onModelChange={agriFieldBoundary.setModel}
                           modelOptions={agriFieldBoundary.modelOptions}
                           imagery={agriFieldBoundary.imagery}
                           onImageryChange={agriFieldBoundary.setImagery}

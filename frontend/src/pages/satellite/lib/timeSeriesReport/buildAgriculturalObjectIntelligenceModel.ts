@@ -465,31 +465,26 @@ export async function buildAgriculturalObjectIntelligenceModel(
       setIfMissing(row, 'agriculturalStatus', agriStatus, fromLayer.get('agriculturalStatus') === true)
     }
 
-    // Crop type — layer wins; Prithvi/country per parcel when provided; spectral proxy only outside field-boundary path
+    // Crop type — layer wins, then HLS/country parcel labels, then spectral class (so FTW pies are never empty).
     const parcelCrop = cropByFieldKey?.get(plot.fieldKey)
     const hlsCropAttempted = cropByFieldKey != null
-    const realCropOnly = hlsCropAttempted && (cropByFieldKey?.size ?? 0) > 0
     let hadLayerCrop = fromLayer.get('cropType') === true && row.cropType !== NOT_AVAILABLE
     if (row.cropType === NOT_AVAILABLE && parcelCrop?.cropType) {
       row.cropType = parcelCrop.cropType
       hadLayerCrop = true
     }
     if (row.cropType === NOT_AVAILABLE) {
-      if (!hlsCropAttempted || !parcelCrop) {
-        if (!realCropOnly) {
-          const proxyCrop = cropTypeSpectralProxy({ ndvi: win.lateNdvi, ndwi: win.lateNdwi })
-          if (proxyCrop !== NOT_AVAILABLE) {
-            row.cropType = proxyCrop
-          } else if (!hlsCropAttempted) {
-            row.cropType = 'Unknown cover (insufficient Sentinel-2 signal)'
-          }
-        }
+      const proxyCrop = cropTypeSpectralProxy({ ndvi: win.lateNdvi, ndwi: win.lateNdwi })
+      if (proxyCrop !== NOT_AVAILABLE) {
+        row.cropType = proxyCrop
+      } else if (!hlsCropAttempted) {
+        row.cropType = 'Unknown cover (insufficient Sentinel-2 signal)'
       }
     }
     if (row.cropTypeConfidencePct === NOT_AVAILABLE || row.cropTypeConfidencePct === '--') {
       if (parcelCrop?.cropType && Number.isFinite(parcelCrop.confidencePct)) {
         row.cropTypeConfidencePct = Math.round(parcelCrop.confidencePct)
-      } else if (!realCropOnly) {
+      } else {
         const conf = cropConfidenceFromEvidence({
           ndvi: win.lateNdvi,
           observationCount: win.count,
@@ -829,15 +824,9 @@ export async function buildAgriculturalObjectIntelligenceModel(
         gaps,
         objectId,
         'Crop Type',
-        realCropOnly
-          ? 'Prithvi / country phenology did not classify this parcel'
-          : 'Crop type filled from spectral class — not a named cultivar',
-        realCropOnly
-          ? 'Widen season window or verify Sentinel Hub + Prithvi credentials'
-          : 'Ground-truth crop labels or trained classifier on the layer',
-        realCropOnly
-          ? 'Retry with a longer HLS window or join farm crop attributes'
-          : 'Join farm crop attributes to raise confidence above spectral estimate',
+        'Crop type filled from spectral class — not a named cultivar',
+        'Ground-truth crop labels or trained classifier on the layer',
+        'Join farm crop attributes to raise confidence above spectral estimate',
       )
     }
     if (weatherEt0TotalMm == null) {
