@@ -667,6 +667,7 @@ import type { VectorExportFormat } from '../../lib/vectorLayerExport';
 import type { AiDlMapLayerRasterRef } from './components/aiDetection/SiAiDlDetectObjectsPanel';
 import { useTreeDetection } from './components/useTreeDetection';
 import type { TreeImageryProviderId } from '../../lib/treeDetection/webMercatorTiles';
+import type { TreeAnalysisMode } from '../../lib/treeDetection/treeDetectionEngine';
 import { SiImportedCustomLayersOverlay, shouldPaintImportedLayerCircles } from './components/SiImportedCustomLayersOverlay';
 import { FloodMonitoringPanel, type FloodLayerKind } from './components/FloodMonitoringPanel';
 import { useFloodMonitoring } from './components/useFloodMonitoring';
@@ -5600,6 +5601,7 @@ export default function SatelliteIntelligence() {
   const [netfloraStatus, setNetfloraStatus] = useState('');
   const [treeProvider, setTreeProvider] = useState<TreeImageryProviderId>('esri');
   const [treeSensitivity] = useState(0.5);
+  const [treeAnalysisMode, setTreeAnalysisMode] = useState<TreeAnalysisMode>('detect');
   const [treeOverlayVisible, setTreeOverlayVisible] = useState(true);
   const [treeConfidenceMin, setTreeConfidenceMin] = useState(0);
   const [expandedEnvSection, setExpandedEnvSection] = useState<
@@ -14955,11 +14957,11 @@ export default function SatelliteIntelligence() {
   );
 
   const treeDetection = useTreeDetection({
-    geometry: treeAoiGeometry ?? null,
+    geometry: getDrawnGeometry(drawnGeometry) ?? null,
     provider: treeProvider,
     enabled: treeDetectionsActive,
     sensitivity: treeSensitivity,
-    mode: 'detect',
+    mode: treeAnalysisMode,
   });
 
   // Apply the confidence-filter slider: only trees scoring ≥ treeConfidenceMin
@@ -27259,22 +27261,16 @@ export default function SatelliteIntelligence() {
                         <TreeDetectionsPanel
                           provider={treeProvider}
                           onProviderChange={setTreeProvider}
-                          hasAoi={!!treeAoiGeometry}
-                          aoiMode={treeAoiMode}
-                          onAoiModeChange={handleTreeAoiModeChange}
-                          aoiLayerOptions={aoiLayerModeOptions}
-                          aoiLayerId={treeAoiLayerId}
-                          onAoiLayerIdChange={setTreeAoiLayerId}
+                          analysisMode={treeAnalysisMode}
+                          onAnalysisModeChange={setTreeAnalysisMode}
+                          hasAoi={!!getDrawnGeometry(drawnGeometry)}
                           phase={treeDetection.phase}
                           busy={treeDetection.busy}
                           error={treeDetection.error}
                           notice={
-                            treeDetection.lastEngine === 'spectral-builtin' ||
-                            treeDetection.lastEngine === 'local-crown'
-                              ? 'Engine: canopy detect → GIS Point'
-                              : treeDetection.lastEngine
-                                ? 'Engine: Ultralytics YOLO Detection (class: tree) → GIS Point'
-                                : null
+                            treeDetection.usedLocalFallback
+                              ? 'Model service offline — used the on-device detector. Start backend/services/tree-detection for higher accuracy.'
+                              : null
                           }
                           result={treeDetection.result}
                           overlayVisible={treeOverlayVisible}
@@ -27286,6 +27282,7 @@ export default function SatelliteIntelligence() {
                           onExport={handleTreeDetectExport}
                           onExportShapefile={handleTreeDetectExportShapefile}
                           onZoomToLayer={handleTreeZoomToLayer}
+                          onClose={() => setIsLayerDropdownOpen(false)}
                         />
                       </div>
                     )}

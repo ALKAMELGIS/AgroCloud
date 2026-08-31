@@ -20,7 +20,10 @@ import {
   loadFtwAoiSession,
   saveFtwAoiSession,
 } from '../../../lib/agriFieldBoundary/ftwAoiTrainingPersistence'
-import type { FtwAoiTrainingSession } from '../../../lib/agriFieldBoundary/ftwAoiTrainingTypes'
+import {
+  isFtwAoiSessionChartable,
+  type FtwAoiTrainingSession,
+} from '../../../lib/agriFieldBoundary/ftwAoiTrainingTypes'
 import type { TrainingEpochRecord } from '../../../lib/trainingAi/trainingAiClient'
 
 export type UseFtwAoiTrainingOptions = {
@@ -92,19 +95,26 @@ export function useFtwAoiTraining({
   const persist = useCallback((next: FtwAoiTrainingSession) => {
     sessionRef.current = next
     setSession(next)
-    saveFtwAoiSession(next)
+    if (isFtwAoiSessionChartable(next)) {
+      saveFtwAoiSession(next)
+    }
   }, [])
 
   useEffect(() => {
     if (!enabled || !activeAoi.key) return
     const loaded = loadFtwAoiSession(activeAoi.key, aoiLabel)
-    persist({
+    const next = {
       ...loaded,
       aoiKey: activeAoi.key,
       aoiLabel: aoiLabel || loaded.aoiLabel,
       areaHa: aoiAreaHa(activeAoi),
       ftwYear,
-    })
+    }
+    sessionRef.current = next
+    setSession(next)
+    if (isFtwAoiSessionChartable(next)) {
+      saveFtwAoiSession(next)
+    }
   }, [activeAoi.key, aoiLabel, ftwYear, enabled, activeAoi, persist])
 
   const stopPoll = useCallback(() => {

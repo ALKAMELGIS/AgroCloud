@@ -2,9 +2,13 @@
  * FTW AOI-scoped Optimal Learning Rate Finder — controls + multi-AOI charts.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FtwAoiTrainingSession } from '../../../lib/agriFieldBoundary/ftwAoiTrainingTypes'
-import { listFtwAoiSessions } from '../../../lib/agriFieldBoundary/ftwAoiTrainingPersistence'
+import { isFtwAoiSessionChartable } from '../../../lib/agriFieldBoundary/ftwAoiTrainingTypes'
+import {
+  listChartableFtwAoiSessions,
+  pruneStaleFtwAoiSessions,
+} from '../../../lib/agriFieldBoundary/ftwAoiTrainingPersistence'
 import {
   AoiTrainingChartsWorkspace,
   ftwSessionToChartBundle,
@@ -35,6 +39,78 @@ function fmtMetric(v: number | null | undefined, digits = 2): string {
   return v.toFixed(digits)
 }
 
+type FtwTrainInfoIconsProps = {
+  session: FtwAoiTrainingSession
+  optimalLr: number | null
+  totalSamples: number
+  trainingLive: boolean
+}
+
+function FtwTrainInfoIcons({
+  session,
+  optimalLr,
+  totalSamples,
+  trainingLive,
+}: FtwTrainInfoIconsProps) {
+  const trainingLoss =
+    session.trainLoss != null ? ` · Loss ${fmtMetric(session.trainLoss, 3)}` : ''
+  const items: Array<{
+    key: string
+    icon: string
+    label: string
+    accent?: boolean
+    live?: boolean
+  }> = [
+    {
+      key: 'dataset',
+      icon: 'fa-solid fa-database',
+      label: `FTW Dataset — Samples: ${totalSamples ? totalSamples.toLocaleString() : '—'}`,
+    },
+    {
+      key: 'area',
+      icon: 'fa-solid fa-chart-area',
+      label: `Area — ${session.areaHa > 0 ? `${session.areaHa.toFixed(1)} ha` : '—'}`,
+    },
+    {
+      key: 'model',
+      icon: 'fa-solid fa-microchip',
+      label: `Model — ${session.model.architecture} · ${session.model.encoder}`,
+    },
+    {
+      key: 'lr',
+      icon: 'fa-solid fa-sliders',
+      label: `Optimal LR — ${optimalLr ? fmtLr(optimalLr) : '—'}`,
+      accent: Boolean(optimalLr),
+    },
+    {
+      key: 'training',
+      icon: 'fa-solid fa-chart-line',
+      label: `Training — Epoch ${session.epoch}/${session.epochs}${trainingLoss}`,
+      live: trainingLive,
+    },
+    {
+      key: 'metrics',
+      icon: 'fa-solid fa-bullseye',
+      label: `Metrics — IoU ${fmtMetric(session.iou)} · F1 ${fmtMetric(session.f1)}`,
+    },
+  ]
+
+  return (
+    <div className="si-ftw-train__info-icons" aria-label="FTW AOI training summary">
+      {items.map(item => (
+        <span
+          key={item.key}
+          className={`si-ftw-train__info-icon${item.accent ? ' si-ftw-train__info-icon--accent' : ''}${item.live ? ' si-ftw-train__info-icon--live' : ''}`}
+          title={item.label}
+          aria-label={item.label}
+        >
+          <i className={item.icon} aria-hidden />
+        </span>
+      ))}
+    </div>
+  )
+}
+
 export function FtwAoiTrainingDashboard({
   session,
   busy = false,
@@ -47,13 +123,20 @@ export function FtwAoiTrainingDashboard({
 }: FtwAoiTrainingDashboardProps) {
   const [viewAoiKey, setViewAoiKey] = useState(session.aoiKey)
 
+  useEffect(() => {
+    pruneStaleFtwAoiSessions([session.aoiKey])
+  }, [session.aoiKey])
+
   const chartBundles = useMemo((): AoiChartBundle[] => {
     const byKey = new Map<string, AoiChartBundle>()
-    const sessions = listFtwAoiSessions()
-    const all = sessions.some(s => s.aoiKey === session.aoiKey)
-      ? sessions.map(s => (s.aoiKey === session.aoiKey ? session : s))
-      : [...sessions, session]
-    for (const row of all) {
+    const persisted = listChartableFtwAoiSessions(session.aoiKey)
+    const all = persisted.some(s => s.aoiKey === session.aoiKey)
+      ? persisted.map(s => (s.aoiKey === session.aoiKey ? session : s))
+      : [...persisted, session]
+    const rows = all.filter(
+      s => isFtwAoiSessionChartable(s) || s.aoiKey === session.aoiKey,
+    )
+    for (const row of rows) {
       const bundle = ftwSessionToChartBundle(row)
       const lrFinder = resolveLrFinderForAoi({
         stored: row.lrFinder,
@@ -81,40 +164,27 @@ export function FtwAoiTrainingDashboard({
   return (
     <div className="si-ftw-train">
       <header className="si-ftw-train__head">
-        <div className="si-ftw-train__title">Optimal Learning Rate Finder — {session.aoiLabel}</div>
-        <dl className="si-ftw-train__meta-grid">
-          <div>
-            <dt>FTW Dataset</dt>
-            <dd>Samples: {totalSamples ? totalSamples.toLocaleString() : '—'}</dd>
+        <FtwTrainInfoIcons
+          session={session}
+          optimalLr={optimalLr}
+          totalSamples={totalSamples}
+          trainingLive={trainingLive}
+        />
+        {session.epoch > 0 && session.epochs > 0 ? (
+          <div
+            className="si-ftw-train__progress"
+            role="progressbar"
+            aria-valuenow={session.epoch}
+            aria-valuemin={0}
+            aria-valuemax={session.epochs}
+            aria-label={`Training progress — epoch ${session.epoch} of ${session.epochs}`}
+          >
+            <div
+              className="si-ftw-train__progress-fill"
+              style={{ width: `${Math.min(100, (session.epoch / session.epochs) * 100)}%` }}
+            />
           </div>
-          <div>
-            <dt>Area</dt>
-            <dd>{session.areaHa > 0 ? `${session.areaHa.toFixed(1)} ha` : '—'}</dd>
-          </div>
-          <div>
-            <dt>Model</dt>
-            <dd>
-              {session.model.architecture} · {session.model.encoder}
-            </dd>
-          </div>
-          <div>
-            <dt>Optimal LR</dt>
-            <dd className="si-ftw-train__opt-lr">{optimalLr ? fmtLr(optimalLr) : '—'}</dd>
-          </div>
-          <div>
-            <dt>Training</dt>
-            <dd>
-              Epoch {session.epoch}/{session.epochs}
-              {session.trainLoss != null ? ` · Loss ${fmtMetric(session.trainLoss, 3)}` : ''}
-            </dd>
-          </div>
-          <div>
-            <dt>Metrics</dt>
-            <dd>
-              IoU {fmtMetric(session.iou)} · F1 {fmtMetric(session.f1)}
-            </dd>
-          </div>
-        </dl>
+        ) : null}
       </header>
 
       {(trainingLive || lrLive) && (

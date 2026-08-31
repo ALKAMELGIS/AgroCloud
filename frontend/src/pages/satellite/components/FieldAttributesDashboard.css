@@ -287,6 +287,114 @@
   letter-spacing: 0.04em;
 }
 
+.si-field-dash__vbar {
+  position: relative;
+  min-width: 0;
+}
+
+.si-field-dash__vbar--scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+}
+
+.si-field-dash__vbar-svg {
+  display: block;
+  min-width: 100%;
+}
+
+.si-field-dash__vbar-bg {
+  fill: rgba(15, 23, 42, 0.03);
+}
+
+.si-field-dash__vbar-grid {
+  stroke: rgba(15, 23, 42, 0.08);
+  stroke-width: 1;
+}
+
+.si-field-dash__vbar-axis {
+  stroke: rgba(15, 23, 42, 0.18);
+  stroke-width: 1;
+}
+
+.si-field-dash__vbar-ytick {
+  font-size: 8px;
+  fill: #64748b;
+}
+
+.si-field-dash__vbar-tick {
+  font-size: 8px;
+  fill: #64748b;
+}
+
+.si-field-dash__vbar-ylabel {
+  font-size: 8px;
+  fill: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.si-field-dash__vbar-tip {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, calc(-100% - 8px));
+  pointer-events: none;
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+  font-size: 9px;
+  line-height: 1.25;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25);
+}
+
+.si-field-dash__vbar-tip strong {
+  display: block;
+  font-weight: 700;
+}
+
+.si-field-dash__vbar-tip span {
+  color: #cbd5e1;
+  font-variant-numeric: tabular-nums;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-bg,
+.gis-float-panel .si-field-dash__vbar-bg,
+.si-field-dash-modal .si-field-dash__vbar-bg {
+  fill: rgba(255, 255, 255, 0.04);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-grid,
+.gis-float-panel .si-field-dash__vbar-grid,
+.si-field-dash-modal .si-field-dash__vbar-grid {
+  stroke: rgba(255, 255, 255, 0.08);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-axis,
+.gis-float-panel .si-field-dash__vbar-axis,
+.si-field-dash-modal .si-field-dash__vbar-axis {
+  stroke: rgba(255, 255, 255, 0.16);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-ytick,
+.gis-float-panel .si-field-dash__vbar-ytick,
+.si-field-dash-modal .si-field-dash__vbar-ytick {
+  fill: #9aa3af;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-tick,
+.gis-float-panel .si-field-dash__vbar-tick,
+.si-field-dash-modal .si-field-dash__vbar-tick {
+  fill: #9aa3af;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-ylabel,
+.gis-float-panel .si-field-dash__vbar-ylabel,
+.si-field-dash-modal .si-field-dash__vbar-ylabel {
+  fill: #94a3b8;
+}
+
 .si-field-dash__bars {
   display: flex;
   flex-direction: column;
@@ -337,15 +445,72 @@
   text-align: right;
 }
 
+.si-field-dash__pie-chart {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.si-field-dash__pie-chart--expanded {
+  gap: 12px;
+}
+
+.si-field-dash__pie-donut {
+  position: relative;
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+}
+
+.si-field-dash__pie-chart--expanded .si-field-dash__pie-donut {
+  width: 88px;
+  height: 88px;
+}
+
+.si-field-dash__pie-ring {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
+}
+
+.si-field-dash__pie-hole {
+  position: absolute;
+  inset: 24%;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
+}
+
+.si-field-dash__pie-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #334155;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.si-field-dash__pie-chart--expanded .si-field-dash__pie-center {
+  font-size: 11px;
+}
+
 .si-field-dash__pie-legend {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  margin-top: 4px;
+  min-width: 0;
+  flex: 1;
 }
 
 .si-field-dash__pie-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
   align-items: center;
   gap: 6px;
   font-size: 9px;
@@ -357,6 +522,19 @@
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+.si-field-dash__pie-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.si-field-dash__pie-value {
+  font-variant-numeric: tabular-nums;
+  color: #334155;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .si-field-dash__empty {
@@ -435,12 +613,27 @@
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__card-head span,
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__bar-row > span:first-child,
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__pie-row,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__pie-label,
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__empty,
 .gis-float-panel .si-field-dash__card-head span,
 .gis-float-panel .si-field-dash__bar-row > span:first-child,
 .gis-float-panel .si-field-dash__pie-row,
+.gis-float-panel .si-field-dash__pie-label,
 .gis-float-panel .si-field-dash__empty {
   color: #9aa3af;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__pie-value,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__pie-center,
+.gis-float-panel .si-field-dash__pie-value,
+.gis-float-panel .si-field-dash__pie-center {
+  color: #e8eaed;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__pie-hole,
+.gis-float-panel .si-field-dash__pie-hole {
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__bar-row strong,
@@ -689,8 +882,19 @@
 .si-field-dash-modal .si-field-dash__card-head span,
 .si-field-dash-modal .si-field-dash__bar-row > span:first-child,
 .si-field-dash-modal .si-field-dash__pie-row,
+.si-field-dash-modal .si-field-dash__pie-label,
 .si-field-dash-modal .si-field-dash__empty {
   color: #9aa3af;
+}
+
+.si-field-dash-modal .si-field-dash__pie-value,
+.si-field-dash-modal .si-field-dash__pie-center {
+  color: #e8eaed;
+}
+
+.si-field-dash-modal .si-field-dash__pie-hole {
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .si-field-dash-modal .si-field-dash__bar-row strong {

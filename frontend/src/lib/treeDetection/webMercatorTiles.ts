@@ -320,27 +320,9 @@ export async function buildTreeImageryMosaic(
   }
 }
 
-/** Axis-aligned lng/lat bbox of a GeoJSON Polygon/MultiPolygon (or Feature / FeatureCollection). */
-export function geometryBBox(
-  input: GeoJSON.Geometry | GeoJSON.Feature | GeoJSON.FeatureCollection | null | undefined,
-): LngLatBBox | null {
+/** Axis-aligned lng/lat bbox of a GeoJSON Polygon/MultiPolygon (or Feature). */
+export function geometryBBox(input: GeoJSON.Geometry | GeoJSON.Feature | null | undefined): LngLatBBox | null {
   if (!input) return null
-  if (input.type === 'FeatureCollection') {
-    let west = Infinity
-    let south = Infinity
-    let east = -Infinity
-    let north = -Infinity
-    for (const f of input.features ?? []) {
-      const b = geometryBBox(f)
-      if (!b) continue
-      if (b.west < west) west = b.west
-      if (b.south < south) south = b.south
-      if (b.east > east) east = b.east
-      if (b.north > north) north = b.north
-    }
-    if (!Number.isFinite(west) || !Number.isFinite(east)) return null
-    return { west, south, east, north }
-  }
   const geom = (input as GeoJSON.Feature).type === 'Feature' ? (input as GeoJSON.Feature).geometry : (input as GeoJSON.Geometry)
   if (!geom) return null
   let west = Infinity

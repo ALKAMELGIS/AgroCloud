@@ -2539,6 +2539,7 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
 
 .si-sat-ctx-rail-btn--map-collapsed .si-sat-ctx-rail-label {
   flex: 0 0 auto;
+  display: none;
   opacity: 0;
   max-width: 0;
   max-height: 0;

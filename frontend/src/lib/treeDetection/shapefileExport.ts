@@ -1,8 +1,16 @@
 /**
- * Minimal shapefile writer for Ultralytics YOLO tree Points
- * (box centre → TREE_ID, X, Y, CONFIDENCE, DATE, IMG_SOURCE).
+ * Minimal, dependency-light Esri Shapefile writer for YOLO tree detections.
  *
- * Point shapefile ZIP: .shp .shx .dbf .prj (WGS84).
+ * Tree detections are POINT features, so we only implement the Point shape type
+ * (shapeType = 1). A complete shapefile is a ZIP bundle of four members:
+ *   - `.shp`  geometry records
+ *   - `.shx`  geometry index
+ *   - `.dbf`  attribute table (dBASE III)
+ *   - `.prj`  WGS84 coordinate-system WKT
+ *
+ * Using the existing `jszip` dependency avoids pulling in a fragile shapefile
+ * package. Numeric/text attributes (confidence, crown size, vigour, species…)
+ * are carried into the `.dbf` so the export is GIS-ready in QGIS / ArcGIS Pro.
  */
 import JSZip from 'jszip'
 
@@ -154,12 +162,13 @@ export async function downloadTreeShapefile(
   baseName = 'tree-detections',
 ): Promise<void> {
   const fields: DbfField[] = [
-    { name: 'TREE_ID', type: 'C', length: 18 },
-    { name: 'X', type: 'N', length: 12, decimals: 7 },
-    { name: 'Y', type: 'N', length: 12, decimals: 7 },
-    { name: 'CONFIDENCE', type: 'N', length: 8, decimals: 3 },
-    { name: 'DATE', type: 'C', length: 10 },
-    { name: 'IMG_SOURCE', type: 'C', length: 40 },
+    { name: 'id', type: 'C', length: 18 },
+    { name: 'size_class', type: 'C', length: 10 },
+    { name: 'vigor', type: 'C', length: 10 },
+    { name: 'confidence', type: 'N', length: 6, decimals: 3 },
+    { name: 'crown_dm', type: 'N', length: 9, decimals: 2 },
+    { name: 'crown_m2', type: 'N', length: 11, decimals: 2 },
+    { name: 'species', type: 'C', length: 16 },
   ]
 
   const records: PointRecord[] = []
@@ -172,12 +181,13 @@ export async function downloadTreeShapefile(
       lng,
       lat,
       values: [
-        String(p.Tree_ID ?? p.id ?? ''),
-        Number(p.X ?? lng),
-        Number(p.Y ?? lat),
-        Number(p.Confidence ?? p.confidence ?? 0),
-        String(p.Date ?? ''),
-        String(p.Image_Source ?? p.imageSource ?? ''),
+        String(p.id ?? ''),
+        String(p.sizeClass ?? ''),
+        String(p.vigor ?? ''),
+        Number(p.confidence ?? 0),
+        Number(p.crownDiameterM ?? 0),
+        Number(p.crownAreaM2 ?? 0),
+        String(p.speciesLabel ?? p.species ?? ''),
       ],
     })
   }

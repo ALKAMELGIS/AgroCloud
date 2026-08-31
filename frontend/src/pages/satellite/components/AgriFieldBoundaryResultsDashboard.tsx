@@ -21,8 +21,10 @@ import {
 } from '../../../lib/trainingAi/trainingModelPersistence'
 import {
   AOI_TRAINING_ANALYTICS_CHANGED_EVENT,
-  listAoiTrainingAnalytics,
+  isAoiTrainingAnalyticsChartable,
+  listChartableAoiTrainingAnalytics,
   loadAoiTrainingAnalytics,
+  pruneStaleAoiTrainingAnalytics,
   saveAoiTrainingAnalytics,
 } from '../../../lib/agriFieldBoundary/aoiTrainingAnalyticsPersistence'
 import { GisFloatingWorkspacePanel } from './GisFloatingWorkspacePanel'
@@ -299,10 +301,16 @@ export function AgriFieldBoundaryResultsDashboard({
     setViewAoiKey(resolvedAoiKey)
   }, [resolvedAoiKey])
 
+  useEffect(() => {
+    if (!panelOpen) return
+    pruneStaleAoiTrainingAnalytics([resolvedAoiKey])
+  }, [panelOpen, resolvedAoiKey])
+
   const chartBundles = useMemo((): AoiChartBundle[] => {
     void analyticsTick
     const byKey = new Map<string, AoiChartBundle>()
-    for (const row of listAoiTrainingAnalytics()) {
+    for (const row of listChartableAoiTrainingAnalytics(resolvedAoiKey)) {
+      if (!isAoiTrainingAnalyticsChartable(row) && row.aoiKey !== resolvedAoiKey) continue
       const bundle = analyticsToChartBundle(row)
       const lrFinder = resolveLrFinderForAoi({
         stored: row.lrFinder,

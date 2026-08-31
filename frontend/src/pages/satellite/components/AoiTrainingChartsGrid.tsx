@@ -2,7 +2,7 @@
  * Shared 2×3 training analytics chart grid — AOI-scoped LR Finder layout.
  */
 
-import { useMemo, useState, type ReactNode } from 'react'
+import { useId, useMemo, useState, type ReactNode } from 'react'
 import { ValidationLinePlot, CHART_PALETTE, type PlotSeries } from './ValidationLinePlot'
 import type { TrainingEpochRecord } from '../../../lib/trainingAi/trainingAiClient'
 import type { FtwAoiTrainingSession, FtwDatasetSplit } from '../../../lib/agriFieldBoundary/ftwAoiTrainingTypes'
@@ -447,6 +447,19 @@ export function analyticsToChartBundle(row: AoiTrainingAnalytics): AoiChartBundl
   }
 }
 
+function aoiKeySuffix(aoiKey: string): string {
+  const id = aoiKey.includes(':') ? aoiKey.slice(aoiKey.indexOf(':') + 1) : aoiKey
+  if (id.length <= 10) return id
+  return `${id.slice(0, 6)}…${id.slice(-4)}`
+}
+
+/** Dropdown label — disambiguates duplicate AOI names with a short key suffix. */
+export function buildAoiChartOptionLabel(bundle: AoiChartBundle, all: AoiChartBundle[]): string {
+  const duplicateLabel = all.filter(b => b.aoiLabel === bundle.aoiLabel).length > 1
+  if (!duplicateLabel) return bundle.aoiLabel
+  return `${bundle.aoiLabel} · ${aoiKeySuffix(bundle.aoiKey)}`
+}
+
 /** Multi-AOI workspace — selector + independent chart grid per AOI. */
 export function AoiTrainingChartsWorkspace({
   bundles,
@@ -456,6 +469,7 @@ export function AoiTrainingChartsWorkspace({
   emptyLossCopy,
   emptyLrFinderCopy,
 }: AoiTrainingChartsWorkspaceProps) {
+  const selectId = useId()
   const [localKey, setLocalKey] = useState(activeAoiKey)
   const selectedKey = onActiveAoiChange ? activeAoiKey : localKey
   const setSelectedKey = onActiveAoiChange ?? setLocalKey
@@ -486,19 +500,23 @@ export function AoiTrainingChartsWorkspace({
   return (
     <div className={`si-aoi-charts-workspace${inline ? ' si-aoi-charts-workspace--inline' : ''}`}>
       {sorted.length > 1 ? (
-        <div className="si-aoi-charts__aoi-tabs" role="tablist" aria-label="AOI training charts">
-          {sorted.map(bundle => (
-            <button
-              key={bundle.aoiKey}
-              type="button"
-              role="tab"
-              aria-selected={bundle.aoiKey === active.aoiKey}
-              className={`si-aoi-charts__aoi-tab${bundle.aoiKey === active.aoiKey ? ' is-active' : ''}`}
-              onClick={() => setSelectedKey(bundle.aoiKey)}
-            >
-              {bundle.aoiLabel}
-            </button>
-          ))}
+        <div className="si-aoi-charts__aoi-picker">
+          <label className="si-aoi-charts__aoi-picker-label" htmlFor={selectId}>
+            AOI
+          </label>
+          <select
+            id={selectId}
+            className="si-aoi-charts__aoi-select"
+            value={active.aoiKey}
+            aria-label="AOI training charts"
+            onChange={e => setSelectedKey(e.target.value)}
+          >
+            {sorted.map(bundle => (
+              <option key={bundle.aoiKey} value={bundle.aoiKey}>
+                {buildAoiChartOptionLabel(bundle, sorted)}
+              </option>
+            ))}
+          </select>
         </div>
       ) : null}
       <AoiTrainingChartsGrid

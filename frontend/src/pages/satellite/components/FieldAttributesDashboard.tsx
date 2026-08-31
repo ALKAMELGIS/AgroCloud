@@ -4,6 +4,7 @@
 
 import { useMemo, useState, type RefObject } from 'react'
 import { ValidationLinePlot, type PlotSeries } from './ValidationLinePlot'
+import { FieldDashBarChart } from './FieldDashBarChart'
 import {
   buildFieldAttributesDashboardModel,
   type FieldAttributesDashboardModel,
@@ -201,22 +202,80 @@ function CountBars({ rows, fillClass = '' }: { rows: NamedCount[]; fillClass?: s
   )
 }
 
-function PieLegend({ rows }: { rows: NamedCount[] }) {
+function buildPieDonutBackground(rows: Array<{ count: number; color: string }>): string {
+  const nonzero = rows.filter(r => r.count > 0)
+  const total = nonzero.reduce((s, r) => s + r.count, 0)
+  if (total <= 0) return 'conic-gradient(#e2e8f0 0% 100%)'
+  let acc = 0
+  const segs: string[] = []
+  for (const r of nonzero) {
+    const pct = (r.count / total) * 100
+    const start = acc
+    acc += pct
+    segs.push(`${r.color} ${start}% ${acc}%`)
+  }
+  return `conic-gradient(${segs.join(', ')})`
+}
+
+function resolvePieSliceColor(label: string, index: number, palette: 'default' | 'health' = 'default'): string {
+  if (palette === 'health') {
+    const lower = label.toLowerCase()
+    if (/healthy/i.test(lower) && !/stress|moderate/i.test(lower)) return '#2e7d32'
+    if (/moderate/i.test(lower)) return '#ed6c02'
+    if (/stress|unhealthy|poor|critical/i.test(lower)) return '#c62828'
+    if (/unknown/i.test(lower)) return '#94a3b8'
+  }
+  return PIE_COLORS[index % PIE_COLORS.length]
+}
+
+function PieDonutChart({
+  rows,
+  palette = 'default',
+  ariaLabel,
+  expanded = false,
+}: {
+  rows: NamedCount[]
+  palette?: 'default' | 'health'
+  ariaLabel: string
+  expanded?: boolean
+}) {
   if (!rows.length) return <p className="si-field-dash__empty">No categories</p>
+
   const total = rows.reduce((s, r) => s + r.count, 0) || 1
+  const slices = rows.map((r, i) => ({
+    ...r,
+    color: resolvePieSliceColor(r.label, i, palette),
+    pct: Math.round((r.count / total) * 100),
+  }))
+  const background = buildPieDonutBackground(slices)
+
   return (
-    <div className="si-field-dash__pie-legend">
-      {rows.map((r, i) => (
-        <div key={r.label} className="si-field-dash__pie-row">
-          <span
-            className="si-field-dash__pie-dot"
-            style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}
-          />
-          <span>
-            {r.label} — {r.count} ({Math.round((r.count / total) * 100)}%)
-          </span>
+    <div className={`si-field-dash__pie-chart${expanded ? ' si-field-dash__pie-chart--expanded' : ''}`}>
+      <div
+        className="si-field-dash__pie-donut"
+        role="img"
+        aria-label={ariaLabel}
+        title={ariaLabel}
+      >
+        <div className="si-field-dash__pie-ring" style={{ background }} />
+        <div className="si-field-dash__pie-hole" aria-hidden />
+        <div className="si-field-dash__pie-center" aria-hidden>
+          {total.toLocaleString()}
         </div>
-      ))}
+      </div>
+      <div className="si-field-dash__pie-legend">
+        {slices.map(r => (
+          <div key={r.label} className="si-field-dash__pie-row">
+            <span className="si-field-dash__pie-dot" style={{ background: r.color }} />
+            <span className="si-field-dash__pie-label" title={r.label}>
+              {r.label}
+            </span>
+            <span className="si-field-dash__pie-value">
+              {r.count} ({r.pct}%)
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -224,7 +283,6 @@ function PieLegend({ rows }: { rows: NamedCount[] }) {
 type DashboardBodyProps = {
   model: FieldAttributesDashboardModel
   aoiLabel: string
-  areaMax: number
   layout: 'compact' | 'expanded'
   embedded?: boolean
   attributesBusy?: boolean
@@ -276,7 +334,6 @@ function DashboardMetaRow({
 function FieldAttributesDashboardBody({
   model,
   aoiLabel,
-  areaMax,
   layout,
   embedded = false,
   attributesBusy = false,
@@ -412,7 +469,14 @@ function FieldAttributesDashboardBody({
             </h4>
             <span>ha</span>
           </div>
-          <BarList rows={model.areaByField} max={areaMax} unit=" ha" />
+          <FieldDashBarChart
+            rows={model.areaByField}
+            ariaLabel="Area by field in hectares"
+            yLabel="ha"
+            color="#1976d2"
+            formatValue={v => fmtHa(v)}
+            expanded={expanded}
+          />
         </section>
 
         <section className="si-field-dash__card">
@@ -422,7 +486,11 @@ function FieldAttributesDashboardBody({
             </h4>
             <span>count</span>
           </div>
-          <PieLegend rows={model.cropMix} />
+          <PieDonutChart
+            rows={model.cropMix}
+            ariaLabel="Crop type distribution"
+            expanded={expanded}
+          />
         </section>
 
         <section className="si-field-dash__card">
@@ -432,7 +500,12 @@ function FieldAttributesDashboardBody({
             </h4>
             <span>count</span>
           </div>
-          <PieLegend rows={model.healthMix} />
+          <PieDonutChart
+            rows={model.healthMix}
+            palette="health"
+            ariaLabel="Health status distribution"
+            expanded={expanded}
+          />
         </section>
       </div>
 
@@ -444,7 +517,14 @@ function FieldAttributesDashboardBody({
             </h4>
             <span>fields</span>
           </div>
-          <CountBars rows={model.ndviBuckets} fillClass="si-field-dash__bar-fill--green" />
+          <FieldDashBarChart
+            rows={model.ndviBuckets.map(r => ({ label: r.label, value: r.count }))}
+            ariaLabel="NDVI distribution by field count"
+            yLabel="fields"
+            color="#2e7d32"
+            formatValue={v => String(Math.round(v))}
+            expanded={expanded}
+          />
         </section>
 
         {model.landCoverMix.length ? (
@@ -468,7 +548,11 @@ function FieldAttributesDashboardBody({
                   </h4>
                   <span>count</span>
                 </div>
-                <PieLegend rows={chart.rows} />
+                <PieDonutChart
+                  rows={chart.rows}
+                  ariaLabel={`${chart.label} distribution`}
+                  expanded={expanded}
+                />
               </section>
             ))
           : null}
@@ -525,11 +609,9 @@ export function FieldAttributesDashboard({
     )
   }
 
-  const areaMax = Math.max(0.01, ...model.areaByField.map(r => r.value))
   const bodyProps = {
     model,
     aoiLabel,
-    areaMax,
     attributesBusy,
     attributesStatus,
     operationProgressPct,

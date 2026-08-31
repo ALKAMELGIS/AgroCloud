@@ -4,6 +4,7 @@
 
 import {
   emptyFtwAoiSession,
+  isFtwAoiSessionChartable,
   type FtwAoiTrainingSession,
 } from './ftwAoiTrainingTypes'
 
@@ -58,4 +59,27 @@ export function listFtwAoiSessions(): FtwAoiTrainingSession[] {
   return Object.values(readStore())
     .map(hit => ({ ...emptyFtwAoiSession(hit.aoiKey, hit.aoiLabel), ...hit, aoiKey: hit.aoiKey }))
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+}
+
+/** Drop idle AOI stubs (polygon edits with no dataset / training) from localStorage. */
+export function pruneStaleFtwAoiSessions(keepKeys: string[] = []): void {
+  const store = readStore()
+  const keep = new Set(keepKeys.filter(Boolean))
+  let changed = false
+  for (const key of Object.keys(store)) {
+    if (keep.has(key)) continue
+    const hit = store[key]!
+    const session = { ...emptyFtwAoiSession(key, hit.aoiLabel), ...hit, aoiKey: key }
+    if (!isFtwAoiSessionChartable(session)) {
+      delete store[key]
+      changed = true
+    }
+  }
+  if (changed) writeStore(store)
+}
+
+export function listChartableFtwAoiSessions(activeKey?: string): FtwAoiTrainingSession[] {
+  return listFtwAoiSessions().filter(
+    s => isFtwAoiSessionChartable(s) || (activeKey != null && s.aoiKey === activeKey),
+  )
 }

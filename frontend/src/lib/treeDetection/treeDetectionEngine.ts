@@ -1,23 +1,29 @@
 /**
- * Tree Detections — Ultralytics YOLO Detection → GIS Point.
+ * Tree Detections — YOLO tree-crown object detection.
  *
- * Esri World Imagery mosaic → YOLO detect (single class `tree`) → bounding box
- * → centre pixel → lng/lat Point. No segmentation and no crown polygons.
+ * Detection is performed by a hosted YOLO model (the single-class "tree" YOLOv5
+ * detector from yolo-trees/ai-tree-detection) reached via the backend proxy. This
+ * module turns the model's per-image bounding boxes into georeferenced
+ * GIS-ready tree features:
+ *   1. Box centre → lng/lat (georeference) + AOI point-in-polygon clip
+ *   2. Crown diameter / area from the box footprint; size classification
+ *   3. Crown-pixel colour sampling → canopy vigour and (optional) species
+ *   4. Cross-tile de-duplication + AOI-wide statistics + GeoJSON
  *
- *   Tree_001  ●     attributes: Tree_ID | X | Y | Confidence | Date | Image_Source
+ * The previous in-browser VHR computer-vision detector (greenness / dark-object
+ * "treeness" / Difference-of-Gaussians / local-maxima) has been removed — all
+ * detections now come from the YOLO model so this is true individual-tree
+ * object detection rather than vegetation segmentation.
  */
 
 import { geodesicAreaM2 } from '../siLayerClassAreaEngine'
 import type { YoloTreeBox } from './yoloTreeDetectionClient'
+import type { LngLatBBox, TreeImageryMosaic, TreeImageryProviderId } from './webMercatorTiles'
 import {
-  TREE_IMAGERY_PROVIDERS,
-  type LngLatBBox,
-  type TreeImageryMosaic,
-  type TreeImageryProviderId,
-} from './webMercatorTiles'
-import {
+  classifyCrownSpecies,
   TREE_SPECIES,
   TREE_SPECIES_ORDER,
+  type CrownFeatures,
   type TreeSpeciesId,
 } from './treeSpeciesClassifier'
 
@@ -36,13 +42,11 @@ export type TreeDetection = {
   lng: number
   lat: number
   confidence: number
-  date?: string
-  imageSource?: string
-  /** Optional leftover fields; GIS export does not use crown polygons. */
-  crownDiameterM?: number
-  crownAreaM2?: number
-  sizeClass?: TreeSizeClass
-  vigor?: TreeVigor
+  crownDiameterM: number
+  crownAreaM2: number
+  sizeClass: TreeSizeClass
+  vigor: TreeVigor
+  /** Present only in 'detect-classify' mode. */
   species?: TreeSpeciesId
   speciesConfidence?: number
 }
@@ -101,9 +105,9 @@ export type CrownDetectionPass = {
 }
 
 export const TREE_SIZE_CLASS_META: Record<TreeSizeClass, { label: string; color: string }> = {
-  small: { label: 'Small tree (< 3 m)', color: '#a3e635' },
-  medium: { label: 'Medium tree (3–6 m)', color: '#22c55e' },
-  large: { label: 'Large tree (> 6 m)', color: '#15803d' },
+  small: { label: 'Small crown (< 3 m)', color: '#a3e635' },
+  medium: { label: 'Medium crown (3–6 m)', color: '#22c55e' },
+  large: { label: 'Large crown (> 6 m)', color: '#15803d' },
 }
 
 export const TREE_VIGOR_META: Record<TreeVigor, { label: string }> = {
@@ -138,6 +142,154 @@ export const DEFAULT_TREE_TUNING: TreeDetectionTuning = {
   precision: 0.75,
 }
 
+/**
+ * Illumination-invariant green dominance in [0,1].
+ *
+ * Uses chromaticity ratios (green vs. the stronger of red/blue) rather than the
+ * brightness-dependent Excess-Green, so dark olive / shadowed tree crowns — which
+ * ExG erased — still register as vegetation.
+ */
+function greenDominanceAt(r: number, g: number, b: number): number {
+  const sum = r + g + b + 1e-6
+  const dom = g / sum - Math.max(r, b) / sum
+  if (dom <= 0) return 0
+  return Math.min(1, dom * 4)
+}
+
+export type TreeImageFields = {
+  /** Green dominance per pixel, [0,1]. */
+  green: Float32Array
+  /** Luminance per pixel, [0,1]; 1 for transparent pixels (treated as bright bg). */
+  lum: Float32Array
+}
+
+/** Build green-dominance + luminance fields (Float32) from RGBA image data. */
+function buildImageFields(imageData: ImageData): TreeImageFields {
+  const { data, width, height } = imageData
+  const n = width * height
+  const green = new Float32Array(n)
+  const lum = new Float32Array(n)
+  for (let i = 0, p = 0; p < n; i += 4, p += 1) {
+    const a = data[i + 3]!
+    if (a === 0) {
+      green[p] = 0
+      lum[p] = 1 // transparent → treat as bright background, never a "dark crown"
+      continue
+    }
+    const r = data[i]!
+    const g = data[i + 1]!
+    const b = data[i + 2]!
+    green[p] = greenDominanceAt(r, g, b)
+    lum[p] = (r + g + b) / 765 // /(3*255)
+  }
+  return { green, lum }
+}
+
+/** Bilinear sample of a Float32 field at sub-pixel (x,y), clamped to bounds. */
+function sampleBilinear(field: Float32Array, width: number, height: number, x: number, y: number): number {
+  if (x < 0) x = 0
+  if (y < 0) y = 0
+  if (x > width - 1) x = width - 1
+  if (y > height - 1) y = height - 1
+  const x0 = Math.floor(x)
+  const y0 = Math.floor(y)
+  const x1 = Math.min(width - 1, x0 + 1)
+  const y1 = Math.min(height - 1, y0 + 1)
+  const fx = x - x0
+  const fy = y - y0
+  const v00 = field[y0 * width + x0]!
+  const v10 = field[y0 * width + x1]!
+  const v01 = field[y1 * width + x0]!
+  const v11 = field[y1 * width + x1]!
+  return v00 * (1 - fx) * (1 - fy) + v10 * fx * (1 - fy) + v01 * (1 - fx) * fy + v11 * fx * fy
+}
+
+/**
+ * "Spokiness" of an angular profile in [0,1]: the fraction of the profile's AC
+ * energy concentrated in a single rotational harmonic in the frond band (k=4..18).
+ *
+ * A palm crown's fronds make the profile near-periodic (e.g. ~10 spokes → strong
+ * k≈10 harmonic) regardless of crown rotation or how many fronds there are. A
+ * smooth broadleaf crown has its energy at k≈1 (an illumination gradient), which
+ * is *excluded* — so the cue is invariant to lighting direction, sun angle, and
+ * orientation. This replaces the old, noisy sign-change spoke count.
+ */
+function angularSpokiness(samples: number[]): number {
+  const N = samples.length
+  if (N < 8) return 0
+  let mean = 0
+  for (const v of samples) mean += v
+  mean /= N
+  let energy = 0
+  for (const v of samples) energy += (v - mean) * (v - mean)
+  if (energy < 1e-6) return 0
+  let best = 0
+  for (let k = 4; k <= 18; k += 1) {
+    let re = 0
+    let im = 0
+    for (let i = 0; i < N; i += 1) {
+      const ang = (2 * Math.PI * k * i) / N
+      const d = samples[i]! - mean
+      re += d * Math.cos(ang)
+      im += d * Math.sin(ang)
+    }
+    const mag = re * re + im * im
+    if (mag > best) best = mag
+  }
+  // One-sided DFT power of a real signal sums to energy*N/2.
+  return Math.min(1, best / (energy * N * 0.5))
+}
+
+/**
+ * Radial frond / star-pattern strength in [0,1] for a crown centred at (cx,cy) —
+ * the core Date-Palm / Palm signature.
+ *
+ * For several concentric rings we sample BOTH luminance and green-dominance with
+ * bilinear interpolation (sub-pixel accurate at small crown scales) and measure
+ * the angular harmonic "spokiness" of each. Palm fronds modulate both channels
+ * (bright/dark spokes + green frond vs. sandy gap), so taking the stronger of the
+ * two per ring makes the cue robust to illumination, viewing angle and canopy
+ * density. Broadleaf / columnar non-palm crowns stay angularly smooth → low score.
+ */
+function radialFrondScoreAt(
+  lum: Float32Array,
+  green: Float32Array,
+  width: number,
+  height: number,
+  cx: number,
+  cy: number,
+  crownRadiusPx: number,
+): number {
+  const N = 36
+  const ringFracs = [0.4, 0.6, 0.8, 1.0, 1.15]
+  let scoreSum = 0
+  let ringsUsed = 0
+  for (const f of ringFracs) {
+    const R = Math.max(2, f * crownRadiusPx)
+    const lv: number[] = []
+    const gv: number[] = []
+    let inBounds = true
+    for (let a = 0; a < N; a += 1) {
+      const ang = (a / N) * Math.PI * 2
+      const x = cx + R * Math.cos(ang)
+      const y = cy + R * Math.sin(ang)
+      if (x < 0 || y < 0 || x >= width || y >= height) {
+        inBounds = false
+        break
+      }
+      lv.push(sampleBilinear(lum, width, height, x, y))
+      gv.push(sampleBilinear(green, width, height, x, y))
+    }
+    if (!inBounds) continue
+    // Either channel exhibiting frond periodicity is palm evidence.
+    scoreSum += Math.max(angularSpokiness(lv), angularSpokiness(gv))
+    ringsUsed += 1
+  }
+  if (ringsUsed === 0) return 0
+  // Emphasise: a couple of strongly-spoked rings already make a confident palm.
+  return Math.min(1, (scoreSum / ringsUsed) * 1.35)
+}
+
 function rayCastInsideRing(lng: number, lat: number, ring: number[][]): boolean {
   let inside = false
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
@@ -168,6 +320,19 @@ function pointInGeometry(lng: number, lat: number, geom: GeoJSON.Geometry): bool
   return false
 }
 
+function classifySize(diameterM: number): TreeSizeClass {
+  if (diameterM < 3) return 'small'
+  if (diameterM <= 6) return 'medium'
+  return 'large'
+}
+
+function classifyVigor(meanGreenness: number): TreeVigor {
+  // Tuned to the green-dominance scale (greenDominanceAt), not the old ExG scale.
+  if (meanGreenness >= 0.42) return 'healthy'
+  if (meanGreenness >= 0.2) return 'moderate'
+  return 'sparse'
+}
+
 export type DetectTreesOptions = {
   /** YOLO boxes (image-pixel coords) detected in this mosaic. */
   boxes: YoloTreeBox[]
@@ -181,22 +346,34 @@ export type DetectTreesOptions = {
   speciesThreshold?: number
 }
 
-export function formatTreeId(indexZeroBased: number): string {
-  return `Tree_${String(indexZeroBased + 1).padStart(3, '0')}`
-}
-
 /**
- * Convert YOLO bounding boxes for ONE imagery mosaic into GIS points:
- * box centre → lng/lat, AOI clip. No crown polygon / segmentation.
+ * Convert the YOLO bounding boxes for ONE imagery mosaic into a
+ * georeferenced detection pass: box centre → lng/lat, AOI point-in-polygon
+ * clip, crown size from the box footprint, and crown-pixel colour sampling for
+ * canopy vigour and (optional) species attributes. Detection itself is the
+ * model's — no computer-vision crown finding happens here. Used as the per-tile
+ * worker of the tiled AOI scan; AOI-wide canopy cover is derived from crown
+ * areas in `assembleTreeResult`.
  */
 export function crownsFromBoxes(options: DetectTreesOptions): CrownDetectionPass {
   const { mosaic, boxes } = options
+  const tuning = options.tuning ?? DEFAULT_TREE_TUNING
+  const mode: TreeAnalysisMode = options.mode ?? 'detect'
+  const classifySpecies = mode === 'detect-classify'
   const geometry =
     (options.geometry as GeoJSON.Feature).type === 'Feature'
       ? (options.geometry as GeoJSON.Feature).geometry
       : (options.geometry as GeoJSON.Geometry)
 
   const { width, height, metersPerPixel } = mosaic
+  const rgba = mosaic.imageData.data
+  // Colour fields are used ONLY for crown vigour + (optional) species attributes
+  // — never for detection, which comes entirely from the YOLO model.
+  const { green, lum } = buildImageFields(mosaic.imageData)
+
+  const minCrownDiameterM = Math.max(0.5, tuning.minCrownDiameterM ?? 1)
+  const maxCrownDiameterM = Math.min(60, tuning.maxCrownDiameterM ?? 40)
+
   const detections: TreeDetection[] = []
   for (const box of boxes) {
     const cxPx = (box.xmin + box.xmax) / 2
@@ -205,16 +382,81 @@ export function crownsFromBoxes(options: DetectTreesOptions): CrownDetectionPass
     const [lng, lat] = mosaic.pxToLngLat(cxPx + 0.5, cyPx + 0.5)
     if (!pointInGeometry(lng, lat, geometry)) continue
 
-    detections.push({
-      id: formatTreeId(detections.length),
+    const wPx = Math.max(1, box.xmax - box.xmin)
+    const hPx = Math.max(1, box.ymax - box.ymin)
+    // Crown diameter from the mean box side; area as the equivalent disk.
+    const crownDiameterM = Math.max(
+      minCrownDiameterM,
+      Math.min(maxCrownDiameterM, ((wPx + hPx) / 2) * metersPerPixel),
+    )
+    if (crownDiameterM < minCrownDiameterM || crownDiameterM > maxCrownDiameterM) continue
+    const crownAreaM2 = Math.PI * (crownDiameterM / 2) ** 2
+
+    // Sample crown pixels (box ∩ image bounds) for greenness / colour attributes.
+    const bx0 = Math.max(0, Math.floor(box.xmin))
+    const by0 = Math.max(0, Math.floor(box.ymin))
+    const bx1 = Math.min(width - 1, Math.ceil(box.xmax))
+    const by1 = Math.min(height - 1, Math.ceil(box.ymax))
+    let nPx = 0
+    let greenSum = 0
+    let greenSqSum = 0
+    let rSum = 0
+    let gSum = 0
+    let bSum = 0
+    for (let y = by0; y <= by1; y += 1) {
+      const row = y * width
+      for (let x = bx0; x <= bx1; x += 1) {
+        const gv = green[row + x]!
+        greenSum += gv
+        greenSqSum += gv * gv
+        nPx += 1
+        if (classifySpecies) {
+          const ci = (row + x) * 4
+          rSum += rgba[ci]!
+          gSum += rgba[ci + 1]!
+          bSum += rgba[ci + 2]!
+        }
+      }
+    }
+    const meanGreen = nPx ? greenSum / nPx : 0
+
+    const detection: TreeDetection = {
+      id: `tree-${detections.length + 1}`,
       lng: Number(lng.toFixed(7)),
       lat: Number(lat.toFixed(7)),
       confidence: Number(Math.max(0, Math.min(1, box.score)).toFixed(3)),
-    })
+      crownDiameterM: Number(crownDiameterM.toFixed(2)),
+      crownAreaM2: Number(crownAreaM2.toFixed(2)),
+      sizeClass: classifySize(crownDiameterM),
+      vigor: classifyVigor(meanGreen),
+    }
+
+    if (classifySpecies && nPx > 0) {
+      const meanG = gSum / nPx || 1e-6
+      const greenVar = Math.max(0, greenSqSum / nPx - meanGreen * meanGreen)
+      const crownRadiusPx = Math.max(2, (wPx + hPx) / 4)
+      const features: CrownFeatures = {
+        crownDiameterM,
+        crownAreaM2,
+        greenDominance: meanGreen,
+        luminance: (rSum + gSum + bSum) / (765 * nPx),
+        redGreenRatio: rSum / nPx / meanG,
+        blueGreenRatio: bSum / nPx / meanG,
+        greenTexture: Math.sqrt(greenVar),
+        compactness: 1,
+        radialFrond: radialFrondScoreAt(lum, green, width, height, cxPx, cyPx, crownRadiusPx),
+      }
+      const pred = classifyCrownSpecies(features, { threshold: options.speciesThreshold })
+      detection.species = pred.species
+      detection.speciesConfidence = pred.confidence
+    }
+
+    detections.push(detection)
   }
 
   return {
     detections,
+    // Canopy cover is computed AOI-wide from crown areas during assembly.
     canopySampled: 0,
     canopyHit: 0,
     metersPerPixel,
@@ -307,16 +549,9 @@ export function assembleTreeResult(options: AssembleTreeResultOptions): TreeDete
   // De-dupe at a fraction of the crown spacing: collapses the same tree found
   // in two overlapping tiles while never merging two genuinely adjacent trees.
   const dedupSpacingM = Math.max(1.2, tuning.minTreeSpacingM * 0.7)
-  const date = new Date().toISOString().slice(0, 10)
-  const imageSource = TREE_IMAGERY_PROVIDERS[options.provider]?.label ?? options.provider
   const deduped = dedupeDetections(merged, dedupSpacingM)
     .sort((a, b) => (a.lat === b.lat ? a.lng - b.lng : b.lat - a.lat))
-    .map((d, i) => ({
-      ...d,
-      id: formatTreeId(i),
-      date,
-      imageSource,
-    }))
+    .map((d, i) => ({ ...d, id: `tree-${i + 1}` }))
 
   const canopySampled = passes.reduce((s, p) => s + p.canopySampled, 0)
   const canopyHit = passes.reduce((s, p) => s + p.canopyHit, 0)
@@ -328,7 +563,7 @@ export function assembleTreeResult(options: AssembleTreeResultOptions): TreeDete
   const aoiAreaM2 = aoiAreaHa * 10_000
   // Canopy cover: legacy grid sample when present, otherwise derived from the
   // detected crown footprints (YOLO boxes) over the AOI area.
-  const crownAreaSum = deduped.reduce((s, d) => s + (d.crownAreaM2 ?? 0), 0)
+  const crownAreaSum = deduped.reduce((s, d) => s + d.crownAreaM2, 0)
   const canopyCoverPct =
     canopySampled > 0
       ? (canopyHit / canopySampled) * 100
@@ -336,13 +571,11 @@ export function assembleTreeResult(options: AssembleTreeResultOptions): TreeDete
         ? Math.min(100, (crownAreaSum / aoiAreaM2) * 100)
         : 0
   const meanCrownDiameterM = deduped.length
-    ? deduped.reduce((s, d) => s + (d.crownDiameterM ?? 0), 0) / deduped.length
+    ? deduped.reduce((s, d) => s + d.crownDiameterM, 0) / deduped.length
     : 0
 
   const classCounts: Record<TreeSizeClass, number> = { small: 0, medium: 0, large: 0 }
-  for (const d of deduped) {
-    if (d.sizeClass) classCounts[d.sizeClass] += 1
-  }
+  for (const d of deduped) classCounts[d.sizeClass] += 1
   const byClass: TreeClassSummary[] = (Object.keys(TREE_SIZE_CLASS_META) as TreeSizeClass[]).map(id => ({
     id,
     label: TREE_SIZE_CLASS_META[id].label,
@@ -369,21 +602,31 @@ export function assembleTreeResult(options: AssembleTreeResultOptions): TreeDete
 
   const geojson: GeoJSON.FeatureCollection = {
     type: 'FeatureCollection',
-    features: deduped.map(d => ({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [d.lng, d.lat] },
-      properties: {
-        Tree_ID: d.id,
-        X: d.lng,
-        Y: d.lat,
-        Confidence: d.confidence,
-        Date: d.date ?? date,
-        Image_Source: d.imageSource ?? imageSource,
-        id: d.id,
-        confidence: d.confidence,
-        kind: 'tree',
-      },
-    })),
+    features: deduped.map(d => {
+      const speciesColor = d.species ? TREE_SPECIES[d.species].color : undefined
+      return {
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [d.lng, d.lat] },
+        properties: {
+          id: d.id,
+          kind: 'tree',
+          sizeClass: d.sizeClass,
+          sizeLabel: TREE_SIZE_CLASS_META[d.sizeClass].label,
+          color: speciesColor ?? TREE_SIZE_CLASS_META[d.sizeClass].color,
+          vigor: d.vigor,
+          confidence: d.confidence,
+          crownDiameterM: d.crownDiameterM,
+          crownAreaM2: d.crownAreaM2,
+          ...(d.species
+            ? {
+                species: d.species,
+                speciesLabel: TREE_SPECIES[d.species].label,
+                speciesConfidence: d.speciesConfidence,
+              }
+            : {}),
+        },
+      }
+    }),
   }
 
   return {

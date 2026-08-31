@@ -80,6 +80,37 @@ export function listAoiTrainingAnalytics(): AoiTrainingAnalytics[] {
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
 }
 
+export function isAoiTrainingAnalyticsChartable(row: AoiTrainingAnalytics): boolean {
+  if (row.epochHistory?.length) return true
+  if (row.lrFinder?.lrs?.length && row.lrFinder.losses?.length) return true
+  if ((row.dataset?.total ?? 0) > 0) return true
+  return false
+}
+
+export function pruneStaleAoiTrainingAnalytics(keepKeys: string[] = []): void {
+  const store = readStore()
+  const keep = new Set(keepKeys.filter(Boolean))
+  let changed = false
+  for (const key of Object.keys(store)) {
+    if (keep.has(key)) continue
+    const row = {
+      ...store[key]!,
+      epochHistory: normalizeEpochHistory(store[key]!.epochHistory),
+    }
+    if (!isAoiTrainingAnalyticsChartable(row)) {
+      delete store[key]
+      changed = true
+    }
+  }
+  if (changed) writeStore(store)
+}
+
+export function listChartableAoiTrainingAnalytics(activeKey?: string): AoiTrainingAnalytics[] {
+  return listAoiTrainingAnalytics().filter(
+    row => isAoiTrainingAnalyticsChartable(row) || (activeKey != null && row.aoiKey === activeKey),
+  )
+}
+
 export function listAoiTrainingAnalyticsKeys(): string[] {
   return Object.keys(readStore())
 }

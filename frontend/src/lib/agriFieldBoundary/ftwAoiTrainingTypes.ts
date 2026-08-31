@@ -93,3 +93,17 @@ export function emptyFtwAoiSession(aoiKey: string, aoiLabel = 'AOI'): FtwAoiTrai
     updatedAt: new Date().toISOString(),
   }
 }
+
+/** True when the session has real FTW training progress worth listing in AOI charts. */
+export function isFtwAoiSessionChartable(session: FtwAoiTrainingSession): boolean {
+  if (session.datasetId) return true
+  if ((session.dataset?.total ?? 0) > 0) return true
+  if (session.lrFinder?.lrs?.length && session.lrFinder.losses?.length) return true
+  if (session.optimalLr != null && session.optimalLr > 0) return true
+  if (session.lossHistory?.length) return true
+  if (session.modelExportId) return true
+  if (session.trainingStatus === 'running' || session.trainingStatus === 'queued') return true
+  if (session.trainingStatus === 'done') return true
+  if (session.lrFinder?.status === 'running' || session.lrFinder?.status === 'queued') return true
+  return false
+}
