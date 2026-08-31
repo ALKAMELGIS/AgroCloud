@@ -18,7 +18,7 @@ const ACCENT_DARK: [number, number, number] = [6, 78, 59]
 const INK: [number, number, number] = [15, 23, 42]
 const MUTED: [number, number, number] = [100, 116, 139]
 const PAGE_MARGIN_MM = 12
-const ELITE_LOGO_URL = 'https://eliteprojects.ae/wp-content/uploads/2022/07/logo-retraced-white-03.png'
+import { eliteAgroLogoAbsoluteUrl } from '../lib/brandAssets'
 
 function fmtNum(n: number): string {
   if (!Number.isFinite(n)) return '—'
@@ -427,7 +427,7 @@ export async function generateRecipeReportPdf(opts: {
       : `Generated ${dateIso}${periodLabel ? ` · ${periodLabel}` : ''}`
 
   let logoAdded = false
-  const logoImg = await fetchUrlAsImageDataUrl(ELITE_LOGO_URL)
+  const logoImg = await fetchUrlAsImageDataUrl(eliteAgroLogoAbsoluteUrl())
   const headerBottomY = drawPdfHeaderBand(doc, pw, workflowTitle, subtitleMeta)
   if (logoImg) {
     try {

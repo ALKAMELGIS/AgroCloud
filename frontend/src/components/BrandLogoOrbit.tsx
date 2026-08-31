@@ -1,6 +1,8 @@
 import type { CSSProperties } from 'react'
 
-const logoUrl = `${import.meta.env.BASE_URL}elite-agro-logo-white.png`
+import { ELITE_AGRO_LOGO_WHITE_URL } from '../lib/brandAssets'
+
+const logoUrl = ELITE_AGRO_LOGO_WHITE_URL
 
 type BrandLogoOrbitProps = {
   /** Max width in px (height follows aspect ratio). */

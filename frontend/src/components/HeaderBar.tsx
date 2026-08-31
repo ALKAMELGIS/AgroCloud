@@ -1,12 +1,11 @@
 import './header.css'
 import './lux-theme.css'
-import { useEffect, useMemo, useRef, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { AgroCloudMark } from './AgroCloudMark'
+import { ELITE_AGRO_LOGO_WHITE_URL, resolveEliteAgroLogoUrl } from '../lib/brandAssets'
 import { normalizeHeaderLogoText } from '../services/settingsStorage'
 import { useSystemSettings } from '../store/SystemSettingsContext'
 import { useLanguage } from '../lib/i18n'
-
-const DEFAULT_CENTER_LOGO = 'https://eliteprojects.ae/wp-content/uploads/2022/07/logo-retraced-white-03.png'
 
 type HeaderBarProps = {
   onToggleMobileNav?: () => void
@@ -26,14 +25,20 @@ export default function HeaderBar({ onToggleMobileNav, mobileNavOpen = false }: 
   }, [settings.themeMode])
 
   const centerLogoSrc = useMemo(() => {
-    if (isDarkTheme && settings.logoDark.trim()) return settings.logoDark.trim()
-    if (!isDarkTheme && settings.logoLight.trim()) return settings.logoLight.trim()
-    return settings.logoLight.trim() || settings.logoDark.trim() || DEFAULT_CENTER_LOGO
+    let raw = ELITE_AGRO_LOGO_WHITE_URL
+    if (isDarkTheme && settings.logoDark.trim()) raw = settings.logoDark.trim()
+    else if (!isDarkTheme && settings.logoLight.trim()) raw = settings.logoLight.trim()
+    else raw = settings.logoLight.trim() || settings.logoDark.trim() || ELITE_AGRO_LOGO_WHITE_URL
+    return resolveEliteAgroLogoUrl(raw)
   }, [isDarkTheme, settings.logoLight, settings.logoDark])
 
-  // White brand assets become invisible on the ivory luxury header → mark them
-  // so the lux theme can render them dark via an auto-contrast filter.
-  const centerLogoIsWhite = /white|light/i.test(centerLogoSrc) || centerLogoSrc === DEFAULT_CENTER_LOGO
+  const [logoSrc, setLogoSrc] = useState(centerLogoSrc)
+  useEffect(() => {
+    setLogoSrc(centerLogoSrc)
+  }, [centerLogoSrc])
+
+  const centerLogoIsWhite =
+    /white|light|elite-agro-logo/i.test(centerLogoSrc) || centerLogoSrc === ELITE_AGRO_LOGO_WHITE_URL
   const usesDefaultMark =
     !logoIconSrc && !hs.logoSvg.trim().startsWith('<svg')
 
@@ -148,7 +153,7 @@ export default function HeaderBar({ onToggleMobileNav, mobileNavOpen = false }: 
         >
           <img
             className="brand-logo"
-            src={centerLogoSrc}
+            src={logoSrc}
             alt=""
             width={300}
             height={48}
@@ -156,6 +161,9 @@ export default function HeaderBar({ onToggleMobileNav, mobileNavOpen = false }: 
             decoding="async"
             fetchPriority="high"
             draggable={false}
+            onError={() => {
+              if (logoSrc !== ELITE_AGRO_LOGO_WHITE_URL) setLogoSrc(ELITE_AGRO_LOGO_WHITE_URL)
+            }}
           />
         </span>
       </div>

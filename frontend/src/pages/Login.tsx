@@ -11,6 +11,7 @@ import { pickDefaultAssignableRole, useDirectoryRoleCatalog } from '../lib/roleC
 import { hydrateProfileFromAdminUserRecord, hydrateProfileFromServer } from '../lib/userProfilePersistence'
 import { appendAuditLog } from '../lib/audit'
 import { useLanguage } from '../lib/i18n'
+import { ELITE_AGRO_LOGO_WHITE_URL } from '../lib/brandAssets'
 import { isTouchDevice } from '../lib/pwaInstall'
 import { sha256Base64, sha256Hex } from '../lib/sha256'
 import {
@@ -1047,7 +1048,7 @@ export default function Login() {
         <div style={{ marginBottom: '20px', textAlign: 'center' }}>
           <div className="login-logo-wrap">
             <img
-              src="https://eliteprojects.ae/wp-content/uploads/2022/07/logo-retraced-white-03.png"
+              src={ELITE_AGRO_LOGO_WHITE_URL}
               alt="Elite Agro Projects"
             />
           </div>
