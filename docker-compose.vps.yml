@@ -15,6 +15,9 @@ services:
       FTW_INFER_ENABLED: '1'
       FTW_INFER_MODEL: 'FTW_PRUE_EFNET_B7'
       FTW_CHECKPOINT_PATH: '/app/models/prue_efnetb7_ccby_checkpoint.ckpt'
+      FTW_INFER_BATCH_SIZE: '1'
+      FTW_INFER_NUM_WORKERS: '1'
+      FTW_INFERENCE_TIMEOUT_SEC: '1800'
     volumes:
       - agri_ftw_models:/app/models
     expose:

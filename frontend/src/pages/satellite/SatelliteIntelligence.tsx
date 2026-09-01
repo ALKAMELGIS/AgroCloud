@@ -12417,6 +12417,20 @@ export default function SatelliteIntelligence() {
 
   const getMapInstance = () => mapRef.current?.getMap?.() ?? mapRef.current;
 
+  /** Live camera for MapSwipe After pane — mirrors main map during wheel pan/zoom. */
+  const getMapSwipeLiveViewState = useCallback(() => {
+    const v = viewStateLiveRef.current;
+    return {
+      longitude: Number(v.longitude) || 0,
+      latitude: Number(v.latitude) || 0,
+      zoom: Number(v.zoom) || 2,
+      bearing: Number(v.bearing) || 0,
+      pitch: Number(v.pitch) || 0,
+    };
+  }, []);
+
+  const getMapSwipeMainMap = useCallback(() => getMapInstance(), []);
+
   /** Sync programmatic viewState changes to the native Mapbox camera (pan/zoom uses ref-only updates). */
   useLayoutEffect(() => {
     if (!isMapLoaded) return;
@@ -26120,6 +26134,8 @@ export default function SatelliteIntelligence() {
             onBeforeTilesChange={onMapSwipeBeforeTilesChange}
             onCompareSidesChange={onMapSwipeCompareSidesChange}
             aoiGeometry={drawnGeometry}
+            getLiveViewState={getMapSwipeLiveViewState}
+            getMainMap={getMapSwipeMainMap}
           />
 
           {activeLayerActionDialog?.mode === 'symbology' && activeDialogLayer ? (

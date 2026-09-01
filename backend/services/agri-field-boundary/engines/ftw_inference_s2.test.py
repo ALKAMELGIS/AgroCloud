@@ -17,16 +17,18 @@ def test_build_ftw_inference_all_cmd_uses_inference_all_subcommand():
     assert '--out "/tmp/ftw-out"' in cmd
     assert "--overwrite" in cmd
     assert "--gpu -1" in cmd
+    assert "--batch_size 1" in cmd
+    assert "--num_workers 1" in cmd
     assert "inference --bbox" not in cmd.replace("inference all", "")
 
 
-def test_build_ftw_inference_all_cmd_prefers_local_checkpoint_path():
-    ckpt = "/opt/models/prue_efnetb7_ccby_checkpoint.ckpt"
+def test_build_ftw_inference_all_cmd_uses_registry_model_id_not_checkpoint_path():
     cmd = build_ftw_inference_all_cmd(
         "/usr/bin/ftw",
         "1,2,3,4",
         year=2023,
         out_dir="/tmp/out",
-        model=ckpt,
+        model="FTW_PRUE_EFNET_B7",
     )
-    assert ckpt in cmd
+    assert "FTW_PRUE_EFNET_B7" in cmd
+    assert ".ckpt" not in cmd

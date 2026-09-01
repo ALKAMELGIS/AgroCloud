@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import MapGL, { Layer, Source } from 'react-map-gl/mapbox'
-import type { StyleSpecification } from 'mapbox-gl'
+import MapGL, { Layer, Source, type MapRef } from 'react-map-gl/mapbox'
+import type { Map as MapboxMap, StyleSpecification } from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
+import { syncAgroCloudMapboxCamera } from '../../../lib/agroCloudMapNavigation'
 import {
   buildSiMapSwipeTileUrls,
   defaultSwipeBeforeDate,
@@ -49,6 +50,10 @@ type Props = {
   onCompareSidesChange?: (sides: SiMapSwipeCompareSides | null) => void
   /** Optional AOI geometry for per-class areas inside the embedded Legend. */
   aoiGeometry?: GeoJSON.Geometry | GeoJSON.Feature | null
+  /** Live camera from the main SI map (updated on every move, not only moveend). */
+  getLiveViewState?: () => SiMapSwipeViewState
+  /** Native Mapbox map instance for the main SI MapGL — used to mirror pan/zoom to After. */
+  getMainMap?: () => MapboxMap | null | undefined
 }
 
 /** Transparent Mapbox style — AOI WMS only; main SI basemap shows through. */
@@ -98,11 +103,37 @@ function SwipeAfterMapPanel(props: {
   mapboxAccessToken: string
   viewState: SiMapSwipeViewState
   tileUrls: string[]
+  getLiveViewState?: () => SiMapSwipeViewState
+  getMainMap?: () => MapboxMap | null | undefined
 }) {
-  const { mapboxAccessToken, viewState, tileUrls } = props
+  const { mapboxAccessToken, viewState, tileUrls, getLiveViewState, getMainMap } = props
+  const afterMapRef = useRef<MapRef | null>(null)
+
+  const syncAfterCamera = useCallback(() => {
+    const live = getLiveViewState?.() ?? viewState
+    const afterMap = afterMapRef.current?.getMap?.() ?? null
+    syncAgroCloudMapboxCamera(afterMap, live, { duration: 0 })
+  }, [getLiveViewState, viewState])
+
+  useEffect(() => {
+    const mainMap = getMainMap?.()
+    if (!mainMap || typeof mainMap.on !== 'function') return
+    const onMove = () => syncAfterCamera()
+    mainMap.on('move', onMove)
+    syncAfterCamera()
+    return () => {
+      mainMap.off('move', onMove)
+    }
+  }, [getMainMap, syncAfterCamera, tileUrls])
+
+  useEffect(() => {
+    syncAfterCamera()
+  }, [viewState, syncAfterCamera])
+
   return (
     <MapGL
-      reuseMaps={false}
+      ref={afterMapRef}
+      reuseMaps
       mapboxAccessToken={mapboxAccessToken}
       mapStyle={SI_MAP_SWIPE_TRANSPARENT_STYLE}
       longitude={viewState.longitude}
@@ -114,6 +145,14 @@ function SwipeAfterMapPanel(props: {
       attributionControl={false}
       preserveDrawingBuffer={false}
       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', background: 'transparent' }}
+      onLoad={evt => {
+        try {
+          evt.target.resize()
+        } catch {
+          /* ignore */
+        }
+        syncAfterCamera()
+      }}
     >
       <SiMapSwipeRasterLayers idPrefix="si-swipe-after" tileUrls={tileUrls} />
     </MapGL>
@@ -140,6 +179,8 @@ export function SiMapSwipeControl({
   onBeforeTilesChange,
   onCompareSidesChange,
   aoiGeometry = null,
+  getLiveViewState,
+  getMainMap,
 }: Props) {
   const [openUncontrolled, setOpenUncontrolled] = useState(false)
   const open = openControlled ?? openUncontrolled
@@ -343,6 +384,8 @@ export function SiMapSwipeControl({
                 mapboxAccessToken={mapboxAccessToken}
                 viewState={viewState}
                 tileUrls={afterTiles}
+                getLiveViewState={getLiveViewState}
+                getMainMap={getMainMap}
               />
             </div>
             <div

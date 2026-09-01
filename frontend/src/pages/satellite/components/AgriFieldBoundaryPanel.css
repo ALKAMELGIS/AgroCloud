@@ -608,6 +608,14 @@
   color: #b91c1c;
   background: rgba(239, 68, 68, 0.1);
 }
+.si-afb__error-detail {
+  margin-top: 4px;
+  font-size: 10px;
+  line-height: 1.35;
+  color: inherit;
+  opacity: 0.92;
+  word-break: break-word;
+}
 .si-afb__status.is-empty {
   color: #a16207;
   background: rgba(234, 179, 8, 0.12);

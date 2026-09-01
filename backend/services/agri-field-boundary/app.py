@@ -1115,7 +1115,7 @@ def _run_job(job_id: str, req: DetectRequest) -> None:
         result = _execute_detect(req, progress)
         _set_job(job_id, status="done", progress=100.0, stage="done", result=result, error=None)
     except Exception as exc:  # noqa: BLE001
-        _set_job(job_id, status="error", progress=100.0, stage="error", error=_public_error(exc), result=None)
+        _set_job(job_id, status="error", progress=100.0, stage="error", error=_public_error(exc, max_len=1200), result=None)
 
 
 @app.get("/health")
@@ -1205,15 +1205,15 @@ def health_ready() -> dict[str, Any]:
         "loading": not ready,
     }
 
-def _public_error(exc: BaseException) -> str:
+def _public_error(exc: BaseException, *, max_len: int = 220) -> str:
     """Keep API errors short and free of huge URLs for UI panels."""
     import re
 
     text = " ".join(str(exc).split())
     text = re.sub(r"https?://\S+", "[url]", text, flags=re.IGNORECASE)
     text = re.sub(r"s3://\S+", "[s3]", text, flags=re.IGNORECASE)
-    if len(text) > 220:
-        text = text[:219] + "…"
+    if len(text) > max_len:
+        text = text[: max_len - 1] + "…"
     return text or "Field boundary request failed."
 
 

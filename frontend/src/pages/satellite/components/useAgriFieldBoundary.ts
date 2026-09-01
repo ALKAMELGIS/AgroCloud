@@ -896,7 +896,7 @@ export function useAgriFieldBoundary({
       ) {
         geojson = styleDelineateFbisGeojson(geojson)
       }
-      return {
+      const finished: FieldBoundaryResult = {
         ...optimized,
         geojson,
         count: geojson.features.length,
@@ -906,6 +906,10 @@ export function useAgriFieldBoundary({
           field: geojson.features.length,
         },
       }
+      if (finished.geojson.features.length > 0) {
+        setFillOpacity(prev => (prev < 0.12 ? 0.7 : prev))
+      }
+      return finished
     }
 
     if (isFieldFileSource(activeSource) && !uploadedImage) {
@@ -1325,7 +1329,15 @@ export function useAgriFieldBoundary({
       setProgress(100)
       setPhase('done')
     } catch (err) {
-      if ((err as Error)?.name === 'AbortError') return
+      if ((err as Error)?.name === 'AbortError') {
+        if (runEpoch === runEpochRef.current) {
+          setPhase('idle')
+          setNotice(null)
+          setProgress(0)
+          setStage(null)
+        }
+        return
+      }
       if (runEpoch !== runEpochRef.current) return
       let offlineErr = err instanceof FieldBoundaryServiceError && err.offline
       const rawMsg =

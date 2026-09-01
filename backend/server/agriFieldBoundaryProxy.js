@@ -200,6 +200,13 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
     return true
   }
 
+  async function ensurePythonReady() {
+    if (pythonReady()) return true
+    const value = await probePythonHealth()
+    pythonCache = { at: Date.now(), value }
+    return Boolean(value?.ready)
+  }
+
   function runBuiltinDetect(body) {
     return detectFieldsBuiltin({
       image: body.image,
@@ -313,7 +320,7 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
     async (req, res) => {
       const err = validateDetectBody(req.body)
       if (err) return res.status(400).json({ error: err })
-      refreshPythonHealth()
+      const ready = await ensurePythonReady()
       const tryBuiltin = () => {
         if (!hasDetectImage(req.body)) {
           return res.status(400).json({
@@ -331,7 +338,7 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
       }
       const source = normalizeDetectSource(req.body)
       const imageOptional = isImageOptionalSource(source)
-      if (!pythonReady()) {
+      if (!ready) {
         ensureLocalAiService('agri-field-boundary')
         if (imageOptional) {
           return res.status(400).json({ error: imageOptionalUnavailableMessage(source) })
@@ -375,7 +382,7 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
     async (req, res) => {
       const err = validateDetectBody(req.body)
       if (err) return res.status(400).json({ error: err })
-      refreshPythonHealth()
+      const ready = await ensurePythonReady()
       const tryBuiltinJob = () => {
         if (!hasDetectImage(req.body)) {
           return res.status(400).json({
@@ -395,7 +402,7 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
       }
       const source = normalizeDetectSource(req.body)
       const imageOptional = isImageOptionalSource(source)
-      if (!pythonReady()) {
+      if (!ready) {
         ensureLocalAiService('agri-field-boundary')
         if (imageOptional) {
           return res.status(400).json({ error: imageOptionalUnavailableMessage(source) })

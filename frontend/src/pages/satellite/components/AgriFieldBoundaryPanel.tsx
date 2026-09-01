@@ -399,6 +399,9 @@ export function AgriFieldBoundaryPanel({
       ? 'Run Delineate Anything on the AOI capture — sharp black instance edges (:8096)'
       : 'Run field boundary detection across the AOI'
   const stageLabel = phase === 'detecting' ? STAGE_LABEL[String(stage || '')] : undefined
+  const serviceOfflineMessage =
+    offline ||
+    /Service offline|backend_unavailable|:8092|uvicorn app:app/i.test(String(error || ''))
   const phaseLabel =
     stageLabel ??
     (isFtwGlobal && phase === 'detecting'
@@ -1155,8 +1158,7 @@ export function AgriFieldBoundaryPanel({
         <div
           className={`si-afb__status ${
             phase === 'error' &&
-              !offline &&
-              !/Service offline|backend_unavailable|:8092|uvicorn app:app/i.test(String(error || ''))
+              !serviceOfflineMessage
               ? 'is-error'
               : phase === 'empty'
                 ? 'is-empty'
@@ -1182,13 +1184,17 @@ export function AgriFieldBoundaryPanel({
           ) : phase === 'error' ? (
             <>
               <i className="fa-solid fa-triangle-exclamation" aria-hidden />{' '}
-              {/Service offline|backend_unavailable|:8092|uvicorn app:app/i.test(String(error || '')) || offline
+              {serviceOfflineMessage
                 ? 'Loading field model… Detect Fields is available on the AgroCloud API.'
                 : error || phaseLabel}
+              {!serviceOfflineMessage && errorDetail ? (
+                <div className="si-afb__error-detail">{errorDetail}</div>
+              ) : null}
             </>
           ) : phase === 'empty' ? (
             <>
               <i className="fa-solid fa-circle-info" aria-hidden /> {error || phaseLabel}
+              {errorDetail ? <div className="si-afb__error-detail">{errorDetail}</div> : null}
             </>
           ) : (
             <>

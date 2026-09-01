@@ -36,14 +36,19 @@ def build_ftw_inference_all_cmd(
     out_dir: str | Path,
     model: str,
     gpu: int = -1,
+    batch_size: int = 1,
+    num_workers: int = 1,
+    stac_host: str | None = None,
 ) -> str:
     """ftw-baselines 3.x — full S2 scene selection → download → infer → polygonize."""
     bbox_s = bbox if isinstance(bbox, str) else ",".join(str(float(v)) for v in bbox)
     model_q = model.replace('"', '\\"')
+    stac = f" --stac_host {stac_host.strip()}" if stac_host and stac_host.strip() else ""
     return (
         f'"{ftw_bin}" inference all '
         f'--bbox {bbox_s} --model "{model_q}" --year {int(year)} '
-        f'--out "{out_dir}" --overwrite --gpu {int(gpu)}'
+        f'--out "{out_dir}" --overwrite --gpu {int(gpu)} '
+        f'--batch_size {int(batch_size)} --num_workers {int(num_workers)}{stac}'
     )
 
 
@@ -62,9 +67,10 @@ class FtwInferenceS2Engine:
         self._probe()
 
     def _resolve_model_arg(self) -> str:
-        if self.checkpoint.is_file():
-            return str(self.checkpoint)
-        return self.model_id
+        # FTW v2+ `inference all` expects a registry model id (e.g. FTW_PRUE_EFNET_B7),
+        # not a local .ckpt path — passing a file path makes the Click CLI fail immediately.
+        model = (self.model_id or "FTW_PRUE_EFNET_B7").strip()
+        return model or "FTW_PRUE_EFNET_B7"
 
     def _probe(self) -> None:
         if self.ftw_bin:
@@ -140,6 +146,9 @@ class FtwInferenceS2Engine:
                     year=year,
                     out_dir=out_dir,
                     model=model_arg,
+                    batch_size=int(os.environ.get("FTW_INFER_BATCH_SIZE", "1")),
+                    num_workers=int(os.environ.get("FTW_INFER_NUM_WORKERS", "1")),
+                    stac_host=os.environ.get("FTW_INFER_STAC_HOST", "").strip() or None,
                 )
             proc = subprocess.run(
                 shell_cmd,
@@ -151,7 +160,7 @@ class FtwInferenceS2Engine:
             if proc.returncode != 0:
                 err = (proc.stderr or proc.stdout or "").strip()
                 raise RuntimeError(
-                    f"FTW inference CLI failed (exit {proc.returncode}). {err[:480]}",
+                    f"FTW inference CLI failed (exit {proc.returncode}). {err[:2000]}",
                 )
             return self._load_output_geojson(out_dir)
 
