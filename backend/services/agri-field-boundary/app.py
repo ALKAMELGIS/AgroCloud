@@ -1153,6 +1153,23 @@ def _health_payload() -> dict[str, Any]:
         from engines.ftw_inference_s2 import get_ftw_inference_s2_engine
 
         ftw_s2_payload = get_ftw_inference_s2_engine().status_payload()
+        ftw_version: str | None = None
+        ftw_bin = ftw_s2_payload.get("cli")
+        if isinstance(ftw_bin, str) and ftw_bin.strip():
+            try:
+                import subprocess
+
+                proc = subprocess.run(
+                    [ftw_bin.strip(), "--version"],
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                )
+                ftw_version = (proc.stdout or proc.stderr or "").strip() or None
+            except Exception:  # noqa: BLE001
+                ftw_version = None
+        if ftw_version:
+            ftw_s2_payload["ftw_version"] = ftw_version
     except Exception as exc:  # noqa: BLE001
         ftw_s2_payload = {"ready": False, "error": f"{type(exc).__name__}: {exc}"}
 

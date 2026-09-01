@@ -1,6 +1,9 @@
 # Production-style image: build SPA then serve API + static assets via backend
 FROM node:20-alpine
 
+ARG CACHE_BUST=2026-09-01-ftw-gpu-fix
+RUN echo "app build ${CACHE_BUST}"
+
 WORKDIR /app
 
 COPY package.json package-lock.json* ./

@@ -1,5 +1,9 @@
 FROM python:3.11-slim
 
+# Bust Docker layer cache on redeploy so GitHub context changes always rebuild.
+ARG CACHE_BUST=2026-09-01-ftw-gpu-fix
+RUN echo "afb build ${CACHE_BUST}"
+
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -15,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir "ftw-tools>=2.0.0b3" "geopandas>=0.14"
+    && pip install --no-cache-dir "ftw-tools==2.0.0b5" "geopandas>=0.14"
 
 # Service modules (app + FoW / Delineate / AFD helpers)
 COPY *.py ./

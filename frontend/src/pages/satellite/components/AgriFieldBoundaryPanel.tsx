@@ -1215,6 +1215,11 @@ export function AgriFieldBoundaryPanel({
               </div>
             </div>
           ) : null}
+          {isFtwInferenceS2 && phase === 'detecting' && stage === 'run' ? (
+            <div className="si-afb__error-detail">
+              AgroDetect S2 is running FTW inference on Sentinel-2 — on CPU this can take 3–8 minutes at ~55%.
+            </div>
+          ) : null}
         </div>
         ) : null}
       </section>

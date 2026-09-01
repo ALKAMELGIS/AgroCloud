@@ -43,12 +43,12 @@ def build_ftw_inference_all_cmd(
     """ftw-baselines 3.x — full S2 scene selection → download → infer → polygonize."""
     bbox_s = bbox if isinstance(bbox, str) else ",".join(str(float(v)) for v in bbox)
     model_q = model.replace('"', '\\"')
-    stac = f" --stac_host {stac_host.strip()}" if stac_host and stac_host.strip() else ""
+    stac = f" --stac_host={stac_host.strip()}" if stac_host and stac_host.strip() else ""
     return (
         f'"{ftw_bin}" inference all '
-        f'--bbox {bbox_s} --model "{model_q}" --year {int(year)} '
-        f'--out "{out_dir}" --overwrite --gpu {int(gpu)} '
-        f'--batch_size {int(batch_size)} --num_workers {int(num_workers)}{stac}'
+        f'--bbox={bbox_s} --model={model_q} --year={int(year)} '
+        f'--out="{out_dir}" --overwrite --gpu={int(gpu)} '
+        f'--batch_size={int(batch_size)} --num_workers={int(num_workers)}{stac}'
     )
 
 
