@@ -1,0 +1,67 @@
+# AgroCloud API-only — GitHub Pages serves www; this VPS serves api.eliteagrocloud.com only.
+#
+# Prerequisites:
+#   - Node agrocloud-node :3001 (systemd)
+#   - agri-field-boundary :8092 (localhost, systemd)
+#
+# Install:
+#   sudo cp scripts/nginx-api-only.conf.example /etc/nginx/sites-available/api.eliteagrocloud.com
+#   sudo ln -sf /etc/nginx/sites-available/api.eliteagrocloud.com /etc/nginx/sites-enabled/
+#   sudo certbot --nginx -d api.eliteagrocloud.com
+#   sudo nginx -t && sudo systemctl reload nginx
+
+upstream agrocloud_api {
+  server 127.0.0.1:3001;
+  keepalive 64;
+}
+
+server {
+  listen 443 ssl http2;
+  listen [::]:443 ssl http2;
+  server_name api.eliteagrocloud.com;
+
+  ssl_certificate     /etc/letsencrypt/live/api.eliteagrocloud.com/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/api.eliteagrocloud.com/privkey.pem;
+
+  add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+  add_header X-Content-Type-Options nosniff always;
+  add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+  client_max_body_size 64m;
+
+  gzip on;
+  gzip_vary on;
+  gzip_types text/css application/javascript application/json image/svg+xml font/woff2;
+  gzip_min_length 1024;
+
+  # AgroDetect S2 / long-running field jobs
+  location /api/agri-field-boundary/ {
+    proxy_pass http://agrocloud_api;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 1800s;
+    proxy_send_timeout 1800s;
+  }
+
+  location / {
+    proxy_pass http://agrocloud_api;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 600s;
+  }
+}
+
+server {
+  listen 80;
+  listen [::]:80;
+  server_name api.eliteagrocloud.com;
+  return 301 https://$host$request_uri;
+}

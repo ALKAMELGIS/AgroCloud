@@ -1,0 +1,23 @@
+# API-only image — no SPA build (GitHub Pages serves www).
+FROM node:20-alpine
+
+ARG CACHE_BUST=2026-09-01-api-only
+RUN echo "api-only build ${CACHE_BUST}"
+
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+COPY backend/package.json ./backend/
+
+RUN npm ci --workspace=backend --include-workspace-root --omit=dev
+
+COPY backend ./backend
+
+ENV NODE_ENV=production
+ENV HOST=0.0.0.0
+ENV PORT=3001
+ENV FIELD_BOUNDARY_URL=http://agri-field-boundary:8092/detect
+
+EXPOSE 3001
+
+CMD ["npm", "run", "start", "-w", "backend"]

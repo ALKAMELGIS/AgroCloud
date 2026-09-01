@@ -1,17 +1,17 @@
-# Production stack for Hostinger VPS (2.24.11.216).
-# Build contexts use the GitHub repo so Hostinger Docker Manager does not need a full checkout.
+# API-only stack — www stays on GitHub Pages; Caddy serves api.eliteagrocloud.com only.
+# Prefer systemd: scripts/deploy-vps-api-only.sh (lighter, survives reboots).
 #
-# Deploy:
-#   Hostinger MCP → VPS_createNewProjectV1
-#   content: https://raw.githubusercontent.com/ALKAMELGIS/AgroCloud/main/docker-compose.vps.yml
+# Deploy via Hostinger MCP:
+#   VPS_createNewProjectV1
+#   content: https://raw.githubusercontent.com/alkamelgis/AgroCloud/main/docker-compose.api-only.yml
 
 services:
   agri-field-boundary:
     build:
-      context: https://github.com/ALKAMELGIS/AgroCloud.git#main:backend/services/agri-field-boundary
+      context: https://github.com/alkamelgis/AgroCloud.git#main:backend/services/agri-field-boundary
       dockerfile: Dockerfile
       args:
-        CACHE_BUST: '2026-09-01-ftw-argv-fix'
+        CACHE_BUST: '2026-09-01-api-only'
     environment:
       PORT: '8092'
       FTW_INFER_ENABLED: '1'
@@ -28,16 +28,15 @@ services:
 
   app:
     build:
-      context: https://github.com/ALKAMELGIS/AgroCloud.git#main
-      dockerfile: Dockerfile
+      context: https://github.com/alkamelgis/AgroCloud.git#main
+      dockerfile: Dockerfile.api-only
       args:
-        CACHE_BUST: '2026-09-01-ftw-argv-fix'
+        CACHE_BUST: '2026-09-01-api-only'
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: '3001'
       FIELD_BOUNDARY_URL: http://agri-field-boundary:8092/detect
-      VITE_ELITE_SAME_ORIGIN_API: 'true'
     expose:
       - '3001'
     depends_on:
@@ -53,7 +52,6 @@ services:
     command:
       - |
         cat > /etc/caddy/Caddyfile <<'EOF'
-        # API only — www/apex stay on GitHub Pages (do not add them here).
         api.eliteagrocloud.com {
           encode gzip zstd
           reverse_proxy app:3001

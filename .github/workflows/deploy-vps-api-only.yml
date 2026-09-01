@@ -1,0 +1,59 @@
+name: Deploy API to VPS
+
+# systemd deploy — Node :3001 + Python :8092 + nginx (api.eliteagrocloud.com only).
+# Frontend stays on GitHub Pages. Requires VPS_HOST + VPS_SSH_KEY secrets.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'scripts/deploy-vps-api-only.sh'
+      - 'scripts/nginx-api-only.conf.example'
+      - '.github/workflows/deploy-vps-api-only.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vps-api
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: ${{ secrets.VPS_HOST != '' && secrets.VPS_SSH_KEY != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Deploy API over SSH (systemd + nginx)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER || 'root' }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT || 22 }}
+          command_timeout: 40m
+          script_stop: true
+          script: |
+            set -euo pipefail
+            DEPLOY_PATH="${{ secrets.VPS_DEPLOY_PATH || '/opt/AgroCloud' }}"
+            export DEPLOY_PATH
+            export BRANCH=main
+            if [[ -x "$DEPLOY_PATH/scripts/deploy-vps-api-only.sh" ]]; then
+              "$DEPLOY_PATH/scripts/deploy-vps-api-only.sh"
+            else
+              mkdir -p "$DEPLOY_PATH"
+              git clone --depth 1 -b main "https://github.com/${{ github.repository }}.git" "$DEPLOY_PATH" 2>/dev/null || true
+              cd "$DEPLOY_PATH" && git pull --ff-only origin main
+              chmod +x scripts/deploy-vps-api-only.sh
+              ./scripts/deploy-vps-api-only.sh
+            fi
+
+      - name: Smoke HTTPS API health
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER || 'root' }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT || 22 }}
+          script: |
+            curl -fsS "http://127.0.0.1:3001/api/health" | grep -q '"ok"'
+            curl -fsS "http://127.0.0.1:3001/api/agri-field-boundary/health" | grep -q '"status"'

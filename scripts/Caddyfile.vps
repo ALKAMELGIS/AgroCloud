@@ -1,7 +1,8 @@
 # TLS for eliteagrocloud.com unified stack (VPS 2.24.11.216).
 # Caddy obtains Let's Encrypt certs automatically.
 
-eliteagrocloud.com, www.eliteagrocloud.com, api.eliteagrocloud.com {
+# API only — www/apex stay on GitHub Pages.
+api.eliteagrocloud.com {
 	encode gzip zstd
 	reverse_proxy app:3001
 }

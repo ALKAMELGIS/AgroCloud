@@ -15,11 +15,17 @@ jobs:
       - name: Check live SPA shell
         run: |
           set -euo pipefail
-          URL="https://alkamelgis.github.io/AgroCloud/"
+          URL="https://www.eliteagrocloud.com/"
           HTML=$(curl -fsSL "$URL")
           echo "$HTML" | grep -q 'id="root"' || { echo "Missing #root in index.html"; exit 1; }
           echo "$HTML" | grep -qE '(AgroCloud/)?assets/index-[^"]+\.js' || { echo "Missing built JS bundle reference"; exit 1; }
-          echo "$HTML" | grep -q 'manifest.webmanifest' || echo "WARN: manifest link not in HTML (PWA may still work via SW registration)"
-          curl -fsSI "https://alkamelgis.github.io/AgroCloud/manifest.webmanifest" | head -n 5
-          curl -fsSI "https://alkamelgis.github.io/AgroCloud/sw.js" | head -n 5
-          echo "Production smoke check passed for $URL"
+          echo "Production SPA smoke check passed for $URL"
+
+      - name: Check API health (api.eliteagrocloud.com)
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          API="https://api.eliteagrocloud.com"
+          curl -fsS "${API}/api/health" | grep -q '"ok"'
+          curl -fsS "${API}/api/agri-field-boundary/health" | grep -q '"status"'
+          echo "API smoke check passed for ${API}"

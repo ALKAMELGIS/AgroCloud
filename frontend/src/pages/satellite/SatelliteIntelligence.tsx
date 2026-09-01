@@ -21997,7 +21997,7 @@ export default function SatelliteIntelligence() {
     return () => {
       if (timer != null) window.clearTimeout(timer);
     };
-  }, [isMapStyleReady, siEnsureGlobeProjection, effectiveMapStyle, siEnterGlobe3dView]);
+  }, [isMapStyleReady, siEnsureGlobeProjection, effectiveMapStyle]);
 
   useEffect(() => {
     if (!isMapStyleReady) return;
