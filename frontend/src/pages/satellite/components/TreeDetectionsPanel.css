@@ -459,3 +459,166 @@
   flex: 1 1 0;
   justify-content: center;
 }
+
+/* ── Light theme (matte black text on light glass) ───────────────────────── */
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-env-section-card.si-rs-panel--glass:has(.si-tree-detect) {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect {
+  --td-text: #222222;
+  --td-muted: #555555;
+  --td-border: rgba(34, 34, 34, 0.14);
+  --td-border-soft: rgba(34, 34, 34, 0.08);
+  --td-glass: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.92));
+  --td-glass-flat: rgba(255, 255, 255, 0.78);
+  --td-blur: saturate(1.05) blur(10px);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.94) 100%);
+  border-color: rgba(34, 34, 34, 0.12);
+  color: var(--td-text);
+  box-shadow:
+    0 12px 32px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.98);
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__close {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(148, 163, 184, 0.28);
+  color: #334155;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__close:hover {
+  background: rgba(241, 245, 249, 0.98);
+  border-color: rgba(100, 116, 139, 0.32);
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__card,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__metric,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__legend,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__status {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__card-label,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__field > span,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__meta,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__filter-head,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__metric span,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__metric small {
+  color: #555555;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__mode-title,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__status-text,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__toggle,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__legend-label,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__filter-head strong,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__field strong {
+  color: #222222;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__mode {
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(148, 163, 184, 0.24);
+  color: #222222;
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__mode:hover {
+  border-color: rgba(100, 116, 139, 0.34);
+  background: rgba(248, 250, 252, 0.96);
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__mode.is-selected {
+  border-color: rgba(15, 23, 42, 0.28);
+  background: rgba(241, 245, 249, 0.98);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.98);
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__mode-radio {
+  border-color: rgba(71, 85, 105, 0.55);
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__mode.is-selected .si-tree-detect__mode-radio {
+  border-color: #1e293b;
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__mode.is-selected .si-tree-detect__mode-radio::after {
+  background: #1e293b;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__btn,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__chip-btn {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(148, 163, 184, 0.28);
+  color: #1e293b;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__btn:hover,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__chip-btn:hover {
+  background: rgba(236, 253, 245, 0.95);
+  border-color: rgba(16, 185, 129, 0.32);
+  color: #065f46;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__btn--primary {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 245, 249, 0.94));
+  border-color: rgba(100, 116, 139, 0.32);
+  color: #0f172a;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.98),
+    0 4px 14px rgba(15, 23, 42, 0.08);
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__btn--primary:hover:not(:disabled) {
+  background: rgba(236, 253, 245, 0.98);
+  border-color: rgba(16, 185, 129, 0.38);
+  color: #065f46;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__select {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(148, 163, 184, 0.32);
+  color: #0f172a;
+  color-scheme: light;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__range {
+  accent-color: #059669;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__status-dot {
+  background: #64748b;
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__status[data-phase='done'] {
+  background: rgba(236, 253, 245, 0.72);
+  border-color: rgba(16, 185, 129, 0.28);
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__status[data-phase='done'] .si-tree-detect__status-dot {
+  background: #059669;
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__status[data-phase='error'] {
+  background: rgba(254, 226, 226, 0.72);
+  border-color: rgba(239, 68, 68, 0.28);
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__error {
+  color: #b91c1c;
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__notice {
+  color: #b45309;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__metric strong,
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__legend-count {
+  color: #0f172a;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__legend-swatch {
+  border-color: rgba(34, 34, 34, 0.16);
+}
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__legend-bar {
+  background: rgba(148, 163, 184, 0.22);
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-tree-detect__toggle input {
+  accent-color: #059669;
+}
