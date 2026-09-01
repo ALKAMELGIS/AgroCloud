@@ -27375,8 +27375,7 @@ export default function SatelliteIntelligence() {
                           score={agriFieldBoundary.result?.score ?? null}
                           hasResult={
                             agriFieldBoundary.model === 'ftw'
-                              ? agriFieldBoundary.ftwGlobalVisible &&
-                                Boolean(activeAoi.geometry)
+                              ? Boolean(resolveFieldBoundaryAoi())
                               : Boolean(agriFieldBoundary.geojson?.features?.length)
                           }
                           resultGeojson={agriFieldBoundary.geojson}

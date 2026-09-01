@@ -334,4 +334,25 @@ describe('AgriFieldBoundaryPanel Results dashboard trigger', () => {
     expect(screen.getByRole('button', { name: 'Build Dataset' })).toBeTruthy()
     cleanupHost()
   })
+
+  it('enables Export and Add layer for FTW Global when AOI exists without Show Global Fields', () => {
+    const { cleanupHost } = mountWithHost({
+      hasAoi: true,
+      model: 'ftw',
+      source: 'ftw',
+      modelOptions: [{ id: 'ftw' as const, label: 'Fields of the World (Global v3)' }],
+      phase: 'idle',
+      hasResult: false,
+      onAddToLayers: () => {},
+      ftwYear: 2025,
+      onFtwYearChange: () => {},
+      ftwThreshold: 70,
+      onFtwThresholdChange: () => {},
+      ftwGlobalOpacity: 90,
+      onFtwGlobalOpacityChange: () => {},
+    })
+    expect(screen.getByTitle('Export field polygons').hasAttribute('disabled')).toBe(false)
+    expect(screen.getByRole('button', { name: 'Add layer to map' }).hasAttribute('disabled')).toBe(false)
+    cleanupHost()
+  })
 })

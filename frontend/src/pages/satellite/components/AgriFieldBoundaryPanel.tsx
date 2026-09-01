@@ -330,6 +330,8 @@ export function AgriFieldBoundaryPanel({
 
   const analyticsTabReady = isFtwTraining ? ftwTraining.hasAoi : hasResult
   const dashboardTabReady = Boolean(resultGeojson?.features?.length)
+  /** FTW Global export vectorizes AOI on demand — only needs a scoped AOI, not a prior detect result. */
+  const exportReady = isFtwGlobal ? hasAoi : hasResult
 
   useEffect(() => {
     setMinAreaText(String(minAreaM2))
@@ -450,8 +452,8 @@ export function AgriFieldBoundaryPanel({
   }, [exportOpen])
 
   useEffect(() => {
-    if (!hasResult && exportOpen) setExportOpen(false)
-  }, [hasResult, exportOpen])
+    if (!exportReady && exportOpen) setExportOpen(false)
+  }, [exportReady, exportOpen])
 
   const openFilePicker = () => {
     const el = fileInputRef.current
@@ -1089,9 +1091,15 @@ export function AgriFieldBoundaryPanel({
             <button
               type="button"
               className="si-afb__btn si-afb__btn--ghost si-afb__add-layer-btn"
-              disabled={!hasResult || busy || exportBusy}
+              disabled={!exportReady || busy || exportBusy}
               aria-busy={exportBusy}
-              title="Add layer to map"
+              title={
+                exportReady
+                  ? 'Add layer to map'
+                  : isFtwGlobal
+                    ? 'Draw or select an AOI to add FTW fields to the map'
+                    : 'Run Detect Fields to add a layer'
+              }
               aria-label="Add layer to map"
               onClick={handleAddToLayers}
             >
@@ -1102,12 +1110,18 @@ export function AgriFieldBoundaryPanel({
             <button
               type="button"
               className="si-afb__btn si-afb__export-trigger"
-              disabled={!hasResult || busy || Boolean(attributesStatus) || exportBusy}
+              disabled={!exportReady || busy || exportBusy}
               aria-haspopup="menu"
               aria-expanded={exportOpen}
               aria-busy={exportBusy}
               onClick={() => setExportOpen(v => !v)}
-              title="Export field polygons"
+              title={
+                exportReady
+                  ? 'Export field polygons'
+                  : isFtwGlobal
+                    ? 'Draw or select an AOI to export FTW Global fields'
+                    : 'Run Detect Fields to export'
+              }
             >
               {exportBusy ? (
                 <>
