@@ -956,7 +956,7 @@ export function useAgriFieldBoundary({
         if (!out.geojson.features.length) {
           setError('No fields detected in this AOI with AgroDetect S2.')
           setErrorDetail(
-            'Try a larger cropland AOI, a clearer Sentinel-2 date, or lower confidence. Requires FTW PRUE on api.eliteagrocloud.com.',
+            'Try a larger cropland AOI, a clearer Sentinel-2 date, or lower confidence. Requires FTW PRUE on the AgroCloud API.',
           )
           setResult(null)
           setPhase('empty')

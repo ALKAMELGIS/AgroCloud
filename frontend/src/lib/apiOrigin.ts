@@ -13,7 +13,7 @@
  */
 
 /** Hostinger Node that serves `/api/*` for the GitHub Pages custom domain. */
-export const ELITE_AGROCLOUD_API_ORIGIN = 'https://api.eliteagrocloud.com'
+export const ELITE_AGROCLOUD_API_ORIGIN = 'https://eliteagrocloud.com'
 
 function sameOrigin(): string {
   return typeof window !== 'undefined' && window.location?.origin ? window.location.origin : ''

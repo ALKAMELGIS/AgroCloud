@@ -392,7 +392,7 @@ export function AgriFieldBoundaryPanel({
       ? 'Show FTW global field boundaries clipped to the selected AOI (pre-computed v3 B7, CC-BY)'
       : `Show FTW global fields — then ${AOI_MODE_HINT[aoiMode]}`
     : isFtwInferenceS2
-      ? 'Run AgroDetect S2 (PRUE) on Sentinel-2 L2A — live inference via api.eliteagrocloud.com'
+      ? 'Run AgroDetect S2 (PRUE) on Sentinel-2 L2A — live inference via eliteagrocloud.com API'
     : isAfd
     ? 'Run Agricultural Field Delineation on Sentinel-2 L2A (12 bands)'
     : isDelineateFbis
