@@ -38,13 +38,22 @@ services:
     ports:
       - '80:80'
       - '443:443'
-    volumes:
-      - ./scripts/Caddyfile.vps:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        cat > /etc/caddy/Caddyfile <<'EOF'
+        eliteagrocloud.com, www.eliteagrocloud.com, api.eliteagrocloud.com {
+          encode gzip zstd
+          reverse_proxy app:3001
+        }
+        EOF
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
     depends_on:
       - app
     restart: unless-stopped
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
 
 volumes:
   caddy_data:
