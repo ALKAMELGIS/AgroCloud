@@ -121,6 +121,9 @@ export type AgriFieldBoundaryPanelProps = {
   onExportGeojson: () => void | Promise<void>
   onExportShapefile: () => void | Promise<void>
   onExportCsv?: () => void | Promise<void>
+  onExportXlsx?: () => void | Promise<void>
+  onExportKml?: () => void | Promise<void>
+  onExportKmz?: () => void | Promise<void>
   onAddToLayers?: () => void | Promise<void>
   /** Progress line while the Sentinel-2 attribute table is being filled. */
   attributesStatus?: string | null
@@ -264,6 +267,9 @@ export function AgriFieldBoundaryPanel({
   onExportGeojson,
   onExportShapefile,
   onExportCsv,
+  onExportXlsx,
+  onExportKml,
+  onExportKmz,
   onAddToLayers,
   attributesStatus = null,
   attributesBusy = false,
@@ -1079,6 +1085,19 @@ export function AgriFieldBoundaryPanel({
         ) : null}
 
         <div className="si-afb__actions si-afb__actions--export">
+          {onAddToLayers ? (
+            <button
+              type="button"
+              className="si-afb__btn si-afb__btn--ghost si-afb__add-layer-btn"
+              disabled={!hasResult || busy || exportBusy}
+              aria-busy={exportBusy}
+              title="Add layer to map"
+              aria-label="Add layer to map"
+              onClick={handleAddToLayers}
+            >
+              <i className="fa-solid fa-layer-group" aria-hidden /> Add layer
+            </button>
+          ) : null}
           <div className={`si-afb__export${exportOpen ? ' is-open' : ''}${exportBusy ? ' is-busy' : ''}`} ref={exportRef}>
             <button
               type="button"
@@ -1103,6 +1122,70 @@ export function AgriFieldBoundaryPanel({
             </button>
             {exportOpen && !exportBusy ? (
               <div className="si-afb__export-menu" role="menu">
+                {onAddToLayers ? (
+                  <button
+                    type="button"
+                    className="si-afb__export-item si-afb__export-item--accent"
+                    role="menuitem"
+                    disabled={exportBusy}
+                    onClick={handleAddToLayers}
+                  >
+                    <i className="fa-solid fa-layer-group" aria-hidden /> Add layer to map
+                  </button>
+                ) : null}
+                {onAddToLayers ? <div className="si-afb__export-divider" role="separator" aria-hidden /> : null}
+                {onExportCsv ? (
+                  <button
+                    type="button"
+                    className="si-afb__export-item"
+                    role="menuitem"
+                    disabled={exportBusy}
+                    onClick={() => {
+                      void Promise.resolve(onExportCsv()).finally(() => setExportOpen(false))
+                    }}
+                  >
+                    <i className="fa-solid fa-file-csv" aria-hidden /> CSV
+                  </button>
+                ) : null}
+                {onExportXlsx ? (
+                  <button
+                    type="button"
+                    className="si-afb__export-item"
+                    role="menuitem"
+                    disabled={exportBusy}
+                    onClick={() => {
+                      void Promise.resolve(onExportXlsx()).finally(() => setExportOpen(false))
+                    }}
+                  >
+                    <i className="fa-solid fa-file-excel" aria-hidden /> XLSX
+                  </button>
+                ) : null}
+                {onExportKml ? (
+                  <button
+                    type="button"
+                    className="si-afb__export-item"
+                    role="menuitem"
+                    disabled={exportBusy}
+                    onClick={() => {
+                      void Promise.resolve(onExportKml()).finally(() => setExportOpen(false))
+                    }}
+                  >
+                    <i className="fa-solid fa-globe" aria-hidden /> KML
+                  </button>
+                ) : null}
+                {onExportKmz ? (
+                  <button
+                    type="button"
+                    className="si-afb__export-item"
+                    role="menuitem"
+                    disabled={exportBusy}
+                    onClick={() => {
+                      void Promise.resolve(onExportKmz()).finally(() => setExportOpen(false))
+                    }}
+                  >
+                    <i className="fa-solid fa-earth-americas" aria-hidden /> KMZ
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="si-afb__export-item"
@@ -1125,30 +1208,6 @@ export function AgriFieldBoundaryPanel({
                 >
                   <i className="fa-solid fa-file-zipper" aria-hidden /> Shapefile
                 </button>
-                {onExportCsv ? (
-                  <button
-                    type="button"
-                    className="si-afb__export-item"
-                    role="menuitem"
-                    disabled={exportBusy}
-                    onClick={() => {
-                      void Promise.resolve(onExportCsv()).finally(() => setExportOpen(false))
-                    }}
-                  >
-                    <i className="fa-solid fa-file-csv" aria-hidden /> CSV
-                  </button>
-                ) : null}
-                {onAddToLayers ? (
-                  <button
-                    type="button"
-                    className="si-afb__export-item"
-                    role="menuitem"
-                    disabled={exportBusy}
-                    onClick={handleAddToLayers}
-                  >
-                    <i className="fa-solid fa-layer-group" aria-hidden /> Add layer
-                  </button>
-                ) : null}
               </div>
             ) : null}
           </div>

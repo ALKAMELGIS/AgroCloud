@@ -432,10 +432,21 @@
 .si-afb__actions--export {
   position: relative;
   margin-top: 2px;
+  align-items: center;
+}
+.si-afb__add-layer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: center;
 }
 .si-afb__export {
   position: relative;
   display: inline-flex;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .si-afb__export.is-busy .si-afb__export-trigger {
   pointer-events: none;
@@ -510,7 +521,7 @@
   left: 0;
   bottom: calc(100% + 4px);
   z-index: 20;
-  min-width: 148px;
+  min-width: 168px;
   padding: 4px;
   border-radius: 8px;
   border: 1px solid rgba(148, 163, 184, 0.35);
@@ -519,6 +530,17 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+.si-afb__export-divider {
+  height: 1px;
+  margin: 2px 4px;
+  background: rgba(148, 163, 184, 0.28);
+}
+.si-afb__export-item--accent {
+  color: #bbf7d0;
+}
+.si-afb__export-trigger {
+  width: 100%;
 }
 .si-afb__export-item {
   display: flex;

@@ -156,52 +156,6 @@ function fmtHa(v: number): string {
   return v.toFixed(2)
 }
 
-function BarList({
-  rows,
-  max,
-  unit = '',
-  fillClass = '',
-}: {
-  rows: Array<{ label: string; value: number }>
-  max: number
-  unit?: string
-  fillClass?: string
-}) {
-  if (!rows.length) {
-    return <p className="si-field-dash__empty">No data</p>
-  }
-  return (
-    <div className="si-field-dash__bars">
-      {rows.map(r => (
-        <div key={r.label} className="si-field-dash__bar-row">
-          <span title={r.label}>{r.label}</span>
-          <div className="si-field-dash__bar-track">
-            <div
-              className={`si-field-dash__bar-fill${fillClass ? ` ${fillClass}` : ''}`}
-              style={{ width: `${Math.max(4, Math.round((r.value / max) * 100))}%` }}
-            />
-          </div>
-          <strong>
-            {r.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-            {unit}
-          </strong>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function CountBars({ rows, fillClass = '' }: { rows: NamedCount[]; fillClass?: string }) {
-  const max = Math.max(1, ...rows.map(r => r.count))
-  return (
-    <BarList
-      rows={rows.map(r => ({ label: r.label, value: r.count }))}
-      max={max}
-      fillClass={fillClass}
-    />
-  )
-}
-
 function buildPieDonutBackground(rows: Array<{ count: number; color: string }>): string {
   const nonzero = rows.filter(r => r.count > 0)
   const total = nonzero.reduce((s, r) => s + r.count, 0)
@@ -217,13 +171,22 @@ function buildPieDonutBackground(rows: Array<{ count: number; color: string }>):
   return `conic-gradient(${segs.join(', ')})`
 }
 
-function resolvePieSliceColor(label: string, index: number, palette: 'default' | 'health' = 'default'): string {
+function resolvePieSliceColor(label: string, index: number, palette: 'default' | 'health' | 'landcover' = 'default'): string {
   if (palette === 'health') {
     const lower = label.toLowerCase()
     if (/healthy/i.test(lower) && !/stress|moderate/i.test(lower)) return '#2e7d32'
     if (/moderate/i.test(lower)) return '#ed6c02'
     if (/stress|unhealthy|poor|critical/i.test(lower)) return '#c62828'
     if (/unknown/i.test(lower)) return '#94a3b8'
+  }
+  if (palette === 'landcover') {
+    const lower = label.toLowerCase()
+    if (/crop/i.test(lower)) return '#2e7d32'
+    if (/bare|soil/i.test(lower)) return '#a1887f'
+    if (/forest|tree|wood/i.test(lower)) return '#1b5e20'
+    if (/grass|meadow|pasture/i.test(lower)) return '#7cb342'
+    if (/water|wet/i.test(lower)) return '#0288d1'
+    if (/urban|built|imper/i.test(lower)) return '#546e7a'
   }
   return PIE_COLORS[index % PIE_COLORS.length]
 }
@@ -235,7 +198,7 @@ function PieDonutChart({
   expanded = false,
 }: {
   rows: NamedCount[]
-  palette?: 'default' | 'health'
+  palette?: 'default' | 'health' | 'landcover'
   ariaLabel: string
   expanded?: boolean
 }) {
@@ -465,13 +428,16 @@ function FieldAttributesDashboardBody({
         <section className="si-field-dash__card">
           <div className="si-field-dash__card-head">
             <h4>
-              <i className="fa-solid fa-chart-pie" aria-hidden /> Crop type mix
+              <i className="fa-solid fa-chart-bar" aria-hidden /> Crop type
             </h4>
             <span>count</span>
           </div>
-          <PieDonutChart
-            rows={model.cropMix}
-            ariaLabel="Crop type distribution"
+          <FieldDashBarChart
+            rows={model.cropMix.map(r => ({ label: r.label, value: r.count }))}
+            ariaLabel="Crop type field count"
+            yLabel="fields"
+            color="#2e7d32"
+            formatValue={v => String(Math.round(v))}
             expanded={expanded}
           />
         </section>
@@ -514,11 +480,16 @@ function FieldAttributesDashboardBody({
           <section className="si-field-dash__card">
             <div className="si-field-dash__card-head">
               <h4>
-                <i className="fa-solid fa-mountain-sun" aria-hidden /> Land cover
+                <i className="fa-solid fa-chart-pie" aria-hidden /> Land cover
               </h4>
               <span>count</span>
             </div>
-            <CountBars rows={model.landCoverMix} fillClass="si-field-dash__bar-fill--amber" />
+            <PieDonutChart
+              rows={model.landCoverMix}
+              palette="landcover"
+              ariaLabel="Land cover distribution"
+              expanded={expanded}
+            />
           </section>
         ) : null}
 

@@ -38,10 +38,9 @@ import {
 } from '../../../lib/agriFieldBoundary/fieldBoundaryProductionMode'
 import { summarizeFieldGeometry } from '../../../lib/agriFieldBoundary/fieldValidationMetrics'
 import {
-  downloadFieldBoundaryGeoPackage,
   downloadFieldBoundaryShapefile,
 } from '../../../lib/agriFieldBoundary/polygonShapefileExport'
-import { downloadVectorCsv } from '../../../lib/vectorLayerExport'
+import { downloadVectorCsv, downloadVectorGeoJson, downloadVectorKml, downloadVectorKmz, downloadVectorXlsx } from '../../../lib/vectorLayerExport'
 import { enrichObjectAttributes } from '../../../lib/objectAttributes/enrichObjectAttributes'
 import {
   ftwInferenceEffectiveSceneDate,
@@ -452,8 +451,8 @@ export function useAgriFieldBoundary({
   resolveAoi,
   aoiClipKey = '',
 }: UseAgriFieldBoundaryOptions) {
-  // Prefer Delineate Anything (dense adjacent field mosaic).
-  const [model, setModelState] = useState<FieldModelId>('delineate-fbis')
+  // Default model: Fields of the World (Global v3).
+  const [model, setModelState] = useState<FieldModelId>('ftw')
   const [imagery, setImageryState] = useState<FieldCaptureImageryId>('basemap')
   const source = deriveFieldSource(model, imagery)
   const imageryRef = useRef(imagery)
@@ -1669,7 +1668,7 @@ export function useAgriFieldBoundary({
   const exportGeojson = useCallback(async () => {
     const fc = await resolveExportGeojson()
     if (!fc?.features?.length) return
-    downloadFieldBoundaryGeoPackage(fc)
+    downloadVectorGeoJson(fc, 'agri-field-boundaries.geojson')
   }, [resolveExportGeojson])
 
   const exportShapefile = useCallback(async () => {
@@ -1682,6 +1681,24 @@ export function useAgriFieldBoundary({
     const fc = await resolveExportGeojson()
     if (!fc?.features?.length) return
     downloadVectorCsv(fc, 'agri-field-boundaries.csv')
+  }, [resolveExportGeojson])
+
+  const exportXlsx = useCallback(async () => {
+    const fc = await resolveExportGeojson()
+    if (!fc?.features?.length) return
+    downloadVectorXlsx(fc, 'agri-field-boundaries.xlsx', 'Field boundaries')
+  }, [resolveExportGeojson])
+
+  const exportKml = useCallback(async () => {
+    const fc = await resolveExportGeojson()
+    if (!fc?.features?.length) return
+    downloadVectorKml(fc, 'agri-field-boundaries.kml', 'Field boundaries')
+  }, [resolveExportGeojson])
+
+  const exportKmz = useCallback(async () => {
+    const fc = await resolveExportGeojson()
+    if (!fc?.features?.length) return
+    await downloadVectorKmz(fc, 'agri-field-boundaries.kmz', 'Field boundaries')
   }, [resolveExportGeojson])
 
   const geojson = result?.geojson ?? null
@@ -1758,6 +1775,9 @@ export function useAgriFieldBoundary({
     exportGeojson,
     exportShapefile,
     exportCsv,
+    exportXlsx,
+    exportKml,
+    exportKmz,
     sen2sr,
     trainingSamples,
     ftwYear,

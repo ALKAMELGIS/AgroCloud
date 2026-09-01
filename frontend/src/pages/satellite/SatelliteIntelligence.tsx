@@ -27408,6 +27408,9 @@ export default function SatelliteIntelligence() {
                           onExportGeojson={() => void agriFieldBoundary.exportGeojson()}
                           onExportShapefile={() => void agriFieldBoundary.exportShapefile()}
                           onExportCsv={() => void agriFieldBoundary.exportCsv()}
+                          onExportXlsx={() => void agriFieldBoundary.exportXlsx()}
+                          onExportKml={() => void agriFieldBoundary.exportKml()}
+                          onExportKmz={() => void agriFieldBoundary.exportKmz()}
                           onAddToLayers={() => void handleAgriFieldBoundaryAddToLayers()}
                           exportBusy={agriFieldBoundary.exportBusy}
                           exportStatus={agriFieldBoundary.exportProgress}

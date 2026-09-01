@@ -164,7 +164,7 @@ describe('AgriFieldBoundaryPanel Results dashboard trigger', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Attributes dashboard' }))
     expect(screen.getByLabelText('Field attributes dashboard')).toBeTruthy()
     expect(screen.getByText('Area by field')).toBeTruthy()
-    expect(screen.getByText('Crop type mix')).toBeTruthy()
+    expect(screen.getByText('Crop type')).toBeTruthy()
     cleanupHost()
   })
 
