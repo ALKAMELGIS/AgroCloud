@@ -6234,7 +6234,7 @@ export default function SatelliteIntelligence() {
   const siWebglContextLostRef = useRef(false);
   /** Bounded retry counter for the "map style never became ready" watchdog. */
   const siMapLoadRetryRef = useRef(0);
-  /** True while Field Boundaries detection/export/attributes are running — blocks auto 3D failover. */
+  /** True while Field Boundaries / FTW Global runs — blocks auto 3D failover. */
   const fieldBoundaryMapBusyRef = useRef(false);
   /** Bounded retry bookkeeping for Sentinel-2 WMS tile errors (reset per layer/date/AOI). */
   const sentinelTileRetryRef = useRef<{ key: string; attempts: number; timer: number | null }>({
@@ -16418,7 +16418,8 @@ export default function SatelliteIntelligence() {
   fieldBoundaryMapBusyRef.current =
     agriFieldBoundary.busy ||
     agriFieldBoundary.attributesBusy ||
-    agriFieldBoundary.exportBusy;
+    agriFieldBoundary.exportBusy ||
+    (agriFieldBoundary.model === 'ftw' && agriFieldBoundary.ftwGlobalVisible);
 
   useEffect(() => {
     if (agriFieldBoundary.model === 'ftw') {
@@ -21982,12 +21983,8 @@ export default function SatelliteIntelligence() {
 
       siMapLoadRetryRef.current = n + 1;
       if (siMapLoadRetryRef.current >= MAX_RETRIES) {
-        // Last resort: switch to the 3D globe terrain view, which uses a different
-        // basemap/style path and reliably re-renders the globe.
-        if (!siGlobeWebglFailoverRef.current && !fieldBoundaryMapBusyRef.current) {
-          siGlobeWebglFailoverRef.current = true;
-          siEnterGlobe3dView();
-        }
+        // Do not auto-switch to 3D — user controls view mode via the 3D button only.
+        setStacStatus('Map style is slow to load — retry basemap or use the 3D button if needed.');
         return;
       }
       timer = window.setTimeout(attempt, siNextBackoffDelayMs(siMapLoadRetryRef.current, {
@@ -24614,15 +24611,14 @@ export default function SatelliteIntelligence() {
               const lowerMessage = String(message || '').toLowerCase();
               const mapboxHostedRequest = String(url || '').includes('api.mapbox.com');
               if (
-                !siGlobeWebglFailoverRef.current &&
-                !fieldBoundaryMapBusyRef.current &&
-                (siMapErrorSuggestsGlobeOrWebglFailure(String(message)) ||
-                  (mapboxHostedRequest &&
-                    (lowerMessage.includes('access token') || lowerMessage.includes('mapbox'))))
+                siMapErrorSuggestsGlobeOrWebglFailure(String(message)) ||
+                (mapboxHostedRequest &&
+                  (lowerMessage.includes('access token') || lowerMessage.includes('mapbox')))
               ) {
-                siGlobeWebglFailoverRef.current = true;
-                siEnterGlobe3dView();
-                setStacStatus('Map detected a rendering issue and is retrying in 3D Globe mode.');
+                // Do not auto-switch to 3D — user controls view mode via the 3D button only.
+                setStacStatus(
+                  'Map rendering issue detected — use the 3D button manually if you want terrain view.',
+                );
                 return;
               }
               console.warn('Map Error:', e);
