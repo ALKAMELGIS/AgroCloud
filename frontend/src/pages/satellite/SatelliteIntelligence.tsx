@@ -6234,6 +6234,8 @@ export default function SatelliteIntelligence() {
   const siWebglContextLostRef = useRef(false);
   /** Bounded retry counter for the "map style never became ready" watchdog. */
   const siMapLoadRetryRef = useRef(0);
+  /** True while Field Boundaries detection/export/attributes are running — blocks auto 3D failover. */
+  const fieldBoundaryMapBusyRef = useRef(false);
   /** Bounded retry bookkeeping for Sentinel-2 WMS tile errors (reset per layer/date/AOI). */
   const sentinelTileRetryRef = useRef<{ key: string; attempts: number; timer: number | null }>({
     key: '',
@@ -14123,6 +14125,7 @@ export default function SatelliteIntelligence() {
   circleRefineDraftRef.current = circleRefineDraft;
 
   const isMapOrbitBlocked = useCallback(() => {
+    if (fieldBoundaryMapBusyRef.current) return true;
     const tool = mapDrawToolRef.current;
     if (tool === 'polygon' && polygonRingRef.current.length > 0) return true;
     if (tool === 'rectangle' || tool === 'circle' || tool === 'box_select') return true;
@@ -14141,10 +14144,8 @@ export default function SatelliteIntelligence() {
       skipNextMapClickRef.current = true;
     },
     onElevationOrbitEngaged: () => {
-      if (!is3DViewRef.current) {
-        setIs3DView(true);
-        siEnsureGlobeProjection();
-      }
+      // 3D mode is user-controlled via the 3D button — right-drag orbit only tilts pitch.
+      if (is3DViewRef.current) siEnsureGlobeProjection();
     },
     listenGlobalPointerUp: false,
   });
@@ -16400,6 +16401,10 @@ export default function SatelliteIntelligence() {
   });
   const agriFieldBoundaryRef = useRef(agriFieldBoundary);
   agriFieldBoundaryRef.current = agriFieldBoundary;
+  fieldBoundaryMapBusyRef.current =
+    agriFieldBoundary.busy ||
+    agriFieldBoundary.attributesBusy ||
+    agriFieldBoundary.exportBusy;
 
   useEffect(() => {
     if (agriFieldBoundary.model === 'ftw') {
@@ -21965,7 +21970,7 @@ export default function SatelliteIntelligence() {
       if (siMapLoadRetryRef.current >= MAX_RETRIES) {
         // Last resort: switch to the 3D globe terrain view, which uses a different
         // basemap/style path and reliably re-renders the globe.
-        if (!siGlobeWebglFailoverRef.current) {
+        if (!siGlobeWebglFailoverRef.current && !fieldBoundaryMapBusyRef.current) {
           siGlobeWebglFailoverRef.current = true;
           siEnterGlobe3dView();
         }
@@ -24596,6 +24601,7 @@ export default function SatelliteIntelligence() {
               const mapboxHostedRequest = String(url || '').includes('api.mapbox.com');
               if (
                 !siGlobeWebglFailoverRef.current &&
+                !fieldBoundaryMapBusyRef.current &&
                 (siMapErrorSuggestsGlobeOrWebglFailure(String(message)) ||
                   (mapboxHostedRequest &&
                     (lowerMessage.includes('access token') || lowerMessage.includes('mapbox'))))
