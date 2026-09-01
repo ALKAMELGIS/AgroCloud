@@ -38,23 +38,13 @@ services:
     ports:
       - '80:80'
       - '443:443'
-    command:
-      - caddy
-      - reverse-proxy
-      - --from
-      - eliteagrocloud.com
-      - --from
-      - www.eliteagrocloud.com
-      - --from
-      - api.eliteagrocloud.com
-      - --to
-      - app:3001
+    volumes:
+      - ./scripts/Caddyfile.vps:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
       - app
     restart: unless-stopped
-    volumes:
-      - caddy_data:/data
-      - caddy_config:/config
 
 volumes:
   caddy_data:
