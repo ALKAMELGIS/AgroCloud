@@ -28,6 +28,38 @@ MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
 DEFAULT_CKPT = MODELS_DIR / "prue_efnetb7_ccby_checkpoint.ckpt"
 
 
+def build_ftw_inference_all_argv(
+    ftw_bin: str,
+    bbox: list[float] | str,
+    *,
+    year: int,
+    out_dir: str | Path,
+    model: str,
+    gpu: int = -1,
+    batch_size: int = 1,
+    num_workers: int = 1,
+    stac_host: str | None = None,
+) -> list[str]:
+    """Argv for ftw-baselines 2.x `inference all` (no shell — safe for --gpu=-1)."""
+    bbox_s = bbox if isinstance(bbox, str) else ",".join(str(float(v)) for v in bbox)
+    argv = [
+        ftw_bin,
+        "inference",
+        "all",
+        f"--bbox={bbox_s}",
+        f"--model={model.strip()}",
+        f"--year={int(year)}",
+        f"--out={out_dir}",
+        "--overwrite",
+        f"--gpu={int(gpu)}",
+        f"--batch_size={int(batch_size)}",
+        f"--num_workers={int(num_workers)}",
+    ]
+    if stac_host and stac_host.strip():
+        argv.append(f"--stac_host={stac_host.strip()}")
+    return argv
+
+
 def build_ftw_inference_all_cmd(
     ftw_bin: str,
     bbox: list[float] | str,
@@ -40,15 +72,20 @@ def build_ftw_inference_all_cmd(
     num_workers: int = 1,
     stac_host: str | None = None,
 ) -> str:
-    """ftw-baselines 3.x — full S2 scene selection → download → infer → polygonize."""
-    bbox_s = bbox if isinstance(bbox, str) else ",".join(str(float(v)) for v in bbox)
-    model_q = model.replace('"', '\\"')
-    stac = f" --stac_host={stac_host.strip()}" if stac_host and stac_host.strip() else ""
-    return (
-        f'"{ftw_bin}" inference all '
-        f'--bbox={bbox_s} --model={model_q} --year={int(year)} '
-        f'--out="{out_dir}" --overwrite --gpu={int(gpu)} '
-        f'--batch_size={int(batch_size)} --num_workers={int(num_workers)}{stac}'
+    """Human-readable command string for logs/tests."""
+    return " ".join(
+        f'"{part}"' if " " in part and not part.startswith("--") else part
+        for part in build_ftw_inference_all_argv(
+            ftw_bin,
+            bbox,
+            year=year,
+            out_dir=out_dir,
+            model=model,
+            gpu=gpu,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            stac_host=stac_host,
+        )
     )
 
 
@@ -74,6 +111,24 @@ class FtwInferenceS2Engine:
 
     def _probe(self) -> None:
         if self.ftw_bin:
+            try:
+                proc = subprocess.run(
+                    [self.ftw_bin, "inference", "all", "--help"],
+                    capture_output=True,
+                    text=True,
+                    timeout=20,
+                )
+                if proc.returncode != 0:
+                    self.available = False
+                    self.error = (
+                        "AgroDetect S2 needs ftw-tools >= 2.0.0b3 (`ftw inference all`). "
+                        f"Installed CLI at {self.ftw_bin} does not expose the all subcommand."
+                    )
+                    return
+            except Exception as exc:  # noqa: BLE001
+                self.available = False
+                self.error = f"FTW CLI probe failed: {exc}"
+                return
             self.available = True
             return
         custom = os.environ.get("FTW_INFERENCE_CMD", "").strip()
@@ -140,7 +195,7 @@ class FtwInferenceS2Engine:
             else:
                 if not self.ftw_bin:
                     raise RuntimeError(self.error or "FTW inference CLI not found.")
-                shell_cmd = build_ftw_inference_all_cmd(
+                argv = build_ftw_inference_all_argv(
                     self.ftw_bin,
                     bbox_s,
                     year=year,
@@ -150,9 +205,10 @@ class FtwInferenceS2Engine:
                     num_workers=int(os.environ.get("FTW_INFER_NUM_WORKERS", "1")),
                     stac_host=os.environ.get("FTW_INFER_STAC_HOST", "").strip() or None,
                 )
+                shell_cmd = " ".join(argv)
             proc = subprocess.run(
-                shell_cmd,
-                shell=True,
+                argv if not custom else shell_cmd,
+                shell=bool(custom),
                 capture_output=True,
                 text=True,
                 timeout=int(os.environ.get("FTW_INFERENCE_TIMEOUT_SEC", "900")),
@@ -160,7 +216,8 @@ class FtwInferenceS2Engine:
             if proc.returncode != 0:
                 err = (proc.stderr or proc.stdout or "").strip()
                 raise RuntimeError(
-                    f"FTW inference CLI failed (exit {proc.returncode}). {err[:2000]}",
+                    f"FTW inference CLI failed (exit {proc.returncode}). "
+                    f"cmd={shell_cmd if custom else argv!r} {err[:1800]}",
                 )
             return self._load_output_geojson(out_dir)
 

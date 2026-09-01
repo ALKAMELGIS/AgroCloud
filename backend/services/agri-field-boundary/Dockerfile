@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
 # Bust Docker layer cache on redeploy so GitHub context changes always rebuild.
-ARG CACHE_BUST=2026-09-01-ftw-gpu-fix
+ARG CACHE_BUST=2026-09-01-ftw-argv-fix
 RUN echo "afb build ${CACHE_BUST}"
 
 WORKDIR /app

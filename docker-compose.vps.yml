@@ -11,7 +11,7 @@ services:
       context: https://github.com/ALKAMELGIS/AgroCloud.git#main:backend/services/agri-field-boundary
       dockerfile: Dockerfile
       args:
-        CACHE_BUST: '2026-09-01-ftw-gpu-fix'
+        CACHE_BUST: '2026-09-01-ftw-argv-fix'
     environment:
       PORT: '8092'
       FTW_INFER_ENABLED: '1'
@@ -31,7 +31,7 @@ services:
       context: https://github.com/ALKAMELGIS/AgroCloud.git#main
       dockerfile: Dockerfile
       args:
-        CACHE_BUST: '2026-09-01-ftw-gpu-fix'
+        CACHE_BUST: '2026-09-01-ftw-argv-fix'
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0

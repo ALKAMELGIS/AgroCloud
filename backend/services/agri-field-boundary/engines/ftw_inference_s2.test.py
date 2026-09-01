@@ -14,7 +14,7 @@ def test_build_ftw_inference_all_cmd_uses_inference_all_subcommand():
     assert "inference all" in cmd
     assert "--bbox=54.5,24.3,54.6,24.4" in cmd
     assert "--year=2024" in cmd
-    assert '--out="/tmp/ftw-out"' in cmd
+    assert '--out=/tmp/ftw-out' in cmd or '--out="/tmp/ftw-out"' in cmd
     assert "--overwrite" in cmd
     assert "--gpu=-1" in cmd
     assert "--batch_size=1" in cmd
