@@ -1,0 +1,97 @@
+# Node API runtime deploy — no Docker build (pulls node:20 + git clone on start).
+# Fixes Global v3 Export + health; AgroDetect S2 still needs Python (:8092) via systemd.
+#
+# Hostinger MCP:
+#   VPS_createNewProjectV1
+#   project_name: agrocloud-node
+#   content: https://raw.githubusercontent.com/ALKAMELGIS/AgroCloud/main/docker-compose.node-runtime.yml
+
+services:
+  app:
+    image: node:20-bookworm-slim
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: '3001'
+      FIELD_BOUNDARY_URL: http://agri-field-boundary:8092/detect
+    volumes:
+      - agrocloud_repo:/opt/AgroCloud
+    command:
+      - bash
+      - -ec
+      - |
+        apt-get update -qq && apt-get install -y -qq git ca-certificates
+        if [ ! -d /opt/AgroCloud/.git ]; then
+          git clone --depth 1 -b main https://github.com/ALKAMELGIS/AgroCloud.git /opt/AgroCloud
+        fi
+        cd /opt/AgroCloud
+        git fetch origin main
+        git reset --hard origin/main
+        npm ci --workspace=backend --include-workspace-root --omit=dev
+        exec npm run start -w backend
+    expose:
+      - '3001'
+
+  agri-field-boundary:
+    image: python:3.12-bookworm
+    restart: unless-stopped
+    environment:
+      PORT: '8092'
+      FTW_INFER_ENABLED: '1'
+      FTW_INFER_MODEL: FTW_PRUE_EFNET_B7
+      FTW_CHECKPOINT_PATH: /opt/AgroCloud/backend/services/agri-field-boundary/models/prue_efnetb7_ccby_checkpoint.ckpt
+    volumes:
+      - agrocloud_repo:/opt/AgroCloud
+      - afb_venv:/opt/afb-venv
+    command:
+      - bash
+      - -ec
+      - |
+        apt-get update -qq && apt-get install -y -qq git git-lfs libgl1 libglib2.0-0 ca-certificates
+        if [ ! -d /opt/AgroCloud/.git ]; then
+          git clone --depth 1 -b main https://github.com/ALKAMELGIS/AgroCloud.git /opt/AgroCloud
+        fi
+        cd /opt/AgroCloud
+        git fetch origin main
+        git reset --hard origin/main
+        git lfs install
+        git lfs pull --include='backend/services/agri-field-boundary/models/**' || true
+        AFB=/opt/AgroCloud/backend/services/agri-field-boundary
+        if [ ! -x /opt/afb-venv/bin/python ]; then
+          python3 -m venv /opt/afb-venv
+          /opt/afb-venv/bin/pip install -U pip wheel
+          /opt/afb-venv/bin/pip install -r "$AFB/requirements.txt"
+        fi
+        cd "$AFB"
+        exec /opt/afb-venv/bin/uvicorn app:app --host 0.0.0.0 --port 8092
+    expose:
+      - '8092'
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    depends_on:
+      - app
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        cat > /etc/caddy/Caddyfile <<'EOF'
+        api.eliteagrocloud.com {
+          encode gzip zstd
+          reverse_proxy app:3001
+        }
+        EOF
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+
+volumes:
+  agrocloud_repo:
+  afb_venv:
+  caddy_data:
+  caddy_config:
