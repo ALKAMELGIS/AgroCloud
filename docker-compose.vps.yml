@@ -1,29 +1,26 @@
 # Production stack for Hostinger VPS (2.24.11.216).
-# Deploy via Hostinger Docker Manager or: docker compose -f docker-compose.vps.yml up -d --build
+# Build contexts use the GitHub repo so Hostinger Docker Manager does not need a full checkout.
 #
-# Serves:
-#   - https://eliteagrocloud.com + www + api  (Caddy TLS)
-#   - Node SPA + /api/* on :3001 (internal)
-#   - agri-field-boundary Python on :8092 (internal, FTW Inference S2 / AFD)
+# Deploy:
+#   Hostinger MCP → VPS_createNewProjectV1
+#   content: https://raw.githubusercontent.com/ALKAMELGIS/AgroCloud/main/docker-compose.vps.yml
 
 services:
   agri-field-boundary:
-    build: ./backend/services/agri-field-boundary
+    build:
+      context: https://github.com/ALKAMELGIS/AgroCloud.git#main:backend/services/agri-field-boundary
+      dockerfile: Dockerfile
     environment:
       PORT: '8092'
       FTW_INFER_ENABLED: '1'
     expose:
       - '8092'
     restart: unless-stopped
-    healthcheck:
-      test: ['CMD-SHELL', 'curl -fsS http://127.0.0.1:8092/health/live || exit 1']
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 120s
 
   app:
-    build: .
+    build:
+      context: https://github.com/ALKAMELGIS/AgroCloud.git#main
+      dockerfile: Dockerfile
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
@@ -33,28 +30,31 @@ services:
     expose:
       - '3001'
     depends_on:
-      agri-field-boundary:
-        condition: service_started
+      - agri-field-boundary
     restart: unless-stopped
-    healthcheck:
-      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3001/api/health | grep -q ok']
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
 
   caddy:
     image: caddy:2-alpine
     ports:
       - '80:80'
       - '443:443'
-    volumes:
-      - ./scripts/Caddyfile.vps:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+    command:
+      - caddy
+      - reverse-proxy
+      - --from
+      - eliteagrocloud.com
+      - --from
+      - www.eliteagrocloud.com
+      - --from
+      - api.eliteagrocloud.com
+      - --to
+      - app:3001
     depends_on:
       - app
     restart: unless-stopped
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
 
 volumes:
   caddy_data:
