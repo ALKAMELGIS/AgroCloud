@@ -82,11 +82,17 @@ log "installing dependencies"
 "$PIP" install -q --upgrade pip wheel
 "$PIP" install -q -r requirements.txt
 "$PIP" install -q "fastapi>=0.110" "uvicorn[standard]>=0.29" "python-multipart>=0.0.9"
-if "$PIP" show ftw-baselines >/dev/null 2>&1; then
-  log "ftw-baselines already installed"
+if "$PIP" show ftw-tools >/dev/null 2>&1; then
+  log "ftw-tools already installed"
 else
-  log "installing ftw-baselines (FTW Inference S2 CLI)"
-  "$PIP" install -q ftw-baselines || log "warning: ftw-baselines pip install failed — check manually"
+  log "installing ftw-tools (FTW Inference S2 CLI)"
+  "$PIP" install -q "ftw-tools>=2.0.0b3" "geopandas>=0.14" || log "warning: ftw-tools pip install failed — check manually"
+fi
+
+FTW_CKPT_URL="https://github.com/fieldsoftheworld/ftw-baselines/releases/download/v3/prue_efnet7_checkpoint.ckpt"
+if [[ ! -s "$FTW_CKPT" ]]; then
+  log "downloading FTW PRUE B7 checkpoint to $FTW_CKPT"
+  curl -fsSL "$FTW_CKPT_URL" -o "$FTW_CKPT" || log "warning: FTW checkpoint download failed"
 fi
 
 wait_http() {

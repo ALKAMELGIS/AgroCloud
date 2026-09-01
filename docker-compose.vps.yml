@@ -13,6 +13,10 @@ services:
     environment:
       PORT: '8092'
       FTW_INFER_ENABLED: '1'
+      FTW_INFER_MODEL: 'FTW_PRUE_EFNET_B7'
+      FTW_CHECKPOINT_PATH: '/app/models/prue_efnetb7_ccby_checkpoint.ckpt'
+    volumes:
+      - agri_ftw_models:/app/models
     expose:
       - '8092'
     restart: unless-stopped
@@ -58,3 +62,4 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+  agri_ftw_models:
