@@ -54,7 +54,7 @@ jobs:
           VITE_MAPBOX_TOKEN: ${{ vars.VITE_MAPBOX_TOKEN }}
           VITE_MAPBOX_ACCESS_TOKEN: ${{ vars.VITE_MAPBOX_TOKEN }}
           # Hostinger Node that serves /api/* (GitHub Pages has no backend).
-          VITE_AGRI_API_SECRETS_URL: ${{ vars.VITE_AGRI_API_SECRETS_URL || 'https://eliteagrocloud.com' }}
+          VITE_AGRI_API_SECRETS_URL: ${{ vars.VITE_AGRI_API_SECRETS_URL || 'https://api.eliteagrocloud.com' }}
           VITE_GOOGLE_MAPS_API_KEY: ''
           VITE_GOOGLE_MAPS_SERVER_API_KEY: ''
           VITE_ARCGIS_PORTAL_TOKEN: ''
