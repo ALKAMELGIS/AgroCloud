@@ -1,0 +1,57 @@
+name: Deploy Docker stack to VPS
+
+# Hostinger VPS Docker Manager — Node + agri-field-boundary + Caddy TLS.
+# Requires repository secrets: VPS_HOST (optional for SSH smoke), VPS_SSH_KEY (optional).
+# Primary deploy uses Hostinger API from maintainer MCP / panel when GitHub SSH is unavailable.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docker-compose.vps.yml'
+      - 'scripts/Caddyfile.vps'
+      - 'Dockerfile'
+      - 'backend/services/agri-field-boundary/**'
+      - '.github/workflows/deploy-vps-docker.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vps-docker
+  cancel-in-progress: true
+
+jobs:
+  smoke-ssh:
+    if: ${{ secrets.VPS_HOST != '' && secrets.VPS_SSH_KEY != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Deploy full-stack over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER || 'root' }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            DEPLOY_PATH="${{ secrets.VPS_DEPLOY_PATH || '/opt/AgroCloud' }}"
+            export DEPLOY_PATH
+            if [[ -x "$DEPLOY_PATH/scripts/deploy-vps-fullstack.sh" ]]; then
+              "$DEPLOY_PATH/scripts/deploy-vps-fullstack.sh"
+            else
+              git clone --depth 1 -b main "https://github.com/${{ github.repository }}.git" "$DEPLOY_PATH"
+              chmod +x "$DEPLOY_PATH/scripts/deploy-vps-fullstack.sh"
+              "$DEPLOY_PATH/scripts/deploy-vps-fullstack.sh"
+            fi
+
+      - name: Smoke HTTPS health
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER || 'root' }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT || 22 }}
+          script: |
+            curl -fsS -k "https://127.0.0.1/api/health" -H "Host: www.eliteagrocloud.com" | grep -q '"ok"'
+            curl -fsS "http://127.0.0.1:8092/health/live" | grep -q '"live"'

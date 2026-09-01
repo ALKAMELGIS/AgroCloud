@@ -1,0 +1,61 @@
+# Production stack for Hostinger VPS (2.24.11.216).
+# Deploy via Hostinger Docker Manager or: docker compose -f docker-compose.vps.yml up -d --build
+#
+# Serves:
+#   - https://eliteagrocloud.com + www + api  (Caddy TLS)
+#   - Node SPA + /api/* on :3001 (internal)
+#   - agri-field-boundary Python on :8092 (internal, FTW Inference S2 / AFD)
+
+services:
+  agri-field-boundary:
+    build: ./backend/services/agri-field-boundary
+    environment:
+      PORT: '8092'
+      FTW_INFER_ENABLED: '1'
+    expose:
+      - '8092'
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://127.0.0.1:8092/health/live || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  app:
+    build: .
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: '3001'
+      FIELD_BOUNDARY_URL: http://agri-field-boundary:8092/detect
+      VITE_ELITE_SAME_ORIGIN_API: 'true'
+    expose:
+      - '3001'
+    depends_on:
+      agri-field-boundary:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3001/api/health | grep -q ok']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./scripts/Caddyfile.vps:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

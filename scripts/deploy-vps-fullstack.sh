@@ -49,6 +49,18 @@ if [[ ! -f frontend/dist/index.html ]]; then
   exit 1
 fi
 
+log "Deploy agri-field-boundary (Python :8092 — FTW Inference S2 / AFD)"
+AFB_DIR="$DEPLOY_PATH/backend/services/agri-field-boundary"
+if [[ -f "$AFB_DIR/start-vps.sh" ]]; then
+  chmod +x "$AFB_DIR/start-vps.sh"
+  cp "$AFB_DIR/agri-field-boundary.service" "/etc/systemd/system/agri-field-boundary.service"
+  sed -i "s|/opt/AgroCloud|${DEPLOY_PATH}|g" "/etc/systemd/system/agri-field-boundary.service" || true
+  export FTW_INFER_ENABLED=1
+  (cd "$AFB_DIR" && AFB_USE_SYSTEMD=1 ./start-vps.sh) || log "warning: agri-field-boundary deploy failed — Map RGB builtin still works"
+else
+  log "warning: missing $AFB_DIR/start-vps.sh — skip Python field engine"
+fi
+
 log "Install / refresh systemd unit for Node"
 cat > "/etc/systemd/system/${NODE_SERVICE}.service" <<EOF
 [Unit]
@@ -62,6 +74,7 @@ WorkingDirectory=${DEPLOY_PATH}
 Environment=NODE_ENV=production
 Environment=HOST=0.0.0.0
 Environment=PORT=${NODE_PORT}
+Environment=FIELD_BOUNDARY_URL=http://127.0.0.1:8092/detect
 EnvironmentFile=-${DEPLOY_PATH}/.env.production
 ExecStart=/usr/bin/npm run start -w backend
 Restart=always
@@ -80,15 +93,19 @@ sleep 2
 curl -fsS "http://127.0.0.1:${NODE_PORT}/api/health" | grep -q '"ok"'
 
 if [[ -f scripts/nginx-eliteagrocloud-vps.conf.example ]]; then
-  log "Install nginx site (if not present)"
+  log "Install / refresh nginx site"
   NGINX_SITE="/etc/nginx/sites-available/eliteagrocloud.com"
-  if [[ ! -f "$NGINX_SITE" ]]; then
-    cp scripts/nginx-eliteagrocloud-vps.conf.example "$NGINX_SITE"
-    ln -sf "$NGINX_SITE" /etc/nginx/sites-enabled/eliteagrocloud.com
-    nginx -t
-    systemctl reload nginx
-    log "Run certbot if TLS not configured: certbot --nginx -d eliteagrocloud.com -d www.eliteagrocloud.com"
+  cp scripts/nginx-eliteagrocloud-vps.conf.example "$NGINX_SITE"
+  ln -sf "$NGINX_SITE" /etc/nginx/sites-enabled/eliteagrocloud.com
+  rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
+  nginx -t
+  systemctl reload nginx
+  if [[ ! -f /etc/letsencrypt/live/eliteagrocloud.com/fullchain.pem ]]; then
+    log "Run certbot: certbot --nginx -d eliteagrocloud.com -d www.eliteagrocloud.com -d api.eliteagrocloud.com"
   fi
 fi
+
+log "Smoke test field boundary proxy"
+curl -fsS "http://127.0.0.1:${NODE_PORT}/api/agri-field-boundary/health" | grep -q '"status"' || log "warning: field boundary health check failed"
 
 log "Deploy complete — https://www.eliteagrocloud.com/ (after DNS points to this VPS)"
