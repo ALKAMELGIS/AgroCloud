@@ -19492,26 +19492,33 @@ export default function SatelliteIntelligence() {
   useEffect(() => {
     const layerAoiWarmNow =
       Boolean(aoiMaskBuilderSettings.sourceLayerId) && Boolean(aoiMaskBuilderWarmMask?.features?.length);
-    if (!aoiMaskBuilderSettings.enabled && !layerAoiWarmNow) {
+    const drawAoiWarmNow = Boolean(isWmsOverlayVisible && drawnAoiClipCollection?.features?.length);
+    if (!aoiMaskBuilderSettings.enabled && !layerAoiWarmNow && !drawAoiWarmNow) {
       setPinnedSentinelWmsMinZoom(null);
       return;
     }
-    if (aoiMaskBuilderSettings.enabled || layerAoiWarmNow) {
+    if (aoiMaskBuilderSettings.enabled || layerAoiWarmNow || drawAoiWarmNow) {
       setPinnedSentinelWmsMinZoom(prev => (prev == null ? sentinelWmsMinZoom : prev));
     }
   }, [
     aoiMaskBuilderSettings.enabled,
     aoiMaskBuilderSettings.sourceLayerId,
     aoiMaskBuilderWarmMask,
+    isWmsOverlayVisible,
+    drawnAoiClipCollection,
     sentinelWmsMinZoom,
   ]);
 
-  /** If Layers AOI is on but zoom is below Sentinel minzoom, zoom to the clip once. */
+  /** If Show on map is on but zoom is below Sentinel minzoom, zoom to the AOI clip once. */
   useEffect(() => {
-    if (!sentinelLayerAoiWmsOnMap || sentinelWmsZoomOk) return;
-    const mask = aoiLayerModeActiveMask ?? aoiMaskBuilderWarmMask ?? aoiMaskBuilderMask;
+    if (!sentinelWmsOnMap || sentinelWmsZoomOk) return;
+    const mask = sentinelLayerAoiWmsOnMap
+      ? aoiLayerModeActiveMask ?? aoiMaskBuilderWarmMask ?? aoiMaskBuilderMask
+      : drawnAoiClipCollection;
     if (!mask?.features?.length) return;
-    const key = `${aoiMaskBuilderSettings.sourceLayerId}|${mask.features.length}|${effectiveSentinelWmsMinZoom}`;
+    const key = sentinelLayerAoiWmsOnMap
+      ? `layers:${aoiMaskBuilderSettings.sourceLayerId}|${mask.features.length}|${effectiveSentinelWmsMinZoom}`
+      : `draw:${drawnAoiClipKey}|${effectiveSentinelWmsMinZoom}`;
     if (layersAoiAutoZoomDoneRef.current === key) return;
     const map = mapRef.current?.getMap?.() ?? mapRef.current;
     if (!map) return;
@@ -19524,12 +19531,15 @@ export default function SatelliteIntelligence() {
       layersAoiAutoZoomDoneRef.current = '';
     }
   }, [
+    sentinelWmsOnMap,
     sentinelLayerAoiWmsOnMap,
     sentinelWmsZoomOk,
     aoiLayerModeActiveMask,
     aoiMaskBuilderWarmMask,
     aoiMaskBuilderMask,
     aoiMaskBuilderSettings.sourceLayerId,
+    drawnAoiClipCollection,
+    drawnAoiClipKey,
     effectiveSentinelWmsMinZoom,
   ]);
 
