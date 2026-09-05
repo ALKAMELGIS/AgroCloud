@@ -18,6 +18,7 @@ import {
   type SentinelHubWmsAoiClipPart,
 } from './sentinelHubWmsAoiClip'
 import { getSentinelHubWmsBaseUrl } from './sentinelHubWmsInstance'
+import { SI_SENTINEL_WMS_SCENE_MAXCC } from './siSentinelAoiSceneCloudFilter'
 import {
   buildSentinelHubWmsGetMapUrlParts,
   getSentinelHubWmsLayerCatalog,
@@ -196,7 +197,8 @@ export function buildSiSentinelAoiWmsStackState(
       layer: wmsGetMapLayerName,
       timeStart,
       timeEnd,
-      cloudCoverage: input.effectiveWmsCloudCoverage,
+      // Granule MAXCC rejects whole tiles; cloud slider filters AOI dates upstream.
+      cloudCoverage: SI_SENTINEL_WMS_SCENE_MAXCC,
       geometryWkt3857: chunk.geometryWkt3857 ?? undefined,
       evalscriptB64: chunk.evalscriptB64,
       tilePixels,

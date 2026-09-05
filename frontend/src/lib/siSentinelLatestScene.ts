@@ -4,6 +4,7 @@
  */
 
 import { getDrawnGeometry } from './sentinelHubWmsAoiClip'
+import { filterSentinelSceneDatesByAoiCloud } from './siSentinelAoiSceneCloudFilter'
 import { localIsoDate, subtractDaysFromIso } from './siSentinelImageryDate'
 
 export const PC_SENTINEL_STAC_SEARCH_URL = 'https://planetarycomputer.microsoft.com/api/stac/v1/search'
@@ -14,13 +15,28 @@ const SCENE_CATALOG_CACHE_TTL_MS = 20 * 60_000
 const sceneCatalogCache = new Map<string, { catalog: SentinelSceneCatalog; expiresAt: number }>()
 const sceneCatalogInFlight = new Map<string, Promise<SentinelSceneCatalog>>()
 
-function sceneCatalogCacheKey(body: Record<string, unknown>): string {
-  return JSON.stringify(body)
+function sceneCatalogCacheKey(
+  body: Record<string, unknown>,
+  extras?: { cloudCoverMax?: number; geomKey?: string },
+): string {
+  return JSON.stringify({ body, ...extras })
+}
+
+function geometryCacheKey(aoi: unknown): string {
+  const geom = getDrawnGeometry(aoi as Parameters<typeof getDrawnGeometry>[0])
+  if (!geom) return ''
+  try {
+    return JSON.stringify(geom)
+  } catch {
+    return String(geom.type || '')
+  }
 }
 
 export type SentinelSceneCatalog = {
   latestSceneIso: string | null
   sceneIsos: string[]
+  /** AOI cloud cover % per scene date (CLP/CLM/SCL inside clip). */
+  sceneCloudByDate?: Record<string, number>
   fetchedAt: number
 }
 
@@ -89,10 +105,8 @@ export function buildStacSearchBodyForAoi(
   if (geom) body.intersects = geom
   else if (bbox) body.bbox = bbox
 
-  const maxCc = options?.cloudCoverMax
-  if (typeof maxCc === 'number' && Number.isFinite(maxCc)) {
-    body.query = { 'eo:cloud_cover': { lt: maxCc } }
-  }
+  // Do not filter STAC by eo:cloud_cover — it is granule-level (~100 km tile), not AOI cloud.
+  // AOI cloud gating runs after catalog fetch via Sentinel Hub WMS CLP/CLM masking.
 
   return body
 }
@@ -123,7 +137,6 @@ export async function fetchSentinelSceneCatalogForAoi(
   },
 ): Promise<SentinelSceneCatalog> {
   const body = buildStacSearchBodyForAoi(aoi, {
-    cloudCoverMax: options?.cloudCoverMax,
     collections: options?.collections,
     lookbackDays: options?.lookbackDays,
   })
@@ -131,7 +144,11 @@ export async function fetchSentinelSceneCatalogForAoi(
     return { latestSceneIso: null, sceneIsos: [], fetchedAt: Date.now() }
   }
 
-  const cacheKey = sceneCatalogCacheKey(body)
+  const cloudCoverMax = options?.cloudCoverMax
+  const cacheKey = sceneCatalogCacheKey(body, {
+    cloudCoverMax,
+    geomKey: geometryCacheKey(aoi),
+  })
   const cached = sceneCatalogCache.get(cacheKey)
   if (cached && Date.now() < cached.expiresAt) {
     return cached.catalog
@@ -154,9 +171,36 @@ export async function fetchSentinelSceneCatalogForAoi(
         return { latestSceneIso: null, sceneIsos: [], fetchedAt: Date.now() }
       }
       const data = (await response.json()) as { features?: Array<{ properties?: { datetime?: string } }> }
-      const catalog = parseSentinelSceneCatalogFromStacFeatures(
+      const stacCatalog = parseSentinelSceneCatalogFromStacFeatures(
         Array.isArray(data?.features) ? data.features : [],
       )
+
+      let sceneIsos = stacCatalog.sceneIsos
+      let sceneCloudByDate: Record<string, number> | undefined
+      if (
+        typeof cloudCoverMax === 'number' &&
+        Number.isFinite(cloudCoverMax) &&
+        cloudCoverMax < 100 &&
+        stacCatalog.sceneIsos.length
+      ) {
+        const filtered = await filterSentinelSceneDatesByAoiCloud(
+          aoi,
+          stacCatalog.sceneIsos,
+          cloudCoverMax,
+          { signal: options?.signal },
+        )
+        sceneIsos = filtered.sceneIsos
+        sceneCloudByDate = Object.keys(filtered.sceneCloudByDate).length
+          ? filtered.sceneCloudByDate
+          : undefined
+      }
+
+      const catalog: SentinelSceneCatalog = {
+        latestSceneIso: sceneIsos[0] ?? null,
+        sceneIsos,
+        sceneCloudByDate,
+        fetchedAt: Date.now(),
+      }
       sceneCatalogCache.set(cacheKey, {
         catalog,
         expiresAt: Date.now() + SCENE_CATALOG_CACHE_TTL_MS,
