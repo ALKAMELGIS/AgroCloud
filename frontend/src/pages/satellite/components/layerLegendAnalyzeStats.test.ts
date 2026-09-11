@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { resolveAnalyzeIndexConfig } from './layerLegendAnalyzeIndexConfig'
-import { computeLayerLegendAnalyzeStats } from './layerLegendAnalyzeStats'
+import {
+  computeLayerLegendAnalyzeStats,
+  LAYER_LEGEND_LARGE_AOI_HA,
+  resolveLegendAnalyzeFetchGeometry,
+} from './layerLegendAnalyzeStats'
 import type { LayerLiveLegendSpec } from '../../../lib/layerLiveLegendCatalog'
 import type { LayerClassAreaResult } from '../../../lib/siLayerClassAreaEngine'
 
@@ -41,6 +45,34 @@ function mockAreaResult(avgMid: number): LayerClassAreaResult {
     classificationMode: 'fixed',
   }
 }
+
+describe('resolveLegendAnalyzeFetchGeometry', () => {
+  it('returns bbox polygon for large AOI', () => {
+    const geom: GeoJSON.Polygon = {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [46, 24],
+          [47, 24],
+          [47, 25],
+          [46, 25],
+          [46, 24],
+        ],
+      ],
+    }
+    const out = resolveLegendAnalyzeFetchGeometry(geom, LAYER_LEGEND_LARGE_AOI_HA + 1)
+    expect(out?.type).toBe('Polygon')
+    expect((out as GeoJSON.Polygon).coordinates[0]).toHaveLength(5)
+  })
+
+  it('keeps geometry for small AOI', () => {
+    const geom: GeoJSON.Polygon = {
+      type: 'Polygon',
+      coordinates: [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]],
+    }
+    expect(resolveLegendAnalyzeFetchGeometry(geom, 100)).toBe(geom)
+  })
+})
 
 describe('resolveAnalyzeIndexConfig', () => {
   it('returns NDVI vegetation health config', () => {

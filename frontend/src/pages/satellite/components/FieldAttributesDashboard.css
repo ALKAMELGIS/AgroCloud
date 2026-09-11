@@ -371,38 +371,32 @@
 }
 
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-bg,
-.gis-float-panel .si-field-dash__vbar-bg,
-.si-field-dash-modal .si-field-dash__vbar-bg {
+.gis-float-panel .si-field-dash__vbar-bg {
   fill: rgba(255, 255, 255, 0.04);
 }
 
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-grid,
-.gis-float-panel .si-field-dash__vbar-grid,
-.si-field-dash-modal .si-field-dash__vbar-grid {
+.gis-float-panel .si-field-dash__vbar-grid {
   stroke: rgba(255, 255, 255, 0.08);
 }
 
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-axis,
-.gis-float-panel .si-field-dash__vbar-axis,
-.si-field-dash-modal .si-field-dash__vbar-axis {
+.gis-float-panel .si-field-dash__vbar-axis {
   stroke: rgba(255, 255, 255, 0.16);
 }
 
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-ytick,
-.gis-float-panel .si-field-dash__vbar-ytick,
-.si-field-dash-modal .si-field-dash__vbar-ytick {
+.gis-float-panel .si-field-dash__vbar-ytick {
   fill: #9aa3af;
 }
 
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-tick,
-.gis-float-panel .si-field-dash__vbar-tick,
-.si-field-dash-modal .si-field-dash__vbar-tick {
+.gis-float-panel .si-field-dash__vbar-tick {
   fill: #9aa3af;
 }
 
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-ylabel,
-.gis-float-panel .si-field-dash__vbar-ylabel,
-.si-field-dash-modal .si-field-dash__vbar-ylabel {
+.gis-float-panel .si-field-dash__vbar-ylabel {
   fill: #94a3b8;
 }
 
@@ -610,14 +604,12 @@
 }
 
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__card-head h4,
-.gis-float-panel .si-field-dash__card-head h4,
-.si-field-dash-modal .si-field-dash__card-head h4 {
+.gis-float-panel .si-field-dash__card-head h4 {
   color: #e8eaed;
 }
 
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__ts-legend,
-.gis-float-panel .si-field-dash__ts-legend,
-.si-field-dash-modal .si-field-dash__ts-legend {
+.gis-float-panel .si-field-dash__ts-legend {
   color: #9aa3af;
 }
 
@@ -716,10 +708,6 @@
   position: absolute;
   inset: 0;
   z-index: 15300;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: clamp(12px, 3vw, 28px);
   pointer-events: auto;
   animation: si-field-dash-modal-in 180ms ease-out;
 }
@@ -730,29 +718,28 @@
   border: none;
   padding: 0;
   margin: 0;
-  background: rgba(0, 0, 0, 0.48);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
+  background: rgba(0, 0, 0, 0.42);
   cursor: pointer;
 }
 
 .si-field-dash-modal__panel {
-  position: relative;
+  position: absolute;
   z-index: 1;
   display: flex;
   flex-direction: column;
-  width: min(920px, 92vw);
-  height: min(640px, 88vh);
-  max-height: 88vh;
+  min-width: 560px;
+  min-height: 480px;
   border-radius: 12px;
-  border: 1px solid var(--si-overlay-border, rgba(255, 255, 255, 0.08));
-  background: var(--si-overlay-bg-soft, rgba(12, 12, 14, 0.92));
-  box-shadow: var(--si-overlay-shadow, 0 20px 60px rgba(0, 0, 0, 0.55));
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(15, 23, 42, 0.16);
+  background: #ffffff;
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.28);
   overflow: hidden;
-  color: var(--si-overlay-text, #e2e8f0);
+  color: #000000;
   animation: si-field-dash-modal-panel-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.si-field-dash-modal__panel--maximized {
+  border-radius: 8px;
 }
 
 @keyframes si-field-dash-modal-in {
@@ -779,11 +766,59 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 52px;
-  padding: 0 12px 0 14px;
-  border-bottom: 1px solid var(--si-overlay-border, rgba(255, 255, 255, 0.06));
-  background: linear-gradient(180deg, var(--si-overlay-fill, rgba(255, 255, 255, 0.04)), transparent);
+  min-height: 56px;
+  padding: 0 10px 0 14px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.1);
+  background: #f8fafc;
   flex-shrink: 0;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.si-field-dash-modal__header:active {
+  cursor: grabbing;
+}
+
+.si-field-dash-modal__tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.si-field-dash-modal__tool,
+.si-field-dash-modal__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 8px;
+  background: #fff;
+  color: #111111;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.si-field-dash-modal__tool:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.si-field-dash-modal__tool:hover:not(:disabled),
+.si-field-dash-modal__close:hover {
+  background: #eef2f7;
+  color: #000;
+}
+
+.si-field-dash-modal__zoom {
+  min-width: 44px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #111111;
 }
 
 .si-field-dash-modal__icon {
@@ -794,9 +829,9 @@
   height: 32px;
   border-radius: 8px;
   flex-shrink: 0;
-  background: linear-gradient(145deg, rgba(25, 118, 210, 0.22), rgba(25, 118, 210, 0.08));
-  border: 1px solid rgba(25, 118, 210, 0.28);
-  color: #90caf9;
+  background: #e8eef6;
+  border: 1px solid rgba(15, 23, 42, 0.16);
+  color: #111111;
   font-size: 14px;
 }
 
@@ -807,131 +842,234 @@
 
 .si-field-dash-modal__title {
   margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: #f0f2f5;
+  font-size: 17px;
+  font-weight: 800;
+  color: #000000;
   line-height: 1.25;
 }
 
 .si-field-dash-modal__subtitle {
   margin: 2px 0 0;
-  font-size: 11px;
-  color: #9aa3af;
+  font-size: 13px;
+  font-weight: 600;
+  color: #000000;
   line-height: 1.3;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.si-field-dash-modal__close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: none;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #e8eaed;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.si-field-dash-modal__close:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #fca5a5;
-}
-
 .si-field-dash-modal__body {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 12px 14px 16px;
+  padding: 16px 18px 28px;
+  background: #ffffff;
+  scrollbar-gutter: stable;
+}
+
+.si-field-dash-modal__zoom-host {
+  min-width: 100%;
+  transform-origin: top left;
+}
+
+.si-field-dash-modal__resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 22px;
+  height: 22px;
+  border: none;
+  padding: 0;
+  background: linear-gradient(135deg, transparent 50%, #111111 50%);
+  cursor: nwse-resize;
+  touch-action: none;
 }
 
 .si-field-dash-modal .si-field-dash {
-  color: #e8eaed;
+  color: #111111;
 }
 
-.si-field-dash-modal .si-field-dash__title {
-  color: #f0f2f5;
-}
-
-.si-field-dash-modal .si-field-dash__subtitle {
-  color: #9aa3af;
+.si-field-dash-modal .si-field-dash__title,
+.si-field-dash-modal .si-field-dash__subtitle,
+.si-field-dash-modal .si-field-dash__kpi-label,
+.si-field-dash-modal .si-field-dash__kpi strong,
+.si-field-dash-modal .si-field-dash__card-head h4,
+.si-field-dash-modal .si-field-dash__card-head span,
+.si-field-dash-modal .si-field-dash__bar-row > span:first-child,
+.si-field-dash-modal .si-field-dash__bar-row strong,
+.si-field-dash-modal .si-field-dash__pie-row,
+.si-field-dash-modal .si-field-dash__pie-label,
+.si-field-dash-modal .si-field-dash__pie-value,
+.si-field-dash-modal .si-field-dash__pie-center,
+.si-field-dash-modal .si-field-dash__empty,
+.si-field-dash-modal .si-field-dash__ts-legend,
+.si-field-dash-modal .si-field-dash__meta-item {
+  color: #111111;
 }
 
 .si-field-dash-modal .si-field-dash__brand-icon {
-  border-color: rgba(100, 181, 246, 0.28);
-  color: #90caf9;
+  border-color: rgba(17, 17, 17, 0.16);
+  color: #111111;
 }
 
 .si-field-dash-modal .si-field-dash__meta-item {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.08);
-  color: #c8cdd3;
+  background: #f3f4f6;
+  border-color: rgba(15, 23, 42, 0.12);
+  color: #111111;
 }
 
 .si-field-dash-modal .si-field-dash__kpi,
 .si-field-dash-modal .si-field-dash__card {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.12);
   box-shadow: none;
 }
 
-.si-field-dash-modal .si-field-dash__kpi-label {
-  color: #9aa3af;
-}
-
-.si-field-dash-modal .si-field-dash__kpi strong {
-  color: #f0f2f5;
-}
-
-.si-field-dash-modal .si-field-dash__card-head h4 {
-  color: #e8eaed;
-}
-
+.si-field-dash-modal .si-field-dash__kpi-label,
+.si-field-dash-modal .si-field-dash__kpi strong,
+.si-field-dash-modal .si-field-dash__card-head h4,
+.si-field-dash-modal .si-field-dash__card-head h4 i,
 .si-field-dash-modal .si-field-dash__card-head span,
 .si-field-dash-modal .si-field-dash__bar-row > span:first-child,
+.si-field-dash-modal .si-field-dash__bar-row strong,
 .si-field-dash-modal .si-field-dash__pie-row,
 .si-field-dash-modal .si-field-dash__pie-label,
-.si-field-dash-modal .si-field-dash__empty {
-  color: #9aa3af;
+.si-field-dash-modal .si-field-dash__pie-value,
+.si-field-dash-modal .si-field-dash__pie-center,
+.si-field-dash-modal .si-field-dash__empty,
+.si-field-dash-modal .si-field-dash__ts-legend {
+  color: #111111;
 }
 
-.si-field-dash-modal .si-field-dash__pie-value,
-.si-field-dash-modal .si-field-dash__pie-center {
-  color: #e8eaed;
+.si-field-dash-modal .si-field-dash__vbar-ytick,
+.si-field-dash-modal .si-field-dash__vbar-tick,
+.si-field-dash-modal .si-field-dash__vbar-ylabel {
+  fill: #111111;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.si-field-dash-modal .si-field-dash__vbar-bg {
+  fill: rgba(15, 23, 42, 0.03);
+}
+
+.si-field-dash-modal .si-field-dash__vbar-grid {
+  stroke: rgba(15, 23, 42, 0.12);
+}
+
+.si-field-dash-modal .si-field-dash__vbar-axis {
+  stroke: #111111;
 }
 
 .si-field-dash-modal .si-field-dash__pie-hole {
-  background: rgba(255, 255, 255, 0.04);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-}
-
-.si-field-dash-modal .si-field-dash__bar-row strong {
-  color: #e8eaed;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.12);
 }
 
 .si-field-dash-modal .si-field-dash__bar-track {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(15, 23, 42, 0.08);
 }
 
 .si-field-dash-modal .si-field-dash__icon-btn {
-  background: rgba(255, 255, 255, 0.06);
-  color: #e8eaed;
-  border-color: rgba(255, 255, 255, 0.1);
+  background: #ffffff;
+  color: #111111;
+  border-color: rgba(15, 23, 42, 0.16);
 }
 
 .si-field-dash-modal .si-field-dash__icon-btn:hover:not(:disabled) {
-  background: rgba(100, 181, 246, 0.12);
-  border-color: rgba(100, 181, 246, 0.35);
-  color: #90caf9;
+  background: #f3f4f6;
+  border-color: rgba(15, 23, 42, 0.28);
+  color: #000000;
 }
 
-@media (max-width: 640px) {
-  .si-field-dash-modal__panel {
-    width: min(100%, 96vw);
-    height: min(92vh, 720px);
-  }
+.si-field-dash-modal .si-field-dash__kpi-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #000000;
+  letter-spacing: 0.05em;
+}
+
+.si-field-dash-modal .si-field-dash__kpi strong {
+  font-size: 18px;
+  font-weight: 800;
+  color: #000000;
+}
+
+.si-field-dash-modal .si-field-dash__card-head h4 {
+  font-size: 13px;
+  font-weight: 800;
+  color: #000000;
+}
+
+.si-field-dash-modal .si-field-dash__card-head h4 i {
+  color: #000000;
+  opacity: 1;
+}
+
+.si-field-dash-modal .si-field-dash__card-head span,
+.si-field-dash-modal .si-field-dash__ts-legend {
+  font-size: 11px;
+  font-weight: 600;
+  color: #000000;
+}
+
+.si-field-dash-modal .si-field-dash__charts,
+.si-field-dash-modal .si-field-dash--expanded .si-field-dash__charts,
+.si-field-dash-modal .si-field-dash--expanded .si-field-dash__charts--primary,
+.si-field-dash-modal .si-field-dash--expanded .si-field-dash__charts--secondary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.si-field-dash-modal .si-field-dash__card {
+  position: relative;
+  min-height: 280px;
+  min-width: 300px;
+  resize: both;
+  overflow: auto;
+  padding: 12px 12px 10px;
+}
+
+.si-field-dash-modal .si-field-dash__card::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 14px;
+  height: 14px;
+  background: linear-gradient(135deg, transparent 50%, rgba(0, 0, 0, 0.45) 50%);
+  pointer-events: none;
+}
+
+.si-field-dash-modal .si-field-dash__vbar-svg {
+  width: 100%;
+  height: auto;
+  min-height: 260px;
+}
+
+.si-field-dash-modal .si-field-dash__pie-chart--expanded .si-field-dash__pie-donut {
+  width: 112px;
+  height: 112px;
+}
+
+.si-field-dash-modal .si-field-dash__pie-chart--expanded .si-field-dash__pie-center {
+  font-size: 14px;
+  font-weight: 800;
+  color: #000000;
+}
+
+.si-field-dash-modal .si-field-dash__pie-row,
+.si-field-dash-modal .si-field-dash__pie-label,
+.si-field-dash-modal .si-field-dash__pie-value {
+  font-size: 11px;
+  font-weight: 600;
+  color: #000000;
+}
+
+.si-field-dash-modal .si-field-dash__card--timeseries {
+  grid-column: 1 / -1;
+  min-height: 320px;
+  resize: vertical;
 }

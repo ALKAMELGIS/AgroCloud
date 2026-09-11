@@ -153,44 +153,123 @@ export async function buildFtwAoiRasterMosaic(
   return { mosaic, features: reference }
 }
 
-/** Sample max confidence from the continuous raster inside a polygon bbox. */
-export function sampleFtwMosaicConfidence(
+export type FtwMosaicFieldStats = {
+  /** Mean raster confidence of field pixels inside this polygon (FTW raw scale). */
+  confidenceMean: number
+  /** Share of interior raster samples that are field pixels (0–1). */
+  extractionAccuracy: number
+  fieldPixels: number
+  interiorPixels: number
+}
+
+function pointInRing(lon: number, lat: number, ring: GeoJSON.Position[]): boolean {
+  let inside = false
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i]?.[0]
+    const yi = ring[i]?.[1]
+    const xj = ring[j]?.[0]
+    const yj = ring[j]?.[1]
+    if (xi == null || yi == null || xj == null || yj == null) continue
+    const intersect = yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi || 1e-15) + xi
+    if (intersect) inside = !inside
+  }
+  return inside
+}
+
+function polygonRings(geometry: GeoJSON.Geometry): GeoJSON.Position[][][] {
+  if (geometry.type === 'Polygon') return geometry.coordinates?.length ? [geometry.coordinates] : []
+  if (geometry.type === 'MultiPolygon') return geometry.coordinates ?? []
+  return []
+}
+
+function pointInPolygon(lon: number, lat: number, rings: GeoJSON.Position[][]): boolean {
+  const outer = rings[0]
+  if (!outer?.length || !pointInRing(lon, lat, outer)) return false
+  for (let h = 1; h < rings.length; h++) {
+    const hole = rings[h]
+    if (hole?.length && pointInRing(lon, lat, hole)) return false
+  }
+  return true
+}
+
+/**
+ * Per-field raster stats from pixels whose centers fall inside the polygon.
+ * Mean confidence — not the bbox maximum, and not the UI threshold.
+ */
+export function sampleFtwMosaicFieldStats(
   mosaic: FtwRasterMosaic,
   feature: GeoJSON.Feature,
-): number {
+): FtwMosaicFieldStats {
+  const empty = { confidenceMean: 0, extractionAccuracy: 0, fieldPixels: 0, interiorPixels: 0 }
   const grid = mosaic.confidence
-  if (!grid?.length) return 0
-  const g = feature.geometry
-  if (!g || (g.type !== 'Polygon' && g.type !== 'MultiPolygon')) return 0
-  const ring =
-    g.type === 'Polygon'
-      ? g.coordinates[0]
-      : g.coordinates?.[0]?.[0]
-  if (!ring?.length) return 0
+  const geometry = feature.geometry
+  if (!grid?.length || !geometry) return empty
+  const parts = polygonRings(geometry)
+  if (!parts.length) return empty
 
   const [west, south, east, north] = mosaic.bbox
   const { width, height } = mosaic
+  const lonSpan = Math.max(east - west, 1e-12)
+  const latSpan = Math.max(north - south, 1e-12)
+
   let minC = width
   let minR = height
   let maxC = 0
   let maxR = 0
-  for (const [lon, lat] of ring) {
-    if (lon == null || lat == null) continue
-    const col = Math.round(((lon - west) / Math.max(east - west, 1e-12)) * Math.max(width - 1, 1))
-    const row = Math.round(((north - lat) / Math.max(north - south, 1e-12)) * Math.max(height - 1, 1))
-    minC = Math.min(minC, col)
-    maxC = Math.max(maxC, col)
-    minR = Math.min(minR, row)
-    maxR = Math.max(maxR, row)
-  }
-  let best = 0
-  for (let row = minR; row <= maxR; row++) {
-    for (let col = minC; col <= maxC; col++) {
-      const i = row * width + col
-      if (mosaic.mask[i]) best = Math.max(best, grid[i]!)
+  for (const rings of parts) {
+    for (const [lon, lat] of rings[0] ?? []) {
+      if (lon == null || lat == null) continue
+      const col = ((lon - west) / lonSpan) * width
+      const row = ((north - lat) / latSpan) * height
+      minC = Math.min(minC, Math.floor(col))
+      maxC = Math.max(maxC, Math.ceil(col))
+      minR = Math.min(minR, Math.floor(row))
+      maxR = Math.max(maxR, Math.ceil(row))
     }
   }
-  return best
+  minC = Math.max(0, minC)
+  minR = Math.max(0, minR)
+  maxC = Math.min(width - 1, maxC)
+  maxR = Math.min(height - 1, maxR)
+  if (maxC < minC || maxR < minR) return empty
+
+  let fieldPixels = 0
+  let interiorPixels = 0
+  let confSum = 0
+  for (let row = minR; row <= maxR; row++) {
+    const lat = north - ((row + 0.5) / height) * latSpan
+    for (let col = minC; col <= maxC; col++) {
+      const lon = west + ((col + 0.5) / width) * lonSpan
+      let inside = false
+      for (const rings of parts) {
+        if (pointInPolygon(lon, lat, rings)) {
+          inside = true
+          break
+        }
+      }
+      if (!inside) continue
+      interiorPixels += 1
+      const i = row * width + col
+      if (!mosaic.mask[i]) continue
+      fieldPixels += 1
+      confSum += grid[i] ?? 0
+    }
+  }
+
+  return {
+    confidenceMean: fieldPixels > 0 ? confSum / fieldPixels : 0,
+    extractionAccuracy: interiorPixels > 0 ? fieldPixels / interiorPixels : 0,
+    fieldPixels,
+    interiorPixels,
+  }
+}
+
+/** Mean raster confidence inside the field polygon. */
+export function sampleFtwMosaicConfidence(
+  mosaic: FtwRasterMosaic,
+  feature: GeoJSON.Feature,
+): number {
+  return sampleFtwMosaicFieldStats(mosaic, feature).confidenceMean
 }
 
 export async function vectorizeFtwMosaic(

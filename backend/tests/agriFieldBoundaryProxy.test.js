@@ -48,6 +48,36 @@ test('agri-field-boundary /config reports configured with builtin fallback', asy
   }
 })
 
+test('ftw-mosaic-vectorize preserves concave mask corners (not convex hull)', async () => {
+  const { vectorizeBinaryMaskBuiltin } = await import('../server/fieldBoundaryBuiltin.js')
+  const { PNG } = await import('pngjs')
+  const w = 32
+  const h = 32
+  const png = new PNG({ width: w, height: h })
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const inside =
+        (x >= 4 && x <= 10 && y >= 4 && y <= 26) || (x >= 4 && x <= 24 && y >= 18 && y <= 26)
+      const o = (y * w + x) * 4
+      const v = inside ? 255 : 0
+      png.data[o] = v
+      png.data[o + 1] = v
+      png.data[o + 2] = v
+      png.data[o + 3] = 255
+    }
+  }
+  const mask = `data:image/png;base64,${PNG.sync.write(png).toString('base64')}`
+  const result = vectorizeBinaryMaskBuiltin({
+    mask,
+    bbox: [55.0, 24.0, 55.01, 24.01],
+    min_area_m2: 1,
+    preserve_geometry: true,
+  })
+  assert.ok(result.count >= 1)
+  const ring = result.geojson.features[0].geometry.coordinates[0]
+  assert.ok(ring.length >= 6, `expected concave contour, got ${ring.length} vertices`)
+})
+
 test('ftw-mosaic-vectorize route is registered and accepts mask POST', async () => {
   const app = express()
   registerAgriFieldBoundaryRoutes(app)

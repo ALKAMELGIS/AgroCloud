@@ -4,11 +4,42 @@ import {
 } from '../../../lib/imageryIndexInterpretationEngine'
 import type { LayerLiveLegendSpec } from '../../../lib/layerLiveLegendCatalog'
 import type { LayerClassAreaResult } from '../../../lib/siLayerClassAreaEngine'
+import { geometryBbox } from '../../../lib/siCropCountryAoi'
 import {
   resolveAnalyzeIndexConfig,
   type AnalyzeTerritoryLevel,
   type LayerLegendAnalyzeIndexConfig,
 } from './layerLegendAnalyzeIndexConfig'
+
+/** Histogram class-area stats are too slow above this AOI size — use zonal bbox fetch. */
+export const LAYER_LEGEND_LARGE_AOI_HA = 1200
+
+/** AOI bounding box for Statistical API when full geometry is too large. */
+export function resolveLegendAnalyzeFetchGeometry(
+  geometry: GeoJSON.Geometry | null | undefined,
+  areaHa: number,
+): GeoJSON.Geometry | null {
+  if (!geometry) return null
+  if (areaHa <= LAYER_LEGEND_LARGE_AOI_HA) return geometry
+  if (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon') {
+    const bbox = geometryBbox(geometry)
+    if (!bbox) return geometry
+    const [w, s, e, n] = bbox
+    return {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [w, s],
+          [e, s],
+          [e, n],
+          [w, n],
+          [w, s],
+        ],
+      ],
+    }
+  }
+  return geometry
+}
 
 const TIER_SCORE: Record<IndexHealthTier, number> = {
   healthy: 85,

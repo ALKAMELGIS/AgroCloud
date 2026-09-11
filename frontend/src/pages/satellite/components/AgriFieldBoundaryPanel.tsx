@@ -407,9 +407,22 @@ export function AgriFieldBoundaryPanel({
       ? 'Run Delineate Anything on the AOI capture — sharp black instance edges (:8096)'
       : 'Run field boundary detection across the AOI'
   const stageLabel = phase === 'detecting' ? STAGE_LABEL[String(stage || '')] : undefined
+  const isPythonEngineRequiredMessage = (msg: string | null | undefined) =>
+    Boolean(
+      msg &&
+        /AgroDetect S2 needs the Python|Agricultural Field Delineation needs the Python|FTW Inference \(S2\)|ftw-baselines/i.test(
+          msg,
+        ),
+    )
+  const pythonEngineMissing =
+    phase === 'error' &&
+    (isPythonEngineRequiredMessage(error) || isPythonEngineRequiredMessage(errorDetail))
   const serviceOfflineMessage =
-    offline ||
-    /Service offline|backend_unavailable|:8092|uvicorn app:app/i.test(String(error || ''))
+    !pythonEngineMissing &&
+    (offline ||
+      /Service offline|backend_unavailable|start agri-field-boundary on :8092|uvicorn app:app/i.test(
+        String(error || ''),
+      ))
   const phaseLabel =
     stageLabel ??
     (isFtwGlobal && phase === 'detecting'
@@ -1230,12 +1243,11 @@ export function AgriFieldBoundaryPanel({
         {phase !== 'idle' || Boolean(health?.loading) ? (
         <div
           className={`si-afb__status ${
-            phase === 'error' &&
-              !serviceOfflineMessage
+            phase === 'error' && !serviceOfflineMessage && !pythonEngineMissing
               ? 'is-error'
-              : phase === 'empty'
+              : phase === 'empty' || pythonEngineMissing
                 ? 'is-empty'
-                : health?.loading || offline
+                : serviceOfflineMessage || health?.loading || offline
                   ? 'is-idle'
                   : `is-${phase}`
           }`}

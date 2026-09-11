@@ -12,4 +12,14 @@ describe('fieldBoundaryClient errors', () => {
     const { short } = formatFieldBoundaryUserError('Field boundary detection failed (HTTP 500).')
     expect(short).toMatch(/Field API unavailable/i)
   })
+
+  it('maps FTW Inference S2 engine errors to actionable copy', () => {
+    const { short, detail } = formatFieldBoundaryUserError(
+      'FTW Inference (S2) needs the Python field engine (:8092) with ftw-baselines CLI configured.',
+      { source: 'ftw-inference-s2' },
+    )
+    expect(short).toMatch(/AgroDetect S2 needs the Python/i)
+    expect(short).not.toMatch(/Loading field model/i)
+    expect(detail).toMatch(/ftw-baselines/i)
+  })
 })

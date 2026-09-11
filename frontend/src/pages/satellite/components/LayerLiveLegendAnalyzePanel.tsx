@@ -66,8 +66,12 @@ export function LayerLiveLegendAnalyzePanel({
 }: LayerLiveLegendAnalyzePanelProps) {
   const { config } = stats
   const levelColor = stats.territoryLevelColor ?? '#84cc16'
-  const showInsight = hasAoi && hasData && stats.insight && !loading
-  const showScore = hasData && stats.healthScore != null
+  const statsReady =
+    hasData ||
+    (stats.average != null && Number.isFinite(stats.average)) ||
+    stats.healthScore != null
+  const showInsight = hasAoi && statsReady && stats.insight && !loading
+  const showScore = statsReady && stats.healthScore != null
 
   return (
     <section
@@ -85,8 +89,8 @@ export function LayerLiveLegendAnalyzePanel({
         </div>
         <ScoreGauge
           score={showScore ? stats.healthScore : null}
-          accentColor={hasData ? levelColor : '#64748b'}
-          loading={loading && !hasData}
+          accentColor={statsReady ? levelColor : '#64748b'}
+          loading={loading && !statsReady}
         />
       </div>
 
@@ -94,22 +98,22 @@ export function LayerLiveLegendAnalyzePanel({
         <div className="si-lll-analyze-stat" role="listitem">
           <i className={`fa-solid ${STAT_ICONS.min} si-lll-analyze-stat__icon`} aria-hidden />
           <span className="si-lll-analyze-stat__label">MIN</span>
-          <strong>{statValue(loading, hasData, () => formatLegendStatValue(stats.min))}</strong>
+          <strong>{statValue(loading, statsReady, () => formatLegendStatValue(stats.min))}</strong>
         </div>
         <div className="si-lll-analyze-stat" role="listitem">
           <i className={`fa-solid ${STAT_ICONS.max} si-lll-analyze-stat__icon`} aria-hidden />
           <span className="si-lll-analyze-stat__label">MAX</span>
-          <strong>{statValue(loading, hasData, () => formatLegendStatValue(stats.max))}</strong>
+          <strong>{statValue(loading, statsReady, () => formatLegendStatValue(stats.max))}</strong>
         </div>
         <div className="si-lll-analyze-stat" role="listitem">
           <i className={`fa-solid ${STAT_ICONS.low} si-lll-analyze-stat__icon`} aria-hidden />
           <span className="si-lll-analyze-stat__label">LOW</span>
-          <strong>{statValue(loading, hasData, () => formatLowPct(stats.lowPct))}</strong>
+          <strong>{statValue(loading, statsReady, () => formatLowPct(stats.lowPct))}</strong>
         </div>
         <div className="si-lll-analyze-stat" role="listitem">
           <i className={`fa-solid ${STAT_ICONS.avg} si-lll-analyze-stat__icon`} aria-hidden />
           <span className="si-lll-analyze-stat__label">AVERAGE</span>
-          <strong>{statValue(loading, hasData, () => formatLegendStatValue(stats.average))}</strong>
+          <strong>{statValue(loading, statsReady, () => formatLegendStatValue(stats.average))}</strong>
         </div>
       </div>
 

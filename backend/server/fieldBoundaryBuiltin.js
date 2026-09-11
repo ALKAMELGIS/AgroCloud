@@ -172,46 +172,76 @@ function findComponents(mask, width, height, minPixels) {
       for (const pi of pixels) {
         const py = (pi / width) | 0
         const px = pi % width
-        let isEdge = false
-        for (const [dx, dy] of [
-          [1, 0],
-          [-1, 0],
-          [0, 1],
-          [0, -1],
-        ]) {
-          const nx = px + dx
-          const ny = py + dy
-          if (nx < 0 || nx >= width || ny < 0 || ny >= height || !mask[ny * width + nx]) {
-            isEdge = true
-            break
-          }
-        }
-        if (isEdge) edgePixels.push([px, py])
+        if (isBoundaryPixel(mask, width, height, px, py)) edgePixels.push([px, py])
       }
-      components.push({ edgePixels, pixelCount: pixels.length })
+      components.push({ pixels, edgePixels, pixelCount: pixels.length })
     }
   }
   return components
 }
 
-function convexHull(points) {
-  if (points.length <= 2) return points.slice()
-  const pts = points.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1])
-  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
-  const lower = []
-  for (const p of pts) {
-    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop()
-    lower.push(p)
+const CONTOUR_NEIGHBORS = [
+  [1, 0],
+  [1, 1],
+  [0, 1],
+  [-1, 1],
+  [-1, 0],
+  [-1, -1],
+  [0, -1],
+  [1, -1],
+]
+
+function isBoundaryPixel(mask, width, height, x, y) {
+  if (!mask[y * width + x]) return false
+  if (x <= 0 || y <= 0 || x >= width - 1 || y >= height - 1) return true
+  const i = y * width + x
+  return !mask[i - 1] || !mask[i + 1] || !mask[i - width] || !mask[i + width]
+}
+
+/** Moore-neighbor trace of an external contour (OpenCV CHAIN_APPROX_NONE equivalent). */
+function traceExternalContour(mask, width, height, sx, sy) {
+  const contour = []
+  let x = sx
+  let y = sy
+  let dir = 7
+  const startX = sx
+  const startY = sy
+  const maxSteps = width * height * 8
+
+  for (let step = 0; step < maxSteps; step++) {
+    contour.push([x, y])
+    let found = false
+    const startK = (dir + 6) % 8
+    for (let k = 0; k < 8; k++) {
+      const ni = (startK + k) % 8
+      const nx = x + CONTOUR_NEIGHBORS[ni][0]
+      const ny = y + CONTOUR_NEIGHBORS[ni][1]
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+      if (!isBoundaryPixel(mask, width, height, nx, ny)) continue
+      x = nx
+      y = ny
+      dir = ni
+      found = true
+      break
+    }
+    if (!found) break
+    if (x === startX && y === startY && contour.length > 3) break
   }
-  const upper = []
-  for (let i = pts.length - 1; i >= 0; i--) {
-    const p = pts[i]
-    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop()
-    upper.push(p)
+  return contour
+}
+
+function decimateCollinearRing(ring) {
+  if (ring.length <= 3) return ring
+  const out = [ring[0]]
+  for (let i = 1; i < ring.length - 1; i++) {
+    const [x0, y0] = out[out.length - 1]
+    const [x1, y1] = ring[i]
+    const [x2, y2] = ring[i + 1]
+    const cross = (x1 - x0) * (y2 - y1) - (y1 - y0) * (x2 - x1)
+    if (Math.abs(cross) > 1e-6) out.push(ring[i])
   }
-  lower.pop()
-  upper.pop()
-  return lower.concat(upper)
+  out.push(ring[ring.length - 1])
+  return out.length >= 3 ? out : ring
 }
 
 function pointToLineDist(p, a, b) {
@@ -254,11 +284,43 @@ function metersPerDeg(lat) {
 function componentToPolygon(comp, width, height, bbox, opts = {}) {
   const preserveGeometry = Boolean(opts.preserveGeometry)
   const [west, south, east, north] = bbox
-  const hull = convexHull(comp.edgePixels)
-  if (hull.length < 3) return null
-  let geoRing = hull.map(([px, py]) => [
-    west + (px / Math.max(width - 1, 1)) * (east - west),
-    north - (py / Math.max(height - 1, 1)) * (north - south),
+  if (!comp?.edgePixels?.length) return null
+
+  let minX = width
+  let minY = height
+  let maxX = 0
+  let maxY = 0
+  for (const pi of comp.pixels || []) {
+    const py = (pi / width) | 0
+    const px = pi % width
+    minX = Math.min(minX, px)
+    maxX = Math.max(maxX, px)
+    minY = Math.min(minY, py)
+    maxY = Math.max(maxY, py)
+  }
+  const cw = maxX - minX + 1
+  const ch = maxY - minY + 1
+  const local = new Uint8Array(cw * ch)
+  for (const pi of comp.pixels || []) {
+    const py = (pi / width) | 0
+    const px = pi % width
+    local[(py - minY) * cw + (px - minX)] = 1
+  }
+
+  let start = comp.edgePixels[0]
+  for (const [px, py] of comp.edgePixels) {
+    if (py < start[1] || (py === start[1] && px < start[0])) start = [px, py]
+  }
+  const localStart = [start[0] - minX, start[1] - minY]
+  let pixelRing = traceExternalContour(local, cw, ch, localStart[0], localStart[1])
+  if (pixelRing.length < 3) return null
+  if (preserveGeometry) {
+    pixelRing = decimateCollinearRing(pixelRing)
+  }
+
+  let geoRing = pixelRing.map(([px, py]) => [
+    west + ((px + minX) / Math.max(width - 1, 1)) * (east - west),
+    north - ((py + minY) / Math.max(height - 1, 1)) * (north - south),
   ])
   const diagDeg = Math.hypot(east - west, north - south)
   if (!preserveGeometry) {

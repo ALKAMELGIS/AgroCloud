@@ -8,6 +8,8 @@
  * Env:
  *   FIELD_BOUNDARY_URL   (default http://127.0.0.1:8092/detect)
  *   FIELD_BOUNDARY_TOKEN (optional Bearer token)
+ *   FIELD_BOUNDARY_REMOTE_URL — AgroDetect / AFD fallback when local :8092 is down
+ *   FIELD_BOUNDARY_REMOTE_FALLBACK=0 — disable dev default (api.eliteagrocloud.com)
  */
 
 import express from 'express'
@@ -88,6 +90,56 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
   const JOB_URL = `${SERVICE_BASE}/detect-job`
   const SEN2SR_STATUS_URL = `${SERVICE_BASE}/api/sentinel2/super-resolution/status`
   const SEN2SR_URL = `${SERVICE_BASE}/api/sentinel2/super-resolution`
+  const REMOTE_FALLBACK_DISABLED =
+    String(process.env.FIELD_BOUNDARY_REMOTE_FALLBACK || '').trim() === '0'
+  const REMOTE_API_BASE = String(
+    process.env.FIELD_BOUNDARY_REMOTE_URL || process.env.AGROCLOUD_REMOTE_API_URL || '',
+  )
+    .trim()
+    .replace(/\/detect-job\/?$/, '')
+    .replace(/\/detect\/?$/, '')
+    .replace(/\/$/, '')
+
+  function remoteServiceBase() {
+    if (REMOTE_FALLBACK_DISABLED) return ''
+    if (REMOTE_API_BASE) return REMOTE_API_BASE
+    if (String(process.env.NODE_ENV || '').toLowerCase() === 'production') return ''
+    if (!/127\.0\.0\.1|localhost|:8092/i.test(ENDPOINT)) return ''
+    return 'https://api.eliteagrocloud.com/api/agri-field-boundary'
+  }
+
+  function remoteDetectUrl(suffix) {
+    const base = remoteServiceBase()
+    if (!base) return ''
+    const path = String(suffix || '').startsWith('/') ? suffix : `/${suffix}`
+    return `${base.replace(/\/$/, '')}${path}`
+  }
+
+  async function forwardRemoteOptional(urlPath, opts) {
+    const url = remoteDetectUrl(urlPath)
+    if (!url) return null
+    try {
+      return await forwardJson(url, opts)
+    } catch {
+      return null
+    }
+  }
+
+  async function tryRemoteImageOptional(body, { preferJob = true } = {}) {
+    if (preferJob) {
+      const job = await forwardRemoteOptional('/detect-job', {
+        method: 'POST',
+        body,
+        timeoutMs: DETECT_JOB_TIMEOUT_MS,
+      })
+      if (job?.status === 200) return job
+    }
+    return forwardRemoteOptional('/detect', {
+      method: 'POST',
+      body,
+      timeoutMs: DETECT_TIMEOUT_MS,
+    })
+  }
 
   const builtinJobs = new Map()
   const BUILTIN_JOB_TTL_MS = 10 * 60 * 1000
@@ -301,13 +353,15 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
       })
     }
     if (python?.loading || python?.live) {
+      // Map RGB / spectral-builtin always works on Node — do not block the toolbox while :8092 warms up.
       return res.status(200).json({
         ...builtinHealthPayload(python),
-        status: 'loading',
-        loading: true,
-        ready: false,
+        status: 'ok',
+        loading: false,
+        ready: true,
         live: true,
         python: true,
+        python_loading: true,
         offline: false,
       })
     }
@@ -341,7 +395,12 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
       if (!ready) {
         ensureLocalAiService('agri-field-boundary')
         if (imageOptional) {
-          return res.status(400).json({ error: imageOptionalUnavailableMessage(source) })
+          const remote = await tryRemoteImageOptional(req.body, { preferJob: false })
+          if (remote?.status === 200) return res.status(200).json(remote.json)
+          return res.status(400).json({
+            error: imageOptionalUnavailableMessage(source),
+            ...(remote?.json?.detail ? { detail: remote.json.detail } : {}),
+          })
         }
         return tryBuiltin()
       }
@@ -353,8 +412,10 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
         })
         if (status === 200) return res.status(200).json(json)
         if (status === 400 || status === 404 || status === 422) return res.status(status).json(json)
-        // AFD cannot use map-RGB builtin — surface the real upstream error.
+        // AFD cannot use map-RGB builtin — try production API, then surface upstream error.
         if (imageOptional) {
+          const remote = await tryRemoteImageOptional(req.body, { preferJob: false })
+          if (remote?.status === 200) return res.status(200).json(remote.json)
           return res.status(status === 502 ? 502 : 400).json({
             error:
               String(json?.error || json?.detail || '').trim() ||
@@ -366,6 +427,8 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
       } catch (err) {
         ensureLocalAiService('agri-field-boundary')
         if (imageOptional) {
+          const remote = await tryRemoteImageOptional(req.body, { preferJob: false })
+          if (remote?.status === 200) return res.status(200).json(remote.json)
           return res.status(502).json({
             error: imageOptionalUnavailableMessage(source),
             detail: String(err?.message || err),
@@ -405,7 +468,12 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
       if (!ready) {
         ensureLocalAiService('agri-field-boundary')
         if (imageOptional) {
-          return res.status(400).json({ error: imageOptionalUnavailableMessage(source) })
+          const remote = await tryRemoteImageOptional(req.body)
+          if (remote?.status === 200) return res.status(200).json(remote.json)
+          return res.status(400).json({
+            error: imageOptionalUnavailableMessage(source),
+            ...(remote?.json?.detail ? { detail: remote.json.detail } : {}),
+          })
         }
         return tryBuiltinJob()
       }
@@ -418,6 +486,8 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
         if (status === 200) return res.status(200).json(json)
         if (status === 400 || status === 404 || status === 422) return res.status(status).json(json)
         if (imageOptional) {
+          const remote = await tryRemoteImageOptional(req.body)
+          if (remote?.status === 200) return res.status(200).json(remote.json)
           return res.status(status === 502 ? 502 : 400).json({
             error:
               String(json?.error || json?.detail || '').trim() ||
@@ -429,6 +499,8 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
       } catch (err) {
         ensureLocalAiService('agri-field-boundary')
         if (imageOptional) {
+          const remote = await tryRemoteImageOptional(req.body)
+          if (remote?.status === 200) return res.status(200).json(remote.json)
           return res.status(502).json({
             error: imageOptionalUnavailableMessage(source),
             detail: String(err?.message || err),
@@ -496,6 +568,19 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
       })
     }
     if (!pythonReady()) {
+      const remote = await forwardRemoteOptional(`/detect-job/${encodeURIComponent(jobId)}`, {
+        method: 'GET',
+        timeoutMs: 30_000,
+      })
+      if (remote) {
+        if (remote.status >= 500) {
+          return res.status(503).json({
+            error: 'Field boundary job poll failed on the remote API.',
+            detail: String(remote.json?.error || remote.json?.detail || `HTTP ${remote.status}`),
+          })
+        }
+        return res.status(remote.status).json(remote.json)
+      }
       return res.status(404).json({ error: 'Unknown field-boundary job.' })
     }
     try {

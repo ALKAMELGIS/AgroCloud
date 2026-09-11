@@ -590,6 +590,7 @@ import { TreeDetectionsPanel } from './components/TreeDetectionsPanel';
 import { type SamPanelTab } from './components/SamDetectionPanel';
 import { useSamDetection, type SamAoiSource } from './components/useSamDetection';
 import { AgriFieldBoundaryPanel, type FieldBoundaryAoiMode } from './components/AgriFieldBoundaryPanel';
+import type { FtwPipelineStepId } from './components/useAgriFieldBoundary';
 import { useAgriFieldBoundary } from './components/useAgriFieldBoundary';
 import type { FieldImagerySource } from '../../lib/agriFieldBoundary/fieldBoundaryClient';
 import {
@@ -16651,11 +16652,11 @@ export default function SatelliteIntelligence() {
       }),
       ...(afb.model === 'ftw'
         ? {
-            color: '#22c55e',
+            color: '#15803d',
             fillColor: '#22c55e',
-            weight: 0,
+            weight: 1.5,
             strokeStyle: 'solid' as const,
-            polygonFillAlpha: 0.35,
+            polygonFillAlpha: 0.32,
             fillStyle: 'solid' as const,
           }
         : fieldBoundaryOutlineLayerStyle()),
@@ -24157,15 +24158,10 @@ export default function SatelliteIntelligence() {
     }
     layerAoiPingPongSyncKeyRef.current = syncKey;
 
-    // Always sync tile URLs while warm (hidden) so Show on map is visibility-only.
-    // hide-only previously left activeUrl empty → cold idle wait on every enable.
-    // Clip mask is already packed; this is setTiles on the inactive slot only.
     syncSiSentinelAoiWmsPingPongStack(map, stack, runtime, {
       visible: layerVisible,
       opacity: layerOpacity,
     });
-    // Reordering Agro/AOI outlines on every index tick flickers the cyan/black
-    // vectors. Only reorder when the raster stack is first mounted or resized.
     if (chunkCountChanged) {
       raiseOverlaysThenAnalysisOrder();
     }
@@ -27454,6 +27450,7 @@ export default function SatelliteIntelligence() {
                           busy={agriFieldBoundary.busy}
                           error={agriFieldBoundary.error}
                           errorDetail={agriFieldBoundary.errorDetail}
+                          notice={agriFieldBoundary.notice}
                           offline={agriFieldBoundary.offline}
                           health={agriFieldBoundary.health}
                           fieldCount={agriFieldBoundary.fieldCount}
@@ -27473,6 +27470,21 @@ export default function SatelliteIntelligence() {
                           ftwGlobalOpacity={agriFieldBoundary.ftwGlobalOpacity}
                           onFtwGlobalOpacityChange={agriFieldBoundary.setFtwGlobalOpacity}
                           ftwGlobalVisible={agriFieldBoundary.ftwGlobalVisible}
+                          ftwPipeline={agriFieldBoundary.ftwPipeline}
+                          onRunFtwStep={(step: FtwPipelineStepId) => {
+                            const afb = agriFieldBoundaryRef.current
+                            const runStep =
+                              step === 'extract'
+                                ? afb.runExtractFields
+                                : step === 'vector'
+                                  ? afb.runConvertToVector
+                                  : afb.runLinkAttributes
+                            void runStep().finally(() => {
+                              if (step === 'extract' && agriFieldBoundaryRef.current.ftwGlobalVisible) {
+                                restoreFtwGlobalMapNavigation();
+                              }
+                            });
+                          }}
                           activeAoi={activeAoi}
                           aoiLabel={aoiSourceLabel(activeAoi.source) || 'AOI'}
                           referenceGeojson={fieldBoundaryReferenceGeojson}
@@ -27505,7 +27517,9 @@ export default function SatelliteIntelligence() {
                           attributesStatus={agriFieldBoundary.attributesProgress}
                           attributesBusy={agriFieldBoundary.attributesBusy}
                           onRefreshAttributes={() =>
-                            void agriFieldBoundary.ensureAttributes({ force: true })
+                            agriFieldBoundary.model === 'ftw'
+                              ? void agriFieldBoundary.runLinkAttributes()
+                              : void agriFieldBoundary.ensureAttributes({ force: true })
                           }
                           sen2srStatus={agriFieldBoundary.sen2sr.status}
                           sen2srProductMode={agriFieldBoundary.sen2sr.productMode}

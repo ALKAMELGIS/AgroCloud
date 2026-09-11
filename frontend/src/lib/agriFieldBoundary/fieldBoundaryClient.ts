@@ -209,11 +209,25 @@ export function formatFieldBoundaryUserError(
   }
 
   const msg = String(raw || '').replace(/\s+/g, ' ').trim()
+  if (/FTW Inference \(S2\)|ftw-baselines/i.test(msg)) {
+    return {
+      short: 'AgroDetect S2 needs the Python field engine (:8092) on this host.',
+      detail:
+        msg ||
+        'AgroDetect S2 requires agri-field-boundary with ftw-baselines CLI (see backend/services/agri-field-boundary).',
+    }
+  }
+  if (/Agricultural Field Delineation needs the Python/i.test(msg)) {
+    return {
+      short: 'Agricultural Field Delineation needs the Python field engine (:8092) on this host.',
+      detail: msg || 'Start agri-field-boundary with bundled AFD weights, or use Map RGB detect.',
+    }
+  }
   if (
     /Service offline/i.test(msg) ||
     /agri-field-boundary on :8092/i.test(msg) ||
     /uvicorn app:app --port 8092/i.test(msg) ||
-    /port 8092/i.test(msg)
+    (/port 8092/i.test(msg) && !/needs the Python field engine/i.test(msg))
   ) {
     return {
       short: 'Loading field model… Detect Fields is available on the AgroCloud API.',
@@ -415,11 +429,14 @@ export async function fetchFieldBoundaryHealth(signal?: AbortSignal): Promise<Fi
     }
     if (json && typeof json === 'object') {
       const status = String(json.status || '')
-      const loading = Boolean(json.loading) || status === 'loading' || json.ready === false
+      const builtinFallback = json.builtin_fallback === true
+      const loading =
+        !builtinFallback &&
+        (Boolean(json.loading) || status === 'loading' || json.ready === false)
       const live =
         json.offline === false ||
         json.live === true ||
-        json.builtin_fallback === true ||
+        builtinFallback ||
         status === 'ok' ||
         status === 'live' ||
         status === 'loading' ||
@@ -429,7 +446,7 @@ export async function fetchFieldBoundaryHealth(signal?: AbortSignal): Promise<Fi
           ...json,
           offline: false,
           loading,
-          ready: json.ready !== false && !loading,
+          ready: builtinFallback ? true : json.ready !== false && !loading,
           live: true,
         }
       }

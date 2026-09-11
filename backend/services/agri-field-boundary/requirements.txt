@@ -26,3 +26,6 @@ pyproj>=3.0.0
 # SEN2SR Lite super-resolution (neural 10m → 2.5m). Load is optional at runtime.
 sen2sr
 mlstac
+# AgroDetect S2 — needs `ftw inference all` (v2 CLI; v1.x lacks the subcommand).
+ftw-tools>=2.0.0b3
+geopandas>=0.14

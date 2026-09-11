@@ -64,9 +64,11 @@ function buildIndexTimeSeriesPlot(
 function IndexTimeSeriesChart({
   ts,
   expanded,
+  modalView = false,
 }: {
   ts: FieldDashIndexTimeSeries | null
   expanded: boolean
+  modalView?: boolean
 }) {
   const { series, xTicks } = useMemo(() => buildIndexTimeSeriesPlot(ts), [ts])
   if (!series.length) {
@@ -86,8 +88,8 @@ function IndexTimeSeriesChart({
       formatX={v => xTicks[Math.round(v)]?.label ?? String(v)}
       formatY={v => v.toFixed(2)}
       ariaLabel="Spectral index time series"
-      height={expanded ? 220 : 150}
-      width={expanded ? 640 : 320}
+      height={modalView ? 280 : expanded ? 220 : 150}
+      width={modalView ? 920 : expanded ? 640 : 320}
       fluid
       grid
       markers={false}
@@ -308,10 +310,12 @@ function FieldAttributesDashboardBody({
   showExpand = false,
 }: DashboardBodyProps) {
   const expanded = layout === 'expanded'
+  const modalView = embedded && expanded
+  const chartExpanded = expanded || modalView
 
   return (
     <div
-      className={`si-field-dash si-field-dash--${layout}${embedded ? ' si-field-dash--embedded' : ''}`}
+      className={`si-field-dash si-field-dash--${layout}${embedded ? ' si-field-dash--embedded si-field-dash--modal-view' : ''}`}
       aria-label="Field attributes dashboard"
     >
       {!embedded ? (
@@ -421,7 +425,9 @@ function FieldAttributesDashboardBody({
             yLabel="ha"
             color="#1976d2"
             formatValue={v => fmtHa(v)}
-            expanded={expanded}
+            expanded={chartExpanded}
+            height={modalView ? 260 : undefined}
+            width={modalView ? 520 : undefined}
           />
         </section>
 
@@ -438,7 +444,9 @@ function FieldAttributesDashboardBody({
             yLabel="fields"
             color="#2e7d32"
             formatValue={v => String(Math.round(v))}
-            expanded={expanded}
+            expanded={chartExpanded}
+            height={modalView ? 260 : undefined}
+            width={modalView ? 520 : undefined}
           />
         </section>
 
@@ -453,7 +461,7 @@ function FieldAttributesDashboardBody({
             rows={model.healthMix}
             palette="health"
             ariaLabel="Health status distribution"
-            expanded={expanded}
+            expanded={chartExpanded}
           />
         </section>
       </div>
@@ -472,7 +480,9 @@ function FieldAttributesDashboardBody({
             yLabel="fields"
             color="#2e7d32"
             formatValue={v => String(Math.round(v))}
-            expanded={expanded}
+            expanded={chartExpanded}
+            height={modalView ? 260 : undefined}
+            width={modalView ? 520 : undefined}
           />
         </section>
 
@@ -488,12 +498,12 @@ function FieldAttributesDashboardBody({
               rows={model.landCoverMix}
               palette="landcover"
               ariaLabel="Land cover distribution"
-              expanded={expanded}
+              expanded={chartExpanded}
             />
           </section>
         ) : null}
 
-        {expanded
+        {chartExpanded
           ? model.attributeMixes.map(chart => (
               <section key={chart.fieldName} className="si-field-dash__card">
                 <div className="si-field-dash__card-head">
@@ -505,7 +515,7 @@ function FieldAttributesDashboardBody({
                 <PieDonutChart
                   rows={chart.rows}
                   ariaLabel={`${chart.label} distribution`}
-                  expanded={expanded}
+                  expanded={chartExpanded}
                 />
               </section>
             ))
@@ -522,7 +532,7 @@ function FieldAttributesDashboardBody({
         <p className="si-field-dash__ts-legend">
           NDVI · NDRE · NDMI · NDWI · SAVI · ET (mm/d ÷10)
         </p>
-        <IndexTimeSeriesChart ts={model.indexTimeSeries} expanded={expanded} />
+        <IndexTimeSeriesChart ts={model.indexTimeSeries} expanded={chartExpanded} modalView={modalView} />
       </section>
     </div>
   )

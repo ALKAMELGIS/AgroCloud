@@ -1016,13 +1016,16 @@
 
 .si-sat-ctx-dock--light .si-lll-analyze-panel__index-title,
 .si-sat-ctx-dock--light .si-lll-analyze-panel__title,
+.si-sat-ctx-dock--light .si-lll-analyze-panel__kicker,
+.si-sat-ctx-dock--light .si-lll-analyze-panel__location,
 .si-sat-ctx-dock--light .si-lll-analyze-stat strong,
+.si-sat-ctx-dock--light .si-lll-analyze-stat__label,
 .si-sat-ctx-dock--light .si-lll-analyze-gauge__inner strong {
   color: #0f172a;
 }
 
 .si-sat-ctx-dock--light .si-lll-analyze-panel__territory {
-  color: #334155;
+  color: #0f172a;
 }
 
 .si-sat-ctx-dock--light .si-lll-analyze-gauge__inner {
@@ -1054,10 +1057,8 @@ html[data-theme='light'] .si-layer-live-float .si-lll-analyze-stat__label,
 html[data-theme='light'] .si-layer-live-float .si-lll-analyze-gauge__inner strong {
   color: #0f172a;
 }
-html[data-theme='light'] .si-layer-live-float .si-lll-analyze-panel__kicker,
-html[data-theme='light'] .si-layer-live-float .si-lll-analyze-panel__location,
-html[data-theme='light'] .si-layer-live-float .si-lll-analyze-stat__label {
-  color: #64748b;
+html[data-theme='light'] .si-layer-live-float .si-lll-analyze-panel__insight {
+  color: #713f12;
 }
 html[data-theme='light'] .si-layer-live-float .si-lll-analyze-gauge__inner {
   background: rgba(255, 255, 255, 0.95);

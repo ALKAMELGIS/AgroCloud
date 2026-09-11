@@ -8,14 +8,16 @@ import {
 import { isClassAreaAbortError, stableGeometryKey, useLayerClassAreas } from './useLayerClassAreas'
 import {
   computeLayerLegendAnalyzeStats,
+  LAYER_LEGEND_LARGE_AOI_HA,
+  resolveLegendAnalyzeFetchGeometry,
   type LayerLegendAnalyzeStats,
   type LayerLegendIndexStatsFallback,
 } from './layerLegendAnalyzeStats'
 
-/** Histogram class-area stats are too slow above this AOI size — use zonal stats only. */
-const LARGE_AOI_CLASS_AREA_HA = 1200
 /** Shorter lookback for legend panel (faster than default 90-day multi-layer trend). */
 const LEGEND_ANALYZE_LOOKBACK_DAYS = 21
+/** Large AOI bbox fetch — wider window to find a clear scene. */
+const LEGEND_ANALYZE_LARGE_AOI_LOOKBACK_DAYS = 45
 
 type Params = {
   geometry: GeoJSON.Geometry | GeoJSON.Feature | null | undefined
@@ -68,8 +70,12 @@ export function useLayerLegendAnalyzeData({
   )
   const geom = useMemo(() => geometryForFetch(geometry), [geomKey, geometry])
   const areaHa = useMemo(() => (geom ? resolveFieldAreaHa(geom) : 0), [geom])
-  const skipClassAreas = areaHa > LARGE_AOI_CLASS_AREA_HA
+  const skipClassAreas = areaHa > LAYER_LEGEND_LARGE_AOI_HA
   const classAreasEnabled = enabled && !skipClassAreas
+  const fetchGeom = useMemo(
+    () => resolveLegendAnalyzeFetchGeometry(geom, areaHa),
+    [geom, areaHa],
+  )
 
   const {
     result: areaResult,
@@ -87,14 +93,21 @@ export function useLayerLegendAnalyzeData({
   const [fallbackLoading, setFallbackLoading] = useState(false)
   const fallbackGenRef = useRef(0)
 
-  const dateKey = String(sceneDate || '').trim().slice(0, 10)
+  const dateKey = useMemo(() => {
+    const raw = String(sceneDate || '').trim().slice(0, 10)
+    if (raw) return raw
+    return new Date().toISOString().slice(0, 10)
+  }, [sceneDate])
   const layerKey = String(layerId || '').trim().toUpperCase()
   const hasClassData = classAreaHasSamples(areaResult)
+  const fallbackLookbackDays = skipClassAreas
+    ? LEGEND_ANALYZE_LARGE_AOI_LOOKBACK_DAYS
+    : LEGEND_ANALYZE_LOOKBACK_DAYS
 
   const shouldFetchFallback =
     enabled &&
     !!geomKey &&
-    !!geom &&
+    !!fetchGeom &&
     !!dateKey &&
     !!layerKey &&
     !hasClassData
@@ -122,11 +135,11 @@ export function useLayerLegendAnalyzeData({
         country: '',
         city: '',
         centroid: [0, 0],
-        geometry: geom,
+        geometry: fetchGeom,
       },
       dateKey,
       [layerKey],
-      { signal: controller.signal, lookbackDays: LEGEND_ANALYZE_LOOKBACK_DAYS },
+      { signal: controller.signal, lookbackDays: fallbackLookbackDays },
     )
       .then(row => {
         if (requestId !== fallbackGenRef.current) return
@@ -158,7 +171,7 @@ export function useLayerLegendAnalyzeData({
       }
       controller.abort()
     }
-  }, [shouldFetchFallback, geomKey, geom, dateKey, layerKey])
+  }, [shouldFetchFallback, geomKey, fetchGeom, dateKey, layerKey, fallbackLookbackDays])
 
   const analyzeStats = useMemo(
     () =>
@@ -173,10 +186,10 @@ export function useLayerLegendAnalyzeData({
 
   const hasData =
     hasClassData ||
-    (indexStats?.average != null && Number.isFinite(indexStats.average))
+    (indexStats?.average != null && Number.isFinite(indexStats.average)) ||
+    (analyzeStats.average != null && Number.isFinite(analyzeStats.average))
 
-  const loading =
-    !hasData && (fallbackLoading || (classAreasEnabled && areaLoading))
+  const loading = !hasData && (fallbackLoading || (classAreasEnabled && areaLoading))
 
   return {
     analyzeStats,

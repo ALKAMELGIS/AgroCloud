@@ -209,6 +209,26 @@ describe('AgriFieldBoundaryPanel Results dashboard trigger', () => {
     cleanupHost()
   })
 
+  it('shows AgroDetect S2 engine message instead of loading copy', () => {
+    const { cleanupHost } = mountWithHost({
+      model: 'ftw-inference-s2',
+      source: 'ftw-inference-s2',
+      modelOptions: [{ id: 'ftw-inference-s2' as const, label: 'AgroDetect S2' }],
+      phase: 'error',
+      error: 'AgroDetect S2 needs the Python field engine (:8092) on this host.',
+      errorDetail:
+        'FTW Inference (S2) needs the Python field engine (:8092) with ftw-baselines CLI configured.',
+      hasResult: false,
+      fieldCount: 0,
+      resultGeojson: { type: 'FeatureCollection', features: [] },
+      health: { python: false, builtin_fallback: true, ready: true, status: 'ok' },
+    })
+    fireEvent.click(screen.getByRole('tab', { name: 'Detect Fields' }))
+    expect(screen.getByText(/AgroDetect S2 needs the Python/i)).toBeTruthy()
+    expect(screen.queryByText(/Loading field model/i)).toBeNull()
+    cleanupHost()
+  })
+
   it('exposes Training Samples tab when training API is provided', () => {
     const generateFromPredictions = vi.fn(() => 1)
     const trainingSamples = {
