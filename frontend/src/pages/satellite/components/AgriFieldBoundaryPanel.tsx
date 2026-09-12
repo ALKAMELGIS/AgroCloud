@@ -407,6 +407,8 @@ export function AgriFieldBoundaryPanel({
       ? 'Run Delineate Anything on the AOI capture — sharp black instance edges (:8096)'
       : 'Run field boundary detection across the AOI'
   const stageLabel = phase === 'detecting' ? STAGE_LABEL[String(stage || '')] : undefined
+  const ftwInferInfo = health?.ftw_inference_s2_status
+  const ftwInferReady = Boolean(health?.ftw_inference_s2)
   const isPythonEngineRequiredMessage = (msg: string | null | undefined) =>
     Boolean(
       msg &&
@@ -415,7 +417,10 @@ export function AgriFieldBoundaryPanel({
         ),
     )
   const pythonEngineMissing =
-    phase === 'error' &&
+    isFtwInferenceS2 &&
+    !ftwInferReady &&
+    !health?.loading &&
+    (phase === 'error' || phase === 'empty') &&
     (isPythonEngineRequiredMessage(error) || isPythonEngineRequiredMessage(errorDetail))
   const serviceOfflineMessage =
     !pythonEngineMissing &&
@@ -445,8 +450,6 @@ export function AgriFieldBoundaryPanel({
       }
     | undefined
   const afdReady = Boolean(health?.agricultural_field_delineation)
-  const ftwInferInfo = health?.ftw_inference_s2_status
-  const ftwInferReady = Boolean(health?.ftw_inference_s2)
 
   useEffect(() => {
     if (!exportOpen) return
@@ -1302,7 +1305,7 @@ export function AgriFieldBoundaryPanel({
           ) : null}
           {isFtwInferenceS2 && phase === 'detecting' && stage === 'run' ? (
             <div className="si-afb__error-detail">
-              AgroDetect S2 is running FTW inference on Sentinel-2 — on CPU this can take 3–8 minutes at ~55%.
+              AgroDetect S2 is running FTW inference on Sentinel-2 — typically 30–90 seconds on CPU (faster on repeat runs).
             </div>
           ) : null}
         </div>

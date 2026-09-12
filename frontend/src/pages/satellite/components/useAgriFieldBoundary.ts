@@ -317,6 +317,15 @@ function isOfflineFieldBoundaryError(message: string | null | undefined): boolea
   )
 }
 
+function isPythonEngineRequiredMessage(message: string | null | undefined): boolean {
+  return Boolean(
+    message &&
+      /AgroDetect S2 needs the Python|Agricultural Field Delineation needs the Python|FTW Inference \(S2\)|ftw-baselines/i.test(
+        message,
+      ),
+  )
+}
+
 export type FieldModelId =
   | 'ftw'
   | 'ftw-inference-s2'
@@ -330,12 +339,24 @@ export type FieldCaptureImageryId = Exclude<
 >
 
 const FIELD_MODELS: Array<{ id: FieldModelId; label: string }> = [
-  { id: 'ftw', label: 'Fields of the World (Global v3)' },
-  { id: 'ftw-inference-s2', label: 'AgroDetect S2' },
   { id: 'delineate-fbis', label: 'Delineate Anything (v2)' },
+  { id: 'ftw', label: 'FTW Global (v3)' },
+  { id: 'ftw-inference-s2', label: 'AgroDetect S2' },
   { id: 'agricultural-field-delineation', label: 'Agricultural Field Delineation' },
   { id: 'map-rgb', label: 'Map RGB detect (instance)' },
 ]
+
+/** Instance / mask engines — skip fragment merge unless the user enables it. */
+function preservesNativeFieldGeometry(source: string, engine?: string): boolean {
+  const s = String(source || '').toLowerCase()
+  const e = String(engine || '').toLowerCase()
+  return (
+    s === 'agricultural-field-delineation' ||
+    s === 'delineate-fbis' ||
+    e.includes('agricultural-field-delineation') ||
+    e.includes('delineate')
+  )
+}
 
 const FIELD_IMAGERY: Array<{ id: FieldCaptureImageryId; label: string }> = [
   { id: 'basemap', label: 'Basemap (Esri / Google map RGB)' },
@@ -359,6 +380,9 @@ function splitFieldSource(source: FieldImagerySource | string): {
   imagery: FieldCaptureImageryId
 } {
   const raw = String(source || '').toLowerCase()
+  if (raw === 'ftw-global' || raw === 'ftw-global-v3' || raw === 'fields-of-the-world-global') {
+    return { model: 'ftw', imagery: 'basemap' }
+  }
   if (
     raw === 'delineate-fbis' ||
     raw === 'agricultural-field-delineation' ||
@@ -451,8 +475,8 @@ export function useAgriFieldBoundary({
   resolveAoi,
   aoiClipKey = '',
 }: UseAgriFieldBoundaryOptions) {
-  // Default model: Fields of the World (Global v3).
-  const [model, setModelState] = useState<FieldModelId>('ftw')
+  // Default: Delineate Anything — fast (~30s) sharp instance vectors on map RGB (months-ago UX).
+  const [model, setModelState] = useState<FieldModelId>('delineate-fbis')
   const [imagery, setImageryState] = useState<FieldCaptureImageryId>('basemap')
   const source = deriveFieldSource(model, imagery)
   const imageryRef = useRef(imagery)
@@ -484,7 +508,7 @@ export function useAgriFieldBoundary({
   const [minAreaM2, setMinAreaM2] = useState(PRODUCTION_MAP_RGB_MIN_AREA_M2)
   /** Outlines only by default — interior fills hide the crop under the field. */
   const [fillOpacity, setFillOpacity] = useState(0)
-  /** Regularize drawn AOI + field footprints into oriented rectangles. */
+  /** Regularize footprints — on by default (straight cadastral edges, no pixel stairs). */
   const [regularizeFootprints, setRegularizeFootprints] = useState(true)
   /** ArcGIS Regularize Building Footprint method. */
   const [regularizeMethod, setRegularizeMethod] =
@@ -548,7 +572,18 @@ export function useAgriFieldBoundary({
   const applyHealthResult = useCallback((h: FieldBoundaryHealth) => {
     setHealth(h)
     setOffline(false)
-    if (isOfflineFieldBoundaryError(errorRef.current) || isOfflineFieldBoundaryError(errorDetailRef.current)) {
+    const pythonReady = Boolean(h.ftw_inference_s2) && h.python !== false && h.ready !== false
+    const stalePythonMsg =
+      isPythonEngineRequiredMessage(errorRef.current) ||
+      isPythonEngineRequiredMessage(errorDetailRef.current)
+    if (pythonReady && stalePythonMsg) {
+      setError(null)
+      setErrorDetail(null)
+      if (phaseRef.current === 'error' || phaseRef.current === 'empty') setPhase('idle')
+    } else if (
+      isOfflineFieldBoundaryError(errorRef.current) ||
+      isOfflineFieldBoundaryError(errorDetailRef.current)
+    ) {
       setError(null)
       setErrorDetail(null)
       if (phaseRef.current === 'error') setPhase('idle')
@@ -641,10 +676,7 @@ export function useAgriFieldBoundary({
       rawResultRef.current = null
       lastDetectContextRef.current = null
     }
-    // AFD masks are already georeferenced field instances — Right Angles / merge
-    // warps pivots and cadastral edges away from ArcGIS Pro quality.
-    if (next === 'agricultural-field-delineation') {
-      setRegularizeFootprints(false)
+    if (next === 'agricultural-field-delineation' || next === 'delineate-fbis') {
       setMergeFragments(false)
     }
     if (next === 'ftw-inference-s2') {
@@ -652,11 +684,14 @@ export function useAgriFieldBoundary({
       const normalized = normalizeSceneRange(safe.from, safe.to)
       setSceneDateFromState(normalized.from)
       setSceneDateToState(normalized.to)
+      void fetchFieldBoundaryHealth()
+        .then(applyHealthResult)
+        .catch(() => {})
     }
     setError(null)
     setErrorDetail(null)
     if (phase === 'error' || phase === 'empty') setPhase('idle')
-  }, [phase, ftwYear])
+  }, [phase, ftwYear, applyHealthResult])
 
   const setImagery = useCallback((next: FieldCaptureImageryId) => {
     sourceChosenRef.current = true
@@ -853,13 +888,11 @@ export function useAgriFieldBoundary({
     }
     const finishResult = (out: FieldBoundaryResult): FieldBoundaryResult => {
       rawResultRef.current = out
-      const isAfd =
-        activeSource === 'agricultural-field-delineation' ||
-        String(out.engine || '').includes('agricultural-field-delineation')
+      const nativeGeom = preservesNativeFieldGeometry(activeSource, out.engine)
       const heavyMerge = false
       const effMinArea = finishMinAreaM2(minAreaM2, heavyMerge)
       const mergedGeo =
-        isAfd && !mergeFragments
+        nativeGeom && !mergeFragments
           ? out.geojson
           : mergeFieldFragments(
               out.geojson,
@@ -870,29 +903,28 @@ export function useAgriFieldBoundary({
         geojson: mergedGeo,
         count: mergedGeo.features.length,
       }
-      // Keep AFD polygons close to the 10 m mask (no OBB / right-angle warp).
+      const softenMeters = regularizeMethod === 'right-angles' ? 4.8 : 6.2
       const optimized =
-        isAfd && !regularizeFootprints
+        !regularizeFootprints && nativeGeom
           ? preRegularize
           : optimizeFieldBoundaryResult(preRegularize, {
-              regularizeFootprints: isAfd ? false : regularizeFootprints,
+              regularizeFootprints,
               regularizeMethod,
-              softenKept: !isAfd,
-              softenMeters: regularizeMethod === 'right-angles' ? 3.2 : 5.2,
+              softenKept: true,
+              softenMeters,
               minFillRatio: 0.55,
               maxAreaInflation: 1.45,
-              resolveOverlaps: mergeFragments,
-              abutNeighborsM: mergeFragments ? 1.15 : 0,
+              resolveOverlaps: regularizeFootprints,
+              abutNeighborsM: regularizeFootprints ? 0.85 : 0,
             })
       // Regularize can inflate footprints — re-clip to AOI and unstack overlays.
+      const isDelineate =
+        activeSource === 'delineate-fbis' || String(optimized.engine || '').includes('delineate')
       let geojson = refineFieldPolygonsToAoi(optimized.geojson, aoiFc, {
         minAreaM2: effMinArea,
-        dropIou: 0.15,
+        dropIou: isDelineate ? 0.12 : 0.15,
       })
-      if (
-        activeSource === 'delineate-fbis' ||
-        String(optimized.engine || '').includes('delineate')
-      ) {
+      if (isDelineate) {
         geojson = styleDelineateFbisGeojson(geojson)
       }
       const finished: FieldBoundaryResult = {
@@ -1075,21 +1107,25 @@ export function useAgriFieldBoundary({
 
         try {
           const daMinArea = Math.max(0.05, minAreaM2)
-          const daConf = Math.max(0.22, Math.min(minConfidence, 0.32))
-          // Primary pass — balanced precision/recall on v2.
+          const primaryConf = Math.max(0.15, Math.min(minConfidence, 0.28))
+          const mergeOpts = { minAreaM2: daMinArea, dropIou: 0.28 as number }
+          // Multi-pass recall — fill gaps while keeping sharp instance edges.
           setNotice('Delineate Anything (v2) — detecting fields…')
-          let merged = await runDa(daConf, 'v2', daMinArea)
-          setProgress(40)
-          // Targeted recall only when the mosaic is sparse — avoids duplicate overlays.
-          if (merged.features.length < 6) {
-            setNotice('Delineate Anything — recall pass (fill gaps)…')
-            const soft = await runDa(Math.max(0.16, daConf - 0.06), 'v2', daMinArea)
-            merged = mergeFieldDetections(merged, soft, {
-              minAreaM2: daMinArea,
-              dropIou: 0.32,
-            })
+          let merged = await runDa(primaryConf, 'v2', daMinArea)
+          setProgress(32)
+          setNotice('Delineate Anything — recall pass (fill gaps)…')
+          const recallConf = Math.max(0.12, primaryConf - 0.08)
+          merged = mergeFieldDetections(merged, await runDa(recallConf, 'v2', daMinArea), mergeOpts)
+          setProgress(48)
+          if (merged.features.length < 90) {
+            setNotice('Delineate Anything — fine recall pass…')
+            merged = mergeFieldDetections(
+              merged,
+              await runDa(Math.max(0.10, recallConf - 0.03), 'v2', daMinArea),
+              mergeOpts,
+            )
           }
-          setProgress(55)
+          setProgress(58)
 
           if (merged.features.length) {
             const styled = styleDelineateFbisGeojson(merged)
@@ -1405,34 +1441,35 @@ export function useAgriFieldBoundary({
     if (!raw?.geojson?.features?.length) return
     if (busy || phase === 'detecting' || phase === 'capturing') return
     const ctx = lastDetectContextRef.current
-    const isAfd =
-      String(ctx?.source || '').includes('agricultural-field-delineation') ||
-      String(raw.engine || '').includes('agricultural-field-delineation')
+    const nativeGeom = preservesNativeFieldGeometry(
+      String(ctx?.source || ''),
+      String(raw.engine || ''),
+    )
     const heavyMerge = false
     const baseMin = ctx?.minAreaM2 ?? 1
     const effMinArea = finishMinAreaM2(baseMin, heavyMerge)
     const mergedGeo =
-      isAfd && !mergeFragments
+      nativeGeom && !mergeFragments
         ? raw.geojson
         : mergeFieldFragments(
             raw.geojson,
             finishMergeOptions(baseMin, { heavyMerge, enabled: mergeFragments }),
           )
-    const softenMeters = regularizeMethod === 'right-angles' ? 3.2 : 5.2
+    const softenMeters = regularizeMethod === 'right-angles' ? 4.8 : 6.2
     const optimized =
-      isAfd && !regularizeFootprints
+      !regularizeFootprints && nativeGeom
         ? { ...raw, geojson: mergedGeo, count: mergedGeo.features.length }
         : optimizeFieldBoundaryResult(
             { ...raw, geojson: mergedGeo, count: mergedGeo.features.length },
             {
-              regularizeFootprints: isAfd ? false : regularizeFootprints,
+              regularizeFootprints,
               regularizeMethod,
-              softenKept: !isAfd,
+              softenKept: true,
               softenMeters,
               minFillRatio: 0.55,
               maxAreaInflation: 1.45,
-              resolveOverlaps: mergeFragments,
-              abutNeighborsM: mergeFragments ? 1.15 : 0,
+              resolveOverlaps: regularizeFootprints,
+              abutNeighborsM: regularizeFootprints ? 0.85 : 0,
             },
           )
     let geojson = optimized.geojson
@@ -1557,11 +1594,11 @@ export function useAgriFieldBoundary({
           regularizeFootprints,
           regularizeMethod,
           softenKept: true,
-          softenMeters: regularizeMethod === 'right-angles' ? 3.2 : 5.2,
+          softenMeters: regularizeMethod === 'right-angles' ? 4.8 : 6.2,
           minFillRatio: 0.55,
           maxAreaInflation: 1.45,
-          resolveOverlaps: mergeFragments,
-          abutNeighborsM: mergeFragments ? 1.15 : 0,
+          resolveOverlaps: regularizeFootprints,
+          abutNeighborsM: regularizeFootprints ? 0.85 : 0,
         },
       ).geojson
 

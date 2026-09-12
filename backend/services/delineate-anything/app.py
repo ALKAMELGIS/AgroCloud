@@ -25,14 +25,17 @@ from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 from PIL import Image
 
-DEFAULT_IMGSZ = int(os.environ.get("DELINEATE_IMG_SIZE", "1024"))
-DEFAULT_CONF = float(os.environ.get("DELINEATE_CONF", "0.25"))
-DEFAULT_IOU = float(os.environ.get("DELINEATE_IOU", "0.45"))
+DEFAULT_IMGSZ = int(os.environ.get("DELINEATE_IMG_SIZE", "1280"))
+DEFAULT_CONF = float(os.environ.get("DELINEATE_CONF", "0.22"))
+DEFAULT_IOU = float(os.environ.get("DELINEATE_IOU", "0.38"))
+TILE_SIZE = int(os.environ.get("DELINEATE_TILE", "1280"))
+TILE_OVERLAP = int(os.environ.get("DELINEATE_TILE_OVERLAP", "256"))
+MAX_DET = int(os.environ.get("DELINEATE_MAX_DET", "500"))
 # large = DelineateAnything.pt (FBIS-22M), large_v2 = DelineateAnythingv2.pt (FBIS-73M)
 DEFAULT_MODEL = os.environ.get("DELINEATE_MODEL", "v2").strip().lower()
 HF_REPO = os.environ.get("DELINEATE_HF_REPO", "MykolaL/DelineateAnything")
-MIN_AREA_PX = int(os.environ.get("DELINEATE_MIN_AREA_PX", "80"))
-SIMPLIFY_EPS = float(os.environ.get("DELINEATE_SIMPLIFY_EPS", "1.5"))
+MIN_AREA_PX = int(os.environ.get("DELINEATE_MIN_AREA_PX", "48"))
+SIMPLIFY_EPS = float(os.environ.get("DELINEATE_SIMPLIFY_EPS", "1.0"))
 
 MODELS = {
     "small": "DelineateAnything-S.pt",
@@ -138,6 +141,135 @@ def _ring_area_m2(coords: list[list[float]]) -> float:
     return abs(area) * 0.5
 
 
+def _tile_windows(h: int, w: int, tile: int, overlap: int) -> list[tuple[int, int, int, int]]:
+    if h <= tile and w <= tile:
+        return [(0, 0, w, h)]
+    step = max(64, tile - overlap)
+    tiles: list[tuple[int, int, int, int]] = []
+    for y0 in range(0, h, step):
+        for x0 in range(0, w, step):
+            x1 = min(w, x0 + tile)
+            y1 = min(h, y0 + tile)
+            if x1 - x0 < tile and x0 > 0:
+                x0 = max(0, x1 - tile)
+            if y1 - y0 < tile and y0 > 0:
+                y0 = max(0, y1 - tile)
+            tiles.append((x0, y0, x1, y1))
+    seen: set[tuple[int, int, int, int]] = set()
+    uniq: list[tuple[int, int, int, int]] = []
+    for t in tiles:
+        if t not in seen:
+            seen.add(t)
+            uniq.append(t)
+    return uniq
+
+
+def _sub_bbox(
+    bbox: tuple[float, float, float, float],
+    x0: int,
+    y0: int,
+    x1: int,
+    y1: int,
+    full_w: int,
+    full_h: int,
+) -> tuple[float, float, float, float]:
+    west, south, east, north = bbox
+    lon_span = east - west
+    lat_span = north - south
+    fw = max(full_w - 1, 1)
+    fh = max(full_h - 1, 1)
+    return (
+        west + (x0 / fw) * lon_span,
+        north - (y1 / fh) * lat_span,
+        west + (x1 / fw) * lon_span,
+        north - (y0 / fh) * lat_span,
+    )
+
+
+def _feature_bounds(feat: dict[str, Any]) -> tuple[float, float, float, float] | None:
+    try:
+        ring = feat["geometry"]["coordinates"][0]
+        lons = [float(c[0]) for c in ring]
+        lats = [float(c[1]) for c in ring]
+        return min(lons), min(lats), max(lons), max(lats)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _bounds_iou(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> float:
+    aw, as_, ae, an = a
+    bw, bs, be, bn = b
+    iw = max(0.0, min(ae, be) - max(aw, bw))
+    ih = max(0.0, min(an, bn) - max(as_, bs))
+    inter = iw * ih
+    if inter <= 0:
+        return 0.0
+    area_a = max(1e-12, (ae - aw) * (an - as_))
+    area_b = max(1e-12, (be - bw) * (bn - bs))
+    return inter / (area_a + area_b - inter)
+
+
+def _dedupe_features(features: list[dict[str, Any]], iou_thresh: float = 0.32) -> list[dict[str, Any]]:
+    ordered = sorted(
+        features,
+        key=lambda f: float((f.get("properties") or {}).get("confidence") or 0),
+        reverse=True,
+    )
+    kept: list[dict[str, Any]] = []
+    kept_bounds: list[tuple[float, float, float, float]] = []
+    for feat in ordered:
+        bounds = _feature_bounds(feat)
+        if bounds is None:
+            continue
+        if any(_bounds_iou(bounds, kb) >= iou_thresh for kb in kept_bounds):
+            continue
+        kept.append(feat)
+        kept_bounds.append(bounds)
+    for i, feat in enumerate(kept, start=1):
+        props = dict(feat.get("properties") or {})
+        props["field_id"] = i
+        feat["properties"] = props
+    return kept
+
+
+def _predict_geojson_tiled(
+    image: Image.Image,
+    *,
+    model_key: str,
+    conf: float,
+    imgsz: int,
+    iou: float,
+    bbox: tuple[float, float, float, float] | None,
+    min_area_m2: float,
+) -> dict[str, Any]:
+    width, height = image.size
+    if width <= TILE_SIZE and height <= TILE_SIZE:
+        return _predict_geojson(
+            image,
+            model_key=model_key,
+            conf=conf,
+            imgsz=imgsz,
+            iou=iou,
+            bbox=bbox,
+            min_area_m2=min_area_m2,
+        )
+    merged: list[dict[str, Any]] = []
+    for x0, y0, x1, y1 in _tile_windows(height, width, TILE_SIZE, TILE_OVERLAP):
+        crop = image.crop((x0, y0, x1, y1))
+        sub_bbox = _sub_bbox(bbox, x0, y0, x1, y1, width, height) if bbox else None
+        fc = _predict_geojson(
+            crop,
+            model_key=model_key,
+            conf=conf,
+            imgsz=imgsz,
+            iou=iou,
+            bbox=sub_bbox,
+            min_area_m2=min_area_m2,
+        )
+        merged.extend(fc.get("features") or [])
+    return {"type": "FeatureCollection", "features": _dedupe_features(merged)}
+
+
 def _predict_geojson(
     image: Image.Image,
     *,
@@ -162,7 +294,7 @@ def _predict_geojson(
         iou=float(iou),
         verbose=False,
         retina_masks=True,
-        max_det=300,
+        max_det=MAX_DET,
     )
     # Some Ultralytics builds return empty with retina_masks on CPU — retry once.
     empty = True
@@ -182,7 +314,7 @@ def _predict_geojson(
             iou=float(iou),
             verbose=False,
             retina_masks=False,
-            max_det=300,
+            max_det=MAX_DET,
         )
 
     features: list[dict[str, Any]] = []
@@ -322,45 +454,36 @@ def _predict_with_fallbacks(
             seen.add(m)
             models.append(m)
 
-    confs = [float(conf), min(float(conf), 0.2), 0.12, 0.08]
-    conf_seen: set[float] = set()
-    conf_list: list[float] = []
-    for c in confs:
+    conf_passes: list[float] = []
+    for c in (float(conf), float(conf) * 0.72, 0.16, 0.12, 0.10):
         c2 = round(max(0.08, min(0.9, c)), 3)
-        if c2 not in conf_seen:
-            conf_seen.add(c2)
-            conf_list.append(c2)
+        if c2 not in conf_passes:
+            conf_passes.append(c2)
 
     last_fc: dict[str, Any] = {"type": "FeatureCollection", "features": []}
     last_packed: Any = None
     last_key = models[0]
-    area_floors = [float(min_area_m2), min(float(min_area_m2), 25.0), 10.0, 0.0]
-    area_seen: set[float] = set()
-    area_list: list[float] = []
-    for a in area_floors:
-        a2 = max(0.0, float(a))
-        if a2 not in area_seen:
-            area_seen.add(a2)
-            area_list.append(a2)
+    area_floor = max(0.0, float(min_area_m2))
 
     for mk in models:
         packed = _get_model(mk)
         last_packed = packed
         last_key = mk
-        for c in conf_list:
-            for area_floor in area_list:
-                fc = _predict_geojson(
-                    image,
-                    model_key=mk,
-                    conf=c,
-                    imgsz=imgsz,
-                    iou=iou,
-                    bbox=bbox,
-                    min_area_m2=area_floor,
-                )
-                last_fc = fc
-                if len(fc.get("features") or []) > 0:
-                    return fc, mk, packed
+        merged_feats: list[dict[str, Any]] = []
+        for c in conf_passes:
+            fc = _predict_geojson_tiled(
+                image,
+                model_key=mk,
+                conf=c,
+                imgsz=imgsz,
+                iou=iou,
+                bbox=bbox,
+                min_area_m2=area_floor,
+            )
+            merged_feats = _dedupe_features(merged_feats + (fc.get("features") or []))
+        if merged_feats:
+            return {"type": "FeatureCollection", "features": merged_feats}, mk, packed
+        last_fc = {"type": "FeatureCollection", "features": merged_feats}
     return last_fc, last_key, last_packed or _get_model(last_key)
 
 

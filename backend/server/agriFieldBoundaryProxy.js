@@ -201,9 +201,10 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
   }
 
   async function probePythonHealth() {
-    const live = await probeUrl(`${SERVICE_BASE}/health/live`, 800)
+    const live = await probeUrl(`${SERVICE_BASE}/health/live`, 1200)
     if (live?.ok && (live.json?.live === true || live.json?.status === 'live' || live.json?.status === 'ok')) {
-      const ready = await probeUrl(`${SERVICE_BASE}/health/ready`, 800)
+      // /health/ready loads engine status and can take ~2s on Windows CPU — keep above that.
+      const ready = await probeUrl(`${SERVICE_BASE}/health/ready`, 4500)
       if (ready?.ok && ready.json?.ready !== false && String(ready.json?.status || '') !== 'loading') {
         return { ...ready.json, live: true, ready: true, status: ready.json?.status || 'ok' }
       }
@@ -248,7 +249,8 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
   function pythonReady() {
     const cached = cachedPython()
     if (!cached?.ready) return false
-    if (Date.now() - pythonCache.at > PYTHON_CACHE_TTL_MS * 3) return false
+    // Keep ready state for 15 min so long FTW / AFD jobs are not dropped mid-poll.
+    if (Date.now() - pythonCache.at > PYTHON_CACHE_TTL_MS * 75) return false
     return true
   }
 
@@ -567,27 +569,27 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
         result: builtin.result,
       })
     }
-    if (!pythonReady()) {
-      const remote = await forwardRemoteOptional(`/detect-job/${encodeURIComponent(jobId)}`, {
-        method: 'GET',
-        timeoutMs: 30_000,
-      })
-      if (remote) {
-        if (remote.status >= 500) {
-          return res.status(503).json({
-            error: 'Field boundary job poll failed on the remote API.',
-            detail: String(remote.json?.error || remote.json?.detail || `HTTP ${remote.status}`),
-          })
-        }
-        return res.status(remote.status).json(remote.json)
-      }
-      return res.status(404).json({ error: 'Unknown field-boundary job.' })
-    }
+    // Always poll Python for in-flight jobs — pythonReady() cache can expire during 3–8 min FTW runs.
     try {
       const { status, json } = await forwardJson(`${JOB_URL}/${encodeURIComponent(jobId)}`, {
         method: 'GET',
         timeoutMs: 30_000,
       })
+      if (status === 404) {
+        const remote = await forwardRemoteOptional(`/detect-job/${encodeURIComponent(jobId)}`, {
+          method: 'GET',
+          timeoutMs: 30_000,
+        })
+        if (remote && remote.status !== 404) {
+          if (remote.status >= 500) {
+            return res.status(503).json({
+              error: 'Field boundary job poll failed on the remote API.',
+              detail: String(remote.json?.error || remote.json?.detail || `HTTP ${remote.status}`),
+            })
+          }
+          return res.status(remote.status).json(remote.json)
+        }
+      }
       if (status >= 500) {
         return res.status(503).json({
           error: 'Field boundary job poll failed on the Python engine.',
@@ -596,6 +598,13 @@ export function registerAgriFieldBoundaryRoutes(app, { jsonBodyLimit = '48mb' } 
       }
       return res.status(status).json(json)
     } catch {
+      const remote = await forwardRemoteOptional(`/detect-job/${encodeURIComponent(jobId)}`, {
+        method: 'GET',
+        timeoutMs: 30_000,
+      })
+      if (remote && remote.status !== 404) {
+        return res.status(remote.status).json(remote.json)
+      }
       return res.status(503).json({ error: 'Could not poll field-boundary job.' })
     }
   })

@@ -22672,7 +22672,7 @@ export default function SatelliteIntelligence() {
           const yearLabel = yearN != null ? `, year ${yearN}` : '';
           const label =
             source === 'ftw'
-              ? 'Fields of the World (Global)'
+              ? 'FTW Global (v3)'
               : source === 'ftw-inference-s2'
                 ? 'AgroDetect S2'
                 : source;

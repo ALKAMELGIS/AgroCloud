@@ -239,10 +239,17 @@ export function formatFieldBoundaryUserError(
   const detail = stripUrls(msg).slice(0, 480)
   const source = opts?.source
 
+  if (/Unknown (field-boundary )?job|Unknown job_id/i.test(msg)) {
+    return {
+      short: 'Field detect job was lost — retry Detect Fields.',
+      detail:
+        detail ||
+        'The async job expired or the Python engine restarted. Retry Detect Fields; AgroDetect S2 typically finishes in 30–90 seconds.',
+    }
+  }
   if (
     /^Not Found$/i.test(msg) ||
-    /\bdetail["']?\s*:\s*["']?Not Found/i.test(msg) ||
-    /Unknown (field-boundary )?job/i.test(msg)
+    /\bdetail["']?\s*:\s*["']?Not Found/i.test(msg)
   ) {
     return {
       short: 'Field API not reached — restart Vite so /api proxies to :3011',

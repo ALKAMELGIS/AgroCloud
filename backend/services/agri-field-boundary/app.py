@@ -749,6 +749,23 @@ def _ftw_crop_calendar_error(exc: BaseException) -> bool:
     return "crop calendar" in msg or "harvest date" in msg or "in the future" in msg
 
 
+def _ftw_inference_bbox(req: DetectRequest, aoi_geom: Any | None) -> list[float]:
+    """AOI envelope (+ pad) — less download/inference area than full viewport bbox."""
+    pad = float(os.environ.get("FTW_INFER_BBOX_PAD_DEG", "0.0006"))
+    if aoi_geom is not None and not getattr(aoi_geom, "is_empty", True):
+        try:
+            minx, miny, maxx, maxy = aoi_geom.bounds
+            return [
+                max(-180.0, float(minx) - pad),
+                max(-90.0, float(miny) - pad),
+                min(180.0, float(maxx) + pad),
+                min(90.0, float(maxy) + pad),
+            ]
+        except Exception:  # noqa: BLE001
+            pass
+    return [float(v) for v in req.bbox]
+
+
 def _execute_ftw_inference_s2(req: DetectRequest, progress: ProgressCb | None = None) -> dict:
     """FTW Inference (S2) — live Sentinel-2 + PRUE via ftw-baselines CLI."""
     from engines.ftw_inference_s2 import get_ftw_inference_s2_engine
@@ -762,6 +779,7 @@ def _execute_ftw_inference_s2(req: DetectRequest, progress: ProgressCb | None = 
         )
 
     aoi_geom = _parse_aoi(req.aoi)
+    infer_bbox = _ftw_inference_bbox(req, aoi_geom)
     year = _infer_ftw_inference_year(req)
 
     if progress:
@@ -773,7 +791,7 @@ def _execute_ftw_inference_s2(req: DetectRequest, progress: ProgressCb | None = 
     last_err: Exception | None = None
     for attempt_year in range(year, max(2016, year - 3), -1):
         try:
-            fc = engine.infer_geojson(list(req.bbox), year=attempt_year)
+            fc = engine.infer_geojson(infer_bbox, year=attempt_year)
             year = attempt_year
             break
         except RuntimeError as exc:
