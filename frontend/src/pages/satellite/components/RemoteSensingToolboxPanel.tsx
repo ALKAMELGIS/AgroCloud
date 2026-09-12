@@ -30,7 +30,11 @@ export type RemoteSensingToolboxPanelProps = {
   imageryDateAutoFollow: boolean
   isFetchingSentinelScenes: boolean
   imageryDateMeta: string | null
-  /** Max cloud cover % for scene catalog / WMS (0–100). */
+  /** Measured AOI cloud % for the active scene (SCL + CLM + CLP). */
+  aoiCloudCoverPct?: number | null
+  /** Measured AOI clear % for the active scene. */
+  aoiClearCoverPct?: number | null
+  /** Prefer scenes with ≤ this AOI cloud % when ranking (0–100); never hides scenes. */
   cloudCoverage: number
   onCloudCoverageChange: (pct: number) => void
   layerGroups: RemoteSensingLayerSelectGroup[]
@@ -100,6 +104,9 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
     onResetImageryDateAuto,
     imageryDateAutoFollow,
     isFetchingSentinelScenes,
+    imageryDateMeta,
+    aoiCloudCoverPct = null,
+    aoiClearCoverPct = null,
     cloudCoverage,
     onCloudCoverageChange,
     layerGroups,
@@ -190,7 +197,9 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
 
         <div className="si-rs-panel__stack si-rs-panel__stack--cloud">
           <div className="si-rs-panel__cloud-row">
-            <span className="si-rs-panel__cloud-label">Cloud</span>
+            <span className="si-rs-panel__cloud-label" title="Ranking preference only — scenes are never removed">
+              Prefer ≤
+            </span>
             <input
               type="range"
               className="si-rs-panel__cloud-slider"
@@ -198,17 +207,29 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
               max={100}
               step={1}
               value={cloudDraft}
-              aria-label="Maximum cloud coverage percent"
+              aria-label="Prefer scenes with at most this AOI cloud percent when ranking"
               onChange={e => setCloudDraft(Math.max(0, Math.min(100, Math.round(Number(e.target.value)))))}
               onPointerUp={commitCloud}
               onKeyUp={commitCloud}
               onBlur={commitCloud}
             />
-            <span className="si-rs-panel__cloud-value" title="Max cloud coverage">
+            <span className="si-rs-panel__cloud-value" title="Scene ranking preference (not a filter)">
               <i className="fa-solid fa-cloud" aria-hidden />
               <strong>{cloudDraft}%</strong>
             </span>
           </div>
+          {typeof aoiCloudCoverPct === 'number' || typeof aoiClearCoverPct === 'number' ? (
+            <p className="si-rs-panel__meta si-rs-panel__meta--inline" role="status">
+              <i className="fa-solid fa-chart-pie" aria-hidden /> AOI (SCL+CLM+CLP):{' '}
+              {typeof aoiCloudCoverPct === 'number' ? `${aoiCloudCoverPct.toFixed(1)}% cloud` : '— cloud'}
+              {' · '}
+              {typeof aoiClearCoverPct === 'number' ? `${aoiClearCoverPct.toFixed(1)}% clear` : '— clear'}
+            </p>
+          ) : isFetchingSentinelScenes ? (
+            <p className="si-rs-panel__meta si-rs-panel__meta--inline" role="status">
+              Measuring AOI cloud cover…
+            </p>
+          ) : null}
         </div>
 
         <label className="si-rs-panel__stack">
@@ -237,6 +258,12 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
             </button>
           </div>
         </label>
+
+        {imageryDateMeta ? (
+          <p className="si-rs-panel__meta si-rs-panel__meta--inline" role="status">
+            {imageryDateMeta}
+          </p>
+        ) : null}
 
         <label className="si-rs-panel__stack">
           <span className="si-rs-panel__label">Index layer</span>

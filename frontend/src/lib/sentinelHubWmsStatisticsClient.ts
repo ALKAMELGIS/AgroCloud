@@ -23,6 +23,12 @@ import {
 } from './sentinelHubWmsLayers'
 import { PC_SENTINEL_STAC_SEARCH_URL } from './siSentinelLatestScene'
 import { addDaysToIso } from './siSentinelImageryDate'
+import {
+  buildSentinelSceneCloudLogEntry,
+  logSentinelSceneCloudMetrics,
+  SI_SENTINEL_WMS_MAXCC,
+  wmsCloudMaskGuardLines,
+} from './sentinelSclCloudMask'
 
 const WMS_TILE_PIXELS = 256
 const MAX_SCENE_FETCHES = 160
@@ -36,9 +42,7 @@ function setup() {
   };
 }
 function evaluatePixel(s) {
-  var scl = s.SCL;
-  var cloud = (scl == 0 || scl == 1 || scl == 3 || scl == 8 || scl == 9 || scl == 10 || scl == 11) || s.CLM == 1 || s.CLP > 25;
-  if (!s.dataMask || cloud) return [0, 0, 0, 0];
+  ${wmsCloudMaskGuardLines('s')}
   var dNdvi = s.B08 + s.B04;
   var ndvi = dNdvi > 1e-6 ? (s.B08 - s.B04) / dNdvi : 0;
   var dNdwi = s.B03 + s.B08;
@@ -60,9 +64,7 @@ function setup() {
   };
 }
 function evaluatePixel(s) {
-  var scl = s.SCL;
-  var cloud = (scl == 0 || scl == 1 || scl == 3 || scl == 8 || scl == 9 || scl == 10 || scl == 11) || s.CLM == 1 || s.CLP > 25;
-  if (!s.dataMask || cloud) return [0, 0, 0, 0];
+  ${wmsCloudMaskGuardLines('s')}
   var dNdsi = s.B11 + s.B08;
   var ndsi = dNdsi > 1e-6 ? (s.B11 - s.B08) / dNdsi : 0;
   var dNdre = s.B08 + s.B05;
@@ -298,7 +300,7 @@ async function fetchPcSceneDates(
   geometry: GeoJSON.Geometry,
   fromIso: string,
   toIso: string,
-  maxCloudCoverage: number,
+  maxCloudCoverage: number | null,
   signal?: AbortSignal,
 ): Promise<string[]> {
   const body: Record<string, unknown> = {
@@ -308,9 +310,8 @@ async function fetchPcSceneDates(
     limit: 500,
     sortby: [{ field: 'datetime', direction: 'asc' }],
   }
-  if (Number.isFinite(maxCloudCoverage)) {
-    body.query = { 'eo:cloud_cover': { lt: maxCloudCoverage } }
-  }
+  // Granule eo:cloud_cover is metadata only — pixel SCL masks gate statistics.
+  void maxCloudCoverage
 
   const res = await fetch(PC_SENTINEL_STAC_SEARCH_URL, {
     method: 'POST',
@@ -486,10 +487,8 @@ export async function postSentinelStatisticsViaWmsClient(
 
   const dataFilter = (input?.data?.[0] as { dataFilter?: { maxCloudCoverage?: number } } | undefined)
     ?.dataFilter
-  const cloudCoverage =
-    typeof dataFilter?.maxCloudCoverage === 'number' && Number.isFinite(dataFilter.maxCloudCoverage)
-      ? dataFilter.maxCloudCoverage
-      : 80
+  void dataFilter
+  const cloudCoverage = SI_SENTINEL_WMS_MAXCC
 
   const bbox3857 = bbox3857FromGeometry(geometry)
   const geometryWkt3857 = geometryToWmsClipWkt3857(geometry)
@@ -500,7 +499,7 @@ export async function postSentinelStatisticsViaWmsClient(
   const accessToken = getSentinelHubAccessToken() || SENTINEL_HUB_PUBLIC_WMS_ACCESS_TOKEN
   const baseUrl = getSentinelHubWmsBaseUrl()
   const layer = resolveSentinelHubWmsEvalscriptProxyLayerName(getSentinelHubWmsLayerCatalog())
-  const sceneDates = await fetchPcSceneDates(geometry, fromIso, toIso, cloudCoverage, signal)
+  const sceneDates = await fetchPcSceneDates(geometry, fromIso, toIso, null, signal)
 
   if (!sceneDates.length) {
     return buildCompatibleResponse([])
@@ -555,6 +554,16 @@ export async function postSentinelStatisticsViaWmsClient(
 
     try {
       const stats = await fetchPair(Boolean(geometryWkt3857))
+      logSentinelSceneCloudMetrics(
+        buildSentinelSceneCloudLogEntry(sceneDate, {
+          clearCount: stats.sampleCount,
+          cloudCount: 0,
+          maskedCount: 0,
+          validCount: stats.sampleCount,
+          aoiCloudCoverPct: null,
+          aoiClearCoverPct: stats.sampleCount > 0 ? 100 : null,
+        }),
+      )
       if (stats.sampleCount === 0 && stats.ndsi == null) return null
       return stats
     } catch (err) {

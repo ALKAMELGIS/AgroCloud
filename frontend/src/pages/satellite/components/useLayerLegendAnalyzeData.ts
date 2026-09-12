@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { LayerLiveLegendSpec } from '../../../lib/layerLiveLegendCatalog'
 import {
+  fetchLegendAnalyzeWmsZonalStats,
+  layerSupportsLegendWmsZonal,
+} from '../../../lib/legendAnalyzeWmsZonal'
+import {
   fetchMultiLayerAoiFieldDailyRow,
   resolveFieldAreaHa,
   resolveMultiLayerAoiIndexStats,
 } from '../../../lib/siMultiLayerAoiTrendAnalysis'
+import { layerSupportsClassArea } from '../../../lib/siLayerClassAreaEngine'
 import { isClassAreaAbortError, stableGeometryKey, useLayerClassAreas } from './useLayerClassAreas'
 import {
   computeLayerLegendAnalyzeStats,
@@ -14,10 +19,11 @@ import {
   type LayerLegendIndexStatsFallback,
 } from './layerLegendAnalyzeStats'
 
-/** Shorter lookback for legend panel (faster than default 90-day multi-layer trend). */
+/** Shorter lookback for legend panel Statistical API fallback. */
 const LEGEND_ANALYZE_LOOKBACK_DAYS = 21
-/** Large AOI bbox fetch — wider window to find a clear scene. */
 const LEGEND_ANALYZE_LARGE_AOI_LOOKBACK_DAYS = 45
+/** Coarser histogram on bbox for large AOIs (agro composites). */
+const LEGEND_LARGE_AOI_CLASS_AREA_RESOLUTION_M = 20
 
 type Params = {
   geometry: GeoJSON.Geometry | GeoJSON.Feature | null | undefined
@@ -54,8 +60,10 @@ function classAreaHasSamples(
 }
 
 /**
- * Analyze / Statistics for the active layer — histogram class areas when available,
- * otherwise zonal min/max/mean from the Statistical API for the same layer id.
+ * Analyze / Statistics for the active layer:
+ * 1) WMS zonal on the active scene (tiled for large AOI)
+ * 2) Histogram class areas (full AOI or bbox for agro composites)
+ * 3) Statistical API time-series fallback
  */
 export function useLayerLegendAnalyzeData({
   geometry,
@@ -70,28 +78,11 @@ export function useLayerLegendAnalyzeData({
   )
   const geom = useMemo(() => geometryForFetch(geometry), [geomKey, geometry])
   const areaHa = useMemo(() => (geom ? resolveFieldAreaHa(geom) : 0), [geom])
-  const skipClassAreas = areaHa > LAYER_LEGEND_LARGE_AOI_HA
-  const classAreasEnabled = enabled && !skipClassAreas
+  const skipFullClassAreas = areaHa > LAYER_LEGEND_LARGE_AOI_HA
   const fetchGeom = useMemo(
     () => resolveLegendAnalyzeFetchGeometry(geom, areaHa),
     [geom, areaHa],
   )
-
-  const {
-    result: areaResult,
-    loading: areaLoading,
-    error: areaError,
-    supported: areaSupported,
-  } = useLayerClassAreas({
-    geometry,
-    layerId,
-    sceneDate,
-    enabled: classAreasEnabled,
-  })
-
-  const [indexStats, setIndexStats] = useState<LayerLegendIndexStatsFallback | null>(null)
-  const [fallbackLoading, setFallbackLoading] = useState(false)
-  const fallbackGenRef = useRef(0)
 
   const dateKey = useMemo(() => {
     const raw = String(sceneDate || '').trim().slice(0, 10)
@@ -99,31 +90,110 @@ export function useLayerLegendAnalyzeData({
     return new Date().toISOString().slice(0, 10)
   }, [sceneDate])
   const layerKey = String(layerId || '').trim().toUpperCase()
-  const hasClassData = classAreaHasSamples(areaResult)
-  const fallbackLookbackDays = skipClassAreas
-    ? LEGEND_ANALYZE_LARGE_AOI_LOOKBACK_DAYS
-    : LEGEND_ANALYZE_LOOKBACK_DAYS
 
-  const shouldFetchFallback =
+  const classAreasOnBbox =
+    enabled &&
+    skipFullClassAreas &&
+    !!fetchGeom &&
+    !!layerKey &&
+    layerSupportsClassArea(layerKey)
+
+  const classAreasEnabled = enabled && !skipFullClassAreas
+  const classAreaGeometry = classAreasOnBbox && fetchGeom ? fetchGeom : geometry
+
+  const {
+    result: areaResult,
+    loading: areaLoading,
+    error: areaError,
+    supported: areaSupported,
+  } = useLayerClassAreas({
+    geometry: classAreaGeometry,
+    layerId,
+    sceneDate,
+    enabled: classAreasEnabled || classAreasOnBbox,
+    resolutionMeters: classAreasOnBbox ? LEGEND_LARGE_AOI_CLASS_AREA_RESOLUTION_M : undefined,
+  })
+
+  const [wmsZonal, setWmsZonal] = useState<LayerLegendIndexStatsFallback | null>(null)
+  const [wmsLoading, setWmsLoading] = useState(false)
+  const wmsGenRef = useRef(0)
+
+  const [apiFallback, setApiFallback] = useState<LayerLegendIndexStatsFallback | null>(null)
+  const [apiLoading, setApiLoading] = useState(false)
+  const apiGenRef = useRef(0)
+
+  const hasClassData = classAreaHasSamples(areaResult)
+  const wmsEnabled =
+    enabled && !!geom && !!dateKey && !!layerKey && layerSupportsLegendWmsZonal(layerKey)
+
+  useEffect(() => {
+    if (!wmsEnabled || !geom) {
+      wmsGenRef.current += 1
+      setWmsZonal(null)
+      setWmsLoading(false)
+      return
+    }
+
+    const requestId = ++wmsGenRef.current
+    const controller = new AbortController()
+    setWmsLoading(true)
+    setWmsZonal(null)
+
+    fetchLegendAnalyzeWmsZonalStats(geom, dateKey, layerKey, {
+      signal: controller.signal,
+      areaHa,
+    })
+      .then(stats => {
+        if (requestId !== wmsGenRef.current) return
+        if (controller.signal.aborted) return
+        if (stats?.average != null && Number.isFinite(stats.average)) {
+          setWmsZonal(stats)
+        } else {
+          setWmsZonal(null)
+        }
+      })
+      .catch((err: unknown) => {
+        if (requestId !== wmsGenRef.current) return
+        if (controller.signal.aborted || isClassAreaAbortError(err)) return
+        setWmsZonal(null)
+      })
+      .finally(() => {
+        if (requestId !== wmsGenRef.current) return
+        setWmsLoading(false)
+      })
+
+    return () => {
+      if (wmsGenRef.current === requestId) wmsGenRef.current += 1
+      controller.abort()
+    }
+  }, [wmsEnabled, geom, geomKey, dateKey, layerKey, areaHa])
+
+  const mergedIndexStats = wmsZonal ?? apiFallback
+  const needsApiFallback =
     enabled &&
     !!geomKey &&
     !!fetchGeom &&
     !!dateKey &&
     !!layerKey &&
-    !hasClassData
+    !hasClassData &&
+    !(wmsZonal?.average != null && Number.isFinite(wmsZonal.average))
 
   useEffect(() => {
-    if (!shouldFetchFallback) {
-      fallbackGenRef.current += 1
-      setIndexStats(null)
-      setFallbackLoading(false)
+    if (!needsApiFallback) {
+      apiGenRef.current += 1
+      setApiFallback(null)
+      setApiLoading(false)
       return
     }
 
-    const requestId = ++fallbackGenRef.current
+    const requestId = ++apiGenRef.current
     const controller = new AbortController()
-    setFallbackLoading(true)
-    setIndexStats(null)
+    setApiLoading(true)
+    setApiFallback(null)
+
+    const lookbackDays = skipFullClassAreas
+      ? LEGEND_ANALYZE_LARGE_AOI_LOOKBACK_DAYS
+      : LEGEND_ANALYZE_LOOKBACK_DAYS
 
     fetchMultiLayerAoiFieldDailyRow(
       {
@@ -139,39 +209,37 @@ export function useLayerLegendAnalyzeData({
       },
       dateKey,
       [layerKey],
-      { signal: controller.signal, lookbackDays: fallbackLookbackDays },
+      { signal: controller.signal, lookbackDays },
     )
       .then(row => {
-        if (requestId !== fallbackGenRef.current) return
+        if (requestId !== apiGenRef.current) return
         if (controller.signal.aborted) return
         const stats = resolveMultiLayerAoiIndexStats(layerKey, row)
         if (stats.mean == null || !Number.isFinite(stats.mean)) {
-          setIndexStats(null)
+          setApiFallback(null)
           return
         }
-        setIndexStats({
+        setApiFallback({
           min: stats.min,
           max: stats.max,
           average: stats.mean,
         })
       })
       .catch((err: unknown) => {
-        if (requestId !== fallbackGenRef.current) return
+        if (requestId !== apiGenRef.current) return
         if (controller.signal.aborted || isClassAreaAbortError(err)) return
-        setIndexStats(null)
+        setApiFallback(null)
       })
       .finally(() => {
-        if (requestId !== fallbackGenRef.current) return
-        setFallbackLoading(false)
+        if (requestId !== apiGenRef.current) return
+        setApiLoading(false)
       })
 
     return () => {
-      if (fallbackGenRef.current === requestId) {
-        fallbackGenRef.current += 1
-      }
+      if (apiGenRef.current === requestId) apiGenRef.current += 1
       controller.abort()
     }
-  }, [shouldFetchFallback, geomKey, fetchGeom, dateKey, layerKey, fallbackLookbackDays])
+  }, [needsApiFallback, geomKey, fetchGeom, dateKey, layerKey, skipFullClassAreas])
 
   const analyzeStats = useMemo(
     () =>
@@ -179,24 +247,29 @@ export function useLayerLegendAnalyzeData({
         layerId,
         spec,
         areaResult: hasClassData ? areaResult : null,
-        indexStats,
+        indexStats: mergedIndexStats,
       }),
-    [layerId, spec, areaResult, hasClassData, indexStats],
+    [layerId, spec, areaResult, hasClassData, mergedIndexStats],
   )
 
   const hasData =
     hasClassData ||
-    (indexStats?.average != null && Number.isFinite(indexStats.average)) ||
+    (wmsZonal?.average != null && Number.isFinite(wmsZonal.average)) ||
+    (apiFallback?.average != null && Number.isFinite(apiFallback.average)) ||
     (analyzeStats.average != null && Number.isFinite(analyzeStats.average))
 
-  const loading = !hasData && (fallbackLoading || (classAreasEnabled && areaLoading))
+  const loading =
+    !hasData &&
+    (wmsLoading ||
+      apiLoading ||
+      ((classAreasEnabled || classAreasOnBbox) && areaLoading))
 
   return {
     analyzeStats,
     areaResult,
     areaLoading,
     areaError,
-    areaSupported: areaSupported || skipClassAreas,
+    areaSupported: areaSupported || skipFullClassAreas || classAreasOnBbox,
     hasData,
     loading,
   }

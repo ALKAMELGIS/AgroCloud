@@ -4,6 +4,12 @@
  */
 
 import { PNG } from 'pngjs'
+import {
+  SI_SENTINEL_WMS_MAXCC,
+  buildSentinelSceneCloudLogEntry,
+  logSentinelSceneCloudMetrics,
+  wmsCloudMaskGuard,
+} from './sentinelSclCloudMask.js'
 
 const SENTINEL_HUB_PUBLIC_WMS_ACCESS_TOKEN = 'PUBLIC_DATA_FEATURED_COLLECTIONS'
 const PC_SENTINEL_STAC_SEARCH_URL = 'https://planetarycomputer.microsoft.com/api/stac/v1/search'
@@ -22,12 +28,7 @@ function setup() {
   };
 }
 function evaluatePixel(s) {
-  var scl = s.SCL;
-  // Hard clouds only (nodata / saturated / shadow / med+high cloud / s2cloudless).
-  // Thin cirrus (10), snow (11), and soft CLP are NOT hard-masked — desert sand and arid
-  // farms were being wiped out and crop classification then had "0 clear scenes".
-  var cloud = (scl == 0 || scl == 1 || scl == 3 || scl == 8 || scl == 9) || s.CLM == 1;
-  if (!s.dataMask || cloud) return [0, 0, 0, 0];
+  ${wmsCloudMaskGuard('s')}
   var dNdvi = s.B08 + s.B04;
   var ndvi = dNdvi > 1e-6 ? (s.B08 - s.B04) / dNdvi : 0;
   var dNdwi = s.B03 + s.B08;
@@ -56,9 +57,7 @@ function setup() {
   };
 }
 function evaluatePixel(s) {
-  var scl = s.SCL;
-  var cloud = (scl == 0 || scl == 1 || scl == 3 || scl == 8 || scl == 9 || scl == 10) || s.CLM == 1 || s.CLP > 50;
-  if (!s.dataMask || cloud) return [0, 0, 0, 0];
+  ${wmsCloudMaskGuard('s')}
   var dNdsi = s.B11 + s.B08;
   var ndsi = dNdsi > 1e-6 ? (s.B11 - s.B08) / dNdsi : 0;
   var dNdre = s.B08 + s.B05;
@@ -91,9 +90,7 @@ function setup() {
   };
 }
 function evaluatePixel(s) {
-  var scl = s.SCL;
-  var cloud = (scl == 0 || scl == 1 || scl == 3 || scl == 8 || scl == 9 || scl == 10) || s.CLM == 1 || s.CLP > 50;
-  if (!s.dataMask || cloud) return [0, 0, 0, 0];
+  ${wmsCloudMaskGuard('s')}
   var dNdvi = s.B08 + s.B04;
   var ndvi = dNdvi > 1e-6 ? (s.B08 - s.B04) / dNdvi : 0;
   var dNdwi = s.B03 + s.B08;
@@ -120,9 +117,7 @@ function setup() {
   };
 }
 function evaluatePixel(s) {
-  var scl = s.SCL;
-  var cloud = (scl == 0 || scl == 1 || scl == 3 || scl == 8 || scl == 9 || scl == 10) || s.CLM == 1 || s.CLP > 50;
-  if (!s.dataMask || cloud) return [0, 0, 0, 0];
+  ${wmsCloudMaskGuard('s')}
   var dNdmi = s.B08 + s.B11;
   var ndmi = dNdmi > 1e-6 ? (s.B08 - s.B11) / dNdmi : 0;
   var dNdwi = s.B03 + s.B08;
@@ -442,7 +437,8 @@ async function computeClassHistogramViaWms(wmsConfig, body, marker) {
     )
     .slice(0, 4)
 
-  const gridCloudCoverage = Math.max(requestedCc, 95)
+  void requestedCc
+  const gridCloudCoverage = SI_SENTINEL_WMS_MAXCC
   const etMode = String(marker.index || '').toLowerCase() === 'et'
   for (const sceneDate of ordered) {
     try {
@@ -616,25 +612,34 @@ export function decodeWmsZonalStatsFromPng(buffer) {
   let ndwiSum = 0
   let ndmiSum = 0
   let count = 0
+  let maskedCount = 0
   for (let i = 0; i < png.data.length; i += 4) {
     const r = png.data[i]
     const g = png.data[i + 1]
     const b = png.data[i + 2]
     const a = png.data[i + 3]
-    if (a < 128 || (r === 0 && g === 0 && b === 0)) continue
+    if (a < 128) {
+      maskedCount += 1
+      continue
+    }
+    if (r === 0 && g === 0 && b === 0) {
+      maskedCount += 1
+      continue
+    }
     ndviSum += r / 127 - 1
     ndwiSum += g / 127 - 1
     ndmiSum += b / 127 - 1
     count += 1
   }
   if (count === 0) {
-    return { ndvi: null, ndwi: null, ndmi: null, sampleCount: 0 }
+    return { ndvi: null, ndwi: null, ndmi: null, sampleCount: 0, maskedCount }
   }
   return {
     ndvi: Number((ndviSum / count).toFixed(4)),
     ndwi: Number((ndwiSum / count).toFixed(4)),
     ndmi: Number((ndmiSum / count).toFixed(4)),
     sampleCount: count,
+    maskedCount,
   }
 }
 
@@ -691,9 +696,8 @@ export async function fetchPcSentinelSceneDates(geometry, fromIso, toIso, maxClo
     limit: 500,
     sortby: [{ field: 'datetime', direction: 'asc' }],
   }
-  if (typeof maxCloudCoverage === 'number' && Number.isFinite(maxCloudCoverage)) {
-    body.query = { 'eo:cloud_cover': { lt: maxCloudCoverage } }
-  }
+  // Granule eo:cloud_cover is metadata only — pixel-level SCL/CLM/CLP masks gate analysis.
+  void maxCloudCoverage
 
   const res = await fetch(PC_SENTINEL_STAC_SEARCH_URL, {
     method: 'POST',
@@ -730,9 +734,8 @@ export async function fetchPcSentinelSceneCloudCover(geometry, fromIso, toIso, m
     limit: 500,
     sortby: [{ field: 'datetime', direction: 'asc' }],
   }
-  if (typeof maxCloudCoverage === 'number' && Number.isFinite(maxCloudCoverage)) {
-    body.query = { 'eo:cloud_cover': { lt: maxCloudCoverage } }
-  }
+  // Granule eo:cloud_cover returned as metadata — never used to reject scenes.
+  void maxCloudCoverage
   const res = await fetch(PC_SENTINEL_STAC_SEARCH_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -814,19 +817,14 @@ export async function selectClearSceneDates(geometry, season, timesteps, maxClou
     } catch {
       scenes = []
     }
-    scenes = scenes.filter(
-      s => !usedDays.has(s.date) && Number.isFinite(s.cloudCover) && s.cloudCover <= ceiling,
-    )
+    scenes = scenes.filter(s => !usedDays.has(s.date) && Number.isFinite(s.cloudCover))
     const chosen = pickBest(scenes, centre)
     if (!chosen) continue
     usedDays.add(chosen.date)
     out.push({ date: chosen.date, cloudCover: chosen.cloudCover, cloudy: false })
   }
 
-  // Season-wide fallback: windows can all miss when clouds cluster; still pick best dates.
-  // If the soft ceiling still under-fills, relax up to min(100, ceiling+30) so humid
-  // seasons can still yield ≥2 candidate dates (AOI clarity is gated after WMS fetch).
-  const seasonCeilings = [...new Set([ceiling, Math.min(100, ceiling + 30), 90])]
+  // Season-wide fallback: rank all granules by metadata cloud (AOI pixel mask gates later).
   if (out.length < Math.min(2, steps)) {
     let all = []
     try {
@@ -834,14 +832,9 @@ export async function selectClearSceneDates(geometry, season, timesteps, maxClou
     } catch {
       all = []
     }
-    for (const seasonCeiling of seasonCeilings) {
+    {
       const ranked = all
-        .filter(
-          s =>
-            !usedDays.has(s.date) &&
-            Number.isFinite(s.cloudCover) &&
-            s.cloudCover <= seasonCeiling,
-        )
+        .filter(s => !usedDays.has(s.date) && Number.isFinite(s.cloudCover))
         .sort((a, b) => a.cloudCover - b.cloudCover || a.date.localeCompare(b.date))
       // Keep ~even temporal spacing (at least ~7 days apart when season allows).
       const seasonDays = Math.max(1, (end - start) / 86400000)
@@ -870,14 +863,13 @@ export async function selectClearSceneDates(geometry, season, timesteps, maxClou
           out.push({ date: s.date, cloudCover: s.cloudCover, cloudy: false })
         }
       }
-      if (out.length >= Math.min(2, steps)) break
     }
   }
 
   out.sort((a, b) => a.date.localeCompare(b.date))
   if (!out.length) {
     throw new Error(
-      `No usable Sentinel-2 scenes (granule cloud ≤ ${Math.min(100, ceiling + 30)}%) found for this AOI/season. Try a wider season or a clearer period.`,
+      'No Sentinel-2 scenes found for this AOI/season. Try a wider date range.',
     )
   }
   return out
@@ -921,7 +913,7 @@ function buildWmsGetMapUrl(options) {
     `&HEIGHT=${options.height ?? WMS_TILE_PIXELS}` +
     `&FORMAT=${encodeURIComponent(format)}&TRANSPARENT=true` +
     `&TIME=${options.timeStart}/${options.timeEnd}` +
-    `&MAXCC=${options.cloudCoverage ?? 80}` +
+    `&MAXCC=${options.cloudCoverage ?? SI_SENTINEL_WMS_MAXCC}` +
     `&SHOWLOGO=false&WARNINGS=false` +
     `&EVALSCRIPT=${encodeURIComponent(options.evalscriptB64 ?? WMS_STATS_EVALSCRIPT_B64)}`
   if (options.geometryWkt3857) {
@@ -1215,8 +1207,9 @@ export async function postSentinelStatisticsViaWms(wmsConfig, body) {
   }
 
   const maxCloudCoverage = body?.input?.data?.[0]?.dataFilter?.maxCloudCoverage
-  const cloudCoverage =
-    typeof maxCloudCoverage === 'number' && Number.isFinite(maxCloudCoverage) ? maxCloudCoverage : 80
+  // Granule maxCloudCoverage is metadata only — WMS MAXCC=100; pixel SCL masks gate stats.
+  void maxCloudCoverage
+  const cloudCoverage = SI_SENTINEL_WMS_MAXCC
 
   const geometryWkt3857 = geometryToWmsClipWkt3857(geometry)
   const bbox3857 = bbox3857FromGeometry(geometry)
@@ -1226,7 +1219,7 @@ export async function postSentinelStatisticsViaWms(wmsConfig, body) {
 
   const baseUrl = `https://services.sentinel-hub.com/ogc/wms/${instanceId}`
   const layer = await resolveWmsEvalProxyLayer(baseUrl, accessToken)
-  const sceneDates = await fetchPcSentinelSceneDates(geometry, fromIso, toIso, cloudCoverage)
+  const sceneDates = await fetchPcSentinelSceneDates(geometry, fromIso, toIso, null)
 
   if (!sceneDates.length) {
     return buildStatisticalApiCompatibleResponse([])
@@ -1249,7 +1242,30 @@ export async function postSentinelStatisticsViaWms(wmsConfig, body) {
         timeStart: sceneDate,
         timeEnd: addDaysToIso(sceneDate, 1),
       })
-      if (stats.sampleCount === 0 || (stats.ndvi == null && stats.ndsi == null && stats.ndmi == null)) return null
+      const logEntry = buildSentinelSceneCloudLogEntry(
+        sceneDate,
+        {
+          clearCount: stats.sampleCount,
+          cloudCount: stats.maskedCount ?? 0,
+          aoiCloudCoverPct:
+            stats.sampleCount + (stats.maskedCount ?? 0) > 0
+              ? Math.round(
+                  ((stats.maskedCount ?? 0) / (stats.sampleCount + (stats.maskedCount ?? 0))) *
+                    1000,
+                ) / 10
+              : null,
+          aoiClearCoverPct:
+            stats.sampleCount + (stats.maskedCount ?? 0) > 0
+              ? Math.round(
+                  (stats.sampleCount / (stats.sampleCount + (stats.maskedCount ?? 0))) * 1000,
+                ) / 10
+              : null,
+        },
+        { originalCloudCoverage: null },
+      )
+      logSentinelSceneCloudMetrics(logEntry)
+      if (stats.sampleCount === 0) return null
+      if (stats.ndvi == null && stats.ndsi == null && stats.ndmi == null) return null
       return { date: sceneDate, ...stats }
     } catch {
       return null

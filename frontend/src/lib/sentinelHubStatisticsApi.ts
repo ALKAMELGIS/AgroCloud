@@ -317,7 +317,7 @@ export const CROP_ALERT_MULTI_INDEX_EVALSCRIPT = `//VERSION=3
 function setup() {
   return {
     input: [{
-      bands: ["B02", "B03", "B04", "B05", "B08", "B11", "B12", "SCL", "dataMask"]
+      bands: ["B02", "B03", "B04", "B05", "B08", "B11", "B12", "SCL", "CLM", "CLP", "dataMask"]
     }],
     output: [
       {
@@ -334,7 +334,7 @@ function setup() {
 }
 function evaluatePixel(samples) {
   var scl = samples.SCL;
-  var cloud = (scl == 3 || scl == 8 || scl == 9 || scl == 10 || scl == 11);
+  var cloud = (scl == 0 || scl == 1 || scl == 3 || scl == 8 || scl == 9 || scl == 10 || scl == 11) || samples.CLM == 1 || samples.CLP > 25;
   var dNdvi = samples.B08 + samples.B04;
   var ndvi = dNdvi > 1e-6 ? (samples.B08 - samples.B04) / dNdvi : NaN;
   var dNdwi = samples.B03 + samples.B08;

@@ -1,11 +1,14 @@
 /**
  * Imperative Mapbox GL lifecycle for Layers AOI Sentinel WMS stacks.
- * Ping-pong raster sources keep the previous frame visible until the next
- * tile set is fully loaded — zero blank frames on date/layer swaps.
+ * Ping-pong raster sources prefetch at opacity 0, then reveal only when tiles
+ * are fully loaded — no partial tile seams on Show on map.
  */
 
 import type { Map as MapboxMap } from 'mapbox-gl'
-import { SENTINEL_HUB_WMS_TILE_PIXELS } from './sentinelHubWmsLayers'
+import {
+  SENTINEL_HUB_WMS_TILE_PIXELS,
+  SI_SENTINEL_WMS_MAP_DISPLAY_MIN_ZOOM,
+} from './sentinelHubWmsLayers'
 import { resolveSiAnalysisRasterBeforeLayerId } from './siMapAnalysisLayerOrder'
 import {
   resolveSiSentinelAoiWmsChunkBounds,
@@ -46,6 +49,8 @@ export function isSiSentinelAoiWmsPingPongMapId(id: string): boolean {
 type PingPongChunkState = {
   activeSlot: SiSentinelAoiWmsPingPongSlot
   activeUrl: string
+  /** URL loading on the inactive slot before swap commit. */
+  pendingUrl: string
   waitCleanup: (() => void) | null
 }
 
@@ -66,6 +71,9 @@ export function createSiSentinelAoiWmsPingPongRuntime(): SiSentinelAoiWmsPingPon
 }
 
 export function resetSiSentinelAoiWmsPingPongRuntime(runtime: SiSentinelAoiWmsPingPongRuntime): void {
+  for (const state of runtime.chunks.values()) {
+    state.waitCleanup?.()
+  }
   runtime.chunks.clear()
   runtime.appliedUrls.clear()
   runtime.appliedBounds.clear()
@@ -86,7 +94,25 @@ export function siSentinelAoiWmsPingPongStackUrlsReady(
     const activeSlot = state?.activeSlot ?? 0
     const sourceId = siSentinelAoiWmsPingPongSourceId(stack.idPrefix, i, activeSlot)
     if (state?.activeUrl !== url) return false
+    if (state?.pendingUrl) return false
     if (!map.getSource(sourceId)) return false
+  }
+  return true
+}
+
+/** True when every active chunk's tiles finished loading (warm prefetch complete). */
+export function siSentinelAoiWmsPingPongStackTilesLoaded(
+  map: MapboxMap,
+  stack: SiSentinelAoiWmsStackState,
+  runtime: SiSentinelAoiWmsPingPongRuntime,
+): boolean {
+  if (!siSentinelAoiWmsPingPongStackUrlsReady(map, stack, runtime)) return false
+  for (let i = 0; i < stack.displayChunks.length; i++) {
+    const chunkKey = siSentinelAoiWmsChunkKey(stack.idPrefix, i)
+    const state = runtime.chunks.get(chunkKey)
+    const activeSlot = state?.activeSlot ?? 0
+    const sourceId = siSentinelAoiWmsPingPongSourceId(stack.idPrefix, i, activeSlot)
+    if (!map.isSourceLoaded(sourceId)) return false
   }
   return true
 }
@@ -103,11 +129,21 @@ function readRasterSource(map: MapboxMap, sourceId: string): SiSentinelRasterSou
   return map.getSource(sourceId) as SiSentinelRasterSourceMutable | null
 }
 
+function syncPingPongSourceDisplayMinZoom(map: MapboxMap, sourceId: string): void {
+  try {
+    const setSourceProperty = (map as MapboxMap & {
+      setSourceProperty?: (id: string, property: string, value: number) => void
+    }).setSourceProperty
+    setSourceProperty?.(sourceId, 'minzoom', SI_SENTINEL_WMS_MAP_DISPLAY_MIN_ZOOM)
+  } catch {
+    /* style rebuild race */
+  }
+}
+
 function ensurePingPongRasterPair(
   map: MapboxMap,
   stack: SiSentinelAoiWmsStackState,
   chunkIdx: number,
-  minZoom: number,
   beforeLayerId?: string,
 ): void {
   const chunk = stack.displayChunks[chunkIdx]
@@ -123,9 +159,11 @@ function ensurePingPongRasterPair(
         type: 'raster',
         tiles: [placeholderUrl],
         tileSize: stack.tilePixels || SENTINEL_HUB_WMS_TILE_PIXELS,
-        minzoom: minZoom,
+        minzoom: SI_SENTINEL_WMS_MAP_DISPLAY_MIN_ZOOM,
         ...(bounds ? { bounds } : {}),
       })
+    } else {
+      syncPingPongSourceDisplayMinZoom(map, sourceId)
     }
 
     if (!map.getLayer(layerId)) {
@@ -187,14 +225,13 @@ function removePingPongRasterPair(map: MapboxMap, idPrefix: string, chunkIdx: nu
 export function ensureSiSentinelAoiWmsPingPongStackOnMap(
   map: MapboxMap,
   stack: SiSentinelAoiWmsStackState,
-  minZoom: number,
   runtime: SiSentinelAoiWmsPingPongRuntime,
   options?: { beforeLayerId?: string },
 ): void {
   const beforeLayerId = options?.beforeLayerId ?? resolveSiAnalysisRasterBeforeLayerId(map)
   const chunkCount = stack.displayChunks.length
   for (let i = 0; i < chunkCount; i++) {
-    ensurePingPongRasterPair(map, stack, i, minZoom, beforeLayerId)
+    ensurePingPongRasterPair(map, stack, i, beforeLayerId)
   }
   for (let i = chunkCount; i < runtime.mountedChunkCount; i++) {
     removePingPongRasterPair(map, stack.idPrefix, i)
@@ -239,18 +276,24 @@ function commitActiveSlot(
     applyChunkPresentation(map, stack, chunkIdx, prevActive, false, presentation.opacity)
   }
   applyChunkPresentation(map, stack, chunkIdx, nextActive, presentation.visible, presentation.opacity)
-  runtime.chunks.set(chunkKey, { activeSlot: nextActive, activeUrl: url, waitCleanup: null })
+  runtime.chunks.set(chunkKey, {
+    activeSlot: nextActive,
+    activeUrl: url,
+    pendingUrl: '',
+    waitCleanup: null,
+  })
 }
 
 /** Safety net if `sourcedata` is missed after the inactive source actually loaded. */
-const SI_SENTINEL_AOI_WMS_SOURCE_READY_SAFETY_MS = 8_000
+const SI_SENTINEL_AOI_WMS_SOURCE_READY_SAFETY_MS = 1_200
 
 function waitForSourceReady(
   map: MapboxMap,
   sourceId: string,
   onReady: () => void,
+  options?: { skipImmediate?: boolean },
 ): () => void {
-  if (map.isSourceLoaded(sourceId)) {
+  if (!options?.skipImmediate && map.isSourceLoaded(sourceId)) {
     onReady()
     return () => undefined
   }
@@ -258,21 +301,22 @@ function waitForSourceReady(
   let settled = false
   const finishIfLoaded = () => {
     if (settled) return
-    // Never swap to an unloaded inactive slot — premature commit blanks the active frame.
     if (!map.isSourceLoaded(sourceId)) return
     settled = true
     cleanup()
     onReady()
   }
 
-  const handler = (ev: { sourceId?: string; isSourceLoaded?: boolean }) => {
+  const handler = (ev: {
+    sourceId?: string
+    isSourceLoaded?: boolean
+    sourceDataType?: string
+  }) => {
     if (ev.sourceId !== sourceId) return
+    if (ev.sourceDataType === 'metadata') return
     finishIfLoaded()
   }
 
-  // Prefer sourcedata; never wait for map `idle` (ArcGIS / other layers can delay idle for seconds).
-  // Longer safety timeout only commits when the source is actually loaded (missed-event recovery).
-  // Timeout alone must not commit while still unloaded.
   const timeoutId =
     typeof window !== 'undefined'
       ? window.setTimeout(finishIfLoaded, SI_SENTINEL_AOI_WMS_SOURCE_READY_SAFETY_MS)
@@ -291,12 +335,83 @@ function waitForSourceReady(
     map.on('sourcedata', handler)
   } catch {
     cleanup()
-    // Map listener failed — only commit if already loaded; otherwise leave active slot presented.
     if (map.isSourceLoaded(sourceId)) onReady()
     return () => undefined
   }
 
   return cleanup
+}
+
+function syncChunkBoundsBothSlots(
+  map: MapboxMap,
+  stack: SiSentinelAoiWmsStackState,
+  chunkIdx: number,
+  runtime: SiSentinelAoiWmsPingPongRuntime,
+): void {
+  const chunk = stack.displayChunks[chunkIdx]
+  const chunkKey = siSentinelAoiWmsChunkKey(stack.idPrefix, chunkIdx)
+  const bounds = resolveSiSentinelAoiWmsChunkBounds(stack, chunk) ?? null
+  for (const slot of [0, 1] as const) {
+    const sourceId = siSentinelAoiWmsPingPongSourceId(stack.idPrefix, chunkIdx, slot)
+    syncSiSentinelAoiWmsChunkBounds(
+      readRasterSource(map, sourceId),
+      bounds,
+      runtime.appliedBounds,
+      slotUrlKey(chunkKey, slot),
+    )
+  }
+}
+
+function cancelChunkWait(runtime: SiSentinelAoiWmsPingPongRuntime, chunkKey: string): PingPongChunkState {
+  const state = runtime.chunks.get(chunkKey)
+  state?.waitCleanup?.()
+  const next: PingPongChunkState = {
+    activeSlot: state?.activeSlot ?? 0,
+    activeUrl: state?.activeUrl ?? '',
+    pendingUrl: '',
+    waitCleanup: null,
+  }
+  runtime.chunks.set(chunkKey, next)
+  return next
+}
+
+function scheduleVisibleWhenReady(
+  map: MapboxMap,
+  stack: SiSentinelAoiWmsStackState,
+  chunkIdx: number,
+  runtime: SiSentinelAoiWmsPingPongRuntime,
+  slot: SiSentinelAoiWmsPingPongSlot,
+  url: string,
+  presentation: { visible: boolean; opacity: number },
+  options?: { pendingUrl?: string; keepActiveSlot?: SiSentinelAoiWmsPingPongSlot },
+): void {
+  const chunkKey = siSentinelAoiWmsChunkKey(stack.idPrefix, chunkIdx)
+  const prev = runtime.chunks.get(chunkKey)
+  prev?.waitCleanup?.()
+  const activeSlot = options?.keepActiveSlot ?? prev?.activeSlot ?? 0
+  const sourceId = siSentinelAoiWmsPingPongSourceId(stack.idPrefix, chunkIdx, slot)
+  const pendingUrl = options?.pendingUrl !== undefined ? options.pendingUrl : url
+
+  applyChunkPresentation(map, stack, chunkIdx, slot, false, presentation.opacity)
+  if (activeSlot !== slot && presentation.visible) {
+    applyChunkPresentation(map, stack, chunkIdx, activeSlot, true, presentation.opacity)
+  }
+
+  const cleanup = waitForSourceReady(
+    map,
+    sourceId,
+    () => {
+      commitActiveSlot(map, stack, chunkIdx, runtime, slot, url, presentation)
+    },
+    { skipImmediate: true },
+  )
+
+  runtime.chunks.set(chunkKey, {
+    activeSlot,
+    activeUrl: prev?.activeUrl ?? '',
+    pendingUrl,
+    waitCleanup: cleanup,
+  })
 }
 
 function syncChunkTilesPingPong(
@@ -310,36 +425,33 @@ function syncChunkTilesPingPong(
   if (!url) return
 
   const chunkKey = siSentinelAoiWmsChunkKey(stack.idPrefix, chunkIdx)
-  const chunk = stack.displayChunks[chunkIdx]
   const state = runtime.chunks.get(chunkKey)
   const activeSlot = state?.activeSlot ?? 0
   const activeUrl = state?.activeUrl ?? ''
 
+  syncChunkBoundsBothSlots(map, stack, chunkIdx, runtime)
+
   if (activeUrl === url) {
-    const bounds = resolveSiSentinelAoiWmsChunkBounds(stack, chunk) ?? null
-    for (const slot of [0, 1] as const) {
-      const sourceId = siSentinelAoiWmsPingPongSourceId(stack.idPrefix, chunkIdx, slot)
-      syncSiSentinelAoiWmsChunkBounds(
-        readRasterSource(map, sourceId),
-        bounds,
-        runtime.appliedBounds,
-        slotUrlKey(chunkKey, slot),
-      )
+    state?.waitCleanup?.()
+    if (presentation.visible && !map.isSourceLoaded(
+      siSentinelAoiWmsPingPongSourceId(stack.idPrefix, chunkIdx, activeSlot),
+    )) {
+      scheduleVisibleWhenReady(map, stack, chunkIdx, runtime, activeSlot, url, presentation, {
+        keepActiveSlot: activeSlot,
+        pendingUrl: '',
+      })
+      return
     }
+    cancelChunkWait(runtime, chunkKey)
     applyChunkPresentation(map, stack, chunkIdx, activeSlot, presentation.visible, presentation.opacity)
     applyChunkPresentation(map, stack, chunkIdx, otherSlot(activeSlot), false, presentation.opacity)
+    runtime.chunks.set(chunkKey, {
+      activeSlot,
+      activeUrl: url,
+      pendingUrl: '',
+      waitCleanup: null,
+    })
     return
-  }
-
-  const bounds = resolveSiSentinelAoiWmsChunkBounds(stack, chunk) ?? null
-  for (const slot of [0, 1] as const) {
-    const sourceId = siSentinelAoiWmsPingPongSourceId(stack.idPrefix, chunkIdx, slot)
-    syncSiSentinelAoiWmsChunkBounds(
-      readRasterSource(map, sourceId),
-      bounds,
-      runtime.appliedBounds,
-      slotUrlKey(chunkKey, slot),
-    )
   }
 
   state?.waitCleanup?.()
@@ -348,8 +460,16 @@ function syncChunkTilesPingPong(
     const sourceId = siSentinelAoiWmsPingPongSourceId(stack.idPrefix, chunkIdx, activeSlot)
     const src = readRasterSource(map, sourceId)
     syncSiSentinelAoiWmsChunkTiles(src, url, runtime.appliedUrls, slotUrlKey(chunkKey, activeSlot))
-    // First paint: show immediately while tiles stream in. Waiting for
-    // sourcedata/idle here left Show on map blank for seconds on cold loads.
+
+    if (presentation.visible) {
+      if (map.isSourceLoaded(sourceId)) {
+        commitActiveSlot(map, stack, chunkIdx, runtime, activeSlot, url, presentation)
+      } else {
+        scheduleVisibleWhenReady(map, stack, chunkIdx, runtime, activeSlot, url, presentation)
+      }
+      return
+    }
+
     commitActiveSlot(map, stack, chunkIdx, runtime, activeSlot, url, presentation)
     return
   }
@@ -357,18 +477,65 @@ function syncChunkTilesPingPong(
   const inactiveSlot = otherSlot(activeSlot)
   const inactiveUrlKey = slotUrlKey(chunkKey, inactiveSlot)
   const inactiveSourceId = siSentinelAoiWmsPingPongSourceId(stack.idPrefix, chunkIdx, inactiveSlot)
-
   const inactiveSrc = readRasterSource(map, inactiveSourceId)
-  syncSiSentinelAoiWmsChunkTiles(inactiveSrc, url, runtime.appliedUrls, inactiveUrlKey)
+  const tilesChanged = syncSiSentinelAoiWmsChunkTiles(
+    inactiveSrc,
+    url,
+    runtime.appliedUrls,
+    inactiveUrlKey,
+  )
 
-  // Index / date swaps: paint the new URL immediately while tiles stream in.
-  // Waiting for sourcedata left the previous frame (or blank) for seconds.
-  commitActiveSlot(map, stack, chunkIdx, runtime, inactiveSlot, url, presentation)
+  if (!presentation.visible) {
+    if (!tilesChanged && map.isSourceLoaded(inactiveSourceId)) {
+      commitActiveSlot(map, stack, chunkIdx, runtime, inactiveSlot, url, presentation)
+    } else {
+      scheduleVisibleWhenReady(map, stack, chunkIdx, runtime, inactiveSlot, url, presentation, {
+        pendingUrl: url,
+      })
+    }
+    return
+  }
+
+  if (!tilesChanged && map.isSourceLoaded(inactiveSourceId)) {
+    commitActiveSlot(map, stack, chunkIdx, runtime, inactiveSlot, url, presentation)
+    return
+  }
+
+  applyChunkPresentation(map, stack, chunkIdx, activeSlot, true, presentation.opacity)
+  applyChunkPresentation(map, stack, chunkIdx, inactiveSlot, false, presentation.opacity)
+
+  const cleanup = waitForSourceReady(
+    map,
+    inactiveSourceId,
+    () => {
+      commitActiveSlot(map, stack, chunkIdx, runtime, inactiveSlot, url, presentation)
+    },
+    { skipImmediate: tilesChanged },
+  )
+
+  runtime.chunks.set(chunkKey, {
+    activeSlot,
+    activeUrl,
+    pendingUrl: url,
+    waitCleanup: cleanup,
+  })
 }
 
 /**
- * Visibility-only show when tiles are already loaded and URLs match.
- * Falls back to full ping-pong sync when a cold load is required.
+ * Warm prefetch at opacity 0 — loads WMS tiles before Show on map.
+ */
+export function prefetchSiSentinelAoiWmsPingPongStack(
+  map: MapboxMap,
+  stack: SiSentinelAoiWmsStackState,
+  runtime: SiSentinelAoiWmsPingPongRuntime,
+  opacity: number,
+): void {
+  syncSiSentinelAoiWmsPingPongStack(map, stack, runtime, { visible: false, opacity })
+}
+
+/**
+ * Visibility-only show when warm prefetch finished — instant Show on map (~1s).
+ * Falls back to sync-with-wait when tiles are still streaming.
  */
 export function revealSiSentinelAoiWmsPingPongStack(
   map: MapboxMap,
@@ -377,7 +544,7 @@ export function revealSiSentinelAoiWmsPingPongStack(
   presentation: { visible: boolean; opacity: number },
 ): void {
   if (!stack.displayChunks.length) return
-  if (siSentinelAoiWmsPingPongStackUrlsReady(map, stack, runtime)) {
+  if (siSentinelAoiWmsPingPongStackTilesLoaded(map, stack, runtime)) {
     for (let i = 0; i < stack.displayChunks.length; i++) {
       const chunkKey = siSentinelAoiWmsChunkKey(stack.idPrefix, i)
       const state = runtime.chunks.get(chunkKey)

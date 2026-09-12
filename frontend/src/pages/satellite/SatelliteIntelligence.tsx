@@ -104,8 +104,8 @@ import {
   pickDefaultSentinelWmsLayer,
   resolveSentinelHubWmsDeltaPreviousDate,
   resolveSentinelHubWmsTimeWindow,
-  sentinelHubWmsMinZoomForLatitude,
   SENTINEL_HUB_WMS_TILE_PIXELS,
+  SI_SENTINEL_WMS_MAP_DISPLAY_MIN_ZOOM,
   SI_DEFAULT_LIVE_WMS_LAYER,
   appendSentinelHubWmsAccessToken,
 } from '../../lib/sentinelHubWmsLayers';
@@ -135,6 +135,7 @@ import {
   createSiSentinelAoiWmsPingPongRuntime,
   ensureSiSentinelAoiWmsPingPongStackOnMap,
   isSiSentinelAoiWmsPingPongMapId,
+  prefetchSiSentinelAoiWmsPingPongStack,
   reloadSiSentinelAoiWmsPingPongStackTiles,
   resetSiSentinelAoiWmsPingPongRuntime,
   revealSiSentinelAoiWmsPingPongStack,
@@ -184,7 +185,6 @@ import {
 } from '../../lib/arcgisDynamicLayer';
 import {
   approximateLngLatBBoxFromViewState,
-  easeMapCameraToLngLatBBoxWithMinZoom,
   expandLngLatBBox,
   pointInLngLatBBox,
   readMapLngLatBBox,
@@ -366,6 +366,7 @@ import {
   fetchSentinelSceneCatalogForAoi,
   type SentinelSceneCatalog,
 } from '../../lib/siSentinelLatestScene';
+import { fetchAoiCloudMaskStatsForSceneDate } from '../../lib/siSentinelAoiSceneCloudFilter';
 import {
   defaultCollectionForProvider,
   remoteSensingCollectionsForProvider,
@@ -4823,6 +4824,23 @@ export default function SatelliteIntelligence() {
     wmsDate,
   ]);
 
+  const catalogAoiCloudStats = useMemo(() => {
+    const date = sentinelFetchDate;
+    if (!date || !sentinelSceneCatalog) return null;
+    const cloud = sentinelSceneCatalog.sceneCloudByDate?.[date];
+    const clear = sentinelSceneCatalog.sceneClearByDate?.[date];
+    if (cloud == null && clear == null) return null;
+    return {
+      cloudPct: typeof cloud === 'number' ? cloud : null,
+      clearPct: typeof clear === 'number' ? clear : null,
+    };
+  }, [sentinelFetchDate, sentinelSceneCatalog]);
+
+  const [liveAoiCloudStats, setLiveAoiCloudStats] = useState<{
+    cloudPct: number | null;
+    clearPct: number | null;
+  } | null>(null);
+
   const [isFetchingSentinelScenes, setIsFetchingSentinelScenes] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   /** Raster/vector MapGL children â€” toggled off during basemap style swap; dock stays mounted via isMapLoaded. */
@@ -5496,9 +5514,6 @@ export default function SatelliteIntelligence() {
   const aoiLayerModeWmsActiveRef = useRef(false);
   /** User unchecked Layers AOI Show on map — skip auto-enable until they pick index/AOI again. */
   const layersAoiUserOptOutRef = useRef(false);
-  /** Pin S2 WMS minzoom while Layers AOI is warm/on so Mapbox does not overzoom coarse tiles. */
-  const [pinnedSentinelWmsMinZoom, setPinnedSentinelWmsMinZoom] = useState<number | null>(null);
-  const layersAoiAutoZoomDoneRef = useRef('');
   const freezeViewportPipeline = shouldFreezeViewportDataPipeline(siScope.isIsolated);
   // layersAoiViewportFrozen is derived after the Layers clip pin resolves — enabling
   // Show on map alone must not freeze viewport seed/fetch.
@@ -19378,6 +19393,35 @@ export default function SatelliteIntelligence() {
     aoiLayerModeActiveMask,
     drawnGeometry,
   ]);
+
+  useEffect(() => {
+    if (catalogAoiCloudStats) {
+      setLiveAoiCloudStats(null);
+      return;
+    }
+    const geometry = getDrawnGeometry(effectiveSentinelAoiSource);
+    const sceneDate = sentinelFetchDate?.trim().slice(0, 10);
+    if (!geometry || !sceneDate) {
+      setLiveAoiCloudStats(null);
+      return;
+    }
+    const controller = new AbortController();
+    fetchAoiCloudMaskStatsForSceneDate(geometry, sceneDate, controller.signal)
+      .then(row => {
+        if (!row || controller.signal.aborted) return;
+        setLiveAoiCloudStats({
+          cloudPct: row.stats.aoiCloudCoverPct,
+          clearPct: row.stats.aoiClearCoverPct,
+        });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setLiveAoiCloudStats(null);
+      });
+    return () => controller.abort();
+  }, [catalogAoiCloudStats, effectiveSentinelAoiSource, sentinelFetchDate]);
+
+  const activeAoiCloudStats = catalogAoiCloudStats ?? liveAoiCloudStats;
+
   /**
    * Stable Agro Structures AOI for WMS tiles â€” fixed extent, unaffected by pan/zoom.
    * Standalone Remote Sensing: only user-drawn sketch (or mask builder); no full-canvas fallback.
@@ -19480,69 +19524,6 @@ export default function SatelliteIntelligence() {
 
   /** Show on map — independent Edit AOI and Layers AOI toggles. */
   const sentinelWmsOnMap = sentinelDrawWmsOnMap || sentinelLayerAoiWmsOnMap;
-
-  const mapLatitude = mapMetrics.latitude;
-  const mapZoom = mapMetrics.zoom;
-  const sentinelWmsMinZoom = useMemo(
-    () => sentinelHubWmsMinZoomForLatitude(mapLatitude),
-    [mapLatitude],
-  );
-  const effectiveSentinelWmsMinZoom = pinnedSentinelWmsMinZoom ?? sentinelWmsMinZoom;
-  const sentinelWmsZoomOk = typeof mapZoom === 'number' && mapZoom >= effectiveSentinelWmsMinZoom;
-
-  useEffect(() => {
-    const layerAoiWarmNow =
-      Boolean(aoiMaskBuilderSettings.sourceLayerId) && Boolean(aoiMaskBuilderWarmMask?.features?.length);
-    const drawAoiWarmNow = Boolean(isWmsOverlayVisible && drawnAoiClipCollection?.features?.length);
-    if (!aoiMaskBuilderSettings.enabled && !layerAoiWarmNow && !drawAoiWarmNow) {
-      setPinnedSentinelWmsMinZoom(null);
-      return;
-    }
-    if (aoiMaskBuilderSettings.enabled || layerAoiWarmNow || drawAoiWarmNow) {
-      setPinnedSentinelWmsMinZoom(prev => (prev == null ? sentinelWmsMinZoom : prev));
-    }
-  }, [
-    aoiMaskBuilderSettings.enabled,
-    aoiMaskBuilderSettings.sourceLayerId,
-    aoiMaskBuilderWarmMask,
-    isWmsOverlayVisible,
-    drawnAoiClipCollection,
-    sentinelWmsMinZoom,
-  ]);
-
-  /** If Show on map is on but zoom is below Sentinel minzoom, zoom to the AOI clip once. */
-  useEffect(() => {
-    if (!sentinelWmsOnMap || sentinelWmsZoomOk) return;
-    const mask = sentinelLayerAoiWmsOnMap
-      ? aoiLayerModeActiveMask ?? aoiMaskBuilderWarmMask ?? aoiMaskBuilderMask
-      : drawnAoiClipCollection;
-    if (!mask?.features?.length) return;
-    const key = sentinelLayerAoiWmsOnMap
-      ? `layers:${aoiMaskBuilderSettings.sourceLayerId}|${mask.features.length}|${effectiveSentinelWmsMinZoom}`
-      : `draw:${drawnAoiClipKey}|${effectiveSentinelWmsMinZoom}`;
-    if (layersAoiAutoZoomDoneRef.current === key) return;
-    const map = mapRef.current?.getMap?.() ?? mapRef.current;
-    if (!map) return;
-    const bounds = getGeoJsonBounds(mask);
-    if (!bounds) return;
-    layersAoiAutoZoomDoneRef.current = key;
-    try {
-      easeMapCameraToLngLatBBoxWithMinZoom(map, bounds, effectiveSentinelWmsMinZoom);
-    } catch {
-      layersAoiAutoZoomDoneRef.current = '';
-    }
-  }, [
-    sentinelWmsOnMap,
-    sentinelLayerAoiWmsOnMap,
-    sentinelWmsZoomOk,
-    aoiLayerModeActiveMask,
-    aoiMaskBuilderWarmMask,
-    aoiMaskBuilderMask,
-    aoiMaskBuilderSettings.sourceLayerId,
-    drawnAoiClipCollection,
-    drawnAoiClipKey,
-    effectiveSentinelWmsMinZoom,
-  ]);
 
   const syncAnalysisMapLayerOrder = useCallback(() => {
     const map = mapRef.current?.getMap?.() ?? mapRef.current;
@@ -19855,13 +19836,7 @@ export default function SatelliteIntelligence() {
             (aoiLineId && map.getLayer(aoiLineId) ? aoiLineId : undefined) ||
             (map.getLayer(agroLineId) ? agroLineId : undefined);
           const runtime = layerAoiWmsPingPongRef.current;
-          ensureSiSentinelAoiWmsPingPongStackOnMap(
-            map,
-            stack,
-            effectiveSentinelWmsMinZoom,
-            runtime,
-            { beforeLayerId },
-          );
+          ensureSiSentinelAoiWmsPingPongStackOnMap(map, stack, runtime, { beforeLayerId });
           // Warm stack → visibility/opacity only; cold first paint falls back to sync.
           revealSiSentinelAoiWmsPingPongStack(map, stack, runtime, {
             visible: true,
@@ -19870,17 +19845,6 @@ export default function SatelliteIntelligence() {
           raiseOverlaysThenAnalysisOrder();
           if (aoiLayerModePinnedClipRef.current?.mask?.features?.length) {
             aoiLayerModeWmsActiveRef.current = true;
-          }
-          const zoomNow = map.getZoom?.();
-          const pinMask = aoiLayerModePinnedClipRef.current?.mask;
-          if (
-            pinMask?.features?.length &&
-            (zoomNow == null || zoomNow < effectiveSentinelWmsMinZoom)
-          ) {
-            const bounds = getGeoJsonBounds(pinMask);
-            if (bounds) {
-              easeMapCameraToLngLatBBoxWithMinZoom(map, bounds, effectiveSentinelWmsMinZoom);
-            }
           }
         }
 
@@ -19983,7 +19947,6 @@ export default function SatelliteIntelligence() {
       wmsLayerSelectValue,
       defaultWmsLayerName,
       wmsLayers,
-      effectiveSentinelWmsMinZoom,
     ],
   );
 
@@ -22998,7 +22961,7 @@ export default function SatelliteIntelligence() {
         layerOptions={remoteSensingLayerOptions}
         layerGroups={remoteSensingLayerSelectGroups}
         activeLayerId={wmsLayerSelectValue}
-        aoiGeometry={drawnGeometry}
+        aoiGeometry={normalizedDrawnAoiGeometry}
         sceneDate={sentinelFetchDate}
         seriesStart={timeSeriesStart}
         seriesEnd={timeSeriesEnd}
@@ -23009,7 +22972,7 @@ export default function SatelliteIntelligence() {
       remoteSensingLayerOptions,
       remoteSensingLayerSelectGroups,
       wmsLayerSelectValue,
-      drawnGeometry,
+      normalizedDrawnAoiGeometry,
       sentinelFetchDate,
       timeSeriesStart,
       timeSeriesEnd,
@@ -24148,9 +24111,7 @@ export default function SatelliteIntelligence() {
       const beforeLayerId =
         (aoiLineId && map.getLayer(aoiLineId) ? aoiLineId : undefined) ||
         (map.getLayer(agroLineId) ? agroLineId : undefined);
-      ensureSiSentinelAoiWmsPingPongStackOnMap(map, stack, effectiveSentinelWmsMinZoom, runtime, {
-        beforeLayerId,
-      });
+      ensureSiSentinelAoiWmsPingPongStackOnMap(map, stack, runtime, { beforeLayerId });
     }
 
     if (!chunkCountChanged && layerAoiPingPongSyncKeyRef.current === syncKey) {
@@ -24158,10 +24119,19 @@ export default function SatelliteIntelligence() {
     }
     layerAoiPingPongSyncKeyRef.current = syncKey;
 
-    syncSiSentinelAoiWmsPingPongStack(map, stack, runtime, {
-      visible: layerVisible,
-      opacity: layerOpacity,
-    });
+    if (layerVisible) {
+      revealSiSentinelAoiWmsPingPongStack(map, stack, runtime, {
+        visible: true,
+        opacity: layerOpacity,
+      });
+    } else if (layerAoiWmsWarm || sentinelWmsSourcesHeld) {
+      prefetchSiSentinelAoiWmsPingPongStack(map, stack, runtime, layerOpacity);
+    } else {
+      syncSiSentinelAoiWmsPingPongStack(map, stack, runtime, {
+        visible: false,
+        opacity: layerOpacity,
+      });
+    }
     if (chunkCountChanged) {
       raiseOverlaysThenAnalysisOrder();
     }
@@ -24171,11 +24141,12 @@ export default function SatelliteIntelligence() {
     layerAoiWmsChunksCacheKey,
     wmsRasterSourceRefreshKey,
     sentinelLayerAoiWmsOnMap,
+    layerAoiWmsWarm,
+    sentinelWmsSourcesHeld,
     mapSwipeOpen,
     aoiMaskDisplayOpacity,
     aoiMaskBuilderSettings.sourceLayerId,
     raiseOverlaysThenAnalysisOrder,
-    effectiveSentinelWmsMinZoom,
   ]);
 
   /**
@@ -25766,7 +25737,7 @@ export default function SatelliteIntelligence() {
                         type="raster"
                         tiles={[stack.tileUrls[chunkIdx] ?? '']}
                         tileSize={stack.tilePixels || SENTINEL_HUB_WMS_TILE_PIXELS}
-                        minzoom={effectiveSentinelWmsMinZoom}
+                        minzoom={SI_SENTINEL_WMS_MAP_DISPLAY_MIN_ZOOM}
                         bounds={resolveSiSentinelAoiWmsChunkBounds(stack, chunk)}
                       >
                         <Layer
@@ -26121,7 +26092,7 @@ export default function SatelliteIntelligence() {
             layerOptions={remoteSensingLayerOptions}
             layerGroups={remoteSensingLayerSelectGroups}
             activeLayerId={wmsLayerSelectValue}
-            aoiGeometry={drawnGeometry}
+            aoiGeometry={normalizedDrawnAoiGeometry}
             sceneDate={sentinelFetchDate}
             seriesStart={timeSeriesStart}
             seriesEnd={timeSeriesEnd}
@@ -26208,7 +26179,7 @@ export default function SatelliteIntelligence() {
             showFab={false}
             onBeforeTilesChange={onMapSwipeBeforeTilesChange}
             onCompareSidesChange={onMapSwipeCompareSidesChange}
-            aoiGeometry={drawnGeometry}
+            aoiGeometry={normalizedDrawnAoiGeometry}
             getLiveViewState={getMapSwipeLiveViewState}
             getMainMap={getMapSwipeMainMap}
           />
@@ -27271,6 +27242,8 @@ export default function SatelliteIntelligence() {
                         onResetImageryDateAuto={resetSentinelImageryDateAuto}
                         imageryDateAutoFollow={imageryDateAutoFollow}
                         isFetchingSentinelScenes={isFetchingSentinelScenes}
+                        aoiCloudCoverPct={activeAoiCloudStats?.cloudPct ?? null}
+                        aoiClearCoverPct={activeAoiCloudStats?.clearPct ?? null}
                         cloudCoverage={cloudCoverage}
                         onCloudCoverageChange={setCloudCoverage}
                         imageryDateMeta={
@@ -27320,11 +27293,7 @@ export default function SatelliteIntelligence() {
                             ? 'Clips the index to your drawn AOI (Edit tool).'
                             : 'Draw an AOI with the Edit tool, then enable Show on map.'
                         }
-                        wmsZoomWarning={
-                          sentinelWmsOnMap && !sentinelWmsZoomOk
-                            ? `Zoom in to ${effectiveSentinelWmsMinZoom}+ — Sentinel-2 index tiles cannot load when zoomed out (max 200 m/px). The map will zoom to the AOI automatically.`
-                            : null
-                        }
+                        wmsZoomWarning={null}
                         sentinelLayerOptions={remoteSensingLayerOptions}
                         aoiLayerModeSettings={aoiMaskBuilderSettings}
                         onAoiLayerModeChange={handleAoiLayerModeChange}

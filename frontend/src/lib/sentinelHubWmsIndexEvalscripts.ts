@@ -545,6 +545,15 @@ function formatNumberList(values: readonly number[]): string {
   return values.map(v => String(v)).join(', ')
 }
 
+/** Visual WMS display — dataMask alpha only. SCL/CLM/CLP analytical mask is stats-only. */
+function buildVisualDisplayAlphaBlock(thresholdExpr: string | null = null): string {
+  if (thresholdExpr) {
+    return `var a = samples.dataMask * (${thresholdExpr} ? 1.0 : 0.0);
+  return imgVals.concat(a);`
+  }
+  return `return imgVals.concat(samples.dataMask);`
+}
+
 /** NDWI: continuous green → white → blue ColorRampVisualizer on B03/B08. */
 export function buildSentinelNdwiTenClassEvalscript(indexVisibilityMin: number | null = null): string {
   const thr =
@@ -552,17 +561,13 @@ export function buildSentinelNdwiTenClassEvalscript(indexVisibilityMin: number |
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
-  const alphaBlock =
-    thr == null
-      ? 'return imgVals.concat(samples.dataMask);'
-      : `var a = samples.dataMask * (val >= ${thr} ? 1.0 : 0.0);
-  return imgVals.concat(a);`
+  const alphaBlock = buildVisualDisplayAlphaBlock(thr == null ? null : `val >= ${thr}`)
 
   return `//VERSION=3
 // NDWI — green (dry) → white (neutral) → blue (water)
 function setup() {
   return {
-    input: ["B03", "B08", "dataMask"],
+    input: ${JSON.stringify(['B03', 'B08', 'dataMask'])},
     output: { bands: 4 }
   };
 }
@@ -587,17 +592,13 @@ export function buildSentinelAweiTenClassEvalscript(indexVisibilityMin: number |
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
-  const alphaBlock =
-    thr == null
-      ? 'return imgVals.concat(samples.dataMask);'
-      : `var a = samples.dataMask * (val >= ${thr} ? 1.0 : 0.0);
-  return imgVals.concat(a);`
+  const alphaBlock = buildVisualDisplayAlphaBlock(thr == null ? null : `val >= ${thr}`)
 
   return `//VERSION=3
 // AWEI — 10 classes · non-water warm → open / deep water blue
 function setup() {
   return {
-    input: ["B03", "B08", "B11", "B12", "dataMask"],
+    input: ${JSON.stringify(['B03', 'B08', 'B11', 'B12', 'dataMask'])},
     output: { bands: 4 }
   };
 }
@@ -639,17 +640,13 @@ export function buildSentinelMndwiTenClassEvalscript(indexVisibilityMin: number 
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
-  const alphaBlock =
-    thr == null
-      ? 'return imgVals.concat(samples.dataMask);'
-      : `var a = samples.dataMask * (val >= ${thr} ? 1.0 : 0.0);
-  return imgVals.concat(a);`
+  const alphaBlock = buildVisualDisplayAlphaBlock(thr == null ? null : `val >= ${thr}`)
 
   return `//VERSION=3
 // MNDWI — 10 classes · light dry gradient → open / deep water blue
 function setup() {
   return {
-    input: ["B03", "B11", "dataMask"],
+    input: ${JSON.stringify(['B03', 'B11', 'dataMask'])},
     output: { bands: 4 }
   };
 }
@@ -691,17 +688,13 @@ export function buildSentinelNdiiTenClassEvalscript(indexVisibilityMin: number |
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
-  const alphaBlock =
-    thr == null
-      ? 'return imgVals.concat(samples.dataMask);'
-      : `var a = samples.dataMask * (val >= ${thr} ? 1.0 : 0.0);
-  return imgVals.concat(a);`
+  const alphaBlock = buildVisualDisplayAlphaBlock(thr == null ? null : `val >= ${thr}`)
 
   return `//VERSION=3
 // NDII — continuous moisture ramp (B08 / B11)
 function setup() {
   return {
-    input: ["B08", "B11", "dataMask"],
+    input: ${JSON.stringify(['B08', 'B11', 'dataMask'])},
     output: { bands: 4 }
   };
 }
@@ -726,17 +719,13 @@ export function buildSentinelNdmiTenClassEvalscript(indexVisibilityMin: number |
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
-  const alphaBlock =
-    thr == null
-      ? 'return imgVals.concat(samples.dataMask);'
-      : `var a = samples.dataMask * (val >= ${thr} ? 1.0 : 0.0);
-  return imgVals.concat(a);`
+  const alphaBlock = buildVisualDisplayAlphaBlock(thr == null ? null : `val >= ${thr}`)
 
   return `//VERSION=3
 // NDMI — continuous moisture ramp (B8A / B11)
 function setup() {
   return {
-    input: ["B8A", "B11", "dataMask"],
+    input: ${JSON.stringify(['B8A', 'B11', 'dataMask'])},
     output: { bands: 4 }
   };
 }
@@ -794,11 +783,7 @@ export function buildSentinelEtTenClassEvalscript(
       ? Math.max(0, Math.min(15, indexVisibilityMin))
       : null
 
-  const alphaBlock =
-    thr == null
-      ? 'return imgVals.concat(samples.dataMask);'
-      : `var a = samples.dataMask * (et >= ${thr} ? 1.0 : 0.0);
-  return imgVals.concat(a);`
+  const alphaBlock = buildVisualDisplayAlphaBlock(thr == null ? null : `et >= ${thr}`)
 
   const coloredRamp: RampStop[] = centers.map((v, i) => [
     v,
@@ -809,7 +794,7 @@ export function buildSentinelEtTenClassEvalscript(
 // ET — seasonal × Kc × moisture demand (mm/day), 10 classes
 function setup() {
   return {
-    input: ["B03", "B04", "B08", "B11", "dataMask"],
+    input: ${JSON.stringify(['B03', 'B04', 'B08', 'B11', 'dataMask'])},
     output: { bands: 4 }
   };
 }
@@ -883,11 +868,7 @@ export function buildSentinelLstTenClassEvalscript(
       ? Math.max(5, Math.min(55, indexVisibilityMin))
       : null
 
-  const alphaBlock =
-    thr == null
-      ? 'return imgVals.concat(samples.dataMask);'
-      : `var a = samples.dataMask * (lst >= ${thr} ? 1.0 : 0.0);
-  return imgVals.concat(a);`
+  const alphaBlock = buildVisualDisplayAlphaBlock(thr == null ? null : `lst >= ${thr}`)
 
   const coloredRamp: RampStop[] = centers.map((v, i) => [
     v,
@@ -898,7 +879,7 @@ export function buildSentinelLstTenClassEvalscript(
 // LST — seasonal NDVI/NDMI land-surface temperature proxy (°C), 10 classes
 function setup() {
   return {
-    input: ["B04", "B08", "B11", "dataMask"],
+    input: ${JSON.stringify(['B04', 'B08', 'B11', 'dataMask'])},
     output: { bands: 4 }
   };
 }
@@ -947,17 +928,13 @@ export function buildSentinelNdviTenClassEvalscript(indexVisibilityMin: number |
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
-  const alphaBlock =
-    thr == null
-      ? 'return imgVals.concat(samples.dataMask);'
-      : `var a = samples.dataMask * (ndvi >= ${thr} ? 1.0 : 0.0);
-  return imgVals.concat(a);`
+  const alphaBlock = buildVisualDisplayAlphaBlock(thr == null ? null : `ndvi >= ${thr}`)
 
   return `//VERSION=3
-// NDVI — agricultural color ramp on B08/B04, dataMask alpha (fast AOI clip)
+// NDVI — agricultural color ramp on B08/B04 (visual display; cloud mask is stats-only)
 function setup() {
   return {
-    input: ["B04", "B08", "dataMask"],
+    input: ${JSON.stringify(['B04', 'B08', 'dataMask'])},
     output: { bands: 4 }
   };
 }
@@ -1016,11 +993,9 @@ export function buildSentinelIndexColorRampEvalscript(
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
-  const alphaBlock =
-    thr == null
-      ? 'return imgVals.concat(samples.dataMask);'
-      : `var a = samples.dataMask * (${spec.indexVar} >= ${thr} ? 1.0 : 0.0);
-  return imgVals.concat(a);`
+  const alphaBlock = buildVisualDisplayAlphaBlock(
+    thr == null ? null : `${spec.indexVar} >= ${thr}`,
+  )
 
   return `//VERSION=3
 function setup() {

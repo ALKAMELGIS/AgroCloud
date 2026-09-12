@@ -13,6 +13,7 @@ backend/dist/
 backend/server/agri_api_secrets.json
 backend/server/data/agri_api_secrets.json
 backend/server/agri_user_profiles.json
+backend/server/agri_admin_directory.json
 
 npm-debug.log*
 yarn-debug.log*

@@ -20,6 +20,8 @@ type Params = {
   sceneDate: string | undefined
   enabled?: boolean
   maxCloudCoverage?: number
+  /** Pixel size for histogram sampling (default 10 m). */
+  resolutionMeters?: number
 }
 
 export function stableGeometryKey(geometry: GeoJSON.Geometry | GeoJSON.Feature): string {
@@ -59,6 +61,7 @@ export function useLayerClassAreas({
   sceneDate,
   enabled = true,
   maxCloudCoverage,
+  resolutionMeters,
 }: Params): UseLayerClassAreasState {
   const resolvedLayerId = useMemo(
     () => normalizeClassAreaLayerId(layerId) ?? layerId,
@@ -93,6 +96,7 @@ export function useLayerClassAreas({
       layerId: resolvedLayerId,
       sceneDate: dateKey,
       maxCloudCoverage,
+      resolutionMeters,
       signal: controller.signal,
     })
       .then(result => {
@@ -120,7 +124,7 @@ export function useLayerClassAreas({
     }
     // geomKey + dateKey + resolvedLayerId capture all inputs that change the request.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, geomKey, dateKey, resolvedLayerId, maxCloudCoverage])
+  }, [active, geomKey, dateKey, resolvedLayerId, maxCloudCoverage, resolutionMeters])
 
   return state
 }

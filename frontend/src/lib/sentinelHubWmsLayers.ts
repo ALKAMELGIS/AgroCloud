@@ -39,6 +39,13 @@ export type SentinelHubWmsLayerInfo = {
 /** Sentinel-2 L1C collection max ground sampling distance for a single GetMap request. */
 export const SENTINEL_HUB_S2_MAX_METERS_PER_PIXEL = 200
 
+/**
+ * Mapbox raster source minzoom for Sentinel index display.
+ * Keep at 0 so Layer index stays visible when zoomed out (Mapbox overzooms native tiles).
+ * {@link sentinelHubWmsMinZoomForLatitude} is the native S2 resolution floor for tile requests.
+ */
+export const SI_SENTINEL_WMS_MAP_DISPLAY_MIN_ZOOM = 0
+
 /** OGC WMS raster resampling — bilinear for smooth index layers (data-level, not CSS). */
 export const SENTINEL_HUB_WMS_RASTER_RESAMPLE_PARAMS =
   '&UPSAMPLING=BILINEAR&DOWNSAMPLING=BILINEAR'

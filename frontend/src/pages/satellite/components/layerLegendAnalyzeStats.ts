@@ -11,8 +11,10 @@ import {
   type LayerLegendAnalyzeIndexConfig,
 } from './layerLegendAnalyzeIndexConfig'
 
-/** Histogram class-area stats are too slow above this AOI size — use zonal bbox fetch. */
-export const LAYER_LEGEND_LARGE_AOI_HA = 1200
+import { LEGEND_ANALYZE_LARGE_AOI_HA } from '../../../lib/legendAnalyzeWmsZonal'
+
+/** Histogram class-area stats are too slow above this AOI size — use WMS tiled zonal fetch. */
+export const LAYER_LEGEND_LARGE_AOI_HA = LEGEND_ANALYZE_LARGE_AOI_HA
 
 /** AOI bounding box for Statistical API when full geometry is too large. */
 export function resolveLegendAnalyzeFetchGeometry(

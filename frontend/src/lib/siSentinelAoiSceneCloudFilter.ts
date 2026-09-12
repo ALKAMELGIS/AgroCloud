@@ -1,6 +1,6 @@
 /**
- * AOI-level Sentinel-2 scene cloud filtering via Sentinel Hub WMS + CLP/CLM/SCL masking.
- * STAC `eo:cloud_cover` is granule-level (~100 km tile) — not suitable for field AOIs.
+ * AOI-level Sentinel-2 scene cloud metrics via Sentinel Hub WMS + CLP/CLM/SCL masking.
+ * STAC `eo:cloud_cover` is granule-level (~100 km tile) — metadata only, not scene rejection.
  */
 
 import {
@@ -11,27 +11,26 @@ import {
 import { getSentinelHubWmsBaseUrl, getSentinelHubWmsInstanceId } from './sentinelHubWmsInstance'
 import { getDrawnGeometry } from './sentinelHubWmsAoiClip'
 import { addDaysToIso } from './siSentinelImageryDate'
+import {
+  aoiCloudCoverPctFromMaskRgba,
+  aoiCloudMaskStatsFromRgba,
+  buildSentinelSceneCloudLogEntry,
+  logSentinelSceneCloudMetrics,
+  SENTINEL_AOI_CLOUD_MASK_EVALSCRIPT,
+  SI_SENTINEL_MIN_AOI_CLEAR_FRACTION,
+  SI_SENTINEL_WMS_MAXCC,
+  type AoiCloudMaskStats,
+  type SentinelSceneCloudLogEntry,
+} from './sentinelSclCloudMask'
 
-/** Never reject a Sentinel-2 granule at tile level — cloud gating is AOI pixel masks. */
-export const SI_SENTINEL_WMS_SCENE_MAXCC = 100
+export { SI_SENTINEL_WMS_MAXCC as SI_SENTINEL_WMS_SCENE_MAXCC } from './sentinelSclCloudMask'
+
+export { aoiCloudCoverPctFromMaskRgba, aoiCloudMaskStatsFromRgba }
+export type { AoiCloudMaskStats, SentinelSceneCloudLogEntry }
 
 const AOI_CLOUD_CHECK_PIXELS = 128
 const AOI_CLOUD_CHECK_CONCURRENCY = 4
 const MAX_AOI_CLOUD_SCENE_CHECKS = 160
-
-const AOI_CLOUD_MASK_EVALSCRIPT = `//VERSION=3
-function setup() {
-  return {
-    input: [{ bands: ["SCL", "CLM", "CLP", "dataMask"] }],
-    output: { bands: 4, sampleType: "UINT8" }
-  };
-}
-function evaluatePixel(s) {
-  var scl = s.SCL;
-  var cloud = (scl == 0 || scl == 1 || scl == 3 || scl == 8 || scl == 9 || scl == 10 || scl == 11) || s.CLM == 1 || s.CLP > 25;
-  if (!s.dataMask) return [0, 0, 0, 0];
-  return cloud ? [255, 0, 0, 255] : [0, 255, 0, 255];
-}`
 
 function evalscriptToBase64(script: string): string {
   const normalized = String(script || '')
@@ -43,7 +42,7 @@ function evalscriptToBase64(script: string): string {
   return normalized
 }
 
-const AOI_CLOUD_MASK_EVALSCRIPT_B64 = evalscriptToBase64(AOI_CLOUD_MASK_EVALSCRIPT)
+const AOI_CLOUD_MASK_EVALSCRIPT_B64 = evalscriptToBase64(SENTINEL_AOI_CLOUD_MASK_EVALSCRIPT)
 
 function lngLatToWebMercator(lng: number, lat: number): [number, number] {
   const x = (lng * 20037508.34) / 180
@@ -133,23 +132,6 @@ function geometryToWmsClipWkt3857(geometry: GeoJSON.Geometry): string | null {
   return null
 }
 
-/** Decode green=clear / red=cloud mask PNG into AOI cloud cover % (null when no AOI pixels). */
-export function aoiCloudCoverPctFromMaskRgba(data: Uint8ClampedArray): number | null {
-  let clear = 0
-  let cloud = 0
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i]!
-    const g = data[i + 1]!
-    const a = data[i + 3]!
-    if (a < 128) continue
-    if (g > 200 && r < 80) clear += 1
-    else if (r > 200 && g < 80) cloud += 1
-  }
-  const total = clear + cloud
-  if (total === 0) return null
-  return Math.round((cloud / total) * 1000) / 10
-}
-
 async function fetchMaskRgba(
   url: string,
   width: number,
@@ -180,11 +162,12 @@ export function isSentinelAoiSceneCloudFilterAvailable(): boolean {
   return Boolean(getSentinelHubWmsInstanceId().trim())
 }
 
-export async function fetchAoiCloudCoverPctForSceneDate(
+export async function fetchAoiCloudMaskStatsForSceneDate(
   geometry: GeoJSON.Geometry,
   sceneDate: string,
   signal?: AbortSignal,
-): Promise<number | null> {
+  options?: { originalCloudCoverage?: number | null },
+): Promise<{ stats: AoiCloudMaskStats; log: SentinelSceneCloudLogEntry } | null> {
   const bbox3857 = bbox3857FromGeometry(geometry)
   const geometryWkt3857 = geometryToWmsClipWkt3857(geometry)
   if (!bbox3857 || !geometryWkt3857) return null
@@ -199,7 +182,7 @@ export async function fetchAoiCloudCoverPctForSceneDate(
     `&BBOX=${minX},${minY},${maxX},${maxY}&CRS=EPSG:3857` +
     `&FORMAT=image/png&TRANSPARENT=true&WIDTH=${px}&HEIGHT=${px}` +
     `&TIME=${sceneDate}/${timeEnd}` +
-    `&MAXCC=${SI_SENTINEL_WMS_SCENE_MAXCC}` +
+    `&MAXCC=${SI_SENTINEL_WMS_MAXCC}` +
     `&GEOMETRY=${encodeURIComponent(geometryWkt3857)}` +
     `&SHOWLOGO=false&WARNINGS=false` +
     `&EVALSCRIPT=${encodeURIComponent(AOI_CLOUD_MASK_EVALSCRIPT_B64)}`
@@ -207,10 +190,25 @@ export async function fetchAoiCloudCoverPctForSceneDate(
 
   try {
     const data = await fetchMaskRgba(url, px, px, signal)
-    return aoiCloudCoverPctFromMaskRgba(data)
+    const stats = aoiCloudMaskStatsFromRgba(data)
+    const log = buildSentinelSceneCloudLogEntry(sceneDate, stats, {
+      sceneId: sceneDate,
+      originalCloudCoverage: options?.originalCloudCoverage ?? null,
+    })
+    logSentinelSceneCloudMetrics(log)
+    return { stats, log }
   } catch {
     return null
   }
+}
+
+export async function fetchAoiCloudCoverPctForSceneDate(
+  geometry: GeoJSON.Geometry,
+  sceneDate: string,
+  signal?: AbortSignal,
+): Promise<number | null> {
+  const row = await fetchAoiCloudMaskStatsForSceneDate(geometry, sceneDate, signal)
+  return row?.stats.aoiCloudCoverPct ?? null
 }
 
 async function mapPool<T, R>(
@@ -234,48 +232,90 @@ async function mapPool<T, R>(
 export type AoiFilteredSceneDate = {
   date: string
   aoiCloudCoverPct: number
+  aoiClearCoverPct: number
+  usable: boolean
 }
 
 /**
- * Keep scene dates whose AOI cloud cover (CLP/CLM/SCL) is ≤ maxAoiCloudCoverPct.
- * When WMS is unavailable, returns all candidate dates unchanged.
+ * Rank scene dates by AOI clear pixel fraction (pixel-level SCL/CLM/CLP mask).
+ * Does NOT reject scenes solely for high granule or AOI cloud % — only when zero clear pixels.
+ * `maxAoiCloudCoverPct` is advisory for ranking preference (prefer clearer scenes first).
  */
 export async function filterSentinelSceneDatesByAoiCloud(
   aoi: unknown,
   candidateDates: string[],
   maxAoiCloudCoverPct: number,
-  options?: { signal?: AbortSignal },
-): Promise<{ sceneIsos: string[]; sceneCloudByDate: Record<string, number> }> {
-  const ceiling = Math.max(0, Math.min(100, Number(maxAoiCloudCoverPct) || 0))
+  options?: { signal?: AbortSignal; originalCloudByDate?: Record<string, number> },
+): Promise<{
+  sceneIsos: string[]
+  sceneCloudByDate: Record<string, number>
+  sceneClearByDate: Record<string, number>
+  sceneLogs: SentinelSceneCloudLogEntry[]
+}> {
   const dates = [...new Set(candidateDates.map(d => d.trim().slice(0, 10)).filter(Boolean))].sort(
     (a, b) => b.localeCompare(a),
   )
 
-  if (!dates.length || ceiling >= 100) {
-    return { sceneIsos: dates, sceneCloudByDate: {} }
+  if (!dates.length) {
+    return { sceneIsos: [], sceneCloudByDate: {}, sceneClearByDate: {}, sceneLogs: [] }
   }
 
   const geometry = getDrawnGeometry(aoi as Parameters<typeof getDrawnGeometry>[0])
   if (!geometry || !isSentinelAoiSceneCloudFilterAvailable()) {
-    return { sceneIsos: dates, sceneCloudByDate: {} }
+    return { sceneIsos: dates, sceneCloudByDate: {}, sceneClearByDate: {}, sceneLogs: [] }
   }
 
   const toCheck = dates.slice(0, MAX_AOI_CLOUD_SCENE_CHECKS)
   const results = await mapPool(toCheck, AOI_CLOUD_CHECK_CONCURRENCY, async date => {
     if (options?.signal?.aborted) return null
-    const pct = await fetchAoiCloudCoverPctForSceneDate(geometry, date, options?.signal)
-    if (pct == null) return null
-    return { date, aoiCloudCoverPct: pct }
+    const row = await fetchAoiCloudMaskStatsForSceneDate(geometry, date, options?.signal, {
+      originalCloudCoverage: options?.originalCloudByDate?.[date] ?? null,
+    })
+    if (!row) return null
+    const { stats, log } = row
+    if (stats.aoiCloudCoverPct == null) return null
+    return {
+      date,
+      aoiCloudCoverPct: stats.aoiCloudCoverPct,
+      aoiClearCoverPct: stats.aoiClearCoverPct ?? 0,
+      usable: log.usable,
+      log,
+    }
   })
 
+  const ranked = results
+    .filter((row): row is NonNullable<typeof row> => Boolean(row))
+    .sort((a, b) => {
+      if (a.usable !== b.usable) return a.usable ? -1 : 1
+      return b.aoiClearCoverPct - a.aoiClearCoverPct || a.aoiCloudCoverPct - b.aoiCloudCoverPct
+    })
+
   const sceneCloudByDate: Record<string, number> = {}
+  const sceneClearByDate: Record<string, number> = {}
+  const sceneLogs: SentinelSceneCloudLogEntry[] = []
   const sceneIsos: string[] = []
-  for (const row of results) {
-    if (!row || row.aoiCloudCoverPct > ceiling) continue
+
+  for (const row of ranked) {
     sceneCloudByDate[row.date] = row.aoiCloudCoverPct
+    sceneClearByDate[row.date] = row.aoiClearCoverPct
+    sceneLogs.push(row.log)
+    // Never drop a scene — rank by clear fraction; pixel mask gates analytics only.
     sceneIsos.push(row.date)
   }
 
-  sceneIsos.sort((a, b) => b.localeCompare(a))
-  return { sceneIsos, sceneCloudByDate }
+  // Append dates the WMS probe skipped or failed — keep full STAC catalog on the map.
+  for (const date of dates) {
+    if (!sceneIsos.includes(date)) sceneIsos.push(date)
+  }
+
+  sceneIsos.sort((a, b) => {
+    const clearA = sceneClearByDate[a] ?? -1
+    const clearB = sceneClearByDate[b] ?? -1
+    if (clearA !== clearB) return clearB - clearA
+    return b.localeCompare(a)
+  })
+
+  return { sceneIsos, sceneCloudByDate, sceneClearByDate, sceneLogs }
 }
+
+export { SI_SENTINEL_MIN_AOI_CLEAR_FRACTION }

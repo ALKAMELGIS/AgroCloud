@@ -71,10 +71,10 @@ const CROP_MIN_CLEAR_FRACTION = Math.max(
   0.2,
   Math.min(0.95, Number(process.env.CROP_MIN_CLEAR_FRACTION) || 0.45),
 )
-/** Absolute floor — reject only nearly empty / failed frames (AOI-normalized). */
+/** Reject only when pixel-level cloud mask leaves no clear AOI pixels (not granule cloud %). */
 const CROP_CLEAR_FLOOR = Math.max(
-  0.05,
-  Math.min(CROP_MIN_CLEAR_FRACTION, Number(process.env.CROP_CLEAR_FLOOR) || 0.08),
+  0.005,
+  Math.min(CROP_MIN_CLEAR_FRACTION, Number(process.env.CROP_CLEAR_FLOOR) || 0.005),
 )
 /** Target ground sampling for the classified output (m/px). 3 m sharpens farm / pivot edges. */
 const CROP_TARGET_MPP = Math.max(

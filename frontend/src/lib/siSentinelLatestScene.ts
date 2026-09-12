@@ -37,6 +37,8 @@ export type SentinelSceneCatalog = {
   sceneIsos: string[]
   /** AOI cloud cover % per scene date (CLP/CLM/SCL inside clip). */
   sceneCloudByDate?: Record<string, number>
+  /** AOI clear (non-cloud) % per scene date. */
+  sceneClearByDate?: Record<string, number>
   fetchedAt: number
 }
 
@@ -177,21 +179,22 @@ export async function fetchSentinelSceneCatalogForAoi(
 
       let sceneIsos = stacCatalog.sceneIsos
       let sceneCloudByDate: Record<string, number> | undefined
-      if (
-        typeof cloudCoverMax === 'number' &&
-        Number.isFinite(cloudCoverMax) &&
-        cloudCoverMax < 100 &&
-        stacCatalog.sceneIsos.length
-      ) {
+      let sceneClearByDate: Record<string, number> | undefined
+      if (stacCatalog.sceneIsos.length) {
+        const preferClearBelowPct =
+          typeof cloudCoverMax === 'number' && Number.isFinite(cloudCoverMax) ? cloudCoverMax : 100
         const filtered = await filterSentinelSceneDatesByAoiCloud(
           aoi,
           stacCatalog.sceneIsos,
-          cloudCoverMax,
+          preferClearBelowPct,
           { signal: options?.signal },
         )
-        sceneIsos = filtered.sceneIsos
+        sceneIsos = filtered.sceneIsos.length ? filtered.sceneIsos : stacCatalog.sceneIsos
         sceneCloudByDate = Object.keys(filtered.sceneCloudByDate).length
           ? filtered.sceneCloudByDate
+          : undefined
+        sceneClearByDate = Object.keys(filtered.sceneClearByDate).length
+          ? filtered.sceneClearByDate
           : undefined
       }
 
@@ -199,6 +202,7 @@ export async function fetchSentinelSceneCatalogForAoi(
         latestSceneIso: sceneIsos[0] ?? null,
         sceneIsos,
         sceneCloudByDate,
+        sceneClearByDate,
         fetchedAt: Date.now(),
       }
       sceneCatalogCache.set(cacheKey, {
