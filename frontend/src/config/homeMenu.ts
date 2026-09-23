@@ -51,6 +51,7 @@ const LEAF_TITLE: Record<string, { en: string; ar: string }> = {
   irrigationSensors: { en: 'Irrigation Sensors', ar: 'حساسات الري' },
   camera: { en: 'Camera', ar: 'الكاميرا' },
   gpsVehicleTracking: { en: 'GPS Vehicle Tracking', ar: 'تتبع مركبات GPS' },
+  johnDeereTracking: { en: 'John Deere Tracking', ar: 'تتبع John Deere' },
   workflowDataSources: { en: 'Data Management', ar: 'إدارة البيانات' },
   dashboardSettings: { en: 'Dashboard Settings', ar: 'إعدادات لوحة التحكم' },
   gisContent: { en: 'GIS Content', ar: 'محتوى نظم المعلومات الجغرافية' },

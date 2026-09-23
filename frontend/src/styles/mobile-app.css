@@ -93,10 +93,26 @@ html.agro-touch .si-map-container {
     border-radius: 18px 18px 0 0;
   }
 
+  /* Larger weather buttons elsewhere — map left dock keeps compact 27px controls. */
   html.agro-touch .si-weather-button {
     width: 44px;
     height: 44px;
     font-size: 14px;
+  }
+
+  html.agro-touch .si-map-floating-controls__left .si-weather-button {
+    width: 27px;
+    height: 27px;
+    min-width: 27px;
+    min-height: 27px;
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+
+  html.agro-touch .si-map-floating-controls__left .si-weather-button > i {
+    font-size: 13px;
+    width: 16px;
+    height: 16px;
   }
 }
 

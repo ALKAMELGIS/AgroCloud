@@ -40,6 +40,7 @@ const SystemSettings = lazyWithRetry(() => import('../pages/admin/SystemSettings
 const SensorIntegrationPage = lazyWithRetry(() => import('../pages/sensors/SensorIntegrationPage'), 'SensorIntegrationPage')
 const GpsVehicleTracking = lazyWithRetry(() => import('../pages/sensors/GpsVehicleTracking'), 'GpsVehicleTracking')
 const AgroCloudManagement = lazyWithRetry(() => import('../pages/applications/AgroCloudManagement'), 'AgroCloudManagement')
+const JohnDeereTracking = lazyWithRetry(() => import('../pages/applications/JohnDeereTracking'), 'JohnDeereTracking')
 
 function RouteLoadingFallback({ label = 'Loading…' }: { label?: string }) {
   return (
@@ -98,6 +99,14 @@ export default function AppRoutes() {
           element={
             <Suspense fallback={<RouteLoadingFallback label="Loading AgroCloud Management…" />}>
               <AgroCloudManagement />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/applications/john-deere-tracking"
+          element={
+            <Suspense fallback={<RouteLoadingFallback label="Loading John Deere Tracking…" />}>
+              <JohnDeereTracking />
             </Suspense>
           }
         />

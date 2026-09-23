@@ -543,6 +543,74 @@ html[data-theme='dark'] .content--sensors-fit {
   min-width: 0;
 }
 
+/* GPS Vehicle Tracking — full-bleed John Deere iframe (same page, no extra toolbar) */
+.app-layout > .content.content--sensors-gps-embed {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background-image: none;
+}
+
+.content--sensors-gps-embed {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.content--sensors-gps-embed .app-main-routes {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.content--sensors-gps-embed .sensor-shell.gps-in-app-browser {
+  flex: 1 1 auto;
+  min-height: calc(100dvh - var(--app-header-block, 72px));
+  height: calc(100dvh - var(--app-header-block, 72px));
+  margin: 0;
+  padding: 0;
+}
+
+/* John Deere Tracking — full-bleed embed (Applications) */
+.app-layout > .content.content--john-deere-tracking-embed {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background-image: none;
+}
+
+.content--john-deere-tracking-embed {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.content--john-deere-tracking-embed .app-main-routes {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.content--john-deere-tracking-embed .sensor-shell.gps-in-app-browser {
+  flex: 1 1 auto;
+  min-height: calc(100dvh - var(--app-header-block, 72px));
+  height: calc(100dvh - var(--app-header-block, 72px));
+  margin: 0;
+  padding: 0;
+}
+
 /* Map UI panels — opaque surfaces above map markers (shared stack) */
 :root {
   --app-map-ui-chrome-z: 60;

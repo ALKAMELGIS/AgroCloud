@@ -11,6 +11,14 @@ import {
   writeAgroCloudDashboardUrl,
   writeAgroCloudKeepAlive,
 } from '../../lib/agroCloudDashboardStorage'
+import JohnDeereOperationsSetupCard from '../../components/JohnDeereOperationsSetupCard'
+import {
+  DEFAULT_GPS_VEHICLE_TRACKING_URL,
+  isValidGpsVehicleTrackingUrl,
+  readGpsVehicleTrackingUrl,
+  resetGpsVehicleTrackingUrl,
+  writeGpsVehicleTrackingUrl,
+} from '../../lib/gpsVehicleTrackingStorage'
 import './dashboard-settings.css'
 
 const DASHBOARD_URL_PRESETS_LS = 'agro-cloud-dashboard-url-presets-v1'
@@ -18,17 +26,24 @@ const DASHBOARD_URL_PRESETS_LS = 'agro-cloud-dashboard-url-presets-v1'
 export default function DashboardSettings() {
   const { language } = useLanguage()
   const [draft, setDraft] = useState(readAgroCloudDashboardUrl)
+  const [gpsDraft, setGpsDraft] = useState(readGpsVehicleTrackingUrl)
   const [pinDashboard, setPinDashboard] = useState(readAgroCloudKeepAlive)
   const [savedUrls, setSavedUrls] = useState<string[]>([])
   const [flash, setFlash] = useState<string | null>(null)
+  const [gpsFlash, setGpsFlash] = useState<string | null>(null)
 
   const copy = useMemo(
     () =>
       language === 'ar'
         ? {
             title: 'إعدادات لوحة التحكم',
-            lead: 'اضبط رابط لوحة ArcGIS المدمجة في صفحة «لوحة Agro Cloud». يُخزَّن الرابط في المتصفح فقط.',
+            lead: 'اضبط روابط التضمين لصفحة Agro Cloud Dashboard وGPS Vehicle Tracking. تُخزَّن في المتصفح فقط.',
             urlLabel: 'رابط ArcGIS Dashboard',
+            gpsUrlLabel: 'رابط GPS Vehicle Tracking (John Deere)',
+            gpsHint:
+              'رابط map.deere.com أو تسجيل John Deere — يُعرض داخل GPS Vehicle Tracking و John Deere Tracking.',
+            gpsInvalid: 'رابط غير صالح (https من map.deere.com أو signin.johndeere.com)',
+            gpsSaved: 'تم حفظ رابط GPS.',
             pinHeading: 'سلوك العرض',
             pinLabel: 'تثبيت اللوحة عند التنقل (بدون إعادة تحميل)',
             pinHint:
@@ -50,8 +65,13 @@ export default function DashboardSettings() {
           }
         : {
             title: 'Dashboard Settings',
-            lead: 'Set the ArcGIS Dashboard URL embedded on the Agro Cloud Dashboard page. Stored in your browser only.',
+            lead: 'Set embed URLs for the Agro Cloud Dashboard page and GPS Vehicle Tracking (Home). Stored in your browser only.',
             urlLabel: 'ArcGIS Dashboard URL',
+            gpsUrlLabel: 'GPS Vehicle Tracking URL (John Deere)',
+            gpsHint:
+              'map.deere.com or John Deere sign-in URL — loads inside GPS Vehicle Tracking and John Deere Tracking pages.',
+            gpsInvalid: 'Invalid URL — use https://map.deere.com or https://signin.johndeere.com/…',
+            gpsSaved: 'GPS link saved.',
             pinHeading: 'Display behavior',
             pinLabel: 'Keep dashboard loaded when switching pages',
             pinHint:
@@ -76,6 +96,7 @@ export default function DashboardSettings() {
 
   useEffect(() => {
     setDraft(readAgroCloudDashboardUrl())
+    setGpsDraft(readGpsVehicleTrackingUrl())
   }, [])
 
   useEffect(() => {
@@ -104,6 +125,12 @@ export default function DashboardSettings() {
     return () => window.clearTimeout(t)
   }, [flash])
 
+  useEffect(() => {
+    if (!gpsFlash) return
+    const t = window.setTimeout(() => setGpsFlash(null), 3200)
+    return () => window.clearTimeout(t)
+  }, [gpsFlash])
+
   const handleSave = useCallback(() => {
     const next = draft.trim()
     if (!isValidEmbedUrl(next)) {
@@ -127,6 +154,30 @@ export default function DashboardSettings() {
       setFlash(copy.invalid)
     }
   }, [copy.saved])
+
+  const handleGpsSave = useCallback(() => {
+    const next = gpsDraft.trim()
+    if (!isValidGpsVehicleTrackingUrl(next)) {
+      setGpsFlash(copy.gpsInvalid)
+      return
+    }
+    try {
+      writeGpsVehicleTrackingUrl(next)
+      setGpsFlash(copy.gpsSaved)
+    } catch {
+      setGpsFlash(copy.gpsInvalid)
+    }
+  }, [copy.gpsInvalid, copy.gpsSaved, gpsDraft])
+
+  const handleGpsReset = useCallback(() => {
+    setGpsDraft(DEFAULT_GPS_VEHICLE_TRACKING_URL)
+    try {
+      resetGpsVehicleTrackingUrl()
+      setGpsFlash(copy.gpsSaved)
+    } catch {
+      setGpsFlash(copy.gpsInvalid)
+    }
+  }, [copy.gpsInvalid, copy.gpsSaved])
 
   const handlePinChange = useCallback(
     (checked: boolean) => {
@@ -220,6 +271,44 @@ export default function DashboardSettings() {
           )}
         </p>
       </section>
+
+      <section className="dashboard-settings-card" aria-labelledby="gps-url-heading">
+        <h2 id="gps-url-heading" className="dashboard-settings-card-heading">
+          {copy.gpsUrlLabel}
+        </h2>
+        <input
+          id="master-gps-vehicle-url"
+          className="dashboard-settings-input"
+          aria-label={copy.gpsUrlLabel}
+          type="url"
+          dir="ltr"
+          spellCheck={false}
+          autoComplete="off"
+          placeholder={DEFAULT_GPS_VEHICLE_TRACKING_URL}
+          value={gpsDraft}
+          onChange={e => setGpsDraft(e.target.value)}
+        />
+        <div className="dashboard-settings-actions">
+          <button type="button" className="gis-btn gis-btn-primary" onClick={handleGpsSave}>
+            {copy.save}
+          </button>
+          <button type="button" className="gis-btn gis-btn-outline" onClick={handleGpsReset}>
+            {copy.reset}
+          </button>
+          {gpsFlash ? (
+            <span
+              className={
+                gpsFlash === copy.gpsInvalid ? 'dashboard-settings-flash err' : 'dashboard-settings-flash ok'
+              }
+            >
+              {gpsFlash}
+            </span>
+          ) : null}
+        </div>
+        <p className="dashboard-settings-hint">{copy.gpsHint}</p>
+      </section>
+
+      <JohnDeereOperationsSetupCard />
 
       <section className="dashboard-settings-card dashboard-settings-card-pin" aria-labelledby="dash-pin-heading">
         <h2 id="dash-pin-heading" className="dashboard-settings-card-heading">

@@ -435,6 +435,8 @@ function AppShell() {
   const isOperationsDataPage = location.pathname.startsWith('/data/')
   /** Soil / weather / irrigation / camera API integration pages */
   const isSensorsPage = location.pathname.startsWith('/sensors/')
+  const isGpsVehicleTracking = location.pathname === '/sensors/gps'
+  const isJohnDeereTracking = location.pathname === '/applications/john-deere-tracking'
   const isHomeLanding = location.pathname === '/' || location.pathname === ''
   const isGisContentPortal = location.pathname.startsWith('/master/gis-content')
   const mainContentClass = [
@@ -445,7 +447,9 @@ function AppShell() {
     isAgroCloudPlatform && 'content--agro-cloud-platform',
     isDevelopDashboard && 'content--develop-dashboard',
     isOperationsDataPage && 'content--operations-fit',
-    isSensorsPage && 'content--sensors-fit',
+    isSensorsPage && !isGpsVehicleTracking && 'content--sensors-fit',
+    isGpsVehicleTracking && 'content--sensors-gps-embed',
+    isJohnDeereTracking && 'content--john-deere-tracking-embed',
   ]
     .filter(Boolean)
     .join(' ')
@@ -478,7 +482,9 @@ function AppShell() {
           />
         ) : null}
         <main className={mainContentClass}>
-          <AppRoutes />
+          <div className="app-main-routes">
+            <AppRoutes />
+          </div>
           <PersistentAgroCloudEmbed />
         </main>
       </div>

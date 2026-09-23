@@ -8,7 +8,8 @@
  *
  * Providers, in order of preference:
  *   1. Mapbox Geocoding  — best relevance + native `autocomplete` + `proximity`.
- *   2. OpenStreetMap Nominatim — token-free fallback (no autocomplete, importance-ranked).
+ *   2. AgroCloud `/api/geocode/search` — server-side Nominatim (Arabic/English, no CORS).
+ *   3. Direct Nominatim — last resort (often blocked in the browser).
  */
 
 export type MapSearchResult = {
@@ -134,6 +135,46 @@ async function searchMapbox(query: string, opts: SearchPlacesOptions): Promise<M
   return out
 }
 
+function mayUseGeocodeServerProxy(): boolean {
+  if (import.meta.env.DEV) return true
+  if (typeof window !== 'undefined' && /github\.io$/i.test(window.location.hostname)) return false
+  return true
+}
+
+async function searchAgroCloudBackend(query: string, opts: SearchPlacesOptions): Promise<MapSearchResult[]> {
+  if (!mayUseGeocodeServerProxy()) return []
+  const params = new URLSearchParams({
+    q: query,
+    limit: String(opts.limit ?? 6),
+    lang: opts.language ?? detectQueryLanguage(query),
+  })
+  const res = await fetch(`/api/geocode/search?${params.toString()}`, { signal: opts.signal })
+  if (!res.ok) return []
+  const data = (await res.json()) as {
+    candidates?: Array<{ lng: number; lat: number; label: string; score?: number }>
+  }
+  const rows = Array.isArray(data.candidates) ? data.candidates : []
+  const out: MapSearchResult[] = []
+  for (const r of rows) {
+    const lng = Number(r.lng)
+    const lat = Number(r.lat)
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) continue
+    const lngLat: [number, number] = [lng, lat]
+    const { label, subtitle } = splitLabel(r.label ?? query, '')
+    const base = typeof r.score === 'number' && Number.isFinite(r.score) ? r.score : 0.65
+    out.push({
+      id: `geocode-${label}-${lng},${lat}`,
+      label,
+      subtitle,
+      lng,
+      lat,
+      kind: 'place',
+      score: proximityScore(base, lngLat, opts.proximity),
+    })
+  }
+  return out
+}
+
 async function searchNominatim(query: string, opts: SearchPlacesOptions): Promise<MapSearchResult[]> {
   const params = new URLSearchParams({
     format: 'json',
@@ -200,6 +241,9 @@ export async function searchPlaces(query: string, opts: SearchPlacesOptions): Pr
     let results: MapSearchResult[] = []
     if (isUsableMapboxToken(opts.mapboxToken)) {
       results = await searchMapbox(q, opts)
+    }
+    if (!results.length) {
+      results = await searchAgroCloudBackend(q, opts)
     }
     if (!results.length) {
       results = await searchNominatim(q, opts)

@@ -1048,14 +1048,24 @@ html[data-theme='light'] .si-layer-live-float .si-lll-analyze-panel {
   border-color: rgba(22, 163, 74, 0.3);
 }
 html[data-theme='light'] .si-layer-live-float .si-lll-analyze-panel__index-title,
-html[data-theme='light'] .si-layer-live-float .si-lll-analyze-panel__title,
 html[data-theme='light'] .si-layer-live-float .si-lll-analyze-panel__kicker,
 html[data-theme='light'] .si-layer-live-float .si-lll-analyze-panel__location,
 html[data-theme='light'] .si-layer-live-float .si-lll-analyze-panel__territory,
+html[data-theme='light'] .si-layer-live-float .si-lll-analyze-stat__label {
+  color: #64748b;
+}
+
+html[data-theme='light'] .si-layer-live-float .si-lll-analyze-panel__title,
 html[data-theme='light'] .si-layer-live-float .si-lll-analyze-stat strong,
-html[data-theme='light'] .si-layer-live-float .si-lll-analyze-stat__label,
 html[data-theme='light'] .si-layer-live-float .si-lll-analyze-gauge__inner strong {
   color: #0f172a;
+}
+
+html[data-theme='light'] .si-layer-live-float__body .si-lll-badges .si-layer-live-legend__badge,
+html[data-theme='light'] .si-layer-live-float__body .si-lll-badges .si-layer-live-legend__are-badge {
+  background: rgba(241, 245, 249, 0.96);
+  color: #475569;
+  border: 1px solid rgba(148, 163, 184, 0.42);
 }
 html[data-theme='light'] .si-layer-live-float .si-lll-analyze-panel__insight {
   color: #713f12;

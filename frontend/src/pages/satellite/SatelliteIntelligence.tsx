@@ -34,6 +34,12 @@ import {
   type MeasurePoint,
   type MeasureUnits,
 } from '../../lib/measurement/measurementEngine';
+import {
+  horizontalAccuracyToMapPixels,
+  mapZoomForHorizontalAccuracyM,
+  watchBestDevicePosition,
+  type DeviceGeoReading,
+} from '../../lib/deviceGeolocation';
 import '../../styles/gisModalSystem.css';
 import '../dashboards/develop-dashboard.css';
 import { parseFile, parseRemoteUrlAsFile } from '../../utils/FileLoader';
@@ -4878,7 +4884,15 @@ export default function SatelliteIntelligence() {
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchActiveIndex, setSearchActiveIndex] = useState(-1);
-  const [searchPin, setSearchPin] = useState<{ lng: number; lat: number; label: string } | null>(null);
+  const [searchPin, setSearchPin] = useState<{
+    lng: number
+    lat: number
+    label: string
+    variant?: 'search' | 'device-gps'
+    accuracyM?: number | null
+  } | null>(null);
+  const [isDeviceGpsLocating, setIsDeviceGpsLocating] = useState(false);
+  const deviceGpsWatchRef = useRef<number | null>(null);
   const searchAbortRef = useRef<AbortController | null>(null);
   const [timeSeriesStart, setTimeSeriesStart] = useState(() => getDefaultSentinelTimeSeriesRange().start);
   const [timeSeriesEnd, setTimeSeriesEnd] = useState(() => getDefaultSentinelTimeSeriesRange().end);
@@ -9485,6 +9499,96 @@ export default function SatelliteIntelligence() {
     [is3DView],
   );
 
+  const applyDeviceGpsReading = useCallback(
+    (reading: DeviceGeoReading, opts?: { refining?: boolean }) => {
+      const { lng, lat, accuracyM } = reading;
+      const label = 'My location';
+      setSearchPin({ lng, lat, label, variant: 'device-gps', accuracyM });
+      const accLabel =
+        accuracyM != null
+          ? accuracyM < 10
+            ? accuracyM.toFixed(1)
+            : String(Math.round(accuracyM))
+          : null;
+      stageGeoAiInspectCard({
+        title: label,
+        rows: [
+          { label: 'Longitude', value: lng.toFixed(7) },
+          { label: 'Latitude', value: lat.toFixed(7) },
+          ...(accLabel != null ? [{ label: 'Accuracy (m)', value: accLabel }] : []),
+        ],
+        lng,
+        lat,
+      });
+      siFlyToLngLatSmooth(lng, lat, mapZoomForHorizontalAccuracyM(accuracyM));
+      if (opts?.refining) {
+        setFieldAnalysisStatus(
+          accLabel != null
+            ? `Refining GPS fix… ±${accLabel} m`
+            : 'Refining GPS fix…',
+        );
+      } else if (accuracyM != null && accuracyM > 40) {
+        setFieldAnalysisStatus(
+          `Location ±${accLabel} m — move outdoors or wait for a tighter GPS lock for better precision.`,
+        );
+      } else {
+        setFieldAnalysisStatus('');
+      }
+    },
+    [siFlyToLngLatSmooth, stageGeoAiInspectCard],
+  );
+
+  const handleMapDeviceGpsLocate = useCallback(() => {
+    if (isDeviceGpsLocating) return;
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setFieldAnalysisStatus('Location is not supported in this browser.');
+      return;
+    }
+    if (deviceGpsWatchRef.current != null) {
+      navigator.geolocation.clearWatch(deviceGpsWatchRef.current);
+      deviceGpsWatchRef.current = null;
+    }
+    setIsDeviceGpsLocating(true);
+    setFieldAnalysisStatus('Acquiring high-accuracy GPS…');
+    const { promise, watchId } = watchBestDevicePosition({
+      targetAccuracyM: 10,
+      maxWaitMs: 28_000,
+      onProgress: reading => applyDeviceGpsReading(reading, { refining: true }),
+    });
+    deviceGpsWatchRef.current = watchId >= 0 ? watchId : null;
+    void promise
+      .then(reading => {
+        applyDeviceGpsReading(reading);
+      })
+      .catch(err => {
+        const code = err && typeof err === 'object' && 'code' in err ? (err as GeolocationPositionError).code : undefined;
+        const msg =
+          code === 1
+            ? 'Location permission denied. Allow precise location for this site.'
+            : code === 3
+              ? 'GPS timed out. Try again outdoors with a clear sky view.'
+              : 'Could not get your location.';
+        setFieldAnalysisStatus(msg);
+      })
+      .finally(() => {
+        if (deviceGpsWatchRef.current != null) {
+          navigator.geolocation.clearWatch(deviceGpsWatchRef.current);
+          deviceGpsWatchRef.current = null;
+        }
+        setIsDeviceGpsLocating(false);
+      });
+  }, [applyDeviceGpsReading, isDeviceGpsLocating]);
+
+  useEffect(
+    () => () => {
+      if (deviceGpsWatchRef.current != null && typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.clearWatch(deviceGpsWatchRef.current);
+        deviceGpsWatchRef.current = null;
+      }
+    },
+    [],
+  );
+
   const siSyncTableForIdentifyLink = useCallback(
     (link: GeoExplorerMapLink | null) => {
       if (link?.type === 'feature') {
@@ -11098,6 +11202,7 @@ export default function SatelliteIntelligence() {
       const controller = new AbortController();
       searchAbortRef.current = controller;
       setIsSearching(true);
+      setShowSearchResults(true);
       let localHits: MapSearchResult[] = [];
       try {
         localHits = searchSiMapLayersAndFeatures(q, {
@@ -24921,7 +25026,35 @@ export default function SatelliteIntelligence() {
                   </Marker>
                 ) : null}
 
-                {searchPin && (
+                {searchPin && searchPin.variant === 'device-gps' ? (
+                  <Marker longitude={searchPin.lng} latitude={searchPin.lat} anchor="center">
+                    <div
+                      className="si-map-gps-location"
+                      title={searchPin.label}
+                      aria-label={searchPin.label}
+                    >
+                      <span
+                        className="si-map-gps-location__accuracy"
+                        style={{
+                          width: horizontalAccuracyToMapPixels(
+                            searchPin.accuracyM ?? 18,
+                            searchPin.lat,
+                            typeof viewState.zoom === 'number' ? viewState.zoom : 17,
+                          ),
+                          height: horizontalAccuracyToMapPixels(
+                            searchPin.accuracyM ?? 18,
+                            searchPin.lat,
+                            typeof viewState.zoom === 'number' ? viewState.zoom : 17,
+                          ),
+                        }}
+                        aria-hidden
+                      />
+                      <span className="si-map-gps-location__pulse" aria-hidden />
+                      <span className="si-map-gps-location__dot" aria-hidden />
+                    </div>
+                  </Marker>
+                ) : null}
+                {searchPin && searchPin.variant !== 'device-gps' ? (
                   <Marker longitude={searchPin.lng} latitude={searchPin.lat} anchor="bottom">
                     <div
                       className={
@@ -24944,7 +25077,7 @@ export default function SatelliteIntelligence() {
                       <i className="fa-solid fa-location-dot si-map-search-pin__icon" aria-hidden />
                     </div>
                   </Marker>
-                )}
+                ) : null}
 
                 {drawnGeometry && aoiLayerVisible ? (
                   <Source id="drawn-index-geometry-source" type="geojson" data={drawnGeometry as any}>
@@ -26818,13 +26951,31 @@ export default function SatelliteIntelligence() {
             ref={searchRef}
             className={`si-map-search ${isSearchOpen ? 'open' : 'collapsed'}`}
           >
-            <button
-              type="button"
-              className="si-map-search-toggle"
-              onClick={() => setIsSearchOpen(open => !open)}
-            >
-              <i className={isSearchOpen ? 'fa-solid fa-xmark' : 'fa-solid fa-magnifying-glass'}></i>
-            </button>
+            <div className="si-map-search-tools">
+              <button
+                type="button"
+                className="si-map-search-toggle"
+                onClick={() => setIsSearchOpen(open => !open)}
+                aria-label={isSearchOpen ? 'Close map search' : 'Open map search'}
+                aria-expanded={isSearchOpen}
+              >
+                <i className={isSearchOpen ? 'fa-solid fa-xmark' : 'fa-solid fa-magnifying-glass'} aria-hidden></i>
+              </button>
+              <button
+                type="button"
+                className={`si-map-search-toggle si-map-gps-locate-button${isDeviceGpsLocating ? ' is-active' : ''}`}
+                onClick={() => handleMapDeviceGpsLocate()}
+                title="My location (device GPS)"
+                aria-label="Zoom map to my device GPS location"
+                disabled={isDeviceGpsLocating}
+              >
+                {isDeviceGpsLocating ? (
+                  <i className="fa-solid fa-spinner fa-spin" aria-hidden></i>
+                ) : (
+                  <i className="fa-solid fa-location-crosshairs" aria-hidden></i>
+                )}
+              </button>
+            </div>
 
             {isSearchOpen && (
               <div className="si-map-search-inner">
@@ -26856,6 +27007,16 @@ export default function SatelliteIntelligence() {
               </div>
             )}
 
+            {isSearchOpen && showSearchResults && isSearching && searchResults.length === 0 ? (
+              <div className="si-map-search-results si-map-search-results--status" role="status">
+                <span className="si-map-search-result-title">Searching places…</span>
+              </div>
+            ) : null}
+            {isSearchOpen && showSearchResults && !isSearching && searchResults.length === 0 && searchQuery.trim().length >= 2 ? (
+              <div className="si-map-search-results si-map-search-results--status" role="status">
+                <span className="si-map-search-result-title">No places found</span>
+              </div>
+            ) : null}
             {isSearchOpen && showSearchResults && searchResults.length > 0 && (
               <div className="si-map-search-results" role="listbox">
                 {searchResults.map((result, idx) => (

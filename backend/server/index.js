@@ -18,6 +18,8 @@ import { bootstrapApiSecretsFromEnv } from './bootstrapApiSecretsFromEnv.js'
 import { registerSentinelHubStatisticsRoutes } from './sentinelHubStatisticsProxy.js'
 import { registerSentinelFieldBatchRoutes } from './sentinelFieldBatchProxy.js'
 import { registerGeocodeRoutes } from './geocodeProxy.js'
+import { registerJohnDeereMapEmbedRoutes } from './johnDeereMapEmbedProxy.js'
+import { registerJohnDeereOAuthRoutes } from './johnDeereOAuthService.js'
 import { registerAcpWeatherRoutes } from './acpWeatherRoutes.js'
 import { registerChirpsRoutes } from './chirpsRoutes.js'
 import { registerWaporAetRoutes } from './waporAetProxy.js'
@@ -132,6 +134,7 @@ app.use(
     credentials: true,
   }),
 )
+registerJohnDeereMapEmbedRoutes(app)
 app.use(
   express.json({
     limit: '2mb',
@@ -140,6 +143,7 @@ app.use(
     // SEN2SR also skips so multipart GeoTIFF / large JSON can hit express.raw.
     type: (req) => {
       const path = String(req.originalUrl || req.url || '')
+      if (path.startsWith('/api/gps/john-deere-map/go/')) return false
       if (
         path.startsWith('/api/sam-detection/') ||
         path.startsWith('/api/sam2-refinement/') ||
@@ -438,6 +442,8 @@ app.get('/api/github/oauth/callback', async (req, res) => {
     res.redirect(appHashRoute(req, '/admin/github', `error=${encodeURIComponent('OAuth callback failed')}`))
   }
 })
+
+registerJohnDeereOAuthRoutes(app, { appHashRoute })
 
 app.get('/api/github/repos', async (req, res) => {
   const s = requireGitHubSession(req, res)

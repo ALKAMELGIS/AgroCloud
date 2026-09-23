@@ -1,4 +1,4 @@
-﻿/* Satellite: make `<main>` a column flex so `.si-page` gets a definite block size (Edge + Chrome height %). */
+/* Satellite: make `<main>` a column flex so `.si-page` gets a definite block size (Edge + Chrome height %). */
 main.content:has(> .si-page) {
   display: flex;
   flex-direction: column;
@@ -2050,10 +2050,18 @@ html[data-theme='light'] .si-main-content {
 }
 .si-map-floating-controls__left .si-basemap-button,
 .si-map-floating-controls__left .si-map-search-toggle,
+.si-map-floating-controls__left .si-map-gps-locate-button,
 .si-map-floating-controls__left .si-weather-button {
   width: 27px;
   height: 27px;
+  min-width: 27px;
+  min-height: 27px;
+  max-width: 27px;
+  max-height: 27px;
+  padding: 0;
   font-size: 10px;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 /* Optically uniform icon glyphs across every left-dock button. Font Awesome
    glyphs have different intrinsic widths/masses (the thermometer is narrow,
@@ -2062,6 +2070,7 @@ html[data-theme='light'] .si-main-content {
    centred square box at one size so all dock icons read as the same size. */
 .si-map-floating-controls__left .si-map-search-toggle > i,
 .si-map-floating-controls__left .si-basemap-button > i,
+.si-map-floating-controls__left .si-map-gps-locate-button > i,
 .si-map-floating-controls__left .si-weather-button > i {
   font-size: 13px;
   line-height: 1;
@@ -2116,6 +2125,32 @@ html[data-theme='light'] .si-main-content {
 .si-map-floating-controls__left .si-weather-toggle {
   position: relative;
   z-index: 5;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+/* Match map dock chrome — weather panel CSS uses a heavier glass + shadow. */
+.si-map-floating-controls__left .si-weather-button {
+  border-radius: 8px;
+  background: var(--si-map-search-bg);
+  border: 1px solid var(--si-map-search-border);
+  color: var(--si-map-ctrl-text);
+  box-shadow: var(--si-map-ctrl-shadow);
+  backdrop-filter: blur(14px) saturate(1.08);
+  -webkit-backdrop-filter: blur(14px) saturate(1.08);
+}
+
+.si-map-floating-controls__left .si-weather-button:hover {
+  background: var(--si-map-search-bg-hover);
+  border-color: var(--si-map-ctrl-border);
+  box-shadow: var(--si-map-ctrl-shadow);
+}
+
+.si-map-floating-controls__left .si-weather-button.active {
+  background: linear-gradient(135deg, var(--si-accent), var(--si-accent-strong));
+  border-color: transparent;
+  color: #f9fafb;
+  box-shadow: 0 0 0 1px var(--si-accent-ring), 0 0 22px rgba(22, 163, 74, 0.4);
 }
 
 
@@ -5938,9 +5973,17 @@ html[data-theme='dark'] .si-layer-action-modal--gis-table .si-layer-action-empty
   left: auto;
   z-index: 10;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.si-map-search-tools {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  flex: none;
 }
 
 .si-map-search-inner {
@@ -6009,6 +6052,18 @@ html[data-theme='dark'] .si-layer-action-modal--gis-table .si-layer-action-empty
   box-shadow: var(--si-map-ctrl-shadow);
 }
 
+.si-map-floating-controls__left .si-map-search-toggle.is-active {
+  background: linear-gradient(135deg, var(--si-accent), var(--si-accent-strong));
+  border-color: transparent;
+  color: #f9fafb;
+  box-shadow: 0 0 0 1px var(--si-accent-ring), 0 0 22px rgba(22, 163, 74, 0.4);
+}
+
+.si-map-floating-controls__left .si-map-search-toggle:disabled {
+  opacity: 0.85;
+  cursor: wait;
+}
+
 .si-map-search-button {
   border: none;
   outline: none;
@@ -6031,6 +6086,12 @@ html[data-theme='dark'] .si-layer-action-modal--gis-table .si-layer-action-empty
 .si-map-search-button:hover {
   background: var(--si-map-search-bg-hover);
   box-shadow: none;
+}
+
+.si-map-search-results--status {
+  padding: 10px 12px;
+  color: var(--si-map-search-result-muted);
+  font-size: 11px;
 }
 
 .si-map-search-results {
@@ -6105,6 +6166,70 @@ html[data-theme='dark'] .si-layer-action-modal--gis-table .si-layer-action-empty
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Device GPS — Google Maps “My Location” blue dot + accuracy halo */
+.si-map-gps-location {
+  position: relative;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.si-map-gps-location__accuracy {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(66, 133, 244, 0.16);
+  border: 1px solid rgba(66, 133, 244, 0.32);
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.si-map-gps-location__pulse {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(66, 133, 244, 0.35);
+  z-index: 1;
+  animation: si-map-gps-location-pulse 2s ease-out infinite;
+  pointer-events: none;
+}
+
+.si-map-gps-location__dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #4285f4;
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.35);
+  z-index: 2;
+  pointer-events: none;
+}
+
+@keyframes si-map-gps-location-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(66, 133, 244, 0.45);
+    opacity: 0.95;
+  }
+  70% {
+    box-shadow: 0 0 0 14px rgba(66, 133, 244, 0);
+    opacity: 0.35;
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(66, 133, 244, 0);
+    opacity: 0.95;
+  }
 }
 
 /* Dropped search pin + pulsing highlight (Google-Maps style). */

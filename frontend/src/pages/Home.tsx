@@ -53,6 +53,11 @@ const menuItems: MenuItem[] = [
         icon: 'fa-solid fa-seedling',
         to: '/dashboards/agro-cloud-platform',
       },
+      {
+        label: { en: 'John Deere Tracking', ar: 'تتبع John Deere' },
+        icon: 'fa-solid fa-tractor',
+        to: '/applications/john-deere-tracking',
+      },
     ],
   },
   {
