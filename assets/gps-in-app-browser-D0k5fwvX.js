@@ -1,0 +1,1 @@
+import{j as e}from"./vendor-charts-B29DT2d9.js";function i({iframeSrc:r,iframeTitle:o}){return e.jsx("div",{className:"gps-in-app-browser__frame-wrap",children:e.jsx("iframe",{title:o,src:r,allow:"geolocation; clipboard-read; clipboard-write; fullscreen",referrerPolicy:"no-referrer-when-downgrade"},r)})}export{i as J};
