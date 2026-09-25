@@ -306,10 +306,27 @@ function mergeCustomPagesWithDefaults(raw: unknown): CustomPageRecord[] {
   const fromUser = Array.isArray(raw)
     ? (raw.map(sanitizeCustomPage).filter(Boolean) as CustomPageRecord[])
     : []
-  const byPath = new Set(fromUser.map(p => p.path))
-  const byId = new Set(fromUser.map(p => p.id))
-  const defaults = DEFAULT_PAGE_LINKS.filter(d => !byPath.has(d.path) && !byId.has(d.id))
-  return [...defaults, ...fromUser]
+  const merged = [...fromUser]
+  for (const def of DEFAULT_PAGE_LINKS) {
+    const idx = merged.findIndex(p => p.path === def.path || p.id === def.id)
+    if (idx === -1) {
+      merged.push(def)
+      continue
+    }
+    const row = merged[idx]
+    const externalUrl =
+      row.bindTarget === 'external' && row.externalUrl?.trim()
+        ? row.externalUrl
+        : def.externalUrl
+    merged[idx] = {
+      ...def,
+      ...row,
+      bindTarget: 'external',
+      externalUrl,
+      visible: row.visible !== false,
+    }
+  }
+  return merged
 }
 
 function sanitizeCustomPage(raw: unknown): CustomPageRecord | null {

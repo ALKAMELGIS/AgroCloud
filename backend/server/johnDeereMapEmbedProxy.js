@@ -28,6 +28,27 @@ const TEXT_REWRITE_HOSTS = [
   'field-analyzer.deere.com',
 ]
 
+/** Okta / Deere embeds load JS from oktacdn.com — AgroCloud default CSP blocks them in iframes. */
+const EMBED_PROXY_CONTENT_SECURITY_POLICY = [
+  "default-src https: http: data: blob: 'unsafe-inline' 'unsafe-eval'",
+  "script-src https: http: data: blob: 'unsafe-inline' 'unsafe-eval'",
+  "style-src https: http: data: blob: 'unsafe-inline'",
+  "img-src https: http: data: blob:",
+  "connect-src https: http: wss: ws: blob:",
+  "font-src https: http: data:",
+  "frame-src https: http:",
+  "frame-ancestors 'self'",
+  "form-action https: http:",
+  "worker-src https: http: blob:",
+].join('; ')
+
+function applyEmbedProxyResponseHeaders(res) {
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN')
+  res.setHeader('Content-Security-Policy', EMBED_PROXY_CONTENT_SECURITY_POLICY)
+  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none')
+  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none')
+}
+
 const SKIP_RESPONSE_HEADERS = new Set([
   'content-encoding',
   'content-length',
@@ -216,6 +237,7 @@ async function proxyToDeere(req, res, target) {
     const loc = upstream.headers.get('location')
     if (loc) {
       const next = rewriteExternalUrl(loc, req)
+      applyEmbedProxyResponseHeaders(res)
       res.redirect(upstream.status, next)
       return
     }
@@ -236,7 +258,7 @@ async function proxyToDeere(req, res, target) {
     res.setHeader(key, value)
   })
 
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN')
+  applyEmbedProxyResponseHeaders(res)
 
   if (req.method === 'HEAD') {
     res.status(upstream.status).end()

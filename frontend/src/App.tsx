@@ -437,6 +437,8 @@ function AppShell() {
   const isSensorsPage = location.pathname.startsWith('/sensors/')
   const isGpsVehicleTracking = location.pathname === '/sensors/gps'
   const isJohnDeereTracking = location.pathname === '/applications/john-deere-tracking'
+  const isJohnDeereSignIn = location.pathname === '/applications/john-deere-sign-in'
+  const isAgroCloudManagement = location.pathname === '/applications/agrocloud-management'
   const isHomeLanding = location.pathname === '/' || location.pathname === ''
   const isGisContentPortal = location.pathname.startsWith('/master/gis-content')
   const mainContentClass = [
@@ -450,6 +452,8 @@ function AppShell() {
     isSensorsPage && !isGpsVehicleTracking && 'content--sensors-fit',
     isGpsVehicleTracking && 'content--sensors-gps-embed',
     isJohnDeereTracking && 'content--john-deere-tracking-embed',
+    isJohnDeereSignIn && 'content--john-deere-signin-embed',
+    isAgroCloudManagement && 'content--agrocloud-management-embed',
   ]
     .filter(Boolean)
     .join(' ')

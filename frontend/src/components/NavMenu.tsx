@@ -88,7 +88,7 @@ const navTranslations = {
     customPage: 'Custom page',
     application: 'Application',
     agroCloudManagement: 'AgroCloud Management',
-    johnDeereTracking: 'John Deere Tracking',
+    johnDeereSignIn: 'John Deere Sign-In',
   },
   ar: {
     account: 'الحساب',
@@ -146,7 +146,7 @@ const navTranslations = {
     customPage: 'صفحة مخصصة',
     application: 'التطبيقات',
     agroCloudManagement: 'إدارة AgroCloud',
-    johnDeereTracking: 'تتبع John Deere',
+    johnDeereSignIn: 'تسجيل دخول John Deere',
   },
 } as const
 

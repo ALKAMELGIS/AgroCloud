@@ -54,9 +54,9 @@ const menuItems: MenuItem[] = [
         to: '/dashboards/agro-cloud-platform',
       },
       {
-        label: { en: 'John Deere Tracking', ar: 'تتبع John Deere' },
-        icon: 'fa-solid fa-tractor',
-        to: '/applications/john-deere-tracking',
+        label: { en: 'John Deere Sign-In', ar: 'تسجيل دخول John Deere' },
+        icon: 'fa-solid fa-user-lock',
+        to: '/applications/john-deere-sign-in',
       },
     ],
   },

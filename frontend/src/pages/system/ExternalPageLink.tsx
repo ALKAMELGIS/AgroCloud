@@ -27,8 +27,8 @@ export default function ExternalPageLink({ url, title }: ExternalPageLinkProps) 
   const iframeSrc = url.trim()
 
   return (
-    <div className="page page-tight agro-cloud-page">
-      <div className="agro-cloud-frame-wrap">
+    <div className="page page-tight agro-cloud-page external-page-link">
+      <div className="gps-in-app-browser__frame-wrap agro-cloud-frame-wrap">
         {iframeSrc ? (
           <iframe
             title={title?.trim() || copy.fallbackTitle}
