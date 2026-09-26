@@ -11,6 +11,15 @@ describe('remoteSensingLayerDisplay', () => {
     )
   })
 
+  it('strips REMI band formulas without orphan punctuation', () => {
+    expect(
+      formatLayerSelectScienceLabel(
+        'Red-Edge Mangrove Index — ((B06−B05)/(B06+B05))·((B03−B11)/(B03+B11)) · mangrove discrimination',
+        'REMI',
+      ),
+    ).toBe('Red-Edge Mangrove Index · mangrove discrimination')
+  })
+
   it('strips mangrove band formulas, keeps practical wording', () => {
     expect(
       stripLayerSelectFormulas(

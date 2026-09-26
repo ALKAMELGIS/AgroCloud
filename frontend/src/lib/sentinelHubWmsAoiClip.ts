@@ -724,7 +724,18 @@ export function buildSentinelHubWmsDisplayChunks(
       })
     }
     if (clipped.length) return capWmsDisplayChunks(clipped, tileCap)
-    // Rings exist but clip failed — avoid full-canvas bleed outside AOI.
+    // GEOMETRY+EVALSCRIPT URL may exceed proxy limits for heavy scripts / large masks.
+    // Fall back to evalscript-only tiles; Mapbox raster bounds clip to the AOI extent.
+    const evalscriptB64 = buildEvalscriptB64ForLayer(u, options)
+    if (evalscriptB64 && usesSentinelHubWmsClientEvalscript(u)) {
+      return [
+        {
+          geometryWkt3857: null,
+          evalscriptB64,
+          aoiBoundsLngLat: lngLatBoundsFromOuterRings(allRings),
+        },
+      ]
+    }
     return []
   }
 

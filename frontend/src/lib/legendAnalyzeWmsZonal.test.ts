@@ -20,9 +20,14 @@ describe('legendAnalyzeWmsZonal', () => {
 
   it('splits large AOI into multiple tiles', () => {
     const bbox: [number, number, number, number] = [0, 0, 10_000, 10_000]
-    const tiles = splitBbox3857ForZonalTiles(bbox, 50_000)
+    const tiles = splitBbox3857ForZonalTiles(bbox, 25_000)
     expect(tiles.length).toBeGreaterThan(1)
     expect(tiles.length).toBeLessThanOrEqual(16)
+  })
+
+  it('uses a single coarse tile for mega AOI', () => {
+    const bbox: [number, number, number, number] = [0, 0, 10_000, 10_000]
+    expect(splitBbox3857ForZonalTiles(bbox, 120_000)).toEqual([bbox])
   })
 
   it('mergeTileIndexStats weights means by sample count', () => {

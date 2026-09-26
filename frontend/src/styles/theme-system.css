@@ -337,7 +337,7 @@ table .cell-secondary {
     .si-map-swipe-panel *
   ):not(.si-map-swipe-overlay *):not(.gis-float-panel *):not(.si-geo-ai-float *):not(
     .si-layer-legend-float *
-  ):not(.si-layer-action-modal--gis-table *):not(.si-hylg *),
+  ):not(.si-layer-action-modal--gis-table *):not(.si-hylg *):not(.si-its-float *),
 .app-layout .si-afb__select,
 .app-layout .si-rs-panel__select,
 .app-layout .si-field-analysis-select,
@@ -351,6 +351,12 @@ table .cell-secondary {
 .app-layout select optgroup {
   color: var(--ds-color-text);
   background-color: var(--theme-bg-elevated, #fafbfc);
+}
+
+.app-layout .si-its-float select option,
+.app-layout .si-its-float select optgroup {
+  background-color: var(--acp-control-bg-dark, #0a0a0a);
+  color: var(--acp-control-fg-dark, #ffffff);
 }
 
 html[data-theme='dark'] .app-layout select option,

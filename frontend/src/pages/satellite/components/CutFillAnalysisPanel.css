@@ -1,0 +1,131 @@
+.si-cutfill .si-cutfill__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+
+.si-cutfill .si-cutfill__step-tab {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.35);
+  color: #e2e8f0;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.si-cutfill .si-cutfill__step-tab.is-active {
+  border-color: rgba(56, 189, 248, 0.65);
+  background: rgba(14, 116, 144, 0.35);
+}
+
+.si-cutfill__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+
+.si-cutfill__field label {
+  color: #94a3b8;
+}
+
+.si-cutfill__field select,
+.si-cutfill__field input,
+.si-cutfill__field textarea {
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.55);
+  color: #f1f5f9;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.si-cutfill__kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.si-cutfill__kpi {
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 10px;
+  padding: 8px;
+  background: rgba(15, 23, 42, 0.4);
+}
+
+.si-cutfill__kpi-label {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.si-cutfill__kpi-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.si-cutfill__table-wrap {
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 8px;
+}
+
+.si-cutfill__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.si-cutfill__table th,
+.si-cutfill__table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+  text-align: left;
+}
+
+.si-cutfill__table tr.is-cut td {
+  color: #fecaca;
+}
+
+.si-cutfill__table tr.is-fill td {
+  color: #bfdbfe;
+}
+
+.si-cutfill__table tr.is-selected {
+  background: rgba(56, 189, 248, 0.15);
+}
+
+.si-cutfill__progress {
+  margin: 8px 0;
+}
+
+.si-cutfill__progress-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(51, 65, 85, 0.8);
+  overflow: hidden;
+}
+
+.si-cutfill__progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0ea5e9, #22d3ee);
+  transition: width 0.2s ease;
+}
+
+.si-cutfill__layer-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.si-cutfill__export-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}

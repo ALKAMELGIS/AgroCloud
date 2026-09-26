@@ -9,6 +9,13 @@ export type AgroCloudMapboxMapLike = {
   getPitch?: () => number
 }
 
+/** Zoom / center frozen for the duration of an orbit drag (wheel-only zoom otherwise). */
+export type AgroCloudOrbitCameraLock = {
+  zoom0: number
+  longitude0: number
+  latitude0: number
+}
+
 export type AgroCloudOrbitDragState = {
   startX: number
   startY: number
@@ -17,6 +24,9 @@ export type AgroCloudOrbitDragState = {
   moved: boolean
   /** Right-button drag — auto-engages 3D elevation on movement. */
   rightElevation?: boolean
+  /** Fired {@link UseAgroCloudMapOrbitNavigationOptions.onElevationOrbitEngaged} once per drag. */
+  elevationEngaged?: boolean
+  lock: AgroCloudOrbitCameraLock
 }
 
 export type AgroCloudMapViewState = {
@@ -72,9 +82,54 @@ export function hideAgroCloudMapboxAttribution(root: ParentNode | null | undefin
   window.requestAnimationFrame(remove)
 }
 
+type AgroCloudMapboxHandlerBundle = AgroCloudMapboxMapScrollLike & {
+  dragRotate?: { enable?: () => void; disable?: () => void }
+  touchZoomRotate?: { enable?: () => void; disable?: () => void; disableRotation?: () => void }
+}
+
+/** Disable Mapbox defaults that zoom or tilt on right-click / aux-click (Google Earth–style). */
+export function applyAgroCloudMapGoogleEarthMouseHandlers(
+  map: AgroCloudMapboxHandlerBundle | null | undefined,
+): void {
+  if (!map) return
+  try {
+    map.dragRotate?.disable?.()
+    map.touchZoomRotate?.disableRotation?.()
+    map.touchZoomRotate?.enable?.()
+    ensureAgroCloudMapScrollZoom(map)
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Block browser aux-click / context menu zoom on the map canvas; returns cleanup. */
+export function bindAgroCloudMapGoogleEarthMouseHandlers(
+  map: AgroCloudMapboxMapEventLike | null | undefined,
+): () => void {
+  if (!map) return () => {}
+  applyAgroCloudMapGoogleEarthMouseHandlers(map)
+  const canvas = map.getCanvas?.()
+  if (!canvas) return () => {}
+
+  const blockNonPrimaryClick = (e: Event) => {
+    const me = e as MouseEvent
+    if (me.button !== 0) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+  }
+
+  canvas.addEventListener('auxclick', blockNonPrimaryClick, true)
+
+  return () => {
+    canvas.removeEventListener('auxclick', blockNonPrimaryClick, true)
+  }
+}
+
 /** Spread onto react-map-gl `<Map>` / `<MapboxMap>` for AgroCloud navigation (no draw tools). */
 export const AGRO_CLOUD_MAPBOX_NAVIGATION_PROPS = {
-  dragRotate: true,
+  /** Native Mapbox right-drag rotate/zoom is off — use custom orbit handlers instead. */
+  dragRotate: false,
   pitchWithRotate: true,
   touchPitch: true,
   touchZoomRotate: true,
@@ -175,6 +230,18 @@ export function syncAgroCloudMapboxCamera(
   }
 }
 
+/** In-memory tile cache for pan/zoom (Mapbox GL). */
+export const AGRO_CLOUD_MAP_TILE_CACHE_MB = 96
+/** Preload adjacent zoom pyramids while moving (reduces blank tiles on wheel zoom). */
+export const AGRO_CLOUD_MAP_PREFETCH_ZOOM_DELTA = 2
+/** Concurrent raster/DEM fetches during navigation. */
+export const AGRO_CLOUD_MAP_MAX_PARALLEL_IMAGE_REQUESTS = 18
+
+export type AgroCloudMapboxMapEventLike = AgroCloudMapboxMapScrollLike & {
+  on?: (type: string, listener: (...args: unknown[]) => void) => void
+  off?: (type: string, listener: (...args: unknown[]) => void) => void
+}
+
 /** Snappy pan/zoom: instant tiles, responsive wheel, no tile cross-fade. */
 export function applyAgroCloudMapPerformanceTuning(
   map: AgroCloudMapboxMapScrollLike | null | undefined,
@@ -188,12 +255,60 @@ export function applyAgroCloudMapPerformanceTuning(
   ensureAgroCloudMapScrollZoom(map)
   try {
     map.setFadeDuration?.(0)
-    map.setMaxParallelImageRequests?.(options?.maxParallelImageRequests ?? 10)
-    map.setPrefetchedZoomDelta?.(options?.prefetchZoomDelta ?? 1)
-    const cacheMb = options?.tileCacheMb ?? 48
-    map.setMaxTileCacheSize?.(cacheMb * 1024 * 1024)
+    map.setMaxParallelImageRequests?.(
+      options?.maxParallelImageRequests ?? AGRO_CLOUD_MAP_MAX_PARALLEL_IMAGE_REQUESTS,
+    )
+    map.setPrefetchedZoomDelta?.(options?.prefetchZoomDelta ?? AGRO_CLOUD_MAP_PREFETCH_ZOOM_DELTA)
+    const cacheMb = options?.tileCacheMb ?? AGRO_CLOUD_MAP_TILE_CACHE_MB
+    const cacheBytes = cacheMb * 1024 * 1024
+    map.setMaxTileCacheSize?.(cacheBytes)
+    map.setMinTileCacheSize?.(Math.floor(cacheBytes * 0.35))
   } catch {
     /* ignore — not all Mapbox builds expose cache tuning */
+  }
+}
+
+/**
+ * Keep Mapbox tile prefetch + cache hot during pan/zoom/tilt so basemap tiles
+ * load in the background without flicker or long gray gaps.
+ */
+export function bindAgroCloudMapViewportTileWarmup(
+  map: AgroCloudMapboxMapEventLike | null | undefined,
+): () => void {
+  if (!map?.on || !map?.off) return () => {}
+
+  const onInteractionStart = () => {
+    applyAgroCloudMapPerformanceTuning(map)
+  }
+  const onInteractionEnd = () => {
+    applyAgroCloudMapPerformanceTuning(map)
+    ensureAgroCloudMapScrollZoom(map)
+    try {
+      map.triggerRepaint?.()
+    } catch {
+      /* ignore */
+    }
+  }
+
+  applyAgroCloudMapPerformanceTuning(map)
+  map.on('movestart', onInteractionStart)
+  map.on('zoomstart', onInteractionStart)
+  map.on('rotatestart', onInteractionStart)
+  map.on('pitchstart', onInteractionStart)
+  map.on('moveend', onInteractionEnd)
+  map.on('zoomend', onInteractionEnd)
+  map.on('rotateend', onInteractionEnd)
+  map.on('pitchend', onInteractionEnd)
+
+  return () => {
+    map.off('movestart', onInteractionStart)
+    map.off('zoomstart', onInteractionStart)
+    map.off('rotatestart', onInteractionStart)
+    map.off('pitchstart', onInteractionStart)
+    map.off('moveend', onInteractionEnd)
+    map.off('zoomend', onInteractionEnd)
+    map.off('rotateend', onInteractionEnd)
+    map.off('pitchend', onInteractionEnd)
   }
 }
 
@@ -336,6 +451,57 @@ export function bindAgroCloudMapWheelZoomPassthrough(
   return () => host.removeEventListener('wheel', onWheel, { capture: true })
 }
 
+export function readOrbitCameraLock(
+  map: AgroCloudMapboxMapScrollLike | null | undefined,
+  fallback: AgroCloudMapViewState,
+): AgroCloudOrbitCameraLock {
+  let zoom0 = typeof fallback.zoom === 'number' ? fallback.zoom : 2
+  let longitude0 = typeof fallback.longitude === 'number' ? fallback.longitude : 0
+  let latitude0 = typeof fallback.latitude === 'number' ? fallback.latitude : 0
+  try {
+    if (typeof map?.getZoom === 'function') zoom0 = map.getZoom()
+    const c = (map as { getCenter?: () => { lng: number; lat: number } }).getCenter?.()
+    if (c) {
+      longitude0 = c.lng
+      latitude0 = c.lat
+    }
+  } catch {
+    /* ignore */
+  }
+  return { zoom0, longitude0, latitude0 }
+}
+
+/** Revert Mapbox zoom/pan drift during orbit — zoom changes are wheel-only. */
+export function enforceOrbitCameraLock(
+  map: AgroCloudMapboxMapScrollLike | null | undefined,
+  lock: AgroCloudOrbitCameraLock,
+): void {
+  if (!map) return
+  try {
+    const z = typeof map.getZoom === 'function' ? map.getZoom() : lock.zoom0
+    const c = (map as { getCenter?: () => { lng: number; lat: number } }).getCenter?.()
+    const zoomDrift = typeof z === 'number' && Math.abs(z - lock.zoom0) > 1e-4
+    const panDrift =
+      c != null &&
+      (Math.abs(c.lng - lock.longitude0) > 1e-8 || Math.abs(c.lat - lock.latitude0) > 1e-8)
+    if (!zoomDrift && !panDrift) return
+    map.jumpTo?.({
+      center: [lock.longitude0, lock.latitude0],
+      zoom: lock.zoom0,
+      duration: 0,
+    })
+  } catch {
+    /* ignore */
+  }
+}
+
+export function applyOrbitLockToViewState<T extends AgroCloudMapViewState>(
+  vs: T,
+  lock: AgroCloudOrbitCameraLock,
+): T {
+  return { ...vs, zoom: lock.zoom0, longitude: lock.longitude0, latitude: lock.latitude0 }
+}
+
 export function readMapBearingPitch(
   map: AgroCloudMapboxMapLike | null | undefined,
   fallback: Pick<AgroCloudMapViewState, 'bearing' | 'pitch'>,
@@ -358,10 +524,9 @@ export function computeAgroCloudOrbitViewState(
 ): Pick<AgroCloudMapViewState, 'bearing' | 'pitch'> {
   const dx = clientX - orbit.startX
   const dy = clientY - orbit.startY
-  return {
-    bearing: orbit.bearing0 + dx * AGRO_CLOUD_ORBIT_BEARING_SENSITIVITY,
-    pitch: clampAgroCloudMapPitch(orbit.pitch0 - dy * AGRO_CLOUD_ORBIT_PITCH_SENSITIVITY),
-  }
+  const bearing = orbit.bearing0 + dx * AGRO_CLOUD_ORBIT_BEARING_SENSITIVITY
+  const pitch = clampAgroCloudMapPitch(orbit.pitch0 - dy * AGRO_CLOUD_ORBIT_PITCH_SENSITIVITY)
+  return { bearing, pitch }
 }
 
 export function isPrimaryPointerButton(ev: MouseEvent | TouchEvent): boolean {
@@ -376,7 +541,7 @@ export function canStartAgroCloudShiftOrbitDrag(ev: MouseEvent | undefined, bloc
   return ev.shiftKey
 }
 
-/** Right button (no Shift) — tilt/orbit and auto-enable 3D elevation while dragging. */
+/** Right button (no Shift) — 3D rotate/orbit (bearing + pitch) and auto terrain while dragging. */
 export function canStartAgroCloudRightElevationOrbitDrag(
   ev: MouseEvent | undefined,
   blocked = false,
@@ -399,6 +564,7 @@ export function createAgroCloudOrbitDragState(
   ev: MouseEvent,
   bearing0: number,
   pitch0: number,
+  lock: AgroCloudOrbitCameraLock,
   rightElevation = false,
 ): AgroCloudOrbitDragState {
   return {
@@ -408,6 +574,7 @@ export function createAgroCloudOrbitDragState(
     pitch0,
     moved: false,
     rightElevation,
+    lock,
   }
 }
 
@@ -419,7 +586,7 @@ export type UseAgroCloudMapOrbitNavigationOptions = {
   isOrbitBlocked?: () => boolean
   /** Called when orbit ended after movement (suppress follow-up map click). */
   onOrbitMoved?: () => void
-  /** Called when right-drag orbit moves (auto 3D elevation). */
+  /** Called when Shift+drag or right-drag orbit moves (auto 3D terrain / elevation). */
   onElevationOrbitEngaged?: () => void
   /** Attach global pointerup listeners (default true). Set false if host manages pointerup. */
   listenGlobalPointerUp?: boolean
@@ -439,8 +606,11 @@ export function useAgroCloudMapOrbitNavigation({
   const endOrbitDrag = useCallback((): boolean => {
     const orbit = orbitRef.current
     if (!orbit) return false
+    const map = getMapInstance() as AgroCloudMapboxMapScrollLike | null | undefined
+    enforceOrbitCameraLock(map, orbit.lock)
     orbitRef.current = null
     setMapboxDragPanEnabled(getMapInstance(), true)
+    ensureAgroCloudMapScrollZoom(getMapInstance() as AgroCloudMapboxMapScrollLike)
     if (orbit.moved) onOrbitMoved?.()
     return orbit.moved
   }, [getMapInstance, onOrbitMoved])
@@ -452,11 +622,15 @@ export function useAgroCloudMapOrbitNavigation({
       const rightElevation = canStartAgroCloudRightElevationOrbitDrag(orig, blocked)
       if (!rightElevation && !canStartAgroCloudShiftOrbitDrag(orig, blocked)) return false
 
-      const { bearing, pitch } = readMapBearingPitch(getMapInstance(), getViewState())
-      orbitRef.current = createAgroCloudOrbitDragState(orig!, bearing, pitch, rightElevation)
+      const map = getMapInstance() as AgroCloudMapboxMapScrollLike | null | undefined
+      const vs = getViewState()
+      const { bearing, pitch } = readMapBearingPitch(getMapInstance(), vs)
+      const lock = readOrbitCameraLock(map, vs)
+      orbitRef.current = createAgroCloudOrbitDragState(orig!, bearing, pitch, lock, rightElevation)
       setMapboxDragPanEnabled(getMapInstance(), false)
       try {
         orig!.preventDefault()
+        orig!.stopPropagation()
       } catch {
         /* ignore */
       }
@@ -475,14 +649,17 @@ export function useAgroCloudMapOrbitNavigation({
       const dy = orig.clientY - orbit.startY
       if (Math.abs(dx) + Math.abs(dy) > 2) orbit.moved = true
 
-      if (orbit.rightElevation && orbit.moved) {
+      if (orbit.moved && !orbit.elevationEngaged) {
+        orbit.elevationEngaged = true
         onElevationOrbitEngaged?.()
       }
 
       const next = computeAgroCloudOrbitViewState(orbit, orig.clientX, orig.clientY)
-      const merged = { ...getViewState(), ...next }
-      syncAgroCloudMapboxCamera(getMapInstance(), merged, { orientationOnly: true })
-      setViewState(prev => ({ ...prev, ...next }))
+      const map = getMapInstance() as AgroCloudMapboxMapScrollLike | null | undefined
+      const merged = applyOrbitLockToViewState({ ...getViewState(), ...next }, orbit.lock)
+      syncAgroCloudMapboxCamera(map, merged, { orientationOnly: true })
+      enforceOrbitCameraLock(map, orbit.lock)
+      setViewState(prev => applyOrbitLockToViewState({ ...prev, ...next }, orbit.lock))
       return true
     },
     [getMapInstance, getViewState, onElevationOrbitEngaged, setViewState],

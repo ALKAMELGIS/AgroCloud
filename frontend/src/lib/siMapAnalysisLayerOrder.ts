@@ -51,6 +51,31 @@ export function isSiStackedAnalysisRasterMapLayerId(layerId: string): boolean {
   return isSiAnalysisRasterMapLayerId(layerId) || isSiCropAiPredictionRasterLayerId(layerId)
 }
 
+/** Cut/Fill products drawn inside the AOI (rasters and contours). */
+export function isSiCutFillMapLayerId(layerId: string): boolean {
+  return layerId.startsWith('cutfill-')
+}
+
+const CUT_FILL_ABOVE_IDS = [
+  'drawn-index-geometry-line',
+  'drawn-index-geometry-point',
+  'si-crop-class-aoi-line',
+] as const
+
+/**
+ * Draw Cut/Fill on top of imagery and index rasters, with the AOI stroke above it.
+ * Inserting under the first `-line` layer buried the raster under the basemap.
+ */
+export function placeSiCutFillLayersInsideAoi(map: MapboxMap, _agroLineId?: string): void {
+  const ids = (typeof map.getStyle === 'function' ? (map.getStyle()?.layers ?? []) : [])
+    .map(l => l.id)
+    .filter((id): id is string => !!id && isSiCutFillMapLayerId(id) && !!map.getLayer(id))
+  for (const id of ids) raiseToTop(map, id)
+  for (const id of CUT_FILL_ABOVE_IDS) {
+    if (map.getLayer(id)) raiseToTop(map, id)
+  }
+}
+
 /** Topmost vector AOI line used as the insert anchor for analysis rasters. */
 export function resolveSiAnalysisRasterBeforeLayerId(map: MapboxMap, agroLineId?: string): string | undefined {
   const styleLayers =
@@ -61,7 +86,10 @@ export function resolveSiAnalysisRasterBeforeLayerId(map: MapboxMap, agroLineId?
     'si-crop-class-aoi-line',
     ...(styleLayers
       .map(l => l.id)
-      .filter((id): id is string => !!id && /-line$/.test(id) && !isSiAnalysisRasterMapLayerId(id))),
+      .filter(
+        (id): id is string =>
+          !!id && /-line$/.test(id) && !isSiAnalysisRasterMapLayerId(id) && !isSiCutFillMapLayerId(id),
+      )),
   ].filter((id): id is string => !!id && !!map.getLayer(id))
 
   return candidates[0]
@@ -191,4 +219,7 @@ export function syncSiMapAnalysisLayerOrder(
   } catch {
     /* ignore */
   }
+
+  // Last: Cut/Fill above imagery, AOI stroke above the raster.
+  placeSiCutFillLayersInsideAoi(map, agroLineId)
 }

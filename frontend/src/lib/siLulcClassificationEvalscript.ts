@@ -125,8 +125,7 @@ function setup() {
       units: "REFLECTANCE"
     }],
     output: { bands: 4, sampleType: "AUTO" },
-    mosaicking: "ORBIT",
-    temporal: true
+    mosaicking: Mosaicking.ORBIT
   };
 }
 

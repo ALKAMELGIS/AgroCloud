@@ -563,3 +563,10 @@ html[data-theme='dark'] .chat-avatar {
     background: var(--ds-color-surface);
   }
 }
+
+/* Map Swipe: skip glass `background` shorthand on selects (tiles chevron SVG as zigzags) */
+html[data-theme='light'] .si-map-swipe-panel__grid select,
+html[data-theme='dark'] .si-map-swipe-panel__grid select {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}

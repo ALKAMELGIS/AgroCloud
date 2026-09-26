@@ -61,7 +61,21 @@ function pickDemZoom(bbox: LngLatBBox, maxTiles: number, maxZoom: number, minZoo
   return minZoom
 }
 
-function loadTileImage(url: string, signal?: AbortSignal): Promise<HTMLImageElement | null> {
+type TileBitmap = HTMLImageElement | ImageBitmap
+
+async function loadTileImage(url: string, signal?: AbortSignal): Promise<TileBitmap | null> {
+  if (signal?.aborted) return null
+  try {
+    const res = await fetch(url, { signal, mode: 'cors', credentials: 'omit' })
+    if (!res.ok) throw new Error('tile fetch failed')
+    const blob = await res.blob()
+    if (signal?.aborted) return null
+    if (typeof createImageBitmap === 'function') {
+      return await createImageBitmap(blob)
+    }
+  } catch {
+    /* fall back to Image() */
+  }
   return new Promise(resolve => {
     if (signal?.aborted) {
       resolve(null)
@@ -106,6 +120,9 @@ export type BuildDemOptions = {
   maxZoom?: number
   minZoom?: number
   signal?: AbortSignal
+  /** Parallel Terrarium fetches (default 12). */
+  tileConcurrency?: number
+  onTileProgress?: (loaded: number, total: number) => void
 }
 
 /**
@@ -144,8 +161,9 @@ export async function buildDemGrid(options: BuildDemOptions): Promise<DemGrid | 
 
   let loaded = 0
   const maxTile = 2 ** zoom
-  const loadedMask = new Uint8Array(nx * ny)
-  await mapPool(tiles, 6, async tile => {
+  const tileConcurrency = options.tileConcurrency ?? 12
+  const reportProgress = () => options.onTileProgress?.(loaded, tiles.length)
+  await mapPool(tiles, tileConcurrency, async tile => {
     if (signal?.aborted) return
     const wrappedX = ((tile.x % maxTile) + maxTile) % maxTile
     if (tile.y < 0 || tile.y >= maxTile) return
@@ -154,9 +172,10 @@ export async function buildDemGrid(options: BuildDemOptions): Promise<DemGrid | 
     const dx = (tile.x - tx0) * TILE_SIZE
     const dy = (tile.y - ty0) * TILE_SIZE
     try {
-      ctx.drawImage(img, dx, dy, TILE_SIZE, TILE_SIZE)
+      ctx.drawImage(img as CanvasImageSource, dx, dy, TILE_SIZE, TILE_SIZE)
+      if (img instanceof ImageBitmap) img.close()
       loaded += 1
-      loadedMask[(tile.x - tx0) * ny + (tile.y - ty0)] = 1
+      reportProgress()
     } catch {
       /* ignore individual draw failures */
     }
@@ -164,15 +183,22 @@ export async function buildDemGrid(options: BuildDemOptions): Promise<DemGrid | 
 
   if (signal?.aborted || loaded === 0) return null
 
+  const cropX0 = Math.max(0, Math.floor(Math.min(wx0, wx1)) - tx0 * TILE_SIZE)
+  const cropY0 = Math.max(0, Math.floor(Math.min(wy0, wy1)) - ty0 * TILE_SIZE)
+  const cropX1 = Math.min(width, Math.ceil(Math.max(wx0, wx1)) - tx0 * TILE_SIZE)
+  const cropY1 = Math.min(height, Math.ceil(Math.max(wy0, wy1)) - ty0 * TILE_SIZE)
+  const cropW = Math.max(1, cropX1 - cropX0)
+  const cropH = Math.max(1, cropY1 - cropY0)
+
   let imageData: ImageData
   try {
-    imageData = ctx.getImageData(0, 0, width, height)
+    imageData = ctx.getImageData(cropX0, cropY0, cropW, cropH)
   } catch {
     return null
   }
 
   const px = imageData.data
-  const elev = new Float32Array(width * height)
+  const elev = new Float32Array(cropW * cropH)
   let sum = 0
   let count = 0
   for (let i = 0, p = 0; i < elev.length; i += 1, p += 4) {
@@ -193,22 +219,22 @@ export async function buildDemGrid(options: BuildDemOptions): Promise<DemGrid | 
   const mean = count ? sum / count : 0
   for (let i = 0; i < elev.length; i += 1) if (!Number.isFinite(elev[i]!)) elev[i] = mean
 
-  const originWorldPxX = tx0 * TILE_SIZE
-  const originWorldPxY = ty0 * TILE_SIZE
+  const originWorldPxX = tx0 * TILE_SIZE + cropX0
+  const originWorldPxY = ty0 * TILE_SIZE + cropY0
   const centerLat = (bbox.north + bbox.south) / 2
   const pxToLngLat = (cx: number, cy: number): [number, number] =>
     worldPxToLngLat(originWorldPxX + cx, originWorldPxY + cy, zoom)
 
   return {
-    width,
-    height,
+    width: cropW,
+    height: cropH,
     elev,
     bbox,
     zoom,
     originWorldPxX,
     originWorldPxY,
     metersPerPixel: metersPerPixelAt(centerLat, zoom),
-    cornerCoords: [pxToLngLat(0, 0), pxToLngLat(width, 0), pxToLngLat(width, height), pxToLngLat(0, height)],
+    cornerCoords: [pxToLngLat(0, 0), pxToLngLat(cropW, 0), pxToLngLat(cropW, cropH), pxToLngLat(0, cropH)],
     tilesLoaded: loaded,
     tilesTotal: tiles.length,
     pxToLngLat,

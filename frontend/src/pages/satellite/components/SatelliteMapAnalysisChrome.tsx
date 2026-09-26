@@ -1,5 +1,6 @@
 import './satelliteMapAnalysisChrome.css';
-import { useLayoutEffect, useMemo, useRef, type ReactNode, type RefObject } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { eoTimelineIndexFromFraction, SiEoTimelineSlider } from './EoTimelineSlider';
 import type {
   AoiStaticExportLngLat,
   AoiStaticMultiLayerLineChartDataset,
@@ -116,6 +117,16 @@ export type SatelliteMapAnalysisChromeProps = {
   timelinePlaying: boolean;
   onTogglePlay: () => void;
   onStep: (dir: -1 | 1) => void;
+  /** Pointer-down on the imagery track. Parent pauses playback and owns the blend. */
+  onTimelineScrubStart?: () => void;
+  /** Continuous 0–1 position while dragging. Parent cross-fades the two nearest dates. */
+  onTimelineScrub?: (fraction: number) => void;
+  /** Pointer-up. Fraction is the exact 0–1 position, not a snapped date index. */
+  onTimelineScrubEnd?: (fraction: number) => void;
+  /** Continuous 0–1 playhead. Must not re-render the map page. */
+  onTimelinePlayProgress?: (fraction: number) => void;
+  /** Play loop pushes a 0–1 thumb position without re-rendering the map page. */
+  onBindTimelineVisualFraction?: (sink: ((fraction: number | null) => void) | null) => void;
   timelineVisible: boolean;
   /** Milliseconds between automatic steps while timeline is playing (drives interval in parent). */
   timelinePlaybackMs?: number;
@@ -164,6 +175,7 @@ export type SatelliteMapAnalysisChromeProps = {
     | 'agri-field-boundary'
     | 'segformer-detection'
     | 'hydro-watershed'
+    | 'cut-fill-analysis'
     | 'well-site'
     | 'well-suitability'
     | 'flood-monitoring'
@@ -229,8 +241,6 @@ function sparkPath(values: number[], w: number, h: number): string {
 }
 
 export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProps) {
-  const chipStripRef = useRef<HTMLDivElement | null>(null);
-
   const {
     weeklyChips,
     activeChipId,
@@ -238,6 +248,11 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
     timelinePlaying,
     onTogglePlay,
     onStep,
+    onTimelineScrubStart,
+    onTimelineScrub,
+    onTimelineScrubEnd,
+    onTimelinePlayProgress,
+    onBindTimelineVisualFraction,
     timelineVisible,
     timelinePlaybackMs = 1400,
     onCycleTimelineSpeed,
@@ -295,10 +310,34 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
     onCropAiPanelOpenChange,
   } = props;
 
-  const activeFull =
-    weeklyChips.find(c => c.id === activeChipId)?.fullDate ??
-    weeklyChips[0]?.fullDate ??
-    '';
+  const [scrubFraction, setScrubFraction] = useState<number | null>(null);
+  const weeklyChipsRef = useRef(weeklyChips);
+  weeklyChipsRef.current = weeklyChips;
+  const selectedTimeRef = useRef<HTMLTimeElement | null>(null);
+
+  const bindTimelineVisualFraction = useCallback(
+    (sink: ((fraction: number | null) => void) | null) => {
+      if (!onBindTimelineVisualFraction) return;
+      if (!sink) {
+        onBindTimelineVisualFraction(null);
+        return;
+      }
+      onBindTimelineVisualFraction(fraction => {
+        sink(fraction);
+        if (fraction == null) return;
+        const chips = weeklyChipsRef.current;
+        const max = chips.length - 1;
+        if (max <= 0) return;
+        const idx = Math.min(max, Math.max(0, Math.round(fraction * max)));
+        const iso = chips[idx]?.fullDate;
+        const el = selectedTimeRef.current;
+        if (!el || !iso || el.textContent === iso) return;
+        el.textContent = iso;
+        el.dateTime = iso;
+      });
+    },
+    [onBindTimelineVisualFraction],
+  );
 
   const activeIndex = useMemo(() => {
     if (!weeklyChips.length) return 0;
@@ -306,13 +345,9 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
     return i < 0 ? 0 : i;
   }, [weeklyChips, activeChipId]);
 
-  const timelineProgress = useMemo(() => {
-    if (weeklyChips.length <= 1) return 1;
-    return activeIndex / (weeklyChips.length - 1);
-  }, [weeklyChips.length, activeIndex]);
-
-  const rangeStartLabel = weeklyChips[0]?.fullDate ?? '';
-  const rangeEndLabel = weeklyChips[weeklyChips.length - 1]?.fullDate ?? '';
+  const labelIndex =
+    scrubFraction != null ? eoTimelineIndexFromFraction(scrubFraction, weeklyChips.length) : activeIndex;
+  const activeFull = weeklyChips[labelIndex]?.fullDate ?? weeklyChips[0]?.fullDate ?? '';
 
   const playbackSpeedLabel = useMemo(() => {
     const base = 1400;
@@ -322,19 +357,10 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
     return `${Math.round(x)}×`;
   }, [timelinePlaybackMs]);
 
-  useLayoutEffect(() => {
-    if (!activeChipId || !chipStripRef.current) return;
-    const strip = chipStripRef.current;
-    const esc =
-      typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
-        ? CSS.escape(activeChipId)
-        : activeChipId.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    const chip = strip.querySelector<HTMLElement>(`[data-timeline-chip="${esc}"]`);
-    if (!chip) return;
-    const reduceMotion =
-      typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    chip.scrollIntoView({ block: 'nearest', inline: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
-  }, [activeChipId, weeklyChips.length]);
+  const handleTimelineIndex = (index: number) => {
+    const chip = weeklyChips[index];
+    if (chip) onPickChip(chip.id);
+  };
 
   const contextualDock = showMapToolbox ? (
     <SatelliteContextualAnalysisDock
@@ -421,72 +447,51 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
             </div>
 
             <div className="si-map-analysis-timeline-track-wrap">
-              <div
-                ref={chipStripRef}
-                className={[
-                  'si-map-analysis-timeline-chips',
-                  weeklyChips.length > 22 ? 'si-map-analysis-timeline-chips--dense' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                data-agrocloud-map-wheel-scroll=""
-                role="tablist"
-              >
-                {weeklyChips.map(chip => (
-                  <button
-                    key={chip.id}
-                    type="button"
-                    role="tab"
-                    data-timeline-chip={chip.id}
-                    aria-selected={chip.id === activeChipId}
-                    className={`si-map-analysis-chip ${chip.id === activeChipId ? 'si-map-analysis-chip--active' : ''}`}
-                    onClick={() => onPickChip(chip.id)}
-                    title={`${chip.fullDate} · index mean ≈ ${chip.mean.toFixed(3)}`}
-                  >
-                    {chip.shortLabel}
-                  </button>
-                ))}
-              </div>
-
-              <div className="si-map-analysis-timeline-scrub">
-                <button
-                  type="button"
-                  className="si-map-analysis-tl-nudge"
-                  aria-label="Step timeline backward (rail)"
-                  onClick={() => onStep(-1)}
-                >
-                  <i className="fa-solid fa-chevron-left" aria-hidden />
-                </button>
-                <div className="si-map-analysis-timeline-scrub-core">
-                  <span className="si-map-analysis-timeline-range-edge" title={rangeStartLabel}>
-                    {rangeStartLabel || '—'}
-                  </span>
-                  <div className="si-map-analysis-timeline-progress-track" aria-hidden>
-                    <div className="si-map-analysis-timeline-progress-bg" />
-                    <div
-                      className="si-map-analysis-timeline-progress-fill"
-                      style={{ transform: `scaleX(${timelineProgress})` }}
-                    />
-                  </div>
-                  <span className="si-map-analysis-timeline-range-edge" title={rangeEndLabel}>
-                    {rangeEndLabel || '—'}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  className="si-map-analysis-tl-nudge"
-                  aria-label="Step timeline forward (rail)"
-                  onClick={() => onStep(1)}
-                >
-                  <i className="fa-solid fa-chevron-right" aria-hidden />
-                </button>
-              </div>
+              <SiEoTimelineSlider
+                steps={weeklyChips}
+                activeIndex={activeIndex}
+                onSelectIndex={handleTimelineIndex}
+                playing={timelinePlaying}
+                playbackMs={timelinePlaybackMs}
+                onPlayProgress={fraction => {
+                  const chips = weeklyChipsRef.current;
+                  const max = chips.length - 1;
+                  if (max > 0 && selectedTimeRef.current) {
+                    const idx = Math.min(max, Math.max(0, Math.round(fraction * max)));
+                    const iso = chips[idx]?.fullDate;
+                    const el = selectedTimeRef.current;
+                    if (iso && el.textContent !== iso) {
+                      el.textContent = iso;
+                      el.dateTime = iso;
+                    }
+                  }
+                  onTimelinePlayProgress?.(fraction);
+                }}
+                onScrubStart={() => {
+                  setScrubFraction(null);
+                  onTimelineScrubStart?.();
+                }}
+                onScrubFraction={fraction => {
+                  setScrubFraction(fraction);
+                  onTimelineScrub?.(fraction);
+                }}
+                onScrubEnd={fraction => {
+                  setScrubFraction(null);
+                  onTimelineScrubEnd?.(fraction);
+                }}
+                onBindVisualFraction={bindTimelineVisualFraction}
+              />
             </div>
 
             <div className="si-map-analysis-timeline-meta">
               <div className="si-map-analysis-timeline-date-block">
                 <span className="si-map-analysis-timeline-date-label">Selected</span>
-                <time className="si-map-analysis-timeline-date" dateTime={activeFull || undefined} title={activeFull}>
+                <time
+                  ref={selectedTimeRef}
+                  className="si-map-analysis-timeline-date"
+                  dateTime={activeFull || undefined}
+                  title={activeFull}
+                >
                   {activeFull || '—'}
                 </time>
               </div>

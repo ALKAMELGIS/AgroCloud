@@ -21,8 +21,48 @@ import { estimateEtMmDayFromMoisture } from '../../../lib/etIndex'
 import { estimateLstCelsius } from '../../../lib/lstIndex'
 import { estimateSaviFromNdvi } from '../../../lib/siCropAlertDchasBeacon'
 import { isDataMaskLayerId } from '../../../lib/dataMaskLayer'
+import { filterRemoteSensingLayerSelectGroups } from '../../../lib/remoteSensingLayerUiSupport'
+import { isLulcClassificationLayerId } from '../../../lib/siLulcClassification'
 
 export type ImageryChartType = 'line' | 'area' | 'bar' | 'pie' | 'scatter'
+
+/** Synthetic daily row for chart-layer eligibility checks. */
+export function imageryTimeSeriesSampleDailyRow(): SentinelHubDailyIndexMeans {
+  return {
+    date: '2026-06-10',
+    ndvi: 0.6,
+    ndmi: 0.3,
+    ndwi: 0.2,
+    evi: 0.55,
+    ndre: 0.4,
+    savi: 0.5,
+    ciRe: 0.12,
+    ndsi: 0.1,
+    si: 0.15,
+    ssi: 0.25,
+    ndii: 0.3,
+  }
+}
+
+const IMAGERY_TS_TEMPORAL_LAYER_IDS = new Set(['VRI', 'CCI', 'EPD', 'EHD'])
+
+/** Whether the layer has a chart pipeline in Imagery Time Series (not map-only / broken composites). */
+export function isImageryTimeSeriesChartLayerId(layerId: string): boolean {
+  const id = layerId.trim().toUpperCase()
+  if (!id) return false
+  if (isDataMaskLayerId(id)) return false
+  if (isChirpsPrecipLayerId(id)) return true
+  if (isLulcClassificationLayerId(id)) return true
+  if (isAdiLayerId(id) || isNcadiLayerId(id)) return true
+  if (IMAGERY_TS_TEMPORAL_LAYER_IDS.has(id)) return true
+  if (isAgroDeltaCompositeLayerId(id)) {
+    const staticId = resolveAgroStaticLayerIdForDelta(id)
+    return staticId != null && isImageryTimeSeriesChartLayerId(staticId)
+  }
+  const row = imageryTimeSeriesSampleDailyRow()
+  const value = evaluateImageryLayerDailyValue(id, row)
+  return value != null && Number.isFinite(value)
+}
 
 /**
  * Format Chart.js linear y-tick labels without float artifacts
@@ -45,9 +85,12 @@ export function formatImageryTimeSeriesYTick(value: string | number): string {
   return String(Number(rounded.toFixed(3)))
 }
 
-/** Layer Live index catalog — same groups as Satellite Intelligence Remote Sensing. */
+/** Imagery Time Series layer picker — indices with a working chart pipeline only. */
 export function buildImageryTimeSeriesLayerGroups(): RemoteSensingLayerSelectGroup[] {
-  return buildRemoteSensingLayerSelectGroups([])
+  return filterRemoteSensingLayerSelectGroups(
+    buildRemoteSensingLayerSelectGroups([]),
+    isImageryTimeSeriesChartLayerId,
+  )
 }
 
 export function flattenImageryTimeSeriesLayerOptions() {

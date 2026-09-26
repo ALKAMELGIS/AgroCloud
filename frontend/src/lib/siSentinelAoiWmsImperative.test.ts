@@ -5,6 +5,7 @@ import {
   ensureSiSentinelAoiWmsPingPongStackOnMap,
   hideSiSentinelAoiWmsPingPongStack,
   isSiSentinelAoiWmsPingPongMapId,
+  presentSiSentinelAoiWmsPingPongBlend,
   revealSiSentinelAoiWmsPingPongStack,
   siSentinelAoiWmsPingPongLayerId,
   siSentinelAoiWmsPingPongSourceId,
@@ -655,5 +656,67 @@ describe('siSentinelAoiWmsImperative', () => {
     expect(sources.has(activeSource)).toBe(true)
     expect(sources.get(activeSource)?.tiles).toEqual(['https://example.test/cold-ndvi'])
     expect(layout).toContainEqual([activeLayer, 'visibility', 'visible'])
+  })
+
+  it('blends two dates on the existing slots without removing sources', () => {
+    const runtime = createSiSentinelAoiWmsPingPongRuntime()
+    const stack = makeStack('https://example.test/d0')
+    const sources = new Map<string, { tiles: string[]; setTiles: ReturnType<typeof vi.fn> }>()
+    const paint: Array<[string, string, unknown]> = []
+    const removed: string[] = []
+    let addCount = 0
+    const map = {
+      getSource: (id: string) => sources.get(id) ?? null,
+      getLayer: () => ({}),
+      addSource: (id: string, spec: { tiles: string[] }) => {
+        addCount += 1
+        const src = {
+          tiles: [...spec.tiles],
+          setTiles: vi.fn((tiles: string[]) => {
+            src.tiles = [...tiles]
+          }),
+        }
+        sources.set(id, src)
+      },
+      addLayer: vi.fn(),
+      removeLayer: (id: string) => removed.push(id),
+      removeSource: (id: string) => removed.push(id),
+      isSourceLoaded: () => true,
+      on: vi.fn(),
+      off: vi.fn(),
+      setLayoutProperty: vi.fn(),
+      setPaintProperty: (id: string, prop: string, value: unknown) => {
+        paint.push([id, prop, value])
+      },
+    }
+
+    ensureSiSentinelAoiWmsPingPongStackOnMap(map as any, stack as any, runtime)
+    presentSiSentinelAoiWmsPingPongBlend(map as any, stack as any, runtime, {
+      fromUrls: ['https://example.test/d0'],
+      toUrls: ['https://example.test/d1'],
+      t: 0.25,
+      opacity: 1,
+    })
+    paint.length = 0
+    presentSiSentinelAoiWmsPingPongBlend(map as any, stack as any, runtime, {
+      fromUrls: ['https://example.test/d0'],
+      toUrls: ['https://example.test/d1'],
+      t: 0.25,
+      opacity: 1,
+    })
+
+    const fromLayer = siSentinelAoiWmsPingPongLayerId(SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX, 0, 0)
+    const toLayer = siSentinelAoiWmsPingPongLayerId(SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX, 0, 1)
+    expect(paint).toContainEqual([fromLayer, 'raster-opacity', 0.75])
+    expect(paint).toContainEqual([toLayer, 'raster-opacity', 0.25])
+    expect(removed).toEqual([])
+    expect(addCount).toBe(2)
+    presentSiSentinelAoiWmsPingPongBlend(map as any, stack as any, runtime, {
+      fromUrls: ['https://example.test/d0'],
+      toUrls: ['https://example.test/d1'],
+      t: 0.25,
+      opacity: 1,
+    })
+    expect(addCount).toBe(2)
   })
 })

@@ -201,6 +201,14 @@ export function SiImageryTimeSeriesPanel({
 
   const layerGroups = useMemo(() => buildImageryTimeSeriesLayerGroups(), [])
 
+  const supportedLayerIdSet = useMemo(() => {
+    const set = new Set<string>()
+    for (const group of layerGroups) {
+      for (const opt of group.options) set.add(opt.id.trim().toUpperCase())
+    }
+    return set
+  }, [layerGroups])
+
   const [selectedFieldKey, setSelectedFieldKey] = useState('')
   const [selectedFieldKeys, setSelectedFieldKeys] = useState<string[]>([])
   const [analysisMode] = useState<SiImageryAnalysisMode>('single-layer-trend')
@@ -980,6 +988,20 @@ export function SiImageryTimeSeriesPanel({
       return [id]
     })
   }, [defaultLayerId])
+
+  useEffect(() => {
+    if (!supportedLayerIdSet.size) return
+    setSelectedLayerIds(prev => {
+      const next = prev.filter(id => supportedLayerIdSet.has(id.trim().toUpperCase()))
+      if (next.length) {
+        const unchanged =
+          next.length === prev.length && next.every((id, index) => id === prev[index])
+        return unchanged ? prev : next
+      }
+      const fallback = supportedLayerIdSet.has('NDVI') ? 'NDVI' : [...supportedLayerIdSet][0]!
+      return [fallback]
+    })
+  }, [supportedLayerIdSet])
 
   useEffect(() => {
     if (analysisMode !== 'single-layer-trend') return

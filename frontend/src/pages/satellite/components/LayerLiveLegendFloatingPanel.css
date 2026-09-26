@@ -282,53 +282,6 @@
   border: 1px solid rgba(134, 239, 172, 0.22);
 }
 
-/* Color key float — badges + Health Score panel: muted black typography on light surfaces */
-.si-layer-live-float__body .si-lll-badges .si-layer-live-legend__badge,
-.si-layer-live-float__body .si-lll-badges .si-layer-live-legend__are-badge {
-  background: rgba(241, 245, 249, 0.96);
-  color: #475569;
-  border: 1px solid rgba(148, 163, 184, 0.42);
-}
-
-.si-layer-live-float__body .si-lll-analyze-panel {
-  background: rgba(255, 255, 255, 0.94);
-  border-color: rgba(148, 163, 184, 0.32);
-  box-shadow:
-    0 4px 16px rgba(15, 23, 42, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
-}
-
-.si-layer-live-float__body .si-lll-analyze-panel__kicker,
-.si-layer-live-float__body .si-lll-analyze-panel__index-title,
-.si-layer-live-float__body .si-lll-analyze-panel__location,
-.si-layer-live-float__body .si-lll-analyze-panel__territory,
-.si-layer-live-float__body .si-lll-analyze-panel__territory-key,
-.si-layer-live-float__body .si-lll-analyze-stat__label {
-  color: #64748b;
-}
-
-.si-layer-live-float__body .si-lll-analyze-panel__title,
-.si-layer-live-float__body .si-lll-analyze-stat strong,
-.si-layer-live-float__body .si-lll-analyze-gauge__inner strong {
-  color: #0f172a;
-}
-
-.si-layer-live-float__body .si-lll-analyze-gauge__inner {
-  background: rgba(255, 255, 255, 0.98);
-  border-color: rgba(148, 163, 184, 0.28);
-}
-
-.si-layer-live-float__body .si-lll-analyze-stat {
-  background: rgba(248, 250, 252, 0.98);
-  border-color: rgba(148, 163, 184, 0.26);
-}
-
-.si-layer-live-float__body .si-lll-analyze-panel__insight {
-  color: #713f12;
-  background: rgba(254, 243, 199, 0.45);
-  border-color: rgba(217, 119, 6, 0.22);
-}
-
 .si-layer-live-float__body .si-layer-live-legend__bar {
   border-color: rgba(255, 255, 255, 0.12);
 }
@@ -432,4 +385,86 @@ html[data-theme='light'] .si-layer-live-float__body .si-layer-live-legend__class
 html[data-theme='light'] .si-layer-live-float__body .si-lll-meta dt,
 html[data-theme='light'] .si-layer-live-float__body .si-lll-row-range {
   color: #64748b;
+}
+
+/* ── Health Score analyze panel — follows html[data-theme] instantly ───── */
+html[data-theme='dark'] .si-layer-live-float__body .si-lll-analyze-panel {
+  background: rgba(11, 15, 19, 0.9);
+  border-color: rgba(132, 204, 22, 0.34);
+  box-shadow:
+    0 6px 22px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+html[data-theme='dark'] .si-layer-live-float__body .si-lll-analyze-panel__kicker,
+html[data-theme='dark'] .si-layer-live-float__body .si-lll-analyze-panel__index-title,
+html[data-theme='dark'] .si-layer-live-float__body .si-lll-analyze-panel__location,
+html[data-theme='dark'] .si-layer-live-float__body .si-lll-analyze-panel__territory,
+html[data-theme='dark'] .si-layer-live-float__body .si-lll-analyze-panel__territory-key,
+html[data-theme='dark'] .si-layer-live-float__body .si-lll-analyze-stat__label {
+  color: var(--theme-text-muted);
+}
+
+html[data-theme='dark'] .si-layer-live-float__body .si-lll-analyze-panel__title,
+html[data-theme='dark'] .si-layer-live-float__body .si-lll-analyze-stat strong,
+html[data-theme='dark'] .si-layer-live-float__body .si-lll-analyze-gauge__inner strong {
+  color: var(--theme-text-primary);
+}
+
+html[data-theme='dark'] .si-layer-live-float__body .si-lll-analyze-gauge__inner {
+  background: rgba(11, 15, 19, 0.92);
+  border-color: var(--theme-border);
+}
+
+html[data-theme='dark'] .si-layer-live-float__body .si-lll-analyze-stat {
+  background: var(--theme-surface-muted);
+  border-color: var(--theme-border);
+}
+
+html[data-theme='dark'] .si-layer-live-float__body .si-lll-analyze-gauge__insight {
+  color: color-mix(in srgb, var(--si-lll-gauge-accent, #eab308) 55%, var(--theme-text-secondary));
+}
+
+html[data-theme='light'] .si-layer-live-float__body .si-lll-badges .si-layer-live-legend__badge,
+html[data-theme='light'] .si-layer-live-float__body .si-lll-badges .si-layer-live-legend__are-badge {
+  background: rgba(241, 245, 249, 0.96);
+  color: var(--theme-text-secondary);
+  border: 1px solid rgba(148, 163, 184, 0.42);
+}
+
+html[data-theme='light'] .si-layer-live-float__body .si-lll-analyze-panel {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(22, 163, 74, 0.28);
+  box-shadow:
+    0 4px 16px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+html[data-theme='light'] .si-layer-live-float__body .si-lll-analyze-panel__kicker,
+html[data-theme='light'] .si-layer-live-float__body .si-lll-analyze-panel__index-title,
+html[data-theme='light'] .si-layer-live-float__body .si-lll-analyze-panel__location,
+html[data-theme='light'] .si-layer-live-float__body .si-lll-analyze-panel__territory,
+html[data-theme='light'] .si-layer-live-float__body .si-lll-analyze-panel__territory-key,
+html[data-theme='light'] .si-layer-live-float__body .si-lll-analyze-stat__label {
+  color: var(--theme-text-muted);
+}
+
+html[data-theme='light'] .si-layer-live-float__body .si-lll-analyze-panel__title,
+html[data-theme='light'] .si-layer-live-float__body .si-lll-analyze-stat strong,
+html[data-theme='light'] .si-layer-live-float__body .si-lll-analyze-gauge__inner strong {
+  color: var(--theme-text-primary);
+}
+
+html[data-theme='light'] .si-layer-live-float__body .si-lll-analyze-gauge__inner {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: var(--theme-border-strong);
+}
+
+html[data-theme='light'] .si-layer-live-float__body .si-lll-analyze-stat {
+  background: rgba(248, 250, 252, 0.98);
+  border-color: var(--theme-border-strong);
+}
+
+html[data-theme='light'] .si-layer-live-float__body .si-lll-analyze-gauge__insight {
+  color: #92400e;
 }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { buildRemoteSensingLayerSelectGroups, flattenRemoteSensingLayerSelectGroups } from '../../../lib/agroCompositeIndices'
 import {
   aggregateImageryTimeSeries,
   aggregateImageryTimeSeriesMulti,
@@ -12,6 +13,7 @@ import {
   computeLinearRegression,
   evaluateImageryLayerDailyValue,
   flattenImageryTimeSeriesLayerOptions,
+  isImageryTimeSeriesChartLayerId,
   pruneImageryTimeSeriesToObservations,
   pruneSingleLayerImagerySeries,
   formatImageryTimeSeriesYTick,
@@ -31,13 +33,16 @@ function dailyRow(overrides: Partial<SentinelHubDailyIndexMeans> = {}): Sentinel
 }
 
 describe('acpImageryTimeSeries', () => {
-  it('exposes full Layer Live catalog groups like Satellite Intelligence', () => {
+  it('exposes chart-supported layer groups only (not full Layer Live catalog)', () => {
     const groups = buildImageryTimeSeriesLayerGroups()
     const flat = flattenImageryTimeSeriesLayerOptions()
     expect(groups.some(g => g.label.includes('Core Interpretation'))).toBe(true)
     expect(groups.some(g => g.label.includes('Vegetation Health'))).toBe(true)
     expect(groups.some(g => g.label.includes('Crop Phenology'))).toBe(true)
     expect(groups.some(g => g.label.includes('Delta'))).toBe(true)
+    for (const opt of flat) {
+      expect(isImageryTimeSeriesChartLayerId(opt.id)).toBe(true)
+    }
     expect(flat.some(o => o.id === 'NDVI')).toBe(true)
     expect(flat.some(o => o.id === 'ET')).toBe(true)
     expect(flat.some(o => o.id === 'VHS')).toBe(true)
@@ -46,15 +51,15 @@ describe('acpImageryTimeSeries', () => {
     expect(flat.some(o => o.id === 'DCHAS')).toBe(true)
     expect(flat.some(o => o.id === 'PRI')).toBe(true)
     expect(flat.some(o => o.id === 'CGI')).toBe(true)
-    expect(flat.some(o => o.id === 'CVI')).toBe(true)
-    expect(flat.some(o => o.id === 'CHS')).toBe(true)
-    expect(flat.some(o => o.id === 'CMI')).toBe(true)
-    expect(flat.some(o => o.id === 'HRI')).toBe(true)
+    expect(flat.some(o => o.id === 'LULC')).toBe(true)
+    expect(flat.some(o => o.id === 'ADI')).toBe(true)
     expect(flat.some(o => o.id === 'VRI')).toBe(true)
-    expect(flat.some(o => o.id === 'CCI')).toBe(true)
-    expect(flat.some(o => o.id === 'EPD')).toBe(true)
-    expect(flat.some(o => o.id === 'EHD')).toBe(true)
-    expect(flat.length).toBeGreaterThan(40)
+    expect(flat.some(o => o.id === 'MVI')).toBe(false)
+    expect(flat.some(o => o.id === 'IOI')).toBe(false)
+    expect(flat.some(o => o.id === 'MNDWI')).toBe(false)
+    expect(flat.length).toBeGreaterThan(20)
+    const fullCount = flattenRemoteSensingLayerSelectGroups(buildRemoteSensingLayerSelectGroups([])).length
+    expect(flat.length).toBeLessThan(fullCount)
   })
 
   it('evaluates crop phenology composites from daily means', () => {

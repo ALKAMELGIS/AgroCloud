@@ -1,3 +1,4 @@
+import type { AnalyzeTerritoryLevel } from './layerLegendAnalyzeIndexConfig'
 import {
   formatLegendStatValue,
   formatLowPct,
@@ -19,29 +20,54 @@ const STAT_ICONS = {
   avg: 'fa-chart-column',
 } as const
 
+function resolveHealthMood(level: AnalyzeTerritoryLevel | null): {
+  emoji: string
+  mod: string
+  ariaLabel: string
+} {
+  switch (level) {
+    case 'Healthy':
+      return { emoji: '😊', mod: 'healthy', ariaLabel: 'Healthy condition' }
+    case 'Moderate':
+      return { emoji: '😐', mod: 'moderate', ariaLabel: 'Moderate condition' }
+    case 'Warning':
+      return { emoji: '😟', mod: 'warning', ariaLabel: 'Stressed condition' }
+    case 'Critical':
+      return { emoji: '😰', mod: 'critical', ariaLabel: 'Critical condition' }
+    default:
+      return { emoji: '·', mod: 'unknown', ariaLabel: 'Condition unknown' }
+  }
+}
+
 function ScoreGauge({
   score,
   accentColor,
   loading,
+  ariaLabel,
 }: {
   score: number | null
   accentColor: string | null
   loading?: boolean
+  ariaLabel?: string
 }) {
   const pct = score != null && Number.isFinite(score) ? Math.max(0, Math.min(100, score)) : 0
   const accent = accentColor ?? '#84cc16'
+  const gaugeStyle = {
+    ['--si-lll-gauge-pct' as string]: `${pct}%`,
+    ['--si-lll-gauge-accent' as string]: accent,
+  }
   return (
-    <div
-      className="si-lll-analyze-gauge"
-      style={{
-        ['--si-lll-gauge-pct' as string]: `${pct}%`,
-        ['--si-lll-gauge-accent' as string]: accent,
-      }}
-      aria-hidden
-    >
-      <div className="si-lll-analyze-gauge__ring" />
-      <div className="si-lll-analyze-gauge__inner">
-        <strong>{loading ? '…' : score != null ? Math.round(score) : '—'}</strong>
+    <div className="si-lll-analyze-gauge-column" style={gaugeStyle}>
+      <div
+        className="si-lll-analyze-gauge"
+        style={gaugeStyle}
+        aria-hidden={!ariaLabel}
+        aria-label={ariaLabel}
+      >
+        <div className="si-lll-analyze-gauge__ring" />
+        <div className="si-lll-analyze-gauge__inner">
+          <strong>{loading ? '…' : score != null ? Math.round(score) : '—'}</strong>
+        </div>
       </div>
     </div>
   )
@@ -70,8 +96,13 @@ export function LayerLiveLegendAnalyzePanel({
     hasData ||
     (stats.average != null && Number.isFinite(stats.average)) ||
     stats.healthScore != null
-  const showInsight = hasAoi && statsReady && stats.insight && !loading
+  const showCaption = hasAoi && statsReady && !loading
   const showScore = statsReady && stats.healthScore != null
+  const mood = resolveHealthMood(showCaption && showScore ? stats.territoryLevel : null)
+  const gaugeAriaLabel =
+    showCaption && showScore && stats.healthScore != null
+      ? `Health score ${Math.round(stats.healthScore)}. ${mood.ariaLabel}.`
+      : undefined
 
   return (
     <section
@@ -86,11 +117,21 @@ export function LayerLiveLegendAnalyzePanel({
             <i className="fa-solid fa-location-dot" aria-hidden />
             {locationLabel}
           </p>
+          {showCaption && showScore && stats.territoryLevel ? (
+            <span
+              className={`si-lll-analyze-panel__mood si-lll-analyze-gauge__mood si-lll-analyze-gauge__mood--${mood.mod}`}
+              role="img"
+              aria-label={mood.ariaLabel}
+            >
+              {mood.emoji}
+            </span>
+          ) : null}
         </div>
         <ScoreGauge
           score={showScore ? stats.healthScore : null}
           accentColor={statsReady ? levelColor : '#64748b'}
           loading={loading && !statsReady}
+          ariaLabel={gaugeAriaLabel}
         />
       </div>
 
@@ -117,12 +158,6 @@ export function LayerLiveLegendAnalyzePanel({
         </div>
       </div>
 
-      {showInsight ? (
-        <p className="si-lll-analyze-panel__insight">
-          <i className="fa-solid fa-triangle-exclamation" aria-hidden />
-          {stats.insight}
-        </p>
-      ) : null}
     </section>
   )
 }

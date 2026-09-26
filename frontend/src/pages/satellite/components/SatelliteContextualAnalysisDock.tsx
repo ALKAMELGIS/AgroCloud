@@ -42,6 +42,7 @@ export type SatelliteContextPanelId =
   | 'agri-field-boundary'
   | 'segformer-detection'
   | 'hydro-watershed'
+  | 'cut-fill-analysis'
   | 'well-site'
   | 'well-suitability'
   | 'flood-monitoring'
@@ -102,6 +103,7 @@ export type SatelliteContextualAnalysisDockProps = {
     | 'agri-field-boundary'
     | 'segformer-detection'
     | 'hydro-watershed'
+    | 'cut-fill-analysis'
     | 'well-site'
     | 'well-suitability'
     | 'flood-monitoring'
@@ -231,6 +233,13 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     hint: 'AOI → DEM, flow, streams, watershed & mesh for distributed hydrology.',
   },
   {
+    id: 'cut-fill-analysis',
+    icon: 'fa-solid fa-mound',
+    label: 'Cut & Fill',
+    title: 'Cut & Fill Analysis',
+    hint: 'Existing vs design surfaces → earthwork volumes, ΔZ map, contours & exports.',
+  },
+  {
     id: 'well-site',
     icon: 'fa-solid fa-droplet',
     label: 'Well Site',
@@ -335,6 +344,7 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
   'tree-detections',
   'agri-field-boundary',
   'hydro-watershed',
+  'cut-fill-analysis',
   'well-site',
   'well-suitability',
   'flood-monitoring',
@@ -349,6 +359,7 @@ const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
   'tree-detections',
   'agri-field-boundary',
   'hydro-watershed',
+  'cut-fill-analysis',
   'well-site',
   'well-suitability',
   'flood-monitoring',
@@ -375,6 +386,7 @@ const RAIL_GROUPS_MAP: SatelliteContextPanelId[][] = [
     'map-swipe',
     'layer-live-legend',
     'hydro-watershed',
+    'cut-fill-analysis',
   ],
   [
     'tree-detections',

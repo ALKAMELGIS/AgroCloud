@@ -10,7 +10,7 @@
  * @see https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer
  */
 
-import { ensureBackendAvailable, resolveApiOrigin } from './apiOrigin'
+import { apiUrl, ensureBackendAvailable, resolveApiOrigin } from './apiOrigin'
 import { ensureRasterStyleMaxNativeZoom, rasterTileMaxNativeZoom } from './rasterTileZoom'
 
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services'
@@ -160,14 +160,28 @@ let terrainApiProbe: Promise<boolean> | null = null
  * `false` without ever touching `/api/terrain/esri-rgb/*`. The result is cached
  * here so repeated basemap/pitch changes never re-probe.
  */
+/** Clear cached terrain proxy probe (e.g. user started the backend after a failed 3D attempt). */
+export function resetTerrainApiAvailabilityProbe(): void {
+  terrainApiAvailability = null
+  terrainApiProbe = null
+}
+
 export function ensureTerrainApiAvailable(): Promise<boolean> {
   if (terrainApiAvailability !== null) return Promise.resolve(terrainApiAvailability)
   if (terrainApiProbe) return terrainApiProbe
   terrainApiProbe = (async () => {
     try {
-      terrainApiAvailability = await ensureBackendAvailable()
+      const backendOk = await ensureBackendAvailable()
+      if (!backendOk) {
+        terrainApiAvailability = false
+        return false
+      }
+      // Health alone is optimistic in dev — confirm the terrain-RGB proxy returns a tile.
+      const probeUrl = apiUrl('/api/terrain/esri-rgb/8/120/85.png')
+      const res = await fetch(probeUrl, { method: 'GET', credentials: 'include' })
+      const type = res.headers.get('content-type') ?? ''
+      terrainApiAvailability = res.ok && /image\/png/i.test(type)
     } catch {
-      // Any unexpected failure — degrade gracefully to the flat raster basemap.
       terrainApiAvailability = false
     }
     return terrainApiAvailability
@@ -648,9 +662,19 @@ function whenDemSourceReady(map: MapboxMapLike, generation: number, run: () => v
  * Does the current basemap / camera pitch call for a 3D mesh, ignoring backend
  * availability? Used to decide whether it's worth probing the terrain proxy.
  */
-function wantsTerrainForView(basemapId: string, pitch: number): boolean {
+function wantsTerrainForView(
+  basemapId: string,
+  pitch: number,
+  terrainLayerEnabled = false,
+): boolean {
+  if (terrainLayerEnabled && pitch >= AGRO_CLOUD_TERRAIN_PITCH_THRESHOLD) return true
   if (basemapId && isTerrain3dBasemapId(basemapId)) return true
   return pitch >= AGRO_CLOUD_TERRAIN_PITCH_THRESHOLD
+}
+
+export type SyncAgroCloudTerrain3dOpts = {
+  /** When true, enable DEM mesh at tilted pitch without switching basemap (Google Earth–style). */
+  terrainLayerEnabled?: boolean
 }
 
 /** Enable or disable 3D terrain mesh after style load, basemap swap, or pitch change. */
@@ -658,15 +682,17 @@ export function syncAgroCloudTerrain3d(
   map: MapboxMapLike | null | undefined,
   basemapId: string,
   pitch?: number,
+  opts?: SyncAgroCloudTerrain3dOpts,
 ): void {
   if (!map || !isMapStyleReady(map)) return
 
   const generation = bumpTerrainSyncGeneration(map)
   const livePitch = readLivePitch(map, pitch ?? 0)
+  const terrainOn = opts?.terrainLayerEnabled === true
   const showHillshade = is3dTopographicBasemapId(basemapId)
 
   // No mesh wanted for this view → tear down immediately, no probe needed.
-  if (!wantsTerrainForView(basemapId, livePitch)) {
+  if (!wantsTerrainForView(basemapId, livePitch, terrainOn)) {
     disableTerrainMesh(map)
     return
   }

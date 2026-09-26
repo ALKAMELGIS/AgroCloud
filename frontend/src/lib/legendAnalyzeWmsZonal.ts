@@ -23,8 +23,15 @@ import { SI_SENTINEL_WMS_MAXCC, wmsCloudMaskGuardLines } from './sentinelSclClou
 export const LEGEND_ANALYZE_LARGE_AOI_HA = 1200
 
 const WMS_TILE_PIXELS = 256
-const WMS_FETCH_CONCURRENCY = 4
+const WMS_FETCH_CONCURRENCY = 10
 const MAX_WMS_ZONAL_TILES = 16
+/** Above this size, one coarse GetMap is faster than many 256² tiles. */
+const LEGEND_ANALYZE_MEGA_AOI_HA = 50_000
+const LEGEND_ANALYZE_VERY_LARGE_AOI_HA = 10_000
+
+const zonalStatsCache = new Map<string, { stats: LegendWmsZonalStats; at: number }>()
+const ZONAL_STATS_CACHE_TTL_MS = 6 * 60 * 1000
+const ZONAL_STATS_CACHE_MAX = 48
 
 export type LegendWmsZonalStats = {
   min: number | null
@@ -174,6 +181,13 @@ export function bbox3857ToWktPolygon(bbox: [number, number, number, number]): st
 }
 
 /** Split a Web Mercator bbox into a capped grid for tiled WMS zonal stats. */
+export function resolveWmsZonalGetMapPixels(areaHa: number, tileCount: number): number {
+  if (areaHa >= LEGEND_ANALYZE_MEGA_AOI_HA) return 128
+  if (areaHa >= LEGEND_ANALYZE_VERY_LARGE_AOI_HA) return 160
+  if (tileCount > 1) return 192
+  return WMS_TILE_PIXELS
+}
+
 export function splitBbox3857ForZonalTiles(
   bbox: [number, number, number, number],
   areaHa: number,
@@ -183,7 +197,12 @@ export function splitBbox3857ForZonalTiles(
 
   if (areaHa <= LEGEND_ANALYZE_LARGE_AOI_HA) return [bbox]
 
-  const targetTiles = Math.min(MAX_WMS_ZONAL_TILES, Math.max(4, Math.ceil(areaHa / 800)))
+  if (areaHa >= LEGEND_ANALYZE_MEGA_AOI_HA) return [bbox]
+
+  const targetTiles = Math.min(
+    MAX_WMS_ZONAL_TILES,
+    Math.max(4, Math.ceil(areaHa / (areaHa >= LEGEND_ANALYZE_VERY_LARGE_AOI_HA ? 2500 : 800))),
+  )
   const side = Math.ceil(Math.sqrt(targetTiles))
   const cols = side
   const rows = side
@@ -376,6 +395,7 @@ async function fetchTileStats(
   tileBbox: [number, number, number, number],
   sceneDate: string,
   spec: NonNullable<ReturnType<typeof resolveWmsZonalChannel>>,
+  pixelSize: number,
   signal?: AbortSignal,
 ): Promise<TileIndexStats | null> {
   const accessToken = getSentinelHubAccessToken() || SENTINEL_HUB_PUBLIC_WMS_ACCESS_TOKEN
@@ -389,7 +409,7 @@ async function fetchTileStats(
     `&LAYERS=${encodeURIComponent(layer)}` +
     `&CRS=EPSG:3857` +
     `&BBOX=${minX},${minY},${maxX},${maxY}` +
-    `&WIDTH=${WMS_TILE_PIXELS}&HEIGHT=${WMS_TILE_PIXELS}` +
+    `&WIDTH=${pixelSize}&HEIGHT=${pixelSize}` +
     `&FORMAT=image/png&TRANSPARENT=true` +
     `&TIME=${sceneDate}/${timeEnd}` +
     `&MAXCC=${SI_SENTINEL_WMS_MAXCC}` +
@@ -398,7 +418,7 @@ async function fetchTileStats(
     `&EVALSCRIPT=${encodeURIComponent(spec.evalB64)}`
   url = appendSentinelHubWmsAccessToken(url, accessToken)
 
-  const data = await fetchPngPixels(url, WMS_TILE_PIXELS, WMS_TILE_PIXELS, signal)
+  const data = await fetchPngPixels(url, pixelSize, pixelSize, signal)
   if (spec.savi) return decodeSaviFromCore(data)
   if (spec.si) return decodeSiFromExt(data)
   if (spec.channel != null) return decodeChannelIndexStats(data, spec.channel)
@@ -409,6 +429,34 @@ async function fetchTileStats(
  * WMS zonal min/max/mean for the active scene and layer inside an AOI.
  * Uses tiled GetMap when AOI exceeds {@link LEGEND_ANALYZE_LARGE_AOI_HA}.
  */
+function zonalCacheKey(
+  layerId: string,
+  day: string,
+  bbox: [number, number, number, number],
+  areaHa: number,
+): string {
+  return `${normalizeLegendWmsZonalLayerKey(layerId)}|${day}|${bbox.map(n => n.toFixed(1)).join(',')}|${Math.round(areaHa)}`
+}
+
+function readZonalCache(key: string): LegendWmsZonalStats | null {
+  const hit = zonalStatsCache.get(key)
+  if (!hit) return null
+  if (Date.now() - hit.at > ZONAL_STATS_CACHE_TTL_MS) {
+    zonalStatsCache.delete(key)
+    return null
+  }
+  return hit.stats
+}
+
+function writeZonalCache(key: string, stats: LegendWmsZonalStats): void {
+  zonalStatsCache.set(key, { stats, at: Date.now() })
+  while (zonalStatsCache.size > ZONAL_STATS_CACHE_MAX) {
+    const oldest = zonalStatsCache.keys().next().value
+    if (oldest == null) break
+    zonalStatsCache.delete(oldest)
+  }
+}
+
 export async function fetchLegendAnalyzeWmsZonalStats(
   geometry: GeoJSON.Geometry,
   sceneDate: string,
@@ -425,14 +473,19 @@ export async function fetchLegendAnalyzeWmsZonalStats(
   if (!bbox) return null
 
   const areaHa = options?.areaHa ?? 0
+  const cacheKey = zonalCacheKey(layerId, day, bbox, areaHa)
+  const cached = readZonalCache(cacheKey)
+  if (cached) return cached
+
   const tiles = splitBbox3857ForZonalTiles(bbox, areaHa)
+  const pixelSize = resolveWmsZonalGetMapPixels(areaHa, tiles.length)
 
   const results = await mapPool(tiles, WMS_FETCH_CONCURRENCY, async tileBbox => {
     if (options?.signal?.aborted) {
       throw new DOMException('The operation was aborted.', 'AbortError')
     }
     try {
-      return await fetchTileStats(tileBbox, day, spec, options?.signal)
+      return await fetchTileStats(tileBbox, day, spec, pixelSize, options?.signal)
     } catch (err) {
       if (options?.signal?.aborted) throw err
       return null
@@ -442,9 +495,11 @@ export async function fetchLegendAnalyzeWmsZonalStats(
   const merged = mergeTileIndexStats(results.filter((r): r is TileIndexStats => Boolean(r)))
   if (!merged || merged.sampleCount === 0) return null
 
-  return {
+  const stats: LegendWmsZonalStats = {
     min: Number(merged.min.toFixed(4)),
     max: Number(merged.max.toFixed(4)),
     average: Number(merged.mean.toFixed(4)),
   }
+  writeZonalCache(cacheKey, stats)
+  return stats
 }

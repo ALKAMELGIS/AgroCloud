@@ -25,6 +25,14 @@ export function stripLayerSelectFormulas(text: string): string {
   let s = String(text || '').trim()
   if (!s) return ''
 
+  const emDashSplit = s.split(/\s—\s/, 2)
+  if (emDashSplit.length === 2 && emDashSplit[0]!.trim()) {
+    const title = emDashSplit[0]!.trim()
+    const tail = stripLayerSelectFormulas(emDashSplit[1]!)
+    if (!tail) return title
+    return `${title} · ${tail}`
+  }
+
   // "NDVI = (NIR − Red) / …" → keep left label only when it is prose-ish; else drop formula side.
   if (/=/.test(s)) {
     const left = s.slice(0, s.indexOf('=')).trim()
@@ -79,6 +87,7 @@ export function stripLayerSelectFormulas(text: string): string {
     .filter(Boolean)
     .filter(p => !looksLikeLayerFormula(p))
     .filter(p => !/^[+\-−–/×*\d.\s]+$/.test(p))
+    .filter(p => p.replace(/[()]/g, '').trim().length > 1)
 
   s = parts.join(' · ')
   s = s.replace(/\s{2,}/g, ' ').trim()

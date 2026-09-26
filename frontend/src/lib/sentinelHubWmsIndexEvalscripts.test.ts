@@ -66,7 +66,12 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
 
     expect(greenCh(dark)).toBeLessThan(greenCh(medium))
 
-    expect(sampleSentinelNdviColorMap(0.41)).toBe(0xffffbf)
+    const stressLow = sampleSentinelNdviColorMap(-0.14)
+    const stressMid = sampleSentinelNdviColorMap(0.06)
+    const stressHigh = sampleSentinelNdviColorMap(0.14)
+    expect(stressLow).toBeLessThan(stressMid)
+    expect(stressMid).toBeLessThan(stressHigh)
+    expect(sampleSentinelNdviColorMap(0.41)).toBeGreaterThan(0xfff000)
 
   })
 

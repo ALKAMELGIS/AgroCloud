@@ -91,12 +91,14 @@ export function useLayerLegendAnalyzeData({
   }, [sceneDate])
   const layerKey = String(layerId || '').trim().toUpperCase()
 
+  const wmsZonalPreferred = !!layerKey && layerSupportsLegendWmsZonal(layerKey)
   const classAreasOnBbox =
     enabled &&
     skipFullClassAreas &&
     !!fetchGeom &&
     !!layerKey &&
-    layerSupportsClassArea(layerKey)
+    layerSupportsClassArea(layerKey) &&
+    !wmsZonalPreferred
 
   const classAreasEnabled = enabled && !skipFullClassAreas
   const classAreaGeometry = classAreasOnBbox && fetchGeom ? fetchGeom : geometry

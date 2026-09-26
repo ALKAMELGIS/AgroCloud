@@ -113,6 +113,28 @@ function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n))
 }
 
+/**
+ * Rain layer motion from the 0–100 intensity slider.
+ * Density and fall speed both rise smoothly: a light drizzle at low values,
+ * a fast downpour at 100%.
+ */
+export function rainMotionFromIntensity(rainPercent: number): {
+  dropCount: number
+  fallSpeedPx: number
+  streakScale: number
+  veilAlpha: number
+  splashChance: number
+} {
+  const t = clamp(rainPercent, 0, 100) / 100
+  return {
+    dropCount: Math.round(t * 1600),
+    fallSpeedPx: 160 + t * 1120,
+    streakScale: 0.7 + t * 1.2,
+    veilAlpha: t * 0.22,
+    splashChance: t * 0.8,
+  }
+}
+
 /** Clamp every field to its valid range (defensive against stored / shared state). */
 export function normalizeWeatherSim(input: Partial<WeatherSimState> | null | undefined): WeatherSimState {
   const s = { ...DEFAULT_WEATHER_SIM, ...(input ?? {}) }

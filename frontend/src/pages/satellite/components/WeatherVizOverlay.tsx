@@ -1,6 +1,8 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   normalizeWeatherSim,
+  rainMotionFromIntensity,
   weatherSimHasActiveEffect,
   weatherWindVector,
   type WeatherSimState,
@@ -8,7 +10,17 @@ import {
 
 /* ───────────────────────────── Particle types ───────────────────────────── */
 
-type RainDrop = { x: number; y: number; len: number; vy: number; thickness: number; alpha: number };
+type RainDrop = {
+  x: number;
+  y: number;
+  len: number;
+  vy: number;
+  thickness: number;
+  alpha: number;
+  /** 0 = distant mist, 1 = foreground streak. */
+  depth: number;
+};
+type RainSplash = { x: number; y: number; life: number; maxR: number };
 type SnowFlake = { x: number; y: number; r: number; vy: number; phase: number; sway: number; alpha: number };
 type Cloud = { x: number; y: number; r: number; vx: number; alpha: number; squish: number };
 type FogBlob = { x: number; y: number; r: number; vx: number; phase: number };
@@ -24,7 +36,6 @@ type Lightning = {
   boltLife: number;
 };
 
-const RAIN_MAX = 620;
 const SNOW_MAX = 360;
 const CLOUD_MAX = 16;
 
@@ -40,10 +51,34 @@ function rand(min: number, max: number): number {
  * speed and prefers-reduced-motion. Pointer-events are disabled so the map stays
  * fully interactive underneath.
  */
-export const WeatherVizOverlay: React.FC<{ sim: WeatherSimState }> = ({ sim }) => {
+export const WeatherVizOverlay: React.FC<{
+  sim: WeatherSimState;
+  /** Map viewport that contains `.mapboxgl-canvas-container`. */
+  mapRootRef?: React.RefObject<HTMLElement | null>;
+}> = ({ sim, mapRootRef }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const simRef = useRef<WeatherSimState>(normalizeWeatherSim(sim));
   simRef.current = normalizeWeatherSim(sim);
+  const [host, setHost] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const root = mapRootRef?.current ?? document.querySelector('.si-map-container');
+    if (!root) return;
+    const find = () => root.querySelector('.mapboxgl-canvas-container') as HTMLElement | null;
+    const existing = find();
+    if (existing) {
+      setHost(existing);
+      return;
+    }
+    const obs = new MutationObserver(() => {
+      const next = find();
+      if (!next) return;
+      setHost(next);
+      obs.disconnect();
+    });
+    obs.observe(root, { childList: true, subtree: true });
+    return () => obs.disconnect();
+  }, [mapRootRef]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -61,6 +96,7 @@ export const WeatherVizOverlay: React.FC<{ sim: WeatherSimState }> = ({ sim }) =
     let dpr = 1;
 
     const rain: RainDrop[] = [];
+    const splashes: RainSplash[] = [];
     const snow: SnowFlake[] = [];
     const clouds: Cloud[] = [];
     const fog: FogBlob[] = [];
@@ -85,12 +121,14 @@ export const WeatherVizOverlay: React.FC<{ sim: WeatherSimState }> = ({ sim }) =
     window.addEventListener('resize', resize);
 
     const spawnRain = (drop: RainDrop, fromTop: boolean) => {
-      drop.x = rand(-0.1 * width, 1.1 * width);
-      drop.y = fromTop ? rand(-height * 0.2, 0) : rand(0, height);
-      drop.len = rand(8, 22);
-      drop.vy = rand(0.85, 1.15);
-      drop.thickness = rand(0.6, 1.4);
-      drop.alpha = rand(0.25, 0.6);
+      const depth = Math.random() < 0.3 ? rand(0.75, 1) : rand(0.32, 0.68);
+      drop.depth = depth;
+      drop.x = rand(-0.18 * width, 1.18 * width);
+      drop.y = fromTop ? rand(-height * 0.28, -6) : rand(0, height);
+      drop.len = rand(12, 20) * (0.5 + depth);
+      drop.vy = rand(0.84, 1.16) * (0.5 + depth * 0.75);
+      drop.thickness = 0.8 + depth * 2.1;
+      drop.alpha = 0.42 + depth * 0.52;
     };
     const spawnSnow = (f: SnowFlake, fromTop: boolean) => {
       f.x = rand(0, width);
@@ -118,7 +156,7 @@ export const WeatherVizOverlay: React.FC<{ sim: WeatherSimState }> = ({ sim }) =
     };
 
     const ensurePool = <T,>(pool: T[], target: number, make: () => T) => {
-      target = Math.max(0, Math.min(target, pool.length + 40));
+      target = Math.max(0, Math.min(target, pool.length + 220));
       while (pool.length < target) pool.push(make());
       if (pool.length > target) pool.length = target;
     };
@@ -247,33 +285,74 @@ export const WeatherVizOverlay: React.FC<{ sim: WeatherSimState }> = ({ sim }) =
         }
       }
 
-      /* 4 ─ Rain */
-      ensurePool(rain, Math.round((rainStrength / 100) * RAIN_MAX), () => {
-        const d: RainDrop = { x: 0, y: 0, len: 0, vy: 1, thickness: 1, alpha: 0.4 };
+      /* 4 ─ Rain (density + fall speed follow the intensity slider) */
+      const rainMotion = rainMotionFromIntensity(rainStrength);
+      const rainT = Math.min(1, Math.max(0, rainStrength / 100));
+      if (rainT > 0.004) {
+        const veil = ctx.createLinearGradient(0, 0, 0, height);
+        veil.addColorStop(0, `rgba(156, 186, 222, ${rainMotion.veilAlpha})`);
+        veil.addColorStop(1, `rgba(70, 98, 132, ${rainMotion.veilAlpha * 0.4})`);
+        ctx.fillStyle = veil;
+        ctx.fillRect(0, 0, width, height);
+      }
+      ensurePool(rain, reduceMotion ? Math.round(rainMotion.dropCount * 0.4) : rainMotion.dropCount, () => {
+        const d: RainDrop = { x: 0, y: 0, len: 0, vy: 1, thickness: 1, alpha: 0.7, depth: 0.6 };
         spawnRain(d, false);
         return d;
       });
       if (rain.length) {
-        const fallSpeed = (640 + rainStrength * 5 + windKmh * 2) * gust; // px/s
-        const slantX = (windPx * 1.6) * gust;
+        const fallSpeed = rainMotion.fallSpeedPx * gust;
+        const slantX = windPx * (1.15 + rainT * 0.35) * gust;
         ctx.lineCap = 'round';
         for (const d of rain) {
-          d.x += slantX * motion;
+          d.x += slantX * d.vy * motion * (0.35 + d.depth * 0.65);
           d.y += fallSpeed * d.vy * motion;
-          if (d.y > height + 20 || d.x < -60 || d.x > width + 60) {
+          if (d.y > height + 16 || d.x < -80 || d.x > width + 80) {
+            if (d.y > height && splashes.length < 110 && Math.random() < rainMotion.splashChance) {
+              splashes.push({
+                x: Math.max(0, Math.min(width, d.x)),
+                y: height - rand(2, 22),
+                life: 1,
+                maxR: rand(2.5, 5 + rainT * 8) * d.depth,
+              });
+            }
             spawnRain(d, true);
             continue;
           }
           const dirX = slantX;
           const dirY = fallSpeed * d.vy;
           const mag = Math.hypot(dirX, dirY) || 1;
-          const ux = (dirX / mag) * d.len;
-          const uy = (dirY / mag) * d.len;
-          ctx.strokeStyle = `rgba(190, 214, 248, ${d.alpha})`;
-          ctx.lineWidth = d.thickness;
+          const len = d.len * rainMotion.streakScale;
+          const ux = (dirX / mag) * len;
+          const uy = (dirY / mag) * len;
+          const alpha = Math.min(0.98, d.alpha * (0.7 + rainT * 0.4));
+          ctx.strokeStyle = `rgba(10, 28, 52, ${alpha * 0.62})`;
+          ctx.lineWidth = d.thickness + 1.4;
           ctx.beginPath();
           ctx.moveTo(d.x, d.y);
           ctx.lineTo(d.x - ux, d.y - uy);
+          ctx.stroke();
+          ctx.strokeStyle = `rgba(236, 246, 255, ${alpha})`;
+          ctx.lineWidth = Math.max(0.9, d.thickness * 0.5);
+          ctx.beginPath();
+          ctx.moveTo(d.x, d.y);
+          ctx.lineTo(d.x - ux, d.y - uy);
+          ctx.stroke();
+        }
+      }
+      if (splashes.length) {
+        for (let i = splashes.length - 1; i >= 0; i -= 1) {
+          const sp = splashes[i]!;
+          sp.life -= dt * (1.6 + rainT * 1.4);
+          if (sp.life <= 0) {
+            splashes.splice(i, 1);
+            continue;
+          }
+          const r = sp.maxR * (1.15 - sp.life);
+          ctx.strokeStyle = `rgba(220, 236, 255, ${sp.life * 0.7})`;
+          ctx.lineWidth = 1.1;
+          ctx.beginPath();
+          ctx.ellipse(sp.x, sp.y, Math.max(1, r), Math.max(0.6, r * 0.32), 0, 0, Math.PI * 2);
           ctx.stroke();
         }
       }
@@ -346,9 +425,10 @@ export const WeatherVizOverlay: React.FC<{ sim: WeatherSimState }> = ({ sim }) =
       window.removeEventListener('resize', resize);
       if (ro) ro.disconnect();
     };
-  }, []);
+  }, [host]);
 
   if (!weatherSimHasActiveEffect(normalizeWeatherSim(sim))) return null;
 
-  return <canvas ref={canvasRef} className="si-wviz-canvas" aria-hidden />;
+  const canvas = <canvas ref={canvasRef} className="si-wviz-canvas" aria-hidden />;
+  return host ? createPortal(canvas, host) : canvas;
 };

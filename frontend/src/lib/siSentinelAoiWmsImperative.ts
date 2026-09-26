@@ -59,6 +59,20 @@ export type SiSentinelAoiWmsPingPongRuntime = {
   appliedUrls: Map<string, string>
   appliedBounds: Map<string, string>
   mountedChunkCount: number
+  /**
+   * Visible date swaps ease opacity over this many milliseconds.
+   * 0 keeps the historical hard cut (unit tests and first paint).
+   */
+  crossfadeMs: number
+  /** Chunks whose opacity is mid requestAnimationFrame cross-fade. */
+  fadingChunks: Set<string>
+  fadeRafIds: number[]
+  /** Tile URLs that have finished loading on a ping-pong slot. */
+  readyUrls: Set<string>
+  /** Latest blend frame, reapplied when the incoming date finishes loading. */
+  latestBlend: { stack: SiSentinelAoiWmsStackState; frame: SiSentinelAoiWmsBlendFrame } | null
+  blendWaits: Map<string, () => void>
+  blendDepth?: number
 }
 
 export function createSiSentinelAoiWmsPingPongRuntime(): SiSentinelAoiWmsPingPongRuntime {
@@ -67,17 +81,40 @@ export function createSiSentinelAoiWmsPingPongRuntime(): SiSentinelAoiWmsPingPon
     appliedUrls: new Map(),
     appliedBounds: new Map(),
     mountedChunkCount: 0,
+    crossfadeMs: 0,
+    fadingChunks: new Set(),
+    fadeRafIds: [],
+    readyUrls: new Set(),
+    latestBlend: null,
+    blendWaits: new Map(),
   }
+}
+
+function cancelPingPongFades(runtime: SiSentinelAoiWmsPingPongRuntime): void {
+  if (!runtime.fadeRafIds) runtime.fadeRafIds = []
+  if (!runtime.fadingChunks) runtime.fadingChunks = new Set()
+  if (typeof cancelAnimationFrame === 'function') {
+    for (const id of runtime.fadeRafIds) cancelAnimationFrame(id)
+  }
+  runtime.fadeRafIds = []
+  runtime.fadingChunks.clear()
 }
 
 export function resetSiSentinelAoiWmsPingPongRuntime(runtime: SiSentinelAoiWmsPingPongRuntime): void {
   for (const state of runtime.chunks.values()) {
     state.waitCleanup?.()
   }
+  cancelPingPongFades(runtime)
   runtime.chunks.clear()
   runtime.appliedUrls.clear()
   runtime.appliedBounds.clear()
   runtime.mountedChunkCount = 0
+  runtime.readyUrls?.clear()
+  runtime.latestBlend = null
+  if (runtime.blendWaits) {
+    for (const off of runtime.blendWaits.values()) off()
+    runtime.blendWaits.clear()
+  }
 }
 
 export function siSentinelAoiWmsPingPongStackUrlsReady(
@@ -259,6 +296,11 @@ function applyChunkPresentation(
   )
 }
 
+function smoothstep(t: number): number {
+  const x = Math.max(0, Math.min(1, t))
+  return x * x * (3 - 2 * x)
+}
+
 function commitActiveSlot(
   map: MapboxMap,
   stack: SiSentinelAoiWmsStackState,
@@ -271,17 +313,53 @@ function commitActiveSlot(
   const chunkKey = siSentinelAoiWmsChunkKey(stack.idPrefix, chunkIdx)
   const prev = runtime.chunks.get(chunkKey)
   const prevActive = prev?.activeSlot ?? 0
+  const duration = runtime.crossfadeMs
+  const canFade =
+    duration > 0 &&
+    presentation.visible &&
+    prevActive !== nextActive &&
+    Boolean(prev?.activeUrl) &&
+    typeof requestAnimationFrame === 'function'
 
-  if (prevActive !== nextActive) {
-    applyChunkPresentation(map, stack, chunkIdx, prevActive, false, presentation.opacity)
+  if (!canFade) {
+    if (prevActive !== nextActive) {
+      applyChunkPresentation(map, stack, chunkIdx, prevActive, false, presentation.opacity)
+    }
+    applyChunkPresentation(map, stack, chunkIdx, nextActive, presentation.visible, presentation.opacity)
+    runtime.fadingChunks?.delete(chunkKey)
+    runtime.chunks.set(chunkKey, {
+      activeSlot: nextActive,
+      activeUrl: url,
+      pendingUrl: '',
+      waitCleanup: null,
+    })
+    return
   }
-  applyChunkPresentation(map, stack, chunkIdx, nextActive, presentation.visible, presentation.opacity)
-  runtime.chunks.set(chunkKey, {
-    activeSlot: nextActive,
-    activeUrl: url,
-    pendingUrl: '',
-    waitCleanup: null,
-  })
+
+  runtime.fadingChunks.add(chunkKey)
+  const fromSlot = prevActive
+  const opacity = presentation.opacity
+  const started = typeof performance !== 'undefined' ? performance.now() : 0
+  const step = (now: number) => {
+    if (!runtime.fadingChunks.has(chunkKey)) return
+    const t = smoothstep((now - started) / duration)
+    applyChunkPresentation(map, stack, chunkIdx, fromSlot, true, opacity * (1 - t))
+    applyChunkPresentation(map, stack, chunkIdx, nextActive, true, opacity * t)
+    if (t < 1) {
+      const id = requestAnimationFrame(step)
+      runtime.fadeRafIds.push(id)
+      return
+    }
+    runtime.fadingChunks.delete(chunkKey)
+    runtime.chunks.set(chunkKey, {
+      activeSlot: nextActive,
+      activeUrl: url,
+      pendingUrl: '',
+      waitCleanup: null,
+    })
+  }
+  const id = requestAnimationFrame(step)
+  runtime.fadeRafIds.push(id)
 }
 
 /** Safety net if `sourcedata` is missed after the inactive source actually loaded. */
@@ -425,6 +503,9 @@ function syncChunkTilesPingPong(
   if (!url) return
 
   const chunkKey = siSentinelAoiWmsChunkKey(stack.idPrefix, chunkIdx)
+  if (runtime.fadingChunks?.has(chunkKey)) {
+    runtime.fadingChunks.delete(chunkKey)
+  }
   const state = runtime.chunks.get(chunkKey)
   const activeSlot = state?.activeSlot ?? 0
   const activeUrl = state?.activeUrl ?? ''
@@ -557,6 +638,149 @@ export function revealSiSentinelAoiWmsPingPongStack(
   syncSiSentinelAoiWmsPingPongStack(map, stack, runtime, presentation)
 }
 
+function slotHoldingUrl(
+  runtime: SiSentinelAoiWmsPingPongRuntime,
+  chunkKey: string,
+  url: string,
+): SiSentinelAoiWmsPingPongSlot | null {
+  for (const slot of [0, 1] as const) {
+    if (runtime.appliedUrls.get(slotUrlKey(chunkKey, slot)) === url) return slot
+  }
+  return null
+}
+
+export type SiSentinelAoiWmsBlendFrame = {
+  fromUrls: string[]
+  toUrls: string[]
+  /** 0 = fully the current date, 1 = fully the next date. */
+  t: number
+  opacity: number
+}
+
+/**
+ * Show two dates at once on the existing ping-pong slots.
+ * Sources and layers stay mounted; only tile URLs and raster-opacity change.
+ * The incoming date stays at opacity 0 until its tiles have loaded, so the
+ * map never flashes empty. Does not move the camera.
+ */
+function watchBlendSlotReady(
+  map: MapboxMap,
+  runtime: SiSentinelAoiWmsPingPongRuntime,
+  sourceId: string,
+  url: string,
+): void {
+  if (!runtime.blendWaits) runtime.blendWaits = new Map()
+  if (!runtime.readyUrls) runtime.readyUrls = new Set()
+  const key = `${sourceId}\n${url}`
+  if (runtime.readyUrls.has(url) || runtime.blendWaits.has(key)) return
+  let settled = false
+  const finish = () => {
+    if (settled) return
+    settled = true
+    try {
+      map.off('sourcedata', handler)
+    } catch {
+      /* ignore */
+    }
+    runtime.blendWaits.delete(key)
+    runtime.readyUrls.add(url)
+    const latest = runtime.latestBlend
+    if (!latest || runtime.blendDepth) return
+    presentSiSentinelAoiWmsPingPongBlend(map, latest.stack, runtime, latest.frame)
+  }
+  const handler = (ev: { sourceId?: string; sourceDataType?: string; isSourceLoaded?: boolean }) => {
+    if (ev.sourceId !== sourceId) return
+    if (ev.sourceDataType === 'metadata') return
+    if (ev.isSourceLoaded || ev.sourceDataType === 'idle' || map.isSourceLoaded?.(sourceId)) finish()
+  }
+  runtime.blendWaits.set(key, () => {
+    settled = true
+    try {
+      map.off('sourcedata', handler)
+    } catch {
+      /* ignore */
+    }
+  })
+  try {
+    map.on('sourcedata', handler)
+  } catch {
+    runtime.blendWaits.delete(key)
+  }
+}
+
+export function presentSiSentinelAoiWmsPingPongBlend(
+  map: MapboxMap,
+  stack: SiSentinelAoiWmsStackState,
+  runtime: SiSentinelAoiWmsPingPongRuntime,
+  frame: SiSentinelAoiWmsBlendFrame,
+): void {
+  if (!stack.displayChunks.length) return
+  if (!runtime.readyUrls) runtime.readyUrls = new Set()
+  runtime.latestBlend = { stack, frame }
+  runtime.blendDepth = (runtime.blendDepth ?? 0) + 1
+  cancelPingPongFades(runtime)
+  ensureSiSentinelAoiWmsPingPongStackOnMap(map, stack, runtime)
+  const t = Math.max(0, Math.min(1, frame.t))
+
+  for (let i = 0; i < stack.displayChunks.length; i++) {
+    const fromUrl = String(frame.fromUrls[i] ?? stack.tileUrls[i] ?? '').trim()
+    const toUrl = String(frame.toUrls[i] ?? fromUrl).trim()
+    if (!fromUrl) continue
+
+    const chunkKey = siSentinelAoiWmsChunkKey(stack.idPrefix, i)
+    const state = runtime.chunks.get(chunkKey)
+    state?.waitCleanup?.()
+
+    const same = !toUrl || toUrl === fromUrl
+    let fromSlot: SiSentinelAoiWmsPingPongSlot = state?.activeSlot ?? 0
+    if (!same) {
+      const holding = slotHoldingUrl(runtime, chunkKey, fromUrl)
+      if (holding != null) fromSlot = holding
+    }
+    const toSlot = otherSlot(fromSlot)
+
+    syncChunkBoundsBothSlots(map, stack, i, runtime)
+    syncSiSentinelAoiWmsChunkTiles(
+      readRasterSource(map, siSentinelAoiWmsPingPongSourceId(stack.idPrefix, i, fromSlot)),
+      fromUrl,
+      runtime.appliedUrls,
+      slotUrlKey(chunkKey, fromSlot),
+    )
+    const toTilesChanged =
+      !same &&
+      syncSiSentinelAoiWmsChunkTiles(
+        readRasterSource(map, siSentinelAoiWmsPingPongSourceId(stack.idPrefix, i, toSlot)),
+        toUrl,
+        runtime.appliedUrls,
+        slotUrlKey(chunkKey, toSlot),
+      )
+
+    const toSourceId = siSentinelAoiWmsPingPongSourceId(stack.idPrefix, i, toSlot)
+    // A fresh setTiles drops the cache. Keep the outgoing date opaque until the
+    // incoming tiles have loaded — never a blank frame. Once they have loaded,
+    // opacity follows the timeline fraction on every frame.
+    if (toTilesChanged && toUrl) runtime.readyUrls.delete(toUrl)
+    const toLoadedNow = !toTilesChanged && Boolean(map.isSourceLoaded?.(toSourceId))
+    if (toLoadedNow && toUrl) runtime.readyUrls.add(toUrl)
+    const toReady = same || (!toTilesChanged && (runtime.readyUrls.has(toUrl) || toLoadedNow))
+    if (!same && !toReady && toUrl) watchBlendSlotReady(map, runtime, toSourceId, toUrl)
+    const fromOpacity = frame.opacity * (toReady ? 1 - t : 1)
+    const toOpacity = same || !toReady ? 0 : frame.opacity * t
+
+    applyChunkPresentation(map, stack, i, fromSlot, fromOpacity > 0.001, fromOpacity)
+    applyChunkPresentation(map, stack, i, toSlot, toOpacity > 0.001, toOpacity)
+
+    const showTo = !same && toReady && t >= 0.5
+    runtime.chunks.set(chunkKey, {
+      activeSlot: showTo ? toSlot : fromSlot,
+      activeUrl: showTo ? toUrl : fromUrl,
+      pendingUrl: !same && !toReady ? toUrl : '',
+      waitCleanup: null,
+    })
+  }
+  runtime.blendDepth = Math.max(0, (runtime.blendDepth ?? 1) - 1)
+}
+
 /** Sync tile URLs with ping-pong buffering and apply visibility — Layers AOI only. */
 export function syncSiSentinelAoiWmsPingPongStack(
   map: MapboxMap,
@@ -597,6 +821,7 @@ export function teardownSiSentinelAoiWmsPingPongStack(
   idPrefix: string,
   runtime: SiSentinelAoiWmsPingPongRuntime,
 ): void {
+  cancelPingPongFades(runtime)
   for (let i = 0; i < runtime.mountedChunkCount; i++) {
     runtime.chunks.get(siSentinelAoiWmsChunkKey(idPrefix, i))?.waitCleanup?.()
     removePingPongRasterPair(map, idPrefix, i)

@@ -40,16 +40,19 @@ export type SentinelIndexEvalProfile =
 type RampStop = [number, number]
 
 /**
- * NDVI stress / vigor below Good growth (0.42) — step ramp unchanged.
+ * NDVI stress / vigor below Good growth (0.42) — smooth orange → dark maroon (clear class contrast).
  */
 export const SENTINEL_NDVI_LOW_COLORMAP: RampStop[] = [
-  [-1.0, 0x000000],
-  [-0.2, 0xa50026],
-  [0.0, 0xd73027],
-  [0.1, 0xf46d43],
-  [0.2, 0xfdae61],
-  [0.3, 0xfee08b],
-  [0.4, 0xffffbf],
+  [-1.0, 0x3d0a0a],
+  [-0.12, 0x5c0000],
+  [-0.04, 0x8b0000],
+  [0.04, 0xc62828],
+  [0.12, 0xe53935],
+  [0.17, 0xff5722],
+  [0.22, 0xff9800],
+  [0.28, 0xffb74d],
+  [0.34, 0xffcc80],
+  [0.4, 0xfff59d],
 ]
 
 /**
@@ -74,12 +77,7 @@ export const SENTINEL_NDVI_COLORMAP: RampStop[] = [
 ]
 
 function sampleSentinelNdviLowColorMap(ndvi: number): number {
-  const pairs = SENTINEL_NDVI_LOW_COLORMAP
-  if (!pairs.length) return 0
-  for (let i = 1; i < pairs.length; i++) {
-    if (ndvi <= pairs[i]![0]) return pairs[i - 1]![1]
-  }
-  return pairs[pairs.length - 1]![1]
+  return sampleSentinelMoistureRampColor(ndvi, SENTINEL_NDVI_LOW_COLORMAP)
 }
 
 /** Matches findColor() in the NDVI WMS evalscript — step below 0.42, smooth gradient above. */

@@ -2480,6 +2480,23 @@ html[data-theme='light'] .si-view3d-opts-btn:hover {
   opacity: 0.4;
   cursor: not-allowed;
 }
+.si-terrain3d-check__input {
+  width: 16px;
+  height: 16px;
+  accent-color: #22c55e;
+  flex-shrink: 0;
+}
+.si-terrain3d-check__label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+.si-terrain3d-footnote {
+  margin: 8px 0 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: #94a3b8;
+}
 .si-terrain3d-check__box {
   width: 18px;
   height: 18px;

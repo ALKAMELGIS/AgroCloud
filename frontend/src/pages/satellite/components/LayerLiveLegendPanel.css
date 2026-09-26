@@ -327,9 +327,9 @@
   gap: 5px;
   font-size: 9.5px;
   font-weight: 600;
-  color: #34d399;
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(16, 185, 129, 0.28);
+  color: var(--theme-text-primary, #222222);
+  background: var(--theme-surface-muted, #f1f3f5);
+  border: 1px solid var(--theme-border, rgba(34, 34, 34, 0.1));
   border-radius: 999px;
   padding: 2.5px 8px;
   font-variant-numeric: tabular-nums;
@@ -342,7 +342,7 @@
 }
 
 .si-layer-live-legend__area-status-sub {
-  color: rgba(255, 255, 255, 0.55);
+  color: inherit;
   font-weight: 500;
 }
 
@@ -394,13 +394,13 @@
 }
 
 .si-sat-ctx-dock--light .si-layer-live-legend__area-status {
-  color: #047857;
-  background: rgba(16, 185, 129, 0.1);
-  border-color: rgba(5, 150, 105, 0.28);
+  color: var(--theme-text-primary, #222222);
+  background: var(--theme-surface-muted, #f1f3f5);
+  border-color: var(--theme-border, rgba(34, 34, 34, 0.1));
 }
 
 .si-sat-ctx-dock--light .si-layer-live-legend__area-status-sub {
-  color: #64748b;
+  color: inherit;
 }
 
 .si-sat-ctx-dock--light .si-layer-live-legend__area-ha {
@@ -788,13 +788,19 @@
   margin: 0 0 6px;
   padding: 12px 12px 11px;
   border-radius: 12px;
-  border: 1px solid rgba(132, 204, 22, 0.38);
-  background: rgba(11, 15, 19, 0.92);
+  border: 1px solid color-mix(in srgb, #84cc16 32%, var(--theme-border-strong));
+  background: color-mix(in srgb, var(--theme-bg-elevated) 94%, transparent);
+  color: var(--theme-text-primary);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   box-shadow:
-    0 6px 22px rgba(0, 0, 0, 0.42),
+    0 6px 22px rgba(0, 0, 0, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease;
 }
 
 .si-lll-analyze-panel__hero {
@@ -808,6 +814,17 @@
 .si-lll-analyze-panel__hero-copy {
   min-width: 0;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  min-height: 68px;
+}
+
+.si-lll-analyze-panel__mood {
+  margin-top: auto;
+  padding-top: 4px;
+  line-height: 1;
+  align-self: flex-start;
 }
 
 .si-lll-analyze-panel__top {
@@ -830,7 +847,7 @@
   margin: 0 0 3px;
   font-size: 9px;
   font-weight: 600;
-  color: #94a3b8;
+  color: var(--theme-text-muted);
   line-height: 1.2;
 }
 
@@ -838,7 +855,7 @@
   margin: 0 0 8px;
   font-size: 9px;
   line-height: 1.25;
-  color: #cbd5e1;
+  color: var(--theme-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -858,21 +875,21 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #94a3b8;
+  color: var(--theme-text-muted);
 }
 
 .si-lll-analyze-panel__title {
   margin: 3px 0 5px;
   font-size: 15px;
   font-weight: 700;
-  color: #f8fafc;
+  color: var(--theme-text-primary);
   line-height: 1.15;
 }
 
 .si-lll-analyze-panel__location {
   margin: 0;
   font-size: 10px;
-  color: #94a3b8;
+  color: var(--theme-text-muted);
   display: flex;
   align-items: center;
   gap: 5px;
@@ -885,6 +902,15 @@
   opacity: 0.85;
 }
 
+.si-lll-analyze-gauge-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  max-width: 92px;
+}
+
 .si-lll-analyze-gauge {
   --si-lll-gauge-accent: #84cc16;
   position: relative;
@@ -893,6 +919,102 @@
   flex-shrink: 0;
   display: grid;
   place-items: center;
+}
+
+.si-lll-analyze-gauge__mood {
+  font-size: 17px;
+  line-height: 1;
+  transform-origin: center bottom;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+
+.si-lll-analyze-gauge__mood--healthy {
+  animation: si-lll-mood-bounce 2.4s ease-in-out infinite;
+}
+
+.si-lll-analyze-gauge__mood--moderate {
+  animation: si-lll-mood-bob 2.6s ease-in-out infinite;
+}
+
+.si-lll-analyze-gauge__mood--warning {
+  animation: si-lll-mood-wobble 1.5s ease-in-out infinite;
+}
+
+.si-lll-analyze-gauge__mood--critical {
+  animation: si-lll-mood-shake 0.52s ease-in-out infinite;
+}
+
+.si-lll-analyze-gauge__insight {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 7px;
+  line-height: 1.3;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--si-lll-gauge-accent, #eab308) 58%, var(--theme-text-secondary));
+  text-align: center;
+  max-width: 88px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  transition: color 180ms ease;
+}
+
+@keyframes si-lll-mood-bounce {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  45% {
+    transform: translateY(-3px) scale(1.06);
+  }
+}
+
+@keyframes si-lll-mood-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-2px) rotate(-4deg);
+  }
+}
+
+@keyframes si-lll-mood-wobble {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+  25% {
+    transform: rotate(-8deg) scale(1.04);
+  }
+  75% {
+    transform: rotate(8deg) scale(1.04);
+  }
+}
+
+@keyframes si-lll-mood-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-2px) rotate(-3deg);
+  }
+  75% {
+    transform: translateX(2px) rotate(3deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .si-lll-analyze-gauge__mood--healthy,
+  .si-lll-analyze-gauge__mood--moderate,
+  .si-lll-analyze-gauge__mood--warning,
+  .si-lll-analyze-gauge__mood--critical {
+    animation: none;
+  }
 }
 
 .si-lll-analyze-gauge--compact {
@@ -916,11 +1038,14 @@
   width: 52px;
   height: 52px;
   border-radius: 50%;
-  background: rgba(11, 15, 19, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--theme-bg-elevated) 96%, transparent);
+  border: 1px solid var(--theme-border);
   display: flex;
   align-items: center;
   justify-content: center;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease;
 }
 
 .si-lll-analyze-gauge--compact .si-lll-analyze-gauge__inner {
@@ -931,8 +1056,9 @@
 .si-lll-analyze-gauge__inner strong {
   font-size: 18px;
   font-weight: 800;
-  color: #f8fafc;
+  color: var(--theme-text-primary);
   line-height: 1;
+  transition: color 180ms ease;
 }
 
 .si-lll-analyze-panel__stats {
@@ -953,10 +1079,13 @@
   gap: 3px;
   padding: 8px 4px;
   border-radius: 9px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--theme-border);
+  background: var(--theme-surface-muted);
   min-width: 0;
   min-height: 58px;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease;
 }
 
 .si-lll-analyze-stat__icon {
@@ -970,14 +1099,14 @@
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.05em;
-  color: #64748b;
+  color: var(--theme-text-muted);
   text-transform: uppercase;
 }
 
 .si-lll-analyze-stat strong {
   font-size: 11px;
   font-weight: 700;
-  color: #f1f5f9;
+  color: var(--theme-text-primary);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
@@ -987,19 +1116,7 @@
 }
 
 .si-lll-analyze-panel__insight {
-  margin: 6px 0 0;
-  padding: 4px 6px;
-  border-radius: 6px;
-  background: rgba(234, 179, 8, 0.08);
-  border: 1px solid rgba(234, 179, 8, 0.18);
-  font-size: 8px;
-  line-height: 1.35;
-  color: #fde68a;
-}
-
-.si-lll-analyze-panel__insight i {
-  margin-inline-end: 4px;
-  opacity: 0.9;
+  display: none;
 }
 
 .si-sat-ctx-dock--light .si-lll-analyze-btn {
@@ -1037,6 +1154,18 @@
   border-color: rgba(148, 163, 184, 0.22);
 }
 
+html[data-theme='dark'] .si-lll-analyze-panel {
+  box-shadow:
+    0 6px 22px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+html[data-theme='light'] .si-lll-analyze-panel {
+  box-shadow:
+    0 4px 16px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
 /* Floating Color key / Health Score — same light tokens when app theme is light */
 html[data-theme='light'] .si-layer-live-float .si-lll-analyze-btn {
   background: rgba(248, 250, 252, 0.95);
@@ -1067,8 +1196,8 @@ html[data-theme='light'] .si-layer-live-float__body .si-lll-badges .si-layer-liv
   color: #475569;
   border: 1px solid rgba(148, 163, 184, 0.42);
 }
-html[data-theme='light'] .si-layer-live-float .si-lll-analyze-panel__insight {
-  color: #713f12;
+html[data-theme='light'] .si-layer-live-float .si-lll-analyze-gauge__insight {
+  color: #92400e;
 }
 html[data-theme='light'] .si-layer-live-float .si-lll-analyze-gauge__inner {
   background: rgba(255, 255, 255, 0.95);

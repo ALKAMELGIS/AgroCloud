@@ -79,6 +79,15 @@
   background: transparent !important;
 }
 
+.si-map-container--interacting .si-map-swipe-overlay__pane {
+  contain: layout paint;
+}
+
+.si-map-container--interacting .si-map-swipe-overlay__handle-line,
+.si-map-container--interacting .si-map-swipe-overlay__handle-knob {
+  will-change: transform;
+}
+
 .si-map-swipe-overlay__badge {
   position: absolute;
   top: 10px;
@@ -530,16 +539,29 @@
 }
 
 .si-map-swipe-panel__grid label {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
   gap: 4px;
-  font: 600 10px/1.2 system-ui, sans-serif;
+  min-width: 0;
+  min-height: 46px;
+  margin: 0;
+  font: 600 10px/12px system-ui, sans-serif;
   color: var(--si-overlay-muted, #9eacb2);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
-.si-map-swipe-panel__grid input,
-.si-map-swipe-panel__grid select {
+.si-map-swipe-panel__grid label > span {
+  display: block;
+  height: 12px;
+  line-height: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.si-map-swipe-panel__grid input {
   width: 100%;
   height: 30px;
   border-radius: 8px;
@@ -549,44 +571,67 @@
   font: 500 12px/1 system-ui, sans-serif;
   padding: 0 8px;
   color-scheme: light dark;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
-.si-map-swipe-panel__grid input:hover,
-.si-map-swipe-panel__grid select:hover {
+.si-map-swipe-panel__grid select {
+  --si-swipe-select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23ffffff' d='M1.4.6 6 5.2 10.6.6 12 2 6 8 0 2z'/%3E%3C/svg%3E");
+  width: 100%;
+  height: 30px;
+  min-height: 30px;
+  max-height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--si-overlay-field-border, rgba(255, 255, 255, 0.18));
+  color: var(--si-overlay-text, #ffffff);
+  font: 500 12px/1 system-ui, sans-serif;
+  padding: 0 28px 0 8px;
+  color-scheme: light dark;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  /* Single shorthand — global theme `background:` on select must not tile the chevron */
+  background: var(--si-overlay-field-bg, rgba(0, 0, 0, 0.55)) var(--si-swipe-select-chevron) no-repeat
+    right 10px center / 12px 8px;
+}
+
+.si-map-swipe-panel__grid input:hover {
   border-color: var(--si-overlay-border-strong, rgba(255, 255, 255, 0.28));
   background-color: var(--si-overlay-field-bg, rgba(0, 0, 0, 0.68));
 }
 
-.si-map-swipe-panel__grid input:focus,
-.si-map-swipe-panel__grid select:focus {
+.si-map-swipe-panel__grid select:hover {
+  border-color: var(--si-overlay-border-strong, rgba(255, 255, 255, 0.28));
+  background: rgba(0, 0, 0, 0.68) var(--si-swipe-select-chevron) no-repeat right 10px center / 12px 8px;
+}
+
+.si-map-swipe-panel__grid input:focus {
   outline: none;
   border-color: rgba(165, 214, 167, 0.55);
   background-color: rgba(0, 0, 0, 0.72);
   box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
 }
 
-.si-map-swipe-panel__grid select {
-  appearance: none;
-  -webkit-appearance: none;
-  padding-right: 28px;
-  cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23ffffff' d='M1.4.6 6 5.2 10.6.6 12 2 6 8 0 2z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  background-size: 10px;
+.si-map-swipe-panel__grid select:focus {
+  outline: none;
+  border-color: rgba(165, 214, 167, 0.55);
+  background: rgba(0, 0, 0, 0.72) var(--si-swipe-select-chevron) no-repeat right 10px center / 12px 8px;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
 }
 
 html[data-theme='light'] .si-map-swipe-panel__grid select {
+  --si-swipe-select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23222222' d='M1.4.6 6 5.2 10.6.6 12 2 6 8 0 2z'/%3E%3C/svg%3E");
   color-scheme: light;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23222222' d='M1.4.6 6 5.2 10.6.6 12 2 6 8 0 2z'/%3E%3C/svg%3E");
 }
 
 html[data-theme='dark'] .si-map-swipe-panel__grid select {
   color-scheme: dark;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23ffffff' d='M1.4.6 6 5.2 10.6.6 12 2 6 8 0 2z'/%3E%3C/svg%3E");
 }
 
 .si-map-swipe-panel__grid select option,

@@ -1053,5 +1053,33 @@ html[data-theme='light'] .si-grb-floatbar .si-grb__tool:hover:not(:disabled) {
 html[data-theme='light'] .si-grb-floatbar .si-grb__tool.is-on {
   background: var(--si-grb-accent-soft);
   border-color: var(--si-grb-accent);
-  color: #365a32;
+  color: #000000;
+}
+html[data-theme='light'] .si-grb-floatbar .si-grb__title > i,
+html[data-theme='light'] .si-grb-floatbar--compact .si-grb__title > i,
+html[data-theme='light'] .si-grb-floatbar:has(.si-grb__ribbon--compact) .si-grb__title > i,
+html[data-theme='light'] .si-grb-floatbar .si-grb-floatbar__drag,
+html[data-theme='light'] .si-grb-floatbar .si-grb-floatbar__drag:hover,
+html[data-theme='light'] .si-grb-floatbar.is-dragging .si-grb-floatbar__drag,
+html[data-theme='light'] .si-grb-floatbar .si-grb__icon-btn,
+html[data-theme='light'] .si-grb-floatbar .si-grb__icon-btn > i,
+html[data-theme='light'] .si-grb--bar .si-grb__ribbon--compact .si-grb__tool,
+html[data-theme='light'] .si-grb--bar .si-grb__ribbon--compact .si-grb__tool > i,
+html[data-theme='light'] .si-grb--bar .si-grb__ribbon--compact .si-grb__tool:hover:not(:disabled),
+html[data-theme='light'] .si-grb--bar .si-grb__ribbon--compact .si-grb__tool:hover:not(:disabled) > i,
+html[data-theme='light'] .si-grb--bar .si-grb__ribbon--compact .si-grb__tool--active,
+html[data-theme='light'] .si-grb--bar .si-grb__ribbon--compact .si-grb__tool--active > i,
+html[data-theme='light'] .si-grb--bar .si-grb__ribbon--compact .si-grb__tool--danger:hover:not(:disabled),
+html[data-theme='light'] .si-grb--bar .si-grb__ribbon--compact .si-grb__tool--danger:hover:not(:disabled) > i,
+html[data-theme='light'] .si-grb-floatbar .si-grb__btn > i,
+html[data-theme='light'] .si-grb--bar .si-grb__row--actions .si-grb__btn--iconized > i {
+  color: #000000;
+}
+html[data-theme='light'] .si-grb--bar .si-grb__ribbon--compact .si-grb__tool {
+  border-color: rgba(0, 0, 0, 0.18);
+  background: rgba(0, 0, 0, 0.03);
+}
+html[data-theme='light'] .si-grb--bar .si-grb__ribbon--compact .si-grb__tool:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.28);
 }

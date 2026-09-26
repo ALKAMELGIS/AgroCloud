@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   isSiAnalysisRasterMapLayerId,
   isSiCropAiPredictionRasterLayerId,
+  isSiCutFillMapLayerId,
   isSiStackedAnalysisRasterMapLayerId,
   syncSiMapAnalysisLayerOrder,
 } from './siMapAnalysisLayerOrder'
@@ -11,6 +12,49 @@ describe('siMapAnalysisLayerOrder', () => {
     expect(isSiAnalysisRasterMapLayerId('sentinel-layer-aoi-layer-0-s0')).toBe(true)
     expect(isSiAnalysisRasterMapLayerId('sentinel-draw-layer-1')).toBe(true)
     expect(isSiAnalysisRasterMapLayerId('agrocloud-basemap-layer-0')).toBe(false)
+  })
+
+  it('stacks cut/fill above the index raster and under the AOI outline', () => {
+    expect(isSiCutFillMapLayerId('cutfill-diff-raster')).toBe(true)
+    expect(isSiCutFillMapLayerId('cutfill-ds-cont-line')).toBe(true)
+    expect(isSiCutFillMapLayerId('sentinel-draw-layer-0')).toBe(false)
+
+    let order = [
+      'basemap',
+      'cutfill-diff-raster',
+      'cutfill-cut-raster',
+      'sentinel-layer-aoi-layer-0-s0',
+      'drawn-index-geometry-line',
+    ]
+    const map = {
+      getStyle: () => ({ layers: order.map(id => ({ id })) }),
+      getLayer: (id: string) => (order.includes(id) ? { id } : undefined),
+      moveLayer: (id: string, beforeId?: string) => {
+        const from = order.indexOf(id)
+        if (from < 0) return
+        order.splice(from, 1)
+        if (!beforeId) {
+          order.push(id)
+          return
+        }
+        const to = order.indexOf(beforeId)
+        if (to < 0) {
+          order.push(id)
+          return
+        }
+        order.splice(to, 0, id)
+      },
+      setPaintProperty: vi.fn(),
+    }
+    syncSiMapAnalysisLayerOrder(map as any, {})
+    const indexIdx = order.indexOf('sentinel-layer-aoi-layer-0-s0')
+    const diffIdx = order.indexOf('cutfill-diff-raster')
+    const cutIdx = order.indexOf('cutfill-cut-raster')
+    const lineIdx = order.indexOf('drawn-index-geometry-line')
+    expect(diffIdx).toBeGreaterThan(indexIdx)
+    expect(cutIdx).toBeGreaterThan(indexIdx)
+    expect(lineIdx).toBeGreaterThan(diffIdx)
+    expect(lineIdx).toBeGreaterThan(cutIdx)
   })
 
   it('treats Crop AI prediction raster as a stacked analysis layer', () => {

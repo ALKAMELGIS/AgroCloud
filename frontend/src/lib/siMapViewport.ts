@@ -7,7 +7,8 @@ import { bboxesIntersect, geometryBBox } from './geoAiGeoJsonSpatial'
 /** WGS84 bounding box: [west, south, east, north] */
 export type LngLatBBox = [number, number, number, number]
 
-export const SI_VIEWPORT_PREFETCH_RATIO = 0.22
+/** Pad around the visible extent when prefetching vector/WMS data (pan lookahead). */
+export const SI_VIEWPORT_PREFETCH_RATIO = 0.32
 export const SI_VIEWPORT_DEBOUNCE_MS = 120
 export const SI_VIEWPORT_BBOX_TILE_DEG = 0.06
 export const SI_VIEWPORT_MOVE_THROTTLE_MS = 80

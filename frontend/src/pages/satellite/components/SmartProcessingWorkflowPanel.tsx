@@ -12,6 +12,7 @@ export type SmartProcessingSectionId =
   | 'agri-field-boundary'
   | 'segformer-detection'
   | 'hydro-watershed'
+  | 'cut-fill-analysis'
   | 'well-site'
   | 'well-suitability'
   | 'flood-monitoring'
@@ -41,6 +42,7 @@ const QUICK_LINKS: Array<{ id: SmartProcessingSectionId; icon: string; label: st
   { id: 'tree-detections', icon: 'fa-solid fa-tree', label: 'Tree Detections' },
   { id: 'agri-field-boundary', icon: 'fa-solid fa-crop-simple', label: 'Field Boundaries' },
   { id: 'hydro-watershed', icon: 'fa-solid fa-water', label: 'Hydro Watershed' },
+  { id: 'cut-fill-analysis', icon: 'fa-solid fa-mound', label: 'Cut & Fill' },
   { id: 'table-geo-ai', icon: 'fa-solid fa-comments', label: 'AI Agent' },
 ];
 
@@ -117,6 +119,13 @@ const WORKFLOW_ROWS: Array<{
         label: 'Hydro Watershed Workflow',
         hint: 'AOI → DEM, slope, flow accumulation, stream network, watershed & mesh for distributed hydrology.',
         target: 'hydro-watershed',
+      },
+      {
+        id: 'cut-fill-analysis',
+        icon: 'fa-solid fa-mound',
+        label: 'Cut & Fill Analysis',
+        hint: 'AOI → existing vs design surfaces → cut/fill volumes, difference map, contours & exports.',
+        target: 'cut-fill-analysis',
       },
       {
         id: 'well-site',

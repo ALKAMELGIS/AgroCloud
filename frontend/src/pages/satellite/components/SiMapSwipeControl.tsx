@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import MapGL, { Layer, Source, type MapRef } from 'react-map-gl/mapbox'
+import { Layer, Source } from 'react-map-gl/mapbox'
 import type { Map as MapboxMap, StyleSpecification } from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
-import { syncAgroCloudMapboxCamera } from '../../../lib/agroCloudMapNavigation'
+import { setMapSwipeClip } from './siMapSwipeClip'
 import {
   buildSiMapSwipeTileUrls,
   defaultSwipeBeforeDate,
@@ -28,6 +28,8 @@ export type SiMapSwipeCompareSides = {
 
 type Props = {
   mapboxAccessToken: string
+  /** Active MapGL style (basemap) — mirrored on the clipped After map. */
+  mainMapStyle: StyleSpecification | string
   viewState: SiMapSwipeViewState
   /** Active AOI FeatureCollection — swipe stays off without it. */
   aoiClip: unknown
@@ -46,6 +48,8 @@ type Props = {
    * (basemap stays underneath). Cleared to [] when swipe closes.
    */
   onBeforeTilesChange?: (tileUrls: string[]) => void
+  /** After-side WMS tile URLs, painted on the same main map and clipped at the divider. */
+  onAfterTilesChange?: (tileUrls: string[]) => void
   /** Live Before/After layer·date for the Layer Live legend tabs. Null when swipe is closed. */
   onCompareSidesChange?: (sides: SiMapSwipeCompareSides | null) => void
   /** Optional AOI geometry for per-class areas inside the embedded Legend. */
@@ -91,7 +95,11 @@ export function SiMapSwipeRasterLayers(props: { idPrefix: string; tileUrls: read
           <Layer
             id={`${idPrefix}-lyr-${i}`}
             type="raster"
-            paint={{ 'raster-opacity': 1, 'raster-fade-duration': 0 }}
+            paint={{
+            'raster-opacity': 1,
+            'raster-fade-duration': 0,
+            'raster-resampling': 'linear',
+          }}
           />
         </Source>
       ))}
@@ -99,74 +107,12 @@ export function SiMapSwipeRasterLayers(props: { idPrefix: string; tileUrls: read
   )
 }
 
-function SwipeAfterMapPanel(props: {
-  mapboxAccessToken: string
-  viewState: SiMapSwipeViewState
-  tileUrls: string[]
-  getLiveViewState?: () => SiMapSwipeViewState
-  getMainMap?: () => MapboxMap | null | undefined
-}) {
-  const { mapboxAccessToken, viewState, tileUrls, getLiveViewState, getMainMap } = props
-  const afterMapRef = useRef<MapRef | null>(null)
-
-  const syncAfterCamera = useCallback(() => {
-    const live = getLiveViewState?.() ?? viewState
-    const afterMap = afterMapRef.current?.getMap?.() ?? null
-    syncAgroCloudMapboxCamera(afterMap, live, { duration: 0 })
-  }, [getLiveViewState, viewState])
-
-  useEffect(() => {
-    const mainMap = getMainMap?.()
-    if (!mainMap || typeof mainMap.on !== 'function') return
-    const onMove = () => syncAfterCamera()
-    mainMap.on('move', onMove)
-    syncAfterCamera()
-    return () => {
-      mainMap.off('move', onMove)
-    }
-  }, [getMainMap, syncAfterCamera, tileUrls])
-
-  useEffect(() => {
-    syncAfterCamera()
-  }, [viewState, syncAfterCamera])
-
-  return (
-    <MapGL
-      ref={afterMapRef}
-      reuseMaps
-      mapboxAccessToken={mapboxAccessToken}
-      mapStyle={SI_MAP_SWIPE_TRANSPARENT_STYLE}
-      longitude={viewState.longitude}
-      latitude={viewState.latitude}
-      zoom={viewState.zoom}
-      bearing={viewState.bearing ?? 0}
-      pitch={viewState.pitch ?? 0}
-      interactive={false}
-      attributionControl={false}
-      preserveDrawingBuffer={false}
-      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', background: 'transparent' }}
-      onLoad={evt => {
-        try {
-          evt.target.resize()
-        } catch {
-          /* ignore */
-        }
-        syncAfterCamera()
-      }}
-    >
-      <SiMapSwipeRasterLayers idPrefix="si-swipe-after" tileUrls={tileUrls} />
-    </MapGL>
-  )
-}
-
 /**
  * MapSwipe chrome for Satellite Intelligence.
- * Before rasters paint on the main MapGL (via onBeforeTilesChange + SiMapSwipeRasterLayers).
- * After rasters use a transparent clipped MapGL so CSS swipe works while the basemap stays visible.
+ * Before and After rasters both paint on the main MapGL. The After stack is
+ * clipped at the divider on that same canvas, so 2D and 3D share one camera.
  */
 export function SiMapSwipeControl({
-  mapboxAccessToken,
-  viewState,
   aoiClip,
   hasAoi,
   activeLayerId,
@@ -177,9 +123,9 @@ export function SiMapSwipeControl({
   onOpenChange,
   showFab = true,
   onBeforeTilesChange,
+  onAfterTilesChange,
   onCompareSidesChange,
   aoiGeometry = null,
-  getLiveViewState,
   getMainMap,
 }: Props) {
   const [openUncontrolled, setOpenUncontrolled] = useState(false)
@@ -273,6 +219,37 @@ export function SiMapSwipeControl({
   }, [beforeTiles, onBeforeTilesChange])
 
   useEffect(() => {
+    onAfterTilesChange?.(afterTiles)
+  }, [afterTiles, onAfterTilesChange])
+
+  useEffect(() => {
+    if (!open || !hasAoi) {
+      setMapSwipeClip(getMainMap?.() ?? null, null)
+      return
+    }
+    let frames = 0
+    let raf = 0
+    let cancelled = false
+    const attach = () => {
+      if (cancelled) return
+      const map = getMainMap?.()
+      if (!map) {
+        if (frames < 40) {
+          frames += 1
+          raf = window.requestAnimationFrame(attach)
+        }
+        return
+      }
+      setMapSwipeClip(map, split)
+    }
+    attach()
+    return () => {
+      cancelled = true
+      if (raf) window.cancelAnimationFrame(raf)
+    }
+  }, [open, hasAoi, split, getMainMap])
+
+  useEffect(() => {
     if (!open || !hasAoi) {
       onCompareSidesChange?.(null)
       return
@@ -294,9 +271,11 @@ export function SiMapSwipeControl({
   useEffect(() => {
     return () => {
       onBeforeTilesChange?.([])
+      onAfterTilesChange?.([])
       onCompareSidesChange?.(null)
+      setMapSwipeClip(getMainMap?.() ?? null, null)
     }
-  }, [onBeforeTilesChange, onCompareSidesChange])
+  }, [onBeforeTilesChange, onAfterTilesChange, onCompareSidesChange, getMainMap])
 
   const setSplitFromClientX = useCallback((clientX: number) => {
     const el = rootRef.current
@@ -374,20 +353,7 @@ export function SiMapSwipeControl({
           role="dialog"
           aria-label="Map swipe compare"
         >
-          {/* After pane only — Before paints on main MapGL; basemap stays visible. */}
           <div className="si-map-swipe-overlay__maps">
-            <div
-              className="si-map-swipe-overlay__pane si-map-swipe-overlay__pane--after"
-              style={{ clipPath: `inset(0 0 0 ${split}%)` }}
-            >
-              <SwipeAfterMapPanel
-                mapboxAccessToken={mapboxAccessToken}
-                viewState={viewState}
-                tileUrls={afterTiles}
-                getLiveViewState={getLiveViewState}
-                getMainMap={getMainMap}
-              />
-            </div>
             <div
               className={`si-map-swipe-overlay__handle${dragging ? ' is-dragging' : ''}`}
               style={{ left: `${split}%` }}

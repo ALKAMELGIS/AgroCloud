@@ -103,8 +103,7 @@ describe('LULC live analysis wiring', () => {
   it('builds a multi-temporal LULC evalscript with IO class colors', () => {
     const script = buildLulcClassificationEvalscript()
     expect(script).toContain('//VERSION=3')
-    expect(script).toContain('mosaicking: "ORBIT"')
-    expect(script).toContain('temporal: true')
+    expect(script).toContain('mosaicking: Mosaicking.ORBIT')
     expect(script).toContain('B08')
     expect(script).toContain('B11')
     // Crops yellow from LULC_CLASSES (#F5C518)
