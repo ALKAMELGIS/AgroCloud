@@ -421,23 +421,19 @@ export function catalogEntryById(catalog: BasemapCatalogEntry[], id: string): Ba
   return catalog.find(e => e.id === id)
 }
 
-/** Reliable default (Esri World Imagery — no API key). */
+/** Fallback when Google VT tiles fail (403 / blocked). */
 export const RASTER_BASEMAP_FALLBACK_ID = 'satellite'
 
-/** Preferred when Google Maps API key is configured. */
 export const GOOGLE_EARTH_BASEMAP_ID = 'google-earth-satellite'
 
-export const DEFAULT_BASEMAP_ID = RASTER_BASEMAP_FALLBACK_ID
+/** Default basemap for Satellite Intelligence and GIS Map. */
+export const DEFAULT_BASEMAP_ID = GOOGLE_EARTH_BASEMAP_ID
 /** @deprecated Alias — Mapbox basemaps removed; same default as {@link DEFAULT_BASEMAP_ID}. */
-export const DEFAULT_BASEMAP_ID_NO_MAPBOX = RASTER_BASEMAP_FALLBACK_ID
+export const DEFAULT_BASEMAP_ID_NO_MAPBOX = GOOGLE_EARTH_BASEMAP_ID
 
-/** Pick a basemap id that can render tiles (Google only when API key exists). */
+/** Resolve stored or preferred basemap id (Google Earth when unset). */
 export function pickDefaultBasemapId(storedOrPreferred?: string): string {
-  const resolved = resolveBasemapId(storedOrPreferred || DEFAULT_BASEMAP_ID)
-  if (resolved === GOOGLE_EARTH_BASEMAP_ID && !getGoogleMapsApiKeyFromEnv()) {
-    return RASTER_BASEMAP_FALLBACK_ID
-  }
-  return resolved
+  return resolveBasemapId(storedOrPreferred || DEFAULT_BASEMAP_ID)
 }
 
 export function isGoogleEarthBasemapId(id: string): boolean {
