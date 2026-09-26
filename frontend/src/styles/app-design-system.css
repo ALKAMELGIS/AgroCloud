@@ -543,8 +543,8 @@ html[data-theme='dark'] .content--sensors-fit {
   min-width: 0;
 }
 
-/* GPS Vehicle Tracking — full-bleed John Deere iframe (same page, no extra toolbar) */
-.app-layout > .content.content--sensors-gps-embed {
+/* Satellite Intelligence — full-height map shell (`.si-page` lives under `.app-main-routes`) */
+.app-layout > .content.content--satellite-intelligence {
   padding: 0;
   overflow: hidden;
   display: flex;
@@ -554,47 +554,13 @@ html[data-theme='dark'] .content--sensors-fit {
   background-image: none;
 }
 
-.content--sensors-gps-embed {
+.content--satellite-intelligence {
   display: flex;
   flex-direction: column;
   min-height: 0;
 }
 
-.content--sensors-gps-embed .app-main-routes {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-height: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.content--sensors-gps-embed .sensor-shell.gps-in-app-browser {
-  flex: 1 1 auto;
-  min-height: calc(100dvh - var(--app-header-block, 72px));
-  height: calc(100dvh - var(--app-header-block, 72px));
-  margin: 0;
-  padding: 0;
-}
-
-/* John Deere Tracking — full-bleed embed (Applications) */
-.app-layout > .content.content--john-deere-tracking-embed {
-  padding: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  background-image: none;
-}
-
-.content--john-deere-tracking-embed {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.content--john-deere-tracking-embed .app-main-routes {
+.content--satellite-intelligence .app-main-routes {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -603,12 +569,10 @@ html[data-theme='dark'] .content--sensors-fit {
   height: 100%;
 }
 
-.content--john-deere-tracking-embed .sensor-shell.gps-in-app-browser {
+.content--satellite-intelligence .si-page {
   flex: 1 1 auto;
   min-height: calc(100dvh - var(--app-header-block, 72px));
   height: calc(100dvh - var(--app-header-block, 72px));
-  margin: 0;
-  padding: 0;
 }
 
 /* AgroCloud Management — full-bleed external app iframe (Railway / link management) */
@@ -652,46 +616,6 @@ html[data-theme='dark'] .content--sensors-fit {
 }
 
 .content--agrocloud-management-embed .gps-in-app-browser__frame-wrap {
-  flex: 1 1 auto;
-  min-height: 0;
-  height: 100%;
-}
-
-/* John Deere Sign-In — Okta iframe (separate from map / GPS tracking) */
-.app-layout > .content.content--john-deere-signin-embed {
-  padding: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  background-image: none;
-}
-
-.content--john-deere-signin-embed {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.content--john-deere-signin-embed .app-main-routes {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-height: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.content--john-deere-signin-embed .sensor-shell.gps-in-app-browser {
-  flex: 1 1 auto;
-  min-height: calc(100dvh - var(--app-header-block, 72px));
-  height: calc(100dvh - var(--app-header-block, 72px));
-  margin: 0;
-  padding: 0;
-}
-
-.content--john-deere-signin-embed .gps-in-app-browser__frame-wrap {
   flex: 1 1 auto;
   min-height: 0;
   height: 100%;

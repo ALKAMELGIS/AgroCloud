@@ -154,15 +154,3 @@ html[data-theme='dark'] .gps-in-app-browser__hint--alert {
   color: #fcd34d;
   background: rgba(120, 53, 15, 0.35);
 }
-
-.content--sensors-gps-embed .gps-in-app-browser,
-.content--john-deere-tracking-embed .gps-in-app-browser {
-  min-height: 0;
-}
-
-.content--sensors-gps-embed .gps-in-app-browser__frame-wrap,
-.content--john-deere-tracking-embed .gps-in-app-browser__frame-wrap {
-  flex: 1 1 auto;
-  min-height: 0;
-  height: 100%;
-}

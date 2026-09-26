@@ -53,11 +53,6 @@ const menuItems: MenuItem[] = [
         icon: 'fa-solid fa-seedling',
         to: '/dashboards/agro-cloud-platform',
       },
-      {
-        label: { en: 'John Deere Sign-In', ar: 'تسجيل دخول John Deere' },
-        icon: 'fa-solid fa-user-lock',
-        to: '/applications/john-deere-sign-in',
-      },
     ],
   },
   {

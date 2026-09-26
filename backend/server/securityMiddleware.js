@@ -66,11 +66,6 @@ export function httpsRedirectMiddleware(req, res, next) {
   return res.redirect(301, `https://${host}${req.originalUrl || req.url}`)
 }
 
-function isJohnDeereEmbedProxyPath(req) {
-  const path = String(req?.originalUrl || req?.url || '').split('?')[0]
-  return path.startsWith('/api/gps/john-deere-map/')
-}
-
 /** Standard enterprise response headers on every response. */
 export function securityHeadersMiddleware(req, res, next) {
   res.setHeader('X-Content-Type-Options', 'nosniff')
@@ -81,10 +76,8 @@ export function securityHeadersMiddleware(req, res, next) {
     'Permissions-Policy',
     'accelerometer=(), camera=(), geolocation=(self), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()',
   )
-  if (!isJohnDeereEmbedProxyPath(req)) {
-    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups')
-    res.setHeader('Content-Security-Policy', buildContentSecurityPolicy())
-  }
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups')
+  res.setHeader('Content-Security-Policy', buildContentSecurityPolicy())
 
   if (isProduction()) {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')

@@ -1,7 +1,6 @@
 /** OEM / telematics platforms commonly used for fleet & GPS integration (UI + local config). */
 
 export type TelematicsProviderId =
-  | 'john_deere'
   | 'cnh'
   | 'agco'
   | 'claas'
@@ -24,16 +23,6 @@ export type TelematicsProviderDef = {
 }
 
 export const TELEMATICS_PROVIDERS: TelematicsProviderDef[] = [
-  {
-    id: 'john_deere',
-    iconClass: 'fa-tractor',
-    accent: '#367C2B',
-    nameEn: 'John Deere',
-    nameAr: 'جون دير',
-    defaultBaseUrl: 'https://developer.deere.com',
-    shortEn: 'Operations Center / JDLink APIs (OAuth — use your app credentials behind a trusted backend).',
-    shortAr: 'مركز العمليات وواجهات JDLink (OAuth عبر خادم موثوق).',
-  },
   {
     id: 'cnh',
     iconClass: 'fa-truck-field',

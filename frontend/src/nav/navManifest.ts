@@ -39,7 +39,6 @@ export type NavTranslationKey =
   | 'customPage'
   | 'application'
   | 'agroCloudManagement'
-  | 'johnDeereSignIn'
 
 export type NavLeafDef = {
   id: string
@@ -107,13 +106,6 @@ export const NAV_DEFAULT_GROUPS: NavGroupDef[] = [
         i18nKey: 'agroCloudManagement',
         defaultIcon: 'fa-solid fa-building-user',
         subitemClass: 'nav-item-agrocloud-management',
-      },
-      {
-        id: 'application-john-deere-sign-in',
-        path: '/applications/john-deere-sign-in',
-        i18nKey: 'johnDeereSignIn',
-        defaultIcon: 'fa-solid fa-user-lock',
-        subitemClass: 'nav-item-john-deere-sign-in',
       },
     ],
   },
