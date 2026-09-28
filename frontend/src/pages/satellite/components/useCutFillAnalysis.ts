@@ -74,8 +74,17 @@ function stableGeometryKey(geometry: GeoJSON.Geometry | GeoJSON.Feature): string
   }
 }
 
-function aoiCentroid(geometry: GeoJSON.Geometry | GeoJSON.Feature): [number, number] | null {
-  const bbox = geometryBBox(geometry)
+function aoiCentroid(
+  geometry: GeoJSON.Geometry | GeoJSON.Feature | GeoJSON.FeatureCollection | null | undefined,
+): [number, number] | null {
+  if (!geometry) return null
+  if ((geometry as GeoJSON.FeatureCollection).type === 'FeatureCollection') {
+    const fc = geometry as GeoJSON.FeatureCollection
+    const first = fc.features?.find(f => f.geometry)
+    if (!first) return null
+    return aoiCentroid(first)
+  }
+  const bbox = geometryBBox(geometry as GeoJSON.Geometry | GeoJSON.Feature)
   if (!bbox) return null
   return [(bbox.west + bbox.east) / 2, (bbox.north + bbox.south) / 2]
 }
@@ -126,17 +135,25 @@ export function useCutFillAnalysis({ geometry, enabled }: Params) {
     setDemError(null)
     setResult(null)
     setMapHit(null)
+    setCrsOverride(null)
   }, [geomKey])
 
   useEffect(() => () => abortRef.current?.abort(), [])
 
-  const crsLabel = useMemo(() => {
+  const autoCrs = useMemo(() => {
     const c = aoiCentroid(geometry ?? null)
-    if (!c) return 'EPSG:4326'
-    const auto = suggestUtmEpsgFromLngLat(c[0], c[1])
-    if (crsOverride) return `EPSG:${crsOverride} (override)`
-    return auto.label
-  }, [geometry, crsOverride])
+    if (!c) return null
+    return suggestUtmEpsgFromLngLat(c[0], c[1])
+  }, [geometry])
+
+  const effectiveCrsEpsg = crsOverride ?? autoCrs?.epsg ?? null
+
+  const crsLabel = useMemo(() => {
+    if (!hasAoi) return 'Draw an AOI on the map to auto-select UTM.'
+    if (crsOverride) return `EPSG:${crsOverride} (manual override)`
+    if (autoCrs) return autoCrs.label
+    return 'EPSG:4326'
+  }, [hasAoi, autoCrs, crsOverride])
 
   const ensureDem = useCallback(async (): Promise<DemGrid | null> => {
     if (demRef.current && demKeyRef.current === geomKey) return demRef.current
@@ -448,6 +465,7 @@ export function useCutFillAnalysis({ geometry, enabled }: Params) {
   return {
     enabled,
     hasAoi,
+    aoiGeometry: geometry ?? null,
     step,
     setStep,
     existingKind,
@@ -470,6 +488,8 @@ export function useCutFillAnalysis({ geometry, enabled }: Params) {
     setContourIntervalM,
     crsOverride,
     setCrsOverride,
+    autoCrsEpsg: autoCrs?.epsg ?? null,
+    effectiveCrsEpsg,
     verticalDatumLabel,
     setVerticalDatumLabel,
     crsLabel,

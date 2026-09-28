@@ -1954,6 +1954,7 @@ function assertCriticalRoutesRegistered() {
     ['get', '/api/segformer-detection/health'],
     ['post', '/api/segformer-detection/detect'],
     ['post', '/api/agri-field-boundary/ftw-mosaic-vectorize'],
+    ['get', '/api/terrain/esri-rgb/:z/:x/:y'],
   ]
   const missing = required.filter(([method, routePath]) => !hasRoute(method, routePath))
   if (missing.length === 0) return

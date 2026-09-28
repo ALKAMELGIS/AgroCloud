@@ -3,9 +3,13 @@ import { createPortal } from 'react-dom'
 import { Layer, Source, useMap } from 'react-map-gl/mapbox'
 import { contourElevationMapboxColorExpression } from '../../../lib/hydroWatershed/hydroEngine'
 import { placeSiCutFillLayersInsideAoi } from '../../../lib/siMapAnalysisLayerOrder'
+import { buildCutFillAoiRaster } from '../../../lib/cutFill/cutFillAoiRaster'
+import { buildCutFillProfile, buildCutFillProfileChart, cutFillProfileLine } from '../../../lib/cutFill/cutFillProfile'
 import { buildCutFillClassPolygons } from '../../../lib/cutFill/cutFillClassPolygons'
+import { encodeRgbaPng } from '../../../lib/cutFill/cutFillGeoTiffPreview'
 import { CUT_FILL_MAP_SWATCH, buildCutFillClassMasks } from '../../../lib/cutFill/cutFillRasterPreview'
 import type { CutFillCellType } from '../../../lib/cutFill/cutFillTypes'
+import { CutFillProfileChart } from './CutFillProfileChart'
 import { SiMapDockAwareMarker } from './SiMapDockAwareMarker'
 import type { CutFillLayerVisibility, UseCutFillAnalysisReturn } from './useCutFillAnalysis'
 import './CutFillMapLegend.css'
@@ -50,6 +54,12 @@ function CutFillLegend({ cutFill }: Props) {
   const maps = useMap()
   const [container, setContainer] = useState<HTMLElement | null>(null)
   const summary = cutFill.result?.summary
+  const profileChart = useMemo(() => {
+    const r = cutFill.result
+    if (!r) return null
+    const profile = buildCutFillProfile(r.dem, r.existingElev, r.designElev, r.difference)
+    return profile ? buildCutFillProfileChart(profile) : null
+  }, [cutFill.result])
 
   useEffect(() => {
     let frames = 0
@@ -109,6 +119,7 @@ function CutFillLegend({ cutFill }: Props) {
         })}
       </ul>
       <p className="si-cutfill-legend__hint">ΔZ = Design − Existing. Click a zone for elevations, type, area, and volume.</p>
+      {profileChart ? <CutFillProfileChart chart={profileChart} /> : null}
     </div>,
     container,
   )
@@ -174,6 +185,14 @@ export function CutFillMapLayers({ cutFill }: Props) {
     classVisible(cutFill.layers, 'fill') ||
     classVisible(cutFill.layers, 'noChange')
   )
+  const aoiRaster = useMemo(() => {
+    if (!showClass || !r?.difference || !cutFill.aoiGeometry) return null
+    return buildCutFillAoiRaster(r.dem, r.difference, cutFill.aoiGeometry, r.classification, {
+      cut: classVisible(cutFill.layers, 'cut'),
+      fill: classVisible(cutFill.layers, 'fill'),
+      noChange: classVisible(cutFill.layers, 'noChange'),
+    })
+  }, [showClass, r, cutFill.aoiGeometry, cutFill.layers])
   const classPolygons = useMemo(() => {
     if (!showClass || !r?.classification || !r.difference) return null
     return buildCutFillClassPolygons(r.dem, r.classification, r.difference, {
@@ -182,6 +201,19 @@ export function CutFillMapLayers({ cutFill }: Props) {
       noChange: classVisible(cutFill.layers, 'noChange'),
     })
   }, [r, showClass, cutFill.layers])
+
+  const aoiImageOverlay = useMemo(() => {
+    if (!showClass || !aoiRaster) return null
+    const png = encodeRgbaPng(aoiRaster.width, aoiRaster.height, aoiRaster.rgba)
+    const url = URL.createObjectURL(new Blob([png], { type: 'image/png' }))
+    return { url, coordinates: aoiRaster.coordinates }
+  }, [showClass, aoiRaster])
+
+  useEffect(() => {
+    return () => {
+      if (aoiImageOverlay?.url) URL.revokeObjectURL(aoiImageOverlay.url)
+    }
+  }, [aoiImageOverlay])
 
   useEffect(() => {
     if (!cutFill.enabled || !r) return
@@ -215,11 +247,12 @@ export function CutFillMapLayers({ cutFill }: Props) {
       window.cancelAnimationFrame(raf)
       bound?.off?.('idle', place)
     }
-  }, [maps, cutFill.enabled, cutFill.layers, cutFill.layerOpacity, r, classPolygons])
+  }, [maps, cutFill.enabled, cutFill.layers, cutFill.layerOpacity, r, classPolygons, aoiRaster, aoiImageOverlay])
+
   const masks = useMemo(() => {
-    if (classPolygons || !r?.classification || !r.difference) return null
+    if (aoiRaster || classPolygons || !r?.classification || !r.difference) return null
     return buildCutFillClassMasks(r.dem, r.classification, r.difference)
-  }, [r, classPolygons])
+  }, [aoiRaster, r, classPolygons])
 
   if (!cutFill.enabled || !r) return null
   const op = cutFill.layerOpacity
@@ -306,7 +339,28 @@ export function CutFillMapLayers({ cutFill }: Props) {
         />
       </Source>,
     )
-  } else if (showClass && r.classLayer) {
+  }
+  if (aoiImageOverlay) {
+    layers.push(
+      <Source
+        key="cf-aoi-dz"
+        id="cutfill-aoi-dz-src"
+        type="image"
+        url={aoiImageOverlay.url}
+        coordinates={aoiImageOverlay.coordinates as any}
+      >
+        <Layer
+          id="cutfill-aoi-dz-raster"
+          type="raster"
+          paint={{
+            'raster-opacity': op,
+            'raster-fade-duration': 0,
+            'raster-resampling': 'linear',
+          }}
+        />
+      </Source>,
+    )
+  } else if (!aoiRaster && showClass && r.classLayer) {
     layers.push(
       <Source key="cf-class" id="cutfill-class-src" type="image" url={r.classLayer.dataUrl} coordinates={r.classLayer.coordinates as any}>
         <Layer
@@ -380,6 +434,21 @@ export function CutFillMapLayers({ cutFill }: Props) {
       >
         <Layer id="cutfill-hit-fill" type="fill" paint={{ 'fill-color': swatch, 'fill-opacity': 0.35 }} />
         <Layer id="cutfill-hit-line" type="line" paint={{ 'line-color': '#f8fafc', 'line-width': 2 }} />
+      </Source>,
+    )
+  }
+
+  const profileLine = buildCutFillProfile(r.dem, r.existingElev, r.designElev, r.difference)
+  const profileFeature = profileLine ? cutFillProfileLine(profileLine) : null
+  if (profileFeature) {
+    layers.push(
+      <Source key="cf-profile" id="cutfill-profile-src" type="geojson" data={{ type: 'FeatureCollection', features: [profileFeature] } as any}>
+        <Layer id="cutfill-profile-casing" type="line" paint={{ 'line-color': '#0f172a', 'line-width': 3, 'line-opacity': 0.85 }} />
+        <Layer
+          id="cutfill-profile-line"
+          type="line"
+          paint={{ 'line-color': '#f8fafc', 'line-width': 1.4, 'line-dasharray': [2, 1.2] }}
+        />
       </Source>,
     )
   }

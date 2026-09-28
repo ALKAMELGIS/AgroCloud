@@ -59,4 +59,23 @@ describe('apiOrigin eliteagrocloud Hostinger fallback', () => {
     expect(configuredApiOrigin()).toBe('')
     expect(resolveApiOrigin()).toBe('http://127.0.0.1:5174')
   })
+
+  it('rewrites misconfigured VITE pointing at the static SPA host to api.eliteagrocloud.com', () => {
+    vi.stubEnv('VITE_AGRI_API_SECRETS_URL', 'https://www.eliteagrocloud.com')
+    vi.stubEnv('VITE_ELITE_SAME_ORIGIN_API', '')
+    vi.stubGlobal('window', {
+      location: { hostname: 'www.eliteagrocloud.com', origin: 'https://www.eliteagrocloud.com' },
+    })
+    expect(configuredApiOrigin()).toBe(ELITE_AGROCLOUD_API_ORIGIN)
+    expect(resolveApiOrigin()).toBe(ELITE_AGROCLOUD_API_ORIGIN)
+  })
+
+  it('rewrites apex eliteagrocloud.com VITE to the api subdomain for terrain tiles', () => {
+    vi.stubEnv('VITE_AGRI_API_SECRETS_URL', 'https://eliteagrocloud.com')
+    vi.stubEnv('VITE_ELITE_SAME_ORIGIN_API', '')
+    vi.stubGlobal('window', {
+      location: { hostname: 'www.eliteagrocloud.com', origin: 'https://www.eliteagrocloud.com' },
+    })
+    expect(configuredApiOrigin()).toBe(ELITE_AGROCLOUD_API_ORIGIN)
+  })
 })

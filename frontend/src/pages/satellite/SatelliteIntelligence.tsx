@@ -755,6 +755,9 @@ import { HydroWatershedPanel } from './components/HydroWatershedPanel';
 import { useHydroWatershed } from './components/useHydroWatershed';
 import { sampleCutFillAtLngLat } from '../../lib/cutFill/cutFillMapSample';
 import { CutFillAnalysisPanel } from './components/CutFillAnalysisPanel';
+import { ElevationProfileMap } from './components/ElevationProfileMap';
+import { ElevationProfilePanel } from './components/ElevationProfilePanel';
+import { useElevationProfile } from './components/useElevationProfile';
 import { CutFillMapLayers } from './components/CutFillMapLayers';
 import { useCutFillAnalysis } from './components/useCutFillAnalysis';
 import { WellSiteRecommendationPanel } from './components/WellSiteRecommendationPanel';
@@ -997,6 +1000,7 @@ type MapToolboxSectionId =
  | 'training-ai'
  | 'hydro-watershed'
  | 'cut-fill-analysis'
+ | 'elevation-profile'
  | 'well-site'
  | 'well-suitability'
  | 'flood-monitoring'
@@ -4693,6 +4697,8 @@ export default function SatelliteIntelligence() {
   );
   const skipMapCameraSyncRef = useRef(false);
   const mapOrbitNavigationRef = useRef<ReturnType<typeof useAgroCloudMapOrbitNavigation> | null>(null);
+  /** Suppress 2D/3D toggle on contextmenu after a right-drag orbit (same gesture, not a click). */
+  const suppressMapContextMenuToggle3dRef = useRef(false);
 
   const [sentinelWmsRev, setSentinelWmsRev] = useState(0);
   const [remoteSensingProvider, setRemoteSensingProvider] = useState('sentinel-hub');
@@ -5717,6 +5723,7 @@ export default function SatelliteIntelligence() {
   | 'training-ai'
   | 'hydro-watershed'
   | 'cut-fill-analysis'
+  | 'elevation-profile'
   | 'well-site'
   | 'well-suitability'
   | 'flood-monitoring'
@@ -8013,7 +8020,7 @@ export default function SatelliteIntelligence() {
   };
 
   const toggle3DView = () => {
-    // Smooth, in-place toggle â€” never rebuilds the style; layers / AOI / zoom stay.
+    // Smooth, in-place toggle — never rebuilds the style; layers / AOI / zoom stay.
     if (is3DViewRef.current) siExitTo2dView();
     else siEnterGlobe3dView();
   };
@@ -14834,6 +14841,9 @@ export default function SatelliteIntelligence() {
     setMeasureCompleted(prev => [...prev, { id, mode, points }]);
   }, []);
 
+  const elevationProfileToolboxOpen =
+    isLayerDropdownOpen && expandedEnvSection === 'elevation-profile';
+
   const clearMeasure = useCallback(() => {
     // Closing keeps completed measurements on the map (until "Clear all").
     archiveFinishedMeasure();
@@ -14848,6 +14858,16 @@ export default function SatelliteIntelligence() {
     setMeasurePanelOpen(false);
     setPointerLngLat(null);
   }, [archiveFinishedMeasure]);
+
+  const onElevationProfileRailToggle = useCallback(() => {
+    if (elevationProfileToolboxOpen) {
+      setIsLayerDropdownOpen(false);
+      setMapToolboxEmbedHost(null);
+      return;
+    }
+    if (measureModeRef.current) clearMeasure();
+    onProcessingWorkflowNavigateMapToolbox('elevation-profile');
+  }, [elevationProfileToolboxOpen, clearMeasure, onProcessingWorkflowNavigateMapToolbox]);
 
   const openMeasurePanel = useCallback(() => {
     // Measurement works in isolation â€” turn off any AOI drawing first.
@@ -15079,6 +15099,7 @@ export default function SatelliteIntelligence() {
       expandedEnvSection === 'segformer-detection' ||
       expandedEnvSection === 'hydro-watershed' ||
       expandedEnvSection === 'cut-fill-analysis' ||
+      expandedEnvSection === 'elevation-profile' ||
       expandedEnvSection === 'well-site' ||
       expandedEnvSection === 'well-suitability' ||
       expandedEnvSection === 'flood-monitoring';
@@ -15349,6 +15370,11 @@ export default function SatelliteIntelligence() {
   const cutFill = useCutFillAnalysis({
     geometry: drawnGeometry ?? null,
     enabled: cutFillActive,
+  });
+  const elevationProfile = useElevationProfile({
+    enabled: expandedEnvSection === 'elevation-profile',
+    sampleTerrain: sampleMeasureElevation,
+    sketchGeometry: drawnGeometry ?? null,
   });
   const handleCutFillRowFlyTo = useCallback((lng: number, lat: number) => {
     const map = mapRef.current?.getMap?.() ?? mapRef.current;
@@ -17985,6 +18011,9 @@ export default function SatelliteIntelligence() {
       setPointerLngLat([lng, lat]);
       return;
     }
+    if (elevationProfile.drawing) {
+      elevationProfile.setCursor([lng, lat]);
+    }
     if (gisLassoDragRef.current && gisSelectionActiveRef.current) {
       const ring = gisLassoRingRef.current;
       const last = ring[ring.length - 1];
@@ -18179,8 +18208,12 @@ export default function SatelliteIntelligence() {
 
   useEffect(() => {
     const onUp = (e: PointerEvent) => {
-      const orbit = mapOrbitNavigation.orbitRef.current;
+      const nav = mapOrbitNavigationRef.current;
+      const orbit = nav?.orbitRef.current;
       if (orbit) {
+        if (orbit.rightElevation && orbit.moved) {
+          suppressMapContextMenuToggle3dRef.current = true;
+        }
         const map = mapRef.current?.getMap?.() ?? mapRef.current;
         enforceOrbitCameraLock(map, orbit.lock);
         viewStateLiveRef.current = applyOrbitLockToViewState(
@@ -18188,7 +18221,7 @@ export default function SatelliteIntelligence() {
           orbit.lock,
         );
       }
-      mapOrbitNavigation.endOrbitDrag();
+      nav?.endOrbitDrag();
       if (dragRectCircleRef.current) {
         interactionEndRef.current.finalizeRect(e.clientX, e.clientY);
       }
@@ -18526,6 +18559,10 @@ export default function SatelliteIntelligence() {
     // A direct-manipulation tool (Move/Rotate/Scale) owns the map gesture; swallow the click
     // so no AOI/identify/popup fires after dragging the raster.
     if (rasterGeoreference.manipMode) {
+      return;
+    }
+    if (elevationProfile.drawing) {
+      elevationProfile.addVertex(lng, lat);
       return;
     }
     // Standalone Measure tool consumes clicks in isolation (no AOI / identify).
@@ -22918,6 +22955,7 @@ export default function SatelliteIntelligence() {
             'well-suitability',
             'hydro-watershed',
             'cut-fill-analysis',
+            'elevation-profile',
             'layers',
             'tree-detections',
             'agri-field-boundary',
@@ -22940,6 +22978,7 @@ export default function SatelliteIntelligence() {
             'well-site': 'Well Site Recommendation (Hydro-AI)',
             'hydro-watershed': 'Hydro watershed',
             'cut-fill-analysis': 'Cut & Fill Analysis',
+            'elevation-profile': 'Elevation Profile',
             layers: 'Layers',
             'tree-detections': 'Tree detections',
             'agri-field-boundary': 'Agricultural Field Delineation',
@@ -25415,6 +25454,15 @@ export default function SatelliteIntelligence() {
             onTouchMove={handleMapPointerMove}
             onClick={evt => handleMapClickDraw(evt.lngLat.lng, evt.lngLat.lat, evt.originalEvent ?? undefined)}
             onDblClick={evt => {
+              if (elevationProfile.drawing) {
+                elevationProfile.finish();
+                try {
+                  evt?.preventDefault?.();
+                } catch {
+                  /* ignore */
+                }
+                return;
+              }
               if (measureModeRef.current && !measureFinishedRef.current) {
                 finishMeasure();
                 try {
@@ -25425,6 +25473,15 @@ export default function SatelliteIntelligence() {
               }
             }}
             onContextMenu={evt => {
+              if (elevationProfile.drawing && elevationProfile.vertices.length) {
+                elevationProfile.undo();
+                try {
+                  evt?.originalEvent?.preventDefault?.();
+                } catch {
+                  /* ignore */
+                }
+                return;
+              }
               if (measureModeRef.current && !measureFinishedRef.current) {
                 handleMeasureUndo();
                 try {
@@ -25434,7 +25491,29 @@ export default function SatelliteIntelligence() {
                 }
                 return;
               }
-              handleMapContextMenu(evt);
+              if (
+                mapDrawToolRef.current === 'polygon' &&
+                isSketchDrawingActiveRef.current &&
+                polygonRingRef.current.length >= 3
+              ) {
+                handleMapContextMenu(evt);
+                try {
+                  evt?.originalEvent?.preventDefault?.();
+                } catch {
+                  /* ignore */
+                }
+                return;
+              }
+              if (suppressMapContextMenuToggle3dRef.current) {
+                suppressMapContextMenuToggle3dRef.current = false;
+                try {
+                  evt?.originalEvent?.preventDefault?.();
+                } catch {
+                  /* ignore */
+                }
+                return;
+              }
+              toggle3DView();
               try {
                 evt?.originalEvent?.preventDefault?.();
               } catch {
@@ -26666,6 +26745,7 @@ export default function SatelliteIntelligence() {
             )}
 
             {isMapStyleReady ? <CutFillMapLayers cutFill={cutFill} /> : null}
+            {isMapStyleReady ? <ElevationProfileMap model={elevationProfile} /> : null}
 
             {isMapStyleReady && drawnGeometry && aoiLayerVisible ? (
               <Source id="drawn-index-geometry-outline-source" type="geojson" data={drawnGeometry as any}>
@@ -27589,6 +27669,8 @@ export default function SatelliteIntelligence() {
             measureMode={measureMode}
             onMeasureOpenPanel={openMeasurePanel}
             onMeasureClear={clearMeasure}
+            elevationProfileOpen={elevationProfileToolboxOpen}
+            onElevationProfileRailToggle={onElevationProfileRailToggle}
             showMapToolbox={true}
           />
 
@@ -27873,8 +27955,8 @@ export default function SatelliteIntelligence() {
                   className={`si-basemap-button si-view3d-button ${is3DView ? 'active' : ''}`}
                   title={
                     is3DView
-                      ? 'Return to flat 2D (double-click for terrain relief settings)'
-                      : 'Tilt into 3D (or use right-drag / Shift+drag on the map; double-click for terrain settings)'
+                      ? 'Return to flat 2D (right-click map to toggle; double-click for terrain relief settings)'
+                      : 'Tilt into 3D (right-click map to toggle; right-drag or Shift+drag to orbit; double-click for terrain settings)'
                   }
                   aria-label={is3DView ? 'Switch to 2D view' : 'Switch to 3D view'}
                   aria-pressed={is3DView}
@@ -28052,6 +28134,8 @@ export default function SatelliteIntelligence() {
                                 ? 'Hydro Watershed Workflow'
                               : expandedEnvSection === 'cut-fill-analysis'
                                 ? 'Cut & Fill Analysis'
+                              : expandedEnvSection === 'elevation-profile'
+                                ? 'Elevation Profile'
                               : expandedEnvSection === 'well-site'
                                 ? 'Well Site (Hydro-AI)'
                               : expandedEnvSection === 'well-suitability'
@@ -28618,6 +28702,11 @@ export default function SatelliteIntelligence() {
                     {expandedEnvSection === 'cut-fill-analysis' && (
                       <div className="si-env-section-card si-rs-panel--glass">
                         <CutFillAnalysisPanel model={cutFill} onRowFlyTo={handleCutFillRowFlyTo} />
+                      </div>
+                    )}
+                    {expandedEnvSection === 'elevation-profile' && (
+                      <div className="si-env-section-card si-rs-panel--glass">
+                        <ElevationProfilePanel model={elevationProfile} />
                       </div>
                     )}
                     {expandedEnvSection === 'well-site' && (

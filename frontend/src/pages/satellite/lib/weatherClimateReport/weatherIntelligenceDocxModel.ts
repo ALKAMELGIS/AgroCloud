@@ -1,5 +1,10 @@
+import type { DocxNativeChartSpec } from '../timeSeriesReport/timeSeriesDocxNativeCharts'
 import type { WeatherClimateReportPayload } from './weatherClimateReportTypes'
 import { climateAggregationLabel } from './weatherClimateAnalysisEngine'
+import {
+  buildWeatherClimateDocxAnalytics,
+  type ClimateVariableStatRow,
+} from './weatherClimateDocxAnalytics'
 import {
   buildWeatherIntelligenceExecutive,
   type WeatherIntelligenceExecutive,
@@ -25,6 +30,14 @@ export type WeatherIntelligenceDocxModel = {
   extremeEventRows: string[][]
   forecastRows: string[][]
   trendSummaryRows: string[][]
+  statisticalAnalysis: {
+    methodologyNote: string
+    trendResolution: 'daily' | 'monthly'
+    variableStats: ClimateVariableStatRow[]
+    periodTrendHeaders: string[]
+    periodTrendRows: string[][]
+  }
+  nativeCharts: DocxNativeChartSpec[]
 }
 
 export function base64ToUint8(base64: string): Uint8Array {
@@ -38,6 +51,7 @@ export async function buildWeatherIntelligenceDocxModel(
   payload: WeatherClimateReportPayload,
 ): Promise<{ model: WeatherIntelligenceDocxModel; images: DocxImageAsset[] }> {
   const executive = buildWeatherIntelligenceExecutive(payload)
+  const analytics = buildWeatherClimateDocxAnalytics(payload)
 
   const model: WeatherIntelligenceDocxModel = {
     title: 'WEATHER INTELLIGENCE REPORT',
@@ -74,6 +88,14 @@ export async function buildWeatherIntelligenceDocxModel(
       ['Climate classification', payload.climateClassification],
       ['Historical coverage', `${payload.historicalCoverageYears} years`],
     ],
+    statisticalAnalysis: {
+      methodologyNote: analytics.methodologyNote,
+      trendResolution: analytics.trendResolution,
+      variableStats: analytics.variableStats,
+      periodTrendHeaders: analytics.periodTrendHeaders,
+      periodTrendRows: analytics.periodTrendRows,
+    },
+    nativeCharts: analytics.nativeCharts,
   }
 
   return { model, images: [] }

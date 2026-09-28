@@ -176,6 +176,7 @@ export type SatelliteMapAnalysisChromeProps = {
     | 'segformer-detection'
     | 'hydro-watershed'
     | 'cut-fill-analysis'
+    | 'elevation-profile'
     | 'well-site'
     | 'well-suitability'
     | 'flood-monitoring'
@@ -211,6 +212,8 @@ export type SatelliteMapAnalysisChromeProps = {
   onMeasureOpenPanel?: () => void;
   /** Main toolbox Measure tool: stop / clear measuring. */
   onMeasureClear?: () => void;
+  elevationProfileOpen?: boolean;
+  onElevationProfileRailToggle?: () => void;
   /** Main toolbox Select tool: feature selection mode active. */
   mapToolboxSelectionActive?: boolean;
   /** Toggle GIS feature selection from the map toolbox rail. */
@@ -298,6 +301,8 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
     measureMode,
     onMeasureOpenPanel,
     onMeasureClear,
+    elevationProfileOpen,
+    onElevationProfileRailToggle,
     mapToolboxSelectionActive,
     onMapToolboxToggleSelection,
     imageryTimeSeriesOpen,
@@ -405,6 +410,8 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
       measureMode={measureMode}
       onMeasureOpenPanel={onMeasureOpenPanel}
       onMeasureClear={onMeasureClear}
+      elevationProfileOpen={elevationProfileOpen}
+      onElevationProfileRailToggle={onElevationProfileRailToggle}
       mapToolboxSelectionActive={mapToolboxSelectionActive}
       onMapToolboxToggleSelection={onMapToolboxToggleSelection}
       imageryTimeSeriesOpen={imageryTimeSeriesOpen}

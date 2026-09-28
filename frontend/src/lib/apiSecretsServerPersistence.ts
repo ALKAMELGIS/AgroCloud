@@ -19,6 +19,7 @@ import {
   persistSentinelHubWmsInstanceIdInBrowser,
 } from './sentinelHubWmsInstance'
 import { scheduleBrowserApiSecretsVaultSnapshot } from './browserApiSecretsVault'
+import { apiUrl, configuredApiOrigin } from './apiOrigin'
 
 export type BuiltinSecretKey =
   | 'mapboxToken'
@@ -76,11 +77,10 @@ const DEFAULT_API_SECRETS_PATH = '/api/system/api-secrets'
 export function getApiSecretsEndpoint(): string {
   const raw = import.meta.env.VITE_AGRI_API_SECRETS_URL
   const u = typeof raw === 'string' ? raw.trim().replace(/\/$/, '') : ''
-  if (!u) return DEFAULT_API_SECRETS_PATH
-  // Accept either the full endpoint URL or just the backend origin/base path:
-  // when the configured value doesn't already end in the canonical path, append
-  // it. Lets users set VITE_AGRI_API_SECRETS_URL=https://api.example.com.
   if (/\/api\/system\/api-secrets$/i.test(u)) return u
+  const remote = configuredApiOrigin()
+  if (remote) return apiUrl('/api/system/api-secrets')
+  if (!u) return DEFAULT_API_SECRETS_PATH
   return `${u}${DEFAULT_API_SECRETS_PATH}`
 }
 

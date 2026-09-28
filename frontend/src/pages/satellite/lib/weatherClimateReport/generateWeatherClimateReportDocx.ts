@@ -2,6 +2,10 @@ import JSZip from 'jszip'
 import { buildWeatherIntelligenceDocxDocumentXml } from './buildWeatherIntelligenceDocxDocument'
 import { buildWeatherIntelligenceDocxModel } from './weatherIntelligenceDocxModel'
 import type { WeatherClimateReportPayload } from './weatherClimateReportTypes'
+import {
+  buildDocxChartXml,
+  buildEmptyChartRelsXml,
+} from '../timeSeriesReport/timeSeriesDocxNativeCharts'
 
 import templateUrl from '../timeSeriesReport/templates/Agricultural_Satellite_Intelligence_Report.template.docx?url'
 
@@ -15,7 +19,9 @@ function patchHeaderFooterXml(xml: string, generatedBy: string, generatedStamp: 
   return out
 }
 
-function buildDocumentRels(): string {
+function buildDocumentRels(
+  chartAssets: Array<{ rId: string; fileStem: string }>,
+): string {
   const staticRels = [
     `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`,
     `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>`,
@@ -27,7 +33,49 @@ function buildDocumentRels(): string {
     `<Relationship Id="${FOOTER_REL_ID}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>`,
     `<Relationship Id="rIdTheme" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="theme/theme1.xml"/>`,
   ]
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${staticRels.join('')}</Relationships>`
+  const chartRels = chartAssets.map(
+    c =>
+      `<Relationship Id="${c.rId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="charts/${c.fileStem}.xml"/>`,
+  )
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${[...staticRels, ...chartRels].join('')}</Relationships>`
+}
+
+function patchDocumentXmlHeaderFooterRefs(xml: string): string {
+  return xml.replace(/rIdHdr/g, HEADER_REL_ID).replace(/rIdFtr/g, FOOTER_REL_ID)
+}
+
+function ensureContentTypes(xml: string, chartStems: string[]): string {
+  let out = xml
+  for (const stem of chartStems) {
+    const part = `/word/charts/${stem}.xml`
+    if (!out.includes(part)) {
+      out = out.replace(
+        '</Types>',
+        `<Override PartName="${part}" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/></Types>`,
+      )
+    }
+  }
+  return out
+}
+
+function ensureUpdateFieldsOnOpen(settingsXml: string): string {
+  if (settingsXml.includes('<w:updateFields')) {
+    return settingsXml.replace(/<w:updateFields[^/]*\/>/, '<w:updateFields w:val="true"/>')
+  }
+  return settingsXml.replace(/<w:settings([^>]*)>/, '<w:settings$1><w:updateFields w:val="true"/>')
+}
+
+function brandHeadingStyles(stylesXml: string): string {
+  let out = stylesXml
+  out = out.replace(
+    /(<w:style w:type="paragraph" w:styleId="Heading1">[\s\S]*?<w:rPr>)[\s\S]*?(<\/w:rPr>)/,
+    `$1<w:b/><w:bCs/><w:color w:val="1F4D2C"/><w:sz w:val="24"/><w:szCs w:val="24"/>$2`,
+  )
+  out = out.replace(
+    /(<w:style w:type="paragraph" w:styleId="Heading2">[\s\S]*?<w:rPr>)[\s\S]*?(<\/w:rPr>)/,
+    `$1<w:b/><w:bCs/><w:color w:val="3F7D4F"/><w:sz w:val="22"/><w:szCs w:val="22"/>$2`,
+  )
+  return out
 }
 
 export async function generateWeatherClimateReportDocx(
@@ -40,8 +88,44 @@ export async function generateWeatherClimateReportDocx(
   const templateBuffer = await templateResponse.arrayBuffer()
 
   const zip = await JSZip.loadAsync(templateBuffer)
-  zip.file('word/document.xml', buildWeatherIntelligenceDocxDocumentXml(model))
-  zip.file('word/_rels/document.xml.rels', buildDocumentRels())
+  zip.file(
+    'word/document.xml',
+    patchDocumentXmlHeaderFooterRefs(buildWeatherIntelligenceDocxDocumentXml(model)),
+  )
+  zip.file(
+    'word/_rels/document.xml.rels',
+    buildDocumentRels(model.nativeCharts.map(c => ({ rId: c.rId, fileStem: c.fileStem }))),
+  )
+
+  const existingCharts = Object.keys(zip.files).filter(p => p.startsWith('word/charts/'))
+  for (const path of existingCharts) {
+    zip.remove(path)
+  }
+  for (const chart of model.nativeCharts) {
+    zip.file(`word/charts/${chart.fileStem}.xml`, buildDocxChartXml(chart))
+    zip.file(`word/charts/_rels/${chart.fileStem}.xml.rels`, buildEmptyChartRelsXml())
+  }
+
+  const ctFile = zip.file('[Content_Types].xml')
+  if (ctFile) {
+    const ctXml = await ctFile.async('string')
+    zip.file(
+      '[Content_Types].xml',
+      ensureContentTypes(ctXml, model.nativeCharts.map(c => c.fileStem)),
+    )
+  }
+
+  const settingsFile = zip.file('word/settings.xml')
+  if (settingsFile) {
+    const settingsXml = await settingsFile.async('string')
+    zip.file('word/settings.xml', ensureUpdateFieldsOnOpen(settingsXml))
+  }
+
+  const stylesFile = zip.file('word/styles.xml')
+  if (stylesFile) {
+    const stylesXml = await stylesFile.async('string')
+    zip.file('word/styles.xml', brandHeadingStyles(stylesXml))
+  }
 
   const headerFile = zip.file('word/header1.xml')
   if (headerFile) {

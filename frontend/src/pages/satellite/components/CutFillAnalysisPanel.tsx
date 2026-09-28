@@ -160,15 +160,27 @@ export function CutFillAnalysisPanel({ model, onRowFlyTo }: Props) {
             />
           </div>
           <div className="si-cutfill__field">
-            <label htmlFor="cf-crs">CRS (UTM override EPSG)</label>
+            <label htmlFor="cf-crs">CRS (UTM from AOI)</label>
             <input
               id="cf-crs"
               type="number"
-              placeholder="Auto UTM"
-              value={model.crsOverride ?? ''}
+              placeholder={model.hasAoi ? '' : 'Auto UTM'}
+              className={
+                !model.crsOverride && model.autoCrsEpsg != null ? 'si-cutfill__crs-auto' : undefined
+              }
+              value={model.effectiveCrsEpsg ?? ''}
               onChange={e => model.setCrsOverride(e.target.value ? Number(e.target.value) : null)}
             />
-            <span>{model.crsLabel}</span>
+            <span className="si-cutfill__crs-hint">{model.crsLabel}</span>
+            {model.crsOverride != null && model.autoCrsEpsg != null ? (
+              <button
+                type="button"
+                className="si-cutfill__crs-reset"
+                onClick={() => model.setCrsOverride(null)}
+              >
+                Use auto UTM ({model.autoCrsEpsg})
+              </button>
+            ) : null}
           </div>
           <div className="si-cutfill__field">
             <label htmlFor="cf-datum">Vertical datum label</label>
@@ -247,7 +259,12 @@ export function CutFillAnalysisPanel({ model, onRowFlyTo }: Props) {
 
           <div className="si-cutfill__layer-toggles">
             {(() => {
-              const classOn = !!(model.layers.cut || model.layers.fill || model.layers.classification)
+              const classOn = !!(
+                model.layers.cut ||
+                model.layers.fill ||
+                model.layers.noChange ||
+                model.layers.classification
+              )
               return (
                 <button
                   type="button"

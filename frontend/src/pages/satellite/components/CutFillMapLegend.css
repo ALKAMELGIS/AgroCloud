@@ -88,6 +88,82 @@
   color: var(--theme-text-muted, #777);
 }
 
+.si-cutfill-profile {
+  margin: 8px 0 2px;
+}
+
+.si-cutfill-profile__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.si-cutfill-profile__key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--theme-text-muted, #777);
+}
+
+.si-cutfill-profile__key i {
+  width: 12px;
+  height: 2px;
+  border-radius: 1px;
+  display: inline-block;
+}
+
+.si-cutfill-profile__key i.is-existing {
+  background: currentColor;
+}
+
+.si-cutfill-profile__key i.is-design {
+  background: #2563eb;
+}
+
+.si-cutfill-profile svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.si-cutfill-profile__cut {
+  fill: #dc2626;
+  fill-opacity: 0.55;
+}
+
+.si-cutfill-profile__fill {
+  fill: #16a34a;
+  fill-opacity: 0.55;
+}
+
+.si-cutfill-profile__existing {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+
+.si-cutfill-profile__design {
+  fill: none;
+  stroke: #2563eb;
+  stroke-width: 1.6;
+}
+
+.si-cutfill-profile__tick {
+  fill: currentColor;
+  font-size: 9px;
+  font-family: inherit;
+}
+
 .si-cutfill-hit {
   min-width: 196px;
   padding: 8px 10px;

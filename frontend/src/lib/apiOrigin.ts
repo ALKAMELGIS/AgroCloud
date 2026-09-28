@@ -61,6 +61,36 @@ function originFromEnvUrl(raw: string): string {
   }
 }
 
+function isEliteAgrocloudStaticPagesOrigin(origin: string): boolean {
+  try {
+    return isEliteAgrocloudPagesHost(new URL(origin).hostname)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * `VITE_AGRI_API_SECRETS_URL` is often set to the public SPA host (www / apex) instead of the
+ * Node API (`api.eliteagrocloud.com`). That breaks `/api/terrain/esri-rgb/*` (3D relief) and other
+ * `/api/*` routes because GitHub Pages answers with HTML. Redirect those values to the API host.
+ */
+function normalizeConfiguredApiOrigin(origin: string): string {
+  if (!origin) return ''
+  if (
+    !eliteAgrocloudSameOriginApi() &&
+    isEliteAgrocloudStaticPagesOrigin(origin)
+  ) {
+    return ELITE_AGROCLOUD_API_ORIGIN
+  }
+  const onPages =
+    typeof window !== 'undefined' &&
+    origin === sameOrigin() &&
+    isKnownStaticHostname(hostname())
+  if (onPages) return ''
+  if (typeof window !== 'undefined' && origin === sameOrigin()) return ''
+  return origin
+}
+
 /** Trimmed value of the configured backend origin override, or '' when unset. */
 export function configuredApiOrigin(): string {
   // Local full-stack / Vite dev always use same-origin `/api` (proxy or co-located Node).
@@ -69,18 +99,8 @@ export function configuredApiOrigin(): string {
   const raw = import.meta.env.VITE_AGRI_API_SECRETS_URL
   const configured = typeof raw === 'string' ? raw.trim() : ''
   if (configured) {
-    const origin = originFromEnvUrl(configured)
-    if (origin) {
-      /**
-       * GitHub Pages sometimes sets VITE_AGRI_API_SECRETS_URL to the same static origin.
-       * That is not a Node backend — fall through to the Hostinger API host.
-       */
-      const onPages = typeof window !== 'undefined' && origin === sameOrigin() && isKnownStaticHostname(hostname())
-      if (!onPages) {
-        if (typeof window !== 'undefined' && origin === sameOrigin()) return ''
-        return origin
-      }
-    }
+    const normalized = normalizeConfiguredApiOrigin(originFromEnvUrl(configured))
+    if (normalized) return normalized
   }
   const remoteFallback = defaultRemoteApiOriginForStaticHost()
   if (remoteFallback) return remoteFallback

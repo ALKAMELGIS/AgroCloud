@@ -1,6 +1,9 @@
 import {
+  CHART_IMAGE_CX,
+  CHART_IMAGE_CY,
   docxBodyParagraph,
   docxBulletList,
+  docxInlineChart,
   docxItalicNote,
   docxMetaLine,
   docxPageBreak,
@@ -42,7 +45,7 @@ export function buildWeatherIntelligenceDocxDocumentXml(model: WeatherIntelligen
   parts.push(
     docxTable(
       ['Indicator', 'Value', 'Notes'],
-      ex.kpis.map(k => [k.icon + ' ' + k.label, k.value, 'Key decision metric']),
+      ex.kpis.map(k => [k.label, k.value, 'Key decision metric']),
       KPI_COLS,
     ),
   )
@@ -51,7 +54,7 @@ export function buildWeatherIntelligenceDocxDocumentXml(model: WeatherIntelligen
   parts.push(docxBodyParagraph(ex.weatherRiskLabel))
   parts.push(
     docxItalicNote(
-      'Score bands: 🟢 80–100 Excellent · 🟡 60–79 Good · 🟠 40–59 Moderate Risk · 🔴 20–39 High Risk · ⚫ 0–19 Critical',
+      'Score bands: 80–100 Excellent · 60–79 Good · 40–59 Moderate Risk · 20–39 High Risk · 0–19 Critical',
     ),
   )
   parts.push(
@@ -67,17 +70,78 @@ export function buildWeatherIntelligenceDocxDocumentXml(model: WeatherIntelligen
 
   parts.push(docxPageBreak())
 
-  // ── Page 2: Current conditions & trends ──
+  // ── Statistical analysis (user-selected date range) ──
+  const stats = model.statisticalAnalysis
+  parts.push(docxSectionHeading('Statistical Analysis — Selected Period'))
+  parts.push(docxBodyParagraph(stats.methodologyNote))
+  parts.push(docxSectionHeading('Summary Statistics', true, 2))
+  parts.push(
+    docxTable(
+      [
+        'Variable',
+        'Minimum',
+        'Maximum',
+        'Average',
+        'Total',
+        'Std. dev.',
+        'Observations',
+        'Missing',
+      ],
+      stats.variableStats.map(r => [
+        r.variable,
+        r.minimum,
+        r.maximum,
+        r.average,
+        r.total,
+        r.stdDev,
+        r.observations,
+        r.missing,
+      ]),
+      [2200, 900, 900, 900, 900, 900, 1100, 900],
+    ),
+  )
+
+  if (model.nativeCharts.length) {
+    parts.push(docxSectionHeading('Climate Charts — Temperature · Humidity · Rainfall', true, 2))
+    parts.push(
+      docxItalicNote(
+        'Native Office charts (editable in Word): temperature and relative humidity extremes, rainfall totals, temperature–humidity relationship, and dual-axis time series for the selected analysis window.',
+      ),
+    )
+    for (const chart of model.nativeCharts) {
+      parts.push(docxInlineChart(chart.rId, CHART_IMAGE_CX, CHART_IMAGE_CY))
+    }
+  }
+
+  if (stats.periodTrendRows.length) {
+    const trendTitle =
+      stats.trendResolution === 'daily' ? 'Daily Trend Table' : 'Monthly Trend Table'
+    parts.push(docxSectionHeading(trendTitle, true, 2))
+    parts.push(
+      docxItalicNote(
+        stats.trendResolution === 'daily'
+          ? 'One row per calendar day in the selected range.'
+          : 'Monthly aggregates derived from daily observations in the selected range.',
+      ),
+    )
+    parts.push(docxTable(stats.periodTrendHeaders, stats.periodTrendRows, [
+      1400, 1100, 1100, 1100, 1000, 900, 900, 1200,
+    ]))
+  }
+
+  parts.push(docxPageBreak())
+
+  // ── Current conditions & trends ──
   parts.push(docxSectionHeading('Current Weather Conditions'))
   parts.push(docxTable(['Parameter', 'Value'], ex.currentConditions, [3600, 5700]))
 
-  parts.push(docxSectionHeading('Daily & Monthly Trends'))
+  parts.push(docxSectionHeading('Climate Trends Overview'))
+  parts.push(docxTable(['Trend', 'Summary'], model.trendSummaryRows, [2800, 6500]))
   parts.push(
     docxItalicNote(
-      'Tabular weather data (hourly, daily, and monthly summaries) is delivered in the Weather Intelligence Excel workbook. Use the in-app Time History charts for interactive visualization.',
+      'Full hourly and multi-scale tables are available in the Weather Intelligence Excel export.',
     ),
   )
-  parts.push(docxTable(['Trend', 'Summary'], model.trendSummaryRows, [2800, 6500]))
 
   parts.push(docxPageBreak())
 

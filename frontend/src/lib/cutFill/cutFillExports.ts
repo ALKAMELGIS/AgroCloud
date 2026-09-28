@@ -3,7 +3,8 @@ import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { buildAoiGeoTiff, downloadBlob, type GeoBand } from '../hydroWatershed/geoTiffExport'
 import { downloadTreeShapefile } from '../treeDetection/shapefileExport'
-import type { CutFillAnalysisResult, CutFillTableRow } from './cutFillTypes'
+import { readCurrentUser } from '../auth'
+import type { CutFillAnalysisResult, CutFillSummary, CutFillTableRow } from './cutFillTypes'
 
 function downloadText(filename: string, text: string, mime: string) {
   downloadBlob(new Blob([text], { type: mime }), filename)
@@ -139,35 +140,179 @@ export function exportCutFillDxf(result: CutFillAnalysisResult, filename = 'cut-
   downloadText(filename, lines.join('\n'), 'application/dxf')
 }
 
-export function exportCutFillPdfReport(result: CutFillAnalysisResult, filename = 'cut-fill-report.pdf') {
-  const doc = new jsPDF()
-  doc.setFontSize(14)
-  doc.text('Cut & Fill Analysis Report', 14, 18)
+export type CutFillReportVolumes = {
+  areaSqM: number
+  cutCuM: number
+  fillCuM: number
+  netLabel: string
+  cutFactorLabel: string
+  fillFactorLabel: string
+}
+
+function fmt2(n: number): string {
+  return (Number.isFinite(n) ? n : 0).toFixed(2)
+}
+
+function fmt3(n: number): string {
+  return (Number.isFinite(n) ? n : 1).toFixed(3)
+}
+
+/** `6399943.57<-Cut->` when cut exceeds fill, otherwise `<-Fill->`. */
+export function formatCutFillNetCuM(cutCuM: number, fillCuM: number): string {
+  const net = (Number.isFinite(cutCuM) ? cutCuM : 0) - (Number.isFinite(fillCuM) ? fillCuM : 0)
+  if (Math.abs(net) < 0.005) return '0.00'
+  if (net > 0) return `${net.toFixed(2)}<-Cut->`
+  return `${(-net).toFixed(2)}<-Fill->`
+}
+
+export function formatCutFillReportStamp(date: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())} ${p(date.getHours())}:${p(date.getMinutes())}:${p(date.getSeconds())}`
+}
+
+/** Volume Summary / Totals figures. Factors default to 1.000 (unadjusted). */
+export function cutFillReportVolumes(
+  summary: CutFillSummary,
+  cutFactor = 1,
+  fillFactor = 1,
+): CutFillReportVolumes {
+  const cf = Number.isFinite(cutFactor) && cutFactor > 0 ? cutFactor : 1
+  const ff = Number.isFinite(fillFactor) && fillFactor > 0 ? fillFactor : 1
+  const cutCuM = summary.cutVolumeM3 * cf
+  const fillCuM = summary.fillVolumeM3 * ff
+  return {
+    areaSqM: summary.cutAreaM2 + summary.fillAreaM2 + summary.noChangeAreaM2,
+    cutCuM,
+    fillCuM,
+    netLabel: formatCutFillNetCuM(cutCuM, fillCuM),
+    cutFactorLabel: fmt3(cf),
+    fillFactorLabel: fmt3(ff),
+  }
+}
+
+export type CutFillPdfReportMeta = {
+  generatedAt?: Date
+  userName?: string
+  drawing?: string
+  cutFactor?: number
+  fillFactor?: number
+}
+
+function blackBar(doc: jsPDF, label: string, y: number, x: number, width: number, centered: boolean): number {
+  const height = centered ? 10 : 8
+  doc.setFillColor(0, 0, 0)
+  doc.rect(x, y, width, height, 'F')
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(centered ? 14 : 11)
+  doc.text(label, centered ? x + width / 2 : x + 3, y + height / 2 + 1.2, { align: centered ? 'center' : 'left' })
+  doc.setTextColor(0, 0, 0)
+  doc.setFont('helvetica', 'normal')
+  return y + height
+}
+
+export function exportCutFillPdfReport(
+  result: CutFillAnalysisResult,
+  filename = 'Cut-Fill-Report.pdf',
+  meta: CutFillPdfReportMeta = {},
+) {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+  doc.setProperties({ title: 'Cut/Fill Report', subject: 'Cut and fill volume summary' })
+  const pageW = doc.internal.pageSize.getWidth()
+  const margin = 12
+  const contentW = pageW - margin * 2
+  const volumes = cutFillReportVolumes(result.summary, meta.cutFactor, meta.fillFactor)
+  const generated = formatCutFillReportStamp(meta.generatedAt ?? new Date())
+  const userName = meta.userName?.trim() || readCurrentUser()?.name?.trim() || 'User'
+  const drawing =
+    meta.drawing?.trim() ||
+    `AgroCloud Cut/Fill · ${result.parameters.crsLabel} · ${result.parameters.verticalDatumLabel}`
+
+  let y = blackBar(doc, 'Cut/Fill Report', 10, margin, contentW, true) + 8
   doc.setFontSize(10)
-  doc.text(`CRS: ${result.parameters.crsLabel}`, 14, 26)
-  doc.text(`Datum: ${result.parameters.verticalDatumLabel}`, 14, 32)
-  doc.text(`Tolerance: ${result.parameters.verticalToleranceM} m`, 14, 38)
-  const s = result.summary
+  doc.setTextColor(0, 0, 0)
+  const metaRows: Array<[string, string]> = [
+    ['Generated:', generated],
+    ['By user:', userName],
+    ['Drawing:', drawing],
+  ]
+  for (const [label, value] of metaRows) {
+    doc.setFont('helvetica', 'bold')
+    doc.text(label, margin + 2, y)
+    doc.setFont('helvetica', 'normal')
+    doc.text(value, margin + 42, y)
+    y += 6
+  }
+
+  y = blackBar(doc, 'Volume Summary', y + 4, margin, contentW, false)
+  const head = [
+    ['Name', 'Type', 'Cut Factor', 'Fill Factor', '2d Area\n(sq.m)', 'Cut\n(Cu. M.)', 'Fill\n(Cu. M.)', 'Net\n(Cu. M.)'],
+  ]
+  const summaryRow = [
+    'Cut and Fill',
+    'full',
+    volumes.cutFactorLabel,
+    volumes.fillFactorLabel,
+    fmt2(volumes.areaSqM),
+    fmt2(volumes.cutCuM),
+    fmt2(volumes.fillCuM),
+    volumes.netLabel,
+  ]
+  const tableStyles = {
+    font: 'helvetica',
+    fontSize: 9,
+    textColor: [0, 0, 0] as [number, number, number],
+    lineColor: [160, 160, 160] as [number, number, number],
+    lineWidth: 0.15,
+    halign: 'center' as const,
+    valign: 'middle' as const,
+  }
   autoTable(doc, {
-    startY: 44,
-    head: [['Metric', 'Value']],
-    body: [
-      ['Cut volume (m³)', s.cutVolumeM3.toFixed(1)],
-      ['Fill volume (m³)', s.fillVolumeM3.toFixed(1)],
-      ['Net volume (m³)', s.netVolumeM3.toFixed(1)],
-      ['Cut area (m²)', s.cutAreaM2.toFixed(0)],
-      ['Fill area (m²)', s.fillAreaM2.toFixed(0)],
-      ['Max cut (m)', s.maxCutM.toFixed(2)],
-      ['Max fill (m)', s.maxFillM.toFixed(2)],
-    ],
+    startY: y,
+    margin: { left: margin, right: margin },
+    tableWidth: contentW,
+    head,
+    body: [summaryRow],
+    styles: tableStyles,
+    headStyles: {
+      fillColor: [0, 0, 0],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      lineColor: [0, 0, 0],
+    },
+    bodyStyles: { fillColor: [255, 255, 255] },
   })
+
+  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6
+  y = blackBar(doc, 'Totals', y, margin, contentW, false)
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: margin },
+    tableWidth: contentW,
+    head: [['', '', '', '', '2d Area\n(sq.m)', 'Cut\n(Cu. M.)', 'Fill\n(Cu. M.)', 'Net\n(Cu. M.)']],
+    body: [['Total', '', '', '', fmt2(volumes.areaSqM), fmt2(volumes.cutCuM), fmt2(volumes.fillCuM), volumes.netLabel]],
+    styles: tableStyles,
+    headStyles: {
+      fillColor: [0, 0, 0],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      lineColor: [0, 0, 0],
+    },
+    bodyStyles: { fillColor: [255, 255, 255] },
+    didParseCell: data => {
+      if (data.section === 'head' && data.column.index < 4) {
+        data.cell.styles.fillColor = [255, 255, 255]
+        data.cell.styles.textColor = [255, 255, 255]
+        data.cell.styles.lineWidth = 0
+      }
+    },
+  })
+
+  const footY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6
+  doc.setFont('helvetica', 'italic')
   doc.setFontSize(8)
-  doc.text(
-    'Grid-based surface volume (ArcGIS Surface Volume equivalent). Terrarium DEM is ~10–30 m; use survey GeoTIFF for engineering grade.',
-    14,
-    (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10,
-    { maxWidth: 180 },
-  )
+  doc.setTextColor(0, 0, 0)
+  doc.text('* Value adjusted by cut or fill factor other than 1.0', pageW - margin, footY, { align: 'right' })
   doc.save(filename)
 }
 

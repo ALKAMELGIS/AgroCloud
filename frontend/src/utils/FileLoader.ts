@@ -3,6 +3,7 @@ import JSZip from 'jszip';
 import Papa from 'papaparse';
 import * as toGeoJSON from '@tmcw/togeojson';
 import * as XLSX from 'xlsx';
+import { isShapefilePart } from '../lib/gisIngest/shapefileBundle';
 
 const MAX_PARSE_BYTES = 480 * 1024 * 1024; // soft cap — browser memory still limits practical size
 
@@ -118,7 +119,15 @@ function yieldToBrowser(): Promise<void> {
 
 /** shpjs may return a FeatureCollection, a Feature, a Geometry, or an object map of layer name → GeoJSON. */
 export function mergeShpLikeToFeatureCollection(geo: unknown): { type: 'FeatureCollection'; features: any[] } {
-  if (!geo || typeof geo !== 'object') return { type: 'FeatureCollection', features: [] };
+  if (!geo) return { type: 'FeatureCollection', features: [] };
+  if (Array.isArray(geo)) {
+    const features: any[] = [];
+    for (const item of geo) {
+      features.push(...mergeShpLikeToFeatureCollection(item).features);
+    }
+    return { type: 'FeatureCollection', features };
+  }
+  if (typeof geo !== 'object') return { type: 'FeatureCollection', features: [] };
   const g = geo as any;
   /** KML `<MultiGeometry>` and some exports surface as a root or nested GeometryCollection. */
   if (g.type === 'GeometryCollection' && Array.isArray(g.geometries)) {
@@ -189,17 +198,31 @@ export function normalizeGeoJsonEnvelope(data: unknown): { type: 'FeatureCollect
 
 /**
  * KML/KMZ placemarks often include Point icons alongside polygons/lines.
- * Drop Point/MultiPoint so only area/line geometries draw on the map.
+ * When area/line geometry exists, drop Point/MultiPoint so folder icons do not clutter the map.
+ * Point-only KML/KMZ files are kept intact so placemarks import and draw as expected.
  */
 export function stripKmlPointFeatures(fc: {
   type: 'FeatureCollection';
   features: any[];
 }): { type: 'FeatureCollection'; features: any[] } {
-  const features = (fc.features ?? []).filter(f => {
+  const features = fc.features ?? [];
+  const hasAreaOrLine = features.some(f => {
+    const t = f?.geometry?.type;
+    return (
+      t === 'Polygon' ||
+      t === 'MultiPolygon' ||
+      t === 'LineString' ||
+      t === 'MultiLineString'
+    );
+  });
+  if (!hasAreaOrLine) {
+    return { type: 'FeatureCollection', features };
+  }
+  const kept = features.filter(f => {
     const t = f?.geometry?.type;
     return t !== 'Point' && t !== 'MultiPoint';
   });
-  return { type: 'FeatureCollection', features };
+  return { type: 'FeatureCollection', features: kept };
 }
 
 function assertXmlHasNoParserErrors(doc: Document, label: string) {
@@ -525,6 +548,69 @@ async function parseGeoTiffToRaster(file: File, opts?: ParseOptions): Promise<Pa
   };
 }
 
+function shapefileZipEntryDir(path: string): string {
+  const m = path.match(/^(.+[\\/])/);
+  return m ? m[1] : '';
+}
+
+function shapefileZipEntryStem(path: string): string {
+  const base = path.replace(/^.*[/\\]/, '');
+  const i = base.lastIndexOf('.');
+  return (i > 0 ? base.slice(0, i) : base).toLowerCase();
+}
+
+async function geoJsonFromShapefileBuffer(arrayBuffer: ArrayBuffer): Promise<{ type: 'FeatureCollection'; features: any[] }> {
+  const raw = await shp(arrayBuffer);
+  return normalizeGeoJsonEnvelope(mergeShpLikeToFeatureCollection(raw));
+}
+
+/**
+ * Parse a .zip that contains shapefile parts (.shp/.dbf/.shx/…).
+ * Retries with per-layer flat archives when shpjs returns empty (common with nested folders).
+ */
+async function parseShapefileZipBuffer(arrayBuffer: ArrayBuffer, filename: string): Promise<ParsedData> {
+  let fc = await geoJsonFromShapefileBuffer(arrayBuffer);
+  if (fc.features.length) {
+    return { type: 'geojson', data: fc, filename, crsHint: 'Shapefile' };
+  }
+
+  const zip = await JSZip.loadAsync(arrayBuffer);
+  const entries = Object.values(zip.files).filter(f => !f.dir);
+  const shpEntries = entries.filter(f => f.name.toLowerCase().endsWith('.shp'));
+  if (!shpEntries.length) {
+    throw new Error('Shapefile ZIP parsed but contains no features.');
+  }
+
+  const mergedFeatures: any[] = [];
+  for (const shpEntry of shpEntries) {
+    const dir = shapefileZipEntryDir(shpEntry.name);
+    const stem = shapefileZipEntryStem(shpEntry.name);
+    const layerZip = new JSZip();
+    for (const ent of entries) {
+      if (shapefileZipEntryDir(ent.name) !== dir) continue;
+      if (!isShapefilePart(ent.name)) continue;
+      if (shapefileZipEntryStem(ent.name) !== stem) continue;
+      layerZip.file(ent.name.replace(/^.*[/\\]/, ''), await ent.async('arraybuffer'));
+    }
+    if (!Object.keys(layerZip.files).length) continue;
+    const layerBuf = await layerZip.generateAsync({ type: 'arraybuffer' });
+    const layerFc = await geoJsonFromShapefileBuffer(layerBuf);
+    const layerLabel = shpEntry.name.replace(/^.*[/\\]/, '').replace(/\.shp$/i, '');
+    for (const f of layerFc.features) {
+      mergedFeatures.push({
+        ...f,
+        properties: { ...(f?.properties ?? {}), __shpLayer: layerLabel },
+      });
+    }
+  }
+
+  fc = { type: 'FeatureCollection', features: mergedFeatures };
+  if (!fc.features.length) {
+    throw new Error('Shapefile ZIP parsed but contains no features.');
+  }
+  return { type: 'geojson', data: fc, filename, crsHint: 'Shapefile' };
+}
+
 const parseKmz = async (file: File, opts?: ParseOptions): Promise<ParsedData> => {
   const ab = await readAsArrayBuffer(file, opts);
   const zip = await JSZip.loadAsync(ab);
@@ -658,10 +744,7 @@ export const parseFile = async (file: File, opts?: ParseOptions): Promise<Parsed
     try {
       const arrayBuffer = await readAsArrayBuffer(file, opts);
       await yieldToBrowser();
-      const raw = await shp(arrayBuffer);
-      const geojson = mergeShpLikeToFeatureCollection(raw);
-      if (!geojson.features.length) throw new Error('Shapefile ZIP parsed but contains no features.');
-      return { type: 'geojson', data: geojson, filename };
+      return await parseShapefileZipBuffer(arrayBuffer, filename);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       try {

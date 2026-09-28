@@ -13,6 +13,7 @@ export type SmartProcessingSectionId =
   | 'segformer-detection'
   | 'hydro-watershed'
   | 'cut-fill-analysis'
+  | 'elevation-profile'
   | 'well-site'
   | 'well-suitability'
   | 'flood-monitoring'
@@ -43,6 +44,7 @@ const QUICK_LINKS: Array<{ id: SmartProcessingSectionId; icon: string; label: st
   { id: 'agri-field-boundary', icon: 'fa-solid fa-crop-simple', label: 'Field Boundaries' },
   { id: 'hydro-watershed', icon: 'fa-solid fa-water', label: 'Hydro Watershed' },
   { id: 'cut-fill-analysis', icon: 'fa-solid fa-mound', label: 'Cut & Fill' },
+  { id: 'elevation-profile', icon: 'fa-solid fa-chart-area', label: 'Elevation Profile' },
   { id: 'table-geo-ai', icon: 'fa-solid fa-comments', label: 'AI Agent' },
 ];
 
@@ -126,6 +128,13 @@ const WORKFLOW_ROWS: Array<{
         label: 'Cut & Fill Analysis',
         hint: 'AOI → existing vs design surfaces → cut/fill volumes, difference map, contours & exports.',
         target: 'cut-fill-analysis',
+      },
+      {
+        id: 'elevation-profile',
+        icon: 'fa-solid fa-chart-area',
+        label: 'Elevation Profile',
+        hint: 'Interactive line on the map → elevation section, slope, statistics & CSV export.',
+        target: 'elevation-profile',
       },
       {
         id: 'well-site',

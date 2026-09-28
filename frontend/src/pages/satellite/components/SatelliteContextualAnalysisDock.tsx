@@ -43,6 +43,7 @@ export type SatelliteContextPanelId =
   | 'segformer-detection'
   | 'hydro-watershed'
   | 'cut-fill-analysis'
+  | 'elevation-profile'
   | 'well-site'
   | 'well-suitability'
   | 'flood-monitoring'
@@ -104,6 +105,7 @@ export type SatelliteContextualAnalysisDockProps = {
     | 'segformer-detection'
     | 'hydro-watershed'
     | 'cut-fill-analysis'
+    | 'elevation-profile'
     | 'well-site'
     | 'well-suitability'
     | 'flood-monitoring'
@@ -143,6 +145,9 @@ export type SatelliteContextualAnalysisDockProps = {
   onMeasureOpenPanel?: () => void;
   /** Turn measurement off / clear the current measurement. */
   onMeasureClear?: () => void;
+  /** Elevation Profile tool — open/close the processing panel (map variant). */
+  elevationProfileOpen?: boolean;
+  onElevationProfileRailToggle?: () => void;
   /** Main toolbox: GIS feature selection mode active. */
   mapToolboxSelectionActive?: boolean;
   /** Toggle GIS feature selection from the Main toolbox Select button. */
@@ -345,6 +350,7 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
   'agri-field-boundary',
   'hydro-watershed',
   'cut-fill-analysis',
+  'elevation-profile',
   'well-site',
   'well-suitability',
   'flood-monitoring',
@@ -360,6 +366,7 @@ const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
   'agri-field-boundary',
   'hydro-watershed',
   'cut-fill-analysis',
+  'elevation-profile',
   'well-site',
   'well-suitability',
   'flood-monitoring',
@@ -393,7 +400,7 @@ const RAIL_GROUPS_MAP: SatelliteContextPanelId[][] = [
     'agri-field-boundary',
     'well-site',
     'well-suitability',
-    'flood-monitoring',
+    'cut-fill-analysis',
     'raster-georeference',
   ],
 ];
@@ -472,6 +479,8 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
     mapSwipeOpen = false,
     onMapSwipeOpenChange,
     goToXyOpen = false,
+    elevationProfileOpen = false,
+    onElevationProfileRailToggle,
     onGoToXyOpenChange,
     cropAiPanelOpen = false,
     onCropAiPanelOpenChange,
@@ -1027,6 +1036,30 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
               <span className="si-sat-ctx-rail-label">
                 <span className="si-sat-ctx-rail-label-title">Go To XY</span>
                 <span className="si-sat-ctx-rail-label-desc">Center map on coordinates</span>
+              </span>
+            ) : null}
+          </button>
+        ) : null}
+        {isMap && !mapStripHidden && onElevationProfileRailToggle ? (
+          <button
+            id="map-toolbox-elevation-profile-btn"
+            type="button"
+            data-tool-id="elevation-profile"
+            className={
+              'si-sat-ctx-rail-btn si-sat-ctx-rail-btn--map si-sat-ctx-rail-btn--elevation-profile' +
+              (railWide ? ' si-sat-ctx-rail-btn--row si-sat-ctx-rail-btn--map-expanded' : ' si-sat-ctx-rail-btn--map-collapsed') +
+              (elevationProfileOpen ? ' si-sat-ctx-rail-btn--active' : '')
+            }
+            title="Elevation Profile — terrain section along a line"
+            aria-label="Elevation Profile"
+            aria-pressed={elevationProfileOpen}
+            onClick={onElevationProfileRailToggle}
+          >
+            <i className="fa-solid fa-mountain" aria-hidden />
+            {railWide ? (
+              <span className="si-sat-ctx-rail-label">
+                <span className="si-sat-ctx-rail-label-title">Elevation Profile</span>
+                <span className="si-sat-ctx-rail-label-desc">Cross-section, slope & export</span>
               </span>
             ) : null}
           </button>

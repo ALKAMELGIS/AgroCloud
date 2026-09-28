@@ -53,4 +53,24 @@ describe('stripKmlPointFeatures', () => {
     expect(out.features).toHaveLength(2)
     expect(out.features.map((f: any) => f.geometry.type)).toEqual(['Polygon', 'LineString'])
   })
+
+  it('keeps Point placemarks when the file is point-only', () => {
+    const out = stripKmlPointFeatures({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { name: 'well-1' },
+          geometry: { type: 'Point', coordinates: [46.12, 24.08] },
+        },
+        {
+          type: 'Feature',
+          properties: { name: 'well-2' },
+          geometry: { type: 'Point', coordinates: [46.22, 24.18] },
+        },
+      ],
+    })
+    expect(out.features).toHaveLength(2)
+    expect(out.features.every((f: any) => f.geometry.type === 'Point')).toBe(true)
+  })
 })
