@@ -41,6 +41,11 @@ export type SiCustomLayerZOrderMap = {
   moveLayer?: (id: string, beforeId?: string) => void
 }
 
+/** Hydro watershed products use `hydro-<step>-{raster|line|fill|label}` (not `<source>-raster`). */
+export function isSiHydroMapLayerId(layerId: string): boolean {
+  return /^hydro-[a-z0-9-]+-(?:raster|line|fill|label)$/.test(layerId)
+}
+
 export function isSiBasemapStyleLayerId(layerId: string): boolean {
   if (!layerId) return false
   if (SI_BASEMAP_LAYER_IDS.has(layerId)) return true
@@ -184,5 +189,14 @@ export function siRaiseCustomLayersAboveBasemap(
     for (const id of overlayIds) moveToTop(map, id)
   }
 
+  for (const id of DRAW_CHROME_ABOVE_OVERLAY_IDS) moveToTop(map, id)
+}
+
+/** Keep hydro DEM / streams / contours above opaque satellite basemap tiles. */
+export function siRaiseHydroLayersAboveBasemap(map: SiCustomLayerZOrderMap): void {
+  if (typeof map.moveLayer !== 'function') return
+  siParkBasemapRastersBelowOverlays(map)
+  const hydroIds = styleLayerIds(map).filter(isSiHydroMapLayerId)
+  for (const id of hydroIds) moveToTop(map, id)
   for (const id of DRAW_CHROME_ABOVE_OVERLAY_IDS) moveToTop(map, id)
 }

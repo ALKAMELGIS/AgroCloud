@@ -1,12 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   normalizeWeatherSim,
   rainMotionFromIntensity,
-  weatherSimHasActiveEffect,
+  resolveWeatherVizOverlayHost,
   weatherWindVector,
   type WeatherSimState,
 } from './weatherSimModel';
+import './WeatherVisualizationPanel.css';
 
 /* ───────────────────────────── Particle types ───────────────────────────── */
 
@@ -53,36 +54,40 @@ function rand(min: number, max: number): number {
  */
 export const WeatherVizOverlay: React.FC<{
   sim: WeatherSimState;
-  /** Map viewport that contains `.mapboxgl-canvas-container`. */
+  /** Map viewport that contains the Mapbox/MapLibre canvas container. */
   mapRootRef?: React.RefObject<HTMLElement | null>;
-}> = ({ sim, mapRootRef }) => {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  /** When false, the map viewport may not exist yet — host resolution retries when this flips true. */
+  mapReady?: boolean;
+}> = ({ sim, mapRootRef, mapReady = true }) => {
   const simRef = useRef<WeatherSimState>(normalizeWeatherSim(sim));
   simRef.current = normalizeWeatherSim(sim);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [host, setHost] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
-    const root = mapRootRef?.current ?? document.querySelector('.si-map-container');
+    const root =
+      (mapRootRef?.current as HTMLElement | null) ??
+      (document.querySelector('.si-map-container') as HTMLElement | null);
     if (!root) return;
-    const find = () => root.querySelector('.mapboxgl-canvas-container') as HTMLElement | null;
-    const existing = find();
+    const resolve = () => resolveWeatherVizOverlayHost(root);
+    const existing = resolve();
     if (existing) {
       setHost(existing);
       return;
     }
     const obs = new MutationObserver(() => {
-      const next = find();
+      const next = resolve();
       if (!next) return;
       setHost(next);
       obs.disconnect();
     });
-    obs.observe(root, { childList: true, subtree: true });
+    obs.observe(document.body, { childList: true, subtree: true });
     return () => obs.disconnect();
-  }, [mapRootRef]);
+  }, [mapRootRef, mapReady]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !host) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -127,8 +132,8 @@ export const WeatherVizOverlay: React.FC<{
       drop.y = fromTop ? rand(-height * 0.28, -6) : rand(0, height);
       drop.len = rand(12, 20) * (0.5 + depth);
       drop.vy = rand(0.84, 1.16) * (0.5 + depth * 0.75);
-      drop.thickness = 0.8 + depth * 2.1;
-      drop.alpha = 0.42 + depth * 0.52;
+      drop.thickness = 0.6 + depth * 1.3;
+      drop.alpha = 0.4 + depth * 0.5;
     };
     const spawnSnow = (f: SnowFlake, fromTop: boolean) => {
       f.x = rand(0, width);
@@ -325,61 +330,61 @@ export const WeatherVizOverlay: React.FC<{
           const len = d.len * rainMotion.streakScale;
           const ux = (dirX / mag) * len;
           const uy = (dirY / mag) * len;
-          const alpha = Math.min(0.98, d.alpha * (0.7 + rainT * 0.4));
-          ctx.strokeStyle = `rgba(10, 28, 52, ${alpha * 0.62})`;
-          ctx.lineWidth = d.thickness + 1.4;
-          ctx.beginPath();
-          ctx.moveTo(d.x, d.y);
-          ctx.lineTo(d.x - ux, d.y - uy);
-          ctx.stroke();
-          ctx.strokeStyle = `rgba(236, 246, 255, ${alpha})`;
-          ctx.lineWidth = Math.max(0.9, d.thickness * 0.5);
-          ctx.beginPath();
-          ctx.moveTo(d.x, d.y);
-          ctx.lineTo(d.x - ux, d.y - uy);
-          ctx.stroke();
-        }
-      }
-      if (splashes.length) {
-        for (let i = splashes.length - 1; i >= 0; i -= 1) {
-          const sp = splashes[i]!;
-          sp.life -= dt * (1.6 + rainT * 1.4);
-          if (sp.life <= 0) {
-            splashes.splice(i, 1);
-            continue;
+          const alpha = Math.min(0.9, d.alpha * (0.6 + rainT * 0.35));
+          const tailX = d.x - ux;
+          const tailY = d.y - uy;
+          if (d.depth > 0.7) {
+            // Foreground drops: transparent tail fading into a bright, light-catching head.
+            const streak = ctx.createLinearGradient(tailX, tailY, d.x, d.y);
+            streak.addColorStop(0, 'rgba(200, 222, 240, 0)');
+            streak.addColorStop(0.7, `rgba(210, 228, 244, ${alpha * 0.55})`);
+            streak.addColorStop(1, `rgba(236, 246, 255, ${alpha * 0.85})`);
+            ctx.strokeStyle = streak;
+          } else {
+            ctx.strokeStyle = `rgba(190, 212, 232, ${alpha * 0.42})`;
           }
-          const r = sp.maxR * (1.15 - sp.life);
-          ctx.strokeStyle = `rgba(220, 236, 255, ${sp.life * 0.7})`;
-          ctx.lineWidth = 1.1;
+          ctx.lineWidth = d.thickness;
           ctx.beginPath();
-          ctx.ellipse(sp.x, sp.y, Math.max(1, r), Math.max(0.6, r * 0.32), 0, 0, Math.PI * 2);
+          ctx.moveTo(d.x, d.y);
+          ctx.lineTo(tailX, tailY);
           ctx.stroke();
         }
       }
 
       /* 5 ─ Snow */
-      ensurePool(snow, Math.round((snowStrength / 100) * SNOW_MAX), () => {
-        const f: SnowFlake = { x: 0, y: 0, r: 1, vy: 1, phase: 0, sway: 12, alpha: 0.8 };
-        spawnSnow(f, false);
-        return f;
-      });
-      if (snow.length) {
-        const fallSpeed = 36 + snowStrength * 1.1; // gentle
+      const snowT = snowStrength / 100;
+      if (snowT > 0.004) {
+        ensurePool(snow, reduceMotion ? Math.round(snowT * 90) : Math.round(snowT * SNOW_MAX), () => {
+          const f: SnowFlake = { x: 0, y: 0, r: 0, vy: 0, phase: 0, sway: 0, alpha: 0.8 };
+          spawnSnow(f, false);
+          return f;
+        });
         for (const f of snow) {
-          f.phase += motion * 1.6;
-          f.y += fallSpeed * f.vy * motion;
-          f.x += (windVec.x * windKmh * 0.7 + Math.sin(f.phase) * f.sway * 0.06) * motion * 14;
-          if (f.y > height + 6) {
-            spawnSnow(f, true);
-            continue;
-          }
-          if (f.x < -10) f.x = width + 10;
-          if (f.x > width + 10) f.x = -10;
-          ctx.fillStyle = `rgba(255, 255, 255, ${f.alpha})`;
+          f.x += (windPx * 0.04 + Math.sin(f.phase) * f.sway * 0.04) * motion * 22;
+          f.y += f.vy * (40 + snowT * 70) * motion;
+          f.phase += motion * 1.8;
+          if (f.y > height + 8) spawnSnow(f, true);
+          ctx.fillStyle = `rgba(240, 248, 255, ${f.alpha * (0.55 + snowT * 0.45)})`;
           ctx.beginPath();
-          ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+          ctx.arc(f.x, f.y, f.r * (0.8 + snowT * 0.6), 0, Math.PI * 2);
           ctx.fill();
         }
+      }
+
+      /* splashes */
+      for (let i = splashes.length - 1; i >= 0; i--) {
+        const sp = splashes[i]!;
+        sp.life -= motion * 2.8;
+        if (sp.life <= 0) {
+          splashes.splice(i, 1);
+          continue;
+        }
+        const t = sp.life;
+        ctx.strokeStyle = `rgba(225, 238, 250, ${t * 0.45})`;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(sp.x, sp.y, sp.maxR * (1 - t), 0, Math.PI);
+        ctx.stroke();
       }
 
       /* 6 ─ Lightning */
@@ -387,7 +392,6 @@ export const WeatherVizOverlay: React.FC<{
       if (thunderN > 0.01 && s.playing && !reduceMotion) {
         lightning.cooldown -= motion;
         if (lightning.cooldown <= 0) {
-          // Strike. Higher thunder ⇒ shorter, more frequent intervals.
           lightning.flash = rand(0.6, 1);
           lightning.bolt = buildBolt();
           lightning.boltLife = rand(0.08, 0.16);
@@ -397,7 +401,6 @@ export const WeatherVizOverlay: React.FC<{
       if (lightning.flash > 0.001) {
         ctx.fillStyle = `rgba(226, 234, 255, ${lightning.flash * 0.5})`;
         ctx.fillRect(0, 0, width, height);
-        // double-strobe decay
         lightning.flash *= 0.82;
         if (lightning.flash < 0.05 && Math.random() < 0.4) lightning.flash = rand(0.2, 0.4);
         if (lightning.flash < 0.01) lightning.flash = 0;
@@ -427,8 +430,10 @@ export const WeatherVizOverlay: React.FC<{
     };
   }, [host]);
 
-  if (!weatherSimHasActiveEffect(normalizeWeatherSim(sim))) return null;
+  if (!host) return null;
 
-  const canvas = <canvas ref={canvasRef} className="si-wviz-canvas" aria-hidden />;
-  return host ? createPortal(canvas, host) : canvas;
+  return createPortal(
+    <canvas ref={canvasRef} className="si-wviz-canvas" aria-hidden />,
+    host,
+  );
 };

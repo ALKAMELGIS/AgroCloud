@@ -163,6 +163,7 @@ import {
 import {
   siCustomLayersBuriedUnderBasemap,
   siRaiseCustomLayersAboveBasemap,
+  siRaiseHydroLayersAboveBasemap,
 } from '../../lib/siCustomLayerZOrder';
 import {
   AGRO_STRUCTURES_FS21_URL,
@@ -816,9 +817,11 @@ import {
   WeatherVisualizationPanel,
   WeatherVizOverlay,
   DEFAULT_WEATHER_SIM,
+  normalizeWeatherSim,
   type WeatherVizCamera,
   type WeatherSimState,
 } from './components/WeatherVisualizationPanel';
+import { weatherSimNeedsCanvasOverlay } from './components/weatherSimModel';
 import { reversePlaceLabel } from '../../lib/openMeteoWeather';
 import { SiFeatureInspectPopup } from './components/SiFeatureInspectPopup';
 import { SiMapDockAwareMarker } from './components/SiMapDockAwareMarker';
@@ -893,6 +896,52 @@ const EMPTY_MAP_STYLE: any = {
  */
 const SI_BASE_SOURCE_PREFIX = 'agrocloud-basemap-src-';
 const SI_BASE_LAYER_PREFIX = 'agrocloud-basemap-layer-';
+/** User 2D/3D toggle: instant camera (no ease delay). */
+const SI_VIEW3D_TOGGLE_MS = 0;
+
+type SiMapCameraPatch = {
+  centerLng: number;
+  centerLat: number;
+  zoom: number;
+  pitch: number;
+  bearing: number;
+};
+
+function applySiMapCamera(
+  mapInstance: { jumpTo?: (o: object) => void; easeTo?: (o: object) => void; once?: (e: string, fn: () => void) => void } | null | undefined,
+  patch: SiMapCameraPatch,
+  onSettled?: () => void,
+): void {
+  if (!mapInstance) {
+    onSettled?.();
+    return;
+  }
+  const camera = {
+    center: [patch.centerLng, patch.centerLat],
+    zoom: patch.zoom,
+    pitch: patch.pitch,
+    bearing: patch.bearing,
+  };
+  try {
+    if (SI_VIEW3D_TOGGLE_MS <= 0 && typeof mapInstance.jumpTo === 'function') {
+      mapInstance.jumpTo(camera);
+      onSettled?.();
+      return;
+    }
+    if (typeof mapInstance.easeTo === 'function') {
+      mapInstance.easeTo({ ...camera, duration: SI_VIEW3D_TOGGLE_MS });
+      if (onSettled && typeof mapInstance.once === 'function') {
+        mapInstance.once('moveend', onSettled);
+      } else {
+        onSettled?.();
+      }
+      return;
+    }
+  } catch {
+    /* ignore */
+  }
+  onSettled?.();
+}
 
 type SiRasterSpec = {
   tiles: string[];
@@ -8019,12 +8068,6 @@ export default function SatelliteIntelligence() {
     void importAoiDataSourceFile(siUploadStagedFile);
   };
 
-  const toggle3DView = () => {
-    // Smooth, in-place toggle — never rebuilds the style; layers / AOI / zoom stay.
-    if (is3DViewRef.current) siExitTo2dView();
-    else siEnterGlobe3dView();
-  };
-
   /** Live DEM vertical exaggeration (relief "Height") for the 3D terrain mesh. */
   const applyTerrainExaggeration = useCallback((ex: number) => {
     const map = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
@@ -8169,27 +8212,14 @@ export default function SatelliteIntelligence() {
 
     siEnsureGlobeProjection();
 
-    if (mapInstance && typeof mapInstance.easeTo === 'function') {
-      try {
-        mapInstance.easeTo({
-          center: [centerLng, centerLat],
-          zoom,
-          pitch,
-          bearing,
-          duration: 700,
-        });
-      } catch {
-        /* ignore */
-      }
-    }
-
     viewStateLiveRef.current = { ...vs, longitude: centerLng, latitude: centerLat, zoom, pitch, bearing };
     setViewState(prev => ({ ...prev, longitude: centerLng, latitude: centerLat, zoom, pitch, bearing }));
+
+    applySiMapCamera(mapInstance, { centerLng, centerLat, zoom, pitch, bearing });
 
     const kickTerrain = () =>
       siSyncTerrainForView({ basemapId: activeBasemap, pitch });
     kickTerrain();
-    [200, 600, 1200, 2400].forEach(ms => window.setTimeout(kickTerrain, ms));
     resetTerrainApiAvailabilityProbe();
     void ensureTerrainApiAvailable().then(ok => {
       if (!ok && is3DViewRef.current) {
@@ -8243,28 +8273,18 @@ export default function SatelliteIntelligence() {
         bearing: 0,
       }));
     };
-    if (mapInstance && typeof mapInstance.easeTo === 'function') {
-      try {
-        mapInstance.easeTo({
-          center: [centerLng, centerLat],
-          zoom,
-          pitch: 0,
-          bearing: 0,
-          duration: 700,
-        });
-        if (typeof mapInstance.once === 'function') {
-          mapInstance.once('moveend', commitFlat);
-        } else {
-          commitFlat();
-        }
-      } catch {
-        viewStateLiveRef.current = { ...vs, pitch: 0, bearing: 0 };
-        setViewState(prev => ({ ...prev, pitch: 0, bearing: 0 }));
-      }
-    } else {
+    if (SI_VIEW3D_TOGGLE_MS <= 0) {
       commitFlat();
+      applySiMapCamera(mapInstance, { centerLng, centerLat, zoom, pitch: 0, bearing: 0 });
+    } else {
+      applySiMapCamera(mapInstance, { centerLng, centerLat, zoom, pitch: 0, bearing: 0 }, commitFlat);
     }
   }, []);
+
+  const toggle3DView = useCallback(() => {
+    if (is3DViewRef.current) siExitTo2dView();
+    else siEnterGlobe3dView();
+  }, [siExitTo2dView, siEnterGlobe3dView]);
 
   const handleSelectWmsLayer = (layerName: string) => {
     setWmsLayer(current => (current === layerName ? '' : layerName));
@@ -19035,6 +19055,49 @@ export default function SatelliteIntelligence() {
     finishSketchExitDrawingMode();
   };
 
+  const handleSiMapContextMenu = useCallback(
+    (evt?: { originalEvent?: { preventDefault?: () => void } }) => {
+      if (elevationProfile.drawing && elevationProfile.vertices.length) {
+        elevationProfile.undo();
+        evt?.originalEvent?.preventDefault?.();
+        return;
+      }
+      if (measureModeRef.current && !measureFinishedRef.current) {
+        handleMeasureUndo();
+        evt?.originalEvent?.preventDefault?.();
+        return;
+      }
+      if (
+        mapDrawToolRef.current === 'polygon' &&
+        isSketchDrawingActiveRef.current &&
+        polygonRingRef.current.length >= 3
+      ) {
+        handleMapContextMenu(evt);
+        evt?.originalEvent?.preventDefault?.();
+        return;
+      }
+      if (suppressMapContextMenuToggle3dRef.current) {
+        suppressMapContextMenuToggle3dRef.current = false;
+        evt?.originalEvent?.preventDefault?.();
+        return;
+      }
+      toggle3DView();
+      evt?.originalEvent?.preventDefault?.();
+    },
+    [elevationProfile, handleMeasureUndo, toggle3DView],
+  );
+
+  useEffect(() => {
+    const host = siMapContainerRef.current;
+    if (!host) return;
+    const blockBrowserMenuOnCanvas = (e: MouseEvent) => {
+      const canvas = host.querySelector('.mapboxgl-canvas');
+      if (canvas?.contains(e.target as Node)) e.preventDefault();
+    };
+    host.addEventListener('contextmenu', blockBrowserMenuOnCanvas);
+    return () => host.removeEventListener('contextmenu', blockBrowserMenuOnCanvas);
+  }, []);
+
   const draftDrawGeoJson = useMemo(() => {
     const features: any[] = [];
     if (rectCirclePreview) {
@@ -19944,6 +20007,7 @@ export default function SatelliteIntelligence() {
     if (siImperativeCustomLayerSourceIdsRef.current.size > 0) {
       siRaiseCustomLayersAboveBasemap(map, siImperativeCustomLayerSourceIdsRef.current);
     }
+    siRaiseHydroLayersAboveBasemap(map);
     // Always allow Layers AOI raster placement after a custom-layer raise.
     const prevFreeze = aoiLayerModeWmsActiveRef.current;
     aoiLayerModeWmsActiveRef.current = false;
@@ -19953,6 +20017,15 @@ export default function SatelliteIntelligence() {
       aoiLayerModeWmsActiveRef.current = prevFreeze;
     }
   }, [syncAnalysisMapLayerOrder]);
+
+  useEffect(() => {
+    if (!isMapStyleReady) return;
+    const anyVisible = HYDRO_STEP_ORDER.some(
+      stepId => hydro.steps[stepId]?.visible && hydro.steps[stepId]?.result,
+    );
+    if (!anyVisible) return;
+    raiseOverlaysThenAnalysisOrder();
+  }, [hydro.steps, isMapStyleReady, raiseOverlaysThenAnalysisOrder]);
 
   /**
    * Drawing an AOI refreshes the clipped tiles but does NOT auto-show the layer â€”
@@ -25472,54 +25545,7 @@ export default function SatelliteIntelligence() {
                 }
               }
             }}
-            onContextMenu={evt => {
-              if (elevationProfile.drawing && elevationProfile.vertices.length) {
-                elevationProfile.undo();
-                try {
-                  evt?.originalEvent?.preventDefault?.();
-                } catch {
-                  /* ignore */
-                }
-                return;
-              }
-              if (measureModeRef.current && !measureFinishedRef.current) {
-                handleMeasureUndo();
-                try {
-                  evt?.originalEvent?.preventDefault?.();
-                } catch {
-                  /* ignore */
-                }
-                return;
-              }
-              if (
-                mapDrawToolRef.current === 'polygon' &&
-                isSketchDrawingActiveRef.current &&
-                polygonRingRef.current.length >= 3
-              ) {
-                handleMapContextMenu(evt);
-                try {
-                  evt?.originalEvent?.preventDefault?.();
-                } catch {
-                  /* ignore */
-                }
-                return;
-              }
-              if (suppressMapContextMenuToggle3dRef.current) {
-                suppressMapContextMenuToggle3dRef.current = false;
-                try {
-                  evt?.originalEvent?.preventDefault?.();
-                } catch {
-                  /* ignore */
-                }
-                return;
-              }
-              toggle3DView();
-              try {
-                evt?.originalEvent?.preventDefault?.();
-              } catch {
-                /* ignore */
-              }
-            }}
+            onContextMenu={handleSiMapContextMenu}
             style={{
               width: '100%',
               height: '100%',
@@ -27007,8 +27033,12 @@ export default function SatelliteIntelligence() {
 
           </MapGL>
 
-          {isWeatherVizOpen ? (
-            <WeatherVizOverlay sim={weatherSim} mapRootRef={siMapContainerRef} />
+          {isWeatherVizOpen || weatherSimNeedsCanvasOverlay(weatherSim) ? (
+            <WeatherVizOverlay
+              sim={weatherSim}
+              mapRootRef={siMapContainerRef}
+              mapReady={isMapLoaded}
+            />
           ) : null}
 
           {cropAlertSettings.enabled && cropAlertSettings.showLegend && cropAlertResultsOnMap.length > 0 ? (
@@ -27260,7 +27290,7 @@ export default function SatelliteIntelligence() {
               containerRef={siMapContainerRef}
               onClose={() => setIsWeatherVizOpen(false)}
               sim={weatherSim}
-              onChange={patch => setWeatherSim(prev => ({ ...prev, ...patch }))}
+              onChange={patch => setWeatherSim(prev => normalizeWeatherSim({ ...prev, ...patch }))}
               onReset={() => setWeatherSim(DEFAULT_WEATHER_SIM)}
               getMap={() => (mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current)}
               getCamera={(): WeatherVizCamera | null => {
@@ -27950,28 +27980,36 @@ export default function SatelliteIntelligence() {
                 </button>
               </div>
               <div className={`si-view3d-toggle si-view3d-toggle--merged ${isTerrain3dPanelOpen ? 'is-open' : ''}`}>
-                <button
-                  type="button"
-                  className={`si-basemap-button si-view3d-button ${is3DView ? 'active' : ''}`}
-                  title={
-                    is3DView
-                      ? 'Return to flat 2D (right-click map to toggle; double-click for terrain relief settings)'
-                      : 'Tilt into 3D (right-click map to toggle; right-drag or Shift+drag to orbit; double-click for terrain settings)'
-                  }
-                  aria-label={is3DView ? 'Switch to 2D view' : 'Switch to 3D view'}
-                  aria-pressed={is3DView}
-                  onClick={toggle3DView}
-                  onDoubleClick={e => {
-                    e.preventDefault();
-                    setIsTerrain3dPanelOpen(v => !v);
-                  }}
-                >
-                  <i
-                    className={`fa-solid ${is3DView ? 'fa-map' : 'fa-mountain-sun'}`}
-                    aria-hidden
-                  />
-                  <span className="si-view3d-button__tag">{is3DView ? '2D' : '3D'}</span>
-                </button>
+                <div className="si-view3d-cluster">
+                  <button
+                    type="button"
+                    className={`si-basemap-button si-view3d-button ${is3DView ? 'active' : ''}`}
+                    title={
+                      is3DView
+                        ? 'Switch to 2D (right-click map to toggle)'
+                        : 'Switch to 3D (right-click map to toggle; right-drag or Shift+drag to orbit)'
+                    }
+                    aria-label={is3DView ? 'Switch to 2D view' : 'Switch to 3D view'}
+                    aria-pressed={is3DView}
+                    onClick={toggle3DView}
+                  >
+                    <i
+                      className={`fa-solid ${is3DView ? 'fa-map' : 'fa-mountain-sun'}`}
+                      aria-hidden
+                    />
+                    <span className="si-view3d-button__tag">{is3DView ? '2D' : '3D'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`si-view3d-opts-btn ${isTerrain3dPanelOpen ? 'active' : ''}`}
+                    title="Terrain relief settings"
+                    aria-label="Terrain relief settings"
+                    aria-expanded={isTerrain3dPanelOpen}
+                    onClick={() => setIsTerrain3dPanelOpen(v => !v)}
+                  >
+                    <i className="fa-solid fa-chevron-down" aria-hidden />
+                  </button>
+                </div>
                 {isTerrain3dPanelOpen ? (
                   <div className="si-terrain3d-panel" role="dialog" aria-label="Terrain 3D controls">
                     <div className="si-terrain3d-panel__head">

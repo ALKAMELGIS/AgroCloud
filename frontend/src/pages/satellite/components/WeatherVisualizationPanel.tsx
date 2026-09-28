@@ -430,7 +430,8 @@ export const WeatherVisualizationPanel: React.FC<WeatherVisualizationPanelProps>
   }, [getMap]);
 
   const applyPreset = (id: WeatherVizPresetId) => {
-    onChange({ ...WEATHER_SIM_PRESETS[id].patch, playing: true });
+    const patch = WEATHER_SIM_PRESETS[id].patch;
+    onChange(normalizeWeatherSim({ ...sim, ...patch, playing: true }));
   };
 
   const handleSaveView = () => {
@@ -580,7 +581,11 @@ export const WeatherVisualizationPanel: React.FC<WeatherVisualizationPanelProps>
                       title={p.label}
                       aria-label={p.label}
                       aria-pressed={active}
-                      onClick={() => applyPreset(id)}
+                      onPointerDown={e => e.stopPropagation()}
+                      onClick={e => {
+                        e.stopPropagation();
+                        applyPreset(id);
+                      }}
                     >
                       <i className={p.icon} aria-hidden />
                     </button>

@@ -9,7 +9,11 @@ import {
   SI_SENTINEL_LAYER_AOI_WMS_ID_PREFIX,
 } from './siSentinelAoiWmsStack'
 import { isSiSentinelAoiWmsPingPongMapId } from './siSentinelAoiWmsImperative'
-import { isSiBasemapStyleLayerId, siParkBasemapRastersBelowOverlays } from './siCustomLayerZOrder'
+import {
+  isSiBasemapStyleLayerId,
+  siParkBasemapRastersBelowOverlays,
+  siRaiseHydroLayersAboveBasemap,
+} from './siCustomLayerZOrder'
 
 /** Polygon fills that must sit under analysis rasters (so NDVI is visible). */
 const DRAWN_AOI_FILL_UNDER_RASTER_IDS = [

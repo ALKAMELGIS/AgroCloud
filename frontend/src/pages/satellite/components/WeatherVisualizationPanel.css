@@ -374,12 +374,12 @@
   color: var(--si-wviz-accent);
 }
 
-.si-wviz-tone--clear i { color: #f59e0b; }
-.si-wviz-tone--cloud i { color: #94a3b8; }
-.si-wviz-tone--rain i { color: #3b82f6; }
-.si-wviz-tone--snow i { color: #38bdf8; }
-.si-wviz-tone--fog i { color: #cbd5e1; }
-.si-wviz-tone--storm i { color: #8b5cf6; }
+.si-wviz-preset.active.si-wviz-tone--clear i { color: #f59e0b; }
+.si-wviz-preset.active.si-wviz-tone--cloud i { color: #64748b; }
+.si-wviz-preset.active.si-wviz-tone--rain i { color: #3b82f6; }
+.si-wviz-preset.active.si-wviz-tone--snow i { color: #38bdf8; }
+.si-wviz-preset.active.si-wviz-tone--fog i { color: #94a3b8; }
+.si-wviz-preset.active.si-wviz-tone--storm i { color: #8b5cf6; }
 
 .si-wviz-preset.active i {
   color: inherit;
@@ -699,12 +699,12 @@ html[data-theme='dark'] .si-wviz-range::-moz-range-thumb {
 }
 
 /* ── Map overlay canvas ── */
-.si-wviz-canvas {
+.si-map-container > .si-wviz-canvas {
   position: absolute;
   inset: 0;
-  z-index: 20;
+  z-index: 42;
+  pointer-events: none;
   width: 100%;
   height: 100%;
-  pointer-events: none;
   display: block;
 }

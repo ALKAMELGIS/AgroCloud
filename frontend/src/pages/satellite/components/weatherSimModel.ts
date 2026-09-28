@@ -163,6 +163,34 @@ export function weatherSimMatchesPreset(state: WeatherSimState, presetId: Weathe
   })
 }
 
+/** Host for the weather canvas — map viewport root (above MapGL, below floating controls). */
+export function resolveWeatherVizOverlayHost(
+  mapRoot: HTMLElement | null | undefined,
+): HTMLElement | null {
+  return mapRoot ?? null
+}
+
+/** Resolve Mapbox/MapLibre canvas container for overlay portals. */
+export function resolveMapCanvasContainer(
+  mapRoot: HTMLElement | null | undefined,
+  mapInstance?: { getCanvasContainer?: () => HTMLElement } | null,
+): HTMLElement | null {
+  try {
+    const fromMap = mapInstance?.getCanvasContainer?.()
+    if (fromMap) return fromMap
+  } catch {
+    /* map mid-teardown */
+  }
+  if (!mapRoot) return null
+  return (
+    mapRoot.querySelector('.mapboxgl-canvas-container') ??
+    mapRoot.querySelector('.maplibregl-canvas-container') ??
+    (mapRoot.querySelector('.mapboxgl-map') as HTMLElement | null) ??
+    (mapRoot.querySelector('.maplibregl-map') as HTMLElement | null) ??
+    mapRoot
+  )
+}
+
 /** Whether any visible weather effect is active (used to skip rendering when idle). */
 export function weatherSimHasActiveEffect(state: WeatherSimState): boolean {
   return (
@@ -174,6 +202,18 @@ export function weatherSimHasActiveEffect(state: WeatherSimState): boolean {
     state.fog > 0 ||
     state.temperatureC <= 2 ||
     state.temperatureC >= 34
+  )
+}
+
+/** Keep the canvas mounted when the panel is closed but a strong preset/slider effect is still on. */
+export function weatherSimNeedsCanvasOverlay(state: WeatherSimState): boolean {
+  return (
+    state.rain > 0 ||
+    state.snow > 0 ||
+    state.storm > 0 ||
+    state.thunder > 0 ||
+    state.fog >= 25 ||
+    state.cloud >= 45
   )
 }
 

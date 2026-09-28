@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   isSiBasemapStyleLayerId,
+  isSiHydroMapLayerId,
   siCustomLayersBuriedUnderBasemap,
   siParkBasemapRastersBelowOverlays,
   siRaiseCustomLayersAboveBasemap,
+  siRaiseHydroLayersAboveBasemap,
 } from './siCustomLayerZOrder'
 
 function fakeMap(initial: string[]) {
@@ -109,5 +111,25 @@ describe('siCustomLayerZOrder', () => {
     siParkBasemapRastersBelowOverlays(map)
     expect(map.order.indexOf('agrocloud-basemap-layer-0')).toBeLessThan(map.order.indexOf('custom-aoi-fill'))
     expect(map.order.indexOf('custom-aoi-line')).toBeGreaterThan(map.order.indexOf('agrocloud-basemap-layer-0'))
+  })
+
+  it('recognizes hydro layer ids', () => {
+    expect(isSiHydroMapLayerId('hydro-streams-line')).toBe(true)
+    expect(isSiHydroMapLayerId('hydro-dem-raster')).toBe(true)
+    expect(isSiHydroMapLayerId('hydro-contours-label')).toBe(true)
+    expect(isSiHydroMapLayerId('custom-1-line')).toBe(false)
+  })
+
+  it('raises hydro products above the basemap', () => {
+    const map = fakeMap([
+      'background',
+      'hydro-dem-raster',
+      'hydro-streams-line',
+      'agrocloud-basemap-layer-0',
+    ])
+    siRaiseHydroLayersAboveBasemap(map)
+    const baseIdx = map.order.indexOf('agrocloud-basemap-layer-0')
+    expect(map.order.indexOf('hydro-dem-raster')).toBeGreaterThan(baseIdx)
+    expect(map.order.indexOf('hydro-streams-line')).toBeGreaterThan(baseIdx)
   })
 })
