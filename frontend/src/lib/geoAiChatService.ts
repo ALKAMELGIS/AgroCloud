@@ -1,4 +1,4 @@
-import { apiUrl } from './apiOrigin'
+import { apiUrl } from '@/core/api/apiOrigin'
 import type { GeoAiLiveMapState } from './geoAiLiveMapContext'
 
 export type GeoAiChatContext = {

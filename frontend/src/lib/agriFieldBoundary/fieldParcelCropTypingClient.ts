@@ -3,7 +3,7 @@
  * POST /api/crop-classification/parcels
  */
 
-import { apiUrl } from '../apiOrigin'
+import { apiUrl } from '@/core/api/apiOrigin'
 import { normalizeHlsCropTypeName } from './hlsCropTypeNormalize'
 
 export type FieldParcelCropInput = {

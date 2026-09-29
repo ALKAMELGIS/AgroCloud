@@ -4,7 +4,7 @@
  *   GET  /api/crs/:code
  *   POST /api/raster/:id/assign-crs
  */
-import { apiUrl } from '../apiOrigin'
+import { apiUrl } from '@/core/api/apiOrigin'
 import type { AgroCloudRasterRecord, CrsInfo } from './siRasterTileService'
 
 /** One search-result row from /api/crs/search. */

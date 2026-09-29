@@ -1,6 +1,6 @@
 import './AgroCloudPlatformDashboard.css'
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { lazyWithRetry } from '../../../lib/lazyWithRetry'
+import { lazyWithRetry } from '@/core/routing/lazyWithRetry'
 import { AcpPlatformProvider } from './acpPlatformContext'
 import { useAcpDashboardEngine } from './useAcpDashboardEngine'
 import { AcpHeaderBar } from './panels/AcpHeaderBar'

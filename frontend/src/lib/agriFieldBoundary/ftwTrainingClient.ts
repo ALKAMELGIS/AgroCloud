@@ -2,7 +2,7 @@
  * FTW AOI-scoped training — dataset sample, LR finder, train, export.
  */
 
-import { apiUrl } from '../apiOrigin'
+import { apiUrl } from '@/core/api/apiOrigin'
 import type {
   FtwDatasetSampleResponse,
   FtwLrFinderResult,

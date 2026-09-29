@@ -3,7 +3,7 @@ import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { buildAoiGeoTiff, downloadBlob, type GeoBand } from '../hydroWatershed/geoTiffExport'
 import { downloadTreeShapefile } from '../treeDetection/shapefileExport'
-import { readCurrentUser } from '../auth'
+import { readCurrentUser } from '@/core/auth/auth'
 import type { CutFillAnalysisResult, CutFillSummary, CutFillTableRow } from './cutFillTypes'
 
 function downloadText(filename: string, text: string, mime: string) {

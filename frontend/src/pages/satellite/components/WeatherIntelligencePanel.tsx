@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSiInstanceScope } from '../siInstanceScope';
+import { useSiInstanceScope } from '@/app/providers/siInstanceScope';
 import './WeatherIntelligencePanel.css';
 import {
   clampOpenMeteoPickerDate,

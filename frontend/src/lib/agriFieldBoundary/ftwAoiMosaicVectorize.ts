@@ -9,7 +9,7 @@ import {
   type LngLatBbox,
   type LoadFtwFeaturesOptions,
 } from './ftwPmtilesFeatures'
-import { apiUrl } from '../apiOrigin'
+import { apiUrl } from '@/core/api/apiOrigin'
 import type { FtwGlobalYear } from './ftwGlobalConfig'
 import { hideFtwTileBoundariesOnly } from './ftwHideTileBoundaries'
 import type { FieldBoundaryResult } from './fieldBoundaryClient'

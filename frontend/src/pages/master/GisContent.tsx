@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './GisContent.css'
-import '../../styles/gisModalSystem.css'
+import '@/assets/styles/gisModalSystem.css'
 import {
   GIS_COLLAPSED_FILTER_SECTIONS,
   GIS_CONTENT_DEFAULT_OWNER,

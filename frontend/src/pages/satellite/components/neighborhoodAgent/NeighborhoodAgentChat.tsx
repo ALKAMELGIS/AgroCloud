@@ -10,7 +10,7 @@ import React, {
 } from 'react';
 import type { GeoExplorerMapLink, GeoExplorerMessage } from '../../../../lib/geoExplorerGemini';
 import { buildNeighborhoodAgentFollowUps } from '../../../../lib/neighborhoodAgentFollowUps';
-import { useSiInstanceScope } from '../../siInstanceScope';
+import { useSiInstanceScope } from '@/app/providers/siInstanceScope';
 import type { GeoExplorerMapAction } from '../GeoExplorerDynamicTable';
 import type { NeighborhoodAgentEvidencePayload } from './neighborhoodAgentEvidence';
 import { NeighborhoodAgentComposer } from './NeighborhoodAgentComposer';

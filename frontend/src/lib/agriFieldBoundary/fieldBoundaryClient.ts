@@ -8,7 +8,7 @@ import {
   regularizeFieldFootprints,
   type FootprintRegularizeMethod,
 } from './fieldFootprintRegularize'
-import { apiUrl, isBackendUnavailablePayload } from '../apiOrigin'
+import { apiUrl, isBackendUnavailablePayload } from '@/core/api/apiOrigin'
 import { PRODUCTION_MAP_RGB_MIN_AREA_M2 } from './fieldBoundaryProductionMode'
 
 const BASE = () => apiUrl('/api/agri-field-boundary')

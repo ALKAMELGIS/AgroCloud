@@ -7,14 +7,14 @@ import {
   getSentinelHubAccessToken,
   isSentinelHubWmsInstanceAccessToken,
   SENTINEL_HUB_PUBLIC_WMS_ACCESS_TOKEN,
-} from './sentinelHubAccessToken'
+} from '@/core/config/sentinelHubAccessToken'
 import {
   configuredApiOrigin,
   ensureBackendAvailable,
   isBackendKnownUnavailable,
   isStaticDeploymentWithoutBackend,
   apiUrl,
-} from './apiOrigin'
+} from '@/core/api/apiOrigin'
 import {
   buildNdviHistogramCalculations,
   CROP_ALERT_NDVI_HISTOGRAM_EVALSCRIPT,

@@ -2,7 +2,7 @@
  * Delineate Anything / FBIS field-boundary client (Training AI Infer).
  */
 
-import { apiUrl } from '../apiOrigin'
+import { apiUrl } from '@/core/api/apiOrigin'
 
 const BASE = () => apiUrl('/api/delineate-anything')
 

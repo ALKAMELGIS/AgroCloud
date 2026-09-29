@@ -6,7 +6,7 @@
 import {
   getSentinelHubAccessToken,
   SENTINEL_HUB_PUBLIC_WMS_ACCESS_TOKEN,
-} from './sentinelHubAccessToken'
+} from '@/core/config/sentinelHubAccessToken'
 import {
   getSentinelHubWmsBaseUrl,
   getSentinelHubWmsInstanceId,

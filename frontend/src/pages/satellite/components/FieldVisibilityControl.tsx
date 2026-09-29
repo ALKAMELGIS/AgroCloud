@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom'
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useSiInstanceScope } from '../siInstanceScope'
+import { useSiInstanceScope } from '@/app/providers/siInstanceScope'
 import './FieldVisibilityControl.css'
 
 type Props = {

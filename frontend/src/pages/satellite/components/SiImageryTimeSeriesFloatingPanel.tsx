@@ -10,7 +10,7 @@ import {
 import { createPortal } from 'react-dom';
 import type { SiAoiFieldRecord } from '../../../lib/siAoiFields';
 import type { SiAoiMaskBuilderLayerLike } from '../../../lib/siAoiMaskBuilder';
-import { useSiInstanceScope } from '../siInstanceScope';
+import { useSiInstanceScope } from '@/app/providers/siInstanceScope';
 import { useMapOverlayIsolation } from '../useMapOverlayIsolation';
 import { SiImageryTimeSeriesPanel } from './SiImageryTimeSeriesPanel';
 import './SiImageryTimeSeriesFloatingPanel.css';

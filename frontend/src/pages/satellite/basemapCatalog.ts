@@ -12,7 +12,7 @@ import {
   SATELLITE_3D_BASEMAP_ID,
   TOPOGRAPHIC_3D_BASEMAP_ID,
 } from '../../lib/agroCloudMapTerrain'
-import { getGoogleMapsApiKeyFromEnv } from '../../lib/googleMapsApiKey'
+import { getGoogleMapsApiKeyFromEnv } from '@/core/config/googleMapsApiKey'
 import { ensureRasterStyleMaxNativeZoom, rasterTileMaxNativeZoom } from '../../lib/rasterTileZoom'
 
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services'

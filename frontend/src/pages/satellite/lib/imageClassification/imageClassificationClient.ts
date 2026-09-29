@@ -4,7 +4,7 @@
  * Step 1 only surfaces the `/config` endpoint (health + supported classifiers/segmenters).
  * ML endpoints (segment / train / classify / accuracy) are added in later steps.
  */
-import { apiUrl } from '@/lib/apiOrigin'
+import { apiUrl } from '@/core/api/apiOrigin'
 
 export type ImageClassificationClassifier = {
   id: string

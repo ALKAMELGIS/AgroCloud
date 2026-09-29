@@ -1,5 +1,5 @@
 import { fetchOpenMeteoWeather, type OpenMeteoWeatherSnapshot } from '../../../../lib/openMeteoWeather'
-import { apiUrl, ensureBackendAvailable, noteApiResponse } from '../../../../lib/apiOrigin'
+import { apiUrl, ensureBackendAvailable, noteApiResponse } from '@/core/api/apiOrigin'
 import {
   groupWeatherTickerFieldsByGrid,
   weatherGridKey,

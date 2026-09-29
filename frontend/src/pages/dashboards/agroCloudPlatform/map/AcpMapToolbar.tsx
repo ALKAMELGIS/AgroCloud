@@ -6,7 +6,7 @@ import {
   useImperativeHandle,
   useState,
 } from 'react'
-import { lazyWithRetry } from '../../../../lib/lazyWithRetry'
+import { lazyWithRetry } from '@/core/routing/lazyWithRetry'
 import { useAcpPlatform } from '../acpPlatformContext'
 import { AcpAddGisLayerPanel } from './AcpAddGisLayerPanel'
 import { AcpEsriBasemapFlyout } from './AcpEsriBasemapFlyout'

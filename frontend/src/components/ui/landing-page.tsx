@@ -8,11 +8,11 @@ import {
   homeMenuItems,
   hubPathForGroupId,
   type MenuItem,
-} from '@/config/homeMenu'
-import { useLanguage } from '@/lib/i18n'
-import { cn } from '@/lib/utils'
-import { useMergedNavigation } from '@/store/SystemSettingsContext'
-import type { MergedGroup } from '@/nav/navManifest'
+} from '@/core/config/homeMenu'
+import { useLanguage } from '@/core/localization/i18n'
+import { cn } from '@/core/utils/utils'
+import { useMergedNavigation } from '@/core/state/SystemSettingsContext'
+import type { MergedGroup } from '@/core/routing/navManifest'
 
 interface ScrollGlobeProps {
   sections: {

@@ -3,7 +3,7 @@
  * (Hostinger Node API; optional Python SegFormer when configured).
  */
 
-import { apiUrl } from '../apiOrigin'
+import { apiUrl } from '@/core/api/apiOrigin'
 import type { InferenceArgumentsPayload } from './inferenceArguments'
 
 const TRAIN_BASE = () => apiUrl('/api/training')

@@ -12,7 +12,7 @@ import {
   simplifyGeometryForSentinelStats,
   type SentinelHubDailyIndexMeans,
 } from './sentinelHubStatisticsApi'
-import { isBackendKnownUnavailable, isStaticDeploymentWithoutBackend } from './apiOrigin'
+import { isBackendKnownUnavailable, isStaticDeploymentWithoutBackend } from '@/core/api/apiOrigin'
 import {
   postSentinelStatisticsViaWmsClient,
 } from './sentinelHubWmsStatisticsClient'

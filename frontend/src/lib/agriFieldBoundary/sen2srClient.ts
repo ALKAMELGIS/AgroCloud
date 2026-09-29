@@ -3,7 +3,7 @@
  * via `/api/sentinel2/super-resolution` (Node proxy → agri-field-boundary on VPS or local :8092).
  */
 
-import { apiUrl } from '../apiOrigin'
+import { apiUrl } from '@/core/api/apiOrigin'
 
 const BASE = () => apiUrl('/api/sentinel2/super-resolution')
 

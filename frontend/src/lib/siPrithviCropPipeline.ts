@@ -12,7 +12,7 @@ import {
   configuredApiOrigin,
   ensureBackendAvailable,
   noteApiResponse,
-} from './apiOrigin'
+} from '@/core/api/apiOrigin'
 
 export type CropClassificationClass = {
   id: number

@@ -7,7 +7,7 @@ import React, {
   type KeyboardEvent,
   type RefObject,
 } from 'react'
-import { useGeoAiSpeechRecognition } from '../../../../hooks/useGeoAiSpeechRecognition'
+import { useGeoAiSpeechRecognition } from '@/core/hooks/useGeoAiSpeechRecognition'
 import { GEO_AI_ATTACH_ACCEPT, geoAiAttachIsImage } from '../../../../lib/geoAiAttachFile'
 
 export type NeighborhoodAgentComposerProps = {

@@ -1,5 +1,5 @@
 import { resolveAgroStructuresFieldDisplayName } from '../../../../lib/agroStructuresPrimaryAoi'
-import { getMapboxAccessToken } from '../../../../lib/mapboxAccessToken'
+import { getMapboxAccessToken } from '@/core/config/mapboxAccessToken'
 import { geocodePlaceQuery } from '../../../../lib/openMeteoWeather'
 import { extractCropAlertFieldsFromMask } from '../../../../lib/siCropAlertEngine'
 

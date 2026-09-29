@@ -7,7 +7,7 @@ import {
   type CSSProperties,
   type RefObject,
 } from 'react'
-import { useSiInstanceScope } from '../siInstanceScope'
+import { useSiInstanceScope } from '@/app/providers/siInstanceScope'
 import { LayerLiveLegendPanel } from './LayerLiveLegendPanel'
 import type { RemoteSensingLayerSelectGroup } from '../../../lib/agroCompositeIndices'
 import type { SiMapSwipeCompareSides } from './SiMapSwipeControl'

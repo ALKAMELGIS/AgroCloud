@@ -1,7 +1,7 @@
 /**
  * Client for AgroCloud aerial raster tile service (COG → XYZ → Mapbox raster source).
  */
-import { apiUrl } from '../apiOrigin'
+import { apiUrl } from '@/core/api/apiOrigin'
 import { createMapboxReadyImageUrl, type RasterMapCoordinates } from './siRasterMapLayer'
 
 export type RasterBboxWgs84 = {

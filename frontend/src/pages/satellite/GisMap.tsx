@@ -37,10 +37,10 @@ import {
   pickDefaultBasemapId,
   resolveBasemapId,
 } from './basemapCatalog'
-import { useMapboxAccessToken } from '../../hooks/useMapboxAccessToken'
-import { useOpenWeatherMapApiKey } from '../../hooks/useOpenWeatherMapApiKey'
+import { useMapboxAccessToken } from '@/core/hooks/useMapboxAccessToken'
+import { useOpenWeatherMapApiKey } from '@/core/hooks/useOpenWeatherMapApiKey'
 import { getArcgisPortalToken } from '../../lib/arcgisPortalToken'
-import { getMapboxAccessToken, getMapboxGlRendererToken } from '../../lib/mapboxAccessToken'
+import { getMapboxAccessToken, getMapboxGlRendererToken } from '@/core/config/mapboxAccessToken'
 import {
   arcgisExtentToWgs84BBox,
   fetchImageServerMeta,
@@ -53,7 +53,7 @@ import {
   parseRemoteUrlAsFile,
 } from '../../utils/FileLoader'
 import { GisDataManager } from './gisDataManager';
-import { useGeminiApiKey } from '../../hooks/useGeminiApiKey'
+import { useGeminiApiKey } from '@/core/hooks/useGeminiApiKey'
 import {
   lastMapQueryCoordsFromMessages,
   replaceUserMessageText,
@@ -101,7 +101,7 @@ import {
   type GisChartPanelConfig,
 } from '../../lib/gisMapChartPanelConfig'
 import './gisGeoExplorerPanel.css'
-import '../../styles/gisModalSystem.css'
+import '@/assets/styles/gisModalSystem.css'
 import { GisGeoExplorerChartConfig } from './components/GisGeoExplorerChartConfig'
 import { GeoExplorerGeminiMessageParts } from './components/GeoExplorerGeminiMessageParts'
 import { GisMapBrowseLayersPane } from './components/GisMapBrowseLayersPane'

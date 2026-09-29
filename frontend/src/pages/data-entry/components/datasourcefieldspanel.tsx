@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import { useLanguage } from '../../../lib/i18n'
+import { useLanguage } from '@/core/localization/i18n'
 import '../dsf-fill-modern.css'
 import { FieldCalculateTools } from './FieldCalculateTools'
 

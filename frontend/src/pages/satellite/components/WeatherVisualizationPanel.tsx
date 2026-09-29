@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { useSiInstanceScope } from '../siInstanceScope';
+import { useSiInstanceScope } from '@/app/providers/siInstanceScope';
 import {
   DEFAULT_WEATHER_SIM,
   WEATHER_SIM_LIMITS,

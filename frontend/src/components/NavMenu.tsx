@@ -1,13 +1,13 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import './navmenu.css'
-import './lux-theme.css'
-import { hasPermission, normalizeRole, readCurrentUser } from '../lib/auth'
-import { useLanguage } from '../lib/i18n'
-import type { MergedGroup } from '../nav/navManifest'
-import { normalizeAppPath } from '../services/settingsStorage'
-import type { ThemeMode } from '../types/systemSettings'
-import { useMergedNavigation, useSystemSettings } from '../store/SystemSettingsContext'
+import '@/assets/styles/lux-theme.css'
+import { hasPermission, normalizeRole, readCurrentUser } from '@/core/auth/auth'
+import { useLanguage } from '@/core/localization/i18n'
+import type { MergedGroup } from '@/core/routing/navManifest'
+import { normalizeAppPath } from '@/core/services/settingsStorage'
+import type { ThemeMode } from '@/core/types/systemSettings'
+import { useMergedNavigation, useSystemSettings } from '@/core/state/SystemSettingsContext'
 
 function resolveThemeIsDark(mode: ThemeMode): boolean {
   if (mode === 'dark') return true

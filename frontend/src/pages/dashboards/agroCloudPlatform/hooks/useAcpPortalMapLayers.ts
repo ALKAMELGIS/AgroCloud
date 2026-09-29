@@ -8,7 +8,7 @@ import {
   useGisContentPortal,
 } from '../../../../lib/gisContentPortalStore'
 import { hostedFeatureLayerGeoJsonForRow } from '../../../../lib/gisHostedFeatureLayerPortal'
-import type { GisContentRepositoryMapLayer } from '../../../../hooks/useGisContentRepositoryMapLayers'
+import type { GisContentRepositoryMapLayer } from '@/core/hooks/useGisContentRepositoryMapLayers'
 import { isAcpExcludedPortalMapRow } from '../map/acpPortalMapLayers'
 import { isAcpOgcRasterPortalRow } from '../../../../lib/acpOgcLayerMeta'
 

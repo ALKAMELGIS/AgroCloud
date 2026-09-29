@@ -14,7 +14,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import MapGL, { Source, Layer, Marker } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import './SatelliteIntelligence.css';
-import '../../styles/map-overlay-theme.css';
+import '@/assets/styles/map-overlay-theme.css';
 import './components/RemoteSensingPanel.css';
 import { RemoteSensingToolboxPanel } from './components/RemoteSensingToolboxPanel';
 import type { RemoteSensingDrawingTool } from './components/RemoteSensingDrawingToolbar';
@@ -40,8 +40,8 @@ import {
   mapZoomForHorizontalAccuracyM,
   watchBestDevicePosition,
   type DeviceGeoReading,
-} from '../../lib/deviceGeolocation';
-import '../../styles/gisModalSystem.css';
+} from '@/core/utils/deviceGeolocation';
+import '@/assets/styles/gisModalSystem.css';
 import '../dashboards/develop-dashboard.css';
 import { parseFile, parseRemoteUrlAsFile } from '../../utils/FileLoader';
 import type { RasterMapCoordinates } from '../../utils/FileLoader';
@@ -73,15 +73,15 @@ import {
   translateFeatureCoordinates,
   vertexHitThresholdPx,
 } from './drawingUtils';
-import { useMapboxAccessToken } from '../../hooks/useMapboxAccessToken';
-import { useGeminiApiKey } from '../../hooks/useGeminiApiKey';
-import { useClaudeApiKey } from '../../hooks/useClaudeApiKey';
-import { useDeepseekApiKey } from '../../hooks/useDeepseekApiKey';
-import { useOllamaConfig } from '../../hooks/useOllamaConfig';
+import { useMapboxAccessToken } from '@/core/hooks/useMapboxAccessToken';
+import { useGeminiApiKey } from '@/core/hooks/useGeminiApiKey';
+import { useClaudeApiKey } from '@/core/hooks/useClaudeApiKey';
+import { useDeepseekApiKey } from '@/core/hooks/useDeepseekApiKey';
+import { useOllamaConfig } from '@/core/hooks/useOllamaConfig';
 import { getArcgisPortalToken } from '../../lib/arcgisPortalToken';
 import { fetchArcGisFeatureLayerGeoJson } from '../../lib/arcgisFeatureLayerGeoJson';
-import { getMapboxAccessToken, getMapboxGlRendererToken } from '../../lib/mapboxAccessToken';
-import { subscribeSentinelHubAccessToken } from '../../lib/sentinelHubAccessToken';
+import { getMapboxAccessToken, getMapboxGlRendererToken } from '@/core/config/mapboxAccessToken';
+import { subscribeSentinelHubAccessToken } from '@/core/config/sentinelHubAccessToken';
 import {
   getSentinelHubWmsBaseUrl,
   isCdseWmsConfigured,
@@ -257,7 +257,7 @@ import {
   SI_WAPI_ALERT_FILL_LAYER_ID,
 } from './components/SiWapiAlertMapOverlay';
 import { SiCropAlertMapLegend } from './components/SiCropAlertMapLegend';
-import { useSiInstanceScope } from './siInstanceScope';
+import { useSiInstanceScope } from '@/app/providers/siInstanceScope';
 import { useMapOverlayIsolation } from './useMapOverlayIsolation';
 import {
   SI_CROP_ALERT_ENGINE_LS_KEY,
@@ -488,7 +488,7 @@ import {
   getAgroCloudTerrainExaggeration,
   TERRAIN_EXAGGERATION_DEFAULT,
 } from '../../lib/agroCloudMapTerrain';
-import { useOpenWeatherMapApiKey } from '../../hooks/useOpenWeatherMapApiKey';
+import { useOpenWeatherMapApiKey } from '@/core/hooks/useOpenWeatherMapApiKey';
 import { agroChatWithDeepSeek, agroChatWithGemini, agroChatWithOllamaStream, warmOllama } from '../../lib/agroAiChat';
 import {
   buildBasemapCatalog,

@@ -17,7 +17,7 @@ import {
 import { hideFtwTileBoundariesOnly } from './ftwHideTileBoundaries'
 import { loadFtwFeaturesForBbox, pickFtwZoomForBbox, type LngLatBbox } from './ftwPmtilesFeatures'
 import { clipFeatureCollectionToAoi } from '../trainingAi/clipResultsToAoi'
-import { yieldToMain } from '../yieldToMain'
+import { yieldToMain } from '@/core/utils/yieldToMain'
 import { optimizeFieldBoundaryResult } from './fieldBoundaryClient'
 import type { FtwGlobalYear } from './ftwGlobalConfig'
 

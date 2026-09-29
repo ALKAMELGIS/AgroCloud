@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import maplibregl, { type Map as MaplibreMap } from 'maplibre-gl'
 import { reversePlaceLabel } from '../../../../lib/openMeteoWeather'
-import { getMapboxAccessToken } from '../../../../lib/mapboxAccessToken'
+import { getMapboxAccessToken } from '@/core/config/mapboxAccessToken'
 import {
   WeatherIntelligencePanel,
   type WeatherLocation,

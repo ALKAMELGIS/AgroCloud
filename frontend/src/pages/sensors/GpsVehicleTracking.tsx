@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Modal } from '../../components/ui/Modal'
-import { useLanguage } from '../../lib/i18n'
+import { useLanguage } from '@/core/localization/i18n'
 import {
   TELEMATICS_PROVIDERS,
   type TelematicsProviderDef,

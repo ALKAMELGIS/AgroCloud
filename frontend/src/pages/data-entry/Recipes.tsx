@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { appAlert } from '../../lib/appDialog'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { useLanguage } from '../../lib/i18n'
+import { useLanguage } from '@/core/localization/i18n'
 import { generateRecipeReportPdf } from '../../lib/recipeReport/generateRecipeReportPdf'
 import { loadRecipeRows, rowsToCsv } from '../../lib/recipeReport/loadRecipeRows'
 import { getRecipeColumnsForForm } from '../../lib/formFieldColumns'

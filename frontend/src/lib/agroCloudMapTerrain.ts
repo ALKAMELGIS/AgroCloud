@@ -10,7 +10,7 @@
  * @see https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer
  */
 
-import { apiUrl, ensureBackendAvailable, resolveApiOrigin } from './apiOrigin'
+import { apiUrl, ensureBackendAvailable, resolveApiOrigin } from '@/core/api/apiOrigin'
 import { ensureRasterStyleMaxNativeZoom, rasterTileMaxNativeZoom } from './rasterTileZoom'
 
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services'

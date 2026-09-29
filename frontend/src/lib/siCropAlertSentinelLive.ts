@@ -35,7 +35,7 @@ import {
   SENTINEL_FIELD_BATCH_SERVER_THRESHOLD,
 } from './sentinelFieldBatchApi'
 
-import type { SiInstanceScope } from '../pages/satellite/siInstanceScope'
+import type { SiInstanceScope } from '@/app/providers/siInstanceScope'
 
 export type CropAlertSentinelFetchProgress = {
   done: number

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useLanguage } from '../../lib/i18n'
+import { useLanguage } from '@/core/localization/i18n'
 import {
   AGRO_CLOUD_EMBED_CHANGED_EVENT,
   readAgroCloudDashboardUrl,

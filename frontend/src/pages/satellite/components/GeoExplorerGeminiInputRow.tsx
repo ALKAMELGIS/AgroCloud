@@ -1,6 +1,6 @@
 import type { ChangeEvent, KeyboardEvent, MouseEvent as ReactMouseEvent, RefObject } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useGeoAiSpeechRecognition } from '../../../hooks/useGeoAiSpeechRecognition'
+import { useGeoAiSpeechRecognition } from '@/core/hooks/useGeoAiSpeechRecognition'
 import { GEO_AI_ATTACH_ACCEPT } from '../../../lib/geoAiAttachFile'
 import type { GeoExplorerCssPrefix } from './GeoExplorerGeminiChatBody'
 

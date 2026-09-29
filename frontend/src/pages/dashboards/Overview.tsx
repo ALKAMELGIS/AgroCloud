@@ -11,8 +11,8 @@ import {
   Filler,
 } from 'chart.js'
 import { Line } from 'react-chartjs-2'
-import { useSystemSettings } from '../../store/SystemSettingsContext'
-import { useLanguage } from '../../lib/i18n'
+import { useSystemSettings } from '@/core/state/SystemSettingsContext'
+import { useLanguage } from '@/core/localization/i18n'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler)
 

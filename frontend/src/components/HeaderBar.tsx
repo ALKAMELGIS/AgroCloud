@@ -1,11 +1,11 @@
 import './header.css'
-import './lux-theme.css'
+import '@/assets/styles/lux-theme.css'
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { AgroCloudMark } from './AgroCloudMark'
-import { ELITE_AGRO_LOGO_WHITE_URL, ELITE_AGROCLOUD_SITE_URL, resolveEliteAgroLogoUrl } from '../lib/brandAssets'
-import { normalizeHeaderLogoText } from '../services/settingsStorage'
-import { useSystemSettings } from '../store/SystemSettingsContext'
-import { useLanguage } from '../lib/i18n'
+import { ELITE_AGRO_LOGO_WHITE_URL, ELITE_AGROCLOUD_SITE_URL, resolveEliteAgroLogoUrl } from '@/core/config/brandAssets'
+import { normalizeHeaderLogoText } from '@/core/services/settingsStorage'
+import { useSystemSettings } from '@/core/state/SystemSettingsContext'
+import { useLanguage } from '@/core/localization/i18n'
 
 type HeaderBarProps = {
   onToggleMobileNav?: () => void

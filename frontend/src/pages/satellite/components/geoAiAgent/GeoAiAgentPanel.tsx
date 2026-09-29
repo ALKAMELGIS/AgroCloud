@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { useAuth } from '../../../../state/auth';
+import { useAuth } from '@/core/state/auth';
 import { GeoAiAgentBuilder } from './GeoAiAgentBuilder';
 import {
   DEFAULT_GEO_AI_AGENT_CHIPS,

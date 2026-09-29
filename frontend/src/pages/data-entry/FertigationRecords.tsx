@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DataSourceFieldsPanel, type DataSourceFormState } from './components/datasourcefieldspanel'
-import { canManageDataSourceSettings } from '../../lib/auth'
+import { canManageDataSourceSettings } from '@/core/auth/auth'
 import { FertigationReportModal } from './components/FertigationReportModal'
 import './EC.css'
 

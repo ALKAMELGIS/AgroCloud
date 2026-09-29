@@ -33,7 +33,7 @@ const pwaEnabled =
   process.env.VITE_ENABLE_PWA !== 'false' && (pwaDevMode || process.env.NODE_ENV === 'production')
 
 /** In-repo SIW entrypoints so CI / GitHub Pages builds always succeed. */
-const SATELLITE_INTELLIGENCE_WORKSPACE_SHIM = resolve(__dirname, 'src/shims/satellite-intelligence-workspace')
+const SATELLITE_INTELLIGENCE_WORKSPACE_SHIM = resolve(__dirname, 'src/app/startup/shims/satellite-intelligence-workspace')
 
 /**
  * Optional absolute path to an external SIW `src` directory (local monorepo).
@@ -211,7 +211,7 @@ export default defineConfig({
       '@satellite-intelligence-workspace': SATELLITE_INTELLIGENCE_WORKSPACE_SRC,
       // Dev / non-PWA: vite-plugin-pwa is off — stub so `import('virtual:pwa-register')` still resolves.
       ...(!pwaEnabled
-        ? { 'virtual:pwa-register': resolve(__dirname, 'src/shims/pwa-register-stub.ts') }
+        ? { 'virtual:pwa-register': resolve(__dirname, 'src/app/startup/shims/pwa-register-stub.ts') }
         : {}),
     },
   },

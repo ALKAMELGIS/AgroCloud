@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
-import { SystemSettingsProvider } from '../store/SystemSettingsContext'
+import { SystemSettingsProvider } from '@/core/state/SystemSettingsContext'
 import NavMenu from './NavMenu'
 
 const routerFuture = { v7_relativeSplatPath: true, v7_startTransition: true } as const

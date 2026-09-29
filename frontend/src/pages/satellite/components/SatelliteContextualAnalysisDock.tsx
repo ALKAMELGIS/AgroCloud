@@ -1,8 +1,8 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useLanguage } from '@/lib/i18n';
-import { useSystemSettings } from '@/store/SystemSettingsContext';
-import type { ThemeMode } from '@/types/systemSettings';
-import { useSiInstanceScope } from '../siInstanceScope';
+import { useLanguage } from '@/core/localization/i18n';
+import { useSystemSettings } from '@/core/state/SystemSettingsContext';
+import type { ThemeMode } from '@/core/types/systemSettings';
+import { useSiInstanceScope } from '@/app/providers/siInstanceScope';
 // Map overlay event isolation — keeps panel clicks/scroll from leaking to the map.
 import { useMapOverlayIsolation } from '../useMapOverlayIsolation';
 import type { AoiStaticExportLngLat, AoiStaticMultiLayerLineChartDataset } from './AoiStaticMultiLayerLineChart';

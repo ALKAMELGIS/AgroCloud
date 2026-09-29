@@ -18,7 +18,7 @@ import {
 } from './siLulcClassification'
 import { resolvePreviousValidSceneDate } from './siAdaptiveTemporalEngine'
 import { subtractDaysFromIso } from './siSentinelImageryDate'
-import { getSentinelHubAccessToken } from './sentinelHubAccessToken'
+import { getSentinelHubAccessToken } from '@/core/config/sentinelHubAccessToken'
 
 /** Keep local — avoid circular import with agroCompositeIndices ↔ dataMaskLayer. */
 const DATAMASK_LAYER_ID = 'DATAMASK'

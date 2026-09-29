@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 
-import { ELITE_AGRO_LOGO_WHITE_URL } from '../lib/brandAssets'
+import { ELITE_AGRO_LOGO_WHITE_URL } from '@/core/config/brandAssets'
 
 const logoUrl = ELITE_AGRO_LOGO_WHITE_URL
 

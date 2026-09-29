@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useLanguage } from '../../lib/i18n'
+import { useLanguage } from '@/core/localization/i18n'
 import './AiAgroCloud.css'
 
 /** Match Home → Satellite Imagery hub accent (violet tile header). */

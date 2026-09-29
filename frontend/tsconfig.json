@@ -14,7 +14,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@satellite-intelligence-workspace/*": ["src/shims/satellite-intelligence-workspace/*"]
+      "@satellite-intelligence-workspace/*": ["src/app/startup/shims/satellite-intelligence-workspace/*"]
     }
   },
   "include": ["src", "config"]

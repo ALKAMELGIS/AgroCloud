@@ -9,9 +9,9 @@ import {
   loadStoredLayers,
   primaryLayerSourceId,
 } from './layerGeo'
-import { getGeminiApiKey } from '../geminiApiKey'
-import { getMapboxAccessToken } from '../mapboxAccessToken'
-import { eliteAgroLogoAbsoluteUrl } from '../brandAssets'
+import { getGeminiApiKey } from '@/core/config/geminiApiKey'
+import { getMapboxAccessToken } from '@/core/config/mapboxAccessToken'
+import { eliteAgroLogoAbsoluteUrl } from '@/core/config/brandAssets'
 import { fetchRecipeReportInsightsFromGemini } from './recipeReportGemini'
 
 const ACCENT: [number, number, number] = [4, 120, 87]

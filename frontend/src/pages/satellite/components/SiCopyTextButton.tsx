@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { copyTextToClipboard } from '../../../lib/copyTextToClipboard'
+import { copyTextToClipboard } from '@/core/utils/copyTextToClipboard'
 import './SiCopyTextButton.css'
 
 export type SiCopyTextButtonProps = {

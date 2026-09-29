@@ -5,7 +5,7 @@
  * Esri Basemap Satellite stitches World Imagery tiles over the AOI.
  */
 
-import { apiUrl } from '../apiOrigin'
+import { apiUrl } from '@/core/api/apiOrigin'
 import { getSentinelHubWmsBaseUrl } from '../sentinelHubWmsInstance'
 import {
   appendSentinelHubWmsAccessToken,

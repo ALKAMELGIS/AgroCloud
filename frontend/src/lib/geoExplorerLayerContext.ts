@@ -9,7 +9,7 @@ import {
   formatFeaturePropertiesForGeoAi,
   getArcDomainForField,
 } from './arcgisAttributeDisplay'
-import { forEachLngLatPairInCoords } from './geoJsonCoordIterWalk'
+import { forEachLngLatPairInCoords } from '@/core/utils/geoJsonCoordIterWalk'
 
 export type GeoAiMapLayer = {
   name: string
