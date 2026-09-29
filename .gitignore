@@ -38,7 +38,7 @@ test-results/
 _restore_tmp_*/
 # Static GitHub Pages build output (may embed env secrets; regenerate in CI with secrets).
 AgroCloud-Pages-Upload/
-# Duplicate export tree / archives (use prepare-for-github.ps1 locally; do not commit).
+# Duplicate export tree / archives (do not commit).
 AgroCloud-GitHub-Ready/
 AgroCloud-GitHub-Ready.zip
 AgroCloud-Pages-Upload.zip
@@ -109,3 +109,7 @@ backend/services/tree-detection/*_log.txt
 
 # Local scratch / sampling scripts
 .sample_grd.mjs
+/frontend/tmp-*.docx
+/frontend/_tmp_*
+/frontend/_patch_*
+/frontend/_ws_debug*

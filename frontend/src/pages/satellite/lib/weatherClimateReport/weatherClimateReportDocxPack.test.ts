@@ -1,4 +1,5 @@
 import fs from 'fs'
+import os from 'os'
 import path from 'path'
 import { describe, expect, it } from 'vitest'
 import JSZip from 'jszip'
@@ -95,7 +96,7 @@ describe('weatherClimateReportDocxPack', () => {
     }
 
     const outBuf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
-    const outPath = path.join(process.cwd(), 'tmp-weather-debug.docx')
+    const outPath = path.join(os.tmpdir(), 'tmp-weather-debug.docx')
     fs.writeFileSync(outPath, outBuf)
 
     const roundTrip = await JSZip.loadAsync(outBuf)

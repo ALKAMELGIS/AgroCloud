@@ -154,7 +154,7 @@ node scripts/pages-dist-check.mjs
 node scripts/sync-pages-dist-to-root.mjs --git-add
 ```
 
-For repository layout and development, see [REPOSITORY.md](REPOSITORY.md).
+For repository layout and development, see [core/docs/REPOSITORY.md](core/docs/REPOSITORY.md).
 
 ---
 

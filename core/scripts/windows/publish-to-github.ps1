@@ -1,12 +1,13 @@
 # Publish this repo to GitHub using HTTPS (avoids SSH publickey errors on Windows).
-# Usage: from repo root, run:  powershell -ExecutionPolicy Bypass -File .\publish-to-github.ps1
-# Optional commit message: powershell -ExecutionPolicy Bypass -File .\publish-to-github.ps1 -CommitMessage "Your message"
+# Usage: from repo root, run:  powershell -ExecutionPolicy Bypass -File .\core\scripts\windows\publish-to-github.ps1
+# Optional commit message: powershell -ExecutionPolicy Bypass -File .\core\scripts\windows\publish-to-github.ps1 -CommitMessage "Your message"
 
 param(
   [string]$CommitMessage = "chore: update project files"
 )
 
 $ErrorActionPreference = 'Stop'
+Set-Location (Resolve-Path (Join-Path $PSScriptRoot '..\..\..'))
 $HttpsOrigin = 'https://github.com/ALKAMELGIS/AgroCloud.git'
 
 Write-Host "Configuring origin to HTTPS (add if missing, update if exists)..." -ForegroundColor Cyan
