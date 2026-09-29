@@ -5,7 +5,6 @@ import * as yup from 'yup'
 import { useLanguage } from '../../lib/i18n'
 import { hasPermission, normalizeRole, readCurrentUser } from '../../lib/auth'
 import { NAV_DEFAULT_GROUPS, NAV_GROUP_IDS } from '../../nav/navManifest'
-import { isExternalPageLink } from '../../lib/defaultPageLinks'
 import {
   DEFAULT_SYSTEM_SETTINGS,
   DIRECTORY_ROLES_CANONICAL,
@@ -559,7 +558,6 @@ export default function SystemSettings() {
   const pageRows = draft.customPages
     .map((page, index) => ({ page, index }))
     .filter(({ page }) => {
-      if (isExternalPageLink(page)) return false
       if (pageGroupFilter !== 'all' && (page.navGroupId || 'data') !== pageGroupFilter) return false
       const q = pageQuery.trim().toLowerCase()
       if (!q) return true
@@ -972,8 +970,8 @@ export default function SystemSettings() {
               <h2>Dynamic pages</h2>
               <p>
                 Register routes and choose which sidebar group they appear under — same flyout ids as the manifest (
-                <code dir="ltr">nav-group-data</code>, <code dir="ltr">nav-group-sensors</code>, …). For external URLs,
-                use <strong>Navigation → Link Management → Add Page Link</strong>.
+                <code dir="ltr">nav-group-data</code>, <code dir="ltr">nav-group-sensors</code>, …). Set{' '}
+                <strong>Bind target → External URL</strong> to embed a link such as an ArcGIS Dashboard.
               </p>
             </div>
             <button type="button" className="gis-btn gis-btn-primary sys-pages-add" onClick={addPage}>

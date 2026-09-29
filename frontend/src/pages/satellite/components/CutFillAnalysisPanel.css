@@ -72,31 +72,6 @@
   color: #7dd3fc;
 }
 
-.si-cutfill__kpis {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.si-cutfill__kpi {
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  border-radius: 10px;
-  padding: 8px;
-  background: rgba(15, 23, 42, 0.4);
-}
-
-.si-cutfill__kpi-label {
-  font-size: 10px;
-  color: #94a3b8;
-}
-
-.si-cutfill__kpi-value {
-  font-size: 14px;
-  font-weight: 600;
-  color: #f8fafc;
-}
-
 .si-cutfill__table-wrap {
   max-height: 220px;
   overflow: auto;

@@ -400,7 +400,6 @@ const RAIL_GROUPS_MAP: SatelliteContextPanelId[][] = [
     'agri-field-boundary',
     'well-site',
     'well-suitability',
-    'cut-fill-analysis',
     'raster-georeference',
   ],
 ];

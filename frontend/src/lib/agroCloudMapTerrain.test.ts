@@ -11,6 +11,7 @@ import {
   getAgroCloudTerrainExaggeration,
   is3dTopographicBasemapId,
   setAgroCloudTerrainExaggeration,
+  TERRAIN_EXAGGERATION_DEFAULT,
   shouldEnableAgroCloudTerrain3d,
   TOPOGRAPHIC_3D_BASEMAP_ID,
 } from './agroCloudMapTerrain'
@@ -91,7 +92,6 @@ describe('agroCloudMapTerrain', () => {
     expect(getAgroCloudTerrainExaggeration()).toBe(2.5)
     expect(setAgroCloudTerrainExaggeration(99)).toBe(8)
     expect(setAgroCloudTerrainExaggeration(0)).toBe(1)
-    // Restore default so other tests/styles see 1.5.
-    expect(setAgroCloudTerrainExaggeration(1.5)).toBe(1.5)
+    expect(setAgroCloudTerrainExaggeration(TERRAIN_EXAGGERATION_DEFAULT)).toBe(1)
   })
 })

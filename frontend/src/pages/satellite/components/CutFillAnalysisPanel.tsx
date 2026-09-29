@@ -226,37 +226,6 @@ export function CutFillAnalysisPanel({ model, onRowFlyTo }: Props) {
 
       {model.step === 'results' && s && (
         <div>
-          <div className="si-cutfill__kpis">
-            <div className="si-cutfill__kpi">
-              <div className="si-cutfill__kpi-label">Total cut volume</div>
-              <div className="si-cutfill__kpi-value">{s.cutVolumeM3.toFixed(0)} m³</div>
-            </div>
-            <div className="si-cutfill__kpi">
-              <div className="si-cutfill__kpi-label">Total fill volume</div>
-              <div className="si-cutfill__kpi-value">{s.fillVolumeM3.toFixed(0)} m³</div>
-            </div>
-            <div className="si-cutfill__kpi">
-              <div className="si-cutfill__kpi-label">Net volume</div>
-              <div className="si-cutfill__kpi-value">{s.netVolumeM3.toFixed(0)} m³</div>
-            </div>
-            <div className="si-cutfill__kpi">
-              <div className="si-cutfill__kpi-label">Cut area</div>
-              <div className="si-cutfill__kpi-value">{(s.cutAreaM2 / 10_000).toFixed(2)} ha</div>
-            </div>
-            <div className="si-cutfill__kpi">
-              <div className="si-cutfill__kpi-label">Fill area</div>
-              <div className="si-cutfill__kpi-value">{(s.fillAreaM2 / 10_000).toFixed(2)} ha</div>
-            </div>
-            <div className="si-cutfill__kpi">
-              <div className="si-cutfill__kpi-label">Maximum cut depth</div>
-              <div className="si-cutfill__kpi-value">{s.maxCutM.toFixed(2)} m</div>
-            </div>
-            <div className="si-cutfill__kpi">
-              <div className="si-cutfill__kpi-label">Maximum fill depth</div>
-              <div className="si-cutfill__kpi-value">{s.maxFillM.toFixed(2)} m</div>
-            </div>
-          </div>
-
           <div className="si-cutfill__layer-toggles">
             {(() => {
               const classOn = !!(

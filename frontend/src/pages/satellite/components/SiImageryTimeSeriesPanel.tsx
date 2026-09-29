@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -22,7 +24,6 @@ import { useImageryIndexInterpretation } from '../hooks/useImageryIndexInterpret
 import {
   buildLulcClassCompositionStats,
   isLulcTimeSeriesSelection,
-  lulcCompositionTotalPixels,
   type LulcClassCompositionStat,
 } from '../../../lib/siLulcClassAreaLive'
 import { isLulcClassificationLayerId } from '../../../lib/siLulcClassification'
@@ -68,6 +69,7 @@ import {
 import { TimeSeriesExportManager } from './timeSeriesReport/ExportManager'
 import { SiDynamicMapSnapshotsPanel } from './SiDynamicMapSnapshotsPanel'
 import { SiImageryWeatherTab } from './SiImageryWeatherTab'
+import { useImageryChartInk } from '../lib/imageryChartInk'
 import '../../dashboards/agroCloudPlatform/AgroCloudPlatformDashboard.css'
 
 ChartJS.register(
@@ -108,6 +110,23 @@ export type SiImageryTimeSeriesPanelProps = {
   generatedBy?: string
   onStormMapOverlayChange?: (overlay: import('../lib/imageryStormAnalysis').SiTsWeatherStormMapOverlay | null) => void
   stormOverlayDismissEpoch?: number
+  /** Floating-window header slot — Aggregate + Chart render there instead of in the toolbar. */
+  headerToolsHost?: HTMLElement | null
+}
+
+const TIME_AGGREGATION_OPTIONS = [
+  ['day', 'Day'],
+  ['week', 'Week'],
+  ['month', 'Month'],
+  ['year', 'Year'],
+] as const
+
+const CHART_TYPE_ICONS: Record<ImageryChartType, string> = {
+  line: 'fa-chart-line',
+  area: 'fa-chart-area',
+  bar: 'fa-chart-column',
+  pie: 'fa-chart-pie',
+  scatter: 'fa-braille',
 }
 
 export function SiImageryTimeSeriesPanel({
@@ -128,9 +147,11 @@ export function SiImageryTimeSeriesPanel({
   generatedBy,
   onStormMapOverlayChange,
   stormOverlayDismissEpoch = 0,
+  headerToolsHost = null,
 }: SiImageryTimeSeriesPanelProps) {
   const chartRef = useRef<ChartJS | null>(null)
   const chartWrapRef = useRef<HTMLDivElement | null>(null)
+  const chartInk = useImageryChartInk()
   const referenceDate = analysisDate.trim().slice(0, 10) || new Date().toISOString().slice(0, 10)
   const defaultRange = useMemo(
     () => defaultImageryDateRange(referenceDate, chartLookbackDays),
@@ -222,12 +243,31 @@ export function SiImageryTimeSeriesPanel({
   const [areaUnit, setAreaUnit] = useState<'ha' | 'm2'>('ha')
   const [fromDate, setFromDate] = useState(defaultRange.from)
   const [toDate, setToDate] = useState(defaultRange.to)
-  const [splitByYears, setSplitByYears] = useState(false)
+  const splitByYears = false
   const [dateError, setDateError] = useState<string | null>(null)
   const [selectedChartDate, setSelectedChartDate] = useState<string | null>(null)
   const [activePanelTab, setActivePanelTab] = useState<
     'chart' | 'interpretation' | 'weather' | 'maps'
   >('chart')
+  const [tabsExportHost, setTabsExportHost] = useState<HTMLDivElement | null>(null)
+  const [infoOpen, setInfoOpen] = useState(false)
+  const infoRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!infoOpen) return
+    const onPointerDown = (e: PointerEvent) => {
+      if (!infoRef.current?.contains(e.target as Node)) setInfoOpen(false)
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setInfoOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [infoOpen])
   const [vegTimeline, setVegTimeline] = useState<
     import('../lib/timeSeriesReport/vegetationCoverageTimeline').VegetationCoveragePoint[]
   >([])
@@ -500,11 +540,6 @@ export function SiImageryTimeSeriesPanel({
 
   const lulcCompositionPresent = useMemo(
     () => lulcComposition.filter(r => r.pixelCount > 0),
-    [lulcComposition],
-  )
-
-  const lulcTotalPixels = useMemo(
-    () => lulcCompositionTotalPixels(lulcComposition),
     [lulcComposition],
   )
 
@@ -793,10 +828,6 @@ export function SiImageryTimeSeriesPanel({
   }, [committedAoiGeometry, fieldOptions, onSelectedFieldKeyChange, invalidateResults])
 
   useEffect(() => {
-    if (selectedLayerIds.length > 1 && splitByYears) setSplitByYears(false)
-  }, [selectedLayerIds.length, splitByYears])
-
-  useEffect(() => {
     if (!lulcAreaMode) return
     if (chartType === 'scatter') setChartType('bar')
   }, [lulcAreaMode, chartType])
@@ -809,14 +840,6 @@ export function SiImageryTimeSeriesPanel({
     }
     wasLulcAreaModeRef.current = lulcAreaMode
   }, [lulcAreaMode])
-
-  useEffect(() => {
-    if (timeAggregation !== 'day' && splitByYears) setSplitByYears(false)
-  }, [timeAggregation, splitByYears])
-
-  useEffect(() => {
-    if ((chartType === 'pie' || chartType === 'scatter') && splitByYears) setSplitByYears(false)
-  }, [chartType, splitByYears])
 
   const syncMapToChartDate = useCallback(
     (isoDate: string) => {
@@ -1167,7 +1190,7 @@ export function SiImageryTimeSeriesPanel({
             label: '% of total area',
             data: lulcComposition.map(r => Number(r.pctOfTotal.toFixed(1))),
             backgroundColor: lulcComposition.map(r => `${r.color}cc`),
-            borderColor: '#0a0a0a',
+            borderColor: chartInk.sliceBorder,
             borderWidth: 1,
           },
         ],
@@ -1187,7 +1210,7 @@ export function SiImageryTimeSeriesPanel({
             label: `${timeAggregation} mean`,
             data: slices.map(s => s.value as number),
             backgroundColor: slices.map((_, i) => `${imageryLayerChartColor(i)}cc`),
-            borderColor: '#0a0a0a',
+            borderColor: chartInk.sliceBorder,
             borderWidth: 1,
           },
         ],
@@ -1202,12 +1225,12 @@ export function SiImageryTimeSeriesPanel({
           label: displayLayerSeries.length > 1 ? 'Layer mean' : 'Monthly mean',
           data: slices.values,
           backgroundColor: slices.labels.map((_, i) => `${imageryLayerChartColor(i)}cc`),
-          borderColor: '#0a0a0a',
+          borderColor: chartInk.sliceBorder,
           borderWidth: 1,
         },
       ],
     }
-  }, [chartLabels, labels, displayLayerSeries, timeAggregation, lulcCompositionMode, lulcComposition])
+  }, [chartLabels, labels, displayLayerSeries, timeAggregation, lulcCompositionMode, lulcComposition, chartInk])
 
   const scatterAxisDates = useMemo(
     () => labels.map(key => resolvePeriodMapDate(key)),
@@ -1300,7 +1323,7 @@ export function SiImageryTimeSeriesPanel({
           align: 'center' as const,
           fullSize: true,
           labels: {
-            color: '#cbd5e1',
+            color: chartInk.label,
             boxWidth: 12,
             boxHeight: 8,
             padding: 16,
@@ -1368,7 +1391,7 @@ export function SiImageryTimeSeriesPanel({
         x: {
           stacked: !lulcCompositionMode && lulcAreaMode && (chartType === 'area' || chartType === 'bar'),
           ticks: {
-            color: '#94a3b8',
+            color: chartInk.tick,
             maxTicksLimit: lulcCompositionMode
               ? Math.max(lulcComposition.length, 4)
               : Math.min(12, Math.max(chartLabels.length, 4)),
@@ -1379,7 +1402,7 @@ export function SiImageryTimeSeriesPanel({
             padding: 6,
           },
           grid: {
-            color: lulcCompositionMode ? 'transparent' : 'rgba(255,255,255,0.06)',
+            color: lulcCompositionMode ? 'transparent' : chartInk.grid,
             drawBorder: true,
           },
         },
@@ -1391,14 +1414,14 @@ export function SiImageryTimeSeriesPanel({
             ? {
                 display: true,
                 text: '% of total area',
-                color: 'rgba(255,255,255,0.72)',
+                color: chartInk.title,
                 font: { size: 9, weight: 600 },
               }
             : lulcAreaMode
               ? {
                   display: true,
                   text: `Class area (${areaUnitLabel})`,
-                  color: 'rgba(255,255,255,0.72)',
+                  color: chartInk.title,
                   font: { size: 9, weight: 600 },
                 }
               : layerSeries.some(s => s.layerId.trim().toUpperCase() === 'LST') &&
@@ -1411,13 +1434,13 @@ export function SiImageryTimeSeriesPanel({
                     text: layerSeries.every(s => s.layerId.trim().toUpperCase() === 'LST')
                       ? 'LST (°C)'
                       : 'LST (°C) / ET (mm/day)',
-                    color: 'rgba(255,255,255,0.72)',
+                    color: chartInk.title,
                     font: { size: 9, weight: 600 },
                   }
                 : undefined,
           stacked: !lulcCompositionMode && lulcAreaMode && (chartType === 'area' || chartType === 'bar'),
           ticks: {
-            color: '#94a3b8',
+            color: chartInk.tick,
             font: { size: 9 },
             padding: 6,
             callback: (value: string | number) => {
@@ -1433,7 +1456,7 @@ export function SiImageryTimeSeriesPanel({
             },
           },
           grid: {
-            color: lulcCompositionMode ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.06)',
+            color: lulcCompositionMode ? chartInk.gridFaint : chartInk.grid,
           },
         },
       },
@@ -1451,6 +1474,7 @@ export function SiImageryTimeSeriesPanel({
       areaUnit,
       areaUnitLabel,
       chartType,
+      chartInk,
     ],
   )
 
@@ -1463,7 +1487,7 @@ export function SiImageryTimeSeriesPanel({
         legend: {
           display: true,
           position: 'right' as const,
-          labels: { color: '#cbd5e1', boxWidth: 10, font: { size: 10 } },
+          labels: { color: chartInk.label, boxWidth: 10, font: { size: 10 } },
         },
         tooltip: {
           bodyFont: { size: 10 },
@@ -1488,7 +1512,7 @@ export function SiImageryTimeSeriesPanel({
         },
       },
     }),
-    [chartReady, hasChartData, lulcCompositionMode, lulcComposition, areaUnit],
+    [chartReady, hasChartData, lulcCompositionMode, lulcComposition, areaUnit, chartInk],
   )
 
   const scatterChartOptions = useMemo(
@@ -1500,7 +1524,7 @@ export function SiImageryTimeSeriesPanel({
       plugins: {
         legend: {
           display: layerSeries.length > 0 || hasRun,
-          labels: { color: '#cbd5e1', boxWidth: 10, font: { size: 10 } },
+          labels: { color: chartInk.label, boxWidth: 10, font: { size: 10 } },
         },
         tooltip: {
           bodyFont: { size: 10 },
@@ -1528,28 +1552,28 @@ export function SiImageryTimeSeriesPanel({
               title: {
                 display: true,
                 text: scatterCorrelation.xLayerId,
-                color: '#94a3b8',
+                color: chartInk.tick,
                 font: { size: 10, weight: '600' as const },
               },
-              ticks: { color: '#94a3b8', maxTicksLimit: 8, font: { size: 9 } },
-              grid: { color: 'rgba(255,255,255,0.06)' },
+              ticks: { color: chartInk.tick, maxTicksLimit: 8, font: { size: 9 } },
+              grid: { color: chartInk.grid },
             },
             y: {
               title: {
                 display: true,
                 text: scatterCorrelation.yLayerId,
-                color: '#94a3b8',
+                color: chartInk.tick,
                 font: { size: 10, weight: '600' as const },
               },
-              ticks: { color: '#94a3b8', font: { size: 9 } },
-              grid: { color: 'rgba(255,255,255,0.06)' },
+              ticks: { color: chartInk.tick, font: { size: 9 } },
+              grid: { color: chartInk.grid },
             },
           }
         : {
             x: {
               type: 'linear' as const,
               ticks: {
-                color: '#94a3b8',
+                color: chartInk.tick,
                 maxTicksLimit: 10,
                 font: { size: 9 },
                 callback: (value: string | number) => {
@@ -1558,15 +1582,15 @@ export function SiImageryTimeSeriesPanel({
                   return new Date(ms).toISOString().slice(0, 10)
                 },
               },
-              grid: { color: 'rgba(255,255,255,0.06)' },
+              grid: { color: chartInk.grid },
             },
             y: {
-              ticks: { color: '#94a3b8', font: { size: 9 } },
-              grid: { color: 'rgba(255,255,255,0.06)' },
+              ticks: { color: chartInk.tick, font: { size: 9 } },
+              grid: { color: chartInk.grid },
             },
           },
     }),
-    [chartReady, layerSeries.length, hasRun, scatterCorrelation, chartDateClickHandler],
+    [chartReady, layerSeries.length, hasRun, scatterCorrelation, chartDateClickHandler, chartInk],
   )
 
   const formatAnalysisSpeed = (ms: number) => {
@@ -1588,6 +1612,55 @@ export function SiImageryTimeSeriesPanel({
         : timeAggregation === 'month'
           ? 'Monthly'
           : 'Yearly'
+
+  const showChartMeta = chartVisible && analysisMode === 'single-layer-trend'
+  const chartMetaItems: Array<{ key: string; icon: string; label: string; value: string }> = showChartMeta
+    ? [
+        { key: 'layer', icon: 'fa-layer-group', label: 'Layer', value: layerSummary },
+        chartType === 'scatter' && layerSeries.length >= 2
+          ? {
+              key: 'range',
+              icon: 'fa-arrows-left-right',
+              label: 'Correlation',
+              value: `${layerSeries[0]?.layerId} → ${layerSeries[1]?.layerId}`,
+            }
+          : { key: 'range', icon: 'fa-calendar-days', label: 'Period', value: `${fromDate} → ${toDate}` },
+        ...(observationCount
+          ? [{ key: 'pts', icon: 'fa-circle-dot', label: 'Points', value: String(observationCount) }]
+          : []),
+        { key: 'agg', icon: 'fa-clock', label: 'Aggregation', value: aggregationLabel },
+        ...(analysisDurationMs != null
+          ? [{ key: 'speed', icon: 'fa-gauge-high', label: 'Speed', value: formatAnalysisSpeed(analysisDurationMs) }]
+          : []),
+        { key: 'field', icon: 'fa-draw-polygon', label: 'Field', value: selectedFieldLabel },
+      ]
+    : []
+
+  const renderExportsInTabs = (node: ReactNode) =>
+    tabsExportHost ? createPortal(node, tabsExportHost) : null
+
+  // Cached daily rows re-bucket instantly for plot / multi-AOI timelines.
+  const applyTimeAggregation = (value: ImageryTimeAggregation) => {
+    setTimeAggregation(value)
+    setSelectedChartDate(null)
+  }
+
+  const chartTypeOptions = lulcAreaMode ? (
+    <>
+      <option value="bar">Class share (%)</option>
+      <option value="pie">Class pie (%)</option>
+      <option value="area">Area trend (ha)</option>
+      <option value="line">Line trend (ha)</option>
+    </>
+  ) : (
+    <>
+      <option value="line">Line</option>
+      <option value="area">Area</option>
+      <option value="bar">Bar</option>
+      <option value="pie">Pie</option>
+      <option value="scatter">Scatter</option>
+    </>
+  )
 
   return (
     <div className="acp-ts">
@@ -1783,59 +1856,71 @@ export function SiImageryTimeSeriesPanel({
             </>
             )}
           </div>
-          <div className="acp-ts__field acp-ts__field--aggregate">
-            <span>Aggregate</span>
-            <div className="acp-ts__aggregate" role="group" aria-label="Time aggregation">
-              {(
-                [
-                  ['day', 'Day'],
-                  ['week', 'Week'],
-                  ['month', 'Month'],
-                  ['year', 'Year'],
-                ] as const
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  className={`acp-ts__aggregate-btn${timeAggregation === value ? ' is-on' : ''}`}
-                  aria-pressed={timeAggregation === value}
-                  onClick={() => {
-                    setTimeAggregation(value)
-                    setSelectedChartDate(null)
-                    // Cached daily rows re-bucket instantly for plot / multi-AOI timelines.
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-          {analysisMode === 'single-layer-trend' ? (
-          <label className="acp-ts__field">
-            <span>Chart</span>
-            <select
-              value={chartType}
-              onChange={e => setChartType(e.target.value as ImageryChartType)}
-            >
-              {lulcAreaMode ? (
-                <>
-                  <option value="bar">Class share (%)</option>
-                  <option value="pie">Class pie (%)</option>
-                  <option value="area">Area trend (ha)</option>
-                  <option value="line">Line trend (ha)</option>
-                </>
-              ) : (
-                <>
-                  <option value="line">Line</option>
-                  <option value="area">Area</option>
-                  <option value="bar">Bar</option>
-                  <option value="pie">Pie</option>
-                  <option value="scatter">Scatter</option>
-                </>
-              )}
-            </select>
-          </label>
-          ) : null}
+          {headerToolsHost ? null : (
+            <>
+              <div className="acp-ts__field acp-ts__field--aggregate">
+                <span>Aggregate</span>
+                <div className="acp-ts__aggregate" role="group" aria-label="Time aggregation">
+                  {TIME_AGGREGATION_OPTIONS.map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={`acp-ts__aggregate-btn${timeAggregation === value ? ' is-on' : ''}`}
+                      aria-pressed={timeAggregation === value}
+                      onClick={() => applyTimeAggregation(value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {analysisMode === 'single-layer-trend' ? (
+                <label className="acp-ts__field">
+                  <span>Chart</span>
+                  <select
+                    value={chartType}
+                    onChange={e => setChartType(e.target.value as ImageryChartType)}
+                  >
+                    {chartTypeOptions}
+                  </select>
+                </label>
+              ) : null}
+            </>
+          )}
+          {headerToolsHost
+            ? createPortal(
+                <div className="si-its-head-tools">
+                  <div className="si-its-head-seg" role="group" aria-label="Time aggregation" title="Aggregate">
+                    <i className="fa-regular fa-calendar si-its-head-seg__icon" aria-hidden />
+                    {TIME_AGGREGATION_OPTIONS.map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={`si-its-head-seg__btn${timeAggregation === value ? ' is-on' : ''}`}
+                        aria-pressed={timeAggregation === value}
+                        onClick={() => applyTimeAggregation(value)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {analysisMode === 'single-layer-trend' ? (
+                    <label className="si-its-head-select" title="Chart type">
+                      <i className={`fa-solid ${CHART_TYPE_ICONS[chartType]} si-its-head-select__icon`} aria-hidden />
+                      <select
+                        value={chartType}
+                        aria-label="Chart type"
+                        onChange={e => setChartType(e.target.value as ImageryChartType)}
+                      >
+                        {chartTypeOptions}
+                      </select>
+                      <i className="fa-solid fa-chevron-down si-its-head-select__chevron" aria-hidden />
+                    </label>
+                  ) : null}
+                </div>,
+                headerToolsHost,
+              )
+            : null}
           {analysisMode === 'single-layer-trend' && lulcAreaMode ? (
             <div className="acp-ts__field acp-ts__field--aggregate">
               <span className="acp-ts__field-label">Area unit</span>
@@ -1981,6 +2066,34 @@ export function SiImageryTimeSeriesPanel({
           >
             <i className="fa-solid fa-map" aria-hidden="true" /> Maps
           </button>
+          <div ref={setTabsExportHost} className="acp-ts__tabs-export" />
+          {chartMetaItems.length ? (
+            <div ref={infoRef} className={`acp-ts__info${infoOpen ? ' is-open' : ''}`}>
+              <button
+                type="button"
+                className="acp-ts__info-btn"
+                aria-label="Analysis details"
+                aria-expanded={infoOpen}
+                aria-controls="acp-ts-info-pop"
+                onClick={() => setInfoOpen(open => !open)}
+              >
+                <i className="fa-solid fa-circle-info" aria-hidden="true" />
+              </button>
+              <div id="acp-ts-info-pop" className="acp-ts__info-pop" role="dialog" aria-label="Analysis details">
+                <dl>
+                  {chartMetaItems.map(item => (
+                    <div key={item.key} className="acp-ts__info-row">
+                      <dt>
+                        <i className={`fa-solid ${item.icon}`} aria-hidden="true" />
+                        {item.label}
+                      </dt>
+                      <dd>{item.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="acp-ts__panels">
@@ -2021,21 +2134,6 @@ export function SiImageryTimeSeriesPanel({
           />
         ) : (
         <>
-        {chartVisible ? (
-          <div className="acp-ts__meta">
-            <span>
-              {layerSummary}
-              {chartType === 'scatter' && layerSeries.length >= 2
-                ? ` · correlation ${layerSeries[0]?.layerId} → ${layerSeries[1]?.layerId}`
-                : ` · ${fromDate} → ${toDate}`}
-              {observationCount ? ` · ${observationCount} pts` : ''}
-              {hasRun ? ` · ${aggregationLabel}` : ''}
-              {analysisDurationMs != null ? ` · ${formatAnalysisSpeed(analysisDurationMs)}` : ''}
-            </span>
-            <span>{selectedFieldLabel}</span>
-          </div>
-        ) : null}
-
         {chartVisible && latestWaterPoint ? (
           <div
             className={
@@ -2134,39 +2232,6 @@ export function SiImageryTimeSeriesPanel({
           )}
         </div>
 
-        {chartVisible ? (
-          <p className="acp-ts__chart-hint">
-            {lulcCompositionMode ? (
-              <>
-                <i className="fa-solid fa-chart-column" aria-hidden="true" /> LULC class share ·{' '}
-                <strong>{lulcTotalPixels.toLocaleString('en-US')}</strong> pixels · Scene:{' '}
-                <strong>
-                  {compositionDateIndex >= 0 ? labels[compositionDateIndex] : analysisDate}
-                </strong>
-                {' · '}
-                hover a class for pixel count, area ({areaUnitLabel}), and % of total
-              </>
-            ) : (
-              <>
-                <i className="fa-solid fa-hand-pointer" aria-hidden="true" /> Click any point to set the map
-                analysis date and open <strong>Interpretation</strong> · Map date:{' '}
-                <strong>{analysisDate}</strong>
-                {interpretSceneDate ? (
-                  <>
-                    {' '}
-                    · Scene: <strong>{interpretSceneDate}</strong>
-                  </>
-                ) : null}
-                {lulcAreaMode ? (
-                  <>
-                    {' '}
-                    · Class areas from pixel counts × 10 m × 10 m ({areaUnitLabel})
-                  </>
-                ) : null}
-              </>
-            )}
-          </p>
-        ) : null}
         {chartVisible && lulcCompositionMode && lulcComposition.length ? (
           <>
             <div className="acp-ts__lulc-legend" role="list" aria-label="LULC class legend">
@@ -2298,27 +2363,9 @@ export function SiImageryTimeSeriesPanel({
           </div>
         </div>
 
-        <div className="acp-ts__foot">
           {analysisMode === 'single-layer-trend' ? (
           <>
-          <label className="acp-ts__toggle">
-            <input
-              type="checkbox"
-              checked={splitByYears}
-              disabled={selectedLayerIds.length > 1 || chartType === 'pie' || chartType === 'scatter' || timeAggregation !== 'day'}
-              onChange={e => setSplitByYears(e.target.checked)}
-            />
-            Split by years
-            {selectedLayerIds.length > 1 || chartType === 'pie' || chartType === 'scatter' || timeAggregation !== 'day' ? (
-              <span className="acp-ts__toggle-hint">
-                {timeAggregation !== 'day'
-                  ? ' (daily only)'
-                  : chartType === 'pie' || chartType === 'scatter'
-                    ? ' (cartesian charts only)'
-                    : ' (single layer only)'}
-              </span>
-            ) : null}
-          </label>
+          {renderExportsInTabs(
           <div className="acp-ts__exports">
             <TimeSeriesExportManager
               disabled={(!labels.length || !hasRun) && exportPlots.length < 1}
@@ -2374,9 +2421,11 @@ export function SiImageryTimeSeriesPanel({
               objectLayerName={selectedPlotSource?.label || exportAoiName}
               objectDailyByFieldKey={objectDailyByFieldKey}
             />
-          </div>
+          </div>,
+          )}
           </>
           ) : (
+          renderExportsInTabs(
           <div className="acp-ts__exports">
             <TimeSeriesExportManager
               disabled={exportPlots.length < 1 || !selectedLayerIds.length}
@@ -2423,9 +2472,9 @@ export function SiImageryTimeSeriesPanel({
               objectLayerName={selectedPlotSource?.label || exportAoiName}
               objectDailyByFieldKey={objectDailyByFieldKey}
             />
-          </div>
+          </div>,
+          )
           )}
-        </div>
     </div>
   )
 }

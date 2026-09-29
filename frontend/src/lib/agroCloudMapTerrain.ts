@@ -63,7 +63,7 @@ export const AGRO_CLOUD_ESRI_HILLSHADE_LAYER_ID = 'agrocloud-esri-hillshade'
 /** Pitch (degrees) at which DEM mesh is enabled during mouse orbit / tilt. */
 export const AGRO_CLOUD_TERRAIN_PITCH_THRESHOLD = 8
 
-const TERRAIN_EXAGGERATION_DEFAULT = 1.5
+export const TERRAIN_EXAGGERATION_DEFAULT = 1
 const TERRAIN_EXAGGERATION_MIN = 1
 const TERRAIN_EXAGGERATION_MAX = 8
 /** Lower max zoom = fewer tiles, faster load; mesh still drapes basemap at high zoom. */
@@ -433,19 +433,26 @@ function disableTerrainMesh(map: MapboxMapLike): void {
   }
 }
 
+/** `idle` can be withheld indefinitely while other sources keep streaming tiles. */
+const MAP_IDLE_FALLBACK_MS = 700
+
 function runOnMapIdle(map: MapboxMapLike, generation: number, run: () => void): void {
+  let ran = false
+  let fallbackTimer: ReturnType<typeof setTimeout> | undefined
   const invoke = () => {
+    if (ran) return
+    ran = true
+    if (fallbackTimer != null) window.clearTimeout(fallbackTimer)
     if (!isTerrainSyncCurrent(map, generation)) return
     if (!isMapStyleReady(map)) return
     run()
   }
 
   try {
-    if (typeof map.loaded === 'function' && !map.loaded()) {
-      map.once?.('load', invoke)
-      return
-    }
     map.once?.('idle', invoke)
+    // An already-idle map emits no further `idle` until something renders.
+    map.triggerRepaint?.()
+    fallbackTimer = window.setTimeout(invoke, MAP_IDLE_FALLBACK_MS)
   } catch {
     invoke()
   }
@@ -587,6 +594,16 @@ function applyTerrainMesh(
   })
 }
 
+/**
+ * First 3D entry waits on the backend decoding LERC tiles for the whole viewport, which can take
+ * well over a few seconds; keep polling (~35 s, backing off to 500 ms) so the mesh still turns on.
+ */
+const DEM_READY_MAX_POLLS = 80
+
+function demReadyPollDelayMs(attempt: number): number {
+  return Math.min(500, Math.round(50 * 1.15 ** attempt))
+}
+
 function whenDemSourceReady(map: MapboxMapLike, generation: number, run: () => void): void {
   const tryRun = () => {
     if (!isTerrainSyncCurrent(map, generation)) return
@@ -649,13 +666,13 @@ function whenDemSourceReady(map: MapboxMapLike, generation: number, run: () => v
       return
     }
     attempts += 1
-    if (attempts >= 48) {
+    if (attempts >= DEM_READY_MAX_POLLS) {
       cleanup()
       return
     }
-    pollTimer = window.setTimeout(poll, 50)
+    pollTimer = window.setTimeout(poll, demReadyPollDelayMs(attempts))
   }
-  pollTimer = window.setTimeout(poll, 50)
+  pollTimer = window.setTimeout(poll, demReadyPollDelayMs(0))
 }
 
 /**

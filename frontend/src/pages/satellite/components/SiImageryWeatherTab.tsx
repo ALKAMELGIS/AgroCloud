@@ -33,6 +33,7 @@ import {
   buildTimeSeriesWeatherTimeline,
   type TimeSeriesWeatherBlock,
 } from '../lib/timeSeriesReport/timeSeriesWeatherTimeline'
+import { useImageryChartInk } from '../lib/imageryChartInk'
 
 ChartJS.register(
   CategoryScale,
@@ -90,6 +91,7 @@ export function SiImageryWeatherTab({
 }: SiImageryWeatherTabProps) {
   const chartRef = useRef<ChartJS | null>(null)
   const chartWrapRef = useRef<HTMLDivElement | null>(null)
+  const chartInk = useImageryChartInk()
   const [weatherMetric, setWeatherMetric] = useState<WeatherCompareMetric | null>('temperature')
   const [stormMode, setStormMode] = useState<WeatherStormAnalysisMode | null>(null)
 
@@ -258,7 +260,7 @@ export function SiImageryWeatherTab({
             legend: {
               display: true,
               position: 'bottom',
-              labels: { color: '#cbd5e1', boxWidth: 12, font: { size: 9 }, padding: 12 },
+              labels: { color: chartInk.label, boxWidth: 12, font: { size: 9 }, padding: 12 },
             },
             tooltip: {
               bodyFont: { size: 10 },
@@ -267,8 +269,8 @@ export function SiImageryWeatherTab({
           },
           scales: {
             x: {
-              ticks: { color: '#94a3b8', maxRotation: 45, minRotation: 20, font: { size: 9 } },
-              grid: { color: 'rgba(255,255,255,0.06)' },
+              ticks: { color: chartInk.tick, maxRotation: 45, minRotation: 20, font: { size: 9 } },
+              grid: { color: chartInk.grid },
             },
             yStorm: {
               type: 'linear',
@@ -282,7 +284,7 @@ export function SiImageryWeatherTab({
                 font: { size: 10, weight: 'bold' },
               },
               ticks: { color: stormAnalysis.mapLineColor, font: { size: 9 } },
-              grid: { color: 'rgba(255,255,255,0.06)' },
+              grid: { color: chartInk.grid },
             },
             ySecondary: {
               type: 'linear',
@@ -316,7 +318,7 @@ export function SiImageryWeatherTab({
     if (!hasWeather || !hasIndex) return null
 
     const useBar = weatherMetric === 'rainfall'
-    const indexColor = '#6ee7b7'
+    const indexColor = chartInk.indexLine
 
     return {
       data: {
@@ -356,7 +358,7 @@ export function SiImageryWeatherTab({
           legend: {
             display: true,
             position: 'bottom',
-            labels: { color: '#cbd5e1', boxWidth: 12, font: { size: 9 }, padding: 12 },
+            labels: { color: chartInk.label, boxWidth: 12, font: { size: 9 }, padding: 12 },
           },
           tooltip: {
             bodyFont: { size: 10 },
@@ -376,14 +378,14 @@ export function SiImageryWeatherTab({
         scales: {
           x: {
             ticks: {
-              color: '#94a3b8',
+              color: chartInk.tick,
               maxRotation: 45,
               minRotation: 20,
               font: { size: 9 },
               autoSkip: true,
               maxTicksLimit: 12,
             },
-            grid: { color: 'rgba(255,255,255,0.06)' },
+            grid: { color: chartInk.grid },
           },
           yWeather: {
             type: 'linear',
@@ -395,7 +397,7 @@ export function SiImageryWeatherTab({
               font: { size: 10, weight: 'bold' },
             },
             ticks: { color: def.color, font: { size: 9 } },
-            grid: { color: 'rgba(255,255,255,0.06)' },
+            grid: { color: chartInk.grid },
           },
           yIndex: {
             type: 'linear',
@@ -414,7 +416,7 @@ export function SiImageryWeatherTab({
         },
       },
     }
-  }, [stormAnalysis, weatherMetric, weatherBlock, indexSeries])
+  }, [stormAnalysis, weatherMetric, weatherBlock, indexSeries, chartInk])
 
   const compareChartType: 'bar' | 'line' =
     stormAnalysis || weatherMetric === 'rainfall' ? 'bar' : 'line'

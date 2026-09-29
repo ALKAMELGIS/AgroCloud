@@ -157,6 +157,7 @@ export function SiImageryTimeSeriesFloatingPanel({
   const { ref: isolationRef, ...isolationHandlers } = isolation;
   const rootRef = useRef<HTMLElement | null>(null);
   const headRef = useRef<HTMLElement | null>(null);
+  const [headToolsEl, setHeadToolsEl] = useState<HTMLDivElement | null>(null);
   const dragRef = useRef<{ pointerId: number; dx: number; dy: number; w: number; h: number } | null>(null);
   const resizeRef = useRef<{
     pointerId: number;
@@ -379,6 +380,7 @@ export function SiImageryTimeSeriesFloatingPanel({
           </span>
           <span className="si-its-float__title">Imagery Time Series</span>
         </span>
+        <div ref={setHeadToolsEl} className="si-its-float__head-tools" data-drag-exclude />
         <button
           type="button"
           className="acp-map-panel__close"
@@ -413,6 +415,7 @@ export function SiImageryTimeSeriesFloatingPanel({
             mapboxToken={mapboxToken}
             onStormMapOverlayChange={onStormMapOverlayChange}
             stormOverlayDismissEpoch={stormOverlayDismissEpoch}
+            headerToolsHost={headToolsEl}
           />
         </div>
         <button

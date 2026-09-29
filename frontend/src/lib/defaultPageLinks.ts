@@ -1,6 +1,9 @@
 import type { CustomPageRecord } from '../types/systemSettings'
+import { DEFAULT_AGRO_CLOUD_DASHBOARD_URL } from './agroCloudDashboardStorage'
 
 export const AGROCLOUD_MANAGEMENT_PAGE_PATH = '/applications/agrocloud-management'
+
+export const EAP_ARCGIS_DASHBOARD_PAGE_PATH = '/dashboards/eap-arcgis'
 
 export const AGROCLOUD_MANAGEMENT_EXTERNAL_URL =
   'https://sublime-acceptance-production-ae33.up.railway.app/login'
@@ -18,6 +21,18 @@ export const DEFAULT_PAGE_LINKS: CustomPageRecord[] = [
     externalUrl: AGROCLOUD_MANAGEMENT_EXTERNAL_URL,
     navGroupId: 'application',
     subitemClass: 'nav-item-agrocloud-management',
+  },
+  {
+    id: 'eap-arcgis-dashboard-link',
+    name: 'EAP ArcGIS Dashboard',
+    nameAr: 'لوحة ArcGIS - EAP',
+    path: EAP_ARCGIS_DASHBOARD_PAGE_PATH,
+    iconClass: 'fa-solid fa-chart-pie',
+    visible: true,
+    bindTarget: 'external',
+    externalUrl: DEFAULT_AGRO_CLOUD_DASHBOARD_URL,
+    navGroupId: 'dashboard',
+    subitemClass: 'nav-item-dashboard-agro',
   },
 ]
 

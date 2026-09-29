@@ -485,6 +485,8 @@ import {
   AGRO_CLOUD_TERRAIN_PITCH_THRESHOLD,
   ESRI_WORLD_TERRAIN_SOURCE_ID,
   setAgroCloudTerrainExaggeration,
+  getAgroCloudTerrainExaggeration,
+  TERRAIN_EXAGGERATION_DEFAULT,
 } from '../../lib/agroCloudMapTerrain';
 import { useOpenWeatherMapApiKey } from '../../hooks/useOpenWeatherMapApiKey';
 import { agroChatWithDeepSeek, agroChatWithGemini, agroChatWithOllamaStream, warmOllama } from '../../lib/agroAiChat';
@@ -5051,7 +5053,7 @@ export default function SatelliteIntelligence() {
   }, [terrainLayerEnabled]);
   const [terrainMeshReady, setTerrainMeshReady] = useState(false);
   /** DEM vertical exaggeration applied to the 3D terrain mesh (1.0 = real, higher = dramatic). */
-  const [terrainExaggeration, setTerrainExaggeration] = useState(1.5);
+  const [terrainExaggeration, setTerrainExaggeration] = useState(TERRAIN_EXAGGERATION_DEFAULT);
   /** Legend tool: the map legend is shown ONLY when the user activates this tool. */
   const [isLegendToolOpen, setIsLegendToolOpen] = useState(false);
   const [cloudCoverage, setCloudCoverage] = useState(20);
@@ -8091,6 +8093,12 @@ export default function SatelliteIntelligence() {
     [applyTerrainExaggeration],
   );
 
+  /** Every 2D → 3D transition starts from the default relief height; the slider still adjusts it afterwards. */
+  const resetTerrainReliefToDefault = useCallback(() => {
+    setTerrainExaggeration(TERRAIN_EXAGGERATION_DEFAULT);
+    setAgroCloudTerrainExaggeration(TERRAIN_EXAGGERATION_DEFAULT);
+  }, []);
+
   const viewStateLiveRef = useRef(viewState);
 
   const scheduleMapMetricsCommit = useCallback((vs: { latitude?: number; zoom?: number }) => {
@@ -8146,6 +8154,7 @@ export default function SatelliteIntelligence() {
         setTerrainLayerEnabled(true);
       }
       if (!is3DViewRef.current) {
+        resetTerrainReliefToDefault();
         setIs3DView(true);
       }
       siEnsureGlobeProjection();
@@ -8166,7 +8175,7 @@ export default function SatelliteIntelligence() {
         if (ok) siSyncTerrainForView({ basemapId: bid, pitch: livePitch });
       });
     },
-    [siEnsureGlobeProjection, siSyncTerrainForView, basemapId],
+    [siEnsureGlobeProjection, siSyncTerrainForView, basemapId, resetTerrainReliefToDefault],
   );
 
   const siEngageAutomatic3dFromGestureRef = useRef(siEngageAutomatic3dFromGesture);
@@ -8177,6 +8186,7 @@ export default function SatelliteIntelligence() {
   /** Explicit 3D globe tilt — terrain mesh only; never changes the user's basemap or zoom. */
   const siEnterGlobe3dView = useCallback(() => {
     siGlobeWebglFailoverRef.current = false;
+    resetTerrainReliefToDefault();
     setIs3DView(true);
     setTerrainLayerEnabled(true);
     terrainLayerEnabledRef.current = true;
@@ -8230,7 +8240,7 @@ export default function SatelliteIntelligence() {
       }
       if (ok) kickTerrain();
     });
-  }, [siEnsureGlobeProjection, siSyncTerrainForView, basemapId]);
+  }, [siEnsureGlobeProjection, siSyncTerrainForView, basemapId, resetTerrainReliefToDefault]);
 
   /**
    * Smooth return to flat 2D â€” eases pitch/bearing to 0 on the *same* map
@@ -22589,25 +22599,40 @@ export default function SatelliteIntelligence() {
     const retries = [400, 900, 1800].map(ms => window.setTimeout(() => siSyncTerrainForView({ basemapId: activeBasemapId, pitch: viewState.pitch }), ms));
     const map = mapRef.current?.getMap ? mapRef.current.getMap() : mapRef.current;
     if (!map) return () => retries.forEach(id => window.clearTimeout(id));
-    const refreshMeshReady = () => {
+    const readMeshReady = () => {
       try {
-        setTerrainMeshReady(Boolean(map.getTerrain?.()));
+        return Boolean(map.getTerrain?.());
       } catch {
-        setTerrainMeshReady(false);
+        return false;
       }
     };
+    const refreshMeshReady = () => setTerrainMeshReady(readMeshReady());
     refreshMeshReady();
+    // `idle` never fires while other sources keep streaming tiles, so confirm the mesh by polling too.
+    let meshPolls = 0;
+    const meshPoll = window.setInterval(() => {
+      const ready = readMeshReady();
+      setTerrainMeshReady(ready);
+      if (ready || ++meshPolls >= 120) window.clearInterval(meshPoll);
+    }, 250);
     const onSourceData = (ev: { sourceId?: string; isSourceLoaded?: boolean }) => {
-      if (ev.sourceId === ESRI_WORLD_TERRAIN_SOURCE_ID && ev.isSourceLoaded) refreshMeshReady();
+      if (ev.sourceId !== ESRI_WORLD_TERRAIN_SOURCE_ID || !ev.isSourceLoaded) return;
+      try {
+        if (!map.getTerrain?.()) applyTerrainExaggeration(getAgroCloudTerrainExaggeration());
+      } catch {
+        /* style mid-swap */
+      }
+      refreshMeshReady();
     };
     map.on?.('sourcedata', onSourceData);
     map.on?.('idle', refreshMeshReady);
     return () => {
       retries.forEach(id => window.clearTimeout(id));
+      window.clearInterval(meshPoll);
       map.off?.('sourcedata', onSourceData);
       map.off?.('idle', refreshMeshReady);
     };
-  }, [terrainLayerEnabled, is3DView, isMapStyleReady, activeBasemapId, viewState.pitch, siSyncTerrainForView]);
+  }, [terrainLayerEnabled, is3DView, isMapStyleReady, activeBasemapId, viewState.pitch, siSyncTerrainForView, applyTerrainExaggeration]);
 
   /** Wheel zoom through floating map chrome (timeline, toolbox) that sits above the canvas. */
   useEffect(() => {
