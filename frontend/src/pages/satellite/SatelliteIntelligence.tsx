@@ -28026,13 +28026,14 @@ export default function SatelliteIntelligence() {
                   </button>
                   <button
                     type="button"
-                    className={`si-view3d-opts-btn ${isTerrain3dPanelOpen ? 'active' : ''}`}
+                    className={`si-basemap-button si-view3d-opts-btn ${isTerrain3dPanelOpen ? 'active' : ''}`}
                     title="Terrain relief settings"
                     aria-label="Terrain relief settings"
                     aria-expanded={isTerrain3dPanelOpen}
                     onClick={() => setIsTerrain3dPanelOpen(v => !v)}
                   >
-                    <i className="fa-solid fa-chevron-down" aria-hidden />
+                    <i className="fa-solid fa-sliders" aria-hidden />
+                    <span className="si-view3d-button__tag">Relief</span>
                   </button>
                 </div>
                 {isTerrain3dPanelOpen ? (

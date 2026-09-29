@@ -2094,11 +2094,6 @@ html[data-theme='light'] .si-main-content {
 .si-map-floating-controls__left .si-map-search-icon {
   font-size: 10px;
 }
-.si-map-floating-controls__left .si-view3d-opts-btn {
-  width: 14px;
-  font-size: 8px;
-  border-radius: 7px;
-}
 .si-map-floating-controls__left .si-view3d-button__tag {
   font-size: 7px;
   padding: 1px 2px;
@@ -2212,51 +2207,22 @@ html[data-theme='light'] .si-basemap-button:hover {
 .si-map-floating-controls__left .si-view3d-toggle.is-open {
   z-index: 60;
 }
-.si-view3d-button {
+.si-view3d-button,
+.si-view3d-opts-btn {
   position: relative;
 }
 
-/* Merged 3D control: main 2D/3D toggle + an options chevron in one cluster. */
+/* Merged 3D control: 2D/3D toggle stacked above the terrain relief settings button. */
 .si-view3d-cluster {
-  display: inline-flex;
-  align-items: stretch;
-  gap: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
 }
-.si-view3d-opts-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  align-self: stretch;
-  padding: 0;
-  border: 1px solid var(--si-map-ctrl-border);
-  border-radius: 8px;
-  background: var(--si-map-opts-bg);
-  color: var(--si-map-opts-text);
-  font-size: 9px;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
-}
-.si-view3d-opts-btn:hover {
-  color: var(--si-map-ctrl-text);
-  border-color: rgba(74, 222, 128, 0.5);
-  background: rgba(22, 101, 52, 0.45);
-}
-html[data-theme='light'] .si-view3d-opts-btn:hover {
-  color: #0f172a;
-  border-color: rgba(4, 120, 87, 0.35);
-  background: rgba(4, 120, 87, 0.08);
-}
-.si-view3d-opts-btn.active {
-  color: #f8fafc;
-  border-color: rgba(74, 222, 128, 0.6);
+.si-view3d-opts-btn.active .si-view3d-button__tag {
   background: var(--si-accent-strong, #15803d);
-}
-.si-view3d-opts-btn.active i {
-  transform: rotate(180deg);
-}
-.si-view3d-opts-btn i {
-  transition: transform 0.15s ease;
+  border-color: transparent;
+  color: #f9fafb;
 }
 .si-view3d-button__tag {
   position: absolute;
