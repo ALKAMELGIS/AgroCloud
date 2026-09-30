@@ -16,7 +16,7 @@ import {
   formatImageryTimeSeriesYTick,
   imageryLayerChartColor,
   type ImageryTimeAggregation,
-} from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import type { PlotLayerTimeSeriesResult } from './siPlotLayerTimeSeries'
 import {
   exportChartPng,

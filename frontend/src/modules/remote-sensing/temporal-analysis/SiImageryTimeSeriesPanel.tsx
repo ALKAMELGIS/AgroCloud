@@ -48,11 +48,11 @@ import {
   type ImageryCorrelationScatterAnalysis,
   type ImageryTimeAggregation,
   type ImageryTimeSeriesLayerSeries,
-} from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import { SiScatterCorrelationInsight } from './SiScatterCorrelationInsight'
-import { AcpImageryLayerMultiSelect } from '@/pages/dashboards/agroCloudPlatform/map/AcpImageryLayerMultiSelect'
-import { SiAoiFieldMultiSelect } from '@/pages/dashboards/agroCloudPlatform/map/SiAoiFieldMultiSelect'
-import { SiAoiFieldSelect } from '@/pages/dashboards/agroCloudPlatform/map/SiAoiFieldSelect'
+import { AcpImageryLayerMultiSelect } from '@/modules/dashboards/gis/agroCloudPlatform/map/AcpImageryLayerMultiSelect'
+import { SiAoiFieldMultiSelect } from '@/modules/dashboards/gis/agroCloudPlatform/map/SiAoiFieldMultiSelect'
+import { SiAoiFieldSelect } from '@/modules/dashboards/gis/agroCloudPlatform/map/SiAoiFieldSelect'
 import { SiMultiLayerAoiTrendView } from './SiMultiLayerAoiTrendView'
 import { SiPlotLayerTimeSeriesView } from './SiPlotLayerTimeSeriesView'
 import type { SiImageryAnalysisMode } from './siMultiLayerAoiTrendAnalysis'
@@ -70,7 +70,7 @@ import { TimeSeriesExportManager } from './ExportManager'
 import { SiDynamicMapSnapshotsPanel } from '../imagery/SiDynamicMapSnapshotsPanel'
 import { SiImageryWeatherTab } from '../weather/SiImageryWeatherTab'
 import { useImageryChartInk } from '@/shared/charts/imageryChartInk'
-import '@/pages/dashboards/agroCloudPlatform/AgroCloudPlatformDashboard.css'
+import '@/modules/dashboards/gis/agroCloudPlatform/AgroCloudPlatformDashboard.css'
 
 ChartJS.register(
   CategoryScale,

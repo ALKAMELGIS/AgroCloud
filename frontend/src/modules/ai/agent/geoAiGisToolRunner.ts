@@ -23,7 +23,7 @@ import {
 } from './geoAiGisEngine'
 import { resolveGisInputLayer } from './geoAiGisLayerResolve'
 import { downloadGeoJsonFile } from '@/modules/gis/layers/siLayerExport'
-import { exportVectorLayer, type VectorExportFormat } from '@/lib/vectorLayerExport'
+import { exportVectorLayer, type VectorExportFormat } from '@/modules/data-management/export/vectorLayerExport'
 
 export type GeoAiGisToolHost = {
   vectorLayers: GeoAiMapLayer[]

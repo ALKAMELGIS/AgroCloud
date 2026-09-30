@@ -483,7 +483,7 @@ export async function parseTrainingSamplesShapefile(
     )
   }
   const shp = (await import('shpjs')).default
-  const { mergeShpLikeToFeatureCollection } = await import('@/utils/FileLoader')
+  const { mergeShpLikeToFeatureCollection } = await import('@/modules/data-management/import/FileLoader')
   const ab = await readFileAsArrayBuffer(file)
   let raw: unknown
   try {

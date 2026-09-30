@@ -5,7 +5,7 @@ import {
 } from '../routing/defaultPageLinks'
 import { useSystemSettings } from '../state/SystemSettingsContext'
 import ExternalPageLink from '../routing/ExternalPageLink'
-import '@/pages/sensors/gps-in-app-browser.css'
+import '@/modules/operations/other/sensors/gps-in-app-browser.css'
 
 /** AgroCloud Management — in-app iframe (default: Al Maha Farm on Railway). */
 export default function AgroCloudManagement() {

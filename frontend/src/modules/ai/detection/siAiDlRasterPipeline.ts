@@ -1,6 +1,6 @@
 import JSZip from 'jszip'
 import proj4 from 'proj4'
-import { parseRemoteUrlAsFile, type RasterMapCoordinates } from '@/utils/FileLoader'
+import { parseRemoteUrlAsFile, type RasterMapCoordinates } from '@/modules/data-management/import/FileLoader'
 import {
   findRasterSidecars,
   boundsFromLngLatCorners,

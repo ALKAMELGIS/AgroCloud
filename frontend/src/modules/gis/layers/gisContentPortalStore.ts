@@ -54,7 +54,7 @@ export type GisContentItemDetails = {
   /** Custom item thumbnail (data URL or remote URL). */
   thumbnailDataUrl?: string
   /** AgroCloud Dashboard builder state (saved App items). */
-  agroCloudDashboard?: import('@/pages/dashboards/agrocloud/agroCloudDashboardData').AgroCloudDashboardConfig
+  agroCloudDashboard?: import('@/modules/dashboards/management/agrocloud/agroCloudDashboardData').AgroCloudDashboardConfig
   /** ArcGIS-style format when item is saved as an app (Dashboard, Web Map, StoryMap). */
   appFormat?: GisContentAppFormat
   /** Saved Web Map state from Map Viewer (extent, basemap, portal layers). */

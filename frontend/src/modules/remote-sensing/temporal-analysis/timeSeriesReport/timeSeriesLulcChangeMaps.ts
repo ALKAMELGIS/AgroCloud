@@ -22,7 +22,7 @@ import type {
   TimeSeriesMapSnapshot,
   TimeSeriesMapSnapshotGroup,
 } from './timeSeriesReportTypes'
-import type { ImageryTimeSeriesLayerSeries } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryTimeSeriesLayerSeries } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 
 const SNAPSHOT_WIDTH = 720
 const SNAPSHOT_HEIGHT = 580

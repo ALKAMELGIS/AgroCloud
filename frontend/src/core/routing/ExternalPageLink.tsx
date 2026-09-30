@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useLanguage } from '../localization/i18n'
-import '@/pages/dashboards/AgroCloudDashboard.css'
+import '@/modules/dashboards/management/AgroCloudDashboard.css'
 
 type ExternalPageLinkProps = {
   url: string

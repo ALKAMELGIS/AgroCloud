@@ -40,8 +40,8 @@ import { summarizeFieldGeometry } from './fieldValidationMetrics'
 import {
   downloadFieldBoundaryShapefile,
 } from './polygonShapefileExport'
-import { downloadVectorCsv, downloadVectorGeoJson, downloadVectorKml, downloadVectorKmz, downloadVectorXlsx } from '@/lib/vectorLayerExport'
-import { enrichObjectAttributes } from '@/lib/objectAttributes/enrichObjectAttributes'
+import { downloadVectorCsv, downloadVectorGeoJson, downloadVectorKml, downloadVectorKmz, downloadVectorXlsx } from '@/modules/data-management/export/vectorLayerExport'
+import { enrichObjectAttributes } from '@/modules/master-data/schemas/enrichObjectAttributes'
 import {
   ftwInferenceEffectiveSceneDate,
   ftwInferenceSafeSceneRange,

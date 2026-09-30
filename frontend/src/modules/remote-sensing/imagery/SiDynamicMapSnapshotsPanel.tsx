@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SentinelHubDailyIndexMeans } from '@/modules/remote-sensing/imagery/sentinelHubStatisticsApi'
-import type { ImageryTimeSeriesLayerSeries } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryTimeSeriesLayerSeries } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import {
   buildDynamicMapSnapshots,
   exportAllDynamicSnapshotPngs,

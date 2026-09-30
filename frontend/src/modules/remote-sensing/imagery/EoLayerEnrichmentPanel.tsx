@@ -7,8 +7,8 @@ import {
   downloadEoGeoJson,
   runEoLayerEnrichment,
 } from './eoLayerEnrichmentRun'
-import { generateEoEnrichmentReportDocx } from '@/lib/eoEnrichmentReport/generateEoEnrichmentReportDocx'
-import { exportVectorLayer } from '@/lib/vectorLayerExport'
+import { generateEoEnrichmentReportDocx } from '@/modules/reports/analytics/eoEnrichmentReport/generateEoEnrichmentReportDocx'
+import { exportVectorLayer } from '@/modules/data-management/export/vectorLayerExport'
 import type { SiLayerPopupConfig } from '@/modules/gis/layers/siLayerPopupConfig'
 import type { FieldImagerySource } from '@/modules/ai/segmentation/field-boundary/fieldBoundaryClient'
 import type { FieldBoundaryPhase } from '@/modules/ai/segmentation/field-boundary/useAgriFieldBoundary'

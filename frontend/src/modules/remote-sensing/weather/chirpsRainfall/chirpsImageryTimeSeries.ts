@@ -5,8 +5,8 @@
 import { CHIRPS_PRECIP_LAYER_ID, isChirpsPrecipLayerId } from '../../indices/agroCompositeIndices'
 import { fetchChirpsTimeseries } from './chirpsClient'
 import type { ChirpsSeriesPoint } from './chirpsIndices'
-import type { ImageryTimeSeriesLayerSeries } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
-import { pruneImageryTimeSeriesToObservations } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryTimeSeriesLayerSeries } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+import { pruneImageryTimeSeriesToObservations } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 
 export function partitionImageryTimeSeriesLayerIds(layerIds: string[]): {
   precipLayerIds: string[]

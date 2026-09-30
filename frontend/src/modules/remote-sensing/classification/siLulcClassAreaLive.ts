@@ -23,7 +23,7 @@ import {
   LULC_HISTOGRAM_BIN_EDGES,
   buildLulcHistogramEvalscript,
 } from './siLulcClassificationEvalscript'
-import type { ImageryTimeSeriesLayerSeries } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryTimeSeriesLayerSeries } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 
 export type LulcClassAreaRow = LayerClassAreaRow & {
   classId: number

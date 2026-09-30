@@ -3,7 +3,7 @@ import type { CreateFeatureLayerResult } from './content-portal/CreateFeatureLay
 import type { Create3dLayerResult } from './content-portal/Create3dLayerWizard'
 import { AGRO_STRUCTURES_FS21_URL, isAgroStructuresLayerUrl } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
 import { isWorldCountriesLayerUrl, WORLD_COUNTRIES_FS51_URL } from '../map/worldCountriesLayer'
-import { mergeShpLikeToFeatureCollection, normalizeGeoJsonEnvelope, parseFile } from '@/utils/FileLoader'
+import { mergeShpLikeToFeatureCollection, normalizeGeoJsonEnvelope, parseFile } from '@/modules/data-management/import/FileLoader'
 import {
   emptyHostedFeatureLayerGeoJson,
   isAgroStructuresPortalRow,

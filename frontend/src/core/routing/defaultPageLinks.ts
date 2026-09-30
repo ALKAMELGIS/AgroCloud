@@ -1,5 +1,5 @@
 import type { CustomPageRecord } from '../types/systemSettings'
-import { DEFAULT_AGRO_CLOUD_DASHBOARD_URL } from '@/lib/agroCloudDashboardStorage'
+import { DEFAULT_AGRO_CLOUD_DASHBOARD_URL } from '@/modules/dashboards/management/agrocloud/agroCloudDashboardStorage'
 
 export const AGROCLOUD_MANAGEMENT_PAGE_PATH = '/applications/agrocloud-management'
 

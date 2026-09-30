@@ -30,7 +30,7 @@ import {
 } from '../siAiDlOutputExport'
 import { defaultArgsForArchitecture } from '../siAiDlTrainConfig'
 import type { AiDlArgRow } from '../siAiDlTrainConfig'
-import type { RasterMapCoordinates } from '@/utils/FileLoader'
+import type { RasterMapCoordinates } from '@/modules/data-management/import/FileLoader'
 import './SiAiDetectionGisPanel.css'
 
 export type AiDlMapLayerRasterRef = {

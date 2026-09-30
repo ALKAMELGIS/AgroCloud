@@ -9,7 +9,7 @@ import { defaultSiLayerPopupConfig, normalizeSiLayerPopupConfig, type SiLayerPop
 import {
   OBJECT_ATTRIBUTES_STAMP,
   objectAttributeFieldNames,
-} from '@/lib/objectAttributes/objectAttributesSchema';
+} from '@/modules/master-data/schemas/objectAttributesSchema';
 
 export type SiPopupInspectSection = { id: string; title: string; rows: GeoAiPopupAttrRow[] };
 

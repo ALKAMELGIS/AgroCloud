@@ -39,7 +39,7 @@ import {
   OBJECT_ATTRIBUTES_STAMP,
   parseObjectAttributesWorkbook,
   resetObjectAttributesSchemaCache,
-} from '@/lib/objectAttributes/objectAttributesSchema'
+} from '@/modules/master-data/schemas/objectAttributesSchema'
 
 const EXAMPLE_COLUMNS = FALLBACK_OBJECT_ATTRIBUTES_SCHEMA.fields.map(f => f.name)
 

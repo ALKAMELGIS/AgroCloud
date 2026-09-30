@@ -1,4 +1,4 @@
-import type { RasterMapCoordinates } from '@/utils/FileLoader'
+import type { RasterMapCoordinates } from '@/modules/data-management/import/FileLoader'
 export type { RasterMapCoordinates }
 import type { AiDlRasterBounds } from '@/modules/ai/detection/siAiDlRasterPipeline'
 

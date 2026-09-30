@@ -1,3 +1,3 @@
 export * from './geoJson'
-export * from '@/utils/FileLoader'
+export * from '@/modules/data-management/import/FileLoader'
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { DataSourceFieldsPanel, type DataSourceFormState } from '@/pages/data-entry/components/datasourcefieldspanel'
-import '@/pages/data-entry/EC.css'
+import { DataSourceFieldsPanel, type DataSourceFormState } from '@/modules/forms/components/datasourcefieldspanel'
+import '@/modules/operations/fertigation/EC.css'
 import { canManageDataSourceSettings } from '../auth'
 import { useCommonText } from '../../localization/i18n'
 

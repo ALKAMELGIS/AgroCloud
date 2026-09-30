@@ -6,7 +6,7 @@ import {
 } from './siPlotLayerTimeSeries'
 import type { SentinelHubDailyIndexMeans } from '../imagery/sentinelHubStatisticsApi'
 import type { CropAlertFieldInput } from '../indices/siCropAlertEngine'
-import type { ImageryTimeAggregation } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryTimeAggregation } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 
 export type UsePlotLayerTimeSeriesStreamOptions = {
   fields: CropAlertFieldInput[]

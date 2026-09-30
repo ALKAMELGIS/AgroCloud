@@ -3,42 +3,42 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { useSystemSettings } from '@/core/state/SystemSettingsContext'
 import { SiInstanceScopeProvider } from '../providers/siInstanceScope'
 import DynamicBindPage from '@/core/routing/DynamicBindPage'
-import AgroCloudDashboard from '@/pages/dashboards/AgroCloudDashboard'
+import AgroCloudDashboard from '@/modules/dashboards/management/AgroCloudDashboard'
 import { lazyWithRetry } from '@/core/routing/lazyWithRetry'
 /** Eager-loaded: avoid full-route Suspense spinner on first paint / dashboard navigation */
 import Home from '../layouts/Home'
 import Login from '@/core/auth/Login'
-const DashboardOverview = lazyWithRetry(() => import('@/pages/dashboards/Overview'), 'DashboardOverview')
-const DevelopDashboard = lazyWithRetry(() => import('@/pages/dashboards/DevelopDashboard'), 'DevelopDashboard')
+const DashboardOverview = lazyWithRetry(() => import('@/modules/dashboards/operational/Overview'), 'DashboardOverview')
+const DevelopDashboard = lazyWithRetry(() => import('@/modules/dashboards/management/DevelopDashboard'), 'DevelopDashboard')
 const AgroCloudPlatformDashboard = lazyWithRetry(
-  () => import('@/pages/dashboards/agroCloudPlatform/AgroCloudPlatformDashboard'),
+  () => import('@/modules/dashboards/gis/agroCloudPlatform/AgroCloudPlatformDashboard'),
   'AgroCloudPlatformDashboard',
 )
 const SatelliteIntelligence = lazyWithRetry(() => import('@/modules/remote-sensing/imagery/SatelliteIntelligence'), 'SatelliteIntelligence')
 const SatelliteMultidimensional = lazyWithRetry(() => import('@/modules/remote-sensing/imagery/Multidimensional'), 'SatelliteMultidimensional')
 const GisMap = lazyWithRetry(() => import('@/modules/gis/map/GisMap'), 'GisMap')
-const DataEntryFertigationRecords = lazyWithRetry(() => import('@/pages/data-entry/FertigationRecords'), 'DataEntryFertigationRecords')
-const DataEntryIrrigation = lazyWithRetry(() => import('@/pages/data-entry/Irrigation'), 'DataEntryIrrigation')
-const DataEntryHarvest = lazyWithRetry(() => import('@/pages/data-entry/Harvest'), 'DataEntryHarvest')
-const DataEntryQHIS = lazyWithRetry(() => import('@/pages/data-entry/QHIS'), 'DataEntryQHIS')
-const DataEntryECPH = lazyWithRetry(() => import('@/pages/data-entry/EC'), 'DataEntryECPH')
-const DataEntryRecipes = lazyWithRetry(() => import('@/pages/data-entry/Recipes'), 'DataEntryRecipes')
+const DataEntryFertigationRecords = lazyWithRetry(() => import('@/modules/operations/fertigation/FertigationRecords'), 'DataEntryFertigationRecords')
+const DataEntryIrrigation = lazyWithRetry(() => import('@/modules/operations/irrigation/Irrigation'), 'DataEntryIrrigation')
+const DataEntryHarvest = lazyWithRetry(() => import('@/modules/operations/harvest/Harvest'), 'DataEntryHarvest')
+const DataEntryQHIS = lazyWithRetry(() => import('@/modules/operations/other/QHIS'), 'DataEntryQHIS')
+const DataEntryECPH = lazyWithRetry(() => import('@/modules/operations/fertigation/EC'), 'DataEntryECPH')
+const DataEntryRecipes = lazyWithRetry(() => import('@/modules/operations/fertigation/Recipes'), 'DataEntryRecipes')
 const AccountProfile = lazyWithRetry(() => import('@/core/auth/account/Profile'), 'AccountProfile')
 const AccountSettings = lazyWithRetry(() => import('@/core/auth/account/Settings'), 'AccountSettings')
 const MasterGisContent = lazyWithRetry(() => import('@/modules/gis/layers/content-portal/GisContent'), 'MasterGisContent')
 const MasterGisContentItem = lazyWithRetry(() => import('@/modules/gis/layers/content-portal/GisContentItemPane'), 'MasterGisContentItem')
-const DashboardSettings = lazyWithRetry(() => import('@/pages/master/DashboardSettings'), 'DashboardSettings')
+const DashboardSettings = lazyWithRetry(() => import('@/modules/dashboards/management/DashboardSettings'), 'DashboardSettings')
 const AdminUsers = lazyWithRetry(() => import('@/core/authorization/Users'), 'AdminUsers')
 const AdminGitHub = lazyWithRetry(() => import('@/core/config/GitHubIntegration'), 'AdminGitHub')
-const DashboardAiChatbot = lazyWithRetry(() => import('@/pages/dashboards/AiChatbot'), 'DashboardAiChatbot')
-const DashboardModel = lazyWithRetry(() => import('@/pages/dashboards/Model'), 'DashboardModel')
-const AiAgroCloud = lazyWithRetry(() => import('@/pages/dashboards/AiAgroCloud'), 'AiAgroCloud')
-const AiAgroChat = lazyWithRetry(() => import('@/pages/dashboards/AiAgroChat'), 'AiAgroChat')
+const DashboardAiChatbot = lazyWithRetry(() => import('@/modules/dashboards/ai/AiChatbot'), 'DashboardAiChatbot')
+const DashboardModel = lazyWithRetry(() => import('@/modules/dashboards/ai/Model'), 'DashboardModel')
+const AiAgroCloud = lazyWithRetry(() => import('@/modules/dashboards/ai/AiAgroCloud'), 'AiAgroCloud')
+const AiAgroChat = lazyWithRetry(() => import('@/modules/dashboards/ai/AiAgroChat'), 'AiAgroChat')
 const StyleGuide = lazyWithRetry(() => import('./StyleGuide'), 'StyleGuide')
 const UsabilityTest = lazyWithRetry(() => import('./UsabilityTest'), 'UsabilityTest')
 const SystemSettings = lazyWithRetry(() => import('@/core/config/SystemSettings'), 'SystemSettings')
-const SensorIntegrationPage = lazyWithRetry(() => import('@/pages/sensors/SensorIntegrationPage'), 'SensorIntegrationPage')
-const GpsVehicleTracking = lazyWithRetry(() => import('@/pages/sensors/GpsVehicleTracking'), 'GpsVehicleTracking')
+const SensorIntegrationPage = lazyWithRetry(() => import('@/modules/operations/other/sensors/SensorIntegrationPage'), 'SensorIntegrationPage')
+const GpsVehicleTracking = lazyWithRetry(() => import('@/modules/operations/other/sensors/GpsVehicleTracking'), 'GpsVehicleTracking')
 const AgroCloudManagement = lazyWithRetry(() => import('@/core/config/AgroCloudManagement'), 'AgroCloudManagement')
 
 function RouteLoadingFallback({ label = 'Loading…' }: { label?: string }) {

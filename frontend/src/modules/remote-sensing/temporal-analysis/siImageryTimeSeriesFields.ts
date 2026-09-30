@@ -2,7 +2,7 @@ import {
   buildAgroStructureFieldOptions,
   resolveAgroStructureFieldByKey,
   type AcpStructureFieldOption,
-} from '@/pages/dashboards/agroCloudPlatform/acpMapSpatial'
+} from '@/modules/dashboards/gis/agroCloudPlatform/acpMapSpatial'
 import { AGRO_STRUCTURES_PRIMARY_LAYER_ID, isAgroStructuresLayer } from '../imagery/agroStructuresPrimaryAoi'
 import type { CropAlertFieldInput } from '../indices/siCropAlertEngine'
 import type { SiAoiFieldRecord } from '../imagery/siAoiFields'

@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf'
-import { evaluateImageryLayerDailyValue } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import { evaluateImageryLayerDailyValue } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import { resolveLayerLiveLegendSpec, type LayerLiveLegendSpec } from '../../indices/layerLiveLegendCatalog'
 import { geodesicAreaM2 } from '../../classification/siLayerClassAreaEngine'
 import type { SentinelHubDailyIndexMeans } from '../../imagery/sentinelHubStatisticsApi'

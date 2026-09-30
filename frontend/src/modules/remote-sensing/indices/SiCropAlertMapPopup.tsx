@@ -19,7 +19,7 @@ import {
   mergeDailyIndexSeries,
   type SentinelHubDailyIndexMeans,
 } from '../imagery/sentinelHubStatisticsApi'
-import { useOptionalAcpPlatform } from '@/pages/dashboards/agroCloudPlatform/acpPlatformContext'
+import { useOptionalAcpPlatform } from '@/modules/dashboards/gis/agroCloudPlatform/acpPlatformContext'
 import './SiCropAlertMapPopup.css'
 
 export type SiCropAlertMapPopupProps = {

@@ -2,8 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from 'react-dom'
 import type { CSSProperties, RefObject } from 'react'
 import type { Chart as ChartJS } from 'chart.js'
-import type { ImageryChartType, ImageryTimeAggregation } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
-import type { ImageryTimeSeriesLayerSeries } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryChartType, ImageryTimeAggregation } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryTimeSeriesLayerSeries } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import type { CropAlertFieldInput } from '../indices/siCropAlertEngine'
 import type { SentinelHubDailyIndexMeans } from '../imagery/sentinelHubStatisticsApi'
 import {

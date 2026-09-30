@@ -42,9 +42,9 @@ import {
   type DeviceGeoReading,
 } from '@/core/utils/deviceGeolocation';
 import '@/assets/styles/gisModalSystem.css';
-import '@/pages/dashboards/develop-dashboard.css';
-import { parseFile, parseRemoteUrlAsFile } from '@/utils/FileLoader';
-import type { RasterMapCoordinates } from '@/utils/FileLoader';
+import '@/modules/dashboards/management/develop-dashboard.css';
+import { parseFile, parseRemoteUrlAsFile } from '@/modules/data-management/import/FileLoader';
+import type { RasterMapCoordinates } from '@/modules/data-management/import/FileLoader';
 import type { CircleCardinal, DrawStyleConfig, VertexRef } from '@/modules/gis/editing/drawingUtils';
 import {
   bboxToPolygonFeature,
@@ -698,8 +698,8 @@ import {
   downloadVectorGeoJson,
   downloadVectorKml,
   downloadVectorShapefile,
-} from '@/lib/vectorLayerExport';
-import type { VectorExportFormat } from '@/lib/vectorLayerExport';
+} from '@/modules/data-management/export/vectorLayerExport';
+import type { VectorExportFormat } from '@/modules/data-management/export/vectorLayerExport';
 import type { AiDlMapLayerRasterRef } from '@/modules/ai/detection/components/SiAiDlDetectObjectsPanel';
 import { useTreeDetection } from '@/modules/ai/detection/tree/useTreeDetection';
 import type { TreeImageryProviderId } from '@/modules/ai/detection/tree/webMercatorTiles';
@@ -730,9 +730,9 @@ import {
   layerHasObjectAttributeTable,
   loadObjectAttributesSchema,
   objectAttributeTableColumns,
-} from '@/lib/objectAttributes/objectAttributesSchema';
+} from '@/modules/master-data/schemas/objectAttributesSchema';
 import { preloadObjectAttributesSchema } from '@/modules/ai/segmentation/field-boundary/fieldAttributeEnrichment';
-import { enrichObjectAttributes } from '@/lib/objectAttributes/enrichObjectAttributes';
+import { enrichObjectAttributes } from '@/modules/master-data/schemas/enrichObjectAttributes';
 import { downloadTreeShapefile } from '@/modules/ai/detection/tree/shapefileExport';
 import {
   searchPlaces,
@@ -782,7 +782,7 @@ import { generateHydroWatershedReportDocx } from '@/modules/gis/spatial-analysis
 import { generateSarFloodIntelligenceReport } from '../change-detection/sarFloodReport/generateSarFloodReportDocx';
 import { generateCropClassificationReportDocx } from '../classification/cropClassificationReport';
 import { exportCropClassificationGeoTiff } from '../classification/cropClassificationReport/cropClassificationGeoTiffExport';
-import { generateWellSiteReportDocx } from '@/lib/wellSiteReport';
+import { generateWellSiteReportDocx } from '@/modules/reports/analytics/wellSiteReport';
 import { GisPortalBrowseLayersPanel } from '@/modules/gis/layers/GisPortalBrowseLayersPanel';
 import type { MapToolboxAddGisLayerAction } from '@/modules/gis/map/MapToolboxAddGisLayerFlyout';
 import { GisDataManager } from '@/modules/gis/map/gisDataManager';
@@ -8768,7 +8768,7 @@ export default function SatelliteIntelligence() {
 
   const handleGisDmImportWfs = useCallback(
     async (baseUrl: string, typeName: string, token?: string) => {
-      const { fetchWfsGeoJson } = await import('@/lib/gisConnections/ogcWfsClient');
+      const { fetchWfsGeoJson } = await import('@/modules/data-management/import/gisConnections/ogcWfsClient');
       const fc = await fetchWfsGeoJson(baseUrl, typeName, token);
       const blob = new Blob([JSON.stringify(fc)], { type: 'application/geo+json' });
       const file = new File([blob], `${typeName || 'wfs'}.geojson`, { type: 'application/geo+json' });
@@ -8782,7 +8782,7 @@ export default function SatelliteIntelligence() {
     async (kind: 'wms' | 'wmts' | 'xyz', url: string, layerName?: string) => {
       const id = `ogc-${Date.now()}`;
       const name = layerName || `${kind.toUpperCase()} layer`;
-      const { normalizeXyzTemplate } = await import('@/lib/gisIngest/cogPmtiles');
+      const { normalizeXyzTemplate } = await import('@/modules/data-management/import/gisIngest/cogPmtiles');
       let tileUrl = url.trim();
       if (kind === 'xyz' || kind === 'wmts') {
         tileUrl = normalizeXyzTemplate(tileUrl);

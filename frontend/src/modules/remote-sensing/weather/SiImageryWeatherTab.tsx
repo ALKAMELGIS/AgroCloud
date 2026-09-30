@@ -14,7 +14,7 @@ import {
   type ChartOptions,
 } from 'chart.js'
 import { Chart } from 'react-chartjs-2'
-import type { ImageryTimeAggregation, ImageryTimeSeriesLayerSeries } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryTimeAggregation, ImageryTimeSeriesLayerSeries } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import {
   buildWeatherIndexInterpretation,
   primaryIndexSeries,

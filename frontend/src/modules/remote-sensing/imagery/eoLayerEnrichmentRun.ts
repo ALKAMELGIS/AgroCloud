@@ -3,7 +3,7 @@
  * using latest Sentinel-2 via STAC catalog + Sentinel Hub Statistical API.
  */
 import type { Feature, FeatureCollection, Geometry, Polygon, MultiPolygon } from 'geojson'
-import { parseFile } from '@/utils/FileLoader'
+import { parseFile } from '@/modules/data-management/import/FileLoader'
 import {
   fetchSentinelFieldIndexForSceneDate,
   fetchSentinelFieldIndexTimeSeries,

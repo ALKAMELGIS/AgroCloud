@@ -8,7 +8,7 @@ import type { SentinelHubDailyIndexMeans, SentinelHubIndexZonalStats } from '../
 import {
   evaluateImageryLayerDailyValue,
   type ImageryTimeSeriesLayerSeries,
-} from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import { geodesicAreaM2 } from '../classification/siLayerClassAreaEngine'
 import { subtractDaysFromIso } from '../imagery/siSentinelImageryDate'
 import {

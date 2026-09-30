@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react'
-import { GisUploadCloudSources } from '@/components/GisUploadCloudSources'
-import type { CloudUploadSourceId } from '@/lib/cloudFilePickerConfig'
+import { GisUploadCloudSources } from '@/modules/data-management/import/GisUploadCloudSources'
+import type { CloudUploadSourceId } from '@/modules/data-management/import/cloudFilePickerConfig'
 import { Create3dLayerWizard } from './Create3dLayerWizard'
 import { CreateFeatureLayerWizard } from './CreateFeatureLayerWizard'
 import { GIS_NEW_ITEM_TYPES } from './gisContentPortalData'

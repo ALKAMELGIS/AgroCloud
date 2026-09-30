@@ -1,4 +1,4 @@
-import type { ImageryCorrelationScatterAnalysis } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryCorrelationScatterAnalysis } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import { buildCorrelationInterpretation } from './timeSeriesReport/timeSeriesScatterChartRenderer'
 
 export type SiScatterCorrelationInsightProps = {

@@ -1,10 +1,10 @@
-import { evaluateImageryLayerDailyValue } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
-import type { ImageryTimeAggregation } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import { evaluateImageryLayerDailyValue } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryTimeAggregation } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import type { SentinelHubDailyIndexMeans } from '../../imagery/sentinelHubStatisticsApi'
 import {
   formatImageryTimePeriodLabel,
   imageryTimePeriodKey,
-} from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import { resolveLayerLiveLegendSpec } from '../../indices/layerLiveLegendCatalog'
 import {
   compositeAoiMapSnapshotBase64,

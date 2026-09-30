@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react'
-import { GisUploadCloudSources } from '@/components/GisUploadCloudSources'
-import type { CloudUploadSourceId } from '@/lib/cloudFilePickerConfig'
+import { GisUploadCloudSources } from '@/modules/data-management/import/GisUploadCloudSources'
+import type { CloudUploadSourceId } from '@/modules/data-management/import/cloudFilePickerConfig'
 import {
   GIS_3D_LAYER_CREATE_METHODS,
   GIS_3D_LAYER_LEARN_MORE_URL,

@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import type { ImageryTimeSeriesLayerSeries } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryTimeSeriesLayerSeries } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 
 export function exportTimeSeriesCsv(chartLabels: string[], layerSeries: ImageryTimeSeriesLayerSeries[]): void {
   if (!chartLabels.length || !layerSeries.length) return

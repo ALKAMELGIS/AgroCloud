@@ -9,7 +9,7 @@ import {
   DEFAULT_IMAGERY_TS_CLOUD_FILTER,
   fetchImageryTimeSeriesProgressive,
 } from '../fetchImageryTimeSeriesProgressive'
-import { evaluateImageryLayerDailyValue } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import { evaluateImageryLayerDailyValue } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import {
   buildPlotTimeSeriesAnalyticsModel,
 } from './buildPlotTimeSeriesAnalyticsModel'

@@ -1,12 +1,12 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
-import { GisUploadCloudSources } from '@/components/GisUploadCloudSources'
+import { GisUploadCloudSources } from '@/modules/data-management/import/GisUploadCloudSources'
 import type { GisHostedFeatureLayerGeoJson } from '../gisHostedFeatureLayerPortal'
 import { fetchHostedFeatureLayerGeoJsonFromServiceUrl } from '../gisHostedFeatureLayerPortal'
 import {
   mergeShpLikeToFeatureCollection,
   normalizeGeoJsonEnvelope,
   parseFile,
-} from '@/utils/FileLoader'
+} from '@/modules/data-management/import/FileLoader'
 import { resolveArcGisLayerTitleFromUrl } from '../arcgisFeatureServiceUrl'
 import {
   GIS_ARCGIS_URL_PLACEHOLDER,
@@ -19,7 +19,7 @@ import {
   type FeatureLayerMethod,
   type GisExistingFeatureLayer,
 } from './gisFeatureLayerWizardData'
-import type { CloudUploadSourceId } from '@/lib/cloudFilePickerConfig'
+import type { CloudUploadSourceId } from '@/modules/data-management/import/cloudFilePickerConfig'
 
 export type CreateFeatureLayerResult = {
   method: FeatureLayerMethod

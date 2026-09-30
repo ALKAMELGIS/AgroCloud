@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { buildVectorPreview, buildValidationIssues, buildStubPreview } from '@/lib/gisIngest/gisPreview';
-import { isShapefilePart } from '@/lib/gisIngest/shapefileBundle';
-import { detectTileServiceKind, normalizeXyzTemplate } from '@/lib/gisIngest/cogPmtiles';
-import { planLidarIngest, detectLidarFormat } from '@/lib/gisIngest/bimLidar';
+import { buildVectorPreview, buildValidationIssues, buildStubPreview } from '@/modules/data-management/import/gisIngest/gisPreview';
+import { isShapefilePart } from '@/modules/data-management/import/gisIngest/shapefileBundle';
+import { detectTileServiceKind, normalizeXyzTemplate } from '@/modules/data-management/import/gisIngest/cogPmtiles';
+import { planLidarIngest, detectLidarFormat } from '@/modules/data-management/import/gisIngest/bimLidar';
 import { toRegistryCard, GIS_LAYER_CONTEXT_ACTIONS } from '../../layers';
-import { VECTOR_ACCEPT, RASTER_ACCEPT } from '@/lib/gisIngest/formats';
-import { suggestServiceKindFromUrl } from '@/lib/gisConnections/webServiceStore';
-import { parseWfsGetCapabilities, buildWfsGetFeatureUrl } from '@/lib/gisConnections/ogcWfsClient';
+import { VECTOR_ACCEPT, RASTER_ACCEPT } from '@/modules/data-management/import/gisIngest/formats';
+import { suggestServiceKindFromUrl } from '@/modules/data-management/import/gisConnections/webServiceStore';
+import { parseWfsGetCapabilities, buildWfsGetFeatureUrl } from '@/modules/data-management/import/gisConnections/ogcWfsClient';
 
 describe('gisPreview', () => {
   it('summarizes a FeatureCollection', () => {

@@ -1,11 +1,11 @@
-import { evaluateImageryLayerDailyValue } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
-import type { ImageryTimeAggregation } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import { evaluateImageryLayerDailyValue } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryTimeAggregation } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import {
   aggregateImageryChartByTimePeriod,
   aggregateImageryTimeSeriesMulti,
   filterImageryTimeSeriesByDateRange,
   pruneImageryTimeSeriesToObservations,
-} from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import { buildImageryIndexInterpretation } from '../../indices/imageryIndexInterpretationEngine'
 import { estimateSaviFromNdvi } from '../../indices/chasIndex'
 import { fetchLayerClassAreas, layerSupportsClassArea } from '../../classification/siLayerClassAreaEngine'
@@ -13,7 +13,7 @@ import { geodesicAreaM2 } from '../../classification/siLayerClassAreaEngine'
 import { geometryMetrics } from '@/modules/ai/agent/geoAiLiveMapContext'
 import type { SentinelHubDailyIndexMeans } from '../../imagery/sentinelHubStatisticsApi'
 import type { CropAlertFieldInput } from '../../indices/siCropAlertEngine'
-import type { ImageryTimeSeriesLayerSeries } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryTimeSeriesLayerSeries } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import { fetchFieldMapSnapshot } from './timeSeriesMapSnapshot'
 import { buildTimeSeriesMapSnapshotGroups } from './timeSeriesExcelMapSnapshots'
 import { buildCumulativeMapSnapshotGroups } from './timeSeriesCumulativeMaps'

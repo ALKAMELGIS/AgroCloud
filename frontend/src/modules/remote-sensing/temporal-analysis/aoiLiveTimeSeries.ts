@@ -2,7 +2,7 @@
  * Live AOI / pixel time series from Sentinel Hub Statistical API.
  */
 
-import { evaluateImageryLayerDailyValue } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import { evaluateImageryLayerDailyValue } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import type { SentinelHubDailyIndexMeans } from '../imagery/sentinelHubStatisticsApi'
 import {
   buildStaticAoiMultiChartDatasets,

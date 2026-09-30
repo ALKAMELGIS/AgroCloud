@@ -16,7 +16,7 @@ import {
   formatImageryTimeSeriesYTick,
   imageryLayerChartColor,
   type ImageryTimeAggregation,
-} from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import {
   multiAoiTimelineToLayerSeries,
   type MultiAoiTimelineResult,

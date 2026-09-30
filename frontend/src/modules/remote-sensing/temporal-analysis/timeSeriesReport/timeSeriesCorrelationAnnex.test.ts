@@ -9,7 +9,7 @@ import { buildTimeSeriesDocxDocumentXml } from './buildTimeSeriesDocxDocument'
 import { buildTimeSeriesExecutiveSummary } from './timeSeriesReportExecutive'
 import { buildTimeSeriesDocxModel } from './timeSeriesReportDocxModel'
 import type { TimeSeriesReportPayload } from './timeSeriesReportTypes'
-import type { ImageryCorrelationScatterAnalysis } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryCorrelationScatterAnalysis } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 
 describe('correlation annex charts', () => {
   it('builds native scatter ChartML with white chartSpace', () => {

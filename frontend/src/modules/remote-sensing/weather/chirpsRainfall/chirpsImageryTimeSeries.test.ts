@@ -4,7 +4,7 @@ import {
   mergeOpticalAndChirpsChart,
   partitionImageryTimeSeriesLayerIds,
 } from './chirpsImageryTimeSeries'
-import { aggregateImageryChartByTimePeriod } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import { aggregateImageryChartByTimePeriod } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 
 describe('chirpsImageryTimeSeries', () => {
   it('partitions PRECIP from optical layer ids', () => {

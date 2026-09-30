@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CropAlertFieldInput } from '../indices/siCropAlertEngine'
-import type { ImageryTimeAggregation } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryTimeAggregation } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import type { SentinelHubDailyIndexMeans } from '../imagery/sentinelHubStatisticsApi'
 import {
   buildMultiAoiTimelineResult,

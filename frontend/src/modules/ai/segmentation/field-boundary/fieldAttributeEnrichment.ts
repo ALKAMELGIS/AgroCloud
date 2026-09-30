@@ -29,8 +29,8 @@ import {
   OBJECT_ATTRIBUTES_STAMP,
   type ObjectAttributesSchema,
   type ObjectAttributeFieldDef,
-} from '@/lib/objectAttributes/objectAttributesSchema'
-import { mapReportRowToObjectAttributes } from '@/lib/objectAttributes/objectAttributesMapper'
+} from '@/modules/master-data/schemas/objectAttributesSchema'
+import { mapReportRowToObjectAttributes } from '@/modules/master-data/schemas/objectAttributesMapper'
 
 export type FieldAttributeColumn = ObjectAttributeFieldDef & {
   /** Alias: GeoJSON property name (same as Excel header). */

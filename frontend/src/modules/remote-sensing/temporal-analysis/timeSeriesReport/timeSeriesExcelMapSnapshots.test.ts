@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import ExcelJS from 'exceljs'
-import { evaluateImageryLayerDailyValue } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import { evaluateImageryLayerDailyValue } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import {
   buildMapSnapshotsSheet,
   pickRepresentativeSceneDate,

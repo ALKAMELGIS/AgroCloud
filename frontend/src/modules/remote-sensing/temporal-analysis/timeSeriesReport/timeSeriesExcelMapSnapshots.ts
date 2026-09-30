@@ -2,11 +2,11 @@ import ExcelJS from 'exceljs'
 import {
   evaluateImageryLayerDailyValue,
   imageryTimePeriodKey,
-} from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import type {
   ImageryTimeAggregation,
   ImageryTimeSeriesLayerSeries,
-} from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import type { ImageryIndexInterpretation } from '../../indices/imageryIndexInterpretationEngine'
 import { resolveLayerLiveLegendSpec } from '../../indices/layerLiveLegendCatalog'
 import type { SentinelHubDailyIndexMeans } from '../../imagery/sentinelHubStatisticsApi'

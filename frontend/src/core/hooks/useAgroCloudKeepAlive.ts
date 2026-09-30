@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   AGRO_CLOUD_KEEP_ALIVE_CHANGED_EVENT,
   readAgroCloudKeepAlive,
-} from '@/lib/agroCloudDashboardStorage'
+} from '@/modules/dashboards/management/agrocloud/agroCloudDashboardStorage'
 
 /** Reactive subscription to “pin dashboard / keep iframe mounted” preference. */
 export function useAgroCloudKeepAlive(): boolean {

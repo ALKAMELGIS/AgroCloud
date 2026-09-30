@@ -1,5 +1,5 @@
 import proj4 from 'proj4'
-import type { RasterMapCoordinates } from '@/utils/FileLoader'
+import type { RasterMapCoordinates } from '@/modules/data-management/import/FileLoader'
 
 export type AiDlRasterBounds = {
   west: number

@@ -1,4 +1,4 @@
-import type { ImageryTimeSeriesLayerSeries } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryTimeSeriesLayerSeries } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import type { TimeSeriesWeatherPoint, TimeSeriesWeatherSummary } from '../temporal-analysis/timeSeriesReport/timeSeriesWeatherTimeline'
 
 export type WeatherCompareMetric = 'temperature' | 'humidity' | 'rainfall' | 'wind'

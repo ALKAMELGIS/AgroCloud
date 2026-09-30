@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import type { ImageryChartType } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
-import { imageryLayerChartColor } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryChartType } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
+import { imageryLayerChartColor } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import { drawVectorPieChart, drawVectorTimeSeriesChart } from './timeSeriesReportVectorChart'
 import type { TimeSeriesReportPayload } from './timeSeriesReportTypes'
 

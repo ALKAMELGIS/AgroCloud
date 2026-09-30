@@ -27,7 +27,7 @@ import {
   imageryDailyRowsSupportLayers,
   imageryDailyRowsNeedRefetchForLayers,
   type ImageryTimeSeriesLayerSeries,
-} from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import {
   resolveImageryStatisticsFetchMode,
   imageryStatisticsFetchNeedsSnowNdsi,

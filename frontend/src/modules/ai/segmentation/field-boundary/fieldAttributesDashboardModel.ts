@@ -6,7 +6,7 @@ import {
   getObjectAttributesSchemaSync,
   type ObjectAttributeFieldDef,
   type ObjectAttributesSchema,
-} from '@/lib/objectAttributes/objectAttributesSchema'
+} from '@/modules/master-data/schemas/objectAttributesSchema'
 import {
   readFieldDashTimeSeriesFromGeojson,
   type FieldDashIndexTimeSeries,

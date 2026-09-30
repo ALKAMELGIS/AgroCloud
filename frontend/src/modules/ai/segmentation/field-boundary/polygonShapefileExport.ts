@@ -5,7 +5,7 @@
 import JSZip from 'jszip'
 
 import { getFieldAttributeColumns } from './fieldAttributeEnrichment'
-import { layerHasObjectAttributeTable } from '@/lib/objectAttributes/objectAttributesSchema'
+import { layerHasObjectAttributeTable } from '@/modules/master-data/schemas/objectAttributesSchema'
 
 const WGS84_PRJ =
   'GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],' +

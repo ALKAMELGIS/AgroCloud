@@ -1,5 +1,5 @@
 import type { SentinelHubDailyIndexMeans } from '../imagery/sentinelHubStatisticsApi'
-import { evaluateImageryLayerDailyValue } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import { evaluateImageryLayerDailyValue } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 
 export type NdsiSnowTimeSeriesDebugReport = {
   layerIds: string[]

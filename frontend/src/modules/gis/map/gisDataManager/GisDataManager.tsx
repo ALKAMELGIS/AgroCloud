@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { GisUploadCloudSources } from '@/components/GisUploadCloudSources';
+import { GisUploadCloudSources } from '@/modules/data-management/import/GisUploadCloudSources';
 import {
   listDbConnections,
   saveDbConnection,
   testDbConnection,
   fetchDbTables,
   deleteDbConnection,
-} from '@/lib/gisConnections/dbConnectionStore';
-import type { GisDbConnectionProfile, GisConnectionKind } from '@/lib/gisConnections/types';
+} from '@/modules/data-management/import/gisConnections/dbConnectionStore';
+import type { GisDbConnectionProfile, GisConnectionKind } from '@/modules/data-management/import/gisConnections/types';
 import {
   listRecent,
   listFavorites,
@@ -17,28 +17,28 @@ import {
   isFavorite,
   removeRecent,
   clearRecent,
-} from '@/lib/gisConnections/recentFavoritesStore';
+} from '@/modules/data-management/import/gisConnections/recentFavoritesStore';
 import {
   listWebServices,
   saveWebService,
   deleteWebService,
   suggestServiceKindFromUrl,
-} from '@/lib/gisConnections/webServiceStore';
-import { parseWfsGetCapabilities, fetchWfsGeoJson } from '@/lib/gisConnections/ogcWfsClient';
+} from '@/modules/data-management/import/gisConnections/webServiceStore';
+import { parseWfsGetCapabilities, fetchWfsGeoJson } from '@/modules/data-management/import/gisConnections/ogcWfsClient';
 import {
   VECTOR_ACCEPT,
   RASTER_ACCEPT,
   VECTOR_FORMAT_LABEL_LIST,
   RASTER_FORMAT_LABEL_LIST,
-} from '@/lib/gisIngest/formats';
-import { isShapefilePart, zipShapefileParts } from '@/lib/gisIngest/shapefileBundle';
+} from '@/modules/data-management/import/gisIngest/formats';
+import { isShapefilePart, zipShapefileParts } from '@/modules/data-management/import/gisIngest/shapefileBundle';
 import {
   buildVectorPreview,
   buildStubPreview,
   buildValidationIssues,
   type VectorPreviewInfo,
-} from '@/lib/gisIngest/gisPreview';
-import { parseFile } from '@/utils/FileLoader';
+} from '@/modules/data-management/import/gisIngest/gisPreview';
+import { parseFile } from '@/modules/data-management/import/FileLoader';
 import {
   GIS_DM_CATEGORIES,
   WIZARD_STEPS,
@@ -1486,7 +1486,7 @@ export function GisDataManager({
               const files = e.target.files ? Array.from(e.target.files) : [];
               e.target.value = '';
               void (async () => {
-                const { planLidarIngest } = await import('@/lib/gisIngest/bimLidar');
+                const { planLidarIngest } = await import('@/modules/data-management/import/gisIngest/bimLidar');
                 for (const f of files) {
                   const plan = planLidarIngest(f.name);
                   pushToast('warn', `${f.name}: ${plan.message}`);

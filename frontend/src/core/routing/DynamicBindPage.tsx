@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import Home from '@/app/layouts/Home'
-import Overview from '@/pages/dashboards/Overview'
+import Overview from '@/modules/dashboards/operational/Overview'
 import ExternalPageLink from './ExternalPageLink'
 import { lazyWithRetry } from './lazyWithRetry'
 

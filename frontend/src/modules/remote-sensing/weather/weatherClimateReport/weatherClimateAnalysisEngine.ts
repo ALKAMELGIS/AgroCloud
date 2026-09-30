@@ -3,7 +3,7 @@ import {
   formatImageryTimePeriodLabel,
   imageryTimePeriodKey,
   type ImageryTimeAggregation,
-} from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import type {
   AnnualClimateRow,
   ClimateExportAggregation,

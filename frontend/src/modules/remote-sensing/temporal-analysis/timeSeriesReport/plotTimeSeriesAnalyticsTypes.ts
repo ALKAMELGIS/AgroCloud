@@ -1,5 +1,5 @@
 import type { CropAlertFieldInput } from '../../indices/siCropAlertEngine'
-import type { ImageryTimeAggregation } from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+import type { ImageryTimeAggregation } from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 import type { IndexHealthTier } from '../../indices/imageryIndexInterpretationEngine'
 
 export type PlotTimeSeriesSortField =

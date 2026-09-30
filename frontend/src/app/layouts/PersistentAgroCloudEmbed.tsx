@@ -4,8 +4,8 @@ import { useLanguage } from '@/core/localization/i18n'
 import {
   AGRO_CLOUD_EMBED_CHANGED_EVENT,
   readAgroCloudDashboardUrl,
-} from '@/lib/agroCloudDashboardStorage'
-import '@/pages/dashboards/AgroCloudDashboard.css'
+} from '@/modules/dashboards/management/agrocloud/agroCloudDashboardStorage'
+import '@/modules/dashboards/management/AgroCloudDashboard.css'
 
 const AGRO_CLOUD_PATH = '/dashboards/agro-cloud'
 

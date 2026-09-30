@@ -51,7 +51,7 @@ import {
   normalizeGeoJsonEnvelope,
   parseFile,
   parseRemoteUrlAsFile,
-} from '@/utils/FileLoader'
+} from '@/modules/data-management/import/FileLoader'
 import { GisDataManager } from './gisDataManager';
 import { useGeminiApiKey } from '@/core/hooks/useGeminiApiKey'
 import {
@@ -106,12 +106,12 @@ import { GisGeoExplorerChartConfig } from '@/modules/ai/agent/GisGeoExplorerChar
 import { GeoExplorerGeminiMessageParts } from '@/modules/ai/agent/GeoExplorerGeminiMessageParts'
 import { GisMapBrowseLayersPane } from '../layers/GisMapBrowseLayersPane'
 import { GisMapSaveOpenFlyout } from './GisMapSaveOpenPanel'
-import { SelectMapFromGisContentModal } from '@/pages/dashboards/agrocloud/SelectMapFromGisContentModal'
+import { SelectMapFromGisContentModal } from '@/modules/dashboards/management/agrocloud/SelectMapFromGisContentModal'
 import type { GisContentRow } from '../layers/content-portal/gisContentPortalData'
 import { gisContentPortalDisplayTypeLabel } from '../layers/content-portal/gisContentPortalData'
 import { siDefaultNewVectorLayerFields, SI_DEFAULT_VECTOR_OUTLINE_COLOR, SI_DEFAULT_VECTOR_POLYGON_FILL_ALPHA, SI_DEFAULT_VECTOR_LINE_WEIGHT } from '../layers/symbology/siSymbolStyleStudio'
 import { isGisPortalRowMapAddable } from '../layers/content-portal/gisContentPortalData'
-import { GisUploadCloudSources } from '@/components/GisUploadCloudSources'
+import { GisUploadCloudSources } from '@/modules/data-management/import/GisUploadCloudSources'
 import {
   bindAgroCloudMapWheelZoomPassthrough,
   ensureAgroCloudMapScrollZoom,

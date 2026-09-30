@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import '@/pages/data-entry/EC.css'
+import '@/modules/operations/fertigation/EC.css'
 import './Users.css'
 import { hasPermission, normalizeEmail, normalizeRole, readCurrentUser, startSession } from '../auth/auth'
 import {

@@ -5,7 +5,7 @@ import {
   imageryTimePeriodKey,
   type ImageryTimeAggregation,
   type ImageryTimeSeriesLayerSeries,
-} from '@/pages/dashboards/agroCloudPlatform/acpImageryTimeSeries'
+} from '@/modules/dashboards/gis/agroCloudPlatform/acpImageryTimeSeries'
 
 export type TimeSeriesWeatherPoint = {
   periodKey: string
