@@ -1,4 +1,4 @@
-/* Typography: self-hosted via src/styles/fonts-local.css (no Google Fonts CDN). */
+/* Typography: self-hosted via src/assets/styles/fonts-local.css (no Google Fonts CDN). */
 
 /* Workflow data-entry shells use padding from .workflow-shell-page (no double gutter) */
 .ec-page:not(.workflow-shell-page) {

@@ -16,13 +16,14 @@ Agri Cloud is a monorepo containing a React/Vite frontend and an Express backend
 .
 ├─ frontend/
 │  ├─ src/
-│  │  ├─ components/      # reusable UI and shared widgets
-│  │  ├─ pages/           # page-level features
-│  │  ├─ services/        # storage/network services
-│  │  ├─ store/           # app-wide state/context
-│  │  ├─ utils/           # helper utilities
-│  │  ├─ types/           # shared TS types
-│  │  └─ styles/          # global style assets
+│  │  ├─ app/             # entry, routes, providers, layouts, startup
+│  │  ├─ core/            # auth, authorization, config, api, state, routing, hooks
+│  │  ├─ modules/         # features: gis, remote-sensing, ai, operations, forms,
+│  │  │                   #   dashboards, reports, master-data, data-management
+│  │  ├─ roles/           # who may use which module (no copied feature code)
+│  │  ├─ shared/          # reusable UI: components, layouts, maps, charts, dialogs
+│  │  ├─ data/            # domains, schemas, templates, seeds, samples
+│  │  └─ assets/          # styles, images, icons, logos, fonts
 │  ├─ public/             # static assets
 │  └─ config/
 ├─ backend/
@@ -40,7 +41,6 @@ Agri Cloud is a monorepo containing a React/Vite frontend and an Express backend
 │  └─ docs/
 ├─ services/              # auxiliary microservices (geodash-api)
 ├─ analysis_engine/       # Python analysis engine
-├─ dashboard-themes/      # dashboard theme presets
 ├─ sentinel-crop-alert/   # standalone Sentinel crop alert app
 ├─ tools/                 # Python report / chart utilities
 ├─ scripts/               # build, deploy and dev scripts (used by npm & CI)
