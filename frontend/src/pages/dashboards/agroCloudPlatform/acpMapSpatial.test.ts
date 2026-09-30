@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractCropAlertFieldsFromMask } from '../../../lib/siCropAlertEngine'
+import { extractCropAlertFieldsFromMask } from '@/modules/remote-sensing/indices/siCropAlertEngine'
 import {
   ACP_DEFAULT_MAP_BOUNDS,
   ACP_DEFAULT_MAP_CENTER,

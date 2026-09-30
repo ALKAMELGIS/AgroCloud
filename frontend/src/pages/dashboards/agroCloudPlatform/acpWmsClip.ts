@@ -1,10 +1,10 @@
-import { bboxesIntersect, geometryBBox } from '../../../lib/geoAiGeoJsonSpatial'
-import { resolveAgroStructuresCountry } from '../../../lib/agroStructuresPrimaryAoi'
+import { bboxesIntersect, geometryBBox } from '@/modules/ai/agent/geoAiGeoJsonSpatial'
+import { resolveAgroStructuresCountry } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
 import {
   SENTINEL_LAYER_LIVE_WMS_MAX_TILE_LAYERS_PLATFORM,
   type SentinelLayerLiveWmsBuildOptions,
-} from '../../../lib/sentinelLayerLiveWmsEngine'
-import { expandLngLatBBox, type LngLatBBox } from '../../../lib/siMapViewport'
+} from '@/modules/remote-sensing/indices/sentinelLayerLiveWmsEngine'
+import { expandLngLatBBox, type LngLatBBox } from '@/modules/gis/map/siMapViewport'
 import { quantizeAcpMapViewBbox } from './map/acpMapViewPublish'
 
 /** Safety cap when viewport holds an extreme number of fields (rare). */

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const p = new URL('../src/pages/satellite/SatelliteIntelligence.tsx', import.meta.url);
+const p = new URL('../src/modules/remote-sensing/imagery/SatelliteIntelligence.tsx', import.meta.url);
 let s = fs.readFileSync(p, 'utf8');
 
 const open = "{expandedEnvSection === 'explore-stac' ? (";

@@ -2,12 +2,12 @@ import {
   buildAgroStructuresCountryDescriptionMapFromFeatures,
   resolveAgroStructuresCountryLabel,
   resolveAgroStructuresFieldDisplayName,
-} from '../../../../lib/agroStructuresPrimaryAoi'
-import { wmoWeatherIconClass, type OpenMeteoWeatherSnapshot } from '../../../../lib/openMeteoWeather'
+} from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
+import { wmoWeatherIconClass, type OpenMeteoWeatherSnapshot } from '@/modules/remote-sensing/weather/openMeteoWeather'
 import {
   extractCropAlertFieldsFromMask,
   type CropAlertFieldInput,
-} from '../../../../lib/siCropAlertEngine'
+} from '@/modules/remote-sensing/indices/siCropAlertEngine'
 import type { AcpMapScopeMode } from '../acpPlatformContext'
 import { resolveAcpScopeGeoFeatures, type AcpMapViewSlice } from '../acpViewportScope'
 import type { AcpWeatherAlertLevel } from './acpWeatherAlertLayerModel'

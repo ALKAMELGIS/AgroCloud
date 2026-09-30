@@ -3,8 +3,8 @@
  */
 
 import type { RealtimeAlertKpiPayload, RealtimeAlertKpiMetric } from '../../pages/dashboards/realtimeAlert/types/realtimeAlert.types'
-import type { CropAlertFieldResult } from '../siCropAlertEngine'
-import { classifyChasFusionToAlert } from '../chasAlertMapping'
+import type { CropAlertFieldResult } from '@/modules/remote-sensing/indices/siCropAlertEngine'
+import { classifyChasFusionToAlert } from '@/modules/remote-sensing/indices/chasAlertMapping'
 
 export function mergeKpiWithEngine(
   api: RealtimeAlertKpiPayload | null,

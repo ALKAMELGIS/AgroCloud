@@ -4,7 +4,7 @@
 import JSZip from 'jszip'
 import * as XLSX from 'xlsx'
 import type { Feature, FeatureCollection, Geometry } from 'geojson'
-import { downloadBlob } from './hydroWatershed/geoTiffExport'
+import { downloadBlob } from '@/modules/gis/spatial-analysis/hydro-watershed/geoTiffExport'
 import {
   OBJECT_ATTRIBUTES_STAMP,
   objectAttributeFieldNames,

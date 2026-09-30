@@ -1,4 +1,4 @@
-import { geometryBBox } from '../../../../lib/geoAiGeoJsonSpatial'
+import { geometryBBox } from '@/modules/ai/agent/geoAiGeoJsonSpatial'
 
 /** Fixed pixel gap between co-located CHAS and Weather alert markers at the same field. */
 export const ACP_CO_MARKER_GAP_X = 52

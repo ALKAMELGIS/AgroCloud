@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { localIsoDate } from '../../../lib/siSentinelImageryDate'
+import { localIsoDate } from '@/modules/remote-sensing/imagery/siSentinelImageryDate'
 
 export type SentinelCalendarDay = {
   date: string

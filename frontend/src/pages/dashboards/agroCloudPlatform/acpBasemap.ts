@@ -4,7 +4,7 @@ import {
   resolveBasemapId,
   tileUrlForMapboxGl,
   type LeafletTileSpec,
-} from '../../satellite/basemapCatalog'
+} from '@/modules/gis/map/basemapCatalog'
 
 export type AcpBasemapRasterLayer = {
   sourceId: string

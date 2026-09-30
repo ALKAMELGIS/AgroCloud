@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { GisContentMapLayerConfig, GisContentMapRegistry } from '@/lib/gisContentRepository'
+import type { GisContentMapLayerConfig, GisContentMapRegistry } from '@/modules/gis/layers/gisContentRepository'
 import {
   buildGisContentMapLayerPayload,
   getGisContentMapRegistry,
@@ -10,9 +10,9 @@ import {
   unregisterGisContentMapLayer,
   updateGisContentMapLayerConfig,
   useGisContentPortal,
-} from '@/lib/gisContentPortalStore'
-import { hostedFeatureLayerGeoJsonForRow } from '@/lib/gisHostedFeatureLayerPortal'
-import type { GisContentRow } from '@/pages/master/gisContentPortalData'
+} from '@/modules/gis/layers/gisContentPortalStore'
+import { hostedFeatureLayerGeoJsonForRow } from '@/modules/gis/layers/gisHostedFeatureLayerPortal'
+import type { GisContentRow } from '@/modules/gis/layers/content-portal/gisContentPortalData'
 
 export type GisContentRepositoryMapLayer = {
   row: GisContentRow

@@ -1,4 +1,4 @@
-import { estimateSaviFromNdvi, resolveDchasOrbPresentation } from '../../../lib/siCropAlertDchasBeacon'
+import { estimateSaviFromNdvi, resolveDchasOrbPresentation } from '@/modules/remote-sensing/indices/siCropAlertDchasBeacon'
 import {
   listPopupSceneDates,
   resolveCropAlertIndexSceneValues,
@@ -8,8 +8,8 @@ import {
   type IndexMinMaxMean,
   type IndexTrendDirection,
   type IndexTrendPresentation,
-} from '../../../lib/siCropAlertMapPopupModel'
-import type { CropAlertFieldResult } from '../../../lib/siCropAlertEngine'
+} from '@/modules/remote-sensing/indices/siCropAlertMapPopupModel'
+import type { CropAlertFieldResult } from '@/modules/remote-sensing/indices/siCropAlertEngine'
 import type { AcpFieldTableRow } from './acpMapSpatial'
 
 export type AcpIndicatorIndexCode = 'NDVI' | 'NDMI' | 'NDWI' | 'SAVI' | 'EVI' | 'LST' | 'CHAS' | 'DCHAS'

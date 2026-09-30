@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { getBasemapThumbnail, listEsriBasemapEntries, resolveBasemapId } from '../../../satellite/basemapCatalog'
+import { getBasemapThumbnail, listEsriBasemapEntries, resolveBasemapId } from '@/modules/gis/map/basemapCatalog'
 import { useAcpPlatform } from '../acpPlatformContext'
 import { AcpMapPanel } from './AcpMapPanel'
 

@@ -1,7 +1,7 @@
-import type { GisContentDataFormat } from './gisContentRepository'
-import type { GisContentItemDetails } from './gisContentPortalStore'
-import type { GisContentRow } from '../pages/master/gisContentPortalData'
-import { getGisContentItemDetails } from './gisContentPortalStore'
+import type { GisContentDataFormat } from '@/modules/gis/layers/gisContentRepository'
+import type { GisContentItemDetails } from '@/modules/gis/layers/gisContentPortalStore'
+import type { GisContentRow } from '@/modules/gis/layers/content-portal/gisContentPortalData'
+import { getGisContentItemDetails } from '@/modules/gis/layers/gisContentPortalStore'
 
 export type AcpOgcLayerMeta = {
   dataFormat: 'wms' | 'wmts'

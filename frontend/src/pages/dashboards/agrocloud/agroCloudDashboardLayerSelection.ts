@@ -1,4 +1,4 @@
-import type { GisContentRow } from '../../master/gisContentPortalData'
+import type { GisContentRow } from '@/modules/gis/layers/content-portal/gisContentPortalData'
 import type {
   AgroCloudDashboardConfig,
   AgroCloudDashboardElement,

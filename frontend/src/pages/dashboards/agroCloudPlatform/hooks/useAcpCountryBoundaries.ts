@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { fetchArcGisFeatureLayerGeoJson } from '../../../../lib/arcgisFeatureLayerGeoJson'
-import { getArcgisPortalToken } from '../../../../lib/arcgisPortalToken'
-import { WORLD_COUNTRIES_FS51_URL } from '../../../../lib/worldCountriesLayer'
+import { fetchArcGisFeatureLayerGeoJson } from '@/modules/gis/layers/arcgisFeatureLayerGeoJson'
+import { getArcgisPortalToken } from '@/modules/gis/layers/arcgisPortalToken'
+import { WORLD_COUNTRIES_FS51_URL } from '@/modules/gis/map/worldCountriesLayer'
 import type { AcpCountryOption } from '../acpMapSpatial'
 import {
   filterWorldCountriesToPortfolio,

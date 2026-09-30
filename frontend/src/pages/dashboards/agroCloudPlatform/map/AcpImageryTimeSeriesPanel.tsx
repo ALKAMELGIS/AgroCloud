@@ -15,12 +15,12 @@ import {
   type ChartData,
 } from 'chart.js'
 import { Bar, Line, Pie, Scatter } from 'react-chartjs-2'
-import { fetchCropAlertSentinelHistoryExtension, buildDailySeriesFromEngineScenes } from '../../../../lib/siCropAlertSentinelLive'
+import { fetchCropAlertSentinelHistoryExtension, buildDailySeriesFromEngineScenes } from '@/modules/remote-sensing/indices/siCropAlertSentinelLive'
 import {
   fetchChirpsPrecipForImageryChart,
   mergeOpticalAndChirpsChart,
   partitionImageryTimeSeriesLayerIds,
-} from '../../../../lib/chirpsRainfall/chirpsImageryTimeSeries'
+} from '@/modules/remote-sensing/weather/chirpsRainfall/chirpsImageryTimeSeries'
 import { acpDefaultLayerIdsFromChartSeries } from '../acpSettingsBundle'
 import { useAcpPlatform } from '../acpPlatformContext'
 import {
@@ -41,7 +41,7 @@ import {
   type ImageryCorrelationScatterAnalysis,
   type ImageryTimeSeriesLayerSeries,
 } from '../acpImageryTimeSeries'
-import { SiScatterCorrelationInsight } from '../../../satellite/components/SiScatterCorrelationInsight'
+import { SiScatterCorrelationInsight } from '@/modules/remote-sensing/temporal-analysis/SiScatterCorrelationInsight'
 import {
   buildAgroStructureFieldOptions,
   resolveAgroStructureFieldByKey,

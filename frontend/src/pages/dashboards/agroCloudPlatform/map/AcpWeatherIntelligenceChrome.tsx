@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import maplibregl, { type Map as MaplibreMap } from 'maplibre-gl'
-import { reversePlaceLabel } from '../../../../lib/openMeteoWeather'
+import { reversePlaceLabel } from '@/modules/remote-sensing/weather/openMeteoWeather'
 import { getMapboxAccessToken } from '@/core/config/mapboxAccessToken'
 import {
   WeatherIntelligencePanel,
   type WeatherLocation,
-} from '../../../satellite/components/WeatherIntelligencePanel'
-import '../../../satellite/components/WeatherIntelligencePanel.css'
+} from '@/modules/remote-sensing/weather/WeatherIntelligencePanel'
+import '@/modules/remote-sensing/weather/WeatherIntelligencePanel.css'
 import { useAcpPlatform } from '../acpPlatformContext'
 import { ACP_FIELD_LOCATE_MIN_ZOOM } from '../acpMapSpatial'
 

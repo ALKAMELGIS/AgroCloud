@@ -3,7 +3,7 @@
  * so secrets survive frontend rebuilds and full app updates when the server data directory persists.
  */
 
-import { getArcgisPortalTokenBrowserOverride, persistArcgisPortalTokenInBrowser } from '@/lib/arcgisPortalToken'
+import { getArcgisPortalTokenBrowserOverride, persistArcgisPortalTokenInBrowser } from '@/modules/gis/layers/arcgisPortalToken'
 import { getClaudeApiKeyBrowserOverride, persistClaudeApiKeyInBrowser } from './claudeApiKey'
 import { getUserApiTokenValue, persistUserApiTokenValue } from './customUserApiTokens'
 import { getDeepseekApiKeyBrowserOverride, persistDeepseekApiKeyInBrowser } from './deepseekApiKey'
@@ -17,7 +17,7 @@ import {
 import {
   getSentinelHubWmsInstanceIdBrowserOverride,
   persistSentinelHubWmsInstanceIdInBrowser,
-} from '@/lib/sentinelHubWmsInstance'
+} from '@/modules/remote-sensing/imagery/sentinelHubWmsInstance'
 import { scheduleBrowserApiSecretsVaultSnapshot } from './browserApiSecretsVault'
 import { apiUrl, configuredApiOrigin } from '../api/apiOrigin'
 

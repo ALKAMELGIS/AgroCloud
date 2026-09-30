@@ -4,8 +4,8 @@ import Overview from '@/pages/dashboards/Overview'
 import ExternalPageLink from './ExternalPageLink'
 import { lazyWithRetry } from './lazyWithRetry'
 
-const GisMap = lazyWithRetry(() => import('@/pages/satellite/GisMap'), 'GisMap')
-const SatelliteIntelligence = lazyWithRetry(() => import('@/pages/satellite/SatelliteIntelligence'), 'SatelliteIntelligence')
+const GisMap = lazyWithRetry(() => import('@/modules/gis/map/GisMap'), 'GisMap')
+const SatelliteIntelligence = lazyWithRetry(() => import('@/modules/remote-sensing/imagery/SatelliteIntelligence'), 'SatelliteIntelligence')
 
 function Placeholder({ title }: { title: string }) {
   return (

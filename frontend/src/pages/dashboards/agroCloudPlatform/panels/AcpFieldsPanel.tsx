@@ -3,11 +3,11 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import type { AcpCountryOption, AcpFieldTableRow } from '../acpMapSpatial'
 import { useAcpPlatform } from '../acpPlatformContext'
-import { resolveAcpFieldHvdColor } from '../../../../lib/siCropAlertDchasBeacon'
-import { CropAlertTierIcon } from '../../../satellite/components/SiCropAlertHvdIcon'
+import { resolveAcpFieldHvdColor } from '@/modules/remote-sensing/indices/siCropAlertDchasBeacon'
+import { CropAlertTierIcon } from '@/modules/remote-sensing/indices/SiCropAlertHvdIcon'
 import { useAcpVirtualRows } from '../hooks/useAcpVirtualRows'
 import { useBreakpoint } from '../hooks/useBreakpoint'
-import '../../../satellite/components/SiCropAlertHvdIcon.css'
+import '@/modules/remote-sensing/indices/SiCropAlertHvdIcon.css'
 
 type Props = {
   rows: AcpFieldTableRow[]

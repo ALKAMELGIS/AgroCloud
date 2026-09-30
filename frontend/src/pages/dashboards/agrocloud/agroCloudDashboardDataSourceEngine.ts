@@ -1,8 +1,8 @@
-import { getGisContentRowById } from '../../../lib/gisContentPortalStore'
+import { getGisContentRowById } from '@/modules/gis/layers/gisContentPortalStore'
 import { ensureLayoutDefaults } from './agroCloudDashboardLayout'
 import { resolveBodyLayout } from './agroCloudDashboardBodyLayout'
-import type { GisContentRow } from '../../master/gisContentPortalData'
-import { gisContentPortalDisplayTypeLabel } from '../../master/gisContentPortalData'
+import type { GisContentRow } from '@/modules/gis/layers/content-portal/gisContentPortalData'
+import { gisContentPortalDisplayTypeLabel } from '@/modules/gis/layers/content-portal/gisContentPortalData'
 import type { AgroCloudDashboardConfig, AgroCloudDashboardElement } from './agroCloudDashboardData'
 
 const GIS_CONTENT_FIELDS_KEY = 'gisContent.layerFields.v1'

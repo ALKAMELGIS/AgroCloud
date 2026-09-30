@@ -1,4 +1,4 @@
-import type { OpenMeteoWeatherSnapshot } from '../../../../lib/openMeteoWeather'
+import type { OpenMeteoWeatherSnapshot } from '@/modules/remote-sensing/weather/openMeteoWeather'
 
 /** Map marker weather states shown as icon + container shape. */
 export type AcpWeatherMarkerCondition = 'clear' | 'cloud' | 'rain' | 'wind' | 'storm' | 'snow' | 'fog'

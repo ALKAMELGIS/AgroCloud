@@ -3,7 +3,7 @@ import type { FeatureCollection } from 'geojson'
 import { buildEoEnrichmentDocxDocumentXml } from './buildEoEnrichmentDocxDocument'
 import { buildEoEnrichmentDocxModel } from './buildEoEnrichmentDocxModel'
 
-import templateUrl from '../../pages/satellite/lib/timeSeriesReport/templates/Agricultural_Satellite_Intelligence_Report.template.docx?url'
+import templateUrl from '@/modules/remote-sensing/temporal-analysis/timeSeriesReport/templates/Agricultural_Satellite_Intelligence_Report.template.docx?url'
 
 const HEADER_REL_ID = 'rIdHdr'
 const FOOTER_REL_ID = 'rIdFtr'

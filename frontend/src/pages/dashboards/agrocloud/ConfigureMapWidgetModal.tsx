@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { GisContentRow } from '../../master/gisContentPortalData'
+import type { GisContentRow } from '@/modules/gis/layers/content-portal/gisContentPortalData'
 import {
   defaultMapWidgetSettings,
   mergeMapWidgetSettings,

@@ -9,13 +9,13 @@ import {
   type MutableRefObject,
   type ReactNode,
 } from 'react'
-import type { CropAlertEngineSettings, CropAlertFieldResult } from '../../../lib/siCropAlertEngine'
+import type { CropAlertEngineSettings, CropAlertFieldResult } from '@/modules/remote-sensing/indices/siCropAlertEngine'
 import {
   ACP_DEFAULT_MAP_CENTER,
   ACP_DEFAULT_MAP_ZOOM,
 } from './acpMapSpatial'
-import type { LngLatBBox } from '../../../lib/siMapViewport'
-import type { GisContentRow } from '../../master/gisContentPortalData'
+import type { LngLatBBox } from '@/modules/gis/map/siMapViewport'
+import type { GisContentRow } from '@/modules/gis/layers/content-portal/gisContentPortalData'
 import { hydrateAcpCropAlertEngineSnapshot } from './acpCropAlertCache'
 import {
   type AcpMapScopeMode,

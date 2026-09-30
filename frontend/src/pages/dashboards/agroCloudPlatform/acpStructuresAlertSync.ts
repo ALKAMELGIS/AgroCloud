@@ -1,7 +1,7 @@
 import {
   extractCropAlertFieldsFromMask,
   type CropAlertFieldResult,
-} from '../../../lib/siCropAlertEngine'
+} from '@/modules/remote-sensing/indices/siCropAlertEngine'
 
 /** Drop alert results for fields no longer present in the Agro_Structures mask. */
 export function pruneCropAlertResultsToMask(

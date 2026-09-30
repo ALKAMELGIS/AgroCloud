@@ -4,7 +4,7 @@ import {
   persistCropAlertResultsCache,
   type CropAlertFieldResult,
   type CropAlertResultsCache,
-} from '../../../lib/siCropAlertEngine'
+} from '@/modules/remote-sensing/indices/siCropAlertEngine'
 import { ACP_CROP_ALERT_RESULTS_LS_KEY } from './acpPlatformConfig'
 
 const ACP_CACHE_OPTS = { resultsKey: ACP_CROP_ALERT_RESULTS_LS_KEY }

@@ -5,9 +5,9 @@ import {
   unregisterGisContentMapLayer,
   updateGisContentMapLayerConfig,
   useGisContentPortal,
-} from '../../../../lib/gisContentPortalStore'
+} from '@/modules/gis/layers/gisContentPortalStore'
 import { isAcpOgcRasterPortalRow, readAcpOgcLayerMetaForRow } from '../../../../lib/acpOgcLayerMeta'
-import { isAgroStructuresPortalRow } from '../../../../lib/gisHostedFeatureLayerPortal'
+import { isAgroStructuresPortalRow } from '@/modules/gis/layers/gisHostedFeatureLayerPortal'
 import { useAcpPlatform } from '../acpPlatformContext'
 import { isAcpExcludedPortalMapRow } from './acpPortalMapLayers'
 

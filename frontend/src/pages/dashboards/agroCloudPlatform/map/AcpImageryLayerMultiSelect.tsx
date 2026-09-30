@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import type { RemoteSensingLayerSelectGroup } from '../../../../lib/agroCompositeIndices'
+import type { RemoteSensingLayerSelectGroup } from '@/modules/remote-sensing/indices/agroCompositeIndices'
 
 type Props = {
   groups: RemoteSensingLayerSelectGroup[]

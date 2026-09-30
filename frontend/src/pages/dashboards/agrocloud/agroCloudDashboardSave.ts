@@ -3,8 +3,8 @@ import {
   getGisContentPortalRows,
   updateGisContentItemDetails,
   upsertGisContentPortalApp,
-} from '../../../lib/gisContentPortalStore'
-import { isAgroCloudDashboardApp } from '../../master/gisContentPortalData'
+} from '@/modules/gis/layers/gisContentPortalStore'
+import { isAgroCloudDashboardApp } from '@/modules/gis/layers/content-portal/gisContentPortalData'
 import { DEFAULT_AGROCLOUD_DASHBOARD_CONFIG, type AgroCloudDashboardConfig } from './agroCloudDashboardData'
 import { normalizeDashboardConfig } from './agroCloudDashboardDataSourceEngine'
 

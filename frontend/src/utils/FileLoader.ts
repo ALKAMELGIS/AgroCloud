@@ -532,7 +532,7 @@ function mapboxImageCoordinatesFromBounds(west: number, south: number, east: num
  */
 async function parseGeoTiffToRaster(file: File, opts?: ParseOptions): Promise<ParsedData> {
   opts?.onProgress?.(10);
-  const { processRasterFiles } = await import('../lib/aiDetection/siAiDlRasterPipeline');
+  const { processRasterFiles } = await import('@/modules/ai/detection/siAiDlRasterPipeline');
   opts?.onProgress?.(40);
   const result = await processRasterFiles([file], opts?.imagePlacementBounds);
   opts?.onProgress?.(100);

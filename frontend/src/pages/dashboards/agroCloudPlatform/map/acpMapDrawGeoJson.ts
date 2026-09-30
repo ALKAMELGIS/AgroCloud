@@ -1,4 +1,4 @@
-import { resolveAgroStructuresCountry } from '../../../../lib/agroStructuresPrimaryAoi'
+import { resolveAgroStructuresCountry } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
 
 function featureKey(f: GeoJSON.Feature, index: number): string {
   const props = (f.properties ?? {}) as Record<string, unknown>

@@ -2,8 +2,8 @@ import {
   buildGisContentMapLayerPayload,
   getGisContentRowById,
   type GisContentMapLayerPayload,
-} from '../../../lib/gisContentPortalStore'
-import { getGisWebMapSnapshotByContentId, type GisWebMapSnapshotV1 } from '../../../lib/gisWebMapPortal'
+} from '@/modules/gis/layers/gisContentPortalStore'
+import { getGisWebMapSnapshotByContentId, type GisWebMapSnapshotV1 } from '@/modules/gis/map/gisWebMapPortal'
 
 export type DashboardWebMapPreview = {
   snapshot: GisWebMapSnapshotV1 | null

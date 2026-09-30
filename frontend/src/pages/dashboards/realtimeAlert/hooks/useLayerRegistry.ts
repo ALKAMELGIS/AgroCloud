@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getGisContentMapRegistry, useGisContentPortal } from '../../../lib/gisContentPortalStore'
+import { getGisContentMapRegistry, useGisContentPortal } from '@/modules/gis/layers/gisContentPortalStore'
 
 export type RealtimeAlertLayerEntry = {
   id: string

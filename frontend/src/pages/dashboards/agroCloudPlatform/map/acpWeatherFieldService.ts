@@ -1,4 +1,4 @@
-import { fetchOpenMeteoWeather, type OpenMeteoWeatherSnapshot } from '../../../../lib/openMeteoWeather'
+import { fetchOpenMeteoWeather, type OpenMeteoWeatherSnapshot } from '@/modules/remote-sensing/weather/openMeteoWeather'
 import { apiUrl, ensureBackendAvailable, noteApiResponse } from '@/core/api/apiOrigin'
 import {
   groupWeatherTickerFieldsByGrid,

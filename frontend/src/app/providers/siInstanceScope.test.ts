@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveSiScopedSessionKey, resolveSiScopedStorageKey } from './siInstanceScope'
-import { isCropAlertCacheEventForKey, SI_CROP_ALERT_RESULTS_LS_KEY } from '@/lib/siCropAlertEngine'
+import { isCropAlertCacheEventForKey, SI_CROP_ALERT_RESULTS_LS_KEY } from '@/modules/remote-sensing/indices/siCropAlertEngine'
 
 describe('siInstanceScope', () => {
   it('returns base keys unchanged for standalone scope', () => {

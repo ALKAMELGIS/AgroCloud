@@ -6,8 +6,8 @@ import {
   getGisContentRowById,
   isGisContentRowInRecycle,
   useGisContentPortal,
-} from '../../../../lib/gisContentPortalStore'
-import { hostedFeatureLayerGeoJsonForRow } from '../../../../lib/gisHostedFeatureLayerPortal'
+} from '@/modules/gis/layers/gisContentPortalStore'
+import { hostedFeatureLayerGeoJsonForRow } from '@/modules/gis/layers/gisHostedFeatureLayerPortal'
 import type { GisContentRepositoryMapLayer } from '@/core/hooks/useGisContentRepositoryMapLayers'
 import { isAcpExcludedPortalMapRow } from '../map/acpPortalMapLayers'
 import { isAcpOgcRasterPortalRow } from '../../../../lib/acpOgcLayerMeta'

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { buildAgroStructuresLayerAoiMask, fetchAgroStructuresGeoJson } from '../../../lib/agroStructuresPrimaryAoi'
+import { buildAgroStructuresLayerAoiMask, fetchAgroStructuresGeoJson } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
 import { buildAcpWmsSessionClipFeatureCollection, buildAcpWmsTileClipSource, resolveAcpWmsBuildOptions } from './acpWmsClip'
 import { buildAcpWmsChunkTileEntries, limitAcpWmsTileEntries } from './acpWmsViewportEngine'
 import {
   buildSentinelLayerLiveDisplayChunks,
   isSentinelLayerLiveWmsRenderReady,
-} from '../../../lib/sentinelLayerLiveWmsEngine'
+} from '@/modules/remote-sensing/indices/sentinelLayerLiveWmsEngine'
 
 describe('limitAcpWmsTileEntries', () => {
   it('passthrough — layer cap is applied at WKT merge build time', () => {

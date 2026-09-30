@@ -6,7 +6,7 @@
  */
 
 import type { BuiltinSecretKey } from './apiSecretsServerPersistence'
-import { getArcgisPortalTokenBrowserOverride, persistArcgisPortalTokenInBrowser } from '@/lib/arcgisPortalToken'
+import { getArcgisPortalTokenBrowserOverride, persistArcgisPortalTokenInBrowser } from '@/modules/gis/layers/arcgisPortalToken'
 import { getClaudeApiKeyBrowserOverride, persistClaudeApiKeyInBrowser } from './claudeApiKey'
 import { clearUserApiTokenValue, getUserApiTokenValue, persistUserApiTokenValue } from './customUserApiTokens'
 import { getDeepseekApiKeyBrowserOverride, persistDeepseekApiKeyInBrowser } from './deepseekApiKey'
@@ -20,7 +20,7 @@ import {
 import {
   getSentinelHubWmsInstanceIdBrowserOverride,
   persistSentinelHubWmsInstanceIdInBrowser,
-} from '@/lib/sentinelHubWmsInstance'
+} from '@/modules/remote-sensing/imagery/sentinelHubWmsInstance'
 import { sanitizeCustomApiTokenSlot } from './customApiTokenSlotSanitize'
 import { SETTINGS_STORAGE_KEY } from '../services/persistedStorageKeys'
 import type { CustomApiTokenSlot } from '../types/systemSettings'

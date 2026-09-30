@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyCropAlertEngineDefaultOperatingState } from '../../../lib/siCropAlertEngine'
+import { applyCropAlertEngineDefaultOperatingState } from '@/modules/remote-sensing/indices/siCropAlertEngine'
 import { DEFAULT_ACP_PLATFORM_CONFIG } from './acpPlatformConfig'
 import {
   ACP_SETTINGS_BUNDLE_VERSION,

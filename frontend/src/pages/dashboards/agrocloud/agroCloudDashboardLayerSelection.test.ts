@@ -9,7 +9,7 @@ import {
 } from './agroCloudDashboardLayerSelection'
 import { appendElementWithoutDataBinding } from './agroCloudDashboardLayerSelection'
 import { registerGisContentDataSource } from './agroCloudDashboardElements'
-import type { GisContentRow } from '../../master/gisContentPortalData'
+import type { GisContentRow } from '@/modules/gis/layers/content-portal/gisContentPortalData'
 import { queryDefinitionFromElement } from './agroCloudDashboardQueryEngine'
 import { widgetRequiresDataPicker } from './agroCloudDashboardWidgetRegistry'
 

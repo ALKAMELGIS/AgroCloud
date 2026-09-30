@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractCropAlertFieldsFromMask, type CropAlertFieldResult } from '../../../lib/siCropAlertEngine'
+import { extractCropAlertFieldsFromMask, type CropAlertFieldResult } from '@/modules/remote-sensing/indices/siCropAlertEngine'
 import {
   maskHasUncachedAlertFields,
   pruneCropAlertResultsToMask,

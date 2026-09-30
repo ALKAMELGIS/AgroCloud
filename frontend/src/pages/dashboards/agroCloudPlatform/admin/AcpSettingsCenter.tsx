@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
-import { getBasemapThumbnail, listEsriBasemapEntries, resolveBasemapId } from '../../../satellite/basemapCatalog'
-import type { CropAlertEngineSettings, CropAlertIndexId, CropAlertTypeId } from '../../../../lib/siCropAlertEngine'
-import { applyCropAlertEngineDefaultOperatingState } from '../../../../lib/siCropAlertEngine'
-import { SI_DEFAULT_LIVE_WMS_LAYER } from '../../../../lib/sentinelHubWmsLayers'
-import { GisMapBrowseLayersPane } from '../../../satellite/components/GisMapBrowseLayersPane'
-import type { GisContentRow } from '../../../master/gisContentPortalData'
+import { getBasemapThumbnail, listEsriBasemapEntries, resolveBasemapId } from '@/modules/gis/map/basemapCatalog'
+import type { CropAlertEngineSettings, CropAlertIndexId, CropAlertTypeId } from '@/modules/remote-sensing/indices/siCropAlertEngine'
+import { applyCropAlertEngineDefaultOperatingState } from '@/modules/remote-sensing/indices/siCropAlertEngine'
+import { SI_DEFAULT_LIVE_WMS_LAYER } from '@/modules/remote-sensing/imagery/sentinelHubWmsLayers'
+import { GisMapBrowseLayersPane } from '@/modules/gis/layers/GisMapBrowseLayersPane'
+import type { GisContentRow } from '@/modules/gis/layers/content-portal/gisContentPortalData'
 import {
   getGisContentMapRegistry,
   getGisContentRowById,
   isGisContentRowInRecycle,
   useGisContentPortal,
-} from '../../../../lib/gisContentPortalStore'
-import { isAgroStructuresPortalRow } from '../../../../lib/gisHostedFeatureLayerPortal'
-import { resolveAgroStructuresCountryLabel } from '../../../../lib/agroStructuresPrimaryAoi'
+} from '@/modules/gis/layers/gisContentPortalStore'
+import { isAgroStructuresPortalRow } from '@/modules/gis/layers/gisHostedFeatureLayerPortal'
+import { resolveAgroStructuresCountryLabel } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
 import {
   DEFAULT_ACP_PLATFORM_CONFIG,
   type AcpMapToolbarConfig,

@@ -2,12 +2,12 @@ import {
   wmoWeatherIconClass,
   wmoWeatherLabel,
   type OpenMeteoWeatherSnapshot,
-} from '../../../../lib/openMeteoWeather'
+} from '@/modules/remote-sensing/weather/openMeteoWeather'
 import {
   expandLngLatBBox,
   pointInLngLatBBox,
   type LngLatBBox,
-} from '../../../../lib/siMapViewport'
+} from '@/modules/gis/map/siMapViewport'
 import {
   buildAcpFieldWeatherTickerEntries,
   scoreWeatherAlertSeverity,

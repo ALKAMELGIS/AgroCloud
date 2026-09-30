@@ -1,12 +1,12 @@
-import { geodesicAreaM2 } from '../siLayerClassAreaEngine'
-import { geometryBBox } from '../hydroWatershed/terrainTiles'
-import type { HydroLegend } from '../hydroWatershed/hydroEngine'
+import { geodesicAreaM2 } from '@/modules/remote-sensing/classification/siLayerClassAreaEngine'
+import { geometryBBox } from '@/modules/gis/spatial-analysis/hydro-watershed/terrainTiles'
+import type { HydroLegend } from '@/modules/gis/spatial-analysis/hydro-watershed/hydroEngine'
 import {
   compositeHydroMapSnapshot,
   fetchHydroBasemapForExtent,
   resolveHydroSnapshotExtent,
   type HydroReportMapMarker,
-} from '../hydroWatershed/hydroReportMapSnapshots'
+} from '@/modules/gis/spatial-analysis/hydro-watershed/hydroReportMapSnapshots'
 import {
   WELL_SITE_DATA_QUALITY_NOTES,
   WELL_SITE_METHODOLOGY_NOTES,

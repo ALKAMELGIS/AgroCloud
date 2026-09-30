@@ -5,10 +5,10 @@ import { base64ToUint8, buildWellSiteDocxModel } from './wellSiteReportDocxModel
 import {
   buildDocxChartXml,
   buildEmptyChartRelsXml,
-} from '../../pages/satellite/lib/timeSeriesReport/timeSeriesDocxNativeCharts'
+} from '@/modules/remote-sensing/temporal-analysis/timeSeriesReport/timeSeriesDocxNativeCharts'
 import type { BuildWellSiteReportInput } from './wellSiteReportTypes'
 
-import templateUrl from '../../pages/satellite/lib/timeSeriesReport/templates/Agricultural_Satellite_Intelligence_Report.template.docx?url'
+import templateUrl from '@/modules/remote-sensing/temporal-analysis/timeSeriesReport/templates/Agricultural_Satellite_Intelligence_Report.template.docx?url'
 
 const HEADER_REL_ID = 'rIdHdr'
 const FOOTER_REL_ID = 'rIdFtr'

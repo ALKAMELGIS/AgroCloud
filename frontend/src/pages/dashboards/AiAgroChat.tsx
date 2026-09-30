@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 import { useLanguage } from '@/core/localization/i18n'
 import { useGeminiApiKey } from '@/core/hooks/useGeminiApiKey'
 import { useDeepseekApiKey } from '@/core/hooks/useDeepseekApiKey'
-import { buildGisContentLayersContext } from '../../lib/geoAiChatClaude'
-import { AGRO_AI_CHAT_SYSTEM, agroChatWithDeepSeek, agroChatWithGemini, type AgroChatTurn } from '../../lib/agroAiChat'
+import { buildGisContentLayersContext } from '@/modules/ai/agent/geoAiChatClaude'
+import { AGRO_AI_CHAT_SYSTEM, agroChatWithDeepSeek, agroChatWithGemini, type AgroChatTurn } from '@/modules/ai/agent/agroAiChat'
 import './AiAgroChat.css'
 
 type Msg = { id: string; role: 'user' | 'assistant'; text: string }

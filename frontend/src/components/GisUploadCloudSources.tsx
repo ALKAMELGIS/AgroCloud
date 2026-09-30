@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { GIS_NEW_ITEM_SOURCES } from '../pages/master/gisContentPortalData';
+import { GIS_NEW_ITEM_SOURCES } from '@/modules/gis/layers/content-portal/gisContentPortalData';
 import { pickCloudUploadFile } from '../lib/cloudFilePicker';
 import type { CloudUploadSourceId } from '../lib/cloudFilePickerConfig';
 

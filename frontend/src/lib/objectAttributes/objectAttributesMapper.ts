@@ -2,9 +2,9 @@
  * Map calculated intelligence model rows onto Example.xlsx attribute columns.
  */
 
-import type { AgriObjectReportRow } from '../../pages/satellite/lib/timeSeriesReport/buildAgriculturalObjectIntelligenceModel'
-import { NOT_AVAILABLE } from '../../pages/satellite/lib/timeSeriesReport/agriculturalObjectIntelligenceSchema'
-import { normalizeHlsCropTypeName } from '../agriFieldBoundary/hlsCropTypeNormalize'
+import type { AgriObjectReportRow } from '@/modules/remote-sensing/temporal-analysis/timeSeriesReport/buildAgriculturalObjectIntelligenceModel'
+import { NOT_AVAILABLE } from '@/modules/remote-sensing/temporal-analysis/timeSeriesReport/agriculturalObjectIntelligenceSchema'
+import { normalizeHlsCropTypeName } from '@/modules/ai/segmentation/field-boundary/hlsCropTypeNormalize'
 import type { ObjectAttributeFieldDef, ObjectAttributesSchema } from './objectAttributesSchema'
 import { getObjectAttributesSchemaSync } from './objectAttributesSchema'
 

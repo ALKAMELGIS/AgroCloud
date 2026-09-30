@@ -1,10 +1,10 @@
 import { describe, expect, it, beforeEach } from 'vitest'
-import { buildGisWebMapSnapshot } from '../../../lib/gisWebMapPortal'
+import { buildGisWebMapSnapshot } from '@/modules/gis/map/gisWebMapPortal'
 import {
   getGisContentPortalRows,
   upsertGisContentPortalWebMap,
   upsertGisContentPortalHostedFeatureLayer,
-} from '../../../lib/gisContentPortalStore'
+} from '@/modules/gis/layers/gisContentPortalStore'
 import { resolveDashboardWebMapPreview } from './agroCloudDashboardWebMapPreview'
 
 describe('resolveDashboardWebMapPreview', () => {

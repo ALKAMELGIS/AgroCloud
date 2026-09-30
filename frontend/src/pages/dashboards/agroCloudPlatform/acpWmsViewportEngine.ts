@@ -2,8 +2,8 @@ import {
   buildSentinelLayerLiveWmsTileSpecs,
   SENTINEL_LAYER_LIVE_WMS_MAX_TILE_LAYERS_PLATFORM,
   type SentinelLayerLiveWmsTileSpec,
-} from '../../../lib/sentinelLayerLiveWmsEngine'
-import type { LngLatBBox } from '../../../lib/siMapViewport'
+} from '@/modules/remote-sensing/indices/sentinelLayerLiveWmsEngine'
+import type { LngLatBBox } from '@/modules/gis/map/siMapViewport'
 import { resolveAcpWmsBuildOptions } from './acpWmsClip'
 
 export type AcpWmsTileEntry = {

@@ -1,4 +1,4 @@
-import type { DocxNativeChartSpec } from '../../pages/satellite/lib/timeSeriesReport/timeSeriesDocxNativeCharts'
+import type { DocxNativeChartSpec } from '@/modules/remote-sensing/temporal-analysis/timeSeriesReport/timeSeriesDocxNativeCharts'
 import type { WellSiteReportPayload } from './wellSiteReportTypes'
 
 export type WellSiteDocxImageAsset = {

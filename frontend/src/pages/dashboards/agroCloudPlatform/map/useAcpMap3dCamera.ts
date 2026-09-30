@@ -15,13 +15,13 @@ import {
   useAgroCloudMapOrbitNavigation,
   type AgroCloudMapViewState,
   type AgroCloudMapboxMapScrollLike,
-} from '../../../../lib/agroCloudMapNavigation'
+} from '@/modules/gis/map/agroCloudMapNavigation'
 import {
   AGRO_CLOUD_TERRAIN_PITCH_THRESHOLD,
   cancelAgroCloudTerrainSync,
   syncAgroCloudTerrain3d,
   warmAgroCloudTerrainDemSource,
-} from '../../../../lib/agroCloudMapTerrain'
+} from '@/modules/remote-sensing/terrain/agroCloudMapTerrain'
 
 const ACP_3D_ENTER_PITCH = 52
 const ACP_CAMERA_EASE_MS = 650

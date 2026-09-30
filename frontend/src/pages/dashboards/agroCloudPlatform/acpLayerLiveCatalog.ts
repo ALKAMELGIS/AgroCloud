@@ -1,7 +1,7 @@
 import {
   buildRemoteSensingLayerSelectGroups,
   type RemoteSensingLayerSelectGroup,
-} from '../../../lib/agroCompositeIndices'
+} from '@/modules/remote-sensing/indices/agroCompositeIndices'
 import { ACP_WMS_LAYER_CATALOG, normalizeAcpWmsLayerId } from './acpWmsLayerCatalog'
 
 /** Full Layer Live catalog — same groups as Satellite Intelligence INDEX LAYER. */

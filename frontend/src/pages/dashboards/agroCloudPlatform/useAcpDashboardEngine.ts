@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getArcgisPortalToken } from '../../../lib/arcgisPortalToken'
+import { getArcgisPortalToken } from '@/modules/gis/layers/arcgisPortalToken'
 import {
   buildAgroStructuresLayerAoiMask,
   buildAgroStructuresMapOutlineGeoJson,
@@ -10,33 +10,33 @@ import {
   fetchAgroStructuresGeoJsonInBbox,
   resolveAgroStructuresCountry,
   resolveAgroStructuresCountryLabel,
-} from '../../../lib/agroStructuresPrimaryAoi'
+} from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
 import {
   extractCropAlertFieldsFromMask,
   runCropAlertEngine,
   type CropAlertEngineSettings,
   type CropAlertFieldResult,
-} from '../../../lib/siCropAlertEngine'
+} from '@/modules/remote-sensing/indices/siCropAlertEngine'
 import {
   buildSnapshotsFromSentinelSeries,
   fetchCropAlertSentinelLiveBatch,
-} from '../../../lib/siCropAlertSentinelLive'
-import { buildCropAlertImageryContext } from '../../../lib/siCropAlertImageryValidation'
-import { localIsoDate } from '../../../lib/siSentinelImageryDate'
-import { expandLngLatBBox, type LngLatBBox } from '../../../lib/siMapViewport'
+} from '@/modules/remote-sensing/indices/siCropAlertSentinelLive'
+import { buildCropAlertImageryContext } from '@/modules/remote-sensing/indices/siCropAlertImageryValidation'
+import { localIsoDate } from '@/modules/remote-sensing/imagery/siSentinelImageryDate'
+import { expandLngLatBBox, type LngLatBBox } from '@/modules/gis/map/siMapViewport'
 import {
   getGisContentItemDetails,
   getGisContentMapRegistry,
   getGisContentRowById,
   isGisContentRowInRecycle,
   useGisContentPortal,
-} from '../../../lib/gisContentPortalStore'
+} from '@/modules/gis/layers/gisContentPortalStore'
 import {
   hostedFeatureLayerGeoJsonForRow,
   isAgroStructuresPortalRow,
   readGisHostedFeatureLayerSnapshot,
-} from '../../../lib/gisHostedFeatureLayerPortal'
-import { computeStableGisFeatureKey } from '../../../lib/gisFeatureStableKey'
+} from '@/modules/gis/layers/gisHostedFeatureLayerPortal'
+import { computeStableGisFeatureKey } from '@/modules/gis/layers/gisFeatureStableKey'
 import {
   hydrateAcpCropAlertResultsRef,
   isAcpCropAlertResultsValidForReferenceDate,
@@ -341,13 +341,13 @@ export function useAcpDashboardEngine() {
       const liveSnapshots = new Map<
         string,
         {
-          current: import('../../../lib/siCropAlertEngine').CropAlertIndexSnapshot
-          previous7: import('../../../lib/siCropAlertEngine').CropAlertIndexSnapshot
-          previous30: import('../../../lib/siCropAlertEngine').CropAlertIndexSnapshot
+          current: import('@/modules/remote-sensing/indices/siCropAlertEngine').CropAlertIndexSnapshot
+          previous7: import('@/modules/remote-sensing/indices/siCropAlertEngine').CropAlertIndexSnapshot
+          previous30: import('@/modules/remote-sensing/indices/siCropAlertEngine').CropAlertIndexSnapshot
           seasonalPeakNdvi: number
-          imagery?: import('../../../lib/siCropAlertImageryValidation').CropAlertFieldImageryMeta
-          ndviSeries?: import('../../../lib/siCropAlertNdviTimeSeries').NdviSceneSeriesAnalysis | null
-          trend?: import('../../../lib/siCropAlertEngine').CropAlertTrend
+          imagery?: import('@/modules/remote-sensing/indices/siCropAlertImageryValidation').CropAlertFieldImageryMeta
+          ndviSeries?: import('@/modules/remote-sensing/indices/siCropAlertNdviTimeSeries').NdviSceneSeriesAnalysis | null
+          trend?: import('@/modules/remote-sensing/indices/siCropAlertEngine').CropAlertTrend
         }
       >()
       for (const field of fields) {

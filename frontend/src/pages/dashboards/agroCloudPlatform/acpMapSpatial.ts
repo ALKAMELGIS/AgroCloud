@@ -7,19 +7,19 @@ import {
   resolveAgroStructuresFeatureAreaHa,
   resolveAgroStructuresFieldDisplayName,
   resolveAgroStructuresStructureTypeLabel,
-} from '../../../lib/agroStructuresPrimaryAoi'
-import { computeChas, chasInputsFromDaily } from '../../../lib/chasIndex'
-import { bboxesIntersect, geometryBBox } from '../../../lib/geoAiGeoJsonSpatial'
-import { computeStableGisFeatureKey } from '../../../lib/gisFeatureStableKey'
-import type { LngLatBBox } from '../../../lib/siMapViewport'
+} from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
+import { computeChas, chasInputsFromDaily } from '@/modules/remote-sensing/indices/chasIndex'
+import { bboxesIntersect, geometryBBox } from '@/modules/ai/agent/geoAiGeoJsonSpatial'
+import { computeStableGisFeatureKey } from '@/modules/gis/layers/gisFeatureStableKey'
+import type { LngLatBBox } from '@/modules/gis/map/siMapViewport'
 import {
   extractCropAlertFieldsFromMask,
   type CropAlertFieldInput,
   type CropAlertFieldResult,
-} from '../../../lib/siCropAlertEngine'
-import { resolveDchasOrbPresentation } from '../../../lib/siCropAlertDchasBeacon'
-import { resolveNdviForPopupSceneDate, resolveDeltaChasForSceneDate } from '../../../lib/siCropAlertMapPopupModel'
-import type { SentinelHubDailyIndexMeans } from '../../../lib/sentinelHubStatisticsApi'
+} from '@/modules/remote-sensing/indices/siCropAlertEngine'
+import { resolveDchasOrbPresentation } from '@/modules/remote-sensing/indices/siCropAlertDchasBeacon'
+import { resolveNdviForPopupSceneDate, resolveDeltaChasForSceneDate } from '@/modules/remote-sensing/indices/siCropAlertMapPopupModel'
+import type { SentinelHubDailyIndexMeans } from '@/modules/remote-sensing/imagery/sentinelHubStatisticsApi'
 
 export type AcpGeoFeature = {
   type: 'Feature'

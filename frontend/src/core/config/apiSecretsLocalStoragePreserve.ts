@@ -3,7 +3,7 @@
  * Used by the app error boundary "Reset App Storage" action.
  */
 import { BROWSER_API_SECRETS_VAULT_KEY } from '../services/persistedStorageKeys'
-import { ARCGIS_PORTAL_TOKEN_LS_KEY } from '@/lib/arcgisPortalToken'
+import { ARCGIS_PORTAL_TOKEN_LS_KEY } from '@/modules/gis/layers/arcgisPortalToken'
 import { CLAUDE_API_KEY_LS_KEY } from './claudeApiKey'
 import { USER_API_TOKEN_LS_PREFIX } from './customUserApiTokens'
 import { DEEPSEEK_API_KEY_LS_KEY } from './deepseekApiKey'
@@ -11,7 +11,7 @@ import { GEMINI_API_KEY_LS_KEY } from './geminiApiKey'
 import { MAPBOX_TOKEN_LS_KEY } from './mapboxAccessToken'
 import { OPENWEATHER_MAP_API_KEY_LS_KEY } from './openWeatherMapApiKey'
 import { SENTINEL_HUB_ACCESS_TOKEN_LS_KEY } from './sentinelHubAccessToken'
-import { SENTINEL_HUB_WMS_INSTANCE_LS_KEY } from '@/lib/sentinelHubWmsInstance'
+import { SENTINEL_HUB_WMS_INSTANCE_LS_KEY } from '@/modules/remote-sensing/imagery/sentinelHubWmsInstance'
 
 const EXACT_PRESERVE_KEYS = new Set<string>([
   BROWSER_API_SECRETS_VAULT_KEY,

@@ -11,7 +11,7 @@ import {
   docxTable,
   docxTableOfContentsPage,
   wrapDocumentBody,
-} from '../../pages/satellite/lib/timeSeriesReport/timeSeriesDocxXml'
+} from '@/modules/remote-sensing/temporal-analysis/timeSeriesReport/timeSeriesDocxXml'
 import type { WellSiteDocxModel } from './wellSiteReportDocxModel'
 
 /** Wider map frame so legend strip under basemap stays readable. */

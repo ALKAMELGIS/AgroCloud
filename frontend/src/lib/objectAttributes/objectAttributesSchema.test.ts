@@ -8,7 +8,7 @@ import {
   objectAttributeTableColumns,
 } from './objectAttributesSchema'
 import { mapReportRowToObjectAttributes } from './objectAttributesMapper'
-import type { AgriObjectReportRow } from '../../pages/satellite/lib/timeSeriesReport/buildAgriculturalObjectIntelligenceModel'
+import type { AgriObjectReportRow } from '@/modules/remote-sensing/temporal-analysis/timeSeriesReport/buildAgriculturalObjectIntelligenceModel'
 
 describe('objectAttributesSchema', () => {
   it('parses Example.xlsx from public/schemas', () => {

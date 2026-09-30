@@ -2,7 +2,7 @@ import {
   lngLatBBoxCacheKey,
   quantizeLngLatBBox,
   type LngLatBBox,
-} from '../../../../lib/siMapViewport'
+} from '@/modules/gis/map/siMapViewport'
 
 /** Coarser grid than SI — fewer React updates while panning. */
 export const ACP_MAP_VIEW_BBOX_TILE_DEG = 0.12

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
-import { LayerLiveLegendPanel } from '../../../satellite/components/LayerLiveLegendPanel'
-import { SiCropAlertMapLegend } from '../../../satellite/components/SiCropAlertMapLegend'
+import { LayerLiveLegendPanel } from '@/modules/remote-sensing/indices/LayerLiveLegendPanel'
+import { SiCropAlertMapLegend } from '@/modules/remote-sensing/indices/SiCropAlertMapLegend'
 import {
   buildImageryTimeSeriesLayerGroups,
   flattenImageryTimeSeriesLayerOptions,

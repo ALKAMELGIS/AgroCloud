@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { CropAlertResultsCache } from '../../../lib/siCropAlertEngine'
+import type { CropAlertResultsCache } from '@/modules/remote-sensing/indices/siCropAlertEngine'
 import { isAcpCropAlertResultsValidForReferenceDate } from './acpCropAlertCache'
 
 function stubCache(referenceDate: string): CropAlertResultsCache {

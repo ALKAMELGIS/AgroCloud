@@ -1,13 +1,13 @@
 import type { FilterSpecification, Map as MaplibreMap } from 'maplibre-gl'
-import type { GisContentMapLayerConfig } from '../../../../lib/gisContentRepository'
-import { isAgroStructuresPortalRow, isWorldCountriesPortalRow } from '../../../../lib/gisHostedFeatureLayerPortal'
-import type { GisContentRow } from '../../../master/gisContentPortalData'
+import type { GisContentMapLayerConfig } from '@/modules/gis/layers/gisContentRepository'
+import { isAgroStructuresPortalRow, isWorldCountriesPortalRow } from '@/modules/gis/layers/gisHostedFeatureLayerPortal'
+import type { GisContentRow } from '@/modules/gis/layers/content-portal/gisContentPortalData'
 import type { AcpMapLayerVisibility } from '../acpMapLayerVisibility'
 import {
   findWorldCountriesGisContentPortalRow,
   WORLD_COUNTRIES_GIS_CONTENT_PORTAL_ID,
-} from '../../../../lib/gisContentPortalPublish'
-import { unregisterGisContentMapLayer } from '../../../../lib/gisContentPortalStore'
+} from '@/modules/gis/layers/gisContentPortalPublish'
+import { unregisterGisContentMapLayer } from '@/modules/gis/layers/gisContentPortalStore'
 import {
   buildAcpPortalAttributeFilter,
   combineAcpPortalFilters,

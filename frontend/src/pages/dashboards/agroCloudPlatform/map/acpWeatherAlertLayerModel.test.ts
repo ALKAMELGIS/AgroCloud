@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { OpenMeteoWeatherSnapshot } from '../../../../lib/openMeteoWeather'
+import type { OpenMeteoWeatherSnapshot } from '@/modules/remote-sensing/weather/openMeteoWeather'
 import {
   buildAcpFieldWeatherLayerEntries,
   buildWeatherAlertTypes,

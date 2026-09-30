@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import maplibregl, { type Map as MaplibreMap } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import type { CropAlertFieldResult } from '../../../../lib/siCropAlertEngine'
+import type { CropAlertFieldResult } from '@/modules/remote-sensing/indices/siCropAlertEngine'
 import {
   SENTINEL_HUB_WMS_TILE_PIXELS,
   sentinelHubWmsMinZoomForLatitude,
-} from '../../../../lib/sentinelHubWmsLayers'
-import { geometryBBox } from '../../../../lib/geoAiGeoJsonSpatial'
-import { getGisContentRowById } from '../../../../lib/gisContentPortalStore'
+} from '@/modules/remote-sensing/imagery/sentinelHubWmsLayers'
+import { geometryBBox } from '@/modules/ai/agent/geoAiGeoJsonSpatial'
+import { getGisContentRowById } from '@/modules/gis/layers/gisContentPortalStore'
 import { useAcpPortalMapLayers } from '../hooks/useAcpPortalMapLayers'
 import { useAcpPlatform } from '../acpPlatformContext'
 import type { AcpMapLayerVisibility } from '../acpMapLayerVisibility'
@@ -43,7 +43,7 @@ import {
   wmsSourceIdForChunk,
   type AcpWmsTileEntry,
 } from '../acpWmsViewportEngine'
-import type { LngLatBBox } from '../../../../lib/siMapViewport'
+import type { LngLatBBox } from '@/modules/gis/map/siMapViewport'
 import {
   debounceAcpMap,
   isAcpMapStyleReady,
@@ -71,9 +71,9 @@ import {
 } from '../acpBasemap'
 import {
   isAgroStructuresMapOutlineStructureType,
-} from '../../../../lib/agroStructuresPrimaryAoi'
-import { AGRO_CLOUD_MAP_MAX_PITCH } from '../../../../lib/agroCloudMapNavigation'
-import { flyToLikeGoogleEarth } from '../../../../lib/googleEarthFlyTo'
+} from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
+import { AGRO_CLOUD_MAP_MAX_PITCH } from '@/modules/gis/map/agroCloudMapNavigation'
+import { flyToLikeGoogleEarth } from '@/modules/gis/map/googleEarthFlyTo'
 import {
   ACP_DEFAULT_MAP_CENTER,
   ACP_INITIAL_MAP_ZOOM,

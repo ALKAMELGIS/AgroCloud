@@ -6,7 +6,7 @@ import {
   enrichFieldAttributesFromSentinel2,
   defaultAttributeWindow,
   type EnrichFieldAttributesOptions,
-} from '../agriFieldBoundary/fieldAttributeEnrichment'
+} from '@/modules/ai/segmentation/field-boundary/fieldAttributeEnrichment'
 import { loadObjectAttributesSchema } from './objectAttributesSchema'
 
 export type EnrichObjectAttributesOptions = {

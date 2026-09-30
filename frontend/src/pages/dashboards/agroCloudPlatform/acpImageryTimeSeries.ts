@@ -1,12 +1,12 @@
-import type { SentinelHubDailyIndexMeans } from '../../../lib/sentinelHubStatisticsApi'
-import { computeChas, chasInputsFromDaily } from '../../../lib/chasIndex'
+import type { SentinelHubDailyIndexMeans } from '@/modules/remote-sensing/imagery/sentinelHubStatisticsApi'
+import { computeChas, chasInputsFromDaily } from '@/modules/remote-sensing/indices/chasIndex'
 import {
   ADI_HISTORICAL_LOOKBACK_DAYS,
   computeAdiCurrentIndex,
   computeAdiZScore,
   isAdiLayerId,
-} from '../../../lib/adiIndex'
-import { isNcadiLayerId } from '../../../lib/ncadiIndex'
+} from '@/modules/remote-sensing/indices/adiIndex'
+import { isNcadiLayerId } from '@/modules/remote-sensing/indices/ncadiIndex'
 import {
   buildRemoteSensingLayerSelectGroups,
   flattenRemoteSensingLayerSelectGroups,
@@ -16,13 +16,13 @@ import {
   resolveAgroCompositeExpr,
   resolveAgroStaticLayerIdForDelta,
   type RemoteSensingLayerSelectGroup,
-} from '../../../lib/agroCompositeIndices'
-import { estimateEtMmDayFromMoisture } from '../../../lib/etIndex'
-import { estimateLstCelsius } from '../../../lib/lstIndex'
-import { estimateSaviFromNdvi } from '../../../lib/siCropAlertDchasBeacon'
-import { isDataMaskLayerId } from '../../../lib/dataMaskLayer'
-import { filterRemoteSensingLayerSelectGroups } from '../../../lib/remoteSensingLayerUiSupport'
-import { isLulcClassificationLayerId } from '../../../lib/siLulcClassification'
+} from '@/modules/remote-sensing/indices/agroCompositeIndices'
+import { estimateEtMmDayFromMoisture } from '@/modules/remote-sensing/indices/etIndex'
+import { estimateLstCelsius } from '@/modules/remote-sensing/indices/lstIndex'
+import { estimateSaviFromNdvi } from '@/modules/remote-sensing/indices/siCropAlertDchasBeacon'
+import { isDataMaskLayerId } from '@/modules/remote-sensing/imagery/dataMaskLayer'
+import { filterRemoteSensingLayerSelectGroups } from '@/modules/remote-sensing/imagery/remoteSensingLayerUiSupport'
+import { isLulcClassificationLayerId } from '@/modules/remote-sensing/classification/siLulcClassification'
 
 export type ImageryChartType = 'line' | 'area' | 'bar' | 'pie' | 'scatter'
 

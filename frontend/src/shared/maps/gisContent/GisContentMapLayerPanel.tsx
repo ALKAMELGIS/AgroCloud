@@ -1,11 +1,11 @@
 import { useCallback } from 'react'
-import type { GisContentMapLayerConfig } from '@/lib/gisContentRepository'
+import type { GisContentMapLayerConfig } from '@/modules/gis/layers/gisContentRepository'
 import {
   registerGisContentMapLayer,
   unregisterGisContentMapLayer,
   updateGisContentMapLayerConfig,
   useGisContentPortal,
-} from '@/lib/gisContentPortalStore'
+} from '@/modules/gis/layers/gisContentPortalStore'
 import './GisContentMapLayerPanel.css'
 
 type Props = {

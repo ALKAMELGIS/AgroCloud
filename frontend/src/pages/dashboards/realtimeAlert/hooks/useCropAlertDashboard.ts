@@ -2,20 +2,20 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   buildAgroStructuresLayerAoiMask,
   fetchAgroStructuresGeoJson,
-} from '../../../lib/agroStructuresPrimaryAoi'
+} from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
 import {
+  DEFAULT_CROP_ALERT_ENGINE_SETTINGS,
   extractCropAlertFieldsFromMask,
   runCropAlertEngine,
   type CropAlertEngineSettings,
   type CropAlertFieldResult,
-} from '../../../lib/siCropAlertEngine'
+} from '@/modules/remote-sensing/indices/siCropAlertEngine'
 import {
   buildSnapshotsFromSentinelSeries,
   fetchCropAlertSentinelLiveBatch,
-} from '../../../lib/siCropAlertSentinelLive'
-import { buildCropAlertImageryContext } from '../../../lib/siCropAlertImageryValidation'
-import { localIsoDate } from '../../../lib/siSentinelImageryDate'
-import { DEFAULT_CROP_ALERT_ENGINE_SETTINGS } from '../../../lib/siCropAlertEngineDefaults'
+} from '@/modules/remote-sensing/indices/siCropAlertSentinelLive'
+import { buildCropAlertImageryContext } from '@/modules/remote-sensing/indices/siCropAlertImageryValidation'
+import { localIsoDate } from '@/modules/remote-sensing/imagery/siSentinelImageryDate'
 
 export function useCropAlertDashboard(analysisDate: string, settings?: Partial<CropAlertEngineSettings>) {
   const [aoiMask, setAoiMask] = useState<GeoJSON.FeatureCollection | null>(null)

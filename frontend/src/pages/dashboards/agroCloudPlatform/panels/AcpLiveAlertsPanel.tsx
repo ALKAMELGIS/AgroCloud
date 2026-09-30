@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import type { DchasRiskTier } from '../../../../lib/siCropAlertDchasBeacon'
-import { DCHAS_HEALTHY_COLOR, DCHAS_ISOLATED_COLOR, resolveAcpFieldHvdColor } from '../../../../lib/siCropAlertDchasBeacon'
-import { resolveFarmerFieldAction, resolveFarmerFieldActionTone } from '../../../../lib/farmerAlertAction'
+import type { DchasRiskTier } from '@/modules/remote-sensing/indices/siCropAlertDchasBeacon'
+import { DCHAS_HEALTHY_COLOR, DCHAS_ISOLATED_COLOR, resolveAcpFieldHvdColor } from '@/modules/remote-sensing/indices/siCropAlertDchasBeacon'
+import { resolveFarmerFieldAction, resolveFarmerFieldActionTone } from '@/modules/remote-sensing/indices/farmerAlertAction'
 import {
   decideIrrigationAlert,
   IRRIGATION_ALERT_LEVEL_COLORS,
@@ -9,14 +9,14 @@ import {
   IRRIGATION_ALERT_LEVEL_ORDER,
   type IrrigationAlertDecision,
   type IrrigationAlertLevel,
-} from '../../../../lib/irrigationDroughtAlert'
+} from '@/modules/remote-sensing/indices/irrigationDroughtAlert'
 import type { AcpFieldTableRow } from '../acpMapSpatial'
 import { resolveAcpDecisionSupportLabel, resolveAcpDecisionSupportTone, resolveAcpFieldSceneComparisonDates } from '../acpDecisionSupport'
 import { buildAcpIndicatorIndexCards } from '../acpIndicatorIndexModel'
 import { useAcpPlatform } from '../acpPlatformContext'
-import { CropAlertTierIcon } from '../../../satellite/components/SiCropAlertHvdIcon'
+import { CropAlertTierIcon } from '@/modules/remote-sensing/indices/SiCropAlertHvdIcon'
 import { AcpIndicatorIndexGrid } from './AcpIndicatorIndexGrid'
-import '../../../satellite/components/SiCropAlertHvdIcon.css'
+import '@/modules/remote-sensing/indices/SiCropAlertHvdIcon.css'
 
 type Props = {
   rows: AcpFieldTableRow[]

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import maplibregl, { type Map as MapLibreMap } from 'maplibre-gl'
-import type { CropAlertFieldResult } from '../../../../lib/siCropAlertEngine'
-import { filterCropAlertMarkersForViewport } from '../../../../lib/siCropAlertMapMarkersFilter'
-import type { LngLatBBox } from '../../../../lib/siMapViewport'
-import { SiCropAlertMapMarker } from '../../../satellite/components/SiCropAlertMapMarker'
+import type { CropAlertFieldResult } from '@/modules/remote-sensing/indices/siCropAlertEngine'
+import { filterCropAlertMarkersForViewport } from '@/modules/remote-sensing/indices/siCropAlertMapMarkersFilter'
+import type { LngLatBBox } from '@/modules/gis/map/siMapViewport'
+import { SiCropAlertMapMarker } from '@/modules/remote-sensing/indices/SiCropAlertMapMarker'
 import { debounceAcpMap } from './acpMapInteraction'
 
 type MarkerEntry = {

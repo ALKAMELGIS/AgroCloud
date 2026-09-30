@@ -1,8 +1,8 @@
 import type { Map as MaplibreMap } from 'maplibre-gl'
 import { buildOgcRasterTileUrlTemplate } from '../../../../lib/acpOgcTileUrls'
 import { readAcpOgcLayerMetaForRow } from '../../../../lib/acpOgcLayerMeta'
-import type { GisContentMapLayerConfig } from '../../../../lib/gisContentRepository'
-import type { GisContentRow } from '../../../master/gisContentPortalData'
+import type { GisContentMapLayerConfig } from '@/modules/gis/layers/gisContentRepository'
+import type { GisContentRow } from '@/modules/gis/layers/content-portal/gisContentPortalData'
 import type { AcpMapLayerVisibility } from '../acpMapLayerVisibility'
 
 export const ACP_OGC_RASTER_PREFIX = 'acp-ogc-raster-'

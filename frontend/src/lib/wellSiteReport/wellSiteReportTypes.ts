@@ -1,4 +1,4 @@
-import type { WellSitePoint, WellSiteResult } from '../hydroWatershed/hydroEngine'
+import type { WellSitePoint, WellSiteResult } from '@/modules/gis/spatial-analysis/hydro-watershed/hydroEngine'
 
 export type BuildWellSiteReportInput = {
   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon

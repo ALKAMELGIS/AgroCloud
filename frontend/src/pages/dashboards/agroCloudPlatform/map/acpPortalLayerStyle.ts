@@ -1,6 +1,6 @@
 import type { FilterSpecification } from 'maplibre-gl'
-import type { GisContentMapLayerConfig } from '../../../../lib/gisContentRepository'
-import type { GisContentRow } from '../../../master/gisContentPortalData'
+import type { GisContentMapLayerConfig } from '@/modules/gis/layers/gisContentRepository'
+import type { GisContentRow } from '@/modules/gis/layers/content-portal/gisContentPortalData'
 import { resolveAcpPortalLayerPaint, type AcpPortalMapLayerPaint } from './acpPortalMapLayers'
 
 function parseColorAlpha(color: string, fallback: string): { color: string; alpha: number } {

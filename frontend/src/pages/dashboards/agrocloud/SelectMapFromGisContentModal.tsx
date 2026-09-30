@@ -4,14 +4,14 @@ import {
   gisContentTypeIcon,
   type GisContentItemType,
   type GisContentRow,
-} from '../../master/gisContentPortalData'
+} from '@/modules/gis/layers/content-portal/gisContentPortalData'
 import {
   getGisContentItemDetails,
   getGisContentPortalFolders,
   getGisContentPortalRows,
   isGisContentRowInRecycle,
-} from '../../../lib/gisContentPortalStore'
-import { readGisWebMapSnapshot } from '../../../lib/gisWebMapPortal'
+} from '@/modules/gis/layers/gisContentPortalStore'
+import { readGisWebMapSnapshot } from '@/modules/gis/map/gisWebMapPortal'
 
 type SelectMapTab = 'my-content' | 'shared-content'
 

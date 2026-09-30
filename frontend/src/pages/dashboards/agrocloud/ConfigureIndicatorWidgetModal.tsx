@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { appAlert } from '@/shared/dialogs/appDialog'
-import type { GisContentRow } from '../../master/gisContentPortalData'
+import type { GisContentRow } from '@/modules/gis/layers/content-portal/gisContentPortalData'
 import type {
   AgroCloudDashboardAggregation,
   AgroCloudDashboardConfig,

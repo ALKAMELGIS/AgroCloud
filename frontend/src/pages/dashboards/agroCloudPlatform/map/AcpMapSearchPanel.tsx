@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
-import { useGisContentPortal } from '../../../../lib/gisContentPortalStore'
+import { useGisContentPortal } from '@/modules/gis/layers/gisContentPortalStore'
 import { useAcpPlatform } from '../acpPlatformContext'
 import { addAcpGisPortalRowToMap } from './acpGisPortalActions'
 import { AcpMapPanel } from './AcpMapPanel'

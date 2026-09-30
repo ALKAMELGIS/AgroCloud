@@ -23,7 +23,7 @@ import { createPageLinkRecord, LinkManagementSection } from './system-settings/L
 import {
   getArcgisPortalTokenBrowserOverride,
   persistArcgisPortalTokenInBrowser,
-} from '@/lib/arcgisPortalToken'
+} from '@/modules/gis/layers/arcgisPortalToken'
 import {
   getMapboxAccessTokenBrowserOverride,
   getMapboxAccessTokenFromEnv,
@@ -32,7 +32,7 @@ import {
 import {
   getSentinelHubWmsInstanceIdBrowserOverride,
   persistSentinelHubWmsInstanceIdInBrowser,
-} from '@/lib/sentinelHubWmsInstance'
+} from '@/modules/remote-sensing/imagery/sentinelHubWmsInstance'
 import {
   getSentinelHubAccessTokenBrowserOverride,
   persistSentinelHubAccessTokenInBrowser,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { appAlert, appPrompt } from '@/shared/dialogs/appDialog'
-import { getGisContentRowById } from '../../../lib/gisContentPortalStore'
+import { getGisContentRowById } from '@/modules/gis/layers/gisContentPortalStore'
 import {
   AGROCLOUD_PRODUCT_NAME,
   DEFAULT_AGROCLOUD_DASHBOARD_CONFIG,
@@ -36,7 +36,7 @@ import {
   RailTimeRegionIcon,
   RailViewIcon,
 } from './AgroCloudDashboardRailIcons'
-import type { GisContentRow } from '../../master/gisContentPortalData'
+import type { GisContentRow } from '@/modules/gis/layers/content-portal/gisContentPortalData'
 import './agro-cloud-dashboards.css'
 
 function BuilderIllustration() {

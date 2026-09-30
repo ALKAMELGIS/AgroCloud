@@ -1,7 +1,7 @@
 import {
   GIS_CONTENT_REPOSITORY_EVENT,
   type GisContentRepositoryChangeDetail,
-} from '../../../lib/gisContentRepository'
+} from '@/modules/gis/layers/gisContentRepository'
 import { geojsonCollectionSignature } from './acpStructuresLoadPolicy'
 
 /** Dispatched on window when AOI / linked layers should resync (weather, alerts, WMS). */

@@ -8,7 +8,7 @@ import {
   docxTable,
   docxTitle,
   wrapDocumentBody,
-} from '../../pages/satellite/lib/timeSeriesReport/timeSeriesDocxXml'
+} from '@/modules/remote-sensing/temporal-analysis/timeSeriesReport/timeSeriesDocxXml'
 import type { EoEnrichmentDocxModel } from './buildEoEnrichmentDocxModel'
 
 function evenWidths(n: number, total = 10080): number[] {

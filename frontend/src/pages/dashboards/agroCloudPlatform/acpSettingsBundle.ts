@@ -1,4 +1,4 @@
-import type { CropAlertEngineSettings } from '../../../lib/siCropAlertEngine'
+import type { CropAlertEngineSettings } from '@/modules/remote-sensing/indices/siCropAlertEngine'
 import {
   DEFAULT_ACP_PLATFORM_CONFIG,
   mergeKpiCardsWithDefaults,
@@ -8,7 +8,7 @@ import {
   loadAcpAlertEngineSettings,
   persistAcpAlertEngineSettings,
 } from './acpPlatformConfig'
-import { applyCropAlertEngineDefaultOperatingState } from '../../../lib/siCropAlertEngine'
+import { applyCropAlertEngineDefaultOperatingState } from '@/modules/remote-sensing/indices/siCropAlertEngine'
 
 export const ACP_SETTINGS_BUNDLE_VERSION = 1 as const
 

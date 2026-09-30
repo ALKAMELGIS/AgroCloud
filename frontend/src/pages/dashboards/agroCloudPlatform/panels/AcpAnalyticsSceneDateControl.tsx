@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef } from 'react'
-import { resolveNearestValidSceneDate } from '../../../../lib/siAdaptiveTemporalEngine'
+import { resolveNearestValidSceneDate } from '@/modules/remote-sensing/temporal-analysis/siAdaptiveTemporalEngine'
 
 type Props = {
   sceneDates: string[]

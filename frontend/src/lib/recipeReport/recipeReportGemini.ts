@@ -1,4 +1,4 @@
-import { geminiGenerateContent, type GeminiContent } from '../geoExplorerGemini'
+import { geminiGenerateContent, type GeminiContent } from '@/modules/ai/agent/geoExplorerGemini'
 
 export type RecipeReportInsights = {
   executiveLines: string[]

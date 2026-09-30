@@ -1,7 +1,7 @@
-import { resolveAgroStructuresFieldDisplayName } from '../../../../lib/agroStructuresPrimaryAoi'
+import { resolveAgroStructuresFieldDisplayName } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
 import { getMapboxAccessToken } from '@/core/config/mapboxAccessToken'
-import { geocodePlaceQuery } from '../../../../lib/openMeteoWeather'
-import { extractCropAlertFieldsFromMask } from '../../../../lib/siCropAlertEngine'
+import { geocodePlaceQuery } from '@/modules/remote-sensing/weather/openMeteoWeather'
+import { extractCropAlertFieldsFromMask } from '@/modules/remote-sensing/indices/siCropAlertEngine'
 
 export type AcpMapSearchFieldHit = {
   kind: 'field'

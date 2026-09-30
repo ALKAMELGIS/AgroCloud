@@ -14,9 +14,9 @@ const AgroCloudPlatformDashboard = lazyWithRetry(
   () => import('@/pages/dashboards/agroCloudPlatform/AgroCloudPlatformDashboard'),
   'AgroCloudPlatformDashboard',
 )
-const SatelliteIntelligence = lazyWithRetry(() => import('@/pages/satellite/SatelliteIntelligence'), 'SatelliteIntelligence')
-const SatelliteMultidimensional = lazyWithRetry(() => import('@/pages/satellite/Multidimensional'), 'SatelliteMultidimensional')
-const GisMap = lazyWithRetry(() => import('@/pages/satellite/GisMap'), 'GisMap')
+const SatelliteIntelligence = lazyWithRetry(() => import('@/modules/remote-sensing/imagery/SatelliteIntelligence'), 'SatelliteIntelligence')
+const SatelliteMultidimensional = lazyWithRetry(() => import('@/modules/remote-sensing/imagery/Multidimensional'), 'SatelliteMultidimensional')
+const GisMap = lazyWithRetry(() => import('@/modules/gis/map/GisMap'), 'GisMap')
 const DataEntryFertigationRecords = lazyWithRetry(() => import('@/pages/data-entry/FertigationRecords'), 'DataEntryFertigationRecords')
 const DataEntryIrrigation = lazyWithRetry(() => import('@/pages/data-entry/Irrigation'), 'DataEntryIrrigation')
 const DataEntryHarvest = lazyWithRetry(() => import('@/pages/data-entry/Harvest'), 'DataEntryHarvest')
@@ -25,8 +25,8 @@ const DataEntryECPH = lazyWithRetry(() => import('@/pages/data-entry/EC'), 'Data
 const DataEntryRecipes = lazyWithRetry(() => import('@/pages/data-entry/Recipes'), 'DataEntryRecipes')
 const AccountProfile = lazyWithRetry(() => import('@/core/auth/account/Profile'), 'AccountProfile')
 const AccountSettings = lazyWithRetry(() => import('@/core/auth/account/Settings'), 'AccountSettings')
-const MasterGisContent = lazyWithRetry(() => import('@/pages/master/GisContent'), 'MasterGisContent')
-const MasterGisContentItem = lazyWithRetry(() => import('@/pages/master/GisContentItemPane'), 'MasterGisContentItem')
+const MasterGisContent = lazyWithRetry(() => import('@/modules/gis/layers/content-portal/GisContent'), 'MasterGisContent')
+const MasterGisContentItem = lazyWithRetry(() => import('@/modules/gis/layers/content-portal/GisContentItemPane'), 'MasterGisContentItem')
 const DashboardSettings = lazyWithRetry(() => import('@/pages/master/DashboardSettings'), 'DashboardSettings')
 const AdminUsers = lazyWithRetry(() => import('@/core/authorization/Users'), 'AdminUsers')
 const AdminGitHub = lazyWithRetry(() => import('@/core/config/GitHubIntegration'), 'AdminGitHub')

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { getGisContentMapRegistry, useGisContentPortal } from '../../../../lib/gisContentPortalStore'
+import { getGisContentMapRegistry, useGisContentPortal } from '@/modules/gis/layers/gisContentPortalStore'
 import { useAcpPlatform } from '../acpPlatformContext'
 import { AcpMapPanel } from './AcpMapPanel'
 import { AcpLayerLiveDropdown } from './AcpLayerLiveDropdown'

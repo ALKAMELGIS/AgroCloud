@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { bumpWmsCacheKey, syncRealtimeAlertWmsLayer } from '../../../lib/realtimeAlert/wmsLayerSync'
+import { bumpWmsCacheKey, syncRealtimeAlertWmsLayer } from '@/lib/realtimeAlert/wmsLayerSync'
 
 export function useWmsLayerSync() {
   const [wmsCacheKey, setWmsCacheKey] = useState(0)

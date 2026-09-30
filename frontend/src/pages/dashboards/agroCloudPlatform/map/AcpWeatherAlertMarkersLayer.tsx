@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import maplibregl, { type Map as MapLibreMap } from 'maplibre-gl'
-import type { LngLatBBox } from '../../../../lib/siMapViewport'
+import type { LngLatBBox } from '@/modules/gis/map/siMapViewport'
 import { filterWeatherMarkersForViewport, type AcpFieldWeatherLayerEntry } from './acpWeatherAlertLayerModel'
 import { AcpWeatherAlertMarker } from './AcpWeatherAlertMarker'
 import { debounceAcpMap } from './acpMapInteraction'

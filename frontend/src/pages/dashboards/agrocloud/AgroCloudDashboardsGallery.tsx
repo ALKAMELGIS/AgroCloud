@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useGisContentPortal } from '../../../lib/gisContentPortalStore'
-import { isAgroCloudDashboardApp } from '../../master/gisContentPortalData'
+import { useGisContentPortal } from '@/modules/gis/layers/gisContentPortalStore'
+import { isAgroCloudDashboardApp } from '@/modules/gis/layers/content-portal/gisContentPortalData'
 import {
   AGROCLOUD_DASHBOARD_AUTHOR,
   AGROCLOUD_DASHBOARD_GALLERY_SEED,

@@ -1,17 +1,17 @@
-import { fetchArcGisFeatureLayerGeoJson } from '../../../../lib/arcgisFeatureLayerGeoJson'
+import { fetchArcGisFeatureLayerGeoJson } from '@/modules/gis/layers/arcgisFeatureLayerGeoJson'
 import { buildAcpOgcLayerMetadata } from '../../../../lib/acpOgcLayerMeta'
-import type { GisHostedFeatureLayerGeoJson } from '../../../../lib/gisHostedFeatureLayerPortal'
+import type { GisHostedFeatureLayerGeoJson } from '@/modules/gis/layers/gisHostedFeatureLayerPortal'
 import {
   persistArcGisHostedFeatureLayerToGisContentPortal,
   publishGisContentNewItem,
-} from '../../../../lib/gisContentPortalPublish'
+} from '@/modules/gis/layers/gisContentPortalPublish'
 import {
   getGisContentItemDetails,
   registerGisContentMapLayer,
   upsertGisContentPortalHostedFeatureLayer,
   upsertGisContentPortalItem,
-} from '../../../../lib/gisContentPortalStore'
-import type { GisContentRow } from '../../../master/gisContentPortalData'
+} from '@/modules/gis/layers/gisContentPortalStore'
+import type { GisContentRow } from '@/modules/gis/layers/content-portal/gisContentPortalData'
 import { mergeShpLikeToFeatureCollection, normalizeGeoJsonEnvelope, parseFile, parseRemoteUrlAsFile } from '../../../../utils/FileLoader'
 import { addAcpGisPortalRowToMap } from './acpGisPortalActions'
 

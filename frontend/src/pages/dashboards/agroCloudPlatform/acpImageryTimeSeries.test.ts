@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildRemoteSensingLayerSelectGroups, flattenRemoteSensingLayerSelectGroups } from '../../../lib/agroCompositeIndices'
+import { buildRemoteSensingLayerSelectGroups, flattenRemoteSensingLayerSelectGroups } from '@/modules/remote-sensing/indices/agroCompositeIndices'
 import {
   aggregateImageryTimeSeries,
   aggregateImageryTimeSeriesMulti,
@@ -18,7 +18,7 @@ import {
   pruneSingleLayerImagerySeries,
   formatImageryTimeSeriesYTick,
 } from './acpImageryTimeSeries'
-import type { SentinelHubDailyIndexMeans } from '../../../lib/sentinelHubStatisticsApi'
+import type { SentinelHubDailyIndexMeans } from '@/modules/remote-sensing/imagery/sentinelHubStatisticsApi'
 
 function dailyRow(overrides: Partial<SentinelHubDailyIndexMeans> = {}): SentinelHubDailyIndexMeans {
   return {

@@ -1,4 +1,4 @@
-import type { Language } from '../../../lib/i18n'
+import type { Language } from '@/core/localization/i18n'
 
 type Copy = {
   title: string

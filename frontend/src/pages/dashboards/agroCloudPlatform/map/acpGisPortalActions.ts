@@ -3,9 +3,9 @@ import {
   isGisContentRowInRecycle,
   refreshGisContentHostedFeatureLayerFromSource,
   registerGisContentMapLayer,
-} from '../../../../lib/gisContentPortalStore'
-import { isAgroStructuresPortalRow, isWorldCountriesPortalRow } from '../../../../lib/gisHostedFeatureLayerPortal'
-import type { GisContentRow } from '../../../master/gisContentPortalData'
+} from '@/modules/gis/layers/gisContentPortalStore'
+import { isAgroStructuresPortalRow, isWorldCountriesPortalRow } from '@/modules/gis/layers/gisHostedFeatureLayerPortal'
+import type { GisContentRow } from '@/modules/gis/layers/content-portal/gisContentPortalData'
 
 export type AcpAddGisPortalRowResult = {
   geojson: GeoJSON.FeatureCollection | null

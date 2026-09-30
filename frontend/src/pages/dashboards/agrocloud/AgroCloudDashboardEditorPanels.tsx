@@ -23,14 +23,14 @@ import {
   resolveDashboardSidebar,
   resolveDashboardViewSettings,
 } from './agroCloudDashboardLayout'
-import { getGisContentRowById } from '../../../lib/gisContentPortalStore'
+import { getGisContentRowById } from '@/modules/gis/layers/gisContentPortalStore'
 import { collectDashboardDataSources, countWidgetsUsingDataSource, dataSourceTypeBadge } from './agroCloudDashboardDataSourceEngine'
 import {
   GIS_CONTENT_SHARING_OPTIONS,
   gisSharingLabel,
   type GisContentSharing,
-} from '../../master/gisContentPortalData'
-import { getGisContentPortalFolders } from '../../../lib/gisContentPortalStore'
+} from '@/modules/gis/layers/content-portal/gisContentPortalData'
+import { getGisContentPortalFolders } from '@/modules/gis/layers/gisContentPortalStore'
 
 type PanelShellProps = {
   title: string

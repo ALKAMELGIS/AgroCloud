@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getGisContentRowById } from '../../../lib/gisContentPortalStore'
-import type { GisContentRow } from '../../master/gisContentPortalData'
+import { getGisContentRowById } from '@/modules/gis/layers/gisContentPortalStore'
+import type { GisContentRow } from '@/modules/gis/layers/content-portal/gisContentPortalData'
 import {
   areFieldTypesCompatible,
   buildAutoDataSourceMapping,

@@ -2,13 +2,13 @@ import {
   getGisContentItemDetails,
   getGisContentMapRegistry,
   getGisContentRowById,
-} from '../../../lib/gisContentPortalStore'
+} from '@/modules/gis/layers/gisContentPortalStore'
 import {
   isAgroStructuresPortalRow,
   readGisHostedFeatureLayerSnapshot,
-} from '../../../lib/gisHostedFeatureLayerPortal'
-import type { LngLatBBox } from '../../../lib/siMapViewport'
-import { lngLatBBoxCacheKey } from '../../../lib/siMapViewport'
+} from '@/modules/gis/layers/gisHostedFeatureLayerPortal'
+import type { LngLatBBox } from '@/modules/gis/map/siMapViewport'
+import { lngLatBBoxCacheKey } from '@/modules/gis/map/siMapViewport'
 
 export type AcpStructuresLoadReason = 'initial' | 'portal' | 'viewport' | 'manual'
 

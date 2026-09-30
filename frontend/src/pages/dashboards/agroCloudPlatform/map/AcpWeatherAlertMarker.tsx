@@ -1,5 +1,5 @@
 import { memo, useMemo, type CSSProperties } from 'react'
-import { wmoWeatherIconClass } from '../../../../lib/openMeteoWeather'
+import { wmoWeatherIconClass } from '@/modules/remote-sensing/weather/openMeteoWeather'
 import type { AcpFieldWeatherLayerEntry } from './acpWeatherAlertLayerModel'
 import { ACP_WEATHER_LEVEL_COLORS } from './acpWeatherAlertLayerModel'
 import { resolveAcpWeatherMarkerVisual } from './acpWeatherMarkerVisual'

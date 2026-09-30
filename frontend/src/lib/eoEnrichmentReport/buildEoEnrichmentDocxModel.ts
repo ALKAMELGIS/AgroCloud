@@ -1,5 +1,5 @@
 import type { Feature, FeatureCollection } from 'geojson'
-import { collectExistingLayerFieldKeys, normalizeEoFieldKey } from '../eoLayerEnrichmentRun'
+import { collectExistingLayerFieldKeys, normalizeEoFieldKey } from '@/modules/remote-sensing/imagery/eoLayerEnrichmentRun'
 
 export type EoEnrichmentDocxModel = {
   layerName: string

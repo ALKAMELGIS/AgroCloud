@@ -1,8 +1,8 @@
 import { useAcpPlatform } from '../acpPlatformContext'
-import type { DchasRiskTier } from '../../../../lib/siCropAlertDchasBeacon'
-import { DCHAS_HEALTHY_COLOR, DCHAS_ISOLATED_COLOR } from '../../../../lib/siCropAlertDchasBeacon'
-import { CropAlertTierIcon } from '../../../satellite/components/SiCropAlertHvdIcon'
-import '../../../satellite/components/SiCropAlertHvdIcon.css'
+import type { DchasRiskTier } from '@/modules/remote-sensing/indices/siCropAlertDchasBeacon'
+import { DCHAS_HEALTHY_COLOR, DCHAS_ISOLATED_COLOR } from '@/modules/remote-sensing/indices/siCropAlertDchasBeacon'
+import { CropAlertTierIcon } from '@/modules/remote-sensing/indices/SiCropAlertHvdIcon'
+import '@/modules/remote-sensing/indices/SiCropAlertHvdIcon.css'
 
 const DECISIONS: {
   id: 'healthy' | 'stable' | 'warning' | 'critical'

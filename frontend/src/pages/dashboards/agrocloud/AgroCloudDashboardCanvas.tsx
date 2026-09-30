@@ -4,7 +4,7 @@ import { DashboardAddElementMenu } from './DashboardAddElementMenu'
 import { AGROCLOUD_TIME_ZONE_OPTIONS } from './agroCloudDashboardTimeRegion'
 import { dashboardThemeCanvasStyle, resolveAgroCloudThemeCustom } from './agroCloudDashboardTheme'
 import { formatDashboardDateTime, dashboardTimeZoneCaption } from './agroCloudDashboardTimeRegion'
-import { getGisContentRowById } from '../../../lib/gisContentPortalStore'
+import { getGisContentRowById } from '@/modules/gis/layers/gisContentPortalStore'
 import {
   classifyDashboardElements,
   dashboardElementIcon,

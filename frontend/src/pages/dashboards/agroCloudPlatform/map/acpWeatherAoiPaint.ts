@@ -1,6 +1,6 @@
 import type { ExpressionSpecification, GeoJSONSource, Map as MaplibreMap } from 'maplibre-gl'
-import { computeStableGisFeatureKey } from '../../../../lib/gisFeatureStableKey'
-import { isAgroStructuresMapOutlineStructureType } from '../../../../lib/agroStructuresPrimaryAoi'
+import { computeStableGisFeatureKey } from '@/modules/gis/layers/gisFeatureStableKey'
+import { isAgroStructuresMapOutlineStructureType } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
 import type { AcpFieldWeatherLayerEntry } from './acpWeatherAlertLayerModel'
 
 export const ACP_LAYER_AOI_FILL = 'acp-aoi-fill'

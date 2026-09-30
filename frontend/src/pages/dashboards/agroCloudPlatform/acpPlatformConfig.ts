@@ -1,7 +1,7 @@
-import type { CropAlertEngineSettings } from '../../../lib/siCropAlertEngine'
-import { applyCropAlertEngineDefaultOperatingState } from '../../../lib/siCropAlertEngine'
-import type { GisContentMapLayerGroup } from '../../../lib/gisContentRepository'
-import { AGRO_STRUCTURES_STRUCTURE_TYPE_CATALOG } from '../../../lib/agroStructuresPrimaryAoi'
+import type { CropAlertEngineSettings } from '@/modules/remote-sensing/indices/siCropAlertEngine'
+import { applyCropAlertEngineDefaultOperatingState } from '@/modules/remote-sensing/indices/siCropAlertEngine'
+import type { GisContentMapLayerGroup } from '@/modules/gis/layers/gisContentRepository'
+import { AGRO_STRUCTURES_STRUCTURE_TYPE_CATALOG } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
 
 export const ACP_STRUCTURES_RELOAD_DEBOUNCE_MS = 650
 export const ACP_PLATFORM_CONFIG_LS_KEY = 'acp_platform_config_v1'
