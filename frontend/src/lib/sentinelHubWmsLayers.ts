@@ -62,6 +62,18 @@ export function resolveSentinelHubWmsTilePixels(layerName: string): number {
   return SENTINEL_HUB_WMS_TILE_PIXELS
 }
 
+/**
+ * Raster source `maxzoom` at Sentinel-2 native resolution (512 px tile at z13 ≈ 9.55 m/px at
+ * the equator, finer elsewhere). Deeper zooms add no detail, so the map overzooms these tiles
+ * instead of requesting many more WMS tiles (pitched 3D views especially).
+ */
+export function resolveSentinelHubWmsNativeMaxZoom(
+  tilePixels = SENTINEL_HUB_WMS_TILE_PIXELS,
+): number {
+  const px = tilePixels > 0 ? tilePixels : SENTINEL_HUB_WMS_TILE_PIXELS
+  return Math.max(0, Math.round(13 + Math.log2(512 / px)))
+}
+
 /** Default Sentinel Live layer when Remote Sensing opens (title match from GetCapabilities). */
 export const SI_DEFAULT_SENTINEL_WMS_LAYER_TITLE = 'NDVI'
 

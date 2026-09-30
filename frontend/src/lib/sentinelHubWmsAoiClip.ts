@@ -11,6 +11,7 @@ import { isAgroCompositeLayerId } from './agroCompositeIndices'
 import { isCropClassificationLayerId } from './siCropClassification'
 import { isLulcClassificationLayerId } from './siLulcClassification'
 import { buildDataMaskLayerEvalscript, isDataMaskLayerId } from './dataMaskLayer'
+import { SENTINEL_TRUE_COLOR_GAIN } from './sentinelSclCloudMask'
 import {
   buildSentinelIndexColorRampEvalscript,
   isSentinelIndexColorRampProfile,
@@ -360,9 +361,9 @@ function setup() {
 }
 function evaluatePixel(s) {
   return [
-    Math.max(0, Math.min(1, s.B04 * 2.5)),
-    Math.max(0, Math.min(1, s.B03 * 2.5)),
-    Math.max(0, Math.min(1, s.B02 * 2.5)),
+    Math.max(0, Math.min(1, s.B04 * ${SENTINEL_TRUE_COLOR_GAIN})),
+    Math.max(0, Math.min(1, s.B03 * ${SENTINEL_TRUE_COLOR_GAIN})),
+    Math.max(0, Math.min(1, s.B02 * ${SENTINEL_TRUE_COLOR_GAIN})),
     s.dataMask
   ];
 }`;

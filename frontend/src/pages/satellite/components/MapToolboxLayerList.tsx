@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { SiCopyTextButton } from './SiCopyTextButton'
+import { SiCopyTextButton } from '@/shared/components/SiCopyTextButton'
 import './MapToolboxLayerList.css'
 
 export type MapToolboxLayerListItem = {

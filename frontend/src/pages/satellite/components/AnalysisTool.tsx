@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { appAlert } from '../../../lib/appDialog';
+import { appAlert } from '@/shared/dialogs/appDialog';
 
 export type IndexType = 'NDWI' | 'NDMI' | 'SAVI';
 

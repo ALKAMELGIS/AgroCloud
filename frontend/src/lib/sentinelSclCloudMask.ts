@@ -1,6 +1,7 @@
 /**
  * Unified Sentinel-2 L2A pixel-level cloud mask (SCL + CLM + CLP).
- * Used for AOI cloud metrics and zonal statistics — visual WMS layers stay unmasked.
+ * Used for AOI cloud metrics, zonal statistics and index display layers
+ * (masked index pixels fall back to the same scene's true color).
  */
 
 /** Minimum AOI clear fraction (0–1) before a scene is marked unusable. */
@@ -161,3 +162,38 @@ export function buildSentinelIndexCloudMaskAlphaBlock(
 
 /** Input bands to append for cloud-masked index evalscripts. */
 export const SENTINEL_CLOUD_MASK_INPUT_BANDS = ['SCL', 'CLM', 'CLP'] as const
+
+/** Sentinel-2 L2A true-color display gain (reflectance × gain, clamped to 0–1). */
+export const SENTINEL_TRUE_COLOR_GAIN = 2.5
+
+/** Bands an index display evalscript needs to paint masked pixels with the scene's true color. */
+export const SENTINEL_CLOUD_RGB_FALLBACK_INPUT_BANDS = [
+  'B02',
+  'B03',
+  'B04',
+  ...SENTINEL_CLOUD_MASK_INPUT_BANDS,
+] as const
+
+/**
+ * Evalscript helpers for index display layers: `cloudMasked(s)` applies the analytical
+ * cloud mask and `trueColor(s)` returns the pixel exactly as the RGB layer renders it.
+ * `maskSnow: false` keeps SCL snow pixels in the index (snow indices).
+ */
+export function buildSentinelCloudRgbFallbackFunctions(options?: { maskSnow?: boolean }): string {
+  const expr =
+    options?.maskSnow === false
+      ? SENTINEL_SCL_CLOUD_MASK_EXPR.replace(' || scl == 11', '')
+      : SENTINEL_SCL_CLOUD_MASK_EXPR
+  return `function cloudMasked(s) {
+  var scl = s.SCL;
+  return ${expr};
+}
+function tc(v) { return Math.max(0, Math.min(1, v * ${SENTINEL_TRUE_COLOR_GAIN})); }
+function trueColor(s) { return [tc(s.B04), tc(s.B03), tc(s.B02), 1]; }`
+}
+
+/** First lines of evaluatePixel: no-data → transparent, cloud → real RGB, else fall through to the index. */
+export function sentinelCloudRgbFallbackGuardLines(sampleVar = 'samples'): string {
+  return `if (!${sampleVar}.dataMask) return [0, 0, 0, 0];
+  if (cloudMasked(${sampleVar})) return trueColor(${sampleVar});`
+}

@@ -4,7 +4,7 @@ import { splitTextIntoMarkdownSegments, type GeoMarkdownSegment } from '../../..
 import type { GeoExplorerCssPrefix } from './GeoExplorerGeminiChatBody'
 import { GeoExplorerDynamicTable, type GeoExplorerMapAction } from './GeoExplorerDynamicTable'
 import { GeoAiEditQuestionTool } from './GeoAiEditQuestionTool'
-import { SiCopyTextButton } from './SiCopyTextButton'
+import { SiCopyTextButton } from '@/shared/components/SiCopyTextButton'
 
 function pfx(prefix: GeoExplorerCssPrefix, part: string): string {
   return `${prefix}-${part}`

@@ -10,6 +10,7 @@ import {
   resolveSentinelHubWmsGetMapLayerName,
   resolveSentinelHubWmsNativeIndexLayerName,
   resolveSentinelHubWmsDeltaPreviousDate,
+  resolveSentinelHubWmsNativeMaxZoom,
   resolveSentinelHubWmsTimeWindow,
   sentinelHubWmsMinZoomForLatitude,
   SENTINEL_HUB_S2_MAX_METERS_PER_PIXEL,
@@ -128,6 +129,14 @@ describe('sentinelHubWmsLayers', () => {
     const mpp = (40_075_016.685_578_49 * Math.cos(0)) / (512 * 2 ** z)
     expect(mpp).toBeLessThanOrEqual(SENTINEL_HUB_S2_MAX_METERS_PER_PIXEL + 1)
     expect(z).toBeGreaterThanOrEqual(8)
+  })
+
+  it('caps raster maxzoom at Sentinel-2 native ~10 m/px for the tile size', () => {
+    expect(resolveSentinelHubWmsNativeMaxZoom()).toBe(13)
+    expect(resolveSentinelHubWmsNativeMaxZoom(256)).toBe(14)
+    expect(resolveSentinelHubWmsNativeMaxZoom(1024)).toBe(12)
+    const mpp = 40_075_016.685_578_49 / (512 * 2 ** resolveSentinelHubWmsNativeMaxZoom(512))
+    expect(mpp).toBeLessThanOrEqual(10)
   })
 
   it('pickDefaultSentinelWmsLayer prefers NDVI', () => {

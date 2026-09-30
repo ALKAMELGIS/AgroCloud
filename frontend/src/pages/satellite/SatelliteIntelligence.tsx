@@ -239,7 +239,7 @@ import {
   GEO_AI_CHAT_SYSTEM_BASE,
   type GeoAiChatTurn,
 } from '../../lib/geoAiChatClaude';
-import { appConfirm } from '../../lib/appDialog';
+import { appConfirm } from '@/shared/dialogs/appDialog';
 import { loadGisMapSavedLayers } from '../../lib/gisMapLayerStore';
 import { computeStableGisFeatureKey } from '../../lib/gisFeatureStableKey';
 import { satelliteCustomLayersToGeoAiLayers } from '../../lib/geoAiMapLayerSources';
@@ -583,7 +583,7 @@ import {
   writeSiStyleClipboard,
 } from './siSymbolStyleStudio';
 import { FieldVisibilityControl } from './components/FieldVisibilityControl';
-import { SiCopyTextButton } from './components/SiCopyTextButton';
+import { SiCopyTextButton } from '@/shared/components/SiCopyTextButton';
 import type { AoiStaticMultiLayerLineChartDataset } from './components/AoiStaticMultiLayerLineChart';
 import { SatelliteMapAnalysisChrome, type MapToolboxNavigateHandler } from './components/SatelliteMapAnalysisChrome';
 import { LayerLiveLegendPanel } from './components/LayerLiveLegendPanel';
@@ -26707,12 +26707,13 @@ export default function SatelliteIntelligence() {
                     const layerOpacity = opacity * (chunk.evalscriptB64 ? 1 : 0.96);
                     return (
                       <Source
-                        key={`${stack.idPrefix}-${chunkIdx}`}
+                        key={`${stack.idPrefix}-${chunkIdx}-${stack.tilePixels}-z${stack.maxNativeZoom ?? 'all'}`}
                         id={siSentinelAoiWmsSourceId(stack.idPrefix, chunkIdx)}
                         type="raster"
                         tiles={[stack.tileUrls[chunkIdx] ?? '']}
                         tileSize={stack.tilePixels || SENTINEL_HUB_WMS_TILE_PIXELS}
                         minzoom={SI_SENTINEL_WMS_MAP_DISPLAY_MIN_ZOOM}
+                        {...(stack.maxNativeZoom != null ? { maxzoom: stack.maxNativeZoom } : {})}
                         bounds={resolveSiSentinelAoiWmsChunkBounds(stack, chunk)}
                       >
                         <Layer

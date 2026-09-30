@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Navigate, useParams } from 'react-router-dom'
-import { appConfirm } from '../../lib/appDialog'
+import { appConfirm } from '@/shared/dialogs/appDialog'
 import { useLanguage } from '@/core/localization/i18n'
 import {
   type CameraVmsPreset,

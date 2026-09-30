@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { appAlert, appConfirm } from '@/lib/appDialog'
-import { Badge } from '@/components/ui/Badge'
-import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
-import { Input } from '@/components/ui/Input'
-import { Textarea } from '@/components/ui/Textarea'
+import { appAlert, appConfirm } from '@/shared/dialogs/appDialog'
+import { Badge } from '@/shared/components/ui/Badge'
+import { Button } from '@/shared/components/ui/Button'
+import { Card } from '@/shared/components/ui/Card'
+import { Input } from '@/shared/components/ui/Input'
+import { Textarea } from '@/shared/components/ui/Textarea'
 
 type ResponseItem = {
   id: string

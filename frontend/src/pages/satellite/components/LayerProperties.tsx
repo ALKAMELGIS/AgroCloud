@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { LayerData } from './LayerManager';
-import { ScaleSelector } from './ScaleSelector';
+import { ScaleSelector } from '@/shared/maps/ScaleSelector';
 
 interface LayerPropertiesProps {
   layer: LayerData;

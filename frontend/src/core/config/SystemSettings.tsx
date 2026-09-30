@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { appConfirm } from '@/lib/appDialog'
+import { appConfirm } from '@/shared/dialogs/appDialog'
 import { useLocation } from 'react-router-dom'
 import * as yup from 'yup'
 import { useLanguage } from '../localization/i18n'

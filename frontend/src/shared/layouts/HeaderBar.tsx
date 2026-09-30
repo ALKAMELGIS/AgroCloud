@@ -1,7 +1,7 @@
 import './header.css'
 import '@/assets/styles/lux-theme.css'
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { AgroCloudMark } from './AgroCloudMark'
+import { AgroCloudMark } from '../components/AgroCloudMark'
 import { ELITE_AGRO_LOGO_WHITE_URL, ELITE_AGROCLOUD_SITE_URL, resolveEliteAgroLogoUrl } from '@/core/config/brandAssets'
 import { normalizeHeaderLogoText } from '@/core/services/settingsStorage'
 import { useSystemSettings } from '@/core/state/SystemSettingsContext'

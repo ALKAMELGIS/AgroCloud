@@ -16,17 +16,15 @@ import { buildSentinelHubWmsAoiClip, inferWmsEvalProfile } from './sentinelHubWm
 
 describe('sentinelHubWmsIndexEvalscripts', () => {
 
-  it('NDVI evalscript uses color ramp without display cloud mask (visual vs analytical)', () => {
+  it('NDVI evalscript ramps cloud-free pixels and shows real RGB on cloud pixels', () => {
 
     const script = buildSentinelIndexColorRampEvalscript('ndvi')
 
     expect(script).toContain('index(samples.B08, samples.B04)')
 
-    expect(script).not.toContain('"SCL"')
-
-    expect(script).not.toContain('"CLM"')
-
-    expect(script).not.toContain('"CLP"')
+    for (const band of ['B02', 'B03', 'B04', 'B08', 'SCL', 'CLM', 'CLP', 'dataMask']) {
+      expect(script).toContain(`"${band}"`)
+    }
 
     expect(script).toContain('ColorRampVisualizer')
 
@@ -34,9 +32,18 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
 
     expect(script).toContain('imgVals.concat(samples.dataMask)')
 
-    expect(script).not.toContain('clearMask')
+    expect(script).toContain('scl == 8 || scl == 9 || scl == 10')
 
-    expect(script).not.toContain('scl == 3')
+    expect(script).toContain('s.CLM == 1')
+
+    expect(script).toContain('if (cloudMasked(samples)) return trueColor(samples);')
+
+    // Cloud test runs before the index so masked pixels never get an index color.
+    expect(script.indexOf('return trueColor(samples)')).toBeLessThan(
+      script.indexOf('index(samples.B08, samples.B04)'),
+    )
+
+    expect(script).toContain('v * 2.5')
 
     expect(script).not.toContain('imgVals.concat(1)')
 
@@ -44,8 +51,23 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
 
     expect(script).not.toContain('function blendRgb')
 
-    expect(script).not.toContain('return [0, 0, 0, 0]')
+  })
 
+  it('every index display evalscript routes cloud pixels to true color', () => {
+    for (const profile of ['ndvi', 'ndwi', 'ndmi', 'savi', 'evi', 'mndwi', 'awei', 'ndii', 'nbr', 'et', 'lst'] as const) {
+      const script = buildSentinelIndexColorRampEvalscript(profile)
+      expect(script, profile).toContain('"SCL"')
+      expect(script, profile).toContain('function cloudMasked(s)')
+      expect(script, profile).toContain('if (cloudMasked(samples)) return trueColor(samples);')
+      expect(script, profile).toContain('scl == 11')
+    }
+  })
+
+  it('NDSI keeps snow pixels in the index and only masks clouds / shadows', () => {
+    const script = buildSentinelIndexColorRampEvalscript('ndsi')
+    expect(script).toContain('if (cloudMasked(samples)) return trueColor(samples);')
+    expect(script).toContain('scl == 9')
+    expect(script).not.toContain('scl == 11')
   })
 
 
@@ -127,7 +149,7 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
 
     expect(script).toContain('viz.process(val)')
 
-    expect(script).not.toContain('"SCL"')
+    expect(script).toContain('"SCL"')
 
     expect(script).not.toContain('clearMask')
 
@@ -149,7 +171,7 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
 
     expect(script).toContain('"B08"')
 
-    expect(script).not.toContain('"SCL"')
+    expect(script).toContain('"SCL"')
 
     expect(script).toContain('viz.process(val)')
 
@@ -187,7 +209,7 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
 
     expect(script).toContain('"B12"')
 
-    expect(script).not.toContain('"SCL"')
+    expect(script).toContain('"SCL"')
 
     expect(script).toContain('0xb3e5fc')
 

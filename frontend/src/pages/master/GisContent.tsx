@@ -45,7 +45,7 @@ import { GisPortalFolderOptionsMenu } from './GisPortalFolderOptionsMenu'
 import { MoveItemsModal } from './MoveItemsModal'
 import { NewItemModal } from './NewItemModal'
 import { ShareItemsModal } from './ShareItemsModal'
-import { appConfirm, appPrompt } from '../../lib/appDialog'
+import { appConfirm, appPrompt } from '@/shared/dialogs/appDialog'
 import { publishGisContentNewItem, ensureDefaultGisContentPortalHostedLayers } from '../../lib/gisContentPortalPublish'
 
 const PAGE_SIZE = 20

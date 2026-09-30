@@ -197,6 +197,7 @@ function ensurePingPongRasterPair(
         tiles: [placeholderUrl],
         tileSize: stack.tilePixels || SENTINEL_HUB_WMS_TILE_PIXELS,
         minzoom: SI_SENTINEL_WMS_MAP_DISPLAY_MIN_ZOOM,
+        ...(stack.maxNativeZoom != null ? { maxzoom: stack.maxNativeZoom } : {}),
         ...(bounds ? { bounds } : {}),
       })
     } else {

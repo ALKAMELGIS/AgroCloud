@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { appAlert } from '../../lib/appDialog'
+import { appAlert } from '@/shared/dialogs/appDialog'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useLanguage } from '@/core/localization/i18n'
 import { generateRecipeReportPdf } from '../../lib/recipeReport/generateRecipeReportPdf'

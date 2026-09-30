@@ -27,7 +27,7 @@ import {
   type LulcClassCompositionStat,
 } from '../../../lib/siLulcClassAreaLive'
 import { isLulcClassificationLayerId } from '../../../lib/siLulcClassification'
-import { lulcPctLabelsPlugin } from '../../../lib/lulcCompositionChartPlugin'
+import { lulcPctLabelsPlugin } from '@/shared/charts/lulcCompositionChartPlugin'
 import { SiImageryIndexInterpretationCard, type ImageryInterpretationActionId } from './SiImageryIndexInterpretationCard'
 import type { SiAoiFieldRecord } from '../../../lib/siAoiFields'
 import type { SiAoiMaskBuilderLayerLike } from '../../../lib/siAoiMaskBuilder'
@@ -69,7 +69,7 @@ import {
 import { TimeSeriesExportManager } from './timeSeriesReport/ExportManager'
 import { SiDynamicMapSnapshotsPanel } from './SiDynamicMapSnapshotsPanel'
 import { SiImageryWeatherTab } from './SiImageryWeatherTab'
-import { useImageryChartInk } from '../lib/imageryChartInk'
+import { useImageryChartInk } from '@/shared/charts/imageryChartInk'
 import '../../dashboards/agroCloudPlatform/AgroCloudPlatformDashboard.css'
 
 ChartJS.register(

@@ -19,7 +19,7 @@ import {
 } from 'chart.js';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import { Bar, Line, Pie, Scatter } from 'react-chartjs-2';
-import { appAlert } from '../../../lib/appDialog';
+import { appAlert } from '@/shared/dialogs/appDialog';
 
 ChartJS.register(
   CategoryScale,

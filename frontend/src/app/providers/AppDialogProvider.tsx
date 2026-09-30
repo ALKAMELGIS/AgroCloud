@@ -5,8 +5,8 @@ import {
   type AppDialogConfirmOptions,
   type AppDialogImpl,
   type AppDialogPromptOptions,
-} from '@/lib/appDialog'
-import '@/components/app-dialog.css'
+} from '@/shared/dialogs/appDialog'
+import '@/shared/dialogs/app-dialog.css'
 
 type DialogState =
   | {

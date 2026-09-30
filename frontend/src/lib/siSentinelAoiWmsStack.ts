@@ -24,6 +24,7 @@ import {
   getSentinelHubWmsLayerCatalog,
   resolveSentinelHubWmsDeltaPreviousDate,
   resolveSentinelHubWmsGetMapLayerName,
+  resolveSentinelHubWmsNativeMaxZoom,
   resolveSentinelHubWmsTilePixels,
   resolveSentinelHubWmsTimeWindow,
   SENTINEL_HUB_WMS_TILE_PIXELS,
@@ -64,6 +65,8 @@ export type SiSentinelAoiWmsStackState = {
   displayChunks: SentinelHubWmsAoiClipPart[]
   tileUrls: string[]
   tilePixels: number
+  /** Raster source maxzoom (native S2 resolution); undefined requests tiles at every zoom. */
+  maxNativeZoom?: number
   aoiBoundsLngLat: [number, number, number, number] | null
   renderReady: boolean
   sessionKey: string
@@ -191,6 +194,13 @@ export function buildSiSentinelAoiWmsStackState(
     : resolveSentinelHubWmsTimeWindow(activeWmsLayer, sentinelFetchDate, deltaPreviousDate)
   const wmsBaseUrl = input.wmsBaseUrl?.trim() || getSentinelHubWmsBaseUrl()
   const tilePixels = resolveSentinelHubWmsTilePixels(activeWmsLayer)
+  const categorical =
+    isLulcClassificationLayerId(activeWmsLayer) ||
+    isAdiLayerId(activeWmsLayer) ||
+    isNcadiLayerId(activeWmsLayer) ||
+    isWapiLayerId(activeWmsLayer)
+  // Class maps keep server-side NEAREST at every zoom; client overzoom would blur class edges.
+  const maxNativeZoom = categorical ? undefined : resolveSentinelHubWmsNativeMaxZoom(tilePixels)
   const tileUrls = displayChunks.map(chunk =>
     buildSentinelHubWmsGetMapUrlParts({
       baseUrl: wmsBaseUrl,
@@ -202,11 +212,7 @@ export function buildSiSentinelAoiWmsStackState(
       geometryWkt3857: chunk.geometryWkt3857 ?? undefined,
       evalscriptB64: chunk.evalscriptB64,
       tilePixels,
-      categorical:
-        isLulcClassificationLayerId(activeWmsLayer) ||
-        isAdiLayerId(activeWmsLayer) ||
-        isNcadiLayerId(activeWmsLayer) ||
-        isWapiLayerId(activeWmsLayer),
+      categorical,
     }),
   )
 
@@ -237,6 +243,7 @@ export function buildSiSentinelAoiWmsStackState(
     displayChunks,
     tileUrls,
     tilePixels,
+    maxNativeZoom,
     aoiBoundsLngLat,
     renderReady: true,
     sessionKey: input.sessionKey,

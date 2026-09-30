@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
-import { Badge } from '@/components/ui/Badge'
-import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
-import { Input } from '@/components/ui/Input'
-import { Modal } from '@/components/ui/Modal'
-import { Select } from '@/components/ui/Select'
-import { Textarea } from '@/components/ui/Textarea'
+import { Badge } from '@/shared/components/ui/Badge'
+import { Button } from '@/shared/components/ui/Button'
+import { Card } from '@/shared/components/ui/Card'
+import { Input } from '@/shared/components/ui/Input'
+import { Modal } from '@/shared/components/ui/Modal'
+import { Select } from '@/shared/components/ui/Select'
+import { Textarea } from '@/shared/components/ui/Textarea'
 
 export default function StyleGuide() {
   const [modalOpen, setModalOpen] = useState(false)

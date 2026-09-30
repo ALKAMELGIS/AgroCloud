@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AgroCloudMark } from '@/components/AgroCloudMark'
+import { AgroCloudMark } from '@/shared/components/AgroCloudMark'
 import { useLanguage } from '@/core/localization/i18n'
 import {
   dismissInstallPrompt,

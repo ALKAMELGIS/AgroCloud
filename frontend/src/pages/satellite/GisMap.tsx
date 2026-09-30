@@ -18,13 +18,13 @@ import { GeoJSON } from 'react-leaflet'
 import { EsriImageServerLayer } from './components/EsriImageServerLayer'
 import MapboxMap, { Layer, NavigationControl, Source } from 'react-map-gl/mapbox'
 import 'mapbox-gl/dist/mapbox-gl.css'
-import MapView from '../../components/MapView'
-import { AgroCloudMark } from '../../components/AgroCloudMark'
+import MapView from '@/shared/maps/MapView'
+import { AgroCloudMark } from '@/shared/components/AgroCloudMark'
 import type { LayerData, SymbologyClassMethod, SymbologyColorRamp, SymbologyConfig, SymbologyStyle } from './components/LayerManager'
 import { FieldVisibilityControl } from './components/FieldVisibilityControl'
 import { GeoExplorerGeminiInputRow } from './components/GeoExplorerGeminiInputRow'
 import { MapPopup } from './components/MapPopup'
-import { SiCopyTextButton } from './components/SiCopyTextButton'
+import { SiCopyTextButton } from '@/shared/components/SiCopyTextButton'
 import { DrawToolsController } from './components/DrawTools'
 import { BasemapGallery, BasemapLayer, type BasemapType } from './components/BasemapGallery'
 import {
@@ -61,7 +61,7 @@ import {
   type GeoExplorerMessage,
   type GeoExplorerPart,
 } from '../../lib/geoExplorerGemini'
-import { appAlert, appConfirm, appPrompt } from '../../lib/appDialog'
+import { appAlert, appConfirm, appPrompt } from '@/shared/dialogs/appDialog'
 import { DEVELOP_DATA_CONTEXT_LS_KEY } from '../../lib/geoAiChatClaude'
 import {
   arcLegendLabelForFieldValue,

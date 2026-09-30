@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import Globe from '@/components/ui/globe'
+import Globe from '@/shared/components/ui/globe'
 import {
   HOME_QUICK_TILES,
   HOME_TILE_ORDER,

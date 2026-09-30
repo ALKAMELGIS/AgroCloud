@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { BrandLogoOrbit } from '@/components/BrandLogoOrbit'
+import { BrandLogoOrbit } from '@/shared/components/BrandLogoOrbit'
 import { isPwaStandalone, isTouchDevice } from './pwaInstall'
-import '@/components/brand-logo-orbit.css'
+import '@/shared/components/brand-logo-orbit.css'
 import './splash.css'
 
 const SPLASH_VIDEO_SRC =

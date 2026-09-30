@@ -15,6 +15,11 @@ import {
   SENTINEL_LST_RAMP,
   LST_WMS_INDEX_SETUP,
 } from './lstIndex'
+import {
+  buildSentinelCloudRgbFallbackFunctions,
+  SENTINEL_CLOUD_RGB_FALLBACK_INPUT_BANDS,
+  sentinelCloudRgbFallbackGuardLines,
+} from './sentinelSclCloudMask'
 
 /**
  * Sentinel Hub Evalscript v3 — ColorRampVisualizer palettes for Live WMS index layers.
@@ -543,7 +548,22 @@ function formatNumberList(values: readonly number[]): string {
   return values.map(v => String(v)).join(', ')
 }
 
-/** Visual WMS display — dataMask alpha only. SCL/CLM/CLP analytical mask is stats-only. */
+/**
+ * Index display inputs + true-color / cloud-mask bands. Cloud pixels (SCL/CLM/CLP) skip the
+ * index and return the same scene's RGB, so clouds stay visible as captured with no holes.
+ */
+function withCloudRgbFallbackInputs(inputs: readonly string[]): string[] {
+  const bands = inputs.filter(b => b !== 'dataMask')
+  for (const band of SENTINEL_CLOUD_RGB_FALLBACK_INPUT_BANDS) {
+    if (!bands.includes(band)) bands.push(band)
+  }
+  return [...bands, 'dataMask']
+}
+
+const CLOUD_RGB_FALLBACK_FUNCTIONS = buildSentinelCloudRgbFallbackFunctions()
+const CLOUD_RGB_FALLBACK_GUARD = sentinelCloudRgbFallbackGuardLines('samples')
+
+/** Visual WMS display alpha for cloud-free pixels (optional index visibility threshold). */
 function buildVisualDisplayAlphaBlock(thresholdExpr: string | null = null): string {
   if (thresholdExpr) {
     return `var a = samples.dataMask * (${thresholdExpr} ? 1.0 : 0.0);
@@ -565,7 +585,7 @@ export function buildSentinelNdwiTenClassEvalscript(indexVisibilityMin: number |
 // NDWI — green (dry) → white (neutral) → blue (water)
 function setup() {
   return {
-    input: ${JSON.stringify(['B03', 'B08', 'dataMask'])},
+    input: ${JSON.stringify(withCloudRgbFallbackInputs(['B03', 'B08', 'dataMask']))},
     output: { bands: 4 }
   };
 }
@@ -576,7 +596,10 @@ const ramp = [
 
 const visualizer = new ColorRampVisualizer(ramp);
 
+${CLOUD_RGB_FALLBACK_FUNCTIONS}
+
 function evaluatePixel(samples) {
+  ${CLOUD_RGB_FALLBACK_GUARD}
   let val = index(samples.B03, samples.B08);
   let imgVals = visualizer.process(val);
   ${alphaBlock}
@@ -596,7 +619,7 @@ export function buildSentinelAweiTenClassEvalscript(indexVisibilityMin: number |
 // AWEI — 10 classes · non-water warm → open / deep water blue
 function setup() {
   return {
-    input: ${JSON.stringify(['B03', 'B08', 'B11', 'B12', 'dataMask'])},
+    input: ${JSON.stringify(withCloudRgbFallbackInputs(['B03', 'B08', 'B11', 'B12', 'dataMask']))},
     output: { bands: 4 }
   };
 }
@@ -607,6 +630,8 @@ const classRamp = [
    )}
 ];
 const viz = new ColorRampVisualizer(classRamp);
+
+${CLOUD_RGB_FALLBACK_FUNCTIONS}
 
 const BREAKS = [${formatNumberList(SENTINEL_AWEI_10_CLASS_BREAKS)}];
 
@@ -624,6 +649,7 @@ function aweiClass(val) {
 }
 
 function evaluatePixel(samples) {
+  ${CLOUD_RGB_FALLBACK_GUARD}
   let val = 4.0 * (samples.B03 - samples.B11) - (0.25 * samples.B08 + 2.75 * samples.B12);
   let cls = aweiClass(val);
   let imgVals = viz.process(cls);
@@ -644,7 +670,7 @@ export function buildSentinelMndwiTenClassEvalscript(indexVisibilityMin: number 
 // MNDWI — 10 classes · light dry gradient → open / deep water blue
 function setup() {
   return {
-    input: ${JSON.stringify(['B03', 'B11', 'dataMask'])},
+    input: ${JSON.stringify(withCloudRgbFallbackInputs(['B03', 'B11', 'dataMask']))},
     output: { bands: 4 }
   };
 }
@@ -655,6 +681,8 @@ const classRamp = [
    )}
 ];
 const viz = new ColorRampVisualizer(classRamp);
+
+${CLOUD_RGB_FALLBACK_FUNCTIONS}
 
 const BREAKS = [${formatNumberList(SENTINEL_MNDWI_10_CLASS_BREAKS)}];
 
@@ -672,6 +700,7 @@ function mndwiClass(val) {
 }
 
 function evaluatePixel(samples) {
+  ${CLOUD_RGB_FALLBACK_GUARD}
   let val = index(samples.B03, samples.B11);
   let cls = mndwiClass(val);
   let imgVals = viz.process(cls);
@@ -692,7 +721,7 @@ export function buildSentinelNdiiTenClassEvalscript(indexVisibilityMin: number |
 // NDII — continuous moisture ramp (B08 / B11)
 function setup() {
   return {
-    input: ${JSON.stringify(['B08', 'B11', 'dataMask'])},
+    input: ${JSON.stringify(withCloudRgbFallbackInputs(['B08', 'B11', 'dataMask']))},
     output: { bands: 4 }
   };
 }
@@ -703,7 +732,10 @@ const moistureRamps = [
 
 const viz = new ColorRampVisualizer(moistureRamps);
 
+${CLOUD_RGB_FALLBACK_FUNCTIONS}
+
 function evaluatePixel(samples) {
+  ${CLOUD_RGB_FALLBACK_GUARD}
   let val = index(samples.B08, samples.B11);
   let imgVals = viz.process(val);
   ${alphaBlock}
@@ -723,7 +755,7 @@ export function buildSentinelNdmiTenClassEvalscript(indexVisibilityMin: number |
 // NDMI — continuous moisture ramp (B8A / B11)
 function setup() {
   return {
-    input: ${JSON.stringify(['B8A', 'B11', 'dataMask'])},
+    input: ${JSON.stringify(withCloudRgbFallbackInputs(['B8A', 'B11', 'dataMask']))},
     output: { bands: 4 }
   };
 }
@@ -734,7 +766,10 @@ const moistureRamps = [
 
 const viz = new ColorRampVisualizer(moistureRamps);
 
+${CLOUD_RGB_FALLBACK_FUNCTIONS}
+
 function evaluatePixel(samples) {
+  ${CLOUD_RGB_FALLBACK_GUARD}
   let val = index(samples.B8A, samples.B11);
   let imgVals = viz.process(val);
   ${alphaBlock}
@@ -792,7 +827,7 @@ export function buildSentinelEtTenClassEvalscript(
 // ET — seasonal × Kc × moisture demand (mm/day), 10 classes
 function setup() {
   return {
-    input: ${JSON.stringify(['B03', 'B04', 'B08', 'B11', 'dataMask'])},
+    input: ${JSON.stringify(withCloudRgbFallbackInputs(['B03', 'B04', 'B08', 'B11', 'dataMask']))},
     output: { bands: 4 }
   };
 }
@@ -802,6 +837,8 @@ const etRamp = [
 ];
 
 const viz = new ColorRampVisualizer(etRamp);
+
+${CLOUD_RGB_FALLBACK_FUNCTIONS}
 
 const BREAKS = [${formatNumberList(breaks)}];
 const CLASS_VAL = [${formatNumberList(centers)}];
@@ -820,6 +857,7 @@ function etClass(val) {
 }
 
 function evaluatePixel(samples) {
+  ${CLOUD_RGB_FALLBACK_GUARD}
   ${setupEt}
   let cls = etClass(et);
   let imgVals = viz.process(CLASS_VAL[cls]);
@@ -877,7 +915,7 @@ export function buildSentinelLstTenClassEvalscript(
 // LST — seasonal NDVI/NDMI land-surface temperature proxy (°C), 10 classes
 function setup() {
   return {
-    input: ${JSON.stringify(['B04', 'B08', 'B11', 'dataMask'])},
+    input: ${JSON.stringify(withCloudRgbFallbackInputs(['B04', 'B08', 'B11', 'dataMask']))},
     output: { bands: 4 }
   };
 }
@@ -887,6 +925,8 @@ const lstRamp = [
 ];
 
 const viz = new ColorRampVisualizer(lstRamp);
+
+${CLOUD_RGB_FALLBACK_FUNCTIONS}
 
 const BREAKS = [${formatNumberList(breaks)}];
 const CLASS_VAL = [${formatNumberList(centers)}];
@@ -905,6 +945,7 @@ function lstClass(val) {
 }
 
 function evaluatePixel(samples) {
+  ${CLOUD_RGB_FALLBACK_GUARD}
   ${setupLst}
   let cls = lstClass(lst);
   let imgVals = viz.process(CLASS_VAL[cls]);
@@ -913,11 +954,8 @@ function evaluatePixel(samples) {
 }
 
 /**
- * NDVI Live WMS — lightweight ColorRampVisualizer on B08/B04 with dataMask alpha.
- *
- * Intentionally minimal so the visible raster appears FAST and fills the whole AOI
- * (no SCL cloud masking → no transparent holes, only 3 input bands, a short
- * evalscript that keeps the WMS GEOMETRY-clip URL well under the length budget).
+ * NDVI Live WMS — ColorRampVisualizer on B08/B04 for cloud-free pixels; cloud pixels
+ * (SCL/CLM/CLP) show the same scene's true color, so the AOI is filled with no holes.
  * Per-class pixel-area analysis runs separately, after the layer is shown.
  */
 export function buildSentinelNdviTenClassEvalscript(indexVisibilityMin: number | null = null): string {
@@ -929,10 +967,10 @@ export function buildSentinelNdviTenClassEvalscript(indexVisibilityMin: number |
   const alphaBlock = buildVisualDisplayAlphaBlock(thr == null ? null : `ndvi >= ${thr}`)
 
   return `//VERSION=3
-// NDVI — agricultural color ramp on B08/B04 (visual display; cloud mask is stats-only)
+// NDVI — agricultural color ramp on cloud-free pixels; clouds show true color
 function setup() {
   return {
-    input: ${JSON.stringify(['B04', 'B08', 'dataMask'])},
+    input: ${JSON.stringify(withCloudRgbFallbackInputs(['B04', 'B08', 'dataMask']))},
     output: { bands: 4 }
   };
 }
@@ -943,7 +981,10 @@ const ramp = [
 
 const visualizer = new ColorRampVisualizer(ramp);
 
+${CLOUD_RGB_FALLBACK_FUNCTIONS}
+
 function evaluatePixel(samples) {
+  ${CLOUD_RGB_FALLBACK_GUARD}
   let ndvi = index(samples.B08, samples.B04);
   let imgVals = visualizer.process(ndvi);
   ${alphaBlock}
@@ -995,10 +1036,16 @@ export function buildSentinelIndexColorRampEvalscript(
     thr == null ? null : `${spec.indexVar} >= ${thr}`,
   )
 
+  // Snow is the NDSI signal, so only clouds / shadows fall back to true color there.
+  const cloudFunctions =
+    profile === 'ndsi'
+      ? buildSentinelCloudRgbFallbackFunctions({ maskSnow: false })
+      : CLOUD_RGB_FALLBACK_FUNCTIONS
+
   return `//VERSION=3
 function setup() {
   return {
-    input: ${JSON.stringify(spec.inputs)},
+    input: ${JSON.stringify(withCloudRgbFallbackInputs(spec.inputs))},
     output: { bands: 4 }
   };
 }
@@ -1009,7 +1056,10 @@ const ramp = [
 
 const visualizer = new ColorRampVisualizer(ramp);
 
+${cloudFunctions}
+
 function evaluatePixel(samples) {
+  ${CLOUD_RGB_FALLBACK_GUARD}
   ${spec.indexExpr}
   let imgVals = visualizer.process(${spec.indexVar});
   ${alphaBlock}

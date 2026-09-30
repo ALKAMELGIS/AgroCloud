@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { appAlert } from '../../../lib/appDialog';
+import { appAlert } from '../dialogs/appDialog';
 import { useMap, useMapEvents, ScaleControl, ZoomControl, MapContainer, TileLayer, CircleMarker } from 'react-leaflet';
 import L from 'leaflet';
 

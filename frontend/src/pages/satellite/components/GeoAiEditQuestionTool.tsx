@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { buildGeoQuestionEditSuggestions } from '../../../lib/geoQuestionEditSuggestions'
 import type { GeoExplorerCssPrefix } from './GeoExplorerGeminiChatBody'
-import { SiCopyTextButton } from './SiCopyTextButton'
+import { SiCopyTextButton } from '@/shared/components/SiCopyTextButton'
 
 function pfx(prefix: GeoExplorerCssPrefix, part: string): string {
   return `${prefix}-${part}`

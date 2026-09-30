@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { appAlert } from '../../../lib/appDialog'
+import { appAlert } from '@/shared/dialogs/appDialog'
 import { getGisContentRowById } from '../../../lib/gisContentPortalStore'
 import type { GisContentRow } from '../../master/gisContentPortalData'
 import type {
