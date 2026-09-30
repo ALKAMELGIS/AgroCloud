@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+import {
+  resetGisContentPortalForTests,
+  seedGisContentPortalFixtureRowsForTests,
+} from '@/modules/gis/layers/gisContentPortalStore'
 import { DEFAULT_AGROCLOUD_DASHBOARD_CONFIG } from './agroCloudDashboardData'
 import { bindWidgetToLayer } from './agroCloudDashboardElements'
 import {
@@ -25,6 +29,11 @@ const mockWebMapRow: GisContentRow = {
 }
 
 describe('agroCloudDashboardLayerSelection', () => {
+  beforeEach(() => {
+    resetGisContentPortalForTests()
+    seedGisContentPortalFixtureRowsForTests()
+  })
+
   it('lists layers after a data source is registered', () => {
     const withSource = registerGisContentDataSource(DEFAULT_AGROCLOUD_DASHBOARD_CONFIG, mockWebMapRow)
     const options = listDashboardLayerOptions(withSource)

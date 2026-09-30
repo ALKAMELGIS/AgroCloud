@@ -53,6 +53,8 @@ export type BuildSentinelHubWmsAoiClipOptions = {
   preferSingleRingChunks?: boolean;
   /** @deprecated Use maxTileLayers — no longer skips GEOMETRY clip. */
   maxAoiClipRings?: number | null;
+  /** 3D terrain: index WMS leaves cloud pixels transparent; RGB clouds render as fill-extrusion. */
+  terrain3dCloudExtrusion?: boolean;
 };
 
 /** Rough planar area for ranking rings (largest farms first when tile budget is tight). */
@@ -330,6 +332,7 @@ function buildEvalscriptV3(
   indexVisibilityMin: number | null,
   layerName: string,
   sceneDate?: string | null,
+  terrain3dCloudExtrusion?: boolean,
 ): string {
   if (profile === 'agro_composite') {
     return buildAgroCompositeLayerEvalscript(layerName, indexVisibilityMin) ?? '';
@@ -344,7 +347,10 @@ function buildEvalscriptV3(
     return buildLulcClassificationEvalscript();
   }
   if (isSentinelIndexColorRampProfile(profile)) {
-    return buildSentinelIndexColorRampEvalscript(profile, indexVisibilityMin, { sceneDate });
+    return buildSentinelIndexColorRampEvalscript(profile, indexVisibilityMin, {
+      sceneDate,
+      terrain3dCloudExtrusion,
+    });
   }
 
   switch (profile) {
@@ -468,7 +474,13 @@ export function buildEvalscriptB64ForLayer(
   const inferred = inferWmsEvalProfile(layerName);
   const profile = inferred === 'native' ? 'true_color' : inferred;
   const indexMin = options?.indexVisibilityMin ?? null;
-  let evalPlain = buildEvalscriptV3(profile, indexMin, layerName, options?.sceneDate);
+  let evalPlain = buildEvalscriptV3(
+    profile,
+    indexMin,
+    layerName,
+    options?.sceneDate,
+    options?.terrain3dCloudExtrusion,
+  );
   return evalPlain ? evalscriptToBase64Param(evalPlain) : null;
 }
 

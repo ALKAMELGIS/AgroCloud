@@ -14,9 +14,11 @@ import { isLulcClassificationLayerId } from '../classification/siLulcClassificat
 import { getCachedSentinelHubWmsDisplayChunks } from './siAoiLayerModeClipCache'
 import {
   getDrawnGeometry,
+  inferWmsEvalProfile,
   isSentinelHubWmsRenderReady,
   type SentinelHubWmsAoiClipPart,
 } from './sentinelHubWmsAoiClip'
+import { isSentinelIndexColorRampProfile } from '../indices/sentinelHubWmsIndexEvalscripts'
 import { getSentinelHubWmsBaseUrl } from './sentinelHubWmsInstance'
 import { SI_SENTINEL_WMS_SCENE_MAXCC } from './siSentinelAoiSceneCloudFilter'
 import {
@@ -57,6 +59,8 @@ export type SiSentinelAoiWmsStackBuildInput = {
   wmsBaseUrl?: string
   /** Included in sourceRefreshKey so provider/collection switches remount MapGL tiles. */
   providerKey?: string
+  /** When true, index evalscripts hide cloud pixels (3D RGB extrusion layer). */
+  terrain3dCloudExtrusion?: boolean
 }
 
 export type SiSentinelAoiWmsStackState = {
@@ -157,6 +161,7 @@ export function buildSiSentinelAoiWmsStackState(
       viewportBBox: input.viewportBBox ?? null,
       maxTileLayers: input.maxTileLayers,
       preferSingleRingChunks: input.preferSingleRingChunks ?? false,
+      terrain3dCloudExtrusion: input.terrain3dCloudExtrusion ?? false,
     },
     input.maskCacheKey,
   )
@@ -194,11 +199,13 @@ export function buildSiSentinelAoiWmsStackState(
     : resolveSentinelHubWmsTimeWindow(activeWmsLayer, sentinelFetchDate, deltaPreviousDate)
   const wmsBaseUrl = input.wmsBaseUrl?.trim() || getSentinelHubWmsBaseUrl()
   const tilePixels = resolveSentinelHubWmsTilePixels(activeWmsLayer)
+  const indexCloudRgbLayer = isSentinelIndexColorRampProfile(inferWmsEvalProfile(activeWmsLayer))
   const categorical =
     isLulcClassificationLayerId(activeWmsLayer) ||
     isAdiLayerId(activeWmsLayer) ||
     isNcadiLayerId(activeWmsLayer) ||
-    isWapiLayerId(activeWmsLayer)
+    isWapiLayerId(activeWmsLayer) ||
+    indexCloudRgbLayer
   // Class maps keep server-side NEAREST at every zoom; client overzoom would blur class edges.
   const maxNativeZoom = categorical ? undefined : resolveSentinelHubWmsNativeMaxZoom(tilePixels)
   const tileUrls = displayChunks.map(chunk =>

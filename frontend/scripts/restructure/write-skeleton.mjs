@@ -1,0 +1,147 @@
+/**
+ * One-off: creates the architecture folders that have no code yet and a short
+ * README in each architecture folder. Does not overwrite an existing README.
+ */
+import fs from 'node:fs'
+import path from 'node:path'
+
+const src = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '../../src')
+
+const folders = {
+  'app': 'Application entry: root component, route table, providers, layouts and startup.',
+  'app/routes': 'Route table and route-level pages (login redirect targets stay as URLs, not folders).',
+  'app/providers': 'App-wide React providers (dialogs, satellite instance scope).',
+  'app/layouts': 'Application shell and home layout.',
+  'app/startup': 'Splash screen, PWA install prompt and boot shims.',
+  'core': 'Shared foundation every module uses. Core is not a feature.',
+  'core/auth': 'Sign-in, session and account profile.',
+  'core/authorization': 'Who can do what: user directory and the role catalog. Roles do not get their own copies of features.',
+  'core/config': 'System settings, API tokens and home menu configuration.',
+  'core/database': 'Browser-side persistence helpers. The server database lives in backend/.',
+  'core/api': 'HTTP client, API origin and the realtime channel.',
+  'core/routing': 'Navigation manifest, lazy route loading and dynamic page links.',
+  'core/state': 'Global state: system settings and the auth context.',
+  'core/hooks': 'Hooks used across modules.',
+  'core/services': 'Shared browser services (settings storage keys).',
+  'core/utils': 'Small shared helpers (files, geojson, clipboard, hashing).',
+  'core/constants': 'Shared constants. Empty until a value is used by more than one module.',
+  'core/types': 'Shared TypeScript types.',
+  'core/validation': 'Shared data validation.',
+  'core/notifications': 'In-app notifications. Empty until the notification center moves here.',
+  'core/localization': 'Arabic, English and Serbian copy.',
+  'core/error-handling': 'Client error monitoring.',
+  'modules': 'Product features. Add a new farm, operation or AI tool as a new folder here.',
+  'modules/master-data': 'Master data: fields, domains, subtypes, relationships and schemas.',
+  'modules/master-data/fields': 'Field master records. Empty until field CRUD moves out of the GIS layers.',
+  'modules/master-data/domains': 'Coded domain values.',
+  'modules/master-data/subtypes': 'Subtype definitions.',
+  'modules/master-data/relationships': 'Relationship classes between master datasets.',
+  'modules/master-data/schemas': 'Attribute schemas, including the workbook-driven object schema.',
+  'modules/master-data/configurations': 'Master-data configuration. Empty until configuration screens move here.',
+  'modules/master-data/approval': 'Configuration approval workflow. Not built yet.',
+  'modules/forms': 'Form builder, shared form controls, templates and submissions.',
+  'modules/forms/builder': 'Form builder. Not built yet.',
+  'modules/forms/components': 'Data-entry form controls shared by the operation screens.',
+  'modules/forms/validation': 'Form-level validation. Not built yet; shared validation stays in core/validation.',
+  'modules/forms/templates': 'Workflow metadata and form templates.',
+  'modules/forms/submissions': 'Stored form submissions. Not built yet.',
+  'modules/operations': 'Daily farm operations. One folder per operation, not per role.',
+  'modules/operations/harvest': 'Harvest entry.',
+  'modules/operations/work-orders': 'Work orders. Not built yet.',
+  'modules/operations/irrigation': 'Irrigation entry.',
+  'modules/operations/fertigation': 'Fertigation, EC/pH and recipes.',
+  'modules/operations/spraying': 'Spraying. Not built yet.',
+  'modules/operations/scouting': 'Scouting. Not built yet.',
+  'modules/operations/workforce': 'Workforce. Not built yet.',
+  'modules/operations/other': 'Operations that do not have their own folder yet, including sensors.',
+  'modules/gis': 'Map, layers and spatial tools. Access is decided by core/authorization, not by copying this folder per role.',
+  'modules/gis/map': 'Basemap, globe, navigation and the GIS data manager.',
+  'modules/gis/layers': 'Layer catalog, symbology, popups and the content portal.',
+  'modules/gis/spatial-analysis': 'Elevation, watershed, wells and other spatial analysis.',
+  'modules/gis/editing': 'Drawing and feature editing.',
+  'modules/gis/selection': 'Feature selection and identify.',
+  'modules/gis/measurement': 'Measurement tools.',
+  'modules/gis/buffer': 'Buffer analysis. Not built yet.',
+  'modules/gis/cut-fill': 'Cut and fill earthwork.',
+  'modules/gis/tools': 'Other GIS tools, including raster georeferencing.',
+  'modules/remote-sensing': 'Satellite and drone imagery, indices, classification, change and weather.',
+  'modules/remote-sensing/imagery': 'Satellite Intelligence workspace, Sentinel imagery and AOI clipping.',
+  'modules/remote-sensing/indices': 'Vegetation and water indices (NDVI, NDWI, NDMI, SAVI and composites).',
+  'modules/remote-sensing/classification': 'Crop and land-cover classification.',
+  'modules/remote-sensing/change-detection': 'Change detection, including flood monitoring.',
+  'modules/remote-sensing/temporal-analysis': 'Imagery time series and multi-date analysis.',
+  'modules/remote-sensing/terrain': 'Terrain relief and the elevation mesh.',
+  'modules/remote-sensing/weather': 'Weather, rainfall and climate reports.',
+  'modules/ai': 'Detection, segmentation, classification, training and the Geo AI agent.',
+  'modules/ai/detection': 'Object and tree detection.',
+  'modules/ai/segmentation': 'Field boundary, SAM and SegFormer segmentation.',
+  'modules/ai/classification': 'AI image classification.',
+  'modules/ai/models': 'Model registry. Not built yet; model files stay with each tool.',
+  'modules/ai/inference': 'Shared inference runtime. Not built yet; each tool calls its own client.',
+  'modules/ai/training': 'Training samples and model training.',
+  'modules/ai/agent': 'Geo AI agent and the neighborhood assistant.',
+  'modules/dashboards': 'Analytics dashboards. One implementation, shown according to the user role.',
+  'modules/dashboards/operational': 'Operations dashboard and realtime alerts.',
+  'modules/dashboards/gis': 'GIS platform dashboard.',
+  'modules/dashboards/remote-sensing': 'Remote-sensing dashboard. Not built yet.',
+  'modules/dashboards/ai': 'AI dashboards and chat.',
+  'modules/dashboards/management': 'Management and AgroCloud dashboards.',
+  'modules/reports': 'Word, Excel and PDF reports.',
+  'modules/reports/operational': 'Operation and recipe reports.',
+  'modules/reports/gis': 'GIS reports. Not built yet.',
+  'modules/reports/analytics': 'Analytical reports (well site, EO enrichment).',
+  'modules/reports/exports': 'Shared Excel, PDF and CSV export helpers. Not built yet; exporters currently live next to their report.',
+  'modules/data-management': 'Import, export, synchronization, quality and migration.',
+  'modules/data-management/import': 'File and service ingest.',
+  'modules/data-management/export': 'Vector layer export.',
+  'modules/data-management/synchronization': 'Data synchronization. Not built yet.',
+  'modules/data-management/quality': 'Data quality checks. Not built yet.',
+  'modules/data-management/migration': 'Data migration. Not built yet.',
+  'roles': 'Role definitions only. Features stay in modules/; a role says who may open them.',
+  'roles/administrator': 'System administrator. Full access.',
+  'roles/data-manager': 'Data manager. Master data, forms and data management.',
+  'roles/farm-manager': 'Farm manager. Operations, dashboards and reports.',
+  'roles/gis-specialist': 'GIS specialist. GIS, remote sensing and AI tools.',
+  'roles/operator': 'Field operator. Daily operation entry.',
+  'roles/viewer': 'Read only.',
+  'shared': 'Reusable interface pieces. Modules compose these instead of copying them.',
+  'shared/components': 'Buttons, inputs and other common components.',
+  'shared/layouts': 'Header and navigation.',
+  'shared/tables': 'Shared tables.',
+  'shared/forms': 'Form controls used by more than one module. Not built yet; data-entry controls live in modules/forms.',
+  'shared/maps': 'Map view and GIS content widgets shared by several modules.',
+  'shared/charts': 'Shared chart helpers.',
+  'shared/dialogs': 'Dialogs and modals.',
+  'shared/filters': 'Shared filters. Not built yet.',
+  'shared/cards': 'Shared cards. Not built yet.',
+  'shared/icons': 'Icon components.',
+  'data': 'Data definitions shipped with the app: domains, schemas, templates, seeds and samples.',
+  'data/domains': 'Domain value lists. Not extracted yet.',
+  'data/schemas': 'Data schemas shipped as files. Not extracted yet.',
+  'data/templates': 'Import templates. Not extracted yet.',
+  'data/seeds': 'Initial data. Not extracted yet.',
+  'data/samples': 'Sample and scratch data.',
+  'assets': 'Static images, icons, logos, fonts and global styles.',
+  'assets/images': 'Images. Not extracted yet; brand images are served from public/.',
+  'assets/icons': 'Icon files. Not extracted yet; icon components live in shared/icons.',
+  'assets/logos': 'Logos. Not extracted yet; brand assets are served from public/.',
+  'assets/fonts': 'Fonts. Not extracted yet; font faces live in assets/styles.',
+  'assets/styles': 'Global stylesheets and design tokens.',
+}
+
+let created = 0
+let readmes = 0
+for (const [rel, text] of Object.entries(folders)) {
+  const dir = path.join(src, rel)
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true })
+    created++
+  }
+  const readme = path.join(dir, 'README.md')
+  if (!fs.existsSync(readme)) {
+    const title = path.posix.basename(rel)
+    fs.writeFileSync(readme, `# ${title}\n\n${text}\n`)
+    readmes++
+  }
+}
+console.log(`dirsCreated=${created} readmes=${readmes}`)

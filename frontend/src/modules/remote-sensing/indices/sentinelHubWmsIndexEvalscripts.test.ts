@@ -16,6 +16,12 @@ import { buildSentinelHubWmsAoiClip, inferWmsEvalProfile } from '../imagery/sent
 
 describe('sentinelHubWmsIndexEvalscripts', () => {
 
+  it('NDVI evalscript uses transparent cloud pixels when 3D extrusion is enabled', () => {
+    const script = buildSentinelIndexColorRampEvalscript('ndvi', null, { terrain3dCloudExtrusion: true })
+    expect(script).toContain('if (cloudMasked(samples)) return [0, 0, 0, 0];')
+    expect(script).not.toContain('return trueColor(samples);')
+  })
+
   it('NDVI evalscript ramps cloud-free pixels and shows real RGB on cloud pixels', () => {
 
     const script = buildSentinelIndexColorRampEvalscript('ndvi')
@@ -34,7 +40,7 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
 
     expect(script).toContain('imgVals.concat(samples.dataMask)')
 
-    expect(script).toContain('scl == 8 || scl == 9 || scl == 10')
+    expect(script).toContain('scl == 9 && clp >=')
 
     expect(script).toContain('scl == 2 || scl == 3 || scl == 4 || scl == 5 || scl == 6 || scl == 7 || scl == 11')
 
@@ -66,7 +72,7 @@ describe('sentinelHubWmsIndexEvalscripts', () => {
       expect(script, profile).toContain('function cloudMasked(s)')
       expect(script, profile).toContain('if (cloudMasked(samples)) return trueColor(samples);')
       expect(script, profile).toContain('if (scl == 2 || scl == 3 || scl == 4 || scl == 5 || scl == 6 || scl == 7 || scl == 11) return false')
-      expect(script, profile).toContain('if (scl == 8 || scl == 9 || scl == 10) return true')
+      expect(script, profile).toContain('if (scl == 9 && clp >=')
     }
   })
 

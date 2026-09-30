@@ -49,14 +49,14 @@ describe('FieldVisibilityControl', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Field visibility' }))
     fireEvent.click(screen.getByRole('checkbox', { name: 'Hide field Field1' }))
 
-    const key = __test__.storageKeyForLayer('layer-2')
+    const key = __test__.storageKeyForLayer('layer-2', k => k)
     const stored = window.localStorage.getItem(key)
     expect(stored).toBeTruthy()
     expect(JSON.parse(stored as string)).toEqual(['Field1'])
   })
 
   it('loads persisted hidden fields and ignores unknown fields', async () => {
-    const key = __test__.storageKeyForLayer('layer-3')
+    const key = __test__.storageKeyForLayer('layer-3', k => k)
     window.localStorage.setItem(key, JSON.stringify(['A', 'UNKNOWN']))
 
     render(<Harness layerId="layer-3" fields={['A', 'B']} />)

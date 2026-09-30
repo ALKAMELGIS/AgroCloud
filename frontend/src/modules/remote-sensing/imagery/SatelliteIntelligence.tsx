@@ -137,6 +137,12 @@ import {
   siSentinelAoiWmsSourceId,
 } from './siSentinelAoiWmsStack';
 import {
+  fetchSiSentinel3dCloudDeck,
+  shouldFetchSiSentinel3dCloudExtrusion,
+  syncSiSentinel3dCloudDeckLayer,
+  type SiSentinel3dCloudDeckPayload,
+} from './siSentinel3dCloudExtrusion';
+import {
   setSiSentinelAoiWmsLayerPresentation,
   siSentinelAoiWmsChunkKey,
   syncSiSentinelAoiWmsChunkBounds,
@@ -5052,6 +5058,8 @@ export default function SatelliteIntelligence() {
     terrainLayerEnabledRef.current = terrainLayerEnabled;
   }, [terrainLayerEnabled]);
   const [terrainMeshReady, setTerrainMeshReady] = useState(false);
+  const [si3dCloudDeckPayload, setSi3dCloudDeckPayload] =
+    useState<SiSentinel3dCloudDeckPayload | null>(null);
   /** DEM vertical exaggeration applied to the 3D terrain mesh (1.0 = real, higher = dramatic). */
   const [terrainExaggeration, setTerrainExaggeration] = useState(TERRAIN_EXAGGERATION_DEFAULT);
   /** Legend tool: the map legend is shown ONLY when the user activates this tool. */
@@ -24284,6 +24292,12 @@ export default function SatelliteIntelligence() {
     timeSeriesStart,
   ]);
 
+  const siTerrain3dCloudExtrusion =
+    is3DView &&
+    terrainLayerEnabled &&
+    terrainMeshReady &&
+    shouldFetchSiSentinel3dCloudExtrusion(activeWmsLayer);
+
   const siSentinelWmsStackCommonInput = useMemo(
     () => ({
       // PRECIP / collection-specific indices are not Sentinel Hub WMS layer names.
@@ -24303,6 +24317,7 @@ export default function SatelliteIntelligence() {
       maxTileLayers: SI_WMS_MAX_TILE_LAYERS,
       wmsBaseUrl,
       providerKey: `${remoteSensingProvider}:${remoteSensingCollection}:${remoteSensingMapBackend}`,
+      terrain3dCloudExtrusion: siTerrain3dCloudExtrusion,
     }),
     [
       activeWmsLayer,
@@ -24318,6 +24333,7 @@ export default function SatelliteIntelligence() {
       remoteSensingProvider,
       remoteSensingCollection,
       remoteSensingMapBackend,
+      siTerrain3dCloudExtrusion,
     ],
   );
 
@@ -24330,9 +24346,16 @@ export default function SatelliteIntelligence() {
         {
           indexVisibilityMin: WMS_AOI_INDEX_VISIBILITY_MIN,
           maxTileLayers: SI_WMS_MAX_TILE_LAYERS,
+          terrain3dCloudExtrusion: siTerrain3dCloudExtrusion,
         },
       ),
-    [drawnAoiClipKey, agroStructuresLayerAoiKey, activeWmsLayer, sentinelFetchDate],
+    [
+      drawnAoiClipKey,
+      agroStructuresLayerAoiKey,
+      activeWmsLayer,
+      sentinelFetchDate,
+      siTerrain3dCloudExtrusion,
+    ],
   );
 
   /**
@@ -24372,6 +24395,7 @@ export default function SatelliteIntelligence() {
           maxTileLayers: layerAoiWmsMaxTiles,
           viewportBBox: layerAoiWmsViewportBBox,
           preferSingleRingChunks: layerAoiPreferSingleRings,
+          terrain3dCloudExtrusion: siTerrain3dCloudExtrusion,
         },
       ),
     [
@@ -24382,6 +24406,7 @@ export default function SatelliteIntelligence() {
       layerAoiWmsViewportBBox,
       layerAoiWmsMaxTiles,
       layerAoiPreferSingleRings,
+      siTerrain3dCloudExtrusion,
     ],
   );
 
@@ -24451,6 +24476,36 @@ export default function SatelliteIntelligence() {
 
   const layerAoiWmsWarm =
     Boolean(aoiMaskBuilderSettings.sourceLayerId) && Boolean(aoiMaskBuilderWarmMask?.features?.length);
+
+  const si3dCloudExtrusionClipSource = useMemo(() => {
+    if (drawAoiWmsStack.displayChunks.length > 0 && drawnAoiWmsClipSource) return drawnAoiWmsClipSource;
+    if (layerAoiWmsStackClipSource) return layerAoiWmsStackClipSource;
+    return null;
+  }, [drawAoiWmsStack.displayChunks.length, drawnAoiWmsClipSource, layerAoiWmsStackClipSource]);
+
+  useEffect(() => {
+    if (!siTerrain3dCloudExtrusion || !sentinelFetchDate || !si3dCloudExtrusionClipSource) {
+      setSi3dCloudDeckPayload(null);
+      return;
+    }
+    const ac = new AbortController();
+    void fetchSiSentinel3dCloudDeck(si3dCloudExtrusionClipSource, sentinelFetchDate, ac.signal).then(
+      deck => {
+        if (!ac.signal.aborted) setSi3dCloudDeckPayload(deck);
+      },
+    );
+    return () => ac.abort();
+  }, [siTerrain3dCloudExtrusion, sentinelFetchDate, si3dCloudExtrusionClipSource, activeWmsLayer]);
+
+  useEffect(() => {
+    const map = mapRef.current?.getMap?.() ?? mapRef.current;
+    if (!map || !isMapStyleReady) return;
+    syncSiSentinel3dCloudDeckLayer(
+      map,
+      siTerrain3dCloudExtrusion && si3dCloudDeckPayload ? si3dCloudDeckPayload : null,
+    );
+    return () => syncSiSentinel3dCloudDeckLayer(map, null);
+  }, [isMapStyleReady, siTerrain3dCloudExtrusion, si3dCloudDeckPayload]);
 
   const sentinelWmsStacks = useMemo((): SiSentinelWmsStackRuntime[] => {
     const stacks: SiSentinelWmsStackRuntime[] = [];

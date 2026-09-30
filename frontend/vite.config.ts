@@ -26,6 +26,7 @@ const gzipAsync = promisify(gzip)
 const brotliAsync = promisify(brotliCompress)
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+const REPO_ROOT = resolve(__dirname, '..')
 
 /** Production builds enable PWA unless explicitly disabled (desktop behavior unchanged). `npm run dev:pwa` sets ENABLE_PWA=true. */
 const pwaDevMode = process.env.ENABLE_PWA === 'true'
@@ -57,6 +58,15 @@ function satelliteIntelligenceWorkspaceDependencyResolve(): Plugin {
     resolveId(id, importer) {
       if (!importer?.includes('GIS RS Intelligence Workspace')) return null
       if (id.startsWith('.') || id.startsWith('/') || id.startsWith('\0')) return null
+      // Never return absolute paths for React — Vite must pre-bundle CJS interop (avoids @fs default export error).
+      if (
+        id === 'react' ||
+        id === 'react-dom' ||
+        id.startsWith('react/') ||
+        id.startsWith('react-dom/')
+      ) {
+        return null
+      }
       try {
         return require.resolve(id, { paths: [__dirname] })
       } catch {
@@ -185,6 +195,20 @@ function productionCanonicalLink(): Plugin {
  * GitHub Pages: `/AgroCloud` (no trailing slash) and `/AgroCloud/` with empty hash break the HashRouter shell.
  * Normalize to `.../AgroCloud/#/` before the app bundle runs.
  */
+/** Dev: bare `react` import must not resolve to hoisted CJS `index.js` via `@fs` (no default export in ESM). */
+function hoistedReactBareSpecifier(): Plugin {
+  return {
+    name: 'agrocloud-hoisted-react-bare',
+    enforce: 'post',
+    resolveId(id) {
+      const norm = id.replace(/\\/g, '/')
+      if (norm.endsWith('/node_modules/react/index.js')) return 'react'
+      if (norm.endsWith('/node_modules/react-dom/index.js')) return 'react-dom'
+      return null
+    },
+  }
+}
+
 function ghPagesHashAndSlashRedirect(): Plugin {
   const base = buildBasePath
   const withSlash = base.endsWith('/') ? base : `${base}/`
@@ -206,6 +230,7 @@ export default defineConfig({
   /** Load `VITE_*` from repo-root `.env` (shared with Node backend). */
   envDir: resolve(__dirname, '..'),
   resolve: {
+    dedupe: ['react', 'react-dom'],
     alias: {
       '@': resolve(__dirname, 'src'),
       '@satellite-intelligence-workspace': SATELLITE_INTELLIGENCE_WORKSPACE_SRC,
@@ -214,6 +239,9 @@ export default defineConfig({
         ? { 'virtual:pwa-register': resolve(__dirname, 'src/app/startup/shims/pwa-register-stub.ts') }
         : {}),
     },
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
   },
   define: {
     'import.meta.env.VITE_ENABLE_PWA': JSON.stringify(pwaEnabled ? 'true' : 'false'),
@@ -244,6 +272,7 @@ export default defineConfig({
   },
   plugins: [
     satelliteIntelligenceWorkspaceDependencyResolve(),
+    hoistedReactBareSpecifier(),
     agroCloudBaseTrailingSlashRedirect(),
     pagesBuildStamp(),
     ghPagesHashAndSlashRedirect(),
@@ -411,9 +440,14 @@ export default defineConfig({
     strictPort: true,
     /** Allow opening dev server by LAN IP (tablet/phone on same Wi‑Fi). */
     allowedHosts: true,
-    ...(SATELLITE_INTELLIGENCE_WORKSPACE_SRC !== SATELLITE_INTELLIGENCE_WORKSPACE_SHIM
-      ? { fs: { allow: [SATELLITE_INTELLIGENCE_WORKSPACE_SRC] } }
-      : {}),
+    fs: {
+      allow: [
+        REPO_ROOT,
+        ...(SATELLITE_INTELLIGENCE_WORKSPACE_SRC !== SATELLITE_INTELLIGENCE_WORKSPACE_SHIM
+          ? [SATELLITE_INTELLIGENCE_WORKSPACE_SRC]
+          : []),
+      ],
+    },
     headers: {
       'Cache-Control': 'no-store',
     },

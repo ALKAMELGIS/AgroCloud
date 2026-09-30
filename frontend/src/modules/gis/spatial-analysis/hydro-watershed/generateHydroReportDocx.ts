@@ -4,7 +4,7 @@ import { buildHydroDocxDocumentXml } from './buildHydroDocxDocument'
 import { base64ToUint8, buildHydroDocxModel } from './hydroReportDocxModel'
 import type { BuildHydroReportInput } from './hydroReportTypes'
 
-import templateUrl from '@/modules/remote-sensing/temporal-analysis/timeSeriesReport/templates/Agricultural_Satellite_Intelligence_Report.template.docx?url'
+import { loadTimeSeriesReportDocxTemplate } from '@/modules/remote-sensing/temporal-analysis/timeSeriesReport/loadTimeSeriesReportDocxTemplate'
 
 const HEADER_REL_ID = 'rIdHdr'
 const FOOTER_REL_ID = 'rIdFtr'
@@ -39,9 +39,7 @@ export async function generateHydroWatershedReportDocx(input: BuildHydroReportIn
   const payload = await buildHydroReportPayload(input)
   const { model, images } = buildHydroDocxModel(payload)
 
-  const templateResponse = await fetch(templateUrl)
-  if (!templateResponse.ok) throw new Error('Failed to load Word report template')
-  const templateBuffer = await templateResponse.arrayBuffer()
+  const templateBuffer = await loadTimeSeriesReportDocxTemplate()
 
   const zip = await JSZip.loadAsync(templateBuffer)
   zip.file('word/document.xml', buildHydroDocxDocumentXml(model))

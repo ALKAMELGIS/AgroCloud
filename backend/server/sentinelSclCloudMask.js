@@ -1,6 +1,8 @@
 /**
- * Unified Sentinel-2 L2A pixel-level cloud mask (SCL + CLM + CLP).
- * Mirrors frontend/src/lib/sentinelSclCloudMask.ts for Node WMS statistics.
+ * Unified Sentinel-2 L2A pixel-level cloud mask (SCL + Cloud Probability).
+ * Mirrors frontend/src/modules/remote-sensing/imagery/sentinelSclCloudMask.ts
+ * Vegetation, soil, water, shadows and snow are never treated as cloud.
+ * CLM is not used — it dilates cloud edges.
  */
 
 /** Minimum AOI clear fraction before a scene is unusable. */
@@ -9,19 +11,23 @@ export const SI_SENTINEL_MIN_AOI_CLEAR_FRACTION = 0.005
 /** Never reject granules at WMS MAXCC — pixel masks gate analysis. */
 export const SI_SENTINEL_WMS_MAXCC = 100
 
-export const SENTINEL_SCL_CLOUD_MASK_EXPR = `(
-  scl == 0 || scl == 1 || scl == 3 || scl == 8 || scl == 9 || scl == 10 || scl == 11
-) || s.CLM == 1 || s.CLP > 25`
+export const SENTINEL_SCL8_CLOUD_CLP_MIN = 0.45
+export const SENTINEL_SCL9_CLOUD_CLP_MIN = 0.2
+export const SENTINEL_SCL10_CLOUD_CLP_MIN = 0.35
+
+export const SENTINEL_CLP_01_EXPR = `(s.CLP > 1.5 ? s.CLP / 255.0 : s.CLP)`
+
+export const SENTINEL_SCL_CLOUD_MASK_EXPR = `!(scl == 2 || scl == 3 || scl == 4 || scl == 5 || scl == 6 || scl == 7 || scl == 11) && ((scl == 9 && ${SENTINEL_CLP_01_EXPR} >= ${SENTINEL_SCL9_CLOUD_CLP_MIN}) || (scl == 10 && ${SENTINEL_CLP_01_EXPR} >= ${SENTINEL_SCL10_CLOUD_CLP_MIN}) || (scl == 8 && ${SENTINEL_CLP_01_EXPR} >= ${SENTINEL_SCL8_CLOUD_CLP_MIN}))`
 
 export function buildSentinelCloudMaskEvalscriptLines(sampleVar = 's') {
-  return `var scl = ${sampleVar}.SCL;
+  return `var scl = Math.round(${sampleVar}.SCL);
   var cloud = ${SENTINEL_SCL_CLOUD_MASK_EXPR.replace(/s\./g, `${sampleVar}.`)};`
 }
 
 export const SENTINEL_AOI_CLOUD_MASK_EVALSCRIPT = `//VERSION=3
 function setup() {
   return {
-    input: [{ bands: ["SCL", "CLM", "CLP", "dataMask"] }],
+    input: [{ bands: ["SCL", "CLP", "dataMask"] }],
     output: { bands: 4, sampleType: "UINT8" }
   };
 }

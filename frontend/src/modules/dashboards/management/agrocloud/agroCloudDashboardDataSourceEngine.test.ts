@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+import {
+  resetGisContentPortalForTests,
+  seedGisContentPortalFixtureRowsForTests,
+} from '@/modules/gis/layers/gisContentPortalStore'
 import {
   applyDataSourceReplacement,
   areFieldTypesCompatible,
@@ -15,6 +19,11 @@ import { addDataSourceFromGisContent, addMapFromGisContent, appendDashboardEleme
 import type { AgroCloudDashboardConfig } from './agroCloudDashboardData'
 
 describe('agroCloudDashboardDataSourceEngine', () => {
+  beforeEach(() => {
+    resetGisContentPortalForTests()
+    seedGisContentPortalFixtureRowsForTests()
+  })
+
   const webMapRow = {
     id: '2',
     title: 'Irrigation zones — West block',

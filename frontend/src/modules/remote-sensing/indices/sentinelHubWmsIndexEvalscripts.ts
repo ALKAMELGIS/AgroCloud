@@ -561,7 +561,19 @@ function withCloudRgbFallbackInputs(inputs: readonly string[]): string[] {
 }
 
 const CLOUD_RGB_FALLBACK_FUNCTIONS = buildSentinelCloudRgbFallbackFunctions()
-const CLOUD_RGB_FALLBACK_GUARD = sentinelCloudRgbFallbackGuardLines('samples')
+
+export type SentinelIndexColorRampEvalscriptOptions = {
+  sceneDate?: string | null
+  /** 3D terrain: hide cloud pixels on the draped index; clouds render on the lifted deck only. */
+  terrain3dCloudExtrusion?: boolean
+}
+
+function cloudRgbFallbackGuard(terrain3dCloudExtrusion?: boolean): string {
+  return sentinelCloudRgbFallbackGuardLines(
+    'samples',
+    terrain3dCloudExtrusion ? 'transparent' : 'inlineRgb',
+  )
+}
 
 /** Visual WMS display alpha for cloud-free pixels (optional index visibility threshold). */
 function buildVisualDisplayAlphaBlock(thresholdExpr: string | null = null): string {
@@ -573,12 +585,16 @@ function buildVisualDisplayAlphaBlock(thresholdExpr: string | null = null): stri
 }
 
 /** NDWI: continuous green → white → blue ColorRampVisualizer on B03/B08. */
-export function buildSentinelNdwiTenClassEvalscript(indexVisibilityMin: number | null = null): string {
+export function buildSentinelNdwiTenClassEvalscript(
+  indexVisibilityMin: number | null = null,
+  evalOptions?: SentinelIndexColorRampEvalscriptOptions,
+): string {
   const thr =
     indexVisibilityMin != null && Number.isFinite(indexVisibilityMin)
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
+  const cloudGuard = cloudRgbFallbackGuard(evalOptions?.terrain3dCloudExtrusion)
   const alphaBlock = buildVisualDisplayAlphaBlock(thr == null ? null : `val >= ${thr}`)
 
   return `//VERSION=3
@@ -599,7 +615,7 @@ const visualizer = new ColorRampVisualizer(ramp);
 ${CLOUD_RGB_FALLBACK_FUNCTIONS}
 
 function evaluatePixel(samples) {
-  ${CLOUD_RGB_FALLBACK_GUARD}
+  ${cloudGuard}
   let val = index(samples.B03, samples.B08);
   let imgVals = visualizer.process(val);
   ${alphaBlock}
@@ -607,12 +623,16 @@ function evaluatePixel(samples) {
 }
 
 /** AWEI: 10-class flood / water extraction reclass on B03/B08/B11/B12. */
-export function buildSentinelAweiTenClassEvalscript(indexVisibilityMin: number | null = null): string {
+export function buildSentinelAweiTenClassEvalscript(
+  indexVisibilityMin: number | null = null,
+  evalOptions?: SentinelIndexColorRampEvalscriptOptions,
+): string {
   const thr =
     indexVisibilityMin != null && Number.isFinite(indexVisibilityMin)
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
+  const cloudGuard = cloudRgbFallbackGuard(evalOptions?.terrain3dCloudExtrusion)
   const alphaBlock = buildVisualDisplayAlphaBlock(thr == null ? null : `val >= ${thr}`)
 
   return `//VERSION=3
@@ -649,7 +669,7 @@ function aweiClass(val) {
 }
 
 function evaluatePixel(samples) {
-  ${CLOUD_RGB_FALLBACK_GUARD}
+  ${cloudGuard}
   let val = 4.0 * (samples.B03 - samples.B11) - (0.25 * samples.B08 + 2.75 * samples.B12);
   let cls = aweiClass(val);
   let imgVals = viz.process(cls);
@@ -658,12 +678,16 @@ function evaluatePixel(samples) {
 }
 
 /** MNDWI: 10-class water reclass — light dry gradient → water blue (B03/B11). */
-export function buildSentinelMndwiTenClassEvalscript(indexVisibilityMin: number | null = null): string {
+export function buildSentinelMndwiTenClassEvalscript(
+  indexVisibilityMin: number | null = null,
+  evalOptions?: SentinelIndexColorRampEvalscriptOptions,
+): string {
   const thr =
     indexVisibilityMin != null && Number.isFinite(indexVisibilityMin)
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
+  const cloudGuard = cloudRgbFallbackGuard(evalOptions?.terrain3dCloudExtrusion)
   const alphaBlock = buildVisualDisplayAlphaBlock(thr == null ? null : `val >= ${thr}`)
 
   return `//VERSION=3
@@ -700,7 +724,7 @@ function mndwiClass(val) {
 }
 
 function evaluatePixel(samples) {
-  ${CLOUD_RGB_FALLBACK_GUARD}
+  ${cloudGuard}
   let val = index(samples.B03, samples.B11);
   let cls = mndwiClass(val);
   let imgVals = viz.process(cls);
@@ -709,12 +733,16 @@ function evaluatePixel(samples) {
 }
 
 /** NDII: continuous moisture ColorRampVisualizer on B08/B11 (broad NIR − SWIR). */
-export function buildSentinelNdiiTenClassEvalscript(indexVisibilityMin: number | null = null): string {
+export function buildSentinelNdiiTenClassEvalscript(
+  indexVisibilityMin: number | null = null,
+  evalOptions?: SentinelIndexColorRampEvalscriptOptions,
+): string {
   const thr =
     indexVisibilityMin != null && Number.isFinite(indexVisibilityMin)
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
+  const cloudGuard = cloudRgbFallbackGuard(evalOptions?.terrain3dCloudExtrusion)
   const alphaBlock = buildVisualDisplayAlphaBlock(thr == null ? null : `val >= ${thr}`)
 
   return `//VERSION=3
@@ -735,7 +763,7 @@ const viz = new ColorRampVisualizer(moistureRamps);
 ${CLOUD_RGB_FALLBACK_FUNCTIONS}
 
 function evaluatePixel(samples) {
-  ${CLOUD_RGB_FALLBACK_GUARD}
+  ${cloudGuard}
   let val = index(samples.B08, samples.B11);
   let imgVals = viz.process(val);
   ${alphaBlock}
@@ -743,12 +771,16 @@ function evaluatePixel(samples) {
 }
 
 /** NDMI: continuous moisture ColorRampVisualizer on B8A/B11. */
-export function buildSentinelNdmiTenClassEvalscript(indexVisibilityMin: number | null = null): string {
+export function buildSentinelNdmiTenClassEvalscript(
+  indexVisibilityMin: number | null = null,
+  evalOptions?: SentinelIndexColorRampEvalscriptOptions,
+): string {
   const thr =
     indexVisibilityMin != null && Number.isFinite(indexVisibilityMin)
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
+  const cloudGuard = cloudRgbFallbackGuard(evalOptions?.terrain3dCloudExtrusion)
   const alphaBlock = buildVisualDisplayAlphaBlock(thr == null ? null : `val >= ${thr}`)
 
   return `//VERSION=3
@@ -769,7 +801,7 @@ const viz = new ColorRampVisualizer(moistureRamps);
 ${CLOUD_RGB_FALLBACK_FUNCTIONS}
 
 function evaluatePixel(samples) {
-  ${CLOUD_RGB_FALLBACK_GUARD}
+  ${cloudGuard}
   let val = index(samples.B8A, samples.B11);
   let imgVals = viz.process(val);
   ${alphaBlock}
@@ -779,8 +811,7 @@ function evaluatePixel(samples) {
 /** ET — seasonal/Kc moisture-proxy ET (mm/day); absolute or AOI percentile 10-class breaks. */
 export function buildSentinelEtTenClassEvalscript(
   indexVisibilityMin: number | null = null,
-  options?: {
-    sceneDate?: string | null
+  options?: SentinelIndexColorRampEvalscriptOptions & {
     /** Ascending interior breaks (length 9) or full edges (length 11). */
     classBreaks?: readonly number[] | null
     classCenters?: readonly number[] | null
@@ -816,6 +847,7 @@ export function buildSentinelEtTenClassEvalscript(
       ? Math.max(0, Math.min(15, indexVisibilityMin))
       : null
 
+  const cloudGuard = cloudRgbFallbackGuard(options?.terrain3dCloudExtrusion)
   const alphaBlock = buildVisualDisplayAlphaBlock(thr == null ? null : `et >= ${thr}`)
 
   const coloredRamp: RampStop[] = centers.map((v, i) => [
@@ -857,7 +889,7 @@ function etClass(val) {
 }
 
 function evaluatePixel(samples) {
-  ${CLOUD_RGB_FALLBACK_GUARD}
+  ${cloudGuard}
   ${setupEt}
   let cls = etClass(et);
   let imgVals = viz.process(CLASS_VAL[cls]);
@@ -868,8 +900,7 @@ function evaluatePixel(samples) {
 /** LST — seasonal NDVI/NDMI land-surface temperature proxy (°C); 10-class thermal ramp. */
 export function buildSentinelLstTenClassEvalscript(
   indexVisibilityMin: number | null = null,
-  options?: {
-    sceneDate?: string | null
+  options?: SentinelIndexColorRampEvalscriptOptions & {
     classBreaks?: readonly number[] | null
     classCenters?: readonly number[] | null
   },
@@ -904,6 +935,7 @@ export function buildSentinelLstTenClassEvalscript(
       ? Math.max(5, Math.min(55, indexVisibilityMin))
       : null
 
+  const cloudGuard = cloudRgbFallbackGuard(options?.terrain3dCloudExtrusion)
   const alphaBlock = buildVisualDisplayAlphaBlock(thr == null ? null : `lst >= ${thr}`)
 
   const coloredRamp: RampStop[] = centers.map((v, i) => [
@@ -945,7 +977,7 @@ function lstClass(val) {
 }
 
 function evaluatePixel(samples) {
-  ${CLOUD_RGB_FALLBACK_GUARD}
+  ${cloudGuard}
   ${setupLst}
   let cls = lstClass(lst);
   let imgVals = viz.process(CLASS_VAL[cls]);
@@ -958,12 +990,16 @@ function evaluatePixel(samples) {
  * (SCL + CLP) show the same scene's true color, so the AOI is filled with no holes.
  * Per-class pixel-area analysis runs separately, after the layer is shown.
  */
-export function buildSentinelNdviTenClassEvalscript(indexVisibilityMin: number | null = null): string {
+export function buildSentinelNdviTenClassEvalscript(
+  indexVisibilityMin: number | null = null,
+  evalOptions?: SentinelIndexColorRampEvalscriptOptions,
+): string {
   const thr =
     indexVisibilityMin != null && Number.isFinite(indexVisibilityMin)
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
       : null
 
+  const cloudGuard = cloudRgbFallbackGuard(evalOptions?.terrain3dCloudExtrusion)
   const alphaBlock = buildVisualDisplayAlphaBlock(thr == null ? null : `ndvi >= ${thr}`)
 
   return `//VERSION=3
@@ -984,7 +1020,7 @@ const visualizer = new ColorRampVisualizer(ramp);
 ${CLOUD_RGB_FALLBACK_FUNCTIONS}
 
 function evaluatePixel(samples) {
-  ${CLOUD_RGB_FALLBACK_GUARD}
+  ${cloudGuard}
   let ndvi = index(samples.B08, samples.B04);
   let imgVals = visualizer.process(ndvi);
   ${alphaBlock}
@@ -995,38 +1031,35 @@ function evaluatePixel(samples) {
 export function buildSentinelIndexColorRampEvalscript(
   profile: SentinelIndexEvalProfile,
   indexVisibilityMin: number | null = null,
-  options?: { sceneDate?: string | null },
+  options?: SentinelIndexColorRampEvalscriptOptions,
 ): string {
   if (profile === 'ndvi') {
-    return buildSentinelNdviTenClassEvalscript(indexVisibilityMin)
+    return buildSentinelNdviTenClassEvalscript(indexVisibilityMin, options)
   }
   if (profile === 'ndwi') {
-    return buildSentinelNdwiTenClassEvalscript(indexVisibilityMin)
+    return buildSentinelNdwiTenClassEvalscript(indexVisibilityMin, options)
   }
   if (profile === 'awei') {
-    return buildSentinelAweiTenClassEvalscript(indexVisibilityMin)
+    return buildSentinelAweiTenClassEvalscript(indexVisibilityMin, options)
   }
   if (profile === 'mndwi') {
-    return buildSentinelMndwiTenClassEvalscript(indexVisibilityMin)
+    return buildSentinelMndwiTenClassEvalscript(indexVisibilityMin, options)
   }
   if (profile === 'ndmi') {
-    return buildSentinelNdmiTenClassEvalscript(indexVisibilityMin)
+    return buildSentinelNdmiTenClassEvalscript(indexVisibilityMin, options)
   }
   if (profile === 'ndii') {
-    return buildSentinelNdiiTenClassEvalscript(indexVisibilityMin)
+    return buildSentinelNdiiTenClassEvalscript(indexVisibilityMin, options)
   }
   if (profile === 'et') {
-    return buildSentinelEtTenClassEvalscript(indexVisibilityMin, {
-      sceneDate: options?.sceneDate,
-    })
+    return buildSentinelEtTenClassEvalscript(indexVisibilityMin, options)
   }
   if (profile === 'lst') {
-    return buildSentinelLstTenClassEvalscript(indexVisibilityMin, {
-      sceneDate: options?.sceneDate,
-    })
+    return buildSentinelLstTenClassEvalscript(indexVisibilityMin, options)
   }
 
   const spec = INDEX_EVAL_SPECS[profile]
+  const cloudGuard = cloudRgbFallbackGuard(options?.terrain3dCloudExtrusion)
   const thr =
     indexVisibilityMin != null && Number.isFinite(indexVisibilityMin)
       ? Math.max(-1, Math.min(1, indexVisibilityMin))
@@ -1059,7 +1092,7 @@ const visualizer = new ColorRampVisualizer(ramp);
 ${cloudFunctions}
 
 function evaluatePixel(samples) {
-  ${CLOUD_RGB_FALLBACK_GUARD}
+  ${cloudGuard}
   ${spec.indexExpr}
   let imgVals = visualizer.process(${spec.indexVar});
   ${alphaBlock}

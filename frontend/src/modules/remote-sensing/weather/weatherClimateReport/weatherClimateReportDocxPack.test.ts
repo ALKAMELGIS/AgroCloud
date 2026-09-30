@@ -11,7 +11,7 @@ import {
   buildEmptyChartRelsXml,
 } from '../../temporal-analysis/timeSeriesReport/timeSeriesDocxNativeCharts'
 
-import templateUrl from '../../temporal-analysis/timeSeriesReport/templates/Agricultural_Satellite_Intelligence_Report.template.docx?url'
+import { loadTimeSeriesReportDocxTemplate } from '../../temporal-analysis/timeSeriesReport/loadTimeSeriesReportDocxTemplate'
 
 function makeHourly(days: number) {
   const pts = []
@@ -82,8 +82,7 @@ describe('weatherClimateReportDocxPack', () => {
       expect(xml).toContain('<c:chartSpace')
     }
 
-    const templateResponse = await fetch(templateUrl)
-    const templateBuffer = await templateResponse.arrayBuffer()
+    const templateBuffer = await loadTimeSeriesReportDocxTemplate()
     const zip = await JSZip.loadAsync(templateBuffer)
     zip.file('word/document.xml', docXml)
     zip.file(

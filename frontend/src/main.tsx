@@ -1,4 +1,4 @@
-import React from 'react'
+import { StrictMode } from 'react'
 import ReactDOM from 'react-dom/client'
 import App from '@/app/App'
 import '@fortawesome/fontawesome-free/css/all.min.css'
@@ -213,7 +213,7 @@ deferAfterFirstPaint(() => {
 }, 3000)
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
-  <React.StrictMode>
+  <StrictMode>
     <App />
-  </React.StrictMode>
+  </StrictMode>
 )

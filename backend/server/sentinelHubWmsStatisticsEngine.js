@@ -23,7 +23,7 @@ const wmsProxyLayerCache = new Map()
 const WMS_ZONAL_STATS_EVALSCRIPT = `//VERSION=3
 function setup() {
   return {
-    input: [{ bands: ["B02", "B03", "B04", "B08", "B11", "SCL", "CLM", "CLP", "dataMask"] }],
+    input: [{ bands: ["B02", "B03", "B04", "B08", "B11", "SCL", "CLP", "dataMask"] }],
     output: { bands: 4, sampleType: "UINT8" }
   };
 }
@@ -52,7 +52,7 @@ const WMS_STATS_EVALSCRIPT_B64 = Buffer.from(WMS_ZONAL_STATS_EVALSCRIPT, 'utf8')
 const WMS_ZONAL_EXT_EVALSCRIPT = `//VERSION=3
 function setup() {
   return {
-    input: [{ bands: ["B03", "B04", "B05", "B08", "B11", "SCL", "CLM", "CLP", "dataMask"] }],
+    input: [{ bands: ["B03", "B04", "B05", "B08", "B11", "SCL", "CLP", "dataMask"] }],
     output: { bands: 4, sampleType: "UINT8" }
   };
 }
@@ -85,7 +85,7 @@ const WMS_STATS_EXT_EVALSCRIPT_B64 = Buffer.from(WMS_ZONAL_EXT_EVALSCRIPT, 'utf8
 const WMS_CLASS_GRID_EVALSCRIPT = `//VERSION=3
 function setup() {
   return {
-    input: [{ bands: ["B03", "B04", "B08", "SCL", "CLM", "CLP", "dataMask"] }],
+    input: [{ bands: ["B03", "B04", "B08", "SCL", "CLP", "dataMask"] }],
     output: { bands: 4, sampleType: "UINT8" }
   };
 }
@@ -112,7 +112,7 @@ const WMS_CLASS_GRID_EVALSCRIPT_B64 = Buffer.from(WMS_CLASS_GRID_EVALSCRIPT, 'ut
 const WMS_ET_CLASS_GRID_EVALSCRIPT = `//VERSION=3
 function setup() {
   return {
-    input: [{ bands: ["B03", "B08", "B11", "SCL", "CLM", "CLP", "dataMask"] }],
+    input: [{ bands: ["B03", "B08", "B11", "SCL", "CLP", "dataMask"] }],
     output: { bands: 4, sampleType: "UINT8" }
   };
 }
@@ -696,7 +696,7 @@ export async function fetchPcSentinelSceneDates(geometry, fromIso, toIso, maxClo
     limit: 500,
     sortby: [{ field: 'datetime', direction: 'asc' }],
   }
-  // Granule eo:cloud_cover is metadata only — pixel-level SCL/CLM/CLP masks gate analysis.
+  // Granule eo:cloud_cover is metadata only — pixel SCL + CLP masks gate analysis.
   void maxCloudCoverage
 
   const res = await fetch(PC_SENTINEL_STAC_SEARCH_URL, {

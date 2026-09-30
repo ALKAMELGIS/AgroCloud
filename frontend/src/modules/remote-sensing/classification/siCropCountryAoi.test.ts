@@ -17,10 +17,10 @@ describe('siCropCountryAoi', () => {
     expect(cropCountryOptionKey('', 'Some Territory')).toBe('N:Some Territory')
   })
 
-  it('clamps large national bboxes for high-res imagery (~0.05°)', () => {
+  it('clamps large national bboxes for high-res imagery (~0.08°)', () => {
     const clamped = clampBboxForCropImagery([24.7, 22.0, 36.9, 31.7])
-    expect(clamped[2] - clamped[0]).toBeLessThanOrEqual(0.051)
-    expect(clamped[3] - clamped[1]).toBeLessThanOrEqual(0.051)
+    expect(clamped[2] - clamped[0]).toBeLessThanOrEqual(0.081)
+    expect(clamped[3] - clamped[1]).toBeLessThanOrEqual(0.081)
   })
 
   it('builds a country AOI data-mask feature for the map', () => {
@@ -63,8 +63,8 @@ describe('siCropCountryAoi', () => {
     const ring = (chip as GeoJSON.Polygon).coordinates[0]!
     const lngs = ring.map(p => p[0]!)
     const lats = ring.map(p => p[1]!)
-    expect(Math.max(...lngs) - Math.min(...lngs)).toBeLessThanOrEqual(0.051)
-    expect(Math.max(...lats) - Math.min(...lats)).toBeLessThanOrEqual(0.051)
+    expect(Math.max(...lngs) - Math.min(...lngs)).toBeLessThanOrEqual(0.081)
+    expect(Math.max(...lats) - Math.min(...lats)).toBeLessThanOrEqual(0.081)
     expect(aoiSpansFarBeyondPredictionBounds(egyptLike, [30, 28, 30.8, 28.8])).toBe(true)
     const size = resolveCropGridSize([30, 28, 30.05, 28.05], 10, 512)
     expect(size).toBeGreaterThanOrEqual(256)

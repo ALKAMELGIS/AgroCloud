@@ -170,7 +170,11 @@ export function siAoiLayerModeChunksCacheKey(
   sceneDate: string | null | undefined,
   options?: Pick<
     BuildSentinelHubWmsAoiClipOptions,
-    'indexVisibilityMin' | 'maxTileLayers' | 'viewportBBox' | 'preferSingleRingChunks'
+    | 'indexVisibilityMin'
+    | 'maxTileLayers'
+    | 'viewportBBox'
+    | 'preferSingleRingChunks'
+    | 'terrain3dCloudExtrusion'
   >,
 ): string {
   const vp = options?.viewportBBox
@@ -184,6 +188,7 @@ export function siAoiLayerModeChunksCacheKey(
     `cap:${options?.maxTileLayers ?? ''}`,
     `vp:${vpKey}`,
     `single:${options?.preferSingleRingChunks ? 1 : 0}`,
+    `t3d:${options?.terrain3dCloudExtrusion ? 1 : 0}`,
   ].join('|')
 }
 
@@ -194,7 +199,11 @@ export function siAoiLayerModeWarmChunksCacheKey(
   sceneDate: string | null | undefined,
   options?: Pick<
     BuildSentinelHubWmsAoiClipOptions,
-    'indexVisibilityMin' | 'maxTileLayers' | 'viewportBBox' | 'preferSingleRingChunks'
+    | 'indexVisibilityMin'
+    | 'maxTileLayers'
+    | 'viewportBBox'
+    | 'preferSingleRingChunks'
+    | 'terrain3dCloudExtrusion'
   >,
 ): string {
   return siAoiLayerModeChunksCacheKey(settingsPinKey, layerName, sceneDate, options)

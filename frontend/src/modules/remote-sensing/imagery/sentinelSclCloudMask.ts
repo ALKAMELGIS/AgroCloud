@@ -20,8 +20,23 @@ export const SENTINEL_SCL_VALID_SURFACE_CLASSES = [2, 3, 4, 5, 6, 7, 11] as cons
 /** SCL cloud classes: 8=medium cloud, 9=high-probability cloud, 10=thin cirrus. */
 export const SENTINEL_SCL_CLOUD_CLASSES = [8, 9, 10] as const
 
-/** Cloud-probability threshold in 0–1 (s2cloudless CLP). */
-export const SENTINEL_CLP_CLOUD_THRESHOLD = 0.55
+/**
+ * CLP confirmation (0–1). Medium cloud and cirrus are Sen2Cor's main false-positive
+ * classes (bright soil, field edges), so they need a high probability.
+ */
+export const SENTINEL_SCL8_CLOUD_CLP_MIN = 0.65
+
+/** SCL high-probability cloud (class 9) still needs a clear probability, not a hint. */
+export const SENTINEL_SCL9_CLOUD_CLP_MIN = 0.45
+
+/** Thin cirrus (class 10) only when cloud probability agrees. */
+export const SENTINEL_SCL10_CLOUD_CLP_MIN = 0.55
+
+/**
+ * Mean visible reflectance (B02+B03+B04)/3. Real clouds are bright; vegetation,
+ * soil, water and shadows stay well below this, even when SCL mislabels them.
+ */
+export const SENTINEL_CLOUD_MIN_VIS_REFLECTANCE = 0.18
 
 function sclEqualsExpr(classes: readonly number[]): string {
   return classes.map(c => `scl == ${c}`).join(' || ')
@@ -31,10 +46,10 @@ function sclEqualsExpr(classes: readonly number[]): string {
 export const SENTINEL_CLP_01_EXPR = `(s.CLP > 1.5 ? s.CLP / 255.0 : s.CLP)`
 
 /**
- * Evalscript v3 expression: true only for cloud pixels (pixel-level, no dilation).
- * Valid surfaces stay false even when CLP/CLM would otherwise flag them.
+ * Pixel cloud mask: Sen2Cor cloud SCL (8/9/10) confirmed by CLP only.
+ * Never masks vegetation, soil, water, shadows, snow, or CLP-only on ambiguous SCL.
  */
-export const SENTINEL_SCL_CLOUD_MASK_EXPR = `!(${sclEqualsExpr(SENTINEL_SCL_VALID_SURFACE_CLASSES)}) && ((${sclEqualsExpr(SENTINEL_SCL_CLOUD_CLASSES)}) || ${SENTINEL_CLP_01_EXPR} >= ${SENTINEL_CLP_CLOUD_THRESHOLD})`
+export const SENTINEL_SCL_CLOUD_MASK_EXPR = `!(${sclEqualsExpr(SENTINEL_SCL_VALID_SURFACE_CLASSES)}) && ((scl == 9 && ${SENTINEL_CLP_01_EXPR} >= ${SENTINEL_SCL9_CLOUD_CLP_MIN}) || (scl == 10 && ${SENTINEL_CLP_01_EXPR} >= ${SENTINEL_SCL10_CLOUD_CLP_MIN}) || (scl == 8 && ${SENTINEL_CLP_01_EXPR} >= ${SENTINEL_SCL8_CLOUD_CLP_MIN}))`
 
 /** Normalize s2cloudless CLP (0–1 or 0–255) to 0–1. */
 export function sentinelCloudProbability01(clp: number): number {
@@ -45,12 +60,26 @@ export function sentinelCloudProbability01(clp: number): number {
 /**
  * Pixel-level cloud decision matching the Layer Index evalscript.
  * Shadows, vegetation, soil, water and snow are never clouds.
+ * `visibleReflectance` is the mean of B02/B03/B04; dark pixels are never clouds.
  */
-export function isSentinelCloudPixel(scl: number, clp: number): boolean {
+export function isSentinelCloudPixel(
+  scl: number,
+  clp: number,
+  visibleReflectance?: number | null,
+): boolean {
   const rounded = Math.round(scl)
   if ((SENTINEL_SCL_VALID_SURFACE_CLASSES as readonly number[]).includes(rounded)) return false
-  if ((SENTINEL_SCL_CLOUD_CLASSES as readonly number[]).includes(rounded)) return true
-  return sentinelCloudProbability01(clp) >= SENTINEL_CLP_CLOUD_THRESHOLD
+  if (
+    visibleReflectance != null &&
+    (!Number.isFinite(visibleReflectance) || visibleReflectance < SENTINEL_CLOUD_MIN_VIS_REFLECTANCE)
+  ) {
+    return false
+  }
+  const clp01 = sentinelCloudProbability01(clp)
+  if (rounded === 9) return clp01 >= SENTINEL_SCL9_CLOUD_CLP_MIN
+  if (rounded === 10) return clp01 >= SENTINEL_SCL10_CLOUD_CLP_MIN
+  if (rounded === 8) return clp01 >= SENTINEL_SCL8_CLOUD_CLP_MIN
+  return false
 }
 
 /** Compact one-liner for evaluatePixel blocks. */
@@ -217,22 +246,35 @@ export const SENTINEL_CLOUD_RGB_FALLBACK_INPUT_BANDS = [
  */
 export function buildSentinelCloudRgbFallbackFunctions(_options?: { maskSnow?: boolean }): string {
   const validSurface = sclEqualsExpr(SENTINEL_SCL_VALID_SURFACE_CLASSES)
-  const sclCloud = sclEqualsExpr(SENTINEL_SCL_CLOUD_CLASSES)
   return `function cloudProb(s) {
   return s.CLP > 1.5 ? s.CLP / 255.0 : s.CLP;
 }
 function cloudMasked(s) {
   var scl = Math.round(s.SCL);
   if (${validSurface}) return false;
-  if (${sclCloud}) return true;
-  return cloudProb(s) >= ${SENTINEL_CLP_CLOUD_THRESHOLD};
+  var clp = cloudProb(s);
+  var vis = (s.B02 + s.B03 + s.B04) / 3;
+  if (vis < ${SENTINEL_CLOUD_MIN_VIS_REFLECTANCE}) return false;
+  if (scl == 9 && clp >= ${SENTINEL_SCL9_CLOUD_CLP_MIN}) return true;
+  if (scl == 10 && clp >= ${SENTINEL_SCL10_CLOUD_CLP_MIN}) return true;
+  if (scl == 8 && clp >= ${SENTINEL_SCL8_CLOUD_CLP_MIN}) return true;
+  return false;
 }
 function tc(v) { return Math.max(0, Math.min(1, v * ${SENTINEL_TRUE_COLOR_GAIN})); }
 function trueColor(s) { return [tc(s.B04), tc(s.B03), tc(s.B02), 1]; }`
 }
 
-/** First lines of evaluatePixel: no-data → transparent, cloud → real RGB, else fall through to the index. */
-export function sentinelCloudRgbFallbackGuardLines(sampleVar = 'samples'): string {
+export type SentinelCloudRgbDisplayMode = 'inlineRgb' | 'transparent'
+
+/** First lines of evaluatePixel: no-data → transparent; cloud → RGB (2D) or transparent (3D extrusion). */
+export function sentinelCloudRgbFallbackGuardLines(
+  sampleVar = 'samples',
+  mode: SentinelCloudRgbDisplayMode = 'inlineRgb',
+): string {
+  if (mode === 'transparent') {
+    return `if (!${sampleVar}.dataMask) return [0, 0, 0, 0];
+  if (cloudMasked(${sampleVar})) return [0, 0, 0, 0];`
+  }
   return `if (!${sampleVar}.dataMask) return [0, 0, 0, 0];
   if (cloudMasked(${sampleVar})) return trueColor(${sampleVar});`
 }

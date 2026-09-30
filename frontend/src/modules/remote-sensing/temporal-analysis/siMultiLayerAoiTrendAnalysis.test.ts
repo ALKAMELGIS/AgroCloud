@@ -91,10 +91,10 @@ describe('siMultiLayerAoiTrendAnalysis', () => {
       buildMultiLayerAoiTrendResult(fieldA, '2024-06-01', ['NDVI'], rowWithZonal),
     ]
     expect(buildMultiLayerAoiTrendChartSeries(zonalResults, ['NDVI'], 'min').layerSeries[0]?.values).toEqual([
-      0.55,
+      0.72,
     ])
     expect(buildMultiLayerAoiTrendChartSeries(zonalResults, ['NDVI'], 'max').layerSeries[0]?.values).toEqual([
-      0.88,
+      0.72,
     ])
   })
 

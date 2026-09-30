@@ -7,7 +7,7 @@ import {
 import { base64ToUint8, buildTimeSeriesDocxModel } from './timeSeriesReportDocxModel'
 import type { TimeSeriesReportPayload } from './timeSeriesReportTypes'
 
-import templateUrl from './templates/Agricultural_Satellite_Intelligence_Report.template.docx?url'
+import { loadTimeSeriesReportDocxTemplate } from './loadTimeSeriesReportDocxTemplate'
 
 const HEADER_REL_ID = 'rIdHdr'
 const FOOTER_REL_ID = 'rIdFtr'
@@ -102,9 +102,7 @@ async function packAndDownloadTimeSeriesDocx(
     downloadName: string
   },
 ): Promise<void> {
-  const templateResponse = await fetch(templateUrl)
-  if (!templateResponse.ok) throw new Error('Failed to load Word report template')
-  const templateBuffer = await templateResponse.arrayBuffer()
+  const templateBuffer = await loadTimeSeriesReportDocxTemplate()
 
   const { model, images } = await buildTimeSeriesDocxModel(payload)
   const zip = await JSZip.loadAsync(templateBuffer)

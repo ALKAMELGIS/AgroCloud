@@ -55,12 +55,22 @@ describe('sentinelSclCloudMask', () => {
     expect(SI_SENTINEL_MIN_AOI_CLEAR_FRACTION).toBeLessThan(0.01)
   })
 
-  it('treats only SCL cloud classes and high CLP as clouds', () => {
-    expect(isSentinelCloudPixel(9, 0)).toBe(true)
-    expect(isSentinelCloudPixel(8, 0)).toBe(true)
-    expect(isSentinelCloudPixel(10, 10)).toBe(true)
-    expect(isSentinelCloudPixel(1, 180)).toBe(true)
-    expect(isSentinelCloudPixel(1, 0.7)).toBe(true)
+  it('treats only SCL cloud classes confirmed by CLP as clouds', () => {
+    expect(isSentinelCloudPixel(9, 140)).toBe(true)
+    expect(isSentinelCloudPixel(9, 60)).toBe(false)
+    expect(isSentinelCloudPixel(8, 180)).toBe(true)
+    expect(isSentinelCloudPixel(8, 130)).toBe(false)
+    expect(isSentinelCloudPixel(10, 160)).toBe(true)
+    expect(isSentinelCloudPixel(10, 100)).toBe(false)
+    expect(isSentinelCloudPixel(1, 200)).toBe(false)
+    expect(isSentinelCloudPixel(1, 0.9)).toBe(false)
+  })
+
+  it('rejects dark vegetation, soil and shadow pixels even when SCL and CLP say cloud', () => {
+    expect(isSentinelCloudPixel(9, 220, 0.05)).toBe(false)
+    expect(isSentinelCloudPixel(8, 220, 0.12)).toBe(false)
+    expect(isSentinelCloudPixel(10, 220, 0.17)).toBe(false)
+    expect(isSentinelCloudPixel(9, 220, 0.45)).toBe(true)
   })
 
   it('never treats vegetation, soil, water, shadows or snow as clouds', () => {
@@ -76,16 +86,19 @@ describe('sentinelSclCloudMask', () => {
     expect(isSentinelCloudPixel(1, 25)).toBe(false)
   })
 
-  it('evalscript mask excludes valid surfaces and does not use CLM dilation', () => {
-    expect(SENTINEL_SCL_CLOUD_MASK_EXPR).toContain('scl == 8 || scl == 9 || scl == 10')
+  it('evalscript mask excludes valid surfaces and requires SCL+CLP agreement', () => {
+    expect(SENTINEL_SCL_CLOUD_MASK_EXPR).toContain('scl == 8 &&')
+    expect(SENTINEL_SCL_CLOUD_MASK_EXPR).toContain('scl == 9 &&')
+    expect(SENTINEL_SCL_CLOUD_MASK_EXPR).toContain('scl == 10 &&')
     expect(SENTINEL_SCL_CLOUD_MASK_EXPR).toContain('scl == 3')
-    expect(SENTINEL_SCL_CLOUD_MASK_EXPR).toContain('scl == 4')
-    expect(SENTINEL_SCL_CLOUD_MASK_EXPR).toContain('scl == 6')
     expect(SENTINEL_SCL_CLOUD_MASK_EXPR).toMatch(/^!/)
     expect(SENTINEL_SCL_CLOUD_MASK_EXPR).not.toContain('CLM')
     const fns = buildSentinelCloudRgbFallbackFunctions()
     expect(fns).toContain('if (scl == 2 || scl == 3 || scl == 4 || scl == 5 || scl == 6 || scl == 7 || scl == 11) return false')
-    expect(fns).toContain('if (scl == 8 || scl == 9 || scl == 10) return true')
+    expect(fns).toContain('if (scl == 9 && clp >=')
+    expect(fns).toContain('var vis = (s.B02 + s.B03 + s.B04) / 3')
+    expect(fns).toContain('if (vis < 0.18) return false')
     expect(fns).not.toContain('CLM')
+    expect(fns).not.toContain('CLP_CERTAIN')
   })
 })

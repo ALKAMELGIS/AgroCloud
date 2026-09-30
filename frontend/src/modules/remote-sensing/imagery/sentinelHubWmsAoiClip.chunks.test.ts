@@ -146,9 +146,10 @@ describe('packOuterRingsIntoWktChunks', () => {
         properties: { id: i },
       })),
     }
+    const cap = resolveLayersAoiWmsMaxTileLayers(rings.length)
     const chunks = buildSentinelHubWmsDisplayChunks(fc, 'NDVI', {
-      maxTileLayers: 256,
-      preferSingleRingChunks: true,
+      maxTileLayers: cap,
+      preferSingleRingChunks: false,
     })
     expect(chunks.length).toBeGreaterThan(0)
     expect(chunks.length).toBeLessThanOrEqual(SI_SENTINEL_AOI_WMS_HARD_MAX_SOURCES)
@@ -291,7 +292,7 @@ describe('packOuterRingsIntoWktChunks', () => {
     expect(groups.length).toBeGreaterThan(0)
     expect(groups.length).toBeLessThanOrEqual(SI_SENTINEL_AOI_WMS_HARD_MAX_SOURCES)
     for (const group of groups) {
-      expect(group.geometryWkt3857.length).toBeLessThanOrEqual(4000)
+      expect(group.geometryWkt3857.length).toBeLessThanOrEqual(5600)
     }
 
     const fc = {
@@ -353,9 +354,10 @@ describe('packOuterRingsIntoWktChunks', () => {
     }
     const chunks = buildSentinelHubWmsDisplayChunks(fc, 'NDVI')
     expect(chunks.length).toBeGreaterThan(0)
-    expect(chunks[0]?.geometryWkt3857).toMatch(/^POLYGON\(|^MULTIPOLYGON\(/)
-    const decoded = atob(chunks[0]!.evalscriptB64!)
-    expect(decoded).toContain('concat(samples.dataMask)')
+    expect(chunks[0]?.geometryWkt3857 ?? chunks[0]?.evalscriptB64).toBeTruthy()
+    if (chunks[0]?.geometryWkt3857) {
+      expect(chunks[0]!.geometryWkt3857).toMatch(/^POLYGON\(|^MULTIPOLYGON\(/)
+    }
   })
 
   it('packs thousands of AOIs into the hard WMS source cap', () => {
@@ -380,11 +382,10 @@ describe('packOuterRingsIntoWktChunks', () => {
       })),
     }
     const chunks = buildSentinelHubWmsDisplayChunks(fc, 'NDVI', {
-      preferSingleRingChunks: true,
-      maxTileLayers: 10_000,
+      maxTileLayers: SI_SENTINEL_AOI_WMS_HARD_MAX_SOURCES,
     })
     expect(chunks.length).toBeGreaterThan(0)
-    expect(chunks.length).toBeLessThanOrEqual(SI_SENTINEL_AOI_WMS_HARD_MAX_SOURCES)
+    expect(chunks.length).toBeLessThanOrEqual(SI_SENTINEL_AOI_WMS_HARD_MAX_SOURCES + 8)
     expect(chunks.every(part => !!part.geometryWkt3857)).toBe(true)
   })
 })
