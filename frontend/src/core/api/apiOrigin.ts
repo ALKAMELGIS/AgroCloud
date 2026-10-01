@@ -128,7 +128,11 @@ function isKnownStaticHostname(host: string): boolean {
  * Prefers the configured backend override, otherwise same-origin (dev proxy / full-stack host).
  */
 export function resolveApiOrigin(): string {
-  return configuredApiOrigin() || sameOrigin()
+  const configured = configuredApiOrigin()
+  if (configured) return configured
+  const remote = defaultRemoteApiOriginForStaticHost()
+  if (remote) return remote
+  return sameOrigin()
 }
 
 /** Absolute URL for a backend API path (leading slash optional). */

@@ -595,6 +595,7 @@ import { SatelliteMapAnalysisChrome, type MapToolboxNavigateHandler } from './Sa
 import { LayerLiveLegendPanel } from '../indices/LayerLiveLegendPanel';
 import { LayerLiveLegendFloatingPanel } from '../indices/LayerLiveLegendFloatingPanel';
 import { usePrefetchLayerLegendAnalyze } from '../indices/usePrefetchLayerLegendAnalyze';
+import { usePrefetchTerrainApi } from '../terrain/usePrefetchTerrainApi';
 import { GisFloatingWorkspacePanel } from '@/modules/gis/map/GisFloatingWorkspacePanel';
 import { SiSymbologyStudioPanel } from '@/modules/gis/layers/symbology/SiSymbologyStudioPanel';
 import { useLayerClassAreas } from '../classification/useLayerClassAreas';
@@ -8243,7 +8244,7 @@ export default function SatelliteIntelligence() {
     void ensureTerrainApiAvailable().then(ok => {
       if (!ok && is3DViewRef.current) {
         setStacStatus(
-          '3D elevation requires the API backend (npm run dev:clean → port 3011). Basemap stays flat until then.',
+          '3D elevation could not reach api.eliteagrocloud.com — check the network or try the 3D toggle again in a moment.',
         );
         return;
       }
@@ -19938,6 +19939,8 @@ export default function SatelliteIntelligence() {
     sentinelFetchDate,
     Boolean(normalizedDrawnAoiGeometry && wmsLayerSelectValue && sentinelFetchDate),
   );
+
+  usePrefetchTerrainApi(isMapStyleReady);
 
   /** Index raster displays when either independent clip path has geometry. */
   const hasDrawRasterClipAoi = useMemo(() => {

@@ -10,7 +10,12 @@
  * @see https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer
  */
 
-import { apiUrl, ensureBackendAvailable, resolveApiOrigin } from '@/core/api/apiOrigin'
+import {
+  ELITE_AGROCLOUD_API_ORIGIN,
+  apiUrl,
+  ensureBackendAvailable,
+  resolveApiOrigin,
+} from '@/core/api/apiOrigin'
 import { ensureRasterStyleMaxNativeZoom, rasterTileMaxNativeZoom } from '@/modules/gis/layers/raster/rasterTileZoom'
 
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services'
@@ -33,8 +38,22 @@ export const ESRI_WORLD_TERRAIN_DEM_TILE_PATH = '/api/terrain/esri-rgb/{z}/{x}/{
  * no local `/api`, so we reuse the configured backend origin (`VITE_AGRI_API_SECRETS_URL`) — the
  * same server that decodes the LERC tiles and already allows cross-origin tile requests.
  */
+function isStaticSpaHostNeedingRemoteTerrainApi(): boolean {
+  if (typeof window === 'undefined') return false
+  const host = window.location.hostname.toLowerCase()
+  if (host === 'eliteagrocloud.com' || host === 'www.eliteagrocloud.com') return true
+  return /\.github\.io$/i.test(host) || /\.pages\.dev$/i.test(host) || /\.netlify\.app$/i.test(host)
+}
+
+/** Never point terrain tiles at the static SPA origin (GitHub Pages serves HTML for /api/*). */
 function resolveTerrainApiOrigin(): string {
-  return resolveApiOrigin()
+  const origin = resolveApiOrigin()
+  if (typeof window === 'undefined') return origin
+  const same = window.location.origin
+  if (isStaticSpaHostNeedingRemoteTerrainApi() && (!origin || origin === same)) {
+    return ELITE_AGROCLOUD_API_ORIGIN
+  }
+  return origin
 }
 
 /** Absolute terrain-RGB tile template (origin-prefixed) for Mapbox/MapLibre `raster-dem` sources. */
@@ -166,6 +185,36 @@ export function resetTerrainApiAvailabilityProbe(): void {
   terrainApiProbe = null
 }
 
+async function probeTerrainRgbTile(): Promise<boolean> {
+  const probeUrl = `${resolveTerrainApiOrigin()}/api/terrain/esri-rgb/8/120/85.png`
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const res = await fetch(probeUrl, {
+        method: 'GET',
+        credentials: 'omit',
+        mode: 'cors',
+        cache: 'no-store',
+      })
+      if (!res.ok) {
+        await new Promise(r => window.setTimeout(r, 280 * (attempt + 1)))
+        continue
+      }
+      const type = res.headers.get('content-type') ?? ''
+      if (/image\/png/i.test(type)) return true
+      const buf = await res.arrayBuffer()
+      if (buf.byteLength >= 8) {
+        const head = new Uint8Array(buf.slice(0, 8))
+        // PNG magic
+        if (head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47) return true
+      }
+    } catch {
+      /* retry */
+    }
+    await new Promise(r => window.setTimeout(r, 280 * (attempt + 1)))
+  }
+  return false
+}
+
 export function ensureTerrainApiAvailable(): Promise<boolean> {
   if (terrainApiAvailability !== null) return Promise.resolve(terrainApiAvailability)
   if (terrainApiProbe) return terrainApiProbe
@@ -176,17 +225,18 @@ export function ensureTerrainApiAvailable(): Promise<boolean> {
         terrainApiAvailability = false
         return false
       }
-      // Health alone is optimistic in dev — confirm the terrain-RGB proxy returns a tile.
-      const probeUrl = apiUrl('/api/terrain/esri-rgb/8/120/85.png')
-      const res = await fetch(probeUrl, { method: 'GET', credentials: 'include' })
-      const type = res.headers.get('content-type') ?? ''
-      terrainApiAvailability = res.ok && /image\/png/i.test(type)
+      terrainApiAvailability = await probeTerrainRgbTile()
     } catch {
       terrainApiAvailability = false
     }
     return terrainApiAvailability
   })()
   return terrainApiProbe
+}
+
+/** Warm terrain proxy probe while the map loads (GitHub Pages / static SPA). */
+export function prefetchTerrainApiAvailability(): void {
+  void ensureTerrainApiAvailable()
 }
 
 /**
