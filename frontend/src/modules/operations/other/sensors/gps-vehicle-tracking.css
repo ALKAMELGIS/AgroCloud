@@ -1,5 +1,11 @@
 /* GPS Vehicle Tracking — extends sensor-integration shell */
 
+.sensor-shell--blank .sensor-main--blank {
+  min-height: calc(100vh - 120px);
+  padding: 0;
+  margin: 0;
+}
+
 .gps-page-actions {
   display: inline-flex;
   align-items: center;

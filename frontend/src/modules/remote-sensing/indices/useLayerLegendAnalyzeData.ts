@@ -3,6 +3,7 @@ import type { LayerLiveLegendSpec } from './layerLiveLegendCatalog'
 import {
   fetchLegendAnalyzeWmsZonalStats,
   layerSupportsLegendWmsZonal,
+  peekLegendAnalyzeWmsZonalStats,
 } from './legendAnalyzeWmsZonal'
 import {
   fetchMultiLayerAoiFieldDailyRow,
@@ -94,13 +95,13 @@ export function useLayerLegendAnalyzeData({
   const wmsZonalPreferred = !!layerKey && layerSupportsLegendWmsZonal(layerKey)
   const classAreasOnBbox =
     enabled &&
+    !wmsZonalPreferred &&
     skipFullClassAreas &&
     !!fetchGeom &&
     !!layerKey &&
-    layerSupportsClassArea(layerKey) &&
-    !wmsZonalPreferred
+    layerSupportsClassArea(layerKey)
 
-  const classAreasEnabled = enabled && !skipFullClassAreas
+  const classAreasEnabled = enabled && !wmsZonalPreferred && !skipFullClassAreas
   const classAreaGeometry = classAreasOnBbox && fetchGeom ? fetchGeom : geometry
 
   const {
@@ -128,6 +129,13 @@ export function useLayerLegendAnalyzeData({
   const wmsEnabled =
     enabled && !!geom && !!dateKey && !!layerKey && layerSupportsLegendWmsZonal(layerKey)
 
+  const peekedWmsZonal = useMemo(() => {
+    if (!wmsEnabled || !geom) return null
+    const hit = peekLegendAnalyzeWmsZonalStats(geom, dateKey, layerKey, { areaHa })
+    if (hit?.average != null && Number.isFinite(hit.average)) return hit
+    return null
+  }, [wmsEnabled, geom, geomKey, dateKey, layerKey, areaHa])
+
   useEffect(() => {
     if (!wmsEnabled || !geom) {
       wmsGenRef.current += 1
@@ -138,8 +146,18 @@ export function useLayerLegendAnalyzeData({
 
     const requestId = ++wmsGenRef.current
     const controller = new AbortController()
-    setWmsLoading(true)
+    const cached = peekLegendAnalyzeWmsZonalStats(geom, dateKey, layerKey, { areaHa })
+    if (cached?.average != null && Number.isFinite(cached.average)) {
+      setWmsZonal(cached)
+      setWmsLoading(false)
+      return () => {
+        if (wmsGenRef.current === requestId) wmsGenRef.current += 1
+        controller.abort()
+      }
+    }
+
     setWmsZonal(null)
+    setWmsLoading(true)
 
     fetchLegendAnalyzeWmsZonalStats(geom, dateKey, layerKey, {
       signal: controller.signal,
@@ -170,7 +188,7 @@ export function useLayerLegendAnalyzeData({
     }
   }, [wmsEnabled, geom, geomKey, dateKey, layerKey, areaHa])
 
-  const mergedIndexStats = wmsZonal ?? apiFallback
+  const mergedIndexStats = wmsZonal ?? peekedWmsZonal ?? apiFallback
   const needsApiFallback =
     enabled &&
     !!geomKey &&
@@ -254,9 +272,13 @@ export function useLayerLegendAnalyzeData({
     [layerId, spec, areaResult, hasClassData, mergedIndexStats],
   )
 
+  const hasWmsZonal =
+    (wmsZonal?.average != null && Number.isFinite(wmsZonal.average)) ||
+    (peekedWmsZonal?.average != null && Number.isFinite(peekedWmsZonal.average))
+
   const hasData =
     hasClassData ||
-    (wmsZonal?.average != null && Number.isFinite(wmsZonal.average)) ||
+    hasWmsZonal ||
     (apiFallback?.average != null && Number.isFinite(apiFallback.average)) ||
     (analyzeStats.average != null && Number.isFinite(analyzeStats.average))
 
@@ -264,7 +286,7 @@ export function useLayerLegendAnalyzeData({
     !hasData &&
     (wmsLoading ||
       apiLoading ||
-      ((classAreasEnabled || classAreasOnBbox) && areaLoading))
+      (!wmsZonalPreferred && (classAreasEnabled || classAreasOnBbox) && areaLoading))
 
   return {
     analyzeStats,

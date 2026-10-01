@@ -2,13 +2,16 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
   type RefObject,
 } from 'react'
 import { useSiInstanceScope } from '@/app/providers/siInstanceScope'
+import { buildLayerLiveLegendList } from './layerLiveLegendCatalog'
 import { LayerLiveLegendPanel } from './LayerLiveLegendPanel'
+import type { LayerLegendCloudCoverPct } from './layerLegendCloudCoverStats'
 import type { RemoteSensingLayerSelectGroup } from './agroCompositeIndices'
 import type { SiMapSwipeCompareSides } from '@/modules/gis/map/SiMapSwipeControl'
 import './LayerLiveLegendFloatingPanel.css'
@@ -92,6 +95,7 @@ type LayerLiveLegendFloatingPanelProps = {
    * Pass null/undefined when swipe is closed.
    */
   mapSwipeCompare?: SiMapSwipeCompareSides | null
+  aoiCloudCover?: LayerLegendCloudCoverPct | null
 }
 
 export function LayerLiveLegendFloatingPanel({
@@ -106,6 +110,7 @@ export function LayerLiveLegendFloatingPanel({
   seriesStart,
   seriesEnd,
   mapSwipeCompare = null,
+  aoiCloudCover = null,
 }: LayerLiveLegendFloatingPanelProps) {
   const { scopedStorageKey } = useSiInstanceScope()
   const posStorageKey = scopedStorageKey(POS_KEY_BASE)
@@ -132,6 +137,14 @@ export function LayerLiveLegendFloatingPanel({
       ? mapSwipeCompare!.after.sceneDate
       : mapSwipeCompare!.before.sceneDate
     : sceneDate
+
+  const floatHeadTitle = useMemo(() => {
+    if (!legendLayerId) return 'Color key'
+    const hit = layerOptions.find(o => o.id === legendLayerId)
+    if (!hit) return legendLayerId
+    const spec = buildLayerLiveLegendList([hit])[0]
+    return spec?.title ?? hit.label ?? legendLayerId
+  }, [legendLayerId, layerOptions])
 
   useEffect(() => {
     if (!swipeActive) setSwipeTab('before')
@@ -318,7 +331,7 @@ export function LayerLiveLegendFloatingPanel({
       style={style}
       dir="ltr"
       role="dialog"
-      aria-label="Layer Live legend"
+      aria-label={`${floatHeadTitle} — Layer Live legend`}
       aria-modal="false"
     >
       <div className="si-layer-live-float__chrome">
@@ -335,7 +348,7 @@ export function LayerLiveLegendFloatingPanel({
           </span>
           <div className="si-layer-live-float__head-text">
             <span className="si-layer-live-float__kicker">Layer Live</span>
-            <span className="si-layer-live-float__head-title">Color key</span>
+            <span className="si-layer-live-float__head-title">{floatHeadTitle}</span>
           </div>
           <button
             type="button"
@@ -394,6 +407,7 @@ export function LayerLiveLegendFloatingPanel({
             sceneDate={legendSceneDate}
             seriesStart={seriesStart}
             seriesEnd={seriesEnd}
+            aoiCloudCover={aoiCloudCover}
             activeOnly
           />
         </div>

@@ -19,6 +19,11 @@ import {
 } from './dsiIndex'
 import { useLayerLegendAnalyzeData } from './useLayerLegendAnalyzeData'
 import { LayerLiveLegendAnalyzePanel } from './LayerLiveLegendAnalyzePanel'
+import {
+  computeLayerLegendCloudCoverAreas,
+  layerLegendSupportsCloudCoverStats,
+  type LayerLegendCloudCoverPct,
+} from './layerLegendCloudCoverStats'
 import './LayerLiveLegendPanel.css'
 
 type LayerOption = { id: string; label?: string }
@@ -38,6 +43,39 @@ type LayerLiveLegendPanelProps = {
   seriesEnd?: string
   /** Overrides the default "Sentinel Hub · 10 m" provider line (follows toolbox selection). */
   providerLabel?: string
+  /** AOI cloud/clear % for the active scene (SCL+CLP mask). */
+  aoiCloudCover?: LayerLegendCloudCoverPct | null
+}
+
+function formatCloudLegendAreaLine(ha: number, km2: number): string {
+  const haLabel =
+    ha >= 100 ? `${Math.round(ha).toLocaleString('en-US')} ha` : `${formatAreaHa(ha)} ha`
+  return `${haLabel} · ${formatAreaKm2(km2)} km²`
+}
+
+function LayerLiveLegendCloudCoverBlock({ areas }: { areas: NonNullable<ReturnType<typeof computeLayerLegendCloudCoverAreas>> }) {
+  const cloudHa = areas.cloudAreaM2 / 10_000
+  const clearHa = areas.clearAreaM2 / 10_000
+  const cloudKm2 = areas.cloudAreaM2 / 1_000_000
+  const clearKm2 = areas.clearAreaM2 / 1_000_000
+  return (
+    <div className="si-lll-cloud-cover" role="group" aria-label="AOI cloud mask area">
+      <div className="si-lll-cloud-cover__line is-cloud">
+        <span className="si-lll-cloud-cover__ico si-lll-cloud-cover__ico--emoji" aria-hidden>
+          ☁️
+        </span>
+        <span className="si-lll-cloud-cover__vals">{formatCloudLegendAreaLine(cloudHa, cloudKm2)}</span>
+        <span className="si-lll-cloud-cover__pct">{areas.cloudPct.toFixed(1)}%</span>
+      </div>
+      <div className="si-lll-cloud-cover__line is-clear">
+        <span className="si-lll-cloud-cover__ico" aria-hidden>
+          <i className="fa-solid fa-sun" />
+        </span>
+        <span className="si-lll-cloud-cover__vals">{formatCloudLegendAreaLine(clearHa, clearKm2)}</span>
+        <span className="si-lll-cloud-cover__pct">{areas.clearPct.toFixed(1)}%</span>
+      </div>
+    </div>
+  )
 }
 
 /** Parse "Low → High" style endpoints out of a subtitle ("· Low → High ·"). */
@@ -74,7 +112,8 @@ function stripSpectralFormulasFromLegendText(text: string): string {
   s = s.replace(/\s{2,}/g, ' ')
   s = s.replace(/\s+·\s+/g, ' · ')
   s = s.replace(/^[·—–\s]+|[·—–\s]+$/g, '')
-  return s.trim()
+  s = s.replace(/\s*=\s*$/g, '').trim()
+  return s
 }
 
 /** Continuous vertical ramp aligned with the class rows (top = first class). */
@@ -96,11 +135,13 @@ export function LayerLiveLegendBody({
   spec,
   classAreas,
   hideNote = false,
+  cloudCoverAreas,
 }: {
   spec: LayerLiveLegendSpec
   classAreas?: LayerClassAreaRow[]
   /** Hide footer formula / discrimination notes (float MapSwipe legend). */
   hideNote?: boolean
+  cloudCoverAreas?: ReturnType<typeof computeLayerLegendCloudCoverAreas>
 }) {
   if (spec.kind === 'composite' && spec.compositeBands?.length) {
     return (
@@ -168,6 +209,8 @@ export function LayerLiveLegendBody({
         </div>
       ) : null}
 
+      {cloudCoverAreas ? <LayerLiveLegendCloudCoverBlock areas={cloudCoverAreas} /> : null}
+
       <div className={`si-lll-scale-body${hasArea ? ' has-area' : ''}`}>
         {verticalGradient ? (
           <span
@@ -233,6 +276,7 @@ export function LayerLiveLegendActiveCard({
   seriesEnd,
   providerLabel: providerLabelProp,
   aoiLabel,
+  aoiCloudCover,
 }: {
   spec: LayerLiveLegendSpec
   activeLayerId?: string
@@ -243,6 +287,7 @@ export function LayerLiveLegendActiveCard({
   seriesEnd?: string
   providerLabel?: string
   aoiLabel?: string
+  aoiCloudCover?: LayerLegendCloudCoverPct | null
 }) {
   const isFloatVariant = variant === 'float'
   const [analyzeOpen, setAnalyzeOpen] = useState(false)
@@ -275,7 +320,12 @@ export function LayerLiveLegendActiveCard({
     if (!aoiGeometry) return 0
     return geodesicAreaM2(aoiGeometry) / 10_000
   }, [aoiGeometry])
-  const totalHa = areaResult ? areaResult.aoiAreaM2 / 10_000 : instantAoiHa
+  const aoiAreaM2 = areaResult?.aoiAreaM2 ?? (aoiGeometry ? geodesicAreaM2(aoiGeometry) : 0)
+  const totalHa = aoiAreaM2 > 0 ? aoiAreaM2 / 10_000 : instantAoiHa
+  const cloudCoverAreas = useMemo(() => {
+    if (!layerLegendSupportsCloudCoverStats(activeLayerId)) return null
+    return computeLayerLegendCloudCoverAreas(aoiAreaM2, aoiCloudCover)
+  }, [activeLayerId, aoiAreaM2, aoiCloudCover])
   const imageryDate = areaResult?.sceneDate || sceneDate || '—'
   const providerLabel = providerLabelProp?.trim() || `Sentinel Hub · ${SENTINEL2_NATIVE_GSD_M} m`
   const seriesLabel = seriesStart && seriesEnd ? `${seriesStart} → ${seriesEnd}` : null
@@ -300,28 +350,38 @@ export function LayerLiveLegendActiveCard({
     ? `${resolvedAoiLabel} - ${formatAreaHa(totalHa)} ha`
     : 'Draw an AOI to analyze territory statistics'
 
+  const floatMetaLine2 = useMemo(() => {
+    const parts: string[] = []
+    if (imageryDate && imageryDate !== '—') parts.push(imageryDate)
+    if (providerLabel) parts.push(providerLabel)
+    if (seriesLabel) parts.push(seriesLabel)
+    return parts.join(' · ')
+  }, [imageryDate, providerLabel, seriesLabel])
+
   return (
     <section
       className={`si-layer-live-legend__section is-active si-lll-scientific${variant === 'float' ? ' si-layer-live-legend__section--float' : ''}`}
       aria-label={`Active layer: ${displaySpec.title}`}
     >
       <header className="si-layer-live-legend__header">
-        <div className="si-lll-titlebar">
-          <h3 className="si-layer-live-legend__title">{displaySpec.title}</h3>
-          <div className="si-lll-badges">
-            <span className="si-layer-live-legend__badge">Active</span>
-            {showAre ? (
-              <span className="si-layer-live-legend__are-badge" title={areMeta.disclaimer}>
-                {areMeta.badgeShort}
-              </span>
-            ) : null}
-            {areaResult?.classificationMode === 'percentile' ? (
-              <span className="si-layer-live-legend__badge" title="Classes are AOI percentiles for this scene">
-                Deciles
-              </span>
-            ) : null}
+        {!isFloatVariant ? (
+          <div className="si-lll-titlebar">
+            <h3 className="si-layer-live-legend__title">{displaySpec.title}</h3>
+            <div className="si-lll-badges">
+              <span className="si-layer-live-legend__badge">Active</span>
+              {showAre ? (
+                <span className="si-layer-live-legend__are-badge" title={areMeta.disclaimer}>
+                  {areMeta.badgeShort}
+                </span>
+              ) : null}
+              {areaResult?.classificationMode === 'percentile' ? (
+                <span className="si-layer-live-legend__badge" title="Classes are AOI percentiles for this scene">
+                  Deciles
+                </span>
+              ) : null}
+            </div>
           </div>
-        </div>
+        ) : null}
 
         {!isFloatVariant ? (
           <div className="si-lll-analyze-row">
@@ -346,35 +406,48 @@ export function LayerLiveLegendActiveCard({
               key={activeLayerId ?? 'none'}
               stats={analyzeStats}
               locationLabel={analyzeLocationLabel}
+              aoiName={resolvedAoiLabel}
+              aoiAreaHa={hasAoi ? totalHa : null}
               loading={analyzeLoading && !analyzeHasData}
               hasAoi={hasAoi}
               hasData={analyzeHasData}
+              compact={isFloatVariant}
             />
           </div>
         ) : null}
 
-        {scientificNameDisplay ? (
-          <p className="si-layer-live-legend__scientific">{scientificNameDisplay}</p>
-        ) : null}
-
-        <dl className="si-lll-meta-grid">
-          <div className="si-lll-meta">
-            <dt>Imagery</dt>
-            <dd>{imageryDate}</dd>
-          </div>
-          <div className="si-lll-meta">
-            <dt>Provider</dt>
-            <dd>{providerLabel}</dd>
-          </div>
-          {seriesLabel ? (
-            <div className="si-lll-meta si-lll-meta--span">
-              <dt>Series</dt>
-              <dd>{seriesLabel}</dd>
+        {isFloatVariant ? (
+          floatMetaLine2 ? (
+            <div className="si-lll-meta-float" aria-label="Layer metadata">
+              <p className="si-lll-meta-float__line is-meta">{floatMetaLine2}</p>
             </div>
-          ) : null}
-        </dl>
+          ) : null
+        ) : (
+          <>
+            {scientificNameDisplay ? (
+              <p className="si-layer-live-legend__scientific">{scientificNameDisplay}</p>
+            ) : null}
 
-        {subtitleDisplay ? <p className="si-layer-live-legend__subtitle">{subtitleDisplay}</p> : null}
+            <dl className="si-lll-meta-grid">
+              <div className="si-lll-meta">
+                <dt>Imagery</dt>
+                <dd>{imageryDate}</dd>
+              </div>
+              <div className="si-lll-meta">
+                <dt>Provider</dt>
+                <dd>{providerLabel}</dd>
+              </div>
+              {seriesLabel ? (
+                <div className="si-lll-meta si-lll-meta--span">
+                  <dt>Series</dt>
+                  <dd>{seriesLabel}</dd>
+                </div>
+              ) : null}
+            </dl>
+
+            {subtitleDisplay ? <p className="si-layer-live-legend__subtitle">{subtitleDisplay}</p> : null}
+          </>
+        )}
         {showAre ? <p className="si-layer-live-legend__are-disclaimer">{areMeta.badgeLong}</p> : null}
         {hasAoi && areaSupported ? (
           <div className="si-layer-live-legend__area-summary" aria-live="polite">
@@ -409,6 +482,7 @@ export function LayerLiveLegendActiveCard({
         spec={displaySpec}
         classAreas={classAreaRows}
         hideNote={variant === 'float'}
+        cloudCoverAreas={cloudCoverAreas}
       />
     </section>
   )
@@ -424,6 +498,7 @@ export function LayerLiveLegendPanel({
   seriesStart,
   seriesEnd,
   providerLabel,
+  aoiCloudCover,
 }: LayerLiveLegendPanelProps) {
   const legendById = useMemo(() => {
     const map = new Map<string, LayerLiveLegendSpec>()
@@ -470,6 +545,7 @@ export function LayerLiveLegendPanel({
           seriesStart={seriesStart}
           seriesEnd={seriesEnd}
           providerLabel={providerLabel}
+          aoiCloudCover={aoiCloudCover}
         />
       </div>
     )
@@ -482,6 +558,7 @@ export function LayerLiveLegendPanel({
           spec={activeSpec}
           activeLayerId={activeLayerId}
           aoiGeometry={aoiGeometry}
+          aoiCloudCover={aoiCloudCover}
           sceneDate={sceneDate}
           seriesStart={seriesStart}
           seriesEnd={seriesEnd}

@@ -594,6 +594,7 @@ import type { AoiStaticMultiLayerLineChartDataset } from '../temporal-analysis/A
 import { SatelliteMapAnalysisChrome, type MapToolboxNavigateHandler } from './SatelliteMapAnalysisChrome';
 import { LayerLiveLegendPanel } from '../indices/LayerLiveLegendPanel';
 import { LayerLiveLegendFloatingPanel } from '../indices/LayerLiveLegendFloatingPanel';
+import { usePrefetchLayerLegendAnalyze } from '../indices/usePrefetchLayerLegendAnalyze';
 import { GisFloatingWorkspacePanel } from '@/modules/gis/map/GisFloatingWorkspacePanel';
 import { SiSymbologyStudioPanel } from '@/modules/gis/layers/symbology/SiSymbologyStudioPanel';
 import { useLayerClassAreas } from '../classification/useLayerClassAreas';
@@ -19931,6 +19932,13 @@ export default function SatelliteIntelligence() {
     [drawnAoiClipCollection, effectiveSentinelAoiSource],
   );
 
+  usePrefetchLayerLegendAnalyze(
+    normalizedDrawnAoiGeometry,
+    wmsLayerSelectValue,
+    sentinelFetchDate,
+    Boolean(normalizedDrawnAoiGeometry && wmsLayerSelectValue && sentinelFetchDate),
+  );
+
   /** Index raster displays when either independent clip path has geometry. */
   const hasDrawRasterClipAoi = useMemo(() => {
     if (isWmsOverlayVisible && drawnAoiClipCollection?.features?.length) return true;
@@ -23510,6 +23518,7 @@ export default function SatelliteIntelligence() {
         seriesStart={timeSeriesStart}
         seriesEnd={timeSeriesEnd}
         providerLabel={remoteSensingMapStatusLine}
+        aoiCloudCover={activeAoiCloudStats}
       />
     ),
     [
@@ -23521,6 +23530,7 @@ export default function SatelliteIntelligence() {
       timeSeriesStart,
       timeSeriesEnd,
       remoteSensingMapStatusLine,
+      activeAoiCloudStats,
     ],
   );
 
@@ -27138,6 +27148,7 @@ export default function SatelliteIntelligence() {
             seriesStart={timeSeriesStart}
             seriesEnd={timeSeriesEnd}
             mapSwipeCompare={mapSwipeOpen ? mapSwipeCompare : null}
+            aoiCloudCover={activeAoiCloudStats}
           />
 
           <SiImageryTimeSeriesFloatingPanel

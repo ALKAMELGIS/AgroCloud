@@ -92,9 +92,13 @@
 }
 
 .si-layer-live-float__head-title {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   color: #f8fafc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .si-layer-live-float__close {
@@ -440,6 +444,37 @@ html[data-theme='light'] .si-layer-live-float__body .si-lll-analyze-panel {
     inset 0 1px 0 rgba(255, 255, 255, 0.92);
 }
 
+html[data-theme='light'] .si-layer-live-float__body .si-lll-analyze-panel--compact {
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--si-lll-analyze-accent, #16a34a) 6%, #ffffff) 0%,
+    #ffffff 55%
+  );
+  border-color: color-mix(in srgb, var(--si-lll-analyze-accent, #16a34a) 32%, rgba(148, 163, 184, 0.45));
+  box-shadow:
+    0 4px 14px rgba(15, 23, 42, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+
+html[data-theme='dark'] .si-layer-live-float__body .si-lll-analyze-panel--compact {
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--si-lll-analyze-accent, #84cc16) 9%, #0b0f13) 0%,
+    rgba(11, 15, 19, 0.94) 58%
+  );
+}
+
+html[data-theme='light'] .si-layer-live-float__body .si-lll-analyze-panel__aoi-chip {
+  background: rgba(248, 250, 252, 0.98);
+  border-color: rgba(148, 163, 184, 0.35);
+  color: #475569;
+}
+
+html[data-theme='dark'] .si-layer-live-float__body .si-lll-analyze-panel__aoi-chip {
+  background: rgba(15, 23, 42, 0.45);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
 html[data-theme='light'] .si-layer-live-float__body .si-lll-analyze-panel__kicker,
 html[data-theme='light'] .si-layer-live-float__body .si-lll-analyze-panel__index-title,
 html[data-theme='light'] .si-layer-live-float__body .si-lll-analyze-panel__location,
@@ -467,4 +502,22 @@ html[data-theme='light'] .si-layer-live-float__body .si-lll-analyze-stat {
 
 html[data-theme='light'] .si-layer-live-float__body .si-lll-analyze-gauge__insight {
   color: #92400e;
+}
+
+html[data-theme='light'] .si-layer-live-float__body .si-lll-cloud-cover {
+  --si-lll-cloud-bg: #ffffff;
+  --si-lll-cloud-border: rgba(15, 23, 42, 0.14);
+  --si-lll-cloud-text: #0f172a;
+  --si-lll-cloud-pct: #0f172a;
+}
+
+html[data-theme='light'] .si-layer-live-float__body .si-lll-cloud-cover__vals {
+  color: #0f172a;
+}
+
+html[data-theme='dark'] .si-layer-live-float__body .si-lll-cloud-cover {
+  --si-lll-cloud-bg: #0b1220;
+  --si-lll-cloud-border: rgba(148, 163, 184, 0.22);
+  --si-lll-cloud-text: #cbd5e1;
+  --si-lll-cloud-pct: #f8fafc;
 }

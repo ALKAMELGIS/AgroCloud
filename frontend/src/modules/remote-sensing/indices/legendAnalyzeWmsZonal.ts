@@ -457,6 +457,36 @@ function writeZonalCache(key: string, stats: LegendWmsZonalStats): void {
   }
 }
 
+/** Synchronous cache read — use to paint Analyze stats before the network round-trip. */
+export function peekLegendAnalyzeWmsZonalStats(
+  geometry: GeoJSON.Geometry,
+  sceneDate: string,
+  layerId: string,
+  options?: { areaHa?: number },
+): LegendWmsZonalStats | null {
+  if (!isLegendAnalyzeWmsZonalAvailable()) return null
+  const day = String(sceneDate || '').trim().slice(0, 10)
+  if (!day) return null
+  if (!resolveWmsZonalChannel(layerId)) return null
+  const bbox = bbox3857FromGeometry(geometry)
+  if (!bbox) return null
+  const areaHa = options?.areaHa ?? 0
+  return readZonalCache(zonalCacheKey(layerId, day, bbox, areaHa))
+}
+
+/** Warm the zonal cache while the float legend is closed. */
+export function prefetchLegendAnalyzeWmsZonalStats(
+  geometry: GeoJSON.Geometry,
+  sceneDate: string,
+  layerId: string,
+  options?: { areaHa?: number },
+): void {
+  if (peekLegendAnalyzeWmsZonalStats(geometry, sceneDate, layerId, options)) return
+  void fetchLegendAnalyzeWmsZonalStats(geometry, sceneDate, layerId, options).catch(() => {
+    /* ignore */
+  })
+}
+
 export async function fetchLegendAnalyzeWmsZonalStats(
   geometry: GeoJSON.Geometry,
   sceneDate: string,
