@@ -12,7 +12,7 @@
 
 import {
   ELITE_AGROCLOUD_API_ORIGIN,
-  apiUrl,
+  clearSameOriginBackendBreaker,
   ensureBackendAvailable,
   resolveApiOrigin,
 } from '@/core/api/apiOrigin'
@@ -46,14 +46,28 @@ function isStaticSpaHostNeedingRemoteTerrainApi(): boolean {
 }
 
 /** Never point terrain tiles at the static SPA origin (GitHub Pages serves HTML for /api/*). */
-function resolveTerrainApiOrigin(): string {
-  const origin = resolveApiOrigin()
-  if (typeof window === 'undefined') return origin
-  const same = window.location.origin
-  if (isStaticSpaHostNeedingRemoteTerrainApi() && (!origin || origin === same)) {
+export function resolveTerrainApiOrigin(): string {
+  if (isStaticSpaHostNeedingRemoteTerrainApi()) {
     return ELITE_AGROCLOUD_API_ORIGIN
   }
-  return origin
+  return resolveApiOrigin()
+}
+
+/**
+ * Mapbox GL loads DEM tiles from a worker — set `credentials: 'omit'` for cross-origin terrain-RGB
+ * (API responds with `Access-Control-Allow-Origin: *`, which forbids credentialed fetches).
+ */
+export function agroCloudMapboxTransformRequest(
+  url: string,
+  resourceType?: string,
+): { url: string; credentials?: 'omit' | 'same-origin' | 'include' } {
+  if (
+    (resourceType === 'Tile' || resourceType === 'Source') &&
+    url.includes('/api/terrain/esri-rgb/')
+  ) {
+    return { url, credentials: 'omit' }
+  }
+  return { url }
 }
 
 /** Absolute terrain-RGB tile template (origin-prefixed) for Mapbox/MapLibre `raster-dem` sources. */
@@ -186,8 +200,25 @@ export function resetTerrainApiAvailabilityProbe(): void {
 }
 
 async function probeTerrainRgbTile(): Promise<boolean> {
-  const probeUrl = `${resolveTerrainApiOrigin()}/api/terrain/esri-rgb/8/120/85.png`
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  const origin = resolveTerrainApiOrigin()
+  try {
+    const healthRes = await fetch(`${origin}/api/terrain/health`, {
+      method: 'GET',
+      credentials: 'omit',
+      mode: 'cors',
+      cache: 'no-store',
+      headers: { Accept: 'application/json' },
+    })
+    if (healthRes.ok) {
+      const body = (await healthRes.json()) as { ok?: boolean }
+      if (body?.ok === true) return true
+    }
+  } catch {
+    /* fall through to PNG tile probe */
+  }
+
+  const probeUrl = `${origin}/api/terrain/esri-rgb/8/120/85.png`
+  for (let attempt = 0; attempt < 4; attempt += 1) {
     try {
       const res = await fetch(probeUrl, {
         method: 'GET',
@@ -220,10 +251,16 @@ export function ensureTerrainApiAvailable(): Promise<boolean> {
   if (terrainApiProbe) return terrainApiProbe
   terrainApiProbe = (async () => {
     try {
-      const backendOk = await ensureBackendAvailable()
-      if (!backendOk) {
-        terrainApiAvailability = false
-        return false
+      if (isStaticSpaHostNeedingRemoteTerrainApi()) {
+        // Same-origin `/api/health` on GitHub Pages returns index.html and trips the breaker —
+        // probe the Hostinger terrain proxy directly instead.
+        clearSameOriginBackendBreaker()
+      } else {
+        const backendOk = await ensureBackendAvailable()
+        if (!backendOk) {
+          terrainApiAvailability = false
+          return false
+        }
       }
       terrainApiAvailability = await probeTerrainRgbTile()
     } catch {

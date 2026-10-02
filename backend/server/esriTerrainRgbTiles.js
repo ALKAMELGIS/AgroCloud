@@ -118,8 +118,14 @@ async function buildTile(z, y, x) {
 export function registerEsriTerrainTileRoutes(app) {
   if (typeof lercDecode !== 'function') {
     console.warn('[terrain] lerc decoder unavailable — 3D Esri terrain tiles disabled.')
+    app.get('/api/terrain/health', (_req, res) => {
+      res.status(503).json({ ok: false, lerc: false })
+    })
     return
   }
+  app.get('/api/terrain/health', (_req, res) => {
+    res.json({ ok: true, lerc: true })
+  })
   app.get('/api/terrain/esri-rgb/:z/:x/:y', async (req, res) => {
     const z = Number.parseInt(req.params.z, 10)
     const x = Number.parseInt(req.params.x, 10)

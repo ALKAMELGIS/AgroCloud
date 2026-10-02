@@ -28,5 +28,6 @@ jobs:
           API="https://api.eliteagrocloud.com"
           curl -fsS "${API}/api/health" | grep -q '"ok"'
           curl -fsS "${API}/api/agri-field-boundary/health" | grep -q '"status"'
+          curl -fsS "${API}/api/terrain/health" | grep -q '"ok":true'
           curl -fsS "${API}/api/terrain/esri-rgb/8/120/85.png" | head -c 8 | grep -q $'\x89PNG'
           echo "API smoke check passed for ${API} (includes 3D terrain tiles)"

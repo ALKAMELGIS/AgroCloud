@@ -487,6 +487,7 @@ import {
   syncAgroCloudTerrain3d,
   SATELLITE_3D_BASEMAP_ID,
   TOPOGRAPHIC_3D_BASEMAP_ID,
+  agroCloudMapboxTransformRequest,
   warmAgroCloudTerrainDemSource,
   AGRO_CLOUD_TERRAIN_PITCH_THRESHOLD,
   ESRI_WORLD_TERRAIN_SOURCE_ID,
@@ -25646,6 +25647,7 @@ export default function SatelliteIntelligence() {
             }}
             mapStyle={glMapStyle}
             mapboxAccessToken={mapboxAccessTokenForMap}
+            transformRequest={agroCloudMapboxTransformRequest}
             attributionControl={false}
             {...AGRO_CLOUD_MAPBOX_NAVIGATION_PROPS}
             dragRotate={false}
