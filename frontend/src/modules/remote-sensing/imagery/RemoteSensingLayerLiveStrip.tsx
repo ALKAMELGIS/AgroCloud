@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type RefObject } from 'react'
 import type { RemoteSensingLayerSelectGroup } from '../indices/agroCompositeIndices'
 import { RemoteSensingLayerSelect } from './RemoteSensingLayerSelect'
 
@@ -22,6 +22,8 @@ export type RemoteSensingLayerLiveStripProps = {
   layerSelectMenuPortal?: boolean
   layerSelectMenuClassName?: string
   layerSelectRootClassName?: string
+  layerSelectMenuBoundsRef?: RefObject<HTMLElement | null>
+  layerSelectMenuMaxHeight?: number
   cloudCoverage?: number
   onCloudCoverageChange?: (value: number) => void
 }
@@ -45,6 +47,8 @@ export function RemoteSensingLayerLiveStrip({
   layerSelectMenuPortal = false,
   layerSelectMenuClassName,
   layerSelectRootClassName,
+  layerSelectMenuBoundsRef,
+  layerSelectMenuMaxHeight,
   cloudCoverage,
   onCloudCoverageChange,
 }: RemoteSensingLayerLiveStripProps) {
@@ -107,6 +111,8 @@ export function RemoteSensingLayerLiveStrip({
           menuClassName={layerSelectMenuClassName}
           rootClassName={layerSelectRootClassName}
           menuMinWidth={228}
+          menuBoundsRef={layerSelectMenuBoundsRef}
+          menuMaxHeight={layerSelectMenuMaxHeight}
           aria-label="Layer"
         />
       </div>

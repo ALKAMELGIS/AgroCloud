@@ -52,11 +52,13 @@ export function DevelopEliteMapImageryTimeSeries({
 
   const mapboxToken = getMapboxAccessToken()
 
+  const hasDrawnClip = developEliteLayerLiveHasDrawnAoiClip(draw?.clipGeoJson)
+
   const selectedFieldKey = committedAoiGeometry
     ? SI_IMAGERY_COMMITTED_AOI_KEY
     : highlightFieldKey
 
-  if (open && !committedAoiGeometry) {
+  if (open && !hasDrawnClip) {
     return null
   }
 
@@ -79,6 +81,7 @@ export function DevelopEliteMapImageryTimeSeries({
       eagerPanel
       drawnAoiOnly
       chartLookbackDays={90}
+      defaultPanelSize={{ w: 720, h: 340 }}
     />
   )
 }

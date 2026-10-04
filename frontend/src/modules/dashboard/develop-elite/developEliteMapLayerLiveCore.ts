@@ -108,10 +108,8 @@ export function buildDevelopEliteLayerLiveWmsStack(options: {
 }): SiSentinelAoiWmsStackState {
   const layerId = String(options.layerId || SI_DEFAULT_LIVE_WMS_LAYER).trim() || SI_DEFAULT_LIVE_WMS_LAYER
   const iso = String(options.isoDate || '').trim().slice(0, 10)
-  const maxCc =
-    options.cloudCoverage != null && Number.isFinite(options.cloudCoverage)
-      ? Math.max(0, Math.min(100, Math.round(options.cloudCoverage)))
-      : SI_SENTINEL_WMS_SCENE_MAXCC
+  // WMS GetMap always uses granule MAXCC=100; UI cloud slider is for scene ranking only (SI parity).
+  const maxCc = SI_SENTINEL_WMS_SCENE_MAXCC
 
   if (!iso || !options.clipSource) {
     return buildSiSentinelAoiWmsStackState(DEVELOP_ELITE_LAYER_LIVE_WMS_ID_PREFIX, {

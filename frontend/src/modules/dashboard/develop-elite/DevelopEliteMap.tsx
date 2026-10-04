@@ -288,6 +288,7 @@ function DevelopEliteMapContent({
   const compactMapLayout = useDevelopEliteCompactViewport()
   const mapRef = useRef<LeafletMap | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const viewportRef = useRef<HTMLDivElement | null>(null)
   const [pin, setPin] = useState<[number, number] | null>(null)
   const basemap = useMemo(() => resolveBasemapId(basemapId), [basemapId])
   const layerOpacity = useMemo(() => layerOpacityFromDrawingInfo(drawingInfo), [drawingInfo])
@@ -426,7 +427,7 @@ function DevelopEliteMapContent({
       className={`develop-elite-map develop-elite-map--legend-rail${compactMapLayout ? ' develop-elite-map--stacked-legend' : ''}`}
       ref={rootRef}
     >
-      <div className="develop-elite-map__viewport">
+      <div className="develop-elite-map__viewport" ref={viewportRef}>
         <MapView
           center={DEVELOP_ELITE_MAP_DEFAULT_CENTER}
           zoom={DEVELOP_ELITE_MAP_DEFAULT_ZOOM}
@@ -464,6 +465,7 @@ function DevelopEliteMapContent({
         <DevelopEliteMapTools
           mapRef={mapRef}
           rootRef={rootRef}
+          viewportRef={viewportRef}
           geojson={geojson}
           treesGeojson={treesGeojson}
           agriLocationGeojson={agriLocationGeojson}

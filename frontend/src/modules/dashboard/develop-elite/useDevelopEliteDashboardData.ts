@@ -19,6 +19,11 @@ import {
 import { normalizeDevelopEliteJoinKey } from './developEliteLayerJoin'
 import { sortDevelopEliteListBySearch } from './developEliteListSearch'
 import {
+  formatDevelopEliteCropHarvestDate,
+  formatDevelopEliteCropPlantingDate,
+  resolveDevelopEliteCropPlantingDateRaw,
+} from './developEliteArcgisDate'
+import {
   buildCountryListItems,
   buildFarmListItems,
   buildZoneListItems,
@@ -84,17 +89,6 @@ function mergeCountryRelationshipZones(
   }
   if (!extra.length) return zones
   return [...zones, ...extra].sort((a, b) => compareDevelopEliteListNames(a.label, b.label))
-}
-
-function formatDevelopEliteArcGisDate(raw: unknown): string {
-  if (raw == null || raw === '') return ''
-  if (typeof raw === 'number' && Number.isFinite(raw)) {
-    const d = new Date(raw)
-    if (!Number.isNaN(d.getTime())) {
-      return d.toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit', hour: 'numeric', minute: '2-digit' })
-    }
-  }
-  return String(raw)
 }
 
 export function useDevelopEliteDashboardData() {
@@ -332,6 +326,18 @@ export function useDevelopEliteDashboardData() {
     [cropRows, scopedFeatures, filters, config.cropStructureJoinField],
   )
 
+  /** Crops table (layer 1): zone/country scope — not limited to farms with a visible structure polygon. */
+  const tableCropRows = useMemo(
+    () =>
+      filterCropRowsForChartStats(
+        cropRows,
+        allFeatures,
+        filters,
+        config.cropStructureJoinField,
+      ),
+    [cropRows, allFeatures, filters, config.cropStructureJoinField],
+  )
+
   const scopedTreeCount = useMemo(
     () => countScopedTreeFeatures(treeFeatures, scopedFeatures, filters),
     [treeFeatures, scopedFeatures, filters],
@@ -521,7 +527,15 @@ export function useDevelopEliteDashboardData() {
 
   const tableRows = useMemo(() => {
     const joinField = config.cropStructureJoinField
-    return scopedCropRows.slice(0, 200).map((row, i) => {
+    const sorted = [...tableCropRows].sort((a, b) => {
+      const aPlant = resolveDevelopEliteCropPlantingDateRaw(a) != null ? 0 : 1
+      const bPlant = resolveDevelopEliteCropPlantingDateRaw(b) != null ? 0 : 1
+      if (aPlant !== bPlant) return aPlant - bPlant
+      const an = String(readArcGisField(a, 'Farm_Name') ?? '')
+      const bn = String(readArcGisField(b, 'Farm_Name') ?? '')
+      return an.localeCompare(bn, undefined, { sensitivity: 'base' })
+    })
+    return sorted.slice(0, 200).map((row, i) => {
       const out: Record<string, string> = { _rowId: String(row.OBJECTID ?? row.objectid ?? i) }
       const rawFc = readArcGisField(row, joinField)
       const fc = rawFc != null && rawFc !== '' ? normalizeDevelopEliteJoinKey(String(rawFc)) : ''
@@ -535,9 +549,10 @@ export function useDevelopEliteDashboardData() {
           out[col] = oid != null && oid !== '' ? String(oid) : ''
         } else if (col === 'Crop_Type') {
           out[col] = resolveCropLabel(row, cropMeta, col)
-        } else if (col === 'Planting_Date' || col === 'Harvest_Date') {
-          const v = row[col]
-          out[col] = formatDevelopEliteArcGisDate(v)
+        } else if (col === 'Planting_Date') {
+          out[col] = formatDevelopEliteCropPlantingDate(row)
+        } else if (col === 'Harvest_Date') {
+          out[col] = formatDevelopEliteCropHarvestDate(row)
         } else if (col === 'Total_Tree') {
           const v = readArcGisField(row, col)
           out[col] = v != null && v !== '' ? String(v) : ''
@@ -548,7 +563,13 @@ export function useDevelopEliteDashboardData() {
       }
       return out
     })
-  }, [scopedCropRows, config.tableColumns, config.cropStructureJoinField, cropMeta, structureFieldKeyByJoinCode])
+  }, [
+    tableCropRows,
+    config.tableColumns,
+    config.cropStructureJoinField,
+    cropMeta,
+    structureFieldKeyByJoinCode,
+  ])
 
   const selectCountry = useCallback((code: string) => {
     setFilters(f => ({

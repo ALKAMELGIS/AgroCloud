@@ -62,4 +62,22 @@ describe('developEliteImageryTimeSeriesAoi', () => {
     const geom = developEliteCommittedAoiGeometry(clip)
     expect(geom?.type).toBe('Polygon')
   })
+
+  it('converts circle sketches (Point + radius m) to polygon geometry', () => {
+    const clip: GeoJSON.FeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { radius: 500 },
+          geometry: { type: 'Point', coordinates: [55.1, 25.2] },
+        },
+      ],
+    }
+    const geom = developEliteCommittedAoiGeometry(clip)
+    expect(geom?.type).toBe('Polygon')
+    const fields = developEliteDrawnAoiToAoiFields(clip)
+    expect(fields).toHaveLength(1)
+    expect(fields[0]?.id).toBe(SI_IMAGERY_COMMITTED_AOI_KEY)
+  })
 })

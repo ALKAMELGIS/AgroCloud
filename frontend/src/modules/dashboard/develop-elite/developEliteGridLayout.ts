@@ -416,7 +416,7 @@ export function syncDevelopEliteGridLayoutsForWidgets(
       item => !hidden.has(item.i) && (allowed.has(item.i) || isDevelopEliteGridLayoutCloneId(item.i)),
     )
     const reflowed = reflow(pruned, cols)
-    out[bp] = bp === 'lg' || bp === 'md' ? alignDevelopEliteKpiCardsOnOneRow(reflowed, cols) : reflowed
+    out[bp] = reflowed
   }
   return out
 }

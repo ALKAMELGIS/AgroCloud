@@ -27,7 +27,7 @@ export function SiRsPanelSelect({
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
-  const menuStyle = useSiRsSelectMenuPosition(open, triggerRef, {
+  const { menuStyle } = useSiRsSelectMenuPosition(open, triggerRef, {
     minWidth: 200,
     maxHeightCap: 480,
   })

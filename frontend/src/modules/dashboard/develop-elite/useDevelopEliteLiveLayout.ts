@@ -32,8 +32,13 @@ export function useDevelopEliteLiveLayout(
   const [layout, setLayout] = useState(() => normalizeDevelopEliteLayout(configLayout))
   const lastCommittedRef = useRef(cloneDevelopEliteLayout(normalizeDevelopEliteLayout(configLayout)))
   const undoStackRef = useRef<DevelopEliteLayoutConfig[]>([])
+  const skipNextConfigSyncRef = useRef(false)
 
   useEffect(() => {
+    if (skipNextConfigSyncRef.current) {
+      skipNextConfigSyncRef.current = false
+      return
+    }
     const normalized = normalizeDevelopEliteLayout(configLayout)
     setLayout(normalized)
     lastCommittedRef.current = cloneDevelopEliteLayout(normalized)
@@ -49,17 +54,27 @@ export function useDevelopEliteLiveLayout(
     })
   }, [])
 
+  const commitLayoutPatch = useCallback(
+    (patch?: LayoutPatch) => {
+      setLayout(prev => {
+        const delta = patch ? (typeof patch === 'function' ? patch(prev) : patch) : {}
+        const merged = patch ? { ...prev, ...delta } : prev
+        const next = normalizeDevelopEliteLayout(merged)
+        undoStackRef.current.push(cloneDevelopEliteLayout(lastCommittedRef.current))
+        if (undoStackRef.current.length > LAYOUT_UNDO_MAX) undoStackRef.current.shift()
+        lastCommittedRef.current = cloneDevelopEliteLayout(next)
+        skipNextConfigSyncRef.current = true
+        patchConfig({ layout: next })
+        notifyDevelopEliteLayoutChanged()
+        return next
+      })
+    },
+    [patchConfig],
+  )
+
   const persistLayout = useCallback(() => {
-    setLayout(current => {
-      const next = normalizeDevelopEliteLayout(current)
-      undoStackRef.current.push(cloneDevelopEliteLayout(lastCommittedRef.current))
-      if (undoStackRef.current.length > LAYOUT_UNDO_MAX) undoStackRef.current.shift()
-      lastCommittedRef.current = cloneDevelopEliteLayout(next)
-      patchConfig({ layout: next })
-      notifyDevelopEliteLayoutChanged()
-      return next
-    })
-  }, [patchConfig])
+    commitLayoutPatch()
+  }, [commitLayoutPatch])
 
   const undoLayout = useCallback(() => {
     const stack = undoStackRef.current
@@ -68,6 +83,7 @@ export function useDevelopEliteLiveLayout(
     lastCommittedRef.current = cloneDevelopEliteLayout(prev)
     const normalized = cloneDevelopEliteLayout(prev)
     setLayout(normalized)
+    skipNextConfigSyncRef.current = true
     patchConfig({ layout: normalized })
     notifyDevelopEliteLayoutChanged()
     return true
@@ -78,9 +94,18 @@ export function useDevelopEliteLiveLayout(
     lastCommittedRef.current = cloneDevelopEliteLayout(next)
     undoStackRef.current = []
     setLayout(next)
+    skipNextConfigSyncRef.current = true
     patchConfig({ layout: next })
     notifyDevelopEliteLayoutChanged()
   }, [patchConfig])
 
-  return { layout, layoutStyle, nudgeLayout, persistLayout, resetLayout, undoLayout }
+  return {
+    layout,
+    layoutStyle,
+    nudgeLayout,
+    commitLayoutPatch,
+    persistLayout,
+    resetLayout,
+    undoLayout,
+  }
 }

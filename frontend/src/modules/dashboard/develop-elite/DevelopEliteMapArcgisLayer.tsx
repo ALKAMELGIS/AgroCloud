@@ -13,6 +13,9 @@ import {
   buildDevelopEliteArcgisFeaturePopupHtml,
 } from './developEliteMapFeaturePopup'
 
+/** Slightly larger map markers for AgroLocation (picture / simple points). */
+const DEVELOP_ELITE_AGRI_LOCATION_POINT_SCALE = 1.22
+
 type Props = {
   layerKey: DevelopEliteMapDataLayerId
   layerLabel: string
@@ -26,13 +29,16 @@ type Props = {
 function pointLayer(
   latlng: LatLngExpression,
   preview: ReturnType<typeof arcgisFeaturePointSymbolPreview>,
+  scale = 1,
 ) {
+  const s = scale > 0 ? scale : 1
   if (!preview) {
-    return L.circleMarker(latlng, { radius: 5, color: '#7ee787', fillColor: '#39ff14', fillOpacity: 0.85 })
+    const r = Math.max(3, 5 * s)
+    return L.circleMarker(latlng, { radius: r, color: '#7ee787', fillColor: '#39ff14', fillOpacity: 0.85 })
   }
   if (preview.kind === 'picture' && preview.imageUrl) {
-    const w = preview.imageWidth ?? 15
-    const h = preview.imageHeight ?? 15
+    const w = Math.round((preview.imageWidth ?? 15) * s)
+    const h = Math.round((preview.imageHeight ?? 15) * s)
     return L.marker(latlng, {
       icon: L.icon({
         iconUrl: preview.imageUrl,
@@ -43,7 +49,7 @@ function pointLayer(
     })
   }
   return L.circleMarker(latlng, {
-    radius: preview.radius,
+    radius: Math.max(2, preview.radius * s),
     color: preview.strokeColor,
     weight: preview.strokeWidth,
     fillColor: preview.fillColor,
@@ -63,6 +69,8 @@ export function DevelopEliteMapArcgisLayer({
 }: Props) {
   const layerOpacity = useMemo(() => layerOpacityFromDrawingInfo(drawingInfo), [drawingInfo])
   const drawingSig = useMemo(() => JSON.stringify(drawingInfo ?? null), [drawingInfo])
+  const pointSymbolScale =
+    layerKey === 'agri-location' ? DEVELOP_ELITE_AGRI_LOCATION_POINT_SCALE : 1
 
   const styleFeature = useCallback(
     (feature?: GeoJSON.Feature) => {
@@ -94,11 +102,11 @@ export function DevelopEliteMapArcgisLayer({
   const pointToLayer = useCallback(
     (feature: GeoJSON.Feature, latlng: LatLngExpression) => {
       const preview = arcgisFeaturePointSymbolPreview(drawingInfo, feature.properties, { layerOpacity })
-      const layer = pointLayer(latlng, preview)
+      const layer = pointLayer(latlng, preview, pointSymbolScale)
       if (!interactive) layer.options.interactive = false
       return layer
     },
-    [drawingInfo, interactive, layerOpacity],
+    [drawingInfo, interactive, layerOpacity, pointSymbolScale],
   )
 
   const map = useMap()

@@ -363,6 +363,51 @@ html[data-theme='dark'] .si-its-float.acp-map-panel--timeseries .acp-ts__field i
   margin-bottom: 5px;
 }
 
+/* Plot layer + field + imagery layers stay on one row (dates on the next). */
+.si-its-float .acp-ts__toolbar-row--scope {
+  display: flex;
+  flex: 1 1 100%;
+  width: 100%;
+  min-width: 0;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 5px;
+}
+
+.si-its-float .acp-ts__toolbar-row--scope .acp-ts__field--plot-source {
+  flex: 0 1 96px;
+  min-width: 72px;
+  max-width: 118px;
+}
+
+.si-its-float .acp-ts__toolbar-row--scope .acp-ts__field--plot-source select {
+  width: 100%;
+  min-width: 0;
+  padding-right: 14px;
+  text-overflow: ellipsis;
+}
+
+.si-its-float .acp-ts__toolbar-row--scope .acp-ts__field--grow:not(.acp-ts__field--layer) {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.si-its-float .acp-ts__toolbar-row--scope .acp-ts__field--layer {
+  flex: 1.2 1 0;
+  min-width: 0;
+}
+
+.si-its-float .acp-ts__toolbar-row--scope .acp-ts-layer-select,
+.si-its-float .acp-ts__toolbar-row--scope .acp-ts-layer-select__trigger {
+  width: 100%;
+  min-width: 0;
+}
+
+.si-its-float.si-its-float--drawn-aoi .acp-ts__toolbar-row--scope .acp-ts__field--plot-source {
+  flex: 0 1 88px;
+  max-width: 104px;
+}
+
 .si-its-float .acp-ts__toolbar .acp-ts__field,
 .si-its-float .acp-ts__toolbar .acp-ts-layer-select {
   position: relative;

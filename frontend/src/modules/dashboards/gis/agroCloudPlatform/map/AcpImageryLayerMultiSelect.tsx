@@ -112,7 +112,11 @@ export function AcpImageryLayerMultiSelect({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listboxId}
-        onClick={() => setOpen(prev => !prev)}
+        onMouseDown={e => e.stopPropagation()}
+        onClick={e => {
+          e.stopPropagation()
+          setOpen(prev => !prev)
+        }}
       >
         <span className="acp-ts-layer-select__summary">{selectedSummary}</span>
         <span className="acp-ts-layer-select__count">
@@ -122,7 +126,18 @@ export function AcpImageryLayerMultiSelect({
       </button>
 
       {open ? (
-        <div id={listboxId} className="acp-ts-layer-select__menu" role="listbox" aria-multiselectable="true" aria-label={ariaLabel}>
+        <div
+          id={listboxId}
+          className="acp-ts-layer-select__menu"
+          role="listbox"
+          aria-multiselectable="true"
+          aria-label={ariaLabel}
+          onPointerDown={e => e.stopPropagation()}
+          onMouseDown={e => {
+            e.preventDefault()
+            e.stopPropagation()
+          }}
+        >
           <div className="acp-ts-layer-select__search-wrap">
             <i className="fa-solid fa-magnifying-glass acp-ts-layer-select__search-icon" aria-hidden />
             <input
@@ -152,6 +167,11 @@ export function AcpImageryLayerMultiSelect({
                         type="checkbox"
                         className="acp-ts-layer-select__checkbox"
                         checked={checked}
+                        onMouseDown={e => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                        }}
+                        onClick={e => e.stopPropagation()}
                         onChange={() => onSelectedIdsChange(toggleLayerId(selectedIds, opt.id))}
                       />
                       <span className="acp-ts-layer-select__option-text">

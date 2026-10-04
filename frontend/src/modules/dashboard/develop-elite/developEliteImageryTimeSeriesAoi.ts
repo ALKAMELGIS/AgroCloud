@@ -1,5 +1,6 @@
 import { computeStableGisFeatureKey } from '@/modules/gis/layers/gisFeatureStableKey'
 import { buildSiAoiFieldRecord, type SiAoiFieldRecord } from '@/modules/remote-sensing/imagery/siAoiFields'
+import { getDrawnGeometry } from '@/modules/remote-sensing/imagery/sentinelHubWmsAoiClip'
 import {
   SI_IMAGERY_COMMITTED_AOI_KEY,
   SI_IMAGERY_DRAWN_AOI_LABEL,
@@ -40,12 +41,8 @@ export function developEliteStructuresToAoiFields(
 export function developEliteCommittedAoiGeometry(
   clip: GeoJSON.FeatureCollection | null | undefined,
 ): GeoJSON.Geometry | null {
-  if (!clip?.features?.length) return null
-  for (const feature of clip.features) {
-    const geometry = feature.geometry
-    if (geometry?.type === 'Polygon' || geometry?.type === 'MultiPolygon') return geometry
-  }
-  return null
+  const geometry = getDrawnGeometry(clip ?? null)
+  return geometry ?? null
 }
 
 /** Develop Elite time series: only the user-drawn AOI (not portfolio / AgroLocation structures). */

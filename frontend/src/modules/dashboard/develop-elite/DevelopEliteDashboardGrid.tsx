@@ -13,12 +13,10 @@ import {
   DEVELOP_ELITE_GRID_BREAKPOINTS,
   DEVELOP_ELITE_GRID_COLS,
   DEVELOP_ELITE_GRID_ROW_HEIGHT,
-  coalesceDevelopEliteSidebarInLayout,
-  developEliteGridWidgetIdsForDisplay,
+  developEliteGridWidgetIds,
   developEliteCompactStackBreakpoint,
   developEliteNarrowGridRowPx,
   isDevelopEliteNarrowGridBreakpoint,
-  stretchBodyColumnsToGridBottom,
   type DevelopEliteGridBreakpoint,
   type DevelopEliteGridLayoutItem,
   type DevelopEliteResponsiveGridLayouts,
@@ -162,22 +160,15 @@ export function DevelopEliteDashboardGrid({
   }, [layoutBreakpoint, layouts])
 
   const displayLayout = draftLayout ?? activeLayout
-  layoutRef.current = activeLayout
+  layoutRef.current = displayLayout
   draftLayoutRef.current = draftLayout
 
-  const layoutForPaint = useMemo(() => {
-    if (layoutEditMode) return displayLayout
-    return coalesceDevelopEliteSidebarInLayout(displayLayout)
-  }, [displayLayout, layoutEditMode])
+  const layoutForPaint = displayLayout
 
   const narrowStackLayout =
     compactListLayout || isDevelopEliteNarrowGridBreakpoint(layoutBreakpoint)
   const rowCount = dragRowCountLocked ?? gridLayoutMaxRow(layoutForPaint)
-  const visualLayout = useMemo(() => {
-    if (layoutEditMode) return layoutForPaint
-    if (narrowStackLayout) return layoutForPaint
-    return stretchBodyColumnsToGridBottom(layoutForPaint, rowCount)
-  }, [layoutEditMode, layoutForPaint, narrowStackLayout, rowCount])
+  const visualLayout = layoutForPaint
 
   const setDraftLayoutLive = useCallback((next: DevelopEliteGridLayoutItem[] | null) => {
     draftLayoutRef.current = next
@@ -209,10 +200,7 @@ export function DevelopEliteDashboardGrid({
     return inner / cols
   }, [cols, width])
 
-  const widgetIds = useMemo(
-    () => developEliteGridWidgetIdsForDisplay(kpiCardIds, layoutEditMode),
-    [kpiCardIds, layoutEditMode],
-  )
+  const widgetIds = useMemo(() => developEliteGridWidgetIds(kpiCardIds), [kpiCardIds])
 
   useLayoutEffect(() => {
     const el = rootRef.current
@@ -255,9 +243,9 @@ export function DevelopEliteDashboardGrid({
 
   const patchActiveLayout = useCallback(
     (nextLayout: DevelopEliteGridLayoutItem[]) => {
-      onLayoutsChange({ ...layouts, [breakpoint]: nextLayout })
+      onLayoutsChange({ ...layouts, [layoutBreakpoint]: nextLayout })
     },
-    [breakpoint, layouts, onLayoutsChange],
+    [layoutBreakpoint, layouts, onLayoutsChange],
   )
 
   const patchAllBreakpoints = useCallback(
@@ -508,10 +496,25 @@ export function DevelopEliteDashboardGrid({
     return () => document.body.classList.remove('develop-elite--widget-dragging')
   }, [draggingId])
 
+  const prevLayoutEditModeRef = useRef(layoutEditMode)
+
   useEffect(() => {
+    const wasEditing = prevLayoutEditModeRef.current
+    prevLayoutEditModeRef.current = layoutEditMode
+
+    if (wasEditing && !layoutEditMode) {
+      const snapshot = draftLayoutRef.current ?? layoutRef.current
+      patchActiveLayout(snapshot)
+      setDraftLayoutLive(null)
+      notifyDevelopEliteLayoutChanged()
+      onLayoutCommit()
+    }
+
     if (layoutEditMode) return
     setOpenMenuWidgetId(null)
-    setDraftLayoutLive(null)
+    if (!wasEditing) {
+      setDraftLayoutLive(null)
+    }
     setDraggingId(null)
     setResizingId(null)
     setStackTargetId(null)
@@ -530,7 +533,7 @@ export function DevelopEliteDashboardGrid({
       'develop-elite--resize-nwse',
     )
     notifyDevelopEliteGridDrag(false)
-  }, [layoutEditMode, setDraftLayoutLive])
+  }, [layoutEditMode, onLayoutCommit, patchActiveLayout, setDraftLayoutLive])
 
   const beginResizeSession = useCallback(
     (item: DevelopEliteGridLayoutItem, edge: GridResizeEdge) => {

@@ -38,6 +38,11 @@ type Props = {
       | ((prev: DevelopEliteLayoutConfig) => Partial<DevelopEliteLayoutConfig>),
   ) => void
   persistLayout: () => void
+  commitLayoutPatch: (
+    patch?:
+      | Partial<DevelopEliteLayoutConfig>
+      | ((prev: DevelopEliteLayoutConfig) => Partial<DevelopEliteLayoutConfig>),
+  ) => void
   layoutEditMode: boolean
   onWidgetConfigure?: (widgetId: string, tab: 'data' | 'kpi' | 'charts' | 'map' | 'appearance') => void
 }
@@ -55,6 +60,7 @@ export function DevelopEliteAgroGridSection({
   setZoneSearch,
   nudgeLayout,
   persistLayout,
+  commitLayoutPatch,
   layoutEditMode,
   onWidgetConfigure,
 }: Props) {
@@ -489,6 +495,7 @@ export function DevelopEliteAgroGridSection({
     filteredZones,
     formatHeroArea,
     mapWidget,
+    commitLayoutPatch,
     nudgeLayout,
     persistLayout,
     setCountrySearch,
@@ -502,16 +509,13 @@ export function DevelopEliteAgroGridSection({
       <DevelopEliteDashboardGrid
         layouts={gridLayouts}
         kpiCardIds={kpiCardIds}
-        onLayoutsChange={next => nudgeLayout({ gridLayouts: next })}
-        onLayoutCommit={persistLayout}
+        onLayoutsChange={next => commitLayoutPatch({ gridLayouts: next })}
+        onLayoutCommit={() => {}}
         layoutEditMode={layoutEditMode}
         widgets={widgets}
         gridHiddenWidgets={gridHiddenWidgets}
         compactListLayout={compactViewport}
-        onGridHiddenWidgetsChange={ids => {
-          nudgeLayout({ gridHiddenWidgets: ids })
-          persistLayout()
-        }}
+        onGridHiddenWidgetsChange={ids => commitLayoutPatch({ gridHiddenWidgets: ids })}
         onWidgetConfigure={onWidgetConfigure}
       />
     </div>

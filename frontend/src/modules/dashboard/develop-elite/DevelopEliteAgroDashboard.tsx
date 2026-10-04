@@ -83,7 +83,8 @@ export default function DevelopEliteAgroDashboard() {
     return n.toLocaleString('en-US', { maximumFractionDigits: 1 })
   }, [])
 
-  const { layout, layoutStyle, nudgeLayout, persistLayout, undoLayout } = useDevelopEliteLiveLayout(
+  const { layout, layoutStyle, nudgeLayout, commitLayoutPatch, persistLayout, undoLayout } =
+    useDevelopEliteLiveLayout(
     data.config.layout,
     data.patchConfig,
   )
@@ -107,6 +108,10 @@ export default function DevelopEliteAgroDashboard() {
   const openSettings = useCallback((tab: SettingsTabId) => {
     setSettingsTab(tab)
     setSettingsOpen(true)
+  }, [])
+
+  const toggleLayoutEditMode = useCallback(() => {
+    setLayoutEditMode(on => !on)
   }, [])
 
   const visibleKpiCards = useMemo(
@@ -186,7 +191,7 @@ export default function DevelopEliteAgroDashboard() {
                 className={`develop-elite__layout-edit-btn${layoutEditMode ? ' is-active' : ''}`}
                 aria-pressed={layoutEditMode}
                 title={layoutEditMode ? 'Finish editing layout' : 'Edit dashboard layout'}
-                onClick={() => setLayoutEditMode(on => !on)}
+                onClick={toggleLayoutEditMode}
               >
                 <i className={`fa-solid ${layoutEditMode ? 'fa-check' : 'fa-table-columns'}`} aria-hidden />
                 <span>{layoutEditMode ? 'Done' : 'Edit layout'}</span>
@@ -253,6 +258,7 @@ export default function DevelopEliteAgroDashboard() {
         setZoneSearch={setZoneSearch}
         nudgeLayout={nudgeLayout}
         persistLayout={persistLayout}
+        commitLayoutPatch={commitLayoutPatch}
         layoutEditMode={layoutEditMode}
         onWidgetConfigure={(_, tab) => openSettings(tab)}
       />

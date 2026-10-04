@@ -88,14 +88,16 @@ function writeSavedSize(s: SavedSize, storageKey: string) {
   }
 }
 
-function clampDefaultSize(): SavedSize {
+function clampDefaultSize(overrides?: Partial<SavedSize>): SavedSize {
   const pad = VIEWPORT_PAD;
   const headH = 38;
+  const targetW = overrides?.w ?? DEFAULT_SIZE.w;
+  const targetH = overrides?.h ?? DEFAULT_SIZE.h;
   return {
-    w: Math.min(MAX_W, Math.max(MIN_W, Math.min(DEFAULT_SIZE.w, window.innerWidth - pad * 2))),
+    w: Math.min(MAX_W, Math.max(MIN_W, Math.min(targetW, window.innerWidth - pad * 2))),
     h: Math.min(
       MAX_BODY_H,
-      Math.max(MIN_BODY_H, Math.min(DEFAULT_SIZE.h, window.innerHeight - headH - pad * 2)),
+      Math.max(MIN_BODY_H, Math.min(targetH, window.innerHeight - headH - pad * 2)),
     ),
   };
 }
@@ -104,8 +106,8 @@ function readInitialPos(storageKey: string): SavedPos {
   return readSavedPos(storageKey) ?? DEFAULT_POS;
 }
 
-function readInitialSize(storageKey: string): SavedSize {
-  return readSavedSize(storageKey) ?? clampDefaultSize();
+function readInitialSize(storageKey: string, overrides?: Partial<SavedSize>): SavedSize {
+  return readSavedSize(storageKey) ?? clampDefaultSize(overrides);
 }
 
 function clampToViewport(x: number, y: number, elW: number, elH: number): SavedPos {
@@ -142,6 +144,8 @@ export type SiImageryTimeSeriesFloatingPanelProps = {
   eagerPanel?: boolean;
   drawnAoiOnly?: boolean;
   chartLookbackDays?: number;
+  /** First-open size when nothing is saved in localStorage (Develop Elite uses a wider toolbar). */
+  defaultPanelSize?: Partial<SavedSize>;
 };
 
 type PanelBodyProps = Omit<
@@ -170,6 +174,7 @@ export function SiImageryTimeSeriesFloatingPanel({
   eagerPanel = false,
   drawnAoiOnly = false,
   chartLookbackDays,
+  defaultPanelSize,
 }: SiImageryTimeSeriesFloatingPanelProps) {
   const { scopedStorageKey } = useSiInstanceScope();
   const posStorageKey = scopedStorageKey(POS_KEY_BASE);
@@ -188,7 +193,7 @@ export function SiImageryTimeSeriesFloatingPanel({
     startH: number;
   } | null>(null);
   const [pos, setPos] = useState<SavedPos>(() => readInitialPos(posStorageKey));
-  const [size, setSize] = useState<SavedSize>(() => readInitialSize(sizeStorageKey));
+  const [size, setSize] = useState<SavedSize>(() => readInitialSize(sizeStorageKey, defaultPanelSize));
   const [dragging, setDragging] = useState(false);
   const [resizing, setResizing] = useState(false);
   const [mountHeavyPanel, setMountHeavyPanel] = useState(false);
@@ -237,14 +242,14 @@ export function SiImageryTimeSeriesFloatingPanel({
     }
     if (anchoredOpenRef.current || !containerRef.current) return;
     const anchor = containerRef.current.getBoundingClientRect();
-    const nextSize = clampDefaultSize();
+    const nextSize = clampDefaultSize(defaultPanelSize);
     const headH = 38;
     setSize(nextSize);
     setPos(
       clampToViewport(anchor.left + 12, anchor.top + 56, nextSize.w, nextSize.h + headH),
     );
     anchoredOpenRef.current = true;
-  }, [containerRef, open]);
+  }, [containerRef, defaultPanelSize, open]);
 
   useLayoutEffect(() => {
     if (!open || !rootRef.current) return;
@@ -431,6 +436,7 @@ export function SiImageryTimeSeriesFloatingPanel({
       ref={rootRef}
       className={
         'si-its-float acp-shell acp-map-panel acp-map-panel--timeseries si-its-float--sized' +
+        (drawnAoiOnly ? ' si-its-float--drawn-aoi' : '') +
         (dragging ? ' si-its-float--dragging' : '') +
         (resizing ? ' si-its-float--resizing' : '')
       }

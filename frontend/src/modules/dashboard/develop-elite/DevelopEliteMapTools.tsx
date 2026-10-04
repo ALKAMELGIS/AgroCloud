@@ -37,6 +37,7 @@ type PanelId = 'search' | 'layers' | 'satellite' | 'basemap' | null
 type ToolbarProps = {
   mapRef: RefObject<LeafletMap | null>
   rootRef: RefObject<HTMLDivElement | null>
+  viewportRef: RefObject<HTMLDivElement | null>
   geojson: GeoJSON.FeatureCollection
   treesGeojson?: GeoJSON.FeatureCollection | null
   agriLocationGeojson?: GeoJSON.FeatureCollection | null
@@ -205,6 +206,7 @@ export function DevelopEliteMapTransientPin({ position }: { position: [number, n
 export function DevelopEliteMapTools({
   mapRef,
   rootRef,
+  viewportRef,
   geojson,
   treesGeojson,
   agriLocationGeojson,
@@ -439,6 +441,11 @@ export function DevelopEliteMapTools({
         <div
           className={`develop-elite-map__panel${panel === 'layers' ? ' develop-elite-map__panel--layers' : ''}${panel === 'satellite' ? ' develop-elite-map__panel--satellite' : ''}`}
           ref={panelRef}
+          onPointerDown={e => e.stopPropagation()}
+          onMouseDown={e => e.stopPropagation()}
+          onClick={e => e.stopPropagation()}
+          onDoubleClick={e => e.stopPropagation()}
+          onWheel={e => e.stopPropagation()}
           role="dialog"
           aria-label={
             panel === 'search'
@@ -492,7 +499,7 @@ export function DevelopEliteMapTools({
           {panel === 'satellite' ? (
             <div className="develop-elite-map__panel-satellite">
               <p className="develop-elite-map__panel-title">Satellite Intelligence</p>
-              <DevelopEliteMapLayerLivePanel />
+              <DevelopEliteMapLayerLivePanel menuBoundsRef={viewportRef} />
             </div>
           ) : null}
           {panel === 'basemap' ? (

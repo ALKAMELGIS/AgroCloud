@@ -7,22 +7,23 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type RefObject,
 } from 'react'
 import { useMap } from 'react-leaflet'
 import L from 'leaflet'
-import type { Map as LeafletMap, TileLayer } from 'leaflet'
+import type { Map as LeafletMap } from 'leaflet'
 import { resolveSiSentinelAoiWmsBoundsLngLat } from '@/modules/remote-sensing/imagery/siSentinelAoiWmsStack'
 import { RemoteSensingLayerLiveStrip } from '@/modules/remote-sensing/imagery/RemoteSensingLayerLiveStrip'
 import '@/modules/remote-sensing/imagery/RemoteSensingPanel.css'
 import {
   SI_DEFAULT_LIVE_WMS_LAYER,
-  SI_SENTINEL_WMS_MAP_DISPLAY_MIN_ZOOM,
   type SentinelHubWmsLayerInfo,
 } from '@/modules/remote-sensing/imagery/sentinelHubWmsLayers'
 import {
-  createSentinelHubBboxTileLayer,
-  updateSentinelHubBboxTileLayerUrl,
-} from '@/modules/remote-sensing/imagery/sentinelHubWmsLeaflet'
+  clearDevelopEliteLayerLiveMounted,
+  syncDevelopEliteLayerLiveMounted,
+  type DevelopEliteLayerLiveMountedEntry,
+} from './developEliteMapLayerLiveMount'
 import {
   buildDevelopEliteLayerLiveLayerGroups,
   buildDevelopEliteLayerLiveTilePlans,
@@ -234,14 +235,6 @@ function ensureLayerLivePane(map: LeafletMap): HTMLElement {
   return map.getPane(name)!
 }
 
-type MountedLiveEntry = { layer: TileLayer; url: string }
-
-function clearMountedLayerLive(map: LeafletMap, mounted: MountedLiveEntry[]) {
-  for (const entry of mounted) {
-    map.removeLayer(entry.layer)
-  }
-}
-
 export function DevelopEliteMapLayerLiveEngine() {
   const map = useMap()
   const ctx = useDevelopEliteMapLayerLive()
@@ -249,24 +242,23 @@ export function DevelopEliteMapLayerLiveEngine() {
   const insight = useDevelopEliteMapInsight()
   const mapSwipeOpen = insight?.tool === 'swipe'
   const { clipSource, layerLiveActive, layerValue, wmsDate, cloudCoverage, setLayerLiveStatus } = ctx
-  const mountedRef = useRef<MountedLiveEntry[]>([])
-  const tileErrorTimerRef = useRef<number | null>(null)
-  const sawTileLoadRef = useRef(false)
+  const mountedRef = useRef<DevelopEliteLayerLiveMountedEntry[]>([])
   const drawClipSignature = draw?.clipGeoJson ? JSON.stringify(draw.clipGeoJson) : ''
 
   const syncTiles = useCallback(() => {
     ensureLayerLivePane(map)
 
     if (!layerLiveActive || mapSwipeOpen) {
-      clearMountedLayerLive(map, mountedRef.current)
+      clearDevelopEliteLayerLiveMounted(map, mountedRef.current)
       mountedRef.current = []
       if (!mapSwipeOpen) setLayerLiveStatus('')
       return
     }
 
-    if (!developEliteLayerLiveHasDrawnAoiClip(draw?.clipGeoJson)) {
+    const liveClip = draw?.clipGeoJson ?? clipSource
+    if (!developEliteLayerLiveHasDrawnAoiClip(liveClip)) {
       setLayerLiveStatus('Draw an AOI with Edit (DRAW) to show Layer Live inside the sketch only.')
-      clearMountedLayerLive(map, mountedRef.current)
+      clearDevelopEliteLayerLiveMounted(map, mountedRef.current)
       mountedRef.current = []
       return
     }
@@ -274,86 +266,44 @@ export function DevelopEliteMapLayerLiveEngine() {
     const plans = buildDevelopEliteLayerLiveTilePlans({
       layerId: layerValue,
       isoDate: wmsDate,
-      clipSource,
+      clipSource: liveClip,
       cloudCoverage,
     })
-    const aoiBounds = resolveSiSentinelAoiWmsBoundsLngLat(clipSource ?? draw?.clipGeoJson)
+    const aoiBounds = resolveSiSentinelAoiWmsBoundsLngLat(liveClip)
 
     if (!plans.length || !aoiBounds) {
       setLayerLiveStatus(
         'Cannot load imagery for this drawn AOI — check Sentinel Hub credentials or pick another date.',
       )
-      clearMountedLayerLive(map, mountedRef.current)
+      clearDevelopEliteLayerLiveMounted(map, mountedRef.current)
       mountedRef.current = []
       return
     }
 
     setLayerLiveStatus('')
-    sawTileLoadRef.current = false
-    if (tileErrorTimerRef.current != null) {
-      window.clearTimeout(tileErrorTimerRef.current)
-      tileErrorTimerRef.current = null
-    }
-
     const lat = map.getCenter().lat
-    const nextMounted: MountedLiveEntry[] = []
-
-    const scheduleLoadFailureStatus = () => {
-      if (tileErrorTimerRef.current != null) window.clearTimeout(tileErrorTimerRef.current)
-      tileErrorTimerRef.current = window.setTimeout(() => {
-        tileErrorTimerRef.current = null
-        if (!sawTileLoadRef.current) {
-          setLayerLiveStatus(
-            `${layerValue || 'Index'} failed to load — verify Sentinel Hub token and imagery date.`,
-          )
-        }
-      }, 12_000)
-    }
-
-    let watchTileLoad = false
-
-    plans.forEach((plan, planIndex) => {
-      const prev = mountedRef.current[planIndex]
-      if (prev && map.hasLayer(prev.layer)) {
-        if (prev.url === plan.url) {
-          nextMounted.push(prev)
-          return
-        }
-        updateSentinelHubBboxTileLayerUrl(prev.layer, plan.url)
-        nextMounted.push({ layer: prev.layer, url: plan.url })
-        watchTileLoad = true
-        return
-      }
-
-      watchTileLoad = true
-      const layer = createSentinelHubBboxTileLayer(plan.url, {
+    mountedRef.current = syncDevelopEliteLayerLiveMounted(
+      map,
+      {
         pane: DEVELOP_ELITE_LAYER_LIVE_PANE,
-        opacity: 0.9,
-        stableDuringInteraction: true,
-        minZoom: SI_SENTINEL_WMS_MAP_DISPLAY_MIN_ZOOM,
+        plans,
+        clipSource: liveClip,
         latitudeDeg: lat,
-        crossOrigin: null,
-      })
-      layer.on('tileload', () => {
-        sawTileLoadRef.current = true
-        setLayerLiveStatus('')
-        if (tileErrorTimerRef.current != null) {
-          window.clearTimeout(tileErrorTimerRef.current)
-          tileErrorTimerRef.current = null
-        }
-      })
-      layer.on('tileerror', scheduleLoadFailureStatus)
-      layer.addTo(map)
-      nextMounted.push({ layer, url: plan.url })
-    })
+        opacity: 0.92,
+      },
+      mountedRef.current,
+    )
 
-    for (const entry of mountedRef.current) {
-      if (!nextMounted.some(n => n.layer === entry.layer)) {
-        map.removeLayer(entry.layer)
-      }
+    const imageEntry = mountedRef.current.find(e => e.kind === 'image')
+    if (imageEntry?.kind === 'image') {
+      imageEntry.layer.off('error')
+      imageEntry.layer.on('error', () => {
+        setLayerLiveStatus(
+          `${layerValue || 'Index'} failed to load — verify Sentinel Hub token and imagery date.`,
+        )
+      })
+      imageEntry.layer.once('load', () => setLayerLiveStatus(''))
     }
-    mountedRef.current = nextMounted
-    if (watchTileLoad) scheduleLoadFailureStatus()
   }, [
     clipSource,
     cloudCoverage,
@@ -370,14 +320,21 @@ export function DevelopEliteMapLayerLiveEngine() {
   useEffect(() => {
     syncTiles()
     return () => {
-      if (tileErrorTimerRef.current != null) {
-        window.clearTimeout(tileErrorTimerRef.current)
-        tileErrorTimerRef.current = null
-      }
-      clearMountedLayerLive(map, mountedRef.current)
+      clearDevelopEliteLayerLiveMounted(map, mountedRef.current)
       mountedRef.current = []
     }
   }, [map, syncTiles])
+
+  useEffect(() => {
+    if (!layerLiveActive || mapSwipeOpen) return
+    const onViewport = () => syncTiles()
+    map.on('zoomend', onViewport)
+    map.on('moveend', onViewport)
+    return () => {
+      map.off('zoomend', onViewport)
+      map.off('moveend', onViewport)
+    }
+  }, [layerLiveActive, map, mapSwipeOpen, syncTiles])
 
   useEffect(() => {
     if (!layerLiveActive) return
@@ -426,7 +383,11 @@ export function DevelopEliteMapLayerLiveDrawBridge() {
   return null
 }
 
-export function DevelopEliteMapLayerLivePanel() {
+export function DevelopEliteMapLayerLivePanel({
+  menuBoundsRef,
+}: {
+  menuBoundsRef?: RefObject<HTMLElement | null>
+} = {}) {
   const {
     layerLiveStatus,
     wmsDate,
@@ -452,6 +413,8 @@ export function DevelopEliteMapLayerLivePanel() {
         layerSelectMenuPortal
         layerSelectRootClassName="si-rs-panel-select"
         layerSelectMenuClassName="develop-elite-map__layer-select-menu"
+        layerSelectMenuBoundsRef={menuBoundsRef}
+        layerSelectMenuMaxHeight={220}
         wmsDate={wmsDate}
         onWmsDateChange={onWmsDateChange}
         onResetImageryDateAuto={onResetImageryDateAuto}

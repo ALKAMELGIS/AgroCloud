@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import type { RemoteSensingLayerSelectGroup } from '../indices/agroCompositeIndices'
 import { formatLayerSelectScienceLabel } from './remoteSensingLayerDisplay'
@@ -20,6 +20,9 @@ type RemoteSensingLayerSelectProps = {
   menuPortal?: boolean
   menuClassName?: string
   menuMinWidth?: number
+  menuMaxHeight?: number
+  /** When set with `menuPortal`, menu stays inside this element (map viewport). */
+  menuBoundsRef?: RefObject<HTMLElement | null>
   'aria-label'?: string
 }
 
@@ -40,6 +43,25 @@ function layerOptionTitle(opt: { label: string; scientificName?: string }): stri
   return science ? `${opt.label} — ${science}` : opt.label
 }
 
+/** Prevent Leaflet / map underlays from receiving the same pointer sequence (ghost clicks). */
+function blockMapPointerBubble(event: React.MouseEvent | React.PointerEvent) {
+  event.stopPropagation()
+}
+
+function blockMapPointerDefault(event: React.MouseEvent) {
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+function selectLayerOption(
+  layerId: string,
+  onChange: (layerId: string) => void,
+  setOpen: (open: boolean) => void,
+) {
+  onChange(layerId)
+  setOpen(false)
+}
+
 export function RemoteSensingLayerSelect({
   groups = [],
   value,
@@ -53,6 +75,8 @@ export function RemoteSensingLayerSelect({
   menuPortal = false,
   menuClassName,
   menuMinWidth = 200,
+  menuMaxHeight = 480,
+  menuBoundsRef,
   'aria-label': ariaLabel = 'Layer',
 }: RemoteSensingLayerSelectProps) {
   const listboxId = useId()
@@ -63,9 +87,10 @@ export function RemoteSensingLayerSelect({
   const searchRef = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const menuStyle = useSiRsSelectMenuPosition(menuPortal && open, triggerRef, {
+  const { menuStyle, backdropStyle } = useSiRsSelectMenuPosition(menuPortal && open, triggerRef, {
     minWidth: menuMinWidth,
-    maxHeightCap: 480,
+    maxHeightCap: menuMaxHeight,
+    boundsRef: menuBoundsRef,
   })
 
   const triggerClass =
@@ -117,7 +142,7 @@ export function RemoteSensingLayerSelect({
     const t = window.setTimeout(() => {
       searchRef.current?.focus({ preventScroll: true })
     }, 0)
-    const onPointerDown = (event: MouseEvent) => {
+    const onPointerDown = (event: PointerEvent) => {
       const t = event.target as Node
       if (rootRef.current?.contains(t) || menuRef.current?.contains(t)) return
       setOpen(false)
@@ -125,11 +150,11 @@ export function RemoteSensingLayerSelect({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpen(false)
     }
-    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('pointerdown', onPointerDown, true)
     document.addEventListener('keydown', onKeyDown)
     return () => {
       window.clearTimeout(t)
-      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('pointerdown', onPointerDown, true)
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [open])
@@ -159,6 +184,8 @@ export function RemoteSensingLayerSelect({
       role="listbox"
       aria-label={ariaLabel}
       style={menuPortal ? menuStyle : undefined}
+      onPointerDown={blockMapPointerBubble}
+      onMouseDown={blockMapPointerBubble}
     >
       <div className="si-rs-layer-select__search-wrap">
         <i className="fa-solid fa-magnifying-glass si-rs-layer-select__search-icon" aria-hidden />
@@ -189,10 +216,11 @@ export function RemoteSensingLayerSelect({
                   aria-selected={active}
                   className={`si-rs-layer-select__option${active ? ' is-active' : ''}`}
                   title={layerOptionTitle(opt)}
-                  onClick={() => {
-                    onChange(opt.id)
-                    setOpen(false)
+                  onMouseDown={e => {
+                    blockMapPointerDefault(e)
+                    selectLayerOption(opt.id, onChange, setOpen)
                   }}
+                  onClick={blockMapPointerDefault}
                 >
                   <span className="si-rs-layer-select__abbr">{opt.label}</span>
                   {science ? <span className="si-rs-layer-select__science">{science}</span> : null}
@@ -239,12 +267,28 @@ export function RemoteSensingLayerSelect({
         aria-controls={listboxId}
         disabled={disabled}
         title={selected ? layerOptionTitle(selected) : selectedLabel}
-        onClick={() => setOpen(prev => !prev)}
+        onMouseDown={blockMapPointerBubble}
+        onClick={e => {
+          blockMapPointerBubble(e)
+          setOpen(prev => !prev)
+        }}
       >
         <span className="si-rs-layer-select__abbr">{selectedLabel}</span>
         <span className="si-rs-layer-select__chevron" aria-hidden />
       </button>
 
+      {menuPortal && open && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              className="si-rs-layer-select__menu-backdrop"
+              style={backdropStyle}
+              aria-hidden
+              onPointerDown={blockMapPointerBubble}
+              onMouseDown={blockMapPointerDefault}
+            />,
+            document.body,
+          )
+        : null}
       {menuPortal && menu && typeof document !== 'undefined'
         ? createPortal(menu, document.body)
         : menu}

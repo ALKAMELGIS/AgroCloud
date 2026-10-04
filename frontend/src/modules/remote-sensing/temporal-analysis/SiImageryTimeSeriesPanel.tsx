@@ -1701,8 +1701,9 @@ export function SiImageryTimeSeriesPanel({
   )
 
   return (
-    <div className="acp-ts">
+    <div className={`acp-ts${drawnAoiOnly ? ' acp-ts--drawn-aoi-only' : ''}`}>
         <div className="acp-ts__toolbar">
+          <div className="acp-ts__toolbar-row acp-ts__toolbar-row--scope">
           <div className="acp-ts__field acp-ts__field--plot-source">
             <span className="acp-ts__field-label">Plot Layer</span>
             <select
@@ -1820,6 +1821,7 @@ export function SiImageryTimeSeriesPanel({
                 setSelectedLayerIds(ids)
               }}
             />
+          </div>
           </div>
           <div className="acp-ts__date-range">
             {analysisMode === 'multi-layer-aoi-comparison' ? (

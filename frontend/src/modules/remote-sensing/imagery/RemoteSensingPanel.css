@@ -775,6 +775,12 @@
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.62);
 }
 
+/* Full-screen catcher while portaled INDEX LAYER menu is open — blocks Leaflet ghost clicks. */
+.si-rs-layer-select__menu-backdrop {
+  background: transparent;
+  pointer-events: auto;
+}
+
 .si-rs-panel-select .si-rs-layer-select__option {
   color: rgba(248, 250, 252, 0.94);
 }
