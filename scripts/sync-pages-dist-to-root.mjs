@@ -23,6 +23,7 @@ const managedTopLevel = [
   'sw.js',
   'agrocloud-logo.png',
   'agrocloud-logo-core.png',
+  'agrocloud-pwa-logo.png',
   'agrocloud-mark-leaves.png',
   'elite-agro-logo-white.png',
   'favicon.png',
@@ -33,6 +34,7 @@ const managedTopLevel = [
   'apple-touch-icon-167.png',
   'pwa-192x192.png',
   'pwa-512x512.png',
+  'maskable-192x192.png',
   'maskable-512x512.png',
 ]
 
