@@ -1233,3 +1233,36 @@
   background: linear-gradient(180deg, rgba(20, 26, 38, 0.9) 0%, rgba(7, 10, 17, 0.9) 100%);
   border-color: rgba(255, 255, 255, 0.12);
 }
+
+.si-map-toolbox-layer-live-strip {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+:is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-map-toolbox-layer-live-strip {
+  border-top-color: rgba(15, 23, 42, 0.1);
+}
+
+.si-map-toolbox-layer-live-strip__toggle {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.si-map-toolbox-layer-live-strip__toggle .si-layer-live-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.si-map-toolbox-layer-live-strip__toggle-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}

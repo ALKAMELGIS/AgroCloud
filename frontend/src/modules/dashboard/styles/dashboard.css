@@ -1,0 +1,5 @@
+/**
+ * Develop Elite dashboard styles (namespaced under `.develop-elite-dashboard` + `.develop-elite`).
+ * Import only from the dashboard module entry component.
+ */
+@import '../develop-elite/develop-elite-dashboard.css';

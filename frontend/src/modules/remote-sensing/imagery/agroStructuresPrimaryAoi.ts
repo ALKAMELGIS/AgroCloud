@@ -127,7 +127,7 @@ export function resolveAgroStructuresFeatureAreaHa(
   props: Record<string, unknown>,
   geometry: unknown,
 ): number {
-  const fromAttr = props.Area_ha ?? props.AREA_HA ?? props.area_ha
+  const fromAttr = props.Area_Ha ?? props.Area_ha ?? props.AREA_HA ?? props.area_ha
   const attrNum = Number(fromAttr)
   if (Number.isFinite(attrNum) && attrNum > 0) return attrNum
   if (isPolygonalAoiGeometry(geometry)) {
@@ -821,12 +821,98 @@ export function findAgroStructuresFeatureByKey(
   return null
 }
 
-export function buildAgroStructuresQueryUrl(token?: string, resultOffset = 0): string {
+function parseAgroStructuresServiceBase(layerUrl: string): string | null {
+  const trimmed = String(layerUrl || '')
+    .trim()
+    .replace(/[?#].*$/, '')
+    .replace(/\/+$/, '')
+  const match = trimmed.match(/^(.*\/agro_structures\/featureserver)\/\d+$/i)
+  return match ? match[1]! : null
+}
+
+/**
+ * REST query endpoints for Agro_Structures polygons.
+ * Portal viewer ids (e.g. /27) are not GeoJSON-queryable — layer 0 is tried before 21.
+ */
+export function agroStructuresGeoJsonQueryLayerUrls(layerUrl?: string): string[] {
+  const trimmed = String(layerUrl || AGRO_STRUCTURES_FS21_URL)
+    .trim()
+    .replace(/[?#].*$/, '')
+    .replace(/\/+$/, '')
+  const serviceBase = parseAgroStructuresServiceBase(trimmed)
+  if (serviceBase) {
+    const layerId = Number(trimmed.split('/').pop())
+    if (layerId === 0) return [`${serviceBase}/0`]
+    if (layerId === 1) return [`${serviceBase}/0`]
+    return [`${serviceBase}/0`, `${serviceBase}/21`]
+  }
+  return [resolveAgroStructuresLayerUrl(trimmed)]
+}
+
+function appendAgroStructuresQueryToken(url: string, token?: string): string {
+  if (!token?.trim()) return url
+  return `${url}&token=${encodeURIComponent(token.trim())}`
+}
+
+export function buildAgroStructuresQueryUrl(
+  token?: string,
+  resultOffset = 0,
+  layerEndpoint = AGRO_STRUCTURES_FS21_URL,
+): string {
+  const endpoint = String(layerEndpoint || AGRO_STRUCTURES_FS21_URL)
+    .trim()
+    .replace(/[?#].*$/, '')
+    .replace(/\/+$/, '')
   const base =
-    `${AGRO_STRUCTURES_FS21_URL}/query?where=1%3D1&outFields=*&returnGeometry=true&outSR=4326&f=geojson` +
+    `${endpoint}/query?where=1%3D1&outFields=*&returnGeometry=true&outSR=4326&f=geojson` +
     `&resultRecordCount=${AGRO_STRUCTURES_QUERY_PAGE_SIZE}&resultOffset=${resultOffset}`
-  if (!token?.trim()) return base
-  return `${base}&token=${encodeURIComponent(token.trim())}`
+  return appendAgroStructuresQueryToken(base, token)
+}
+
+function isRetryableAgroStructuresQueryHttpError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false
+  return /\((400|403|404)\)/.test(err.message)
+}
+
+async function readAgroStructuresQueryError(res: Response): Promise<string> {
+  try {
+    const data = (await res.json()) as { error?: { message?: string; details?: string[] } }
+    const detail = data?.error?.message || data?.error?.details?.[0]
+    return detail ? `: ${detail}` : ''
+  } catch {
+    return ''
+  }
+}
+
+async function fetchAgroStructuresGeoJsonFromEndpoint(
+  layerEndpoint: string,
+  token?: string,
+): Promise<{ type: 'FeatureCollection'; features: unknown[] }> {
+  const features: unknown[] = []
+  let offset = 0
+  for (let page = 0; page < 50; page++) {
+    const res = await fetch(buildAgroStructuresQueryUrl(token, offset, layerEndpoint))
+    if (!res.ok) {
+      const detail = await readAgroStructuresQueryError(res)
+      throw new Error(`Agro_Structures query failed (${res.status})${detail}`)
+    }
+    const data = (await res.json()) as {
+      type?: string
+      features?: unknown[]
+      properties?: { exceededTransferLimit?: boolean }
+      error?: { message?: string }
+    }
+    if (data?.error?.message) throw new Error(data.error.message)
+    if (data?.type !== 'FeatureCollection' || !Array.isArray(data.features)) {
+      throw new Error('Agro_Structures did not return GeoJSON features.')
+    }
+    features.push(...data.features)
+    if (!data.properties?.exceededTransferLimit || data.features.length < AGRO_STRUCTURES_QUERY_PAGE_SIZE) {
+      return { type: 'FeatureCollection', features }
+    }
+    offset += AGRO_STRUCTURES_QUERY_PAGE_SIZE
+  }
+  return { type: 'FeatureCollection', features }
 }
 
 /** ArcGIS envelope query — server-side Structure_Type filter + spatial intersects (viewport lazy load). */
@@ -834,7 +920,12 @@ export function buildAgroStructuresBboxQueryUrl(
   bbox: LngLatBBox,
   token?: string,
   resultOffset = 0,
+  layerEndpoint = AGRO_STRUCTURES_FS21_URL,
 ): string {
+  const endpoint = String(layerEndpoint || AGRO_STRUCTURES_FS21_URL)
+    .trim()
+    .replace(/[?#].*$/, '')
+    .replace(/\/+$/, '')
   const where = encodeURIComponent(agroStructuresSentinelMaskSqlWhere())
   const geometry = encodeURIComponent(
     JSON.stringify({
@@ -846,17 +937,17 @@ export function buildAgroStructuresBboxQueryUrl(
     }),
   )
   const base =
-    `${AGRO_STRUCTURES_FS21_URL}/query?where=${where}&geometry=${geometry}` +
+    `${endpoint}/query?where=${where}&geometry=${geometry}` +
     `&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects` +
     `&outFields=*&returnGeometry=true&outSR=4326&f=geojson` +
     `&resultRecordCount=${AGRO_STRUCTURES_QUERY_PAGE_SIZE}&resultOffset=${resultOffset}`
-  if (!token?.trim()) return base
-  return `${base}&token=${encodeURIComponent(token.trim())}`
+  return appendAgroStructuresQueryToken(base, token)
 }
 
 /** Fetch Farm Plots + PIVOT features intersecting a WGS84 bounding box (paginated). */
-export async function fetchAgroStructuresGeoJsonInBbox(
+async function fetchAgroStructuresGeoJsonInBboxFromEndpoint(
   bbox: LngLatBBox,
+  layerEndpoint: string,
   token?: string,
   signal?: AbortSignal,
 ): Promise<{ type: 'FeatureCollection'; features: unknown[] }> {
@@ -864,13 +955,18 @@ export async function fetchAgroStructuresGeoJsonInBbox(
   let offset = 0
   for (let page = 0; page < 20; page++) {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-    const res = await fetch(buildAgroStructuresBboxQueryUrl(bbox, token, offset), { signal })
-    if (!res.ok) throw new Error(`Agro_Structures bbox query failed (${res.status})`)
+    const res = await fetch(buildAgroStructuresBboxQueryUrl(bbox, token, offset, layerEndpoint), { signal })
+    if (!res.ok) {
+      const detail = await readAgroStructuresQueryError(res)
+      throw new Error(`Agro_Structures bbox query failed (${res.status})${detail}`)
+    }
     const data = (await res.json()) as {
       type?: string
       features?: unknown[]
       properties?: { exceededTransferLimit?: boolean }
+      error?: { message?: string }
     }
+    if (data?.error?.message) throw new Error(data.error.message)
     if (data?.type !== 'FeatureCollection' || !Array.isArray(data.features)) {
       throw new Error('Agro_Structures bbox query did not return GeoJSON features.')
     }
@@ -881,6 +977,25 @@ export async function fetchAgroStructuresGeoJsonInBbox(
     offset += AGRO_STRUCTURES_QUERY_PAGE_SIZE
   }
   return { type: 'FeatureCollection', features }
+}
+
+export async function fetchAgroStructuresGeoJsonInBbox(
+  bbox: LngLatBBox,
+  token?: string,
+  signal?: AbortSignal,
+  layerUrl?: string,
+): Promise<{ type: 'FeatureCollection'; features: unknown[] }> {
+  const candidates = agroStructuresGeoJsonQueryLayerUrls(layerUrl)
+  let lastError: Error | null = null
+  for (const endpoint of candidates) {
+    try {
+      return await fetchAgroStructuresGeoJsonInBboxFromEndpoint(bbox, endpoint, token, signal)
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e))
+      if (!isRetryableAgroStructuresQueryHttpError(lastError)) throw lastError
+    }
+  }
+  throw lastError ?? new Error('Agro_Structures bbox query failed')
 }
 
 /** Stable signature for layer-wide AOI mask — changes when features are added/edited/removed. */
@@ -912,28 +1027,22 @@ export function buildAgroStructuresLayerAoiMask(
   return { type: 'FeatureCollection', features }
 }
 
-export async function fetchAgroStructuresGeoJson(token?: string): Promise<{
+export async function fetchAgroStructuresGeoJson(
+  token?: string,
+  layerUrl?: string,
+): Promise<{
   type: 'FeatureCollection'
   features: unknown[]
 }> {
-  const features: unknown[] = []
-  let offset = 0
-  for (let page = 0; page < 50; page++) {
-    const res = await fetch(buildAgroStructuresQueryUrl(token, offset))
-    if (!res.ok) throw new Error(`Agro_Structures query failed (${res.status})`)
-    const data = (await res.json()) as {
-      type?: string
-      features?: unknown[]
-      properties?: { exceededTransferLimit?: boolean }
+  const candidates = agroStructuresGeoJsonQueryLayerUrls(layerUrl)
+  let lastError: Error | null = null
+  for (const endpoint of candidates) {
+    try {
+      return await fetchAgroStructuresGeoJsonFromEndpoint(endpoint, token)
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e))
+      if (!isRetryableAgroStructuresQueryHttpError(lastError)) throw lastError
     }
-    if (data?.type !== 'FeatureCollection' || !Array.isArray(data.features)) {
-      throw new Error('Agro_Structures did not return GeoJSON features.')
-    }
-    features.push(...data.features)
-    if (!data.properties?.exceededTransferLimit || data.features.length < AGRO_STRUCTURES_QUERY_PAGE_SIZE) {
-      return { type: 'FeatureCollection', features }
-    }
-    offset += AGRO_STRUCTURES_QUERY_PAGE_SIZE
   }
-  return { type: 'FeatureCollection', features }
+  throw lastError ?? new Error('Agro_Structures query failed')
 }

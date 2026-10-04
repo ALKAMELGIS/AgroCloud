@@ -32,6 +32,8 @@ export type SentinelHubLeafletTileLayerOptions = {
   stableDuringInteraction?: boolean
   /** Map latitude — aligns tile pixel size with Sentinel-2 GSD at current zoom. */
   latitudeDeg?: number
+  /** Omit for WMS display tiles (avoids CORS failures when the server omits ACAO). */
+  crossOrigin?: 'anonymous' | null
 }
 
 /**
@@ -56,7 +58,7 @@ export function createSentinelHubBboxTileLayer(
     zoomOffset: -1,
     minZoom: options.minZoom ?? 0,
     maxZoom: 22,
-    crossOrigin: 'anonymous',
+    ...(options.crossOrigin === 'anonymous' ? { crossOrigin: 'anonymous' as const } : {}),
     updateWhenIdle: options.stableDuringInteraction ?? false,
     updateWhenZooming: options.stableDuringInteraction ? false : true,
     keepBuffer: options.stableDuringInteraction ? 8 : 5,
@@ -78,6 +80,9 @@ export function createSentinelHubBboxTileLayer(
     el.className = SENTINEL_HUB_WMS_TILE_CLASS
     el.setAttribute('role', 'presentation')
     el.style.imageRendering = 'auto'
+    if (options.crossOrigin === 'anonymous') {
+      el.crossOrigin = 'anonymous'
+    }
 
     const onLoad = () => {
       ;(this as L.TileLayer & { _tileOnLoad: (d: L.DoneCallback, t: HTMLElement) => void })._tileOnLoad(done, el)

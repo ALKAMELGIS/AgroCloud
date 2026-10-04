@@ -50,7 +50,21 @@
   overflow: hidden;
 }
 
-/* —— Gallery —— */
+/* —— Gallery (blank index route) —— */
+.agrocloud-dashboards--blank {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+
+.agrocloud-dashboards__blank {
+  flex: 1;
+  min-height: 0;
+}
+
+/* —— Gallery (legacy markup; editor routes may still use shared tokens) —— */
 .agrocloud-dashboards__topnav {
   display: flex;
   align-items: center;
@@ -4273,6 +4287,12 @@ body.agrocloud-dashboard-element-resizing * {
   background: transparent;
   color: inherit;
   cursor: pointer;
+}
+
+.agrocloud-dashboard-canvas__refresh-btn {
+  flex-shrink: 0;
+  border-color: rgba(0, 0, 0, 0.12);
+  background: rgba(255, 255, 255, 0.85);
 }
 
 .agrocloud-dashboard-canvas__sidebar-empty {

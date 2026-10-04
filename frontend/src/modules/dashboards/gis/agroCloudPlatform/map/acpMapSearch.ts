@@ -35,7 +35,7 @@ function normalizeSearchText(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
-function scoreTextMatch(query: string, text: string): number {
+export function scoreTextMatch(query: string, text: string): number {
   const q = normalizeSearchText(query)
   const t = normalizeSearchText(text)
   if (!q || !t) return 0

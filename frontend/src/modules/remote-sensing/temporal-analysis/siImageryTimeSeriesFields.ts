@@ -315,7 +315,14 @@ function drawnAoiFieldOption(): AcpStructureFieldOption {
   }
 }
 
-/** Plot/AOI layers available for Time Series source picker (Layers panel + Drawn AOI). */
+/** Default plot layer when opening Time Series (drawn sketch wins over portfolio structures). */
+export function defaultSiImageryPlotSourceId(layers: SiImageryPlotSourceLayer[]): string {
+  if (!layers.length) return ''
+  const drawn = layers.find(s => s.id === SI_IMAGERY_PLOT_SOURCE_DRAWN)
+  return drawn?.id ?? layers[0]!.id
+}
+
+/** Plot/AOI layers available for Time Series source picker (Drawn AOI → Agro Structures → map layers). */
 export function listSiImageryPlotSourceLayers(
   agroStructuresMask: GeoJSON.FeatureCollection | null | undefined,
   aoiFields: SiAoiFieldRecord[],
@@ -338,7 +345,14 @@ export function listSiImageryPlotSourceLayers(
     }
   }
   vectorSources.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
-  sources.push(...vectorSources)
+
+  if (committedAoiGeometry) {
+    sources.push({
+      id: SI_IMAGERY_PLOT_SOURCE_DRAWN,
+      label: SI_IMAGERY_DRAWN_AOI_LABEL,
+      featureCount: 1,
+    })
+  }
 
   // Mask-only Agro path when the Layers panel does not yet expose the agro layer entry.
   const agroLayerListed = [...listedIds].some(id => {
@@ -349,7 +363,7 @@ export function listSiImageryPlotSourceLayers(
     const effectiveAgroMask = resolveEffectiveAgroStructuresMask(agroStructuresMask, vectorLayers)
     const agroOptions = buildBaseStructureFieldOptions(effectiveAgroMask, aoiFields)
     if (agroOptions.length) {
-      sources.unshift({
+      sources.push({
         id: SI_IMAGERY_PLOT_SOURCE_AGRO,
         label: 'Agro Structures',
         featureCount: agroOptions.length,
@@ -357,13 +371,7 @@ export function listSiImageryPlotSourceLayers(
     }
   }
 
-  if (committedAoiGeometry) {
-    sources.push({
-      id: SI_IMAGERY_PLOT_SOURCE_DRAWN,
-      label: SI_IMAGERY_DRAWN_AOI_LABEL,
-      featureCount: 1,
-    })
-  }
+  sources.push(...vectorSources)
   return sources
 }
 

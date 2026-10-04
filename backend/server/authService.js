@@ -479,6 +479,38 @@ export function registerAuthRoutes(app, opts) {
       return res.status(400).json({ ok: false, error: 'Password must be at least 8 characters.' })
     }
 
+    try {
+      const { tryIdentityLogin } = await import('./identity/identityLoginBridge.js')
+      const identityResult = await tryIdentityLogin(req, res, {
+        email,
+        password,
+        verifyPassword,
+      })
+      if (identityResult?.ok) {
+        addAuthEvent('login_success', { email, mode: 'identity_pg' })
+        return res.json({
+          ok: true,
+          user: identityResult.user,
+          permissions: identityResult.permissions,
+          identity: true,
+        })
+      }
+      if (identityResult?.failed) {
+        if (identityResult.reason === 'account_not_active') {
+          addAuthEvent('login_failed', { email, reason: 'account_not_active' })
+          return res.status(403).json({
+            ok: false,
+            error: 'Account is not active. Please contact User Management.',
+            code: 'account_not_active',
+          })
+        }
+        addAuthEvent('login_failed', { email, reason: identityResult.reason || 'invalid_credentials' })
+        return res.status(401).json({ ok: false, error: 'Invalid email or password.', code: 'invalid_credentials' })
+      }
+    } catch (identityErr) {
+      console.error('[auth] identity login fallback', identityErr)
+    }
+
     const { users, auditLog } = readUsers(filePath)
     const matches = findUserByEmail(users, email)
     if (!matches.length) {

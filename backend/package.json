@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "node server/index.js",
     "start": "node server/index.js",
-    "test": "node --test \"tests/**/*.test.js\""
+    "test": "node --test \"tests/**/*.test.js\"",
+    "identity:migrate": "node scripts/identity-migrate.js",
+    "identity:import": "node scripts/identity-import.js"
   },
   "dependencies": {
     "@gradio/client": "^2.3.0",
@@ -19,6 +21,7 @@
     "multer": "^2.2.0",
     "nodemailer": "^8.0.7",
     "openai": "^6.17.0",
+    "pg": "^8.23.1",
     "pngjs": "^7.0.0",
     "proj4": "^2.20.9",
     "ws": "^8.17.0",

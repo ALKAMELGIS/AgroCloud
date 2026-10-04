@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildSentinelHubWmsDisplayChunks,
+  extractOuterRingsWgs84,
   mergeWktChunkGroupsToCap,
   packOuterRingsIntoFixedBucketGroups,
   packOuterRingsIntoWktChunkGroups,
@@ -8,6 +9,28 @@ import {
   resolveLayersAoiWmsMaxTileLayers,
   SI_SENTINEL_AOI_WMS_HARD_MAX_SOURCES,
 } from './sentinelHubWmsAoiClip'
+
+describe('drawn circle AOI (Leaflet GeoJSON)', () => {
+  it('converts Point + radius to polygon rings for WMS dataMask clip', () => {
+    const fc = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { radius: 800 },
+          geometry: { type: 'Point', coordinates: [55.12, 25.08] },
+        },
+      ],
+    }
+    const rings = extractOuterRingsWgs84(fc)
+    expect(rings.length).toBe(1)
+    expect(rings[0]!.length).toBeGreaterThan(16)
+
+    const chunks = buildSentinelHubWmsDisplayChunks(fc, 'NDVI')
+    expect(chunks.length).toBeGreaterThan(0)
+    expect(chunks.some(part => part.geometryWkt3857 || part.evalscriptB64)).toBe(true)
+  })
+})
 
 describe('mergeWktChunkGroupsToCap', () => {
   it('merges groups to cap while retaining all rings (full coverage)', () => {

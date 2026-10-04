@@ -136,6 +136,23 @@ export const startSession = (user: Partial<CurrentUser> | null, options?: StartS
   }
 }
 
+const IDENTITY_PERMISSIONS_KEY = 'identityPermissions'
+
+function readServerPermissions(): string[] {
+  try {
+    const raw = localStorage.getItem(IDENTITY_PERMISSIONS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    return Array.isArray(parsed) ? parsed.map(String) : []
+  } catch {
+    return []
+  }
+}
+
+const LEGACY_PERMISSION_ALIASES: Record<string, string[]> = {
+  'admin.users.manage': ['users.view', 'users.create', 'users.update', 'users.disable'],
+}
+
 const roleAllows = (role: Role, permission: string): boolean => {
   if (role === 'Admin') return true
   if (permission === 'dataSource.update') return role === 'Manager'
@@ -144,6 +161,13 @@ const roleAllows = (role: Role, permission: string): boolean => {
 }
 
 export const hasPermission = (permission: string, roleValue: unknown): boolean => {
+  const serverPerms = readServerPermissions()
+  if (serverPerms.length) {
+    if (serverPerms.includes(permission)) return true
+    const aliases = LEGACY_PERMISSION_ALIASES[permission]
+    if (aliases?.some((p) => serverPerms.includes(p))) return true
+    return false
+  }
   const role = normalizeRole(roleValue)
   return roleAllows(role, permission)
 }

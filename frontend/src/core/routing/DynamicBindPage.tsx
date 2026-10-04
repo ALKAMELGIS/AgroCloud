@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
 import Home from '@/app/layouts/Home'
 import Overview from '@/modules/dashboards/operational/Overview'
-import ExternalPageLink from './ExternalPageLink'
+import ExternalEmbeddedPage from './ExternalEmbeddedPage'
 import { lazyWithRetry } from './lazyWithRetry'
 
 const GisMap = lazyWithRetry(() => import('@/modules/gis/map/GisMap'), 'GisMap')
@@ -60,7 +60,7 @@ export default function DynamicBindPage({
         </Suspense>
       )
     case 'external':
-      return <ExternalPageLink url={externalUrl ?? ''} title={title} />
+      return <ExternalEmbeddedPage title={title} externalUrl={externalUrl} />
     default:
       return <Placeholder title={title} />
   }

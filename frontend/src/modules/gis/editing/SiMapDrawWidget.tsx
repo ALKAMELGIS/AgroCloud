@@ -19,7 +19,6 @@ export type SiMapDrawWidgetProps = {
 }
 
 const SHAPE_TOOLS: Array<{ id: RemoteSensingDrawingTool; icon: string; title: string }> = [
-  { id: 'point', icon: 'fa-solid fa-location-dot', title: 'Point' },
   { id: 'circle', icon: 'fa-regular fa-circle', title: 'Circle' },
   { id: 'rectangle', icon: 'fa-regular fa-square', title: 'Rectangle' },
   { id: 'polygon', icon: 'fa-solid fa-draw-polygon', title: 'Polygon' },

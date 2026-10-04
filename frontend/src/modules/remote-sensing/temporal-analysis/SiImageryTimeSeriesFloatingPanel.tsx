@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -12,8 +14,15 @@ import type { SiAoiFieldRecord } from '../imagery/siAoiFields';
 import type { SiAoiMaskBuilderLayerLike } from '../imagery/siAoiMaskBuilder';
 import { useSiInstanceScope } from '@/app/providers/siInstanceScope';
 import { useMapOverlayIsolation } from '@/modules/gis/map/useMapOverlayIsolation';
-import { SiImageryTimeSeriesPanel } from './SiImageryTimeSeriesPanel';
 import './SiImageryTimeSeriesFloatingPanel.css';
+import {
+  SiImageryTimeSeriesPanel,
+  type SiImageryTimeSeriesPanelProps,
+} from './SiImageryTimeSeriesPanel';
+
+const LazySiImageryTimeSeriesPanel = lazy(() =>
+  import('./SiImageryTimeSeriesPanel').then(m => ({ default: m.SiImageryTimeSeriesPanel })),
+);
 
 const POS_KEY_BASE = 'si-its-float-pos-v3';
 const SIZE_KEY_BASE = 'si-its-float-size-v2';
@@ -129,7 +138,16 @@ export type SiImageryTimeSeriesFloatingPanelProps = {
   mapboxToken?: string;
   onStormMapOverlayChange?: (overlay: import('./imageryStormAnalysis').SiTsWeatherStormMapOverlay | null) => void;
   stormOverlayDismissEpoch?: number;
+  /** Skip lazy chunk + deferred mount (Develop Elite drawn AOI). */
+  eagerPanel?: boolean;
+  drawnAoiOnly?: boolean;
+  chartLookbackDays?: number;
 };
+
+type PanelBodyProps = Omit<
+  SiImageryTimeSeriesPanelProps,
+  'agroStructuresMask' | 'aoiFields' | 'vectorLayers' | 'committedAoiGeometry'
+>;
 
 export function SiImageryTimeSeriesFloatingPanel({
   open,
@@ -149,6 +167,9 @@ export function SiImageryTimeSeriesFloatingPanel({
   mapboxToken,
   onStormMapOverlayChange,
   stormOverlayDismissEpoch = 0,
+  eagerPanel = false,
+  drawnAoiOnly = false,
+  chartLookbackDays,
 }: SiImageryTimeSeriesFloatingPanelProps) {
   const { scopedStorageKey } = useSiInstanceScope();
   const posStorageKey = scopedStorageKey(POS_KEY_BASE);
@@ -170,6 +191,24 @@ export function SiImageryTimeSeriesFloatingPanel({
   const [size, setSize] = useState<SavedSize>(() => readInitialSize(sizeStorageKey));
   const [dragging, setDragging] = useState(false);
   const [resizing, setResizing] = useState(false);
+  const [mountHeavyPanel, setMountHeavyPanel] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      if (!eagerPanel) setMountHeavyPanel(false);
+      return;
+    }
+    if (eagerPanel) {
+      setMountHeavyPanel(true);
+      return;
+    }
+    const frame = requestAnimationFrame(() => setMountHeavyPanel(true));
+    return () => cancelAnimationFrame(frame);
+  }, [open, eagerPanel]);
+
+  useEffect(() => {
+    if (eagerPanel) setMountHeavyPanel(true);
+  }, [eagerPanel]);
 
   const setBodyIsolationRef = useCallback(
     (node: HTMLElement | null) => {
@@ -188,6 +227,24 @@ export function SiImageryTimeSeriesFloatingPanel({
       h: Math.min(maxH, Math.max(MIN_BODY_H, h)),
     };
   }, []);
+
+  const anchoredOpenRef = useRef(false);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      anchoredOpenRef.current = false;
+      return;
+    }
+    if (anchoredOpenRef.current || !containerRef.current) return;
+    const anchor = containerRef.current.getBoundingClientRect();
+    const nextSize = clampDefaultSize();
+    const headH = 38;
+    setSize(nextSize);
+    setPos(
+      clampToViewport(anchor.left + 12, anchor.top + 56, nextSize.w, nextSize.h + headH),
+    );
+    anchoredOpenRef.current = true;
+  }, [containerRef, open]);
 
   useLayoutEffect(() => {
     if (!open || !rootRef.current) return;
@@ -335,6 +392,21 @@ export function SiImageryTimeSeriesFloatingPanel({
     return () => window.removeEventListener('resize', onWinResize);
   }, [clampSize]);
 
+  const panelBodyProps: PanelBodyProps = {
+    defaultLayerId,
+    analysisDate,
+    imageryDateAutoFollow,
+    onMapDateFromChart,
+    selectedFieldKey,
+    onSelectedFieldKeyChange,
+    onHighlightFieldKeysChange,
+    mapboxToken,
+    onStormMapOverlayChange,
+    stormOverlayDismissEpoch,
+    drawnAoiOnly,
+    chartLookbackDays,
+  };
+
   if (!open || typeof document === 'undefined') return null;
 
   const style: CSSProperties = {
@@ -400,23 +472,33 @@ export function SiImageryTimeSeriesFloatingPanel({
           data-agrocloud-map-wheel-scroll=""
           {...isolationHandlers}
         >
-          <SiImageryTimeSeriesPanel
-            agroStructuresMask={agroStructuresMask}
-            aoiFields={aoiFields}
-            vectorLayers={vectorLayers}
-            committedAoiGeometry={committedAoiGeometry}
-            defaultLayerId={defaultLayerId}
-            analysisDate={analysisDate}
-            imageryDateAutoFollow={imageryDateAutoFollow}
-            onMapDateFromChart={onMapDateFromChart}
-            selectedFieldKey={selectedFieldKey}
-            onSelectedFieldKeyChange={onSelectedFieldKeyChange}
-            onHighlightFieldKeysChange={onHighlightFieldKeysChange}
-            mapboxToken={mapboxToken}
-            onStormMapOverlayChange={onStormMapOverlayChange}
-            stormOverlayDismissEpoch={stormOverlayDismissEpoch}
-            headerToolsHost={headToolsEl}
-          />
+          {mountHeavyPanel ? (
+            eagerPanel ? (
+              <SiImageryTimeSeriesPanel
+                agroStructuresMask={agroStructuresMask}
+                aoiFields={aoiFields}
+                vectorLayers={vectorLayers}
+                committedAoiGeometry={committedAoiGeometry}
+                headerToolsHost={headToolsEl}
+                {...panelBodyProps}
+              />
+            ) : (
+              <Suspense
+                fallback={<p className="si-its-float__loading" role="status">Loading charts…</p>}
+              >
+                <LazySiImageryTimeSeriesPanel
+                  agroStructuresMask={agroStructuresMask}
+                  aoiFields={aoiFields}
+                  vectorLayers={vectorLayers}
+                  committedAoiGeometry={committedAoiGeometry}
+                  headerToolsHost={headToolsEl}
+                  {...panelBodyProps}
+                />
+              </Suspense>
+            )
+          ) : (
+            <p className="si-its-float__loading" role="status">Opening…</p>
+          )}
         </div>
         <button
           type="button"

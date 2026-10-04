@@ -27,6 +27,7 @@ import { readRasterMetadata, hasGdal } from './rasterMetadata.js'
 import { describeCrs } from './projectionManager.js'
 import { assertSupportedDriver, ensureCloudOptimizedGeoTiff, isJp2Name } from './rasterCogPipeline.js'
 import { convertRasterViaMlService } from './rasterMlConvert.js'
+import { requireRasterAccess } from '../identity/scopeIntegration.js'
 import {
   isPlainImageName,
   imageDimensions,
@@ -526,7 +527,7 @@ export function registerRasterRoutes(app) {
     })
   })
 
-  app.get(['/api/raster/:id/tiles/:z/:x/:y.png', '/api/raster/:id/tiles/:z/:x/:y'], async (req, res) => {
+  app.get(['/api/raster/:id/tiles/:z/:x/:y.png', '/api/raster/:id/tiles/:z/:x/:y'], requireRasterAccess, async (req, res) => {
     const record = getRasterRecord(req.params.id)
     if (!record) return res.status(404).json({ error: 'Raster not found' })
     if (record.status !== 'ready') {

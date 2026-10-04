@@ -38,6 +38,8 @@ import { registerDelineateAnythingRoutes } from './delineateAnythingProxy.js'
 import { registerFloodMonitoringRoutes } from './floodMonitoringProxy.js'
 import { registerEsriTerrainTileRoutes } from './esriTerrainRgbTiles.js'
 import { registerRasterRoutes } from './raster/rasterUploadRoutes.js'
+import { registerEmbedFrameCheckRoute } from './embedFrameCheckRoute.js'
+import { registerEmbedBrowseRoute } from './embedBrowseRoute.js'
 import { registerCrsRoutes } from './raster/crsRoutes.js'
 import { warmProjectionManager } from './raster/projectionManager.js'
 import { registerImageClassificationRoutes } from './imageClassificationProxy.js'
@@ -48,6 +50,7 @@ import {
   securityHeadersMiddleware,
 } from './securityMiddleware.js'
 import { registerAuthRoutes } from './authService.js'
+import { bootstrapIdentity } from './identity/registerIdentity.js'
 
 loadProductionEnv()
 
@@ -228,6 +231,8 @@ app.use(express.static(FRONTEND_DIST, FRONTEND_STATIC_OPTS))
 app.get('/api/health', (_req, res) => {
   res.status(200).json({ status: 'ok' })
 })
+registerEmbedFrameCheckRoute(app)
+registerEmbedBrowseRoute(app)
 
 // New versioned API gateway: /api/v1/* and /api/v2/*
 app.use('/api', versionedRoutes)
@@ -1993,6 +1998,8 @@ app.get('*', (req, res) => {
 
 app.use(notFoundHandler)
 app.use(errorHandler)
+
+await bootstrapIdentity(app)
 
 const server = app.listen(API_PORT, LISTEN_HOST, () => {
   console.log(`API listening on http://${LISTEN_HOST === '0.0.0.0' ? 'localhost' : LISTEN_HOST}:${API_PORT} (bind ${LISTEN_HOST})`)

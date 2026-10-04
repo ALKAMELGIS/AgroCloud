@@ -275,6 +275,27 @@ export const NAV_DEFAULT_GROUPS: NavGroupDef[] = [
         subitemClass: 'nav-item-admin',
       },
       {
+        id: 'admin-manpower',
+        path: '/admin/manpower',
+        i18nKey: 'manpower',
+        defaultIcon: 'fa-solid fa-people-group',
+        subitemClass: 'nav-item-admin',
+      },
+      {
+        id: 'admin-roles',
+        path: '/admin/roles',
+        i18nKey: 'rolesPermissions',
+        defaultIcon: 'fa-solid fa-shield-halved',
+        subitemClass: 'nav-item-admin',
+      },
+      {
+        id: 'admin-hierarchy',
+        path: '/admin/hierarchy',
+        i18nKey: 'hierarchy',
+        defaultIcon: 'fa-solid fa-sitemap',
+        subitemClass: 'nav-item-admin',
+      },
+      {
         id: 'admin-system-settings',
         path: '/admin/system-settings',
         i18nKey: 'systemSettings',

@@ -10,7 +10,7 @@ describe('resolveArcGisFeatureLayerQueryProfile', () => {
     })
     expect(profile.pageSize).toBe(100)
     expect(profile.maxAllowableOffset).toBe('0.2')
-    expect(profile.outFields).toContain('COUNTRY')
+    expect(profile.outFields).toContain('ALL_COUNTRY')
     expect(profile.geometryPrecision).toBe(4)
   })
 

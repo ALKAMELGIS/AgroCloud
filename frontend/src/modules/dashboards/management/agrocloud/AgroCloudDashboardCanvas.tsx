@@ -1,4 +1,5 @@
 import { useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { DashboardRefreshButton } from '@/modules/dashboards/components/DashboardRefreshButton'
 import type { AgroCloudDashboardConfig, AgroCloudDashboardElement, AgroCloudDashboardElementKind } from './agroCloudDashboardData'
 import { DashboardAddElementMenu } from './DashboardAddElementMenu'
 import { AGROCLOUD_TIME_ZONE_OPTIONS } from './agroCloudDashboardTimeRegion'
@@ -42,6 +43,9 @@ type Props = {
   /** Show ArcGIS-style element menu on widget hover (edit mode). */
   editMode?: boolean
   className?: string
+  onRefresh?: () => void
+  refreshBusy?: boolean
+  lastRefreshedAt?: Date | null
 }
 
 function WidgetChrome({
@@ -312,6 +316,9 @@ export function AgroCloudDashboardCanvas({
   onElementReorder,
   editMode = false,
   className,
+  onRefresh,
+  refreshBusy = false,
+  lastRefreshedAt = null,
 }: Props) {
   const [canvasAddMenuOpen, setCanvasAddMenuOpen] = useState(false)
   const canvasAddWrapRef = useRef<HTMLDivElement>(null)
@@ -458,6 +465,14 @@ export function AgroCloudDashboardCanvas({
             <span className="agrocloud-dashboard-canvas__tz" title={tzCaption}>
               {tzCaption}
             </span>
+            {onRefresh ? (
+              <DashboardRefreshButton
+                className="agrocloud-dashboard-canvas__refresh-btn"
+                busy={refreshBusy}
+                lastUpdated={lastRefreshedAt}
+                onClick={() => void onRefresh()}
+              />
+            ) : null}
             {headerLayout.menuEnabled ? (
               <button type="button" className="agrocloud-dashboard-canvas__menu-btn" aria-label="Menu">
                 <i className="fa-solid fa-bars" aria-hidden />
@@ -477,6 +492,14 @@ export function AgroCloudDashboardCanvas({
             <span className="agrocloud-dashboard-canvas__tz" title={tzCaption}>
               {tzCaption}
             </span>
+            {onRefresh ? (
+              <DashboardRefreshButton
+                className="agrocloud-dashboard-canvas__refresh-btn"
+                busy={refreshBusy}
+                lastUpdated={lastRefreshedAt}
+                onClick={() => void onRefresh()}
+              />
+            ) : null}
             {config.badgeEnabled ? <span className="agrocloud-dashboard-canvas__badge">Elite AgroCloud</span> : null}
           </div>
         </header>

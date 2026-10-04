@@ -64,7 +64,8 @@ export function resolveArcGisFeatureLayerQueryProfile(
     return {
       pageSize: 100,
       maxAllowableOffset: '0.2',
-      outFields: 'OBJECTID,COUNTRY,ISO_CC,CONTINENT,LAND_TYPE,Status,COUNTRYAFF',
+      outFields:
+        'OBJECTID,Country,ALL_COUNTRY,COUNTRYAFF,CONTINENT,LAND_TYPE,Status,ZONE_ID',
       geometryPrecision: 4,
     }
   }

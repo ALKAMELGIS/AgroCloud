@@ -19,7 +19,8 @@ import { getUserApiTokenValue, persistUserApiTokenValue } from './customUserApiT
 import type { CustomApiTokenSlot, CustomPageRecord, SystemSettingsPersistedV1 } from '../types/systemSettings'
 import './system-settings.css'
 import { NavGroupEditor } from './system-settings/NavGroupEditor'
-import { createPageLinkRecord, LinkManagementSection } from './system-settings/LinkManagementSection'
+import { createPageLinkRecord } from './system-settings/LinkManagementSection'
+import { EmbeddedPagesSettingsSection } from './system-settings/EmbeddedPagesSettingsSection'
 import {
   getArcgisPortalTokenBrowserOverride,
   persistArcgisPortalTokenInBrowser,
@@ -62,18 +63,6 @@ import {
   persistOpenWeatherMapApiKeyInBrowser,
 } from './openWeatherMapApiKey'
 import { persistApiSecretsPatchToServer } from './apiSecretsServerPersistence'
-
-const PAGE_ICON_PRESETS = [
-  'fa-solid fa-file',
-  'fa-solid fa-house',
-  'fa-solid fa-map',
-  'fa-solid fa-chart-line',
-  'fa-solid fa-table',
-  'fa-solid fa-leaf',
-  'fa-solid fa-droplet',
-  'fa-solid fa-tractor',
-  'fa-solid fa-layer-group',
-] as const
 
 const CUSTOM_API_SLOT_ICONS = [
   'fa-solid fa-key',
@@ -192,8 +181,6 @@ export default function SystemSettings() {
     iconClass: 'fa-solid fa-key',
   })
   const [confirmReset, setConfirmReset] = useState(false)
-  const [pageQuery, setPageQuery] = useState('')
-  const [pageGroupFilter, setPageGroupFilter] = useState<'all' | string>('all')
   const [navPickGroup, setNavPickGroup] = useState<string>(
     () => NAV_DEFAULT_GROUPS.find(g => g.id !== 'data')?.id ?? 'dashboard',
   )
@@ -488,21 +475,6 @@ export default function SystemSettings() {
     }))
   }
 
-  const addPage = () => {
-    const id = `page-${Date.now()}`
-    const rec: CustomPageRecord = {
-      id,
-      name: 'New page',
-      path: `/pages/${id}`,
-      iconClass: 'fa-solid fa-file',
-      visible: true,
-      bindTarget: 'placeholder',
-      navGroupId: 'data',
-      subitemClass: '',
-    }
-    setDraft(d => ({ ...d, customPages: [...d.customPages, rec] }))
-  }
-
   const addPageLink = () => {
     const rec = createPageLinkRecord()
     setDraft(d => ({ ...d, customPages: [...d.customPages, rec] }))
@@ -519,56 +491,9 @@ export default function SystemSettings() {
     setDraft(d => ({ ...d, customPages: d.customPages.filter(p => p.id !== id) }))
   }
 
-  const reorderPages = (from: number, to: number) => {
-    setDraft(d => {
-      const next = [...d.customPages]
-      const [m] = next.splice(from, 1)
-      next.splice(to, 0, m)
-      return { ...d, customPages: next }
-    })
-  }
-
-  const duplicatePage = (id: string) => {
-    setDraft(d => {
-      const idx = d.customPages.findIndex(p => p.id === id)
-      if (idx < 0) return d
-      const src = d.customPages[idx]
-      const newId = `page-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-      const clone: CustomPageRecord = {
-        ...src,
-        id: newId,
-        name: `${src.name} Copy`,
-        path: normalizeAppPath(`${src.path}-copy`),
-      }
-      const next = [...d.customPages]
-      next.splice(idx + 1, 0, clone)
-      return { ...d, customPages: next }
-    })
-  }
-
-  const movePageByDelta = (index: number, delta: -1 | 1) => {
-    const target = index + delta
-    if (target < 0 || target >= draft.customPages.length) return
-    reorderPages(index, target)
-  }
-
   const dataNavGroup = NAV_DEFAULT_GROUPS.find(g => g.id === 'data')
   const navGroupsExceptData = NAV_DEFAULT_GROUPS.filter(g => g.id !== 'data')
   const currentGroupDef = navGroupsExceptData.find(g => g.id === navPickGroup)
-  const pageRows = draft.customPages
-    .map((page, index) => ({ page, index }))
-    .filter(({ page }) => {
-      if (pageGroupFilter !== 'all' && (page.navGroupId || 'data') !== pageGroupFilter) return false
-      const q = pageQuery.trim().toLowerCase()
-      if (!q) return true
-      return (
-        page.name.toLowerCase().includes(q) ||
-        (page.nameAr ?? '').toLowerCase().includes(q) ||
-        page.path.toLowerCase().includes(q) ||
-        (page.navGroupId || 'data').toLowerCase().includes(q)
-      )
-    })
-
   const settingsDirty = useMemo(
     () => JSON.stringify(mergeWithDefaults(settings)) !== JSON.stringify(mergeWithDefaults(draft)),
     [settings, draft],
@@ -860,19 +785,9 @@ export default function SystemSettings() {
             </h2>
             <p className="sys-settings-panel__desc">
               Override labels (EN/AR), Font Awesome icon classes, and visibility. Drag rows to reorder groups or items.
-              Use <strong>Link Management</strong> to bind in-app routes to external URLs.
+              Embedded URLs are configured under the <strong>Pages</strong> tab.
             </p>
           </div>
-
-          <LinkManagementSection
-            language={language}
-            pages={draft.customPages}
-            onAdd={addPageLink}
-            onUpdate={updatePage}
-            onRemove={removePage}
-          />
-
-          <hr className="sys-divider" />
 
           {dataNavGroup ? (
             <section
@@ -965,263 +880,13 @@ export default function SystemSettings() {
 
       {tab === 'pages' ? (
         <div className="sys-settings-tab-pane">
-          <div className="sys-pages-head">
-            <div>
-              <h2>Dynamic pages</h2>
-              <p>
-                Register routes and choose which sidebar group they appear under — same flyout ids as the manifest (
-                <code dir="ltr">nav-group-data</code>, <code dir="ltr">nav-group-sensors</code>, …). Set{' '}
-                <strong>Bind target → External URL</strong> to embed a link such as an ArcGIS Dashboard.
-              </p>
-            </div>
-            <button type="button" className="gis-btn gis-btn-primary sys-pages-add" onClick={addPage}>
-              <i className="fa-solid fa-plus" aria-hidden />
-              Add page
-            </button>
-          </div>
-
-          <div className="sys-pages-toolbar">
-            <label className="sys-pages-toolbar__search">
-              <i className="fa-solid fa-magnifying-glass" aria-hidden />
-              <input
-                className="gis-input"
-                value={pageQuery}
-                onChange={e => setPageQuery(e.target.value)}
-                placeholder="Search by name, path, or group…"
-              />
-            </label>
-            <select
-              className="gis-input"
-              value={pageGroupFilter}
-              onChange={e => setPageGroupFilter(e.target.value)}
-              aria-label="Filter pages by sidebar group"
-            >
-              <option value="all">All groups</option>
-              {NAV_GROUP_IDS.map(gid => (
-                <option key={gid} value={gid}>{gid}</option>
-              ))}
-            </select>
-            <span className="sys-pages-toolbar__count">
-              {pageRows.length} / {draft.customPages.length} pages
-            </span>
-          </div>
-
-          {draft.customPages.length === 0 ? (
-            <div className="sys-empty-state">
-              <i className="fa-solid fa-circle-plus" aria-hidden />
-              No custom pages yet. Use <strong>Add page</strong> to register a path and bind it to a screen.
-            </div>
-          ) : pageRows.length === 0 ? (
-            <div className="sys-empty-state">
-              <i className="fa-solid fa-filter-circle-xmark" aria-hidden />
-              No pages match your current search/filter.
-            </div>
-          ) : (
-            <div className="sys-pages-list">
-              {pageRows.map(({ page: p, index: rowIdx }) => (
-                <article
-                  key={p.id}
-                  className="sys-page-card"
-                  onDragOver={e => e.preventDefault()}
-                  onDrop={e => {
-                    e.preventDefault()
-                    const from = Number(e.dataTransfer.getData('text/page-row-abs'))
-                    if (!Number.isFinite(from)) return
-                    reorderPages(from, rowIdx)
-                  }}
-                >
-                  <div
-                    className="sys-page-card__drag"
-                    draggable
-                    onDragStart={e => {
-                      e.dataTransfer.effectAllowed = 'move'
-                      e.dataTransfer.setData('text/page-row-abs', String(rowIdx))
-                    }}
-                    title="Drag to reorder"
-                    aria-hidden
-                  >
-                    <i className="fa-solid fa-grip-vertical" style={{ fontSize: 18 }} />
-                  </div>
-                  <div className="sys-page-card__main">
-                    <div className="sys-page-card__topbar">
-                      <span className="sys-page-card__index">#{rowIdx + 1}</span>
-                      <div className="sys-page-card__quick-actions">
-                        <button type="button" className="gis-btn gis-btn-outline" onClick={() => movePageByDelta(rowIdx, -1)} disabled={rowIdx === 0}>
-                          <i className="fa-solid fa-arrow-up" aria-hidden /> Up
-                        </button>
-                        <button type="button" className="gis-btn gis-btn-outline" onClick={() => movePageByDelta(rowIdx, 1)} disabled={rowIdx === draft.customPages.length - 1}>
-                          <i className="fa-solid fa-arrow-down" aria-hidden /> Down
-                        </button>
-                        <button type="button" className="gis-btn gis-btn-outline" onClick={() => duplicatePage(p.id)}>
-                          <i className="fa-solid fa-copy" aria-hidden /> Duplicate
-                        </button>
-                      </div>
-                    </div>
-                    <div className="sys-page-card__grid">
-                      <div className="sys-page-field">
-                        <label htmlFor={`page-name-${p.id}`}>Display name (EN)</label>
-                        <input
-                          id={`page-name-${p.id}`}
-                          className="gis-input"
-                          value={p.name}
-                          onChange={e => updatePage(p.id, { name: e.target.value })}
-                        />
-                      </div>
-                      <div className="sys-page-field">
-                        <label htmlFor={`page-name-ar-${p.id}`}>Display name (AR)</label>
-                        <input
-                          id={`page-name-ar-${p.id}`}
-                          className="gis-input"
-                          dir="rtl"
-                          placeholder={p.name}
-                          value={p.nameAr ?? ''}
-                          onChange={e => updatePage(p.id, { nameAr: e.target.value })}
-                        />
-                      </div>
-                      <div className="sys-page-field">
-                        <label htmlFor={`page-path-${p.id}`}>Route path</label>
-                        <input
-                          id={`page-path-${p.id}`}
-                          className="gis-input"
-                          dir="ltr"
-                          value={p.path}
-                          onChange={e => updatePage(p.id, { path: e.target.value })}
-                          spellCheck={false}
-                        />
-                      </div>
-                      <div className="sys-page-field">
-                        <label htmlFor={`page-bind-${p.id}`}>Bind target</label>
-                        <select
-                          id={`page-bind-${p.id}`}
-                          className="gis-input"
-                          value={p.bindTarget}
-                          onChange={e =>
-                            updatePage(p.id, { bindTarget: e.target.value as CustomPageRecord['bindTarget'] })
-                          }
-                        >
-                          <option value="placeholder">Placeholder</option>
-                          <option value="home">Home</option>
-                          <option value="gis">GIS Map</option>
-                          <option value="satellite-indices">Satellite Intelligence</option>
-                          <option value="dashboards-overview">Dashboard overview</option>
-                          <option value="external">External URL (page link)</option>
-                        </select>
-                      </div>
-                      {p.bindTarget === 'external' ? (
-                        <div className="sys-page-field sys-page-field--wide">
-                          <label htmlFor={`page-exturl-${p.id}`}>External URL</label>
-                          <input
-                            id={`page-exturl-${p.id}`}
-                            className="gis-input"
-                            dir="ltr"
-                            type="url"
-                            placeholder="https://"
-                            value={p.externalUrl ?? ''}
-                            onChange={e => updatePage(p.id, { externalUrl: e.target.value })}
-                            spellCheck={false}
-                          />
-                        </div>
-                      ) : null}
-                      <div className="sys-page-field">
-                        <label htmlFor={`page-navgrp-${p.id}`}>Sidebar group</label>
-                        <select
-                          id={`page-navgrp-${p.id}`}
-                          className="gis-input"
-                          value={p.navGroupId || 'data'}
-                          onChange={e => updatePage(p.id, { navGroupId: e.target.value })}
-                        >
-                          {NAV_GROUP_IDS.map(gid => (
-                            <option key={gid} value={gid}>
-                              {gid === 'data'
-                                ? 'Operations / Data (nav-group-data)'
-                                : gid.charAt(0).toUpperCase() + gid.slice(1)}
-                            </option>
-                          ))}
-                        </select>
-                        <small style={{ display: 'block', marginTop: 6, fontSize: 11, color: 'var(--ds-color-text-muted)' }}>
-                          Flyout container id:{' '}
-                          <code dir="ltr">{`nav-group-${p.navGroupId || 'data'}`}</code>
-                        </small>
-                      </div>
-                      <div className="sys-page-field">
-                        <label htmlFor={`page-subcls-${p.id}`}>Sublist row CSS (<code dir="ltr">subitemClass</code>)</label>
-                        <input
-                          id={`page-subcls-${p.id}`}
-                          className="gis-input"
-                          dir="ltr"
-                          placeholder="Leave empty for auto (same style as group default)"
-                          value={p.subitemClass ?? ''}
-                          onChange={e => updatePage(p.id, { subitemClass: e.target.value })}
-                          spellCheck={false}
-                          list={`page-subcls-datalist-${p.id}`}
-                        />
-                        <datalist id={`page-subcls-datalist-${p.id}`}>
-                          {(NAV_DEFAULT_GROUPS.find(g => g.id === (p.navGroupId || 'data'))?.children ?? []).map(leaf => (
-                            <option key={leaf.id} value={leaf.subitemClass} />
-                          ))}
-                        </datalist>
-                        <small style={{ display: 'block', marginTop: 6, fontSize: 11, color: 'var(--ds-color-text-muted)' }}>
-                          Pick a built-in row class from suggestions or type your own — matches{' '}
-                          <code dir="ltr">nav-item-*</code> entries under this group&apos;s sublist.
-                        </small>
-                      </div>
-                    </div>
-
-                    <div className="sys-page-field" style={{ marginTop: 14 }}>
-                      <label htmlFor={`page-icon-${p.id}`}>Icon (Font Awesome class)</label>
-                      <div className="sys-page-iconrow">
-                        <span className="sys-page-icon-preview" aria-hidden>
-                          <i className={p.iconClass || 'fa-solid fa-file'} />
-                        </span>
-                        <input
-                          id={`page-icon-${p.id}`}
-                          className="gis-input"
-                          style={{ flex: 1, minWidth: 140 }}
-                          value={p.iconClass}
-                          onChange={e => updatePage(p.id, { iconClass: e.target.value })}
-                          spellCheck={false}
-                          placeholder="fa-solid fa-file"
-                        />
-                      </div>
-                      <div className="sys-page-icon-chips" style={{ marginTop: 10 }}>
-                        {PAGE_ICON_PRESETS.map(ic => (
-                          <button
-                            key={ic}
-                            type="button"
-                            className="sys-page-icon-chip"
-                            title={ic}
-                            aria-label={`Use icon ${ic}`}
-                            onClick={() => updatePage(p.id, { iconClass: ic })}
-                          >
-                            <i className={ic} />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="sys-page-actions">
-                      <label className="sys-page-visible">
-                        <input
-                          type="checkbox"
-                          checked={p.visible}
-                          onChange={e => updatePage(p.id, { visible: e.target.checked })}
-                        />
-                        Visible in app routes
-                      </label>
-                      <button
-                        type="button"
-                        className="gis-btn gis-btn-outline sys-btn-icon-danger"
-                        onClick={() => removePage(p.id)}
-                      >
-                        <i className="fa-solid fa-trash" aria-hidden style={{ marginInlineEnd: 6 }} />
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
+          <EmbeddedPagesSettingsSection
+            language={language}
+            pages={draft.customPages}
+            onAdd={addPageLink}
+            onUpdate={updatePage}
+            onRemove={removePage}
+          />
           {inlineSettingsActions}
         </div>
       ) : null}

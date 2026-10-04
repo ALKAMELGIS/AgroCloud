@@ -14413,18 +14413,21 @@ export default function SatelliteIntelligence() {
       return;
     }
     if (spec.kind === 'circle') {
-      setCircleRadiusM(null);
-      setCircleRefineDraft(null);
-      setCircleRefineActiveHandle(null);
-      setMapDragPanEnabled(true);
       const feature = circleFromEdgeFeature(lng1, lat1, lng2, lat2, 128, 'Drawn circle');
       if (gisSelectionActiveRef.current) {
+        setCircleRadiusM(null);
+        setCircleRefineDraft(null);
+        setCircleRefineActiveHandle(null);
+        setMapDragPanEnabled(true);
         applyGisFeatureSelectionFromGeometries([feature.geometry as GeoJSON.Geometry]);
         skipNextMapClickRef.current = true;
         return;
       }
-      commitUserGeometry(feature);
-      finishSketchExitDrawingMode();
+      setCircleRadiusM(haversineDistanceMeters(lng1, lat1, lng2, lat2));
+      setCircleRefineDraft({ center: [lng1, lat1], edge: [lng2, lat2] });
+      setCircleRefineActiveHandle(null);
+      setDrawAssistHint('Adjust handles or press Enter to apply the circle.');
+      setMapDragPanEnabled(false);
       skipNextMapClickRef.current = true;
       return;
     }
@@ -14595,6 +14598,8 @@ export default function SatelliteIntelligence() {
       tool === 'polyline';
     setMapDragPanEnabled(!lockPan);
   };
+  const applyMapDrawToolFnRef = useRef(applyMapDrawTool);
+  applyMapDrawToolFnRef.current = applyMapDrawTool;
 
   /**
    * After committing a sketch: save Active AOI and exit drawing mode.
@@ -14765,7 +14770,7 @@ export default function SatelliteIntelligence() {
     setExpandedEnvSection('remote-sensing');
     setIsLayerDropdownOpen(true);
     setRsDrawingModeActive(true);
-    if (tool) applyMapDrawTool(tool);
+    if (tool) applyMapDrawToolFnRef.current(tool);
   }, []);
 
   const handleRsDrawingModeChange = useCallback(
@@ -14779,10 +14784,14 @@ export default function SatelliteIntelligence() {
         // Toolbox panels with their own Select AOI keep the panel open while drawing.
         const section = expandedEnvSectionRef.current;
         const keepToolboxOpen =
+          section === 'remote-sensing' ||
           section === 'agri-field-boundary' ||
           section === 'tree-detections';
         if (!keepToolboxOpen) {
           setIsLayerDropdownOpen(false);
+        } else if (section === 'remote-sensing') {
+          setExpandedEnvSection('remote-sensing');
+          setIsLayerDropdownOpen(true);
         }
       }
       setRsDrawingModeActive(active);
@@ -14800,7 +14809,7 @@ export default function SatelliteIntelligence() {
     setCropClassDrawingModeActive(false);
     setDrawTargetMode('aoi');
     setRsDrawingModeActive(true);
-    applyMapDrawTool(tool);
+    applyMapDrawToolFnRef.current(tool);
   }, []);
 
   const handleCropClassDrawingModeChange = useCallback(
@@ -20422,6 +20431,44 @@ export default function SatelliteIntelligence() {
     [],
   );
 
+  const handleRemoteSensingToolboxLayerChange = useCallback(
+    (layerId: string) => {
+      setWmsLayer(layerId);
+      if (isChirpsPrecipLayerId(layerId)) {
+        setIsWmsOverlayVisible(true);
+        setSentinelWmsSourcesHeld(true);
+      }
+      if (
+        shouldAutoEnableRemoteSensingAoiMap(layerId) &&
+        (hasDrawnAoiClip || aoiMaskBuilderSettings.enabled)
+      ) {
+        setIsWmsOverlayVisible(true);
+        setSentinelWmsSourcesHeld(true);
+      }
+      if (isCollectionCatalogIndexId(layerId)) {
+        const def = resolveCollectionIndexDef(layerId);
+        setFieldAnalysisStatus(
+          def
+            ? `${def.label} selected · 10-class legend ready · ${def.scientificName}`
+            : 'Collection index selected · 10-class legend ready',
+        );
+      }
+      const ids = Object.keys(ENVIRONMENTAL_INDICES) as EnvironmentalIndexId[];
+      if (ids.includes(layerId as EnvironmentalIndexId)) {
+        setSelectedIndex(layerId as EnvironmentalIndexId);
+      }
+      setAoiMaskBuilderSettings(prev => {
+        if (prev.sentinelLayerId === layerId) return prev;
+        const next = { ...prev, sentinelLayerId: layerId };
+        persistSiAoiMaskBuilderSettings(next, {
+          storageKey: siScope.scopedStorageKey(SI_AOI_MASK_BUILDER_LS_KEY),
+        });
+        return next;
+      });
+    },
+    [aoiMaskBuilderSettings.enabled, hasDrawnAoiClip, siScope],
+  );
+
   useEffect(() => {
     if (!aoiLayerModeOptions.length) return;
     setAoiMaskBuilderSettings(prev => {
@@ -20957,6 +21004,7 @@ export default function SatelliteIntelligence() {
       const ids = [
         // Live sketch preview (fill/outline/vertices while drawing)
         'si-draw-draft-fill',
+        'si-draw-draft-polygon-line',
         'si-draw-draft-line',
         'si-draw-draft-close-hint',
         'si-draw-draft-vertex',
@@ -21970,6 +22018,18 @@ export default function SatelliteIntelligence() {
     setTimeSeriesStart(range.start);
     setTimeSeriesEnd(range.end);
   }, [sentinelImageryAoiKey, sentinelSceneCatalog?.sceneIsos]);
+
+  const handleManualImageryDateChange = useCallback(
+    (v: string) => {
+      setImageryDateAutoFollow(false);
+      saveSentinelImageryDatePrefsForAoi(sentinelImageryAoiKey, {
+        autoFollow: false,
+        manualIso: v,
+      });
+      applySelectedDate(dateFromLocalIso(v));
+    },
+    [sentinelImageryAoiKey],
+  );
 
   /** Per-AOI prefs: manual date pauses auto-update for this AOI only. */
   useEffect(() => {
@@ -25446,6 +25506,15 @@ export default function SatelliteIntelligence() {
   const ftwGlobalMapActive =
     agriFieldBoundary.model === 'ftw' && agriFieldBoundary.ftwGlobalVisible;
 
+  /** Hide dropped search / Go-To pins while sketching so only draft geometry shows on the canvas. */
+  const hideMapLocationPinsDuringSketch =
+    rsDrawingModeActive ||
+    cropClassDrawingModeActive ||
+    rectCirclePreview != null ||
+    polygonRing.length > 0 ||
+    circleRefineDraft != null ||
+    polylineStart != null;
+
   return (
     <div className="si-page">
       <div className="si-main-content">
@@ -25789,7 +25858,17 @@ export default function SatelliteIntelligence() {
                       paint={{
                         // Keep draft AOI clearly visible even if saved drawStyle is too transparent.
                         'fill-color': '#facc15',
-                        'fill-opacity': 0.22 * drawVisualOpacity,
+                        'fill-opacity': 0.32 * drawVisualOpacity,
+                      }}
+                    />
+                    <Layer
+                      id="si-draw-draft-polygon-line"
+                      type="line"
+                      filter={['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]]}
+                      paint={{
+                        'line-color': '#facc15',
+                        'line-width': Math.max(2.5, drawStyle.strokeWidth),
+                        'line-opacity': 0.98 * drawVisualOpacity,
                       }}
                     />
                     <Layer
@@ -25930,7 +26009,7 @@ export default function SatelliteIntelligence() {
                   </Marker>
                 ))}
 
-                {goToXyMarker ? (
+                {goToXyMarker && !hideMapLocationPinsDuringSketch ? (
                   <Marker longitude={goToXyMarker.lng} latitude={goToXyMarker.lat} anchor="bottom">
                     <div className="si-map-search-pin si-map-search-pin--goto-xy" title="Go To XY marker">
                       <i className="fa-solid fa-location-dot si-map-search-pin__icon" aria-hidden />
@@ -25938,7 +26017,7 @@ export default function SatelliteIntelligence() {
                   </Marker>
                 ) : null}
 
-                {searchPin && searchPin.variant === 'device-gps' ? (
+                {searchPin && !hideMapLocationPinsDuringSketch && searchPin.variant === 'device-gps' ? (
                   <Marker longitude={searchPin.lng} latitude={searchPin.lat} anchor="center">
                     <div
                       className="si-map-gps-location"
@@ -25966,7 +26045,7 @@ export default function SatelliteIntelligence() {
                     </div>
                   </Marker>
                 ) : null}
-                {searchPin && searchPin.variant !== 'device-gps' ? (
+                {searchPin && !hideMapLocationPinsDuringSketch && searchPin.variant !== 'device-gps' ? (
                   <Marker longitude={searchPin.lng} latitude={searchPin.lat} anchor="bottom">
                     <div
                       className={
@@ -26880,12 +26959,12 @@ export default function SatelliteIntelligence() {
                     ['literal', ['LineString', 'MultiLineString', 'Polygon', 'MultiPolygon']],
                   ]}
                   paint={{
-                    'line-color': hasActiveLayerSourceAoi ? '#fbbf24' : drawStyle.strokeColor,
+                    'line-color': hasActiveLayerSourceAoi ? '#fbbf24' : '#facc15',
                     'line-width': [
                       'case',
                       ['in', ['geometry-type'], ['literal', ['LineString', 'MultiLineString']]],
                       Math.max(2, drawStyle.strokeWidth + 1),
-                      drawStyle.strokeWidth,
+                      Math.max(2.5, drawStyle.strokeWidth),
                     ],
                     'line-opacity': isActivelyDrawingNewShape ? 0 : drawVisualOpacity * aoiLayerOpacity,
                     ...(hasActiveLayerSourceAoi ? { 'line-dasharray': [2, 2] as [number, number] } : {}),
@@ -27978,7 +28057,7 @@ export default function SatelliteIntelligence() {
                 <button
                   type="button"
                   className={`si-basemap-button si-layer-live-button ${isWmsOverlayVisible ? 'active' : ''}`}
-                  onClick={() => setIsWmsOverlayVisible(v => !v)}
+                  onClick={toggleWmsOverlayVisibility}
                   title={
                     isWmsOverlayVisible
                       ? `Hide ${wmsLayerSelectValue || 'index'} imagery (Layer Live)`
@@ -28377,14 +28456,7 @@ export default function SatelliteIntelligence() {
                         onCollectionChange={handleRemoteSensingCollectionChange}
                         mapStatusLine={remoteSensingMapStatusLine}
                         wmsDate={imageryDateAutoFollow ? sentinelFetchDate : wmsDate}
-                        onWmsDateChange={v => {
-                          setImageryDateAutoFollow(false);
-                          saveSentinelImageryDatePrefsForAoi(sentinelImageryAoiKey, {
-                            autoFollow: false,
-                            manualIso: v,
-                          });
-                          applySelectedDate(dateFromLocalIso(v));
-                        }}
+                        onWmsDateChange={handleManualImageryDateChange}
                         onResetImageryDateAuto={resetSentinelImageryDateAuto}
                         imageryDateAutoFollow={imageryDateAutoFollow}
                         isFetchingSentinelScenes={isFetchingSentinelScenes}
@@ -28403,40 +28475,7 @@ export default function SatelliteIntelligence() {
                         }
                         layerGroups={remoteSensingLayerSelectGroups}
                         layerValue={wmsLayerSelectValue}
-                        onLayerChange={layerId => {
-                          setWmsLayer(layerId);
-                          if (isChirpsPrecipLayerId(layerId)) {
-                            setIsWmsOverlayVisible(true);
-                            setSentinelWmsSourcesHeld(true);
-                          }
-                          if (
-                            shouldAutoEnableRemoteSensingAoiMap(layerId) &&
-                            (hasDrawnAoiClip || aoiMaskBuilderSettings.enabled)
-                          ) {
-                            setIsWmsOverlayVisible(true);
-                            setSentinelWmsSourcesHeld(true);
-                          }
-                          if (isCollectionCatalogIndexId(layerId)) {
-                            const def = resolveCollectionIndexDef(layerId);
-                            setFieldAnalysisStatus(
-                              def
-                                ? `${def.label} selected · 10-class legend ready · ${def.scientificName}`
-                                : 'Collection index selected · 10-class legend ready',
-                            );
-                          }
-                          const ids = Object.keys(ENVIRONMENTAL_INDICES) as EnvironmentalIndexId[];
-                          if (ids.includes(layerId as EnvironmentalIndexId)) {
-                            setSelectedIndex(layerId as EnvironmentalIndexId);
-                          }
-                          setAoiMaskBuilderSettings(prev => {
-                            if (prev.sentinelLayerId === layerId) return prev;
-                            const next = { ...prev, sentinelLayerId: layerId };
-                            persistSiAoiMaskBuilderSettings(next, {
-                              storageKey: siScope.scopedStorageKey(SI_AOI_MASK_BUILDER_LS_KEY),
-                            });
-                            return next;
-                          });
-                        }}
+                        onLayerChange={handleRemoteSensingToolboxLayerChange}
                         isLoadingLayers={rsLayerCatalogLoading}
                         showOnMap={isWmsOverlayVisible}
                         onShowOnMapChange={handleIndexShowOnMapChange}

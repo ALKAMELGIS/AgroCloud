@@ -1,9 +1,9 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
 
-export type SiInstanceScope = 'standalone'
+export type SiInstanceScope = 'standalone' | 'develop-elite'
 
-export function resolveSiScopedStorageKey(baseKey: string, _scope: SiInstanceScope = 'standalone'): string {
-  return baseKey
+export function resolveSiScopedStorageKey(baseKey: string, scope: SiInstanceScope = 'standalone'): string {
+  return scope === 'develop-elite' ? `de:${baseKey}` : baseKey
 }
 
 export function resolveSiScopedSessionKey(baseKey: string, scope: SiInstanceScope = 'standalone'): string {
@@ -42,8 +42,8 @@ export function SiInstanceScopeProvider({
       scope,
       scopedStorageKey: (baseKey: string) => resolveSiScopedStorageKey(baseKey, scope),
       scopedSessionKey: (baseKey: string) => resolveSiScopedSessionKey(baseKey, scope),
-      isolateRouting: false,
-      isIsolated: false,
+      isolateRouting: scope === 'develop-elite',
+      isIsolated: scope === 'develop-elite',
     }),
     [scope],
   )

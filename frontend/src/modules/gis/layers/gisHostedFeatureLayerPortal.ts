@@ -178,7 +178,7 @@ export async function fetchHostedFeatureLayerGeoJsonFromServiceUrl(
   const url = resolveAgroStructuresLayerUrl(serviceUrl.trim())
   if (!url) throw new Error('ArcGIS layer URL is required.')
   const geojson = isAgroStructuresLayerUrl(url)
-    ? ((await fetchAgroStructuresGeoJson(token || undefined)) as GisHostedFeatureLayerGeoJson)
+    ? ((await fetchAgroStructuresGeoJson(token || undefined, url)) as GisHostedFeatureLayerGeoJson)
     : ((await fetchArcGisFeatureLayerGeoJson(url, {
         token,
         onProgress: options?.onProgress,

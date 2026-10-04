@@ -67,9 +67,9 @@ html[data-theme='light'] body,
 html[data-theme='light'] .ds-card,
 html[data-theme='light'] .card,
 html[data-theme='light'] .ec-card,
-html[data-theme='light'] input,
-html[data-theme='light'] select,
-html[data-theme='light'] textarea {
+html[data-theme='light'] input:not(.develop-elite *),
+html[data-theme='light'] select:not(.develop-elite *),
+html[data-theme='light'] textarea:not(.develop-elite *) {
   background: var(--ds-color-surface);
   backdrop-filter: blur(var(--ds-glass-blur, 18px)) saturate(1.08);
   -webkit-backdrop-filter: blur(var(--ds-glass-blur, 18px)) saturate(1.08);
@@ -105,28 +105,35 @@ html[data-theme='light'] .home-page .app-icon-card:hover::before {
   opacity: 0;
 }
 
-html[data-theme='light'] .app-layout i[class*='fa-']:not(.app-icon):not(.icon),
-html[data-theme='light'] .page i[class*='fa-']:not(.app-icon):not(.icon) {
+html[data-theme='light'] .app-layout i[class*='fa-']:not(.app-icon):not(.icon):not(.develop-elite *),
+html[data-theme='light'] .page:not(.develop-elite) i[class*='fa-']:not(.app-icon):not(.icon) {
   color: currentColor;
+}
+
+/* Back controls: chevron must follow button fg (not page --ds-color-text on white pills). */
+.back-btn i[class*='fa-'],
+.app-back-icon-btn i[class*='fa-'],
+.settings-page .settings-header-back i[class*='fa-'] {
+  color: inherit;
 }
 
 /* Light: enforce dark readable typography across app tools and pages */
 html[data-theme='light'] .app-layout,
-html[data-theme='light'] .page,
+html[data-theme='light'] .page:not(.develop-elite),
 html[data-theme='light'] .gis-page-padding {
   color: var(--ds-color-text);
 }
 
-html[data-theme='light'] .app-layout h1,
-html[data-theme='light'] .app-layout h2,
-html[data-theme='light'] .app-layout h3,
-html[data-theme='light'] .app-layout h4,
-html[data-theme='light'] .page h1,
-html[data-theme='light'] .page h2,
-html[data-theme='light'] .page h3,
-html[data-theme='light'] .page h4,
+html[data-theme='light'] .app-layout h1:not(.develop-elite *),
+html[data-theme='light'] .app-layout h2:not(.develop-elite *),
+html[data-theme='light'] .app-layout h3:not(.develop-elite *),
+html[data-theme='light'] .app-layout h4:not(.develop-elite *),
+html[data-theme='light'] .page:not(.develop-elite) h1,
+html[data-theme='light'] .page:not(.develop-elite) h2,
+html[data-theme='light'] .page:not(.develop-elite) h3,
+html[data-theme='light'] .page:not(.develop-elite) h4,
 html[data-theme='light'] .ds-modal-title,
-html[data-theme='light'] .page-title {
+html[data-theme='light'] .page-title:not(.develop-elite *) {
   color: var(--ds-color-text);
 }
 
@@ -136,42 +143,42 @@ html[data-theme='light'] .ec-card {
   color: var(--ds-color-text);
 }
 
-html[data-theme='light'] input,
-html[data-theme='light'] select,
-html[data-theme='light'] textarea {
+html[data-theme='light'] input:not(.develop-elite *),
+html[data-theme='light'] select:not(.develop-elite *),
+html[data-theme='light'] textarea:not(.develop-elite *) {
   color: var(--ds-color-text);
 }
 
-html[data-theme='light'] label,
+html[data-theme='light'] label:not(.develop-elite *),
 html[data-theme='light'] .ds-label,
-html[data-theme='light'] .app-layout p,
-html[data-theme='light'] .app-layout li,
-html[data-theme='light'] .app-layout td,
-html[data-theme='light'] .app-layout th,
-html[data-theme='light'] .page p,
-html[data-theme='light'] .page li {
+html[data-theme='light'] .app-layout p:not(.develop-elite *),
+html[data-theme='light'] .app-layout li:not(.develop-elite *),
+html[data-theme='light'] .app-layout td:not(.develop-elite *),
+html[data-theme='light'] .app-layout th:not(.develop-elite *),
+html[data-theme='light'] .page:not(.develop-elite) p,
+html[data-theme='light'] .page:not(.develop-elite) li {
   color: var(--ds-color-text);
 }
 
 html[data-theme='dark'] .app-layout,
-html[data-theme='dark'] .page,
+html[data-theme='dark'] .page:not(.develop-elite),
 html[data-theme='dark'] .gis-page-padding {
   color: var(--ds-color-text);
 }
 
-html[data-theme='dark'] label,
+html[data-theme='dark'] label:not(.develop-elite *),
 html[data-theme='dark'] .ds-label,
-html[data-theme='dark'] .app-layout p,
-html[data-theme='dark'] .app-layout li,
-html[data-theme='dark'] .app-layout td,
-html[data-theme='dark'] .app-layout th,
-html[data-theme='dark'] .page p,
-html[data-theme='dark'] .page li {
+html[data-theme='dark'] .app-layout p:not(.develop-elite *),
+html[data-theme='dark'] .app-layout li:not(.develop-elite *),
+html[data-theme='dark'] .app-layout td:not(.develop-elite *),
+html[data-theme='dark'] .app-layout th:not(.develop-elite *),
+html[data-theme='dark'] .page:not(.develop-elite) p,
+html[data-theme='dark'] .page:not(.develop-elite) li {
   color: var(--ds-color-text);
 }
 
-html[data-theme='light'] .app-layout small,
-html[data-theme='light'] .page small,
+html[data-theme='light'] .app-layout small:not(.develop-elite *),
+html[data-theme='light'] .page:not(.develop-elite) small,
 html[data-theme='light'] .text-muted,
 html[data-theme='light'] .ds-muted,
 html[data-theme='light'] .ds-text-muted {
@@ -183,8 +190,8 @@ html[data-theme='light'] .ds-text-secondary {
   color: var(--ds-color-text-secondary);
 }
 
-html[data-theme='dark'] .app-layout small,
-html[data-theme='dark'] .page small,
+html[data-theme='dark'] .app-layout small:not(.develop-elite *),
+html[data-theme='dark'] .page:not(.develop-elite) small,
 html[data-theme='dark'] .text-muted,
 html[data-theme='dark'] .ds-muted,
 html[data-theme='dark'] .ds-text-muted {
@@ -207,8 +214,8 @@ html[data-theme='dark'] .ds-text-secondary {
 /* Scrollbars: see styles/si-scrollbar-system.css (loaded from main.tsx) */
 
 /* Font Awesome: inherit text color except brand hubs (home tiles + nav capsules) */
-html[data-theme='dark'] .app-layout i[class*='fa-']:not(.app-icon):not(.icon),
-html[data-theme='dark'] .page i[class*='fa-']:not(.app-icon):not(.icon),
+html[data-theme='dark'] .app-layout i[class*='fa-']:not(.app-icon):not(.icon):not(.develop-elite *),
+html[data-theme='dark'] .page:not(.develop-elite) i[class*='fa-']:not(.app-icon):not(.icon),
 html[data-theme='dark'] .gis-page-padding i[class*='fa-']:not(.app-icon):not(.icon),
 html[data-theme='dark'] .ds-btn i[class*='fa-'],
 html[data-theme='dark'] .ds-btn-primary i[class*='fa-'],
@@ -229,9 +236,9 @@ html[data-theme='dark'] body {
 html[data-theme='dark'] .ds-card,
 html[data-theme='dark'] .card,
 html[data-theme='dark'] .ec-card,
-html[data-theme='dark'] input,
-html[data-theme='dark'] select,
-html[data-theme='dark'] textarea {
+html[data-theme='dark'] input:not(.develop-elite *),
+html[data-theme='dark'] select:not(.develop-elite *),
+html[data-theme='dark'] textarea:not(.develop-elite *) {
   background: var(--ds-color-surface);
   backdrop-filter: blur(var(--ds-glass-blur, 16px)) saturate(1.12);
   -webkit-backdrop-filter: blur(var(--ds-glass-blur, 16px)) saturate(1.12);
@@ -427,8 +434,8 @@ html[data-theme='dark'] .chat-avatar {
     border: 2px solid var(--ds-color-bg);
   }
 
-  html:not([data-theme]) .app-layout i[class*='fa-']:not(.app-icon):not(.icon),
-  html:not([data-theme]) .page i[class*='fa-']:not(.app-icon):not(.icon),
+  html:not([data-theme]) .app-layout i[class*='fa-']:not(.app-icon):not(.icon):not(.develop-elite *),
+  html:not([data-theme]) .page:not(.develop-elite) i[class*='fa-']:not(.app-icon):not(.icon),
   html:not([data-theme]) .gis-page-padding i[class*='fa-']:not(.app-icon):not(.icon),
   html:not([data-theme]) .ds-btn i[class*='fa-'],
   html:not([data-theme]) .ds-btn-primary i[class*='fa-'],

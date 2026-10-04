@@ -71,6 +71,9 @@ export function registerAdminDirectoryPersistence(app, opts) {
   const token = String(opts.accessToken || '').trim()
 
   function guard(req, res, next) {
+    if (process.env.NODE_ENV === 'production' && !token) {
+      return res.status(401).json({ ok: false, error: 'Admin directory token required in production.' })
+    }
     if (!token) return next()
     const hdr = String(req.headers['x-agri-admin-directory-token'] || '').trim()
     const auth = String(req.headers.authorization || '')
@@ -80,13 +83,31 @@ export function registerAdminDirectoryPersistence(app, opts) {
     return res.status(401).json({ ok: false, error: 'Invalid or missing admin directory token.' })
   }
 
-  app.get('/api/v1/admin/directory', guard, (_req, res) => {
+  app.get('/api/v1/admin/directory', guard, async (_req, res) => {
+    try {
+      const { exportDirectorySnapshot } = await import('./identity/directoryExport.js')
+      const { isIdentityReady } = await import('./identity/db.js')
+      if (isIdentityReady()) {
+        const snapshot = await exportDirectorySnapshot()
+        if (snapshot) return res.json({ ok: true, ...snapshot })
+      }
+    } catch (e) {
+      console.error('[admin-directory] PG export failed', e)
+    }
     const { data } = readStore(filePath)
     return res.json({ ok: true, ...data })
   })
 
-  app.put('/api/v1/admin/directory', guard, (req, res) => {
+  app.put('/api/v1/admin/directory', guard, async (req, res) => {
     try {
+      const { isIdentityReady } = await import('./identity/db.js')
+      if (isIdentityReady()) {
+        return res.status(403).json({
+          ok: false,
+          error: 'Directory PUT is disabled when PostgreSQL identity is active. Use /api/v1/identity APIs.',
+          code: 'directory_read_only',
+        })
+      }
       const body = req.body && typeof req.body === 'object' ? req.body : {}
       const users = Array.isArray(body.users) ? body.users : null
       const auditLog = Array.isArray(body.auditLog) ? body.auditLog : null

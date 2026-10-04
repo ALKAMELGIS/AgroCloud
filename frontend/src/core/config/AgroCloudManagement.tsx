@@ -4,8 +4,7 @@ import {
   resolveAgroCloudManagementUrl,
 } from '../routing/defaultPageLinks'
 import { useSystemSettings } from '../state/SystemSettingsContext'
-import ExternalPageLink from '../routing/ExternalPageLink'
-import '@/modules/operations/other/sensors/gps-in-app-browser.css'
+import ExternalEmbeddedPage from '../routing/ExternalEmbeddedPage'
 
 /** AgroCloud Management — in-app iframe (default: Al Maha Farm on Railway). */
 export default function AgroCloudManagement() {
@@ -14,9 +13,5 @@ export default function AgroCloudManagement() {
   const url = resolveAgroCloudManagementUrl(settings.customPages)
   const title = pageLink?.name?.trim() || 'AgroCloud Management'
 
-  return (
-    <main className="sensor-shell gps-in-app-browser agrocloud-management-page" aria-label={title}>
-      <ExternalPageLink url={url} title={title} />
-    </main>
-  )
+  return <ExternalEmbeddedPage title={title} externalUrl={url} />
 }

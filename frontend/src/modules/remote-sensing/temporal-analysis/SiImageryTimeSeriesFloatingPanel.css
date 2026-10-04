@@ -274,6 +274,14 @@
   flex-direction: column;
 }
 
+.si-its-float__loading {
+  margin: 0;
+  padding: 16px 12px;
+  font-size: 11px;
+  color: rgba(236, 253, 245, 0.75);
+  text-align: center;
+}
+
 .si-its-float .acp-ts {
   display: flex;
   flex-direction: column;

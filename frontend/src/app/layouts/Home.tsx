@@ -150,6 +150,9 @@ const menuItems: MenuItem[] = [
     color: '#1E293B', // Dark
     items: [
       { label: { en: 'User Management', ar: 'إدارة المستخدمين' }, icon: 'fa-solid fa-users', to: '/admin/users' },
+      { label: { en: 'Manpower', ar: 'القوى العاملة' }, icon: 'fa-solid fa-people-group', to: '/admin/manpower' },
+      { label: { en: 'Roles & Permissions', ar: 'الأدوار والصلاحيات' }, icon: 'fa-solid fa-shield-halved', to: '/admin/roles' },
+      { label: { en: 'Hierarchy', ar: 'التسلسل الهرمي' }, icon: 'fa-solid fa-sitemap', to: '/admin/hierarchy' },
       { label: { en: 'GitHub Integration', ar: 'تكامل GitHub' }, icon: 'fa-brands fa-github', to: '/admin/github' },
       { label: { en: 'System Settings', ar: 'إعدادات النظام' }, icon: 'fa-solid fa-sliders', to: '/admin/system-settings' },
     ]

@@ -30,6 +30,7 @@ const DRAWN_AOI_OUTLINE_ABOVE_RASTER_IDS = [
 
 const DRAW_DRAFT_TOP_IDS = [
   'si-draw-draft-fill',
+  'si-draw-draft-polygon-line',
   'si-draw-draft-line',
   'si-draw-draft-close-hint',
   'si-draw-draft-vertex',

@@ -495,7 +495,7 @@
   border: 1px solid rgba(15, 23, 42, 0.1);
   border-radius: 14px;
   background: linear-gradient(165deg, #ffffff 0%, #f1f5f9 100%);
-  color: var(--settings-ink);
+  color: var(--settings-ink, #0f172a);
   box-shadow:
     0 8px 22px rgba(15, 23, 42, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.95);
@@ -520,6 +520,23 @@
 .settings-page .settings-header-back:focus-visible {
   outline: 2px solid rgba(4, 120, 87, 0.45);
   outline-offset: 2px;
+}
+
+.settings-page .settings-header-back i[class*='fa-'] {
+  color: inherit;
+}
+
+html[data-theme='dark'] .settings-page .settings-header-back {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: #0a0a0a;
+  color: rgba(255, 255, 255, 0.76);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+}
+
+html[data-theme='dark'] .settings-page .settings-header-back:hover {
+  background: #121212;
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 .settings-page .settings-datasource-header-title {

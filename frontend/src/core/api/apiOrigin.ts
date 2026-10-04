@@ -158,6 +158,9 @@ export function isStaticDeploymentWithoutBackend(): boolean {
   return !configuredApiOrigin()
 }
 
+/** @deprecated Alias for {@link isStaticDeploymentWithoutBackend} (legacy embed probe import). */
+export const isStaticHostWithoutBackend = isStaticDeploymentWithoutBackend
+
 /**
  * HTTP statuses that indicate the backend route isn't reachable:
  *   - 404/405/501: a static host swallowed the `/api/*` route.

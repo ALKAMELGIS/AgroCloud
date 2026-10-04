@@ -193,7 +193,7 @@ export function createPageLinkRecord(path?: string): CustomPageRecord {
   const routePath = normalizeAppPath(path ?? `/pages/${id.slice(-8)}`)
   return {
     id,
-    name: 'New page link',
+    name: 'New embedded page',
     path: routePath,
     iconClass: 'fa-solid fa-link',
     visible: true,

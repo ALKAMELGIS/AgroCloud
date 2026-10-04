@@ -61,10 +61,13 @@ import {
   buildSiImageryFieldOptionsForSource,
   collectSiImageryObjectFeatures,
   listSiImageryPlotLabelAttributes,
+  defaultSiImageryPlotSourceId,
   listSiImageryPlotSourceLayers,
   resolveSiImageryField,
   SI_IMAGERY_COMMITTED_AOI_KEY,
   SI_IMAGERY_PLOT_LABEL_AUTO,
+  SI_IMAGERY_DRAWN_AOI_LABEL,
+  SI_IMAGERY_PLOT_SOURCE_DRAWN,
 } from './siImageryTimeSeriesFields'
 import { TimeSeriesExportManager } from './ExportManager'
 import { SiDynamicMapSnapshotsPanel } from '../imagery/SiDynamicMapSnapshotsPanel'
@@ -112,6 +115,8 @@ export type SiImageryTimeSeriesPanelProps = {
   stormOverlayDismissEpoch?: number
   /** Floating-window header slot — Aggregate + Chart render there instead of in the toolbar. */
   headerToolsHost?: HTMLElement | null
+  /** Drawn AOI only (Develop Elite): lighter prefetch, no portfolio structures. */
+  drawnAoiOnly?: boolean
 }
 
 const TIME_AGGREGATION_OPTIONS = [
@@ -141,14 +146,17 @@ export function SiImageryTimeSeriesPanel({
   selectedFieldKey: selectedFieldKeyProp,
   onSelectedFieldKeyChange,
   onHighlightFieldKeysChange,
-  chartLookbackDays = 90,
+  chartLookbackDays: chartLookbackDaysProp = 90,
   mapboxToken,
   projectName,
   generatedBy,
   onStormMapOverlayChange,
   stormOverlayDismissEpoch = 0,
   headerToolsHost = null,
+  drawnAoiOnly = false,
 }: SiImageryTimeSeriesPanelProps) {
+  const chartLookbackDays = drawnAoiOnly ? Math.min(chartLookbackDaysProp, 90) : chartLookbackDaysProp
+  const autoRunDelayMs = drawnAoiOnly ? 60 : 280
   const chartRef = useRef<ChartJS | null>(null)
   const chartWrapRef = useRef<HTMLDivElement | null>(null)
   const chartInk = useImageryChartInk()
@@ -160,6 +168,7 @@ export function SiImageryTimeSeriesPanel({
 
   const [plotLabelAttribute, setPlotLabelAttribute] = useState(SI_IMAGERY_PLOT_LABEL_AUTO)
   const [selectedPlotSourceId, setSelectedPlotSourceId] = useState('')
+  const prevPlotDrawnGeomKeyRef = useRef('')
 
   const plotLabelAttributes = useMemo(
     () => listSiImageryPlotLabelAttributes(vectorLayers),
@@ -168,24 +177,53 @@ export function SiImageryTimeSeriesPanel({
 
   const plotSourceLayers = useMemo(
     () =>
-      listSiImageryPlotSourceLayers(
-        agroStructuresMask,
-        aoiFields,
-        committedAoiGeometry,
-        vectorLayers,
-      ),
-    [agroStructuresMask, aoiFields, committedAoiGeometry, vectorLayers],
+      drawnAoiOnly
+        ? committedAoiGeometry
+          ? [
+              {
+                id: SI_IMAGERY_PLOT_SOURCE_DRAWN,
+                label: SI_IMAGERY_DRAWN_AOI_LABEL,
+                featureCount: 1,
+              },
+            ]
+          : []
+        : listSiImageryPlotSourceLayers(
+            agroStructuresMask,
+            aoiFields,
+            committedAoiGeometry,
+            vectorLayers,
+          ),
+    [agroStructuresMask, aoiFields, committedAoiGeometry, vectorLayers, drawnAoiOnly],
   )
 
   useEffect(() => {
     if (!plotSourceLayers.length) {
       setSelectedPlotSourceId('')
+      prevPlotDrawnGeomKeyRef.current = ''
       return
     }
-    setSelectedPlotSourceId(prev =>
-      prev && plotSourceLayers.some(s => s.id === prev) ? prev : plotSourceLayers[0]!.id,
-    )
-  }, [plotSourceLayers])
+
+    let drawnGeomKey = ''
+    if (committedAoiGeometry) {
+      try {
+        drawnGeomKey = JSON.stringify(committedAoiGeometry)
+      } catch {
+        drawnGeomKey = ''
+      }
+    }
+    const drawnGeomNew =
+      Boolean(drawnGeomKey) && drawnGeomKey !== prevPlotDrawnGeomKeyRef.current
+    if (drawnGeomKey) prevPlotDrawnGeomKeyRef.current = drawnGeomKey
+    else prevPlotDrawnGeomKeyRef.current = ''
+
+    const drawnSourceId = plotSourceLayers.find(s => s.id === SI_IMAGERY_PLOT_SOURCE_DRAWN)?.id
+
+    setSelectedPlotSourceId(prev => {
+      if (drawnGeomNew && drawnSourceId) return drawnSourceId
+      if (prev && plotSourceLayers.some(s => s.id === prev)) return prev
+      return defaultSiImageryPlotSourceId(plotSourceLayers)
+    })
+  }, [committedAoiGeometry, plotSourceLayers])
 
   const selectedPlotSource = useMemo(
     () => plotSourceLayers.find(s => s.id === selectedPlotSourceId) ?? null,
@@ -400,7 +438,7 @@ export function SiImageryTimeSeriesPanel({
     toDate,
     layerIds: selectedLayerIds,
     referenceDate,
-    prefetchLookbackDays: Math.max(chartLookbackDays, 365),
+    prefetchLookbackDays: drawnAoiOnly ? chartLookbackDays : Math.max(chartLookbackDays, 365),
   })
 
   const rangeFilteredChart = useMemo(
@@ -990,17 +1028,17 @@ export function SiImageryTimeSeriesPanel({
     const prev = prevAutoRunDatesRef.current
     if (prev.from === fromDate && prev.to === toDate && hasRun) return
     // Re-run whenever the toolbar range changes (including first run after edit).
-    const id = window.setTimeout(() => void runAnalysisRef.current(), 280)
+    const id = window.setTimeout(() => void runAnalysisRef.current(), autoRunDelayMs)
     return () => window.clearTimeout(id)
-  }, [fromDate, toDate, selectedFieldKey, hasRun, dateError, analysisMode])
+  }, [fromDate, toDate, selectedFieldKey, hasRun, dateError, analysisMode, autoRunDelayMs])
 
   useEffect(() => {
     if (analysisMode !== 'single-layer-trend') return
     if (hasRun || loading) return
     if (!selectedFieldKey || !fromDate || !toDate || fromDate >= toDate || dateError) return
-    const id = window.setTimeout(() => void runAnalysisRef.current(), 280)
+    const id = window.setTimeout(() => void runAnalysisRef.current(), autoRunDelayMs)
     return () => window.clearTimeout(id)
-  }, [selectedFieldKey, fromDate, toDate, selectedLayerIds, hasRun, loading, dateError, analysisMode])
+  }, [selectedFieldKey, fromDate, toDate, selectedLayerIds, hasRun, loading, dateError, analysisMode, autoRunDelayMs])
 
   useEffect(() => {
     const id = defaultLayerId.trim()

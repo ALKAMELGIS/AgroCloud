@@ -10,6 +10,7 @@ import {
   fetchAgroStructuresGeoJsonInBbox,
   resolveAgroStructuresCountry,
   resolveAgroStructuresCountryLabel,
+  resolveAgroStructuresLayerUrl,
 } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
 import {
   extractCropAlertFieldsFromMask,
@@ -122,16 +123,21 @@ async function resolveAgroStructuresLayerGeojson(
   signal: AbortSignal,
 ): Promise<GeoJSON.FeatureCollection> {
   const registry = getGisContentMapRegistry()
+  let liveLayerUrl: string | undefined
   for (const id of registry.activeItemIds) {
     const row = getGisContentRowById(id)
     if (!row || !isAgroStructuresPortalRow(row)) continue
     const snap = readGisHostedFeatureLayerSnapshot(getGisContentItemDetails(row.id))
-    if (snap?.externalServiceUrl?.trim()) break
+    const external = snap?.externalServiceUrl?.trim()
+    if (external) {
+      liveLayerUrl = resolveAgroStructuresLayerUrl(external)
+      break
+    }
     if (snap?.geojson?.features?.length) {
       return snap.geojson as GeoJSON.FeatureCollection
     }
   }
-  const geojson = await fetchAgroStructuresGeoJson(token || undefined)
+  const geojson = await fetchAgroStructuresGeoJson(token || undefined, liveLayerUrl)
   if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
   return geojson as GeoJSON.FeatureCollection
 }

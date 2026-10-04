@@ -404,6 +404,49 @@ export type DrawnAoiGeometry =
   | { type: 'Polygon'; coordinates: [number, number][][] }
   | { type: 'MultiPolygon'; coordinates: [number, number][][][] };
 
+/** Leaflet `L.Circle#toGeoJSON()` — Point + `properties.radius` (meters). */
+function circleRingWgs84FromMeters(
+  lng: number,
+  lat: number,
+  radiusMeters: number,
+  steps = 64,
+): [number, number][] {
+  const ring: [number, number][] = []
+  const latRad = (lat * Math.PI) / 180
+  const cosLat = Math.cos(latRad)
+  const mPerDegLat = 111_320
+  const mPerDegLng = 111_320 * (Math.abs(cosLat) > 1e-6 ? cosLat : 1e-6)
+  for (let i = 0; i <= steps; i++) {
+    const ang = (i / steps) * 2 * Math.PI
+    const dx = (radiusMeters * Math.cos(ang)) / mPerDegLng
+    const dy = (radiusMeters * Math.sin(ang)) / mPerDegLat
+    ring.push([lng + dx, lat + dy])
+  }
+  return ring
+}
+
+function drawnAoiFromFeature(feature: {
+  geometry?: unknown
+  properties?: unknown
+}): DrawnAoiGeometry | null {
+  const geom = feature.geometry as { type?: string; coordinates?: unknown } | undefined
+  if (!geom || typeof geom !== 'object') return null
+  if (geom.type === 'Polygon' || geom.type === 'MultiPolygon') {
+    return geom as DrawnAoiGeometry
+  }
+  if (geom.type === 'Point' && Array.isArray(geom.coordinates) && geom.coordinates.length >= 2) {
+    const props = feature.properties as { radius?: number } | null | undefined
+    const radiusM = Number(props?.radius)
+    if (!Number.isFinite(radiusM) || radiusM <= 0) return null
+    const lng = Number(geom.coordinates[0])
+    const lat = Number(geom.coordinates[1])
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null
+    const ring = circleRingWgs84FromMeters(lng, lat, radiusM)
+    return { type: 'Polygon', coordinates: [ring] }
+  }
+  return null
+}
+
 function mergePolygonGeometries(geoms: DrawnAoiGeometry[]): DrawnAoiGeometry | null {
   const polys: [number, number][][][] = [];
   for (const geom of geoms) {
@@ -422,11 +465,15 @@ export function getDrawnGeometry(geo: unknown): DrawnAoiGeometry | null {
     geometry?: DrawnAoiGeometry;
     features?: Array<{ geometry?: DrawnAoiGeometry }>;
   };
-  if (g.type === 'Feature' && g.geometry) return getDrawnGeometry(g.geometry);
+  if (g.type === 'Feature' && g.geometry) {
+    const fromFeature = drawnAoiFromFeature(g as { geometry: g.geometry; properties?: unknown });
+    if (fromFeature) return fromFeature;
+    return getDrawnGeometry(g.geometry);
+  }
   if (g.type === 'FeatureCollection' && Array.isArray(g.features)) {
     const merged: DrawnAoiGeometry[] = [];
     for (const feature of g.features) {
-      const part = getDrawnGeometry(feature);
+      const part = drawnAoiFromFeature(feature) ?? getDrawnGeometry(feature);
       if (part) merged.push(part);
     }
     return mergePolygonGeometries(merged);

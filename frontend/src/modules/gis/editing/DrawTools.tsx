@@ -5,6 +5,16 @@ import 'leaflet-draw';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import './DrawTools.css';
 
+/** Small circle handles for leaflet-draw (replaces default blue location pin icons). */
+function sketchVertexIcon(fill = '#4ade80'): L.DivIcon {
+  return L.divIcon({
+    className: 'agro-draw-sketch-vertex',
+    iconSize: [10, 10],
+    iconAnchor: [5, 5],
+    html: `<span class="agro-draw-sketch-vertex__dot" style="background:${fill}"></span>`,
+  });
+}
+
 // Logic Component (inside MapContainer)
 interface DrawToolsControllerProps {
   activeTool: string | null;
@@ -105,27 +115,20 @@ export const DrawToolsController: React.FC<DrawToolsControllerProps> = ({
         
         if (type === 'circle') {
             featureGroupRef.current?.addLayer(layer);
-            
-            // Add center marker for circle (Standard Marker)
-            const center = layer.getLatLng();
-            const centerMarker = L.marker(center, {
-                interactive: true
-            });
-            (centerMarker as any).__isCircleCenter = true;
-            (centerMarker as any).__parentCircle = layer;
-            
-            // Link marker to circle for deletion/editing
-            (layer as any).centerMarker = centerMarker;
-            
-            featureGroupRef.current?.addLayer(centerMarker);
         } else if (type === 'marker') {
-            // Ensure marker displays with text
-            layer.bindTooltip("Marker Location", { 
-                permanent: true, 
-                direction: 'top',
-                className: 'custom-marker-tooltip' 
-            });
-            featureGroupRef.current?.addLayer(layer);
+            const latlng = layer.getLatLng?.();
+            featureGroupRef.current?.removeLayer(layer);
+            if (latlng) {
+              const dot = L.circleMarker(latlng, {
+                radius: 6,
+                color: shapeColor || '#4ade80',
+                fillColor: shapeColor || '#4ade80',
+                fillOpacity: 0.85,
+                weight: 2,
+                ...(featureGroupPane ? { pane: featureGroupPane } : {}),
+              });
+              featureGroupRef.current?.addLayer(dot);
+            }
         } else {
             featureGroupRef.current?.addLayer(layer);
         }
@@ -138,15 +141,6 @@ export const DrawToolsController: React.FC<DrawToolsControllerProps> = ({
           }
         } catch {
         }
-        try {
-          if (type === 'circle' && (layer as any).centerMarker?.on) {
-            (layer as any).centerMarker.on('click', () => {
-              onSelectionChange?.(layer);
-            });
-          }
-        } catch {
-        }
-        
         // Zoom to AOI
         zoomToLayer(layer);
 
@@ -155,21 +149,11 @@ export const DrawToolsController: React.FC<DrawToolsControllerProps> = ({
         onToolActivate(null); // Reset tool
       };
 
-      const handleDeleted = (e: any) => {
-        e.layers.eachLayer((layer: any) => {
-            if ((layer as any).centerMarker) {
-                featureGroupRef.current?.removeLayer((layer as any).centerMarker);
-            }
-        });
+      const handleDeleted = () => {
         emitCount();
       };
 
-      const handleEdited = (e: any) => {
-        e.layers.eachLayer((layer: any) => {
-            if ((layer as any).centerMarker && layer.getLatLng) {
-                (layer as any).centerMarker.setLatLng(layer.getLatLng());
-            }
-        });
+      const handleEdited = () => {
         emitCount();
       };
 
@@ -219,25 +203,28 @@ export const DrawToolsController: React.FC<DrawToolsControllerProps> = ({
           fillOpacity: 0.2,
           clickable: true
         };
+        const vertexIcon = sketchVertexIcon(shapeColor || '#4ade80');
 
         let drawer;
         
         if (type === 'rectangle') {
           // @ts-ignore
-          drawer = new L.Draw.Rectangle(map, { shapeOptions, metric: true });
+          drawer = new L.Draw.Rectangle(map, { shapeOptions, metric: true, icon: vertexIcon, touchIcon: vertexIcon });
         } else if (type === 'polygon') {
           // @ts-ignore
           drawer = new L.Draw.Polygon(map, {
             shapeOptions,
             allowIntersection: false,
-            showArea: true
+            showArea: true,
+            icon: vertexIcon,
+            touchIcon: vertexIcon,
           });
         } else if (type === 'circle') {
           // @ts-ignore
-          drawer = new L.Draw.Circle(map, { shapeOptions, showRadius: true });
+          drawer = new L.Draw.Circle(map, { shapeOptions, showRadius: true, icon: vertexIcon, touchIcon: vertexIcon });
         } else if (type === 'marker') {
           // @ts-ignore
-          drawer = new L.Draw.Marker(map);
+          drawer = new L.Draw.Marker(map, { icon: vertexIcon });
         }
 
         if (drawer) {

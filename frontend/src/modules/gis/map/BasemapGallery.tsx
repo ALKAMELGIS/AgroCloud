@@ -4,9 +4,11 @@ import {
   buildBasemapCatalog,
   catalogEntryById,
   DEFAULT_BASEMAP_ID,
+  ESRI_BASEMAP_IDS,
   getBasemapThumbnail,
   resolveBasemapId,
 } from './basemapCatalog'
+import { rasterTileMaxNativeZoom } from '../layers/raster/rasterTileZoom'
 import { TOPOGRAPHIC_3D_BASEMAP_ID } from '@/modules/remote-sensing/terrain/agroCloudMapTerrain'
 
 export type BasemapType = string
@@ -165,20 +167,37 @@ export const BasemapLayer: React.FC<{
 
   return (
     <>
-      {layers.map((L, i) => (
-        <TileLayer
-          key={`${resolvedId}-${i}-${L.url.slice(0, 48)}`}
-          url={L.url}
-          attribution={L.attribution}
-          opacity={L.opacity ?? 1}
-          maxZoom={19}
-          {...(pane ? { pane } : {})}
-          {...(stableDuringInteraction
-            ? { updateWhenIdle: true, updateWhenZooming: false, keepBuffer: 4 }
-            : {})}
-          {...(L.url.includes('google.com/vt') ? { subdomains: ['0', '1', '2', '3'] } : {})}
-        />
-      ))}
+      {layers.map((L, i) => {
+        const url = L.url
+        const subdomains =
+          url.includes('google.com/vt')
+            ? (['0', '1', '2', '3'] as const)
+            : url.includes('{s}')
+              ? (['a', 'b', 'c', 'd'] as const)
+              : undefined
+        return (
+          <TileLayer
+            key={`${resolvedId}-${i}-${url.slice(0, 48)}`}
+            url={url}
+            attribution={L.attribution}
+            opacity={L.opacity ?? 1}
+            maxZoom={22}
+            maxNativeZoom={L.maxNativeZoom ?? rasterTileMaxNativeZoom(url)}
+            {...(subdomains ? { subdomains: [...subdomains] } : {})}
+            {...(url.includes('{r}') ? { detectRetina: true } : {})}
+            {...(pane ? { pane } : {})}
+            {...(stableDuringInteraction
+              ? { updateWhenIdle: true, updateWhenZooming: false, keepBuffer: 4 }
+              : {})}
+          />
+        )
+      })}
     </>
   )
+}
+
+/** Develop Elite / GIS map picker order (Google + ArcGIS Online list). */
+export function listDevelopEliteBasemapEntries(catalog = buildBasemapCatalog('')) {
+  const ids = ['google-earth-satellite', ...ESRI_BASEMAP_IDS]
+  return ids.map(id => catalogEntryById(catalog, id)).filter((e): e is NonNullable<typeof e> => !!e)
 }

@@ -17,7 +17,12 @@ import {
 const SplashScreen = lazyWithRetry(() => import('./startup/SplashScreen'), 'SplashScreen')
 import { AuthProvider, useAuth } from '@/core/state/auth'
 import { LanguageProvider } from '@/core/localization/i18n'
-import { SystemSettingsProvider } from '@/core/state/SystemSettingsContext'
+import { SystemSettingsProvider, useSystemSettings } from '@/core/state/SystemSettingsContext'
+import { isExternalEmbedRoute } from '@/core/routing/defaultPageLinks'
+import { AgroThemeProvider } from '@/theme/AgroThemeProvider'
+import { AppSnackbarProvider } from '@/components/feedback/AppSnackbarProvider'
+import { MuiAppShell } from '@/components/layout/MuiAppShell'
+import { isMuiShellEnabled } from '@/config/muiShell'
 
 type AppErrorState = {
   error: unknown
@@ -400,6 +405,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
 
 function AppShell() {
   const { user, logout } = useAuth()
+  const { settings } = useSystemSettings()
   const location = useLocation()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
@@ -435,7 +441,7 @@ function AppShell() {
   const isOperationsDataPage = location.pathname.startsWith('/data/')
   /** Soil / weather / irrigation / camera API integration pages */
   const isSensorsPage = location.pathname.startsWith('/sensors/')
-  const isAgroCloudManagement = location.pathname === '/applications/agrocloud-management'
+  const isExternalEmbed = isExternalEmbedRoute(settings.customPages, location.pathname)
   const isSatelliteIntelligence =
     location.pathname === '/satellite/indices' || location.pathname.startsWith('/satellite/indices/')
   const isHomeLanding = location.pathname === '/' || location.pathname === ''
@@ -449,13 +455,24 @@ function AppShell() {
     isDevelopDashboard && 'content--develop-dashboard',
     isOperationsDataPage && 'content--operations-fit',
     isSensorsPage && 'content--sensors-fit',
-    isAgroCloudManagement && 'content--agrocloud-management-embed',
+    isExternalEmbed && 'content--external-embed',
     isSatelliteIntelligence && 'content--satellite-intelligence',
   ]
     .filter(Boolean)
     .join(' ')
 
   const layoutChromeClass = ['layout', 'layout-sidebar', 'app-layout'].join(' ')
+  const showAppChrome = showChrome
+  const muiShell = isMuiShellEnabled()
+
+  const routeBody = (
+    <>
+      <div className="app-main-routes">
+        <AppRoutes />
+      </div>
+      <PersistentAgroCloudEmbed />
+    </>
+  )
 
   if (user && isOnLogin) {
     const from = (location.state as any)?.from?.pathname
@@ -466,16 +483,24 @@ function AppShell() {
     return <Navigate to="/login" replace state={{ from: location }} />
   }
 
+  if (showAppChrome && muiShell) {
+    return (
+      <MuiAppShell mainClassName={mainContentClass} onLogout={handleLogout}>
+        {routeBody}
+      </MuiAppShell>
+    )
+  }
+
   return (
     <>
-      {showChrome ? (
+      {showAppChrome ? (
         <HeaderBar
           onToggleMobileNav={() => setMobileNavOpen(v => !v)}
           mobileNavOpen={mobileNavOpen}
         />
       ) : null}
       <div className={showChrome ? layoutChromeClass : 'layout'}>
-        {showChrome ? (
+        {showAppChrome ? (
           <NavMenu
             onLogout={handleLogout}
             mobileNavOpen={mobileNavOpen}
@@ -483,10 +508,7 @@ function AppShell() {
           />
         ) : null}
         <main className={mainContentClass}>
-          <div className="app-main-routes">
-            <AppRoutes />
-          </div>
-          <PersistentAgroCloudEmbed />
+          {routeBody}
         </main>
       </div>
     </>
@@ -499,16 +521,20 @@ export default function App() {
       <LanguageProvider>
         <AuthProvider>
           <SystemSettingsProvider>
-            <AppDialogProvider>
-              <AppErrorBoundary>
-                <AppShell />
-                <Suspense fallback={null}>
-                  <SplashScreen />
-                </Suspense>
-                <PwaInstallPrompt />
-                <PwaInstallFab />
-              </AppErrorBoundary>
-            </AppDialogProvider>
+            <AgroThemeProvider>
+              <AppSnackbarProvider>
+                <AppDialogProvider>
+                  <AppErrorBoundary>
+                    <AppShell />
+                    <Suspense fallback={null}>
+                      <SplashScreen />
+                    </Suspense>
+                    <PwaInstallPrompt />
+                    <PwaInstallFab />
+                  </AppErrorBoundary>
+                </AppDialogProvider>
+              </AppSnackbarProvider>
+            </AgroThemeProvider>
           </SystemSettingsProvider>
         </AuthProvider>
       </LanguageProvider>

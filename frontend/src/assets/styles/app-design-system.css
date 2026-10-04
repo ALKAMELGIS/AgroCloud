@@ -100,6 +100,34 @@ html[data-theme='dark'] .app-layout > .content.content--agro-cloud-dashboard {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  background: #001a14;
+  background-image: none;
+}
+
+html[data-theme='dark'] .app-layout > .content.content--develop-dashboard {
+  background: #001a14;
+  background-image: none;
+}
+
+.content--develop-dashboard .app-main-routes {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.content--develop-dashboard .develop-elite.page {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: none;
+  min-height: calc(100dvh - var(--app-header-block, 72px));
+  height: calc(100dvh - var(--app-header-block, 72px));
+}
+
+.content--develop-dashboard .develop-elite.page.develop-elite--grid-dashboard {
+  min-height: calc(100dvh - var(--app-header-block, 72px));
 }
 
 .app-layout > .content.content--agro-cloud-platform {
@@ -440,28 +468,45 @@ html[data-theme='dark'] .ds-modal {
   box-shadow: var(--ds-shadow-md);
 }
 
-/* Global square back control: light surface + dark chevron (all routes, incl. Users admin). */
+/* Global square back control — icon contrast in light + dark (see theme-system exclusions). */
 .back-btn,
 .app-back-icon-btn {
+  --app-back-btn-bg: #ffffff;
+  --app-back-btn-fg: #0f172a;
+  --app-back-btn-border: rgba(15, 23, 42, 0.14);
+  --app-back-btn-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: #ffffff;
-  color: rgba(15, 23, 42, 0.88);
+  border: 1px solid var(--app-back-btn-border);
+  background: var(--app-back-btn-bg);
+  color: var(--app-back-btn-fg);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    background 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   font-size: 15px;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--app-back-btn-shadow);
+}
+
+.back-btn i,
+.back-btn svg,
+.app-back-icon-btn i,
+.app-back-icon-btn svg {
+  color: inherit;
+  opacity: 1;
 }
 
 .back-btn:hover,
 .app-back-icon-btn:hover {
-  background: #f8fafc;
-  color: var(--ds-color-text);
+  --app-back-btn-bg: #f8fafc;
+  --app-back-btn-fg: #020617;
   border-color: rgba(37, 99, 235, 0.35);
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
   transform: translateX(-3px) translateY(-1px);
@@ -480,18 +525,42 @@ html[data-theme='dark'] .ds-modal {
 
 html[data-theme='dark'] .back-btn,
 html[data-theme='dark'] .app-back-icon-btn {
-  background: #ffffff;
-  color: #0f172a;
-  border-color: rgba(255, 255, 255, 0.35);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+  --app-back-btn-bg: #0a0a0a;
+  --app-back-btn-fg: rgba(255, 255, 255, 0.76);
+  --app-back-btn-border: rgba(255, 255, 255, 0.14);
+  --app-back-btn-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
 }
 
 html[data-theme='dark'] .back-btn:hover,
 html[data-theme='dark'] .app-back-icon-btn:hover {
-  background: #f1f5f9;
-  color: #020617;
-  border-color: rgba(96, 165, 250, 0.55);
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
+  --app-back-btn-bg: #121212;
+  --app-back-btn-fg: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .back-btn,
+  :root:not([data-theme]) .app-back-icon-btn {
+    --app-back-btn-bg: #0a0a0a;
+    --app-back-btn-fg: rgba(255, 255, 255, 0.76);
+    --app-back-btn-border: rgba(255, 255, 255, 0.14);
+    --app-back-btn-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+  }
+
+  :root:not([data-theme]) .back-btn:hover,
+  :root:not([data-theme]) .app-back-icon-btn:hover {
+    --app-back-btn-bg: #121212;
+    --app-back-btn-fg: rgba(255, 255, 255, 0.9);
+    border-color: rgba(255, 255, 255, 0.22);
+  }
+}
+
+html[data-theme='light'] .back-btn,
+html[data-theme='light'] .app-back-icon-btn {
+  --app-back-btn-bg: #ffffff;
+  --app-back-btn-fg: #0f172a;
+  --app-back-btn-border: rgba(15, 23, 42, 0.14);
 }
 
 @media (max-width: 640px) {
@@ -575,8 +644,9 @@ html[data-theme='dark'] .content--sensors-fit {
   height: calc(100dvh - var(--app-header-block, 72px));
 }
 
-/* AgroCloud Management — full-bleed external app iframe (Railway / link management) */
-.app-layout > .content.content--agrocloud-management-embed {
+/* Settings → Pages external URLs (AgroCloud Management, Irrigation Sensors, custom links) */
+.app-layout > .content.content--external-embed,
+.content.content--external-embed {
   padding: 0;
   overflow: hidden;
   display: flex;
@@ -586,13 +656,13 @@ html[data-theme='dark'] .content--sensors-fit {
   background-image: none;
 }
 
-.content--agrocloud-management-embed {
+.content--external-embed {
   display: flex;
   flex-direction: column;
   min-height: 0;
 }
 
-.content--agrocloud-management-embed .app-main-routes {
+.content--external-embed .app-main-routes {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -601,7 +671,8 @@ html[data-theme='dark'] .content--sensors-fit {
   height: 100%;
 }
 
-.content--agrocloud-management-embed .agrocloud-management-page.sensor-shell.gps-in-app-browser {
+.content--external-embed .sensor-shell.gps-in-app-browser,
+.content--external-embed .external-embed-shell {
   flex: 1 1 auto;
   min-height: calc(100dvh - var(--app-header-block, 72px));
   height: calc(100dvh - var(--app-header-block, 72px));
@@ -609,13 +680,24 @@ html[data-theme='dark'] .content--sensors-fit {
   padding: 0;
 }
 
-.content--agrocloud-management-embed .external-page-link.agro-cloud-page {
+.content--external-embed .irrigation-sensors-embed,
+.content--external-embed .agrocloud-management-page {
   flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   height: 100%;
 }
 
-.content--agrocloud-management-embed .gps-in-app-browser__frame-wrap {
+.content--external-embed .external-page-link.agro-cloud-page {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.content--external-embed .gps-in-app-browser__frame-wrap {
   flex: 1 1 auto;
   min-height: 0;
   height: 100%;
@@ -647,4 +729,46 @@ html[data-theme='dark'] .content--sensors-fit {
   padding: 2rem;
   color: #64748b;
   font-size: 0.95rem;
+}
+
+/* ArcGIS Dashboard–style refresh control (Develop / AgroCloud dashboards) */
+.dashboard-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--ds-color-border, rgba(0, 0, 0, 0.12));
+  border-radius: 2px;
+  background: var(--ds-color-surface, #fff);
+  color: var(--ds-color-text-muted, #605e5c);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.dashboard-refresh-btn:hover:not(:disabled) {
+  color: var(--ds-color-primary, #107c10);
+  border-color: var(--ds-color-primary, #107c10);
+}
+
+.dashboard-refresh-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.dashboard-refresh-btn.is-spinning i {
+  animation: dashboard-refresh-spin 0.85s linear infinite;
+}
+
+@keyframes dashboard-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-refresh-btn.is-spinning i {
+    animation: none;
+  }
 }

@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { DashboardRefreshButton } from '@/modules/dashboards/components/DashboardRefreshButton'
 import { useAcpPlatform } from '../acpPlatformContext'
 import type { AcpKpiCardConfig } from '../acpPlatformConfig'
 import { useBreakpoint, isAcpCompactLayout } from '../hooks/useBreakpoint'
@@ -55,6 +56,7 @@ function KpiCard({
 
 export function AcpHeaderBar({ kpiTotals }: { kpiTotals?: ReturnType<typeof useAcpPlatform>['kpiTotals'] }) {
   const acp = useAcpPlatform()
+  const [refreshBusy, setRefreshBusy] = useState(false)
   const bp = useBreakpoint()
   const compact = isAcpCompactLayout(bp)
   const totals = kpiTotals ?? acp.kpiTotals
@@ -103,17 +105,19 @@ export function AcpHeaderBar({ kpiTotals }: { kpiTotals?: ReturnType<typeof useA
             <input type="checkbox" checked={acp.autoFollowDate} onChange={e => acp.setAutoFollowDate(e.target.checked)} />
             Auto
           </label>
-          <button
-            type="button"
+          <DashboardRefreshButton
             className="acp-icon-btn"
-            title="Refresh"
+            busy={refreshBusy}
             onClick={() => {
-              acp.refreshWmsLayer()
-              acp.refreshEngine()
+              setRefreshBusy(true)
+              try {
+                acp.refreshWmsLayer()
+                acp.refreshEngine()
+              } finally {
+                window.setTimeout(() => setRefreshBusy(false), 600)
+              }
             }}
-          >
-            <i className="fa-solid fa-rotate" aria-hidden />
-          </button>
+          />
           <button type="button" className="acp-icon-btn" title="Settings" onClick={() => acp.setSettingsOpen(true)}>
             <i className="fa-solid fa-gear" aria-hidden />
           </button>

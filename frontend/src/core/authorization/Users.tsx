@@ -18,6 +18,8 @@ import {
   pullAdminDirectoryFromServer,
   scheduleAdminDirectorySync,
 } from './adminDirectoryPersistence'
+import UsersManagementPage from '@/modules/identity/pages/UsersManagementPage'
+import { useIdentityAvailable } from '@/modules/identity/hooks/useAuthorization'
 
 type User = {
   id: number
@@ -74,7 +76,7 @@ function AdminUserAvatar({ email, name, large }: { email: string; name: string; 
   )
 }
 
-export default function Users({ embedded }: { embedded?: boolean } = {}) {
+function LegacyUsers({ embedded }: { embedded?: boolean } = {}) {
   const navigate = useNavigate()
   const isEmbedded = Boolean(embedded)
   const [users, setUsers] = useState<User[]>([])
@@ -1542,4 +1544,10 @@ export default function Users({ embedded }: { embedded?: boolean } = {}) {
       )}
     </div>
   )
+}
+
+export default function Users({ embedded }: { embedded?: boolean } = {}) {
+  const identityOn = useIdentityAvailable()
+  if (identityOn) return <UsersManagementPage embedded={embedded} />
+  return <LegacyUsers embedded={embedded} />
 }

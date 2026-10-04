@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from '@/app/App'
 import '@fortawesome/fontawesome-free/css/all.min.css'
 import '@/assets/styles/fonts-core.css'
+// Legacy global stack — sunset order: src/assets/styles/LEGACY_CSS.md
 import '@/assets/styles/index.css'
 import '@/assets/styles/gisModalSystem.css'
 import '@/assets/styles/geodash-tailwind.css'

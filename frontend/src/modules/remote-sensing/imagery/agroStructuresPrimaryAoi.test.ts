@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   AGRO_STRUCTURES_FS21_URL,
+  agroStructuresGeoJsonQueryLayerUrls,
   agroStructuresFullLayerSqlWhere,
   agroStructuresHitPropertiesMatch,
   agroStructuresSentinelMaskSqlWhere,
@@ -42,6 +43,15 @@ describe('agroStructuresPrimaryAoi', () => {
     expect(isAgroStructuresServiceUrl(legacy)).toBe(true)
     expect(resolveAgroStructuresLayerUrl(legacy)).toBe(AGRO_STRUCTURES_FS21_URL)
     expect(isAgroStructuresLayerUrl(legacy)).toBe(true)
+  })
+
+  it('queries FeatureServer/0 before /21 for portal layer ids', () => {
+    const service =
+      'https://services1.arcgis.com/jz3ndhbYV5K9NwI8/arcgis/rest/services/Agro_Structures/FeatureServer'
+    const urls = agroStructuresGeoJsonQueryLayerUrls(`${service}/27`)
+    expect(urls[0]).toBe(`${service}/0`)
+    expect(urls[1]).toBe(`${service}/21`)
+    expect(agroStructuresGeoJsonQueryLayerUrls(`${service}/0`)).toEqual([`${service}/0`])
   })
 
   it('converts polygon features to primary AOI', () => {

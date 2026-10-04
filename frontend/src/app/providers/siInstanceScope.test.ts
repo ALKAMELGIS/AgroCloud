@@ -11,6 +11,12 @@ describe('siInstanceScope', () => {
       'si-crop-alert-sentinel-series-v1',
     )
   })
+
+  it('prefixes develop-elite scoped keys', () => {
+    expect(resolveSiScopedStorageKey('si-its-float-pos-v3', 'develop-elite')).toBe(
+      'de:si-its-float-pos-v3',
+    )
+  })
 })
 
 describe('isCropAlertCacheEventForKey', () => {

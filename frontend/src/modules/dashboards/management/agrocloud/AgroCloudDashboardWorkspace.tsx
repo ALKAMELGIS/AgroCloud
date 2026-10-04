@@ -36,6 +36,7 @@ import {
 } from './AgroCloudDashboardRailIcons'
 import type { GisContentRow } from '@/modules/gis/layers/content-portal/gisContentPortalData'
 import { AgroCloudDashboardCanvas } from './AgroCloudDashboardCanvas'
+import { useAgroCloudDashboardRefresh } from './agroCloudDashboardRefresh'
 import './agro-cloud-dashboards.css'
 
 /** Panel-based dashboard workspace (View, Theme, Data sources, …). */
@@ -54,6 +55,7 @@ export default function AgroCloudDashboardWorkspace() {
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const saveWrapRef = useRef<HTMLDivElement>(null)
   const addWrapRef = useRef<HTMLDivElement>(null)
+  const dashboardRefresh = useAgroCloudDashboardRefresh(config)
 
   useEffect(() => {
     if (!dashboardId) return
@@ -340,6 +342,9 @@ export default function AgroCloudDashboardWorkspace() {
         onElementDelete={removeElement}
         onElementResize={handleElementResize}
         onLayoutDrop={handleLayoutDrop}
+        onRefresh={dashboardRefresh.refresh}
+        refreshBusy={dashboardRefresh.busy}
+        lastRefreshedAt={dashboardRefresh.lastRefreshedAt}
         className="agrocloud-dashboard-editor__canvas-area"
       />
 

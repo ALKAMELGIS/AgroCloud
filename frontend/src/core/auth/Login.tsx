@@ -697,6 +697,20 @@ export default function Login() {
         const serverLogin = await loginAccount({ email: emailTrimmed, password: passwordTrimmed })
         if (serverLogin?.ok) {
           const hashed = await hashPassword(passwordTrimmed)
+          if (serverLogin.permissions?.length) {
+            try {
+              localStorage.setItem('identityPermissions', JSON.stringify(serverLogin.permissions))
+            } catch {
+              /* ignore */
+            }
+          }
+          if (serverLogin.identity) {
+            try {
+              localStorage.setItem('identityActive', '1')
+            } catch {
+              /* ignore */
+            }
+          }
           startSessionFromServerUser(serverLogin.user, hashed)
           persistSignInFields(emailTrimmed, passwordTrimmed)
           void hydrateProfileFromServer(emailTrimmed)

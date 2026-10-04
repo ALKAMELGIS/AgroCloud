@@ -631,6 +631,56 @@ export function metricUnit(metric: WeatherHistoryMetric): string {
   }
 }
 
+/** Current conditions only — for dashboard map pick (small payload, fast parse). */
+export async function fetchOpenMeteoWeatherMapPick(
+  lat: number,
+  lng: number,
+  signal?: AbortSignal,
+): Promise<OpenMeteoWeatherSnapshot> {
+  const url = new URL('https://api.open-meteo.com/v1/forecast')
+  url.searchParams.set('latitude', String(lat))
+  url.searchParams.set('longitude', String(lng))
+  url.searchParams.set('timezone', 'auto')
+  url.searchParams.set(
+    'current',
+    'temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_direction_10m',
+  )
+
+  const res = await fetch(url.toString(), { signal })
+  if (!res.ok) throw new Error(`Open-Meteo HTTP ${res.status}`)
+
+  const data = (await res.json()) as Record<string, unknown>
+  const tz = typeof data.timezone === 'string' ? data.timezone : 'UTC'
+  const elev = typeof data.elevation === 'number' ? data.elevation : null
+
+  const cur = data.current as Record<string, unknown> | undefined
+  const time = typeof cur?.time === 'string' ? cur.time : new Date().toISOString()
+  const temp = typeof cur?.temperature_2m === 'number' ? cur.temperature_2m : null
+  const code = typeof cur?.weather_code === 'number' ? cur.weather_code : null
+  const wind = typeof cur?.wind_speed_10m === 'number' ? cur.wind_speed_10m : null
+  const windDir = typeof cur?.wind_direction_10m === 'number' ? cur.wind_direction_10m : null
+  const rh = typeof cur?.relative_humidity_2m === 'number' ? cur.relative_humidity_2m : null
+  const precip = typeof cur?.precipitation === 'number' ? cur.precipitation : null
+
+  return {
+    lat,
+    lng,
+    timezone: tz,
+    elevationM: elev,
+    observedAt: time,
+    temperatureC: temp,
+    weatherCode: code,
+    conditionLabel: wmoWeatherLabel(code),
+    windSpeedKmh: wind,
+    windDirectionDeg: windDir,
+    windDirectionLabel: windDirectionLabel(windDir),
+    humidityPct: rh,
+    precipMm: precip,
+    daily: [],
+    nextHours: [],
+  }
+}
+
 export async function fetchOpenMeteoWeather(lat: number, lng: number): Promise<OpenMeteoWeatherSnapshot> {
   const url = new URL('https://api.open-meteo.com/v1/forecast')
   url.searchParams.set('latitude', String(lat))

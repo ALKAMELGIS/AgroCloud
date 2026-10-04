@@ -3,6 +3,8 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { useSystemSettings } from '@/core/state/SystemSettingsContext'
 import { SiInstanceScopeProvider } from '../providers/siInstanceScope'
 import DynamicBindPage from '@/core/routing/DynamicBindPage'
+import ExternalEmbeddedPage from '@/core/routing/ExternalEmbeddedPage'
+import { isExternalPageLink } from '@/core/routing/defaultPageLinks'
 import AgroCloudDashboard from '@/modules/dashboards/management/AgroCloudDashboard'
 import { lazyWithRetry } from '@/core/routing/lazyWithRetry'
 /** Eager-loaded: avoid full-route Suspense spinner on first paint / dashboard navigation */
@@ -29,6 +31,9 @@ const MasterGisContent = lazyWithRetry(() => import('@/modules/gis/layers/conten
 const MasterGisContentItem = lazyWithRetry(() => import('@/modules/gis/layers/content-portal/GisContentItemPane'), 'MasterGisContentItem')
 const DashboardSettings = lazyWithRetry(() => import('@/modules/dashboards/management/DashboardSettings'), 'DashboardSettings')
 const AdminUsers = lazyWithRetry(() => import('@/core/authorization/Users'), 'AdminUsers')
+const AdminManpower = lazyWithRetry(() => import('@/modules/manpower/pages/ManpowerDashboard'), 'AdminManpower')
+const AdminRoles = lazyWithRetry(() => import('@/modules/identity/pages/RolesPermissionsPage'), 'AdminRoles')
+const AdminHierarchy = lazyWithRetry(() => import('@/modules/identity/pages/HierarchyPage'), 'AdminHierarchy')
 const AdminGitHub = lazyWithRetry(() => import('@/core/config/GitHubIntegration'), 'AdminGitHub')
 const DashboardAiChatbot = lazyWithRetry(() => import('@/modules/dashboards/ai/AiChatbot'), 'DashboardAiChatbot')
 const DashboardModel = lazyWithRetry(() => import('@/modules/dashboards/ai/Model'), 'DashboardModel')
@@ -40,6 +45,7 @@ const SystemSettings = lazyWithRetry(() => import('@/core/config/SystemSettings'
 const SensorIntegrationPage = lazyWithRetry(() => import('@/modules/operations/other/sensors/SensorIntegrationPage'), 'SensorIntegrationPage')
 const GpsVehicleTracking = lazyWithRetry(() => import('@/modules/operations/other/sensors/GpsVehicleTracking'), 'GpsVehicleTracking')
 const AgroCloudManagement = lazyWithRetry(() => import('@/core/config/AgroCloudManagement'), 'AgroCloudManagement')
+const IrrigationSensorsEmbed = lazyWithRetry(() => import('@/core/config/IrrigationSensorsEmbed'), 'IrrigationSensorsEmbed')
 
 function RouteLoadingFallback({ label = 'Loading…' }: { label?: string }) {
   return (
@@ -110,8 +116,19 @@ export default function AppRoutes() {
         <Route path="/account/profile-user-management" element={<Navigate to="/account/profile" replace />} />
         <Route path="/account/settings" element={<AccountSettings />} />
         <Route path="/sensors/gps" element={<GpsVehicleTracking />} />
+        <Route
+          path="/sensors/irrigation"
+          element={
+            <Suspense fallback={<RouteLoadingFallback label="Loading Irrigation Sensors…" />}>
+              <IrrigationSensorsEmbed />
+            </Suspense>
+          }
+        />
         <Route path="/sensors/:sensorKind" element={<SensorIntegrationPage />} />
         <Route path="/admin/users" element={<AdminUsers />} />
+        <Route path="/admin/manpower" element={<AdminManpower />} />
+        <Route path="/admin/roles" element={<AdminRoles />} />
+        <Route path="/admin/hierarchy" element={<AdminHierarchy />} />
         <Route path="/admin/github" element={<AdminGitHub />} />
         <Route path="/admin/system-settings" element={<SystemSettings />} />
         <Route path="/style-guide" element={<StyleGuide />} />
@@ -119,7 +136,7 @@ export default function AppRoutes() {
         <Route
           path="/dashboard/develop/*"
           element={
-            <Suspense fallback={<RouteLoadingFallback label="Loading dashboard builder…" />}>
+            <Suspense fallback={<RouteLoadingFallback label="Loading Develop Dashboard…" />}>
               <DevelopDashboard />
             </Suspense>
           }
@@ -133,11 +150,15 @@ export default function AppRoutes() {
               key={p.id}
               path={p.path.replace(/^\//, '')}
               element={
-                <DynamicBindPage
-                  bindTarget={p.bindTarget}
-                  title={p.name}
-                  externalUrl={p.externalUrl}
-                />
+                isExternalPageLink(p) ? (
+                  <ExternalEmbeddedPage title={p.name} externalUrl={p.externalUrl} />
+                ) : (
+                  <DynamicBindPage
+                    bindTarget={p.bindTarget}
+                    title={p.name}
+                    externalUrl={p.externalUrl}
+                  />
+                )
               }
             />
           ))}

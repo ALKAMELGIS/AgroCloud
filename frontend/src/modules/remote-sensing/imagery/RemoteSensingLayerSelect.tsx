@@ -1,6 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { RemoteSensingLayerSelectGroup } from '../indices/agroCompositeIndices'
 import { formatLayerSelectScienceLabel } from './remoteSensingLayerDisplay'
+import { useSiRsSelectMenuPosition } from './useSiRsSelectMenuPosition'
 
 type RemoteSensingLayerSelectProps = {
   groups: RemoteSensingLayerSelectGroup[]
@@ -10,6 +12,14 @@ type RemoteSensingLayerSelectProps = {
   loading?: boolean
   loadingLabel?: string
   emptyLabel?: string
+  /** Extra class on the root `.si-rs-layer-select` (e.g. `si-rs-panel-select`). */
+  rootClassName?: string
+  /** `panel` uses compact RS panel trigger chrome instead of field-analysis select. */
+  triggerVariant?: 'field' | 'panel'
+  /** Portals the menu to `document.body` so it is not clipped by map panels. */
+  menuPortal?: boolean
+  menuClassName?: string
+  menuMinWidth?: number
   'aria-label'?: string
 }
 
@@ -38,14 +48,30 @@ export function RemoteSensingLayerSelect({
   loading = false,
   loadingLabel = 'Loading Sentinel Hub layers…',
   emptyLabel = 'No Sentinel Hub WMS layers — check API tokens / instance ID.',
+  rootClassName,
+  triggerVariant = 'field',
+  menuPortal = false,
+  menuClassName,
+  menuMinWidth = 200,
   'aria-label': ariaLabel = 'Layer',
 }: RemoteSensingLayerSelectProps) {
   const listboxId = useId()
   const searchId = useId()
   const rootRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const menuStyle = useSiRsSelectMenuPosition(menuPortal && open, triggerRef, {
+    minWidth: menuMinWidth,
+    maxHeightCap: 480,
+  })
+
+  const triggerClass =
+    triggerVariant === 'panel'
+      ? 'si-rs-layer-select__trigger si-rs-panel__select'
+      : 'si-rs-layer-select__trigger si-field-analysis-select'
 
   const safeGroups = Array.isArray(groups) ? groups : []
   const selected = useMemo(() => findSelectedOption(safeGroups, value), [safeGroups, value])
@@ -92,7 +118,9 @@ export function RemoteSensingLayerSelect({
       searchRef.current?.focus({ preventScroll: true })
     }, 0)
     const onPointerDown = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+      const t = event.target as Node
+      if (rootRef.current?.contains(t) || menuRef.current?.contains(t)) return
+      setOpen(false)
     }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpen(false)
@@ -106,10 +134,83 @@ export function RemoteSensingLayerSelect({
     }
   }, [open])
 
+  const rootClass = [
+    'si-rs-layer-select',
+    open ? 'is-open' : '',
+    disabled ? 'si-rs-layer-select--disabled' : '',
+    rootClassName,
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  const menuClass = [
+    'si-rs-layer-select__menu',
+    menuPortal ? 'si-rs-layer-select__menu--portal' : '',
+    menuClassName,
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  const menu = open ? (
+    <div
+      ref={menuRef}
+      id={listboxId}
+      className={menuClass}
+      role="listbox"
+      aria-label={ariaLabel}
+      style={menuPortal ? menuStyle : undefined}
+    >
+      <div className="si-rs-layer-select__search-wrap">
+        <i className="fa-solid fa-magnifying-glass si-rs-layer-select__search-icon" aria-hidden />
+        <input
+          ref={searchRef}
+          id={searchId}
+          type="search"
+          className="si-rs-layer-select__search"
+          placeholder="Search layers…"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => e.stopPropagation()}
+          aria-label="Search layers"
+        />
+      </div>
+      {filteredGroups.length ? (
+        filteredGroups.map(group => (
+          <div key={group.id} className="si-rs-layer-select__group">
+            <div className="si-rs-layer-select__group-label">{group.label}</div>
+            {group.options.map(opt => {
+              const active = opt.id.toUpperCase() === value.trim().toUpperCase()
+              const science = formatLayerSelectScienceLabel(opt.scientificName, opt.label)
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  className={`si-rs-layer-select__option${active ? ' is-active' : ''}`}
+                  title={layerOptionTitle(opt)}
+                  onClick={() => {
+                    onChange(opt.id)
+                    setOpen(false)
+                  }}
+                >
+                  <span className="si-rs-layer-select__abbr">{opt.label}</span>
+                  {science ? <span className="si-rs-layer-select__science">{science}</span> : null}
+                </button>
+              )
+            })}
+          </div>
+        ))
+      ) : (
+        <p className="si-rs-layer-select__empty">No layers match &ldquo;{query.trim()}&rdquo;</p>
+      )}
+    </div>
+  ) : null
+
   if (loading) {
     return (
-      <div className="si-rs-layer-select si-rs-layer-select--disabled" aria-busy="true">
-        <button type="button" className="si-rs-layer-select__trigger si-field-analysis-select" disabled>
+      <div className={`${rootClass} si-rs-layer-select--disabled`} aria-busy="true">
+        <button type="button" className={triggerClass} disabled>
           <span className="si-rs-layer-select__abbr">{loadingLabel}</span>
         </button>
       </div>
@@ -118,8 +219,8 @@ export function RemoteSensingLayerSelect({
 
   if (!safeGroups.length) {
     return (
-      <div className="si-rs-layer-select si-rs-layer-select--disabled">
-        <button type="button" className="si-rs-layer-select__trigger si-field-analysis-select" disabled>
+      <div className={`${rootClass} si-rs-layer-select--disabled`}>
+        <button type="button" className={triggerClass} disabled>
           <span className="si-rs-layer-select__abbr">{emptyLabel}</span>
         </button>
       </div>
@@ -127,13 +228,11 @@ export function RemoteSensingLayerSelect({
   }
 
   return (
-    <div
-      ref={rootRef}
-      className={`si-rs-layer-select${open ? ' is-open' : ''}${disabled ? ' si-rs-layer-select--disabled' : ''}`}
-    >
+    <div ref={rootRef} className={rootClass}>
       <button
+        ref={triggerRef}
         type="button"
-        className="si-rs-layer-select__trigger si-field-analysis-select"
+        className={triggerClass}
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -146,54 +245,9 @@ export function RemoteSensingLayerSelect({
         <span className="si-rs-layer-select__chevron" aria-hidden />
       </button>
 
-      {open ? (
-        <div id={listboxId} className="si-rs-layer-select__menu" role="listbox" aria-label={ariaLabel}>
-          <div className="si-rs-layer-select__search-wrap">
-            <i className="fa-solid fa-magnifying-glass si-rs-layer-select__search-icon" aria-hidden />
-            <input
-              ref={searchRef}
-              id={searchId}
-              type="search"
-              className="si-rs-layer-select__search"
-              placeholder="Search layers…"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              onKeyDown={e => e.stopPropagation()}
-              aria-label="Search layers"
-            />
-          </div>
-          {filteredGroups.length ? (
-            filteredGroups.map(group => (
-              <div key={group.id} className="si-rs-layer-select__group">
-                <div className="si-rs-layer-select__group-label">{group.label}</div>
-                {group.options.map(opt => {
-                  const active = opt.id.toUpperCase() === value.trim().toUpperCase()
-                  const science = formatLayerSelectScienceLabel(opt.scientificName, opt.label)
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      role="option"
-                      aria-selected={active}
-                      className={`si-rs-layer-select__option${active ? ' is-active' : ''}`}
-                      title={layerOptionTitle(opt)}
-                      onClick={() => {
-                        onChange(opt.id)
-                        setOpen(false)
-                      }}
-                    >
-                      <span className="si-rs-layer-select__abbr">{opt.label}</span>
-                      {science ? <span className="si-rs-layer-select__science">{science}</span> : null}
-                    </button>
-                  )
-                })}
-              </div>
-            ))
-          ) : (
-            <p className="si-rs-layer-select__empty">No layers match &ldquo;{query.trim()}&rdquo;</p>
-          )}
-        </div>
-      ) : null}
+      {menuPortal && menu && typeof document !== 'undefined'
+        ? createPortal(menu, document.body)
+        : menu}
     </div>
   )
 }

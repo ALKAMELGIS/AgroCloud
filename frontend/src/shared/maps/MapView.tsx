@@ -14,8 +14,11 @@ type Props = {
   showBaseLayer?: boolean
   showZoomControl?: boolean
   showScaleControl?: boolean
+  attributionControl?: boolean
   /** Smoother pan/zoom inertia for dashboard maps. */
   smoothInteraction?: boolean
+  /** Snappy wheel/button zoom (no zoom animation, low debounce). */
+  fastZoom?: boolean
 }
 
 export default function MapView({
@@ -29,7 +32,9 @@ export default function MapView({
   showBaseLayer = true,
   showZoomControl = true,
   showScaleControl = true,
+  attributionControl = true,
   smoothInteraction = false,
+  fastZoom = false,
 }: Props) {
   const useMapbox = Boolean(mapboxToken)
   const url = useMapbox
@@ -46,18 +51,30 @@ export default function MapView({
       zoomDelta={zoomDelta}
       style={{ height: '100%', width: '100%' }}
       zoomControl={false}
-      {...(smoothInteraction
+      attributionControl={attributionControl}
+      {...(fastZoom
         ? {
             inertia: true,
-            inertiaDeceleration: 2400,
-            inertiaMaxSpeed: 1800,
-            zoomAnimation: true,
-            fadeAnimation: true,
-            markerZoomAnimation: true,
-            wheelDebounceTime: 60,
-            wheelPxPerZoomLevel: 90,
+            inertiaDeceleration: 3000,
+            inertiaMaxSpeed: 2200,
+            zoomAnimation: false,
+            fadeAnimation: false,
+            markerZoomAnimation: false,
+            wheelDebounceTime: 12,
+            wheelPxPerZoomLevel: 72,
           }
-        : {})}
+        : smoothInteraction
+          ? {
+              inertia: true,
+              inertiaDeceleration: 2400,
+              inertiaMaxSpeed: 1800,
+              zoomAnimation: true,
+              fadeAnimation: true,
+              markerZoomAnimation: true,
+              wheelDebounceTime: 60,
+              wheelPxPerZoomLevel: 90,
+            }
+          : {})}
     >
       {showBaseLayer ? <TileLayer url={url} attribution={attribution} /> : null}
       <MapReady onMapReady={onMapReady} />

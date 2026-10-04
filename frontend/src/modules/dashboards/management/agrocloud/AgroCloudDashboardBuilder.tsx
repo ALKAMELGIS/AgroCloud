@@ -37,6 +37,7 @@ import {
   RailViewIcon,
 } from './AgroCloudDashboardRailIcons'
 import type { GisContentRow } from '@/modules/gis/layers/content-portal/gisContentPortalData'
+import { useAgroCloudDashboardRefresh } from './agroCloudDashboardRefresh'
 import './agro-cloud-dashboards.css'
 
 function BuilderIllustration() {
@@ -86,6 +87,7 @@ export default function AgroCloudDashboardBuilder() {
   const { dashboardId } = useParams<{ dashboardId?: string }>()
   const [title, setTitle] = useState('Untitled dashboard')
   const [config, setConfig] = useState<AgroCloudDashboardConfig>(DEFAULT_AGROCLOUD_DASHBOARD_CONFIG)
+  const dashboardRefresh = useAgroCloudDashboardRefresh(config)
   const [emptyAddMenuOpen, setEmptyAddMenuOpen] = useState(false)
   const [sidebarAddMenuOpen, setSidebarAddMenuOpen] = useState(false)
   const [panel, setPanel] = useState<AgroCloudEditorPanel | null>(null)
@@ -419,6 +421,9 @@ export default function AgroCloudDashboardBuilder() {
               onElementDelete={removeElement}
               onElementResize={handleElementResize}
               onLayoutDrop={handleLayoutDrop}
+              onRefresh={dashboardRefresh.refresh}
+              refreshBusy={dashboardRefresh.busy}
+              lastRefreshedAt={dashboardRefresh.lastRefreshedAt}
               className="agrocloud-dashboard-builder__canvas"
             />
           ) : (

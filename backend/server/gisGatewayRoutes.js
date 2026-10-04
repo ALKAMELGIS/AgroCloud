@@ -34,7 +34,18 @@ function validateDbProfile(profile) {
 }
 
 export function registerGisGatewayRoutes(app) {
-  app.get('/api/gis-gateway/health', (_req, res) => {
+  app.get('/api/gis-gateway/health', async (req, res) => {
+    try {
+      const { isGisScopeEnforced } = await import('./identity/scopeIntegration.js')
+      const { isIdentityReady } = await import('./identity/db.js')
+      if (isGisScopeEnforced() && isIdentityReady()) {
+        const { resolveSessionUser } = await import('./identity/sessionService.js')
+        const actor = await resolveSessionUser(req)
+        if (!actor) return res.status(401).json({ ok: false, error: 'Unauthorized.' })
+      }
+    } catch {
+      /* optional enforcement */
+    }
     res.json({ ok: true, service: 'gis-gateway' })
   })
 

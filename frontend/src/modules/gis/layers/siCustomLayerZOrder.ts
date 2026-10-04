@@ -27,6 +27,7 @@ const SI_BASEMAP_LAYER_IDS = new Set([
 
 const DRAW_CHROME_ABOVE_OVERLAY_IDS = [
   'si-draw-draft-fill',
+  'si-draw-draft-polygon-line',
   'si-draw-draft-line',
   'si-draw-draft-close-hint',
   'si-draw-draft-vertex',

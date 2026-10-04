@@ -22,7 +22,9 @@ export type AuthApiError = {
 
 export type RegisterResult = { ok: true; user: AuthUserRecord; message?: string } | AuthApiError
 
-export type LoginResult = { ok: true; user: AuthUserRecord } | AuthApiError
+export type LoginResult =
+  | { ok: true; user: AuthUserRecord; permissions?: string[]; identity?: boolean }
+  | AuthApiError
 
 export type VerifyEmailResult = { ok: true; user: AuthUserRecord; message?: string } | AuthApiError
 
@@ -77,6 +79,7 @@ export async function loginAccount(payload: {
   try {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })

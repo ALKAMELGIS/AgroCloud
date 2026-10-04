@@ -69,6 +69,14 @@ export async function pullAdminDirectoryFromServer(): Promise<AdminDirectoryPayl
 
 export async function pushAdminDirectoryToServer(users: unknown[], auditLog: unknown[]): Promise<boolean> {
   try {
+    const statusRes = await fetch('/api/v1/identity/status', { credentials: 'include' })
+    if (statusRes.ok) {
+      const st = (await statusRes.json()) as { identity?: boolean }
+      if (st.identity) {
+        console.warn('[admin-directory] Skipping PUT — PostgreSQL identity is active.')
+        return false
+      }
+    }
     const res = await fetch(adminDirectoryApiBase(), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...adminDirectoryAuthHeaders() },

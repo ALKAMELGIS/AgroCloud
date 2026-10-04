@@ -5,8 +5,13 @@ export const AGROCLOUD_MANAGEMENT_PAGE_PATH = '/applications/agrocloud-managemen
 
 export const EAP_ARCGIS_DASHBOARD_PAGE_PATH = '/dashboards/eap-arcgis'
 
+export const IRRIGATION_SENSORS_PAGE_PATH = '/sensors/irrigation'
+
 export const AGROCLOUD_MANAGEMENT_EXTERNAL_URL =
   'https://sublime-acceptance-production-ae33.up.railway.app/login'
+
+/** Default AgSense 365 farm grid — override in Settings → Pages. */
+export const IRRIGATION_SENSORS_DEFAULT_URL = 'https://www.agsense365.com/farm/grid'
 
 /** Seeded when no user-defined link exists at this path. */
 export const DEFAULT_PAGE_LINKS: CustomPageRecord[] = [
@@ -34,6 +39,18 @@ export const DEFAULT_PAGE_LINKS: CustomPageRecord[] = [
     navGroupId: 'dashboard',
     subitemClass: 'nav-item-dashboard-agro',
   },
+  {
+    id: 'irrigation-sensors-agsense-link',
+    name: 'Irrigation Sensors',
+    nameAr: 'حساسات الري',
+    path: IRRIGATION_SENSORS_PAGE_PATH,
+    iconClass: 'fa-solid fa-faucet-drip',
+    visible: true,
+    bindTarget: 'external',
+    externalUrl: IRRIGATION_SENSORS_DEFAULT_URL,
+    navGroupId: 'sensors',
+    subitemClass: 'nav-item-sensor-irrigation',
+  },
 ]
 
 export function isExternalPageLink(page: CustomPageRecord): boolean {
@@ -51,4 +68,24 @@ export function resolveAgroCloudManagementUrl(pages: CustomPageRecord[]): string
   const trimmed = link?.externalUrl?.trim()
   if (trimmed) return trimmed
   return AGROCLOUD_MANAGEMENT_EXTERNAL_URL
+}
+
+/** Resolved embed URL for Irrigation Sensors (AgSense grid by default). */
+export function resolveIrrigationSensorsUrl(pages: CustomPageRecord[]): string {
+  const link = findPageLinkByPath(pages, IRRIGATION_SENSORS_PAGE_PATH)
+  const trimmed = link?.externalUrl?.trim()
+  if (trimmed) return trimmed
+  return IRRIGATION_SENSORS_DEFAULT_URL
+}
+
+const DEDICATED_EXTERNAL_EMBED_PATHS = new Set<string>([
+  IRRIGATION_SENSORS_PAGE_PATH,
+  AGROCLOUD_MANAGEMENT_PAGE_PATH,
+])
+
+/** True when the current route should render a full-height external iframe (Settings → Pages). */
+export function isExternalEmbedRoute(pages: CustomPageRecord[], pathname: string): boolean {
+  const normalized = pathname.startsWith('/') ? pathname : `/${pathname}`
+  if (DEDICATED_EXTERNAL_EMBED_PATHS.has(normalized)) return true
+  return Boolean(findPageLinkByPath(pages, normalized))
 }

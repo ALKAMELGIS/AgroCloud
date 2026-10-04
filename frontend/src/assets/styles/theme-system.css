@@ -97,9 +97,9 @@ html[data-theme='dark'],
 /* ========== Global typography (app shell) ==========
    Skip map glass overlays so light-theme --ds-color-text is not forced onto dark chrome. */
 .app-layout,
-.page,
+.page:not(.develop-elite),
 .gis-page-padding,
-.content {
+.content:not(.content--develop-dashboard) {
   color: var(--ds-color-text);
 }
 
@@ -108,13 +108,13 @@ html[data-theme='dark'],
     .geo-ai-agent-panel *
   ):not(.si-layer-live-float *):not(.si-measure-panel *):not(.si-grb-floatbar *):not(
     .si-map-draw-widget *
-  ),
-.page h1,
-.page h2,
-.page h3,
-.page h4,
-.page h5,
-.page h6,
+  ):not(.develop-elite *),
+.page:not(.develop-elite) h1,
+.page:not(.develop-elite) h2,
+.page:not(.develop-elite) h3,
+.page:not(.develop-elite) h4,
+.page:not(.develop-elite) h5,
+.page:not(.develop-elite) h6,
 .ds-modal-title,
 .page-title,
 .card-title,
@@ -127,25 +127,25 @@ html[data-theme='dark'],
     .geo-ai-agent-panel *
   ):not(.si-layer-live-float *):not(.si-measure-panel *):not(.si-grb-floatbar *):not(
     .si-map-draw-widget *
-  ),
-.page p,
-.page li,
-.page td,
-.page th {
+  ):not(.develop-elite *),
+.page:not(.develop-elite) p,
+.page:not(.develop-elite) li,
+.page:not(.develop-elite) td,
+.page:not(.develop-elite) th {
   color: var(--ds-color-text);
 }
 
 label:not(.gis-sel-toolbar *):not(.si-go-to-xy *):not(.nac-float *):not(.geo-ai-agent-panel *):not(
   .si-layer-live-float *
-):not(.si-measure-panel *):not(.si-grb-floatbar *):not(.si-map-draw-widget *),
+):not(.si-measure-panel *):not(.si-grb-floatbar *):not(.si-map-draw-widget *):not(.develop-elite *),
 .ds-label,
 legend,
 .field-label {
   color: var(--ds-color-text);
 }
 
-.app-layout small,
-.page small,
+.app-layout small:not(.develop-elite *),
+.page:not(.develop-elite) small,
 .caption,
 .help-text,
 .form-hint,
@@ -189,9 +189,9 @@ button:disabled {
 }
 
 /* Forms & inputs */
-input,
-select,
-textarea,
+input:not(.develop-elite *),
+select:not(.develop-elite *),
+textarea:not(.develop-elite *),
 .ds-input,
 .ds-select,
 .ds-textarea {
@@ -204,8 +204,8 @@ textarea::placeholder {
 }
 
 /* Dropdowns & menus */
-[role='listbox'],
-[role='menu'],
+[role='listbox']:not(.develop-elite *),
+[role='menu']:not(.develop-elite *),
 .dropdown-menu,
 .ds-dropdown,
 .select-menu {
@@ -219,7 +219,7 @@ textarea::placeholder {
 }
 
 /* Tables */
-table thead th {
+table thead th:not(.develop-elite *) {
   color: var(--ds-color-text);
 }
 
@@ -279,8 +279,8 @@ table .cell-secondary {
 }
 
 /* Font Awesome inherits theme text (except branded hubs) */
-.app-layout i[class*='fa-']:not(.app-icon):not(.icon),
-.page i[class*='fa-']:not(.app-icon):not(.icon),
+.app-layout i[class*='fa-']:not(.app-icon):not(.icon):not(.develop-elite *),
+.page:not(.develop-elite) i[class*='fa-']:not(.app-icon):not(.icon),
 .nav-theme-toggle__icon {
   color: currentColor;
   opacity: 1;
@@ -321,7 +321,9 @@ table .cell-secondary {
     .si-layer-legend-float *
   ):not(.si-layer-action-modal--gis-table *):not(.si-hylg *):not(.nac-composer *):not(
     .nav-theme-toggle
-  ):not(.navmenu-utility .group-header),
+  ):not(.navmenu-utility .group-header):not(.back-btn):not(.app-back-icon-btn):not(
+    .settings-header-back
+  ):not(.develop-elite *),
 .app-layout .si-afb__btn,
 .app-layout .si-rs-panel__action,
 .app-layout .si-rs-panel__tool,
@@ -337,7 +339,7 @@ table .cell-secondary {
     .si-map-swipe-panel *
   ):not(.si-map-swipe-overlay *):not(.gis-float-panel *):not(.si-geo-ai-float *):not(
     .si-layer-legend-float *
-  ):not(.si-layer-action-modal--gis-table *):not(.si-hylg *):not(.si-its-float *),
+  ):not(.si-layer-action-modal--gis-table *):not(.si-hylg *):not(.si-its-float *):not(.develop-elite *),
 .app-layout .si-afb__select,
 .app-layout .si-rs-panel__select,
 .app-layout .si-field-analysis-select,
@@ -367,10 +369,10 @@ html[data-theme='dark'] .app-layout select optgroup {
 
 .app-layout .navmenu .sublist,
 .app-layout .navmenu-utility-popover.sublist,
-.app-layout [role='menu'],
-.app-layout [role='listbox'],
-.app-layout .dropdown-menu,
-.app-layout .si-rs-layer-select__menu {
+.app-layout [role='menu']:not(.develop-elite *),
+.app-layout [role='listbox']:not(.develop-elite *):not(.develop-elite-map__layer-select-menu),
+.app-layout .dropdown-menu:not(.develop-elite *),
+.app-layout .si-rs-layer-select__menu:not(.develop-elite-map__layer-select-menu) {
   color: var(--ds-color-text);
   background: var(--theme-bg-elevated, var(--ds-color-surface));
   border-color: var(--theme-border, var(--ds-color-border));
@@ -378,26 +380,26 @@ html[data-theme='dark'] .app-layout select optgroup {
 
 .app-layout .navmenu .subitem,
 .app-layout .navmenu-utility-popover .subitem,
-.app-layout [role='menuitem'],
-.app-layout [role='option'],
-.app-layout .si-rs-layer-select__option {
+.app-layout [role='menuitem']:not(.develop-elite *),
+.app-layout [role='option']:not(.develop-elite *):not(.develop-elite-map__layer-select-menu *),
+.app-layout .si-rs-layer-select__option:not(.develop-elite *):not(.develop-elite-map__layer-select-menu *) {
   color: var(--ds-color-text);
 }
 
 .app-layout .navmenu .subitem:hover,
 .app-layout .navmenu-utility-popover .subitem:hover,
-.app-layout [role='menuitem']:hover,
-.app-layout [role='option']:hover,
-.app-layout .si-rs-layer-select__option:hover {
+.app-layout [role='menuitem']:not(.develop-elite *):hover,
+.app-layout [role='option']:not(.develop-elite *):not(.develop-elite-map__layer-select-menu *):hover,
+.app-layout .si-rs-layer-select__option:not(.develop-elite *):not(.develop-elite-map__layer-select-menu *):hover {
   background: var(--theme-surface-muted, rgba(34, 34, 34, 0.06));
   color: var(--ds-color-text);
 }
 
 html[data-theme='dark'] .app-layout .navmenu .subitem:hover,
 html[data-theme='dark'] .app-layout .navmenu-utility-popover .subitem:hover,
-html[data-theme='dark'] .app-layout [role='menuitem']:hover,
-html[data-theme='dark'] .app-layout [role='option']:hover,
-html[data-theme='dark'] .app-layout .si-rs-layer-select__option:hover {
+html[data-theme='dark'] .app-layout [role='menuitem']:not(.develop-elite *):hover,
+html[data-theme='dark'] .app-layout [role='option']:not(.develop-elite *):not(.develop-elite-map__layer-select-menu *):hover,
+html[data-theme='dark'] .app-layout .si-rs-layer-select__option:not(.develop-elite *):not(.develop-elite-map__layer-select-menu *):hover {
   background: rgba(230, 230, 230, 0.08);
 }
 

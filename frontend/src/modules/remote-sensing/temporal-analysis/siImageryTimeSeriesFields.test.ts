@@ -231,8 +231,8 @@ describe('siImageryTimeSeriesFields', () => {
     it('lists Potato_Plots and Drawn AOI when both are present', () => {
       const sources = listSiImageryPlotSourceLayers(null, [], drawnAoi, [potatoPlotsLayer])
       expect(sources.map(s => s.id)).toEqual([
-        potatoPlotsLayer.id,
         SI_IMAGERY_PLOT_SOURCE_DRAWN,
+        potatoPlotsLayer.id,
       ])
       expect(sources.find(s => s.id === potatoPlotsLayer.id)).toMatchObject({
         label: 'Potato_Plots',
@@ -242,6 +242,14 @@ describe('siImageryTimeSeriesFields', () => {
         label: SI_IMAGERY_DRAWN_AOI_LABEL,
         featureCount: 1,
       })
+    })
+
+    it('prefers Drawn AOI over Agro Structures when both exist', () => {
+      const sources = listSiImageryPlotSourceLayers(agroMask, [], drawnAoi, null)
+      expect(sources.map(s => s.id)).toEqual([
+        SI_IMAGERY_PLOT_SOURCE_DRAWN,
+        SI_IMAGERY_PLOT_SOURCE_AGRO,
+      ])
     })
 
     it('includes Agro Structures when mask fields exist', () => {
@@ -293,9 +301,9 @@ describe('siImageryTimeSeriesFields', () => {
       }
       const sources = listSiImageryPlotSourceLayers(null, [], drawnAoi, [agroLayer, potatoPlotsLayer])
       expect(sources.map(s => s.id)).toEqual([
+        SI_IMAGERY_PLOT_SOURCE_DRAWN,
         agroLayer.id,
         potatoPlotsLayer.id,
-        SI_IMAGERY_PLOT_SOURCE_DRAWN,
       ])
       expect(sources.find(s => s.id === agroLayer.id)).toMatchObject({
         label: 'Agro_Structures',
