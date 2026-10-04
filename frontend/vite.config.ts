@@ -334,11 +334,11 @@ export default defineConfig({
               ],
             },
             includeAssets: [
+              'agrocloud-pwa-logo.png',
               'agrocloud-logo.png',
               'agrocloud-logo-core.png',
               'agrocloud-mark-leaves.png',
               'elite-agro-logo-white.png',
-              'agrocloud-app-icon.svg',
               'favicon.png',
               'favicon-16x16.png',
               'favicon-32x32.png',
@@ -352,7 +352,7 @@ export default defineConfig({
             ],
             manifest: {
               id: buildBasePath,
-              name: 'AgroCloud — Smart Agriculture & GIS',
+              name: 'Agro Cloud',
               short_name: 'Agro Cloud',
               description:
                 'Elite AgroCloud: smart agriculture, satellite intelligence, GIS maps, and field operations.',
@@ -361,8 +361,8 @@ export default defineConfig({
               display: 'standalone',
               display_override: ['standalone', 'minimal-ui', 'browser'],
               orientation: 'any',
-              background_color: '#051a10',
-              theme_color: '#051a10',
+              background_color: '#ffffff',
+              theme_color: '#00c853',
               lang: 'en',
               dir: 'ltr',
               categories: ['business', 'productivity', 'utilities'],
@@ -390,12 +390,6 @@ export default defineConfig({
                   src: 'pwa-192x192.png',
                   sizes: '192x192',
                   type: 'image/png',
-                  purpose: 'any',
-                },
-                {
-                  src: 'agrocloud-app-icon.svg',
-                  sizes: 'any',
-                  type: 'image/svg+xml',
                   purpose: 'any',
                 },
                 {

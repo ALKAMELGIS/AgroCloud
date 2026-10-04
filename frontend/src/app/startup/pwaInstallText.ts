@@ -2,8 +2,8 @@ import type { AppLanguage } from '@/core/localization/i18n'
 
 export const pwaInstallText = {
   en: {
-    title: 'Install AgroCloud',
-    subtitle: 'Add to your home screen for a fast, full-screen app experience.',
+    title: 'Install app',
+    subtitle: 'Add Agro Cloud to your home screen for a fast, full-screen experience.',
     featureFast: 'Faster loads on weak networks',
     featureFullscreen: 'Standalone full-screen mode',
     featureSame: 'Same AgroCloud features as the website',
@@ -29,8 +29,8 @@ export const pwaInstallText = {
     androidStep3: 'Open AgroCloud from your home screen — it runs like a native app',
   },
   ar: {
-    title: 'تثبيت AgroCloud',
-    subtitle: 'أضِف التطبيق إلى الشاشة الرئيسية لتجربة سريعة بملء الشاشة.',
+    title: 'تثبيت التطبيق',
+    subtitle: 'أضِف Agro Cloud إلى الشاشة الرئيسية لتجربة سريعة بملء الشاشة.',
     featureFast: 'تحميل أسرع على الشبكات الضعيفة',
     featureFullscreen: 'وضع ملء الشاشة بدون شريط المتصفح',
     featureSame: 'نفس ميزات AgroCloud كما على الموقع',

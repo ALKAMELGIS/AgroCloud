@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AgroCloudMark } from '@/shared/components/AgroCloudMark'
 import { useLanguage } from '@/core/localization/i18n'
 import {
   dismissInstallPrompt,
@@ -11,6 +10,7 @@ import {
   type BeforeInstallPromptEvent,
 } from './pwaInstall'
 import { usePwaInstallText } from './pwaInstallText'
+import { AGRO_CLOUD_PWA_LOGO_URL } from './pwaBrandAssets'
 import './pwa-install.css'
 
 type InstallMode = ReturnType<typeof resolvePwaInstallMode>
@@ -129,17 +129,29 @@ export default function PwaInstallPrompt() {
       dir={direction}
     >
       <div className="pwa-install-card">
-        <div className="pwa-install-card__head">
-          <AgroCloudMark size={40} className="pwa-install-card__mark" title="AgroCloud" />
-          <div>
-            <h2 id="pwa-install-title" className="pwa-install-card__title">
-              {title}
-            </h2>
-            <p className="pwa-install-card__sub">{subtitle}</p>
-          </div>
-          <button type="button" className="pwa-install-card__close" onClick={() => close(true)} aria-label={t.notNow}>
-            <i className="fa-solid fa-xmark" aria-hidden />
-          </button>
+        <button
+          type="button"
+          className="pwa-install-card__close"
+          onClick={() => close(true)}
+          aria-label={t.notNow}
+        >
+          <i className="fa-solid fa-xmark" aria-hidden />
+        </button>
+
+        <div className="pwa-install-card__hero">
+          <img
+            className="pwa-install-card__logo"
+            src={AGRO_CLOUD_PWA_LOGO_URL}
+            width={220}
+            height={220}
+            alt="Agro Cloud"
+            decoding="async"
+            draggable={false}
+          />
+          <h2 id="pwa-install-title" className="pwa-install-card__title">
+            {title}
+          </h2>
+          <p className="pwa-install-card__sub">{subtitle}</p>
         </div>
 
         {mode === 'ios-ipad' ? (
@@ -189,7 +201,7 @@ export default function PwaInstallPrompt() {
               <i className="fa-solid fa-expand" aria-hidden /> {t.featureFullscreen}
             </li>
             <li>
-              <i className="fa-solid fa-leaf" aria-hidden /> {t.featureSame}
+              <i className="fa-solid fa-cloud" aria-hidden /> {t.featureSame}
             </li>
           </ul>
         )}

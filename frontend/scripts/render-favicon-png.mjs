@@ -1,5 +1,5 @@
 /**
- * Raster favicons from public/agrocloud-logo.png (requires sharp).
+ * Raster favicons from public/agrocloud-pwa-logo.png (requires sharp).
  */
 import sharp from 'sharp'
 import { fileURLToPath } from 'node:url'
@@ -9,7 +9,7 @@ import fs from 'node:fs'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const pub = path.join(__dirname, '../public')
 const repoRoot = path.join(__dirname, '../..')
-const logoPath = path.join(pub, 'agrocloud-logo.png')
+const logoPath = path.join(pub, 'agrocloud-pwa-logo.png')
 
 if (!fs.existsSync(logoPath)) {
   console.error('Missing', logoPath)
