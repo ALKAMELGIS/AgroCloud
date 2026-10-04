@@ -42,7 +42,7 @@ export const DEFAULT_DEVELOP_ELITE_TREES_LAYER_URL =
   'https://services1.arcgis.com/jz3ndhbYV5K9NwI8/ArcGIS/rest/services/Tree/FeatureServer/24'
 
 export const DEFAULT_DEVELOP_ELITE_AGRI_LOCATION_LAYER_URL =
-  'https://services1.arcgis.com/jz3ndhbYV5K9NwI8/ArcGIS/rest/services/Agri_Location/FeatureServer/0'
+  'https://services1.arcgis.com/jz3ndhbYV5K9NwI8/ArcGIS/rest/services/Agri_Location/FeatureServer/19'
 
 export type DevelopEliteKpiSource =
   | 'totalAreaHa'
@@ -204,7 +204,11 @@ export function normalizeDevelopEliteTreesLayerUrl(url: string): string {
 
 export function normalizeDevelopEliteAgriLocationLayerUrl(url: string): string {
   const trimmed = String(url || '').trim()
-  return trimmed || DEFAULT_DEVELOP_ELITE_AGRI_LOCATION_LAYER_URL
+  const base = trimmed || DEFAULT_DEVELOP_ELITE_AGRI_LOCATION_LAYER_URL
+  return base.replace(
+    /\/Agri_Location\/FeatureServer\/0$/i,
+    '/Agri_Location/FeatureServer/19',
+  )
 }
 
 export const DEFAULT_DEVELOP_ELITE_CONFIG: DevelopEliteDashboardConfig = {

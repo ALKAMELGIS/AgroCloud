@@ -255,6 +255,60 @@ describe('developEliteKpiEngine', () => {
     expect(kpis.cards['total-projects']).toBe('3')
   })
 
+  it('keeps AgroLocation KPIs when farm search filters structures to none', () => {
+    const features = normalizeStructureFeatures({
+      type: 'FeatureCollection',
+      features: [
+        polyFeature({ Farm_Code: 'F1', ZONE_ID: 'MH', Structure_Type: 1007, Area_ha: 1 }),
+        polyFeature({ Farm_Code: 'F2', ZONE_ID: 'UG', Structure_Type: 1007, Area_ha: 1 }),
+      ],
+    })
+    const agri: GeoJSON.Feature[] = [
+      { type: 'Feature', properties: { Subtype: 1003, ZONEID: 'MH' }, geometry: { type: 'Point', coordinates: [0, 0] } },
+      { type: 'Feature', properties: { Subtype: 1001, ZONEID: 'UG' }, geometry: { type: 'Point', coordinates: [0, 0] } },
+    ]
+    const narrowed = filterStructureFeatures(features, {
+      ...filters,
+      locationSearch: 'no-such-farm-xyz',
+    })
+    expect(narrowed).toHaveLength(0)
+    const agriScope = filterStructureFeatures(features, {
+      country: 'all',
+      zoneId: 'all',
+      selectedFieldKey: null,
+      locationSearch: '',
+    })
+    const kpis = computeDevelopEliteKpis(
+      narrowed,
+      [],
+      DEFAULT_DEVELOP_ELITE_CONFIG,
+      0,
+      agri,
+      null,
+      { ...filters, locationSearch: 'no-such-farm-xyz' },
+      agriScope,
+      { country: 'all', zoneId: 'all', selectedFieldKey: null, locationSearch: '' },
+    )
+    expect(kpis.cards['wildfelid']).toBe('1')
+    expect(kpis.cards['total-projects']).toBe('2')
+  })
+
+  it('matches Wildlife Project by Subtype 1003 without drawingInfo', () => {
+    const agri: GeoJSON.Feature[] = [
+      { type: 'Feature', properties: { Subtype: 1003, ZONEID: 'A' }, geometry: { type: 'Point', coordinates: [0, 0] } },
+    ]
+    const n = countScopedAgriLocationFeatures(
+      agri,
+      [],
+      filters,
+      'Subtype',
+      'Wildlife Project',
+      'equals',
+      null,
+    )
+    expect(n).toBe(1)
+  })
+
   it('counts tree layer points for Tree KPI', () => {
     const features = normalizeStructureFeatures({
       type: 'FeatureCollection',

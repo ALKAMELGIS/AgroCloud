@@ -30,6 +30,7 @@ import {
   compareDevelopEliteListNames,
   filterZoneListForCountry,
   computeDevelopEliteKpis,
+  developEliteAgriKpiFilters,
   computeDevelopEliteZoneLayerTotalAreaHa,
   computeSideStructureCounts,
   countScopedTreeFeatures,
@@ -343,6 +344,13 @@ export function useDevelopEliteDashboardData() {
     [treeFeatures, scopedFeatures, filters],
   )
 
+  const agriKpiFilters = useMemo(() => developEliteAgriKpiFilters(filters), [filters])
+
+  const agriKpiStructures = useMemo(
+    () => filterStructureFeatures(allFeatures, agriKpiFilters, filterContext),
+    [agriKpiFilters, allFeatures, filterContext],
+  )
+
   const heroZoneLayerTotalAreaHa = useMemo(
     () => computeDevelopEliteZoneLayerTotalAreaHa(zoneLayerStructures),
     [zoneLayerStructures],
@@ -357,6 +365,8 @@ export function useDevelopEliteDashboardData() {
       agriLocationFeatures,
       agriLocationDrawingInfo,
       filters,
+      agriKpiStructures,
+      agriKpiFilters,
     )
     return { ...base, heroZoneLayerTotalAreaHa }
   }, [
@@ -366,6 +376,8 @@ export function useDevelopEliteDashboardData() {
     scopedTreeCount,
     agriLocationFeatures,
     agriLocationDrawingInfo,
+    agriKpiFilters,
+    agriKpiStructures,
     filters,
     heroZoneLayerTotalAreaHa,
   ])

@@ -548,6 +548,12 @@ function agriLocationCategoryField(
   return 'Subtype'
 }
 
+const DEVELOP_ELITE_AGRI_LOCATION_SUBTYPE_BY_LABEL: Record<string, string[]> = {
+  'wildlife project': ['1003'],
+  'vip farm': ['1002'],
+  'agri location': ['1001'],
+}
+
 function agriFeatureMatchesCategory(
   props: Record<string, unknown>,
   fieldName: string,
@@ -563,6 +569,14 @@ function agriFeatureMatchesCategory(
     const raw = readProp(props, field) || readProp(props, 'Subtype') || readProp(props, 'subtype')
     if (codes.has(normalizeUniqueValueKey(raw))) return true
   }
+  const subtypeFallback = DEVELOP_ELITE_AGRI_LOCATION_SUBTYPE_BY_LABEL[match.trim().toLowerCase()]
+  if (subtypeFallback?.length) {
+    const sub = normalizeUniqueValueKey(
+      readProp(props, field) || readProp(props, 'Subtype') || readProp(props, 'subtype'),
+    )
+    if (subtypeFallback.includes(sub)) return true
+  }
+  if (matchFieldFilter(props, 'Project', match, mode ?? 'equals')) return true
   if (matchFieldFilter(props, 'Name', match, mode ?? 'equals')) return true
   return false
 }
@@ -576,6 +590,8 @@ function evalKpiCard(
   agriLocationFeatures: GeoJSON.Feature[],
   agriLocationDrawingInfo: Record<string, unknown> | null | undefined,
   filters: DevelopEliteFilters,
+  agriScopeStructures: DevelopEliteStructureFeature[],
+  agriKpiFilters: DevelopEliteFilters,
 ): string {
   const propsList = features.map(f => f.properties ?? {})
   switch (card.source) {
@@ -615,8 +631,8 @@ function evalKpiCard(
       }
       const n = countScopedAgriLocationFeatures(
         agriLocationFeatures,
-        features,
-        filters,
+        agriScopeStructures,
+        agriKpiFilters,
         card.fieldName || 'Subtype',
         match,
         card.fieldMatchMode ?? 'equals',
@@ -646,7 +662,7 @@ function evalKpiCard(
       return formatNumber(scopedTreeCount, card.format ?? 'compact')
     case 'agriLocationLayerCount':
       return formatNumber(
-        countScopedAgriLocationLayer(agriLocationFeatures, features, filters),
+        countScopedAgriLocationLayer(agriLocationFeatures, agriScopeStructures, agriKpiFilters),
         card.format ?? 'number',
       )
     default:
@@ -772,6 +788,15 @@ export function computeDevelopEliteZoneLayerTotalAreaHa(
   return total
 }
 
+export function developEliteAgriKpiFilters(filters: DevelopEliteFilters): DevelopEliteFilters {
+  return {
+    country: filters.country,
+    zoneId: filters.zoneId,
+    selectedFieldKey: null,
+    locationSearch: '',
+  }
+}
+
 export function computeDevelopEliteKpis(
   features: DevelopEliteStructureFeature[],
   cropRows: ArcGisTableRow[],
@@ -785,6 +810,8 @@ export function computeDevelopEliteKpis(
     selectedFieldKey: null,
     locationSearch: '',
   },
+  agriScopeStructures: DevelopEliteStructureFeature[] = features,
+  agriKpiFilters: DevelopEliteFilters = developEliteAgriKpiFilters(filters),
 ): DevelopEliteKpiValues {
   let heroTotalAreaHa = 0
   for (const f of features) {
@@ -801,6 +828,8 @@ export function computeDevelopEliteKpis(
       agriLocationFeatures,
       agriLocationDrawingInfo,
       filters,
+      agriScopeStructures,
+      agriKpiFilters,
     )
   }
   return { heroTotalAreaHa, heroZoneLayerTotalAreaHa: 0, cards }
