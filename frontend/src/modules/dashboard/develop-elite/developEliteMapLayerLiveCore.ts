@@ -28,8 +28,8 @@ export const DEVELOP_ELITE_LAYER_LIVE_PANE = 'develop-elite-layer-live'
 
 export const DEVELOP_ELITE_LAYER_LIVE_WMS_ID_PREFIX = 'develop-elite-layer-live'
 
-/** Above vector overlays (400) and draw sketch (360); below popups (700). */
-export const DEVELOP_ELITE_LAYER_LIVE_PANE_Z_INDEX = 550
+/** Above basemap tiles (~200), below vector overlays (~400) so structures / Subtype points stay visible on zoom. */
+export const DEVELOP_ELITE_LAYER_LIVE_PANE_Z_INDEX = 350
 
 /** Scene ranking / WMS MAXCC preference for Develop Elite Layer Live (matches SI toolbox default intent). */
 export const DEVELOP_ELITE_LAYER_LIVE_DEFAULT_CLOUD_COVERAGE = 10

@@ -58,6 +58,8 @@ type Props = {
   kpiCardIds: string[]
   onLayoutsChange: (layouts: DevelopEliteResponsiveGridLayouts) => void
   onLayoutCommit: () => void
+  gridRowStrideByBp?: Partial<Record<DevelopEliteGridBreakpoint, number>>
+  onGridRowStrideCommit?: (breakpoint: DevelopEliteGridBreakpoint, rowStridePx: number) => void
   layoutEditMode: boolean
   widgets: Record<string, ReactNode>
   gridHiddenWidgets: string[]
@@ -107,6 +109,8 @@ export function DevelopEliteDashboardGrid({
   kpiCardIds,
   onLayoutsChange,
   onLayoutCommit,
+  gridRowStrideByBp,
+  onGridRowStrideCommit,
   layoutEditMode,
   widgets,
   gridHiddenWidgets,
@@ -176,19 +180,29 @@ export function DevelopEliteDashboardGrid({
   }, [])
 
   const editRowLockRef = useRef<number | null>(null)
-  if (!layoutEditMode) editRowLockRef.current = null
-  else if (editRowLockRef.current == null && gridHeight > 0 && rowCount > 0) {
+  if (layoutEditMode && editRowLockRef.current == null && gridHeight > 0 && rowCount > 0) {
     editRowLockRef.current = computeRowStridePx(gridHeight, rowCount)
   }
-  const editRowPx = editRowLockRef.current
+  const editRowPx = layoutEditMode ? editRowLockRef.current : null
   const narrowRowPx =
     narrowStackLayout && !layoutEditMode ? developEliteNarrowGridRowPx(layoutBreakpoint) : null
+
+  const savedRowStridePx = gridRowStrideByBp?.[layoutBreakpoint] ?? null
 
   const rowUnitPx = useMemo(() => {
     if (layoutEditMode && editRowPx != null) return editRowPx
     if (narrowRowPx != null) return narrowRowPx
-    return computeRowStridePx(gridHeight, rowCount)
-  }, [editRowPx, gridHeight, layoutEditMode, narrowRowPx, rowCount])
+    if (savedRowStridePx != null && savedRowStridePx > 0) return savedRowStridePx
+    if (gridHeight > 0 && rowCount > 0) return computeRowStridePx(gridHeight, rowCount)
+    return DEVELOP_ELITE_GRID_ROW_HEIGHT
+  }, [
+    editRowPx,
+    gridHeight,
+    layoutEditMode,
+    narrowRowPx,
+    rowCount,
+    savedRowStridePx,
+  ])
   const rowStridePx = rowUnitPx + GRID_MARGIN_Y
   rowStrideRef.current = rowUnitPx
 
@@ -503,10 +517,15 @@ export function DevelopEliteDashboardGrid({
     prevLayoutEditModeRef.current = layoutEditMode
 
     if (wasEditing && !layoutEditMode) {
+      const stride = editRowLockRef.current
       const snapshot = draftLayoutRef.current ?? layoutRef.current
       patchActiveLayout(snapshot)
       setDraftLayoutLive(null)
       notifyDevelopEliteLayoutChanged()
+      if (stride != null && stride > 0) {
+        onGridRowStrideCommit?.(layoutBreakpoint, Math.round(stride))
+      }
+      editRowLockRef.current = null
       onLayoutCommit()
     }
 
@@ -533,7 +552,14 @@ export function DevelopEliteDashboardGrid({
       'develop-elite--resize-nwse',
     )
     notifyDevelopEliteGridDrag(false)
-  }, [layoutEditMode, onLayoutCommit, patchActiveLayout, setDraftLayoutLive])
+  }, [
+    layoutBreakpoint,
+    layoutEditMode,
+    onGridRowStrideCommit,
+    onLayoutCommit,
+    patchActiveLayout,
+    setDraftLayoutLive,
+  ])
 
   const beginResizeSession = useCallback(
     (item: DevelopEliteGridLayoutItem, edge: GridResizeEdge) => {
@@ -573,9 +599,8 @@ export function DevelopEliteDashboardGrid({
     onLayoutCommit()
   }, [onLayoutCommit, patchActiveLayout, setDraftLayoutLive])
 
-  const freeEditRows = layoutEditMode && editRowPx != null && editRowPx > 0
-  const fixedRowPx = freeEditRows ? editRowPx! : narrowRowPx
-  const useFixedRowGrid = freeEditRows || narrowRowPx != null
+  const fixedRowPx = rowUnitPx
+  const useFixedRowGrid = fixedRowPx > 0
   const editGridHeight = useFixedRowGrid && fixedRowPx != null
     ? rowCount * fixedRowPx + GRID_MARGIN_Y * Math.max(0, rowCount - 1) + GRID_MARGIN_Y * 2
     : 0

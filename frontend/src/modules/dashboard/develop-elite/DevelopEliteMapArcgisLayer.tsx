@@ -8,9 +8,12 @@ import {
   layerOpacityFromDrawingInfo,
 } from '@/modules/gis/layers/arcgisDrawingInfoLeaflet'
 import type { DevelopEliteMapDataLayerId } from './developEliteMapDataLayers'
+import { DEVELOP_ELITE_MAP_DATA_PANE } from './developEliteMapPanes'
+import { createDevelopEliteMapDataSvgRenderer } from './developEliteMapRenderers'
 import {
   bindDevelopEliteMapLayerPopup,
   buildDevelopEliteArcgisFeaturePopupHtml,
+  developEliteMapLayerSupportsPopup,
 } from './developEliteMapFeaturePopup'
 
 /** Slightly larger map markers for AgroLocation (picture / simple points). */
@@ -30,11 +33,18 @@ function pointLayer(
   latlng: LatLngExpression,
   preview: ReturnType<typeof arcgisFeaturePointSymbolPreview>,
   scale = 1,
+  vectorPane = DEVELOP_ELITE_MAP_DATA_PANE,
 ) {
   const s = scale > 0 ? scale : 1
   if (!preview) {
     const r = Math.max(3, 5 * s)
-    return L.circleMarker(latlng, { radius: r, color: '#7ee787', fillColor: '#39ff14', fillOpacity: 0.85 })
+    return L.circleMarker(latlng, {
+      radius: r,
+      color: '#7ee787',
+      fillColor: '#39ff14',
+      fillOpacity: 0.85,
+      pane: vectorPane,
+    })
   }
   if (preview.kind === 'picture' && preview.imageUrl) {
     const w = Math.round((preview.imageWidth ?? 15) * s)
@@ -55,6 +65,7 @@ function pointLayer(
     fillColor: preview.fillColor,
     fillOpacity: preview.opacity,
     opacity: preview.opacity,
+    pane: vectorPane,
   })
 }
 
@@ -67,10 +78,15 @@ export function DevelopEliteMapArcgisLayer({
   countryLabels = null,
   onFeatureClick,
 }: Props) {
+  const map = useMap()
   const layerOpacity = useMemo(() => layerOpacityFromDrawingInfo(drawingInfo), [drawingInfo])
   const drawingSig = useMemo(() => JSON.stringify(drawingInfo ?? null), [drawingInfo])
   const pointSymbolScale =
     layerKey === 'agri-location' ? DEVELOP_ELITE_AGRI_LOCATION_POINT_SCALE : 1
+  const vectorSmoothFactor = 1
+  const vectorPane = DEVELOP_ELITE_MAP_DATA_PANE
+
+  const vectorRenderer = useMemo(() => createDevelopEliteMapDataSvgRenderer(map), [map])
 
   const styleFeature = useCallback(
     (feature?: GeoJSON.Feature) => {
@@ -102,32 +118,33 @@ export function DevelopEliteMapArcgisLayer({
   const pointToLayer = useCallback(
     (feature: GeoJSON.Feature, latlng: LatLngExpression) => {
       const preview = arcgisFeaturePointSymbolPreview(drawingInfo, feature.properties, { layerOpacity })
-      const layer = pointLayer(latlng, preview, pointSymbolScale)
+      const layer = pointLayer(latlng, preview, pointSymbolScale, vectorPane)
       if (!interactive) layer.options.interactive = false
       return layer
     },
-    [drawingInfo, interactive, layerOpacity, pointSymbolScale],
+    [drawingInfo, interactive, layerOpacity, pointSymbolScale, vectorPane],
   )
-
-  const map = useMap()
 
   const onEachFeature = useCallback(
     (feature: GeoJSON.Feature, layer: Layer) => {
       if (!interactive) return
       const props = (feature.properties ?? {}) as Record<string, unknown>
-      bindDevelopEliteMapLayerPopup(
-        layer,
-        buildDevelopEliteArcgisFeaturePopupHtml(layerLabel, props, {
-          layerKey,
-          drawingInfo,
-          countryLabels,
-        }),
-        undefined,
-        map,
-      )
-      if (onFeatureClick) {
-        layer.on('click', () => onFeatureClick(feature))
+      if (developEliteMapLayerSupportsPopup(layerKey)) {
+        bindDevelopEliteMapLayerPopup(
+          layer,
+          buildDevelopEliteArcgisFeaturePopupHtml(layerLabel, props, {
+            layerKey,
+            drawingInfo,
+            countryLabels,
+          }),
+          undefined,
+          map,
+        )
       }
+      layer.on('click', (event: L.LeafletMouseEvent) => {
+        L.DomEvent.stopPropagation(event)
+        onFeatureClick?.(feature)
+      })
     },
     [countryLabels, drawingInfo, interactive, layerKey, layerLabel, map, onFeatureClick],
   )
@@ -135,11 +152,15 @@ export function DevelopEliteMapArcgisLayer({
   if (!geojson.features.length) return null
 
   const hasPoints = geojson.features.some(f => f.geometry?.type === 'Point')
+  const dataSig = `${geojson.features.length}`
 
   return (
     <GeoJSON
-      key={`${layerKey}-${drawingSig}`}
+      key={`${layerKey}-${drawingSig}-${dataSig}`}
       data={geojson as GeoJSON.GeoJsonObject}
+      pane={vectorPane}
+      renderer={vectorRenderer}
+      smoothFactor={vectorSmoothFactor}
       style={styleFeature}
       pointToLayer={hasPoints ? pointToLayer : undefined}
       onEachFeature={onEachFeature}

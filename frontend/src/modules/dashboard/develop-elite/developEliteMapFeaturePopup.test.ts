@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildDevelopEliteArcgisFeaturePopupHtml,
+  developEliteMapLayerSupportsPopup,
   escapeDevelopEliteMapPopupHtml,
 } from './developEliteMapFeaturePopup'
 
 describe('developEliteMapFeaturePopup', () => {
+  it('disables popups for World Countries overlay', () => {
+    expect(developEliteMapLayerSupportsPopup('world-countries')).toBe(false)
+    expect(developEliteMapLayerSupportsPopup('agro-structures')).toBe(true)
+  })
+
   it('escapes HTML in popup text', () => {
     expect(escapeDevelopEliteMapPopupHtml('<script>')).toBe('&lt;script&gt;')
   })
@@ -33,6 +39,24 @@ describe('developEliteMapFeaturePopup', () => {
     expect(html).toContain('Liwa 32')
     expect(html).not.toContain('subscriptions@eliteprojects.ae')
     expect(html).not.toContain('last edited user')
+  })
+
+  it('prioritizes irrigation valve fields', () => {
+    const html = buildDevelopEliteArcgisFeaturePopupHtml(
+      'Irrigation System Valve',
+      {
+        OBJECTID: 9,
+        Valve_Name: 'V-01',
+        Farm_Code: 'AF204',
+        SUBTYPE: '1',
+        DEVELOPERNAME: 'Elite',
+      },
+      { layerKey: 'irrigation-valves' },
+    )
+    expect(html).toContain('Irrigation System Valve')
+    expect(html).toContain('V-01')
+    expect(html).toContain('AF204')
+    expect(html).toContain('Elite')
   })
 
   it('resolves unique-value labels from drawingInfo', () => {

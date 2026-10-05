@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { aggregateChartSlices, readArcGisNumber } from './developEliteChartAggregate'
+import {
+  aggregateChartSlices,
+  readArcGisNumber,
+  resolveCodedFieldLabel,
+} from './developEliteChartAggregate'
+import { DEFAULT_DEVELOP_ELITE_CHART_PALETTE } from './developEliteChartsConfig'
 
 describe('aggregateChartSlices', () => {
   it('sums Total_Tree per crop label', () => {
@@ -13,11 +18,21 @@ describe('aggregateChartSlices', () => {
         ['100', 'Plum Tomato'],
         ['200', 'Capsicum Red'],
       ]),
+      fieldDomainLabels: new Map([
+        [
+          'Crop_Type',
+          new Map([
+            ['100', 'Plum Tomato'],
+            ['200', 'Capsicum Red'],
+          ]),
+        ],
+      ]),
     }
     const slices = aggregateChartSlices(rows, 'Crop_Type', meta, 'Total_Tree')
     const plum = slices.find(s => s.label === 'Plum Tomato')
     expect(plum?.value).toBe(920)
-    expect(plum?.color).toBe('#38bdf8')
+    expect(plum?.color).toBe(DEFAULT_DEVELOP_ELITE_CHART_PALETTE[0])
+    expect(slices.find(s => s.label === 'Capsicum Red')?.color).toBe(DEFAULT_DEVELOP_ELITE_CHART_PALETTE[1])
   })
 
   it('falls back to row count when sum field is all zero', () => {
@@ -26,12 +41,25 @@ describe('aggregateChartSlices', () => {
       { crop_type: 'A', Total_Tree: 0 },
       { crop_type: 'B', total_tree: 0 },
     ]
-    const meta = { cropTypeLabels: new Map<string, string>() }
+    const meta = { cropTypeLabels: new Map<string, string>(), fieldDomainLabels: new Map() }
     const slices = aggregateChartSlices(rows, 'Crop_Type', meta, 'Total_Tree')
     const a = slices.find(s => s.label === 'A')
     const b = slices.find(s => s.label === 'B')
     expect(a?.value).toBe(2)
     expect(b?.value).toBe(1)
+  })
+})
+
+describe('resolveCodedFieldLabel', () => {
+  it('maps Variety domain code to description name', () => {
+    const meta = {
+      cropTypeLabels: new Map<string, string>(),
+      fieldDomainLabels: new Map([
+        ['Variety', new Map([['14012', 'Cherry Tomato A'], ['14013', 'Beefsteak B']])],
+      ]),
+    }
+    expect(resolveCodedFieldLabel({ Variety: 14012 }, meta, 'Variety')).toBe('Cherry Tomato A')
+    expect(resolveCodedFieldLabel({ VARIETY: '14013' }, meta, 'Variety')).toBe('Beefsteak B')
   })
 })
 

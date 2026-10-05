@@ -1,6 +1,7 @@
 import type { ArcGisTableRow, DevelopEliteLayerMeta } from './developEliteArcgisFetch'
 import {
   loadDevelopEliteDashboardConfig,
+  normalizeDevelopEliteStructuresLayerUrl,
   type DevelopEliteDashboardConfig,
 } from './developEliteDashboardConfig'
 
@@ -13,6 +14,10 @@ export type DevelopEliteArcgisDataSnapshot = {
   treesDrawingInfo: Record<string, unknown> | null
   agriLocationFeatures: GeoJSON.Feature[]
   agriLocationDrawingInfo: Record<string, unknown> | null
+  irrigationValveFeatures: GeoJSON.Feature[]
+  irrigationValvesDrawingInfo: Record<string, unknown> | null
+  irrigationMainPipeFeatures: GeoJSON.Feature[]
+  irrigationMainPipeDrawingInfo: Record<string, unknown> | null
   cropMeta: DevelopEliteLayerMeta
   countryLabels: Map<string, string>
   worldCountries: GeoJSON.FeatureCollection | null
@@ -25,12 +30,15 @@ const sessionCache = new Map<string, DevelopEliteArcgisDataSnapshot>()
 
 export function developEliteArcgisCacheKey(config: DevelopEliteDashboardConfig): string {
   return [
-    config.structuresLayerUrl,
+    normalizeDevelopEliteStructuresLayerUrl(config.structuresLayerUrl),
     config.zonesLayerUrl,
     config.cropsTableUrl,
     config.treesLayerUrl,
     config.agriLocationLayerUrl,
+    config.irrigationValvesLayerUrl,
+    config.irrigationMainPipeLayerUrl,
     config.worldCountriesLayerUrl,
+    'wc-map-v5',
   ].join('|')
 }
 

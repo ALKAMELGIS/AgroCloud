@@ -1,21 +1,21 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Layer, Map as LeafletMap, Path } from 'leaflet'
 import L from 'leaflet'
-import { GeoJSON, useMap } from 'react-leaflet'
+import { useMap } from 'react-leaflet'
 import MapView from '@/shared/maps/MapView'
 import { BasemapLayer } from '@/modules/gis/map/BasemapGallery'
 import { resolveBasemapId } from '@/modules/gis/map/basemapCatalog'
 import { computeStableGisFeatureKey } from '@/modules/gis/layers/gisFeatureStableKey'
-import {
-  arcgisFeatureToLeafletPathOptions,
-  layerOpacityFromDrawingInfo,
-} from '@/modules/gis/layers/arcgisDrawingInfoLeaflet'
+import { layerOpacityFromDrawingInfo } from '@/modules/gis/layers/arcgisDrawingInfoLeaflet'
+import { developEliteStructureLeafletStyle } from './developEliteMapLegend'
 import {
   bindDevelopEliteMapLayerPopup,
   buildDevelopEliteArcgisFeaturePopupHtml,
+  wireDevelopEliteMapFeatureActivate,
 } from './developEliteMapFeaturePopup'
 import {
   DevelopEliteMapGridDragLock,
+  DevelopEliteMapInteractionTune,
   DevelopEliteMapInvalidateOnLayout,
   DevelopEliteMapLegendRail,
   DevelopEliteMapRefBridge,
@@ -23,6 +23,8 @@ import {
   DevelopEliteMapTransientPin,
 } from './DevelopEliteMapTools'
 import { DevelopEliteMapArcgisLayer } from './DevelopEliteMapArcgisLayer'
+import { DevelopEliteMapWorldCountriesLayer } from './DevelopEliteMapWorldCountriesLayer'
+import { DevelopEliteMapVectorGeoJson } from './DevelopEliteMapVectorGeoJson'
 import type { DevelopEliteMapDataLayerId } from './developEliteDashboardConfig'
 import { DEVELOP_ELITE_MAP_DATA_LAYERS, isDevelopEliteMapDataLayerVisible } from './developEliteMapDataLayers'
 import { filterDevelopEliteMapOverlayGeoJson } from './developEliteMapOverlayFilter'
@@ -52,10 +54,17 @@ import {
   useDevelopEliteMapDraw,
 } from './DevelopEliteMapDraw'
 import { buildDevelopEliteStructureFeatureMeta } from './developEliteMapStructureMeta'
+import { ensureDevelopEliteMapDataPane, ensureDevelopEliteMapWorldCountriesPane } from './developEliteMapPanes'
+import {
+  DEVELOP_ELITE_MAP_ZOOM_DELTA,
+  DEVELOP_ELITE_MAP_ZOOM_SNAP,
+} from './developEliteMapInteraction'
 type Props = {
   geojson: GeoJSON.FeatureCollection
   basemapId: string
   highlightFieldKey: string | null
+  /** Incremented when the crops table requests fly-to (re-zoom even if selection unchanged). */
+  mapFlyToRequest?: number
   drawingInfo: Record<string, unknown> | null
   countryLabels: Map<string, string> | null
   worldCountriesGeojson?: GeoJSON.FeatureCollection | null
@@ -67,6 +76,10 @@ type Props = {
   treesDrawingInfo?: Record<string, unknown> | null
   agriLocationGeojson?: GeoJSON.FeatureCollection | null
   agriLocationDrawingInfo?: Record<string, unknown> | null
+  irrigationValvesGeojson?: GeoJSON.FeatureCollection | null
+  irrigationValvesDrawingInfo?: Record<string, unknown> | null
+  irrigationMainPipeGeojson?: GeoJSON.FeatureCollection | null
+  irrigationMainPipeDrawingInfo?: Record<string, unknown> | null
   mapLayerVisibility: Record<DevelopEliteMapDataLayerId, boolean>
   mapDataLayerOrder: DevelopEliteMapDataLayerId[]
   onMapLayerVisibilityChange: (id: DevelopEliteMapDataLayerId, visible: boolean) => void
@@ -76,23 +89,38 @@ type Props = {
   onViewportChange?: (view: DevelopEliteMapView) => void
 }
 
+function DevelopEliteMapDataPane() {
+  const map = useMap()
+  useLayoutEffect(() => {
+    ensureDevelopEliteMapDataPane(map)
+    ensureDevelopEliteMapWorldCountriesPane(map)
+  }, [map])
+  return null
+}
+
 function MapListViewport({ onChange }: { onChange?: (view: DevelopEliteMapView) => void }) {
   const map = useMap()
   useEffect(() => {
     if (!onChange) return
+    let raf = 0
     const emit = () => {
-      const bounds = map.getBounds()
-      onChange({
-        zoom: map.getZoom(),
-        west: bounds.getWest(),
-        south: bounds.getSouth(),
-        east: bounds.getEast(),
-        north: bounds.getNorth(),
+      if (raf) cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        const bounds = map.getBounds()
+        onChange({
+          zoom: map.getZoom(),
+          west: bounds.getWest(),
+          south: bounds.getSouth(),
+          east: bounds.getEast(),
+          north: bounds.getNorth(),
+        })
       })
     }
     map.on('moveend', emit)
     emit()
     return () => {
+      if (raf) cancelAnimationFrame(raf)
       map.off('moveend', emit)
     }
   }, [map, onChange])
@@ -226,9 +254,11 @@ function CountryMapFlyTo({
 function FlyToHighlight({
   geojson,
   highlightFieldKey,
+  flyRequest,
 }: {
   geojson: GeoJSON.FeatureCollection
   highlightFieldKey: string | null
+  flyRequest: number
 }) {
   const map = useMap()
   useEffect(() => {
@@ -244,7 +274,7 @@ function FlyToHighlight({
     } catch {
       /* ignore */
     }
-  }, [map, geojson, highlightFieldKey])
+  }, [map, geojson, highlightFieldKey, flyRequest])
   return null
 }
 
@@ -262,6 +292,7 @@ function DevelopEliteMapContent({
   geojson,
   basemapId,
   highlightFieldKey,
+  mapFlyToRequest = 0,
   drawingInfo,
   countryLabels,
   worldCountriesGeojson,
@@ -273,6 +304,10 @@ function DevelopEliteMapContent({
   treesDrawingInfo,
   agriLocationGeojson,
   agriLocationDrawingInfo,
+  irrigationValvesGeojson,
+  irrigationValvesDrawingInfo,
+  irrigationMainPipeGeojson,
+  irrigationMainPipeDrawingInfo,
   mapLayerVisibility,
   mapDataLayerOrder,
   onMapLayerVisibilityChange,
@@ -296,19 +331,26 @@ function DevelopEliteMapContent({
   const showWorldCountries = isDevelopEliteMapDataLayerVisible(mapLayerVisibility, 'world-countries')
   const showTrees = isDevelopEliteMapDataLayerVisible(mapLayerVisibility, 'trees')
   const showAgriLocation = isDevelopEliteMapDataLayerVisible(mapLayerVisibility, 'agri-location')
+  const showIrrigationValves = isDevelopEliteMapDataLayerVisible(
+    mapLayerVisibility,
+    'irrigation-valves',
+  )
+  const showIrrigationMainPipe = isDevelopEliteMapDataLayerVisible(
+    mapLayerVisibility,
+    'irrigation-main-pipe',
+  )
 
   const structureFeatureMeta = useMemo(
     () => buildDevelopEliteStructureFeatureMeta(geojson),
     [geojson],
   )
-
-  const structureCanvasRenderer = useMemo(() => L.canvas({ padding: 0.5 }), [])
+  const structureLayersByKeyRef = useRef(new Map<string, Layer>())
 
   const styleFeature = useCallback(
     (feature?: GeoJSON.Feature) => {
       const key = feature ? structureFeatureMeta.get(feature)?.key : null
       const highlighted = Boolean(highlightFieldKey && key === highlightFieldKey)
-      return arcgisFeatureToLeafletPathOptions(drawingInfo, feature?.properties, {
+      return developEliteStructureLeafletStyle(drawingInfo, (feature?.properties ?? {}) as Record<string, unknown>, {
         layerOpacity,
         highlighted,
       })
@@ -318,9 +360,20 @@ function DevelopEliteMapContent({
 
   const drawingSig = useMemo(() => JSON.stringify(drawingInfo ?? null), [drawingInfo])
 
+  useEffect(() => {
+    structureLayersByKeyRef.current.clear()
+  }, [geojson, drawingSig])
+
+  useEffect(() => {
+    if (!highlightFieldKey || !mapFlyToRequest) return
+    const layer = structureLayersByKeyRef.current.get(highlightFieldKey)
+    if (layer) pulseDevelopEliteStructureLayer(layer)
+  }, [highlightFieldKey, mapFlyToRequest])
+
   const onEachStructureFeature = useCallback(
     (feature: GeoJSON.Feature, layer: Layer) => {
       const key = structureFeatureMeta.get(feature)?.key ?? computeStableGisFeatureKey(feature, 0)
+      structureLayersByKeyRef.current.set(key, layer)
       const props = (feature.properties ?? {}) as Record<string, unknown>
       bindDevelopEliteMapLayerPopup(
         layer,
@@ -329,29 +382,23 @@ function DevelopEliteMapContent({
           drawingInfo,
           countryLabels,
         }),
+        undefined,
+        mapRef.current,
       )
-      layer.on('click', () => onSelectFieldKey(key))
-      if (highlightFieldKey && key === highlightFieldKey) {
-        pulseDevelopEliteStructureLayer(layer)
-      }
+      wireDevelopEliteMapFeatureActivate(
+        layer,
+        () => onSelectFieldKey(key),
+        () => structureLayersByKeyRef.current.get(key) ?? layer,
+      )
     },
-    [countryLabels, drawingInfo, highlightFieldKey, onSelectFieldKey, structureFeatureMeta],
+    [countryLabels, drawingInfo, onSelectFieldKey, structureFeatureMeta],
   )
 
   const orderedMapLayers = useMemo(() => {
     const bottomToTop = [...mapDataLayerOrder].reverse()
     return bottomToTop.map(id => {
-      if (id === 'world-countries' && showWorldCountries && worldCountriesGeojson?.features?.length) {
-        return (
-          <DevelopEliteMapArcgisLayer
-            key="world-countries"
-            layerKey="world-countries"
-            layerLabel={mapLayerLabel('world-countries')}
-            geojson={worldCountriesGeojson}
-            drawingInfo={worldCountriesDrawingInfo ?? null}
-            countryLabels={countryLabels}
-          />
-        )
+      if (id === 'world-countries') {
+        return null
       }
       if (id === 'trees' && showTrees && treesGeojson?.features?.length) {
         return (
@@ -361,6 +408,36 @@ function DevelopEliteMapContent({
             layerLabel={mapLayerLabel('trees')}
             geojson={treesGeojson}
             drawingInfo={treesDrawingInfo ?? null}
+          />
+        )
+      }
+      if (
+        id === 'irrigation-valves' &&
+        showIrrigationValves &&
+        irrigationValvesGeojson?.features?.length
+      ) {
+        return (
+          <DevelopEliteMapArcgisLayer
+            key="irrigation-valves"
+            layerKey="irrigation-valves"
+            layerLabel={mapLayerLabel('irrigation-valves')}
+            geojson={irrigationValvesGeojson}
+            drawingInfo={irrigationValvesDrawingInfo ?? null}
+          />
+        )
+      }
+      if (
+        id === 'irrigation-main-pipe' &&
+        showIrrigationMainPipe &&
+        irrigationMainPipeGeojson?.features?.length
+      ) {
+        return (
+          <DevelopEliteMapArcgisLayer
+            key="irrigation-main-pipe"
+            layerKey="irrigation-main-pipe"
+            layerLabel={mapLayerLabel('irrigation-main-pipe')}
+            geojson={irrigationMainPipeGeojson}
+            drawingInfo={irrigationMainPipeDrawingInfo ?? null}
           />
         )
       }
@@ -375,14 +452,14 @@ function DevelopEliteMapContent({
           />
         )
       }
-      if (id === 'agro-structures' && showStructures) {
+      if (id === 'agro-structures' && showStructures && geojson.features.length) {
         return (
-          <GeoJSON
+          <DevelopEliteMapVectorGeoJson
             key={`structures-${geojson.features.length}-${drawingSig}`}
+            layerKey={`structures-${geojson.features.length}-${drawingSig}`}
             data={geojson as GeoJSON.GeoJsonObject}
             style={styleFeature}
             onEachFeature={onEachStructureFeature}
-            renderer={structureCanvasRenderer}
           />
         )
       }
@@ -397,14 +474,17 @@ function DevelopEliteMapContent({
     showStructures,
     agriLocationDrawingInfo,
     agriLocationGeojson,
+    irrigationValvesDrawingInfo,
+    irrigationValvesGeojson,
+    irrigationMainPipeDrawingInfo,
+    irrigationMainPipeGeojson,
     showAgriLocation,
+    showIrrigationMainPipe,
+    showIrrigationValves,
     showTrees,
-    showWorldCountries,
     styleFeature,
     treesDrawingInfo,
     treesGeojson,
-    worldCountriesDrawingInfo,
-    worldCountriesGeojson,
   ])
 
   const sentinelClipSource = useMemo(
@@ -414,6 +494,14 @@ function DevelopEliteMapContent({
         : geojson,
     [geojson, worldCountriesPortfolioExtentGeojson],
   )
+
+  const worldCountriesLayerGeojson = useMemo(() => {
+    if (worldCountriesGeojson?.features?.length) return worldCountriesGeojson
+    if (worldCountriesPortfolioExtentGeojson?.features?.length) {
+      return worldCountriesPortfolioExtentGeojson
+    }
+    return null
+  }, [worldCountriesGeojson, worldCountriesPortfolioExtentGeojson])
 
   const draw = useDevelopEliteMapDraw()
   return (
@@ -431,19 +519,28 @@ function DevelopEliteMapContent({
         <MapView
           center={DEVELOP_ELITE_MAP_DEFAULT_CENTER}
           zoom={DEVELOP_ELITE_MAP_DEFAULT_ZOOM}
+          zoomSnap={DEVELOP_ELITE_MAP_ZOOM_SNAP}
+          zoomDelta={DEVELOP_ELITE_MAP_ZOOM_DELTA}
           showBaseLayer={false}
           showZoomControl={false}
           showScaleControl={false}
           attributionControl={false}
-          fastZoom
+          developEliteMap
           onMapReady={map => {
+            ensureDevelopEliteMapDataPane(map)
+            ensureDevelopEliteMapWorldCountriesPane(map)
             mapRef.current = map
           }}
         >
+          <DevelopEliteMapDataPane />
           <DevelopEliteMapRefBridge mapRef={mapRef} />
           <DevelopEliteMapInvalidateOnLayout />
+          <DevelopEliteMapInteractionTune />
           <DevelopEliteMapGridDragLock />
           <BasemapLayer selectedBasemap={basemap} stableDuringInteraction />
+          {showWorldCountries && worldCountriesLayerGeojson?.features?.length ? (
+            <DevelopEliteMapWorldCountriesLayer geojson={worldCountriesLayerGeojson} />
+          ) : null}
           {orderedMapLayers}
           <DevelopEliteMapTransientPin position={pin} />
           <PortfolioMapExtent portfolioExtentGeojson={worldCountriesPortfolioExtentGeojson} />
@@ -453,7 +550,11 @@ function DevelopEliteMapContent({
             portfolioExtentGeojson={worldCountriesPortfolioExtentGeojson}
             worldCountryDomain={worldCountryDomain}
           />
-          <FlyToHighlight geojson={geojson} highlightFieldKey={highlightFieldKey} />
+          <FlyToHighlight
+            geojson={geojson}
+            highlightFieldKey={highlightFieldKey}
+            flyRequest={mapFlyToRequest}
+          />
           {onViewportChange ? <MapListViewport onChange={onViewportChange} /> : null}
           <DevelopEliteMapInsightEngine />
           <DevelopEliteMapSwipeEngine />
@@ -468,6 +569,8 @@ function DevelopEliteMapContent({
           viewportRef={viewportRef}
           geojson={geojson}
           treesGeojson={treesGeojson}
+          irrigationValvesGeojson={irrigationValvesGeojson}
+          irrigationMainPipeGeojson={irrigationMainPipeGeojson}
           agriLocationGeojson={agriLocationGeojson}
           worldCountriesGeojson={worldCountriesGeojson}
           countryLabels={countryLabels}
@@ -492,6 +595,8 @@ function DevelopEliteMapContent({
       <DevelopEliteMapLegendRail
         drawingInfo={drawingInfo}
         treesDrawingInfo={treesDrawingInfo}
+        irrigationValvesDrawingInfo={irrigationValvesDrawingInfo}
+        irrigationMainPipeDrawingInfo={irrigationMainPipeDrawingInfo}
         agriLocationDrawingInfo={agriLocationDrawingInfo}
         mapLayerVisibility={mapLayerVisibility}
         onSelectFieldKey={onSelectFieldKey}

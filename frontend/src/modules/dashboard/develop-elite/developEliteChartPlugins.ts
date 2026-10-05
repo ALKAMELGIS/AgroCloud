@@ -1,6 +1,14 @@
 import type { Chart, Plugin } from 'chart.js'
 import type { DevelopEliteChartsConfig } from './developEliteChartsConfig'
-import { developEliteChartValueLabelColor } from './developEliteCropChartColors'
+import { DEVELOP_ELITE_CHART_SLICE_FLASH_MS } from './developEliteChartFlash'
+import {
+  DEVELOP_ELITE_CHART_VALUE_UNIT,
+  formatDevelopEliteChartValueWithUnit,
+  formatDevelopElitePieCalloutMetricLine,
+} from './developEliteChartFormat'
+import {
+  DEVELOP_ELITE_PIE_CALLOUT_LINE_COLOR,
+} from './developEliteCropChartColors'
 
 type PieArcLike = {
   getProps: (props: string[], useFinal?: boolean) => Record<string, number>
@@ -80,12 +88,13 @@ export function layoutPieCallouts(
   total: number,
   bounds: { top: number; bottom: number; boxHeight: number },
   textWidth: (text: string) => number,
+  valueUnit: string = DEVELOP_ELITE_CHART_VALUE_UNIT,
 ): PieCalloutBox[] {
   const draft: Array<PieCalloutBox & { preferredY: number }> = []
   for (const slice of slices) {
     if (slice.value <= 0 || !slice.label) continue
     const side: 'left' | 'right' = Math.cos(slice.midAngle) >= 0 ? 'right' : 'left'
-    const pct = `${((slice.value / total) * 100).toFixed(2)}%`
+    const pct = formatDevelopElitePieCalloutMetricLine(slice.value, total, valueUnit)
     draft.push({
       label: slice.label,
       pct,
@@ -191,6 +200,7 @@ function drawPieBandCallouts(
   pieTop: number,
   pieBottom: number,
   measure: (text: string) => number,
+  valueUnit: string = DEVELOP_ELITE_CHART_VALUE_UNIT,
 ): void {
   const boxHeight = fontSize + 2
   const edge = 4
@@ -198,13 +208,13 @@ function drawPieBandCallouts(
     index,
     band: (Math.sin(slice.midAngle) >= 0 ? 'bottom' : 'top') as 'top' | 'bottom',
     col: (Math.cos(slice.midAngle) >= 0 ? 'right' : 'left') as 'left' | 'right',
-    line: `${slice.label}  ${((slice.value / total) * 100).toFixed(2)}%`,
+    line: `${slice.label}  ${formatDevelopElitePieCalloutMetricLine(slice.value, total, valueUnit)}`,
     midAngle: slice.midAngle,
   }))
 
   ctx.save()
   ctx.fillStyle = charts.tickColor
-  ctx.strokeStyle = 'rgba(203, 213, 225, 0.55)'
+  ctx.strokeStyle = DEVELOP_ELITE_PIE_CALLOUT_LINE_COLOR
   ctx.lineWidth = 1
   ctx.textBaseline = 'middle'
   ctx.font = `500 ${fontSize}px ${charts.fontFamily}`
@@ -250,7 +260,10 @@ function drawPieBandCallouts(
   ctx.restore()
 }
 
-export function createDevelopElitePieCalloutPlugin(charts: DevelopEliteChartsConfig): Plugin<'pie'> {
+export function createDevelopElitePieCalloutPlugin(
+  charts: DevelopEliteChartsConfig,
+  valueUnit: string = DEVELOP_ELITE_CHART_VALUE_UNIT,
+): Plugin<'pie'> {
   return {
     id: 'developElitePieCallouts',
     beforeLayout(chart) {
@@ -330,6 +343,7 @@ export function createDevelopElitePieCalloutPlugin(charts: DevelopEliteChartsCon
           pieTop,
           pieBottom,
           measure,
+          valueUnit,
         )
         return
       }
@@ -338,6 +352,7 @@ export function createDevelopElitePieCalloutPlugin(charts: DevelopEliteChartsCon
         total,
         { top: 4, bottom: canvasHeight - 4, boxHeight },
         measure,
+        valueUnit,
       )
 
       const edge = 4
@@ -356,7 +371,7 @@ export function createDevelopElitePieCalloutPlugin(charts: DevelopEliteChartsCon
 
       ctx.save()
       ctx.fillStyle = charts.tickColor
-      ctx.strokeStyle = 'rgba(74, 222, 128, 0.35)'
+      ctx.strokeStyle = DEVELOP_ELITE_PIE_CALLOUT_LINE_COLOR
       ctx.lineWidth = 1
       ctx.textBaseline = 'middle'
 
@@ -397,7 +412,27 @@ export function createDevelopElitePieCalloutPlugin(charts: DevelopEliteChartsCon
   }
 }
 
-export function createDevelopEliteBarValuePlugin(charts: DevelopEliteChartsConfig): Plugin<'bar'> {
+/** Fills Chart.js canvas (transparent by default) with dashboard dark green. */
+export function createDevelopEliteChartCanvasBgPlugin(fillColor: string): Plugin {
+  return {
+    id: 'developEliteChartCanvasBg',
+    beforeDraw(chart) {
+      const { ctx } = chart
+      const w = chart.width
+      const h = chart.height
+      if (w <= 0 || h <= 0) return
+      ctx.save()
+      ctx.fillStyle = fillColor
+      ctx.fillRect(0, 0, w, h)
+      ctx.restore()
+    },
+  }
+}
+
+export function createDevelopEliteBarValuePlugin(
+  charts: DevelopEliteChartsConfig,
+  valueUnit: string = DEVELOP_ELITE_CHART_VALUE_UNIT,
+): Plugin<'bar'> {
   return {
     id: 'developEliteBarValues',
     afterDatasetsDraw(chart: Chart<'bar'>) {
@@ -407,26 +442,104 @@ export function createDevelopEliteBarValuePlugin(charts: DevelopEliteChartsConfi
 
       const dataset = data.datasets[0]
       const values = (dataset?.data ?? []) as number[]
-      const colors = (dataset?.backgroundColor ?? []) as string[]
-      const fontSize = Math.max(7, charts.axisFontPx)
+      const fontSize = Math.max(8, charts.axisFontPx)
       ctx.save()
       ctx.font = `600 ${fontSize}px ${charts.fontFamily}`
       ctx.textBaseline = 'middle'
+      ctx.fillStyle = charts.labelColor || '#ffffff'
 
       meta.data.forEach((bar, index) => {
         const value = Number(values[index]) || 0
         if (value <= 0) return
-        const bg = String(colors[index] ?? '')
-        ctx.fillStyle = developEliteChartValueLabelColor(bg, charts.tickColor)
         const props = (bar as BarLike).getProps(['x', 'y', 'base', 'width', 'height'], true)
         const endX = props.x
         const y = props.y
-        const innerX = Math.max(props.base + 8, endX - 6)
-        ctx.textAlign = 'right'
-        ctx.fillText(String(Math.round(value)), innerX, y)
+        const label = formatDevelopEliteChartValueWithUnit(value, valueUnit)
+        const labelX = endX + 8
+        ctx.textAlign = 'left'
+        ctx.fillText(label, labelX, y)
       })
 
       ctx.restore()
+    },
+  }
+}
+
+function findChartLabelIndex(chart: Chart, label: string): number {
+  const labels = chart.data.labels ?? []
+  return labels.findIndex(entry => String(entry) === label)
+}
+
+/** Pulsing yellow outline + light fill on the pie slice / bar that matches the flashed crop. */
+export function createDevelopEliteChartSliceFlashPlugin(
+  highlightLabel: string | null,
+  flashStartedAt: number,
+): Plugin {
+  return {
+    id: 'developEliteChartSliceFlash',
+    afterDatasetsDraw(chart) {
+      if (!highlightLabel || flashStartedAt <= 0) return
+      const elapsed = performance.now() - flashStartedAt
+      if (elapsed > DEVELOP_ELITE_CHART_SLICE_FLASH_MS) return
+
+      const index = findChartLabelIndex(chart, highlightLabel)
+      if (index < 0) return
+      const meta = chart.getDatasetMeta(0)
+      const element = meta.data[index]
+      if (!element) return
+
+      const phase = (elapsed % 450) / 450
+      const pulse = 0.35 + 0.65 * (0.5 - 0.5 * Math.cos(phase * Math.PI * 2))
+      const { ctx } = chart
+      ctx.save()
+      ctx.shadowColor = `rgba(253, 224, 71, ${0.28 + 0.35 * pulse})`
+      ctx.shadowBlur = 6 + 12 * pulse
+
+      if (chart.config.type === 'pie') {
+        const props = (element as PieArcLike).getProps(
+          ['x', 'y', 'startAngle', 'endAngle', 'outerRadius', 'innerRadius'],
+          true,
+        )
+        const innerR = props.innerRadius ?? 0
+        ctx.fillStyle = `rgba(253, 224, 71, ${0.1 + 0.14 * pulse})`
+        ctx.beginPath()
+        ctx.arc(props.x, props.y, props.outerRadius, props.startAngle, props.endAngle)
+        ctx.arc(props.x, props.y, innerR, props.endAngle, props.startAngle, true)
+        ctx.closePath()
+        ctx.fill()
+
+        ctx.strokeStyle = `rgba(250, 204, 21, ${0.72 + 0.28 * pulse})`
+        ctx.lineWidth = 2.5 + 2 * pulse
+        ctx.beginPath()
+        ctx.arc(
+          props.x,
+          props.y,
+          props.outerRadius + 3 + 5 * pulse,
+          props.startAngle,
+          props.endAngle,
+        )
+        ctx.stroke()
+      } else if (chart.config.type === 'bar') {
+        const props = (element as BarLike).getProps(['x', 'y', 'base', 'width', 'height'], true)
+        const left = Math.min(props.base, props.x)
+        const right = Math.max(props.base, props.x)
+        const top = props.y - props.height / 2 - 3 - 2 * pulse
+        const bottom = props.y + props.height / 2 + 3 + 2 * pulse
+        const w = right - left + 4
+        const h = bottom - top
+
+        ctx.fillStyle = `rgba(253, 224, 71, ${0.08 + 0.12 * pulse})`
+        ctx.fillRect(left - 2, top, w, h)
+
+        ctx.strokeStyle = `rgba(250, 204, 21, ${0.75 + 0.25 * pulse})`
+        ctx.lineWidth = 2 + 1.5 * pulse
+        ctx.strokeRect(left - 2, top, w, h)
+      }
+
+      ctx.restore()
+      if (elapsed < DEVELOP_ELITE_CHART_SLICE_FLASH_MS) {
+        requestAnimationFrame(() => chart.draw())
+      }
     },
   }
 }

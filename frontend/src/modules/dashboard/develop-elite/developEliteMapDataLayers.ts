@@ -2,19 +2,25 @@ export type DevelopEliteMapDataLayerId =
   | 'agro-structures'
   | 'world-countries'
   | 'trees'
+  | 'irrigation-valves'
+  | 'irrigation-main-pipe'
   | 'agri-location'
 
 export const DEVELOP_ELITE_MAP_DATA_LAYER_IDS: DevelopEliteMapDataLayerId[] = [
+  'trees',
+  'irrigation-valves',
+  'agri-location',
+  'irrigation-main-pipe',
   'agro-structures',
   'world-countries',
-  'trees',
-  'agri-location',
 ]
 
 /** Panel order top → bottom; top row draws above others on the map. */
 export const DEFAULT_DEVELOP_ELITE_MAP_DATA_LAYER_ORDER: DevelopEliteMapDataLayerId[] = [
   'trees',
+  'irrigation-valves',
   'agri-location',
+  'irrigation-main-pipe',
   'agro-structures',
   'world-countries',
 ]
@@ -29,6 +35,8 @@ export const DEVELOP_ELITE_MAP_DATA_LAYERS: DevelopEliteMapDataLayerDef[] = [
   { id: 'agro-structures', label: 'Agro Structures' },
   { id: 'world-countries', label: 'World Countries' },
   { id: 'trees', label: 'Tree' },
+  { id: 'irrigation-valves', label: 'Irrigation System Valve' },
+  { id: 'irrigation-main-pipe', label: 'Irrigation Pressure Main Pipe' },
   { id: 'agri-location', label: 'AgroLocation' },
 ]
 
@@ -44,6 +52,8 @@ export const DEFAULT_DEVELOP_ELITE_MAP_LAYER_VISIBILITY: Record<
   'agro-structures': true,
   'world-countries': true,
   trees: true,
+  'irrigation-valves': true,
+  'irrigation-main-pipe': true,
   'agri-location': true,
 }
 
@@ -76,17 +86,24 @@ export function normalizeDevelopEliteMapDataLayerOrder(
   return placeAgriLocationAfterTrees(out)
 }
 
+/** Keep point overlays stacked: Tree → Irrigation valves → AgroLocation (when present). */
 function placeAgriLocationAfterTrees(
   order: DevelopEliteMapDataLayerId[],
 ): DevelopEliteMapDataLayerId[] {
-  const agriIdx = order.indexOf('agri-location')
   const treeIdx = order.indexOf('trees')
-  if (agriIdx < 0 || treeIdx < 0 || agriIdx === treeIdx + 1) return order
-  const next = order.filter(id => id !== 'agri-location')
-  const nextTreeIdx = next.indexOf('trees')
+  if (treeIdx < 0) return order
+  const stackAfterTrees: DevelopEliteMapDataLayerId[] = [
+    'irrigation-valves',
+    'agri-location',
+    'irrigation-main-pipe',
+  ]
+  const present = stackAfterTrees.filter(id => order.includes(id))
+  if (!present.length) return order
+  const without = order.filter(id => !stackAfterTrees.includes(id))
+  const nextTreeIdx = without.indexOf('trees')
   if (nextTreeIdx < 0) return order
-  next.splice(nextTreeIdx + 1, 0, 'agri-location')
-  return next
+  without.splice(nextTreeIdx + 1, 0, ...present)
+  return without
 }
 
 export function orderDevelopEliteMapDataLayerDefs(

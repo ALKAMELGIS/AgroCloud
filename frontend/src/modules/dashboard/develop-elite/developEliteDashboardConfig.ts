@@ -2,6 +2,9 @@ import { WORLD_COUNTRIES_FS51_URL } from '@/modules/gis/map/worldCountriesLayer'
 import { AGRO_STRUCTURES_FS21_URL } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
 import {
   DEFAULT_DEVELOP_ELITE_CHARTS,
+  DEFAULT_DEVELOP_ELITE_CHART_PALETTE,
+  DEVELOP_ELITE_CHART_PALETTE_PRESET_LS_KEY,
+  DEVELOP_ELITE_CHART_PALETTE_PRESET_VERSION,
   normalizeDevelopEliteChartsConfig,
   type DevelopEliteChartsConfig,
 } from './developEliteChartsConfig'
@@ -22,8 +25,8 @@ import {
 export const DEVELOP_ELITE_CONFIG_LS_KEY = 'develop_elite_dashboard_config_v1'
 export const DEVELOP_ELITE_LAYOUT_PRESET_LS_KEY = 'develop_elite_layout_preset_v'
 export const DEVELOP_ELITE_MAP_LAYER_ORDER_PRESET_LS_KEY = 'develop_elite_map_layer_order_preset_v'
-/** Bump when default map layer stack changes (e.g. add AgroLocation after Tree). */
-export const DEVELOP_ELITE_MAP_LAYER_ORDER_PRESET_VERSION = 1
+/** Bump when default map layer stack changes (e.g. add irrigation valves layer). */
+export const DEVELOP_ELITE_MAP_LAYER_ORDER_PRESET_VERSION = 3
 
 export const DEFAULT_DEVELOP_ELITE_STRUCTURES_URL =
   'https://services1.arcgis.com/jz3ndhbYV5K9NwI8/arcgis/rest/services/Agro_Structures/FeatureServer/0'
@@ -43,6 +46,14 @@ export const DEFAULT_DEVELOP_ELITE_TREES_LAYER_URL =
 
 export const DEFAULT_DEVELOP_ELITE_AGRI_LOCATION_LAYER_URL =
   'https://services1.arcgis.com/jz3ndhbYV5K9NwI8/ArcGIS/rest/services/Agri_Location/FeatureServer/19'
+
+/** Irrigation system valve points (FeatureServer /0). */
+export const DEFAULT_DEVELOP_ELITE_IRRIGATION_VALVES_LAYER_URL =
+  'https://services1.arcgis.com/jz3ndhbYV5K9NwI8/arcgis/rest/services/Irrigation_System_Valve/FeatureServer/0'
+
+/** Irrigation pressure main pipe lines (FeatureServer /0). */
+export const DEFAULT_DEVELOP_ELITE_IRRIGATION_MAIN_PIPE_LAYER_URL =
+  'https://services1.arcgis.com/jz3ndhbYV5K9NwI8/ArcGIS/rest/services/Irrigation_Pressure_Main_Pipe/FeatureServer/0'
 
 export type DevelopEliteKpiSource =
   | 'totalAreaHa'
@@ -84,10 +95,16 @@ export type DevelopEliteDashboardConfig = {
   treesLayerUrl: string
   /** Farm plot / agri location polygons (Agri_Location FeatureServer). */
   agriLocationLayerUrl: string
+  /** Irrigation valve points (Irrigation_System_Valve FeatureServer). */
+  irrigationValvesLayerUrl: string
+  /** Irrigation pressure main pipe polylines. */
+  irrigationMainPipeLayerUrl: string
   basemapId: string
   chartGroupField: string
-  /** Numeric field summed per group for pie/bar (e.g. Total_Tree). Empty = row count. */
+  /** Numeric field summed per group for pie/bar (e.g. Total_Tree, Per_Tons). Empty = row count. */
   chartValueField: string
+  /** Shown on pie/bar charts (value axis / chart caption). */
+  chartValueLabel: string
   /** Join field on structures layer and crops table (e.g. Farm_Code). */
   cropStructureJoinField: string
   charts: DevelopEliteChartsConfig
@@ -211,6 +228,16 @@ export function normalizeDevelopEliteAgriLocationLayerUrl(url: string): string {
   )
 }
 
+export function normalizeDevelopEliteIrrigationValvesLayerUrl(url: string): string {
+  const trimmed = String(url || '').trim()
+  return trimmed || DEFAULT_DEVELOP_ELITE_IRRIGATION_VALVES_LAYER_URL
+}
+
+export function normalizeDevelopEliteIrrigationMainPipeLayerUrl(url: string): string {
+  const trimmed = String(url || '').trim()
+  return trimmed || DEFAULT_DEVELOP_ELITE_IRRIGATION_MAIN_PIPE_LAYER_URL
+}
+
 export const DEFAULT_DEVELOP_ELITE_CONFIG: DevelopEliteDashboardConfig = {
   version: 1,
   structuresLayerUrl: DEFAULT_DEVELOP_ELITE_STRUCTURES_URL,
@@ -219,9 +246,12 @@ export const DEFAULT_DEVELOP_ELITE_CONFIG: DevelopEliteDashboardConfig = {
   cropsTableUrl: DEFAULT_DEVELOP_ELITE_CROPS_TABLE_URL,
   treesLayerUrl: DEFAULT_DEVELOP_ELITE_TREES_LAYER_URL,
   agriLocationLayerUrl: DEFAULT_DEVELOP_ELITE_AGRI_LOCATION_LAYER_URL,
+  irrigationValvesLayerUrl: DEFAULT_DEVELOP_ELITE_IRRIGATION_VALVES_LAYER_URL,
+  irrigationMainPipeLayerUrl: DEFAULT_DEVELOP_ELITE_IRRIGATION_MAIN_PIPE_LAYER_URL,
   basemapId: 'google-earth-satellite',
   chartGroupField: 'Crop_Type',
   chartValueField: 'Total_Tree',
+  chartValueLabel: 'Per Tons',
   cropStructureJoinField: 'Farm_Code',
   charts: DEFAULT_DEVELOP_ELITE_CHARTS,
   tableColumns: DEFAULT_DEVELOP_ELITE_TABLE_COLUMNS,
@@ -295,6 +325,8 @@ export function loadDevelopEliteDashboardConfig(): DevelopEliteDashboardConfig {
     const storedPreset = Number(window.localStorage.getItem(presetKey) || 0)
     const mapOrderPresetKey = DEVELOP_ELITE_MAP_LAYER_ORDER_PRESET_LS_KEY
     const storedMapOrderPreset = Number(window.localStorage.getItem(mapOrderPresetKey) || 0)
+    const chartPalettePresetKey = DEVELOP_ELITE_CHART_PALETTE_PRESET_LS_KEY
+    const storedChartPalettePreset = Number(window.localStorage.getItem(chartPalettePresetKey) || 0)
     let layout = normalizeDevelopEliteLayout(parsed.layout)
     if (storedPreset < DEVELOP_ELITE_LAYOUT_PRESET_VERSION) {
       layout = normalizeDevelopEliteLayout({
@@ -321,8 +353,9 @@ export function loadDevelopEliteDashboardConfig(): DevelopEliteDashboardConfig {
       ...DEFAULT_DEVELOP_ELITE_CONFIG,
       ...parsed,
       version: 1,
-      structuresLayerUrl:
+      structuresLayerUrl: normalizeDevelopEliteStructuresLayerUrl(
         String(parsed.structuresLayerUrl || '').trim() || DEFAULT_DEVELOP_ELITE_STRUCTURES_URL,
+      ),
       zonesLayerUrl: normalizeDevelopEliteZonesLayerUrl(
         String(parsed.zonesLayerUrl || '').trim(),
         String(parsed.structuresLayerUrl || '').trim() || DEFAULT_DEVELOP_ELITE_STRUCTURES_URL,
@@ -338,10 +371,19 @@ export function loadDevelopEliteDashboardConfig(): DevelopEliteDashboardConfig {
       agriLocationLayerUrl: normalizeDevelopEliteAgriLocationLayerUrl(
         String(parsed.agriLocationLayerUrl || ''),
       ),
+      irrigationValvesLayerUrl: normalizeDevelopEliteIrrigationValvesLayerUrl(
+        String(parsed.irrigationValvesLayerUrl || ''),
+      ),
+      irrigationMainPipeLayerUrl: normalizeDevelopEliteIrrigationMainPipeLayerUrl(
+        String(parsed.irrigationMainPipeLayerUrl || ''),
+      ),
       chartGroupField: String(parsed.chartGroupField || DEFAULT_DEVELOP_ELITE_CONFIG.chartGroupField),
       chartValueField:
         String(parsed.chartValueField ?? DEFAULT_DEVELOP_ELITE_CONFIG.chartValueField).trim() ||
         DEFAULT_DEVELOP_ELITE_CONFIG.chartValueField,
+      chartValueLabel:
+        String(parsed.chartValueLabel ?? DEFAULT_DEVELOP_ELITE_CONFIG.chartValueLabel).trim() ||
+        DEFAULT_DEVELOP_ELITE_CONFIG.chartValueLabel,
       cropStructureJoinField:
         String(parsed.cropStructureJoinField ?? DEFAULT_DEVELOP_ELITE_CONFIG.cropStructureJoinField).trim() ||
         DEFAULT_DEVELOP_ELITE_CONFIG.cropStructureJoinField,
@@ -366,14 +408,28 @@ export function loadDevelopEliteDashboardConfig(): DevelopEliteDashboardConfig {
       layout,
       charts: normalizeDevelopEliteChartsConfig(parsed.charts),
     }
+    if (storedChartPalettePreset < DEVELOP_ELITE_CHART_PALETTE_PRESET_VERSION) {
+      config.charts = normalizeDevelopEliteChartsConfig({
+        ...config.charts,
+        palette: [...DEFAULT_DEVELOP_ELITE_CHART_PALETTE],
+        labelColor: DEFAULT_DEVELOP_ELITE_CHARTS.labelColor,
+        axisColor: DEFAULT_DEVELOP_ELITE_CHARTS.axisColor,
+        tickColor: DEFAULT_DEVELOP_ELITE_CHARTS.tickColor,
+      })
+    }
     if (
       storedPreset < DEVELOP_ELITE_LAYOUT_PRESET_VERSION ||
-      storedMapOrderPreset < DEVELOP_ELITE_MAP_LAYER_ORDER_PRESET_VERSION
+      storedMapOrderPreset < DEVELOP_ELITE_MAP_LAYER_ORDER_PRESET_VERSION ||
+      storedChartPalettePreset < DEVELOP_ELITE_CHART_PALETTE_PRESET_VERSION
     ) {
       try {
         window.localStorage.setItem(
           mapOrderPresetKey,
           String(DEVELOP_ELITE_MAP_LAYER_ORDER_PRESET_VERSION),
+        )
+        window.localStorage.setItem(
+          chartPalettePresetKey,
+          String(DEVELOP_ELITE_CHART_PALETTE_PRESET_VERSION),
         )
       } catch {
         /* ignore */
@@ -406,9 +462,17 @@ export function repairDevelopEliteCropsTableUrl(structuresUrl: string, cropsUrl:
   return crops
 }
 
-/** Canonical polygon layer URL for queries (legacy /27 → FS/21). */
+/** Portal viewer layer /27 is not queryable — use Agro_Structures FS/0 (polygons). */
+export function normalizeDevelopEliteStructuresLayerUrl(url: string): string {
+  const trimmed = String(url || '').trim()
+  const norm = (trimmed || DEFAULT_DEVELOP_ELITE_STRUCTURES_URL).replace(/\/+$/, '')
+  if (/\/FeatureServer\/27$/i.test(norm)) {
+    return norm.replace(/\/27$/i, '/0')
+  }
+  return norm
+}
+
+/** Canonical polygon layer URL for queries (legacy /27 → FS/0). */
 export function resolveDevelopEliteStructuresQueryUrl(configUrl: string): string {
-  const trimmed = String(configUrl || '').trim()
-  if (!trimmed) return AGRO_STRUCTURES_FS21_URL
-  return trimmed.replace(/\/+$/, '')
+  return normalizeDevelopEliteStructuresLayerUrl(configUrl)
 }

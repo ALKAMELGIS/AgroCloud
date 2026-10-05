@@ -1,6 +1,9 @@
 import type { CSSProperties } from 'react'
 import { developEliteAccent } from '@/theme/dashboardTokens'
-import type { DevelopEliteResponsiveGridLayouts } from './developEliteGridLayout'
+import type {
+  DevelopEliteGridBreakpoint,
+  DevelopEliteResponsiveGridLayouts,
+} from './developEliteGridLayout'
 
 export type DevelopEliteLayoutConfig = {
   kpiRowHeightPx: number
@@ -27,6 +30,8 @@ export type DevelopEliteLayoutConfig = {
   gridLayouts?: DevelopEliteResponsiveGridLayouts
   /** Widgets removed from the grid until restored from settings. */
   gridHiddenWidgets?: string[]
+  /** Saved row height (px) per breakpoint so view mode matches layout edit after Done. */
+  gridRowStrideByBp?: Partial<Record<DevelopEliteGridBreakpoint, number>>
   /** Dashboard border / line color (hex). */
   themeBorderColor: string
   /** Border width for panels and cards (px). */
@@ -71,6 +76,7 @@ export const DEFAULT_DEVELOP_ELITE_LAYOUT: DevelopEliteLayoutConfig = {
   widgetFloat: {},
   gridLayouts: undefined,
   gridHiddenWidgets: [],
+  gridRowStrideByBp: undefined,
   themeBorderColor: '#2f6b4a',
   themeBorderWidthPx: 1,
   themeIconColor: developEliteAccent,
@@ -133,6 +139,22 @@ export function resolveDevelopEliteKpiCardWidthPx(
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n))
+}
+
+const GRID_ROW_STRIDE_MIN = 20
+const GRID_ROW_STRIDE_MAX = 200
+
+function normalizeGridRowStrideByBp(
+  partial?: Partial<Record<DevelopEliteGridBreakpoint, number>> | null,
+): Partial<Record<DevelopEliteGridBreakpoint, number>> | undefined {
+  if (!partial || typeof partial !== 'object') return undefined
+  const out: Partial<Record<DevelopEliteGridBreakpoint, number>> = {}
+  for (const [key, value] of Object.entries(partial)) {
+    const n = Number(value)
+    if (!Number.isFinite(n)) continue
+    out[key as DevelopEliteGridBreakpoint] = clamp(n, GRID_ROW_STRIDE_MIN, GRID_ROW_STRIDE_MAX)
+  }
+  return Object.keys(out).length ? out : undefined
 }
 
 const DEFAULT_BORDER_HEX = '#2f6b4a'
@@ -226,6 +248,7 @@ export function normalizeDevelopEliteLayout(
     gridHiddenWidgets: Array.isArray(p.gridHiddenWidgets)
       ? p.gridHiddenWidgets.map(id => String(id).trim()).filter(Boolean)
       : d.gridHiddenWidgets ?? [],
+    gridRowStrideByBp: normalizeGridRowStrideByBp(p.gridRowStrideByBp) ?? d.gridRowStrideByBp,
     themeBorderColor: normalizeDevelopEliteHexColor(p.themeBorderColor, d.themeBorderColor),
     themeBorderWidthPx: clamp(Number(p.themeBorderWidthPx ?? d.themeBorderWidthPx), 1, 4),
     themeIconColor: normalizeDevelopEliteHexColor(p.themeIconColor, d.themeIconColor),

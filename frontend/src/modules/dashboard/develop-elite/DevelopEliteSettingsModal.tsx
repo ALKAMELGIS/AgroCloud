@@ -4,17 +4,10 @@ import { DEFAULT_DEVELOP_ELITE_CHART_PALETTE } from './developEliteChartsConfig'
 import {
   DEFAULT_DEVELOP_ELITE_CONFIG,
   DEFAULT_DEVELOP_ELITE_TABLE_COLUMNS,
-  DEFAULT_DEVELOP_ELITE_AGRI_LOCATION_LAYER_URL,
-  DEFAULT_DEVELOP_ELITE_TREES_LAYER_URL,
-  DEFAULT_DEVELOP_ELITE_WORLD_COUNTRIES_LAYER_URL,
-  DEFAULT_DEVELOP_ELITE_ZONES_LAYER_URL,
-  normalizeDevelopEliteAgriLocationLayerUrl,
-  normalizeDevelopEliteTreesLayerUrl,
-  normalizeDevelopEliteWorldCountriesLayerUrl,
-  normalizeDevelopEliteZonesLayerUrl,
-  repairDevelopEliteCropsTableUrl,
   type DevelopEliteDashboardConfig,
 } from './developEliteDashboardConfig'
+import { normalizeDevelopEliteDashboardDataSources } from './developEliteDataSourceRegistry'
+import { DevelopEliteSettingsDataTab } from './DevelopEliteSettingsDataTab'
 
 type TabId = 'data' | 'kpi' | 'charts' | 'map' | 'appearance'
 
@@ -103,7 +96,9 @@ export function DevelopEliteSettingsModal({ open, config, initialTab, onClose, o
   return (
     <div className="develop-elite-settings" role="dialog" aria-modal="true" aria-label="Dashboard settings">
       <button type="button" className="develop-elite-settings__backdrop" aria-label="Close" onClick={onClose} />
-      <div className="develop-elite-settings__panel">
+      <div
+        className={`develop-elite-settings__panel${tab === 'data' ? ' develop-elite-settings__panel--data' : ''}`}
+      >
         <header className="develop-elite-settings__head">
           <h2>Settings</h2>
           <button type="button" className="develop-elite-settings__close" onClick={onClose} aria-label="Close">
@@ -125,85 +120,7 @@ export function DevelopEliteSettingsModal({ open, config, initialTab, onClose, o
         </nav>
         <div className="develop-elite-settings__body">
           {tab === 'data' ? (
-            <>
-              <p className="develop-elite-settings__hint">Agro Structures (map, KPIs, charts)</p>
-              <label className="develop-elite-settings__field">
-                <span>Structures layer URL (FeatureServer /0)</span>
-                <input
-                  type="url"
-                  value={draft.structuresLayerUrl}
-                  onChange={e => setDraft(d => ({ ...d, structuresLayerUrl: e.target.value }))}
-                />
-              </label>
-              <label className="develop-elite-settings__field">
-                <span>Zones layer URL (Name list — /21, Map Viewer ~ /27)</span>
-                <input
-                  type="url"
-                  value={draft.zonesLayerUrl}
-                  placeholder={DEFAULT_DEVELOP_ELITE_ZONES_LAYER_URL}
-                  onChange={e => setDraft(d => ({ ...d, zonesLayerUrl: e.target.value }))}
-                />
-              </label>
-              <label className="develop-elite-settings__field">
-                <span>Crops table URL (FeatureServer /1)</span>
-                <input
-                  type="url"
-                  value={draft.cropsTableUrl}
-                  onChange={e => setDraft(d => ({ ...d, cropsTableUrl: e.target.value }))}
-                />
-              </label>
-              <label className="develop-elite-settings__field">
-                <span>Tree layer URL (FeatureServer /24 — Tree KPI)</span>
-                <input
-                  type="url"
-                  value={draft.treesLayerUrl}
-                  placeholder={DEFAULT_DEVELOP_ELITE_TREES_LAYER_URL}
-                  onChange={e => setDraft(d => ({ ...d, treesLayerUrl: e.target.value }))}
-                />
-              </label>
-              <label className="develop-elite-settings__field">
-                <span>AgroLocation layer URL (map layer)</span>
-                <input
-                  type="url"
-                  value={draft.agriLocationLayerUrl}
-                  placeholder={DEFAULT_DEVELOP_ELITE_AGRI_LOCATION_LAYER_URL}
-                  onChange={e => setDraft(d => ({ ...d, agriLocationLayerUrl: e.target.value }))}
-                />
-              </label>
-              <p className="develop-elite-settings__hint">Portfolio map overlay</p>
-              <label className="develop-elite-settings__field">
-                <span>World Countries layer URL (FeatureServer /51)</span>
-                <input
-                  type="url"
-                  value={draft.worldCountriesLayerUrl}
-                  placeholder={DEFAULT_DEVELOP_ELITE_WORLD_COUNTRIES_LAYER_URL}
-                  onChange={e => setDraft(d => ({ ...d, worldCountriesLayerUrl: e.target.value }))}
-                />
-              </label>
-              <label className="develop-elite-settings__field">
-                <span>Structure ↔ crops join field</span>
-                <input
-                  type="text"
-                  value={draft.cropStructureJoinField}
-                  onChange={e => setDraft(d => ({ ...d, cropStructureJoinField: e.target.value }))}
-                />
-              </label>
-              <p className="develop-elite-settings__hint">
-                Crops table (<strong>/1</strong>) joins to structures via{' '}
-                <strong>Farm_Code</strong> (or the field above). Portal layer ids such as{' '}
-                <strong>/27</strong> resolve to REST <strong>/21</strong> for the zone list; map
-                polygons query <strong>/0</strong> (with <strong>/21</strong> fallback when needed).
-                Country outlines and the countries sidebar use <strong>World_Countries /51</strong>.
-              </p>
-              <label className="develop-elite-settings__field">
-                <span>Wildlife Project label (AgroLocation layer)</span>
-                <input
-                  type="text"
-                  value={draft.wildfelidProjectMatch}
-                  onChange={e => setDraft(d => ({ ...d, wildfelidProjectMatch: e.target.value }))}
-                />
-              </label>
-            </>
+            <DevelopEliteSettingsDataTab draft={draft} onChange={setDraft} />
           ) : null}
           {tab === 'kpi' ? (
             <div className="develop-elite-settings__kpi-list">
@@ -234,6 +151,24 @@ export function DevelopEliteSettingsModal({ open, config, initialTab, onClose, o
                   type="text"
                   value={draft.chartGroupField}
                   onChange={e => setDraft(d => ({ ...d, chartGroupField: e.target.value }))}
+                />
+              </label>
+              <label className="develop-elite-settings__field">
+                <span>Chart value field (sum per group)</span>
+                <input
+                  type="text"
+                  value={draft.chartValueField}
+                  placeholder="Total_Tree"
+                  onChange={e => setDraft(d => ({ ...d, chartValueField: e.target.value }))}
+                />
+              </label>
+              <label className="develop-elite-settings__field">
+                <span>Chart value label (pie / bar caption)</span>
+                <input
+                  type="text"
+                  value={draft.chartValueLabel}
+                  placeholder="Per Tons"
+                  onChange={e => setDraft(d => ({ ...d, chartValueLabel: e.target.value }))}
                 />
               </label>
               <AppearanceRange
@@ -455,24 +390,7 @@ export function DevelopEliteSettingsModal({ open, config, initialTab, onClose, o
             type="button"
             className="develop-elite-settings__btn is-primary"
             onClick={() => {
-              onSave({
-                ...draft,
-                zonesLayerUrl: normalizeDevelopEliteZonesLayerUrl(
-                  draft.zonesLayerUrl,
-                  draft.structuresLayerUrl,
-                ),
-                worldCountriesLayerUrl: normalizeDevelopEliteWorldCountriesLayerUrl(
-                  draft.worldCountriesLayerUrl,
-                ),
-                cropsTableUrl: repairDevelopEliteCropsTableUrl(
-                  draft.structuresLayerUrl,
-                  draft.cropsTableUrl,
-                ),
-                treesLayerUrl: normalizeDevelopEliteTreesLayerUrl(draft.treesLayerUrl),
-                agriLocationLayerUrl: normalizeDevelopEliteAgriLocationLayerUrl(
-                  draft.agriLocationLayerUrl,
-                ),
-              })
+              onSave(normalizeDevelopEliteDashboardDataSources(draft))
               onClose()
             }}
           >

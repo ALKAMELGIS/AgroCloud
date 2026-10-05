@@ -1,5 +1,6 @@
 import type { ArcGisTableRow, DevelopEliteLayerMeta } from './developEliteArcgisFetch'
-import { colorForCropChartLabel } from './developEliteCropChartColors'
+import { DEFAULT_DEVELOP_ELITE_CHART_PALETTE } from './developEliteChartsConfig'
+import { resolveDevelopEliteSliceColor } from './developEliteCropChartColors'
 import type { DevelopEliteChartSlice } from './useDevelopEliteDashboardData'
 
 export function readArcGisField(row: ArcGisTableRow, field: string): unknown {
@@ -22,15 +23,39 @@ export function readArcGisNumber(row: ArcGisTableRow, field: string): number | n
   return Number.isFinite(n) ? n : null
 }
 
-export function resolveCropLabel(row: ArcGisTableRow, meta: DevelopEliteLayerMeta, field: string): string {
+export function resolveDevelopEliteFieldDomainLabels(
+  meta: DevelopEliteLayerMeta,
+  field: string,
+): Map<string, string> | undefined {
+  const want = field.trim().toLowerCase()
+  if (!want) return undefined
+  for (const [name, labels] of meta.fieldDomainLabels ?? new Map()) {
+    if (name.toLowerCase() === want) return labels
+  }
+  if (want === 'crop_type' && meta.cropTypeLabels.size) return meta.cropTypeLabels
+  return undefined
+}
+
+/** Resolve ArcGIS coded-value domain code → description (e.g. Variety 14012 → cultivar name). */
+export function resolveCodedFieldLabel(
+  row: ArcGisTableRow,
+  meta: DevelopEliteLayerMeta,
+  field: string,
+): string {
   const raw = readArcGisField(row, field)
-  if (raw == null || raw === '') return 'Unknown'
+  if (raw == null || raw === '') {
+    return field.toLowerCase() === 'crop_type' ? 'Unknown' : ''
+  }
   const key = String(raw).trim()
-  return (
-    meta.cropTypeLabels.get(key) ??
-    meta.cropTypeLabels.get(String(Number(key))) ??
-    key
-  )
+  const domain = resolveDevelopEliteFieldDomainLabels(meta, field)
+  if (domain) {
+    return domain.get(key) ?? domain.get(String(Number(key))) ?? key
+  }
+  return key
+}
+
+export function resolveCropLabel(row: ArcGisTableRow, meta: DevelopEliteLayerMeta, field: string): string {
+  return resolveCodedFieldLabel(row, meta, field)
 }
 
 function buildAggregateMap(
@@ -53,21 +78,34 @@ function buildAggregateMap(
 }
 
 function mapToSlices(map: Map<string, number>): DevelopEliteChartSlice[] {
-  return [...map.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([label, value], i) => ({
-      label,
-      value,
-      color: colorForCropChartLabel(label, i),
-    }))
+  const entries = [...map.entries()].sort((a, b) => b[1] - a[1])
+  const palette = DEFAULT_DEVELOP_ELITE_CHART_PALETTE
+  return entries.map(([label, value], i) => ({
+    label,
+    value,
+    color: resolveDevelopEliteSliceColor(label, i, palette, 'pie'),
+  }))
 }
 
-const TOTAL_TREE_FIELD_ALIASES = ['Total_Tree', 'TOTAL_TREE', 'total_tree', 'TotalTrees', 'total_trees']
+const CHART_SUM_FIELD_ALIASES = [
+  'Total_Tree',
+  'TOTAL_TREE',
+  'total_tree',
+  'TotalTrees',
+  'total_trees',
+  'Per_Tons',
+  'PER_TONS',
+  'per_tons',
+  'Per Tons',
+  'Total_Tons',
+  'TOTAL_TONS',
+  'Tons',
+]
 
 function resolveSumField(rows: ArcGisTableRow[], configured?: string): string | undefined {
   const key = configured?.trim()
   if (!key) return undefined
-  const candidates = [key, ...TOTAL_TREE_FIELD_ALIASES.filter(a => a.toLowerCase() !== key.toLowerCase())]
+  const candidates = [key, ...CHART_SUM_FIELD_ALIASES.filter(a => a.toLowerCase() !== key.toLowerCase())]
   for (const field of candidates) {
     if (rows.some(r => (readArcGisNumber(r, field) ?? 0) > 0)) return field
   }

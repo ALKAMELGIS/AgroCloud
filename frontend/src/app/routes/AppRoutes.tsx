@@ -115,7 +115,14 @@ export default function AppRoutes() {
         <Route path="/account/profile" element={<AccountProfile />} />
         <Route path="/account/profile-user-management" element={<Navigate to="/account/profile" replace />} />
         <Route path="/account/settings" element={<AccountSettings />} />
-        <Route path="/sensors/gps" element={<GpsVehicleTracking />} />
+        <Route
+          path="/sensors/gps"
+          element={
+            <Suspense fallback={<RouteLoadingFallback label="Loading GPS Vehicle Tracking…" />}>
+              <GpsVehicleTracking />
+            </Suspense>
+          }
+        />
         <Route
           path="/sensors/irrigation"
           element={

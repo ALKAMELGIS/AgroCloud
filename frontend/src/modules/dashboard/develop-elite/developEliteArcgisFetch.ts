@@ -15,6 +15,8 @@ export type ArcGisCodedValue = { name: string; code: number | string }
 
 export type DevelopEliteLayerMeta = {
   cropTypeLabels: Map<string, string>
+  /** ArcGIS coded-value domains keyed by field name (e.g. Variety, Crop_Type). */
+  fieldDomainLabels: Map<string, Map<string, string>>
 }
 
 function normalizeLayerEndpoint(url: string): string {
@@ -183,19 +185,48 @@ export async function fetchArcGisTableRows(
   return rows
 }
 
+function collectCodedValuesFromField(field: {
+  domain?: { codedValues?: ArcGisCodedValue[] }
+}): Map<string, string> {
+  const map = new Map<string, string>()
+  const coded = field?.domain?.codedValues
+  if (!Array.isArray(coded)) return map
+  for (const cv of coded) {
+    const name = String(cv.name ?? '').trim()
+    if (!name) continue
+    const codeStr = String(cv.code)
+    map.set(codeStr, name)
+    const num = Number(cv.code)
+    if (Number.isFinite(num)) map.set(String(num), name)
+  }
+  return map
+}
+
 function collectCodedValuesFromFields(
   fields: Array<{ name?: string; domain?: { codedValues?: ArcGisCodedValue[] } }> | undefined,
   fieldName: string,
 ): Map<string, string> {
-  const map = new Map<string, string>()
   const want = fieldName.toLowerCase()
   const field = fields?.find(f => String(f.name || '').toLowerCase() === want)
-  const coded = field?.domain?.codedValues
-  if (!Array.isArray(coded)) return map
-  for (const cv of coded) {
-    map.set(String(cv.code), String(cv.name))
+  if (!field) return new Map()
+  return collectCodedValuesFromField(field)
+}
+
+function collectAllFieldDomainLabels(
+  fields: Array<{ name?: string; domain?: { codedValues?: ArcGisCodedValue[] } }> | undefined,
+): Map<string, Map<string, string>> {
+  const out = new Map<string, Map<string, string>>()
+  for (const field of fields ?? []) {
+    const name = String(field.name ?? '').trim()
+    if (!name) continue
+    const labels = collectCodedValuesFromField(field)
+    if (labels.size) out.set(name, labels)
   }
-  return map
+  return out
+}
+
+export function developEliteEmptyLayerMeta(): DevelopEliteLayerMeta {
+  return { cropTypeLabels: new Map(), fieldDomainLabels: new Map() }
 }
 
 /** Layer metadata for any FeatureServer endpoint (no Agro_Structures rewrite). */
@@ -262,12 +293,17 @@ export async function fetchStructuresCountryLabelMap(
 export async function fetchCropsTableMeta(tableUrl: string): Promise<DevelopEliteLayerMeta> {
   try {
     const res = await fetch(`${tableUrl.replace(/\/+$/, '')}?f=pjson`)
-    if (!res.ok) return { cropTypeLabels: new Map() }
+    if (!res.ok) return developEliteEmptyLayerMeta()
     const data = (await res.json()) as { fields?: Array<{ name?: string; domain?: { codedValues?: ArcGisCodedValue[] } }> }
+    const fieldDomainLabels = collectAllFieldDomainLabels(data.fields)
+    const cropTypeLabels =
+      fieldDomainLabels.get('Crop_Type') ??
+      collectCodedValuesFromFields(data.fields, 'Crop_Type')
     return {
-      cropTypeLabels: collectCodedValuesFromFields(data.fields, 'Crop_Type'),
+      cropTypeLabels,
+      fieldDomainLabels,
     }
   } catch {
-    return { cropTypeLabels: new Map() }
+    return developEliteEmptyLayerMeta()
   }
 }

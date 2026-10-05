@@ -40,6 +40,8 @@ type ToolbarProps = {
   viewportRef: RefObject<HTMLDivElement | null>
   geojson: GeoJSON.FeatureCollection
   treesGeojson?: GeoJSON.FeatureCollection | null
+  irrigationValvesGeojson?: GeoJSON.FeatureCollection | null
+  irrigationMainPipeGeojson?: GeoJSON.FeatureCollection | null
   agriLocationGeojson?: GeoJSON.FeatureCollection | null
   worldCountriesGeojson?: GeoJSON.FeatureCollection | null
   countryLabels: Map<string, string> | null
@@ -103,19 +105,36 @@ function DevelopEliteMapLegendSwatch({ item }: { item: DevelopEliteMapLegendRow 
 export function DevelopEliteMapLegendRail({
   drawingInfo,
   treesDrawingInfo,
+  irrigationValvesDrawingInfo,
+  irrigationMainPipeDrawingInfo,
   agriLocationDrawingInfo,
   mapLayerVisibility,
   onSelectFieldKey,
 }: {
   drawingInfo: Record<string, unknown> | null
   treesDrawingInfo?: Record<string, unknown> | null
+  irrigationValvesDrawingInfo?: Record<string, unknown> | null
+  irrigationMainPipeDrawingInfo?: Record<string, unknown> | null
   agriLocationDrawingInfo?: Record<string, unknown> | null
   mapLayerVisibility: Record<DevelopEliteMapDataLayerId, boolean>
   onSelectFieldKey?: (key: string | null) => void
 }) {
   const legend = useMemo(
-    () => buildDevelopEliteMapLegendSections(drawingInfo, treesDrawingInfo, agriLocationDrawingInfo),
-    [agriLocationDrawingInfo, drawingInfo, treesDrawingInfo],
+    () =>
+      buildDevelopEliteMapLegendSections(
+        drawingInfo,
+        treesDrawingInfo,
+        agriLocationDrawingInfo,
+        irrigationValvesDrawingInfo,
+        irrigationMainPipeDrawingInfo,
+      ),
+    [
+      agriLocationDrawingInfo,
+      drawingInfo,
+      irrigationMainPipeDrawingInfo,
+      irrigationValvesDrawingInfo,
+      treesDrawingInfo,
+    ],
   )
 
   const renderRow = (item: DevelopEliteMapLegendRow) => (
@@ -129,6 +148,12 @@ export function DevelopEliteMapLegendRail({
     isDevelopEliteMapDataLayerVisible(mapLayerVisibility, 'agro-structures') && legend.structures.length
   const showTreesLegend =
     isDevelopEliteMapDataLayerVisible(mapLayerVisibility, 'trees') && legend.trees.length
+  const showIrrigationValvesLegend =
+    isDevelopEliteMapDataLayerVisible(mapLayerVisibility, 'irrigation-valves') &&
+    legend.irrigationValves.length
+  const showIrrigationMainPipeLegend =
+    isDevelopEliteMapDataLayerVisible(mapLayerVisibility, 'irrigation-main-pipe') &&
+    legend.irrigationMainPipe.length
   const showAgriLocationLegend =
     isDevelopEliteMapDataLayerVisible(mapLayerVisibility, 'agri-location') && legend.agriLocation.length
 
@@ -149,6 +174,22 @@ export function DevelopEliteMapLegendRail({
               <p className="develop-elite-map__legend-section-title">Tree</p>
               <ul className="develop-elite-map__legend-list develop-elite-map__legend-list--rail">
                 {legend.trees.map(renderRow)}
+              </ul>
+            </>
+          ) : null}
+          {showIrrigationValvesLegend ? (
+            <>
+              <p className="develop-elite-map__legend-section-title">Irrigation valves</p>
+              <ul className="develop-elite-map__legend-list develop-elite-map__legend-list--rail">
+                {legend.irrigationValves.map(renderRow)}
+              </ul>
+            </>
+          ) : null}
+          {showIrrigationMainPipeLegend ? (
+            <>
+              <p className="develop-elite-map__legend-section-title">Irrigation main pipe</p>
+              <ul className="develop-elite-map__legend-list develop-elite-map__legend-list--rail">
+                {legend.irrigationMainPipe.map(renderRow)}
               </ul>
             </>
           ) : null}
@@ -209,6 +250,8 @@ export function DevelopEliteMapTools({
   viewportRef,
   geojson,
   treesGeojson,
+  irrigationValvesGeojson,
+  irrigationMainPipeGeojson,
   agriLocationGeojson,
   worldCountriesGeojson,
   countryLabels,
@@ -244,6 +287,8 @@ export function DevelopEliteMapTools({
     () => ({
       structures: geojson,
       trees: treesGeojson,
+      irrigationValves: irrigationValvesGeojson,
+      irrigationMainPipe: irrigationMainPipeGeojson,
       agriLocation: agriLocationGeojson,
       worldCountries: worldCountriesGeojson,
       countryLabels,
@@ -253,6 +298,8 @@ export function DevelopEliteMapTools({
       agriLocationGeojson,
       countryLabels,
       geojson,
+      irrigationMainPipeGeojson,
+      irrigationValvesGeojson,
       mapLayerVisibility,
       treesGeojson,
       worldCountriesGeojson,
@@ -574,10 +621,57 @@ export function DevelopEliteMapRefBridge({ mapRef }: { mapRef: RefObject<Leaflet
   return null
 }
 
+export function DevelopEliteMapInteractionTune() {
+  const map = useMap()
+  useEffect(() => {
+    let interacting = 0
+    const bump = (delta: number) => {
+      interacting = Math.max(0, interacting + delta)
+      const container = map.getContainer()
+      if (container) container.classList.toggle('develop-elite-map--interacting', interacting > 0)
+    }
+    const onMoveStart = () => bump(1)
+    const onMoveEnd = () => bump(-1)
+    const onZoomStart = () => bump(1)
+    const onZoomEnd = () => bump(-1)
+    map.on('movestart', onMoveStart)
+    map.on('moveend', onMoveEnd)
+    map.on('zoomstart', onZoomStart)
+    map.on('zoomend', onZoomEnd)
+    return () => {
+      map.off('movestart', onMoveStart)
+      map.off('moveend', onMoveEnd)
+      map.off('zoomstart', onZoomStart)
+      map.off('zoomend', onZoomEnd)
+      map.getContainer()?.classList.remove('develop-elite-map--interacting')
+    }
+  }, [map])
+  return null
+}
+
 export function DevelopEliteMapInvalidateOnLayout() {
   const map = useMap()
   useEffect(() => {
+    let zooming = false
+    let dragging = false
+    const onZoomStart = () => {
+      zooming = true
+    }
+    const onZoomEnd = () => {
+      zooming = false
+    }
+    const onDragStart = () => {
+      dragging = true
+    }
+    const onDragEnd = () => {
+      dragging = false
+    }
+    map.on('zoomstart', onZoomStart)
+    map.on('zoomend', onZoomEnd)
+    map.on('dragstart', onDragStart)
+    map.on('dragend', onDragEnd)
     const refresh = () => {
+      if (zooming || dragging) return
       requestAnimationFrame(() => {
         try {
           map.invalidateSize()
@@ -596,6 +690,10 @@ export function DevelopEliteMapInvalidateOnLayout() {
     if (root && ro) ro.observe(root)
     refresh()
     return () => {
+      map.off('zoomstart', onZoomStart)
+      map.off('zoomend', onZoomEnd)
+      map.off('dragstart', onDragStart)
+      map.off('dragend', onDragEnd)
       window.removeEventListener('develop-elite-layout-changed', refresh)
       window.removeEventListener('orientationchange', refresh)
       ro?.disconnect()

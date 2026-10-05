@@ -9,15 +9,13 @@ import { buildDefaultDevelopEliteGridLayouts, syncDevelopEliteGridLayoutsForWidg
 import type { DevelopEliteLayoutConfig } from './developEliteLayoutConfig'
 import type { DevelopEliteKpiCardConfig } from './developEliteDashboardConfig'
 import type { useDevelopEliteDashboardData } from './useDevelopEliteDashboardData'
-import { developEliteListItemMatchesSearch } from './developEliteListSearch'
+import { DevelopEliteCountryListPanel } from './DevelopEliteCountryListPanel'
+import { DevelopEliteFarmListPanel } from './DevelopEliteFarmListPanel'
+import { DevelopEliteZoneListPanel } from './DevelopEliteZoneListPanel'
 import {
   DEVELOP_ELITE_COMPACT_LIST_WIDGET_IDS,
   useDevelopEliteCompactViewport,
 } from './developEliteCompactViewport'
-
-function developEliteFarmSearchHaystack(item: { title: string; subtitle?: string }) {
-  return `${item.title} ${item.subtitle ?? ''}`
-}
 
 type DashboardData = ReturnType<typeof useDevelopEliteDashboardData>
 
@@ -89,8 +87,10 @@ export function DevelopEliteAgroGridSection({
       tableRows: data.tableRows,
       tableColumns: data.config.tableColumns,
       charts: data.config.charts,
+      valueLabel: data.config.chartValueLabel,
       tableHighlightRowId: data.tableHighlightRowId,
-      selectedFieldKey: data.filters.selectedFieldKey,
+      tableFlashRowId: data.tableFlashRowId,
+      selectedFieldKey: data.mapFieldHighlightKey,
       onTableRowClick: data.focusTableRow,
       onTableRowDoubleClick: data.activateTableRowOnMap,
     }),
@@ -99,8 +99,10 @@ export function DevelopEliteAgroGridSection({
       data.tableRows,
       data.config.tableColumns,
       data.config.charts,
+      data.config.chartValueLabel,
       data.tableHighlightRowId,
-      data.filters.selectedFieldKey,
+      data.tableFlashRowId,
+      data.mapFieldHighlightKey,
       data.focusTableRow,
       data.activateTableRowOnMap,
     ],
@@ -116,6 +118,10 @@ export function DevelopEliteAgroGridSection({
             treesDrawingInfo={data.treesDrawingInfo}
             agriLocationGeojson={data.mapAgriLocationGeoJson}
             agriLocationDrawingInfo={data.agriLocationDrawingInfo}
+            irrigationValvesGeojson={data.mapIrrigationValvesGeoJson}
+            irrigationValvesDrawingInfo={data.irrigationValvesDrawingInfo}
+            irrigationMainPipeGeojson={data.mapIrrigationMainPipeGeoJson}
+            irrigationMainPipeDrawingInfo={data.irrigationMainPipeDrawingInfo}
             mapLayerVisibility={data.mapLayerVisibility}
             mapDataLayerOrder={data.mapDataLayerOrder}
             onMapLayerVisibilityChange={data.setMapLayerVisible}
@@ -124,7 +130,8 @@ export function DevelopEliteAgroGridSection({
             worldCountriesPortfolioExtentGeojson={data.mapWorldCountriesPortfolioExtentGeoJson}
             worldCountriesDrawingInfo={data.worldCountriesDrawingInfo}
             basemapId={data.config.basemapId}
-            highlightFieldKey={data.filters.selectedFieldKey}
+            highlightFieldKey={data.mapFieldHighlightKey}
+            mapFlyToRequest={data.mapFlyToRequest}
             drawingInfo={data.structuresDrawingInfo}
             countryLabels={data.countryLabels}
             worldCountryDomain={data.worldCountryDomain}
@@ -142,6 +149,10 @@ export function DevelopEliteAgroGridSection({
       data.treesDrawingInfo,
       data.mapAgriLocationGeoJson,
       data.agriLocationDrawingInfo,
+      data.mapIrrigationValvesGeoJson,
+      data.irrigationValvesDrawingInfo,
+      data.mapIrrigationMainPipeGeoJson,
+      data.irrigationMainPipeDrawingInfo,
       data.mapLayerVisibility,
       data.mapDataLayerOrder,
       data.setMapLayerVisible,
@@ -150,7 +161,8 @@ export function DevelopEliteAgroGridSection({
       data.mapWorldCountriesPortfolioExtentGeoJson,
       data.worldCountriesDrawingInfo,
       data.config.basemapId,
-      data.filters.selectedFieldKey,
+      data.mapFieldHighlightKey,
+      data.mapFlyToRequest,
       data.structuresDrawingInfo,
       data.countryLabels,
       data.worldCountryDomain,
@@ -191,42 +203,7 @@ export function DevelopEliteAgroGridSection({
         <DevelopEliteGridWidget className="develop-elite-grid-widget--sidebar">
           <DevelopEliteResizeHost as="aside" className="develop-elite__sidebar develop-elite__sidebar--in-grid">
             <DevelopEliteResizeHost className="develop-elite__panel develop-elite__panel--farms">
-              <label className="develop-elite__search">
-                <i className="fa-solid fa-magnifying-glass" aria-hidden />
-                <input
-                  type="search"
-                  placeholder="Search"
-                  value={data.filters.locationSearch}
-                  onChange={e => data.setLocationSearch(e.target.value)}
-                />
-              </label>
-              <ul className="develop-elite__list develop-elite__list--scroll">
-                {data.farmList.map(item => (
-                  <li key={item.fieldKey}>
-                    <button
-                      type="button"
-                      className={`develop-elite__list-btn${data.filters.selectedFieldKey === item.fieldKey ? ' is-active' : ''}`}
-                      onClick={() =>
-                        data.selectFarm(data.filters.selectedFieldKey === item.fieldKey ? null : item.fieldKey)
-                      }
-                    >
-                      <span
-                        className={`develop-elite__list-title${
-                          developEliteListItemMatchesSearch(
-                            developEliteFarmSearchHaystack(item),
-                            data.filters.locationSearch,
-                          )
-                            ? ' develop-elite__list-title--search-hit'
-                            : ''
-                        }`}
-                      >
-                        {item.title}
-                      </span>
-                      {item.subtitle ? <span className="develop-elite__list-sub">{item.subtitle}</span> : null}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <DevelopEliteFarmListPanel data={data} />
               <DevelopEliteResizeHandle
                 edge="bottom"
                 label="Resize farms / countries split"
@@ -237,45 +214,12 @@ export function DevelopEliteAgroGridSection({
               />
             </DevelopEliteResizeHost>
             <div className="develop-elite__panel develop-elite__panel--countries">
-              <label className="develop-elite__search">
-                <i className="fa-solid fa-magnifying-glass" aria-hidden />
-                <input
-                  type="search"
-                  placeholder="Search"
-                  value={countrySearch}
-                  onChange={e => setCountrySearch(e.target.value)}
-                />
-              </label>
-              <ul className="develop-elite__list develop-elite__list--scroll">
-                <li>
-                  <button
-                    type="button"
-                    className={`develop-elite__list-btn${data.filters.country === 'all' ? ' is-active' : ''}`}
-                    onClick={() => data.selectCountry('all')}
-                  >
-                    All countries
-                  </button>
-                </li>
-                {filteredCountries.map(c => (
-                  <li key={c.code}>
-                    <button
-                      type="button"
-                      className={`develop-elite__list-btn${data.filters.country === c.code ? ' is-active' : ''}`}
-                      onClick={() => data.selectCountry(c.code)}
-                    >
-                      <span
-                        className={`develop-elite__list-title${
-                          developEliteListItemMatchesSearch(`${c.label} ${c.code}`, countrySearch)
-                            ? ' develop-elite__list-title--search-hit'
-                            : ''
-                        }`}
-                      >
-                        {c.label}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <DevelopEliteCountryListPanel
+                data={data}
+                filteredCountries={filteredCountries}
+                countrySearch={countrySearch}
+                setCountrySearch={setCountrySearch}
+              />
             </div>
           </DevelopEliteResizeHost>
         </DevelopEliteGridWidget>
@@ -287,42 +231,7 @@ export function DevelopEliteAgroGridSection({
             className="develop-elite__sidebar develop-elite__sidebar--in-grid develop-elite__panel develop-elite__panel--farms develop-elite__panel--farms-only"
             aria-label="Farms"
           >
-            <label className="develop-elite__search">
-              <i className="fa-solid fa-magnifying-glass" aria-hidden />
-              <input
-                type="search"
-                placeholder="Search"
-                value={data.filters.locationSearch}
-                onChange={e => data.setLocationSearch(e.target.value)}
-              />
-            </label>
-            <ul className="develop-elite__list develop-elite__list--scroll">
-              {data.farmList.map(item => (
-                <li key={item.fieldKey}>
-                  <button
-                    type="button"
-                    className={`develop-elite__list-btn${data.filters.selectedFieldKey === item.fieldKey ? ' is-active' : ''}`}
-                    onClick={() =>
-                      data.selectFarm(data.filters.selectedFieldKey === item.fieldKey ? null : item.fieldKey)
-                    }
-                  >
-                    <span
-                      className={`develop-elite__list-title${
-                        developEliteListItemMatchesSearch(
-                          developEliteFarmSearchHaystack(item),
-                          data.filters.locationSearch,
-                        )
-                          ? ' develop-elite__list-title--search-hit'
-                          : ''
-                      }`}
-                    >
-                      {item.title}
-                    </span>
-                    {item.subtitle ? <span className="develop-elite__list-sub">{item.subtitle}</span> : null}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <DevelopEliteFarmListPanel data={data} />
           </DevelopEliteResizeHost>
         </DevelopEliteGridWidget>
       ),
@@ -333,81 +242,24 @@ export function DevelopEliteAgroGridSection({
             className="develop-elite__sidebar develop-elite__sidebar--in-grid develop-elite__panel develop-elite__panel--countries develop-elite__panel--countries-only"
             aria-label="Countries"
           >
-            <label className="develop-elite__search">
-              <i className="fa-solid fa-magnifying-glass" aria-hidden />
-              <input
-                type="search"
-                placeholder="Search"
-                value={countrySearch}
-                onChange={e => setCountrySearch(e.target.value)}
-              />
-            </label>
-            <ul className="develop-elite__list develop-elite__list--scroll">
-              <li>
-                <button
-                  type="button"
-                  className={`develop-elite__list-btn${data.filters.country === 'all' ? ' is-active' : ''}`}
-                  onClick={() => data.selectCountry('all')}
-                >
-                  All countries
-                </button>
-              </li>
-              {filteredCountries.map(c => (
-                <li key={c.code}>
-                  <button
-                    type="button"
-                    className={`develop-elite__list-btn${data.filters.country === c.code ? ' is-active' : ''}`}
-                    onClick={() => data.selectCountry(c.code)}
-                  >
-                    <span
-                      className={`develop-elite__list-title${
-                        developEliteListItemMatchesSearch(`${c.label} ${c.code}`, countrySearch)
-                          ? ' develop-elite__list-title--search-hit'
-                          : ''
-                      }`}
-                    >
-                      {c.label}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <DevelopEliteCountryListPanel
+              data={data}
+              filteredCountries={filteredCountries}
+              countrySearch={countrySearch}
+              setCountrySearch={setCountrySearch}
+            />
           </DevelopEliteResizeHost>
         </DevelopEliteGridWidget>
       ),
       zones: (
         <DevelopEliteGridWidget className="develop-elite-grid-widget--zones">
           <DevelopEliteResizeHost as="aside" className="develop-elite__zones-col develop-elite__zones-col--in-grid" aria-label="Zones">
-            <label className="develop-elite__search">
-              <i className="fa-solid fa-magnifying-glass" aria-hidden />
-              <input
-                type="search"
-                placeholder="Search"
-                value={zoneSearch}
-                onChange={e => setZoneSearch(e.target.value)}
-              />
-            </label>
-            <ul className="develop-elite__list develop-elite__list--scroll">
-              {filteredZones.map(z => (
-                <li key={z.zoneId}>
-                  <button
-                    type="button"
-                    className={`develop-elite__zone-btn${data.filters.zoneId === z.zoneId ? ' is-active' : ''}`}
-                    onClick={() => data.selectZone(data.filters.zoneId === z.zoneId ? 'all' : z.zoneId)}
-                  >
-                    <span
-                      className={`develop-elite__list-title${
-                        developEliteListItemMatchesSearch(`${z.label} ${z.zoneId}`, zoneSearch)
-                          ? ' develop-elite__list-title--search-hit'
-                          : ''
-                      }`}
-                    >
-                      {z.label}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <DevelopEliteZoneListPanel
+              data={data}
+              filteredZones={filteredZones}
+              zoneSearch={zoneSearch}
+              setZoneSearch={setZoneSearch}
+            />
           </DevelopEliteResizeHost>
         </DevelopEliteGridWidget>
       ),
@@ -510,7 +362,13 @@ export function DevelopEliteAgroGridSection({
         layouts={gridLayouts}
         kpiCardIds={kpiCardIds}
         onLayoutsChange={next => commitLayoutPatch({ gridLayouts: next })}
-        onLayoutCommit={() => {}}
+        onLayoutCommit={persistLayout}
+        gridRowStrideByBp={layout.gridRowStrideByBp}
+        onGridRowStrideCommit={(bp, rowStridePx) =>
+          commitLayoutPatch(prev => ({
+            gridRowStrideByBp: { ...(prev.gridRowStrideByBp ?? {}), [bp]: rowStridePx },
+          }))
+        }
         layoutEditMode={layoutEditMode}
         widgets={widgets}
         gridHiddenWidgets={gridHiddenWidgets}

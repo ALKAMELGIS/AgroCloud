@@ -46,7 +46,8 @@
   min-height: 140px;
 }
 
-.develop-elite-drag-widget.is-floated.develop-elite-charts__table-wrap {
+.develop-elite-drag-widget.is-floated.develop-elite-charts__table-wrap,
+.develop-elite-drag-widget.is-floated.develop-elite-charts__table-panel {
   overflow: auto;
   min-height: 160px;
 }
@@ -197,12 +198,188 @@ body.develop-elite--widget-dragging {
 
 .develop-elite__logo-center {
   justify-self: center;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.develop-elite__elite-logo {
-  max-height: 44px;
-  width: auto;
-  object-fit: contain;
+/* UAE digital clock (replaces center logo) — transparent on header green */
+.develop-elite-digital-clock {
+  --de-clock-digit-h: 20px;
+  --de-clock-digit-w: 12px;
+  --de-clock-colon-w: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-height: 36px;
+  padding: 0;
+  background: transparent;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Weekday drum: circular lens over scrolling day strip */
+.develop-elite-digital-clock__day-dial {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.develop-elite-digital-clock__day-dial-track {
+  position: absolute;
+  inset: 1px;
+  overflow: hidden;
+  border-radius: 50%;
+  -webkit-mask-image: radial-gradient(circle, #000 42%, transparent 72%);
+  mask-image: radial-gradient(circle, #000 42%, transparent 72%);
+}
+
+.develop-elite-digital-clock__day-dial-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 4px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.22);
+  transform: translateY(calc(-50% - var(--de-day-offset, 0px)));
+  transition: transform 0.55s cubic-bezier(0.33, 1, 0.68, 1);
+  will-change: transform;
+}
+
+.develop-elite-digital-clock__day-dial-strip span {
+  height: 6px;
+  line-height: 6px;
+  flex-shrink: 0;
+  opacity: 0.28;
+  transform: scale(0.82);
+  transition: opacity 0.35s ease, transform 0.35s ease, color 0.35s ease;
+}
+
+.develop-elite-digital-clock__day-dial-strip span.is-far {
+  opacity: 0.18;
+  transform: scale(0.72);
+}
+
+.develop-elite-digital-clock__day-dial-strip span.is-near {
+  opacity: 0.45;
+  transform: scale(0.88);
+  color: rgba(134, 239, 172, 0.55);
+}
+
+.develop-elite-digital-clock__day-dial-strip span.is-active {
+  opacity: 0;
+}
+
+.develop-elite-digital-clock__day-dial-lens {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  font-size: 5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #facc15;
+  text-shadow: 0 0 5px rgba(250, 204, 21, 0.45);
+  pointer-events: none;
+}
+
+.develop-elite-digital-clock__face {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.develop-elite-digital-clock__time {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.develop-elite-digital-clock__pair {
+  display: inline-flex;
+  gap: 1px;
+  transition: filter 0.2s ease;
+}
+
+.develop-elite-digital-clock__pair.is-flash {
+  filter: brightness(1.2);
+}
+
+.develop-elite-digital-clock__meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 6px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.develop-elite-digital-clock__tz {
+  color: var(--de-accent);
+  text-shadow: 0 0 8px rgba(74, 222, 128, 0.35);
+}
+
+.develop-elite-seven-seg {
+  width: var(--de-clock-digit-w);
+  height: var(--de-clock-digit-h);
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+.develop-elite-seven-seg--colon {
+  width: var(--de-clock-colon-w);
+  height: var(--de-clock-digit-h);
+  margin: 0 1px;
+}
+
+.develop-elite-seven-seg__bar {
+  fill: rgba(30, 80, 55, 0.55);
+}
+
+.develop-elite-seven-seg__bar.is-on {
+  fill: rgba(255, 255, 255, 0.96);
+  filter:
+    drop-shadow(0 0 1px rgba(255, 255, 255, 0.9))
+    drop-shadow(0 0 5px rgba(74, 222, 128, 0.45))
+    drop-shadow(0 0 10px rgba(74, 222, 128, 0.2));
+}
+
+.develop-elite-seven-seg__bar.is-on.is-accent {
+  fill: #7ef0c0;
+  filter:
+    drop-shadow(0 0 2px rgba(126, 240, 192, 0.95))
+    drop-shadow(0 0 8px rgba(74, 222, 128, 0.65));
+}
+
+.develop-elite-seven-seg__dot {
+  fill: rgba(30, 80, 55, 0.55);
+}
+
+.develop-elite-seven-seg__dot.is-on {
+  fill: rgba(255, 255, 255, 0.92);
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.55));
+  transition: opacity 0.15s ease;
+}
+
+.develop-elite-seven-seg--colon.is-pulse .develop-elite-seven-seg__dot.is-on {
+  opacity: 0.35;
 }
 
 .develop-elite__header-meta {
@@ -727,9 +904,106 @@ body.develop-elite--widget-dragging {
   appearance: none;
 }
 
+.develop-elite__search-row {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  flex-shrink: 0;
+  margin: 4px 5px 0;
+}
+
+.develop-elite__search-row .develop-elite__search {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.develop-elite__search-play {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  min-height: 22px;
+  padding: 0;
+  border: 1px solid var(--de-border-soft);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.62);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.develop-elite__search-play:hover {
+  color: rgba(255, 255, 255, 0.88);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.develop-elite__search-play.is-active {
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(74, 222, 128, 0.45);
+  background: rgba(74, 222, 128, 0.12);
+}
+
+.develop-elite__search-play i {
+  font-size: 9px;
+  margin-left: 1px;
+}
+
+.develop-elite__search-play.is-active i.fa-pause {
+  margin-left: 0;
+}
+
+.develop-elite__list-text--ticker {
+  color: rgba(255, 255, 255, 0.88);
+  text-shadow: none;
+}
+
+.develop-elite__list-sub.develop-elite__list-text--ticker {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.develop-elite__list--airport-ticker {
+  scroll-behavior: auto;
+}
+
+.develop-elite__list--airport-ticker > li {
+  content-visibility: visible;
+  contain-intrinsic-size: auto 36px;
+}
+
+.develop-elite__list--airport-ticker .develop-elite__list-title--search-hit {
+  animation: none;
+  text-shadow: none;
+  outline-color: rgba(255, 255, 255, 0.35);
+}
+
 .develop-elite__panel--farms .develop-elite__search,
 .develop-elite__panel--countries .develop-elite__search {
   margin-inline: 5px;
+}
+
+.develop-elite__panel--farms .develop-elite__search-row,
+.develop-elite__panel--countries .develop-elite__search-row {
+  margin-inline: 5px;
+}
+
+.develop-elite__zones-col .develop-elite__search-row {
+  margin: 3px 4px 0;
+}
+
+.develop-elite__list--countries .develop-elite__list-btn {
+  text-align: center;
+  align-items: center;
+}
+
+.develop-elite__list-title--zone-ticker {
+  display: block;
+  width: 100%;
+  text-align: center;
 }
 
 .develop-elite__zones-col--in-grid .develop-elite__search {
@@ -1108,7 +1382,7 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   padding: 10px 8px 8px;
   box-sizing: border-box;
   border-left: 1px solid var(--de-border-soft);
-  background: rgba(0, 20, 8, 0.96);
+  background: var(--de-structure-cell-bg);
   z-index: 380;
   overflow: hidden;
 }
@@ -1391,6 +1665,22 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   width: 100%;
   height: 100%;
   background: #0a1a10;
+  touch-action: none;
+}
+
+.develop-elite-map .leaflet-container.develop-elite-map--interacting .leaflet-map-pane,
+.develop-elite-map .leaflet-container.develop-elite-map--interacting .leaflet-tile-pane {
+  will-change: transform;
+}
+
+.develop-elite-map .leaflet-container.develop-elite-map--interacting path.develop-elite-structure-flash {
+  animation: none;
+}
+
+/* Canvas vector paths: avoid SVG overlay flicker during wheel zoom. */
+.develop-elite-map .leaflet-overlay-pane canvas,
+.develop-elite-map .leaflet-develop-elite-data-layers-pane canvas {
+  image-rendering: auto;
 }
 
 @keyframes develop-elite-structure-flash {
@@ -2079,6 +2369,28 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   image-rendering: auto;
 }
 
+/* Keep Agro Structures / Tree / AgroLocation above Sentinel & Layer Live */
+.develop-elite-map .leaflet-pane.leaflet-overlay-pane,
+.develop-elite-map .leaflet-pane.leaflet-marker-pane,
+.develop-elite-map .leaflet-pane.leaflet-develop-elite-data-layers-pane {
+  z-index: 620;
+}
+
+/* Global index.css sets svg { max-width: 100% }, which collapses Leaflet overlay SVG width (parent pane is 0px). */
+.develop-elite-map .leaflet-container svg.leaflet-zoom-animated {
+  max-width: none;
+}
+
+.develop-elite-map .leaflet-pane.leaflet-develop-elite-world-countries-pane {
+  z-index: 580;
+  pointer-events: none;
+}
+
+.develop-elite-map .leaflet-develop-elite-world-countries-pane path.leaflet-interactive,
+.develop-elite-map .leaflet-develop-elite-world-countries-pane path {
+  pointer-events: none !important;
+}
+
 .develop-elite-map .leaflet-pane.leaflet-popup-pane {
   z-index: 850;
 }
@@ -2108,11 +2420,11 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   height: 18px;
   font-size: 16px;
   line-height: 16px;
-  color: rgba(134, 239, 172, 0.85);
+  color: rgba(255, 255, 255, 0.62);
 }
 
 .develop-elite-map-popup-wrap .leaflet-popup-close-button:hover {
-  color: #fff;
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .develop-elite-map-popup-wrap .leaflet-popup-tip {
@@ -2149,10 +2461,10 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: #ecfdf3;
+  color: rgba(255, 255, 255, 0.92);
   padding: 0 20px 4px 0;
   margin-bottom: 2px;
-  border-bottom: 1px solid rgba(74, 222, 128, 0.18);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .develop-elite-map-popup__title {
@@ -2171,19 +2483,19 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(74, 222, 128, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 2px;
   background: rgba(0, 0, 0, 0.4);
-  color: #86efac;
+  color: rgba(255, 255, 255, 0.72);
   cursor: pointer;
   font-size: 9px;
   line-height: 1;
 }
 
 .develop-elite-map-popup__zoom:hover {
-  background: rgba(74, 222, 128, 0.16);
-  border-color: var(--de-accent);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.95);
 }
 
 .develop-elite-map-popup__scroll {
@@ -2224,7 +2536,7 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: rgba(143, 168, 152, 0.95);
+  color: rgba(255, 255, 255, 0.55);
   line-height: 1.25;
 }
 
@@ -2232,7 +2544,7 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   margin: 0;
   font-size: 9px;
   font-weight: 500;
-  color: #e8f5ec;
+  color: rgba(255, 255, 255, 0.9);
   line-height: 1.3;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -2243,7 +2555,7 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
 }
 
 .develop-elite-map-popup__scroll::-webkit-scrollbar-thumb {
-  background: rgba(74, 222, 128, 0.35);
+  background: rgba(255, 255, 255, 0.22);
   border-radius: 3px;
 }
 
@@ -2315,16 +2627,27 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   min-height: 0;
   min-width: 0;
   overflow: visible;
-  background: var(--de-panel);
+  background: var(--de-structure-cell-bg);
+}
+
+.develop-elite--grid-dashboard .develop-elite-grid-widget--chart .develop-elite-charts__pie,
+.develop-elite--grid-dashboard .develop-elite-grid-widget--chart .develop-elite-charts__bar {
+  background: var(--de-structure-cell-bg);
 }
 
 .develop-elite-charts__pie {
   padding-right: 2px;
 }
 
-.develop-elite-grid-widget--chart .develop-elite-grid-widget__body,
-.develop-elite-grid-widget--chart .develop-elite-charts--single {
+.develop-elite-grid-widget--chart .develop-elite-charts--single:not(.develop-elite-charts--table-only) {
   overflow: visible;
+}
+
+.develop-elite-grid-widget--chart .develop-elite-charts--table-only {
+  overflow: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
 }
 
 .develop-elite-charts__pie.develop-elite-resize-host,
@@ -2333,48 +2656,88 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   flex-direction: column;
 }
 
+.develop-elite-charts__metric-title {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 6px 8px 2px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--de-accent);
+  pointer-events: none;
+}
+
 .develop-elite-charts__pie > canvas,
 .develop-elite-charts__bar > canvas {
   flex: 1 1 auto;
   min-height: 0;
   width: 100% !important;
   max-height: 100%;
+  background-color: var(--de-structure-cell-bg);
 }
 
-.develop-elite-charts__table-wrap {
-  overflow-x: auto;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+.develop-elite-charts__table-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
+  width: 100%;
+  height: 100%;
   background: var(--de-panel);
   border-left: 1px solid rgba(47, 107, 74, 0.35);
 }
 
+.develop-elite-charts__table-wrap {
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+  min-width: 0;
+  background: var(--de-panel);
+}
+
 .develop-elite-charts__table {
-  width: max-content;
-  min-width: 100%;
-  border-collapse: collapse;
-  font-size: var(--de-chart-table-fs, 9px);
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--de-chart-table-fs, 8px);
   font-family: var(--de-chart-table-font, inherit);
   color: var(--de-chart-label-color, var(--de-text));
 }
 
 .develop-elite-charts__table th,
 .develop-elite-charts__table td {
+  box-sizing: border-box;
   border: 1px solid var(--de-border-soft);
-  padding: 3px 5px;
+  padding: 4px 6px;
+  line-height: 1.25;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: #ffffff;
+  vertical-align: middle;
+}
+
+.develop-elite-charts__table-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.develop-elite-charts__table td {
+  background: var(--de-panel);
 }
 
 .develop-elite-charts__table th {
-  background: rgba(74, 222, 128, 0.22);
+  background: var(--de-chart-table-header-bg, rgba(74, 222, 128, 0.22));
   position: sticky;
   top: 0;
+  z-index: 2;
   font-weight: 600;
-  z-index: 1;
+  box-shadow: 0 1px 0 var(--de-border-soft);
 }
 
 .develop-elite-charts__table-crop {
@@ -2401,6 +2764,26 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
 
 .develop-elite-charts__table tbody tr.is-table-row-focus.is-table-row-map-selected td {
   background: rgba(74, 222, 128, 0.24);
+}
+
+@keyframes develop-elite-table-row-flash {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 0 1px rgba(253, 224, 71, 0.5),
+      0 0 10px rgba(253, 224, 71, 0.12);
+    background: rgba(253, 224, 71, 0.07);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 2px rgba(250, 204, 21, 0.95),
+      0 0 14px rgba(253, 224, 71, 0.28);
+    background: rgba(253, 224, 71, 0.16);
+  }
+}
+
+.develop-elite-charts__table tbody tr.is-table-row-flash td {
+  animation: develop-elite-table-row-flash 0.45s ease-in-out 3;
 }
 
 .develop-elite-charts__empty {
@@ -2497,6 +2880,10 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   color: #fff;
 }
 
+.develop-elite-settings__panel--data {
+  width: min(560px, 94vw);
+}
+
 .develop-elite-settings__head {
   display: flex;
   justify-content: space-between;
@@ -2579,6 +2966,231 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
 
 .develop-elite-settings__hint {
   font-size: 10px;
+  color: #94a3b8;
+}
+
+.develop-elite-settings__hint--tight {
+  margin: 0 0 10px;
+}
+
+.develop-elite-settings__field--compact {
+  margin-bottom: 8px;
+}
+
+/* Data tab — grouped ArcGIS sources */
+.develop-elite-settings__data-lead {
+  margin: 0 0 14px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #94a3b8;
+}
+
+.develop-elite-settings__data-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.develop-elite-settings__data-group {
+  border: 1px solid var(--de-border-soft);
+  border-radius: 6px;
+  background: rgba(0, 24, 18, 0.45);
+  overflow: hidden;
+}
+
+.develop-elite-settings__data-group-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: #e2e8f0;
+  user-select: none;
+}
+
+.develop-elite-settings__data-group-summary::-webkit-details-marker {
+  display: none;
+}
+
+.develop-elite-settings__data-group-summary::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 6px solid var(--de-accent);
+  margin-right: 8px;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.develop-elite-settings__data-group[open] > .develop-elite-settings__data-group-summary::before {
+  transform: rotate(90deg);
+}
+
+.develop-elite-settings__data-group-summary .develop-elite-settings__data-group-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.develop-elite-settings__data-group-count {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--de-muted);
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--de-border-soft);
+}
+
+.develop-elite-settings__data-group-desc {
+  margin: 0;
+  padding: 0 12px 10px;
+  font-size: 10px;
+  line-height: 1.45;
+  color: var(--de-muted);
+}
+
+.develop-elite-settings__data-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+
+.develop-elite-settings__data-layer {
+  padding: 10px 10px 8px;
+  border-radius: 5px;
+  border: 1px solid rgba(74, 222, 128, 0.12);
+  background: rgba(0, 12, 8, 0.55);
+}
+
+.develop-elite-settings__data-layer-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+@media (min-width: 420px) {
+  .develop-elite-settings__data-layer-head {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+}
+
+.develop-elite-settings__data-layer-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.develop-elite-settings__data-layer-desc {
+  margin: 4px 0 0;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--de-muted);
+}
+
+.develop-elite-settings__data-layer-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.develop-elite-settings__data-badge {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--de-border-soft);
+  color: #cbd5e1;
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.develop-elite-settings__data-badge--muted {
+  color: #94a3b8;
+}
+
+.develop-elite-settings__data-badge--accent {
+  border-color: rgba(74, 222, 128, 0.35);
+  color: var(--de-accent);
+}
+
+.develop-elite-settings__data-layer-service {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 10px;
+  color: #86efac;
+}
+
+.develop-elite-settings__data-layer-service code {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 10px;
+  color: #bbf7d0;
+  word-break: break-all;
+}
+
+.develop-elite-settings__data-layer-url input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 8px;
+  border: 1px solid var(--de-border-soft);
+  border-radius: 4px;
+  background: var(--de-panel);
+  color: #fff;
+  font-size: 10px;
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+.develop-elite-settings__data-layer-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.develop-elite-settings__data-link {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 10px;
+  color: var(--de-accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.develop-elite-settings__data-link:disabled {
+  opacity: 0.35;
+  cursor: default;
+  text-decoration: none;
+}
+
+a.develop-elite-settings__data-link {
+  display: inline;
+}
+
+.develop-elite-settings__data-joins {
+  padding-top: 12px;
+  border-top: 1px solid var(--de-border-soft);
+}
+
+.develop-elite-settings__data-joins-title {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: #94a3b8;
 }
 
@@ -2863,8 +3475,21 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
     align-items: center;
   }
 
-  .develop-elite__elite-logo {
+  .develop-elite-digital-clock {
+    --de-clock-digit-h: 18px;
+    --de-clock-digit-w: 11px;
+    --de-clock-colon-w: 5px;
+    gap: 5px;
     max-height: 32px;
+  }
+
+  .develop-elite-digital-clock__day-dial {
+    width: 17px;
+    height: 17px;
+  }
+
+  .develop-elite-digital-clock__day-dial-lens {
+    font-size: 4.5px;
   }
 
   .develop-elite__kpi-row > * {
@@ -2944,7 +3569,7 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   width: 100%;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .develop-elite__header--compact {
@@ -3380,7 +4005,7 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
 
 .develop-elite-charts--single .develop-elite-charts__pie,
 .develop-elite-charts--single .develop-elite-charts__bar,
-.develop-elite-charts--single .develop-elite-charts__table-wrap {
+.develop-elite-charts--single .develop-elite-charts__table-panel {
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
@@ -3388,9 +4013,27 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   height: 100%;
 }
 
-.develop-elite-charts--single .develop-elite-charts__table-wrap {
+.develop-elite-charts--single .develop-elite-charts__table-body-scroll {
   overflow-x: auto;
   overflow-y: auto;
+  max-height: 100%;
+}
+
+.develop-elite-charts--table-only .develop-elite-charts__table-panel {
+  height: 100%;
+  border-left: none;
+}
+
+.develop-elite-charts:not(.develop-elite-charts--single) .develop-elite-charts__table-panel {
+  max-height: 100%;
+  align-self: stretch;
+}
+
+.develop-elite-grid-widget--chart .develop-elite-grid-widget__body > .develop-elite-charts--table-only {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .develop-elite-grid-item--cell {
@@ -3876,6 +4519,7 @@ body.develop-elite--resizing .develop-elite-grid-item--cell.is-resizing .develop
 .develop-elite--grid-dashboard .develop-elite-map__panel,
 .develop-elite--grid-dashboard .develop-elite-charts__pie,
 .develop-elite--grid-dashboard .develop-elite-charts__bar,
+.develop-elite--grid-dashboard .develop-elite-charts__table-panel,
 .develop-elite--grid-dashboard .develop-elite-charts__table-wrap,
 .develop-elite--grid-dashboard .develop-elite-charts__table th,
 .develop-elite--grid-dashboard .develop-elite-charts__table td {
@@ -4762,7 +5406,14 @@ body.develop-elite--lists-drawer-open {
   }
 
   .develop-elite--compact-viewport .develop-elite__logo-center {
-    display: none;
+    display: flex;
+    transform: scale(0.78);
+    transform-origin: center top;
+  }
+
+  .develop-elite--compact-viewport .develop-elite-digital-clock__day-dial {
+    width: 15px;
+    height: 15px;
   }
 
   .develop-elite--compact-viewport .develop-elite__header-meta {

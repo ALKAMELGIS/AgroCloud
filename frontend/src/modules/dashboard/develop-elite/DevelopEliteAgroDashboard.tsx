@@ -1,5 +1,6 @@
 import { lazy, Suspense, useMemo, useState, useCallback, useEffect, useRef } from 'react'
 import { DevelopEliteHeaderDateTime } from './DevelopEliteHeaderDateTime'
+import { DevelopEliteHeaderDigitalClock } from './DevelopEliteHeaderDigitalClock'
 import { DevelopEliteAgroGridSection } from './DevelopEliteAgroGridSection'
 import { useDevelopEliteDashboardData } from './useDevelopEliteDashboardData'
 import { useDevelopEliteLiveLayout } from './useDevelopEliteLiveLayout'
@@ -12,8 +13,6 @@ import { developEliteAccent } from '@/theme/dashboardTokens'
 import '../styles/dashboard.css'
 
 type SettingsTabId = 'data' | 'kpi' | 'charts' | 'map' | 'appearance'
-
-const ELITE_LOGO = `${import.meta.env.BASE_URL}elite-agro-projects-logo.png`
 
 const DevelopEliteSettingsModal = lazy(() =>
   import('./DevelopEliteSettingsModal').then(m => ({ default: m.DevelopEliteSettingsModal })),
@@ -133,7 +132,7 @@ export default function DevelopEliteAgroDashboard() {
             <span className="develop-elite__brand-text">Agro Cloud</span>
           </div>
           <div className="develop-elite__logo-center">
-            <img src={ELITE_LOGO} alt="Elite Agro Projects" className="develop-elite__elite-logo" draggable={false} />
+            <DevelopEliteHeaderDigitalClock />
           </div>
           <div className="develop-elite__header-meta">
             <div className="develop-elite__header-meta-info">

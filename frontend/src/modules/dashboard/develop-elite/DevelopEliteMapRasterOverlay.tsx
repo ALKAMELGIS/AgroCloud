@@ -13,6 +13,7 @@ import {
   isDevelopEliteClippedRasterStackReady,
 } from './developEliteMapRasterEngine'
 import type { DevelopEliteMapView } from './developEliteKpiEngine'
+import { DEVELOP_ELITE_MAP_RASTER_PANE_Z_INDEX } from './developEliteMapPanes'
 
 const RASTER_PANE = 'develop-elite-raster'
 
@@ -42,7 +43,7 @@ export function DevelopEliteMapRasterOverlay({
   useEffect(() => {
     if (!map || !anyRasterOn) return
     const pane = map.getPane(RASTER_PANE) ?? map.createPane(RASTER_PANE)
-    pane.style.zIndex = '390'
+    pane.style.zIndex = String(DEVELOP_ELITE_MAP_RASTER_PANE_Z_INDEX)
   }, [map, anyRasterOn])
 
   useEffect(() => {

@@ -7,9 +7,10 @@ import {
 } from './developEliteMapDataLayers'
 
 describe('developEliteMapDataLayers', () => {
-  it('defaults with Tree on top and Agri_Location second', () => {
+  it('defaults with Tree on top, irrigation valves, then Agri_Location', () => {
     expect(DEFAULT_DEVELOP_ELITE_MAP_DATA_LAYER_ORDER[0]).toBe('trees')
-    expect(DEFAULT_DEVELOP_ELITE_MAP_DATA_LAYER_ORDER[1]).toBe('agri-location')
+    expect(DEFAULT_DEVELOP_ELITE_MAP_DATA_LAYER_ORDER[1]).toBe('irrigation-valves')
+    expect(DEFAULT_DEVELOP_ELITE_MAP_DATA_LAYER_ORDER[2]).toBe('agri-location')
   })
 
   it('reorders layers by drag target', () => {
@@ -17,6 +18,9 @@ describe('developEliteMapDataLayers', () => {
     expect(moveMapDataLayerInOrder(order, 'world-countries', 'trees')).toEqual([
       'world-countries',
       'trees',
+      'irrigation-valves',
+      'agri-location',
+      'irrigation-main-pipe',
       'agro-structures',
     ])
   })
@@ -24,7 +28,9 @@ describe('developEliteMapDataLayers', () => {
   it('fills missing ids when normalizing order', () => {
     expect(normalizeDevelopEliteMapDataLayerOrder(['trees'])).toEqual([
       'trees',
+      'irrigation-valves',
       'agri-location',
+      'irrigation-main-pipe',
       'agro-structures',
       'world-countries',
     ])

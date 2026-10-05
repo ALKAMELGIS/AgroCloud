@@ -1,16 +1,23 @@
 import { normalizeDevelopEliteHexColor } from './developEliteLayoutConfig'
 
-/** Agro brand palette — dark green → lime → lemon → gold (no duplicates). */
+/** Chart canvas fill (matches structure cells / Nethouse box). */
+export const DEVELOP_ELITE_CHART_SURFACE_BG = '#071a11'
+
+/**
+ * Pie / bar slice order (highest value → lower): dark green → green → lime → orange → yellow → light green → white.
+ */
 export const DEFAULT_DEVELOP_ELITE_CHART_PALETTE = [
   '#14532d',
-  '#166534',
-  '#22c55e',
-  '#4ade80',
+  '#16a34a',
   '#a3e635',
-  '#ecfdf5',
-  '#fef08a',
+  '#ea580c',
   '#facc15',
+  '#86efac',
+  '#ffffff',
 ]
+
+export const DEVELOP_ELITE_CHART_PALETTE_PRESET_LS_KEY = 'develop_elite_chart_palette_preset_v'
+export const DEVELOP_ELITE_CHART_PALETTE_PRESET_VERSION = 1
 
 export type DevelopEliteChartsConfig = {
   pieMaxSlices: number
@@ -34,14 +41,14 @@ export const DEFAULT_DEVELOP_ELITE_CHARTS: DevelopEliteChartsConfig = {
   barMaxSlices: 10,
   sortByValueDesc: true,
   groupRemainderAsOther: true,
-  labelColor: '#b7f7c8',
-  axisColor: '#86efac',
-  tickColor: '#ecfdf5',
+  labelColor: '#ffffff',
+  axisColor: '#ffffff',
+  tickColor: '#ffffff',
   gridColor: 'rgba(74, 222, 128, 0.12)',
   fontFamily: "'Segoe UI', system-ui, sans-serif",
   legendFontPx: 7,
   axisFontPx: 9,
-  tableFontPx: 9,
+  tableFontPx: 8,
   tableHeaderBg: 'rgba(74, 222, 128, 0.12)',
   palette: [...DEFAULT_DEVELOP_ELITE_CHART_PALETTE],
 }

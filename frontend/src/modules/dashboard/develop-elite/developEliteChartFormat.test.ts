@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { formatDevelopEliteChartAxisTick, formatDevelopEliteChartValue } from './developEliteChartFormat'
+import {
+  formatDevelopEliteChartAxisTick,
+  formatDevelopEliteChartValue,
+  formatDevelopEliteChartValueWithUnit,
+  resolveDevelopEliteChartValueUnit,
+} from './developEliteChartFormat'
 
 describe('developEliteChartFormat', () => {
   it('formats large axis ticks without repeating 1k', () => {
@@ -12,5 +17,10 @@ describe('developEliteChartFormat', () => {
   it('formats in-bar values', () => {
     expect(formatDevelopEliteChartValue(60000)).toBe('60k')
     expect(formatDevelopEliteChartValue(450)).toBe('450')
+  })
+
+  it('appends Tons unit and normalizes Per Tons label', () => {
+    expect(formatDevelopEliteChartValueWithUnit(120000)).toBe('120k Tons')
+    expect(resolveDevelopEliteChartValueUnit('Per Tons')).toBe('Tons')
   })
 })

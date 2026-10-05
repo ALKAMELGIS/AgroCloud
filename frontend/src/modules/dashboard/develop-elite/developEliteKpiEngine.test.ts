@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { computeStableGisFeatureKey } from '@/modules/gis/layers/gisFeatureStableKey'
 import { DEFAULT_DEVELOP_ELITE_CONFIG } from './developEliteDashboardConfig'
 import {
   buildCountryListItems,
   buildFarmListItems,
   buildZoneListItems,
+  compareDevelopEliteCropTableRows,
   compareDevelopEliteListNames,
   computeDevelopEliteKpis,
   computeDevelopEliteZoneLayerTotalAreaHa,
@@ -15,6 +17,7 @@ import {
   filterCropRowsForChartStats,
   filterCropRowsForStructures,
   filterStructureFeatures,
+  filterStructureFeaturesByMapView,
   geometryOverlapsMapView,
   sortDevelopEliteZoneListByMapView,
   normalizeStructureFeatures,
@@ -91,6 +94,31 @@ describe('developEliteKpiEngine', () => {
     expect(countries.map(c => c.label)).toEqual(['Morocco', 'United Arab Emirates'])
     const farms = buildFarmListItems(features, { countryLabels: labels })
     expect(farms.map(item => item.title).sort()).toEqual(['Farm A', 'Farm B'])
+  })
+
+  it('sorts crop table rows by NH farm code with numeric order', () => {
+    const rows = [
+      { Farm_Name: 'Other', Farm_Code: 'Z-9' },
+      { Farm_Name: 'NH-02', Farm_Code: 'MH102' },
+      { Farm_Name: 'NH-01', Farm_Code: 'MH101' },
+    ] as import('./developEliteArcgisFetch').ArcGisTableRow[]
+    const sorted = [...rows].sort((a, b) => compareDevelopEliteCropTableRows(a, b, 'Farm_Code'))
+    expect(sorted.map(r => String(r.Farm_Name))).toEqual(['NH-01', 'NH-02', 'Other'])
+  })
+
+  it('sorts NH-prefixed farm names before other farms', () => {
+    const features = normalizeStructureFeatures({
+      type: 'FeatureCollection',
+      features: [
+        polyFeature({ Farm_Name: 'Farm Z', ZONE_ID: 'MH' }),
+        polyFeature({ Farm_Name: 'NH 10', ZONE_ID: 'MH' }),
+        polyFeature({ Farm_Name: 'NH 02', ZONE_ID: 'MH' }),
+        polyFeature({ Farm_Name: 'NH 01', ZONE_ID: 'MH' }),
+        polyFeature({ Farm_Name: '1-B', ZONE_ID: 'AD' }),
+      ],
+    })
+    const farms = buildFarmListItems(features)
+    expect(farms.map(f => f.title)).toEqual(['NH 01', 'NH 02', 'NH 10', '1-B', 'Farm Z'])
   })
 
   it('shows Agro Structures name and Zone_ID together', () => {
@@ -185,6 +213,28 @@ describe('developEliteKpiEngine', () => {
     expect(tableScope).toHaveLength(1)
     const chartScope = filterCropRowsForChartStats(crops, features, filters)
     expect(chartScope).toHaveLength(2)
+  })
+
+  it('links selected map field to crop rows by Farm_Code even when ZONE_ID differs', () => {
+    const features = normalizeStructureFeatures({
+      type: 'FeatureCollection',
+      features: [
+        polyFeature({ Farm_Code: 'MH132', ZONE_ID: 'NH 07', Structure_Type: 1006, Area_ha: 1 }),
+      ],
+    })
+    const fieldKey = computeStableGisFeatureKey(features[0]!, 0)
+    const crops = [
+      { Farm_Code: 'MH132', Crop_Type: '7001', Total_Tree: 12, ZONE_ID: 'MH' },
+      { Farm_Code: 'MH999', Crop_Type: '7002', Total_Tree: 99, ZONE_ID: 'MH' },
+    ]
+    const scoped = filterCropRowsForChartStats(crops, features, {
+      country: 'all',
+      zoneId: 'NH 07',
+      selectedFieldKey: fieldKey,
+      locationSearch: '',
+    })
+    expect(scoped).toHaveLength(1)
+    expect(scoped[0]?.Farm_Code).toBe('MH132')
   })
 
   it('joins crops to structures by Farm_Code case-insensitively', () => {
@@ -443,5 +493,45 @@ describe('geometryOverlapsMapView', () => {
       ],
     }
     expect(geometryOverlapsMapView(geometry, view)).toBe(false)
+  })
+})
+
+describe('filterStructureFeaturesByMapView', () => {
+  it('clips structures to the visible map when zoomed in', () => {
+    const fc = {
+      type: 'FeatureCollection' as const,
+      features: [
+        polyFeature({ Farm_Name: 'In view' }),
+        {
+          type: 'Feature' as const,
+          properties: { Farm_Name: 'Out of view' },
+          geometry: {
+            type: 'Polygon' as const,
+            coordinates: [
+              [
+                [10, 10],
+                [10.1, 10],
+                [10.1, 10.1],
+                [10, 10],
+              ],
+            ],
+          },
+        },
+      ],
+    }
+    const features = normalizeStructureFeatures(fc)
+    const view = { zoom: 8, west: 55, south: 25, east: 55.3, north: 25.3 }
+    const clipped = filterStructureFeaturesByMapView(features, view)
+    expect(clipped).toHaveLength(1)
+    expect(clipped[0]?.properties?.Farm_Name).toBe('In view')
+  })
+
+  it('keeps full scope at portfolio zoom', () => {
+    const features = normalizeStructureFeatures({
+      type: 'FeatureCollection',
+      features: [polyFeature({}), polyFeature({ Farm_Name: 'B' })],
+    })
+    const view = { zoom: 4, west: 49, south: 22, east: 59, north: 27 }
+    expect(filterStructureFeaturesByMapView(features, view)).toHaveLength(2)
   })
 })

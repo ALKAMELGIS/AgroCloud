@@ -25,6 +25,9 @@ const FEATURE_NAME_KEYS = [
   'NAME',
   'Farm_Name',
   'Farm_Code',
+  'Valve_Name',
+  'Valve_Code',
+  'DEVELOPERNAME',
   'COUNTRY',
   'Country',
   'Country_Name',
@@ -56,6 +59,8 @@ export function resolveDevelopEliteMapFeatureLabel(
 ): { label: string; metaParts: string[] } {
   const name =
     stringProp(readProp(props, 'Name')) ||
+    stringProp(readProp(props, 'Valve_Name')) ||
+    stringProp(readProp(props, 'DEVELOPERNAME')) ||
     stringProp(readProp(props, 'Farm_Name')) ||
     stringProp(readProp(props, 'Farm_Code'))
   const countryCode = stringProp(readProp(props, 'COUNTRY') ?? readProp(props, 'Country'))
@@ -129,6 +134,8 @@ function scoreAcpHit(query: string, hit: AcpMapSearchHit): number {
 export type DevelopEliteMapSearchSources = {
   structures: GeoJSON.FeatureCollection
   trees?: GeoJSON.FeatureCollection | null
+  irrigationValves?: GeoJSON.FeatureCollection | null
+  irrigationMainPipe?: GeoJSON.FeatureCollection | null
   agriLocation?: GeoJSON.FeatureCollection | null
   worldCountries?: GeoJSON.FeatureCollection | null
   countryLabels?: Map<string, string> | null
@@ -169,6 +176,30 @@ export function searchDevelopEliteMapLocal(
       ...searchGeoJsonLayerFeatures(q, 'agri-location', 'AgroLocation', sources.agriLocation, countryLabels, 6),
     )
   }
+  if (visible('irrigation-valves')) {
+    featureBuckets.push(
+      ...searchGeoJsonLayerFeatures(
+        q,
+        'irrigation-valves',
+        'Irrigation System Valve',
+        sources.irrigationValves,
+        countryLabels,
+        6,
+      ),
+    )
+  }
+  if (visible('irrigation-main-pipe')) {
+    featureBuckets.push(
+      ...searchGeoJsonLayerFeatures(
+        q,
+        'irrigation-main-pipe',
+        'Irrigation Pressure Main Pipe',
+        sources.irrigationMainPipe,
+        countryLabels,
+        6,
+      ),
+    )
+  }
   if (visible('world-countries')) {
     featureBuckets.push(
       ...searchGeoJsonLayerFeatures(
@@ -203,6 +234,10 @@ export function developEliteMapGeoJsonForLayer(
       return sources.trees ?? null
     case 'agri-location':
       return sources.agriLocation ?? null
+    case 'irrigation-valves':
+      return sources.irrigationValves ?? null
+    case 'irrigation-main-pipe':
+      return sources.irrigationMainPipe ?? null
     case 'world-countries':
       return sources.worldCountries ?? null
     default:

@@ -77,6 +77,51 @@ export function compareDevelopEliteListNames(a: string, b: string): number {
   return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
 }
 
+const DEVELOP_ELITE_FARM_NH_TITLE = /^NH[-\s]*(\d+)/i
+
+function developEliteFarmNhSortNumber(title: string): number | null {
+  const m = title.trim().match(DEVELOP_ELITE_FARM_NH_TITLE)
+  if (!m) return null
+  const n = Number(m[1])
+  return Number.isFinite(n) ? n : null
+}
+
+/** Farm sidebar: NH 01, NH 02, … first, then natural sort on the rest. */
+export function compareDevelopEliteFarmListItems(
+  a: { title: string },
+  b: { title: string },
+): number {
+  const aNh = developEliteFarmNhSortNumber(a.title)
+  const bNh = developEliteFarmNhSortNumber(b.title)
+  if (aNh != null && bNh != null) {
+    if (aNh !== bNh) return aNh - bNh
+    return compareDevelopEliteListNames(a.title, b.title)
+  }
+  if (aNh != null) return -1
+  if (bNh != null) return 1
+  return compareDevelopEliteListNames(a.title, b.title)
+}
+
+function developEliteCropTableFarmLabel(row: ArcGisTableRow, joinField: string): string {
+  const farmName = readArcGisField(row, 'Farm_Name')
+  if (farmName != null && String(farmName).trim()) return String(farmName).trim()
+  const code = readArcGisField(row, joinField)
+  if (code != null && String(code).trim()) return String(code).trim()
+  return ''
+}
+
+/** Crops table: NH rows first (by number), then natural farm/code order. */
+export function compareDevelopEliteCropTableRows(
+  a: ArcGisTableRow,
+  b: ArcGisTableRow,
+  joinField: string,
+): number {
+  return compareDevelopEliteFarmListItems(
+    { title: developEliteCropTableFarmLabel(a, joinField) },
+    { title: developEliteCropTableFarmLabel(b, joinField) },
+  )
+}
+
 const SIDE_TYPE_CODES: Record<'glasshouse' | 'nethouse' | 'greenhouse', number> = {
   glasshouse: 1002,
   nethouse: 1001,
@@ -87,6 +132,10 @@ function structureTypeCode(props: Record<string, unknown>): number | null {
   const raw = props.Structure_Type ?? props.STRUCTURE_TYPE ?? props.structure_type
   const code = Number(raw)
   return Number.isFinite(code) ? code : null
+}
+
+export function readDevelopEliteStructureTypeCode(props: Record<string, unknown>): number | null {
+  return structureTypeCode(props)
 }
 
 function readProp(props: Record<string, unknown>, key: string): string {
@@ -109,6 +158,25 @@ export function readDevelopEliteStructureZoneId(props: Record<string, unknown>):
   return String(raw).trim()
 }
 
+function featureMentionsZoneToken(
+  props: Record<string, unknown>,
+  zoneId: string,
+  activeZoneLabel?: string | null,
+): boolean {
+  const zone = zoneId?.trim()
+  if (!zone || zone === 'all') return true
+  const needle = normalizeFilterToken(zone)
+  const labelNeedle = activeZoneLabel ? normalizeFilterToken(activeZoneLabel) : ''
+  for (const v of Object.values(props)) {
+    if (v == null || v === '') continue
+    const hay = normalizeFilterToken(String(v))
+    if (!hay) continue
+    if (hay === needle || hay.includes(needle) || needle.includes(hay)) return true
+    if (labelNeedle && (hay === labelNeedle || hay.includes(labelNeedle))) return true
+  }
+  return false
+}
+
 function structureMatchesZoneFilter(
   props: Record<string, unknown>,
   zoneId: string,
@@ -128,7 +196,43 @@ function structureMatchesZoneFilter(
       return true
     }
   }
+  if (featureMentionsZoneToken(props, zone, activeZoneLabel)) return true
   return false
+}
+
+/** Tree / AgroLocation on map: zone + country on point attributes (not structure-derived ZONE_ID only). */
+export function filterDevelopEliteMapPointFeatures(
+  features: GeoJSON.Feature[],
+  filters: DevelopEliteFilters,
+  ctx?: DevelopEliteFilterContext,
+): GeoJSON.Feature[] {
+  if (!features.length) return []
+  const country = filters.country?.trim()
+  const zone = filters.zoneId?.trim()
+  const hasCountry = Boolean(country && country !== 'all')
+  const hasZone = Boolean(zone && zone !== 'all')
+  if (!hasCountry && !hasZone) return features
+
+  return features.filter(f => {
+    const props = (f.properties ?? {}) as Record<string, unknown>
+    if (hasCountry) {
+      const code = readProp(props, 'Country') || readProp(props, 'COUNTRY') || readProp(props, 'country')
+      if (code) {
+        if (
+          !structureFeatureMatchesCountryFilter(props, country!, {
+            countryLabels: ctx?.countryLabels,
+            worldCountryDomain: ctx?.worldCountryDomain,
+          })
+        ) {
+          return false
+        }
+      }
+    }
+    if (hasZone) {
+      if (!structureMatchesZoneFilter(props, zone!, ctx?.activeZoneLabel)) return false
+    }
+    return true
+  })
 }
 
 function matchFieldFilter(
@@ -209,6 +313,37 @@ export function filterStructureFeatures(
  * Crop table stats for pie/bar: full layer 1 scope by zone/country (not limited to visible structure Farm_Code list).
  * When a single field is selected, uses the same join as the table.
  */
+function structureFeaturesForSelectedField(
+  structureFeatures: DevelopEliteStructureFeature[],
+  selectedFieldKey: string,
+): DevelopEliteStructureFeature[] {
+  const selected = structureFeatures.filter(
+    (f, i) => computeStableGisFeatureKey(f, i) === selectedFieldKey,
+  )
+  return selected.length ? selected : structureFeatures
+}
+
+/** Layer 1 crop rows linked to layer 0 polygons via join field (default Farm_Code). */
+export function filterCropRowsByStructureJoin(
+  cropRows: ArcGisTableRow[],
+  structureFeatures: DevelopEliteStructureFeature[],
+  joinField = 'Farm_Code',
+): ArcGisTableRow[] {
+  const joinKey = joinField.trim() || 'Farm_Code'
+  const farmCodes = new Set<string>()
+  for (const f of structureFeatures) {
+    const raw = readArcGisField(f.properties ?? {}, joinKey)
+    const code = raw != null && raw !== '' ? normalizeDevelopEliteJoinKey(String(raw)) : ''
+    if (code) farmCodes.add(code)
+  }
+  if (!farmCodes.size) return []
+  return cropRows.filter(row => {
+    const rawFc = readArcGisField(row, joinKey)
+    const fc = rawFc != null && rawFc !== '' ? normalizeDevelopEliteJoinKey(String(rawFc)) : ''
+    return Boolean(fc && farmCodes.has(fc))
+  })
+}
+
 export function filterCropRowsForChartStats(
   cropRows: ArcGisTableRow[],
   structureFeatures: DevelopEliteStructureFeature[],
@@ -216,7 +351,11 @@ export function filterCropRowsForChartStats(
   joinField = 'Farm_Code',
 ): ArcGisTableRow[] {
   if (filters.selectedFieldKey) {
-    return filterCropRowsForStructures(cropRows, structureFeatures, filters, joinField)
+    const linkedStructures = structureFeaturesForSelectedField(
+      structureFeatures,
+      filters.selectedFieldKey,
+    )
+    return filterCropRowsByStructureJoin(cropRows, linkedStructures, joinField)
   }
   const zone = filters.zoneId?.trim()
   const country = filters.country?.trim()
@@ -287,7 +426,7 @@ export function buildFarmListItems(
       subtitle: zoneName,
     })
   }
-  return items.sort((a, b) => compareDevelopEliteListNames(a.title, b.title))
+  return items.sort(compareDevelopEliteFarmListItems)
 }
 
 export function filterZoneListForCountry(
@@ -454,6 +593,45 @@ export function geometryOverlapsMapView(
   if (hit) return true
   if (!Number.isFinite(minLng)) return false
   return !(maxLng < view.west || minLng > view.east || maxLat < view.south || minLat > view.north)
+}
+
+/** Below this zoom, KPIs follow country/zone filters only; at/above, also clip to the visible map. */
+export const DEVELOP_ELITE_VIEWPORT_KPI_MIN_ZOOM = 6
+
+export function developEliteShouldScopeKpisToMapView(
+  view: DevelopEliteMapView | null | undefined,
+): boolean {
+  return view != null && Number.isFinite(view.zoom) && view.zoom >= DEVELOP_ELITE_VIEWPORT_KPI_MIN_ZOOM
+}
+
+export function filterStructureFeaturesByMapView(
+  features: DevelopEliteStructureFeature[],
+  view: DevelopEliteMapView | null | undefined,
+): DevelopEliteStructureFeature[] {
+  if (!developEliteShouldScopeKpisToMapView(view)) return features
+  return features.filter(f => geometryOverlapsMapView(f.geometry, view!))
+}
+
+export function filterGeoJsonFeaturesByMapView<T extends GeoJSON.Feature>(
+  features: readonly T[],
+  view: DevelopEliteMapView | null | undefined,
+): T[] {
+  if (!developEliteShouldScopeKpisToMapView(view)) return [...features]
+  return features.filter(f => geometryOverlapsMapView(f.geometry, view!))
+}
+
+export function computeDevelopEliteZoneLayerTotalAreaHaInMapView(
+  zoneLayer: GeoJSON.FeatureCollection | null | undefined,
+  view: DevelopEliteMapView | null | undefined,
+): number {
+  if (!developEliteShouldScopeKpisToMapView(view) || !zoneLayer?.features?.length) return 0
+  let total = 0
+  for (const raw of zoneLayer.features) {
+    if (raw?.type !== 'Feature') continue
+    if (!geometryOverlapsMapView(raw.geometry, view!)) continue
+    total += resolveAgroStructuresFeatureAreaHa(raw.properties ?? {}, raw.geometry)
+  }
+  return total
 }
 
 export function buildCountryListItems(
@@ -670,36 +848,71 @@ function evalKpiCard(
   }
 }
 
+function developElitePointLayerNoGeoScope(filters: DevelopEliteFilters): boolean {
+  return (
+    (!filters.country || filters.country === 'all') &&
+    (!filters.zoneId || filters.zoneId === 'all') &&
+    !filters.selectedFieldKey &&
+    !filters.locationSearch.trim()
+  )
+}
+
+function developEliteZoneIdsFromStructures(
+  scopedStructures: DevelopEliteStructureFeature[],
+): Set<string> {
+  const zoneIds = new Set<string>()
+  for (const f of scopedStructures) {
+    const z = readProp(f.properties ?? {}, 'ZONE_ID')
+    if (z) zoneIds.add(z.toLowerCase())
+  }
+  return zoneIds
+}
+
+/** Map + KPI: tree points scoped by country/zone (structure-derived ZONE_ID set). */
+export function filterScopedTreeFeatures(
+  treeFeatures: GeoJSON.Feature[],
+  scopedStructures: DevelopEliteStructureFeature[],
+  filters: DevelopEliteFilters,
+): GeoJSON.Feature[] {
+  if (!treeFeatures.length) return []
+  if (developElitePointLayerNoGeoScope(filters)) return treeFeatures
+
+  const zoneIds = developEliteZoneIdsFromStructures(scopedStructures)
+  if (!zoneIds.size) return []
+
+  return treeFeatures.filter(t => {
+    const props = t.properties ?? {}
+    const z = (readProp(props, 'ZONEID') || readProp(props, 'ZONE_ID')).toLowerCase()
+    return Boolean(z && zoneIds.has(z))
+  })
+}
+
 /** Count tree points from FeatureServer /24, scoped by dashboard country/zone/field filters. */
 export function countScopedTreeFeatures(
   treeFeatures: GeoJSON.Feature[],
   scopedStructures: DevelopEliteStructureFeature[],
   filters: DevelopEliteFilters,
 ): number {
-  if (!treeFeatures.length) return 0
+  return filterScopedTreeFeatures(treeFeatures, scopedStructures, filters).length
+}
 
-  const noGeoScope =
-    (!filters.country || filters.country === 'all') &&
-    (!filters.zoneId || filters.zoneId === 'all') &&
-    !filters.selectedFieldKey &&
-    !filters.locationSearch.trim()
+/** Map + KPI: every Agri_Location point scoped by country/zone. */
+export function filterScopedAgriLocationLayerFeatures(
+  agriFeatures: GeoJSON.Feature[],
+  scopedStructures: DevelopEliteStructureFeature[],
+  filters: DevelopEliteFilters,
+): GeoJSON.Feature[] {
+  if (!agriFeatures.length) return []
+  if (developElitePointLayerNoGeoScope(filters)) return agriFeatures
 
-  if (noGeoScope) return treeFeatures.length
+  const zoneIds = developEliteZoneIdsFromStructures(scopedStructures)
+  if (!zoneIds.size) return []
 
-  const zoneIds = new Set<string>()
-  for (const f of scopedStructures) {
-    const z = readProp(f.properties ?? {}, 'ZONE_ID')
-    if (z) zoneIds.add(z.toLowerCase())
-  }
-  if (!zoneIds.size) return 0
-
-  let n = 0
-  for (const t of treeFeatures) {
-    const props = t.properties ?? {}
-    const z = (readProp(props, 'ZONEID') || readProp(props, 'ZONE_ID')).toLowerCase()
-    if (z && zoneIds.has(z)) n++
-  }
-  return n
+  return agriFeatures.filter(feature => {
+    const props = feature.properties ?? {}
+    const z = (readProp(props, 'ZONE_ID') || readProp(props, 'ZONEID')).toLowerCase()
+    return Boolean(z && zoneIds.has(z))
+  })
 }
 
 /** Every Agri_Location feature, scoped by the same country / zone filter as the map. */
@@ -708,30 +921,7 @@ export function countScopedAgriLocationLayer(
   scopedStructures: DevelopEliteStructureFeature[],
   filters: DevelopEliteFilters,
 ): number {
-  if (!agriFeatures.length) return 0
-
-  const noGeoScope =
-    (!filters.country || filters.country === 'all') &&
-    (!filters.zoneId || filters.zoneId === 'all') &&
-    !filters.selectedFieldKey &&
-    !filters.locationSearch.trim()
-
-  if (noGeoScope) return agriFeatures.length
-
-  const zoneIds = new Set<string>()
-  for (const f of scopedStructures) {
-    const z = readProp(f.properties ?? {}, 'ZONE_ID')
-    if (z) zoneIds.add(z.toLowerCase())
-  }
-  if (!zoneIds.size) return 0
-
-  let n = 0
-  for (const feature of agriFeatures) {
-    const props = feature.properties ?? {}
-    const z = (readProp(props, 'ZONE_ID') || readProp(props, 'ZONEID')).toLowerCase()
-    if (z && zoneIds.has(z)) n++
-  }
-  return n
+  return filterScopedAgriLocationLayerFeatures(agriFeatures, scopedStructures, filters).length
 }
 
 /** Agri_Location features (e.g. Wildlife Project), scoped like the tree KPI. */
@@ -777,7 +967,11 @@ export function countScopedAgriLocationFeatures(
 /** Sum of `Area_Ha` (or geometry) for all polygons in the Zones feature layer. */
 export function computeDevelopEliteZoneLayerTotalAreaHa(
   zoneLayer: GeoJSON.FeatureCollection | null | undefined,
+  view?: DevelopEliteMapView | null,
 ): number {
+  if (developEliteShouldScopeKpisToMapView(view)) {
+    return computeDevelopEliteZoneLayerTotalAreaHaInMapView(zoneLayer, view)
+  }
   const features = zoneLayer?.features
   if (!features?.length) return 0
   let total = 0
@@ -792,6 +986,16 @@ export function developEliteAgriKpiFilters(filters: DevelopEliteFilters): Develo
   return {
     country: filters.country,
     zoneId: filters.zoneId,
+    selectedFieldKey: null,
+    locationSearch: '',
+  }
+}
+
+/** Map canvas: no dashboard filters — only per-feature highlight / flash on click. */
+export function developEliteMapDisplayFilters(_filters: DevelopEliteFilters): DevelopEliteFilters {
+  return {
+    country: 'all',
+    zoneId: 'all',
     selectedFieldKey: null,
     locationSearch: '',
   }

@@ -1,10 +1,14 @@
+import type { PathOptions } from 'leaflet'
 import {
   buildArcgisUniqueValueLegendItems,
   flattenArcgisUniqueValueInfos,
   normalizeUniqueValueKey,
   type ArcgisUniqueValueLegendItem,
 } from '@/modules/gis/layers/arcgisDrawingInfoMapbox'
-import { layerOpacityFromDrawingInfo } from '@/modules/gis/layers/arcgisDrawingInfoLeaflet'
+import {
+  arcgisFeatureToLeafletPathOptions,
+  layerOpacityFromDrawingInfo,
+} from '@/modules/gis/layers/arcgisDrawingInfoLeaflet'
 import { parseEsriPointSymbol, type ArcgisPointSymbolPreview } from '@/modules/gis/layers/arcgisPointSymbol'
 import { AGRO_STRUCTURES_STRUCTURE_TYPE_CATALOG } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
 
@@ -15,7 +19,7 @@ export type DevelopEliteMapLegendRow = {
   outlineColor: string
   outlineWidth: number
   hollow: boolean
-  group: 'structures' | 'trees' | 'agri-location' | 'overlay'
+  group: 'structures' | 'trees' | 'irrigation-valves' | 'irrigation-main-pipe' | 'agri-location' | 'overlay'
   /** Point / picture markers from ArcGIS (Tree, AgroLocation). */
   symbolStyle?: 'polygon' | 'point'
   pointPreview?: ArcgisPointSymbolPreview
@@ -79,7 +83,7 @@ function isArcgisPointMarkerSymbol(symbol: unknown): boolean {
 /** Unique-value classes for point layers — preserves picture markers and simple markers. */
 export function buildDevelopElitePointLayerLegendItems(
   drawingInfo: Record<string, unknown> | null | undefined,
-  group: 'trees' | 'agri-location',
+  group: 'trees' | 'irrigation-valves' | 'agri-location',
 ): DevelopEliteMapLegendRow[] {
   const ren = (drawingInfo as { renderer?: { type?: string } } | null)?.renderer
   if (!ren || String(ren.type || '') !== 'uniqueValue') return []
@@ -188,19 +192,96 @@ export function buildDevelopEliteAgriLocationLegendItems(
   return fromApi.map(item => legendItemToRow(item, 'agri-location'))
 }
 
+export function buildDevelopEliteIrrigationValvesLegendItems(
+  drawingInfo: Record<string, unknown> | null | undefined,
+): DevelopEliteMapLegendRow[] {
+  const pointRows = buildDevelopElitePointLayerLegendItems(drawingInfo, 'irrigation-valves')
+  if (pointRows.length) return pointRows
+  const fromApi = buildArcgisUniqueValueLegendItems(drawingInfo)
+  return fromApi.map(item => legendItemToRow(item, 'irrigation-valves'))
+}
+
+export function buildDevelopEliteIrrigationMainPipeLegendItems(
+  drawingInfo: Record<string, unknown> | null | undefined,
+): DevelopEliteMapLegendRow[] {
+  const fromApi = buildArcgisUniqueValueLegendItems(drawingInfo)
+  return fromApi.map(item => legendItemToRow(item, 'irrigation-main-pipe'))
+}
+
+function readStructureTypeCode(props: Record<string, unknown>): number | null {
+  const raw =
+    props.Structure_Type ??
+    props.STRUCTURE_TYPE ??
+    props.structure_type ??
+    props.StructureType
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : null
+}
+
+/** Visible Agro_Structures symbology (ArcGIS drawingInfo + Structure_Type fallback). */
+export function developEliteStructureLeafletStyle(
+  drawingInfo: Record<string, unknown> | null | undefined,
+  properties: Record<string, unknown>,
+  options?: { layerOpacity?: number; highlighted?: boolean },
+): PathOptions {
+  const layerOpacity = options?.layerOpacity ?? layerOpacityFromDrawingInfo(drawingInfo)
+  const base = arcgisFeatureToLeafletPathOptions(drawingInfo, properties, {
+    layerOpacity,
+    highlighted: options?.highlighted,
+  })
+  if (options?.highlighted) return base
+
+  const code = readStructureTypeCode(properties)
+  const fallback = code != null ? STRUCTURE_TYPE_FALLBACK[code] : undefined
+  if (fallback) {
+    const fromFallback: PathOptions = {
+      color: fallback.outlineColor,
+      weight: Math.max(fallback.outlineWidth, 2),
+      fillColor: fallback.hollow ? fallback.outlineColor : fallback.fillColor,
+      fillOpacity: fallback.hollow ? 0 : 0.38,
+      opacity: 1,
+    }
+    const looksGeneric =
+      base.color === '#64748b' ||
+      base.fillColor === '#94a3b8' ||
+      ((base.fillOpacity ?? 0) < 0.02 && (base.weight ?? 0) < 1)
+    if (looksGeneric) return fromFallback
+  }
+
+  const fillOp = base.fillOpacity ?? 0
+  const weight = base.weight ?? 1
+  if (fillOp < 0.05) {
+    return {
+      ...base,
+      color: base.color && base.color !== 'transparent' ? base.color : '#4ce600',
+      weight: Math.max(weight, 2),
+      opacity: 1,
+    }
+  }
+  return base
+}
+
 export function buildDevelopEliteMapLegendSections(
   drawingInfo: Record<string, unknown> | null | undefined,
   treesDrawingInfo?: Record<string, unknown> | null,
   agriLocationDrawingInfo?: Record<string, unknown> | null,
+  irrigationValvesDrawingInfo?: Record<string, unknown> | null,
+  irrigationMainPipeDrawingInfo?: Record<string, unknown> | null,
 ): {
   structures: DevelopEliteMapLegendRow[]
   trees: DevelopEliteMapLegendRow[]
+  irrigationValves: DevelopEliteMapLegendRow[]
+  irrigationMainPipe: DevelopEliteMapLegendRow[]
   agriLocation: DevelopEliteMapLegendRow[]
   overlays: DevelopEliteMapLegendRow[]
 } {
   return {
     structures: buildDevelopEliteStructuresLegendItems(drawingInfo),
     trees: buildDevelopEliteTreeLegendItems(treesDrawingInfo ?? null),
+    irrigationValves: buildDevelopEliteIrrigationValvesLegendItems(irrigationValvesDrawingInfo ?? null),
+    irrigationMainPipe: buildDevelopEliteIrrigationMainPipeLegendItems(
+      irrigationMainPipeDrawingInfo ?? null,
+    ),
     agriLocation: buildDevelopEliteAgriLocationLegendItems(agriLocationDrawingInfo ?? null),
     overlays: OVERLAY_LEGEND_ROWS,
   }

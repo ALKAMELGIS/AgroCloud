@@ -19,6 +19,8 @@ type Props = {
   smoothInteraction?: boolean
   /** Snappy wheel/button zoom (no zoom animation, low debounce). */
   fastZoom?: boolean
+  /** Develop Elite: light fast pan/zoom, SVG-friendly (no preferCanvas). */
+  developEliteMap?: boolean
 }
 
 export default function MapView({
@@ -35,6 +37,7 @@ export default function MapView({
   attributionControl = true,
   smoothInteraction = false,
   fastZoom = false,
+  developEliteMap = false,
 }: Props) {
   const useMapbox = Boolean(mapboxToken)
   const url = useMapbox
@@ -52,7 +55,20 @@ export default function MapView({
       style={{ height: '100%', width: '100%' }}
       zoomControl={false}
       attributionControl={attributionControl}
-      {...(fastZoom
+      {...(developEliteMap
+        ? {
+            inertia: true,
+            inertiaDeceleration: 3400,
+            inertiaMaxSpeed: 3200,
+            zoomAnimation: false,
+            fadeAnimation: false,
+            markerZoomAnimation: false,
+            preferCanvas: false,
+            wheelDebounceTime: 8,
+            wheelPxPerZoomLevel: 52,
+            bounceAtZoomLimits: false,
+          }
+        : fastZoom
         ? {
             inertia: true,
             inertiaDeceleration: 3000,
@@ -60,6 +76,7 @@ export default function MapView({
             zoomAnimation: false,
             fadeAnimation: false,
             markerZoomAnimation: false,
+            preferCanvas: true,
             wheelDebounceTime: 12,
             wheelPxPerZoomLevel: 72,
           }

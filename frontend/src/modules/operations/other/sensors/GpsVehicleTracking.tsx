@@ -1,14 +1,17 @@
-import { useLanguage } from '@/core/localization/i18n'
-import './sensor-integration.css'
-import './gps-vehicle-tracking.css'
+import {
+  GPS_VEHICLE_TRACKING_PAGE_PATH,
+  findPageLinkByPath,
+  resolveGpsVehicleTrackingUrl,
+} from '@/core/routing/defaultPageLinks'
+import { useSystemSettings } from '@/core/state/SystemSettingsContext'
+import ExternalEmbeddedPage from '@/core/routing/ExternalEmbeddedPage'
 
-/** GPS Vehicle Tracking route — intentionally blank placeholder. */
+/** GPS Vehicle Tracking — John Deere map login (iframe). URL from Settings → Pages. */
 export default function GpsVehicleTracking() {
-  const { direction } = useLanguage()
+  const { settings } = useSystemSettings()
+  const pageLink = findPageLinkByPath(settings.customPages, GPS_VEHICLE_TRACKING_PAGE_PATH)
+  const url = resolveGpsVehicleTrackingUrl(settings.customPages)
+  const title = pageLink?.name?.trim() || 'GPS Vehicle Tracking'
 
-  return (
-    <div className="sensor-shell sensor-shell--blank" dir={direction}>
-      <main className="sensor-main sensor-main--blank" />
-    </div>
-  )
+  return <ExternalEmbeddedPage title={title} externalUrl={url} chromeless />
 }

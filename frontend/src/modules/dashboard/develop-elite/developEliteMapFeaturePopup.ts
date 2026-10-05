@@ -20,24 +20,73 @@ const POPUP_FIELD_ORDER = [
   'Farm_Name',
   'Farm_Code',
   'Name',
+  'Valve_Name',
+  'Valve_Code',
+  'DEVELOPERNAME',
   'Crop_Type',
   'Variety',
   'Subtype',
+  'SUBTYPE',
   'ZONE_ID',
   'Zone_ID',
   'Country',
   'Country_Name',
   'COUNTRY',
+  'ALL_COUNTRY',
+  'COUNTRYAFF',
+  'CONTINENT',
+  'LAND TYPE',
+  'LAND_TYPE',
   'Structure_Type',
   'Area_ha',
   'Area_Ha',
   'ProjectCode',
+  'Project_Name',
   'Status',
   'Region',
   'City',
-  'OBJECTID',
-  'ObjectID',
 ]
+
+const LAYER_POPUP_FIELD_PRIORITY: Partial<Record<DevelopEliteMapDataLayerId, string[]>> = {
+  'world-countries': ['ALL_COUNTRY', 'COUNTRYAFF', 'CONTINENT', 'STATUS', 'LAND TYPE', 'LAND_TYPE', 'Name'],
+  'agro-structures': [
+    'Farm_Name',
+    'Farm_Code',
+    'Structure_Type',
+    'Crop_Type',
+    'ZONE_ID',
+    'Country_Name',
+    'Country',
+    'Area_ha',
+    'ProjectCode',
+    'Status',
+    'Region',
+  ],
+  trees: ['Name', 'Tree_Type', 'TREE_TYPE', 'Species', 'Farm_Name', 'Farm_Code', 'ZONE_ID', 'Subtype'],
+  'agri-location': ['Name', 'ProjectCode', 'Project_Name', 'Subtype', 'Farm_Name', 'Farm_Code', 'Status', 'Area_ha'],
+  'irrigation-valves': [
+    'Valve_Name',
+    'Valve_Code',
+    'DEVELOPERNAME',
+    'Farm_Name',
+    'Farm_Code',
+    'SUBTYPE',
+    'Subtype',
+    'ZONE_ID',
+    'Status',
+  ],
+  'irrigation-main-pipe': [
+    'FACILITYID',
+    'DEVELOPERNAME',
+    'SUBTYPE',
+    'Subtype',
+    'COMMENTS',
+    'INSTALLATIONDATE',
+    'Farm_Name',
+    'Farm_Code',
+    'ZONE_ID',
+  ],
+}
 
 export function escapeDevelopEliteMapPopupHtml(value: string): string {
   return value
@@ -76,6 +125,8 @@ function resolvePopupMaxRows(
   if (maxRows != null) return maxRows
   if (layerKey === 'agri-location') return 6
   if (layerKey === 'trees') return 7
+  if (layerKey === 'irrigation-valves') return 8
+  if (layerKey === 'irrigation-main-pipe') return 8
   return 8
 }
 
@@ -129,9 +180,20 @@ function formatPopupValue(
   return String(raw).trim()
 }
 
-function popupFieldKeys(props: Record<string, unknown>): string[] {
+function popupFieldKeys(
+  props: Record<string, unknown>,
+  layerKey?: DevelopEliteMapDataLayerId,
+): string[] {
   const keys = Object.keys(props).filter(k => !shouldSkipPopupField(k))
-  const orderIndex = new Map(POPUP_FIELD_ORDER.map((k, i) => [k.toLowerCase(), i]))
+  const layerOrder = layerKey ? LAYER_POPUP_FIELD_PRIORITY[layerKey] : undefined
+  const orderIndex = new Map(
+    (layerOrder ?? POPUP_FIELD_ORDER).map((k, i) => [k.toLowerCase(), i]),
+  )
+  for (const k of POPUP_FIELD_ORDER) {
+    if (!orderIndex.has(k.toLowerCase())) {
+      orderIndex.set(k.toLowerCase(), orderIndex.size)
+    }
+  }
   return keys.sort((a, b) => {
     const ai = orderIndex.get(a.toLowerCase())
     const bi = orderIndex.get(b.toLowerCase())
@@ -139,6 +201,32 @@ function popupFieldKeys(props: Record<string, unknown>): string[] {
     if (ai != null) return -1
     if (bi != null) return 1
     return a.localeCompare(b, undefined, { sensitivity: 'base' })
+  })
+}
+
+/** Re-open popup after React/Leaflet rebinds layers (e.g. structure selection). */
+export function scheduleDevelopEliteMapPopupReopen(
+  resolveLayer: () => L.Layer | undefined,
+  latlng: L.LatLng,
+): void {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const layer = resolveLayer()
+      if (!layer) return
+      layer.openPopup(latlng)
+    })
+  })
+}
+
+export function wireDevelopEliteMapFeatureActivate(
+  layer: L.Layer,
+  onActivate: () => void,
+  resolveLayer: () => L.Layer | undefined,
+): void {
+  layer.on('click', (event: L.LeafletMouseEvent) => {
+    L.DomEvent.stopPropagation(event)
+    onActivate()
+    scheduleDevelopEliteMapPopupReopen(resolveLayer, event.latlng)
   })
 }
 
@@ -176,6 +264,10 @@ export function zoomDevelopEliteMapPopupLayer(map: L.Map, layer: L.Layer): void 
 function resolveLayerMap(layer: L.Layer): L.Map | null {
   const withMap = layer as L.Layer & { _map?: L.Map | null }
   return withMap._map ?? null
+}
+
+export function developEliteMapLayerSupportsPopup(layerKey?: DevelopEliteMapDataLayerId): boolean {
+  return layerKey !== 'world-countries'
 }
 
 export function bindDevelopEliteMapLayerPopup(
@@ -223,7 +315,7 @@ export function buildDevelopEliteArcgisFeaturePopupHtml(
   const maxRows = resolvePopupMaxRows(layerKey, options?.maxRows)
 
   const rows: Array<{ label: string; value: string }> = []
-  for (const key of popupFieldKeys(props)) {
+  for (const key of popupFieldKeys(props, layerKey)) {
     const formatted = formatPopupValue(key, readProp(props, key), layerKey, drawingInfo, countryLabels)
     if (!formatted) continue
     if (

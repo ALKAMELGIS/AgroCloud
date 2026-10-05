@@ -26,8 +26,8 @@ import {
 
 const SWIPE_BEFORE_PANE = 'develop-elite-swipe-before'
 const SWIPE_AFTER_PANE = 'develop-elite-swipe-after'
-const SWIPE_BEFORE_Z = 560
-const SWIPE_AFTER_Z = 565
+const SWIPE_BEFORE_Z = 360
+const SWIPE_AFTER_Z = 365
 
 type MountedSwipeEntry =
   | { kind: 'image'; layer: ImageOverlay; signature: string }

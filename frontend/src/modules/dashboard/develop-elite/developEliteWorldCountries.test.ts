@@ -91,10 +91,21 @@ describe('buildWorldCountryListItems', () => {
 describe('filterWorldCountriesForMap', () => {
   it('drops Status 0 (not available) polygons', () => {
     const out = filterWorldCountriesForMap([
-      { type: 'Feature', properties: { Country: 2, Status: 0 }, geometry: null },
-      { type: 'Feature', properties: { Country: 3, Status: 1 }, geometry: null },
+      { type: 'Feature', properties: { Country: 2, Status: 0 }, geometry: { type: 'Polygon', coordinates: [] } },
+      { type: 'Feature', properties: { Country: 3, Status: 1 }, geometry: { type: 'Polygon', coordinates: [] } },
     ])
     expect(out).toHaveLength(1)
     expect((out[0]!.properties as { Country: number }).Country).toBe(3)
+  })
+
+  it('keeps portfolio rows with ALL_COUNTRY and geometry when Country is null', () => {
+    const out = filterWorldCountriesForMap([
+      {
+        type: 'Feature',
+        properties: { Country: null, ALL_COUNTRY: 'UAE', Status: 1 },
+        geometry: { type: 'Polygon', coordinates: [] },
+      },
+    ])
+    expect(out).toHaveLength(1)
   })
 })

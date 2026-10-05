@@ -7,11 +7,17 @@ export const EAP_ARCGIS_DASHBOARD_PAGE_PATH = '/dashboards/eap-arcgis'
 
 export const IRRIGATION_SENSORS_PAGE_PATH = '/sensors/irrigation'
 
+export const GPS_VEHICLE_TRACKING_PAGE_PATH = '/sensors/gps'
+
 export const AGROCLOUD_MANAGEMENT_EXTERNAL_URL =
   'https://sublime-acceptance-production-ae33.up.railway.app/login'
 
 /** Default AgSense 365 farm grid — override in Settings → Pages. */
 export const IRRIGATION_SENSORS_DEFAULT_URL = 'https://www.agsense365.com/farm/grid'
+
+/** John Deere Operations Center map sign-in — override in Settings → Pages. */
+export const GPS_VEHICLE_TRACKING_DEFAULT_URL =
+  'https://signin.johndeere.com/oauth2/aus78tnlaysMraFhC1t7/v1/authorize?client_id=johndeere-8BsHt2wO5gtMpBazeVpXsvtORU6dwmL91OpMvK5e&response_type=code&redirect_uri=https%3A%2F%2Fmap.deere.com%2Flogin&scope=profile%20openid%20offline_access%20toggles'
 
 /** Seeded when no user-defined link exists at this path. */
 export const DEFAULT_PAGE_LINKS: CustomPageRecord[] = [
@@ -51,6 +57,18 @@ export const DEFAULT_PAGE_LINKS: CustomPageRecord[] = [
     navGroupId: 'sensors',
     subitemClass: 'nav-item-sensor-irrigation',
   },
+  {
+    id: 'gps-vehicle-tracking-jd-link',
+    name: 'GPS Vehicle Tracking',
+    nameAr: 'تتبع مركبات GPS',
+    path: GPS_VEHICLE_TRACKING_PAGE_PATH,
+    iconClass: 'fa-solid fa-route',
+    visible: true,
+    bindTarget: 'external',
+    externalUrl: GPS_VEHICLE_TRACKING_DEFAULT_URL,
+    navGroupId: 'sensors',
+    subitemClass: 'nav-item-sensor-gps',
+  },
 ]
 
 export function isExternalPageLink(page: CustomPageRecord): boolean {
@@ -78,8 +96,17 @@ export function resolveIrrigationSensorsUrl(pages: CustomPageRecord[]): string {
   return IRRIGATION_SENSORS_DEFAULT_URL
 }
 
+/** Resolved embed URL for GPS Vehicle Tracking (John Deere sign-in by default). */
+export function resolveGpsVehicleTrackingUrl(pages: CustomPageRecord[]): string {
+  const link = findPageLinkByPath(pages, GPS_VEHICLE_TRACKING_PAGE_PATH)
+  const trimmed = link?.externalUrl?.trim()
+  if (trimmed) return trimmed
+  return GPS_VEHICLE_TRACKING_DEFAULT_URL
+}
+
 const DEDICATED_EXTERNAL_EMBED_PATHS = new Set<string>([
   IRRIGATION_SENSORS_PAGE_PATH,
+  GPS_VEHICLE_TRACKING_PAGE_PATH,
   AGROCLOUD_MANAGEMENT_PAGE_PATH,
 ])
 

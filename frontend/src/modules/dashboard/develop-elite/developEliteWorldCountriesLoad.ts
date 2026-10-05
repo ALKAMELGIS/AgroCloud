@@ -62,6 +62,8 @@ export async function fetchDevelopEliteWorldCountriesGeoJson(
   const fc = await fetchArcGisFeatureLayerGeoJson(endpoint, {
     token,
     signal,
+    /** Portfolio outlines only — avoids downloading the full global country mesh. */
+    where: 'Status in (1,2,3)',
   })
   return fc as GeoJSON.FeatureCollection
 }

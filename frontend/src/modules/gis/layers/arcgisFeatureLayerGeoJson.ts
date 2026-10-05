@@ -22,6 +22,8 @@ export type FetchArcGisFeatureLayerGeoJsonOptions = {
   signal?: AbortSignal
   /** Per-page fetch timeout (ms). */
   timeoutMs?: number
+  /** ArcGIS SQL where clause (default `1=1`). */
+  where?: string
 }
 
 type ArcGisLayerMeta = {
@@ -175,9 +177,10 @@ function buildQueryUrl(
   offset: number,
   token: string | undefined,
   returnGeometry: boolean,
+  where: string,
 ): string {
   const params = new URLSearchParams({
-    where: '1=1',
+    where: where.trim() || '1=1',
     outFields: profile.outFields,
     returnGeometry: returnGeometry ? 'true' : 'false',
     outSR: '4326',
@@ -218,11 +221,12 @@ export async function fetchArcGisFeatureLayerGeoJson(
 
   const profile = resolveArcGisFeatureLayerQueryProfile(url, meta, featureCount)
   const geometry = returnGeometry && !isTableLayer(meta)
+  const whereClause = options.where?.trim() || '1=1'
   const features: GisHostedFeatureLayerGeoJson['features'] = []
   let offset = 0
 
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const queryUrl = buildQueryUrl(url, profile, offset, token, geometry)
+    const queryUrl = buildQueryUrl(url, profile, offset, token, geometry, whereClause)
     const data = await fetchArcGisJson<{
       type?: string
       features?: GisHostedFeatureLayerGeoJson['features']

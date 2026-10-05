@@ -173,10 +173,12 @@ export function filterWorldCountriesForMap(
   countryDomain?: Map<string, string>,
 ): GeoJSON.Feature[] {
   return features.filter(f => {
+    if (!f.geometry) return false
     const props = (f.properties ?? {}) as Record<string, unknown>
+    if (!MAP_VISIBLE_STATUS.has(readStatus(props))) return false
     const code = readWorldCountryCode(props, countryDomain)
-    if (!code) return false
-    return MAP_VISIBLE_STATUS.has(readStatus(props))
+    if (code) return true
+    return Boolean(readPortfolioCountryLabel(props))
   })
 }
 
