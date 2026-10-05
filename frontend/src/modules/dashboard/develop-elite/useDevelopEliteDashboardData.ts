@@ -1,4 +1,5 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { purgeAndReloadForStaleDeploy } from '@/core/routing/lazyWithRetry'
 import { type ArcGisTableRow, type DevelopEliteLayerMeta } from './developEliteArcgisFetch'
 import { ensureDevelopEliteArcgisSnapshot } from './developEliteArcgisDataLoad'
 import {
@@ -192,7 +193,10 @@ export function useDevelopEliteDashboardData() {
   const [mapHighlightFieldKey, setMapHighlightFieldKey] = useState<string | null>(null)
   const [mapFlyToRequest, setMapFlyToRequest] = useState(0)
 
-  const refresh = useCallback(() => setReloadToken(t => t + 1), [])
+  /** Full page reload (cache-bust + SW purge) so users pick up new deploys and fresh ArcGIS fetches. */
+  const refresh = useCallback(() => {
+    void purgeAndReloadForStaleDeploy()
+  }, [])
   const refreshing = loading && structures !== null
   const initialLoading = false
 

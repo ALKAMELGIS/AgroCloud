@@ -4,7 +4,10 @@ import { DevelopEliteHeaderDigitalClock } from './DevelopEliteHeaderDigitalClock
 import { DevelopEliteAgroGridSection } from './DevelopEliteAgroGridSection'
 import { useDevelopEliteDashboardData } from './useDevelopEliteDashboardData'
 import { useDevelopEliteLiveLayout } from './useDevelopEliteLiveLayout'
-import { DashboardRefreshButton } from '@/modules/dashboards/components/DashboardRefreshButton'
+import {
+  DashboardRefreshButton,
+  dashboardRefreshTitle,
+} from '@/modules/dashboards/components/DashboardRefreshButton'
 import { sortDevelopEliteListBySearch } from './developEliteListSearch'
 import { sortDevelopEliteZoneListByMapView } from './developEliteKpiEngine'
 import { useDevelopEliteCompactViewport } from './developEliteCompactViewport'
@@ -197,8 +200,9 @@ export default function DevelopEliteAgroDashboard() {
               </button>
               <DashboardRefreshButton
                 className="develop-elite__refresh-btn"
-                busy={data.refreshing}
                 lastUpdated={data.lastRefreshedAt}
+                title={dashboardRefreshTitle(data.lastRefreshedAt, 'Reload page')}
+                aria-label="Reload page"
                 onClick={data.refresh}
               />
               {compactViewport ? (
