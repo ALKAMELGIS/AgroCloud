@@ -2404,6 +2404,14 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   max-width: none;
 }
 
+/* Picture markers (Tree / valves / AgroLocation) — global img { max-width: 100% } collapses Leaflet icons. */
+.develop-elite-map .leaflet-marker-pane img.leaflet-marker-icon,
+.develop-elite-map .leaflet-marker-pane img.leaflet-marker-shadow {
+  max-width: none !important;
+  width: auto;
+  height: auto;
+}
+
 .develop-elite-map .leaflet-pane.leaflet-develop-elite-world-countries-pane {
   z-index: 580;
   pointer-events: none;

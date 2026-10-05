@@ -41,6 +41,7 @@ export function developEliteArcgisCacheKey(config: DevelopEliteDashboardConfig):
     'wc-map-v5',
     'irr-valves-sym-v1',
     'irr-main-pipe-arrows-v1',
+    'map-point-layers-v2',
   ].join('|')
 }
 

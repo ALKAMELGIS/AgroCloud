@@ -23,6 +23,11 @@ import {
   buildDevelopEliteArcgisFeaturePopupHtml,
   developEliteMapLayerSupportsPopup,
 } from './developEliteMapFeaturePopup'
+import {
+  developEliteMapPointZoomScale,
+  geoJsonFeatureHasPointGeometry,
+  isDevelopElitePointOnlyArcgisGeoJson,
+} from './developEliteMapGeoJsonGeometry'
 
 /** Slightly larger map markers for AgroLocation (picture / simple points). */
 const DEVELOP_ELITE_AGRI_LOCATION_POINT_SCALE = 1.22
@@ -43,9 +48,11 @@ function pointLayer(
   latlng: LatLngExpression,
   preview: ReturnType<typeof arcgisFeaturePointSymbolPreview>,
   scale = 1,
-  vectorPane = DEVELOP_ELITE_MAP_DATA_PANE,
+  options?: { vectorPane?: string; useMarkerPane?: boolean },
 ) {
   const s = scale > 0 ? scale : 1
+  const pane = options?.useMarkerPane ? undefined : options?.vectorPane ?? DEVELOP_ELITE_MAP_DATA_PANE
+  const paneOpt = pane ? { pane } : {}
   if (!preview) {
     const r = Math.max(3, 5 * s)
     return L.circleMarker(latlng, {
@@ -53,7 +60,7 @@ function pointLayer(
       color: '#7ee787',
       fillColor: '#39ff14',
       fillOpacity: 0.85,
-      pane: vectorPane,
+      ...paneOpt,
     })
   }
   if (preview.kind === 'picture' && preview.imageUrl) {
@@ -65,7 +72,7 @@ function pointLayer(
         iconSize: [w, h],
         iconAnchor: [w / 2, h / 2],
       }),
-      pane: vectorPane,
+      ...paneOpt,
       interactive: true,
       zIndexOffset: 120,
     })
@@ -77,7 +84,7 @@ function pointLayer(
     fillColor: preview.fillColor,
     fillOpacity: preview.opacity,
     opacity: preview.opacity,
-    pane: vectorPane,
+    ...paneOpt,
   })
 }
 
@@ -99,12 +106,19 @@ export function DevelopEliteMapArcgisLayer({
   })
   const layerOpacity = useMemo(() => layerOpacityFromDrawingInfo(drawingInfo), [drawingInfo])
   const drawingSig = useMemo(() => JSON.stringify(drawingInfo ?? null), [drawingInfo])
-  const pointSymbolScale =
+  const pointOnlyLayer = useMemo(
+    () => isDevelopElitePointOnlyArcgisGeoJson(geojson.features),
+    [geojson.features],
+  )
+  const basePointSymbolScale =
     layerKey === 'agri-location'
       ? DEVELOP_ELITE_AGRI_LOCATION_POINT_SCALE
       : layerKey === 'irrigation-valves'
         ? DEVELOP_ELITE_IRRIGATION_VALVES_POINT_SCALE
         : 1
+  const pointSymbolScale = pointOnlyLayer
+    ? basePointSymbolScale * developEliteMapPointZoomScale(mapZoom)
+    : basePointSymbolScale
   const vectorSmoothFactor = 1
   const vectorPane = DEVELOP_ELITE_MAP_DATA_PANE
 
@@ -177,11 +191,14 @@ export function DevelopEliteMapArcgisLayer({
   const pointToLayer = useCallback(
     (feature: GeoJSON.Feature, latlng: LatLngExpression) => {
       const preview = arcgisFeaturePointSymbolPreview(drawingInfo, feature.properties, { layerOpacity })
-      const layer = pointLayer(latlng, preview, pointSymbolScale, vectorPane)
+      const layer = pointLayer(latlng, preview, pointSymbolScale, {
+        vectorPane,
+        useMarkerPane: pointOnlyLayer,
+      })
       if (!interactive) layer.options.interactive = false
       return layer
     },
-    [drawingInfo, interactive, layerOpacity, pointSymbolScale, vectorPane],
+    [drawingInfo, interactive, layerOpacity, pointOnlyLayer, pointSymbolScale, vectorPane],
   )
 
   const onEachFeature = useCallback(
@@ -210,15 +227,18 @@ export function DevelopEliteMapArcgisLayer({
 
   if (!geojson.features.length) return null
 
-  const hasPoints = geojson.features.some(f => f.geometry?.type === 'Point')
+  const hasPoints = geojson.features.some(geoJsonFeatureHasPointGeometry)
   const dataSig = `${geojson.features.length}`
+  const layerKeySig = `${layerKey}-${drawingSig}-${dataSig}${isMainPipeLayer ? `-z${mapZoom}` : ''}${
+    pointOnlyLayer ? `-pz${mapZoom.toFixed(1)}` : ''
+  }`
 
   return (
     <GeoJSON
-      key={`${layerKey}-${drawingSig}-${dataSig}${isMainPipeLayer ? `-z${mapZoom}` : ''}`}
+      key={layerKeySig}
       data={geojson as GeoJSON.GeoJsonObject}
-      pane={vectorPane}
-      renderer={vectorRenderer}
+      pane={pointOnlyLayer ? undefined : vectorPane}
+      renderer={pointOnlyLayer ? undefined : vectorRenderer}
       smoothFactor={vectorSmoothFactor}
       style={styleFeature}
       pointToLayer={hasPoints ? pointToLayer : undefined}
