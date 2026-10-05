@@ -5,10 +5,105 @@
 const CACHE_TTL_MS = 20 * 60_000
 const CURRENT_CACHE_TTL_MS = 10 * 60_000
 const GRID_CACHE_TTL_MS = 12 * 60_000
+const HOURLY_RANGE_CACHE_TTL_MS = 10 * 60_000
 const GRID_CHUNK = 50
 const cache = new Map()
 const currentCache = new Map()
 const gridCache = new Map()
+const hourlyRangeCache = new Map()
+
+const CHART_HOURLY_VARS =
+  'temperature_2m,relative_humidity_2m,precipitation,precipitation_probability,weather_code,wind_speed_10m,wind_direction_10m'
+
+function parseChartHourlySeries(data) {
+  const hourly = data?.hourly
+  if (!hourly?.time?.length) return []
+  const out = []
+  for (let i = 0; i < hourly.time.length; i++) {
+    out.push({
+      time: hourly.time[i],
+      temperatureC: hourly.temperature_2m?.[i] ?? null,
+      humidityPct: hourly.relative_humidity_2m?.[i] ?? null,
+      precipitationMm: hourly.precipitation?.[i] ?? null,
+      precipitationProbabilityPct: hourly.precipitation_probability?.[i] ?? null,
+      weatherCode: hourly.weather_code?.[i] ?? null,
+      windSpeedKmh: hourly.wind_speed_10m?.[i] ?? null,
+      windDirectionDeg: hourly.wind_direction_10m?.[i] ?? null,
+    })
+  }
+  return out
+}
+
+function daysBetweenYmdInclusive(fromYmd, toYmd) {
+  const a = Date.parse(`${fromYmd}T12:00:00`)
+  const b = Date.parse(`${toYmd}T12:00:00`)
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0
+  return Math.max(0, Math.round((b - a) / 86_400_000))
+}
+
+function todayYmdUtc() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+async function openMeteoForecastHourly(lat, lng, params) {
+  const url = new URL('https://api.open-meteo.com/v1/forecast')
+  url.searchParams.set('latitude', String(lat))
+  url.searchParams.set('longitude', String(lng))
+  url.searchParams.set('timezone', 'auto')
+  url.searchParams.set('wind_speed_unit', 'kmh')
+  url.searchParams.set('hourly', CHART_HOURLY_VARS)
+  for (const [k, v] of Object.entries(params)) {
+    url.searchParams.set(k, String(v))
+  }
+  const omRes = await fetch(url.toString())
+  if (!omRes.ok) {
+    const err = new Error(`Open-Meteo HTTP ${omRes.status}`)
+    err.status = omRes.status
+    throw err
+  }
+  return omRes.json()
+}
+
+async function fetchHourlyRangeOpenMeteo(lat, lng, startDate, endDate) {
+  const key = `${cacheKey(lat, lng)}|${startDate}|${endDate}`
+  const hit = hourlyRangeCache.get(key)
+  if (hit && Date.now() - hit.at < HOURLY_RANGE_CACHE_TTL_MS) {
+    return hit.rows
+  }
+
+  const today = todayYmdUtc()
+  let rows = []
+
+  try {
+    const data = await openMeteoForecastHourly(lat, lng, {
+      start_date: startDate,
+      end_date: endDate,
+    })
+    rows = parseChartHourlySeries(data)
+  } catch {
+    rows = []
+  }
+
+  if (!rows.length) {
+    const pastDays = Math.min(92, daysBetweenYmdInclusive(startDate, today) + 1)
+    const forecastDays = Math.min(16, daysBetweenYmdInclusive(today, endDate) + 1)
+    try {
+      const data = await openMeteoForecastHourly(lat, lng, {
+        past_days: Math.max(1, pastDays),
+        forecast_days: Math.max(1, forecastDays),
+      })
+      rows = parseChartHourlySeries(data).filter(p => {
+        const day = String(p.time).slice(0, 10)
+        return day >= startDate && day <= endDate
+      })
+    } catch {
+      rows = []
+    }
+  }
+
+  hourlyRangeCache.set(key, { at: Date.now(), rows })
+  return rows
+}
 
 function pickHourlyIndex(times, timeIso) {
   if (!Array.isArray(times) || !times.length) return 0
@@ -82,7 +177,34 @@ function readCurrentFields(openMeteo) {
     const n = cur[v]
     current[v] = typeof n === 'number' && Number.isFinite(n) ? n : null
   }
+  if (current.temperature_2m == null) {
+    const hourly = openMeteo?.hourly ?? {}
+    const t = hourly.temperature_2m?.[0]
+    if (typeof t === 'number' && Number.isFinite(t)) {
+      current.temperature_2m = t
+      const h = hourly.relative_humidity_2m?.[0]
+      const w = hourly.wind_speed_10m?.[0]
+      const d = hourly.wind_direction_10m?.[0]
+      const c = hourly.weather_code?.[0]
+      const p = hourly.precipitation?.[0]
+      if (current.relative_humidity_2m == null && typeof h === 'number') current.relative_humidity_2m = h
+      if (current.wind_speed_10m == null && typeof w === 'number') current.wind_speed_10m = w
+      if (current.wind_direction_10m == null && typeof d === 'number') current.wind_direction_10m = d
+      if (current.weather_code == null && typeof c === 'number') current.weather_code = c
+      if (current.precipitation == null && typeof p === 'number') current.precipitation = p
+    }
+  }
   return current
+}
+
+function readDailyMinMax(openMeteo) {
+  const daily = openMeteo?.daily ?? {}
+  const min = daily.temperature_2m_min?.[0]
+  const max = daily.temperature_2m_max?.[0]
+  return {
+    dailyMinC: typeof min === 'number' && Number.isFinite(min) ? min : null,
+    dailyMaxC: typeof max === 'number' && Number.isFinite(max) ? max : null,
+  }
 }
 
 async function fetchOpenMeteoCurrentOnly(lat, lng) {
@@ -97,6 +219,12 @@ async function fetchOpenMeteoCurrentOnly(lat, lng) {
   url.searchParams.set('timezone', 'auto')
   url.searchParams.set('wind_speed_unit', 'kmh')
   url.searchParams.set('current', CURRENT_PICK_VARS.join(','))
+  url.searchParams.set(
+    'hourly',
+    'temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,precipitation',
+  )
+  url.searchParams.set('daily', 'temperature_2m_max,temperature_2m_min')
+  url.searchParams.set('forecast_days', '1')
   const omRes = await fetch(url.toString())
   if (!omRes.ok) {
     const err = new Error(`Open-Meteo HTTP ${omRes.status}`)
@@ -131,6 +259,7 @@ async function fetchDashboardOpenMeteo(lat, lng) {
     'daily',
     'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant',
   )
+  url.searchParams.set('past_days', '3')
   url.searchParams.set('forecast_days', '7')
   const omRes = await fetch(url.toString())
   if (!omRes.ok) {
@@ -185,6 +314,26 @@ export function registerWeatherDashboardRoutes(app) {
     }
   })
 
+  app.get('/api/weather/hourly-range', async (req, res) => {
+    const lat = Number(req.query.lat)
+    const lng = Number(req.query.lng)
+    const startDate = String(req.query.start_date || '').slice(0, 10)
+    const endDate = String(req.query.end_date || '').slice(0, 10)
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.status(400).json({ error: 'lat and lng required' })
+    }
+    if (!startDate || !endDate || startDate > endDate) {
+      return res.status(400).json({ error: 'start_date and end_date required' })
+    }
+    try {
+      const hourly = await fetchHourlyRangeOpenMeteo(lat, lng, startDate, endDate)
+      res.json({ hourly, source: 'Open-Meteo' })
+    } catch (e) {
+      const status = e?.status === 429 ? 429 : 502
+      res.status(status).json({ error: e instanceof Error ? e.message : 'Hourly range failed' })
+    }
+  })
+
   /** Cached per-site current weather for location lists (sequential upstream calls). */
   app.post('/api/weather/locations-current', async (req, res) => {
     const locations = Array.isArray(req.body?.locations) ? req.body.locations : []
@@ -211,6 +360,7 @@ export function registerWeatherDashboardRoutes(app) {
             lat,
             lng,
             current: readCurrentFields(openMeteo),
+            ...readDailyMinMax(openMeteo),
           })
         } catch {
           rows.push({ id, lat, lng, current: {} })
@@ -272,6 +422,10 @@ export function registerWeatherDashboardRoutes(app) {
               })
             : await openMeteoMultiFetch(chunk, {
                 current: currentVars.join(','),
+                hourly:
+                  'temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,precipitation',
+                daily: 'temperature_2m_max,temperature_2m_min',
+                forecast_days: '1',
               })
 
         for (let j = 0; j < chunk.length; j++) {
@@ -288,10 +442,10 @@ export function registerWeatherDashboardRoutes(app) {
             }
             outPoints.push({ lat: pt.lat, lng: pt.lng, values })
           } else {
-            const cur = entry.current ?? {}
+            const normalized = readCurrentFields(entry)
             const current = {}
             for (const v of currentVars) {
-              const n = cur[v]
+              const n = normalized[v]
               current[v] = typeof n === 'number' && Number.isFinite(n) ? n : null
             }
             outPoints.push({ lat: pt.lat, lng: pt.lng, current })

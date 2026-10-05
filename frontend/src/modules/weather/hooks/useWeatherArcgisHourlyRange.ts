@@ -60,7 +60,12 @@ export function useWeatherArcgisHourlyRange(
     void fetchOpenMeteoHourlyForDateRange(lat, lng, range, ac.signal)
       .then(rows => {
         if (ac.signal.aborted || flight !== fetchSeqRef.current) return
-        if (rows.length) setHourlyRange(rows)
+        if (rows.length) {
+          setHourlyRange(rows)
+          return
+        }
+        const again = bundleHourlyFallback(bundle, range)
+        if (again.length) setHourlyRange(again)
       })
       .catch(() => {
         /* keep fallback / cache */

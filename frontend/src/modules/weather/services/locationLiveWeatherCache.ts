@@ -35,6 +35,11 @@ export async function fetchLocationLiveRow(
     weatherCode: snap.weatherCode,
   }
   cache.set(key, row)
+  try {
+    window.dispatchEvent(new CustomEvent('weather-location-live-cache'))
+  } catch {
+    /* ignore */
+  }
   return row
 }
 

@@ -3,7 +3,7 @@ import type { ChartData } from 'chart.js'
 import { Chart } from 'react-chartjs-2'
 import {
   buildArcgisHumidityLineChart,
-  buildArcgisTemperatureLineChart,
+  buildTemperatureHourlyBarChart,
   buildArcgisWindDirectionChart,
   buildArcgisWindSpeedChart,
 } from '../charts/weatherLiveChartBuilders'
@@ -66,7 +66,7 @@ export function WeatherArcgisStackedCharts({
   const tempTitle = `Temperature for ${locationLabel}`
   const humidityTitle = `Humidity for ${locationLabel}`
 
-  const dailyForecast = useMemo(() => bundle?.daily7 ?? [], [bundle?.daily7])
+  const tempBars = useMemo(() => hourly.slice(-Math.min(48, hourly.length)), [hourly])
 
   const windDirChart = useMemo(
     () => chartWithIsoLabels(buildArcgisWindDirectionChart(hourly), hourly),
@@ -80,9 +80,9 @@ export function WeatherArcgisStackedCharts({
     () => chartWithIsoLabels(buildArcgisHumidityLineChart(hourly), hourly),
     [hourly],
   )
-  const tempLineChart = useMemo(
-    () => chartWithIsoLabels(buildArcgisTemperatureLineChart(hourly, dailyForecast), hourly),
-    [hourly, dailyForecast],
+  const tempBarChart = useMemo(
+    () => chartWithIsoLabels(buildTemperatureHourlyBarChart(tempBars), tempBars),
+    [tempBars],
   )
 
   return (
@@ -126,19 +126,6 @@ export function WeatherArcgisStackedCharts({
           aria-label={metricTab === 'humidity' ? humidityTitle : tempTitle}
         >
           <div className="weather-arcgis-charts__plot">
-            {metricTab === 'temperature' ? (
-              <div
-                className="weather-arcgis-charts__minmax-legend"
-                aria-label="Temperature min and max"
-              >
-                <span className="weather-arcgis-charts__minmax-legend-item weather-arcgis-charts__minmax-legend-item--min">
-                  Min:
-                </span>
-                <span className="weather-arcgis-charts__minmax-legend-item weather-arcgis-charts__minmax-legend-item--max">
-                  Max:
-                </span>
-              </div>
-            ) : null}
             {metricTab === 'humidity' ? (
               <Chart
                 type="line"
@@ -149,8 +136,8 @@ export function WeatherArcgisStackedCharts({
               />
             ) : (
               <Chart
-                type="line"
-                data={tempLineChart}
+                type="bar"
+                data={tempBarChart}
                 options={arcgisStackChartOptions(tempTitle, {
                   plugins: { legend: { display: false } },
                 })}

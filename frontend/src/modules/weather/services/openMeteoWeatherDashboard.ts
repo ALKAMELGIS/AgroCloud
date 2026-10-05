@@ -9,6 +9,8 @@ import {
 } from '@/modules/remote-sensing/weather/openMeteoWeather'
 import { apiUrl, noteApiResponse } from '@/core/api/apiOrigin'
 import {
+  addDaysToYmd,
+  daysBetweenYmdInclusive,
   filterHourlyByDateRange,
   getWeatherChartTodayYmd,
   type WeatherChartDateRange,
@@ -297,6 +299,7 @@ async function fetchOpenMeteoDirect(lat: number, lng: number): Promise<OpenMeteo
     'wind_speed_10m_max',
     'wind_direction_10m_dominant',
   ].join(','))
+  url.searchParams.set('past_days', '3')
   url.searchParams.set('forecast_days', String(Math.min(7, OPEN_METEO_FORECAST_MAX_DAYS)))
   url.searchParams.set('wind_speed_unit', 'kmh')
 
@@ -456,11 +459,8 @@ export async function fetchOpenMeteoDashboardBundle(
   lat: number,
   lng: number,
 ): Promise<OpenMeteoDashboardBundle> {
-  const proxied = await fetchOpenMeteoViaApi(lat, lng)
-  if (weatherBundleHasUsableData(proxied)) return proxied!
-
   const errors: string[] = []
-  for (const fetcher of [fetchOpenMeteoDirect, fetchOpenMeteoDirectLite]) {
+  for (const fetcher of [fetchOpenMeteoDirectLite, fetchOpenMeteoDirect]) {
     try {
       const bundle = await fetchWith429Retry(() => fetcher(lat, lng))
       if (weatherBundleHasUsableData(bundle)) return bundle
@@ -468,6 +468,9 @@ export async function fetchOpenMeteoDashboardBundle(
       errors.push(e instanceof Error ? e.message : 'fetch failed')
     }
   }
+
+  const proxied = await fetchOpenMeteoViaApi(lat, lng)
+  if (weatherBundleHasUsableData(proxied)) return proxied!
 
   if (proxied) return proxied
   throw new Error(errors[0] ?? 'Unable to load Open-Meteo dashboard data')
@@ -505,16 +508,6 @@ const CHART_RANGE_HOURLY_VARS = [
   'wind_speed_10m',
   'wind_direction_10m',
 ].join(',')
-
-function mergeHourlySeries(
-  a: OpenMeteoDashboardHourlyPoint[],
-  b: OpenMeteoDashboardHourlyPoint[],
-): OpenMeteoDashboardHourlyPoint[] {
-  const map = new Map<string, OpenMeteoDashboardHourlyPoint>()
-  for (const p of a) map.set(p.time, p)
-  for (const p of b) map.set(p.time, p)
-  return [...map.values()].sort((x, y) => x.time.localeCompare(y.time))
-}
 
 async function fetchOpenMeteoHourlyJson(
   url: URL,
@@ -556,7 +549,56 @@ export function peekOpenMeteoHourlyRangeCache(
   return hit.rows
 }
 
-/** Hourly series for ArcGIS chart date range (archive + forecast). */
+async function fetchHourlyRangeViaApi(
+  lat: number,
+  lng: number,
+  range: WeatherChartDateRange,
+  signal?: AbortSignal,
+): Promise<OpenMeteoDashboardHourlyPoint[] | null> {
+  try {
+    const q = new URLSearchParams({
+      lat: String(lat),
+      lng: String(lng),
+      start_date: range.startDate,
+      end_date: range.endDate,
+    })
+    const res = await fetch(`${apiUrl('/api/weather/hourly-range')}?${q}`, {
+      credentials: 'same-origin',
+      signal,
+    })
+    noteApiResponse(res.status)
+    if (!res.ok) return null
+    const payload = (await res.json()) as { hourly?: OpenMeteoDashboardHourlyPoint[] }
+    if (!payload.hourly?.length) return null
+    return payload.hourly
+  } catch {
+    return null
+  }
+}
+
+async function fetchForecastHourlyWindow(
+  lat: number,
+  lng: number,
+  signal?: AbortSignal,
+  opts?: { startDate?: string; endDate?: string; pastDays?: number; forecastDays?: number },
+): Promise<OpenMeteoDashboardHourlyPoint[]> {
+  const url = new URL('https://api.open-meteo.com/v1/forecast')
+  url.searchParams.set('latitude', String(lat))
+  url.searchParams.set('longitude', String(lng))
+  url.searchParams.set('timezone', 'auto')
+  url.searchParams.set('wind_speed_unit', 'kmh')
+  url.searchParams.set('hourly', CHART_RANGE_HOURLY_VARS)
+  if (opts?.startDate && opts?.endDate) {
+    url.searchParams.set('start_date', opts.startDate)
+    url.searchParams.set('end_date', opts.endDate)
+  } else {
+    url.searchParams.set('past_days', String(Math.max(1, opts?.pastDays ?? 7)))
+    url.searchParams.set('forecast_days', String(Math.max(1, opts?.forecastDays ?? 7)))
+  }
+  return fetchOpenMeteoHourlyJson(url, signal)
+}
+
+/** Hourly series for ArcGIS chart date range (forecast API; archive only for older history). */
 export async function fetchOpenMeteoHourlyForDateRange(
   lat: number,
   lng: number,
@@ -573,11 +615,40 @@ export async function fetchOpenMeteoHourlyForDateRange(
     return cached.rows
   }
 
+  const proxied = await fetchHourlyRangeViaApi(lat, lng, range, signal)
+  if (proxied?.length) {
+    const rows = filterHourlyByDateRange(proxied, range)
+    hourlyRangeCache.set(cacheKey, { at: Date.now(), rows })
+    return rows
+  }
+
   const today = getWeatherChartTodayYmd()
   let merged: OpenMeteoDashboardHourlyPoint[] = []
 
-  if (startDate <= today) {
-    const archiveEnd = endDate <= today ? endDate : today
+  try {
+    merged = await fetchWith429Retry(() =>
+      fetchForecastHourlyWindow(lat, lng, signal, { startDate, endDate }),
+    )
+  } catch {
+    merged = []
+  }
+
+  if (!merged.length) {
+    const pastDays = Math.min(92, daysBetweenYmdInclusive(startDate, today) + 1)
+    const forecastDays = Math.min(16, daysBetweenYmdInclusive(today, endDate) + 1)
+    try {
+      merged = await fetchWith429Retry(() =>
+        fetchForecastHourlyWindow(lat, lng, signal, { pastDays, forecastDays }),
+      )
+    } catch {
+      merged = []
+    }
+  }
+
+  const archiveLagDays = 5
+  const archiveThrough = addDaysToYmd(today, -archiveLagDays)
+  if (!merged.length && startDate < archiveThrough) {
+    const archiveEnd = endDate < archiveThrough ? endDate : archiveThrough
     const url = new URL('https://archive-api.open-meteo.com/v1/archive')
     url.searchParams.set('latitude', String(lat))
     url.searchParams.set('longitude', String(lng))
@@ -589,25 +660,7 @@ export async function fetchOpenMeteoHourlyForDateRange(
     try {
       merged = await fetchOpenMeteoHourlyJson(url, signal)
     } catch {
-      merged = []
-    }
-  }
-
-  if (endDate >= today) {
-    const forecastStart = startDate > today ? startDate : today
-    const url = new URL('https://api.open-meteo.com/v1/forecast')
-    url.searchParams.set('latitude', String(lat))
-    url.searchParams.set('longitude', String(lng))
-    url.searchParams.set('timezone', 'auto')
-    url.searchParams.set('wind_speed_unit', 'kmh')
-    url.searchParams.set('start_date', forecastStart)
-    url.searchParams.set('end_date', endDate)
-    url.searchParams.set('hourly', CHART_RANGE_HOURLY_VARS)
-    try {
-      const forecast = await fetchOpenMeteoHourlyJson(url, signal)
-      merged = mergeHourlySeries(merged, forecast)
-    } catch {
-      /* keep archive slice */
+      /* ignore */
     }
   }
 

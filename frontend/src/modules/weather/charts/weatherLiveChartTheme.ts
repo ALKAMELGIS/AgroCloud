@@ -21,17 +21,49 @@ function parseChartAxisIso(iso: string): Date {
   return d
 }
 
-/** ArcGIS dashboard axis: midnight → "Jan 21", noon → "12:00". */
-export function formatArcgisAxisTick(iso: string): string | undefined {
+function arcgisDateLabel(d: Date): string {
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function arcgisTimeLabel(d: Date): string {
+  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
+/** ArcGIS X axis: show calendar date on day changes; same-day ticks show HH:mm on the hour. */
+export function formatArcgisAxisTick(iso: string, prevIso?: string): string {
   const d = parseChartAxisIso(iso)
-  if (Number.isNaN(d.getTime())) return undefined
-  if (d.getMinutes() !== 0) return undefined
-  const h = d.getHours()
-  if (h === 0) {
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  if (Number.isNaN(d.getTime())) return ''
+
+  const dateLabel = arcgisDateLabel(d)
+  const prev = prevIso ? parseChartAxisIso(prevIso) : null
+  const prevDate =
+    prev && !Number.isNaN(prev.getTime()) ? arcgisDateLabel(prev) : null
+  const dayChanged = !prevDate || dateLabel !== prevDate
+
+  if (dayChanged) {
+    if (d.getHours() === 0 && d.getMinutes() === 0) return dateLabel
+    return `${dateLabel} ${arcgisTimeLabel(d)}`
   }
-  if (h === 12) return '12:00'
-  return undefined
+
+  if (d.getMinutes() !== 0) return ''
+  return arcgisTimeLabel(d)
+}
+
+function resolveCategoryAxisIso(
+  chart: { data: { labels?: unknown[] } },
+  value: string | number,
+  index: number,
+): { iso: string; prevIso?: string } | null {
+  const labels = chart.data.labels
+  let idx = index
+  if (typeof value === 'number' && Number.isFinite(value)) idx = value
+  let raw = labels?.[idx]
+  if (typeof raw !== 'string') {
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) raw = value
+    else return null
+  }
+  const prev = idx > 0 && typeof labels?.[idx - 1] === 'string' ? (labels[idx - 1] as string) : undefined
+  return { iso: raw, prevIso: prev }
 }
 
 function formatArcgisTooltipTitle(iso: string): string {
@@ -51,18 +83,16 @@ const ARCGIS_GRID_COLOR = 'rgba(255, 255, 255, 0.1)'
 const ARCGIS_X_TICKS = {
   color: ARCGIS_AXIS_TICK_COLOR,
   font: { size: 9, weight: 'normal' as const },
-  maxTicksLimit: 18,
+  maxTicksLimit: 16,
   maxRotation: 0,
   minRotation: 0,
   autoSkip: true,
+  autoSkipPadding: 8,
   padding: 6,
-  callback(value: string | number) {
-    const idx = typeof value === 'number' ? value : Number(value)
-    const labels = this.chart.data.labels
-    const raw = labels?.[idx]
-    if (typeof raw !== 'string') return ''
-    const tick = formatArcgisAxisTick(raw)
-    return tick ?? ''
+  callback(value: string | number, index: number) {
+    const hit = resolveCategoryAxisIso(this.chart, value, index)
+    if (!hit) return ''
+    return formatArcgisAxisTick(hit.iso, hit.prevIso)
   },
 }
 

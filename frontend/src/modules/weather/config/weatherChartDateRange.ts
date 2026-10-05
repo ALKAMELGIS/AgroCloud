@@ -19,6 +19,21 @@ export function getWeatherChartTodayYmd(): string {
   return formatLocalDateYmd(new Date())
 }
 
+/** Inclusive day count from `fromYmd` through `toYmd` (local calendar days). */
+export function daysBetweenYmdInclusive(fromYmd: string, toYmd: string): number {
+  const a = Date.parse(`${fromYmd}T12:00:00`)
+  const b = Date.parse(`${toYmd}T12:00:00`)
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0
+  return Math.max(0, Math.round((b - a) / 86_400_000))
+}
+
+export function addDaysToYmd(ymd: string, deltaDays: number): string {
+  const d = new Date(`${ymd}T12:00:00`)
+  if (Number.isNaN(d.getTime())) return ymd
+  d.setDate(d.getDate() + deltaDays)
+  return formatLocalDateYmd(d)
+}
+
 export function getDefaultWeatherChartStartYmd(lookbackDays = WEATHER_CHART_DEFAULT_LOOKBACK_DAYS): string {
   const d = new Date()
   d.setHours(12, 0, 0, 0)

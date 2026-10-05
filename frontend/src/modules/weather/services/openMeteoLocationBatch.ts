@@ -6,9 +6,7 @@ import { fetchCurrentGridBatch } from './openMeteoGridProxy'
 
 import { apiUrl, noteApiResponse } from '@/core/api/apiOrigin'
 
-import { fetchLocationLiveRow } from './locationLiveWeatherCache'
-
-
+import { peekLocationLiveRow } from './locationLiveWeatherCache'
 
 const CURRENT_VARS = [
 
@@ -28,9 +26,9 @@ const CURRENT_VARS = [
 
 
 
-const CHUNK_SIZE = 8
+const CHUNK_SIZE = 5
 
-const CHUNK_GAP_MS = 900
+const CHUNK_GAP_MS = 1600
 
 const SITE_PICK_GAP_MS = 140
 
@@ -86,41 +84,39 @@ function emptyRow(site: WeatherFarmSite): WeatherLocationRow {
 
     weatherCode: null,
 
+    dailyMinC: null,
+
+    dailyMaxC: null,
+
   }
 
 }
 
 
 
-function rowFromCurrent(site: WeatherFarmSite, cur: Record<string, unknown> | undefined): WeatherLocationRow {
+function readDailyMinMax(entry: Record<string, unknown> | undefined): {
 
-  const num = (k: string) => {
+  dailyMinC: number | null
 
-    const v = cur?.[k]
+  dailyMaxC: number | null
 
-    return typeof v === 'number' && Number.isFinite(v) ? v : null
+} {
 
-  }
+  const daily = entry?.daily as
 
-  const code = num('weather_code')
+    | { temperature_2m_min?: number[]; temperature_2m_max?: number[] }
+
+    | undefined
+
+  const min = daily?.temperature_2m_min?.[0]
+
+  const max = daily?.temperature_2m_max?.[0]
 
   return {
 
-    id: site.id,
+    dailyMinC: typeof min === 'number' && Number.isFinite(min) ? min : null,
 
-    label: site.label,
-
-    temperatureC: num('temperature_2m'),
-
-    humidityPct: num('relative_humidity_2m'),
-
-    windSpeedKmh: num('wind_speed_10m'),
-
-    windDirectionDeg: num('wind_direction_10m'),
-
-    precipMm: num('precipitation'),
-
-    weatherCode: code != null ? Math.round(code) : null,
+    dailyMaxC: typeof max === 'number' && Number.isFinite(max) ? max : null,
 
   }
 
@@ -128,9 +124,93 @@ function rowFromCurrent(site: WeatherFarmSite, cur: Record<string, unknown> | un
 
 
 
-function rowHasLiveTemp(row: WeatherLocationRow): boolean {
+function rowFromCurrent(
+  site: WeatherFarmSite,
+  cur: Record<string, unknown> | undefined,
+  daily?: { dailyMinC?: number | null; dailyMaxC?: number | null },
+): WeatherLocationRow {
+  const num = (k: string) => {
+    const v = cur?.[k]
+    return typeof v === 'number' && Number.isFinite(v) ? v : null
+  }
+  const code = num('weather_code')
+  return {
+    id: site.id,
+    label: site.label,
+    temperatureC: num('temperature_2m'),
+    humidityPct: num('relative_humidity_2m'),
+    windSpeedKmh: num('wind_speed_10m'),
+    windDirectionDeg: num('wind_direction_10m'),
+    precipMm: num('precipitation'),
+    weatherCode: code != null ? Math.round(code) : null,
+    dailyMinC: daily?.dailyMinC ?? null,
+    dailyMaxC: daily?.dailyMaxC ?? null,
+  }
+}
+
+function applyHourlyFallback(row: WeatherLocationRow, entry: Record<string, unknown> | undefined): WeatherLocationRow {
+  if (rowHasLiveTemp(row) || !entry) return row
+  const hourly = entry.hourly as
+    | {
+        temperature_2m?: number[]
+        relative_humidity_2m?: number[]
+        weather_code?: number[]
+        wind_speed_10m?: number[]
+        wind_direction_10m?: number[]
+        precipitation?: number[]
+      }
+    | undefined
+  const t = hourly?.temperature_2m?.[0]
+  if (typeof t !== 'number' || !Number.isFinite(t)) return row
+  const code = hourly?.weather_code?.[0]
+  return {
+    ...row,
+    temperatureC: t,
+    humidityPct: hourly?.relative_humidity_2m?.[0] ?? row.humidityPct,
+    windSpeedKmh: hourly?.wind_speed_10m?.[0] ?? row.windSpeedKmh,
+    windDirectionDeg: hourly?.wind_direction_10m?.[0] ?? row.windDirectionDeg,
+    precipMm: hourly?.precipitation?.[0] ?? row.precipMm,
+    weatherCode:
+      typeof code === 'number' && Number.isFinite(code) ? Math.round(code) : row.weatherCode,
+  }
+}
+
+function rowFromOpenMeteoEntry(site: WeatherFarmSite, entry: Record<string, unknown> | undefined): WeatherLocationRow {
+  if (!entry || (entry as { error?: boolean }).error) return emptyRow(site)
+  const cur = entry.current as Record<string, unknown> | undefined
+  let row = { ...rowFromCurrent(site, cur), ...readDailyMinMax(entry) }
+  return applyHourlyFallback(row, entry)
+}
+
+
+
+export function rowHasLiveTemp(row: WeatherLocationRow): boolean {
 
   return row.temperatureC != null && Number.isFinite(row.temperatureC)
+
+}
+
+
+
+export function seedLocationRowsFromLiveCache(sites: WeatherFarmSite[]): WeatherLocationRow[] {
+
+  return sites.map(site => {
+
+    const hit = peekLocationLiveRow(site.lat, site.lng)
+
+    if (!hit || !rowHasLiveTemp(hit)) return emptyRow(site)
+
+    return {
+
+      ...hit,
+
+      id: site.id,
+
+      label: site.label,
+
+    }
+
+  })
 
 }
 
@@ -145,65 +225,10 @@ function countLiveTemps(rows: WeatherLocationRow[]): number {
 
 
 export function mapSitesToRowsFromApiEntries(
-
   sites: WeatherFarmSite[],
-
   entries: Record<string, unknown>[],
-
 ): WeatherLocationRow[] {
-
-  return sites.map((site, i) => {
-
-    const entry = entries[i] ?? entries[0]
-
-    if (entry && typeof entry === 'object' && (entry as { error?: boolean }).error) {
-
-      return emptyRow(site)
-
-    }
-
-    const cur =
-
-      entry && typeof entry === 'object'
-
-        ? (entry as Record<string, unknown>).current as Record<string, unknown> | undefined
-
-        : undefined
-
-    let row = rowFromCurrent(site, cur)
-
-    if (!rowHasLiveTemp(row) && entry && typeof entry === 'object') {
-
-      const hourly = (entry as Record<string, unknown>).hourly as
-
-        | { temperature_2m?: number[]; relative_humidity_2m?: number[]; weather_code?: number[] }
-
-        | undefined
-
-      const t = hourly?.temperature_2m?.[0]
-
-      if (typeof t === 'number' && Number.isFinite(t)) {
-
-        row = {
-
-          ...row,
-
-          temperatureC: t,
-
-          humidityPct: hourly?.relative_humidity_2m?.[0] ?? row.humidityPct,
-
-          weatherCode: hourly?.weather_code?.[0] ?? row.weatherCode,
-
-        }
-
-      }
-
-    }
-
-    return row
-
-  })
-
+  return sites.map((site, i) => rowFromOpenMeteoEntry(site, entries[i] ?? entries[0]))
 }
 
 
@@ -266,15 +291,26 @@ async function fetchLocationsCurrentViaApi(
 
     const payload = (await res.json()) as {
 
-      rows?: Array<{ id: string; current?: Record<string, number | null> }>
+      rows?: Array<{
+        id: string
+        current?: Record<string, number | null>
+        dailyMinC?: number | null
+        dailyMaxC?: number | null
+      }>
 
     }
 
     if (!payload.rows?.length) return null
 
-    const byId = new Map(payload.rows.map(r => [r.id, r.current ?? {}]))
+    const byId = new Map(payload.rows.map(r => [r.id, r]))
 
-    return sites.map(site => rowFromCurrent(site, byId.get(site.id) ?? byId.get(String(site.id))))
+    return sites.map(site => {
+      const hit = byId.get(site.id) ?? byId.get(String(site.id))
+      return rowFromCurrent(site, hit?.current ?? {}, {
+        dailyMinC: hit?.dailyMinC ?? null,
+        dailyMaxC: hit?.dailyMaxC ?? null,
+      })
+    })
 
   } catch {
 
@@ -299,6 +335,12 @@ async function fetchChunkDirect(sites: WeatherFarmSite[], signal?: AbortSignal):
   url.searchParams.set('wind_speed_unit', 'kmh')
 
   url.searchParams.set('current', CURRENT_VARS.join(','))
+  url.searchParams.set(
+    'hourly',
+    'temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,precipitation',
+  )
+  url.searchParams.set('daily', 'temperature_2m_max,temperature_2m_min')
+  url.searchParams.set('forecast_days', '1')
 
 
 
@@ -402,9 +444,9 @@ async function fillMissingWithMapPick(
 
       await sleep(SITE_PICK_GAP_MS, signal)
 
-      const row = await fetchLocationLiveRow(site.id, site.label, site.lat, site.lng, signal)
+      const [row] = await fetchChunkDirectWithRetry([site], signal)
 
-      out.push(row)
+      out.push(rowHasLiveTemp(row) ? row : existing)
 
     } catch {
 
@@ -420,7 +462,110 @@ async function fillMissingWithMapPick(
 
 
 
+async function fetchCurrentViaGetApi(
+  site: WeatherFarmSite,
+  signal?: AbortSignal,
+): Promise<WeatherLocationRow | null> {
+  try {
+    const q = new URLSearchParams({
+      lat: String(site.lat),
+      lng: String(site.lng),
+    })
+    const res = await fetch(apiUrl(`/api/weather/current?${q}`), {
+      signal,
+      credentials: 'same-origin',
+    })
+    noteApiResponse(res.status)
+    if (!res.ok) return null
+    const payload = (await res.json()) as { current?: Record<string, number | null> }
+    const row = rowFromCurrent(site, payload.current ?? {})
+    return rowHasLiveTemp(row) ? row : null
+  } catch {
+    return null
+  }
+}
+
 async function fetchChunkRows(sites: WeatherFarmSite[], signal?: AbortSignal): Promise<WeatherLocationRow[]> {
+  const proxied = await fetchCurrentGridBatch(
+    sites.map(s => ({ lat: s.lat, lng: s.lng })),
+    CURRENT_VARS,
+    signal,
+  )
+  if (proxied?.points?.length === sites.length) {
+    const mapped = mapSitesToRowsFromProxyPoints(sites, proxied.points)
+    if (countLiveTemps(mapped) > 0) return mapped
+  }
+
+  try {
+    const direct = await fetchChunkDirectWithRetry(sites, signal)
+    if (countLiveTemps(direct) > 0) return direct
+  } catch {
+    /* try per-site API */
+  }
+
+  const out: WeatherLocationRow[] = []
+  for (const site of sites) {
+    if (signal?.aborted) break
+    const hit = await fetchCurrentViaGetApi(site, signal)
+    out.push(hit ?? emptyRow(site))
+    await sleep(90, signal)
+  }
+  return out.length ? out : sites.map(emptyRow)
+}
+
+
+
+export function coalesceLocationRow(base: WeatherLocationRow, r: WeatherLocationRow): WeatherLocationRow {
+  const preferR = rowHasLiveTemp(r)
+  const preferBase = rowHasLiveTemp(base) && !preferR
+  return {
+    ...base,
+    ...r,
+    label: base.label,
+    temperatureC: preferR ? r.temperatureC : preferBase ? base.temperatureC : r.temperatureC ?? base.temperatureC,
+    humidityPct: r.humidityPct ?? base.humidityPct,
+    windSpeedKmh: r.windSpeedKmh ?? base.windSpeedKmh,
+    windDirectionDeg: r.windDirectionDeg ?? base.windDirectionDeg,
+    precipMm: r.precipMm ?? base.precipMm,
+    weatherCode: r.weatherCode ?? base.weatherCode,
+    dailyMinC: r.dailyMinC ?? base.dailyMinC,
+    dailyMaxC: r.dailyMaxC ?? base.dailyMaxC,
+  }
+}
+
+function mergeLocationRows(
+
+  sites: WeatherFarmSite[],
+
+  parts: WeatherLocationRow[],
+
+): WeatherLocationRow[] {
+
+  const byId = new Map(sites.map(s => [s.id, emptyRow(s)]))
+
+  for (const r of parts) {
+
+    const base = byId.get(r.id)
+
+    if (!base) continue
+
+    byId.set(r.id, coalesceLocationRow(base, r))
+
+  }
+
+  return sites.map(s => byId.get(s.id)!)
+
+}
+
+
+
+async function fetchAllSitesViaGridBatch(
+
+  sites: WeatherFarmSite[],
+
+  signal?: AbortSignal,
+
+): Promise<WeatherLocationRow[] | null> {
 
   const proxied = await fetchCurrentGridBatch(
 
@@ -432,31 +577,17 @@ async function fetchChunkRows(sites: WeatherFarmSite[], signal?: AbortSignal): P
 
   )
 
-  if (proxied?.points?.length === sites.length) {
+  if (!proxied?.points?.length) return null
 
-    const mapped = mapSitesToRowsFromProxyPoints(sites, proxied.points)
+  const mapped = mapSitesToRowsFromProxyPoints(sites, proxied.points)
 
-    if (countLiveTemps(mapped) > 0) return mapped
-
-  }
-
-
-
-  try {
-
-    return await fetchChunkDirectWithRetry(sites, signal)
-
-  } catch {
-
-    return sites.map(emptyRow)
-
-  }
+  return countLiveTemps(mapped) > 0 ? mapped : null
 
 }
 
 
 
-/** Batched current weather for the locations sidebar (server cache first). */
+/** Batched current weather for the locations sidebar (API → grid → targeted direct). */
 
 export async function fetchOpenMeteoLocationRowsBatch(
 
@@ -464,25 +595,53 @@ export async function fetchOpenMeteoLocationRowsBatch(
 
   signal?: AbortSignal,
 
+  onProgress?: (rows: WeatherLocationRow[]) => void,
+
 ): Promise<WeatherLocationRow[]> {
 
   if (!sites.length) return []
 
 
 
-  const fromApi = await fetchLocationsCurrentViaApi(sites, signal)
+  let acc: WeatherLocationRow[] = seedLocationRowsFromLiveCache(sites)
 
-  const rows: WeatherLocationRow[] = []
 
-  for (let i = 0; i < sites.length; i += CHUNK_SIZE) {
+
+  const publish = (parts: WeatherLocationRow[]) => {
+
+    acc = mergeLocationRows(sites, [...acc, ...parts])
+
+    onProgress?.(acc)
+
+    return acc
+
+  }
+
+
+
+  publish([])
+
+  const gridRows = await fetchAllSitesViaGridBatch(sites, signal)
+  if (gridRows?.length) {
+    let merged = publish(gridRows)
+    if (countLiveTemps(merged) >= sites.length) return merged
+  }
+
+  let merged = acc
+
+  const missingSites = sites.filter(s => !rowHasLiveTemp(merged.find(r => r.id === s.id)!))
+
+  for (let i = 0; i < missingSites.length; i += CHUNK_SIZE) {
 
     if (signal?.aborted) break
 
-    const chunk = sites.slice(i, i + CHUNK_SIZE)
+    const chunk = missingSites.slice(i, i + CHUNK_SIZE)
 
-    rows.push(...(await fetchChunkRows(chunk, signal)))
+    const chunkRows = await fetchChunkRows(chunk, signal)
 
-    if (i + CHUNK_SIZE < sites.length) {
+    merged = publish(chunkRows)
+
+    if (i + CHUNK_SIZE < missingSites.length) {
 
       await sleep(CHUNK_GAP_MS, signal)
 
@@ -492,33 +651,30 @@ export async function fetchOpenMeteoLocationRowsBatch(
 
 
 
-  const merged = fromApi?.length
+  const stillMissing = sites.filter(s => !rowHasLiveTemp(merged.find(r => r.id === s.id)!))
 
-    ? sites.map(site => {
-
-        const pick = rows.find(r => r.id === site.id)
-
-        const api = fromApi.find(r => r.id === site.id)
-
-        const base = pick ?? api ?? emptyRow(site)
-
-        if (rowHasLiveTemp(base)) return base
-
-        if (api && rowHasLiveTemp(api)) return api
-
-        return base
-
-      })
-
-    : rows
-
-
-
-  if (countLiveTemps(merged) < sites.length) {
-
-    return fillMissingWithMapPick(sites, merged, signal)
-
+  if (stillMissing.length > 0) {
+    const fromApi = await fetchLocationsCurrentViaApi(stillMissing, signal)
+    if (fromApi?.length) {
+      merged = publish(fromApi)
+    }
   }
+
+  const stillMissingAfterApi = sites.filter(s => !rowHasLiveTemp(merged.find(r => r.id === s.id)!))
+
+  if (stillMissingAfterApi.length > 0 && stillMissingAfterApi.length <= 12) {
+
+    const missingRows = merged.filter(r => stillMissingAfterApi.some(m => m.id === r.id))
+
+    const filled = await fillMissingWithMapPick(stillMissingAfterApi, missingRows, signal)
+
+    merged = publish([
+      ...merged.filter(r => !stillMissingAfterApi.some(m => m.id === r.id)),
+      ...filled,
+    ])
+  }
+
+
 
   return merged
 

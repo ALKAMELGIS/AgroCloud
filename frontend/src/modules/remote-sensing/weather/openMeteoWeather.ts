@@ -726,6 +726,18 @@ export async function fetchOpenMeteoWeatherMapPick(
   lng: number,
   signal?: AbortSignal,
 ): Promise<OpenMeteoWeatherSnapshot> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      return await fetchOpenMeteoWeatherMapPickDirect(lat, lng, signal)
+    } catch (e) {
+      lastError = e
+      const msg = e instanceof Error ? e.message : String(e)
+      if (!msg.includes('429') || attempt >= 3) break
+      await new Promise(r => window.setTimeout(r, 700 * (attempt + 1)))
+    }
+  }
+
   try {
     const { apiUrl, noteApiResponse } = await import('@/core/api/apiOrigin')
     const res = await fetch(`${apiUrl('/api/weather/current')}?lat=${lat}&lng=${lng}`, {
@@ -738,35 +750,9 @@ export async function fetchOpenMeteoWeatherMapPick(
       if (payload.current) return snapshotFromCurrentFields(lat, lng, payload.current)
     }
   } catch {
-    /* fall through */
+    /* ignore */
   }
 
-  try {
-    const { apiUrl, noteApiResponse } = await import('@/core/api/apiOrigin')
-    const res = await fetch(`${apiUrl('/api/weather/dashboard')}?lat=${lat}&lng=${lng}`, {
-      signal,
-      credentials: 'same-origin',
-    })
-    noteApiResponse(res.status)
-    if (res.ok) {
-      const payload = (await res.json()) as { openMeteo?: Record<string, unknown> }
-      if (payload.openMeteo) return snapshotFromOpenMeteoPayload(lat, lng, payload.openMeteo)
-    }
-  } catch {
-    /* fall through */
-  }
-
-  let lastError: unknown
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      return await fetchOpenMeteoWeatherMapPickDirect(lat, lng, signal)
-    } catch (e) {
-      lastError = e
-      const msg = e instanceof Error ? e.message : String(e)
-      if (!msg.includes('429') || attempt >= 3) break
-      await new Promise(r => window.setTimeout(r, 700 * (attempt + 1)))
-    }
-  }
   throw lastError instanceof Error ? lastError : new Error('Open-Meteo map pick failed')
 }
 

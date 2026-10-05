@@ -6,6 +6,8 @@ import { useSearchParams } from 'react-router-dom'
 import type { WeatherLocationId } from './config/weatherFarmIds'
 import { WeatherLocationList } from './components/WeatherLocationList'
 import { useWeatherLocationRows } from './hooks/useWeatherLocationRows'
+import { coalesceLocationRow, rowHasLiveTemp } from './services/openMeteoLocationBatch'
+import { peekLocationLiveRow } from './services/locationLiveWeatherCache'
 import { WeatherMapStage } from './components/WeatherMapStage'
 import { WeatherChartsPanel } from './components/WeatherChartsPanel'
 import { formatOperationalIndicatorLine } from './insights/buildOperationalWeatherIndicators'
@@ -119,8 +121,21 @@ export default function WeatherIntelligenceDashboard() {
           precipMm: null,
           weatherCode: null,
         }
-      const withMeta = { ...row, label: s.label, countryLabel: s.countryLabel ?? '' }
-      const d0 = s.id === data.farmId ? data.bundle?.daily7?.[0] : undefined
+      const live = peekLocationLiveRow(s.lat, s.lng)
+      const mergedRow =
+        live && rowHasLiveTemp(live)
+          ? coalesceLocationRow(row, { ...live, id: s.id, label: s.label })
+          : row
+      const withMeta = {
+        ...mergedRow,
+        label: s.label,
+        countryLabel: s.countryLabel ?? '',
+        dailyMinC: mergedRow.dailyMinC ?? null,
+        dailyMaxC: mergedRow.dailyMaxC ?? null,
+      }
+      const dayKey = new Date().toISOString().slice(0, 10)
+      const d0 =
+        data.bundle?.daily7?.find(d => d.date.slice(0, 10) === dayKey) ?? data.bundle?.daily7?.[0]
       if (s.id === data.farmId && snap) {
         return {
           ...withMeta,
@@ -130,8 +145,8 @@ export default function WeatherIntelligenceDashboard() {
           windDirectionDeg: snap.windDirectionDeg ?? row.windDirectionDeg,
           precipMm: snap.precipMm ?? row.precipMm,
           weatherCode: snap.weatherCode ?? row.weatherCode,
-          dailyMinC: d0?.tempMinC ?? row.dailyMinC,
-          dailyMaxC: d0?.tempMaxC ?? row.dailyMaxC,
+          dailyMinC: d0?.tempMinC ?? row.dailyMinC ?? withMeta.dailyMinC,
+          dailyMaxC: d0?.tempMaxC ?? row.dailyMaxC ?? withMeta.dailyMaxC,
         }
       }
       return withMeta

@@ -84,23 +84,9 @@ export function WeatherLocationList({
 
   const arcgis = variant === 'arcgis'
 
-  const canTicker = arcgis && filtered.length > 3 && !query.trim()
-
-
+  const canTicker = !arcgis && filtered.length > 3 && !query.trim()
 
   useWeatherLocationTicker(tickerOn && canTicker, hoverPause, listRef, filtered.length)
-
-
-
-  const toggleTicker = () => {
-
-    if (!canTicker) return
-
-    setTickerOn(v => !v)
-
-  }
-
-
 
   return (
 
@@ -125,62 +111,20 @@ export function WeatherLocationList({
         .join(' ')}
 
       aria-label="Locations"
-
+      aria-busy={arcgis && loading ? true : undefined}
     >
-
-      <div className="weather-locations__head">
-
-        <h2 className="weather-locations__title">
-
-          {arcgis ? 'Current Forecast per Location' : 'Locations'}
-
-        </h2>
-
-        <div className="weather-locations__head-actions">
-
-          {arcgis ? (
-
-            <button
-
-              type="button"
-
-              className={`weather-locations__ticker-btn${tickerOn ? ' is-playing' : ''}`}
-
-              onClick={toggleTicker}
-
-              disabled={!canTicker}
-
-              aria-pressed={tickerOn}
-
-              title={
-
-                !canTicker
-
-                  ? 'Need more locations to auto-scroll'
-
-                  : tickerOn
-
-                    ? 'Pause list scroll'
-
-                    : 'Play — airport-style scroll'
-
-              }
-
-            >
-
-              <i className={`fa-solid ${tickerOn ? 'fa-pause' : 'fa-play'}`} aria-hidden />
-
-            </button>
-
-          ) : null}
-
-          {loading ? <span className="weather-locations__status">Updating…</span> : null}
-
+      {arcgis ? (
+        <div className="weather-locations__head weather-locations__head--arcgis-ref">
+          <h2 className="weather-locations__title">Current Forecast per Location</h2>
         </div>
-
-      </div>
-
-
+      ) : (
+        <div className="weather-locations__head">
+          <h2 className="weather-locations__title">Locations</h2>
+          <div className="weather-locations__head-actions">
+            {loading ? <span className="weather-locations__status">Updating…</span> : null}
+          </div>
+        </div>
+      )}
 
       {!arcgis ? (
 
@@ -200,31 +144,7 @@ export function WeatherLocationList({
 
         />
 
-      ) : (
-
-        <input
-
-          type="search"
-
-          className="weather-locations__search weather-locations__search--arcgis"
-
-          placeholder="Filter locations…"
-
-          value={query}
-
-          onChange={e => {
-
-            setQuery(e.target.value)
-
-            if (e.target.value.trim()) setTickerOn(false)
-
-          }}
-
-          aria-label="Filter locations"
-
-        />
-
-      )}
+      ) : null}
 
 
 
@@ -261,73 +181,65 @@ export function WeatherLocationList({
 
 
           if (arcgis) {
+            const dir = dirLabel ?? '—'
 
             return (
-
               <li key={row.id} className="weather-locations__row-arcgis">
-
                 <button
-
                   type="button"
-
-                  className={`weather-locations__arcgis-item${active ? ' is-active' : ''}`}
-
+                  className={[
+                    'weather-arcgis-hourly__row',
+                    'weather-locations__arcgis-row',
+                    active ? 'is-active' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                   onClick={() => onSelect(row.id)}
-
                 >
+                  <div className="weather-locations__arcgis-place">
+                    <span className="weather-arcgis-hourly__place" title={row.label}>
+                      {row.label}
+                    </span>
+                  </div>
 
-                  <span className="weather-locations__arcgis-name-col">
+                  <section className="weather-arcgis-hourly__wind" aria-label="Wind">
+                    <WeatherWindBarb directionDeg={row.windDirectionDeg} variant="arcgis" />
+                    <div className="weather-arcgis-hourly__wind-main">
+                      <div className="weather-arcgis-hourly__wind-speeds">
+                        <span>{knots != null ? `${Math.round(knots)} knots` : '—'}</span>
+                        <span>
+                          {row.windSpeedKmh != null ? `${Math.round(row.windSpeedKmh)} km/h` : '—'}
+                        </span>
+                      </div>
+                      <span className="weather-arcgis-hourly__wind-dir">{dir}</span>
+                      <span className="weather-arcgis-hourly__section-label">Wind</span>
+                    </div>
+                  </section>
 
-                    <span className="weather-locations__arcgis-name">{row.label}</span>
+                  <section className="weather-arcgis-hourly__temp" aria-label="Temperature">
+                    <span className="weather-arcgis-hourly__temp-val">
+                      {row.temperatureC != null ? `${Math.round(row.temperatureC)}°C` : '—'}
+                    </span>
+                    <div className="weather-arcgis-hourly__temp-range">
+                      <span className="weather-arcgis-hourly__temp-min">
+                        Min: {row.dailyMinC != null ? `${Math.round(row.dailyMinC)}°C` : '—'}
+                      </span>
+                      <span className="weather-arcgis-hourly__temp-max">
+                        Max: {row.dailyMaxC != null ? `${Math.round(row.dailyMaxC)}°C` : '—'}
+                      </span>
+                    </div>
+                    <span className="weather-arcgis-hourly__section-label">Temperature</span>
+                  </section>
 
-                    {row.countryLabel ? (
-
-                      <span className="weather-locations__arcgis-country">{row.countryLabel}</span>
-
-                    ) : null}
-
-                  </span>
-
-                  <WeatherWindBarb directionDeg={row.windDirectionDeg} variant="arcgis" />
-
-                  <span className="weather-locations__arcgis-wind">
-
-                    {knots != null ? `${Math.round(knots)} knots` : '—'}
-
-                    {row.windSpeedKmh != null ? `, ${Math.round(row.windSpeedKmh)} km/h` : ''}
-
-                    {dirLabel ? ` ${dirLabel}` : ''}
-
-                  </span>
-
-                  <span className="weather-locations__arcgis-temp">
-
-                    {row.temperatureC != null ? `${Math.round(row.temperatureC)}°C` : '…'}
-
-                  </span>
-
-                  <span className="weather-locations__arcgis-minmax">
-
-                    {row.dailyMinC != null ? `${Math.round(row.dailyMinC)}°` : '—'}
-
-                    {' / '}
-
-                    {row.dailyMaxC != null ? `${Math.round(row.dailyMaxC)}°` : '—'}
-
-                  </span>
-
-                  <span className="weather-locations__arcgis-rh">
-
-                    {row.humidityPct != null ? `${Math.round(row.humidityPct)}%` : '—'}
-
-                  </span>
-
+                  <section className="weather-arcgis-hourly__hum" aria-label="Humidity">
+                    <span className="weather-arcgis-hourly__hum-val">
+                      {row.humidityPct != null ? `${Math.round(row.humidityPct)}%` : '—'}
+                    </span>
+                    <span className="weather-arcgis-hourly__section-label">Humidity</span>
+                  </section>
                 </button>
-
               </li>
-
             )
-
           }
 
 
