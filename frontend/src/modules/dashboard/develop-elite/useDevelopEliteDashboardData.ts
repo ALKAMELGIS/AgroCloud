@@ -1,5 +1,4 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { purgeAndReloadForStaleDeploy } from '@/core/routing/lazyWithRetry'
 import { type ArcGisTableRow, type DevelopEliteLayerMeta } from './developEliteArcgisFetch'
 import { ensureDevelopEliteArcgisSnapshot } from './developEliteArcgisDataLoad'
 import {
@@ -63,6 +62,7 @@ import {
 } from './developEliteWorldCountries'
 import { resolveDevelopEliteMapWorldCountriesGeoJson } from './developEliteMapWorldCountriesGeoJson'
 import {
+  clearDevelopEliteArcgisSessionCache,
   developEliteArcgisBoot,
   developEliteArcgisCacheKey,
   developEliteArcgisLayerUrlsChanged,
@@ -70,6 +70,7 @@ import {
   setDevelopEliteArcgisSessionCache,
   type DevelopEliteArcgisDataSnapshot,
 } from './developEliteArcgisSessionCache'
+import { dispatchDevelopEliteDashboardRefresh } from './developEliteDashboardEvents'
 import { fetchDevelopEliteWorldCountriesGeoJson } from './developEliteWorldCountriesLoad'
 import {
   quantizeDevelopEliteMapView,
@@ -193,9 +194,12 @@ export function useDevelopEliteDashboardData() {
   const [mapHighlightFieldKey, setMapHighlightFieldKey] = useState<string | null>(null)
   const [mapFlyToRequest, setMapFlyToRequest] = useState(0)
 
-  /** Full page reload (cache-bust + SW purge) so users pick up new deploys and fresh ArcGIS fetches. */
+  /** Refetch all ArcGIS layers + KPIs/charts/map without a browser reload. */
   const refresh = useCallback(() => {
-    void purgeAndReloadForStaleDeploy()
+    clearDevelopEliteArcgisSessionCache(developEliteArcgisCacheKey(configRef.current))
+    setError(null)
+    setReloadToken(t => t + 1)
+    dispatchDevelopEliteDashboardRefresh()
   }, [])
   const refreshing = loading && structures !== null
   const initialLoading = false
@@ -251,6 +255,8 @@ export function useDevelopEliteDashboardData() {
 
   const structuresRef = useRef(structures)
   structuresRef.current = structures
+  const configRef = useRef(config)
+  configRef.current = config
 
   const persistConfig = useCallback((next: DevelopEliteDashboardConfig) => {
     setConfig(prev => {

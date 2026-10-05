@@ -200,9 +200,10 @@ export default function DevelopEliteAgroDashboard() {
               </button>
               <DashboardRefreshButton
                 className="develop-elite__refresh-btn"
+                busy={data.refreshing}
                 lastUpdated={data.lastRefreshedAt}
-                title={dashboardRefreshTitle(data.lastRefreshedAt, 'Reload page')}
-                aria-label="Reload page"
+                title={dashboardRefreshTitle(data.lastRefreshedAt, 'Refresh dashboard')}
+                aria-label="Refresh dashboard"
                 onClick={data.refresh}
               />
               {compactViewport ? (

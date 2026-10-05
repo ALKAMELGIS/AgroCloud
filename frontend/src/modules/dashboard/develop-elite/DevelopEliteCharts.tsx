@@ -36,6 +36,7 @@ import {
 } from 'chart.js'
 import { Bar, Pie } from 'react-chartjs-2'
 import { DEVELOP_ELITE_CHART_SURFACE_BG, type DevelopEliteChartsConfig } from './developEliteChartsConfig'
+import { DEVELOP_ELITE_DASHBOARD_REFRESH_EVENT } from './developEliteDashboardEvents'
 import { prepareDevelopEliteChartSlices } from './developEliteChartSlices'
 import {
   DEVELOP_ELITE_CHART_FLASH_OUTLINE,
@@ -109,7 +110,11 @@ function DevelopEliteChartsInner({
       })
     }
     window.addEventListener('develop-elite-layout-changed', refresh)
-    return () => window.removeEventListener('develop-elite-layout-changed', refresh)
+    window.addEventListener(DEVELOP_ELITE_DASHBOARD_REFRESH_EVENT, refresh)
+    return () => {
+      window.removeEventListener('develop-elite-layout-changed', refresh)
+      window.removeEventListener(DEVELOP_ELITE_DASHBOARD_REFRESH_EVENT, refresh)
+    }
   }, [])
 
   const chartFlashCropLabel = useMemo(

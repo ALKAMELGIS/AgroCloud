@@ -65,6 +65,12 @@ export function setDevelopEliteArcgisSessionCache(
   sessionCache.set(key, snapshot)
 }
 
+/** Drop cached ArcGIS snapshot so the next load refetches every layer (dashboard refresh). */
+export function clearDevelopEliteArcgisSessionCache(key?: string): void {
+  if (key) sessionCache.delete(key)
+  else sessionCache.clear()
+}
+
 /** Hydrate React state from session cache on each dashboard mount. */
 export function developEliteArcgisBoot() {
   const config = loadDevelopEliteDashboardConfig()

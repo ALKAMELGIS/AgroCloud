@@ -21,6 +21,7 @@ import { DevelopEliteMapLayerLivePanel } from './DevelopEliteMapLayerLive'
 import { useDevelopEliteMapChrome, type DevelopEliteMapPanelId } from './DevelopEliteMapChrome'
 import { fitDevelopElitePortfolioView } from './developEliteMapViewport'
 import { useDevelopEliteCompactViewport } from './developEliteCompactViewport'
+import { DEVELOP_ELITE_DASHBOARD_REFRESH_EVENT } from './developEliteDashboardEvents'
 
 const TOOLS: Array<{ id: string; icon: string; label: string }> = [
   { id: 'search', icon: 'fa-magnifying-glass', label: 'Search map' },
@@ -693,6 +694,7 @@ export function DevelopEliteMapInvalidateOnLayout() {
       })
     }
     window.addEventListener('develop-elite-layout-changed', refresh)
+    window.addEventListener(DEVELOP_ELITE_DASHBOARD_REFRESH_EVENT, refresh)
     window.addEventListener('orientationchange', refresh)
     const root = map.getContainer()?.closest('.develop-elite-map')
     const ro =
@@ -707,6 +709,7 @@ export function DevelopEliteMapInvalidateOnLayout() {
       map.off('dragstart', onDragStart)
       map.off('dragend', onDragEnd)
       window.removeEventListener('develop-elite-layout-changed', refresh)
+      window.removeEventListener(DEVELOP_ELITE_DASHBOARD_REFRESH_EVENT, refresh)
       window.removeEventListener('orientationchange', refresh)
       ro?.disconnect()
     }
