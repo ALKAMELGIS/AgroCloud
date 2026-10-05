@@ -56,4 +56,38 @@ describe('buildDevelopElitePointLayerLegendItems', () => {
     expect(rows[0]?.pointPreview?.kind).toBe('picture')
     expect(rows[0]?.pointPreview?.imageUrl).toMatch(/^data:image\/png;base64,/)
   })
+
+  it('builds irrigation valve legend from uniqueValueGroups + esriPMS', () => {
+    const rows = buildDevelopElitePointLayerLegendItems(
+      {
+        renderer: {
+          type: 'uniqueValue',
+          field1: 'SUBTYPE',
+          uniqueValueGroups: [
+            {
+              heading: 'SUBTYPE',
+              classes: [
+                {
+                  label: 'Butterfly',
+                  symbol: {
+                    type: 'esriPMS',
+                    imageData:
+                      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+                    contentType: 'image/png',
+                    width: 15,
+                    height: 15,
+                  },
+                  values: [['1']],
+                },
+              ],
+            },
+          ],
+        },
+      },
+      'irrigation-valves',
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.label).toBe('Butterfly')
+    expect(rows[0]?.pointPreview?.kind).toBe('picture')
+  })
 })

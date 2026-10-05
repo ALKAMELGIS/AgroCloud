@@ -56,6 +56,18 @@ type ToolbarProps = {
 }
 
 function DevelopEliteMapLegendSwatch({ item }: { item: DevelopEliteMapLegendRow }) {
+  if (item.symbolStyle === 'directional-line') {
+    const stroke = item.outlineColor || '#004da8'
+    const w = Math.max(2, Math.min(5, item.outlineWidth))
+    return (
+      <span className="develop-elite-map__legend-swatch develop-elite-map__legend-swatch--directional-line" aria-hidden>
+        <svg width="52" height="14" viewBox="0 0 52 14">
+          <line x1="1" y1="7" x2="36" y2="7" stroke={stroke} strokeWidth={w} strokeLinecap="round" />
+          <polygon points="38,7 50,2 50,12" fill={stroke} />
+        </svg>
+      </span>
+    )
+  }
   const preview = item.symbolStyle === 'point' ? item.pointPreview : undefined
   if (preview?.kind === 'picture' && preview.imageUrl) {
     const w = preview.imageWidth ?? 18

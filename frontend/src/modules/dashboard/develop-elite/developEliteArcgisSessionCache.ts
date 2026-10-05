@@ -39,6 +39,8 @@ export function developEliteArcgisCacheKey(config: DevelopEliteDashboardConfig):
     config.irrigationMainPipeLayerUrl,
     config.worldCountriesLayerUrl,
     'wc-map-v5',
+    'irr-valves-sym-v1',
+    'irr-main-pipe-arrows-v1',
   ].join('|')
 }
 

@@ -21,7 +21,7 @@ export type DevelopEliteMapLegendRow = {
   hollow: boolean
   group: 'structures' | 'trees' | 'irrigation-valves' | 'irrigation-main-pipe' | 'agri-location' | 'overlay'
   /** Point / picture markers from ArcGIS (Tree, AgroLocation). */
-  symbolStyle?: 'polygon' | 'point'
+  symbolStyle?: 'polygon' | 'point' | 'directional-line'
   pointPreview?: ArcgisPointSymbolPreview
 }
 
@@ -205,7 +205,16 @@ export function buildDevelopEliteIrrigationMainPipeLegendItems(
   drawingInfo: Record<string, unknown> | null | undefined,
 ): DevelopEliteMapLegendRow[] {
   const fromApi = buildArcgisUniqueValueLegendItems(drawingInfo)
-  return fromApi.map(item => legendItemToRow(item, 'irrigation-main-pipe'))
+  return fromApi.map(item => {
+    const row = legendItemToRow(item, 'irrigation-main-pipe')
+    return {
+      ...row,
+      hollow: true,
+      fillColor: 'transparent',
+      symbolStyle: 'directional-line',
+      outlineWidth: Math.max(3, Math.min(6, row.outlineWidth + 1)),
+    }
+  })
 }
 
 function readStructureTypeCode(props: Record<string, unknown>): number | null {

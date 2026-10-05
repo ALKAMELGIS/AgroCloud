@@ -242,7 +242,11 @@ export async function fetchArcgisLayerDrawingInfoExact(
     const data = (await res.json()) as { drawingInfo?: unknown; error?: { message?: string } }
     if (data?.error?.message) return null
     if (!data?.drawingInfo) return null
-    return sanitizeArcgisDrawingInfoForClient(data.drawingInfo)
+    const sanitized = sanitizeArcgisDrawingInfoForClient(data.drawingInfo)
+    if (sanitized) return sanitized
+    return typeof data.drawingInfo === 'object' && data.drawingInfo !== null
+      ? (data.drawingInfo as Record<string, unknown>)
+      : null
   } catch {
     return null
   }
@@ -259,7 +263,11 @@ export async function fetchFeatureLayerDrawingInfo(
     const data = (await res.json()) as { drawingInfo?: unknown; error?: { message?: string } }
     if (data?.error?.message) return null
     if (!data?.drawingInfo) return null
-    return sanitizeArcgisDrawingInfoForClient(data.drawingInfo)
+    const sanitized = sanitizeArcgisDrawingInfoForClient(data.drawingInfo)
+    if (sanitized) return sanitized
+    return typeof data.drawingInfo === 'object' && data.drawingInfo !== null
+      ? (data.drawingInfo as Record<string, unknown>)
+      : null
   } catch {
     return null
   }

@@ -58,14 +58,16 @@ export function buildArcgisUniqueValueLegendItems(
   const infos = flattenArcgisUniqueValueInfos(ren);
   return infos.map(uvi => {
     const sym = uvi?.symbol;
-    const hollow = esriPolygonFillIsHollow(sym);
+    const isLine = sym?.type === 'esriSLS';
+    const hollow = isLine || esriPolygonFillIsHollow(sym);
     const fill = hollow ? 'rgba(0,0,0,0)' : symbolFillColor(sym) ?? 'rgba(0,0,0,0)';
     const ol = symbolOutlineStyle(sym);
+    const lineCss = isLine && Array.isArray(sym?.color) ? esriColorToCss(sym.color) : null;
     return {
       value: normalizeUniqueValueKey(uvi?.value),
       label: String(uvi?.label ?? uvi?.value ?? '').trim() || normalizeUniqueValueKey(uvi?.value),
       fillColor: hollow ? 'transparent' : fill,
-      outlineColor: ol.color ? esriColorToCss(sym?.outline?.color) ?? ol.color : MAPBOX_SAFE_FALLBACK_COLOR,
+      outlineColor: lineCss ?? (ol.color ? esriColorToCss(sym?.outline?.color) ?? ol.color : MAPBOX_SAFE_FALLBACK_COLOR),
       outlineWidth: ol.width,
       hollow,
     };
@@ -189,6 +191,14 @@ function symbolFillColor(symbol: any): string | null {
 }
 
 function symbolOutlineStyle(symbol: any): { color: string | null; width: number; opacity: number } {
+  if (symbol?.type === 'esriSLS' && Array.isArray(symbol.color)) {
+    const color = esriColorToRgbCss(symbol.color);
+    const w =
+      typeof symbol.width === 'number' && Number.isFinite(symbol.width)
+        ? Math.max(1, Math.min(8, Math.round(symbol.width / 2)))
+        : 3;
+    return { color, width: w, opacity: esriColorAlpha(symbol.color) };
+  }
   const o = symbol?.outline;
   if (!o) return { color: null, width: 1, opacity: 1 };
   const color = Array.isArray(o.color) ? esriColorToRgbCss(o.color) : null;

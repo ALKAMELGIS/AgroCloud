@@ -52,10 +52,91 @@ describe('arcgisFeatureToLeafletPathOptions', () => {
   })
 })
 
+const IRRIGATION_MAIN_PIPE_DRAWING_INFO = {
+  renderer: {
+    type: 'uniqueValue',
+    field1: 'SUBTYPE',
+    uniqueValueGroups: [
+      {
+        heading: 'SUBTYPE',
+        classes: [
+          {
+            label: 'Distribution Main',
+            symbol: {
+              type: 'esriSLS',
+              style: 'esriSLSSolid',
+              color: [0, 77, 168, 255],
+              width: 14,
+            },
+            values: [['1']],
+          },
+          {
+            label: 'Transmission Main',
+            symbol: {
+              type: 'esriSLS',
+              style: 'esriSLSSolid',
+              color: [228, 26, 28, 255],
+              width: 14,
+            },
+            values: [['2']],
+          },
+        ],
+      },
+    ],
+  },
+}
+
+describe('irrigation main pipe line symbology', () => {
+  it('maps SUBTYPE to esriSLS color and weight', () => {
+    const style = arcgisFeatureToLeafletPathOptions(IRRIGATION_MAIN_PIPE_DRAWING_INFO, { SUBTYPE: 1 })
+    expect(style.color).toBe('#004da8')
+    expect(style.weight).toBeGreaterThanOrEqual(2)
+    expect(style.fillOpacity).toBe(0)
+  })
+
+  it('maps another SUBTYPE code', () => {
+    const style = arcgisFeatureToLeafletPathOptions(IRRIGATION_MAIN_PIPE_DRAWING_INFO, { SUBTYPE: '2' })
+    expect(style.color).toBe('#e41a1c')
+  })
+})
+
+const IRRIGATION_VALVE_DRAWING_INFO = {
+  renderer: {
+    type: 'uniqueValue',
+    field1: 'SUBTYPE',
+    uniqueValueGroups: [
+      {
+        heading: 'SUBTYPE',
+        classes: [
+          {
+            label: 'Solenoid',
+            symbol: {
+              type: 'esriPMS',
+              imageData:
+                'iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+              contentType: 'image/png',
+              width: 10,
+              height: 10,
+            },
+            values: [['5']],
+          },
+        ],
+      },
+    ],
+  },
+}
+
 describe('arcgisFeaturePointSymbolPreview', () => {
   it('returns a preview for a matched unique-value feature', () => {
     const preview = arcgisFeaturePointSymbolPreview(AGRO_STRUCTURES_DRAWING_INFO, { Structure_Type: 1000 })
     expect(preview?.strokeColor).toBeTruthy()
     expect(preview?.fillColor).toBe('#4ce600')
+  })
+
+  it('maps Irrigation_System_Valve SUBTYPE to esriPMS picture marker', () => {
+    const preview = arcgisFeaturePointSymbolPreview(IRRIGATION_VALVE_DRAWING_INFO, { SUBTYPE: 5 })
+    expect(preview?.kind).toBe('picture')
+    expect(preview?.imageUrl).toMatch(/^data:image\/png;base64,/)
+    expect(preview?.imageWidth).toBe(10)
   })
 })

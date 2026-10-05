@@ -83,7 +83,35 @@ export function normalizeDevelopEliteMapDataLayerOrder(
   for (const id of DEVELOP_ELITE_MAP_DATA_LAYER_IDS) {
     if (!seen.has(id)) out.push(id)
   }
-  return placeAgriLocationAfterTrees(out)
+  return placeAgriLocationAfterTrees(ensureMapOverlaysAboveStructureFills(out))
+}
+
+const DEVELOP_ELITE_OVERLAY_ABOVE_STRUCTURE_IDS: DevelopEliteMapDataLayerId[] = [
+  'trees',
+  'irrigation-valves',
+  'agri-location',
+  'irrigation-main-pipe',
+]
+
+/** Valves / pipes / trees must draw above opaque structure polygons (panel order: lower index = on top). */
+function ensureMapOverlaysAboveStructureFills(
+  order: DevelopEliteMapDataLayerId[],
+): DevelopEliteMapDataLayerId[] {
+  const structureIdx = order.indexOf('agro-structures')
+  if (structureIdx < 0) return order
+  let next = [...order]
+  for (const id of DEVELOP_ELITE_OVERLAY_ABOVE_STRUCTURE_IDS) {
+    const idx = next.indexOf(id)
+    if (idx < 0 || idx < structureIdx) continue
+    next = next.filter(layerId => layerId !== id)
+    const structuresAt = next.indexOf('agro-structures')
+    if (structuresAt < 0) {
+      next.unshift(id)
+      continue
+    }
+    next.splice(structuresAt, 0, id)
+  }
+  return next
 }
 
 /** Keep point overlays stacked: Tree → Irrigation valves → AgroLocation (when present). */

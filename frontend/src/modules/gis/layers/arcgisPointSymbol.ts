@@ -87,6 +87,39 @@ export function parseEsriPmsSymbol(symbol: any, layerOpacity = 1): ArcgisPointSy
   };
 }
 
+export type ArcgisLineSymbolPreview = {
+  color: string
+  weight: number
+  opacity: number
+  dashArray?: string
+}
+
+/** Map ArcGIS line width (often 10–16 on utility layers) to Leaflet stroke weight. */
+export function arcgisEsriLineWeight(width: number): number {
+  if (!Number.isFinite(width)) return 3
+  return Math.max(2, Math.min(9, Math.round(width / 2)))
+}
+
+function esriLineDashArray(style: string): string | undefined {
+  const s = String(style || '').toLowerCase()
+  if (s.includes('dashdot')) return '10 6 2 6'
+  if (s.includes('dot')) return '2 8'
+  if (s.includes('dash')) return '10 8'
+  return undefined
+}
+
+export function parseEsriSlsSymbol(symbol: any, layerOpacity = 1): ArcgisLineSymbolPreview | null {
+  if (!symbol || symbol.type !== 'esriSLS') return null
+  const stroke = esriColorToHexAndOpacity(symbol.color, layerOpacity)
+  const width = Number.isFinite(symbol.width) ? Number(symbol.width) : 2
+  return {
+    color: stroke.hex,
+    weight: arcgisEsriLineWeight(width),
+    opacity: stroke.opacity,
+    dashArray: esriLineDashArray(String(symbol.style || '')),
+  }
+}
+
 export function parseEsriSfsSymbol(symbol: any, layerOpacity = 1): ArcgisPointSymbolPreview | null {
   if (!symbol || symbol.type !== 'esriSFS') return null;
   const fill = esriColorToHexAndOpacity(symbol.color, layerOpacity);

@@ -36,6 +36,18 @@ describe('developEliteMapDataLayers', () => {
     ])
   })
 
+  it('keeps irrigation valves above agro-structures when order was saved wrong', () => {
+    const order = normalizeDevelopEliteMapDataLayerOrder([
+      'agro-structures',
+      'irrigation-valves',
+      'irrigation-main-pipe',
+      'trees',
+      'world-countries',
+    ])
+    expect(order.indexOf('irrigation-valves')).toBeLessThan(order.indexOf('agro-structures'))
+    expect(order.indexOf('irrigation-main-pipe')).toBeLessThan(order.indexOf('agro-structures'))
+  })
+
   it('maps order to layer defs', () => {
     const defs = orderDevelopEliteMapDataLayerDefs(['trees', 'agro-structures', 'world-countries'])
     expect(defs.map(d => d.id)).toEqual(['trees', 'agro-structures', 'world-countries'])

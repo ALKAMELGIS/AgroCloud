@@ -6,7 +6,12 @@ import {
   pickRendererPrimaryField,
   sanitizeArcgisDrawingInfoForClient,
 } from './arcgisDrawingInfoMapbox'
-import { parseEsriPointSymbol, parseEsriSfsSymbol, type ArcgisPointSymbolPreview } from './arcgisPointSymbol'
+import {
+  parseEsriPointSymbol,
+  parseEsriSfsSymbol,
+  parseEsriSlsSymbol,
+  type ArcgisPointSymbolPreview,
+} from './arcgisPointSymbol'
 
 const FALLBACK: PathOptions = {
   color: '#64748b',
@@ -66,6 +71,19 @@ export function esriPolygonSymbolToLeafletPathOptions(symbol: unknown, layerOpac
     fillOpacity: hollow ? 0 : preview.opacity,
     opacity: 1,
   }
+}
+
+export function resolveArcgisRendererSymbol(
+  drawingInfo: unknown,
+  properties: GeoJSON.GeoJsonProperties | null | undefined,
+): unknown {
+  const sanitized = sanitizeArcgisDrawingInfoForClient(drawingInfo) ?? drawingInfo
+  const ren = (sanitized as { renderer?: unknown } | null)?.renderer
+  const props =
+    properties && typeof properties === 'object' && !Array.isArray(properties)
+      ? (properties as Record<string, unknown>)
+      : {}
+  return resolveRendererSymbol(ren, props)
 }
 
 function resolveRendererSymbol(renderer: unknown, props: Record<string, unknown>): unknown {
@@ -161,6 +179,25 @@ export function arcgisFeatureToLeafletPathOptions(
       ? (properties as Record<string, unknown>)
       : {}
   const symbol = resolveRendererSymbol(ren, props)
+  const line = parseEsriSlsSymbol(symbol, layerOpacity)
+  if (line) {
+    const base: PathOptions = {
+      color: line.color,
+      weight: line.weight,
+      opacity: line.opacity,
+      fillOpacity: 0,
+      dashArray: line.dashArray,
+    }
+    if (options?.highlighted) {
+      return {
+        ...base,
+        color: '#39ff14',
+        weight: Math.max(line.weight + 2, 4),
+        opacity: 1,
+      }
+    }
+    return base
+  }
   const base = esriPolygonSymbolToLeafletPathOptions(symbol, layerOpacity)
   if (options?.highlighted) {
     const fill = base.fillColor ?? '#4ce600'

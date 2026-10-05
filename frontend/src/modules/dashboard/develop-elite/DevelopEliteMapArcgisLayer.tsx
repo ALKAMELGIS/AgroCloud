@@ -1,7 +1,15 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { LatLngExpression, Layer } from 'leaflet'
 import L from 'leaflet'
-import { GeoJSON, useMap } from 'react-leaflet'
+import { GeoJSON, useMap, useMapEvents } from 'react-leaflet'
+import {
+  collectIrrigationMainPipeArrowPlacements,
+  irrigationMainPipeArrowIconHtml,
+  irrigationMainPipeArrowSizePx,
+  irrigationMainPipeArrowSpacingMeters,
+  irrigationMainPipePathOptions,
+  irrigationMainPipeShowFlowArrows,
+} from './developEliteIrrigationMainPipeSymbology'
 import {
   arcgisFeaturePointSymbolPreview,
   arcgisFeatureToLeafletPathOptions,
@@ -18,6 +26,8 @@ import {
 
 /** Slightly larger map markers for AgroLocation (picture / simple points). */
 const DEVELOP_ELITE_AGRI_LOCATION_POINT_SCALE = 1.22
+/** Irrigation valve picture markers are small in ArcGIS (10–15px); boost for satellite basemap. */
+const DEVELOP_ELITE_IRRIGATION_VALVES_POINT_SCALE = 1.45
 
 type Props = {
   layerKey: DevelopEliteMapDataLayerId
@@ -55,7 +65,9 @@ function pointLayer(
         iconSize: [w, h],
         iconAnchor: [w / 2, h / 2],
       }),
+      pane: vectorPane,
       interactive: true,
+      zIndexOffset: 120,
     })
   }
   return L.circleMarker(latlng, {
@@ -79,10 +91,20 @@ export function DevelopEliteMapArcgisLayer({
   onFeatureClick,
 }: Props) {
   const map = useMap()
+  const isMainPipeLayer = layerKey === 'irrigation-main-pipe'
+  const [mapZoom, setMapZoom] = useState(() => map.getZoom())
+  useMapEvents({
+    zoomend: () => setMapZoom(map.getZoom()),
+    moveend: () => setMapZoom(map.getZoom()),
+  })
   const layerOpacity = useMemo(() => layerOpacityFromDrawingInfo(drawingInfo), [drawingInfo])
   const drawingSig = useMemo(() => JSON.stringify(drawingInfo ?? null), [drawingInfo])
   const pointSymbolScale =
-    layerKey === 'agri-location' ? DEVELOP_ELITE_AGRI_LOCATION_POINT_SCALE : 1
+    layerKey === 'agri-location'
+      ? DEVELOP_ELITE_AGRI_LOCATION_POINT_SCALE
+      : layerKey === 'irrigation-valves'
+        ? DEVELOP_ELITE_IRRIGATION_VALVES_POINT_SCALE
+        : 1
   const vectorSmoothFactor = 1
   const vectorPane = DEVELOP_ELITE_MAP_DATA_PANE
 
@@ -90,6 +112,9 @@ export function DevelopEliteMapArcgisLayer({
 
   const styleFeature = useCallback(
     (feature?: GeoJSON.Feature) => {
+      if (isMainPipeLayer) {
+        return irrigationMainPipePathOptions(drawingInfo, feature?.properties, mapZoom, { layerOpacity })
+      }
       const base = arcgisFeatureToLeafletPathOptions(drawingInfo, feature?.properties, { layerOpacity })
       if (layerKey !== 'world-countries') return base
       const weight = base.weight ?? 1
@@ -112,8 +137,42 @@ export function DevelopEliteMapArcgisLayer({
       }
       return base
     },
-    [drawingInfo, layerKey, layerOpacity],
+    [drawingInfo, isMainPipeLayer, layerKey, layerOpacity, mapZoom],
   )
+
+  useEffect(() => {
+    if (!isMainPipeLayer || !geojson.features.length) return
+    const group = L.layerGroup([], { pane: vectorPane })
+    map.addLayer(group)
+    const latitude = map.getCenter().lat
+    const spacing = irrigationMainPipeArrowSpacingMeters(mapZoom, latitude)
+    if (irrigationMainPipeShowFlowArrows(mapZoom)) {
+      for (const feature of geojson.features) {
+        const style = irrigationMainPipePathOptions(drawingInfo, feature.properties, mapZoom, { layerOpacity })
+        const color = String(style.color ?? '#004da8')
+        const weight = style.weight ?? 4
+        const size = irrigationMainPipeArrowSizePx(weight)
+        const placements = collectIrrigationMainPipeArrowPlacements(feature.geometry ?? null, spacing)
+        for (const placement of placements) {
+          const icon = L.divIcon({
+            className: 'develop-elite-irrigation-pipe-arrow-icon',
+            html: irrigationMainPipeArrowIconHtml(color, size, placement.bearingDeg),
+            iconSize: [size, size],
+            iconAnchor: [size / 2, size / 2],
+          })
+          L.marker([placement.lat, placement.lng], {
+            icon,
+            pane: vectorPane,
+            interactive: false,
+            keyboard: false,
+          }).addTo(group)
+        }
+      }
+    }
+    return () => {
+      map.removeLayer(group)
+    }
+  }, [drawingInfo, geojson, isMainPipeLayer, layerOpacity, map, mapZoom, vectorPane])
 
   const pointToLayer = useCallback(
     (feature: GeoJSON.Feature, latlng: LatLngExpression) => {
@@ -156,7 +215,7 @@ export function DevelopEliteMapArcgisLayer({
 
   return (
     <GeoJSON
-      key={`${layerKey}-${drawingSig}-${dataSig}`}
+      key={`${layerKey}-${drawingSig}-${dataSig}${isMainPipeLayer ? `-z${mapZoom}` : ''}`}
       data={geojson as GeoJSON.GeoJsonObject}
       pane={vectorPane}
       renderer={vectorRenderer}

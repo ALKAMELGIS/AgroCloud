@@ -1,3 +1,7 @@
+import {
+  GOOGLE_EARTH_BASEMAP_ID,
+  pickDefaultBasemapId,
+} from '@/modules/gis/map/basemapCatalog'
 import { WORLD_COUNTRIES_FS51_URL } from '@/modules/gis/map/worldCountriesLayer'
 import { AGRO_STRUCTURES_FS21_URL } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
 import {
@@ -27,6 +31,30 @@ export const DEVELOP_ELITE_LAYOUT_PRESET_LS_KEY = 'develop_elite_layout_preset_v
 export const DEVELOP_ELITE_MAP_LAYER_ORDER_PRESET_LS_KEY = 'develop_elite_map_layer_order_preset_v'
 /** Bump when default map layer stack changes (e.g. add irrigation valves layer). */
 export const DEVELOP_ELITE_MAP_LAYER_ORDER_PRESET_VERSION = 3
+export const DEVELOP_ELITE_BASEMAP_PRESET_LS_KEY = 'develop_elite_basemap_preset_v'
+export const DEVELOP_ELITE_BASEMAP_PRESET_VERSION = 1
+
+/** Older saved defaults before Google Earth was the dashboard standard. */
+const DEVELOP_ELITE_LEGACY_DEFAULT_BASEMAP_IDS = new Set([
+  '',
+  'esri',
+  'satellite',
+  'esri-imagery',
+  'hybrid',
+  'street',
+  'terrain',
+  'osm',
+  'carto-positron',
+  'carto-dark-matter',
+])
+
+export function normalizeDevelopEliteBasemapId(stored: unknown): string {
+  const raw = String(stored ?? '').trim()
+  if (!raw || DEVELOP_ELITE_LEGACY_DEFAULT_BASEMAP_IDS.has(raw)) {
+    return GOOGLE_EARTH_BASEMAP_ID
+  }
+  return pickDefaultBasemapId(raw)
+}
 
 export const DEFAULT_DEVELOP_ELITE_STRUCTURES_URL =
   'https://services1.arcgis.com/jz3ndhbYV5K9NwI8/arcgis/rest/services/Agro_Structures/FeatureServer/0'
@@ -248,7 +276,7 @@ export const DEFAULT_DEVELOP_ELITE_CONFIG: DevelopEliteDashboardConfig = {
   agriLocationLayerUrl: DEFAULT_DEVELOP_ELITE_AGRI_LOCATION_LAYER_URL,
   irrigationValvesLayerUrl: DEFAULT_DEVELOP_ELITE_IRRIGATION_VALVES_LAYER_URL,
   irrigationMainPipeLayerUrl: DEFAULT_DEVELOP_ELITE_IRRIGATION_MAIN_PIPE_LAYER_URL,
-  basemapId: 'google-earth-satellite',
+  basemapId: GOOGLE_EARTH_BASEMAP_ID,
   chartGroupField: 'Crop_Type',
   chartValueField: 'Total_Tree',
   chartValueLabel: 'Per Tons',
@@ -326,7 +354,9 @@ export function loadDevelopEliteDashboardConfig(): DevelopEliteDashboardConfig {
     const mapOrderPresetKey = DEVELOP_ELITE_MAP_LAYER_ORDER_PRESET_LS_KEY
     const storedMapOrderPreset = Number(window.localStorage.getItem(mapOrderPresetKey) || 0)
     const chartPalettePresetKey = DEVELOP_ELITE_CHART_PALETTE_PRESET_LS_KEY
+    const basemapPresetKey = DEVELOP_ELITE_BASEMAP_PRESET_LS_KEY
     const storedChartPalettePreset = Number(window.localStorage.getItem(chartPalettePresetKey) || 0)
+    const storedBasemapPreset = Number(window.localStorage.getItem(basemapPresetKey) || 0)
     let layout = normalizeDevelopEliteLayout(parsed.layout)
     if (storedPreset < DEVELOP_ELITE_LAYOUT_PRESET_VERSION) {
       layout = normalizeDevelopEliteLayout({
@@ -377,6 +407,12 @@ export function loadDevelopEliteDashboardConfig(): DevelopEliteDashboardConfig {
       irrigationMainPipeLayerUrl: normalizeDevelopEliteIrrigationMainPipeLayerUrl(
         String(parsed.irrigationMainPipeLayerUrl || ''),
       ),
+      basemapId: (() => {
+        if (storedBasemapPreset < DEVELOP_ELITE_BASEMAP_PRESET_VERSION) {
+          return GOOGLE_EARTH_BASEMAP_ID
+        }
+        return normalizeDevelopEliteBasemapId(parsed.basemapId)
+      })(),
       chartGroupField: String(parsed.chartGroupField || DEFAULT_DEVELOP_ELITE_CONFIG.chartGroupField),
       chartValueField:
         String(parsed.chartValueField ?? DEFAULT_DEVELOP_ELITE_CONFIG.chartValueField).trim() ||
@@ -420,7 +456,8 @@ export function loadDevelopEliteDashboardConfig(): DevelopEliteDashboardConfig {
     if (
       storedPreset < DEVELOP_ELITE_LAYOUT_PRESET_VERSION ||
       storedMapOrderPreset < DEVELOP_ELITE_MAP_LAYER_ORDER_PRESET_VERSION ||
-      storedChartPalettePreset < DEVELOP_ELITE_CHART_PALETTE_PRESET_VERSION
+      storedChartPalettePreset < DEVELOP_ELITE_CHART_PALETTE_PRESET_VERSION ||
+      storedBasemapPreset < DEVELOP_ELITE_BASEMAP_PRESET_VERSION
     ) {
       try {
         window.localStorage.setItem(
@@ -430,6 +467,10 @@ export function loadDevelopEliteDashboardConfig(): DevelopEliteDashboardConfig {
         window.localStorage.setItem(
           chartPalettePresetKey,
           String(DEVELOP_ELITE_CHART_PALETTE_PRESET_VERSION),
+        )
+        window.localStorage.setItem(
+          basemapPresetKey,
+          String(DEVELOP_ELITE_BASEMAP_PRESET_VERSION),
         )
       } catch {
         /* ignore */
