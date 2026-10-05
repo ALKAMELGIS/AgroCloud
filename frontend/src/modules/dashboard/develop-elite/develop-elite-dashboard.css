@@ -969,11 +969,14 @@ body.develop-elite--widget-dragging {
 
 .develop-elite__list--airport-ticker {
   scroll-behavior: auto;
+  overflow-y: auto !important;
+  overflow-anchor: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 .develop-elite__list--airport-ticker > li {
   content-visibility: visible;
-  contain-intrinsic-size: auto 36px;
+  contain-intrinsic-size: unset;
 }
 
 .develop-elite__list--airport-ticker .develop-elite__list-title--search-hit {
@@ -1031,7 +1034,7 @@ body.develop-elite--widget-dragging {
   min-height: 0;
 }
 
-.develop-elite__list--scroll > li {
+.develop-elite__list--scroll:not(.develop-elite__list--airport-ticker) > li {
   content-visibility: auto;
   contain-intrinsic-size: auto 36px;
 }
@@ -3659,6 +3662,23 @@ a.develop-elite-settings__data-link {
   justify-content: space-evenly;
   flex: 1 1 auto;
   min-height: 0;
+}
+
+.develop-elite--grid-dashboard .develop-elite__panel--farms-only,
+.develop-elite--grid-dashboard .develop-elite__zones-col--in-grid {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.develop-elite--grid-dashboard .develop-elite__panel--farms-only > .develop-elite__list--scroll,
+.develop-elite--grid-dashboard .develop-elite__zones-col--in-grid > .develop-elite__list--scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  overflow-y: auto;
 }
 
 .develop-elite--grid-dashboard .develop-elite__panel--countries-only > .develop-elite__list--scroll > li {
