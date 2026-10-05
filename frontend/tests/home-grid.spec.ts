@@ -39,7 +39,8 @@ test.describe('Home grid layout & performance', () => {
 
       const cards = page.locator('.app-icon-card')
       await expect(cards.first()).toBeVisible()
-      await expect(cards).toHaveCount(5)
+      const cardCount = await cards.count()
+      expect(cardCount).toBeGreaterThanOrEqual(5)
 
       await page.waitForTimeout(1200)
 

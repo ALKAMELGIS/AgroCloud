@@ -592,6 +592,27 @@ html[data-theme='dark'] .sys-settings-tab:hover:not(.sys-settings-tab--active) {
   margin-bottom: 0;
 }
 
+.sys-weather-thresholds-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px 16px;
+  margin-top: 10px;
+}
+
+.sys-weather-thresholds-grid__row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.sys-weather-thresholds-grid__row input {
+  max-width: 120px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--ds-color-border, #e2e8f0);
+}
+
 .sys-settings-api-divider {
   margin: 16px 0 18px;
   border: none;

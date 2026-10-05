@@ -48,6 +48,18 @@ export type HomePageSettings = {
   backgroundImage: string
 }
 
+/** Operational thresholds for Weather Intelligence insights & alerts (Open-Meteo context). */
+export type WeatherOperationsSettings = {
+  windSprayWarningKmh: number
+  windSprayCautionKmh: number
+  heatStressC: number
+  frostC: number
+  heavyRainMm6h: number
+  highHumidityPct: number
+  lowHumidityPct: number
+  highWindAlertKmh: number
+}
+
 export type HeaderSettings = {
   logoText: string
   logoTextAr: string
@@ -116,6 +128,7 @@ export type SystemSettingsPersistedV1 = {
    * role pickers. Order follows the global role order; omit roles by excluding them from the array.
    */
   directoryRoleCatalog: Role[]
+  weatherOperations: WeatherOperationsSettings
 }
 
 export type SystemSettingsDraft = SystemSettingsPersistedV1 & { dirty?: boolean }

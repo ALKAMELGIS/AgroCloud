@@ -20,6 +20,7 @@ import { useDevelopEliteMapLayerLive } from './DevelopEliteMapLayerLive'
 import { developEliteLayerLiveHasDrawnAoiClip } from './developEliteMapLayerLiveCore'
 import { SI_IMAGERY_COMMITTED_AOI_KEY } from '@/modules/remote-sensing/temporal-analysis/siImageryTimeSeriesFields'
 import { prefetchDevelopEliteImageryTimeSeriesPanel } from './developElitePrefetchImageryTimeSeries'
+import { Link } from 'react-router-dom'
 import { registerDevelopEliteMapIntelPick } from './developEliteMapIntelPick'
 
 type ToolId = 'intel' | 'swipe'
@@ -262,6 +263,14 @@ export function DevelopEliteMapInsightEngine() {
               <span>
                 Rain {insight.snapshot.precipMm != null ? `${insight.snapshot.precipMm.toFixed(1)} mm` : '—'}
               </span>
+              {insight.point ? (
+                <Link
+                  className="develop-elite-map__insight-wi-link"
+                  to={`/weather/intelligence?lat=${insight.point.lat}&lng=${insight.point.lng}`}
+                >
+                  Open Weather Intelligence
+                </Link>
+              ) : null}
             </div>
           ) : null}
         </aside>,

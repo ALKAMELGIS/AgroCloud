@@ -3,10 +3,22 @@ import L from 'leaflet'
 
 const INTEL_PICK_IGNORE_SELECTOR = [
   '.develop-elite-map__insight-panel',
+  '.develop-elite-map__insight-tools',
+  '.develop-elite-map__insight-btn',
   '.develop-elite-map__draw-widget-host',
   '.si-map-draw-widget',
   '.develop-elite-map__swipe-chrome-host',
   '.si-map-swipe-overlay',
+  '.weather-map-stage__insight-rail',
+  '.weather-map-stage__insight-panel',
+  '.weather-map-stage__map-tool-stack',
+  '.weather-map-stage__map-search',
+  '.weather-map-stage__basemap-panel',
+  '.weather-map-stage__map-tool-btn',
+  '.weather-map-stage__layers-top',
+  '.weather-map-stage__toolbar-float',
+  '.weather-map-stage__chip',
+  '.weather-map-stage__float-tool',
   '.leaflet-control',
   '.leaflet-popup',
 ].join(',')

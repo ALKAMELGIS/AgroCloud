@@ -13,6 +13,7 @@ import { sortDevelopEliteZoneListByMapView } from './developEliteKpiEngine'
 import { useDevelopEliteCompactViewport } from './developEliteCompactViewport'
 import { DevelopEliteListsDrawer } from './DevelopEliteListsDrawer'
 import { developEliteAccent } from '@/theme/dashboardTokens'
+import { useAgroViewport } from '@/theme/useAgroViewport'
 import '../styles/dashboard.css'
 
 type SettingsTabId = 'data' | 'kpi' | 'charts' | 'map' | 'appearance'
@@ -31,6 +32,7 @@ export default function DevelopEliteAgroDashboard() {
   const [layoutEditMode, setLayoutEditMode] = useState(false)
   const [listsDrawerOpen, setListsDrawerOpen] = useState(false)
   const compactViewport = useDevelopEliteCompactViewport()
+  const agroViewport = useAgroViewport()
   const countryMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -123,7 +125,7 @@ export default function DevelopEliteAgroDashboard() {
 
   return (
     <div
-      className={`develop-elite-dashboard develop-elite page page-tight develop-elite--grid-dashboard${layoutEditMode ? ' develop-elite--layout-edit' : ''}${layout.themeIconsUnified ? ' develop-elite--theme-icons-unified' : ''}${compactViewport ? ' develop-elite--compact-viewport' : ''}`}
+      className={`develop-elite-dashboard develop-elite page page-tight develop-elite--grid-dashboard${layoutEditMode ? ' develop-elite--layout-edit' : ''}${layout.themeIconsUnified ? ' develop-elite--theme-icons-unified' : ''}${compactViewport ? ' develop-elite--compact-viewport' : ''}${agroViewport === 'mobile' ? ' develop-elite--viewport-mobile' : ''}${agroViewport === 'tablet' ? ' develop-elite--viewport-tablet' : ''}`}
       style={{ ...layoutStyle, ['--de-accent' as string]: developEliteAccent }}
     >
       <header className="develop-elite__header develop-elite__header--compact">

@@ -22,6 +22,8 @@ import { registerAcpWeatherRoutes } from './acpWeatherRoutes.js'
 import { registerChirpsRoutes } from './chirpsRoutes.js'
 import { registerWaporAetRoutes } from './waporAetProxy.js'
 import { registerOpenMeteoEt0Routes } from './openMeteoEt0Proxy.js'
+import { registerWeatherDashboardRoutes } from './weatherDashboardRoutes.js'
+import { registerGfsRasterRoutes } from './gfsRasterRoutes.js'
 import { registerCropClassificationRoutes } from './cropClassificationProxy.js'
 import { registerTreeDetectionRoutes } from './treeDetectionProxy.js'
 import { registerSamDetectionRoutes } from './samDetectionProxy.js'
@@ -1919,6 +1921,8 @@ registerAcpWeatherRoutes(app)
 registerChirpsRoutes(app)
 registerWaporAetRoutes(app)
 registerOpenMeteoEt0Routes(app)
+registerWeatherDashboardRoutes(app)
+registerGfsRasterRoutes(app)
 registerCropClassificationRoutes(app, { secretsFilePath: API_SECRETS_FILE, broadcast })
 registerTreeDetectionRoutes(app)
 registerDelineateAnythingRoutes(app)

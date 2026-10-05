@@ -119,6 +119,13 @@ const menuItems: MenuItem[] = [
     to: '/dashboards/ai-agro-cloud',
   },
   {
+    id: 'weather',
+    label: { en: 'Weather', ar: 'الطقس' },
+    icon: 'fa-solid fa-cloud-sun',
+    color: '#22D3EE',
+    to: '/weather/intelligence',
+  },
+  {
     id: 'camera-direct',
     label: { en: 'Camera', ar: 'الكاميرا' },
     icon: 'fa-solid fa-camera',

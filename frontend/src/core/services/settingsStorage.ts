@@ -89,6 +89,16 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettingsPersistedV1 = {
   },
   customApiTokenSlots: [],
   directoryRoleCatalog: [...DIRECTORY_ROLES_CANONICAL],
+  weatherOperations: {
+    windSprayWarningKmh: 25,
+    windSprayCautionKmh: 15,
+    heatStressC: 38,
+    frostC: 2,
+    heavyRainMm6h: 5,
+    highHumidityPct: 85,
+    lowHumidityPct: 25,
+    highWindAlertKmh: 28,
+  },
 }
 
 function optionalTrimmedString(value: unknown, maxLen?: number): string {
@@ -271,6 +281,26 @@ export function mergeWithDefaults(partial: Partial<SystemSettingsPersistedV1>): 
           : DEFAULT_SYSTEM_SETTINGS.headerSettings.layoutPreset,
       autoSave: hdrRaw?.autoSave === true,
     },
+    weatherOperations: sanitizeWeatherOperations(partial.weatherOperations),
+  }
+}
+
+function sanitizeWeatherOperations(raw: unknown): SystemSettingsPersistedV1['weatherOperations'] {
+  const d = DEFAULT_SYSTEM_SETTINGS.weatherOperations
+  const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const num = (key: keyof typeof d) => {
+    const v = Number(o[key])
+    return Number.isFinite(v) ? v : d[key]
+  }
+  return {
+    windSprayWarningKmh: num('windSprayWarningKmh'),
+    windSprayCautionKmh: num('windSprayCautionKmh'),
+    heatStressC: num('heatStressC'),
+    frostC: num('frostC'),
+    heavyRainMm6h: num('heavyRainMm6h'),
+    highHumidityPct: num('highHumidityPct'),
+    lowHumidityPct: num('lowHumidityPct'),
+    highWindAlertKmh: num('highWindAlertKmh'),
   }
 }
 

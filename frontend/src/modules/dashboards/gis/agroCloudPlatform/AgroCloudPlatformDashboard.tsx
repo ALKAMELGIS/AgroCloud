@@ -37,25 +37,48 @@ function MapCanvasFallback() {
   )
 }
 
-function AcpSectionNav({ showFields, showRight }: { showFields: boolean; showRight: boolean }) {
-  const jump = useCallback((id: string) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [])
+export type AcpCompactSection = 'fields' | 'map' | 'insights'
 
+function AcpSectionNav({
+  active,
+  onChange,
+  showFields,
+  showRight,
+}: {
+  active: AcpCompactSection
+  onChange: (section: AcpCompactSection) => void
+  showFields: boolean
+  showRight: boolean
+}) {
   return (
     <nav className="acp-section-nav" role="navigation" aria-label="Dashboard sections">
       {showFields ? (
-        <button type="button" className="acp-section-nav__btn" onClick={() => jump('acp-section-fields')}>
+        <button
+          type="button"
+          className={`acp-section-nav__btn${active === 'fields' ? ' is-active' : ''}`}
+          aria-current={active === 'fields' ? 'page' : undefined}
+          onClick={() => onChange('fields')}
+        >
           <i className="fa-solid fa-list" aria-hidden />
           <span>Fields</span>
         </button>
       ) : null}
-      <button type="button" className="acp-section-nav__btn" onClick={() => jump('acp-section-map')}>
+      <button
+        type="button"
+        className={`acp-section-nav__btn acp-section-nav__btn--map${active === 'map' ? ' is-active' : ''}`}
+        aria-current={active === 'map' ? 'page' : undefined}
+        onClick={() => onChange('map')}
+      >
         <i className="fa-solid fa-map" aria-hidden />
         <span>Map</span>
       </button>
       {showRight ? (
-        <button type="button" className="acp-section-nav__btn" onClick={() => jump('acp-section-insights')}>
+        <button
+          type="button"
+          className={`acp-section-nav__btn${active === 'insights' ? ' is-active' : ''}`}
+          aria-current={active === 'insights' ? 'page' : undefined}
+          onClick={() => onChange('insights')}
+        >
           <i className="fa-solid fa-chart-pie" aria-hidden />
           <span>Insights</span>
         </button>
@@ -70,6 +93,7 @@ function AgroCloudPlatformBody() {
   const compact = isAcpCompactLayout(bp)
   const mapToolbarRef = useRef<AcpMapToolbarHandle>(null)
   const [activeMapPanel, setActiveMapPanel] = useState<AcpMapPanelId | null>(null)
+  const [compactSection, setCompactSection] = useState<AcpCompactSection>('map')
   const toolPanelOpen = activeMapPanel != null
   const {
     filteredRows,
@@ -86,18 +110,22 @@ function AgroCloudPlatformBody() {
   }, [])
 
   useEffect(() => {
-    if (!compact) setActiveMapPanel(null)
+    if (!compact) {
+      setActiveMapPanel(null)
+      setCompactSection('map')
+    }
   }, [compact])
 
   const onMapPanelOpen = useCallback(() => {
     if (!compact) return
-    document.getElementById('acp-section-map')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setCompactSection('map')
   }, [compact])
 
   const shellClass = [
     'acp-shell',
     `acp-shell--${bp}`,
     compact ? 'acp-shell--compact' : '',
+    compact ? `acp-shell--view-${compactSection}` : '',
     toolPanelOpen ? 'acp-shell--tool-panel' : '',
     acp.config.panels.timeSeriesChart ? 'acp-shell--has-timeseries-chart' : '',
   ]
@@ -210,7 +238,12 @@ function AgroCloudPlatformBody() {
             onPanelOpen={onMapPanelOpen}
             onActivePanelChange={setActiveMapPanel}
           />
-          <AcpSectionNav showFields={showFields} showRight={showRight} />
+          <AcpSectionNav
+            active={compactSection}
+            onChange={setCompactSection}
+            showFields={showFields}
+            showRight={showRight}
+          />
         </>
       ) : (
         <>

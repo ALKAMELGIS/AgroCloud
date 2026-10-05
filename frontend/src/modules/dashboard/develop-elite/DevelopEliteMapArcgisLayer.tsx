@@ -42,6 +42,8 @@ type Props = {
   interactive?: boolean
   countryLabels?: Map<string, string> | null
   onFeatureClick?: (feature: GeoJSON.Feature) => void
+  /** Extra scale for picture/simple point symbols (e.g. weather map readability). */
+  pointSymbolScaleMultiplier?: number
 }
 
 function pointLayer(
@@ -96,6 +98,7 @@ export function DevelopEliteMapArcgisLayer({
   interactive = true,
   countryLabels = null,
   onFeatureClick,
+  pointSymbolScaleMultiplier = 1,
 }: Props) {
   const map = useMap()
   const isMainPipeLayer = layerKey === 'irrigation-main-pipe'
@@ -116,9 +119,10 @@ export function DevelopEliteMapArcgisLayer({
       : layerKey === 'irrigation-valves'
         ? DEVELOP_ELITE_IRRIGATION_VALVES_POINT_SCALE
         : 1
-  const pointSymbolScale = pointOnlyLayer
-    ? basePointSymbolScale * developEliteMapPointZoomScale(mapZoom)
-    : basePointSymbolScale
+  const pointSymbolScale =
+    (pointOnlyLayer
+      ? basePointSymbolScale * developEliteMapPointZoomScale(mapZoom)
+      : basePointSymbolScale) * Math.max(0.5, pointSymbolScaleMultiplier)
   const vectorSmoothFactor = 1
   const vectorPane = DEVELOP_ELITE_MAP_DATA_PANE
 

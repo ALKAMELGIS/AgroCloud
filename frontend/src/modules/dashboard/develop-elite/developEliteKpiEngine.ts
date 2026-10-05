@@ -19,6 +19,7 @@ import {
 } from '@/modules/gis/layers/arcgisDrawingInfoMapbox'
 import type { DevelopEliteDashboardConfig, DevelopEliteKpiCardConfig } from './developEliteDashboardConfig'
 import { structureFeatureMatchesCountryFilter } from './developEliteCountryFilter'
+import { comparePortfolioCountryListLabels } from './developEliteCountryListSort'
 
 export type DevelopEliteFilters = {
   country: string
@@ -655,7 +656,7 @@ export function buildCountryListItems(
       label: resolveAgroStructuresCountryLabel(code, ctx?.countryLabels) || v.label,
       count: v.count,
     }))
-    .sort((a, b) => compareDevelopEliteListNames(a.label, b.label))
+    .sort((a, b) => comparePortfolioCountryListLabels(a.label, b.label))
 }
 
 export function resolveDevelopEliteCountryFilterLabel(

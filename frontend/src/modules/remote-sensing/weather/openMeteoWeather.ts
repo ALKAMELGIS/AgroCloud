@@ -8,6 +8,8 @@ export type OpenMeteoDailyForecast = {
   tempMaxC: number | null
   tempMinC: number | null
   precipMm: number | null
+  /** Daily ET₀ (FAO) sum mm when requested from Open-Meteo. */
+  et0Mm?: number | null
   weatherCode: number | null
   conditionLabel: string
 }
@@ -314,7 +316,7 @@ function dailyDetailFromRaw(
   }
 }
 
-function parseHourlySeries(data: Record<string, unknown>): OpenMeteoHourlyPoint[] {
+export function parseHourlySeries(data: Record<string, unknown>): OpenMeteoHourlyPoint[] {
   const hourly = data.hourly as
     | {
         time?: string[]
@@ -631,25 +633,11 @@ export function metricUnit(metric: WeatherHistoryMetric): string {
   }
 }
 
-/** Current conditions only — for dashboard map pick (small payload, fast parse). */
-export async function fetchOpenMeteoWeatherMapPick(
+function snapshotFromOpenMeteoPayload(
   lat: number,
   lng: number,
-  signal?: AbortSignal,
-): Promise<OpenMeteoWeatherSnapshot> {
-  const url = new URL('https://api.open-meteo.com/v1/forecast')
-  url.searchParams.set('latitude', String(lat))
-  url.searchParams.set('longitude', String(lng))
-  url.searchParams.set('timezone', 'auto')
-  url.searchParams.set(
-    'current',
-    'temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_direction_10m',
-  )
-
-  const res = await fetch(url.toString(), { signal })
-  if (!res.ok) throw new Error(`Open-Meteo HTTP ${res.status}`)
-
-  const data = (await res.json()) as Record<string, unknown>
+  data: Record<string, unknown>,
+): OpenMeteoWeatherSnapshot {
   const tz = typeof data.timezone === 'string' ? data.timezone : 'UTC'
   const elev = typeof data.elevation === 'number' ? data.elevation : null
 
@@ -679,6 +667,107 @@ export async function fetchOpenMeteoWeatherMapPick(
     daily: [],
     nextHours: [],
   }
+}
+
+async function fetchOpenMeteoWeatherMapPickDirect(
+  lat: number,
+  lng: number,
+  signal?: AbortSignal,
+): Promise<OpenMeteoWeatherSnapshot> {
+  const url = new URL('https://api.open-meteo.com/v1/forecast')
+  url.searchParams.set('latitude', String(lat))
+  url.searchParams.set('longitude', String(lng))
+  url.searchParams.set('timezone', 'auto')
+  url.searchParams.set('wind_speed_unit', 'kmh')
+  url.searchParams.set(
+    'current',
+    'temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_direction_10m',
+  )
+
+  const res = await fetch(url.toString(), { signal })
+  if (!res.ok) throw new Error(`Open-Meteo HTTP ${res.status}`)
+  const data = (await res.json()) as Record<string, unknown>
+  return snapshotFromOpenMeteoPayload(lat, lng, data)
+}
+
+function snapshotFromCurrentFields(
+  lat: number,
+  lng: number,
+  current: Record<string, number | null | undefined>,
+): OpenMeteoWeatherSnapshot {
+  const num = (k: string) => {
+    const v = current[k]
+    return typeof v === 'number' && Number.isFinite(v) ? v : null
+  }
+  const code = num('weather_code')
+  const windDir = num('wind_direction_10m')
+  return {
+    lat,
+    lng,
+    timezone: 'UTC',
+    elevationM: null,
+    observedAt: new Date().toISOString(),
+    temperatureC: num('temperature_2m'),
+    weatherCode: code,
+    conditionLabel: wmoWeatherLabel(code),
+    windSpeedKmh: num('wind_speed_10m'),
+    windDirectionDeg: windDir,
+    windDirectionLabel: windDirectionLabel(windDir),
+    humidityPct: num('relative_humidity_2m'),
+    precipMm: num('precipitation'),
+    daily: [],
+    nextHours: [],
+  }
+}
+
+/** Current conditions — map pick (API proxy first, then Open-Meteo with retry). */
+export async function fetchOpenMeteoWeatherMapPick(
+  lat: number,
+  lng: number,
+  signal?: AbortSignal,
+): Promise<OpenMeteoWeatherSnapshot> {
+  try {
+    const { apiUrl, noteApiResponse } = await import('@/core/api/apiOrigin')
+    const res = await fetch(`${apiUrl('/api/weather/current')}?lat=${lat}&lng=${lng}`, {
+      signal,
+      credentials: 'same-origin',
+    })
+    noteApiResponse(res.status)
+    if (res.ok) {
+      const payload = (await res.json()) as { current?: Record<string, number | null> }
+      if (payload.current) return snapshotFromCurrentFields(lat, lng, payload.current)
+    }
+  } catch {
+    /* fall through */
+  }
+
+  try {
+    const { apiUrl, noteApiResponse } = await import('@/core/api/apiOrigin')
+    const res = await fetch(`${apiUrl('/api/weather/dashboard')}?lat=${lat}&lng=${lng}`, {
+      signal,
+      credentials: 'same-origin',
+    })
+    noteApiResponse(res.status)
+    if (res.ok) {
+      const payload = (await res.json()) as { openMeteo?: Record<string, unknown> }
+      if (payload.openMeteo) return snapshotFromOpenMeteoPayload(lat, lng, payload.openMeteo)
+    }
+  } catch {
+    /* fall through */
+  }
+
+  let lastError: unknown
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      return await fetchOpenMeteoWeatherMapPickDirect(lat, lng, signal)
+    } catch (e) {
+      lastError = e
+      const msg = e instanceof Error ? e.message : String(e)
+      if (!msg.includes('429') || attempt >= 3) break
+      await new Promise(r => window.setTimeout(r, 700 * (attempt + 1)))
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Open-Meteo map pick failed')
 }
 
 export async function fetchOpenMeteoWeather(lat: number, lng: number): Promise<OpenMeteoWeatherSnapshot> {

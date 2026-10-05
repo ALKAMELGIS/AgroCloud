@@ -228,7 +228,7 @@ export function DevelopEliteMapLegendRail({
     >
       <div className="develop-elite-map__legend-rail-inner">
         {compactLegend ? (
-          <details className="develop-elite-map__legend-fold" open>
+          <details className="develop-elite-map__legend-fold" {...(compactLegend ? {} : { open: true })}>
             <summary className="develop-elite-map__legend-rail-title develop-elite-map__legend-fold-summary">
               Layer legend
             </summary>

@@ -82,8 +82,8 @@ describe('buildWorldCountryListItems', () => {
       domain,
     )
     expect(list).toEqual([
-      { code: '3', label: 'Morocco', count: 1 },
       { code: '1', label: 'UAE', count: 1 },
+      { code: '3', label: 'Morocco', count: 1 },
     ])
   })
 })

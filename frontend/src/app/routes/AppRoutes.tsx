@@ -46,6 +46,10 @@ const SensorIntegrationPage = lazyWithRetry(() => import('@/modules/operations/o
 const GpsVehicleTracking = lazyWithRetry(() => import('@/modules/operations/other/sensors/GpsVehicleTracking'), 'GpsVehicleTracking')
 const AgroCloudManagement = lazyWithRetry(() => import('@/core/config/AgroCloudManagement'), 'AgroCloudManagement')
 const IrrigationSensorsEmbed = lazyWithRetry(() => import('@/core/config/IrrigationSensorsEmbed'), 'IrrigationSensorsEmbed')
+const WeatherIntelligenceDashboard = lazyWithRetry(
+  () => import('@/modules/weather/WeatherIntelligenceDashboard'),
+  'WeatherIntelligenceDashboard',
+)
 
 function RouteLoadingFallback({ label = 'Loading…' }: { label?: string }) {
   return (
@@ -62,6 +66,14 @@ export default function AppRoutes() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<Home />} />
+        <Route
+          path="/weather/intelligence"
+          element={
+            <Suspense fallback={<RouteLoadingFallback label="Loading Weather Intelligence…" />}>
+              <WeatherIntelligenceDashboard />
+            </Suspense>
+          }
+        />
         <Route path="/satellite" element={<Navigate to="/satellite/indices" replace />} />
         <Route path="/data/fertigation" element={<Navigate to="/data/fertigation-records" replace />} />
         <Route path="/data/fertigation-records" element={<DataEntryFertigationRecords />} />

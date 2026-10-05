@@ -2060,6 +2060,7 @@ html[data-theme='light'] .si-main-content {
 }
 .si-map-floating-controls__left .si-basemap-button,
 .si-map-floating-controls__left .si-map-search-toggle,
+.si-map-floating-controls__left .si-map-page-refresh-button,
 .si-map-floating-controls__left .si-map-gps-locate-button,
 .si-map-floating-controls__left .si-weather-button {
   width: 27px;
@@ -2080,6 +2081,7 @@ html[data-theme='light'] .si-main-content {
    centred square box at one size so all dock icons read as the same size. */
 .si-map-floating-controls__left .si-map-search-toggle > i,
 .si-map-floating-controls__left .si-basemap-button > i,
+.si-map-floating-controls__left .si-map-page-refresh-button > i,
 .si-map-floating-controls__left .si-map-gps-locate-button > i,
 .si-map-floating-controls__left .si-weather-button > i {
   font-size: 13px;

@@ -6,6 +6,8 @@ export type DevelopEliteUaeClockParts = {
   hours: string
   minutes: string
   seconds: string
+  /** `AM` or `PM` (12-hour clock). */
+  dayPeriod: string
   weekdayShort: string
   weekdayIndex: number
   monthDay: string
@@ -19,12 +21,12 @@ export function getDevelopEliteUaeClockParts(
   now: Date,
   timeZone: string = DEVELOP_ELITE_UAE_TIME_ZONE,
 ): DevelopEliteUaeClockParts {
-  const timeParts = new Intl.DateTimeFormat('en-GB', {
+  const timeParts = new Intl.DateTimeFormat('en-US', {
     timeZone,
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false,
+    hour12: true,
   }).formatToParts(now)
 
   const dateParts = new Intl.DateTimeFormat('en-GB', {
@@ -42,10 +44,14 @@ export function getDevelopEliteUaeClockParts(
   const day = partValue(dateParts, 'day')
   const month = partValue(dateParts, 'month')
 
+  const dayPeriodRaw = partValue(timeParts, 'dayPeriod')
+  const dayPeriod = dayPeriodRaw ? dayPeriodRaw.toUpperCase() : ''
+
   return {
     hours: partValue(timeParts, 'hour'),
     minutes: partValue(timeParts, 'minute'),
     seconds: partValue(timeParts, 'second'),
+    dayPeriod,
     weekdayShort,
     weekdayIndex: weekdayIndex >= 0 ? weekdayIndex : 0,
     monthDay: `${month}.${day}`,
@@ -53,7 +59,8 @@ export function getDevelopEliteUaeClockParts(
 }
 
 export function formatDevelopEliteUaeClockAriaLabel(parts: DevelopEliteUaeClockParts): string {
-  return `UAE time ${parts.hours}:${parts.minutes}:${parts.seconds}, ${parts.weekdayShort} ${parts.monthDay}`
+  const period = parts.dayPeriod ? ` ${parts.dayPeriod}` : ''
+  return `UAE time ${parts.hours}:${parts.minutes}:${parts.seconds}${period}, ${parts.weekdayShort} ${parts.monthDay}`
 }
 
 /** Seven-segment mask: a,b,c,d,e,f,g */

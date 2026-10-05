@@ -13,6 +13,7 @@ type Props = {
   onMapReady?: (map: any) => void
   showBaseLayer?: boolean
   showZoomControl?: boolean
+  zoomControlPosition?: 'topleft' | 'topright' | 'bottomleft' | 'bottomright'
   showScaleControl?: boolean
   attributionControl?: boolean
   /** Smoother pan/zoom inertia for dashboard maps. */
@@ -33,6 +34,7 @@ export default function MapView({
   onMapReady,
   showBaseLayer = true,
   showZoomControl = true,
+  zoomControlPosition = 'topright',
   showScaleControl = true,
   attributionControl = true,
   smoothInteraction = false,
@@ -96,7 +98,7 @@ export default function MapView({
       {showBaseLayer ? <TileLayer url={url} attribution={attribution} /> : null}
       <MapReady onMapReady={onMapReady} />
       {children}
-      {showZoomControl ? <ZoomControl position="topright" /> : null}
+      {showZoomControl ? <ZoomControl position={zoomControlPosition} /> : null}
       {showScaleControl ? <ScaleControl position="bottomleft" /> : null}
     </MapContainer>
   )

@@ -19,6 +19,7 @@ import LogoutIcon from '@mui/icons-material/Logout'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useLanguage } from '@/core/localization/i18n'
 import { useMergedNavigation } from '@/core/state/SystemSettingsContext'
+import { isFullBleedMainClass } from '@/theme/fullBleedRoutes'
 import { agroTokens } from '@/theme/tokens'
 import { MobileBottomNav } from '../navigation/MobileBottomNav'
 
@@ -37,6 +38,7 @@ export function MuiAppShell({ children, mainClassName, onLogout }: MuiAppShellPr
   const location = useLocation()
   const label = (en: string, ar: string) => (language === 'ar' ? ar : en)
   const isExternalEmbed = mainClassName?.includes('content--external-embed')
+  const fullBleed = isFullBleedMainClass(mainClassName)
 
   const drawer = (
     <Box sx={{ width: agroTokens.drawerWidth, pt: 1 }} role="navigation" aria-label="Main">
@@ -125,16 +127,17 @@ export function MuiAppShell({ children, mainClassName, onLogout }: MuiAppShellPr
           flexGrow: 1,
           minWidth: 0,
           pt: `calc(${agroTokens.headerHeight}px + env(safe-area-inset-top, 0px))`,
-          pb: isExternalEmbed
-            ? 0
-            : { xs: `calc(${agroTokens.bottomNavHeight}px + env(safe-area-inset-bottom, 0px))`, md: 2 },
-          px: isExternalEmbed ? 0 : { xs: 1.5, sm: 2, md: 3 },
+          pb:
+            isExternalEmbed || fullBleed
+              ? 0
+              : { xs: `calc(${agroTokens.bottomNavHeight}px + env(safe-area-inset-bottom, 0px))`, md: 2 },
+          px: isExternalEmbed || fullBleed ? 0 : { xs: 1.5, sm: 2, md: 3 },
         }}
       >
         {children}
       </Box>
 
-      <MobileBottomNav onMore={() => setMobileOpen(true)} />
+      {fullBleed ? null : <MobileBottomNav onMore={() => setMobileOpen(true)} />}
     </Box>
   )
 }

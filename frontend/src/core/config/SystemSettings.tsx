@@ -1167,6 +1167,49 @@ export default function SystemSettings() {
               </p>
             </div>
 
+            <div className="sys-api-tokens-card sys-api-tokens-card--wide">
+              <h3 className="sys-settings-panel__title sys-settings-api-h3">
+                <i className="fa-solid fa-cloud-bolt" aria-hidden />
+                {language === 'ar' ? 'عمليات الطقس (Weather Intelligence)' : 'Weather Intelligence operations'}
+              </h3>
+              <p className="sys-settings-panel__desc sys-settings-api-hint">
+                {language === 'ar'
+                  ? 'عتبات التنبيهات والمؤشرات الزراعية في لوحة Weather Intelligence (Open-Meteo).'
+                  : 'Alert and operational insight thresholds for the Weather Intelligence dashboard (Open-Meteo).'}
+              </p>
+              <div className="sys-weather-thresholds-grid">
+                {(
+                  [
+                    ['windSprayWarningKmh', language === 'ar' ? 'رياح رش — تحذير (كم/س)' : 'Spray warning wind (km/h)'],
+                    ['windSprayCautionKmh', language === 'ar' ? 'رياح رش — حذر (كم/س)' : 'Spray caution wind (km/h)'],
+                    ['heatStressC', language === 'ar' ? 'إجهاد حراري (°م)' : 'Heat stress (°C)'],
+                    ['frostC', language === 'ar' ? 'صقيع (°م)' : 'Frost (°C)'],
+                    ['highWindAlertKmh', language === 'ar' ? 'رياح عالية — تنبيه (كم/س)' : 'High wind alert (km/h)'],
+                    ['heavyRainMm6h', language === 'ar' ? 'مطر غزير 6س (مم)' : 'Heavy rain 6h (mm)'],
+                    ['highHumidityPct', language === 'ar' ? 'رطوبة عالية (%)' : 'High humidity (%)'],
+                    ['lowHumidityPct', language === 'ar' ? 'رطوبة منخفضة (%)' : 'Low humidity (%)'],
+                  ] as const
+                ).map(([key, label]) => (
+                  <label key={key} className="sys-weather-thresholds-grid__row">
+                    <span>{label}</span>
+                    <input
+                      type="number"
+                      value={draft.weatherOperations[key]}
+                      onChange={e =>
+                        setDraft(d => ({
+                          ...d,
+                          weatherOperations: {
+                            ...d.weatherOperations,
+                            [key]: Number(e.target.value),
+                          },
+                        }))
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+
             <div id="sentinel-api-tokens" className="sys-api-tokens-card sys-api-tokens-card--wide">
               <h3 className="sys-settings-panel__title sys-settings-api-h3">
                 <i className="fa-solid fa-satellite" aria-hidden />

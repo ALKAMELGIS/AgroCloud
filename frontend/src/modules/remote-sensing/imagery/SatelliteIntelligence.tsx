@@ -4948,6 +4948,7 @@ export default function SatelliteIntelligence() {
 
   const [isFetchingSentinelScenes, setIsFetchingSentinelScenes] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
+  const [isMapCanvasRefreshing, setIsMapCanvasRefreshing] = useState(false);
   /** Raster/vector MapGL children â€” toggled off during basemap style swap; dock stays mounted via isMapLoaded. */
   const [isMapStyleReady, setIsMapStyleReady] = useState(false);
   /** Bumps when the Mapbox style is ready again so overlay sources remount on the canvas. */
@@ -25397,6 +25398,57 @@ export default function SatelliteIntelligence() {
     };
   }, [isMapStyleReady, sentinelWmsOnMap, wmsRasterSourceRefreshKey, sentinelWmsStacks]);
 
+  const handleRefreshMapCanvas = useCallback(() => {
+    if (isMapCanvasRefreshing) return;
+    setIsMapCanvasRefreshing(true);
+    const map = mapRef.current?.getMap?.() ?? mapRef.current;
+    try {
+      map?.resize?.();
+      map?.triggerRepaint?.();
+    } catch {
+      /* ignore */
+    }
+    if (map && isMapStyleReady) {
+      for (const { stack, useVisibilityToggle } of sentinelWmsStacks) {
+        if (useVisibilityToggle) {
+          reloadSiSentinelAoiWmsPingPongStackTiles(map, stack, layerAoiWmsPingPongRef.current, {
+            force: true,
+          });
+          continue;
+        }
+        for (let i = 0; i < stack.displayChunks.length; i++) {
+          const src = map.getSource?.(siSentinelAoiWmsSourceId(stack.idPrefix, i)) as
+            | { setTiles?: (tiles: string[]) => void }
+            | null
+            | undefined;
+          const url = stack.tileUrls[i];
+          if (src && typeof src.setTiles === 'function' && url) {
+            try {
+              src.setTiles([url]);
+            } catch {
+              /* ignore source race during style rebuild */
+            }
+          }
+        }
+      }
+      try {
+        raiseOverlaysThenAnalysisOrder();
+      } catch {
+        /* ignore */
+      }
+    }
+    setCustomLayersMapEpoch(epoch => epoch + 1);
+    window.requestAnimationFrame(() => {
+      try {
+        map?.resize?.();
+        map?.triggerRepaint?.();
+      } catch {
+        /* ignore */
+      }
+      setIsMapCanvasRefreshing(false);
+    });
+  }, [isMapCanvasRefreshing, isMapStyleReady, sentinelWmsStacks, raiseOverlaysThenAnalysisOrder]);
+
   /** Keep analysis rasters above satellite basemap and below vector AOI boundaries. */
   useLayoutEffect(() => {
     if (!isMapStyleReady) return;
@@ -27972,6 +28024,20 @@ export default function SatelliteIntelligence() {
                 aria-expanded={isSearchOpen}
               >
                 <i className={isSearchOpen ? 'fa-solid fa-xmark' : 'fa-solid fa-magnifying-glass'} aria-hidden></i>
+              </button>
+              <button
+                type="button"
+                className={`si-map-search-toggle si-map-page-refresh-button${isMapCanvasRefreshing ? ' is-active' : ''}`}
+                onClick={() => handleRefreshMapCanvas()}
+                title="Refresh map"
+                aria-label="Refresh map"
+                disabled={isMapCanvasRefreshing}
+              >
+                {isMapCanvasRefreshing ? (
+                  <i className="fa-solid fa-spinner fa-spin" aria-hidden></i>
+                ) : (
+                  <i className="fa-solid fa-rotate-right" aria-hidden></i>
+                )}
               </button>
               <button
                 type="button"

@@ -446,6 +446,7 @@ function AppShell() {
     location.pathname === '/satellite/indices' || location.pathname.startsWith('/satellite/indices/')
   const isHomeLanding = location.pathname === '/' || location.pathname === ''
   const isGisContentPortal = location.pathname.startsWith('/master/gis-content')
+  const isWeatherIntelligence = location.pathname.startsWith('/weather/intelligence')
   const mainContentClass = [
     'content',
     isGisContentPortal && 'content--gis-content-portal',
@@ -457,6 +458,7 @@ function AppShell() {
     isSensorsPage && 'content--sensors-fit',
     isExternalEmbed && 'content--external-embed',
     isSatelliteIntelligence && 'content--satellite-intelligence',
+    isWeatherIntelligence && 'content--weather-intelligence',
   ]
     .filter(Boolean)
     .join(' ')
@@ -483,7 +485,7 @@ function AppShell() {
     return <Navigate to="/login" replace state={{ from: location }} />
   }
 
-  if (showAppChrome && muiShell) {
+  if (showChrome && muiShell) {
     return (
       <MuiAppShell mainClassName={mainContentClass} onLogout={handleLogout}>
         {routeBody}

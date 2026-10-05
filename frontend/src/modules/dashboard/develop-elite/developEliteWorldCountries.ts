@@ -1,4 +1,5 @@
-import { compareDevelopEliteListNames, type DevelopEliteCountryListItem } from './developEliteKpiEngine'
+import { type DevelopEliteCountryListItem } from './developEliteKpiEngine'
+import { comparePortfolioCountryListLabels } from './developEliteCountryListSort'
 
 
 
@@ -222,7 +223,7 @@ export function buildWorldCountryListItems(
 
     .map(([code, v]) => ({ code, label: v.label, count: v.count }))
 
-    .sort((a, b) => compareDevelopEliteListNames(a.label, b.label))
+    .sort((a, b) => comparePortfolioCountryListLabels(a.label, b.label))
 
 }
 

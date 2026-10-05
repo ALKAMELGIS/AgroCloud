@@ -336,6 +336,10 @@ body.develop-elite--widget-dragging {
   text-shadow: 0 0 8px rgba(74, 222, 128, 0.35);
 }
 
+.develop-elite-digital-clock__ampm {
+  color: rgba(255, 255, 255, 0.55);
+}
+
 .develop-elite-seven-seg {
   width: var(--de-clock-digit-w);
   height: var(--de-clock-digit-h);
@@ -5312,12 +5316,64 @@ body.develop-elite--lists-drawer-open {
 }
 
 @media (max-width: 767px) {
+  .develop-elite--compact-viewport .develop-elite__header-top {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'brand meta'
+      'clock meta';
+    justify-items: start;
+    text-align: left;
+    padding: 8px 8px 10px;
+  }
+
+  .develop-elite--compact-viewport .develop-elite__logo-center {
+    transform: scale(0.82);
+    transform-origin: left top;
+  }
+
+  .develop-elite--compact-viewport .develop-elite__header-meta {
+    justify-content: flex-end;
+    width: auto;
+    flex-wrap: nowrap;
+  }
+
   .develop-elite--compact-viewport .develop-elite-grid-widget--map {
     min-height: 340px;
   }
 
   .develop-elite-map--stacked-legend .develop-elite-map__viewport {
     min-height: min(52dvh, 360px);
+  }
+
+  .develop-elite--viewport-mobile.develop-elite--compact-viewport .develop-elite-grid-widget--map {
+    min-height: min(58dvh, 520px);
+  }
+
+  .develop-elite--viewport-mobile .develop-elite-map--stacked-legend .develop-elite-map__viewport {
+    min-height: min(56dvh, 460px);
+  }
+
+  .develop-elite--viewport-mobile .develop-elite-map__tools {
+    position: absolute;
+    top: auto;
+    right: 8px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    flex-direction: column;
+    max-height: min(52dvh, 320px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 4px;
+    border-radius: 12px;
+    background: rgba(8, 28, 18, 0.72);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  .develop-elite--viewport-mobile .develop-elite-map__zoom-group--bottom {
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    left: 8px;
+    right: auto;
   }
 
   .develop-elite-map__legend-fold:not([open]) + .develop-elite-map__insight-tools {
@@ -5451,9 +5507,12 @@ body.develop-elite--lists-drawer-open {
 @media (max-width: 1199px) {
   .develop-elite--compact-viewport .develop-elite__header-top {
     grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: 'brand meta';
-    align-items: center;
-    gap: 8px;
+    grid-template-areas:
+      'brand meta'
+      'clock meta';
+    align-items: start;
+    justify-items: start;
+    gap: 4px 8px;
     padding: 8px 10px;
   }
 
@@ -5465,9 +5524,14 @@ body.develop-elite--lists-drawer-open {
   }
 
   .develop-elite--compact-viewport .develop-elite__logo-center {
+    grid-area: clock;
     display: flex;
-    transform: scale(0.78);
-    transform-origin: center top;
+    justify-self: start;
+    align-self: start;
+    margin-inline-start: 14px;
+    margin-top: 2px;
+    transform: scale(0.88);
+    transform-origin: left top;
   }
 
   .develop-elite--compact-viewport .develop-elite-digital-clock__day-dial {
@@ -5477,6 +5541,8 @@ body.develop-elite--lists-drawer-open {
 
   .develop-elite--compact-viewport .develop-elite__header-meta {
     grid-area: meta;
+    grid-row: 1 / span 2;
+    align-self: center;
     display: flex;
     flex-direction: row;
     flex-wrap: nowrap;

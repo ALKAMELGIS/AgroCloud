@@ -1,0 +1,40 @@
+import { fetchOpenMeteoWeatherMapPick } from '@/modules/remote-sensing/weather/openMeteoWeather'
+import type { WeatherLocationId } from '../config/weatherFarmIds'
+import type { WeatherLocationRow } from '../hooks/useWeatherLocationRows'
+
+const cache = new Map<string, WeatherLocationRow>()
+
+function cacheKey(lat: number, lng: number): string {
+  return `${lat.toFixed(3)},${lng.toFixed(3)}`
+}
+
+export function peekLocationLiveRow(lat: number, lng: number): WeatherLocationRow | null {
+  return cache.get(cacheKey(lat, lng)) ?? null
+}
+
+export async function fetchLocationLiveRow(
+  id: WeatherLocationId,
+  label: string,
+  lat: number,
+  lng: number,
+  signal?: AbortSignal,
+): Promise<WeatherLocationRow> {
+  const key = cacheKey(lat, lng)
+  const hit = cache.get(key)
+  if (hit?.temperatureC != null) return { ...hit, id, label }
+
+  const snap = await fetchOpenMeteoWeatherMapPick(lat, lng, signal)
+  const row: WeatherLocationRow = {
+    id,
+    label,
+    temperatureC: snap.temperatureC,
+    humidityPct: snap.humidityPct,
+    windSpeedKmh: snap.windSpeedKmh,
+    windDirectionDeg: snap.windDirectionDeg ?? null,
+    precipMm: snap.precipMm,
+    weatherCode: snap.weatherCode,
+  }
+  cache.set(key, row)
+  return row
+}
+

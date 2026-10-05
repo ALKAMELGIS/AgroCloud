@@ -106,6 +106,9 @@ function DevelopEliteHeaderDigitalClockInner() {
         </div>
         <div className="develop-elite-digital-clock__meta" aria-hidden>
           <span className="develop-elite-digital-clock__tz">UAE</span>
+          {parts.dayPeriod ? (
+            <span className="develop-elite-digital-clock__ampm">{parts.dayPeriod}</span>
+          ) : null}
           <span className="develop-elite-digital-clock__date">{parts.monthDay}</span>
         </div>
       </div>
