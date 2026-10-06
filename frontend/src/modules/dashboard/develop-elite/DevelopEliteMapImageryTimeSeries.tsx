@@ -3,7 +3,7 @@ import { getMapboxAccessToken } from '@/core/config/mapboxAccessToken'
 import { SiImageryTimeSeriesFloatingPanel } from '@/modules/remote-sensing/temporal-analysis/SiImageryTimeSeriesFloatingPanel'
 import { SI_IMAGERY_COMMITTED_AOI_KEY } from '@/modules/remote-sensing/temporal-analysis/siImageryTimeSeriesFields'
 import { useDevelopEliteMapDraw } from './DevelopEliteMapDraw'
-import { useDevelopEliteMapLayerLive } from './DevelopEliteMapLayerLive'
+import { useDevelopEliteMapLayerLive } from './developEliteMapLayerLiveContext'
 import {
   developEliteCommittedAoiGeometry,
   developEliteDrawnAoiToAoiFields,

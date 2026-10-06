@@ -4,6 +4,8 @@ import L from 'leaflet';
 import 'leaflet-draw';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import './DrawTools.css';
+import { lockLeafletMapForSketch, unlockLeafletMapForSketch } from './leafletMapSketchInteraction';
+import { attachSimpleShapeTouchCommit } from './leafletSimpleShapeTouchDraw';
 
 /** Small circle handles for leaflet-draw (replaces default blue location pin icons). */
 function sketchVertexIcon(fill = '#4ade80'): L.DivIcon {
@@ -41,40 +43,54 @@ export const DrawToolsController: React.FC<DrawToolsControllerProps> = ({
   const map = useMap();
   const drawControlRef = useRef<any>(null);
   const activeDrawerRef = useRef<any>(null);
+  const touchCommitCleanupRef = useRef<(() => void) | null>(null);
   const editModeRef = useRef<'none' | 'edit' | 'delete'>('none');
+  const onToolActivateRef = useRef(onToolActivate);
+  const onAOICreatedRef = useRef(onAOICreated);
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  const onDrawingChangedRef = useRef(onDrawingChanged);
+  onToolActivateRef.current = onToolActivate;
+  onAOICreatedRef.current = onAOICreated;
+  onSelectionChangeRef.current = onSelectionChange;
+  onDrawingChangedRef.current = onDrawingChanged;
 
   const emitCount = () => {
     const fg = featureGroupRef.current;
     if (!fg) return;
     try {
       const count = fg.getLayers().filter((l: any) => !(l && typeof l === 'object' && (l as any).__isCircleCenter)).length;
-      onDrawingChanged?.(count);
+      onDrawingChangedRef.current?.(count);
     } catch {
     }
   };
 
   const zoomToLayer = (layer: any) => {
     if (!map || !layer) return;
-    try {
-      if (layer.getBounds) {
-        const b = layer.getBounds();
-        if (b && b.isValid && b.isValid()) {
-          (map as any).flyToBounds?.(b, { padding: [60, 60], maxZoom: 18, duration: 0.8 });
-          return;
+    const run = () => {
+      try {
+        if (!(layer as L.Layer & { _map?: L.Map })._map) return;
+        if (layer.getBounds) {
+          const b = layer.getBounds();
+          if (b && b.isValid && b.isValid()) {
+            (map as any).flyToBounds?.(b, { padding: [60, 60], maxZoom: 18, duration: 0.8 });
+            return;
+          }
         }
+      } catch {
+        /* layer mid-mount */
       }
-    } catch {
-    }
-    try {
-      if (layer.getLatLng) {
-        const ll = layer.getLatLng();
-        if (ll && typeof ll.lat === 'number' && typeof ll.lng === 'number') {
-          (map as any).flyTo?.(ll, Math.max(map.getZoom(), 17), { duration: 0.8 });
-          return;
+      try {
+        if (layer.getLatLng) {
+          const ll = layer.getLatLng();
+          if (ll && typeof ll.lat === 'number' && typeof ll.lng === 'number') {
+            (map as any).flyTo?.(ll, Math.max(map.getZoom(), 17), { duration: 0.8 });
+          }
         }
+      } catch {
+        /* layer mid-mount */
       }
-    } catch {
-    }
+    };
+    requestAnimationFrame(() => requestAnimationFrame(run));
   };
 
   // Effect for DrawControl and Event Listeners
@@ -111,11 +127,11 @@ export const DrawToolsController: React.FC<DrawToolsControllerProps> = ({
       // Handlers
       const handleCreated = (e: any) => {
         const layer = e.layer;
-        const type = e.layerType;
-        
-        if (type === 'circle') {
+        const layerType = e.layerType;
+
+        if (layerType === 'circle') {
             featureGroupRef.current?.addLayer(layer);
-        } else if (type === 'marker') {
+        } else if (layerType === 'marker') {
             const latlng = layer.getLatLng?.();
             featureGroupRef.current?.removeLayer(layer);
             if (latlng) {
@@ -133,20 +149,26 @@ export const DrawToolsController: React.FC<DrawToolsControllerProps> = ({
             featureGroupRef.current?.addLayer(layer);
         }
 
-        try {
-          if (layer?.on) {
-            layer.on('click', () => {
-              onSelectionChange?.(layer);
-            });
+        const finish = () => {
+          try {
+            if (layer?.on) {
+              layer.on('click', () => {
+                onSelectionChangeRef.current?.(layer);
+              });
+            }
+          } catch {
+            /* layer teardown */
           }
-        } catch {
-        }
-        // Zoom to AOI
-        zoomToLayer(layer);
-
-        onAOICreated(layer);
-        emitCount();
-        onToolActivate(null); // Reset tool
+          try {
+            onAOICreatedRef.current(layer);
+            emitCount();
+            onToolActivateRef.current(null);
+            zoomToLayer(layer);
+          } catch (err) {
+            console.error('[DrawTools] finish sketch', err);
+          }
+        };
+        requestAnimationFrame(finish);
       };
 
       const handleDeleted = () => {
@@ -177,7 +199,7 @@ export const DrawToolsController: React.FC<DrawToolsControllerProps> = ({
          // Real cleanup is in the separate unmount effect below.
       }
     };
-  }, [map]); // Run once on mount (deps simplified)
+  }, [map, featureGroupPane, shapeColor]); // Stable handlers via refs
 
   // Effect for Active Tool Management
   useEffect(() => {
@@ -185,10 +207,17 @@ export const DrawToolsController: React.FC<DrawToolsControllerProps> = ({
 
     // Cleanup previous drawer
     const cleanupDrawer = () => {
+      touchCommitCleanupRef.current?.();
+      touchCommitCleanupRef.current = null;
       if (activeDrawerRef.current) {
-        activeDrawerRef.current.disable();
+        try {
+          activeDrawerRef.current.disable();
+        } catch {
+          /* drawer already torn down */
+        }
         activeDrawerRef.current = null;
       }
+      unlockLeafletMapForSketch(map);
       L.DomUtil.removeClass(map.getContainer(), 'crosshair-cursor');
     };
     cleanupDrawer();
@@ -209,37 +238,66 @@ export const DrawToolsController: React.FC<DrawToolsControllerProps> = ({
         
         if (type === 'rectangle') {
           // @ts-ignore
-          drawer = new L.Draw.Rectangle(map, { shapeOptions, metric: true, icon: vertexIcon, touchIcon: vertexIcon });
+          drawer = new L.Draw.Rectangle(map, {
+            shapeOptions,
+            metric: true,
+            repeatMode: false,
+            icon: vertexIcon,
+            touchIcon: vertexIcon,
+          });
         } else if (type === 'polygon') {
           // @ts-ignore
           drawer = new L.Draw.Polygon(map, {
             shapeOptions,
             allowIntersection: false,
             showArea: true,
+            repeatMode: false,
             icon: vertexIcon,
             touchIcon: vertexIcon,
           });
         } else if (type === 'circle') {
           // @ts-ignore
-          drawer = new L.Draw.Circle(map, { shapeOptions, showRadius: true, icon: vertexIcon, touchIcon: vertexIcon });
+          drawer = new L.Draw.Circle(map, {
+            shapeOptions,
+            showRadius: true,
+            repeatMode: false,
+            icon: vertexIcon,
+            touchIcon: vertexIcon,
+          });
         } else if (type === 'marker') {
           // @ts-ignore
           drawer = new L.Draw.Marker(map, { icon: vertexIcon });
         }
 
         if (drawer) {
-          drawer.enable();
-          activeDrawerRef.current = drawer;
-          L.DomUtil.addClass(map.getContainer(), 'crosshair-cursor');
+          lockLeafletMapForSketch(map);
+          try {
+            drawer.enable();
+            activeDrawerRef.current = drawer;
+            L.DomUtil.addClass(map.getContainer(), 'crosshair-cursor');
+            if (type === 'circle' || type === 'rectangle') {
+              touchCommitCleanupRef.current = attachSimpleShapeTouchCommit(
+                map,
+                drawer,
+                type === 'circle' ? 'circle' : 'rectangle',
+              );
+            }
+          } catch {
+            unlockLeafletMapForSketch(map);
+            activeDrawerRef.current = null;
+            onToolActivateRef.current(null);
+          }
         }
         
     } else if (activeTool === 'edit') {
+        lockLeafletMapForSketch(map);
         // @ts-ignore
         const editor = new L.EditToolbar.Edit(map, { featureGroup: featureGroupRef.current });
         editor.enable();
         activeDrawerRef.current = editor;
         editModeRef.current = 'edit';
     } else if (activeTool === 'delete_mode') {
+        lockLeafletMapForSketch(map);
         // @ts-ignore
         const deleter = new L.EditToolbar.Delete(map, { featureGroup: featureGroupRef.current });
         deleter.enable();
@@ -248,11 +306,17 @@ export const DrawToolsController: React.FC<DrawToolsControllerProps> = ({
     } else if (activeTool === 'delete') {
         featureGroupRef.current?.clearLayers();
         emitCount();
-        onToolActivate(null);
+        onToolActivateRef.current(null);
     }
 
     return () => cleanupDrawer();
-  }, [map, activeTool, onToolActivate, featureGroupRef, shapeColor]);
+  }, [map, activeTool, shapeColor]);
+
+  useEffect(() => {
+    return () => {
+      unlockLeafletMapForSketch(map);
+    };
+  }, [map]);
 
   // Cleanup on unmount
   useEffect(() => {

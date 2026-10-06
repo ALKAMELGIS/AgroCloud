@@ -16,7 +16,7 @@ import {
   type OpenMeteoWeatherSnapshot,
 } from '@/modules/remote-sensing/weather/openMeteoWeather'
 import { useDevelopEliteMapDraw } from './DevelopEliteMapDraw'
-import { useDevelopEliteMapLayerLive } from './DevelopEliteMapLayerLive'
+import { useDevelopEliteMapLayerLiveOptional } from './developEliteMapLayerLiveContext'
 import { developEliteLayerLiveHasDrawnAoiClip } from './developEliteMapLayerLiveCore'
 import { SI_IMAGERY_COMMITTED_AOI_KEY } from '@/modules/remote-sensing/temporal-analysis/siImageryTimeSeriesFields'
 import { prefetchDevelopEliteImageryTimeSeriesPanel } from './developElitePrefetchImageryTimeSeries'
@@ -288,7 +288,7 @@ export function DevelopEliteMapInsightToolbar({
 } = {}) {
   const insight = useInsight()
   const draw = useDevelopEliteMapDraw()
-  const layerLive = useDevelopEliteMapLayerLive()
+  const layerLive = useDevelopEliteMapLayerLiveOptional()
 
   useEffect(() => {
     prefetchDevelopEliteImageryTimeSeriesPanel()
@@ -332,7 +332,7 @@ export function DevelopEliteMapInsightToolbar({
     insight.toggleImageryTimeSeries()
     if (!opening) return
     onSelectFieldKey?.(SI_IMAGERY_COMMITTED_AOI_KEY)
-    requestAnimationFrame(() => layerLive.activateLayerLive())
+    requestAnimationFrame(() => layerLive?.activateLayerLive())
   }
 
   const timeSeriesLabel = hasDrawnAoi

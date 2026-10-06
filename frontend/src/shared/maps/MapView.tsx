@@ -2,6 +2,7 @@ import type React from 'react'
 import { useEffect } from 'react'
 import { MapContainer, TileLayer, ZoomControl, ScaleControl, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
+import { DEVELOP_ELITE_MAP_CONTAINER_OPTIONS } from '@/modules/dashboard/develop-elite/developEliteMapInteraction'
 
 type Props = {
   center?: [number, number]
@@ -57,20 +58,7 @@ export default function MapView({
       style={{ height: '100%', width: '100%' }}
       zoomControl={false}
       attributionControl={attributionControl}
-      {...(developEliteMap
-        ? {
-            inertia: true,
-            inertiaDeceleration: 3400,
-            inertiaMaxSpeed: 3200,
-            zoomAnimation: false,
-            fadeAnimation: false,
-            markerZoomAnimation: false,
-            preferCanvas: false,
-            wheelDebounceTime: 8,
-            wheelPxPerZoomLevel: 52,
-            bounceAtZoomLimits: false,
-          }
-        : fastZoom
+      {...(developEliteMap ? { ...DEVELOP_ELITE_MAP_CONTAINER_OPTIONS } : fastZoom
         ? {
             inertia: true,
             inertiaDeceleration: 3000,
@@ -96,7 +84,7 @@ export default function MapView({
           : {})}
     >
       {showBaseLayer ? <TileLayer url={url} attribution={attribution} /> : null}
-      <MapReady onMapReady={onMapReady} />
+      <MapReady onMapReady={onMapReady} developEliteMap={developEliteMap} />
       {children}
       {showZoomControl ? <ZoomControl position={zoomControlPosition} /> : null}
       {showScaleControl ? <ScaleControl position="bottomleft" /> : null}
@@ -104,31 +92,43 @@ export default function MapView({
   )
 }
 
-function MapReady({ onMapReady }: { onMapReady?: (map: any) => void }) {
+function MapReady({
+  onMapReady,
+  developEliteMap = false,
+}: {
+  onMapReady?: (map: any) => void
+  developEliteMap?: boolean
+}) {
   const map = useMap()
   useEffect(() => {
     onMapReady?.(map)
     let cancelled = false
-    const timer = window.setTimeout(() => {
-      if (cancelled) return
+    let resizeDebounce: number | null = null
+    const runInvalidate = () => {
       const container = map.getContainer?.()
       if (!container?.isConnected) return
       try {
-        map.invalidateSize?.()
-      } catch {
-        /* map mid-teardown */
-      }
-    }, 0)
-    let ro: ResizeObserver | null = null
-    const safeInvalidate = () => {
-      const container = map.getContainer?.()
-      if (!container?.isConnected) return
-      try {
-        map.invalidateSize?.()
+        map.invalidateSize?.({ animate: false })
       } catch {
         /* map mid-teardown */
       }
     }
+    const safeInvalidate = () => {
+      if (developEliteMap) {
+        if (resizeDebounce != null) window.clearTimeout(resizeDebounce)
+        resizeDebounce = window.setTimeout(() => {
+          resizeDebounce = null
+          runInvalidate()
+        }, 140)
+        return
+      }
+      runInvalidate()
+    }
+    const timer = window.setTimeout(() => {
+      if (cancelled) return
+      runInvalidate()
+    }, 0)
+    let ro: ResizeObserver | null = null
     if (typeof ResizeObserver !== 'undefined') {
       ro = new ResizeObserver(() => {
         safeInvalidate()
@@ -146,8 +146,9 @@ function MapReady({ onMapReady }: { onMapReady?: (map: any) => void }) {
     return () => {
       cancelled = true
       window.clearTimeout(timer)
+      if (resizeDebounce != null) window.clearTimeout(resizeDebounce)
       ro?.disconnect()
     }
-  }, [map, onMapReady])
+  }, [developEliteMap, map, onMapReady])
   return null
 }

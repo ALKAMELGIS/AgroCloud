@@ -16,7 +16,7 @@ import {
   developEliteLayerLiveHasDrawnAoiClip,
   developEliteLayerLiveSelectOptions,
 } from './developEliteMapLayerLiveCore'
-import { useDevelopEliteMapLayerLive } from './DevelopEliteMapLayerLive'
+import { useDevelopEliteMapLayerLive } from './developEliteMapLayerLiveContext'
 import { resolveDevelopEliteLayerLiveAoiImageUrl } from './developEliteMapLayerLiveAoiImage'
 import { useDevelopEliteMapInsight } from './DevelopEliteMapInsightTools'
 import {

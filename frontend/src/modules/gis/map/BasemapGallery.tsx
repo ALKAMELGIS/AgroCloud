@@ -10,6 +10,7 @@ import {
 } from './basemapCatalog'
 import { rasterTileMaxNativeZoom } from '../layers/raster/rasterTileZoom'
 import { TOPOGRAPHIC_3D_BASEMAP_ID } from '@/modules/remote-sensing/terrain/agroCloudMapTerrain'
+import { DEVELOP_ELITE_BASEMAP_TILE_PROPS } from '@/modules/dashboard/develop-elite/developEliteMapInteraction'
 
 export type BasemapType = string
 
@@ -186,9 +187,7 @@ export const BasemapLayer: React.FC<{
             {...(subdomains ? { subdomains: [...subdomains] } : {})}
             {...(url.includes('{r}') ? { detectRetina: true } : {})}
             {...(pane ? { pane } : {})}
-            {...(stableDuringInteraction
-              ? { updateWhenIdle: true, updateWhenZooming: false, keepBuffer: 4 }
-              : {})}
+            {...(stableDuringInteraction ? { ...DEVELOP_ELITE_BASEMAP_TILE_PROPS } : {})}
           />
         )
       })}

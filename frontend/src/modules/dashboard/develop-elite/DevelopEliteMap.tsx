@@ -59,6 +59,7 @@ import {
   DEVELOP_ELITE_MAP_ZOOM_DELTA,
   DEVELOP_ELITE_MAP_ZOOM_SNAP,
 } from './developEliteMapInteraction'
+import { safeInvalidateLeafletMapSize } from '@/modules/gis/editing/leafletMapSketchInteraction'
 type Props = {
   geojson: GeoJSON.FeatureCollection
   basemapId: string
@@ -177,7 +178,7 @@ function PortfolioMapExtent({
     if (portfolioExtentGeojson?.features?.length && !worldFitDone.current) {
       applyPortfolioOrDefault()
       requestAnimationFrame(() => {
-        map.invalidateSize({ animate: false })
+        safeInvalidateLeafletMapSize(map, { animate: false })
         applyPortfolioOrDefault()
         worldFitDone.current = true
         defaultViewApplied.current = true
