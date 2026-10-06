@@ -16,7 +16,10 @@ import { isDevelopEliteMapDataLayerVisible } from './developEliteMapDataLayers'
 import { DevelopEliteMapDataLayerList } from './DevelopEliteMapDataLayerList'
 import { buildDevelopEliteMapLegendSections, type DevelopEliteMapLegendRow } from './developEliteMapLegend'
 import { flyToFieldKey, flyToGeoJsonExtent, flyToGeoJsonFeatureIndex, flyToLatLng } from './developEliteMapFly'
-import { safeInvalidateLeafletMapSize } from '@/modules/gis/editing/leafletMapSketchInteraction'
+import {
+  DEVELOP_ELITE_MAP_RESET_INTERACTION_EVENT,
+  safeInvalidateLeafletMapSize,
+} from '@/modules/gis/editing/leafletMapSketchInteraction'
 import { DevelopEliteMapInsightToolbar } from './DevelopEliteMapInsightTools'
 import { DevelopEliteMapLayerLivePanel } from './DevelopEliteMapLayerLivePanel'
 import { useDevelopEliteMapChrome, type DevelopEliteMapPanelId } from './DevelopEliteMapChrome'
@@ -644,25 +647,29 @@ export function DevelopEliteMapInteractionTune() {
       interacting = Math.max(0, interacting + delta)
       if (container) container.classList.toggle('develop-elite-map--interacting', interacting > 0)
     }
-    const onMoveStart = () => bump(1)
-    const onMoveEnd = () => bump(-1)
+    const resetInteractionChrome = () => {
+      interacting = 0
+      container?.classList.remove('develop-elite-map--interacting', 'develop-elite-map--zooming')
+    }
+    const onDragStart = () => bump(1)
+    const onDragEnd = () => bump(-1)
     const onZoomStart = () => {
-      bump(1)
       container?.classList.add('develop-elite-map--zooming')
     }
     const onZoomEnd = () => {
-      bump(-1)
       container?.classList.remove('develop-elite-map--zooming')
     }
-    map.on('movestart', onMoveStart)
-    map.on('moveend', onMoveEnd)
+    map.on('dragstart', onDragStart)
+    map.on('dragend', onDragEnd)
     map.on('zoomstart', onZoomStart)
     map.on('zoomend', onZoomEnd)
+    window.addEventListener(DEVELOP_ELITE_MAP_RESET_INTERACTION_EVENT, resetInteractionChrome)
     return () => {
-      map.off('movestart', onMoveStart)
-      map.off('moveend', onMoveEnd)
+      map.off('dragstart', onDragStart)
+      map.off('dragend', onDragEnd)
       map.off('zoomstart', onZoomStart)
       map.off('zoomend', onZoomEnd)
+      window.removeEventListener(DEVELOP_ELITE_MAP_RESET_INTERACTION_EVENT, resetInteractionChrome)
       container?.classList.remove('develop-elite-map--interacting', 'develop-elite-map--zooming')
     }
   }, [map])

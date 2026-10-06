@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTheme } from '@mui/material/styles'
+import type { AgroThemeMode } from '@/theme/createAgroTheme'
 import { Chart as ChartJS, type ChartData } from 'chart.js'
 import { Chart } from 'react-chartjs-2'
 import {
@@ -45,6 +47,8 @@ export function WeatherArcgisStackedCharts({
   dateRange,
   hourlyRange,
 }: Props) {
+  const muiTheme = useTheme()
+  const chartMode: AgroThemeMode = muiTheme.palette.mode === 'dark' ? 'dark' : 'light'
   const [metricTab, setMetricTab] = useState<ForecastMetricTab>('temperature')
   const stackRef = useRef<HTMLDivElement>(null)
 
@@ -84,7 +88,7 @@ export function WeatherArcgisStackedCharts({
       window.clearTimeout(t)
       ro.disconnect()
     }
-  }, [hourly.length, metricTab])
+  }, [chartMode, hourly.length, metricTab])
 
   const windDirTitle = `Wind Direction for ${locationLabel}`
   const windSpeedTitle = `Wind Speed for ${locationLabel}`
@@ -94,20 +98,20 @@ export function WeatherArcgisStackedCharts({
   const tempBars = useMemo(() => hourly.slice(-Math.min(48, hourly.length)), [hourly])
 
   const windDirChart = useMemo(
-    () => chartWithIsoLabels(buildArcgisWindDirectionChart(hourly), hourly),
-    [hourly],
+    () => chartWithIsoLabels(buildArcgisWindDirectionChart(hourly, chartMode), hourly),
+    [chartMode, hourly],
   )
   const windSpeedChart = useMemo(
-    () => chartWithIsoLabels(buildArcgisWindSpeedChart(hourly), hourly),
-    [hourly],
+    () => chartWithIsoLabels(buildArcgisWindSpeedChart(hourly, chartMode), hourly),
+    [chartMode, hourly],
   )
   const humidityChart = useMemo(
     () => chartWithIsoLabels(buildArcgisHumidityLineChart(hourly), hourly),
     [hourly],
   )
   const tempBarChart = useMemo(
-    () => chartWithIsoLabels(buildTemperatureHourlyBarChart(tempBars), tempBars),
-    [tempBars],
+    () => chartWithIsoLabels(buildTemperatureHourlyBarChart(tempBars, chartMode), tempBars),
+    [chartMode, tempBars],
   )
 
   return (
@@ -161,7 +165,7 @@ export function WeatherArcgisStackedCharts({
                     },
                   },
                 },
-              })}
+              }, chartMode)}
             />
           </div>
         </section>
@@ -172,7 +176,7 @@ export function WeatherArcgisStackedCharts({
               data={windSpeedChart}
               options={arcgisStackChartOptions(windSpeedTitle, {
                 scales: { y: { min: 0 } },
-              })}
+              }, chartMode)}
             />
           </div>
         </section>
@@ -187,7 +191,7 @@ export function WeatherArcgisStackedCharts({
                 data={humidityChart}
                 options={arcgisStackChartOptions(humidityTitle, {
                   scales: { y: { min: 0, max: 100 } },
-                })}
+                }, chartMode)}
               />
             ) : (
               <Chart
@@ -195,7 +199,7 @@ export function WeatherArcgisStackedCharts({
                 data={tempBarChart}
                 options={arcgisStackChartOptions(tempTitle, {
                   plugins: { legend: { display: false } },
-                })}
+                }, chartMode)}
               />
             )}
           </div>

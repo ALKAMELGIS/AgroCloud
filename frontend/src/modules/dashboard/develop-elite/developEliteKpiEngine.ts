@@ -596,13 +596,24 @@ export function geometryOverlapsMapView(
   return !(maxLng < view.west || minLng > view.east || maxLat < view.south || minLat > view.north)
 }
 
-/** Below this zoom, KPIs follow country/zone filters only; at/above, also clip to the visible map. */
-export const DEVELOP_ELITE_VIEWPORT_KPI_MIN_ZOOM = 6
+/** When the map has published a view, hero area KPIs clip to the visible extent (any zoom). */
+export const DEVELOP_ELITE_VIEWPORT_KPI_MIN_ZOOM = 0
 
 export function developEliteShouldScopeKpisToMapView(
   view: DevelopEliteMapView | null | undefined,
 ): boolean {
   return view != null && Number.isFinite(view.zoom) && view.zoom >= DEVELOP_ELITE_VIEWPORT_KPI_MIN_ZOOM
+}
+
+/** Sum Area_Ha / geometry for all Agro Structures in scope (all Structure_Type subtypes). */
+export function computeDevelopEliteStructuresTotalAreaHa(
+  features: DevelopEliteStructureFeature[],
+): number {
+  let total = 0
+  for (const f of features) {
+    total += resolveAgroStructuresFeatureAreaHa(f.properties ?? {}, f.geometry)
+  }
+  return total
 }
 
 export function filterStructureFeaturesByMapView(
@@ -625,7 +636,8 @@ export function computeDevelopEliteZoneLayerTotalAreaHaInMapView(
   zoneLayer: GeoJSON.FeatureCollection | null | undefined,
   view: DevelopEliteMapView | null | undefined,
 ): number {
-  if (!developEliteShouldScopeKpisToMapView(view) || !zoneLayer?.features?.length) return 0
+  if (!developEliteShouldScopeKpisToMapView(view)) return 0
+  if (!zoneLayer?.features?.length) return 0
   let total = 0
   for (const raw of zoneLayer.features) {
     if (raw?.type !== 'Feature') continue
@@ -1018,10 +1030,7 @@ export function computeDevelopEliteKpis(
   agriScopeStructures: DevelopEliteStructureFeature[] = features,
   agriKpiFilters: DevelopEliteFilters = developEliteAgriKpiFilters(filters),
 ): DevelopEliteKpiValues {
-  let heroTotalAreaHa = 0
-  for (const f of features) {
-    heroTotalAreaHa += resolveAgroStructuresFeatureAreaHa(f.properties ?? {}, f.geometry)
-  }
+  const heroTotalAreaHa = computeDevelopEliteStructuresTotalAreaHa(features)
   const cards: Record<string, string> = {}
   for (const card of config.kpiCards.filter(c => c.visible)) {
     cards[card.id] = evalKpiCard(

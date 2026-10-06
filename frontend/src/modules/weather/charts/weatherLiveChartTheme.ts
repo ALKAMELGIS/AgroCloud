@@ -1,4 +1,6 @@
 import type { ChartOptions } from 'chart.js'
+import type { AgroThemeMode } from '@/theme/createAgroTheme'
+import { readDocumentThemeMode } from '@/theme/createAgroTheme'
 
 export const WEATHER_CHART_COLORS = {
   temp: '#f97316',
@@ -77,29 +79,38 @@ function formatArcgisTooltipTitle(iso: string): string {
   })
 }
 
-const ARCGIS_AXIS_TICK_COLOR = 'rgba(203, 213, 225, 0.82)'
-const ARCGIS_GRID_COLOR = 'rgba(255, 255, 255, 0.1)'
-
-const ARCGIS_X_TICKS = {
-  color: ARCGIS_AXIS_TICK_COLOR,
-  font: { size: 9, weight: 'normal' as const },
-  maxTicksLimit: 16,
-  maxRotation: 0,
-  minRotation: 0,
-  autoSkip: true,
-  autoSkipPadding: 8,
-  padding: 6,
-  callback(value: string | number, index: number) {
-    const hit = resolveCategoryAxisIso(this.chart, value, index)
-    if (!hit) return ''
-    return formatArcgisAxisTick(hit.iso, hit.prevIso)
-  },
+function arcgisAxisTickColor(mode: AgroThemeMode): string {
+  return mode === 'light' ? 'rgba(51, 65, 85, 0.88)' : 'rgba(203, 213, 225, 0.82)'
 }
 
-const ARCGIS_Y_TICKS = {
-  color: ARCGIS_AXIS_TICK_COLOR,
-  font: { size: 9, weight: 'normal' as const },
-  padding: 6,
+function arcgisGridColor(mode: AgroThemeMode): string {
+  return mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : 'rgba(255, 255, 255, 0.1)'
+}
+
+function arcgisXTicks(mode: AgroThemeMode) {
+  return {
+    color: arcgisAxisTickColor(mode),
+    font: { size: 9, weight: 'normal' as const },
+    maxTicksLimit: 16,
+    maxRotation: 0,
+    minRotation: 0,
+    autoSkip: true,
+    autoSkipPadding: 8,
+    padding: 6,
+    callback(value: string | number, index: number) {
+      const hit = resolveCategoryAxisIso(this.chart, value, index)
+      if (!hit) return ''
+      return formatArcgisAxisTick(hit.iso, hit.prevIso)
+    },
+  }
+}
+
+function arcgisYTicks(mode: AgroThemeMode) {
+  return {
+    color: arcgisAxisTickColor(mode),
+    font: { size: 9, weight: 'normal' as const },
+    padding: 6,
+  }
 }
 
 /** Orange line + soft fill — ArcGIS humidity / accent forecast series. */
@@ -117,21 +128,33 @@ export const ARCGIS_ORANGE_AREA_LINE_STYLE = {
   spanGaps: true,
 }
 
-export const ARCGIS_LINE_DATASET_STYLE = {
-  borderColor: '#ffffff',
-  backgroundColor: 'transparent',
-  fill: false,
-  tension: 0.42,
-  cubicInterpolationMode: 'monotone' as const,
-  pointRadius: 0,
-  pointHoverRadius: 3,
-  borderWidth: 2,
-  borderCapStyle: 'round' as const,
-  borderJoinStyle: 'round' as const,
-  spanGaps: true,
+export function arcgisLineDatasetStyle(mode: AgroThemeMode = readDocumentThemeMode()) {
+  return {
+    borderColor: mode === 'light' ? '#1e293b' : '#ffffff',
+    backgroundColor: 'transparent',
+    fill: false,
+    tension: 0.42,
+    cubicInterpolationMode: 'monotone' as const,
+    pointRadius: 0,
+    pointHoverRadius: 3,
+    borderWidth: 2,
+    borderCapStyle: 'round' as const,
+    borderJoinStyle: 'round' as const,
+    spanGaps: true,
+  }
 }
 
-export function arcgisStackChartOptions(title: string, extra?: Partial<ChartOptions>): ChartOptions {
+/** @deprecated Use arcgisLineDatasetStyle() for theme-aware stroke color. */
+export const ARCGIS_LINE_DATASET_STYLE = arcgisLineDatasetStyle('dark')
+
+export function arcgisStackChartOptions(
+  title: string,
+  extra?: Partial<ChartOptions>,
+  mode: AgroThemeMode = readDocumentThemeMode(),
+): ChartOptions {
+  const xTicks = arcgisXTicks(mode)
+  const yTicks = arcgisYTicks(mode)
+  const gridColor = arcgisGridColor(mode)
   const base = baseLiveChartOptions({
     animation: { duration: 280 },
     elements: {
@@ -148,16 +171,16 @@ export function arcgisStackChartOptions(title: string, extra?: Partial<ChartOpti
       title: {
         display: true,
         text: title,
-        color: '#f1f5f9',
+        color: mode === 'light' ? '#0f172a' : '#f1f5f9',
         align: 'start',
         font: { size: 12, weight: 'bold' },
         padding: { top: 2, bottom: 8 },
       },
       tooltip: {
-        backgroundColor: 'rgba(15, 15, 18, 0.92)',
-        titleColor: '#f8fafc',
-        bodyColor: '#e2e8f0',
-        borderColor: 'rgba(255,255,255,0.12)',
+        backgroundColor: mode === 'light' ? 'rgba(255, 255, 255, 0.96)' : 'rgba(15, 15, 18, 0.92)',
+        titleColor: mode === 'light' ? '#0f172a' : '#f8fafc',
+        bodyColor: mode === 'light' ? '#334155' : '#e2e8f0',
+        borderColor: mode === 'light' ? 'rgba(15, 23, 42, 0.12)' : 'rgba(255,255,255,0.12)',
         borderWidth: 1,
         callbacks: {
           title(items) {
@@ -169,20 +192,20 @@ export function arcgisStackChartOptions(title: string, extra?: Partial<ChartOpti
     },
     scales: {
       x: {
-        ticks: ARCGIS_X_TICKS,
+        ticks: xTicks,
         border: { display: false },
         grid: {
           display: true,
-          color: ARCGIS_GRID_COLOR,
+          color: gridColor,
           drawTicks: true,
           tickLength: 4,
         },
       },
       y: {
-        ticks: ARCGIS_Y_TICKS,
+        ticks: yTicks,
         border: { display: false },
         grid: {
-          color: ARCGIS_GRID_COLOR,
+          color: gridColor,
           drawTicks: true,
           tickLength: 4,
         },
@@ -200,12 +223,12 @@ export function arcgisStackChartOptions(title: string, extra?: Partial<ChartOpti
       x: {
         ...base.scales?.x,
         ...extra.scales?.x,
-        ticks: { ...ARCGIS_X_TICKS, ...extra.scales?.x?.ticks },
+        ticks: { ...xTicks, ...extra.scales?.x?.ticks },
       },
       y: {
         ...base.scales?.y,
         ...extra.scales?.y,
-        ticks: { ...base.scales?.y?.ticks, ...extra.scales?.y?.ticks },
+        ticks: { ...yTicks, ...extra.scales?.y?.ticks },
       },
     },
   }

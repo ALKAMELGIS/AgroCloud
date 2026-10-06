@@ -1,5 +1,6 @@
 import './weather-monitoring.css'
 import './weather-intelligence.css'
+import './weather-intelligence-arcgis-themes.css'
 import '@/modules/dashboard/develop-elite/develop-elite-dashboard.css'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'

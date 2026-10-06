@@ -1684,27 +1684,33 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   touch-action: none;
 }
 
-.develop-elite-map .leaflet-tile-pane {
-  transform: translateZ(0);
+.develop-elite-map .leaflet-tile-pane .leaflet-tile,
+.develop-elite-map .develop-elite-basemap-tile {
+  pointer-events: none;
 }
 
-.develop-elite-map .leaflet-container.develop-elite-map--interacting .leaflet-map-pane,
-.develop-elite-map .leaflet-container.develop-elite-map--interacting .leaflet-tile-pane {
+.develop-elite-map .leaflet-container.develop-elite-map--interacting .leaflet-map-pane {
   will-change: transform;
 }
 
-.develop-elite-map .leaflet-container.develop-elite-map--interacting .leaflet-tile {
-  backface-visibility: hidden;
-}
-
+/* Basemap-only motion: hide heavy GIS / analysis panes while panning or zooming. */
+.develop-elite-map .leaflet-container.develop-elite-map--interacting .leaflet-develop-elite-data-layers-pane,
+.develop-elite-map .leaflet-container.develop-elite-map--interacting .leaflet-develop-elite-world-countries-pane,
+.develop-elite-map .leaflet-container.develop-elite-map--interacting .leaflet-pane[name='develop-elite-layer-live'],
+.develop-elite-map .leaflet-container.develop-elite-map--interacting .leaflet-marker-pane,
+.develop-elite-map .leaflet-container.develop-elite-map--interacting .leaflet-overlay-pane > svg,
 .develop-elite-map .leaflet-container.develop-elite-map--zooming .leaflet-develop-elite-data-layers-pane,
 .develop-elite-map .leaflet-container.develop-elite-map--zooming .leaflet-develop-elite-world-countries-pane,
-.develop-elite-map .leaflet-container.develop-elite-map--zooming .leaflet-pane[name='develop-elite-layer-live'] {
+.develop-elite-map .leaflet-container.develop-elite-map--zooming .leaflet-pane[name='develop-elite-layer-live'],
+.develop-elite-map .leaflet-container.develop-elite-map--zooming .leaflet-marker-pane,
+.develop-elite-map .leaflet-container.develop-elite-map--zooming .leaflet-overlay-pane > svg {
   visibility: hidden;
   pointer-events: none;
 }
 
-/* Keep AOI sketch visible while drawing (do not hide sketch pane during zoom). */
+/* Keep AOI sketch visible while drawing (do not hide sketch pane during map motion). */
+.develop-elite-map .leaflet-container.develop-elite-map--interacting:not(.develop-elite-map--drawing-sketch)
+  .leaflet-pane[name='develop-elite-draw-sketch'],
 .develop-elite-map .leaflet-container.develop-elite-map--zooming:not(.develop-elite-map--drawing-sketch)
   .leaflet-pane[name='develop-elite-draw-sketch'] {
   visibility: hidden;

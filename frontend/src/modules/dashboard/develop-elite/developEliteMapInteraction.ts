@@ -1,26 +1,38 @@
 /** Leaflet MapContainer options tuned for Develop Elite dashboard pan/zoom. */
 export const DEVELOP_ELITE_MAP_CONTAINER_OPTIONS = {
   inertia: true,
-  inertiaDeceleration: 3400,
-  inertiaMaxSpeed: 3200,
+  inertiaDeceleration: 3600,
+  inertiaMaxSpeed: 3400,
   /** Off during wheel/pinch — CSS transform stays smooth; avoids double tile work. */
   zoomAnimation: false,
   fadeAnimation: false,
   markerZoomAnimation: false,
   preferCanvas: false,
-  wheelDebounceTime: 28,
-  /** Higher = lighter wheel zoom (more px per zoom step). */
-  wheelPxPerZoomLevel: 76,
+  /** Debounce wheel so basemap tiles are not re-queued every tick. */
+  wheelDebounceTime: 36,
+  /** Higher = fewer zoom steps per scroll → less tile churn. */
+  wheelPxPerZoomLevel: 84,
   bounceAtZoomLimits: false,
 } as const
 
-/** Fewer fractional steps → less basemap tile churn while panning/zooming. */
-export const DEVELOP_ELITE_MAP_ZOOM_SNAP = 0.5
-export const DEVELOP_ELITE_MAP_ZOOM_DELTA = 0.5
+/** Integer zoom → one tile pyramid level after gesture ends (smooth scale while wheeling). */
+export const DEVELOP_ELITE_MAP_ZOOM_SNAP = 1
+export const DEVELOP_ELITE_MAP_ZOOM_DELTA = 1
 
-/** Basemap TileLayer options (Google / Esri) on the DE grid map. */
+/** Cap hi-res satellite fetches in the dashboard grid map widget. */
+export const DEVELOP_ELITE_BASEMAP_MAX_ZOOM = 20
+
+/**
+ * Basemap-only TileLayer options on the DE grid map.
+ * Overlays use separate panes and are hidden in CSS while interacting.
+ */
 export const DEVELOP_ELITE_BASEMAP_TILE_PROPS = {
-  updateWhenIdle: true,
+  /** Load while panning so the viewport never drains to an empty (black) tile pane. */
+  updateWhenIdle: false,
+  /** Scale existing tiles during wheel zoom; fetch new level after zoomend. */
   updateWhenZooming: false,
-  keepBuffer: 5,
+  keepBuffer: 4,
+  className: 'develop-elite-basemap-tile',
+  detectRetina: false,
+  tileSize: 256,
 } as const

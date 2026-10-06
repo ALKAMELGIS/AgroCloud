@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react'
+import { useTheme } from '@mui/material/styles'
 import { useLocation, useNavigate } from 'react-router-dom'
 import './Home.css'
 import { useLanguage, type AppLanguage } from '@/core/localization/i18n'
@@ -72,7 +73,6 @@ const menuItems: MenuItem[] = [
     color: '#8B5CF6', // Violet
     items: [
       { label: { en: 'Satellite Intelligence', ar: 'التحليل الفضائي الذكي' }, icon: 'fa-solid fa-layer-group', to: '/satellite/indices' },
-      { label: { en: 'GIS Map', ar: 'خريطة GIS' }, icon: 'fa-solid fa-map', to: '/satellite/gis' },
     ]
   },
   {
@@ -170,7 +170,7 @@ const menuItems: MenuItem[] = [
     id: 'admin',
     label: { en: 'Settings', ar: 'الإعدادات' },
     icon: 'fa-solid fa-user-shield',
-    color: '#1E293B', // Dark
+    color: '#6366F1',
     items: [
       { label: { en: 'User Management', ar: 'إدارة المستخدمين' }, icon: 'fa-solid fa-users', to: '/admin/users' },
       { label: { en: 'Manpower', ar: 'القوى العاملة' }, icon: 'fa-solid fa-people-group', to: '/admin/manpower' },
@@ -192,9 +192,33 @@ const menuItems: MenuItem[] = [
   }
 ]
 
+function homeIconAccentColor(hexColor: string, darkCanvas: boolean): string {
+  if (!darkCanvas) return hexColor
+  const triplet = toRgbTriplet(hexColor).split(' ').map(Number)
+  if (triplet.length !== 3 || triplet.some(n => Number.isNaN(n))) return hexColor
+  const [r, g, b] = triplet
+  const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
+  if (lum >= 0.42) return hexColor
+  const mix = 0.68
+  const lr = Math.round(r + (226 - r) * mix)
+  const lg = Math.round(g + (232 - g) * mix)
+  const lb = Math.round(b + (240 - b) * mix)
+  return `#${[lr, lg, lb].map(v => v.toString(16).padStart(2, '0')).join('')}`
+}
+
+function homeCardAccentStyle(accentHex: string, darkCanvas: boolean): CSSProperties {
+  const accent = homeIconAccentColor(accentHex, darkCanvas)
+  return {
+    '--app-accent': accent,
+    '--app-accent-rgb': toRgbTriplet(accent),
+  } as CSSProperties
+}
+
 export default function Home() {
   const navigate = useNavigate()
   const location = useLocation()
+  const muiTheme = useTheme()
+  const darkHomeCanvas = muiTheme.palette.mode === 'dark'
   const systemSettings = useSystemSettingsOptional()
   const [activeGroup, setActiveGroup] = useState<MenuItem | null>(null)
   const [sublistOpen, setSublistOpen] = useState(true)
@@ -354,12 +378,7 @@ export default function Home() {
                         className={`app-icon-card ${homePageSettings.cardDensity === 'compact' ? 'app-icon-card--compact' : ''}`}
                         onClick={() => handleSubItemClick(subItem)}
                         aria-label={subItem.label[language]}
-                        style={
-                          {
-                            '--app-accent': activeGroup.color,
-                            '--app-accent-rgb': toRgbTriplet(activeGroup.color),
-                          } as CSSProperties
-                        }
+                        style={homeCardAccentStyle(activeGroup.color, darkHomeCanvas)}
                       >
                         <i className={`app-icon ${subItem.icon} fa-fw`} aria-hidden="true"></i>
                         <span className="app-label">{subItem.label[language]}</span>
@@ -397,12 +416,7 @@ export default function Home() {
                   onClick={() => handleMainClick(item)}
                   aria-label={item.label[language]}
                   data-reveal="item"
-                  style={
-                    {
-                      '--app-accent': item.color,
-                      '--app-accent-rgb': toRgbTriplet(item.color),
-                    } as CSSProperties
-                  }
+                  style={homeCardAccentStyle(item.color, darkHomeCanvas)}
                 >
                   <i className={`app-icon ${item.icon} fa-fw`} aria-hidden="true"></i>
                   <span className="app-label">{item.label[language]}</span>

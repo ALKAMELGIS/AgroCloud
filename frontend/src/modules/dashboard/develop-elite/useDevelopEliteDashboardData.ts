@@ -14,6 +14,7 @@ import {
   saveDevelopEliteDashboardConfig,
 } from './developEliteDashboardConfig'
 import {
+  isDevelopEliteMapDataLayerVisible,
   normalizeDevelopEliteMapDataLayerOrder,
   normalizeDevelopEliteMapLayerVisibility,
 } from './developEliteMapDataLayers'
@@ -37,7 +38,9 @@ import {
   compareDevelopEliteListNames,
   filterZoneListForCountry,
   computeDevelopEliteKpis,
+  computeDevelopEliteStructuresTotalAreaHa,
   developEliteAgriKpiFilters,
+  developEliteMapDisplayFilters,
   computeDevelopEliteZoneLayerTotalAreaHa,
   computeSideStructureCounts,
   filterCropRowsForChartStats,
@@ -510,10 +513,43 @@ export function useDevelopEliteDashboardData() {
     [agriLocationFeatures, mapView],
   )
 
-  const heroZoneLayerTotalAreaHa = useMemo(
-    () => computeDevelopEliteZoneLayerTotalAreaHa(zoneLayerStructures, mapView),
-    [zoneLayerStructures, mapView],
+  const mapLayerVisibility = useMemo(
+    () => normalizeDevelopEliteMapLayerVisibility(config.mapLayerVisibility),
+    [config.mapLayerVisibility],
   )
+
+  const agroStructuresLayerVisible = isDevelopEliteMapDataLayerVisible(
+    mapLayerVisibility,
+    'agro-structures',
+  )
+
+  /** Same pool as the map canvas: all structures on the layer, clipped to the current map view. */
+  const mapLinkedStructureFeatures = useMemo(() => {
+    const base = filterStructureFeatures(
+      allFeatures,
+      developEliteMapDisplayFilters(filters),
+      filterContext,
+    )
+    return filterStructureFeaturesByMapView(base, mapView)
+  }, [allFeatures, filterContext, filters, mapView])
+
+  const heroZoneLayerTotalAreaHa = useMemo(() => {
+    if (!agroStructuresLayerVisible) return 0
+    if (zoneLayerStructures?.features?.length) {
+      return computeDevelopEliteZoneLayerTotalAreaHa(zoneLayerStructures, mapView)
+    }
+    return computeDevelopEliteStructuresTotalAreaHa(mapLinkedStructureFeatures)
+  }, [
+    agroStructuresLayerVisible,
+    mapLinkedStructureFeatures,
+    mapView,
+    zoneLayerStructures,
+  ])
+
+  const heroMapCultivatedAreaHa = useMemo(() => {
+    if (!agroStructuresLayerVisible) return 0
+    return computeDevelopEliteStructuresTotalAreaHa(mapLinkedStructureFeatures)
+  }, [agroStructuresLayerVisible, mapLinkedStructureFeatures])
 
   const kpis = useMemo(() => {
     const base = computeDevelopEliteKpis(
@@ -527,7 +563,11 @@ export function useDevelopEliteDashboardData() {
       agriKpiStructures,
       agriKpiFilters,
     )
-    return { ...base, heroZoneLayerTotalAreaHa }
+    return {
+      ...base,
+      heroTotalAreaHa: heroMapCultivatedAreaHa,
+      heroZoneLayerTotalAreaHa,
+    }
   }, [
     scopedFeatures,
     scopedCropRows,
@@ -538,6 +578,7 @@ export function useDevelopEliteDashboardData() {
     agriKpiFilters,
     agriKpiStructures,
     filters,
+    heroMapCultivatedAreaHa,
     heroZoneLayerTotalAreaHa,
   ])
 
@@ -640,11 +681,6 @@ export function useDevelopEliteDashboardData() {
   const mapIrrigationMainPipeGeoJson = useMemo((): GeoJSON.FeatureCollection => {
     return { type: 'FeatureCollection', features: irrigationMainPipeFeatures }
   }, [irrigationMainPipeFeatures])
-
-  const mapLayerVisibility = useMemo(
-    () => normalizeDevelopEliteMapLayerVisibility(config.mapLayerVisibility),
-    [config.mapLayerVisibility],
-  )
 
   const mapDataLayerOrder = useMemo(
     () => normalizeDevelopEliteMapDataLayerOrder(config.mapDataLayerOrder),

@@ -8,7 +8,9 @@ import {
   compareDevelopEliteCropTableRows,
   compareDevelopEliteListNames,
   computeDevelopEliteKpis,
+  computeDevelopEliteStructuresTotalAreaHa,
   computeDevelopEliteZoneLayerTotalAreaHa,
+  developEliteShouldScopeKpisToMapView,
   filterZoneListForCountry,
   computeSideStructureCounts,
   countScopedAgriLocationFeatures,
@@ -67,6 +69,22 @@ describe('developEliteKpiEngine', () => {
     expect(kpis.cards['wildfelid']).toBe('0')
     expect(kpis.heroTotalAreaHa).toBeGreaterThan(0)
     expect(kpis.heroZoneLayerTotalAreaHa).toBe(0)
+  })
+
+  it('sums all Structure_Type subtypes in the visible map view', () => {
+    const features = normalizeStructureFeatures({
+      type: 'FeatureCollection',
+      features: [
+        polyFeature({ Structure_Type: 1000, Area_ha: 10 }),
+        polyFeature({ Structure_Type: 1001, Area_ha: 7 }),
+        polyFeature({ Structure_Type: 1002, Area_ha: 3 }),
+      ],
+    })
+    const view = { zoom: 12, west: 55.05, south: 25.05, east: 55.25, north: 25.25 }
+    expect(developEliteShouldScopeKpisToMapView(view)).toBe(true)
+    const inView = filterStructureFeaturesByMapView(features, view)
+    expect(inView.length).toBe(3)
+    expect(computeDevelopEliteStructuresTotalAreaHa(inView)).toBe(20)
   })
 
   it('sums Zone layer Area_Ha for the zone hero KPI', () => {

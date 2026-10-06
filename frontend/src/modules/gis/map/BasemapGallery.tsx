@@ -10,7 +10,10 @@ import {
 } from './basemapCatalog'
 import { rasterTileMaxNativeZoom } from '../layers/raster/rasterTileZoom'
 import { TOPOGRAPHIC_3D_BASEMAP_ID } from '@/modules/remote-sensing/terrain/agroCloudMapTerrain'
-import { DEVELOP_ELITE_BASEMAP_TILE_PROPS } from '@/modules/dashboard/develop-elite/developEliteMapInteraction'
+import {
+  DEVELOP_ELITE_BASEMAP_MAX_ZOOM,
+  DEVELOP_ELITE_BASEMAP_TILE_PROPS,
+} from '@/modules/dashboard/develop-elite/developEliteMapInteraction'
 
 export type BasemapType = string
 
@@ -176,18 +179,19 @@ export const BasemapLayer: React.FC<{
             : url.includes('{s}')
               ? (['a', 'b', 'c', 'd'] as const)
               : undefined
+        const deBasemap = stableDuringInteraction
         return (
           <TileLayer
             key={`${resolvedId}-${i}-${url.slice(0, 48)}`}
             url={url}
             attribution={L.attribution}
             opacity={L.opacity ?? 1}
-            maxZoom={22}
+            maxZoom={deBasemap ? DEVELOP_ELITE_BASEMAP_MAX_ZOOM : 22}
             maxNativeZoom={L.maxNativeZoom ?? rasterTileMaxNativeZoom(url)}
             {...(subdomains ? { subdomains: [...subdomains] } : {})}
-            {...(url.includes('{r}') ? { detectRetina: true } : {})}
+            {...(!deBasemap && url.includes('{r}') ? { detectRetina: true } : {})}
             {...(pane ? { pane } : {})}
-            {...(stableDuringInteraction ? { ...DEVELOP_ELITE_BASEMAP_TILE_PROPS } : {})}
+            {...(deBasemap ? { ...DEVELOP_ELITE_BASEMAP_TILE_PROPS } : {})}
           />
         )
       })}

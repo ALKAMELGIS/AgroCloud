@@ -2,10 +2,11 @@ import type { ChartData } from 'chart.js'
 import type { OpenMeteoDailyForecast } from '@/modules/remote-sensing/weather/openMeteoWeather'
 import type { OpenMeteoDashboardHourlyPoint } from '../services/openMeteoWeatherDashboard'
 import {
-  ARCGIS_LINE_DATASET_STYLE,
   ARCGIS_ORANGE_AREA_LINE_STYLE,
   WEATHER_CHART_COLORS,
+  arcgisLineDatasetStyle,
 } from './weatherLiveChartTheme'
+import type { AgroThemeMode } from '@/theme/createAgroTheme'
 
 const WIND_BIN_LABELS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
 
@@ -111,20 +112,30 @@ export function buildWindDirectionChart(hourly: OpenMeteoDashboardHourlyPoint[])
   }
 }
 
-export function buildArcgisWindDirectionChart(hourly: OpenMeteoDashboardHourlyPoint[]): ChartData<'line'> {
+export function buildArcgisWindDirectionChart(
+  hourly: OpenMeteoDashboardHourlyPoint[],
+  mode: AgroThemeMode = 'dark',
+): ChartData<'line'> {
   return {
     labels: hourly.map(h => formatShortAxisTime(h.time)),
     datasets: [
       {
         label: 'Direction °',
         data: hourly.map(h => h.windDirectionDeg),
-        ...ARCGIS_LINE_DATASET_STYLE,
+        ...arcgisLineDatasetStyle(mode),
       },
     ],
   }
 }
 
-export function buildTemperatureHourlyBarChart(hourly: OpenMeteoDashboardHourlyPoint[]): ChartData<'bar'> {
+export function buildTemperatureHourlyBarChart(
+  hourly: OpenMeteoDashboardHourlyPoint[],
+  mode: AgroThemeMode = 'dark',
+): ChartData<'bar'> {
+  const barFill =
+    mode === 'light' ? 'rgba(30, 41, 59, 0.72)' : 'rgba(248, 250, 252, 0.82)'
+  const barEdge =
+    mode === 'light' ? 'rgba(15, 23, 42, 0.85)' : 'rgba(248, 250, 252, 0.95)'
   return {
     labels: hourly.map(h => {
       const clock = h.time.slice(11, 16)
@@ -134,8 +145,8 @@ export function buildTemperatureHourlyBarChart(hourly: OpenMeteoDashboardHourlyP
       {
         label: '°C',
         data: hourly.map(h => h.temperatureC),
-        backgroundColor: 'rgba(248, 250, 252, 0.82)',
-        borderColor: 'rgba(248, 250, 252, 0.95)',
+        backgroundColor: barFill,
+        borderColor: barEdge,
         borderWidth: 0,
         borderRadius: 1,
       },
@@ -160,14 +171,17 @@ export function buildWindSpeedChart(hourly: OpenMeteoDashboardHourlyPoint[]): Ch
   }
 }
 
-export function buildArcgisWindSpeedChart(hourly: OpenMeteoDashboardHourlyPoint[]): ChartData<'line'> {
+export function buildArcgisWindSpeedChart(
+  hourly: OpenMeteoDashboardHourlyPoint[],
+  mode: AgroThemeMode = 'dark',
+): ChartData<'line'> {
   return {
     labels: hourly.map(h => formatShortAxisTime(h.time)),
     datasets: [
       {
         label: 'Wind km/h',
         data: hourly.map(h => h.windSpeedKmh),
-        ...ARCGIS_LINE_DATASET_STYLE,
+        ...arcgisLineDatasetStyle(mode),
       },
     ],
   }

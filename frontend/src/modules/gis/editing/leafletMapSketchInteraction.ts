@@ -66,6 +66,80 @@ export function unlockLeafletMapForSketch(map: L.Map): void {
   L.DomUtil.removeClass(map.getContainer(), SKETCH_CLASS)
 }
 
+type LeafletDraggableLike = {
+  _dragging?: boolean
+  _moved?: boolean
+  _onUp?: (event: Event) => void
+  finishDrag?: () => void
+}
+
+/** Clear stuck leaflet-grabbing / pointer-down after sketch teardown or close-draw. */
+export function releaseLeafletMapPointerState(map: L.Map): void {
+  const container = map.getContainer()
+  if (!container?.isConnected) return
+
+  L.DomUtil.removeClass(container, 'leaflet-grabbing')
+  L.DomUtil.removeClass(container, 'leaflet-dragging')
+  L.DomUtil.removeClass(container, 'crosshair-cursor')
+
+  try {
+    const dragging = map.dragging as L.Handler & { _draggable?: LeafletDraggableLike }
+    const draggable = dragging?._draggable
+    if (draggable?._dragging) {
+      try {
+        if (typeof draggable.finishDrag === 'function') {
+          draggable.finishDrag()
+        } else {
+          draggable._onUp?.({ type: 'mouseup', target: container } as Event)
+        }
+      } catch {
+        draggable._dragging = false
+        draggable._moved = false
+      }
+    }
+  } catch {
+    /* dragging handler teardown */
+  }
+
+  try {
+    if (typeof PointerEvent !== 'undefined') {
+      container.dispatchEvent(
+        new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse' }),
+      )
+      container.dispatchEvent(
+        new PointerEvent('pointercancel', { bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse' }),
+      )
+    }
+    container.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }))
+  } catch {
+    /* synthetic events unsupported */
+  }
+
+  try {
+    if (document.pointerLockElement === container) {
+      document.exitPointerLock()
+    }
+  } catch {
+    /* pointer lock */
+  }
+}
+
+export const DEVELOP_ELITE_MAP_RESET_INTERACTION_EVENT = 'develop-elite-map:reset-interaction-chrome'
+
+/** End draw/sketch mode and restore normal map pan cursor (no stuck grab). */
+export function finishLeafletMapSketchSession(map: L.Map): void {
+  unlockLeafletMapForSketch(map)
+  releaseLeafletMapPointerState(map)
+  try {
+    const container = map.getContainer()
+    L.DomUtil.removeClass(container, 'develop-elite-map--interacting')
+    L.DomUtil.removeClass(container, 'develop-elite-map--zooming')
+    window.dispatchEvent(new CustomEvent(DEVELOP_ELITE_MAP_RESET_INTERACTION_EVENT))
+  } catch {
+    /* map teardown */
+  }
+}
+
 export function isLeafletSketchInteractionLocked(map: L.Map): boolean {
   return L.DomUtil.hasClass(map.getContainer(), SKETCH_CLASS)
 }

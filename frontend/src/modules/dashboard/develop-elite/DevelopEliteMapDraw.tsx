@@ -14,6 +14,7 @@ import { createPortal } from 'react-dom'
 import { useMap } from 'react-leaflet'
 import L from 'leaflet'
 import { DrawToolsController } from '@/modules/gis/editing/DrawTools'
+import { finishLeafletMapSketchSession } from '@/modules/gis/editing/leafletMapSketchInteraction'
 import { SiMapDrawWidget } from '@/modules/gis/editing/SiMapDrawWidget'
 import type { RemoteSensingDrawingTool } from '@/modules/gis/editing/RemoteSensingDrawingToolbar'
 import '@/modules/gis/editing/SiMapDrawWidget.css'
@@ -24,6 +25,7 @@ type DrawContextValue = {
   drawingActive: boolean
   setDrawingActive: (active: boolean) => void
   toggleDrawing: () => void
+  stopDrawing: () => void
   activeTool: RemoteSensingDrawingTool | null
   setActiveTool: (tool: RemoteSensingDrawingTool | null) => void
   hasClearableDrawing: boolean
@@ -98,10 +100,18 @@ export function DevelopEliteMapDrawProvider({ children }: { children: ReactNode 
     })
   }, [])
 
+  const stopDrawing = useCallback(() => {
+    setActiveTool(null)
+    setDrawingActive(false)
+  }, [])
+
   const toggleDrawing = useCallback(() => {
     setDrawingActive(current => {
-      if (current) setActiveTool(null)
-      return !current
+      if (current) {
+        setActiveTool(null)
+        return false
+      }
+      return true
     })
   }, [])
 
@@ -125,6 +135,7 @@ export function DevelopEliteMapDrawProvider({ children }: { children: ReactNode 
       drawingActive,
       setDrawingActive,
       toggleDrawing,
+      stopDrawing,
       activeTool,
       setActiveTool,
       hasClearableDrawing,
@@ -140,6 +151,7 @@ export function DevelopEliteMapDrawProvider({ children }: { children: ReactNode 
       drawingActive,
       hasClearableDrawing,
       notifyDrawingChanged,
+      stopDrawing,
       toggleDrawing,
     ],
   )
@@ -190,6 +202,11 @@ export function DevelopEliteMapDrawEngine() {
     }
   }, [draw, map])
 
+  useEffect(() => {
+    if (!draw || draw.drawingActive) return
+    finishLeafletMapSketchSession(map)
+  }, [draw?.drawingActive, draw, map])
+
   if (!draw) return null
 
   const host = map.getContainer()
@@ -226,7 +243,7 @@ export function DevelopEliteMapDrawEngine() {
                 onToolChange={draw.setActiveTool}
                 hasClearableDrawing={draw.hasClearableDrawing}
                 onClearDrawing={draw.clearDrawing}
-                onDeactivate={() => draw.setDrawingActive(false)}
+                onDeactivate={() => draw.stopDrawing()}
               />
             </div>,
             host,

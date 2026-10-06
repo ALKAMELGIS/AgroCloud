@@ -4,7 +4,7 @@ import L from 'leaflet';
 import 'leaflet-draw';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import './DrawTools.css';
-import { lockLeafletMapForSketch, unlockLeafletMapForSketch } from './leafletMapSketchInteraction';
+import { finishLeafletMapSketchSession, lockLeafletMapForSketch } from './leafletMapSketchInteraction';
 import { attachSimpleShapeTouchCommit } from './leafletSimpleShapeTouchDraw';
 
 /** Small circle handles for leaflet-draw (replaces default blue location pin icons). */
@@ -203,9 +203,8 @@ export const DrawToolsController: React.FC<DrawToolsControllerProps> = ({
 
   // Effect for Active Tool Management
   useEffect(() => {
-    if (!map || !activeTool) return;
+    if (!map) return;
 
-    // Cleanup previous drawer
     const cleanupDrawer = () => {
       touchCommitCleanupRef.current?.();
       touchCommitCleanupRef.current = null;
@@ -217,9 +216,14 @@ export const DrawToolsController: React.FC<DrawToolsControllerProps> = ({
         }
         activeDrawerRef.current = null;
       }
-      unlockLeafletMapForSketch(map);
-      L.DomUtil.removeClass(map.getContainer(), 'crosshair-cursor');
+      finishLeafletMapSketchSession(map);
     };
+
+    if (!activeTool) {
+      cleanupDrawer();
+      return;
+    }
+
     cleanupDrawer();
 
     if (['polygon', 'rectangle', 'circle', 'marker'].includes(activeTool)) {
@@ -283,7 +287,7 @@ export const DrawToolsController: React.FC<DrawToolsControllerProps> = ({
               );
             }
           } catch {
-            unlockLeafletMapForSketch(map);
+            finishLeafletMapSketchSession(map);
             activeDrawerRef.current = null;
             onToolActivateRef.current(null);
           }
@@ -314,7 +318,7 @@ export const DrawToolsController: React.FC<DrawToolsControllerProps> = ({
 
   useEffect(() => {
     return () => {
-      unlockLeafletMapForSketch(map);
+      finishLeafletMapSketchSession(map);
     };
   }, [map]);
 

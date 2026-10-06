@@ -1,0 +1,159 @@
+/* ArcGIS Weather Dashboard — follows app theme (html[data-theme]). Dark tokens default in weather-intelligence.css. */
+
+html[data-theme='light'] .content--weather-intelligence .weather-shell.weather-shell--arcgis {
+  --weather-bg: #e5e7eb;
+  --weather-panel: #ffffff;
+  --weather-border: rgba(15, 23, 42, 0.12);
+  --weather-text: #0f172a;
+  --weather-muted: #64748b;
+  --arcgis-brand: #007ac2;
+  --arcgis-temp: #ca8a04;
+  --arcgis-rh: #7c3aed;
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-shell.weather-shell--arcgis .weather-header {
+  background: var(--weather-panel);
+  border-bottom-color: var(--weather-border);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-header__title--arcgis,
+html[data-theme='light'] .content--weather-intelligence .weather-header__arcgis-icon {
+  color: var(--weather-text);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-header__arcgis-field select {
+  background: #f8fafc;
+  color: var(--weather-text);
+  border-color: var(--weather-border);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-header__humidity-pill {
+  background: #f1f5f9;
+  color: var(--weather-text);
+  border-color: var(--weather-border);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-header__arcgis-toolbar--segmented {
+  background: #f1f5f9;
+  border-color: var(--weather-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-header__arcgis-toolbar--segmented .weather-header__icon-btn {
+  color: #334155;
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-header__arcgis-toolbar--segmented .weather-header__icon-btn:not(:last-child) {
+  border-right-color: var(--weather-border);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-header--arcgis .develop-elite-digital-clock__date,
+html[data-theme='light'] .content--weather-intelligence .weather-header--arcgis .develop-elite-digital-clock__day-dial {
+  color: var(--weather-muted);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-shell.weather-shell--arcgis .weather-locations,
+html[data-theme='light'] .content--weather-intelligence .weather-locations--arcgis .weather-locations__list {
+  background: var(--weather-panel);
+  border-right-color: var(--weather-border);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-locations--arcgis .weather-locations__head--arcgis-ref {
+  background: #f1f5f9;
+  border-bottom-color: var(--weather-border);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-locations--arcgis .weather-locations__title {
+  color: var(--weather-text);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-locations__ticker-btn {
+  color: #475569;
+  background: rgba(15, 23, 42, 0.06);
+  box-shadow: none;
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-locations--arcgis .weather-arcgis-hourly__section-label {
+  color: var(--weather-muted);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-locations--arcgis .weather-arcgis-hourly__row {
+  border-bottom-color: var(--weather-border);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-charts-column {
+  background: var(--weather-panel);
+  border-right-color: var(--weather-border);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-arcgis-charts__plot,
+html[data-theme='light'] .content--weather-intelligence .weather-arcgis-charts__plot canvas {
+  background: #f8fafc;
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-arcgis-charts__metric-tabs,
+html[data-theme='light'] .content--weather-intelligence .weather-arcgis-charts--stacked-panel .weather-arcgis-charts__panel-head {
+  border-color: var(--weather-border);
+  background: #f8fafc;
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-arcgis-charts--stacked-panel .weather-arcgis-charts__panel-title {
+  color: var(--weather-text);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-arcgis-date-bar__toggle {
+  color: #475569;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-arcgis-date-bar__panel {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: var(--weather-border);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-arcgis-date-bar__field {
+  color: var(--weather-muted);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-arcgis-date-bar__field input {
+  background: #fff;
+  color: var(--weather-text);
+  border-color: var(--weather-border);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-arcgis-footer-nav,
+html[data-theme='light'] .content--weather-intelligence .weather-arcgis-shell-tabs {
+  background: var(--weather-panel);
+  border-color: var(--weather-border);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-hourly-table,
+html[data-theme='light'] .content--weather-intelligence .weather-hourly-table__scroll,
+html[data-theme='light'] .content--weather-intelligence .weather-hourly-table--arcgis tbody tr {
+  background: var(--weather-panel);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-hourly-table__title,
+html[data-theme='light'] .content--weather-intelligence .weather-hourly-table--arcgis thead th {
+  background: #f1f5f9;
+  color: var(--weather-text);
+  border-color: var(--weather-border);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-hourly-table--arcgis th,
+html[data-theme='light'] .content--weather-intelligence .weather-hourly-table--arcgis td {
+  color: var(--weather-text);
+  border-color: var(--weather-border);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-shell--arcgis-mobile .weather-charts-column > .weather-arcgis-date-bar,
+html[data-theme='light'] .content--weather-intelligence .weather-shell--arcgis-mobile .weather-arcgis-charts__metric-tabs {
+  background: var(--weather-panel);
+  border-color: var(--weather-border);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-wind-barb {
+  color: #475569;
+}

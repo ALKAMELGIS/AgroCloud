@@ -119,10 +119,12 @@ function MapListViewport({ onChange }: { onChange?: (view: DevelopEliteMapView) 
       })
     }
     map.on('moveend', emit)
+    map.on('zoomend', emit)
     emit()
     return () => {
       if (raf) cancelAnimationFrame(raf)
       map.off('moveend', emit)
+      map.off('zoomend', emit)
     }
   }, [map, onChange])
   return null
