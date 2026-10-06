@@ -1,0 +1,1 @@
+import{r as e}from"./vendor-react-CARSxlZT.js";function s(t,r){var i,a,o;return e.isValidElement(t)&&r.indexOf(t.type.muiName??((o=(a=(i=t.type)==null?void 0:i._payload)==null?void 0:a.value)==null?void 0:o.muiName))!==-1}function p(t){return typeof t=="string"}export{p as a,s as i};
