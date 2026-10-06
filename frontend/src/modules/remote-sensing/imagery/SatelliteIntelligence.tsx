@@ -63,9 +63,11 @@ import {
   loadDrawWorkspace,
   lngLatPixelDistance,
   minPixelDistToPolyline,
+  offsetWgs84Meters,
   pointInPolygonGeometry,
   projectPointerToCircleCardinalEdge,
   saveDrawWorkspace,
+  SKETCH_MIN_DRAG_METERS,
   SI_DRAW_WORKSPACE_LS_KEY_V2,
   setVertexCoord,
   snapLngLatToBearingStep,
@@ -460,6 +462,7 @@ import {
 import {
   applySiGlobeCockpitFog,
   isSiGlobeCockpit2dActive,
+  nudgeSiMapboxGlobeCanvas,
   SI_GLOBE_COCKPIT_2D_VIEW,
   SI_GLOBE_COCKPIT_FOG,
 } from '@/modules/gis/map/siGlobeCockpit';
@@ -6382,7 +6385,7 @@ export default function SatelliteIntelligence() {
   const drawFadeRafRef = useRef<number | null>(null);
   const [drawAssistHint, setDrawAssistHint] = useState('');
   const [circleRadiusM, setCircleRadiusM] = useState<number | null>(null);
-  /** After initial circle drag: center + edge with N/E/S/W handles before Enter commits. */
+  /** Legacy refine handles (keyboard Enter); sketch circles commit on pointer release. */
   const [circleRefineDraft, setCircleRefineDraft] = useState<null | { center: [number, number]; edge: [number, number] }>(
     null,
   );
@@ -14407,28 +14410,36 @@ export default function SatelliteIntelligence() {
       setMapDragPanEnabled(true);
       return;
     }
-    const [lng1, lat1] = spec.start;
-    const [lng2, lat2] = end;
-    if (Math.hypot(lng2 - lng1, lat2 - lat1) < 1e-7) {
-      setMapDragPanEnabled(true);
-      return;
+    let [lng1, lat1] = spec.start;
+    let [lng2, lat2] = end;
+    const dragTooSmall =
+      Math.abs(lng2 - lng1) < 1e-8 && Math.abs(lat2 - lat1) < 1e-8;
+    if (dragTooSmall) {
+      if (spec.kind === 'circle') {
+        [lng2, lat2] = offsetWgs84Meters(lng1, lat1, SKETCH_MIN_DRAG_METERS, 0);
+      } else {
+        [lng2, lat2] = offsetWgs84Meters(
+          lng1,
+          lat1,
+          SKETCH_MIN_DRAG_METERS,
+          SKETCH_MIN_DRAG_METERS,
+        );
+      }
     }
     if (spec.kind === 'circle') {
       const feature = circleFromEdgeFeature(lng1, lat1, lng2, lat2, 128, 'Drawn circle');
+      setCircleRadiusM(null);
+      setCircleRefineDraft(null);
+      setCircleRefineActiveHandle(null);
+      setDrawAssistHint('');
+      setMapDragPanEnabled(true);
       if (gisSelectionActiveRef.current) {
-        setCircleRadiusM(null);
-        setCircleRefineDraft(null);
-        setCircleRefineActiveHandle(null);
-        setMapDragPanEnabled(true);
         applyGisFeatureSelectionFromGeometries([feature.geometry as GeoJSON.Geometry]);
         skipNextMapClickRef.current = true;
         return;
       }
-      setCircleRadiusM(haversineDistanceMeters(lng1, lat1, lng2, lat2));
-      setCircleRefineDraft({ center: [lng1, lat1], edge: [lng2, lat2] });
-      setCircleRefineActiveHandle(null);
-      setDrawAssistHint('Adjust handles or press Enter to apply the circle.');
-      setMapDragPanEnabled(false);
+      commitUserGeometry(feature);
+      finishSketchExitDrawingMode();
       skipNextMapClickRef.current = true;
       return;
     }
@@ -18258,7 +18269,7 @@ export default function SatelliteIntelligence() {
   endPolygonSketchDragRef.current = endPolygonSketchDrag;
 
   useEffect(() => {
-    const onUp = (e: PointerEvent) => {
+    const finishPointer = (clientX: number, clientY: number) => {
       const nav = mapOrbitNavigationRef.current;
       const orbit = nav?.orbitRef.current;
       if (orbit) {
@@ -18274,7 +18285,7 @@ export default function SatelliteIntelligence() {
       }
       nav?.endOrbitDrag();
       if (dragRectCircleRef.current) {
-        interactionEndRef.current.finalizeRect(e.clientX, e.clientY);
+        interactionEndRef.current.finalizeRect(clientX, clientY);
       }
       if (circleRefineInteractionRef.current) {
         circleRefineInteractionRef.current = null;
@@ -18302,11 +18313,18 @@ export default function SatelliteIntelligence() {
       }
       endPolygonSketchDragRef.current();
     };
+    const onUp = (e: PointerEvent) => finishPointer(e.clientX, e.clientY);
+    const onTouchEnd = (e: TouchEvent) => {
+      const t = e.changedTouches[0];
+      if (t) finishPointer(t.clientX, t.clientY);
+    };
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onUp);
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
     return () => {
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
+      window.removeEventListener('touchend', onTouchEnd);
     };
   }, []);
 
@@ -22526,7 +22544,7 @@ export default function SatelliteIntelligence() {
       return;
     }
     const MAX_RETRIES = 6;
-    const firstDelayMs = siBrowserReportsMicrosoftEdge() ? 3500 : 6000;
+    const firstDelayMs = siBrowserReportsMicrosoftEdge() ? 900 : 1400;
     let timer: number | null = null;
 
     const attempt = () => {
@@ -22721,6 +22739,38 @@ export default function SatelliteIntelligence() {
       mapRef.current?.getMap?.() ?? mapRef.current,
     );
   }, [isMapLoaded, isMapStyleReady]);
+
+  /**
+   * First paint: flex + lazy route often gives Mapbox a 0×0 canvas — stays black until
+   * a full page refresh. Resize + globe/fog nudge when the container or map instance appears.
+   */
+  useLayoutEffect(() => {
+    const host = siMapContainerRef.current;
+    if (!host) return;
+    let cancelled = false;
+    const run = () => {
+      if (cancelled) return;
+      const map = mapRef.current?.getMap?.() ?? mapRef.current;
+      nudgeSiMapboxGlobeCanvas(map, host);
+    };
+    run();
+    const raf1 = requestAnimationFrame(run);
+    const raf2 = requestAnimationFrame(() => requestAnimationFrame(run));
+    const t1 = window.setTimeout(run, 60);
+    const t2 = window.setTimeout(run, 200);
+    const t3 = window.setTimeout(run, 500);
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => run()) : null;
+    ro?.observe(host);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.clearTimeout(t3);
+      ro?.disconnect();
+    };
+  }, [isMapLoaded]);
 
   /** Mapbox tile cache + zoom-level prefetch during pan/zoom/tilt (no flicker / gray gaps). */
   useEffect(() => {
@@ -25545,14 +25595,11 @@ export default function SatelliteIntelligence() {
 
   const globeCockpit2dActive = useMemo(
     () =>
-      isSiGlobeCockpit2dActive(
-        { ...viewState, zoom: mapMetrics.zoom, latitude: mapMetrics.latitude },
-        {
-          is3DView,
-          hasRegionalFocus: drawnGeometry != null || aoiFields.length > 0,
-        },
-      ),
-    [viewState, mapMetrics.zoom, mapMetrics.latitude, is3DView, drawnGeometry, aoiFields.length],
+      isSiGlobeCockpit2dActive(viewState, {
+        is3DView,
+        hasRegionalFocus: drawnGeometry != null || aoiFields.length > 0,
+      }),
+    [viewState, is3DView, drawnGeometry, aoiFields.length],
   );
 
   const ftwGlobalMapActive =
@@ -25657,7 +25704,6 @@ export default function SatelliteIntelligence() {
           <MapGL
             key="si-map-globe"
             ref={mapRef}
-            reuseMaps
             antialias={false}
             initialViewState={initialMapViewStateRef.current}
             onMove={evt => {
@@ -25740,6 +25786,13 @@ export default function SatelliteIntelligence() {
             onMouseMove={handleMapPointerMove}
             onTouchStart={handleMapPointerDown}
             onTouchMove={handleMapPointerMove}
+            onTouchEnd={evt => {
+              const orig = evt.originalEvent as TouchEvent | undefined;
+              const t = orig?.changedTouches?.[0];
+              if (t && dragRectCircleRef.current) {
+                finalizeRectDragFromPointer(t.clientX, t.clientY);
+              }
+            }}
             onClick={evt => handleMapClickDraw(evt.lngLat.lng, evt.lngLat.lat, evt.originalEvent ?? undefined)}
             onDblClick={evt => {
               if (elevationProfile.drawing) {
@@ -25854,6 +25907,10 @@ export default function SatelliteIntelligence() {
                 terrainLayerEnabled: terrainLayerEnabledRef.current,
               });
               syncLiveViewport(true);
+              nudgeSiMapboxGlobeCanvas(evt.target, siMapContainerRef.current);
+              requestAnimationFrame(() => {
+                nudgeSiMapboxGlobeCanvas(evt.target, siMapContainerRef.current);
+              });
             }}
           >
             {isMapStyleReady ? (

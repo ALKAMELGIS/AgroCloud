@@ -57,6 +57,20 @@ export function haversineDistanceMeters(lng1: number, lat1: number, lng2: number
   return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/** Offset a WGS84 point by meters (approximate; fine for sketch min-size). */
+export function offsetWgs84Meters(
+  lng: number,
+  lat: number,
+  metersEast: number,
+  metersNorth: number,
+): [number, number] {
+  const cosLat = Math.max(0.2, Math.cos((lat * Math.PI) / 180));
+  return [lng + metersEast / (111320 * cosLat), lat + metersNorth / 111320];
+}
+
+/** Minimum drag size for touch taps without move (meters). */
+export const SKETCH_MIN_DRAG_METERS = 48;
+
 /** Snap pointer to nearest candidate vertex within pixel threshold; returns adjusted lng/lat. */
 export function snapLngLatToNearestVertex(
   map: MapboxMap,

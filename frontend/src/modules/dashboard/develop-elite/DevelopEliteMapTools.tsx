@@ -16,8 +16,9 @@ import { isDevelopEliteMapDataLayerVisible } from './developEliteMapDataLayers'
 import { DevelopEliteMapDataLayerList } from './DevelopEliteMapDataLayerList'
 import { buildDevelopEliteMapLegendSections, type DevelopEliteMapLegendRow } from './developEliteMapLegend'
 import { flyToFieldKey, flyToGeoJsonExtent, flyToGeoJsonFeatureIndex, flyToLatLng } from './developEliteMapFly'
+import { safeInvalidateLeafletMapSize } from '@/modules/gis/editing/leafletMapSketchInteraction'
 import { DevelopEliteMapInsightToolbar } from './DevelopEliteMapInsightTools'
-import { DevelopEliteMapLayerLivePanel } from './DevelopEliteMapLayerLive'
+import { DevelopEliteMapLayerLivePanel } from './DevelopEliteMapLayerLivePanel'
 import { useDevelopEliteMapChrome, type DevelopEliteMapPanelId } from './DevelopEliteMapChrome'
 import { fitDevelopElitePortfolioView } from './developEliteMapViewport'
 import { useDevelopEliteCompactViewport } from './developEliteCompactViewport'
@@ -638,15 +639,21 @@ export function DevelopEliteMapInteractionTune() {
   const map = useMap()
   useEffect(() => {
     let interacting = 0
+    const container = map.getContainer()
     const bump = (delta: number) => {
       interacting = Math.max(0, interacting + delta)
-      const container = map.getContainer()
       if (container) container.classList.toggle('develop-elite-map--interacting', interacting > 0)
     }
     const onMoveStart = () => bump(1)
     const onMoveEnd = () => bump(-1)
-    const onZoomStart = () => bump(1)
-    const onZoomEnd = () => bump(-1)
+    const onZoomStart = () => {
+      bump(1)
+      container?.classList.add('develop-elite-map--zooming')
+    }
+    const onZoomEnd = () => {
+      bump(-1)
+      container?.classList.remove('develop-elite-map--zooming')
+    }
     map.on('movestart', onMoveStart)
     map.on('moveend', onMoveEnd)
     map.on('zoomstart', onZoomStart)
@@ -656,7 +663,7 @@ export function DevelopEliteMapInteractionTune() {
       map.off('moveend', onMoveEnd)
       map.off('zoomstart', onZoomStart)
       map.off('zoomend', onZoomEnd)
-      map.getContainer()?.classList.remove('develop-elite-map--interacting')
+      container?.classList.remove('develop-elite-map--interacting', 'develop-elite-map--zooming')
     }
   }, [map])
   return null
@@ -686,11 +693,7 @@ export function DevelopEliteMapInvalidateOnLayout() {
     const refresh = () => {
       if (zooming || dragging) return
       requestAnimationFrame(() => {
-        try {
-          map.invalidateSize()
-        } catch {
-          /* map teardown */
-        }
+        safeInvalidateLeafletMapSize(map)
       })
     }
     window.addEventListener('develop-elite-layout-changed', refresh)

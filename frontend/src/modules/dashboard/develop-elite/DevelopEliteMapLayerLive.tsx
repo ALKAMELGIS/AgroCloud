@@ -1,20 +1,15 @@
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
-  type RefObject,
 } from 'react'
 import { useMap } from 'react-leaflet'
 import L from 'leaflet'
 import type { Map as LeafletMap } from 'leaflet'
 import { resolveSiSentinelAoiWmsBoundsLngLat } from '@/modules/remote-sensing/imagery/siSentinelAoiWmsStack'
-import { RemoteSensingLayerLiveStrip } from '@/modules/remote-sensing/imagery/RemoteSensingLayerLiveStrip'
-import '@/modules/remote-sensing/imagery/RemoteSensingPanel.css'
 import {
   SI_DEFAULT_LIVE_WMS_LAYER,
   type SentinelHubWmsLayerInfo,
@@ -37,38 +32,13 @@ import {
 } from './developEliteMapLayerLiveCore'
 import { useDevelopEliteMapDraw } from './DevelopEliteMapDraw'
 import { useDevelopEliteMapInsight } from './DevelopEliteMapInsightTools'
+import {
+  DevelopEliteMapLayerLiveContext,
+  useDevelopEliteMapLayerLive,
+  type DevelopEliteMapLayerLiveContextValue,
+} from './developEliteMapLayerLiveContext'
 
-type LayerLiveContextValue = {
-  clipSource: unknown
-  wmsDate: string
-  onWmsDateChange: (iso: string) => void
-  onResetImageryDateAuto: () => void
-  imageryDateAutoFollow: boolean
-  isFetchingSentinelScenes: boolean
-  layerGroups: ReturnType<typeof buildDevelopEliteLayerLiveLayerGroups>
-  layerValue: string
-  onLayerChange: (layerId: string) => void
-  isLoadingLayers: boolean
-  layerLiveActive: boolean
-  hasDrawnAoiClip: boolean
-  onToggleLayerLive: () => void
-  activateLayerLive: () => void
-  layerLiveTitle: string
-  layerLiveStatus: string
-  setLayerLiveStatus: (message: string) => void
-  cloudCoverage: number
-  onCloudCoverageChange: (value: number) => void
-}
-
-const DevelopEliteMapLayerLiveContext = createContext<LayerLiveContextValue | null>(null)
-
-export function useDevelopEliteMapLayerLive(): LayerLiveContextValue {
-  const ctx = useContext(DevelopEliteMapLayerLiveContext)
-  if (!ctx) {
-    throw new Error('useDevelopEliteMapLayerLive must be used within DevelopEliteMapLayerLiveProvider')
-  }
-  return ctx
-}
+export { useDevelopEliteMapLayerLive } from './developEliteMapLayerLiveContext'
 
 type ProviderProps = {
   /** Drawn AOI sketch (preferred for Layer Live dataMask clip). */
@@ -177,7 +147,7 @@ export function DevelopEliteMapLayerLiveProvider({ primaryClip, fallbackClip, ch
       : `Show ${layerId || 'index'} inside drawn AOI (Layer Live)`
 
   const value = useMemo(
-    (): LayerLiveContextValue => ({
+    (): DevelopEliteMapLayerLiveContextValue => ({
       clipSource,
       wmsDate,
       onWmsDateChange,
@@ -367,6 +337,8 @@ export function DevelopEliteMapLayerLiveDrawBridge() {
   const draw = useDevelopEliteMapDraw()
   const { layerLiveActive, activateLayerLive } = useDevelopEliteMapLayerLive()
   const lastSketchSigRef = useRef('')
+  const drawRef = useRef(draw)
+  drawRef.current = draw
 
   useEffect(() => {
     const fc = draw?.clipGeoJson
@@ -377,64 +349,16 @@ export function DevelopEliteMapLayerLiveDrawBridge() {
     }
     if (sig === lastSketchSigRef.current) return
     lastSketchSigRef.current = sig
-    if (!layerLiveActive) activateLayerLive()
-  }, [activateLayerLive, draw?.clipGeoJson, layerLiveActive])
+    if (layerLiveActive) return
+    const frame = window.requestAnimationFrame(() => {
+      if (drawRef.current?.activeTool) return
+      activateLayerLive()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [activateLayerLive, draw?.activeTool, draw?.clipGeoJson, layerLiveActive])
 
   return null
 }
 
-export function DevelopEliteMapLayerLivePanel({
-  menuBoundsRef,
-}: {
-  menuBoundsRef?: RefObject<HTMLElement | null>
-} = {}) {
-  const {
-    layerLiveStatus,
-    wmsDate,
-    onWmsDateChange,
-    onResetImageryDateAuto,
-    imageryDateAutoFollow,
-    isFetchingSentinelScenes,
-    layerGroups,
-    layerValue,
-    onLayerChange,
-    isLoadingLayers,
-    layerLiveActive,
-    hasDrawnAoiClip,
-    onToggleLayerLive,
-    layerLiveTitle,
-    cloudCoverage,
-    onCloudCoverageChange,
-  } = useDevelopEliteMapLayerLive()
-  return (
-    <div className="develop-elite-map__si-rs-panel si-rs-panel si-rs-panel--flat">
-      <RemoteSensingLayerLiveStrip
-        className="develop-elite-map__si-strip"
-        layerSelectMenuPortal
-        layerSelectRootClassName="si-rs-panel-select"
-        layerSelectMenuClassName="develop-elite-map__layer-select-menu"
-        layerSelectMenuBoundsRef={menuBoundsRef}
-        layerSelectMenuMaxHeight={220}
-        wmsDate={wmsDate}
-        onWmsDateChange={onWmsDateChange}
-        onResetImageryDateAuto={onResetImageryDateAuto}
-        imageryDateAutoFollow={imageryDateAutoFollow}
-        isFetchingSentinelScenes={isFetchingSentinelScenes}
-        layerGroups={layerGroups}
-        layerValue={layerValue}
-        onLayerChange={onLayerChange}
-        isLoadingLayers={isLoadingLayers}
-        layerLiveActive={layerLiveActive}
-        layerLiveDisabled={!hasDrawnAoiClip}
-        onToggleLayerLive={onToggleLayerLive}
-        layerLiveTitle={layerLiveTitle}
-        cloudCoverage={cloudCoverage}
-        onCloudCoverageChange={onCloudCoverageChange}
-      />
-      {layerLiveStatus ? (
-        <p className="develop-elite-map__layer-live-status" role="status">{layerLiveStatus}</p>
-      ) : null}
-    </div>
-  )
-}
+export { DevelopEliteMapLayerLivePanel } from './DevelopEliteMapLayerLivePanel'
 

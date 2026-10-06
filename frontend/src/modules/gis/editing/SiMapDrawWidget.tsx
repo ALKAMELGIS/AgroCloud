@@ -6,7 +6,7 @@ export type SiMapDrawWidgetProps = {
   /** Widget only renders when drawing mode is active. */
   active: boolean
   activeTool: RemoteSensingDrawingTool | null
-  onToolChange: (tool: RemoteSensingDrawingTool) => void
+  onToolChange: (tool: RemoteSensingDrawingTool | null) => void
   hasClearableDrawing: boolean
   onClearDrawing: () => void
   /** Deactivate drawing (turns the widget off — activation lives in the Main Toolbox). */
@@ -64,7 +64,7 @@ export function SiMapDrawWidget({
             title={tool.title}
             aria-label={tool.title}
             aria-pressed={activeTool === tool.id}
-            onClick={() => onToolChange(tool.id)}
+            onClick={() => onToolChange(activeTool === tool.id ? null : tool.id)}
           >
             <i className={tool.icon} aria-hidden />
           </button>

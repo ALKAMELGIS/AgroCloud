@@ -1,5 +1,6 @@
 import type { Map as LeafletMap } from 'leaflet'
 import L from 'leaflet'
+import { isLeafletSketchInteractionLocked } from '@/modules/gis/editing/leafletMapSketchInteraction'
 
 const INTEL_PICK_IGNORE_SELECTOR = [
   '.develop-elite-map__insight-panel',
@@ -42,6 +43,7 @@ export function registerDevelopEliteMapIntelPick(
 
   const onClick = (event: MouseEvent) => {
     if (event.button !== 0) return
+    if (isLeafletSketchInteractionLocked(map)) return
     if (shouldIgnoreDevelopEliteMapIntelPickClick(event.target)) return
     const latlng = map.mouseEventToLatLng(event)
     if (!Number.isFinite(latlng.lat) || !Number.isFinite(latlng.lng)) return

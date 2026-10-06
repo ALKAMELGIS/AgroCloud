@@ -54,6 +54,37 @@ export function applySiGlobeCockpitFog(
   }
 }
 
+type SiMapboxGlobeNudgeMap = {
+  resize?: () => void
+  triggerRepaint?: () => void
+  setProjection?: (projection: { name: string }) => void
+  setFog?: (fog: typeof SI_GLOBE_COCKPIT_FOG) => void
+  getCanvas?: () => HTMLCanvasElement
+}
+
+/** Resize + globe projection + fog — fixes black canvas on first route paint (flex layout / lazy mount). */
+export function nudgeSiMapboxGlobeCanvas(
+  map: SiMapboxGlobeNudgeMap | null | undefined,
+  host?: HTMLElement | null,
+): boolean {
+  if (!map) return false
+  try {
+    if (host) {
+      const { width, height } = host.getBoundingClientRect()
+      if (width < 4 || height < 4) return false
+    }
+    map.resize?.()
+    map.triggerRepaint?.()
+    if (typeof map.setProjection === 'function') {
+      map.setProjection({ name: 'globe' })
+    }
+    applySiGlobeCockpitFog(map)
+    return true
+  } catch {
+    return false
+  }
+}
+
 type CockpitSpinMap = {
   getCenter: () => { lng: number; lat: number }
   setCenter: (center: [number, number]) => void

@@ -105,7 +105,6 @@ export function DevelopEliteMapArcgisLayer({
   const [mapZoom, setMapZoom] = useState(() => map.getZoom())
   useMapEvents({
     zoomend: () => setMapZoom(map.getZoom()),
-    moveend: () => setMapZoom(map.getZoom()),
   })
   const layerOpacity = useMemo(() => layerOpacityFromDrawingInfo(drawingInfo), [drawingInfo])
   const drawingSig = useMemo(() => JSON.stringify(drawingInfo ?? null), [drawingInfo])

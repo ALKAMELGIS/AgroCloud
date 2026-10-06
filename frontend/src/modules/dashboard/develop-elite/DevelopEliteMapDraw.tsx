@@ -1,5 +1,6 @@
 import {
   createContext,
+  startTransition,
   useCallback,
   useContext,
   useEffect,
@@ -92,7 +93,9 @@ export function DevelopEliteMapDrawProvider({ children }: { children: ReactNode 
   const featureGroupRef = useRef<L.FeatureGroup | null>(null)
 
   const refreshClip = useCallback(() => {
-    setClipGeoJson(syncClipFromFeatureGroup(featureGroupRef.current))
+    startTransition(() => {
+      setClipGeoJson(syncClipFromFeatureGroup(featureGroupRef.current))
+    })
   }, [])
 
   const toggleDrawing = useCallback(() => {
@@ -159,6 +162,23 @@ function countSketchLayers(fg: L.FeatureGroup | null): number {
 export function DevelopEliteMapDrawEngine() {
   const map = useMap()
   const draw = useDevelopEliteMapDraw()
+  const drawRef = useRef(draw)
+  drawRef.current = draw
+
+  const handleToolActivate = useCallback((tool: string | null) => {
+    drawRef.current?.setActiveTool(leafletToolToDrawing(tool))
+  }, [])
+
+  const handleAOICreated = useCallback(() => {
+    const current = drawRef.current
+    if (!current) return
+    current.setActiveTool(null)
+    current.notifyDrawingChanged(countSketchLayers(current.featureGroupRef.current))
+  }, [])
+
+  const handleDrawingChanged = useCallback((count: number) => {
+    drawRef.current?.notifyDrawingChanged(count)
+  }, [])
 
   useEffect(() => {
     if (!draw) return
@@ -184,15 +204,12 @@ export function DevelopEliteMapDrawEngine() {
       {draw.drawingActive ? (
         <DrawToolsController
           activeTool={leafletTool}
-          onToolActivate={tool => draw.setActiveTool(leafletToolToDrawing(tool))}
+          onToolActivate={handleToolActivate}
           featureGroupRef={draw.featureGroupRef}
           featureGroupPane={DRAW_SKETCH_PANE}
           shapeColor={DRAW_ACCENT}
-          onAOICreated={() => {
-            draw.setActiveTool(null)
-            draw.notifyDrawingChanged(countSketchLayers(draw.featureGroupRef.current))
-          }}
-          onDrawingChanged={count => draw.notifyDrawingChanged(count)}
+          onAOICreated={handleAOICreated}
+          onDrawingChanged={handleDrawingChanged}
         />
       ) : null}
       {draw.drawingActive && host
