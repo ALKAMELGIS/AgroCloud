@@ -42,7 +42,7 @@ export function buildWindyEmbedUrl(input: BuildWindyEmbedUrlInput): string {
   url.searchParams.set('detailLon', detailLon.toFixed(3))
   url.searchParams.set('zoom', String(input.zoom ?? 10))
   url.searchParams.set('level', 'surface')
-  url.searchParams.set('overlay', input.overlay ?? 'wind')
+  url.searchParams.set('overlay', input.overlay ?? 'temp')
   url.searchParams.set('product', 'ecmwf')
   url.searchParams.set('menu', '')
   url.searchParams.set('message', 'true')

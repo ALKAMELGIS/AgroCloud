@@ -4,6 +4,7 @@ import './Home.css'
 import { useLanguage, type AppLanguage } from '@/core/localization/i18n'
 import { useSystemSettingsOptional } from '@/core/state/SystemSettingsContext'
 import { startSession } from '@/core/auth/auth'
+import { GPS_VEHICLE_TRACKING_SIGNIN_URL } from '@/core/routing/defaultPageLinks'
 
 interface MenuItem {
   id: string
@@ -12,6 +13,8 @@ interface MenuItem {
   color: string
   items?: SubMenuItem[]
   to?: string
+  /** Opens in a new tab (e.g. John Deere sign-in). */
+  externalUrl?: string
 }
 
 interface SubMenuItem {
@@ -19,6 +22,13 @@ interface SubMenuItem {
   icon: string
   to?: string
   action?: 'logout'
+  externalUrl?: string
+}
+
+function openExternalApp(url: string): void {
+  const trimmed = url.trim()
+  if (!trimmed) return
+  window.open(trimmed, '_blank', 'noopener,noreferrer')
 }
 
 const menuItems: MenuItem[] = [
@@ -108,7 +118,12 @@ const menuItems: MenuItem[] = [
       { label: { en: 'Weather Sensors', ar: 'حساسات الطقس' }, icon: 'fa-solid fa-cloud-sun', to: '/sensors/weather' },
       { label: { en: 'Irrigation Sensors', ar: 'حساسات الري' }, icon: 'fa-solid fa-faucet-drip', to: '/sensors/irrigation' },
       { label: { en: 'Camera', ar: 'الكاميرا' }, icon: 'fa-solid fa-camera', to: '/sensors/camera' },
-      { label: { en: 'GPS Vehicle Tracking', ar: 'تتبع مركبات GPS' }, icon: 'fa-solid fa-route', to: '/sensors/gps' },
+      {
+        label: { en: 'GPS Vehicle Tracking', ar: 'تتبع مركبات GPS' },
+        icon: 'fa-solid fa-route',
+        to: '/sensors/gps',
+        externalUrl: GPS_VEHICLE_TRACKING_SIGNIN_URL,
+      },
     ]
   },
   {
@@ -137,7 +152,8 @@ const menuItems: MenuItem[] = [
     label: { en: 'GPS Vehicle Tracking', ar: 'تتبع مركبات GPS' },
     icon: 'fa-solid fa-route',
     color: '#10B981',
-    to: '/sensors/gps'
+    to: '/sensors/gps',
+    externalUrl: GPS_VEHICLE_TRACKING_SIGNIN_URL,
   },
   {
     id: 'master',
@@ -212,6 +228,8 @@ export default function Home() {
     if (item.items?.length) {
       setActiveGroup(item)
       setSublistOpen(true)
+    } else if (item.externalUrl) {
+      openExternalApp(item.externalUrl)
     } else if (item.to) {
       navigate(item.to)
     }
@@ -225,6 +243,10 @@ export default function Home() {
     if (subItem.action === 'logout') {
       startSession(null)
       navigate('/login', { replace: true })
+      return
+    }
+    if (subItem.externalUrl) {
+      openExternalApp(subItem.externalUrl)
       return
     }
     if (subItem.to) navigate(subItem.to)

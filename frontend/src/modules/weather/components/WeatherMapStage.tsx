@@ -327,6 +327,7 @@ export function WeatherMapStage({
             farmId={farmId}
             locationLabel={locationLabel}
             activeLayerId={activeLayerId}
+            agriLocations={agriLocations}
           />
         ) : null}
         {showLeaflet ? (

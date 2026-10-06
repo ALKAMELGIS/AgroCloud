@@ -15,9 +15,10 @@ export const AGROCLOUD_MANAGEMENT_EXTERNAL_URL =
 /** Default AgSense 365 farm grid — override in Settings → Pages. */
 export const IRRIGATION_SENSORS_DEFAULT_URL = 'https://www.agsense365.com/farm/grid'
 
-/** John Deere Operations Center map sign-in — override in Settings → Pages. */
-export const GPS_VEHICLE_TRACKING_DEFAULT_URL =
-  'https://signin.johndeere.com/oauth2/aus78tnlaysMraFhC1t7/v1/authorize?client_id=johndeere-8BsHt2wO5gtMpBazeVpXsvtORU6dwmL91OpMvK5e&response_type=code&redirect_uri=https%3A%2F%2Fmap.deere.com%2Flogin&scope=profile%20openid%20offline_access%20toggles'
+/** John Deere sign-in — override in Settings → Pages. */
+export const GPS_VEHICLE_TRACKING_SIGNIN_URL = 'https://signin.johndeere.com/'
+
+export const GPS_VEHICLE_TRACKING_DEFAULT_URL = GPS_VEHICLE_TRACKING_SIGNIN_URL
 
 /** Seeded when no user-defined link exists at this path. */
 export const DEFAULT_PAGE_LINKS: CustomPageRecord[] = [

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { buildWindyEmbedUrl, windyOverlayFromLayer } from '../utils/buildWindyEmbedUrl'
+import { buildWindyEmbed2Url, resolveWindyMapView, windyOverlayForMapDisplayView } from '../config/weatherWindyEmbed'
 import type { WeatherMapLayerId } from '../config/weatherLayerCatalog'
 
 type Props = {
@@ -8,21 +8,33 @@ type Props = {
   farmId: string
   locationLabel?: string
   activeLayerId: WeatherMapLayerId
+  agriLocations?: GeoJSON.FeatureCollection | null
 }
 
-export function WeatherWindyEmbed({ lat, lng, farmId, locationLabel, activeLayerId }: Props) {
-  const zoom = farmId === 'all' ? 7 : 11
+export function WeatherWindyEmbed({
+  lat,
+  lng,
+  farmId,
+  locationLabel,
+  activeLayerId,
+  agriLocations = null,
+}: Props) {
+  const mapView = useMemo(
+    () => resolveWindyMapView({ farmId, lat, lon: lng, agriLocations }),
+    [farmId, lat, lng, agriLocations],
+  )
   const src = useMemo(
     () =>
-      buildWindyEmbedUrl({
-        lat,
-        lng,
-        detailLat: lat,
-        detailLon: lng,
-        zoom,
-        overlay: windyOverlayFromLayer(activeLayerId),
+      buildWindyEmbed2Url({
+        lat: mapView.lat,
+        lon: mapView.lon,
+        detailLat: mapView.detailLat,
+        detailLon: mapView.detailLon,
+        zoom: mapView.zoom,
+        overlay: windyOverlayForMapDisplayView('', activeLayerId),
+        locationLabel: locationLabel === 'All locations' ? '' : locationLabel,
       }),
-    [lat, lng, zoom, activeLayerId],
+    [mapView, activeLayerId, locationLabel],
   )
 
   const title = locationLabel
@@ -32,7 +44,7 @@ export function WeatherWindyEmbed({ lat, lng, farmId, locationLabel, activeLayer
   return (
     <div className="weather-map-stage__windy">
       <iframe
-        key={`${farmId}-${lat.toFixed(4)}-${lng.toFixed(4)}-${activeLayerId}`}
+        key={`${farmId}-${mapView.lat.toFixed(4)}-${mapView.lon.toFixed(4)}-${mapView.zoom}-${activeLayerId}`}
         className="weather-map-stage__windy-frame"
         src={src}
         title={title}

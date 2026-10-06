@@ -71,17 +71,46 @@ export function WeatherIntelligenceHeader({
 
   if (arcgis) {
     const toolbar = (
-      <div className="weather-header__arcgis-toolbar" aria-label="Map actions">
-        <button type="button" className="weather-header__icon-btn" onClick={onRefresh} disabled={loading} title="Refresh">
+      <div
+        className="weather-header__arcgis-toolbar weather-header__arcgis-toolbar--segmented"
+        role="toolbar"
+        aria-label="Map actions"
+      >
+        <button
+          type="button"
+          className="weather-header__icon-btn"
+          onClick={onRefresh}
+          disabled={loading}
+          title="Refresh"
+          aria-label="Refresh weather data"
+        >
           <i className="fa-solid fa-rotate" aria-hidden />
         </button>
-        <button type="button" className="weather-header__icon-btn" onClick={onFullscreen} title="Full screen">
+        <button
+          type="button"
+          className="weather-header__icon-btn"
+          onClick={onFullscreen}
+          title="Full screen"
+          aria-label="Full screen"
+        >
           <i className="fa-solid fa-expand" aria-hidden />
         </button>
-        <button type="button" className="weather-header__icon-btn" onClick={onOpenExcelExport} title="Export Excel report">
+        <button
+          type="button"
+          className="weather-header__icon-btn"
+          onClick={onOpenExcelExport}
+          title="Export Excel report"
+          aria-label="Export Excel report"
+        >
           <i className="fa-solid fa-file-excel" aria-hidden />
         </button>
-        <button type="button" className="weather-header__icon-btn" onClick={onOpenSettings} title="Settings">
+        <button
+          type="button"
+          className="weather-header__icon-btn"
+          onClick={onOpenSettings}
+          title="Settings"
+          aria-label="Settings"
+        >
           <i className="fa-solid fa-gear" aria-hidden />
         </button>
       </div>
@@ -90,9 +119,15 @@ export function WeatherIntelligenceHeader({
     if (compact) {
       return (
         <header className="weather-header weather-header--arcgis weather-header--arcgis-compact">
-          <div className="weather-header__arcgis-compact-top">
+          <div className="weather-header__arcgis-compact-head">
             <h1 className="weather-header__title weather-header__title--arcgis">Weather</h1>
-            {toolbar}
+            <div
+              className="weather-header__arcgis-clock-center weather-header__arcgis-clock-center--compact"
+              aria-label="UAE time"
+            >
+              <DevelopEliteHeaderDigitalClock />
+            </div>
+            <div className="weather-header__arcgis-compact-actions">{toolbar}</div>
           </div>
           <div className="weather-header__arcgis-filters">
             {sites.length && onSelectFarm && farmId ? (
