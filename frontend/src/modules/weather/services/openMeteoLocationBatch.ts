@@ -4,7 +4,9 @@ import type { WeatherFarmSite } from './weatherFarmService'
 
 import { fetchCurrentGridBatch } from './openMeteoGridProxy'
 
-import { apiUrl, noteApiResponse } from '@/core/api/apiOrigin'
+import { fetchOpenMeteoWeatherMapPick } from '@/modules/remote-sensing/weather/openMeteoWeather'
+
+import { apiUrl, configuredApiOrigin, ensureBackendAvailable, noteApiResponse } from '@/core/api/apiOrigin'
 
 import { peekLocationLiveRow } from './locationLiveWeatherCache'
 
@@ -26,11 +28,51 @@ const CURRENT_VARS = [
 
 
 
-const CHUNK_SIZE = 5
+const CHUNK_SIZE = 10
 
-const CHUNK_GAP_MS = 1600
+const CHUNK_GAP_MS = 700
 
-const SITE_PICK_GAP_MS = 140
+const SITE_PICK_GAP_MS = 200
+
+const ROWS_SESSION_KEY = 'agrocloud.weatherLocationRows.v2'
+
+const ROWS_SESSION_TTL_MS = 20 * 60_000
+
+async function weatherApiReachable(): Promise<boolean> {
+  if (import.meta.env.DEV) return true
+  if (configuredApiOrigin()) return true
+  return ensureBackendAvailable()
+}
+
+function sitesFingerprint(sites: WeatherFarmSite[]): string {
+  return sites.map(s => `${s.id}:${s.lat.toFixed(3)},${s.lng.toFixed(3)}`).join('|')
+}
+
+export function readPersistedLocationRows(sites: WeatherFarmSite[]): WeatherLocationRow[] | null {
+  try {
+    const raw = sessionStorage.getItem(ROWS_SESSION_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { at: number; fp: string; rows: WeatherLocationRow[] }
+    if (Date.now() - parsed.at > ROWS_SESSION_TTL_MS) return null
+    if (parsed.fp !== sitesFingerprint(sites)) return null
+    if (!parsed.rows?.some(rowHasLiveTemp)) return null
+    return parsed.rows
+  } catch {
+    return null
+  }
+}
+
+function writePersistedLocationRows(sites: WeatherFarmSite[], rows: WeatherLocationRow[]): void {
+  try {
+    if (!rows.some(rowHasLiveTemp)) return
+    sessionStorage.setItem(
+      ROWS_SESSION_KEY,
+      JSON.stringify({ at: Date.now(), fp: sitesFingerprint(sites), rows }),
+    )
+  } catch {
+    /* quota / private mode */
+  }
+}
 
 
 
@@ -185,9 +227,132 @@ function rowFromOpenMeteoEntry(site: WeatherFarmSite, entry: Record<string, unkn
 
 
 export function rowHasLiveTemp(row: WeatherLocationRow): boolean {
-
   return row.temperatureC != null && Number.isFinite(row.temperatureC)
+}
 
+function rowNeedsDaily(row: WeatherLocationRow | undefined): boolean {
+  return Boolean(row && rowHasLiveTemp(row) && (row.dailyMinC == null || row.dailyMaxC == null))
+}
+
+async function fetchOneSiteBestEffort(
+  site: WeatherFarmSite,
+  signal?: AbortSignal,
+): Promise<WeatherLocationRow> {
+  const viaApi = await fetchCurrentViaGetApi(site, signal)
+  if (viaApi && rowHasLiveTemp(viaApi)) return viaApi
+  try {
+    const [direct] = await fetchChunkDirectWithRetry([site], signal)
+    if (rowHasLiveTemp(direct)) return direct
+  } catch {
+    /* next */
+  }
+  try {
+    const snap = await fetchOpenMeteoWeatherMapPick(site.lat, site.lng, signal)
+    const row = rowFromCurrent(site, {
+      temperature_2m: snap.temperatureC,
+      relative_humidity_2m: snap.humidityPct,
+      wind_speed_10m: snap.windSpeedKmh,
+      wind_direction_10m: snap.windDirectionDeg,
+      precipitation: snap.precipMm,
+      weather_code: snap.weatherCode,
+    })
+    const d0 = snap.daily?.[0]
+    return {
+      ...row,
+      dailyMinC: d0?.tempMinC ?? row.dailyMinC,
+      dailyMaxC: d0?.tempMaxC ?? row.dailyMaxC,
+    }
+  } catch {
+    return emptyRow(site)
+  }
+}
+
+/** Fill today's min/max °C when current conditions exist but daily arrays were omitted. */
+export async function enrichDailyForRows(
+  sites: WeatherFarmSite[],
+  merged: WeatherLocationRow[],
+  signal?: AbortSignal,
+): Promise<WeatherLocationRow[]> {
+  let out = merged
+  const need = sites.filter(s => rowNeedsDaily(out.find(r => r.id === s.id)))
+  if (!need.length) return out
+
+  if (await weatherApiReachable()) {
+    const fromApi = await fetchLocationsCurrentViaApi(need, signal)
+    if (fromApi?.length) out = mergeLocationRows(sites, [...out, ...fromApi])
+  }
+
+  const stillNeed = sites.filter(s => rowNeedsDaily(out.find(r => r.id === s.id)))
+  for (let i = 0; i < stillNeed.length; i += CHUNK_SIZE) {
+    if (signal?.aborted) break
+    const chunk = stillNeed.slice(i, i + CHUNK_SIZE)
+    try {
+      const rows = await fetchChunkDirectWithRetry(chunk, signal)
+      out = mergeLocationRows(sites, [...out, ...rows])
+    } catch {
+      /* rate limit — keep partial */
+    }
+    if (i + CHUNK_SIZE < stillNeed.length) await sleep(CHUNK_GAP_MS, signal)
+  }
+  return out
+}
+
+async function retryMissingTemperatureSites(
+  sites: WeatherFarmSite[],
+  merged: WeatherLocationRow[],
+  signal?: AbortSignal,
+): Promise<WeatherLocationRow[]> {
+  let out = merged
+  const missing = sites.filter(s => !rowHasLiveTemp(out.find(r => r.id === s.id)!))
+  for (const site of missing) {
+    if (signal?.aborted) break
+    const row = await fetchOneSiteBestEffort(site, signal)
+    if (rowHasLiveTemp(row)) out = mergeLocationRows(sites, [...out, row])
+    await sleep(100, signal)
+  }
+  return out
+}
+
+/** Portfolio "All locations" when direct fetch fails — average from loaded sites. */
+export function synthesizeAllLocationsRow(
+  label: string,
+  peers: WeatherLocationRow[],
+): WeatherLocationRow | null {
+  const live = peers.filter(r => r.id !== 'all' && rowHasLiveTemp(r))
+  if (!live.length) return null
+  const mean = (pick: (r: WeatherLocationRow) => number | null | undefined) => {
+    const vals = live
+      .map(pick)
+      .filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
+    if (!vals.length) return null
+    return vals.reduce((a, b) => a + b, 0) / vals.length
+  }
+  const minOf = (pick: (r: WeatherLocationRow) => number | null | undefined) => {
+    const vals = live
+      .map(pick)
+      .filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
+    return vals.length ? Math.min(...vals) : null
+  }
+  const maxOf = (pick: (r: WeatherLocationRow) => number | null | undefined) => {
+    const vals = live
+      .map(pick)
+      .filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
+    return vals.length ? Math.max(...vals) : null
+  }
+  const temperatureC = mean(r => r.temperatureC)
+  if (temperatureC == null) return null
+  return {
+    id: 'all',
+    label,
+    temperatureC,
+    humidityPct: mean(r => r.humidityPct),
+    windSpeedKmh: mean(r => r.windSpeedKmh),
+    windDirectionDeg: mean(r => r.windDirectionDeg),
+    precipMm: mean(r => r.precipMm),
+    weatherCode: live[0]?.weatherCode ?? null,
+    dailyMinC: minOf(r => r.dailyMinC),
+    dailyMaxC: maxOf(r => r.dailyMaxC),
+  }
 }
 
 
@@ -234,25 +399,23 @@ export function mapSitesToRowsFromApiEntries(
 
 
 function mapSitesToRowsFromProxyPoints(
-
   sites: WeatherFarmSite[],
-
-  points: Array<{ current?: Record<string, number | null> }>,
-
+  points: Array<{
+    current?: Record<string, number | null>
+    dailyMinC?: number | null
+    dailyMaxC?: number | null
+  }>,
 ): WeatherLocationRow[] {
-
   return sites.map((site, i) => {
-
-    const cur = points[i]?.current ?? {}
-
+    const pt = points[i]
+    const cur = pt?.current ?? {}
     const normalized: Record<string, unknown> = {}
-
     for (const [k, v] of Object.entries(cur)) normalized[k] = v
-
-    return rowFromCurrent(site, normalized)
-
+    return rowFromCurrent(site, normalized, {
+      dailyMinC: pt?.dailyMinC ?? null,
+      dailyMaxC: pt?.dailyMaxC ?? null,
+    })
   })
-
 }
 
 
@@ -266,6 +429,7 @@ async function fetchLocationsCurrentViaApi(
 ): Promise<WeatherLocationRow[] | null> {
 
   try {
+    if (!(await weatherApiReachable())) return null
 
     const res = await fetch(apiUrl('/api/weather/locations-current'), {
 
@@ -335,10 +499,6 @@ async function fetchChunkDirect(sites: WeatherFarmSite[], signal?: AbortSignal):
   url.searchParams.set('wind_speed_unit', 'kmh')
 
   url.searchParams.set('current', CURRENT_VARS.join(','))
-  url.searchParams.set(
-    'hourly',
-    'temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,precipitation',
-  )
   url.searchParams.set('daily', 'temperature_2m_max,temperature_2m_min')
   url.searchParams.set('forecast_days', '1')
 
@@ -361,12 +521,15 @@ async function fetchChunkDirect(sites: WeatherFarmSite[], signal?: AbortSignal):
   const raw = (await res.json()) as Record<string, unknown> | Record<string, unknown>[]
 
   if (!Array.isArray(raw) && raw && typeof raw === 'object' && (raw as { error?: boolean }).error) {
-
     throw new Error('Open-Meteo rate limited')
-
   }
 
-  const entries = Array.isArray(raw) ? raw : [raw]
+  const entries = (Array.isArray(raw) ? raw : [raw]).map((entry, i) => {
+    if (entry && typeof entry === 'object' && (entry as { error?: boolean }).error) {
+      return {}
+    }
+    return entry
+  })
 
   return mapSitesToRowsFromApiEntries(sites, entries)
 
@@ -394,7 +557,9 @@ async function fetchChunkDirectWithRetry(
 
     const status = (e as Error & { status?: number }).status
 
-    const is429 = status === 429 || (e instanceof Error && e.message.includes('429'))
+    const is429 =
+      status === 429 ||
+      (e instanceof Error && (e.message.includes('429') || e.message.includes('rate limit')))
 
     if (is429 && attempt < 3) {
 
@@ -441,17 +606,11 @@ async function fillMissingWithMapPick(
     }
 
     try {
-
       await sleep(SITE_PICK_GAP_MS, signal)
-
-      const [row] = await fetchChunkDirectWithRetry([site], signal)
-
+      const row = await fetchOneSiteBestEffort(site, signal)
       out.push(rowHasLiveTemp(row) ? row : existing)
-
     } catch {
-
       out.push(existing)
-
     }
 
   }
@@ -477,40 +636,63 @@ async function fetchCurrentViaGetApi(
     })
     noteApiResponse(res.status)
     if (!res.ok) return null
-    const payload = (await res.json()) as { current?: Record<string, number | null> }
-    const row = rowFromCurrent(site, payload.current ?? {})
+    const payload = (await res.json()) as {
+      current?: Record<string, number | null>
+      dailyMinC?: number | null
+      dailyMaxC?: number | null
+    }
+    const row = rowFromCurrent(site, payload.current ?? {}, {
+      dailyMinC: payload.dailyMinC ?? null,
+      dailyMaxC: payload.dailyMaxC ?? null,
+    })
     return rowHasLiveTemp(row) ? row : null
   } catch {
     return null
   }
 }
 
-async function fetchChunkRows(sites: WeatherFarmSite[], signal?: AbortSignal): Promise<WeatherLocationRow[]> {
-  const proxied = await fetchCurrentGridBatch(
-    sites.map(s => ({ lat: s.lat, lng: s.lng })),
-    CURRENT_VARS,
-    signal,
-  )
-  if (proxied?.points?.length === sites.length) {
-    const mapped = mapSitesToRowsFromProxyPoints(sites, proxied.points)
-    if (countLiveTemps(mapped) > 0) return mapped
-  }
-
-  try {
-    const direct = await fetchChunkDirectWithRetry(sites, signal)
-    if (countLiveTemps(direct) > 0) return direct
-  } catch {
-    /* try per-site API */
-  }
-
-  const out: WeatherLocationRow[] = []
-  for (const site of sites) {
+async function fetchDirectChunksForSites(
+  sites: WeatherFarmSite[],
+  signal?: AbortSignal,
+): Promise<WeatherLocationRow[]> {
+  let merged = sites.map(emptyRow)
+  for (let i = 0; i < sites.length; i += CHUNK_SIZE) {
     if (signal?.aborted) break
-    const hit = await fetchCurrentViaGetApi(site, signal)
-    out.push(hit ?? emptyRow(site))
-    await sleep(90, signal)
+    const chunk = sites.slice(i, i + CHUNK_SIZE)
+    try {
+      const rows = await fetchChunkDirectWithRetry(chunk, signal)
+      merged = mergeLocationRows(sites, [...merged, ...rows])
+    } catch {
+      /* rate limit — try next chunk */
+    }
+    if (i + CHUNK_SIZE < sites.length) await sleep(CHUNK_GAP_MS, signal)
   }
-  return out.length ? out : sites.map(emptyRow)
+  return merged
+}
+
+async function fetchChunkRows(sites: WeatherFarmSite[], signal?: AbortSignal): Promise<WeatherLocationRow[]> {
+  let merged = sites.map(emptyRow)
+
+  if (await weatherApiReachable()) {
+    for (const site of sites) {
+      if (signal?.aborted) break
+      const hit = await fetchCurrentViaGetApi(site, signal)
+      if (hit) merged = mergeLocationRows(sites, [...merged, hit])
+      await sleep(80, signal)
+    }
+  }
+
+  const stillMissing = sites.filter(s => !rowHasLiveTemp(merged.find(r => r.id === s.id)!))
+  if (stillMissing.length) {
+    try {
+      const direct = await fetchDirectChunksForSites(stillMissing, signal)
+      merged = mergeLocationRows(sites, [...merged, ...direct])
+    } catch {
+      /* fall through */
+    }
+  }
+
+  return merged
 }
 
 
@@ -601,33 +783,64 @@ export async function fetchOpenMeteoLocationRowsBatch(
 
   if (!sites.length) return []
 
-
-
-  let acc: WeatherLocationRow[] = seedLocationRowsFromLiveCache(sites)
-
-
+  const persisted = readPersistedLocationRows(sites)
+  let acc: WeatherLocationRow[] = mergeLocationRows(sites, [
+    ...seedLocationRowsFromLiveCache(sites),
+    ...(persisted ?? []),
+  ])
 
   const publish = (parts: WeatherLocationRow[]) => {
-
     acc = mergeLocationRows(sites, [...acc, ...parts])
-
     onProgress?.(acc)
-
+    if (acc.some(rowHasLiveTemp)) writePersistedLocationRows(sites, acc)
     return acc
-
   }
-
-
 
   publish([])
+  let merged = acc
 
-  const gridRows = await fetchAllSitesViaGridBatch(sites, signal)
-  if (gridRows?.length) {
-    let merged = publish(gridRows)
-    if (countLiveTemps(merged) >= sites.length) return merged
+  const missingAfterSeed = sites.filter(s => !rowHasLiveTemp(merged.find(r => r.id === s.id)!))
+  if (missingAfterSeed.length) {
+    try {
+      const directFirst = await fetchDirectChunksForSites(missingAfterSeed, signal)
+      merged = publish(directFirst)
+      merged = await enrichDailyForRows(sites, merged, signal)
+      publish(merged)
+      if (countLiveTemps(merged) >= sites.length) {
+        writePersistedLocationRows(sites, merged)
+        return merged
+      }
+    } catch {
+      /* backend/API path may still fill gaps */
+    }
   }
 
-  let merged = acc
+  if (await weatherApiReachable()) {
+    const gridRows = await fetchAllSitesViaGridBatch(sites, signal)
+    if (gridRows?.length) {
+      merged = publish(gridRows)
+      merged = await enrichDailyForRows(sites, merged, signal)
+      publish(merged)
+      if (countLiveTemps(merged) >= sites.length) {
+        writePersistedLocationRows(sites, merged)
+        return merged
+      }
+    }
+
+    const missingForApi = sites.filter(s => !rowHasLiveTemp(merged.find(r => r.id === s.id)!))
+    if (missingForApi.length) {
+      const fromApi = await fetchLocationsCurrentViaApi(missingForApi, signal)
+      if (fromApi?.length) {
+        merged = publish(fromApi)
+        if (countLiveTemps(merged) >= sites.length) {
+          merged = await enrichDailyForRows(sites, merged, signal)
+          publish(merged)
+          writePersistedLocationRows(sites, merged)
+          return merged
+        }
+      }
+    }
+  }
 
   const missingSites = sites.filter(s => !rowHasLiveTemp(merged.find(r => r.id === s.id)!))
 
@@ -651,33 +864,28 @@ export async function fetchOpenMeteoLocationRowsBatch(
 
 
 
-  const stillMissing = sites.filter(s => !rowHasLiveTemp(merged.find(r => r.id === s.id)!))
-
-  if (stillMissing.length > 0) {
-    const fromApi = await fetchLocationsCurrentViaApi(stillMissing, signal)
-    if (fromApi?.length) {
-      merged = publish(fromApi)
-    }
-  }
-
   const stillMissingAfterApi = sites.filter(s => !rowHasLiveTemp(merged.find(r => r.id === s.id)!))
 
-  if (stillMissingAfterApi.length > 0 && stillMissingAfterApi.length <= 12) {
-
+  if (stillMissingAfterApi.length > 0) {
     const missingRows = merged.filter(r => stillMissingAfterApi.some(m => m.id === r.id))
-
     const filled = await fillMissingWithMapPick(stillMissingAfterApi, missingRows, signal)
-
     merged = publish([
       ...merged.filter(r => !stillMissingAfterApi.some(m => m.id === r.id)),
       ...filled,
     ])
   }
 
+  merged = await enrichDailyForRows(sites, merged, signal)
+  merged = await retryMissingTemperatureSites(sites, merged, signal)
+  const allSite = sites.find(s => s.id === 'all')
+  if (allSite && !rowHasLiveTemp(merged.find(r => r.id === 'all')!)) {
+    const synth = synthesizeAllLocationsRow(allSite.label, merged)
+    if (synth) merged = mergeLocationRows(sites, [...merged, synth])
+  }
+  publish(merged)
 
-
+  writePersistedLocationRows(sites, merged)
   return merged
-
 }
 
 

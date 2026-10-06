@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import type { ChartData } from 'chart.js'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Chart as ChartJS, type ChartData } from 'chart.js'
 import { Chart } from 'react-chartjs-2'
 import {
   buildArcgisHumidityLineChart,
@@ -46,6 +46,7 @@ export function WeatherArcgisStackedCharts({
   hourlyRange,
 }: Props) {
   const [metricTab, setMetricTab] = useState<ForecastMetricTab>('temperature')
+  const stackRef = useRef<HTMLDivElement>(null)
 
   const anchorIso = mapTimeIso ?? bundle?.snapshot?.observedAt ?? bundle?.hourlyForecast?.[0]?.time
 
@@ -60,6 +61,30 @@ export function WeatherArcgisStackedCharts({
     const base = hourlyRange.length ? hourlyRange : fallbackHourly
     return downsampleHourlySeries(base)
   }, [hourlyRange, fallbackHourly])
+
+  useEffect(() => {
+    const root = stackRef.current
+    if (!root) return
+    const resizeCharts = () => {
+      for (const canvas of root.querySelectorAll('canvas')) {
+        try {
+          ChartJS.getChart(canvas)?.resize()
+        } catch {
+          /* chart tearing down */
+        }
+      }
+    }
+    resizeCharts()
+    const t = window.setTimeout(resizeCharts, 200)
+    const ro = new ResizeObserver(() => {
+      requestAnimationFrame(resizeCharts)
+    })
+    ro.observe(root)
+    return () => {
+      window.clearTimeout(t)
+      ro.disconnect()
+    }
+  }, [hourly.length, metricTab])
 
   const windDirTitle = `Wind Direction for ${locationLabel}`
   const windSpeedTitle = `Wind Speed for ${locationLabel}`
@@ -86,8 +111,38 @@ export function WeatherArcgisStackedCharts({
   )
 
   return (
-    <div className="weather-arcgis-charts weather-arcgis-charts--with-date-bar">
-      <div className="weather-arcgis-charts__stack">
+    <div className="weather-arcgis-charts weather-arcgis-charts--with-date-bar weather-arcgis-charts--stacked-panel">
+      <div className="weather-arcgis-charts__panel-head">
+        <h3 className="weather-arcgis-charts__panel-title">{locationLabel}</h3>
+        <p className="weather-arcgis-charts__panel-sub">Wind &amp; temperature charts</p>
+      </div>
+      <nav className="weather-arcgis-charts__metric-tabs" aria-label="Forecast metric">
+        {(
+          [
+            { id: 'temperature' as const, label: 'Temperature Forecast', shortLabel: 'Temperature' },
+            { id: 'humidity' as const, label: 'Humidity Forecast', shortLabel: 'Humidity' },
+          ] as const
+        ).map(t => (
+          <button
+            key={t.id}
+            type="button"
+            className={`weather-arcgis-charts__metric-tab${metricTab === t.id ? ' is-active' : ''}`}
+            aria-selected={metricTab === t.id}
+            onClick={() => setMetricTab(t.id)}
+          >
+            <span className="weather-arcgis-charts__metric-tab-label weather-arcgis-charts__metric-tab-label--long">
+              {t.label}
+            </span>
+            <span
+              className="weather-arcgis-charts__metric-tab-label weather-arcgis-charts__metric-tab-label--short"
+              aria-hidden
+            >
+              {t.shortLabel}
+            </span>
+          </button>
+        ))}
+      </nav>
+      <div className="weather-arcgis-charts__stack" ref={stackRef}>
         <section className="weather-arcgis-charts__block" aria-label={windDirTitle}>
           <div className="weather-arcgis-charts__plot">
             <Chart
@@ -146,24 +201,6 @@ export function WeatherArcgisStackedCharts({
           </div>
         </section>
       </div>
-      <nav className="weather-arcgis-charts__metric-tabs" aria-label="Forecast metric">
-        {(
-          [
-            { id: 'temperature' as const, label: 'Temperature Forecast' },
-            { id: 'humidity' as const, label: 'Humidity Forecast' },
-          ] as const
-        ).map(t => (
-          <button
-            key={t.id}
-            type="button"
-            className={`weather-arcgis-charts__metric-tab${metricTab === t.id ? ' is-active' : ''}`}
-            aria-selected={metricTab === t.id}
-            onClick={() => setMetricTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
       {!hourly.length ? (
         <p className="weather-arcgis-charts__empty">
           No data for {dateRange.startDate} → {dateRange.endDate} — try a shorter range or refresh.

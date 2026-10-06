@@ -5,6 +5,7 @@
  */
 import ExcelJS from 'exceljs'
 import type { MeteoNativeChartSpec } from './meteoNativeExcelCharts'
+import { chartSectionMatchesMetrics } from '@/modules/weather/export/weatherExcelExportMetrics'
 import type { WeatherClimateReportPayload } from './weatherClimateReportTypes'
 import { climateAggregationLabel } from './weatherClimateAnalysisEngine'
 import {
@@ -967,14 +968,19 @@ function writeChartSheets(
   monthly: MonthlyLayout,
   daily: SheetBounds,
   hourly: HourlyLayout,
+  exportMetricFocus?: string[],
 ): MeteoNativeChartSpec[] {
   const packed = buildChartSectionDefs(monthly, daily, hourly)
   const specs: MeteoNativeChartSpec[] = []
+  const metricSet = new Set(exportMetricFocus ?? [])
 
   const writeGroup = (sheetName: string, title: string, subtitle: string, secs: ChartSec[]) => {
     const ws = wb.getWorksheet(sheetName) ?? wb.addWorksheet(sheetName)
     let row = initChartSheet(ws, title, subtitle)
-    for (const sec of secs) {
+    const filtered = metricSet.size
+      ? secs.filter(s => chartSectionMatchesMetrics(s.label, metricSet))
+      : secs
+    for (const sec of filtered) {
       const labelRow = pushChartLabel(ws, row, sec.label)
       const spec = sec.build(labelRow)
       if (spec) specs.push(spec)
@@ -1032,7 +1038,13 @@ export async function buildMeteoDataReportWorkbook(
   wb.addWorksheet(METEO_SHEET.chartsDaily)
   const hourlyBounds = writeDataHourly(wb, model)
   wb.addWorksheet(METEO_SHEET.chartsHourly)
-  const chartSpecs = writeChartSheets(wb, monthlyLayout, dailyBounds, hourlyBounds)
+  const chartSpecs = writeChartSheets(
+    wb,
+    monthlyLayout,
+    dailyBounds,
+    hourlyBounds,
+    payload.exportMetricFocus,
+  )
 
   wb.__meteoChartSpecs = chartSpecs
   wb.__chartsSheetName = METEO_SHEET.chartMonthly

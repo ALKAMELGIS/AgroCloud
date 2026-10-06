@@ -1095,6 +1095,8 @@
 
 .weather-shell .weather-map-stage__map {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   position: relative;
   min-height: 0;
   height: 100%;
@@ -1103,6 +1105,84 @@
   border-radius: 10px;
   overflow: hidden;
   background: #0c1824;
+}
+
+.weather-map-source-tabs {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0;
+  padding: 0 8px;
+  background: rgba(12, 24, 36, 0.96);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 500;
+}
+
+.weather-map-source-tabs__btn {
+  flex: 1;
+  max-width: 220px;
+  padding: 8px 12px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+}
+
+.weather-map-source-tabs__btn.is-active {
+  color: var(--arcgis-brand, #3b82f6);
+  border-bottom-color: var(--arcgis-brand, #3b82f6);
+}
+
+.weather-map-source-tabs__label--short {
+  display: none;
+}
+
+.weather-map-stage__map-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.weather-map-stage__map-body > .leaflet-container,
+.weather-map-stage__map-body .leaflet-container {
+  flex: 1;
+  min-height: 0;
+  height: 100% !important;
+}
+
+.weather-map-stage__windy {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #0a1620;
+}
+
+.weather-map-stage__windy-frame {
+  flex: 1;
+  width: 100%;
+  min-height: 240px;
+  border: 0;
+  display: block;
+}
+
+.weather-map-stage__windy-credit {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 4px 10px 6px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+  text-align: right;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.weather-map-stage__windy-credit a {
+  color: rgba(147, 197, 253, 0.9);
 }
 
 .weather-map-stage__insight-rail {
@@ -1881,6 +1961,130 @@
   justify-content: flex-end;
   gap: 8px;
   margin-top: 12px;
+}
+
+.weather-excel-export-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.weather-excel-export-dialog__panel {
+  width: min(520px, 96vw);
+  max-height: min(90vh, 720px);
+  overflow: auto;
+  background: var(--weather-panel);
+  border: 1px solid var(--weather-border);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.weather-excel-export-dialog__panel h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.weather-excel-export-dialog__lead {
+  margin: 0 0 14px;
+  font-size: 12px;
+  color: var(--weather-muted, #94a3b8);
+  line-height: 1.45;
+}
+
+.weather-excel-export-dialog__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.weather-excel-export-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.weather-excel-export-dialog__field input[type='date'] {
+  border-radius: 6px;
+  border: 1px solid var(--weather-border);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--weather-text);
+  padding: 6px 8px;
+}
+
+.weather-excel-export-dialog__fieldset {
+  border: 1px solid var(--weather-border);
+  border-radius: 8px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+
+.weather-excel-export-dialog__fieldset legend {
+  padding: 0 4px;
+  font-weight: 600;
+}
+
+.weather-excel-export-dialog__radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 16px;
+  cursor: pointer;
+}
+
+.weather-excel-export-dialog__checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 6px 10px;
+  margin-top: 6px;
+}
+
+.weather-excel-export-dialog__check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.weather-excel-export-dialog__progress {
+  font-size: 12px;
+  color: var(--weather-accent);
+  margin: 0 0 8px;
+}
+
+.weather-excel-export-dialog__error {
+  font-size: 12px;
+  color: #f87171;
+  margin: 0 0 8px;
+}
+
+.weather-excel-export-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.weather-excel-export-dialog__primary {
+  background: var(--weather-accent);
+  color: #0f172a;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.weather-excel-export-dialog__primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .weather-map-stage__tool.is-active {
@@ -2789,7 +2993,7 @@
   --arcgis-temp: #ffcc00;
   --arcgis-rh: #b19cd9;
   --arcgis-brand: #009af2;
-  grid-template-columns: minmax(200px, 22%) minmax(0, 1fr) minmax(280px, 38%);
+  grid-template-columns: minmax(360px, 27%) minmax(0, 1fr) minmax(260px, 36%);
   grid-template-rows: auto minmax(0, 1fr) auto;
   grid-template-areas:
     'header header header'
@@ -2802,7 +3006,7 @@
 
 /* Locations class is shared with legacy shell — keep ArcGIS 3-pane grid. */
 .weather-shell.weather-shell--arcgis.weather-shell--with-locations {
-  grid-template-columns: minmax(200px, 22%) minmax(0, 1fr) minmax(280px, 38%);
+  grid-template-columns: minmax(360px, 27%) minmax(0, 1fr) minmax(260px, 36%);
   grid-template-rows: auto minmax(0, 1fr) auto;
   grid-template-areas:
     'header header header'
@@ -2880,17 +3084,62 @@
   flex-wrap: wrap;
   align-items: flex-end;
   justify-content: flex-end;
-  gap: 10px 14px;
+  gap: 8px 10px;
   margin-left: 0;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.weather-header__arcgis-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 8px 10px;
+  min-width: 0;
+}
+
+.weather-header__arcgis-toolbar {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  align-self: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .weather-header--arcgis .develop-elite-digital-clock {
   --de-accent: #4ade80;
+  --de-clock-digit-h: 24px;
+  --de-clock-digit-w: 14px;
+  --de-clock-colon-w: 7px;
+  gap: 8px;
+  max-height: 44px;
 }
 
-.weather-header--arcgis .develop-elite-digital-clock__day-dial-lens,
+.weather-header--arcgis .develop-elite-digital-clock__day-dial {
+  width: 24px;
+  height: 24px;
+}
+
 .weather-header--arcgis .develop-elite-digital-clock__day-dial-strip {
+  font-size: 5px;
   color: rgba(255, 255, 255, 0.55);
+}
+
+.weather-header--arcgis .develop-elite-digital-clock__day-dial-strip span {
+  height: 7px;
+  line-height: 7px;
+}
+
+.weather-header--arcgis .develop-elite-digital-clock__day-dial-lens {
+  font-size: 6px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.weather-header--arcgis .develop-elite-digital-clock__meta {
+  font-size: 7px;
+  gap: 6px;
 }
 
 .weather-header--arcgis .develop-elite-digital-clock__date {
@@ -2906,7 +3155,9 @@
 }
 
 .weather-header__arcgis-field select {
-  min-width: 140px;
+  min-width: 0;
+  width: min(128px, 22vw);
+  max-width: 148px;
   padding: 4px 8px;
   font-size: 12px;
   border-radius: 4px;
@@ -2927,9 +3178,17 @@
   background: #0a0a0a;
   color: #fff;
   border-radius: 999px;
-  padding: 6px 14px;
+  padding: 5px 12px;
   font-size: 12px;
+  line-height: 1.2;
   cursor: pointer;
+  flex-shrink: 0;
+  align-self: flex-end;
+  margin-bottom: 1px;
+}
+
+.weather-header--arcgis .weather-header__arcgis-toolbar .weather-header__icon-btn {
+  margin-bottom: 1px;
 }
 
 .weather-header__humidity-pill.is-on {
@@ -3066,8 +3325,8 @@
 }
 
 .weather-locations--arcgis .weather-arcgis-hourly__row {
-  grid-template-columns: minmax(72px, 0.9fr) minmax(0, 1.4fr) minmax(0, 1.12fr) minmax(44px, 0.58fr);
-  padding: 10px 4px 10px 8px;
+  grid-template-columns: minmax(92px, 1.05fr) minmax(0, 1.35fr) minmax(0, 1.22fr) minmax(56px, 0.72fr);
+  padding: 12px 8px 12px 10px;
   border-bottom-color: rgba(255, 255, 255, 0.1);
 }
 
@@ -3094,54 +3353,76 @@
 .weather-locations--arcgis .weather-arcgis-hourly__wind,
 .weather-locations--arcgis .weather-arcgis-hourly__temp,
 .weather-locations--arcgis .weather-arcgis-hourly__hum {
-  min-height: 72px;
-  padding: 0 6px;
+  min-height: 86px;
+  padding: 0 8px;
   gap: 4px;
 }
 
 .weather-locations--arcgis .weather-arcgis-hourly__wind-speeds {
   font-size: 11px;
-  gap: 2px;
+  gap: 3px;
+  line-height: 1.2;
 }
 
 .weather-locations--arcgis .weather-arcgis-hourly__wind-dir {
-  font-size: 14px;
+  font-size: 13px;
+}
+
+.weather-locations--arcgis .weather-arcgis-hourly__wind .weather-arcgis-hourly__section-label {
+  margin-top: auto;
+  padding-top: 4px;
 }
 
 .weather-locations--arcgis .weather-arcgis-hourly__section-label {
   font-size: 9px;
   color: rgba(255, 255, 255, 0.42);
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 .weather-locations--arcgis .weather-arcgis-hourly__temp {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-rows: 1fr auto;
-  column-gap: 6px;
-  align-content: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 3px;
 }
 
 .weather-locations--arcgis .weather-arcgis-hourly__temp-val {
-  grid-column: 1;
-  grid-row: 1;
-  align-self: center;
-  font-size: 20px;
+  font-size: 18px;
+  line-height: 1.05;
+  flex-shrink: 0;
 }
 
 .weather-locations--arcgis .weather-arcgis-hourly__temp-range {
-  grid-column: 2;
-  grid-row: 1;
-  align-self: center;
-  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10px;
+  line-height: 1.2;
+  flex-shrink: 0;
 }
 
 .weather-locations--arcgis .weather-arcgis-hourly__temp .weather-arcgis-hourly__section-label {
-  grid-column: 1 / -1;
-  grid-row: 2;
+  margin-top: auto;
+  align-self: flex-end;
+  padding-top: 4px;
+}
+
+.weather-locations--arcgis .weather-arcgis-hourly__hum {
+  justify-content: flex-start;
 }
 
 .weather-locations--arcgis .weather-arcgis-hourly__hum-val {
-  font-size: 20px;
+  font-size: 18px;
+  line-height: 1.05;
+  flex-shrink: 0;
+}
+
+.weather-locations--arcgis .weather-arcgis-hourly__hum .weather-arcgis-hourly__section-label {
+  margin-top: auto;
+  align-self: flex-end;
+  padding-top: 4px;
 }
 
 .weather-wind-barb {
@@ -3302,6 +3583,33 @@
   box-sizing: border-box;
 }
 
+.weather-arcgis-charts--stacked-panel .weather-arcgis-charts__panel-head {
+  order: 0;
+}
+
+.weather-arcgis-charts--stacked-panel .weather-arcgis-charts__stack {
+  order: 1;
+  flex: 1 1 auto;
+}
+
+.weather-arcgis-charts--stacked-panel .weather-arcgis-charts__metric-tabs {
+  order: 2;
+}
+
+@media (min-width: 900px) {
+  .weather-arcgis-charts--stacked-panel .weather-arcgis-charts__stack {
+    order: 1;
+  }
+
+  .weather-arcgis-charts--stacked-panel .weather-arcgis-charts__metric-tabs {
+    order: 2;
+    margin-top: 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: none;
+    position: static;
+  }
+}
+
 .weather-arcgis-charts__stack {
   flex: 1 1 auto;
   min-height: 0;
@@ -3406,6 +3714,127 @@
   color: var(--weather-muted);
 }
 
+.weather-arcgis-charts--stacked-panel .weather-arcgis-charts__panel-head {
+  display: none;
+  flex-shrink: 0;
+  padding: 8px 12px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: #242424;
+}
+
+.weather-arcgis-charts--stacked-panel .weather-arcgis-charts__panel-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.25;
+}
+
+.weather-arcgis-charts--stacked-panel .weather-arcgis-charts__panel-sub {
+  margin: 2px 0 0;
+  font-size: 10px;
+  color: var(--weather-muted);
+}
+
+.weather-arcgis-charts__metric-tab-label--short {
+  display: none;
+}
+
+.weather-shell--arcgis-mobile .weather-charts-column > .weather-arcgis-date-bar {
+  position: sticky;
+  top: 0;
+  z-index: 14;
+  width: 100%;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 6px 10px;
+  margin: 0;
+  background: #1c1c1c;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.weather-shell--arcgis-mobile .weather-charts-column__tab-panel {
+  overflow: hidden;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-charts--stacked-panel {
+  padding-top: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-charts--stacked-panel .weather-arcgis-charts__panel-head {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-charts__metric-tabs {
+  flex-shrink: 0;
+  margin-top: 0;
+  border-top: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: #1f1f1f;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-charts--stacked-panel .weather-arcgis-charts__panel-head {
+  order: 0;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-charts--stacked-panel .weather-arcgis-charts__metric-tabs {
+  order: 1;
+  top: 0;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-charts--stacked-panel .weather-arcgis-charts__stack {
+  order: 2;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-charts__metric-tab {
+  min-height: 42px;
+  padding: 10px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-charts__metric-tab-label--long {
+  display: none;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-charts__metric-tab-label--short {
+  display: inline;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-charts__stack {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  gap: 10px;
+  padding: 8px 0 12px;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-charts__block {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-charts__block--grow {
+  flex: 0 0 auto;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-charts__plot {
+  flex: 0 0 auto;
+  min-height: 156px;
+  height: min(28vh, 200px);
+  max-height: 220px;
+}
+
 .weather-shell.weather-shell--arcgis .weather-main {
   grid-area: main;
   border-radius: 0;
@@ -3434,6 +3863,10 @@
   color: #9ca3af;
   font-size: 12px;
   cursor: pointer;
+}
+
+.weather-arcgis-footer-nav__label--short {
+  display: none;
 }
 
 .weather-arcgis-footer-nav__btn.is-active {
@@ -3481,34 +3914,87 @@
   border-bottom-color: var(--arcgis-brand);
 }
 
-.weather-shell.weather-shell--arcgis-mobile {
-  grid-template-columns: 1fr;
+.weather-shell.weather-shell--arcgis.weather-shell--arcgis-mobile,
+.weather-shell.weather-shell--arcgis.weather-shell--arcgis-mobile.weather-shell--with-locations {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-areas:
+    'header'
+    'arcgis-shell-tabs'
+    'arcgis-panel';
+  gap: 0;
+  overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.weather-shell--arcgis-mobile.weather-shell--arcgis-view-charts {
+  grid-template-columns: minmax(0, 1fr) !important;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   grid-template-areas:
     'header'
     'arcgis-shell-tabs'
     'arcgis-panel'
     'arcgis-footer';
-  gap: 0;
 }
 
 .weather-shell--arcgis-mobile .weather-arcgis-shell-tabs {
   display: flex;
 }
 
-.weather-shell--arcgis-mobile .weather-locations,
-.weather-shell--arcgis-mobile .weather-charts-column,
-.weather-shell--arcgis-mobile .weather-main {
-  grid-area: arcgis-panel;
+.weather-shell.weather-shell--arcgis.weather-shell--arcgis-mobile .weather-header,
+.weather-shell.weather-shell--arcgis.weather-shell--arcgis-mobile .weather-arcgis-shell-tabs {
+  grid-column: 1 / -1;
+  width: 100%;
+  max-width: 100%;
+}
+
+.weather-shell.weather-shell--arcgis.weather-shell--arcgis-mobile .weather-locations,
+.weather-shell.weather-shell--arcgis.weather-shell--arcgis-mobile .weather-charts-column,
+.weather-shell.weather-shell--arcgis.weather-shell--arcgis-mobile .weather-main {
+  grid-area: arcgis-panel !important;
+  grid-row: arcgis-panel;
+  grid-column: 1 / -1 !important;
   min-height: 0;
   max-height: none;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  isolation: isolate;
+  justify-self: stretch;
 }
 
-.weather-shell--arcgis-mobile .weather-arcgis-shell-panel--hidden {
-  display: none !important;
+.weather-shell--arcgis-mobile .weather-header {
+  position: relative;
+  z-index: 30;
+  flex-shrink: 0;
 }
 
-.weather-shell.weather-shell--arcgis-tablet {
+.weather-shell--arcgis-mobile .weather-arcgis-shell-tabs {
+  position: relative;
+  z-index: 25;
+  flex-shrink: 0;
+}
+
+.weather-shell.weather-shell--arcgis.weather-shell--arcgis-mobile .weather-arcgis-footer-nav {
+  grid-area: arcgis-footer !important;
+  grid-column: 1 / -1 !important;
+  grid-row: arcgis-footer;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0;
+  flex-shrink: 0;
+  z-index: 20;
+  justify-self: stretch;
+  align-self: end;
+  box-sizing: border-box;
+}
+
+.weather-shell.weather-shell--arcgis.weather-shell--arcgis-tablet,
+.weather-shell.weather-shell--arcgis.weather-shell--arcgis-tablet.weather-shell--with-locations {
   grid-template-columns: minmax(148px, 30%) minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) minmax(0, 46%) auto;
   grid-template-areas:
@@ -3538,14 +4024,233 @@
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
+  padding-bottom: max(4px, env(safe-area-inset-bottom, 0px));
 }
 
 .weather-shell--arcgis-touch .weather-arcgis-footer-nav__btn {
-  flex: 1 0 auto;
-  min-width: max-content;
+  flex: 1 1 0;
+  min-width: 0;
   white-space: nowrap;
   font-size: 11px;
-  padding: 8px 12px;
+  padding: 10px 8px;
+  text-align: center;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-footer-nav__label--long {
+  display: none;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-footer-nav__label--short {
+  display: inline;
+}
+
+.weather-shell--arcgis-mobile .weather-header--arcgis {
+  padding: 8px 10px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.weather-shell--arcgis-mobile .weather-header--arcgis .weather-header__arcgis-brand {
+  grid-column: unset;
+  grid-row: unset;
+  width: 100%;
+}
+
+.weather-shell--arcgis-mobile .weather-header--arcgis .weather-header__arcgis-controls {
+  grid-column: unset;
+  grid-row: unset;
+  width: 100%;
+  justify-self: stretch;
+}
+
+.weather-shell--arcgis-mobile .weather-header__arcgis-sub,
+.weather-shell--arcgis-mobile .weather-header__arcgis-icon {
+  display: none;
+}
+
+.weather-shell--arcgis-mobile .weather-header__title--arcgis {
+  font-size: 16px !important;
+  line-height: 1.2;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-date-bar {
+  position: static;
+  top: auto;
+  left: auto;
+  z-index: auto;
+  flex-shrink: 0;
+  padding: 8px 10px 4px;
+  pointer-events: auto;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: #1c1c1c;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-charts--with-date-bar {
+  padding-top: 0;
+}
+
+.weather-shell--arcgis-mobile .weather-header__arcgis-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+  gap: 8px;
+}
+
+.weather-shell--arcgis-mobile .weather-header__arcgis-field {
+  min-width: 0;
+}
+
+.weather-shell--arcgis-mobile .weather-header__arcgis-field select {
+  width: 100%;
+  max-width: none;
+}
+
+.weather-shell--arcgis-mobile .weather-header__arcgis-toolbar {
+  width: 100%;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.weather-shell--arcgis-mobile .weather-header__arcgis-toolbar .weather-header__icon-btn {
+  flex: 1 1 0;
+  max-width: 44px;
+}
+
+.weather-shell--arcgis-mobile .weather-locations--arcgis {
+  border-right: none;
+}
+
+.weather-shell--arcgis-mobile .weather-locations--arcgis .weather-arcgis-hourly__row {
+  grid-template-columns: minmax(76px, 1.1fr) minmax(0, 1.25fr) minmax(0, 1.15fr) minmax(52px, 0.75fr);
+  padding: 10px 6px;
+}
+
+.weather-shell--arcgis-mobile .weather-main--arcgis-map .weather-map-stage {
+  min-height: 0;
+}
+
+.weather-shell--arcgis-mobile .weather-charts-column {
+  min-height: 0;
+  border-right: none;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+}
+
+.weather-shell--arcgis-mobile .weather-charts-column__tab-panel,
+.weather-shell--arcgis-mobile .weather-arcgis-charts,
+.weather-shell--arcgis-mobile .weather-arcgis-charts__stack,
+.weather-shell--arcgis-mobile .weather-arcgis-charts__block,
+.weather-shell--arcgis-mobile .weather-arcgis-charts__plot {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-charts__plot canvas {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.weather-shell--arcgis-mobile .weather-main--arcgis-map {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.weather-shell--arcgis-mobile .weather-main--arcgis-map .weather-map-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+
+.weather-shell--arcgis-mobile .weather-main--arcgis-map .weather-map-stage__map {
+  flex: 1 1 auto;
+  min-height: min(52vh, 100%);
+  height: 100%;
+}
+
+.weather-shell--arcgis-mobile .weather-map-source-tabs__btn {
+  min-height: 40px;
+  padding: 6px 8px;
+  font-size: 11px;
+  max-width: none;
+}
+
+.weather-shell--arcgis-mobile .weather-map-source-tabs__label--long {
+  display: none;
+}
+
+.weather-shell--arcgis-mobile .weather-map-source-tabs__label--short {
+  display: inline;
+}
+
+.weather-shell--arcgis-mobile .weather-map-stage__windy-frame {
+  min-height: min(48vh, 100%);
+}
+
+.weather-shell--arcgis-mobile .weather-main--arcgis-map .weather-map-stage__map .leaflet-container {
+  min-height: 200px;
+  height: 100% !important;
+}
+
+.weather-header--arcgis-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px 6px !important;
+}
+
+.weather-header__arcgis-compact-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.weather-header--arcgis-compact .weather-header__title--arcgis {
+  margin: 0;
+  font-size: 17px !important;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.weather-header--arcgis-compact .weather-header__arcgis-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+}
+
+.weather-header--arcgis-compact .weather-header__arcgis-field select {
+  width: 100%;
+  max-width: none;
+}
+
+.weather-header--arcgis-compact .weather-header__arcgis-toolbar {
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.weather-header--arcgis-compact .weather-header__arcgis-toolbar .weather-header__icon-btn {
+  width: 36px;
+  height: 34px;
+  max-width: none;
+  flex: 0 0 auto;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-shell-tabs {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-shell-tabs__btn {
+  min-height: 46px;
+  font-size: 11px;
 }
 
 @media (max-width: 899px) {
@@ -3570,6 +4275,16 @@
   .weather-header__arcgis-controls {
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  .weather-header__arcgis-filters {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .weather-header__arcgis-toolbar {
+    width: 100%;
+    justify-content: flex-end;
   }
 
   .weather-header__title--arcgis {
@@ -3785,6 +4500,207 @@
   color: var(--weather-muted);
 }
 
+.weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__panel-head {
+  display: none;
+  flex-shrink: 0;
+  padding: 8px 12px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: #242424;
+}
+
+.weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__panel-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.25;
+}
+
+.weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__panel-sub {
+  margin: 2px 0 0;
+  font-size: 10px;
+  color: var(--weather-muted);
+}
+
+.weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__cols-head {
+  display: none;
+  flex-shrink: 0;
+  grid-template-columns: minmax(76px, 0.95fr) minmax(0, 1.35fr) minmax(0, 1.1fr) minmax(52px, 0.65fr);
+  gap: 0;
+  padding: 6px 8px 6px 10px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+  background: #1f1f1f;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__cols-head span {
+  padding: 0 10px;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__cols-head span:first-child {
+  border-left: none;
+  padding-left: 0;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-hourly--forecast-panel {
+  padding-top: 0;
+}
+
+.weather-shell--arcgis-mobile .weather-charts-column--hourly .weather-arcgis-date-bar,
+.weather-shell--arcgis-mobile .weather-charts-column--tabled .weather-arcgis-date-bar {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  width: 100%;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 6px 10px;
+  margin: 0;
+  background: #1c1c1c;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__panel-head {
+  display: flex;
+  flex-direction: column;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__cols-head {
+  display: grid;
+  position: sticky;
+  top: 0;
+  z-index: 8;
+}
+
+.weather-shell--arcgis-mobile .weather-charts-column--hourly .weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__cols-head {
+  top: 34px;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__place {
+  display: none;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__section-label {
+  display: none;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__temp-range {
+  display: none;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__row {
+  grid-template-columns: 58px minmax(0, 1fr) 52px 44px;
+  padding: 8px 6px;
+  align-items: center;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__when {
+  padding-right: 4px;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__time {
+  font-size: 11px;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__wind,
+.weather-shell--arcgis-mobile .weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__temp,
+.weather-shell--arcgis-mobile .weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__hum {
+  min-height: 0;
+  padding: 2px 4px;
+  border-left-color: rgba(255, 255, 255, 0.12);
+  justify-content: center;
+  align-items: center;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__wind {
+  gap: 4px;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__wind .weather-wind-barb {
+  display: none;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__wind-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  width: 100%;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__wind-speeds {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px 4px;
+  font-size: 9px;
+  line-height: 1.2;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__wind-dir {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__temp-val {
+  font-size: 14px;
+  line-height: 1.1;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-hourly--forecast-panel .weather-arcgis-hourly__hum-val {
+  font-size: 13px;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-footer-nav {
+  justify-content: stretch;
+  gap: 6px;
+  padding: 6px 10px max(8px, env(safe-area-inset-bottom, 0px));
+  margin: 0;
+  left: 0;
+  right: 0;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-footer-nav__btn {
+  flex: 1 1 0;
+  min-height: 44px;
+  padding: 8px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom-width: 2px;
+}
+
+.weather-shell--arcgis-mobile .weather-arcgis-footer-nav__btn.is-active {
+  background: rgba(0, 154, 242, 0.12);
+  border-color: rgba(0, 154, 242, 0.35);
+}
+
+.weather-shell--arcgis-mobile .weather-hourly-table--with-date-bar {
+  padding-top: 0;
+}
+
+.weather-shell--arcgis-mobile .weather-hourly-table__title {
+  display: none;
+}
+
+.weather-shell--arcgis-mobile .weather-hourly-table__scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+.weather-shell--arcgis-mobile .weather-hourly-table--arcgis th,
+.weather-shell--arcgis-mobile .weather-hourly-table--arcgis td {
+  padding: 8px 6px;
+  font-size: 11px;
+}
+
 .weather-hourly-table {
   flex: 1;
   min-height: 0;
@@ -3947,8 +4863,12 @@
 }
 
 .weather-locations__arcgis-row .weather-wind-barb--arcgis svg {
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
+}
+
+.weather-locations--arcgis .weather-arcgis-hourly__wind .weather-wind-barb {
+  margin-top: 0;
 }
 
 .weather-hourly-table__num,

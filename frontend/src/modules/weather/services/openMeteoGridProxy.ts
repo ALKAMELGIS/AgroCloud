@@ -1,4 +1,10 @@
-import { apiUrl, noteApiResponse } from '@/core/api/apiOrigin'
+import { apiUrl, configuredApiOrigin, ensureBackendAvailable, noteApiResponse } from '@/core/api/apiOrigin'
+
+async function weatherApiReachable(): Promise<boolean> {
+  if (import.meta.env.DEV) return true
+  if (configuredApiOrigin()) return true
+  return ensureBackendAvailable()
+}
 
 export type GridPoint = { lat: number; lng: number }
 
@@ -7,11 +13,18 @@ export type GridBatchHourlyResponse = {
 }
 
 export type GridBatchCurrentResponse = {
-  points: Array<{ lat: number; lng: number; current: Record<string, number | null> }>
+  points: Array<{
+    lat: number
+    lng: number
+    current: Record<string, number | null>
+    dailyMinC?: number | null
+    dailyMaxC?: number | null
+  }>
 }
 
 async function postGridBatch<T>(body: Record<string, unknown>, signal?: AbortSignal): Promise<T | null> {
   try {
+    if (!(await weatherApiReachable())) return null
     const res = await fetch(apiUrl('/api/weather/grid-batch'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

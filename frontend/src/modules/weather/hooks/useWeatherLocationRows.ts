@@ -3,6 +3,7 @@ import type { WeatherLocationId } from '../config/weatherFarmIds'
 import {
   coalesceLocationRow,
   fetchOpenMeteoLocationRowsBatch,
+  readPersistedLocationRows,
   rowHasLiveTemp,
   seedLocationRowsFromLiveCache,
 } from '../services/openMeteoLocationBatch'
@@ -46,8 +47,15 @@ export function useWeatherLocationRows(sites: WeatherFarmSite[], refreshKey?: st
       return
     }
     const cachedSeed = seedLocationRowsFromLiveCache(sites)
-    if (cachedSeed.some(rowHasLiveTemp)) {
-      setRows(cachedSeed)
+    const persisted = readPersistedLocationRows(sites)
+    const seeded = sites.map(s => {
+      const a = cachedSeed.find(r => r.id === s.id) ?? emptyPlaceholder(s)
+      const b = persisted?.find(r => r.id === s.id)
+      if (b && rowHasLiveTemp(b)) return coalesceLocationRow(a, b)
+      return rowHasLiveTemp(a) ? a : b ?? a
+    })
+    if (seeded.some(rowHasLiveTemp)) {
+      setRows(seeded)
     }
     setLoading(true)
     try {
@@ -89,7 +97,10 @@ export function useWeatherLocationRows(sites: WeatherFarmSite[], refreshKey?: st
         sites.map(s => {
           const fromCache = seeded.find(r => r.id === s.id)
           const prevRow = prev.find(p => p.id === s.id)
-          if (fromCache && rowHasLiveTemp(fromCache)) return fromCache
+          if (fromCache && rowHasLiveTemp(fromCache)) {
+            const base = prevRow ?? fromCache ?? emptyPlaceholder(s)
+            return coalesceLocationRow(base, { ...fromCache, id: s.id, label: s.label })
+          }
           return prevRow ?? fromCache ?? emptyPlaceholder(s)
         }),
       )

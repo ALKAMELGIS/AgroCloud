@@ -112,4 +112,6 @@ export type WeatherClimateReportPayload = {
     agriculturalImpact: string
     bullets: string[]
   }
+  /** When set, only chart sections matching these metric ids are exported. */
+  exportMetricFocus?: string[]
 }

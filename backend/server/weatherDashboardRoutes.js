@@ -291,6 +291,7 @@ export function registerWeatherDashboardRoutes(app) {
         lat,
         lng,
         current: readCurrentFields(openMeteo),
+        ...readDailyMinMax(openMeteo),
         source: 'Open-Meteo',
       })
     } catch (e) {
@@ -346,28 +347,34 @@ export function registerWeatherDashboardRoutes(app) {
       }
     }
 
-    const rows = []
+    const rows = new Array(locations.length)
     try {
-      for (let i = 0; i < locations.length; i++) {
-        const loc = locations[i]
-        const lat = Number(loc.lat)
-        const lng = Number(loc.lng)
-        const id = loc.id != null ? String(loc.id) : `${lat},${lng}`
-        try {
-          const openMeteo = await fetchOpenMeteoCurrentOnly(lat, lng)
-          rows.push({
-            id,
-            lat,
-            lng,
-            current: readCurrentFields(openMeteo),
-            ...readDailyMinMax(openMeteo),
-          })
-        } catch {
-          rows.push({ id, lat, lng, current: {} })
-        }
-        if (i + 1 < locations.length) await sleepMs(110)
+      const CONCURRENCY = 4
+      for (let i = 0; i < locations.length; i += CONCURRENCY) {
+        const slice = locations.slice(i, i + CONCURRENCY)
+        await Promise.all(
+          slice.map(async (loc, j) => {
+            const idx = i + j
+            const lat = Number(loc.lat)
+            const lng = Number(loc.lng)
+            const id = loc.id != null ? String(loc.id) : `${lat},${lng}`
+            try {
+              const openMeteo = await fetchOpenMeteoCurrentOnly(lat, lng)
+              rows[idx] = {
+                id,
+                lat,
+                lng,
+                current: readCurrentFields(openMeteo),
+                ...readDailyMinMax(openMeteo),
+              }
+            } catch {
+              rows[idx] = { id, lat, lng, current: {} }
+            }
+          }),
+        )
+        if (i + CONCURRENCY < locations.length) await sleepMs(120)
       }
-      res.json({ rows })
+      res.json({ rows: rows.filter(Boolean) })
     } catch (e) {
       const status = e?.status === 429 ? 429 : 502
       res.status(status).json({ error: e instanceof Error ? e.message : 'Locations weather failed' })
@@ -448,7 +455,8 @@ export function registerWeatherDashboardRoutes(app) {
               const n = normalized[v]
               current[v] = typeof n === 'number' && Number.isFinite(n) ? n : null
             }
-            outPoints.push({ lat: pt.lat, lng: pt.lng, current })
+            const daily = readDailyMinMax(entry)
+            outPoints.push({ lat: pt.lat, lng: pt.lng, current, ...daily })
           }
         }
       }

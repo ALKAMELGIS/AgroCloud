@@ -40,6 +40,8 @@ import {
 } from '../config/weatherMapView'
 import { agriLocationLatLng } from '../map/weatherLocationPoint'
 import { pulseWeatherMapLocation } from '../map/weatherMapLocationPulse'
+import { WeatherMapSourceTabs, type WeatherMapSourceTab } from './WeatherMapSourceTabs'
+import { WeatherWindyEmbed } from './WeatherWindyEmbed'
 
 type Props = {
   site: WeatherFarmSite | null
@@ -62,9 +64,50 @@ type Props = {
   onApplyMapPick?: (point: { lat: number; lng: number; label: string }) => void
   /** Emoji layer strip across the top of the map (off for ArcGIS-style layout). */
   showLayerStrip?: boolean
+  /** Map vs Windy.com embed tabs (ArcGIS layout). */
+  showMapSourceTabs?: boolean
+  locationLabel?: string
   /** Open-Meteo viewport grid + IDW canvas/WebGL raster (Windy-style). */
   openMeteoInterpolatedRaster?: boolean
   mapForecastTimeline?: ReactNode
+}
+
+/** Leaflet needs invalidateSize after mobile panel swaps / grid relayout. */
+function WeatherMapLayoutSync() {
+  const map = useMap()
+  useEffect(() => {
+    const bump = () => {
+      try {
+        map.invalidateSize({ animate: false })
+      } catch {
+        /* map mid-teardown */
+      }
+    }
+    bump()
+    const raf = requestAnimationFrame(bump)
+    const t1 = window.setTimeout(bump, 120)
+    const t2 = window.setTimeout(bump, 450)
+    const onVis = () => {
+      if (document.visibilityState === 'visible') bump()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('orientationchange', bump)
+    const el = map.getContainer()?.parentElement
+    const ro =
+      el && typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => bump())
+        : null
+    if (ro && el) ro.observe(el)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.clearTimeout(t1)
+      window.clearTimeout(t2)
+      document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('orientationchange', bump)
+      ro?.disconnect()
+    }
+  }, [map])
+  return null
 }
 
 function FitFarmBounds({
@@ -163,6 +206,8 @@ export function WeatherMapStage({
   onLocationSelect,
   onApplyMapPick,
   showLayerStrip = true,
+  showMapSourceTabs = false,
+  locationLabel,
   mapTimeIsoNext,
   rasterBlend = 0,
   gfsRasterActive = false,
@@ -170,6 +215,7 @@ export function WeatherMapStage({
   openMeteoInterpolatedRaster = false,
   mapForecastTimeline = null,
 }: Props) {
+  const [mapSourceTab, setMapSourceTab] = useState<WeatherMapSourceTab>('map')
   const [openMeteoPickActive, setOpenMeteoPickActive] = useState(false)
   const [basemapId, setBasemapId] = useState(() => readWeatherBasemapId())
   const onBasemapChange = useCallback((id: string) => {
@@ -233,9 +279,17 @@ export function WeatherMapStage({
 
   const windyLayers = WEATHER_WINDY_LAYER_IDS.map(id => getWeatherMapLayer(id))
 
+  const windyLat = site?.lat ?? center[0]
+  const windyLng = site?.lng ?? center[1]
+  const showLeaflet = !showMapSourceTabs || mapSourceTab === 'map'
+  const showWindy = showMapSourceTabs && mapSourceTab === 'windy'
+
   return (
     <div className="weather-map-stage">
       <div className="weather-map-stage__map">
+        {showMapSourceTabs ? (
+          <WeatherMapSourceTabs value={mapSourceTab} onChange={setMapSourceTab} />
+        ) : null}
         {showLayerStrip ? (
           <div className="weather-map-stage__layers-top" role="tablist" aria-label="Weather layers">
             {windyLayers.map((l, index) => {
@@ -265,6 +319,17 @@ export function WeatherMapStage({
             })}
           </div>
         ) : null}
+        <div className="weather-map-stage__map-body">
+        {showWindy ? (
+          <WeatherWindyEmbed
+            lat={windyLat}
+            lng={windyLng}
+            farmId={farmId}
+            locationLabel={locationLabel}
+            activeLayerId={activeLayerId}
+          />
+        ) : null}
+        {showLeaflet ? (
         <MapView
           center={center}
           zoom={WEATHER_MAP_WORLD_ZOOM}
@@ -277,6 +342,7 @@ export function WeatherMapStage({
           smoothInteraction
         >
           <WeatherMapPanesInit />
+          <WeatherMapLayoutSync />
           {basemapLayers.map((layer, index) => (
             <TileLayer
               key={`${layer.url}-${index}`}
@@ -386,15 +452,17 @@ export function WeatherMapStage({
             />
           ) : null}
         </MapView>
-        {mapMode === 'climate' && climateUrl ? (
+        ) : null}
+        {showLeaflet && mapMode === 'climate' && climateUrl ? (
           <div className="weather-map-stage__banner">Historical climate — NOT LIVE WEATHER</div>
         ) : null}
-        {mapMode !== 'climate' && useGfsTiles && gfsCycleLabel ? (
+        {showLeaflet && mapMode !== 'climate' && useGfsTiles && gfsCycleLabel ? (
           <div className="weather-map-stage__gfs-badge" title="NOAA GFS forecast cycle">
             {gfsCycleLabel}
           </div>
         ) : null}
-        {mapForecastTimeline}
+        {showLeaflet ? mapForecastTimeline : null}
+        </div>
       </div>
     </div>
   )

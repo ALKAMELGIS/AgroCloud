@@ -21,7 +21,7 @@ type Props = {
   onRefresh: () => void
   onFullscreen: () => void
   onOpenLayers: () => void
-  onOpenAdvanced: () => void
+  onOpenExcelExport: () => void
   onOpenSettings: () => void
   variant?: 'default' | 'arcgis'
   sites?: WeatherFarmSite[]
@@ -31,6 +31,8 @@ type Props = {
   onLayerChange?: (id: WeatherMapLayerId) => void
   /** Live conditions for the selected location — drives Map View option labels. */
   locationMapReading?: LocationWeatherReading | null
+  /** Phone/tablet stacked shell — compact header + full-width map panel. */
+  compact?: boolean
 }
 
 export function WeatherIntelligenceHeader({
@@ -42,7 +44,7 @@ export function WeatherIntelligenceHeader({
   onRefresh,
   onFullscreen,
   onOpenLayers,
-  onOpenAdvanced,
+  onOpenExcelExport,
   onOpenSettings,
   variant = 'default',
   sites = [],
@@ -51,6 +53,7 @@ export function WeatherIntelligenceHeader({
   activeLayerId,
   onLayerChange,
   locationMapReading = null,
+  compact = false,
 }: Props) {
   const lastUpdated = bundle?.fetchedAt
     ? new Date(bundle.fetchedAt).toLocaleTimeString()
@@ -67,6 +70,73 @@ export function WeatherIntelligenceHeader({
   )
 
   if (arcgis) {
+    const toolbar = (
+      <div className="weather-header__arcgis-toolbar" aria-label="Map actions">
+        <button type="button" className="weather-header__icon-btn" onClick={onRefresh} disabled={loading} title="Refresh">
+          <i className="fa-solid fa-rotate" aria-hidden />
+        </button>
+        <button type="button" className="weather-header__icon-btn" onClick={onFullscreen} title="Full screen">
+          <i className="fa-solid fa-expand" aria-hidden />
+        </button>
+        <button type="button" className="weather-header__icon-btn" onClick={onOpenExcelExport} title="Export Excel report">
+          <i className="fa-solid fa-file-excel" aria-hidden />
+        </button>
+        <button type="button" className="weather-header__icon-btn" onClick={onOpenSettings} title="Settings">
+          <i className="fa-solid fa-gear" aria-hidden />
+        </button>
+      </div>
+    )
+
+    if (compact) {
+      return (
+        <header className="weather-header weather-header--arcgis weather-header--arcgis-compact">
+          <div className="weather-header__arcgis-compact-top">
+            <h1 className="weather-header__title weather-header__title--arcgis">Weather</h1>
+            {toolbar}
+          </div>
+          <div className="weather-header__arcgis-filters">
+            {sites.length && onSelectFarm && farmId ? (
+              <label className="weather-header__arcgis-field">
+                <span className="weather-header__arcgis-field-label">
+                  <i className="fa-solid fa-location-dot" aria-hidden /> Location
+                </span>
+                <select
+                  value={farmId}
+                  onChange={e => onSelectFarm(e.target.value as WeatherLocationId)}
+                  aria-label="Select a location"
+                >
+                  {sites.map(s => (
+                    <option key={s.id} value={s.id}>{s.label}</option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <span className="weather-header__location-pill">{locationLabel}</span>
+            )}
+            {activeLayerId && onLayerChange ? (
+              <label className="weather-header__arcgis-field">
+                <span className="weather-header__arcgis-field-label">
+                  <i className="fa-solid fa-map" aria-hidden /> Map layer
+                </span>
+                <select
+                  value={activeLayerId}
+                  onChange={e => onLayerChange(e.target.value as WeatherMapLayerId)}
+                  aria-label="Map view layer"
+                  title={activeLayerHint}
+                >
+                  {arcgisMapLayerOptions.map(l => (
+                    <option key={l.id} value={l.id}>
+                      {mapViewSelectLabel(l.id, mapReading)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+          </div>
+        </header>
+      )
+    }
+
     return (
       <header className="weather-header weather-header--arcgis">
         <div className="weather-header__arcgis-brand">
@@ -80,63 +150,54 @@ export function WeatherIntelligenceHeader({
           <DevelopEliteHeaderDigitalClock />
         </div>
         <div className="weather-header__arcgis-controls">
-          {sites.length && onSelectFarm && farmId ? (
-            <label className="weather-header__arcgis-field">
-              <span className="weather-header__arcgis-field-label">
-                <i className="fa-solid fa-location-dot" aria-hidden /> Select a location
-              </span>
-              <select
-                value={farmId}
-                onChange={e => onSelectFarm(e.target.value as WeatherLocationId)}
-                aria-label="Select a location"
-              >
-                {sites.map(s => (
-                  <option key={s.id} value={s.id}>{s.label}</option>
-                ))}
-              </select>
-            </label>
-          ) : (
-            <span className="weather-header__location-pill">{locationLabel}</span>
-          )}
-          {activeLayerId && onLayerChange ? (
-            <label className="weather-header__arcgis-field">
-              <span className="weather-header__arcgis-field-label">
-                <i className="fa-solid fa-map" aria-hidden /> Map View
-              </span>
-              <select
-                value={activeLayerId}
-                onChange={e => onLayerChange(e.target.value as WeatherMapLayerId)}
-                aria-label="Map view layer"
-                title={activeLayerHint}
-              >
-                {arcgisMapLayerOptions.map(l => (
-                  <option key={l.id} value={l.id}>
-                    {mapViewSelectLabel(l.id, mapReading)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-          <button
-            type="button"
-            className={`weather-header__humidity-pill${activeLayerId === 'humidity' ? ' is-on' : ''}`}
-            onClick={() => onLayerChange?.('humidity')}
-            title="Show humidity on map"
-          >
-            Humidity
-          </button>
-          <button type="button" className="weather-header__icon-btn" onClick={onRefresh} disabled={loading} title="Refresh">
-            <i className="fa-solid fa-rotate" aria-hidden />
-          </button>
-          <button type="button" className="weather-header__icon-btn" onClick={onFullscreen} title="Full screen">
-            <i className="fa-solid fa-expand" aria-hidden />
-          </button>
-          <button type="button" className="weather-header__icon-btn" onClick={onOpenAdvanced} title="Insights & reports">
-            <i className="fa-solid fa-chart-line" aria-hidden />
-          </button>
-          <button type="button" className="weather-header__icon-btn" onClick={onOpenSettings} title="Settings">
-            <i className="fa-solid fa-gear" aria-hidden />
-          </button>
+          <div className="weather-header__arcgis-filters">
+            {sites.length && onSelectFarm && farmId ? (
+              <label className="weather-header__arcgis-field">
+                <span className="weather-header__arcgis-field-label">
+                  <i className="fa-solid fa-location-dot" aria-hidden /> Select a location
+                </span>
+                <select
+                  value={farmId}
+                  onChange={e => onSelectFarm(e.target.value as WeatherLocationId)}
+                  aria-label="Select a location"
+                >
+                  {sites.map(s => (
+                    <option key={s.id} value={s.id}>{s.label}</option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <span className="weather-header__location-pill">{locationLabel}</span>
+            )}
+            {activeLayerId && onLayerChange ? (
+              <label className="weather-header__arcgis-field">
+                <span className="weather-header__arcgis-field-label">
+                  <i className="fa-solid fa-map" aria-hidden /> Map View
+                </span>
+                <select
+                  value={activeLayerId}
+                  onChange={e => onLayerChange(e.target.value as WeatherMapLayerId)}
+                  aria-label="Map view layer"
+                  title={activeLayerHint}
+                >
+                  {arcgisMapLayerOptions.map(l => (
+                    <option key={l.id} value={l.id}>
+                      {mapViewSelectLabel(l.id, mapReading)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <button
+              type="button"
+              className={`weather-header__humidity-pill${activeLayerId === 'humidity' ? ' is-on' : ''}`}
+              onClick={() => onLayerChange?.('humidity')}
+              title="Show humidity on map"
+            >
+              Humidity
+            </button>
+          </div>
+          {toolbar}
         </div>
       </header>
     )
@@ -177,8 +238,8 @@ export function WeatherIntelligenceHeader({
         <button type="button" className="weather-header__icon-btn" onClick={onOpenSettings} title="Settings">
           <i className="fa-solid fa-gear" aria-hidden />
         </button>
-        <button type="button" className="weather-header__icon-btn" onClick={onOpenAdvanced} title="Climate & reports">
-          <i className="fa-solid fa-clock-rotate-left" aria-hidden />
+        <button type="button" className="weather-header__icon-btn" onClick={onOpenExcelExport} title="Export Excel report">
+          <i className="fa-solid fa-file-excel" aria-hidden />
         </button>
       </div>
     </header>

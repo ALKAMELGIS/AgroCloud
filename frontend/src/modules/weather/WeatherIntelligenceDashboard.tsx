@@ -6,7 +6,13 @@ import { useSearchParams } from 'react-router-dom'
 import type { WeatherLocationId } from './config/weatherFarmIds'
 import { WeatherLocationList } from './components/WeatherLocationList'
 import { useWeatherLocationRows } from './hooks/useWeatherLocationRows'
-import { coalesceLocationRow, rowHasLiveTemp } from './services/openMeteoLocationBatch'
+import { useSupplementLocationDailyExtents } from './hooks/useSupplementLocationDailyExtents'
+import { getWeatherChartTodayYmd } from './config/weatherChartDateRange'
+import {
+  coalesceLocationRow,
+  rowHasLiveTemp,
+  synthesizeAllLocationsRow,
+} from './services/openMeteoLocationBatch'
 import { peekLocationLiveRow } from './services/locationLiveWeatherCache'
 import { WeatherMapStage } from './components/WeatherMapStage'
 import { WeatherChartsPanel } from './components/WeatherChartsPanel'
@@ -27,6 +33,7 @@ import { WeatherSpatialAnalysisPanel } from './components/WeatherSpatialAnalysis
 import { WeatherFieldPanel } from './components/WeatherFieldPanel'
 import { WeatherAdvancedDrawer } from './components/WeatherAdvancedDrawer'
 import { WeatherThresholdsDialog } from './components/WeatherThresholdsDialog'
+import { WeatherExcelExportModal } from './components/WeatherExcelExportModal'
 import { WEATHER_MAP_MODES } from './config/weatherMapModes'
 import { WeatherArcgisFooterNav, type WeatherArcgisFooterTab } from './components/WeatherArcgisFooterNav'
 import {
@@ -46,11 +53,11 @@ export default function WeatherIntelligenceDashboard() {
   const isDesktop = vp === 'desktop'
   const isArcgisLayout = true
   const arcgisTouch = vp !== 'desktop'
-  const arcgisMobile = vp === 'mobile'
   const arcgisTablet = vp === 'tablet'
   const data = useWeatherIntelligenceState({ preferOpenMeteoRaster: isArcgisLayout })
   const shellRef = useRef<HTMLDivElement>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [excelExportOpen, setExcelExportOpen] = useState(false)
   const [arcgisFooterTab, setArcgisFooterTab] = useState<WeatherArcgisFooterTab>('current')
   const [arcgisShellView, setArcgisShellView] = useState<WeatherArcgisShellView>('map')
   const { range: chartDateRange, setRange: setChartDateRange } = useWeatherChartDateRange()
@@ -105,6 +112,7 @@ export default function WeatherIntelligenceDashboard() {
     : (vp === 'desktop' || data.mobileTab === 'insights') && locationSites.length > 0
   const { rows: locationRows, loading: locationRowsLoading, reload: reloadLocationRows } =
     useWeatherLocationRows(locationSites, data.catalog?.loadedAt)
+  const locationDailyPatch = useSupplementLocationDailyExtents(locationSites, locationRows)
 
   const displayLocationRows = useMemo(() => {
     const byId = new Map(locationRows.map(r => [r.id, r]))
@@ -126,32 +134,68 @@ export default function WeatherIntelligenceDashboard() {
         live && rowHasLiveTemp(live)
           ? coalesceLocationRow(row, { ...live, id: s.id, label: s.label })
           : row
+      const patched = locationDailyPatch.get(s.id)
       const withMeta = {
         ...mergedRow,
         label: s.label,
         countryLabel: s.countryLabel ?? '',
-        dailyMinC: mergedRow.dailyMinC ?? null,
-        dailyMaxC: mergedRow.dailyMaxC ?? null,
+        dailyMinC: mergedRow.dailyMinC ?? patched?.dailyMinC ?? null,
+        dailyMaxC: mergedRow.dailyMaxC ?? patched?.dailyMaxC ?? null,
       }
-      const dayKey = new Date().toISOString().slice(0, 10)
+      const dayKey = getWeatherChartTodayYmd()
       const d0 =
         data.bundle?.daily7?.find(d => d.date.slice(0, 10) === dayKey) ?? data.bundle?.daily7?.[0]
-      if (s.id === data.farmId && snap) {
-        return {
-          ...withMeta,
-          temperatureC: snap.temperatureC ?? row.temperatureC,
-          humidityPct: snap.humidityPct ?? row.humidityPct,
-          windSpeedKmh: snap.windSpeedKmh ?? row.windSpeedKmh,
-          windDirectionDeg: snap.windDirectionDeg ?? row.windDirectionDeg,
-          precipMm: snap.precipMm ?? row.precipMm,
-          weatherCode: snap.weatherCode ?? row.weatherCode,
-          dailyMinC: d0?.tempMinC ?? row.dailyMinC ?? withMeta.dailyMinC,
-          dailyMaxC: d0?.tempMaxC ?? row.dailyMaxC ?? withMeta.dailyMaxC,
+      if (s.id === data.farmId) {
+        const hourlySeries = arcgisHourly.hourlyRange.length
+          ? arcgisHourly.hourlyRange
+          : data.bundle?.hourlyForecast?.length
+            ? data.bundle.hourlyForecast
+            : data.bundle?.hourly ?? []
+        let dailyMinC = withMeta.dailyMinC ?? d0?.tempMinC ?? null
+        let dailyMaxC = withMeta.dailyMaxC ?? d0?.tempMaxC ?? null
+        if (dailyMinC == null || dailyMaxC == null) {
+          const temps = hourlySeries
+            .filter(h => h.time.slice(0, 10) === dayKey)
+            .map(h => h.temperatureC)
+            .filter((t): t is number => t != null && Number.isFinite(t))
+          if (temps.length) {
+            dailyMinC = dailyMinC ?? Math.min(...temps)
+            dailyMaxC = dailyMaxC ?? Math.max(...temps)
+          }
         }
+        if (snap) {
+          return {
+            ...withMeta,
+            temperatureC: snap.temperatureC ?? row.temperatureC,
+            humidityPct: snap.humidityPct ?? row.humidityPct,
+            windSpeedKmh: snap.windSpeedKmh ?? row.windSpeedKmh,
+            windDirectionDeg: snap.windDirectionDeg ?? row.windDirectionDeg,
+            precipMm: snap.precipMm ?? row.precipMm,
+            weatherCode: snap.weatherCode ?? row.weatherCode,
+            dailyMinC,
+            dailyMaxC,
+          }
+        }
+        return { ...withMeta, dailyMinC, dailyMaxC }
       }
       return withMeta
+    }).map((row, _i, arr) => {
+      if (row.id !== 'all' || rowHasLiveTemp(row)) return row
+      const synth = synthesizeAllLocationsRow(row.label, arr)
+      return synth ? { ...row, ...synth, label: row.label } : row
     })
-  }, [locationSites, locationRows, data.farmId, data.bundle?.snapshot, data.bundle?.fetchedAt, data.bundle?.daily7])
+  }, [
+    locationSites,
+    locationRows,
+    data.farmId,
+    data.bundle?.snapshot,
+    data.bundle?.fetchedAt,
+    data.bundle?.daily7,
+    data.bundle?.hourly,
+    data.bundle?.hourlyForecast,
+    arcgisHourly.hourlyRange,
+    locationDailyPatch,
+  ])
 
   const selectedLocationMapReading = useMemo(() => {
     const row = displayLocationRows.find(r => r.id === data.farmId)
@@ -187,15 +231,18 @@ export default function WeatherIntelligenceDashboard() {
     [data],
   )
 
-  const arcgisPanelHidden = (panel: WeatherArcgisShellView) =>
-    arcgisMobile && arcgisShellView !== panel ? 'weather-arcgis-shell-panel--hidden' : ''
+  /** Phone + tablet: one main panel (map | charts | locations) — avoids grid overlap. */
+  const arcgisStacked = arcgisTouch
+  const arcgisShowsPanel = (panel: WeatherArcgisShellView) =>
+    !arcgisStacked || arcgisShellView === panel
 
   const shellClass = [
     'weather-shell',
     isArcgisLayout ? 'weather-shell--arcgis' : '',
     arcgisTouch ? 'weather-shell--arcgis-touch' : '',
-    arcgisMobile ? `weather-shell--arcgis-view-${arcgisShellView}` : '',
-    arcgisTablet ? 'weather-shell--arcgis-tablet' : '',
+    arcgisStacked ? 'weather-shell--arcgis-mobile' : '',
+    arcgisStacked ? `weather-shell--arcgis-view-${arcgisShellView}` : '',
+    arcgisTablet && !arcgisStacked ? 'weather-shell--arcgis-tablet' : '',
     locationSites.length ? 'weather-shell--with-locations' : '',
     !isArcgisLayout && vp !== 'desktop' ? 'weather-shell--compact' : '',
     !isArcgisLayout ? `weather-shell--tab-${data.mobileTab}` : '',
@@ -220,13 +267,17 @@ export default function WeatherIntelligenceDashboard() {
   )
 
   const showSide = !isArcgisLayout && !isDesktop && data.mobileTab === 'insights'
-  const showMap = isArcgisLayout || isDesktop || data.mobileTab === 'map'
+  const showMap =
+    (isArcgisLayout && arcgisShowsPanel('map')) || (!isArcgisLayout && (isDesktop || data.mobileTab === 'map'))
   const showForecast = !isArcgisLayout && !isDesktop && data.mobileTab === 'forecast'
+  const showArcgisChartsPanel = isArcgisLayout && arcgisShowsPanel('charts')
+  const showArcgisLocationsPanel = showLocationsPanel && arcgisShowsPanel('locations')
 
   return (
     <div className={shellClass} ref={shellRef}>
       <WeatherIntelligenceHeader
         variant={isArcgisLayout ? 'arcgis' : 'default'}
+        compact={arcgisStacked}
         locationLabel={data.queryPoint.label}
         lat={data.queryPoint.lat}
         lng={data.queryPoint.lng}
@@ -245,10 +296,10 @@ export default function WeatherIntelligenceDashboard() {
         onFullscreen={onFullscreen}
         onOpenLayers={() => data.setLayerManagerOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
-        onOpenAdvanced={() => data.setAdvancedOpen(true)}
+        onOpenExcelExport={() => setExcelExportOpen(true)}
       />
 
-      {arcgisMobile ? (
+      {arcgisStacked ? (
         <WeatherArcgisShellTabs value={arcgisShellView} onChange={setArcgisShellView} />
       ) : null}
 
@@ -289,7 +340,7 @@ export default function WeatherIntelligenceDashboard() {
         </div>
       ) : null}
 
-      {showLocationsPanel ? (
+      {showArcgisLocationsPanel || (!isArcgisLayout && showLocationsPanel) ? (
         <WeatherLocationList
           variant={isArcgisLayout ? 'arcgis' : 'default'}
           rows={displayLocationRows}
@@ -298,11 +349,10 @@ export default function WeatherIntelligenceDashboard() {
           onSelect={id => data.setFarmId(id)}
           compareIds={data.compareFarmIds}
           onToggleCompare={isArcgisLayout ? undefined : onToggleCompare}
-          className={arcgisMobile ? arcgisPanelHidden('locations') : undefined}
         />
       ) : null}
 
-      {isArcgisLayout ? (
+      {showArcgisChartsPanel ? (
         <div
           className={`weather-charts-column${
             arcgisFooterTab === 'tabled'
@@ -310,7 +360,7 @@ export default function WeatherIntelligenceDashboard() {
               : arcgisFooterTab === 'hourly'
                 ? ' weather-charts-column--hourly'
                 : ''
-          }${arcgisPanelHidden('charts')}`}
+          }`}
         >
           <WeatherArcgisChartDateBar
             range={chartDateRange}
@@ -360,7 +410,7 @@ export default function WeatherIntelligenceDashboard() {
       {showMap ? (
         <>
           <main
-            className={`weather-main${isArcgisLayout ? ' weather-main--arcgis-map' : ''}${isArcgisLayout ? arcgisPanelHidden('map') : ''}`}
+            className={`weather-main${isArcgisLayout ? ' weather-main--arcgis-map' : ''}`}
           >
             {!isArcgisLayout ? (
               <WeatherTimeline
@@ -377,6 +427,7 @@ export default function WeatherIntelligenceDashboard() {
               />
             ) : null}
             <WeatherMapStage
+              key={arcgisStacked ? `weather-map-${arcgisShellView}` : 'weather-map-desktop'}
               openMeteoInterpolatedRaster={data.preferOpenMeteoRaster}
               site={data.site}
               farmId={data.farmId}
@@ -384,6 +435,8 @@ export default function WeatherIntelligenceDashboard() {
               agriLocations={data.catalog?.agriLocations ?? null}
               agriLocationDrawingInfo={data.catalog?.agriLocationDrawingInfo ?? null}
               showLayerStrip={!isArcgisLayout}
+              showMapSourceTabs={isArcgisLayout}
+              locationLabel={data.queryPoint.label}
               activeLayerId={data.activeLayerId}
               onLayerChange={data.setActiveLayerId}
               mapTimeIso={data.mapTimeIso}
@@ -524,7 +577,7 @@ export default function WeatherIntelligenceDashboard() {
         </aside>
       ) : null}
 
-      {isArcgisLayout ? (
+      {showArcgisChartsPanel ? (
         <WeatherArcgisFooterNav value={arcgisFooterTab} onChange={setArcgisFooterTab} />
       ) : null}
 
@@ -562,6 +615,17 @@ export default function WeatherIntelligenceDashboard() {
         thresholds={data.thresholds}
         onClose={() => setSettingsOpen(false)}
         onSave={data.setThresholds}
+      />
+
+      <WeatherExcelExportModal
+        open={excelExportOpen}
+        onClose={() => setExcelExportOpen(false)}
+        locationLabel={data.queryPoint.label}
+        lat={data.queryPoint.lat}
+        lng={data.queryPoint.lng}
+        sites={locationSites}
+        initialRange={chartDateRange}
+        defaultCompareSiteIds={data.compareFarmIds}
       />
 
       <WeatherAdvancedDrawer

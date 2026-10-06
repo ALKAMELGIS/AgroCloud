@@ -4,6 +4,7 @@ import {
   type OpenMeteoDashboardBundle,
   type OpenMeteoDashboardHourlyPoint,
 } from '../services/openMeteoWeatherDashboard'
+import { dailyMinMaxMapFromHourly, mergeDailyMinMaxMaps } from '../utils/weatherDailyExtents'
 import { WeatherWindBarb, kmhToKnots } from './WeatherWindBarb'
 
 type Props = {
@@ -38,18 +39,29 @@ export function WeatherArcgisHourlyForecast({
   const rows = hourlyRange
 
   const dailyByDate = useMemo(() => {
-    const map = new Map<string, { min: number | null; max: number | null }>()
+    const fromDaily = new Map<string, { min: number | null; max: number | null }>()
     for (const d of bundle?.daily7 ?? []) {
-      map.set(d.date.slice(0, 10), { min: d.tempMinC, max: d.tempMaxC })
+      fromDaily.set(d.date.slice(0, 10), { min: d.tempMinC, max: d.tempMaxC })
     }
-    return map
-  }, [bundle?.daily7])
+    const fromHourly = dailyMinMaxMapFromHourly(rows)
+    return mergeDailyMinMaxMaps(fromDaily, fromHourly)
+  }, [bundle?.daily7, rows])
 
   return (
     <div
-      className="weather-arcgis-hourly weather-arcgis-hourly--with-date-bar"
+      className="weather-arcgis-hourly weather-arcgis-hourly--with-date-bar weather-arcgis-hourly--forecast-panel"
       aria-label={`Hourly forecast for ${locationLabel}`}
     >
+      <div className="weather-arcgis-hourly__panel-head">
+        <h3 className="weather-arcgis-hourly__panel-title">{locationLabel}</h3>
+        <p className="weather-arcgis-hourly__panel-sub">Hourly forecast</p>
+      </div>
+      <div className="weather-arcgis-hourly__cols-head" aria-hidden="true">
+        <span>Time</span>
+        <span>Wind</span>
+        <span>Temp</span>
+        <span>Humidity</span>
+      </div>
       <div className="weather-arcgis-hourly__scroll">
         {rows.map(h => {
           const knots = kmhToKnots(h.windSpeedKmh)

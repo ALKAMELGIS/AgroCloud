@@ -650,6 +650,24 @@ function snapshotFromOpenMeteoPayload(
   const rh = typeof cur?.relative_humidity_2m === 'number' ? cur.relative_humidity_2m : null
   const precip = typeof cur?.precipitation === 'number' ? cur.precipitation : null
 
+  const dailyRaw = data.daily as
+    | { time?: string[]; temperature_2m_max?: number[]; temperature_2m_min?: number[]; weather_code?: number[] }
+    | undefined
+  const daily: OpenMeteoDailyForecast[] = []
+  if (dailyRaw?.time?.length) {
+    for (let i = 0; i < dailyRaw.time.length; i++) {
+      const c = dailyRaw.weather_code?.[i]
+      daily.push({
+        date: String(dailyRaw.time[i]).slice(0, 10),
+        tempMaxC: dailyRaw.temperature_2m_max?.[i] ?? null,
+        tempMinC: dailyRaw.temperature_2m_min?.[i] ?? null,
+        precipMm: null,
+        weatherCode: typeof c === 'number' ? c : null,
+        conditionLabel: wmoWeatherLabel(typeof c === 'number' ? c : null),
+      })
+    }
+  }
+
   return {
     lat,
     lng,
@@ -664,7 +682,7 @@ function snapshotFromOpenMeteoPayload(
     windDirectionLabel: windDirectionLabel(windDir),
     humidityPct: rh,
     precipMm: precip,
-    daily: [],
+    daily,
     nextHours: [],
   }
 }
@@ -683,6 +701,8 @@ async function fetchOpenMeteoWeatherMapPickDirect(
     'current',
     'temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_direction_10m',
   )
+  url.searchParams.set('daily', 'temperature_2m_max,temperature_2m_min,weather_code')
+  url.searchParams.set('forecast_days', '1')
 
   const res = await fetch(url.toString(), { signal })
   if (!res.ok) throw new Error(`Open-Meteo HTTP ${res.status}`)
@@ -746,8 +766,21 @@ export async function fetchOpenMeteoWeatherMapPick(
     })
     noteApiResponse(res.status)
     if (res.ok) {
-      const payload = (await res.json()) as { current?: Record<string, number | null> }
-      if (payload.current) return snapshotFromCurrentFields(lat, lng, payload.current)
+      const payload = (await res.json()) as {
+        current?: Record<string, number | null>
+        dailyMinC?: number | null
+        dailyMaxC?: number | null
+      }
+      if (payload.current) {
+        const snap = snapshotFromCurrentFields(lat, lng, payload.current)
+        const min = payload.dailyMinC
+        const max = payload.dailyMaxC
+        if (typeof min === 'number' && typeof max === 'number' && Number.isFinite(min) && Number.isFinite(max)) {
+          const today = new Date().toISOString().slice(0, 10)
+          snap.daily = [{ date: today, tempMinC: min, tempMaxC: max, weatherCode: snap.weatherCode, precipMm: null, windSpeedKmh: null, windDirectionDeg: null, humidityPct: null }]
+        }
+        return snap
+      }
     }
   } catch {
     /* ignore */

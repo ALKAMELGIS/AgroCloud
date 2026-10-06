@@ -24,6 +24,7 @@ export async function fetchLocationLiveRow(
   if (hit?.temperatureC != null) return { ...hit, id, label }
 
   const snap = await fetchOpenMeteoWeatherMapPick(lat, lng, signal)
+  const d0 = snap.daily?.[0]
   const row: WeatherLocationRow = {
     id,
     label,
@@ -33,6 +34,8 @@ export async function fetchLocationLiveRow(
     windDirectionDeg: snap.windDirectionDeg ?? null,
     precipMm: snap.precipMm,
     weatherCode: snap.weatherCode,
+    dailyMinC: d0?.tempMinC ?? null,
+    dailyMaxC: d0?.tempMaxC ?? null,
   }
   cache.set(key, row)
   try {
