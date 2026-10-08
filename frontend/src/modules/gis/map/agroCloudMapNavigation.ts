@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
+import { setMapLibreGlobeProjection, setMapLibreMercatorProjection } from './maplibreGlobeEnvironment'
 
 const AGRO_CLOUD_MAP_LOGO_MARK_URL = `${import.meta.env.BASE_URL}agrocloud-mark-leaves.png`
 
@@ -274,15 +275,29 @@ export function applyAgroCloudMapPerformanceTuning(
  */
 export function bindAgroCloudMapViewportTileWarmup(
   map: AgroCloudMapboxMapEventLike | null | undefined,
+  options?: {
+    performance?: {
+      tileCacheMb?: number
+      maxParallelImageRequests?: number
+      prefetchZoomDelta?: number
+    }
+    /** Skip extra repaint after each gesture (lighter for embedded dashboard maps). */
+    repaintOnInteractionEnd?: boolean
+    wheelZoomRate?: number
+  },
 ): () => void {
   if (!map?.on || !map?.off) return () => {}
 
+  const perf = options?.performance
+  const repaintOnEnd = options?.repaintOnInteractionEnd !== false
+
   const onInteractionStart = () => {
-    applyAgroCloudMapPerformanceTuning(map)
+    applyAgroCloudMapPerformanceTuning(map, perf)
   }
   const onInteractionEnd = () => {
-    applyAgroCloudMapPerformanceTuning(map)
-    ensureAgroCloudMapScrollZoom(map)
+    applyAgroCloudMapPerformanceTuning(map, perf)
+    ensureAgroCloudMapScrollZoom(map, options?.wheelZoomRate)
+    if (!repaintOnEnd) return
     try {
       map.triggerRepaint?.()
     } catch {
@@ -290,7 +305,7 @@ export function bindAgroCloudMapViewportTileWarmup(
     }
   }
 
-  applyAgroCloudMapPerformanceTuning(map)
+  applyAgroCloudMapPerformanceTuning(map, perf)
   map.on('movestart', onInteractionStart)
   map.on('zoomstart', onInteractionStart)
   map.on('rotatestart', onInteractionStart)
@@ -327,22 +342,29 @@ export function syncAgroCloudMapProjectionForZoom(
       typeof current === 'string'
         ? current
         : typeof current === 'object' && current
-          ? String((current as { name?: string }).name ?? '')
+          ? String(
+              (current as { name?: string; type?: string }).name ??
+                (current as { type?: string }).type ??
+                '',
+            )
           : ''
     const isGlobe = name === 'globe'
-    if (wantGlobe && !isGlobe) map.setProjection({ name: 'globe' })
-    else if (!wantGlobe && isGlobe) map.setProjection({ name: 'mercator' })
+    if (wantGlobe && !isGlobe) setMapLibreGlobeProjection(map)
+    else if (!wantGlobe && isGlobe) setMapLibreMercatorProjection(map)
   } catch {
     /* ignore projection swap races during style load */
   }
 }
 
 /** Re-enable wheel zoom after style swaps (Mapbox can leave handlers off). */
-export function ensureAgroCloudMapScrollZoom(map: AgroCloudMapboxMapScrollLike | null | undefined): void {
+export function ensureAgroCloudMapScrollZoom(
+  map: AgroCloudMapboxMapScrollLike | null | undefined,
+  wheelZoomRate?: number,
+): void {
   if (!map) return
   try {
     map.scrollZoom?.enable?.()
-    map.scrollZoom?.setWheelZoomRate?.(AGRO_CLOUD_MAP_WHEEL_ZOOM_RATE)
+    map.scrollZoom?.setWheelZoomRate?.(wheelZoomRate ?? AGRO_CLOUD_MAP_WHEEL_ZOOM_RATE)
     map.doubleClickZoom?.enable?.()
     map.touchZoomRotate?.enable?.()
     map.boxZoom?.enable?.()

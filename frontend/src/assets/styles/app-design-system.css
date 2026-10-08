@@ -122,12 +122,12 @@ html[data-theme='dark'] .app-layout > .content.content--develop-dashboard {
   flex: 1 1 auto;
   width: 100%;
   max-width: none;
-  min-height: calc(100dvh - var(--app-header-block, 72px));
-  height: calc(100dvh - var(--app-header-block, 72px));
+  min-height: calc(100dvh - var(--header-height, 52px));
+  height: calc(100dvh - var(--header-height, 52px));
 }
 
 .content--develop-dashboard .develop-elite.page.develop-elite--grid-dashboard {
-  min-height: calc(100dvh - var(--app-header-block, 72px));
+  min-height: calc(100dvh - var(--header-height, 52px));
 }
 
 .app-layout > .content.content--agro-cloud-platform {

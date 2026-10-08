@@ -11,7 +11,6 @@ import type { DevelopEliteKpiCardConfig } from './developEliteDashboardConfig'
 import type { useDevelopEliteDashboardData } from './useDevelopEliteDashboardData'
 import { DevelopEliteCountryListPanel } from './DevelopEliteCountryListPanel'
 import { DevelopEliteFarmListPanel } from './DevelopEliteFarmListPanel'
-import { DevelopEliteZoneListPanel } from './DevelopEliteZoneListPanel'
 import {
   DEVELOP_ELITE_COMPACT_LIST_WIDGET_IDS,
   useDevelopEliteCompactViewport,
@@ -25,11 +24,8 @@ type Props = {
   formatHeroArea: (n: number) => string
   data: DashboardData
   filteredCountries: Array<{ code: string; label: string }>
-  filteredZones: Array<{ zoneId: string; label: string }>
   countrySearch: string
   setCountrySearch: Dispatch<SetStateAction<string>>
-  zoneSearch: string
-  setZoneSearch: Dispatch<SetStateAction<string>>
   nudgeLayout: (
     patch:
       | Partial<DevelopEliteLayoutConfig>
@@ -51,11 +47,8 @@ export function DevelopEliteAgroGridSection({
   formatHeroArea,
   data,
   filteredCountries,
-  filteredZones,
   countrySearch,
   setCountrySearch,
-  zoneSearch,
-  setZoneSearch,
   nudgeLayout,
   persistLayout,
   commitLayoutPatch,
@@ -93,9 +86,13 @@ export function DevelopEliteAgroGridSection({
       selectedFieldKey: data.mapFieldHighlightKey,
       onTableRowClick: data.focusTableRow,
       onTableRowDoubleClick: data.activateTableRowOnMap,
+      chartCropHighlight: data.chartCropTypeFilter,
+      onChartSliceClick: data.selectChartCropType,
     }),
     [
       data.chartSlices,
+      data.chartCropTypeFilter,
+      data.selectChartCropType,
       data.tableRows,
       data.config.tableColumns,
       data.config.charts,
@@ -124,20 +121,24 @@ export function DevelopEliteAgroGridSection({
             irrigationMainPipeDrawingInfo={data.irrigationMainPipeDrawingInfo}
             mapLayerVisibility={data.mapLayerVisibility}
             mapDataLayerOrder={data.mapDataLayerOrder}
+            mapDataLayerOpacity={data.mapDataLayerOpacity}
+            dashboardConfig={data.config}
             onMapLayerVisibilityChange={data.setMapLayerVisible}
             onMapDataLayerOrderChange={data.setMapDataLayerOrder}
+            onMapDataLayerOpacityChange={data.setMapDataLayerOpacity}
             worldCountriesGeojson={data.mapWorldCountriesGeoJson}
             worldCountriesPortfolioExtentGeojson={data.mapWorldCountriesPortfolioExtentGeoJson}
             worldCountriesDrawingInfo={data.worldCountriesDrawingInfo}
             basemapId={data.config.basemapId}
             highlightFieldKey={data.mapFieldHighlightKey}
             mapFlyToRequest={data.mapFlyToRequest}
+            mapCountryFlyRequest={data.mapCountryFlyRequest}
             drawingInfo={data.structuresDrawingInfo}
             countryLabels={data.countryLabels}
             worldCountryDomain={data.worldCountryDomain}
             countryFilter={data.filters.country}
             onBasemapChange={id => data.patchConfig({ basemapId: id })}
-            onSelectFieldKey={key => data.selectFarm(key)}
+            onSelectFieldKey={key => (key ? data.focusFarmOnMap(key) : data.selectFarm(null))}
             onViewportChange={data.setMapView}
           />
         </DevelopEliteResizeHost>
@@ -163,6 +164,7 @@ export function DevelopEliteAgroGridSection({
       data.config.basemapId,
       data.mapFieldHighlightKey,
       data.mapFlyToRequest,
+      data.mapCountryFlyRequest,
       data.structuresDrawingInfo,
       data.countryLabels,
       data.worldCountryDomain,
@@ -251,18 +253,6 @@ export function DevelopEliteAgroGridSection({
           </DevelopEliteResizeHost>
         </DevelopEliteGridWidget>
       ),
-      zones: (
-        <DevelopEliteGridWidget className="develop-elite-grid-widget--zones">
-          <DevelopEliteResizeHost as="aside" className="develop-elite__zones-col develop-elite__zones-col--in-grid" aria-label="Zones">
-            <DevelopEliteZoneListPanel
-              data={data}
-              filteredZones={filteredZones}
-              zoneSearch={zoneSearch}
-              setZoneSearch={setZoneSearch}
-            />
-          </DevelopEliteResizeHost>
-        </DevelopEliteGridWidget>
-      ),
       structures: (
         <DevelopEliteGridWidget className="develop-elite-grid-widget--structures">
           <DevelopEliteResizeHost className="develop-elite__structure-stack develop-elite__structure-stack--in-grid" aria-label="Structure counts">
@@ -344,16 +334,13 @@ export function DevelopEliteAgroGridSection({
     data.setLocationSearch,
     data.sideCounts,
     filteredCountries,
-    filteredZones,
     formatHeroArea,
     mapWidget,
     commitLayoutPatch,
     nudgeLayout,
     persistLayout,
     setCountrySearch,
-    setZoneSearch,
     visibleKpiCards,
-    zoneSearch,
   ])
 
   return (

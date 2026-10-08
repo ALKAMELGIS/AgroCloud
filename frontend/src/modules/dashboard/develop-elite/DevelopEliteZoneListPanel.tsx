@@ -20,9 +20,12 @@ export function DevelopEliteZoneListPanel({
   filteredZones,
   zoneSearch,
   setZoneSearch,
-  searchPlaceholder = 'Search',
+  searchPlaceholder = 'Search project code',
 }: Props) {
-  const { playing, togglePlaying, tickerActive, listRef } = useDevelopEliteAirportListTicker(zoneSearch)
+  const { playing, togglePlaying, tickerActive, listRef } = useDevelopEliteAirportListTicker(
+    zoneSearch,
+    filteredZones.length,
+  )
 
   return (
     <>

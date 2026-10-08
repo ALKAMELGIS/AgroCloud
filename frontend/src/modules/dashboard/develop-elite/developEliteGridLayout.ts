@@ -41,7 +41,6 @@ export type DevelopEliteResponsiveGridLayouts = Partial<
 export const DEVELOP_ELITE_BODY_WIDGET_IDS = [
   'sidebar-farms',
   'sidebar-countries',
-  'zones',
   'structures',
   'map',
   'chart-pie',
@@ -162,12 +161,11 @@ function buildKpiLayoutItems(kpiCardIds: string[], cols: number, yOffset = 0): D
   return items
 }
 
-/** Elite reference dashboard: farms | zones | structures | map + charts (pie, bar, table). */
+/** Elite reference dashboard: farms | structures | map + charts (pie, bar, table). */
 function buildBodyLayoutItems(cols: number, bodyY: number): DevelopEliteGridLayoutItem[] {
   const sidebarW = cols >= 24 ? 5 : cols >= 20 ? 4 : Math.max(3, Math.round(cols * 0.2))
-  const zonesW = cols >= 20 ? 2 : Math.max(2, Math.round(cols * 0.1))
   const structW = cols >= 20 ? 2 : Math.max(2, Math.round(cols * 0.1))
-  const leftW = sidebarW + zonesW + structW
+  const leftW = sidebarW + structW
   const rightW = Math.max(4, cols - leftW)
   const mapH = cols >= 20 ? 10 : 9
   const chartsH = 5
@@ -200,17 +198,8 @@ function buildBodyLayoutItems(cols: number, bodyY: number): DevelopEliteGridLayo
       minH: 3,
     },
     {
-      i: 'zones',
-      x: sidebarW,
-      y: bodyY,
-      w: zonesW,
-      h: bodyH,
-      minW: Math.min(2, cols),
-      minH: 6,
-    },
-    {
       i: 'structures',
-      x: sidebarW + zonesW,
+      x: sidebarW,
       y: bodyY,
       w: structW,
       h: bodyH,
@@ -309,7 +298,6 @@ function buildStackedLayoutForCols(
   if (includeListPanels) {
     stack('sidebar-farms', 6)
     stack('sidebar-countries', 4)
-    stack('zones', 7)
     stack('structures', 6)
   }
   stack('map', 12)
@@ -399,6 +387,22 @@ export function rebalanceDevelopEliteKpiRow(
   return layout.map(item => next.get(item.i) ?? item)
 }
 
+/** Drop legacy `zones` column from saved layouts and shift widgets left. */
+export function stripDevelopEliteZonesGridWidget(
+  layout: DevelopEliteGridLayoutItem[],
+): DevelopEliteGridLayoutItem[] {
+  const zones = layout.find(item => item.i === 'zones')
+  if (!zones) return layout.filter(item => item.i !== 'zones')
+  const shiftW = zones.w
+  const zonesX = zones.x
+  return layout
+    .filter(item => item.i !== 'zones')
+    .map(item => {
+      if (item.x > zonesX) return { ...item, x: Math.max(0, item.x - shiftW) }
+      return item
+    })
+}
+
 export function syncDevelopEliteGridLayoutsForWidgets(
   partial: DevelopEliteResponsiveGridLayouts | null | undefined,
   kpiCardIds: string[],
@@ -411,7 +415,7 @@ export function syncDevelopEliteGridLayoutsForWidgets(
   const out: DevelopEliteResponsiveGridLayouts = {}
   for (const bp of Object.keys(DEVELOP_ELITE_GRID_COLS) as DevelopEliteGridBreakpoint[]) {
     const cols = DEVELOP_ELITE_GRID_COLS[bp]
-    const migrated = migrateDevelopEliteSidebarGridItem(normalized[bp] ?? [])
+    const migrated = stripDevelopEliteZonesGridWidget(migrateDevelopEliteSidebarGridItem(normalized[bp] ?? []))
     const pruned = migrated.filter(
       item => !hidden.has(item.i) && (allowed.has(item.i) || isDevelopEliteGridLayoutCloneId(item.i)),
     )
@@ -425,7 +429,7 @@ export function developEliteGridWidgetIds(kpiCardIds: string[]): string[] {
   return ['kpi-hero-zone', 'kpi-hero', ...kpiCardIds.map(id => `kpi-${id}`), ...DEVELOP_ELITE_BODY_WIDGET_IDS]
 }
 
-const FULL_HEIGHT_BODY_WIDGET_IDS = new Set<string>(['sidebar', 'zones', 'structures'])
+const FULL_HEIGHT_BODY_WIDGET_IDS = new Set<string>(['sidebar', 'structures'])
 
 /** View mode: one sidebar card (same look as before layout edit). */
 export function coalesceDevelopEliteSidebarInLayout(

@@ -1,5 +1,5 @@
 import {
-  GOOGLE_EARTH_BASEMAP_ID,
+  GOOGLE_SATELLITE_HYBRID_BASEMAP_ID,
   pickDefaultBasemapId,
 } from '@/modules/gis/map/basemapCatalog'
 import { WORLD_COUNTRIES_FS51_URL } from '@/modules/gis/map/worldCountriesLayer'
@@ -22,6 +22,7 @@ import {
   DEFAULT_DEVELOP_ELITE_MAP_DATA_LAYER_ORDER,
   DEFAULT_DEVELOP_ELITE_MAP_LAYER_VISIBILITY,
   normalizeDevelopEliteMapDataLayerOrder,
+  normalizeDevelopEliteMapLayerOpacity,
   normalizeDevelopEliteMapLayerVisibility,
   type DevelopEliteMapDataLayerId,
 } from './developEliteMapDataLayers'
@@ -32,9 +33,12 @@ export const DEVELOP_ELITE_MAP_LAYER_ORDER_PRESET_LS_KEY = 'develop_elite_map_la
 /** Bump when default map layer stack changes (e.g. add irrigation valves layer). */
 export const DEVELOP_ELITE_MAP_LAYER_ORDER_PRESET_VERSION = 3
 export const DEVELOP_ELITE_BASEMAP_PRESET_LS_KEY = 'develop_elite_basemap_preset_v'
-export const DEVELOP_ELITE_BASEMAP_PRESET_VERSION = 1
+export const DEVELOP_ELITE_BASEMAP_PRESET_VERSION = 2
 
-/** Older saved defaults before Google Earth was the dashboard standard. */
+/** Globe cockpit map tab (Portfolio tab always available). */
+export const DEVELOP_ELITE_GLOBE_COCKPIT_TAB_ENABLED = false
+
+/** Older saved defaults before Satellite Hybrid was the dashboard standard. */
 const DEVELOP_ELITE_LEGACY_DEFAULT_BASEMAP_IDS = new Set([
   '',
   'esri',
@@ -51,7 +55,7 @@ const DEVELOP_ELITE_LEGACY_DEFAULT_BASEMAP_IDS = new Set([
 export function normalizeDevelopEliteBasemapId(stored: unknown): string {
   const raw = String(stored ?? '').trim()
   if (!raw || DEVELOP_ELITE_LEGACY_DEFAULT_BASEMAP_IDS.has(raw)) {
-    return GOOGLE_EARTH_BASEMAP_ID
+    return GOOGLE_SATELLITE_HYBRID_BASEMAP_ID
   }
   return pickDefaultBasemapId(raw)
 }
@@ -142,6 +146,7 @@ export type DevelopEliteDashboardConfig = {
   layout: DevelopEliteLayoutConfig
   mapLayerVisibility: Record<DevelopEliteMapDataLayerId, boolean>
   mapDataLayerOrder: DevelopEliteMapDataLayerId[]
+  mapDataLayerOpacity: Record<DevelopEliteMapDataLayerId, number>
 }
 
 export type { DevelopEliteMapDataLayerId }
@@ -276,7 +281,7 @@ export const DEFAULT_DEVELOP_ELITE_CONFIG: DevelopEliteDashboardConfig = {
   agriLocationLayerUrl: DEFAULT_DEVELOP_ELITE_AGRI_LOCATION_LAYER_URL,
   irrigationValvesLayerUrl: DEFAULT_DEVELOP_ELITE_IRRIGATION_VALVES_LAYER_URL,
   irrigationMainPipeLayerUrl: DEFAULT_DEVELOP_ELITE_IRRIGATION_MAIN_PIPE_LAYER_URL,
-  basemapId: GOOGLE_EARTH_BASEMAP_ID,
+  basemapId: GOOGLE_SATELLITE_HYBRID_BASEMAP_ID,
   chartGroupField: 'Crop_Type',
   chartValueField: 'Total_Tree',
   chartValueLabel: 'Per Tons',
@@ -288,6 +293,7 @@ export const DEFAULT_DEVELOP_ELITE_CONFIG: DevelopEliteDashboardConfig = {
   layout: DEFAULT_DEVELOP_ELITE_LAYOUT,
   mapLayerVisibility: { ...DEFAULT_DEVELOP_ELITE_MAP_LAYER_VISIBILITY },
   mapDataLayerOrder: [...DEFAULT_DEVELOP_ELITE_MAP_DATA_LAYER_ORDER],
+  mapDataLayerOpacity: normalizeDevelopEliteMapLayerOpacity(),
 }
 
 const LEGACY_TOTAL_PROJECTS_ICONS = new Set(['fa-seedling', 'fa-diagram-project', 'fa-project-diagram'])
@@ -409,7 +415,7 @@ export function loadDevelopEliteDashboardConfig(): DevelopEliteDashboardConfig {
       ),
       basemapId: (() => {
         if (storedBasemapPreset < DEVELOP_ELITE_BASEMAP_PRESET_VERSION) {
-          return GOOGLE_EARTH_BASEMAP_ID
+          return GOOGLE_SATELLITE_HYBRID_BASEMAP_ID
         }
         return normalizeDevelopEliteBasemapId(parsed.basemapId)
       })(),
@@ -436,6 +442,7 @@ export function loadDevelopEliteDashboardConfig(): DevelopEliteDashboardConfig {
         }
         return normalizeDevelopEliteMapDataLayerOrder(parsed.mapDataLayerOrder)
       })(),
+      mapDataLayerOpacity: normalizeDevelopEliteMapLayerOpacity(parsed.mapDataLayerOpacity),
       kpiCards: mergeKpiCards(Array.isArray(parsed.kpiCards) ? parsed.kpiCards : []),
       tableColumns:
         Array.isArray(parsed.tableColumns) && parsed.tableColumns.length

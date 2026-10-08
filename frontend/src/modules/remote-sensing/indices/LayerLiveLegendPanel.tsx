@@ -45,6 +45,8 @@ type LayerLiveLegendPanelProps = {
   providerLabel?: string
   /** AOI cloud/clear % for the active scene (SCL+CLP mask). */
   aoiCloudCover?: LayerLegendCloudCoverPct | null
+  /** Map embed: horizontal color key strip. */
+  legendScaleLayout?: LayerLiveLegendScaleLayout
 }
 
 function formatCloudLegendAreaLine(ha: number, km2: number): string {
@@ -126,6 +128,8 @@ function buildVerticalGradient(spec: LayerLiveLegendSpec): string | null {
   return spec.gradientCss ?? null
 }
 
+export type LayerLiveLegendScaleLayout = 'vertical' | 'horizontal'
+
 function formatScaleValue(v: number): string {
   if (Number.isInteger(v)) return String(v)
   return v.toFixed(2).replace(/\.?0+$/, '')
@@ -136,12 +140,15 @@ export function LayerLiveLegendBody({
   classAreas,
   hideNote = false,
   cloudCoverAreas,
+  scaleLayout = 'vertical',
 }: {
   spec: LayerLiveLegendSpec
   classAreas?: LayerClassAreaRow[]
   /** Hide footer formula / discrimination notes (float MapSwipe legend). */
   hideNote?: boolean
   cloudCoverAreas?: ReturnType<typeof computeLayerLegendCloudCoverAreas>
+  /** Horizontal strip layout for compact map embed legends. */
+  scaleLayout?: LayerLiveLegendScaleLayout
 }) {
   if (spec.kind === 'composite' && spec.compositeBands?.length) {
     return (
@@ -170,6 +177,7 @@ export function LayerLiveLegendBody({
   }
   const verticalGradient = buildVerticalGradient(spec)
   const hasArea = !!classAreas?.length
+  const isHorizontal = scaleLayout === 'horizontal'
 
   if (!spec.classes?.length) {
     return (
@@ -185,6 +193,66 @@ export function LayerLiveLegendBody({
         ) : null}
         {!hideNote && spec.note ? <p className="si-layer-live-legend__note">{spec.note}</p> : null}
       </>
+    )
+  }
+
+  if (isHorizontal) {
+    return (
+      <div className="si-lll-scale si-lll-scale--horizontal">
+        {cloudCoverAreas ? <LayerLiveLegendCloudCoverBlock areas={cloudCoverAreas} /> : null}
+        <div className={`si-lll-hlegend${hasArea ? ' has-area' : ''}`}>
+          <div className="si-lll-hlegend-ramp" role="img" aria-label={`${spec.title} color ramp`}>
+            {spec.classes.map((row, i) => (
+              <span
+                key={`seg-${row.label}-${i}`}
+                className="si-lll-hlegend-seg"
+                style={{ background: row.color }}
+                title={`${row.label} · ${row.rangeLabel}`}
+              />
+            ))}
+          </div>
+          {hasScale ? (
+            <div className="si-lll-hlegend-extents" aria-hidden>
+              <span className="si-lll-hlegend-extent is-low">
+                <span className="si-lll-hlegend-extent-v">{formatScaleValue(spec.valueMin!)}</span>
+                {ends.low ? <span className="si-lll-hlegend-extent-k">{ends.low}</span> : null}
+              </span>
+              {ends.mid ? (
+                <span className="si-lll-hlegend-extent is-mid">
+                  <span className="si-lll-hlegend-extent-k">{ends.mid}</span>
+                </span>
+              ) : null}
+              <span className="si-lll-hlegend-extent is-high">
+                <span className="si-lll-hlegend-extent-v">{formatScaleValue(spec.valueMax!)}</span>
+                {ends.high ? <span className="si-lll-hlegend-extent-k">{ends.high}</span> : null}
+              </span>
+            </div>
+          ) : null}
+          <ul className="si-lll-hlegend-cols">
+            {spec.classes.map((row, i) => {
+              const area = classAreas?.[i]
+              const hasName = !!row.label && row.label.trim() !== row.rangeLabel.trim()
+              return (
+                <li key={`${row.label}-${row.rangeLabel}-${i}`} className="si-lll-hlegend-col">
+                  <span className="si-lll-hlegend-col-mark" style={{ background: row.color }} aria-hidden />
+                  <div className="si-lll-hlegend-col-text">
+                    {hasName ? <span className="si-lll-hlegend-col-name">{row.label}</span> : null}
+                    <span className={`si-lll-hlegend-col-range${hasName ? '' : ' is-primary'}`}>
+                      {row.rangeLabel}
+                    </span>
+                  </div>
+                  {area ? (
+                    <span className="si-lll-hlegend-col-area" title={`${area.pctOfAoi.toFixed(1)}% of AOI`}>
+                      {area.pctOfAoi.toFixed(0)}%
+                    </span>
+                  ) : null}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+        {!hideNote && spec.note ? <p className="si-layer-live-legend__note">{spec.note}</p> : null}
+      </div>
     )
   }
 
@@ -277,10 +345,12 @@ export function LayerLiveLegendActiveCard({
   providerLabel: providerLabelProp,
   aoiLabel,
   aoiCloudCover,
+  legendScaleLayout = 'vertical',
 }: {
   spec: LayerLiveLegendSpec
   activeLayerId?: string
   variant?: 'inline' | 'float'
+  legendScaleLayout?: LayerLiveLegendScaleLayout
   aoiGeometry?: GeoJSON.Geometry | GeoJSON.Feature | null
   sceneDate?: string
   seriesStart?: string
@@ -347,8 +417,10 @@ export function LayerLiveLegendActiveCard({
     resolveAoiLabelFromGeometry(aoiGeometry) ||
     (hasAoi ? 'AOI' : 'No AOI')
   const analyzeLocationLabel = hasAoi
-    ? `${resolvedAoiLabel} - ${formatAreaHa(totalHa)} ha`
-    : 'Draw an AOI to analyze territory statistics'
+    ? `${resolvedAoiLabel} · ${formatAreaHa(totalHa)} ha`
+    : isFloatVariant
+      ? 'Draw AOI for territory stats'
+      : 'Draw an AOI to analyze territory statistics'
 
   const floatMetaLine2 = useMemo(() => {
     const parts: string[] = []
@@ -360,7 +432,7 @@ export function LayerLiveLegendActiveCard({
 
   return (
     <section
-      className={`si-layer-live-legend__section is-active si-lll-scientific${variant === 'float' ? ' si-layer-live-legend__section--float' : ''}`}
+      className={`si-layer-live-legend__section is-active si-lll-scientific${variant === 'float' ? ' si-layer-live-legend__section--float' : ''}${legendScaleLayout === 'horizontal' ? ' si-lll-scale-layout-horizontal' : ''}`}
       aria-label={`Active layer: ${displaySpec.title}`}
     >
       <header className="si-layer-live-legend__header">
@@ -483,6 +555,7 @@ export function LayerLiveLegendActiveCard({
         classAreas={classAreaRows}
         hideNote={variant === 'float'}
         cloudCoverAreas={cloudCoverAreas}
+        scaleLayout={legendScaleLayout}
       />
     </section>
   )
@@ -499,6 +572,7 @@ export function LayerLiveLegendPanel({
   seriesEnd,
   providerLabel,
   aoiCloudCover,
+  legendScaleLayout = 'vertical',
 }: LayerLiveLegendPanelProps) {
   const legendById = useMemo(() => {
     const map = new Map<string, LayerLiveLegendSpec>()
@@ -540,6 +614,7 @@ export function LayerLiveLegendPanel({
           spec={activeSpec}
           activeLayerId={activeLayerId}
           variant="float"
+          legendScaleLayout={legendScaleLayout}
           aoiGeometry={aoiGeometry}
           sceneDate={sceneDate}
           seriesStart={seriesStart}

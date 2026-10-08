@@ -178,6 +178,15 @@ function featureMentionsZoneToken(
   return false
 }
 
+export function readDevelopEliteAgriLocationProjectCode(props: Record<string, unknown>): string {
+  return (
+    readProp(props, 'Project_Code') ||
+    readProp(props, 'ProjectCode') ||
+    readProp(props, 'PROJECT_CODE') ||
+    readProp(props, 'project_code')
+  )
+}
+
 function structureMatchesZoneFilter(
   props: Record<string, unknown>,
   zoneId: string,
@@ -185,6 +194,12 @@ function structureMatchesZoneFilter(
 ): boolean {
   const zone = zoneId?.trim()
   if (!zone || zone === 'all') return true
+  const projectCode = readDevelopEliteAgriLocationProjectCode(props)
+  if (projectCode) {
+    const needle = normalizeFilterToken(zone)
+    const hay = normalizeFilterToken(projectCode)
+    if (hay === needle || projectCode === zone) return true
+  }
   const zid = readDevelopEliteStructureZoneId(props)
   if (zid && (zid === zone || zid === String(Number(zone)))) return true
   const name = resolveAgroStructuresFieldName(props) || readProp(props, 'Name')
@@ -230,7 +245,14 @@ export function filterDevelopEliteMapPointFeatures(
       }
     }
     if (hasZone) {
-      if (!structureMatchesZoneFilter(props, zone!, ctx?.activeZoneLabel)) return false
+      const projectCode = readDevelopEliteAgriLocationProjectCode(props)
+      if (projectCode) {
+        const needle = normalizeFilterToken(zone!)
+        const hay = normalizeFilterToken(projectCode)
+        if (hay !== needle && projectCode !== zone) return false
+      } else if (!structureMatchesZoneFilter(props, zone!, ctx?.activeZoneLabel)) {
+        return false
+      }
     }
     return true
   })
@@ -371,7 +393,14 @@ export function filterCropRowsForChartStats(
   }
   return cropRows.filter(row => {
     const z = readProp(row, 'ZONE_ID')
-    if (zone && zone !== 'all' && z !== zone) return false
+    const projectCode = readDevelopEliteAgriLocationProjectCode(row as Record<string, unknown>)
+    if (zone && zone !== 'all') {
+      const matchesZone = z === zone
+      const matchesProject =
+        projectCode === zone ||
+        (projectCode && normalizeFilterToken(projectCode) === normalizeFilterToken(zone))
+      if (!matchesZone && !matchesProject) return false
+    }
     if (countryFarmCodes?.size) {
       const rawFc = readArcGisField(row, joinField)
       const fc =
@@ -401,7 +430,15 @@ export function filterCropRowsForStructures(
       rawFc != null && rawFc !== '' ? normalizeDevelopEliteJoinKey(String(rawFc)) : ''
     const z = readProp(row, 'ZONE_ID')
     if (farmCodes.size && fc && !farmCodes.has(fc)) return false
-    if (filters.zoneId && filters.zoneId !== 'all' && z !== filters.zoneId) return false
+    if (filters.zoneId && filters.zoneId !== 'all') {
+      const zone = filters.zoneId
+      const projectCode = readDevelopEliteAgriLocationProjectCode(row as Record<string, unknown>)
+      const matchesZone = z === zone
+      const matchesProject =
+        projectCode === zone ||
+        (projectCode && normalizeFilterToken(projectCode) === normalizeFilterToken(zone))
+      if (!matchesZone && !matchesProject) return false
+    }
     return true
   })
 }
@@ -468,6 +505,52 @@ function readZoneDisplayName(props: Record<string, unknown>): string {
   return readProp(props, 'Name') || resolveAgroStructuresFieldName(props)
 }
 
+/** Sidebar list: distinct Agri Location `Project_Code` values. */
+export function buildAgriLocationProjectCodeListItems(
+  features: GeoJSON.Feature[],
+): DevelopEliteZoneListItem[] {
+  const map = new Map<string, DevelopEliteZoneListItem>()
+  for (const f of features) {
+    const props = (f.properties ?? {}) as Record<string, unknown>
+    const code = readDevelopEliteAgriLocationProjectCode(props)
+    if (!code) continue
+    const key = code.toLowerCase()
+    const hit = map.get(key)
+    if (hit) {
+      hit.count += 1
+      continue
+    }
+    map.set(key, { zoneId: code, label: code, count: 1 })
+  }
+  return [...map.values()].sort((a, b) => compareDevelopEliteListNames(a.label, b.label))
+}
+
+export function filterProjectCodeListForCountry(
+  items: DevelopEliteZoneListItem[],
+  agriFeatures: GeoJSON.Feature[],
+  countryCode: string,
+  ctx?: DevelopEliteFilterContext,
+): DevelopEliteZoneListItem[] {
+  const country = countryCode?.trim()
+  if (!country || country === 'all') return items
+  const codes = new Set<string>()
+  for (const f of agriFeatures) {
+    const props = (f.properties ?? {}) as Record<string, unknown>
+    if (
+      !structureFeatureMatchesCountryFilter(props, country, {
+        countryLabels: ctx?.countryLabels,
+        worldCountryDomain: ctx?.worldCountryDomain,
+      })
+    ) {
+      continue
+    }
+    const code = readDevelopEliteAgriLocationProjectCode(props)
+    if (code) codes.add(code.toLowerCase())
+  }
+  if (!codes.size) return []
+  return items.filter(z => codes.has(z.zoneId.toLowerCase()))
+}
+
 export function buildZoneListItems(features: DevelopEliteStructureFeature[]): DevelopEliteZoneListItem[] {
   const map = new Map<string, DevelopEliteZoneListItem>()
   for (const f of features) {
@@ -531,8 +614,10 @@ export function buildDevelopEliteZoneGeometryLookup(
     const props = f.properties ?? {}
     const zoneId = readDevelopEliteStructureZoneId(props)
     const name = readZoneDisplayName(props)
+    const projectCode = readDevelopEliteAgriLocationProjectCode(props)
     if (zoneId && zoneId !== '—') byId.set(zoneId.toLowerCase(), geometry)
     if (name?.trim()) byLabel.set(name.trim().toLowerCase(), geometry)
+    if (projectCode?.trim()) byId.set(projectCode.trim().toLowerCase(), geometry)
   }
   return {
     geometryForItem(item) {
@@ -596,8 +681,8 @@ export function geometryOverlapsMapView(
   return !(maxLng < view.west || minLng > view.east || maxLat < view.south || minLat > view.north)
 }
 
-/** When the map has published a view, hero area KPIs clip to the visible extent (any zoom). */
-export const DEVELOP_ELITE_VIEWPORT_KPI_MIN_ZOOM = 0
+/** Clip charts/KPIs to the map extent only when zoomed to field/portfolio detail (not world overview). */
+export const DEVELOP_ELITE_VIEWPORT_KPI_MIN_ZOOM = 8
 
 export function developEliteShouldScopeKpisToMapView(
   view: DevelopEliteMapView | null | undefined,

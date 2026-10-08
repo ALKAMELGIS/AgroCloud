@@ -18,12 +18,23 @@ import './LayerLiveLegendFloatingPanel.css'
 
 const POS_KEY_BASE = 'si-layer-live-float-pos-v2'
 const SIZE_KEY_BASE = 'si-layer-live-float-size-v1'
+const POS_KEY_EMBED = 'si-layer-live-float-embed-pos-v1'
+const SIZE_KEY_EMBED = 'si-layer-live-float-embed-size-v2'
+
+/** Develop Elite / map-embed Layer Live card — fixed default footprint. */
+export const LAYER_LIVE_MAP_EMBED_DEFAULT_SIZE = { w: 320, h: 118 } as const
 
 /** Resize bounds (card width × scrollable body height), in px. */
 const MIN_W = 240
 const MAX_W = 560
 const MIN_BODY_H = 150
 const MAX_BODY_H = 760
+
+const EMBED_MIN_W = 220
+const EMBED_MAX_W = 360
+const EMBED_MIN_BODY_H = 96
+const EMBED_MAX_BODY_H = 200
+const EMBED_HEAD_H = 32
 
 type SavedPos = { x: number; y: number }
 type SavedSize = { w: number; h: number }
@@ -75,6 +86,33 @@ function writeSavedSize(s: SavedSize, storageKey: string) {
   }
 }
 
+function readEmbedSavedSize(storageKey: string): SavedSize | null {
+  try {
+    const raw = localStorage.getItem(storageKey)
+    if (!raw) return null
+    const j = JSON.parse(raw) as { w?: unknown; h?: unknown }
+    if (typeof j.w === 'number' && typeof j.h === 'number' && Number.isFinite(j.w) && Number.isFinite(j.h)) {
+      return {
+        w: Math.min(EMBED_MAX_W, Math.max(EMBED_MIN_W, j.w)),
+        h: Math.min(EMBED_MAX_BODY_H, Math.max(EMBED_MIN_BODY_H, j.h)),
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
+function writeEmbedSavedSize(s: SavedSize, storageKey: string) {
+  writeSavedSize(
+    {
+      w: Math.min(EMBED_MAX_W, Math.max(EMBED_MIN_W, s.w)),
+      h: Math.min(EMBED_MAX_BODY_H, Math.max(EMBED_MIN_BODY_H, s.h)),
+    },
+    storageKey,
+  )
+}
+
 type LayerLiveLegendFloatingPanelProps = {
   open: boolean
   onClose: () => void
@@ -96,6 +134,8 @@ type LayerLiveLegendFloatingPanelProps = {
    */
   mapSwipeCompare?: SiMapSwipeCompareSides | null
   aoiCloudCover?: LayerLegendCloudCoverPct | null
+  /** Compact card clamped inside a dashboard map cell (Develop Elite grid map). */
+  embeddedInMap?: boolean
 }
 
 export function LayerLiveLegendFloatingPanel({
@@ -111,17 +151,20 @@ export function LayerLiveLegendFloatingPanel({
   seriesEnd,
   mapSwipeCompare = null,
   aoiCloudCover = null,
+  embeddedInMap = false,
 }: LayerLiveLegendFloatingPanelProps) {
   const { scopedStorageKey } = useSiInstanceScope()
-  const posStorageKey = scopedStorageKey(POS_KEY_BASE)
-  const sizeStorageKey = scopedStorageKey(SIZE_KEY_BASE)
+  const posStorageKey = scopedStorageKey(embeddedInMap ? POS_KEY_EMBED : POS_KEY_BASE)
+  const sizeStorageKey = scopedStorageKey(embeddedInMap ? SIZE_KEY_EMBED : SIZE_KEY_BASE)
   const rootRef = useRef<HTMLElement | null>(null)
   const dragRef = useRef<{ dx: number; dy: number; startX: number; startY: number; w: number; h: number } | null>(
     null,
   )
   const resizeRef = useRef<{ startX: number; startY: number; startW: number; startH: number } | null>(null)
   const [pos, setPos] = useState<SavedPos | null>(() => readSavedPos(posStorageKey))
-  const [size, setSize] = useState<SavedSize | null>(() => readSavedSize(sizeStorageKey))
+  const [size, setSize] = useState<SavedSize | null>(() =>
+    embeddedInMap ? readEmbedSavedSize(sizeStorageKey) : readSavedSize(sizeStorageKey),
+  )
   const [dragging, setDragging] = useState(false)
   const [resizing, setResizing] = useState(false)
   const [swipeTab, setSwipeTab] = useState<'before' | 'after'>('before')
@@ -150,11 +193,25 @@ export function LayerLiveLegendFloatingPanel({
     if (!swipeActive) setSwipeTab('before')
   }, [swipeActive])
 
+  const embedLimits = useCallback(() => {
+    const box = containerRef.current?.getBoundingClientRect()
+    if (!box || !embeddedInMap) {
+      return { maxW: MAX_W, maxBodyH: MAX_BODY_H, minW: MIN_W, minBodyH: MIN_BODY_H }
+    }
+    const pad = 8
+    return {
+      maxW: Math.min(EMBED_MAX_W, box.width - pad * 2),
+      maxBodyH: Math.min(EMBED_MAX_BODY_H, box.height - EMBED_HEAD_H - pad * 3 - 28),
+      minW: EMBED_MIN_W,
+      minBodyH: EMBED_MIN_BODY_H,
+    }
+  }, [containerRef, embeddedInMap])
+
   const clampToContainer = useCallback(
     (x: number, y: number, elW: number, elH: number) => {
       const box = containerRef.current?.getBoundingClientRect()
       if (!box) return { x, y }
-      const pad = 10
+      const pad = embeddedInMap ? 8 : 10
       const maxX = Math.max(pad, box.width - elW - pad)
       const maxY = Math.max(pad, box.height - elH - pad)
       return {
@@ -162,8 +219,42 @@ export function LayerLiveLegendFloatingPanel({
         y: Math.min(maxY, Math.max(pad, y)),
       }
     },
-    [containerRef],
+    [containerRef, embeddedInMap],
   )
+
+  useLayoutEffect(() => {
+    if (!open || !embeddedInMap || !containerRef.current) return
+    const box = containerRef.current.getBoundingClientRect()
+    const limits = embedLimits()
+    const defaultW = Math.min(
+      limits.maxW,
+      Math.max(limits.minW, LAYER_LIVE_MAP_EMBED_DEFAULT_SIZE.w),
+    )
+    const defaultBodyH = Math.min(
+      limits.maxBodyH,
+      Math.max(limits.minBodyH, LAYER_LIVE_MAP_EMBED_DEFAULT_SIZE.h),
+    )
+
+    setSize(s => {
+      const raw = s ?? { w: defaultW, h: defaultBodyH }
+      const next = {
+        w: Math.min(limits.maxW, Math.max(limits.minW, raw.w)),
+        h: Math.min(limits.maxBodyH, Math.max(limits.minBodyH, raw.h)),
+      }
+      const cardH = next.h + EMBED_HEAD_H
+      setPos(p => {
+        if (p) return clampToContainer(p.x, p.y, next.w, cardH)
+        const pad = 8
+        return clampToContainer(
+          pad,
+          Math.max(pad, box.height - cardH - pad - 24),
+          next.w,
+          cardH,
+        )
+      })
+      return next
+    })
+  }, [open, embeddedInMap, clampToContainer, embedLimits])
 
   useLayoutEffect(() => {
     if (!open || !rootRef.current || !containerRef.current) return
@@ -259,18 +350,19 @@ export function LayerLiveLegendFloatingPanel({
       const dx = e.clientX - resizeRef.current.startX
       const dy = e.clientY - resizeRef.current.startY
       // Keep the card inside the map container as it grows.
-      let maxW = MAX_W
-      let maxH = MAX_BODY_H
+      const limits = embedLimits()
+      let maxW = limits.maxW
+      let maxH = limits.maxBodyH
       if (box && root) {
         const r = root.getBoundingClientRect()
-        maxW = Math.min(MAX_W, box.right - 12 - r.left)
-        maxH = Math.min(MAX_BODY_H, box.bottom - 12 - r.top - 52 /* header */)
+        maxW = Math.min(limits.maxW, box.right - 12 - r.left)
+        maxH = Math.min(limits.maxBodyH, box.bottom - 12 - r.top - 52 /* header */)
       }
-      const w = Math.max(MIN_W, Math.min(maxW, resizeRef.current.startW + dx))
-      const h = Math.max(MIN_BODY_H, Math.min(maxH, resizeRef.current.startH + dy))
+      const w = Math.max(limits.minW, Math.min(maxW, resizeRef.current.startW + dx))
+      const h = Math.max(limits.minBodyH, Math.min(maxH, resizeRef.current.startH + dy))
       setSize({ w, h })
     },
-    [containerRef],
+    [containerRef, embedLimits],
   )
 
   const onResizePointerUp = useCallback(
@@ -278,7 +370,9 @@ export function LayerLiveLegendFloatingPanel({
       if (resizeRef.current) {
         resizeRef.current = null
         setSize(s => {
-          if (s) writeSavedSize(s, sizeStorageKey)
+          if (!s) return s
+          if (embeddedInMap) writeEmbedSavedSize(s, sizeStorageKey)
+          else writeSavedSize(s, sizeStorageKey)
           return s
         })
       }
@@ -289,17 +383,27 @@ export function LayerLiveLegendFloatingPanel({
         /* ignore */
       }
     },
-    [sizeStorageKey],
+    [embeddedInMap, sizeStorageKey],
   )
 
   const resetSize = useCallback(() => {
+    if (embeddedInMap) {
+      const limits = embedLimits()
+      const next = {
+        w: Math.min(limits.maxW, Math.max(limits.minW, LAYER_LIVE_MAP_EMBED_DEFAULT_SIZE.w)),
+        h: Math.min(limits.maxBodyH, Math.max(limits.minBodyH, LAYER_LIVE_MAP_EMBED_DEFAULT_SIZE.h)),
+      }
+      setSize(next)
+      writeEmbedSavedSize(next, sizeStorageKey)
+      return
+    }
     setSize(null)
     try {
       localStorage.removeItem(sizeStorageKey)
     } catch {
       /* ignore */
     }
-  }, [sizeStorageKey])
+  }, [embeddedInMap, embedLimits, sizeStorageKey])
 
   useEffect(() => {
     const onResize = () => {
@@ -322,12 +426,17 @@ export function LayerLiveLegendFloatingPanel({
     ...(pos != null ? { left: pos.x, top: pos.y, right: 'auto', bottom: 'auto' } : {}),
     ...(size != null ? { width: size.w } : {}),
   }
-  const bodyStyle: CSSProperties = size != null ? { maxHeight: size.h } : {}
+  const bodyStyle: CSSProperties =
+    size != null
+      ? embeddedInMap
+        ? { height: size.h, maxHeight: size.h, minHeight: size.h, overflowY: 'auto', overflowX: 'hidden' }
+        : { maxHeight: size.h }
+      : {}
 
   return (
     <aside
       ref={rootRef}
-      className={`si-layer-live-float${dragging ? ' si-layer-live-float--dragging' : ''}${resizing ? ' si-layer-live-float--resizing' : ''}`}
+      className={`si-layer-live-float${embeddedInMap ? ' si-layer-live-float--map-embed si-layer-live-float--legend-horizontal' : ''}${size != null ? ' si-layer-live-float--sized' : ''}${dragging ? ' si-layer-live-float--dragging' : ''}${resizing ? ' si-layer-live-float--resizing' : ''}`}
       style={style}
       dir="ltr"
       role="dialog"
@@ -408,6 +517,7 @@ export function LayerLiveLegendFloatingPanel({
             seriesStart={seriesStart}
             seriesEnd={seriesEnd}
             aoiCloudCover={aoiCloudCover}
+            legendScaleLayout={embeddedInMap ? 'horizontal' : 'vertical'}
             activeOnly
           />
         </div>

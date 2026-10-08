@@ -1,7 +1,10 @@
 import { DevelopEliteAirportFlapText } from './DevelopEliteAirportFlapText'
 import { DevelopEliteListSearchWithPlay } from './DevelopEliteListSearchWithPlay'
 import { developEliteListItemMatchesSearch } from './developEliteListSearch'
-import { useDevelopEliteAirportListTicker } from './useDevelopEliteAirportListTicker'
+import {
+  developEliteAirportTickerRows,
+  useDevelopEliteAirportListTicker,
+} from './useDevelopEliteAirportListTicker'
 import type { useDevelopEliteDashboardData } from './useDevelopEliteDashboardData'
 
 type DashboardData = ReturnType<typeof useDevelopEliteDashboardData>
@@ -21,9 +24,12 @@ export function DevelopEliteFarmListPanel({
   searchPlaceholder = 'Search',
   listClassName,
 }: Props) {
+  const farmRows = data.farmList
   const { playing, togglePlaying, tickerActive, listRef } = useDevelopEliteAirportListTicker(
     data.filters.locationSearch,
+    farmRows.length,
   )
+  const tickerRows = developEliteAirportTickerRows(farmRows, tickerActive)
 
   return (
     <>
@@ -38,18 +44,19 @@ export function DevelopEliteFarmListPanel({
       />
       <ul
         ref={listRef}
+        data-ticker-loop={tickerActive && farmRows.length >= 2 ? 'half' : undefined}
         className={`develop-elite__list develop-elite__list--scroll develop-elite__list--farms${
           tickerActive ? ' develop-elite__list--airport-ticker' : ''
         }${listClassName ? ` ${listClassName}` : ''}`}
       >
-        {data.farmList.map(item => (
-          <li key={item.fieldKey}>
+        {tickerRows.map((item, index) => (
+          <li key={`${item.fieldKey}-${index}`}>
             <button
               type="button"
-              className={`develop-elite__list-btn${data.filters.selectedFieldKey === item.fieldKey ? ' is-active' : ''}`}
-              onClick={() =>
-                data.selectFarm(data.filters.selectedFieldKey === item.fieldKey ? null : item.fieldKey)
-              }
+              className={`develop-elite__list-btn${data.filters.selectedFieldKey === item.fieldKey ? ' is-active' : ''}${
+                data.farmListFlashFieldKey === item.fieldKey ? ' is-farm-flash' : ''
+              }`}
+              onClick={() => data.focusFarmOnMap(item.fieldKey)}
             >
               <DevelopEliteAirportFlapText
                 text={item.title}

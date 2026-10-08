@@ -21,6 +21,9 @@ export type DevelopEliteMapLayerLiveContextValue = {
   setLayerLiveStatus: (message: string) => void
   cloudCoverage: number
   onCloudCoverageChange: (value: number) => void
+  layerLiveLegendOpen: boolean
+  toggleLayerLiveLegend: () => void
+  setLayerLiveLegendOpen: (open: boolean) => void
 }
 
 export const DevelopEliteMapLayerLiveContext =

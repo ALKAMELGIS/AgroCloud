@@ -26,6 +26,8 @@ export type RemoteSensingLayerLiveStripProps = {
   layerSelectMenuMaxHeight?: number
   cloudCoverage?: number
   onCloudCoverageChange?: (value: number) => void
+  layerLegendOpen?: boolean
+  onOpenLayerLegend?: () => void
 }
 
 /** Imagery date, index layer, and Layer Live — embedded under the map Layers toolbox list. */
@@ -51,6 +53,8 @@ export function RemoteSensingLayerLiveStrip({
   layerSelectMenuMaxHeight,
   cloudCoverage,
   onCloudCoverageChange,
+  layerLegendOpen = false,
+  onOpenLayerLegend,
 }: RemoteSensingLayerLiveStripProps) {
   const rootClass = ['si-map-toolbox-layer-live-strip', className].filter(Boolean).join(' ')
   const cloudSafe =
@@ -96,25 +100,43 @@ export function RemoteSensingLayerLiveStrip({
         </div>
       </label>
 
-      <div className="si-rs-panel__stack">
+      <div className="si-rs-panel__stack si-rs-panel__stack--index-layer">
         <span className="si-rs-panel__label">Index layer</span>
-        <RemoteSensingLayerSelect
-          groups={layerGroups}
-          value={isLoadingLayers ? '' : layerValue}
-          onChange={onLayerChange}
-          loading={isLoadingLayers}
-          loadingLabel="Loading layers…"
-          emptyLabel="No layers for this satellite — check credentials or pick another provider."
-          disabled={isLoadingLayers}
-          triggerVariant={layerSelectMenuPortal ? 'panel' : 'field'}
-          menuPortal={layerSelectMenuPortal}
-          menuClassName={layerSelectMenuClassName}
-          rootClassName={layerSelectRootClassName}
-          menuMinWidth={228}
-          menuBoundsRef={layerSelectMenuBoundsRef}
-          menuMaxHeight={layerSelectMenuMaxHeight}
-          aria-label="Layer"
-        />
+        <div className="si-rs-panel__control si-rs-panel__control--index-layer">
+          <RemoteSensingLayerSelect
+            groups={layerGroups}
+            value={isLoadingLayers ? '' : layerValue}
+            onChange={onLayerChange}
+            loading={isLoadingLayers}
+            loadingLabel="Loading layers…"
+            emptyLabel="No layers for this satellite — check credentials or pick another provider."
+            disabled={isLoadingLayers}
+            triggerVariant={layerSelectMenuPortal ? 'panel' : 'field'}
+            menuPortal={layerSelectMenuPortal}
+            menuClassName={layerSelectMenuClassName}
+            rootClassName={layerSelectRootClassName}
+            menuMinWidth={228}
+            menuBoundsRef={layerSelectMenuBoundsRef}
+            menuMaxHeight={layerSelectMenuMaxHeight}
+            aria-label="Layer"
+          />
+          {onOpenLayerLegend ? (
+            <button
+              type="button"
+              className={`si-rs-panel__icon-btn si-rs-panel__legend-btn${layerLegendOpen ? ' is-on' : ''}`}
+              title={
+                layerLegendOpen
+                  ? 'Hide Layer Live color key'
+                  : 'Layer Live legend — color keys for the active index layer'
+              }
+              aria-label="Layer Live legend — color keys for the active index layer"
+              aria-pressed={layerLegendOpen}
+              onClick={onOpenLayerLegend}
+            >
+              <i className="fa-solid fa-bars-staggered" aria-hidden />
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {cloudSafe != null && onCloudCoverageChange ? (

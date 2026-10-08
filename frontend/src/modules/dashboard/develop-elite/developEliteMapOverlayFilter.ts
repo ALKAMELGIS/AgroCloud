@@ -1,4 +1,4 @@
-import type { DevelopEliteFilters } from './developEliteKpiEngine'
+import { readDevelopEliteAgriLocationProjectCode, type DevelopEliteFilters } from './developEliteKpiEngine'
 import { readWorldCountryCode } from './developEliteWorldCountries'
 
 export type DevelopEliteMapOverlayLayer = {
@@ -36,8 +36,14 @@ export function filterDevelopEliteMapOverlayGeoJson(
   if (layerId !== 'world-countries' && filters.zoneId && filters.zoneId !== 'all') {
     const want = filters.zoneId
     features = features.filter(f => {
-      const zone = readZoneId((f.properties ?? {}) as Record<string, unknown>)
-      return zone === want
+      const props = (f.properties ?? {}) as Record<string, unknown>
+      const zone = readZoneId(props)
+      if (zone === want) return true
+      if (layerId === 'agri-location') {
+        const projectCode = readDevelopEliteAgriLocationProjectCode(props)
+        return projectCode === want
+      }
+      return false
     })
   }
   return { type: 'FeatureCollection', features }

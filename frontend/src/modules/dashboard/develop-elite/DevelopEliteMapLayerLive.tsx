@@ -57,6 +57,7 @@ export function DevelopEliteMapLayerLiveProvider({ primaryClip, fallbackClip, ch
   const [layerLiveActive, setLayerLiveActive] = useState(false)
   const [layerLiveStatus, setLayerLiveStatus] = useState('')
   const [cloudCoverage, setCloudCoverage] = useState(DEVELOP_ELITE_LAYER_LIVE_DEFAULT_CLOUD_COVERAGE)
+  const [layerLiveLegendOpen, setLayerLiveLegendOpen] = useState(false)
 
   useEffect(() => {
     const ac = new AbortController()
@@ -136,6 +137,17 @@ export function DevelopEliteMapLayerLiveProvider({ primaryClip, fallbackClip, ch
     setLayerLiveStatus('')
   }, [primaryClip])
 
+  const toggleLayerLiveLegend = useCallback(() => {
+    setLayerLiveLegendOpen(open => {
+      const next = !open
+      if (next && developEliteLayerLiveHasDrawnAoiClip(primaryClip)) {
+        setLayerLiveActive(true)
+        setLayerLiveStatus('')
+      }
+      return next
+    })
+  }, [primaryClip])
+
   const onCloudCoverageChange = useCallback((value: number) => {
     setCloudCoverage(Math.max(0, Math.min(100, Math.round(value))))
   }, [])
@@ -167,10 +179,15 @@ export function DevelopEliteMapLayerLiveProvider({ primaryClip, fallbackClip, ch
       setLayerLiveStatus,
       cloudCoverage,
       onCloudCoverageChange,
+      layerLiveLegendOpen,
+      toggleLayerLiveLegend,
+      setLayerLiveLegendOpen,
     }),
     [
       clipSource,
       cloudCoverage,
+      layerLiveLegendOpen,
+      toggleLayerLiveLegend,
       hasDrawnAoiClip,
       imageryDateAutoFollow,
       isLoadingLayers,

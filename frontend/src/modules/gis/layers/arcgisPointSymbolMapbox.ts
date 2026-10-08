@@ -2,14 +2,16 @@
  * Mapbox `symbol` layer helpers for ArcGIS picture marker (esriPMS) point symbology.
  */
 import {
+  arcgisUniqueValueKeyExpression,
+  collectUniqueValueMatchKeys,
   flattenArcgisUniqueValueInfos,
   normalizeUniqueValueKey,
-  pickRendererPrimaryField,
 } from './arcgisDrawingInfoMapbox';
-import { parseEsriPmsSymbol } from './arcgisPointSymbol';
+import { parseEsriPointSymbol } from './arcgisPointSymbol';
 
 export type ArcgisPointIconEntry = {
   valueKey: string;
+  label?: string;
   imageId: string;
   imageUrl: string;
   width: number;
@@ -23,49 +25,23 @@ export type ArcgisPointIconLayerSpec = {
   iconSize: number;
 };
 
-function propertyGetExpression(field: string): any {
-  const f = field.trim();
-  if (!f) return ['literal', ''];
-  const underscored = f.replace(/\s+/g, '_');
-  const noSpace = f.replace(/\s+/g, '');
-  const variants = Array.from(
-    new Set([f, underscored, noSpace, f.toLowerCase(), underscored.toLowerCase(), noSpace.toLowerCase()]),
-  ).filter(Boolean);
-  if (variants.length === 1) return ['get', variants[0]!];
-  const inner: any[] = ['coalesce'];
-  for (const v of variants) inner.push(['get', v]);
-  inner.push(['literal', '']);
-  return inner;
-}
-
-function uniqueValueKeyExpression(ren: any): any {
-  const f1 = typeof ren.field1 === 'string' ? ren.field1.trim() : '';
-  const f2 = typeof ren.field2 === 'string' ? ren.field2.trim() : '';
-  const f3 = typeof ren.field3 === 'string' ? ren.field3.trim() : '';
-  const delim = typeof ren.fieldDelimiter === 'string' && ren.fieldDelimiter.length ? ren.fieldDelimiter : '|';
-  const parts = [f1, f2, f3].filter(Boolean);
-  if (parts.length === 0) {
-    const fb = pickRendererPrimaryField(ren);
-    return fb ? ['to-string', propertyGetExpression(fb)] : ['to-string', ['literal', '']];
-  }
-  if (parts.length === 1) return ['to-string', propertyGetExpression(parts[0]!)];
-  const concat: any[] = ['concat'];
-  for (let i = 0; i < parts.length; i += 1) {
-    if (i > 0) concat.push(delim);
-    concat.push(['to-string', propertyGetExpression(parts[i]!)]);
-  }
-  return concat;
-}
-
-function pmsEntryFromSymbol(symbol: any, imageId: string, valueKey: string): ArcgisPointIconEntry | null {
-  const preview = parseEsriPmsSymbol(symbol, 1);
-  if (!preview?.imageUrl) return null;
+function pointIconEntryFromSymbol(
+  symbol: unknown,
+  imageId: string,
+  valueKey: string,
+  label?: string,
+): ArcgisPointIconEntry | null {
+  const preview = parseEsriPointSymbol(symbol, 1);
+  if (preview?.kind !== 'picture' || !preview.imageUrl) return null;
+  const w = preview.imageWidth ?? 24;
+  const h = preview.imageHeight ?? 24;
   return {
     valueKey,
+    label,
     imageId,
     imageUrl: preview.imageUrl,
-    width: preview.imageWidth ?? 24,
-    height: preview.imageHeight ?? 24,
+    width: w,
+    height: h,
   };
 }
 
@@ -79,7 +55,7 @@ export function buildArcgisPointIconLayerSpec(
   const t = String(ren.type || '');
 
   if (t === 'simple') {
-    const entry = pmsEntryFromSymbol(ren.symbol, `${layerSafeId}-arcgis-pms-def`, 'default');
+    const entry = pointIconEntryFromSymbol(ren.symbol, `${layerSafeId}-arcgis-pms-def`, 'default');
     if (!entry) return null;
     return {
       fieldExpr: ['to-string', ['literal', 'default']],
@@ -96,16 +72,26 @@ export function buildArcgisPointIconLayerSpec(
       const uvi = infos[i];
       const valueKey = normalizeUniqueValueKey(uvi?.value);
       if (!valueKey) continue;
-      const entry = pmsEntryFromSymbol(uvi?.symbol, `${layerSafeId}-arcgis-pms-${i}`, valueKey);
+      const label = String(uvi?.label ?? '').trim();
+      const entry = pointIconEntryFromSymbol(
+        uvi?.symbol,
+        `${layerSafeId}-arcgis-pms-${i}`,
+        valueKey,
+        label || undefined,
+      );
       if (entry) entries.push(entry);
     }
-    const defEntry = pmsEntryFromSymbol(ren.defaultSymbol, `${layerSafeId}-arcgis-pms-def`, 'default');
+    const defEntry = pointIconEntryFromSymbol(
+      ren.defaultSymbol,
+      `${layerSafeId}-arcgis-pms-def`,
+      'default',
+    );
     if (!entries.length && !defEntry) return null;
     const defaultImageId = defEntry?.imageId ?? entries[0]!.imageId;
     if (defEntry && !entries.some(e => e.imageId === defEntry.imageId)) entries.push(defEntry);
     const maxW = Math.max(...entries.map(e => e.width), 24);
     return {
-      fieldExpr: uniqueValueKeyExpression(ren),
+      fieldExpr: arcgisUniqueValueKeyExpression(ren),
       defaultImageId,
       entries,
       iconSize: Math.max(0.35, Math.min(1.6, maxW / 24)),
@@ -117,10 +103,86 @@ export function buildArcgisPointIconLayerSpec(
 
 export function buildArcgisPointIconImageMatch(spec: ArcgisPointIconLayerSpec): any[] {
   const expr: any[] = ['match', spec.fieldExpr];
+  const keysUsed = new Set<string>();
   for (const entry of spec.entries) {
     if (entry.valueKey === 'default') continue;
-    expr.push(entry.valueKey, entry.imageId);
+    for (const key of collectUniqueValueMatchKeys(entry.valueKey, entry.label)) {
+      if (!key || keysUsed.has(key)) continue;
+      keysUsed.add(key);
+      expr.push(key, entry.imageId);
+    }
   }
   expr.push(spec.defaultImageId);
   return expr;
+}
+
+export type ArcgisPointIconImageMap = {
+  hasImage?: (id: string) => boolean;
+  addImage?: (id: string, image: HTMLImageElement | ImageBitmap, options?: { pixelRatio?: number }) => void;
+  loadImage?: (
+    url: string,
+    callback: (err: Error | null | undefined, image?: HTMLImageElement | ImageBitmap) => void,
+  ) => void;
+};
+
+/** Register picture-marker images on a Mapbox / MapLibre map. Returns true when all icons are already loaded. */
+export function ensureArcgisPointIconImages(
+  map: ArcgisPointIconImageMap,
+  spec: ArcgisPointIconLayerSpec,
+  onReady?: () => void,
+): boolean {
+  const entries = spec.entries;
+  if (!entries.length) return false;
+  let pending = 0;
+  for (const entry of entries) {
+    try {
+      if (typeof map.hasImage === 'function' && map.hasImage(entry.imageId)) continue;
+    } catch {
+      /* ignore */
+    }
+    pending += 1;
+    const done = () => {
+      pending -= 1;
+      if (pending <= 0) onReady?.();
+    };
+    if (entry.imageUrl.startsWith('data:') && typeof document !== 'undefined') {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          if (typeof map.hasImage === 'function' && map.hasImage(entry.imageId)) {
+            done();
+            return;
+          }
+          map.addImage?.(entry.imageId, img, { pixelRatio: 2 });
+        } catch {
+          /* ignore */
+        }
+        done();
+      };
+      img.onerror = () => done();
+      img.src = entry.imageUrl;
+      continue;
+    }
+    if (typeof map.loadImage === 'function') {
+      map.loadImage(entry.imageUrl, (err, image) => {
+        if (err || !image) {
+          done();
+          return;
+        }
+        try {
+          if (typeof map.hasImage === 'function' && map.hasImage(entry.imageId)) {
+            done();
+            return;
+          }
+          map.addImage?.(entry.imageId, image);
+        } catch {
+          /* ignore */
+        }
+        done();
+      });
+    } else {
+      done();
+    }
+  }
+  return pending === 0;
 }

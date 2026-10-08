@@ -6,7 +6,6 @@ export const DEVELOP_ELITE_COMPACT_VIEWPORT_MQ = '(max-width: 1199px)'
 export const DEVELOP_ELITE_COMPACT_LIST_WIDGET_IDS = [
   'sidebar-farms',
   'sidebar-countries',
-  'zones',
   'structures',
 ] as const
 

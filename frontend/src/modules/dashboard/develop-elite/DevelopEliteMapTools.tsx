@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import type { Map as LeafletMap } from 'leaflet'
-import { CircleMarker, useMap } from 'react-leaflet'
+import {
+  DEVELOP_ELITE_MAP_FOCUS_LEGEND_LAYER_EVENT,
+  type DevelopEliteMapFocusLegendLayerDetail,
+} from './developEliteDashboardEvents'
+import type { Map as MaplibreMap } from 'maplibre-gl'
 import { searchAcpPlaces } from '@/modules/dashboards/gis/agroCloudPlatform/map/acpMapSearch'
 import {
   developEliteMapGeoJsonForLayer,
@@ -10,22 +13,39 @@ import {
 } from './developEliteMapSearch'
 import { listDevelopEliteBasemapEntries } from '@/modules/gis/map/BasemapGallery'
 import { resolveBasemapId } from '@/modules/gis/map/basemapCatalog'
+import { useDevelopEliteMapLibre } from './developEliteMapLibreContext'
+import { useDevelopEliteMapLayerLiveOptional } from './developEliteMapLayerLiveContext'
 import { parseLatLngQuery } from '@/modules/remote-sensing/weather/openMeteoWeather'
 import type { DevelopEliteMapDataLayerId } from './developEliteDashboardConfig'
 import { isDevelopEliteMapDataLayerVisible } from './developEliteMapDataLayers'
 import { DevelopEliteMapDataLayerList } from './DevelopEliteMapDataLayerList'
-import { buildDevelopEliteMapLegendSections, type DevelopEliteMapLegendRow } from './developEliteMapLegend'
-import { flyToFieldKey, flyToGeoJsonExtent, flyToGeoJsonFeatureIndex, flyToLatLng } from './developEliteMapFly'
 import {
-  DEVELOP_ELITE_MAP_RESET_INTERACTION_EVENT,
-  safeInvalidateLeafletMapSize,
-} from '@/modules/gis/editing/leafletMapSketchInteraction'
+  DevelopEliteMapDataLayerActionDialogs,
+  type DevelopEliteMapDataLayerDialogState,
+} from './DevelopEliteMapDataLayerActionDialogs'
+import {
+  developEliteDataSourceForMapLayer,
+  developEliteMapServiceUrlForLayer,
+} from './developEliteDataSourceRegistry'
+import type { DevelopEliteDashboardConfig } from './developEliteDashboardConfig'
+import { buildDevelopEliteMapLegendSections, type DevelopEliteMapLegendRow } from './developEliteMapLegend'
+import { DevelopEliteMapLegendSwatch } from './DevelopEliteMapLegendSwatch'
+import { DEVELOP_ELITE_MAP_DEFAULT_VIEW_3D } from './developEliteMapViewport'
+import { restoreDevelopElitePortfolioGlobeBasemap } from './developEliteMapLibreGlobeBasemap'
+import {
+  developEliteMapLibreFitGeoJson,
+  developEliteMapLibreApplyDefaultPortfolioView,
+  developEliteMapLibreFlyToFieldKey,
+  developEliteMapLibreFlyToGeoJsonFeatureIndex,
+  developEliteMapLibreFlyToLatLng,
+} from './developEliteMapLibreNavigation'
 import { DevelopEliteMapInsightToolbar } from './DevelopEliteMapInsightTools'
 import { DevelopEliteMapLayerLivePanel } from './DevelopEliteMapLayerLivePanel'
 import { useDevelopEliteMapChrome, type DevelopEliteMapPanelId } from './DevelopEliteMapChrome'
-import { fitDevelopElitePortfolioView } from './developEliteMapViewport'
 import { useDevelopEliteCompactViewport } from './developEliteCompactViewport'
-import { DEVELOP_ELITE_DASHBOARD_REFRESH_EVENT } from './developEliteDashboardEvents'
+
+const TOPOGRAPHIC_3D_TOOL_LABEL =
+  '3D Topographic — instant Esri relief basemap with terrain mesh and Agro Structure extrusion. Shift+drag or right-drag to orbit.'
 
 const TOOLS: Array<{ id: string; icon: string; label: string }> = [
   { id: 'search', icon: 'fa-magnifying-glass', label: 'Search map' },
@@ -35,12 +55,12 @@ const TOOLS: Array<{ id: string; icon: string; label: string }> = [
   { id: 'fullscreen', icon: 'fa-expand', label: 'Full screen' },
   { id: 'home', icon: 'fa-house', label: 'Portfolio map extent' },
   { id: 'locate', icon: 'fa-location-crosshairs', label: 'My location' },
+  { id: 'topographic3d', icon: 'fa-mountain', label: TOPOGRAPHIC_3D_TOOL_LABEL },
 ]
 
 type PanelId = 'search' | 'layers' | 'satellite' | 'basemap' | null
 
 type ToolbarProps = {
-  mapRef: RefObject<LeafletMap | null>
   rootRef: RefObject<HTMLDivElement | null>
   viewportRef: RefObject<HTMLDivElement | null>
   geojson: GeoJSON.FeatureCollection
@@ -53,70 +73,19 @@ type ToolbarProps = {
   basemapId: string
   mapLayerVisibility: Record<DevelopEliteMapDataLayerId, boolean>
   mapDataLayerOrder: DevelopEliteMapDataLayerId[]
+  mapDataLayerOpacity: Record<DevelopEliteMapDataLayerId, number>
+  dashboardConfig: DevelopEliteDashboardConfig
+  drawingInfo: Record<string, unknown> | null
+  treesDrawingInfo?: Record<string, unknown> | null
+  irrigationValvesDrawingInfo?: Record<string, unknown> | null
+  irrigationMainPipeDrawingInfo?: Record<string, unknown> | null
+  agriLocationDrawingInfo?: Record<string, unknown> | null
   onMapLayerVisibilityChange: (id: DevelopEliteMapDataLayerId, visible: boolean) => void
   onMapDataLayerOrderChange: (order: DevelopEliteMapDataLayerId[]) => void
+  onMapDataLayerOpacityChange: (id: DevelopEliteMapDataLayerId, opacity: number) => void
   onBasemapChange: (id: string) => void
   onSelectFieldKey: (key: string | null) => void
   onPin: (pos: [number, number] | null) => void
-}
-
-function DevelopEliteMapLegendSwatch({ item }: { item: DevelopEliteMapLegendRow }) {
-  if (item.symbolStyle === 'directional-line') {
-    const stroke = item.outlineColor || '#004da8'
-    const w = Math.max(2, Math.min(5, item.outlineWidth))
-    return (
-      <span className="develop-elite-map__legend-swatch develop-elite-map__legend-swatch--directional-line" aria-hidden>
-        <svg width="52" height="14" viewBox="0 0 52 14">
-          <line x1="1" y1="7" x2="36" y2="7" stroke={stroke} strokeWidth={w} strokeLinecap="round" />
-          <polygon points="38,7 50,2 50,12" fill={stroke} />
-        </svg>
-      </span>
-    )
-  }
-  const preview = item.symbolStyle === 'point' ? item.pointPreview : undefined
-  if (preview?.kind === 'picture' && preview.imageUrl) {
-    const w = preview.imageWidth ?? 18
-    const h = preview.imageHeight ?? 18
-    const scale = Math.min(1, 16 / Math.max(w, h))
-    return (
-      <img
-        className="develop-elite-map__legend-swatch develop-elite-map__legend-swatch--point-img"
-        src={preview.imageUrl}
-        alt=""
-        width={Math.max(12, Math.round(w * scale))}
-        height={Math.max(12, Math.round(h * scale))}
-        aria-hidden
-      />
-    )
-  }
-  if (preview) {
-    const r = Math.max(3, Math.min(7, preview.radius))
-    return (
-      <span className="develop-elite-map__legend-swatch develop-elite-map__legend-swatch--point" aria-hidden>
-        <svg width="16" height="16" viewBox="0 0 16 16">
-          <circle
-            cx="8"
-            cy="8"
-            r={r}
-            fill={preview.fillColor}
-            stroke={preview.strokeColor}
-            strokeWidth={preview.strokeWidth}
-          />
-        </svg>
-      </span>
-    )
-  }
-  return (
-    <span
-      className={`develop-elite-map__legend-swatch${item.hollow ? ' is-hollow' : ''}`}
-      style={{
-        backgroundColor: item.hollow ? 'transparent' : item.fillColor,
-        borderColor: item.outlineColor,
-        borderWidth: Math.max(1, item.outlineWidth),
-      }}
-      aria-hidden
-    />
-  )
 }
 
 export function DevelopEliteMapLegendRail({
@@ -175,12 +144,28 @@ export function DevelopEliteMapLegendRail({
     isDevelopEliteMapDataLayerVisible(mapLayerVisibility, 'agri-location') && legend.agriLocation.length
 
   const compactLegend = useDevelopEliteCompactViewport()
+  const [legendPulseLayerId, setLegendPulseLayerId] = useState<DevelopEliteMapDataLayerId | null>(null)
+
+  useEffect(() => {
+    const onFocus = (e: Event) => {
+      const layerId = (e as CustomEvent<DevelopEliteMapFocusLegendLayerDetail>).detail?.layerId
+      if (!layerId) return
+      setLegendPulseLayerId(layerId)
+      window.setTimeout(() => setLegendPulseLayerId(null), 2400)
+    }
+    window.addEventListener(DEVELOP_ELITE_MAP_FOCUS_LEGEND_LAYER_EVENT, onFocus)
+    return () => window.removeEventListener(DEVELOP_ELITE_MAP_FOCUS_LEGEND_LAYER_EVENT, onFocus)
+  }, [])
 
   const legendBody = (
         <div className="develop-elite-map__legend-rail-scroll">
           {showStructuresLegend ? (
             <>
-              <p className="develop-elite-map__legend-section-title">Agro structures</p>
+              <p
+                className={`develop-elite-map__legend-section-title${legendPulseLayerId === 'agro-structures' ? ' is-pulse' : ''}`}
+              >
+                Agro structures
+              </p>
               <ul className="develop-elite-map__legend-list develop-elite-map__legend-list--rail">
                 {legend.structures.map(renderRow)}
               </ul>
@@ -188,7 +173,11 @@ export function DevelopEliteMapLegendRail({
           ) : null}
           {showTreesLegend ? (
             <>
-              <p className="develop-elite-map__legend-section-title">Tree</p>
+              <p
+                className={`develop-elite-map__legend-section-title${legendPulseLayerId === 'trees' ? ' is-pulse' : ''}`}
+              >
+                Tree
+              </p>
               <ul className="develop-elite-map__legend-list develop-elite-map__legend-list--rail">
                 {legend.trees.map(renderRow)}
               </ul>
@@ -196,7 +185,11 @@ export function DevelopEliteMapLegendRail({
           ) : null}
           {showIrrigationValvesLegend ? (
             <>
-              <p className="develop-elite-map__legend-section-title">Irrigation valves</p>
+              <p
+                className={`develop-elite-map__legend-section-title${legendPulseLayerId === 'irrigation-valves' ? ' is-pulse' : ''}`}
+              >
+                Irrigation valves
+              </p>
               <ul className="develop-elite-map__legend-list develop-elite-map__legend-list--rail">
                 {legend.irrigationValves.map(renderRow)}
               </ul>
@@ -204,7 +197,11 @@ export function DevelopEliteMapLegendRail({
           ) : null}
           {showIrrigationMainPipeLegend ? (
             <>
-              <p className="develop-elite-map__legend-section-title">Irrigation main pipe</p>
+              <p
+                className={`develop-elite-map__legend-section-title${legendPulseLayerId === 'irrigation-main-pipe' ? ' is-pulse' : ''}`}
+              >
+                Irrigation main pipe
+              </p>
               <ul className="develop-elite-map__legend-list develop-elite-map__legend-list--rail">
                 {legend.irrigationMainPipe.map(renderRow)}
               </ul>
@@ -212,7 +209,11 @@ export function DevelopEliteMapLegendRail({
           ) : null}
           {showAgriLocationLegend ? (
             <>
-              <p className="develop-elite-map__legend-section-title">AgroLocation</p>
+              <p
+                className={`develop-elite-map__legend-section-title${legendPulseLayerId === 'agri-location' ? ' is-pulse' : ''}`}
+              >
+                AgroLocation
+              </p>
               <ul className="develop-elite-map__legend-list develop-elite-map__legend-list--rail">
                 {legend.agriLocation.map(renderRow)}
               </ul>
@@ -250,19 +251,7 @@ export function DevelopEliteMapLegendRail({
   )
 }
 
-export function DevelopEliteMapTransientPin({ position }: { position: [number, number] | null }) {
-  if (!position) return null
-  return (
-    <CircleMarker
-      center={position}
-      radius={8}
-      pathOptions={{ color: '#4ade80', fillColor: '#22c55e', fillOpacity: 0.85, weight: 2 }}
-    />
-  )
-}
-
 export function DevelopEliteMapTools({
-  mapRef,
   rootRef,
   viewportRef,
   geojson,
@@ -275,22 +264,33 @@ export function DevelopEliteMapTools({
   basemapId,
   mapLayerVisibility,
   mapDataLayerOrder,
+  mapDataLayerOpacity,
+  dashboardConfig,
+  drawingInfo,
+  treesDrawingInfo,
+  irrigationValvesDrawingInfo,
+  irrigationMainPipeDrawingInfo,
+  agriLocationDrawingInfo,
   onMapLayerVisibilityChange,
   onMapDataLayerOrderChange,
+  onMapDataLayerOpacityChange,
   onBasemapChange,
   onSelectFieldKey,
   onPin,
 }: ToolbarProps) {
+  const { mapRef, viewMode3d, setViewMode3d } = useDevelopEliteMapLibre()
+  const layerLive = useDevelopEliteMapLayerLiveOptional()
   const [panel, setPanel] = useState<PanelId>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchHits, setSearchHits] = useState<DevelopEliteMapSearchHit[]>([])
   const [searchStatus, setSearchStatus] = useState('')
   const [locateStatus, setLocateStatus] = useState('')
+  const [layerPanelStatus, setLayerPanelStatus] = useState('')
+  const [layerDialog, setLayerDialog] = useState<DevelopEliteMapDataLayerDialogState>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   const searchSeq = useRef(0)
   const mapChrome = useDevelopEliteMapChrome()
-
   useEffect(() => {
     if (!mapChrome) return
     mapChrome.registerMapPanelOpener((id: DevelopEliteMapPanelId) => {
@@ -300,6 +300,12 @@ export function DevelopEliteMapTools({
 
   const basemapEntries = useMemo(() => listDevelopEliteBasemapEntries(), [])
   const activeBasemapId = useMemo(() => resolveBasemapId(basemapId), [basemapId])
+
+  const toggleLayerLiveLegend = useCallback(() => {
+    if (!layerLive) return
+    layerLive.toggleLayerLiveLegend()
+  }, [layerLive])
+
   const searchSources = useMemo<DevelopEliteMapSearchSources>(
     () => ({
       structures: geojson,
@@ -346,7 +352,7 @@ export function DevelopEliteMapTools({
 
   const applySearchHit = useCallback(
     (
-      map: LeafletMap,
+      map: MaplibreMap,
       hit: DevelopEliteMapSearchHit,
       sources: DevelopEliteMapSearchSources,
       handlers: {
@@ -354,17 +360,21 @@ export function DevelopEliteMapTools({
         onSelectFieldKey: (key: string | null) => void
       },
     ) => {
+      const cinematic = { viewMode3d }
       if (hit.kind === 'field') {
         handlers.onSelectFieldKey(hit.fieldKey)
-        flyToFieldKey(map, sources.structures, hit.fieldKey)
+        developEliteMapLibreFlyToFieldKey(map, sources.structures, hit.fieldKey, cinematic)
         handlers.onPin(null)
       } else if (hit.kind === 'place') {
-        flyToLatLng(map, hit.lat, hit.lng)
+        developEliteMapLibreFlyToLatLng(map, hit.lat, hit.lng, 14, cinematic)
         handlers.onPin([hit.lat, hit.lng])
       } else if (hit.kind === 'map-feature') {
         handlers.onSelectFieldKey(null)
         const collection = developEliteMapGeoJsonForLayer(sources, hit.sourceLayerId)
-        if (collection && flyToGeoJsonFeatureIndex(map, collection, hit.featureIndex)) {
+        if (
+          collection &&
+          developEliteMapLibreFlyToGeoJsonFeatureIndex(map, collection, hit.featureIndex, cinematic)
+        ) {
           handlers.onPin(null)
         }
       } else if (hit.kind === 'layer') {
@@ -372,12 +382,12 @@ export function DevelopEliteMapTools({
         const layerId = hit.layerId as DevelopEliteMapDataLayerId
         const collection = developEliteMapGeoJsonForLayer(sources, layerId)
         if (collection) {
-          flyToGeoJsonExtent(map, collection, { padding: [32, 32], maxZoom: 12 })
+          developEliteMapLibreFitGeoJson(map, collection, { maxZoom: 12 })
         }
         handlers.onPin(null)
       }
     },
-    [],
+    [viewMode3d],
   )
 
   const runSearch = useCallback(async () => {
@@ -389,7 +399,7 @@ export function DevelopEliteMapTools({
 
     const direct = parseLatLngQuery(q)
     if (direct) {
-      flyToLatLng(map, direct.lat, direct.lng)
+      developEliteMapLibreFlyToLatLng(map, direct.lat, direct.lng, 15, { viewMode3d })
       onPin([direct.lat, direct.lng])
       setSearchStatus('Coordinates')
       setSearchHits([])
@@ -413,7 +423,7 @@ export function DevelopEliteMapTools({
     }
     setSearchStatus(`${merged.length} result(s)`)
     applySearchHit(map, merged[0]!, searchSources, { onPin, onSelectFieldKey })
-  }, [applySearchHit, mapRef, onPin, onSelectFieldKey, searchQuery, searchSources])
+  }, [applySearchHit, mapRef, onPin, onSelectFieldKey, searchQuery, searchSources, viewMode3d])
 
   useEffect(() => {
     if (panel !== 'search') return
@@ -438,11 +448,15 @@ export function DevelopEliteMapTools({
   )
 
   const onZoomIn = useCallback(() => {
-    mapRef.current?.zoomIn()
+    const map = mapRef.current
+    if (!map) return
+    map.zoomTo(map.getZoom() + 1, { duration: 200 })
   }, [mapRef])
 
   const onZoomOut = useCallback(() => {
-    mapRef.current?.zoomOut()
+    const map = mapRef.current
+    if (!map) return
+    map.zoomTo(map.getZoom() - 1, { duration: 200 })
   }, [mapRef])
 
   const onToolClick = useCallback(
@@ -469,7 +483,14 @@ export function DevelopEliteMapTools({
           break
         }
         case 'home':
-          if (map) fitDevelopElitePortfolioView(map, worldCountriesGeojson, { animate: true })
+          if (map) {
+            setViewMode3d(DEVELOP_ELITE_MAP_DEFAULT_VIEW_3D)
+            restoreDevelopElitePortfolioGlobeBasemap(map, {
+              basemapId: activeBasemapId,
+              viewMode3d: DEVELOP_ELITE_MAP_DEFAULT_VIEW_3D,
+            })
+            developEliteMapLibreApplyDefaultPortfolioView(map, { animate: true, cinematic: false })
+          }
           onPin(null)
           setPanel(null)
           break
@@ -482,7 +503,7 @@ export function DevelopEliteMapTools({
           navigator.geolocation.getCurrentPosition(
             pos => {
               const { latitude: lat, longitude: lng } = pos.coords
-              flyToLatLng(map, lat, lng, 15)
+              developEliteMapLibreFlyToLatLng(map, lat, lng, 15, { viewMode3d })
               onPin([lat, lng])
               setLocateStatus('')
               setPanel(null)
@@ -492,11 +513,23 @@ export function DevelopEliteMapTools({
           )
           break
         }
+        case 'topographic3d': {
+          const next = !viewMode3d
+          setViewMode3d(next)
+          if (map) {
+            restoreDevelopElitePortfolioGlobeBasemap(map, {
+              basemapId: activeBasemapId,
+              viewMode3d: next,
+            })
+          }
+          setPanel(null)
+          break
+        }
         default:
           break
       }
     },
-    [mapRef, onPin, rootRef, togglePanel, worldCountriesGeojson],
+    [activeBasemapId, mapRef, onPin, rootRef, setViewMode3d, togglePanel, viewMode3d, worldCountriesGeojson],
   )
 
   return (
@@ -552,11 +585,48 @@ export function DevelopEliteMapTools({
           {panel === 'layers' ? (
             <div className="develop-elite-map__panel-layers">
               <p className="develop-elite-map__panel-title">Layers</p>
+              {layerPanelStatus ? (
+                <p className="develop-elite-map__panel-hint develop-elite-map__panel-hint--layer-status" role="status">
+                  {layerPanelStatus}
+                </p>
+              ) : null}
               <DevelopEliteMapDataLayerList
                 order={mapDataLayerOrder}
                 visibility={mapLayerVisibility}
+                layerOpacity={mapDataLayerOpacity}
+                sources={searchSources}
+                serviceUrlForLayer={id => developEliteMapServiceUrlForLayer(dashboardConfig, id)}
+                drawingInfo={drawingInfo}
+                treesDrawingInfo={treesDrawingInfo}
+                irrigationValvesDrawingInfo={irrigationValvesDrawingInfo}
+                irrigationMainPipeDrawingInfo={irrigationMainPipeDrawingInfo}
+                agriLocationDrawingInfo={agriLocationDrawingInfo}
                 onOrderChange={onMapDataLayerOrderChange}
                 onVisibilityChange={onMapLayerVisibilityChange}
+                onLayerOpacityChange={onMapDataLayerOpacityChange}
+                onOpenDialog={(mode, layerId) => setLayerDialog({ mode, layerId })}
+                onStatus={msg => {
+                  setLayerPanelStatus(msg)
+                  window.setTimeout(() => setLayerPanelStatus(''), 4000)
+                }}
+              />
+              <DevelopEliteMapDataLayerActionDialogs
+                dialog={layerDialog}
+                onClose={() => setLayerDialog(null)}
+                sources={searchSources}
+                drawingInfo={drawingInfo}
+                treesDrawingInfo={treesDrawingInfo}
+                irrigationValvesDrawingInfo={irrigationValvesDrawingInfo}
+                irrigationMainPipeDrawingInfo={irrigationMainPipeDrawingInfo}
+                agriLocationDrawingInfo={agriLocationDrawingInfo}
+                serviceUrl={
+                  layerDialog
+                    ? developEliteMapServiceUrlForLayer(dashboardConfig, layerDialog.layerId)
+                    : undefined
+                }
+                dataSourceDef={
+                  layerDialog ? developEliteDataSourceForMapLayer(layerDialog.layerId) ?? null : null
+                }
               />
             </div>
           ) : null}
@@ -588,22 +658,48 @@ export function DevelopEliteMapTools({
       ) : null}
       {locateStatus ? <p className="develop-elite-map__toast" role="status">{locateStatus}</p> : null}
       <div className="develop-elite-map__tools">
-        {TOOLS.map(tool => (
-          <button
-            key={tool.id}
-            type="button"
-            className={`develop-elite-map__tool${panel === tool.id || (tool.id === 'fullscreen' && isFullscreen) ? ' is-active' : ''}`}
-            title={tool.label}
-            aria-label={tool.label}
-            aria-pressed={panel === tool.id || (tool.id === 'fullscreen' && isFullscreen)}
-            onClick={() => onToolClick(tool.id)}
-          >
-            <i
-              className={`fa-solid ${tool.id === 'fullscreen' && isFullscreen ? 'fa-compress' : tool.icon}`}
-              aria-hidden
-            />
-          </button>
-        ))}
+        {TOOLS.map(tool => {
+          const isTopographic3d = tool.id === 'topographic3d'
+          const isActive =
+            (isTopographic3d && viewMode3d) ||
+            panel === tool.id ||
+            (tool.id === 'fullscreen' && isFullscreen)
+          const iconClass =
+            tool.id === 'fullscreen' && isFullscreen
+              ? 'fa-compress'
+              : isTopographic3d && viewMode3d
+                ? 'fa-map'
+                : tool.icon
+          const ariaLabel = isTopographic3d
+            ? viewMode3d
+              ? '3D Topographic — active (globe, terrain, structure extrusion)'
+              : 'Turn on 3D Topographic'
+            : tool.label
+          return (
+            <button
+              key={tool.id}
+              type="button"
+              className={`develop-elite-map__tool${isTopographic3d ? ' develop-elite-map__tool--topographic3d' : ''}${isTopographic3d && viewMode3d ? ' develop-elite-map__tool--view3d' : ''}${isActive ? ' is-active' : ''}`}
+              title={tool.label}
+              aria-label={ariaLabel}
+              aria-pressed={isActive}
+              onClick={() => onToolClick(tool.id)}
+            >
+              <i className={`fa-solid ${iconClass}`} aria-hidden />
+            </button>
+          )
+        })}
+        <button
+          type="button"
+          className={`develop-elite-map__tool${layerLive?.layerLiveLegendOpen ? ' is-active' : ''}`}
+          title="Layer Live legend — color keys for the active index layer."
+          aria-label="Layer Live legend"
+          aria-pressed={layerLive?.layerLiveLegendOpen ?? false}
+          disabled={!layerLive}
+          onClick={toggleLayerLiveLegend}
+        >
+          <i className="fa-solid fa-bars-staggered" aria-hidden />
+        </button>
       </div>
       <div className="develop-elite-map__zoom-group develop-elite-map__zoom-group--bottom" role="group" aria-label="Zoom">
         <button
@@ -627,142 +723,4 @@ export function DevelopEliteMapTools({
       </div>
     </>
   )
-}
-
-/** Keeps map ref in sync when using react-leaflet context (fallback if onMapReady races). */
-export function DevelopEliteMapRefBridge({ mapRef }: { mapRef: RefObject<LeafletMap | null> }) {
-  const map = useMap()
-  useEffect(() => {
-    mapRef.current = map
-  }, [map, mapRef])
-  return null
-}
-
-export function DevelopEliteMapInteractionTune() {
-  const map = useMap()
-  useEffect(() => {
-    let interacting = 0
-    const container = map.getContainer()
-    const bump = (delta: number) => {
-      interacting = Math.max(0, interacting + delta)
-      if (container) container.classList.toggle('develop-elite-map--interacting', interacting > 0)
-    }
-    const resetInteractionChrome = () => {
-      interacting = 0
-      container?.classList.remove('develop-elite-map--interacting', 'develop-elite-map--zooming')
-    }
-    const onDragStart = () => bump(1)
-    const onDragEnd = () => bump(-1)
-    const onZoomStart = () => {
-      container?.classList.add('develop-elite-map--zooming')
-    }
-    const onZoomEnd = () => {
-      container?.classList.remove('develop-elite-map--zooming')
-    }
-    map.on('dragstart', onDragStart)
-    map.on('dragend', onDragEnd)
-    map.on('zoomstart', onZoomStart)
-    map.on('zoomend', onZoomEnd)
-    window.addEventListener(DEVELOP_ELITE_MAP_RESET_INTERACTION_EVENT, resetInteractionChrome)
-    return () => {
-      map.off('dragstart', onDragStart)
-      map.off('dragend', onDragEnd)
-      map.off('zoomstart', onZoomStart)
-      map.off('zoomend', onZoomEnd)
-      window.removeEventListener(DEVELOP_ELITE_MAP_RESET_INTERACTION_EVENT, resetInteractionChrome)
-      container?.classList.remove('develop-elite-map--interacting', 'develop-elite-map--zooming')
-    }
-  }, [map])
-  return null
-}
-
-export function DevelopEliteMapInvalidateOnLayout() {
-  const map = useMap()
-  useEffect(() => {
-    let zooming = false
-    let dragging = false
-    const onZoomStart = () => {
-      zooming = true
-    }
-    const onZoomEnd = () => {
-      zooming = false
-    }
-    const onDragStart = () => {
-      dragging = true
-    }
-    const onDragEnd = () => {
-      dragging = false
-    }
-    map.on('zoomstart', onZoomStart)
-    map.on('zoomend', onZoomEnd)
-    map.on('dragstart', onDragStart)
-    map.on('dragend', onDragEnd)
-    const refresh = () => {
-      if (zooming || dragging) return
-      requestAnimationFrame(() => {
-        safeInvalidateLeafletMapSize(map)
-      })
-    }
-    window.addEventListener('develop-elite-layout-changed', refresh)
-    window.addEventListener(DEVELOP_ELITE_DASHBOARD_REFRESH_EVENT, refresh)
-    window.addEventListener('orientationchange', refresh)
-    const root = map.getContainer()?.closest('.develop-elite-map')
-    const ro =
-      root && typeof ResizeObserver !== 'undefined'
-        ? new ResizeObserver(() => refresh())
-        : null
-    if (root && ro) ro.observe(root)
-    refresh()
-    return () => {
-      map.off('zoomstart', onZoomStart)
-      map.off('zoomend', onZoomEnd)
-      map.off('dragstart', onDragStart)
-      map.off('dragend', onDragEnd)
-      window.removeEventListener('develop-elite-layout-changed', refresh)
-      window.removeEventListener(DEVELOP_ELITE_DASHBOARD_REFRESH_EVENT, refresh)
-      window.removeEventListener('orientationchange', refresh)
-      ro?.disconnect()
-    }
-  }, [map])
-  return null
-}
-
-/** Disables Leaflet pan/zoom while a dashboard card is grid-dragging (Shift+drag). */
-export function DevelopEliteMapGridDragLock() {
-  const map = useMap()
-  useEffect(() => {
-    const enableMap = () => {
-      try {
-        map.dragging.enable()
-        map.touchZoom.enable()
-        map.doubleClickZoom.enable()
-        map.boxZoom.enable()
-        map.scrollWheelZoom.enable()
-      } catch {
-        /* map teardown */
-      }
-    }
-    const disableMap = () => {
-      try {
-        map.dragging.disable()
-        map.touchZoom.disable()
-        map.doubleClickZoom.disable()
-        map.boxZoom.disable()
-        map.scrollWheelZoom.disable()
-      } catch {
-        /* map teardown */
-      }
-    }
-    const onGridDrag = (ev: Event) => {
-      const active = Boolean((ev as CustomEvent<{ active: boolean }>).detail?.active)
-      if (active) disableMap()
-      else enableMap()
-    }
-    window.addEventListener('develop-elite-grid-drag', onGridDrag)
-    return () => {
-      window.removeEventListener('develop-elite-grid-drag', onGridDrag)
-      enableMap()
-    }
-  }, [map])
-  return null
 }

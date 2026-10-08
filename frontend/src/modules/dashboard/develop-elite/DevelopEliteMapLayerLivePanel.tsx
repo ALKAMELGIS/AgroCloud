@@ -1,4 +1,4 @@
-import type { RefObject } from 'react'
+import { useCallback, type RefObject } from 'react'
 import { RemoteSensingLayerLiveStrip } from '@/modules/remote-sensing/imagery/RemoteSensingLayerLiveStrip'
 import '@/modules/remote-sensing/imagery/RemoteSensingPanel.css'
 import { useDevelopEliteMapLayerLive } from './developEliteMapLayerLiveContext'
@@ -25,7 +25,12 @@ export function DevelopEliteMapLayerLivePanel({
     layerLiveTitle,
     cloudCoverage,
     onCloudCoverageChange,
+    layerLiveLegendOpen,
+    toggleLayerLiveLegend,
   } = useDevelopEliteMapLayerLive()
+  const onOpenLayerLegend = useCallback(() => {
+    toggleLayerLiveLegend()
+  }, [toggleLayerLiveLegend])
   return (
     <div className="develop-elite-map__si-rs-panel si-rs-panel si-rs-panel--flat">
       <RemoteSensingLayerLiveStrip
@@ -50,6 +55,8 @@ export function DevelopEliteMapLayerLivePanel({
         layerLiveTitle={layerLiveTitle}
         cloudCoverage={cloudCoverage}
         onCloudCoverageChange={onCloudCoverageChange}
+        layerLegendOpen={layerLiveLegendOpen}
+        onOpenLayerLegend={onOpenLayerLegend}
       />
       {layerLiveStatus ? (
         <p className="develop-elite-map__layer-live-status" role="status">{layerLiveStatus}</p>

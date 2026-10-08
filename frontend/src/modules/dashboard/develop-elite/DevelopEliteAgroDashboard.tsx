@@ -257,11 +257,8 @@ export default function DevelopEliteAgroDashboard() {
         formatHeroArea={formatHeroArea}
         data={data}
         filteredCountries={filteredCountries}
-        filteredZones={filteredZones}
         countrySearch={countrySearch}
         setCountrySearch={setCountrySearch}
-        zoneSearch={zoneSearch}
-        setZoneSearch={setZoneSearch}
         nudgeLayout={nudgeLayout}
         persistLayout={persistLayout}
         commitLayoutPatch={commitLayoutPatch}

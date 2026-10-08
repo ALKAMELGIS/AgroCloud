@@ -289,7 +289,6 @@ export function DevelopEliteMapInsightToolbar({
   const insight = useInsight()
   const draw = useDevelopEliteMapDraw()
   const layerLive = useDevelopEliteMapLayerLiveOptional()
-
   useEffect(() => {
     prefetchDevelopEliteImageryTimeSeriesPanel()
   }, [])

@@ -7,9 +7,50 @@ function boundsSpanDegrees(bounds: L.LatLngBounds): number {
   return Math.max(Math.abs(ne.lat - sw.lat), Math.abs(ne.lng - sw.lng))
 }
 
-/** Default continental view — Europe, Africa, Middle East (matches Elite dashboard). */
-export const DEVELOP_ELITE_MAP_DEFAULT_CENTER: [number, number] = [18, 32]
-export const DEVELOP_ELITE_MAP_DEFAULT_ZOOM = 3
+/** Bump when default globe camera / topographic default changes — clients re-apply {@link DEVELOP_ELITE_MAP_DEFAULT_VIEW}. */
+export const DEVELOP_ELITE_MAP_VIEWPORT_PRESET_VERSION = 9
+export const DEVELOP_ELITE_MAP_VIEWPORT_PRESET_LS_KEY = 'develop_elite_map_viewport_preset_v'
+
+export type DevelopEliteMapDefaultCamera = {
+  /** [latitude, longitude] */
+  center: [number, number]
+  zoom: number
+  pitch: number
+  bearing: number
+}
+
+/** Camera pitch when 3D Topographic toolbar is on (terrain + extrusion). */
+export const DEVELOP_ELITE_MAP_DEFAULT_PORTFOLIO_PITCH = 52
+
+/**
+ * Browser-load default: globe on Africa/MENA, galaxy backdrop, country outlines — flat camera
+ * (pitch 0). Tilt + topographic only after the user enables 3D Topographic.
+ */
+export const DEVELOP_ELITE_MAP_DEFAULT_VIEW: DevelopEliteMapDefaultCamera = {
+  center: [2.5, 17.5],
+  zoom: 1.9,
+  pitch: 0,
+  bearing: 0,
+}
+
+/** `acp-map--3d` / viewport chrome follows the topographic toolbar, not the flat globe home. */
+export const DEVELOP_ELITE_MAP_PORTFOLIO_GLOBE_PRESENTATION = false
+
+/** Never enable 3D Topographic on refresh, route entry, or map init — toolbar only. */
+export const DEVELOP_ELITE_MAP_DEFAULT_VIEW_3D = false
+
+/** Toolbar, terrain mesh, and GPU extrusion follow explicit 3D Topographic mode only. */
+export function isDevelopEliteMapPortfolio3dActive(viewMode3d: boolean): boolean {
+  return viewMode3d
+}
+
+/** @deprecated Use {@link DEVELOP_ELITE_MAP_DEFAULT_VIEW}. */
+export const DEVELOP_ELITE_MAP_DEFAULT_CENTER: [number, number] = DEVELOP_ELITE_MAP_DEFAULT_VIEW.center
+/** @deprecated Use {@link DEVELOP_ELITE_MAP_DEFAULT_VIEW}. */
+export const DEVELOP_ELITE_MAP_DEFAULT_ZOOM = DEVELOP_ELITE_MAP_DEFAULT_VIEW.zoom
+
+/** Allow slight zoom-out past the default globe view. */
+export const DEVELOP_ELITE_MAP_MIN_ZOOM = 0.5
 
 /** Cap auto-fit so the map stays at portfolio / regional scale, not farm-level. */
 export const DEVELOP_ELITE_PORTFOLIO_MAX_ZOOM = 4

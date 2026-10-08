@@ -305,6 +305,10 @@ function uniqueValueKeyExpression(ren: any): any {
   return concat;
 }
 
+export function arcgisUniqueValueKeyExpression(ren: any): any {
+  return uniqueValueKeyExpression(ren);
+}
+
 export type ArcgisMapboxFillPaint = {
   'fill-color': string | any[];
   'fill-opacity': number | any[];

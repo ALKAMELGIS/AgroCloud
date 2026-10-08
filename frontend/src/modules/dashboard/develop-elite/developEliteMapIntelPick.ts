@@ -22,6 +22,7 @@ const INTEL_PICK_IGNORE_SELECTOR = [
   '.weather-map-stage__float-tool',
   '.leaflet-control',
   '.leaflet-popup',
+  '.maplibregl-popup',
 ].join(',')
 
 /** True when the DOM target is map chrome, not the map surface. */

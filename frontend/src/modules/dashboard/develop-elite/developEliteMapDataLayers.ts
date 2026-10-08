@@ -154,3 +154,49 @@ export function moveMapDataLayerInOrder(
   next.splice(to, 0, draggedId)
   return normalizeDevelopEliteMapDataLayerOrder(next)
 }
+
+/** Panel list: index 0 is top (drawn above). Forward = toward top of list. */
+export function nudgeMapDataLayerDrawOrder(
+  order: DevelopEliteMapDataLayerId[],
+  layerId: DevelopEliteMapDataLayerId,
+  direction: 'forward' | 'backward',
+): DevelopEliteMapDataLayerId[] {
+  const idx = order.indexOf(layerId)
+  if (idx < 0) return order
+  const target = direction === 'forward' ? idx - 1 : idx + 1
+  if (target < 0 || target >= order.length) return order
+  const next = [...order]
+  const [item] = next.splice(idx, 1)
+  next.splice(target, 0, item)
+  return normalizeDevelopEliteMapDataLayerOrder(next)
+}
+
+export const DEFAULT_DEVELOP_ELITE_MAP_LAYER_OPACITY = 1
+
+export function normalizeDevelopEliteMapLayerOpacity(
+  partial?: Partial<Record<DevelopEliteMapDataLayerId, number>> | null,
+): Record<DevelopEliteMapDataLayerId, number> {
+  const out: Record<DevelopEliteMapDataLayerId, number> = {
+    'agro-structures': DEFAULT_DEVELOP_ELITE_MAP_LAYER_OPACITY,
+    'world-countries': DEFAULT_DEVELOP_ELITE_MAP_LAYER_OPACITY,
+    trees: DEFAULT_DEVELOP_ELITE_MAP_LAYER_OPACITY,
+    'irrigation-valves': DEFAULT_DEVELOP_ELITE_MAP_LAYER_OPACITY,
+    'irrigation-main-pipe': DEFAULT_DEVELOP_ELITE_MAP_LAYER_OPACITY,
+    'agri-location': DEFAULT_DEVELOP_ELITE_MAP_LAYER_OPACITY,
+  }
+  if (!partial) return out
+  for (const id of DEVELOP_ELITE_MAP_DATA_LAYER_IDS) {
+    const raw = partial[id]
+    if (!Number.isFinite(raw)) continue
+    out[id] = Math.min(1, Math.max(0.05, Number(raw)))
+  }
+  return out
+}
+
+export function developEliteMapDataLayerOpacityValue(
+  opacity: Record<DevelopEliteMapDataLayerId, number>,
+  id: DevelopEliteMapDataLayerId,
+): number {
+  const v = opacity[id]
+  return Number.isFinite(v) ? Math.min(1, Math.max(0.05, v)) : DEFAULT_DEVELOP_ELITE_MAP_LAYER_OPACITY
+}

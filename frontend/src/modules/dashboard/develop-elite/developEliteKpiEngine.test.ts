@@ -4,6 +4,7 @@ import { DEFAULT_DEVELOP_ELITE_CONFIG } from './developEliteDashboardConfig'
 import {
   buildCountryListItems,
   buildFarmListItems,
+  buildAgriLocationProjectCodeListItems,
   buildZoneListItems,
   compareDevelopEliteCropTableRows,
   compareDevelopEliteListNames,
@@ -109,7 +110,7 @@ describe('developEliteKpiEngine', () => {
     const features = normalizeStructureFeatures(fc)
     const labels = new Map([['1', 'Morocco'], ['2', 'United Arab Emirates']])
     const countries = buildCountryListItems(features, { countryLabels: labels })
-    expect(countries.map(c => c.label)).toEqual(['Morocco', 'United Arab Emirates'])
+    expect(countries.map(c => c.label)).toEqual(['United Arab Emirates', 'Morocco'])
     const farms = buildFarmListItems(features, { countryLabels: labels })
     expect(farms.map(item => item.title).sort()).toEqual(['Farm A', 'Farm B'])
   })
@@ -424,6 +425,31 @@ describe('filterZoneListForCountry', () => {
   })
 })
 
+describe('buildAgriLocationProjectCodeListItems', () => {
+  it('lists distinct Project_Code values from Agri Location', () => {
+    const items = buildAgriLocationProjectCodeListItems([
+      {
+        type: 'Feature',
+        properties: { Project_Code: 'PRJ-01', Country: 1 },
+        geometry: { type: 'Point', coordinates: [55, 25] },
+      },
+      {
+        type: 'Feature',
+        properties: { ProjectCode: 'PRJ-01' },
+        geometry: { type: 'Point', coordinates: [55.1, 25.1] },
+      },
+      {
+        type: 'Feature',
+        properties: { Project_Code: 'PRJ-02' },
+        geometry: { type: 'Point', coordinates: [56, 25] },
+      },
+    ])
+    expect(items).toHaveLength(2)
+    expect(items.map(i => i.label).sort()).toEqual(['PRJ-01', 'PRJ-02'])
+    expect(items.find(i => i.zoneId === 'PRJ-01')?.count).toBe(2)
+  })
+})
+
 describe('buildZoneListItems', () => {
   it('lists ArcGIS Name values (not structure type shorthand)', () => {
     const items = buildZoneListItems(
@@ -550,6 +576,7 @@ describe('filterStructureFeaturesByMapView', () => {
       features: [polyFeature({}), polyFeature({ Farm_Name: 'B' })],
     })
     const view = { zoom: 4, west: 49, south: 22, east: 59, north: 27 }
+    expect(developEliteShouldScopeKpisToMapView(view)).toBe(false)
     expect(filterStructureFeaturesByMapView(features, view)).toHaveLength(2)
   })
 })

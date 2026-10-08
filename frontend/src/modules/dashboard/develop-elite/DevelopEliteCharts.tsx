@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 
 function developEliteChartTableColumnWidthPx(col: string): number {
   switch (col) {
@@ -75,6 +75,8 @@ type Props = {
   tableHighlightRowId?: string | null
   tableFlashRowId?: string | null
   selectedFieldKey?: string | null
+  chartCropHighlight?: string | null
+  onChartSliceClick?: (cropLabel: string) => void
   onTableRowClick?: (rowId: string) => void
   onTableRowDoubleClick?: (rowId: string) => void
 }
@@ -93,10 +95,21 @@ function DevelopEliteChartsInner({
   tableHighlightRowId,
   tableFlashRowId,
   selectedFieldKey,
+  chartCropHighlight,
+  onChartSliceClick,
   onTableRowClick,
   onTableRowDoubleClick,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
+  const tableHeadScrollRef = useRef<HTMLDivElement>(null)
+  const tableBodyScrollRef = useRef<HTMLDivElement>(null)
+
+  const onTableBodyScroll = useCallback(() => {
+    const body = tableBodyScrollRef.current
+    const head = tableHeadScrollRef.current
+    if (!body || !head) return
+    head.scrollLeft = body.scrollLeft
+  }, [])
 
   useEffect(() => {
     const refresh = () => {
@@ -117,10 +130,10 @@ function DevelopEliteChartsInner({
     }
   }, [])
 
-  const chartFlashCropLabel = useMemo(
-    () => resolveDevelopEliteChartFlashCropLabel(tableRows, tableFlashRowId),
-    [tableFlashRowId, tableRows],
-  )
+  const chartFlashCropLabel = useMemo(() => {
+    if (chartCropHighlight) return chartCropHighlight
+    return resolveDevelopEliteChartFlashCropLabel(tableRows, tableFlashRowId)
+  }, [chartCropHighlight, tableFlashRowId, tableRows])
 
   const [chartFlashStartedAt, setChartFlashStartedAt] = useState(0)
   useEffect(() => {
@@ -227,6 +240,11 @@ function DevelopEliteChartsInner({
       responsive: true,
       maintainAspectRatio: false,
       layout: { padding: { left: 16, right: 16, top: 64, bottom: 64 } },
+      onClick: (_event: unknown, elements: { index: number }[], chart: { data: { labels?: unknown[] } }) => {
+        if (!onChartSliceClick || !elements.length) return
+        const label = String(chart.data.labels?.[elements[0].index] ?? '')
+        if (label) onChartSliceClick(label)
+      },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -247,7 +265,7 @@ function DevelopEliteChartsInner({
         },
       },
     }),
-    [charts, valueUnit],
+    [charts, onChartSliceClick, valueUnit],
   )
 
   const barOptions = useMemo(
@@ -256,6 +274,11 @@ function DevelopEliteChartsInner({
       indexAxis: 'y' as const,
       responsive: true,
       maintainAspectRatio: false,
+      onClick: (_event: unknown, elements: { index: number }[], chart: { data: { labels?: unknown[] } }) => {
+        if (!onChartSliceClick || !elements.length) return
+        const label = String(chart.data.labels?.[elements[0].index] ?? '')
+        if (label) onChartSliceClick(label)
+      },
       datasets: {
         bar: {
           barThickness: 'flex' as const,
@@ -310,7 +333,7 @@ function DevelopEliteChartsInner({
         },
       },
     }),
-    [barSuggestedMax, charts, valueUnit],
+    [barSuggestedMax, charts, onChartSliceClick, valueUnit],
   )
 
   const rootClass =
@@ -420,30 +443,47 @@ function DevelopEliteChartsInner({
     [tableColumns, tableColumnWidths],
   )
 
+  const tableWidthStyle = useMemo(
+    (): CSSProperties => ({ minWidth: Math.max(tableMinWidthPx, 100) }),
+    [tableMinWidthPx],
+  )
+
+  const tableHeaderRow = (
+    <tr>
+      {tableColumns.map(col => (
+        <th
+          key={col}
+          scope="col"
+          className={col === 'Total_Tree' ? 'develop-elite-charts__table-num' : undefined}
+        >
+          {col === 'OBJECTID' ? 'ID' : col}
+        </th>
+      ))}
+    </tr>
+  )
+
   const tableBlock =
     part === 'all' || part === 'table' ? (
       <div className="develop-elite-charts__table-panel" style={tableStyle}>
-        <div className="develop-elite-charts__table-wrap">
+        <div ref={tableHeadScrollRef} className="develop-elite-charts__table-head">
           <table
-            className="develop-elite-charts__table"
-            style={{ minWidth: Math.max(tableMinWidthPx, 100) }}
+            className="develop-elite-charts__table develop-elite-charts__table--head"
+            style={tableWidthStyle}
           >
             {tableColGroup}
-            <thead>
-              <tr>
-                {tableColumns.map(col => (
-                  <th
-                    key={col}
-                    scope="col"
-                    className={
-                      col === 'Total_Tree' ? 'develop-elite-charts__table-num' : undefined
-                    }
-                  >
-                    {col === 'OBJECTID' ? 'ID' : col}
-                  </th>
-                ))}
-              </tr>
-            </thead>
+            <thead>{tableHeaderRow}</thead>
+          </table>
+        </div>
+        <div
+          ref={tableBodyScrollRef}
+          className="develop-elite-charts__table-wrap"
+          onScroll={onTableBodyScroll}
+        >
+          <table
+            className="develop-elite-charts__table develop-elite-charts__table--body"
+            style={tableWidthStyle}
+          >
+            {tableColGroup}
             <tbody>
               {tableRows.length === 0 ? (
                 <tr>

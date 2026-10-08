@@ -294,6 +294,61 @@
   border-color: rgba(255, 255, 255, 0.14);
 }
 
+/* Map embed — fixed compact chrome (Develop Elite grid map) */
+.si-layer-live-float--map-embed .si-layer-live-float__chrome {
+  border-radius: 12px;
+}
+
+.si-layer-live-float--map-embed .si-layer-live-float__head {
+  gap: 4px;
+  padding: 2px 6px 3px;
+  min-height: 0;
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+.si-layer-live-float--map-embed .si-layer-live-float__grip {
+  width: 12px;
+  font-size: 8px;
+  opacity: 0.65;
+}
+
+.si-layer-live-float--map-embed .si-layer-live-float__head-text {
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: nowrap;
+}
+
+.si-layer-live-float--map-embed .si-layer-live-float__head-title {
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.si-layer-live-float--map-embed .si-layer-live-float__kicker {
+  font-size: 7px;
+  letter-spacing: 0.06em;
+  line-height: 1.1;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.si-layer-live-float--map-embed .si-layer-live-float__close {
+  width: 20px;
+  height: 20px;
+  font-size: 10px;
+}
+
+.si-layer-live-float--map-embed.si-layer-live-float--sized .si-layer-live-float__chrome {
+  display: flex;
+  flex-direction: column;
+}
+
+.si-layer-live-float--map-embed .si-layer-live-float__body {
+  max-height: none;
+  padding: 3px 7px 6px;
+}
+
 /* ── Resize handle (bottom-right) ─────────────────────────────────────── */
 .si-layer-live-float__resize {
   position: absolute;

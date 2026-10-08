@@ -69,6 +69,20 @@ export default function HeaderBar({ onToggleMobileNav, mobileNavOpen = false }: 
   useEffect(() => {
     const el = headerRef.current
     if (!el) return
+    const syncHeight = () => {
+      const h = Math.max(40, Math.round(el.getBoundingClientRect().height))
+      document.documentElement.style.setProperty('--header-height', `${h}px`)
+      document.documentElement.style.setProperty('--app-header-block', `${h}px`)
+    }
+    syncHeight()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(syncHeight) : null
+    ro?.observe(el)
+    return () => ro?.disconnect()
+  }, [hs.paddingX, hs.paddingY, hs.autoResize, hs.showCenterLogo, hs.showLogoIcon, hs.showLogoText])
+
+  useEffect(() => {
+    const el = headerRef.current
+    if (!el) return
 
     const prefersReduced = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
     if (prefersReduced || !hs.enableAnimation) return
@@ -111,7 +125,7 @@ export default function HeaderBar({ onToggleMobileNav, mobileNavOpen = false }: 
 
   return (
     <header
-      className={`agri-header agri-header--align-${hs.logoAlign}${hs.sticky ? ' agri-header--sticky' : ''}${hs.transparent ? ' agri-header--transparent' : ''}${hs.autoResize ? ' agri-header--auto-resize' : ''}${hs.mobileShowLogoText ? '' : ' agri-header--hide-mobile-text'}${hs.tabletShowLogoText ? '' : ' agri-header--hide-tablet-text'}`}
+      className={`agri-header agri-header--align-${hs.logoAlign}${hs.sticky ? ' agri-header--sticky' : ''}${hs.transparent ? ' agri-header--transparent' : ''}${hs.autoResize ? ' agri-header--auto-resize' : ''}${hs.enableAnimation ? ' agri-header--motion' : ''}${hs.mobileShowLogoText ? '' : ' agri-header--hide-mobile-text'}${hs.tabletShowLogoText ? '' : ' agri-header--hide-tablet-text'}`}
       ref={headerRef}
       style={headerStyle}
     >

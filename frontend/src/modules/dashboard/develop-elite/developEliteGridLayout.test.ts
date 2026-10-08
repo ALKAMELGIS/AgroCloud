@@ -69,7 +69,7 @@ describe('developEliteGridLayout', () => {
     expect(farms).toMatchObject({ x: 0, y: 2, w: 5 })
     expect(countries).toMatchObject({ x: 0, w: 5 })
     expect((farms?.h ?? 0) + (countries?.h ?? 0)).toBe(15)
-    expect(map).toMatchObject({ x: 9, y: 2, w: 15, h: 10 })
+    expect(map).toMatchObject({ x: 7, y: 2, w: 17, h: 10 })
     expect(table?.y).toBe(12)
     expect(table?.h).toBe(5)
   })
@@ -114,13 +114,12 @@ describe('developEliteGridLayout', () => {
     expect(widths).toEqual([8, 8, 8])
   })
 
-  it('stretches sidebar column widgets and zones to grid bottom for display', () => {
+  it('stretches sidebar column widgets to grid bottom for display', () => {
     const layout = [
       { i: 'sidebar-farms', x: 0, y: 3, w: 4, h: 4 },
       { i: 'sidebar-countries', x: 0, y: 7, w: 4, h: 2 },
-      { i: 'zones', x: 4, y: 3, w: 2, h: 6 },
-      { i: 'structures', x: 6, y: 3, w: 2, h: 6 },
-      { i: 'map', x: 8, y: 3, w: 16, h: 9 },
+      { i: 'structures', x: 4, y: 3, w: 2, h: 6 },
+      { i: 'map', x: 6, y: 3, w: 18, h: 9 },
     ]
     const stretched = stretchBodyColumnsToGridBottom(layout, 17)
     expect(stretched.find(i => i.i === 'sidebar-farms')?.h).toBeGreaterThan(4)

@@ -339,14 +339,14 @@ export async function fetchImageryTimeSeriesProgressive(
   const existingRun = runInflight.get(cacheKey)
   // Prefetch (no signal) may reuse an in-flight UI fetch. UI fetches with AbortSignal must not
   // reuse a sibling promise — an aborted run would resolve empty and poison Apply/re-run.
-  if (existingRun && !options.signal) return existingRun
+  if (existingRun && !options?.signal) return existingRun
 
   const runPromise = (async () => {
     const emit = (daily: SentinelHubDailyIndexMeans[], progress: ImageryTimeSeriesProgress) => {
       options.onProgress?.({ daily, progress })
     }
 
-    if (options.signal?.aborted) {
+    if (options?.signal?.aborted) {
       emit([], {
         phase: 'aborted',
         message: 'Cancelled',
@@ -373,7 +373,7 @@ export async function fetchImageryTimeSeriesProgressive(
 
     const cachedPromise = readImageryTsCache(cacheKey)
     const statusPromise = Promise.race([
-      fetchSentinelHubStatisticsProxyStatus({ signal: options.signal }),
+      fetchSentinelHubStatisticsProxyStatus({ signal: options?.signal }),
       new Promise<null>(resolve => {
         setTimeout(() => resolve(null), IMAGERY_TS_PROXY_STATUS_TIMEOUT_MS)
       }),
@@ -461,9 +461,9 @@ export async function fetchImageryTimeSeriesProgressive(
       return mergeChain
     }
 
-    if (chunks.length && !options.signal?.aborted) {
+    if (chunks.length && !options?.signal?.aborted) {
       await mapPool(chunks, fetchConcurrency, async chunk => {
-        if (options.signal?.aborted) return []
+        if (options?.signal?.aborted) return []
         const rows = await fetchChunkDaily(
           field.geometry!,
           chunk,
@@ -471,7 +471,7 @@ export async function fetchImageryTimeSeriesProgressive(
           toIso,
           cloudFilter,
           layerIds,
-          options.signal,
+          options?.signal,
           message => {
             lastChunkError = message
           },
@@ -480,7 +480,7 @@ export async function fetchImageryTimeSeriesProgressive(
         return rows
       })
       await mergeChain
-      if (options.signal?.aborted) throw abortError()
+      if (options?.signal?.aborted) throw abortError()
       emit(merged, {
         phase: 'complete',
         message: `Complete · ${countImageryObservations(merged)} observations`,
@@ -495,14 +495,14 @@ export async function fetchImageryTimeSeriesProgressive(
 
     await mergeChain
 
-    if (options.signal?.aborted) throw abortError()
+    if (options?.signal?.aborted) throw abortError()
 
     if (!merged.length && chunksTotal > 0) {
       throw imageryTsEmptyResultError(chunksTotal, lastChunkError)
     }
 
     // Persist only after the full Start→End crawl finishes.
-    if (merged.length && !options.signal?.aborted) {
+    if (merged.length && !options?.signal?.aborted) {
       void writeImageryTsCache(cacheKey, {
         fieldKey: field.fieldKey,
         fromIso,

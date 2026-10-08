@@ -1,4 +1,8 @@
 import type { AgroCloudMapViewState } from './agroCloudMapNavigation'
+import {
+  applyMapLibreGlobeGalaxySky,
+  setMapLibreGlobeProjection,
+} from './maplibreGlobeEnvironment'
 
 /** Default centered 2D globe — full Earth in the map canvas (Satellite Intelligence cockpit). */
 export const SI_GLOBE_COCKPIT_2D_VIEW: AgroCloudMapViewState = {
@@ -75,10 +79,9 @@ export function nudgeSiMapboxGlobeCanvas(
     }
     map.resize?.()
     map.triggerRepaint?.()
-    if (typeof map.setProjection === 'function') {
-      map.setProjection({ name: 'globe' })
-    }
+    setMapLibreGlobeProjection(map)
     applySiGlobeCockpitFog(map)
+    applyMapLibreGlobeGalaxySky(map as never)
     return true
   } catch {
     return false

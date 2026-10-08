@@ -32,6 +32,8 @@ type DrawContextValue = {
   clearDrawing: () => void
   clipGeoJson: GeoJSON.FeatureCollection | null
   featureGroupRef: MutableRefObject<L.FeatureGroup | null>
+  /** MapLibre sketch store (Develop Elite WebGL map). */
+  sketchFeaturesRef: MutableRefObject<GeoJSON.Feature[]>
   notifyDrawingChanged: (count: number) => void
 }
 
@@ -93,10 +95,19 @@ export function DevelopEliteMapDrawProvider({ children }: { children: ReactNode 
   const [clipGeoJson, setClipGeoJson] = useState<GeoJSON.FeatureCollection | null>(null)
   const [hasClearableDrawing, setHasClearableDrawing] = useState(false)
   const featureGroupRef = useRef<L.FeatureGroup | null>(null)
+  const sketchFeaturesRef = useRef<GeoJSON.Feature[]>([])
 
   const refreshClip = useCallback(() => {
     startTransition(() => {
-      setClipGeoJson(syncClipFromFeatureGroup(featureGroupRef.current))
+      const fromLeaflet = syncClipFromFeatureGroup(featureGroupRef.current)
+      if (fromLeaflet) {
+        setClipGeoJson(fromLeaflet)
+        return
+      }
+      const feats = sketchFeaturesRef.current
+      setClipGeoJson(
+        feats.length ? { type: 'FeatureCollection', features: [...feats] } : null,
+      )
     })
   }, [])
 
@@ -116,11 +127,12 @@ export function DevelopEliteMapDrawProvider({ children }: { children: ReactNode 
   }, [])
 
   const clearDrawing = useCallback(() => {
+    sketchFeaturesRef.current = []
     featureGroupRef.current?.clearLayers()
     setHasClearableDrawing(false)
-    setClipGeoJson(null)
     setActiveTool(null)
-  }, [])
+    refreshClip()
+  }, [refreshClip])
 
   const notifyDrawingChanged = useCallback(
     (count: number) => {
@@ -142,6 +154,7 @@ export function DevelopEliteMapDrawProvider({ children }: { children: ReactNode 
       clearDrawing,
       clipGeoJson,
       featureGroupRef,
+      sketchFeaturesRef,
       notifyDrawingChanged,
     }),
     [

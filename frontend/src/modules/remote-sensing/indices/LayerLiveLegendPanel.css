@@ -837,6 +837,320 @@ html[data-theme='dark'] .si-lll-cloud-cover {
   text-align: right;
 }
 
+/* ── Horizontal map legend (segmented ramp + columns) ───────────────────── */
+.si-lll-scale--horizontal {
+  gap: 6px;
+}
+
+.si-lll-hlegend {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  min-width: 0;
+}
+
+.si-lll-hlegend-ramp {
+  display: flex;
+  width: 100%;
+  min-height: 10px;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.22),
+    0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.si-lll-hlegend-seg {
+  flex: 1 1 0;
+  min-width: 2px;
+  height: 100%;
+}
+
+.si-lll-hlegend-extents {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 0 1px;
+  font-variant-numeric: tabular-nums;
+}
+
+.si-lll-hlegend-extent {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  max-width: 38%;
+}
+
+.si-lll-hlegend-extent.is-low {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.si-lll-hlegend-extent.is-mid {
+  flex: 0 1 auto;
+  align-items: center;
+  text-align: center;
+  max-width: 28%;
+}
+
+.si-lll-hlegend-extent.is-high {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.si-lll-hlegend-extent-v {
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #f1f5f9;
+  line-height: 1.1;
+}
+
+.si-lll-hlegend-extent-k {
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.si-lll-hlegend-cols {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  width: 100%;
+}
+
+.si-lll-hlegend-col {
+  flex: 1 1 calc(50% - 6px);
+  min-width: min(100%, 108px);
+  display: grid;
+  grid-template-columns: 5px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 4px;
+  padding: 4px 5px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.si-lll-hlegend-col-mark {
+  width: 5px;
+  align-self: stretch;
+  min-height: 22px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.si-lll-hlegend-col-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.si-lll-hlegend-col-name {
+  font-size: 8px;
+  font-weight: 700;
+  color: #e2e8f0;
+  line-height: 1.15;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.si-lll-hlegend-col-range {
+  font-size: 7.5px;
+  font-weight: 500;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.si-lll-hlegend-col-range.is-primary {
+  font-size: 8px;
+  font-weight: 700;
+  color: #f1f5f9;
+  white-space: normal;
+}
+
+.si-lll-hlegend-col-area {
+  font-size: 8px;
+  font-weight: 700;
+  color: #38bdf8;
+  padding-top: 1px;
+}
+
+.si-layer-live-float--legend-horizontal .si-lll-analyze-panel--compact,
+.si-layer-live-float--map-embed .si-lll-analyze-panel--compact {
+  margin-bottom: 4px;
+  padding: 5px 7px 5px 8px;
+  border-radius: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0;
+}
+
+.si-layer-live-float--legend-horizontal .si-lll-analyze-panel--compact .si-lll-analyze-panel__hero,
+.si-layer-live-float--map-embed .si-lll-analyze-panel--compact .si-lll-analyze-panel__hero {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 4px 6px;
+  padding-left: 0;
+}
+
+.si-layer-live-float--legend-horizontal .si-lll-analyze-panel--compact .si-lll-analyze-panel__hero-copy,
+.si-layer-live-float--map-embed .si-lll-analyze-panel--compact .si-lll-analyze-panel__hero-copy {
+  gap: 2px;
+}
+
+.si-layer-live-float--legend-horizontal .si-lll-analyze-panel--compact .si-lll-analyze-panel__title,
+.si-layer-live-float--map-embed .si-lll-analyze-panel--compact .si-lll-analyze-panel__title {
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.si-layer-live-float--legend-horizontal .si-lll-analyze-panel--compact .si-lll-analyze-panel__location,
+.si-layer-live-float--map-embed .si-lll-analyze-panel--compact .si-lll-analyze-panel__location {
+  margin: 0;
+  font-size: 7.5px;
+  line-height: 1.25;
+  opacity: 0.92;
+}
+
+.si-layer-live-float--legend-horizontal .si-lll-analyze-panel--compact .si-lll-analyze-panel__location-text,
+.si-layer-live-float--map-embed .si-lll-analyze-panel--compact .si-lll-analyze-panel__location-text {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.si-layer-live-float--legend-horizontal .si-lll-analyze-panel--compact .si-lll-analyze-panel__level-mood,
+.si-layer-live-float--map-embed .si-lll-analyze-panel--compact .si-lll-analyze-panel__level-mood {
+  width: 28px;
+  height: 28px;
+  font-size: 18px;
+}
+
+.si-layer-live-float--legend-horizontal .si-lll-analyze-panel--compact .si-lll-analyze-panel__gauge-wrap,
+.si-layer-live-float--map-embed .si-lll-analyze-panel--compact .si-lll-analyze-panel__gauge-wrap {
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+}
+
+.si-layer-live-float--legend-horizontal .si-lll-analyze-panel--compact .si-lll-analyze-panel__gauge-caption,
+.si-layer-live-float--map-embed .si-lll-analyze-panel--compact .si-lll-analyze-panel__gauge-caption {
+  display: none;
+}
+
+.si-layer-live-float--legend-horizontal .si-lll-analyze-gauge--compact,
+.si-layer-live-float--map-embed .si-lll-analyze-gauge--compact {
+  width: 36px;
+  height: 36px;
+}
+
+.si-layer-live-float--legend-horizontal .si-lll-analyze-gauge--compact,
+.si-layer-live-float--map-embed .si-lll-analyze-gauge--compact .si-lll-analyze-gauge__inner {
+  width: 28px;
+  height: 28px;
+}
+
+.si-layer-live-float--legend-horizontal .si-lll-analyze-gauge--compact,
+.si-layer-live-float--map-embed .si-lll-analyze-gauge--compact .si-lll-analyze-gauge__inner strong {
+  font-size: 10px;
+}
+
+.si-layer-live-float--legend-horizontal .si-lll-analyze-panel--compact .si-lll-analyze-panel__divider,
+.si-layer-live-float--map-embed .si-lll-analyze-panel--compact .si-lll-analyze-panel__divider {
+  display: none;
+}
+
+.si-layer-live-float--legend-horizontal .si-lll-analyze-panel--compact .si-lll-analyze-panel__stats--compact,
+.si-layer-live-float--map-embed .si-lll-analyze-panel--compact .si-lll-analyze-panel__stats--compact {
+  grid-column: 1 / -1;
+  gap: 3px;
+  margin-top: 4px;
+  padding: 4px 0 0;
+  border-top: 1px solid color-mix(in srgb, var(--si-lll-analyze-accent, #84cc16) 22%, var(--theme-border));
+}
+
+.si-layer-live-float--legend-horizontal .si-lll-analyze-panel--compact .si-lll-analyze-stat,
+.si-layer-live-float--map-embed .si-lll-analyze-panel--compact .si-lll-analyze-stat {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 0;
+  padding: 2px 5px;
+  border-radius: 5px;
+  gap: 4px;
+}
+
+.si-layer-live-float--legend-horizontal .si-lll-analyze-panel--compact .si-lll-analyze-stat__label,
+.si-layer-live-float--map-embed .si-lll-analyze-panel--compact .si-lll-analyze-stat__label {
+  font-size: 6.5px;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+  flex-shrink: 0;
+}
+
+.si-layer-live-float--legend-horizontal .si-lll-analyze-panel--compact .si-lll-analyze-stat strong,
+.si-layer-live-float--map-embed .si-lll-analyze-panel--compact .si-lll-analyze-stat strong {
+  font-size: 8.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  min-width: 0;
+}
+
+.si-layer-live-float--legend-horizontal .si-layer-live-legend__section--float .si-lll-meta-float {
+  margin-bottom: 2px;
+}
+
+html[data-theme='light'] .si-lll-hlegend-ramp {
+  border-color: rgba(15, 23, 42, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+}
+
+html[data-theme='light'] .si-lll-hlegend-extent-v {
+  color: #0f172a;
+}
+
+html[data-theme='light'] .si-lll-hlegend-col {
+  background: rgba(248, 250, 252, 0.92);
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+html[data-theme='light'] .si-lll-hlegend-col-name,
+html[data-theme='light'] .si-lll-hlegend-col-range.is-primary {
+  color: #1e293b;
+}
+
+html[data-theme='light'] .si-lll-hlegend-col-range {
+  color: #64748b;
+}
+
 /* ── Light theme overrides for the scientific layout ──────────────────── */
 .si-sat-ctx-dock--light .si-lll-meta-grid {
   background: rgba(255, 255, 255, 0.28);

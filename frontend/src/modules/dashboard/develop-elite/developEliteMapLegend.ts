@@ -11,6 +11,7 @@ import {
 } from '@/modules/gis/layers/arcgisDrawingInfoLeaflet'
 import { parseEsriPointSymbol, type ArcgisPointSymbolPreview } from '@/modules/gis/layers/arcgisPointSymbol'
 import { AGRO_STRUCTURES_STRUCTURE_TYPE_CATALOG } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
+import type { DevelopEliteMapDataLayerId } from './developEliteMapDataLayers'
 
 export type DevelopEliteMapLegendRow = {
   id: string
@@ -40,6 +41,14 @@ const STRUCTURE_TYPE_FALLBACK: Record<
   1007: { fillColor: 'transparent', outlineColor: 'rgb(76, 230, 0)', outlineWidth: 2, hollow: true },
 }
 
+/** Solid rgb for legend swatches — ArcGIS rgba previews look washed out on the rail. */
+function developEliteLegendOpaqueColor(color: string): string {
+  if (!color || color === 'transparent') return color
+  const rgba = /^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,/i.exec(color)
+  if (rgba) return `rgb(${rgba[1]},${rgba[2]},${rgba[3]})`
+  return color
+}
+
 const OVERLAY_LEGEND_ROWS: DevelopEliteMapLegendRow[] = [
   {
     id: 'overlay-world-countries',
@@ -65,8 +74,8 @@ function legendItemToRow(item: ArcgisUniqueValueLegendItem, group: DevelopEliteM
   return {
     id: `${group}-${item.value}-${item.label}`,
     label: item.label,
-    fillColor: item.fillColor,
-    outlineColor: item.outlineColor,
+    fillColor: developEliteLegendOpaqueColor(item.fillColor),
+    outlineColor: developEliteLegendOpaqueColor(item.outlineColor),
     outlineWidth: item.outlineWidth,
     hollow: item.hollow,
     group,
@@ -247,7 +256,7 @@ export function developEliteStructureLeafletStyle(
       color: fallback.outlineColor,
       weight: Math.max(fallback.outlineWidth, 2),
       fillColor: fallback.hollow ? fallback.outlineColor : fallback.fillColor,
-      fillOpacity: fallback.hollow ? 0 : 0.38,
+      fillOpacity: fallback.hollow ? 0 : 0.88,
       opacity: 1,
     }
     const looksGeneric =
@@ -267,7 +276,19 @@ export function developEliteStructureLeafletStyle(
       opacity: 1,
     }
   }
+  if (fillOp > 0 && fillOp < 0.88) {
+    return { ...base, fillOpacity: Math.min(1, Math.max(0.88, fillOp)), opacity: 1 }
+  }
   return base
+}
+
+export type DevelopEliteMapLegendSections = {
+  structures: DevelopEliteMapLegendRow[]
+  trees: DevelopEliteMapLegendRow[]
+  irrigationValves: DevelopEliteMapLegendRow[]
+  irrigationMainPipe: DevelopEliteMapLegendRow[]
+  agriLocation: DevelopEliteMapLegendRow[]
+  overlays: DevelopEliteMapLegendRow[]
 }
 
 export function buildDevelopEliteMapLegendSections(
@@ -276,14 +297,7 @@ export function buildDevelopEliteMapLegendSections(
   agriLocationDrawingInfo?: Record<string, unknown> | null,
   irrigationValvesDrawingInfo?: Record<string, unknown> | null,
   irrigationMainPipeDrawingInfo?: Record<string, unknown> | null,
-): {
-  structures: DevelopEliteMapLegendRow[]
-  trees: DevelopEliteMapLegendRow[]
-  irrigationValves: DevelopEliteMapLegendRow[]
-  irrigationMainPipe: DevelopEliteMapLegendRow[]
-  agriLocation: DevelopEliteMapLegendRow[]
-  overlays: DevelopEliteMapLegendRow[]
-} {
+): DevelopEliteMapLegendSections {
   return {
     structures: buildDevelopEliteStructuresLegendItems(drawingInfo),
     trees: buildDevelopEliteTreeLegendItems(treesDrawingInfo ?? null),
@@ -293,5 +307,125 @@ export function buildDevelopEliteMapLegendSections(
     ),
     agriLocation: buildDevelopEliteAgriLocationLegendItems(agriLocationDrawingInfo ?? null),
     overlays: OVERLAY_LEGEND_ROWS,
+  }
+}
+
+const DEFAULT_LAYER_PREVIEW: Partial<Record<DevelopEliteMapDataLayerId, DevelopEliteMapLegendRow[]>> = {
+  'agro-structures': [
+    {
+      id: 'structures-preview',
+      label: 'Agro Structures',
+      fillColor: 'rgb(76, 230, 0)',
+      outlineColor: 'rgb(110, 110, 110)',
+      outlineWidth: 1,
+      hollow: false,
+      group: 'structures',
+    },
+  ],
+  trees: [
+    {
+      id: 'trees-preview',
+      label: 'Tree',
+      fillColor: '#39ff14',
+      outlineColor: '#7ee787',
+      outlineWidth: 1,
+      hollow: false,
+      group: 'trees',
+      symbolStyle: 'point',
+      pointPreview: {
+        kind: 'circle',
+        symbolType: 'esriSMS',
+        label: 'Tree',
+        fillColor: '#39ff14',
+        strokeColor: '#7ee787',
+        strokeWidth: 1,
+        radius: 5,
+        opacity: 1,
+      },
+    },
+  ],
+  'irrigation-valves': [
+    {
+      id: 'valves-preview',
+      label: 'Irrigation valves',
+      fillColor: '#a78bfa',
+      outlineColor: '#ddd6fe',
+      outlineWidth: 1,
+      hollow: false,
+      group: 'irrigation-valves',
+      symbolStyle: 'point',
+      pointPreview: {
+        kind: 'circle',
+        symbolType: 'esriSMS',
+        label: 'Valve',
+        fillColor: '#a78bfa',
+        strokeColor: '#ddd6fe',
+        strokeWidth: 1,
+        radius: 6,
+        opacity: 1,
+      },
+    },
+  ],
+  'agri-location': [
+    {
+      id: 'agri-location-preview',
+      label: 'AgroLocation',
+      fillColor: '#38bdf8',
+      outlineColor: '#0ea5e9',
+      outlineWidth: 1,
+      hollow: false,
+      group: 'agri-location',
+      symbolStyle: 'point',
+      pointPreview: {
+        kind: 'circle',
+        symbolType: 'esriSMS',
+        label: 'AgroLocation',
+        fillColor: '#38bdf8',
+        strokeColor: '#0ea5e9',
+        strokeWidth: 1,
+        radius: 5,
+        opacity: 1,
+      },
+    },
+  ],
+  'irrigation-main-pipe': [
+    {
+      id: 'main-pipe-preview',
+      label: 'Main pipe',
+      fillColor: 'transparent',
+      outlineColor: '#004da8',
+      outlineWidth: 3,
+      hollow: true,
+      group: 'irrigation-main-pipe',
+      symbolStyle: 'directional-line',
+    },
+  ],
+  'world-countries': [OVERLAY_LEGEND_ROWS[0]],
+}
+
+/** ArcGIS-style preview swatches for the Layers panel toggle rows. */
+export function developEliteMapDataLayerLegendPreviews(
+  layerId: DevelopEliteMapDataLayerId,
+  legend: DevelopEliteMapLegendSections,
+  maxClasses = 4,
+): DevelopEliteMapLegendRow[] {
+  const pick = (rows: DevelopEliteMapLegendRow[]) =>
+    rows.length ? rows.slice(0, maxClasses) : (DEFAULT_LAYER_PREVIEW[layerId] ?? [])
+
+  switch (layerId) {
+    case 'agro-structures':
+      return pick(legend.structures)
+    case 'trees':
+      return pick(legend.trees)
+    case 'irrigation-valves':
+      return pick(legend.irrigationValves)
+    case 'irrigation-main-pipe':
+      return pick(legend.irrigationMainPipe)
+    case 'agri-location':
+      return pick(legend.agriLocation)
+    case 'world-countries':
+      return pick(legend.overlays.filter(row => row.id === 'overlay-world-countries'))
+    default:
+      return DEFAULT_LAYER_PREVIEW[layerId] ?? []
   }
 }

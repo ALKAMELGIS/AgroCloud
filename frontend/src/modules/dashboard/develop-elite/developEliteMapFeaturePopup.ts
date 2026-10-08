@@ -285,17 +285,25 @@ export function bindDevelopEliteMapLayerPopup(
     ...popupOptions,
   })
   layer.on('popupopen', () => {
-    const root = layer.getPopup()?.getElement()
-    const btn = root?.querySelector(`[${DEVELOP_ELITE_MAP_POPUP_ZOOM_ATTR}]`)
-    if (!(btn instanceof HTMLButtonElement)) return
-    if (btn.dataset.dePopupZoomWired === '1') return
-    btn.dataset.dePopupZoomWired = '1'
-    btn.addEventListener('click', event => {
-      event.preventDefault()
-      event.stopPropagation()
+    wireDevelopEliteMapPopupZoomButton(layer.getPopup()?.getElement(), () => {
       const activeMap = map ?? resolveLayerMap(layer)
       if (activeMap) zoomDevelopEliteMapPopupLayer(activeMap, layer)
     })
+  })
+}
+
+export function wireDevelopEliteMapPopupZoomButton(
+  root: ParentNode | null | undefined,
+  onZoom: () => void,
+): void {
+  const btn = root?.querySelector(`[${DEVELOP_ELITE_MAP_POPUP_ZOOM_ATTR}]`)
+  if (!(btn instanceof HTMLButtonElement)) return
+  if (btn.dataset.dePopupZoomWired === '1') return
+  btn.dataset.dePopupZoomWired = '1'
+  btn.addEventListener('click', event => {
+    event.preventDefault()
+    event.stopPropagation()
+    onZoom()
   })
 }
 

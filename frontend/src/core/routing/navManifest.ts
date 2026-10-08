@@ -137,13 +137,6 @@ export const NAV_DEFAULT_GROUPS: NavGroupDef[] = [
         defaultIcon: 'fa-solid fa-layer-group',
         subitemClass: 'nav-item-indices',
       },
-      {
-        id: 'satellite-gis',
-        path: '/satellite/gis',
-        i18nKey: 'gisMap',
-        defaultIcon: 'fa-solid fa-map-location-dot',
-        subitemClass: 'nav-item-gis-map',
-      },
     ],
   },
   {

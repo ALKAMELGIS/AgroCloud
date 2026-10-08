@@ -190,6 +190,22 @@ export function developEliteDataSourcesByGroup(
   return DEVELOP_ELITE_DATA_SOURCES.filter(s => s.group === groupId).sort((a, b) => a.order - b.order)
 }
 
+export function developEliteDataSourceForMapLayer(
+  layerId: DevelopEliteMapDataLayerId,
+): DevelopEliteDataSourceDef | undefined {
+  return DEVELOP_ELITE_DATA_SOURCES.find(s => s.mapLayerId === layerId)
+}
+
+export function developEliteMapServiceUrlForLayer(
+  config: DevelopEliteDashboardConfig,
+  layerId: DevelopEliteMapDataLayerId,
+): string {
+  const def = developEliteDataSourceForMapLayer(layerId)
+  if (!def) return ''
+  const raw = config[def.key]
+  return String(raw ?? def.defaultUrl).trim()
+}
+
 /** Short label from REST URL for display (e.g. Agro_Structures /0). */
 export function developEliteArcGisUrlShortLabel(url: string): string {
   const trimmed = String(url || '').trim()

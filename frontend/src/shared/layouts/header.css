@@ -89,6 +89,30 @@
   display: none;
 }
 
+/* Pointer spotlight (HeaderBar sets --hx / --hy when enableAnimation is on) */
+.agri-header--motion::after {
+  display: block;
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 1;
+  background: radial-gradient(
+    560px circle at var(--hx, 50%) var(--hy, 35%),
+    rgba(255, 255, 255, 0.16),
+    rgba(255, 255, 255, 0.04) 38%,
+    transparent 68%
+  );
+  transition: opacity 0.4s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agri-header--motion::after {
+    display: none;
+  }
+}
+
 /* Luxury fuse: header + horizontal nav read as one chrome (pseudo-layers only; nav children unchanged) */
 .agri-header + .layout.app-layout > .navmenu.navmenu--compact {
   margin-top: 0;

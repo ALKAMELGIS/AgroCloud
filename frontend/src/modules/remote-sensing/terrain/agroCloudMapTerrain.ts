@@ -770,7 +770,9 @@ function wantsTerrainForView(
   basemapId: string,
   pitch: number,
   terrainLayerEnabled = false,
+  explicitToolbarGate = false,
 ): boolean {
+  if (explicitToolbarGate) return terrainLayerEnabled === true
   if (terrainLayerEnabled && pitch >= AGRO_CLOUD_TERRAIN_PITCH_THRESHOLD) return true
   if (basemapId && isTerrain3dBasemapId(basemapId)) return true
   return pitch >= AGRO_CLOUD_TERRAIN_PITCH_THRESHOLD
@@ -779,6 +781,10 @@ function wantsTerrainForView(
 export type SyncAgroCloudTerrain3dOpts = {
   /** When true, enable DEM mesh at tilted pitch without switching basemap (Google Earth–style). */
   terrainLayerEnabled?: boolean
+  /**
+   * Develop Elite portfolio: only the 3D Topographic toolbar enables terrain — not pitch alone.
+   */
+  terrainExplicitToolbarGate?: boolean
 }
 
 /** Enable or disable 3D terrain mesh after style load, basemap swap, or pitch change. */

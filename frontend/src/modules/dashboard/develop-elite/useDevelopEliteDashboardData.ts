@@ -16,6 +16,7 @@ import {
 import {
   isDevelopEliteMapDataLayerVisible,
   normalizeDevelopEliteMapDataLayerOrder,
+  normalizeDevelopEliteMapLayerOpacity,
   normalizeDevelopEliteMapLayerVisibility,
 } from './developEliteMapDataLayers'
 import {
@@ -32,11 +33,10 @@ import {
 import {
   buildCountryListItems,
   buildFarmListItems,
-  buildZoneListItems,
+  buildAgriLocationProjectCodeListItems,
+  filterProjectCodeListForCountry,
   compareDevelopEliteCropTableRows,
   compareDevelopEliteFarmListItems,
-  compareDevelopEliteListNames,
-  filterZoneListForCountry,
   computeDevelopEliteKpis,
   computeDevelopEliteStructuresTotalAreaHa,
   developEliteAgriKpiFilters,
@@ -56,12 +56,10 @@ import {
   type DevelopEliteListContext,
   type DevelopEliteMapView,
   type DevelopEliteStructureFeature,
-  type DevelopEliteZoneListItem,
 } from './developEliteKpiEngine'
 import {
   buildWorldCountryListItems,
   filterWorldCountriesForMap,
-  readWorldCountryCode,
 } from './developEliteWorldCountries'
 import { resolveDevelopEliteMapWorldCountriesGeoJson } from './developEliteMapWorldCountriesGeoJson'
 import {
@@ -81,37 +79,6 @@ import {
 } from './developEliteMapViewPublish'
 
 export type DevelopEliteChartSlice = { label: string; value: number; color: string }
-
-function mergeCountryRelationshipZones(
-  zones: DevelopEliteZoneListItem[],
-  world: GeoJSON.FeatureCollection | null,
-  country: string,
-  labels: Map<string, string>,
-  domain: Map<string, string>,
-): DevelopEliteZoneListItem[] {
-  const selected = country?.trim()
-  if (!selected || selected === 'all' || !world?.features?.length) return zones
-  const wantLabel = (labels.get(selected) || domain.get(selected) || selected).trim().toLowerCase()
-  const extra: DevelopEliteZoneListItem[] = []
-  for (const feature of world.features) {
-    const props = (feature.properties ?? {}) as Record<string, unknown>
-    const code = readWorldCountryCode(props, domain)
-    const name = String(props.ALL_COUNTRY ?? props.COUNTRYAFF ?? '').trim()
-    const matches =
-      code === selected ||
-      name.toLowerCase() === selected.toLowerCase() ||
-      name.toLowerCase() === wantLabel ||
-      (labels.get(code) || '').toLowerCase() === wantLabel
-    if (!matches) continue
-    const zoneId = String(props.ZONE_ID ?? props.Zone_ID ?? '').trim()
-    if (!zoneId) continue
-    if (zones.some(zone => zone.zoneId.toLowerCase() === zoneId.toLowerCase())) continue
-    if (extra.some(zone => zone.zoneId.toLowerCase() === zoneId.toLowerCase())) continue
-    extra.push({ zoneId, label: zoneId, count: 0 })
-  }
-  if (!extra.length) return zones
-  return [...zones, ...extra].sort((a, b) => compareDevelopEliteListNames(a.label, b.label))
-}
 
 export function useDevelopEliteDashboardData() {
   const boot = developEliteArcgisBoot()
@@ -196,13 +163,27 @@ export function useDevelopEliteDashboardData() {
   const [tableFlashRowId, setTableFlashRowId] = useState<string | null>(null)
   const [mapHighlightFieldKey, setMapHighlightFieldKey] = useState<string | null>(null)
   const [mapFlyToRequest, setMapFlyToRequest] = useState(0)
+  const [mapCountryFlyRequest, setMapCountryFlyRequest] = useState(0)
+  const [farmListFlashFieldKey, setFarmListFlashFieldKey] = useState<string | null>(null)
+  const [chartCropTypeFilter, setChartCropTypeFilter] = useState<string | null>(null)
+  const tableRowsRef = useRef<Record<string, string>[]>([])
 
   /** Refetch all ArcGIS layers + KPIs/charts/map without a browser reload. */
   const refresh = useCallback(() => {
     clearDevelopEliteArcgisSessionCache(developEliteArcgisCacheKey(configRef.current))
     setError(null)
+    setChartCropTypeFilter(null)
+    setMapHighlightFieldKey(null)
+    setTableHighlightRowId(null)
+    setFarmListFlashFieldKey(null)
+    setFilters({
+      country: 'all',
+      zoneId: 'all',
+      selectedFieldKey: null,
+      locationSearch: '',
+    })
     setReloadToken(t => t + 1)
-    dispatchDevelopEliteDashboardRefresh()
+    dispatchDevelopEliteDashboardRefresh({ resetMapViewport: true })
   }, [])
   const refreshing = loading && structures !== null
   const initialLoading = false
@@ -379,40 +360,21 @@ export function useDevelopEliteDashboardData() {
     [mergedCountryLabels],
   )
 
-  const zoneLayerFeatures = useMemo(
-    () =>
-      zoneLayerStructures?.features?.length
-        ? normalizeStructureFeatures(zoneLayerStructures)
-        : [],
-    [zoneLayerStructures],
-  )
-
-  const zoneListMapSortFeatures = useMemo(
-    () => (zoneLayerFeatures.length ? zoneLayerFeatures : allFeatures),
-    [allFeatures, zoneLayerFeatures],
-  )
+  const zoneListMapSortFeatures = useMemo((): DevelopEliteStructureFeature[] => {
+    return agriLocationFeatures.map((f, i) => ({
+      type: 'Feature',
+      geometry: f.geometry,
+      properties: { ...(f.properties ?? {}) },
+    })) as DevelopEliteStructureFeature[]
+  }, [agriLocationFeatures])
 
   const zoneList = useMemo(() => {
-    const items = buildZoneListItems(zoneLayerFeatures.length ? zoneLayerFeatures : allFeatures)
-    const filtered = filterZoneListForCountry(items, allFeatures, filters.country, {
+    const items = buildAgriLocationProjectCodeListItems(agriLocationFeatures)
+    return filterProjectCodeListForCountry(items, agriLocationFeatures, filters.country, {
       countryLabels: mergedCountryLabels,
       worldCountryDomain,
     })
-    return mergeCountryRelationshipZones(
-      filtered,
-      worldCountries,
-      filters.country,
-      mergedCountryLabels,
-      worldCountryDomain,
-    )
-  }, [
-    allFeatures,
-    zoneLayerFeatures,
-    filters.country,
-    mergedCountryLabels,
-    worldCountryDomain,
-    worldCountries,
-  ])
+  }, [agriLocationFeatures, filters.country, mergedCountryLabels, worldCountryDomain])
 
   const filterContext = useMemo((): DevelopEliteFilterContext => {
     const activeZoneLabel =
@@ -442,39 +404,6 @@ export function useDevelopEliteDashboardData() {
     [cropRows, scopedFeatures, filters, config.cropStructureJoinField],
   )
 
-  /** Layer 1 crops: charts/KPIs respect filters + visible map extent when zoomed in. */
-  const chartStructurePool = useMemo(() => {
-    const base = filterStructureFeatures(
-      allFeatures,
-      {
-        country: filters.country,
-        zoneId: filters.zoneId,
-        selectedFieldKey: filters.selectedFieldKey,
-        locationSearch: '',
-      },
-      filterContext,
-    )
-    return filterStructureFeaturesByMapView(base, mapView)
-  }, [
-    allFeatures,
-    filterContext,
-    filters.country,
-    filters.selectedFieldKey,
-    filters.zoneId,
-    mapView,
-  ])
-
-  const dashboardCropRows = useMemo(
-    () =>
-      filterCropRowsForChartStats(
-        cropRows,
-        chartStructurePool,
-        filters,
-        config.cropStructureJoinField,
-      ),
-    [cropRows, chartStructurePool, filters, config.cropStructureJoinField],
-  )
-
   const tableScopeFilters = useMemo(
     (): DevelopEliteFilters => ({
       country: filters.country,
@@ -485,15 +414,20 @@ export function useDevelopEliteDashboardData() {
     [filters.country, filters.zoneId, filters.locationSearch],
   )
 
+  const tableStructurePool = useMemo(() => {
+    const base = filterStructureFeatures(allFeatures, tableScopeFilters, filterContext)
+    return filterStructureFeaturesByMapView(base, mapView)
+  }, [allFeatures, filterContext, mapView, tableScopeFilters])
+
   const tableCropRows = useMemo(
     () =>
       filterCropRowsForChartStats(
         cropRows,
-        allFeatures,
+        tableStructurePool,
         tableScopeFilters,
         config.cropStructureJoinField,
       ),
-    [cropRows, allFeatures, tableScopeFilters, config.cropStructureJoinField],
+    [cropRows, tableStructurePool, tableScopeFilters, config.cropStructureJoinField],
   )
 
   const scopedTreeCount = useMemo(() => {
@@ -629,15 +563,16 @@ export function useDevelopEliteDashboardData() {
     mapView,
   ])
 
+  /** Pie/bar use the same Farm_Code–joined crop rows as the grid table (not a separate chart-only filter). */
   const chartSlices = useMemo(
     () =>
       aggregateChartSlices(
-        dashboardCropRows,
+        tableCropRows,
         config.chartGroupField,
         cropMeta,
         config.chartValueField,
       ),
-    [dashboardCropRows, config.chartGroupField, config.chartValueField, cropMeta],
+    [tableCropRows, config.chartGroupField, config.chartValueField, cropMeta],
   )
 
   const cropTypeColors = useMemo(() => {
@@ -687,6 +622,11 @@ export function useDevelopEliteDashboardData() {
     [config.mapDataLayerOrder],
   )
 
+  const mapDataLayerOpacity = useMemo(
+    () => normalizeDevelopEliteMapLayerOpacity(config.mapDataLayerOpacity),
+    [config.mapDataLayerOpacity],
+  )
+
   const setMapLayerVisible = useCallback((id: DevelopEliteMapDataLayerId, visible: boolean) => {
     setConfig(prev => {
       const next = {
@@ -706,6 +646,20 @@ export function useDevelopEliteDashboardData() {
       const next = {
         ...prev,
         mapDataLayerOrder: normalizeDevelopEliteMapDataLayerOrder(order),
+      }
+      saveDevelopEliteDashboardConfig(next)
+      return next
+    })
+  }, [])
+
+  const setMapDataLayerOpacity = useCallback((id: DevelopEliteMapDataLayerId, opacity: number) => {
+    setConfig(prev => {
+      const next = {
+        ...prev,
+        mapDataLayerOpacity: normalizeDevelopEliteMapLayerOpacity({
+          ...prev.mapDataLayerOpacity,
+          [id]: opacity,
+        }),
       }
       saveDevelopEliteDashboardConfig(next)
       return next
@@ -771,7 +725,15 @@ export function useDevelopEliteDashboardData() {
     structureFieldKeyByFarmName,
   ])
 
+  tableRowsRef.current = tableRows
+
+  const displayTableRows = useMemo(() => {
+    if (!chartCropTypeFilter) return tableRows
+    return tableRows.filter(row => row.Crop_Type === chartCropTypeFilter)
+  }, [chartCropTypeFilter, tableRows])
+
   const selectCountry = useCallback((code: string) => {
+    setChartCropTypeFilter(null)
     setMapHighlightFieldKey(null)
     setFilters(f => ({
       ...f,
@@ -779,6 +741,7 @@ export function useDevelopEliteDashboardData() {
       zoneId: 'all',
       selectedFieldKey: null,
     }))
+    setMapCountryFlyRequest(n => n + 1)
   }, [])
 
   const selectZone = useCallback((zoneId: string) => {
@@ -787,28 +750,62 @@ export function useDevelopEliteDashboardData() {
   }, [])
 
   const selectFarm = useCallback((fieldKey: string | null) => {
+    setChartCropTypeFilter(null)
     setMapHighlightFieldKey(fieldKey)
     setFilters(f => ({ ...f, selectedFieldKey: fieldKey }))
+    if (fieldKey) setMapFlyToRequest(n => n + 1)
   }, [])
 
-  const focusTableRow = useCallback((rowId: string) => {
-    setTableHighlightRowId(rowId)
+  const focusFarmOnMap = useCallback((fieldKey: string) => {
+    setChartCropTypeFilter(null)
+    setMapHighlightFieldKey(fieldKey)
+    setFilters(f => ({ ...f, selectedFieldKey: fieldKey }))
+    setMapFlyToRequest(n => n + 1)
+    setFarmListFlashFieldKey(null)
+    requestAnimationFrame(() => setFarmListFlashFieldKey(fieldKey))
+    window.setTimeout(() => {
+      setFarmListFlashFieldKey(current => (current === fieldKey ? null : current))
+    }, 1600)
   }, [])
+
+  const focusTableRow = useCallback(
+    (rowId: string) => {
+      setTableHighlightRowId(rowId)
+      const row = tableRowsRef.current.find(r => r._rowId === rowId)
+      if (row?._fieldKey) focusFarmOnMap(row._fieldKey)
+    },
+    [focusFarmOnMap],
+  )
+
+  const selectChartCropType = useCallback((cropLabel: string) => {
+    const next = chartCropTypeFilter === cropLabel ? null : cropLabel
+    setChartCropTypeFilter(next)
+    setMapHighlightFieldKey(null)
+    setFilters(f => ({ ...f, selectedFieldKey: null }))
+    if (!next) return
+    const row = tableRowsRef.current.find(r => r.Crop_Type === next)
+    if (row) {
+      setTableHighlightRowId(row._rowId)
+      setTableFlashRowId(row._rowId)
+      window.setTimeout(() => {
+        setTableFlashRowId(current => (current === row._rowId ? null : current))
+      }, 1600)
+    }
+  }, [chartCropTypeFilter])
 
   const activateTableRowOnMap = useCallback(
     (rowId: string) => {
-      const row = tableRows.find(r => r._rowId === rowId)
+      const row = tableRowsRef.current.find(r => r._rowId === rowId)
       const fieldKey = row?._fieldKey
       if (!fieldKey) return
       setTableHighlightRowId(rowId)
       setTableFlashRowId(rowId)
-      setMapHighlightFieldKey(fieldKey)
-      setMapFlyToRequest(n => n + 1)
+      focusFarmOnMap(fieldKey)
       window.setTimeout(() => {
         setTableFlashRowId(current => (current === rowId ? null : current))
       }, 1600)
     },
-    [tableRows],
+    [focusFarmOnMap],
   )
 
   const mapFieldHighlightKey = mapHighlightFieldKey ?? filters.selectedFieldKey
@@ -849,23 +846,30 @@ export function useDevelopEliteDashboardData() {
     irrigationMainPipeDrawingInfo,
     mapLayerVisibility,
     mapDataLayerOrder,
+    mapDataLayerOpacity,
     setMapLayerVisible,
     setMapDataLayerOrder,
+    setMapDataLayerOpacity,
     mapWorldCountriesGeoJson,
     mapWorldCountriesPortfolioExtentGeoJson,
     worldCountriesDrawingInfo,
     structuresDrawingInfo,
-    tableRows,
+    tableRows: displayTableRows,
+    chartCropTypeFilter,
+    selectChartCropType,
     tableHighlightRowId,
     tableFlashRowId,
     mapFieldHighlightKey,
     focusTableRow,
     activateTableRowOnMap,
     mapFlyToRequest,
+    mapCountryFlyRequest,
     activeCountryLabel,
     selectCountry,
     selectZone,
     selectFarm,
+    focusFarmOnMap,
+    farmListFlashFieldKey,
     setLocationSearch,
     scopedFeatures,
     countryLabels,

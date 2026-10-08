@@ -30,7 +30,7 @@ import {
 } from './developEliteMapGeoJsonGeometry'
 
 /** Slightly larger map markers for AgroLocation (picture / simple points). */
-const DEVELOP_ELITE_AGRI_LOCATION_POINT_SCALE = 1.22
+const DEVELOP_ELITE_AGRI_LOCATION_POINT_SCALE = 1.42
 /** Irrigation valve picture markers are small in ArcGIS (10–15px); boost for satellite basemap. */
 const DEVELOP_ELITE_IRRIGATION_VALVES_POINT_SCALE = 1.45
 

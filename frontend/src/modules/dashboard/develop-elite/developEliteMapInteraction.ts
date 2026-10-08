@@ -29,8 +29,8 @@ export const DEVELOP_ELITE_BASEMAP_MAX_ZOOM = 20
 export const DEVELOP_ELITE_BASEMAP_TILE_PROPS = {
   /** Load while panning so the viewport never drains to an empty (black) tile pane. */
   updateWhenIdle: false,
-  /** Scale existing tiles during wheel zoom; fetch new level after zoomend. */
-  updateWhenZooming: false,
+  /** Keep pyramid tiles visible while zooming (avoids empty #0a1a10 viewport). */
+  updateWhenZooming: true,
   keepBuffer: 4,
   className: 'develop-elite-basemap-tile',
   detectRetina: false,

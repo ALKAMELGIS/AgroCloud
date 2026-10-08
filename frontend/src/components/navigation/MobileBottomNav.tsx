@@ -8,7 +8,7 @@ import { agroTokens } from '@/theme/tokens'
 
 const tabs = [
   { value: '/', label: 'Home', icon: <HomeIcon />, match: (p: string) => p === '/' },
-  { value: '/satellite/gis', label: 'Map', icon: <MapIcon />, match: (p: string) => p.includes('/gis') || p.includes('/satellite') },
+  { value: '/satellite/indices', label: 'Map', icon: <MapIcon />, match: (p: string) => p.includes('/satellite') },
   { value: '/data/ec-ph', label: 'Data', icon: <StorageIcon />, match: (p: string) => p.startsWith('/data') },
   { value: '/admin/users', label: 'More', icon: <MoreHorizIcon />, match: (p: string) => p.startsWith('/admin') || p.startsWith('/account') },
 ]

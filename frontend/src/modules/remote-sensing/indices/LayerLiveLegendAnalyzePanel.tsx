@@ -160,7 +160,7 @@ export function LayerLiveLegendAnalyzePanel({
             </div>
           ) : (
             <p className="si-lll-analyze-panel__location">
-              <i className="fa-solid fa-location-dot" aria-hidden />
+              {!compact ? <i className="fa-solid fa-location-dot" aria-hidden /> : null}
               <span className="si-lll-analyze-panel__location-text">{locationLabel}</span>
             </p>
           )}

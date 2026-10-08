@@ -62,6 +62,18 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
         return true
       }
     }
+    // MapLibre tile worker race: non-http schemes without addProtocol can invoke fetch without AbortController.
+    if (message.includes("reading 'signal'")) {
+      const stackText = stack || ''
+      if (
+        stackText.includes('maplibre') ||
+        stackText.includes('makeXMLHttpRequest') ||
+        stackText.includes('makeFetchRequest') ||
+        stackText.includes('makeRequest')
+      ) {
+        return true
+      }
+    }
     return false
   }
 

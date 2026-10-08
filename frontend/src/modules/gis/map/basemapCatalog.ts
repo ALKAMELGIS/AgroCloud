@@ -21,6 +21,9 @@ const ATTR_GOOGLE = '© Google'
 const ATTR_OSM = '© OpenStreetMap contributors'
 const ATTR_CARTO = '© OpenStreetMap © CARTO'
 
+/** Google VT hybrid (satellite imagery + roads/labels, lyrs=y). */
+export const GOOGLE_SATELLITE_HYBRID_BASEMAP_ID = 'google-satellite-hybrid'
+
 export type LeafletTileSpec = {
   url: string
   attribution: string
@@ -42,38 +45,56 @@ export type BasemapCatalogEntry = {
   terrain3d?: boolean
 }
 
-/** Google satellite raster (lyrs=s). Requires API key for reliable embedding in Mapbox GL. */
-function googleSatelliteTileUrls(apiKey = ''): string[] {
+/** Google VT raster (`lyrs`: s=satellite, y=hybrid satellite+labels). */
+function googleVtTileUrls(lyrs: string, apiKey = ''): string[] {
   const keySuffix = apiKey ? `&key=${encodeURIComponent(apiKey)}` : ''
   const base = (host: string) =>
-    `https://${host}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}${keySuffix}`
+    `https://${host}.google.com/vt/lyrs=${lyrs}&x={x}&y={y}&z={z}${keySuffix}`
   return [base('mt0'), base('mt1'), base('mt2'), base('mt3')]
 }
 
-function googleSatelliteLeafletUrl(apiKey = ''): string {
+function googleVtLeafletUrl(lyrs: string, apiKey = ''): string {
   const keySuffix = apiKey ? `&key=${encodeURIComponent(apiKey)}` : ''
-  return `https://mt{s}.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}${keySuffix}`
+  return `https://mt{s}.google.com/vt/lyrs=${lyrs}&hl=en&x={x}&y={y}&z={z}${keySuffix}`
 }
 
-function googleSatelliteRasterStyle(apiKey = ''): Record<string, unknown> {
+function googleVtRasterStyle(sourceId: string, layerId: string, name: string, lyrs: string, apiKey = ''): Record<string, unknown> {
   return {
     version: 8 as const,
-    name: 'Google Earth Satellite',
+    name,
     sources: {
-      'google-earth-sat': {
+      [sourceId]: {
         type: 'raster',
-        tiles: googleSatelliteTileUrls(apiKey),
+        tiles: googleVtTileUrls(lyrs, apiKey),
         tileSize: 256,
-        maxzoom: rasterTileMaxNativeZoom('https://mt0.google.com/vt/lyrs=s'),
+        maxzoom: rasterTileMaxNativeZoom(`https://mt0.google.com/vt/lyrs=${lyrs}`),
         attribution: ATTR_GOOGLE,
       },
     },
-    layers: [{ id: 'google-earth-sat-layer', type: 'raster', source: 'google-earth-sat' }],
+    layers: [{ id: layerId, type: 'raster', source: sourceId }],
   }
 }
 
+function googleSatelliteRasterStyle(apiKey = ''): Record<string, unknown> {
+  return googleVtRasterStyle('google-earth-sat', 'google-earth-sat-layer', 'Google Earth Satellite', 's', apiKey)
+}
+
 function googleSatelliteLeafletLayers(apiKey = ''): LeafletTileSpec[] {
-  return [{ url: googleSatelliteLeafletUrl(apiKey), attribution: ATTR_GOOGLE }]
+  return [{ url: googleVtLeafletUrl('s', apiKey), attribution: ATTR_GOOGLE }]
+}
+
+function googleSatelliteHybridRasterStyle(apiKey = ''): Record<string, unknown> {
+  return googleVtRasterStyle(
+    'google-sat-hybrid',
+    'google-sat-hybrid-layer',
+    'Google Maps Satellite Hybrid',
+    'y',
+    apiKey,
+  )
+}
+
+function googleSatelliteHybridLeafletLayers(apiKey = ''): LeafletTileSpec[] {
+  return [{ url: googleVtLeafletUrl('y', apiKey), attribution: ATTR_GOOGLE }]
 }
 
 function esriTile(servicePath: string): string {
@@ -151,6 +172,12 @@ export function buildBasemapCatalog(_legacyMapboxToken = '', _options?: BuildBas
       label: 'Google Earth Satellite',
       mapboxStyle: googleSatelliteRasterStyle(googleKey),
       leafletLayers: googleSatelliteLeafletLayers(googleKey),
+    },
+    {
+      id: GOOGLE_SATELLITE_HYBRID_BASEMAP_ID,
+      label: 'Google Maps — Satellite Hybrid',
+      mapboxStyle: googleSatelliteHybridRasterStyle(googleKey),
+      leafletLayers: googleSatelliteHybridLeafletLayers(googleKey),
     },
     {
       id: 'satellite',
@@ -251,11 +278,16 @@ export function buildBasemapCatalog(_legacyMapboxToken = '', _options?: BuildBas
       label: 'Light Gray Canvas',
       mapboxStyle: rasterStyleFromTiles([
         { url: esriTile(ESRI_CANVAS_LIGHT_BASE), attribution: ATTR_ESRI },
-        { url: esriTile(ESRI_CANVAS_LIGHT_REF), attribution: ATTR_ESRI, opacity: 1 },
+        {
+          url: esriTile(ESRI_CANVAS_LIGHT_REF),
+          attribution: ATTR_ESRI,
+          opacity: 1,
+          maxNativeZoom: 13,
+        },
       ]),
       leafletLayers: [
         { url: esriTile(ESRI_CANVAS_LIGHT_BASE), attribution: ATTR_ESRI },
-        { url: esriTile(ESRI_CANVAS_LIGHT_REF), attribution: ATTR_ESRI },
+        { url: esriTile(ESRI_CANVAS_LIGHT_REF), attribution: ATTR_ESRI, maxNativeZoom: 13 },
       ],
     },
     {
@@ -263,11 +295,16 @@ export function buildBasemapCatalog(_legacyMapboxToken = '', _options?: BuildBas
       label: 'Dark Gray Canvas',
       mapboxStyle: rasterStyleFromTiles([
         { url: esriTile(ESRI_CANVAS_DARK_BASE), attribution: ATTR_ESRI },
-        { url: esriTile(ESRI_CANVAS_DARK_REF), attribution: ATTR_ESRI, opacity: 1 },
+        {
+          url: esriTile(ESRI_CANVAS_DARK_REF),
+          attribution: ATTR_ESRI,
+          opacity: 1,
+          maxNativeZoom: 13,
+        },
       ]),
       leafletLayers: [
         { url: esriTile(ESRI_CANVAS_DARK_BASE), attribution: ATTR_ESRI },
-        { url: esriTile(ESRI_CANVAS_DARK_REF), attribution: ATTR_ESRI },
+        { url: esriTile(ESRI_CANVAS_DARK_REF), attribution: ATTR_ESRI, maxNativeZoom: 13 },
       ],
     },
     {
@@ -357,6 +394,9 @@ export function getBasemapThumbnail(entry: BasemapCatalogEntry, _mapboxToken = '
   if (entry.id === 'google-earth-satellite') {
     return 'https://mt1.google.com/vt/lyrs=s&x=2&y=1&z=2'
   }
+  if (entry.id === GOOGLE_SATELLITE_HYBRID_BASEMAP_ID) {
+    return 'https://mt1.google.com/vt/lyrs=y&x=2&y=1&z=2'
+  }
   if (entry.id === TOPOGRAPHIC_3D_BASEMAP_ID) {
     return esriTile('World_Shaded_Relief').replace('{z}', '2').replace('{y}', '1').replace('{x}', '2')
   }
@@ -397,8 +437,10 @@ export function resolveBasemapId(id: string): string {
   const legacy: Record<string, string> = {
     'mapbox-alkamelgis': 'google-earth-satellite',
     'mapbox-standard-satellite': 'google-earth-satellite',
-    'mapbox-hybrid': 'esri-imagery-hybrid',
-    hybrid: 'esri-imagery-hybrid',
+    'mapbox-hybrid': GOOGLE_SATELLITE_HYBRID_BASEMAP_ID,
+    hybrid: GOOGLE_SATELLITE_HYBRID_BASEMAP_ID,
+    'google-hybrid': GOOGLE_SATELLITE_HYBRID_BASEMAP_ID,
+    'google-satellite-hybrid': GOOGLE_SATELLITE_HYBRID_BASEMAP_ID,
     street: 'esri-streets',
     terrain: 'esri-topo',
     '3d-topo': TOPOGRAPHIC_3D_BASEMAP_ID,
@@ -455,6 +497,7 @@ export function isSatelliteImageryBasemapId(id: string): boolean {
   return (
     resolved === RASTER_BASEMAP_FALLBACK_ID ||
     resolved === GOOGLE_EARTH_BASEMAP_ID ||
+    resolved === GOOGLE_SATELLITE_HYBRID_BASEMAP_ID ||
     resolved === 'esri' ||
     resolved === 'satellite-3d' ||
     /satellite|imagery/i.test(resolved)

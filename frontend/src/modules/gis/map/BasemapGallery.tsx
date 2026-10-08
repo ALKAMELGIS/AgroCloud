@@ -5,11 +5,15 @@ import {
   catalogEntryById,
   DEFAULT_BASEMAP_ID,
   ESRI_BASEMAP_IDS,
+  GOOGLE_SATELLITE_HYBRID_BASEMAP_ID,
   getBasemapThumbnail,
   resolveBasemapId,
 } from './basemapCatalog'
 import { rasterTileMaxNativeZoom } from '../layers/raster/rasterTileZoom'
-import { TOPOGRAPHIC_3D_BASEMAP_ID } from '@/modules/remote-sensing/terrain/agroCloudMapTerrain'
+import {
+  SATELLITE_3D_BASEMAP_ID,
+  TOPOGRAPHIC_3D_BASEMAP_ID,
+} from '@/modules/remote-sensing/terrain/agroCloudMapTerrain'
 import {
   DEVELOP_ELITE_BASEMAP_MAX_ZOOM,
   DEVELOP_ELITE_BASEMAP_TILE_PROPS,
@@ -64,7 +68,7 @@ export const BasemapGallery: React.FC<BasemapGalleryProps> = ({ selectedBasemap,
                     alt={entry.label}
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
-                  {entry.id === 'esri-imagery-hybrid' && (
+                  {(entry.id === 'esri-imagery-hybrid' || entry.id === GOOGLE_SATELLITE_HYBRID_BASEMAP_ID) && (
                     <div
                       style={{
                         position: 'absolute',
@@ -199,8 +203,17 @@ export const BasemapLayer: React.FC<{
   )
 }
 
+/** Gray canvas basemaps over-fetch placeholder tiles in the DE grid map — keep in GIS catalog only. */
+const DEVELOP_ELITE_BASEMAP_EXCLUDE = new Set(['esri-light-gray', 'esri-dark-gray'])
+
 /** Develop Elite / GIS map picker order (Google + ArcGIS Online list). */
 export function listDevelopEliteBasemapEntries(catalog = buildBasemapCatalog('')) {
-  const ids = ['google-earth-satellite', ...ESRI_BASEMAP_IDS]
+  const ids = [
+    'google-earth-satellite',
+    GOOGLE_SATELLITE_HYBRID_BASEMAP_ID,
+    SATELLITE_3D_BASEMAP_ID,
+    TOPOGRAPHIC_3D_BASEMAP_ID,
+    ...ESRI_BASEMAP_IDS,
+  ].filter(id => !DEVELOP_ELITE_BASEMAP_EXCLUDE.has(id))
   return ids.map(id => catalogEntryById(catalog, id)).filter((e): e is NonNullable<typeof e> => !!e)
 }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   AGRO_CLOUD_ESRI_HILLSHADE_LAYER_ID,
   AGRO_CLOUD_HILLSHADE_LAYER_ID,
@@ -11,6 +11,7 @@ import {
   getAgroCloudTerrainExaggeration,
   is3dTopographicBasemapId,
   setAgroCloudTerrainExaggeration,
+  syncAgroCloudTerrain3d,
   TERRAIN_EXAGGERATION_DEFAULT,
   shouldEnableAgroCloudTerrain3d,
   TOPOGRAPHIC_3D_BASEMAP_ID,
@@ -85,6 +86,23 @@ describe('agroCloudMapTerrain', () => {
     })
     // The computed-hillshade layer (sourced from the DEM) is not present yet.
     expect(style.layers.some((l) => l.id === AGRO_CLOUD_HILLSHADE_LAYER_ID)).toBe(false)
+  })
+
+  it('does not enable terrain from pitch alone when explicit toolbar gate is on', () => {
+    const setTerrain = vi.fn()
+    const map = {
+      isStyleLoaded: () => true,
+      getPitch: () => 52,
+      getZoom: () => 2,
+      setTerrain,
+      getSource: () => null,
+      getStyle: () => ({ layers: [] }),
+    }
+    syncAgroCloudTerrain3d(map as never, 'google-satellite-hybrid', 52, {
+      terrainLayerEnabled: false,
+      terrainExplicitToolbarGate: true,
+    })
+    expect(setTerrain).toHaveBeenCalledWith(null)
   })
 
   it('clamps and shares the user-adjustable terrain exaggeration', () => {

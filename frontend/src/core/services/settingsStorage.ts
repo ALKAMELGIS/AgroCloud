@@ -263,7 +263,7 @@ export function mergeWithDefaults(partial: Partial<SystemSettingsPersistedV1>): 
         hdrRaw?.logoAlign === 'start' || hdrRaw?.logoAlign === 'center' || hdrRaw?.logoAlign === 'space-between'
           ? hdrRaw.logoAlign
           : DEFAULT_SYSTEM_SETTINGS.headerSettings.logoAlign,
-      mobileShowLogoText: hdrRaw?.mobileShowLogoText === true,
+      mobileShowLogoText: hdrRaw?.mobileShowLogoText !== false,
       tabletShowLogoText: hdrRaw?.tabletShowLogoText !== false,
       sticky: hdrRaw?.sticky !== false,
       transparent: hdrRaw?.transparent === true,
