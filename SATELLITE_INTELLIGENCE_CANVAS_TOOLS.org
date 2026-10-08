@@ -1,0 +1,505 @@
+#+TITLE: Satellite Intelligence Canvas — Tools & Utilities Inventory (bottom → top)
+#+AUTHOR: AgroCloud / Satellite Intelligence
+#+DATE: 2026-09-01
+#+OPTIONS: toc:3 num:t ^:nil
+#+STARTUP: overview
+
+* Scope and method
+
+This report inventories every tool, layer class and utility that participates in the
+*Satellite Intelligence* map canvas (route =/satellite=, page component
+=frontend/src/pages/satellite/SatelliteIntelligence.tsx=, ~29k lines) and the panels
+mounted around it.  It was produced by static reading of the source tree only — no
+environment was created, no dependencies installed, nothing executed.
+
+The canvas is a single *Mapbox GL JS* map (=react-map-gl/mapbox= =<MapGL>=, globe
+projection).  Part I walks the render stack from the bottom-most pixel (terrain mesh and
+basemap rasters) to the top-most DOM overlay (toolbox chrome, swipe handle, remote-sensing
+panels).  Part II catalogues each tool family in detail.  Part III lists libraries,
+backend services and a file index.
+
+Conventions:
+- =monospace= → Mapbox source/layer id, TypeScript symbol or file path.
+- Paths are relative to =frontend/src/= unless they begin with =backend/= or =services/=.
+- "SI" = Satellite Intelligence.
+
+* PART I — Canvas stack, bottom to top
+
+The stack below is the *effective* draw order.  Some tiers are declared as React
+=<Source>/<Layer>= children of =<MapGL>=; others are added imperatively
+(=map.addSource/addLayer=) and then re-ordered by two z-order utilities:
+
+- =lib/siCustomLayerZOrder.ts= — =siParkBasemapRastersBelowOverlays()= slides every
+  basemap raster immediately under the first non-basemap layer;
+  =siRaiseCustomLayersAboveBasemap()= raises imported GIS overlays
+  (=-fill/-line/-circle/-marker/-arcgis-icon/-cluster/-cluster-count/-raster/-arcgis-raster/-label=,
+  =-vt-*=, =-arcgis-*=) above them and keeps sketch chrome on top.
+- =lib/siMapAnalysisLayerOrder.ts= — =syncSiMapAnalysisLayerOrder()= enforces
+  *basemap → AOI fill → analysis raster → vector outlines → draft sketch → MCDA*.
+- Both are invoked from =raiseOverlaysThenAnalysisOrder()= (SI page, ~L19524) on
+  =onStyleData=, after custom-layer paint, and when the Layers-AOI raster stack is
+  (re)mounted.
+
+** Tier 0 — Rendering engine, projection, sky
+| Item | Implementation | Notes |
+|------+----------------+-------|
+| Map engine | =mapbox-gl= 3.18 via =react-map-gl= 8 (=MapGL=, =Source=, =Layer=, =Marker=) | =reuseMaps=, =antialias=false=, =attributionControl=false=, =dragRotate=false= |
+| Projection | =projection={{ name: 'globe' }}= | =minZoom=0.35= |
+| Globe cockpit | =pages/satellite/siGlobeCockpit.ts= | =SI_GLOBE_COCKPIT_2D_VIEW=, fog preset =SI_GLOBE_COCKPIT_FOG=, auto-spin (=bindSiGlobeCockpitSpin=, 300 s), max zoom 2.75 / pitch 12 while in cockpit |
+| Sky backdrop | =siGlobeSkyGl.ts=, =siGlobeSkySurvey.ts=, =siGlobeSkyCatalog.ts= | STScI DSS + SDSS HiPS survey imagery, bright-star / constellation line overlay |
+| WebGL / globe resilience | =lib/siMapboxGlobeCompat.ts= | Edge detection, WebGL-context-loss recovery with back-off, error classification |
+| Navigation props | =lib/agroCloudMapNavigation.ts= (=AGRO_CLOUD_MAPBOX_NAVIGATION_PROPS=, =ensureAgroCloudMapScrollZoom=, orbit drag) | Wheel zoom, right-drag orbit; no compass/zoom widgets |
+| Camera helpers | =lib/googleEarthFlyTo.ts= (=flyToLikeGoogleEarth=, =zoomFromLngLatBbox=), =syncAgroCloudMapboxCamera= | Space-lift fly-to |
+| Interaction perf | =lib/siMapInteractionPerf.ts=, =lib/siMapViewport.ts=, =lib/siViewportFeatureCache.ts= | Live viewport extent capture / throttled commits, dense-layer interaction mode |
+| Branding | =applyAgroCloudMapboxBranding= | Replaces Mapbox logo/attribution chrome |
+
+** Tier 1 — Terrain mesh and hillshade (3D basemaps only)
+| Item | Implementation | Notes |
+|------+----------------+-------|
+| DEM source | =lib/agroCloudMapTerrain.ts= → =raster-dem= source =esri-terrain= from =/api/terrain/esri-rgb/{z}/{x}/{y}= (Esri WorldElevation3D → Terrain-RGB proxy) | Added at runtime by =syncAgroCloudTerrain3d()= only after =ensureTerrainApiAvailable()=; =warmAgroCloudTerrainDemSource()= on load |
+| Terrain | =map.setTerrain({ source, exaggeration })= | Exaggeration slider (=setAgroCloudTerrainExaggeration=), enabled when pitch > =AGRO_CLOUD_TERRAIN_PITCH_THRESHOLD= (8°) and basemap is a =terrain3d= entry |
+| Hillshade | =agrocloud-hillshade= (computed) and =agrocloud-esri-hillshade= (Esri World_Hillshade raster overlay) | Part of *3D Topographic* style; treated as basemap id by z-order code |
+| 2D/3D toggle | SI chrome button "Switch to 3D/2D view" | Pitches camera; drives terrain sync in =onMoveEnd= |
+
+** Tier 2 — Basemap rasters
+Catalog: =pages/satellite/basemapCatalog.ts= (=buildBasemapCatalog=, shared with the
+Leaflet GIS Map).  All entries are *raster tile* styles built by =rasterStyleFromTiles()=
+(no Mapbox-hosted vector styles).  Layer ids are =layer-0=, =layer-1=, … inside the
+style; recognised as basemap by =isSiBasemapStyleLayerId()= (also =topo-base-layer=,
+=sat3d-base-layer=, =google-earth-sat-layer=, =agrocloud-basemap-layer-*=, =topo-fallback-layer-*=).
+
+| id | Label | Tiles |
+|----+-------+-------|
+| =google-earth-satellite= | Google Earth Satellite | =mt{0-3}.google.com/vt/lyrs=s= (needs Google Maps API key; 403 → fallback) |
+| =satellite= (default) | Satellite (Esri) | Esri World_Imagery |
+| =terrain-opentopo= | Terrain (OpenTopo) | OpenTopoMap |
+| =3d-satellite= | Satellite 3D (Esri Imagery + Terrain) | World_Imagery + DEM mesh (=terrain3d=) |
+| =3d-topographic= | 3D Topographic | World_Topo_Map + Esri World_Hillshade + DEM mesh (=terrain3d=) |
+| =osm= | OpenStreetMap | tile.openstreetmap.org |
+| =esri= | Esri World Imagery | World_Imagery |
+| =esri-imagery-hybrid= | Imagery Hybrid | World_Imagery + Reference/World_Boundaries_and_Places |
+| =esri-streets= | Streets | World_Street_Map |
+| =esri-topo= | Topographic / Outdoor | World_Topo_Map |
+| =esri-navigation-night= | Streets (Night) | Carto dark_all |
+| =esri-terrain-labels= | Terrain with labels (Esri) | World_Terrain_Base + Reference/World_Reference_Overlay |
+| =esri-light-gray= | Light Gray Canvas | Canvas/World_Light_Gray_Base + _Reference |
+| =esri-dark-gray= | Dark Gray Canvas | Canvas/World_Dark_Gray_Base + _Reference |
+| =esri-oceans= | Oceans | Ocean/World_Ocean_Base + _Reference |
+| =esri-natgeo= | National Geographic | NatGeo_World_Map |
+| =esri-shaded-relief= | Shaded Relief | World_Shaded_Relief |
+| =esri-physical= | World Physical | World_Physical_Map |
+| =carto-positron= | Light (Carto) | Carto light_all |
+| =carto-dark-matter= | Dark (Carto) | Carto dark_all |
+
+Utilities: =resolveBasemapId()= (legacy id aliasing), =pickDefaultBasemapId()=,
+=basemapTileErrorShouldFallback()= (auto-fallback on 401/403, wired in =MapGL onError=
+→ =tryFallbackBasemapFromTileError=), =isSatelliteImageryBasemapId()=,
+=getBasemapThumbnail()=, =ESRI_BASEMAP_IDS= picker order, =lib/rasterTileZoom.ts=
+(=ensureRasterStyleMaxNativeZoom=, provider max-native-zoom table).  Picker UI is the
+inline *Basemap* gallery in the SI left chrome (=BasemapGallery.tsx= is the Leaflet
+counterpart).
+
+** Tier 3 — AOI polygon fills parked *under* analysis rasters
+=DRAWN_AOI_FILL_UNDER_RASTER_IDS= + =extraFillIdsUnderRaster=:
+| Layer id | Source | Purpose |
+|----------+--------+---------|
+| =drawn-index-geometry-fill= | =drawn-index-geometry-source= (drawn AOI) | Light tint under imagery; opacity 0 while a new shape is being drafted |
+| =si-crop-class-aoi-fill= | =si-crop-class-aoi-source= | Crop-classification AOI tint |
+| =agro-structures-fs21-fill= | Agro_Structures primary AOI layer (=lib/agroStructuresPrimaryAoi.ts=) | Fill opacity forced to 0 while any Sentinel WMS is on (=suppressAgroFillWhenWms=) |
+| Mask-builder source layer fill | =SiImportedCustomLayersOverlay suppressFillOpacityLayerIds= | Outline kept, fill hidden so live WMS owns the fill |
+
+** Tier 4 — Analysis / imagery rasters
+Analysis rasters are placed just below the top-most =*-line= vector outline
+(=resolveSiAnalysisRasterBeforeLayerId=).
+
+*** 4a. Sentinel Hub / CDSE WMS "Layer Live" stacks
+| Stack | Ids | Mount style | Notes |
+|-------+-----+-------------+-------|
+| Drawn-AOI stack | =sentinel-draw-<chunk>= source / layer (=siSentinelAoiWmsSourceId/LayerId=) | Declarative =<Source type="raster">= per display chunk, =bounds= = chunk bbox | Built by =lib/siSentinelAoiWmsStack.ts buildSiSentinelAoiWmsStackState()=; tiles carry WMS =GEOMETRY= (EPSG:3857 WKT) + base64 =EVALSCRIPT= (=lib/sentinelHubWmsAoiClip.ts=) so pixels outside the AOI are transparent |
+| Layers-AOI stack | =sentinel-layer-aoi-…-s0/-s1= ping-pong pairs (=lib/siSentinelAoiWmsImperative.ts=) | Imperative =useLayoutEffect= (no React Source) | Two raster sources per chunk; previous frame stays visible until the next tile set loads, then opacity swaps (=lib/siSentinelAoiWmsFlickerFree.ts=) — zero blank frames on date/layer change |
+| In-place sync | =syncSiSentinelAoiWmsChunkTiles/Bounds= | =setTiles= / =setBounds= directly on =RasterTileSource= | react-map-gl does not apply standalone =bounds= updates |
+| Tile geometry | =SENTINEL_HUB_WMS_TILE_PIXELS=, =SENTINEL_HUB_S2_MAX_METERS_PER_PIXEL= | | |
+
+*** 4b. Other rasters on the canvas
+| Layer id | Source type | Producer |
+|----------+-------------+----------|
+| =si-swipe-before-lyr-<i>= | raster tiles | MapSwipe *Before* side (=SiMapSwipeRasterLayers=) — see swipe section |
+| =crop-ai-prediction-raster= (=SI_CROP_AI_PREDICTION_RASTER_LAYER_ID=) | image | Prithvi Crop AI prediction PNG; participates in AOI fill/outline stacking |
+| =si-stac-thumb-layer= | image | STAC scene thumbnail preview (=stacMapThumb=) |
+| =chirps-precip-raster= | image | CHIRPS daily rainfall raster (=useChirpsPrecipitation=) |
+| =collection-dem-index-raster= | image | Copernicus-DEM-collection derived index (slope/aspect/hillshade/TPI/TRI/TWI/watershed) from Terrarium tiles (=useCollectionDemOverlay=, =lib/collectionDemOverlay.ts=) |
+| =hydro-<step>-raster= | image | Hydro Watershed raster steps (DEM, hillshade, slope, flow direction, flow accumulation) |
+| =wellsite-heat-raster= | image | Well Site Recommendation suitability heat map |
+| =segformer-detection-mask-raster= | image | SegFormer georeferenced class mask |
+| =flood-extent-raster=, =flood-change-raster= | image | SAR flood monitoring |
+| =image-classification-raster=, =-segments=, =-result=, =-georef-preview= | image | Image Classification wizard |
+| =raster-georef-raster=, =raster-georef-preview= | image / raster tiles | Raster georeferencing tool preview & committed layer |
+| =<layerId>-arcgis-raster= | raster tiles | Imported ArcGIS MapServer / ImageServer tile layers (=buildArcGisMapServerRasterTiles= / =buildArcGisImageServerRasterTiles=) |
+| =<layerId>-raster= | image | Imported GeoTIFF / PNG+world-file / server-ingested raster (=renderMode: 'raster'=, =lib/raster/siRasterMapLayer.ts=, =siRasterTileService.ts ingestRasterFilesViaServer=) |
+| =ftw-global-*= seamless raster ids | image | FTW Global field-boundary "seamless raster" that replaces vector tiles when ready (=lib/agriFieldBoundary/ftwGlobalMapLayer.ts=) |
+
+** Tier 5 — Imported / user vector layers (TOC layers)
+Rendered declaratively by =components/SiImportedCustomLayersOverlay.tsx= so style
+diffs cannot wipe them; only ArcGIS vector-tile stacks are painted imperatively
+(=siPaintCustomLayersOnMapboxCanvas=).
+
+| Per-layer Mapbox layers | Notes |
+|-------------------------+-------|
+| =<sid>-fill= (fill, polygons) | Paint from =resolveImportedLayerPaint()=: ArcGIS Online drawingInfo (=lib/arcgisDrawingInfoMapbox.ts=), simple upload style, or Symbology-Studio pack (=buildSiCustomVectorStylePack=) |
+| =<sid>-line= (line, polygons + lines) | Zoom-scaled width |
+| =<sid>-circle= (circle, true point layers only — =shouldPaintImportedLayerCircles=) | |
+| =<sid>-label= (symbol) | Field label with =SiLayerLabelStyle= (font stack, halo, min/max zoom, definition filter) |
+| =<sid>-vt-*=, =<sid>-arcgis-*=, =<sid>-marker=, =<sid>-arcgis-icon=, =<sid>-cluster=, =<sid>-cluster-count= | Imperative ArcGIS vector tiles / point symbols / clusters |
+| =ftw-global-pmtiles-source/fill/line= | FTW Global PMTiles decoded client-side (=@mapbox/vector-tile= + =pbf= + =pmtiles=, no =addProtocol=), min zoom =FTW_GLOBAL_FIELD_MIN_ZOOM= |
+| =agro-structures-fs21-*= | Agro_Structures FeatureServer layer (Farm Plots / PIVOT codes 1006/1007 mask; outline codes 1000–1002), primary AOI provider |
+
+Layer sources (=lib/siCustomLayerFactory.ts SiCustomLayerBase.source=): ='upload' | 'api' | 'arcgis' | 'stac'=; =renderMode: 'vector' | 'raster'=; geometry kinds
+='point' | 'line' | 'polygon' | 'raster' | 'mixed' | 'unknown'=; factories
+=createSiVectorImportLayer=, =createSiRasterImportLayer=, =createSiBimImportLayer=.
+
+** Tier 6 — Tool-result vectors (analysis outputs)
+Declared inside =<MapGL>= in this order (bottom → top):
+| Source id | Layers | Tool |
+|-----------+--------+------|
+| =si-ic-sample-aoi-source= | =-fill=, =-line= | Image Classification sample AOI |
+| =tree-detections-source= | =tree-detections-overlay= (circle), =-label= (symbol, minzoom 15) | Tree Detections |
+| =sam-aoi-source= | =sam-aoi-fill/line= | SAM AOI |
+| =sam-train-samples-source= | =-fill/-line/-point= | SAM training samples |
+| =training-ai-samples-source= | =-fill/-line/-point= (selected state) | Training & AI samples |
+| =sam-train-draft-source= | =-fill/-line/-point= | SAM sample draft |
+| =sam-saved-source= | =-fill=, =-poly-line=, =-line=, =-point= | SAM saved objects |
+| =sam-mask-source= | =-fill=, =-poly-line=, =-line=, =-point= | SAM current mask |
+| =sam-points-source= | =-halo=, =-dot= (fg green / bg red) | SAM point prompts |
+| =agri-field-boundary-source= | =agri-field-boundary-fill=, =-outline= (=tolerance=0=, =buffer=64=) | Field delineation |
+| =hydro-<step>-source= | =-line= + =-label= (contours, colour by elevation), =-line= (streams, Strahler/Shreve ramp), =-fill= + =-line= (mesh/basins/watershed) | Hydro Watershed (persistent until removed in Layers) |
+| =si-aoi-fields-source= | =si-aoi-fields-fill/line= | AOI fields (=lib/siAoiFields.ts=) |
+| =si-regional-crop-calibrated= | =-fill=, =-line= | Regional crop training calibrated output |
+| =si-multi-aoi-source= | =si-multi-aoi-fill= (opacity 0), =-line= (active weight) | Multi-AOI outlines |
+| =segformer-detection-source= | =segformer-detection-fill=, =-outline= | SegFormer polygons |
+| (disabled) =si-multi-aoi-centroids= cluster, =si-aoi-heat-source= heatmap | | guarded by =false &&= |
+| =si-stac-footprints= | =-fill=, =-line= (dashed) | STAC search footprints |
+| =si-wapi-alert-polygons= → =si-wapi-alert-fill/line= | | ISS/WAPI irrigation alerts (=SiWapiAlertMapOverlay=) |
+| =flood-boundaries-vector= | | SAR flood polygons |
+| =wellsite-recommended-wells= | managed custom layer | Well points |
+| =well-suit-mcda-<ts>-*= | heat / streams / points | Well Suitability MCDA — always raised to top by =syncSiMapAnalysisLayerOrder= |
+| =training-ai-live-samples= | custom layer | Training results live layer |
+| =si-ts-weather-storm= | custom layer | Storm periods from imagery-weather analysis |
+| =ai-detection-netflora-results=, =image-classification-samples/-checkpoints=, =si-gcp-overlay= | | AI DL detection, IC wizard, georeference GCPs |
+
+** Tier 7 — AOI outlines & vertices kept *above* rasters
+=DRAWN_AOI_OUTLINE_ABOVE_RASTER_IDS= + =extraOutlineIdsAboveRaster=:
+| Layer id | Notes |
+|----------+-------|
+| =drawn-index-geometry-line= (source =drawn-index-geometry-outline-source=) | Dashed amber when the AOI comes from a Layers-source AOI |
+| =drawn-index-geometry-point= | Point AOI marker |
+| =si-crop-class-aoi-line= | |
+| =agro-structures-fs21-line=, =<maskSource>-line= | Agro / Layers-AOI outline (insert anchor for rasters) |
+| =si-edit-handles-circles= (source =si-edit-handles=) | Vertex edit handles for committed geometry |
+
+** Tier 8 — Selection, identify & attention highlights
+| Source | Layers | Producer |
+|--------+--------+----------|
+| =si-geo-ai-table-selection= | =si-geo-ai-sel-fill/line/point= | GIS selection workbench + GeoAI linked table selection (=lib/geoAiLinkedSelection.ts=, =siGeoAiMapSelectionPaint.ts=) |
+| =si-imagery-field-flash= | =-fill=, =-line= (blinking) | Time-series → map field flash (=siImageryFieldFlashPaint.ts=) |
+| =si-geo-ai-pin= | =si-geo-ai-pin-glow=, =-core= | GeoAI answer pin |
+
+** Tier 9 — Sketch & measurement chrome (always top of GL stack)
+=DRAW_DRAFT_TOP_IDS= / =DRAW_CHROME_ABOVE_OVERLAY_IDS=:
+| Source | Layers |
+|--------+--------|
+| =si-draw-draft= | =si-draw-draft-fill=, =-line= (dashed), =-close-hint= (green dashed), =-vertex= (polyVertex / circleCenter / circleCardinal roles), =-pt= |
+| =si-measure-source= | =si-measure-fill=, =-guide=, =-line-active=, =-line-done=, =-vertex= |
+
+** Tier 10 — HTML markers anchored to the map (=<Marker>= / =SiMapDockAwareMarker=)
+Measurement labels · Go-To-XY pin · search pin (pulsing, clickable when a GeoAI card is staged) · GeoAI pin "show details" button · crop-alert field markers + popup (=SiCropAlertMapMarkersLayer=, =SiCropAlertMapMarker=, =SiCropAlertHvdIcon=) · WAPI alert markers + popup · stress-zones popup · multi-AOI popups (source / mean / range) · feature identify popup (=SiFeatureInspectPopup=, overlap stepping) · weather pin.
+=SiMapDockAwareMarker= keeps popups clear of the right dock.
+
+** Tier 11 — DOM overlays above the canvas (bottom → top in JSX)
+1. =WeatherVizOverlay= — canvas particle weather sim (rain/snow/fog/storm).
+2. =SiCropAlertMapLegend=.
+3. =LayerLiveLegendFloatingPanel= — index legend + class areas + analyze.
+4. =SiImageryTimeSeriesFloatingPanel=.
+5. =SiCropAiFloatingPanel= → =SiPrithviCropToolPanel=.
+6. =SiMapSwipeControl= — MapSwipe *After* map (transparent clipped =<MapGL>=) + divider handle + compare panel.
+7. =GisFloatingWorkspacePanel= → =SiSymbologyStudioPanel= (symbology dialog).
+8. =SiGoToXyBar=.
+9. =WeatherIntelligencePanel=, =WeatherVisualizationPanel=.
+10. =SatelliteAoiStaticChartsMapOverlay= — on-map multi-layer AOI charts.
+11. =NeighborhoodAgentChat= / GeoAI floating widget.
+12. =SatelliteMapAnalysisChrome= — left floating controls, right *Map toolbox* dock (=SatelliteContextualAnalysisDock= → =MapToolsDock= portal into =map.getCanvasContainer()=), timeline bar.
+13. =GisSelectionWorkbench=, =SiMapDrawWidget=, =HydroLegendTool=, draw live HUD, =MeasurementPanel=.
+14. =SatelliteMapProcessingOptionsPortal= — processing panels (Remote sensing, alerts, AI tools, hydro, flood…).
+15. =GeoreferenceFloatbar= → =RasterGeoreferenceRibbon=.
+16. =SiLayerPopupConfigurator=, =SiLayerLabelingPanel=, =SiLayerLegendFloatingPanel=.
+17. =GisDataManager= modal, =SiAddArcGisLayerPanel=, =GisPortalBrowseLayersPanel=.
+
+* PART II — Tool families in detail
+
+** 1. Map chrome & dock controls
+*** Right-rail Map toolbox (=SatelliteContextualAnalysisDock.tsx=, =SatelliteMapAnalysisChrome.tsx=, =MapToolsDock.tsx=)
+Primary actions (top → bottom): *Add layer* (=add-gis-layer= → =MapToolboxAddGisLayerFlyout=) · *Edit* (toggles AOI drawing, opens =SiMapDrawWidget=) · *Select* (=GisSelectionWorkbench=) · *Measure* (=MeasurementPanel=) · *Go To XY* (=SiGoToXyBar=) · *Chat AI Agent* (=SatelliteGeoAiFloatingWidget=) · collapse strip · theme toggle · close panel.
+
+Rail groups (=RAIL_GROUPS_MAP=):
+| Group | id | Label | Opens |
+|-------+----+-------+-------|
+| 1 | =layers= | Layers | TOC (=MapToolboxLayerList=) |
+| 1 | =remote-sensing= | Remote sensing | =RemoteSensingToolboxPanel= |
+| 1 | =wapi-alerts= | ISS Alert | =SiWapiAlertPanel= |
+| 1 | =crop-classification= | Crop AI | isolated =SiCropAiFloatingPanel= |
+| 1 | =imagery-time-series= | Time Series | =SiImageryTimeSeriesFloatingPanel= |
+| 1 | =map-swipe= | MapSwipe | =SiMapSwipeControl= |
+| 1 | =layer-live-legend= | Legend | =LayerLiveLegendFloatingPanel= |
+| 1 | =hydro-watershed= | Hydro Watershed | =HydroWatershedPanel= |
+| 2 | =tree-detections= | Tree Detections | =TreeDetectionsPanel= |
+| 2 | =agri-field-boundary= | Field Boundaries | =AgriFieldBoundaryPanel= |
+| 2 | =well-site= | Well Site | =WellSiteRecommendationPanel= |
+| 2 | =well-suitability= | Well Suitability | =WellSuitabilityPanel= |
+| 2 | =flood-monitoring= | Flood (SAR) | =FloodMonitoringPanel= |
+| 2 | =raster-georeference= | Georeference | =GeoreferenceFloatbar= + =RasterGeoreferenceRibbon= |
+
+Other processing-portal section ids reachable by navigation / Smart Processing:
+=crop-alerts= (Agro Sentinel Alert Engine → =SiCropAlertCenterPanel=), =stress-zones=
+(=SiStressZonesPanel=), =training-ai= (=TrainingAITool=), =segformer-detection= (GeoAI
+Analysis Toolbox → =SegFormerDetectionPanel=), =source= (STAC catalog).  Retired ids:
+=eo-enrichment=, =ai-detection-gis=, =sam-detection=, =image-classification= (panels
+still exist and mount through other flows).  Catalog helpers:
+=SmartProcessingWorkflowPanel.tsx=, =SatelliteSmartProcessingPanel.tsx=.
+
+*** Left floating chrome (inline in SI page)
+Search (places · layers · features; =lib/mapSearchGeocode.ts=, =lib/siMapLayerSearch.ts=, =lib/geoExplorerGeocode.ts=) · Layer Live toggle · Basemap gallery · Weather Intelligence (Open-Meteo pin pick) · Weather visualization · 2D/3D + Terrain relief slider · Key/Legend (=HydroLegendTool=) · Swipe.
+
+*** Timeline chrome (=SatelliteMapAnalysisChrome.tsx=)
+Previous / Play-Pause / Next · date chips · scrub nudges · playback-speed cycle.
+
+*** Not present
+No dedicated zoom ±, home, compass, fullscreen or scale-bar widgets on the SI canvas
+(=MapControls.tsx=, =SearchWidget.tsx=, =BasemapGallery.tsx=, =ScaleSelector.tsx=,
+=DrawTools.tsx=, =ToolPanels.tsx= serve the Leaflet =GisMap.tsx=).
+
+** 2. Drawing tools (AOI sketch)
+Files: =components/SiMapDrawWidget.tsx=, =components/RemoteSensingDrawingToolbar.tsx=,
+=pages/satellite/drawingUtils.ts= (=DrawStyleConfig=, =VertexRef=, =CircleCardinal=,
+geometry helpers), =siDrawnAoiLiveIndex.ts= (clip signature / normalisation).
+
+| Tool id (=RemoteSensingDrawingTool=) | Behaviour |
+|---------------------------------------+-----------|
+| =point= | Single click point AOI |
+| =circle= | Centre + edge; cardinal handles; Enter commits refine; live HUD shows radius/area |
+| =rectangle= | Drag rectangle |
+| =polygon= | Click ring; Enter closes (≥3 pts); Backspace / Ctrl+Z drops vertex; close-hint segment |
+| Pan / Lock | Re-enable drag-pan or lock the map while sketching |
+| Clear | Clears sketch (analysis layers stay) |
+| × | Turn drawing off |
+
+Post-commit editing: vertex handles (=si-edit-handles=), geometry undo/redo, draw style
+(stroke/fill colour, width, opacity, point radius), AOI layer visibility/opacity in TOC,
+"Use as AOI" from vector layers, active AOI resolution (=lib/siAoiManager.ts
+resolveSiActiveAoi= → source ='draw' | 'layers'=).
+
+** 3. Measurement tools
+=components/MeasurementPanel.tsx= + =lib/measurement/measurementEngine.ts=.
+Modes: =distance=, =area=, =perimeter=, =rectangle=, =circle=, =radius=, =bearing=,
+=angle=, =coordinate=, =elevation= (3D), =distance3d= (3D), =height3d= (3D).
+Distance units: m, km, ft, mi.  Area units: m², ha, acre, km².
+Actions: undo, redo, finish (double-click), clear current, clear all, close; right-click
+= undo vertex.  Labels rendered as =<Marker>= chips; geometry on =si-measure-source=.
+
+** 4. Selection workbench
+=components/gisSelection/*= + =lib/gisSelection/{types,spatialQuery,mapSelectionQuery}.ts=,
+context =pages/satellite/gisSelection/GisSelectionContext.tsx=.
+| =GisSelectionTool= | =select= (click), =rectangle=, =polygon=, =lasso=, =circle=, =line=, =trace= |
+| =GisSelectionSetMode= | =new=, =add= (Shift), =remove= (Ctrl), =subset= "From current" (Ctrl+Shift) |
+Panels: toolbar, layer list/panel, results (counts, zoom, clear, export), attribute
+table (=GisSelectionAttributeTablePanel=), *Select by Attributes*, *Select by Location*
+(intersects, within, contains, overlaps, touches, within_distance km, completely_contains).
+Engine helpers: =selectFeaturesAtPoint=, =selectFeaturesByMask=, =lineSelectionMask=,
+=mergeSelectionHits=, =selectFeaturesAtMapPoint= (overlap stack), =computeStableGisFeatureKey=.
+
+** 5. Swipe tool (MapSwipe)
+Files: =components/SiMapSwipeControl.tsx=, =components/siMapSwipeTiles.ts=.
+- Compares two Sentinel *Layer Live* renderings over the active AOI (disabled without an AOI clip).
+- Modes (=SiMapSwipeMode=): =both= (independent layer + date per side), =dates= (same layer, two dates; Before defaults to −14 d via =defaultSwipeBeforeDate=), =layers= (same date, two layers).
+- *Before* side: tile URLs built by =buildSiMapSwipeTileUrls()= (WMS + AOI clip) and painted on the *main* map as =si-swipe-before-src-<i>/-lyr-<i>= (Tier 4b).
+- *After* side: a second, non-interactive =<MapGL>= with a fully transparent style (=SI_MAP_SWIPE_TRANSPARENT_STYLE=) hosting =si-swipe-after-*= rasters, camera-synced to the main map on every =move=, clipped with CSS =clip-path: inset(0 0 0 <split>%)= and a draggable divider (← / → nudge ±2 %).
+- While open, the Layers-AOI ping-pong stack is hidden (=layerVisible = … && !mapSwipeOpen=) and per-side colour-key legends come from =LayerLiveLegendPanel=; the Layer Live legend panel receives =mapSwipeCompare=.
+- Inputs: cloud coverage, layer catalogue (=remoteSensingLayerOptions=), scene date (auto-follow or manual).
+
+** 6. Layer list / TOC and layer utilities
+=components/MapToolboxLayerList.tsx= rows: visibility eye, drag re-order, opacity
+slider, zoom-to, attribute table, symbology, properties/metadata, duplicate, rename,
+AI analysis, generate report, show/hide labels, export raster (GeoTIFF), remove, copy name.
+SI ⋯ menu (=SiLayerOptionsMenuPortal= in SI page): Zoom to · Layer properties · Export
+(Shp / KML / GeoJSON / CSV) · Attributes · Symbology · Legend · Configure pop-ups ·
+Layer opacity · Bring forward / Send backward · Copy name · Use as AOI · Rename ·
+Refresh (ArcGIS) · Labeling… · Definition query… · Remove from map.
+Supporting libs: =lib/siLayerPopupConfig.ts=, =lib/siLayerPopupInspect.ts=,
+=lib/siMapFeatureIdentify.ts=, =lib/siLayerLabelStyle.ts=, =lib/layerLiveLegendCatalog.ts=,
+=lib/siLayerExport.ts=, =lib/vectorLayerExport.ts=, =lib/gisMapLayerStore.ts= (saved maps),
+=components/GisMapSaveOpenPanel.tsx=, =components/SiDynamicMapSnapshotsPanel.tsx=.
+
+** 7. Add-layer & data import
+*** Add-layer flyout (=MapToolboxAddGisLayerAction=)
+=browse= (Browse layers → =GisPortalBrowseLayersPanel= / =GisMapBrowseLayersPane=) ·
+=arcgis= (Add ArcGIS Layer → =SiAddArcGisLayerPanel=, =lib/arcgisServiceDiscover.ts=,
+=arcgisDynamicLayer.ts=, =arcgisFeatureLayerGeoJson.ts=, =arcgisImageServer.ts=,
+=arcgisPortalToken.ts=) · =url= (Add layer from URL, =parseRemoteUrlAsFile=) · =file=
+(Add layer from file) · =sketch= (Create sketch layer) · =media= (Add media layer).
+*** GIS Data Manager (=pages/satellite/gisDataManager/=)
+Categories (=GisDataManagerCategory=): =recent=, =favorites=, =giscontent=, =vector=,
+=raster=, =database=, =cloud=, =web=, =bim=, =lidar=, =realtime=, =ai=, =enterprise=.
+Wizard: source → preview → projection → symbology → validation → import → ready.
+*** Supported file formats (=utils/FileLoader.ts=)
+- Vector: =.geojson .json .topojson .zip= (shapefile) =.kml .kmz .gpx .csv .xlsx .xls= (+ =.shp .dbf .shx .prj .cpg= inside zip) — parsers =shpjs=, =@tmcw/togeojson=, =jszip=, =papaparse=, =xlsx=, TopoJSON converter.
+- Raster: =.tif .tiff .geotiff .jp2 .j2k .png .jpg .jpeg .webp .gif .bmp= + world files =.tfw .pgw .jgw .jpgw .wld=, =.prj=, =.aux.xml= — =geotiff=, =proj4=, =lib/aiDetection/siAiDlRasterPipeline.ts= (CRS detection, bounds reprojection), =lib/raster/siRasterMapLayer.ts= (8192 px texture cap, fit within bounds).
+- BIM: =.ifc= (=createSiBimImportLayer=).
+*** Portal / hosted layers
+=lib/gisContentPortalStore.ts=, =gisContentPortalPublish.ts=, =gisHostedFeatureLayerPortal.ts=,
+=gisContentPortalTableUtils.ts=, =pages/master/gisContentPortalData.ts=.
+
+** 8. Remote sensing tools
+*** 8.1 Remote Sensing toolbox panel (=components/RemoteSensingToolboxPanel.tsx=)
+Provider / collection / layer select (=RemoteSensingLayerSelect=, =SiRsPanelSelect=),
+AOI mode (draw vs Layers AOI → =SiAoiLayerModePanel=, =SiAoiMaskBuilderPanel=),
+"Show on map" toggle, imagery date + auto-follow, cloud-cover slider, time-series
+window, legend toggle, Generate/Stop timeline, Export GeoTIFF, CHIRPS controls,
+field-timeline CTA.
+*** 8.2 Providers (=lib/remoteSensingProviders.ts=, =remoteSensingProviderSession.ts=, =remoteSensingLayerProfiles.ts=)
+| id | Label | Backend | Status |
+|----+-------+---------+--------|
+| =sentinel-hub= | Sentinel Hub (S2 L2A/L1C, S1 GRD, S3, S5P, S6, CCM, Copernicus DEM, Mosaics, CLMS, Complementary) | =services.sentinel-hub.com/ogc/wms/{instance}= (=lib/sentinelHubWmsInstance.ts=, token =sentinelHubAccessToken.ts=) | integrated |
+| =esa-sentinel= | ESA Sentinel (CDSE) | =sh.dataspace.copernicus.eu/ogc/wms/{id}= with SH fallback | integrated |
+| =nasa-landsat= | NASA Landsat 8/9, HLS | Sentinel Hub | integrated |
+| =aster= | ASTER L1T | PC STAC calendar, formulas in =asterL1tIndices.ts= | partial |
+| =planet=, =airbus=, =maxar=, =blacksky=, =satellogic=, =space42=, =umbra=, =mbrsc=, =jaea=, =oneatlas= | Commercial VHR / SAR | Open S2 placeholder until credentials | not integrated |
+Layer profiles: =s2-optical=, =landsat-optical=, =s3-optical=, =vhr-optical=, =sar=, =aster-optical=, =collection-catalog=.
+Other imagery paths: Microsoft Planetary Computer STAC (=lib/siSentinelLatestScene.ts=, =mpcPlanetaryApi.ts= templates =ndvi_s2=, =false_color_s2=, =ndmi_s2=, =ndvi_landsat=, =false_color_landsat=), proxied STAC search (=SentinelSearch.tsx= → =/api/stac/search=; visualisations Natural Color, Color Infrared, SWIR, Agriculture, NDWI, NDMI, EVI, EVI2, SAVI, BSI, NBR, Atmospheric Penetration), Esri ImageServer (=EsriImageServerLayer.tsx=), UCSB CHIRPS (=/api/chirps/*=), SEN2SR super-resolution (=Sen2srProductControls.tsx=, =useSen2srControls.ts= → =/api/sentinel2/super-resolution=; modes RAW S2 10 m · SEN2SR 2.5 m · Basemap RGB · Drone upload).
+*** 8.3 Indices and products
+- Core S2 evalscripts (=lib/agroCompositeIndices.ts=, =sentinelHubWmsLayers.ts=, legends in =layerLiveLegendCatalog.ts=): NDVI, NDMI, NDII, NDWI, MNDWI, AWEI, NBR, SAVI, EVI, GNDVI, NDRE, NDSI, ET proxy, LST proxy, DATAMASK; presets =1_TRUE_COLOR=, =2_FALSE_COLOR=, =3_NDVI=; GetCapabilities merge for SWIR / SAR VV-VH.
+- Live analysis products: LULC (=lib/siLulcClassification.ts=), ADI (=adiIndex.ts=), NCADI (=ncadiIndex.ts=), CHAS_ALERT, STRESS_ZONES, CROP_CLASS.
+- Agro composites (+ Δ deltas): Vegetation Health (CVHI, VHS, VDI, CVI, CSI, WST) · Water & Moisture (DRI, VMI, SMI, OIR, WDSI, DSI) · Irrigation & Field (IEI, UII, FPR, CPI, ISS, WAPI — =wapiIndex.ts=) · Growth & Stability (GPI, CSI2, CRI, VDG) · Risk (ARI, CHS, CPS) · Phenology (PRI, CGI, CMI, HRI, VRI, CCI, EPD, EHD) · Soil & Salinity (NDSI, SI, SSI) · Gold exploration (IOI, CLAY_MI, FMI, NDAI, BSI, REAI, GEI, GCI, EGCI) · CHAS.
+- Mangrove (=mangroveIndices.ts=): MVI, REMI, MI, MFI, NDRE-B5/B6/B7, CI-RE, GCI-CHL, MTCI, REIP.
+- Per-collection catalogs (=lib/collectionIndexCatalog.ts=): Sentinel-3 (NDVI, EVI, FAPAR, LAI, FCOVER, CI, LST, WQI) · Sentinel-5P (NO2, SO2, CO, O3, CH4, AI, AQI) · Sentinel-6 (SLA, SSH, OST, SWH, SLT) · CCM optical / SAR · Copernicus DEM (slope, aspect, hillshade, TPI, TRI, TWI, watershed) · Sentinel Mosaics · CLMS bio-geophysical / LULC · Complementary climate.
+- ASTER L1T (=asterL1tIndices.ts=): vegetation, thermal (LST, NDIE, TAI), soil, mineral (CI, IOI, FMI, CAI, OHI, SILICA, QI, …).
+- CHIRPS (=lib/chirpsRainfall/*=): PRECIP raster; analytics P, RAI, SPI, RTI, RDI, WAI; aggregation daily/monthly/seasonal/annual.
+*** 8.4 Time & scene selection
+Imagery date + auto-follow (=lib/siSentinelImageryDate.ts=), latest-scene resolver with cloud filter and cache (=siSentinelLatestScene.ts=), WMS TIME windows (30 d default; ADI 90, NCADI 60, WAPI 45, LULC/crop 120; Δ = previous → current), =ImagerySceneCalendar.tsx=, time-series range (90 d default), timeline playback, temporal MapSwipe.
+*** 8.5 AOI clipping & masking
+Drawn-AOI WMS clip (=sentinelHubWmsAoiClip.ts=, =sentinel-draw= stack) · Layers-AOI mode (=SiAoiLayerModePanel=, =lib/siAoiMaskBuilder.ts=, =siAoiLayerModeClipCache.ts=, =sentinel-layer-aoi= stack) · Mask Builder (filtered / selected / whole layer; transparent / clip / dim outside) · flicker-free ping-pong stack · =lib/layersAoiClipGeoJson.ts=, =siCropAoiResolve.ts=, =siCropAoiSource.ts=.
+*** 8.6 Analysis & derived tools
+Layer Live legend + class areas (=LayerLiveLegendPanel=, =useLayerClassAreas=, SH Statistical API) · Legend Analyze (=LayerLiveLegendAnalyzePanel=, =layerLegendAnalyzeIndexConfig.ts=, =layerLegendAnalyzeStats.ts=) · DEM index overlay · CHIRPS stats · EO Layer Enrichment (=EoLayerEnrichmentPanel=, zonal means + agronomic heuristics) · Imagery Time Series / multi-layer trends / LULC composition (=SiImageryTimeSeriesPanel=) · Weather vs index (=SiImageryWeatherTab=, =lib/imageryWeatherCompare.ts=, =imageryStormAnalysis.ts=) · legacy templates (=AnalysisPanel.tsx=, =AnalysisTool.tsx=).
+*** 8.7 Exports
+Index GeoTIFF ZIP (=lib/remoteSensing/rsIndexGeoTiffExport.ts=: RGB TIF + Float32 index + companions + prj/tfw + README) · CHIRPS GeoTIFF/CSV/XLSX/HTML · vector KMZ/KML/SHP/GeoJSON/CSV/XLSX (=vectorLayerExport.ts=, =VectorLayerExportPanel=) · EO enrichment CSV/GeoJSON/DOCX (=lib/eoEnrichmentReport/=) · time-series report family (see §12).
+
+** 9. AI detection & segmentation tools
+| Tool | UI / hook | Model | Backend | Map ids |
+|------+-----------+-------+---------+---------|
+| SAM Detection | =SamDetectionPanel=, =SamTrainingSamplesManager=, =useSamDetection=, =useSamTrainingSamples= | Meta SAM (samgeo vit_h/l/b) | =/api/sam-detection/*= → =backend/services/sam-detection= | =sam-*= |
+| AI DL Detect / Train (GIS panel) | =aiDetection/SiAiDetectionGisPanel=, =SiAiDlDetectObjectsPanel=, =SiAiDlTrainModelPanel=, =SiAiDlRasterGeorefDialog= | dlpk / yolo / tensorflow / pytorch / onnx / custom; Netflora YOLO | =/api/raster/*=; =geoai-inference= (Mask R-CNN) | =ai-detection-netflora-results= |
+| SegFormer Detection | =segformerDetection/SegFormerDetectionPanel=, =useSegFormerDetection= | SegFormer-B5 ADE20K (+ SAM2 refine, Temporal Transformer / Prithvi) | =/api/segformer-detection=, =/api/sam2-refinement=, =/api/temporal-transformer= | =segformer-detection-*= |
+| Training & AI | =trainingAi/TrainingAITool= (Data, Training, Validation, Inference, Quick dashboard), =useTrainingAISamples= | Trainable SegFormer; engines =segformer= / =delineate-fbis= / =yolo-trees= | =/api/training/*=, =/api/inference/*=, =/api/delineate-anything/*= | =training-ai-samples-*=, =training-ai-live-samples= |
+| Image Classification wizard | =imageClassification/ImageClassificationWizardPanel=, =useImageClassificationWizard= | SLIC / Felzenszwalb + supervised/unsupervised, pixel/object | =/api/image-classification/*= | =image-classification-*=, =si-ic-sample-aoi-*= |
+| Tree Detections | =TreeDetectionsPanel=, =useTreeDetection=, =lib/treeDetection/= | Ultralytics YOLO tree class (+ species classifier, on-device fallback) | =/api/tree-detection/predict= | =tree-detections-*= |
+Exports: GeoJSON, Shapefile, GPKG, CSV, mask PNG; training packs geojson / sam / yolo / unet / segformer.
+
+** 10. Crop & agronomy intelligence
+| Tool | UI / lib | Notes |
+|------+----------+-------|
+| Agricultural Field Delineation | =AgriFieldBoundaryPanel=, =…TimePanel=, =…ValidatePanel=, =…ResultsDashboard=, =…TrainingSamplesPane=, =FtwAoiTrainingDashboard=, hooks =useAgriFieldBoundary=, =useFieldBoundaryTrainingSamples=, =useFtwAoiTraining=, =lib/agriFieldBoundary/= | AOI modes draw / layers / viewport / select; models =ftw=, =ftw-inference-s2=, =delineate-fbis=, =agricultural-field-delineation=, =map-rgb=; FTW Global PMTiles; =/api/agri-field-boundary/*=, =/api/ftw-training/*= |
+| Prithvi Crop AI | =SiPrithviCropToolPanel= in =SiCropAiFloatingPanel=, =lib/siPrithviCropPipeline.ts= | IBM Prithvi multi-temporal; =/api/crop-classification/*=; output =crop-ai-prediction-raster=; DOCX + GeoTIFF export (=lib/cropClassificationReport/=) |
+| Crop Classification (WMS) + Regional training | =SiCropClassificationPanel=, =SiCropClassificationAoiToolbar=, =SiRegionalCropTrainingPanel=, =lib/siCropClassification.ts=, =siRegionalCropTraining.ts= | Temporal evalscript =CROP_CLASS= / =LULC=; regional calibration layer =si-regional-crop-calibrated= |
+| Smart Crop Alert Center | =SiCropAlertCenterPanel=, map markers/popup/legend, =lib/siCropAlertEngine.ts=, =siCropAlertSentinelLive.ts=, =siCropAlertImageryValidation.ts= | Per-field NDVI/NDWI/NDMI/EVI rule + ΔCHAS engine |
+| ISS / WAPI Irrigation Alert | =SiWapiAlertPanel=, =SiWapiAlertMapOverlay=, =lib/siWapiAlertEngine.ts= | Excel export |
+| Stress Zones | =SiStressZonesPanel=, =SiStressZonesMapPopup=, =useStressZonesAnalysis=, =lib/siStressZonesLive.ts= | WMS =STRESS_ZONES= + zone areas |
+| Water Status | =SiWaterStatusPanel=, =useFieldWaterRequirement= | ET0 / AET / water requirement (Open-Meteo, WaPOR) |
+| EO Layer Enrichment | =EoLayerEnrichmentPanel= | Attributes or segmentations mode |
+| Field Attributes Dashboard | =FieldAttributesDashboard*=, =lib/objectAttributes/= | KPI charts, schema-driven attributes |
+
+** 11. Hydrology & water
+| Tool | UI / hook / lib | Map ids |
+|------+-----------------+---------|
+| Hydro Watershed | =HydroWatershedPanel=, =HydroLegendTool=, =useHydroWatershed=, =lib/hydroWatershed/hydroEngine.ts=, =terrainTiles.ts= | =hydro-<step>-*= for dem, hillshade, slope, flow-direction, flow-accum, streams (Strahler/Shreve), contours (+labels), watershed, basins, mesh; GeoTIFF + DOCX report |
+| Well Site Recommendation | =WellSiteRecommendationPanel=, =useWellSiteRecommendation=, =wellSiteWorkbook.ts=, =lib/wellSiteReport/= | =wellsite-heat-raster=, =wellsite-recommended-wells=; GeoTIFF / GeoJSON / CSV / XLSX / DOCX |
+| Well Suitability (MCDA) | =WellSuitabilityPanel=, =useWellSuitabilityAnalysis=, =wellSuitabilityExports.ts=, =lib/hydroWatershed/wellSuitabilityMcdaEngine.ts= | =well-suit-mcda-*=; GeoTIFF / KMZ / SHP / PDF / workbook |
+| Flood Monitoring (SAR) | =FloodMonitoringPanel=, =useFloodMonitoring=, =lib/sarFloodReport/= | Sentinel-1 pre/post VV threshold → =flood-extent-raster=, =flood-change-raster=, =flood-boundaries-vector=; DOCX + XLSX |
+
+** 12. Weather, climate, time series & reporting
+- Weather Intelligence (=WeatherIntelligencePanel=, =WeatherTimeHistoryChart=, =lib/openMeteoWeather.ts=, =pages/satellite/lib/weatherClimateReport/=) — forecast + archive at pin; DOCX / Excel.
+- Weather Visualization (=WeatherVisualizationPanel=, =WeatherVizOverlay=, =weatherSimModel.ts=) — particle sim + Mapbox fog.
+- Imagery ↔ weather (=imageryStormAnalysis.ts=, =imageryWeatherCompare.ts=, =SiImageryWeatherTab=) — storm overlay =si-ts-weather-storm=.
+- Time series: =hooks/useAoiLiveTimeSeries.ts=, =useImageryTimeSeriesStream.ts=, =useMultiLayerAoiTrendStream.ts=, =usePlotLayerTimeSeriesStream.ts=, =useImageryIndexInterpretation.ts=, =utils/aoiLiveTimeSeries.ts=, =staticAoiMultiChartData.ts=, views =SiMultiLayerAoiTrendView=, =SiPlotLayerTimeSeriesView=, =SiScatterCorrelationInsight=, =SiImageryIndexInterpretationCard=, =SatelliteAoiStaticChartsMapOverlay=, =AoiStaticMultiLayerLineChart= (Chart.js).
+- Reporting (=components/timeSeriesReport/ExportManager.tsx=, =pages/satellite/lib/timeSeriesReport/*=): export kinds =pdf=, =docx=, =lulc-docx=, =excel=, =batch-excel=, =batch-field-summary=, =weather-excel=, =plot-priority-excel=, =aoi-raw-excel=, =aoi-raw-by-layer-excel=, =agri-object-intel-excel=, =csv=, =png=, =geojson= (jsPDF + autotable, ExcelJS, DOCX XML builder).
+- Map snapshots (=SiDynamicMapSnapshotsPanel=) → PNG / PDF packs.
+
+** 13. GeoAI assistants (LLM)
+UI: =geoAiAgent/GeoAiAgentPanel=, =GeoAiAgentBuilder=, =neighborhoodAgent/*= (chat, composer, evidence rows, stats chart, transcript), =GeoExplorerGemini*= (chat body / input / message parts), =GeoExplorerDynamicTable=, =GeoAiEditQuestionTool=, =SiGeoAiInspectPopupBody=, =SatelliteGeoAiFloatingWidget=.
+Turn runners: =lib/runGeoAiServerTurn.ts= (server GIS chat first), =runGeoExplorerGeminiTurn.ts=, =geoAiAgentTurn.ts=; engines =geoAiAgentTools.ts=, =geoAiCommandExecutor.ts= (map commands), =geoAiGisToolRunner.ts=, =geoAiStatsEngine.ts=, =geoAiLayerAttributeQuery.ts=, =geoAiWeatherContext.ts=, =geoAiBasemapQuery.ts=, =geoAiLiveMapContext.ts=, =geoAiAnalystPacks.ts=, =geoAiResolveMapCoords.ts=, =geoAiResolveTableMapLink.ts=, =geoAiAttachFile.ts=, =neighborhoodAgentPlaceIntent.ts=.
+Providers: Gemini (=geoExplorerGemini.ts=, =useGeminiApiKey=), Claude (=geoAiChatClaude.ts=, =useClaudeApiKey=), DeepSeek (=useDeepseekApiKey=), Ollama (=useOllamaConfig=, =/api/ollama/chat=); server =backend/services/geoai-chat= (=/api/geoai-chat/*=, GeoPandas/Shapely/Rasterio + optional OpenAI).
+Map side-effects: pin (=si-geo-ai-pin=), linked selection highlight (=si-geo-ai-sel-*=), fly-to, inspect cards.
+
+** 14. Cartography: symbology, labels, popups, legends, tables
+- Symbology Studio: =SiSymbologyStudioPanel=, =SiSymbologyClassesTable=, =SiPointSymbolSection=, =LayerProperties=, =LayerManager= (=SymbologyStyle= single / unique / color / size / color_size / dot_density / threshold_markers; =SymbologyClassMethod= jenks / quantile / equal_interval; =SymbologyColorRamp= viridis / blues / greens / plasma / magma / turbo); helpers =symbologyHelpers.ts=, =siSymbolStyleStudio.ts=, =siPointSymbolGallery.ts=, =siPolygonSymbolGallery.ts=, =lib/arcgisDrawingInfoMapbox.ts=, =arcgisPointSymbolMapbox.ts=, =mapboxPaintSanitize.ts=.
+- Labels: =SiLayerLabelingPanel=, =lib/siLayerLabelStyle.ts=.
+- Popups / identify: =SiLayerPopupConfigurator=, =LayerAttributePopupBody=, =FeatureIdentifyPopupCard=, =SiFeatureInspectPopup=, =MapPopup=, =lib/arcgisAttributeDisplay.ts=.
+- Legends: =SiLayerLegendFloatingPanel=, =LayerLiveLegendPanel=, =LayerLiveLegendFloatingPanel=, =SiMapAnalysisLegendOverlay=, =SiCropAlertMapLegend=, =HydroLegendTool=.
+- Tables: =TablePanel=, =GeoExplorerDynamicTable=, =GisSelectionAttributeTablePanel=.
+- Field visibility: =FieldVisibilityControl=.
+
+** 15. Raster georeferencing
+=rasterGeoreference/RasterGeoreferencePanel=, =RasterGeoreferenceRibbon=, =GeoreferenceFloatbar=, =useRasterGeoreferenceTool=, =lib/raster/siRasterTileService.ts=, =rasterGeorefPlacement.ts=; GCP overlay =si-gcp-overlay=; backend =/api/raster/*= (georeference, COG/WMS).
+
+** 16. Hotkeys
+| Context | Keys | Action |
+|---------+------+--------|
+| Drawing | Ctrl/Cmd+Z · Ctrl/Cmd+Y / Ctrl/Cmd+Shift+Z · Esc · Backspace · Enter | undo · redo · cancel · drop vertex · commit |
+| Selection | Shift · Ctrl · Ctrl+Shift · Esc | add · remove · from-current · close/deactivate |
+| Measure | double-click · right-click | finish · undo vertex |
+| MapSwipe handle | ← / → | nudge split ±2 % |
+| Go To XY | Enter | fly to coordinates |
+| Search results | ↑ ↓ Enter Esc | navigate / select / dismiss |
+| Panels / flyouts / legends | Esc | close |
+
+* PART III — Libraries, services, file index
+
+** Frontend libraries used by the canvas (=frontend/package.json=)
+| Library | Role |
+|---------+------|
+| =mapbox-gl= ^3.18, =react-map-gl= ^8.1 | GL canvas, globe, terrain, sources/layers/markers |
+| =maplibre-gl=, =maplibre-gl-layer-control= | Alternate GL engine (other pages) |
+| =leaflet=, =react-leaflet=, =leaflet-draw= | Legacy GIS Map (shares basemap catalog) |
+| =@turf/turf= | Geometry ops, areas, buffers, centroids |
+| =proj4= | CRS reprojection (rasters, WKT clip) |
+| =geotiff= | GeoTIFF decode / encode |
+| =shpjs=, =@tmcw/togeojson=, =jszip=, =papaparse=, =xlsx= | Vector import (SHP zip, KML/KMZ/GPX, CSV, Excel) |
+| =pmtiles=, =@mapbox/vector-tile=, =pbf= | FTW Global PMTiles MVT decoding |
+| =chart.js=, =react-chartjs-2=, =chartjs-plugin-zoom= | Time-series and dashboard charts |
+| =jspdf=, =jspdf-autotable=, =exceljs=, =react-to-print= | PDF / Excel / print reports |
+| =@fortawesome/fontawesome-free= | Icons |
+| =react-router-dom= | Route =/satellite=, query params |
+
+** Backend services (=backend/services/*=, =services/*=) and Node API routes
+| Service | Purpose | Consumer |
+|---------+---------+----------|
+| =agri-field-boundary= (:8092) | Mask R-CNN / Delineate-Anything / AFD / FTW-S2 field delineation + SEN2SR | Field Boundaries, EO enrichment segmentations, Sen2SR controls |
+| =delineate-anything= | YOLO field instance segmentation (FBIS) | Training & AI inference |
+| =eo-layer-enrichment= | S2 zonal index enrichment CLI/API | EO Layer Enrichment |
+| =geoai-chat= (:8099) | Spatial Q&A (GeoPandas, optional OpenAI) | GeoAI agents |
+| =geoai-inference= (:8098) | geoai Mask R-CNN (buildings, cars, ships, solar, parking) | AI DL detection |
+| =image-classification= | SLIC / Felzenszwalb + classify / accuracy | Image Classification wizard |
+| =sam-detection= (:8090) | Interactive SAM | SAM Detection |
+| =sam2-refinement= (:8096) | SAM2 polygon refine | SegFormer field pipeline |
+| =segformer-detection= (:8095) | SegFormer-B5 semantic segmentation | SegFormer, Training health |
+| =temporal-transformer= (:8097) | Crop type on field polygons (+ Prithvi) | SegFormer temporal step |
+| =tree-detection= | YOLO tree boxes | Tree Detections |
+| =services/geodash-api= | Dataset upload / spatial features (GeoDash) | Not SI canvas core |
+| Node routes | =/api/terrain/esri-rgb=, =/api/chirps/*=, =/api/stac/search=, =/api/crop-classification/*=, =/api/flood-monitoring/*=, =/api/training/*=, =/api/inference/*=, =/api/ftw-training/*=, =/api/raster/*=, =/api/ollama/*=; =analysis_engine= =/mpc/*= | Terrain, CHIRPS, STAC, Prithvi, SAR flood, training, georef, LLM proxy, MPC |
+External: Sentinel Hub / CDSE OGC WMS + Statistical API, Microsoft Planetary Computer STAC, Esri ArcGIS Online tiles & services, Google VT tiles, OpenStreetMap / OpenTopoMap / Carto tiles, Open-Meteo, WaPOR, CDS HiPS sky surveys.
+
+** File index (primary)
+- Page & stack: =pages/satellite/SatelliteIntelligence.tsx= (MapGL children ≈ L24477–26028; DOM overlays ≈ L26030–27900), =SatelliteIntelligence.css=, =basemapCatalog.ts=, =siInstanceScope.tsx=, =useMapOverlayIsolation.ts=.
+- Z-order: =lib/siMapAnalysisLayerOrder.ts=, =lib/siCustomLayerZOrder.ts=.
+- WMS / AOI: =lib/sentinelHubWms{Instance,Layers,AoiClip}.ts=, =siSentinelAoiWms{Stack,FlickerFree,Imperative}.ts=, =siAoiManager.ts=, =siAoiMaskBuilder.ts=, =siAoiLayerModeClipCache.ts=, =siDrawnAoiLiveIndex.ts=.
+- Terrain / globe: =lib/agroCloudMapTerrain.ts=, =siGlobeCockpit.ts=, =siGlobeSky*.ts=, =siMapboxGlobeCompat.ts=, =agroCloudMapNavigation.ts=.
+- Imports: =utils/FileLoader.ts=, =lib/siCustomLayerFactory.ts=, =components/SiImportedCustomLayersOverlay.tsx=, =lib/arcgis*.ts=, =lib/raster/*=, =pages/satellite/gisDataManager/=.
+- Chrome: =components/SatelliteMapAnalysisChrome.tsx=, =SatelliteContextualAnalysisDock.tsx=, =MapToolsDock.tsx=, =MapToolboxLayerList.tsx=, =MapToolboxAddGisLayerFlyout.tsx=, =SatelliteMapProcessingOptionsPortal.tsx=.
+- Draw / measure / select / swipe: =SiMapDrawWidget.tsx=, =RemoteSensingDrawingToolbar.tsx=, =drawingUtils.ts=, =MeasurementPanel.tsx=, =lib/measurement/measurementEngine.ts=, =components/gisSelection/*=, =lib/gisSelection/*=, =SiMapSwipeControl.tsx=, =siMapSwipeTiles.ts=.
+- Remote sensing: =RemoteSensingToolboxPanel.tsx=, =RemoteSensingLayerSelect.tsx=, =lib/remoteSensing*.ts=, =agroCompositeIndices.ts=, =collectionIndexCatalog.ts=, =layerLiveLegendCatalog.ts=, =lib/remoteSensing/rsIndexGeoTiffExport.ts=, =lib/chirpsRainfall/*=.
