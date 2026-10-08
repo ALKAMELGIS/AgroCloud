@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { developEliteAirportTickerRows } from './useDevelopEliteAirportListTicker'
+import {
+  developEliteAirportTickerLoopHeight,
+  developEliteAirportTickerRows,
+} from './useDevelopEliteAirportListTicker'
 
 function listMaxScroll(scrollHeight: number, clientHeight: number): number {
   return Math.max(0, scrollHeight - clientHeight)
@@ -18,5 +21,10 @@ describe('develop elite list ticker scroll range', () => {
     const rows = [{ id: 'a' }, { id: 'b' }]
     expect(developEliteAirportTickerRows(rows, false)).toHaveLength(2)
     expect(developEliteAirportTickerRows(rows, true)).toHaveLength(4)
+  })
+
+  it('uses half scroll height for duplicated loop', () => {
+    expect(developEliteAirportTickerLoopHeight(800, true)).toBe(400)
+    expect(developEliteAirportTickerLoopHeight(800, false)).toBe(800)
   })
 })

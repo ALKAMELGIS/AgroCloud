@@ -1,21 +1,23 @@
-import type { ReactNode, RefObject } from 'react'
+import { forwardRef, type HTMLAttributes, type ReactNode } from 'react'
 
 type Props = {
-  viewportRef: RefObject<HTMLDivElement | null>
   tickerActive: boolean
   children: ReactNode
-}
+} & HTMLAttributes<HTMLDivElement>
 
 /** Clips the list while Play uses transform-based airport-board scroll. */
-export function DevelopEliteListTickerViewport({ viewportRef, tickerActive, children }: Props) {
-  return (
-    <div
-      ref={viewportRef}
-      className={`develop-elite__list-viewport${
-        tickerActive ? ' develop-elite__list-viewport--ticker' : ''
-      }`}
-    >
-      {children}
-    </div>
-  )
-}
+export const DevelopEliteListTickerViewport = forwardRef<HTMLDivElement, Props>(
+  function DevelopEliteListTickerViewport({ tickerActive, children, className = '', ...rest }, ref) {
+    return (
+      <div
+        ref={ref}
+        className={`develop-elite__list-viewport${
+          tickerActive ? ' develop-elite__list-viewport--ticker' : ''
+        }${className ? ` ${className}` : ''}`}
+        {...rest}
+      >
+        {children}
+      </div>
+    )
+  },
+)
