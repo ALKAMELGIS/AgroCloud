@@ -34,6 +34,7 @@ import {
   DEVELOP_ELITE_MAP_MIN_ZOOM,
   DEVELOP_ELITE_MAP_PORTFOLIO_GLOBE_PRESENTATION,
 } from './developEliteMapViewport'
+import { useDevelopEliteMapDraw } from './DevelopEliteMapDraw'
 import { useDevelopEliteMapLibre } from './developEliteMapLibreContext'
 import { useAcpMap3dCamera } from '@/modules/dashboards/gis/agroCloudPlatform/map/useAcpMap3dCamera'
 import {
@@ -71,6 +72,9 @@ export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
   basemapRef.current = flatBasemapId
   const viewMode3dRef = useRef(viewMode3d)
   viewMode3dRef.current = viewMode3d
+  const draw = useDevelopEliteMapDraw()
+  const drawingActiveRef = useRef(false)
+  drawingActiveRef.current = Boolean(draw?.drawingActive)
 
   useAcpMap3dCamera({
     mapRef,
@@ -87,7 +91,9 @@ export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
     autoPromoteViewMode3dFromPitch: false,
     promoteViewMode3dOnElevationOrbit: false,
     cameraEaseMs: 220,
+    isOrbitBlocked: () => drawingActiveRef.current,
     allowPrimaryPointerOrbit: () =>
+      !drawingActiveRef.current &&
       developEliteMapAllowsPrimaryPointerOrbit(mapRef.current, viewMode3dRef.current),
     orbitSensitivity: DEVELOP_ELITE_ORBIT_SENSITIVITY,
     syncTerrainDuringOrientationDrag: false,

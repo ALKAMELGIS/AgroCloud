@@ -159,3 +159,17 @@
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-map-draw-widget__close {
   color: #64748b;
 }
+
+@media (pointer: coarse) {
+  .si-map-draw-widget {
+    padding: 7px 9px;
+    gap: 6px;
+  }
+
+  .si-map-draw-widget__tool {
+    width: 44px;
+    height: 44px;
+    font-size: 15px;
+    border-radius: 10px;
+  }
+}

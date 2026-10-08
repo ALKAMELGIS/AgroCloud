@@ -4,6 +4,7 @@ import {
   developEliteAgroStructureExtrusionHeightM,
   developEliteMapLibreStructuresExtrusionPaint,
   developEliteMapLibreHiddenHitFillPaint,
+  developEliteDrawingInfoUsesPictureMarkers,
   developEliteMapLibreInvisibleCircleHitPaint,
   developEliteMapLibreStructuresPaint,
 } from './developEliteMapLibreArcgisSymbology'
@@ -29,6 +30,32 @@ describe('developEliteAgroStructureExtrusionHeightM', () => {
     expect(
       developEliteAgroStructureExtrusionHeightM({ value: '1007', label: 'Farm Plots', hollow: true }),
     ).toBe(0)
+  })
+})
+
+describe('developEliteDrawingInfoUsesPictureMarkers', () => {
+  it('detects esriPMS unique-value renderers (AgroLocation)', () => {
+    const drawingInfo = {
+      renderer: {
+        type: 'uniqueValue',
+        field1: 'SUBTYPE',
+        uniqueValueInfos: [
+          {
+            value: 1,
+            symbol: {
+              type: 'esriPMS',
+              imageData:
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+              contentType: 'image/png',
+              width: 18,
+              height: 18,
+            },
+          },
+        ],
+      },
+    }
+    expect(developEliteDrawingInfoUsesPictureMarkers(drawingInfo)).toBe(true)
+    expect(developEliteDrawingInfoUsesPictureMarkers(null)).toBe(false)
   })
 })
 

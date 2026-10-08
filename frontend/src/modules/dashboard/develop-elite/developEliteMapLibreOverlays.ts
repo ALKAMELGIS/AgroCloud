@@ -11,6 +11,7 @@ import {
   DE_MAPLIBRE_POINT_FILTER,
   DE_MAPLIBRE_POLY_FILTER,
   DE_MAPLIBRE_POLY_LINE_FILTER,
+  developEliteDrawingInfoUsesPictureMarkers,
   developEliteMapLibreHiddenHitFillPaint,
   developEliteMapLibreInvisibleCircleHitPaint,
   developEliteMapLibrePointCirclePaint,
@@ -347,14 +348,15 @@ function syncArcgisPointLayer(
     () => opts.onArcgisIconsLoaded?.(),
   )
   const iconsOn = opts.iconsVisible !== false
-  const pictureMarkerRenderer = Boolean(spec?.entries?.length)
-  const showPictureIcons = iconsOn && pictureMarkerRenderer && iconsReady
+  const pictureMarkerRenderer =
+    Boolean(spec?.entries?.length) || developEliteDrawingInfoUsesPictureMarkers(opts.drawingInfo)
+  const showPictureIcons = iconsOn && Boolean(spec?.entries?.length) && iconsReady
 
   const invisibleHitRadius =
     opts.layerKey === 'irrigation-valves' ? 10 : opts.layerKey === 'trees' ? 8 : 7
 
   if (showPictureIcons) {
-    /** esriPMS picture markers only — no esriSMS fallback circles (purple/yellow halos). */
+    /** esriPMS only — hide circle layer entirely (opacity-0 hits still showed yellow/purple SMS paint). */
     ensureCircleLayer(
       map,
       opts.circleLayerId,
@@ -362,7 +364,7 @@ function syncArcgisPointLayer(
       developEliteMapLibreInvisibleCircleHitPaint(invisibleHitRadius),
       DE_MAPLIBRE_POINT_FILTER,
     )
-    map.setLayoutProperty(opts.circleLayerId, 'visibility', opts.visible ? 'visible' : 'none')
+    map.setLayoutProperty(opts.circleLayerId, 'visibility', 'none')
 
     const { layout, paint } = developEliteMapLibrePointIconLayout(spec!, iconSize, opts.visible, layerOpacity)
     ensureSymbolLayer(map, opts.iconLayerId, opts.sourceId, layout, paint, DE_MAPLIBRE_POINT_FILTER)
@@ -371,7 +373,24 @@ function syncArcgisPointLayer(
   }
 
   if (pictureMarkerRenderer) {
-    /** Icons still loading — hide SMS halos until real PMS symbols are ready. */
+    /** PMS symbology — never stack SMS / dev fallback circles under picture markers. */
+    if (developEliteMapLibreHasLayer(map, opts.circleLayerId)) {
+      map.setLayoutProperty(opts.circleLayerId, 'visibility', 'none')
+    }
+    if (!showPictureIcons && developEliteMapLibreHasLayer(map, opts.iconLayerId)) {
+      map.setLayoutProperty(opts.iconLayerId, 'visibility', 'none')
+    }
+    return
+  }
+
+  /**
+   * esriSMS / simple marker symbology — circle layer is the authored style.
+   * AgroLocation / valves use PMS in production; avoid yellow/blue dev fallbacks when drawingInfo is still loading.
+   */
+  const skipDevFallbackCircle =
+    !opts.drawingInfo &&
+    (opts.layerKey === 'agri-location' || opts.layerKey === 'irrigation-valves' || opts.layerKey === 'trees')
+  if (skipDevFallbackCircle) {
     if (developEliteMapLibreHasLayer(map, opts.circleLayerId)) {
       map.setLayoutProperty(opts.circleLayerId, 'visibility', 'none')
     }
@@ -381,7 +400,6 @@ function syncArcgisPointLayer(
     return
   }
 
-  /** esriSMS / simple marker symbology — circle layer is the authored style. */
   const circlePaint = developEliteMapLibrePointCirclePaint(opts.drawingInfo, opts.fallback)
   ensureCircleLayer(map, opts.circleLayerId, opts.sourceId, circlePaint, DE_MAPLIBRE_POINT_FILTER)
   map.setLayoutProperty(opts.circleLayerId, 'visibility', opts.visible ? 'visible' : 'none')

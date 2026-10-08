@@ -6,15 +6,25 @@ import type { RemoteSensingDrawingTool } from '@/modules/gis/editing/RemoteSensi
 import {
   bboxToPolygonFeature,
   circleFromEdgeFeature,
+  haversineDistanceMeters,
   offsetWgs84Meters,
   SKETCH_MIN_DRAG_METERS,
 } from '@/modules/gis/editing/drawingUtils'
 import { useDevelopEliteMapLibre } from './developEliteMapLibreContext'
 import { useDevelopEliteMapDraw } from './DevelopEliteMapDraw'
 import {
+  finishMapLibreSketchSession,
+  lockMapLibreForSketch,
+  unlockMapLibreForSketch,
+} from './developEliteMapLibreSketchInteraction'
+import {
   raiseDevelopEliteMapLibreSketchLayers,
   syncDevelopEliteMapLibreSketchData,
 } from './developEliteMapLibreSketchLayers'
+
+const PREVIEW_CIRCLE_STEPS = 40
+const COMMIT_CIRCLE_STEPS = 96
+const POLYGON_CLOSE_TAP_METERS = 28
 
 function fc(features: GeoJSON.Feature[]): GeoJSON.FeatureCollection {
   return { type: 'FeatureCollection', features }
@@ -43,10 +53,33 @@ function fitMapToFeature(map: MaplibreMap, feature: GeoJSON.Feature) {
     maxLat = Math.max(maxLat, lat)
   }
   try {
-    map.fitBounds([[minLng, minLat], [maxLng, maxLat]], { padding: 48, maxZoom: 18, duration: 600 })
+    map.fitBounds(
+      [
+        [minLng, minLat],
+        [maxLng, maxLat],
+      ],
+      { padding: 48, maxZoom: 18, duration: 400 },
+    )
   } catch {
     /* ignore */
   }
+}
+
+function lngLatFromEvent(e: MapMouseEvent): [number, number] {
+  return [e.lngLat.lng, e.lngLat.lat]
+}
+
+function isSingleTouch(e: MapMouseEvent): boolean {
+  const te = e.originalEvent as TouchEvent | undefined
+  if (te?.type?.startsWith('touch')) return te.touches.length === 1
+  return true
+}
+
+function isPrimarySketchPointer(e: MapMouseEvent): boolean {
+  const oe = e.originalEvent
+  if (oe instanceof MouseEvent) return oe.button === 0
+  if (typeof TouchEvent !== 'undefined' && oe instanceof TouchEvent) return oe.touches.length === 1
+  return true
 }
 
 export function DevelopEliteMapLibreDrawEngine() {
@@ -58,6 +91,26 @@ export function DevelopEliteMapLibreDrawEngine() {
   const [previewFeatures, setPreviewFeatures] = useState<GeoJSON.Feature[]>([])
   const polygonRingRef = useRef<[number, number][]>([])
   const dragRef = useRef<null | { kind: 'rectangle' | 'circle'; start: [number, number] }>(null)
+  const previewRafRef = useRef(0)
+  const pendingPreviewRef = useRef<GeoJSON.Feature[] | null>(null)
+
+  const flushPreview = useCallback(() => {
+    previewRafRef.current = 0
+    const next = pendingPreviewRef.current
+    if (next) {
+      pendingPreviewRef.current = null
+      setPreviewFeatures(next)
+    }
+  }, [])
+
+  const schedulePreview = useCallback(
+    (features: GeoJSON.Feature[]) => {
+      pendingPreviewRef.current = features
+      if (previewRafRef.current) return
+      previewRafRef.current = requestAnimationFrame(flushPreview)
+    },
+    [flushPreview],
+  )
 
   const syncSketchLayers = useCallback(() => {
     const map = mapRef.current
@@ -84,6 +137,11 @@ export function DevelopEliteMapLibreDrawEngine() {
       setPreviewFeatures([])
       polygonRingRef.current = []
       dragRef.current = null
+      pendingPreviewRef.current = null
+      if (previewRafRef.current) {
+        cancelAnimationFrame(previewRafRef.current)
+        previewRafRef.current = 0
+      }
       if (map) {
         syncDevelopEliteMapLibreSketchData(map, fc(d.sketchFeaturesRef.current), fc([]))
         raiseDevelopEliteMapLibreSketchLayers(map)
@@ -97,29 +155,19 @@ export function DevelopEliteMapLibreDrawEngine() {
     const map = mapRef.current
     const d = drawRef.current
     if (!map || !mapReady || !d?.drawingActive) {
-      map?.getCanvas()?.classList.remove('develop-elite-map--drawing-sketch')
+      if (map) finishMapLibreSketchSession(map)
       return
     }
 
-    const container = map.getContainer()
     const tool = d.activeTool
-
     const panLocked =
       tool === 'polygon' || tool === 'rectangle' || tool === 'circle' || tool === 'point'
-    if (panLocked) {
-      map.dragPan.disable()
-      map.doubleClickZoom.disable()
-      container.classList.add('develop-elite-map--drawing-sketch')
-    } else {
-      map.dragPan.enable()
-      map.doubleClickZoom.enable()
-      container.classList.remove('develop-elite-map--drawing-sketch')
-    }
-
-    const lngLatFromEvent = (e: MapMouseEvent): [number, number] => [e.lngLat.lng, e.lngLat.lat]
+    if (panLocked) lockMapLibreForSketch(map)
+    else unlockMapLibreForSketch(map)
 
     const onMapClick = (e: MapMouseEvent) => {
       if (!drawRef.current?.drawingActive) return
+      if (!isSingleTouch(e)) return
       const active = drawRef.current.activeTool
       if (active === 'point') {
         e.preventDefault()
@@ -132,13 +180,28 @@ export function DevelopEliteMapLibreDrawEngine() {
       }
       if (active === 'polygon') {
         const ring = polygonRingRef.current
-        ring.push([e.lngLat.lng, e.lngLat.lat])
+        const lng = e.lngLat.lng
+        const lat = e.lngLat.lat
+        if (ring.length >= 3) {
+          const [fx, fy] = ring[0]!
+          if (haversineDistanceMeters(fx, fy, lng, lat) <= POLYGON_CLOSE_TAP_METERS) {
+            e.preventDefault()
+            const closed = [...ring, ring[0]!]
+            commitFeature({
+              type: 'Feature',
+              properties: { label: 'Drawn polygon' },
+              geometry: { type: 'Polygon', coordinates: [closed] },
+            })
+            return
+          }
+        }
+        ring.push([lng, lat])
         const line: GeoJSON.Feature = {
           type: 'Feature',
           properties: {},
           geometry: { type: 'LineString', coordinates: ring },
         }
-        setPreviewFeatures(ring.length >= 2 ? [line] : [])
+        schedulePreview(ring.length >= 2 ? [line] : [])
       }
     }
 
@@ -147,7 +210,7 @@ export function DevelopEliteMapLibreDrawEngine() {
       e.preventDefault()
       const ring = polygonRingRef.current
       if (ring.length < 3) return
-      const closed = [...ring, ring[0]]
+      const closed = [...ring, ring[0]!]
       commitFeature({
         type: 'Feature',
         properties: { label: 'Drawn polygon' },
@@ -155,30 +218,42 @@ export function DevelopEliteMapLibreDrawEngine() {
       })
     }
 
-    const onDown = (e: MapMouseEvent) => {
+    const beginDrag = (e: MapMouseEvent) => {
       const active = drawRef.current?.activeTool
       if (active !== 'rectangle' && active !== 'circle') return
-      if (e.originalEvent.button !== 0) return
+      if (!isPrimarySketchPointer(e) || !isSingleTouch(e)) return
+      e.preventDefault()
       dragRef.current = { kind: active, start: lngLatFromEvent(e) }
-      map.dragPan.disable()
+      lockMapLibreForSketch(map)
     }
 
     const onMove = (e: MapMouseEvent) => {
       const drag = dragRef.current
       if (!drag) return
+      if (!isSingleTouch(e)) return
+      e.preventDefault()
       const end = lngLatFromEvent(e)
       if (drag.kind === 'rectangle') {
-        setPreviewFeatures([bboxToPolygonFeature(drag.start[0], drag.start[1], end[0], end[1])])
+        schedulePreview([bboxToPolygonFeature(drag.start[0], drag.start[1], end[0], end[1])])
       } else {
-        setPreviewFeatures([circleFromEdgeFeature(drag.start[0], drag.start[1], end[0], end[1], 96)])
+        schedulePreview([
+          circleFromEdgeFeature(
+            drag.start[0],
+            drag.start[1],
+            end[0],
+            end[1],
+            PREVIEW_CIRCLE_STEPS,
+          ),
+        ])
       }
     }
 
-    const onUp = (e: MapMouseEvent) => {
+    const endDrag = (e: MapMouseEvent) => {
       const drag = dragRef.current
       if (!drag) return
+      e.preventDefault()
       let end = lngLatFromEvent(e)
-      let [lng1, lat1] = drag.start
+      const [lng1, lat1] = drag.start
       let [lng2, lat2] = end
       if (Math.abs(lng2 - lng1) < 1e-8 && Math.abs(lat2 - lat1) < 1e-8) {
         if (drag.kind === 'circle') {
@@ -189,7 +264,7 @@ export function DevelopEliteMapLibreDrawEngine() {
       }
       const feature =
         drag.kind === 'circle'
-          ? circleFromEdgeFeature(lng1, lat1, lng2, lat2, 128, 'Drawn circle')
+          ? circleFromEdgeFeature(lng1, lat1, lng2, lat2, COMMIT_CIRCLE_STEPS, 'Drawn circle')
           : bboxToPolygonFeature(lng1, lat1, lng2, lat2, 'Drawn rectangle')
       dragRef.current = null
       commitFeature(feature)
@@ -201,7 +276,7 @@ export function DevelopEliteMapLibreDrawEngine() {
       const ring = polygonRingRef.current
       if (ring.length < 3) return
       ev.preventDefault()
-      const closed = [...ring, ring[0]]
+      const closed = [...ring, ring[0]!]
       commitFeature({
         type: 'Feature',
         properties: { label: 'Drawn polygon' },
@@ -211,34 +286,43 @@ export function DevelopEliteMapLibreDrawEngine() {
 
     map.on('click', onMapClick)
     map.on('dblclick', onDblClick)
-    map.on('mousedown', onDown)
+    map.on('mousedown', beginDrag)
     map.on('mousemove', onMove)
-    map.on('mouseup', onUp)
+    map.on('mouseup', endDrag)
+    map.on('touchstart', beginDrag)
+    map.on('touchmove', onMove)
+    map.on('touchend', endDrag)
     window.addEventListener('keydown', onKey)
 
     return () => {
       map.off('click', onMapClick)
       map.off('dblclick', onDblClick)
-      map.off('mousedown', onDown)
+      map.off('mousedown', beginDrag)
       map.off('mousemove', onMove)
-      map.off('mouseup', onUp)
+      map.off('mouseup', endDrag)
+      map.off('touchstart', beginDrag)
+      map.off('touchmove', onMove)
+      map.off('touchend', endDrag)
       window.removeEventListener('keydown', onKey)
-      map.dragPan.enable()
-      map.doubleClickZoom.enable()
-      container.classList.remove('develop-elite-map--drawing-sketch')
+      if (previewRafRef.current) cancelAnimationFrame(previewRafRef.current)
+      previewRafRef.current = 0
+      finishMapLibreSketchSession(map)
       polygonRingRef.current = []
       dragRef.current = null
+      pendingPreviewRef.current = null
       setPreviewFeatures([])
     }
-  }, [commitFeature, draw?.activeTool, draw?.drawingActive, mapReady, mapRef])
+  }, [commitFeature, draw?.activeTool, draw?.drawingActive, mapReady, mapRef, schedulePreview])
 
   useEffect(() => {
     if (!draw?.drawingActive) {
       polygonRingRef.current = []
       dragRef.current = null
       setPreviewFeatures([])
+      const map = mapRef.current
+      if (map) finishMapLibreSketchSession(map)
     }
-  }, [draw?.drawingActive, draw?.activeTool])
+  }, [draw?.drawingActive, draw?.activeTool, mapRef])
 
   useEffect(() => {
     const map = mapRef.current

@@ -6731,7 +6731,8 @@ input:checked + .slider:before {
 }
 
 /* Web mapping tools (Environmental Index â†’ Tools tab) */
-.si-map-container--drawing .mapboxgl-canvas {
+.si-map-container--drawing .mapboxgl-canvas,
+.agro-cloud-map--sketch-lock .mapboxgl-canvas {
   touch-action: none;
 }
 

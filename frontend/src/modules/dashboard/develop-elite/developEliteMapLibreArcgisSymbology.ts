@@ -314,10 +314,19 @@ export function developEliteMapLibreInvisibleCircleHitPaint(hitRadius = 8): Reco
     'circle-color': 'rgba(0,0,0,0)',
     'circle-opacity': 0,
     'circle-blur': 0,
+    'circle-pitch-scale': 'map',
+    'circle-pitch-alignment': 'map',
     'circle-stroke-color': 'rgba(0,0,0,0)',
     'circle-stroke-opacity': 0,
     'circle-stroke-width': 0,
   }
+}
+
+/** True when renderer uses esriPMS picture markers (AgroLocation, valves, etc.). */
+export function developEliteDrawingInfoUsesPictureMarkers(
+  drawingInfo: Record<string, unknown> | null | undefined,
+): boolean {
+  return Boolean(buildArcgisPointIconLayerSpec(drawingInfo, 'probe')?.entries?.length)
 }
 
 /** @deprecated Prefer {@link developEliteMapLibreInvisibleCircleHitPaint} (does not merge prior paint). */

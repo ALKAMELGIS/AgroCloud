@@ -1794,6 +1794,14 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   border-radius: 2px;
   border-color: rgba(57, 255, 20, 0.28);
   color: #d7f5e2;
+  touch-action: manipulation;
+}
+
+@media (pointer: coarse) {
+  .develop-elite-map__draw-widget-host .si-map-draw-widget__tool {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 
 .develop-elite-map__draw-widget-host .si-map-draw-widget__tool.is-on {
@@ -1817,6 +1825,7 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
 .maplibregl-map.develop-elite-map--drawing-sketch,
 .maplibregl-canvas-container.develop-elite-map--drawing-sketch {
   cursor: crosshair !important;
+  touch-action: none;
 }
 
 .leaflet-container.develop-elite-map--drawing-sketch .leaflet-draw-guide-dash {

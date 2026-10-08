@@ -477,11 +477,16 @@ import {
   computeAgroCloudOrbitViewState,
   ensureAgroCloudMapScrollZoom,
   setMapboxDragPanEnabled,
+  type AgroCloudMapboxMapScrollLike,
   applyOrbitLockToViewState,
   enforceOrbitCameraLock,
   syncAgroCloudMapboxCamera,
   useAgroCloudMapOrbitNavigation,
 } from '@/modules/gis/map/agroCloudMapNavigation';
+import {
+  lockAgroCloudMapForSketch,
+  unlockAgroCloudMapForSketch,
+} from '@/modules/gis/map/agroCloudMapSketchInteraction';
 import {
   cancelAgroCloudTerrainSync,
   canUseEsriWorldTerrainDem,
@@ -4321,7 +4326,10 @@ const POLYGON_CLOSE_SNAP_BASE_PX = 20;
 function polygonCloseSnapThresholdPx(map: { getZoom?: () => number } | null | undefined): number {
   if (!map) return POLYGON_CLOSE_SNAP_BASE_PX;
   try {
-    return Math.max(POLYGON_CLOSE_SNAP_BASE_PX, vertexHitThresholdPx(map as any));
+    const coarse =
+      typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+    const base = coarse ? 28 : POLYGON_CLOSE_SNAP_BASE_PX;
+    return Math.max(base, vertexHitThresholdPx(map as any) * (coarse ? 1.15 : 1));
   } catch {
     return POLYGON_CLOSE_SNAP_BASE_PX;
   }
@@ -14176,9 +14184,25 @@ export default function SatelliteIntelligence() {
       .catch(() => setGeoExplorerChatError('Could not read the file.'));
   }, []);
 
+  const siMapToolUsesSketchTouchLock = (tool: MapDrawTool) =>
+    tool === 'rectangle' ||
+    tool === 'box_select' ||
+    tool === 'circle' ||
+    tool === 'polygon' ||
+    tool === 'polyline';
+
   const setMapDragPanEnabled = (enabled: boolean) => {
     setMapPanLocked(!enabled);
-    setMapboxDragPanEnabled(getMapInstance(), enabled);
+    const map = getMapInstance() as AgroCloudMapboxMapScrollLike | null;
+    setMapboxDragPanEnabled(map, enabled);
+    const tool = mapDrawToolRef.current;
+    const sketchTouchLock =
+      !enabled ||
+      dragRectCircleRef.current != null ||
+      polygonRingSketchDragRef.current != null ||
+      (isSketchDrawingActiveRef.current && siMapToolUsesSketchTouchLock(tool));
+    if (sketchTouchLock) lockAgroCloudMapForSketch(map);
+    else unlockAgroCloudMapForSketch(map);
   };
 
   const toggleMapPanLock = useCallback(() => {
@@ -14507,8 +14531,10 @@ export default function SatelliteIntelligence() {
 
   const isMapOrbitBlocked = useCallback(() => {
     if (fieldBoundaryMapBusyRef.current) return true;
+    if (dragRectCircleRef.current != null) return true;
+    if (polygonRingSketchDragRef.current != null) return true;
     const tool = mapDrawToolRef.current;
-    if (tool === 'polygon' && polygonRingRef.current.length > 0) return true;
+    if (tool === 'polygon' && isSketchDrawingActiveRef.current) return true;
     if (tool === 'rectangle' || tool === 'circle' || tool === 'box_select') return true;
     if (tool === 'polyline' && polylineStartRef.current) return true;
     if (tool === 'lasso' || tool === 'freehand' || tool === 'text') return true;
@@ -14809,6 +14835,7 @@ export default function SatelliteIntelligence() {
       setRsDrawingModeActive(active);
       if (!active) {
         cancelCurrentDrawing();
+        unlockAgroCloudMapForSketch(getMapInstance() as AgroCloudMapboxMapScrollLike | null);
         setMapDragPanEnabled(true);
       }
     },
@@ -17883,7 +17910,21 @@ export default function SatelliteIntelligence() {
   }, [drawnGeometry, flood.result, hydro.steps.dem]);
 
   const handleMapPointerDown = (evt: any) => {
-    const orig = evt.originalEvent as MouseEvent | undefined;
+    const orig = evt.originalEvent as MouseEvent | TouchEvent | undefined;
+    if (orig && 'touches' in orig && orig.touches.length > 1) return;
+    const toolOnDown = mapDrawToolRef.current;
+    if (
+      orig &&
+      'touches' in orig &&
+      isSketchDrawingActiveRef.current &&
+      (siMapToolUsesSketchTouchLock(toolOnDown) || dragRectCircleRef.current)
+    ) {
+      try {
+        orig.preventDefault();
+      } catch {
+        /* passive listener */
+      }
+    }
     if (orig && 'button' in orig) {
       const btn = (orig as MouseEvent).button;
       if (btn === 2) {
@@ -18350,6 +18391,29 @@ export default function SatelliteIntelligence() {
       }
     };
   }, [mapDrawTool, isMapStyleReady]);
+
+  useEffect(() => {
+    const map = getMapInstance() as AgroCloudMapboxMapScrollLike | null;
+    if (!map || !isMapStyleReady) return;
+    const sketchActive = isSketchDrawingActiveRef.current;
+    const tool = mapDrawTool;
+    if (!sketchActive || !siMapToolUsesSketchTouchLock(tool)) return;
+    lockAgroCloudMapForSketch(map);
+    setMapboxDragPanEnabled(map, false);
+    return () => {
+      unlockAgroCloudMapForSketch(map);
+    };
+  }, [
+    rsDrawingModeActive,
+    cropClassDrawingModeActive,
+    icDrawingModeActive,
+    samTrainDigitizing,
+    trainingAiDigitizing,
+    samAoiDrawing,
+    gisSelectionActive,
+    mapDrawTool,
+    isMapStyleReady,
+  ]);
 
   const undoRedoRef = useRef({ undo: undoGeometry, redo: redoGeometry });
   undoRedoRef.current = { undo: undoGeometry, redo: redoGeometry };
@@ -25622,7 +25686,14 @@ export default function SatelliteIntelligence() {
           ref={siMapContainerRef}
           className={`si-map-container${
             !ftwGlobalMapActive &&
-            ['point', 'polyline', 'polygon', 'rectangle', 'circle', 'box_select'].includes(mapDrawTool)
+            (rsDrawingModeActive ||
+              cropClassDrawingModeActive ||
+              icDrawingModeActive ||
+              samTrainDigitizing ||
+              trainingAiDigitizing ||
+              samAoiDrawing ||
+              gisSelectionActive ||
+              ['point', 'polyline', 'polygon', 'rectangle', 'circle', 'box_select'].includes(mapDrawTool))
               ? ' si-map-container--drawing'
               : ''
           }${weatherPickOnMap ? ' si-map-container--weather-pick' : ''}${

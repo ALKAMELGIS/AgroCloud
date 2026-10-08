@@ -59,6 +59,8 @@ type Options = {
   cameraEaseMs?: number
   /** Primary-button drag orbits instead of pan when this returns true (3D explore). */
   allowPrimaryPointerOrbit?: () => boolean
+  /** When true, orbit drag will not start (e.g. map draw sketch active). */
+  isOrbitBlocked?: () => boolean
   orbitSensitivity?: { bearing?: number; pitch?: number }
   /** When false, skip DEM/terrain resync on every orbit frame (sync on orbit end instead). */
   syncTerrainDuringOrientationDrag?: boolean
@@ -85,6 +87,7 @@ export function useAcpMap3dCamera({
   promoteViewMode3dOnElevationOrbit = true,
   cameraEaseMs = ACP_CAMERA_EASE_MS,
   allowPrimaryPointerOrbit,
+  isOrbitBlocked,
   orbitSensitivity,
   syncTerrainDuringOrientationDrag = true,
   mapPerformanceTuning,
@@ -176,6 +179,7 @@ export function useAcpMap3dCamera({
     setViewState: setMapOrientation,
     getViewState: () => mapViewStateRef.current,
     getMapInstance: () => mapRef.current,
+    isOrbitBlocked,
     allowPrimaryPointerOrbit,
     orbitSensitivity,
     onElevationOrbitEngaged: () => {
