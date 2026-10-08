@@ -3,6 +3,8 @@ import {
   DE_AGRO_STRUCTURE_EXTRUSION_HEIGHT_M,
   developEliteAgroStructureExtrusionHeightM,
   developEliteMapLibreStructuresExtrusionPaint,
+  developEliteMapLibreHiddenHitFillPaint,
+  developEliteMapLibreInvisibleCircleHitPaint,
   developEliteMapLibreStructuresPaint,
 } from './developEliteMapLibreArcgisSymbology'
 
@@ -27,6 +29,24 @@ describe('developEliteAgroStructureExtrusionHeightM', () => {
     expect(
       developEliteAgroStructureExtrusionHeightM({ value: '1007', label: 'Farm Plots', hollow: true }),
     ).toBe(0)
+  })
+})
+
+describe('developEliteMapLibreInvisibleCircleHitPaint', () => {
+  it('zeros all circle paint keys for identify-only layers', () => {
+    const hit = developEliteMapLibreInvisibleCircleHitPaint(10)
+    expect(hit['circle-opacity']).toBe(0)
+    expect(hit['circle-color']).toBe('rgba(0,0,0,0)')
+    expect(hit['circle-stroke-opacity']).toBe(0)
+    expect(hit['circle-radius']).toBe(10)
+  })
+})
+
+describe('developEliteMapLibreHiddenHitFillPaint', () => {
+  it('keeps footprint queryable while visually hidden under extrusion', () => {
+    const hit = developEliteMapLibreHiddenHitFillPaint({ 'fill-color': '#4ade80', 'fill-opacity': 0.88 })
+    expect(hit['fill-opacity']).toBe(0.001)
+    expect(hit['fill-color']).toBe('#4ade80')
   })
 })
 

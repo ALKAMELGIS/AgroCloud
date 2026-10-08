@@ -1,5 +1,6 @@
 import type { Map as MaplibreMap } from 'maplibre-gl'
 import {
+  applyAgroCloudMapGoogleEarthMouseHandlers,
   applyAgroCloudMapPerformanceTuning,
   type AgroCloudMapboxMapScrollLike,
 } from '@/modules/gis/map/agroCloudMapNavigation'
@@ -25,6 +26,7 @@ export function applyDevelopEliteMapLibrePerformanceTuning(map: MaplibreMap | nu
   if (!map) return
   const nav = asNavMap(map)
   applyAgroCloudMapPerformanceTuning(nav, { ...DEVELOP_ELITE_MAPLIBRE_PERFORMANCE_OPTIONS })
+  applyAgroCloudMapGoogleEarthMouseHandlers(nav)
   try {
     nav.scrollZoom?.enable?.()
     nav.scrollZoom?.setWheelZoomRate?.(DEVELOP_ELITE_MAPLIBRE_WHEEL_ZOOM_RATE)
@@ -32,6 +34,8 @@ export function applyDevelopEliteMapLibrePerformanceTuning(map: MaplibreMap | nu
     nav.touchZoomRotate?.enable?.()
     nav.boxZoom?.enable?.()
     nav.setRenderWorldCopies?.(false)
+    ;(nav as { touchPitch?: { enable?: () => void } }).touchPitch?.enable?.()
+    ;(nav as { dragPan?: { enable?: () => void } }).dragPan?.enable?.()
   } catch {
     /* ignore */
   }

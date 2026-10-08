@@ -493,6 +493,8 @@ function DevelopEliteChartsInner({
                 </tr>
               ) : (
                 tableRows.map(row => {
+                  const rowJoinCode = (row.Farm_Code ?? '').trim()
+                  const mapLinkable = Boolean(row._fieldKey?.trim() || rowJoinCode)
                   const mapLinked = Boolean(selectedFieldKey && row._fieldKey === selectedFieldKey)
                   const rowFocused = tableHighlightRowId === row._rowId
                   const rowFlashing = tableFlashRowId === row._rowId
@@ -500,7 +502,7 @@ function DevelopEliteChartsInner({
                     rowFocused ? 'is-table-row-focus' : '',
                     mapLinked ? 'is-table-row-map-selected' : '',
                     rowFlashing ? 'is-table-row-flash' : '',
-                    row._fieldKey ? 'is-table-row-clickable' : '',
+                    mapLinkable ? 'is-table-row-clickable' : '',
                   ]
                     .filter(Boolean)
                     .join(' ')
@@ -508,10 +510,12 @@ function DevelopEliteChartsInner({
                     <tr
                       key={row._rowId}
                       className={rowClass || undefined}
+                      title={mapLinkable ? 'Double-click to fly to farm on map (Farm_Code)' : undefined}
                       onClick={() => onTableRowClick?.(row._rowId)}
                       onDoubleClick={e => {
                         e.preventDefault()
-                        if (row._fieldKey) onTableRowDoubleClick?.(row._rowId)
+                        e.stopPropagation()
+                        if (mapLinkable) onTableRowDoubleClick?.(row._rowId)
                       }}
                     >
                       {tableColumns.map(col => {

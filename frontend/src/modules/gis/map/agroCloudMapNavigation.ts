@@ -543,11 +543,14 @@ export function computeAgroCloudOrbitViewState(
   orbit: AgroCloudOrbitDragState,
   clientX: number,
   clientY: number,
+  sensitivity?: { bearing?: number; pitch?: number },
 ): Pick<AgroCloudMapViewState, 'bearing' | 'pitch'> {
   const dx = clientX - orbit.startX
   const dy = clientY - orbit.startY
-  const bearing = orbit.bearing0 + dx * AGRO_CLOUD_ORBIT_BEARING_SENSITIVITY
-  const pitch = clampAgroCloudMapPitch(orbit.pitch0 - dy * AGRO_CLOUD_ORBIT_PITCH_SENSITIVITY)
+  const bearingSens = sensitivity?.bearing ?? AGRO_CLOUD_ORBIT_BEARING_SENSITIVITY
+  const pitchSens = sensitivity?.pitch ?? AGRO_CLOUD_ORBIT_PITCH_SENSITIVITY
+  const bearing = orbit.bearing0 + dx * bearingSens
+  const pitch = clampAgroCloudMapPitch(orbit.pitch0 - dy * pitchSens)
   return { bearing, pitch }
 }
 
@@ -606,8 +609,14 @@ export type UseAgroCloudMapOrbitNavigationOptions = {
   getMapInstance: () => AgroCloudMapboxMapLike | null | undefined
   /** When true, orbit drag will not start (e.g. active draw tool in Satellite Intelligence). */
   isOrbitBlocked?: () => boolean
+  /** When true, primary-button drag orbits instead of pan (ArcGIS SceneView in 3D). */
+  allowPrimaryPointerOrbit?: () => boolean
+  /** Override default orbit sensitivities (bearing / pitch deg per px). */
+  orbitSensitivity?: { bearing?: number; pitch?: number }
   /** Called when orbit ended after movement (suppress follow-up map click). */
   onOrbitMoved?: () => void
+  /** Called once when an orbit drag ends (after movement). */
+  onOrbitEnd?: () => void
   /** Called when Shift+drag or right-drag orbit moves (auto 3D terrain / elevation). */
   onElevationOrbitEngaged?: () => void
   /** Attach global pointerup listeners (default true). Set false if host manages pointerup. */
@@ -619,7 +628,10 @@ export function useAgroCloudMapOrbitNavigation({
   getViewState,
   getMapInstance,
   isOrbitBlocked,
+  allowPrimaryPointerOrbit,
+  orbitSensitivity,
   onOrbitMoved,
+  onOrbitEnd,
   onElevationOrbitEngaged,
   listenGlobalPointerUp = true,
 }: UseAgroCloudMapOrbitNavigationOptions) {
@@ -633,16 +645,26 @@ export function useAgroCloudMapOrbitNavigation({
     orbitRef.current = null
     setMapboxDragPanEnabled(getMapInstance(), true)
     ensureAgroCloudMapScrollZoom(getMapInstance() as AgroCloudMapboxMapScrollLike)
-    if (orbit.moved) onOrbitMoved?.()
+    if (orbit.moved) {
+      onOrbitMoved?.()
+      onOrbitEnd?.()
+    }
     return orbit.moved
-  }, [getMapInstance, onOrbitMoved])
+  }, [getMapInstance, onOrbitEnd, onOrbitMoved])
 
   const tryStartOrbitFromMapEvent = useCallback(
     (evt: { originalEvent?: MouseEvent } | null | undefined): boolean => {
       const orig = evt?.originalEvent
       const blocked = isOrbitBlocked?.() ?? false
       const rightElevation = canStartAgroCloudRightElevationOrbitDrag(orig, blocked)
-      if (!rightElevation && !canStartAgroCloudShiftOrbitDrag(orig, blocked)) return false
+      const primaryOrbit =
+        !blocked &&
+        Boolean(orig) &&
+        (allowPrimaryPointerOrbit?.() ?? false) &&
+        isPrimaryPointerButton(orig!) &&
+        orig!.button === 0 &&
+        !orig!.shiftKey
+      if (!rightElevation && !canStartAgroCloudShiftOrbitDrag(orig, blocked) && !primaryOrbit) return false
 
       const map = getMapInstance() as AgroCloudMapboxMapScrollLike | null | undefined
       const vs = getViewState()
@@ -658,7 +680,7 @@ export function useAgroCloudMapOrbitNavigation({
       }
       return true
     },
-    [getMapInstance, getViewState, isOrbitBlocked],
+    [allowPrimaryPointerOrbit, getMapInstance, getViewState, isOrbitBlocked],
   )
 
   const applyOrbitMoveFromMapEvent = useCallback(
@@ -676,7 +698,7 @@ export function useAgroCloudMapOrbitNavigation({
         onElevationOrbitEngaged?.()
       }
 
-      const next = computeAgroCloudOrbitViewState(orbit, orig.clientX, orig.clientY)
+      const next = computeAgroCloudOrbitViewState(orbit, orig.clientX, orig.clientY, orbitSensitivity)
       const map = getMapInstance() as AgroCloudMapboxMapScrollLike | null | undefined
       const merged = applyOrbitLockToViewState({ ...getViewState(), ...next }, orbit.lock)
       syncAgroCloudMapboxCamera(map, merged, { orientationOnly: true })
@@ -684,7 +706,7 @@ export function useAgroCloudMapOrbitNavigation({
       setViewState(prev => applyOrbitLockToViewState({ ...prev, ...next }, orbit.lock))
       return true
     },
-    [getMapInstance, getViewState, onElevationOrbitEngaged, setViewState],
+    [getMapInstance, getViewState, onElevationOrbitEngaged, orbitSensitivity, setViewState],
   )
 
   useEffect(() => {

@@ -22,6 +22,7 @@ import {
 import {
   buildDevelopEliteStructureFieldKeyByFarmName,
   buildDevelopEliteStructureFieldKeyByJoinCode,
+  findDevelopEliteStructureFieldKey,
   normalizeDevelopEliteFarmNameKey,
   normalizeDevelopEliteJoinKey,
 } from './developEliteLayerJoin'
@@ -346,6 +347,8 @@ export function useDevelopEliteDashboardData() {
   }, [config.worldCountriesLayerUrl, worldCountries, worldCountryDomain])
 
   const allFeatures = useMemo(() => normalizeStructureFeatures(structures), [structures])
+  const allFeaturesRef = useRef(allFeatures)
+  allFeaturesRef.current = allFeatures
 
   const mergedCountryLabels = useMemo(() => {
     const merged = new Map(countryLabels)
@@ -768,13 +771,43 @@ export function useDevelopEliteDashboardData() {
     }, 1600)
   }, [])
 
+  const resolveTableRowFieldKey = useCallback(
+    (row: Record<string, string> | undefined): string | null => {
+      if (!row) return null
+      if (row._fieldKey?.trim()) return row._fieldKey.trim()
+      const joinField = config.cropStructureJoinField
+      const farmCode = row.Farm_Code ?? row[joinField] ?? ''
+      const farmName = row.Farm_Name ?? ''
+      if (!farmCode.trim() && !farmName.trim()) return null
+      const fromLive = findDevelopEliteStructureFieldKey(
+        allFeaturesRef.current,
+        joinField,
+        farmCode,
+        farmName,
+      )
+      if (fromLive) return fromLive
+      if (farmCode.trim()) {
+        const fromMap = structureFieldKeyByJoinCode.get(normalizeDevelopEliteJoinKey(farmCode))
+        if (fromMap) return fromMap
+      }
+      if (farmName.trim()) {
+        return structureFieldKeyByFarmName.get(normalizeDevelopEliteFarmNameKey(farmName)) ?? null
+      }
+      return null
+    },
+    [config.cropStructureJoinField, structureFieldKeyByFarmName, structureFieldKeyByJoinCode],
+  )
+
   const focusTableRow = useCallback(
     (rowId: string) => {
       setTableHighlightRowId(rowId)
       const row = tableRowsRef.current.find(r => r._rowId === rowId)
-      if (row?._fieldKey) focusFarmOnMap(row._fieldKey)
+      const fieldKey = resolveTableRowFieldKey(row)
+      if (!fieldKey) return
+      setMapHighlightFieldKey(fieldKey)
+      setFilters(f => ({ ...f, selectedFieldKey: fieldKey }))
     },
-    [focusFarmOnMap],
+    [resolveTableRowFieldKey],
   )
 
   const selectChartCropType = useCallback((cropLabel: string) => {
@@ -796,7 +829,7 @@ export function useDevelopEliteDashboardData() {
   const activateTableRowOnMap = useCallback(
     (rowId: string) => {
       const row = tableRowsRef.current.find(r => r._rowId === rowId)
-      const fieldKey = row?._fieldKey
+      const fieldKey = resolveTableRowFieldKey(row)
       if (!fieldKey) return
       setTableHighlightRowId(rowId)
       setTableFlashRowId(rowId)
@@ -805,7 +838,7 @@ export function useDevelopEliteDashboardData() {
         setTableFlashRowId(current => (current === rowId ? null : current))
       }, 1600)
     },
-    [focusFarmOnMap],
+    [focusFarmOnMap, resolveTableRowFieldKey],
   )
 
   const mapFieldHighlightKey = mapHighlightFieldKey ?? filters.selectedFieldKey

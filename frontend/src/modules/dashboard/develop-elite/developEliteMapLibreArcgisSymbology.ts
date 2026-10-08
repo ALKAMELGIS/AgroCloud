@@ -306,18 +306,34 @@ export function developEliteMapLibrePointIconLayout(
   }
 }
 
+/** Identify-only circle — must set every paint key so stale ArcGIS circle-color expressions do not show halos. */
+export function developEliteMapLibreInvisibleCircleHitPaint(hitRadius = 8): Record<string, unknown> {
+  const radius = Math.max(6, hitRadius)
+  return {
+    'circle-radius': radius,
+    'circle-color': 'rgba(0,0,0,0)',
+    'circle-opacity': 0,
+    'circle-blur': 0,
+    'circle-stroke-color': 'rgba(0,0,0,0)',
+    'circle-stroke-opacity': 0,
+    'circle-stroke-width': 0,
+  }
+}
+
+/** @deprecated Prefer {@link developEliteMapLibreInvisibleCircleHitPaint} (does not merge prior paint). */
 export function developEliteMapLibreHiddenHitCirclePaint(circlePaint: Record<string, unknown>): Record<string, unknown> {
   const hitRadius =
     typeof circlePaint['circle-radius'] === 'number'
       ? Math.max(6, circlePaint['circle-radius'] as number)
       : 8
+  return developEliteMapLibreInvisibleCircleHitPaint(hitRadius)
+}
+
+/** Invisible footprint for identify when 3D extrusion replaces visible fill. */
+export function developEliteMapLibreHiddenHitFillPaint(fillPaint: Record<string, unknown>): Record<string, unknown> {
   return {
-    ...circlePaint,
-    'circle-color': 'rgba(0,0,0,0)',
-    'circle-opacity': 0,
-    'circle-stroke-color': 'rgba(0,0,0,0)',
-    'circle-stroke-opacity': 0,
-    'circle-stroke-width': 0,
-    'circle-radius': hitRadius,
+    ...fillPaint,
+    'fill-opacity': 0.001,
+    'fill-outline-color': 'rgba(0,0,0,0)',
   }
 }

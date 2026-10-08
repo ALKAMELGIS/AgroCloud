@@ -3,6 +3,7 @@ import { computeStableGisFeatureKey } from '@/modules/gis/layers/gisFeatureStabl
 import {
   buildDevelopEliteStructureFieldKeyByFarmName,
   buildDevelopEliteStructureFieldKeyByJoinCode,
+  findDevelopEliteStructureFieldKey,
 } from './developEliteLayerJoin'
 import type { DevelopEliteStructureFeature } from './developEliteKpiEngine'
 
@@ -25,5 +26,12 @@ describe('developEliteLayerJoin', () => {
     const features = [poly({ Farm_Name: 'GH-A01', OBJECTID: 2 })]
     const map = buildDevelopEliteStructureFieldKeyByFarmName(features)
     expect(map.get('gh-a01')).toBe(computeStableGisFeatureKey(features[0]!, 0))
+  })
+
+  it('finds structure field key from crops table Farm_Code at activation time', () => {
+    const features = [poly({ Farm_Code: 'MH102', Farm_Name: 'NH-02', OBJECTID: 3 })]
+    expect(findDevelopEliteStructureFieldKey(features, 'Farm_Code', 'mh102', 'NH-02')).toBe(
+      computeStableGisFeatureKey(features[0]!, 0),
+    )
   })
 })

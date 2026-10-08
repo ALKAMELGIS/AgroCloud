@@ -50,6 +50,36 @@ describe('flattenArcgisUniqueValueInfos', () => {
 });
 
 describe('arcgisDrawingInfoToCirclePaint', () => {
+  it('ignores esriPMS classes in uniqueValue (picture markers use icon layers)', () => {
+    const drawingInfo = {
+      renderer: {
+        type: 'uniqueValue',
+        field1: 'SUBTYPE',
+        uniqueValueInfos: [
+          {
+            value: 1,
+            symbol: {
+              type: 'esriPMS',
+              imageData:
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+              contentType: 'image/png',
+              width: 12,
+              height: 12,
+            },
+          },
+          {
+            value: 2,
+            symbol: { type: 'esriSMS', size: 10, color: [169, 0, 230, 255], outline: { color: [0, 0, 0, 255], width: 1 } },
+          },
+        ],
+      },
+    };
+    const paint = arcgisDrawingInfoToCirclePaint(drawingInfo);
+    const match = paint?.['circle-color'] as unknown[];
+    expect(match?.[0]).toBe('match');
+    expect(JSON.stringify(match)).not.toContain('169');
+  });
+
   it('builds match paint for uniqueValue without defaultSymbol', () => {
     const drawingInfo = {
       renderer: {

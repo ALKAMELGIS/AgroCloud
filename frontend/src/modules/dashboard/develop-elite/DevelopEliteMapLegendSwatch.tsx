@@ -59,28 +59,12 @@ export function DevelopEliteMapLegendSwatch({ item }: { item: DevelopEliteMapLeg
   )
 }
 
-/** Compact symbology for the Layers panel (single class or multi-class strip). */
-export function DevelopEliteMapDataLayerSwatch({ rows }: { rows: DevelopEliteMapLegendRow[] }) {
-  if (!rows.length) return null
-  if (rows.length === 1) {
-    return (
-      <span className="develop-elite-map__data-layer-swatch">
-        <DevelopEliteMapLegendSwatch item={rows[0]} />
-      </span>
-    )
-  }
+/** Compact symbology for the Layers panel — same renderer as map legend (incl. esriPMS pictures). */
+export function DevelopEliteMapDataLayerSwatch({ row }: { row: DevelopEliteMapLegendRow | null }) {
+  if (!row) return null
   return (
-    <span className="develop-elite-map__data-layer-swatch develop-elite-map__data-layer-swatch--multi" aria-hidden>
-      {rows.slice(0, 4).map(row => (
-        <span
-          key={row.id}
-          className={`develop-elite-map__data-layer-swatch-segment${row.hollow ? ' is-hollow' : ''}`}
-          style={{
-            backgroundColor: row.hollow ? 'transparent' : row.fillColor,
-            borderColor: row.outlineColor,
-          }}
-        />
-      ))}
+    <span className="develop-elite-map__data-layer-swatch">
+      <DevelopEliteMapLegendSwatch item={row} />
     </span>
   )
 }

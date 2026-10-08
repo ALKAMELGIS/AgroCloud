@@ -210,6 +210,13 @@ function DevelopEliteMapContent({
                 <DevelopEliteMapLibreLayerLiveEngine />
                 <DevelopEliteMapLibreInsightEngine />
                 <DevelopEliteMapLibreFeaturePopupBridge
+                  geojson={geojson}
+                  treesGeojson={treesGeojson}
+                  irrigationValvesGeojson={irrigationValvesGeojson}
+                  irrigationMainPipeGeojson={irrigationMainPipeGeojson}
+                  agriLocationGeojson={agriLocationGeojson}
+                  worldCountriesGeojson={worldCountriesGeojson}
+                  mapLayerVisibility={mapLayerVisibility}
                   structuresDrawingInfo={drawingInfo}
                   treesDrawingInfo={treesDrawingInfo}
                   irrigationValvesDrawingInfo={irrigationValvesDrawingInfo}

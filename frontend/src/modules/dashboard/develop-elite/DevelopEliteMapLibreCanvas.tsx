@@ -13,7 +13,15 @@ import {
   cancelAgroCloudTerrainSync,
   prefetchTerrainApiAvailability,
 } from '@/modules/remote-sensing/terrain/agroCloudMapTerrain'
-import { AGRO_CLOUD_MAP_MAX_PITCH, bindAgroCloudMapViewportTileWarmup } from '@/modules/gis/map/agroCloudMapNavigation'
+import {
+  AGRO_CLOUD_MAP_MAX_PITCH,
+  bindAgroCloudMapGoogleEarthMouseHandlers,
+  bindAgroCloudMapViewportTileWarmup,
+} from '@/modules/gis/map/agroCloudMapNavigation'
+import {
+  DEVELOP_ELITE_ORBIT_SENSITIVITY,
+  developEliteMapAllowsPrimaryPointerOrbit,
+} from './developEliteMapLibreOrbit'
 import {
   applyDevelopEliteMapLibrePerformanceTuning,
   DEVELOP_ELITE_MAPLIBRE_PERFORMANCE_OPTIONS,
@@ -78,7 +86,11 @@ export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
     terrainExplicitToolbarGate: true,
     autoPromoteViewMode3dFromPitch: false,
     promoteViewMode3dOnElevationOrbit: false,
-    cameraEaseMs: 320,
+    cameraEaseMs: 220,
+    allowPrimaryPointerOrbit: () =>
+      developEliteMapAllowsPrimaryPointerOrbit(mapRef.current, viewMode3dRef.current),
+    orbitSensitivity: DEVELOP_ELITE_ORBIT_SENSITIVITY,
+    syncTerrainDuringOrientationDrag: false,
     mapPerformanceTuning: { ...DEVELOP_ELITE_MAPLIBRE_PERFORMANCE_OPTIONS },
   })
 
@@ -165,6 +177,7 @@ export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
     if (map.loaded()) markMapReady()
     else map.once('load', markMapReady)
     applyDevelopEliteMapLibrePerformanceTuning(map)
+    const unbindEarthMouse = bindAgroCloudMapGoogleEarthMouseHandlers(map as never)
     restoreDevelopElitePortfolioGlobeBasemap(map, {
       basemapId: basemapRef.current,
       viewMode3d: DEVELOP_ELITE_MAP_DEFAULT_VIEW_3D,
@@ -183,8 +196,6 @@ export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
     }
     map.on('load', reapplyAfterStyle)
     map.on('style.load', reapplyAfterStyle)
-    map.on('move', scheduleViewportEnvironment)
-    map.on('zoom', scheduleViewportEnvironment)
     map.on('zoomend', scheduleViewportEnvironment)
     map.on('moveend', scheduleViewportEnvironment)
     const unbindTileWarmup = bindAgroCloudMapViewportTileWarmup(map as never, {
@@ -204,10 +215,9 @@ export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
       map.off('load', reapplyAfterStyle)
       map.off('style.load', reapplyAfterStyle)
       if (viewportEnvRaf) cancelAnimationFrame(viewportEnvRaf)
-      map.off('move', scheduleViewportEnvironment)
-      map.off('zoom', scheduleViewportEnvironment)
       map.off('zoomend', scheduleViewportEnvironment)
       map.off('moveend', scheduleViewportEnvironment)
+      unbindEarthMouse()
       unbindTileWarmup()
       ro.disconnect()
       cancelAgroCloudTerrainSync(map as never)

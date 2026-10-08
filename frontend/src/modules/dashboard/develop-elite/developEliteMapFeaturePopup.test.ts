@@ -24,7 +24,8 @@ describe('developEliteMapFeaturePopup', () => {
     })
     expect(html).toContain('Date Tree')
     expect(html).toContain('Tree')
-    expect(html).toContain('data-develop-elite-popup-zoom')
+    expect(html).toContain('data-develop-elite-popup-zoom-link')
+    expect(html).toContain('develop-elite-map-popup--ago')
     expect(html).not.toContain('Shape__Area')
   })
 

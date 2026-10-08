@@ -43,11 +43,22 @@ import { DevelopEliteMapInsightToolbar } from './DevelopEliteMapInsightTools'
 import { DevelopEliteMapLayerLivePanel } from './DevelopEliteMapLayerLivePanel'
 import { useDevelopEliteMapChrome, type DevelopEliteMapPanelId } from './DevelopEliteMapChrome'
 import { useDevelopEliteCompactViewport } from './developEliteCompactViewport'
+import {
+  DevelopEliteMapNavigator,
+  DevelopEliteMapNavigatorCompassGlyph,
+  DevelopEliteMapNavigatorContextMenu,
+  DevelopEliteMapNavigatorFab,
+} from './DevelopEliteMapNavigator'
 
 const TOPOGRAPHIC_3D_TOOL_LABEL =
-  '3D Topographic — instant Esri relief basemap with terrain mesh and Agro Structure extrusion. Shift+drag or right-drag to orbit.'
+  '3D Topographic — terrain + structure extrusion. Drag to orbit 360° (Shift+drag or right-drag anytime; left-drag orbits when 3D is active).'
 
 const TOOLS: Array<{ id: string; icon: string; label: string }> = [
+  {
+    id: 'navigator',
+    icon: 'fa-compass',
+    label: 'Navigator — touch pan, rotate, zoom (View tab style)',
+  },
   { id: 'search', icon: 'fa-magnifying-glass', label: 'Search map' },
   { id: 'layers', icon: 'fa-layer-group', label: 'Layers' },
   { id: 'satellite', icon: 'fa-satellite-dish', label: 'Satellite Intelligence' },
@@ -288,6 +299,8 @@ export function DevelopEliteMapTools({
   const [layerPanelStatus, setLayerPanelStatus] = useState('')
   const [layerDialog, setLayerDialog] = useState<DevelopEliteMapDataLayerDialogState>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [navigatorOpen, setNavigatorOpen] = useState(true)
+  const [navigatorPlanar, setNavigatorPlanar] = useState(true)
   const panelRef = useRef<HTMLDivElement>(null)
   const searchSeq = useRef(0)
   const mapChrome = useDevelopEliteMapChrome()
@@ -494,6 +507,10 @@ export function DevelopEliteMapTools({
           onPin(null)
           setPanel(null)
           break
+        case 'navigator':
+          setNavigatorOpen(prev => !prev)
+          setPanel(null)
+          break
         case 'locate': {
           if (!map || typeof navigator === 'undefined' || !navigator.geolocation) {
             setLocateStatus('GPS unavailable')
@@ -610,24 +627,6 @@ export function DevelopEliteMapTools({
                   window.setTimeout(() => setLayerPanelStatus(''), 4000)
                 }}
               />
-              <DevelopEliteMapDataLayerActionDialogs
-                dialog={layerDialog}
-                onClose={() => setLayerDialog(null)}
-                sources={searchSources}
-                drawingInfo={drawingInfo}
-                treesDrawingInfo={treesDrawingInfo}
-                irrigationValvesDrawingInfo={irrigationValvesDrawingInfo}
-                irrigationMainPipeDrawingInfo={irrigationMainPipeDrawingInfo}
-                agriLocationDrawingInfo={agriLocationDrawingInfo}
-                serviceUrl={
-                  layerDialog
-                    ? developEliteMapServiceUrlForLayer(dashboardConfig, layerDialog.layerId)
-                    : undefined
-                }
-                dataSourceDef={
-                  layerDialog ? developEliteDataSourceForMapLayer(layerDialog.layerId) ?? null : null
-                }
-              />
             </div>
           ) : null}
           {panel === 'satellite' ? (
@@ -657,11 +656,14 @@ export function DevelopEliteMapTools({
         </div>
       ) : null}
       {locateStatus ? <p className="develop-elite-map__toast" role="status">{locateStatus}</p> : null}
+      <div className="develop-elite-map__map-chrome">
       <div className="develop-elite-map__tools">
         {TOOLS.map(tool => {
           const isTopographic3d = tool.id === 'topographic3d'
+          const isNavigator = tool.id === 'navigator'
           const isActive =
             (isTopographic3d && viewMode3d) ||
+            (isNavigator && navigatorOpen) ||
             panel === tool.id ||
             (tool.id === 'fullscreen' && isFullscreen)
           const iconClass =
@@ -679,13 +681,17 @@ export function DevelopEliteMapTools({
             <button
               key={tool.id}
               type="button"
-              className={`develop-elite-map__tool${isTopographic3d ? ' develop-elite-map__tool--topographic3d' : ''}${isTopographic3d && viewMode3d ? ' develop-elite-map__tool--view3d' : ''}${isActive ? ' is-active' : ''}`}
+              className={`develop-elite-map__tool${isTopographic3d ? ' develop-elite-map__tool--topographic3d' : ''}${isNavigator ? ' develop-elite-map__tool--navigator' : ''}${isTopographic3d && viewMode3d ? ' develop-elite-map__tool--view3d' : ''}${isActive ? ' is-active' : ''}`}
               title={tool.label}
               aria-label={ariaLabel}
               aria-pressed={isActive}
               onClick={() => onToolClick(tool.id)}
             >
-              <i className={`fa-solid ${iconClass}`} aria-hidden />
+              {isNavigator ? (
+                <DevelopEliteMapNavigatorCompassGlyph className="develop-elite-map__navigator-compass-glyph develop-elite-map__navigator-compass-glyph--tool" />
+              ) : (
+                <i className={`fa-solid ${iconClass}`} aria-hidden />
+              )}
             </button>
           )
         })}
@@ -701,6 +707,14 @@ export function DevelopEliteMapTools({
           <i className="fa-solid fa-bars-staggered" aria-hidden />
         </button>
       </div>
+      <DevelopEliteMapNavigatorContextMenu viewportRef={viewportRef} onOpenChange={setNavigatorOpen} />
+      <DevelopEliteMapNavigator
+        open={navigatorOpen}
+        onOpenChange={setNavigatorOpen}
+        viewportRef={viewportRef}
+        planarNavigation={navigatorPlanar}
+        onPlanarNavigationChange={setNavigatorPlanar}
+      />
       <div className="develop-elite-map__zoom-group develop-elite-map__zoom-group--bottom" role="group" aria-label="Zoom">
         <button
           type="button"
@@ -721,6 +735,25 @@ export function DevelopEliteMapTools({
           <span aria-hidden>−</span>
         </button>
       </div>
+      <DevelopEliteMapDataLayerActionDialogs
+        dialog={layerDialog}
+        onClose={() => setLayerDialog(null)}
+        sources={searchSources}
+        drawingInfo={drawingInfo}
+        treesDrawingInfo={treesDrawingInfo}
+        irrigationValvesDrawingInfo={irrigationValvesDrawingInfo}
+        irrigationMainPipeDrawingInfo={irrigationMainPipeDrawingInfo}
+        agriLocationDrawingInfo={agriLocationDrawingInfo}
+        serviceUrl={
+          layerDialog ? developEliteMapServiceUrlForLayer(dashboardConfig, layerDialog.layerId) : undefined
+        }
+        dataSourceDef={layerDialog ? developEliteDataSourceForMapLayer(layerDialog.layerId) ?? null : null}
+      />
+      </div>
+      <DevelopEliteMapNavigatorFab
+        open={navigatorOpen}
+        onToggle={() => setNavigatorOpen(prev => !prev)}
+      />
     </>
   )
 }

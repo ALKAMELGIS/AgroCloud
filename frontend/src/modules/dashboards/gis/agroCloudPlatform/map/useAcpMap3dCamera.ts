@@ -57,6 +57,11 @@ type Options = {
   promoteViewMode3dOnElevationOrbit?: boolean
   /** Camera ease when entering/exiting 3D (ms). */
   cameraEaseMs?: number
+  /** Primary-button drag orbits instead of pan when this returns true (3D explore). */
+  allowPrimaryPointerOrbit?: () => boolean
+  orbitSensitivity?: { bearing?: number; pitch?: number }
+  /** When false, skip DEM/terrain resync on every orbit frame (sync on orbit end instead). */
+  syncTerrainDuringOrientationDrag?: boolean
   mapPerformanceTuning?: {
     tileCacheMb?: number
     maxParallelImageRequests?: number
@@ -79,6 +84,9 @@ export function useAcpMap3dCamera({
   autoPromoteViewMode3dFromPitch = true,
   promoteViewMode3dOnElevationOrbit = true,
   cameraEaseMs = ACP_CAMERA_EASE_MS,
+  allowPrimaryPointerOrbit,
+  orbitSensitivity,
+  syncTerrainDuringOrientationDrag = true,
   mapPerformanceTuning,
 }: Options) {
   const basemapIdRef = useRef(basemapId)
@@ -152,7 +160,7 @@ export function useAcpMap3dCamera({
       const pitch = typeof next.pitch === 'number' ? next.pitch : map.getPitch()
       const bearing = typeof next.bearing === 'number' ? next.bearing : map.getBearing()
       mapViewStateRef.current = { pitch, bearing }
-      syncTerrain(map, pitch)
+      if (syncTerrainDuringOrientationDrag) syncTerrain(map, pitch)
       if (
         autoPromoteViewMode3dFromPitch &&
         pitch >= AGRO_CLOUD_TERRAIN_PITCH_THRESHOLD &&
@@ -161,15 +169,21 @@ export function useAcpMap3dCamera({
         setViewMode3d(true)
       }
     },
-    [autoPromoteViewMode3dFromPitch, mapRef, setViewMode3d, syncTerrain],
+    [autoPromoteViewMode3dFromPitch, mapRef, setViewMode3d, syncTerrain, syncTerrainDuringOrientationDrag],
   )
 
   const orbitNav = useAgroCloudMapOrbitNavigation({
     setViewState: setMapOrientation,
     getViewState: () => mapViewStateRef.current,
     getMapInstance: () => mapRef.current,
+    allowPrimaryPointerOrbit,
+    orbitSensitivity,
     onElevationOrbitEngaged: () => {
       if (promoteViewMode3dOnElevationOrbit) setViewMode3d(true)
+    },
+    onOrbitEnd: () => {
+      const map = mapRef.current
+      if (map) syncTerrain(map, map.getPitch())
     },
   })
 
@@ -223,7 +237,10 @@ export function useAcpMap3dCamera({
       const live = mapRef.current
       if (!live) return
       mapViewStateRef.current = { bearing: live.getBearing(), pitch: live.getPitch() }
-      if (live.getPitch() >= AGRO_CLOUD_TERRAIN_PITCH_THRESHOLD) {
+      if (
+        syncTerrainDuringOrientationDrag &&
+        live.getPitch() >= AGRO_CLOUD_TERRAIN_PITCH_THRESHOLD
+      ) {
         syncTerrain(live, live.getPitch())
       }
     }
@@ -240,7 +257,7 @@ export function useAcpMap3dCamera({
       map.off('move', onMove)
       cancelAgroCloudTerrainSync(asNavMap(map))
     }
-  }, [mapInstance, mapPerformanceTuning, mapRef, syncTerrain])
+  }, [mapInstance, mapPerformanceTuning, mapRef, syncTerrain, syncTerrainDuringOrientationDrag])
 
   useEffect(() => {
     const map = mapRef.current

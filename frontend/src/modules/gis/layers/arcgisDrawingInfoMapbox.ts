@@ -533,7 +533,10 @@ export function arcgisDrawingInfoToLinePaint(drawingInfo: any, fallbackLineColor
 type CirclePaintProps = Record<string, unknown>;
 
 function smsSymbolToCircleProps(symbol: any): CirclePaintProps | null {
-  if (!symbol || symbol.type !== 'esriSMS') return pmsSymbolToCircleProps(symbol);
+  if (!symbol || typeof symbol !== 'object') return null;
+  const t = String(symbol.type || '');
+  /** Picture / polygon / line symbols use icon or fill layers — never stack colored circles underneath. */
+  if (t !== 'esriSMS') return null;
   const fillCol = symbolFillColor(symbol) || 'rgba(59,130,246,0.85)';
   const outline = symbolOutlineStyle(symbol);
   const size = typeof symbol?.size === 'number' && Number.isFinite(symbol.size) ? Math.max(2, symbol.size) : 8;
@@ -545,22 +548,6 @@ function smsSymbolToCircleProps(symbol: any): CirclePaintProps | null {
     'circle-opacity': fillOp,
     'circle-stroke-color': outline.color || 'rgba(30,41,59,0.9)',
     'circle-stroke-width': outline.width,
-    'circle-stroke-opacity': 0.95,
-  };
-}
-
-/** Approximate picture markers as circles until sprite icons are registered. */
-function pmsSymbolToCircleProps(symbol: any): CirclePaintProps | null {
-  if (!symbol || symbol.type !== 'esriPMS') return null;
-  const w = Number.isFinite(symbol.width) ? symbol.width : Number.isFinite(symbol.size) ? symbol.size : 16;
-  const h = Number.isFinite(symbol.height) ? symbol.height : Number.isFinite(symbol.size) ? symbol.size : 16;
-  const radius = Math.max(4, Math.min(22, Math.max(w, h) / 2));
-  return {
-    'circle-radius': radius,
-    'circle-color': 'rgba(59,130,246,0.88)',
-    'circle-opacity': 0.92,
-    'circle-stroke-color': 'rgba(30,41,59,0.85)',
-    'circle-stroke-width': 1,
     'circle-stroke-opacity': 0.95,
   };
 }

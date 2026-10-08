@@ -9,7 +9,11 @@ import {
   arcgisFeatureToLeafletPathOptions,
   layerOpacityFromDrawingInfo,
 } from '@/modules/gis/layers/arcgisDrawingInfoLeaflet'
-import { parseEsriPointSymbol, type ArcgisPointSymbolPreview } from '@/modules/gis/layers/arcgisPointSymbol'
+import {
+  arcgisPointSymbolPreviewFromDrawingInfo,
+  parseEsriPointSymbol,
+  type ArcgisPointSymbolPreview,
+} from '@/modules/gis/layers/arcgisPointSymbol'
 import { AGRO_STRUCTURES_STRUCTURE_TYPE_CATALOG } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
 import type { DevelopEliteMapDataLayerId } from './developEliteMapDataLayers'
 
@@ -89,6 +93,50 @@ function isArcgisPointMarkerSymbol(symbol: unknown): boolean {
   return t === 'esriSMS' || t === 'esriPMS'
 }
 
+function isPointMarkerPreview(preview: ArcgisPointSymbolPreview): boolean {
+  return (
+    preview.kind === 'picture' ||
+    preview.symbolType === 'esriSMS' ||
+    preview.symbolType === 'esriPMS'
+  )
+}
+
+function legendRowFromPointPreview(
+  group: DevelopEliteMapLegendRow['group'],
+  id: string,
+  label: string,
+  pointPreview: ArcgisPointSymbolPreview,
+): DevelopEliteMapLegendRow {
+  return {
+    id,
+    label,
+    fillColor: pointPreview.fillColor,
+    outlineColor: pointPreview.strokeColor,
+    outlineWidth: pointPreview.strokeWidth,
+    hollow: false,
+    group,
+    symbolStyle: 'point',
+    pointPreview,
+  }
+}
+
+function buildDevelopElitePointLayerLegendFromRenderer(
+  drawingInfo: Record<string, unknown> | null | undefined,
+  group: 'trees' | 'irrigation-valves' | 'agri-location',
+): DevelopEliteMapLegendRow[] {
+  const layerOpacity = layerOpacityFromDrawingInfo(drawingInfo)
+  const preview = arcgisPointSymbolPreviewFromDrawingInfo(drawingInfo, layerOpacity)
+  if (!preview || !isPointMarkerPreview(preview)) return []
+  return [
+    legendRowFromPointPreview(
+      group,
+      `${group}-renderer-symbol`,
+      preview.label || group,
+      preview,
+    ),
+  ]
+}
+
 /** Unique-value classes for point layers — preserves picture markers and simple markers. */
 export function buildDevelopElitePointLayerLegendItems(
   drawingInfo: Record<string, unknown> | null | undefined,
@@ -106,7 +154,7 @@ export function buildDevelopElitePointLayerLegendItems(
     const sym = uvi?.symbol
     if (isArcgisPointMarkerSymbol(sym)) {
       const pointPreview = parseEsriPointSymbol(sym, layerOpacity)
-      if (pointPreview) {
+      if (pointPreview && isPointMarkerPreview(pointPreview)) {
         rows.push({
           id: `${group}-${value}-${label}`,
           label,
@@ -118,15 +166,7 @@ export function buildDevelopElitePointLayerLegendItems(
           symbolStyle: 'point',
           pointPreview,
         })
-        continue
       }
-    }
-    const polyItems = buildArcgisUniqueValueLegendItems(
-      { renderer: { type: 'uniqueValue', uniqueValueInfos: [uvi] } },
-      layerOpacity,
-    )
-    if (polyItems[0]) {
-      rows.push(legendItemToRow(polyItems[0], group))
     }
   }
 
@@ -188,8 +228,7 @@ export function buildDevelopEliteTreeLegendItems(
 ): DevelopEliteMapLegendRow[] {
   const pointRows = buildDevelopElitePointLayerLegendItems(drawingInfo, 'trees')
   if (pointRows.length) return pointRows
-  const fromApi = buildArcgisUniqueValueLegendItems(drawingInfo)
-  return fromApi.map(item => legendItemToRow(item, 'trees'))
+  return buildDevelopElitePointLayerLegendFromRenderer(drawingInfo, 'trees')
 }
 
 export function buildDevelopEliteAgriLocationLegendItems(
@@ -197,8 +236,7 @@ export function buildDevelopEliteAgriLocationLegendItems(
 ): DevelopEliteMapLegendRow[] {
   const pointRows = buildDevelopElitePointLayerLegendItems(drawingInfo, 'agri-location')
   if (pointRows.length) return pointRows
-  const fromApi = buildArcgisUniqueValueLegendItems(drawingInfo)
-  return fromApi.map(item => legendItemToRow(item, 'agri-location'))
+  return buildDevelopElitePointLayerLegendFromRenderer(drawingInfo, 'agri-location')
 }
 
 export function buildDevelopEliteIrrigationValvesLegendItems(
@@ -206,8 +244,7 @@ export function buildDevelopEliteIrrigationValvesLegendItems(
 ): DevelopEliteMapLegendRow[] {
   const pointRows = buildDevelopElitePointLayerLegendItems(drawingInfo, 'irrigation-valves')
   if (pointRows.length) return pointRows
-  const fromApi = buildArcgisUniqueValueLegendItems(drawingInfo)
-  return fromApi.map(item => legendItemToRow(item, 'irrigation-valves'))
+  return buildDevelopElitePointLayerLegendFromRenderer(drawingInfo, 'irrigation-valves')
 }
 
 export function buildDevelopEliteIrrigationMainPipeLegendItems(
@@ -347,9 +384,9 @@ const DEFAULT_LAYER_PREVIEW: Partial<Record<DevelopEliteMapDataLayerId, DevelopE
   'irrigation-valves': [
     {
       id: 'valves-preview',
-      label: 'Irrigation valves',
-      fillColor: '#a78bfa',
-      outlineColor: '#ddd6fe',
+      label: 'Irrigation System Valve',
+      fillColor: '#38bdf8',
+      outlineColor: '#0ea5e9',
       outlineWidth: 1,
       hollow: false,
       group: 'irrigation-valves',
@@ -358,8 +395,8 @@ const DEFAULT_LAYER_PREVIEW: Partial<Record<DevelopEliteMapDataLayerId, DevelopE
         kind: 'circle',
         symbolType: 'esriSMS',
         label: 'Valve',
-        fillColor: '#a78bfa',
-        strokeColor: '#ddd6fe',
+        fillColor: '#38bdf8',
+        strokeColor: '#0ea5e9',
         strokeWidth: 1,
         radius: 6,
         opacity: 1,
@@ -403,11 +440,10 @@ const DEFAULT_LAYER_PREVIEW: Partial<Record<DevelopEliteMapDataLayerId, DevelopE
   'world-countries': [OVERLAY_LEGEND_ROWS[0]],
 }
 
-/** ArcGIS-style preview swatches for the Layers panel toggle rows. */
-export function developEliteMapDataLayerLegendPreviews(
+function developEliteMapDataLayerLegendRows(
   layerId: DevelopEliteMapDataLayerId,
   legend: DevelopEliteMapLegendSections,
-  maxClasses = 4,
+  maxClasses: number,
 ): DevelopEliteMapLegendRow[] {
   const pick = (rows: DevelopEliteMapLegendRow[]) =>
     rows.length ? rows.slice(0, maxClasses) : (DEFAULT_LAYER_PREVIEW[layerId] ?? [])
@@ -427,5 +463,48 @@ export function developEliteMapDataLayerLegendPreviews(
       return pick(legend.overlays.filter(row => row.id === 'overlay-world-countries'))
     default:
       return DEFAULT_LAYER_PREVIEW[layerId] ?? []
+  }
+}
+
+/** ArcGIS-style preview swatches for the Layers panel toggle rows. */
+export function developEliteMapDataLayerLegendPreviews(
+  layerId: DevelopEliteMapDataLayerId,
+  legend: DevelopEliteMapLegendSections,
+  maxClasses = 4,
+): DevelopEliteMapLegendRow[] {
+  return developEliteMapDataLayerLegendRows(layerId, legend, maxClasses)
+}
+
+/** One TOC swatch per layer — matches live map symbol (picture markers, lines, polygons). */
+function isPointLayerLegendRow(row: DevelopEliteMapLegendRow): boolean {
+  return (
+    row.symbolStyle === 'point' &&
+    Boolean(row.pointPreview && isPointMarkerPreview(row.pointPreview))
+  )
+}
+
+export function developEliteMapDataLayerLegendPreviewRow(
+  layerId: DevelopEliteMapDataLayerId,
+  legend: DevelopEliteMapLegendSections,
+): DevelopEliteMapLegendRow | null {
+  const rows = developEliteMapDataLayerLegendRows(layerId, legend, 32)
+  const pointRows = rows.filter(isPointLayerLegendRow)
+  const defaults = DEFAULT_LAYER_PREVIEW[layerId] ?? []
+
+  switch (layerId) {
+    case 'trees':
+    case 'irrigation-valves':
+    case 'agri-location': {
+      const picture = pointRows.find(r => r.pointPreview?.kind === 'picture' && r.pointPreview.imageUrl)
+      if (picture) return picture
+      if (pointRows[0]) return pointRows[0]
+      return defaults[0] ?? null
+    }
+    case 'irrigation-main-pipe':
+      return rows.find(r => r.symbolStyle === 'directional-line') ?? rows[0] ?? null
+    case 'agro-structures':
+      return rows.find(r => !r.hollow && r.fillColor !== 'transparent') ?? rows[0] ?? null
+    default:
+      return rows[0] ?? defaults[0] ?? null
   }
 }

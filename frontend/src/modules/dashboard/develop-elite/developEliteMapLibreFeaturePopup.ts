@@ -1,4 +1,8 @@
-import maplibregl, { type Map as MaplibreMap, type MapMouseEvent } from 'maplibre-gl'
+import maplibregl, {
+  type Map as MaplibreMap,
+  type MapLayerMouseEvent,
+  type MapMouseEvent,
+} from 'maplibre-gl'
 import { bbox } from '@turf/turf'
 import type { DevelopEliteMapDataLayerId } from './developEliteMapDataLayers'
 import { DEVELOP_ELITE_MAP_DATA_LAYERS } from './developEliteMapDataLayers'
@@ -6,6 +10,7 @@ import {
   buildDevelopEliteArcgisFeaturePopupHtml,
   developEliteMapLayerSupportsPopup,
   DEVELOP_ELITE_MAP_POPUP_WRAP_CLASS,
+  wireDevelopEliteMapPopupPager,
   wireDevelopEliteMapPopupZoomButton,
 } from './developEliteMapFeaturePopup'
 import { DE_MAPLIBRE_POPUP_QUERY_LAYER_IDS } from './developEliteMapLibreOverlays'
@@ -13,16 +18,32 @@ import { DE_MAPLIBRE_STRUCTURE_HIGHLIGHT_LAYER_IDS } from './developEliteMapLibr
 import { developEliteMapLibreCinematicFlyToBbox } from './developEliteMapLibreCinematicFly'
 import { developEliteMapLibreHasLayer } from './developEliteMapLibreStyle'
 import { computeStableGisFeatureKey } from '@/modules/gis/layers/gisFeatureStableKey'
+import type { DevelopEliteMapSearchSources } from './developEliteMapSearch'
+import {
+  enrichDevelopEliteMapIdentifyFeature,
+  fallbackDevelopEliteMapIdentifyAtLngLat,
+} from './developEliteMapLibreIdentify'
+import { developEliteMapAllowsPrimaryPointerOrbit } from './developEliteMapLibreOrbit'
 
 export type DevelopEliteMapLibreFeaturePopupOpts = {
   viewMode3d: boolean
+  identifyHitRadiusPx?: number
   countryLabels?: Map<string, string> | null
+  sources?: DevelopEliteMapSearchSources | null
   structuresDrawingInfo?: Record<string, unknown> | null
   treesDrawingInfo?: Record<string, unknown> | null
   irrigationValvesDrawingInfo?: Record<string, unknown> | null
   irrigationMainPipeDrawingInfo?: Record<string, unknown> | null
   agriLocationDrawingInfo?: Record<string, unknown> | null
   onSelectStructureFieldKey?: (fieldKey: string) => void
+}
+
+const DEFAULT_IDENTIFY_HIT_RADIUS_PX = 8
+const TAP_IDENTIFY_MAX_MOVE_PX = 6
+
+type PopupCandidate = {
+  feature: GeoJSON.Feature
+  layerKey: DevelopEliteMapDataLayerId
 }
 
 const HIGHLIGHT_LAYER_TO_DATA: Record<string, DevelopEliteMapDataLayerId> = {
@@ -73,11 +94,33 @@ function drawingInfoForLayer(
 }
 
 function queryPopupLayerIds(map: MaplibreMap): string[] {
-  const ids = [
-    ...DE_MAPLIBRE_STRUCTURE_HIGHLIGHT_LAYER_IDS,
-    ...DE_MAPLIBRE_POPUP_QUERY_LAYER_IDS,
+  const ids = [...DE_MAPLIBRE_STRUCTURE_HIGHLIGHT_LAYER_IDS, ...DE_MAPLIBRE_POPUP_QUERY_LAYER_IDS]
+  return ids.filter(id => {
+    if (!developEliteMapLibreHasLayer(map, id)) return false
+    try {
+      const visibility = map.getLayoutProperty(id, 'visibility')
+      return visibility !== 'none'
+    } catch {
+      return true
+    }
+  })
+}
+
+function queryIdentifyFeatures(
+  map: MaplibreMap,
+  point: { x: number; y: number },
+  layerIds: string[],
+  radiusPx: number,
+): ReturnType<MaplibreMap['queryRenderedFeatures']> {
+  if (!layerIds.length) return []
+  let hits = map.queryRenderedFeatures([point.x, point.y], { layers: layerIds })
+  if (hits.length) return hits
+  const radius = Math.max(4, radiusPx)
+  const box: [[number, number], [number, number]] = [
+    [point.x - radius, point.y - radius],
+    [point.x + radius, point.y + radius],
   ]
-  return ids.filter(id => developEliteMapLibreHasLayer(map, id))
+  return map.queryRenderedFeatures(box, { layers: layerIds })
 }
 
 export function zoomDevelopEliteMapLibreFeature(
@@ -104,58 +147,30 @@ export function registerDevelopEliteMapLibreFeaturePopup(
 ): () => void {
   const popup = new maplibregl.Popup({
     closeButton: true,
-    closeOnClick: true,
-    className: DEVELOP_ELITE_MAP_POPUP_WRAP_CLASS,
-    maxWidth: '224px',
-    offset: 12,
+    closeOnClick: false,
+    className: `${DEVELOP_ELITE_MAP_POPUP_WRAP_CLASS} develop-elite-map-popup-wrap--ago`,
+    maxWidth: '320px',
+    offset: 16,
     anchor: 'bottom',
   })
 
-  const popupFeatureRef = new WeakMap<maplibregl.Popup, GeoJSON.Feature>()
+  let identifyStack: PopupCandidate[] = []
+  let identifyIndex = 0
+  let identifyLngLat: [number, number] | null = null
 
-  const onZoom = (feature: GeoJSON.Feature) => {
-    zoomDevelopEliteMapLibreFeature(map, feature, opts.viewMode3d)
+  const boundLayerIds = new Set<string>()
+
+  const candidateDedupeKey = (candidate: PopupCandidate): string => {
+    const enriched = enrichDevelopEliteMapIdentifyFeature(candidate.feature, candidate.layerKey, opts.sources)
+    const stable = computeStableGisFeatureKey(enriched)
+    if (stable) return `${candidate.layerKey}:${stable}`
+    const oid = (enriched.properties as Record<string, unknown> | undefined)?.OBJECTID
+    return `${candidate.layerKey}:${String(oid ?? '')}:${candidate.layerKey}`
   }
 
-  popup.on('open', () => {
-    const feature = popupFeatureRef.get(popup)
-    wireDevelopEliteMapPopupZoomButton(popup.getElement(), () => {
-      if (feature) onZoom(feature)
-    })
-  })
-
-  const showFeature = (feature: GeoJSON.Feature, layerKey: DevelopEliteMapDataLayerId, lngLat: [number, number]) => {
-    const props = (feature.properties ?? {}) as Record<string, unknown>
-    const layerTitle = LAYER_LABEL.get(layerKey) ?? layerKey
-    const html = buildDevelopEliteArcgisFeaturePopupHtml(layerTitle, props, {
-      layerKey,
-      drawingInfo: drawingInfoForLayer(layerKey, opts),
-      countryLabels: opts.countryLabels ?? null,
-    })
-    popupFeatureRef.set(popup, feature)
-    popup.setHTML(html).setLngLat(lngLat).addTo(map)
-
-    if (layerKey === 'agro-structures' && opts.onSelectStructureFieldKey) {
-      const fieldKey = computeStableGisFeatureKey(feature)
-      if (fieldKey) opts.onSelectStructureFieldKey(fieldKey)
-    }
-  }
-
-  const onClick = (event: MapMouseEvent) => {
-    const layerIds = queryPopupLayerIds(map)
-    if (!layerIds.length) return
-
-    let hits = map.queryRenderedFeatures(event.point, { layers: layerIds })
-    if (!hits.length) {
-      const radius = 6
-      const box: [[number, number], [number, number]] = [
-        [event.point.x - radius, event.point.y - radius],
-        [event.point.x + radius, event.point.y + radius],
-      ]
-      hits = map.queryRenderedFeatures(box, { layers: layerIds })
-    }
-    if (!hits.length) return
-
+  const hitsToCandidates = (hits: ReturnType<MaplibreMap['queryRenderedFeatures']>): PopupCandidate[] => {
+    const seen = new Set<string>()
+    const out: PopupCandidate[] = []
     for (const hit of hits) {
       const layerKey = resolvePopupDataLayer(hit.layer.id)
       if (!layerKey || !developEliteMapLayerSupportsPopup(layerKey)) continue
@@ -166,13 +181,146 @@ export function registerDevelopEliteMapLibreFeaturePopup(
         geometry,
         properties: (hit.properties ?? {}) as Record<string, unknown>,
       }
-      event.preventDefault()
-      showFeature(feature, layerKey, [event.lngLat.lng, event.lngLat.lat])
-      return
+      const candidate: PopupCandidate = { feature, layerKey }
+      const key = candidateDedupeKey(candidate)
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(candidate)
+    }
+    return out
+  }
+
+  const wirePopupActions = (feature: GeoJSON.Feature) => {
+    const root = popup.getElement()
+    wireDevelopEliteMapPopupZoomButton(root, () => {
+      zoomDevelopEliteMapLibreFeature(map, feature, opts.viewMode3d)
+    })
+    wireDevelopEliteMapPopupPager(root, {
+      onPrev:
+        identifyStack.length > 1
+          ? () => {
+              identifyIndex = Math.max(0, identifyIndex - 1)
+              renderIdentifyPopup()
+            }
+          : undefined,
+      onNext:
+        identifyStack.length > 1
+          ? () => {
+              identifyIndex = Math.min(identifyStack.length - 1, identifyIndex + 1)
+              renderIdentifyPopup()
+            }
+          : undefined,
+    })
+  }
+
+  const renderIdentifyPopup = () => {
+    if (!identifyLngLat || !identifyStack.length) return
+    const candidate = identifyStack[identifyIndex]
+    if (!candidate) return
+
+    const enriched = enrichDevelopEliteMapIdentifyFeature(candidate.feature, candidate.layerKey, opts.sources)
+    const props = (enriched.properties ?? {}) as Record<string, unknown>
+    const layerTitle = LAYER_LABEL.get(candidate.layerKey) ?? candidate.layerKey
+    const html = buildDevelopEliteArcgisFeaturePopupHtml(layerTitle, props, {
+      layerKey: candidate.layerKey,
+      drawingInfo: drawingInfoForLayer(candidate.layerKey, opts),
+      countryLabels: opts.countryLabels ?? null,
+      agoStyle: true,
+      pageIndex: identifyIndex,
+      pageTotal: identifyStack.length,
+    })
+
+    popup.setHTML(html).setLngLat(identifyLngLat).addTo(map)
+    wirePopupActions(enriched)
+
+    if (candidate.layerKey === 'agro-structures' && opts.onSelectStructureFieldKey) {
+      const fieldKey = computeStableGisFeatureKey(enriched)
+      if (fieldKey) opts.onSelectStructureFieldKey(fieldKey)
     }
   }
 
-  const cursorLayers = queryPopupLayerIds(map)
+  const openIdentifyAtLocation = (candidates: PopupCandidate[], lngLat: [number, number]) => {
+    if (!candidates.length) return
+    identifyStack = candidates
+    identifyIndex = 0
+    identifyLngLat = lngLat
+    renderIdentifyPopup()
+  }
+
+  const identifyHitRadiusPx =
+    opts.identifyHitRadiusPx ?? (opts.viewMode3d ? 22 : DEFAULT_IDENTIFY_HIT_RADIUS_PX)
+
+  const runIdentify = (lngLat: [number, number], point: { x: number; y: number }, originalEvent?: MouseEvent) => {
+    const layerIds = queryPopupLayerIds(map)
+    let candidates: PopupCandidate[] = []
+    if (layerIds.length) {
+      const hits = queryIdentifyFeatures(map, point, layerIds, identifyHitRadiusPx)
+      candidates = hitsToCandidates(hits)
+    }
+
+    if (!candidates.length) {
+      const fallback = fallbackDevelopEliteMapIdentifyAtLngLat(lngLat, opts.sources, opts.viewMode3d)
+      if (fallback) {
+        candidates = [{ feature: fallback.feature, layerKey: fallback.layerKey }]
+      }
+    }
+
+    if (!candidates.length) return
+
+    openIdentifyAtLocation(candidates, lngLat)
+    originalEvent?.preventDefault()
+    originalEvent?.stopPropagation()
+  }
+
+  let pointerTapDown: { x: number; y: number; lngLat: [number, number] } | null = null
+  let lastIdentifyAtMs = 0
+
+  const shouldUseTapIdentifyOnMouseUp = (): boolean =>
+    opts.viewMode3d && developEliteMapAllowsPrimaryPointerOrbit(map, opts.viewMode3d)
+
+  const onMapClick = (event: MapMouseEvent) => {
+    lastIdentifyAtMs = Date.now()
+    runIdentify([event.lngLat.lng, event.lngLat.lat], event.point, event.originalEvent)
+  }
+
+  const onMapMouseDown = (event: MapMouseEvent) => {
+    if (event.originalEvent.button !== 0) return
+    pointerTapDown = {
+      x: event.point.x,
+      y: event.point.y,
+      lngLat: [event.lngLat.lng, event.lngLat.lat],
+    }
+  }
+
+  const onMapMouseUp = (event: MapMouseEvent) => {
+    const down = pointerTapDown
+    pointerTapDown = null
+    if (!down || event.originalEvent.button !== 0 || !shouldUseTapIdentifyOnMouseUp()) return
+    const dx = event.point.x - down.x
+    const dy = event.point.y - down.y
+    if (dx * dx + dy * dy > TAP_IDENTIFY_MAX_MOVE_PX * TAP_IDENTIFY_MAX_MOVE_PX) return
+    if (Date.now() - lastIdentifyAtMs < 120) return
+    runIdentify(down.lngLat, { x: down.x, y: down.y }, event.originalEvent)
+  }
+
+  const onLayerClick = (event: MapLayerMouseEvent) => {
+    if (!event.features?.length) return
+    const lngLat: [number, number] = [event.lngLat.lng, event.lngLat.lat]
+    const candidates = hitsToCandidates(event.features)
+    if (!candidates.length) return
+    openIdentifyAtLocation(candidates, lngLat)
+    event.preventDefault()
+  }
+
+  const syncLayerClickHandlers = () => {
+    const layerIds = queryPopupLayerIds(map)
+    for (const id of layerIds) {
+      if (boundLayerIds.has(id)) continue
+      map.on('click', id, onLayerClick)
+      boundLayerIds.add(id)
+    }
+  }
+
   const onEnter = () => {
     map.getCanvas().style.cursor = 'pointer'
   }
@@ -180,19 +328,37 @@ export function registerDevelopEliteMapLibreFeaturePopup(
     map.getCanvas().style.cursor = ''
   }
 
-  for (const id of cursorLayers) {
-    map.on('mouseenter', id, onEnter)
-    map.on('mouseleave', id, onLeave)
+  const bindCursorHandlers = () => {
+    for (const id of queryPopupLayerIds(map)) {
+      map.on('mouseenter', id, onEnter)
+      map.on('mouseleave', id, onLeave)
+    }
   }
 
-  map.on('click', onClick)
-
-  return () => {
-    popup.remove()
-    map.off('click', onClick)
-    for (const id of cursorLayers) {
+  const unbindCursorHandlers = () => {
+    for (const id of [...DE_MAPLIBRE_STRUCTURE_HIGHLIGHT_LAYER_IDS, ...DE_MAPLIBRE_POPUP_QUERY_LAYER_IDS]) {
       map.off('mouseenter', id, onEnter)
       map.off('mouseleave', id, onLeave)
     }
+  }
+
+  syncLayerClickHandlers()
+  bindCursorHandlers()
+  map.on('click', onMapClick)
+  map.on('mousedown', onMapMouseDown)
+  map.on('mouseup', onMapMouseUp)
+  map.on('idle', syncLayerClickHandlers)
+
+  return () => {
+    popup.remove()
+    map.off('click', onMapClick)
+    map.off('mousedown', onMapMouseDown)
+    map.off('mouseup', onMapMouseUp)
+    map.off('idle', syncLayerClickHandlers)
+    for (const id of boundLayerIds) {
+      map.off('click', id, onLayerClick)
+    }
+    boundLayerIds.clear()
+    unbindCursorHandlers()
   }
 }

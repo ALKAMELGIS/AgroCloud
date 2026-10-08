@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import { ResponsiveDialog } from '@/components/overlays/ResponsiveDialog'
-import { ResponsiveDataTable } from '@/components/data-display/ResponsiveDataTable'
 import type { DevelopEliteMapDataLayerId } from './developEliteDashboardConfig'
 import { DEVELOP_ELITE_MAP_DATA_LAYERS } from './developEliteMapDataLayers'
 import {
@@ -8,6 +7,7 @@ import {
   developEliteMapDataLayerLegendPreviews,
 } from './developEliteMapLegend'
 import { DevelopEliteMapLegendSwatch } from './DevelopEliteMapLegendSwatch'
+import { DevelopEliteMapAttributesDock } from './DevelopEliteMapAttributesDock'
 import { developEliteMapGeoJsonForLayer, type DevelopEliteMapSearchSources } from './developEliteMapSearch'
 import {
   developEliteArcGisUrlShortLabel,
@@ -112,12 +112,12 @@ export function DevelopEliteMapDataLayerActionDialogs({
 
   if (dialog.mode === 'table') {
     return (
-      <ResponsiveDialog open maxWidth="lg" title={`${layerLabel} — Attributes`} onClose={onClose}>
-        <p className="develop-elite-map__layer-dialog-hint">
-          Showing up to {tableRows.length} feature{tableRows.length === 1 ? '' : 's'} from the loaded map cache.
-        </p>
-        <ResponsiveDataTable rows={tableRows} columns={tableColumns} empty="No attributes for this layer." />
-      </ResponsiveDialog>
+      <DevelopEliteMapAttributesDock
+        layerLabel={layerLabel}
+        rows={tableRows}
+        columns={tableColumns}
+        onClose={onClose}
+      />
     )
   }
 

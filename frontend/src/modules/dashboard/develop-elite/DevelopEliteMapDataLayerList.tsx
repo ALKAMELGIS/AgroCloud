@@ -7,7 +7,7 @@ import {
 } from './developEliteMapDataLayers'
 import {
   buildDevelopEliteMapLegendSections,
-  developEliteMapDataLayerLegendPreviews,
+  developEliteMapDataLayerLegendPreviewRow,
 } from './developEliteMapLegend'
 import { DevelopEliteMapDataLayerSwatch } from './DevelopEliteMapLegendSwatch'
 import { DevelopEliteMapDataLayerRowMenu } from './DevelopEliteMapDataLayerRowMenu'
@@ -103,7 +103,7 @@ export function DevelopEliteMapDataLayerList({
     <ul className="develop-elite-map__data-layer-list" aria-label="Map data layers">
       {layers.map(layer => {
         const visible = isDevelopEliteMapDataLayerVisible(visibility, layer.id)
-        const symbology = developEliteMapDataLayerLegendPreviews(layer.id, legend)
+        const symbology = developEliteMapDataLayerLegendPreviewRow(layer.id, legend)
         const isDragging = dragId === layer.id
         const isDropTarget = dropTargetId === layer.id && dragId && dragId !== layer.id
         return (
@@ -146,7 +146,7 @@ export function DevelopEliteMapDataLayerList({
               <span className={`develop-elite-map__data-layer-eye${visible ? ' is-on' : ' is-off'}`} aria-hidden>
                 <i className={`fa-solid ${visible ? 'fa-eye' : 'fa-eye-slash'}`} />
               </span>
-              <DevelopEliteMapDataLayerSwatch rows={symbology} />
+              <DevelopEliteMapDataLayerSwatch row={symbology} />
               <span className="develop-elite-map__data-layer-name">{layer.label}</span>
             </button>
             <DevelopEliteMapDataLayerRowMenu

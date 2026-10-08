@@ -11,7 +11,8 @@ import {
   DE_MAPLIBRE_POINT_FILTER,
   DE_MAPLIBRE_POLY_FILTER,
   DE_MAPLIBRE_POLY_LINE_FILTER,
-  developEliteMapLibreHiddenHitCirclePaint,
+  developEliteMapLibreHiddenHitFillPaint,
+  developEliteMapLibreInvisibleCircleHitPaint,
   developEliteMapLibrePointCirclePaint,
   developEliteMapLibrePointIconLayout,
   developEliteMapLibrePreparePointIcons,
@@ -337,7 +338,6 @@ function syncArcgisPointLayer(
   ensureGeoJsonSource(map, opts.sourceId, opts.data)
   const userScale = opts.userOpacityScale ?? 1
   const layerOpacity = layerOpacityFromDrawingInfo(opts.drawingInfo) * userScale
-  const circlePaint = developEliteMapLibrePointCirclePaint(opts.drawingInfo, opts.fallback)
   const { spec, iconsReady, iconSize } = developEliteMapLibrePreparePointIcons(
     map,
     opts.layerSafeId,
@@ -347,18 +347,45 @@ function syncArcgisPointLayer(
     () => opts.onArcgisIconsLoaded?.(),
   )
   const iconsOn = opts.iconsVisible !== false
-  const useIcons = iconsOn && Boolean(spec && iconsReady)
-  // Picture-marker renderers still get blue esriPMS circle fallbacks in circle paint — hide them whenever
-  // we have an icon spec (even while sprites load) so only the ArcGIS picture symbols show.
-  const circleToPaint =
-    useIcons || spec ? developEliteMapLibreHiddenHitCirclePaint(circlePaint) : circlePaint
-  ensureCircleLayer(map, opts.circleLayerId, opts.sourceId, circleToPaint, DE_MAPLIBRE_POINT_FILTER)
-  map.setLayoutProperty(opts.circleLayerId, 'visibility', opts.visible ? 'visible' : 'none')
+  const pictureMarkerRenderer = Boolean(spec?.entries?.length)
+  const showPictureIcons = iconsOn && pictureMarkerRenderer && iconsReady
 
-  if (spec && iconsReady && iconsOn) {
-    const { layout, paint } = developEliteMapLibrePointIconLayout(spec, iconSize, opts.visible, layerOpacity)
+  const invisibleHitRadius =
+    opts.layerKey === 'irrigation-valves' ? 10 : opts.layerKey === 'trees' ? 8 : 7
+
+  if (showPictureIcons) {
+    /** esriPMS picture markers only — no esriSMS fallback circles (purple/yellow halos). */
+    ensureCircleLayer(
+      map,
+      opts.circleLayerId,
+      opts.sourceId,
+      developEliteMapLibreInvisibleCircleHitPaint(invisibleHitRadius),
+      DE_MAPLIBRE_POINT_FILTER,
+    )
+    map.setLayoutProperty(opts.circleLayerId, 'visibility', opts.visible ? 'visible' : 'none')
+
+    const { layout, paint } = developEliteMapLibrePointIconLayout(spec!, iconSize, opts.visible, layerOpacity)
     ensureSymbolLayer(map, opts.iconLayerId, opts.sourceId, layout, paint, DE_MAPLIBRE_POINT_FILTER)
-  } else if (developEliteMapLibreHasLayer(map, opts.iconLayerId)) {
+    map.setLayoutProperty(opts.iconLayerId, 'visibility', opts.visible ? 'visible' : 'none')
+    return
+  }
+
+  if (pictureMarkerRenderer) {
+    /** Icons still loading — hide SMS halos until real PMS symbols are ready. */
+    if (developEliteMapLibreHasLayer(map, opts.circleLayerId)) {
+      map.setLayoutProperty(opts.circleLayerId, 'visibility', 'none')
+    }
+    if (developEliteMapLibreHasLayer(map, opts.iconLayerId)) {
+      map.setLayoutProperty(opts.iconLayerId, 'visibility', 'none')
+    }
+    return
+  }
+
+  /** esriSMS / simple marker symbology — circle layer is the authored style. */
+  const circlePaint = developEliteMapLibrePointCirclePaint(opts.drawingInfo, opts.fallback)
+  ensureCircleLayer(map, opts.circleLayerId, opts.sourceId, circlePaint, DE_MAPLIBRE_POINT_FILTER)
+  map.setLayoutProperty(opts.circleLayerId, 'visibility', opts.visible ? 'visible' : 'none')
+  if (developEliteMapLibreHasLayer(map, opts.iconLayerId)) {
     map.setLayoutProperty(opts.iconLayerId, 'visibility', 'none')
   }
 }
@@ -443,11 +470,14 @@ export function syncDevelopEliteMapLibreOverlays(map: MaplibreMap, opts: Develop
     )
   }
   ensureLineLayer(map, LAYER_STRUCTURES_LINE, SRC_STRUCTURES, structuresPaint.line, DE_MAPLIBRE_POLY_LINE_FILTER)
-  map.setLayoutProperty(
-    LAYER_STRUCTURES_FILL,
-    'visibility',
-    showStructures && !structures3d ? 'visible' : 'none',
-  )
+  const structuresFillPaint =
+    showStructures && structures3d
+      ? developEliteMapLibreHiddenHitFillPaint(structuresPaint.fill)
+      : structuresPaint.fill
+  Object.entries(structuresFillPaint).forEach(([key, value]) => {
+    map.setPaintProperty(LAYER_STRUCTURES_FILL, key, value)
+  })
+  map.setLayoutProperty(LAYER_STRUCTURES_FILL, 'visibility', showStructures ? 'visible' : 'none')
   map.setLayoutProperty(LAYER_STRUCTURES_EXTRUDE, 'visibility', structures3d ? 'visible' : 'none')
   map.setLayoutProperty(LAYER_STRUCTURES_LINE, 'visibility', showStructures ? 'visible' : 'none')
 
@@ -502,7 +532,7 @@ export function syncDevelopEliteMapLibreOverlays(map: MaplibreMap, opts: Develop
     visible: showValves,
     mapZoom: opts.mapZoom,
     userOpacityScale: layerUserOpacity('irrigation-valves'),
-    fallback: { color: '#a78bfa', stroke: '#ddd6fe', radius: 6 },
+    fallback: { color: '#38bdf8', stroke: '#0ea5e9', radius: 6 },
     onArcgisIconsLoaded: opts.onArcgisIconsLoaded,
   })
 

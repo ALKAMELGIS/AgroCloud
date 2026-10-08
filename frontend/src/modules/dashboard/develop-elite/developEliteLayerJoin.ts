@@ -28,6 +28,39 @@ export function buildDevelopEliteStructureFieldKeyByJoinCode(
 }
 
 /** Fallback when join codes differ between crops table and structures layer. */
+/** Resolve map feature key for a crops-table row (Farm_Code → structures layer). */
+export function findDevelopEliteStructureFieldKey(
+  features: DevelopEliteStructureFeature[],
+  joinField: string,
+  joinValue: string,
+  farmName?: string,
+): string | null {
+  const field = joinField.trim() || 'Farm_Code'
+  const code = joinValue.trim() ? normalizeDevelopEliteJoinKey(joinValue) : ''
+  if (code) {
+    for (let i = 0; i < features.length; i++) {
+      const f = features[i]!
+      const raw = readArcGisField(f.properties ?? {}, field)
+      if (raw == null || raw === '') continue
+      if (normalizeDevelopEliteJoinKey(String(raw)) === code) {
+        return computeStableGisFeatureKey(f, i)
+      }
+    }
+  }
+  const nameKey = farmName?.trim() ? normalizeDevelopEliteFarmNameKey(farmName) : ''
+  if (nameKey) {
+    for (let i = 0; i < features.length; i++) {
+      const f = features[i]!
+      const raw = readArcGisField(f.properties ?? {}, 'Farm_Name')
+      if (raw == null || raw === '') continue
+      if (normalizeDevelopEliteFarmNameKey(String(raw)) === nameKey) {
+        return computeStableGisFeatureKey(f, i)
+      }
+    }
+  }
+  return null
+}
+
 export function buildDevelopEliteStructureFieldKeyByFarmName(
   features: DevelopEliteStructureFeature[],
 ): Map<string, string> {

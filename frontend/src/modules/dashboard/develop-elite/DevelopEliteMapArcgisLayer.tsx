@@ -215,6 +215,7 @@ export function DevelopEliteMapArcgisLayer({
             layerKey,
             drawingInfo,
             countryLabels,
+            agoStyle: false,
           }),
           undefined,
           map,

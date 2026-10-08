@@ -9,9 +9,13 @@ import {
 import type L from 'leaflet'
 import type { DevelopEliteMapDataLayerId } from './developEliteMapDataLayers'
 import { flyToLatLng } from './developEliteMapFly'
+import { resolveDevelopEliteMapFeatureLabel } from './developEliteMapSearch'
 
 export const DEVELOP_ELITE_MAP_POPUP_WRAP_CLASS = 'develop-elite-map-popup-wrap'
 export const DEVELOP_ELITE_MAP_POPUP_ZOOM_ATTR = 'data-develop-elite-popup-zoom'
+export const DEVELOP_ELITE_MAP_POPUP_PREV_ATTR = 'data-develop-elite-popup-prev'
+export const DEVELOP_ELITE_MAP_POPUP_NEXT_ATTR = 'data-develop-elite-popup-next'
+export const DEVELOP_ELITE_MAP_POPUP_ZOOM_LINK_ATTR = 'data-develop-elite-popup-zoom-link'
 
 const POPUP_FIELD_SKIP =
   /^(shape|shape__|st_area|st_length|globalid$|created_?(date|user)|last_?edited_?(date|user)|editor_?tracking)/i
@@ -121,13 +125,51 @@ function popupRowLabel(key: string): string {
 function resolvePopupMaxRows(
   layerKey: DevelopEliteMapDataLayerId | undefined,
   maxRows?: number,
+  agoStyle?: boolean,
 ): number {
   if (maxRows != null) return maxRows
+  if (agoStyle) return 14
   if (layerKey === 'agri-location') return 6
   if (layerKey === 'trees') return 7
   if (layerKey === 'irrigation-valves') return 8
   if (layerKey === 'irrigation-main-pipe') return 8
   return 8
+}
+
+function buildPopupAttributeRows(
+  props: Record<string, unknown>,
+  layerKey: DevelopEliteMapDataLayerId | undefined,
+  drawingInfo: Record<string, unknown> | null,
+  countryLabels: Map<string, string> | null,
+  maxRows: number,
+): Array<{ key: string; label: string; value: string }> {
+  const rows: Array<{ key: string; label: string; value: string }> = []
+  for (const key of popupFieldKeys(props, layerKey)) {
+    const formatted = formatPopupValue(key, readProp(props, key), layerKey, drawingInfo, countryLabels)
+    if (!formatted) continue
+    if (
+      (key === 'Country' || key === 'COUNTRY') &&
+      /^\d+$/.test(formatted) &&
+      countryLabels?.size
+    ) {
+      const named = countryLabels.get(formatted.trim())
+      if (named) {
+        rows.push({ key, label: popupRowLabel('Country'), value: named })
+        if (rows.length >= maxRows) break
+        continue
+      }
+    }
+    rows.push({ key, label: popupRowLabel(key), value: formatted })
+    if (rows.length >= maxRows) break
+  }
+
+  if (layerKey === 'agro-structures' && rows.length === 0) {
+    const country = resolveAgroStructuresCountryDisplayName(props, countryLabels)
+    const title = String(props.Farm_Name ?? props.Farm_Code ?? '').trim()
+    if (title) rows.push({ key: 'Farm', label: 'Farm', value: title })
+    if (country && country !== 'Unknown') rows.push({ key: 'Country', label: 'Country', value: country })
+  }
+  return rows
 }
 
 function uniqueValueLabel(
@@ -230,9 +272,10 @@ export function wireDevelopEliteMapFeatureActivate(
   })
 }
 
-function buildDevelopEliteMapPopupHeadHtml(layerTitle: string): string {
-  const title = escapeDevelopEliteMapPopupHtml(layerTitle)
-  return `<div class="develop-elite-map-popup__head"><span class="develop-elite-map-popup__title">${title}</span><button type="button" class="develop-elite-map-popup__zoom" title="Zoom to location" aria-label="Zoom to location" ${DEVELOP_ELITE_MAP_POPUP_ZOOM_ATTR}><i class="fa-solid fa-magnifying-glass-location" aria-hidden="true"></i></button></div>`
+function buildDevelopEliteMapPopupHeadHtml(layerTitle: string, featureTitle?: string): string {
+  const primary = escapeDevelopEliteMapPopupHtml(featureTitle?.trim() || layerTitle)
+  const kicker = escapeDevelopEliteMapPopupHtml(featureTitle?.trim() ? layerTitle : 'Layer info')
+  return `<div class="develop-elite-map-popup__head"><div class="develop-elite-map-popup__head-text"><span class="develop-elite-map-popup__kicker">${kicker}</span><span class="develop-elite-map-popup__title">${primary}</span></div><button type="button" class="develop-elite-map-popup__zoom" title="Zoom to location" aria-label="Zoom to location" ${DEVELOP_ELITE_MAP_POPUP_ZOOM_ATTR}><i class="fa-solid fa-magnifying-glass-location" aria-hidden="true"></i></button></div>`
 }
 
 export function zoomDevelopEliteMapPopupLayer(map: L.Map, layer: L.Layer): void {
@@ -296,15 +339,46 @@ export function wireDevelopEliteMapPopupZoomButton(
   root: ParentNode | null | undefined,
   onZoom: () => void,
 ): void {
-  const btn = root?.querySelector(`[${DEVELOP_ELITE_MAP_POPUP_ZOOM_ATTR}]`)
-  if (!(btn instanceof HTMLButtonElement)) return
-  if (btn.dataset.dePopupZoomWired === '1') return
-  btn.dataset.dePopupZoomWired = '1'
-  btn.addEventListener('click', event => {
-    event.preventDefault()
-    event.stopPropagation()
-    onZoom()
-  })
+  const selectors = [`[${DEVELOP_ELITE_MAP_POPUP_ZOOM_ATTR}]`, `[${DEVELOP_ELITE_MAP_POPUP_ZOOM_LINK_ATTR}]`]
+  for (const selector of selectors) {
+    const btn = root?.querySelector(selector)
+    if (!(btn instanceof HTMLButtonElement)) continue
+    if (btn.dataset.dePopupZoomWired === '1') continue
+    btn.dataset.dePopupZoomWired = '1'
+    btn.addEventListener('click', event => {
+      event.preventDefault()
+      event.stopPropagation()
+      onZoom()
+    })
+  }
+}
+
+export function wireDevelopEliteMapPopupPager(
+  root: ParentNode | null | undefined,
+  handlers: { onPrev?: () => void; onNext?: () => void },
+): void {
+  const prev = root?.querySelector(`[${DEVELOP_ELITE_MAP_POPUP_PREV_ATTR}]`)
+  const next = root?.querySelector(`[${DEVELOP_ELITE_MAP_POPUP_NEXT_ATTR}]`)
+  if (prev instanceof HTMLButtonElement && handlers.onPrev) {
+    if (prev.dataset.dePopupPagerWired !== '1') {
+      prev.dataset.dePopupPagerWired = '1'
+      prev.addEventListener('click', e => {
+        e.preventDefault()
+        e.stopPropagation()
+        handlers.onPrev?.()
+      })
+    }
+  }
+  if (next instanceof HTMLButtonElement && handlers.onNext) {
+    if (next.dataset.dePopupPagerWired !== '1') {
+      next.dataset.dePopupPagerWired = '1'
+      next.addEventListener('click', e => {
+        e.preventDefault()
+        e.stopPropagation()
+        handlers.onNext?.()
+      })
+    }
+  }
 }
 
 export function buildDevelopEliteArcgisFeaturePopupHtml(
@@ -315,41 +389,60 @@ export function buildDevelopEliteArcgisFeaturePopupHtml(
     drawingInfo?: Record<string, unknown> | null
     countryLabels?: Map<string, string> | null
     maxRows?: number
+    /** ArcGIS Online–style popup (blue header, field table, footer links). */
+    agoStyle?: boolean
+    pageIndex?: number
+    pageTotal?: number
   },
 ): string {
   const layerKey = options?.layerKey
   const drawingInfo = options?.drawingInfo ?? null
   const countryLabels = options?.countryLabels ?? null
-  const maxRows = resolvePopupMaxRows(layerKey, options?.maxRows)
+  const agoStyle = options?.agoStyle !== false
+  const maxRows = resolvePopupMaxRows(layerKey, options?.maxRows, agoStyle)
+  const { label: featureTitle } = resolveDevelopEliteMapFeatureLabel(props, countryLabels ?? undefined)
+  const rows = buildPopupAttributeRows(props, layerKey, drawingInfo, countryLabels, maxRows)
 
-  const rows: Array<{ label: string; value: string }> = []
-  for (const key of popupFieldKeys(props, layerKey)) {
-    const formatted = formatPopupValue(key, readProp(props, key), layerKey, drawingInfo, countryLabels)
-    if (!formatted) continue
-    if (
-      (key === 'Country' || key === 'COUNTRY') &&
-      /^\d+$/.test(formatted) &&
-      countryLabels?.size
-    ) {
-      const named = countryLabels.get(formatted.trim())
-      if (named) {
-        rows.push({ label: popupRowLabel('Country'), value: named })
-        if (rows.length >= maxRows) break
-        continue
-      }
-    }
-    rows.push({ label: popupRowLabel(key), value: formatted })
-    if (rows.length >= maxRows) break
+  const pageIndex = Math.max(0, options?.pageIndex ?? 0)
+  const pageTotal = Math.max(1, options?.pageTotal ?? 1)
+  const showPager = pageTotal > 1
+
+  if (agoStyle) {
+    const titleLine = escapeDevelopEliteMapPopupHtml(
+      featureTitle && featureTitle !== 'Feature' ? `${layerTitle}: ${featureTitle}` : layerTitle,
+    )
+    const pager = showPager
+      ? `<div class="develop-elite-map-popup__ago-pager" role="navigation" aria-label="Features at this location">
+          <button type="button" class="develop-elite-map-popup__ago-pager-btn" ${DEVELOP_ELITE_MAP_POPUP_PREV_ATTR} title="Previous feature" aria-label="Previous feature"${pageIndex <= 0 ? ' disabled' : ''}><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>
+          <span class="develop-elite-map-popup__ago-pager-label">(${pageIndex + 1} of ${pageTotal})</span>
+          <button type="button" class="develop-elite-map-popup__ago-pager-btn" ${DEVELOP_ELITE_MAP_POPUP_NEXT_ATTR} title="Next feature" aria-label="Next feature"${pageIndex >= pageTotal - 1 ? ' disabled' : ''}><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>
+        </div>`
+      : ''
+
+    const tableBody = rows.length
+      ? rows
+          .map(
+            row =>
+              `<tr><th scope="row">${escapeDevelopEliteMapPopupHtml(row.key)}</th><td>${escapeDevelopEliteMapPopupHtml(row.value)}</td></tr>`,
+          )
+          .join('')
+      : `<tr><td colspan="2" class="develop-elite-map-popup__ago-empty">No attributes</td></tr>`
+
+    return `<div class="develop-elite-map-popup develop-elite-map-popup--ago">
+      <div class="develop-elite-map-popup__ago-header">
+        ${pager}
+        <p class="develop-elite-map-popup__ago-title">${titleLine}</p>
+      </div>
+      <div class="develop-elite-map-popup__ago-scroll">
+        <table class="develop-elite-map-popup__ago-table"><tbody>${tableBody}</tbody></table>
+      </div>
+      <div class="develop-elite-map-popup__ago-footer">
+        <button type="button" class="develop-elite-map-popup__ago-link" ${DEVELOP_ELITE_MAP_POPUP_ZOOM_LINK_ATTR}>Zoom to</button>
+      </div>
+    </div>`
   }
 
-  if (layerKey === 'agro-structures' && rows.length === 0) {
-    const country = resolveAgroStructuresCountryDisplayName(props, countryLabels)
-    const title = String(props.Farm_Name ?? props.Farm_Code ?? '').trim()
-    if (title) rows.push({ label: 'Farm', value: title })
-    if (country && country !== 'Unknown') rows.push({ label: 'Country', value: country })
-  }
-
-  const head = buildDevelopEliteMapPopupHeadHtml(layerTitle)
+  const head = buildDevelopEliteMapPopupHeadHtml(layerTitle, featureTitle !== 'Feature' ? featureTitle : undefined)
   if (!rows.length) {
     return `<div class="develop-elite-map-popup develop-elite-map-popup--compact">${head}<p class="develop-elite-map-popup__empty">No attributes</p></div>`
   }
