@@ -1,5 +1,6 @@
 import { DevelopEliteAirportFlapText } from './DevelopEliteAirportFlapText'
 import { DevelopEliteListSearchWithPlay } from './DevelopEliteListSearchWithPlay'
+import { DevelopEliteListTickerViewport } from './DevelopEliteListTickerViewport'
 import { developEliteListItemMatchesSearch } from './developEliteListSearch'
 import {
   developEliteAirportTickerRows,
@@ -25,7 +26,7 @@ export function DevelopEliteFarmListPanel({
   listClassName,
 }: Props) {
   const farmRows = data.farmList
-  const { playing, togglePlaying, tickerActive, listRef } = useDevelopEliteAirportListTicker(
+  const { playing, togglePlaying, tickerActive, viewportRef, listRef } = useDevelopEliteAirportListTicker(
     data.filters.locationSearch,
     farmRows.length,
   )
@@ -42,14 +43,14 @@ export function DevelopEliteFarmListPanel({
         playAriaLabel="Play farm list ticker"
         pauseAriaLabel="Pause farm list ticker"
       />
-      <ul
-        ref={listRef}
-        data-ticker-loop={tickerActive && farmRows.length >= 2 ? 'half' : undefined}
-        className={`develop-elite__list develop-elite__list--scroll develop-elite__list--farms${
-          tickerActive ? ' develop-elite__list--airport-ticker' : ''
-        }${listClassName ? ` ${listClassName}` : ''}`}
-      >
-        {tickerRows.map((item, index) => (
+      <DevelopEliteListTickerViewport viewportRef={viewportRef} tickerActive={tickerActive}>
+        <ul
+          ref={listRef}
+          className={`develop-elite__list develop-elite__list--scroll develop-elite__list--farms${
+            tickerActive ? ' develop-elite__list--airport-ticker' : ''
+          }${listClassName ? ` ${listClassName}` : ''}`}
+        >
+          {tickerRows.map((item, index) => (
           <li key={`${item.fieldKey}-${index}`}>
             <button
               type="button"
@@ -79,8 +80,9 @@ export function DevelopEliteFarmListPanel({
               ) : null}
             </button>
           </li>
-        ))}
-      </ul>
+          ))}
+        </ul>
+      </DevelopEliteListTickerViewport>
     </>
   )
 }

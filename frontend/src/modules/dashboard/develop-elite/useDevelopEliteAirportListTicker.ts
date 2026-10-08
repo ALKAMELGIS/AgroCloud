@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 
-/** Medium–slow airport-board scroll (~26px/s). */
-const DEVELOP_ELITE_LIST_SCROLL_PX_PER_SEC = 26
+/** Medium–slow airport-board scroll (~22px/s). */
+export const DEVELOP_ELITE_LIST_SCROLL_PX_PER_SEC = 22
 
-function listMaxScroll(el: HTMLUListElement): number {
-  return Math.max(0, el.scrollHeight - el.clientHeight)
+function listContentHeight(listEl: HTMLElement): number {
+  return listEl.offsetHeight
 }
 
 /** Duplicate rows for seamless airport-board loop (only while ticker runs). */
@@ -14,14 +14,22 @@ export function developEliteAirportTickerRows<T>(rows: T[], tickerActive: boolea
 }
 
 export function useDevelopEliteListAutoScroll(
+  viewportRef: RefObject<HTMLElement | null>,
   listRef: RefObject<HTMLUListElement | null>,
   active: boolean,
   itemCount: number,
+  loopHalf: boolean,
 ) {
+  const offsetRef = useRef(0)
+
   useLayoutEffect(() => {
-    if (!active) return
-    const el = listRef.current
-    if (!el) return
+    const viewport = viewportRef.current
+    const list = listRef.current
+    if (!active || !viewport || !list) {
+      if (list) list.style.transform = ''
+      offsetRef.current = 0
+      return
+    }
 
     let raf = 0
     let last = performance.now()
@@ -30,22 +38,27 @@ export function useDevelopEliteListAutoScroll(
     const tick = (now: number) => {
       const dt = Math.min((now - last) / 1000, 0.12)
       last = now
-      const max = listMaxScroll(el)
-      const loopHalf = el.dataset.tickerLoop === 'half'
-      const loopMax = loopHalf && max > 2 ? max / 2 : max
-      if (max <= 1) {
+      const contentH = listContentHeight(list)
+      const viewH = viewport.clientHeight
+      const loopEnd = loopHalf ? contentH / 2 : Math.max(0, contentH - viewH)
+      if (loopHalf && contentH / 2 <= 1) {
         layoutWaitSec += dt
-        if (layoutWaitSec < 4) {
-          void el.offsetHeight
-        }
+        if (layoutWaitSec < 6) void list.offsetHeight
+        list.style.transform = ''
+        offsetRef.current = 0
+      } else if (!loopHalf && loopEnd <= 1) {
+        layoutWaitSec += dt
+        if (layoutWaitSec < 6) void list.offsetHeight
+        list.style.transform = ''
+        offsetRef.current = 0
       } else {
         layoutWaitSec = 0
-        let next = el.scrollTop + DEVELOP_ELITE_LIST_SCROLL_PX_PER_SEC * dt
-        if (next >= loopMax - 0.5) {
-          el.scrollTop = 0
-        } else {
-          el.scrollTop = next
+        let next = offsetRef.current + DEVELOP_ELITE_LIST_SCROLL_PX_PER_SEC * dt
+        if (next >= loopEnd - 0.5) {
+          next = 0
         }
+        offsetRef.current = next
+        list.style.transform = `translate3d(0, ${-next}px, 0)`
       }
       raf = requestAnimationFrame(tick)
     }
@@ -60,30 +73,35 @@ export function useDevelopEliteListAutoScroll(
     start()
     const ro = new ResizeObserver(() => {
       if (!active) return
-      void el.offsetHeight
+      void list.offsetHeight
     })
-    ro.observe(el)
+    ro.observe(viewport)
+    ro.observe(list)
     const mo = new MutationObserver(() => {
       if (!active) return
-      void el.offsetHeight
+      void list.offsetHeight
     })
-    mo.observe(el, { childList: true, subtree: true })
+    mo.observe(list, { childList: true, subtree: true })
 
     return () => {
       mo.disconnect()
       ro.disconnect()
       cancelAnimationFrame(raf)
+      list.style.transform = ''
+      offsetRef.current = 0
     }
-  }, [active, itemCount, listRef])
+  }, [active, itemCount, loopHalf, listRef, viewportRef])
 }
 
 export function useDevelopEliteAirportListTicker(searchQuery: string, itemCount = 0) {
   const [playing, setPlaying] = useState(false)
+  const viewportRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
 
   const tickerActive = playing && !searchQuery.trim()
+  const loopHalf = tickerActive && itemCount >= 2
 
-  useDevelopEliteListAutoScroll(listRef, tickerActive, itemCount)
+  useDevelopEliteListAutoScroll(viewportRef, listRef, tickerActive, itemCount, loopHalf)
 
   useEffect(() => {
     if (searchQuery.trim()) {
@@ -92,14 +110,8 @@ export function useDevelopEliteAirportListTicker(searchQuery: string, itemCount 
   }, [searchQuery])
 
   const togglePlaying = useCallback(() => {
-    setPlaying(prev => {
-      const next = !prev
-      if (next && listRef.current) {
-        listRef.current.scrollTop = 0
-      }
-      return next
-    })
+    setPlaying(prev => !prev)
   }, [])
 
-  return { playing, togglePlaying, tickerActive, listRef }
+  return { playing, togglePlaying, tickerActive, viewportRef, listRef }
 }

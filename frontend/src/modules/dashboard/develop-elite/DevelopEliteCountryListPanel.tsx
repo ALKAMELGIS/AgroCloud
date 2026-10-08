@@ -1,8 +1,12 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { DevelopEliteAirportFlapText } from './DevelopEliteAirportFlapText'
 import { DevelopEliteListSearchWithPlay } from './DevelopEliteListSearchWithPlay'
+import { DevelopEliteListTickerViewport } from './DevelopEliteListTickerViewport'
 import { developEliteListItemMatchesSearch } from './developEliteListSearch'
-import { useDevelopEliteAirportListTicker } from './useDevelopEliteAirportListTicker'
+import {
+  developEliteAirportTickerRows,
+  useDevelopEliteAirportListTicker,
+} from './useDevelopEliteAirportListTicker'
 import type { useDevelopEliteDashboardData } from './useDevelopEliteDashboardData'
 
 type DashboardData = ReturnType<typeof useDevelopEliteDashboardData>
@@ -22,7 +26,15 @@ export function DevelopEliteCountryListPanel({
   setCountrySearch,
   searchPlaceholder = 'Search',
 }: Props) {
-  const { playing, togglePlaying, tickerActive, listRef } = useDevelopEliteAirportListTicker(countrySearch)
+  const countryRows = [
+    { key: 'all', label: 'All countries', code: 'all' as const },
+    ...filteredCountries.map(c => ({ key: c.code, label: c.label, code: c.code })),
+  ]
+  const { playing, togglePlaying, tickerActive, viewportRef, listRef } = useDevelopEliteAirportListTicker(
+    countrySearch,
+    countryRows.length,
+  )
+  const tickerRows = developEliteAirportTickerRows(countryRows, tickerActive)
 
   return (
     <>
@@ -35,45 +47,37 @@ export function DevelopEliteCountryListPanel({
         playAriaLabel="Play country list ticker"
         pauseAriaLabel="Pause country list ticker"
       />
-      <ul
-        ref={listRef}
-        className={`develop-elite__list develop-elite__list--scroll develop-elite__list--countries${
-          tickerActive ? ' develop-elite__list--airport-ticker' : ''
-        }`}
-      >
-        <li>
-          <button
-            type="button"
-            className={`develop-elite__list-btn${data.filters.country === 'all' ? ' is-active' : ''}`}
-            onClick={() => data.selectCountry('all')}
-          >
-            <DevelopEliteAirportFlapText
-              text="All countries"
-              active={tickerActive}
-              className="develop-elite__list-title"
-            />
-          </button>
-        </li>
-        {filteredCountries.map(c => (
-          <li key={c.code}>
-            <button
-              type="button"
-              className={`develop-elite__list-btn${data.filters.country === c.code ? ' is-active' : ''}`}
-              onClick={() => data.selectCountry(c.code)}
-            >
-              <DevelopEliteAirportFlapText
-                text={c.label}
-                active={tickerActive}
-                className={`develop-elite__list-title${
-                  developEliteListItemMatchesSearch(`${c.label} ${c.code}`, countrySearch)
-                    ? ' develop-elite__list-title--search-hit'
-                    : ''
+      <DevelopEliteListTickerViewport viewportRef={viewportRef} tickerActive={tickerActive}>
+        <ul
+          ref={listRef}
+          className={`develop-elite__list develop-elite__list--scroll develop-elite__list--countries${
+            tickerActive ? ' develop-elite__list--airport-ticker' : ''
+          }`}
+        >
+          {tickerRows.map((row, index) => (
+            <li key={`${row.key}-${index}`}>
+              <button
+                type="button"
+                className={`develop-elite__list-btn${
+                  data.filters.country === row.code ? ' is-active' : ''
                 }`}
-              />
-            </button>
-          </li>
-        ))}
-      </ul>
+                onClick={() => data.selectCountry(row.code)}
+              >
+                <DevelopEliteAirportFlapText
+                  text={row.label}
+                  active={tickerActive}
+                  className={`develop-elite__list-title${
+                    row.code !== 'all' &&
+                    developEliteListItemMatchesSearch(`${row.label} ${row.code}`, countrySearch)
+                      ? ' develop-elite__list-title--search-hit'
+                      : ''
+                  }`}
+                />
+              </button>
+            </li>
+          ))}
+        </ul>
+      </DevelopEliteListTickerViewport>
     </>
   )
 }

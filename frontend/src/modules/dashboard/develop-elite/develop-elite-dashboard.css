@@ -971,11 +971,29 @@ body.develop-elite--widget-dragging {
   color: rgba(255, 255, 255, 0.55);
 }
 
+.develop-elite__list-viewport {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.develop-elite__list-viewport--ticker {
+  overflow: hidden;
+}
+
+.develop-elite__list-viewport--ticker > .develop-elite__list--scroll {
+  flex: none;
+  min-height: 0;
+  overflow: visible;
+}
+
 .develop-elite__list--airport-ticker {
   scroll-behavior: auto;
-  overflow-y: auto !important;
+  overflow: visible !important;
   overflow-anchor: none;
-  -webkit-overflow-scrolling: touch;
+  will-change: transform;
 }
 
 .develop-elite__list--airport-ticker > li {
@@ -4298,12 +4316,17 @@ a.develop-elite-settings__data-link {
 }
 
 /* Countries list in grid: slightly larger type + even vertical rhythm in tall cells */
-.develop-elite--grid-dashboard .develop-elite__panel--countries-only > .develop-elite__list--scroll {
+.develop-elite--grid-dashboard .develop-elite__panel--countries-only > .develop-elite__list-viewport > .develop-elite__list--scroll {
   display: flex;
   flex-direction: column;
   justify-content: space-evenly;
   flex: 1 1 auto;
   min-height: 0;
+}
+
+.develop-elite--grid-dashboard .develop-elite__panel--countries-only > .develop-elite__list-viewport:not(.develop-elite__list-viewport--ticker) {
+  display: flex;
+  flex-direction: column;
 }
 
 .develop-elite--grid-dashboard .develop-elite__panel--farms-only,
@@ -4315,13 +4338,11 @@ a.develop-elite-settings__data-link {
   overflow: hidden;
 }
 
-.develop-elite--grid-dashboard .develop-elite__panel--farms-only > .develop-elite__list--scroll,
-.develop-elite--grid-dashboard .develop-elite__zones-col--in-grid > .develop-elite__list--scroll {
+.develop-elite--grid-dashboard .develop-elite__panel--farms-only > .develop-elite__list-viewport,
+.develop-elite--grid-dashboard .develop-elite__zones-col--in-grid > .develop-elite__list-viewport {
   flex: 1 1 0;
   min-height: 0;
   max-height: 100%;
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
 
 .develop-elite-grid-widget--sidebar-farms .develop-elite-resize-host.develop-elite__panel--farms-only {
@@ -4331,7 +4352,7 @@ a.develop-elite-settings__data-link {
   overflow: hidden;
 }
 
-.develop-elite--grid-dashboard .develop-elite__panel--countries-only > .develop-elite__list--scroll > li {
+.develop-elite--grid-dashboard .develop-elite__panel--countries-only > .develop-elite__list-viewport > .develop-elite__list--scroll > li {
   flex: 0 0 auto;
   contain-intrinsic-size: auto 44px;
 }
@@ -5377,7 +5398,7 @@ body.develop-elite--resizing .develop-elite-grid-item--cell.is-resizing .develop
   overflow: hidden;
 }
 
-.develop-elite-list-panels__section .develop-elite__list--scroll {
+.develop-elite-list-panels__section .develop-elite__list-viewport {
   flex: 1 1 auto;
   min-height: 0;
   max-height: none;
@@ -5403,7 +5424,7 @@ body.develop-elite--resizing .develop-elite-grid-item--cell.is-resizing .develop
   font-size: 14px;
 }
 
-.develop-elite-lists-drawer__body .develop-elite__zones-col .develop-elite__list--scroll {
+.develop-elite-lists-drawer__body .develop-elite__zones-col .develop-elite__list-viewport {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -5411,7 +5432,7 @@ body.develop-elite--resizing .develop-elite-grid-item--cell.is-resizing .develop
   padding: 0 4px 8px;
 }
 
-.develop-elite-lists-drawer__body .develop-elite__zones-col .develop-elite__list--scroll > li {
+.develop-elite-lists-drawer__body .develop-elite__zones-col .develop-elite__list-viewport > .develop-elite__list--scroll > li {
   flex: 0 0 auto;
   content-visibility: visible;
   contain-intrinsic-size: auto;
