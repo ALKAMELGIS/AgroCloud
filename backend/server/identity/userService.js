@@ -35,6 +35,7 @@ export function mapUserForClient(row, permissions = []) {
     status: mapStatusToLegacy(row.status),
     lastLogin: row.last_login_at ? new Date(row.last_login_at).toLocaleString() : 'Never',
     emailVerified: row.email_verified,
+    avatar: row.avatar_url || undefined,
     organizationId: row.organization_id,
     dataScope: row.data_scope,
     permissions,

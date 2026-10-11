@@ -9,7 +9,7 @@ import { SiRsPanelSelect } from './SiRsPanelSelect'
 import { SiAoiLayerModePanel } from './SiAoiLayerModePanel'
 import type { SiAoiMaskBuilderLayerOption, SiAoiMaskBuilderSettings } from './siAoiMaskBuilder'
 import type { RemoteSensingDrawingTool } from '@/modules/gis/editing/RemoteSensingDrawingToolbar'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type RefObject } from 'react'
 
 export const REMOTE_SENSING_PROVIDERS = remoteSensingProviderOptions()
 
@@ -90,6 +90,9 @@ export type RemoteSensingToolboxPanelProps = {
   onChirpsExportCsv?: () => void
   onChirpsExportExcel?: () => void
   onChirpsExportReport?: () => void
+  layerSelectMenuPortal?: boolean
+  layerSelectMenuBoundsRef?: RefObject<HTMLElement | null>
+  layerSelectMenuMaxHeight?: number
   onClose: () => void
 }
 
@@ -151,11 +154,17 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
     onChirpsExportCsv,
     onChirpsExportExcel,
     onChirpsExportReport,
+    layerSelectMenuPortal = true,
+    layerSelectMenuBoundsRef,
+    layerSelectMenuMaxHeight,
   } = props
 
   const providerMeta = remoteSensingProviderDef(provider)
   const collectionOptions = remoteSensingCollectionsForProvider(provider)
   const cloudSafe = Math.max(0, Math.min(100, Math.round(Number(cloudCoverage) || 0)))
+  const layerMenuMaxHeight =
+    layerSelectMenuMaxHeight ??
+    Math.min(typeof window !== 'undefined' ? Math.round(window.innerHeight * 0.55) : 420, 520)
   const [cloudDraft, setCloudDraft] = useState(cloudSafe)
   useEffect(() => {
     setCloudDraft(cloudSafe)
@@ -275,6 +284,13 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
             loadingLabel="Loading layers…"
             emptyLabel="No layers for this satellite — check credentials or pick another provider."
             disabled={isLoadingLayers}
+            triggerVariant={layerSelectMenuPortal ? 'panel' : 'field'}
+            menuPortal={layerSelectMenuPortal}
+            menuBoundsRef={layerSelectMenuBoundsRef}
+            menuMinWidth={260}
+            menuMaxHeight={layerMenuMaxHeight}
+            rootClassName={layerSelectMenuPortal ? 'si-rs-panel-select' : undefined}
+            menuClassName={layerSelectMenuPortal ? 'si-rs-panel-select__menu' : undefined}
             aria-label="Layer"
           />
         </label>
@@ -305,7 +321,6 @@ export function RemoteSensingToolboxPanel(props: RemoteSensingToolboxPanelProps)
         ) : null}
 
         <div className="si-rs-panel__stack si-rs-panel__stack--section">
-          <span className="si-rs-panel__label">AOI layer mode</span>
           <SiAoiLayerModePanel
             settings={aoiLayerModeSettings}
             onChange={onAoiLayerModeChange}

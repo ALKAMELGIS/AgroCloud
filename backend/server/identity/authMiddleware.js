@@ -1,4 +1,5 @@
 import { AuthzError } from './authorizationService.js'
+import { CreditsError } from './creditsService.js'
 import { isIdentityReady } from './db.js'
 import { resolveSessionUser } from './sessionService.js'
 

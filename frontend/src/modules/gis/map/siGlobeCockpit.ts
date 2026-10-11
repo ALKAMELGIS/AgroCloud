@@ -88,6 +88,74 @@ export function nudgeSiMapboxGlobeCanvas(
   }
 }
 
+function siMapboxCanvasHasDrawableSize(map: SiMapboxGlobeNudgeMap | null | undefined): boolean {
+  const canvas = map?.getCanvas?.()
+  return Boolean(canvas && canvas.width >= 4 && canvas.height >= 4)
+}
+
+/**
+ * Poll + ResizeObserver until the map host and WebGL canvas have real dimensions.
+ * Satellite Intelligence mounts inside a flex shell; Mapbox often inits at 0×0 and stays black
+ * until a manual page refresh unless we keep nudging after layout settles.
+ */
+export function bindSiMapboxGlobeCanvasBoot(
+  getMap: () => SiMapboxGlobeNudgeMap | null | undefined,
+  getHost: () => HTMLElement | null | undefined,
+): () => void {
+  let pollId: number | null = null
+  let pollCount = 0
+  const maxPolls = 48
+
+  const nudge = () => {
+    const host = getHost()
+    const map = getMap()
+    if (!host || !map) return false
+    return nudgeSiMapboxGlobeCanvas(map, host)
+  }
+
+  const maybeStopPolling = () => {
+    const host = getHost()
+    const map = getMap()
+    const hostSized = Boolean(host && host.getBoundingClientRect().width >= 4 && host.getBoundingClientRect().height >= 4)
+    if (hostSized && siMapboxCanvasHasDrawableSize(map)) {
+      if (pollId != null) {
+        window.clearInterval(pollId)
+        pollId = null
+      }
+    }
+  }
+
+  const tick = () => {
+    pollCount += 1
+    nudge()
+    maybeStopPolling()
+    if (pollCount >= maxPolls && pollId != null) {
+      window.clearInterval(pollId)
+      pollId = null
+    }
+  }
+
+  tick()
+  requestAnimationFrame(tick)
+  requestAnimationFrame(() => requestAnimationFrame(tick))
+  pollId = window.setInterval(tick, 250)
+
+  const ro =
+    typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => {
+          nudge()
+          maybeStopPolling()
+        })
+      : null
+  const host = getHost()
+  if (host) ro?.observe(host)
+
+  return () => {
+    if (pollId != null) window.clearInterval(pollId)
+    ro?.disconnect()
+  }
+}
+
 type CockpitSpinMap = {
   getCenter: () => { lng: number; lat: number }
   setCenter: (center: [number, number]) => void

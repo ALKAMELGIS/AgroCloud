@@ -20,7 +20,17 @@ export function CutFillProfileChart({ chart }: Props) {
           <i className="is-design" /> Design
         </span>
       </figcaption>
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Cut and fill profile">
+      <div
+        className="si-cutfill-profile__plot"
+        style={{ aspectRatio: `${width} / ${height}` }}
+      >
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          preserveAspectRatio="xMidYMid meet"
+          className="si-cutfill-profile__svg"
+          role="img"
+          aria-label="Cut and fill profile"
+        >
         {chart.bands.map((band, i) => (
           <path
             key={i}
@@ -42,7 +52,8 @@ export function CutFillProfileChart({ chart }: Props) {
         <text x={width - 4} y={height - 2} textAnchor="end" className="si-cutfill-profile__tick">
           {chart.xEndLabel}
         </text>
-      </svg>
+        </svg>
+      </div>
     </figure>
   )
 }

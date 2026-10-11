@@ -1,0 +1,321 @@
+.si-flood-sim-setup__title {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.si-flood-sim-setup__lead {
+  margin: 0 0 12px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.si-flood-sim-setup__section {
+  margin-bottom: 12px;
+}
+
+.si-flood-sim-setup__label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+}
+
+.si-flood-sim-setup__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.si-flood-sim-setup__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.si-flood-sim-setup__grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.si-flood-sim-setup__grid input,
+.si-flood-sim-setup__grid select {
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--si-overlay-field-border, rgba(255, 255, 255, 0.18));
+  background: var(--si-overlay-field-bg, rgba(0, 0, 0, 0.45));
+  color: inherit;
+}
+
+.si-flood-sim-setup__warn {
+  color: #fca5a5;
+  font-size: 12px;
+  margin: 0 0 8px;
+}
+
+.si-flood-sim-setup__meta {
+  font-size: 11px;
+  opacity: 0.8;
+  margin: 6px 0 0;
+}
+
+.si-flood-sim-setup__status {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  margin-top: 10px;
+  opacity: 0.85;
+}
+
+.si-flood-sim-setup__progress {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.si-flood-sim-btn {
+  border: 1px solid var(--si-overlay-border, rgba(255, 255, 255, 0.14));
+  background: var(--si-overlay-fill, rgba(255, 255, 255, 0.06));
+  color: inherit;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.si-flood-sim-btn--primary {
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px 12px;
+  font-weight: 700;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.85), rgba(6, 182, 212, 0.75));
+  border-color: rgba(56, 189, 248, 0.5);
+}
+
+.si-flood-sim-btn--chip.is-on {
+  border-color: rgba(56, 189, 248, 0.65);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.35);
+}
+
+.si-flood-sim-btn--ghost {
+  background: transparent;
+}
+
+.si-flood-sim-chrome {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 8;
+}
+
+.si-flood-sim-chrome > * {
+  pointer-events: auto;
+}
+
+.si-flood-sim-panel--left {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: min(300px, calc(100% - 24px));
+  max-height: calc(100% - 120px);
+  overflow: auto;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 12px 40px rgba(2, 6, 23, 0.45);
+  color: #e2e8f0;
+  font-size: 12px;
+}
+
+.si-flood-sim-panel__head h2 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.si-flood-sim-panel__head p {
+  margin: 4px 0 0;
+  opacity: 0.8;
+  font-size: 11px;
+}
+
+.si-flood-sim-panel__section {
+  margin-top: 14px;
+}
+
+.si-flood-sim-panel__section h3 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.75;
+}
+
+.si-flood-sim-viz-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.si-flood-sim-viz-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(30, 41, 59, 0.55);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.si-flood-sim-viz-card.is-active {
+  border-color: rgba(56, 189, 248, 0.8);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+}
+
+.si-flood-sim-viz-card__thumb {
+  width: 100%;
+  height: 36px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.15), rgba(37, 99, 235, 0.55));
+}
+
+.si-flood-sim-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 10px;
+}
+
+.si-flood-sim-legend__bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(186, 230, 253, 0.2), #0ea5e9, #1d4ed8, #312e81);
+}
+
+.si-flood-sim-style-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.si-flood-sim-style-chip {
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.5);
+  color: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.si-flood-sim-style-chip.is-active {
+  border-color: rgba(56, 189, 248, 0.75);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.3);
+}
+
+.si-flood-sim-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.si-flood-sim-fine-tune {
+  margin-top: 12px;
+  font-size: 11px;
+}
+
+.si-flood-sim-fine-tune label {
+  display: block;
+  margin-top: 8px;
+}
+
+.si-flood-sim-running {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.si-flood-sim-timeline {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  width: min(720px, calc(100% - 32px));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  backdrop-filter: blur(12px);
+  color: #e2e8f0;
+  font-size: 11px;
+}
+
+.si-flood-sim-timeline__play {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 0;
+  background: #2563eb;
+  color: #fff;
+  cursor: pointer;
+}
+
+.si-flood-sim-timeline__scrub {
+  flex: 1 1 180px;
+  min-width: 120px;
+}
+
+.si-flood-sim-timeline__stats {
+  display: flex;
+  gap: 14px;
+}
+
+.si-flood-sim-timeline__stats div {
+  display: flex;
+  flex-direction: column;
+}
+
+.si-flood-sim-timeline__stats strong {
+  font-size: 13px;
+}
+
+.si-flood-sim-inspect {
+  position: absolute;
+  right: 12px;
+  bottom: 100px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #e2e8f0;
+  font-size: 12px;
+}
+
+.si-flood-sim-inspect h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+}
+
+.si-flood-sim-inspect p {
+  margin: 4px 0;
+}

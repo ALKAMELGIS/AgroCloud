@@ -87,13 +87,31 @@ export async function resolveSessionUser(req) {
      JOIN users u ON u.id = s.user_id
      JOIN roles r ON r.id = u.role_id
      JOIN organizations o ON o.id = u.organization_id
-     WHERE s.token_hash = $1 AND s.expires_at > now() AND u.status = 'ACTIVE'`,
+     WHERE s.token_hash = $1 AND s.expires_at > now() AND u.status = 'ACTIVE' AND u.deleted_at IS NULL`,
     [tokenHash],
   )
   if (!rows[0]) return null
   const user = rows[0]
+  void pool.query(`UPDATE sessions SET last_active_at = now() WHERE token_hash = $1`, [tokenHash]).catch(() => {})
   const perms = await loadUserPermissions(user.id, user.role_id)
   return { user, permissions: perms, sessionToken: token }
+}
+
+export async function deleteAllSessionsForUser(client, userId) {
+  if (!isIdentityReady() || !userId) return
+  const pool = client || getPool()
+  await pool.query('DELETE FROM sessions WHERE user_id = $1', [userId])
+}
+
+export async function deleteOtherSessionsForUser(client, userId, keepToken) {
+  if (!isIdentityReady() || !userId) return
+  const pool = client || getPool()
+  const keepHash = keepToken ? hashSessionToken(keepToken) : null
+  if (keepHash) {
+    await pool.query('DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $2', [userId, keepHash])
+  } else {
+    await pool.query('DELETE FROM sessions WHERE user_id = $1', [userId])
+  }
 }
 
 export async function loadUserPermissions(userId, roleId) {

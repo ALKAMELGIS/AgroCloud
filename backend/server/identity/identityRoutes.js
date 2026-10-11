@@ -19,6 +19,11 @@ import {
   allocateManpower,
   listTransactions,
 } from './manpowerService.js'
+import {
+  adminAdjustCredits,
+  getWalletForUser,
+  listCreditTransactions,
+} from './creditsService.js'
 
 const router = Router()
 

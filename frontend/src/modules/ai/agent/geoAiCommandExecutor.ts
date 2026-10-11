@@ -35,6 +35,7 @@ export type GeoAiToolboxPanelId =
   | 'imagery-time-series'
   | 'map-swipe'
   | 'flood-monitoring'
+  | 'flood-simulation'
   | 'well-site'
   | 'hydro-watershed'
   | 'cut-fill-analysis'
@@ -54,7 +55,9 @@ export function normalizeGeoAiToolboxPanelId(raw: string): GeoAiToolboxPanelId |
   }
   if (/^(imagery-time-series|time-series|timeseries|timeline|ts)$/.test(t)) return 'imagery-time-series'
   if (/^(map-swipe|mapswipe|swipe|compare|swipe-compare)$/.test(t)) return 'map-swipe'
-  if (/^(flood-monitoring|flood|sar-flood|sar)$/.test(t)) return 'flood-monitoring'
+  if (/^(flood-simulation|simulate-flood|swmm2d|flood-sim)$/.test(t)) return 'flood-simulation'
+  if (/^(flood-monitoring|sar-flood|sar)$/.test(t)) return 'flood-monitoring'
+  if (/^(flood)$/.test(t)) return 'flood-simulation'
   if (/^(well-site|well|hydro-ai|drilling)$/.test(t)) return 'well-site'
   if (/^(hydro-watershed|hydro|watershed|basin)$/.test(t)) return 'hydro-watershed'
   if (/^(cut-fill-analysis|cut-fill|cutfill|earthwork|cut-and-fill)$/.test(t)) return 'cut-fill-analysis'

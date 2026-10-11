@@ -47,6 +47,7 @@ export type SatelliteContextPanelId =
   | 'well-site'
   | 'well-suitability'
   | 'flood-monitoring'
+  | 'flood-simulation'
   | 'raster-georeference'
   | 'table-geo-ai'
   | 'spatial'
@@ -109,8 +110,10 @@ export type SatelliteContextualAnalysisDockProps = {
     | 'well-site'
     | 'well-suitability'
     | 'flood-monitoring'
+    | 'flood-simulation'
     | 'raster-georeference'
     | 'table-geo-ai'
+    | 'training-ai'
     | null;
   /** Called with the embed host element whenever the map panel mounts/updates; null when unmounted. */
   onMapToolboxEmbedHost?: (el: HTMLDivElement | null) => void;
@@ -135,6 +138,9 @@ export type SatelliteContextualAnalysisDockProps = {
   /** Layer Live legend pinned on map (right float). */
   layerLiveLegendOpen?: boolean;
   onLayerLiveLegendOpenChange?: (open: boolean) => void;
+  /** Explore Indexes gallery overlay on the map (same layer list as Index layer). */
+  exploreIndexesOpen?: boolean;
+  onExploreIndexesOpenChange?: (open: boolean) => void;
   /** Main toolbox: Edit/draw activation toggle for the system drawing tool. */
   mapToolboxDrawingActive?: boolean;
   /** Toggle the system drawing tool from the Main toolbox Edit button. */
@@ -266,6 +272,13 @@ const RAIL: Array<{ id: SatelliteContextPanelId; icon: string; label: string; ti
     hint: 'AOI → Sentinel-1 SAR change detection → flood extent, boundaries & stats.',
   },
   {
+    id: 'flood-simulation',
+    icon: 'fa-solid fa-water',
+    label: 'Simulate Flood',
+    title: 'Simulate a Flood',
+    hint: '2D rainfall flood simulation in your browser — GPU preview on 3D terrain.',
+  },
+  {
     id: 'raster-georeference',
     icon: 'fa-solid fa-map-location-dot',
     label: 'Georeference',
@@ -354,6 +367,7 @@ const RAIL_MAP_TOOLBOX_IDS = new Set<SatelliteContextPanelId>([
   'well-site',
   'well-suitability',
   'flood-monitoring',
+  'flood-simulation',
   'raster-georeference',
   'table-geo-ai',
 ]);
@@ -370,6 +384,7 @@ const MAP_RAIL_FLOAT_IDS = new Set<SatelliteContextPanelId>([
   'well-site',
   'well-suitability',
   'flood-monitoring',
+  'flood-simulation',
   'raster-georeference',
 ]);
 
@@ -400,6 +415,7 @@ const RAIL_GROUPS_MAP: SatelliteContextPanelId[][] = [
     'agri-field-boundary',
     'well-site',
     'well-suitability',
+    'flood-simulation',
     'raster-georeference',
   ],
 ];
@@ -466,6 +482,8 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
     mapToolboxLayerLiveLegend,
     layerLiveLegendOpen = false,
     onLayerLiveLegendOpenChange,
+    exploreIndexesOpen = false,
+    onExploreIndexesOpenChange,
     mapToolboxDrawingActive = false,
     onMapToolboxToggleDrawing,
     measureMode = null,
@@ -486,7 +504,7 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
   } = props;
 
   const { scopedStorageKey } = useSiInstanceScope();
-  const { settings: systemSettings, setSettings } = useSystemSettings();
+  const { settings: systemSettings } = useSystemSettings();
   const appThemeDark = useMemo(
     () => resolveThemeIsDark(systemSettings.themeMode),
     [systemSettings.themeMode],
@@ -994,6 +1012,29 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
             ) : null}
           </button>
         ) : null}
+        {isMap && !mapStripHidden && onExploreIndexesOpenChange ? (
+          <button
+            id="map-toolbox-explore-indexes-btn"
+            type="button"
+            className={
+              'si-sat-ctx-rail-btn si-sat-ctx-rail-btn--map si-sat-ctx-rail-btn--explore-indexes' +
+              (railWide ? ' si-sat-ctx-rail-btn--row si-sat-ctx-rail-btn--map-expanded' : ' si-sat-ctx-rail-btn--map-collapsed') +
+              (exploreIndexesOpen ? ' si-sat-ctx-rail-btn--active' : '')
+            }
+            title="Explore Indexes — gallery picker for spectral layers"
+            aria-label="Explore Indexes"
+            aria-pressed={exploreIndexesOpen}
+            onClick={() => onExploreIndexesOpenChange(!exploreIndexesOpen)}
+          >
+            <i className="fa-solid fa-images si-sat-ctx-rail-btn__icon--gallery" aria-hidden />
+            {railWide ? (
+              <span className="si-sat-ctx-rail-label">
+                <span className="si-sat-ctx-rail-label-title">Explore Indexes</span>
+                <span className="si-sat-ctx-rail-label-desc">Gallery layer picker</span>
+              </span>
+            ) : null}
+          </button>
+        ) : null}
         {isMap && !mapStripHidden && onMeasureOpenPanel ? (
           <button
             id="map-toolbox-measure-btn"
@@ -1227,20 +1268,6 @@ export function SatelliteContextualAnalysisDock(props: SatelliteContextualAnalys
                   )}
                 </div>
                 <div className="si-sat-ctx-panel-header-actions">
-                  <button
-                    type="button"
-                    className="si-sat-ctx-icon-btn"
-                    title={appThemeDark ? 'Switch to light mode' : 'Switch to dark mode'}
-                    aria-label="Toggle app theme"
-                    onClick={() =>
-                      setSettings({
-                        ...systemSettings,
-                        themeMode: appThemeDark ? 'light' : 'dark',
-                      })
-                    }
-                  >
-                    <i className={`fa-solid ${appThemeDark ? 'fa-sun' : 'fa-moon'}`} aria-hidden />
-                  </button>
                   <button type="button" className="si-sat-ctx-icon-btn" title="Close" aria-label="Close panel" onClick={closePanel}>
                     <i className="fa-solid fa-xmark" aria-hidden />
                   </button>

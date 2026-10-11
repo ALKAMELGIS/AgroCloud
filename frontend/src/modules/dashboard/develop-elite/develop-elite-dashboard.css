@@ -1749,6 +1749,8 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
 
 .leaflet-container > .develop-elite-map__weather-viz,
 .leaflet-container > .develop-elite-map__insight-panel,
+.develop-elite-map__viewport > .develop-elite-map__insight-panel,
+.maplibregl-map > .develop-elite-map__insight-panel,
 .leaflet-container > .develop-elite-map__swipe-bar,
 .leaflet-container > .develop-elite-map__swipe-chrome-host,
 .leaflet-container > .develop-elite-map__draw-widget-host,
@@ -1821,6 +1823,26 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   cursor: crosshair !important;
 }
 
+.maplibregl-map.develop-elite-map--intel-pick .maplibregl-canvas {
+  cursor: crosshair !important;
+}
+
+.develop-elite-map--webgl .develop-elite-map__viewport > .develop-elite-map__insight-panel {
+  top: 42px;
+  bottom: auto;
+  max-height: min(220px, 40%);
+  overflow: auto;
+}
+
+.develop-elite-map__insight-pick-marker {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #facc15;
+  border: 2px solid #fef08a;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+
 .leaflet-container.develop-elite-map--drawing-sketch,
 .maplibregl-map.develop-elite-map--drawing-sketch,
 .maplibregl-canvas-container.develop-elite-map--drawing-sketch {
@@ -1837,6 +1859,9 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
 }
 
 .develop-elite-map__insight-panel {
+  position: absolute;
+  z-index: 720;
+  pointer-events: auto;
   left: 8px;
   bottom: 28px;
   width: min(240px, calc(100% - 16px));
@@ -2112,53 +2137,68 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   height: 14px;
 }
 
-.develop-elite-map .maplibregl-ctrl-bottom-left {
-  z-index: 2;
+.develop-elite-map {
+  --de-nav-fab-size: 26px;
+  --de-nav-stack-gap: 5px;
+  --de-nav-stack-inset: 6px;
 }
 
-.develop-elite-map__navigator-fab-host {
+.develop-elite-map .maplibregl-ctrl-bottom-left {
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  pointer-events: none;
+}
+
+.develop-elite-map__navigator-stack {
   pointer-events: auto;
-  margin: 0 0 10px 8px !important;
+  margin: 0 0 var(--de-nav-stack-inset) var(--de-nav-stack-inset) !important;
   float: none;
   clear: none;
 }
 
-.develop-elite-map__navigator-fab-host .develop-elite-map__navigator-fab {
-  position: relative;
-  left: auto;
-  bottom: auto;
-  z-index: 1;
+.develop-elite-map__navigator-stack-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--de-nav-stack-gap);
+  max-width: min(108px, 36vw);
 }
 
 .develop-elite-map__navigator-fab {
-  position: absolute;
-  left: 8px;
-  bottom: 10px;
-  z-index: 830;
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
-  min-height: 34px;
+  position: relative;
+  flex-shrink: 0;
+  width: var(--de-nav-fab-size);
+  height: var(--de-nav-fab-size);
+  min-width: var(--de-nav-fab-size);
+  min-height: var(--de-nav-fab-size);
   padding: 0;
-  border: 1px solid var(--de-border-soft);
-  border-radius: 4px;
-  background: rgba(0, 20, 8, 0.94);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.82);
+  backdrop-filter: blur(10px);
   color: var(--de-accent);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 2px 10px rgba(2, 6, 23, 0.45);
   pointer-events: auto;
   touch-action: manipulation;
 }
 
+.develop-elite-map__navigator-fab .develop-elite-map__navigator-compass-glyph {
+  width: 13px;
+  height: 13px;
+}
+
 .develop-elite-map__navigator-fab:hover,
 .develop-elite-map__navigator-fab.is-active {
-  background: rgba(0, 40, 20, 0.98);
+  background: rgba(30, 41, 59, 0.92);
   border-color: var(--de-accent);
   color: #fff;
+  box-shadow: 0 0 0 1px rgba(57, 255, 20, 0.25), 0 4px 14px rgba(2, 6, 23, 0.5);
 }
 
 .develop-elite__brand-icon {
@@ -2207,33 +2247,43 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   z-index: 820;
 }
 
-/* ArcGIS-style map navigator — touch pan / rotate / zoom (2D planar + 3D) */
+/* Compact 3D orbit navigator */
 .develop-elite-map__navigator {
+  --de-nav-disc: 54px;
+  --de-nav-side: 18px;
   position: absolute;
-  left: 6px;
-  bottom: 50px;
+  left: var(--de-nav-stack-inset);
+  bottom: calc(var(--de-nav-stack-inset) + var(--de-nav-fab-size) + var(--de-nav-stack-gap));
   z-index: 825;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
-  max-width: min(168px, 46vw);
+  gap: 2px;
+  max-width: min(100px, 34vw);
   touch-action: none;
   user-select: none;
   pointer-events: auto;
 }
 
+.develop-elite-map__navigator--stacked {
+  position: static;
+  left: auto;
+  bottom: auto;
+  z-index: auto;
+  max-width: 100%;
+}
+
 .develop-elite-map__navigator-header {
   display: flex;
   flex-wrap: wrap;
-  gap: 3px;
+  gap: 2px;
 }
 
 .develop-elite-map__navigator-body {
   display: grid;
-  grid-template-columns: 28px 1fr 28px;
-  grid-template-rows: 28px 1fr 28px;
-  gap: 3px;
+  grid-template-columns: var(--de-nav-side) 1fr var(--de-nav-side);
+  grid-template-rows: var(--de-nav-side) 1fr var(--de-nav-side);
+  gap: 2px;
   align-items: center;
   justify-items: center;
 }
@@ -2242,59 +2292,106 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   grid-column: 2;
   grid-row: 1 / span 3;
   position: relative;
-  width: 96px;
-  height: 96px;
+  width: var(--de-nav-disc);
+  height: var(--de-nav-disc);
   border-radius: 50%;
-  background: rgba(12, 18, 14, 0.88);
-  border: 1px solid rgba(57, 255, 20, 0.35);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  background: radial-gradient(circle at 35% 28%, rgba(51, 65, 85, 0.92), rgba(15, 23, 42, 0.96) 70%);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow:
+    0 3px 12px rgba(2, 6, 23, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
   cursor: grab;
   touch-action: none;
+  overflow: visible;
+}
+
+.develop-elite-map__navigator-disc--3d {
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(57, 255, 20, 0.12);
 }
 
 .develop-elite-map__navigator-disc:active {
   cursor: grabbing;
 }
 
+.develop-elite-map__navigator-orbit {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  transition: transform 0.08s linear;
+  pointer-events: none;
+}
+
 .develop-elite-map__navigator-ring {
   position: absolute;
   border-radius: 50%;
   pointer-events: none;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.develop-elite-map__navigator-ring--rotate {
-  inset: 22%;
-  border-color: rgba(57, 255, 20, 0.22);
 }
 
 .develop-elite-map__navigator-ring--pan {
-  inset: 6%;
-  border-color: rgba(255, 255, 255, 0.18);
+  inset: 4%;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
 }
 
-.develop-elite-map__navigator-north {
+.develop-elite-map__navigator-ring--rotate {
+  inset: 20%;
+  border: 3px solid rgba(180, 190, 185, 0.55);
+  background: radial-gradient(circle at 40% 35%, rgba(220, 225, 222, 0.35), rgba(90, 98, 94, 0.25) 55%, transparent 70%);
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, 0.15),
+    inset 0 -2px 5px rgba(0, 0, 0, 0.35);
+}
+
+.develop-elite-map__navigator-orbit-handle {
+  position: absolute;
+  left: 50%;
+  top: 20%;
+  width: 8px;
+  height: 4px;
+  margin-left: -4px;
+  margin-top: -2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(240, 245, 242, 0.9), rgba(140, 150, 145, 0.85));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+.develop-elite-map__navigator-north-mark {
+  position: absolute;
+  left: 50%;
+  top: 1px;
+  width: 0;
+  height: 0;
+  margin-left: -4px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 6px solid rgba(255, 255, 255, 0.92);
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
+  pointer-events: none;
+}
+
+.develop-elite-map__navigator-pivot {
   position: absolute;
   left: 50%;
   top: 50%;
-  transform: translate(-50%, -50%);
-  width: 30px;
-  height: 30px;
+  width: 11px;
+  height: 11px;
+  margin: -5.5px 0 0 -5.5px;
   border-radius: 50%;
-  border: 1px solid rgba(57, 255, 20, 0.5);
-  background: rgba(0, 28, 12, 0.95);
-  color: var(--de-accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  cursor: pointer;
-  z-index: 2;
-  padding: 0;
+  pointer-events: none;
+  z-index: 3;
+  background: radial-gradient(circle at 32% 28%, #f2f4f3, #8a9490 42%, #3d4541 78%);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.55),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.35);
 }
 
-.develop-elite-map__navigator-north i {
-  transform: rotate(-45deg);
+.develop-elite-map__navigator-disc--3d .develop-elite-map__navigator-pivot {
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
 }
 
 .develop-elite-map__navigator-cardinal {
@@ -2305,67 +2402,71 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   border: none;
   background: transparent;
   cursor: pointer;
-  z-index: 1;
+  z-index: 2;
+  pointer-events: auto;
 }
 
 .develop-elite-map__navigator-cardinal--n {
-  top: 2px;
+  top: 3px;
   left: 50%;
   transform: translateX(-50%);
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-bottom: 7px solid rgba(240, 250, 245, 0.85);
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 5px solid rgba(230, 240, 235, 0.75);
 }
 
 .develop-elite-map__navigator-cardinal--s {
-  bottom: 2px;
+  bottom: 3px;
   left: 50%;
   transform: translateX(-50%);
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-top: 7px solid rgba(200, 210, 205, 0.55);
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid rgba(160, 170, 165, 0.45);
 }
 
 .develop-elite-map__navigator-cardinal--e {
-  right: 2px;
+  right: 3px;
   top: 50%;
   transform: translateY(-50%);
-  border-top: 5px solid transparent;
-  border-bottom: 5px solid transparent;
-  border-left: 7px solid rgba(200, 210, 205, 0.55);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid rgba(160, 170, 165, 0.45);
 }
 
 .develop-elite-map__navigator-cardinal--w {
-  left: 2px;
+  left: 3px;
   top: 50%;
   transform: translateY(-50%);
-  border-top: 5px solid transparent;
-  border-bottom: 5px solid transparent;
-  border-right: 7px solid rgba(200, 210, 205, 0.55);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-right: 5px solid rgba(160, 170, 165, 0.45);
 }
 
 .develop-elite-map__navigator-btn {
-  border: 1px solid var(--de-border-soft);
-  background: rgba(0, 20, 8, 0.92);
-  color: var(--de-accent);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(22, 28, 26, 0.94);
+  color: rgba(220, 230, 225, 0.9);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
   box-sizing: border-box;
+  border-radius: 2px;
 }
 
 .develop-elite-map__navigator-btn--mini {
-  width: 22px;
-  height: 22px;
-  font-size: 9px;
+  width: 16px;
+  height: 16px;
+  font-size: 7px;
+  border-radius: 5px;
 }
 
 .develop-elite-map__navigator-btn--side {
-  width: 28px;
-  height: 28px;
-  font-size: 11px;
+  width: var(--de-nav-side);
+  height: var(--de-nav-side);
+  font-size: 8px;
+  border-radius: 5px;
 }
 
 .develop-elite-map__navigator-btn--up {
@@ -2389,19 +2490,10 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
 }
 
 .develop-elite-map__navigator-btn:hover,
-.develop-elite-map__navigator-btn.is-active,
-.develop-elite-map__navigator-north:hover {
+.develop-elite-map__navigator-btn.is-active {
   background: rgba(0, 40, 20, 0.98);
   border-color: var(--de-accent);
   color: #fff;
-}
-
-.develop-elite-map__navigator-hint {
-  margin: 0;
-  font-size: 8px;
-  line-height: 1.35;
-  color: rgba(180, 210, 190, 0.75);
-  max-width: 168px;
 }
 
 .develop-elite-map__tool--zoom {
@@ -5402,6 +5494,17 @@ a.develop-elite-settings__data-link {
   width: 100%;
 }
 
+.develop-elite--grid-dashboard .develop-elite-map {
+  --de-nav-fab-size: 24px;
+  --de-nav-stack-inset: 5px;
+  --de-nav-stack-gap: 4px;
+}
+
+.develop-elite--grid-dashboard .develop-elite-map__navigator {
+  --de-nav-disc: 50px;
+  --de-nav-side: 16px;
+}
+
 .develop-elite-charts--single {
   display: flex;
   flex-direction: column;
@@ -6373,48 +6476,34 @@ body.develop-elite--lists-drawer-open {
     bottom: 28px;
   }
 
-  .develop-elite--compact-viewport .develop-elite-map__navigator-fab {
-    left: 10px;
-    bottom: 14px;
-    width: 42px;
-    height: 42px;
-    min-width: 42px;
-    min-height: 42px;
-    font-size: 18px;
+  .develop-elite--compact-viewport .develop-elite-map {
+    --de-nav-fab-size: 28px;
+    --de-nav-stack-inset: 8px;
   }
 
-  .develop-elite--compact-viewport .develop-elite-map__navigator {
-    left: 8px;
-    bottom: 62px;
-    max-width: min(200px, 52vw);
+  .develop-elite--compact-viewport .develop-elite-map__navigator-fab .develop-elite-map__navigator-compass-glyph {
+    width: 14px;
+    height: 14px;
   }
 
-  .develop-elite--compact-viewport .develop-elite-map__navigator-disc {
-    width: 112px;
-    height: 112px;
-  }
-
-  .develop-elite--compact-viewport .develop-elite-map__navigator-body {
-    grid-template-columns: 36px 1fr 36px;
-    grid-template-rows: 36px 1fr 36px;
+  .develop-elite--compact-viewport .develop-elite-map__navigator:not(.develop-elite-map__navigator--stacked) {
+    left: var(--de-nav-stack-inset);
+    bottom: calc(var(--de-nav-stack-inset) + var(--de-nav-fab-size) + var(--de-nav-stack-gap));
+    max-width: min(104px, 40vw);
+    --de-nav-disc: 58px;
+    --de-nav-side: 20px;
   }
 
   .develop-elite--compact-viewport .develop-elite-map__navigator-btn--mini {
-    width: 32px;
-    height: 32px;
-    font-size: 12px;
+    width: 22px;
+    height: 22px;
+    font-size: 10px;
   }
 
   .develop-elite--compact-viewport .develop-elite-map__navigator-btn--side {
-    width: 36px;
-    height: 36px;
-    font-size: 14px;
-  }
-
-  .develop-elite--compact-viewport .develop-elite-map__navigator-north {
-    width: 38px;
-    height: 38px;
-    font-size: 14px;
+    width: var(--de-nav-side);
+    height: var(--de-nav-side);
+    font-size: 11px;
   }
 
   .develop-elite--compact-viewport .develop-elite-map__navigator-hint {

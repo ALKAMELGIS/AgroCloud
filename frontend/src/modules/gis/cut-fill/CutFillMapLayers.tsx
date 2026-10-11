@@ -55,11 +55,28 @@ function fmtVol(m3: number): string {
   return Number.isFinite(m3) ? Math.round(m3).toLocaleString('en-US') : '—'
 }
 
-const LEGEND_GEOM_LS = 'si-cutfill-legend-geom-v3'
-const LEGEND_DEFAULT_W = 274
-const LEGEND_MIN_W = 220
-const LEGEND_MAX_W = 720
-const LEGEND_MIN_H = 150
+/** Short legend numbers (full value in `title`). */
+function fmtCompact(n: number, digits = 2): string {
+  if (!Number.isFinite(n)) return '—'
+  const sign = n < 0 ? '-' : ''
+  const v = Math.abs(n)
+  if (v >= 1e12) return `${sign}${(v / 1e12).toFixed(digits)}T`
+  if (v >= 1e9) return `${sign}${(v / 1e9).toFixed(digits)}G`
+  if (v >= 1e6) return `${sign}${(v / 1e6).toFixed(digits)}M`
+  if (v >= 1e4) return `${sign}${(v / 1e3).toFixed(1)}k`
+  if (v >= 100) return `${sign}${v.toFixed(0)}`
+  return `${sign}${v.toFixed(digits)}`
+}
+
+function fmtHaCompact(m2: number): string {
+  return fmtCompact(m2 / 10_000, 2)
+}
+
+const LEGEND_GEOM_LS = 'si-cutfill-legend-geom-v6'
+const LEGEND_DEFAULT_W = 360
+const LEGEND_MIN_W = 240
+const LEGEND_MAX_W = 880
+const LEGEND_MIN_H = 120
 const VIEWPORT_PAD = 8
 
 /** Viewport-fixed card geometry; `h: null` sizes the card to its content. */
@@ -71,8 +88,7 @@ function readLegendGeom(): LegendGeom | null {
     if (!raw) return null
     const g = JSON.parse(raw) as Partial<LegendGeom>
     if (![g.x, g.y, g.w].every(v => typeof v === 'number' && Number.isFinite(v))) return null
-    const h = typeof g.h === 'number' && Number.isFinite(g.h) ? g.h : null
-    return { x: g.x as number, y: g.y as number, w: g.w as number, h }
+    return { x: g.x as number, y: g.y as number, w: g.w as number, h: null }
   } catch {
     return null
   }
@@ -80,8 +96,12 @@ function readLegendGeom(): LegendGeom | null {
 
 function writeLegendGeom(g: LegendGeom | null): void {
   try {
-    if (g) localStorage.setItem(LEGEND_GEOM_LS, JSON.stringify(g))
-    else localStorage.removeItem(LEGEND_GEOM_LS)
+    if (g) {
+      localStorage.setItem(
+        LEGEND_GEOM_LS,
+        JSON.stringify({ x: g.x, y: g.y, w: g.w }),
+      )
+    } else localStorage.removeItem(LEGEND_GEOM_LS)
   } catch {
     /* ignore */
   }
@@ -106,23 +126,31 @@ function legendBounds(container: HTMLElement | null): LegendBounds {
   }
 }
 
-function clampLegendGeom(g: LegendGeom, renderedH: number, b: LegendBounds): LegendGeom {
+function responsiveLegendWidth(b: LegendBounds, preferred: number): number {
   const availW = Math.max(LEGEND_MIN_W, b.right - b.left)
+  const cap = Math.min(LEGEND_MAX_W, availW)
+  const floor = Math.min(LEGEND_MIN_W, availW)
+  const target = Number.isFinite(preferred) ? preferred : LEGEND_DEFAULT_W
+  if (availW < 420) return cap
+  return Math.max(floor, Math.min(target, cap))
+}
+
+function clampLegendGeom(g: LegendGeom, renderedH: number, b: LegendBounds): LegendGeom {
   const availH = Math.max(LEGEND_MIN_H, b.bottom - b.top)
-  const w = Math.max(LEGEND_MIN_W, Math.min(LEGEND_MAX_W, availW, g.w))
-  const h = g.h == null ? null : Math.max(LEGEND_MIN_H, Math.min(availH, g.h))
-  const effH = Math.min(h ?? renderedH, availH)
+  const w = responsiveLegendWidth(b, g.w)
+  const effH = Math.min(renderedH, availH)
   const x = Math.max(b.left, Math.min(b.right - w, g.x))
   const y = Math.max(b.top, Math.min(b.bottom - effH, g.y))
-  return { x, y, w, h }
+  return { x, y, w, h: null }
 }
 
 /** Default layout: content-height card docked to the map's bottom-left corner. */
 function defaultLegendGeom(b: LegendBounds, renderedH: number): LegendGeom {
-  return clampLegendGeom({ x: b.left, y: b.bottom - renderedH, w: LEGEND_DEFAULT_W, h: null }, renderedH, b)
+  const w = responsiveLegendWidth(b, LEGEND_DEFAULT_W)
+  return clampLegendGeom({ x: b.left, y: b.bottom - renderedH, w, h: null }, renderedH, b)
 }
 
-function CutFillEarthworkSummary({ summary }: { summary: CutFillSummary }) {
+function CutFillLegendMetrics({ summary }: { summary: CutFillSummary }) {
   const net = summary.netVolumeM3
   const total = summary.cutVolumeM3 + summary.fillVolumeM3
   const cutShare = total > 0 ? (summary.cutVolumeM3 / total) * 100 : 50
@@ -136,57 +164,71 @@ function CutFillEarthworkSummary({ summary }: { summary: CutFillSummary }) {
         : 'Cut and fill are balanced'
 
   return (
-    <section className="si-cutfill-legend__kpis" aria-label="Earthwork summary">
-      <div className="si-cutfill-legend__section-title">Earthwork</div>
-      <div className="si-cutfill-legend__kpi-grid">
-        <div className="si-cutfill-legend__kpi is-cut">
-          <span className="si-cutfill-legend__kpi-label">Cut volume</span>
+    <section className="si-cutfill-legend__metrics" aria-label="Earthwork summary">
+      <div className="si-cutfill-legend__kpi-strip">
+        <div className="si-cutfill-legend__kpi is-cut" title={`${ha(summary.cutAreaM2)} ha`}>
+          <span className="si-cutfill-legend__kpi-label">Cut A</span>
           <span className="si-cutfill-legend__kpi-value">
-            {fmtVol(summary.cutVolumeM3)}
-            <small>m³</small>
+            {fmtHaCompact(summary.cutAreaM2)}
+            <small>ha</small>
           </span>
         </div>
-        <div className="si-cutfill-legend__kpi is-fill">
-          <span className="si-cutfill-legend__kpi-label">Fill volume</span>
+        <div className="si-cutfill-legend__kpi is-fill" title={`${ha(summary.fillAreaM2)} ha`}>
+          <span className="si-cutfill-legend__kpi-label">Fill A</span>
           <span className="si-cutfill-legend__kpi-value">
-            {fmtVol(summary.fillVolumeM3)}
-            <small>m³</small>
+            {fmtHaCompact(summary.fillAreaM2)}
+            <small>ha</small>
           </span>
         </div>
-      </div>
-      <div className={`si-cutfill-legend__net is-${balance}`} title={balanceHint}>
-        <div className="si-cutfill-legend__net-head">
-          <span className="si-cutfill-legend__kpi-label">Net volume</span>
-          <span className="si-cutfill-legend__net-badge">{balanceLabel}</span>
-        </div>
-        <span className="si-cutfill-legend__kpi-value">
-          {net > 0 ? '+' : ''}
-          {fmtVol(net)}
-          <small>m³</small>
-        </span>
-        <div className="si-cutfill-legend__balance" aria-hidden>
-          <span className="is-cut" style={{ width: `${cutShare}%` }} />
-          <span className="is-fill" style={{ width: `${100 - cutShare}%` }} />
-        </div>
-      </div>
-      <div className="si-cutfill-legend__kpi-grid">
-        <div className="si-cutfill-legend__kpi is-cut">
-          <span className="si-cutfill-legend__kpi-label">
-            <i className="fa-solid fa-arrow-down" aria-hidden /> Max cut depth
-          </span>
+        <div className="si-cutfill-legend__kpi is-neutral" title={`${ha(summary.noChangeAreaM2)} ha`}>
+          <span className="si-cutfill-legend__kpi-label">No Δ</span>
           <span className="si-cutfill-legend__kpi-value">
-            {fmtM(summary.maxCutM)}
+            {fmtHaCompact(summary.noChangeAreaM2)}
+            <small>ha</small>
+          </span>
+        </div>
+        <div
+          className="si-cutfill-legend__kpi is-depth"
+          title={`Max cut ${fmtM(summary.maxCutM)} m · Max fill ${fmtM(summary.maxFillM)} m`}
+        >
+          <span className="si-cutfill-legend__kpi-label">Depth</span>
+          <span className="si-cutfill-legend__kpi-value si-cutfill-legend__kpi-value--depth">
+            <span className="is-cut">↓{fmtM(summary.maxCutM)}</span>
+            <span className="is-fill">↑{fmtM(summary.maxFillM)}</span>
             <small>m</small>
           </span>
         </div>
-        <div className="si-cutfill-legend__kpi is-fill">
+        <div className="si-cutfill-legend__kpi is-cut" title={`${fmtVol(summary.cutVolumeM3)} m³`}>
+          <span className="si-cutfill-legend__kpi-label">Cut V</span>
+          <span className="si-cutfill-legend__kpi-value">
+            {fmtCompact(summary.cutVolumeM3)}
+            <small>m³</small>
+          </span>
+        </div>
+        <div className="si-cutfill-legend__kpi is-fill" title={`${fmtVol(summary.fillVolumeM3)} m³`}>
+          <span className="si-cutfill-legend__kpi-label">Fill V</span>
+          <span className="si-cutfill-legend__kpi-value">
+            {fmtCompact(summary.fillVolumeM3)}
+            <small>m³</small>
+          </span>
+        </div>
+        <div
+          className={`si-cutfill-legend__net is-${balance}`}
+          title={`${balanceHint} · ${net > 0 ? '+' : ''}${fmtVol(net)} m³`}
+        >
           <span className="si-cutfill-legend__kpi-label">
-            <i className="fa-solid fa-arrow-up" aria-hidden /> Max fill depth
+            Net
+            <span className="si-cutfill-legend__net-badge">{balanceLabel}</span>
           </span>
           <span className="si-cutfill-legend__kpi-value">
-            {fmtM(summary.maxFillM)}
-            <small>m</small>
+            {net > 0 ? '+' : ''}
+            {fmtCompact(net)}
+            <small>m³</small>
           </span>
+          <div className="si-cutfill-legend__balance" aria-hidden>
+            <span className="is-cut" style={{ width: `${cutShare}%` }} />
+            <span className="is-fill" style={{ width: `${100 - cutShare}%` }} />
+          </div>
         </div>
       </div>
     </section>
@@ -208,8 +250,12 @@ function CutFillLegend({ cutFill }: Props) {
     const r = cutFill.result
     if (!r) return null
     const profile = buildCutFillProfile(r.dem, r.existingElev, r.designElev, r.difference)
-    return profile ? buildCutFillProfileChart(profile) : null
-  }, [cutFill.result])
+    if (!profile) return null
+    const panelW = geom?.w ?? LEGEND_DEFAULT_W
+    const chartW = Math.max(220, Math.min(640, panelW - 22))
+    const chartH = chartW < 300 ? 100 : chartW < 380 ? 112 : 120
+    return buildCutFillProfileChart(profile, chartW, chartH)
+  }, [cutFill.result, geom?.w])
 
   useEffect(() => {
     let frames = 0
@@ -230,7 +276,7 @@ function CutFillLegend({ cutFill }: Props) {
     return () => window.cancelAnimationFrame(raf)
   }, [maps])
 
-  const visible = !!container && !!summary
+  const visible = !!container && !!summary && cutFill.mapLegendOpen
 
   const relayout = useCallback(() => {
     const b = legendBounds(container)
@@ -240,7 +286,11 @@ function CutFillLegend({ cutFill }: Props) {
   }, [container])
 
   useLayoutEffect(() => {
-    if (visible) relayout()
+    if (!visible) return
+    if (geomRef.current?.h != null) {
+      setGeom(g => (g ? { ...g, h: null } : g))
+    }
+    relayout()
   }, [visible, relayout, profileChart])
 
   useEffect(() => {
@@ -264,7 +314,6 @@ function CutFillLegend({ cutFill }: Props) {
       e.stopPropagation()
       const sx = e.clientX
       const sy = e.clientY
-      const startH = start.h ?? el.offsetHeight
       const b = legendBounds(container)
       userPlacedRef.current = true
       setInteraction(kind)
@@ -273,8 +322,8 @@ function CutFillLegend({ cutFill }: Props) {
         const dy = ev.clientY - sy
         const next =
           kind === 'drag'
-            ? { ...start, x: start.x + dx, y: start.y + dy }
-            : { ...start, w: start.w + dx, h: startH + dy }
+            ? { ...start, x: start.x + dx, y: start.y + dy, h: null }
+            : { ...start, w: start.w + dx, h: null }
         setGeom(clampLegendGeom(next, el.offsetHeight, b))
       }
       const onUp = () => {
@@ -330,57 +379,85 @@ function CutFillLegend({ cutFill }: Props) {
       style={{
         left: geom?.x ?? 0,
         top: geom?.y ?? 0,
-        width: geom?.w ?? LEGEND_DEFAULT_W,
-        height: geom?.h ?? undefined,
+        width: geom?.w ?? responsiveLegendWidth(bounds, LEGEND_DEFAULT_W),
+        maxWidth: bounds.right - bounds.left,
         maxHeight: Math.max(LEGEND_MIN_H, bounds.bottom - bounds.top),
         visibility: geom ? 'visible' : 'hidden',
+        ['--si-cutfill-legend-w' as string]: `${geom?.w ?? responsiveLegendWidth(bounds, LEGEND_DEFAULT_W)}px`,
+        ['--si-cutfill-legend-max-h' as string]: `${Math.max(LEGEND_MIN_H, bounds.bottom - bounds.top)}px`,
       }}
       onPointerDown={e => e.stopPropagation()}
       onClick={e => e.stopPropagation()}
     >
-      <header
-        className="si-cutfill-legend__head"
-        onPointerDown={onHeadPointerDown}
-        onDoubleClick={resetLayout}
-        title="Drag to move · double-click to restore default"
-      >
-        <span className="si-cutfill-legend__grip" aria-hidden>
-          <i className="fa-solid fa-grip-vertical" />
-        </span>
-        <span className="si-cutfill-legend__title">Cut & Fill</span>
+      <header className="si-cutfill-legend__head">
+        <button
+          type="button"
+          className="si-cutfill-legend__head-drag"
+          onPointerDown={onHeadPointerDown}
+          onDoubleClick={resetLayout}
+          title="Drag to move · double-click to restore default"
+        >
+          <span className="si-cutfill-legend__grip" aria-hidden>
+            <i className="fa-solid fa-grip-vertical" />
+          </span>
+          <span className="si-cutfill-legend__title">Cut & Fill</span>
+        </button>
+        <button
+          type="button"
+          className="si-cutfill-legend__close"
+          aria-label="Close legend"
+          title="Close"
+          onClick={() => cutFill.setMapLegendOpen(false)}
+        >
+          <i className="fa-solid fa-xmark" aria-hidden />
+        </button>
       </header>
       <div className="si-cutfill-legend__body">
-        <ul className="si-cutfill-legend__list">
-          {CLASS_ROWS.map(row => {
-            const on = classVisible(cutFill.layers, row.key)
-            return (
-              <li key={row.key}>
-                <button
-                  type="button"
-                  className={`si-cutfill-legend__row${on ? ' is-on' : ''}`}
-                  aria-pressed={on}
-                  onClick={() => cutFill.toggleLayer(row.key)}
-                >
-                  <span className="si-cutfill-legend__swatch" style={{ background: row.swatch, opacity: on ? 1 : 0.35 }} />
-                  <span className="si-cutfill-legend__copy">
-                    <strong>{row.label}</strong>
-                    <span>{row.hint}</span>
-                  </span>
-                  <span className="si-cutfill-legend__ha">{ha(areaFor(row.type))} ha</span>
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-        <p className="si-cutfill-legend__hint">ΔZ = Design − Existing. Click a zone for elevations, type, area, and volume.</p>
-        {profileChart ? <CutFillProfileChart chart={profileChart} /> : null}
-        <CutFillEarthworkSummary summary={summary} />
+        <div className="si-cutfill-legend__body-main">
+          <CutFillLegendMetrics summary={summary} />
+        </div>
+        {profileChart ? (
+          <div className="si-cutfill-legend__chart-block">
+            <CutFillProfileChart chart={profileChart} />
+          </div>
+        ) : null}
+        <footer className="si-cutfill-legend__body-foot">
+          <section className="si-cutfill-legend__zones" aria-label="Zone visibility">
+            <div className="si-cutfill-legend__zone-grid">
+              {CLASS_ROWS.map(row => {
+                const on = classVisible(cutFill.layers, row.key)
+                return (
+                  <button
+                    key={row.key}
+                    type="button"
+                    className={`si-cutfill-legend__zone${on ? ' is-on' : ''}`}
+                    aria-pressed={on}
+                    title={row.hint}
+                    onClick={() => cutFill.toggleLayer(row.key)}
+                  >
+                    <span
+                      className="si-cutfill-legend__swatch"
+                      style={{ background: row.swatch, opacity: on ? 1 : 0.35 }}
+                    />
+                    <span className="si-cutfill-legend__zone-label">{row.label}</span>
+                    <span className="si-cutfill-legend__zone-ha" title={`${ha(areaFor(row.type))} ha`}>
+                      {fmtHaCompact(areaFor(row.type))}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </section>
+          <p className="si-cutfill-legend__hint">
+            ΔZ = Design − Existing. Click a zone for elevations, type, area, and volume.
+          </p>
+        </footer>
       </div>
       <button
         type="button"
         className="si-cutfill-legend__resize"
-        aria-label="Resize legend (double-click to restore default position and size)"
-        title="Drag to resize · double-click to restore default"
+        aria-label="Resize legend width (double-click to restore default position and size)"
+        title="Drag to resize width · double-click to restore default"
         onPointerDown={e => startPointerSession(e, 'resize')}
         onDoubleClick={resetLayout}
       >

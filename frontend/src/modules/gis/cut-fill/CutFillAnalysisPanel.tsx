@@ -5,12 +5,24 @@ import { CutFill3DView } from './CutFill3DView'
 import '../spatial-analysis/hydro-watershed/HydroWatershedPanel.css'
 import './CutFillAnalysisPanel.css'
 
-const STEPS: Array<{ id: CutFillWizardStep; label: string }> = [
-  { id: 'surfaces', label: '① Surfaces' },
-  { id: 'parameters', label: '② Parameters' },
-  { id: 'analysis', label: '③ Run' },
-  { id: 'results', label: '④ Results' },
-  { id: 'export', label: '⑤ Export' },
+const STEPS: Array<{ id: CutFillWizardStep; label: string; icon: string }> = [
+  { id: 'surfaces', label: 'Surfaces', icon: 'fa-layer-group' },
+  { id: 'parameters', label: 'Params', icon: 'fa-sliders' },
+  { id: 'analysis', label: 'Run', icon: 'fa-play' },
+  { id: 'results', label: 'Results', icon: 'fa-chart-column' },
+  { id: 'export', label: 'Export', icon: 'fa-file-export' },
+]
+
+const RESULT_LAYER_CHIPS: Array<
+  | { kind: 'class'; label: string; icon: string; tone: 'cutfill' }
+  | { kind: 'layer'; key: keyof UseCutFillAnalysisReturn['layers']; label: string; icon: string; tone: string }
+> = [
+  { kind: 'class', label: 'Cut / Fill', icon: 'fa-chart-pie', tone: 'cutfill' },
+  { kind: 'layer', key: 'difference', label: 'Difference', icon: 'fa-wave-square', tone: 'diff' },
+  { kind: 'layer', key: 'existing', label: 'Existing', icon: 'fa-mountain', tone: 'existing' },
+  { kind: 'layer', key: 'design', label: 'Design', icon: 'fa-ruler-combined', tone: 'design' },
+  { kind: 'layer', key: 'existingContours', label: 'Ex. contours', icon: 'fa-chart-area', tone: 'existing' },
+  { kind: 'layer', key: 'designContours', label: 'Des. contours', icon: 'fa-drafting-compass', tone: 'design' },
 ]
 
 type Props = {
@@ -34,16 +46,22 @@ export function CutFillAnalysisPanel({ model, onRowFlyTo }: Props) {
         </span>
       </header>
 
-      <div className="si-cutfill__steps" role="tablist">
-        {STEPS.map(st => (
+      <div className="si-cutfill__steps" role="tablist" aria-label="Cut and fill workflow">
+        {STEPS.map((st, index) => (
           <button
             key={st.id}
             type="button"
             role="tab"
+            aria-selected={model.step === st.id}
             className={`si-cutfill__step-tab${model.step === st.id ? ' is-active' : ''}`}
+            title={st.label}
             onClick={() => model.setStep(st.id)}
           >
-            {st.label}
+            <span className="si-cutfill__step-icon" aria-hidden>
+              <i className={`fa-solid ${st.icon}`} />
+              <span className="si-cutfill__step-num">{index + 1}</span>
+            </span>
+            <span className="si-cutfill__step-label">{st.label}</span>
           </button>
         ))}
       </div>
@@ -226,49 +244,70 @@ export function CutFillAnalysisPanel({ model, onRowFlyTo }: Props) {
 
       {model.step === 'results' && s && (
         <div>
-          <div className="si-cutfill__layer-toggles">
-            {(() => {
-              const classOn = !!(
-                model.layers.cut ||
-                model.layers.fill ||
-                model.layers.noChange ||
-                model.layers.classification
-              )
-              return (
-                <button
-                  type="button"
-                  className={`si-cutfill__step-tab${classOn ? ' is-active' : ''}`}
-                  aria-pressed={classOn}
-                  onClick={() => model.setClassOverlay(!classOn)}
-                >
-                  {classOn ? '● ' : '○ '}
-                  Cut/Fill
-                </button>
-              )
-            })()}
-            {(
-              [
-                ['difference', 'Difference'],
-                ['existing', 'Existing'],
-                ['design', 'Design'],
-                ['existingContours', 'Existing contours'],
-                ['designContours', 'Design contours'],
-              ] as const
-            ).map(([key, label]) => {
-              const on = !!model.layers[key]
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  className={`si-cutfill__step-tab${on ? ' is-active' : ''}`}
-                  aria-pressed={on}
-                  onClick={() => model.toggleLayer(key)}
-                >
-                  {on ? '● ' : '○ '}
-                  {label}
-                </button>
-              )
-            })}
+          {!model.mapLegendOpen ? (
+            <button
+              type="button"
+              className="si-cutfill__legend-reopen"
+              onClick={() => model.setMapLegendOpen(true)}
+            >
+              <i className="fa-solid fa-chart-column" aria-hidden />
+              Show map legend
+            </button>
+          ) : null}
+          <div className="si-cutfill__layer-toggles" role="group" aria-label="Map overlays">
+            <div className="si-cutfill__layer-toggles-head">
+              <span className="si-cutfill__layer-toggles-title">Map layers</span>
+              <span className="si-cutfill__layer-toggles-hint">Toggle visibility</span>
+            </div>
+            <div className="si-cutfill__layer-grid">
+              {RESULT_LAYER_CHIPS.map(chip => {
+                if (chip.kind === 'class') {
+                  const classOn = !!(
+                    model.layers.cut ||
+                    model.layers.fill ||
+                    model.layers.noChange ||
+                    model.layers.classification
+                  )
+                  return (
+                    <button
+                      key="class"
+                      type="button"
+                      className={`si-cutfill__layer-chip is-tone-${chip.tone}${classOn ? ' is-active' : ''}`}
+                      aria-pressed={classOn}
+                      title="Cut, fill, and no-change zones"
+                      onClick={() => model.setClassOverlay(!classOn)}
+                    >
+                      <span className="si-cutfill__layer-chip-icon" aria-hidden>
+                        <i className={`fa-solid ${chip.icon}`} />
+                      </span>
+                      <span className="si-cutfill__layer-chip-label">{chip.label}</span>
+                      <span className="si-cutfill__layer-chip-state" aria-hidden>
+                        <i className={`fa-solid ${classOn ? 'fa-eye' : 'fa-eye-slash'}`} />
+                      </span>
+                    </button>
+                  )
+                }
+                const on = !!model.layers[chip.key]
+                return (
+                  <button
+                    key={chip.key}
+                    type="button"
+                    className={`si-cutfill__layer-chip is-tone-${chip.tone}${on ? ' is-active' : ''}`}
+                    aria-pressed={on}
+                    title={chip.label}
+                    onClick={() => model.toggleLayer(chip.key)}
+                  >
+                    <span className="si-cutfill__layer-chip-icon" aria-hidden>
+                      <i className={`fa-solid ${chip.icon}`} />
+                    </span>
+                    <span className="si-cutfill__layer-chip-label">{chip.label}</span>
+                    <span className="si-cutfill__layer-chip-state" aria-hidden>
+                      <i className={`fa-solid ${on ? 'fa-eye' : 'fa-eye-slash'}`} />
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
           <div className="si-cutfill__field">
             <label htmlFor="cf-opacity">Overlay opacity {Math.round(model.layerOpacity * 100)}%</label>

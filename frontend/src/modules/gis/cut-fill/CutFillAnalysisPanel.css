@@ -1,23 +1,268 @@
+.si-cutfill {
+  --cf-chip-border: rgba(148, 163, 184, 0.35);
+  --cf-chip-bg: rgba(15, 23, 42, 0.35);
+  --cf-chip-text: #e2e8f0;
+  --cf-chip-muted: #94a3b8;
+  --cf-chip-active-border: rgba(56, 189, 248, 0.65);
+  --cf-chip-active-bg: rgba(14, 116, 144, 0.35);
+  --cf-icon-bg: rgba(255, 255, 255, 0.08);
+}
+
+:where(.si-sat-ctx-dock--light, html[data-theme='light']) .si-cutfill {
+  --cf-chip-border: rgba(148, 163, 184, 0.45);
+  --cf-chip-bg: rgba(255, 255, 255, 0.72);
+  --cf-chip-text: #0f172a;
+  --cf-chip-muted: #64748b;
+  --cf-chip-active-border: rgba(16, 185, 129, 0.55);
+  --cf-chip-active-bg: linear-gradient(180deg, rgba(236, 253, 245, 0.95), rgba(255, 255, 255, 0.9));
+  --cf-icon-bg: rgba(15, 23, 42, 0.06);
+}
+
 .si-cutfill .si-cutfill__steps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
   margin: 0 0 12px;
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--cf-chip-border);
+  background: color-mix(in srgb, var(--cf-chip-bg) 60%, transparent);
 }
 
 .si-cutfill .si-cutfill__step-tab {
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: rgba(15, 23, 42, 0.35);
-  color: #e2e8f0;
-  border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 6px 2px 5px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--cf-chip-muted);
   cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.si-cutfill .si-cutfill__step-tab:hover {
+  color: var(--cf-chip-text);
+  background: var(--cf-icon-bg);
 }
 
 .si-cutfill .si-cutfill__step-tab.is-active {
-  border-color: rgba(56, 189, 248, 0.65);
-  background: rgba(14, 116, 144, 0.35);
+  border-color: var(--cf-chip-active-border);
+  background: var(--cf-chip-active-bg);
+  color: var(--cf-chip-text);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.si-cutfill .si-cutfill__step-icon {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  border: 1px solid var(--cf-chip-border);
+  background: var(--cf-icon-bg);
+  font-size: 12px;
+  color: inherit;
+}
+
+.si-cutfill .si-cutfill__step-tab.is-active .si-cutfill__step-icon {
+  border-color: color-mix(in srgb, var(--cf-chip-active-border) 70%, transparent);
+  color: #0ea5e9;
+}
+
+:where(.si-sat-ctx-dock--light, html[data-theme='light']) .si-cutfill .si-cutfill__step-tab.is-active .si-cutfill__step-icon {
+  color: #059669;
+}
+
+.si-cutfill .si-cutfill__step-num {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 14px;
+  text-align: center;
+  color: #fff;
+  background: #64748b;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
+}
+
+.si-cutfill .si-cutfill__step-tab.is-active .si-cutfill__step-num {
+  background: linear-gradient(135deg, #0ea5e9, #06b6d4);
+}
+
+:where(.si-sat-ctx-dock--light, html[data-theme='light']) .si-cutfill .si-cutfill__step-tab.is-active .si-cutfill__step-num {
+  background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.si-cutfill .si-cutfill__step-label {
+  max-width: 100%;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.15;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.si-cutfill__legend-reopen {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px dashed var(--cf-chip-border);
+  border-radius: 10px;
+  background: var(--cf-chip-bg);
+  color: var(--cf-chip-text);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.si-cutfill__legend-reopen:hover {
+  border-color: var(--cf-chip-active-border);
+  background: var(--cf-chip-active-bg);
+}
+
+.si-cutfill__layer-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--cf-chip-border);
+  background: color-mix(in srgb, var(--cf-chip-bg) 55%, transparent);
+}
+
+.si-cutfill__layer-toggles-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.si-cutfill__layer-toggles-title {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cf-chip-text);
+}
+
+.si-cutfill__layer-toggles-hint {
+  font-size: 9px;
+  color: var(--cf-chip-muted);
+}
+
+.si-cutfill__layer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.si-cutfill__layer-chip {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 8px 8px 7px;
+  border: 1px solid var(--cf-chip-border);
+  border-radius: 10px;
+  background: var(--cf-chip-bg);
+  color: var(--cf-chip-text);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    opacity 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.si-cutfill__layer-chip:not(.is-active) {
+  opacity: 0.72;
+}
+
+.si-cutfill__layer-chip.is-active {
+  border-color: var(--cf-chip-active-border);
+  background: var(--cf-chip-active-bg);
+  opacity: 1;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+}
+
+.si-cutfill__layer-chip-icon {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  font-size: 12px;
+  border: 1px solid var(--cf-chip-border);
+  background: var(--cf-icon-bg);
+}
+
+.si-cutfill__layer-chip.is-tone-cutfill .si-cutfill__layer-chip-icon {
+  color: #dc2626;
+  background: linear-gradient(135deg, rgba(254, 226, 226, 0.9), rgba(254, 242, 242, 0.5));
+}
+
+.si-cutfill__layer-chip.is-tone-cutfill.is-active .si-cutfill__layer-chip-icon {
+  box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.25);
+}
+
+.si-cutfill__layer-chip.is-tone-diff .si-cutfill__layer-chip-icon {
+  color: #7c3aed;
+}
+
+.si-cutfill__layer-chip.is-tone-existing .si-cutfill__layer-chip-icon {
+  color: #475569;
+}
+
+.si-cutfill__layer-chip.is-tone-design .si-cutfill__layer-chip-icon {
+  color: #2563eb;
+}
+
+.si-cutfill__layer-chip-label {
+  min-width: 0;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+}
+
+.si-cutfill__layer-chip-state {
+  flex: none;
+  font-size: 10px;
+  color: var(--cf-chip-muted);
+  opacity: 0.85;
+}
+
+.si-cutfill__layer-chip.is-active .si-cutfill__layer-chip-state {
+  color: #059669;
 }
 
 .si-cutfill__field {
@@ -32,6 +277,10 @@
   color: #94a3b8;
 }
 
+:where(.si-sat-ctx-dock--light, html[data-theme='light']) .si-cutfill__field label {
+  color: #64748b;
+}
+
 .si-cutfill__field select,
 .si-cutfill__field input,
 .si-cutfill__field textarea {
@@ -41,6 +290,14 @@
   color: #f1f5f9;
   padding: 6px 8px;
   font-size: 12px;
+}
+
+:where(.si-sat-ctx-dock--light, html[data-theme='light']) .si-cutfill__field select,
+:where(.si-sat-ctx-dock--light, html[data-theme='light']) .si-cutfill__field input,
+:where(.si-sat-ctx-dock--light, html[data-theme='light']) .si-cutfill__field textarea {
+  background: rgba(255, 255, 255, 0.9);
+  color: #0f172a;
+  border-color: rgba(148, 163, 184, 0.45);
 }
 
 .si-cutfill__crs-auto {
@@ -53,6 +310,10 @@
   color: #cbd5e1;
   font-size: 11px;
   line-height: 1.35;
+}
+
+:where(.si-sat-ctx-dock--light, html[data-theme='light']) .si-cutfill__crs-hint {
+  color: #64748b;
 }
 
 .si-cutfill__crs-reset {
@@ -119,13 +380,6 @@
   height: 100%;
   background: linear-gradient(90deg, #0ea5e9, #22d3ee);
   transition: width 0.2s ease;
-}
-
-.si-cutfill__layer-toggles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 10px;
 }
 
 .si-cutfill__export-grid {

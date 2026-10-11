@@ -121,7 +121,7 @@ export function buildCutFillProfileChart(profile: CutFillProfile, width = 260, h
   const padL = 32
   const padR = 6
   const padT = 8
-  const padB = 16
+  const padB = 20
   const plotW = Math.max(1, width - padL - padR)
   const plotH = Math.max(1, height - padT - padB)
   const xOf = (d: number) => padL + (d / dMax) * plotW

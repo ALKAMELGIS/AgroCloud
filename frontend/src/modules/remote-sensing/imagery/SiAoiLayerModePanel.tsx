@@ -132,12 +132,7 @@ export function SiAoiLayerModePanel({
             <>Querying all layer polygons for Sentinel analysis…</>
           )}
         </p>
-      ) : options.length === 0 ? (
-        <p className="si-rs-panel__meta si-rs-panel__meta--inline" role="status">
-          Add a vector layer from <strong>Layers</strong>, pick it above, then enable Show on map to clip the
-          selected index to that layer&apos;s polygons.
-        </p>
-      ) : (
+      ) : options.length === 0 ? null : (
         <p className="si-rs-panel__meta si-rs-panel__meta--inline" role="status">
           Enable <strong>Show on map (Layers AOI)</strong> to paint the selected index inside this layer&apos;s
           polygons.

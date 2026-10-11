@@ -2224,6 +2224,15 @@ html[data-theme='light'] .si-map-analysis-tl-nudge:hover {
   font-size: var(--si-map-rail-icon);
 }
 
+/* Explore Indexes — gallery (stacked frames) glyph, centred in compact rail cells */
+.si-sat-ctx-rail-btn--explore-indexes .si-sat-ctx-rail-btn__icon--gallery,
+.si-sat-ctx-dock--map-toolbox .si-sat-ctx-rail-btn--explore-indexes > .fa-images {
+  font-size: var(--si-map-rail-icon);
+  line-height: 1;
+  transform: scale(1.05);
+  transform-origin: center;
+}
+
 .si-sat-ctx-dock--map-toolbox.si-sat-ctx-dock--rail-narrow .si-sat-ctx-rail-sep {
   margin: 2px 8px;
 }

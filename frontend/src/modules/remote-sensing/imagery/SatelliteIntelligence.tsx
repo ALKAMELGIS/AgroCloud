@@ -461,6 +461,7 @@ import {
 } from '@/modules/gis/map/siMapboxGlobeCompat';
 import {
   applySiGlobeCockpitFog,
+  bindSiMapboxGlobeCanvasBoot,
   isSiGlobeCockpit2dActive,
   nudgeSiMapboxGlobeCanvas,
   SI_GLOBE_COCKPIT_2D_VIEW,
@@ -603,6 +604,7 @@ import type { AoiStaticMultiLayerLineChartDataset } from '../temporal-analysis/A
 import { SatelliteMapAnalysisChrome, type MapToolboxNavigateHandler } from './SatelliteMapAnalysisChrome';
 import { LayerLiveLegendPanel } from '../indices/LayerLiveLegendPanel';
 import { LayerLiveLegendFloatingPanel } from '../indices/LayerLiveLegendFloatingPanel';
+import { SiExploreIndexesGalleryPanel } from './SiExploreIndexesGalleryPanel';
 import { usePrefetchLayerLegendAnalyze } from '../indices/usePrefetchLayerLegendAnalyze';
 import { usePrefetchTerrainApi } from '../terrain/usePrefetchTerrainApi';
 import { GisFloatingWorkspacePanel } from '@/modules/gis/map/GisFloatingWorkspacePanel';
@@ -780,6 +782,11 @@ import { ElevationProfilePanel } from '@/modules/gis/spatial-analysis/elevation-
 import { useElevationProfile } from '@/modules/gis/spatial-analysis/elevation-profile/useElevationProfile';
 import { CutFillMapLayers } from '@/modules/gis/cut-fill/CutFillMapLayers';
 import { useCutFillAnalysis } from '@/modules/gis/cut-fill/useCutFillAnalysis';
+import { FloodSimulationMapLayers } from '@/modules/gis/flood-simulation/FloodSimulationMapLayers';
+import { FloodSimulationSetupPanel } from '@/modules/gis/flood-simulation/ui/FloodSimulationSetupPanel';
+import { FloodSimulationChrome } from '@/modules/gis/flood-simulation/ui/FloodSimulationChrome';
+import { useFloodSimulation } from '@/modules/gis/flood-simulation/useFloodSimulation';
+import '@/modules/gis/flood-simulation/floodSimulation.css';
 import { WellSiteRecommendationPanel } from '@/modules/gis/spatial-analysis/well-site/WellSiteRecommendationPanel';
 import { useWellSiteRecommendation } from '@/modules/gis/spatial-analysis/well-site/useWellSiteRecommendation';
 import { useChirpsPrecipitation } from '../weather/useChirpsPrecipitation';
@@ -5802,6 +5809,7 @@ export default function SatelliteIntelligence() {
   | 'well-suitability'
   | 'flood-monitoring'
   | 'image-classification'
+  | 'flood-simulation'
   | 'raster-georeference'
   | 'table-geo-ai'
   >('source');
@@ -6215,6 +6223,7 @@ export default function SatelliteIntelligence() {
 
   const [geoAiFloatingOpen, setGeoAiFloatingOpen] = useState(false);
   const [layerLiveLegendOpen, setLayerLiveLegendOpen] = useState(false);
+  const [exploreIndexesOpen, setExploreIndexesOpen] = useState(false);
   const [geoAiFloatingExpanded, setGeoAiFloatingExpanded] = useState(false);
   const geoAiAgentPrefsLs = siScope.scopedStorageKey(GEO_AI_AGENT_PREFS_LS_KEY);
   const [geoAiAgentPrefs, setGeoAiAgentPrefs] = useState<GeoAiAgentPrefs>(() =>
@@ -14824,7 +14833,8 @@ export default function SatelliteIntelligence() {
         const keepToolboxOpen =
           section === 'remote-sensing' ||
           section === 'agri-field-boundary' ||
-          section === 'tree-detections';
+          section === 'tree-detections' ||
+          section === 'flood-simulation';
         if (!keepToolboxOpen) {
           setIsLayerDropdownOpen(false);
         } else if (section === 'remote-sensing') {
@@ -15192,7 +15202,6 @@ export default function SatelliteIntelligence() {
       expandedEnvSection === 'well-site' ||
       expandedEnvSection === 'well-suitability' ||
       expandedEnvSection === 'flood-monitoring';
-
     if (analysisOnly) {
       setRsDrawingModeActive(false);
       setCropClassDrawingModeActive(false);
@@ -15459,6 +15468,20 @@ export default function SatelliteIntelligence() {
   const cutFill = useCutFillAnalysis({
     geometry: drawnGeometry ?? null,
     enabled: cutFillActive,
+  });
+  const floodSimulationActive = expandedEnvSection === 'flood-simulation';
+  const floodSimulation = useFloodSimulation({
+    geometry: drawnGeometry ?? null,
+    enabled: floodSimulationActive,
+    mapRef,
+    terrainExaggeration,
+    setTerrainExaggeration,
+    defaultTerrainExaggeration: TERRAIN_EXAGGERATION_DEFAULT,
+    onRequestDrawArea: () => {
+      setDrawTargetMode('aoi');
+      handleRsDrawingModeChange(true);
+      handleRsDrawingToolChange('polygon');
+    },
   });
   const elevationProfile = useElevationProfile({
     enabled: expandedEnvSection === 'elevation-profile',
@@ -18722,6 +18745,14 @@ export default function SatelliteIntelligence() {
     }
     if (
       stressZonesMapInteractRef.current.showOnMap &&
+      expandedEnvSectionRef.current === 'flood-simulation' &&
+      !isSketchDrawingActiveRef.current &&
+      floodSimulation.result
+    ) {
+      floodSimulation.sampleAt(lng, lat);
+      return;
+    }
+    if (
       stressZonesMapInteractRef.current.hasResult &&
       stressZonesMapInteractRef.current.sectionOpen
     ) {
@@ -20148,6 +20179,33 @@ export default function SatelliteIntelligence() {
     if (!anyVisible) return;
     raiseOverlaysThenAnalysisOrder();
   }, [hydro.steps, isMapStyleReady, raiseOverlaysThenAnalysisOrder]);
+
+  useEffect(() => {
+    if (!isMapStyleReady || !floodSimulationActive) return;
+    const showingFlood =
+      floodSimulation.phase === 'RUNNING' ||
+      floodSimulation.phase === 'PAUSED' ||
+      floodSimulation.phase === 'COMPLETE';
+    if (!showingFlood || (!floodSimulation.previewUrl && !floodSimulation.result)) return;
+
+    raiseOverlaysThenAnalysisOrder();
+    const map = mapRef.current?.getMap?.() ?? mapRef.current;
+    if (!map?.getLayer?.('drawn-index-geometry-fill')) return;
+    try {
+      map.setPaintProperty('drawn-index-geometry-fill', 'fill-opacity', 0.02);
+    } catch {
+      /* style race */
+    }
+    const t = window.setTimeout(() => raiseOverlaysThenAnalysisOrder(), 80);
+    return () => window.clearTimeout(t);
+  }, [
+    isMapStyleReady,
+    floodSimulationActive,
+    floodSimulation.phase,
+    floodSimulation.previewUrl,
+    floodSimulation.result,
+    raiseOverlaysThenAnalysisOrder,
+  ]);
 
   /**
    * Drawing an AOI refreshes the clipped tiles but does NOT auto-show the layer â€”
@@ -22620,6 +22678,7 @@ export default function SatelliteIntelligence() {
       const n = siMapLoadRetryRef.current;
       setStacStatus('Map is taking longer than expected to load â€” retrying globe rendering.');
       siEnsureGlobeProjection();
+      nudgeSiMapboxGlobeCanvas(map, siMapContainerRef.current);
       applySiGlobeCockpitFog(map);
       syncAgroCloudMapboxCamera(map, SI_GLOBE_COCKPIT_2D_VIEW);
 
@@ -22805,37 +22864,31 @@ export default function SatelliteIntelligence() {
   }, [isMapLoaded, isMapStyleReady]);
 
   /**
-   * First paint: flex + lazy route often gives Mapbox a 0×0 canvas — stays black until
-   * a full page refresh. Resize + globe/fog nudge when the container or map instance appears.
-   */
-  useLayoutEffect(() => {
-    const host = siMapContainerRef.current;
-    if (!host) return;
-    let cancelled = false;
-    const run = () => {
-      if (cancelled) return;
-      const map = mapRef.current?.getMap?.() ?? mapRef.current;
-      nudgeSiMapboxGlobeCanvas(map, host);
+  /** Flex/lazy route: keep resizing until Mapbox canvas has real dimensions (avoids black globe on first open). */
+  useEffect(() => {
+    let bootCleanup: (() => void) | undefined;
+    let waitId: number | null = null;
+    const arm = () => {
+      if (!siMapContainerRef.current) return false;
+      bootCleanup = bindSiMapboxGlobeCanvasBoot(
+        () => mapRef.current?.getMap?.() ?? mapRef.current,
+        () => siMapContainerRef.current,
+      );
+      return true;
     };
-    run();
-    const raf1 = requestAnimationFrame(run);
-    const raf2 = requestAnimationFrame(() => requestAnimationFrame(run));
-    const t1 = window.setTimeout(run, 60);
-    const t2 = window.setTimeout(run, 200);
-    const t3 = window.setTimeout(run, 500);
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => run()) : null;
-    ro?.observe(host);
+    if (!arm()) {
+      waitId = window.setInterval(() => {
+        if (arm() && waitId != null) {
+          window.clearInterval(waitId);
+          waitId = null;
+        }
+      }, 50);
+    }
     return () => {
-      cancelled = true;
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-      window.clearTimeout(t3);
-      ro?.disconnect();
+      if (waitId != null) window.clearInterval(waitId);
+      bootCleanup?.();
     };
-  }, [isMapLoaded]);
-
+  }, []);
   /** Mapbox tile cache + zoom-level prefetch during pan/zoom/tilt (no flicker / gray gaps). */
   useEffect(() => {
     if (!isMapStyleReady) return;
@@ -23023,6 +23076,7 @@ export default function SatelliteIntelligence() {
           'map-swipe',
           'flood-monitoring (SAR)',
           'well-site',
+          'flood-simulation',
           'hydro-watershed',
           'cut-fill-analysis',
           'aoi-edit',
@@ -23245,6 +23299,7 @@ export default function SatelliteIntelligence() {
             'remote-sensing',
             'flood-monitoring',
             'well-site',
+            'flood-simulation',
             'well-suitability',
             'hydro-watershed',
             'cut-fill-analysis',
@@ -23269,6 +23324,7 @@ export default function SatelliteIntelligence() {
             'remote-sensing': 'Remote sensing (NDVI / NDWI / NDMI and WMS indices)',
             'flood-monitoring': 'Flood Monitoring (SAR)',
             'well-site': 'Well Site Recommendation (Hydro-AI)',
+            'flood-simulation': 'Simulate a Flood',
             'hydro-watershed': 'Hydro watershed',
             'cut-fill-analysis': 'Cut & Fill Analysis',
             'elevation-profile': 'Elevation Profile',
@@ -25516,7 +25572,9 @@ export default function SatelliteIntelligence() {
     if (isMapCanvasRefreshing) return;
     setIsMapCanvasRefreshing(true);
     const map = mapRef.current?.getMap?.() ?? mapRef.current;
+    const host = siMapContainerRef.current;
     try {
+      nudgeSiMapboxGlobeCanvas(map, host);
       map?.resize?.();
       map?.triggerRepaint?.();
     } catch {
@@ -25554,6 +25612,7 @@ export default function SatelliteIntelligence() {
     setCustomLayersMapEpoch(epoch => epoch + 1);
     window.requestAnimationFrame(() => {
       try {
+        nudgeSiMapboxGlobeCanvas(map, host);
         map?.resize?.();
         map?.triggerRepaint?.();
       } catch {
@@ -25562,7 +25621,6 @@ export default function SatelliteIntelligence() {
       setIsMapCanvasRefreshing(false);
     });
   }, [isMapCanvasRefreshing, isMapStyleReady, sentinelWmsStacks, raiseOverlaysThenAnalysisOrder]);
-
   /** Keep analysis rasters above satellite basemap and below vector AOI boundaries. */
   useLayoutEffect(() => {
     if (!isMapStyleReady) return;
@@ -25982,6 +26040,11 @@ export default function SatelliteIntelligence() {
               requestAnimationFrame(() => {
                 nudgeSiMapboxGlobeCanvas(evt.target, siMapContainerRef.current);
               });
+              [80, 320, 900].forEach(ms =>
+                window.setTimeout(() => {
+                  nudgeSiMapboxGlobeCanvas(evt.target, siMapContainerRef.current);
+                }, ms),
+              );
             }}
           >
             {isMapStyleReady ? (
@@ -27127,6 +27190,16 @@ export default function SatelliteIntelligence() {
 
             {isMapStyleReady ? <CutFillMapLayers cutFill={cutFill} /> : null}
             {isMapStyleReady ? <ElevationProfileMap model={elevationProfile} /> : null}
+            {isMapStyleReady && floodSimulationActive ? (
+              <FloodSimulationMapLayers model={floodSimulation} />
+            ) : null}
+            {isMapStyleReady && floodSimulationActive ? (
+              <FloodSimulationChrome
+                model={floodSimulation}
+                basemapId={basemapId}
+                setBasemapId={setBasemapId}
+              />
+            ) : null}
 
             {isMapStyleReady && drawnGeometry && aoiLayerVisible ? (
               <Source id="drawn-index-geometry-outline-source" type="geojson" data={drawnGeometry as any}>
@@ -27413,6 +27486,16 @@ export default function SatelliteIntelligence() {
             seriesEnd={timeSeriesEnd}
             mapSwipeCompare={mapSwipeOpen ? mapSwipeCompare : null}
             aoiCloudCover={activeAoiCloudStats}
+          />
+
+          <SiExploreIndexesGalleryPanel
+            open={exploreIndexesOpen}
+            onClose={() => setExploreIndexesOpen(false)}
+            containerRef={siMapContainerRef}
+            groups={remoteSensingLayerSelectGroups}
+            value={wmsLayerSelectValue}
+            onChange={handleRemoteSensingToolboxLayerChange}
+            loading={rsLayerCatalogLoading}
           />
 
           <SiImageryTimeSeriesFloatingPanel
@@ -28026,6 +28109,8 @@ export default function SatelliteIntelligence() {
             onCropAiPanelOpenChange={setCropAiPanelOpen}
             layerLiveLegendOpen={layerLiveLegendOpen}
             onLayerLiveLegendOpenChange={setLayerLiveLegendOpen}
+            exploreIndexesOpen={exploreIndexesOpen}
+            onExploreIndexesOpenChange={setExploreIndexesOpen}
             mapToolboxDrawingActive={rsDrawingModeActive}
             onMapToolboxToggleDrawing={() => {
               if (rsDrawingModeActiveRef.current) {
@@ -28159,7 +28244,6 @@ export default function SatelliteIntelligence() {
                 onClick={() => handleRefreshMapCanvas()}
                 title="Refresh map"
                 aria-label="Refresh map"
-                disabled={isMapCanvasRefreshing}
               >
                 {isMapCanvasRefreshing ? (
                   <i className="fa-solid fa-spinner fa-spin" aria-hidden></i>
@@ -28551,11 +28635,13 @@ export default function SatelliteIntelligence() {
                                 ? 'Well Suitability (MCDA)'
                               : expandedEnvSection === 'flood-monitoring'
                                 ? 'Flood Monitoring (SAR-Based)'
-                                : expandedEnvSection === 'layers'
-                                  ? 'Layers'
-                                  : expandedEnvSection === 'source'
-                                    ? 'Source catalog'
-                                    : 'Processing Options'}
+                              : expandedEnvSection === 'flood-simulation'
+                                ? 'Simulate a Flood'
+                              : expandedEnvSection === 'layers'
+                                ? 'Layers'
+                              : expandedEnvSection === 'source'
+                                ? 'Source catalog'
+                                : 'Processing Options'}
                         </div>
                       </div>
                       <button
@@ -28729,6 +28815,7 @@ export default function SatelliteIntelligence() {
                         onChirpsExportExcel={() => chirpsPrecip.exportExcel()}
                         onChirpsExportReport={() => chirpsPrecip.exportReport()}
                         onClose={() => setIsLayerDropdownOpen(false)}
+                        layerSelectMenuBoundsRef={siMapContainerRef}
                       />
                     )}
                     {expandedEnvSection === 'tree-detections' && (
@@ -29140,6 +29227,11 @@ export default function SatelliteIntelligence() {
                           onExportKmz={() => void wellSuitability.exportKmz()}
                           onZoomToPoint={handleWellSuitabilityZoomToPoint}
                         />
+                      </div>
+                    )}
+                    {expandedEnvSection === 'flood-simulation' && (
+                      <div className="si-env-section-card si-rs-panel--glass">
+                        <FloodSimulationSetupPanel model={floodSimulation} />
                       </div>
                     )}
                     {expandedEnvSection === 'flood-monitoring' && (

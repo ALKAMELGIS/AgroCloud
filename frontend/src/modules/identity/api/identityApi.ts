@@ -96,6 +96,29 @@ export async function fetchIdentityHierarchy(root?: string): Promise<unknown[]> 
   return data?.nodes || []
 }
 
+export async function fetchCreditWallet(): Promise<{ balance: number }> {
+  const res = await fetch('/api/v1/credits/wallet', { credentials: 'include' })
+  const data = await parse<{ ok?: boolean; wallet?: { balance: number } }>(res)
+  if (!res.ok || !data?.wallet) throw new Error('Failed to load wallet')
+  return data.wallet
+}
+
+export async function adjustUserCredits(body: {
+  userId: string
+  amount: number
+  reason?: string
+}): Promise<{ balance: number }> {
+  const res = await fetch('/api/v1/admin/credits/adjust', {
+    method: 'POST',
+    credentials: 'include',
+    headers: jsonHeaders,
+    body: JSON.stringify(body),
+  })
+  const data = await parse<{ ok?: boolean; balance?: number; error?: string }>(res)
+  if (!res.ok || data?.balance == null) throw new Error(data?.error || 'Adjust failed')
+  return { balance: data.balance }
+}
+
 export const IDENTITY_PERMISSIONS_KEY = 'identityPermissions'
 
 export function persistIdentityPermissions(permissions: string[]) {

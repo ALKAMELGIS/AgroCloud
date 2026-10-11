@@ -110,6 +110,44 @@ export async function verifyEmailToken(token: string): Promise<VerifyEmailResult
   }
 }
 
+export type ForgotPasswordResult = { ok: true; message?: string } | AuthApiError
+
+export type ResetPasswordResult = { ok: true; message?: string } | AuthApiError
+
+export async function requestPasswordReset(email: string): Promise<ForgotPasswordResult | null> {
+  try {
+    const res = await fetch('/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    const data = await parseJson<ForgotPasswordResult>(res)
+    if (!data) return null
+    if (!res.ok && data.ok === false) return data
+    if (data.ok) return data
+    return null
+  } catch {
+    return null
+  }
+}
+
+export async function resetPasswordWithToken(token: string, password: string): Promise<ResetPasswordResult | null> {
+  try {
+    const res = await fetch('/api/auth/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, password }),
+    })
+    const data = await parseJson<ResetPasswordResult>(res)
+    if (!data) return null
+    if (!res.ok && data.ok === false) return data
+    if (data.ok) return data
+    return null
+  } catch {
+    return null
+  }
+}
+
 export async function resendVerificationEmail(email: string): Promise<ResendVerificationResult | null> {
   try {
     const res = await fetch('/api/auth/resend-verification', {

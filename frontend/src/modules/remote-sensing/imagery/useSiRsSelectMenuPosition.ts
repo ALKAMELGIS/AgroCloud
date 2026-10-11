@@ -29,7 +29,16 @@ function readBoundsRect(
       bottom: b.bottom - edgePad,
     }
   }
+  const vv = window.visualViewport
   const pad = edgePad
+  if (vv) {
+    return {
+      left: vv.offsetLeft + pad,
+      top: vv.offsetTop + pad,
+      right: vv.offsetLeft + vv.width - pad,
+      bottom: vv.offsetTop + vv.height - pad,
+    }
+  }
   return {
     left: pad,
     top: pad,

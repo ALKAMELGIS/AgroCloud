@@ -4,6 +4,7 @@
  */
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'crypto'
 import { readAdminDirectoryStore, writeAdminDirectoryStore } from './adminDirectoryPersistence.js'
+import { authRateLimitConfig, createAuthRateLimiter } from './authRateLimit.js'
 
 const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000
 const SCRYPT_N = 16384
@@ -324,11 +325,16 @@ export function registerAuthRoutes(app, opts) {
     opts.adminNotifyEmail || process.env.AUTH_ADMIN_NOTIFY_EMAIL || DEFAULT_ADMIN_NOTIFY_EMAIL,
   )
 
+  const rateCfg = authRateLimitConfig()
+  const limitRegister = createAuthRateLimiter('register', rateCfg.registerMax)
+  const limitLogin = createAuthRateLimiter('login', rateCfg.loginMax)
+  const limitVerify = createAuthRateLimiter('verify', rateCfg.verifyMax)
+
   app.get('/api/auth/status', (_req, res) => {
     res.json({ ok: true, serverAuth: true, smtp: hasSmtpConfig() })
   })
 
-  app.post('/api/auth/register', async (req, res) => {
+  app.post('/api/auth/register', limitRegister, async (req, res) => {
     const email = normalizeEmail(req.body?.email)
     const name = String(req.body?.name || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim()
     const password = String(req.body?.password || '')
@@ -466,7 +472,7 @@ export function registerAuthRoutes(app, opts) {
     })
   })
 
-  app.post('/api/auth/login', async (req, res) => {
+  app.post('/api/auth/login', limitLogin, async (req, res) => {
     const email = normalizeEmail(req.body?.email)
     const password = String(req.body?.password || '')
 
@@ -597,7 +603,7 @@ export function registerAuthRoutes(app, opts) {
     return res.json({ ok: true, user: sanitizeUserForClient(updatedUser) })
   })
 
-  app.post('/api/auth/verify-email', async (req, res) => {
+  app.post('/api/auth/verify-email', limitVerify, async (req, res) => {
     const token = String(req.body?.token || req.query?.token || '').trim()
     if (!token) {
       addAuthEvent('verify_email_failed', { reason: 'missing_token' })
@@ -660,7 +666,7 @@ export function registerAuthRoutes(app, opts) {
     })
   })
 
-  app.post('/api/auth/resend-verification', async (req, res) => {
+  app.post('/api/auth/resend-verification', limitVerify, async (req, res) => {
     const email = normalizeEmail(req.body?.email)
     if (!email) {
       addAuthEvent('resend_verification_failed', { reason: 'missing_email' })

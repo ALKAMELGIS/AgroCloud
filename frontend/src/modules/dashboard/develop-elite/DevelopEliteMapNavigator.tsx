@@ -11,7 +11,7 @@ import {
 const PAN_STEP_PX = 72
 const ZOOM_STEP = 1
 
-const NAVIGATOR_FAB_HOST_ATTR = 'data-develop-elite-navigator-fab-host'
+const NAVIGATOR_STACK_HOST_ATTR = 'data-develop-elite-navigator-stack-host'
 
 /** Inline compass so the navigator control stays visible even if icon fonts fail to load. */
 export function DevelopEliteMapNavigatorCompassGlyph({ className }: { className?: string }) {
@@ -29,14 +29,14 @@ export function DevelopEliteMapNavigatorCompassGlyph({ className }: { className?
   )
 }
 
-function developEliteMapNavigatorFabPortalHost(map: MaplibreMap): HTMLDivElement {
+function developEliteMapNavigatorStackHost(map: MaplibreMap): HTMLDivElement {
   const container = map.getContainer()
-  const existing = container.querySelector<HTMLDivElement>(`[${NAVIGATOR_FAB_HOST_ATTR}]`)
+  const existing = container.querySelector<HTMLDivElement>(`[${NAVIGATOR_STACK_HOST_ATTR}]`)
   if (existing) return existing
 
   const host = document.createElement('div')
-  host.setAttribute(NAVIGATOR_FAB_HOST_ATTR, '')
-  host.className = 'develop-elite-map__navigator-fab-host maplibregl-ctrl'
+  host.setAttribute(NAVIGATOR_STACK_HOST_ATTR, '')
+  host.className = 'develop-elite-map__navigator-stack maplibregl-ctrl'
 
   let corner = container.querySelector('.maplibregl-ctrl-bottom-left')
   if (!corner) {
@@ -96,13 +96,7 @@ export function DevelopEliteMapNavigatorContextMenu({
   return null
 }
 
-export function DevelopEliteMapNavigatorFab({
-  open,
-  onToggle,
-}: {
-  open: boolean
-  onToggle: () => void
-}) {
+function useDevelopEliteMapNavigatorStackHost(): HTMLDivElement | null {
   const { mapRef, mapReady } = useDevelopEliteMapLibre()
   const [portalHost, setPortalHost] = useState<HTMLDivElement | null>(null)
 
@@ -112,13 +106,58 @@ export function DevelopEliteMapNavigatorFab({
       setPortalHost(null)
       return
     }
-    const host = developEliteMapNavigatorFabPortalHost(map)
+    const host = developEliteMapNavigatorStackHost(map)
     setPortalHost(host)
     return () => {
       host.remove()
     }
   }, [mapReady, mapRef])
 
+  return portalHost
+}
+
+/** FAB + orbit navigator stacked in the map corner (no overlap with map chrome). */
+export function DevelopEliteMapNavigatorStack(
+  props: Props & {
+    onToggle: () => void
+  },
+) {
+  const portalHost = useDevelopEliteMapNavigatorStackHost()
+  const { open, onToggle } = props
+
+  const stack = (
+    <div className="develop-elite-map__navigator-stack-inner">
+      {open ? <DevelopEliteMapNavigator {...props} embedded /> : null}
+      <button
+        type="button"
+        className={`develop-elite-map__navigator-fab${open ? ' is-active' : ''}`}
+        title="Navigator — pan, rotate, zoom"
+        aria-label="Navigator"
+        aria-pressed={open}
+        onPointerDown={e => e.stopPropagation()}
+        onClick={e => {
+          e.stopPropagation()
+          onToggle()
+        }}
+      >
+        <DevelopEliteMapNavigatorCompassGlyph />
+      </button>
+    </div>
+  )
+
+  if (portalHost) return createPortal(stack, portalHost)
+  return stack
+}
+
+/** @deprecated Use {@link DevelopEliteMapNavigatorStack} */
+export function DevelopEliteMapNavigatorFab({
+  open,
+  onToggle,
+}: {
+  open: boolean
+  onToggle: () => void
+}) {
+  const portalHost = useDevelopEliteMapNavigatorStackHost()
   const fab = (
     <button
       type="button"
@@ -135,7 +174,6 @@ export function DevelopEliteMapNavigatorFab({
       <DevelopEliteMapNavigatorCompassGlyph />
     </button>
   )
-
   if (portalHost) return createPortal(fab, portalHost)
   return fab
 }
@@ -146,8 +184,10 @@ export function DevelopEliteMapNavigator({
   viewportRef,
   planarNavigation,
   onPlanarNavigationChange,
-}: Props) {
+  embedded = false,
+}: Props & { embedded?: boolean }) {
   const { mapRef, viewMode3d } = useDevelopEliteMapLibre()
+  const [mapBearing, setMapBearing] = useState(0)
   const discRef = useRef<HTMLDivElement | null>(null)
   const gestureRef = useRef<{
     zone: DevelopEliteMapNavigatorZone
@@ -158,6 +198,20 @@ export function DevelopEliteMapNavigator({
     startAngle: number
     pointerId: number
   } | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const map = mapRef.current
+    if (!map) return
+    const sync = () => setMapBearing(map.getBearing())
+    sync()
+    map.on('rotate', sync)
+    map.on('moveend', sync)
+    return () => {
+      map.off('rotate', sync)
+      map.off('moveend', sync)
+    }
+  }, [mapRef, open])
 
   const resetNorth = useCallback(() => {
     const map = mapRef.current
@@ -272,7 +326,7 @@ export function DevelopEliteMapNavigator({
 
   return (
     <div
-      className="develop-elite-map__navigator"
+      className={`develop-elite-map__navigator${embedded ? ' develop-elite-map__navigator--stacked' : ''}`}
       role="group"
       aria-label="Map navigator"
       onPointerDown={e => e.stopPropagation()}
@@ -336,51 +390,67 @@ export function DevelopEliteMapNavigator({
           <i className="fa-solid fa-plus" aria-hidden />
         </button>
         <div
-          className="develop-elite-map__navigator-disc"
+          className={`develop-elite-map__navigator-disc${viewMode3d ? ' develop-elite-map__navigator-disc--3d' : ''}`}
           ref={discRef}
           onPointerDown={onDiscPointerDown}
           onPointerMove={onDiscPointerMove}
           onPointerUp={onDiscPointerUp}
           onPointerCancel={onDiscPointerUp}
         >
-          <span className="develop-elite-map__navigator-ring develop-elite-map__navigator-ring--pan" aria-hidden />
-          <span className="develop-elite-map__navigator-ring develop-elite-map__navigator-ring--rotate" aria-hidden />
-          <button
-            type="button"
-            className="develop-elite-map__navigator-north"
-            title="North — click to reset bearing"
-            aria-label="North — reset bearing"
-            onClick={resetNorth}
+          <div
+            className="develop-elite-map__navigator-orbit"
+            style={{ transform: `rotate(${-mapBearing}deg)` }}
+            aria-hidden
           >
-            <i className="fa-solid fa-location-arrow" aria-hidden />
-          </button>
-          <button
-            type="button"
-            className="develop-elite-map__navigator-cardinal develop-elite-map__navigator-cardinal--n"
-            title="Face north"
-            aria-label="Face north"
-            onClick={() => faceCardinal(0)}
-          />
-          <button
-            type="button"
-            className="develop-elite-map__navigator-cardinal develop-elite-map__navigator-cardinal--e"
-            title="Face east"
-            aria-label="Face east"
-            onClick={() => faceCardinal(90)}
-          />
-          <button
-            type="button"
-            className="develop-elite-map__navigator-cardinal develop-elite-map__navigator-cardinal--s"
-            title="Face south"
-            aria-label="Face south"
-            onClick={() => faceCardinal(180)}
-          />
-          <button
-            type="button"
-            className="develop-elite-map__navigator-cardinal develop-elite-map__navigator-cardinal--w"
-            title="Face west"
-            aria-label="Face west"
-            onClick={() => faceCardinal(-90)}
+            <span className="develop-elite-map__navigator-ring develop-elite-map__navigator-ring--pan" />
+            <span className="develop-elite-map__navigator-ring develop-elite-map__navigator-ring--rotate" />
+            <span className="develop-elite-map__navigator-orbit-handle" />
+            <span className="develop-elite-map__navigator-north-mark" />
+            <button
+              type="button"
+              className="develop-elite-map__navigator-cardinal develop-elite-map__navigator-cardinal--n"
+              title="Face north"
+              aria-label="Face north"
+              onClick={e => {
+                e.stopPropagation()
+                faceCardinal(0)
+              }}
+            />
+            <button
+              type="button"
+              className="develop-elite-map__navigator-cardinal develop-elite-map__navigator-cardinal--e"
+              title="Face east"
+              aria-label="Face east"
+              onClick={e => {
+                e.stopPropagation()
+                faceCardinal(90)
+              }}
+            />
+            <button
+              type="button"
+              className="develop-elite-map__navigator-cardinal develop-elite-map__navigator-cardinal--s"
+              title="Face south"
+              aria-label="Face south"
+              onClick={e => {
+                e.stopPropagation()
+                faceCardinal(180)
+              }}
+            />
+            <button
+              type="button"
+              className="develop-elite-map__navigator-cardinal develop-elite-map__navigator-cardinal--w"
+              title="Face west"
+              aria-label="Face west"
+              onClick={e => {
+                e.stopPropagation()
+                faceCardinal(-90)
+              }}
+            />
+          </div>
+          <span
+            className="develop-elite-map__navigator-pivot"
+            title={viewMode3d ? 'Center: look around' : 'Center: rotate'}
+            aria-hidden
           />
         </div>
         <button
@@ -405,11 +475,6 @@ export function DevelopEliteMapNavigator({
           <i className="fa-solid fa-minus" aria-hidden />
         </button>
       </div>
-      <p className="develop-elite-map__navigator-hint">
-        {viewMode3d
-          ? 'Outer ring: pan · Middle: rotate · Center: look · Right‑click map to show'
-          : 'Outer ring: pan · Inner: rotate · Tap north to reset · Right‑click map to show'}
-      </p>
     </div>
   )
 }

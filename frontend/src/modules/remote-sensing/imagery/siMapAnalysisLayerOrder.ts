@@ -61,6 +61,34 @@ export function isSiCutFillMapLayerId(layerId: string): boolean {
   return layerId.startsWith('cutfill-')
 }
 
+export const SI_FLOOD_SIM_RASTER_LAYER_ID = 'si-flood-sim-raster-layer'
+
+export function isSiFloodSimulationMapLayerId(layerId: string): boolean {
+  return layerId === SI_FLOOD_SIM_RASTER_LAYER_ID || layerId.startsWith('si-flood-sim-')
+}
+
+/** Flood depth raster — same stack slot as Sentinel / Crop AI (above AOI fill, under outline). */
+export function isSiFloodOrStackedAnalysisRasterMapLayerId(layerId: string): boolean {
+  return isSiStackedAnalysisRasterMapLayerId(layerId) || isSiFloodSimulationMapLayerId(layerId)
+}
+
+/** Flood raster above basemap/AOI fill, below drawn AOI outline (reference-style water on imagery). */
+export function placeSiFloodSimulationLayers(map: MapboxMap): void {
+  const anchor =
+    resolveSiAnalysisRasterBeforeLayerId(map) ??
+    (map.getLayer('drawn-index-geometry-line') ? 'drawn-index-geometry-line' : undefined)
+  const ids = (typeof map.getStyle === 'function' ? (map.getStyle()?.layers ?? []) : [])
+    .map(l => l.id)
+    .filter((id): id is string => !!id && isSiFloodSimulationMapLayerId(id) && !!map.getLayer(id))
+  for (const id of ids) {
+    if (anchor) placeUnder(map, id, anchor)
+    else raiseToTop(map, id)
+  }
+  for (const id of CUT_FILL_ABOVE_IDS) {
+    if (map.getLayer(id)) raiseToTop(map, id)
+  }
+}
+
 const CUT_FILL_ABOVE_IDS = [
   'drawn-index-geometry-line',
   'drawn-index-geometry-point',
@@ -153,7 +181,7 @@ export function syncSiMapAnalysisLayerOrder(
     typeof map.getStyle === 'function' ? (map.getStyle()?.layers ?? []) : []
   const rasterIds = styleLayers
     .map(l => l.id)
-    .filter((id): id is string => !!id && isSiStackedAnalysisRasterMapLayerId(id))
+    .filter((id): id is string => !!id && isSiFloodOrStackedAnalysisRasterMapLayerId(id))
 
   // 1) Park analysis rasters under vector outlines (agro / drawn AOI / Layers AOI lines).
   for (const rasterId of rasterIds) {
@@ -171,7 +199,7 @@ export function syncSiMapAnalysisLayerOrder(
   const firstRaster =
     (typeof map.getStyle === 'function' ? (map.getStyle()?.layers ?? []) : [])
       .map(l => l.id)
-      .find((id): id is string => !!id && isSiStackedAnalysisRasterMapLayerId(id)) ?? null
+      .find((id): id is string => !!id && isSiFloodOrStackedAnalysisRasterMapLayerId(id)) ?? null
 
   // 2) Tuck polygon fills under the rasters so NDVI / indices paint on top of AOI fill.
   for (const aoiId of DRAWN_AOI_FILL_UNDER_RASTER_IDS) {
@@ -224,6 +252,9 @@ export function syncSiMapAnalysisLayerOrder(
   } catch {
     /* ignore */
   }
+
+  // Flood water raster (same anchor as NDVI; must run after fills are tucked under rasters).
+  placeSiFloodSimulationLayers(map)
 
   // Last: Cut/Fill above imagery, AOI stroke above the raster.
   placeSiCutFillLayersInsideAoi(map, agroLineId)

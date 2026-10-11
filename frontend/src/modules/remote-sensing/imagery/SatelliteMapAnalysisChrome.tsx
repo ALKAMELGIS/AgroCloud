@@ -180,8 +180,10 @@ export type SatelliteMapAnalysisChromeProps = {
     | 'well-site'
     | 'well-suitability'
     | 'flood-monitoring'
+    | 'flood-simulation'
     | 'raster-georeference'
     | 'table-geo-ai'
+    | 'training-ai'
     | null;
   onMapToolboxEmbedHost?: (el: HTMLDivElement | null) => void;
   onToolboxPanelClose?: () => void;
@@ -202,6 +204,8 @@ export type SatelliteMapAnalysisChromeProps = {
   mapToolboxLayerLiveLegend?: ReactNode;
   layerLiveLegendOpen?: boolean;
   onLayerLiveLegendOpenChange?: (open: boolean) => void;
+  exploreIndexesOpen?: boolean;
+  onExploreIndexesOpenChange?: (open: boolean) => void;
   /** Main toolbox Edit button: whether the system drawing tool is active. */
   mapToolboxDrawingActive?: boolean;
   /** Main toolbox Edit button: toggle the system drawing tool. */
@@ -296,6 +300,8 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
     mapToolboxLayerLiveLegend,
     layerLiveLegendOpen,
     onLayerLiveLegendOpenChange,
+    exploreIndexesOpen,
+    onExploreIndexesOpenChange,
     mapToolboxDrawingActive,
     onMapToolboxToggleDrawing,
     measureMode,
@@ -405,6 +411,8 @@ export function SatelliteMapAnalysisChrome(props: SatelliteMapAnalysisChromeProp
       mapToolboxLayerLiveLegend={mapToolboxLayerLiveLegend}
       layerLiveLegendOpen={layerLiveLegendOpen}
       onLayerLiveLegendOpenChange={onLayerLiveLegendOpenChange}
+      exploreIndexesOpen={exploreIndexesOpen}
+      onExploreIndexesOpenChange={onExploreIndexesOpenChange}
       mapToolboxDrawingActive={mapToolboxDrawingActive}
       onMapToolboxToggleDrawing={onMapToolboxToggleDrawing}
       measureMode={measureMode}

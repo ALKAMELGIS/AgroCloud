@@ -44,10 +44,9 @@ import { DevelopEliteMapLayerLivePanel } from './DevelopEliteMapLayerLivePanel'
 import { useDevelopEliteMapChrome, type DevelopEliteMapPanelId } from './DevelopEliteMapChrome'
 import { useDevelopEliteCompactViewport } from './developEliteCompactViewport'
 import {
-  DevelopEliteMapNavigator,
   DevelopEliteMapNavigatorCompassGlyph,
   DevelopEliteMapNavigatorContextMenu,
-  DevelopEliteMapNavigatorFab,
+  DevelopEliteMapNavigatorStack,
 } from './DevelopEliteMapNavigator'
 
 const TOPOGRAPHIC_3D_TOOL_LABEL =
@@ -708,13 +707,6 @@ export function DevelopEliteMapTools({
         </button>
       </div>
       <DevelopEliteMapNavigatorContextMenu viewportRef={viewportRef} onOpenChange={setNavigatorOpen} />
-      <DevelopEliteMapNavigator
-        open={navigatorOpen}
-        onOpenChange={setNavigatorOpen}
-        viewportRef={viewportRef}
-        planarNavigation={navigatorPlanar}
-        onPlanarNavigationChange={setNavigatorPlanar}
-      />
       <div className="develop-elite-map__zoom-group develop-elite-map__zoom-group--bottom" role="group" aria-label="Zoom">
         <button
           type="button"
@@ -750,9 +742,13 @@ export function DevelopEliteMapTools({
         dataSourceDef={layerDialog ? developEliteDataSourceForMapLayer(layerDialog.layerId) ?? null : null}
       />
       </div>
-      <DevelopEliteMapNavigatorFab
+      <DevelopEliteMapNavigatorStack
         open={navigatorOpen}
+        onOpenChange={setNavigatorOpen}
         onToggle={() => setNavigatorOpen(prev => !prev)}
+        viewportRef={viewportRef}
+        planarNavigation={navigatorPlanar}
+        onPlanarNavigationChange={setNavigatorPlanar}
       />
     </>
   )

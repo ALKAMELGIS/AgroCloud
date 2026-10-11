@@ -263,7 +263,10 @@ export function DevelopEliteMapLibreInsightEngine() {
   }, [insight?.point, insight?.tool, mapReady, mapRef])
 
   const map = mapRef.current
-  const host = map?.getContainer()
+  const host =
+    map?.getContainer()?.closest<HTMLElement>('.develop-elite-map__viewport') ??
+    map?.getContainer() ??
+    null
   if (!insight || !host || insight.tool !== 'intel') return null
 
   const stopMapEvent = (event: { stopPropagation(): void }) => {
@@ -282,6 +285,15 @@ export function DevelopEliteMapLibreInsightEngine() {
       {!insight.point ? <p>Click the map to read weather at that point.</p> : null}
       {insight.weatherStatus === 'loading' ? <p>Loading forecast…</p> : null}
       {insight.weatherStatus === 'error' ? <p>{insight.weatherError}</p> : null}
+      {insight.point && insight.weatherStatus !== 'ready' && !insight.snapshot ? (
+        <p>
+          {insight.weatherStatus === 'loading'
+            ? 'Loading…'
+            : insight.point
+              ? `${insight.point.lat.toFixed(3)}, ${insight.point.lng.toFixed(3)}`
+              : ''}
+        </p>
+      ) : null}
       {insight.snapshot ? (
         <div className="develop-elite-map__insight-wx">
           <i className={wmoWeatherIconClass(insight.snapshot.weatherCode)} aria-hidden />
@@ -291,6 +303,17 @@ export function DevelopEliteMapLibreInsightEngine() {
           <span>{insight.snapshot.conditionLabel}</span>
           <span>
             {insight.point ? `${insight.point.lat.toFixed(3)}, ${insight.point.lng.toFixed(3)}` : ''}
+          </span>
+          <span>
+            Humidity {insight.snapshot.humidityPct != null ? `${Math.round(insight.snapshot.humidityPct)}%` : '—'}
+            {' · '}
+            Wind{' '}
+            {insight.snapshot.windSpeedKmh != null
+              ? `${Math.round(insight.snapshot.windSpeedKmh)} km/h ${insight.snapshot.windDirectionLabel}`
+              : '—'}
+          </span>
+          <span>
+            Rain {insight.snapshot.precipMm != null ? `${insight.snapshot.precipMm.toFixed(1)} mm` : '—'}
           </span>
           {insight.point ? (
             <Link

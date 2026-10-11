@@ -6,6 +6,8 @@ const INTEL_PICK_IGNORE_SELECTOR = [
   '.develop-elite-map__insight-panel',
   '.develop-elite-map__insight-tools',
   '.develop-elite-map__insight-btn',
+  '.develop-elite-map__legend-rail',
+  '.maplibregl-control-container',
   '.develop-elite-map__draw-widget-host',
   '.si-map-draw-widget',
   '.develop-elite-map__swipe-chrome-host',

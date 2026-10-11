@@ -119,6 +119,8 @@ export function useCutFillAnalysis({ geometry, enabled }: Params) {
   const [mapHit, setMapHit] = useState<CutFillMapHit | null>(null)
   const [highlightRowId, setHighlightRowId] = useState<number | null>(null)
   const [tableFilter, setTableFilter] = useState('')
+  const [mapLegendOpen, setMapLegendOpen] = useState(true)
+  const prevResultRef = useRef<CutFillAnalysisResult | null>(null)
 
   const [demLoading, setDemLoading] = useState(false)
   const [demError, setDemError] = useState<string | null>(null)
@@ -139,6 +141,13 @@ export function useCutFillAnalysis({ geometry, enabled }: Params) {
   }, [geomKey])
 
   useEffect(() => () => abortRef.current?.abort(), [])
+
+  useEffect(() => {
+    if (result && result !== prevResultRef.current) {
+      setMapLegendOpen(true)
+    }
+    prevResultRef.current = result
+  }, [result])
 
   const autoCrs = useMemo(() => {
     const c = aoiCentroid(geometry ?? null)
@@ -349,6 +358,7 @@ export function useCutFillAnalysis({ geometry, enabled }: Params) {
         classLayer,
       }
       setResult(analysis)
+      setMapLegendOpen(true)
       setLayers({ ...DEFAULT_LAYERS })
       setMapHit(null)
       setStep('results')
@@ -513,6 +523,8 @@ export function useCutFillAnalysis({ geometry, enabled }: Params) {
     highlightFeature,
     mapHit,
     setMapHit,
+    mapLegendOpen,
+    setMapLegendOpen,
     exportFormat,
     aoiMask: maskRef.current,
   }
