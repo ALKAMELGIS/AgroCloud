@@ -120,6 +120,9 @@ body.develop-elite--widget-dragging {
   --de-kpi-label: #b8c9be;
   --de-accent: #5cdb5c;
   --de-accent-bright: #7ee787;
+  --de-map-popup-header-bg: linear-gradient(180deg, #071a11 0%, #051a10 55%, #031208 100%);
+  --de-map-popup-header-fg: #eef2ef;
+  --de-map-popup-header-accent: #2f6b4a;
   --de-shadow-inset: inset 0 1px 0 rgba(126, 231, 135, 0.06);
   --de-shadow-panel: 0 4px 24px rgba(0, 0, 0, 0.28);
   --de-layout-kpi-height: 58px;
@@ -1467,40 +1470,74 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
 }
 
 .develop-elite-map__viewport--space {
+  --de-space-blend: 1;
+  --de-space-bearing: 0deg;
+  --de-space-pitch: 0deg;
   background: #000;
   overflow: hidden;
+  perspective: 900px;
+  perspective-origin: 50% 46%;
 }
 
+/* Phase 3 — spherical star dome (parallax vs camera bearing/pitch). */
 .develop-elite-map__viewport--space::before {
   content: '';
   position: absolute;
-  inset: 0;
+  inset: -18%;
   z-index: 0;
   pointer-events: none;
-  opacity: 1;
+  opacity: calc(0.28 + var(--de-space-blend, 1) * 0.72);
+  transition: opacity 0.45s ease;
   background:
-    url('./develop-elite-starfield.svg') repeat,
-    radial-gradient(ellipse 48% 34% at 76% 30%, rgba(168, 85, 247, 0.35), transparent 58%),
-    radial-gradient(ellipse 36% 28% at 16% 70%, rgba(56, 189, 248, 0.18), transparent 55%),
-    radial-gradient(ellipse 65% 42% at 50% 50%, rgba(88, 28, 135, 0.14), transparent 62%);
+    radial-gradient(ellipse 130% 95% at 50% 48%, rgba(255, 255, 255, 0.04), transparent 62%),
+    #000 url('./develop-elite-starfield.svg') repeat;
   background-size:
-    256px 256px,
     100% 100%,
-    100% 100%,
-    100% 100%;
+    calc(280px + var(--de-space-blend, 1) * 80px) calc(280px + var(--de-space-blend, 1) * 80px);
+  transform: rotateX(calc(var(--de-space-pitch, 0deg) * 0.42)) rotateZ(calc(var(--de-space-bearing, 0deg) * -0.22))
+    scale(calc(1.06 + var(--de-space-blend, 1) * 0.14));
+  transform-origin: 50% 46%;
+  will-change: transform, opacity;
 }
 
+/* Phase 3 — Milky Way band (Google Earth–style galactic plane). */
 .develop-elite-map__viewport--space::after {
   content: '';
   position: absolute;
-  inset: 0;
+  inset: -25%;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.55;
-  background: url('./develop-elite-starfield.svg') repeat;
-  background-size: 192px 192px;
-  transform: rotate(4deg) scale(1.08);
-  filter: brightness(1.35);
+  opacity: calc(var(--de-space-blend, 1) * 0.78);
+  transition: opacity 0.55s ease;
+  mix-blend-mode: screen;
+  background:
+    radial-gradient(
+      ellipse 115% 22% at 52% 44%,
+      rgba(210, 195, 255, 0.34) 0%,
+      rgba(140, 120, 210, 0.12) 38%,
+      transparent 68%
+    ),
+    radial-gradient(
+      ellipse 85% 12% at 48% 41%,
+      rgba(255, 255, 255, 0.16) 0%,
+      rgba(180, 200, 255, 0.06) 42%,
+      transparent 70%
+    ),
+    linear-gradient(
+      118deg,
+      transparent 18%,
+      rgba(120, 90, 180, 0.08) 42%,
+      rgba(220, 210, 255, 0.2) 50%,
+      rgba(120, 90, 180, 0.08) 58%,
+      transparent 82%
+    );
+  transform: rotate(calc(var(--de-space-bearing, 0deg) * -1 + 24deg)) scale(1.12);
+  filter: blur(0.6px);
+  will-change: transform, opacity;
+}
+
+.develop-elite-map__viewport--space:not(.develop-elite-map__viewport--space-active)::after {
+  opacity: 0;
 }
 
 .develop-elite-map--webgl .develop-elite-map__viewport--space .develop-elite-map__viewport-pane {
@@ -1538,15 +1575,14 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
 .develop-elite-map__galaxy-backdrop::before {
   content: '';
   position: absolute;
-  inset: -10%;
+  inset: -12%;
   z-index: 0;
   pointer-events: none;
-  background:
-    url('./develop-elite-starfield.svg') repeat,
-    radial-gradient(ellipse 50% 36% at 74% 30%, rgba(168, 85, 247, 0.32), transparent 58%),
-    radial-gradient(ellipse 40% 30% at 18% 68%, rgba(56, 189, 248, 0.15), transparent 55%),
-    #000;
-  background-size: 256px 256px, 100% 100%, 100% 100%, 100% 100%;
+  opacity: calc(0.22 + var(--de-space-blend, 1) * 0.55);
+  transition: opacity 0.45s ease;
+  background: #000 url('./develop-elite-starfield.svg') repeat;
+  background-size: calc(300px + var(--de-space-blend, 1) * 60px);
+  transform: rotateZ(calc(var(--de-space-bearing, 0deg) * -0.12));
 }
 
 .develop-elite-map__galaxy-backdrop .maplibregl-map {
@@ -2138,7 +2174,7 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
 }
 
 .develop-elite-map {
-  --de-nav-fab-size: 26px;
+  --de-nav-fab-size: 22px;
   --de-nav-stack-gap: 5px;
   --de-nav-stack-inset: 6px;
 }
@@ -2175,7 +2211,7 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   min-height: var(--de-nav-fab-size);
   padding: 0;
   border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 9px;
+  border-radius: calc(var(--de-nav-fab-size) * 0.32);
   background: rgba(15, 23, 42, 0.82);
   backdrop-filter: blur(10px);
   color: var(--de-accent);
@@ -2189,8 +2225,8 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
 }
 
 .develop-elite-map__navigator-fab .develop-elite-map__navigator-compass-glyph {
-  width: 13px;
-  height: 13px;
+  width: calc(var(--de-nav-fab-size) * 0.5);
+  height: calc(var(--de-nav-fab-size) * 0.5);
 }
 
 .develop-elite-map__navigator-fab:hover,
@@ -3671,9 +3707,14 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
 .develop-elite-map-popup-wrap--ago.maplibregl-popup .maplibregl-popup-close-button {
   top: 6px;
   right: 6px;
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(255, 255, 255, 0.72);
   font-size: 18px;
   z-index: 2;
+}
+
+.develop-elite-map-popup-wrap--ago.maplibregl-popup .maplibregl-popup-close-button:hover {
+  color: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .develop-elite-map-popup-wrap.maplibregl-popup .maplibregl-popup-close-button:hover {
@@ -3754,9 +3795,11 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
 }
 
 .develop-elite-map-popup__ago-header {
-  background: #0079c1;
-  color: #fff;
+  background: var(--de-map-popup-header-bg);
+  color: var(--de-map-popup-header-fg, #eef2ef);
   padding: 8px 28px 8px 10px;
+  border-bottom: 1px solid var(--de-map-popup-header-accent, #2f6b4a);
+  box-shadow: inset 0 1px 0 rgba(126, 231, 135, 0.08);
 }
 
 .develop-elite-map-popup__ago-pager {
@@ -3773,8 +3816,8 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   padding: 0;
   border: none;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--de-map-popup-header-fg, #eef2ef);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -3783,7 +3826,7 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
 }
 
 .develop-elite-map-popup__ago-pager-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .develop-elite-map-popup__ago-pager-btn:disabled {
@@ -3800,6 +3843,15 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   font-size: 13px;
   font-weight: 700;
   line-height: 1.25;
+}
+
+.develop-elite-map-popup__ago-sub {
+  margin: 4px 0 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--de-muted, #8fa898);
 }
 
 .develop-elite-map-popup__ago-scroll {
@@ -5495,9 +5547,9 @@ a.develop-elite-settings__data-link {
 }
 
 .develop-elite--grid-dashboard .develop-elite-map {
-  --de-nav-fab-size: 24px;
-  --de-nav-stack-inset: 5px;
-  --de-nav-stack-gap: 4px;
+  --de-nav-fab-size: 18px;
+  --de-nav-stack-inset: 4px;
+  --de-nav-stack-gap: 3px;
 }
 
 .develop-elite--grid-dashboard .develop-elite-map__navigator {

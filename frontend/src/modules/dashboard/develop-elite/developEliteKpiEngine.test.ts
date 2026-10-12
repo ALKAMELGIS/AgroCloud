@@ -54,7 +54,7 @@ function polyFeature(props: Record<string, unknown>): GeoJSON.Feature {
 }
 
 describe('developEliteKpiEngine', () => {
-  it('counts PIVOT and VIP farms from structure features', () => {
+  it('counts PIVOT from structures and VIP Farm from Agri_Location layer 19', () => {
     const fc = {
       type: 'FeatureCollection' as const,
       features: [
@@ -64,7 +64,19 @@ describe('developEliteKpiEngine', () => {
       ],
     }
     const features = filterStructureFeatures(normalizeStructureFeatures(fc), filters)
-    const kpis = computeDevelopEliteKpis(features, [], DEFAULT_DEVELOP_ELITE_CONFIG)
+    const agri: GeoJSON.Feature[] = [
+      {
+        type: 'Feature',
+        properties: { Name: 'VIP Site', Subtype: 1002, ZONE_ID: 'MH' },
+        geometry: { type: 'Point', coordinates: [0, 0] },
+      },
+      {
+        type: 'Feature',
+        properties: { Name: 'Agri', Subtype: 1001, ZONE_ID: 'MH' },
+        geometry: { type: 'Point', coordinates: [0, 0] },
+      },
+    ]
+    const kpis = computeDevelopEliteKpis(features, [], DEFAULT_DEVELOP_ELITE_CONFIG, 0, agri, null, filters)
     expect(kpis.cards.pivot).toBe('2')
     expect(kpis.cards['vip-farm']).toBe('1')
     expect(kpis.cards['wildfelid']).toBe('0')

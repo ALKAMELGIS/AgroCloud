@@ -1,6 +1,7 @@
 import type { ChartOptions } from 'chart.js'
 import type { AgroThemeMode } from '@/theme/createAgroTheme'
 import { readDocumentThemeMode } from '@/theme/createAgroTheme'
+import type { WeatherArcgisGuidesPluginOptions } from './weatherArcgisChartPlugins'
 
 export const WEATHER_CHART_COLORS = {
   temp: '#f97316',
@@ -151,6 +152,7 @@ export function arcgisStackChartOptions(
   title: string,
   extra?: Partial<ChartOptions>,
   mode: AgroThemeMode = readDocumentThemeMode(),
+  guides?: WeatherArcgisGuidesPluginOptions,
 ): ChartOptions {
   const xTicks = arcgisXTicks(mode)
   const yTicks = arcgisYTicks(mode)
@@ -168,6 +170,7 @@ export function arcgisStackChartOptions(
     },
     plugins: {
       legend: { display: false },
+      weatherArcgisGuides: guides ? { ...guides, themeMode: mode } : undefined,
       title: {
         display: true,
         text: title,
@@ -218,7 +221,13 @@ export function arcgisStackChartOptions(
   return {
     ...base,
     ...extra,
-    plugins: { ...base.plugins, ...extra.plugins },
+    plugins: {
+      ...base.plugins,
+      ...extra.plugins,
+      weatherArcgisGuides: guides
+        ? { ...guides, themeMode: mode, ...extra.plugins?.weatherArcgisGuides }
+        : extra.plugins?.weatherArcgisGuides,
+    },
     scales: {
       x: {
         ...base.scales?.x,

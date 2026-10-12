@@ -47,6 +47,14 @@ import {
   restoreDevelopElitePortfolioGlobeBasemap,
   syncDevelopEliteMapLibreViewportEnvironment,
 } from './developEliteMapLibreGlobeBasemap'
+import {
+  bindSiMapboxGlobeCanvasBoot,
+  nudgeSiMapboxGlobeCanvas,
+} from '@/modules/gis/map/siGlobeCockpit'
+import {
+  applyDevelopEliteMapSpaceEnvironment,
+  bindDevelopEliteMapSpaceEnvironment,
+} from './developEliteMapSpaceEnvironment'
 
 type Props = {
   basemapId: string
@@ -188,9 +196,13 @@ export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
       basemapId: basemapRef.current,
       viewMode3d: DEVELOP_ELITE_MAP_DEFAULT_VIEW_3D,
     })
+    const unbindGlobeCanvasBoot = bindSiMapboxGlobeCanvasBoot(() => map, () => el)
+    const unbindSpaceEnvironment = bindDevelopEliteMapSpaceEnvironment(map, shellRef.current)
     const reapplyAfterStyle = () => {
       applyDevelopEliteMapLibrePerformanceTuning(map)
       restoreGlobeBasemap(map)
+      nudgeSiMapboxGlobeCanvas(map, el)
+      applyDevelopEliteMapSpaceEnvironment(map, shellRef.current)
     }
     let viewportEnvRaf = 0
     const scheduleViewportEnvironment = () => {
@@ -225,6 +237,8 @@ export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
       map.off('moveend', scheduleViewportEnvironment)
       unbindEarthMouse()
       unbindTileWarmup()
+      unbindGlobeCanvasBoot()
+      unbindSpaceEnvironment()
       ro.disconnect()
       cancelAgroCloudTerrainSync(map as never)
       registerMap(null)

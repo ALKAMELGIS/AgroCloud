@@ -3,7 +3,9 @@ import { computeStableGisFeatureKey } from '@/modules/gis/layers/gisFeatureStabl
 import {
   buildDevelopEliteStructureFieldKeyByFarmName,
   buildDevelopEliteStructureFieldKeyByJoinCode,
+  findDevelopEliteAgriLocationFeatureByJoin,
   findDevelopEliteStructureFieldKey,
+  resolveDevelopEliteTableRowMapFlyTarget,
 } from './developEliteLayerJoin'
 import type { DevelopEliteStructureFeature } from './developEliteKpiEngine'
 
@@ -33,5 +35,39 @@ describe('developEliteLayerJoin', () => {
     expect(findDevelopEliteStructureFieldKey(features, 'Farm_Code', 'mh102', 'NH-02')).toBe(
       computeStableGisFeatureKey(features[0]!, 0),
     )
+  })
+
+  it('prefers agri when structure key on row is stale', () => {
+    const fc: GeoJSON.FeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { Farm_Code: 'MH103', Farm_Name: 'NH-03' },
+          geometry: { type: 'Point', coordinates: [55.2, 25.3] },
+        },
+      ],
+    }
+    const target = resolveDevelopEliteTableRowMapFlyTarget([], fc, 'Farm_Code', {
+      _fieldKey: 'missing-key',
+      Farm_Code: 'MH103',
+      Farm_Name: 'NH-03',
+    })
+    expect(target?.kind).toBe('agri')
+  })
+
+  it('finds agri location point by Farm_Code for table fly-to fallback', () => {
+    const fc: GeoJSON.FeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { Farm_Code: 'MH101', Farm_Name: 'NH-01' },
+          geometry: { type: 'Point', coordinates: [55.1, 25.2] },
+        },
+      ],
+    }
+    const hit = findDevelopEliteAgriLocationFeatureByJoin(fc, 'Farm_Code', 'mh101')
+    expect(hit?.properties?.Farm_Code).toBe('MH101')
   })
 })

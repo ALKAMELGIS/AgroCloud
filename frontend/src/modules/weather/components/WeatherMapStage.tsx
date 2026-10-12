@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { flyToGeoJsonExtent, flyToLatLng } from '@/modules/dashboard/develop-elite/developEliteMapFly'
+import { focusWeatherFarmOnMap } from '../map/weatherMapFocusLocation'
 import { WeatherMapOpenMeteoPickEngine } from '../map/WeatherMapOpenMeteoPick'
 import { WeatherMapInsightRail } from '../map/WeatherMapInsightRail'
 import { DEFAULT_BASEMAP_ID, buildBasemapCatalog, catalogEntryById, resolveBasemapId } from '@/modules/gis/map/basemapCatalog'
@@ -38,8 +38,6 @@ import {
   WEATHER_MAP_WORLD_CENTER,
   WEATHER_MAP_WORLD_ZOOM,
 } from '../config/weatherMapView'
-import { agriLocationLatLng } from '../map/weatherLocationPoint'
-import { pulseWeatherMapLocation } from '../map/weatherMapLocationPulse'
 import { WeatherMapSourceTabs, type WeatherMapSourceTab } from './WeatherMapSourceTabs'
 import { WeatherWindyEmbed } from './WeatherWindyEmbed'
 
@@ -61,6 +59,8 @@ type Props = {
   onFieldSelect?: (feature: GeoJSON.Feature) => void
   locationRows?: WeatherLocationRow[]
   onLocationSelect?: (id: WeatherLocationId) => void
+  /** Table double-click: fly + pulse even when farm already selected. */
+  tableFlyRequest?: { farmId: WeatherLocationId; nonce: number } | null
   onApplyMapPick?: (point: { lat: number; lng: number; label: string }) => void
   /** Emoji layer strip across the top of the map (off for ArcGIS-style layout). */
   showLayerStrip?: boolean
@@ -114,79 +114,47 @@ function FitFarmBounds({
   site,
   farmId,
   agriLocations,
+  tableFlyRequest,
 }: {
   site: WeatherFarmSite | null
   farmId: string
   agriLocations?: GeoJSON.FeatureCollection | null
+  tableFlyRequest?: { farmId: WeatherLocationId; nonce: number } | null
 }) {
   const map = useMap()
   const agriFeatureCount = agriLocations?.features?.length ?? 0
   const prevFarmIdRef = useRef(farmId)
+  const prevFlyNonceRef = useRef(0)
+
   useEffect(() => {
-    const apply = () => {
+    const apply = (opts: { pulse: boolean; targetId: WeatherLocationId }) => {
       try {
         map.invalidateSize()
       } catch {
         /* map mid-teardown */
       }
-
-      const selectionChanged = prevFarmIdRef.current !== farmId
-      prevFarmIdRef.current = farmId
-
-      if (farmId === 'all') {
-        const locFeatures = agriLocations?.features ?? []
-        if (locFeatures.length) {
-          const layer = L.geoJSON({ type: 'FeatureCollection', features: locFeatures })
-          const bounds = layer.getBounds()
-          if (bounds.isValid()) {
-            map.fitBounds(bounds, {
-              padding: [48, 48],
-              maxZoom: WEATHER_MAP_PORTFOLIO_MAX_ZOOM,
-            })
-            return
-          }
-        }
-        map.setView(WEATHER_MAP_WORLD_CENTER, WEATHER_MAP_WORLD_ZOOM)
-        return
-      }
-
-      const locationId = farmId as WeatherLocationId
-      const pin = agriLocationLatLng(agriLocations, locationId)
-      const focusLat = pin?.[0] ?? site?.lat
-      const focusLng = pin?.[1] ?? site?.lng
-
-      if (pin) {
-        flyToLatLng(map, pin[0], pin[1], 16)
-        if (selectionChanged) pulseWeatherMapLocation(map, pin[0], pin[1])
-        return
-      }
-
-      if (!site) {
-        map.setView(WEATHER_MAP_WORLD_CENTER, WEATHER_MAP_WORLD_ZOOM)
-        return
-      }
-
-      if (site.featureCollection.features.length) {
-        const flew = flyToGeoJsonExtent(map, site.featureCollection, {
-          padding: [40, 40],
-          maxZoom: 14,
-        })
-        if (flew && selectionChanged && Number.isFinite(focusLat) && Number.isFinite(focusLng)) {
-          pulseWeatherMapLocation(map, focusLat!, focusLng!)
-        }
-        if (flew) return
-      }
-
-      if (Number.isFinite(site.lat) && Number.isFinite(site.lng)) {
-        flyToLatLng(map, site.lat, site.lng, 14)
-        if (selectionChanged) pulseWeatherMapLocation(map, site.lat, site.lng)
-      }
+      focusWeatherFarmOnMap(map, opts.targetId, site, agriLocations ?? null, { pulse: opts.pulse })
     }
 
     map.whenReady(() => {
-      window.requestAnimationFrame(apply)
+      window.requestAnimationFrame(() => {
+        const flyNonce = tableFlyRequest?.nonce ?? 0
+        if (tableFlyRequest && flyNonce !== prevFlyNonceRef.current) {
+          prevFlyNonceRef.current = flyNonce
+          prevFarmIdRef.current = tableFlyRequest.farmId
+          apply({ pulse: true, targetId: tableFlyRequest.farmId })
+          return
+        }
+
+        const selectionChanged = prevFarmIdRef.current !== farmId
+        prevFarmIdRef.current = farmId
+        apply({
+          pulse: selectionChanged,
+          targetId: farmId as WeatherLocationId,
+        })
+      })
     })
-  }, [map, site, farmId, agriFeatureCount, agriLocations])
+  }, [map, site, farmId, agriFeatureCount, agriLocations, tableFlyRequest])
   return null
 }
 
@@ -204,6 +172,7 @@ export function WeatherMapStage({
   onFieldSelect,
   locationRows = [],
   onLocationSelect,
+  tableFlyRequest = null,
   onApplyMapPick,
   showLayerStrip = true,
   showMapSourceTabs = false,
@@ -425,10 +394,16 @@ export function WeatherMapStage({
             rows={locationRows}
             selectedId={farmId as WeatherLocationId}
             onSelect={onLocationSelect}
+            tableFlyRequest={tableFlyRequest}
             enabled={mapMode !== 'climate'}
           />
           <WeatherMapOpenMeteoPickEngine active={openMeteoPickActive} onApplyPick={onApplyMapPick} />
-          <FitFarmBounds site={site} farmId={farmId} agriLocations={agriLocations} />
+          <FitFarmBounds
+            site={site}
+            farmId={farmId}
+            agriLocations={agriLocations}
+            tableFlyRequest={tableFlyRequest}
+          />
           <WeatherFieldGridLoader
             layer={layerDef}
             mapTimeIso={mapTimeIso}

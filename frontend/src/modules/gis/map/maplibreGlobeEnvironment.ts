@@ -1,25 +1,25 @@
 import type { Map as MaplibreMap } from 'maplibre-gl'
 import type { SkySpecification } from '@maplibre/maplibre-gl-style-spec'
 
-/** MapLibre v5 globe + space backdrop (Mapbox GL uses `name`; MapLibre uses `type`). */
+/** Google Earth–style space backdrop (pure black + procedural stars via fog). */
 export const MAPLIBRE_GLOBE_SKY_GALAXY: SkySpecification = {
-  'sky-color': '#08051a',
-  'sky-horizon-blend': 0.06,
-  'horizon-color': '#2d1b4e',
-  'horizon-fog-blend': 0.14,
-  'fog-color': '#0a0614',
+  'sky-color': '#000000',
+  'sky-horizon-blend': 0.04,
+  'horizon-color': '#000000',
+  'horizon-fog-blend': 0.08,
+  'fog-color': '#000000',
   'fog-ground-blend': 0,
   'atmosphere-blend': 1,
 }
 
 /** Starfield in space around the globe (MapLibre `setFog`). */
 export const MAPLIBRE_GLOBE_FOG_GALAXY = {
-  range: [0.35, 12] as [number, number],
+  range: [0.4, 9] as [number, number],
   color: '#000000',
-  'horizon-blend': 0.1,
+  'horizon-blend': 0.16,
   'high-color': '#000000',
   'space-color': '#000000',
-  'star-intensity': 1,
+  'star-intensity': 0.55,
 }
 
 /** Match {@link syncAgroCloudMapProjectionForZoom} globe cutoff (avoid import cycle). */

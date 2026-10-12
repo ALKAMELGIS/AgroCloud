@@ -25,6 +25,7 @@ import {
   findDevelopEliteStructureFieldKey,
   normalizeDevelopEliteFarmNameKey,
   normalizeDevelopEliteJoinKey,
+  resolveDevelopEliteTableRowMapFlyTarget,
 } from './developEliteLayerJoin'
 import { sortDevelopEliteListBySearch } from './developEliteListSearch'
 import {
@@ -164,6 +165,18 @@ export function useDevelopEliteDashboardData() {
   const [tableFlashRowId, setTableFlashRowId] = useState<string | null>(null)
   const [mapHighlightFieldKey, setMapHighlightFieldKey] = useState<string | null>(null)
   const [mapFlyToRequest, setMapFlyToRequest] = useState(0)
+  const [mapFlyToLngLat, setMapFlyToLngLat] = useState<{
+    lat: number
+    lng: number
+    nonce: number
+  } | null>(null)
+  const [mapTableIdentifyRequest, setMapTableIdentifyRequest] = useState<{
+    feature: GeoJSON.Feature
+    layerKey: 'agri-location'
+    nonce: number
+  } | null>(null)
+  const [mapPopupFieldKey, setMapPopupFieldKey] = useState<string | null>(null)
+  const [mapPopupRequest, setMapPopupRequest] = useState(0)
   const [mapCountryFlyRequest, setMapCountryFlyRequest] = useState(0)
   const [farmListFlashFieldKey, setFarmListFlashFieldKey] = useState<string | null>(null)
   const [chartCropTypeFilter, setChartCropTypeFilter] = useState<string | null>(null)
@@ -798,6 +811,21 @@ export function useDevelopEliteDashboardData() {
     [config.cropStructureJoinField, structureFieldKeyByFarmName, structureFieldKeyByJoinCode],
   )
 
+  const requestMapPopupForFieldKey = useCallback((fieldKey: string) => {
+    const key = fieldKey.trim()
+    if (!key) return
+    setMapPopupFieldKey(key)
+    setMapPopupRequest(n => n + 1)
+  }, [])
+
+  const syncTableRowFromMapPopup = useCallback((rowId: string) => {
+    setTableHighlightRowId(rowId)
+    setTableFlashRowId(rowId)
+    window.setTimeout(() => {
+      setTableFlashRowId(current => (current === rowId ? null : current))
+    }, 1600)
+  }, [])
+
   const focusTableRow = useCallback(
     (rowId: string) => {
       setTableHighlightRowId(rowId)
@@ -806,8 +834,9 @@ export function useDevelopEliteDashboardData() {
       if (!fieldKey) return
       setMapHighlightFieldKey(fieldKey)
       setFilters(f => ({ ...f, selectedFieldKey: fieldKey }))
+      requestMapPopupForFieldKey(fieldKey)
     },
-    [resolveTableRowFieldKey],
+    [requestMapPopupForFieldKey, resolveTableRowFieldKey],
   )
 
   const selectChartCropType = useCallback((cropLabel: string) => {
@@ -829,16 +858,61 @@ export function useDevelopEliteDashboardData() {
   const activateTableRowOnMap = useCallback(
     (rowId: string) => {
       const row = tableRowsRef.current.find(r => r._rowId === rowId)
-      const fieldKey = resolveTableRowFieldKey(row)
-      if (!fieldKey) return
+      if (!row) return
       setTableHighlightRowId(rowId)
       setTableFlashRowId(rowId)
-      focusFarmOnMap(fieldKey)
       window.setTimeout(() => {
         setTableFlashRowId(current => (current === rowId ? null : current))
       }, 1600)
+
+      const target = resolveDevelopEliteTableRowMapFlyTarget(
+        allFeaturesRef.current,
+        mapAgriLocationGeoJson,
+        config.cropStructureJoinField,
+        row,
+      )
+      if (!target) return
+
+      if (target.kind === 'structure') {
+        focusFarmOnMap(target.fieldKey)
+        requestMapPopupForFieldKey(target.fieldKey)
+        return
+      }
+
+      const agriHit = target.feature
+      const coords =
+        agriHit.geometry?.type === 'Point'
+          ? agriHit.geometry.coordinates
+          : agriHit.geometry?.type === 'MultiPoint'
+            ? agriHit.geometry.coordinates[0]
+            : null
+      if (!coords || coords.length < 2) return
+      setMapHighlightFieldKey(null)
+      setFilters(f => ({ ...f, selectedFieldKey: null }))
+      setMapFlyToLngLat({ lat: coords[1], lng: coords[0], nonce: Date.now() })
+      setMapTableIdentifyRequest({
+        feature: agriHit,
+        layerKey: 'agri-location',
+        nonce: Date.now(),
+      })
     },
-    [focusFarmOnMap, resolveTableRowFieldKey],
+    [
+      config.cropStructureJoinField,
+      focusFarmOnMap,
+      mapAgriLocationGeoJson,
+      requestMapPopupForFieldKey,
+    ],
+  )
+
+  const cropTablePopupLink = useMemo(
+    () => ({
+      joinField: config.cropStructureJoinField,
+      tableColumns: config.tableColumns,
+      cropRows: tableCropRows,
+      formattedTableRows: tableRows,
+      cropMeta,
+    }),
+    [config.cropStructureJoinField, config.tableColumns, cropMeta, tableCropRows, tableRows],
   )
 
   const mapFieldHighlightKey = mapHighlightFieldKey ?? filters.selectedFieldKey
@@ -896,6 +970,12 @@ export function useDevelopEliteDashboardData() {
     focusTableRow,
     activateTableRowOnMap,
     mapFlyToRequest,
+    mapFlyToLngLat,
+    mapTableIdentifyRequest,
+    mapPopupFieldKey,
+    mapPopupRequest,
+    cropTablePopupLink,
+    syncTableRowFromMapPopup,
     mapCountryFlyRequest,
     activeCountryLabel,
     selectCountry,

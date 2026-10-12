@@ -195,9 +195,9 @@ export const DEFAULT_DEVELOP_ELITE_KPI_CARDS: DevelopEliteKpiCardConfig[] = [
     icon: 'fa-star',
     visible: true,
     order: 4,
-    source: 'fieldFilterCount',
-    fieldName: 'Farm_Category',
-    fieldMatch: 'VIP FARM',
+    source: 'agriLocationFilterCount',
+    fieldName: 'Subtype',
+    fieldMatch: 'VIP Farm',
     fieldMatchMode: 'equals',
     format: 'number',
   },
@@ -340,6 +340,20 @@ function mergeKpiCards(saved: DevelopEliteKpiCardConfig[]): DevelopEliteKpiCardC
             fieldName: wildDef.fieldName,
             fieldMatch: wildDef.fieldMatch,
             fieldMatchMode: wildDef.fieldMatchMode,
+          }
+        }
+        return card
+      }
+      if (card.id === 'vip-farm') {
+        const vipDef = DEFAULT_DEVELOP_ELITE_KPI_CARDS.find(c => c.id === 'vip-farm')
+        if (!vipDef) return card
+        if (card.source === 'fieldFilterCount') {
+          return {
+            ...card,
+            source: vipDef.source,
+            fieldName: vipDef.fieldName,
+            fieldMatch: vipDef.fieldMatch,
+            fieldMatchMode: vipDef.fieldMatchMode,
           }
         }
         return card

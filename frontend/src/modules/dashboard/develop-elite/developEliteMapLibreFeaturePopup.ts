@@ -24,6 +24,13 @@ import {
   fallbackDevelopEliteMapIdentifyAtLngLat,
 } from './developEliteMapLibreIdentify'
 import { developEliteMapAllowsPrimaryPointerOrbit } from './developEliteMapLibreOrbit'
+import type { DevelopEliteCropTablePopupLink } from './developEliteMapCropTablePopup'
+import {
+  developEliteTableRowIdForFarmCode,
+  developEliteTableRowIdForFieldKey,
+  mergeDevelopEliteCropTableIntoPopupProps,
+} from './developEliteMapCropTablePopup'
+import { developEliteFeaturePopupLngLat } from './developEliteMapFeatureCentroid'
 
 export type DevelopEliteMapLibreFeaturePopupOpts = {
   viewMode3d: boolean
@@ -35,7 +42,19 @@ export type DevelopEliteMapLibreFeaturePopupOpts = {
   irrigationValvesDrawingInfo?: Record<string, unknown> | null
   irrigationMainPipeDrawingInfo?: Record<string, unknown> | null
   agriLocationDrawingInfo?: Record<string, unknown> | null
+  cropTableLink?: DevelopEliteCropTablePopupLink | null
   onSelectStructureFieldKey?: (fieldKey: string) => void
+  onFocusCropTableRowId?: (rowId: string) => void
+}
+
+export type DevelopEliteMapLibreFeaturePopupHandle = {
+  openFeature: (
+    feature: GeoJSON.Feature,
+    layerKey: DevelopEliteMapDataLayerId,
+    lngLat?: [number, number],
+  ) => void
+  close: () => void
+  dispose: () => void
 }
 
 const DEFAULT_IDENTIFY_HIT_RADIUS_PX = 8
@@ -144,7 +163,7 @@ export function zoomDevelopEliteMapLibreFeature(
 export function registerDevelopEliteMapLibreFeaturePopup(
   map: MaplibreMap,
   opts: DevelopEliteMapLibreFeaturePopupOpts,
-): () => void {
+): DevelopEliteMapLibreFeaturePopupHandle {
   const popup = new maplibregl.Popup({
     closeButton: true,
     closeOnClick: false,
@@ -219,7 +238,8 @@ export function registerDevelopEliteMapLibreFeaturePopup(
     if (!candidate) return
 
     const enriched = enrichDevelopEliteMapIdentifyFeature(candidate.feature, candidate.layerKey, opts.sources)
-    const props = (enriched.properties ?? {}) as Record<string, unknown>
+    const baseProps = (enriched.properties ?? {}) as Record<string, unknown>
+    const { props, cropLinked } = mergeDevelopEliteCropTableIntoPopupProps(baseProps, opts.cropTableLink)
     const layerTitle = LAYER_LABEL.get(candidate.layerKey) ?? candidate.layerKey
     const html = buildDevelopEliteArcgisFeaturePopupHtml(layerTitle, props, {
       layerKey: candidate.layerKey,
@@ -228,14 +248,23 @@ export function registerDevelopEliteMapLibreFeaturePopup(
       agoStyle: true,
       pageIndex: identifyIndex,
       pageTotal: identifyStack.length,
+      cropTableLinked: cropLinked,
     })
 
     popup.setHTML(html).setLngLat(identifyLngLat).addTo(map)
     wirePopupActions(enriched)
 
-    if (candidate.layerKey === 'agro-structures' && opts.onSelectStructureFieldKey) {
+    if (candidate.layerKey === 'agro-structures') {
       const fieldKey = computeStableGisFeatureKey(enriched)
-      if (fieldKey) opts.onSelectStructureFieldKey(fieldKey)
+      if (fieldKey && opts.onSelectStructureFieldKey) opts.onSelectStructureFieldKey(fieldKey)
+      if (opts.cropTableLink && opts.onFocusCropTableRowId) {
+        const joinField = opts.cropTableLink.joinField.trim() || 'Farm_Code'
+        const farmCode = String(props[joinField] ?? props.Farm_Code ?? '').trim()
+        const rowId =
+          (fieldKey ? developEliteTableRowIdForFieldKey(opts.cropTableLink, fieldKey) : null) ??
+          developEliteTableRowIdForFarmCode(opts.cropTableLink, farmCode)
+        if (rowId) opts.onFocusCropTableRowId(rowId)
+      }
     }
   }
 
@@ -310,6 +339,8 @@ export function registerDevelopEliteMapLibreFeaturePopup(
     if (!candidates.length) return
     openIdentifyAtLocation(candidates, lngLat)
     event.preventDefault()
+    event.originalEvent?.preventDefault()
+    event.originalEvent?.stopPropagation()
   }
 
   const syncLayerClickHandlers = () => {
@@ -349,7 +380,21 @@ export function registerDevelopEliteMapLibreFeaturePopup(
   map.on('mouseup', onMapMouseUp)
   map.on('idle', syncLayerClickHandlers)
 
-  return () => {
+  const openFeature = (
+    feature: GeoJSON.Feature,
+    layerKey: DevelopEliteMapDataLayerId,
+    lngLat?: [number, number],
+  ) => {
+    const anchor = lngLat ?? developEliteFeaturePopupLngLat(feature)
+    if (!anchor) return
+    openIdentifyAtLocation([{ feature, layerKey }], anchor)
+  }
+
+  const close = () => {
+    popup.remove()
+  }
+
+  const dispose = () => {
     popup.remove()
     map.off('click', onMapClick)
     map.off('mousedown', onMapMouseDown)
@@ -361,4 +406,6 @@ export function registerDevelopEliteMapLibreFeaturePopup(
     boundLayerIds.clear()
     unbindCursorHandlers()
   }
+
+  return { openFeature, close, dispose }
 }

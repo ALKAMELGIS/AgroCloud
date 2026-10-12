@@ -14,6 +14,7 @@ import { readFeaturePointLatLng } from './weatherLocationPoint'
 import { pulseWeatherMapLocation } from './weatherMapLocationPulse'
 
 import { wmoWeatherEmojiMeta } from '../config/wmoWeatherEmoji'
+import { buildWeatherLocationAlert } from '../insights/buildWeatherLocationAlert'
 
 import type { WeatherLocationRow } from '../hooks/useWeatherLocationRows'
 
@@ -32,6 +33,8 @@ type Props = {
   selectedId?: WeatherLocationId
 
   onSelect?: (id: WeatherLocationId) => void
+
+  tableFlyRequest?: { farmId: WeatherLocationId; nonce: number } | null
 
   enabled?: boolean
 
@@ -63,7 +66,22 @@ function formatTemp(c: number | null): string {
 
 
 
-function buildMarkerHtml(row: WeatherLocationRow | undefined, label: string, selected: boolean): string {
+function buildAlertMarkerHtml(row: WeatherLocationRow | undefined): string {
+  if (!row) return ''
+  const alert = buildWeatherLocationAlert(row)
+  if (!alert) return ''
+  return `
+      <span class="weather-loc-marker__alert weather-loc-alert weather-loc-alert--${alert.severity} weather-loc-alert--compact" title="${escapeAttr(alert.title)}" aria-label="${escapeAttr(alert.title)}">
+        <span class="weather-loc-alert__emoji weather-loc-marker__emoji--${alert.anim}" aria-hidden="true">${alert.emoji}</span>
+      </span>`
+}
+
+function buildMarkerHtml(
+  row: WeatherLocationRow | undefined,
+  label: string,
+  selected: boolean,
+  flash: boolean,
+): string {
 
   const hasData = row?.temperatureC != null && Number.isFinite(row.temperatureC)
 
@@ -71,15 +89,19 @@ function buildMarkerHtml(row: WeatherLocationRow | undefined, label: string, sel
 
   const temp = formatTemp(row?.temperatureC ?? null)
 
-  const aria = `${label}: ${wmoWeatherLabel(row?.weatherCode ?? null)}, ${hasData ? temp : 'loading'}`
+  const alertNote = row ? buildWeatherLocationAlert(row) : null
+  const alertHtml = buildAlertMarkerHtml(row)
+  const aria = `${label}: ${wmoWeatherLabel(row?.weatherCode ?? null)}, ${hasData ? temp : 'loading'}${alertNote ? `, alert ${alertNote.shortLabel}` : ''}`
 
   const selectedClass = selected ? ' is-selected' : ''
 
   const liveClass = hasData ? ' is-live' : ''
 
+  const flashClass = flash ? ' is-flash' : ''
+
   return `
 
-    <div class="weather-loc-marker${selectedClass}${liveClass}" aria-label="${escapeAttr(aria)}">
+    <div class="weather-loc-marker${selectedClass}${liveClass}${flashClass}" aria-label="${escapeAttr(aria)}">
 
       <div class="weather-loc-marker__badge">
 
@@ -98,7 +120,7 @@ function buildMarkerHtml(row: WeatherLocationRow | undefined, label: string, sel
       </div>
 
       <span class="weather-loc-marker__name" title="${escapeAttr(label)}">${escapeAttr(label)}</span>
-
+      ${alertHtml}
       <span class="weather-loc-marker__caret" aria-hidden="true"></span>
 
     </div>
@@ -157,6 +179,8 @@ export function WeatherLocationLiveMarkers({
 
   onSelect,
 
+  tableFlyRequest = null,
+
   enabled = true,
 
 }: Props) {
@@ -164,6 +188,15 @@ export function WeatherLocationLiveMarkers({
   const map = useMap()
 
   const [liveById, setLiveById] = useState<Record<string, WeatherLocationRow>>({})
+
+  const [flashMarkerId, setFlashMarkerId] = useState<WeatherLocationId | null>(null)
+
+  useEffect(() => {
+    if (!tableFlyRequest?.nonce) return
+    setFlashMarkerId(tableFlyRequest.farmId)
+    const t = window.setTimeout(() => setFlashMarkerId(null), 1600)
+    return () => window.clearTimeout(t)
+  }, [tableFlyRequest?.farmId, tableFlyRequest?.nonce])
 
 
 
@@ -281,7 +314,7 @@ export function WeatherLocationLiveMarkers({
 
       const selected = selectedId === id
 
-      const html = buildMarkerHtml(row, label, selected)
+      const html = buildMarkerHtml(row, label, selected, flashMarkerId === id)
 
 
 
@@ -351,7 +384,7 @@ export function WeatherLocationLiveMarkers({
 
     }
 
-  }, [enabled, geojson, liveById, map, onSelect, rowsById, selectedId])
+  }, [enabled, flashMarkerId, geojson, liveById, map, onSelect, rowsById, selectedId])
 
   return null
 }

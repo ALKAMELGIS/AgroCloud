@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { windDirectionLabel, wmoWeatherIconClass } from '@/modules/remote-sensing/weather/openMeteoWeather'
 
@@ -8,7 +8,14 @@ import type { WeatherLocationRow } from '../hooks/useWeatherLocationRows'
 
 import { useWeatherLocationTicker } from '../hooks/useWeatherLocationTicker'
 
+import {
+  loadWeatherOperationsThresholds,
+  subscribeWeatherOperationsThresholds,
+} from '../config/weatherThresholds'
+import { resolveWeatherLocationAlert } from '../insights/buildWeatherLocationAlert'
+import { sortWeatherLocationRowsByAlertRisk } from '../insights/sortWeatherLocationRowsByAlertRisk'
 import { WeatherWindBarb, kmhToKnots } from './WeatherWindBarb'
+import { WeatherLocationAlertChip } from './WeatherLocationAlertChip'
 
 
 
@@ -31,6 +38,9 @@ type Props = {
   variant?: 'default' | 'arcgis'
 
   className?: string
+
+  /** Double-click row: fly map to location (single click still selects). */
+  onLocationFlyTo?: (id: WeatherLocationId) => void
 
 }
 
@@ -56,6 +66,8 @@ export function WeatherLocationList({
 
   className,
 
+  onLocationFlyTo,
+
 }: Props) {
 
   const [query, setQuery] = useState('')
@@ -64,9 +76,33 @@ export function WeatherLocationList({
 
   const [hoverPause, setHoverPause] = useState(false)
 
+  const [thresholds, setThresholds] = useState(loadWeatherOperationsThresholds)
+
   const listRef = useRef<HTMLUListElement>(null)
 
+  const rowFlashTimerRef = useRef<number | null>(null)
 
+  const [rowFlashId, setRowFlashId] = useState<WeatherLocationId | null>(null)
+
+  useEffect(() => subscribeWeatherOperationsThresholds(() => setThresholds(loadWeatherOperationsThresholds())), [])
+
+  useEffect(
+    () => () => {
+      if (rowFlashTimerRef.current != null) window.clearTimeout(rowFlashTimerRef.current)
+    },
+    [],
+  )
+
+  const handleRowDoubleClick = (id: WeatherLocationId) => {
+    onSelect(id)
+    onLocationFlyTo?.(id)
+    setRowFlashId(id)
+    if (rowFlashTimerRef.current != null) window.clearTimeout(rowFlashTimerRef.current)
+    rowFlashTimerRef.current = window.setTimeout(() => {
+      setRowFlashId(null)
+      rowFlashTimerRef.current = null
+    }, 1400)
+  }
 
   const filtered = useMemo(() => {
 
@@ -78,15 +114,34 @@ export function WeatherLocationList({
 
   }, [rows, query])
 
-
+  const displayRows = useMemo(() => {
+    if (variant !== 'arcgis') return filtered
+    return sortWeatherLocationRowsByAlertRisk(filtered, thresholds)
+  }, [filtered, thresholds, variant])
 
   const compareCount = compareIds.filter(id => id !== 'all').length
 
   const arcgis = variant === 'arcgis'
 
-  const canTicker = !arcgis && filtered.length > 3 && !query.trim()
+  const arcgisBoard = arcgis && displayRows.length > 3
 
-  useWeatherLocationTicker(tickerOn && canTicker, hoverPause, listRef, filtered.length)
+  const canTicker = (!arcgis && filtered.length > 3 && !query.trim()) || arcgisBoard
+
+  const tickerActive = (tickerOn && canTicker && !arcgis) || arcgisBoard
+
+  const listEntries = useMemo(() => {
+    if (!arcgisBoard) {
+      return displayRows.map(row => ({ row, key: row.id, ariaHidden: false }))
+    }
+    return [
+      ...displayRows.map(row => ({ row, key: `${row.id}-a`, ariaHidden: false })),
+      ...displayRows.map(row => ({ row, key: `${row.id}-b`, ariaHidden: true })),
+    ]
+  }, [arcgisBoard, displayRows])
+
+  useWeatherLocationTicker(tickerActive, hoverPause, listRef, listEntries.length, {
+    seamlessLoop: arcgisBoard,
+  })
 
   return (
 
@@ -98,9 +153,11 @@ export function WeatherLocationList({
 
         arcgis ? 'weather-locations--arcgis' : '',
 
-        tickerOn && canTicker ? 'weather-locations--ticker-on' : '',
+        arcgisBoard ? 'weather-locations--arcgis-board' : '',
 
-        hoverPause && tickerOn ? 'weather-locations--ticker-paused' : '',
+        tickerActive ? 'weather-locations--ticker-on' : '',
+
+        hoverPause && tickerActive ? 'weather-locations--ticker-paused' : '',
 
         className,
 
@@ -115,7 +172,12 @@ export function WeatherLocationList({
     >
       {arcgis ? (
         <div className="weather-locations__head weather-locations__head--arcgis-ref">
-          <h2 className="weather-locations__title">Current Forecast per Location</h2>
+          <div className="weather-locations__head-arcgis-inner">
+            <h2 className="weather-locations__title">Current Forecast per Location</h2>
+            <p className="weather-locations__board-sub" aria-live="polite">
+              Live board · highest alert risk first
+            </p>
+          </div>
         </div>
       ) : (
         <div className="weather-locations__head">
@@ -155,14 +217,14 @@ export function WeatherLocationList({
         className="weather-locations__list"
 
         onMouseEnter={() => {
-          if (tickerOn) setHoverPause(true)
+          if (tickerActive) setHoverPause(true)
         }}
 
         onMouseLeave={() => setHoverPause(false)}
 
       >
 
-        {filtered.map(row => {
+        {listEntries.map(({ row, key, ariaHidden }) => {
 
           const active = row.id === selectedId
 
@@ -178,28 +240,47 @@ export function WeatherLocationList({
 
             row.windDirectionDeg != null ? windDirectionLabel(row.windDirectionDeg) : null
 
-
+          const alert = arcgis ? resolveWeatherLocationAlert(row, thresholds) : null
 
           if (arcgis) {
             const dir = dirLabel ?? '—'
 
             return (
-              <li key={row.id} className="weather-locations__row-arcgis">
+              <li
+                key={key}
+                className={[
+                  'weather-locations__row-arcgis',
+                  alert?.severity === 'warning' ? 'weather-locations__row-arcgis--risk' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                aria-hidden={ariaHidden || undefined}
+              >
                 <button
                   type="button"
                   className={[
                     'weather-arcgis-hourly__row',
                     'weather-locations__arcgis-row',
                     active ? 'is-active' : '',
+                    alert ? `weather-locations__arcgis-row--alert-${alert.severity}` : '',
+                    rowFlashId === row.id ? 'is-flash' : '',
                   ]
                     .filter(Boolean)
                     .join(' ')}
                   onClick={() => onSelect(row.id)}
+                  onDoubleClick={e => {
+                    e.preventDefault()
+                    if (ariaHidden) return
+                    handleRowDoubleClick(row.id)
+                  }}
+                  tabIndex={ariaHidden ? -1 : undefined}
+                  title={`${row.label} — double-click to fly to map`}
                 >
                   <div className="weather-locations__arcgis-place">
                     <span className="weather-arcgis-hourly__place" title={row.label}>
                       {row.label}
                     </span>
+                    <WeatherLocationAlertChip row={row} variant="inline" />
                   </div>
 
                   <section className="weather-arcgis-hourly__wind" aria-label="Wind">
@@ -246,15 +327,28 @@ export function WeatherLocationList({
 
           return (
 
-            <li key={row.id}>
+            <li key={key}>
 
               <button
 
                 type="button"
 
-                className={`weather-locations__item${active ? ' is-active' : ''}`}
+                className={[
+                  'weather-locations__item',
+                  active ? 'is-active' : '',
+                  rowFlashId === row.id ? 'is-flash' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
 
                 onClick={() => onSelect(row.id)}
+
+                onDoubleClick={e => {
+                  e.preventDefault()
+                  handleRowDoubleClick(row.id)
+                }}
+
+                title={`${row.label} — double-click to fly to map`}
 
               >
 
@@ -269,6 +363,7 @@ export function WeatherLocationList({
                 <span className="weather-locations__body">
 
                   <span className="weather-locations__name">{row.label}</span>
+                  <WeatherLocationAlertChip row={row} variant="inline" />
 
                   <span
 
@@ -356,7 +451,7 @@ export function WeatherLocationList({
 
       </ul>
 
-      {!filtered.length && !loading ? (
+      {!displayRows.length && !loading ? (
         <p className="weather-locations__empty">No locations match your search.</p>
       ) : null}
     </aside>

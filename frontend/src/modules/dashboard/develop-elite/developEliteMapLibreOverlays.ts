@@ -355,8 +355,8 @@ function syncArcgisPointLayer(
   const invisibleHitRadius =
     opts.layerKey === 'irrigation-valves' ? 10 : opts.layerKey === 'trees' ? 8 : 7
 
-  if (showPictureIcons) {
-    /** esriPMS only — hide circle layer entirely (opacity-0 hits still showed yellow/purple SMS paint). */
+  if (pictureMarkerRenderer) {
+    /** Invisible circle footprint for identify (must stay layout-visible for queryRenderedFeatures). */
     ensureCircleLayer(
       map,
       opts.circleLayerId,
@@ -364,20 +364,16 @@ function syncArcgisPointLayer(
       developEliteMapLibreInvisibleCircleHitPaint(invisibleHitRadius),
       DE_MAPLIBRE_POINT_FILTER,
     )
-    map.setLayoutProperty(opts.circleLayerId, 'visibility', 'none')
+    map.setLayoutProperty(opts.circleLayerId, 'visibility', opts.visible ? 'visible' : 'none')
 
-    const { layout, paint } = developEliteMapLibrePointIconLayout(spec!, iconSize, opts.visible, layerOpacity)
-    ensureSymbolLayer(map, opts.iconLayerId, opts.sourceId, layout, paint, DE_MAPLIBRE_POINT_FILTER)
-    map.setLayoutProperty(opts.iconLayerId, 'visibility', opts.visible ? 'visible' : 'none')
-    return
-  }
-
-  if (pictureMarkerRenderer) {
-    /** PMS symbology — never stack SMS / dev fallback circles under picture markers. */
-    if (developEliteMapLibreHasLayer(map, opts.circleLayerId)) {
-      map.setLayoutProperty(opts.circleLayerId, 'visibility', 'none')
+    if (showPictureIcons) {
+      const { layout, paint } = developEliteMapLibrePointIconLayout(spec!, iconSize, opts.visible, layerOpacity)
+      ensureSymbolLayer(map, opts.iconLayerId, opts.sourceId, layout, paint, DE_MAPLIBRE_POINT_FILTER)
+      map.setLayoutProperty(opts.iconLayerId, 'visibility', opts.visible ? 'visible' : 'none')
+      return
     }
-    if (!showPictureIcons && developEliteMapLibreHasLayer(map, opts.iconLayerId)) {
+
+    if (developEliteMapLibreHasLayer(map, opts.iconLayerId)) {
       map.setLayoutProperty(opts.iconLayerId, 'visibility', 'none')
     }
     return

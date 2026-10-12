@@ -21,6 +21,7 @@ import { applyDevelopElitePortfolioMapBrowserLoadDefault } from './developEliteM
 import {
   developEliteMapLibreApplyDefaultPortfolioView,
   developEliteMapLibreFlyToFieldKey,
+  developEliteMapLibreFlyToLatLng,
   developEliteMapLibreFitGeoJson,
   developEliteMapLibreReadView,
 } from './developEliteMapLibreNavigation'
@@ -234,6 +235,7 @@ export function DevelopEliteMapLibreFlyBridge({
   geojson,
   highlightFieldKey,
   mapFlyToRequest,
+  mapFlyToLngLat,
   mapCountryFlyRequest,
 }: {
   basemapId: string
@@ -244,6 +246,7 @@ export function DevelopEliteMapLibreFlyBridge({
   geojson: GeoJSON.FeatureCollection
   highlightFieldKey: string | null
   mapFlyToRequest?: number
+  mapFlyToLngLat?: { lat: number; lng: number; nonce: number } | null
   mapCountryFlyRequest?: number
 }) {
   const { mapRef, mapReady, viewMode3d, setViewMode3d } = useDevelopEliteMapLibre()
@@ -299,6 +302,13 @@ export function DevelopEliteMapLibreFlyBridge({
       pulseDevelopEliteMapLibreStructureHighlight(map)
     }
   }, [geojson, highlightFieldKey, mapFlyToRequest, mapReady, mapRef, viewMode3d])
+
+  useEffect(() => {
+    if (!mapReady || !mapFlyToLngLat?.nonce) return
+    const map = mapRef.current
+    if (!map) return
+    developEliteMapLibreFlyToLatLng(map, mapFlyToLngLat.lat, mapFlyToLngLat.lng, 16, { viewMode3d })
+  }, [mapFlyToLngLat?.lat, mapFlyToLngLat?.lng, mapFlyToLngLat?.nonce, mapReady, mapRef, viewMode3d])
 
   useEffect(() => {
     if (!mapReady) return

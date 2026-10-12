@@ -1,6 +1,13 @@
 import type { DevelopEliteStructureFeature } from './developEliteKpiEngine'
 import { readArcGisField } from './developEliteChartAggregate'
-import { computeStableGisFeatureKey } from '@/modules/gis/layers/gisFeatureStableKey'
+import {
+  computeStableGisFeatureKey,
+  findFeatureIndexByStableKey,
+} from '@/modules/gis/layers/gisFeatureStableKey'
+
+export type DevelopEliteTableRowMapFlyTarget =
+  | { kind: 'structure'; fieldKey: string }
+  | { kind: 'agri'; feature: GeoJSON.Feature }
 
 /** Normalize Farm_Code (and similar keys) for structure ↔ crops table joins. */
 export function normalizeDevelopEliteJoinKey(value: string): string {
@@ -56,6 +63,79 @@ export function findDevelopEliteStructureFieldKey(
       if (normalizeDevelopEliteFarmNameKey(String(raw)) === nameKey) {
         return computeStableGisFeatureKey(f, i)
       }
+    }
+  }
+  return null
+}
+
+/** Structure polygon fly-to when present; otherwise Agri Location point (crops table double-click). */
+export function resolveDevelopEliteTableRowMapFlyTarget(
+  structureFeatures: DevelopEliteStructureFeature[],
+  agriCollection: GeoJSON.FeatureCollection | null | undefined,
+  joinField: string,
+  row: Record<string, string>,
+): DevelopEliteTableRowMapFlyTarget | null {
+  const field = joinField.trim() || 'Farm_Code'
+  const farmCode = row.Farm_Code ?? row[field] ?? ''
+  const farmName = row.Farm_Name ?? ''
+  let fieldKey = row._fieldKey?.trim() ?? ''
+  if (!fieldKey) {
+    fieldKey = findDevelopEliteStructureFieldKey(structureFeatures, field, farmCode, farmName) ?? ''
+  } else if (findFeatureIndexByStableKey(structureFeatures, fieldKey) < 0) {
+    const resolved = findDevelopEliteStructureFieldKey(structureFeatures, field, farmCode, farmName)
+    if (resolved) fieldKey = resolved
+  }
+  if (fieldKey && findFeatureIndexByStableKey(structureFeatures, fieldKey) >= 0) {
+    return { kind: 'structure', fieldKey }
+  }
+  const agriHit = findDevelopEliteAgriLocationFeatureByJoin(
+    agriCollection,
+    field,
+    farmCode,
+    farmName,
+  )
+  if (agriHit) return { kind: 'agri', feature: agriHit }
+  return null
+}
+
+function readPointLngLat(geometry: GeoJSON.Geometry | undefined): [number, number] | null {
+  if (!geometry) return null
+  if (geometry.type === 'Point' && geometry.coordinates.length >= 2) {
+    return [geometry.coordinates[0], geometry.coordinates[1]]
+  }
+  if (geometry.type === 'MultiPoint' && geometry.coordinates[0]?.length >= 2) {
+    const c = geometry.coordinates[0]
+    return [c[0], c[1]]
+  }
+  return null
+}
+
+/** Agri Location point for a crops-table row when structure polygon is missing. */
+export function findDevelopEliteAgriLocationFeatureByJoin(
+  collection: GeoJSON.FeatureCollection | null | undefined,
+  joinField: string,
+  joinValue: string,
+  farmName?: string,
+): GeoJSON.Feature | null {
+  const features = collection?.features ?? []
+  if (!features.length) return null
+  const field = joinField.trim() || 'Farm_Code'
+  const code = joinValue.trim() ? normalizeDevelopEliteJoinKey(joinValue) : ''
+  if (code) {
+    for (const f of features) {
+      const raw = readArcGisField(f.properties ?? {}, field)
+      if (raw == null || raw === '') continue
+      if (normalizeDevelopEliteJoinKey(String(raw)) !== code) continue
+      if (readPointLngLat(f.geometry)) return f
+    }
+  }
+  const nameKey = farmName?.trim() ? normalizeDevelopEliteFarmNameKey(farmName) : ''
+  if (nameKey) {
+    for (const f of features) {
+      const raw = readArcGisField(f.properties ?? {}, 'Farm_Name')
+      if (raw == null || raw === '') continue
+      if (normalizeDevelopEliteFarmNameKey(String(raw)) !== nameKey) continue
+      if (readPointLngLat(f.geometry)) return f
     }
   }
   return null

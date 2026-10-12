@@ -1,7 +1,6 @@
 import type { Map as MaplibreMap } from 'maplibre-gl'
 import {
-  MAPLIBRE_GLOBE_FOG_GALAXY,
-  MAPLIBRE_GLOBE_SKY_GALAXY,
+  applyMapLibreGlobeGalaxySky,
   setMapLibreGlobeProjection,
 } from '@/modules/gis/map/maplibreGlobeEnvironment'
 import { syncAgroCloudTerrain3d } from '@/modules/remote-sensing/terrain/agroCloudMapTerrain'
@@ -16,14 +15,7 @@ export function applyDevelopElitePortfolioGlobeEnvironment(map: MaplibreMap | nu
   if (!map) return
   setMapLibreGlobeProjection(map)
   try {
-    map.setSky?.(MAPLIBRE_GLOBE_SKY_GALAXY)
-    map.setFog?.(MAPLIBRE_GLOBE_FOG_GALAXY)
-    const canvas = map.getCanvas?.()
-    if (canvas) canvas.style.background = 'transparent'
-    const container = map.getContainer?.()
-    if (container) container.style.background = 'transparent'
-    const canvasContainer = container?.querySelector?.('.maplibregl-canvas-container') as HTMLElement | null
-    if (canvasContainer) canvasContainer.style.background = 'transparent'
+    applyMapLibreGlobeGalaxySky(map)
   } catch {
     /* style swap race */
   }

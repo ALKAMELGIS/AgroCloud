@@ -1,7 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { resolveBasemapId } from '@/modules/gis/map/basemapCatalog'
 import { DevelopEliteMapLegendRail, DevelopEliteMapTools } from './DevelopEliteMapTools'
-import type { DevelopEliteMapDataLayerId } from './developEliteDashboardConfig'
 import { DevelopEliteMapImageryTimeSeriesHost } from './DevelopEliteMapImageryTimeSeries'
 import { prefetchDevelopEliteImageryTimeSeriesPanel } from './developElitePrefetchImageryTimeSeries'
 import { DevelopEliteMapChromeProvider } from './DevelopEliteMapChrome'
@@ -35,14 +34,28 @@ import {
   type DevelopEliteMapCanvasTab,
 } from './DevelopEliteMapViewportTabs'
 import { DEVELOP_ELITE_DASHBOARD_REFRESH_EVENT } from './developEliteDashboardEvents'
-import type { DevelopEliteDashboardConfig } from './developEliteDashboardConfig'
+import type {
+  DevelopEliteDashboardConfig,
+  DevelopEliteMapDataLayerId,
+} from './developEliteDashboardConfig'
+import type { DevelopEliteCropTablePopupLink } from './developEliteMapCropTablePopup'
 
 type Props = {
   geojson: GeoJSON.FeatureCollection
   basemapId: string
   highlightFieldKey: string | null
   mapFlyToRequest?: number
+  mapFlyToLngLat?: { lat: number; lng: number; nonce: number } | null
+  mapTableIdentifyRequest?: {
+    feature: GeoJSON.Feature
+    layerKey: DevelopEliteMapDataLayerId
+    nonce: number
+  } | null
   mapCountryFlyRequest?: number
+  mapPopupFieldKey?: string | null
+  mapPopupRequest?: number
+  cropTablePopupLink?: DevelopEliteCropTablePopupLink | null
+  onFocusCropTableRowId?: (rowId: string) => void
   drawingInfo: Record<string, unknown> | null
   countryLabels: Map<string, string> | null
   worldCountriesGeojson?: GeoJSON.FeatureCollection | null
@@ -85,7 +98,13 @@ function DevelopEliteMapContent({
   basemapId,
   highlightFieldKey,
   mapFlyToRequest = 0,
+  mapFlyToLngLat = null,
+  mapTableIdentifyRequest = null,
   mapCountryFlyRequest = 0,
+  mapPopupFieldKey = null,
+  mapPopupRequest = 0,
+  cropTablePopupLink = null,
+  onFocusCropTableRowId,
   drawingInfo,
   treesDrawingInfo,
   agriLocationDrawingInfo,
@@ -200,6 +219,7 @@ function DevelopEliteMapContent({
                   geojson={geojson}
                   highlightFieldKey={highlightFieldKey}
                   mapFlyToRequest={mapFlyToRequest}
+                  mapFlyToLngLat={mapFlyToLngLat}
                   mapCountryFlyRequest={mapCountryFlyRequest}
                 />
                 <DevelopEliteMapLibreDrawEngine />
@@ -224,6 +244,11 @@ function DevelopEliteMapContent({
                   agriLocationDrawingInfo={agriLocationDrawingInfo}
                   countryLabels={countryLabels}
                   onSelectFieldKey={onSelectFieldKey}
+                  cropTableLink={cropTablePopupLink}
+                  mapPopupFieldKey={mapPopupFieldKey}
+                  mapPopupRequest={mapPopupRequest}
+                  mapTableIdentifyRequest={mapTableIdentifyRequest}
+                  onFocusCropTableRowId={onFocusCropTableRowId}
                 />
                 <DevelopEliteMapLayerLiveLegendHost viewportRef={viewportRef} />
                 <DevelopEliteMapTools

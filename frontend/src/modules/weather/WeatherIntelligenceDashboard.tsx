@@ -61,6 +61,18 @@ export default function WeatherIntelligenceDashboard() {
   const [excelExportOpen, setExcelExportOpen] = useState(false)
   const [arcgisFooterTab, setArcgisFooterTab] = useState<WeatherArcgisFooterTab>('current')
   const [arcgisShellView, setArcgisShellView] = useState<WeatherArcgisShellView>('map')
+  const [tableFlyRequest, setTableFlyRequest] = useState<{
+    farmId: WeatherLocationId
+    nonce: number
+  } | null>(null)
+
+  const flyToLocationFromTable = useCallback(
+    (id: WeatherLocationId) => {
+      data.setFarmId(id)
+      setTableFlyRequest({ farmId: id, nonce: Date.now() })
+    },
+    [data.setFarmId],
+  )
   const { range: chartDateRange, setRange: setChartDateRange } = useWeatherChartDateRange()
   const arcgisHourly = useWeatherArcgisHourlyRange(
     data.queryPoint.lat,
@@ -348,6 +360,7 @@ export default function WeatherIntelligenceDashboard() {
           loading={locationRowsLoading}
           selectedId={data.farmId}
           onSelect={id => data.setFarmId(id)}
+          onLocationFlyTo={flyToLocationFromTable}
           compareIds={data.compareFarmIds}
           onToggleCompare={isArcgisLayout ? undefined : onToggleCompare}
         />
@@ -380,6 +393,7 @@ export default function WeatherIntelligenceDashboard() {
               mapTimeIso={data.mapTimeIso}
               dateRange={chartDateRange}
               hourlyRange={arcgisHourly.hourlyRange}
+              onLiveDataTick={() => void data.refreshWeather()}
             />
           </div>
           <div
@@ -450,6 +464,7 @@ export default function WeatherIntelligenceDashboard() {
               onFieldSelect={f => data.setSelectedField(f)}
               locationRows={displayLocationRows}
               onLocationSelect={id => data.setFarmId(id)}
+              tableFlyRequest={tableFlyRequest}
               onApplyMapPick={loc => data.setCustomLocation(loc)}
               mapForecastTimeline={
                 isArcgisLayout && timelineLabels.length > 0 ? (

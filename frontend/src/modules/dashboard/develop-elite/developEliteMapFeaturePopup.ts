@@ -393,13 +393,19 @@ export function buildDevelopEliteArcgisFeaturePopupHtml(
     agoStyle?: boolean
     pageIndex?: number
     pageTotal?: number
+    /** Crop grid row merged via Farm_Code. */
+    cropTableLinked?: boolean
   },
 ): string {
   const layerKey = options?.layerKey
   const drawingInfo = options?.drawingInfo ?? null
   const countryLabels = options?.countryLabels ?? null
   const agoStyle = options?.agoStyle !== false
-  const maxRows = resolvePopupMaxRows(layerKey, options?.maxRows, agoStyle)
+  const maxRows = resolvePopupMaxRows(
+    layerKey,
+    options?.cropTableLinked ? Math.max(resolvePopupMaxRows(layerKey, options?.maxRows, agoStyle), 16) : options?.maxRows,
+    agoStyle,
+  )
   const { label: featureTitle } = resolveDevelopEliteMapFeatureLabel(props, countryLabels ?? undefined)
   const rows = buildPopupAttributeRows(props, layerKey, drawingInfo, countryLabels, maxRows)
 
@@ -428,10 +434,15 @@ export function buildDevelopEliteArcgisFeaturePopupHtml(
           .join('')
       : `<tr><td colspan="2" class="develop-elite-map-popup__ago-empty">No attributes</td></tr>`
 
+    const cropHint = options?.cropTableLinked
+      ? `<p class="develop-elite-map-popup__ago-sub">Crop table · linked by Farm_Code</p>`
+      : ''
+
     return `<div class="develop-elite-map-popup develop-elite-map-popup--ago">
       <div class="develop-elite-map-popup__ago-header">
         ${pager}
         <p class="develop-elite-map-popup__ago-title">${titleLine}</p>
+        ${cropHint}
       </div>
       <div class="develop-elite-map-popup__ago-scroll">
         <table class="develop-elite-map-popup__ago-table"><tbody>${tableBody}</tbody></table>

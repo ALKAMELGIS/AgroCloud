@@ -1,6 +1,7 @@
 import type { Map as MaplibreMap, MapMouseEvent } from 'maplibre-gl'
 import { shouldIgnoreDevelopEliteMapIntelPickClick } from './developEliteMapIntelPick'
 import { isMapLibreSketchInteractionLocked } from './developEliteMapLibreSketchInteraction'
+import { developEliteMapLibreClickHitsPopupFeature } from './developEliteMapLibrePopupHitTest'
 
 const TAP_MAX_MOVE_PX = 10
 const PICK_DEBOUNCE_MS = 100
@@ -21,6 +22,7 @@ export function registerDevelopEliteMapLibreIntelPick(
     if (isMapLibreSketchInteractionLocked(map)) return
     const target = dom?.target ?? null
     if (target instanceof Element && shouldIgnoreDevelopEliteMapIntelPickClick(target)) return
+    if (developEliteMapLibreClickHitsPopupFeature(map, event.point)) return
     const { lat, lng } = event.lngLat
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
     const now = Date.now()

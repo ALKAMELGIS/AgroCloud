@@ -103,6 +103,14 @@ function DevelopEliteChartsInner({
   const rootRef = useRef<HTMLDivElement>(null)
   const tableHeadScrollRef = useRef<HTMLDivElement>(null)
   const tableBodyScrollRef = useRef<HTMLDivElement>(null)
+  const tableRowClickTimerRef = useRef<number | null>(null)
+
+  useEffect(
+    () => () => {
+      if (tableRowClickTimerRef.current != null) window.clearTimeout(tableRowClickTimerRef.current)
+    },
+    [],
+  )
 
   const onTableBodyScroll = useCallback(() => {
     const body = tableBodyScrollRef.current
@@ -140,6 +148,16 @@ function DevelopEliteChartsInner({
     if (!chartFlashCropLabel) return
     setChartFlashStartedAt(performance.now())
   }, [chartFlashCropLabel, tableFlashRowId])
+
+  useEffect(() => {
+    if (!tableHighlightRowId) return
+    const wrap = tableBodyScrollRef.current
+    if (!wrap) return
+    const row = wrap.querySelector(`tr.is-table-row-focus, tr.is-table-row-map-selected`)
+    if (row instanceof HTMLElement) {
+      row.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+  }, [tableHighlightRowId, tableRows.length])
 
   const pieSlices = useMemo(
     () => prepareDevelopEliteChartSlices(slices, charts, 'pie'),
@@ -494,7 +512,8 @@ function DevelopEliteChartsInner({
               ) : (
                 tableRows.map(row => {
                   const rowJoinCode = (row.Farm_Code ?? '').trim()
-                  const mapLinkable = Boolean(row._fieldKey?.trim() || rowJoinCode)
+                  const farmName = (row.Farm_Name ?? '').trim()
+                  const mapLinkable = Boolean(row._fieldKey?.trim() || rowJoinCode || farmName)
                   const mapLinked = Boolean(selectedFieldKey && row._fieldKey === selectedFieldKey)
                   const rowFocused = tableHighlightRowId === row._rowId
                   const rowFlashing = tableFlashRowId === row._rowId
@@ -510,11 +529,28 @@ function DevelopEliteChartsInner({
                     <tr
                       key={row._rowId}
                       className={rowClass || undefined}
-                      title={mapLinkable ? 'Double-click to fly to farm on map (Farm_Code)' : undefined}
-                      onClick={() => onTableRowClick?.(row._rowId)}
+                      title={
+                        mapLinkable
+                          ? 'Click: highlight · Double-click: Fly to location on map (Farm_Code / Farm_Name)'
+                          : undefined
+                      }
+                      onClick={() => {
+                        if (!onTableRowClick) return
+                        if (tableRowClickTimerRef.current != null) {
+                          window.clearTimeout(tableRowClickTimerRef.current)
+                        }
+                        tableRowClickTimerRef.current = window.setTimeout(() => {
+                          onTableRowClick(row._rowId)
+                          tableRowClickTimerRef.current = null
+                        }, 260)
+                      }}
                       onDoubleClick={e => {
                         e.preventDefault()
                         e.stopPropagation()
+                        if (tableRowClickTimerRef.current != null) {
+                          window.clearTimeout(tableRowClickTimerRef.current)
+                          tableRowClickTimerRef.current = null
+                        }
                         if (mapLinkable) onTableRowDoubleClick?.(row._rowId)
                       }}
                     >

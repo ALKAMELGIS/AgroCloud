@@ -1,6 +1,7 @@
 import type { AgroCloudMapViewState } from './agroCloudMapNavigation'
 import {
   applyMapLibreGlobeGalaxySky,
+  MAPLIBRE_GLOBE_FOG_GALAXY,
   setMapLibreGlobeProjection,
 } from './maplibreGlobeEnvironment'
 
@@ -16,14 +17,7 @@ export const SI_GLOBE_COCKPIT_2D_VIEW: AgroCloudMapViewState = {
 export const SI_GLOBE_COCKPIT_MAX_ZOOM = 2.75
 export const SI_GLOBE_COCKPIT_MAX_PITCH = 12
 
-export const SI_GLOBE_COCKPIT_FOG = {
-  range: [0.4, 9] as [number, number],
-  color: '#000000',
-  'horizon-blend': 0.16,
-  'high-color': '#000000',
-  'space-color': '#000000',
-  'star-intensity': 0.55,
-}
+export const SI_GLOBE_COCKPIT_FOG = MAPLIBRE_GLOBE_FOG_GALAXY
 
 /** One full Earth rotation — slow longitude spin; starfield stays fixed (no bearing spin). */
 export const SI_GLOBE_COCKPIT_SPIN_SECONDS = 300

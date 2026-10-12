@@ -132,7 +132,13 @@ export function DevelopEliteAgroGridSection({
             basemapId={data.config.basemapId}
             highlightFieldKey={data.mapFieldHighlightKey}
             mapFlyToRequest={data.mapFlyToRequest}
+            mapFlyToLngLat={data.mapFlyToLngLat}
+            mapTableIdentifyRequest={data.mapTableIdentifyRequest}
             mapCountryFlyRequest={data.mapCountryFlyRequest}
+            mapPopupFieldKey={data.mapPopupFieldKey}
+            mapPopupRequest={data.mapPopupRequest}
+            cropTablePopupLink={data.cropTablePopupLink}
+            onFocusCropTableRowId={data.syncTableRowFromMapPopup}
             drawingInfo={data.structuresDrawingInfo}
             countryLabels={data.countryLabels}
             worldCountryDomain={data.worldCountryDomain}
@@ -164,7 +170,13 @@ export function DevelopEliteAgroGridSection({
       data.config.basemapId,
       data.mapFieldHighlightKey,
       data.mapFlyToRequest,
+      data.mapFlyToLngLat,
+      data.mapTableIdentifyRequest,
       data.mapCountryFlyRequest,
+      data.mapPopupFieldKey,
+      data.mapPopupRequest,
+      data.cropTablePopupLink,
+      data.syncTableRowFromMapPopup,
       data.structuresDrawingInfo,
       data.countryLabels,
       data.worldCountryDomain,

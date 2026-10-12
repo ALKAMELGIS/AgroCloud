@@ -1,11 +1,17 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useRef } from 'react'
+import { computeStableGisFeatureKey } from '@/modules/gis/layers/gisFeatureStableKey'
 import { useDevelopEliteMapLibre } from './developEliteMapLibreContext'
-import { registerDevelopEliteMapLibreFeaturePopup } from './developEliteMapLibreFeaturePopup'
+import {
+  registerDevelopEliteMapLibreFeaturePopup,
+  type DevelopEliteMapLibreFeaturePopupHandle,
+} from './developEliteMapLibreFeaturePopup'
 import { useDevelopEliteMapDraw } from './DevelopEliteMapDraw'
 import { useDevelopEliteMapInsight } from './DevelopEliteMapInsightTools'
 import { useDevelopEliteCompactViewport } from './developEliteCompactViewport'
 import type { DevelopEliteMapDataLayerId } from './developEliteDashboardConfig'
 import type { DevelopEliteMapSearchSources } from './developEliteMapSearch'
+import type { DevelopEliteCropTablePopupLink } from './developEliteMapCropTablePopup'
+import { useMemo } from 'react'
 
 type Props = {
   geojson: GeoJSON.FeatureCollection
@@ -21,7 +27,16 @@ type Props = {
   irrigationMainPipeDrawingInfo?: Record<string, unknown> | null
   agriLocationDrawingInfo?: Record<string, unknown> | null
   countryLabels?: Map<string, string> | null
+  cropTableLink?: DevelopEliteCropTablePopupLink | null
+  mapPopupFieldKey?: string | null
+  mapPopupRequest?: number
+  mapTableIdentifyRequest?: {
+    feature: GeoJSON.Feature
+    layerKey: DevelopEliteMapDataLayerId
+    nonce: number
+  } | null
   onSelectFieldKey?: (key: string | null) => void
+  onFocusCropTableRowId?: (rowId: string) => void
 }
 
 export function DevelopEliteMapLibreFeaturePopupBridge({
@@ -38,12 +53,18 @@ export function DevelopEliteMapLibreFeaturePopupBridge({
   irrigationMainPipeDrawingInfo,
   agriLocationDrawingInfo,
   countryLabels,
+  cropTableLink,
+  mapPopupFieldKey,
+  mapPopupRequest = 0,
+  mapTableIdentifyRequest = null,
   onSelectFieldKey,
+  onFocusCropTableRowId,
 }: Props) {
   const { mapRef, mapReady, viewMode3d } = useDevelopEliteMapLibre()
   const draw = useDevelopEliteMapDraw()
   const insight = useDevelopEliteMapInsight()
   const compactViewport = useDevelopEliteCompactViewport()
+  const popupHandleRef = useRef<DevelopEliteMapLibreFeaturePopupHandle | null>(null)
 
   const sources = useMemo<DevelopEliteMapSearchSources>(
     () => ({
@@ -68,14 +89,13 @@ export function DevelopEliteMapLibreFeaturePopupBridge({
     ],
   )
 
-  const identifyEnabled =
-    mapReady && insight?.tool !== 'intel' && insight?.tool !== 'swipe' && !draw?.drawingActive
+  const identifyEnabled = mapReady && insight?.tool !== 'swipe' && !draw?.drawingActive
 
   useEffect(() => {
     const map = mapRef.current
     if (!map || !identifyEnabled) return
 
-    return registerDevelopEliteMapLibreFeaturePopup(map, {
+    const handle = registerDevelopEliteMapLibreFeaturePopup(map, {
       viewMode3d,
       identifyHitRadiusPx: compactViewport ? 18 : viewMode3d ? 24 : 12,
       sources,
@@ -85,22 +105,48 @@ export function DevelopEliteMapLibreFeaturePopupBridge({
       irrigationValvesDrawingInfo,
       irrigationMainPipeDrawingInfo,
       agriLocationDrawingInfo,
+      cropTableLink: cropTableLink ?? null,
       onSelectStructureFieldKey: fieldKey => onSelectFieldKey?.(fieldKey),
+      onFocusCropTableRowId: onFocusCropTableRowId,
     })
+    popupHandleRef.current = handle
+    return () => {
+      handle.dispose()
+      popupHandleRef.current = null
+    }
   }, [
     agriLocationDrawingInfo,
     compactViewport,
     countryLabels,
+    cropTableLink,
     identifyEnabled,
     irrigationMainPipeDrawingInfo,
     irrigationValvesDrawingInfo,
     mapRef,
+    onFocusCropTableRowId,
     onSelectFieldKey,
     sources,
     structuresDrawingInfo,
     treesDrawingInfo,
     viewMode3d,
   ])
+
+  useEffect(() => {
+    if (!mapPopupRequest || !mapPopupFieldKey?.trim()) return
+    const handle = popupHandleRef.current
+    if (!handle) return
+    const fieldKey = mapPopupFieldKey.trim()
+    const hit = geojson.features.find((f, i) => computeStableGisFeatureKey(f, i) === fieldKey)
+    if (!hit) return
+    handle.openFeature(hit, 'agro-structures')
+  }, [geojson.features, mapPopupFieldKey, mapPopupRequest])
+
+  useEffect(() => {
+    if (!mapTableIdentifyRequest?.nonce) return
+    const handle = popupHandleRef.current
+    if (!handle) return
+    handle.openFeature(mapTableIdentifyRequest.feature, mapTableIdentifyRequest.layerKey)
+  }, [mapTableIdentifyRequest])
 
   return null
 }
