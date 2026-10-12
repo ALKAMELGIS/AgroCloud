@@ -6,6 +6,8 @@ type Props = {
   onTogglePlay: () => void
   /** Slim strip docked on the map */
   compact?: boolean
+  /** Extra-small overlay on ArcGIS map */
+  mini?: boolean
   dock?: 'top' | 'bottom'
 }
 
@@ -16,6 +18,7 @@ export function WeatherTimeline({
   playing,
   onTogglePlay,
   compact,
+  mini,
   dock = 'top',
 }: Props) {
   const max = Math.max(0, labels.length - 1)
@@ -25,7 +28,7 @@ export function WeatherTimeline({
     <div
       className={`weather-timeline${
         compact ? ` weather-timeline--compact weather-timeline--map-${dock}` : ''
-      }`}
+      }${mini ? ' weather-timeline--map-mini' : ''}`}
       role="group"
       aria-label="Weather time machine"
     >

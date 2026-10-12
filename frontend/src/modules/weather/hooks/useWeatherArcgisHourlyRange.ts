@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { filterHourlyByDateRange, type WeatherChartDateRange } from '../config/weatherChartDateRange'
 import {
   fetchOpenMeteoHourlyForDateRange,
+  invalidateOpenMeteoHourlyRangeCache,
   peekOpenMeteoHourlyRangeCache,
   type OpenMeteoDashboardBundle,
   type OpenMeteoDashboardHourlyPoint,
@@ -39,6 +40,12 @@ export function useWeatherArcgisHourlyRange(
 
   const [hourlyRangeLoading, setHourlyRangeLoading] = useState(() => hourlyRange.length === 0)
   const fetchSeqRef = useRef(0)
+  const [refreshNonce, setRefreshNonce] = useState(0)
+
+  const refreshHourlyRange = useCallback(() => {
+    invalidateOpenMeteoHourlyRangeCache(lat, lng, range)
+    setRefreshNonce(n => n + 1)
+  }, [lat, lng, range.endDate, range.startDate])
 
   useEffect(() => {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
@@ -77,7 +84,7 @@ export function useWeatherArcgisHourlyRange(
       })
 
     return () => ac.abort()
-  }, [lat, lng, range.startDate, range.endDate, bundle])
+  }, [lat, lng, range.startDate, range.endDate, bundle, refreshNonce])
 
-  return { hourlyRange, hourlyRangeLoading }
+  return { hourlyRange, hourlyRangeLoading, refreshHourlyRange }
 }

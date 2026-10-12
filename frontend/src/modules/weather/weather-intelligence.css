@@ -359,7 +359,14 @@
   color: #fecaca;
   background: rgba(127, 29, 29, 0.88);
   border-color: rgba(248, 113, 113, 0.55);
-  box-shadow: 0 0 10px rgba(239, 68, 68, 0.35);
+  box-shadow: none;
+  filter: none;
+}
+
+/* Very hot / heat badges — no pulsing glow (lighting only; keep pill + label). */
+.weather-loc-alert .weather-loc-marker__emoji--glow {
+  animation: none;
+  filter: none;
 }
 
 .weather-loc-alert--caution {
@@ -1090,6 +1097,44 @@
 .weather-timeline--compact .weather-timeline__slider {
   min-width: 48px;
   height: 4px;
+}
+
+.weather-map-stage__map .weather-timeline--map-bottom.weather-timeline--map-mini {
+  left: 8px;
+  right: 8px;
+  bottom: 40px;
+  gap: 2px;
+  padding: 1px 5px;
+  min-height: 18px;
+  max-height: 22px;
+  border-radius: 6px;
+}
+
+.weather-timeline--map-mini .weather-timeline__play,
+.weather-timeline--map-mini .weather-timeline__step {
+  padding: 1px 4px;
+  font-size: 9px;
+  border-radius: 4px;
+  min-width: 18px;
+}
+
+.weather-timeline--map-mini .weather-timeline__play {
+  width: 20px;
+}
+
+.weather-timeline--map-mini .weather-timeline__play .fa-solid {
+  font-size: 8px;
+}
+
+.weather-timeline--map-mini .weather-timeline__label {
+  font-size: 8px;
+  min-width: 0;
+  max-width: 42%;
+}
+
+.weather-timeline--map-mini .weather-timeline__slider {
+  min-width: 36px;
+  height: 3px;
 }
 
 .weather-timeline__slider {
@@ -3382,16 +3427,6 @@
     #000 calc(100% - 18px),
     transparent 100%
   );
-}
-
-.weather-locations__row-arcgis--risk .weather-locations__arcgis-row {
-  background: linear-gradient(
-    90deg,
-    rgba(220, 38, 38, 0.14) 0%,
-    rgba(220, 38, 38, 0.04) 42%,
-    transparent 100%
-  );
-  box-shadow: inset 3px 0 0 rgba(248, 113, 113, 0.85);
 }
 
 .weather-locations__arcgis-row.is-flash,

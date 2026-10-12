@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { sliceHourlyForChartWindow } from '../services/openMeteoWeatherDashboard'
 import {
   computeWeatherChartNowIndex,
   floorToOpenMeteoHourIso,
@@ -23,6 +24,19 @@ describe('weatherArcgisChartLive', () => {
     const mid = new Date('2024-06-01T14:30:00').getTime()
     const idx = computeWeatherChartNowIndex(labels, mid)
     expect(idx).toBeCloseTo(0.5, 5)
+  })
+
+  it('keeps lookback hours in chart window slice', () => {
+    const anchor = '2026-10-12T14:00'
+    const points = [
+      { time: '2026-10-05T15:00' },
+      { time: '2026-10-11T10:00' },
+      { time: '2026-10-12T15:00' },
+      { time: '2026-10-13T10:00' },
+    ] as Parameters<typeof sliceHourlyForChartWindow>[0]
+    const out = sliceHourlyForChartWindow(points, anchor, 7, 1)
+    expect(out.map(p => p.time)).toContain('2026-10-05T15:00')
+    expect(out.map(p => p.time)).toContain('2026-10-11T10:00')
   })
 
   it('interpolates series at now between hourly samples', () => {

@@ -16,7 +16,8 @@ import {
 import { Chart } from 'react-chartjs-2'
 import {
   buildArcgisHumidityLineChart,
-  buildTemperatureHourlyBarChart,
+  buildDailyTemperatureBarSeries,
+  buildTemperatureDailyBarChart,
   buildArcgisWindDirectionChart,
   buildArcgisWindSpeedChart,
 } from '../charts/weatherLiveChartBuilders'
@@ -42,7 +43,7 @@ import {
 } from '../config/weatherThresholds'
 import { useWeatherArcgisChartLive } from '../hooks/useWeatherArcgisChartLive'
 import {
-  sliceHourlyFromAnchor,
+  sliceHourlyForChartWindow,
   type OpenMeteoDashboardBundle,
   type OpenMeteoDashboardHourlyPoint,
 } from '../services/openMeteoWeatherDashboard'
@@ -58,8 +59,6 @@ ChartJS.register(
   Tooltip,
   Legend,
 )
-
-const HOURLY_WINDOW = 72
 
 const LIVE_CADENCE_OPTIONS: { id: WeatherChartLiveCadence; label: string }[] = [
   { id: '1s', label: '1s' },
@@ -120,16 +119,21 @@ export function WeatherArcgisStackedCharts({
     liveAnchorIso ?? mapTimeIso ?? bundle?.snapshot?.observedAt ?? bundle?.hourlyForecast?.[0]?.time
 
   const fallbackHourly = useMemo(() => {
-    const series = bundle?.hourlyForecast?.length ? bundle.hourlyForecast : bundle?.hourly ?? []
+    const series = bundle?.hourly?.length ? bundle.hourly : bundle?.hourlyForecast ?? []
     if (!series.length) return []
-    const sliced = sliceHourlyFromAnchor(series, anchorIso ?? series[0].time, HOURLY_WINDOW)
-    return filterHourlyByDateRange(sliced, dateRange)
+    const inRange = filterHourlyByDateRange(series, dateRange)
+    if (inRange.length) return inRange
+    const anchor = anchorIso ?? series[0]?.time
+    if (!anchor) return []
+    return filterHourlyByDateRange(sliceHourlyForChartWindow(series, anchor), dateRange)
   }, [bundle, anchorIso, dateRange])
 
   const hourly = useMemo(() => {
-    const base = hourlyRange.length ? hourlyRange : fallbackHourly
+    const merged = hourlyRange.length ? hourlyRange : fallbackHourly
+    const inRange = filterHourlyByDateRange(merged, dateRange)
+    const base = inRange.length ? inRange : fallbackHourly
     return downsampleHourlySeries(base)
-  }, [hourlyRange, fallbackHourly])
+  }, [hourlyRange, fallbackHourly, dateRange])
 
   const isoLabels = useMemo(() => hourly.map(h => h.time), [hourly])
   const nowIndex = useMemo(() => computeWeatherChartNowIndex(isoLabels, nowMs), [isoLabels, nowMs])
@@ -165,13 +169,16 @@ export function WeatherArcgisStackedCharts({
 
   const windDirTitle = `Wind Direction for ${locationLabel}`
   const windSpeedTitle = `Wind Speed for ${locationLabel}`
-  const tempTitle = `Temperature for ${locationLabel}`
+  const tempTitle = `Bar By Day for ${locationLabel}`
   const humidityTitle = `Humidity for ${locationLabel}`
 
-  const tempBars = useMemo(() => hourly.slice(-Math.min(48, hourly.length)), [hourly])
+  const tempDailyBars = useMemo(
+    () => buildDailyTemperatureBarSeries(hourly, bundle?.daily7, dateRange),
+    [hourly, bundle?.daily7, dateRange],
+  )
   const tempExtent = useMemo(
-    () => numericExtent(tempBars.map(h => h.temperatureC)),
-    [tempBars],
+    () => numericExtent(tempDailyBars.map(h => h.temperatureC)),
+    [tempDailyBars],
   )
   const windExtent = useMemo(
     () => numericExtent(hourly.map(h => h.windSpeedKmh)),
@@ -230,7 +237,7 @@ export function WeatherArcgisStackedCharts({
     [hourly, humidityGuides, isoLabels, liveMotion, nowIndex],
   )
 
-  const tempIsoLabels = useMemo(() => tempBars.map(h => h.time), [tempBars])
+  const tempIsoLabels = useMemo(() => tempDailyBars.map(h => h.time), [tempDailyBars])
   const tempGuidesLive = useMemo(
     () => ({
       nowIndex: computeWeatherChartNowIndex(tempIsoLabels, nowMs),
@@ -238,9 +245,9 @@ export function WeatherArcgisStackedCharts({
       showNowLine: true,
       liveMotion,
       isoLabels: tempIsoLabels,
-      liveSeries: tempBars.map(h => h.temperatureC),
+      liveSeries: tempDailyBars.map(h => h.temperatureC),
     }),
-    [liveMotion, nowMs, tempBars, tempGuides, tempIsoLabels],
+    [liveMotion, nowMs, tempDailyBars, tempGuides, tempIsoLabels],
   )
 
   const windDirChart = useMemo(
@@ -256,8 +263,8 @@ export function WeatherArcgisStackedCharts({
     [hourly],
   )
   const tempBarChart = useMemo(
-    () => chartWithIsoLabels(buildTemperatureHourlyBarChart(tempBars, chartMode), tempBars),
-    [chartMode, tempBars],
+    () => chartWithIsoLabels(buildTemperatureDailyBarChart(tempDailyBars, chartMode), tempDailyBars),
+    [chartMode, tempDailyBars],
   )
 
   const liveClockLabel = useMemo(

@@ -9,6 +9,7 @@ import {
 } from '@/modules/remote-sensing/weather/openMeteoWeather'
 import { apiUrl, noteApiResponse } from '@/core/api/apiOrigin'
 import {
+  WEATHER_CHART_DEFAULT_LOOKBACK_DAYS,
   addDaysToYmd,
   daysBetweenYmdInclusive,
   filterHourlyByDateRange,
@@ -99,6 +100,24 @@ export function sliceHourlyFromAnchor(
   max: number,
 ): OpenMeteoDashboardHourlyPoint[] {
   return sliceFromNow(points, fromIso, max)
+}
+
+/** Default chart window: lookback through short forecast (keeps ~1 week visible on live charts). */
+export function sliceHourlyForChartWindow(
+  points: OpenMeteoDashboardHourlyPoint[],
+  anchorIso: string,
+  lookbackDays = WEATHER_CHART_DEFAULT_LOOKBACK_DAYS,
+  forecastDays = 2,
+): OpenMeteoDashboardHourlyPoint[] {
+  if (!points.length) return []
+  const anchorMs = new Date(anchorIso).getTime()
+  if (!Number.isFinite(anchorMs)) return points
+  const startMs = anchorMs - Math.max(0, lookbackDays) * 86_400_000
+  const endMs = anchorMs + Math.max(0, forecastDays) * 86_400_000
+  return points.filter(p => {
+    const t = new Date(p.time).getTime()
+    return Number.isFinite(t) && t >= startMs && t <= endMs
+  })
 }
 
 function sliceFromNow(points: OpenMeteoDashboardHourlyPoint[], fromIso: string, max: number): OpenMeteoDashboardHourlyPoint[] {
@@ -241,7 +260,7 @@ export function parseOpenMeteoDashboardBundle(
   return {
     snapshot,
     hourly: hourlyAll,
-    hourlyForecast: sliceFromNow(hourlyAll, time, 72),
+    hourlyForecast: sliceHourlyForChartWindow(hourlyAll, time),
     daily7: daily.slice(0, 7),
     fetchedAt: fetchedAt ?? new Date().toISOString(),
     sourceLabel: 'Open-Meteo',
@@ -299,7 +318,7 @@ async function fetchOpenMeteoDirect(lat: number, lng: number): Promise<OpenMeteo
     'wind_speed_10m_max',
     'wind_direction_10m_dominant',
   ].join(','))
-  url.searchParams.set('past_days', '3')
+  url.searchParams.set('past_days', String(WEATHER_CHART_DEFAULT_LOOKBACK_DAYS))
   url.searchParams.set('forecast_days', String(Math.min(7, OPEN_METEO_FORECAST_MAX_DAYS)))
   url.searchParams.set('wind_speed_unit', 'kmh')
 
@@ -547,6 +566,25 @@ export function peekOpenMeteoHourlyRangeCache(
   const hit = hourlyRangeCache.get(key)
   if (!hit || Date.now() - hit.at > HOURLY_RANGE_CACHE_TTL_MS) return null
   return hit.rows
+}
+
+export function invalidateOpenMeteoHourlyRangeCache(
+  lat?: number,
+  lng?: number,
+  range?: WeatherChartDateRange,
+): void {
+  if (lat == null || lng == null) {
+    hourlyRangeCache.clear()
+    return
+  }
+  if (range) {
+    hourlyRangeCache.delete(hourlyRangeCacheKey(lat, lng, range))
+    return
+  }
+  const prefix = `${lat.toFixed(4)},${lng.toFixed(4)}|`
+  for (const key of hourlyRangeCache.keys()) {
+    if (key.startsWith(prefix)) hourlyRangeCache.delete(key)
+  }
 }
 
 async function fetchHourlyRangeViaApi(

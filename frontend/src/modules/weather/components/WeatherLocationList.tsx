@@ -250,7 +250,6 @@ export function WeatherLocationList({
                 key={key}
                 className={[
                   'weather-locations__row-arcgis',
-                  alert?.severity === 'warning' ? 'weather-locations__row-arcgis--risk' : '',
                 ]
                   .filter(Boolean)
                   .join(' ')}

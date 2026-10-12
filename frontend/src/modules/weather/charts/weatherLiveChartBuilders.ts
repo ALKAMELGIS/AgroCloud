@@ -2,6 +2,11 @@ import type { ChartData } from 'chart.js'
 import type { OpenMeteoDailyForecast } from '@/modules/remote-sensing/weather/openMeteoWeather'
 import type { OpenMeteoDashboardHourlyPoint } from '../services/openMeteoWeatherDashboard'
 import {
+  addDaysToYmd,
+  clampWeatherChartDateRange,
+  type WeatherChartDateRange,
+} from '../config/weatherChartDateRange'
+import {
   ARCGIS_ORANGE_AREA_LINE_STYLE,
   WEATHER_CHART_COLORS,
   arcgisLineDatasetStyle,
@@ -18,6 +23,85 @@ export function formatShortAxisTime(iso: string): string {
 
 function dailyByDate(daily: OpenMeteoDailyForecast[]): Map<string, OpenMeteoDailyForecast> {
   return new Map(daily.map(d => [d.date, d]))
+}
+
+function emptyDashboardHourlyPoint(time: string, temperatureC: number | null): OpenMeteoDashboardHourlyPoint {
+  return {
+    time,
+    temperatureC,
+    weatherCode: null,
+    precipitationMm: null,
+    snowfallCm: null,
+    humidityPct: null,
+    windSpeedKmh: null,
+    windDirectionDeg: null,
+    pressureHpa: null,
+    et0Mm: null,
+    shortwaveRadiationWm2: null,
+    apparentTemperatureC: null,
+    dewPointC: null,
+    cloudCoverPct: null,
+    visibilityKm: null,
+    precipitationProbabilityPct: null,
+    rainMm: null,
+  }
+}
+
+/** One bar per calendar day (daily max °C) for ArcGIS “Bar By Day” panel. */
+export function buildDailyTemperatureBarSeries(
+  hourly: OpenMeteoDashboardHourlyPoint[],
+  daily: OpenMeteoDailyForecast[] | null | undefined,
+  range: WeatherChartDateRange,
+): OpenMeteoDashboardHourlyPoint[] {
+  const { startDate, endDate } = clampWeatherChartDateRange(range)
+  const dailyMap = daily?.length ? dailyByDate(daily) : new Map<string, OpenMeteoDailyForecast>()
+  const hourlyMax = new Map<string, number>()
+
+  for (const h of hourly) {
+    const day = h.time.slice(0, 10)
+    if (day < startDate || day > endDate) continue
+    if (h.temperatureC == null || !Number.isFinite(h.temperatureC)) continue
+    const prev = hourlyMax.get(day)
+    hourlyMax.set(day, prev == null ? h.temperatureC : Math.max(prev, h.temperatureC))
+  }
+
+  const out: OpenMeteoDashboardHourlyPoint[] = []
+  for (let cursor = startDate; cursor <= endDate; cursor = addDaysToYmd(cursor, 1)) {
+    const fromDaily = dailyMap.get(cursor)?.tempMaxC ?? null
+    const fromHourly = hourlyMax.get(cursor) ?? null
+    const temperatureC =
+      fromDaily != null && Number.isFinite(fromDaily)
+        ? fromDaily
+        : fromHourly != null && Number.isFinite(fromHourly)
+          ? fromHourly
+          : null
+    out.push(emptyDashboardHourlyPoint(`${cursor}T12:00`, temperatureC))
+  }
+  return out
+}
+
+export function buildTemperatureDailyBarChart(
+  dailyBars: OpenMeteoDashboardHourlyPoint[],
+  mode: AgroThemeMode = 'dark',
+): ChartData<'bar'> {
+  const barFill =
+    mode === 'light' ? 'rgba(30, 41, 59, 0.72)' : 'rgba(248, 250, 252, 0.82)'
+  const barEdge =
+    mode === 'light' ? 'rgba(15, 23, 42, 0.85)' : 'rgba(248, 250, 252, 0.95)'
+  return {
+    labels: dailyBars.map(h => h.time.slice(0, 10)),
+    datasets: [
+      {
+        label: 'Daily max °C',
+        data: dailyBars.map(h => h.temperatureC),
+        backgroundColor: barFill,
+        borderColor: barEdge,
+        borderWidth: 0,
+        borderRadius: 2,
+        maxBarThickness: 28,
+      },
+    ],
+  }
 }
 
 export function buildTemperatureTrendChart(

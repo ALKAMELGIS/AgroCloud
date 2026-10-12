@@ -10,30 +10,33 @@ import { buildWeatherAlerts } from '../analysis/buildWeatherAlerts'
 import { computeFarmWeatherStats } from '../analysis/farmWeatherStats'
 import { buildOperationalWeatherIndicators } from '../insights/buildOperationalWeatherIndicators'
 import { isWeatherClimateMapModeAvailable } from '../config/weatherPhase2Layers'
+import type { OpenMeteoDashboardHourlyPoint } from '../services/openMeteoWeatherDashboard'
+import { formatHourlyTimelineLabel } from '../utils/weatherTimelineLabels'
 import { useWeatherMonitoringData, type WeatherMobileTab } from './useWeatherMonitoringData'
 
 const AUTO_REFRESH_MS = 15 * 60_000
+const LOCATION_TIMELINE_MAX_FRAMES = 336
 
 export type WeatherIntelligenceStateOptions = {
   /** Viewport IDW raster from Open-Meteo (hourly grid); disables GFS tile timeline when true. */
   preferOpenMeteoRaster?: boolean
-}
-
-function formatHourlyTimelineLabel(iso: string): string {
-  const d = new Date(iso.replace(' ', 'T'))
-  if (Number.isNaN(d.getTime())) return iso.replace('T', ' ').slice(0, 16)
-  return d.toLocaleString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  /** ArcGIS map: scrub/play uses selected location hourly (not GFS global labels). */
+  preferLocationTimeline?: boolean
 }
 
 export function useWeatherIntelligenceState(options: WeatherIntelligenceStateOptions = {}) {
   const preferOpenMeteoRaster = options.preferOpenMeteoRaster ?? false
+  const preferLocationTimeline = options.preferLocationTimeline ?? false
   const base = useWeatherMonitoringData()
+  const [locationTimelineHourly, setLocationTimelineHourlyState] = useState<
+    OpenMeteoDashboardHourlyPoint[] | null
+  >(null)
+  const setLocationTimelineHourly = useCallback(
+    (series: OpenMeteoDashboardHourlyPoint[] | null) => {
+      setLocationTimelineHourlyState(series)
+    },
+    [],
+  )
   const [mapMode, setMapMode] = useState<WeatherMapMode>('weather')
   const [vizMode, setVizMode] = useState<WeatherVizMode>('animated')
   const [precipWindow, setPrecipWindow] = useState<WeatherPrecipWindow>('6h')
@@ -54,11 +57,19 @@ export function useWeatherIntelligenceState(options: WeatherIntelligenceStateOpt
   }, [mapMode])
 
   const gfs = useGfsRasterTimeline()
-  const hourly = base.bundle?.hourlyForecast ?? []
-  const useGfsTimeline = !preferOpenMeteoRaster && gfs.validTimes.length > 0
+  const bundleHourly = base.bundle?.hourlyForecast ?? []
+  const locationHourly =
+    preferLocationTimeline && locationTimelineHourly?.length
+      ? locationTimelineHourly
+      : null
+  const hourly = locationHourly ?? bundleHourly
+  const useGfsTimeline =
+    !preferOpenMeteoRaster && !locationHourly && gfs.validTimes.length > 0
   const rasterFrameCount = useGfsTimeline
     ? Math.min(gfs.validTimes.length, 120)
-    : Math.min(hourly.length, 48)
+    : locationHourly
+      ? Math.min(locationHourly.length, LOCATION_TIMELINE_MAX_FRAMES)
+      : Math.min(hourly.length, 48)
 
   const mapTimeIso = useGfsTimeline
     ? gfs.pickFrameTime(timelineHourIndex % Math.max(1, rasterFrameCount))
@@ -194,5 +205,7 @@ export function useWeatherIntelligenceState(options: WeatherIntelligenceStateOpt
     setThresholds,
     mobileTab,
     setMobileTab,
+    setLocationTimelineHourly,
+    locationTimelineActive: Boolean(locationHourly),
   }
 }

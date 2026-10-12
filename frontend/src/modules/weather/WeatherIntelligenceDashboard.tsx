@@ -48,6 +48,10 @@ import { WeatherArcgisHourlyForecast } from './components/WeatherArcgisHourlyFor
 import { useWeatherChartDateRange } from './hooks/useWeatherChartDateRange'
 import { useWeatherArcgisHourlyRange } from './hooks/useWeatherArcgisHourlyRange'
 import { weatherReadingFromRow } from './config/weatherLocationMapLayer'
+import {
+  findDefaultTimelineIndex,
+  formatHourlyTimelineLabel,
+} from './utils/weatherTimelineLabels'
 export default function WeatherIntelligenceDashboard() {
   const vp = useAgroViewport()
   const [searchParams] = useSearchParams()
@@ -55,7 +59,10 @@ export default function WeatherIntelligenceDashboard() {
   const isArcgisLayout = true
   const arcgisTouch = vp !== 'desktop'
   const arcgisTablet = vp === 'tablet'
-  const data = useWeatherIntelligenceState({ preferOpenMeteoRaster: isArcgisLayout })
+  const data = useWeatherIntelligenceState({
+    preferOpenMeteoRaster: isArcgisLayout,
+    preferLocationTimeline: isArcgisLayout,
+  })
   const shellRef = useRef<HTMLDivElement>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [excelExportOpen, setExcelExportOpen] = useState(false)
@@ -80,13 +87,60 @@ export default function WeatherIntelligenceDashboard() {
     chartDateRange,
     data.bundle,
   )
+
+  const onArcgisChartLiveTick = useCallback(() => {
+    arcgisHourly.refreshHourlyRange()
+    void data.refreshWeather()
+  }, [arcgisHourly.refreshHourlyRange, data.refreshWeather])
   const snap = data.bundle?.snapshot
+
+  useEffect(() => {
+    if (!isArcgisLayout) return
+    data.setLocationTimelineHourly(
+      arcgisHourly.hourlyRange.length ? arcgisHourly.hourlyRange : null,
+    )
+  }, [
+    isArcgisLayout,
+    arcgisHourly.hourlyRange,
+    data.queryPoint.lat,
+    data.queryPoint.lng,
+    data.setLocationTimelineHourly,
+  ])
+
+  const timelineLiveIndex = useMemo(
+    () => findDefaultTimelineIndex(arcgisHourly.hourlyRange),
+    [arcgisHourly.hourlyRange],
+  )
+
+  const timelineAtLiveHour =
+    !data.windAnimPlaying && data.timelineHourIndex === timelineLiveIndex
+
+  useEffect(() => {
+    if (!isArcgisLayout || !arcgisHourly.hourlyRange.length) return
+    data.setTimelineHourIndex(findDefaultTimelineIndex(arcgisHourly.hourlyRange))
+  }, [
+    isArcgisLayout,
+    data.farmId,
+    chartDateRange.startDate,
+    chartDateRange.endDate,
+    data.queryPoint.lat,
+    data.queryPoint.lng,
+  ])
+
   const timelineLabels = useMemo(() => {
+    if (isArcgisLayout && arcgisHourly.hourlyRange.length) {
+      return arcgisHourly.hourlyRange.map(h => formatHourlyTimelineLabel(h.time))
+    }
     if (data.rasterTimelineLabels?.length) {
       return data.rasterTimelineLabels.slice(0, 120)
     }
-    return (data.bundle?.hourlyForecast ?? []).map(h => h.time.replace('T', ' ').slice(0, 16))
-  }, [data.rasterTimelineLabels, data.bundle?.hourlyForecast])
+    return (data.bundle?.hourlyForecast ?? []).map(h => formatHourlyTimelineLabel(h.time))
+  }, [
+    isArcgisLayout,
+    arcgisHourly.hourlyRange,
+    data.rasterTimelineLabels,
+    data.bundle?.hourlyForecast,
+  ])
 
   const gfsRasterActive =
     !data.preferOpenMeteoRaster && Boolean(data.gfsRasterMeta?.validTimes?.length)
@@ -176,6 +230,22 @@ export default function WeatherIntelligenceDashboard() {
             dailyMaxC = dailyMaxC ?? Math.max(...temps)
           }
         }
+        const timelinePt = hourlySeries[data.timelineHourIndex]
+        const useTimelineHour =
+          isArcgisLayout && timelinePt && (!timelineAtLiveHour || data.windAnimPlaying)
+        if (useTimelineHour) {
+          return {
+            ...withMeta,
+            temperatureC: timelinePt.temperatureC ?? withMeta.temperatureC,
+            humidityPct: timelinePt.humidityPct ?? withMeta.humidityPct,
+            windSpeedKmh: timelinePt.windSpeedKmh ?? withMeta.windSpeedKmh,
+            windDirectionDeg: timelinePt.windDirectionDeg ?? withMeta.windDirectionDeg,
+            precipMm: timelinePt.precipMm ?? withMeta.precipMm,
+            weatherCode: timelinePt.weatherCode ?? withMeta.weatherCode,
+            dailyMinC,
+            dailyMaxC,
+          }
+        }
         if (snap) {
           return {
             ...withMeta,
@@ -208,6 +278,10 @@ export default function WeatherIntelligenceDashboard() {
     data.bundle?.hourlyForecast,
     arcgisHourly.hourlyRange,
     locationDailyPatch,
+    isArcgisLayout,
+    data.timelineHourIndex,
+    timelineAtLiveHour,
+    data.windAnimPlaying,
   ])
 
   const selectedLocationMapReading = useMemo(() => {
@@ -393,7 +467,7 @@ export default function WeatherIntelligenceDashboard() {
               mapTimeIso={data.mapTimeIso}
               dateRange={chartDateRange}
               hourlyRange={arcgisHourly.hourlyRange}
-              onLiveDataTick={() => void data.refreshWeather()}
+              onLiveDataTick={onArcgisChartLiveTick}
             />
           </div>
           <div
@@ -466,23 +540,6 @@ export default function WeatherIntelligenceDashboard() {
               onLocationSelect={id => data.setFarmId(id)}
               tableFlyRequest={tableFlyRequest}
               onApplyMapPick={loc => data.setCustomLocation(loc)}
-              mapForecastTimeline={
-                isArcgisLayout && timelineLabels.length > 0 ? (
-                  <WeatherTimeline
-                    compact
-                    dock="bottom"
-                    labels={timelineLabels}
-                    hourIndex={data.timelineHourIndex}
-                    onChange={data.setTimelineHourIndex}
-                    playing={data.windAnimPlaying}
-                    onTogglePlay={() => {
-                      const next = !data.windAnimPlaying
-                      data.setWindAnimPlaying(next)
-                      if (next && data.vizMode === 'points') data.setVizMode('animated')
-                    }}
-                  />
-                ) : null
-              }
             />
             <WeatherFieldPanel feature={data.selectedField} onClose={() => data.setSelectedField(null)} />
           </main>
