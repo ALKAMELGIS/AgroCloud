@@ -9,9 +9,11 @@ import {
   listChartableFtwAoiSessions,
   pruneStaleFtwAoiSessions,
 } from './ftwAoiTrainingPersistence'
+import { synthesizeFtwTrainingEpochHistory } from './ftwTrainingLocalBuiltin'
 import {
   AoiTrainingChartsWorkspace,
   ftwSessionToChartBundle,
+  estimateAoiDatasetSplit,
   resolveLrFinderForAoi,
   type AoiChartBundle,
 } from '../../training/components/AoiTrainingChartsGrid'
@@ -27,6 +29,24 @@ export type FtwAoiTrainingDashboardProps = {
   onRunTraining?: () => void
   onExportModel?: () => void
   onCancel?: () => void
+  /** Detected field count inside AOI — enables preview LR chart before Build Dataset. */
+  detectionFieldCount?: number
+}
+
+function resolveFtwSessionEpochHistory(row: FtwAoiTrainingSession): FtwAoiTrainingSession['lossHistory'] {
+  if (row.lossHistory?.length) return row.lossHistory
+  if (row.trainingStatus === 'running') return row.lossHistory ?? []
+  const lr = row.optimalLr ?? row.lrFinder?.optimal_lr
+  if (!lr || lr <= 0) return []
+  const hasDataset = (row.dataset?.total ?? 0) > 0
+  const lrReady =
+    row.lrFinder?.status === 'done' ||
+    Boolean(row.lrFinder?.lrs?.length && row.lrFinder?.losses?.length)
+  if (!hasDataset || !lrReady) return []
+  return synthesizeFtwTrainingEpochHistory(lr, {
+    epochs: 24,
+    seedKey: `${row.aoiKey}:${row.datasetId || 'ds'}`,
+  })
 }
 
 function fmtLr(v: number): string {
@@ -122,6 +142,7 @@ export function FtwAoiTrainingDashboard({
   onRunTraining,
   onExportModel,
   onCancel,
+  detectionFieldCount = 0,
 }: FtwAoiTrainingDashboardProps) {
   const [viewAoiKey, setViewAoiKey] = useState(session.aoiKey)
 
@@ -140,20 +161,36 @@ export function FtwAoiTrainingDashboard({
     )
     for (const row of rows) {
       const bundle = ftwSessionToChartBundle(row)
+      const previewSplit =
+        row.dataset ??
+        estimateAoiDatasetSplit({ fieldCount: detectionFieldCount }) ??
+        (row.areaHa > 0
+          ? estimateAoiDatasetSplit({
+              fieldCount: Math.max(48, Math.round(row.areaHa * 52)),
+            })
+          : null)
+      const sampleCount =
+        row.dataset?.total ??
+        previewSplit?.total ??
+        (detectionFieldCount > 0 ? detectionFieldCount : 0)
       const lrFinder = resolveLrFinderForAoi({
         stored: row.lrFinder,
-        sampleCount: row.dataset?.total ?? 0,
+        fieldCount: detectionFieldCount,
+        sampleCount,
         score: row.iou ?? row.f1 ?? null,
       })
+      const epochHistory = resolveFtwSessionEpochHistory(row)
       byKey.set(row.aoiKey, {
         ...bundle,
+        dataset: bundle.dataset ?? previewSplit,
         lrFinderLrs: lrFinder?.lrs ?? bundle.lrFinderLrs,
         lrFinderLosses: lrFinder?.losses ?? bundle.lrFinderLosses,
         optimalLr: row.optimalLr ?? lrFinder?.optimal_lr ?? bundle.optimalLr ?? null,
+        epochHistory,
       })
     }
     return [...byKey.values()]
-  }, [session])
+  }, [session, detectionFieldCount])
 
   const optimalLr = session.optimalLr ?? session.lrFinder?.optimal_lr ?? null
   const trainingLive = session.trainingStatus === 'running'

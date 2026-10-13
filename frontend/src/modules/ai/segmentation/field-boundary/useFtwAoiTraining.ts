@@ -8,6 +8,7 @@ import type { SiActiveAoi } from '@/modules/remote-sensing/imagery/siAoiManager'
 import { aoiFeatureCollectionBbox } from '../../training/clipResultsToAoi'
 import {
   cancelFtwTrainingJob,
+  downloadFtwModelExport,
   exportFtwModelUrl,
   fetchFtwTrainingJob,
   lrFinderFromJob,
@@ -287,6 +288,7 @@ export function useFtwAoiTraining({
   const exportModel = useCallback(() => {
     const jobId = sessionRef.current.trainingJobId
     if (!jobId) return
+    if (downloadFtwModelExport(jobId)) return
     window.open(exportFtwModelUrl(jobId), '_blank', 'noopener,noreferrer')
   }, [])
 

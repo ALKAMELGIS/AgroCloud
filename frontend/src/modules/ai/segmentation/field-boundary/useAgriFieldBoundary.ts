@@ -339,8 +339,8 @@ export type FieldCaptureImageryId = Exclude<
 >
 
 const FIELD_MODELS: Array<{ id: FieldModelId; label: string }> = [
-  { id: 'delineate-fbis', label: 'Delineate Anything (v2)' },
   { id: 'ftw', label: 'FTW Global (v3)' },
+  { id: 'delineate-fbis', label: 'Delineate Anything (v2)' },
   { id: 'ftw-inference-s2', label: 'AgroDetect S2' },
   { id: 'agricultural-field-delineation', label: 'Agricultural Field Delineation' },
   { id: 'map-rgb', label: 'Map RGB detect (instance)' },
@@ -475,8 +475,8 @@ export function useAgriFieldBoundary({
   resolveAoi,
   aoiClipKey = '',
 }: UseAgriFieldBoundaryOptions) {
-  // Default: Delineate Anything — fast (~30s) sharp instance vectors on map RGB (months-ago UX).
-  const [model, setModelState] = useState<FieldModelId>('delineate-fbis')
+  // Default: FTW Global v3 — AOI-scoped global fields + LR/training tab (Satellite Intelligence toolbox).
+  const [model, setModelState] = useState<FieldModelId>('ftw')
   const [imagery, setImageryState] = useState<FieldCaptureImageryId>('basemap')
   const source = deriveFieldSource(model, imagery)
   const imageryRef = useRef(imagery)

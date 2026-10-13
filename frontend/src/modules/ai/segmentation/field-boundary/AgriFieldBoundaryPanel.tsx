@@ -1376,6 +1376,7 @@ export function AgriFieldBoundaryPanel({
           <FtwAoiTrainingDashboard
             session={ftwTraining.session}
             hasAoi={ftwAnalyticsReady}
+            detectionFieldCount={resultGeojson?.features?.length ?? 0}
             busy={ftwTraining.busy}
             error={ftwTraining.error}
             onBuildDataset={() => void ftwTraining.buildDataset()}

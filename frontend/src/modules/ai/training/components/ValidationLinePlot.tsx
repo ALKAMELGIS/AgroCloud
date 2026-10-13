@@ -53,6 +53,10 @@ export type ValidationLinePlotProps = {
   showBottomAxis?: boolean
   /** Smooth curves between samples (time series). */
   smooth?: boolean
+  /** Cap categorical x tick labels (avoids overlap on wide fluid charts). */
+  maxXTicks?: number
+  /** Hide in-SVG series legend (use HTML legend instead). */
+  hideLegend?: boolean
 }
 
 /** Matplotlib tab10 defaults shared by training / validation charts. */
@@ -127,6 +131,21 @@ function seriesPath(
   return d
 }
 
+export function subsamplePlotXTicks(
+  ticks: Array<{ value: number; label: string }>,
+  maxCount: number,
+): Array<{ value: number; label: string }> {
+  if (!ticks.length || maxCount < 2) return ticks
+  if (ticks.length <= maxCount) return ticks
+  const last = ticks.length - 1
+  const picked: Array<{ value: number; label: string }> = []
+  for (let i = 0; i < maxCount; i += 1) {
+    const idx = Math.round((i / (maxCount - 1)) * last)
+    picked.push(ticks[idx]!)
+  }
+  return picked.filter((t, i, arr) => i === 0 || t.value !== arr[i - 1]!.value)
+}
+
 function nearestPoint(points: PlotPoint[], x: number): PlotPoint | null {
   if (!points.length) return null
   let best = points[0]!
@@ -161,11 +180,13 @@ export function ValidationLinePlot({
   fluid = false,
   showBottomAxis = true,
   smooth = false,
+  maxXTicks,
+  hideLegend = false,
 }: ValidationLinePlotProps) {
   const svgRef = useRef<SVGSVGElement | null>(null)
   const [hover, setHover] = useState<HoverTip | null>(null)
 
-  const W = Math.max(180, width)
+  const W = Math.max(180, width ?? DEFAULT_W)
   const H = height
   const padT = annotation ? 16 : PAD_T
   const pts = series.flatMap(s => s.points)
@@ -195,14 +216,18 @@ export function ValidationLinePlot({
     const sy = (y: number) => H - PAD_B - ((y - yLo) / ySpan) * (H - padT - PAD_B)
     const xFromSvg = (svgX: number) => xMin + ((svgX - PAD_L) / (W - PAD_L - PAD_R || 1)) * xSpan
 
-    const ticksX = xTicks?.length
+    const ticksFull = xTicks?.length
       ? xTicks
       : niceTicks(rawXMin, rawXMax, 4)
           .filter(v => v >= xMin - 1e-9 && v <= xMax + 1e-9)
           .map(v => ({ value: v, label: defaultFormat(v) }))
+    const ticksX =
+      maxXTicks && ticksFull.length > maxXTicks
+        ? subsamplePlotXTicks(ticksFull, maxXTicks)
+        : ticksFull
 
     return { rawXMin, rawXMax, xMin, xMax, dataMax, yTicks, yLo, yHi, sx, sy, xFromSvg, ticksX }
-  }, [pts, xTicks, yDomain, refLine, W, H, padT])
+  }, [pts, xTicks, yDomain, refLine, W, H, padT, maxXTicks])
 
   const resolveXLabel = useCallback(
     (x: number) => {
@@ -355,7 +380,7 @@ export function ValidationLinePlot({
             ) : null}
             <text
               x={sx(t.value)}
-              y={showBottomAxis ? H - PAD_B + 10 : H - PAD_B + 8}
+              y={showBottomAxis ? H - PAD_B + 11 : H - PAD_B + 10}
               className="si-afbv__figure-tick"
               textAnchor="middle"
             >
@@ -488,43 +513,47 @@ export function ValidationLinePlot({
           </text>
         ) : null}
 
-        <g>
-          <rect
-            x={legendX}
-            y={legendY}
-            width={legendW}
-            height={legendH}
-            rx="1.5"
-            className="si-afbv__figure-legend"
-          />
-          {series.map((s, i) => {
-            const cy = legendY + 8 + i * 10
-            const drawMarkers = seriesWantsMarkers(s, markers)
-            return (
-              <g key={`lg-${s.id}`}>
-                <line
-                  x1={legendX + 4}
-                  x2={legendX + 16}
-                  y1={cy - 2.5}
-                  y2={cy - 2.5}
-                  stroke={s.color}
-                  strokeWidth="1.3"
-                  strokeDasharray={s.dashed ? '4 2' : undefined}
-                />
-                {drawMarkers ? (
-                  <circle cx={legendX + 10} cy={cy - 2.5} r="1.5" fill={s.color} />
-                ) : null}
-                <text x={legendX + 19} y={cy} className="si-afbv__figure-legend-text">
-                  {s.label}
-                </text>
-              </g>
-            )
-          })}
-        </g>
+        {!hideLegend ? (
+          <g>
+            <rect
+              x={legendX}
+              y={legendY}
+              width={legendW}
+              height={legendH}
+              rx="1.5"
+              className="si-afbv__figure-legend"
+            />
+            {series.map((s, i) => {
+              const cy = legendY + 8 + i * 10
+              const drawMarkers = seriesWantsMarkers(s, markers)
+              return (
+                <g key={`lg-${s.id}`}>
+                  <line
+                    x1={legendX + 4}
+                    x2={legendX + 16}
+                    y1={cy - 2.5}
+                    y2={cy - 2.5}
+                    stroke={s.color}
+                    strokeWidth="1.3"
+                    strokeDasharray={s.dashed ? '4 2' : undefined}
+                  />
+                  {drawMarkers ? (
+                    <circle cx={legendX + 10} cy={cy - 2.5} r="1.5" fill={s.color} />
+                  ) : null}
+                  <text x={legendX + 19} y={cy} className="si-afbv__figure-legend-text">
+                    {s.label}
+                  </text>
+                </g>
+              )
+            })}
+          </g>
+        ) : null}
 
-        <text x={(PAD_L + W - PAD_R) / 2} y={H - 4} className="si-afbv__figure-axis" textAnchor="middle">
-          {xLabel}
-        </text>
+        {xLabel ? (
+          <text x={(PAD_L + W - PAD_R) / 2} y={H - 3} className="si-afbv__figure-axis" textAnchor="middle">
+            {xLabel}
+          </text>
+        ) : null}
         <text
           x={9}
           y={(padT + H - PAD_B) / 2}

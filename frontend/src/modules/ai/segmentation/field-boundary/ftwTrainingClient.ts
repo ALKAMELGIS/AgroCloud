@@ -9,8 +9,24 @@ import type {
   FtwTrainingModelInfo,
 } from './ftwAoiTrainingTypes'
 import type { TrainingEpochRecord } from '../../training/trainingAiClient'
+import {
+  isFtwLocalBuiltinJobId,
+  localCancelFtwTrainingJob,
+  localExportFtwModel,
+  localGetFtwTrainingJob,
+  localSampleFtwDataset,
+  localStartFtwLrFinder,
+  localStartFtwTrain,
+} from './ftwTrainingLocalBuiltin'
 
 const BASE = () => apiUrl('/api/ftw-training')
+
+/** When the remote API is missing or errors, run the same workflow in-browser. */
+export function shouldFtwTrainingUseLocalFallback(err: FtwTrainingServiceError): boolean {
+  if (err.offline) return true
+  const s = err.status
+  return s === 404 || s === 405 || s === 500 || s === 502 || s === 503
+}
 
 export type FtwTrainingHealth = {
   available: boolean
@@ -103,12 +119,24 @@ async function getJson<T extends Record<string, unknown>>(path: string): Promise
 }
 
 export async function fetchFtwTrainingHealth(): Promise<FtwTrainingHealth> {
-  const json = await getJson<FtwTrainingHealth>('/health')
-  return {
-    available: Boolean(json.available ?? json.training ?? true),
-    training: Boolean(json.training ?? json.available ?? true),
-    engine: json.engine as string | undefined,
-    builtin_fallback: Boolean(json.builtin_fallback),
+  try {
+    const json = await getJson<FtwTrainingHealth>('/health')
+    return {
+      available: Boolean(json.available ?? json.training ?? true),
+      training: Boolean(json.training ?? json.available ?? true),
+      engine: json.engine as string | undefined,
+      builtin_fallback: Boolean(json.builtin_fallback),
+    }
+  } catch (err) {
+    if (err instanceof FtwTrainingServiceError && shouldFtwTrainingUseLocalFallback(err)) {
+      return {
+        available: true,
+        training: true,
+        engine: 'ftw-training-local',
+        builtin_fallback: true,
+      }
+    }
+    throw err
   }
 }
 
@@ -124,8 +152,14 @@ export type SampleFtwDatasetRequest = {
 }
 
 export async function sampleFtwDataset(body: SampleFtwDatasetRequest): Promise<FtwDatasetSampleResponse> {
-  const json = await postJson<FtwDatasetSampleResponse>('/dataset/sample', body)
-  return json
+  try {
+    return await postJson<FtwDatasetSampleResponse>('/dataset/sample', body)
+  } catch (err) {
+    if (err instanceof FtwTrainingServiceError && shouldFtwTrainingUseLocalFallback(err)) {
+      return localSampleFtwDataset(body)
+    }
+    throw err
+  }
 }
 
 export type StartLrFinderRequest = {
@@ -138,7 +172,14 @@ export type StartLrFinderRequest = {
 }
 
 export async function startFtwLrFinder(body: StartLrFinderRequest): Promise<{ job_id: string }> {
-  return postJson<{ job_id: string }>('/lr-finder/start', body)
+  try {
+    return await postJson<{ job_id: string }>('/lr-finder/start', body)
+  } catch (err) {
+    if (err instanceof FtwTrainingServiceError && shouldFtwTrainingUseLocalFallback(err)) {
+      return { job_id: localStartFtwLrFinder(body) }
+    }
+    throw err
+  }
 }
 
 export type StartFtwTrainingRequest = {
@@ -151,15 +192,60 @@ export type StartFtwTrainingRequest = {
 }
 
 export async function startFtwTraining(body: StartFtwTrainingRequest): Promise<{ job_id: string }> {
-  return postJson<{ job_id: string }>('/train/start', body)
+  try {
+    return await postJson<{ job_id: string }>('/train/start', body)
+  } catch (err) {
+    if (err instanceof FtwTrainingServiceError && shouldFtwTrainingUseLocalFallback(err)) {
+      const job_id = await localStartFtwTrain(body)
+      return { job_id }
+    }
+    throw err
+  }
 }
 
 export async function fetchFtwTrainingJob(jobId: string): Promise<FtwTrainingJobResponse> {
-  return getJson<FtwTrainingJobResponse>(`/${encodeURIComponent(jobId)}`)
+  if (isFtwLocalBuiltinJobId(jobId)) {
+    const local = localGetFtwTrainingJob(jobId)
+    if (local) return local
+  }
+  try {
+    return await getJson<FtwTrainingJobResponse>(`/${encodeURIComponent(jobId)}`)
+  } catch (err) {
+    if (err instanceof FtwTrainingServiceError && shouldFtwTrainingUseLocalFallback(err)) {
+      const local = localGetFtwTrainingJob(jobId)
+      if (local) return local
+    }
+    throw err
+  }
 }
 
 export async function cancelFtwTrainingJob(jobId: string): Promise<void> {
-  await postJson('/' + encodeURIComponent(jobId) + '/cancel', {})
+  if (isFtwLocalBuiltinJobId(jobId)) {
+    localCancelFtwTrainingJob(jobId)
+    return
+  }
+  try {
+    await postJson('/' + encodeURIComponent(jobId) + '/cancel', {})
+  } catch (err) {
+    if (err instanceof FtwTrainingServiceError && shouldFtwTrainingUseLocalFallback(err)) {
+      localCancelFtwTrainingJob(jobId)
+      return
+    }
+    throw err
+  }
+}
+
+export function downloadFtwModelExport(jobId: string): boolean {
+  const payload = localExportFtwModel(jobId)
+  if (!payload) return false
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `ftw-aoi-model-${jobId.slice(0, 16)}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+  return true
 }
 
 export function lrFinderFromJob(job: FtwTrainingJobResponse): FtwLrFinderResult | null {

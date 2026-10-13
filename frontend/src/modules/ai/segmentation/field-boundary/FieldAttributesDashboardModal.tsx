@@ -17,10 +17,10 @@ const ZOOM_DEFAULT = 1
 const ZOOM_DEFAULT_COMPACT = 0.92
 
 /** Professional floating panel — not full-map takeover. */
-const PANEL_MAX_WIDTH = 820
-const PANEL_MAX_HEIGHT = 620
-const PANEL_WIDTH_RATIO = 0.68
-const PANEL_HEIGHT_RATIO = 0.72
+const PANEL_MAX_WIDTH = 1024
+const PANEL_MAX_HEIGHT = 760
+const PANEL_WIDTH_RATIO = 0.78
+const PANEL_HEIGHT_RATIO = 0.82
 const PANEL_MARGIN = 14
 
 type Frame = { x: number; y: number; w: number; h: number }
@@ -100,6 +100,9 @@ export function FieldAttributesDashboardModal({
     pointerId: number
   } | null>(null)
   const captureTargetRef = useRef<HTMLElement | null>(null)
+  const modalRef = useRef<HTMLDivElement | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  const bodyRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (!open) {
@@ -143,6 +146,46 @@ export function FieldAttributesDashboardModal({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
+
+  /** Map wheel / drag must not steal input while the dashboard modal is open. */
+  useEffect(() => {
+    const host = portalHost
+    if (!open || !host) return
+    host.classList.add('si-map-container--field-dash-modal-open')
+    return () => host.classList.remove('si-map-container--field-dash-modal-open')
+  }, [open, portalHost])
+
+  useEffect(() => {
+    if (!open) return
+    panelRef.current?.focus({ preventScroll: true })
+  }, [open, frame])
+
+  useEffect(() => {
+    if (!open) return
+    const onWheelCapture = (e: WheelEvent) => {
+      const modal = modalRef.current
+      if (!modal?.contains(e.target as Node)) return
+      e.stopPropagation()
+      e.stopImmediatePropagation()
+      const panel = panelRef.current
+      const body = bodyRef.current
+      if (!panel?.contains(e.target as Node)) {
+        e.preventDefault()
+        return
+      }
+      if (!body) return
+      const maxScroll = body.scrollHeight - body.clientHeight
+      if (maxScroll <= 1) {
+        e.preventDefault()
+        return
+      }
+      e.preventDefault()
+      const next = clamp(body.scrollTop + e.deltaY, 0, maxScroll)
+      body.scrollTop = next
+    }
+    document.addEventListener('wheel', onWheelCapture, { passive: false, capture: true })
+    return () => document.removeEventListener('wheel', onWheelCapture, { capture: true })
+  }, [open])
 
   useEffect(() => {
     if (!open || maximized) return
@@ -263,6 +306,7 @@ export function FieldAttributesDashboardModal({
 
   return createPortal(
     <div
+      ref={modalRef}
       className="si-field-dash-modal"
       id="si-field-attributes-dashboard"
       role="dialog"
@@ -276,6 +320,8 @@ export function FieldAttributesDashboardModal({
         onClick={onClose}
       />
       <div
+        ref={panelRef}
+        tabIndex={-1}
         className={`si-field-dash-modal__panel${maximized ? ' si-field-dash-modal__panel--maximized' : ''}`}
         style={{ left: frame.x, top: frame.y, width: frame.w, height: frame.h }}
       >
@@ -346,7 +392,7 @@ export function FieldAttributesDashboardModal({
             </button>
           </div>
         </header>
-        <div className="si-field-dash-modal__body">
+        <div ref={bodyRef} className="si-field-dash-modal__body">
           <div className="si-field-dash-modal__zoom-host" style={{ zoom }}>
             {children}
           </div>

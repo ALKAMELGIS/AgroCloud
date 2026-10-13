@@ -293,6 +293,31 @@
   letter-spacing: 0.02em;
 }
 
+.si-field-dash__ts-legend--chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: 0 0 4px;
+}
+
+.si-field-dash__ts-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9px;
+  font-weight: 600;
+  color: #64748b;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.si-field-dash__ts-chip-line {
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
 .si-field-dash--expanded .si-field-dash__charts {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
@@ -1042,10 +1067,28 @@
 .si-field-dash-modal__body {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 10px 12px 22px;
   background: #ffffff;
   scrollbar-gutter: stable;
+  touch-action: pan-y;
+}
+
+/* Modal open — map canvas must not capture wheel / drag beneath the dialog. */
+.si-map-container--field-dash-modal-open .mapboxgl-canvas-container.mapboxgl-interactive,
+.si-map-container--field-dash-modal-open .maplibregl-canvas-container.maplibregl-interactive {
+  pointer-events: none !important;
+}
+
+.si-map-container--field-dash-modal-open .si-field-dash-modal {
+  pointer-events: auto;
+}
+
+.si-field-dash-modal__panel:focus {
+  outline: none;
 }
 
 .si-field-dash-modal__zoom-host {
@@ -1240,11 +1283,19 @@
 
 .si-field-dash-modal .si-field-dash__card {
   position: relative;
-  min-height: 200px;
+  min-height: 168px;
   min-width: 0;
   resize: none;
-  overflow: hidden;
+  overflow: visible;
   padding: 10px 10px 8px;
+}
+
+.si-field-dash-modal .si-field-dash--modal-view .si-field-dash__card--health-spotlight {
+  min-height: 0;
+}
+
+.si-field-dash-modal .si-field-dash--modal-view .si-field-dash__card--landcover {
+  min-height: 0;
 }
 
 .si-field-dash-modal .si-field-dash__vbar-svg {
@@ -1319,9 +1370,43 @@
   margin-bottom: 4px;
 }
 
-.si-field-dash-modal .si-field-dash--modal-view .si-field-dash__card--timeseries {
-  min-height: 240px;
+.si-field-dash--modal-view .si-field-dash__spotlight {
+  display: grid;
+  grid-template-columns: minmax(200px, 30%) minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.si-field-dash--modal-view .si-field-dash__card--health-spotlight,
+.si-field-dash--modal-view .si-field-dash__card--timeseries-spotlight {
+  min-height: 0;
+  min-width: 0;
+}
+
+.si-field-dash--modal-view .si-field-dash__card--timeseries-spotlight .si-afbv__figure-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.si-field-dash--modal-view .si-field-dash__card--timeseries-spotlight {
+  display: flex;
+  flex-direction: column;
+}
+
+.si-field-dash-modal .si-field-dash--modal-view .si-field-dash__charts--primary,
+.si-field-dash-modal .si-field-dash--modal-view .si-field-dash__charts--secondary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.si-field-dash-modal .si-field-dash--modal-view .si-field-dash__card--pie-group {
   grid-column: 1 / -1;
+}
+
+.si-field-dash-modal .si-field-dash--modal-view .si-field-dash__card--timeseries {
+  min-height: 0;
+  grid-column: auto;
 }
 
 .si-field-dash-modal .si-field-dash--modal-view .si-field-dash__ts-legend {
@@ -1338,6 +1423,14 @@
 
 .si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure {
   overflow: visible;
+}
+
+.si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure-tick {
+  font-size: 8px;
+}
+
+.si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure-axis {
+  font-size: 8px;
 }
 
 .si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure-bg {

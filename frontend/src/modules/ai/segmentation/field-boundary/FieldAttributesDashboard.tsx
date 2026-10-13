@@ -62,6 +62,26 @@ function buildIndexTimeSeriesPlot(
   return { series, xTicks }
 }
 
+function IndexTimeSeriesLegend({ modalView }: { modalView?: boolean }) {
+  if (!modalView) {
+    return (
+      <p className="si-field-dash__ts-legend">
+        NDVI · NDRE · NDMI · NDWI · SAVI · ET (mm/d ÷10)
+      </p>
+    )
+  }
+  return (
+    <div className="si-field-dash__ts-legend si-field-dash__ts-legend--chips" aria-hidden>
+      {INDEX_TS_META.map(m => (
+        <span key={m.id} className="si-field-dash__ts-chip">
+          <span className="si-field-dash__ts-chip-line" style={{ background: m.color, opacity: m.dashed ? 0.85 : 1 }} />
+          {m.id === 'ET' ? 'ET (÷10)' : m.id}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 function IndexTimeSeriesChart({
   ts,
   expanded,
@@ -82,20 +102,22 @@ function IndexTimeSeriesChart({
   return (
     <ValidationLinePlot
       series={series}
-      xLabel="Date"
+      xLabel={modalView ? 'Date' : 'Date'}
       yLabel="Index"
       yDomain={[-0.05, 1]}
       xTicks={xTicks}
       formatX={v => xTicks[Math.round(v)]?.label ?? String(v)}
       formatY={v => v.toFixed(2)}
       ariaLabel="Spectral index time series"
-      height={modalView ? 220 : expanded ? 220 : 150}
-      width={modalView ? undefined : expanded ? 640 : 320}
+      height={modalView ? 200 : expanded ? 220 : 150}
+      width={modalView ? 560 : expanded ? 640 : 320}
       fluid
       grid
       markers
       smooth
-      showBottomAxis={false}
+      showBottomAxis={modalView}
+      maxXTicks={modalView ? 7 : expanded ? 8 : 5}
+      hideLegend={modalView}
     />
   )
 }
@@ -424,7 +446,38 @@ function FieldAttributesDashboardBody({
         ))}
       </div>
 
+      {modalView ? (
+        <div className="si-field-dash__spotlight">
+          <section className="si-field-dash__card si-field-dash__card--health-spotlight">
+            <div className="si-field-dash__card-head">
+              <h4>
+                <i className="fa-solid fa-heart-pulse" aria-hidden /> Health status
+              </h4>
+              <span>count</span>
+            </div>
+            <PieDonutChart
+              rows={model.healthMix}
+              palette="health"
+              ariaLabel="Health status distribution"
+              expanded={chartExpanded}
+              modalView={modalView}
+            />
+          </section>
+          <section className="si-field-dash__card si-field-dash__card--timeseries si-field-dash__card--timeseries-spotlight">
+            <div className="si-field-dash__card-head">
+              <h4>
+                <i className="fa-solid fa-chart-line" aria-hidden /> Index time series
+              </h4>
+              <span>AOI mean</span>
+            </div>
+            <IndexTimeSeriesLegend modalView />
+            <IndexTimeSeriesChart ts={model.indexTimeSeries} expanded={chartExpanded} modalView={modalView} />
+          </section>
+        </div>
+      ) : null}
+
       <div className="si-field-dash__charts si-field-dash__charts--primary">
+        {!modalView ? (
         <section className="si-field-dash__card">
           <div className="si-field-dash__card-head">
             <h4>
@@ -440,6 +493,7 @@ function FieldAttributesDashboardBody({
             modalView={modalView}
           />
         </section>
+        ) : null}
 
         <section className="si-field-dash__card">
           <div className="si-field-dash__card-head">
@@ -498,7 +552,7 @@ function FieldAttributesDashboardBody({
         </section>
 
         {model.landCoverMix.length ? (
-          <section className="si-field-dash__card">
+          <section className="si-field-dash__card si-field-dash__card--landcover">
             <div className="si-field-dash__card-head">
               <h4>
                 <i className="fa-solid fa-chart-pie" aria-hidden /> Land cover
@@ -559,6 +613,7 @@ function FieldAttributesDashboardBody({
           : null}
       </div>
 
+      {!modalView ? (
       <section className="si-field-dash__card si-field-dash__card--timeseries">
         <div className="si-field-dash__card-head">
           <h4>
@@ -566,11 +621,10 @@ function FieldAttributesDashboardBody({
           </h4>
           <span>AOI mean</span>
         </div>
-        <p className="si-field-dash__ts-legend">
-          NDVI · NDRE · NDMI · NDWI · SAVI · ET (mm/d ÷10)
-        </p>
-        <IndexTimeSeriesChart ts={model.indexTimeSeries} expanded={chartExpanded} modalView={modalView} />
+        <IndexTimeSeriesLegend modalView={false} />
+        <IndexTimeSeriesChart ts={model.indexTimeSeries} expanded={chartExpanded} modalView={false} />
       </section>
+      ) : null}
     </div>
   )
 }
