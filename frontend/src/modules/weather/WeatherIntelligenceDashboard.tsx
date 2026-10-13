@@ -94,18 +94,22 @@ export default function WeatherIntelligenceDashboard() {
   }, [arcgisHourly.refreshHourlyRange, data.refreshWeather])
   const snap = data.bundle?.snapshot
 
+  const locationTimelineSyncKey = useMemo(() => {
+    const series = arcgisHourly.hourlyRange
+    if (!series.length) return `${data.queryPoint.lat},${data.queryPoint.lng}:0`
+    return `${data.queryPoint.lat},${data.queryPoint.lng}:${series.length}:${series[0]?.time ?? ''}:${series[series.length - 1]?.time ?? ''}`
+  }, [
+    arcgisHourly.hourlyRange,
+    data.queryPoint.lat,
+    data.queryPoint.lng,
+  ])
+
   useEffect(() => {
     if (!isArcgisLayout) return
     data.setLocationTimelineHourly(
       arcgisHourly.hourlyRange.length ? arcgisHourly.hourlyRange : null,
     )
-  }, [
-    isArcgisLayout,
-    arcgisHourly.hourlyRange,
-    data.queryPoint.lat,
-    data.queryPoint.lng,
-    data.setLocationTimelineHourly,
-  ])
+  }, [isArcgisLayout, locationTimelineSyncKey, arcgisHourly.hourlyRange, data.setLocationTimelineHourly])
 
   const timelineLiveIndex = useMemo(
     () => findDefaultTimelineIndex(arcgisHourly.hourlyRange),

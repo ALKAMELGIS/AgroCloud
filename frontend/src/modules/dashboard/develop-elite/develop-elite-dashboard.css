@@ -1473,6 +1473,7 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   --de-space-blend: 1;
   --de-space-bearing: 0deg;
   --de-space-pitch: 0deg;
+  --de-space-zoom: 1;
   background: #000;
   overflow: hidden;
   perspective: 900px;
@@ -1488,59 +1489,42 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
   pointer-events: none;
   opacity: calc(0.28 + var(--de-space-blend, 1) * 0.72);
   transition: opacity 0.45s ease;
-  background:
-    radial-gradient(ellipse 130% 95% at 50% 48%, rgba(255, 255, 255, 0.04), transparent 62%),
-    #000 url('./develop-elite-starfield.svg') repeat;
+  background: #000 url('./develop-elite-starfield.svg') repeat;
   background-size:
     100% 100%,
     calc(280px + var(--de-space-blend, 1) * 80px) calc(280px + var(--de-space-blend, 1) * 80px);
-  transform: rotateX(calc(var(--de-space-pitch, 0deg) * 0.42)) rotateZ(calc(var(--de-space-bearing, 0deg) * -0.22))
-    scale(calc(1.06 + var(--de-space-blend, 1) * 0.14));
+  transform: rotateX(calc(var(--de-space-pitch, 0deg) * 0.55)) rotateZ(calc(var(--de-space-bearing, 0deg) * -0.38))
+    scale(calc(1.08 + var(--de-space-zoom, 1) * 0.1 + var(--de-space-blend, 1) * 0.12));
   transform-origin: 50% 46%;
   will-change: transform, opacity;
 }
 
-/* Phase 3 — Milky Way band (Google Earth–style galactic plane). */
+/* Milky Way / lens-flare band removed — procedural canvas + MapLibre stars only. */
 .develop-elite-map__viewport--space::after {
-  content: '';
-  position: absolute;
-  inset: -25%;
-  z-index: 0;
-  pointer-events: none;
-  opacity: calc(var(--de-space-blend, 1) * 0.78);
-  transition: opacity 0.55s ease;
-  mix-blend-mode: screen;
-  background:
-    radial-gradient(
-      ellipse 115% 22% at 52% 44%,
-      rgba(210, 195, 255, 0.34) 0%,
-      rgba(140, 120, 210, 0.12) 38%,
-      transparent 68%
-    ),
-    radial-gradient(
-      ellipse 85% 12% at 48% 41%,
-      rgba(255, 255, 255, 0.16) 0%,
-      rgba(180, 200, 255, 0.06) 42%,
-      transparent 70%
-    ),
-    linear-gradient(
-      118deg,
-      transparent 18%,
-      rgba(120, 90, 180, 0.08) 42%,
-      rgba(220, 210, 255, 0.2) 50%,
-      rgba(120, 90, 180, 0.08) 58%,
-      transparent 82%
-    );
-  transform: rotate(calc(var(--de-space-bearing, 0deg) * -1 + 24deg)) scale(1.12);
-  filter: blur(0.6px);
-  will-change: transform, opacity;
-}
-
-.develop-elite-map__viewport--space:not(.develop-elite-map__viewport--space-active)::after {
-  opacity: 0;
+  content: none;
+  display: none;
 }
 
 .develop-elite-map--webgl .develop-elite-map__viewport--space .develop-elite-map__viewport-pane {
+  z-index: 1;
+}
+
+.develop-elite-map__space-starfield {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 1;
+}
+
+.develop-elite-map__viewport--space-canvas::before,
+.develop-elite-map__viewport--space-canvas .develop-elite-map__galaxy-backdrop::before {
+  opacity: calc(0.08 + var(--de-space-blend, 1) * 0.14);
+}
+
+.develop-elite-map--webgl .develop-elite-map__viewport-pane .develop-elite-map__webgl.develop-elite-map__galaxy-backdrop {
+  position: absolute;
+  inset: 0;
   z-index: 1;
 }
 

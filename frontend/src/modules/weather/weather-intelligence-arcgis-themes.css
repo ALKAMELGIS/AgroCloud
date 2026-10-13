@@ -47,9 +47,43 @@ html[data-theme='light'] .content--weather-intelligence .weather-header__arcgis-
   border-right-color: var(--weather-border);
 }
 
+html[data-theme='light'] .content--weather-intelligence .weather-header--arcgis .develop-elite-digital-clock {
+  --de-accent: #059669;
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-header--arcgis .develop-elite-digital-clock__day-dial-strip {
+  color: rgba(15, 23, 42, 0.35);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-header--arcgis .develop-elite-digital-clock__day-dial-strip span.is-near {
+  color: rgba(5, 150, 105, 0.75);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-header--arcgis .develop-elite-digital-clock__day-dial-lens {
+  color: #b45309;
+  text-shadow: none;
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-header--arcgis .develop-elite-digital-clock__meta,
 html[data-theme='light'] .content--weather-intelligence .weather-header--arcgis .develop-elite-digital-clock__date,
-html[data-theme='light'] .content--weather-intelligence .weather-header--arcgis .develop-elite-digital-clock__day-dial {
+html[data-theme='light'] .content--weather-intelligence .weather-header--arcgis .develop-elite-digital-clock__ampm {
   color: var(--weather-muted);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-header--arcgis .develop-elite-seven-seg__bar,
+html[data-theme='light'] .content--weather-intelligence .weather-header--arcgis .develop-elite-seven-seg__dot {
+  fill: rgba(15, 23, 42, 0.14);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-header--arcgis .develop-elite-seven-seg__bar.is-on,
+html[data-theme='light'] .content--weather-intelligence .weather-header--arcgis .develop-elite-seven-seg__dot.is-on {
+  fill: #0f172a;
+  filter: none;
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-header--arcgis .develop-elite-seven-seg__bar.is-on.is-accent {
+  fill: #047857;
+  filter: none;
 }
 
 html[data-theme='light'] .content--weather-intelligence .weather-shell.weather-shell--arcgis .weather-locations,
@@ -79,6 +113,20 @@ html[data-theme='light'] .content--weather-intelligence .weather-locations--arcg
 
 html[data-theme='light'] .content--weather-intelligence .weather-locations--arcgis .weather-arcgis-hourly__row {
   border-bottom-color: var(--weather-border);
+  color: var(--weather-text);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-locations--arcgis .weather-arcgis-hourly__place,
+html[data-theme='light'] .content--weather-intelligence .weather-locations--arcgis .weather-arcgis-hourly__time,
+html[data-theme='light'] .content--weather-intelligence .weather-locations--arcgis .weather-arcgis-hourly__wind-speeds,
+html[data-theme='light'] .content--weather-intelligence .weather-locations--arcgis .weather-arcgis-hourly__wind-dir {
+  color: var(--weather-text);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-locations--arcgis .weather-arcgis-hourly__wind,
+html[data-theme='light'] .content--weather-intelligence .weather-locations--arcgis .weather-arcgis-hourly__temp,
+html[data-theme='light'] .content--weather-intelligence .weather-locations--arcgis .weather-arcgis-hourly__hum {
+  border-left-color: var(--weather-border);
 }
 
 html[data-theme='light'] .content--weather-intelligence .weather-charts-column {
@@ -156,4 +204,52 @@ html[data-theme='light'] .content--weather-intelligence .weather-shell--arcgis-m
 
 html[data-theme='light'] .content--weather-intelligence .weather-wind-barb {
   color: #475569;
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-map-source-tabs {
+  background: var(--weather-panel);
+  border-bottom-color: var(--weather-border);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-map-source-tabs__btn {
+  color: var(--weather-muted);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-map-source-tabs__btn.is-active {
+  color: var(--arcgis-brand);
+  border-bottom-color: var(--arcgis-brand);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-map-stage__map-tool-buttons {
+  background: rgba(255, 255, 255, 0.94);
+  border-color: var(--weather-border);
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.12);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-map-stage__map-tool-btn {
+  background: #f1f5f9;
+  color: var(--weather-text);
+  border-color: var(--weather-border);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-map-stage__map-tool-btn:hover {
+  background: #e2e8f0;
+  border-color: rgba(15, 23, 42, 0.18);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-map-stage__map-tool-btn.is-active {
+  color: #047857;
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(5, 150, 105, 0.45);
+  box-shadow: 0 0 0 1px rgba(5, 150, 105, 0.2);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-arcgis-footer-nav__btn,
+html[data-theme='light'] .content--weather-intelligence .weather-arcgis-shell-tabs__btn {
+  color: var(--weather-muted);
+}
+
+html[data-theme='light'] .content--weather-intelligence .weather-arcgis-footer-nav__btn.is-active,
+html[data-theme='light'] .content--weather-intelligence .weather-arcgis-shell-tabs__btn.is-active {
+  color: var(--weather-text);
 }

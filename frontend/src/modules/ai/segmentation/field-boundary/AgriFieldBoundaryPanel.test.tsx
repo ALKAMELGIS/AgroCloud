@@ -355,6 +355,51 @@ describe('AgriFieldBoundaryPanel Results dashboard trigger', () => {
     cleanupHost()
   })
 
+  it('uses activeAoi when ftwTrainingAoi is an empty placeholder object', () => {
+    const layerFc = resultGeojson
+    const { cleanupHost } = mountWithHost({
+      hasAoi: true,
+      model: 'ftw',
+      source: 'ftw',
+      modelOptions: [{ id: 'ftw' as const, label: 'Fields of the World (Global v3)' }],
+      phase: 'idle',
+      hasResult: false,
+      activeAoi: { key: 'layers:mask-1', source: 'layers', geometry: layerFc },
+      ftwTrainingAoi: { geometry: null, key: '', source: null },
+      aoiLabel: 'Layers mask',
+    })
+    const tab = screen.getByRole('tab', { name: 'Optimal Learning Rate Finder' })
+    expect(tab.hasAttribute('disabled')).toBe(false)
+    fireEvent.click(tab)
+    expect(screen.getByRole('button', { name: 'Build Dataset' }).hasAttribute('disabled')).toBe(false)
+    cleanupHost()
+  })
+
+  it('uses ftwTrainingAoi (layer mode) for LR Finder when map sketch activeAoi is empty', () => {
+    const layerFc = resultGeojson
+    const { cleanupHost } = mountWithHost({
+      hasAoi: true,
+      aoiMode: 'layers',
+      model: 'ftw',
+      source: 'ftw',
+      modelOptions: [{ id: 'ftw' as const, label: 'Fields of the World (Global v3)' }],
+      phase: 'idle',
+      hasResult: false,
+      activeAoi: { key: '', source: null, geometry: null },
+      ftwTrainingAoi: {
+        key: 'layers:field-polygon-1',
+        source: 'layers',
+        geometry: layerFc,
+      },
+      aoiLabel: 'Layer AOI',
+    })
+    const tab = screen.getByRole('tab', { name: 'Optimal Learning Rate Finder' })
+    expect(tab.hasAttribute('disabled')).toBe(false)
+    fireEvent.click(tab)
+    expect(screen.getByRole('button', { name: 'Build Dataset' })).toBeTruthy()
+    cleanupHost()
+  })
+
   it('enables Export and Add layer for FTW Global when AOI exists without Show Global Fields', () => {
     const { cleanupHost } = mountWithHost({
       hasAoi: true,

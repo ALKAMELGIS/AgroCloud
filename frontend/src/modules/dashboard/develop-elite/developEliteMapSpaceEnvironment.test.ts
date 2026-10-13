@@ -23,6 +23,6 @@ describe('developEliteMapSpaceEnvironment', () => {
     const low = interpolateDevelopEliteSpaceFog(0.1)['star-intensity']
     const high = interpolateDevelopEliteSpaceFog(0.95)['star-intensity']
     expect(high).toBeGreaterThan(low)
-    expect(high).toBeGreaterThan(0.7)
+    expect(high).toBeGreaterThan(0.85)
   })
 })

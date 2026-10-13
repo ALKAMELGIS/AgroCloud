@@ -49,6 +49,10 @@ export type ValidationLinePlotProps = {
   width?: number
   /** Stretch SVG to the card width (float dashboard). */
   fluid?: boolean
+  /** Horizontal baseline under the plot (off for dashboard time-series). Default true. */
+  showBottomAxis?: boolean
+  /** Smooth curves between samples (time series). */
+  smooth?: boolean
 }
 
 /** Matplotlib tab10 defaults shared by training / validation charts. */
@@ -101,6 +105,28 @@ function seriesWantsMarkers(s: PlotSeries, plotMarkers: boolean): boolean {
   return plotMarkers
 }
 
+function seriesPath(
+  points: PlotPoint[],
+  sx: (x: number) => number,
+  sy: (y: number) => number,
+  smooth: boolean,
+): string {
+  if (!points.length) return ''
+  if (!smooth || points.length < 3) {
+    return points
+      .map((p, i) => `${i === 0 ? 'M' : 'L'}${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`)
+      .join(' ')
+  }
+  let d = `M${sx(points[0]!.x).toFixed(1)},${sy(points[0]!.y).toFixed(1)}`
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const p0 = points[i]!
+    const p1 = points[i + 1]!
+    const mx = (sx(p0.x) + sx(p1.x)) / 2
+    d += ` Q${mx.toFixed(1)},${sy(p0.y).toFixed(1)} ${sx(p1.x).toFixed(1)},${sy(p1.y).toFixed(1)}`
+  }
+  return d
+}
+
 function nearestPoint(points: PlotPoint[], x: number): PlotPoint | null {
   if (!points.length) return null
   let best = points[0]!
@@ -133,6 +159,8 @@ export function ValidationLinePlot({
   height = 156,
   width = DEFAULT_W,
   fluid = false,
+  showBottomAxis = true,
+  smooth = false,
 }: ValidationLinePlotProps) {
   const svgRef = useRef<SVGSVGElement | null>(null)
   const [hover, setHover] = useState<HoverTip | null>(null)
@@ -316,16 +344,18 @@ export function ValidationLinePlot({
         ))}
         {ticksX.map(t => (
           <g key={`x-${t.value}-${t.label}`}>
-            <line
-              x1={sx(t.value)}
-              x2={sx(t.value)}
-              y1={H - PAD_B}
-              y2={H - PAD_B + 3}
-              className="si-afbv__spine"
-            />
+            {showBottomAxis ? (
+              <line
+                x1={sx(t.value)}
+                x2={sx(t.value)}
+                y1={H - PAD_B}
+                y2={H - PAD_B + 3}
+                className="si-afbv__spine"
+              />
+            ) : null}
             <text
               x={sx(t.value)}
-              y={H - PAD_B + 10}
+              y={showBottomAxis ? H - PAD_B + 10 : H - PAD_B + 8}
               className="si-afbv__figure-tick"
               textAnchor="middle"
             >
@@ -335,7 +365,9 @@ export function ValidationLinePlot({
         ))}
 
         <line x1={PAD_L} x2={PAD_L} y1={padT} y2={H - PAD_B} className="si-afbv__spine" />
-        <line x1={PAD_L} x2={W - PAD_R} y1={H - PAD_B} y2={H - PAD_B} className="si-afbv__spine" />
+        {showBottomAxis ? (
+          <line x1={PAD_L} x2={W - PAD_R} y1={H - PAD_B} y2={H - PAD_B} className="si-afbv__spine" />
+        ) : null}
 
         {refLine ? (
           <>
@@ -366,17 +398,28 @@ export function ValidationLinePlot({
 
         {series.map(s => {
           const drawMarkers = seriesWantsMarkers(s, markers)
+          const linePath = seriesPath(s.points, sx, sy, smooth && !s.dashed)
           return (
             <g key={s.id}>
+              {smooth && !s.dashed && s.points.length >= 2 ? (
+                <path
+                  d={`${linePath} L${sx(s.points[s.points.length - 1]!.x).toFixed(1)},${(H - PAD_B).toFixed(1)} L${sx(s.points[0]!.x).toFixed(1)},${(H - PAD_B).toFixed(1)} Z`}
+                  fill={s.color}
+                  fillOpacity="0.06"
+                  stroke="none"
+                  className="si-afbv__figure-area"
+                />
+              ) : null}
               <path
-                d={s.points
-                  .map((p, i) => `${i === 0 ? 'M' : 'L'}${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`)
-                  .join(' ')}
+                d={linePath}
                 fill="none"
                 stroke={s.color}
-                strokeWidth="1.3"
+                strokeWidth={smooth ? 2 : 1.3}
+                strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeDasharray={s.dashed ? '4 2' : undefined}
+                vectorEffect="non-scaling-stroke"
+                strokeDasharray={s.dashed ? '5 3' : undefined}
+                className="si-afbv__figure-line"
               />
               {drawMarkers
                 ? s.points.map(p => (
@@ -385,8 +428,10 @@ export function ValidationLinePlot({
                       className="si-afbv__figure-dot"
                       cx={sx(p.x)}
                       cy={sy(p.y)}
-                      r="1.7"
+                      r={smooth ? 2.4 : 1.7}
                       fill={s.color}
+                      stroke="#fff"
+                      strokeWidth="0.6"
                     />
                   ))
                 : null}

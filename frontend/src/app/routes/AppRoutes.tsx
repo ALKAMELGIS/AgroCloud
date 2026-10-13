@@ -62,7 +62,7 @@ function RouteLoadingFallback({ label = 'Loading…' }: { label?: string }) {
 export default function AppRoutes() {
   const { settings } = useSystemSettings()
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<RouteLoadingFallback label="Loading page…" />}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<Home />} />
@@ -86,9 +86,11 @@ export default function AppRoutes() {
         <Route
           path="/satellite/indices"
           element={
-            <SiInstanceScopeProvider scope="standalone">
-              <SatelliteIntelligence />
-            </SiInstanceScopeProvider>
+            <Suspense fallback={<RouteLoadingFallback label="Loading Satellite Intelligence…" />}>
+              <SiInstanceScopeProvider scope="standalone">
+                <SatelliteIntelligence />
+              </SiInstanceScopeProvider>
+            </Suspense>
           }
         />
         <Route path="/satellite-intelligence-workspace" element={<Navigate to="/satellite/indices" replace />} />

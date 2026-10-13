@@ -298,7 +298,7 @@ export function DevelopEliteMapTools({
   const [layerPanelStatus, setLayerPanelStatus] = useState('')
   const [layerDialog, setLayerDialog] = useState<DevelopEliteMapDataLayerDialogState>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [navigatorOpen, setNavigatorOpen] = useState(true)
+  const [navigatorOpen, setNavigatorOpen] = useState(false)
   const [navigatorPlanar, setNavigatorPlanar] = useState(true)
   const panelRef = useRef<HTMLDivElement>(null)
   const searchSeq = useRef(0)

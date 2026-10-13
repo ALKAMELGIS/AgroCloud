@@ -17,6 +17,7 @@ import { FtwAoiTrainingDashboard } from './FtwAoiTrainingDashboard'
 import { FieldAttributesDashboard } from './FieldAttributesDashboard'
 import { AfbOperationProgressBar } from './AfbOperationProgressBar'
 import { useFtwAoiTraining } from './useFtwAoiTraining'
+import { isUsableSiActiveAoi, pickFtwTrainingAoi } from './resolveFtwTrainingAoi'
 import type { FieldBoundaryTrainingSamplesApi } from './useFieldBoundaryTrainingSamples'
 import type { FtwGlobalYear } from './ftwGlobalConfig'
 import { ftwGlobalAttribution } from './ftwGlobalConfig'
@@ -159,6 +160,8 @@ export type AgriFieldBoundaryPanelProps = {
   ftwGlobalVisible?: boolean
   /** Active map AOI — scopes FTW training analytics per polygon. */
   activeAoi?: SiActiveAoi
+  /** FTW LR Finder / training — uses Detect Fields AOI mode (layer, select, draw, viewport). */
+  ftwTrainingAoi?: SiActiveAoi
   aoiLabel?: string
 }
 
@@ -299,6 +302,7 @@ export function AgriFieldBoundaryPanel({
   onFtwGlobalOpacityChange,
   ftwGlobalVisible = false,
   activeAoi,
+  ftwTrainingAoi,
   aoiLabel,
 }: AgriFieldBoundaryPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -321,14 +325,17 @@ export function AgriFieldBoundaryPanel({
   const isFtwInferenceS2 = model === 'ftw-inference-s2'
   const isFtwTraining = isFtwGlobal
 
+  const ftwAoiResolved = pickFtwTrainingAoi(ftwTrainingAoi, activeAoi)
+
   const ftwTraining = useFtwAoiTraining({
-    activeAoi: activeAoi ?? { geometry: null, key: '', source: null },
+    activeAoi: ftwAoiResolved,
     aoiLabel,
     ftwYear,
     enabled: isFtwTraining,
   })
 
-  const analyticsTabReady = isFtwTraining ? ftwTraining.hasAoi : hasResult
+  const ftwAnalyticsReady = isFtwTraining && isUsableSiActiveAoi(ftwAoiResolved)
+  const analyticsTabReady = isFtwTraining ? ftwAnalyticsReady : hasResult
   const dashboardTabReady = Boolean(resultGeojson?.features?.length)
   /** FTW Global export vectorizes AOI on demand — only needs a scoped AOI, not a prior detect result. */
   const exportReady = isFtwGlobal ? hasAoi : hasResult
@@ -538,7 +545,7 @@ export function AgriFieldBoundaryPanel({
             analyticsTabReady
               ? 'Optimal Learning Rate Finder — AOI-scoped LR Finder, loss, IoU, F1 and dataset charts'
               : isFtwTraining
-                ? 'Draw or select an AOI for FTW training analytics'
+                ? 'Choose an AOI (draw, layer from Layers panel, select, or map extent) for FTW training'
                 : 'Run Detect Fields to open Optimal Learning Rate Finder'
           }
           aria-label="Optimal Learning Rate Finder"
@@ -1368,6 +1375,7 @@ export function AgriFieldBoundaryPanel({
         {isFtwGlobal ? (
           <FtwAoiTrainingDashboard
             session={ftwTraining.session}
+            hasAoi={ftwAnalyticsReady}
             busy={ftwTraining.busy}
             error={ftwTraining.error}
             onBuildDataset={() => void ftwTraining.buildDataset()}
@@ -1395,7 +1403,7 @@ export function AgriFieldBoundaryPanel({
           initialReferenceName={referenceLabel}
           referenceNotice={referenceNotice}
           referenceBusy={referenceBusy}
-          activeAoiKey={activeAoi?.key || 'current-aoi'}
+          activeAoiKey={ftwAoiResolved.key || 'current-aoi'}
           aoiLabel={aoiLabel || 'AOI'}
           approvedSamples={trainingSamples?.counts.approved ?? 0}
           draftSamples={trainingSamples?.counts.draft ?? 0}
@@ -1419,7 +1427,7 @@ export function AgriFieldBoundaryPanel({
         initialReferenceName={referenceLabel}
         referenceNotice={referenceNotice}
         referenceBusy={referenceBusy}
-        activeAoiKey={activeAoi?.key || 'current-aoi'}
+        activeAoiKey={ftwAoiResolved.key || 'current-aoi'}
         aoiLabel={aoiLabel || 'AOI'}
         approvedSamples={trainingSamples?.counts.approved ?? 0}
         draftSamples={trainingSamples?.counts.draft ?? 0}

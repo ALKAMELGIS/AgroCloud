@@ -19,6 +19,7 @@ import './FtwAoiTrainingDashboard.css'
 
 export type FtwAoiTrainingDashboardProps = {
   session: FtwAoiTrainingSession
+  hasAoi?: boolean
   busy?: boolean
   error?: string | null
   onBuildDataset?: () => void
@@ -113,6 +114,7 @@ function FtwTrainInfoIcons({
 
 export function FtwAoiTrainingDashboard({
   session,
+  hasAoi = true,
   busy = false,
   error = null,
   onBuildDataset,
@@ -195,11 +197,28 @@ export function FtwAoiTrainingDashboard({
 
       {error ? <div className="si-ftw-train__status si-ftw-train__status--error">{error}</div> : null}
 
+      {!hasAoi ? (
+        <p className="si-ftw-train__status" role="status">
+          Choose an AOI: draw on the map, pick a layer under Select AOI, use feature Select, map extent, or
+          enable AOI from the Layers panel.
+        </p>
+      ) : null}
+
       <div className="si-ftw-train__actions">
-        <button type="button" className="si-afb__btn" disabled={busy} onClick={onBuildDataset}>
+        <button
+          type="button"
+          className="si-afb__btn"
+          disabled={busy || !hasAoi}
+          onClick={onBuildDataset}
+        >
           Build Dataset
         </button>
-        <button type="button" className="si-afb__btn" disabled={busy} onClick={onRunLrFinder}>
+        <button
+          type="button"
+          className="si-afb__btn"
+          disabled={busy || !hasAoi}
+          onClick={onRunLrFinder}
+        >
           LR Finder
         </button>
         <button

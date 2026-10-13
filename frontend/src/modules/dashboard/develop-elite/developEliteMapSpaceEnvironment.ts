@@ -52,7 +52,7 @@ export function interpolateDevelopEliteSpaceFog(blend: number): DevelopEliteSpac
     'high-color': MAPLIBRE_GLOBE_FOG_GALAXY['high-color'],
     'space-color': MAPLIBRE_GLOBE_FOG_GALAXY['space-color'],
     'horizon-blend': lerp(0.06, MAPLIBRE_GLOBE_FOG_GALAXY['horizon-blend'], t),
-    'star-intensity': lerp(0.08, 0.82, t),
+    'star-intensity': lerp(0.12, 1, t),
   }
 }
 
@@ -65,6 +65,11 @@ export function applyDevelopEliteMapSpaceCssVars(
   host.style.setProperty('--de-space-blend', String(Number(blend.toFixed(4))))
   host.style.setProperty('--de-space-bearing', `${camera.bearing}deg`)
   host.style.setProperty('--de-space-pitch', `${camera.pitch}deg`)
+  const zoomNorm = clamp01(
+    (DEVELOP_ELITE_SPACE_ZOOM_FADE_END - camera.zoom) /
+      (DEVELOP_ELITE_SPACE_ZOOM_FADE_END - DEVELOP_ELITE_SPACE_ZOOM_FULL || 1),
+  )
+  host.style.setProperty('--de-space-zoom', String(Number(zoomNorm.toFixed(4))))
   host.classList.toggle('develop-elite-map__viewport--space-active', blend > 0.04)
   return blend
 }

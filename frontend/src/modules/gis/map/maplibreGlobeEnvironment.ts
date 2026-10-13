@@ -14,7 +14,7 @@ export const MAPLIBRE_GLOBE_SKY_GALAXY: SkySpecification = {
 
 /** Starfield in space around the globe (MapLibre `setFog`). */
 export const MAPLIBRE_GLOBE_FOG_GALAXY = {
-  range: [0.4, 9] as [number, number],
+  range: [0.25, 11] as [number, number],
   color: '#000000',
   'horizon-blend': 0.16,
   'high-color': '#000000',

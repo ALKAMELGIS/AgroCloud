@@ -17,6 +17,7 @@ import {
 } from './fieldAttributesDashboardTimeSeries'
 import { AfbOperationProgressBar } from './AfbOperationProgressBar'
 import { FieldAttributesDashboardModal } from './FieldAttributesDashboardModal'
+import { pieSliceConicGradient, preparePieSlices } from './fieldAttributesPieSlices'
 import './FieldAttributesDashboard.css'
 
 const PIE_COLORS = ['#1976d2', '#2e7d32', '#ed6c02', '#7b1fa2', '#00838f', '#c62828', '#5d4037', '#455a64']
@@ -88,11 +89,13 @@ function IndexTimeSeriesChart({
       formatX={v => xTicks[Math.round(v)]?.label ?? String(v)}
       formatY={v => v.toFixed(2)}
       ariaLabel="Spectral index time series"
-      height={modalView ? 280 : expanded ? 220 : 150}
-      width={modalView ? 920 : expanded ? 640 : 320}
+      height={modalView ? 220 : expanded ? 220 : 150}
+      width={modalView ? undefined : expanded ? 640 : 320}
       fluid
       grid
-      markers={false}
+      markers
+      smooth
+      showBottomAxis={false}
     />
   )
 }
@@ -158,21 +161,6 @@ function fmtHa(v: number): string {
   return v.toFixed(2)
 }
 
-function buildPieDonutBackground(rows: Array<{ count: number; color: string }>): string {
-  const nonzero = rows.filter(r => r.count > 0)
-  const total = nonzero.reduce((s, r) => s + r.count, 0)
-  if (total <= 0) return 'conic-gradient(#e2e8f0 0% 100%)'
-  let acc = 0
-  const segs: string[] = []
-  for (const r of nonzero) {
-    const pct = (r.count / total) * 100
-    const start = acc
-    acc += pct
-    segs.push(`${r.color} ${start}% ${acc}%`)
-  }
-  return `conic-gradient(${segs.join(', ')})`
-}
-
 function resolvePieSliceColor(label: string, index: number, palette: 'default' | 'health' | 'landcover' = 'default'): string {
   if (palette === 'health') {
     const lower = label.toLowerCase()
@@ -198,24 +186,31 @@ function PieDonutChart({
   palette = 'default',
   ariaLabel,
   expanded = false,
+  modalView = false,
+  compact = false,
 }: {
   rows: NamedCount[]
   palette?: 'default' | 'health' | 'landcover'
   ariaLabel: string
   expanded?: boolean
+  modalView?: boolean
+  compact?: boolean
 }) {
   if (!rows.length) return <p className="si-field-dash__empty">No categories</p>
 
   const total = rows.reduce((s, r) => s + r.count, 0) || 1
-  const slices = rows.map((r, i) => ({
-    ...r,
-    color: resolvePieSliceColor(r.label, i, palette),
-    pct: Math.round((r.count / total) * 100),
-  }))
-  const background = buildPieDonutBackground(slices)
+  const slices = preparePieSlices(rows, (label, i) => resolvePieSliceColor(label, i, palette), {
+    maxSlices: modalView ? 5 : 6,
+  })
+  const background = pieSliceConicGradient(slices)
+  const singleSlice = slices.length === 1
+  const centerMain = singleSlice ? `${slices[0]!.pct}%` : total.toLocaleString()
+  const centerSub = singleSlice ? slices[0]!.label : 'fields'
 
   return (
-    <div className={`si-field-dash__pie-chart${expanded ? ' si-field-dash__pie-chart--expanded' : ''}`}>
+    <div
+      className={`si-field-dash__pie-chart${expanded ? ' si-field-dash__pie-chart--expanded' : ''}${modalView ? ' si-field-dash__pie-chart--modal' : ''}${compact ? ' si-field-dash__pie-chart--compact' : ''}`}
+    >
       <div
         className="si-field-dash__pie-donut"
         role="img"
@@ -225,19 +220,37 @@ function PieDonutChart({
         <div className="si-field-dash__pie-ring" style={{ background }} />
         <div className="si-field-dash__pie-hole" aria-hidden />
         <div className="si-field-dash__pie-center" aria-hidden>
-          {total.toLocaleString()}
+          <span className="si-field-dash__pie-center-main">{centerMain}</span>
+          {!compact ? (
+            <span className="si-field-dash__pie-center-sub" title={centerSub}>
+              {centerSub}
+            </span>
+          ) : null}
         </div>
       </div>
       <div className="si-field-dash__pie-legend">
+        {(expanded || modalView) && !compact ? (
+          <div className="si-field-dash__pie-legend-head" aria-hidden>
+            <span className="si-field-dash__pie-legend-head__label">Category</span>
+            <span className="si-field-dash__pie-legend-head__meter">Share</span>
+            <span className="si-field-dash__pie-legend-head__pct">%</span>
+            <span className="si-field-dash__pie-legend-head__n">#</span>
+          </div>
+        ) : null}
         {slices.map(r => (
           <div key={r.label} className="si-field-dash__pie-row">
-            <span className="si-field-dash__pie-dot" style={{ background: r.color }} />
+            <span className="si-field-dash__pie-dot" style={{ background: r.color }} aria-hidden />
             <span className="si-field-dash__pie-label" title={r.label}>
               {r.label}
             </span>
-            <span className="si-field-dash__pie-value">
-              {r.count} ({r.pct}%)
+            <span className="si-field-dash__pie-meter" aria-hidden>
+              <span
+                className="si-field-dash__pie-meter-fill"
+                style={{ width: `${Math.min(100, r.pct)}%`, background: r.color }}
+              />
             </span>
+            <span className="si-field-dash__pie-pct">{r.pct}%</span>
+            <span className="si-field-dash__pie-value">{r.count.toLocaleString()}</span>
           </div>
         ))}
       </div>
@@ -415,19 +428,16 @@ function FieldAttributesDashboardBody({
         <section className="si-field-dash__card">
           <div className="si-field-dash__card-head">
             <h4>
-              <i className="fa-solid fa-chart-bar" aria-hidden /> Area by field
+              <i className="fa-solid fa-heart-pulse" aria-hidden /> Health status
             </h4>
-            <span>ha</span>
+            <span>count</span>
           </div>
-          <FieldDashBarChart
-            rows={model.areaByField}
-            ariaLabel="Area by field in hectares"
-            yLabel="ha"
-            color="#1976d2"
-            formatValue={v => fmtHa(v)}
+          <PieDonutChart
+            rows={model.healthMix}
+            palette="health"
+            ariaLabel="Health status distribution"
             expanded={chartExpanded}
-            height={modalView ? 260 : undefined}
-            width={modalView ? 520 : undefined}
+            modalView={modalView}
           />
         </section>
 
@@ -445,23 +455,25 @@ function FieldAttributesDashboardBody({
             color="#2e7d32"
             formatValue={v => String(Math.round(v))}
             expanded={chartExpanded}
-            height={modalView ? 260 : undefined}
-            width={modalView ? 520 : undefined}
+            height={modalView ? 200 : undefined}
           />
         </section>
 
         <section className="si-field-dash__card">
           <div className="si-field-dash__card-head">
             <h4>
-              <i className="fa-solid fa-heart-pulse" aria-hidden /> Health status
+              <i className="fa-solid fa-chart-bar" aria-hidden /> Area by field
             </h4>
-            <span>count</span>
+            <span>ha</span>
           </div>
-          <PieDonutChart
-            rows={model.healthMix}
-            palette="health"
-            ariaLabel="Health status distribution"
+          <FieldDashBarChart
+            rows={model.areaByField}
+            ariaLabel="Area by field in hectares"
+            yLabel="ha"
+            color="#1976d2"
+            formatValue={v => fmtHa(v)}
             expanded={chartExpanded}
+            height={modalView ? 200 : undefined}
           />
         </section>
       </div>
@@ -481,8 +493,7 @@ function FieldAttributesDashboardBody({
             color="#2e7d32"
             formatValue={v => String(Math.round(v))}
             expanded={chartExpanded}
-            height={modalView ? 260 : undefined}
-            width={modalView ? 520 : undefined}
+            height={modalView ? 200 : undefined}
           />
         </section>
 
@@ -499,26 +510,52 @@ function FieldAttributesDashboardBody({
               palette="landcover"
               ariaLabel="Land cover distribution"
               expanded={chartExpanded}
+              modalView={modalView}
             />
           </section>
         ) : null}
 
-        {chartExpanded
-          ? model.attributeMixes.map(chart => (
-              <section key={chart.fieldName} className="si-field-dash__card">
+        {chartExpanded && model.attributeMixes.length
+          ? modalView
+            ? (
+              <section className="si-field-dash__card si-field-dash__card--pie-group">
                 <div className="si-field-dash__card-head">
                   <h4>
-                    <i className="fa-solid fa-table-columns" aria-hidden /> {chart.label}
+                    <i className="fa-solid fa-table-columns" aria-hidden /> Attribute mix indicators
                   </h4>
-                  <span>count</span>
+                  <span>% of fields</span>
                 </div>
-                <PieDonutChart
-                  rows={chart.rows}
-                  ariaLabel={`${chart.label} distribution`}
-                  expanded={chartExpanded}
-                />
+                <div className="si-field-dash__pie-group-grid">
+                  {model.attributeMixes.map(chart => (
+                    <article key={chart.fieldName} className="si-field-dash__pie-group-item">
+                      <h5 className="si-field-dash__pie-group-title">{chart.label}</h5>
+                      <PieDonutChart
+                        rows={chart.rows}
+                        ariaLabel={`${chart.label} distribution`}
+                        expanded={chartExpanded}
+                        modalView={modalView}
+                        compact
+                      />
+                    </article>
+                  ))}
+                </div>
               </section>
-            ))
+            )
+            : model.attributeMixes.map(chart => (
+                <section key={chart.fieldName} className="si-field-dash__card">
+                  <div className="si-field-dash__card-head">
+                    <h4>
+                      <i className="fa-solid fa-table-columns" aria-hidden /> {chart.label}
+                    </h4>
+                    <span>count</span>
+                  </div>
+                  <PieDonutChart
+                    rows={chart.rows}
+                    ariaLabel={`${chart.label} distribution`}
+                    expanded={chartExpanded}
+                  />
+                </section>
+              ))
           : null}
       </div>
 

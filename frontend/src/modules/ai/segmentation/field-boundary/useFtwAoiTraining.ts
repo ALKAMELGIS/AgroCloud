@@ -25,6 +25,7 @@ import {
   type FtwAoiTrainingSession,
 } from './ftwAoiTrainingTypes'
 import type { TrainingEpochRecord } from '../../training/trainingAiClient'
+import { isUsableSiActiveAoi } from './resolveFtwTrainingAoi'
 
 export type UseFtwAoiTrainingOptions = {
   activeAoi: SiActiveAoi
@@ -304,6 +305,6 @@ export function useFtwAoiTraining({
     runFullPipeline,
     cancelTraining,
     exportModel,
-    hasAoi: Boolean(activeAoi.key && activeAoi.geometry),
+    hasAoi: isUsableSiActiveAoi(activeAoi),
   }
 }

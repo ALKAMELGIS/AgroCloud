@@ -12,6 +12,7 @@ import { DevelopEliteMapDrawProvider, useDevelopEliteMapDraw } from './DevelopEl
 import type { DevelopEliteMapView } from './developEliteKpiEngine'
 import { DevelopEliteMapLibreProvider } from './developEliteMapLibreContext'
 import { DevelopEliteMapLibreCanvas } from './DevelopEliteMapLibreCanvas'
+import { DevelopEliteMapSpaceBackdrop } from './DevelopEliteMapSpaceBackdrop'
 import {
   DevelopEliteMapLibreFlyBridge,
   DevelopEliteMapLibreOverlays,
@@ -190,6 +191,7 @@ function DevelopEliteMapContent({
                   role="tabpanel"
                   aria-labelledby="de-map-tab-portfolio"
                 >
+                <DevelopEliteMapSpaceBackdrop hostRef={viewportRef} />
                 <DevelopEliteMapLibreCanvas basemapId={basemap} shellRef={viewportRef} />
                 <DevelopEliteMapLibreOverlays
                   geojson={geojson}

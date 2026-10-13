@@ -127,7 +127,7 @@ import {
   resolveLayersAoiWmsMaxTileLayers,
 } from './sentinelHubWmsAoiClip';
 import { drawnAoiClipSignature, normalizeDrawnAoiClipCollection } from './siDrawnAoiLiveIndex';
-import { resolveSiActiveAoi, type SiActiveAoi } from './siAoiManager';
+import { resolveSiActiveAoi, type SiActiveAoi, type SiActiveAoiSource } from './siAoiManager';
 import {
   buildSiSentinelAoiWmsStackState,
   isSiSentinelAoiWmsMapLayerId,
@@ -642,6 +642,7 @@ import { TreeDetectionsPanel } from '@/modules/ai/detection/tree/TreeDetectionsP
 import { type SamPanelTab } from '@/modules/ai/segmentation/sam/SamDetectionPanel';
 import { useSamDetection, type SamAoiSource } from '@/modules/ai/segmentation/sam/useSamDetection';
 import { AgriFieldBoundaryPanel, type FieldBoundaryAoiMode } from '@/modules/ai/segmentation/field-boundary/AgriFieldBoundaryPanel';
+import { pickFtwTrainingAoi } from '@/modules/ai/segmentation/field-boundary/resolveFtwTrainingAoi';
 import type { FtwPipelineStepId } from '@/modules/ai/segmentation/field-boundary/useAgriFieldBoundary';
 import { useAgriFieldBoundary } from '@/modules/ai/segmentation/field-boundary/useAgriFieldBoundary';
 import type { FieldImagerySource } from '@/modules/ai/segmentation/field-boundary/fieldBoundaryClient';
@@ -19925,6 +19926,30 @@ export default function SatelliteIntelligence() {
   );
   trainingAiActiveAoiRef.current = activeAoi;
 
+  /** FTW LR Finder / dataset — Detect Fields AOI + Layers panel mask fallback. */
+  const fieldBoundaryFtwTrainingAoi = useMemo((): SiActiveAoi => {
+    const raw = resolveFieldBoundaryAoi();
+    let fromFieldBoundary: SiActiveAoi | null = null;
+    if (raw) {
+      const fc = geometryToAoiFeatureCollection(raw);
+      if (fc.features?.length) {
+        const mode = fieldBoundaryAoiMode;
+        const source: SiActiveAoiSource =
+          mode === 'layers' || mode === 'select'
+            ? 'layers'
+            : mode === 'draw'
+              ? 'draw'
+              : 'agro';
+        fromFieldBoundary = {
+          geometry: fc,
+          key: fieldBoundaryAoiClipKey,
+          source,
+        };
+      }
+    }
+    return pickFtwTrainingAoi(fromFieldBoundary, activeAoi);
+  }, [resolveFieldBoundaryAoi, fieldBoundaryAoiClipKey, fieldBoundaryAoiMode, activeAoi]);
+
   const sentinelDrawIndexActive = isWmsOverlayVisible;
   const sentinelLayerAoiIndexActive = aoiMaskBuilderSettings.enabled;
 
@@ -28928,7 +28953,12 @@ export default function SatelliteIntelligence() {
                             });
                           }}
                           activeAoi={activeAoi}
-                          aoiLabel={aoiSourceLabel(activeAoi.source) || 'AOI'}
+                          ftwTrainingAoi={fieldBoundaryFtwTrainingAoi}
+                          aoiLabel={
+                            aoiSourceLabel(fieldBoundaryFtwTrainingAoi.source) ||
+                            aoiSourceLabel(activeAoi.source) ||
+                            'AOI'
+                          }
                           referenceGeojson={fieldBoundaryReferenceGeojson}
                           referenceLabel={fieldBoundaryReferenceLabel}
                           referenceNotice={null}

@@ -245,6 +245,47 @@
   padding-bottom: 10px;
 }
 
+/* Index time series in dock / compact tab (modal chart chrome is scoped under .si-field-dash-modal) */
+.si-field-dash__card--timeseries:not(.si-field-dash-modal *) .si-afbv__figure-wrap {
+  margin-top: 2px;
+  padding: 4px 2px 0;
+  border-radius: 6px;
+}
+
+.si-field-dash__card--timeseries:not(.si-field-dash-modal *) .si-afbv__figure-grid {
+  stroke: rgba(15, 23, 42, 0.16);
+  stroke-width: 0.65;
+  vector-effect: non-scaling-stroke;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark)
+  .si-field-dash__card--timeseries:not(.si-field-dash-modal *)
+  .si-afbv__figure-bg {
+  fill: #0a0a0a;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark)
+  .si-field-dash__card--timeseries:not(.si-field-dash-modal *)
+  .si-afbv__figure-grid {
+  stroke: rgba(255, 255, 255, 0.22);
+  stroke-width: 0.75;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark)
+  .si-field-dash__card--timeseries:not(.si-field-dash-modal *)
+  .si-afbv__spine {
+  stroke: rgba(255, 255, 255, 0.38);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark)
+  .si-field-dash__card--timeseries:not(.si-field-dash-modal *)
+  .si-afbv__figure-tick,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark)
+  .si-field-dash__card--timeseries:not(.si-field-dash-modal *)
+  .si-afbv__figure-axis {
+  fill: rgba(230, 230, 230, 0.82);
+}
+
 .si-field-dash__ts-legend {
   margin: 0 0 6px;
   font-size: 9px;
@@ -370,32 +411,32 @@
   font-variant-numeric: tabular-nums;
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-bg,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-bg:not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__vbar-bg {
   fill: rgba(255, 255, 255, 0.04);
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-grid,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-grid:not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__vbar-grid {
   stroke: rgba(255, 255, 255, 0.08);
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-axis,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-axis:not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__vbar-axis {
   stroke: rgba(255, 255, 255, 0.16);
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-ytick,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-ytick:not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__vbar-ytick {
   fill: #9aa3af;
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-tick,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-tick:not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__vbar-tick {
   fill: #9aa3af;
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-ylabel,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__vbar-ylabel:not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__vbar-ylabel {
   fill: #94a3b8;
 }
@@ -492,17 +533,36 @@
   position: absolute;
   inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
-  font-weight: 700;
+  gap: 1px;
+  padding: 0 6px;
+  text-align: center;
   color: #334155;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
 }
 
-.si-field-dash__pie-chart--expanded .si-field-dash__pie-center {
+.si-field-dash__pie-center-main {
   font-size: 11px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.si-field-dash__pie-center-sub {
+  max-width: 92%;
+  font-size: 7px;
+  font-weight: 650;
+  line-height: 1.15;
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.si-field-dash__pie-chart--expanded .si-field-dash__pie-center-main {
+  font-size: 12px;
 }
 
 .si-field-dash__pie-legend {
@@ -513,13 +573,67 @@
   flex: 1;
 }
 
+.si-field-dash__pie-legend-head {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1.1fr) minmax(52px, 1.4fr) 2.4em 2.2em;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.si-field-dash__pie-legend-head__label {
+  grid-column: 2;
+}
+
+.si-field-dash__pie-legend-head__meter {
+  grid-column: 3;
+}
+
+.si-field-dash__pie-legend-head__pct {
+  grid-column: 4;
+  text-align: right;
+}
+
+.si-field-dash__pie-legend-head__n {
+  grid-column: 5;
+  text-align: right;
+}
+
 .si-field-dash__pie-row {
   display: grid;
-  grid-template-columns: 8px minmax(0, 1fr) auto;
+  grid-template-columns: 8px minmax(0, 1.1fr) minmax(52px, 1.4fr) 2.4em 2.2em;
   align-items: center;
   gap: 6px;
   font-size: 9px;
   color: #475569;
+}
+
+.si-field-dash__pie-meter {
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.si-field-dash__pie-meter-fill {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: inherit;
+  transition: width 0.35s ease;
+}
+
+.si-field-dash__pie-pct {
+  font-size: 9px;
+  font-weight: 700;
+  color: #334155;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .si-field-dash__pie-dot {
@@ -537,9 +651,59 @@
 
 .si-field-dash__pie-value {
   font-variant-numeric: tabular-nums;
-  color: #334155;
+  color: #475569;
   font-weight: 600;
+  font-size: 9px;
+  text-align: right;
   white-space: nowrap;
+}
+
+.si-field-dash__pie-chart--modal {
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.si-field-dash__pie-chart--modal .si-field-dash__pie-donut {
+  width: 96px;
+  height: 96px;
+}
+
+.si-field-dash__pie-chart--compact {
+  gap: 8px;
+}
+
+.si-field-dash__pie-chart--compact .si-field-dash__pie-donut {
+  width: 64px;
+  height: 64px;
+}
+
+.si-field-dash__pie-chart--compact .si-field-dash__pie-center-main {
+  font-size: 10px;
+}
+
+.si-field-dash__card--pie-group {
+  grid-column: 1 / -1;
+}
+
+.si-field-dash__pie-group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.si-field-dash__pie-group-item {
+  padding: 8px 10px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: rgba(15, 23, 42, 0.02);
+}
+
+.si-field-dash__pie-group-title {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.25;
 }
 
 .si-field-dash__empty {
@@ -554,38 +718,38 @@
   grid-column: 1 / -1;
 }
 
-/* Dark dock + floating panel — matte white text */
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash,
+/* Dark dock + floating panel — matte white text (not the portaled attributes modal) */
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash:not(.si-field-dash-modal .si-field-dash),
 .gis-float-panel .si-field-dash {
   color: #e8eaed;
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__title,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__title:not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__title {
   color: #f0f2f5;
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__subtitle,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__subtitle:not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__subtitle {
   color: #9aa3af;
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__brand-icon,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__brand-icon:not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__brand-icon {
   background: linear-gradient(145deg, rgba(100, 181, 246, 0.18), rgba(25, 118, 210, 0.08));
   border-color: rgba(100, 181, 246, 0.28);
   color: #90caf9;
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__meta-item,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__meta-item:not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__meta-item {
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(255, 255, 255, 0.08);
   color: #c8cdd3;
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__kpi,
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__card,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__kpi:not(.si-field-dash-modal *),
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__card:not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__kpi,
 .gis-float-panel .si-field-dash__card {
   background: rgba(255, 255, 255, 0.04);
@@ -593,31 +757,31 @@
   box-shadow: none;
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__kpi-label,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__kpi-label:not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__kpi-label {
   color: #9aa3af;
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__kpi strong,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__kpi strong:not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__kpi strong {
   color: #f0f2f5;
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__card-head h4,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__card-head h4:not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__card-head h4 {
   color: #e8eaed;
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__ts-legend,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__ts-legend:not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__ts-legend {
   color: #9aa3af;
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__card-head span,
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__bar-row > span:first-child,
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__pie-row,
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__pie-label,
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__empty,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__card-head span:not(.si-field-dash-modal *),
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__bar-row > span:first-child:not(.si-field-dash-modal *),
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__pie-row:not(.si-field-dash-modal *),
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__pie-label:not(.si-field-dash-modal *),
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__empty:not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__card-head span,
 .gis-float-panel .si-field-dash__bar-row > span:first-child,
 .gis-float-panel .si-field-dash__pie-row,
@@ -626,44 +790,44 @@
   color: #9aa3af;
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__pie-value,
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__pie-center,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__pie-value:not(.si-field-dash-modal *),
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__pie-center:not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__pie-value,
 .gis-float-panel .si-field-dash__pie-center {
   color: #e8eaed;
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__pie-hole,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__pie-hole:not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__pie-hole {
   background: rgba(255, 255, 255, 0.04);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__bar-row strong,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__bar-row strong:not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__bar-row strong {
   color: #e8eaed;
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__bar-track,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__bar-track:not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__bar-track {
   background: rgba(255, 255, 255, 0.08);
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__icon-btn,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__icon-btn:not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__icon-btn {
   background: rgba(255, 255, 255, 0.06);
   color: #e8eaed;
   border-color: rgba(255, 255, 255, 0.1);
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__icon-btn:hover:not(:disabled),
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__icon-btn:hover:not(:disabled):not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__icon-btn:hover:not(:disabled) {
   background: rgba(100, 181, 246, 0.12);
   border-color: rgba(100, 181, 246, 0.35);
   color: #90caf9;
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__icon-btn--accent,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash__icon-btn--accent:not(.si-field-dash-modal *),
 .gis-float-panel .si-field-dash__icon-btn--accent {
   background: rgba(100, 181, 246, 0.14);
   border-color: rgba(100, 181, 246, 0.32);
@@ -705,6 +869,11 @@
 }
 
 .si-field-dash-modal {
+  --si-field-dash-modal-icon-bg: #ffffff;
+  --si-field-dash-modal-icon-fg: #111111;
+  --si-field-dash-modal-icon-border: rgba(15, 23, 42, 0.14);
+  --si-field-dash-modal-icon-hover-bg: #eef2f7;
+  --si-field-dash-modal-resize-fg: #111111;
   position: absolute;
   inset: 0;
   z-index: 15300;
@@ -727,12 +896,15 @@
   z-index: 1;
   display: flex;
   flex-direction: column;
-  min-width: 560px;
-  min-height: 480px;
-  border-radius: 12px;
+  min-width: min(420px, 100%);
+  min-height: min(360px, 100%);
+  max-width: calc(100% - 8px);
+  max-height: calc(100% - 8px);
+  box-sizing: border-box;
+  border-radius: 10px;
   border: 1px solid rgba(15, 23, 42, 0.16);
   background: #ffffff;
-  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.28);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.22);
   overflow: hidden;
   color: #000000;
   animation: si-field-dash-modal-panel-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -765,9 +937,9 @@
 .si-field-dash-modal__header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 56px;
-  padding: 0 10px 0 14px;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 8px 0 12px;
   border-bottom: 1px solid rgba(15, 23, 42, 0.1);
   background: #f8fafc;
   flex-shrink: 0;
@@ -792,14 +964,22 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid rgba(15, 23, 42, 0.14);
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+  border: 1px solid var(--si-field-dash-modal-icon-border);
   border-radius: 8px;
-  background: #fff;
-  color: #111111;
+  background: var(--si-field-dash-modal-icon-bg);
+  color: var(--si-field-dash-modal-icon-fg);
   cursor: pointer;
   flex-shrink: 0;
+}
+
+.si-field-dash-modal__tool i,
+.si-field-dash-modal__close i,
+.si-field-dash-modal__icon i {
+  color: inherit;
+  opacity: 1;
 }
 
 .si-field-dash-modal__tool:disabled {
@@ -809,14 +989,14 @@
 
 .si-field-dash-modal__tool:hover:not(:disabled),
 .si-field-dash-modal__close:hover {
-  background: #eef2f7;
-  color: #000;
+  background: var(--si-field-dash-modal-icon-hover-bg);
+  color: var(--si-field-dash-modal-icon-fg);
 }
 
 .si-field-dash-modal__zoom {
-  min-width: 44px;
+  min-width: 38px;
   text-align: center;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: #111111;
 }
@@ -825,13 +1005,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 8px;
   flex-shrink: 0;
-  background: #e8eef6;
-  border: 1px solid rgba(15, 23, 42, 0.16);
-  color: #111111;
+  background: var(--si-field-dash-modal-icon-bg);
+  border: 1px solid var(--si-field-dash-modal-icon-border);
+  color: var(--si-field-dash-modal-icon-fg);
   font-size: 14px;
 }
 
@@ -842,15 +1022,15 @@
 
 .si-field-dash-modal__title {
   margin: 0;
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 800;
   color: #000000;
   line-height: 1.25;
 }
 
 .si-field-dash-modal__subtitle {
-  margin: 2px 0 0;
-  font-size: 13px;
+  margin: 1px 0 0;
+  font-size: 11px;
   font-weight: 600;
   color: #000000;
   line-height: 1.3;
@@ -863,7 +1043,7 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 16px 18px 28px;
+  padding: 10px 12px 22px;
   background: #ffffff;
   scrollbar-gutter: stable;
 }
@@ -877,13 +1057,37 @@
   position: absolute;
   right: 0;
   bottom: 0;
-  width: 22px;
-  height: 22px;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
   border: none;
   padding: 0;
-  background: linear-gradient(135deg, transparent 50%, #111111 50%);
+  border-bottom-right-radius: 11px;
+  background: transparent;
   cursor: nwse-resize;
   touch-action: none;
+}
+
+.si-field-dash-modal__resize::before {
+  content: '';
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 14px;
+  height: 14px;
+  border-right: 2px solid var(--si-field-dash-modal-resize-fg);
+  border-bottom: 2px solid var(--si-field-dash-modal-resize-fg);
+  border-bottom-right-radius: 2px;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.si-field-dash-modal__resize:hover::before {
+  opacity: 1;
+}
+
+.si-field-dash-modal__resize:active {
+  cursor: nwse-resize;
 }
 
 .si-field-dash-modal .si-field-dash {
@@ -972,15 +1176,26 @@
 }
 
 .si-field-dash-modal .si-field-dash__icon-btn {
-  background: #ffffff;
-  color: #111111;
-  border-color: rgba(15, 23, 42, 0.16);
+  background: var(--si-field-dash-modal-icon-bg);
+  color: var(--si-field-dash-modal-icon-fg);
+  border-color: var(--si-field-dash-modal-icon-border);
+}
+
+.si-field-dash-modal .si-field-dash__icon-btn i {
+  color: inherit;
+  opacity: 1;
 }
 
 .si-field-dash-modal .si-field-dash__icon-btn:hover:not(:disabled) {
-  background: #f3f4f6;
-  border-color: rgba(15, 23, 42, 0.28);
-  color: #000000;
+  background: var(--si-field-dash-modal-icon-hover-bg);
+  border-color: var(--si-field-dash-modal-icon-border);
+  color: var(--si-field-dash-modal-icon-fg);
+}
+
+.si-field-dash-modal .si-field-dash__icon-btn--accent {
+  background: rgba(25, 118, 210, 0.1);
+  border-color: rgba(25, 118, 210, 0.28);
+  color: #1565c0;
 }
 
 .si-field-dash-modal .si-field-dash__kpi-label {
@@ -991,7 +1206,7 @@
 }
 
 .si-field-dash-modal .si-field-dash__kpi strong {
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 800;
   color: #000000;
 }
@@ -1019,39 +1234,155 @@
 .si-field-dash-modal .si-field-dash--expanded .si-field-dash__charts--primary,
 .si-field-dash-modal .si-field-dash--expanded .si-field-dash__charts--secondary {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
 }
 
 .si-field-dash-modal .si-field-dash__card {
   position: relative;
-  min-height: 280px;
-  min-width: 300px;
-  resize: both;
-  overflow: auto;
-  padding: 12px 12px 10px;
-}
-
-.si-field-dash-modal .si-field-dash__card::after {
-  content: '';
-  position: absolute;
-  right: 3px;
-  bottom: 3px;
-  width: 14px;
-  height: 14px;
-  background: linear-gradient(135deg, transparent 50%, rgba(0, 0, 0, 0.45) 50%);
-  pointer-events: none;
+  min-height: 200px;
+  min-width: 0;
+  resize: none;
+  overflow: hidden;
+  padding: 10px 10px 8px;
 }
 
 .si-field-dash-modal .si-field-dash__vbar-svg {
   width: 100%;
   height: auto;
-  min-height: 260px;
+  min-height: 180px;
+  max-height: 220px;
 }
 
-.si-field-dash-modal .si-field-dash__pie-chart--expanded .si-field-dash__pie-donut {
-  width: 112px;
-  height: 112px;
+.si-field-dash-modal .si-field-dash__pie-chart--expanded:not(.si-field-dash__pie-chart--compact) .si-field-dash__pie-donut {
+  width: 100px;
+  height: 100px;
+}
+
+.si-field-dash-modal .si-field-dash__pie-meter {
+  background: rgba(15, 23, 42, 0.1);
+}
+
+.si-field-dash-modal .si-field-dash__pie-group-item {
+  background: rgba(15, 23, 42, 0.03);
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__pie-meter {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__pie-group-item {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__pie-group-title,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__pie-pct {
+  color: #f0f2f5;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__pie-center-sub {
+  color: #b8c0cc;
+}
+
+/* Compact layout inside floating modal (fluid charts, tighter KPI grid). */
+.si-field-dash-modal .si-field-dash--modal-view {
+  gap: 8px;
+}
+
+.si-field-dash-modal .si-field-dash--modal-view .si-field-dash__head--embedded {
+  padding-bottom: 0;
+  gap: 6px;
+}
+
+.si-field-dash-modal .si-field-dash--modal-view .si-field-dash__kpi-grid {
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 6px;
+}
+
+.si-field-dash-modal .si-field-dash--modal-view .si-field-dash__kpi {
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+.si-field-dash-modal .si-field-dash--modal-view .si-field-dash__kpi-label {
+  font-size: 7px;
+}
+
+.si-field-dash-modal .si-field-dash--modal-view .si-field-dash__kpi strong {
+  margin-top: 2px;
+  font-size: 13px;
+}
+
+.si-field-dash-modal .si-field-dash--modal-view .si-field-dash__card-head {
+  margin-bottom: 4px;
+}
+
+.si-field-dash-modal .si-field-dash--modal-view .si-field-dash__card--timeseries {
+  min-height: 240px;
+  grid-column: 1 / -1;
+}
+
+.si-field-dash-modal .si-field-dash--modal-view .si-field-dash__ts-legend {
+  margin: 0 0 6px;
+  font-size: 10px;
+}
+
+.si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure-wrap {
+  margin-top: 2px;
+  padding: 6px 4px 2px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.03) 0%, transparent 72%);
+}
+
+.si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure {
+  overflow: visible;
+}
+
+.si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure-bg {
+  fill: transparent;
+}
+
+.si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure-grid {
+  stroke: rgba(15, 23, 42, 0.08);
+  stroke-dasharray: 2 4;
+}
+
+.si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__spine {
+  stroke: rgba(15, 23, 42, 0.22);
+}
+
+.si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure-line {
+  filter: drop-shadow(0 0 0.35px rgba(15, 23, 42, 0.25));
+}
+
+.si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure-legend {
+  fill: rgba(255, 255, 255, 0.92);
+  stroke: rgba(15, 23, 42, 0.1);
+  stroke-width: 0.5;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure-wrap {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 72%);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure-grid {
+  stroke: rgba(255, 255, 255, 0.1);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__spine {
+  stroke: rgba(255, 255, 255, 0.2);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure-tick,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure-axis {
+  fill: #b8c0cc;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure-legend {
+  fill: rgba(21, 25, 34, 0.92);
+  stroke: rgba(255, 255, 255, 0.12);
 }
 
 .si-field-dash-modal .si-field-dash__pie-chart--expanded .si-field-dash__pie-center {
@@ -1070,6 +1401,181 @@
 
 .si-field-dash-modal .si-field-dash__card--timeseries {
   grid-column: 1 / -1;
-  min-height: 320px;
-  resize: vertical;
+  min-height: 240px;
+  resize: none;
+}
+
+/* App dark theme — modal uses dark chrome + light text (light theme keeps white panel above) */
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal {
+  --si-field-dash-modal-icon-bg: rgba(255, 255, 255, 0.08);
+  --si-field-dash-modal-icon-fg: #f0f2f5;
+  --si-field-dash-modal-icon-border: rgba(255, 255, 255, 0.18);
+  --si-field-dash-modal-icon-hover-bg: rgba(255, 255, 255, 0.16);
+  --si-field-dash-modal-resize-fg: rgba(255, 255, 255, 0.88);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__icon-btn--accent {
+  background: rgba(96, 165, 250, 0.14);
+  border-color: rgba(96, 165, 250, 0.35);
+  color: #93c5fd;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal__panel {
+  background: #151922;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #f0f2f5;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.55);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal__header {
+  background: #1c2230;
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal__body {
+  background: #151922;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal__title,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal__subtitle,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal__zoom {
+  color: #f0f2f5;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash {
+  color: #f0f2f5;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__kpi-label,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__ts-legend,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__card-head span {
+  color: #b8c0cc;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__kpi strong,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__card-head h4,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__card-head h4 i,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__bar-row strong,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__pie-value,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__pie-center,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__pie-label,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__pie-row,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__empty {
+  color: #f0f2f5;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__kpi,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__card {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__vbar-ytick,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__vbar-tick,
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__vbar-ylabel {
+  fill: #e8eaed;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__vbar-axis {
+  stroke: #e8eaed;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__vbar-grid {
+  stroke: rgba(255, 255, 255, 0.12);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__vbar-bg {
+  fill: rgba(255, 255, 255, 0.03);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__pie-hole {
+  background: #151922;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__meta-item {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #f0f2f5;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__meta-item i {
+  color: inherit;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__brand-icon {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #f0f2f5;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__bar-row > span:first-child {
+  color: #b8c0cc;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__bar-track {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+@media (max-width: 900px) {
+  .si-field-dash-modal__header {
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding-bottom: 8px;
+    padding-top: 8px;
+  }
+
+  .si-field-dash-modal__titles {
+    flex: 1 1 100%;
+    order: 2;
+  }
+
+  .si-field-dash-modal__tools {
+    order: 3;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    margin-left: auto;
+  }
+
+  .si-field-dash-modal__subtitle {
+    white-space: normal;
+  }
+
+  .si-field-dash-modal .si-field-dash__charts,
+  .si-field-dash-modal .si-field-dash--expanded .si-field-dash__charts,
+  .si-field-dash-modal .si-field-dash--expanded .si-field-dash__charts--primary,
+  .si-field-dash-modal .si-field-dash--expanded .si-field-dash__charts--secondary {
+    grid-template-columns: 1fr;
+  }
+
+  .si-field-dash-modal .si-field-dash__card {
+    min-width: 0;
+  }
+
+  .si-field-dash-modal__body {
+    padding: 12px 12px 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .si-field-dash-modal__panel {
+    min-width: 0;
+    min-height: 0;
+    border-radius: 10px;
+  }
+
+  .si-field-dash-modal__tool,
+  .si-field-dash-modal__close {
+    width: 36px;
+    height: 36px;
+  }
+
+  .si-field-dash-modal__zoom {
+    min-width: 40px;
+    font-size: 11px;
+  }
+
+  .si-field-dash-modal .si-field-dash__kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

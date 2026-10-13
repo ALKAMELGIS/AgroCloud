@@ -210,6 +210,7 @@ export function DevelopEliteMapLibreCanvas({ basemapId, shellRef }: Props) {
       viewportEnvRaf = requestAnimationFrame(() => {
         viewportEnvRaf = 0
         syncViewportEnvironment(map)
+        applyDevelopEliteMapSpaceEnvironment(map, shellRef.current)
       })
     }
     map.on('load', reapplyAfterStyle)

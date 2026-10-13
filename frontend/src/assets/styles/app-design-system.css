@@ -764,10 +764,14 @@ html[data-theme='dark'] .content--sensors-fit {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 40vh;
+  min-height: min(60vh, 100%);
   padding: 2rem;
-  color: #64748b;
+  color: var(--ds-color-text-muted, #64748b);
   font-size: 0.95rem;
+}
+
+html[data-theme='light'] .route-loading-fallback {
+  color: #334155;
 }
 
 /* ArcGIS Dashboard–style refresh control (Develop / AgroCloud dashboards) */
