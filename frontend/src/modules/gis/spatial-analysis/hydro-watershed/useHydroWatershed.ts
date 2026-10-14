@@ -7,7 +7,7 @@ import {
   type HydroStepId,
   type HydroStepResult,
 } from './hydroEngine'
-import { buildAoiGeoTiff, downloadGeoTiffWithAux } from './geoTiffExport'
+import { exportHydroStep, type HydroExportFormat, type HydroStreamModel } from './hydroStepExport'
 
 export type HydroStepState = {
   status: 'idle' | 'running' | 'done' | 'error'
@@ -21,8 +21,15 @@ export type HydroStepState = {
 
 const EMPTY_STEP: HydroStepState = { status: 'idle', result: null, error: null, visible: false, opacity: 1 }
 
+type HydroAoiInput =
+  | GeoJSON.Geometry
+  | GeoJSON.Feature
+  | GeoJSON.FeatureCollection
+  | null
+  | undefined
+
 type Params = {
-  geometry: GeoJSON.Geometry | GeoJSON.Feature | null | undefined
+  geometry: HydroAoiInput
   enabled: boolean
   sensitivity?: number
   /** Contour interval (m); 0/undefined = auto. */
@@ -31,8 +38,11 @@ type Params = {
   basinCount?: number
 }
 
-function stableGeometryKey(geometry: GeoJSON.Geometry | GeoJSON.Feature): string {
+function stableGeometryKey(geometry: Exclude<HydroAoiInput, null | undefined>): string {
   try {
+    if ((geometry as GeoJSON.FeatureCollection).type === 'FeatureCollection') {
+      return JSON.stringify(geometry, (_k, v) => (typeof v === 'number' ? Number(v.toFixed(6)) : v))
+    }
     const geom =
       (geometry as GeoJSON.Feature).type === 'Feature'
         ? (geometry as GeoJSON.Feature).geometry
@@ -191,12 +201,24 @@ export function useHydroWatershed({ geometry, enabled, sensitivity, contourInter
    * Export a finished raster layer as a georeferenced, AOI-clipped GeoTIFF
    * (EPSG:3857, native Float32, NoData=−9999) and trigger a download.
    */
-  const exportRaster = useCallback((id: HydroStepId) => {
-    const result = steps[id]?.result
-    if (!result || result.kind !== 'raster' || !result.band) return false
-    downloadGeoTiffWithAux(buildAoiGeoTiff(result.band, maskRef.current))
-    return true
-  }, [steps])
+  const exportStep = useCallback(
+    async (id: HydroStepId, format: HydroExportFormat, streamModel: HydroStreamModel = 'strahler') => {
+      const result = steps[id]?.result
+      if (!result) return false
+      await exportHydroStep(id, result, format, maskRef.current, { streamModel })
+      return true
+    },
+    [steps],
+  )
+
+  const exportRaster = useCallback(
+    (id: HydroStepId) => {
+      void exportStep(id, 'geotiff')
+      const result = steps[id]?.result
+      return result?.kind === 'raster' && !!result.band
+    },
+    [exportStep, steps],
+  )
 
   const clearAll = useCallback(() => {
     setSteps(prev => {
@@ -222,6 +244,7 @@ export function useHydroWatershed({ geometry, enabled, sensitivity, contourInter
     toggleVisible,
     setOpacity,
     removeStep,
+    exportStep,
     exportRaster,
     clearAll,
   }

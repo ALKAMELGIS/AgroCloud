@@ -59,6 +59,7 @@ const DEFAULT_LAYERS: CutFillLayerVisibility = {
 type Params = {
   geometry: GeoJSON.Geometry | GeoJSON.Feature | null | undefined
   enabled: boolean
+  aoiName?: string
 }
 
 function stableGeometryKey(geometry: GeoJSON.Geometry | GeoJSON.Feature): string {
@@ -89,7 +90,7 @@ function aoiCentroid(
   return [(bbox.west + bbox.east) / 2, (bbox.north + bbox.south) / 2]
 }
 
-export function useCutFillAnalysis({ geometry, enabled }: Params) {
+export function useCutFillAnalysis({ geometry, enabled, aoiName }: Params) {
   const geomKey = useMemo(() => (geometry ? stableGeometryKey(geometry) : ''), [geometry])
   const hasAoi = !!geomKey && !!geometry
 
@@ -408,9 +409,9 @@ export function useCutFillAnalysis({ geometry, enabled }: Params) {
   const exportFormat = useCallback(
     async (kind: CutFillExportKind) => {
       if (!result) return
-      await runCutFillExport(kind, result, maskRef.current)
+      await runCutFillExport(kind, result, maskRef.current, { aoiName })
     },
-    [result],
+    [result, aoiName],
   )
 
   const buildDeferredLayers = useCallback(

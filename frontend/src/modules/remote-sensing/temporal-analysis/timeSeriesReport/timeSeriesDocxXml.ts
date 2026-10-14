@@ -261,6 +261,13 @@ export function docxImageCaption(lines: string[]): string {
   return `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="0" w:before="0" w:line="200" w:lineRule="auto"/></w:pPr>${run(text, { color: DOCX_INK, size: 14 })}</w:p>`
 }
 
+/** Compact legend line under a map figure (Word-only, does not affect map PNG). */
+export function docxMapLegendCaption(text: string): string {
+  const t = String(text || '').trim()
+  if (!t) return ''
+  return `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="28" w:before="0" w:line="180" w:lineRule="auto"/></w:pPr>${run(t, { italic: true, color: DOCX_MUTED, size: 12 })}</w:p>`
+}
+
 function docxMapTableRow(images: Array<{ rId: string; date: string; label: string }>): string {
   const cellW = Math.floor(10080 / MAPS_PER_ROW)
   const cells = images

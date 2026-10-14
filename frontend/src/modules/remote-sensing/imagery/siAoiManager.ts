@@ -71,3 +71,28 @@ export function resolveSiActiveAoi(input: ResolveSiActiveAoiInput): SiActiveAoi 
 
   return { geometry: null, key: '', source: null }
 }
+
+/** Polygon / MultiPolygon feature for terrain tools (Hydro, cut/fill, wells). */
+export function siActiveAoiToAnalysisFeature(
+  aoi: SiActiveAoi,
+): GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> | null {
+  const fc = aoi.geometry
+  if (!hasClipFeatures(fc)) return null
+  const multiCoords: number[][][][] = []
+  for (const f of fc.features) {
+    const g = f?.geometry
+    if (!g) continue
+    if (g.type === 'Polygon') multiCoords.push(g.coordinates as number[][][])
+    else if (g.type === 'MultiPolygon') multiCoords.push(...(g.coordinates as number[][][][]))
+  }
+  if (!multiCoords.length) return null
+  const geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon =
+    multiCoords.length === 1
+      ? { type: 'Polygon', coordinates: multiCoords[0]! }
+      : { type: 'MultiPolygon', coordinates: multiCoords }
+  return {
+    type: 'Feature',
+    properties: { aoiSource: aoi.source ?? undefined },
+    geometry,
+  }
+}

@@ -382,6 +382,13 @@
   transition: width 0.2s ease;
 }
 
+.si-cutfill__export-docx {
+  width: 100%;
+  margin-bottom: 10px;
+  justify-content: center;
+  gap: 8px;
+}
+
 .si-cutfill__export-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -4,6 +4,7 @@ import autoTable from 'jspdf-autotable'
 import { buildAoiGeoTiff, downloadBlob, type GeoBand } from '../spatial-analysis/hydro-watershed/geoTiffExport'
 import { downloadTreeShapefile } from '@/modules/ai/detection/tree/shapefileExport'
 import { readCurrentUser } from '@/core/auth/auth'
+import { generateCutFillReportDocx } from './generateCutFillReportDocx'
 import type { CutFillAnalysisResult, CutFillSummary, CutFillTableRow } from './cutFillTypes'
 
 function downloadText(filename: string, text: string, mime: string) {
@@ -316,9 +317,18 @@ export function exportCutFillPdfReport(
   doc.save(filename)
 }
 
-export type CutFillExportKind = 'csv' | 'xlsx' | 'geojson' | 'geotiff' | 'shp' | 'dxf' | 'pdf'
+export type CutFillExportKind = 'csv' | 'xlsx' | 'geojson' | 'geotiff' | 'shp' | 'dxf' | 'pdf' | 'docx'
 
-export async function runCutFillExport(kind: CutFillExportKind, result: CutFillAnalysisResult, aoiMask: Uint8Array | null) {
+export type CutFillExportOptions = {
+  aoiName?: string
+}
+
+export async function runCutFillExport(
+  kind: CutFillExportKind,
+  result: CutFillAnalysisResult,
+  aoiMask: Uint8Array | null,
+  options?: CutFillExportOptions,
+) {
   switch (kind) {
     case 'csv':
       exportCutFillCsv(result)
@@ -340,6 +350,9 @@ export async function runCutFillExport(kind: CutFillExportKind, result: CutFillA
       break
     case 'pdf':
       exportCutFillPdfReport(result)
+      break
+    case 'docx':
+      await generateCutFillReportDocx(result, aoiMask, { aoiName: options?.aoiName })
       break
     default:
       break

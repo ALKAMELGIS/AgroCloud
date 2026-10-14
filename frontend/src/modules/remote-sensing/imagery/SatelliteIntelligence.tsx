@@ -15462,6 +15462,7 @@ export default function SatelliteIntelligence() {
   const cutFill = useCutFillAnalysis({
     geometry: drawnGeometry ?? null,
     enabled: cutFillActive,
+    aoiName: aoiLayerLabel,
   });
   const elevationProfile = useElevationProfile({
     enabled: expandedEnvSection === 'elevation-profile',
@@ -23598,7 +23599,10 @@ export default function SatelliteIntelligence() {
       ...HYDRO_STEP_ORDER.filter(stepId => hydro.steps[stepId]?.status === 'done' && !!hydro.steps[stepId]?.result).map(
         stepId => {
           const st = hydro.steps[stepId];
-          const canExport = st.result?.kind === 'raster' && !!st.result.band;
+          const canExport =
+            st.result?.kind === 'raster'
+              ? !!st.result.band
+              : !!(st.result?.kind === 'vector' && st.result.data.features.length);
           const layerKind: 'raster' | 'vector' = st.result?.kind === 'raster' ? 'raster' : 'vector';
           return {
             id: `hydro-${stepId}`,
@@ -23611,7 +23615,14 @@ export default function SatelliteIntelligence() {
             opacity: st.opacity ?? 1,
             onOpacityChange: (v: number) => hydro.setOpacity(stepId, v),
             onToggle: () => hydro.toggleVisible(stepId),
-            onExport: canExport ? () => hydro.exportRaster(stepId) : undefined,
+            onExport: canExport
+              ? () =>
+                  void hydro.exportStep(
+                    stepId,
+                    st.result?.kind === 'raster' ? 'geotiff' : 'kml',
+                    hydroStreamModel,
+                  )
+              : undefined,
             onRemove: () => hydro.removeStep(stepId),
             ...(stepId === 'contours'
               ? {
@@ -29103,10 +29114,7 @@ export default function SatelliteIntelligence() {
                           onContourIntervalChange={setHydroContourInterval}
                           basinCount={hydroBasinCount}
                           onBasinCountChange={setHydroBasinCount}
-                          onRunStep={hydro.runStep}
-                          onToggleVisible={hydro.toggleVisible}
-                          onRemoveStep={hydro.removeStep}
-                          onExportRaster={hydro.exportRaster}
+                          onExportStep={(id, format, streamModel) => hydro.exportStep(id, format, streamModel)}
                           onRunAll={handleHydroRunAll}
                           onExportReport={handleHydroExportReport}
                           exportReportBusy={hydroExportBusy}

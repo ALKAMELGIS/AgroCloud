@@ -344,6 +344,36 @@
   border-color: rgba(255, 255, 255, 0.26);
 }
 
+.si-hydro__run--status {
+  cursor: default;
+}
+
+.si-hydro__card .si-hydro__status-badge {
+  flex: none;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--hy-border-soft);
+  color: var(--hy-muted);
+}
+
+.si-hydro__actions--export {
+  align-items: stretch;
+}
+
+.si-hydro__export-fmt {
+  flex: 1 1 72px;
+  min-width: 0;
+  display: flex;
+}
+
+.si-hydro__export-select {
+  width: 100%;
+  min-width: 0;
+}
+
 /* ── Result layer ───────────────────────────────────────────────────────── */
 .si-hydro__layer {
   margin-top: 8px;
@@ -707,5 +737,98 @@
 
 :is(html[data-theme='light'], .si-sat-ctx-dock--light) .si-hydro__act.is-on i {
   color: #065f46;
+}
+
+/* Run-only workflow — read-only layer status (no per-step play / options). */
+.si-hydro__status {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.si-hydro__status-row {
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--hy-border-soft);
+  background: var(--hy-glass-flat);
+  min-width: 0;
+}
+
+.si-hydro__status-row.is-running {
+  border-color: rgba(96, 165, 250, 0.35);
+}
+
+.si-hydro__status-row.is-done {
+  border-color: rgba(52, 211, 153, 0.28);
+}
+
+.si-hydro__status-row.is-error {
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+.si-hydro__status-icon {
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: #ffffff;
+  opacity: 0.92;
+}
+
+.si-hydro__status-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--hy-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.si-hydro__status-badge {
+  font-size: 9px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--hy-muted);
+  white-space: nowrap;
+}
+
+.si-hydro__status-row.is-done .si-hydro__status-badge {
+  color: #6ee7b7;
+}
+
+.si-hydro__status-row.is-running .si-hydro__status-badge {
+  color: #93c5fd;
+}
+
+.si-hydro__status-row.is-error .si-hydro__status-badge {
+  color: #fca5a5;
+}
+
+.si-hydro__status-err {
+  grid-column: 2 / -1;
+  font-size: 9px;
+  color: #fca5a5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.si-hydro__layers-note {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--hy-muted);
+}
+
+.si-hydro__layers-note strong {
+  color: var(--hy-text);
+  font-weight: 650;
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveSiActiveAoi } from './siAoiManager'
+import { resolveSiActiveAoi, siActiveAoiToAnalysisFeature } from './siAoiManager'
 import { drawnAoiClipSignature } from './siDrawnAoiLiveIndex'
 
 const ring = (lng: number, lat: number): [number, number][] => [
@@ -119,5 +119,26 @@ describe('resolveSiActiveAoi', () => {
 
     expect(result.source).toBe('layers')
     expect(result.geometry).toBe(layers)
+  })
+})
+
+describe('siActiveAoiToAnalysisFeature', () => {
+  it('returns null when AOI has no features', () => {
+    expect(
+      siActiveAoiToAnalysisFeature({ geometry: null, key: '', source: null }),
+    ).toBeNull()
+  })
+
+  it('merges layers mask FC into a single Polygon feature for hydro tools', () => {
+    const layers = polyFc(10, 54.0, 24.0)
+    const aoi = resolveSiActiveAoi({
+      layersEnabled: true,
+      layersMask: layers,
+    })
+    const feat = siActiveAoiToAnalysisFeature(aoi)
+    expect(feat?.type).toBe('Feature')
+    expect(feat?.geometry.type).toBe('Polygon')
+    expect(feat?.properties?.aoiSource).toBe('layers')
+    expect(feat?.geometry.coordinates[0]?.[0]).toEqual([54, 24])
   })
 })

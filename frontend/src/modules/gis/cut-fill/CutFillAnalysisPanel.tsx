@@ -361,29 +361,41 @@ export function CutFillAnalysisPanel({ model, onRowFlyTo }: Props) {
       )}
 
       {model.step === 'export' && (
-        <div className="si-cutfill__export-grid">
-          {(
-            [
-              ['csv', 'CSV'],
-              ['xlsx', 'Excel'],
-              ['geojson', 'GeoJSON'],
-              ['geotiff', 'GeoTIFF ΔZ'],
-              ['shp', 'Shapefile'],
-              ['dxf', 'DXF'],
-              ['pdf', 'PDF report'],
-            ] as Array<[CutFillExportKind, string]>
-          ).map(([kind, label]) => (
-            <button
-              key={kind}
-              type="button"
-              className="si-hydro__export-report"
-              disabled={!model.result}
-              onClick={() => void model.exportFormat(kind)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <>
+          <button
+            type="button"
+            className="si-hydro__export-report si-cutfill__export-docx"
+            disabled={!model.result}
+            title="Full Word report with map atlas, KPI tables, charts, and elevation profile"
+            onClick={() => void model.exportFormat('docx')}
+          >
+            <i className="fa-solid fa-file-word" aria-hidden />
+            <span>Export full report (DOCX)</span>
+          </button>
+          <div className="si-cutfill__export-grid">
+            {(
+              [
+                ['csv', 'CSV'],
+                ['xlsx', 'Excel'],
+                ['geojson', 'GeoJSON'],
+                ['geotiff', 'GeoTIFF ΔZ'],
+                ['shp', 'Shapefile'],
+                ['dxf', 'DXF'],
+                ['pdf', 'PDF report'],
+              ] as Array<[CutFillExportKind, string]>
+            ).map(([kind, label]) => (
+              <button
+                key={kind}
+                type="button"
+                className="si-hydro__export-report"
+                disabled={!model.result}
+                onClick={() => void model.exportFormat(kind)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </>
       )}
     </div>
   )

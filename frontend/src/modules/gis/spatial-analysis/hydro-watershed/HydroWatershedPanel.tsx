@@ -1,4 +1,10 @@
+import { useCallback, useState } from 'react'
 import type { HydroStepId } from './hydroEngine'
+import {
+  defaultExportFormatForResult,
+  exportFormatsForResult,
+  type HydroExportFormat,
+} from './hydroStepExport'
 import type { HydroStepState } from './useHydroWatershed'
 import './HydroWatershedPanel.css'
 
@@ -46,14 +52,21 @@ type HydroWatershedPanelProps = {
   /** Number of largest drainage basins to delineate. */
   basinCount: number
   onBasinCountChange: (count: number) => void
-  onRunStep: (id: HydroStepId) => void
-  onToggleVisible: (id: HydroStepId) => void
-  onRemoveStep: (id: HydroStepId) => void
-  onExportRaster: (id: HydroStepId) => void
+  onExportStep: (
+    id: HydroStepId,
+    format: HydroExportFormat,
+    streamModel: 'strahler' | 'shreve',
+  ) => void | Promise<void>
   onRunAll: () => void
   onExportReport?: () => void
   exportReportBusy?: boolean
   exportReportLabel?: string
+}
+
+function stepCanExport(st: HydroStepState): boolean {
+  if (st.status !== 'done' || !st.result) return false
+  if (st.result.kind === 'raster') return !!st.result.band
+  return st.result.data.features.length > 0
 }
 
 export function HydroWatershedPanel({
@@ -67,16 +80,44 @@ export function HydroWatershedPanel({
   onContourIntervalChange,
   basinCount,
   onBasinCountChange,
-  onRunStep,
-  onToggleVisible,
-  onRemoveStep,
-  onExportRaster,
+  onExportStep,
   onRunAll,
   onExportReport,
   exportReportBusy,
   exportReportLabel,
 }: HydroWatershedPanelProps) {
   const anyDone = Object.values(steps).some(st => st.status === 'done')
+  const [formatByStep, setFormatByStep] = useState<Partial<Record<HydroStepId, HydroExportFormat>>>({})
+  const [exportBusyId, setExportBusyId] = useState<HydroStepId | null>(null)
+
+  const resolveFormat = useCallback(
+    (stepId: HydroStepId, st: HydroStepState): HydroExportFormat => {
+      const result = st.result!
+      const picked = formatByStep[stepId]
+      const allowed = exportFormatsForResult(result, stepId).map(f => f.id)
+      if (picked && allowed.includes(picked)) return picked
+      return defaultExportFormatForResult(result)
+    },
+    [formatByStep],
+  )
+
+  const handleExport = useCallback(
+    async (stepId: HydroStepId) => {
+      const st = steps[stepId]
+      if (!stepCanExport(st)) return
+      const format = resolveFormat(stepId, st)
+      setExportBusyId(stepId)
+      try {
+        await onExportStep(stepId, format, streamModel)
+      } catch (err) {
+        window.alert(err instanceof Error ? err.message : String(err))
+      } finally {
+        setExportBusyId(null)
+      }
+    },
+    [onExportStep, resolveFormat, steps, streamModel],
+  )
+
   return (
     <div className="si-hydro">
       <header className="si-hydro__head">
@@ -133,20 +174,14 @@ export function HydroWatershedPanel({
           const running = st.status === 'running'
           const done = st.status === 'done'
           const failed = st.status === 'error'
-          const canExport = done && st.result?.kind === 'raster' && !!st.result.band
+          const canExport = stepCanExport(st)
           return (
             <div
               key={step.id}
               role="listitem"
-              className={`si-hydro__card${done ? ' is-done' : ''}${failed ? ' is-error' : ''}`}
+              className={`si-hydro__card${done ? ' is-done' : ''}${failed ? ' is-error' : ''}${running ? ' is-running' : ''}`}
             >
-              <button
-                type="button"
-                className="si-hydro__run"
-                onClick={() => onRunStep(step.id)}
-                disabled={!hasAoi || running}
-                title={`Run ${step.label}`}
-              >
+              <div className="si-hydro__run si-hydro__run--status" aria-label={step.label}>
                 <span className="si-hydro__run-icon" aria-hidden>
                   {running ? (
                     <i className="fa-solid fa-circle-notch fa-spin" />
@@ -155,14 +190,11 @@ export function HydroWatershedPanel({
                   )}
                 </span>
                 <span className="si-hydro__run-label">{step.label}</span>
-                <span className="si-hydro__run-play" aria-hidden>
-                  {running ? (
-                    <i className="fa-solid fa-spinner fa-spin" />
-                  ) : (
-                    <i className={`fa-solid ${done ? 'fa-rotate-right' : 'fa-play'}`} />
-                  )}
-                </span>
-              </button>
+                {!done && !failed && !running ? (
+                  <span className="si-hydro__status-badge">Pending</span>
+                ) : null}
+                {running ? <span className="si-hydro__status-badge">Running…</span> : null}
+              </div>
 
               {done && st.result ? (
                 <div className="si-hydro__layer">
@@ -233,36 +265,48 @@ export function HydroWatershedPanel({
                     </dl>
                   ) : null}
 
-                  <div className="si-hydro__actions">
-                    <button
-                      type="button"
-                      className={`si-hydro__act${st.visible ? ' is-on' : ''}`}
-                      onClick={() => onToggleVisible(step.id)}
-                      title={st.visible ? 'Hide layer' : 'Show layer'}
-                      aria-pressed={st.visible}
-                    >
-                      <i className={`fa-solid ${st.visible ? 'fa-eye' : 'fa-eye-slash'}`} aria-hidden />
-                    </button>
-                    {canExport ? (
+                  {canExport ? (
+                    <div className="si-hydro__actions si-hydro__actions--export">
+                      <label className="si-hydro__export-fmt">
+                        <span className="visually-hidden">Export format</span>
+                        <select
+                          className="si-hydro__opt-select si-hydro__export-select"
+                          value={resolveFormat(step.id, st)}
+                          onChange={e =>
+                            setFormatByStep(prev => ({
+                              ...prev,
+                              [step.id]: e.target.value as HydroExportFormat,
+                            }))
+                          }
+                          aria-label={`Export format for ${step.label}`}
+                        >
+                          {exportFormatsForResult(st.result, step.id).map(f => (
+                            <option key={f.id} value={f.id}>
+                              {f.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
                       <button
                         type="button"
                         className="si-hydro__act"
-                        onClick={() => onExportRaster(step.id)}
-                        title="Export raster — GeoTIFF clipped to AOI"
+                        onClick={() => void handleExport(step.id)}
+                        disabled={exportBusyId === step.id}
+                        title={
+                          st.result.kind === 'raster'
+                            ? 'Export raster — GeoTIFF clipped to AOI'
+                            : 'Export vector — clipped to AOI'
+                        }
                       >
-                        <i className="fa-solid fa-file-export" aria-hidden />
+                        {exportBusyId === step.id ? (
+                          <i className="fa-solid fa-circle-notch fa-spin" aria-hidden />
+                        ) : (
+                          <i className="fa-solid fa-file-export" aria-hidden />
+                        )}
                         <span className="si-hydro__act-text">Export</span>
                       </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="si-hydro__act si-hydro__act--danger"
-                      onClick={() => onRemoveStep(step.id)}
-                      title="Remove layer"
-                    >
-                      <i className="fa-solid fa-trash-can" aria-hidden />
-                    </button>
-                  </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -271,6 +315,9 @@ export function HydroWatershedPanel({
           )
         })}
       </div>
+      <p className="si-hydro__layers-note">
+        Manage added layers in <strong>Layer settings → Main</strong>.
+      </p>
     </div>
   )
 }

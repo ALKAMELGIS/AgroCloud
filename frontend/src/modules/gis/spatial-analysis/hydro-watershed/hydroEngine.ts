@@ -1014,8 +1014,8 @@ export function computeContours(ctx: HydroComputeContext): HydroStepResult {
 
 // ── Primary basins / watershed delineation (shared multi-outlet colouring) ─────
 
-/** Coordinated qualitative palette — same colours on map, legend, and report. */
-const BASIN_PALETTE: Array<[number, number, number]> = [
+/** Coordinated qualitative palette — same colours on map, legend, export, and report. */
+export const HYDRO_BASIN_PALETTE: Array<[number, number, number]> = [
   [31, 119, 180],
   [255, 127, 14],
   [44, 160, 44],
@@ -1029,6 +1029,11 @@ const BASIN_PALETTE: Array<[number, number, number]> = [
   [255, 187, 120],
   [197, 176, 213],
 ]
+
+export function hydroBasinRgb(rank1Based: number): [number, number, number] {
+  const rank = Math.max(1, Math.round(rank1Based))
+  return HYDRO_BASIN_PALETTE[(rank - 1) % HYDRO_BASIN_PALETTE.length]!
+}
 
 type PrimaryBasinRasterOptions = {
   bandName: string
@@ -1117,7 +1122,7 @@ function buildPrimaryBasinRaster(
       return [120, 120, 120, options.alphaMinor]
     }
     const rank = (id - 1) | 0
-    const [r, g, b] = BASIN_PALETTE[rank % BASIN_PALETTE.length]!
+    const [r, g, b] = HYDRO_BASIN_PALETTE[rank % HYDRO_BASIN_PALETTE.length]!
     if (drawBoundaries) {
       const x = i % w
       const y = (i / w) | 0
@@ -1142,7 +1147,7 @@ function buildPrimaryBasinRaster(
   const largestKm2 = topOutlets.length ? (topOutlets[0]![1] * cellArea) / 1e6 : 0
   const totalPrimaryKm2 = topOutlets.reduce((s, [, size]) => s + (size * cellArea) / 1e6, 0)
   const swatches: HydroLegendSwatch[] = topOutlets.map(([, size], idx) => ({
-    color: rgbCss(BASIN_PALETTE[idx % BASIN_PALETTE.length]!),
+    color: rgbCss(HYDRO_BASIN_PALETTE[idx % HYDRO_BASIN_PALETTE.length]!),
     label: `${options.labelPrefix} ${idx + 1} · ${((size * cellArea) / 1e6).toFixed(2)} km²`,
   }))
   if (options.includeMinorGrey && ranked.length > topOutlets.length) {
@@ -1229,15 +1234,22 @@ export function buildAoiMask(
   geometry: GeoJSON.Geometry | GeoJSON.Feature | null | undefined,
 ): Uint8Array | null {
   if (!geometry) return null
-  const geom =
-    (geometry as GeoJSON.Feature).type === 'Feature'
-      ? (geometry as GeoJSON.Feature).geometry
-      : (geometry as GeoJSON.Geometry)
-  if (!geom) return null
-  let polys: number[][][][]
-  if (geom.type === 'Polygon') polys = [geom.coordinates as number[][][]]
-  else if (geom.type === 'MultiPolygon') polys = geom.coordinates as number[][][][]
-  else return null
+  const polys: number[][][][] = []
+  const pushGeom = (geom: GeoJSON.Geometry | null | undefined) => {
+    if (!geom) return
+    if (geom.type === 'Polygon') polys.push(geom.coordinates as number[][][])
+    else if (geom.type === 'MultiPolygon') polys.push(...(geom.coordinates as number[][][][]))
+  }
+  if ((geometry as GeoJSON.FeatureCollection).type === 'FeatureCollection') {
+    for (const feat of (geometry as GeoJSON.FeatureCollection).features) pushGeom(feat.geometry)
+  } else {
+    const geom =
+      (geometry as GeoJSON.Feature).type === 'Feature'
+        ? (geometry as GeoJSON.Feature).geometry
+        : (geometry as GeoJSON.Geometry)
+    pushGeom(geom)
+  }
+  if (!polys.length) return null
 
   const { width: w, height: h } = dem
   const mask = new Uint8Array(w * h)

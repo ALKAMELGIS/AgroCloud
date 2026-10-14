@@ -14,6 +14,7 @@ import {
   buildGdalPamAuxXml,
   computeFloatRasterStats,
   writeFloat32GisGeoTiff,
+  writeRgbGisGeoTiff,
 } from '../../layers/gisGeoTiffWriter'
 
 /** Circumference of the Web-Mercator world in projected metres. */
@@ -135,6 +136,89 @@ export function buildAoiGeoTiff(
     auxXml,
     auxFilename: `${filename}.aux.xml`,
   }
+}
+
+function loadMapPreviewRgba(dataUrl: string, width: number, height: number): Promise<Uint8ClampedArray> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        reject(new Error('Could not decode map preview for export.'))
+        return
+      }
+      ctx.drawImage(img, 0, 0, width, height)
+      resolve(ctx.getImageData(0, 0, width, height).data)
+    }
+    img.onerror = () => reject(new Error('Could not decode map preview for export.'))
+    img.src = dataUrl
+  })
+}
+
+/**
+ * GeoTIFF RGBA clipped to AOI — matches on-map symbology (same PNG as KMZ / map layer).
+ */
+export async function buildAoiRgbGeoTiffFromPreview(
+  dataUrl: string,
+  band: GeoBand,
+  aoiMask: Uint8Array | null,
+): Promise<ExportGeoTiffResult> {
+  if (!dataUrl?.startsWith('data:')) throw new Error('No styled map preview for GeoTIFF export.')
+  const { width, height } = band
+  const src = await loadMapPreviewRgba(dataUrl, width, height)
+  const win = maskWindow(aoiMask, width, height)
+  const cw = win.c1 - win.c0 + 1
+  const ch = win.r1 - win.r0 + 1
+  const out = new Uint8Array(cw * ch * 4)
+  for (let r = 0; r < ch; r += 1) {
+    const srcRow = (win.r0 + r) * width
+    const dstRow = r * cw
+    for (let c = 0; c < cw; c += 1) {
+      const srcIdx = srcRow + win.c0 + c
+      const dstPx = (dstRow + c) * 4
+      const inside = !aoiMask || aoiMask[srcIdx]
+      if (inside) {
+        const p = srcIdx * 4
+        out[dstPx] = src[p]!
+        out[dstPx + 1] = src[p + 1]!
+        out[dstPx + 2] = src[p + 2]!
+        out[dstPx + 3] = src[p + 3]!
+      } else {
+        out[dstPx + 3] = 0
+      }
+    }
+  }
+
+  const mapSize = TILE_SIZE * 2 ** band.zoom
+  const pixelScale = WORLD_METERS / mapSize
+  const winOriginPxX = band.originWorldPxX + win.c0
+  const winOriginPxY = band.originWorldPxY + win.r0
+  const tiepointX = -WORLD_METERS / 2 + winOriginPxX * pixelScale
+  const tiepointY = WORLD_METERS / 2 - winOriginPxY * pixelScale
+
+  const arrayBuffer = writeRgbGisGeoTiff({
+    width: cw,
+    height: ch,
+    pixels: out,
+    samplesPerPixel: 4,
+    pixelScaleX: pixelScale,
+    pixelScaleY: pixelScale,
+    tiepointX,
+    tiepointY,
+    epsg: 3857,
+    geographic: false,
+    description: `${band.name} (styled RGB)`,
+  })
+
+  const safe = band.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+  const filename = `${safe || 'raster'}-styled.tif`
+  return { blob: new Blob([arrayBuffer], { type: 'image/tiff' }), filename }
 }
 
 /** Trigger a browser download for a Blob. */

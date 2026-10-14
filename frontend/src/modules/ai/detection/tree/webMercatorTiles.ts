@@ -341,7 +341,14 @@ export function geometryBBox(input: GeoJSON.Geometry | GeoJSON.Feature | null | 
   }
   if (geom.type === 'Polygon') (geom.coordinates as number[][][]).forEach(visitRing)
   else if (geom.type === 'MultiPolygon') (geom.coordinates as number[][][][]).forEach(poly => poly.forEach(visitRing))
-  else return null
+  else if (geom.type === 'FeatureCollection') {
+    for (const feat of (geom as GeoJSON.FeatureCollection).features) {
+      const sub = feat.geometry
+      if (!sub) continue
+      if (sub.type === 'Polygon') (sub.coordinates as number[][][]).forEach(visitRing)
+      else if (sub.type === 'MultiPolygon') (sub.coordinates as number[][][][]).forEach(poly => poly.forEach(visitRing))
+    }
+  } else return null
   if (!Number.isFinite(west) || !Number.isFinite(east)) return null
   return { west, south, east, north }
 }
