@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { GisUploadCloudSources } from '@/modules/data-management/import/GisUploadCloudSources';
 import {
@@ -77,24 +77,40 @@ function uid(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-function WorkspaceSection({ title, lead, children }: { title?: string; lead?: string; children: ReactNode }) {
+function WorkspaceSection({
+  title,
+  titleTooltip,
+  children,
+}: {
+  title?: string;
+  titleTooltip?: string;
+  children: ReactNode;
+}) {
   return (
     <div>
-      {title ? <h3 className="gis-dm-section-title">{title}</h3> : null}
-      {lead ? <p className="gis-dm-lead">{lead}</p> : null}
+      {title ? (
+        <h3 className="gis-dm-section-title" title={titleTooltip}>
+          {title}
+        </h3>
+      ) : null}
       {children}
     </div>
   );
 }
 
-function ComingSoon({ label, hint }: { label: string; hint?: string }) {
+function ComingSoon({ label }: { label: string }) {
   return (
-    <div className="gis-dm-stub" role="status">
-      <i className="fa-solid fa-screwdriver-wrench" aria-hidden />
-      <h3 className="gis-dm-section-title">{label}</h3>
-      <p className="gis-dm-lead">{hint || 'This category is on the enterprise roadmap and requires gateway support.'}</p>
+    <div className="gis-dm-stub gis-dm-stub--compact" role="status">
+      <i className="fa-solid fa-clock" aria-hidden />
+      <span className="gis-dm-section-title">{label}</span>
+      <span className="gis-dm-rail-hint">Soon</span>
     </div>
   );
+}
+
+function formatLabelSummary(labels: string[], max = 4): string {
+  if (labels.length <= max) return labels.join(' · ');
+  return `${labels.slice(0, max).join(' · ')} +${labels.length - max}`;
 }
 
 export function GisDataManager({
@@ -126,7 +142,7 @@ export function GisDataManager({
   const folderInputRef = useRef<HTMLInputElement>(null);
   const [category, setCategory] = useState<GisDataManagerCategory>(initialCategory);
   const [search, setSearch] = useState('');
-  const [railCollapsed, setRailCollapsed] = useState(false);
+  const [railCollapsed, setRailCollapsed] = useState(true);
   const [wizardStep, setWizardStep] = useState<GisImportWizardStep>('source');
   const [layerName, setLayerName] = useState('');
   const [remoteUrl, setRemoteUrl] = useState('');
@@ -156,7 +172,7 @@ export function GisDataManager({
   const [wfsTypeName, setWfsTypeName] = useState('');
   const [webServices, setWebServices] = useState(() => listWebServices());
   const [recentTick, setRecentTick] = useState(0);
-  const [size, setSize] = useState({ w: 720, h: 500 });
+  const [size, setSize] = useState({ w: 580, h: 400 });
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const resizeRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const dragRef = useRef<{ dx: number; dy: number } | null>(null);
@@ -171,6 +187,7 @@ export function GisDataManager({
     if (!open) return;
     setCategory(initialCategory);
     setWizardStep('source');
+    setRailCollapsed(true);
   }, [open, initialCategory]);
 
   // Open centred on screen; on window resize just keep it inside the viewport (don't
@@ -211,7 +228,12 @@ export function GisDataManager({
 
   const filteredCategories = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return GIS_DM_CATEGORIES;
+    if (!q) {
+      return [
+        ...GIS_DM_CATEGORIES.filter(c => c.ready),
+        ...GIS_DM_CATEGORIES.filter(c => !c.ready),
+      ];
+    }
     return GIS_DM_CATEGORIES.filter(
       c => c.label.toLowerCase().includes(q) || c.id.includes(q) || (c.hint || '').toLowerCase().includes(q),
     );
@@ -466,8 +488,8 @@ export function GisDataManager({
       const s = resizeRef.current;
       if (!s) return;
       setSize({
-        w: Math.max(520, Math.min(window.innerWidth - 24, s.w + (ev.clientX - s.x))),
-        h: Math.max(380, Math.min(window.innerHeight - 24, s.h + (ev.clientY - s.y))),
+        w: Math.max(480, Math.min(window.innerWidth - 24, s.w + (ev.clientX - s.x))),
+        h: Math.max(320, Math.min(window.innerHeight - 24, s.h + (ev.clientY - s.y))),
       });
     };
     const onUp = () => {
@@ -515,7 +537,7 @@ export function GisDataManager({
   const renderWorkspace = () => {
     if (category === 'recent') {
       return (
-        <WorkspaceSection title="Recent sources" lead="Recently imported or connected data sources on this browser.">
+        <WorkspaceSection title="Recent">
           {recentItems.length > 0 ? (
             <div className="gis-dm-list-actions">
               <button
@@ -533,7 +555,7 @@ export function GisDataManager({
             </div>
           ) : null}
           <div className="gis-dm-card-list">
-            {recentItems.length === 0 ? <p className="gis-dm-lead">No recent sources yet.</p> : null}
+            {recentItems.length === 0 ? <p className="gis-dm-empty">No recent items.</p> : null}
             {recentItems.map(item => (
               <div key={item.id} className="gis-dm-card">
                 <i className="fa-solid fa-clock" aria-hidden />
@@ -575,9 +597,9 @@ export function GisDataManager({
 
     if (category === 'favorites') {
       return (
-        <WorkspaceSection title="Favorites" lead="Pin databases, services, and files you use often.">
+        <WorkspaceSection title="Favorites">
           <div className="gis-dm-card-list">
-            {favoriteItems.length === 0 ? <p className="gis-dm-lead">No favorites yet.</p> : null}
+            {favoriteItems.length === 0 ? <p className="gis-dm-empty">No favorites.</p> : null}
             {favoriteItems.map(item => (
               <div key={item.id} className="gis-dm-card">
                 <i className="fa-solid fa-star" aria-hidden />
@@ -594,11 +616,9 @@ export function GisDataManager({
 
     if (category === 'giscontent') {
       return (
-        <WorkspaceSection title="GIS Content" lead="Hosted feature layers saved in this browser portal.">
+        <WorkspaceSection title="GIS Content">
           <div className="gis-dm-card-list">
-            {portalItems.length === 0 ? (
-              <p className="gis-dm-lead">No hosted layers yet. Publish from GIS Content or import a file.</p>
-            ) : null}
+            {portalItems.length === 0 ? <p className="gis-dm-empty">No hosted layers.</p> : null}
             {portalItems.map(item => {
               const busy = addingPortalRowId === item.id;
               return (
@@ -631,7 +651,7 @@ export function GisDataManager({
       const layer = rasterLayerTools?.layer ?? null
       const display = rasterLayerTools?.display
       return (
-        <WorkspaceSection title="Raster Layer" lead="Style and manage the active map raster. Add a layer from the actions below — no separate Load row.">
+        <WorkspaceSection title="Raster">
           {layer && display && rasterLayerTools ? (
             <div className="gis-dm-raster-layer">
               <div className="gis-dm-raster-layer__head">
@@ -707,8 +727,7 @@ export function GisDataManager({
           ) : (
             <div className="gis-dm-raster-empty" role="status">
               <i className="fa-regular fa-image" aria-hidden />
-              <p>No raster layer on the map yet.</p>
-              <p className="gis-dm-lead">Add a Raster Layer from file, URL, or cloud — then style it here.</p>
+              <p>No raster on map.</p>
             </div>
           )}
 
@@ -863,13 +882,7 @@ export function GisDataManager({
             ) : null}
 
             {preview ? (
-              <div className="gis-dm-preview-panel">
-                <dl className="gis-dm-kv">
-                  <dt>File</dt>
-                  <dd>{preview.filename}</dd>
-                  <dt>CRS</dt>
-                  <dd>{preview.crsHint || 'Read on add'}</dd>
-                </dl>
+              <div className="gis-dm-preview-panel gis-dm-preview-panel--actions-only">
                 <button
                   type="button"
                   className="gis-dm-btn gis-dm-btn--primary"
@@ -887,17 +900,13 @@ export function GisDataManager({
 
     if (category === 'vector' || category === 'bim') {
       const labels = category === 'bim' ? ['IFC'] : [...VECTOR_FORMAT_LABEL_LIST];
+      const formatSummary = formatLabelSummary(labels);
+      const formatTitle = labels.join(', ');
       return (
-        <WorkspaceSection
-          title={category === 'bim' ? 'BIM / CAD' : 'Vector data'}
-          lead={
-            category === 'bim'
-              ? 'IFC models are anchored as map footprints for GIS workflows.'
-              : 'Shapefile (ZIP or multi-part), GeoJSON, TopoJSON, KML/KMZ, GPX, CSV, Excel.'
-          }
-        >
+        <WorkspaceSection title={category === 'bim' ? 'BIM / CAD' : 'Vector'}>
           <div
-            className={`gis-dm-dropzone${dropActive ? ' is-active' : ''}`}
+            className={`gis-dm-dropzone gis-dm-dropzone--compact${dropActive ? ' is-active' : ''}`}
+            title={formatTitle}
             role="button"
             tabIndex={0}
             onClick={() => fileInputRef.current?.click()}
@@ -918,8 +927,8 @@ export function GisDataManager({
             <div className="gis-dm-dropzone-icon" aria-hidden>
               <i className="fa-solid fa-cloud-arrow-up" />
             </div>
-            <p className="gis-dm-dropzone-title">Drag & drop files</p>
-            <p className="gis-dm-dropzone-sub">{labels.join(' · ')}</p>
+            <p className="gis-dm-dropzone-title">Drop files</p>
+            <p className="gis-dm-dropzone-sub">{formatSummary}</p>
           </div>
           <input
             ref={fileInputRef}
@@ -948,16 +957,16 @@ export function GisDataManager({
           />
           <div className="gis-dm-actions-row">
             <button type="button" className="gis-dm-btn" onClick={() => fileInputRef.current?.click()}>
-              <i className="fa-solid fa-folder-open" aria-hidden /> Browse Files
+              <i className="fa-solid fa-folder-open" aria-hidden /> Files
             </button>
             <button type="button" className="gis-dm-btn" onClick={() => folderInputRef.current?.click()}>
-              <i className="fa-solid fa-folder-tree" aria-hidden /> Browse Folder
+              <i className="fa-solid fa-folder-tree" aria-hidden /> Folder
             </button>
           </div>
 
           {category !== 'bim' ? (
-            <div className="gis-dm-field" style={{ marginTop: 14 }}>
-              <span>Import from URL</span>
+            <div className="gis-dm-field" style={{ marginTop: 10 }}>
+              <span>URL</span>
               <div className="gis-dm-url-row">
                 <input
                   className="gis-dm-input"
@@ -990,7 +999,7 @@ export function GisDataManager({
                     })();
                   }}
                 >
-                  <i className="fa-solid fa-globe" aria-hidden /> {isImportingRemote ? 'Importing…' : 'Import URL'}
+                  <i className="fa-solid fa-globe" aria-hidden /> {isImportingRemote ? '…' : 'Import'}
                 </button>
               </div>
             </div>
@@ -1006,13 +1015,13 @@ export function GisDataManager({
             </div>
           ) : null}
 
-          <label className="gis-dm-field" style={{ marginTop: 12 }}>
-            <span>Layer name (optional)</span>
-            <input className="gis-dm-input" value={layerName} onChange={e => setLayerName(e.target.value)} placeholder="Display name" />
+          <label className="gis-dm-field" style={{ marginTop: 10 }}>
+            <span>Name</span>
+            <input className="gis-dm-input" value={layerName} onChange={e => setLayerName(e.target.value)} placeholder="Layer name" />
           </label>
           <label className="gis-dm-inline-check">
             <input type="checkbox" checked={zoomToLayer} onChange={e => setZoomToLayer(e.target.checked)} />
-            Zoom to layer after import
+            Zoom after import
           </label>
 
           {stagedFiles.length ? (
@@ -1048,42 +1057,19 @@ export function GisDataManager({
           ) : null}
 
           {preview ? (
-            <div className="gis-dm-preview-panel">
-              <h4 className="gis-dm-preview-title">Live preview</h4>
-              <dl className="gis-dm-kv">
-                <dt>File</dt>
-                <dd>{preview.filename}</dd>
-                <dt>Type</dt>
-                <dd>{preview.geometryTypes.join(', ') || '—'}</dd>
-                <dt>Features</dt>
-                <dd>{preview.featureCount}</dd>
-                <dt>CRS</dt>
-                <dd>{preview.crsHint || 'Unknown'}</dd>
-                <dt>Extent</dt>
-                <dd>{preview.bbox ? preview.bbox.map(n => n.toFixed(4)).join(', ') : '—'}</dd>
-                <dt>Fields</dt>
-                <dd>{preview.sampleFields.slice(0, 12).join(', ') || '—'}</dd>
-                <dt>Memory est.</dt>
-                <dd>~{(preview.memoryEstimate / (1024 * 1024)).toFixed(1)} MB</dd>
-              </dl>
-              <div className="gis-dm-chips">
-                {validationIssues.map(issue => (
-                  <span
-                    key={issue.code}
-                    className={`gis-dm-chip gis-dm-chip--${
-                      issue.severity === 'error' ? 'error' : issue.severity === 'warning' ? 'warn' : 'ok'
-                    }`}
-                  >
-                    {issue.severity === 'info' ? '✓' : issue.severity === 'warning' ? '!' : '×'} {issue.message}
-                  </span>
-                ))}
-              </div>
+            <div className="gis-dm-preview-panel gis-dm-preview-panel--actions-only">
               <button
                 type="button"
                 className="gis-dm-btn gis-dm-btn--primary"
                 disabled={
                   importBusy || validationIssues.some(i => i.severity === 'error' && i.code === 'missing_features')
                 }
+                title={
+                  validationIssues.length
+                    ? validationIssues.map(i => i.message).join(' · ')
+                    : `Import ${preview.filename}`
+                }
+                aria-label={`Import ${preview.filename} to map`}
                 onClick={() => void runImport()}
               >
                 <i className="fa-solid fa-circle-check" aria-hidden /> {importBusy ? 'Importing…' : 'Import to map'}
@@ -1096,10 +1082,7 @@ export function GisDataManager({
 
     if (category === 'database') {
       return (
-        <WorkspaceSection
-          title="Database connections"
-          lead="Save enterprise connection profiles. Live PostGIS queries run through the GIS gateway when available."
-        >
+        <WorkspaceSection title="Database">
           <div className="gis-dm-grid-2">
             <label className="gis-dm-field">
               <span>Platform</span>
@@ -1203,7 +1186,7 @@ export function GisDataManager({
               <i className="fa-solid fa-plug" aria-hidden /> Test & Save
             </button>
           </div>
-          {dbTablesMsg ? <p className="gis-dm-lead">{dbTablesMsg}</p> : null}
+          {dbTablesMsg ? <p className="gis-dm-empty gis-dm-empty--inline">{dbTablesMsg}</p> : null}
           <div className="gis-dm-card-list" style={{ marginTop: 12 }}>
             {dbProfiles.map(p => (
               <div key={p.id} className="gis-dm-card">
@@ -1234,7 +1217,7 @@ export function GisDataManager({
 
     if (category === 'cloud') {
       return (
-        <WorkspaceSection title="Cloud storage" lead="Browse OneDrive, Google Drive, and Dropbox. S3 / Azure / GCS use gateway credentials.">
+        <WorkspaceSection title="Cloud">
           <GisUploadCloudSources
             cloudOnly
             onFile={file => {
@@ -1245,22 +1228,15 @@ export function GisDataManager({
             }}
             onStatus={msg => pushToast('info', msg)}
           />
-          <div className="gis-dm-stub" style={{ marginTop: 14 }}>
-            <i className="fa-solid fa-cloud" aria-hidden />
-            <p className="gis-dm-lead">AWS S3, Azure Blob, GCS, and Cloudflare R2 browsers require the enterprise GIS gateway proxy.</p>
-          </div>
         </WorkspaceSection>
       );
     }
 
     if (category === 'web') {
       return (
-        <WorkspaceSection
-          title="Web services"
-          lead="ArcGIS Feature/Map/Image services, OGC WMS/WMTS/WFS, XYZ tiles, and STAC endpoints."
-        >
+        <WorkspaceSection title="Web services">
           <label className="gis-dm-field">
-            <span>ArcGIS service URL</span>
+            <span>ArcGIS URL</span>
             <input
               className="gis-dm-input"
               value={arcgisUrl}
@@ -1457,12 +1433,9 @@ export function GisDataManager({
 
     if (category === 'lidar') {
       return (
-        <WorkspaceSection
-          title="LiDAR"
-          lead="LAS / LAZ / COPC / EPT — client planning with gateway conversion for DSM/DTM."
-        >
+        <WorkspaceSection title="LiDAR">
           <div
-            className="gis-dm-dropzone"
+            className="gis-dm-dropzone gis-dm-dropzone--compact"
             role="button"
             tabIndex={0}
             onClick={() => fileInputRef.current?.click()}
@@ -1473,8 +1446,8 @@ export function GisDataManager({
             <div className="gis-dm-dropzone-icon" aria-hidden>
               <i className="fa-solid fa-mountain" />
             </div>
-            <p className="gis-dm-dropzone-title">Drop LAS / LAZ / XYZ / PLY</p>
-            <p className="gis-dm-dropzone-sub">Gateway converts to DSM, DTM, intensity, and hillshade</p>
+            <p className="gis-dm-dropzone-title">Drop LAS / LAZ</p>
+            <p className="gis-dm-dropzone-sub">LAS · LAZ · COPC · EPT</p>
           </div>
           <input
             ref={fileInputRef}
@@ -1498,18 +1471,20 @@ export function GisDataManager({
       );
     }
     if (category === 'realtime') {
-      return <ComingSoon label="Real-Time" hint="Sensor and stream connectors for live GIS feeds." />;
+      return <ComingSoon label="Real-Time" />;
     }
     if (category === 'ai') {
-      return <ComingSoon label="AI Import" hint="Automatic schema detection and format recovery." />;
+      return <ComingSoon label="AI Import" />;
     }
     if (category === 'enterprise') {
-      return <ComingSoon label="Enterprise" hint="Portal SSO, versioned geodatabases, and gateway catalogs." />;
+      return <ComingSoon label="Enterprise" />;
     }
     return null;
   };
 
   const stepIndex = WIZARD_STEPS.findIndex(s => s.id === wizardStep);
+  const wizardActive = stagedFiles.length > 0 || wizardStep !== 'source';
+  const searchActive = search.trim().length > 0;
 
   return createPortal(
     <>
@@ -1532,13 +1507,21 @@ export function GisDataManager({
             <span className="gis-dm-brand-mark" aria-hidden>
               <i className="fa-solid fa-map" />
             </span>
-            <div>
-              <h2 className="gis-dm-title" id="gis-dm-title">
-                GIS Data Manager
-              </h2>
-              <p className="gis-dm-subtitle">Enterprise import · connect · manage</p>
-            </div>
+            <h2 className="gis-dm-title" id="gis-dm-title">
+              GIS Data Manager
+            </h2>
           </div>
+          <label className="gis-dm-search-field gis-dm-search-field--head">
+            <i className="fa-solid fa-magnifying-glass" aria-hidden />
+            <input
+              type="search"
+              placeholder="Search sources…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              aria-label="Search data sources"
+              onPointerDown={e => e.stopPropagation()}
+            />
+          </label>
           <div className="gis-dm-head-actions">
             <button
               type="button"
@@ -1554,39 +1537,32 @@ export function GisDataManager({
           </div>
         </header>
 
-        <div className="gis-dm-search">
-          <label className="gis-dm-search-field">
-            <i className="fa-solid fa-magnifying-glass" aria-hidden />
-            <input
-              type="search"
-              placeholder="Search data sources…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              aria-label="Search data sources"
-            />
-          </label>
-        </div>
-
         <div className="gis-dm-body">
           <nav className="gis-dm-rail" aria-label="Data source categories">
-            {filteredCategories.map(c => (
-              <button
-                key={c.id}
-                type="button"
-                className={`gis-dm-rail-btn${category === c.id ? ' is-active' : ''}${!c.ready ? ' is-disabled' : ''}`}
-                onClick={() => {
-                  setCategory(c.id);
-                  setWizardStep('source');
-                }}
-                title={c.hint || c.label}
-              >
-                <span className="gis-dm-rail-icon" aria-hidden>
-                  <i className={c.icon} />
-                </span>
-                <span className="gis-dm-rail-label">{c.label}</span>
-                {!c.ready ? <span className="gis-dm-rail-hint">Soon</span> : null}
-              </button>
-            ))}
+            {filteredCategories.map((c, i) => {
+              const showDivider =
+                !searchActive && !c.ready && (i === 0 || filteredCategories[i - 1]?.ready);
+              return (
+                <Fragment key={c.id}>
+                  {showDivider ? <div className="gis-dm-rail-divider" aria-hidden /> : null}
+                  <button
+                    type="button"
+                    className={`gis-dm-rail-btn${category === c.id ? ' is-active' : ''}${!c.ready ? ' is-soon' : ''}`}
+                    onClick={() => {
+                      setCategory(c.id);
+                      setWizardStep('source');
+                    }}
+                    title={c.hint || c.label}
+                  >
+                    <span className="gis-dm-rail-icon" aria-hidden>
+                      <i className={c.icon} />
+                    </span>
+                    <span className="gis-dm-rail-label">{c.label}</span>
+                    {!c.ready ? <span className="gis-dm-rail-hint">Soon</span> : null}
+                  </button>
+                </Fragment>
+              );
+            })}
           </nav>
           <div className="gis-dm-main">
             <div className="gis-dm-workspace">{renderWorkspace()}</div>
@@ -1599,16 +1575,20 @@ export function GisDataManager({
         </div>
 
         <footer className="gis-dm-footer">
-          <div className="gis-dm-wizard-steps" aria-label="Import wizard steps">
-            {WIZARD_STEPS.map((s, i) => (
-              <span
-                key={s.id}
-                className={`gis-dm-wizard-step${i === stepIndex ? ' is-current' : ''}${i < stepIndex ? ' is-done' : ''}`}
-              >
-                {i + 1}. {s.label}
-              </span>
-            ))}
-          </div>
+          {wizardActive ? (
+            <div className="gis-dm-wizard-progress" aria-label="Import wizard progress">
+              {WIZARD_STEPS.map((s, i) => (
+                <span
+                  key={s.id}
+                  className={`gis-dm-wizard-dot${i === stepIndex ? ' is-current' : ''}${i < stepIndex ? ' is-done' : ''}`}
+                  title={s.label}
+                />
+              ))}
+              <span className="gis-dm-wizard-current">{WIZARD_STEPS[stepIndex]?.label ?? 'Import'}</span>
+            </div>
+          ) : (
+            <span className="gis-dm-footer-idle">Import</span>
+          )}
           <div className="gis-dm-footer-actions">
             <button type="button" className="gis-dm-btn gis-dm-btn--ghost" onClick={onClose}>
               Close

@@ -17,7 +17,6 @@ export type SmartProcessingSectionId =
   | 'well-site'
   | 'well-suitability'
   | 'flood-monitoring'
-  | 'flood-simulation'
   | 'raster-georeference'
   | 'table-geo-ai';
 

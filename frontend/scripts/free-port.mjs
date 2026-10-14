@@ -1,7 +1,8 @@
 import { execSync } from 'node:child_process'
+import { VITE_PORT } from '../../scripts/devPorts.mjs'
 
-const portArg = process.argv.find((a) => /^\d+$/.test(a))
-const port = portArg ? Number(portArg) : 5174
+const portArg = process.argv.find(a => /^\d+$/.test(a))
+const port = portArg ? Number(portArg) : VITE_PORT
 
 const isWindows = process.platform === 'win32'
 
@@ -26,4 +27,3 @@ for (const line of lines) {
 for (const pid of pids) {
   tryExec(`taskkill /PID ${pid} /F`)
 }
-

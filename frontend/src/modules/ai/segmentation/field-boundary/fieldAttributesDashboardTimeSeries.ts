@@ -35,6 +35,28 @@ function round3(n: number): number {
   return Math.round(n * 1000) / 1000
 }
 
+/** Shared Y scale for multi-index time series (includes negative NDWI). */
+export function computeIndexTimeSeriesYDomain(values: number[]): [number, number] {
+  const ys = values.filter(v => Number.isFinite(v))
+  if (!ys.length) return [-0.05, 1]
+  let lo = Math.min(...ys)
+  let hi = Math.max(...ys)
+  const span = hi - lo
+  if (span < 0.06) {
+    lo -= 0.05
+    hi += 0.05
+  } else {
+    const pad = span * 0.1
+    lo -= pad
+    hi += pad
+  }
+  if (lo >= 0) lo = Math.max(-0.05, lo)
+  else lo = Math.floor(lo * 20) / 20
+  hi = Math.min(1, Math.ceil(hi * 20) / 20)
+  if (hi <= lo) hi = lo + 0.1
+  return [lo, hi]
+}
+
 /** Mean across all fields per date for each dashboard index. */
 export function aggregateAoiIndexTimeSeries(
   dailyByFieldKey: Map<string, SentinelHubDailyIndexMeans[]>,

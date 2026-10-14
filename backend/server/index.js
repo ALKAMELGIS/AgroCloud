@@ -56,6 +56,12 @@ import { bootstrapIdentity } from './identity/registerIdentity.js'
 
 loadProductionEnv()
 
+const DEV_VITE_PORT = Number(process.env.VITE_DEV_PORT || 5180)
+const DEV_APP_ORIGIN = String(process.env.APP_ORIGIN || `http://localhost:${DEV_VITE_PORT}/AgroCloud`).replace(
+  /\/+$/,
+  '',
+)
+
 /** `backend/server` — scripts and data files live next to this file. */
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url))
 const { apiSecretsFile: API_SECRETS_FILE, userProfilesFile: USER_PROFILES_FILE, adminDirectoryFile: ADMIN_DIRECTORY_FILE } =
@@ -110,8 +116,8 @@ const CORS_DEFAULT_ORIGINS = [
   'https://eliteagrocloud.com',
   'https://api.eliteagrocloud.com',
   'https://alkamelgis.github.io',
-  'http://localhost:5174',
-  'http://127.0.0.1:5174',
+  `http://localhost:${DEV_VITE_PORT}`,
+  `http://127.0.0.1:${DEV_VITE_PORT}`,
   'http://localhost:3011',
   'http://127.0.0.1:3011',
 ]
@@ -260,7 +266,7 @@ function resolveAppOrigin(req) {
   if (APP_ORIGIN_ENV) return APP_ORIGIN_ENV.replace(/\/$/, '')
   const proto = String(req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim() || 'http'
   const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim()
-  if (!host) return 'http://localhost:5174'
+  if (!host) return DEV_APP_ORIGIN
   const originPath = APP_ORIGIN_ENV ? '' : '/AgroCloud'
   return `${proto}://${host}${originPath}`
 }

@@ -10,7 +10,7 @@ import { fileURLToPath } from 'url'
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.join(SERVER_DIR, '..', '..')
 
-/** Dev ports from repo `.env` must win over shell (Geosyntra often exports 3001/5173). */
+/** Dev ports from repo `.env` must win over stray shell PORT / VITE_DEV_PORT. */
 const DEV_PORT_KEYS = new Set(['PORT', 'WS_PORT', 'VITE_DEV_PORT'])
 const PRODUCTION_PORT_KEYS = new Set(['PORT', 'WS_PORT'])
 

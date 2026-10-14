@@ -54,10 +54,10 @@ describe('apiOrigin eliteagrocloud Hostinger fallback', () => {
     vi.stubEnv('VITE_AGRI_API_SECRETS_URL', '')
     vi.stubEnv('PROD', true)
     vi.stubGlobal('window', {
-      location: { hostname: '127.0.0.1', origin: 'http://127.0.0.1:5174' },
+      location: { hostname: '127.0.0.1', origin: 'http://127.0.0.1:5180' },
     })
     expect(configuredApiOrigin()).toBe('')
-    expect(resolveApiOrigin()).toBe('http://127.0.0.1:5174')
+    expect(resolveApiOrigin()).toBe('http://127.0.0.1:5180')
   })
 
   it('rewrites misconfigured VITE pointing at the static SPA host to api.eliteagrocloud.com', () => {

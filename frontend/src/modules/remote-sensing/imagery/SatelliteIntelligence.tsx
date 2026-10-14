@@ -783,11 +783,6 @@ import { ElevationProfilePanel } from '@/modules/gis/spatial-analysis/elevation-
 import { useElevationProfile } from '@/modules/gis/spatial-analysis/elevation-profile/useElevationProfile';
 import { CutFillMapLayers } from '@/modules/gis/cut-fill/CutFillMapLayers';
 import { useCutFillAnalysis } from '@/modules/gis/cut-fill/useCutFillAnalysis';
-import { FloodSimulationMapLayers } from '@/modules/gis/flood-simulation/FloodSimulationMapLayers';
-import { FloodSimulationSetupPanel } from '@/modules/gis/flood-simulation/ui/FloodSimulationSetupPanel';
-import { FloodSimulationChrome } from '@/modules/gis/flood-simulation/ui/FloodSimulationChrome';
-import { useFloodSimulation } from '@/modules/gis/flood-simulation/useFloodSimulation';
-import '@/modules/gis/flood-simulation/floodSimulation.css';
 import { WellSiteRecommendationPanel } from '@/modules/gis/spatial-analysis/well-site/WellSiteRecommendationPanel';
 import { useWellSiteRecommendation } from '@/modules/gis/spatial-analysis/well-site/useWellSiteRecommendation';
 import { useChirpsPrecipitation } from '../weather/useChirpsPrecipitation';
@@ -5810,7 +5805,6 @@ export default function SatelliteIntelligence() {
   | 'well-suitability'
   | 'flood-monitoring'
   | 'image-classification'
-  | 'flood-simulation'
   | 'raster-georeference'
   | 'table-geo-ai'
   >('source');
@@ -14834,8 +14828,7 @@ export default function SatelliteIntelligence() {
         const keepToolboxOpen =
           section === 'remote-sensing' ||
           section === 'agri-field-boundary' ||
-          section === 'tree-detections' ||
-          section === 'flood-simulation';
+          section === 'tree-detections';
         if (!keepToolboxOpen) {
           setIsLayerDropdownOpen(false);
         } else if (section === 'remote-sensing') {
@@ -15469,20 +15462,6 @@ export default function SatelliteIntelligence() {
   const cutFill = useCutFillAnalysis({
     geometry: drawnGeometry ?? null,
     enabled: cutFillActive,
-  });
-  const floodSimulationActive = expandedEnvSection === 'flood-simulation';
-  const floodSimulation = useFloodSimulation({
-    geometry: drawnGeometry ?? null,
-    enabled: floodSimulationActive,
-    mapRef,
-    terrainExaggeration,
-    setTerrainExaggeration,
-    defaultTerrainExaggeration: TERRAIN_EXAGGERATION_DEFAULT,
-    onRequestDrawArea: () => {
-      setDrawTargetMode('aoi');
-      handleRsDrawingModeChange(true);
-      handleRsDrawingToolChange('polygon');
-    },
   });
   const elevationProfile = useElevationProfile({
     enabled: expandedEnvSection === 'elevation-profile',
@@ -18745,15 +18724,6 @@ export default function SatelliteIntelligence() {
       if (cutFill.mapHit) cutFill.setMapHit(null);
     }
     if (
-      stressZonesMapInteractRef.current.showOnMap &&
-      expandedEnvSectionRef.current === 'flood-simulation' &&
-      !isSketchDrawingActiveRef.current &&
-      floodSimulation.result
-    ) {
-      floodSimulation.sampleAt(lng, lat);
-      return;
-    }
-    if (
       stressZonesMapInteractRef.current.hasResult &&
       stressZonesMapInteractRef.current.sectionOpen
     ) {
@@ -20204,33 +20174,6 @@ export default function SatelliteIntelligence() {
     if (!anyVisible) return;
     raiseOverlaysThenAnalysisOrder();
   }, [hydro.steps, isMapStyleReady, raiseOverlaysThenAnalysisOrder]);
-
-  useEffect(() => {
-    if (!isMapStyleReady || !floodSimulationActive) return;
-    const showingFlood =
-      floodSimulation.phase === 'RUNNING' ||
-      floodSimulation.phase === 'PAUSED' ||
-      floodSimulation.phase === 'COMPLETE';
-    if (!showingFlood || (!floodSimulation.previewUrl && !floodSimulation.result)) return;
-
-    raiseOverlaysThenAnalysisOrder();
-    const map = mapRef.current?.getMap?.() ?? mapRef.current;
-    if (!map?.getLayer?.('drawn-index-geometry-fill')) return;
-    try {
-      map.setPaintProperty('drawn-index-geometry-fill', 'fill-opacity', 0.02);
-    } catch {
-      /* style race */
-    }
-    const t = window.setTimeout(() => raiseOverlaysThenAnalysisOrder(), 80);
-    return () => window.clearTimeout(t);
-  }, [
-    isMapStyleReady,
-    floodSimulationActive,
-    floodSimulation.phase,
-    floodSimulation.previewUrl,
-    floodSimulation.result,
-    raiseOverlaysThenAnalysisOrder,
-  ]);
 
   /**
    * Drawing an AOI refreshes the clipped tiles but does NOT auto-show the layer â€”
@@ -23101,7 +23044,6 @@ export default function SatelliteIntelligence() {
           'map-swipe',
           'flood-monitoring (SAR)',
           'well-site',
-          'flood-simulation',
           'hydro-watershed',
           'cut-fill-analysis',
           'aoi-edit',
@@ -23324,7 +23266,6 @@ export default function SatelliteIntelligence() {
             'remote-sensing',
             'flood-monitoring',
             'well-site',
-            'flood-simulation',
             'well-suitability',
             'hydro-watershed',
             'cut-fill-analysis',
@@ -23349,7 +23290,6 @@ export default function SatelliteIntelligence() {
             'remote-sensing': 'Remote sensing (NDVI / NDWI / NDMI and WMS indices)',
             'flood-monitoring': 'Flood Monitoring (SAR)',
             'well-site': 'Well Site Recommendation (Hydro-AI)',
-            'flood-simulation': 'Simulate a Flood',
             'hydro-watershed': 'Hydro watershed',
             'cut-fill-analysis': 'Cut & Fill Analysis',
             'elevation-profile': 'Elevation Profile',
@@ -25785,6 +25725,8 @@ export default function SatelliteIntelligence() {
             weeklyComposites.length > 0 || fieldTimelineSessionActive
               ? ' si-map-container--timeline-active'
               : ''
+          }${
+            activeLayerActionDialog?.mode === 'table' ? ' si-map-container--gis-attr-open' : ''
           }`}
           title={siMapDrawingTitle || undefined}
         >
@@ -27215,17 +27157,6 @@ export default function SatelliteIntelligence() {
 
             {isMapStyleReady ? <CutFillMapLayers cutFill={cutFill} /> : null}
             {isMapStyleReady ? <ElevationProfileMap model={elevationProfile} /> : null}
-            {isMapStyleReady && floodSimulationActive ? (
-              <FloodSimulationMapLayers model={floodSimulation} />
-            ) : null}
-            {isMapStyleReady && floodSimulationActive ? (
-              <FloodSimulationChrome
-                model={floodSimulation}
-                basemapId={basemapId}
-                setBasemapId={setBasemapId}
-              />
-            ) : null}
-
             {isMapStyleReady && drawnGeometry && aoiLayerVisible ? (
               <Source id="drawn-index-geometry-outline-source" type="geojson" data={drawnGeometry as any}>
                 <Layer
@@ -28660,8 +28591,6 @@ export default function SatelliteIntelligence() {
                                 ? 'Well Suitability (MCDA)'
                               : expandedEnvSection === 'flood-monitoring'
                                 ? 'Flood Monitoring (SAR-Based)'
-                              : expandedEnvSection === 'flood-simulation'
-                                ? 'Simulate a Flood'
                               : expandedEnvSection === 'layers'
                                 ? 'Layers'
                               : expandedEnvSection === 'source'
@@ -29259,11 +29188,6 @@ export default function SatelliteIntelligence() {
                         />
                       </div>
                     )}
-                    {expandedEnvSection === 'flood-simulation' && (
-                      <div className="si-env-section-card si-rs-panel--glass">
-                        <FloodSimulationSetupPanel model={floodSimulation} />
-                      </div>
-                    )}
                     {expandedEnvSection === 'flood-monitoring' && (
                       <div className="si-env-section-card si-rs-panel--glass">
                         <FloodMonitoringPanel
@@ -29525,6 +29449,7 @@ export default function SatelliteIntelligence() {
                 : undefined
             }
             onMouseDown={e => e.stopPropagation()}
+            onWheel={isAttrTable ? e => e.stopPropagation() : undefined}
           >
             {isAttrTable ? (
               <div
@@ -29767,7 +29692,10 @@ export default function SatelliteIntelligence() {
                           </>
                         ) : null}
                         <div className="si-gis-attr-win__grid">
-                          <div className="si-layer-action-table-wrap">
+                          <div
+                            className="si-layer-action-table-wrap"
+                            data-agrocloud-map-wheel-scroll=""
+                          >
                             <table className="gis-layer-table si-layer-action-table">
                           <thead>
                             <tr>

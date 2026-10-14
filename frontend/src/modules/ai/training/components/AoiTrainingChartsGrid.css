@@ -179,6 +179,42 @@
   font-size: 11px;
 }
 
+.si-aoi-charts__dataset-chart {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+}
+
+.si-aoi-charts__dataset-chart .si-afbv__figure-wrap {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+}
+
+.si-aoi-charts__dataset-chart .si-afbv__figure--vbar {
+  cursor: default;
+}
+
+.si-field-dash-modal .si-aoi-charts__card .si-afbv__figure-bg {
+  fill: transparent;
+}
+
+.si-field-dash-modal .si-aoi-charts__card .si-afbv__figure-grid {
+  stroke: rgba(15, 23, 42, 0.08);
+  stroke-dasharray: 2 4;
+}
+
+.si-field-dash-modal .si-aoi-charts__card .si-afbv__spine {
+  stroke: rgba(15, 23, 42, 0.22);
+}
+
+.si-field-dash-modal .si-aoi-charts__card .si-afbv__figure-tick {
+  font-size: 8px;
+  fill: #111111;
+}
+
 .si-aoi-charts__bars {
   display: flex;
   flex-direction: column;

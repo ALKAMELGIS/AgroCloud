@@ -35,8 +35,6 @@ if (ips.length) {
 console.log('')
 console.log(`  API (proxied via Vite):  /api  →  backend :${API_PORT}`)
 console.log(`  WebSocket (proxied):     /ws  →  backend :${WS_PORT}`)
-console.log('  Geosyntra (separate repo) uses 5173 / 3001 / 3002 — do not mix projects.')
-console.log('')
 console.log('  Tips:')
 console.log('  • Run "npm run dev" (frontend + backend), not dev:client alone.')
 console.log('  • If /api routes look stale, run "npm run dev:server:clean" to reclaim :3011.')

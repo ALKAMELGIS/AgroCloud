@@ -55,11 +55,16 @@ export function useWeatherArcgisHourlyRange(
     if (cached?.length) {
       setHourlyRange(cached)
       setHourlyRangeLoading(false)
-    } else if (instantFallback.length) {
-      setHourlyRange(instantFallback)
-      setHourlyRangeLoading(false)
     } else {
-      setHourlyRangeLoading(true)
+      setHourlyRange(prev => {
+        if (prev.length) return prev
+        if (instantFallback.length) return instantFallback
+        return prev
+      })
+      setHourlyRangeLoading(prevLoading => {
+        if (instantFallback.length) return false
+        return prevLoading
+      })
     }
 
     const ac = new AbortController()

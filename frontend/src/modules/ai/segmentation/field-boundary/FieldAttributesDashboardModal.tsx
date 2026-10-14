@@ -8,6 +8,12 @@ export type FieldAttributesDashboardModalProps = {
   title: string
   subtitle?: string
   children: ReactNode
+  /** Defaults to `si-field-attributes-dashboard`. */
+  dialogId?: string
+  /** Class on map host while open (blocks map wheel/drag). */
+  mapHostOpenClassName?: string
+  /** Header mark icon (Font Awesome classes). */
+  headerIconClass?: string
 }
 
 const ZOOM_MIN = 0.85
@@ -86,6 +92,9 @@ export function FieldAttributesDashboardModal({
   title,
   subtitle,
   children,
+  dialogId = 'si-field-attributes-dashboard',
+  mapHostOpenClassName = 'si-map-container--field-dash-modal-open',
+  headerIconClass = 'fa-solid fa-chart-pie',
 }: FieldAttributesDashboardModalProps) {
   const [portalHost, setPortalHost] = useState<HTMLElement | null>(null)
   const [frame, setFrame] = useState<Frame | null>(null)
@@ -151,9 +160,11 @@ export function FieldAttributesDashboardModal({
   useEffect(() => {
     const host = portalHost
     if (!open || !host) return
-    host.classList.add('si-map-container--field-dash-modal-open')
-    return () => host.classList.remove('si-map-container--field-dash-modal-open')
-  }, [open, portalHost])
+    if (mapHostOpenClassName) host.classList.add(mapHostOpenClassName)
+    return () => {
+      if (mapHostOpenClassName) host.classList.remove(mapHostOpenClassName)
+    }
+  }, [open, portalHost, mapHostOpenClassName])
 
   useEffect(() => {
     if (!open) return
@@ -308,7 +319,7 @@ export function FieldAttributesDashboardModal({
     <div
       ref={modalRef}
       className="si-field-dash-modal"
-      id="si-field-attributes-dashboard"
+      id={dialogId}
       role="dialog"
       aria-modal="true"
       aria-label={title}
@@ -334,7 +345,7 @@ export function FieldAttributesDashboardModal({
           title="Drag to move the dashboard"
         >
           <span className="si-field-dash-modal__icon" aria-hidden>
-            <i className="fa-solid fa-chart-pie" />
+            <i className={headerIconClass} />
           </span>
           <div className="si-field-dash-modal__titles">
             <h2 className="si-field-dash-modal__title">{title}</h2>

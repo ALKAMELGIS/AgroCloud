@@ -35,7 +35,6 @@ export type GeoAiToolboxPanelId =
   | 'imagery-time-series'
   | 'map-swipe'
   | 'flood-monitoring'
-  | 'flood-simulation'
   | 'well-site'
   | 'hydro-watershed'
   | 'cut-fill-analysis'

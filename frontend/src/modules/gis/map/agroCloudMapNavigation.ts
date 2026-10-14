@@ -446,6 +446,15 @@ export function bindAgroCloudMapWheelZoomPassthrough(
     const target = e.target
     if (target instanceof HTMLElement && target.closest('.mapboxgl-canvas')) return
 
+    /* ArcGIS-style attribute table: wheel stays on the table, never zooms the map underneath. */
+    if (target instanceof HTMLElement && target.closest('.si-layer-action-modal--gis-table')) {
+      const scrollHost = target.closest('[data-agrocloud-map-wheel-scroll]') as HTMLElement | null
+      if (scrollHost && shouldConsumeWheelOnScrollHost(scrollHost, e)) return
+      e.preventDefault()
+      e.stopPropagation()
+      return
+    }
+
     const scrollHost = target instanceof HTMLElement
       ? (target.closest('[data-agrocloud-map-wheel-scroll]') as HTMLElement | null)
       : null

@@ -4,8 +4,8 @@
   position: fixed;
   inset: 0;
   z-index: 9400;
-  background: rgba(0, 0, 0, 0.34);
-  backdrop-filter: blur(3px);
+  background: rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(4px);
 }
 
 .gis-dm-shell {
@@ -235,8 +235,15 @@
   background: rgba(255, 255, 255, 0.05);
 }
 
-.gis-dm-rail-btn.is-active {
-  color: var(--gdm-text);
+.gis-dm-rail-btn.is-soon {
+  opacity: 0.62;
+}
+
+.gis-dm-rail-divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--gdm-border-soft);
+  flex-shrink: 0;
   background: var(--gdm-accent-soft);
   border-color: rgba(127, 220, 182, 0.28);
 }
@@ -272,6 +279,7 @@
   min-width: 0;
   min-height: 0;
   background: rgba(255, 255, 255, 0.02);
+  padding: 8px 10px;
 }
 
 .gis-dm-workspace {
@@ -286,32 +294,51 @@
   padding: 6px 10px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  background: rgba(0, 0, 0, 0.18);
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.gis-dm-wizard-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.gis-dm-wizard-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
   flex-shrink: 0;
 }
 
-.gis-dm-wizard-steps {
-  display: flex;
-  gap: 3px;
-  flex: 1;
-  min-width: 0;
-  overflow-x: auto;
+.gis-dm-wizard-dot.is-current {
+  background: var(--gdm-accent);
+  box-shadow: 0 0 0 2px var(--gdm-accent-soft);
 }
 
-.gis-dm-wizard-step {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 7px;
-  border-radius: 999px;
+.gis-dm-wizard-dot.is-done {
+  background: rgba(127, 220, 182, 0.55);
+}
+
+.gis-dm-wizard-current {
   font-size: 10px;
+  font-weight: 600;
   color: var(--gdm-muted);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.gis-dm-wizard-step.is-current {
+.gis-dm-footer-idle {
+  flex: 1;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(178, 188, 200, 0.45);
   color: var(--gdm-accent);
   background: var(--gdm-accent-soft);
 }
@@ -321,8 +348,8 @@
 }
 
 .gis-dm-footer-actions {
-  display: flex;
-  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
   margin-inline-start: auto;
 }
 
@@ -362,7 +389,14 @@
 }
 
 .gis-dm-btn--ghost {
+  border-radius: 8px;
+  padding: 0 10px;
   background: transparent;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.gis-dm-btn--ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .gis-dm-dropzone {
@@ -605,6 +639,13 @@
   margin-top: 10px;
 }
 
+.gis-dm-preview-panel--actions-only {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin-top: 8px;
+}
+
 .gis-dm-preview-title {
   margin: 0 0 7px;
   font-size: 11.5px;
@@ -624,22 +665,26 @@
 }
 
 .gis-dm-kv dd {
-  margin: 0;
-  color: var(--gdm-text);
-  word-break: break-word;
-}
-
-.gis-dm-section-title {
-  margin: 0 0 8px;
-  font-size: 12.5px;
+  margin: 0 0 6px;
+  font-size: 11.5px;
   font-weight: 600;
 }
 
 .gis-dm-lead {
-  margin: 0 0 10px;
-  font-size: 11.5px;
+  margin: 0 0 8px;
+  font-size: 11px;
   color: var(--gdm-muted);
-  line-height: 1.45;
+  line-height: 1.4;
+}
+
+.gis-dm-empty {
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: var(--gdm-muted);
+}
+
+.gis-dm-empty--inline {
+  margin-top: 6px;
 }
 
 .gis-dm-stub {
@@ -648,6 +693,20 @@
   border-radius: 12px;
   border: 1px dashed rgba(148, 163, 184, 0.35);
   background: rgba(15, 23, 42, 0.3);
+}
+
+.gis-dm-stub--compact {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 12px;
+}
+
+.gis-dm-stub--compact i {
+  font-size: 18px;
+  color: var(--gdm-warn);
+  margin: 0;
 }
 
 .gis-dm-stub i {
@@ -873,14 +932,21 @@
 .gis-dm-raster-menu__item:focus-visible {
   background: rgba(56, 189, 248, 0.16);
   outline: none;
+  padding: 8px 10px;
+  margin-top: 0;
 }
-.gis-dm-raster-menu__item i {
-  width: 16px;
-  opacity: 0.8;
+
+.gis-dm-dropzone--compact .gis-dm-dropzone-icon {
+  font-size: 14px;
+  margin-bottom: 2px;
 }
-.gis-dm-dropzone--compact {
-  padding: 14px 12px;
-  margin-top: 4px;
+
+.gis-dm-dropzone--compact .gis-dm-dropzone-title {
+  font-size: 11px;
+}
+
+.gis-dm-dropzone--compact .gis-dm-dropzone-sub {
+  font-size: 9.5px;
 }
 .gis-dm-dropzone--compact .gis-dm-dropzone-title {
   font-size: 12.5px;

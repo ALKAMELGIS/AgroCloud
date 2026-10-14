@@ -53,6 +53,8 @@ export type ValidationLinePlotProps = {
   showBottomAxis?: boolean
   /** Smooth curves between samples (time series). */
   smooth?: boolean
+  /** Gradient fill under lines (single-series only; off for multi-index time series). */
+  areaFill?: boolean
   /** Cap categorical x tick labels (avoids overlap on wide fluid charts). */
   maxXTicks?: number
   /** Hide in-SVG series legend (use HTML legend instead). */
@@ -486,22 +488,50 @@ export function ValidationLinePlot({
               y1={padT}
               y2={H - PAD_B}
               className="si-afbv__figure-crosshair"
+              stroke={hover.rows[0]?.color ?? '#64748b'}
+              strokeOpacity={0.42}
+              strokeWidth={1}
+              vectorEffect="non-scaling-stroke"
             />
             {hover.rows.map(r => (
-              <circle
-                key={`h-${r.id}`}
-                cx={hover.svgX}
-                cy={r.svgY}
-                r="3.2"
-                fill={r.color}
-                stroke="#fff"
-                strokeWidth="1.1"
-                className="si-afbv__figure-hover-dot"
-              />
+              <g key={`h-${r.id}`}>
+                <circle
+                  cx={hover.svgX}
+                  cy={r.svgY}
+                  r="4.2"
+                  fill="none"
+                  stroke={r.color}
+                  strokeOpacity={0.35}
+                  strokeWidth="2.2"
+                  className="si-afbv__figure-hover-halo"
+                />
+                <circle
+                  cx={hover.svgX}
+                  cy={r.svgY}
+                  r="2.6"
+                  fill="#ffffff"
+                  stroke={r.color}
+                  strokeWidth="1.4"
+                  className="si-afbv__figure-hover-dot"
+                />
+              </g>
             ))}
           </g>
         ) : null}
 
+        {hover
+          ? ticksX.map(t => (
+              <text
+                key={`x-over-${t.value}-${t.label}`}
+                x={sx(t.value)}
+                y={showBottomAxis ? H - PAD_B + 11 : H - PAD_B + 10}
+                className="si-afbv__figure-tick si-afbv__figure-tick--over"
+                textAnchor="middle"
+              >
+                {t.label}
+              </text>
+            ))
+          : null}
         {annotation && annY != null ? (
           <text
             x={annPx + (annNearRight ? -4 : 4)}

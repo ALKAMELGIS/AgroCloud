@@ -2,13 +2,20 @@ import { Chart as ChartJS, type Chart, type Plugin } from 'chart.js'
 import type { AgroThemeMode } from '@/theme/createAgroTheme'
 import {
   computeWeatherChartNowIndex,
+  floorToOpenMeteoHourIso,
   interpolateWeatherChartValue,
+  parseWeatherChartAxisTime,
   type WeatherArcgisChartGuideSet,
   type WeatherChartHorizontalGuide,
 } from './weatherArcgisChartLive'
 
+/** ArcGIS-style live segment — indicates the current hourly update window. */
+export const WEATHER_CHART_LIVE_RANGE_LINE = '#eab308'
+
 export type WeatherArcgisGuidesPluginOptions = WeatherArcgisChartGuideSet & {
   showNowLine?: boolean
+  /** Yellow line segment along the series for the live update window (line charts only). */
+  showLiveRangeLine?: boolean
   themeMode?: AgroThemeMode
   /** Recompute NOW position every frame from wall clock (smooth second-by-second motion). */
   liveMotion?: boolean
@@ -32,7 +39,9 @@ function stopLiveMotionLoop(chart: Chart) {
 
 function syncLiveMotionLoop(chart: Chart) {
   const opts = chart.options.plugins?.weatherArcgisGuides
-  const enabled = Boolean(opts?.liveMotion && opts.showNowLine !== false)
+  const enabled = Boolean(
+    opts?.liveMotion && (opts.showLiveRangeLine || opts.showNowLine !== false),
+  )
   if (!enabled) {
     stopLiveMotionLoop(chart)
     return
@@ -117,6 +126,60 @@ function drawNowLine(chart: Chart, nowIndex: number, mode: AgroThemeMode) {
   ctx.restore()
 }
 
+function drawLiveRangeSegment(
+  chart: Chart,
+  isoLabels: string[],
+  liveSeries: Array<number | null | undefined>,
+  nowMs: number,
+  circular: boolean,
+) {
+  if (!isoLabels.length || !liveSeries.length) return
+  const xScale = chart.scales.x
+  const yScale = chart.scales.y
+  if (!xScale || !yScale) return
+  const { left, right, top, bottom } = chart.chartArea
+  if (!left || !right || !top || !bottom) return
+
+  const rangeStartMs = parseWeatherChartAxisTime(floorToOpenMeteoHourIso(nowMs))
+  const startIdx = computeWeatherChartNowIndex(isoLabels, rangeStartMs)
+  const endIdx = computeWeatherChartNowIndex(isoLabels, nowMs)
+  if (startIdx == null || endIdx == null || endIdx <= startIdx) return
+
+  const steps = Math.max(12, Math.ceil((endIdx - startIdx) * 6))
+
+  const ctx = chart.ctx
+  ctx.save()
+  ctx.beginPath()
+  ctx.strokeStyle = WEATHER_CHART_LIVE_RANGE_LINE
+  ctx.lineWidth = 2.75
+  ctx.lineJoin = 'round'
+  ctx.lineCap = 'round'
+
+  let started = false
+  for (let s = 0; s <= steps; s++) {
+    const idx = startIdx + ((endIdx - startIdx) * s) / steps
+    const i0 = Math.min(Math.max(0, Math.floor(idx)), isoLabels.length - 1)
+    const i1 = Math.min(i0 + 1, isoLabels.length - 1)
+    const frac = idx - i0
+    const t0 = parseWeatherChartAxisTime(isoLabels[i0]!)
+    const t1 = parseWeatherChartAxisTime(isoLabels[i1]!)
+    const sampleMs = Math.min(nowMs, Math.max(rangeStartMs, t0 + (t1 - t0) * frac))
+    const val = interpolateWeatherChartValue(isoLabels, liveSeries, sampleMs, { circular })
+    if (val == null) continue
+    const x = xScale.getPixelForValue(idx)
+    const y = yScale.getPixelForValue(val)
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue
+    if (!started) {
+      ctx.moveTo(x, y)
+      started = true
+    } else {
+      ctx.lineTo(x, y)
+    }
+  }
+  if (started) ctx.stroke()
+  ctx.restore()
+}
+
 function drawLiveNowDot(chart: Chart, nowIndex: number, value: number, mode: AgroThemeMode) {
   const xScale = chart.scales.x
   const yScale = chart.scales.y
@@ -170,14 +233,25 @@ export const weatherArcgisGuidesPlugin: Plugin = {
     const nowIndex = opts.liveMotion
       ? computeWeatherChartNowIndex(isoLabels, nowMs)
       : opts.nowIndex
-    if (opts.showNowLine !== false && nowIndex != null && Number.isFinite(nowIndex)) {
-      drawNowLine(chart, nowIndex, mode)
-    }
-    if (opts.liveMotion && opts.liveSeries?.length && nowIndex != null && Number.isFinite(nowIndex)) {
-      const liveVal = interpolateWeatherChartValue(isoLabels, opts.liveSeries, nowMs, {
-        circular: opts.liveSeriesCircular,
-      })
-      if (liveVal != null) drawLiveNowDot(chart, nowIndex, liveVal, mode)
+
+    if (
+      opts.showLiveRangeLine &&
+      opts.liveMotion &&
+      opts.liveSeries?.length &&
+      nowIndex != null &&
+      Number.isFinite(nowIndex)
+    ) {
+      drawLiveRangeSegment(chart, isoLabels, opts.liveSeries, nowMs, Boolean(opts.liveSeriesCircular))
+    } else {
+      if (opts.showNowLine !== false && nowIndex != null && Number.isFinite(nowIndex)) {
+        drawNowLine(chart, nowIndex, mode)
+      }
+      if (opts.liveMotion && opts.liveSeries?.length && nowIndex != null && Number.isFinite(nowIndex)) {
+        const liveVal = interpolateWeatherChartValue(isoLabels, opts.liveSeries, nowMs, {
+          circular: opts.liveSeriesCircular,
+        })
+        if (liveVal != null) drawLiveNowDot(chart, nowIndex, liveVal, mode)
+      }
     }
   },
 }

@@ -315,6 +315,22 @@ export function buildArcgisTemperatureLineChart(
   }
 }
 
+/** Orange line with transparent fill — ArcGIS hourly temperature panel. */
+export function buildArcgisTemperatureHourlyLineChart(
+  hourly: OpenMeteoDashboardHourlyPoint[],
+): ChartData<'line'> {
+  return {
+    labels: hourly.map(h => formatShortAxisTime(h.time)),
+    datasets: [
+      {
+        label: '°C',
+        data: hourly.map(h => h.temperatureC),
+        ...ARCGIS_ORANGE_AREA_LINE_STYLE,
+      },
+    ],
+  }
+}
+
 /** Orange line with transparent fill — ArcGIS humidity panel. */
 export function buildArcgisHumidityLineChart(hourly: OpenMeteoDashboardHourlyPoint[]): ChartData<'line'> {
   return {

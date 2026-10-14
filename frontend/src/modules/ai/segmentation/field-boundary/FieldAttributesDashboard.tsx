@@ -12,6 +12,7 @@ import {
 } from './fieldAttributesDashboardModel'
 import {
   FIELD_DASH_ET_CHART_SCALE,
+  computeIndexTimeSeriesYDomain,
   type FieldDashIndexId,
   type FieldDashIndexTimeSeries,
 } from './fieldAttributesDashboardTimeSeries'
@@ -62,19 +63,36 @@ function buildIndexTimeSeriesPlot(
   return { series, xTicks }
 }
 
-function IndexTimeSeriesLegend({ modalView }: { modalView?: boolean }) {
-  if (!modalView) {
-    return (
-      <p className="si-field-dash__ts-legend">
-        NDVI · NDRE · NDMI · NDWI · SAVI · ET (mm/d ÷10)
-      </p>
-    )
-  }
+function IndexTimeSeriesLegend({
+  compact,
+  themeSwatches,
+  modalView,
+}: {
+  compact?: boolean
+  themeSwatches?: boolean
+  /** Modal spotlight: theme-colored swatches (alias for themeSwatches). */
+  modalView?: boolean
+}) {
+  const swatches = themeSwatches ?? Boolean(modalView)
   return (
-    <div className="si-field-dash__ts-legend si-field-dash__ts-legend--chips" aria-hidden>
+    <div
+      className={`si-field-dash__ts-legend si-field-dash__ts-legend--chips${compact ? ' si-field-dash__ts-legend--compact' : ''}${swatches ? ' si-field-dash__ts-legend--theme-swatches' : ''}`}
+      aria-hidden
+    >
       {INDEX_TS_META.map(m => (
         <span key={m.id} className="si-field-dash__ts-chip">
-          <span className="si-field-dash__ts-chip-line" style={{ background: m.color, opacity: m.dashed ? 0.85 : 1 }} />
+          <span
+            className={`si-field-dash__ts-chip-line${m.dashed ? ' si-field-dash__ts-chip-line--dashed' : ''}`}
+            style={
+              swatches
+                ? m.dashed
+                  ? { borderColor: 'currentColor' }
+                  : { background: 'currentColor' }
+                : m.dashed
+                  ? { borderColor: m.color }
+                  : { background: m.color }
+            }
+          />
           {m.id === 'ET' ? 'ET (÷10)' : m.id}
         </span>
       ))}
@@ -92,6 +110,11 @@ function IndexTimeSeriesChart({
   modalView?: boolean
 }) {
   const { series, xTicks } = useMemo(() => buildIndexTimeSeriesPlot(ts), [ts])
+  const yDomain = useMemo(
+    () => computeIndexTimeSeriesYDomain(series.flatMap(s => s.points.map(p => p.y))),
+    [series],
+  )
+
   if (!series.length) {
     return (
       <p className="si-field-dash__empty">
@@ -99,25 +122,27 @@ function IndexTimeSeriesChart({
       </p>
     )
   }
+
   return (
     <ValidationLinePlot
       series={series}
-      xLabel={modalView ? 'Date' : 'Date'}
+      xLabel="Date"
       yLabel="Index"
-      yDomain={[-0.05, 1]}
+      yDomain={yDomain}
       xTicks={xTicks}
       formatX={v => xTicks[Math.round(v)]?.label ?? String(v)}
       formatY={v => v.toFixed(2)}
       ariaLabel="Spectral index time series"
-      height={modalView ? 200 : expanded ? 220 : 150}
-      width={modalView ? 560 : expanded ? 640 : 320}
+      height={modalView ? 228 : expanded ? 220 : 168}
+      width={modalView ? 560 : expanded ? 640 : 280}
       fluid
       grid
-      markers
+      markers={false}
       smooth
-      showBottomAxis={modalView}
+      areaFill={false}
+      showBottomAxis
       maxXTicks={modalView ? 7 : expanded ? 8 : 5}
-      hideLegend={modalView}
+      hideLegend
     />
   )
 }
@@ -210,6 +235,7 @@ function PieDonutChart({
   expanded = false,
   modalView = false,
   compact = false,
+  stackLayout = false,
 }: {
   rows: NamedCount[]
   palette?: 'default' | 'health' | 'landcover'
@@ -217,6 +243,8 @@ function PieDonutChart({
   expanded?: boolean
   modalView?: boolean
   compact?: boolean
+  /** Donut above legend — for narrow modal columns (health spotlight). */
+  stackLayout?: boolean
 }) {
   if (!rows.length) return <p className="si-field-dash__empty">No categories</p>
 
@@ -231,7 +259,7 @@ function PieDonutChart({
 
   return (
     <div
-      className={`si-field-dash__pie-chart${expanded ? ' si-field-dash__pie-chart--expanded' : ''}${modalView ? ' si-field-dash__pie-chart--modal' : ''}${compact ? ' si-field-dash__pie-chart--compact' : ''}`}
+      className={`si-field-dash__pie-chart${expanded ? ' si-field-dash__pie-chart--expanded' : ''}${modalView ? ' si-field-dash__pie-chart--modal' : ''}${compact ? ' si-field-dash__pie-chart--compact' : ''}${stackLayout ? ' si-field-dash__pie-chart--stack' : ''}`}
     >
       <div
         className="si-field-dash__pie-donut"
@@ -461,6 +489,7 @@ function FieldAttributesDashboardBody({
               ariaLabel="Health status distribution"
               expanded={chartExpanded}
               modalView={modalView}
+              stackLayout
             />
           </section>
           <section className="si-field-dash__card si-field-dash__card--timeseries si-field-dash__card--timeseries-spotlight">
@@ -510,6 +539,7 @@ function FieldAttributesDashboardBody({
             formatValue={v => String(Math.round(v))}
             expanded={chartExpanded}
             height={modalView ? 200 : undefined}
+            xTickLayout={modalView || chartExpanded ? 'horizontal' : 'auto'}
           />
         </section>
 
@@ -528,6 +558,8 @@ function FieldAttributesDashboardBody({
             formatValue={v => fmtHa(v)}
             expanded={chartExpanded}
             height={modalView ? 200 : undefined}
+            xTickLayout={modalView || chartExpanded ? 'horizontal' : 'auto'}
+            categoryScroll
           />
         </section>
       </div>
@@ -548,6 +580,7 @@ function FieldAttributesDashboardBody({
             formatValue={v => String(Math.round(v))}
             expanded={chartExpanded}
             height={modalView ? 200 : undefined}
+            xTickLayout={modalView || chartExpanded ? 'horizontal' : 'auto'}
           />
         </section>
 
@@ -565,6 +598,7 @@ function FieldAttributesDashboardBody({
               ariaLabel="Land cover distribution"
               expanded={chartExpanded}
               modalView={modalView}
+              stackLayout={modalView}
             />
           </section>
         ) : null}

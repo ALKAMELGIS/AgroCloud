@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { SentinelHubDailyIndexMeans } from '@/modules/remote-sensing/imagery/sentinelHubStatisticsApi'
-import { aggregateAoiIndexTimeSeries } from './fieldAttributesDashboardTimeSeries'
+import {
+  aggregateAoiIndexTimeSeries,
+  computeIndexTimeSeriesYDomain,
+} from './fieldAttributesDashboardTimeSeries'
 
 function row(date: string, overrides: Partial<SentinelHubDailyIndexMeans> = {}): SentinelHubDailyIndexMeans {
   return {
@@ -32,5 +35,13 @@ describe('aggregateAoiIndexTimeSeries', () => {
     expect(ts!.indices.NDVI[0]).toBe(0.3)
     expect(ts!.indices.NDVI[1]).toBe(0.5)
     expect(ts!.indices.NDRE[0]).toBe(0.32)
+  })
+})
+
+describe('computeIndexTimeSeriesYDomain', () => {
+  it('extends below zero when NDWI is negative', () => {
+    const [lo, hi] = computeIndexTimeSeriesYDomain([0.35, 0.42, -0.18, 0.55])
+    expect(lo).toBeLessThan(-0.1)
+    expect(hi).toBeGreaterThan(0.5)
   })
 })

@@ -16,10 +16,10 @@ import {
 import { Chart } from 'react-chartjs-2'
 import {
   buildArcgisHumidityLineChart,
-  buildDailyTemperatureBarSeries,
-  buildTemperatureDailyBarChart,
   buildArcgisWindDirectionChart,
   buildArcgisWindSpeedChart,
+  buildDailyTemperatureBarSeries,
+  buildTemperatureDailyBarChart,
 } from '../charts/weatherLiveChartBuilders'
 import { arcgisStackChartOptions } from '../charts/weatherLiveChartTheme'
 import {
@@ -128,14 +128,26 @@ export function WeatherArcgisStackedCharts({
     return filterHourlyByDateRange(sliceHourlyForChartWindow(series, anchor), dateRange)
   }, [bundle, anchorIso, dateRange])
 
-  const hourly = useMemo(() => {
+  const hourlyRawInRange = useMemo(() => {
     const merged = hourlyRange.length ? hourlyRange : fallbackHourly
     const inRange = filterHourlyByDateRange(merged, dateRange)
-    const base = inRange.length ? inRange : fallbackHourly
-    return downsampleHourlySeries(base)
+    return inRange.length ? inRange : fallbackHourly
   }, [hourlyRange, fallbackHourly, dateRange])
 
+  const hourly = useMemo(() => downsampleHourlySeries(hourlyRawInRange), [hourlyRawInRange])
+
+  const dailyTempSeries = useMemo(
+    () =>
+      buildDailyTemperatureBarSeries(
+        hourlyRawInRange,
+        bundle?.snapshot?.daily?.length ? bundle.snapshot.daily : bundle?.daily7,
+        dateRange,
+      ),
+    [hourlyRawInRange, bundle?.snapshot?.daily, bundle?.daily7, dateRange],
+  )
+
   const isoLabels = useMemo(() => hourly.map(h => h.time), [hourly])
+  const dailyIsoLabels = useMemo(() => dailyTempSeries.map(d => d.time), [dailyTempSeries])
   const nowIndex = useMemo(() => computeWeatherChartNowIndex(isoLabels, nowMs), [isoLabels, nowMs])
 
   const tempGuides = useMemo(() => buildTemperatureChartGuides(thresholds), [thresholds])
@@ -165,20 +177,16 @@ export function WeatherArcgisStackedCharts({
       window.clearTimeout(t)
       ro.disconnect()
     }
-  }, [chartMode, hourly.length, metricTab, nowIndex])
+  }, [chartMode, dailyTempSeries.length, hourly.length, metricTab])
 
   const windDirTitle = `Wind Direction for ${locationLabel}`
   const windSpeedTitle = `Wind Speed for ${locationLabel}`
-  const tempTitle = `Bar By Day for ${locationLabel}`
+  const tempTitle = `Temperature for ${locationLabel}`
   const humidityTitle = `Humidity for ${locationLabel}`
 
-  const tempDailyBars = useMemo(
-    () => buildDailyTemperatureBarSeries(hourly, bundle?.daily7, dateRange),
-    [hourly, bundle?.daily7, dateRange],
-  )
   const tempExtent = useMemo(
-    () => numericExtent(tempDailyBars.map(h => h.temperatureC)),
-    [tempDailyBars],
+    () => numericExtent(dailyTempSeries.map(h => h.temperatureC)),
+    [dailyTempSeries],
   )
   const windExtent = useMemo(
     () => numericExtent(hourly.map(h => h.windSpeedKmh)),
@@ -195,60 +203,46 @@ export function WeatherArcgisStackedCharts({
 
   const liveMotion = liveCadence === '1s'
 
-  const chartAnim = useMemo(
-    () => ({ duration: liveMotion ? 0 : liveCadence === '1m' ? 280 : 420 }),
-    [liveCadence, liveMotion],
+  const chartAnim = useMemo(() => ({ duration: 0 }), [])
+
+  const lineLiveGuides = useCallback(
+    (
+      horizontal: typeof tempGuides,
+      liveSeries: Array<number | null | undefined>,
+      labels: string[],
+      circular?: boolean,
+    ) => ({
+      nowIndex: liveMotion ? null : nowIndex,
+      horizontal,
+      showNowLine: !liveMotion,
+      showLiveRangeLine: liveMotion,
+      liveMotion,
+      isoLabels: labels,
+      liveSeries,
+      liveSeriesCircular: circular,
+    }),
+    [liveMotion, nowIndex],
   )
 
   const windDirGuides = useMemo(
-    () => ({
-      nowIndex,
-      horizontal: [] as typeof tempGuides,
-      showNowLine: true,
-      liveMotion,
-      isoLabels,
-      liveSeries: hourly.map(h => h.windDirectionDeg),
-      liveSeriesCircular: true,
-    }),
-    [hourly, isoLabels, liveMotion, nowIndex],
+    () => lineLiveGuides([], hourly.map(h => h.windDirectionDeg), isoLabels, true),
+    [hourly, isoLabels, lineLiveGuides],
   )
 
   const windSpeedGuides = useMemo(
-    () => ({
-      nowIndex,
-      horizontal: windGuides,
-      showNowLine: true,
-      liveMotion,
-      isoLabels,
-      liveSeries: hourly.map(h => h.windSpeedKmh),
-    }),
-    [hourly, isoLabels, liveMotion, nowIndex, windGuides],
+    () => lineLiveGuides(windGuides, hourly.map(h => h.windSpeedKmh), isoLabels),
+    [hourly, isoLabels, lineLiveGuides, windGuides],
   )
 
   const humidityChartGuides = useMemo(
-    () => ({
-      nowIndex,
-      horizontal: humidityGuides,
-      showNowLine: true,
-      liveMotion,
-      isoLabels,
-      liveSeries: hourly.map(h => h.humidityPct),
-    }),
-    [hourly, humidityGuides, isoLabels, liveMotion, nowIndex],
+    () => lineLiveGuides(humidityGuides, hourly.map(h => h.humidityPct), isoLabels),
+    [hourly, humidityGuides, isoLabels, lineLiveGuides],
   )
 
-  const tempIsoLabels = useMemo(() => tempDailyBars.map(h => h.time), [tempDailyBars])
-  const tempGuidesLive = useMemo(
-    () => ({
-      nowIndex: computeWeatherChartNowIndex(tempIsoLabels, nowMs),
-      horizontal: tempGuides,
-      showNowLine: true,
-      liveMotion,
-      isoLabels: tempIsoLabels,
-      liveSeries: tempDailyBars.map(h => h.temperatureC),
-    }),
-    [liveMotion, nowMs, tempDailyBars, tempGuides, tempIsoLabels],
-  )
+  const tempChartGuides = useMemo(() => {
+    const base = lineLiveGuides(tempGuides, dailyTempSeries.map(h => h.temperatureC), dailyIsoLabels)
+    return { ...base, showLiveRangeLine: false, isoLabels: dailyIsoLabels }
+  }, [dailyIsoLabels, dailyTempSeries, lineLiveGuides, tempGuides])
 
   const windDirChart = useMemo(
     () => chartWithIsoLabels(buildArcgisWindDirectionChart(hourly, chartMode), hourly),
@@ -262,9 +256,9 @@ export function WeatherArcgisStackedCharts({
     () => chartWithIsoLabels(buildArcgisHumidityLineChart(hourly), hourly),
     [hourly],
   )
-  const tempBarChart = useMemo(
-    () => chartWithIsoLabels(buildTemperatureDailyBarChart(tempDailyBars, chartMode), tempDailyBars),
-    [chartMode, tempDailyBars],
+  const tempDailyBarChart = useMemo(
+    () => chartWithIsoLabels(buildTemperatureDailyBarChart(dailyTempSeries, chartMode), dailyTempSeries),
+    [chartMode, dailyTempSeries],
   )
 
   const liveClockLabel = useMemo(
@@ -334,6 +328,7 @@ export function WeatherArcgisStackedCharts({
             <Chart
               type="line"
               data={windDirChart}
+              updateMode="none"
               options={arcgisStackChartOptions(
                 windDirTitle,
                 {
@@ -362,6 +357,7 @@ export function WeatherArcgisStackedCharts({
             <Chart
               type="line"
               data={windSpeedChart}
+              updateMode="none"
               options={arcgisStackChartOptions(
                 windSpeedTitle,
                 {
@@ -388,6 +384,7 @@ export function WeatherArcgisStackedCharts({
               <Chart
                 type="line"
                 data={humidityChart}
+                updateMode="none"
                 options={arcgisStackChartOptions(
                   humidityTitle,
                   {
@@ -401,7 +398,8 @@ export function WeatherArcgisStackedCharts({
             ) : (
               <Chart
                 type="bar"
-                data={tempBarChart}
+                data={tempDailyBarChart}
+                updateMode="none"
                 options={arcgisStackChartOptions(
                   tempTitle,
                   {
@@ -415,7 +413,7 @@ export function WeatherArcgisStackedCharts({
                     },
                   },
                   chartMode,
-                  tempGuidesLive,
+                  tempChartGuides,
                 )}
               />
             )}

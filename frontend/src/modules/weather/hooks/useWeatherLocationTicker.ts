@@ -1,7 +1,7 @@
 import { type RefObject, useEffect, useRef } from 'react'
 
-/** Moderate airport-board scroll (~28 px/s). */
-const TICKER_PX_PER_SEC = 28
+/** Moderate airport-board scroll — steady, not too fast. */
+const TICKER_PX_PER_SEC = 24
 
 type Options = {
   /** When list content is duplicated, loop at half scroll height for seamless scroll. */
@@ -22,6 +22,7 @@ export function useWeatherLocationTicker(
 ) {
   const rafRef = useRef(0)
   const lastTsRef = useRef(0)
+  const scrollRemainderRef = useRef(0)
   const seamlessLoop = options?.seamlessLoop ?? false
 
   useEffect(() => {
@@ -29,6 +30,7 @@ export function useWeatherLocationTicker(
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
       rafRef.current = 0
       lastTsRef.current = 0
+      scrollRemainderRef.current = 0
       return
     }
 
@@ -42,19 +44,21 @@ export function useWeatherLocationTicker(
       const total = node.scrollHeight - node.clientHeight
       if (total > 6) {
         const last = lastTsRef.current || ts
-        const dt = Math.min(ts - last, 48)
+        const dt = Math.min(Math.max(ts - last, 0), 32)
         lastTsRef.current = ts
-        node.scrollTop += (TICKER_PX_PER_SEC * dt) / 1000
+        const delta = (TICKER_PX_PER_SEC * dt) / 1000 + scrollRemainderRef.current
+        const pixels = delta >= 1 ? Math.floor(delta) : 0
+        scrollRemainderRef.current = delta - pixels
+        if (pixels > 0) node.scrollTop += pixels
 
         if (seamlessLoop && node.scrollHeight > node.clientHeight * 1.5) {
           const segment = node.scrollHeight / 2
-          if (node.scrollTop >= segment - 1) {
+          if (node.scrollTop >= segment) {
             node.scrollTop -= segment
-            lastTsRef.current = ts
           }
-        } else if (node.scrollTop >= total - 1) {
+        } else if (node.scrollTop >= total - 0.5) {
           node.scrollTop = 0
-          lastTsRef.current = ts
+          scrollRemainderRef.current = 0
         }
       }
 
@@ -66,6 +70,7 @@ export function useWeatherLocationTicker(
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
       rafRef.current = 0
       lastTsRef.current = 0
+      scrollRemainderRef.current = 0
     }
   }, [enabled, paused, itemCount, listRef, seamlessLoop])
 }

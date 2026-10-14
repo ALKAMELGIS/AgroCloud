@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import type { FieldBoundaryPhase, FieldCaptureImageryId, FieldModelId } from './useAgriFieldBoundary'
 import {
   acceptForFieldSource,
@@ -15,9 +15,14 @@ import { AgriFieldBoundaryResultsDashboard } from './AgriFieldBoundaryResultsDas
 import { AgriFieldBoundaryTrainingSamplesPane } from './AgriFieldBoundaryTrainingSamplesPane'
 import { FtwAoiTrainingDashboard } from './FtwAoiTrainingDashboard'
 import { FieldAttributesDashboard } from './FieldAttributesDashboard'
+import { FieldAttributesDashboardModal } from './FieldAttributesDashboardModal'
 import { AfbOperationProgressBar } from './AfbOperationProgressBar'
 import { useFtwAoiTraining } from './useFtwAoiTraining'
-import { isUsableSiActiveAoi, pickFtwTrainingAoi } from './resolveFtwTrainingAoi'
+import {
+  isUsableSiActiveAoi,
+  listDistinctUsableSiActiveAois,
+  pickFtwTrainingAoi,
+} from './resolveFtwTrainingAoi'
 import type { FieldBoundaryTrainingSamplesApi } from './useFieldBoundaryTrainingSamples'
 import type { FtwGlobalYear } from './ftwGlobalConfig'
 import { ftwGlobalAttribution } from './ftwGlobalConfig'
@@ -311,6 +316,7 @@ export function AgriFieldBoundaryPanel({
   const [minAreaText, setMinAreaText] = useState(() => String(minAreaM2))
   const [activeTab, setActiveTab] = useState<FieldBoundaryPanelTab>('detect')
   const [dashboardOpen, setDashboardOpen] = useState(false)
+  const [ftwTrainModalOpen, setFtwTrainModalOpen] = useState(false)
   const [modelInfoOpen, setModelInfoOpen] = useState(false)
 
   const trainingCounts = trainingSamples?.counts
@@ -326,6 +332,10 @@ export function AgriFieldBoundaryPanel({
   const isFtwTraining = isFtwGlobal
 
   const ftwAoiResolved = pickFtwTrainingAoi(ftwTrainingAoi, activeAoi)
+  const ftwChartAois = useMemo(
+    () => listDistinctUsableSiActiveAois(ftwAoiResolved, ftwTrainingAoi, activeAoi),
+    [ftwAoiResolved, ftwTrainingAoi, activeAoi],
+  )
 
   const ftwTraining = useFtwAoiTraining({
     activeAoi: ftwAoiResolved,
@@ -336,6 +346,35 @@ export function AgriFieldBoundaryPanel({
 
   const ftwAnalyticsReady = isFtwTraining && isUsableSiActiveAoi(ftwAoiResolved)
   const analyticsTabReady = isFtwTraining ? ftwAnalyticsReady : hasResult
+
+  const ftwDashboardShared = useMemo(
+    () => ({
+      session: ftwTraining.session,
+      hasAoi: ftwAnalyticsReady,
+      chartAois: ftwChartAois,
+      detectionFieldCount: resultGeojson?.features?.length ?? 0,
+      busy: ftwTraining.busy,
+      error: ftwTraining.error,
+      onBuildDataset: () => void ftwTraining.buildDataset(),
+      onRunLrFinder: () => void ftwTraining.runLrFinder(),
+      onRunTraining: () => void ftwTraining.runTraining(),
+      onExportModel: ftwTraining.exportModel,
+      onCancel: () => void ftwTraining.cancelTraining(),
+    }),
+    [
+      ftwTraining.session,
+      ftwTraining.busy,
+      ftwTraining.error,
+      ftwTraining.buildDataset,
+      ftwTraining.runLrFinder,
+      ftwTraining.runTraining,
+      ftwTraining.exportModel,
+      ftwTraining.cancelTraining,
+      ftwAnalyticsReady,
+      ftwChartAois,
+      resultGeojson?.features?.length,
+    ],
+  )
   const dashboardTabReady = Boolean(resultGeojson?.features?.length)
   /** FTW Global export vectorizes AOI on demand — only needs a scoped AOI, not a prior detect result. */
   const exportReady = isFtwGlobal ? hasAoi : hasResult
@@ -351,6 +390,7 @@ export function AgriFieldBoundaryPanel({
   useEffect(() => {
     if (!analyticsTabReady) {
       setDashboardOpen(false)
+      setFtwTrainModalOpen(false)
       if (activeTab === 'results') setActiveTab('detect')
     }
     if (!dashboardTabReady && activeTab === 'dashboard') setActiveTab('detect')
@@ -553,13 +593,7 @@ export function AgriFieldBoundaryPanel({
           onClick={() => analyticsTabReady && setActiveTab('results')}
         >
           <i className="fa-solid fa-chart-line" aria-hidden />
-          {isFtwTraining ? (
-            ftwTraining.session.dataset?.total ? (
-              <span className="si-afb__tab-badge">{ftwTraining.session.dataset.total}</span>
-            ) : analyticsTabReady ? (
-              <span className="si-afb__tab-badge">LR</span>
-            ) : null
-          ) : hasResult ? (
+          {!isFtwTraining && hasResult ? (
             <span className="si-afb__tab-badge">{fieldCount}</span>
           ) : null}
         </button>
@@ -1374,16 +1408,9 @@ export function AgriFieldBoundaryPanel({
       >
         {isFtwGlobal ? (
           <FtwAoiTrainingDashboard
-            session={ftwTraining.session}
-            hasAoi={ftwAnalyticsReady}
-            detectionFieldCount={resultGeojson?.features?.length ?? 0}
-            busy={ftwTraining.busy}
-            error={ftwTraining.error}
-            onBuildDataset={() => void ftwTraining.buildDataset()}
-            onRunLrFinder={() => void ftwTraining.runLrFinder()}
-            onRunTraining={() => void ftwTraining.runTraining()}
-            onExportModel={ftwTraining.exportModel}
-            onCancel={() => void ftwTraining.cancelTraining()}
+            {...ftwDashboardShared}
+            layout="compact"
+            onExpand={() => setFtwTrainModalOpen(true)}
           />
         ) : (
         <>
@@ -1413,6 +1440,18 @@ export function AgriFieldBoundaryPanel({
         )}
       </section>
       )}
+
+      <FieldAttributesDashboardModal
+        open={ftwTrainModalOpen && isFtwGlobal}
+        onClose={() => setFtwTrainModalOpen(false)}
+        containerRef={mapContainerRef ?? { current: null }}
+        title="AOI Training Dashboard"
+        subtitle="LR Finder · Loss · IoU · F1 · Dataset"
+        dialogId="si-ftw-train-dashboard"
+        headerIconClass="fa-solid fa-chart-line"
+      >
+        <FtwAoiTrainingDashboard {...ftwDashboardShared} layout="modal" />
+      </FieldAttributesDashboardModal>
 
       <AgriFieldBoundaryResultsDashboard
         open={dashboardOpen}

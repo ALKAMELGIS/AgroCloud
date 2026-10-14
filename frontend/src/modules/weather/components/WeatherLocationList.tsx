@@ -74,6 +74,8 @@ export function WeatherLocationList({
 
   const [tickerOn, setTickerOn] = useState(false)
 
+  const [boardPlaying, setBoardPlaying] = useState(true)
+
   const [hoverPause, setHoverPause] = useState(false)
 
   const [thresholds, setThresholds] = useState(loadWeatherOperationsThresholds)
@@ -129,6 +131,8 @@ export function WeatherLocationList({
 
   const tickerActive = (tickerOn && canTicker && !arcgis) || arcgisBoard
 
+  const tickerPaused = hoverPause || (arcgisBoard ? !boardPlaying : false)
+
   const listEntries = useMemo(() => {
     if (!arcgisBoard) {
       return displayRows.map(row => ({ row, key: row.id, ariaHidden: false }))
@@ -139,7 +143,7 @@ export function WeatherLocationList({
     ]
   }, [arcgisBoard, displayRows])
 
-  useWeatherLocationTicker(tickerActive, hoverPause, listRef, listEntries.length, {
+  useWeatherLocationTicker(tickerActive, tickerPaused, listRef, listEntries.length, {
     seamlessLoop: arcgisBoard,
   })
 
@@ -157,7 +161,7 @@ export function WeatherLocationList({
 
         tickerActive ? 'weather-locations--ticker-on' : '',
 
-        hoverPause && tickerActive ? 'weather-locations--ticker-paused' : '',
+        tickerPaused && tickerActive ? 'weather-locations--ticker-paused' : '',
 
         className,
 
@@ -178,6 +182,17 @@ export function WeatherLocationList({
               Live board · highest alert risk first
             </p>
           </div>
+          <button
+            type="button"
+            className={`weather-locations__ticker-btn weather-locations__ticker-btn--head${boardPlaying ? ' is-playing' : ''}`}
+            aria-pressed={boardPlaying}
+            aria-label={boardPlaying ? 'Pause location scroll' : 'Play location scroll'}
+            title={boardPlaying ? 'Pause scroll' : 'Play scroll'}
+            disabled={!canTicker}
+            onClick={() => setBoardPlaying(p => !p)}
+          >
+            <i className={`fa-solid fa-${boardPlaying ? 'pause' : 'play'}`} aria-hidden />
+          </button>
         </div>
       ) : (
         <div className="weather-locations__head">
@@ -217,7 +232,7 @@ export function WeatherLocationList({
         className="weather-locations__list"
 
         onMouseEnter={() => {
-          if (tickerActive) setHoverPause(true)
+          if (tickerActive && boardPlaying) setHoverPause(true)
         }}
 
         onMouseLeave={() => setHoverPause(false)}

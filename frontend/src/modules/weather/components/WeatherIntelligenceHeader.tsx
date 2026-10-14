@@ -151,7 +151,7 @@ export function WeatherIntelligenceHeader({
             {activeLayerId && onLayerChange ? (
               <label className="weather-header__arcgis-field">
                 <span className="weather-header__arcgis-field-label">
-                  <i className="fa-solid fa-map" aria-hidden /> Map layer
+                  <i className="fa-solid fa-map" aria-hidden /> Layer
                 </span>
                 <select
                   value={activeLayerId}
@@ -189,7 +189,7 @@ export function WeatherIntelligenceHeader({
             {sites.length && onSelectFarm && farmId ? (
               <label className="weather-header__arcgis-field">
                 <span className="weather-header__arcgis-field-label">
-                  <i className="fa-solid fa-location-dot" aria-hidden /> Select a location
+                  <i className="fa-solid fa-location-dot" aria-hidden /> Location
                 </span>
                 <select
                   value={farmId}
@@ -207,7 +207,7 @@ export function WeatherIntelligenceHeader({
             {activeLayerId && onLayerChange ? (
               <label className="weather-header__arcgis-field">
                 <span className="weather-header__arcgis-field-label">
-                  <i className="fa-solid fa-map" aria-hidden /> Map View
+                  <i className="fa-solid fa-map" aria-hidden /> Layer
                 </span>
                 <select
                   value={activeLayerId}

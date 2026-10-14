@@ -180,7 +180,6 @@ export type SatelliteMapAnalysisChromeProps = {
     | 'well-site'
     | 'well-suitability'
     | 'flood-monitoring'
-    | 'flood-simulation'
     | 'raster-georeference'
     | 'table-geo-ai'
     | 'training-ai'

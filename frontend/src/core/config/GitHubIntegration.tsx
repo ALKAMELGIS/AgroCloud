@@ -38,7 +38,7 @@ type GhEvent = {
 const getWsUrl = () => {
   const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:'
   const proto = isHttps ? 'wss' : 'ws'
-  const host = typeof window !== 'undefined' ? window.location.host : 'localhost:5174'
+  const host = typeof window !== 'undefined' ? window.location.host : 'localhost:5180'
   return `${proto}://${host}/ws`
 }
 

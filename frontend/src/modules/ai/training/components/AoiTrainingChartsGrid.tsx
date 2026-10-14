@@ -7,6 +7,7 @@ import { ValidationLinePlot, CHART_PALETTE, type PlotSeries } from './Validation
 import type { TrainingEpochRecord } from '../trainingAiClient'
 import type { FtwAoiTrainingSession, FtwDatasetSplit } from '../../segmentation/field-boundary/ftwAoiTrainingTypes'
 import type { AoiTrainingAnalytics } from '../../segmentation/field-boundary/aoiTrainingAnalyticsPersistence'
+import { FieldDashBarChart } from '../../segmentation/field-boundary/FieldDashBarChart'
 import './AoiTrainingChartsGrid.css'
 
 export type AoiDatasetSplit = FtwDatasetSplit
@@ -51,30 +52,37 @@ function fmtLr(v: number): string {
   return v.toExponential(1)
 }
 
-function DatasetBars({ dataset }: { dataset: AoiDatasetSplit | null | undefined }) {
+function DatasetBars({
+  dataset,
+  inline = true,
+  height,
+  width,
+}: {
+  dataset: AoiDatasetSplit | null | undefined
+  inline?: boolean
+  height: number
+  width: number
+}) {
   if (!dataset?.total) {
     return <p className="si-aoi-charts__empty">No samples counted inside this AOI yet.</p>
   }
-  const max = Math.max(dataset.train, dataset.validation, dataset.test, 1)
   const rows = [
-    { label: 'Training', value: dataset.train, cls: '' },
-    { label: 'Validation', value: dataset.validation, cls: 'si-aoi-charts__bar-fill--val' },
-    { label: 'Test', value: dataset.test, cls: 'si-aoi-charts__bar-fill--test' },
+    { label: 'Train', value: dataset.train },
+    { label: 'Val', value: dataset.validation },
+    { label: 'Test', value: dataset.test },
   ]
   return (
-    <div className="si-aoi-charts__bars" aria-label="Dataset split distribution inside AOI">
-      {rows.map(r => (
-        <div key={r.label} className="si-aoi-charts__bar-row">
-          <span>{r.label}</span>
-          <div className="si-aoi-charts__bar-track">
-            <div
-              className={`si-aoi-charts__bar-fill${r.cls ? ` ${r.cls}` : ''}`}
-              style={{ width: `${Math.round((r.value / max) * 100)}%` }}
-            />
-          </div>
-          <strong>{r.value.toLocaleString()}</strong>
-        </div>
-      ))}
+    <div className="si-aoi-charts__dataset-chart">
+      <FieldDashBarChart
+        skin="afbv"
+        rows={rows}
+        barColors={[CHART_PALETTE.train, CHART_PALETTE.val, CHART_PALETTE.extra[2]!]}
+        ariaLabel="Dataset split distribution inside AOI"
+        expanded={!inline}
+        height={height}
+        width={width}
+        formatValue={v => v.toLocaleString()}
+      />
     </div>
   )
 }
@@ -392,7 +400,7 @@ export function AoiTrainingChartsGrid({
             <h4>Dataset Distribution</h4>
             <span>Train · Val · Test</span>
           </div>
-          <DatasetBars dataset={dataset ?? null} />
+          <DatasetBars dataset={dataset ?? null} inline={inline} height={chartH} width={chartW} />
         </section>
       </div>
     </div>

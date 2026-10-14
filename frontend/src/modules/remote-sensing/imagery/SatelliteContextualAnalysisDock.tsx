@@ -47,7 +47,6 @@ export type SatelliteContextPanelId =
   | 'well-site'
   | 'well-suitability'
   | 'flood-monitoring'
-  | 'flood-simulation'
   | 'raster-georeference'
   | 'table-geo-ai'
   | 'spatial'
@@ -110,7 +109,6 @@ export type SatelliteContextualAnalysisDockProps = {
     | 'well-site'
     | 'well-suitability'
     | 'flood-monitoring'
-    | 'flood-simulation'
     | 'raster-georeference'
     | 'table-geo-ai'
     | 'training-ai'
@@ -406,7 +404,6 @@ const RAIL_GROUPS_MAP: SatelliteContextPanelId[][] = [
     'crop-classification',
     'imagery-time-series',
     'map-swipe',
-    'layer-live-legend',
     'hydro-watershed',
     'cut-fill-analysis',
   ],

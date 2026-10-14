@@ -248,8 +248,15 @@
 /* Index time series in dock / compact tab (modal chart chrome is scoped under .si-field-dash-modal) */
 .si-field-dash__card--timeseries:not(.si-field-dash-modal *) .si-afbv__figure-wrap {
   margin-top: 2px;
-  padding: 4px 2px 0;
+  padding: 2px 0 0;
   border-radius: 6px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.si-field-dash__card--timeseries:not(.si-field-dash-modal *) .si-afbv__figure {
+  overflow: hidden;
+  max-width: 100%;
 }
 
 .si-field-dash__card--timeseries:not(.si-field-dash-modal *) .si-afbv__figure-grid {
@@ -296,8 +303,23 @@
 .si-field-dash__ts-legend--chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 10px;
+  gap: 4px 8px;
+  margin: 0 0 6px;
+}
+
+.si-field-dash__ts-legend--compact {
+  gap: 3px 6px;
   margin: 0 0 4px;
+}
+
+.si-field-dash__ts-legend--compact .si-field-dash__ts-chip {
+  font-size: 7px;
+  gap: 3px;
+}
+
+.si-field-dash__ts-legend--compact .si-field-dash__ts-chip-line {
+  width: 10px;
+  height: 2px;
 }
 
 .si-field-dash__ts-chip {
@@ -316,6 +338,13 @@
   height: 2px;
   border-radius: 1px;
   flex-shrink: 0;
+}
+
+.si-field-dash__ts-chip-line--dashed {
+  background: transparent !important;
+  border-top: 2px dashed currentColor;
+  height: 0;
+  box-sizing: border-box;
 }
 
 .si-field-dash--expanded .si-field-dash__charts {
@@ -371,13 +400,43 @@
 
 .si-field-dash__vbar--scroll {
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: visible;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.65) rgba(15, 23, 42, 0.08);
+}
+
+.si-field-dash__vbar--scroll::-webkit-scrollbar {
+  height: 8px;
+}
+
+.si-field-dash__vbar--scroll::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.06);
+  border-radius: 4px;
+}
+
+.si-field-dash__vbar--scroll::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.55);
+  border-radius: 4px;
+}
+
+.si-field-dash__vbar--scroll .si-field-dash__vbar-svg {
+  max-width: none;
+}
+
+.si-field-dash__vbar--x-horizontal.si-field-dash__vbar--scroll {
   padding-bottom: 2px;
 }
 
 .si-field-dash__vbar-svg {
   display: block;
   min-width: 100%;
+  overflow: visible;
+}
+
+.si-field-dash__vbar-tick--horizontal {
+  font-size: 9px;
 }
 
 .si-field-dash__vbar-bg {
@@ -691,6 +750,52 @@
 .si-field-dash__pie-chart--modal .si-field-dash__pie-donut {
   width: 96px;
   height: 96px;
+}
+
+/* Modal: donut stacked above legend (narrow spotlight column). */
+.si-field-dash__pie-chart--modal.si-field-dash__pie-chart--stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  width: 100%;
+}
+
+.si-field-dash__pie-chart--modal.si-field-dash__pie-chart--stack .si-field-dash__pie-donut {
+  width: min(100%, 112px);
+  height: auto;
+  aspect-ratio: 1;
+  margin-inline: auto;
+}
+
+.si-field-dash__pie-chart--modal.si-field-dash__pie-chart--stack .si-field-dash__pie-legend {
+  flex: none;
+  width: 100%;
+}
+
+.si-field-dash__pie-chart--modal.si-field-dash__pie-chart--stack .si-field-dash__pie-legend-head,
+.si-field-dash__pie-chart--modal.si-field-dash__pie-chart--stack .si-field-dash__pie-row {
+  grid-template-columns: 8px minmax(0, 1fr) 2.75em 2.5em;
+}
+
+.si-field-dash__pie-chart--modal.si-field-dash__pie-chart--stack .si-field-dash__pie-legend-head__meter,
+.si-field-dash__pie-chart--modal.si-field-dash__pie-chart--stack .si-field-dash__pie-meter {
+  display: none;
+}
+
+.si-field-dash__pie-chart--modal.si-field-dash__pie-chart--stack .si-field-dash__pie-legend-head__pct {
+  grid-column: 3;
+}
+
+.si-field-dash__pie-chart--modal.si-field-dash__pie-chart--stack .si-field-dash__pie-legend-head__n {
+  grid-column: 4;
+}
+
+.si-field-dash__pie-chart--modal.si-field-dash__pie-chart--stack .si-field-dash__pie-pct {
+  grid-column: 3;
+}
+
+.si-field-dash__pie-chart--modal.si-field-dash__pie-chart--stack .si-field-dash__pie-value {
+  grid-column: 4;
 }
 
 .si-field-dash__pie-chart--compact {
@@ -1298,11 +1403,39 @@
   min-height: 0;
 }
 
+.si-field-dash-modal .si-field-dash__vbar {
+  width: 100%;
+  overflow: visible;
+}
+
+.si-field-dash-modal .si-field-dash__vbar:not(.si-field-dash__vbar--x-horizontal) {
+  padding-bottom: 2px;
+}
+
 .si-field-dash-modal .si-field-dash__vbar-svg {
   width: 100%;
+  max-width: 100%;
   height: auto;
-  min-height: 180px;
-  max-height: 220px;
+  min-height: 0;
+  overflow: visible;
+}
+
+.si-field-dash-modal .si-field-dash__vbar--scroll .si-field-dash__vbar-svg {
+  width: auto;
+  max-width: none;
+  min-width: 100%;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__vbar--scroll {
+  scrollbar-color: rgba(148, 163, 184, 0.55) rgba(255, 255, 255, 0.06);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__vbar--scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__vbar--scroll::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.45);
 }
 
 .si-field-dash-modal .si-field-dash__pie-chart--expanded:not(.si-field-dash__pie-chart--compact) .si-field-dash__pie-donut {
@@ -1372,7 +1505,7 @@
 
 .si-field-dash--modal-view .si-field-dash__spotlight {
   display: grid;
-  grid-template-columns: minmax(200px, 30%) minmax(0, 1fr);
+  grid-template-columns: minmax(240px, 34%) minmax(0, 1fr);
   gap: 10px;
   align-items: stretch;
 }
@@ -1383,11 +1516,47 @@
   min-width: 0;
 }
 
+.si-field-dash--modal-view .si-field-dash__card--health-spotlight {
+  display: flex;
+  flex-direction: column;
+}
+
+.si-field-dash--modal-view .si-field-dash__card--health-spotlight .si-field-dash__pie-chart {
+  flex: 1;
+  min-height: 0;
+}
+
+@media (max-width: 720px) {
+  .si-field-dash--modal-view .si-field-dash__spotlight {
+    grid-template-columns: 1fr;
+  }
+
+  .si-field-dash-modal .si-field-dash--modal-view .si-field-dash__charts--primary,
+  .si-field-dash-modal .si-field-dash--modal-view .si-field-dash__charts--secondary {
+    grid-template-columns: 1fr;
+  }
+
+}
+
 .si-field-dash--modal-view .si-field-dash__card--timeseries-spotlight .si-afbv__figure-wrap {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+.si-field-dash--modal-view .si-field-dash__card--timeseries-spotlight .si-afbv__figure-area {
+  display: none;
+}
+
+.si-field-dash--modal-view .si-field-dash__card--timeseries-spotlight .si-afbv__figure-line {
+  stroke-width: 1.75;
+  opacity: 0.92;
+}
+
+.si-field-dash--modal-view .si-field-dash__card--timeseries-spotlight .si-afbv__figure-grid {
+  stroke-dasharray: 2 5;
+  opacity: 0.55;
 }
 
 .si-field-dash--modal-view .si-field-dash__card--timeseries-spotlight {
@@ -1414,11 +1583,42 @@
   font-size: 10px;
 }
 
+.si-field-dash-modal .si-field-dash__card--timeseries .si-field-dash__ts-legend--theme-swatches .si-field-dash__ts-chip {
+  color: rgba(15, 23, 42, 0.52);
+  font-weight: 650;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark)
+  .si-field-dash-modal
+  .si-field-dash__card--timeseries
+  .si-field-dash__ts-legend--theme-swatches
+  .si-field-dash__ts-chip {
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.si-field-dash-modal .si-field-dash__card--timeseries:not(.si-field-dash__card--timeseries-spotlight) {
+  background: #ffffff;
+}
+
+/* Spotlight time series: same card surface as health spotlight (not solid chart pad). */
+.si-field-dash-modal .si-field-dash__card--timeseries.si-field-dash__card--timeseries-spotlight {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+.si-field-dash-modal .si-field-dash__card--timeseries.si-field-dash__card--timeseries-spotlight .si-afbv__figure-wrap {
+  background: transparent;
+}
+
+.si-field-dash-modal .si-field-dash__card--timeseries.si-field-dash__card--timeseries-spotlight .si-afbv__figure-bg {
+  fill: transparent;
+}
+
 .si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure-wrap {
-  margin-top: 2px;
-  padding: 6px 4px 2px;
-  border-radius: 8px;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.03) 0%, transparent 72%);
+  margin-top: 0;
+  padding: 0 2px 4px;
+  border-radius: 0;
+  background: #ffffff;
 }
 
 .si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure {
@@ -1434,7 +1634,7 @@
 }
 
 .si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure-bg {
-  fill: transparent;
+  fill: #ffffff;
 }
 
 .si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure-grid {
@@ -1450,18 +1650,69 @@
   filter: drop-shadow(0 0 0.35px rgba(15, 23, 42, 0.25));
 }
 
+.si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure-crosshair {
+  stroke-dasharray: 3 4;
+}
+
+.si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure-tick--over {
+  stroke: #ffffff;
+  stroke-width: 3.5px;
+}
+
 .si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure-legend {
   fill: rgba(255, 255, 255, 0.92);
   stroke: rgba(15, 23, 42, 0.1);
   stroke-width: 0.5;
 }
 
-:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure-wrap {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 72%);
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__card--timeseries:not(.si-field-dash__card--timeseries-spotlight) {
+  background: #0a0a0a;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark)
+  .si-field-dash-modal
+  .si-field-dash__card--timeseries.si-field-dash__card--timeseries-spotlight {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__card--timeseries:not(.si-field-dash__card--timeseries-spotlight) .si-afbv__figure-wrap {
+  background: #0a0a0a;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__card--timeseries:not(.si-field-dash__card--timeseries-spotlight) .si-afbv__figure-bg {
+  fill: #0a0a0a;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark)
+  .si-field-dash-modal
+  .si-field-dash__card--timeseries.si-field-dash__card--timeseries-spotlight
+  .si-afbv__figure-wrap {
+  background: transparent;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark)
+  .si-field-dash-modal
+  .si-field-dash__card--timeseries.si-field-dash__card--timeseries-spotlight
+  .si-afbv__figure-bg {
+  fill: transparent;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure-tick--over {
+  stroke: #0a0a0a;
+  stroke-width: 3.5px;
+}
+
+:is(html[data-theme='dark'], .si-sat-ctx-dock--dark)
+  .si-field-dash-modal
+  .si-field-dash__card--timeseries.si-field-dash__card--timeseries-spotlight
+  .si-afbv__figure-tick--over {
+  stroke: rgba(21, 25, 34, 0.92);
 }
 
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__figure-grid {
-  stroke: rgba(255, 255, 255, 0.1);
+  stroke: rgba(255, 255, 255, 0.12);
 }
 
 :is(html[data-theme='dark'], .si-sat-ctx-dock--dark) .si-field-dash-modal .si-field-dash__card--timeseries .si-afbv__spine {

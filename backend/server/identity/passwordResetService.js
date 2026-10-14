@@ -6,12 +6,17 @@ import { writeAudit } from './auditService.js'
 
 const RESET_TTL_MS = 60 * 60 * 1000
 
+function defaultDevAppOrigin() {
+  const port = Number(process.env.VITE_DEV_PORT || 5180)
+  return String(process.env.APP_ORIGIN || `http://localhost:${port}/AgroCloud`).replace(/\/+$/, '')
+}
+
 function hashResetToken(token) {
   return createHash('sha256').update(String(token)).digest('hex')
 }
 
 export function buildPasswordResetLink(baseUrl, token) {
-  const base = String(baseUrl || '').trim().replace(/\/+$/, '') || 'http://localhost:5174/AgroCloud'
+  const base = String(baseUrl || '').trim().replace(/\/+$/, '') || defaultDevAppOrigin()
   return `${base}/#/login?reset=${encodeURIComponent(token)}`
 }
 

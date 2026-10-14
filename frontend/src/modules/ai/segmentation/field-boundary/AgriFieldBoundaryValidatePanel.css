@@ -219,15 +219,23 @@
   pointer-events: all;
 }
 .si-afbv__figure-crosshair {
-  stroke: rgba(15, 23, 42, 0.45);
-  stroke-width: 0.8;
-  stroke-dasharray: 3 2;
+  stroke: rgba(15, 23, 42, 0.35);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
 }
 .si-afbv__block--validation .si-afbv__figure-crosshair {
   stroke: rgba(255, 255, 255, 0.55);
 }
-.si-afbv__figure-hover-dot {
+.si-afbv__figure-hover-dot,
+.si-afbv__figure-hover-halo {
   pointer-events: none;
+}
+.si-afbv__figure-tick--over {
+  paint-order: stroke fill;
+  stroke: #ffffff;
+  stroke-width: 3px;
+  stroke-linejoin: round;
 }
 .si-afbv__figure-tip {
   position: absolute;

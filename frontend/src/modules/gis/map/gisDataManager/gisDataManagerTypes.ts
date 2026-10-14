@@ -112,15 +112,15 @@ export const GIS_DM_CATEGORIES: {
   { id: 'favorites', label: 'Favorites', icon: 'fa-solid fa-star', ready: true },
   { id: 'giscontent', label: 'GIS Content', icon: 'fa-solid fa-layer-group', ready: true },
   { id: 'vector', label: 'Vector', icon: 'fa-solid fa-draw-polygon', ready: true },
-  { id: 'raster', label: 'Raster', icon: 'fa-regular fa-image', ready: true, hint: 'Raster Layer — display, stretch & manage' },
+  { id: 'raster', label: 'Raster', icon: 'fa-regular fa-image', ready: true, hint: 'Raster display & stretch' },
   { id: 'database', label: 'Database', icon: 'fa-solid fa-database', ready: true },
   { id: 'cloud', label: 'Cloud', icon: 'fa-solid fa-cloud', ready: true },
   { id: 'web', label: 'Web Services', icon: 'fa-solid fa-globe', ready: true },
   { id: 'bim', label: 'BIM / CAD', icon: 'fa-solid fa-building', ready: true },
   { id: 'lidar', label: 'LiDAR', icon: 'fa-solid fa-mountain', ready: true },
-  { id: 'realtime', label: 'Real-Time', icon: 'fa-solid fa-bolt', ready: false, hint: 'Stream connectors coming soon' },
-  { id: 'ai', label: 'AI Import', icon: 'fa-solid fa-brain', ready: false, hint: 'Smart format detection coming soon' },
-  { id: 'enterprise', label: 'Enterprise', icon: 'fa-solid fa-building-columns', ready: false, hint: 'Requires GIS gateway' },
+  { id: 'realtime', label: 'Real-Time', icon: 'fa-solid fa-bolt', ready: false, hint: 'Coming soon' },
+  { id: 'ai', label: 'AI Import', icon: 'fa-solid fa-brain', ready: false, hint: 'Coming soon' },
+  { id: 'enterprise', label: 'Enterprise', icon: 'fa-solid fa-building-columns', ready: false, hint: 'Coming soon' },
 ];
 
 export const WIZARD_STEPS: { id: GisImportWizardStep; label: string }[] = [
