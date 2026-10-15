@@ -70,6 +70,13 @@ describe('hydroReportExecutive', () => {
     const tables = buildHydroReportTables({
       steps: { dem: { status: 'done', result: demResult } },
       areaHa: 120,
+      aoiName: 'Test AOI',
+      centroidLabel: '0°N, 0°E',
+      crs: 'EPSG:4326',
+      demSource: 'Terrarium',
+      demResolution: '30 m/px',
+      analysisDate: '2026-01-01',
+      completedStepsLabel: 'dem',
       slopeRows: [{ class: 'Flat', range: '0° – 2°', areaHa: 10, pct: 20 }],
       floodRiskRows: [
         { label: 'Low Risk', areaHa: 40, pct: 33.3 },
@@ -85,6 +92,7 @@ describe('hydroReportExecutive', () => {
     expect(flood?.rows.some(r => r[0] === 'Total (all classes)')).toBe(true)
     expect(flood?.rows.some(r => r[0] === 'Affected (High + Critical)')).toBe(true)
     const study = tables.find(t => t.title === 'Study Area Summary')
-    expect(study?.rows[0]?.[1]).toContain('120.00 ha')
+    expect(study?.rows.some(r => r[1]?.includes('120.00 ha'))).toBe(true)
+    expect(tables.some(t => t.title === 'Project Information')).toBe(true)
   })
 })

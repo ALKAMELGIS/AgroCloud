@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import type { HydroStepId } from './hydroEngine'
+import { canBundleExportLayer } from './hydroBundleExport'
 import {
   defaultExportFormatForResult,
   exportFormatsForResult,
@@ -61,6 +62,9 @@ type HydroWatershedPanelProps = {
   onExportReport?: () => void
   exportReportBusy?: boolean
   exportReportLabel?: string
+  /** Single KMZ with one folder per completed layer (Google Earth). */
+  onExportAllLayers?: () => void | Promise<void>
+  exportAllLayersBusy?: boolean
 }
 
 function stepCanExport(st: HydroStepState): boolean {
@@ -85,8 +89,13 @@ export function HydroWatershedPanel({
   onExportReport,
   exportReportBusy,
   exportReportLabel,
+  onExportAllLayers,
+  exportAllLayersBusy,
 }: HydroWatershedPanelProps) {
   const anyDone = Object.values(steps).some(st => st.status === 'done')
+  const exportableLayerCount = STEPS.filter(
+    s => steps[s.id].status === 'done' && steps[s.id].result && canBundleExportLayer(steps[s.id].result!),
+  ).length
   const [formatByStep, setFormatByStep] = useState<Partial<Record<HydroStepId, HydroExportFormat>>>({})
   const [exportBusyId, setExportBusyId] = useState<HydroStepId | null>(null)
 
@@ -158,6 +167,24 @@ export function HydroWatershedPanel({
               <i className="fa-solid fa-file-word" aria-hidden />
             )}
             <span>{exportReportLabel ?? 'Export Hydro Report'}</span>
+          </button>
+        ) : null}
+        {onExportAllLayers ? (
+          <button
+            type="button"
+            className="si-hydro__export-all-kmz"
+            onClick={() => void onExportAllLayers()}
+            disabled={
+              !hasAoi || exportableLayerCount === 0 || exportAllLayersBusy || demLoading || exportReportBusy
+            }
+            title="Export all completed layers in one KMZ — each analysis in its own Google Earth folder"
+          >
+            {exportAllLayersBusy ? (
+              <i className="fa-solid fa-circle-notch fa-spin" aria-hidden />
+            ) : (
+              <i className="fa-solid fa-earth-americas" aria-hidden />
+            )}
+            <span>Export all layers (KMZ)</span>
           </button>
         ) : null}
       </div>

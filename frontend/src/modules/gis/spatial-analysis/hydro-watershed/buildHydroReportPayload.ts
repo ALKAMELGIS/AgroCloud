@@ -13,6 +13,7 @@ import {
 } from './hydroReportDerivedLayers'
 import {
   buildHydroExecutiveSummary,
+  buildHydroReportKeyIndicators,
   buildHydroReportTables,
   completedHydroSteps,
   hydroRecommendations,
@@ -202,9 +203,14 @@ export async function buildHydroReportPayload(input: BuildHydroReportInput): Pro
     input.onProgress?.(done, total, spec.title)
   }
 
+  const completedSteps = completedHydroSteps(input.steps)
+  const completedStepsLabel = completedSteps.join(', ') || 'None'
+
   const executive = buildHydroExecutiveSummary({
     aoiName: input.aoiName,
     areaHa,
+    sitePlanAreaHa: input.sitePlanAreaHa,
+    locationLabel: input.locationLabel,
     demResolution,
     steps: input.steps,
     slopeClasses: slopeRows.map(r => ({ class: r.class, pct: r.pct })),
@@ -214,11 +220,46 @@ export async function buildHydroReportPayload(input: BuildHydroReportInput): Pro
     wetlandAreaHa,
   })
 
+  const locationLabel =
+    input.locationLabel?.trim() ||
+    (input.aoiName.includes(',') ? input.aoiName.slice(input.aoiName.indexOf(',') + 1).trim() : undefined)
+
+  const tables = buildHydroReportTables({
+    steps: input.steps,
+    areaHa,
+    sitePlanAreaHa: input.sitePlanAreaHa,
+    aoiName: input.aoiName,
+    locationLabel,
+    centroidLabel: centroidLabel(input.geometry),
+    crs: 'EPSG:4326 (WGS 84) · analysis grids EPSG:3857',
+    demSource: 'Mapzen Terrarium terrain tiles (AWS open elevation)',
+    demResolution,
+    analysisDate: now.slice(0, 10),
+    completedStepsLabel,
+    slopeRows,
+    floodRiskRows,
+    floodRiskStats,
+    wetlandRows,
+    wetlandStats,
+    wetlandAreaHa,
+    wetlandPct,
+  })
+
+  const keyIndicators = buildHydroReportKeyIndicators({
+    areaHa,
+    sitePlanAreaHa: input.sitePlanAreaHa,
+    steps: input.steps,
+    floodRiskRows,
+    wetlandPct,
+  })
+
   return {
     projectName: input.projectName ?? 'AgroCloud Hydro Intelligence',
     generatedBy: input.generatedBy ?? 'AgroCloud',
     generatedAt: now,
     aoiName: input.aoiName,
+    sitePlanAreaHa: input.sitePlanAreaHa,
+    locationLabel,
     areaHa,
     crs: 'EPSG:4326 (WGS 84) · analysis grids EPSG:3857',
     demSource: 'Mapzen Terrarium terrain tiles (AWS open elevation)',
@@ -227,18 +268,9 @@ export async function buildHydroReportPayload(input: BuildHydroReportInput): Pro
     centroidLabel: centroidLabel(input.geometry),
     executive,
     snapshots,
-    tables: buildHydroReportTables({
-      steps: input.steps,
-      areaHa,
-      slopeRows,
-      floodRiskRows,
-      floodRiskStats,
-      wetlandRows,
-      wetlandStats,
-      wetlandAreaHa,
-      wetlandPct,
-    }),
-    completedSteps: completedHydroSteps(input.steps),
+    tables,
+    keyIndicators,
+    completedSteps,
     recommendations: hydroRecommendations(input.steps),
     dataQualityNotes:
       'Terrain from Terrarium DEM tiles; hydrology derived client-side via D8 flow routing. Flood-risk and wetland layers are screening proxies from slope + flow accumulation — validate with field data and hydraulic models for engineering design. Area (ha) and % of AOI are computed from class cell counts scaled to the geodesic AOI area.',

@@ -1,4 +1,5 @@
-import type { HydroReportPayload } from './hydroReportTypes'
+import type { HydroReportPayload, HydroReportTable } from './hydroReportTypes'
+import { HYDRO_REPORT_MAP_SPECS } from './hydroReportTypes'
 
 export type HydroDocxImageAsset = {
   rId: string
@@ -6,11 +7,21 @@ export type HydroDocxImageAsset = {
   base64: string
 }
 
+export type HydroDocxSnapshotView = {
+  rId: string | null
+  legend: string
+  stats: string
+  note?: string
+}
+
 export type HydroDocxModel = {
   projectName: string
   generatedBy: string
   generatedStamp: string
   aoiName: string
+  locationLabel: string
+  coverLocationLine: string
+  sitePlanAreaLabel: string
   areaHa: string
   crs: string
   demSource: string
@@ -23,14 +34,10 @@ export type HydroDocxModel = {
   floodRiskSummary: string
   wetlandSummary: string
   conclusion: string
-  snapshotBlocks: Array<{
-    title: string
-    legend: string
-    stats: string
-    rId: string | null
-    note?: string
-  }>
-  tables: Array<{ title: string; headers: string[]; rows: string[][] }>
+  snapshotsById: Record<string, HydroDocxSnapshotView>
+  tables: HydroReportTable[]
+  tablesByTitle: Record<string, HydroReportTable>
+  keyIndicators: Array<[string, string]>
   recommendations: string[]
   dataQualityNotes: string
   completedStepsLabel: string
@@ -43,8 +50,18 @@ export function base64ToUint8(base64: string): Uint8Array {
   return bytes
 }
 
-function nextRid(counter: number): string {
-  return `rIdImg${counter}`
+function inferLocation(aoiName: string, locationLabel?: string): string {
+  if (locationLabel?.trim()) return locationLabel.trim()
+  const comma = aoiName.indexOf(',')
+  if (comma >= 0) return aoiName.slice(comma + 1).trim()
+  return ''
+}
+
+function coverBanner(aoiName: string, location: string): string {
+  const base = aoiName.split(',')[0]?.trim() || aoiName
+  const short = base.replace(/\s*-\s*SitePlan/i, '').trim()
+  if (location) return `${short.toUpperCase()} · ${location.toUpperCase()}`
+  return base.toUpperCase()
 }
 
 export function buildHydroDocxModel(payload: HydroReportPayload): {
@@ -52,30 +69,39 @@ export function buildHydroDocxModel(payload: HydroReportPayload): {
   images: HydroDocxImageAsset[]
 } {
   const images: HydroDocxImageAsset[] = []
+  const snapshotsById: Record<string, HydroDocxSnapshotView> = {}
   let imageCounter = 0
 
-  const snapshotBlocks = payload.snapshots.map(snap => {
+  const snapBySpecId = Object.fromEntries(payload.snapshots.map(s => [s.id, s]))
+
+  for (const spec of HYDRO_REPORT_MAP_SPECS) {
+    const snap = snapBySpecId[spec.id]
     let rId: string | null = null
-    if (snap.imageBase64) {
+    if (snap?.imageBase64) {
       imageCounter += 1
-      rId = nextRid(imageCounter)
+      rId = `rIdImg${imageCounter}`
       images.push({ rId, fileName: `hydro_${imageCounter}.png`, base64: snap.imageBase64 })
     }
-    const stats = snap.stats.map(row => `${row.label}: ${row.value}`).join(' · ')
-    return {
-      title: snap.title,
-      legend: snap.legendText,
-      stats,
+    snapshotsById[spec.id] = {
       rId,
-      note: snap.note,
+      legend: snap?.legendText ?? '',
+      stats: snap?.stats.map(row => `${row.label}: ${row.value}`).join(' · ') ?? '',
+      note: snap?.note,
     }
-  })
+  }
+
+  const locationLabel = inferLocation(payload.aoiName, payload.locationLabel)
+  const sitePlanHa = payload.sitePlanAreaHa ?? payload.areaHa
+  const tablesByTitle = Object.fromEntries(payload.tables.map(t => [t.title, t]))
 
   const model: HydroDocxModel = {
     projectName: payload.projectName,
     generatedBy: payload.generatedBy,
     generatedStamp: payload.generatedAt.replace('T', ' ').slice(0, 19) + ' UTC',
-    aoiName: payload.aoiName,
+    aoiName: payload.aoiName.split(',')[0]?.trim() || payload.aoiName,
+    locationLabel,
+    coverLocationLine: coverBanner(payload.aoiName, locationLabel),
+    sitePlanAreaLabel: `${sitePlanHa.toFixed(0)} ha`,
     areaHa: `${payload.areaHa.toFixed(2)} ha`,
     crs: payload.crs,
     demSource: payload.demSource,
@@ -88,8 +114,10 @@ export function buildHydroDocxModel(payload: HydroReportPayload): {
     floodRiskSummary: payload.executive.floodRiskSummary,
     wetlandSummary: payload.executive.wetlandSummary,
     conclusion: payload.executive.conclusion,
-    snapshotBlocks,
+    snapshotsById,
     tables: payload.tables,
+    tablesByTitle,
+    keyIndicators: payload.keyIndicators,
     recommendations: payload.recommendations,
     dataQualityNotes: payload.dataQualityNotes,
     completedStepsLabel: payload.completedSteps.join(', ') || 'None',

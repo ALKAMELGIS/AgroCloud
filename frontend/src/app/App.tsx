@@ -88,6 +88,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
 
   componentDidCatch(error: unknown) {
     if (AppErrorBoundary.recoverFromStaleChunk(error)) return
+    if (AppErrorBoundary.recoverFromInvalidLazyExport(error)) return
     if (AppErrorBoundary.recoverFromHooksMismatch(error)) return
     try {
       const message = error instanceof Error ? error.message : String(error)
@@ -108,6 +109,23 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { err: AppErro
   /** Stale-deploy chunk failures should self-heal with a one-time reload, not a dead-end screen. */
   private static readonly STALE_CHUNK_GUARD = 'agro_boundary_chunk_reload'
   private static readonly HOOKS_MISMATCH_GUARD = 'agro_hooks_mismatch_reload'
+
+  /** React.lazy + empty Vite HMR module (missing default export) — one cache-busting reload. */
+  private static recoverFromInvalidLazyExport(error: unknown): boolean {
+    if (typeof window === 'undefined') return false
+    const message = error instanceof Error ? error.message : String(error ?? '')
+    if (!/Cannot convert object to primitive value/i.test(message)) return false
+    const guardKey = `${AppErrorBoundary.STALE_CHUNK_GUARD}:lazy`
+    try {
+      if (sessionStorage.getItem(guardKey)) return false
+      sessionStorage.setItem(guardKey, '1')
+    } catch {
+      return false
+    }
+    clearChunkReloadGuards()
+    void purgeAndReloadForStaleDeploy()
+    return true
+  }
 
   private static recoverFromStaleChunk(error: unknown): boolean {
     if (typeof window === 'undefined') return false

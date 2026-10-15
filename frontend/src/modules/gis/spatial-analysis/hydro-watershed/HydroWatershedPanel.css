@@ -196,7 +196,8 @@
   cursor: not-allowed;
 }
 
-.si-hydro__export-report {
+.si-hydro__export-report,
+.si-hydro__export-all-kmz {
   flex: 1 1 auto;
   display: inline-flex;
   align-items: center;
@@ -223,9 +224,23 @@
   background: linear-gradient(180deg, rgba(37, 99, 235, 0.65), rgba(15, 23, 42, 0.82));
   border-color: rgba(147, 197, 253, 0.55);
 }
-.si-hydro__export-report:disabled {
+.si-hydro__export-report:disabled,
+.si-hydro__export-all-kmz:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.si-hydro__export-all-kmz {
+  border-color: rgba(34, 197, 94, 0.5);
+  background: linear-gradient(180deg, rgba(20, 83, 45, 0.55), rgba(15, 23, 42, 0.72));
+}
+.si-hydro__export-all-kmz i {
+  font-size: 12px;
+  color: #86efac;
+}
+.si-hydro__export-all-kmz:hover:not(:disabled) {
+  background: linear-gradient(180deg, rgba(22, 163, 74, 0.65), rgba(15, 23, 42, 0.82));
+  border-color: rgba(134, 239, 172, 0.55);
 }
 
 /* ── Errors ─────────────────────────────────────────────────────────────── */

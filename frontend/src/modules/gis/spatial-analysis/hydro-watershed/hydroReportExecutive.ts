@@ -61,6 +61,8 @@ function parseBasinLegendLabel(label: string, aoiHa: number): { name: string; ar
 export function buildHydroExecutiveSummary(input: {
   aoiName: string
   areaHa: number
+  sitePlanAreaHa?: number
+  locationLabel?: string
   demResolution: string
   steps: BuildHydroReportInput['steps']
   slopeClasses?: Array<{ class: string; pct: number }>
@@ -103,9 +105,16 @@ export function buildHydroExecutiveSummary(input: {
   const wetlandArea =
     input.wetlandAreaHa != null ? fmtHa(input.wetlandAreaHa) : '—'
 
+  const siteHa = input.sitePlanAreaHa ?? input.areaHa
+  const loc = input.locationLabel?.trim()
+  const place = loc ? `${input.aoiName}, ${loc}` : input.aoiName
+  const areaPhrase =
+    Math.abs(siteHa - input.areaHa) > 0.05
+      ? `(total area ${fmtHa(siteHa)}; analysis extent ${fmtHa(input.areaHa)})`
+      : `(total area ${fmtHa(input.areaHa)})`
   const projectOverview = [
-    `This Hydro Watershed & Flood Risk Assessment Report presents a terrain-hydrology analysis of ${input.aoiName} (${fmtHa(input.areaHa)}).`,
-    `The study uses open Terrarium DEM terrain tiles (${input.demResolution}) processed entirely within AgroCloud's Hydro Watershed Workflow.`,
+    `This Hydro Watershed & Flood Risk Assessment Report presents a terrain-hydrology analysis of ${place} ${areaPhrase}.`,
+    `The study uses open Terrarium DEM terrain tiles (${input.demResolution}) processed entirely within the Hydro Watershed Workflow.`,
     'Outputs include elevation, slope, aspect, flow direction, flow accumulation, stream network extraction, watershed delineation, flood-risk screening, and wetland-potential mapping.',
   ].join(' ')
 
@@ -153,9 +162,55 @@ export function buildHydroExecutiveSummary(input: {
   }
 }
 
+export function buildHydroReportKeyIndicators(input: {
+  areaHa: number
+  sitePlanAreaHa?: number
+  steps: BuildHydroReportInput['steps']
+  floodRiskRows?: HydroAreaClassRow[]
+  wetlandPct?: number
+}): Array<[string, string]> {
+  const dem = input.steps.dem?.result
+  const slope = input.steps.slope?.result
+  const streams = input.steps.streams?.result
+  const watershed = input.steps.watershed?.result
+  const minE = findStatLike(dem, 'min') ?? '—'
+  const maxE = findStatLike(dem, 'max') ?? '—'
+  const relief = findStatLike(dem, 'relief') ?? '—'
+  const meanSlope = findStatLike(slope, 'mean') ?? '—'
+  const maxSlope = findStatLike(slope, 'max') ?? '—'
+  const streamLen = findStatLike(streams, 'length') ?? '—'
+  const primaryCount = findStatLike(watershed, 'Primary basins') ?? '—'
+  const primaryArea = findStatLike(watershed, 'Primary area') ?? '—'
+  const high = input.floodRiskRows?.find(r => r.label.toLowerCase().includes('high') && !r.label.toLowerCase().includes('critical'))
+  const crit = input.floodRiskRows?.find(r => r.label.toLowerCase().includes('critical'))
+  const floodPct =
+    high || crit ? fmtPct((high?.pct ?? 0) + (crit?.pct ?? 0)) : '—'
+  const wetlandPct = input.wetlandPct != null ? fmtPct(input.wetlandPct) : '—'
+  const siteHa = input.sitePlanAreaHa ?? input.areaHa
+  return [
+    [`${siteHa.toFixed(0)} ha`, 'Total area (site plan)'],
+    [`${input.areaHa.toFixed(2)} ha`, 'Analysis extent (AOI)'],
+    [`${minE} – ${maxE}`, `Elevation range (relief ${relief})`],
+    [`${meanSlope}`, `Mean slope (max ${maxSlope})`],
+    [`${streamLen}`, 'Stream channel length'],
+    [`${primaryCount}`, `Primary basins (${primaryArea})`],
+    [floodPct, 'High + critical flood risk'],
+    [wetlandPct, 'Wetland potential area'],
+  ]
+}
+
 export function buildHydroReportTables(input: {
   steps: BuildHydroReportInput['steps']
   areaHa: number
+  sitePlanAreaHa?: number
+  aoiName: string
+  locationLabel?: string
+  centroidLabel: string
+  crs: string
+  demSource: string
+  demResolution: string
+  analysisDate: string
+  completedStepsLabel: string
   slopeRows?: Array<{ class: string; range: string; areaHa: number; pct: number }>
   floodRiskRows?: HydroAreaClassRow[]
   floodRiskStats?: Array<{ label: string; value: string }>
@@ -166,13 +221,40 @@ export function buildHydroReportTables(input: {
 }): HydroReportTable[] {
   const tables: HydroReportTable[] = []
   const aoiHa = input.areaHa
+  const siteHa = input.sitePlanAreaHa ?? aoiHa
+  const siteName = input.aoiName.split(',')[0]?.trim() || input.aoiName
 
   tables.push({
     title: 'Study Area Summary',
     headers: ['Metric', 'Value', 'Notes'],
     rows: [
-      ['Total AOI area', fmtHa(aoiHa), 'Reference total for all % columns'],
+      ...(Math.abs(siteHa - aoiHa) > 0.05
+        ? [['Site plan area', fmtHa(siteHa), 'Included within the AOI'] as [string, string, string]]
+        : []),
+      ['Total AOI area', fmtHa(aoiHa), 'Full analysis extent; reference total for all % columns'],
       ['AOI area (km²)', `${(aoiHa / 100).toFixed(3)} km²`, '1 km² = 100 ha'],
+    ],
+  })
+
+  tables.push({
+    title: 'Project Information',
+    headers: ['Field', 'Value'],
+    rows: [
+      ['Study Area Name', siteName],
+      ['Location', input.locationLabel?.trim() || '—'],
+      ['Total Area', fmtHa(siteHa)],
+      [
+        'Analysis Extent (AOI)',
+        Math.abs(siteHa - aoiHa) > 0.05
+          ? `${fmtHa(aoiHa)} (full analysis, including the remaining area outside the site plan)`
+          : fmtHa(aoiHa),
+      ],
+      ['Centroid', input.centroidLabel],
+      ['Coordinate Reference System', input.crs],
+      ['Analysis Date', input.analysisDate],
+      ['DEM Source', input.demSource],
+      ['DEM Resolution', input.demResolution],
+      ['Completed Workflow Steps', input.completedStepsLabel],
     ],
   })
 
@@ -199,6 +281,15 @@ export function buildHydroReportTables(input: {
         ]),
         ['Total', '—', slopeSumHa.toFixed(2), fmtPct(pctOfTotal(slopeSumHa, aoiHa) || 100)],
       ],
+    })
+  }
+
+  const streams = input.steps.streams?.result
+  if (streams) {
+    tables.push({
+      title: 'Stream Network Summary',
+      headers: ['Metric', 'Value'],
+      rows: streams.stats.map(s => [s.label, s.value]),
     })
   }
 
@@ -255,15 +346,6 @@ export function buildHydroReportTables(input: {
       title: 'Drainage Basins Summary',
       headers: ['Metric', 'Value'],
       rows: basins.stats.map(s => [s.label, s.value]),
-    })
-  }
-
-  const streams = input.steps.streams?.result
-  if (streams) {
-    tables.push({
-      title: 'Stream Network Summary',
-      headers: ['Metric', 'Value'],
-      rows: streams.stats.map(s => [s.label, s.value]),
     })
   }
 

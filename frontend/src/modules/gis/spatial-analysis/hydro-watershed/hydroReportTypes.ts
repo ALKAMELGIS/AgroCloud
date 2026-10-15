@@ -33,6 +33,10 @@ export type HydroReportPayload = {
   generatedBy: string
   generatedAt: string
   aoiName: string
+  /** Optional site-plan footprint when smaller than the analysis AOI (ha). */
+  sitePlanAreaHa?: number
+  /** Country or region label for cover page and Project Information table. */
+  locationLabel?: string
   areaHa: number
   crs: string
   demSource: string
@@ -45,11 +49,15 @@ export type HydroReportPayload = {
   completedSteps: HydroStepId[]
   recommendations: string[]
   dataQualityNotes: string
+  /** Cover + executive KPI strip (value, caption). */
+  keyIndicators: Array<[string, string]>
 }
 
 export type BuildHydroReportInput = {
   geometry: GeoJSON.Geometry
   aoiName: string
+  sitePlanAreaHa?: number
+  locationLabel?: string
   steps: Partial<Record<HydroStepId, { status: string; result: HydroStepResult | null }>>
   mapboxToken?: string
   projectName?: string

@@ -153,7 +153,7 @@ export function enrichHydroVectorForExport(
   return { type: 'FeatureCollection', features }
 }
 
-export function buildStyledHydroKmlDocument(fc: FeatureCollection, documentName: string): string {
+export function buildStyledHydroPlacemarksXml(fc: FeatureCollection): string {
   if (!fc.features.length) throw new Error('No features to export.')
   const placemarks = fc.features
     .map((f, i) => {
@@ -175,6 +175,11 @@ export function buildStyledHydroKmlDocument(fc: FeatureCollection, documentName:
     .filter(Boolean)
     .join('')
   if (!placemarks) throw new Error('No drawable geometries for KML.')
+  return placemarks
+}
+
+export function buildStyledHydroKmlDocument(fc: FeatureCollection, documentName: string): string {
+  const placemarks = buildStyledHydroPlacemarksXml(fc)
   return (
     `<?xml version="1.0" encoding="UTF-8"?>` +
     `<kml xmlns="http://www.opengis.net/kml/2.2"><Document>` +

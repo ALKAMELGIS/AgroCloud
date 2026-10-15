@@ -15500,6 +15500,7 @@ export default function SatelliteIntelligence() {
   }, [hydro]);
   const [hydroExportBusy, setHydroExportBusy] = useState(false);
   const [hydroExportLabel, setHydroExportLabel] = useState<string | undefined>(undefined);
+  const [hydroBundleBusy, setHydroBundleBusy] = useState(false);
   const handleHydroExportReport = useCallback(() => {
     const geom = drawnGeometry?.geometry;
     if (!geom) return;
@@ -15529,6 +15530,31 @@ export default function SatelliteIntelligence() {
       }
     })();
   }, [drawnGeometry, hydro.steps, mapboxToken]);
+
+  const handleHydroExportAllLayers = useCallback(() => {
+    if (!hydro.hasAoi) return;
+    const aoiName =
+      (drawnGeometry?.properties?.name as string | undefined) ??
+      (drawnGeometry?.properties?.fieldName as string | undefined) ??
+      'Hydro Study Area';
+    setHydroBundleBusy(true);
+    void (async () => {
+      try {
+        const result = await hydro.exportAllLayersKmz({
+          streamModel: hydroStreamModel,
+          aoiName,
+        });
+        if (result.skipped.length) {
+          console.info('[Hydro KMZ bundle] skipped layers:', result.skipped);
+        }
+      } catch (err) {
+        console.error('Hydro all-layers KMZ export failed', err);
+        window.alert(err instanceof Error ? err.message : String(err));
+      } finally {
+        setHydroBundleBusy(false);
+      }
+    })();
+  }, [drawnGeometry, hydro, hydroStreamModel]);
 
   // Re-run Contours / Basins when their option changes (the option refs are
   // refreshed on render, so re-running here picks up the latest interval/count).
@@ -29119,6 +29145,8 @@ export default function SatelliteIntelligence() {
                           onExportReport={handleHydroExportReport}
                           exportReportBusy={hydroExportBusy}
                           exportReportLabel={hydroExportLabel}
+                          onExportAllLayers={handleHydroExportAllLayers}
+                          exportAllLayersBusy={hydroBundleBusy}
                         />
                       </div>
                     )}

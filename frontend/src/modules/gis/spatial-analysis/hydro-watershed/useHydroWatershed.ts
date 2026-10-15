@@ -7,6 +7,7 @@ import {
   type HydroStepId,
   type HydroStepResult,
 } from './hydroEngine'
+import { exportAllHydroLayersKmz } from './hydroBundleExport'
 import { exportHydroStep, type HydroExportFormat, type HydroStreamModel } from './hydroStepExport'
 
 export type HydroStepState = {
@@ -220,6 +221,16 @@ export function useHydroWatershed({ geometry, enabled, sensitivity, contourInter
     [exportStep, steps],
   )
 
+  const exportAllLayersKmz = useCallback(
+    async (opts?: { streamModel?: HydroStreamModel; aoiName?: string }) => {
+      return exportAllHydroLayersKmz(steps, {
+        streamModel: opts?.streamModel ?? 'strahler',
+        aoiName: opts?.aoiName,
+      })
+    },
+    [steps],
+  )
+
   const clearAll = useCallback(() => {
     setSteps(prev => {
       const next = { ...prev }
@@ -246,6 +257,7 @@ export function useHydroWatershed({ geometry, enabled, sensitivity, contourInter
     removeStep,
     exportStep,
     exportRaster,
+    exportAllLayersKmz,
     clearAll,
   }
 }

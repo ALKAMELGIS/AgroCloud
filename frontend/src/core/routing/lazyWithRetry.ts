@@ -116,6 +116,27 @@ export function clearStaleChunkRecoveryState(guardKeys: string[] = []): void {
   }
 }
 
+function isLazyModuleMissingDefault(mod: unknown): boolean {
+  if (!mod || typeof mod !== 'object') return true
+  const d = (mod as { default?: unknown }).default
+  return typeof d !== 'function'
+}
+
+/** Vite HMR can leave a hot boundary serving a 200 response with an empty module (no default export). */
+function recoverFromInvalidLazyModule<T>(chunkKey: string): Promise<{ default: T }> | null {
+  if (typeof window === 'undefined') return null
+  if (import.meta.env.DEV) {
+    clearChunkReloadGuards()
+  }
+  const guardKey = `${RELOAD_GUARD_PREFIX}${chunkKey}`
+  if (!safeSessionGet(guardKey)) {
+    safeSessionSet(guardKey, '1')
+    void purgeAndReloadForStaleDeploy()
+    return new Promise<{ default: T }>(() => {})
+  }
+  return null
+}
+
 function isDynamicImportError(error: unknown): boolean {
   const message =
     error instanceof Error ? error.message : typeof error === 'string' ? error : String(error ?? '')
@@ -125,7 +146,8 @@ function isDynamicImportError(error: unknown): boolean {
     /Importing a module script failed/i.test(message) ||
     /Unable to preload CSS/i.test(message) ||
     /'text\/html'.*not a valid JavaScript MIME type/i.test(message) ||
-    /expected a JavaScript(?:-or-Wasm)? module/i.test(message)
+    /expected a JavaScript(?:-or-Wasm)? module/i.test(message) ||
+    /Cannot convert object to primitive value/i.test(message)
   )
 }
 
@@ -187,6 +209,13 @@ export function lazyWithRetry<T extends ComponentType<any>>(
   return lazy(async () => {
     const load = async () => {
       const mod = await factory()
+      if (isLazyModuleMissingDefault(mod)) {
+        const pending = recoverFromInvalidLazyModule<T>(chunkKey)
+        if (pending) return pending
+        throw new Error(
+          `Route chunk "${chunkKey}" did not load a component. Restart the dev server or use Reload Page.`,
+        )
+      }
       safeSessionRemove(guardKey)
       return mod
     }
