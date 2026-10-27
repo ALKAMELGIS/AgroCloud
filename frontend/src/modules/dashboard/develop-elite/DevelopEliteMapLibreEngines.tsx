@@ -1,9 +1,13 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import maplibregl from 'maplibre-gl'
 import { DEVELOP_ELITE_MAP_RESET_INTERACTION_EVENT } from '@/modules/gis/editing/leafletMapSketchInteraction'
 import { useDevelopEliteMapLibre } from './developEliteMapLibreContext'
 import { registerDevelopEliteMapLibreIntelPick } from './developEliteMapLibreIntelPick'
-import { useDevelopEliteMapInsight } from './DevelopEliteMapInsightTools'
+import {
+  DevelopEliteMapInsightWeatherPanel,
+  useDevelopEliteMapInsight,
+} from './DevelopEliteMapInsightTools'
 import { useDevelopEliteMapLayerLive } from './developEliteMapLayerLiveContext'
 import { useDevelopEliteMapDraw } from './DevelopEliteMapDraw'
 import {
@@ -283,6 +287,16 @@ export function DevelopEliteMapLibreInsightEngine() {
   const { mapRef, mapReady } = useDevelopEliteMapLibre()
   const insight = useDevelopEliteMapInsight()
   const markerRef = useRef<maplibregl.Marker | null>(null)
+  const [portalHost, setPortalHost] = useState<HTMLElement | null>(null)
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReady) {
+      setPortalHost(null)
+      return
+    }
+    setPortalHost(map.getContainer())
+  }, [mapReady, mapRef])
 
   useEffect(() => {
     const map = mapRef.current
@@ -308,5 +322,7 @@ export function DevelopEliteMapLibreInsightEngine() {
     }
   }, [insight?.point, insight?.tool, mapReady, mapRef])
 
-  return null
+  if (!insight || !portalHost || insight.tool !== 'intel') return null
+
+  return createPortal(<DevelopEliteMapInsightWeatherPanel insight={insight} />, portalHost)
 }

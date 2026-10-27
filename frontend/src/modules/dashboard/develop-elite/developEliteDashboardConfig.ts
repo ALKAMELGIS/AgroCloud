@@ -1,9 +1,8 @@
+import { GOOGLE_SATELLITE_HYBRID_BASEMAP_ID, pickDefaultBasemapId } from '@/modules/gis/map/basemapCatalog'
 import {
-  GOOGLE_SATELLITE_HYBRID_BASEMAP_ID,
-  MAPBOX_SATELLITE_BASEMAP_ID,
-  pickDefaultBasemapId,
-} from '@/modules/gis/map/basemapCatalog'
-import { resolveDevelopElitePreferredBasemapId } from './developEliteMapBasemapDefault'
+  DEVELOP_ELITE_DEFAULT_BASEMAP_ID,
+  resolveDevelopElitePreferredBasemapId,
+} from './developEliteMapBasemapDefault'
 import { WORLD_COUNTRIES_FS51_URL } from '@/modules/gis/map/worldCountriesLayer'
 import { AGRO_STRUCTURES_FS21_URL } from '@/modules/remote-sensing/imagery/agroStructuresPrimaryAoi'
 import {
@@ -35,12 +34,12 @@ export const DEVELOP_ELITE_MAP_LAYER_ORDER_PRESET_LS_KEY = 'develop_elite_map_la
 /** Bump when default map layer stack changes (e.g. add irrigation valves layer). */
 export const DEVELOP_ELITE_MAP_LAYER_ORDER_PRESET_VERSION = 3
 export const DEVELOP_ELITE_BASEMAP_PRESET_LS_KEY = 'develop_elite_basemap_preset_v'
-export const DEVELOP_ELITE_BASEMAP_PRESET_VERSION = 3
+export const DEVELOP_ELITE_BASEMAP_PRESET_VERSION = 4
 
 /** Globe cockpit map tab (Portfolio tab always available). */
 export const DEVELOP_ELITE_GLOBE_COCKPIT_TAB_ENABLED = false
 
-/** Older saved defaults before Satellite Hybrid was the dashboard standard. */
+/** Older saved defaults before Esri World Imagery was the dashboard standard. */
 const DEVELOP_ELITE_LEGACY_DEFAULT_BASEMAP_IDS = new Set([
   '',
   'esri',
@@ -60,7 +59,7 @@ export function normalizeDevelopEliteBasemapId(stored: unknown): string {
   if (!raw || DEVELOP_ELITE_LEGACY_DEFAULT_BASEMAP_IDS.has(raw)) {
     return preferred
   }
-  if (raw === GOOGLE_SATELLITE_HYBRID_BASEMAP_ID && preferred === MAPBOX_SATELLITE_BASEMAP_ID) {
+  if (raw === GOOGLE_SATELLITE_HYBRID_BASEMAP_ID && preferred === DEVELOP_ELITE_DEFAULT_BASEMAP_ID) {
     return preferred
   }
   return pickDefaultBasemapId(raw)
@@ -287,7 +286,7 @@ export const DEFAULT_DEVELOP_ELITE_CONFIG: DevelopEliteDashboardConfig = {
   agriLocationLayerUrl: DEFAULT_DEVELOP_ELITE_AGRI_LOCATION_LAYER_URL,
   irrigationValvesLayerUrl: DEFAULT_DEVELOP_ELITE_IRRIGATION_VALVES_LAYER_URL,
   irrigationMainPipeLayerUrl: DEFAULT_DEVELOP_ELITE_IRRIGATION_MAIN_PIPE_LAYER_URL,
-  basemapId: MAPBOX_SATELLITE_BASEMAP_ID,
+  basemapId: DEVELOP_ELITE_DEFAULT_BASEMAP_ID,
   chartGroupField: 'Crop_Type',
   chartValueField: 'Total_Tree',
   chartValueLabel: 'Per Tons',

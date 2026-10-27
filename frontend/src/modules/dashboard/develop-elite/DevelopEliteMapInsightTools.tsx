@@ -8,9 +8,12 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { createPortal } from 'react-dom'
 import { CircleMarker, useMap } from 'react-leaflet'
+import { Link } from 'react-router-dom'
 import {
   fetchOpenMeteoWeatherMapPick,
+  wmoWeatherIconClass,
   type OpenMeteoWeatherSnapshot,
 } from '@/modules/remote-sensing/weather/openMeteoWeather'
 import { useDevelopEliteMapDraw } from './DevelopEliteMapDraw'
@@ -200,10 +203,63 @@ function DevelopEliteMapInsightPickMarker({ point }: { point: { lat: number; lng
   )
 }
 
+function stopInsightPanelMapEvent(event: { stopPropagation(): void }) {
+  event.stopPropagation()
+}
+
+/** Floating Open-Meteo readout — portaled onto the map container (Leaflet or MapLibre). */
+export function DevelopEliteMapInsightWeatherPanel({ insight }: { insight: InsightContextValue }) {
+  if (insight.tool !== 'intel') return null
+  return (
+    <aside
+      className="develop-elite-map__insight-panel"
+      aria-label="Weather — Open-Meteo"
+      onPointerDown={stopInsightPanelMapEvent}
+      onClick={stopInsightPanelMapEvent}
+      onDoubleClick={stopInsightPanelMapEvent}
+    >
+      <p className="develop-elite-map__insight-panel-title">Weather</p>
+      {!insight.point ? <p>Click the map to read weather at that point.</p> : null}
+      {insight.weatherStatus === 'loading' ? <p>Loading forecast…</p> : null}
+      {insight.weatherStatus === 'error' ? <p>{insight.weatherError}</p> : null}
+      {insight.snapshot ? (
+        <div className="develop-elite-map__insight-wx">
+          <i className={wmoWeatherIconClass(insight.snapshot.weatherCode)} aria-hidden />
+          <strong>
+            {insight.snapshot.temperatureC != null ? `${Math.round(insight.snapshot.temperatureC)}°C` : '—'}
+          </strong>
+          <span>{insight.snapshot.conditionLabel}</span>
+          <span>
+            {insight.point ? `${insight.point.lat.toFixed(3)}, ${insight.point.lng.toFixed(3)}` : ''}
+          </span>
+          <span>
+            Humidity {insight.snapshot.humidityPct != null ? `${Math.round(insight.snapshot.humidityPct)}%` : '—'}
+            {' · '}
+            Wind{' '}
+            {insight.snapshot.windSpeedKmh != null
+              ? `${Math.round(insight.snapshot.windSpeedKmh)} km/h ${insight.snapshot.windDirectionLabel}`
+              : '—'}
+          </span>
+          <span>Rain {insight.snapshot.precipMm != null ? `${insight.snapshot.precipMm.toFixed(1)} mm` : '—'}</span>
+          {insight.point ? (
+            <Link
+              className="develop-elite-map__insight-wi-link"
+              to={`/weather/intelligence?lat=${insight.point.lat}&lng=${insight.point.lng}`}
+            >
+              Open Weather Intelligence
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
+    </aside>
+  )
+}
+
 /** Map-side behaviour: weather pick and Open-Meteo panel. MapSwipe uses {@link DevelopEliteMapSwipeEngine}. */
 export function DevelopEliteMapInsightEngine() {
   const map = useMap()
   const insight = useInsight()
+  const host = map.getContainer()
   const tool = insight?.tool ?? null
   const setPoint = insight?.setPoint
 
@@ -212,11 +268,16 @@ export function DevelopEliteMapInsightEngine() {
     return registerDevelopEliteMapIntelPick(map, setPoint)
   }, [map, setPoint, tool])
 
-  if (!insight) return null
+  if (!insight || !host) return null
 
-  return insight.tool === 'intel' ? (
-    <DevelopEliteMapInsightPickMarker point={insight.point} />
-  ) : null
+  return (
+    <>
+      {insight.tool === 'intel' ? <DevelopEliteMapInsightPickMarker point={insight.point} /> : null}
+      {insight.tool === 'intel'
+        ? createPortal(<DevelopEliteMapInsightWeatherPanel insight={insight} />, host)
+        : null}
+    </>
+  )
 }
 
 export function DevelopEliteMapInsightToolbar({
@@ -243,6 +304,11 @@ export function DevelopEliteMapInsightToolbar({
     : 'MapSwipe needs a drawn AOI — use Edit (DRAW), then finish the sketch.'
 
   const items: Array<{ id: ToolId; icon: string; label: string; disabled?: boolean }> = [
+    {
+      id: 'intel',
+      icon: 'fa-cloud-sun',
+      label: 'Weather — click the map for Open-Meteo at that point',
+    },
     { id: 'swipe', icon: 'fa-left-right', label: swipeLabel, disabled: !hasSwipeAoi },
   ]
 
