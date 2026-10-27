@@ -1785,8 +1785,10 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
 
 .develop-elite-map__insight-tools {
   flex-shrink: 0;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: center;
+  justify-content: space-between;
   gap: 4px;
   width: 100%;
   max-width: 100%;
@@ -1797,10 +1799,12 @@ body.develop-elite--resizing .develop-elite-resize-handle--bottom {
 }
 
 .develop-elite-map__insight-btn {
-  width: 100%;
-  max-width: 26px;
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto;
+  max-width: none;
   height: 22px;
-  margin: 0 auto;
+  margin: 0;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -6596,7 +6600,6 @@ body.develop-elite--lists-drawer-open {
   }
 
   .develop-elite-map__legend-rail--stacked .develop-elite-map__insight-tools {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 6px;
     margin-top: 8px;
   }
